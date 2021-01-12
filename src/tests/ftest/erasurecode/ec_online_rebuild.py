@@ -22,7 +22,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 from ec_utils import ErasureCodeIor
-from apricot import skipForTicket
 
 class EcOnlineRebuild(ErasureCodeIor):
     # pylint: disable=too-many-ancestors
@@ -41,7 +40,6 @@ class EcOnlineRebuild(ErasureCodeIor):
         #Enabled Online rebuild
         self.set_online_rebuild = True
 
-    @skipForTicket("DAOS-5377")
     def test_ec_offline_rebuild(self):
         """Jira ID: DAOS-5894.
 

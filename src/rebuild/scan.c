@@ -666,7 +666,7 @@ rebuild_scanner(void *data)
 	/* Create object tree root */
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
-	rc = dbtree_create(DBTREE_CLASS_NV, 0, 4, &uma, NULL,
+	rc = dbtree_create(DBTREE_CLASS_UV, 0, 4, &uma, NULL,
 			   &tls->rebuild_tree_hdl);
 	if (rc != 0) {
 		D_ERROR("failed to create rebuild tree: "DF_RC"\n", DP_RC(rc));
@@ -674,8 +674,8 @@ rebuild_scanner(void *data)
 	}
 
 	rpt_get(rpt);
-	rc = dss_ult_create(rebuild_objects_send_ult, rpt, DSS_ULT_REBUILD,
-			    DSS_TGT_SELF, 0, &ult_send);
+	rc = dss_ult_create(rebuild_objects_send_ult, rpt, DSS_XS_SELF,
+			    0, 0, &ult_send);
 	if (rc != 0) {
 		rpt_put(rpt);
 		D_GOTO(out, rc);
@@ -728,7 +728,7 @@ rebuild_scan_leader(void *data)
 	while (rpt->rt_pool->sp_dtx_resync_version < rpt->rt_rebuild_ver)
 		ABT_thread_yield();
 
-	rc = dss_thread_collective(rebuild_scanner, rpt, 0, DSS_ULT_REBUILD);
+	rc = dss_thread_collective(rebuild_scanner, rpt, 0);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -736,7 +736,7 @@ rebuild_scan_leader(void *data)
 		DP_UUID(rpt->rt_pool_uuid));
 
 	ABT_mutex_lock(rpt->rt_lock);
-	rc = dss_task_collective(rebuild_scan_done, rpt, 0, DSS_ULT_REBUILD);
+	rc = dss_task_collective(rebuild_scan_done, rpt, 0);
 	ABT_mutex_unlock(rpt->rt_lock);
 	if (rc) {
 		D_ERROR(DF_UUID" send rebuild object list failed:%d\n",
@@ -776,6 +776,14 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	/* check if the rebuild is already started */
 	rpt = rpt_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver);
 	if (rpt != NULL) {
+		if (rpt->rt_global_done) {
+			D_WARN("the previous rebuild "DF_UUID"/%d"
+			       " is not cleanup yet\n",
+			       DP_UUID(rsi->rsi_pool_uuid),
+		               rsi->rsi_rebuild_ver);
+			D_GOTO(out, rc = -DER_BUSY);
+		}
+
 		/* Rebuild should never skip the version */
 		D_ASSERTF(rsi->rsi_rebuild_ver == rpt->rt_rebuild_ver,
 			  "rsi_rebuild_ver %d != rt_rebuild_ver %d\n",
@@ -833,8 +841,8 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 
 	rpt_get(rpt);
-	rc = dss_ult_create(rebuild_tgt_status_check_ult, rpt, DSS_ULT_REBUILD,
-			    DSS_TGT_SELF, 0, NULL);
+	rc = dss_ult_create(rebuild_tgt_status_check_ult, rpt, DSS_XS_SELF,
+			    0, 0, NULL);
 	if (rc) {
 		rpt_put(rpt);
 		D_GOTO(out, rc);
@@ -842,8 +850,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 
 	rpt_get(rpt);
 	/* step-3: start scan leader */
-	rc = dss_ult_create(rebuild_scan_leader, rpt, DSS_ULT_REBUILD,
-			    DSS_TGT_SELF, 0, NULL);
+	rc = dss_ult_create(rebuild_scan_leader, rpt, DSS_XS_SELF, 0, 0, NULL);
 	if (rc != 0) {
 		rpt_put(rpt);
 		D_GOTO(out, rc);

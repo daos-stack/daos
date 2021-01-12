@@ -254,7 +254,7 @@ parse_pool_info(struct json_object *json_pool, daos_mgmt_pool_info_t *pool_info)
 	if (json_pool == NULL || pool_info == NULL)
 		return -DER_INVAL;
 
-	if (!json_object_object_get_ex(json_pool, "UUID", &tmp)) {
+	if (!json_object_object_get_ex(json_pool, "uuid", &tmp)) {
 		D_ERROR("unable to extract pool UUID from JSON\n");
 		return -DER_INVAL;
 	}
@@ -269,7 +269,7 @@ parse_pool_info(struct json_object *json_pool, daos_mgmt_pool_info_t *pool_info)
 		return -DER_INVAL;
 	}
 
-	if (!json_object_object_get_ex(json_pool, "Svcreps", &tmp)) {
+	if (!json_object_object_get_ex(json_pool, "svc_reps", &tmp)) {
 		D_ERROR("unable to parse pool svcreps from JSON\n");
 		return -DER_INVAL;
 	}
@@ -557,7 +557,7 @@ dmg_pool_list(const char *dmg_config_file, const char *group,
 		goto out_json;
 	}
 
-	json_object_object_get_ex(dmg_out, "Pools", &pool_list);
+	json_object_object_get_ex(dmg_out, "pools", &pool_list);
 	if (pool_list == NULL)
 		*npools = 0;
 	else

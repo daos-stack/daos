@@ -390,9 +390,9 @@ def scons(): # pylint: disable=too-many-locals
 
     env.Alias('install', '$PREFIX')
     platform_arm = is_platform_arm()
-    Export('DAOS_VERSION', 'API_VERSION',
-           'env', 'prereqs', 'platform_arm',
-           'CONF_DIR')
+    # Export() is handled specially by pylint so do not merge these two lines.
+    Export('DAOS_VERSION', 'API_VERSION', 'env', 'prereqs')
+    Export('platform_arm', 'CONF_DIR')
 
     if env['PLATFORM'] == 'darwin':
         # generate .so on OSX instead of .dylib
@@ -415,7 +415,6 @@ def scons(): # pylint: disable=too-many-locals
     env.Install("$PREFIX/lib64/daos", "API_VERSION")
 
     env.Install('$PREFIX/etc/bash_completion.d', ['utils/completion/daos.bash'])
-    env.Install('$PREFIX/etc', ['utils/memcheck-daos-client.supp'])
     env.Install('$PREFIX/lib/daos/TESTING/ftest/util',
                 ['utils/sl/env_modules.py'])
     env.Install('$PREFIX/lib/daos/TESTING/ftest/',

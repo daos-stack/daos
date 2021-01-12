@@ -443,8 +443,7 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 
 	/* let's check scanning status on every thread*/
 	ABT_mutex_lock(rpt->rt_lock);
-	rc = dss_thread_collective(dss_rebuild_check_one, &arg, 0,
-				   DSS_ULT_REBUILD);
+	rc = dss_thread_collective(dss_rebuild_check_one, &arg, 0);
 	if (rc) {
 		ABT_mutex_unlock(rpt->rt_lock);
 		D_GOTO(out, rc);
@@ -810,6 +809,7 @@ rebuild_scan_broadcast(struct ds_pool *pool,
 	crt_rpc_t		*rpc;
 	int			rc;
 
+retry:
 	/* Send rebuild RPC to all targets of the pool to initialize rebuild.
 	 * XXX this should be idempotent as well as query and fini.
 	 */
@@ -838,10 +838,19 @@ rebuild_scan_broadcast(struct ds_pool *pool,
 	rso = crt_reply_get(rpc);
 	if (rc == 0)
 		rc = rso->rso_status;
+	if (rc == -DER_BUSY) {
+		crt_req_decref(rpc);
+		D_DEBUG(DB_REBUILD, "rebuild "DF_UUID" scan retry\n",
+			DP_UUID(pool->sp_uuid));
+		goto retry;
+	}
 
 	rgt->rgt_init_scan = 1;
 	rgt->rgt_stable_epoch = rso->rso_stable_epoch;
 
+	D_DEBUG(DB_REBUILD, "rebuild "DF_UUID" rc %d got stable epoch "
+		DF_U64"\n", DP_UUID(rsi->rsi_pool_uuid), rc,
+		rgt->rgt_stable_epoch);
 	crt_req_decref(rpc);
 	return rc;
 }
@@ -1155,6 +1164,10 @@ rebuild_task_ult(void *arg)
 				" canceled.\n", DP_UUID(task->dst_pool_uuid),
 				task->dst_map_ver);
 			rc = 0;
+			D_PRINT("Rebuild [canceled] (pool "DF_UUID" ver=%u"
+				" status=%d)\n", DP_UUID(task->dst_pool_uuid),
+				task->dst_map_ver, rc);
+			D_GOTO(output, rc);
 		}
 
 		D_PRINT("Rebuild [failed] (pool "DF_UUID" ver=%u status=%d)\n",
@@ -1169,7 +1182,7 @@ rebuild_task_ult(void *arg)
 			rgt->rgt_status.rs_errno = rc;
 			D_GOTO(done, rc);
 		} else {
-			D_GOTO(out_put, rc);
+			D_GOTO(try_reschedule, rc);
 		}
 	}
 
@@ -1189,10 +1202,11 @@ done:
 			 */
 			D_DEBUG(DB_REBUILD, DF_UUID" Only stop the leader\n",
 				DP_UUID(task->dst_pool_uuid));
-			D_GOTO(out_put, rc);
+			D_GOTO(try_reschedule, rc);
 		}
 	} else {
-		if (task->dst_tgts.pti_number <= 0)
+		if (task->dst_tgts.pti_number <= 0 ||
+		    rgt->rgt_status.rs_errno != 0)
 			goto iv_stop;
 
 		if (task->dst_rebuild_op == RB_OP_FAIL
@@ -1228,6 +1242,7 @@ iv_stop:
 		iv.riv_rec_count	= rgt->rgt_status.rs_rec_nr;
 		iv.riv_size		= rgt->rgt_status.rs_size;
 		iv.riv_seconds          = rgt->rgt_status.rs_seconds;
+		iv.riv_stable_epoch	= rgt->rgt_stable_epoch;
 
 		rc = rebuild_iv_update(pool->sp_iv_ns, &iv, CRT_IV_SHORTCUT_NONE,
 				       CRT_IV_SYNC_LAZY, true);
@@ -1242,8 +1257,9 @@ iv_stop:
 	if (rc != 0)
 		D_ERROR("rebuild_status_completed_update, "DF_UUID" "
 			"failed, rc %d.\n", DP_UUID(task->dst_pool_uuid), rc);
-out_put:
-	if (rgt == NULL || !is_rebuild_global_done(rgt)) {
+try_reschedule:
+	if (rgt == NULL || !is_rebuild_global_done(rgt) ||
+	    rgt->rgt_status.rs_errno != 0) {
 		int ret;
 
 		/* NB: we can not skip the rebuild of the target,
@@ -1260,7 +1276,7 @@ out_put:
 			D_DEBUG(DB_REBUILD, DF_UUID" reschedule rebuild\n",
 				DP_UUID(pool->sp_uuid));
 	}
-
+output:
 	ds_pool_put(pool);
 	if (rgt)
 		rebuild_global_pool_tracker_destroy(rgt);
@@ -1317,8 +1333,7 @@ rebuild_ults(void *arg)
 				continue;
 
 			rc = dss_ult_create(rebuild_task_ult, task,
-					    DSS_ULT_REBUILD, DSS_TGT_SELF,
-					    0, NULL);
+					    DSS_XS_SELF, 0, 0, NULL);
 			if (rc == 0) {
 				rebuild_gst.rg_inflight++;
 				/* TODO: This needs to be expanded to select the
@@ -1510,8 +1525,8 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 		D_DEBUG(DB_REBUILD, "rebuild ult "DF_UUID" ver=%u, op=%s",
 			DP_UUID(uuid), map_ver, RB_OP_STR(rebuild_op));
 		rebuild_gst.rg_rebuild_running = 1;
-		rc = dss_ult_create(rebuild_ults, NULL, DSS_ULT_REBUILD,
-				    DSS_TGT_SELF, 0, NULL);
+		rc = dss_ult_create(rebuild_ults, NULL, DSS_XS_SELF,
+				    0, 0, NULL);
 		if (rc) {
 			ABT_cond_free(&rebuild_gst.rg_stop_cond);
 			rebuild_gst.rg_rebuild_running = 0;
@@ -1694,8 +1709,10 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 		rebuild_pool_tls_destroy(pool_tls);
 
 	/* close the rebuild pool/container on all main XS */
-	rc = dss_task_collective(rebuild_fini_one, rpt, 0, DSS_ULT_REBUILD);
+	rc = dss_task_collective(rebuild_fini_one, rpt, 0);
 
+	/* destory the migrate_tls of 0-xstream */
+	ds_migrate_fini_one(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	rpt_put(rpt);
 	/* No one should access rpt after rebuild_fini_one.
 	 */
@@ -2064,7 +2081,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	rpt->rt_rebuild_fence = crt_hlc_get();
-	rc = dss_task_collective(rebuild_prepare_one, rpt, 0, DSS_ULT_REBUILD);
+	rc = dss_task_collective(rebuild_prepare_one, rpt, 0);
 	if (rc) {
 		rpt->rt_rebuild_fence = 0;
 		rebuild_pool_tls_destroy(pool_tls);
