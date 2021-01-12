@@ -235,14 +235,12 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		if (cb_info->cci_rc != 0) {
 			D_ERROR("rpc (opc: %#x) failed, rc: %d.\n",
 				rpc_req->cr_opc, cb_info->cci_rc);
-			D_FREE(test_ping_rpc_req_input->name);
 			break;
 		}
 		DBG_PRINT("%s checkin result - ret: %d, room_no: %d, "
 					 "bool_val %d.\n",
 					 test_ping_rpc_req_input->name, test_ping_rpc_req_output->ret,
 					 test_ping_rpc_req_output->room_no, test_ping_rpc_req_output->bool_val);
-		D_FREE(test_ping_rpc_req_input->name);
 		sem_post(&test_g.t_token_to_proceed);
 		D_ASSERT(test_ping_rpc_req_output->bool_val == true);
 		break;
