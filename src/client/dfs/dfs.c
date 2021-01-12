@@ -2320,14 +2320,14 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	 int flags, daos_oclass_id_t cid, daos_size_t chunk_size,
 	 const char *value, dfs_obj_t **_obj)
 {
-	return dfs_open2(dfs, parent, name, mode, flags, cid, chunk_size,
-			value, NULL, _obj);
+	return dfs_open_stat(dfs, parent, name, mode, flags, cid, chunk_size,
+			     value, _obj, NULL);
 }
 
 int
-dfs_open2(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
-	  int flags, daos_oclass_id_t cid, daos_size_t chunk_size,
-	  const char *value, struct stat *stbuf, dfs_obj_t **_obj)
+dfs_open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
+	      int flags, daos_oclass_id_t cid, daos_size_t chunk_size,
+	      const char *value, dfs_obj_t **_obj, struct stat *stbuf)
 {
 	struct dfs_entry	entry = {0};
 	dfs_obj_t		*obj;

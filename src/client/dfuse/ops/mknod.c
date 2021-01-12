@@ -32,7 +32,7 @@ dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct dfuse_inode_entry	*ie;
 	int				rc;
 
-	DFUSE_TRA_INFO(fs_handle, "Parent:%lu '%s'", parent->ie_stat.st_ino,
+	DFUSE_TRA_INFO(parent, "Parent:%lu '%s'", parent->ie_stat.st_ino,
 		       name);
 
 	D_ALLOC_PTR(ie);
@@ -43,9 +43,9 @@ dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	DFUSE_TRA_DEBUG(ie, "file '%s' mode 0%o", name, mode);
 
-	rc = dfs_open2(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
-		       mode, O_CREAT | O_EXCL | O_RDWR,
-		       0, 0, NULL, &ie->ie_stat, &ie->ie_obj);
+	rc = dfs_open_stat(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
+			   mode, O_CREAT | O_EXCL | O_RDWR,
+			   0, 0, NULL, &ie->ie_obj, &ie->ie_stat);
 	if (rc)
 		D_GOTO(err, rc);
 
@@ -63,6 +63,6 @@ dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	return;
 err:
-	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+	DFUSE_REPLY_ERR_RAW(parent, req, rc);
 	D_FREE(ie);
 }
