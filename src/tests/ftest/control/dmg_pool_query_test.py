@@ -58,6 +58,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         self.log.info("==>   Running dmg pool query:")
         return self.dmg.pool_query(uuid)
 
+    @skipForTicket("DAOS-6452")
     def test_pool_query_basic(self):
         """
         JIRA ID: DAOS-2976
