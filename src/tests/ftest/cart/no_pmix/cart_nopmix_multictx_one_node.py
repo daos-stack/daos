@@ -27,8 +27,7 @@ from __future__ import print_function
 import sys
 import subprocess
 
-from avocado       import Test
-from avocado       import main
+from apricot       import TestWithoutServers
 
 sys.path.append('./util')
 
@@ -36,11 +35,11 @@ sys.path.append('./util')
 # pylint: disable=wrong-import-position
 from cart_utils import CartUtils
 
-class CartNoPmixOneNodeTest(Test):
+class CartNoPmixOneNodeTest(TestWithoutServers):
     """
     Runs basic CaRT no_pmix tests
 
-    :avocado: tags=all,cart,pr,no_pmix,one_node
+    :avocado: recursive
     """
     def setUp(self):
         """ Test setup """
@@ -58,15 +57,11 @@ class CartNoPmixOneNodeTest(Test):
                          "CRT_CTX_SHARE_ADDR": ofi_share_addr,
                          "CRT_CTX_NUM": ofi_ctx_num}
 
-    def tearDown(self):
-        """ Test tear down """
-        print("Run TearDown\n")
-
     def test_cart_no_pmix(self):
         """
         Test CaRT NoPmix
 
-        :avocado: tags=all,cart,pr,no_pmix,one_node
+        :avocado: tags=all,cart,pr,daily_regression,no_pmix,one_node
         """
 
         cmd = self.params.get("tst_bin", '/run/tests/*/')

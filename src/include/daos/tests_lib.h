@@ -37,6 +37,11 @@
 #define DAOS_ON_VALGRIND 0
 #endif
 
+#define assert_success(r) do {\
+	int __rc = (r); \
+	if (__rc != 0) \
+		fail_msg("Not successful!! Error code: " DF_RC, DP_RC(__rc)); \
+	} while (0)
 
 /** Read a command line from stdin. */
 char *dts_readline(const char *prompt);
@@ -131,6 +136,8 @@ struct dts_context {
 	/** INPUT: should be initialized by caller */
 	/** optional, pmem file name, only for VOS test */
 	char			*tsc_pmem_file;
+	/** DMG config file */
+	char			*tsc_dmg_conf;
 	/** optional, pool service ranks, only for DAOS test */
 	d_rank_list_t		 tsc_svc;
 	/** MPI rank of caller */
@@ -343,6 +350,19 @@ int dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
  */
 int dmg_storage_set_nvme_fault(const char *dmg_config_file,
 			       char *host, const uuid_t uuid, int force);
+/**
+ * Get NVMe Device health stats.
+ *
+ * \param dmg_config_file
+ *		[IN]	DMG config file
+ * \param host	[IN]	Get device-health from the given host.
+ * \param uuid	[IN]	UUID of the device.
+ * \param stats	[IN/OUT]
+ *			[in] Health stats for which to get counter value.
+ *			[out] Stats counter value.
+ */
+int dmg_storage_query_device_health(const char *dmg_config_file, char *host,
+				    char *stats, const uuid_t uuid);
 
 /**
  * Verify the assumed blobstore device state with the actual enum definition

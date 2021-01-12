@@ -114,13 +114,14 @@ static int data_init(int server, crt_init_options_t *opt)
 	crt_gdata.cg_inited = 0;
 	crt_gdata.cg_na_plugin = CRT_NA_OFI_SOCKETS;
 	crt_gdata.cg_sep_mode = false;
+	crt_gdata.cg_contig_ports = true;
 
 	srand(d_timeus_secdiff(0) + getpid());
 	start_rpcid = ((uint64_t)rand()) << 32;
 
 	crt_gdata.cg_rpcid = start_rpcid;
 
-	D_DEBUG(DB_ALL, "Starting RPCID 0x%lx\n", start_rpcid);
+	D_DEBUG(DB_ALL, "Starting RPCID %#lx\n", start_rpcid);
 
 	/* Apply CART-890 workaround for server side only */
 	if (server) {
@@ -207,40 +208,81 @@ exit:
 static int
 crt_plugin_init(void)
 {
+	struct crt_prog_cb_priv *cbs_prog;
+	struct crt_timeout_cb_priv *cbs_timeout;
+	struct crt_event_cb_priv *cbs_event;
+	size_t cbs_size = CRT_CALLBACKS_NUM;
 	int i, rc;
 
 	D_ASSERT(crt_plugin_gdata.cpg_inited == 0);
 
-	/** init the lists */
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		D_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_prog_cbs[i]);
-		rc = D_RWLOCK_INIT(&crt_plugin_gdata.cpg_prog_rwlock[i], NULL);
-		if (rc != 0)
-			D_GOTO(out, rc);
+		crt_plugin_gdata.cpg_prog_cbs_old[i] = NULL;
+		D_ALLOC_ARRAY(cbs_prog, cbs_size);
+		if (cbs_prog == NULL) {
+			for (i--; i >= 0; i--)
+				D_FREE(crt_plugin_gdata.cpg_prog_cbs[i]);
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
+		crt_plugin_gdata.cpg_prog_size[i] = cbs_size;
+		crt_plugin_gdata.cpg_prog_cbs[i]  = cbs_prog;
 	}
 
-	D_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_timeout_cbs);
-	rc = D_RWLOCK_INIT(&crt_plugin_gdata.cpg_timeout_rwlock, NULL);
-	if (rc != 0)
-		D_GOTO(out_destroy_prog, rc);
+	crt_plugin_gdata.cpg_timeout_cbs_old = NULL;
+	D_ALLOC_ARRAY(cbs_timeout, cbs_size);
+	if (cbs_timeout == NULL) {
+		D_GOTO(out_destroy_prog, rc = -DER_NOMEM);
+	}
+	crt_plugin_gdata.cpg_timeout_size = cbs_size;
+	crt_plugin_gdata.cpg_timeout_cbs  = cbs_timeout;
 
-	D_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_event_cbs);
-	rc = D_RWLOCK_INIT(&crt_plugin_gdata.cpg_event_rwlock, NULL);
-	if (rc != 0)
-		D_GOTO(out_destroy_timeout, rc);
+	crt_plugin_gdata.cpg_event_cbs_old = NULL;
+	D_ALLOC_ARRAY(cbs_event, cbs_size);
+	if (cbs_event == NULL) {
+		D_GOTO(out_destroy_timeout, rc = -DER_NOMEM);
+	}
+	crt_plugin_gdata.cpg_event_size = cbs_size;
+	crt_plugin_gdata.cpg_event_cbs  = cbs_event;
 
+	rc = D_MUTEX_INIT(&crt_plugin_gdata.cpg_mutex, NULL);
+	if (rc)
+		D_GOTO(out_destroy_event, rc);
 
 	crt_plugin_gdata.cpg_inited = 1;
 	D_GOTO(out, rc = 0);
 
-	D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_event_rwlock);
+out_destroy_event:
+	D_FREE(crt_plugin_gdata.cpg_event_cbs);
 out_destroy_timeout:
-	D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_timeout_rwlock);
+	D_FREE(crt_plugin_gdata.cpg_timeout_cbs);
 out_destroy_prog:
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
-		D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_prog_rwlock[i]);
+		D_FREE(crt_plugin_gdata.cpg_prog_cbs[i]);
 out:
 	return rc;
+}
+
+static void
+crt_plugin_fini(void)
+{
+	int i;
+
+	D_ASSERT(crt_plugin_gdata.cpg_inited == 1);
+
+	crt_plugin_gdata.cpg_inited = 0;
+
+	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
+		D_FREE(crt_plugin_gdata.cpg_prog_cbs[i]);
+		D_FREE(crt_plugin_gdata.cpg_prog_cbs_old[i]);
+	}
+
+	D_FREE(crt_plugin_gdata.cpg_timeout_cbs);
+	D_FREE(crt_plugin_gdata.cpg_timeout_cbs_old);
+
+	D_FREE(crt_plugin_gdata.cpg_event_cbs);
+	D_FREE(crt_plugin_gdata.cpg_event_cbs_old);
+
+	D_MUTEX_DESTROY(&crt_plugin_gdata.cpg_mutex);
 }
 
 int
@@ -270,7 +312,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 	/* d_fault_inject_init() is reference counted */
 	rc = d_fault_inject_init();
-	if (rc != DER_SUCCESS) {
+	if (rc != DER_SUCCESS && rc != -DER_NOSYS) {
 		D_ERROR("d_fault_inject_init() failed, rc: %d.\n", rc);
 		D_GOTO(out, rc);
 	}
@@ -292,8 +334,9 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	if (gdata_init_flag == 0) {
 		rc = data_init(server, opt);
 		if (rc != 0) {
-			D_ERROR("data_init failed, "DF_RC"\n", DP_RC(rc));
-			D_GOTO(out, rc);
+			D_ERROR("data_init failed, rc(%d) - %s.\n",
+				rc, strerror(rc));
+			D_GOTO(out, rc = -rc);
 		}
 	}
 	D_ASSERT(gdata_init_flag == 1);
@@ -388,28 +431,30 @@ do_init:
 		if (crt_na_type_is_ofi(crt_gdata.cg_na_plugin)) {
 			rc = crt_na_ofi_config_init();
 			if (rc != 0) {
-				D_ERROR("crt_na_ofi_config_init failed, "
-					"rc: %d.\n", rc);
+				D_ERROR("crt_na_ofi_config_init() failed, "
+					DF_RC "\n", DP_RC(rc));
 				D_GOTO(out, rc);
 			}
 		}
 
 		rc = crt_hg_init();
 		if (rc != 0) {
-			D_ERROR("crt_hg_init failed rc: %d.\n", rc);
+			D_ERROR("crt_hg_init() failed, " DF_RC "\n", DP_RC(rc));
 			D_GOTO(cleanup, rc);
 		}
 
 		rc = crt_grp_init(grpid);
 		if (rc != 0) {
-			D_ERROR("crt_grp_init failed, rc: %d.\n", rc);
+			D_ERROR("crt_grp_init() failed, " DF_RC "\n",
+				DP_RC(rc));
 			D_GOTO(cleanup, rc);
 		}
 
 		if (crt_plugin_gdata.cpg_inited == 0) {
 			rc = crt_plugin_init();
 			if (rc != 0) {
-				D_ERROR("crt_plugin_init rc: %d.\n", rc);
+				D_ERROR("crt_plugin_init() failed, " DF_RC "\n",
+					DP_RC(rc));
 				D_GOTO(cleanup, rc);
 			}
 		}
@@ -418,7 +463,9 @@ do_init:
 
 		rc = crt_opc_map_create(CRT_OPC_MAP_BITS);
 		if (rc != 0) {
-			D_ERROR("crt_opc_map_create failed rc: %d.\n", rc);
+			D_ERROR("crt_opc_map_create() failed, " DF_RC "\n",
+				DP_RC(rc));
+			crt_self_test_fini();
 			D_GOTO(cleanup, rc);
 		}
 		D_ASSERT(crt_gdata.cg_opc_map != NULL);
@@ -439,6 +486,8 @@ do_init:
 
 cleanup:
 	crt_gdata.cg_inited = 0;
+	if (crt_plugin_gdata.cpg_inited == 1)
+		crt_plugin_fini();
 	if (crt_gdata.cg_grp_inited == 1)
 		crt_grp_fini();
 	if (crt_gdata.cg_opc_map != NULL)
@@ -451,7 +500,7 @@ unlock:
 
 out:
 	if (rc != 0) {
-		D_ERROR("crt_init failed, rc: %d.\n", rc);
+		D_ERROR("failed, " DF_RC "\n", DP_RC(rc));
 		d_fault_inject_fini();
 		d_log_fini();
 	}
@@ -462,42 +511,6 @@ bool
 crt_initialized()
 {
 	return (gdata_init_flag == 1) && (crt_gdata.cg_inited == 1);
-}
-
-void
-crt_plugin_fini(void)
-{
-	struct crt_prog_cb_priv		*prog_cb_priv;
-	struct crt_timeout_cb_priv	*timeout_cb_priv;
-	struct crt_event_cb_priv	*event_cb_priv;
-	int				 i;
-
-	D_ASSERT(crt_plugin_gdata.cpg_inited == 1);
-
-	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		while ((prog_cb_priv = d_list_pop_entry(
-					&crt_plugin_gdata.cpg_prog_cbs[i],
-					struct crt_prog_cb_priv,
-					cpcp_link))) {
-			D_FREE(prog_cb_priv);
-		}
-	}
-
-	while ((timeout_cb_priv = d_list_pop_entry(&crt_plugin_gdata.cpg_timeout_cbs,
-						   struct crt_timeout_cb_priv,
-						   ctcp_link))) {
-		D_FREE(timeout_cb_priv);
-	}
-	while ((event_cb_priv = d_list_pop_entry(&crt_plugin_gdata.cpg_event_cbs,
-						 struct crt_event_cb_priv,
-						 cecp_link))) {
-		D_FREE(event_cb_priv);
-	}
-
-	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
-		D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_prog_rwlock[i]);
-	D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_timeout_rwlock);
-	D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_event_rwlock);
 }
 
 int
@@ -516,6 +529,8 @@ crt_finalize(void)
 
 	crt_gdata.cg_refcount--;
 	if (crt_gdata.cg_refcount == 0) {
+		crt_self_test_fini();
+
 		if (crt_gdata.cg_ctx_num > 0) {
 			D_ASSERT(!crt_context_empty(CRT_LOCKED));
 			D_ERROR("cannot finalize, current ctx_num(%d).\n",
@@ -571,7 +586,7 @@ crt_finalize(void)
 out:
 	/* d_fault_inject_fini() is reference counted */
 	local_rc = d_fault_inject_fini();
-	if (local_rc != 0)
+	if (local_rc != 0 && local_rc != -DER_NOSYS)
 		D_ERROR("d_fault_inject_fini() failed, rc: %d\n", local_rc);
 
 direct_out:

@@ -131,8 +131,9 @@ struct evt_rect {
 
 /** A search rectangle to limit scope of a search */
 struct evt_filter {
-	struct evt_extent	fr_ex;	/**< extent range */
-	daos_epoch_range_t	fr_epr;	/**< epoch range */
+	struct evt_extent	fr_ex;		/**< extent range */
+	daos_epoch_range_t	fr_epr;		/**< range with uncertainty */
+	daos_epoch_t		fr_epoch;	/**< actual epoch */
 	/** higher level punch epoch (0 if not punched) */
 	daos_epoch_t		fr_punch_epc;
 	/** Minor epc for higher level punch */
@@ -166,12 +167,12 @@ struct evt_filter {
 
 /** Log format of evtree filter */
 #define DF_FILTER			\
-	DF_EXT "@" DF_X64"-"DF_X64"(punch="DF_X64".%d)"
+	DF_EXT "@" DF_X64"-"DF_X64"(epoch="DF_X64",punch="DF_X64".%d)"
 
 #define DP_FILTER(filter)					\
 	DP_EXT(&(filter)->fr_ex), (filter)->fr_epr.epr_lo,	\
 	(filter)->fr_epr.epr_hi, (filter)->fr_punch_epc,	\
-	(filter)->fr_punch_minor_epc
+	(filter)->fr_epoch, (filter)->fr_punch_minor_epc
 
 /** Return the width of an extent */
 static inline daos_size_t
@@ -296,6 +297,8 @@ struct evt_entry_in {
 	struct evt_rect		ei_rect;
 	/** checksum of entry */
 	struct dcs_csum_info	ei_csum;
+	/** epoch uncertainty boundary */
+	daos_epoch_t		ei_bound;
 	/** pool map version */
 	uint32_t		ei_ver;
 	/** number of bytes per record, zero for punch */
@@ -621,8 +624,8 @@ enum {
 
 	/** The iterator is for purge operation */
 	EVT_ITER_FOR_PURGE	= (1 << 5),
-	/** The iterator is for rebuild scan */
-	EVT_ITER_FOR_REBUILD	= (1 << 6),
+	/** The iterator is for data migration scan */
+	EVT_ITER_FOR_MIGRATION	= (1 << 6),
 };
 
 /**

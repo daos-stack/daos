@@ -43,6 +43,10 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+var (
+	defaultPoolUUID = MockUUID()
+)
+
 func createACLFile(t *testing.T, path string, acl *control.AccessControlList) {
 	t.Helper()
 
@@ -56,6 +60,16 @@ func createACLFile(t *testing.T, path string, acl *control.AccessControlList) {
 	if err != nil {
 		t.Fatalf("Couldn't write to file: %v", err)
 	}
+}
+
+func createWithSystem(req *control.PoolCreateReq, system string) *control.PoolCreateReq {
+	req.SetSystem(system)
+	return req
+}
+
+func evictWithSystem(req *control.PoolEvictReq, system string) *control.PoolEvictReq {
+	req.SetSystem(system)
+	return req
 }
 
 func TestPoolCommands(t *testing.T) {
@@ -118,14 +132,13 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with minimal arguments",
 			fmt.Sprintf("pool create --scm-size %s --nsvc 3", testScmSizeStr),
 			strings.Join([]string{
-				printRequest(t, &control.PoolCreateReq{
+				printRequest(t, createWithSystem(&control.PoolCreateReq{
 					ScmBytes:   uint64(testScmSize),
 					NumSvcReps: 3,
-					Sys:        "daos_server", // FIXME: This should be a constant
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
 					Ranks:      []system.Rank{},
-				}),
+				}, build.DefaultSystemName)),
 			}, " "),
 			nil,
 		},
@@ -134,16 +147,15 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo --group bar --nvme-size %s --sys fnord --acl-file %s",
 				testScmSizeStr, testNvmeSizeStr, testACLFile),
 			strings.Join([]string{
-				printRequest(t, &control.PoolCreateReq{
+				printRequest(t, createWithSystem(&control.PoolCreateReq{
 					ScmBytes:   uint64(testScmSize),
 					NvmeBytes:  uint64(testNvmeSize),
 					NumSvcReps: 3,
-					Sys:        "fnord",
 					User:       "foo@",
 					UserGroup:  "bar@",
 					Ranks:      []system.Rank{},
 					ACL:        testACL,
-				}),
+				}, "fnord")),
 			}, " "),
 			nil,
 		},
@@ -152,16 +164,15 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo --group bar --nvme-size %s --sys fnord --acl-file %s",
 				strconv.Itoa(testScmSize), strconv.Itoa(testNvmeSize), testACLFile),
 			strings.Join([]string{
-				printRequest(t, &control.PoolCreateReq{
+				printRequest(t, createWithSystem(&control.PoolCreateReq{
 					ScmBytes:   uint64(testScmSize),
 					NvmeBytes:  uint64(testNvmeSize),
 					NumSvcReps: 3,
-					Sys:        "fnord",
 					User:       "foo@",
 					UserGroup:  "bar@",
 					Ranks:      []system.Rank{},
 					ACL:        testACL,
-				}),
+				}, "fnord")),
 			}, " "),
 			nil,
 		},
@@ -169,14 +180,13 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with user and group domains",
 			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo@home --group bar@home", testScmSizeStr),
 			strings.Join([]string{
-				printRequest(t, &control.PoolCreateReq{
+				printRequest(t, createWithSystem(&control.PoolCreateReq{
 					ScmBytes:   uint64(testScmSize),
 					NumSvcReps: 3,
-					Sys:        "daos_server",
 					User:       "foo@home",
 					UserGroup:  "bar@home",
 					Ranks:      []system.Rank{},
-				}),
+				}, build.DefaultSystemName)),
 			}, " "),
 			nil,
 		},
@@ -184,14 +194,13 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with user but no group",
 			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo", testScmSizeStr),
 			strings.Join([]string{
-				printRequest(t, &control.PoolCreateReq{
+				printRequest(t, createWithSystem(&control.PoolCreateReq{
 					ScmBytes:   uint64(testScmSize),
 					NumSvcReps: 3,
-					Sys:        "daos_server",
 					User:       "foo@",
 					UserGroup:  eGrp.Name + "@",
 					Ranks:      []system.Rank{},
-				}),
+				}, build.DefaultSystemName)),
 			}, " "),
 			nil,
 		},
@@ -199,14 +208,13 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with group but no user",
 			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --group foo", testScmSizeStr),
 			strings.Join([]string{
-				printRequest(t, &control.PoolCreateReq{
+				printRequest(t, createWithSystem(&control.PoolCreateReq{
 					ScmBytes:   uint64(testScmSize),
 					NumSvcReps: 3,
-					Sys:        "daos_server",
 					User:       eUsr.Username + "@",
 					UserGroup:  "foo@",
 					Ranks:      []system.Rank{},
-				}),
+				}, build.DefaultSystemName)),
 			}, " "),
 			nil,
 		},
@@ -361,7 +369,6 @@ func TestPoolCommands(t *testing.T) {
 			}, " "),
 			nil,
 		},
-
 		{
 			"Destroy pool with force",
 			"pool destroy --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --force",
@@ -377,21 +384,17 @@ func TestPoolCommands(t *testing.T) {
 			"Evict pool",
 			"pool evict --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 			strings.Join([]string{
-				printRequest(t, &control.PoolEvictReq{
+				printRequest(t, evictWithSystem(&control.PoolEvictReq{
 					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Sys:  "daos_server",
-				}),
+				}, build.DefaultSystemName)),
 			}, " "),
 			nil,
 		},
-
 		{
 			"List pools",
 			"pool list",
 			strings.Join([]string{
-				printRequest(t, &control.ListPoolsReq{
-					System: build.DefaultSystemName,
-				}),
+				printRequest(t, listWithSystem(&control.ListPoolsReq{}, build.DefaultSystemName)),
 			}, " "),
 			nil,
 		},
@@ -580,6 +583,35 @@ func TestPoolCommands(t *testing.T) {
 				}),
 			}, " "),
 			nil,
+		},
+		{
+			"Query pool with UUID",
+			"pool query --pool 12345678-1234-1234-1234-1234567890ab",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryReq{
+					UUID: "12345678-1234-1234-1234-1234567890ab",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query pool with Label",
+			"pool query --pool test-label",
+			strings.Join([]string{
+				printRequest(t, &control.PoolResolveIDReq{
+					HumanID: "test-label",
+				}),
+				printRequest(t, &control.PoolQueryReq{
+					UUID: defaultPoolUUID,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query pool with empty ID",
+			"pool query --pool \"\"",
+			"",
+			fmt.Errorf("pool ID"),
 		},
 		{
 			"Nonexistent subcommand",

@@ -63,6 +63,7 @@ const (
 	// general fault codes
 	Unknown Code = iota
 	MissingSoftwareDependency
+	BadVersionSoftwareDependency
 	PrivilegedHelperNotPrivileged
 	PrivilegedHelperNotAvailable
 	PrivilegedHelperRequestFailed
@@ -113,9 +114,11 @@ const (
 	ServerScmUnmanaged
 	ServerBdevNotFound
 	ServerIommuDisabled
+	ServerWrongSystem
 	ServerPoolScmTooSmall
 	ServerPoolNvmeTooSmall
 	ServerPoolInvalidRanks
+	ServerPoolDuplicateLabel
 	ServerInsufficientFreeHugePages
 	ServerHarnessNotStarted
 	ServerDataPlaneNotStarted
@@ -129,6 +132,7 @@ const (
 	ServerNoConfigPath
 	ServerConfigBadControlPort
 	ServerConfigBadAccessPoints
+	ServerConfigEvenAccessPoints
 	ServerConfigBadProvider
 	ServerConfigNoServers
 	ServerConfigDuplicateFabric

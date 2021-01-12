@@ -1,0 +1,163 @@
+//
+// (C) Copyright 2019-2020 Intel Corporation.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+// The Government's rights to use, modify, reproduce, release, perform, display,
+// or disclose this software are subject to the terms of the Apache License as
+// provided in Contract No. 8F-30005.
+// Any reproduction of computer software, computer software documentation, or
+// portions thereof marked with this legend must also reproduce the markings.
+//
+
+syntax = "proto3";
+package ctl;
+
+option go_package = "github.com/daos-stack/daos/src/control/common/proto/ctl";
+
+// Control Service Protobuf Definitions related to interactions between
+// DAOS control server and DAOS Blob I/O (BIO) module and Per-Server Metadata
+// (SMD).
+
+message BioHealthReq {
+	string dev_uuid = 1;
+	string tgt_id = 2;
+}
+
+// BioHealthResp mirrors nvme_health_stats structure.
+message BioHealthResp {
+	string model = 1;
+	string serial = 2;
+	uint64 timestamp = 3;
+	// Device health details
+	uint32 warn_temp_time = 5;
+	uint32 crit_temp_time = 6;
+	uint64 ctrl_busy_time = 7;
+	uint64 power_cycles = 8;
+	uint64 power_on_hours = 9;
+	uint64 unsafe_shutdowns = 10;
+	uint64 media_errs = 11;
+	uint64 err_log_entries = 12;
+	// I/O error counters
+	uint32 bio_read_errs = 13;
+	uint32 bio_write_errs = 14;
+	uint32 bio_unmap_errs = 15;
+	uint32 checksum_errs = 16;
+	uint32 temperature = 17; // in Kelvin
+	// Critical warnings
+	bool temp_warn = 18;
+	bool avail_spare_warn = 19;
+	bool dev_reliability_warn = 20;
+	bool read_only_warn = 21;
+	bool volatile_mem_warn = 22; // volatile memory backup
+	int32 status = 23; // DAOS err code
+	string dev_uuid = 24; // UUID of blobstore
+	// Usage stats
+	uint64 total_bytes = 25; // size of blobstore
+	uint64 avail_bytes = 26; // free space in blobstore
+}
+
+message SmdDevReq {
+}
+
+message SmdDevResp {
+	message Device {
+		string uuid = 1; // UUID of blobstore
+		repeated int32 tgt_ids = 2; // VOS target IDs
+		string state = 3; // BIO device state
+		string trAddr = 4; // Transport address of blobstore
+	}
+	int32 status = 1;
+	repeated Device devices = 2;
+}
+
+message SmdPoolReq {
+}
+
+message SmdPoolResp {
+	message Pool {
+		string uuid = 1; // UUID of VOS pool
+		repeated int32 tgt_ids = 2; // VOS target IDs
+		repeated uint64 blobs = 3; // SPDK blobs
+	}
+	int32 status = 1;
+	repeated Pool pools = 2;
+}
+
+message DevStateReq {
+	string dev_uuid = 1; // UUID of blobstore
+}
+
+message DevStateResp {
+	int32 status = 1; // DAOS error code
+	string dev_uuid = 2; // UUID of blobstore
+	string dev_state = 3; // Transport address of blobstore
+}
+
+message DevReplaceReq {
+	string old_dev_uuid = 1; // UUID of old (hot-removed) blobstore/device
+	string new_dev_uuid = 2; // UUID of new (hot-plugged) blobstore/device
+	bool   noReint      = 3; // Skip device reintegration if set
+}
+
+message DevReplaceResp {
+	int32 status = 1; // DAOS error code
+	string new_dev_uuid = 2; // UUID of new (hot-plugged) blobstore/device
+	string dev_state = 3; // BIO device state
+}
+
+message DevIdentifyReq {
+	string dev_uuid = 1; // UUID of VMD uuid
+}
+
+message DevIdentifyResp {
+	int32 status = 1; // DAOS error code
+	string dev_uuid = 2; // UUID of VMD uuid
+	string led_state = 3; // VMD LED state
+}
+
+message SmdQueryReq {
+	bool omitDevices = 1; // query should omit devices
+	bool omitPools = 2; // query should omit pools
+	bool includeBioHealth = 3; // query should include BIO health for devices
+	bool setFaulty = 4; // set the specified device to FAULTY
+	string uuid = 5; // constrain query to this UUID (pool or device)
+	uint32 rank = 6; // response should only include information about this rank
+	string target = 7; // response should only include information about this VOS target
+	string replaceUUID = 8; // UUID of new device to replace storage with
+	bool noReint = 9; // specify if device reint is needed (used for replace cmd)
+	bool identify = 10; // set the VMD LED state to quickly blink
+}
+
+message SmdQueryResp {
+	message Device {
+		string uuid = 1; // UUID of blobstore
+		repeated int32 tgt_ids = 2; // VOS target IDs
+		string state = 3; // BIO device state
+		string trAddr = 4; // Transport address of blobstore
+		BioHealthResp health = 5; // optional BIO health
+	}
+	message Pool {
+		string uuid = 1; // UUID of VOS pool
+		repeated int32 tgt_ids = 2; // VOS target IDs
+		repeated uint64 blobs = 3; // SPDK blobs
+	}
+	message RankResp {
+		uint32 rank = 1; // rank to which this response corresponds
+		repeated Device devices = 2; // List of devices on the rank
+		repeated Pool pools = 3; // List of pools on the rank
+	}
+	int32 status = 1; // DAOS error code
+	repeated RankResp ranks = 2; // List of per-rank responses
+}

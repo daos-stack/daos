@@ -232,26 +232,33 @@ uint16_t bio_iov2media(const struct bio_iov *biov)
 static inline int
 bio_sgl_init(struct bio_sglist *sgl, unsigned int nr)
 {
-	memset(sgl, 0, sizeof(*sgl));
-
+	sgl->bs_nr_out = 0;
 	sgl->bs_nr = nr;
+
+	if (nr == 0) {
+		sgl->bs_iovs = NULL;
+		return 0;
+	}
+
 	D_ALLOC_ARRAY(sgl->bs_iovs, nr);
+
 	return sgl->bs_iovs == NULL ? -DER_NOMEM : 0;
 }
 
 static inline void
 bio_sgl_fini(struct bio_sglist *sgl)
 {
-	if (sgl->bs_iovs == NULL)
+	if (sgl == NULL || sgl->bs_iovs == NULL)
 		return;
 
 	D_FREE(sgl->bs_iovs);
-	memset(sgl, 0, sizeof(*sgl));
+	sgl->bs_nr_out = 0;
+	sgl->bs_nr = 0;
 }
 
 /*
  * Convert bio_sglist into d_sg_list_t, caller is responsible to
- * call daos_sgl_fini(sgl, false) to free iovs.
+ * call d_sgl_fini(sgl, false) to free iovs.
  */
 static inline int
 bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl, bool deduped_skip)
@@ -261,7 +268,7 @@ bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl, bool deduped_skip)
 	D_ASSERT(sgl != NULL);
 	D_ASSERT(bsgl != NULL);
 
-	rc = daos_sgl_init(sgl, bsgl->bs_nr_out);
+	rc = d_sgl_init(sgl, bsgl->bs_nr_out);
 	if (rc != 0)
 		return rc;
 
@@ -317,11 +324,13 @@ bio_sgl_holes(struct bio_sglist *bsgl)
  * NB. Move it to control.h if it needs be shared by control plane.
  */
 struct bio_dev_info {
-	d_list_t	 bdi_link;
-	uuid_t		 bdi_dev_id;
-	uint32_t	 bdi_flags;	/* defined in control.h */
-	uint32_t	 bdi_tgt_cnt;
-	int		*bdi_tgts;
+	d_list_t		bdi_link;
+	uuid_t			bdi_dev_id;
+	uint32_t		bdi_flags;	/* defined in control.h */
+	uint32_t		bdi_tgt_cnt;
+	int		       *bdi_tgts;
+	char		       *bdi_traddr;
+	uint32_t		bdi_dev_type;	/* reserved */
 };
 
 static inline void
@@ -329,6 +338,8 @@ bio_free_dev_info(struct bio_dev_info *dev_info)
 {
 	if (dev_info->bdi_tgts != NULL)
 		D_FREE(dev_info->bdi_tgts);
+	if (dev_info->bdi_traddr != NULL)
+		D_FREE(dev_info->bdi_traddr);
 	D_FREE(dev_info);
 }
 
@@ -670,4 +681,32 @@ void bio_log_csum_err(struct bio_xs_context *b, int tgt_id);
 
 /* Too many blob IO queued, need to schedule a NVMe poll? */
 bool bio_need_nvme_poll(struct bio_xs_context *xs);
+
+/*
+ * Replace a device.
+ *
+ * \param xs		[IN]	xstream context
+ * \param old_dev_id	[IN]	UUID of device to be replaced
+ * \param new_dev_id	[IN]	UUID of new device to replace with
+ *
+ * \return			Zero on success, negative value on error
+ */
+int bio_replace_dev(struct bio_xs_context *xs, uuid_t old_dev_id,
+		    uuid_t new_dev_id);
+
+/*
+ * Set the LED on a VMD device to new state.
+ *
+ * \param xs            [IN]    xstream context
+ * \param devid		[IN]	UUID of the VMD device
+ * \param led_state	[IN]	State to set the LED to
+ *				(ie identify, off, fault/on)
+ * \param reset		[IN]	Reset flag indicates that the led_state
+ * 				will be determined by the saved state in
+ * 				bio_bdev (bb_led_state)
+ *
+ * \return                      Zero on success, negative value on error
+ */
+int bio_set_led_state(struct bio_xs_context *xs, uuid_t devid,
+		      const char *led_state, bool reset);
 #endif /* __BIO_API_H__ */

@@ -115,10 +115,10 @@ extendedKeyUsage = clientAuth
 function generate_ca_cert () {
     echo "Generating Private CA Root Certificate"
     # Generate Private key and set permissions
-    openssl genrsa -out "${PRIVATE}/daosCA.key" 4096
+    openssl genrsa -out "${PRIVATE}/daosCA.key" 3072
     chmod 0400 "${PRIVATE}/daosCA.key"
     # Generate CA Certificate
-    openssl req -new -x509 -config "${CA_HOME}/ca.cnf" -days 1095  -sha512 \
+    openssl req -new -x509 -config "${CA_HOME}/ca.cnf" -days 365  -sha512 \
         -key "${PRIVATE}/daosCA.key" \
         -out "${CERTS}/daosCA.crt" -batch
     # Reset the the CA index
@@ -131,7 +131,7 @@ function generate_ca_cert () {
 function generate_agent_cert () {
     echo "Generating Agent Certificate"
     # Generate Private key and set its permissions
-    openssl genrsa -out "${CERTS}/agent.key" 4096
+    openssl genrsa -out "${CERTS}/agent.key" 3072
     chmod 0400 "${CERTS}/agent.key"
     # Generate a Certificate Signing Request (CRS)
     openssl req -new -config "${CONFIGS}/agent.cnf" -key "${CERTS}/agent.key" \
@@ -151,7 +151,7 @@ function generate_agent_cert () {
 function generate_admin_cert () {
     echo "Generating Admin Certificate"
     # Generate Private key and set its permissions
-    openssl genrsa -out "${CERTS}/admin.key" 4096
+    openssl genrsa -out "${CERTS}/admin.key" 3072
     chmod 0400 "${CERTS}/admin.key"
     # Generate a Certificate Signing Request (CRS)
     openssl req -new -config "${CONFIGS}/admin.cnf" -key "${CERTS}/admin.key" \
@@ -171,7 +171,7 @@ function generate_admin_cert () {
 function generate_server_cert () {
     echo "Generating Server Certificate"
     # Generate Private key and set its permissions
-    openssl genrsa -out "${CERTS}/server.key" 4096
+    openssl genrsa -out "${CERTS}/server.key" 3072
     chmod 0400 "${CERTS}/server.key"
     # Generate a Certificate Signing Request (CRS)
     openssl req -new -config "${CONFIGS}/server.cnf" \
@@ -196,7 +196,7 @@ function generate_test_cert () {
 
     echo "Generating Test Certificate"
     # Generate Private key and set its permissions
-    openssl genrsa -out "${CERTS}/test.key" 4096
+    openssl genrsa -out "${CERTS}/test.key" 3072
     chmod 0400 "${CERTS}/test.key"
     # Generate a Certificate Signing Request (CRS)
     openssl req -new -config "${CONFIGS}/test.cnf" -key "${CERTS}/test.key" \

@@ -38,6 +38,7 @@ class ContainerCopy(MdtestBase, IorTestBase):
         self.container = []
 
     def create_cont(self):
+        # pylint: disable=arguments-differ
         """Create a TestContainer object to be used to create container."""
         # Get container params and create
         self.container.append(self.get_container(self.pool, create=False))
@@ -60,7 +61,7 @@ class ContainerCopy(MdtestBase, IorTestBase):
         # param for dcp processes
         processes = self.params.get("processes", "/run/datamover/*")
 
-        dcp = DataMover(self.hostlist_clients)
+        dcp = DataMover(self.hostlist_clients, self.tmp)
         dcp.get_params(self)
         # update dest path
         if update_dest:

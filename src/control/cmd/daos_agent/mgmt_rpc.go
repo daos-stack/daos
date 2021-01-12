@@ -51,13 +51,10 @@ type mgmtModule struct {
 	numaAware  bool
 	netCtx     context.Context
 	mutex      sync.Mutex
+	monitor    *procMon
 }
 
 func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
-	if method != drpc.MethodGetAttachInfo && method != drpc.MethodDisconnect {
-		return nil, drpc.UnknownMethodFailure()
-	}
-
 	uc, ok := session.Conn.(*net.UnixConn)
 	if !ok {
 		return nil, errors.Errorf("session.Conn type conversion failed")
@@ -75,11 +72,22 @@ func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req
 		return nil, err
 	}
 
+	ctx := context.TODO() // FIXME: Should be the top-level context.
+
 	switch method {
 	case drpc.MethodGetAttachInfo:
-		return mod.handleGetAttachInfo(req, cred.Pid)
-	case drpc.MethodDisconnect:
-		return mod.handleDisconnect(req, cred.Pid)
+		return mod.handleGetAttachInfo(ctx, req, cred.Pid)
+	case drpc.MethodNotifyPoolConnect:
+		return nil, mod.handleNotifyPoolConnect(ctx, req, cred.Pid)
+	case drpc.MethodNotifyPoolDisconnect:
+		return nil, mod.handleNotifyPoolDisconnect(ctx, req, cred.Pid)
+	case drpc.MethodNotifyExit:
+		// There isn't anything we can do here if this fails so just
+		// call the disconnect handler and return success.
+		mod.handleNotifyExit(ctx, cred.Pid)
+		return nil, nil
+	default:
+		return nil, drpc.UnknownMethodFailure()
 	}
 
 	return nil, drpc.UnknownMethodFailure()
@@ -100,7 +108,7 @@ func (mod *mgmtModule) ID() drpc.ModuleID {
 // time this dRPC is invoked. Subsequent calls receive the cached data.
 // The use of cached data may be disabled by exporting
 // "DAOS_AGENT_DISABLE_CACHE=true" in the environment running the daos_agent.
-func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, error) {
+func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid int32) ([]byte, error) {
 	var err error
 	numaNode := mod.aiCache.defaultNumaNode
 
@@ -140,10 +148,9 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 		return nil, errors.Errorf("unknown system name %s", pbReq.Sys)
 	}
 
-	ctx := context.TODO() // FIXME: Should be the top-level context.
-	resp, err := control.GetAttachInfo(ctx, mod.ctlInvoker, &control.GetAttachInfoReq{
-		System: pbReq.Sys,
-	})
+	req := new(control.GetAttachInfoReq)
+	req.SetSystem(pbReq.GetSys())
+	resp, err := control.GetAttachInfo(ctx, mod.ctlInvoker, req)
 	if err != nil {
 		return nil, errors.Wrapf(err, "GetAttachInfo %+v", pbReq)
 	}
@@ -170,10 +177,36 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 		return nil, err
 	}
 
-	return mod.aiCache.getResponse(numaNode)
+	cacheResp, err := mod.aiCache.getResponse(numaNode)
+	if err != nil {
+		return nil, err
+	}
+
+	return cacheResp, err
 }
 
-func (mod *mgmtModule) handleDisconnect(reqb []byte, pid int32) ([]byte, error) {
-	mod.log.Debugf("Disconnect is currently not implemented")
-	return nil, nil
+func (mod *mgmtModule) handleNotifyPoolConnect(ctx context.Context, reqb []byte, pid int32) error {
+	pbReq := new(mgmtpb.PoolMonitorReq)
+	if err := proto.Unmarshal(reqb, pbReq); err != nil {
+		return drpc.UnmarshalingPayloadFailure()
+	}
+	mod.monitor.AddPoolHandle(ctx, pid, pbReq)
+	return nil
+}
+
+func (mod *mgmtModule) handleNotifyPoolDisconnect(ctx context.Context, reqb []byte, pid int32) error {
+	pbReq := new(mgmtpb.PoolMonitorReq)
+	if err := proto.Unmarshal(reqb, pbReq); err != nil {
+		return drpc.UnmarshalingPayloadFailure()
+	}
+	mod.monitor.RemovePoolHandle(ctx, pid, pbReq)
+	return nil
+}
+
+// handleNotifyExit crafts a new request for the process monitor to inform the
+// monitor that a process is exiting. Even though the process is terminating
+// cleanly disconnect will inform the control plane of any outstanding handles
+// that the process held open.
+func (mod *mgmtModule) handleNotifyExit(ctx context.Context, pid int32) {
+	mod.monitor.NotifyExit(ctx, pid)
 }

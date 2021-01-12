@@ -54,7 +54,8 @@ class GetContainerACLTest(ContSecurityTestBase):
             expected with valid inputs and verify that we can't overwrite
             an already existing file when using the --outfile argument.
 
-        :avocado: tags=all,pr,security,container_acl,cont_get_acl_inputs
+        :avocado: tags=all,pr,daily_regression,security,container_acl
+        :avocado: tags=cont_get_acl_inputs
         """
         test_errs = []
         for verbose in [True, False]:
@@ -66,7 +67,6 @@ class GetContainerACLTest(ContSecurityTestBase):
                 self.daos_cmd.exit_status_exception = False
                 self.daos_cmd.container_get_acl(
                     self.pool.uuid,
-                    self.pool.svc_ranks[0],
                     self.container.uuid,
                     verbose=verbose,
                     outfile=path_to_file)
@@ -80,7 +80,6 @@ class GetContainerACLTest(ContSecurityTestBase):
                 self.daos_cmd.exit_status_exception = False
                 self.daos_cmd.container_get_acl(
                     self.pool.uuid,
-                    self.pool.svc_ranks[0],
                     self.container.uuid,
                     verbose=verbose,
                     outfile=path_to_file)
@@ -99,7 +98,8 @@ class GetContainerACLTest(ContSecurityTestBase):
         Test Description: Test that container get-acl command doesn't
             get ACL information without permission.
 
-        :avocado: tags=all,pr,security,container_acl,cont_get_acl_noperms
+        :avocado: tags=all,daily_regression,security,container_acl
+        :avocado: tags=cont_get_acl_noperms
         """
         # Let's give access to the pool to the root user
         self.get_dmg_command().pool_update_acl(
@@ -116,7 +116,6 @@ class GetContainerACLTest(ContSecurityTestBase):
         test_errs = []
         self.daos_cmd.container_get_acl(
             self.pool.uuid,
-            self.pool.svc_ranks[0],
             self.container.uuid,
             outfile="outfile.txt")
         test_errs.extend(self.error_handling(self.daos_cmd.result, "-1001"))

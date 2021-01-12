@@ -1,6 +1,7 @@
 hosts:
   test_servers:
     - server-A
+timeout: 50
 server_config:
   name: daos_server
 pool:
@@ -10,17 +11,13 @@ pool:
   control_method: dmg
 container:
   control_method: daos
-container_uuid_states: !mux
-  gooduuid:
-    uuid:
-      - PASS
-  baduuid:
-    uuid:
-      - FAIL
-handle_states: !mux
-  goodpoh:
-    poh:
-      - PASS
-  badpoh:
-    poh:
-      - FAIL
+uuid_poh: !mux
+  good_uuid_good_poh:
+    uuid: PASS
+    poh: PASS
+  good_uuid_bad_poh:
+    uuid: PASS
+    poh: FAIL
+  bad_uuid_good_poh:
+    uuid: FAIL
+    poh: PASS

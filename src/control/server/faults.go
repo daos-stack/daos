@@ -109,6 +109,14 @@ func FaultPoolInvalidRanks(invalid []system.Rank) *fault.Fault {
 	)
 }
 
+func FaultPoolDuplicateLabel(dupe string) *fault.Fault {
+	return serverFault(
+		code.ServerPoolDuplicateLabel,
+		fmt.Sprintf("pool label %q already exists in the system", dupe),
+		"retry the request with a unique pool label",
+	)
+}
+
 func FaultInsufficientFreeHugePages(free, requested int) *fault.Fault {
 	return serverFault(
 		code.ServerInsufficientFreeHugePages,
@@ -130,6 +138,14 @@ func FaultBdevNotFound(bdevs []string) *fault.Fault {
 		code.ServerBdevNotFound,
 		fmt.Sprintf("NVMe SSD%s %v not found", common.Pluralise("", len(bdevs)), bdevs),
 		fmt.Sprintf("check SSD%s %v that are specified in server config exist", common.Pluralise("", len(bdevs)), bdevs),
+	)
+}
+
+func FaultWrongSystem(reqName, sysName string) *fault.Fault {
+	return serverFault(
+		code.ServerWrongSystem,
+		fmt.Sprintf("request system does not match running system (%s != %s)", reqName, sysName),
+		"retry the request with the correct system name",
 	)
 }
 

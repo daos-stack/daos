@@ -27,6 +27,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -438,13 +439,19 @@ func (c *Server) Validate(log logging.Logger) (err error) {
 		return FaultConfigNoProvider
 	}
 
-	// only single access point valid for now
-	if len(c.AccessPoints) != 1 {
-		return FaultConfigBadAccessPoints
+	c.AccessPoints, err = common.ParseHostList(c.AccessPoints, c.ControlPort)
+	if err != nil {
+		return errors.Wrap(err, "unable to parse access_points")
 	}
-	for i := range c.AccessPoints {
-		// apply configured control port if not supplied
-		host, port, err := common.SplitPort(c.AccessPoints[i], c.ControlPort)
+	switch {
+	case len(c.AccessPoints) < 1:
+		return FaultConfigBadAccessPoints
+	case len(c.AccessPoints)%2 == 0:
+		return FaultConfigEvenAccessPoints
+	}
+
+	for _, ap := range c.AccessPoints {
+		host, port, err := net.SplitHostPort(ap)
 		if err != nil {
 			return errors.Wrap(FaultConfigBadAccessPoints, err.Error())
 		}
@@ -457,8 +464,6 @@ func (c *Server) Validate(log logging.Logger) (err error) {
 		if port == "0" {
 			return FaultConfigBadControlPort
 		}
-
-		c.AccessPoints[i] = fmt.Sprintf("%s:%s", host, port)
 	}
 
 	netCtx, err := netdetect.Init(context.Background())

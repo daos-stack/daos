@@ -409,6 +409,7 @@ class DmgCommandBase(YamlCommand):
                     DmgCommandBase.StorageSubCommand.FormatSubCommand,
                     self).__init__(
                         "/run/dmg/storage/format/*", "format")
+                self.verbose = FormattedParameter("--verbose", False)
                 self.reformat = FormattedParameter("--reformat", False)
 
         class PrepareSubCommand(CommandWithParameters):
@@ -618,6 +619,8 @@ class DmgCommandBase(YamlCommand):
                     DmgCommandBase.SystemSubCommand.StartSubCommand,
                     self).__init__(
                         "/run/dmg/system/start/*", "start")
+                self.ranks = FormattedParameter("--ranks={}")
+                self.rank_hosts = FormattedParameter("--rank-hosts={}")
 
         class StopSubCommand(CommandWithParameters):
             """Defines an object for the dmg system stop command."""

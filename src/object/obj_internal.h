@@ -176,7 +176,9 @@ struct obj_reasb_req {
 	/* only for single-value IO flag */
 					 orr_singv_only:1,
 	/* the flag of IOM re-allocable (used for EC IOM merge) */
-					 orr_iom_realloc:1;
+					 orr_iom_realloc:1,
+	/* iod_size is set by IO reply */
+					 orr_size_set:1;
 };
 
 static inline void
@@ -207,6 +209,12 @@ struct migrate_pool_tls {
 	/* Container/objects to be migrated will be attached to the tree */
 	daos_handle_t		mpt_root_hdl;
 	struct btr_root		mpt_root;
+
+	/* Container/objects already migrated will be attached to the tree, to
+	 * avoid the object being migrated multiple times.
+	 */
+	daos_handle_t		mpt_migrated_root_hdl;
+	struct btr_root		mpt_migrated_root;
 
 	/* Hash table to store the container uuids which have already been
 	 * deleted (used by reintegration)
@@ -461,7 +469,7 @@ void obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr);
 int obj_bulk_prep(d_sg_list_t *sgls, unsigned int nr, bool bulk_bind,
 		  crt_bulk_perm_t bulk_perm, tse_task_t *task,
 		  crt_bulk_t **p_bulks);
-struct daos_oclass_attr *obj_get_oca(struct dc_object *obj, bool force_check);
+struct daos_oclass_attr *obj_get_oca(struct dc_object *obj);
 bool obj_is_ec(struct dc_object *obj);
 int obj_get_replicas(struct dc_object *obj);
 int obj_shard_open(struct dc_object *obj, unsigned int shard,

@@ -1,4 +1,4 @@
-.TH dmg 1 "9 November 2020"
+.TH dmg 1 "4 December 2020"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -53,8 +53,8 @@ Comma separated list of access point addresses <ipv4addr/hostname>
 \fB\fB\-p\fR, \fB\-\-num-pmem\fR\fP
 Minimum number of SCM (pmem) devices required per storage host in DAOS system
 .TP
-\fB\fB\-n\fR, \fB\-\-num-nvme\fR\fP
-Minimum number of NVMe devices required per storage host in DAOS system
+\fB\fB\-n\fR, \fB\-\-num-nvme\fR <default: \fI"1"\fR>\fP
+Minimum number of NVMe devices required per storage host in DAOS system, set to 0 to generate pmem-only config
 .TP
 \fB\fB\-c\fR, \fB\-\-net-class\fR <default: \fI"best-available"\fR>\fP
 Network class preferred
@@ -140,7 +140,7 @@ Delete an entry from a DAOS pool's Access Control List
 
 .TP
 \fB\fB\-\-pool\fR (\fIrequired\fR)\fP
-UUID of DAOS pool
+Unique ID of DAOS pool
 .TP
 \fB\fB\-p\fR, \fB\-\-principal\fR (\fIrequired\fR)\fP
 Principal whose entry should be removed
@@ -154,7 +154,7 @@ Destroy a DAOS pool
 
 .TP
 \fB\fB\-\-pool\fR (\fIrequired\fR)\fP
-UUID of DAOS pool to destroy
+Unique ID of DAOS pool
 .TP
 \fB\fB\-f\fR, \fB\-\-force\fR\fP
 Force removal of DAOS pool
@@ -168,7 +168,7 @@ Drain targets from a rank
 
 .TP
 \fB\fB\-\-pool\fR (\fIrequired\fR)\fP
-UUID of the DAOS pool to drain a target in
+Unique ID of DAOS pool
 .TP
 \fB\fB\-\-rank\fR (\fIrequired\fR)\fP
 Rank of the targets to be drained
@@ -185,7 +185,7 @@ Evict all pool connections to a DAOS pool
 
 .TP
 \fB\fB\-\-pool\fR (\fIrequired\fR)\fP
-UUID of DAOS pool to evict connection to
+Unique ID of DAOS pool
 .TP
 \fB\fB\-S\fR, \fB\-\-sys\fR <default: \fI"daos_server"\fR>\fP
 DAOS system that the pools connections be evicted from.
@@ -199,7 +199,7 @@ Exclude targets from a rank
 
 .TP
 \fB\fB\-\-pool\fR (\fIrequired\fR)\fP
-UUID of the DAOS pool to exclude a target from
+Unique ID of DAOS pool
 .TP
 \fB\fB\-\-rank\fR (\fIrequired\fR)\fP
 Rank of the targets to be excluded
@@ -216,7 +216,7 @@ Extend a DAOS pool to include new ranks.
 
 .TP
 \fB\fB\-\-pool\fR (\fIrequired\fR)\fP
-UUID of the DAOS pool to extend
+Unique ID of DAOS pool
 .TP
 \fB\fB\-\-ranks\fR (\fIrequired\fR)\fP
 Comma-separated list of ranks to add to the pool
@@ -236,7 +236,7 @@ Get a DAOS pool's Access Control List
 
 .TP
 \fB\fB\-\-pool\fR (\fIrequired\fR)\fP
-UUID of DAOS pool
+Unique ID of DAOS pool
 .TP
 \fB\fB\-o\fR, \fB\-\-outfile\fR\fP
 Output ACL to file
@@ -261,7 +261,7 @@ Overwrite a DAOS pool's Access Control List
 
 .TP
 \fB\fB\-\-pool\fR (\fIrequired\fR)\fP
-UUID of DAOS pool
+Unique ID of DAOS pool
 .TP
 \fB\fB\-a\fR, \fB\-\-acl-file\fR (\fIrequired\fR)\fP
 Path for new Access Control List file
@@ -275,7 +275,7 @@ Query a DAOS pool
 
 .TP
 \fB\fB\-\-pool\fR (\fIrequired\fR)\fP
-UUID of DAOS pool to query
+Unique ID of DAOS pool
 .SS pool reintegrate
 Reintegrate targets for a rank
 
@@ -286,7 +286,7 @@ Reintegrate targets for a rank
 
 .TP
 \fB\fB\-\-pool\fR (\fIrequired\fR)\fP
-UUID of the DAOS pool to start reintegration in
+Unique ID of DAOS pool
 .TP
 \fB\fB\-\-rank\fR (\fIrequired\fR)\fP
 Rank of the targets to be reintegrated
@@ -303,7 +303,7 @@ Set pool property
 
 .TP
 \fB\fB\-\-pool\fR (\fIrequired\fR)\fP
-UUID of DAOS pool
+Unique ID of DAOS pool
 .TP
 \fB\fB\-n\fR, \fB\-\-name\fR (\fIrequired\fR)\fP
 Name of property to be set
@@ -320,7 +320,7 @@ Update entries in a DAOS pool's Access Control List
 
 .TP
 \fB\fB\-\-pool\fR (\fIrequired\fR)\fP
-UUID of DAOS pool
+Unique ID of DAOS pool
 .TP
 \fB\fB\-a\fR, \fB\-\-acl-file\fR\fP
 Path for new Access Control List file
@@ -346,6 +346,22 @@ Show results of each SCM & NVMe device format operation
 .TP
 \fB\fB\-\-reformat\fR\fP
 Reformat storage overwriting any existing filesystem (CAUTION: destructive operation)
+.SS storage identify
+Blink the status LED on a given VMD device for visual SSD identification.
+
+\fBAliases\fP: i
+
+.SS storage identify vmd
+Quickly blink the status LED on a VMD NVMe SSD for device identification.
+
+\fBUsage\fP: identify vmd [vmd-OPTIONS]
+.TP
+
+\fBAliases\fP: n
+
+.TP
+\fB\fB\-\-uuid\fR (\fIrequired\fR)\fP
+Device UUID of the VMD device to identify
 .SS storage prepare
 Prepare SCM and NVMe storage attached to remote servers.
 
@@ -444,6 +460,28 @@ Show SCM & NVMe storage space utilization per storage server
 
 \fBAliases\fP: u
 
+.SS storage replace
+Replace a storage device that has been hot-removed with a new device.
+
+\fBAliases\fP: r
+
+.SS storage replace nvme
+Replace an evicted/FAULTY NVMe SSD with another device.
+
+\fBUsage\fP: replace nvme [nvme-OPTIONS]
+.TP
+
+\fBAliases\fP: n
+
+.TP
+\fB\fB\-\-old-uuid\fR (\fIrequired\fR)\fP
+Device UUID of hot-removed SSD
+.TP
+\fB\fB\-\-new-uuid\fR (\fIrequired\fR)\fP
+Device UUID of new device
+.TP
+\fB\fB\-\-no-reint\fR\fP
+Bypass reintegration of device and just bring back online.
 .SS storage scan
 Scan SCM and NVMe storage attached to remote servers.
 

@@ -315,11 +315,23 @@ func TestServer_ConfigValidation(t *testing.T) {
 			},
 			nil,
 		},
-		"multiple access points": {
+		"multiple access points (even)": {
 			func(c *Server) *Server {
 				return c.WithAccessPoints("1.2.3.4:1234", "5.6.7.8:5678")
 			},
-			FaultConfigBadAccessPoints,
+			FaultConfigEvenAccessPoints,
+		},
+		"multiple access points (odd)": {
+			func(c *Server) *Server {
+				return c.WithAccessPoints("1.2.3.4:1234", "5.6.7.8:5678", "1.5.3.8:6247")
+			},
+			nil,
+		},
+		"multiple access points (dupes)": {
+			func(c *Server) *Server {
+				return c.WithAccessPoints("1.2.3.4:1234", "5.6.7.8:5678", "1.2.3.4:1234")
+			},
+			FaultConfigEvenAccessPoints,
 		},
 		"no access points": {
 			func(c *Server) *Server {
@@ -449,6 +461,7 @@ func TestServer_ConfigDuplicateValues(t *testing.T) {
 		return ioserver.NewConfig().
 			WithLogFile("a").
 			WithFabricInterface("a").
+			WithFabricInterfacePort(42).
 			WithScmClass("ram").
 			WithScmRamdiskSize(1).
 			WithScmMountPoint("a")
@@ -457,6 +470,7 @@ func TestServer_ConfigDuplicateValues(t *testing.T) {
 		return ioserver.NewConfig().
 			WithLogFile("b").
 			WithFabricInterface("b").
+			WithFabricInterfacePort(42).
 			WithScmClass("ram").
 			WithScmRamdiskSize(1).
 			WithScmMountPoint("b")
@@ -529,6 +543,7 @@ func TestServer_ConfigNetworkDeviceClass(t *testing.T) {
 			WithLogFile("a").
 			WithScmClass("ram").
 			WithScmRamdiskSize(1).
+			WithFabricInterfacePort(42).
 			WithScmMountPoint("a")
 	}
 	configB := func() *ioserver.Config {
@@ -536,6 +551,7 @@ func TestServer_ConfigNetworkDeviceClass(t *testing.T) {
 			WithLogFile("b").
 			WithScmClass("ram").
 			WithScmRamdiskSize(1).
+			WithFabricInterfacePort(43).
 			WithScmMountPoint("b")
 	}
 

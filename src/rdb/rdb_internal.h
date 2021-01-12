@@ -1,4 +1,4 @@
-/**
+/*
  * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,6 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
+ * \file
+ *
  * rdb: Internal Declarations
  */
 
@@ -214,7 +216,7 @@ CRT_RPC_DECLARE(rdb_op, DAOS_ISEQ_RDB_OP, DAOS_OSEQ_RDB_OP)
 
 #define DAOS_ISEQ_RDB_REQUESTVOTE /* input fields */		 \
 	((struct rdb_op_in)	(rvi_op)		CRT_VAR) \
-	((msg_requestvote_t)	(rvi_msg)		CRT_VAR)
+	((msg_requestvote_t)	(rvi_msg)		CRT_RAW)
 
 #define DAOS_OSEQ_RDB_REQUESTVOTE /* output fields */		 \
 	((struct rdb_op_out)	(rvo_op)		CRT_VAR) \
@@ -229,24 +231,23 @@ CRT_RPC_DECLARE(rdb_requestvote, DAOS_ISEQ_RDB_REQUESTVOTE,
 
 #define DAOS_OSEQ_RDB_APPENDENTRIES /* output fields */		 \
 	((struct rdb_op_out)	(aeo_op)		CRT_VAR) \
-	((msg_appendentries_response_t) (aeo_msg)	CRT_VAR)
+	((msg_appendentries_response_t) (aeo_msg)	CRT_RAW)
 
 CRT_RPC_DECLARE(rdb_appendentries, DAOS_ISEQ_RDB_APPENDENTRIES,
 		DAOS_OSEQ_RDB_APPENDENTRIES)
 
 struct rdb_local {
-	d_iov_t		rl_kds_iov;	/* isi_kds buffer */
-	d_iov_t		rl_data_iov;	/* isi_data buffer */
+	d_iov_t	rl_kds_iov;	/* isi_kds buffer */
+	d_iov_t	rl_data_iov;	/* isi_data buffer */
 };
 
 #define DAOS_ISEQ_RDB_INSTALLSNAPSHOT /* input fields */	 \
 	((struct rdb_op_in)	(isi_op)		CRT_VAR) \
 	((msg_installsnapshot_t) (isi_msg)		CRT_VAR) \
-	((uint32_t)		(isi_padding)		CRT_VAR) \
 	/* chunk sequence number */				 \
 	((uint64_t)		(isi_seq)		CRT_VAR) \
 	/* chunk anchor */					 \
-	((struct rdb_anchor)	(isi_anchor)		CRT_VAR) \
+	((struct rdb_anchor)	(isi_anchor)		CRT_RAW) \
 	/* daos_key_desc_t[] */					 \
 	((crt_bulk_t)		(isi_kds)		CRT_VAR) \
 	/* described by isi_kds */				 \
@@ -263,7 +264,7 @@ struct rdb_local {
 	/* last seq number */					 \
 	((uint64_t)		(iso_seq)		CRT_VAR) \
 	/* last anchor */					 \
-	((struct rdb_anchor)	(iso_anchor)		CRT_VAR)
+	((struct rdb_anchor)	(iso_anchor)		CRT_RAW)
 
 CRT_RPC_DECLARE(rdb_installsnapshot, DAOS_ISEQ_RDB_INSTALLSNAPSHOT,
 		DAOS_OSEQ_RDB_INSTALLSNAPSHOT)

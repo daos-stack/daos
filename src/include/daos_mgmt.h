@@ -48,19 +48,6 @@ typedef struct {
  */
 
 /**
- * Kill a remote server.
- *
- * \param grp	[IN]	Process set name of the DAOS servers managing the pool
- * \param rank	[IN]	Rank to kill
- * \param force	[IN]	Abrupt shutdown, no cleanup
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- */
-int
-daos_mgmt_svc_rip(const char *grp, d_rank_t rank, bool force,
-		  daos_event_t *ev);
-
-/**
  * Exclude a set of storage targets from a pool.
  *
  * \param uuid	[IN]	UUID of the pool
@@ -84,34 +71,6 @@ int
 daos_pool_tgt_exclude(const uuid_t uuid, const char *grp,
 		      const d_rank_list_t *svc, struct d_tgt_list *tgts,
 		      daos_event_t *ev);
-
-/**
- * Extend the pool to more targets. If \a tgts is NULL, this function
- * will extend the pool to all the targets in the group, otherwise it will
- * only extend the pool to the included targets.
- *
- * NB: Doubling storage targets in the pool can have better performance than
- * arbitrary targets adding.
- *
- * \param uuid	[IN]	UUID of the pool to extend
- * \param grp	[IN]	Process set name of the DAOS servers managing the pool
- * \param tgts	[IN]	Optional, only extend the pool to included targets.
- * \param failed
- *		[OUT]	Optional, buffer to store faulty targets on failure.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_INVAL	Invalid parameter
- *			-DER_UNREACH	Network is unreachable
- *			-DER_NO_PERM	Permission denied
- *			-DER_NONEXIST	Storage target is nonexistent
- */
-int
-daos_pool_extend(const uuid_t uuid, const char *grp, d_rank_list_t *tgts,
-		 d_rank_list_t *failed, daos_event_t *ev);
 
 /**
  * reintegrate a set of storage targets from a pool.
@@ -209,58 +168,6 @@ int
 daos_pool_stop_svc(daos_handle_t poh, daos_event_t *ev);
 
 /**
- * Add service replicas to an existing replicated service instance.
- *
- * \param uuid	[IN]	UUID of the service to add replicas to.
- * \param group	[IN]	Name of DAOS server process set managing the service.
- * \param svc	[IN]	List of service ranks.
- * \param targets
- *		[IN]	Ranks of the replicas to be added.
- * \param failed
- *		[OUT]	Optional, list of ranks which could not be added.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_INVAL	Invalid parameter
- *			-DER_UNREACH	Network is unreachable
- *			-DER_NO_PERM	Permission denied
- *			-DER_NONEXIST	Storage target is nonexistent
- */
-int
-daos_pool_add_replicas(const uuid_t uuid, const char *group,
-		       d_rank_list_t *svc, d_rank_list_t *targets,
-		       d_rank_list_t *failed, daos_event_t *ev);
-
-/**
- * Remove service replicas from an existing replicated service instance.
- *
- * \param uuid	[IN]	UUID of the service to remove replicas from.
- * \param group	[IN]	Name of DAOS server process set managing the service.
- * \param svc	[IN]	List of service ranks.
- * \param targets
- *		[IN]	Ranks of the replicas to be removed.
- * \param failed
- *		[OUT]	Optional, list of ranks which could not be removed.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_INVAL	Invalid parameter
- *			-DER_UNREACH	Network is unreachable
- *			-DER_NO_PERM	Permission denied
- *			-DER_NONEXIST	Storage target is nonexistent
- */
-int
-daos_pool_remove_replicas(const uuid_t uuid, const char *group,
-			  d_rank_list_t *svc, d_rank_list_t *targets,
-			  d_rank_list_t *failed, daos_event_t *ev);
-
-/**
  * The operation code for DAOS client to set different parameters globally
  * on all servers.
  */
@@ -287,8 +194,8 @@ enum {
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
-daos_mgmt_set_params(const char *grp, d_rank_t rank, unsigned int key_id,
-		     uint64_t value, uint64_t value_extra, daos_event_t *ev);
+daos_debug_set_params(const char *grp, d_rank_t rank, unsigned int key_id,
+		      uint64_t value, uint64_t value_extra, daos_event_t *ev);
 
 /**
  * Add mark to servers.
@@ -296,7 +203,7 @@ daos_mgmt_set_params(const char *grp, d_rank_t rank, unsigned int key_id,
  * \param mark	[IN]	mark to add to the debug log.
  */
 int
-daos_mgmt_add_mark(const char *mark);
+daos_debug_add_mark(const char *mark);
 
 /**
  * Query internal blobstore state for given blobstore uuid in the specified

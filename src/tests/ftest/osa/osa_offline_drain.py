@@ -24,6 +24,7 @@
 import time
 import random
 from osa_utils import OSAUtils
+from apricot import skipForTicket
 from test_utils_pool import TestPool
 
 
@@ -51,7 +52,7 @@ class OSAOfflineDrain(OSAUtils):
         pool = {}
         pool_uuid = []
         target_list = []
-        drain_servers = len(self.hostlist_servers) - 1
+        drain_servers = (len(self.hostlist_servers) * 2) - 1
 
         # Exclude target : random two targets  (target idx : 0-7)
         n = random.randint(0, 6)
@@ -95,6 +96,8 @@ class OSAOfflineDrain(OSAUtils):
                 if pver_drain > pver_begin + 1:
                     break
 
+            self.assert_on_rebuild_failure()
+
             pver_drain = self.get_pool_version()
             self.log.info("Pool Version after drain %d", pver_drain)
             # Check pool version incremented after pool drain
@@ -108,13 +111,15 @@ class OSAOfflineDrain(OSAUtils):
         if data:
             self.verify_single_object()
 
+    @skipForTicket("DAOS-6107")
     def test_osa_offline_drain(self):
         """
         JIRA ID: DAOS-4750
 
         Test Description: Validate Offline Drain
 
-        :avocado: tags=all,pr,hw,large,osa,osa_drain,offline_drain
+        :avocado: tags=all,daily_regression,hw,medium,ib2
+        :avocado: tags=osa,osa_drain,offline_drain
         """
         for pool_num in range(1, 3):
             self.run_offline_drain_test(pool_num, True)

@@ -49,7 +49,7 @@ func TestPretty_PrintNVMeHealthMap(t *testing.T) {
 		t.Fatal(err)
 	}
 	controllerAwTS.HealthStats.Timestamp = tt
-	ttStr := time.Unix(int64(tt), 0).Format(time.UnixDate)
+	ttStr := getTimestampString(tt)
 
 	for name, tc := range map[string]struct {
 		hsm         control.HostStorageMap
@@ -299,11 +299,13 @@ host1
 -----
 PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
   SMD Devices
-    UUID:%s Targets:%v Rank:%d State:%s
+    UUID:%s [TrAddr:]
+      Targets:%v Rank:%d State:%s
 
 PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
   SMD Devices
-    UUID:%s Targets:%v Rank:%d State:%s
+    UUID:%s [TrAddr:]
+      Targets:%v Rank:%d State:%s
 
 `,
 				controllerC.PciAddr, controllerC.Model, controllerC.FwRev,
@@ -334,13 +336,17 @@ host1
 -----
 PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
   SMD Devices
-    UUID:%s Targets:%v Rank:%d State:%s
-    UUID:%s Targets:%v Rank:%d State:%s
+    UUID:%s [TrAddr:]
+      Targets:%v Rank:%d State:%s
+    UUID:%s [TrAddr:]
+      Targets:%v Rank:%d State:%s
 
 PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
   SMD Devices
-    UUID:%s Targets:%v Rank:%d State:%s
-    UUID:%s Targets:%v Rank:%d State:%s
+    UUID:%s [TrAddr:]
+      Targets:%v Rank:%d State:%s
+    UUID:%s [TrAddr:]
+      Targets:%v Rank:%d State:%s
 
 `,
 				controllerE.PciAddr, controllerE.Model, controllerE.FwRev,

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -65,6 +65,9 @@ type (
 		UUID             string // UUID of pool or device for single result
 		Rank             system.Rank
 		Target           string
+		ReplaceUUID      string // UUID of new device to replace storage
+		NoReint          bool   // for device replacement
+		Identify         bool   // for VMD LED device identification
 	}
 
 	// SmdQueryResp represents the results of performing
@@ -86,7 +89,7 @@ func (si *SmdInfo) addRankPools(rank system.Rank, pools []*SmdPool) {
 }
 
 func (sqr *SmdQueryResp) addHostResponse(hr *HostResponse) (err error) {
-	pbResp, ok := hr.Message.(*mgmtpb.SmdQueryResp)
+	pbResp, ok := hr.Message.(*ctlpb.SmdQueryResp)
 	if !ok {
 		return errors.Errorf("unable to unpack message: %+v", hr.Message)
 	}
@@ -137,16 +140,21 @@ func SmdQuery(ctx context.Context, rpcClient UnaryInvoker, req *SmdQueryReq) (*S
 	}
 	if req.UUID != "" {
 		if err := checkUUID(req.UUID); err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "bad device UUID")
+		}
+	}
+	if req.ReplaceUUID != "" {
+		if err := checkUUID(req.ReplaceUUID); err != nil {
+			return nil, errors.Wrap(err, "bad new device UUID for replacement")
 		}
 	}
 
-	pbReq := new(mgmtpb.SmdQueryReq)
+	pbReq := new(ctlpb.SmdQueryReq)
 	if err := convert.Types(req, pbReq); err != nil {
 		return nil, errors.Wrap(err, "unable to convert request to protobuf")
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).SmdQuery(ctx, pbReq)
+		return ctlpb.NewCtlSvcClient(conn).SmdQuery(ctx, pbReq)
 	})
 
 	if req.SetFaulty {

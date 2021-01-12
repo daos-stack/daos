@@ -39,6 +39,7 @@
 This provides consistency checking for CaRT log files.
 """
 
+import sys
 import time
 import argparse
 HAVE_TABULATE = True
@@ -159,12 +160,6 @@ class RegionCounter():
                                                       end_time - start_time,
                                                       data)
 
-# CaRT Error numbers to convert to strings.
-C_ERRNOS = {0: '-DER_SUCCESS',
-            -1006: 'DER_UNREACH',
-            -1011: '-DER_TIMEDOUT',
-            -1032: '-DER_EVICTED'}
-
 # Use a global variable here so show_line can remember previously reported
 # error lines.
 shown_logs = set()
@@ -205,6 +200,7 @@ mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
                      'cont_iv_prop_g2l': ('prop_entry->dpe_str'),
                      'ds_mgmt_drpc_group_update': ('body'),
                      'enum_cont_cb': ('ptr'),
+                     'pool_iv_conns_resize': ('new_conns'),
                      'obj_enum_prep_sgls': ('dst_sgls[i].sg_iovs',
                                             'dst_sgls[i].sg_iovs[j].iov_buf'),
                      'notify_ready': ('reqb'),
@@ -212,6 +208,7 @@ mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
                      'iv_on_get': ('iv_value->sg_iovs[0].iov_buf'),
                      'oid_iv_ent_init': ('oid_entry'),
                      'pool_svc_name_cb': ('s'),
+                     'daos_iov_copy': ('dst->iov_buf'),
                      'local_name_to_principal_name': ('*name'),
                      'pack_daos_response': ('body'),
                      'ds_mgmt_drpc_get_attach_info': ('body'),
@@ -227,7 +224,9 @@ mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
                      'auth_cred_to_iov': ('packed'),
                      'd_sgl_init': ('sgl->sg_iovs'),
                      'daos_csummer_alloc_iods_csums': ('buf'),
-                     'daos_sgl_init': ('sgl->sg_iovs')}
+                     'get_pool_svc_ranks': ('req'),
+                     'send_monitor_request': ('reqb'),
+                     'ds_mgmt_drpc_pool_evict': ('body')}
 # pylint: enable=line-too-long
 
 mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
@@ -236,7 +235,6 @@ mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
                     'crt_rpc_priv_free': ('rpc_priv'),
                     'crt_group_config_save': ('url'),
                     'get_self_uri': ('uri'),
-                    'd_sgl_fini': ('sgl->sg_iovs[i].iov_buf'),
                     'tc_srv_start_basic': ('my_uri'),
                     'crt_init_opt': ('crt_gdata.cg_addr'),
                     'cont_prop_default_copy': ('entry_def->dpe_str'),
@@ -245,8 +243,8 @@ mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
                     'init_pool_metadata': ('uuids'),
                     'fini_free': ('svc->s_name',
                                   'svc->s_db_path'),
-                    'daos_sgl_fini': ('sgl->sg_iovs[i].iov_buf',
-                                      'sgl->sg_iovs'),
+                    'd_sgl_fini': ('sgl->sg_iovs[i].iov_buf',
+                                   'sgl->sg_iovs'),
                     'd_rank_list_free': ('rank_list',
                                          'rank_list->rl_ranks'),
                     'pool_prop_default_copy': ('entry_def->dpe_str'),
@@ -457,6 +455,16 @@ class LogTest():
 
         for line in self._li.new_iter(pid=pid, stateful=True):
             self.save_log_line(line)
+            try:
+                msg = ''.join(line._fields[2:])
+                # Warn if a line references the name of the function it was in,
+                # but skip short function names or _internal suffixes.
+                if line.function in msg and len(line.function) > 6 and \
+                   '{}_internal'.format(line.function) not in msg:
+                    show_line(line, 'NORMAL',
+                              'Logging references function name')
+            except AttributeError:
+                pass
             if abort_on_warning:
                 if line.level <= cart_logparse.LOG_LEVELS['WARN']:
                     show = True
@@ -468,6 +476,17 @@ class LogTest():
                             show = False
                             self.fi_location = line
                         elif '-1009' in line.get_msg():
+
+                            src_offset = line.lineno - self.fi_location.lineno
+                            if line.filename == self.fi_location.filename:
+                                src_offset = line.lineno - self.fi_location.lineno
+                                if src_offset > 0 and src_offset < 5:
+                                    show_line(line, 'NORMAL',
+                                              'Logging allocation failure')
+
+                            if not line.get_msg().endswith("DER_NOMEM(-1009): 'Out of memory'"):
+                                show_line(line, 'LOW',
+                                          'Error does not use DF_RC')
                             # For the fault injection test do not report
                             # errors for lines that print -DER_NOMEM, as
                             # this highlights other errors and lines which
@@ -478,7 +497,7 @@ class LogTest():
                         # that fail during shutdown.
                         if line.rpc_opcode == '0xfe000000':
                             show = False
-                    elif line.fac == 'external':
+                    if line.fac == 'external':
                         show = False
                     if show:
                         # Allow WARNING or ERROR messages, but anything higher
@@ -688,8 +707,7 @@ class LogTest():
             elif line.is_callback():
                 rpc = line.descriptor
                 rpc_state = 'COMPLETED'
-                result = line.get_field(-1).rstrip('.')
-                result = C_ERRNOS.get(int(result), result)
+                result = line.get_field(13).split('(')[0]
                 c_state_names.add(result)
                 opcode = current_opcodes[line.descriptor]
                 try:
@@ -726,10 +744,10 @@ class LogTest():
         names = sorted(c_state_names)
         if names:
             try:
-                names.remove('-DER_SUCCESS')
+                names.remove('DER_SUCCESS')
             except ValueError:
                 pass
-            names.insert(0, '-DER_SUCCESS')
+            names.insert(0, 'DER_SUCCESS')
         headers = ['OPCODE',
                    'ALLOCATED',
                    'SUBMITTED',
@@ -738,7 +756,7 @@ class LogTest():
                    'DEALLOCATED']
 
         for state in names:
-            headers.append(state)
+            headers.append('-{}'.format(state))
         for (op, counts) in sorted(op_state_counters.items()):
             row = [op,
                    counts['ALLOCATED'],
@@ -780,9 +798,16 @@ def run():
     args = parser.parse_args()
     try:
         log_iter = cart_logparse.LogIter(args.file)
-    except IsADirectoryError:
-        print('Log tracing on directory not possible')
-        return
+    except UnicodeDecodeError:
+        # If there is a unicode error in the log file then retry with checks
+        # enabled which should both report the error and run in latin-1 so
+        # perform the log parsing anyway.  The check for log_iter.file_corrupt
+        # later on will ensure that this error does not get logged, then
+        # ignored.
+        # The only possible danger here is the file is simply too big to check
+        # the encoding on, in which case this second attempt would fail with
+        # an out-of-memory error.
+        log_iter = cart_logparse.LogIter(args.file, check_encoding=True)
     test_iter = LogTest(log_iter)
     if args.dfuse:
         test_iter.check_dfuse_io()
@@ -793,6 +818,8 @@ def run():
             print('Errors in log file, ignoring')
         except NotAllFreed:
             print('Memory leaks, ignoring')
+    if log_iter.file_corrupt:
+        sys.exit(1)
 
 if __name__ == '__main__':
     run()

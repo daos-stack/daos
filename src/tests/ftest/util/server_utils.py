@@ -22,12 +22,14 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import getpass
+import os
 import socket
+import time
 
 from command_utils_base import \
     CommandFailure, FormattedParameter, YamlParameters, CommandWithParameters
 from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
-from general_utils import pcmd, get_log_file
+from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human
 from dmg_utils import DmgCommand
 
 
@@ -42,7 +44,7 @@ class DaosServerCommand(YamlCommand):
     FORMAT_PATTERN = "(SCM format required)(?!;)"
     REFORMAT_PATTERN = "Metadata format required"
 
-    def __init__(self, path="", yaml_cfg=None, timeout=20):
+    def __init__(self, path="", yaml_cfg=None, timeout=30):
         """Create a daos_server command object.
 
         Args:
@@ -50,7 +52,7 @@ class DaosServerCommand(YamlCommand):
             yaml_cfg (YamlParameters, optional): yaml configuration parameters.
                 Defaults to None.
             timeout (int, optional): number of seconds to wait for patterns to
-                appear in the subprocess output. Defaults to 20 seconds.
+                appear in the subprocess output. Defaults to 30 seconds.
         """
         super(DaosServerCommand, self).__init__(
             "/run/daos_server/*", "daos_server", path, yaml_cfg, timeout)
@@ -310,7 +312,7 @@ class DaosServerManager(SubprocessManager):
         self.manager.job.sub_command_override = "start"
 
         # Dmg command to access this group of servers which will be configured
-        # to access the doas_servers when they are started
+        # to access the daos_servers when they are started
         self.dmg = DmgCommand(self.manager.job.command_path, dmg_cfg)
 
     def get_params(self, test):
@@ -393,7 +395,7 @@ class DaosServerManager(SubprocessManager):
             self.log.info("Cleaning up the %s directory.", str(scm_mount))
 
             # Remove the superblocks
-            cmd = "rm -fr {}/*".format(scm_mount)
+            cmd = "sudo rm -fr {}/*".format(scm_mount)
             if cmd not in clean_cmds:
                 clean_cmds.append(cmd)
 
@@ -462,10 +464,11 @@ class DaosServerManager(SubprocessManager):
             cmd.sub_command_class.sub_command_class.nvme_only.value = True
 
         if using_nvme:
-            cmd.sub_command_class.sub_command_class.hugepages.value = 4096
+            hugepages = self.get_config_value("nr_hugepages")
+            cmd.sub_command_class.sub_command_class.hugepages.value = hugepages
 
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
-        result = pcmd(self._hosts, str(cmd), timeout=30)
+        result = pcmd(self._hosts, str(cmd), timeout=40)
         if len(result) > 1 or 0 not in result:
             dev_type = "nvme"
             if using_dcpm and using_nvme:
@@ -486,10 +489,21 @@ class DaosServerManager(SubprocessManager):
             raise ServerFailed(
                 "Failed to start servers before format: {}".format(error))
 
-    def detect_io_server_start(self):
-        """Detect when all the daos_io_servers have started."""
+    def detect_io_server_start(self, host_qty=None):
+        """Detect when all the daos_io_servers have started.
+
+        Args:
+            host_qty (int): number of servers expected to have been started.
+
+        Raises:
+            ServerFailed: if there was an error starting the servers after
+                formatting.
+
+        """
+        if host_qty is None:
+            hosts_qty = len(self._hosts)
         self.log.info("<SERVER> Waiting for the daos_io_servers to start")
-        self.manager.job.update_pattern("normal", len(self._hosts))
+        self.manager.job.update_pattern("normal", hosts_qty)
         if not self.manager.job.check_subprocess_status(self.manager.process):
             self.kill()
             raise ServerFailed("Failed to start servers after format")
@@ -558,7 +572,7 @@ class DaosServerManager(SubprocessManager):
         # be further investigated.
         self.dmg.storage_format(timeout=40)
 
-        # Wait for all the doas_io_servers to start
+        # Wait for all the daos_io_servers to start
         self.detect_io_server_start()
 
         return True
@@ -622,3 +636,189 @@ class DaosServerManager(SubprocessManager):
                 "variable!".format(name))
 
         return self.get_config_value(setting)
+
+    def get_single_system_state(self):
+        """Get the current homogeneous DAOS system state.
+
+        Raises:
+            ServerFailed: if a single state for all servers is not detected
+
+        Returns:
+            str: the current DAOS system state
+
+        """
+        data = self.dmg.system_query()
+        if not data:
+            # The regex failed to get the rank and state
+            raise ServerFailed(
+                "Error obtaining {} output: {}".format(self.dmg, data))
+        try:
+            states = list(set([data[rank]["state"] for rank in data]))
+        except KeyError:
+            raise ServerFailed(
+                "Unexpected result from {} - missing 'state' key: {}".format(
+                    self.dmg, data))
+        if len(states) > 1:
+            # Multiple states for different ranks detected
+            raise ServerFailed(
+                "Multiple system states ({}) detected:\n  {}".format(
+                    states, data))
+        return states[0]
+
+    def check_system_state(self, valid_states, max_checks=1):
+        """Check that the DAOS system state is one of the provided states.
+
+        Fail the test if the current state does not match one of the specified
+        valid states.  Optionally the state check can loop multiple times,
+        sleeping one second between checks, by increasing the number of maximum
+        checks.
+
+        Args:
+            valid_states (list): expected DAOS system states as a list of
+                lowercase strings
+            max_checks (int, optional): number of times to check the state.
+                Defaults to 1.
+
+        Raises:
+            ServerFailed: if there was an error detecting the server state or
+                the detected state did not match one of the valid states
+
+        Returns:
+            str: the matching valid detected state
+
+        """
+        checks = 0
+        daos_state = "????"
+        while daos_state not in valid_states and checks < max_checks:
+            if checks > 0:
+                time.sleep(1)
+            try:
+                daos_state = self.get_single_system_state().lower()
+            except ServerFailed as error:
+                raise error
+            checks += 1
+            self.log.info("System state check (%s): %s", checks, daos_state)
+        if daos_state not in valid_states:
+            raise ServerFailed(
+                "Error checking DAOS state, currently neither {} after "
+                "{} state check(s)!".format(valid_states, checks))
+        return daos_state
+
+    def system_start(self):
+        """Start the DAOS IO servers.
+
+        Raises:
+            ServerFailed: if there was an error starting the servers
+
+        """
+        self.log.info("Starting DAOS IO servers")
+        self.check_system_state(("stopped"))
+        self.dmg.system_start()
+        if self.dmg.result.exit_status != 0:
+            raise ServerFailed(
+                "Error starting DAOS:\n{}".format(self.dmg.result))
+
+    def system_stop(self, extra_states=None):
+        """Stop the DAOS IO servers.
+
+        Args:
+            extra_states (list, optional): a list of DAOS system states in
+                addition to "started" and "joined" that are verified prior to
+                issuing the stop. Defaults to None.
+
+        Raises:
+            ServerFailed: if there was an error stopping the servers
+
+        """
+        valid_states = ["started", "joined"]
+        if extra_states:
+            valid_states.extend(extra_states)
+        self.log.info("Stopping DAOS IO servers")
+        self.check_system_state(valid_states)
+        self.dmg.system_stop(force=True)
+        if self.dmg.result.exit_status != 0:
+            raise ServerFailed(
+                "Error stopping DAOS:\n{}".format(self.dmg.result))
+
+    def get_available_storage(self):
+        """Get the available SCM and NVMe storage.
+
+        Raises:
+            ServerFailed: if there was an error stopping the servers
+
+        Returns:
+            list: a list of the maximum available SCM and NVMe sizes in bytes
+
+        """
+        def get_host_capacity(key, device_names):
+            """Get the total storage capacity per host rank.
+
+            Args:
+                key (str): the capacity type, e.g. "scm" or "nvme"
+                device_names (list): the device names of this capacity type
+
+            Returns:
+                dict: a dictionary of total storage capacity per host rank
+
+            """
+            host_capacity = {}
+            for host in data:
+                device_sizes = []
+                for device in data[host][key]:
+                    if device in device_names:
+                        device_sizes.append(
+                            human_to_bytes(
+                                data[host][key][device]["capacity"]))
+                host_capacity[host] = sum(device_sizes)
+            return host_capacity
+
+        # Default maximum bytes for SCM and NVMe
+        storage = [0, 0]
+
+        using_dcpm = self.manager.job.using_dcpm
+        using_nvme = self.manager.job.using_nvme
+
+        if using_dcpm or using_nvme:
+            # Stop the DAOS IO servers in order to be able to scan the storage
+            self.system_stop()
+
+            # Scan all of the hosts for their SCM and NVMe storage
+            self.dmg.hostlist = self._hosts
+            data = self.dmg.storage_scan(verbose=True)
+            self.dmg.hostlist = self.get_config_value("access_points")
+            if self.dmg.result.exit_status != 0:
+                raise ServerFailed(
+                    "Error obtaining DAOS storage:\n{}".format(self.dmg.result))
+
+            # Restart the DAOS IO servers
+            self.system_start()
+
+        if using_dcpm:
+            # Find the sizes of the configured SCM storage
+            scm_devices = [
+                os.path.basename(path)
+                for path in self.get_config_value("scm_list") if path]
+            capacity = get_host_capacity("scm", scm_devices)
+            for host in sorted(capacity):
+                self.log.info("SCM capacity for %s: %s", host, capacity[host])
+            # Use the minimum SCM storage across all servers
+            storage[0] = capacity[min(capacity, key=capacity.get)]
+        else:
+            # Use the assigned scm_size
+            scm_size = self.get_config_value("scm_size")
+            storage[0] = human_to_bytes("{}GB".format(scm_size))
+
+        if using_nvme:
+            # Find the sizes of the configured NVMe storage
+            capacity = get_host_capacity(
+                "nvme", self.get_config_value("bdev_list"))
+            for host in sorted(capacity):
+                self.log.info("NVMe capacity for %s: %s", host, capacity[host])
+            # Use the minimum SCM storage across all servers
+            storage[1] = capacity[min(capacity, key=capacity.get)]
+
+        self.log.info(
+            "Total available storage:\n  SCM:  %s (%s)\n  NVMe: %s (%s)",
+            str(storage[0]), bytes_to_human(storage[0], binary=False),
+            str(storage[1]), bytes_to_human(storage[1], binary=False))
+        return storage

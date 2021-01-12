@@ -31,6 +31,11 @@ $ sudo reboot
 !!! warning
     VFIO support is a new feature for DAOS 1.2 and has been tested on CentOS 7.7
 
+To force SPDK to use UIO rather than VFIO at daos_server runtime, set
+'disable_vfio' in the
+[server config file](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml#L109),
+but note that this will require running daos_server as root.
+
 ## Time Synchronization
 
 The DAOS transaction model relies on timestamps and requires time to be
@@ -206,3 +211,25 @@ $ sudo ln -s $SL_PREFIX/include \
     The RPM installation is preferred for production scenarios. Manual
     installation is most appropriate for development and predeployment
     proof-of-concept scenarios.
+
+## Memory Lock Limits
+
+Low ulimit for memlock can cause SPDK to fail and emit the following error:
+
+```bash
+daos_io_server:1 EAL: cannot set up DMA remapping, error 12 (Cannot allocate
+    memory)
+```
+
+The memlock limit only needs to be manually adjusted when `daos_server` is not
+running as a systemd service. Default ulimit settings vary between OSes.
+
+For RPM installations, the service will typically be launched by systemd and
+the limit is pre-set to unlimited in the `daos_server.service` unit file:
+https://github.com/daos-stack/daos/blob/master/utils/systemd/daos_server.service#L16.
+Note that values set in `/etc/security/limits.conf` are ignored by services
+launched by systemd.
+
+For non-RPM installations where `daos_server` is launched directly from the
+commandline, limits should be adjusted in `/etc/security/limits.conf` as per
+https://software.intel.com/content/www/us/en/develop/blogs/best-known-methods-for-setting-locked-memory-size.html.

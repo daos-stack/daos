@@ -84,6 +84,7 @@ class IorTestBase(DfuseTestBase):
 
     def create_cont(self, oclass):
         """Create a TestContainer object to be used to create container.
+
         Args:
             oclass: Explicitly supply object class for container create
         """
@@ -99,6 +100,23 @@ class IorTestBase(DfuseTestBase):
 
         # create container
         self.container.create()
+
+    def display_pool_space(self, pool=None):
+        """Display the current pool space.
+
+        If the TestPool object has a DmgCommand object assigned, also display
+        the free pool space per target.
+
+        Args:
+            pool (TestPool, optional): The pool for which to display space.
+                    Default is self.pool.
+        """
+        if not pool:
+            pool = self.pool
+
+        pool.display_pool_daos_space()
+        if pool.dmg:
+            pool.set_query_data()
 
     def run_ior_with_pool(self, intercept=None, test_file_suffix="",
                           test_file="daos:testFile", create_pool=True,
@@ -214,18 +232,22 @@ class IorTestBase(DfuseTestBase):
             self.fail("Exiting Test: Subprocess not running")
 
     def run_ior(self, manager, processes, intercept=None, display_space=True,
-                plugin_path=None, fail_on_warning=None):
+                plugin_path=None, fail_on_warning=False, pool=None):
         """Run the IOR command.
 
         Args:
             manager (str): mpi job manager command
             processes (int): number of host processes
-            intercept (str): path to interception library.
+            intercept (str, optional): path to interception library.
+            display_space (bool, optional): Whether to display the pool
+                space. Defaults to True.
             plugin_path (str, optional): HDF5 vol connector library path.
                 This will enable dfuse (xattr) working directory which is
                 needed to run vol connector for DAOS. Default is None.
-            fail_on_warning (bool): Controls whether the test should
-                fail if a 'WARNING' is found.
+            fail_on_warning (bool, optional): Controls whether the test
+                should fail if a 'WARNING' is found. Default is False.
+            pool (TestPool, optional): The pool for which to display space.
+                Default is self.pool.
         """
         env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:
@@ -239,9 +261,12 @@ class IorTestBase(DfuseTestBase):
         manager.assign_processes(processes)
         manager.assign_environment(env)
 
+        if not pool:
+            pool = self.pool
+
         try:
             if display_space:
-                self.pool.display_pool_daos_space()
+                self.display_pool_space(pool)
             out = manager.run()
 
             if self.subprocess:
@@ -261,10 +286,7 @@ class IorTestBase(DfuseTestBase):
             self.fail("Test was expected to pass but it failed.\n")
         finally:
             if not self.subprocess and display_space:
-                self.pool.display_pool_daos_space()
-                if self.pool.dmg:
-                    # Display the per-target free space
-                    self.pool.set_query_data()
+                self.display_pool_space(pool)
 
     def stop_ior(self):
         """Stop IOR process.
@@ -282,7 +304,7 @@ class IorTestBase(DfuseTestBase):
             self.log.error("IOR stop Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
         finally:
-            self.pool.display_pool_daos_space()
+            self.display_pool_space()
 
     def run_multiple_ior_with_pool(self, results, intercept=None):
         """Execute ior with optional overrides for ior flags and object_class.
@@ -364,7 +386,7 @@ class IorTestBase(DfuseTestBase):
         manager.assign_environment(env)
         self.lock.release()
         try:
-            self.pool.display_pool_daos_space()
+            self.display_pool_space()
             out = manager.run()
             self.lock.acquire(True)
             results[job_num] = IorCommand.get_ior_metrics(out)
@@ -373,7 +395,7 @@ class IorTestBase(DfuseTestBase):
             self.log.error("IOR Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
         finally:
-            self.pool.display_pool_daos_space()
+            self.display_pool_space()
 
     def verify_pool_size(self, original_pool_info, processes):
         """Validate the pool size.
@@ -405,14 +427,15 @@ class IorTestBase(DfuseTestBase):
                 "Pool Free Size did not match: actual={}, expected={}".format(
                     actual_pool_size, expected_pool_size))
 
-    def execute_cmd(self, cmd, fail_on_err=True, display_output=True):
+    def execute_cmd(self, command, fail_on_err=True, display_output=True):
         """Execute cmd using general_utils.pcmd.
 
         Args:
-            cmd (str): String command to be executed
-            fail_on_err (bool): Boolean for whether to fail the test if command
-                execution returns non zero return code.
-            display_output (bool): Boolean for whether to display output.
+            command (str): the command to execute on the client hosts
+            fail_on_err (bool, optional): whether or not to fail the test if
+                command returns a non zero return code. Defaults to True.
+            display_output (bool, optional): whether or not to display output.
+                Defaults to True.
 
         Returns:
             dict: a dictionary of return codes keys and accompanying NodeSet
@@ -420,24 +443,42 @@ class IorTestBase(DfuseTestBase):
 
         """
         try:
-            # execute bash cmds
-            ret = pcmd(
-                self.hostlist_clients,
-                cmd,
-                verbose=display_output,
-                timeout=300)
-            if 0 not in ret:
-                error_hosts = NodeSet(
-                    ",".join(
-                        [str(node_set) for code, node_set in
-                         ret.items() if code != 0]))
-                if fail_on_err:
-                    raise CommandFailure(
-                        "Error running '{}' on the following "
-                        "hosts: {}".format(cmd, error_hosts))
+            # Execute the bash command on each client host
+            result = self._execute_command(command, fail_on_err, display_output)
 
-        # report error if any command fails
         except CommandFailure as error:
+            # Report an error if any command fails
             self.log.error("DfuseSparseFile Test Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
-        return ret
+
+        return result
+
+    def _execute_command(self, command, fail_on_err=True, display_output=True):
+        """Execute the command on all client hosts.
+
+        Optionally verify if the command returns a non zero return code.
+
+        Args:
+            command (str): the command to execute on the client hosts
+            fail_on_err (bool, optional): whether or not to fail the test if
+                command returns a non zero return code. Defaults to True.
+            display_output (bool, optional): whether or not to display output.
+                Defaults to True.
+
+        Raises:
+            CommandFailure: if 'fail_on_err' is set and the command fails on at
+                least one of the client hosts
+
+        Returns:
+            dict: a dictionary of return codes keys and accompanying NodeSet
+                values indicating which hosts yielded the return code.
+
+        """
+        result = pcmd(
+            self.hostlist_clients, command, verbose=display_output, timeout=300)
+        if 0 not in result and fail_on_err:
+            hosts = [str(nodes) for code, nodes in result.items() if code != 0]
+            raise CommandFailure(
+                "Error running '{}' on the following hosts: {}".format(
+                    command, NodeSet(",".join(hosts))))
+        return result

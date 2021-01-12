@@ -26,10 +26,10 @@ package server
 import (
 	"context"
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -38,8 +38,8 @@ import (
 	"github.com/pkg/errors"
 
 	. "github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/common/proto"
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/lib/control"
+
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
@@ -58,8 +58,6 @@ const (
 )
 
 func TestServer_Harness_Start(t *testing.T) {
-	defaultAddrStr := "127.0.0.1:10001"
-
 	for name, tc := range map[string]struct {
 		trc              *ioserver.TestRunnerConfig
 		isAP             bool                     // is first instance an AP/MS replica/bootstrap
@@ -72,7 +70,7 @@ func TestServer_Harness_Start(t *testing.T) {
 		expDrpcCalls     map[uint32][]drpc.Method // method ids called for each instance.Index()
 		expGrpcCalls     map[uint32][]string      // string repr of call for each instance.Index()
 		expRanks         map[uint32]system.Rank   // ranks to have been set during Start()
-		expMembers       system.Members           // members to have been registered during Stop()
+		expMembers       system.Members           // members to have been registered during Start()
 		expIoErrs        map[uint32]error         // errors expected from instances
 	}{
 		"normal startup/shutdown": {
@@ -217,9 +215,10 @@ func TestServer_Harness_Start(t *testing.T) {
 				WithSocketDir(testDir).
 				WithTransportConfig(&security.TransportConfig{AllowInsecure: true})
 
+			joinMu := sync.Mutex{}
+			joinRequests := make(map[uint32][]string)
 			var instanceStarts uint32
 			harness := NewIOServerHarness(log)
-			mockMSClients := make(map[int]*proto.MockMgmtSvcClient)
 			for i, srvCfg := range config.Servers {
 				if err := os.MkdirAll(srvCfg.Storage.SCM.MountPoint, 0777); err != nil {
 					t.Fatal(err)
@@ -242,26 +241,18 @@ func TestServer_Harness_Start(t *testing.T) {
 				}
 				scmProvider := scm.NewMockProvider(log, nil, &scm.MockSysConfig{IsMountedBool: true})
 
-				msClientCfg := mgmtSvcClientCfg{
-					ControlAddr:  &net.TCPAddr{},
-					AccessPoints: []string{defaultAddrStr},
+				idx := uint32(i)
+				joinFn := func(_ context.Context, req *control.SystemJoinReq) (*control.SystemJoinResp, error) {
+					// appease the race detector
+					joinMu.Lock()
+					defer joinMu.Unlock()
+					joinRequests[idx] = []string{fmt.Sprintf("Join %d", req.Rank)}
+					return &control.SystemJoinResp{
+						Rank: system.Rank(idx),
+					}, nil
 				}
-				msClient := newMgmtSvcClient(context.TODO(), log, msClientCfg)
-				// create mock that implements MgmtSvcClient
-				mockMSClient := proto.NewMockMgmtSvcClient(
-					proto.MockMgmtSvcClientConfig{})
-				// store for checking calls later
-				mockMSClients[i] = mockMSClient.(*proto.MockMgmtSvcClient)
-				mockConnectFn := func(ctx context.Context, ap string,
-					tc *security.TransportConfig,
-					fn func(context.Context, mgmtpb.MgmtSvcClient) error) error {
 
-					return fn(ctx, mockMSClient)
-				}
-				// inject fn that uses the mock client to be used on connect
-				msClient.connectFn = mockConnectFn
-
-				srv := NewIOServerInstance(log, bdevProvider, scmProvider, msClient, runner)
+				srv := NewIOServerInstance(log, bdevProvider, scmProvider, joinFn, runner)
 				var isAP bool
 				if tc.isAP && i == 0 { // first instance will be AP & bootstrap MS
 					isAP = true
@@ -279,8 +270,7 @@ func TestServer_Harness_Start(t *testing.T) {
 					rank = new(system.Rank)
 				}
 				srv.setSuperblock(&Superblock{
-					MS: isAP, UUID: uuid, Rank: rank, CreateMS: isAP,
-					BootstrapMS: isAP, ValidRank: isValid,
+					UUID: uuid, Rank: rank, ValidRank: isValid,
 				})
 
 				if err := harness.AddInstance(srv); err != nil {
@@ -305,11 +295,10 @@ func TestServer_Harness_Start(t *testing.T) {
 
 			// start harness async and signal completion
 			var gotErr error
-			membership := system.MockMembership(t, log)
-			sysdb := system.MockDatabase(t, log)
+			membership, sysdb := system.MockMembership(t, log, mockTCPResolver)
 			done := make(chan struct{})
 			go func(ctxIn context.Context) {
-				gotErr = harness.Start(ctxIn, membership, sysdb, config)
+				gotErr = harness.Start(ctxIn, sysdb, config)
 				close(done)
 			}(ctx)
 
@@ -407,6 +396,8 @@ func TestServer_Harness_Start(t *testing.T) {
 				}
 			}
 
+			joinMu.Lock()
+			defer joinMu.Unlock()
 			// verify expected RPCs were made, ranks allocated and
 			// members added to membership
 			for _, srv := range instances {
@@ -418,8 +409,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				AssertEqual(t, tc.expDrpcCalls[srv.Index()], gotDrpcCalls,
 					fmt.Sprintf("%s: unexpected dRPCs for instance %d", name, srv.Index()))
 
-				gotGrpcCalls := mockMSClients[int(srv.Index())].Calls
-				if diff := cmp.Diff(tc.expGrpcCalls[srv.Index()], gotGrpcCalls); diff != "" {
+				if diff := cmp.Diff(tc.expGrpcCalls[srv.Index()], joinRequests[srv.Index()]); diff != "" {
 					t.Fatalf("unexpected gRPCs for instance %d (-want, +got):\n%s\n",
 						srv.Index(), diff)
 				}

@@ -26,11 +26,14 @@ package system
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"math/rand"
 	"net"
 	"sort"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -45,16 +48,6 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func setupTestDatabase(t *testing.T, log logging.Logger, replicas []string) (*Database, func()) {
-	testDir, cleanup := common.CreateTestDir(t)
-
-	db := NewDatabase(log, &DatabaseConfig{
-		RaftDir:  testDir + "/raft",
-		Replicas: replicas,
-	})
-	return db, cleanup
-}
-
 func waitForLeadership(t *testing.T, ctx context.Context, db *Database, gained bool, timeout time.Duration) {
 	t.Helper()
 	timer := time.NewTimer(timeout)
@@ -64,7 +57,11 @@ func waitForLeadership(t *testing.T, ctx context.Context, db *Database, gained b
 			t.Fatal(ctx.Err())
 			return
 		case <-timer.C:
-			t.Fatal("leadership state did not change before timeout")
+			state := "gained"
+			if !gained {
+				state = "lost"
+			}
+			t.Fatalf("leadership was not %s before timeout", state)
 			return
 		default:
 			if db.IsLeader() == gained {
@@ -135,87 +132,8 @@ func TestSystem_Database_filterMembers(t *testing.T) {
 	}
 }
 
-func TestSystem_Database_checkReplica(t *testing.T) {
-	for name, tc := range map[string]struct {
-		replicas     []string
-		controlAddr  *net.TCPAddr
-		expRepAddr   *net.TCPAddr
-		expBootstrap bool
-		expErr       error
-	}{
-		"not replica": {
-			replicas:    []string{mockControlAddr(t, 2).String()},
-			controlAddr: mockControlAddr(t, 1),
-		},
-		"replica, no bootstrap": {
-			replicas: []string{
-				mockControlAddr(t, 2).String(),
-				mockControlAddr(t, 1).String(),
-			},
-			controlAddr: mockControlAddr(t, 1),
-			expRepAddr:  mockControlAddr(t, 1),
-		},
-		"replica, bootstrap": {
-			replicas: []string{
-				mockControlAddr(t, 1).String(),
-			},
-			controlAddr:  mockControlAddr(t, 1),
-			expRepAddr:   mockControlAddr(t, 1),
-			expBootstrap: true,
-		},
-		"replica, unspecified control address": {
-			replicas: []string{
-				mockControlAddr(t, 1).String(),
-			},
-			controlAddr: &net.TCPAddr{
-				IP:   net.IPv4zero,
-				Port: build.DefaultControlPort,
-			},
-			expRepAddr:   mockControlAddr(t, 1),
-			expBootstrap: true,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
-
-			db, cleanup := setupTestDatabase(t, log, tc.replicas)
-			defer cleanup()
-
-			repAddr, isBootstrap, gotErr := db.checkReplica(tc.controlAddr)
-			common.CmpErr(t, tc.expErr, gotErr)
-			if tc.expErr != nil {
-				return
-			}
-
-			// Just to get a bit of extra coverage
-			if repAddr != nil {
-				db.replicaAddr.Addr = repAddr
-				var err error
-				repAddr, err = db.ReplicaAddr()
-				if err != nil {
-					t.Fatal(err)
-				}
-			} else {
-				_, err := db.ReplicaAddr()
-				common.CmpErr(t, &ErrNotReplica{tc.replicas}, err)
-			}
-
-			if diff := cmp.Diff(tc.expRepAddr, repAddr); diff != "" {
-				t.Fatalf("unexpected repAddr (-want, +got):\n%s\n", diff)
-			}
-			if diff := cmp.Diff(tc.expBootstrap, isBootstrap); diff != "" {
-				t.Fatalf("unexpected isBootstrap (-want, +got)\n:%s\n", diff)
-			}
-		})
-	}
-}
-
 func TestSystem_Database_Cancel(t *testing.T) {
-	localhost := &net.TCPAddr{
-		IP: net.IPv4(127, 0, 0, 1),
-	}
-
+	localhost := common.LocalhostCtrlAddr()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
@@ -223,15 +141,32 @@ func TestSystem_Database_Cancel(t *testing.T) {
 	defer cancel()
 	dbCtx, dbCancel := context.WithCancel(ctx)
 
-	db, cleanup := setupTestDatabase(t, log, []string{localhost.String()})
+	db, cleanup := TestDatabase(t, log, localhost)
 	defer cleanup()
-	if err := db.Start(dbCtx, localhost); err != nil {
+	if err := db.Start(dbCtx); err != nil {
 		t.Fatal(err)
 	}
 
-	waitForLeadership(t, ctx, db, true, 5*time.Second)
+	var onGainedCalled, onLostCalled uint32
+	db.OnLeadershipGained(func(_ context.Context) error {
+		atomic.StoreUint32(&onGainedCalled, 1)
+		return nil
+	})
+	db.OnLeadershipLost(func() error {
+		atomic.StoreUint32(&onLostCalled, 1)
+		return nil
+	})
+
+	waitForLeadership(t, ctx, db, true, 10*time.Second)
 	dbCancel()
-	waitForLeadership(t, ctx, db, false, 5*time.Second)
+	waitForLeadership(t, ctx, db, false, 10*time.Second)
+
+	if atomic.LoadUint32(&onGainedCalled) != 1 {
+		t.Fatal("OnLeadershipGained callbacks didn't execute")
+	}
+	if atomic.LoadUint32(&onLostCalled) != 1 {
+		t.Fatal("OnLeadershipLost callbacks didn't execute")
+	}
 }
 
 func replicaGen(ctx context.Context, maxRanks, maxReplicas int) chan []Rank {
@@ -318,7 +253,7 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	db0, cleanup0 := setupTestDatabase(t, log, nil)
+	db0, cleanup0 := TestDatabase(t, log, nil)
 	defer cleanup0()
 
 	nextAddr := ctrlAddrGen(ctx, net.IPv4(127, 0, 0, 1), 4)
@@ -346,9 +281,10 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 
 	for i := 0; i < maxPools; i++ {
 		ps := &PoolService{
-			PoolUUID: uuid.New(),
-			State:    PoolServiceStateReady,
-			Replicas: <-replicas,
+			PoolUUID:  uuid.New(),
+			PoolLabel: fmt.Sprintf("pool%04d", i),
+			State:     PoolServiceStateReady,
+			Replicas:  <-replicas,
 		}
 		data, err := createRaftUpdate(raftOpAddPoolService, ps)
 		if err != nil {
@@ -369,7 +305,7 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	db1, cleanup1 := setupTestDatabase(t, log, nil)
+	db1, cleanup1 := TestDatabase(t, log, nil)
 	defer cleanup1()
 
 	if err := (*fsm)(db1).Restore(sink.Reader()); err != nil {
@@ -389,7 +325,7 @@ func TestSystem_Database_SnapshotRestoreBadVersion(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	db0, cleanup0 := setupTestDatabase(t, log, nil)
+	db0, cleanup0 := TestDatabase(t, log, nil)
 	defer cleanup0()
 	db0.data.SchemaVersion = 1024 // arbitrarily large, should never get here
 
@@ -402,7 +338,7 @@ func TestSystem_Database_SnapshotRestoreBadVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	db1, cleanup1 := setupTestDatabase(t, log, nil)
+	db1, cleanup1 := TestDatabase(t, log, nil)
 	defer cleanup1()
 
 	wantErr := errors.Errorf("%d != %d", db0.data.SchemaVersion, CurrentSchemaVersion)
@@ -435,19 +371,223 @@ func TestSystem_Database_BadApply(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			db0, cleanup0 := setupTestDatabase(t, log, nil)
-			defer cleanup0()
-
-			defer func() {
-				if r := recover(); r == nil {
-					t.Fatal("expected panic in Apply()")
-				}
-			}()
-
+			db := MockDatabase(t, log)
 			rl := &raft.Log{
 				Data: tc.payload,
 			}
-			(*fsm)(db0).Apply(rl)
+			(*fsm)(db).Apply(rl)
+
+			if !strings.Contains(buf.String(), "SHUTDOWN") {
+				t.Fatal("expected an emergency shutdown, but didn't see one")
+			}
+		})
+	}
+}
+
+func raftUpdateTestMember(t *testing.T, db *Database, op raftOp, member *Member) {
+	t.Helper()
+
+	mu := &memberUpdate{
+		Member: member,
+	}
+	if op == raftOpAddMember {
+		mu.NextRank = true
+	}
+	data, err := createRaftUpdate(op, mu)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rl := &raft.Log{
+		Data: data,
+	}
+	(*fsm)(db).Apply(rl)
+}
+
+func TestSystem_Database_memberRaftOps(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	testMembers := make([]*Member, 0)
+	nextAddr := ctrlAddrGen(ctx, net.IPv4(127, 0, 0, 1), 4)
+	for i := 0; i < 3; i++ {
+		testMembers = append(testMembers, &Member{
+			Rank:        Rank(i),
+			UUID:        uuid.New(),
+			Addr:        <-nextAddr,
+			state:       MemberStateJoined,
+			FaultDomain: MustCreateFaultDomainFromString("/rack0"),
+		})
+	}
+
+	changedFaultDomainMember := &Member{
+		Rank:        testMembers[1].Rank,
+		UUID:        testMembers[1].UUID,
+		Addr:        testMembers[1].Addr,
+		state:       testMembers[1].state,
+		FaultDomain: MustCreateFaultDomainFromString("/rack1"),
+	}
+
+	cmpOpts := []cmp.Option{
+		cmp.AllowUnexported(Member{}),
+	}
+
+	for name, tc := range map[string]struct {
+		startingMembers []*Member
+		op              raftOp
+		updateMember    *Member
+		expMembers      []*Member
+		expFDTree       *FaultDomainTree
+	}{
+		"add success": {
+			op:           raftOpAddMember,
+			updateMember: testMembers[0],
+			expMembers: []*Member{
+				testMembers[0],
+			},
+			expFDTree: NewFaultDomainTree(testMembers[0].RankFaultDomain()),
+		},
+		"update state success": {
+			startingMembers: testMembers,
+			op:              raftOpUpdateMember,
+			updateMember: &Member{
+				Rank:        testMembers[1].Rank,
+				UUID:        testMembers[1].UUID,
+				Addr:        testMembers[1].Addr,
+				state:       MemberStateStopped,
+				FaultDomain: testMembers[1].FaultDomain,
+			},
+			expMembers: []*Member{
+				testMembers[0],
+				{
+					Rank:        testMembers[1].Rank,
+					UUID:        testMembers[1].UUID,
+					Addr:        testMembers[1].Addr,
+					state:       MemberStateStopped,
+					FaultDomain: testMembers[1].FaultDomain,
+				},
+				testMembers[2],
+			},
+
+			expFDTree: NewFaultDomainTree(
+				testMembers[0].RankFaultDomain(),
+				testMembers[1].RankFaultDomain(),
+				testMembers[2].RankFaultDomain()),
+		},
+		"update fault domain success": {
+			startingMembers: testMembers,
+			op:              raftOpUpdateMember,
+			updateMember:    changedFaultDomainMember,
+			expMembers: []*Member{
+				testMembers[0],
+				changedFaultDomainMember,
+				testMembers[2],
+			},
+			expFDTree: NewFaultDomainTree(
+				testMembers[0].RankFaultDomain(),
+				changedFaultDomainMember.RankFaultDomain(),
+				testMembers[2].RankFaultDomain()),
+		},
+		"remove success": {
+			startingMembers: testMembers,
+			op:              raftOpRemoveMember,
+			updateMember:    testMembers[2],
+			expMembers: []*Member{
+				testMembers[0],
+				testMembers[1],
+			},
+			expFDTree: NewFaultDomainTree(
+				testMembers[0].RankFaultDomain(),
+				testMembers[1].RankFaultDomain()),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			db := MockDatabase(t, log)
+
+			// setup initial member DB
+			for _, initMember := range tc.startingMembers {
+				raftUpdateTestMember(t, db, raftOpAddMember, initMember)
+			}
+
+			// Update the member
+			raftUpdateTestMember(t, db, tc.op, tc.updateMember)
+
+			// Check member DB was updated
+			for _, expMember := range tc.expMembers {
+				uuidM, ok := db.data.Members.Uuids[expMember.UUID]
+				if !ok {
+					t.Errorf("member not found for UUID %s", expMember.UUID)
+				}
+				if diff := cmp.Diff(expMember, uuidM, cmpOpts...); diff != "" {
+					t.Fatalf("member wrong in UUID DB (-want, +got):\n%s\n", diff)
+				}
+
+				rankM, ok := db.data.Members.Ranks[expMember.Rank]
+				if !ok {
+					t.Errorf("member not found for rank %d", expMember.Rank)
+				}
+				if diff := cmp.Diff(expMember, rankM, cmpOpts...); diff != "" {
+					t.Fatalf("member wrong in rank DB (-want, +got):\n%s\n", diff)
+				}
+
+				addrMs, ok := db.data.Members.Addrs[expMember.Addr.String()]
+				if !ok {
+					t.Errorf("slice not found for addr %s", expMember.Addr.String())
+				}
+
+				found := false
+				for _, am := range addrMs {
+					if am.Rank == expMember.Rank {
+						found = true
+						if diff := cmp.Diff(expMember, am, cmpOpts...); diff != "" {
+							t.Fatalf("member wrong in addr DB (-want, +got):\n%s\n", diff)
+						}
+					}
+				}
+				if !found {
+					t.Fatalf("expected member %+v not found for addr %s", expMember, expMember.Addr.String())
+				}
+
+			}
+			if len(db.data.Members.Uuids) != len(tc.expMembers) {
+				t.Fatalf("expected %d members, got %d", len(tc.expMembers), len(db.data.Members.Uuids))
+			}
+
+			if diff := cmp.Diff(tc.expFDTree, db.data.Members.FaultDomains); diff != "" {
+				t.Fatalf("wrong FaultDomainTree in DB (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestSystem_Database_FaultDomainTree(t *testing.T) {
+	for name, tc := range map[string]struct {
+		fdTree *FaultDomainTree
+	}{
+		"nil": {},
+		"actual tree": {
+			fdTree: NewFaultDomainTree(
+				MustCreateFaultDomain("one", "two", "three"),
+				MustCreateFaultDomain("one", "two", "four"),
+				MustCreateFaultDomain("five", "six", "seven"),
+				MustCreateFaultDomain("five", "eight", "nine"),
+			),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			db := MockDatabase(t, log)
+			db.data.Members.FaultDomains = tc.fdTree
+
+			result := db.FaultDomainTree()
+
+			if diff := cmp.Diff(tc.fdTree, result); diff != "" {
+				t.Fatalf("(-want, +got):\n%s\n", diff)
+			}
 		})
 	}
 }

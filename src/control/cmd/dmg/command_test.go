@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,7 +34,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/daos-stack/daos/src/control/common"
-	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -131,19 +130,23 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 			Value:    &mgmtpb.PoolSetPropResp_Numval{},
 		})
 	case *control.SystemStopReq:
-		resp = control.MockMSResponse("", nil, &ctlpb.SystemStopResp{})
+		resp = control.MockMSResponse("", nil, &mgmtpb.SystemStopResp{})
 	case *control.SystemResetFormatReq:
-		resp = control.MockMSResponse("", nil, &ctlpb.SystemResetFormatResp{})
+		resp = control.MockMSResponse("", nil, &mgmtpb.SystemResetFormatResp{})
 	case *control.SystemStartReq:
-		resp = control.MockMSResponse("", nil, &ctlpb.SystemStartResp{})
+		resp = control.MockMSResponse("", nil, &mgmtpb.SystemStartResp{})
 	case *control.SystemQueryReq:
-		resp = control.MockMSResponse("", nil, &ctlpb.SystemQueryResp{})
+		resp = control.MockMSResponse("", nil, &mgmtpb.SystemQueryResp{})
 	case *control.LeaderQueryReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.LeaderQueryResp{})
 	case *control.ListPoolsReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.ListPoolsResp{})
 	case *control.ContSetOwnerReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.ContSetOwnerResp{})
+	case *control.PoolResolveIDReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolResolveIDResp{
+			Uuid: defaultPoolUUID,
+		})
 	case *control.PoolQueryReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolQueryResp{})
 	case *control.PoolGetACLReq, *control.PoolOverwriteACLReq,

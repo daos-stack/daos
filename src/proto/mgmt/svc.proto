@@ -1,0 +1,163 @@
+//
+// (C) Copyright 2018-2020 Intel Corporation.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+// The Government's rights to use, modify, reproduce, release, perform, display,
+// or disclose this software are subject to the terms of the Apache License as
+// provided in Contract No. 8F-30005.
+// Any reproduction of computer software, computer software documentation, or
+// portions thereof marked with this legend must also reproduce the markings.
+//
+
+syntax = "proto3";
+package mgmt;
+
+option go_package = "github.com/daos-stack/daos/src/control/common/proto/mgmt";
+
+// Management Service Protobuf Definitions related to interactions between
+// DAOS control server and DAOS IO Servers.
+
+// Generic response just containing DER from IO server.
+message DaosResp {
+	int32 status = 1;	// DAOS error code.
+}
+
+message GroupUpdateReq {
+	message Server {
+		uint32 rank = 1;
+		string uri = 2;
+	}
+	uint32 map_version = 1;
+	repeated Server servers = 2;
+}
+
+message GroupUpdateResp {
+	int32 status = 1;
+}
+
+message JoinReq {
+	string sys = 1;		// DAOS system name.
+	string uuid = 2;	// Server UUID.
+	uint32 rank = 3;	// Server rank desired, if not MAX_UINT32.
+	string uri = 4;		// Server CaRT base URI (i.e., for context 0).
+	uint32 nctxs = 5;	// Server CaRT context count.
+	string addr = 6;	// Server management address.
+	string srvFaultDomain = 7; // Fault domain for this instance's server
+	uint32 idx = 8;		// Instance index on server node.
+}
+
+message JoinResp {
+	int32 status = 1;	// DAOS error code
+	uint32 rank = 2;	// Server rank assigned.
+	enum State {
+		IN = 0;		// Server in the system.
+		OUT = 1;	// Server excluded from the system.
+	}
+	State state = 3;	// Server state in the system map.
+	string faultDomain = 4; // Fault domain for the instance
+	bool localJoin = 5;	// Join processed locally.
+}
+
+message LeaderQueryReq {
+	string sys = 1;		// System name.
+}
+
+message LeaderQueryResp {
+	string currentLeader = 1;
+	repeated string replicas = 2;
+}
+
+// RankStateInfo defines extended fields for rank state change related events.
+message RankStateInfo {
+	uint32 instance = 1;	// Control-plane harness instance index.
+	bool errored = 2;	// Rank in error state.
+	string error = 3;	// Message associated with error.
+}
+
+// RASEvent describes a RAS event in the DAOS system.
+message RASEvent {
+	string name = 1;	// Unique identifier, 64-char.
+	string timestamp = 2;	// Fully qualified timestamp (us) incl timezone.
+	uint32 severity = 3;	// Event severity.
+	string msg = 4;		// Human readable message describing event.
+	uint32 id = 5;		// Unique numeric event identifier.
+	uint32 type = 6;	// Event type.
+	uint32 rank = 7; 	// (optional) DAOS rank involved in event.
+	string hostname = 8;	// (optional) Hostname of node involved in event.
+	oneof extended_info {	// (optional) Instance specific info.
+		RankStateInfo rank_state = 9;
+	}
+}
+
+// ClusterEventReq wraps an event subtype e.g. RASEvent.
+message ClusterEventReq {
+	uint64 sequence = 1;	// Sequence identifier for cluster events.
+	oneof event {
+		RASEvent ras = 2;
+	}
+}
+
+// ClusterEventResp acknowledges receipt of an event notification.
+message ClusterEventResp {
+	uint64 sequence = 1;	// Sequence identifier for cluster events.
+}
+
+message GetAttachInfoReq {
+	string sys = 1;		// System name. For daos_agent only.
+	bool allRanks = 2;      // Return PSRs for all ranks, not just the MS replicas.
+}
+
+message GetAttachInfoResp {
+	int32 status = 1;	// DAOS error code
+	message Psr {
+		uint32 rank = 1;
+		string uri = 2;
+	}
+	repeated Psr psrs = 2;	// CaRT PSRs of the system group.
+				// These CaRT settings are shared with the
+				// libdaos client to aid in CaRT initialization.
+	string Provider = 3;	// CaRT OFI provider
+	string Interface = 4;	// CaRT OFI_INTERFACE
+	string Domain = 5;	// CaRT OFI_DOMAIN for given OFI_INTERFACE
+	uint32 CrtCtxShareAddr = 6; // CaRT CRT_CTX_SHARE_ADDR
+	uint32 CrtTimeout = 7;	// CaRT CRT_TIMEOUT
+	uint32 NetDevClass = 8; // ARP protocol hardware identifier of the
+				// IO server network interface
+}
+
+message PrepShutdownReq {
+	uint32 rank = 1;	// DAOS IO server unique identifier.
+}
+
+// PrepShutdownResp is identical to DaosResp.
+
+message PingRankReq {
+	uint32 rank = 1;	// DAOS IO server unique identifier.
+}
+
+// PingRankResp is identical to DaosResp.
+
+message SetRankReq {
+	uint32 rank = 1;	// DAOS IO server unique identifier.
+}
+
+// SetRankResp is identical to DaosResp.
+
+message PoolMonitorReq {
+	string sys = 1; // DAOS system identifier
+	string poolUUID = 2;	// Pool UUID associated with the Pool Handle
+	string poolHandleUUID = 3; // Pool Handle UUID for the connection
+	string jobid = 4;	// Job ID to associate instance with.
+}

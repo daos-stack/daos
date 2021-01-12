@@ -186,7 +186,7 @@ struct daos_pool_cont_info {
  *
  * \param[in]	uuid	UUID to identify a pool.
  * \param[in]	grp	Process set name of the DAOS servers managing the pool
- * \param[in]	svc	Pool service replica ranks, as reported by
+ * \param[in]	svc	Optional, pool service replica ranks, as reported by
  *			daos_pool_create().
  * \param[in]	flags	Connect mode represented by the DAOS_PC_ bits.
  * \param[out]	poh	Returned open handle.
@@ -225,25 +225,6 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
  */
 int
 daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev);
-
-/**
- * Evict all connections to a pool.
- *
- * \param uuid	[IN]	UUID of the pool
- * \param grp	[IN]	process set name of the DAOS servers managing the pool
- * \param svc	[IN]	list of pool service ranks
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_UNREACH	Network is unreachable
- *			-DER_NONEXIST	Pool is nonexistent
- */
-int
-daos_pool_evict(const uuid_t uuid, const char *grp, const d_rank_list_t *svc,
-		daos_event_t *ev);
 
 /*
  * Handle API

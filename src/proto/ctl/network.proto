@@ -24,6 +24,8 @@
 syntax = "proto3";
 package ctl;
 
+option go_package = "github.com/daos-stack/daos/src/control/common/proto/ctl";
+
 message NetworkScanReq {
   string provider = 1;
   string excludeinterfaces = 2;
@@ -32,6 +34,7 @@ message NetworkScanReq {
 message NetworkScanResp {
   repeated FabricInterface interfaces = 1;
   int32 numacount = 2;
+  int32 corespernuma = 3; // physical cores per numa node
 }
 
 message FabricInterface {

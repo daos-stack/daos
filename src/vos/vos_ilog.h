@@ -74,6 +74,11 @@ struct vos_ilog_info {
 	 *  subsequent punch as it does not need replay if it's intermediate
 	 */
 	daos_epoch_t		 ii_next_punch;
+	/** True if there is an uncertain update.  If a punch is uncertain,
+	 *  it should always cause a failure in vos_ilog_fetch.  But update
+	 *  conflict depends on the operation doing the check.
+	 */
+	daos_epoch_t		 ii_uncertain_create;
 	/** The entity has no valid log entries */
 	bool			 ii_empty;
 };
@@ -100,6 +105,7 @@ vos_ilog_fetch_finish(struct vos_ilog_info *info);
  * \param	intent[IN]	Intent of the operation
  * \param	ilog[IN]	The incarnation log root
  * \param	epoch[IN]	Epoch to fetch
+ * \param	bound[IN]	Epoch uncertainty bound
  * \param	punched[IN]	Punched epoch.  Ignored if parent is passed.
  * \param	parent[IN]	parent incarnation log info (NULL if no parent
  *				log exists).  Fetch should have already been
@@ -114,7 +120,7 @@ vos_ilog_fetch_finish(struct vos_ilog_info *info);
 #define vos_ilog_fetch vos_ilog_fetch_
 int
 vos_ilog_fetch_(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
-		struct ilog_df *ilog, daos_epoch_t epoch,
+		struct ilog_df *ilog, daos_epoch_t epoch, daos_epoch_t bound,
 		const struct vos_punch_record *punched,
 		const struct vos_ilog_info *parent, struct vos_ilog_info *info);
 
@@ -125,6 +131,7 @@ vos_ilog_fetch_(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
  * \param	cont[IN]	Pointer to vos container
  * \param	ilog[IN]	The incarnation log root
  * \param	epr[IN]		Range of update
+ * \param	bound[IN]	Epoch uncertainty bound
  * \param	parent[IN]	parent incarnation log info (NULL if no parent
  *				log exists).  Fetch should have already been
  *				called at same epoch or parent.
@@ -138,9 +145,9 @@ vos_ilog_fetch_(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
 #define vos_ilog_update vos_ilog_update_
 int
 vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
-		 const daos_epoch_range_t *epr, struct vos_ilog_info *parent,
-		 struct vos_ilog_info *info, uint32_t cond_flag,
-		 struct vos_ts_set *ts_set);
+		 const daos_epoch_range_t *epr, daos_epoch_t bound,
+		 struct vos_ilog_info *parent, struct vos_ilog_info *info,
+		 uint32_t cond_flag, struct vos_ts_set *ts_set);
 
 /**
  * Punch the incarnation log entry if it's the leaf.  Do conditional check if
@@ -150,6 +157,7 @@ vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
  * \param	cont[IN]	Pointer to vos container
  * \param	ilog[IN]	The incarnation log root
  * \param	epr[IN]		Range of update
+ * \param	bound[IN]	Epoch uncertainty bound
  * \param	parent[IN]	parent incarnation log info (NULL if no parent
  *				log exists).  Fetch should have already been
  *				called at same epoch or parent.
@@ -164,9 +172,9 @@ vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 #define vos_ilog_punch vos_ilog_punch_
 int
 vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
-		const daos_epoch_range_t *epr, struct vos_ilog_info *parent,
-		struct vos_ilog_info *info, struct vos_ts_set *ts_set,
-		bool leaf, bool replay);
+		const daos_epoch_range_t *epr, daos_epoch_t bound,
+		struct vos_ilog_info *parent, struct vos_ilog_info *info,
+		struct vos_ts_set *ts_set, bool leaf, bool replay);
 
 /**
  * Check the incarnation log for existence and return important information
@@ -219,16 +227,17 @@ vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
 /* Useful for debugging the incarnation log but too much information for
  * normal debugging.
  */
-#define vos_ilog_fetch(umm, coh, intent, ilog, epoch, punched, parent, info)\
+#define vos_ilog_fetch(umm, coh, intent, ilog, epoch, bound, punched,	\
+		       parent, info)					\
 ({									\
 	int __rc;							\
 									\
 	D_DEBUG(DB_TRACE, "vos_ilog_fetch: log="DF_X64" intent=%d"	\
-		" epoch="DF_X64" punched="DF_X64"\n",			\
-		umem_ptr2off(umm, ilog), intent, epoch,			\
+		" epoch="DF_X64" bound="DF_X64" punched="DF_X64"\n",	\
+		umem_ptr2off(umm, ilog), intent, epoch, (bound),	\
 		(uint64_t)punched);					\
-	__rc = vos_ilog_fetch_(umm, coh, intent, ilog, epoch, punched,	\
-			       parent, info);				\
+	__rc = vos_ilog_fetch_(umm, coh, intent, ilog, epoch, bound,	\
+			       punched,	parent, info);			\
 	D_DEBUG(DB_TRACE, "vos_ilog_fetch: returned "DF_RC" create="	\
 		DF_X64" pp="DF_PUNCH" pap="DF_PUNCH" np="DF_X64	\
 		" %s\n", DP_RC(__rc), (info)->ii_create,		\
@@ -239,15 +248,17 @@ vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
 	__rc;								\
 })
 
-#define vos_ilog_update(cont, ilog, epr, parent, info, cond, ts_set)	\
+#define vos_ilog_update(cont, ilog, epr, bound, parent, info, cond,	\
+			ts_set)						\
 ({									\
 	struct umem_instance	*__umm = vos_cont2umm(cont);		\
 	int			 __rc;					\
 									\
 	D_DEBUG(DB_TRACE, "vos_ilog_update: log="DF_X64" epr="		\
-		DF_X64"-"DF_X64" cond=%d\n", umem_ptr2off(__umm, ilog),	\
-		(epr)->epr_lo, (epr)->epr_hi, (cond));			\
-	__rc = vos_ilog_update_(cont, ilog, epr, parent, info,		\
+		DF_X64"-"DF_X64" bound="DF_X64" cond=%d\n",		\
+		umem_ptr2off(__umm, ilog), (epr)->epr_lo, (epr)->epr_hi,\
+		(bound), (cond));					\
+	__rc = vos_ilog_update_(cont, ilog, epr, bound, parent, info,	\
 				cond, ts_set);				\
 	D_DEBUG(DB_TRACE, "vos_ilog_update: returned "DF_RC" create="	\
 		DF_X64" pap="DF_X64".%d\n", DP_RC(__rc),		\
@@ -256,17 +267,18 @@ vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
 	__rc;								\
 })
 
-#define vos_ilog_punch(cont, ilog, epr, parent, info, ts_set, leaf,	\
-		       replay)						\
+#define vos_ilog_punch(cont, ilog, epr, bound, parent, info, ts_set,	\
+		       leaf, replay)					\
 ({									\
 	struct umem_instance	*__umm = vos_cont2umm(cont);		\
 	int			 __rc;					\
 									\
 	D_DEBUG(DB_TRACE, "vos_ilog_punch: log="DF_X64" epr="		\
-		DF_X64"-"DF_X64" leaf=%d\n", umem_ptr2off(__umm, ilog),	\
-		(epr)->epr_lo, (epr)->epr_hi, (leaf));			\
-	__rc = vos_ilog_punch_(cont, ilog, epr, parent, info, ts_set,	\
-			       leaf, replay);				\
+		DF_X64"-"DF_X64" bound="DF_X64" leaf=%d\n",		\
+		umem_ptr2off(__umm, ilog), (epr)->epr_lo, (epr)->epr_hi,\
+		(bound), (leaf));					\
+	__rc = vos_ilog_punch_(cont, ilog, epr, bound, parent, info,	\
+			       ts_set, leaf, replay);			\
 	D_DEBUG(DB_TRACE, "vos_ilog_punch: returned " DF_RC"\n",	\
 		DP_RC(__rc));						\
 	__rc;								\

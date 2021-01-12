@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -585,7 +585,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 	char			oclass[10], type[10];
 	char			str[DUNS_MAX_XATTR_LEN];
 	int			len;
-	int			try_multiple = 1;		/* boolean */
+	bool			try_multiple = true;
 	int			rc;
 	bool			backend_dfuse = false;
 
@@ -609,8 +609,9 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		}
 		close(fd);
 	} else if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
-		struct statfs fs;
-		char *dir, *dirp;
+		struct statfs	fs;
+		char		*dir, *dirp;
+		mode_t		mode = S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH;
 
 		dir = strdup(path);
 		if (dir == NULL) {
@@ -650,7 +651,10 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 #endif
 
 		/** create a new directory if POSIX/MPI-IO container */
-		rc = mkdir(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+		if (backend_dfuse)
+			rc = mknod(path, mode | S_IFIFO, 0);
+		else
+			rc = mkdir(path, mode);
 		if (rc == -1) {
 			int err = errno;
 
@@ -670,11 +674,11 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		strcpy(oclass, "UNKNOWN");
 	daos_unparse_ctype(attrp->da_type, type);
 
-	/* create container with specified container uuid (try_multiple=0)
-	 * or a generated random container uuid (try_multiple!=0).
+	/* create container with specified container uuid (try_multiple)
+	 * or a generated random container uuid (!try_multiple).
 	 */
 	if (!uuid_is_null(attrp->da_cuuid)) {
-		try_multiple = 0;
+		try_multiple = false;
 		uuid_unparse(attrp->da_cuuid, cont);
 		D_INFO("try create once with provided container UUID: %36s\n",
 			cont);

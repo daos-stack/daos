@@ -26,10 +26,7 @@ from __future__ import print_function
 
 import sys
 
-from apricot import skipForTicket
-
-from avocado       import Test
-from avocado       import main
+from apricot       import TestWithoutServers
 
 sys.path.append('./util')
 
@@ -37,11 +34,11 @@ sys.path.append('./util')
 # pylint: disable=wrong-import-position
 from cart_utils import CartUtils
 
-class CartCtlOneNodeTest(Test):
+class CartCtlOneNodeTest(TestWithoutServers):
     """
     Runs basic CaRT ctl tests
 
-    :avocado: tags=all,cart,pr,ctl,one_node
+    :avocado: recursive
     """
     def setUp(self):
         """ Test setup """
@@ -49,16 +46,11 @@ class CartCtlOneNodeTest(Test):
         self.utils = CartUtils()
         self.env = self.utils.get_env(self)
 
-    def tearDown(self):
-        """ Test tear down """
-        print("Run TearDown\n")
-
-    @skipForTicket("DAOS-5547")
     def test_cart_ctl(self):
         """
         Test CaRT ctl
 
-        :avocado: tags=all,cart,pr,ctl,one_node
+        :avocado: tags=all,cart,pr,daily_regression,ctl,one_node
         """
 
         srvcmd = self.utils.build_cmd(self, self.env, "test_servers")
@@ -76,18 +68,10 @@ class CartCtlOneNodeTest(Test):
             self.fail("Server did not launch, return code %s" \
                        % procrtn)
 
-        clicmd = self.utils.build_cmd(self, self.env, "test_clients_1")
-        self.utils.launch_test(self, clicmd, srv_rtn)
-        clicmd = self.utils.build_cmd(self, self.env, "test_clients_2")
-        self.utils.launch_test(self, clicmd, srv_rtn)
-        clicmd = self.utils.build_cmd(self, self.env, "test_clients_3")
-        self.utils.launch_test(self, clicmd, srv_rtn)
-        clicmd = self.utils.build_cmd(self, self.env, "test_clients_4")
-        self.utils.launch_test(self, clicmd, srv_rtn)
-        clicmd = self.utils.build_cmd(self, self.env, "test_clients_5")
-        self.utils.launch_test(self, clicmd, srv_rtn)
-        clicmd = self.utils.build_cmd(self, self.env, "test_clients_6")
-        self.utils.launch_test(self, clicmd, srv_rtn)
+        for index in range(6):
+            clicmd = self.utils.build_cmd(
+                self, self.env, "test_clients", index=index)
+            self.utils.launch_test(self, clicmd, srv_rtn)
 
 
 if __name__ == "__main__":

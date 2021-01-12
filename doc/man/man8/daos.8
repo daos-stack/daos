@@ -52,6 +52,8 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 .br
 	  \fBlist-cont\fR
 .br
+	  \fBls\fR
+.br
 	  \fBquery\fR            query a pool
 .br
 	  \fBstat\fR             get pool statistics
@@ -61,6 +63,8 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 	  \fBget-attr\fR         get pool user-defined attribute
 .br
 	  \fBget-prop\fR         get pool properties
+.br
+	  \fBautotest\fR         verify setup with smoke tests
 .br
 .TP
 .I pool \fBOPTION\fRs:
@@ -136,7 +140,7 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 .br
 				      \fBlabel\fR (can be any string)
 .br
-				      \fBcksum\fR checksum type (can be {off,crc{16,32,64},sha1})
+				      \fBcksum\fR checksum type (can be {off,crc{16,32,64},adler32,sha{1,256,512})
 .br
 				      \fBcksum_size\fR checksum chunk size (can be any value <2GiB)
 .br
@@ -146,7 +150,7 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 .br
 				      \fBdedup_th\fR deduplication threshold (can be any value between 4KiB and 2GiB). Preview feature.
 .br
-				      \fBcompression\fR compression type (can be {lz4,gzip,gzip[1-9]}). Preview feature.
+				      \fBcompression\fR compression type (can be {lz4,deflate,deflate[1-4]}). Preview feature.
 .br
 				      \fBencryption\fR encryption type (can be aes-{xts{129,256},cbc{128,192,256},gcm{128,256}). Preview feature.
 .br

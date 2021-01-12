@@ -45,7 +45,7 @@ reconnect(test_arg_t *arg) {
 	flags = (DAOS_COO_RW | DAOS_COO_FORCE);
 	if (arg->myrank == 0) {
 		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-				       arg->pool.svc, DAOS_PC_RW,
+				       NULL /* svc */, DAOS_PC_RW,
 				       &arg->pool.poh, &arg->pool.pool_info,
 				       NULL /* ev */);
 		if (rc)
@@ -225,6 +225,9 @@ oid_allocator_checker(void **state)
 	int		num_oids[NUM_RGS];
 	int		i;
 	int		rc, rc_reduce;
+
+	/* skipped until bug DAOS-5999 is fixed */
+	skip();
 
 	srand(time(NULL));
 	reconnect(arg);

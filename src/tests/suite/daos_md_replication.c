@@ -66,7 +66,7 @@ mdr_stop_pool_svc(void **argv)
 	/* Connect to the pool. */
 	if (arg->myrank == 0) {
 		print_message("connecting to pool\n");
-		rc = daos_pool_connect(uuid, arg->group, arg->pool.svc,
+		rc = daos_pool_connect(uuid, arg->group, NULL /* svc */,
 				       DAOS_PC_RW, &poh, NULL /* info */,
 				       NULL /* ev */);
 	}
@@ -150,7 +150,7 @@ mdr_stop_cont_svc(void **argv)
 	}
 
 	print_message("connecting to pool\n");
-	rc = daos_pool_connect(pool_uuid, arg->group, arg->pool.svc,
+	rc = daos_pool_connect(pool_uuid, arg->group, NULL /* svc */,
 			       DAOS_PC_RW, &poh, NULL, NULL /* ev */);
 	assert_int_equal(rc, 0);
 	print_message("creating container\n");

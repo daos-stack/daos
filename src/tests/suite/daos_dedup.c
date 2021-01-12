@@ -28,12 +28,6 @@
 #include <gurt/types.h>
 #include <daos_prop.h>
 
-#define assert_success(r) do {\
-	int __rc = (r); \
-	if (__rc != 0) \
-		fail_msg("Not successful!! Error code: " DF_RC, DP_RC(__rc)); \
-	} while (0)
-
 struct dedup_test_ctx {
 	/** Pool */
 	daos_handle_t		poh;
@@ -56,6 +50,20 @@ enum THRESHOLD_SETTING {
 	THRESHOLD_GREATER_THAN_DATA = 1,
 	THRESHOLD_LESS_THAN_DATA,
 };
+
+static bool
+dedup_is_nvme_enabled(test_arg_t *arg)
+{
+	daos_pool_info_t	 pinfo = { 0 };
+	struct daos_pool_space	*ps = &pinfo.pi_space;
+	int			 rc;
+
+	pinfo.pi_bits = DPI_ALL;
+	rc = test_pool_get_info(arg, &pinfo);
+	assert_int_equal(rc, 0);
+
+	return ps->ps_free_min[DAOS_MEDIA_NVME] != 0;
+}
 
 /** easily setup an iov and allocate */
 static void
@@ -87,7 +95,7 @@ setup_sgl(struct dedup_test_ctx *ctx)
 					 " sed do eiusmod tempor incididunt ut"
 					 " labore et dolore magna aliqua.");
 
-	daos_sgl_init(&ctx->fetch_sgl, 1);
+	d_sgl_init(&ctx->fetch_sgl, 1);
 	iov_alloc(&ctx->fetch_sgl.sg_iovs[0],
 		daos_sgl_buf_size(&ctx->update_sgl));
 }
@@ -230,6 +238,11 @@ with_identical_updates(void *const *state, uint32_t iod_type, int csum_type,
 	daos_size_t		after_second_update;
 	daos_size_t		delta;
 	int			rc;
+
+	if (dedup_is_nvme_enabled(*state)) {
+		print_message("Currently dedup doesn't support NVMe.\n");
+		skip();
+	}
 
 	setup_context(&ctx, *state, iod_type, csum_type, oc, dedup_type,
 		      dedup_threshold_setting);
