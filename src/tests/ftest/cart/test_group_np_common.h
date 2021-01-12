@@ -28,8 +28,8 @@
 
 #define TEST_CTX_MAX_NUM	 (72)
 
-#define TEST_GROUP_BASE          0x010000000
-#define TEST_GROUP_VER           0
+#define TEST_GROUP_BASE					0x010000000
+#define TEST_GROUP_VER					 0
 
 #define MAX_NUM_RANKS		1024
 #define CRT_CTL_MAX_ARG_STR_LEN (1 << 16)
@@ -38,8 +38,8 @@
 #include <ctype.h>
 
 struct t_swim_status {
-  int rank;
-  int swim_status;
+	int rank;
+	int swim_status;
 };
 
 struct test_t {
@@ -53,8 +53,8 @@ struct test_t {
 	bool			 t_save_cfg;
 	bool			 t_use_cfg;
 	bool			 t_register_swim_callback;
-	int  			 t_get_swim_status;
-	int  			 t_delete_rank_from_ranklist;
+	int				 t_get_swim_status;
+	int				 t_delete_rank_from_ranklist;
 	d_rank_t			 cg_ranks[MAX_NUM_RANKS];
 	int				 cg_num_ranks;
 	struct t_swim_status t_verify_swim_status;
@@ -113,14 +113,14 @@ test_checkin_handler(crt_rpc_t *rpc_req)
 	D_ASSERTF(e_req != NULL, "crt_req_get() failed. e_req: %p\n", e_req);
 
 	DBG_PRINT("tier1 test_server recv'd checkin, opc: %#x.\n",
-		   rpc_req->cr_opc);
+			 rpc_req->cr_opc);
 	DBG_PRINT("tier1 checkin input - age: %d, name: %s, days: %d, "
-		  "bool_val %d.\n", e_req->age, e_req->name, e_req->days,
-		   e_req->bool_val);
+			"bool_val %d.\n", e_req->age, e_req->name, e_req->days,
+			 e_req->bool_val);
 
 	e_reply = crt_reply_get(rpc_req);
 	D_ASSERTF(e_reply != NULL, "crt_reply_get() failed. e_reply: %p\n",
-		  e_reply);
+			e_reply);
 	e_reply->ret = 0;
 	e_reply->room_no = test_g.t_roomno++;
 	e_reply->bool_val = e_req->bool_val;
@@ -135,7 +135,7 @@ test_checkin_handler(crt_rpc_t *rpc_req)
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
 
 	DBG_PRINT("tier1 test_srver sent checkin reply, ret: %d, \
-		   room_no: %d.\n", e_reply->ret, e_reply->room_no);
+			 room_no: %d.\n", e_reply->ret, e_reply->room_no);
 }
 
 /* Keep a table of whether each rank is alive (0) or dead (1) */
@@ -153,27 +153,27 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 	D_ASSERTF(e_req != NULL, "crt_req_get() failed. e_req: %p\n", e_req);
 
 	DBG_PRINT("tier1 test_server recv'd swim_status, opc: %#x.\n",
-		   rpc_req->cr_opc);
-  DBG_PRINT("tier1 swim_status input - rank: %d, exp_status: %d.\n",
-       e_req->rank, e_req->exp_status);
+			 rpc_req->cr_opc);
+	DBG_PRINT("tier1 swim_status input - rank: %d, exp_status: %d.\n",
+			 e_req->rank, e_req->exp_status);
 
 	D_ASSERTF(swim_status_by_rank[e_req->rank] == e_req->exp_status,
-       "Unexpected SWIM status.\n");
+			 "Unexpected SWIM status.\n");
 	DBG_PRINT("Rank [%d] is in SWIM state [%d], as expected.\n",
-       e_req->rank, e_req->exp_status);
+			 e_req->rank, e_req->exp_status);
 
 	e_reply = crt_reply_get(rpc_req);
 
-  /* If we got past the previous assert, then we've succeeded */
+	/* If we got past the previous assert, then we've succeeded */
 	e_reply->bool_val = true;
-  D_ASSERTF(e_reply != NULL, "crt_reply_get() failed. e_reply: %p\n",
-		  e_reply);
+	D_ASSERTF(e_reply != NULL, "crt_reply_get() failed. e_reply: %p\n",
+			e_reply);
 
 	rc = crt_reply_send(rpc_req);
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
 
 	DBG_PRINT("tier1 test_srver sent swim_status reply, e_reply->bool_val: %d.\n",
-      e_reply->bool_val);
+			e_reply->bool_val);
 }
 
 static void
@@ -188,14 +188,14 @@ test_ping_delay_handler(crt_rpc_t *rpc_req)
 	D_ASSERTF(p_req != NULL, "crt_req_get() failed. p_req: %p\n", p_req);
 
 	DBG_PRINT("tier1 test_server recv'd checkin, opc: %#x.\n",
-		  rpc_req->cr_opc);
+			rpc_req->cr_opc);
 	DBG_PRINT("tier1 checkin input - age: %d, name: %s, days: %d, "
-		  "delay: %u.\n", p_req->age, p_req->name, p_req->days,
-		   p_req->delay);
+			"delay: %u.\n", p_req->age, p_req->name, p_req->days,
+			 p_req->delay);
 
 	p_reply = crt_reply_get(rpc_req);
 	D_ASSERTF(p_reply != NULL, "crt_reply_get() failed. p_reply: %p\n",
-		  p_reply);
+			p_reply);
 	p_reply->ret = 0;
 	p_reply->room_no = test_g.t_roomno++;
 
@@ -205,7 +205,7 @@ test_ping_delay_handler(crt_rpc_t *rpc_req)
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
 
 	DBG_PRINT("tier1 test_srver sent checkin reply, ret: %d, \
-		   room_no: %d.\n", p_reply->ret, p_reply->room_no);
+			 room_no: %d.\n", p_reply->ret, p_reply->room_no);
 }
 
 static void
@@ -222,7 +222,7 @@ client_cb_common(const struct crt_cb_info *cb_info)
 
 	if (cb_info->cci_arg != NULL) {
 		*(int *) cb_info->cci_arg = 1;
-  }
+	}
 
 	switch (cb_info->cci_rpc->cr_opc) {
 	case TEST_OPC_CHECKIN:
@@ -239,9 +239,9 @@ client_cb_common(const struct crt_cb_info *cb_info)
 			break;
 		}
 		DBG_PRINT("%s checkin result - ret: %d, room_no: %d, "
-		       "bool_val %d.\n",
-		       test_ping_rpc_req_input->name, test_ping_rpc_req_output->ret,
-		       test_ping_rpc_req_output->room_no, test_ping_rpc_req_output->bool_val);
+					 "bool_val %d.\n",
+					 test_ping_rpc_req_input->name, test_ping_rpc_req_output->ret,
+					 test_ping_rpc_req_output->room_no, test_ping_rpc_req_output->bool_val);
 		D_FREE(test_ping_rpc_req_input->name);
 		sem_post(&test_g.t_token_to_proceed);
 		D_ASSERT(test_ping_rpc_req_output->bool_val == true);
@@ -259,9 +259,9 @@ client_cb_common(const struct crt_cb_info *cb_info)
 			break;
 		}
 		DBG_PRINT("swim_status result - rank: %d, exp_status: %d, "
-		       "result: %d.\n",
-		       swim_status_rpc_req_input->rank, swim_status_rpc_req_input->exp_status,
-           swim_status_rpc_req_output->bool_val);
+					 "result: %d.\n",
+					 swim_status_rpc_req_input->rank, swim_status_rpc_req_input->exp_status,
+					 swim_status_rpc_req_output->bool_val);
 		sem_post(&test_g.t_token_to_proceed);
 		D_ASSERT(swim_status_rpc_req_output->bool_val == true);
 		break;
@@ -280,7 +280,7 @@ static void
 test_shutdown_handler(crt_rpc_t *rpc_req)
 {
 	DBG_PRINT("tier1 test_srver received shutdown request, opc: %#x.\n",
-		   rpc_req->cr_opc);
+			 rpc_req->cr_opc);
 
 	D_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");
 	D_ASSERTF(rpc_req->cr_output == NULL, "RPC request output is NULL\n");
@@ -378,7 +378,7 @@ check_in(crt_group_t *remote_group, int rank, int tag)
 	}
 
 	D_ASSERTF(buffer != NULL, "Cannot allocate memory.\n");
-	snprintf(buffer,  256, "Guest %d", rank);
+	snprintf(buffer,	256, "Guest %d", rank);
 	rpc_req_input->name = buffer;
 	rpc_req_input->age = 21;
 	rpc_req_input->days = 7;
@@ -495,7 +495,7 @@ parse_rank_string(char *arg_str, d_rank_t *ranks, int *num_ranks)
 	D_ASSERT(num_ranks != NULL);
 	D_ASSERT(arg_str != NULL);
 	if (strnlen(arg_str, CRT_CTL_MAX_ARG_STR_LEN) >=
-		    CRT_CTL_MAX_ARG_STR_LEN) {
+				CRT_CTL_MAX_ARG_STR_LEN) {
 		D_ERROR("arg string too long.\n");
 		return;
 	}
@@ -569,15 +569,15 @@ test_parse_args(int argc, char **argv)
 	test_g.t_use_cfg = true;
 	test_g.t_register_swim_callback = false;
 
-  /* SWIM testing options */
-  /* Default to a non-existent, invalid rank */
+	/* SWIM testing options */
+	/* Default to a non-existent, invalid rank */
 	test_g.t_delete_rank_from_ranklist = -1;
 	test_g.t_get_swim_status = false;
 
-  /* Default value: non-existent rank with status "alive" */
+	/* Default value: non-existent rank with status "alive" */
 	test_g.t_verify_swim_status = (struct t_swim_status){ -1, 0 };
 
-  struct t_swim_status vss;
+	struct t_swim_status vss;
 
 	while (1) {
 		rc = getopt_long(argc, argv, "n:a:c:h:u:r:", long_options,
@@ -627,9 +627,9 @@ test_parse_args(int argc, char **argv)
 			break;
 		case 'v':
 
-      vss = parse_verify_swim_status_arg(optarg);
-      test_g.t_verify_swim_status.rank = vss.rank;
-      test_g.t_verify_swim_status.swim_status = vss.swim_status;
+			vss = parse_verify_swim_status_arg(optarg);
+			test_g.t_verify_swim_status.rank = vss.rank;
+			test_g.t_verify_swim_status.swim_status = vss.swim_status;
 
 			break;
 		case 'g':
@@ -640,7 +640,7 @@ test_parse_args(int argc, char **argv)
 			break;
 		case 'r':
 			parse_rank_string(optarg, test_g.cg_ranks,
-					  &test_g.cg_num_ranks);
+						&test_g.cg_num_ranks);
 			break;
 		case '?':
 			return 1;
