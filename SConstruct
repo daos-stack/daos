@@ -88,6 +88,7 @@ def update_rpm_version(version, tag):
             cmd = 'rpmdev-packager'
             try:
                 pkg_st = subprocess.Popen(cmd, stdout=subprocess.PIPE) # nosec
+                packager = pkg_st.communicate()[0].strip().decode('UTF-8')
             except OSError:
                 packager = pkg_st.communicate()[0].strip().decode('UTF-8')
                 print("You need to have the rpmdev-packager tool (from the "
