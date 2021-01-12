@@ -371,13 +371,15 @@ class DaosServerManager(SubprocessManager):
             self.dmg.certificate_owner = getpass.getuser()
 
         # An internal dictionary used to define the expected states of each
-        # server rank when checking their states.  Initially it is empty and
-        # populated after calling start() via _set_expected_states().  It may
-        # also be initialized by _set_expected_states() when calling
-        # update_expected_states() - typically to mark a rank as having been
-        # stopped by a test - if it is empty when the method is called.  This
-        # would be the case if the servers had been started by a previous test
-        # variant.
+        # server rank when checking their states. It will be populated with
+        # the dictionary output of DmgCommand.system_query() when any of the
+        # following methods are called:
+        #   - start()
+        #   - verify_expected_states(set_expected=True)
+        # Individual rank states may also be updated by calling the
+        # update_expected_states() method. This is required to mark any rank
+        # stopped by a test with the correct state to avoid errors being raised
+        # during tearDown().
         self._expected_states = {}
 
     def get_params(self, test):
@@ -619,7 +621,7 @@ class DaosServerManager(SubprocessManager):
         self._prepare_dmg_hostlist()
 
         # Define the expected states for each rank
-        self._set_expected_states()
+        self._expected_states = self.system_query()
 
     def reset_storage(self):
         """Reset the server storage.
@@ -757,7 +759,7 @@ class DaosServerManager(SubprocessManager):
             str: the current DAOS system state
 
         """
-        data = self.dmg.system_query()
+        data = self.system_query()
         if not data:
             # The regex failed to get the rank and state
             raise ServerFailed(
@@ -933,12 +935,20 @@ class DaosServerManager(SubprocessManager):
             str(storage[1]), bytes_to_human(storage[1], binary=False))
         return storage
 
-    def _set_expected_states(self):
-        """Populate the expected state dictionary."""
+    def system_query(self):
+        """Query the state of the daos_server ranks.
+
+        Returns:
+            dict: dictionary of server rank keys, each referencing a dictionary
+                of information.  This will be empty if there was error obtaining
+                the dmg system query output.
+
+        """
         try:
-            self._expected_states = self.dmg.system_query()
+            data = self.dmg.system_query()
         except CommandFailure:
-            self._expected_states = {}
+            data = {}
+        return data
 
     def update_expected_states(self, rank, state):
         """Update the expected state of the specified server rank.
@@ -954,8 +964,13 @@ class DaosServerManager(SubprocessManager):
                 self._expected_states[rank]["state"], state)
             self._expected_states[rank]["state"] = state
 
-    def verify_expected_states(self):
+    def verify_expected_states(self, set_expected=False):
         """Verify that the expected server rank states match the current states.
+
+        Args:
+            set_expected (bool, optional): option to update the expected server
+                rank states to the current states prior to checking the states.
+                Defaults to False.
 
         Returns:
             dict: a dictionary of whether or not any of the server states were
@@ -966,13 +981,14 @@ class DaosServerManager(SubprocessManager):
 
         """
         status = {"expected": True, "restart": False}
+        running_states = ["started", "joined"]
 
         # Get the current state of the servers
-        try:
-            current_states = self.dmg.system_query()
-        except CommandFailure:
-            current_states = {}
-            status["expected"] = False
+        current_states = self.system_query()
+        if set_expected:
+            # Assign the expected states to the current server rank states
+            self.log.info("<SERVER> Assigning expected server states.")
+            self._expected_states = current_states.copy()
 
         # Verify the expected states match the current states
         self.log.info(
@@ -988,33 +1004,39 @@ class DaosServerManager(SubprocessManager):
                 log_format,
                 "-" * 4, "-" * 15, "-" * 36, "-" * 14, "-" * 14, "-" * 6)
             for rank in sorted(self._expected_states):
-                try:
-                    current_rank = current_states.pop(rank)
-                except KeyError:
-                    current_rank = {"state": "not detected"}
-                    status["expected"] = False
                 domain = self._expected_states[rank]["domain"].split(".")
                 expected = self._expected_states[rank]["state"].lower()
-                current = current_rank["state"].lower()
-                result = "PASS" if expected == current else "FAIL"
+                try:
+                    current_rank = current_states.pop(rank)
+                    current = current_rank["state"].lower()
+                except KeyError:
+                    current = "not detected"
+
+                # Check if the rank's current state is expected
+                result = "PASS" if current == expected else "FAIL"
+                status["expected"] &= current == expected
+
+                # Restart all ranks if this rank is not running
+                if current not in running_states:
+                    status["restart"] = True
+
                 self.log.info(
                     log_format, rank, domain[0].replace("/", ""),
-                    self._expected_states[rank]["uuid"], expected, current,
-                    result)
-                status["expected"] &= expected == current
-                if current not in ["started", "joined"]:
-                    status["restart"] = True
+                    self._expected_states[rank]["uuid"], expected,
+                    current, result)
 
             # Report any current states that were not expected
             for rank in sorted(current_states):
-                status["expected"] = False
                 domain = current_states[rank]["domain"].split(".")
                 self.log.info(
                     log_format, rank, domain[0].replace("/", ""),
                     current_states[rank]["uuid"], "not detected",
                     current_states[rank]["state"].lower(), "FAIL")
+                status["expected"] = False
+
         else:
             self.log.info("  Unable to obtain current server state")
+            status["expected"] = False
 
         # Any unexpected state detected warrants a restart of all servers
         if not status["expected"]:

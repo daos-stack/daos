@@ -364,7 +364,7 @@ class TestWithServers(TestWithoutServers):
         self.server_group = None
         self.agent_managers = []
         self.server_managers = []
-        self.start_servers_once = False
+        self.start_servers_once = True
         self.server_manager_class = "Systemctl"
         self.agent_manager_class = "Systemctl"
         self.setup_start_servers = True
@@ -745,15 +745,20 @@ class TestWithServers(TestWithoutServers):
         start_servers = True
         if self.start_servers_once:
             # Starting servers for each test variant is enabled.  The servers
-            # will still need be started if any server is down.
-            status = self.check_running("servers", self.server_managers, True)
+            # will still need be started if any server is down.  Since the
+            # ServerManager objects have been initialized but start() has not
+            # been called, the dmg command will need to be prepared and the
+            # expected states will need to be assigned.
+            status = self.check_running(
+                "servers", self.server_managers, True, True)
             start_servers = status["restart"]
         if start_servers:
             self.log.info("--- STARTING SERVERS ---")
             self._start_manager_list("server", self.server_managers)
         self.log.info("-" * 100)
 
-    def check_running(self, name, manager_list, prepare_dmg=False):
+    def check_running(self, name, manager_list, prepare_dmg=False,
+                      set_expected=False):
         """Verify that servers are running on all the expected hosts.
 
         Args:
@@ -763,6 +768,9 @@ class TestWithServers(TestWithoutServers):
                 each server manager prior to querying the server states. This
                 should be set to True when verifying server states for servers
                 started by other test variants. Defaults to False.
+            set_expected (bool, optional): option to update the expected server
+                rank states to the current states prior to checking the states.
+                Defaults to False.
 
         Returns:
             dict: a dictionary of whether or not any of the server states were
@@ -780,7 +788,7 @@ class TestWithServers(TestWithoutServers):
                 manager.prepare_dmg()
 
             # Verify the current server states match the expected states
-            manager_status = manager.verify_expected_states()
+            manager_status = manager.verify_expected_states(set_expected)
             status["expected"] &= manager_status["expected"]
             if manager_status["restart"]:
                 status["restart"] = True
