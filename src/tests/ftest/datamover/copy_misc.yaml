@@ -4,7 +4,7 @@ hosts:
     test_clients:
         - server-B
 timeouts:
-    test_copy_auto_create_dest_dcp: 120
+    test_copy_auto_create_dest_dcp: 80
 server_config:
     name: daos_server
 pool:
