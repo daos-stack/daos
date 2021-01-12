@@ -33,7 +33,7 @@ class CreateContainterACLTest(ContSecurityTestBase):
 
     :avocado: recursive
     """
-
+    @skipForTicket("DAOS-6479")
     def test_container_basics(self):
         """Test basic container create/destroy/open/close/query.
 
