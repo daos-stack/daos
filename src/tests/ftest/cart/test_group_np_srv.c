@@ -101,7 +101,7 @@ test_run(d_rank_t my_rank)
 		DBG_PRINT("Context %d created\n", i);
 
 		rc = pthread_create(&test_g.t_tid[i], NULL, tc_progress_fn,
-						&test_g.t_crt_ctx[i]);
+				    &test_g.t_crt_ctx[i]);
 		D_ASSERTF(rc == 0, "pthread_create() failed. rc: %d\n", rc);
 		DBG_PRINT("Progress thread %d started\n", i);
 	}
