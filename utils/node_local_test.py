@@ -1060,7 +1060,7 @@ class posix_tests():
         print(os.stat(fname))
         print(os.stat(newfile))
         os.chmod(fname, stat.S_IRUSR | stat.S_IWUSR)
-        os.chmod(newfile, emode)
+        os.chmod(newfile, e_mode)
         print(os.stat(fname))
         print(os.stat(newfile))
         os.rename(newfile, fname)
@@ -1073,7 +1073,7 @@ class posix_tests():
             print('Failed to fchmod() replaced file')
         ofd.close()
         nf = os.stat(fname)
-        assert stat.S_IMODE(nf.st_mode) == emode
+        assert stat.S_IMODE(nf.st_mode) == e_mode
 
 def run_posix_tests(server, conf, test=None):
     """Run one or all posix tests"""

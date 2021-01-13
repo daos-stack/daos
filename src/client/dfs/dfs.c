@@ -753,7 +753,8 @@ open_file(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 fopen:
 	if (!S_ISREG(entry.mode)) {
 		/* This could assert as fetch_entry() is called with false
-		 * for fetch_symlink */
+		 * for fetch_symlink
+		 */
 		D_FREE(entry.value);
 		return EINVAL;
 	}
