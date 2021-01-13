@@ -428,6 +428,27 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 			   daos_epoch_t epoch, uint32_t intent, uint32_t type);
 
 /**
+ * Get local entry DTX state. Only used by VOS aggregation.
+ *
+ * \param entry		[IN]	DTX local id
+ *
+ * \return		DTX_ST_COMMITTED, DTX_ST_PREPARED or
+ *			DTX_ST_ABORTED.
+ */
+static inline unsigned int
+vos_dtx_ent_state(uint32_t entry)
+{
+	switch (entry) {
+	case DTX_LID_COMMITTED:
+		return DTX_ST_COMMITTED;
+	case DTX_LID_ABORTED:
+		return DTX_ST_ABORTED;
+	default:
+		return DTX_ST_PREPARED;
+	}
+}
+
+/**
  * Register the record (to be modified) to the DTX entry.
  *
  * \param umm		[IN]	Instance of an unified memory class.
@@ -557,6 +578,8 @@ struct vos_rec_bundle {
 	uint32_t		 rb_ver;
 	/** tree class */
 	enum vos_tree_class	 rb_tclass;
+	/** DTX state */
+	unsigned int		 rb_dtx_state;
 };
 
 #define VOS_SIZE_ROUND		8

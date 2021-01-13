@@ -1071,6 +1071,7 @@ singv_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	it_entry->ie_ver	 = rbund.rb_ver;
 	it_entry->ie_recx.rx_idx = 0;
 	it_entry->ie_recx.rx_nr  = 1;
+	it_entry->ie_dtx_state	 = rbund.rb_dtx_state;
  out:
 	return rc;
 }
@@ -1242,6 +1243,7 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	it_entry->ie_rsize	= inob;
 	it_entry->ie_ver	= entry.en_ver;
 	it_entry->ie_csum	= entry.en_csum;
+	it_entry->ie_dtx_state	= dtx_alb2state(entry.en_avail_rc);
 	bio_iov_set(&it_entry->ie_biov, entry.en_addr,
 		    it_entry->ie_recx.rx_nr * it_entry->ie_rsize);
  out:

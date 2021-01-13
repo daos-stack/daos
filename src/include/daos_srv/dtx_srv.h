@@ -172,20 +172,6 @@ struct dtx_stat {
 	uint64_t	dtx_oldest_committed_time;
 };
 
-/**
- * DAOS two-phase commit transaction status.
- */
-enum dtx_status {
-	/** Local participant has done the modification. */
-	DTX_ST_PREPARED		= 1,
-	/** The DTX has been committed. */
-	DTX_ST_COMMITTED	= 2,
-	/** The DTX is corrupted, some participant RDG(s) may be lost. */
-	DTX_ST_CORRUPTED	= 3,
-	/** The DTX is committable, but not committed, non-persistent status. */
-	DTX_ST_COMMITTABLE	= 4,
-};
-
 enum dtx_flags {
 	/** Single operand. */
 	DTX_SOLO		= (1 << 0),
