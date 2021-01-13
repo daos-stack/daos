@@ -4,6 +4,7 @@
 
 # pylint: disable=too-many-lines
 # pylint: disable=too-few-public-methods
+# pylint: disable=protected-access
 
 import os
 import sys
@@ -353,7 +354,7 @@ class DaosServer():
         control_log_file = tempfile.NamedTemporaryFile(prefix='dnt_control_',
                                                        suffix='.log',
                                                        delete=False)
-        scyaml = yaml.load(scfd)
+        scyaml = yaml.safe_load(scfd)
         scyaml['servers'][0]['log_file'] = self._log_file
         if self.conf.args.server_debug:
             scyaml['control_log_mask'] = 'ERROR'
@@ -442,7 +443,9 @@ class DaosServer():
                 for line in rc.stdout.decode('utf-8').splitlines():
                     if 'format storage of running instance' in line:
                         ready = True
-                    if 'format request for already-formatted storage and reformat not specified' in line:
+                    format_message = ('format request for already-formatted'
+                                      ' storage and reformat not specified')
+                    if format_message in line:
                         cmd = ['storage', 'format', '--reformat']
                 for line in rc.stderr.decode('utf-8').splitlines():
                     if 'system reformat requires the following' in line:
@@ -470,7 +473,7 @@ class DaosServer():
         if not self._sp:
             return
         rc = self.run_dmg(['system', 'stop'])
-        assert rc.returncode == 0
+        assert rc.returncode == 0 # nosec
 
         start = time.time()
         max_stop_time = 5
@@ -491,7 +494,8 @@ class DaosServer():
         # When parsing the server logs do not report on memory leaks
         # yet, as if it fails then lots of memory won't be freed and
         # it's not helpful at this stage to report that.
-        # TODO: Remove this block when daos_server shutdown works.
+        # TODO:                              # pylint: disable=W0511
+        # Remove this block when daos_server shutdown works.
         parent_pid = self._sp.pid
         procs = []
         for proc_id in os.listdir('/proc/'):
@@ -535,7 +539,8 @@ class DaosServer():
         # Show errors from server logs bug suppress memory leaks as the server
         # often segfaults at shutdown.
         if os.path.exists(self._log_file):
-            # TODO: Enable memleak checking when server shutdown works.
+            # TODO:                              # pylint: disable=W0511
+            # Enable memleak checking when server shutdown works.
             log_test(self.conf, self._log_file, show_memleaks=False)
         self.running = False
         if self.agent_dir != DEFAULT_AGENT_DIR:
@@ -581,7 +586,7 @@ def il_cmd(dfuse, cmd, check_read=True, check_write=True):
                  log_file.name,
                  check_read=check_read,
                  check_write=check_write)
-        assert ret.returncode == 0
+        assert ret.returncode == 0 # nosec
     except NLTestNoFunction as error:
         print("ERROR: command '{}' did not log via {}".format(' '.join(cmd),
                                                               error.function))
@@ -839,7 +844,7 @@ def assert_file_size_fd(fd, size):
     """Verify the file size is as expected"""
     my_stat = os.fstat(fd)
     print('Checking file size is {} {}'.format(size, my_stat.st_size))
-    assert my_stat.st_size == size
+    assert my_stat.st_size == size # nosec
 
 def assert_file_size(ofd, size):
     """Verify the file size is as expected"""
@@ -970,7 +975,7 @@ def create_cont(conf, pool, posix=False):
         cmd = ['container', 'create', '--pool', pool]
     rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
-    assert rc.returncode == 0
+    assert rc.returncode == 0 # nosec
     new_container = rc.stdout.decode().split(' ')[-1].rstrip()
 
     cmd = ['pool', 'list-containers', '--pool', pool]
@@ -988,7 +993,7 @@ def destroy_container(conf, pool, container):
            '--pool', pool, '--cont', container]
     rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
-    assert rc.returncode == 0
+    assert rc.returncode == 0 # nosec
     return rc.stdout.decode('utf-8').strip()
 
 def make_pool(daos):
@@ -1009,7 +1014,7 @@ def make_pool(daos):
         time.sleep(0.5)
 
     print(rc)
-    assert rc.returncode == 0
+    assert rc.returncode == 0 # nosec
 
     return get_pool_list()
 
@@ -1046,7 +1051,7 @@ def run_tests(dfuse):
     rc = subprocess.run(['dd', 'if=/dev/zero', 'bs=16k', 'count=64',
                          'of={}'.format(os.path.join(path, 'dd_file'))])
     print(rc)
-    assert rc.returncode == 0
+    assert rc.returncode == 0 # nosec
     ofd = open(fname, 'w')
     ofd.write('hello')
     print(os.fstat(ofd.fileno()))
@@ -1065,14 +1070,14 @@ def run_tests(dfuse):
     print(os.fstat(ofd.fileno()))
     ofd.close()
     ret = il_cmd(dfuse, ['cat', fname], check_write=False)
-    assert ret.returncode == 0
+    assert ret.returncode == 0 # nosec
     ofd = os.open(fname, os.O_TRUNC)
     assert_file_size_fd(ofd, 0)
     os.close(ofd)
     symlink_name = os.path.join(path, 'symlink_src')
     symlink_dest = 'missing_dest'
     os.symlink(symlink_dest, symlink_name)
-    assert symlink_dest == os.readlink(symlink_name)
+    assert symlink_dest == os.readlink(symlink_name) # nosec
 
     # Note that this doesn't test dfs because fuse will do a
     # lookup to check if the file exists rather than just trying
@@ -1241,7 +1246,7 @@ def create_and_read_via_il(dfuse, path):
     print(os.fstat(ofd.fileno()))
     ofd.close()
     ret = il_cmd(dfuse, ['cat', fname], check_write=False)
-    assert ret.returncode == 0
+    assert ret.returncode == 0 # nosec
 
 def run_container_query(conf, path):
     """Query a path to extract container information"""
@@ -1250,7 +1255,7 @@ def run_container_query(conf, path):
 
     rc = run_daos_cmd(conf, cmd)
 
-    assert rc.returncode == 0
+    assert rc.returncode == 0 # nosec
 
     print(rc)
     output = rc.stdout.decode('utf-8')
@@ -1282,7 +1287,7 @@ def run_duns_overlay_test(server, conf):
                              uns_dir])
 
     print('rc is {}'.format(rc))
-    assert rc.returncode == 0
+    assert rc.returncode == 0 # nosec
 
     dfuse = DFuse(server, conf, path=uns_dir)
 
@@ -1419,7 +1424,7 @@ def run_dfuse(server, conf):
     uns_stat = os.stat(uns_path)
     print(direct_stat)
     print(uns_stat)
-    assert uns_stat.st_ino == direct_stat.st_ino
+    assert uns_stat.st_ino == direct_stat.st_ino # nosec
 
     fatal_errors.add_result(dfuse.stop())
     print('Trying UNS with previous cont')
@@ -1434,7 +1439,7 @@ def run_dfuse(server, conf):
     uns_stat = os.stat(uns_path)
     print(direct_stat)
     print(uns_stat)
-    assert uns_stat.st_ino == direct_stat.st_ino
+    assert uns_stat.st_ino == direct_stat.st_ino # nosec
     fatal_errors.add_result(dfuse.stop())
 
     if fatal_errors.errors:
@@ -1448,7 +1453,8 @@ def run_il_test(server, conf):
 
     pools = get_pool_list()
 
-    # TODO: This doesn't work with two pools, partly related to
+    # TODO:                       # pylint: disable=W0511
+    # This doesn't work with two pools, partly related to
     # DAOS-5109 but there may be other issues.
     while len(pools) < 1:
         pools = make_pool(server)
@@ -1480,24 +1486,25 @@ def run_il_test(server, conf):
     fd.close()
     # Copy it across containers.
     ret = il_cmd(dfuse, ['cp', f, dirs[-1]])
-    assert ret.returncode == 0
+    assert ret.returncode == 0 # nosec
 
     # Copy it within the container.
     child_dir = os.path.join(dirs[0], 'new_dir')
     os.mkdir(child_dir)
     il_cmd(dfuse, ['cp', f, child_dir])
-    assert ret.returncode == 0
+    assert ret.returncode == 0 # nosec
 
     # Copy something into a container
     ret = il_cmd(dfuse, ['cp', '/bin/bash', dirs[-1]], check_read=False)
-    assert ret.returncode == 0
+    assert ret.returncode == 0 # nosec
     # Read it from within a container
-    # TODO: change this to something else, md5sum uses fread which isn't
+    # TODO:                              # pylint: disable=W0511
+    # change this to something else, md5sum uses fread which isn't
     # intercepted.
     ret = il_cmd(dfuse,
                  ['md5sum', os.path.join(dirs[-1], 'bash')],
                  check_read=False, check_write=False)
-    assert ret.returncode == 0
+    assert ret.returncode == 0 # nosec
     ret = il_cmd(dfuse, ['dd',
                          'if={}'.format(os.path.join(dirs[-1], 'bash')),
                          'of={}'.format(os.path.join(dirs[-1], 'bash_copy')),
@@ -1506,7 +1513,7 @@ def run_il_test(server, conf):
                          'bs=128k'])
 
     print(ret)
-    assert ret.returncode == 0
+    assert ret.returncode == 0 # nosec
 
     for my_dir in dirs:
         create_and_read_via_il(dfuse, my_dir)
@@ -1906,7 +1913,8 @@ def test_alloc_fail(server, wf, conf):
 def main():
     """Main entry point"""
 
-    parser = argparse.ArgumentParser(description='Run DAOS client on local node')
+    parser = argparse.ArgumentParser(
+        description='Run DAOS client on local node')
     parser.add_argument('--output-file', default='nlt-errors.json')
     parser.add_argument('--server-debug', default=None)
     parser.add_argument('--dfuse-debug', default=None)
