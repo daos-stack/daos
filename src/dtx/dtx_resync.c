@@ -91,10 +91,11 @@ dtx_resync_commit(struct ds_cont_child *cont,
 		 * DTXs. So double check the status before current commit.
 		 */
 		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid,
-				   NULL, NULL, false);
+				   NULL, NULL, NULL, false);
 
 		/* Skip this DTX since it has been committed or aggregated. */
-		if (rc == DTX_ST_COMMITTED || rc == -DER_NONEXIST)
+		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE ||
+		    rc == -DER_NONEXIST)
 			goto next;
 
 		/* If we failed to check the status, then assume that it is
@@ -108,7 +109,7 @@ next:
 	}
 
 	if (j > 0) {
-		rc = dtx_commit(cont, dte, j, false);
+		rc = dtx_commit(cont, dte, j, true);
 		if (rc < 0)
 			D_ERROR("Failed to commit the DTXs: rc = "DF_RC"\n",
 				DP_RC(rc));
@@ -134,7 +135,9 @@ dtx_target_alive(struct ds_pool *pool, uint32_t id)
 	struct pool_target	*target;
 	int			 rc;
 
+	ABT_rwlock_wrlock(pool->sp_lock);
 	rc = pool_map_find_target(pool->sp_map, id, &target);
+	ABT_rwlock_unlock(pool->sp_lock);
 	D_ASSERT(rc == 1);
 
 	return target->ta_comp.co_status == PO_COMP_ST_UPIN ? true : false;
@@ -146,14 +149,14 @@ dtx_is_leader(struct ds_pool *pool, struct dtx_resync_args *dra,
 {
 	struct dtx_memberships	*mbs = dre->dre_dte.dte_mbs;
 
-	if (mbs->dm_dte_flags & DTE_LEADER)
-		return 1;
-
 	/* Old leader is still alive, then current server is not the leader. */
 	if (mbs->dm_flags & DMF_CONTAIN_LEADER &&
 	    dtx_target_alive(pool, mbs->dm_tgts[0].ddt_id))
 		return 0;
 
+	/* XXX: need more work when we support to elect DTX leader from
+	 *	data shard for EC object in the future.
+	 */
 	return ds_pool_check_dtx_leader(pool, &dre->dre_oid, dra->version);
 }
 
@@ -228,7 +231,9 @@ dtx_status_handle(struct dtx_resync_args *dra)
 	if (drh->drh_count == 0)
 		goto out;
 
+	ABT_rwlock_wrlock(pool->sp_lock);
 	tgt_cnt = pool_map_target_nr(pool->sp_map);
+	ABT_rwlock_unlock(pool->sp_lock);
 	D_ASSERT(tgt_cnt != 0);
 
 	D_ALLOC_ARRAY(tgt_array, tgt_cnt);
@@ -237,6 +242,12 @@ dtx_status_handle(struct dtx_resync_args *dra)
 
 	d_list_for_each_entry_safe(dre, next, &drh->drh_list, dre_link) {
 		struct dtx_memberships	*mbs = dre->dre_dte.dte_mbs;
+
+		if (cont->sc_closing)
+			goto out;
+
+		if (mbs->dm_dte_flags & DTE_LEADER)
+			goto commit;
 
 		rc = dtx_is_leader(pool, dra, dre);
 		if (rc <= 0) {
@@ -257,7 +268,7 @@ dtx_status_handle(struct dtx_resync_args *dra)
 		/* The DTX has been committed on some remote replica(s),
 		 * let's commit the DTX globally.
 		 */
-		if (rc == DTX_ST_COMMITTED)
+		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE)
 			goto commit;
 
 		if (rc == DTX_ST_PREPARED) {
@@ -274,18 +285,28 @@ dtx_status_handle(struct dtx_resync_args *dra)
 				 *	the DTX. we need more human knowledge
 				 *	to manually recover related things.
 				 *
-				 *	One possible TBD is that we can mark
-				 *	the DTX as 'failed' on related servers,
-				 *	that will fail subsequent accessing of
-				 *	related data directly without talk with
-				 *	the leader again.
+				 *	Then we will mark the TX as corrupted
+				 *	via special dtx_abort() with 0 @epoch.
 				 */
+				dte = &dre->dre_dte;
+				rc = dtx_abort(cont, 0, &dte, 1);
+				if (rc < 0)
+					err = rc;
 
 				dtx_dre_release(drh, dre);
 				continue;
 			}
 
 			goto commit;
+		}
+
+		if (rc == -DER_INPROGRESS) {
+			D_WARN("Other participants not sure about whether the "
+			       "DTX "DF_DTI" can be committed or not, retry.\n",
+			       DP_DTI(&dre->dre_xid));
+			d_list_del(&dre->dre_link);
+			d_list_add_tail(&dre->dre_link, &drh->drh_list);
+			continue;
 		}
 
 		if (rc != -DER_NONEXIST) {
@@ -301,10 +322,11 @@ dtx_status_handle(struct dtx_resync_args *dra)
 		 * DTXs. So double check the status before next action.
 		 */
 		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid,
-				   NULL, NULL, false);
+				   NULL, NULL, NULL, false);
 
 		/* Skip this DTX that it may has been committed or aborted. */
-		if (rc == DTX_ST_COMMITTED || rc == -DER_NONEXIST) {
+		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE ||
+		    rc == -DER_NONEXIST) {
 			dtx_dre_release(drh, dre);
 			continue;
 		}
@@ -333,6 +355,11 @@ dtx_status_handle(struct dtx_resync_args *dra)
 		 */
 		dte = &dre->dre_dte;
 		rc = dtx_abort(cont, dre->dre_epoch, &dte, 1);
+
+		D_DEBUG(DB_TRACE, "As the new leader for TX "
+			DF_DTI", abort it: "DF_RC"\n",
+			DP_DTI(&dre->dre_xid), DP_RC(rc));
+
 		if (rc < 0)
 			err = rc;
 
@@ -340,6 +367,9 @@ dtx_status_handle(struct dtx_resync_args *dra)
 		continue;
 
 commit:
+		D_DEBUG(DB_TRACE, "As the new leader for TX "
+			DF_DTI", try to commit it.\n", DP_DTI(&dre->dre_xid));
+
 		if (++count >= DTX_THRESHOLD_COUNT) {
 			rc = dtx_resync_commit(cont, drh, count);
 			if (rc < 0)
@@ -357,7 +387,11 @@ commit:
 out:
 	D_FREE(tgt_array);
 
-	if (err >= 0)
+	while ((dre = d_list_pop_entry(&drh->drh_list, struct dtx_resync_entry,
+				       dre_link)) != NULL)
+		dtx_dre_release(drh, dre);
+
+	if (err >= 0 && !cont->sc_closing)
 		/* Drain old committable DTX to help subsequent rebuild. */
 		err = dtx_obj_sync(cont, NULL, dra->epoch);
 
@@ -382,12 +416,33 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 
 	D_ASSERT(!(ent->ie_dtx_flags & DTE_INVALID));
 
-	if (ent->ie_dtx_flags & DTE_LEADER && !dra->resync_all)
+	/* Skip corrupted entry that will be handled via other special tool. */
+	if (ent->ie_dtx_flags & DTE_CORRUPTED)
 		return 0;
 
-	/* Only handle the DTX that happened before the DTX resync. */
-	if (ent->ie_dtx_ver >= dra->version)
-		return 0;
+	if (dra->resync_all) {
+		/* For open container. */
+		if (ent->ie_dtx_flags & DTE_LEADER) {
+			/* Leader: handle the DTX that happened before current
+			 * DTX resync.
+			 */
+			if (ent->ie_epoch < dra->epoch)
+				return 0;
+		} else {
+			/* Non-leader: handle the DTX with old version. */
+			if (ent->ie_dtx_ver >= dra->version)
+				return 0;
+		}
+	} else {
+		/* For pool map refresh. */
+		/* Leader: do nothing. */
+		if (ent->ie_dtx_flags & DTE_LEADER)
+			return 0;
+
+		/* Non-leader: handle the DTX with old version. */
+		if (ent->ie_dtx_ver >= dra->version)
+			return 0;
+	}
 
 	D_ASSERT(ent->ie_dtx_mbs_dsize > 0);
 	D_ASSERT(ent->ie_dtx_tgt_cnt > 0);
@@ -427,6 +482,7 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 {
 	struct ds_cont_child		*cont = NULL;
 	struct dtx_resync_args		 dra = { 0 };
+	d_rank_t			 myrank;
 	int				 rc = 0;
 	int				 rc1 = 0;
 	bool				 resynced = false;
@@ -440,6 +496,7 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 	}
 
 	ABT_mutex_lock(cont->sc_mutex);
+
 	while (cont->sc_dtx_resyncing) {
 		if (!block) {
 			ABT_mutex_unlock(cont->sc_mutex);
@@ -451,10 +508,18 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 		resynced = true;
 	}
 	if (resynced || /* Someone just did the DTX resync*/
-	    cont->sc_stopping) {
+	    cont->sc_closing) {
 		ABT_mutex_unlock(cont->sc_mutex);
 		goto out;
 	}
+
+	crt_group_rank(NULL, &myrank);
+	if (myrank == daos_fail_value_get() &&
+	    DAOS_FAIL_CHECK(DAOS_DTX_SRV_RESTART)) {
+		dss_set_start_epoch();
+		vos_dtx_cache_reset(cont->sc_hdl);
+	}
+
 	cont->sc_dtx_resyncing = 1;
 	cont->sc_dtx_resync_ver = ver;
 	ABT_mutex_unlock(cont->sc_mutex);
@@ -546,7 +611,7 @@ dtx_resync_one(void *data)
 
 	cb_arg.arg = *arg;
 	param.ip_hdl = child->spc_hdl;
-	param.ip_flags = VOS_IT_FOR_REBUILD;
+	param.ip_flags = VOS_IT_FOR_MIGRATION;
 	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
 			 container_scan_cb, NULL, &cb_arg, NULL);
 
@@ -577,7 +642,7 @@ dtx_resync_ult(void *data)
 		DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version,
 		arg->version);
 
-	rc = dss_thread_collective(dtx_resync_one, arg, 0, DSS_ULT_REBUILD);
+	rc = dss_thread_collective(dtx_resync_one, arg, 0);
 	if (rc) {
 		/* If dtx resync fails, then let's still update
 		 * sp_dtx_resync_version, so the rebuild can go ahead,

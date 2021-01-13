@@ -21,6 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+# pylint: disable=too-many-lines
 
 # Some useful test classes inherited from avocado.Test
 
@@ -33,6 +34,7 @@ from getpass import getuser
 
 from avocado import Test as avocadoTest
 from avocado import skip, TestFail, fail_on
+from avocado.utils.distro import detect
 
 import fault_config_utils
 from pydaos.raw import DaosContext, DaosLog, DaosApiError
@@ -83,6 +85,16 @@ class Test(avocadoTest):
 
     :avocado: recursive
     """
+
+    # Skipping Test Variants:
+    #   If this list is populated with one or more
+    #       [<ticket>, <param_name>, <param_value>]
+    #   list items, then setUp() will check each test variant to see if the
+    #   <param_name> has been assigned <param_value>.  When this is the case the
+    #   test variant will be skipped/cancelled for <ticket> before anything else
+    #   in setUp() is executed.  If the <param_name> is "test_method_name" then
+    #   <param_value> is compared to the name of the test method.
+    CANCEL_FOR_TICKET = []
 
     def __init__(self, *args, **kwargs):
         """Initialize a Test object."""
@@ -139,6 +151,44 @@ class Test(avocadoTest):
 
         self.log.info("Job-ID: %s", self.job_id)
         self.log.info("Test PID: %s", os.getpid())
+        self._timeout_reported = False
+
+    def setUp(self):
+        """Set up each test case."""
+        self.check_variant_skip()
+        self.log.info("*** SETUP running on %s ***", str(detect()))
+        super(Test, self).setUp()
+
+    def check_variant_skip(self):
+        """Determine if this test variant should be skipped.
+
+        If self.CANCEL_FOR_TICKET is populated, check each item in the list to
+        determine if this test variant should be skipped (cancelled).  Each item
+        should be a tuple whose:
+            - first entry is the ticket defining the test variant skip reason
+            - next two entries define:
+                - the test yaml parameter name to read / test method name
+                - the test yaml parameter value used to trigger the skip
+        If multiple sets of test yaml names/values are specified they must all
+        match in order for the test variant to be skipped.
+        """
+        for data in (list(item) for item in self.CANCEL_FOR_TICKET):
+            ticket = data.pop(0)
+            skip_variant = len(data) > 1
+            while data and skip_variant:
+                try:
+                    name = data.pop(0)
+                    value = data.pop(0)
+                    if name == "test_method_name":
+                        skip_variant &= self.get_test_name() == value
+                    else:
+                        skip_variant &= self.params.get(name) == value
+                except IndexError:
+                    self.fail(
+                        "Invalid CANCEL_FOR_TICKET format: {}".format(
+                            self.CANCEL_FOR_TICKET))
+            if skip_variant:
+                self.cancelForTicket(ticket)
 
     # pylint: disable=invalid-name
     def cancelForTicket(self, ticket):
@@ -154,6 +204,39 @@ class Test(avocadoTest):
 
         """
         return (self.__str__().split(".", 4)[3]).split(";", 1)[0]
+
+    def report_timeout(self):
+        """Report whether or not this test case was timed out."""
+        if not self._timeout_reported:
+            # Update the elapsed time
+            self.get_state()
+            if self.timeout is None:
+                # self.timeout is not set - this is a problem
+                self.log.error("*** TEARDOWN called with UNKNOWN timeout ***")
+                self.log.error("self.timeout undefined - please investigate!")
+            elif self.time_elapsed > self.timeout:
+                # Timeout has expired
+                self.log.info(
+                    "*** TEARDOWN called due to TIMEOUT: "
+                    "%s second timeout exceeded ***", str(self.timeout))
+                self.log.info("test execution has been terminated by avocado")
+            else:
+                # Normal operation
+                remaining = str(self.timeout - self.time_elapsed)
+                self.log.info(
+                    "*** TEARDOWN called after test completion: elapsed time: "
+                    "%s seconds ***", str(self.time_elapsed))
+                self.log.info(
+                    "Amount of time left in test timeout: %s seconds",
+                    remaining)
+
+        # Disable reporting the timeout upon subsequent inherited calls
+        self._timeout_reported = True
+
+    def tearDown(self):
+        """Tear down after each test case."""
+        self.report_timeout()
+        super(Test, self).tearDown()
 
 
 class TestWithoutServers(Test):
@@ -241,6 +324,7 @@ class TestWithoutServers(Test):
 
     def tearDown(self):
         """Tear down after each test case."""
+        self.report_timeout()
         super(TestWithoutServers, self).tearDown()
 
         if self.fault_file:
@@ -643,6 +727,9 @@ class TestWithServers(TestWithoutServers):
 
     def tearDown(self):
         """Tear down after each test case."""
+        # Report whether or not the timeout has expired
+        self.report_timeout()
+
         # Tear down any test-specific items
         errors = self.pre_tear_down()
 
@@ -681,7 +768,7 @@ class TestWithServers(TestWithoutServers):
             list: a list of error strings to report at the end of tearDown().
 
         """
-        self.log.info("teardown() started")
+        self.log.debug("no pre-teardown steps defined")
         return []
 
     def stop_job_managers(self):

@@ -147,7 +147,7 @@ ts_open_create(void **state)
 	create = tst_fn_val.input;
 	arg = tst_fn_val.optval;
 
-	if (!daos_handle_is_inval(ts_toh)) {
+	if (daos_handle_is_valid(ts_toh)) {
 		D_PRINT("Tree has been opened\n");
 		fail();
 	}
@@ -1083,14 +1083,14 @@ test_evt_iter_flags(void **state)
 	rc = evt_create(arg->ta_root, ts_feats, ORDER_DEF_INTERNAL, arg->ta_uma,
 			&ts_evt_desc_cbs, &toh);
 	assert_int_equal(rc, 0);
-	D_ALLOC_ARRAY(data, (NUM_EPOCHS+1));
+	D_ALLOC_ARRAY(data, (NUM_EPOCHS + 1));
 	if (data == NULL)
 		goto end;
-	for (count = 0; count < NUM_EPOCHS+1; count++) {
+	for (count = 0; count < NUM_EPOCHS + 1; count++) {
 		D_ALLOC_ARRAY(data[count], (NUM_EPOCHS+NUM_EXTENTS+1));
 		if (data[count] == NULL) {
 			print_message("Cannot allocate Memory\n");
-			goto end;
+			goto finish3;
 		}
 	}
 	D_ALLOC_ARRAY(exp_val, (NUM_EPOCHS+1)*
@@ -1224,6 +1224,9 @@ finish1:
 	D_FREE(actual_val);
 finish2:
 	D_FREE(exp_val);
+finish3:
+	for (count = 0; count < NUM_EPOCHS + 1; count++)
+		D_FREE(data[count]);
 end:
 	D_FREE(data);
 	rc = evt_destroy(toh);

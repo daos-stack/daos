@@ -8,12 +8,12 @@ hosts:
 # servers if a server partition is defined
     # server_partition: daos_server
     client_partition: daos_client
-    client_reservation:
+    # client_reservation: daos-test
 orterun:
     allow_run_as_root: True
 # This timeout must be longer than the test_timeout param (+15minutes)
-# 1 hour test
-timeout: 1H15M
+# 12 hour test
+timeout: 12H15M
 setup:
     start_servers: True
     start_agents: True
@@ -34,25 +34,37 @@ server_config:
         scm_list: [/dev/pmem0]
         bdev_class: nvme
         bdev_list: ["0000:81:00.0","0000:da:00.0"]
+    transport_config:
+      allow_insecure: True
+agent_config:
+    transport_config:
+      allow_insecure: True
+dmg:
+    transport_config:
+      allow_insecure: True
 # pool_params - attributes of the pools to create; Currently only create one
-pool_ior:
+pool_jobs:
     mode: 146
     name: daos_server
-    scm_size: 40000000000
-    nvme_size: 100000000000
+    scm_size: 80GB
+    nvme_size: 200GB
     svcn: 1
     control_method: dmg
+    rebuild_timeout: 60
 pool_reserved:
     mode: 511
     name: daos_server
-    scm_size: 3000000000
-    nvme_size: 50000000000
+    scm_size: 3GB
+    nvme_size: 50GB
     control_method: dmg
 container:
     type: POSIX
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    oclass: RP_2G1
     control_method: daos
+    daos_timeout: 30
 container_reserved:
+    oclass: OC_RP_2G1
     akey_size: 5
     dkey_size: 5
     data_size: 4096
@@ -78,22 +90,22 @@ container_reserved:
 soak_harassers:
     name: soak_harassers
     # harasser test timeout in hours
-    test_timeout: 1
-    harasser_timeout: 120
+    test_timeout: 12
     # maximum timeout for a single job in test in minutes
-    job_timeout: 10
+    job_timeout: 30
     nodesperjob:
         - -1
-    # used for performance benchmarks
     taskspernode:
         - 16
-    poollist:
-        - pool_ior
     joblist:
         - ior_harasser
+        - fio_harasser
     harasserlist:
         - snapshot
-        #- rebuild
+        - exclude_reintegrate
+        - server-stop_server-reintegrate
+    harasser_to: 30
+    enable_drain: False
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -102,6 +114,9 @@ ior_harasser:
     api:
         - DFS
         - MPIIO
+        - POSIX
+        - HDF5
+        - HDF5-VOL
     test_file: daos:testFile
     flags: -v -w -W -r -R
     block_size:
@@ -109,24 +124,38 @@ ior_harasser:
     repetitions: 1
     transfer_size:
         - '4k'
-        - '128k'
         - '1m'
     segment_count: 1
     dfs_oclass:
-        - 'SX'
-    dfs_destroy: True
-rebuild:
-    rebuild_timeout: 30
-    ranks_to_kill:
-        - 2
-    svcl: 1
-    dfs_oclass:
-        - "RP_2GX"
-dmg_create_destroy:
+        - 'RP_2G1'
+    dfs_dir_oclass:
+        - 'RP_2G1'
+fio_harasser:
+  names:
+      - global
+      - test
+  global:
+    directory: "/tmp/daos_dfuse/"
+    ioengine: 'libaio'
+    thread: 1
+    group_reporting: 1
+    direct: 1
+    verify: 'crc64'
+    iodepth: 16
+  test:
+    numjobs: 1
+  soak:
+    blocksize:
+        - '1M'
     size:
-      - 8M
-      - 16M
-      - 64M
-      - 512M
-      - 1G
-      - 30G
+        - '1G'
+    rw:
+        - 'rw'
+        - 'randrw'
+dfuse:
+    mount_dir: "/tmp/daos_dfuse/"
+    disable_direct_io: True
+hdf5_vol:
+    plugin_path: "/usr/lib64/mpich/lib"
+
+

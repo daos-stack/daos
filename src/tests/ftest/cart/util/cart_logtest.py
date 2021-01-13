@@ -39,6 +39,7 @@
 This provides consistency checking for CaRT log files.
 """
 
+import sys
 import time
 import argparse
 HAVE_TABULATE = True
@@ -207,6 +208,7 @@ mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
                      'iv_on_get': ('iv_value->sg_iovs[0].iov_buf'),
                      'oid_iv_ent_init': ('oid_entry'),
                      'pool_svc_name_cb': ('s'),
+                     'daos_iov_copy': ('dst->iov_buf'),
                      'local_name_to_principal_name': ('*name'),
                      'pack_daos_response': ('body'),
                      'ds_mgmt_drpc_get_attach_info': ('body'),
@@ -222,8 +224,9 @@ mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
                      'auth_cred_to_iov': ('packed'),
                      'd_sgl_init': ('sgl->sg_iovs'),
                      'daos_csummer_alloc_iods_csums': ('buf'),
-                     'daos_sgl_init': ('sgl->sg_iovs'),
-                     'get_pool_svc_ranks': ('req')}
+                     'get_pool_svc_ranks': ('req'),
+                     'send_monitor_request': ('reqb'),
+                     'ds_mgmt_drpc_pool_evict': ('body')}
 # pylint: enable=line-too-long
 
 mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
@@ -232,7 +235,6 @@ mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
                     'crt_rpc_priv_free': ('rpc_priv'),
                     'crt_group_config_save': ('url'),
                     'get_self_uri': ('uri'),
-                    'd_sgl_fini': ('sgl->sg_iovs[i].iov_buf'),
                     'tc_srv_start_basic': ('my_uri'),
                     'crt_init_opt': ('crt_gdata.cg_addr'),
                     'cont_prop_default_copy': ('entry_def->dpe_str'),
@@ -241,14 +243,14 @@ mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
                     'init_pool_metadata': ('uuids'),
                     'fini_free': ('svc->s_name',
                                   'svc->s_db_path'),
-                    'daos_sgl_fini': ('sgl->sg_iovs[i].iov_buf',
-                                      'sgl->sg_iovs'),
+                    'd_sgl_fini': ('sgl->sg_iovs[i].iov_buf',
+                                   'sgl->sg_iovs'),
                     'd_rank_list_free': ('rank_list',
                                          'rank_list->rl_ranks'),
                     'pool_prop_default_copy': ('entry_def->dpe_str'),
                     'pool_svc_store_uuid_cb': ('path'),
                     'ds_mgmt_svc_start': ('uri'),
-                    'ds_mgmt_drpc_pool_create': ('resp.svcreps'),
+                    'ds_mgmt_drpc_pool_create': ('resp.svc_reps'),
                     'ds_rsvc_lookup': ('path'),
                     'daos_acl_free': ('acl'),
                     'update_done': ('iv_value->sg_iovs'),
@@ -796,9 +798,16 @@ def run():
     args = parser.parse_args()
     try:
         log_iter = cart_logparse.LogIter(args.file)
-    except IsADirectoryError:
-        print('Log tracing on directory not possible')
-        return
+    except UnicodeDecodeError:
+        # If there is a unicode error in the log file then retry with checks
+        # enabled which should both report the error and run in latin-1 so
+        # perform the log parsing anyway.  The check for log_iter.file_corrupt
+        # later on will ensure that this error does not get logged, then
+        # ignored.
+        # The only possible danger here is the file is simply too big to check
+        # the encoding on, in which case this second attempt would fail with
+        # an out-of-memory error.
+        log_iter = cart_logparse.LogIter(args.file, check_encoding=True)
     test_iter = LogTest(log_iter)
     if args.dfuse:
         test_iter.check_dfuse_io()
@@ -809,6 +818,8 @@ def run():
             print('Errors in log file, ignoring')
         except NotAllFreed:
             print('Memory leaks, ignoring')
+    if log_iter.file_corrupt:
+        sys.exit(1)
 
 if __name__ == '__main__':
     run()

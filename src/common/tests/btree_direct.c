@@ -317,7 +317,7 @@ sk_btr_open_create(void **state)
 	create = tst_fn_val.input;
 	arg = tst_fn_val.optval;
 
-	if (!daos_handle_is_inval(sk_toh)) {
+	if (daos_handle_is_valid(sk_toh)) {
 		fail_msg("Tree has been opened\n");
 	}
 

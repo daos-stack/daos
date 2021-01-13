@@ -5,7 +5,10 @@ import platform
 import subprocess
 import time
 import errno
+import SCons.Warnings
 from SCons.Script import BUILD_TARGETS
+
+SCons.Warnings.warningAsException()
 
 try:
     input = raw_input # pylint: disable=redefined-builtin
@@ -21,8 +24,8 @@ DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-gnu-zero-variadic-macro-arguments',
                  '-Wno-tautological-constant-out-of-range-compare',
                  '-Wno-unused-command-line-argument',
-                 '-Wframe-larger-than=4096',
-                 ' -mavx2']
+                 '-Wframe-larger-than=4096']
+#                 '-mavx2']
 
 # Compiler flags to prevent optimizing out security checks
 DESIRED_FLAGS.extend(['-fno-strict-overflow', '-fno-delete-null-pointer-checks',
@@ -81,10 +84,10 @@ def update_rpm_version(version, tag):
             spec[line_num] = "Release:       {}%{{?relval}}%{{?dist}}\n".\
                              format(release)
         if line == "%changelog\n":
+            cmd = 'rpmdev-packager'
             try:
-                packager = subprocess.Popen(
-                    'rpmdev-packager', stdout=subprocess.PIPE).communicate(
-                    )[0].strip().decode('UTF-8')
+                pkg_st = subprocess.Popen(cmd, stdout=subprocess.PIPE) # nosec
+                packager = pkg_st.communicate()[0].strip().decode('UTF-8')
             except OSError:
                 print("You need to have the rpmdev-packager tool (from the "
                       "rpmdevtools RPM on EL7) in order to make releases.\n\n"
@@ -148,6 +151,9 @@ def set_defaults(env):
     if GetOption("preprocess"):
         #could refine this but for now, just assume these warnings are ok
         env.AppendIfSupported(CCFLAGS=PP_ONLY_FLAGS)
+
+    if env.get('BUILD_TYPE') != 'release':
+        env.Append(CCFLAGS=['-DFAULT_INJECTION=1'])
 
 def preload_prereqs(prereqs):
     """Preload prereqs specific to platform"""
@@ -384,9 +390,9 @@ def scons(): # pylint: disable=too-many-locals
 
     env.Alias('install', '$PREFIX')
     platform_arm = is_platform_arm()
-    Export('DAOS_VERSION', 'API_VERSION',
-           'env', 'prereqs', 'platform_arm',
-           'CONF_DIR')
+    # Export() is handled specially by pylint so do not merge these two lines.
+    Export('DAOS_VERSION', 'API_VERSION', 'env', 'prereqs')
+    Export('platform_arm', 'CONF_DIR')
 
     if env['PLATFORM'] == 'darwin':
         # generate .so on OSX instead of .dylib
@@ -409,7 +415,6 @@ def scons(): # pylint: disable=too-many-locals
     env.Install("$PREFIX/lib64/daos", "API_VERSION")
 
     env.Install('$PREFIX/etc/bash_completion.d', ['utils/completion/daos.bash'])
-    env.Install('$PREFIX/etc', ['utils/memcheck-daos-client.supp'])
     env.Install('$PREFIX/lib/daos/TESTING/ftest/util',
                 ['utils/sl/env_modules.py'])
     env.Install('$PREFIX/lib/daos/TESTING/ftest/',

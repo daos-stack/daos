@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -134,6 +134,36 @@ gen_oid(daos_ofeat_t ofeats)
 {
 	vts_cntr.cn_oids++;
 	return dts_unit_oid_gen(0, ofeats, 0);
+}
+
+static uint32_t	oid_seed;
+static uint64_t	oid_count;
+
+void
+reset_oid_stable(uint32_t seed)
+{
+	oid_seed = seed;
+	oid_count = 0;
+}
+
+daos_unit_oid_t
+gen_oid_stable(daos_ofeat_t ofeats)
+{
+	daos_unit_oid_t	uoid = {0};
+	uint64_t	hdr;
+
+	hdr = oid_seed;
+	oid_seed += 2441; /* prime */
+	hdr <<= 32;
+
+	uoid.id_pub.lo = oid_count;
+	oid_count += 66179; /* prime */
+	uoid.id_pub.lo |= hdr;
+	daos_obj_generate_id(&uoid.id_pub, oid_count, OC_RP_XSF, oid_seed);
+	oid_count += 1171; /* prime */
+
+	vts_cntr.cn_oids++;
+	return uoid;
 }
 
 void
@@ -881,6 +911,7 @@ io_obj_cache_test(void **state)
 	rc = vos_pool_destroy(po_name, pool_uuid);
 	assert_int_equal(rc, 0);
 	vos_obj_cache_destroy(occ);
+	free(po_name);
 }
 
 static void
@@ -980,38 +1011,6 @@ io_iter_test_with_anchor(void **state)
 
 	arg->ta_flags = TF_IT_ANCHOR | TF_REC_EXT;
 	io_iter_test_base(arg);
-}
-
-#define IOT_FA_DKEYS (100)
-
-static void
-io_iter_test_dkey_cond(void **state)
-{
-	struct io_test_args	*arg = *state;
-	int			 i;
-	int			 nr, rc = 0;
-	int			 akeys, recs;
-	daos_epoch_range_t	 epr;
-
-	skip();
-	arg->ta_flags = TF_FIXED_AKEY;
-	epr.epr_lo = gen_rand_epoch();
-	epr.epr_hi = DAOS_EPOCH_MAX;
-
-	for (i = 0; i < IOT_FA_DKEYS; i++) {
-		rc = io_update_and_fetch_dkey(arg, epr.epr_lo, epr.epr_lo);
-		assert_int_equal(rc, 0);
-	}
-	epr.epr_lo += 10;
-	rc = io_obj_iter_test(arg, &epr, VOS_IT_EPC_GE,
-			      &nr, &akeys, &recs, false);
-	assert_true(rc == 0 || rc == -DER_NONEXIST);
-
-	print_message("Enumerated: %d, total_keys: %lu.\n",
-		      nr, vts_cntr.cn_fa_dkeys);
-	print_message("Enumerated akeys: %d\n", akeys);
-
-	assert_int_equal(nr, vts_cntr.cn_fa_dkeys);
 }
 
 #define RANGE_ITER_KEYS (10)
@@ -1698,7 +1697,7 @@ io_sgl_update(void **state)
 	iod.iod_nr = 1;
 
 	/* Allocate memory for the scatter-gather list */
-	rc = daos_sgl_init(&sgl, SGL_TEST_BUF_COUNT);
+	rc = d_sgl_init(&sgl, SGL_TEST_BUF_COUNT);
 	assert_int_equal(rc, 0);
 
 	/* Allocate memory for the SGL_TEST_BUF_COUNT buffers */
@@ -1718,7 +1717,7 @@ io_sgl_update(void **state)
 	/* Write/Update */
 	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, 1, 0, 0, &dkey, 1,
 			    &iod, NULL, &sgl);
-	daos_sgl_fini(&sgl, true);
+	d_sgl_fini(&sgl, true);
 
 	if (rc) {
 		print_error("Failed to update: "DF_RC"\n", DP_RC(rc));
@@ -1728,7 +1727,7 @@ io_sgl_update(void **state)
 
 	/* Now fetch */
 	memset(fetch_buf, 0, SGL_TEST_BUF_COUNT * SGL_TEST_BUF_SIZE);
-	rc = daos_sgl_init(&sgl, 1);
+	rc = d_sgl_init(&sgl, 1);
 	assert_int_equal(rc, 0);
 	d_iov_set(sgl.sg_iovs, &fetch_buf[0], SGL_TEST_BUF_COUNT *
 		     SGL_TEST_BUF_SIZE);
@@ -1738,7 +1737,7 @@ io_sgl_update(void **state)
 		print_error("Failed to fetch: "DF_RC"\n", DP_RC(rc));
 		goto exit;
 	}
-	daos_sgl_fini(&sgl, false);
+	d_sgl_fini(&sgl, false);
 	/* Test if ground truth matches fetch_buf */
 	assert_memory_equal(ground_truth, fetch_buf, SGL_TEST_BUF_COUNT *
 			    SGL_TEST_BUF_SIZE);
@@ -1790,7 +1789,7 @@ io_sgl_fetch(void **state)
 	memcpy(&ground_truth[0], &update_buf[0], SGL_TEST_BUF_COUNT *
 		SGL_TEST_BUF_SIZE);
 	/* Attach the buffer to the scatter-gather list */
-	daos_sgl_init(&sgl, 1);
+	d_sgl_init(&sgl, 1);
 	d_iov_set(sgl.sg_iovs, &update_buf[0], SGL_TEST_BUF_COUNT *
 		     SGL_TEST_BUF_SIZE);
 
@@ -1799,11 +1798,11 @@ io_sgl_fetch(void **state)
 			    &iod, NULL, &sgl);
 	if (rc)
 		goto exit;
-	daos_sgl_fini(&sgl, false);
+	d_sgl_fini(&sgl, false);
 	inc_cntr(arg->ta_flags);
 
 	/* Allocate memory for the scatter-gather list */
-	daos_sgl_init(&sgl, SGL_TEST_BUF_COUNT);
+	d_sgl_init(&sgl, SGL_TEST_BUF_COUNT);
 
 	/* Allocate memory for the SGL_TEST_BUF_COUNT fetch buffers */
 	for (i = 0; i < SGL_TEST_BUF_COUNT; i++) {
@@ -1824,7 +1823,7 @@ io_sgl_fetch(void **state)
 		assert_memory_equal(&ground_truth[i * SGL_TEST_BUF_SIZE],
 			fetch_buffs[i], SGL_TEST_BUF_SIZE);
 	}
-	daos_sgl_fini(&sgl, true);
+	d_sgl_fini(&sgl, true);
 exit:
 	assert_int_equal(rc, 0);
 }
@@ -2464,8 +2463,6 @@ static const struct CMUnitTest io_tests[] = {
 		io_iter_test, NULL, NULL},
 	{ "VOS240.1: KV Iter tests with anchor (for dkey)",
 		io_iter_test_with_anchor, NULL, NULL},
-	{ "VOS240.2: d-key enumeration with condition (akey)",
-		io_iter_test_dkey_cond, NULL, NULL},
 	{ "VOS240.3: KV range Iteration tests (for dkey)",
 		io_obj_forward_iter_test, NULL, NULL},
 	{ "VOS240.4: KV reverse range Iteration tests (for dkey)",

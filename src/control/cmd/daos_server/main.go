@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -64,7 +64,7 @@ type mainOpts struct {
 type versionCmd struct{}
 
 func (cmd *versionCmd) Execute(_ []string) error {
-	fmt.Printf("daos_server version %s\n", build.DaosVersion)
+	fmt.Printf("%s v%s\n", build.ControlPlaneName, build.DaosVersion)
 	os.Exit(0)
 	return nil
 }
@@ -168,6 +168,10 @@ func main() {
 	if err := parseOpts(os.Args[1:], &opts, log); err != nil {
 		if errors.Cause(err) == context.Canceled {
 			log.Infof("%s (pid %d) shutting down", build.ControlPlaneName, os.Getpid())
+			os.Exit(0)
+		}
+		if fe, ok := errors.Cause(err).(*flags.Error); ok && fe.Type == flags.ErrHelp {
+			log.Info(fe.Error())
 			os.Exit(0)
 		}
 		exitWithError(log, err)

@@ -114,9 +114,12 @@ const (
 	ServerScmUnmanaged
 	ServerBdevNotFound
 	ServerIommuDisabled
+	ServerWrongSystem
 	ServerPoolScmTooSmall
 	ServerPoolNvmeTooSmall
 	ServerPoolInvalidRanks
+	ServerPoolInvalidServiceReps
+	ServerPoolDuplicateLabel
 	ServerInsufficientFreeHugePages
 	ServerHarnessNotStarted
 	ServerDataPlaneNotStarted

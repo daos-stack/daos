@@ -1267,17 +1267,21 @@ crt_group_rank_p2s(crt_group_t *subgrp, d_rank_t rank_in, d_rank_t *rank_out)
 		return rc;
 	}
 
+	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
 	rlink = d_hash_rec_find(&grp_priv->gp_p2s_table,
 			(void *)&rank_in, sizeof(rank_in));
 	if (!rlink) {
 		D_ERROR("Rank=%d not part of the group\n", rank_in);
-		return -DER_OOG;
+		D_GOTO(unlock, rc = -DER_OOG);
 	}
 
 	rm = crt_rm_link2ptr(rlink);
 	*rank_out = rm->rm_value;
 
 	d_hash_rec_decref(&grp_priv->gp_p2s_table, rlink);
+
+unlock:
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
 	return rc;
 }
@@ -1293,11 +1297,6 @@ crt_group_rank_s2p(crt_group_t *subgrp, d_rank_t rank_in, d_rank_t *rank_out)
 		return -DER_UNINIT;
 	}
 
-	if (!crt_is_service()) {
-		D_ERROR("Can only be called in a service group.\n");
-		return -DER_INVAL;
-	}
-
 	if (subgrp == NULL) {
 		D_ERROR("Invalid argument: subgrp is NULL.\n");
 		return -DER_INVAL;
@@ -1309,7 +1308,10 @@ crt_group_rank_s2p(crt_group_t *subgrp, d_rank_t rank_in, d_rank_t *rank_out)
 	}
 
 	grp_priv = container_of(subgrp, struct crt_grp_priv, gp_pub);
+
+	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
 	*rank_out = crt_grp_priv_get_primary_rank(grp_priv, rank_in);
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
 	return rc;
 }
@@ -2143,54 +2145,85 @@ out:
 }
 
 int
-crt_register_event_cb(crt_event_cb event_handler, void *arg)
+crt_register_event_cb(crt_event_cb func, void *args)
 {
-	struct crt_event_cb_priv	*cb_priv, *cb_priv2;
-	int				 rc = DER_SUCCESS;
+	struct crt_event_cb_priv *cbs_event;
+	size_t i, cbs_size;
+	int rc = 0;
 
-	D_ALLOC_PTR(cb_priv);
-	if (cb_priv == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-	cb_priv->cecp_func = event_handler;
-	cb_priv->cecp_args = arg;
+	D_MUTEX_LOCK(&crt_plugin_gdata.cpg_mutex);
 
-	D_RWLOCK_WRLOCK(&crt_plugin_gdata.cpg_event_rwlock);
-	d_list_for_each_entry(cb_priv2, &crt_plugin_gdata.cpg_event_cbs,
-			      cecp_link) {
-		if (cb_priv2->cecp_func == event_handler &&
-		    cb_priv2->cecp_args == arg) {
-			D_FREE(cb_priv);
-			rc = -DER_EXIST;
-			break;
+	cbs_size = crt_plugin_gdata.cpg_event_size;
+	cbs_event = crt_plugin_gdata.cpg_event_cbs;
+
+	for (i = 0; i < cbs_size; i++) {
+		if (cbs_event[i].cecp_func == func &&
+		    cbs_event[i].cecp_args == args) {
+			D_GOTO(out_unlock, rc = -DER_EXIST);
 		}
 	}
-	if (rc == 0)
-		d_list_add_tail(&cb_priv->cecp_link,
-				&crt_plugin_gdata.cpg_event_cbs);
-	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_event_rwlock);
 
-out:
+	for (i = 0; i < cbs_size; i++) {
+		if (cbs_event[i].cecp_func == NULL) {
+			cbs_event[i].cecp_args = args;
+			cbs_event[i].cecp_func = func;
+			D_GOTO(out_unlock, rc = 0);
+		}
+	}
+
+	D_FREE(crt_plugin_gdata.cpg_event_cbs_old);
+
+	crt_plugin_gdata.cpg_event_cbs_old = cbs_event;
+	cbs_size += CRT_CALLBACKS_NUM;
+
+	D_ALLOC_ARRAY(cbs_event, cbs_size);
+	if (cbs_event == NULL) {
+		crt_plugin_gdata.cpg_event_cbs_old = NULL;
+		D_GOTO(out_unlock, rc = -DER_NOMEM);
+	}
+
+	if (i > 0)
+		memcpy(cbs_event, crt_plugin_gdata.cpg_event_cbs_old,
+		       i * sizeof(*cbs_event));
+	cbs_event[i].cecp_args = args;
+	cbs_event[i].cecp_func = func;
+
+	crt_plugin_gdata.cpg_event_cbs  = cbs_event;
+	crt_plugin_gdata.cpg_event_size = cbs_size;
+
+out_unlock:
+	D_MUTEX_UNLOCK(&crt_plugin_gdata.cpg_mutex);
 	return rc;
 }
 
 int
-crt_unregister_event_cb(crt_event_cb event_handler, void *arg)
+crt_unregister_event_cb(crt_event_cb func, void *args)
 {
-	struct crt_event_cb_priv	*cb_priv;
-	int				 rc = -DER_NONEXIST;
+	struct crt_event_cb_priv *cb_event;
+	size_t i, cbs_size;
+	int rc = -DER_NONEXIST;
 
-	D_RWLOCK_WRLOCK(&crt_plugin_gdata.cpg_event_rwlock);
-	d_list_for_each_entry(cb_priv, &crt_plugin_gdata.cpg_event_cbs,
-			      cecp_link) {
-		if (cb_priv->cecp_func == event_handler &&
-		    cb_priv->cecp_args == arg) {
-			d_list_del(&cb_priv->cecp_link);
-			D_FREE(cb_priv);
-			rc = DER_SUCCESS;
-			break;
+	D_MUTEX_LOCK(&crt_plugin_gdata.cpg_mutex);
+
+	cbs_size = crt_plugin_gdata.cpg_event_size;
+	cb_event = crt_plugin_gdata.cpg_event_cbs;
+
+	for (i = 0; i < cbs_size; i++) {
+		if (cb_event[i].cecp_func == func &&
+		    cb_event[i].cecp_args == args) {
+			cb_event[i].cecp_func = NULL;
+			cb_event[i].cecp_args = NULL;
+			D_GOTO(out_unlock, rc = 0);
 		}
 	}
-	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_event_rwlock);
+
+out_unlock:
+	if (crt_plugin_gdata.cpg_event_cbs_old != NULL) {
+		D_FREE(crt_plugin_gdata.cpg_event_cbs_old);
+		crt_plugin_gdata.cpg_event_cbs_old = NULL;
+	}
+
+	D_MUTEX_UNLOCK(&crt_plugin_gdata.cpg_mutex);
 	return rc;
 }
 
@@ -2323,7 +2356,7 @@ grp_regen_linear_list(struct crt_grp_priv *grp_priv)
  * Function should only be called once per rank, even if multiple
  * tags are added with corresponding URIs
  */
-static int
+int
 grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank)
 {
 	d_rank_list_t	*membs;
@@ -3488,5 +3521,63 @@ cleanup:
 
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
+	return rc;
+}
+
+int
+crt_group_psrs_set(crt_group_t *grp, d_rank_list_t *rank_list)
+{
+	struct crt_grp_priv	*grp_priv;
+	struct crt_grp_priv	*prim_grp_priv;
+	d_rank_list_t		*copy_rank_list;
+	int			i;
+	int			rc;
+
+	grp_priv = crt_grp_pub2priv(grp);
+	if (grp_priv == NULL) {
+		D_ERROR("Failed to lookup grp\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (rank_list == NULL) {
+		D_ERROR("Passed rank_list is NULL\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (rank_list->rl_nr == 0) {
+		D_ERROR("Passed 0-sized rank_list\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = d_rank_list_dup(&copy_rank_list, rank_list);
+	if (rc != 0) {
+		D_ERROR("Failed to copy rank list\n");
+		D_GOTO(out, rc);
+	}
+
+	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
+	if (!grp_priv->gp_primary) {
+		prim_grp_priv = grp_priv->gp_priv_prim;
+
+		/* Convert all passed secondary ranks to primary */
+		for (i = 0; i < copy_rank_list->rl_nr; i++) {
+			copy_rank_list->rl_ranks[i] =
+				crt_grp_priv_get_primary_rank(
+						grp_priv,
+						copy_rank_list->rl_ranks[i]);
+		}
+	} else {
+		prim_grp_priv = grp_priv;
+	}
+
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
+
+	D_RWLOCK_WRLOCK(&prim_grp_priv->gp_rwlock);
+	if (prim_grp_priv->gp_psr_ranks) {
+		D_FREE(prim_grp_priv->gp_psr_ranks);
+		prim_grp_priv->gp_psr_ranks = copy_rank_list;
+	}
+	D_RWLOCK_UNLOCK(&prim_grp_priv->gp_rwlock);
+out:
 	return rc;
 }
