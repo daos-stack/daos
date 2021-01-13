@@ -222,29 +222,6 @@ class DaosPool(object):
         """Extend the pool to more targets."""
         raise NotImplementedError("Extend not implemented in C API yet.")
 
-    def evict(self, cb_func=None):
-        """Evict all connections to a pool."""
-        func = self.context.get_function('evict-client')
-
-        # phasing out the pool service rank list argument
-        no_svcl = daos_cref.RankList(None, 0)
-
-        if cb_func is None:
-            ret = func(self.uuid, self.group, ctypes.byref(no_svcl), None)
-            if ret != 0:
-                raise DaosApiError("Pool evict returned non-zero. "
-                                   "RC: {0}".format(ret))
-        else:
-            event = daos_cref.DaosEvent()
-            params = [self.uuid, self.group, ctypes.byref(no_svcl), event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func,
-                                            self))
-            thread.start()
-
     def tgt_reint(self, rank_list, tgt=-1, cb_func=None):
         """Reintegrate a set of storage targets to a pool that had previously
            failed.
@@ -766,7 +743,7 @@ class DaosObj(object):
             del self.tgt_rank_list[:]
             for i in range(0, shards):
                 self.tgt_rank_list.append(
-                    obj_layout_ptr[0].ol_shards[0][0].os_ranks[i])
+                    obj_layout_ptr[0].ol_shards[0][0].os_shard_data[i].sd_rank)
         else:
             raise DaosApiError("get_layout returned. RC: {0}".format(ret))
 
@@ -2193,29 +2170,6 @@ class DaosSnapshot(object):
             raise Exception("Failed to destroy the snapshot. RC: {0}"
                             .format(retcode))
 
-class DaosServer(object):
-    # pylint: disable=too-few-public-methods
-    """Represent a DAOS Server."""
-
-    def __init__(self, context, group, rank):
-        """Set up the python pool object, not the real pool."""
-        self.context = context
-        self.group_name = group
-        self.rank = rank
-
-    def kill(self, force):
-        """Send a pool creation request to the daos server group."""
-        c_group = ctypes.create_string_buffer(self.group_name)
-        c_force = ctypes.c_int(force)
-        c_rank = ctypes.c_uint(self.rank)
-
-        func = self.context.get_function('kill-server')
-        ret = func(c_group, c_rank, c_force, None)
-        if ret != 0:
-            raise DaosApiError("Server kill returned non-zero. RC: {0}"
-                               .format(ret))
-
-
 class DaosContext(object):
     # pylint: disable=too-few-public-methods
     """Provides environment and other info for a DAOS client."""
@@ -2257,16 +2211,13 @@ class DaosContext(object):
             'destroy-snap':    self.libdaos.daos_cont_destroy_snap,
             'destroy-tx':      self.libdaos.daos_tx_abort,
             'disconnect-pool': self.libdaos.daos_pool_disconnect,
-            'evict-client':    self.libdaos.daos_pool_evict,
             'exclude-target':  self.libdaos.daos_pool_tgt_exclude,
-            'extend-pool':     self.libdaos.daos_pool_extend,
             'fetch-obj':       self.libdaos.daos_obj_fetch,
             'generate-oid':    self.libtest.dts_oid_gen,
             'get-cont-attr':   self.libdaos.daos_cont_get_attr,
             'get-pool-attr':   self.libdaos.daos_pool_get_attr,
             'get-layout':      self.libdaos.daos_obj_layout_get,
             'init-event':      self.libdaos.daos_event_init,
-            'kill-server':     self.libdaos.daos_mgmt_svc_rip,
             'kill-target':     self.libdaos.daos_pool_tgt_exclude_out,
             'list-attr':       self.libdaos.daos_cont_list_attr,
             'list-cont-attr':  self.libdaos.daos_cont_list_attr,

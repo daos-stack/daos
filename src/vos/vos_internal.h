@@ -241,7 +241,8 @@ struct vos_dtx_act_ent {
 	int				 dae_rec_cap;
 	unsigned int			 dae_committable:1,
 					 dae_committed:1,
-					 dae_aborted:1;
+					 dae_aborted:1,
+					 dae_maybe_shared:1;
 };
 
 extern struct vos_tls	*standalone_tls;
@@ -306,6 +307,11 @@ struct vos_dtx_cmt_ent {
 #define DCE_OID(dce)		((dce)->dce_base.dce_oid)
 #define DCE_DKEY_HASH(dce)	((dce)->dce_base.dce_dkey_hash)
 #define DCE_OID_OFF(dce)	((dce)->dce_base.dce_oid_off)
+/*
+ * If there are multiple objects (indicated via DCE_OID_OFF()) are modified
+ * via current DTX, then the dkey hash in the committed DTX entry is useless.
+ * Under such case, re-use it as the count of modified objects.
+ */
 #define DCE_OID_CNT(dce)	DCE_DKEY_HASH(dce)
 
 /* in-memory structures standalone instance */
@@ -425,6 +431,27 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth);
 int
 vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 			   daos_epoch_t epoch, uint32_t intent, uint32_t type);
+
+/**
+ * Get local entry DTX state. Only used by VOS aggregation.
+ *
+ * \param entry		[IN]	DTX local id
+ *
+ * \return		DTX_ST_COMMITTED, DTX_ST_PREPARED or
+ *			DTX_ST_ABORTED.
+ */
+static inline unsigned int
+vos_dtx_ent_state(uint32_t entry)
+{
+	switch (entry) {
+	case DTX_LID_COMMITTED:
+		return DTX_ST_COMMITTED;
+	case DTX_LID_ABORTED:
+		return DTX_ST_ABORTED;
+	default:
+		return DTX_ST_PREPARED;
+	}
+}
 
 /**
  * Register the record (to be modified) to the DTX entry.
@@ -556,20 +583,9 @@ struct vos_rec_bundle {
 	uint32_t		 rb_ver;
 	/** tree class */
 	enum vos_tree_class	 rb_tclass;
+	/** DTX state */
+	unsigned int		 rb_dtx_state;
 };
-
-/**
- * Inline data structure for embedding the key bundle and key into an anchor
- * for serialization.
- */
-#define	EMBEDDED_KEY_MAX	80
-struct vos_embedded_key {
-	/** Inlined iov key references */
-	d_iov_t		ek_kiov;
-	/** Inlined buffer the key references*/
-	unsigned char	ek_key[EMBEDDED_KEY_MAX];
-};
-D_CASSERT(sizeof(struct vos_embedded_key) == DAOS_ANCHOR_BUF_MAX);
 
 #define VOS_SIZE_ROUND		8
 
@@ -791,7 +807,7 @@ struct vos_iterator {
 	uint32_t		 it_ref_cnt;
 	uint32_t		 it_from_parent:1,
 				 it_for_purge:1,
-				 it_for_rebuild:1,
+				 it_for_migration:1,
 				 it_ignore_uncommitted:1;
 };
 
@@ -1043,10 +1059,10 @@ vos_iter_intent(struct vos_iterator *iter)
 {
 	if (iter->it_for_purge)
 		return DAOS_INTENT_PURGE;
-	if (iter->it_for_rebuild)
-		return DAOS_INTENT_REBUILD;
 	if (iter->it_ignore_uncommitted)
 		return DAOS_INTENT_IGNORE_NONCOMMITTED;
+	if (iter->it_for_migration)
+		return DAOS_INTENT_MIGRATION;
 	return DAOS_INTENT_DEFAULT;
 }
 
@@ -1181,6 +1197,26 @@ vos_epc_punched(daos_epoch_t epc, uint16_t minor_epc,
 		return true;
 
 	return false;
+}
+
+static inline bool
+vos_dtx_hit_inprogress(void)
+{
+	struct dtx_handle	*dth = vos_dth_get();
+
+	return dth != NULL && dth->dth_share_tbd_count > 0;
+}
+
+static inline bool
+vos_dtx_continue_detect(int rc)
+{
+	struct dtx_handle	*dth = vos_dth_get();
+
+	/* Continue to detect other potential in-prepared DTX. */
+	return rc == -DER_INPROGRESS && dth != NULL &&
+		dth->dth_share_tbd_count > 0 &&
+		dth->dth_share_tbd_count < DTX_REFRESH_MAX &&
+		dth->dth_share_tbd_scanned < DTX_DETECT_SCAN_MAX;
 }
 
 static inline bool

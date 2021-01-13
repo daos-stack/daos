@@ -327,6 +327,12 @@ func TestServer_ConfigValidation(t *testing.T) {
 			},
 			nil,
 		},
+		"multiple access points (dupes)": {
+			func(c *Server) *Server {
+				return c.WithAccessPoints("1.2.3.4:1234", "5.6.7.8:5678", "1.2.3.4:1234")
+			},
+			FaultConfigEvenAccessPoints,
+		},
 		"no access points": {
 			func(c *Server) *Server {
 				return c.WithAccessPoints()

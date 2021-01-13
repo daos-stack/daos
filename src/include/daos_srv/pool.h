@@ -216,6 +216,8 @@ int ds_pool_iv_srv_hdl_fetch(struct ds_pool *pool, uuid_t *pool_hdl_uuid,
 
 int ds_pool_svc_term_get(uuid_t uuid, uint64_t *term);
 
+int ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
+			     uint32_t version);
 int ds_pool_check_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
 			     uint32_t version);
 
@@ -246,7 +248,8 @@ int ds_pool_svc_list_cont(uuid_t uuid, d_rank_list_t *ranks,
 			  uint64_t *ncontainers);
 
 int ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks,
-			    uint32_t force);
+			    uuid_t *handles, size_t n_handles,
+			    uint32_t destroy, uint32_t force);
 void
 ds_pool_disable_evict(void);
 void

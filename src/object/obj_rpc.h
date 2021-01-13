@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -110,6 +110,12 @@
 	X(DAOS_OBJ_RPC_MIGRATE,						\
 		0, &CQF_obj_migrate,					\
 		ds_obj_migrate_handler, NULL),				\
+	X(DAOS_OBJ_RPC_EC_AGGREGATE,					\
+		0, &CQF_obj_ec_agg,					\
+		ds_obj_ec_agg_handler, NULL),				\
+	X(DAOS_OBJ_RPC_EC_REPLICATE,					\
+		0, &CQF_obj_ec_agg,					\
+		ds_obj_ec_rep_handler, NULL),				\
 	X(DAOS_OBJ_RPC_CPD,						\
 		0, &CQF_obj_cpd,					\
 		ds_obj_cpd_handler, NULL)
@@ -151,15 +157,17 @@ enum obj_rpc_flags {
 	 */
 	ORF_ENUM_WITHOUT_EPR	= (1 << 8),
 	/* CPD RPC leader */
-	DRF_CPD_LEADER		= (1 << 9),
+	ORF_CPD_LEADER		= (1 << 9),
 	/* Bulk data transfer for CPD RPC. */
-	DRF_CPD_BULK		= (1 << 10),
+	ORF_CPD_BULK		= (1 << 10),
 	/* Contain EC split req, only used on CPD leader locally. */
-	DRF_HAS_EC_SPLIT	= (1 << 11),
+	ORF_HAS_EC_SPLIT	= (1 << 11),
 	/* Checking the existence of the object/key. */
-	DRF_CHECK_EXISTENCE	= (1 << 12),
+	ORF_CHECK_EXISTENCE	= (1 << 12),
 	/** Include the map details on fetch (daos_iom_t::iom_recxs) */
 	ORF_CREATE_MAP_DETAIL	= (1 << 13),
+	/* For data migration. */
+	ORF_FOR_MIGRATION	= (1 << 14),
 };
 
 /* common for update/fetch */
@@ -325,6 +333,49 @@ CRT_RPC_DECLARE(obj_sync, DAOS_ISEQ_OBJ_SYNC, DAOS_OSEQ_OBJ_SYNC)
 	((int32_t)		(om_status)		CRT_VAR)
 
 CRT_RPC_DECLARE(obj_migrate, DAOS_ISEQ_OBJ_MIGRATE, DAOS_OSEQ_OBJ_MIGRATE)
+
+#define DAOS_ISEQ_OBJ_EC_AGG	/* input fields */			\
+	((uuid_t)		(ea_pool_uuid)		CRT_VAR)	\
+	((uuid_t)		(ea_cont_uuid)		CRT_VAR)	\
+	((uuid_t)		(ea_poh_uuid)		CRT_VAR)	\
+	((uuid_t)		(ea_coh_uuid)		CRT_VAR)	\
+	((daos_unit_oid_t)	(ea_oid)		CRT_VAR)	\
+	((daos_key_t)		(ea_dkey)		CRT_VAR)	\
+	((daos_key_t)		(ea_akey)		CRT_VAR)	\
+	((daos_epoch_range_t)	(ea_epoch_range)	CRT_VAR)	\
+	((uint64_t)		(ea_stripenum)		CRT_VAR)	\
+	((uint64_t)		(ea_rsize)		CRT_VAR)	\
+	((crt_bulk_t)		(ea_bulk)		CRT_VAR)	\
+	((uint32_t)		(ea_map_ver)		CRT_VAR)	\
+	((uint32_t)		(ea_remove_nr)		CRT_VAR)	\
+	((daos_recx_t)		(ea_remove_recxs)	CRT_ARRAY)	\
+	((daos_epoch_t)		(ea_remove_eps)		CRT_ARRAY)
+
+
+#define DAOS_OSEQ_OBJ_EC_AGG	/* output fields */		 \
+	((int32_t)		(ea_status)		CRT_VAR) \
+	((uint32_t)		(ea_map_ver)		CRT_VAR)
+
+CRT_RPC_DECLARE(obj_ec_agg, DAOS_ISEQ_OBJ_EC_AGG, DAOS_OSEQ_OBJ_EC_AGG)
+
+#define DAOS_ISEQ_OBJ_EC_REP	/* input fields */			\
+	((uuid_t)		(er_pool_uuid)		CRT_VAR)	\
+	((uuid_t)		(er_cont_uuid)		CRT_VAR)	\
+	((uuid_t)		(er_poh_uuid)		CRT_VAR)	\
+	((uuid_t)		(er_coh_uuid)		CRT_VAR)	\
+	((daos_unit_oid_t)	(er_oid)		CRT_VAR)	\
+	((daos_key_t)		(er_dkey)		CRT_VAR)	\
+	((daos_iod_t)		(er_iod)		CRT_VAR)	\
+	((uint64_t)		(er_epoch)		CRT_VAR)	\
+	((uint64_t)		(er_stripenum)		CRT_VAR)	\
+	((crt_bulk_t)		(er_bulk)		CRT_VAR)	\
+	((uint32_t)		(er_map_ver)		CRT_VAR)
+
+#define DAOS_OSEQ_OBJ_EC_REP	/* output fields */		 \
+	((int32_t)		(er_status)		CRT_VAR) \
+	((uint32_t)		(er_map_ver)		CRT_VAR)
+
+CRT_RPC_DECLARE(obj_ec_rep, DAOS_ISEQ_OBJ_EC_REP, DAOS_OSEQ_OBJ_EC_REP)
 
 void daos_dc_obj2id(void *ptr, daos_obj_id_t *id);
 
@@ -513,7 +564,6 @@ obj_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 		return -DER_TIMEDOUT;
 
 	opcode = DAOS_RPC_OPCODE(opc, DAOS_OBJ_MODULE, DAOS_OBJ_VERSION);
-	/* call daos_rpc_tag to get the target tag/context idx */
 	tgt_ep->ep_tag = daos_rpc_tag(DAOS_REQ_IO, tgt_ep->ep_tag);
 
 	return crt_req_create(crt_ctx, tgt_ep, opcode, req);
@@ -532,7 +582,9 @@ obj_is_modification_opc(uint32_t opc)
 		opc == DAOS_OBJ_RPC_PUNCH_DKEYS ||
 		opc == DAOS_OBJ_RPC_TGT_PUNCH_DKEYS ||
 		opc == DAOS_OBJ_RPC_PUNCH_AKEYS ||
-		opc == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS;
+		opc == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS ||
+		opc == DAOS_OBJ_RPC_EC_AGGREGATE ||
+		opc == DAOS_OBJ_RPC_EC_REPLICATE;
 }
 
 static inline bool

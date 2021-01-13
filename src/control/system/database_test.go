@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -285,6 +285,12 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 			PoolLabel: fmt.Sprintf("pool%04d", i),
 			State:     PoolServiceStateReady,
 			Replicas:  <-replicas,
+			Storage: &PoolServiceStorage{
+				CreationRankStr: fmt.Sprintf("[0-%d]", maxRanks),
+				CurrentRankStr:  fmt.Sprintf("[0-%d]", maxRanks),
+				ScmPerRank:      1,
+				NVMePerRank:     2,
+			},
 		}
 		data, err := createRaftUpdate(raftOpAddPoolService, ps)
 		if err != nil {
@@ -313,8 +319,9 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 	}
 
 	cmpOpts := []cmp.Option{
-		cmpopts.IgnoreUnexported(dbData{}, Member{}),
+		cmpopts.IgnoreUnexported(dbData{}, Member{}, PoolServiceStorage{}),
 		cmpopts.IgnoreFields(dbData{}, "RWMutex"),
+		cmpopts.IgnoreFields(PoolServiceStorage{}, "Mutex"),
 	}
 	if diff := cmp.Diff(db0.data, db1.data, cmpOpts...); diff != "" {
 		t.Fatalf("db differs after restore (-want, +got):\n%s\n", diff)
@@ -467,7 +474,6 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 				},
 				testMembers[2],
 			},
-
 			expFDTree: NewFaultDomainTree(
 				testMembers[0].RankFaultDomain(),
 				testMembers[1].RankFaultDomain(),
@@ -555,8 +561,42 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 				t.Fatalf("expected %d members, got %d", len(tc.expMembers), len(db.data.Members.Uuids))
 			}
 
-			if diff := cmp.Diff(tc.expFDTree, db.data.Members.FaultDomains); diff != "" {
+			if diff := cmp.Diff(tc.expFDTree, db.data.Members.FaultDomains, ignoreFaultDomainIDOption()); diff != "" {
 				t.Fatalf("wrong FaultDomainTree in DB (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestSystem_Database_FaultDomainTree(t *testing.T) {
+	for name, tc := range map[string]struct {
+		fdTree *FaultDomainTree
+	}{
+		"nil": {},
+		"actual tree": {
+			fdTree: NewFaultDomainTree(
+				MustCreateFaultDomain("one", "two", "three"),
+				MustCreateFaultDomain("one", "two", "four"),
+				MustCreateFaultDomain("five", "six", "seven"),
+				MustCreateFaultDomain("five", "eight", "nine"),
+			),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			db := MockDatabase(t, log)
+			db.data.Members.FaultDomains = tc.fdTree
+
+			result := db.FaultDomainTree()
+
+			if diff := cmp.Diff(tc.fdTree, result); diff != "" {
+				t.Fatalf("(-want, +got):\n%s\n", diff)
+			}
+
+			if result != nil && result == db.data.Members.FaultDomains {
+				t.Fatal("expected fault domain tree to be a copy")
 			}
 		})
 	}

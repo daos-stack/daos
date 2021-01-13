@@ -53,7 +53,7 @@ smd_pool_assign(uuid_t pool_id, int tgt_id, uint64_t blob_id, uint64_t blob_sz)
 	d_iov_t			key, val;
 	int			tgt_idx, rc;
 
-	D_ASSERT(!daos_handle_is_inval(smd_store.ss_pool_hdl));
+	D_ASSERT(daos_handle_is_valid(smd_store.ss_pool_hdl));
 
 	uuid_copy(key_pool.uuid, pool_id);
 	smd_lock(&smd_store);
@@ -123,7 +123,7 @@ smd_pool_unassign(uuid_t pool_id, int tgt_id)
 	uint64_t		*blob_src, *blob_tgt;
 	int			 tgt_idx, rc, move_cnt;
 
-	D_ASSERT(!daos_handle_is_inval(smd_store.ss_pool_hdl));
+	D_ASSERT(daos_handle_is_valid(smd_store.ss_pool_hdl));
 
 	uuid_copy(key_pool.uuid, pool_id);
 	smd_lock(&smd_store);
@@ -220,7 +220,7 @@ smd_pool_get(uuid_t pool_id, struct smd_pool_info **pool_info)
 	d_iov_t			 key, val;
 	int			 rc;
 
-	D_ASSERT(!daos_handle_is_inval(smd_store.ss_pool_hdl));
+	D_ASSERT(daos_handle_is_valid(smd_store.ss_pool_hdl));
 
 	uuid_copy(key_pool.uuid, pool_id);
 	smd_lock(&smd_store);
@@ -254,7 +254,7 @@ smd_pool_get_blob(uuid_t pool_id, int tgt_id, uint64_t *blob_id)
 	d_iov_t			key, val;
 	int			tgt_idx, rc;
 
-	D_ASSERT(!daos_handle_is_inval(smd_store.ss_pool_hdl));
+	D_ASSERT(daos_handle_is_valid(smd_store.ss_pool_hdl));
 
 	uuid_copy(key_pool.uuid, pool_id);
 	smd_lock(&smd_store);
@@ -295,7 +295,7 @@ smd_pool_list(d_list_t *pool_list, int *pools)
 	int			 rc;
 
 	D_ASSERT(pool_list && d_list_empty(pool_list));
-	D_ASSERT(!daos_handle_is_inval(smd_store.ss_pool_hdl));
+	D_ASSERT(daos_handle_is_valid(smd_store.ss_pool_hdl));
 
 	smd_lock(&smd_store);
 
@@ -367,7 +367,7 @@ smd_replace_blobs(struct smd_pool_info *info, uint32_t tgt_cnt, int *tgts)
 	int			tgt_id, tgt_idx;
 	int			i, rc;
 
-	D_ASSERT(!daos_handle_is_inval(smd_store.ss_pool_hdl));
+	D_ASSERT(daos_handle_is_valid(smd_store.ss_pool_hdl));
 
 	uuid_copy(key_pool.uuid, info->spi_id);
 

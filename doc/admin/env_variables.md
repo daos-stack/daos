@@ -2,8 +2,9 @@
 
 This section lists the environment variables used by DAOS. 
 
-!!!warning Many of these variables are used for development purposes only,
-           and may be removed or changed in the future.
+!!! warning
+    Many of these variables are used for development purposes only,
+    and may be removed or changed in the future.
 
 The description of each variable follows the following format:
 

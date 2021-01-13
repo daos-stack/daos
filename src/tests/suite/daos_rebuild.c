@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -533,7 +533,8 @@ rebuild_send_objects_fail(void **state)
 	/* Skip object send on all of the targets */
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-				     DAOS_REBUILD_TGT_SEND_OBJS_FAIL, 0, NULL);
+				      DAOS_REBUILD_TGT_SEND_OBJS_FAIL |
+				      DAOS_FAIL_ONCE, 0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 	/* Even do not sending the objects, the rebuild should still be
 	 * able to finish.
@@ -915,7 +916,8 @@ rebuild_multiple_tgts(void **state)
 		/* kill 2 ranks at the same time */
 		D_ASSERT(layout->ol_shards[0]->os_replica_nr > 2);
 		for (i = 0; i < 3; i++) {
-			d_rank_t rank = layout->ol_shards[0]->os_ranks[i];
+			d_rank_t rank =
+				layout->ol_shards[0]->os_shard_loc[i].sd_rank;
 
 			if (rank != leader) {
 				exclude_ranks[fail_cnt] = rank;
@@ -961,7 +963,7 @@ rebuild_io_cb(void *arg)
 	test_arg_t	*test_arg = arg;
 	daos_obj_id_t	*oids = test_arg->rebuild_cb_arg;
 
-	if (!daos_handle_is_inval(test_arg->coh))
+	if (daos_handle_is_valid(test_arg->coh))
 		rebuild_io(test_arg, oids, OBJ_NR);
 
 	return 0;
@@ -973,7 +975,7 @@ rebuild_io_post_cb(void *arg)
 	test_arg_t	*test_arg = arg;
 	daos_obj_id_t	*oids = test_arg->rebuild_post_cb_arg;
 
-	if (!daos_handle_is_inval(test_arg->coh))
+	if (daos_handle_is_valid(test_arg->coh))
 		rebuild_io_validate(test_arg, oids, OBJ_NR, true);
 
 	return 0;
@@ -1118,7 +1120,7 @@ rebuild_fail_all_replicas_before_rebuild(void **state)
 	/* Kill one replica and start rebuild */
 	shard = layout->ol_shards[0];
 	daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
-			 arg->pool.alive_svc, shard->os_ranks[0]);
+			 arg->pool.alive_svc, shard->os_shard_loc[0].sd_rank);
 
 	/* Sleep 10 seconds after it scan finish and hang before rebuild */
 	print_message("sleep 10 seconds to wait scan to be finished \n");
@@ -1128,9 +1130,10 @@ rebuild_fail_all_replicas_before_rebuild(void **state)
 	/* NB: we can not kill rank 0, otherwise the following set_params
 	 * will fail and also pool destroy will not work.
 	 */
-	if (shard->os_ranks[1] != 0)
+	if (shard->os_shard_loc[1].sd_rank != 0)
 		daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
-				 arg->pool.alive_svc, shard->os_ranks[1]);
+				 arg->pool.alive_svc,
+				 shard->os_shard_loc[1].sd_rank);
 
 	/* Continue rebuild */
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
@@ -1174,7 +1177,8 @@ rebuild_fail_all_replicas(void **state)
 		int j;
 
 		for (j = 0; j < layout->ol_shards[i]->os_replica_nr; j++) {
-			d_rank_t rank = layout->ol_shards[i]->os_ranks[j];
+			d_rank_t rank =
+				layout->ol_shards[i]->os_shard_loc[j].sd_rank;
 
 			daos_kill_server(arg, arg->pool.pool_uuid,
 					 arg->group, arg->pool.alive_svc,
@@ -1238,6 +1242,47 @@ multi_pools_rebuild_concurrently(void **state)
 out:
 	for (i = POOL_NUM * CONT_PER_POOL - 1; i >= 0; i--)
 		rebuild_pool_destroy(args[i]);
+}
+
+static void
+rebuild_kill_rank_during_rebuild(void **state)
+{
+	test_arg_t	*arg = *state;
+	test_arg_t	*new_arg = NULL;
+	daos_obj_id_t	oids[OBJ_NR];
+	int		i;
+	int		rc;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	rc = rebuild_pool_create(&new_arg, arg, SETUP_CONT_CONNECT, NULL);
+	if (rc)
+		return;
+
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
+	}
+
+	rebuild_io(new_arg, oids, OBJ_NR);
+
+	/* hang the rebuild */
+	if (arg->myrank == 0) {
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_REBUILD_TGT_SCAN_HANG, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 5,
+				      0, NULL);
+	}
+
+	new_arg->rebuild_cb = rebuild_destroy_pool_cb;
+
+	daos_exclude_target(arg->pool.pool_uuid, arg->group, arg->dmg_config,
+			    NULL /* svc */, ranks_to_kill[0], -1);
+
+	sleep(2);
+	daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
+			 arg->pool.alive_svc, ranks_to_kill[0]);
 }
 
 /** create a new pool/container for each test */
@@ -1310,6 +1355,9 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_sub_teardown},
 	{"REBUILD27: rebuild fail all replicas",
 	 rebuild_fail_all_replicas, rebuild_sub_setup, rebuild_sub_teardown},
+	{"REBUILD28: rebuild kill rank during rebuild",
+	 rebuild_kill_rank_during_rebuild, rebuild_sub_setup,
+	 rebuild_sub_teardown},
 };
 
 /* TODO: Enable aggregation once stable view rebuild is done. */
