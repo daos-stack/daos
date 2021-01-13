@@ -1152,10 +1152,10 @@ pipeline {
                 stage('NLT') {
                     when {
                       beforeAgent true
-                      expression { ! skip_stage('ci_hdwr1') }
+                      expression { ! skip_stage('nlt') }
                     }
                     agent {
-                        label 'ci_vm1'
+                        label 'ci_hdwr1'
                     }
                     steps {
                         unitTest timeout_time: 20,
