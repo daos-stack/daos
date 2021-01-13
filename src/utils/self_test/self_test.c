@@ -447,7 +447,7 @@ static void print_results(struct st_latency *latencies,
 	       latencies[num_failed].val / 1000,
 	       latencies[num_failed + num_passed / 4].val / 1000,
 	       latencies[num_failed + num_passed / 2].val / 1000,
-	       latencies[num_failed + num_passed * 3/4].val / 1000,
+	       latencies[num_failed + (num_passed * 3) / 4].val / 1000,
 	       latencies[test_params->rep_count - 1].val / 1000,
 	       latency_avg / 1000, latency_std_dev / 1000);
 
