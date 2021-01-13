@@ -878,7 +878,7 @@ def run_tests(test_files, tag_filter, args):
 
             # Optionally rename the test results directory for this test
             if args.rename:
-                rename_logs(avocado_logs_dir, test_file["py"])
+                rename_logs(avocado_logs_dir, test_file["py"], args)
 
             # Optionally process core files
             if args.process_cores:
@@ -1146,7 +1146,7 @@ def archive_files(destination, hosts, source_files, cart, args):
     return get_remote_output(hosts, " ".join(command), 900)
 
 
-def rename_logs(avocado_logs_dir, test_file):
+def rename_logs(avocado_logs_dir, test_file, args):
     """Append the test name to its avocado job-results directory name.
 
     Args:
