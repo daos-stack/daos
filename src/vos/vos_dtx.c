@@ -847,14 +847,18 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 		if (DAE_OID_CNT(dae) == 1) {
 			/* Overwrite DCE_OID if modify single object. */
 			DCE_OID(dce) = DAE_OID_INLINE(dae);
-			DCE_OID_CNT(dce) = 1;
+			/* The dec_dkey_hash is the real dkey hash. */
+			DCE_DKEY_HASH(dce) = DAE_DKEY_HASH(dae);
 		} else if (DAE_OID_CNT(dae) > 1) {
 			/* Take over the OID_OFF from active entry. */
 			DCE_OID_OFF(dce) = DAE_OID_OFF(dae);
+			/* Reuse dec_dkey_hash as the OID count. */
 			DCE_OID_CNT(dce) = DAE_OID_CNT(dae);
 		} else {
-			/* Only the leader_oid is modified by the DTX.*/
-			DCE_OID_CNT(dce) = 1;
+			/* Only the leader_oid is modified by the DTX.
+			 * The dec_dkey_hash is the real dkey hash.
+			 */
+			DCE_DKEY_HASH(dce) = DAE_DKEY_HASH(dae);
 		}
 	} else {
 		struct dtx_handle	*dth = vos_dth_get();
@@ -866,7 +870,8 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 		if (dth->dth_oid_array != NULL) {
 			if (dth->dth_oid_cnt == 1) {
 				DCE_OID(dce) = dth->dth_oid_array[0];
-				DCE_OID_CNT(dce) = 1;
+				/* The dec_dkey_hash is the real dkey hash. */
+				DCE_DKEY_HASH(dce) = dth->dth_dkey_hash;
 			} else {
 				struct umem_instance	*umm;
 				size_t			 size;
@@ -887,13 +892,15 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 				memcpy(umem_off2ptr(umm, rec_off),
 				       dth->dth_oid_array, size);
 				DCE_OID_OFF(dce) = rec_off;
+				/* Reuse dec_dkey_hash as the OID count. */
 				DCE_OID_CNT(dce) = dth->dth_oid_cnt;
 			}
 		} else {
 			D_ASSERT(dth->dth_oid_cnt == 0);
 
 			DCE_OID(dce) = dth->dth_leader_oid;
-			DCE_OID_CNT(dce) = 1;
+			/* The dec_dkey_hash is the real dkey hash. */
+			DCE_DKEY_HASH(dce) = dth->dth_dkey_hash;
 		}
 	}
 
@@ -2009,6 +2016,9 @@ vos_dtx_post_handle(struct vos_container *cont, struct vos_dtx_act_ent **daes,
 			 * as 'committed' or 'aborted'. That will consume some
 			 * DRAM until server restart.
 			 */
+			D_WARN("Cannot remove DTX "DF_DTI" from active table: "
+			       DF_RC"\n", DP_DTI(&DAE_XID(daes[i])), DP_RC(rc));
+
 			if (abort)
 				daes[i]->dae_aborted = 1;
 			else

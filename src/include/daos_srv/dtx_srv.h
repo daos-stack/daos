@@ -75,6 +75,8 @@ struct dtx_handle {
 	daos_unit_oid_t			 dth_leader_oid;
 
 	uint32_t			 dth_sync:1, /* commit synchronously. */
+					 /* DTXs in CoS list are committed. */
+					 dth_cos_done:1,
 					 dth_resent:1, /* For resent case. */
 					 /* Only one participator in the DTX. */
 					 dth_solo:1,
@@ -183,6 +185,8 @@ enum dtx_flags {
 	DTX_FOR_MIGRATION	= (1 << 3),
 	/** Ignore other uncommitted DTXs. */
 	DTX_IGNORE_UNCOMMITTED	= (1 << 4),
+	/** Resent request. */
+	DTX_RESEND		= (1 << 5),
 };
 
 int
