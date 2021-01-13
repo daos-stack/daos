@@ -37,6 +37,11 @@ import (
 	. "github.com/daos-stack/daos/src/control/system"
 )
 
+func listWithSystem(req *control.ListPoolsReq, sysName string) *control.ListPoolsReq {
+	req.SetSystem(sysName)
+	return req
+}
+
 func TestDmg_SystemCommands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
 		{
@@ -51,7 +56,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with single rank",
 			"system query --ranks 0",
 			strings.Join([]string{
-				`*control.SystemQueryReq-{"HostList":null,"Ranks":"0","Hosts":""}`,
+				`*control.SystemQueryReq-{"Sys":"","HostList":null,"Ranks":"0","Hosts":""}`,
 			}, " "),
 			nil,
 		},
@@ -59,7 +64,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with multiple ranks",
 			"system query --ranks 0,2,4-8",
 			strings.Join([]string{
-				`*control.SystemQueryReq-{"HostList":null,"Ranks":"[0,2,4-8]","Hosts":""}`,
+				`*control.SystemQueryReq-{"Sys":"","HostList":null,"Ranks":"[0,2,4-8]","Hosts":""}`,
 			}, " "),
 			nil,
 		},
@@ -73,7 +78,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with single host",
 			"system query --rank-hosts foo-0",
 			strings.Join([]string{
-				`*control.SystemQueryReq-{"HostList":null,"Ranks":"","Hosts":"foo-0"}`,
+				`*control.SystemQueryReq-{"Sys":"","HostList":null,"Ranks":"","Hosts":"foo-0"}`,
 			}, " "),
 			nil,
 		},
@@ -81,7 +86,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with multiple hosts",
 			"system query --rank-hosts bar9,foo-[0-100]",
 			strings.Join([]string{
-				`*control.SystemQueryReq-{"HostList":null,"Ranks":"","Hosts":"bar9,foo-[0-100]"}`,
+				`*control.SystemQueryReq-{"Sys":"","HostList":null,"Ranks":"","Hosts":"bar9,foo-[0-100]"}`,
 			}, " "),
 			nil,
 		},
@@ -132,7 +137,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system stop with single rank",
 			"system stop --ranks 0",
 			strings.Join([]string{
-				`*control.SystemStopReq-{"HostList":null,"Ranks":"0","Hosts":"","Prep":true,"Kill":true,"Force":false}`,
+				`*control.SystemStopReq-{"Sys":"","HostList":null,"Ranks":"0","Hosts":"","Prep":true,"Kill":true,"Force":false}`,
 			}, " "),
 			nil,
 		},
@@ -140,7 +145,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system stop with multiple ranks",
 			"system stop --ranks 0,1,4",
 			strings.Join([]string{
-				`*control.SystemStopReq-{"HostList":null,"Ranks":"[0-1,4]","Hosts":"","Prep":true,"Kill":true,"Force":false}`,
+				`*control.SystemStopReq-{"Sys":"","HostList":null,"Ranks":"[0-1,4]","Hosts":"","Prep":true,"Kill":true,"Force":false}`,
 			}, " "),
 			nil,
 		},
@@ -148,7 +153,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system stop with multiple hosts",
 			"system stop --rank-hosts bar9,foo-[0-100]",
 			strings.Join([]string{
-				`*control.SystemStopReq-{"HostList":null,"Ranks":"","Hosts":"bar9,foo-[0-100]","Prep":true,"Kill":true,"Force":false}`,
+				`*control.SystemStopReq-{"Sys":"","HostList":null,"Ranks":"","Hosts":"bar9,foo-[0-100]","Prep":true,"Kill":true,"Force":false}`,
 			}, " "),
 			nil,
 		},
@@ -176,7 +181,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system start with single rank",
 			"system start --ranks 0",
 			strings.Join([]string{
-				`*control.SystemStartReq-{"HostList":null,"Ranks":"0","Hosts":""}`,
+				`*control.SystemStartReq-{"Sys":"","HostList":null,"Ranks":"0","Hosts":""}`,
 			}, " "),
 			nil,
 		},
@@ -184,7 +189,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system start with multiple ranks",
 			"system start --ranks 0,1,4",
 			strings.Join([]string{
-				`*control.SystemStartReq-{"HostList":null,"Ranks":"[0-1,4]","Hosts":""}`,
+				`*control.SystemStartReq-{"Sys":"","HostList":null,"Ranks":"[0-1,4]","Hosts":""}`,
 			}, " "),
 			nil,
 		},
@@ -192,7 +197,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system start with multiple hosts",
 			"system start --rank-hosts bar9,foo-[0-100]",
 			strings.Join([]string{
-				`*control.SystemStartReq-{"HostList":null,"Ranks":"","Hosts":"bar9,foo-[0-100]"}`,
+				`*control.SystemStartReq-{"Sys":"","HostList":null,"Ranks":"","Hosts":"bar9,foo-[0-100]"}`,
 			}, " "),
 			nil,
 		},
@@ -222,9 +227,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system list-pools with default config",
 			"system list-pools",
 			strings.Join([]string{
-				printRequest(t, &control.ListPoolsReq{
-					System: build.DefaultSystemName,
-				}),
+				printRequest(t, listWithSystem(&control.ListPoolsReq{}, build.DefaultSystemName)),
 			}, " "),
 			nil,
 		},

@@ -44,24 +44,25 @@ server_config:
       env_vars:
         - DD_MASK=mgmt,io,md,epc,dsms,rebuild
   transport_config:
-    allow_insecure: True
+    allow_insecure: False
 agent_config:
   transport_config:
-    allow_insecure: True
+    allow_insecure: False
 dmg:
   transport_config:
-    allow_insecure: True
+    allow_insecure: False
 daos_tests:
   num_clients:
     num_clients: 1
   num_replicas:
     num_replicas: 1
   Tests: !mux
-    test_r_0-10:
-      daos_test: r
-      test_name: rebuild tests 0-10
-      args: -s3 -u subtests="0-10"
-      test_timeout: 1500
+# Skipped for DAOS-5851
+#    test_r_0-10:
+#      daos_test: r
+#      test_name: rebuild tests 0-10
+#      args: -s3 -u subtests="0-10"
+#      test_timeout: 1500
     test_r_12-15:
       daos_test: r
       test_name: rebuild tests 12-15
@@ -114,5 +115,9 @@ daos_tests:
     test_r_27:
       daos_test: r
       test_name: rebuild tests 27
-      args: -s3 -u subtests="27"
+      args: -s6 -u subtests="27"
       test_timeout: 1500
+    test_r_28:
+      daos_test: r
+      test_name: rebuild tests 28
+      args: -s3 -u subtests="28"

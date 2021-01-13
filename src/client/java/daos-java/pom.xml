@@ -61,26 +61,14 @@
   <build>
     <plugins>
       <plugin>
-        <groupId>org.codehaus.mojo</groupId>
-        <artifactId>native-maven-plugin</artifactId>
-        <version>1.0-alpha-9</version>
-        <extensions>true</extensions>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
         <configuration>
-          <javahClassNames>
-            <javahClassName>io.daos.dfs.DaosFsClient</javahClassName>
-            <javahClassName>io.daos.DaosClient</javahClassName>
-          </javahClassNames>
-          <javahOutputDirectory>${project.basedir}/src/main/native/include</javahOutputDirectory>
+          <compilerArgs>
+            <arg>-h</arg>
+            <arg>${project.basedir}/src/main/native/include</arg>
+          </compilerArgs>
         </configuration>
-        <executions>
-          <execution>
-            <id>generate-head</id>
-            <phase>compile</phase>
-            <goals>
-              <goal>javah</goal>
-            </goals>
-          </execution>
-        </executions>
       </plugin>
       <plugin>
         <artifactId>maven-antrun-plugin</artifactId>
@@ -118,9 +106,21 @@
               <tasks>
                 <mkdir dir="${native.build.path}"/>
                 <exec executable="sh" outputproperty="java-home" failonerror="true">
-                  <arg line="./find_java_home.sh"/>
+                  <arg value="./find_java_home.sh"/>
                 </exec>
                 <echo message="Java home is ${java-home}" />
+                <exec executable="bash" outputproperty="sl-prefix" failonerror="true">
+                  <arg value="./find_build_paths.sh"/>
+                  <arg value="${daos.install.path}"/>
+                  <arg value="SL_PREFIX"/>
+                </exec>
+                <echo message="SL_PREFIX is ${sl-prefix}" />
+                <exec executable="bash" outputproperty="sl-protobufc-prefix" failonerror="true">
+                  <arg value="./find_build_paths.sh"/>
+                  <arg value="${daos.install.path}"/>
+                  <arg value="SL_PROTOBUFC_PREFIX"/>
+                </exec>
+                <echo message="SL_PROTOBUFC_PREFIX is ${sl-protobufc-prefix}" />
                 <delete file="${project.basedir}/src/main/native/include/io_daos_dfs_DaosFsClient_DaosFsClientBuilder.h"/>
                 <delete file="${project.basedir}/src/main/native/include/io_daos_DaosClient_DaosClientBuilder.h"/>
                 <exec dir="${native.build.path}"
@@ -160,8 +160,8 @@
                   <arg value="-I/usr/local/"/>
                   <arg value="-I${java-home}/include/"/>
                   <arg value="-I${java-home}/include/linux/"/>
-                  <arg value="-I${daos.install.path}/include/"/>
-                  <arg value="-I${daos.install.path}/prereq/dev/protobufc/include/"/>
+                  <arg value="-I${sl-prefix}/include/"/>
+                  <arg value="-I${sl-protobufc-prefix}/include/"/>
                   <arg value="-I${project.basedir}/src/main/native/include/"/>
                   <arg value="${project.basedir}/src/main/native/io_daos_dfs_DaosFsClient.c"/>
                   <arg value="-o${native.build.path}/io_daos_dfs_DaosFsClient.o"/>
@@ -176,8 +176,8 @@
                   <arg value="-I/usr/local/"/>
                   <arg value="-I${java-home}/include/"/>
                   <arg value="-I${java-home}/include/linux/"/>
-                  <arg value="-I${daos.install.path}/include/"/>
-                  <arg value="-I${daos.install.path}/prereq/dev/protobufc/include/"/>
+                  <arg value="-I${sl-prefix}/include/"/>
+                  <arg value="-I${sl-protobufc-prefix}/include/"/>
                   <arg value="-I${project.basedir}/src/main/native/include/"/>
                   <arg value="${project.basedir}/src/main/native/DunsAttribute.pb-c.c"/>
                   <arg value="-o${native.build.path}/DunsAttribute.pb-c.o"/>
@@ -194,9 +194,9 @@
                   <arg value="${native.build.path}/io_daos_dfs_DaosFsClient.o"/>
                   <arg value="${native.build.path}/DunsAttribute.pb-c.o"/>
                   <arg value="${native.build.path}/io_daos_DaosClient.o"/>
-                  <arg value="-L${daos.install.path}/lib"/>
-                  <arg value="-L${daos.install.path}/lib64"/>
-                  <arg value="-L${daos.install.path}/prereq/dev/protobufc/lib"/>
+                  <arg value="-L${sl-prefix}/lib"/>
+                  <arg value="-L${sl-prefix}/lib64"/>
+                  <arg value="-L${sl-protobufc-prefix}/lib"/>
                   <arg value="-L/usr/lib"/>
                   <arg value="-L/usr/lib64"/>
                   <arg value="-L/usr/local/lib"/>

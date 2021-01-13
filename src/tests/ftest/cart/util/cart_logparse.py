@@ -449,6 +449,8 @@ class LogIter():
         # latin-1
         self._fd = None
 
+        self.file_corrupt = False
+
         self.bz2 = False
 
         # Force check encoding for smaller files.
@@ -474,6 +476,10 @@ class LogIter():
                     data = self._fd.read(199)
                     lines = data.splitlines()
                     print(lines[-1])
+                    self.file_corrupt = True
+
+                    # This will now work, as the file has been opened in
+                    # latin-1 rather than unicode.
                 self._fd.seek(0)
             else:
                 self._fd = open(fname, 'r', encoding='utf-8')
@@ -632,7 +638,7 @@ class LogIter():
             self._iter_index += 1
 
             if self._pid and self._iter_index > self._iter_last_index:
-                assert self._iter_count == self._iter_pid['line_count']
+                assert self._iter_count == self._iter_pid['line_count'] # nosec
                 raise StopIteration
 
             line = self.__lnext()

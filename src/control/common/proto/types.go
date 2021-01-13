@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -271,8 +271,8 @@ func AccessControlListFromPB(pbACL *mgmtpb.ACLResp) *common.AccessControlList {
 func PoolDiscoveriesFromPB(pbPools []*mgmtpb.ListPoolsResp_Pool) []*common.PoolDiscovery {
 	pools := make([]*common.PoolDiscovery, 0, len(pbPools))
 	for _, pbPool := range pbPools {
-		svcReps := make([]uint32, 0, len(pbPool.Svcreps))
-		svcReps = append(svcReps, pbPool.Svcreps...)
+		svcReps := make([]uint32, 0, len(pbPool.SvcReps))
+		svcReps = append(svcReps, pbPool.SvcReps...)
 
 		pools = append(pools, &common.PoolDiscovery{
 			UUID:        pbPool.Uuid,
