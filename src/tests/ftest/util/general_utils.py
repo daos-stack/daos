@@ -894,7 +894,7 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
         #     timeout=timeout, verbose=verbose, raise_exception=raise_exception)
         localhost = gethostname().split(".")[0]
         result = run_command(
-            "{} scp {}:{} {}".format(
+            "{} scp -o StrictHostKeyChecking=no {}:{} {}".format(
                 get_clush_command(hosts, "-S -v", sudo), localhost, source,
                 destination),
             timeout=timeout, verbose=verbose, raise_exception=raise_exception)
@@ -923,10 +923,11 @@ def get_clush_command(hosts, args=None, sudo=False):
     if args:
         command.insert(1, args)
     if sudo:
-        # Disable host key checking and add sudo to the command
-        command.extend(["-o", "-oStrictHostKeyChecking=no", "sudo"])
+        # If ever needed, this is how to disable host key checking:
+        # command.extend(["-o", "-oStrictHostKeyChecking=no", "sudo"])
         # When "sudo clush ..." works in CI, switch back to this method
         # command.insert(0, "sudo")
+        command.append("sudo")
     return " ".join(command)
 
 
