@@ -264,6 +264,36 @@ err:
 }
 
 static void
+df_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
+{
+	struct dfuse_projection_info    *fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry        *parent_inode = NULL;
+	d_list_t                        *rlink;
+	int                             rc;
+
+	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &parent, sizeof(parent));
+	if (!rlink) {
+		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %#lx", parent);
+		D_GOTO(err, rc = ENOENT);
+	}
+
+	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+	if (!parent_inode->ie_dfs->dfs_ops->mknod)
+		D_GOTO(decref, rc = ENOTSUP);
+
+	parent_inode->ie_dfs->dfs_ops->mknod(req, parent_inode, name,
+					     mode | S_IFDIR);
+
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+	return;
+decref:
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+err:
+	DFUSE_REPLY_ERR_RAW(parent_inode, req, rc);
+}
+
+static void
 df_ll_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
@@ -431,7 +461,7 @@ df_ll_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 	/* Don't allow setting of uid/gid extended attribute */
 	if (strncmp(name, DFUSE_XATTR_PREFIX,
 		    sizeof(DFUSE_XATTR_PREFIX) - 1) == 0) {
-		D_GOTO(err, rc = ENOTSUP);
+		D_GOTO(err, rc = EPERM);
 	}
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
@@ -704,6 +734,7 @@ struct fuse_lowlevel_ops
 	/* Ops that support per-inode indirection */
 	fuse_ops->getattr	= df_ll_getattr;
 	fuse_ops->lookup	= df_ll_lookup;
+	fuse_ops->mkdir		= df_ll_mkdir;
 	fuse_ops->opendir	= df_ll_opendir;
 	fuse_ops->releasedir	= df_ll_releasedir;
 	fuse_ops->unlink	= df_ll_unlink;
