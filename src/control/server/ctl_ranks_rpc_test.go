@@ -404,7 +404,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 
 				srv.OnInstanceExit(
 					func(_ context.Context, _ system.Rank, _ error) error {
-						svc.events.Publish(events.NewRankExitEvent("foo",
+						svc.events.Publish(events.NewRankDownEvent("foo",
 							0, 0, common.NormalExit))
 						return nil
 					})

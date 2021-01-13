@@ -40,7 +40,6 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/system"
@@ -235,10 +234,6 @@ func (svc *mgmtSvc) join(ctx context.Context, req *batchJoinRequest) *batchJoinR
 			joinErr: errors.Wrapf(err, "invalid server fault domain %q", req.GetSrvFaultDomain()),
 		}
 	}
-
-	// don't publish rank exit events whilst performing controlled shutdown
-	svc.events.DisableEventIDs(events.RASRankDown)
-	defer svc.events.EnableEventIDs(events.RASRankDown)
 
 	joinResponse, err := svc.membership.Join(&system.JoinRequest{
 		Rank:           system.Rank(req.Rank),

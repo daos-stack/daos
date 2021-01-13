@@ -74,8 +74,8 @@ func RankStateInfoToProto(rsi *RankStateInfo) (*sharedpb.RASEvent_RankStateInfo,
 	return pbInfo, nil
 }
 
-// NewRankExitEvent creates a specific RankExit event from given inputs.
-func NewRankExitEvent(hostname string, instanceIdx uint32, rank uint32, exitErr common.ExitStatus) *RASEvent {
+// NewRankDownEvent creates a specific RankDown event from given inputs.
+func NewRankDownEvent(hostname string, instanceIdx uint32, rank uint32, exitErr common.ExitStatus) *RASEvent {
 	return &RASEvent{
 		Timestamp: common.FormatTime(time.Now()),
 		Msg:       "DAOS rank exited unexpectedly",

@@ -62,14 +62,16 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev, char *hid,
 
 	(void)gettimeofday(&tv, 0);
 	tm = localtime(&tv.tv_sec);
-	if (tm != NULL)
+	if (tm != NULL) {
 		D_ASPRINTF(evt->timestamp,
 			   "%04d/%02d/%02d-%02d:%02d:%02d.%02ld",
 			   tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
 			   tm->tm_hour, tm->tm_min, tm->tm_sec,
 			   (long)tv.tv_usec / 10000);
-	else
+	} else {
+		D_ERROR("unable to generate timestamp\n");
 		evt->timestamp = NULL;
+	}
 
 	evt->id = (uint32_t)id;
 	evt->type = (uint32_t)type;

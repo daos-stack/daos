@@ -1071,7 +1071,7 @@ func TestControl_SystemReformat(t *testing.T) {
 }
 
 func TestControl_SystemNotify(t *testing.T) {
-	rasEventRankExit := events.NewRankExitEvent("foo", 0, 0, common.NormalExit)
+	rasEventRankDown := events.NewRankDownEvent("foo", 0, 0, common.NormalExit)
 
 	for name, tc := range map[string]struct {
 		req     *SystemNotifyReq
@@ -1089,12 +1089,12 @@ func TestControl_SystemNotify(t *testing.T) {
 			expErr: errors.New("nil event in request"),
 		},
 		"zero sequence number": {
-			req:    &SystemNotifyReq{Event: rasEventRankExit},
+			req:    &SystemNotifyReq{Event: rasEventRankDown},
 			expErr: errors.New("invalid sequence"),
 		},
 		"local failure": {
 			req: &SystemNotifyReq{
-				Event:    rasEventRankExit,
+				Event:    rasEventRankDown,
 				Sequence: 1,
 			},
 			uErr:   errors.New("local failed"),
@@ -1102,7 +1102,7 @@ func TestControl_SystemNotify(t *testing.T) {
 		},
 		"remote failure": {
 			req: &SystemNotifyReq{
-				Event:    rasEventRankExit,
+				Event:    rasEventRankDown,
 				Sequence: 1,
 			},
 			uResp:  MockMSResponse("host1", errors.New("remote failed"), nil),
@@ -1110,7 +1110,7 @@ func TestControl_SystemNotify(t *testing.T) {
 		},
 		"empty response": {
 			req: &SystemNotifyReq{
-				Event:    rasEventRankExit,
+				Event:    rasEventRankDown,
 				Sequence: 1,
 			},
 			uResp:   MockMSResponse("10.0.0.1:10001", nil, &sharedpb.ClusterEventResp{}),
@@ -1140,7 +1140,7 @@ func TestControl_SystemNotify(t *testing.T) {
 }
 
 func TestControl_EventForwarder_OnEvent(t *testing.T) {
-	rasEventRankExit := events.NewRankExitEvent("foo", 0, 0, common.NormalExit)
+	rasEventRankDown := events.NewRankDownEvent("foo", 0, 0, common.NormalExit)
 
 	for name, tc := range map[string]struct {
 		aps            []string
@@ -1153,10 +1153,10 @@ func TestControl_EventForwarder_OnEvent(t *testing.T) {
 			event: nil,
 		},
 		"missing access points": {
-			event: rasEventRankExit,
+			event: rasEventRankDown,
 		},
 		"successful forward": {
-			event:          rasEventRankExit,
+			event:          rasEventRankDown,
 			aps:            []string{"192.168.1.1"},
 			expInvokeCount: 1,
 		},

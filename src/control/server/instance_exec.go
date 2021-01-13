@@ -140,7 +140,7 @@ func publishInstanceExitFn(publishFn func(*events.RASEvent), hostname string, sr
 		if exitErr == nil {
 			return errors.New("expected non-nil exit error")
 		}
-		publishFn(events.NewRankExitEvent(hostname, srvIdx, rank.Uint32(),
+		publishFn(events.NewRankDownEvent(hostname, srvIdx, rank.Uint32(),
 			common.ExitStatus(exitErr.Error())))
 
 		return nil

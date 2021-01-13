@@ -23,7 +23,6 @@
 
 // This file defines RAS event related protobuf messages communicated over dRPC
 // and gRPC.
-// TODO: find a way to sensibly share definitions in duplicate file srv/event.
 
 syntax = "proto3";
 package shared;
@@ -71,8 +70,7 @@ message ClusterEventReq {
 	RASEvent event = 2;	// RAS event.
 }
 
-// RASEventResp acknowledges receipt of an event notification and an error
-// status. Acknowledgment does not indicate that the event was handled.
+// RASEventResp acknowledges receipt of an event notification.
 message ClusterEventResp {
 	uint64 sequence = 1;	// Sequence identifier for RAS events.
 	int32 status = 2;	// DAOS error code.

@@ -453,7 +453,7 @@ func (m *Membership) OnEvent(_ context.Context, evt *events.RASEvent) {
 	case events.RASRankDown:
 		ei := evt.GetRankStateInfo()
 		if ei == nil {
-			m.log.Error("no extended info in RankExit event received")
+			m.log.Error("no extended info in RankDown event received")
 			return
 		}
 		m.log.Debugf("processing RAS event %q from rank %d on host %q",

@@ -61,6 +61,7 @@ crt_self_uri_get(int tag, char **uri)
 			  strlen(crt_self_uri_get_uri));
 	return crt_self_uri_get_return;
 }
+
 static uint32_t	mock_self_rank = 1;
 d_rank_t
 dss_self_rank(void)
@@ -221,15 +222,6 @@ test_drpc_verify_notify_bio_error(void **state)
 	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
 	assert_int_equal(drpc_init(), 0);
 
-	/* drpc connection created */
-	assert_int_equal(connect_sockfd, socket_return);
-
-	/* socket was left open */
-	assert_int_equal(close_call_count, 0);
-
-	/* Message was sent */
-	assert_non_null(sendmsg_msg_ptr);
-
 	assert_int_equal(ds_notify_bio_error(MET_WRITE, 0), 0);
 	verify_notify_bio_error();
 
@@ -303,7 +295,7 @@ test_drpc_verify_notify_pool_svc_update(void **state)
 }
 
 static void
-verify_notify_pool_svc_update_inval()
+verify_cluster_event_not_sent()
 {
 	Drpc__Call		*call;
 	Shared__ClusterEventReq	*req;
@@ -335,7 +327,7 @@ test_drpc_verify_notify_pool_svc_update_noreps(void **state)
 
 	assert_int_equal(ds_notify_pool_svc_update(&pool_uuid, NULL),
 			 -DER_INVAL);
-	verify_notify_pool_svc_update_inval();
+	verify_cluster_event_not_sent();
 
 	drpc_fini();
 }
@@ -354,7 +346,7 @@ test_drpc_verify_notify_pool_svc_update_nopool(void **state)
 
 	assert_int_equal(ds_notify_pool_svc_update(NULL, svc_ranks),
 			 -DER_INVAL);
-	verify_notify_pool_svc_update_inval();
+	verify_cluster_event_not_sent();
 
 	d_rank_list_free(svc_ranks);
 
@@ -484,26 +476,6 @@ test_drpc_verify_notify_ras_min_viable(void **state)
 }
 
 static void
-verify_notify_ras_inval()
-{
-	Drpc__Call		*call;
-	Shared__ClusterEventReq	*req;
-
-	call = drpc__call__unpack(NULL, sendmsg_msg_iov_len,
-				  sendmsg_msg_content);
-	assert_non_null(call);
-	assert_int_equal(call->module, DRPC_MODULE_SRV);
-
-	/* Verify NULL payload content */
-	req = shared__cluster_event_req__unpack(NULL, call->body.len,
-						call->body.data);
-	assert_true(req == NULL);
-
-	/* Cleanup */
-	drpc__call__free_unpacked(call, NULL);
-}
-
-static void
 test_drpc_verify_notify_ras_emptymsg(void **state)
 {
 	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
@@ -512,7 +484,7 @@ test_drpc_verify_notify_ras_emptymsg(void **state)
 	ds_notify_ras_event(RAS_RANK_DOWN, "", RAS_TYPE_STATE_CHANGE,
 			    RAS_SEV_ERROR, NULL, NULL, NULL, NULL, NULL, NULL,
 			    NULL, NULL);
-	verify_notify_ras_inval();
+	verify_cluster_event_not_sent();
 
 	drpc_fini();
 }
@@ -526,7 +498,7 @@ test_drpc_verify_notify_ras_nomsg(void **state)
 	ds_notify_ras_event(RAS_RANK_DOWN, NULL, RAS_TYPE_STATE_CHANGE,
 			    RAS_SEV_ERROR, NULL, NULL, NULL, NULL, NULL, NULL,
 			    NULL, NULL);
-	verify_notify_ras_inval();
+	verify_cluster_event_not_sent();
 
 	drpc_fini();
 }

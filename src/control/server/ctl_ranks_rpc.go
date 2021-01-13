@@ -195,7 +195,7 @@ func (svc *ControlService) StopRanks(ctx context.Context, req *ctlpb.RanksReq) (
 		return nil, err
 	}
 
-	// don't publish rank exit events whilst performing controlled shutdown
+	// don't publish rank down events whilst performing controlled shutdown
 	svc.events.DisableEventIDs(events.RASRankDown)
 	defer svc.events.EnableEventIDs(events.RASRankDown)
 

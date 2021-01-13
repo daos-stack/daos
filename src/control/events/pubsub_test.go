@@ -65,7 +65,7 @@ func (tly *tally) getRx() []string {
 }
 
 func TestEvents_PubSub_Basic(t *testing.T) {
-	evt1 := NewRankExitEvent("foo", 1, 1, common.ExitStatus("test"))
+	evt1 := NewRankDownEvent("foo", 1, 1, common.ExitStatus("test"))
 
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
@@ -96,7 +96,7 @@ func TestEvents_PubSub_Basic(t *testing.T) {
 }
 
 func TestEvents_PubSub_Reset(t *testing.T) {
-	evt1 := NewRankExitEvent("foo", 1, 1, common.ExitStatus("test"))
+	evt1 := NewRankDownEvent("foo", 1, 1, common.ExitStatus("test"))
 
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
@@ -140,7 +140,7 @@ func TestEvents_PubSub_Reset(t *testing.T) {
 }
 
 func TestEvents_PubSub_DisableEvent(t *testing.T) {
-	evt1 := NewRankExitEvent("foo", 1, 1, common.ExitStatus("test"))
+	evt1 := NewRankDownEvent("foo", 1, 1, common.ExitStatus("test"))
 
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
@@ -175,7 +175,7 @@ func TestEvents_PubSub_DisableEvent(t *testing.T) {
 // TODO: update subscribe any topic test to use events of different types when
 // more events exist.
 func TestEvents_PubSub_SubscribeAnyTopic(t *testing.T) {
-	evt1 := NewRankExitEvent("foo", 1, 1, common.ExitStatus("test"))
+	evt1 := NewRankDownEvent("foo", 1, 1, common.ExitStatus("test"))
 
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)

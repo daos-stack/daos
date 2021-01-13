@@ -787,12 +787,12 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 		},
 		"event on unrecognised rank": {
 			members:    members,
-			event:      events.NewRankExitEvent("foo", 0, 4, common.NormalExit),
+			event:      events.NewRankDownEvent("foo", 0, 4, common.NormalExit),
 			expMembers: members,
 		},
 		"state updated on unscheduled exit": {
 			members: members,
-			event:   events.NewRankExitEvent("foo", 0, 1, common.NormalExit),
+			event:   events.NewRankDownEvent("foo", 0, 1, common.NormalExit),
 			expMembers: Members{
 				MockMember(t, 0, MemberStateJoined),
 				MockMember(t, 1, MemberStateErrored).WithInfo(

@@ -115,7 +115,7 @@ func (d *eventsDispatched) OnEvent(ctx context.Context, e *events.RASEvent) {
 }
 
 func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
-	eventRankExit := events.NewRankExitEvent("foo", 0, 0, common.NormalExit)
+	eventRankDown := events.NewRankDownEvent("foo", 0, 0, common.NormalExit)
 
 	for name, tc := range map[string]struct {
 		nilReq        bool
@@ -130,11 +130,11 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			expErr: errors.New("nil request"),
 		},
 		"successful notification": {
-			event: eventRankExit,
+			event: eventRankDown,
 			expResp: &sharedpb.ClusterEventResp{
 				Sequence: 1,
 			},
-			expDispatched: []*events.RASEvent{eventRankExit},
+			expDispatched: []*events.RASEvent{eventRankDown},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
