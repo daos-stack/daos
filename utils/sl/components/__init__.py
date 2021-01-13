@@ -284,7 +284,7 @@ def define_components(reqs):
                                  True)
     reqs.define('argobots',
                 retriever=retriever,
-                commands=['git clean -dxf ',
+                commands=['git clean -dxf',
                           './autogen.sh',
                           './configure --prefix=$ARGOBOTS_PREFIX CC=gcc'
                           ' --enable-valgrind',
