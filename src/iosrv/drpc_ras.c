@@ -234,8 +234,8 @@ out:
 
 static int
 raise_ras(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev, char *hid,
-          d_rank_t *rank, char *jid, uuid_t *puuid, uuid_t *cuuid,
-          daos_obj_id_t *oid, char *cop, Shared__RASEvent *evt)
+	  d_rank_t *rank, char *jid, uuid_t *puuid, uuid_t *cuuid,
+	  daos_obj_id_t *oid, char *cop, Shared__RASEvent *evt)
 {
 	int	rc;
 
