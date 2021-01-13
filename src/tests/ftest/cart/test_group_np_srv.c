@@ -38,7 +38,7 @@
 /* Callback to process a SWIM message */
 static void
 swim_crt_event_cb(d_rank_t rank, enum crt_event_source src,
-			 enum crt_event_type type, void *arg)
+		  enum crt_event_type type, void *arg)
 {
 
 		/* Example output for SWIM CRT_EVT_DEAD on rank #2:
