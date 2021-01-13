@@ -228,6 +228,7 @@ stride_buf_op(int opc, char *buf, unsigned offset, int size)
 				 * old version will be fully overwritten
 				 */
 				if (ts_single && opc == STRIDE_BUF_SET) {
+					stride_buf.sb_buf[pos] = 0;
 					continue;
 				}
 				return 0;
