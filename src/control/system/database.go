@@ -121,6 +121,7 @@ type (
 	GroupMap struct {
 		Version  uint32
 		RankURIs map[Rank]string
+		MSRanks  []Rank
 	}
 )
 
@@ -461,29 +462,9 @@ func (db *Database) GroupMap() (*GroupMap, error) {
 	gm := newGroupMap(db.data.MapVersion)
 	for _, srv := range db.data.Members.Ranks {
 		gm.RankURIs[srv.Rank] = srv.FabricURI
-	}
-
-	if len(gm.RankURIs) == 0 {
-		return nil, ErrEmptyGroupMap
-	}
-
-	return gm, nil
-}
-
-// ReplicaRanks returns the set of ranks associated with MS replicas.
-func (db *Database) ReplicaRanks() (*GroupMap, error) {
-	if err := db.CheckReplica(); err != nil {
-		return nil, err
-	}
-	db.data.RLock()
-	defer db.data.RUnlock()
-
-	gm := newGroupMap(db.data.MapVersion)
-	for _, srv := range db.filterMembers(AvailableMemberFilter) {
-		if !db.isReplica(srv.Addr) {
-			continue
+		if srv.state&AvailableMemberFilter > 0 && db.isReplica(srv.Addr) {
+			gm.MSRanks = append(gm.MSRanks, srv.Rank)
 		}
-		gm.RankURIs[srv.Rank] = srv.FabricURI
 	}
 
 	if len(gm.RankURIs) == 0 {
