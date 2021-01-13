@@ -30,6 +30,7 @@
 #define D_LOGFAC	DD_FAC(tests)
 
 #include "daos_iotest.h"
+#include "dfs_test.h"
 #include <daos/pool.h>
 #include <daos/mgmt.h>
 #include <daos/container.h>
@@ -77,10 +78,9 @@ degrade_ec_internal(void **state, int *shards, int shards_nr, int write_type)
 		verify_ec_full(&req, arg->index, 0);
 
 	ioreq_fini(&req);
-#if 0
+
 	while (idx > 0)
 		rebuild_add_back_tgts(arg, ranks[--idx], NULL, 1);
-#endif
 }
 
 static void
@@ -161,6 +161,150 @@ degrade_full_fail_data_parity(void **state)
 	degrade_ec_internal(state, shards, 2, FULL_UPDATE);
 }
 
+static void
+degrade_dfs_fail_data_s0(void **state)
+{
+	int shard = 0;
+
+	dfs_ec_rebuild_io(state, &shard, 1);
+}
+
+static void
+degrade_dfs_fail_data_s1(void **state)
+{
+	int shard = 1;
+
+	dfs_ec_rebuild_io(state, &shard, 1);
+}
+
+static void
+degrade_dfs_fail_data_s3(void **state)
+{
+	int shard = 3;
+
+	dfs_ec_rebuild_io(state, &shard, 1);
+}
+
+static void
+degrade_dfs_fail_2data_s0s1(void **state)
+{
+	int shards[2];
+
+	shards[0] = 0;
+	shards[1] = 1;
+	dfs_ec_rebuild_io(state, shards, 2);
+}
+
+static void
+degrade_dfs_fail_2data_s0s2(void **state)
+{
+	int shards[2];
+
+	shards[0] = 0;
+	shards[1] = 2;
+	dfs_ec_rebuild_io(state, shards, 2);
+}
+
+static void
+degrade_dfs_fail_2data_s0s3(void **state)
+{
+	int shards[2];
+
+	shards[0] = 0;
+	shards[1] = 3;
+	dfs_ec_rebuild_io(state, shards, 2);
+}
+
+static void
+degrade_dfs_fail_2data_s1s2(void **state)
+{
+	int shards[2];
+
+	shards[0] = 1;
+	shards[1] = 2;
+	dfs_ec_rebuild_io(state, shards, 2);
+}
+
+static void
+degrade_dfs_fail_2data_s1s3(void **state)
+{
+	int shards[2];
+
+	shards[0] = 1;
+	shards[1] = 3;
+	dfs_ec_rebuild_io(state, shards, 2);
+}
+
+static void
+degrade_dfs_fail_2data_s2s3(void **state)
+{
+	int shards[2];
+
+	shards[0] = 2;
+	shards[1] = 3;
+	dfs_ec_rebuild_io(state, shards, 2);
+}
+
+static void
+degrade_dfs_fail_data_parity_s0p1(void **state)
+{
+	int shards[2];
+
+	shards[0] = 0;
+	shards[1] = 5;
+	dfs_ec_rebuild_io(state, shards, 2);
+}
+
+static void
+degrade_dfs_fail_data_parity_s3p1(void **state)
+{
+	int shards[2];
+
+	shards[0] = 3;
+	shards[1] = 5;
+	dfs_ec_rebuild_io(state, shards, 2);
+}
+
+static void
+degrade_dfs_fail_data_parity_s2p1(void **state)
+{
+	int shards[2];
+
+	shards[0] = 2;
+	shards[1] = 5;
+	dfs_ec_rebuild_io(state, shards, 2);
+}
+
+static void
+degrade_dfs_fail_data_parity_s0p0(void **state)
+{
+	int shards[2];
+
+	shards[0] = 0;
+	shards[1] = 4;
+	dfs_ec_rebuild_io(state, shards, 2);
+}
+
+static void
+degrade_dfs_fail_data_parity_s2p0(void **state)
+{
+	int shards[2];
+
+	shards[0] = 2;
+	shards[1] = 4;
+	dfs_ec_rebuild_io(state, shards, 2);
+}
+
+static void
+degrade_dfs_fail_data_parity_s3p0(void **state)
+{
+	int shards[2];
+
+	shards[0] = 3;
+	shards[1] = 4;
+	dfs_ec_rebuild_io(state, shards, 2);
+}
+
 #define DEGRADE_SMALL_POOL_SIZE (1ULL << 28)
 int
 degrade_small_sub_setup(void **state)
@@ -193,6 +337,51 @@ static const struct CMUnitTest degrade_tests[] = {
 	 test_teardown},
 	{"DEGRADE7: degrade full update with data/parity tgt fail ",
 	 degrade_full_fail_data_parity, degrade_small_sub_setup,
+	 test_teardown},
+	{"DEGRADE8: degrade io with data(s0) tgt fail ",
+	 degrade_dfs_fail_data_s0, degrade_small_sub_setup,
+	 test_teardown},
+	{"DEGRADE9: degrade io with data(s1) tgt fail ",
+	 degrade_dfs_fail_data_s1, degrade_small_sub_setup,
+	 test_teardown},
+	{"DEGRADE10: degrade io with data(s1) tgt fail ",
+	 degrade_dfs_fail_data_s3, degrade_small_sub_setup,
+	 test_teardown},
+	{"DEGRADE11: degrade io with data(s0, s1) tgt fail ",
+	 degrade_dfs_fail_2data_s0s1, degrade_small_sub_setup,
+	 test_teardown},
+	{"DEGRADE12: degrade io with data(s0, s2) tgt fail ",
+	 degrade_dfs_fail_2data_s0s2, degrade_small_sub_setup,
+	 test_teardown},
+	{"DEGRADE13: degrade io with data(s0, s3) tgt fail ",
+	 degrade_dfs_fail_2data_s0s3, degrade_small_sub_setup,
+	 test_teardown},
+	{"DEGRADE14: degrade io with data(s1, s2) tgt fail ",
+	 degrade_dfs_fail_2data_s1s2, degrade_small_sub_setup,
+	 test_teardown},
+	{"DEGRADE15: degrade io with data(s1, s3) tgt fail ",
+	 degrade_dfs_fail_2data_s1s3, degrade_small_sub_setup,
+	 test_teardown},
+	{"DEGRADE16: degrade io with data(s2, s3) tgt fail ",
+	 degrade_dfs_fail_2data_s2s3, degrade_small_sub_setup,
+	 test_teardown},
+	{"DEGRADE17: degrade io with 1data 1parity(s0, p1)",
+	 degrade_dfs_fail_data_parity_s0p1, degrade_small_sub_setup,
+	 test_teardown},
+	{"DEGRADE18: degrade io with 1data 1parity(s3, p1)",
+	 degrade_dfs_fail_data_parity_s3p1, degrade_small_sub_setup,
+	 test_teardown},
+	{"DEGRADE19: degrade io with 1data 1parity(s2, p1)",
+	 degrade_dfs_fail_data_parity_s2p1, degrade_small_sub_setup,
+	 test_teardown},
+	{"DEGRADE20: degrade io with 1data 1parity(s0, p0)",
+	 degrade_dfs_fail_data_parity_s0p0, degrade_small_sub_setup,
+	 test_teardown},
+	{"DEGRADE21: degrade io with 1data 1parity(s3, p0)",
+	 degrade_dfs_fail_data_parity_s3p0, degrade_small_sub_setup,
+	 test_teardown},
+	{"DEGRADE22: degrade io with 1data 1parity(s2, p0)",
+	 degrade_dfs_fail_data_parity_s2p0, degrade_small_sub_setup,
 	 test_teardown},
 };
 

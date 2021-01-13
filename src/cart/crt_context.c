@@ -633,23 +633,26 @@ crt_req_timeout_untrack(struct crt_rpc_priv *rpc_priv)
 static void
 crt_exec_timeout_cb(struct crt_rpc_priv *rpc_priv)
 {
-	struct crt_timeout_cb_priv *cb_priv;
+	struct crt_timeout_cb_priv	*cbs_timeout;
+	crt_timeout_cb			 cb_func;
+	void				*cb_args;
+	size_t				 cbs_size;
+	size_t				 i;
 
-	if (crt_plugin_gdata.cpg_inited == 0)
+	if (unlikely(crt_plugin_gdata.cpg_inited == 0 || rpc_priv == NULL))
 		return;
-	if (rpc_priv == NULL) {
-		D_ERROR("Invalid parameter, rpc_priv == NULL\n");
-		return;
+
+	cbs_size = crt_plugin_gdata.cpg_timeout_size;
+	cbs_timeout = crt_plugin_gdata.cpg_timeout_cbs;
+
+	for (i = 0; i < cbs_size; i++) {
+		cb_func = cbs_timeout[i].ctcp_func;
+		cb_args = cbs_timeout[i].ctcp_args;
+		/* check for and execute timeout callbacks here */
+		if (cb_func != NULL)
+			cb_func(rpc_priv->crp_pub.cr_ctx, &rpc_priv->crp_pub,
+				cb_args);
 	}
-	D_RWLOCK_RDLOCK(&crt_plugin_gdata.cpg_timeout_rwlock);
-	d_list_for_each_entry(cb_priv,
-			      &crt_plugin_gdata.cpg_timeout_cbs,
-			      ctcp_link) {
-		cb_priv->ctcp_func(rpc_priv->crp_pub.cr_ctx,
-				   &rpc_priv->crp_pub,
-				   cb_priv->ctcp_args);
-	}
-	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_timeout_rwlock);
 }
 
 static bool
@@ -803,12 +806,6 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 		crt_req_timeout_untrack(rpc_priv);
 
 		d_list_add_tail(&rpc_priv->crp_tmp_link, &timeout_list);
-		RPC_ERROR(rpc_priv,
-			  "ctx_id %d, (status: %#x) timed out, tgt rank %d, tag %d\n",
-			  crt_ctx->cc_idx,
-			  rpc_priv->crp_state,
-			  rpc_priv->crp_pub.cr_ep.ep_rank,
-			  rpc_priv->crp_pub.cr_ep.ep_tag);
 	};
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
@@ -816,6 +813,15 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	while ((rpc_priv = d_list_pop_entry(&timeout_list,
 					    struct crt_rpc_priv,
 					    crp_tmp_link))) {
+		RPC_ERROR(rpc_priv,
+			  "ctx_id %d, (status: %#x) timed out (%d seconds), "
+			  "target (%d:%d)\n",
+			  crt_ctx->cc_idx,
+			  rpc_priv->crp_state,
+			  rpc_priv->crp_timeout_sec,
+			  rpc_priv->crp_pub.cr_ep.ep_rank,
+			  rpc_priv->crp_pub.cr_ep.ep_tag);
+
 		/* check for and execute RPC timeout callbacks here */
 		crt_exec_timeout_cb(rpc_priv);
 		crt_req_timeout_hdlr(rpc_priv);
@@ -1174,35 +1180,32 @@ crt_context_empty(int locked)
 static void
 crt_exec_progress_cb(struct crt_context *ctx)
 {
-	struct crt_prog_cb_priv	*cb_priv;
+	struct crt_prog_cb_priv	*cbs_prog;
+	crt_progress_cb		 cb_func;
+	void			*cb_args;
+	size_t i, cbs_size;
 	int ctx_idx;
 	int rc;
 
-	if (crt_plugin_gdata.cpg_inited == 0)
+	if (unlikely(crt_plugin_gdata.cpg_inited == 0 || ctx == NULL))
 		return;
-
-	if (ctx == NULL) {
-		D_ERROR("Invalid parameter.\n");
-		return;
-	}
 
 	rc = crt_context_idx(ctx, &ctx_idx);
-	if (rc) {
+	if (unlikely(rc)) {
 		D_ERROR("crt_context_idx() failed, rc: %d.\n", rc);
 		return;
 	}
 
-	/* avoid lock and list traverse overhead if no progress cb */
-	if (d_list_empty(&crt_plugin_gdata.cpg_prog_cbs[ctx_idx]))
-		return;
+	cbs_size = crt_plugin_gdata.cpg_prog_size[ctx_idx];
+	cbs_prog = crt_plugin_gdata.cpg_prog_cbs[ctx_idx];
 
-	D_RWLOCK_RDLOCK(&crt_plugin_gdata.cpg_prog_rwlock[ctx_idx]);
-	d_list_for_each_entry(cb_priv, &crt_plugin_gdata.cpg_prog_cbs[ctx_idx],
-			      cpcp_link) {
+	for (i = 0; i < cbs_size; i++) {
+		cb_func = cbs_prog[i].cpcp_func;
+		cb_args = cbs_prog[i].cpcp_args;
 		/* check for and execute progress callbacks here */
-		cb_priv->cpcp_func(ctx, cb_priv->cpcp_args);
+		if (cb_func != NULL)
+			cb_func(ctx, cb_args);
 	}
-	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_prog_rwlock[ctx_idx]);
 }
 
 int
@@ -1347,55 +1350,94 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout)
  * 2) call crt_register_progress_cb(user_cb);
  */
 int
-crt_register_progress_cb(crt_progress_cb cb, int ctx_idx, void *arg)
+crt_register_progress_cb(crt_progress_cb func, int ctx_idx, void *args)
 {
-	/* save the function pointer and arg to a global list */
-	struct crt_prog_cb_priv	*cb_priv = NULL;
-	int			 rc = 0;
+	struct crt_prog_cb_priv	*cbs_prog;
+	size_t i, cbs_size;
+	int rc = 0;
 
 	if (ctx_idx >= CRT_SRV_CONTEXT_NUM) {
 		D_ERROR("ctx_idx %d >= %d\n", ctx_idx, CRT_SRV_CONTEXT_NUM);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	D_ALLOC_PTR(cb_priv);
-	if (cb_priv == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+	D_MUTEX_LOCK(&crt_plugin_gdata.cpg_mutex);
 
-	cb_priv->cpcp_func = cb;
-	cb_priv->cpcp_args = arg;
+	cbs_size = crt_plugin_gdata.cpg_prog_size[ctx_idx];
+	cbs_prog = crt_plugin_gdata.cpg_prog_cbs[ctx_idx];
 
-	D_RWLOCK_WRLOCK(&crt_plugin_gdata.cpg_prog_rwlock[ctx_idx]);
-	d_list_add_tail(&cb_priv->cpcp_link,
-			&crt_plugin_gdata.cpg_prog_cbs[ctx_idx]);
-	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_prog_rwlock[ctx_idx]);
+	for (i = 0; i < cbs_size; i++) {
+		if (cbs_prog[i].cpcp_func == func &&
+		    cbs_prog[i].cpcp_args == args) {
+			D_GOTO(out_unlock, rc = -DER_EXIST);
+		}
+	}
+
+	for (i = 0; i < cbs_size; i++) {
+		if (cbs_prog[i].cpcp_func == NULL) {
+			cbs_prog[i].cpcp_args = args;
+			cbs_prog[i].cpcp_func = func;
+			D_GOTO(out_unlock, rc = 0);
+		}
+	}
+
+	if (crt_plugin_gdata.cpg_prog_cbs_old[ctx_idx] != NULL)
+		D_FREE(crt_plugin_gdata.cpg_prog_cbs_old[ctx_idx]);
+
+	crt_plugin_gdata.cpg_prog_cbs_old[ctx_idx] = cbs_prog;
+	cbs_size += CRT_CALLBACKS_NUM;
+
+	D_ALLOC_ARRAY(cbs_prog, cbs_size);
+	if (cbs_prog == NULL) {
+		crt_plugin_gdata.cpg_prog_cbs_old[ctx_idx] = NULL;
+		D_GOTO(out_unlock, rc = -DER_NOMEM);
+	}
+
+	if (i > 0)
+		memcpy(cbs_prog, crt_plugin_gdata.cpg_prog_cbs_old[ctx_idx],
+		       i * sizeof(*cbs_prog));
+	cbs_prog[i].cpcp_args = args;
+	cbs_prog[i].cpcp_func = func;
+
+	crt_plugin_gdata.cpg_prog_cbs[ctx_idx]  = cbs_prog;
+	crt_plugin_gdata.cpg_prog_size[ctx_idx] = cbs_size;
+
+out_unlock:
+	D_MUTEX_UNLOCK(&crt_plugin_gdata.cpg_mutex);
 out:
 	return rc;
 }
 
 int
-crt_unregister_progress_cb(crt_progress_cb cb, int ctx_idx, void *arg)
+crt_unregister_progress_cb(crt_progress_cb func, int ctx_idx, void *args)
 {
-	struct crt_prog_cb_priv *tmp, *cb_priv;
-	int			 rc = -DER_NONEXIST;
+	struct crt_prog_cb_priv	*cbs_prog;
+	size_t i, cbs_size;
+	int rc = -DER_NONEXIST;
 
 	if (ctx_idx >= CRT_SRV_CONTEXT_NUM) {
 		D_ERROR("ctx_idx %d >= %d\n", ctx_idx, CRT_SRV_CONTEXT_NUM);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	D_RWLOCK_WRLOCK(&crt_plugin_gdata.cpg_prog_rwlock[ctx_idx]);
-	d_list_for_each_entry_safe(cb_priv, tmp,
-				   &crt_plugin_gdata.cpg_prog_cbs[ctx_idx],
-				   cpcp_link) {
-		if (cb_priv->cpcp_func == cb && cb_priv->cpcp_args == arg) {
-			d_list_del_init(&cb_priv->cpcp_link);
-			D_FREE(cb_priv);
-			D_GOTO(out_unlock, rc = -DER_SUCCESS);
+	D_MUTEX_LOCK(&crt_plugin_gdata.cpg_mutex);
+
+	cbs_size = crt_plugin_gdata.cpg_prog_size[ctx_idx];
+	cbs_prog = crt_plugin_gdata.cpg_prog_cbs[ctx_idx];
+
+	for (i = 0; i < cbs_size; i++) {
+		if (cbs_prog[i].cpcp_func == func &&
+		    cbs_prog[i].cpcp_args == args) {
+			cbs_prog[i].cpcp_func = NULL;
+			cbs_prog[i].cpcp_args = NULL;
+			D_GOTO(out_unlock, rc = 0);
 		}
 	}
+
 out_unlock:
-	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_prog_rwlock[ctx_idx]);
+	D_FREE(crt_plugin_gdata.cpg_prog_cbs_old[ctx_idx]);
+
+	D_MUTEX_UNLOCK(&crt_plugin_gdata.cpg_mutex);
 out:
 	return rc;
 }
@@ -1406,23 +1448,54 @@ out:
  * 2) call crt_register_timeout_cb_core(user_cb);
  */
 int
-crt_register_timeout_cb(crt_timeout_cb cb, void *arg)
+crt_register_timeout_cb(crt_timeout_cb func, void *args)
 {
-	/* TODO: save the function pointer somewhere for retrieval later on */
-	struct crt_timeout_cb_priv	*timeout_cb_priv = NULL;
-	int				 rc = 0;
+	struct crt_timeout_cb_priv *cbs_timeout;
+	size_t i, cbs_size;
+	int rc = 0;
 
-	D_ALLOC_PTR(timeout_cb_priv);
-	if (timeout_cb_priv == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-	timeout_cb_priv->ctcp_func = cb;
-	timeout_cb_priv->ctcp_args = arg;
-	D_RWLOCK_WRLOCK(&crt_plugin_gdata.cpg_timeout_rwlock);
-	d_list_add_tail(&timeout_cb_priv->ctcp_link,
-			&crt_plugin_gdata.cpg_timeout_cbs);
-	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_timeout_rwlock);
+	D_MUTEX_LOCK(&crt_plugin_gdata.cpg_mutex);
 
-out:
+	cbs_size = crt_plugin_gdata.cpg_timeout_size;
+	cbs_timeout = crt_plugin_gdata.cpg_timeout_cbs;
+
+	for (i = 0; i < cbs_size; i++) {
+		if (cbs_timeout[i].ctcp_func == func &&
+		    cbs_timeout[i].ctcp_args == args) {
+			D_GOTO(out_unlock, rc = -DER_EXIST);
+		}
+	}
+
+	for (i = 0; i < cbs_size; i++) {
+		if (cbs_timeout[i].ctcp_func == NULL) {
+			cbs_timeout[i].ctcp_args = args;
+			cbs_timeout[i].ctcp_func = func;
+			D_GOTO(out_unlock, rc = 0);
+		}
+	}
+
+	D_FREE(crt_plugin_gdata.cpg_timeout_cbs_old);
+
+	crt_plugin_gdata.cpg_timeout_cbs_old = cbs_timeout;
+	cbs_size += CRT_CALLBACKS_NUM;
+
+	D_ALLOC_ARRAY(cbs_timeout, cbs_size);
+	if (cbs_timeout == NULL) {
+		crt_plugin_gdata.cpg_timeout_cbs_old = NULL;
+		D_GOTO(out_unlock, rc = -DER_NOMEM);
+	}
+
+	if (i > 0)
+		memcpy(cbs_timeout, crt_plugin_gdata.cpg_timeout_cbs_old,
+		       i * sizeof(*cbs_timeout));
+	cbs_timeout[i].ctcp_args = args;
+	cbs_timeout[i].ctcp_func = func;
+
+	crt_plugin_gdata.cpg_timeout_cbs  = cbs_timeout;
+	crt_plugin_gdata.cpg_timeout_size = cbs_size;
+
+out_unlock:
+	D_MUTEX_UNLOCK(&crt_plugin_gdata.cpg_mutex);
 	return rc;
 }
 

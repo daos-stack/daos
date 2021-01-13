@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,7 +70,7 @@ set_uid(struct dfuse_inode_entry *ie, fuse_req_t req)
 }
 
 void
-dfuse_cb_mkdir_with_id(fuse_req_t req, struct dfuse_inode_entry *parent,
+dfuse_cb_mknod_with_id(fuse_req_t req, struct dfuse_inode_entry *parent,
 		       const char *name, mode_t mode)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
@@ -91,7 +91,7 @@ dfuse_cb_mkdir_with_id(fuse_req_t req, struct dfuse_inode_entry *parent,
 	DFUSE_TRA_DEBUG(ie, "directory '%s' mode 0%o", name, mode);
 
 	rc = dfs_open(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
-		      mode | S_IFDIR, O_CREAT | O_RDWR,
+		      mode, O_CREAT | O_RDWR,
 		      0, 0, NULL, &ie->ie_obj);
 	if (rc)
 		D_GOTO(err, rc);
@@ -116,7 +116,7 @@ dfuse_cb_mkdir_with_id(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(release, rc);
 
 	/* Return the new inode data, and keep the parent ref */
-	dfuse_reply_entry(fs_handle, ie, NULL, req);
+	dfuse_reply_entry(fs_handle, ie, NULL, true, req);
 
 	return;
 

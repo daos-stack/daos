@@ -23,84 +23,29 @@
 
 package control
 
-import (
-	"fmt"
-	"strconv"
-	"strings"
-
-	"github.com/pkg/errors"
-
-	"github.com/daos-stack/daos/src/control/lib/hostlist"
-)
-
-// ParseHostList validates and deduplicates the given list of host
-// strings. Any hosts missing a port will have one added according
-// to the defaultPort parameter.
-func ParseHostList(in []string, defaultPort int) (out []string, err error) {
-	var set *hostlist.HostSet
-	set, err = hostlist.CreateSet(strings.Join(in, ","))
-	if err != nil {
-		return nil, err
-	}
-	out = strings.Split(set.DerangedString(), ",")
-
-	for i, host := range out {
-		hostPort := strings.Split(host, ":")
-		switch len(hostPort) {
-		case 1:
-			out[i] = fmt.Sprintf("%s:%d", host, defaultPort)
-		case 2:
-			_, err = strconv.Atoi(hostPort[1])
-		default:
-			err = errors.New("host should conform to hostname[:port]")
-		}
-
-		if err != nil {
-			return nil, errors.Wrapf(err, "invalid host %q", host)
-		}
-	}
-
-	return
-}
+import "github.com/daos-stack/daos/src/control/common"
 
 // getRequestHosts returns a list of control plane addresses for
-// the request. The logic for determining the list is as follows:
-//
-// 1.  If the request has an explicit hostlist set, use it regardless
-//     of request type. This allows for flexibility and config overrides,
-//     but generally should be used for non-AP requests to specific hosts.
-// 2.  If there is no hostlist set on the request, check the request type
-//     and use the following decision tree:
-// 2a. If the request is destined for an Access Point (DAOS MS Replica),
-//     pick the first host in the configuration's hostlist. By convention
-//     this host will be an AP and the request should succeed. If for some
-//     reason the request fails, a future mechanism will attempt to find
-//     a working AP replica to service the request.
-// 2b. If the request is not destined for an AP, then the request is sent
-//     to the entire hostlist set in the configuration.
-//
-// Will always return at least 1 host, or an error.
+// the request. If the request does not supply its own hostlist,
+// create one from the configuration's hostlist.
 func getRequestHosts(cfg *Config, req targetChooser) (hosts []string, err error) {
-	hosts = req.getHostList()
-	if len(hosts) == 0 {
-		if len(cfg.HostList) == 0 {
-			return nil, FaultConfigEmptyHostList
-		}
-		hosts = cfg.HostList
+	if len(req.getHostList()) == 0 && len(cfg.HostList) == 0 {
+		return nil, FaultConfigEmptyHostList
 	}
-
 	if cfg.ControlPort == 0 {
 		return nil, FaultConfigBadControlPort
 	}
 
-	hosts, err = ParseHostList(hosts, cfg.ControlPort)
+	hosts, err = common.ParseHostList(req.getHostList(), cfg.ControlPort)
 	if err != nil {
 		return nil, err
 	}
 
-	if req.isMSRequest() {
-		// pick first host as AP, by convention
-		hosts = hosts[:1]
+	if len(hosts) == 0 {
+		hosts, err = common.ParseHostList(cfg.HostList, cfg.ControlPort)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return hosts, nil

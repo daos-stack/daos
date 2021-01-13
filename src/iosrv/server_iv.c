@@ -242,7 +242,7 @@ iv_entry_free(struct ds_iv_entry *entry)
 		    class->iv_class_ops->ivc_ent_destroy)
 			class->iv_class_ops->ivc_ent_destroy(&entry->iv_value);
 		else
-			daos_sgl_fini(&entry->iv_value, true);
+			d_sgl_fini(&entry->iv_value, true);
 	}
 
 	D_FREE(entry);
@@ -506,8 +506,7 @@ ivc_pre_cb(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 {
 	int rc;
 
-	rc = dss_ult_create(cb_func, cb_arg, DSS_ULT_MISC, DSS_TGT_SELF,
-			    0, NULL);
+	rc = dss_ult_create(cb_func, cb_arg, DSS_XS_SELF, 0, 0, NULL);
 	if (rc)
 		D_ERROR("dss_ult_create failed, rc "DF_RC"\n", DP_RC(rc));
 }
@@ -592,8 +591,7 @@ ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 	D_ASSERT(entry != NULL);
 
 	/* Let's deal with iv_value first */
-	if (iv_value != NULL)
-		daos_sgl_fini((d_sg_list_t *)iv_value, false);
+	d_sgl_fini(iv_value, false);
 
 	rc = entry->iv_class->iv_class_ops->ivc_ent_put(entry,
 							priv_entry->priv);
@@ -955,7 +953,7 @@ sync_comp_cb(void *arg, int rc)
 		}
 	}
 
-	daos_sgl_fini(&cb_arg->iv_value, true);
+	d_sgl_fini(&cb_arg->iv_value, true);
 	D_FREE(cb_arg);
 	return rc;
 }

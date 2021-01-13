@@ -46,16 +46,16 @@ func TestEntityFormatter(t *testing.T) {
 			expectedResult: `
 title
 -----
-a       : b     
-c       : d     
-bananas : grapes
+  a       : b       
+  c       : d       
+  bananas : grapes  
 `,
 		},
 		"empty title": {
 			attrs: []TableRow{
 				{"a": "b"},
 			},
-			expectedResult: "a : b\n",
+			expectedResult: "  a : b \n",
 		},
 		"empty attrs": {
 			title: "empty",
@@ -73,8 +73,8 @@ empty
 			expectedResult: `
 long title is long
 ------------------
-a   : b  
-foo : bar
+  a   : b   
+  foo : bar 
 `,
 		},
 	} {

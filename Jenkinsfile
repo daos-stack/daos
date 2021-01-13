@@ -30,6 +30,22 @@ boolean doc_only_change() {
     return rc == 1
 }
 
+boolean release_candidate() {
+    return !sh(label: "Determine if building (a PR of) an RC",
+              script: "git diff-index --name-only HEAD^ | grep -q TAG && " +
+                      "grep -i '[0-9]rc[0-9]' TAG",
+              returnStatus: true)
+}
+
+def scons_faults_args() {
+    // The default build will have BUILD_TYPE=dev; fault injection enabled
+    if ((cachedCommitPragma(pragma: 'faults-enabled', def_val: 'true') == 'true') && !release_candidate()) {
+        return "BUILD_TYPE=dev"
+    } else {
+        return "BUILD_TYPE=release"
+    }
+}
+
 def skip_stage(String stage, boolean def_val = false) {
     String value = 'false'
     if (def_val) {
@@ -135,7 +151,8 @@ String unit_packages() {
                            'spdk-devel libfabric-devel '+
                            'pmix numactl-devel ' +
                            'libipmctl-devel python36-pyxattr ' +
-                           'python36-tabulate numactl'
+                           'python36-tabulate numactl ' +
+                           'valgrind-devel'
         if (need_qb) {
             // TODO: these should be gotten from the Requires: of RPM
             packages += " spdk-tools mercury-2.0.0~rc1" +
@@ -218,7 +235,7 @@ String functional_packages() {
 String functional_packages(String distro) {
     String daos_pkgs = get_daos_packages(distro)
     String pkgs = " openmpi3 hwloc ndctl fio " +
-                  "ior-hpc-daos-0 " +
+                  "patchutils ior-hpc-daos-0 " +
                   "romio-tests-cart-4-daos-0 " +
                   "testmpio-cart-4-daos-0 " +
                   "mpi4py-tests-cart-4-daos-0 " +
@@ -269,6 +286,25 @@ def getuid() {
                         script: "id -u",
                         returnStdout: true).trim()
     return cached_uid
+}
+
+// Default priority is 3, lower is better.
+// The parameter for a job is set using the script/Jenkinsfile from the
+// previous build of that job, so the first build of any PR will always
+// run at default because Jenkins sees it as a new job, but subsequent
+// ones will use the value from here.
+// The advantage therefore is not to change the priority of PRs, but to
+// change the master branch itself to run at lower priority, resulting
+// in faster time-to-result for PRs.
+
+String get_priority() {
+    if (env.BRANCH_NAME == 'master') {
+        string p = '2'
+    } else {
+        string p = ''
+    }
+    echo "Build priority set to " + p == '' ? 'default' : p
+    return p
 }
 
 String rpm_test_version() {
@@ -322,8 +358,10 @@ boolean skip_scan_rpms_centos7() {
 
 boolean skip_ftest_hw(String size) {
     return env.DAOS_STACK_CI_HARDWARE_SKIP == 'true' ||
+           skip_stage('func-test') ||
            skip_stage('func-hw-test') ||
-           skip_stage('func-hw-test-' + size)
+           skip_stage('func-hw-test-' + size) ||
+           (env.BRANCH_NAME == 'master' && ! startedByTimer())
 }
 
 boolean skip_bandit_check() {
@@ -358,6 +396,10 @@ boolean skip_build_on_ubuntu_clang() {
 
 }
 
+boolean skip_build_on_leap15_gcc() {
+    return skip_stage('build-leap15-gcc')
+}
+
 boolean skip_build_on_leap15_icc() {
     return target_branch == 'weekly-testing' ||
            skip_stage('build-leap15-icc') ||
@@ -369,6 +411,7 @@ boolean skip_unit_testing_stage() {
             (skip_stage('build') &&
              rpm_test_version() == '') ||
             doc_only_change() ||
+            skip_build_on_centos7_gcc() ||
             skip_stage('unit-tests')
 }
 
@@ -402,7 +445,7 @@ String quick_build_deps(String distro) {
     } else {
         error("Unknown distro: ${distro} in quick_build_deps()")
     }
-    return sh(label:'Get Quickbuild dependencies',
+    return sh(label: 'Get Quickbuild dependencies',
               script: "rpmspec -q " +
                       "--srpm " +
                       rpmspec_args + ' ' +
@@ -415,7 +458,8 @@ pipeline {
     agent { label 'lightweight' }
 
     triggers {
-        cron(env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
+        cron(env.BRANCH_NAME == 'master' ? 'TZ=America/Toronto\n0 0,12 * * *\n' : '' +
+             env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
     }
 
     environment {
@@ -424,12 +468,20 @@ pipeline {
         SSH_KEY_ARGS = "-ici_key"
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
+        SCONS_FAULTS_ARGS = scons_faults_args()
     }
 
     options {
         // preserve stashes so that jobs can be started at the test stage
         preserveStashes(buildCount: 5)
         ansiColor('xterm')
+        buildDiscarder(logRotator(artifactDaysToKeepStr: '300'))
+    }
+
+    parameters {
+        string(name: 'BuildPriority',
+               defaultValue: get_priority(),
+               description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
     }
 
     stages {
@@ -462,7 +514,21 @@ pipeline {
                     steps {
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
-                                   ignored_files: "src/control/vendor/*:src/include/daos/*.pb-c.h:src/common/*.pb-c.[ch]:src/mgmt/*.pb-c.[ch]:src/iosrv/*.pb-c.[ch]:src/security/*.pb-c.[ch]:*.crt:*.pem:*_test.go:src/cart/_structures_from_macros_.h"
+                                   ignored_files: "src/control/vendor/*:" +
+                                                  "src/include/daos/*.pb-c.h:" +
+                                                  "src/common/*.pb-c.[ch]:" +
+                                                  "src/mgmt/*.pb-c.[ch]:" +
+                                                  "src/iosrv/*.pb-c.[ch]:" +
+                                                  "src/security/*.pb-c.[ch]:" +
+						  "src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:" +
+						  "src/client/java/daos-java/src/main/native/*.pb-c.[ch]:" +
+						  "src/client/java/daos-java/src/main/native/include/*.pb-c.[ch]:" +
+                                                  "*.crt:" +
+                                                  "*.pem:" +
+                                                  "*_test.go:" +
+                                                  "src/cart/_structures_from_macros_.h:" +
+                                                  "src/tests/ftest/*.patch:" +
+                                                  "src/tests/ftest/large_stdout.txt"
                     }
                     post {
                         always {
@@ -655,7 +721,8 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   stash_files: 'ci/test_files_to_stash.txt'
+                                   stash_files: 'ci/test_files_to_stash.txt',
+                                   scons_args: scons_faults_args()
                     }
                     post {
                         always {
@@ -689,8 +756,8 @@ pipeline {
                             filename 'Dockerfile.centos.7'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
-                                '$BUILDARGS_QB_TRUE' +
+                            additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
+                                " -t ${sanitized_JOB_NAME}-centos7 " +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                 quick_build_deps('centos7') + '"' +
@@ -699,7 +766,8 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   stash_files: 'ci/test_files_to_stash.txt'
+                                   stash_files: 'ci/test_files_to_stash.txt',
+                                   scons_args: scons_faults_args()
                     }
                     post {
                         always {
@@ -824,7 +892,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallel_build()
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_args: scons_faults_args()
                     }
                     post {
                         always {
@@ -863,7 +932,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallel_build()
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_args: scons_faults_args()
                     }
                     post {
                         always {
@@ -902,7 +972,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallel_build()
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_args: scons_faults_args()
                     }
                     post {
                         always {
@@ -927,6 +998,10 @@ pipeline {
                     }
                 }
                 stage('Build on Leap 15') {
+                    when {
+                        beforeAgent true
+                        expression { ! skip_build_on_leap15_gcc() }
+                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.leap.15'
@@ -941,7 +1016,8 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   stash_files: 'ci/test_files_to_stash.txt'
+                                   stash_files: 'ci/test_files_to_stash.txt',
+                                   scons_args: scons_faults_args()
                     }
                     post {
                         always {
@@ -980,7 +1056,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallel_build()
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_args: scons_faults_args()
                     }
                     post {
                         always {
@@ -1020,7 +1097,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallel_build()
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_args: scons_faults_args()
                     }
                     post {
                         always {
@@ -1341,8 +1419,8 @@ pipeline {
                             filename 'Dockerfile.centos.7'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
-                                '$BUILDARGS_QB_TRUE' +
+                            additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
+                                " -t ${sanitized_JOB_NAME}-centos7 " +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                 quick_build_deps('centos7') + '"' +

@@ -129,7 +129,7 @@ class RebuildTests(TestWithServers):
                 "Data verification error after rebuild")
         self.log.info("Test Passed")
 
-    @skipForTicket("DAOS-5804")
+    @skipForTicket("DAOS-6359")
     def test_simple_rebuild(self):
         """JIRA ID: DAOS-XXXX Rebuild-001.
 
@@ -139,11 +139,11 @@ class RebuildTests(TestWithServers):
         Use Cases:
             single pool rebuild, single client, various record/object counts
 
-        :avocado: tags=all,pr,medium,pool,rebuild,rebuildsimple
+        :avocado: tags=all,daily_regression,medium,pool,rebuild,rebuildsimple
         """
         self.run_rebuild_test(1)
 
-    @skipForTicket("DAOS-5804")
+    @skipForTicket("DAOS-6359")
     def test_multipool_rebuild(self):
         """JIRA ID: DAOS-XXXX (Rebuild-002).
 
@@ -153,6 +153,6 @@ class RebuildTests(TestWithServers):
         Use Cases:
             multipool rebuild, single client, various object and record counts
 
-        :avocado: tags=all,pr,medium,pool,rebuild,rebuildmulti
+        :avocado: tags=all,daily_regression,medium,pool,rebuild,rebuildmulti
         """
         self.run_rebuild_test(self.params.get("quantity", "/run/testparams/*"))

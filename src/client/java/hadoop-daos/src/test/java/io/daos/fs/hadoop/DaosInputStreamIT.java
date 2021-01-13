@@ -173,12 +173,12 @@ public class DaosInputStreamIT {
         + fsDataInputStream.getPos(), fsDataInputStream.getPos() == 0);
     DaosInputStream in =
         (DaosInputStream) fsDataInputStream.getWrappedStream();
-    byte[] buf = new byte[Constants.DEFAULT_DAOS_PRELOAD_SIZE];
-    in.read(buf, 0, Constants.DEFAULT_DAOS_PRELOAD_SIZE);
+    byte[] buf = new byte[Constants.MINIMUM_DAOS_READ_BUFFER_SIZE];
+    in.read(buf, 0, Constants.MINIMUM_DAOS_READ_BUFFER_SIZE);
     assertTrue("expected position at:"
             + Constants.DEFAULT_DAOS_READ_BUFFER_SIZE + ", but got:"
             + in.getPos(),
-        in.getPos() == Constants.DEFAULT_DAOS_PRELOAD_SIZE);
+        in.getPos() == Constants.MINIMUM_DAOS_READ_BUFFER_SIZE);
 
     fsDataInputStream.seek(4 * 1024 * 1024);
     buf = new byte[1 * 1024 * 1024];

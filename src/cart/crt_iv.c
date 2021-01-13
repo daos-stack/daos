@@ -1001,8 +1001,6 @@ crt_ivf_bulk_transfer(struct crt_ivns_internal *ivns_internal,
 	/* crt_req_decref done in crt_ivf_bulk_transfer_done_cb */
 	RPC_PUB_ADDREF(rpc);
 
-	memset(&bulk_desc, 0x0, sizeof(struct crt_bulk_desc));
-
 	bulk_desc.bd_rpc = rpc;
 	bulk_desc.bd_bulk_op = CRT_BULK_PUT;
 	bulk_desc.bd_remote_hdl = dest_bulk;
@@ -1685,7 +1683,8 @@ exit:
 
 		if (put_needed)
 			iv_ops->ivo_on_put(ivns, iv_value, user_priv);
-		D_ERROR("Failed to issue IV fetch; rc = " DF_RC "\n",
+		D_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR,
+			"Failed to issue IV fetch; rc = " DF_RC "\n",
 			DP_RC(rc));
 
 		if (cb_info) {
