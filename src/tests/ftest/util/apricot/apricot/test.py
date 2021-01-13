@@ -152,7 +152,7 @@ class Test(avocadoTest):
         self.log.info("Job-ID: %s", self.job_id)
         self.log.info("Test PID: %s", os.getpid())
         self._timeout_reported = False
-        self.teardown_cancel = []
+        self._teardown_cancel = set()
         self._teardown_errors = []
 
     def setUp(self):
@@ -201,13 +201,27 @@ class Test(avocadoTest):
                 that cause this test case to be cancelled.
         """
         verb = "is"
-        if isinstance(ticket, list):
+        if isinstance(ticket, set):
+            ticket = sorted(ticket)
             if len(ticket) > 1:
                 ticket[-1] = " ".join(["and", ticket[-1]])
                 verb = "are"
             ticket = ", ".join(ticket)
         return self.cancel("Skipping until {} {} fixed.".format(ticket, verb))
     # pylint: enable=invalid-name
+
+    def add_cancel_ticket(self, ticket, reason=None):
+        """Skip a test due to a ticket needing to be completed.
+
+        Args:
+            ticket (object): the ticket (str) or group of tickets (list)
+                that cause this test case to be cancelled.
+            reason (str, option): optional reason to skip. Defaults to None.
+        """
+        self.log.info(
+            "<CANCEL> Skipping %s for %s%s", self.get_test_name(), ticket,
+            ": {}".format(reason) if reason else "")
+        self._teardown_cancel.add(ticket)
 
     def get_test_name(self):
         """Obtain the test method name from the Avocado test name.
@@ -257,8 +271,8 @@ class Test(avocadoTest):
                 "\n - ".join(self._teardown_errors)))
 
         # Cancel the test if any part of the test was skipped due to ticket
-        if self.teardown_cancel:
-            self.cancelForTicket(self.teardown_cancel)
+        if self._teardown_cancel:
+            self.cancelForTicket(self._teardown_cancel)
 
 
 class TestWithoutServers(Test):

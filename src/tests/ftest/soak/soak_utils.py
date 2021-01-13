@@ -590,22 +590,16 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                     cancel_api_6095 = ["HDF5-VOL", "HDF5", "POSIX"]
                     if api in cancel_api_6095 and t_size == "4k" and (
                             o_type in ["RP_2G1", 'RP_2GX']):
-                        self.teardown_cancel.append("DAOS-6095")
-                        self.teardown_cancel = list(set(self.teardown_cancel))
-                        self.log.info(
-                            "<<<Cancel for ticket {}: IOR -a {} "
-                            "with -t {} and -o {}>>>".format(
-                                self.teardown_cancel[-1], api, t_size,
-                                o_type))
+                        self.add_cancel_ticket(
+                            "DAOS-6095",
+                            "IOR -a {} with -t {} and -o {}".format(
+                                api, t_size, o_type))
                         continue
                     # Cancel for ticket DAOS-6308
                     if api == "MPIIO" and o_type == "RP_2GX":
-                        self.teardown_cancel.append("DAOS-6308")
-                        self.teardown_cancel = list(set(self.teardown_cancel))
-                        self.log.info(
-                            "<<<Cancel for ticket {}: IOR -a {} and "
-                            "-o {}>>>".format(
-                                self.teardown_cancel[-1], api, o_type))
+                        self.add_cancel_ticket(
+                            "DAOS-6308",
+                            "IOR -a {} with -o {}".format(api, o_type))
                         continue
                     ior_cmd = IorCommand()
                     ior_cmd.namespace = ior_params
