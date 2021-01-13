@@ -69,7 +69,7 @@ print_usage(const char *err_msg)
 		"\t-x <value>     : Value as hex string, only used for update operation\n"
 		"\t-s <strategy>  : One of ['none', 'eager_update', 'lazy_update', 'eager_notify', 'lazy_notify']\n"
 		"\t-l <log.txt>   : Print results to log file instead of stdout\n"
-		"\t-m <value>     : Value as string, used to control timig to chage group verion\n"
+		"\t-m <value>     : Value as string, used to control timing to change group version\n"
 		"\t		 0  - change at time of call.\n"
 		"\t		 1  - change at end of iv_test_fetch.\n"
 		"\n"
