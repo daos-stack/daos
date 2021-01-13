@@ -61,8 +61,9 @@ print_usage(const char *prog_name)
 {
 	printf("Usage: %s [optional arguments]\n"
 	       "\n"
-	       "--rank, -r\n"
-	       "\tShow telemetry data from this IO Server rank (default 0)\n"
+	       "--srv_idx, -S\n"
+	       "\tShow telemetry data from this IO Server local index "
+	       "(default 0)\n"
 	       "--path, -p\n"
 	       "\tDisplay metrics at or below the specified path\n"
 	       "\tDefault is root directory\n"
@@ -97,7 +98,7 @@ main(int argc, char **argv)
 	struct d_tm_node_t	*node = NULL;
 	uint64_t		*shmem_root = NULL;
 	char			dirname[D_TM_MAX_NAME_LEN] = {0};
-	int			rank = 0;
+	int			srv_idx = 0;
 	int			iteration = 0;
 	int			num_iter = 0;
 	int			filter = 0;
@@ -109,7 +110,7 @@ main(int argc, char **argv)
 	/********************* Parse user arguments *********************/
 	while (1) {
 		static struct option long_options[] = {
-			{"rank", required_argument, NULL, 'r'},
+			{"srv_idx", required_argument, NULL, 'S'},
 			{"counter", no_argument, NULL, 'c'},
 			{"duration", no_argument, NULL, 'd'},
 			{"timestamp", no_argument, NULL, 't'},
@@ -122,14 +123,14 @@ main(int argc, char **argv)
 			{NULL, 0, NULL, 0}
 		};
 
-		c = getopt_long_only(argc, argv, "r:cdtsgi:p:D:h",
+		c = getopt_long_only(argc, argv, "S:cdtsgi:p:D:h",
 				     long_options, NULL);
 		if (c == -1)
 			break;
 
 		switch (c) {
-		case 'r':
-			rank = atoi(optarg);
+		case 'S':
+			srv_idx = atoi(optarg);
 			break;
 		case 'c':
 			filter |= D_TM_COUNTER;
@@ -167,7 +168,7 @@ main(int argc, char **argv)
 		filter = D_TM_COUNTER | D_TM_DURATION | D_TM_TIMESTAMP |
 			 D_TM_TIMER_SNAPSHOT | D_TM_GAUGE;
 
-	shmem_root = d_tm_get_shared_memory(rank);
+	shmem_root = d_tm_get_shared_memory(srv_idx);
 	if (!shmem_root)
 		goto failure;
 
@@ -197,9 +198,9 @@ main(int argc, char **argv)
 	return 0;
 
 failure:
-	printf("Unable to attach to the shared memory for the rank: %d\n"
-	       "Make sure to run the IO server with the same rank to initialize"
-	       " the shared memory and populate it with metrics.\n",
-	       rank);
+	printf("Unable to attach to the shared memory for the server index: %d"
+	       "\nMake sure to run the IO server with the same index to "
+	       "initialize the shared memory and populate it with metrics.\n",
+	       srv_idx);
 	return -1;
 }
