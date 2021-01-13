@@ -495,7 +495,6 @@ dss_srv_handler(void *arg)
 
 		ABT_thread_yield();
 	}
-	D_ASSERT(d_list_empty(&dx->dx_sleep_ult_list));
 
 	wait_all_exited(dx);
 	if (dmi->dmi_dp) {
@@ -624,7 +623,6 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 		dx->dx_main_xs	= xs_id >= dss_sys_xs_nr && xs_offset == 0;
 	}
 	dx->dx_dsc_started = false;
-	D_INIT_LIST_HEAD(&dx->dx_sleep_ult_list);
 
 	/**
 	 * Generate name for each xstreams so that they can be easily identified
