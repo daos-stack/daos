@@ -152,7 +152,7 @@ class Test(avocadoTest):
         self.log.info("Job-ID: %s", self.job_id)
         self.log.info("Test PID: %s", os.getpid())
         self._timeout_reported = False
-        # When cancelling within a test variant,
+        # When canceling within a test variant,
         # use 'add_cancel_ticket(<ticket>)' to add to this set.
         self._teardown_cancel = set()
         self._teardown_errors = []
