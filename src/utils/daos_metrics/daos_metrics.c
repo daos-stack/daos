@@ -187,12 +187,6 @@ main(int argc, char **argv)
 	}
 
 	while ((num_iter == 0) || (iteration < num_iter)) {
-		printf("\nIteration: %d\n", iteration);
-		printf("There are %" PRIu64 " matching metrics underneath the"
-		       " directory %s\n",
-		       d_tm_count_metrics(shmem_root, root, filter),
-		       dirname[0] != '\0' ? dirname : "/");
-
 		print_my_children(shmem_root, root, filter | D_TM_DIRECTORY, 0,
 				  stdout);
 		iteration++;

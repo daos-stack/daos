@@ -241,7 +241,7 @@ d_tm_init(int rank, uint64_t mem_size)
 	int		rc = D_TM_SUCCESS;
 
 	if ((d_tm_shmem_root != NULL) && (d_tm_root != NULL)) {
-		D_INFO("d_tm_init already completed for rank %d\n", rank);
+		D_INFO("d_tm_init already completed for srv_idx %d\n", rank);
 		return rc;
 	}
 
@@ -270,7 +270,7 @@ d_tm_init(int rank, uint64_t mem_size)
 	}
 	*base_addr = (uint64_t)d_tm_shmem_root;
 
-	snprintf(tmp, sizeof(tmp), "rank %d", rank);
+	snprintf(tmp, sizeof(tmp), "srv_idx %d", rank);
 	rc = d_tm_alloc_node(&d_tm_root, tmp);
 	if (rc != D_TM_SUCCESS)
 		goto failure;
@@ -281,11 +281,11 @@ d_tm_init(int rank, uint64_t mem_size)
 		goto failure;
 	}
 
-	D_INFO("Telemetry and metrics initialized for rank %u\n", rank);
+	D_INFO("Telemetry and metrics initialized for srv_idx %u\n", rank);
 	return rc;
 
 failure:
-	D_ERROR("Failed to initialize telemetry and metrics for rank %u: "
+	D_ERROR("Failed to initialize telemetry and metrics for srv_idx %u: "
 		"rc = %d\n", rank, rc);
 	return rc;
 }
