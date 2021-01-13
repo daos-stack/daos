@@ -26,11 +26,12 @@ def scons():
     """Execute build"""
     Import('env')
 
-    unit_env = env.Clone()
+    denv = env.Clone()
 
-    daos_build.test(unit_env, 'daos_metrics',
-                    ['daos_metrics.c'],
-                    LIBS=['gurt'])
+    daos_metrics = daos_build.program(denv, 'daos_metrics',
+                                      ['daos_metrics.c'], LIBS=['gurt'])
+
+    denv.Install('$PREFIX/bin', daos_metrics)
 
 if __name__ == "SCons.Script":
     scons()

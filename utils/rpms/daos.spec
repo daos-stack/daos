@@ -10,7 +10,7 @@
 
 Name:          daos
 Version:       1.1.2.1
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -398,6 +398,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
 %{_bindir}/crt_launch
+%{_bindir}/daos_metrics
 %{_prefix}/etc/fault-inject-cart.yaml
 %{_bindir}/fault_status
 # For avocado tests
@@ -410,6 +411,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Wed Jan 13 2021 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.2.1-3
+- Install daos_metrics utility to %{_bindir}
 
 * Tue Dec 15 2020 Ashley Pittman <ashley.m.pittman@intel.com> 1.1.2.1-2
 - Combine the two memcheck suppressions files.
