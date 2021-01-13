@@ -229,7 +229,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	defer eventPubSub.Close()
 
 	// Init management RPC subsystem.
-	mgmtSvc := newMgmtSvc(harness, membership, sysdb, eventPubSub)
+	mgmtSvc := newMgmtSvc(harness, membership, sysdb, rpcClient, eventPubSub)
 
 	// Forward received events to management service by default.
 	eventForwarder := control.NewEventForwarder(rpcClient, cfg.AccessPoints)
@@ -340,7 +340,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	}
 
 	// Create and setup control service.
-	controlService := NewControlService(log, harness, bdevProvider, scmProvider, cfg, membership, sysdb, rpcClient)
+	controlService := NewControlService(log, harness, bdevProvider, scmProvider, cfg, eventPubSub)
 	if err := controlService.Setup(); err != nil {
 		return errors.Wrap(err, "setup control service")
 	}
@@ -385,7 +385,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	}...)
 
 	grpcServer := grpc.NewServer(srvOpts...)
-	ctlpb.RegisterMgmtCtlServer(grpcServer, controlService)
+	ctlpb.RegisterCtlSvcServer(grpcServer, controlService)
 
 	mgmtSvc.clientNetworkCfg = &config.ClientNetworkCfg{
 		Provider:        cfg.Fabric.Provider,

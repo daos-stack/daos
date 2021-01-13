@@ -104,7 +104,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 
 			db := system.MockDatabaseWithAddr(t, log, msReplica.Addr)
 			m := system.NewMembership(log, db)
-			tc.mgmtSvc = newMgmtSvc(harness, m, db, nil)
+			tc.mgmtSvc = newMgmtSvc(harness, m, db, nil, nil)
 			if _, err := tc.mgmtSvc.membership.Add(msReplica); err != nil {
 				t.Fatal(err)
 			}

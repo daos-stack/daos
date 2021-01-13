@@ -45,8 +45,6 @@ const (
 	// PoolCreateTimeout defines the amount of time a pool create
 	// request can take before being timed out.
 	PoolCreateTimeout = 10 * time.Minute // be generous for large pools
-
-	defaultPoolSvcReps = 1
 )
 
 type (
@@ -117,8 +115,11 @@ func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err err
 		return nil, err
 	}
 
-	if in.NumSvcReps == 0 {
-		in.NumSvcReps = defaultPoolSvcReps
+	if in.TotalBytes > 0 && (in.ScmBytes > 0 || in.NvmeBytes > 0) {
+		return nil, errors.New("can't mix TotalBytes and ScmBytes/NvmeBytes")
+	}
+	if in.TotalBytes == 0 && in.ScmBytes == 0 {
+		return nil, errors.New("can't create pool with 0 SCM")
 	}
 
 	out = new(mgmtpb.PoolCreateReq)
@@ -138,20 +139,28 @@ type (
 		msRequest
 		unaryRequest
 		retryableRequest
-		ScmBytes   uint64
-		NvmeBytes  uint64
-		Ranks      []system.Rank
-		NumSvcReps uint32
+		Name       string
 		User       string
 		UserGroup  string
 		ACL        *AccessControlList
+		NumSvcReps uint32
+		// auto-config params
+		TotalBytes uint64
+		ScmRatio   float64
+		NumRanks   uint32
+		// manual params
+		Ranks     []system.Rank
+		ScmBytes  uint64
+		NvmeBytes uint64
 	}
 
 	// PoolCreateResp contains the response from a pool create request.
 	PoolCreateResp struct {
-		UUID     string
-		SvcReps  []uint32 `json:"Svcreps"`
-		NumRanks uint32   `json:"Numranks"`
+		UUID      string   `json:"uuid"`
+		SvcReps   []uint32 `json:"svc_reps"`
+		TgtRanks  []uint32 `json:"tgt_ranks"`
+		ScmBytes  uint64   `json:"scm_bytes"`
+		NvmeBytes uint64   `json:"nvme_bytes"`
 	}
 )
 
@@ -202,11 +211,9 @@ func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq)
 		return nil, errors.New("unable to extract PoolCreateResp from MS response")
 	}
 
-	return &PoolCreateResp{
-		UUID:     pbReq.Uuid,
-		SvcReps:  pbPcr.GetSvcreps(),
-		NumRanks: pbPcr.GetNumranks(),
-	}, nil
+	pcr := new(PoolCreateResp)
+	pcr.UUID = pbReq.Uuid
+	return pcr, convert.Types(pbPcr, pcr)
 }
 
 type (

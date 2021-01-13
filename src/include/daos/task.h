@@ -41,7 +41,6 @@ struct daos_task_args {
 		/** Management */
 		daos_pool_create_t	pool_create;
 		daos_pool_destroy_t	pool_destroy;
-		daos_pool_evict_t	pool_evict;
 		daos_set_params_t	mgmt_set_params;
 		daos_pool_replicas_t	pool_add_replicas;
 		daos_pool_replicas_t	pool_remove_replicas;

@@ -752,7 +752,7 @@ func (db *Database) FaultDomainTree() *FaultDomainTree {
 	db.data.RLock()
 	defer db.data.RUnlock()
 
-	return db.data.Members.FaultDomains
+	return db.data.Members.FaultDomains.Copy()
 }
 
 // copyPoolService makes a copy of the supplied PoolService pointer

@@ -30,7 +30,7 @@
 #include <spdk/vmd.h>
 
 static int
-revive_dev(struct bio_bdev *d_bdev)
+revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 {
 	struct bio_blobstore	*bbs;
 	int			 rc;
@@ -54,6 +54,12 @@ revive_dev(struct bio_bdev *d_bdev)
 	D_ASSERT(owner_thread(bbs) != NULL);
 
 	spdk_thread_send_msg(owner_thread(bbs), setup_bio_bdev, d_bdev);
+
+	/* Set the LED of the VMD device to OFF state */
+	rc = bio_set_led_state(xs_ctxt, d_bdev->bb_uuid, "off", false/*reset*/);
+	if (rc != 0)
+		D_ERROR("Error managing LED on device:"DF_UUID"\n",
+			DP_UUID(d_bdev->bb_uuid));
 
 	return 0;
 }
@@ -424,7 +430,7 @@ bio_replace_dev(struct bio_xs_context *xs_ctxt, uuid_t old_dev_id,
 
 	/* Change a faulty device back to normal, it's usually for testing */
 	if (uuid_compare(old_dev_id, new_dev_id) == 0) {
-		rc = revive_dev(old_dev);
+		rc = revive_dev(xs_ctxt, old_dev);
 		goto out;
 	}
 
@@ -761,7 +767,7 @@ skip_led_str:
 	}
 
 	/* If the current state of a device is FAULTY we do not want to reset */
-	if (current_led_state == SPDK_VMD_LED_STATE_FAULT)
+	if ((current_led_state == SPDK_VMD_LED_STATE_FAULT) && reset)
 		D_GOTO(state_set, rc);
 
 	if (!reset)
@@ -796,17 +802,17 @@ skip_led_str:
 	}
 
 state_set:
-	if (reset) {
+	if (!reset && (current_led_state != SPDK_VMD_LED_STATE_OFF)) {
+		/*
+		 * Init the start time for the LED for a new event.
+		 */
+		bio_dev->bb_led_start_time = d_timeus_secdiff(0);
+	} else {
 		/*
 		 * Reset the LED start time to indicate a LED event has
 		 * completed.
 		 */
 		bio_dev->bb_led_start_time = 0;
-	} else {
-		/*
-		 * Init the start time for the LED for a new event.
-		 */
-		bio_dev->bb_led_start_time = d_timeus_secdiff(0);
 	}
 
 free_traddr:

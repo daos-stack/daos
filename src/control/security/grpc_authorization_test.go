@@ -67,19 +67,25 @@ func inList(c Component, compList []Component) bool {
 func TestSecurity_ComponentHasAccess(t *testing.T) {
 	allComponents := []Component{ComponentUndefined, ComponentAdmin, ComponentAgent, ComponentServer}
 	testCases := map[string][]Component{
-		"/ctl.MgmtCtl/StoragePrepare":     {ComponentAdmin},
-		"/ctl.MgmtCtl/StorageScan":        {ComponentAdmin},
-		"/ctl.MgmtCtl/StorageFormat":      {ComponentAdmin},
-		"/ctl.MgmtCtl/SystemQuery":        {ComponentAdmin},
-		"/ctl.MgmtCtl/SystemStop":         {ComponentAdmin},
-		"/ctl.MgmtCtl/SystemResetFormat":  {ComponentAdmin},
-		"/ctl.MgmtCtl/SystemStart":        {ComponentAdmin},
-		"/ctl.MgmtCtl/NetworkScan":        {ComponentAdmin},
-		"/ctl.MgmtCtl/FirmwareQuery":      {ComponentAdmin},
-		"/ctl.MgmtCtl/FirmwareUpdate":     {ComponentAdmin},
+		"/ctl.CtlSvc/StoragePrepare":      {ComponentAdmin},
+		"/ctl.CtlSvc/StorageScan":         {ComponentAdmin},
+		"/ctl.CtlSvc/StorageFormat":       {ComponentAdmin},
+		"/ctl.CtlSvc/NetworkScan":         {ComponentAdmin},
+		"/ctl.CtlSvc/FirmwareQuery":       {ComponentAdmin},
+		"/ctl.CtlSvc/FirmwareUpdate":      {ComponentAdmin},
+		"/ctl.CtlSvc/SmdQuery":            {ComponentAdmin},
+		"/ctl.CtlSvc/PrepShutdownRanks":   {ComponentServer},
+		"/ctl.CtlSvc/StopRanks":           {ComponentServer},
+		"/ctl.CtlSvc/PingRanks":           {ComponentServer},
+		"/ctl.CtlSvc/ResetFormatRanks":    {ComponentServer},
+		"/ctl.CtlSvc/StartRanks":          {ComponentServer},
 		"/mgmt.MgmtSvc/Join":              {ComponentServer},
 		"/mgmt.MgmtSvc/ClusterEvent":      {ComponentServer},
 		"/mgmt.MgmtSvc/LeaderQuery":       {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemQuery":       {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemStop":        {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemResetFormat": {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemStart":       {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolCreate":        {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolDestroy":       {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolResolveID":     {ComponentAdmin},
@@ -95,15 +101,9 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/mgmt.MgmtSvc/PoolEvict":         {ComponentAdmin, ComponentAgent},
 		"/mgmt.MgmtSvc/PoolExtend":        {ComponentAdmin},
 		"/mgmt.MgmtSvc/GetAttachInfo":     {ComponentAgent},
-		"/mgmt.MgmtSvc/SmdQuery":          {ComponentAdmin},
 		"/mgmt.MgmtSvc/ListPools":         {ComponentAdmin},
 		"/mgmt.MgmtSvc/ListContainers":    {ComponentAdmin},
 		"/mgmt.MgmtSvc/ContSetOwner":      {ComponentAdmin},
-		"/mgmt.MgmtSvc/PrepShutdownRanks": {ComponentServer},
-		"/mgmt.MgmtSvc/StopRanks":         {ComponentServer},
-		"/mgmt.MgmtSvc/PingRanks":         {ComponentServer},
-		"/mgmt.MgmtSvc/ResetFormatRanks":  {ComponentServer},
-		"/mgmt.MgmtSvc/StartRanks":        {ComponentServer},
 	}
 
 	var missing []string
@@ -150,8 +150,8 @@ func TestSecurity_AllRpcsAreAuthorized(t *testing.T) {
 			prefix:  "/mgmt.MgmtSvc/",
 		},
 		"ctl rpcs": {
-			service: (*ctlpb.MgmtCtlServer)(nil),
-			prefix:  "/ctl.MgmtCtl/",
+			service: (*ctlpb.CtlSvcServer)(nil),
+			prefix:  "/ctl.CtlSvc/",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -187,8 +187,8 @@ func TestSecurity_AuthorizedRpcsAreValid(t *testing.T) {
 			prefix:  "/mgmt.MgmtSvc/",
 		},
 		"ctl rpcs": {
-			service: (*ctlpb.MgmtCtlServer)(nil),
-			prefix:  "/ctl.MgmtCtl/",
+			service: (*ctlpb.CtlSvcServer)(nil),
+			prefix:  "/ctl.CtlSvc/",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

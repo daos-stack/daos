@@ -71,7 +71,7 @@ class PoolTestBase(TestWithServers):
                     str(sizes[index]), bytes_to_human(sizes[index]))
         return sizes
 
-    def get_pool_list(self, quantity, scm_ratio, nvme_ratio):
+    def get_pool_list(self, quantity, scm_ratio, nvme_ratio, svcn=None):
         """Get a list of TestPool objects.
 
         Set each TestPool's scm_size and nvme_size attributes using the
@@ -85,6 +85,8 @@ class PoolTestBase(TestWithServers):
             nvme_ratio (float): percentage of the maximum NVMe capacity to use
                 for the pool sizes, e.g. 0.9 for 90%. Specifying None will
                 setup each pool without NVMe.
+            svcn (int): Number of pool service replicas. The default value
+                of None will use the default set on the server.
 
         Returns:
             list: a list of TestPool objects equal in length to the quantity
@@ -96,6 +98,7 @@ class PoolTestBase(TestWithServers):
         pool_list = [
             self.get_pool(create=False, connect=False) for _ in range(quantity)]
         for pool in pool_list:
+            pool.svcn.update(svcn)
             pool.scm_size.update(bytes_to_human(sizes[0]), "scm_size")
             if nvme_ratio is not None:
                 if sizes[1] is None:
