@@ -53,7 +53,7 @@ dump_envariables(void)
 	}
 }
 
-/* Workaround for CART-890 */
+/* Workaroun for CART-890 */
 static int
 mem_pin_workaround(void)
 {

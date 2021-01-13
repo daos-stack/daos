@@ -166,7 +166,7 @@ crt_context_init(crt_context_t crt_ctx)
 				      NULL /* priv */, &crt_timeout_bh_ops,
 				      &ctx->cc_bh_timeout);
 	if (rc != 0) {
-		D_ERROR("d_binheap_create() failed, " DF_RC "\n", DP_RC(rc));
+		D_ERROR("d_binheap_create() failed, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_mutex_destroy, rc);
 	}
 

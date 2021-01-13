@@ -12,6 +12,21 @@ codespell -w --ignore-words-list dedup,nd,uint,ths,ba,creat,te,cas,mapp,pres,cra
 # CORCI-988 tracks this, with a view to improving reporting in this case.
 RC=$?
 
+# Apply the year change patch.
+regex='(^\s*[\*/].*)((Copyright\s*)([0-9]{4})(-([0-9]{4}))?)(\s*(Intel.*$))'
+year=$(date +%Y)
+mapfile -t sfiles < <(git diff --name-only origin/"$CHANGE_TARGET"...)
+for file in "${sfiles[@]}"
+do
+    read -r y1 y2 <<< "$(sed -nre "s/^.*$regex.*$/\4 \6/p" "$file")"
+    if [[ -z $y1 ]] ; then
+	echo "Copyright Information not found in: $file"
+	errors=$((errors + 1))
+    elif [[ $y1 -ne $year && $year -ne $y2 ]] ; then
+	sed -i -re "s/$regex/\1Copyright $y1-$year \8/" "$file" || exit 1
+    fi
+done
+
 def_ignore="SPLIT_STRING,SSCANF_TO_KSTRTO,PREFER_KERNEL_TYPES"
 def_ignore+=",USE_NEGATIVE_ERRNO,CAMELCASE,STATIC_CONST_CHAR_ARRAY"
 def_ignore+=",COMPARISON_TO_NULL,COMPLEX_MACRO,BIT_MACRO"
