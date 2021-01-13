@@ -213,7 +213,7 @@ func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
 	harness.started.SetTrue()
 
 	ms, db := system.MockMembership(t, log, mockTCPResolver)
-	return newMgmtSvc(harness, ms, db, events.NewPubSub(context.Background(), log))
+	return newMgmtSvc(harness, ms, db, nil, events.NewPubSub(context.Background(), log))
 }
 
 // newTestMgmtSvcMulti creates a mgmtSvc that contains the requested
@@ -232,7 +232,10 @@ func newTestMgmtSvcMulti(t *testing.T, log logging.Logger, count int, isAP bool)
 	}
 	harness.started.SetTrue()
 
-	return newMgmtSvc(harness, nil, nil, nil)
+	svc := newTestMgmtSvc(t, log)
+	svc.harness = harness
+
+	return svc
 }
 
 // newTestMgmtSvcNonReplica creates a mgmtSvc that is configured to

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2020 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -382,7 +382,7 @@ typedef struct {
 				daos_unit_oid_t	ie_oid;
 			};
 		};
-		/** Array entry */
+		/** Array or SV entry */
 		struct {
 			/** record size */
 			daos_size_t		ie_rsize;
@@ -400,6 +400,8 @@ typedef struct {
 			uint32_t		ie_ver;
 			/** Minor epoch of extent */
 			uint16_t		ie_minor_epc;
+			/** entry dtx state */
+			unsigned int		ie_dtx_state;
 		};
 		/** Active DTX entry. */
 		struct {

@@ -183,7 +183,7 @@ type (
 // containing results for all host scan operations.
 func NetworkScan(ctx context.Context, rpcClient UnaryInvoker, req *NetworkScanReq) (*NetworkScanResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return ctlpb.NewMgmtCtlClient(conn).NetworkScan(ctx, &ctlpb.NetworkScanReq{
+		return ctlpb.NewCtlSvcClient(conn).NetworkScan(ctx, &ctlpb.NetworkScanReq{
 			Provider: req.Provider,
 		})
 	})
