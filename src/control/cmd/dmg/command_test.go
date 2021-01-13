@@ -119,7 +119,9 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 	resp := &control.UnaryResponse{}
 	switch uReq.(type) {
 	case *control.PoolCreateReq:
-		resp = control.MockMSResponse("", nil, &mgmtpb.PoolCreateResp{})
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolCreateResp{
+			TgtRanks: []uint32{0},
+		})
 	case *control.PoolDestroyReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolDestroyResp{})
 	case *control.PoolEvictReq:

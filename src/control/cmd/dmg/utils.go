@@ -126,3 +126,16 @@ func tabulateRankGroups(groups system.RankGroups, titles ...string) (string, err
 
 	return formatter.Format(table), nil
 }
+
+// errIncompatFlags accepts a base flag and a set of incompatible
+// flags in order to generate a user-comprehensible error when an
+// incompatible set of parameters was supplied.
+func errIncompatFlags(key string, incompat ...string) error {
+	base := fmt.Sprintf("--%s may not be mixed", key)
+	if len(incompat) == 0 {
+		// kind of a weird error but better than nothing
+		return errors.New(base)
+	}
+
+	return errors.Errorf("%s with --%s", base, strings.Join(incompat, " or --"))
+}

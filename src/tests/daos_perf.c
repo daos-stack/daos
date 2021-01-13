@@ -219,6 +219,9 @@ stride_buf_op(int opc, char *buf, unsigned offset, int size)
 			pos = i + stride_marks[j];
 			if (pos < offset)
 				continue;
+			/* possible for the last page */
+			if (pos >= stride_buf.sb_size)
+				break;
 
 			if (pos >= offset + size) {
 				/* NB: for single value, unset marks because

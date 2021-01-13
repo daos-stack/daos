@@ -27,7 +27,6 @@ from __future__ import print_function
 import time
 from distutils.spawn import find_executable
 import os
-import random
 # MPI environment module needs this
 #pylint: disable=unused-import
 import re
@@ -235,7 +234,7 @@ class CartUtils():
         _tst_slt = cartobj.params.get("{}_slt".format(host),
                                       "/run/tests/*/")
         _tst_ctx = cartobj.params.get("{}_CRT_CTX_NUM".format(host),
-                                     "/run/defaultENV/")
+                                      "/run/defaultENV/")
 
         # If the yaml parameter is a list, return the n-th element
         tst_bin = self.get_yaml_list_elem(_tst_bin, index)
@@ -348,7 +347,7 @@ class CartUtils():
         #pylint: disable=exec-used
         #pylint: disable=undefined-variable
         if not self.module_init:
-            exec(open(init_file).read())
+            exec(open(init_file).read()) # nosec
             self.module = module
             self.module_init = True
         #pylint: enable=exec-used
@@ -356,7 +355,7 @@ class CartUtils():
 
         try:
             with open(os.devnull, 'w') as devnull:
-                subprocess.check_call(['sh', '-l', '-c', 'module -V'],
+                subprocess.check_call(['/bin/sh', '-l', '-c', 'module -V'],
                                       stdout=devnull,
                                       stderr=devnull)
         except subprocess.CalledProcessError:
