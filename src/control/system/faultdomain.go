@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ package system
 import (
 	"errors"
 	"fmt"
-	"hash/fnv"
 	"io"
 	"math"
 	"sort"
@@ -42,6 +41,9 @@ const (
 
 	// FaultDomainNilStr is the string value of a nil FaultDomain.
 	FaultDomainNilStr = "(nil)"
+
+	// FaultDomainRootID is the ID of the root node
+	FaultDomainRootID = 1
 )
 
 // FaultDomain represents a multi-layer fault domain.
@@ -145,20 +147,6 @@ func (f *FaultDomain) MustCreateChild(childLevel string) *FaultDomain {
 	return child
 }
 
-// Uint64 transforms the Fault Domain into an identifying 64-bit integer.
-func (f *FaultDomain) Uint64() uint64 {
-	hasher := fnv.New64a()
-	hasher.Write([]byte(f.String()))
-	return hasher.Sum64()
-}
-
-// Uint32 transforms the Fault Domain into an identifying 32-bit integer.
-func (f *FaultDomain) Uint32() uint32 {
-	hasher := fnv.New32a()
-	hasher.Write([]byte(f.String()))
-	return hasher.Sum32()
-}
-
 // NewFaultDomain creates a FaultDomain from a sequence of strings representing
 // individual levels of the domain.
 // For each level of the domain, we assume case insensitivity and trim
@@ -224,8 +212,11 @@ func MustCreateFaultDomainFromString(domainStr string) *FaultDomain {
 
 type (
 	// FaultDomainTree is a node in a tree of FaultDomain objects.
+	// This tree structure is not thread-safe and callers are expected to
+	// add access synchronization if needed.
 	FaultDomainTree struct {
 		Domain   *FaultDomain
+		ID       uint32
 		Children []*FaultDomainTree
 	}
 )
@@ -237,6 +228,30 @@ func (t *FaultDomainTree) WithNodeDomain(domain *FaultDomain) *FaultDomainTree {
 	}
 	t.Domain = domain
 	return t
+}
+
+// WithID changes the integer ID of the FaultDomainTree node.
+func (t *FaultDomainTree) WithID(id uint32) *FaultDomainTree {
+	if t == nil {
+		t = NewFaultDomainTree()
+	}
+	t.ID = id
+	return t
+}
+
+// nextID walks the tree to figure out what the next unique ID is
+func (t *FaultDomainTree) nextID() uint32 {
+	if t == nil {
+		return FaultDomainRootID
+	}
+	nextID := t.ID + 1
+	for _, c := range t.Children {
+		cNextID := c.nextID()
+		if cNextID > nextID {
+			nextID = cNextID
+		}
+	}
+	return nextID
 }
 
 // AddDomain adds a child fault domain, including intermediate nodes, to the
@@ -270,21 +285,23 @@ func (t *FaultDomainTree) Merge(t2 *FaultDomainTree) error {
 		return errors.New("trees cannot be merged")
 	}
 
-	t.mergeTree(t2)
+	nextID := t.nextID()
+	t.mergeTree(t2, &nextID)
 	return nil
 }
 
-func (t *FaultDomainTree) mergeTree(toBeMerged *FaultDomainTree) {
+func (t *FaultDomainTree) mergeTree(toBeMerged *FaultDomainTree, nextID *uint32) {
 	for _, m := range toBeMerged.Children {
 		foundBranch := false
 		for _, p := range t.Children {
 			if p.Domain.Equals(m.Domain) {
 				foundBranch = true
-				p.mergeTree(m)
+				p.mergeTree(m, nextID)
 				break
 			}
 		}
 		if !foundBranch {
+			m.updateAllIDs(nextID)
 			t.Children = append(t.Children, m)
 			sort.Slice(t.Children, func(i, j int) bool {
 				return t.Children[i].Domain.BottomLevel() < t.Children[j].Domain.BottomLevel()
@@ -293,6 +310,14 @@ func (t *FaultDomainTree) mergeTree(toBeMerged *FaultDomainTree) {
 	}
 
 	return
+}
+
+func (t *FaultDomainTree) updateAllIDs(nextID *uint32) {
+	t.ID = *nextID
+	*nextID++
+	for _, c := range t.Children {
+		c.updateAllIDs(nextID)
+	}
 }
 
 // RemoveDomain removes a given fault domain from the tree.
@@ -426,12 +451,28 @@ func (t *FaultDomainTree) ToProto() []*mgmtpb.FaultDomain {
 func (t *FaultDomainTree) toProtoSingle() *mgmtpb.FaultDomain {
 	result := &mgmtpb.FaultDomain{
 		Domain: t.Domain.String(),
-		Id:     t.Domain.Uint32(),
+		Id:     t.ID,
 	}
 	for _, child := range t.Children {
-		result.Children = append(result.Children, child.Domain.Uint32())
+		result.Children = append(result.Children, child.ID)
 	}
 	return result
+}
+
+// Copy creates a copy of the full FaultDomainTree in memory.
+func (t *FaultDomainTree) Copy() *FaultDomainTree {
+	if t == nil {
+		return nil
+	}
+
+	tCopy := NewFaultDomainTree().
+		WithNodeDomain(t.Domain).
+		WithID(t.ID)
+	for _, c := range t.Children {
+		tCopy.Children = append(tCopy.Children, c.Copy())
+	}
+
+	return tCopy
 }
 
 // NewFaultDomainTree creates a FaultDomainTree including all the
@@ -439,24 +480,30 @@ func (t *FaultDomainTree) toProtoSingle() *mgmtpb.FaultDomain {
 func NewFaultDomainTree(domains ...*FaultDomain) *FaultDomainTree {
 	tree := &FaultDomainTree{
 		Domain:   MustCreateFaultDomain(), // Empty fault domain will not fail
+		ID:       FaultDomainRootID,
 		Children: make([]*FaultDomainTree, 0),
 	}
+	nextID := tree.ID + 1
 	for _, d := range domains {
 		subtree := faultDomainTreeFromDomain(d)
-		tree.mergeTree(subtree)
+		tree.mergeTree(subtree, &nextID)
 	}
 	return tree
 }
 
 func faultDomainTreeFromDomain(d *FaultDomain) *FaultDomainTree {
 	tree := NewFaultDomainTree()
+	nextID := tree.ID + 1
 	if !d.Empty() {
 		node := tree
 		for i := 0; i < d.NumLevels(); i++ {
 			childDomain := MustCreateFaultDomain(d.Domains[:i+1]...)
-			child := NewFaultDomainTree().WithNodeDomain(childDomain)
+			child := NewFaultDomainTree().
+				WithNodeDomain(childDomain).
+				WithID(nextID)
 			node.Children = append(node.Children, child)
 			node = child
+			nextID++
 		}
 	}
 	return tree
