@@ -98,6 +98,10 @@ enum {
 	DAOS_OC_EC_K2P2_L32K,	/* Erasure code, 2 data cells, 2 parity cells,
 				 * cell size 32K.
 				 */
+	DAOS_OC_EC_K4P1_L32K,	/* Erasure code, 4 data cells, 1 parity cells,
+				 * cell size 32K.
+				 */
+
 	DAOS_OC_EC_K4P2_L32K,	/* Erasure code, 4 data cells, 2 parity cells,
 				 * cell size 32K.
 				 */
@@ -182,12 +186,17 @@ struct daos_obj_shard_md {
 	uint32_t		smd_padding;
 };
 
+struct daos_shard_loc {
+	uint32_t	sd_rank;
+	uint32_t	sd_tgt_idx;
+};
+
 /**
  * object layout information.
  **/
 struct daos_obj_shard {
-	uint32_t	os_replica_nr;
-	uint32_t	os_ranks[0];
+	uint32_t		os_replica_nr;
+	struct daos_shard_loc	os_shard_loc[0];
 };
 
 struct daos_obj_layout {

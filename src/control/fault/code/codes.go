@@ -118,6 +118,7 @@ const (
 	ServerPoolScmTooSmall
 	ServerPoolNvmeTooSmall
 	ServerPoolInvalidRanks
+	ServerPoolInvalidServiceReps
 	ServerPoolDuplicateLabel
 	ServerInsufficientFreeHugePages
 	ServerHarnessNotStarted
