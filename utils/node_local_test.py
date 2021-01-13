@@ -994,7 +994,7 @@ class posix_tests():
             print(os.fstat(ofd.fileno()))
             self.fail()
         except FileNotFoundError:
-            print('Failed to fstat() renamed file')
+            print('Failed to fstat() replaced file')
         ofd.close()
 
     @needs_dfuse
@@ -1029,8 +1029,51 @@ class posix_tests():
             print(os.fstat(ofd.fileno()))
             self.fail()
         except FileNotFoundError:
-            print('Failed to fstat() renamed file')
+            print('Failed to fstat() unlinked file')
         ofd.close()
+
+    @needs_dfuse
+    def test_chmod(self):
+        """Test that chmod works on file"""
+        fname = os.path.join(self.dfuse.dir, 'testfile')
+        ofd = open(fname, 'w')
+        ofd.close()
+
+        modes = [stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR,
+                 stat.S_IRUSR]
+
+        for mode in modes:
+            os.chmod(fname, mode)
+            attr = os.stat(fname)
+            assert stat.S_IMODE(attr.st_mode) == mode
+
+    @needs_dfuse
+    def test_fchmod_replaced(self):
+        """Test that fchmod works on file clobbered by rename"""
+        fname = os.path.join(self.dfuse.dir, 'unlinked')
+        newfile = os.path.join(self.dfuse.dir, 'unlinked2')
+        e_mode = stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR
+        ofd = open(fname, 'w')
+        nfd = open(newfile, 'w')
+        nfd.write('hello')
+        nfd.close()
+        print(os.stat(fname))
+        print(os.stat(newfile))
+        os.chmod(fname, stat.S_IRUSR | stat.S_IWUSR)
+        os.chmod(newfile, emode)
+        print(os.stat(fname))
+        print(os.stat(newfile))
+        os.rename(newfile, fname)
+        # This should fail, because the file has been deleted.
+        try:
+            os.fchmod(ofd.fileno(), stat.S_IRUSR)
+            print(os.fstat(ofd.fileno()))
+            self.fail()
+        except FileNotFoundError:
+            print('Failed to fchmod() replaced file')
+        ofd.close()
+        nf = os.stat(fname)
+        assert stat.S_IMODE(nf.st_mode) == emode
 
 def run_posix_tests(server, conf, test=None):
     """Run one or all posix tests"""
