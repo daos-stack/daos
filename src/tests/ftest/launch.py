@@ -809,10 +809,6 @@ def run_tests(test_files, tag_filter, args):
     avocado_logs_dir = os.path.expanduser(avocado_logs_dir[0])
     print("Avocado logs stored in {}".format(avocado_logs_dir))
 
-    # Remove stale job results, if any, before test run
-    if os.path.isdir(avocado_logs_dir):
-        rmtree(avocado_logs_dir)
-
     # Create the base avocado run command
     command_list = [
         "avocado",
@@ -1157,11 +1153,20 @@ def rename_logs(avocado_logs_dir, test_file):
         avocado_logs_dir (str): avocado job-results directory
         test_file (str): the test python file
     """
+    test_name = get_test_category(test_file)
     test_logs_lnk = os.path.join(avocado_logs_dir, "latest")
     test_logs_dir = os.path.realpath(test_logs_lnk)
-    new_test_logs_dir = os.path.join(avocado_logs_dir, test_file)
+
+    if args.jenkinslog:
+        new_test_logs_dir = os.path.join(avocado_logs_dir, test_file)
+        try:
+            os.makedirs(new_test_logs_dir)
+        except OSError as error:
+            print("Error mkdir {}: {}".format(new_test_logs_dir, error))
+    else:
+        new_test_logs_dir = "{}-{}".format(test_logs_dir, test_name)
+
     try:
-        os.makedirs(new_test_logs_dir)
         os.rename(test_logs_dir, new_test_logs_dir)
         os.remove(test_logs_lnk)
         os.symlink(new_test_logs_dir, test_logs_lnk)
@@ -1685,6 +1690,10 @@ def main():
         "-v", "--verbose",
         action="store_true",
         help="verbose output")
+    parser.add_argument(
+        "-j", "--jenkinslog",
+        action="store_true",
+        help="rename the avocado test logs directory for publishing in Jenkins")
     args = parser.parse_args()
     print("Arguments: {}".format(args))
 

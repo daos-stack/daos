@@ -179,6 +179,12 @@ if [ "$(lsb_release -s -i)" = "CentOS" ]; then
 else
     process_cores=""
 fi
+
+# Clean stale job results
+if [ -d "$logs_prefix/ftest/avocado/job-results" ]; then
+    rm -rf "$logs_prefix/ftest/avocado/job-results"
+fi
+
 # now run it!
 # shellcheck disable=SC2086
 if ! ./launch.py -cris"${process_cores}"a -th "${LOGS_THRESHOLD}" \

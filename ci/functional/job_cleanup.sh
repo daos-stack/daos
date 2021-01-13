@@ -15,12 +15,6 @@ fi
 
 rm -rf install/lib/daos/TESTING/ftest/avocado/job-results/job-*/html/
 
-# Remove the latest avocado symlink directory to avoid inclusion in the
-# jenkins build artifacts
-if [ -e install/lib/daos/TESTING/ftest/avocado/job-results/latest ]; then
-  unlink install/lib/daos/TESTING/ftest/avocado/job-results/latest
-fi
-
 arts="$arts$(ls ./*daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
 arts="$arts$(ls -d \
    install/lib/daos/TESTING/ftest/avocado/job-results/* 2>/dev/null)" && \
@@ -28,4 +22,10 @@ arts="$arts$(ls -d \
 if [ -n "$arts" ]; then
   # shellcheck disable=SC2046,SC2086
   mv $(echo $arts | tr '\n' ' ') "Functional/"
+fi
+
+# Remove the latest avocado symlink directory to avoid inclusion in the
+# jenkins build artifacts
+if [ -d "Functional/latest" ]; then
+  rm -f "Functional/latest"
 fi
