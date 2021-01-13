@@ -370,7 +370,7 @@ check_in(crt_group_t *remote_group, int rank, int tag)
 
 	rpc_req_input = crt_req_get(rpc_req);
 	D_ASSERTF(rpc_req_input != NULL, "crt_req_get() failed."
- 		  " rpc_req_input: %p\n", rpc_req_input);
+		  " rpc_req_input: %p\n", rpc_req_input);
 
 	if (D_SHOULD_FAIL(test_g.t_fault_attr_1000)) {
 		buffer = NULL;
