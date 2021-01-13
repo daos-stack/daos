@@ -275,28 +275,3 @@ daos_pool_stop_svc(daos_handle_t poh, daos_event_t *ev)
 
 	return dc_task_schedule(task, true);
 }
-
-int
-daos_pool_evict(const uuid_t uuid, const char *grp, const d_rank_list_t *svc,
-		daos_event_t *ev)
-{
-	daos_pool_evict_t       *args;
-	tse_task_t              *task;
-	int                      rc;
-
-	DAOS_API_ARG_ASSERT(*args, POOL_EVICT);
-	if (!daos_uuid_valid(uuid))
-		return -DER_INVAL;
-
-	rc = dc_task_create(dc_pool_evict, NULL, ev, &task);
-	if (rc)
-		return rc;
-
-	args = dc_task_get_args(task);
-	args->grp       = grp;
-	args->svc       = (d_rank_list_t *)svc;
-	uuid_copy((unsigned char *)args->uuid, uuid);
-
-	return dc_task_schedule(task, true);
-}
-
