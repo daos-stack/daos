@@ -44,14 +44,14 @@ swim_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		/* Example output for SWIM CRT_EVT_DEAD on rank #2:
 		 *	 rank = 2, crt_event_source = 1, crt_event_type = 1
 		 *
-		 * 		enum crt_event_type {
-		 * 			CRT_EVT_ALIVE,
-		 * 			CRT_EVT_DEAD,
-		 * 		};
-		 * 		enum crt_event_source {
-		 * 			CRT_EVS_UNKNOWN,
-		 * 			CRT_EVS_SWIM,
-		 * 		};
+		 *		enum crt_event_type {
+		 *			CRT_EVT_ALIVE,
+		 *			CRT_EVT_DEAD,
+		 *		};
+		 *		enum crt_event_source {
+		 *			CRT_EVS_UNKNOWN,
+		 *			CRT_EVS_SWIM,
+		 *		};
 		 */
 
 		D_DEBUG(DB_TEST, "Cart callback event: "
