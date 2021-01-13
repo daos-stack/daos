@@ -923,11 +923,10 @@ def get_clush_command(hosts, args=None, sudo=False):
     if args:
         command.insert(1, args)
     if sudo:
-        # If ever needed, this is how to disable host key checking:
-        # command.extend(["-o", "-oStrictHostKeyChecking=no", "sudo"])
+        # Disable host key checking and add sudo to the command
+        command.extend(["-o", "-oStrictHostKeyChecking=no", "sudo"])
         # When "sudo clush ..." works in CI, switch back to this method
         # command.insert(0, "sudo")
-        command.append("sudo")
     return " ".join(command)
 
 

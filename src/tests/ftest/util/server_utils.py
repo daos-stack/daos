@@ -21,6 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+# pylint: disable=too-many-lines
 import getpass
 import os
 import socket
@@ -1003,6 +1004,8 @@ class DaosServerManager(SubprocessManager):
             self.log.info(
                 log_format,
                 "-" * 4, "-" * 15, "-" * 36, "-" * 14, "-" * 14, "-" * 6)
+
+            # Verify that each expected rank appears in the current states
             for rank in sorted(self._expected_states):
                 domain = self._expected_states[rank]["domain"].split(".")
                 expected = self._expected_states[rank]["state"].lower()
@@ -1012,11 +1015,11 @@ class DaosServerManager(SubprocessManager):
                 except KeyError:
                     current = "not detected"
 
-                # Check if the rank's current state is expected
+                # Check if the rank's expected state matches the current state
                 result = "PASS" if current == expected else "FAIL"
                 status["expected"] &= current == expected
 
-                # Restart all ranks if this rank is not running
+                # Restart all ranks if the expected rank is not running
                 if current not in running_states:
                     status["restart"] = True
 
@@ -1025,16 +1028,17 @@ class DaosServerManager(SubprocessManager):
                     self._expected_states[rank]["uuid"], expected,
                     current, result)
 
-            # Report any current states that were not expected
+            # Report any current states that were not expected as an error
             for rank in sorted(current_states):
+                status["expected"] = False
                 domain = current_states[rank]["domain"].split(".")
                 self.log.info(
                     log_format, rank, domain[0].replace("/", ""),
                     current_states[rank]["uuid"], "not detected",
                     current_states[rank]["state"].lower(), "FAIL")
-                status["expected"] = False
 
         else:
+            # Any failure to obtain the current rank information is an error
             self.log.info("  Unable to obtain current server state")
             status["expected"] = False
 
