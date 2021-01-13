@@ -1401,7 +1401,7 @@ dfuse_fstatfs(int fd, struct stat *buf)
 	if (rc != 0)
 		goto do_real_fstat;
 
-	rc = dfs_ostat(entry->fd_dfs, entry->fd_dfsoh, buf);
+	rc = dfs_ostat(entry->fd_cont->ioc_dfs, entry->fd_dfsoh, buf);
 
 	DFUSE_TRA_INFO(entry, "fstat() returned %d", rc);
 
@@ -1417,6 +1417,7 @@ do_real_fstat:
 	return __real_fstatfs(fd, buf);
 }
 
+#if 0
 DFUSE_PUBLIC int
 dfuse_fstatfs64(int fd, struct stat64 *buf)
 {
@@ -1444,6 +1445,7 @@ dfuse_fstatfs64(int fd, struct stat64 *buf)
 do_real_fstat:
 	return __real_fstatfs64(fd, buf);
 }
+#endif
 
 DFUSE_PUBLIC int
 dfuse_get_bypass_status(int fd)

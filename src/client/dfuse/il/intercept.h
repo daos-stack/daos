@@ -68,8 +68,7 @@
 	ACTION(int,     dup2,      (int, int))                                \
 	ACTION(int,     fcntl,     (int, int, ...))                           \
 	ACTION(FILE *,  fdopen,    (int, const char *))                       \
-	ACTION(int,     fstatfs,   (int, struct stat *))\
-	ACTION(int,     fstatfs64,   (int, struct stat64 *))
+	ACTION(int,     fstatfs,   (int, struct stat *))
 #define FOREACH_INTERCEPT(ACTION)            \
 	FOREACH_SINGLE_INTERCEPT(ACTION)     \
 	FOREACH_ALIASED_INTERCEPT(ACTION)
