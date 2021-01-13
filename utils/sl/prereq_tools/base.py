@@ -27,12 +27,14 @@
 # pylint: disable=bare-except
 # pylint: disable=exec-used
 # pylint: disable=too-many-statements
+# pylint: disable=too-many-lines
 from __future__ import absolute_import, division, print_function
 import os
 import traceback
 import hashlib
 import time
 import sys
+import shutil
 from build_info import BuildInfo
 from SCons.Variables import PathVariable
 from SCons.Variables import EnumVariable
@@ -57,6 +59,7 @@ except ImportError:
     DEVNULL = open(os.devnull, "wb")
 import tarfile
 import copy
+from distutils.spawn import find_executable
 if sys.version_info < (3, 0):
 # pylint: disable=import-error
     import ConfigParser
@@ -284,7 +287,7 @@ class Runner():
                 retval = True
             else:
                 print('RUN: %s' % command)
-                if subprocess.call(command, shell=True,
+                if subprocess.call(command, shell=True,   # nosec
                                    env=self.env['ENV']) != 0:
                     retval = False
                     break
@@ -299,15 +302,19 @@ def default_libpath():
     """On debian systems, the default library path can be queried"""
     if not os.path.isfile('/etc/debian_version'):
         return []
+    dpkgarchitecture = find_executable('dpkg-architecture')
+    if not dpkgarchitecture:
+        print('No dpkg-architecture found in path.')
+        return []
     try:
-        pipe = subprocess.Popen(['dpkg-architecture', '-qDEB_HOST_MULTIARCH'],
+        pipe = subprocess.Popen([dpkgarchitecture, '-qDEB_HOST_MULTIARCH'],
                                 stdout=subprocess.PIPE, stderr=DEVNULL)
         (stdo, _) = pipe.communicate()
         if pipe.returncode == 0:
             archpath = stdo.decode().strip()
             return ['lib/' + archpath]
     except Exception:
-        pass
+        print('default_libpath, Exception: subprocess.Popen dpkg-architecture')
     return []
 
 class GitRepoRetriever():
@@ -440,7 +447,7 @@ class WebRetriever():
 
         return False
 
-    def get(self, subdir, **kw):
+    def get(self, subdir, **kw): #pylint: disable=unused-argument
         """Downloads and extracts sources from a url into subdir"""
 
         basename = os.path.basename(self.url)
@@ -663,7 +670,7 @@ class PreReqComponent():
                 os.makedirs(self.__build_dir)
 
         except Exception:
-            pass
+            print('PreReqComponent init, Exception: if self.__dry_run')
         self.__prebuilt_path = {}
         self.__src_path = {}
 
@@ -692,8 +699,7 @@ class PreReqComponent():
             else:
                 os.makedirs(self.prereq_prefix)
         except:
-            pass
-
+            print('PreReqComponent init, Exception: if self.__dry_run')
         self.setup_parallel_build()
 
         self.config_file = config_file
@@ -925,7 +931,7 @@ class PreReqComponent():
             self.__opts.Update(self.__env)
         except UserError:
             if self.__dry_run:
-                pass
+                print('except on add_opts, self.__opts.Update')
             else:
                 raise
 
@@ -982,7 +988,7 @@ class PreReqComponent():
             env = self.__env.Clone()
             self.require(env, comp)
 
-    def modify_prefix(self, comp_def, env):
+    def modify_prefix(self, comp_def, env): #pylint: disable=unused-argument
         """Overwrite the prefix in cases where we may be using the default"""
         if comp_def.package:
             return
@@ -1357,7 +1363,7 @@ class _Component():
                     return True
         except AttributeError:
             # This feature is new in scons 2.4
-            pass
+            print('except AttributeError: new in scons 2.4')
 
         config.Finish()
         if self.__check_only:
@@ -1483,7 +1489,7 @@ class _Component():
                 else:
                     os.makedirs(self.build_path)
             except:
-                pass
+                print('except on configure, if self.__dry_run')
 
     def set_environment(self, env, needed_libs):
         """Modify the specified construction environment to build with
@@ -1562,7 +1568,7 @@ class _Component():
         if self.__dry_run:
             print('Would empty %s' % path)
         else:
-            os.system("rm -rf %s" % path)
+            shutil.rmtree(path)
             os.mkdir(path)
 
     def _has_changes(self):
