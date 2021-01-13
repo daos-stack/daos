@@ -1526,7 +1526,7 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 		D_GOTO(send_error, rc = -DER_NONEXIST);
 	}
 
-	/* Check local group version matching with in comming request */
+	/* Check local group version matching with in coming request */
 	grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
 
 	if (grp_ver != input->ifi_grp_ver) {
@@ -1712,7 +1712,7 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 	 * The request is not located on current server.
 	 * Create an rpc request to external server.
 	 * Return read-only copy and request 'write' version of iv_value
-	 * Free up previos iv_value structure.
+	 * Free up previous iv_value structure.
 	 */
 	iv_ops->ivo_on_put(ivns_internal, iv_value, user_priv);
 	put_needed = false;
@@ -1767,8 +1767,8 @@ exit:
 		if (put_needed)
 			iv_ops->ivo_on_put(ivns, iv_value, user_priv);
 		D_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR,
-			"Failed to issue IV fetch; rc = " DF_RC "\n",
-			DP_RC(rc));
+			 "Failed to issue IV fetch; rc = " DF_RC "\n",
+			 DP_RC(rc));
 
 		if (cb_info) {
 			IVNS_DECREF(cb_info->ifc_ivns_internal);
@@ -2653,7 +2653,7 @@ crt_ivu_rpc_issue(d_rank_t dest_rank, crt_iv_key_t *iv_key,
 
 	/*
 	 * If the current version does not match that which has come in,
-	 * then the verion number does not match that version associated
+	 * then the version number does not match that version associated
 	 * with the root rank node we are sending to.
 	 */
 	local_grp_ver =  ivns_internal->cii_grp_priv->gp_membs_ver;
@@ -3301,7 +3301,7 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 		 * Send synchronization to parent
 		 * Need to get a version number associated with next node.
 		 * Need to compare with previous version.  If not equal,
-		 * then there has been a version change in betwen.
+		 * then there has been a version change in between.
 		 */
 		D_RWLOCK_RDLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 		grp_ver2 =  ivns_internal->cii_grp_priv->gp_membs_ver;

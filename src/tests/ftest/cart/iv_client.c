@@ -405,7 +405,7 @@ exit_code:
  * of the call.
  * However, if this is not zero, then it allows for the change
  * in version number to occur at some other time, implementer
- * discression.  Its intension is to allow the change in version
+ * discression.  Its intention is to allow the change in version
  * number within a call back function; thus simulating an
  * asynchronis event requesting a version change while the
  * system is handling another iv request.
@@ -427,7 +427,7 @@ test_iv_set_grp_version(char *arg_version, char *arg_timing)
 	int					 time = 0;
 	char					*tmp;
 
-	/* See if string contais valid hex characters.  If so assume
+	/* See if string contains valid hex characters.  If so assume
 	 * base 16.  Else, default to base 10.
 	 */
 	tmp = strpbrk(arg_version, "abcdABCDxX");

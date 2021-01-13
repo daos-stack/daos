@@ -235,7 +235,7 @@ class CartIvOneNodeTest(TestWithoutServers):
 
             if "invalidate" in operation:
                 command = " {!s} -o '{!s}' -r '{!s}' -k '{!s}:{!s}' " \
-                            .format( command, operation, rank, key_rank, \
+                            .format(command, operation, rank, key_rank, \
                             key_idx )
                 if 'sync' in action:
                     command = "{!s} -s '{!s}'".format(command, action['sync'])
@@ -335,7 +335,7 @@ class CartIvOneNodeTest(TestWithoutServers):
             # ******************
             # Invalidate the value
             {"operation":"invalidate", "rank":0, "key":(0, 42),
-              "sync":"eager_update"},
+             "sync":"eager_update"},
             #
             # ****
             # Fetch the value again from each server, expecting failure
@@ -354,7 +354,7 @@ class CartIvOneNodeTest(TestWithoutServers):
             ######################
             # Testing version number conflicts.
             ######################
-            # Test of verison skew on fetch between rank 0 and rank 1.
+            # Test of verson skew on fetch between rank 0 and rank 1.
             # Make sure we can set version numbers.
             {"operation":"set_grp_version", "rank":0, "key":(0, 42),
              "version":"0xdeadc0de", "return_code":0, "expected_value":""},
@@ -364,7 +364,7 @@ class CartIvOneNodeTest(TestWithoutServers):
              "version":"", "return_code":0, "expected_value":""},
             #
             # ******************
-            # Test of verison skew on fetch between rank 0 and rank 1.
+            # Test of version skew on fetch between rank 0 and rank 1.
             # From parent to child and from child to parent
             # Don't setup a iv variable.
             # Modify version number on root 0.
@@ -384,7 +384,7 @@ class CartIvOneNodeTest(TestWithoutServers):
             {"operation":"invalidate", "rank":1, "key":(1, 42)},
             #
             # ******************
-            # Test of verison skew on fetch between rank 0 and rank 1.
+            # Test of version skew on fetch between rank 0 and rank 1.
             # Create iv variable on rank 1.
             # Fetch from rank 0.
             # Change version on rank 0 while request in flight,
@@ -405,7 +405,7 @@ class CartIvOneNodeTest(TestWithoutServers):
             {"operation":"invalidate", "rank":0, "key":(1, 42)},
             #
             # ******************
-            # Test of verison skew on fetch between rank 0 and rank 1.
+            # Test of version skew on fetch between rank 0 and rank 1.
             # From parent to child.
             # Create a iv variable on second server  (child).
             # Setup second server to change version after it receives
@@ -431,7 +431,7 @@ class CartIvOneNodeTest(TestWithoutServers):
             # Need to know that this works prior to changing version
             # Verifies eager_notify works with invalidate.
             #
-            {"operation":"update", "rank":0, "key":(4, 42), "value":"turnip" },
+            {"operation":"update", "rank":0, "key":(4, 42), "value":"turnip"},
             {"operation":"fetch", "rank":1, "key":(4, 42),
              "return_code":0, "expected_value":"turnip"},
             {"operation":"fetch", "rank":0, "key":(4, 42),
@@ -462,14 +462,14 @@ class CartIvOneNodeTest(TestWithoutServers):
             # Test of version skew on update with synchronization
             #   when version on child process is different
             # Change version on rank 4
-            # Create iv varable on rank 0 using sync.
+            # Create iv variable on rank 0 using sync.
             #   Should return error and no iv variable created.
             # Make sure nothing is left behind on other nodes.
             #
             {"operation":"set_grp_version", "rank":4, "key":(4, 42),
              "version":"0xdeadc0de", "return_code":0, "expected_value":""},
             {"operation":"update", "rank":0, "key":(0, 42), "value":"beans",
-             "sync":"eager_update", "return_code":-1036 },
+             "sync":"eager_update", "return_code":-1036},
             # Even though previous failure, leaves stale state on ranks
             {"operation":"fetch", "rank":0, "key":(0, 42),
              "return_code":0, "expected_value":"beans"},
