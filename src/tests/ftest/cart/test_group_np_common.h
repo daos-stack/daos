@@ -644,7 +644,7 @@ test_parse_args(int argc, char **argv)
 			break;
 		case 'r':
 			parse_rank_string(optarg, test_g.cg_ranks,
-						&test_g.cg_num_ranks);
+					  &test_g.cg_num_ranks);
 			break;
 		case '?':
 			return 1;
