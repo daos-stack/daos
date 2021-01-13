@@ -28,7 +28,7 @@
 #define TEST_OPC_SHUTDOWN	CRT_PROTO_OPC(0x010000000, 0, 1)
 
 /* input fields */
-#define CRT_ISEQ_TEST_PING_DELAY  				 \
+#define CRT_ISEQ_TEST_PING_DELAY				 \
 	((int32_t)		(age)			CRT_VAR) \
 	((int32_t)		(days)			CRT_VAR) \
 	((d_string_t)		(name)			CRT_VAR) \
