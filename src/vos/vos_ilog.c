@@ -45,10 +45,11 @@ vos_ilog_status_get(struct umem_instance *umm, uint32_t tx_id,
 
 	switch (rc) {
 	case ALB_UNAVAILABLE:
+	case ALB_AVAILABLE_DIRTY:
 		return ILOG_UNCOMMITTED;
 	case ALB_AVAILABLE_CLEAN:
 		return ILOG_COMMITTED;
-	case ALB_AVAILABLE_DIRTY:
+	case ALB_AVAILABLE_ABORTED:
 		break;
 	default:
 		D_ASSERTF(0, "Unexpected availability\n");
