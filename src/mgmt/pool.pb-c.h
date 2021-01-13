@@ -90,22 +90,17 @@ struct  _Mgmt__PoolCreateReq
 {
   ProtobufCMessage base;
   /*
-   * SCM size in bytes
+   * UUID for new pool, generated on the client
    */
-  uint64_t scmbytes;
+  char *uuid;
   /*
-   * NVMe size in bytes
+   * Unique name for pool (optional)
    */
-  uint64_t nvmebytes;
+  char *name;
   /*
-   * target ranks
+   * DAOS system identifier
    */
-  size_t n_ranks;
-  uint32_t *ranks;
-  /*
-   * desired number of pool service replicas
-   */
-  uint32_t numsvcreps;
+  char *sys;
   /*
    * formatted user e.g. "bob@"
    */
@@ -114,14 +109,6 @@ struct  _Mgmt__PoolCreateReq
    * formatted group e.g. "builders@"
    */
   char *usergroup;
-  /*
-   * UUID for new pool, generated on the client
-   */
-  char *uuid;
-  /*
-   * DAOS system identifier
-   */
-  char *sys;
   /*
    * Access Control Entries in short string format
    */
@@ -132,10 +119,39 @@ struct  _Mgmt__PoolCreateReq
    */
   size_t n_faultdomains;
   Mgmt__FaultDomain **faultdomains;
+  /*
+   * desired number of pool service replicas
+   */
+  uint32_t numsvcreps;
+  /*
+   * Total pool size in bytes (auto config)
+   */
+  uint64_t totalbytes;
+  /*
+   * Ratio of SCM:NVMe expressed as % (auto config)
+   */
+  double scmratio;
+  /*
+   * Number of target ranks to use (auto config)
+   */
+  uint32_t numranks;
+  /*
+   * target ranks (manual config)
+   */
+  size_t n_ranks;
+  uint32_t *ranks;
+  /*
+   * SCM size in bytes (manual config)
+   */
+  uint64_t scmbytes;
+  /*
+   * NVMe size in bytes (manual config)
+   */
+  uint64_t nvmebytes;
 };
 #define MGMT__POOL_CREATE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_req__descriptor) \
-    , 0, 0, 0,NULL, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0, 0, 0, 0, 0,NULL, 0, 0 }
 
 
 /*
@@ -151,16 +167,25 @@ struct  _Mgmt__PoolCreateResp
   /*
    * pool service replica ranks
    */
-  size_t n_svcreps;
-  uint32_t *svcreps;
+  size_t n_svc_reps;
+  uint32_t *svc_reps;
   /*
-   * number of target ranks used
+   * pool target ranks
    */
-  uint32_t numranks;
+  size_t n_tgt_ranks;
+  uint32_t *tgt_ranks;
+  /*
+   * total SCM allocated to pool
+   */
+  uint64_t scm_bytes;
+  /*
+   * total NVMe allocated to pool
+   */
+  uint64_t nvme_bytes;
 };
 #define MGMT__POOL_CREATE_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_resp__descriptor) \
-    , 0, 0,NULL, 0 }
+    , 0, 0,NULL, 0,NULL, 0, 0 }
 
 
 /*
@@ -170,13 +195,13 @@ struct  _Mgmt__PoolDestroyReq
 {
   ProtobufCMessage base;
   /*
-   * uuid of pool to destroy
-   */
-  char *uuid;
-  /*
    * DAOS system identifier
    */
   char *sys;
+  /*
+   * uuid of pool to destroy
+   */
+  char *uuid;
   /*
    * destroy regardless of active connections
    */
@@ -215,22 +240,27 @@ struct  _Mgmt__PoolEvictReq
 {
   ProtobufCMessage base;
   /*
-   * uuid of pool to evict
-   */
-  char *uuid;
-  /*
    * DAOS system identifier
    */
   char *sys;
+  /*
+   * uuid of pool to evict
+   */
+  char *uuid;
   /*
    * List of pool service ranks
    */
   size_t n_svc_ranks;
   uint32_t *svc_ranks;
+  /*
+   * Optional list of handles to evict
+   */
+  size_t n_handles;
+  char **handles;
 };
 #define MGMT__POOL_EVICT_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_evict_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL }
 
 
 /*
@@ -256,6 +286,10 @@ struct  _Mgmt__PoolExcludeReq
 {
   ProtobufCMessage base;
   /*
+   * DAOS system identifier
+   */
+  char *sys;
+  /*
    * uuid of pool to add target up to
    */
   char *uuid;
@@ -276,7 +310,7 @@ struct  _Mgmt__PoolExcludeReq
 };
 #define MGMT__POOL_EXCLUDE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_exclude_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL }
 
 
 /*
@@ -302,6 +336,10 @@ struct  _Mgmt__PoolDrainReq
 {
   ProtobufCMessage base;
   /*
+   * DAOS system identifier
+   */
+  char *sys;
+  /*
    * uuid of pool to add target up to
    */
   char *uuid;
@@ -322,7 +360,7 @@ struct  _Mgmt__PoolDrainReq
 };
 #define MGMT__POOL_DRAIN_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_drain_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL }
 
 
 /*
@@ -347,6 +385,10 @@ struct  _Mgmt__PoolDrainResp
 struct  _Mgmt__PoolExtendReq
 {
   ProtobufCMessage base;
+  /*
+   * DAOS system identifier
+   */
+  char *sys;
   /*
    * uuid of pool to add target up to
    */
@@ -377,7 +419,7 @@ struct  _Mgmt__PoolExtendReq
 };
 #define MGMT__POOL_EXTEND_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_extend_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0, 0, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0, 0, 0,NULL }
 
 
 /*
@@ -403,6 +445,10 @@ struct  _Mgmt__PoolReintegrateReq
 {
   ProtobufCMessage base;
   /*
+   * DAOS system identifier
+   */
+  char *sys;
+  /*
    * uuid of pool to add target up to
    */
   char *uuid;
@@ -423,7 +469,7 @@ struct  _Mgmt__PoolReintegrateReq
 };
 #define MGMT__POOL_REINTEGRATE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_reintegrate_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL }
 
 
 /*
@@ -468,8 +514,8 @@ struct  _Mgmt__ListPoolsResp__Pool
   /*
    * pool service replica ranks
    */
-  size_t n_svcreps;
-  uint32_t *svcreps;
+  size_t n_svc_reps;
+  uint32_t *svc_reps;
 };
 #define MGMT__LIST_POOLS_RESP__POOL__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_pools_resp__pool__descriptor) \
@@ -505,13 +551,17 @@ struct  _Mgmt__PoolResolveIDReq
 {
   ProtobufCMessage base;
   /*
+   * DAOS system identifier
+   */
+  char *sys;
+  /*
    * Unique pool identifier
    */
   char *humanid;
 };
 #define MGMT__POOL_RESOLVE_IDREQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_resolve_idreq__descriptor) \
-    , (char *)protobuf_c_empty_string }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
 /*
@@ -539,6 +589,10 @@ struct  _Mgmt__ListContReq
 {
   ProtobufCMessage base;
   /*
+   * DAOS system identifier
+   */
+  char *sys;
+  /*
    * uuid of pool
    */
   char *uuid;
@@ -550,7 +604,7 @@ struct  _Mgmt__ListContReq
 };
 #define MGMT__LIST_CONT_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_cont_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
 
 
 struct  _Mgmt__ListContResp__Cont
@@ -590,6 +644,10 @@ struct  _Mgmt__ListContResp
 struct  _Mgmt__PoolQueryReq
 {
   ProtobufCMessage base;
+  /*
+   * DAOS system identifier
+   */
+  char *sys;
   char *uuid;
   /*
    * List of pool service ranks
@@ -599,7 +657,7 @@ struct  _Mgmt__PoolQueryReq
 };
 #define MGMT__POOL_QUERY_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
 
 
 /*
@@ -696,15 +754,15 @@ struct  _Mgmt__PoolQueryResp
 
 typedef enum {
   MGMT__POOL_SET_PROP_REQ__PROPERTY__NOT_SET = 0,
-  MGMT__POOL_SET_PROP_REQ__PROPERTY_NAME = 2,
-  MGMT__POOL_SET_PROP_REQ__PROPERTY_NUMBER = 3
+  MGMT__POOL_SET_PROP_REQ__PROPERTY_NAME = 3,
+  MGMT__POOL_SET_PROP_REQ__PROPERTY_NUMBER = 4
     PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__POOL_SET_PROP_REQ__PROPERTY)
 } Mgmt__PoolSetPropReq__PropertyCase;
 
 typedef enum {
   MGMT__POOL_SET_PROP_REQ__VALUE__NOT_SET = 0,
-  MGMT__POOL_SET_PROP_REQ__VALUE_STRVAL = 4,
-  MGMT__POOL_SET_PROP_REQ__VALUE_NUMVAL = 5
+  MGMT__POOL_SET_PROP_REQ__VALUE_STRVAL = 5,
+  MGMT__POOL_SET_PROP_REQ__VALUE_NUMVAL = 6
     PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__POOL_SET_PROP_REQ__VALUE)
 } Mgmt__PoolSetPropReq__ValueCase;
 
@@ -714,6 +772,10 @@ typedef enum {
 struct  _Mgmt__PoolSetPropReq
 {
   ProtobufCMessage base;
+  /*
+   * DAOS system identifier
+   */
+  char *sys;
   /*
    * uuid of pool to modify
    */
@@ -748,7 +810,7 @@ struct  _Mgmt__PoolSetPropReq
 };
 #define MGMT__POOL_SET_PROP_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_set_prop_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL, MGMT__POOL_SET_PROP_REQ__PROPERTY__NOT_SET, {0}, MGMT__POOL_SET_PROP_REQ__VALUE__NOT_SET, {0} }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, MGMT__POOL_SET_PROP_REQ__PROPERTY__NOT_SET, {0}, MGMT__POOL_SET_PROP_REQ__VALUE__NOT_SET, {0} }
 
 
 typedef enum {

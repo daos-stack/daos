@@ -3842,6 +3842,21 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 
 	replace_failed_replicas(svc, map);
 
+	if (opc == POOL_ADD_IN) {
+		/*
+		 * If we are setting ranks from UP -> UPIN, schedule a reclaim
+		 * operation to garbage collect any unreachable data moved
+		 * during reintegration/addition
+		 */
+		rc = ds_rebuild_schedule(pool_uuid, map_version, tgts,
+					 RB_OP_RECLAIM);
+		if (rc != 0) {
+			D_ERROR("failed to schedule reclaim rc: "DF_RC"\n",
+				DP_RC(rc));
+			D_GOTO(out, rc);
+		}
+	}
+
 out_map:
 	if (map_version_p != NULL)
 		*map_version_p = pool_map_get_version((map == NULL || rc != 0) ?
@@ -4541,6 +4556,57 @@ find_hdls_to_evict(struct rdb_tx *tx, struct pool_svc *svc, uuid_t **hdl_uuids,
 	return 0;
 }
 
+/*
+ * Callers are responsible for freeing *hdl_uuids if this function returns zero.
+ */
+static int
+validate_hdls_to_evict(struct rdb_tx *tx, struct pool_svc *svc,
+		       uuid_t **hdl_uuids, int *n_hdl_uuids, uuid_t *hdl_list,
+		       int n_hdl_list) {
+	uuid_t		*valid_list;
+	int		n_valid_list = 0;
+	int		i;
+	int		rc = 0;
+	d_iov_t		key;
+	d_iov_t		value;
+	struct pool_hdl	hdl;
+
+	if (hdl_list == NULL || n_hdl_list == 0) {
+		return -DER_INVAL;
+	}
+
+	/* Assume the entire list is valid */
+	D_ALLOC(valid_list, sizeof(uuid_t) * n_hdl_list);
+	if (valid_list == NULL)
+		return -DER_NOMEM;
+
+	for (i = 0; i < n_hdl_list; i++) {
+		d_iov_set(&key, hdl_list[i], sizeof(uuid_t));
+		d_iov_set(&value, &hdl, sizeof(hdl));
+		rc = rdb_tx_lookup(tx, &svc->ps_handles, &key, &value);
+
+		if (rc == 0) {
+			uuid_copy(valid_list[n_valid_list], hdl_list[i]);
+			n_valid_list++;
+		} else if (rc == -DER_NONEXIST) {
+			D_DEBUG(DF_DSMS, "Skipping invalid handle" DF_UUID "\n",
+				DP_UUID(hdl_list[i]));
+			/* Reset RC in case we're the last entry */
+			rc = 0;
+			continue;
+		} else {
+			D_FREE(valid_list);
+			D_GOTO(out, rc);
+		}
+	}
+
+	*hdl_uuids = valid_list;
+	*n_hdl_uuids = n_valid_list;
+
+out:
+	return rc;
+}
+
 void
 ds_pool_evict_handler(crt_rpc_t *rpc)
 {
@@ -4548,9 +4614,9 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 	struct pool_evict_out  *out = crt_reply_get(rpc);
 	struct pool_svc	       *svc;
 	struct rdb_tx		tx;
-	uuid_t		       *hdl_uuids;
+	uuid_t		       *hdl_uuids = NULL;
 	size_t			hdl_uuids_size;
-	int			n_hdl_uuids;
+	int			n_hdl_uuids = 0;
 	int			rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
@@ -4567,8 +4633,19 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 
 	ABT_rwlock_wrlock(svc->ps_lock);
 
-	rc = find_hdls_to_evict(&tx, svc, &hdl_uuids, &hdl_uuids_size,
-				&n_hdl_uuids);
+	/*
+	 * If a subset of handles is specified use them instead of iterating
+	 * through all handles for the pool uuid
+	 */
+	if (in->pvi_hdls.ca_arrays) {
+		rc = validate_hdls_to_evict(&tx, svc, &hdl_uuids, &n_hdl_uuids,
+					    in->pvi_hdls.ca_arrays,
+					    in->pvi_hdls.ca_count);
+	} else {
+		rc = find_hdls_to_evict(&tx, svc, &hdl_uuids, &hdl_uuids_size,
+					&n_hdl_uuids);
+	}
+
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 
@@ -4622,19 +4699,26 @@ out:
 }
 
 /**
- * Send a CaRT message to the pool svc during pool destroy to test and
- * (if applicable based on force option) evict all open handles on a pool.
+ * Send a CaRT message to the pool svc to test and
+ * (if applicable based on destoy and force option) evict all open handles
+ * on a pool.
  *
  * \param[in]	pool_uuid	UUID of the pool
  * \param[in]	ranks		Pool service replicas
- * \param[in]	force		If true request all handles be forcibly evicted
+ * \param[in]	handles		List of handles to selectively evict
+ * \param[in]	n_handles	Number of items in handles
+ * \param[in]	destroy		If true the evict request is a destroy request
+ * \param[in]	force		If true and destroy is true request all handles
+ *				be forcibly evicted
  *
  * \return	0		Success
  *		-DER_BUSY	Open pool handles exist and no force requested
  *
  */
 int
-ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks, uint32_t force)
+ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks,
+			uuid_t *handles, size_t n_handles,
+			uint32_t destroy, uint32_t force)
 {
 	int			 rc;
 	struct rsvc_client	 client;
@@ -4671,11 +4755,13 @@ rechoose:
 	in = crt_req_get(rpc);
 	uuid_copy(in->pvi_op.pi_uuid, pool_uuid);
 	uuid_clear(in->pvi_op.pi_hdl);
+	in->pvi_hdls.ca_arrays = handles;
+	in->pvi_hdls.ca_count = n_handles;
 
 	/* Pool destroy (force=false): assert no open handles / do not evict.
 	 * Pool destroy (force=true): evict any/all open handles on the pool.
 	 */
-	in->pvi_pool_destroy = 1;
+	in->pvi_pool_destroy = destroy;
 	in->pvi_pool_destroy_force = force;
 
 	rc = dss_rpc_send(rpc);
