@@ -152,6 +152,8 @@ class Test(avocadoTest):
         self.log.info("Job-ID: %s", self.job_id)
         self.log.info("Test PID: %s", os.getpid())
         self._timeout_reported = False
+        # When cancelling within a test variant,
+        # use 'add_cancel_ticket(<ticket>)' to add to this set.
         self._teardown_cancel = set()
         self._teardown_errors = []
 
@@ -197,7 +199,7 @@ class Test(avocadoTest):
         """Skip a test due to a ticket needing to be completed.
 
         Args:
-            ticket (object): the ticket (str) or group of tickets (list)
+            ticket (object): the ticket (str) or group of tickets (set)
                 that cause this test case to be cancelled.
         """
         verb = "is"
@@ -214,8 +216,7 @@ class Test(avocadoTest):
         """Skip a test due to a ticket needing to be completed.
 
         Args:
-            ticket (object): the ticket (str) or group of tickets (list)
-                that cause this test case to be cancelled.
+            ticket (object): the ticket (str) used to cancel the test.
             reason (str, option): optional reason to skip. Defaults to None.
         """
         self.log.info(

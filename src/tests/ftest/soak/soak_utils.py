@@ -587,9 +587,9 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
             for t_size in tsize_list:
                 for o_type in oclass_list:
                     # Cancel for ticket DAOS-6095
-                    cancel_api_6095 = ["HDF5-VOL", "HDF5", "POSIX"]
-                    if api in cancel_api_6095 and t_size == "4k" and (
-                            o_type in ["RP_2G1", 'RP_2GX']):
+                    if (api in ["HDF5-VOL", "HDF5", "POSIX"]
+                            and t_size == "4k"
+                            and o_type in ["RP_2G1", 'RP_2GX']):
                         self.add_cancel_ticket(
                             "DAOS-6095",
                             "IOR -a {} with -t {} and -o {}".format(

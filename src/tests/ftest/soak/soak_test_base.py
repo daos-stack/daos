@@ -528,7 +528,7 @@ class SoakTestBase(TestWithServers):
             # Start new pass
             start_loop_time = time.time()
             self.log.info(
-                "<<Soak PASS %s: time until done %s>>", self.loop,
+                "<<SOAK LOOP %s: time until done %s>>", self.loop,
                 DDHHMMSS_format(self.end_time - time.time()))
             # Create pool for jobs
             add_pools(self, ["pool_jobs"])
@@ -546,7 +546,7 @@ class SoakTestBase(TestWithServers):
                 self.fail(error)
             # Check space after jobs done
             self.pool[1].display_pool_daos_space()
-            self.soak_errors = self.destroy_containers(self.container)
+            self.soak_errors.extend(self.destroy_containers(self.container))
             self.soak_errors.extend(self.destroy_pools(self.pool[1]))
             # remove the test pools from self.pool; preserving reserved pool
             self.container = []
