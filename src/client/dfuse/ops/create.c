@@ -76,20 +76,16 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	DFUSE_TRA_DEBUG(ie, "file '%s' flags 0%o mode 0%o", name, fi->flags,
 			mode);
 
-	rc = dfs_open2(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
-		       mode, fi->flags, 0, 0, NULL, &ie->ie_stat, &oh->doh_obj);
-	if (rc) {
-		DFUSE_TRA_DEBUG(parent, "dfs_open() failed %d", rc);
+	rc = dfs_open_stat(parent->ie_dfs->dfs_ns, parent->ie_obj, name, mode,
+			   fi->flags, 0, 0, NULL, &oh->doh_obj, &ie->ie_stat);
+	if (rc)
 		D_GOTO(err, rc);
-	}
 
 	/** duplicate the file handle for the fuse handle */
 	rc = dfs_dup(parent->ie_dfs->dfs_ns, oh->doh_obj, O_RDWR,
 		     &ie->ie_obj);
-	if (rc) {
-		DFUSE_TRA_DEBUG(parent, "dfs_dup() failed %d", rc);
-		D_GOTO(release1, rc);
-	}
+	if (rc)
+		D_GOTO(release, rc);
 
 	oh->doh_dfs = parent->ie_dfs->dfs_ns;
 	oh->doh_ie = ie;
@@ -124,7 +120,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	dfuse_reply_entry(fs_handle, ie, &fi_out, true, req);
 
 	return;
-release1:
+release:
 	dfs_release(oh->doh_obj);
 err:
 	DFUSE_REPLY_ERR_RAW(parent, req, rc);

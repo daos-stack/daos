@@ -1082,7 +1082,7 @@ def run_tests(dfuse):
     # Note that this doesn't test dfs because fuse will do a
     # lookup to check if the file exists rather than just trying
     # to create it.
-    fname = os.path.join(dfuse.dir, 'test_file4')
+    fname = os.path.join(path, 'test_file4')
     fd = os.open(fname, os.O_CREAT | os.O_EXCL)
     os.close(fd)
     try:

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -95,9 +95,9 @@ dfuse_cb_mknod_with_id(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	DFUSE_TRA_DEBUG(ie, "directory '%s' mode 0%o", name, mode);
 
-	rc = dfs_open2(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
-		       mode, O_CREAT | O_RDWR,
-		       0, 0, NULL, &ie->ie_stat, &ie->ie_obj);
+	rc = dfs_open_stat(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
+			   mode, O_CREAT | O_RDWR,
+			   0, 0, NULL, &ie->ie_obj, &ie->ie_stat);
 	if (rc)
 		D_GOTO(err, rc);
 
