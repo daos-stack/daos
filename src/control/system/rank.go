@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,7 +28,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	"github.com/pkg/errors"
 )
 
@@ -138,28 +137,24 @@ func (rl RankList) String() string {
 
 // RanksToUint32 is a convenience method to convert this
 // slice of system ranks to a slice of uint32 ranks.
-func RanksToUint32(ranks []Rank) (uint32Ranks []uint32) {
-	if ranks == nil {
-		ranks = []Rank{}
-	}
-	if err := convert.Types(ranks, &uint32Ranks); err != nil {
-		return nil
+func RanksToUint32(in []Rank) []uint32 {
+	out := make([]uint32, len(in))
+	for i := range in {
+		out[i] = in[i].Uint32()
 	}
 
-	return
+	return out
 }
 
 // RanksFromUint32 is a convenience method to convert this
 // slice of uint32 ranks to a slice of system ranks.
-func RanksFromUint32(ranks []uint32) (sysRanks []Rank) {
-	if ranks == nil {
-		ranks = []uint32{}
-	}
-	if err := convert.Types(ranks, &sysRanks); err != nil {
-		return nil
+func RanksFromUint32(in []uint32) []Rank {
+	out := make([]Rank, len(in))
+	for i := range in {
+		out[i] = Rank(in[i])
 	}
 
-	return
+	return out
 }
 
 // CheckRankMembership compares two Rank slices and returns a

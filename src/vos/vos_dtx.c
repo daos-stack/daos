@@ -1323,12 +1323,22 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		 * modification to guarantee the transaction semantics.
 		 */
 		if (dtx_is_valid_handle(dth))
-			return dtx_inprogress(dae, dth, false, 2);
+			return dtx_inprogress(dae, dth, false, 5);
 
 		return ALB_UNAVAILABLE;
 	}
 
-	if (intent == DAOS_INTENT_DEFAULT || intent == DAOS_INTENT_MIGRATION) {
+	/* For rebuild fetch, if hit non-committed DTX, has to ask the
+	 * sponsor to wait and retry, otherwise, the new in-rebuilding
+	 * target may miss some data.
+	 * Under such case, DTX resync on related leader server is not
+	 * finished yet. It is unnecessary to DTX refresh with leader.
+	 * So use "UNLL" as the DTX handle for dtx_inprogress().
+	 */
+	if (intent == DAOS_INTENT_MIGRATION)
+		return dtx_inprogress(dae, NULL, false, 6);
+
+	if (intent == DAOS_INTENT_DEFAULT) {
 		if (!(DAE_FLAGS(dae) & DTE_LEADER) ||
 		    DAOS_FAIL_CHECK(DAOS_VOS_NON_LEADER))
 			/* Non-leader or rebuild case, return -DER_INPROGRESS,

@@ -90,26 +90,17 @@ struct  _Mgmt__PoolCreateReq
 {
   ProtobufCMessage base;
   /*
+   * UUID for new pool, generated on the client
+   */
+  char *uuid;
+  /*
+   * Unique name for pool (optional)
+   */
+  char *name;
+  /*
    * DAOS system identifier
    */
   char *sys;
-  /*
-   * SCM size in bytes
-   */
-  uint64_t scmbytes;
-  /*
-   * NVMe size in bytes
-   */
-  uint64_t nvmebytes;
-  /*
-   * target ranks
-   */
-  size_t n_ranks;
-  uint32_t *ranks;
-  /*
-   * desired number of pool service replicas
-   */
-  uint32_t numsvcreps;
   /*
    * formatted user e.g. "bob@"
    */
@@ -118,10 +109,6 @@ struct  _Mgmt__PoolCreateReq
    * formatted group e.g. "builders@"
    */
   char *usergroup;
-  /*
-   * UUID for new pool, generated on the client
-   */
-  char *uuid;
   /*
    * Access Control Entries in short string format
    */
@@ -132,10 +119,39 @@ struct  _Mgmt__PoolCreateReq
    */
   size_t n_faultdomains;
   Mgmt__FaultDomain **faultdomains;
+  /*
+   * desired number of pool service replicas
+   */
+  uint32_t numsvcreps;
+  /*
+   * Total pool size in bytes (auto config)
+   */
+  uint64_t totalbytes;
+  /*
+   * Ratio of SCM:NVMe expressed as % (auto config)
+   */
+  double scmratio;
+  /*
+   * Number of target ranks to use (auto config)
+   */
+  uint32_t numranks;
+  /*
+   * target ranks (manual config)
+   */
+  size_t n_ranks;
+  uint32_t *ranks;
+  /*
+   * SCM size in bytes (manual config)
+   */
+  uint64_t scmbytes;
+  /*
+   * NVMe size in bytes (manual config)
+   */
+  uint64_t nvmebytes;
 };
 #define MGMT__POOL_CREATE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0, 0, 0,NULL, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0, 0, 0, 0, 0,NULL, 0, 0 }
 
 
 /*
@@ -151,16 +167,25 @@ struct  _Mgmt__PoolCreateResp
   /*
    * pool service replica ranks
    */
-  size_t n_svcreps;
-  uint32_t *svcreps;
+  size_t n_svc_reps;
+  uint32_t *svc_reps;
   /*
-   * number of target ranks used
+   * pool target ranks
    */
-  uint32_t numranks;
+  size_t n_tgt_ranks;
+  uint32_t *tgt_ranks;
+  /*
+   * total SCM allocated to pool
+   */
+  uint64_t scm_bytes;
+  /*
+   * total NVMe allocated to pool
+   */
+  uint64_t nvme_bytes;
 };
 #define MGMT__POOL_CREATE_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_resp__descriptor) \
-    , 0, 0,NULL, 0 }
+    , 0, 0,NULL, 0,NULL, 0, 0 }
 
 
 /*
@@ -489,8 +514,8 @@ struct  _Mgmt__ListPoolsResp__Pool
   /*
    * pool service replica ranks
    */
-  size_t n_svcreps;
-  uint32_t *svcreps;
+  size_t n_svc_reps;
+  uint32_t *svc_reps;
 };
 #define MGMT__LIST_POOLS_RESP__POOL__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_pools_resp__pool__descriptor) \
