@@ -113,7 +113,7 @@ class ListPoolsTest(TestWithServers):
             ),
             (
                 "Create 3 pools using all ranks with --svcn=3",
-                {"rank_lists": [None for _ in ranks], "sr": 3}
+                {"rank_lists": [None for _ in ranks[:3]], "sr": 3}
             ),
         ]
         errors = []
