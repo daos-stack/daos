@@ -222,6 +222,10 @@
 #
 #  fabric_iface: qib0
 #  fabric_iface_port: 20000
+#
+#  # The server instance binds itself to cores and memory that are related
+#  # to the specified NUMA node.  For best performance, it is necessary to
+#  # select a NUMA node that matches that of the fabric_iface.
 #  pinned_numa_node: 0
 #
 #  # Force specific debug mask (D_LOG_MASK) at start up time.
@@ -313,6 +317,10 @@
 #
 #  fabric_iface: qib1
 #  fabric_iface_port: 20000
+#
+#  # The server instance binds itself to cores and memory that are related
+#  # to the specified NUMA node.  For best performance, it is necessary to
+#  # select a NUMA node that matches that of the fabric_iface.
 #  pinned_numa_node: 1
 #
 #  # Force specific debug mask (D_LOG_MASK) at start up time.
