@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,10 @@ package system
 
 import (
 	"encoding/json"
+	"fmt"
+	"sync"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 )
@@ -43,6 +46,17 @@ type (
 	// PoolServiceState is used to represent the state of the pool service
 	PoolServiceState uint
 
+	// PoolServiceStorage holds information about the pool storage.
+	PoolServiceStorage struct {
+		sync.Mutex
+		CreationRankStr string   // string rankset set at creation
+		creationRanks   *RankSet // used to reconstitute the rankset
+		CurrentRankStr  string   // string rankset representing current ranks
+		currentRanks    *RankSet // used to reconstitute the rankset
+		ScmPerRank      uint64   // scm per rank allocated during creation
+		NVMePerRank     uint64   // nvme per rank allocated during creation
+	}
+
 	// PoolService represents a pool service created to manage metadata
 	// for a DAOS Pool.
 	PoolService struct {
@@ -50,6 +64,7 @@ type (
 		PoolLabel string
 		State     PoolServiceState
 		Replicas  []Rank
+		Storage   *PoolServiceStorage
 	}
 
 	// PoolRankMap provides a map of Rank->[]*PoolService.
@@ -67,6 +82,76 @@ type (
 		Labels PoolLabelMap
 	}
 )
+
+// NewPoolService returns a properly-initialized *PoolService.
+func NewPoolService(uuid uuid.UUID, rankScm, rankNvme uint64, ranks []Rank) *PoolService {
+	rs := RankSetFromRanks(ranks)
+	return &PoolService{
+		PoolUUID: uuid,
+		State:    PoolServiceStateCreating,
+		Storage: &PoolServiceStorage{
+			ScmPerRank:      rankScm,
+			NVMePerRank:     rankNvme,
+			CreationRankStr: rs.RangedString(),
+			CurrentRankStr:  rs.RangedString(),
+		},
+	}
+}
+
+// CreationRanks returns the set of target ranks associated
+// with the pool's creation.
+func (pss *PoolServiceStorage) CreationRanks() []Rank {
+	pss.Lock()
+	defer pss.Unlock()
+
+	if pss.creationRanks == nil {
+		var err error
+		pss.creationRanks, err = CreateRankSet(pss.CreationRankStr)
+		if err != nil {
+			return nil
+		}
+	}
+	return pss.creationRanks.Ranks()
+}
+
+// CurrentRanks returns the set of target ranks associated
+// with the pool's current.
+func (pss *PoolServiceStorage) CurrentRanks() []Rank {
+	pss.Lock()
+	defer pss.Unlock()
+
+	if pss.currentRanks == nil {
+		var err error
+		pss.currentRanks, err = CreateRankSet(pss.CurrentRankStr)
+		if err != nil {
+			return nil
+		}
+	}
+	return pss.currentRanks.Ranks()
+}
+
+// TotalSCM returns the total amount of SCM storage allocated to
+// the pool, calculated from the current set of ranks multiplied
+// by the per-rank SCM allocation made at creation time.
+func (pss *PoolServiceStorage) TotalSCM() uint64 {
+	return uint64(len(pss.CurrentRanks())) * pss.ScmPerRank
+}
+
+// TotalNVMe returns the total amount of NVMe storage allocated to
+// the pool, calculated from the current set of ranks multiplied
+// by the per-rank NVMe allocation made at creation time.
+func (pss *PoolServiceStorage) TotalNVMe() uint64 {
+	return uint64(len(pss.CurrentRanks())) * pss.NVMePerRank
+}
+
+func (pss *PoolServiceStorage) String() string {
+	if pss == nil {
+		return "no pool storage info available"
+	}
+	return fmt.Sprintf("total SCM: %s, total NVMe: %s",
+		humanize.Bytes(pss.TotalSCM()),
+		humanize.Bytes(pss.TotalNVMe()))
+}
 
 func (pss PoolServiceState) String() string {
 	return [...]string{
@@ -160,7 +245,9 @@ func (pdb *PoolDatabase) UnmarshalJSON(data []byte) error {
 // updating all of the relevant maps.
 func (pdb *PoolDatabase) addService(ps *PoolService) {
 	pdb.Uuids[ps.PoolUUID] = ps
-	pdb.Labels[ps.PoolLabel] = ps
+	if ps.PoolLabel != "" {
+		pdb.Labels[ps.PoolLabel] = ps
+	}
 	for _, rank := range ps.Replicas {
 		pdb.Ranks[rank] = append(pdb.Ranks[rank], ps)
 	}
@@ -178,7 +265,9 @@ func (pdb *PoolDatabase) updateService(cur, new *PoolService) {
 	// TODO: Update svc rank map
 	cur.Replicas = new.Replicas
 
-	delete(pdb.Labels, cur.PoolLabel)
+	if cur.PoolLabel != "" {
+		delete(pdb.Labels, cur.PoolLabel)
+	}
 	cur.PoolLabel = new.PoolLabel
 	if cur.PoolLabel != "" {
 		pdb.Labels[cur.PoolLabel] = cur
@@ -189,7 +278,9 @@ func (pdb *PoolDatabase) updateService(cur, new *PoolService) {
 // updating all of the relevant maps.
 func (pdb *PoolDatabase) removeService(ps *PoolService) {
 	delete(pdb.Uuids, ps.PoolUUID)
-	delete(pdb.Labels, ps.PoolLabel)
+	if ps.PoolLabel != "" {
+		delete(pdb.Labels, ps.PoolLabel)
+	}
 	for _, rank := range ps.Replicas {
 		rankServices := pdb.Ranks[rank]
 		for idx, rs := range rankServices {

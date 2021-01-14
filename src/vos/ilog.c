@@ -1489,6 +1489,7 @@ enum {
 	AGG_RC_NEXT,
 	AGG_RC_REMOVE,
 	AGG_RC_REMOVE_PREV,
+	AGG_RC_ABORT,
 };
 
 static int
@@ -1502,6 +1503,10 @@ check_agg_entry(const struct ilog_entry *entry, struct agg_arg *agg_arg)
 		agg_arg->aa_prev ? agg_arg->aa_prev->ie_id.id_epoch : 0,
 		agg_arg->aa_prior_punch ?
 		agg_arg->aa_prior_punch->ie_id.id_epoch : 0);
+
+	/* Abort ilog aggregation on hitting any uncommitted entry */
+	if (entry->ie_status == ILOG_UNCOMMITTED)
+		D_GOTO(done, rc = AGG_RC_ABORT);
 
 	if (entry->ie_id.id_epoch > agg_arg->aa_epr->epr_hi)
 		D_GOTO(done, rc = AGG_RC_DONE);
@@ -1642,6 +1647,9 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 			if (rc == 0)
 				removed++;
 			break;
+		case AGG_RC_ABORT:
+			rc = -DER_TX_BUSY;
+			goto done;
 		case AGG_RC_REMOVE_PREV:
 			/* Fall through: Should not get this here */
 		default:
@@ -1679,6 +1687,9 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 			if (rc != 0)
 				goto done;
 			break;
+		case AGG_RC_ABORT:
+			rc = -DER_TX_BUSY;
+			goto done;
 		default:
 			/* Unknown return code */
 			D_ASSERT(0);

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -123,6 +123,6 @@ func MockScmMountPoint(varIdx ...int32) *ctlpb.ScmNamespace_Mount {
 // MockPoolList returns a slice of mock protobuf Pool messages used in tests for
 // multiple packages.
 var MockPoolList = []*mgmtpb.ListPoolsResp_Pool{
-	{Uuid: "12345678-1234-1234-1234-123456789abc", Svcreps: []uint32{1, 2}},
-	{Uuid: "12345678-1234-1234-1234-cba987654321", Svcreps: []uint32{0}},
+	{Uuid: "12345678-1234-1234-1234-123456789abc", SvcReps: []uint32{1, 2}},
+	{Uuid: "12345678-1234-1234-1234-cba987654321", SvcReps: []uint32{0}},
 }
