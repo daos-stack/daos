@@ -382,7 +382,7 @@ int d_log_init(void);
  * \return			0 on success, -1 on failure
  */
 int d_log_init_adv(char *log_tag, char *log_file, unsigned int flavor,
-		     d_dbug_t def_mask, d_dbug_t err_mask);
+		   d_dbug_t def_mask, d_dbug_t err_mask);
 
 /**
  * Remove a reference on the default cart log.  Calls d_log_close
@@ -419,7 +419,7 @@ void d_log_sync_mask(void);
  * \return			0 on success, -1 on error.
  */
 int d_log_open(char *tag, int maxfac_hint, int default_mask,
-	      int stderr_mask, char *logfile, int flags);
+	       int stderr_mask, char *logfile, int flags);
 
 /**
  * set the logmask for a given facility.

@@ -142,7 +142,6 @@ struct d_log_xstate d_log_xst;
 static struct d_log_state mst;
 static d_list_t	d_log_caches;
 
-
 /* default name for facility 0 */
 static const char *default_fac0name = "CLOG";
 
@@ -224,7 +223,7 @@ static int clog_setnfac(int n)
 	for (/*null */ ; lcv < try; lcv++) {	/* init the new */
 		nfacs[lcv].fac_mask = mst.def_mask;
 		nfacs[lcv].fac_aname =
-		    (lcv == 0) ? (char *) default_fac0name : NULL;
+		    (lcv == 0) ? (char *)default_fac0name : NULL;
 		nfacs[lcv].fac_lname = NULL;
 		nfacs[lcv].is_enabled = true; /* enable all facs by default */
 	}
@@ -305,7 +304,6 @@ d_log_add_cache(int *cache, int nr)
 	clog_unlock();
 }
 
-
 /**
  * dlog_cleanout: release previously allocated resources (e.g. from a
  * close or during a failed open).  this function assumes the clogmux
@@ -361,7 +359,8 @@ static void dlog_cleanout(void)
 		}
 		free(d_log_xst.dlog_facs);
 		d_log_xst.dlog_facs = NULL;
-		d_log_xst.fac_cnt = mst.fac_alloc = 0;
+		d_log_xst.fac_cnt = 0;
+		mst.fac_alloc = 0;
 	}
 
 	reset_caches(true); /* Log is going away, reset cached masks */
@@ -605,7 +604,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 			 "%02d/%02d-%02d:%02d:%02d.%02ld %s ",
 			 tm->tm_mon + 1, tm->tm_mday,
 			 tm->tm_hour, tm->tm_min, tm->tm_sec,
-			 (long int) tv.tv_usec / 10000, mst.uts.nodename);
+			 (long int)tv.tv_usec / 10000, mst.uts.nodename);
 
 	if (mst.oflags & DLOG_FLV_TAG) {
 		if (mst.oflags & DLOG_FLV_LOGPID) {
@@ -665,7 +664,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	} else {
 		/* it fit, make sure it ends in newline */
 		if (b[tlen - 1] != '\n') {
-			D_ASSERT(tlen < DLOG_TBSIZ-1);
+			D_ASSERT(tlen < DLOG_TBSIZ - 1);
 			b[tlen++] = '\n';
 			b[tlen] = 0;
 		}
@@ -805,7 +804,7 @@ d_getenv_size(char *env)
  */
 int
 d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
-	      char *logfile, int flags)
+	   char *logfile, int flags)
 {
 	int	tagblen;
 	char	*newtag = NULL, *cp;
@@ -933,7 +932,7 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 		fprintf(stderr, "clog_setnfac failed.\n");
 		goto error;
 	}
-	(void) uname(&mst.uts);
+	(void)uname(&mst.uts);
 	d_log_xst.nodename = mst.uts.nodename;	/* expose this */
 	/* chop off the domainname */
 	if ((flags & DLOG_FLV_FQDN) == 0) {
@@ -1062,7 +1061,6 @@ int d_log_namefacility(int facility, const char *aname, const char *lname)
 		d_log_xst.dlog_facs[facility].is_enabled = false;
 	else
 		d_log_xst.dlog_facs[facility].is_enabled = true;
-
 
 	rv = 0;		/* now we have success */
 done:
@@ -1201,18 +1199,18 @@ int d_log_setmasks(char *mstr, int mlen0)
 			for (facno = 0; facno < d_log_xst.fac_cnt; facno++) {
 				if (d_log_xst.dlog_facs[facno].fac_aname &&
 				    strlen(d_log_xst.dlog_facs[facno].
-					   fac_aname) == faclen
-				    && strncasecmp(d_log_xst.dlog_facs[facno].
-						   fac_aname, fac,
-						   faclen) == 0) {
+					   fac_aname) == faclen &&
+				    strncasecmp(d_log_xst.dlog_facs[facno].
+						fac_aname, fac,
+						faclen) == 0) {
 					break;
 				}
 				if (d_log_xst.dlog_facs[facno].fac_lname &&
 				    strlen(d_log_xst.dlog_facs[facno].
-					   fac_lname) == faclen
-				    && strncasecmp(d_log_xst.dlog_facs[facno].
-						   fac_lname, fac,
-						   faclen) == 0) {
+					   fac_lname) == faclen &&
+				    strncasecmp(d_log_xst.dlog_facs[facno].
+						fac_lname, fac,
+						faclen) == 0) {
 					break;
 				}
 			}
@@ -1246,7 +1244,6 @@ int d_log_setmasks(char *mstr, int mlen0)
 				tmp = d_log_setlogmask(facno, prino);
 				if (rv != -1)
 					rv = tmp;
-
 			}
 		}
 	}

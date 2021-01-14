@@ -489,7 +489,6 @@ cleanup_dbg_namebit(void)
 	}
 }
 
-
 /**
  * Setup the debug names and mask bits.
  *
@@ -526,7 +525,7 @@ setup_dbg_namebit(void)
 
 int
 d_log_init_adv(char *log_tag, char *log_file, unsigned int flavor,
-		 d_dbug_t def_mask, d_dbug_t err_mask)
+	       d_dbug_t def_mask, d_dbug_t err_mask)
 {
 	int rc = 0;
 

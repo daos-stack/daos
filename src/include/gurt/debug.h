@@ -318,7 +318,6 @@ do {									\
 	assert(cond);							\
 } while (0)
 
-
 #define D_CASSERT(cond, ...)						\
 	_Static_assert(cond, #cond ": " __VA_ARGS__)
 
