@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -743,12 +743,13 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 	D_ASSERT(rebuild_op == RB_OP_FAIL ||
 		 rebuild_op == RB_OP_DRAIN ||
 		 rebuild_op == RB_OP_REINT ||
-		 rebuild_op == RB_OP_EXTEND);
+		 rebuild_op == RB_OP_EXTEND ||
+		 rebuild_op == RB_OP_RECLAIM);
 	match_status = (rebuild_op == RB_OP_FAIL ? PO_COMP_ST_DOWN :
 			rebuild_op == RB_OP_DRAIN ? PO_COMP_ST_DRAIN :
 			rebuild_op == RB_OP_REINT ? PO_COMP_ST_UP :
 			rebuild_op == RB_OP_EXTEND ? PO_COMP_ST_NEW :
-			PO_COMP_ST_UNKNOWN);
+			PO_COMP_ST_UPIN); /* RB_OP_RECLAIM */
 
 	if (tgts != NULL && tgts->pti_number > 0) {
 		bool changed = false;
@@ -774,11 +775,7 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 						target->ta_comp.co_rank);
 			if (dom && dom->do_comp.co_status == match_status) {
 				D_DEBUG(DB_REBUILD, "rebuild %s rank %u/%u\n",
-					rebuild_op == RB_OP_FAIL ? "fail" :
-					rebuild_op == RB_OP_DRAIN ? "drain" :
-					rebuild_op == RB_OP_REINT ? "reint" :
-					rebuild_op == RB_OP_EXTEND ? "extend" :
-					"???",
+					RB_OP_STR(rebuild_op),
 					target->ta_comp.co_rank,
 					target->ta_comp.co_id);
 			}
@@ -1145,6 +1142,7 @@ done:
 				" UPIN: %d\n", task->dst_tgts.pti_ids[0].pti_id,
 				DP_UUID(task->dst_pool_uuid), rc);
 		}
+		/* No change needed for RB_OP_RECLAIM */
 	}
 iv_stop:
 	/* NB: even if there are some failures, the leader should
@@ -1420,6 +1418,7 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 	uuid_copy(task->dst_pool_uuid, uuid);
 	D_INIT_LIST_HEAD(&task->dst_list);
 
+	/* TODO: Merge everything for reclaim */
 	rc = pool_target_id_list_merge(&task->dst_tgts, tgts);
 	if (rc)
 		D_GOTO(free, rc);
