@@ -831,7 +831,9 @@ class YamlCommand(SubProcessCommand):
 
         # debug to list copy of cert files
         if names:
-            self.log.debug("Copied certificates for %s:", self._command)
+            self.log.debug(
+                "Copied certificates for %s (in %s):",
+                self._command, ", ".join(names))
             result = run_command(
                 "{} /usr/bin/ls -la {}".format(
                     get_clush_command(hosts, "-S -v", True), " ".join(names)),

@@ -450,7 +450,7 @@ class DaosServerManager(SubprocessManager):
         self._prepare_dmg_certificates()
 
         # Prepare dmg for running storage format on all server hosts
-        self.dmg.temporary_file_hosts = socket.gethostname().split(".")[0]
+        self.dmg.temporary_file_hosts = socket.gethostname().split(".")[0:1]
         self._prepare_dmg_hostlist(self._hosts)
         if not self.dmg.yaml:
             # If using a dmg config file, transport security was

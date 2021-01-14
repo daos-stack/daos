@@ -184,7 +184,7 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
         elif verbose:
             msg = "Error occurred running '{}': {}".format(command, error)
         else:
-            msg = "Error occurred running '{}':\n  {}".format(
+            msg = "Error occurred running '{}':\n{}".format(
                 command, error.result)
 
     if msg is not None:
@@ -795,7 +795,6 @@ def create_directory(hosts, directory, timeout=10, verbose=True,
                 pid             - command's pid
 
     """
-    hosts = convert_string(hosts)
     return run_command(
         "{} /usr/bin/mkdir -p {}".format(
             get_clush_command(hosts, "-S -v", sudo), directory),
@@ -834,7 +833,6 @@ def change_file_owner(hosts, filename, owner, timeout=10, verbose=True,
                 pid             - command's pid
 
     """
-    hosts = convert_string(hosts)
     return run_command(
         "{0} chown {1}:{1} {2}".format(
             get_clush_command(hosts, "-S -v", sudo), owner, filename),
@@ -883,21 +881,36 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
 
     """
     result = None
-    hosts = convert_string(hosts)
     if mkdir:
-        result = create_directory(hosts, os.path.dirname(destination))
+        result = create_directory(
+            hosts, os.path.dirname(destination), verbose=verbose,
+            raise_exception=raise_exception)
     if result is None or result.exit_status == 0:
-        # When "sudo clush ..." works in CI, switch back to this method
-        # result = run_command(
-        #     "{} --copy {} --dest {}".format(
-        #         get_clush_command(hosts, "-S -v", sudo), source, destination),
-        #     timeout=timeout, verbose=verbose, raise_exception=raise_exception)
-        localhost = gethostname().split(".")[0]
-        result = run_command(
-            "{} scp -o StrictHostKeyChecking=no {}:{} {}".format(
-                get_clush_command(hosts, "-S -v", sudo), localhost, source,
-                destination),
-            timeout=timeout, verbose=verbose, raise_exception=raise_exception)
+        if sudo:
+            # In order to copy a protected file to a remote host in CI the
+            # source will first be copied as is to the remote host
+            localhost = gethostname().split(".")[0]
+            other_hosts = [host for host in hosts if host != localhost]
+            if other_hosts:
+                result = distribute_files(
+                    other_hosts, source, source, mkdir=True,
+                    timeout=timeout, verbose=verbose,
+                    raise_exception=raise_exception, sudo=False, owner=None)
+            if result is None or result.exit_status == 0:
+                # Then a local sudo copy will be executed on the remote node to
+                # copy the source to the destination
+                command = "{} cp {} {}".format(
+                    get_clush_command(hosts, "-S -v", True), source,
+                    destination)
+                result = run_command(command, timeout, verbose, raise_exception)
+        else:
+            # Without the sudo requirement copy the source to the destination
+            # directly with clush
+            command = "{} --copy {} --dest {}".format(
+                get_clush_command(hosts, "-S -v", False), source, destination)
+            result = run_command(command, timeout, verbose, raise_exception)
+
+        # If requested update the ownership of the destination file
         if owner is not None and result.exit_status == 0:
             change_file_owner(
                 hosts, destination, owner, timeout=timeout, verbose=verbose,
@@ -913,7 +926,7 @@ def get_clush_command(hosts, args=None, sudo=False):
         args (str, optional): additional clush command line arguments. Defaults
             to None.
         sudo (bool, optional): if set the clush command will be configured to
-            run with sudo privileges. Defaults to False.
+            run a command with sudo privileges. Defaults to False.
 
     Returns:
         str: the clush command
@@ -925,8 +938,6 @@ def get_clush_command(hosts, args=None, sudo=False):
     if sudo:
         # If ever needed, this is how to disable host key checking:
         # command.extend(["-o", "-oStrictHostKeyChecking=no", "sudo"])
-        # When "sudo clush ..." works in CI, switch back to this method
-        # command.insert(0, "sudo")
         command.append("sudo")
     return " ".join(command)
 
