@@ -1,5 +1,7 @@
 [Unit]
 Description=DAOS Server
+StartLimitIntervalSec=60
+StartLimitBurst=5 
 Wants=network-online.target
 After=network-online.target
 
@@ -13,6 +15,7 @@ ExecStart=/usr/bin/daos_server start
 StandardOutput=journal
 StandardError=journal
 Restart=on-failure
+RestartSec=10
 LimitMEMLOCK=infinity
 LimitCORE=infinity
 
