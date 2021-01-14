@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2340,6 +2340,9 @@ again:
 	 * the RPC to other replicas.
 	 */
 
+	if (flags & ORF_RESEND)
+		dtx_flags |= DTX_RESEND;
+
 	rc = dtx_leader_begin(ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 1,
 			      version, &orw->orw_oid, dti_cos, dti_cos_cnt,
 			      tgts, tgt_cnt, dtx_flags, mbs, &dlh);
@@ -2354,9 +2357,6 @@ again:
 	exec_arg.args = split_req;
 	exec_arg.flags = flags;
 	exec_arg.start = orw->orw_start_shard;
-
-	if (flags & ORF_RESEND)
-		dlh.dlh_handle.dth_resent = 1;
 
 	/* Execute the operation on all targets */
 	rc = dtx_leader_exec_ops(&dlh, obj_tgt_update, NULL, NULL, &exec_arg);
@@ -3202,6 +3202,9 @@ again:
 	 * the RPC to other replicas.
 	 */
 
+	if (flags & ORF_RESEND)
+		dtx_flags |= DTX_RESEND;
+
 	rc = dtx_leader_begin(ioc.ioc_vos_coh, &opi->opi_dti, &epoch, 1,
 			      version, &opi->opi_oid, dti_cos, dti_cos_cnt,
 			      tgts, tgt_cnt, dtx_flags, mbs, &dlh);
@@ -3214,9 +3217,6 @@ again:
 	exec_arg.rpc = rpc;
 	exec_arg.ioc = &ioc;
 	exec_arg.flags = flags;
-
-	if (flags & ORF_RESEND)
-		dlh.dlh_handle.dth_resent = 1;
 
 	/* Execute the operation on all shards */
 	rc = dtx_leader_exec_ops(&dlh, obj_tgt_punch, obj_punch_agg_cb,
@@ -4208,6 +4208,8 @@ ds_obj_dtx_leader_ult(void *arg)
 
 	if (tgt_cnt <= 1 && dcde->dcde_write_cnt <= 1)
 		dtx_flags |= DTX_SOLO;
+	if (flags & ORF_RESEND)
+		dtx_flags |= DTX_RESEND;
 
 	rc = dtx_leader_begin(dca->dca_ioc->ioc_vos_coh, &dcsh->dcsh_xid,
 			      &dcsh->dcsh_epoch, dcde->dcde_write_cnt,
@@ -4221,9 +4223,6 @@ ds_obj_dtx_leader_ult(void *arg)
 	exec_arg.ioc = dca->dca_ioc;
 	exec_arg.args = dca;
 	exec_arg.flags = flags;
-
-	if (flags & ORF_RESEND)
-		dlh.dlh_handle.dth_resent = 1;
 
 	/* Execute the operation on all targets */
 	rc = dtx_leader_exec_ops(&dlh, obj_obj_dtx_leader, NULL, NULL, &exec_arg);
