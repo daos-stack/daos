@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,7 +57,7 @@ dfuse_cb_symlink(fuse_req_t req, const char *link,
 	if (rc)
 		D_GOTO(err, rc);
 
-	dfuse_reply_entry(fs_handle, ie, NULL, req);
+	dfuse_reply_entry(fs_handle, ie, NULL, true, req);
 
 	return;
 err:

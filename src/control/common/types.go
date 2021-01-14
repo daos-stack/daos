@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -77,8 +77,8 @@ func (acl *AccessControlList) String() string {
 
 // PoolDiscovery represents the basic discovery information for a pool.
 type PoolDiscovery struct {
-	UUID        string   // Unique identifier
-	SvcReplicas []uint32 `json:"Svcreps"` // Ranks of pool service replicas
+	UUID        string   `json:"uuid"`     // Unique identifier
+	SvcReplicas []uint32 `json:"svc_reps"` // Ranks of pool service replicas
 }
 
 // InterfaceIsNil returns true if the interface itself or its underlying value

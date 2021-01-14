@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2020 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -280,6 +280,8 @@ enum {
 	OC_EC_2P2G4K,
 	OC_EC_2P2G8K,
 	OC_EC_2P2GX,
+
+	OC_EC_3P1G1,
 
 	/** EC 4+1 object classes */
 	OC_EC_4P1G1	= 320,

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -63,6 +63,11 @@ var (
 		fmt.Sprintf("%s instance not started or not responding on dRPC", build.DataPlaneName),
 		"retry the operation or check server logs for more details",
 	)
+	FaultPoolInvalidServiceReps = serverFault(
+		code.ServerPoolInvalidServiceReps,
+		fmt.Sprintf("pool service replicas number should be an odd number between 1 and %d", MaxPoolServiceReps),
+		"retry the request with a valid number of pool service replicas",
+	)
 )
 
 func FaultInstancesNotStopped(action string, rank system.Rank) *fault.Fault {
@@ -76,22 +81,22 @@ func FaultInstancesNotStopped(action string, rank system.Rank) *fault.Fault {
 func FaultPoolNvmeTooSmall(reqBytes uint64, targetCount int) *fault.Fault {
 	return serverFault(
 		code.ServerPoolNvmeTooSmall,
-		fmt.Sprintf("requested NVMe capacity (%s) is too small (min %s)",
-			humanize.IBytes(reqBytes),
-			humanize.IBytes(ioserver.NvmeMinBytesPerTarget*uint64(targetCount))),
+		fmt.Sprintf("requested NVMe capacity (%s / %d) is too small (min %s per target)",
+			humanize.Bytes(reqBytes), targetCount,
+			humanize.IBytes(ioserver.NvmeMinBytesPerTarget)),
 		fmt.Sprintf("NVMe capacity should be larger than %s",
-			humanize.IBytes(ioserver.NvmeMinBytesPerTarget*uint64(targetCount))),
+			humanize.Bytes(ioserver.NvmeMinBytesPerTarget*uint64(targetCount))),
 	)
 }
 
 func FaultPoolScmTooSmall(reqBytes uint64, targetCount int) *fault.Fault {
 	return serverFault(
 		code.ServerPoolScmTooSmall,
-		fmt.Sprintf("requested SCM capacity (%s) is too small (min %s)",
-			humanize.IBytes(reqBytes),
-			humanize.IBytes(ioserver.ScmMinBytesPerTarget*uint64(targetCount))),
+		fmt.Sprintf("requested SCM capacity (%s / %d) is too small (min %s per target)",
+			humanize.Bytes(reqBytes), targetCount,
+			humanize.IBytes(ioserver.ScmMinBytesPerTarget)),
 		fmt.Sprintf("SCM capacity should be larger than %s",
-			humanize.IBytes(ioserver.ScmMinBytesPerTarget*uint64(targetCount))),
+			humanize.Bytes(ioserver.ScmMinBytesPerTarget*uint64(targetCount))),
 	)
 }
 
@@ -138,6 +143,14 @@ func FaultBdevNotFound(bdevs []string) *fault.Fault {
 		code.ServerBdevNotFound,
 		fmt.Sprintf("NVMe SSD%s %v not found", common.Pluralise("", len(bdevs)), bdevs),
 		fmt.Sprintf("check SSD%s %v that are specified in server config exist", common.Pluralise("", len(bdevs)), bdevs),
+	)
+}
+
+func FaultWrongSystem(reqName, sysName string) *fault.Fault {
+	return serverFault(
+		code.ServerWrongSystem,
+		fmt.Sprintf("request system does not match running system (%s != %s)", reqName, sysName),
+		"retry the request with the correct system name",
 	)
 }
 

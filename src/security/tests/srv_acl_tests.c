@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2041,7 +2041,7 @@ static void
 test_get_rebuild_cont_capas(void **state)
 {
 	assert_int_equal(ds_sec_get_rebuild_cont_capabilities(),
-			 CONT_CAPA_READ_DATA);
+			 CONT_CAPA_READ_DATA | CONT_CAPA_WRITE_DATA);
 }
 
 static void

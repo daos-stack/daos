@@ -22,7 +22,11 @@
 //
 
 syntax = "proto3";
-package ctl;
+package mgmt;
+
+option go_package = "github.com/daos-stack/daos/src/control/common/proto/mgmt";
+
+import "shared/ranks.proto";
 
 // Management Service Protobuf Definitions related to interactions between
 // DAOS control server and DAOS system.
@@ -39,22 +43,12 @@ message SystemMember {
 	string faultDomain = 6;
 }
 
-// RankResult is a generic result for a system operation on a rank.
-// Identical to mgmt.proto RanksResp_RankResult.
-message RankResult {
-	uint32 rank = 1;
-	string action = 2;
-	bool errored = 3;
-	string msg = 4;
-	uint32 state = 5;
-	string addr = 6;
-}
-
 // SystemStopReq supplies system shutdown parameters.
 message SystemStopReq {
-	bool prep = 1; // indicates that the prep stage should be performed
-	bool kill = 2; // indicates that the kill stage should be performed
-	bool force = 3;
+	string sys = 1; // DAOS system name
+	bool prep = 2; // indicates that the prep stage should be performed
+	bool kill = 3; // indicates that the kill stage should be performed
+	bool force = 4;
 	string ranks = 5; // rankset to query
 	string hosts = 6; // hostset to query
 }
@@ -62,13 +56,14 @@ message SystemStopReq {
 // SystemStopResp returns status of shutdown attempt and results
 // of attempts to stop system members.
 message SystemStopResp {
-	repeated RankResult results = 1;
+	repeated shared.RankResult results = 1;
 	string absentranks = 2; // rankset missing from membership
 	string absenthosts = 3; // hostset missing from membership
 }
 
 // SystemResetFormatReq supplies system reset format parameters.
 message SystemResetFormatReq {
+	string sys = 1; // DAOS system name
 	string ranks = 2; // rankset to query
 	string hosts = 3; // hostset to query
 }
@@ -76,13 +71,14 @@ message SystemResetFormatReq {
 // SystemResetFormatResp returns status of reset format attempt and results
 // of attempts to reset format of system members.
 message SystemResetFormatResp {
-	repeated RankResult results = 1;
+	repeated shared.RankResult results = 1;
 	string absentranks = 2; // rankset missing from membership
 	string absenthosts = 3; // hostset missing from membership
 }
 
 // SystemStartReq supplies system restart parameters.
 message SystemStartReq {
+	string sys = 1; // DAOS system name
 	string ranks = 2; // rankset to query
 	string hosts = 3; // hostset to query
 }
@@ -90,13 +86,14 @@ message SystemStartReq {
 // SystemStartResp returns status of restart attempt and results
 // of attempts to start system members.
 message SystemStartResp {
-	repeated RankResult results = 1;
+	repeated shared.RankResult results = 1;
 	string absentranks = 2; // rankset missing from membership
 	string absenthosts = 3; // hostset missing from membership
 }
 
 // SystemQueryReq supplies system query parameters.
 message SystemQueryReq {
+	string sys = 1; // DAOS system name
 	string ranks = 2; // rankset to query
 	string hosts = 3; // hostset to query
 }
