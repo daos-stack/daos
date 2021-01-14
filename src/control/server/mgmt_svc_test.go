@@ -25,6 +25,7 @@ package server
 
 import (
 	"context"
+	"sort"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -54,18 +55,26 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				CrtCtxShareAddr: 1,
 				CrtTimeout:      10, NetDevClass: netdetect.Infiniband,
 			},
-			req: &mgmtpb.GetAttachInfoReq{Sys: build.DefaultSystemName},
+			req: &mgmtpb.GetAttachInfoReq{
+				Sys:      build.DefaultSystemName,
+				AllRanks: true,
+			},
 			expResp: &mgmtpb.GetAttachInfoResp{
 				Provider:        "ofi+verbs",
 				CrtCtxShareAddr: 1,
 				CrtTimeout:      10,
 				NetDevClass:     netdetect.Infiniband,
-				Psrs: []*mgmtpb.GetAttachInfoResp_Psr{
+				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 					{
 						Rank: msReplica.Rank.Uint32(),
 						Uri:  msReplica.FabricURI,
 					},
+					{
+						Rank: nonReplica.Rank.Uint32(),
+						Uri:  nonReplica.FabricURI,
+					},
 				},
+				MsRanks: []uint32{0},
 			},
 		},
 		"Server uses sockets + Ethernet": {
@@ -75,18 +84,26 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				CrtTimeout:      5,
 				NetDevClass:     netdetect.Ether,
 			},
-			req: &mgmtpb.GetAttachInfoReq{Sys: build.DefaultSystemName},
+			req: &mgmtpb.GetAttachInfoReq{
+				Sys:      build.DefaultSystemName,
+				AllRanks: true,
+			},
 			expResp: &mgmtpb.GetAttachInfoResp{
 				Provider:        "ofi+sockets",
 				CrtCtxShareAddr: 0,
 				CrtTimeout:      5,
 				NetDevClass:     netdetect.Ether,
-				Psrs: []*mgmtpb.GetAttachInfoResp_Psr{
+				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 					{
 						Rank: msReplica.Rank.Uint32(),
 						Uri:  msReplica.FabricURI,
 					},
+					{
+						Rank: nonReplica.Rank.Uint32(),
+						Uri:  nonReplica.FabricURI,
+					},
 				},
+				MsRanks: []uint32{0},
 			},
 		},
 	} {
@@ -115,6 +132,11 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			gotResp, gotErr := tc.mgmtSvc.GetAttachInfo(context.TODO(), tc.req)
 			if gotErr != nil {
 				t.Fatalf("unexpected error: %+v\n", gotErr)
+			}
+
+			// Sort the "want" and "got" RankUris slices by rank before comparing them.
+			for _, r := range [][]*mgmtpb.GetAttachInfoResp_RankUri{tc.expResp.RankUris, gotResp.RankUris} {
+				sort.Slice(r, func(i, j int) bool { return r[i].Rank < r[j].Rank })
 			}
 
 			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
