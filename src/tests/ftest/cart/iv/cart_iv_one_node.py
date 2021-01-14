@@ -235,8 +235,8 @@ class CartIvOneNodeTest(TestWithoutServers):
 
             if "invalidate" in operation:
                 command = " {!s} -o '{!s}' -r '{!s}' -k '{!s}:{!s}' " \
-                            .format(command, operation, rank, key_rank, \
-                            key_idx )
+                            .format(command, operation, rank, key_rank,\
+                            key_idx)
                 if 'sync' in action:
                     command = "{!s} -s '{!s}'".format(command, action['sync'])
                 if 'sync' not in action:
@@ -354,7 +354,7 @@ class CartIvOneNodeTest(TestWithoutServers):
             ######################
             # Testing version number conflicts.
             ######################
-            # Test of verson skew on fetch between rank 0 and rank 1.
+            # Test of version skew on fetch between rank 0 and rank 1.
             # Make sure we can set version numbers.
             {"operation":"set_grp_version", "rank":0, "key":(0, 42),
              "version":"0xdeadc0de", "return_code":0, "expected_value":""},

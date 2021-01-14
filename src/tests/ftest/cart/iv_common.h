@@ -89,8 +89,8 @@ struct iv_key_struct {
 #define CRT_ISEQ_RPC_GET_GRP_VERSION	/* input fields */	 \
 	((uint32_t)		(unused)		CRT_VAR)
 
-#define CRT_OSEQ_RPC_GET_GRP_VERSION	/* output fields */	\
-	((uint32_t)		(version)		CRT_VAR)\
+#define CRT_OSEQ_RPC_GET_GRP_VERSION	/* output fields */	 \
+	((uint32_t)		(version)		CRT_VAR) \
 	((int32_t)		(rc)			CRT_VAR)
 
 #ifdef _SERVER
