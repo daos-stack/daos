@@ -3595,61 +3595,6 @@ dbtree_iter_prev(daos_handle_t ih)
 	return btr_iter_move(ih, false);
 }
 
-static int
-btr_iter_move_with_intent(daos_handle_t ih, uint32_t intent, bool forward)
-{
-	struct btr_context	*tcx;
-	struct btr_trace	*trace;
-	struct btr_iterator	*itr;
-	struct btr_check_alb	 alb;
-	int			 rc;
-
-	tcx = btr_hdl2tcx(ih);
-	if (tcx == NULL)
-		return -DER_NO_HDL;
-
-	itr = &tcx->tc_itr;
-	alb.intent = intent;
-
-again:
-	rc = btr_iter_move(ih, forward);
-	if (rc != 0)
-		return rc;
-
-	trace = &tcx->tc_trace[tcx->tc_depth - 1];
-	alb.nd_off = trace->tr_node;
-	alb.at = trace->tr_at;
-	rc = btr_check_availability(tcx, &alb);
-	switch (rc) {
-	case PROBE_RC_UNAVAILABLE:
-		goto again;
-	case PROBE_RC_INPROGRESS:
-		itr->it_state = BTR_ITR_FINI;
-		return -DER_INPROGRESS;
-	case PROBE_RC_DATA_LOSS:
-		itr->it_state = BTR_ITR_FINI;
-		return -DER_DATA_LOSS;
-	case PROBE_RC_OK:
-		return 0;
-	case PROBE_RC_ERR:
-	default:
-		itr->it_state = BTR_ITR_FINI;
-		return -DER_INVAL;
-	}
-}
-
-int
-dbtree_iter_next_with_intent(daos_handle_t ih, uint32_t intent)
-{
-	return btr_iter_move_with_intent(ih, intent, true);
-}
-
-int
-dbtree_iter_prev_with_intent(daos_handle_t ih, uint32_t intent)
-{
-	return btr_iter_move_with_intent(ih, intent, false);
-}
-
 /**
  * Fetch the key and value of current record, if \a key and \a val provide
  * sink buffers, then key and value will be copied into them. If buffer
