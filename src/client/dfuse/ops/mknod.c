@@ -32,8 +32,8 @@ dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct dfuse_inode_entry	*ie;
 	int				rc;
 
-	DFUSE_TRA_INFO(parent,
-		       "Parent:%lu '%s'", parent->ie_stat.st_ino, name);
+	DFUSE_TRA_INFO(parent, "Parent:%lu '%s'", parent->ie_stat.st_ino,
+		       name);
 
 	D_ALLOC_PTR(ie);
 	if (!ie)
@@ -43,13 +43,11 @@ dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	DFUSE_TRA_DEBUG(ie, "file '%s' mode 0%o", name, mode);
 
-	rc = dfs_open(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
-		      mode, O_CREAT | O_EXCL | O_RDWR,
-		      0, 0, NULL, &ie->ie_obj);
-	if (rc) {
-		DFUSE_TRA_DEBUG(parent, "dfs_open() failed %d", rc);
+	rc = dfs_open_stat(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
+			   mode, O_CREAT | O_EXCL | O_RDWR,
+			   0, 0, NULL, &ie->ie_obj, &ie->ie_stat);
+	if (rc)
 		D_GOTO(err, rc);
-	}
 
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
@@ -58,21 +56,13 @@ dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_truncated = false;
 	atomic_store_relaxed(&ie->ie_ref, 1);
 
-	rc = dfs_ostat(parent->ie_dfs->dfs_ns, ie->ie_obj, &ie->ie_stat);
-	if (rc) {
-		DFUSE_TRA_DEBUG(parent, "dfs_ostat() failed %d", rc);
-		D_GOTO(release, rc);
-	}
-
 	LOG_MODES(ie, mode);
 
 	/* Return the new inode data, and keep the parent ref */
 	dfuse_reply_entry(fs_handle, ie, NULL, true, req);
 
 	return;
-release:
-	dfs_release(ie->ie_obj);
 err:
-	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+	DFUSE_REPLY_ERR_RAW(parent, req, rc);
 	D_FREE(ie);
 }
