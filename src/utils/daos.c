@@ -1111,9 +1111,6 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	case CONT_COPY:
 		rc = cont_copy_hdlr(ap);
 		break;
-
-
-	/* TODO: implement the following ops */
 	case CONT_LIST_OBJS:
 		rc = cont_list_objs_hdlr(ap);
 		break;
