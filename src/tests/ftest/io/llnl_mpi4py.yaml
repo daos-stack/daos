@@ -9,6 +9,10 @@ hosts:
 timeout: 180
 server_config:
     name: daos_server
+    servers:
+        env_vars:
+          - DD_MASK=io,trace
+          - D_LOG_MASK=DEBUG,MEM=ERR
 pool:
     mode: 146
     name: daos_server
