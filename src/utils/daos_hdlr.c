@@ -3411,7 +3411,8 @@ out_disconnect:
 		D_GOTO(out, rc);
 	}
 	/* only destroy snapshot if we created it, and it wasn't
-	 * passed in by the user */
+	 * passed in by the user
+	 */
 	if (!is_usr_snap) {
 		epr.epr_lo = epoch;
 		epr.epr_hi = epoch;
