@@ -263,7 +263,8 @@ class CartUtils():
                                        daos_test_shared_dir,
                                        tst_ppn)
 
-        mca_flags = "--mca btl self,tcp "
+        mca_flags = "--mca btl ^openib "
+        mca_flags += "--mca oob ^ud "
 
         if self.provider == "ofi+psm2":
             mca_flags += "--mca pml ob1 "
