@@ -64,39 +64,39 @@ class PoolCreateTests(PoolTestBase):
                 max_duration, exceeding_duration))
 
     def test_create_max_pool_scm_only(self):
-        """JIRA ID: DAOS-3599.
+        """JIRA ID: DAOS-5114 / SRS-1.
 
         Test Description:
             Create a single pool that utilizes all the persistent memory on all
             of the servers. Verify that the pool creation takes no longer than
-            2 minutes.
+            1 minute.
 
         :avocado: tags=all,daily_regression,hw,large,pool
         :avocado: tags=create_max_pool_scm_only
         """
         # Create 1 pool using 90% of the available SCM capacity (no NVMe)
         self.pool = self.get_pool_list(1, 0.9, None, 1)
-        self.check_pool_creation(120)
+        self.check_pool_creation(60)
 
     def test_create_max_pool(self):
-        """JIRA ID: DAOS-3599.
+        """JIRA ID: DAOS-5114 / SRS-3.
 
         Test Description:
             Create a single pool that utilizes all the persistent memory and all
             the SSD capacity on all of the servers.  Verify that pool creation
-            takes less than 4 minutes.
+            takes less than 2 minutes.
 
         :avocado: tags=all,daily_regression,hw,large,pool,create_max_pool
         """
         # Create 1 pool using 90% of the available capacity
         self.pool = self.get_pool_list(1, 0.9, 0.9, 1)
-        self.check_pool_creation(240)
+        self.check_pool_creation(120)
 
     def test_create_pool_quantity(self):
-        """JIRA ID: DAOS-3599.
+        """JIRA ID: DAOS-5114 / SRS-2 / SRS-4.
 
         Test Description:
-            Create 100 pools on all of the servers.
+            Create 200 pools on all of the servers.
             Perform an orderly system shutdown via cmd line (dmg).
             Restart the system via cmd line tool (dmg).
             Verify that DAOS is ready to accept requests with in 2 minutes.
