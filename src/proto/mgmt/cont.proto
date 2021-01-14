@@ -24,16 +24,19 @@
 syntax = "proto3";
 package mgmt;
 
+option go_package = "github.com/daos-stack/daos/src/control/common/proto/mgmt";
+
 // Management Service Protobuf Definitions related to interactions between
 // DAOS control server and DAOS containers.
 
 // ContSetOwnerReq supplies new pool parameters.
 message ContSetOwnerReq {
-	string contUUID = 1; // UUID of the container
-	string poolUUID = 2; // UUID of the pool that the container is in
-	string owneruser = 3; // formatted user e.g. "bob@"
-	string ownergroup = 4; // formatted group e.g. "builders@"
-	repeated uint32 svc_ranks = 5; // List of pool service ranks
+	string sys = 1; // DAOS system identifier
+	string contUUID = 2; // UUID of the container
+	string poolUUID = 3; // UUID of the pool that the container is in
+	string owneruser = 4; // formatted user e.g. "bob@"
+	string ownergroup = 5; // formatted group e.g. "builders@"
+	repeated uint32 svc_ranks = 6; // List of pool service ranks
 }
 
 // ContSetOwnerResp returns created pool uuid and ranks.

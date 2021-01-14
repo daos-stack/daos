@@ -628,14 +628,14 @@ vos_ts_table_free(struct vos_ts_table **ts_table);
  * \param[in]		flags	Operations flags
  * \param[in]		cflags	Check/update flags
  * \param[in]		akey_nr	Number of akeys in operation
- * \param[in]		tx_id	Optional transaction id
+ * \param[in]		dth	Optional transaction handle
  *
  * \return	0 on success, error otherwise.
  */
 int
 vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
 		    uint16_t cflags, uint32_t akey_nr,
-		    const struct dtx_id *tx_id);
+		    const struct dtx_handle *dth);
 
 /** Upgrade any negative entries in the set now that the associated
  *  update/punch has committed

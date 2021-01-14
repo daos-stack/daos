@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,6 +41,7 @@ enum REBUILD_TEST_OP_TYPE {
 	RB_OP_TYPE_FAIL,
 	RB_OP_TYPE_DRAIN,
 	RB_OP_TYPE_ADD,
+	RB_OP_TYPE_RECLAIM,
 };
 
 static void
@@ -130,6 +131,14 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 			case RB_OP_TYPE_DRAIN:
 				rebuild_drain_tgt(args, args_cnt, ranks[i],
 						tgts ? tgts[i] : -1);
+				break;
+			case RB_OP_TYPE_RECLAIM:
+				/*
+				 * There is no externally accessible operation
+				 * that triggers reclaim. It is automatically
+				 * scheduled after reintegration or addition
+				 */
+				D_ASSERT(op_type != RB_OP_TYPE_RECLAIM);
 				break;
 			}
 		}
@@ -873,7 +882,7 @@ get_rank_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid,
 	daos_obj_layout_get(arg->coh, oid, &layout);
 	grp_idx = shard / layout->ol_shards[0]->os_replica_nr;
 	idx = shard % layout->ol_shards[0]->os_replica_nr;
-	rank = layout->ol_shards[grp_idx]->os_ranks[idx];
+	rank = layout->ol_shards[grp_idx]->os_shard_loc[idx].sd_rank;
 
 	print_message("idx %u grp %u rank %d\n", idx, grp_idx, rank);
 	daos_obj_layout_free(layout);

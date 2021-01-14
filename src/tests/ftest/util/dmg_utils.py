@@ -85,6 +85,14 @@ class DmgCommand(DmgCommandBase):
             r"Targets:\[[0-9 ]+\]\s+Rank:\d+\s+State:(\w+))",
     }
 
+    def _get_json_result(self, sub_command_list=None, **kwargs):
+        """Wraps the base _get_result method to force JSON output."""
+        prev_json_val = self.json.value
+        self.json.update(True)
+        self._get_result(sub_command_list, **kwargs)
+        self.json.update(prev_json_val)
+        return json.loads(self.result.stdout)
+
     def network_scan(self, provider=None, all_devs=False):
         """Get the result of the dmg network scan command.
 
@@ -358,7 +366,7 @@ class DmgCommand(DmgCommandBase):
             target_list (list, optional): a list of storage server unique
                 identifiers (ranks) for the DAOS pool
             svcn (str, optional): Number of pool service replicas. Defaults to
-                None, in which case 1 is used by the dmg binary in default.
+                None, in which case the default value is set by the server.
             group (str, optional): DAOS system group name in which to create the
                 pool. Defaults to None, in which case "daos_server" is used by
                 default.
@@ -384,33 +392,35 @@ class DmgCommand(DmgCommandBase):
         }
         if target_list is not None:
             kwargs["ranks"] = ",".join([str(target) for target in target_list])
-        self._get_result(("pool", "create"), **kwargs)
 
         # Extract the new pool UUID and SVC list from the command output
         data = {}
-        if self.json.value:
-            # Sample json output.
-            # "response": {
-            #     "UUID": "ebac9285-61ec-4d2e-aa2d-4d0f7dd6b7d6",
-            #     "Svcreps": [
-            #     0
-            #     ]
-            # },
-            # "error": null,
-            # "status": 0
-            output = json.loads(self.result.stdout)
-            data["uuid"] = output["response"]["UUID"]
-            data["svc"] = ",".join(
-                [str(svc) for svc in output["response"]["Svcreps"]])
+        # Sample json output.
+        # "response": {
+        #   "uuid": "ebac9285-61ec-4d2e-aa2d-4d0f7dd6b7d6",
+        #   "svc_reps": [
+        #     0
+        #   ],
+        #   "tgt_ranks": [
+        #     0,
+        #     1
+        #   ],
+        #   "scm_bytes": 256000000,
+        #   "nvme_bytes": 0
+        # },
+        # "error": null,
+        # "status": 0
+        output = self._get_json_result(("pool", "create"), **kwargs)
+        if output["response"] is None:
+            return data
 
-        else:
-            match = re.findall(
-                r"UUID:\s+([A-Za-z0-9-]+),\s+"
-                r"Service replicas:\s+([0-9]+(,[0-9]+)*)",
-                self.result.stdout)
-            if match:
-                data["uuid"] = match[0][0]
-                data["svc"] = match[0][1]
+        data["uuid"] = output["response"]["uuid"]
+        data["svc"] = ",".join(
+            [str(svc) for svc in output["response"]["svc_reps"]])
+        data["ranks"] = ",".join(
+            [str(r) for r in output["response"]["tgt_ranks"]])
+        data["scm_per_rank"] = output["response"]["scm_bytes"]
+        data["nvme_per_rank"] = output["response"]["nvme_bytes"]
 
         return data
 
@@ -441,7 +451,7 @@ class DmgCommand(DmgCommandBase):
         #   - NVMe:
         #     Total size: <L>
         #     Free: <M>, min:<N>, max:<O>, mean:<P>
-        #   Rebuild <Q>, <R> objs, <S> recs
+        #   Rebuild <Q>, <R>, <S>
         #
         # This yields the following tuple of tuples when run through the regex:
         #   0: (<A>, <B>, <C>, <D>, <E>, '', '', '', '', '', '', '', '', '')
@@ -474,8 +484,8 @@ class DmgCommand(DmgCommandBase):
         #       },
         #       "rebuild": {
         #           "status": <Q>,
-        #           "objects": <R>,
-        #           "records": <S>
+        #           "status2": <R>,
+        #           "status3": <S>
         #       }
         #   }
         #
@@ -512,7 +522,7 @@ class DmgCommand(DmgCommandBase):
                 1: {"target_count": 5},
                 2: space_map,
                 3: space_map,
-                4: {"status": 11, "objects": 12, "records": 13}
+                4: {"status": 11, "status2": 12, "status3": 13}
             }
             for index_1, match_list in enumerate(match):
                 if index_1 not in map_values:
@@ -845,8 +855,12 @@ class DmgCommand(DmgCommandBase):
         self.log.info("system_query data: %s", str(data))
         return data
 
-    def system_start(self):
+    def system_start(self, ranks=None):
         """Start the system.
+
+        Args:
+            ranks (str, optional): comma separated ranks to stop. Defaults to
+                None.
 
         Raises:
             CommandFailure: if the dmg system start command fails.
@@ -855,7 +869,7 @@ class DmgCommand(DmgCommandBase):
             dict: a dictionary of host ranks and their unique states.
 
         """
-        self._get_result(("system", "start"))
+        self._get_result(("system", "start"), ranks=ranks)
 
         # Populate a dictionary with host set keys for each unique state
         data = {}

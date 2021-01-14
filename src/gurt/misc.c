@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -206,7 +206,6 @@ d_rank_list_realloc(d_rank_list_t *ptr, uint32_t size)
 		ptr->rl_ranks = new_rl_ranks;
 		ptr->rl_nr = size;
 	} else {
-		D_ERROR("d_rank_list_realloc() failed.\n");
 		ptr = NULL;
 	}
 
