@@ -157,16 +157,9 @@ class OSAOfflineParallelTest(OSAUtils):
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
             pool[val].display_pool_daos_space(display_string)
-            fail_count = 0
-            while fail_count <= 20:
-                pver_end = self.get_pool_version()
-                time.sleep(10)
-                fail_count += 1
-                if pver_end > 23:
-                    break
-
+            self.is_rebuild_done(3)
             self.assert_on_rebuild_failure()
-
+            pver_end = self.get_pool_version()
             self.log.info("Pool Version at the End %s", pver_end)
             self.assertTrue(pver_end == 25,
                             "Pool Version Error:  at the end")
