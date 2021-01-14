@@ -482,7 +482,7 @@ server_init(int argc, char *argv[])
 		goto exit_debug_init;
 
 	d_tm_mark_duration_start(&startup_dur, D_TM_CLOCK_REALTIME,
-				 "server", "startup_duration");
+				 "server", "startup_duration", NULL);
 
 	rc = register_dbtree_classes();
 	if (rc != 0)
@@ -618,7 +618,7 @@ server_init(int argc, char *argv[])
 
 	d_tm_record_timestamp(&started_ts, "server", "started_at", NULL);
 
-	d_tm_set_gauge(NULL, dss_self_rank(), "server", "rank");
+	d_tm_set_gauge(NULL, dss_self_rank(), "server", "rank", NULL);
 
 	gethostname(hostname, 255);
 	D_PRINT("DAOS I/O server (v%s) process %u started on rank %u "
