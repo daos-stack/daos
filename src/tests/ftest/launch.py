@@ -886,6 +886,13 @@ def run_tests(test_files, tag_filter, args):
                                          args):
                     return_code |= 256
 
+    if args.jenkinslog:
+        test_logs_lnk = os.path.join(avocado_logs_dir, "latest")
+        try:
+            os.remove(test_logs_lnk)
+        except OSError as error:
+            print("Failed to remove sym link latest: {}".format(error))
+
     return return_code
 
 

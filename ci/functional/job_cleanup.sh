@@ -23,9 +23,3 @@ if [ -n "$arts" ]; then
   # shellcheck disable=SC2046,SC2086
   mv $(echo $arts | tr '\n' ' ') "Functional/"
 fi
-
-# Remove the latest avocado symlink directory to avoid inclusion in the
-# jenkins build artifacts
-if [ -d "Functional/latest" ]; then
-  rm -f "Functional/latest"
-fi
