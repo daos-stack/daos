@@ -221,8 +221,7 @@ def set_test_environment(args):
     test_hosts.update(args.test_servers)
     test_dir = os.environ["DAOS_TEST_LOG_DIR"]
     spawn_commands(test_hosts, "mkdir -p {}".format(test_dir))
-    spawn_commands(
-        test_hosts, "sudo chown {0}:{0} {1}".format(getuser(), test_dir))
+    spawn_commands(test_hosts, "chmod a+wr {}".format(test_dir))
     spawn_commands(
         test_hosts, "ls -al {} | grep {}".format(
             os.path.dirname(test_dir), os.path.basename(test_dir)))
