@@ -36,6 +36,8 @@
 #include "daos.h"
 #include "daos_fs.h"
 
+#include "dfs_internal.h"
+
 #include "dfuse_common.h"
 
 struct dfuse_info {
