@@ -644,16 +644,16 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 				fprintf(stderr,
 					"failed to parse pool UUID: %s\n",
 					optarg);
-			D_GOTO(out_free, rc = RC_NO_HELP);
-		}
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			}
 		break;
 		case 'c':
 			if (uuid_parse(optarg, ap->c_uuid) != 0) {
 				fprintf(stderr,
 					"failed to parse cont UUID: %s\n",
 					optarg);
-			D_GOTO(out_free, rc = RC_NO_HELP);
-		}
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			}
 		break;
 		case 'm':
 			D_STRNDUP(ap->mdsrv_str, optarg, strlen(optarg));

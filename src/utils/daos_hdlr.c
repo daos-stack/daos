@@ -2484,7 +2484,7 @@ static int
 copy_connect(bool is_posix_copy,
 	     struct file_dfs *src_file_dfs,
 	     struct file_dfs *dst_file_dfs,
-	     struct copy_args *fa,
+	     struct copy_args *ca,
 	     char *sysname,
 	     daos_cont_info_t *src_cont_info,
 	     daos_cont_info_t *dst_cont_info)
@@ -2494,22 +2494,22 @@ copy_connect(bool is_posix_copy,
 
 	/* open src pool, src cont, and mount dfs */
 	if (src_file_dfs->type == DAOS) {
-		rc = daos_pool_connect(fa->src_p_uuid, sysname, NULL,
-				       DAOS_PC_RW, &fa->src_poh, NULL, NULL);
+		rc = daos_pool_connect(ca->src_p_uuid, sysname, NULL,
+				       DAOS_PC_RW, &ca->src_poh, NULL, NULL);
 		if (rc != 0) {
 			fprintf(stderr, "failed to connect to destination "
 				"pool: %d\n", rc);
 			D_GOTO(out, rc);
 		}
-		rc = daos_cont_open(fa->src_poh, fa->src_c_uuid, DAOS_COO_RW,
-				    &fa->src_coh, src_cont_info, NULL);
+		rc = daos_cont_open(ca->src_poh, ca->src_c_uuid, DAOS_COO_RW,
+				    &ca->src_coh, src_cont_info, NULL);
 		if (rc != 0) {
 			fprintf(stderr, "failed to open source "
 				"container: %d\n", rc);
 			D_GOTO(err_src_root, rc);
 		}
 		if (is_posix_copy) {
-			rc = dfs_mount(fa->src_poh, fa->src_coh, O_RDWR,
+			rc = dfs_mount(ca->src_poh, ca->src_coh, O_RDWR,
 				       &src_file_dfs->dfs);
 			if (rc) {
 				fprintf(stderr, "dfs mount on source "
@@ -2521,22 +2521,22 @@ copy_connect(bool is_posix_copy,
 
 	/* open dst pool, dst cont, and mount dfs */
 	if (dst_file_dfs->type == DAOS) {
-		rc = daos_pool_connect(fa->dst_p_uuid, sysname, NULL,
-				       DAOS_PC_RW, &fa->dst_poh, NULL, NULL);
+		rc = daos_pool_connect(ca->dst_p_uuid, sysname, NULL,
+				       DAOS_PC_RW, &ca->dst_poh, NULL, NULL);
 		if (rc != 0) {
 			fprintf(stderr, "failed to connect to destination "
 				"pool: %d\n", rc);
 			D_GOTO(out, rc);
 		}
-		rc = daos_cont_open(fa->dst_poh, fa->dst_c_uuid, DAOS_COO_RW,
-				    &fa->dst_coh, dst_cont_info, NULL);
+		rc = daos_cont_open(ca->dst_poh, ca->dst_c_uuid, DAOS_COO_RW,
+				    &ca->dst_coh, dst_cont_info, NULL);
 		if (rc != 0) {
 			fprintf(stderr, "failed to open destination "
 				"container: %d\n", rc);
 			D_GOTO(err_dst_root, rc);
 		}
 		if (is_posix_copy) {
-			rc = dfs_mount(fa->dst_poh, fa->dst_coh, O_RDWR,
+			rc = dfs_mount(ca->dst_poh, ca->dst_coh, O_RDWR,
 				       &dst_file_dfs->dfs);
 			if (rc != 0) {
 				fprintf(stderr, "dfs mount on destination "
@@ -2548,28 +2548,28 @@ copy_connect(bool is_posix_copy,
 	return rc;
 
 err_dst_dfs:
-	rc = daos_cont_close(fa->dst_coh, NULL);
+	rc = daos_cont_close(ca->dst_coh, NULL);
 	if (rc != 0) {
 		fprintf(stderr, "failed to close destination "
 			"container (%d)\n", rc);
 	}
 err_dst_root:
-	rc = daos_pool_disconnect(fa->dst_poh, NULL);
+	rc = daos_pool_disconnect(ca->dst_poh, NULL);
 	if (rc != 0) {
 		fprintf(stderr, "failed to disconnect from destintaion "
-			"pool "DF_UUIDF ": %s (%d)\n", DP_UUID(fa->src_p_uuid),
+			"pool "DF_UUIDF ": %s (%d)\n", DP_UUID(ca->src_p_uuid),
 			d_errdesc(rc), rc);
 	}
 err_src_dfs:
-	rc = daos_cont_close(fa->src_coh, NULL);
+	rc = daos_cont_close(ca->src_coh, NULL);
 	if (rc != 0) {
 		fprintf(stderr, "failed to close source container (%d)\n", rc);
 	}
 err_src_root:
-	rc = daos_pool_disconnect(fa->src_poh, NULL);
+	rc = daos_pool_disconnect(ca->src_poh, NULL);
 	if (rc != 0) {
 		fprintf(stderr, "failed to disconnect from source pool "DF_UUIDF
-			": %s (%d)\n", DP_UUID(fa->src_p_uuid),
+			": %s (%d)\n", DP_UUID(ca->src_p_uuid),
 			d_errdesc(rc), rc);
 	}
 out:
@@ -2589,7 +2589,7 @@ file_set_defaults_dfs(struct file_dfs *file_dfs)
 
 static int
 copy_disconnect(bool is_posix_copy,
-		struct copy_args *fa,
+		struct copy_args *ca,
 		struct file_dfs *src_file_dfs,
 		struct file_dfs *dst_file_dfs)
 {
@@ -2604,17 +2604,17 @@ copy_disconnect(bool is_posix_copy,
 				D_GOTO(out, rc);
 			}
 		}
-		rc = daos_cont_close(fa->src_coh, NULL);
+		rc = daos_cont_close(ca->src_coh, NULL);
 		if (rc != 0) {
 			fprintf(stderr, "failed to close source "
 				"container (%d)\n", rc);
 			D_GOTO(out, rc);
 		}
-		rc = daos_pool_disconnect(fa->src_poh, NULL);
+		rc = daos_pool_disconnect(ca->src_poh, NULL);
 		if (rc != 0) {
 			fprintf(stderr, "failed to disconnect from source "
 				"pool "DF_UUIDF ": %s (%d)\n",
-				DP_UUID(fa->src_p_uuid), d_errdesc(rc), rc);
+				DP_UUID(ca->src_p_uuid), d_errdesc(rc), rc);
 			D_GOTO(out, rc);
 		}
 	}
@@ -2627,17 +2627,17 @@ copy_disconnect(bool is_posix_copy,
 				D_GOTO(out, rc);
 			}
 		}
-		rc = daos_cont_close(fa->dst_coh, NULL);
+		rc = daos_cont_close(ca->dst_coh, NULL);
 		if (rc != 0) {
 			fprintf(stderr, "failed to close destination "
 				"container (%d)\n", rc);
 			D_GOTO(out, rc);
 		}
-		rc = daos_pool_disconnect(fa->dst_poh, NULL);
+		rc = daos_pool_disconnect(ca->dst_poh, NULL);
 		if (rc != 0) {
 			fprintf(stderr, "failed to disconnect from destination "
 				"pool "DF_UUIDF ": %s (%d)\n",
-				DP_UUID(fa->dst_p_uuid), d_errdesc(rc), rc);
+				DP_UUID(ca->dst_p_uuid), d_errdesc(rc), rc);
 			D_GOTO(out, rc);
 		}
 	}
@@ -2673,7 +2673,7 @@ out:
 static int
 fs_copy_parse(char *src,
 	      char *dst,
-	      struct copy_args *fa,
+	      struct copy_args *ca,
 	      struct file_dfs *src_file_dfs,
 	      struct file_dfs *dst_file_dfs,
 	      struct duns_attr_t *src_dattr,
@@ -2739,8 +2739,8 @@ fs_copy_parse(char *src,
 		/* check if this copy is from root of DFS cont */
 		*src_str = strdup("/");
 		*src_dfs_path = strdup(src);
-		rc = fs_copy_parse_uuids(src, &src_saveptr, &fa->src_p_uuid,
-					 &fa->src_c_uuid, &src_pool,
+		rc = fs_copy_parse_uuids(src, &src_saveptr, &ca->src_p_uuid,
+					 &ca->src_c_uuid, &src_pool,
 					 &src_cont);
 		if (rc != 0 || (src_pool == NULL || src_cont == NULL)) {
 			fprintf(stderr, "failed to parse source DAOS uuids\n");
@@ -2768,8 +2768,8 @@ fs_copy_parse(char *src,
 			rc = 0;
 		} else {
 			*src_str = strdup("/");
-			uuid_copy(fa->src_p_uuid, (*src_dattr).da_puuid);
-			uuid_copy(fa->src_c_uuid, (*src_dattr).da_cuuid);
+			uuid_copy(ca->src_p_uuid, (*src_dattr).da_puuid);
+			uuid_copy(ca->src_c_uuid, (*src_dattr).da_cuuid);
 		}
 	} else {
 		fprintf(stderr, "cannot parse src format, please use:\n"
@@ -2785,7 +2785,7 @@ fs_copy_parse(char *src,
 		*dst_str = strdup("/");
 		*dst_dfs_path = strdup(dst);
 		rc = fs_copy_parse_uuids(dst, &dst_saveptr,
-					 &fa->dst_p_uuid, &fa->dst_c_uuid,
+					 &ca->dst_p_uuid, &ca->dst_c_uuid,
 					 &dst_pool, &dst_cont);
 		if (rc != 0 || (dst_pool == NULL || dst_cont == NULL)) {
 			fprintf(stderr, "failed to parse destination DAOS "
@@ -2814,8 +2814,8 @@ fs_copy_parse(char *src,
 			rc = 0;
 		} else {
 			*dst_str = strdup("/");
-			uuid_copy(fa->dst_p_uuid, (*dst_dattr).da_puuid);
-			uuid_copy(fa->dst_c_uuid, (*dst_dattr).da_cuuid);
+			uuid_copy(ca->dst_p_uuid, (*dst_dattr).da_puuid);
+			uuid_copy(ca->dst_c_uuid, (*dst_dattr).da_cuuid);
 		}
 	} else {
 		fprintf(stderr, "cannot parse dst format, please use:\n"
@@ -2845,7 +2845,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	struct duns_attr_t	dst_dattr = {0};
 	struct file_dfs		src_file_dfs = {0};
 	struct file_dfs		dst_file_dfs = {0};
-	struct copy_args	fa = {0};
+	struct copy_args	ca = {0};
 	int			src_str_len = 0;
 	int			dst_str_len = 0;
 	bool			is_posix_copy = true;
@@ -2853,7 +2853,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	file_set_defaults_dfs(&src_file_dfs);
 	file_set_defaults_dfs(&dst_file_dfs);
 	rc = fs_copy_parse(ap->src, ap->dst,
-			   &fa, &src_file_dfs,
+			   &ca, &src_file_dfs,
 			   &dst_file_dfs, &src_dattr,
 			   &dst_dattr, &src_str,
 			   &src_dfs_path, &src_str_len,
@@ -2864,7 +2864,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc);
 	}
 
-	rc = copy_connect(is_posix_copy, &src_file_dfs, &dst_file_dfs, &fa,
+	rc = copy_connect(is_posix_copy, &src_file_dfs, &dst_file_dfs, &ca,
 			  ap->sysname, &src_cont_info, &dst_cont_info);
 	if (rc != 0) {
 		fprintf(stderr, "fs copy failed to connect: %d\n", rc);
@@ -2948,7 +2948,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	}
 out_disconnect:
 	/* umount dfs, close conts, and disconnect pools */
-	rc = copy_disconnect(is_posix_copy, &fa, &src_file_dfs, &dst_file_dfs);
+	rc = copy_disconnect(is_posix_copy, &ca, &src_file_dfs, &dst_file_dfs);
 	if (rc != 0)
 		fprintf(stderr, "failed to disconnect (%d)\n", rc);
 out:
@@ -3236,6 +3236,11 @@ cont_copy_list_dkeys(daos_handle_t *src_oh,
 
 			/* enumerate and parse akeys */
 			rc = cont_copy_list_akeys(src_oh, dst_oh, diov);
+			if (rc != 0) {
+				fprintf(stderr, "failed to list akeys: %d\n",
+					rc);
+				D_GOTO(out, rc = 1);
+			}
 			ptr += dkey_kds[j].kd_key_len;
 		}
 	}
@@ -3414,6 +3419,7 @@ out_disconnect:
 	rc = copy_disconnect(is_posix_copy, &cp_args, &src_cp_type,
 			     &dst_cp_type);
 	if (rc != 0) {
+		fprintf(stderr, "failed to disconnect: %d\n", rc);
 	}
 out:
 	if (rc == 0) {
