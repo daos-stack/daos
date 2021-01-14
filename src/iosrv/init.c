@@ -63,7 +63,7 @@ static char	       *daos_sysname = DAOS_DEFAULT_SYS_NAME;
 const char	       *dss_storage_path = "/mnt/daos";
 
 /** NVMe config file */
-const char	       *dss_nvme_conf = "/etc/daos_nvme.conf";
+const char	       *dss_nvme_conf;
 
 /** Socket Directory */
 const char	       *dss_socket_dir = "/var/run/daos_server";
