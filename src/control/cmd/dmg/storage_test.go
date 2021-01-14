@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
-	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
@@ -226,7 +226,7 @@ func TestDmg_Storage_shouldReformatSystem(t *testing.T) {
 	for name, tc := range map[string]struct {
 		reformat, expSysReformat bool
 		uErr, expErr             error
-		members                  []*ctlpb.SystemMember
+		members                  []*mgmtpb.SystemMember
 	}{
 		"no reformat": {},
 		"failed member query": {
@@ -239,7 +239,7 @@ func TestDmg_Storage_shouldReformatSystem(t *testing.T) {
 		},
 		"rank not stopped": {
 			reformat: true,
-			members: []*ctlpb.SystemMember{
+			members: []*mgmtpb.SystemMember{
 				{Rank: 0, State: uint32(system.MemberStateStopped)},
 				{Rank: 1, State: uint32(system.MemberStateJoined)},
 			},
@@ -247,7 +247,7 @@ func TestDmg_Storage_shouldReformatSystem(t *testing.T) {
 		},
 		"ranks not stopped": {
 			reformat: true,
-			members: []*ctlpb.SystemMember{
+			members: []*mgmtpb.SystemMember{
 				{Rank: 0, State: uint32(system.MemberStateJoined)},
 				{Rank: 1, State: uint32(system.MemberStateStopped)},
 				{Rank: 5, State: uint32(system.MemberStateJoined)},
@@ -260,7 +260,7 @@ func TestDmg_Storage_shouldReformatSystem(t *testing.T) {
 		},
 		"system reformat": {
 			reformat: true,
-			members: []*ctlpb.SystemMember{
+			members: []*mgmtpb.SystemMember{
 				{Rank: 0, State: uint32(system.MemberStateStopped)},
 				{Rank: 0, State: uint32(system.MemberStateStopped)},
 			},
@@ -274,7 +274,7 @@ func TestDmg_Storage_shouldReformatSystem(t *testing.T) {
 			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
 				UnaryError: tc.uErr,
 				UnaryResponse: control.MockMSResponse("host1", nil,
-					&ctlpb.SystemQueryResp{Members: tc.members}),
+					&mgmtpb.SystemQueryResp{Members: tc.members}),
 			})
 			cmd := storageFormatCmd{}
 			cmd.log = log

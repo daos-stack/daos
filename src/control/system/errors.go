@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,12 +42,18 @@ var (
 // IsUnavailable returns a boolean indicating whether or not the
 // supplied error corresponds to some unavailability state.
 func IsUnavailable(err error) bool {
+	if err == nil {
+		return false
+	}
 	return strings.Contains(errors.Cause(err).Error(), ErrRaftUnavail.Error())
 }
 
 // IsEmptyGroupMap returns a boolean indicating whether or not the
 // supplied error corresponds to an empty system group map.
 func IsEmptyGroupMap(err error) bool {
+	if err == nil {
+		return false
+	}
 	return strings.Contains(errors.Cause(err).Error(), ErrEmptyGroupMap.Error())
 }
 

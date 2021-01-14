@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2172,6 +2172,15 @@ many_tx(void **state)
 	int			count, i, j, k, tx_num, cur_tx, old_tx;
 	int			random = 0, op;
 	int			total = 0, success = 0, writes = 0;
+	int			nr_dkey = NR_DKEY;
+	int			nr_akey = NR_AKEY;
+	int			nr_obj = NR_OBJ;
+
+	if (DAOS_ON_VALGRIND) {
+		nr_dkey /= 5;
+		nr_akey /= 5;
+		nr_obj /= 5;
+	}
 
 	test_args_reset(arg, VPOOL_SIZE);
 	coh = arg->ctx.tc_co_hdl;
@@ -2184,14 +2193,14 @@ many_tx(void **state)
 	assert_int_equal(rc, 0);
 
 	/* Set up dkey and akey */
-	for (i = 0; i < NR_OBJ; i++)
+	for (i = 0; i < nr_obj; i++)
 		oid[i] = gen_oid(arg->ofeat);
-	for (i = 0; i < NR_DKEY; i++) {
+	for (i = 0; i < nr_dkey; i++) {
 		vts_key_gen(&dkey_buf[i][0], arg->dkey_size, true, arg);
 		set_iov(&dkey[i], &dkey_buf[i][0],
 			arg->ofeat & DAOS_OF_DKEY_UINT64);
 	}
-	for (i = 0; i < NR_AKEY; i++) {
+	for (i = 0; i < nr_akey; i++) {
 		vts_key_gen(&akey_buf[i][0], arg->akey_size, true, arg);
 		set_iov(&akey[i], &akey_buf[i][0],
 			arg->ofeat & DAOS_OF_AKEY_UINT64);
@@ -2207,9 +2216,9 @@ many_tx(void **state)
 	tx_num = 0;
 start_over:
 	srand(0);
-	for (i = 0; i < NR_OBJ; i++) {
-		for (j = 0; j < NR_DKEY; j++) {
-			for (k = 0; k < NR_AKEY; k++) {
+	for (i = 0; i < nr_obj; i++) {
+		for (j = 0; j < nr_dkey; j++) {
+			for (k = 0; k < nr_akey; k++) {
 				for (count = 0; count < 3; count++) {
 					total++;
 					switch (tx_num & 3) {
@@ -2302,7 +2311,7 @@ start_over:
 		memset(&req[old_tx], 0, sizeof(req[0]));
 	}
 
-	for (i = 0; i < NR_OBJ; i++) {
+	for (i = 0; i < nr_obj; i++) {
 		rc = vos_obj_delete(coh, oid[i]);
 		assert_int_equal(rc, 0);
 	}

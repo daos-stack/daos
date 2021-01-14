@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2020 Intel Corporation.
+// (C) Copyright 2018-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,7 +29,9 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/system"
@@ -172,6 +174,34 @@ Ranks       Action Result
 			if diff := cmp.Diff(strings.TrimLeft(tt.out, "\n"), table); diff != "" {
 				t.Fatalf("unexpected output (-want, +got):\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func TestDmg_errIncompatFlags(t *testing.T) {
+	for name, tc := range map[string]struct {
+		base     string
+		incompat []string
+		expErr   error
+	}{
+		"0 incompat": {
+			base:   "base",
+			expErr: errors.New("--base may not be mixed"),
+		},
+		"one incompat": {
+			base:     "base",
+			incompat: []string{"one"},
+			expErr:   errors.New("--base may not be mixed with --one"),
+		},
+		"two incompat": {
+			base:     "base",
+			incompat: []string{"one", "two"},
+			expErr:   errors.New("--base may not be mixed with --one or --two"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotErr := errIncompatFlags(tc.base, tc.incompat...)
+			common.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }
