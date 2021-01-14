@@ -13,6 +13,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
+//@Library(value="system-pipeline-lib@corci-1037") _
 
 boolean doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
@@ -452,6 +453,43 @@ String quick_build_deps(String distro) {
                       "--requires utils/rpms/daos.spec " +
                       "2>/dev/null",
               returnStdout: true)
+
+/* fuse3-devel >= 3.4.2 after libpmemobj-devel
+    return '''scons >= 2.4
+libfabric-devel >= 1.11.0
+boost-devel
+mercury-devel = 2.0.0~rc1-1.el7
+openpa-devel
+libpsm2-devel
+gcc-c++
+openmpi3-devel
+hwloc-devel
+argobots-devel >= 1.0rc1
+json-c-devel
+libpmem-devel >= 1.8
+libpmemobj-devel >= 1.8
+protobuf-c-devel
+'lz4-devel
+spdk-devel >= 20
+libisa-l-devel
+libisa-l_crypto-devel
+raft-devel = 0.7.1
+openssl-devel
+libevent-devel
+libyaml-devel
+libcmocka-devel
+readline-devel
+valgrind-devel
+systemd
+python-devel
+python-distro
+numactl-devel
+CUnit-devel
+golang-bin >= 1.12
+libipmctl-devel
+python36-devel
+Lmod
+'''*/
 }
 
 pipeline {
@@ -601,6 +639,10 @@ pipeline {
             }
             parallel {
                 stage('Build RPM on CentOS 7') {
+                    when {
+                        beforeAgent true
+                        expression { ! skip_build_rpm('centos7') }
+                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.mockbuild'
@@ -702,19 +744,32 @@ pipeline {
                         }
                     }
                 }
+                stage('Test dockerfile info') {
+                    steps {
+                        echo dockerBuildArgs(qb: quickbuild())
+                        echo quick_build_deps('centos7')
+                        echo pr_repos()
+                    }
+                }
                 stage('Build on CentOS 7') {
                     when {
                         beforeAgent true
                         expression { ! skip_build_on_centos7_gcc() }
                     }
                     agent {
+// dockerBuildArgs(qb: quickbuild())
+//                                                " -t ${sanitized_JOB_NAME}-centos7 " +
+//                                                 ' --build-arg QUICKBUILD_DEPS="' +
+//                                                quick_build_deps('centos7') + '"' +
+//                                                ' --build-arg REPOS="' + pr_repos() + '"'
+
                         dockerfile {
                             filename 'Dockerfile.centos.7'
                             dir 'utils/docker'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
-                                                ' --build-arg QUICKBUILD_DEPS="' +
+                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quick_build_deps('centos7') + '"' +
                                                 ' --build-arg REPOS="' + pr_repos() + '"'
                         }
