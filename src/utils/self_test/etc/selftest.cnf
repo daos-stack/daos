@@ -1,3 +1,5 @@
+# The parameter specificaions are identical to the long version self_test
+#        command line arguments.
 # Warning.
 # "path" When executing from CI, then path should not be defined.
 #        However, when executing not in CI, they user may not have access
