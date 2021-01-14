@@ -1,7 +1,7 @@
 [Unit]
 Description=DAOS Agent
 StartLimitIntervalSec=60
-StartLimitBurst=5 
+StartLimitBurst=5
 Wants=network-online.target
 After=network-online.target
 
