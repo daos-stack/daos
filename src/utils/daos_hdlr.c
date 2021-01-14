@@ -3307,6 +3307,7 @@ cont_copy_hdlr(struct cmd_args_s *ap)
 	struct file_dfs		src_cp_type = {0};
 	struct file_dfs		dst_cp_type = {0};
 	daos_epoch_range_t	epr;
+	daos_epoch_t		is_usr_snap = false;
 
 	file_set_defaults_dfs(&src_cp_type);
 	file_set_defaults_dfs(&dst_cp_type);
@@ -3332,6 +3333,7 @@ cont_copy_hdlr(struct cmd_args_s *ap)
 
 	/* use snapshot if one was passed in, otherwise create one */
 	if (ap->epc != 0) {
+		is_usr_snap = true;
 		epoch = ap->epc;
 	} else {
 		rc = daos_cont_create_snap_opt(cp_args.src_coh,
@@ -3408,11 +3410,15 @@ out_disconnect:
 		fprintf(stderr, "failed to close object iterator: %d\n", rc);
 		D_GOTO(out, rc);
 	}
-	epr.epr_lo = epoch;
-	epr.epr_hi = epoch;
-	rc = daos_cont_destroy_snap(cp_args.src_coh, epr, NULL);
-	if (rc != 0) {
-		fprintf(stderr, "failed to destroy snapshot: %d\n", rc);
+	/* only destroy snapshot if we created it, and it wasn't
+	 * passed in by the user */
+	if (!is_usr_snap) {
+		epr.epr_lo = epoch;
+		epr.epr_hi = epoch;
+		rc = daos_cont_destroy_snap(cp_args.src_coh, epr, NULL);
+		if (rc != 0) {
+			fprintf(stderr, "failed to destroy snapshot: %d\n", rc);
+		}
 	}
 
 	/* close src and dst pools, conts */
