@@ -43,7 +43,7 @@ class ReadArrayTest(RebuildTestBase):
             self.pool.read_data_during_rebuild(self.container),
             "Error reading data during rebuild")
 
-    @skipForTicket("DAOS-6450")
+#    @skipForTicket("DAOS-6450")
     def test_read_array_during_rebuild(self):
         """Jira ID: DAOS-691.
 
