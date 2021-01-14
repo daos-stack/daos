@@ -59,12 +59,12 @@
 #ifdef LUSTRE_INCLUDE
 #define LIBLUSTRE		"liblustreapi.so"
 
-static bool liblustre_notfound = false;
+static bool liblustre_notfound;
 /* need to protect against concurrent/multi-threaded attempts to bind ? */
-static bool liblustre_binded = false;
+static bool liblustre_binded;
 static int (*dir_create_foreign)(const char *, mode_t, __u32, __u32,
 				 const char *) = NULL;
-static int (*unlink_foreign)(char *) = NULL;
+static int (*unlink_foreign)(char *);
 
 static int
 bind_liblustre()
@@ -187,7 +187,7 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 		/* to confirm we have already a buffer large enough get a
 		 * BIG LMV !!
 		 */
-		lum->lum_stripe_count = (XATTR_SIZE_MAX - 
+		lum->lum_stripe_count = (XATTR_SIZE_MAX -
 					sizeof(struct lmv_user_md)) /
 					sizeof(struct lmv_user_mds_data);
 		rc = ioctl(fd, LL_IOC_LMV_GETSTRIPE, buf);
@@ -388,7 +388,8 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 		int err = errno;
 
 		if (err == ENOTSUP) {
-			D_INFO("Path is not in a filesystem that supports the DAOS unified namespace\n");
+			D_INFO("Path is not in a filesystem that supports the "
+				"DAOS unified namespace\n");
 		} else if (err == ENODATA) {
 			D_INFO("Path does not represent a DAOS link\n");
 		} else if (s > DUNS_MAX_XATTR_LEN) {
@@ -791,8 +792,14 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		if (rc) {
 			int err = errno;
 
-			D_ERROR("Failed to set DAOS xattr: %s\n",
-				strerror(err));
+			if (err == ENOTSUP) {
+				D_INFO("Path is not in a filesystem that "
+					"supports the DAOS unified "
+					"namespace\n");
+			} else {
+				D_ERROR("Failed to set DAOS xattr: %s\n",
+					strerror(err));
+			}
 			D_GOTO(err_link, rc = err);
 		}
 
