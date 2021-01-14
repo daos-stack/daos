@@ -26,6 +26,7 @@ from __future__ import print_function
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from datetime import datetime
+from getpass import getuser
 import json
 import os
 import re
@@ -218,8 +219,13 @@ def set_test_environment(args):
     test_hosts = NodeSet(socket.gethostname().split(".")[0])
     test_hosts.update(args.test_clients)
     test_hosts.update(args.test_servers)
+    test_dir = os.environ["DAOS_TEST_LOG_DIR"]
+    spawn_commands(test_hosts, "mkdir -p {}".format(test_dir))
     spawn_commands(
-        test_hosts, "mkdir -p {}".format(os.environ["DAOS_TEST_LOG_DIR"]))
+        test_hosts, "sudo chown {0}:{0} {1}".format(getuser(), test_dir))
+    spawn_commands(
+        test_hosts, "ls -al {} | grep {}".format(
+            os.path.dirname(test_dir), os.path.basename(test_dir)))
 
     # Python paths required for functional testing
     python_version = "python{}{}".format(
@@ -974,6 +980,8 @@ def clean_logs(test_yaml, args):
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     host_list = get_hosts_from_yaml(test_yaml, args)
     command = "sudo rm -fr {}".format(os.path.join(logs_dir, "*.log*"))
+    # also remove any ABT infos/stacks dumps
+    command += " /tmp/daos_dump*"
     print("Cleaning logs on {}".format(host_list))
     if not spawn_commands(host_list, command):
         print("Error cleaning logs, aborting")
@@ -1022,9 +1030,11 @@ def archive_daos_logs(avocado_logs_dir, test_files, args):
     print("Archiving host logs from {} in {}".format(hosts, destination))
 
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
+    # and any ULTs stacks dumps
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     task = archive_files(
-        destination, hosts, "{}/*.log*".format(logs_dir), True, args)
+        destination, hosts, "/tmp/daos_dump* {}/*.log*".format(logs_dir), True,
+        args)
 
     # Determine if the command completed successfully across all the hosts
     status = 0
