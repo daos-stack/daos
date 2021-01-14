@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -208,14 +208,9 @@ crt_proc_d_rank_list_t(crt_proc_t proc, d_rank_list_t **data)
 			D_GOTO(out, rc = 0);
 		}
 
-		D_ALLOC_PTR(rank_list);
+		rank_list = d_rank_list_alloc(nr);
 		if (rank_list == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
-		D_ALLOC_ARRAY(rank_list->rl_ranks, nr);
-		if (rank_list->rl_ranks == NULL) {
-			D_FREE(rank_list);
-			D_GOTO(out, rc = -DER_NOMEM);
-		}
 		buf = hg_proc_save_ptr(proc, nr * sizeof(*buf));
 		memcpy(rank_list->rl_ranks, buf, nr * sizeof(*buf));
 		rank_list->rl_nr = nr;
