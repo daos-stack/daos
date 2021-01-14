@@ -3123,7 +3123,8 @@ cont_copy_list_akeys(daos_handle_t *src_oh,
 		 * number of dkeys returned
 		 */
 		for (ptr = akey_enum_buf, j = 0; j < akey_number; j++) {
-			snprintf(akey, akey_kds[j].kd_key_len + 1, "%s", ptr);
+			buf_len = snprintf(akey, akey_kds[j].kd_key_len + 1,
+					   "%s", ptr);
 			if (buf_len >= ENUM_KEY_BUF) {
 				fprintf(stderr, "akey is too large: %d\n", rc);
 				D_GOTO(out, rc = -1);
