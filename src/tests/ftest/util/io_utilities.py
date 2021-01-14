@@ -27,6 +27,179 @@ from general_utils import get_random_string, DaosTestError
 from pydaos.raw import DaosApiError
 
 import time
+import tempfile
+import shutil
+import os
+import random
+
+
+class DirTree(object):
+    """
+    This class creates a directory-tree. The height, the number of files and
+    subdirectories that will be created to populate the directory-tree are
+    configurable.
+    The name of the directories and files are randomly generated. The files
+    include the suffix ".file".
+    The class has the option to create a configurable number of files at the
+    very bottom of the directory-tree with the suffix ".needle"
+
+    Examples:
+
+    tree = DirTree("/mnt", height=7, subdirs_per_node=4, files_per_node=5)
+    tree.create()
+
+    It will create:
+    1 + 4 + 16 + 64 + 256 + 1024 + 4096 + 16384 = 21845 directories
+    5 + 20 + 80 + 320 + 1280 + 5120 + 20480 = 27305 files
+
+    tree = DirTree("/mnt", height=2, subdirs_per_node=3, files_per_node=5)
+    tree.create()
+
+    It will create:
+    1 + 3 + 9 = 13 directories
+    5 + 15 = 20 files
+    """
+
+    def __init__(self, root, height=1, subdirs_per_node=1, files_per_node=1):
+        """
+        Parameters:
+            root             (str): The path where the directory-tree
+                                    will be created.
+            height           (int): Height of the directory-tree.
+            subdirs_per_node (int): Number of sub directories per directories.
+            files_per_node   (int): Number of files created per directory.
+        """
+        self._root = root
+        self._subdirs_per_node = subdirs_per_node
+        self._height = height
+        self._files_per_node = files_per_node
+        self._tree_path = ""
+        self._needles_prefix = ""
+        self._needles_count = 0
+        self._needles_paths = []
+        self._logger = None
+
+    def create(self):
+        """
+        Populate the directory-tree. This method must be called before using
+        the other methods.
+        """
+        if self._tree_path:
+            return
+
+        try:
+            self._tree_path = tempfile.mkdtemp(dir=self._root)
+            self._log("Directory-tree root: {0}".format(self._tree_path))
+            self._create_dir_tree(self._tree_path, self._height)
+            self._created_remaining_needles()
+        except Exception as err:
+            raise RuntimeError(
+                "Failed to populate tree directory with error: {0}".format(err))
+
+        return self._tree_path
+
+    def destroy(self):
+        """
+        Remove the tree directory.
+        """
+        if self._tree_path:
+            shutil.rmtree(self._tree_path)
+            self._tree_path = ""
+            self._needles_paths = []
+            self._needles_count = 0
+
+    def set_number_of_needles(self, num):
+        """
+        Set the number of files that will be created at the very bottom of
+        the directory-tree. These files will have the ".needle" suffix.
+        """
+        self._needles_count = num
+
+    def set_needles_prefix(self, prefix):
+        """
+        Set the needle prefix name. The file name will begin with that prefix.
+        """
+        self._needles_prefix = prefix
+
+    def get_probe(self):
+        """
+        Returns a tuple containing a needle file name randomly selected and the
+        absolute pathname of that file, in that order.
+        """
+        if not self._needles_paths:
+            raise ValueError(
+                "{0} object is not initialized".format(
+                    self.__class__.__name__))
+
+        needle_path = random.choice(self._needles_paths)
+        needle_name = os.path.basename(needle_path)
+        return needle_name, needle_path
+
+    def set_logger(self, fn):
+        """
+        Set the function that will be used to print log messages.
+        If this value is not set, it will work silently.
+
+        Parameters:
+            fn (function): Function to be used for logging.
+        """
+        self._logger = fn
+
+    def _log(self, msg):
+        """If logger function is set, print log messages"""
+        if self._logger:
+            self._logger(msg)
+
+    def _create_dir_tree(self, current_path, current_height):
+        """
+        Create the actual directory tree using depth-first search approach.
+        """
+        if current_height <= 0:
+            return
+
+        self._create_needle(current_path, current_height)
+
+        # create files
+        for _ in range(self._files_per_node):
+            fd, _ = tempfile.mkstemp(dir=current_path, suffix=".file")
+            os.close(fd)
+
+        # create nested directories
+        for _ in range(self._subdirs_per_node):
+            new_path = tempfile.mkdtemp(dir=current_path)
+            self._create_dir_tree(new_path, current_height - 1)
+
+    def _created_remaining_needles(self):
+        """
+        If the number of needle files requested is bigger than the number of
+        directories at the bottom of the directory tree. Create the remaining
+        needle files at random directories at the bottom of the tree.
+        """
+        if self._needles_count <= 0:
+            return
+
+        for count in range(self._needles_count):
+            new_path = os.path.dirname(random.choice(self._needles_paths))
+            suffix = "_{:05d}.needle".format(count)
+            fd, _ = tempfile.mkstemp(
+                dir=new_path, prefix=self._needles_prefix, suffix=suffix)
+            os.close(fd)
+
+    def _create_needle(self, current_path, current_height):
+        """If we reach the bottom of the tree, create a *.needle file"""
+        if current_height != 1:
+            return
+
+        if self._needles_count <= 0:
+            return
+
+        self._needles_count -= 1
+        suffix = "_{:05d}.needle".format(self._needles_count)
+        fd, file_name = tempfile.mkstemp(
+            dir=current_path, prefix=self._needles_prefix, suffix=suffix)
+        os.close(fd)
+
+        self._needles_paths.append(file_name)
 
 
 def continuous_io(container, seconds):
