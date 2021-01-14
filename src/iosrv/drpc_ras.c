@@ -50,13 +50,15 @@ free_event(Shared__RASEvent *evt)
 }
 
 static int
-init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev, char *hid,
-	   d_rank_t *rank, char *jid, uuid_t *puuid, uuid_t *cuuid,
-	   daos_obj_id_t *oid, char *cop, Shared__RASEvent *evt)
+init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
+	   char *hwid, d_rank_t *rank, char *jobid, uuid_t *pool,
+	   uuid_t *cont, daos_obj_id_t *objid, char *ctlop,
+	   Shared__RASEvent *evt)
 {
-	struct timeval	 tv;
-	struct tm	*tm;
-	int		 rc;
+	struct dss_module_info	*dmi = get_module_info();
+	struct timeval		 tv;
+	struct tm		*tm;
+	int			 rc;
 
 	/* Populate mandatory RAS fields. */
 
@@ -76,6 +78,12 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev, char *hid,
 	evt->id = (uint32_t)id;
 	evt->type = (uint32_t)type;
 	evt->severity = (uint32_t)sev;
+	evt->proc_id = (uint64_t)getpid();
+	dmi = get_module_info();
+	if (dmi != NULL)
+		evt->thread_id = (uint64_t)dmi->dmi_xs_id;
+	else
+		D_ERROR("failed to retrieve xstream id");
 
 	if (strnlen(dss_hostname, DSS_HOSTNAME_MAX_LEN) == 0) {
 		D_ERROR("missing hostname parameter\n");
@@ -91,24 +99,24 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev, char *hid,
 
 	/* Populate optional RAS fields. */
 
-	evt->hw_id = (hid != NULL) ? hid : NULL;
+	evt->hw_id = (hwid != NULL) ? hwid : NULL;
 	/* UINT32_MAX/CRT_NO_RANK indicates nil rank in daos_{,io_}server */
 	evt->rank = (rank != NULL) ? (uint32_t)*rank : CRT_NO_RANK;
-	evt->job_id = (jid != NULL) ? jid : NULL;
-	evt->ctl_op = (cop != NULL) ? cop : NULL;
+	evt->job_id = (jobid != NULL) ? jobid : NULL;
+	evt->ctl_op = (ctlop != NULL) ? ctlop : NULL;
 
-	if ((puuid != NULL) && !uuid_is_null(*puuid))
-		D_ASPRINTF(evt->pool_uuid, DF_UUIDF, DP_UUID(*puuid));
+	if ((pool != NULL) && !uuid_is_null(*pool))
+		D_ASPRINTF(evt->pool_uuid, DF_UUIDF, DP_UUID(*pool));
 	else
 		evt->pool_uuid = NULL;
 
-	if ((cuuid != NULL) && !uuid_is_null(*cuuid))
-		D_ASPRINTF(evt->cont_uuid, DF_UUIDF, DP_UUID(*cuuid));
+	if ((cont != NULL) && !uuid_is_null(*cont))
+		D_ASPRINTF(evt->cont_uuid, DF_UUIDF, DP_UUID(*cont));
 	else
 		evt->cont_uuid = NULL;
 
-	if (oid != NULL)
-		D_ASPRINTF(evt->obj_id, DF_OID, DP_OID(*oid));
+	if (objid != NULL)
+		D_ASPRINTF(evt->obj_id, DF_OID, DP_OID(*objid));
 	else
 		evt->obj_id = NULL;
 
@@ -157,13 +165,13 @@ log_event(Shared__RASEvent *evt)
 	if (evt->job_id != NULL)
 		D_FPRINTF(stream, " jobid: [%s]", evt->job_id);
 	if (evt->pool_uuid != NULL)
-		D_FPRINTF(stream, " puuid: [%s]", evt->pool_uuid);
+		D_FPRINTF(stream, " pool: [%s]", evt->pool_uuid);
 	if (evt->cont_uuid != NULL)
-		D_FPRINTF(stream, " cuuid: [%s]", evt->cont_uuid);
+		D_FPRINTF(stream, " container: [%s]", evt->cont_uuid);
 	if (evt->obj_id != NULL)
-		D_FPRINTF(stream, " oid: [%s]", evt->obj_id);
+		D_FPRINTF(stream, " objid: [%s]", evt->obj_id);
 	if (evt->ctl_op != NULL)
-		D_FPRINTF(stream, " control_op: [%s]", evt->ctl_op);
+		D_FPRINTF(stream, " ctlop: [%s]", evt->ctl_op);
 
 	/* Log data blob if event info is non-specific */
 	if (eic != SHARED__RASEVENT__EXTENDED_INFO_STR_INFO)
@@ -235,14 +243,14 @@ out:
 }
 
 static int
-raise_ras(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev, char *hid,
-	  d_rank_t *rank, char *jid, uuid_t *puuid, uuid_t *cuuid,
-	  daos_obj_id_t *oid, char *cop, Shared__RASEvent *evt)
+raise_ras(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev, char *hwid,
+	  d_rank_t *rank, char *jobid, uuid_t *pool, uuid_t *cont,
+	  daos_obj_id_t *objid, char *ctlop, Shared__RASEvent *evt)
 {
 	int	rc;
 
-	rc = init_event(id, msg, type, sev, hid, rank, jid, puuid, cuuid, oid,
-			cop, evt);
+	rc = init_event(id, msg, type, sev, hwid, rank, jobid, pool, cont,
+			objid, ctlop, evt);
 	if (rc != 0) {
 		D_ERROR("failed to init RAS event %s: "DF_RC"\n",
 			ras_event2str(RAS_POOL_REPS_UPDATE), DP_RC(rc));
@@ -262,26 +270,26 @@ raise_ras(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev, char *hid,
 
 void
 ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
-		    char *hid, d_rank_t *rank, char *jid, uuid_t *puuid,
-		    uuid_t *cuuid, daos_obj_id_t *oid, char *cop, char *data)
+		    char *hwid, d_rank_t *rank, char *jobid, uuid_t *pool,
+		    uuid_t *cont, daos_obj_id_t *objid, char *ctlop, char *data)
 {
 	Shared__RASEvent	evt = SHARED__RASEVENT__INIT;
 	d_rank_t		this_rank = dss_self_rank();
 
 	/* use opaque blob oneof case for extended info for passthrough event */
 	evt.extended_info_case = SHARED__RASEVENT__EXTENDED_INFO_STR_INFO;
-	evt.str_info = data;
+	evt.str_info = (data == NULL) ? "" : data;
 
 	/* populate rank param if empty */
 	if (rank == NULL)
 		rank = &this_rank;
 
-	raise_ras(id, msg, type, sev, hid, rank, jid, puuid, cuuid, oid, cop,
-		  &evt);
+	raise_ras(id, msg, type, sev, hwid, rank, jobid, pool, cont, objid,
+		  ctlop, &evt);
 }
 
 int
-ds_notify_pool_svc_update(uuid_t *puuid, d_rank_list_t *svc)
+ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl)
 {
 	Shared__RASEvent			evt = SHARED__RASEVENT__INIT;
 	Shared__RASEvent__PoolSvcEventInfo	info = \
@@ -289,16 +297,16 @@ ds_notify_pool_svc_update(uuid_t *puuid, d_rank_list_t *svc)
 	d_rank_t				rank = dss_self_rank();
 	int					rc;
 
-	if ((puuid == NULL) || uuid_is_null(*puuid)) {
+	if ((pool == NULL) || uuid_is_null(*pool)) {
 		D_ERROR("invalid pool\n");
 		return -DER_INVAL;
 	}
-	if ((svc == NULL) || svc->rl_nr == 0) {
+	if ((svcl == NULL) || svcl->rl_nr == 0) {
 		D_ERROR("invalid service replicas\n");
 		return -DER_INVAL;
 	}
 
-	rc = rank_list_to_uint32_array(svc, &info.svc_reps, &info.n_svc_reps);
+	rc = rank_list_to_uint32_array(svcl, &info.svc_reps, &info.n_svc_reps);
 	if (rc != 0) {
 		D_ERROR("failed to convert svc replicas to proto\n");
 		return rc;
@@ -309,9 +317,10 @@ ds_notify_pool_svc_update(uuid_t *puuid, d_rank_list_t *svc)
 
 	rc = raise_ras(RAS_POOL_REPS_UPDATE,
 		       "List of pool service replica ranks has been updated.",
-		       RAS_TYPE_STATE_CHANGE, RAS_SEV_INFO, NULL /* hid */,
-		       &rank /* rank */, NULL /* jid */, puuid,
-		       NULL /* cuuid */, NULL /* oid */, NULL /* cop */, &evt);
+		       RAS_TYPE_STATE_CHANGE, RAS_SEV_INFO, NULL /* hwid */,
+		       &rank /* rank */, NULL /* jobid */, pool,
+		       NULL /* cont */, NULL /* objid */, NULL /* ctlop */,
+		       &evt);
 
 	D_FREE(info.svc_reps);
 

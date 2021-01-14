@@ -39,8 +39,8 @@ message RASEvent {
 	string hostname = 6;	// (optional) Hostname of node involved in event.
 	uint32 rank = 7;	// (optional) DAOS rank involved in event.
 	string hw_id = 8;	// (optional) Hardware component involved in event.
-	string proc_id = 9;	// (optional) Process involved in event.
-	string thread_id = 10;	// (optional) Thread involved in event.
+	uint64 proc_id = 9;	// (optional) Process involved in event.
+	uint64 thread_id = 10;	// (optional) Thread involved in event.
 	string job_id = 11;	// (optional) Job involved in event.
 	string pool_uuid = 12;	// (optional) Pool UUID involved in event.
 	string cont_uuid = 13;	// (optional) Container UUID involved in event.
@@ -70,7 +70,7 @@ message ClusterEventReq {
 	RASEvent event = 2;	// RAS event.
 }
 
-// RASEventResp acknowledges receipt of an event notification.
+// ClusterEventResp acknowledges receipt of an event notification.
 message ClusterEventResp {
 	uint64 sequence = 1;	// Sequence identifier for RAS events.
 	int32 status = 2;	// DAOS error code.
