@@ -58,7 +58,7 @@ servers:
   # scm_size: 6
 
   # When scm_class is set to dcpm, scm_list is the list of device paths for
-  # AppDirect pmem namespaces (currently only one per server supported).
+  # PMem namespaces (currently only one per server supported).
   scm_class: dcpm
   scm_list: [/dev/pmem0]
 
