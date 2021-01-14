@@ -31,18 +31,12 @@
  *
  * DSS_POOL_NET_POLL	Network poll ULT
  * DSS_POOL_NVME_POLL	NVMe poll ULT
- * DSS_POOL_IO		Update/Fetch/Punch, enumeration RPC handler ULTs
- * DSS_POOL_REBUILD	Rebuild/Reint scan & pull ULTs
- * DSS_POOL_GC		Space reclaiming ULTs like GC or aggregation
- * DSS_POOL_SCRUB	Scrub checksums to discover silent data corruption
+ * DSS_POOL_GENERIC	All other ULTS
  */
 enum {
 	DSS_POOL_NET_POLL	= 0,
 	DSS_POOL_NVME_POLL,
-	DSS_POOL_IO,
-	DSS_POOL_REBUILD,
-	DSS_POOL_GC,
-	DSS_POOL_SCRUB,
+	DSS_POOL_GENERIC,
 	DSS_POOL_CNT,
 };
 
@@ -119,7 +113,7 @@ int dss_module_cleanup_all(void);
 /* srv.c */
 int dss_srv_init(void);
 int dss_srv_fini(bool force);
-void dss_dump_ABT_state(void);
+void dss_dump_ABT_state(FILE *fp);
 void dss_xstreams_open_barrier(void);
 struct dss_xstream *dss_get_xstream(int stream_id);
 int dss_xstream_cnt(void);
@@ -140,8 +134,6 @@ struct dss_thread_local_storage *dss_tls_init(int tag);
 void ds_iv_init(void);
 void ds_iv_fini(void);
 
-/** To schedule ULT on caller's self XS */
-#define DSS_XS_SELF		(-1)
 /** Total number of XS */
 #define DSS_XS_NR_TOTAL						\
 	(dss_sys_xs_nr + dss_tgt_nr + dss_tgt_offload_xs_nr)

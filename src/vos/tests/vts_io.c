@@ -911,6 +911,7 @@ io_obj_cache_test(void **state)
 	rc = vos_pool_destroy(po_name, pool_uuid);
 	assert_int_equal(rc, 0);
 	vos_obj_cache_destroy(occ);
+	free(po_name);
 }
 
 static void

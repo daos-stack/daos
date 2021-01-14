@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1267,17 +1267,21 @@ crt_group_rank_p2s(crt_group_t *subgrp, d_rank_t rank_in, d_rank_t *rank_out)
 		return rc;
 	}
 
+	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
 	rlink = d_hash_rec_find(&grp_priv->gp_p2s_table,
 			(void *)&rank_in, sizeof(rank_in));
 	if (!rlink) {
 		D_ERROR("Rank=%d not part of the group\n", rank_in);
-		return -DER_OOG;
+		D_GOTO(unlock, rc = -DER_OOG);
 	}
 
 	rm = crt_rm_link2ptr(rlink);
 	*rank_out = rm->rm_value;
 
 	d_hash_rec_decref(&grp_priv->gp_p2s_table, rlink);
+
+unlock:
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
 	return rc;
 }
@@ -1293,11 +1297,6 @@ crt_group_rank_s2p(crt_group_t *subgrp, d_rank_t rank_in, d_rank_t *rank_out)
 		return -DER_UNINIT;
 	}
 
-	if (!crt_is_service()) {
-		D_ERROR("Can only be called in a service group.\n");
-		return -DER_INVAL;
-	}
-
 	if (subgrp == NULL) {
 		D_ERROR("Invalid argument: subgrp is NULL.\n");
 		return -DER_INVAL;
@@ -1309,7 +1308,10 @@ crt_group_rank_s2p(crt_group_t *subgrp, d_rank_t rank_in, d_rank_t *rank_out)
 	}
 
 	grp_priv = container_of(subgrp, struct crt_grp_priv, gp_pub);
+
+	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
 	*rank_out = crt_grp_priv_get_primary_rank(grp_priv, rank_in);
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
 	return rc;
 }
@@ -2315,7 +2317,6 @@ grp_regen_linear_list(struct crt_grp_priv *grp_priv)
 	int		index;
 	int		i;
 	d_rank_list_t	*linear_list;
-	d_rank_t	*tmp_ptr;
 
 	membs = grp_priv->gp_membs.cgm_list;
 	linear_list = grp_priv->gp_membs.cgm_linear_list;
@@ -2323,14 +2324,10 @@ grp_regen_linear_list(struct crt_grp_priv *grp_priv)
 	/* If group size changed - reallocate the list */
 	if (!linear_list->rl_ranks ||
 	    linear_list->rl_nr != grp_priv->gp_size) {
-		D_REALLOC_ARRAY(tmp_ptr, linear_list->rl_ranks,
-			grp_priv->gp_size);
-
-		if (!tmp_ptr)
+		linear_list = d_rank_list_realloc(linear_list,
+						  grp_priv->gp_size);
+		if (linear_list == NULL)
 			return -DER_NOMEM;
-
-		linear_list->rl_ranks = tmp_ptr;
-		linear_list->rl_nr = grp_priv->gp_size;
 	}
 
 	index = 0;
@@ -2362,7 +2359,6 @@ grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank)
 	int		first;
 	int		i;
 	uint32_t	new_amount;
-	d_rank_t	*tmp;
 	int		rc = 0;
 	int		ret;
 
@@ -2384,13 +2380,11 @@ grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank)
 		first = membs->rl_nr;
 		new_amount = first + RANK_LIST_REALLOC_SIZE;
 
-		D_REALLOC_ARRAY(tmp, membs->rl_ranks, new_amount);
-		if (!tmp)
+
+		membs = d_rank_list_realloc(membs, new_amount);
+		if (membs == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 
-		membs->rl_ranks = tmp;
-
-		membs->rl_nr = new_amount;
 		for (i = first; i < first + RANK_LIST_REALLOC_SIZE; i++) {
 			membs->rl_ranks[i] = CRT_NO_RANK;
 			rc = grp_add_free_index(
@@ -3519,5 +3513,63 @@ cleanup:
 
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
+	return rc;
+}
+
+int
+crt_group_psrs_set(crt_group_t *grp, d_rank_list_t *rank_list)
+{
+	struct crt_grp_priv	*grp_priv;
+	struct crt_grp_priv	*prim_grp_priv;
+	d_rank_list_t		*copy_rank_list;
+	int			i;
+	int			rc;
+
+	grp_priv = crt_grp_pub2priv(grp);
+	if (grp_priv == NULL) {
+		D_ERROR("Failed to lookup grp\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (rank_list == NULL) {
+		D_ERROR("Passed rank_list is NULL\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (rank_list->rl_nr == 0) {
+		D_ERROR("Passed 0-sized rank_list\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = d_rank_list_dup(&copy_rank_list, rank_list);
+	if (rc != 0) {
+		D_ERROR("Failed to copy rank list\n");
+		D_GOTO(out, rc);
+	}
+
+	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
+	if (!grp_priv->gp_primary) {
+		prim_grp_priv = grp_priv->gp_priv_prim;
+
+		/* Convert all passed secondary ranks to primary */
+		for (i = 0; i < copy_rank_list->rl_nr; i++) {
+			copy_rank_list->rl_ranks[i] =
+				crt_grp_priv_get_primary_rank(
+						grp_priv,
+						copy_rank_list->rl_ranks[i]);
+		}
+	} else {
+		prim_grp_priv = grp_priv;
+	}
+
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
+
+	D_RWLOCK_WRLOCK(&prim_grp_priv->gp_rwlock);
+	if (prim_grp_priv->gp_psr_ranks) {
+		D_FREE(prim_grp_priv->gp_psr_ranks);
+		prim_grp_priv->gp_psr_ranks = copy_rank_list;
+	}
+	D_RWLOCK_UNLOCK(&prim_grp_priv->gp_rwlock);
+out:
 	return rc;
 }
