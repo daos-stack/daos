@@ -295,7 +295,7 @@ class CopyBasicsTest(DataMoverTestBase):
         copy_list.append([
             "copy_subsets (uns sub_sub_dir to uuid sub_dir)",
             ["DAOS_UNS", sub_sub_dir, pool1, container1],
-            ["DAOS_UUID", sub_dir2, pool1, container1]])
+            ["DAOS_UUID", sub_sub_dir2, pool1, container1]])
 
         # Run and verify each copy.
         # Each src or dst is a list of params:
