@@ -1226,8 +1226,10 @@ obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version)
 		break;
 	case DAOS_OBJ_RPC_EC_AGGREGATE:
 		((struct obj_ec_agg_out *)reply)->ea_map_ver = map_version;
+		break;
 	case DAOS_OBJ_RPC_CPD:
 		((struct obj_cpd_out *)reply)->oco_map_version = map_version;
+		break;
 	case DAOS_OBJ_RPC_EC_REPLICATE:
 		((struct obj_ec_rep_out *)reply)->er_map_ver = map_version;
 		break;
