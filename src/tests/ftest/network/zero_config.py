@@ -29,7 +29,6 @@ import random
 from avocado import fail_on
 from apricot import TestWithServers
 from daos_racer_utils import DaosRacerCommand
-from agent_utils import include_local_host
 from command_utils import CommandFailure
 from general_utils import check_file_exists, get_host_data, get_log_file
 
@@ -87,7 +86,7 @@ class ZeroConfigTest(TestWithServers):
             bool: status of whether correct device was used.
 
         """
-	# anticipate log switch
+        # anticipate log switch
         cmd = "if [ -f {0}.old ]; then head -50 {0}.old; else head -50 {0};" \
               "fi".format(log_file)
         err = "Error getting log data."
