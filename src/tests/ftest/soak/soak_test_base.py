@@ -545,7 +545,8 @@ class SoakTestBase(TestWithServers):
             except SoakTestError as error:
                 self.fail(error)
             # Check space after jobs done
-            self.pool[1].display_pool_daos_space()
+            for pool in self.pool:
+                self.dmg_command.pool_query(pool.uuid)
             self.soak_errors.extend(self.destroy_containers(self.container))
             self.soak_errors.extend(self.destroy_pools(self.pool[1]))
             # remove the test pools from self.pool; preserving reserved pool

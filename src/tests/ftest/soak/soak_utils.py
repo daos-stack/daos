@@ -647,7 +647,6 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                     if api in ["HDF5-VOL", "POSIX"]:
                         sbatch_cmds.extend(
                             stop_dfuse(dfuse, nodesperjob, "SLURM"))
-                    sbatch_cmds.append("exit $status")
                     log_name = "{}_{}_{}_{}".format(
                         api, b_size, t_size, o_type)
                     commands.append([sbatch_cmds, log_name])
@@ -716,8 +715,6 @@ def create_fio_cmdline(self, job_spec, pool):
                     # If posix, add the srun dfuse stop cmds
                     if fio_cmd.api.value == "POSIX":
                         srun_cmds.extend(stop_dfuse(dfuse, nodesperjob=1))
-                    # exit code
-                    srun_cmds.append("exit $status")
                     log_name = "{}_{}_{}_{}".format(blocksize, size, rw, o_type)
                     commands.append([srun_cmds, log_name])
                     self.log.info("<<Fio cmdlines>>:")
@@ -742,7 +739,18 @@ def build_job_script(self, commands, job, ppn, nodesperjob):
     self.log.info("<<Build Script>> at %s", time.ctime())
     script_list = []
     # if additional cmds are needed in the batch script
-    additional_cmds = []
+    dmg_config = self.dmg_command.configpath.value
+    prepend_cmds = [
+        "/usr/bin/dmg pool query -o {} --pool {} ".format(
+            dmg_config, self.pool[1].uuid),
+        "/usr/bin/dmg pool query -o {} --pool {} ".format(
+            dmg_config, self.pool[0].uuid)]
+    append_cmds = [
+        "/usr/bin/dmg pool query -o {} --pool {} ".format(
+            dmg_config, self.pool[1].uuid),
+        "/usr/bin/dmg pool query -o {} --pool {} ".format(
+            dmg_config, self.pool[0].uuid)]
+    exit_cmd = ["exit $status"]
     # Create the sbatch script for each list of cmdlines
     for cmd, log_name in commands:
         if isinstance(cmd, str):
@@ -763,7 +771,7 @@ def build_job_script(self, commands, job, ppn, nodesperjob):
         unique = get_random_string(5, self.used)
         script = slurm_utils.write_slurm_script(
             self.test_log_dir, job, output, nodesperjob,
-            additional_cmds + cmd, unique, sbatch)
+            prepend_cmds + cmd + append_cmds + exit_cmd, unique, sbatch)
         script_list.append(script)
         self.used.append(unique)
     return script_list
