@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ void
 dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  struct dfuse_inode_entry *ie,
 		  struct fuse_file_info *fi_out,
+		  bool is_new,
 		  fuse_req_t req)
 {
 	struct fuse_entry_param	entry = {0};
@@ -39,8 +40,19 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	D_ASSERT(ie->ie_parent);
 	D_ASSERT(ie->ie_dfs);
 
-	entry.attr_timeout = ie->ie_dfs->dfs_attr_timeout;
-	entry.entry_timeout = ie->ie_dfs->dfs_attr_timeout;
+	/* Set the caching attributes of this entry, but do not allow
+	 * any caching on fifos.
+	 */
+
+	if (S_ISFIFO(ie->ie_stat.st_mode)) {
+		if (!is_new) {
+			ie->ie_stat.st_mode &= ~S_IFIFO;
+			ie->ie_stat.st_mode |= S_IFDIR;
+		}
+	} else {
+		entry.attr_timeout = ie->ie_dfs->dfs_attr_timeout;
+		entry.entry_timeout = ie->ie_dfs->dfs_attr_timeout;
+	}
 
 	if (ie->ie_stat.st_ino == 0) {
 
@@ -48,10 +60,8 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		if (rc)
 			D_GOTO(out_decref, rc);
 
-		rc = dfuse_compute_inode(ie->ie_dfs, &ie->ie_oid,
+		dfuse_compute_inode(ie->ie_dfs, &ie->ie_oid,
 					 &ie->ie_stat.st_ino);
-		if (rc)
-			D_GOTO(out_decref, rc);
 	}
 
 	entry.attr = ie->ie_stat;
@@ -346,7 +356,8 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_dfs = parent->ie_dfs;
 
 	rc = dfs_lookup_rel(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
-			    O_RDWR, &ie->ie_obj, NULL, &ie->ie_stat);
+			    O_RDWR | O_NOFOLLOW, &ie->ie_obj,
+			    NULL, &ie->ie_stat);
 	if (rc) {
 		DFUSE_TRA_DEBUG(parent, "dfs_lookup() failed: (%s)",
 				strerror(rc));
@@ -367,7 +378,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_name[NAME_MAX] = '\0';
 	atomic_store_relaxed(&ie->ie_ref, 1);
 
-	if (S_ISDIR(ie->ie_stat.st_mode)) {
+	if (S_ISFIFO(ie->ie_stat.st_mode)) {
 		rc = check_for_uns_ep(fs_handle, ie);
 		DFUSE_TRA_DEBUG(ie,
 				"check_for_uns_ep() returned %d", rc);
@@ -375,11 +386,12 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 			D_GOTO(err, rc);
 	}
 
-	dfuse_reply_entry(fs_handle, ie, NULL, req);
+	dfuse_reply_entry(fs_handle, ie, NULL, false, req);
 	return;
 
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+	dfs_release(ie->ie_obj);
 free:
 	D_FREE(ie);
 }

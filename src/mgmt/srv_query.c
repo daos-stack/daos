@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,8 +89,7 @@ int ds_mgmt_get_bs_state(uuid_t bs_uuid, int *bs_state)
 
 	/* Create a ULT on the tgt_id */
 	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
-	/* TODO Add a new DSS_ULT_BIO tag */
-	rc = dss_ult_create(bs_state_query, (void *)bs_state, DSS_ULT_GC,
+	rc = dss_ult_create(bs_state_query, (void *)bs_state, DSS_XS_VOS,
 			    tgt_id, 0, &thread);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
@@ -208,8 +207,7 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 
 	/* Create a ULT on the tgt_id */
 	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
-	/* TODO Add a new DSS_ULT_BIO tag */
-	rc = dss_ult_create(bio_health_query, mbh, DSS_ULT_GC, tgt_id, 0,
+	rc = dss_ult_create(bio_health_query, mbh, DSS_XS_VOS, tgt_id, 0,
 			    &thread);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
@@ -257,7 +255,7 @@ bio_query_dev_list(void *arg)
 }
 
 int
-ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
+ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 {
 	struct bio_dev_info	   *dev_info = NULL, *tmp;
 	struct bio_list_devs_info   list_devs_info = { 0 };
@@ -271,7 +269,7 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 	D_INIT_LIST_HEAD(&list_devs_info.dev_list);
 
 	rc = dss_ult_execute(bio_query_dev_list, &list_devs_info, NULL, NULL,
-			     DSS_ULT_GC, 0, 0);
+			     DSS_XS_VOS, 0, 0);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT\n");
 		goto out;
@@ -290,7 +288,7 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 			rc = -DER_NOMEM;
 			break;
 		}
-		mgmt__smd_dev_resp__device__init(resp->devices[i]);
+		ctl__smd_dev_resp__device__init(resp->devices[i]);
 		/*
 		 * XXX: These fields are initialized as "empty string" by above
 		 * protobuf auto-generated function, to avoid error cleanup
@@ -394,7 +392,7 @@ out:
 }
 
 int
-ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp)
+ds_mgmt_smd_list_pools(Ctl__SmdPoolResp *resp)
 {
 	struct smd_pool_info	*pool_info = NULL, *tmp;
 	d_list_t		 pool_list;
@@ -423,7 +421,7 @@ ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp)
 			rc = -DER_NOMEM;
 			break;
 		}
-		mgmt__smd_pool_resp__pool__init(resp->pools[i]);
+		ctl__smd_pool_resp__pool__init(resp->pools[i]);
 		/* See "empty string" comments in ds_mgmt_smd_list_devs() */
 		resp->pools[i]->uuid = NULL;
 
@@ -492,7 +490,7 @@ out:
 }
 
 int
-ds_mgmt_dev_state_query(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
+ds_mgmt_dev_state_query(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 {
 	struct smd_dev_info	*dev_info;
 	int			 buflen = 10;
@@ -605,7 +603,7 @@ bio_faulty_state_set(void *arg)
 }
 
 int
-ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
+ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 {
 	struct bio_faulty_dev_info  faulty_info = { 0 };
 	struct smd_dev_info	   *dev_info;
@@ -655,8 +653,7 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
 
 	/* Create a ULT on the tgt_id */
 	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
-	/* TODO Add a new DSS_ULT_BIO tag */
-	rc = dss_ult_create(bio_faulty_state_set, NULL, DSS_ULT_GC,
+	rc = dss_ult_create(bio_faulty_state_set, NULL, DSS_XS_VOS,
 			    tgt_id, 0, &thread);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
@@ -669,7 +666,7 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
 	uuid_copy(faulty_info.devid, dev_uuid);
 	/* set the VMD LED to FAULTY state on init xstream */
 	rc = dss_ult_execute(bio_faulty_led_set, &faulty_info, NULL,
-			     NULL, DSS_ULT_GC, 0, 0);
+			     NULL, DSS_XS_VOS, 0, 0);
 	if (rc) {
 		D_ERROR("FAULT LED state not set on device:"DF_UUID"\n",
 			DP_UUID(dev_uuid));
@@ -725,7 +722,7 @@ bio_storage_dev_replace(void *arg)
 
 int
 ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid,
-		    Mgmt__DevReplaceResp *resp)
+		    Ctl__DevReplaceResp *resp)
 {
 	struct bio_replace_dev_info	 replace_dev_info = { 0 };
 	int				 buflen = 10;
@@ -757,7 +754,7 @@ ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid,
 	uuid_copy(replace_dev_info.old_dev, old_dev_uuid);
 	uuid_copy(replace_dev_info.new_dev, new_dev_uuid);
 	rc = dss_ult_execute(bio_storage_dev_replace, &replace_dev_info, NULL,
-			     NULL, DSS_ULT_GC, 0, 0);
+			     NULL, DSS_XS_VOS, 0, 0);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT\n");
 		goto out;
@@ -812,7 +809,7 @@ bio_storage_dev_identify(void *arg)
 
 
 int
-ds_mgmt_dev_identify(uuid_t dev_uuid, Mgmt__DevIdentifyResp *resp)
+ds_mgmt_dev_identify(uuid_t dev_uuid, Ctl__DevIdentifyResp *resp)
 {
 	struct bio_identify_dev_info identify_info = { 0 };
 	int			     buflen = 10;
@@ -840,7 +837,7 @@ ds_mgmt_dev_identify(uuid_t dev_uuid, Mgmt__DevIdentifyResp *resp)
 
 	uuid_copy(identify_info.devid, dev_uuid);
 	rc = dss_ult_execute(bio_storage_dev_identify, &identify_info, NULL,
-			     NULL, DSS_ULT_GC, 0, 0);
+			     NULL, DSS_XS_VOS, 0, 0);
 	if (rc != 0)
 		goto out;
 

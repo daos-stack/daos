@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -722,9 +722,9 @@ cont_iv_update(void *ns, int class_id, uuid_t key_uuid,
 	civ_key->class_id = class_id;
 	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0, retry);
 	if (rc)
-		D_ERROR(DF_UUID" iv update failed "DF_RC"\n", DP_UUID(key_uuid),
-			DP_RC(rc));
-
+		D_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR,
+			 DF_UUID" iv update failed "DF_RC"\n",
+			 DP_UUID(key_uuid), DP_RC(rc));
 	return rc;
 }
 
@@ -921,8 +921,8 @@ cont_iv_hdl_fetch(uuid_t cont_hdl_uuid, uuid_t pool_uuid,
 	uuid_copy(arg.cont_hdl_uuid, cont_hdl_uuid);
 	arg.eventual = eventual;
 	arg.invalidate_current = invalidate_current;
-	rc = dss_ult_create(cont_iv_capa_refresh_ult, &arg,
-			    DSS_ULT_POOL_SRV, 0, 0, NULL);
+	rc = dss_ult_create(cont_iv_capa_refresh_ult, &arg, DSS_XS_SYS,
+			    0, 0, NULL);
 	if (rc)
 		D_GOTO(out_eventual, rc);
 
@@ -1240,8 +1240,8 @@ cont_iv_prop_fetch(struct ds_iv_ns *ns, uuid_t cont_uuid,
 	uuid_copy(arg.cont_uuid, cont_uuid);
 	arg.prop = cont_prop;
 	arg.eventual = eventual;
-	rc = dss_ult_create(cont_iv_prop_fetch_ult, &arg,
-			    DSS_ULT_POOL_SRV, 0, DSS_DEEP_STACK_SZ, NULL);
+	rc = dss_ult_create(cont_iv_prop_fetch_ult, &arg, DSS_XS_SYS,
+			    0, DSS_DEEP_STACK_SZ, NULL);
 	if (rc)
 		D_GOTO(out, rc);
 
