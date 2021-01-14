@@ -203,3 +203,14 @@ int cont_list_objs_hdlr(struct cmd_args_s *ap);
  */
 
 int obj_query_hdlr(struct cmd_args_s *ap);
+
+/**
+ * Interactive function testing shell for DAOS
+ *
+ * Provides a shell to test VOS and DAOS commands.
+ *
+ * \param[in]     argc   number of arguments
+ * \param[in,out] argv   array of character pointers listing the arguments.
+ * \return               0 on success, daos_errno code on failure.
+ */
+int obj_ctl_shell(int argc, char *argv[]);
