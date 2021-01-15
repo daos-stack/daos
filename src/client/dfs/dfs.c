@@ -539,7 +539,7 @@ get_num_entries(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
 
 static int
 entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
-	   size_t len, struct stat *stbuf)
+	   size_t len, struct dfs_obj *obj, struct stat *stbuf)
 {
 	struct dfs_entry	entry = {0};
 	bool			exists;
@@ -554,6 +554,9 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 		return rc;
 
 	if (!exists)
+		return ENOENT;
+
+	if (obj && (obj->oid.hi != entry.oid.hi || obj->oid.lo != entry.oid.lo))
 		return ENOENT;
 
 	switch (entry.mode & S_IFMT) {
@@ -3131,7 +3134,7 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf)
 		oh = parent->oh;
 	}
 
-	return entry_stat(dfs, DAOS_TX_NONE, oh, name, len, stbuf);
+	return entry_stat(dfs, DAOS_TX_NONE, oh, name, len, NULL, stbuf);
 }
 
 int
@@ -3152,7 +3155,7 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf)
 
 
 	rc = entry_stat(dfs, DAOS_TX_NONE, oh, obj->name, strlen(obj->name),
-			stbuf);
+			obj, stbuf);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -3348,7 +3351,9 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	daos_recx_t		recx[3];
 	bool			set_size = false;
 	int			i = 0;
+	size_t			len;
 	int			rc;
+	struct stat		rstat = {};
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
@@ -3358,14 +3363,26 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		return EPERM;
 	if ((obj->flags & O_ACCMODE) == O_RDONLY)
 		return EPERM;
+	if (flags & DFS_SET_ATTR_MODE)
+		if ((stbuf->st_mode & S_IFMT) != (obj->mode & S_IFMT))
+			return EINVAL;
 
 	/** Open parent object and fetch entry of obj from it */
 	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RO, &oh, NULL);
 	if (rc)
 		return daos_der2errno(rc);
 
+	len = strlen(obj->name);
+
+	/* Fetch the remote entry first so we can check the oid, then keep
+	 * a track locally of what has been updated
+	 */
+	rc = entry_stat(dfs, th, oh, obj->name, len, obj, &rstat);
+	if (rc)
+		D_GOTO(out_obj, rc);
+
 	/** set dkey as the entry name */
-	d_iov_set(&dkey, (void *)obj->name, strlen(obj->name));
+	d_iov_set(&dkey, (void *)obj->name, len);
 	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
 	iod.iod_recxs	= recx;
 	iod.iod_type	= DAOS_IOD_ARRAY;
@@ -3378,6 +3395,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		recx[i].rx_nr = sizeof(mode_t);
 		i++;
 		flags &= ~DFS_SET_ATTR_MODE;
+		rstat.st_mode = stbuf->st_mode;
 	}
 	if (flags & DFS_SET_ATTR_ATIME) {
 		d_iov_set(&sg_iovs[i], &stbuf->st_atim, sizeof(time_t));
@@ -3385,6 +3403,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		recx[i].rx_nr = sizeof(time_t);
 		i++;
 		flags &= ~DFS_SET_ATTR_ATIME;
+		rstat.st_atim = stbuf->st_atim;
 	}
 	if (flags & DFS_SET_ATTR_MTIME) {
 		d_iov_set(&sg_iovs[i], &stbuf->st_mtim, sizeof(time_t));
@@ -3392,6 +3411,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		recx[i].rx_nr = sizeof(time_t);
 		i++;
 		flags &= ~DFS_SET_ATTR_MTIME;
+		rstat.st_mtim = stbuf->st_mtim;
 	}
 	if (flags & DFS_SET_ATTR_SIZE) {
 
@@ -3414,6 +3434,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		rc = daos_array_set_size(obj->oh, th, stbuf->st_size, NULL);
 		if (rc)
 			D_GOTO(out_obj, rc = daos_der2errno(rc));
+		rstat.st_size = stbuf->st_size;
 	}
 
 	iod.iod_nr = i;
@@ -3433,12 +3454,11 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	}
 
 out_stat:
-	rc = entry_stat(dfs, th, oh, obj->name, strlen(obj->name), stbuf);
+	*stbuf = rstat;
 
 out_obj:
 	daos_obj_close(oh, NULL);
 	return rc;
-
 }
 
 int
