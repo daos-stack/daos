@@ -21,6 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+from apricot import skipForTicket
 from cont_security_test_base import ContSecurityTestBase
 from security_test_base import generate_acl_file
 
@@ -33,7 +34,7 @@ class CreateContainterACLTest(ContSecurityTestBase):
 
     :avocado: recursive
     """
-
+    @skipForTicket("DAOS-6479")
     def test_container_basics(self):
         """Test basic container create/destroy/open/close/query.
 
