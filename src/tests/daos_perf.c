@@ -1612,9 +1612,6 @@ The options are as follows:\n\
 \n\
 -B	Profile performance of both update and fetch.\n\
 \n\
--n	Only run iterate performance test but with nesting iterator\n\
-	enable.  This can only run in vos mode.\n\
-\n\
 -f pathname\n\
 	Full path name of the VOS file.\n\
 \n\
