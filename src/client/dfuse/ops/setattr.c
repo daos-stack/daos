@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -137,6 +137,7 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 	attr->st_gid = attr_in.st_uid;
 
 reply:
+	attr->st_ino = ie->ie_stat.st_ino;
 	DFUSE_REPLY_ATTR(ie, req, attr);
 	return;
 
