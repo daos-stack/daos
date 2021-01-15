@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -169,9 +169,9 @@ Pool created with 6.00%%%% SCM/NVMe ratio
   UUID          : %s
   Service Ranks : [0-2]                               
   Storage Ranks : [0-3]                               
-  Total Size    : 11 GB                               
-  SCM           : 600 MB (150 MB / rank)              
-  NVMe          : 10 GB (2.5 GB / rank)               
+  Total Size    : 42 GB                               
+  SCM           : 2.4 GB (600 MB / rank)              
+  NVMe          : 40 GB (10 GB / rank)                
 
 `, common.MockUUID()),
 		},
@@ -188,8 +188,8 @@ Pool created with 100.00%%%% SCM/NVMe ratio
   UUID          : %s
   Service Ranks : [0-2]                               
   Storage Ranks : [0-3]                               
-  Total Size    : 600 MB                              
-  SCM           : 600 MB (150 MB / rank)              
+  Total Size    : 2.4 GB                              
+  SCM           : 2.4 GB (600 MB / rank)              
   NVMe          : 0 B (0 B / rank)                    
 
 `, common.MockUUID()),

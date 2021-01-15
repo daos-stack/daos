@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -89,14 +89,15 @@ func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ..
 		return errors.New("create response had 0 target ranks")
 	}
 
+	numRanks := uint64(len(pcr.TgtRanks))
 	title := fmt.Sprintf("Pool created with %0.2f%%%% SCM/NVMe ratio", ratio*100)
 	_, err := fmt.Fprintln(out, txtfmt.FormatEntity(title, []txtfmt.TableRow{
 		{"UUID": pcr.UUID},
 		{"Service Ranks": FormatRanks(pcr.SvcReps)},
 		{"Storage Ranks": FormatRanks(pcr.TgtRanks)},
-		{"Total Size": humanize.Bytes(pcr.ScmBytes + pcr.NvmeBytes)},
-		{"SCM": fmt.Sprintf("%s (%s / rank)", humanize.Bytes(pcr.ScmBytes), humanize.Bytes(pcr.ScmBytes/uint64(len(pcr.TgtRanks))))},
-		{"NVMe": fmt.Sprintf("%s (%s / rank)", humanize.Bytes(pcr.NvmeBytes), humanize.Bytes(pcr.NvmeBytes/uint64(len(pcr.TgtRanks))))},
+		{"Total Size": humanize.Bytes((pcr.ScmBytes + pcr.NvmeBytes) * numRanks)},
+		{"SCM": fmt.Sprintf("%s (%s / rank)", humanize.Bytes(pcr.ScmBytes*numRanks), humanize.Bytes(pcr.ScmBytes))},
+		{"NVMe": fmt.Sprintf("%s (%s / rank)", humanize.Bytes(pcr.NvmeBytes*numRanks), humanize.Bytes(pcr.NvmeBytes))},
 	}))
 
 	return err

@@ -213,6 +213,29 @@ pl_obj_layout_free(struct pl_obj_layout *layout)
 	D_FREE(layout);
 }
 
+/* Returns whether or not a given layout contains the specified rank */
+bool
+pl_obj_layout_contains(struct pool_map *map, struct pl_obj_layout *layout,
+		       uint32_t rank, uint32_t target_index)
+{
+	struct pool_target *target;
+	int i;
+	int rc;
+
+	D_ASSERT(layout != NULL);
+
+	for (i = 0; i < layout->ol_nr; i++) {
+		rc = pool_map_find_target(map, layout->ol_shards[i].po_target,
+					  &target);
+		if (rc != 0 && target->ta_comp.co_rank == rank &&
+		    target->ta_comp.co_index == target_index)
+			return true; /* Found a target and rank matches */
+	}
+
+	/* No match found */
+	return false;
+}
+
 int
 pl_obj_layout_alloc(unsigned int grp_size, unsigned int grp_nr,
 		struct pl_obj_layout **layout_pp)

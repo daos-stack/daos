@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,6 +41,9 @@ import (
 )
 
 const (
+	// DefaultPoolScmRatio defines the default SCM:NVMe ratio for
+	// requests that do not specify one.
+	DefaultPoolScmRatio = 0.06
 	// DefaultPoolServiceReps defines a default value for pool create
 	// requests that do not specify a value. If there are fewer than this
 	// number of ranks available, then the default falls back to 1.
@@ -112,16 +115,27 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 		return errors.New("harness has no managed instances")
 	}
 
+	if len(req.GetRanks()) == 0 {
+		return errors.New("zero ranks in calculateCreateStorage()")
+	}
+	if req.GetScmratio() == 0 {
+		req.Scmratio = DefaultPoolScmRatio
+	}
+
+	storagePerRank := func(total uint64) uint64 {
+		return total / uint64(len(req.GetRanks()))
+	}
+
 	switch {
 	case len(instances[0].bdevConfig().DeviceList) == 0:
 		svc.log.Info("config has 0 bdevs; excluding NVMe from pool create request")
 		if req.GetScmbytes() == 0 {
-			req.Scmbytes = req.GetTotalbytes()
+			req.Scmbytes = storagePerRank(req.GetTotalbytes())
 		}
 		req.Nvmebytes = 0
 	case req.GetTotalbytes() > 0:
-		req.Nvmebytes = req.GetTotalbytes()
-		req.Scmbytes = uint64(float64(req.GetTotalbytes()) * req.GetScmratio())
+		req.Nvmebytes = storagePerRank(req.GetTotalbytes())
+		req.Scmbytes = storagePerRank(uint64(float64(req.GetTotalbytes()) * req.GetScmratio()))
 	}
 
 	// zero these out as they're not needed anymore
@@ -224,6 +238,10 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		sort.Slice(req.Ranks, func(i, j int) bool { return req.Ranks[i] < req.Ranks[j] })
 	}
 
+	if len(req.GetRanks()) == 0 {
+		return nil, errors.New("pool request contains zero target ranks")
+	}
+
 	// Set the number of service replicas to a reasonable default
 	// if the request didn't specify. Note that the number chosen
 	// should not be even in order to work best with the raft protocol's
@@ -304,7 +322,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return resp, nil
 	}
 	// let the caller know what was actually created
-	resp.TgtRanks = req.Ranks
+	resp.TgtRanks = req.GetRanks()
 	resp.ScmBytes = req.Scmbytes
 	resp.NvmeBytes = req.Nvmebytes
 
