@@ -406,8 +406,9 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
  * changes have been made.
  */
 int
-ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
-			int opc, bool evict_rank)
+ds_pool_map_tgts_update(struct pool_map *map,
+			struct pool_target_id_list *tgts, int opc,
+			bool evict_rank, uint32_t *tgt_map_ver)
 {
 	uint32_t	version;
 	int		i;
@@ -416,6 +417,9 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 	D_ASSERT(tgts != NULL);
 
 	version = pool_map_get_version(map);
+	if (tgt_map_ver != NULL)
+		*tgt_map_ver = version;
+
 	for (i = 0; i < tgts->pti_number; i++) {
 		struct pool_target	*target = NULL;
 		struct pool_domain	*dom = NULL;
@@ -440,6 +444,9 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 		if (rc != 0)
 			return rc;
 
+		if (tgt_map_ver != NULL && *tgt_map_ver < version)
+			*tgt_map_ver = version;
+
 		if (evict_rank &&
 		    !(dom->do_comp.co_status & (PO_COMP_ST_DOWN |
 						PO_COMP_ST_DOWNOUT)) &&
@@ -457,6 +464,13 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 			version++;
 		}
 	}
+
+	/* If no target is being changed, let's reset the tgt_map_ver to 0,
+	 * so related ULT like rebuild/reintegrate/drain will not be scheduled.
+	 */
+	if (tgt_map_ver != NULL && *tgt_map_ver == pool_map_get_version(map))
+		*tgt_map_ver = 0;
+
 	/* Set the version only if actual changes have been made. */
 	if (version > pool_map_get_version(map)) {
 		D_DEBUG(DF_DSMS, "generating map %p version %u:\n",
@@ -797,9 +811,10 @@ update_targets_ult(void *arg)
 		rc = dsc_pool_tgt_exclude(uta->uta_pool_id, NULL /* grp */,
 					  &svc, &tgt_list);
 	if (rc)
-		D_ERROR(DF_UUID": %s targets failed. %d\n",
+		D_ERROR(DF_UUID": %s targets failed. " DF_RC "\n",
+			DP_UUID(uta->uta_pool_id),
 			uta->uta_reint ? "Reint" : "Exclude",
-			DP_UUID(uta->uta_pool_id), rc);
+			DP_RC(rc));
 
 	free_update_targets_arg(uta);
 }
@@ -823,8 +838,7 @@ update_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 	if (uta == NULL)
 		return -DER_NOMEM;
 
-	rc = dss_ult_create(update_targets_ult, uta, DSS_ULT_MISC,
-			    DSS_TGT_SELF, 0, NULL);
+	rc = dss_ult_create(update_targets_ult, uta, DSS_XS_SELF, 0, 0, NULL);
 	if (rc) {
 		D_ERROR(DF_UUID": Failed to start targets updating ULT. %d\n",
 			DP_UUID(pool_id), rc);
@@ -862,8 +876,8 @@ nvme_reaction(int *tgt_ids, int tgt_cnt, bool reint)
 			 * to transit BIO BS state to now.
 			 */
 			D_DEBUG(DB_MGMT, DF_UUID": Targets are all in %s\n",
-				reint ? "UP/UPIN" : "DOWN/DOWNOUT",
-				DP_UUID(pool_info->spi_id));
+				DP_UUID(pool_info->spi_id),
+				reint ? "UP/UPIN" : "DOWN/DOWNOUT");
 			break;
 		case 1:
 			/*
@@ -871,8 +885,8 @@ nvme_reaction(int *tgt_ids, int tgt_cnt, bool reint)
 			 * need to send exclude/reint RPC.
 			 */
 			D_DEBUG(DB_MGMT, DF_UUID": Trigger targets %s.\n",
-				reint ? "reint" : "exclude",
-				DP_UUID(pool_info->spi_id));
+				DP_UUID(pool_info->spi_id),
+				reint ? "reint" : "exclude");
 			rc = update_pool_targets(pool_info->spi_id, tgt_ids,
 						 tgt_cnt, reint, pl_rank);
 			if (rc == 0)

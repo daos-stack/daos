@@ -104,7 +104,7 @@ nvme_recov_1(void **state)
 	for (i = 0; i < ndisks; i++) {
 		if (devices[i].rank != rank)
 			continue;
-		print_message("Rank=%d UUID=%s state=%s host=%s tgts=",
+		print_message("Rank=%d UUID=" DF_UUIDF " state=%s host=%s tgts=",
 			      devices[i].rank, DP_UUID(devices[i].device_id),
 			      devices[i].state, devices[i].host);
 		for (j = 0; j < devices[i].n_tgtidx; j++)
@@ -247,7 +247,7 @@ nvme_test_verify_device_stats(void **state)
 	rc = dmg_storage_device_list(dmg_config_file, NULL, devices);
 	assert_int_equal(rc, 0);
 	for (i = 0; i < ndisks; i++)
-		print_message("Rank=%d UUID=%s state=%s host=%s\n",
+		print_message("Rank=%d UUID=" DF_UUIDF " state=%s host=%s\n",
 			      devices[i].rank, DP_UUID(devices[i].device_id),
 			devices[i].state, devices[i].host);
 
@@ -292,7 +292,7 @@ nvme_test_verify_device_stats(void **state)
 	/**
 	*Set single device for rank0 to faulty.
 	*/
-	print_message("NVMe with UUID=%s on host=%s\" set to Faulty\n",
+	print_message("NVMe with UUID=" DF_UUIDF " on host=%s\" set to Faulty\n",
 		      DP_UUID(devices[rank_pos].device_id),
 		devices[rank_pos].host);
 	rc = dmg_storage_set_nvme_fault(dmg_config_file,
@@ -315,7 +315,7 @@ nvme_test_verify_device_stats(void **state)
 		if (devices[i].rank == 0)
 			rank_pos = i;
 	}
-	assert_string_equal(devices[rank_pos].state, "\"FAULTY\"");
+	assert_string_equal(devices[rank_pos].state, "\"EVICTED\"");
 
 	rc = verify_state_in_log(devices[rank_pos].host, log_file,
 				 "NORMAL -> FAULTY");
@@ -391,7 +391,7 @@ nvme_test_get_blobstore_state(void **state)
 	rc = dmg_storage_device_list(dmg_config_file, NULL, devices);
 	assert_int_equal(rc, 0);
 	for (i = 0; i < ndisks; i++)
-		print_message("Rank=%d UUID=%s state=%s host=%s\n",
+		print_message("Rank=%d UUID=" DF_UUIDF " state=%s host=%s\n",
 			      devices[i].rank, DP_UUID(devices[i].device_id),
 			devices[i].state, devices[i].host);
 
@@ -436,7 +436,7 @@ nvme_test_get_blobstore_state(void **state)
 	 * Manually set first device returned to faulty via
 	 * 'dmg storage set nvme-faulty'.
 	 */
-	print_message("NVMe with UUID=%s on host=%s\" set to Faulty\n",
+	print_message("NVMe with UUID=" DF_UUIDF " on host=%s\" set to Faulty\n",
 		      DP_UUID(devices[0].device_id),
 		      devices[0].host);
 	rc = dmg_storage_set_nvme_fault(dmg_config_file, devices[0].host,

@@ -80,6 +80,7 @@ struct ds_cont_child {
 				 sc_dtx_aggregating:1,
 				 sc_dtx_reindex:1,
 				 sc_dtx_reindex_abort:1,
+				 sc_closing:1,
 				 sc_vos_aggregating:1,
 				 sc_abort_vos_aggregating:1,
 				 sc_props_fetched:1,
@@ -238,7 +239,7 @@ struct csum_recalc_args {
 	daos_size_t		 cra_seg_size;  /* size of coalesced entry */
 	unsigned int		 cra_seg_cnt;   /* # of read segments */
 	unsigned int		 cra_buf_len;	/* length of read buffer */
-	int			 cra_tgt_id;	/* used to log error */
+	int			 cra_tgt_id;	/* VOS target ID */
 	int			 cra_rc;	/* return code */
 	ABT_eventual		 csum_eventual;
 };

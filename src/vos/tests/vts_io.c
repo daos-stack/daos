@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -911,6 +911,7 @@ io_obj_cache_test(void **state)
 	rc = vos_pool_destroy(po_name, pool_uuid);
 	assert_int_equal(rc, 0);
 	vos_obj_cache_destroy(occ);
+	free(po_name);
 }
 
 static void
@@ -1010,38 +1011,6 @@ io_iter_test_with_anchor(void **state)
 
 	arg->ta_flags = TF_IT_ANCHOR | TF_REC_EXT;
 	io_iter_test_base(arg);
-}
-
-#define IOT_FA_DKEYS (100)
-
-static void
-io_iter_test_dkey_cond(void **state)
-{
-	struct io_test_args	*arg = *state;
-	int			 i;
-	int			 nr, rc = 0;
-	int			 akeys, recs;
-	daos_epoch_range_t	 epr;
-
-	skip();
-	arg->ta_flags = TF_FIXED_AKEY;
-	epr.epr_lo = gen_rand_epoch();
-	epr.epr_hi = DAOS_EPOCH_MAX;
-
-	for (i = 0; i < IOT_FA_DKEYS; i++) {
-		rc = io_update_and_fetch_dkey(arg, epr.epr_lo, epr.epr_lo);
-		assert_int_equal(rc, 0);
-	}
-	epr.epr_lo += 10;
-	rc = io_obj_iter_test(arg, &epr, VOS_IT_EPC_GE,
-			      &nr, &akeys, &recs, false);
-	assert_true(rc == 0 || rc == -DER_NONEXIST);
-
-	print_message("Enumerated: %d, total_keys: %lu.\n",
-		      nr, vts_cntr.cn_fa_dkeys);
-	print_message("Enumerated akeys: %d\n", akeys);
-
-	assert_int_equal(nr, vts_cntr.cn_fa_dkeys);
 }
 
 #define RANGE_ITER_KEYS (10)
@@ -2494,8 +2463,6 @@ static const struct CMUnitTest io_tests[] = {
 		io_iter_test, NULL, NULL},
 	{ "VOS240.1: KV Iter tests with anchor (for dkey)",
 		io_iter_test_with_anchor, NULL, NULL},
-	{ "VOS240.2: d-key enumeration with condition (akey)",
-		io_iter_test_dkey_cond, NULL, NULL},
 	{ "VOS240.3: KV range Iteration tests (for dkey)",
 		io_obj_forward_iter_test, NULL, NULL},
 	{ "VOS240.4: KV reverse range Iteration tests (for dkey)",

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -292,7 +292,7 @@ dc_tx_alloc(daos_handle_t coh, daos_epoch_t epoch, uint64_t flags,
 		return -DER_NO_HDL;
 
 	ph = dc_cont_hdl2pool_hdl(coh);
-	D_ASSERT(!daos_handle_is_inval(ph));
+	D_ASSERT(daos_handle_is_valid(ph));
 
 	D_ALLOC_PTR(tx);
 	if (tx == NULL)
@@ -1060,7 +1060,8 @@ dc_tx_classify_update(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 	struct daos_oclass_attr		*oca = NULL;
 	int				 rc = 0;
 
-	if (daos_oclass_is_ec(obj->cob_md.omd_id, &oca)) {
+	oca = obj_get_oca(obj);
+	if (DAOS_OC_IS_EC(oca)) {
 		struct obj_reasb_req	*reasb_req;
 
 		D_ALLOC_PTR(reasb_req);
@@ -1158,7 +1159,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 		leader_dtr = d_list_entry(dtr_list->next, struct dc_tx_rdg,
 					  dtr_link);
 
-	oca = daos_oclass_attr_find(obj->cob_md.omd_id);
+	oca = obj_get_oca(obj);
 	size = sizeof(*dtr) + sizeof(uint32_t) * obj->cob_grp_size;
 	D_ALLOC(dtr, size);
 	if (dtr == NULL)
@@ -1187,7 +1188,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 
 		rc = obj_shard_open(obj, idx, tx->tx_pm_ver, &shard);
 		if (rc == -DER_NONEXIST) {
-			if (oca->ca_resil == DAOS_RES_EC && !all) {
+			if (DAOS_OC_IS_EC(oca) && !all) {
 				if (idx >= start + obj->cob_grp_size -
 							oca->u.ec.e_p)
 					skipped_parity++;
@@ -1341,7 +1342,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 	if (read)
 		dtr->dtr_group.drg_flags = DGF_RDONLY;
 
-	if (oca->ca_resil == DAOS_RES_EC && !all) {
+	if (DAOS_OC_IS_EC(oca) && !all) {
 		dtr->dtr_group.drg_redundancy = oca->u.ec.e_p + 1;
 		D_ASSERT(dtr->dtr_group.drg_redundancy <= obj->cob_grp_size);
 	} else {
@@ -1398,8 +1399,7 @@ dc_tx_reduce_rdgs(d_list_t *dtr_list, uint32_t *grp_cnt, uint32_t *mod_cnt)
 	size_t			 size = 0;
 
 	*grp_cnt = 0;
-	leader = d_list_entry(dtr_list->next, struct dc_tx_rdg, dtr_link);
-	d_list_del(&leader->dtr_link);
+	leader = d_list_pop_entry(dtr_list, struct dc_tx_rdg, dtr_link);
 
 	/* Filter the dtrs that are the same as @leader. */
 	d_list_for_each_entry_safe(dtr, next, dtr_list, dtr_link) {
@@ -1412,8 +1412,7 @@ dc_tx_reduce_rdgs(d_list_t *dtr_list, uint32_t *grp_cnt, uint32_t *mod_cnt)
 	if (d_list_empty(dtr_list))
 		goto out;
 
-	tmp = d_list_entry(dtr_list->next, struct dc_tx_rdg, dtr_link);
-	d_list_del(&tmp->dtr_link);
+	tmp = d_list_pop_entry(dtr_list, struct dc_tx_rdg, dtr_link);
 
 	/* XXX: Try to merge the other non-leaders if possible.
 	 *	Consider efficiency, just one cycle scan. We do
@@ -1516,11 +1515,11 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	tgt_cnt = pool_map_target_nr(tx->tx_pool->dp_map);
 	D_ASSERT(tgt_cnt != 0);
 
-	start = dc_tx_leftmost_req(tx, false);
 	D_ALLOC_ARRAY(dtrgs, tgt_cnt);
 	if (dtrgs == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	start = dc_tx_leftmost_req(tx, false);
 	for (i = 0; i < req_cnt; i++) {
 		dcsr = &tx->tx_req_cache[i + start];
 		obj = dcsr->dcsr_obj;
@@ -1617,13 +1616,27 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		leader_oid.id_pub = obj->cob_md.omd_id;
 		leader_oid.id_shard = i;
 		leader_dtrg_idx = obj_get_shard(obj, i)->po_target;
-		if (!daos_oclass_is_ec(obj->cob_md.omd_id, NULL))
+		if (!obj_is_ec(obj))
 			mbs->dm_flags |= DMF_SRDG_REP;
 
 		/* If there is only one redundancy group to be modified,
 		 * then such redundancy group information should already
 		 * has been at the head position in the dtr_list.
 		 */
+	}
+
+	if (DAOS_FAIL_CHECK(DAOS_DTX_SPEC_LEADER)) {
+		i = dc_tx_leftmost_req(tx, true);
+		dcsr = &tx->tx_req_cache[i];
+		obj = dcsr->dcsr_obj;
+
+		leader_oid.id_pub = obj->cob_md.omd_id;
+		/* Use the shard 0 as the leader for test. The test program
+		 * will guarantee that at least one sub-modification happen
+		 * on the object shard 0.
+		 */
+		leader_oid.id_shard = 0;
+		leader_dtrg_idx = obj_get_shard(obj, 0)->po_target;
 	}
 
 	dcsh->dcsh_xid = tx->tx_id;
@@ -2908,7 +2921,7 @@ dc_tx_convert(enum obj_rpc_opc opc, tse_task_t *task)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = dc_tx_alloc(coh, 0, 0, false, &tx);
+	rc = dc_tx_alloc(coh, 0, DAOS_TF_ZERO_COPY, false, &tx);
 	if (rc != 0) {
 		D_ERROR("Fail to open TX for opc %u: "DF_RC"\n",
 			opc, DP_RC(rc));

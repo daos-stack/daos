@@ -32,6 +32,12 @@ class DaosCoreTestRebuild(DaosCoreBase):
     :avocado: recursive
     """
 
+    # Test variants that should be skipped
+    CANCEL_FOR_TICKET = [
+        ["DAOS-5851", "test_name", "rebuild tests 0-10"],
+        ["DAOS-6442", "test_name", "rebuild tests 18"]
+    ]
+
     def test_rebuild(self):
         """Jira ID: DAOS-2770.
 
@@ -41,7 +47,8 @@ class DaosCoreTestRebuild(DaosCoreBase):
         Use case:
             Balance testing load between hardware and VM clusters.
 
-        :avocado: tags=all,pr,hw,medium,ib2,unittest,daos_test_rebuild
+        :avocado: tags=all,pr,daily_regression,hw,medium,ib2,unittest
+        :avocado: tags=daos_test_rebuild
         :avocado: tags=DAOS_5610
         """
         DaosCoreBase.run_subtest(self)

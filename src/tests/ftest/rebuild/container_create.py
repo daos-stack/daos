@@ -39,6 +39,12 @@ class ContainerCreate(TestWithServers):
     :avocado: recursive
     """
 
+    # Cancel any tests with tickets already assigned
+    CANCEL_FOR_TICKET = [
+        ["DAOS-2434", "rank", 1],
+        ["DAOS-2434", "rank", 2],
+    ]
+
     def add_containers_during_rebuild(self, loop_id, qty, pool1, pool2):
         """Add containers to a pool while rebuild is still in progress.
 
@@ -162,10 +168,6 @@ class ContainerCreate(TestWithServers):
             self.job_manager.assign_processes(len(self.hostlist_clients))
             self.job_manager.assign_environment(
                 self.job_manager.job.get_default_env("mpirun"))
-
-        # Cancel any tests with tickets already assigned
-        if rank in (1, 2):
-            self.cancelForTicket("DAOS-2434")
 
         errors = [0 for _ in range(loop_qty)]
         for loop in range(loop_qty):

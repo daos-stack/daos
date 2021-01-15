@@ -71,10 +71,11 @@ class PoolCreateTests(PoolTestBase):
             of the servers. Verify that the pool creation takes no longer than
             2 minutes.
 
-        :avocado: tags=all,pr,hw,large,pool,create_max_pool_scm_only
+        :avocado: tags=all,daily_regression,hw,large,pool
+        :avocado: tags=create_max_pool_scm_only
         """
         # Create 1 pool using 90% of the available SCM capacity (no NVMe)
-        self.pool = self.get_pool_list(1, 0.9, None)
+        self.pool = self.get_pool_list(1, 0.9, None, 1)
         self.check_pool_creation(120)
 
     def test_create_max_pool(self):
@@ -85,10 +86,10 @@ class PoolCreateTests(PoolTestBase):
             the SSD capacity on all of the servers.  Verify that pool creation
             takes less than 4 minutes.
 
-        :avocado: tags=all,pr,hw,large,pool,create_max_pool
+        :avocado: tags=all,daily_regression,hw,large,pool,create_max_pool
         """
         # Create 1 pool using 90% of the available capacity
-        self.pool = self.get_pool_list(1, 0.9, 0.9)
+        self.pool = self.get_pool_list(1, 0.9, 0.9, 1)
         self.check_pool_creation(240)
 
     def test_create_pool_quantity(self):
@@ -100,13 +101,13 @@ class PoolCreateTests(PoolTestBase):
             Restart the system via cmd line tool (dmg).
             Verify that DAOS is ready to accept requests with in 2 minutes.
 
-        :avocado: tags=all,pr,hw,large,pool,create_performance
+        :avocado: tags=all,pr,daily_regression,hw,large,pool,create_performance
         """
         # Create some number of pools each using a equal amount of 60% of the
         # available capacity, e.g. 0.6% for 100 pools.
         quantity = self.params.get("quantity", "/run/pool/*", 1)
         ratio = 0.6 / quantity
-        self.pool = self.get_pool_list(quantity, ratio, ratio)
+        self.pool = self.get_pool_list(quantity, ratio, ratio, 1)
         self.check_pool_creation(3)
 
         # Verify DAOS can be restarted in less than 2 minutes
@@ -152,13 +153,13 @@ class PoolCreateTests(PoolTestBase):
             creating a pool of the same size on across all but the first pool
             succeeds.
 
-        :avocado: tags=all,pr,hw,large,pool,create_no_space
+        :avocado: tags=all,pr,daily_regression,hw,large,pool,create_no_space
         """
         # Define three pools to create:
         #   - one pool using 90% of the available capacity of one server
         #   - one pool using 90% of the available capacity of all servers
         #   - one pool using 90% of the available capacity of the other server
-        self.pool = self.get_pool_list(3, 0.9, 0.9)
+        self.pool = self.get_pool_list(3, 0.9, 0.9, 1)
         ranks = [rank for rank, _ in enumerate(self.hostlist_servers)]
         self.pool[0].target_list.update(ranks[:1], "pool[0].target_list")
         self.pool[1].target_list.update(ranks, "pool[1].target_list")
@@ -190,7 +191,6 @@ class PoolCreateTests(PoolTestBase):
             "should succeed."
         )
 
-    @skipForTicket("DAOS-6174")
     def test_create_no_space_loop(self):
         """JIRA ID: DAOS-3728.
 
@@ -203,13 +203,14 @@ class PoolCreateTests(PoolTestBase):
             deleting the successfully created pool to verify that there is not
             any subtle/low capacity space being lost with each failed create.
 
-        :avocado: tags=all,pr,hw,large,pool,create_no_space_loop
+        :avocado: tags=all,pr,daily_regression,hw,large,pool
+        :avocado: tags=create_no_space_loop
         """
         # Define three pools to create:
         #   - one pool using 90% of the available capacity of one server
         #   - one pool using 90% of the available capacity of all servers
         #   - one pool using 90% of the available capacity of the other server
-        self.pool = self.get_pool_list(3, 0.9, 0.9)
+        self.pool = self.get_pool_list(3, 0.9, 0.9, 1)
         ranks = [rank for rank, _ in enumerate(self.hostlist_servers)]
         self.pool[0].target_list.update(ranks[:1], "pool[0].target_list")
         self.pool[1].target_list.update(ranks, "pool[1].target_list")
