@@ -10,7 +10,7 @@
 
 Name:          daos
 Version:       1.1.2.1
-Release:       1%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -242,7 +242,7 @@ mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
 mv %{?buildroot}/%{_prefix}/etc/bash_completion.d %{?buildroot}/%{_sysconfdir}
 
 %pre server
-getent group daos_admins >/dev/null || groupadd -r daos_admins
+getent group daos_server >/dev/null || groupadd -r daos_server
 getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r daos_server
 %post server
 /sbin/ldconfig
@@ -254,6 +254,7 @@ getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r daos_server
 %systemd_postun %{server_svc_name}
 
 %pre client
+getent group daos_agent >/dev/null || groupadd -r daos_agent
 getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %post client
 %systemd_post %{agent_svc_name}
@@ -301,9 +302,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %attr(0700,daos_server,daos_server) %{conf_dir}/certs/clients
 %attr(0644,root,root) %{conf_dir}/daos_server.yml
 # set daos_admin to be setuid root in order to perform privileged tasks
-%attr(4750,root,daos_admins) %{_bindir}/daos_admin
-# set daos_server to be setgid daos_admins in order to invoke daos_admin
-%attr(2755,root,daos_admins) %{_bindir}/daos_server
+%attr(4750,root,daos_server) %{_bindir}/daos_admin
+# set daos_server to be setgid daos_server in order to invoke daos_admin
+%attr(2755,root,daos_server) %{_bindir}/daos_server
 %{_bindir}/daos_io_server
 %dir %{_libdir}/daos_srv
 %{_libdir}/daos_srv/libcont.so
@@ -322,7 +323,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_unitdir}/%{server_svc_name}
 
 %files client
-%{_prefix}/etc/memcheck-daos-client.supp
 %{_bindir}/cart_ctl
 %{_bindir}/self_test
 %{_bindir}/dmg
@@ -411,6 +411,13 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/*.a
 
 %changelog
+
+* Fri Jan 15 2021 Michael Hennecke <mhennecke@lenovo.com> 1.1.2.1-3
+- Harmonize daos_server and daos_agent groups.
+
+* Tue Dec 15 2020 Ashley Pittman <ashley.m.pittman@intel.com> 1.1.2.1-2
+- Combine the two memcheck suppressions files.
+
 * Wed Dec 09 2020 Johann Lombardi <johann.lombardi@intel.com> 1.1.2.1-1
 - Version bump up to 1.1.2.1
 
