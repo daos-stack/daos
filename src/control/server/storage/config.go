@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,20 @@
 package storage
 
 import "github.com/pkg/errors"
+
+const (
+	// MinNVMeStorage defines the minimum per-target allocation
+	// that may be requested. Requests with smaller amounts will
+	// be rounded up.
+	MinNVMeStorage = 1 << 30 // 1GiB, from bio_xtream.c
+
+	// MinScmToNVMeRatio defines the minimum-allowable ratio
+	// of SCM to NVMe.
+	MinScmToNVMeRatio = 0.01 // 1%
+	// DefaultScmToNVMeRation defines the default ratio of
+	// SCM to NVMe.
+	DefaultScmToNVMeRatio = 0.06
+)
 
 const (
 	maxScmDeviceLen = 1

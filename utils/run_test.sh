@@ -26,6 +26,8 @@ run_test()
     local in="$*"
     local a="${in// /-}"
     local b="${a////-}"
+    b="${b//;/-}"
+    b="${b//\"/-}"
 
     if [ -n "${RUN_TEST_FILTER}" ]; then
         if ! [[ "$*" =~ ${RUN_TEST_FILTER} ]]; then
@@ -85,14 +87,15 @@ if [ -d "/mnt/daos" ]; then
         if [ "$RUN_TEST_VALGRIND" = "memcheck" ]; then
             [ -z "$VALGRIND_SUPP" ] &&
                 VALGRIND_SUPP="$(pwd)/utils/test_memcheck.supp"
-            VALGRIND_XML_PATH="test_results/unit-test-%q{TNAME}.memcheck.xml"
+            VALGRIND_XML_PATH="unit-test-%q{TNAME}.memcheck.xml"
             export VALGRIND_CMD="valgrind --leak-check=full \
                                           --show-reachable=yes \
+                                          --num-callers=20 \
                                           --error-limit=no \
                                           --suppressions=${VALGRIND_SUPP} \
                                           --error-exitcode=42 \
-					  --xml=yes \
-					  --xml-file=${VALGRIND_XML_PATH}"
+                                          --xml=yes \
+                                          --xml-file=${VALGRIND_XML_PATH}"
         else
             VALGRIND_SUPP=""
         fi
@@ -125,6 +128,10 @@ if [ -d "/mnt/daos" ]; then
     run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_handler_tests"
     run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_listener_tests"
     run_test "${SL_BUILD_DIR}/src/mgmt/tests/srv_drpc_tests"
+    run_test "${SL_PREFIX}/bin/daos_perf" -T vos -R '"U;p F;p V"' -o 5 -d 5 \
+             -a 5 -n 10
+    run_test "${SL_PREFIX}/bin/daos_perf" -T vos -R '"U;p F;p V"' -o 5 -d 5 \
+             -a 5 -n 10 -A
 
     # Tests launched by scripts
     export USE_VALGRIND=${RUN_TEST_VALGRIND}

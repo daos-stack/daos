@@ -309,25 +309,27 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 
 	rc = sem_init(&fs_handle->dpi_sem, 0, 0);
 	if (rc != 0)
-		D_GOTO(err, 0);
+		D_GOTO(err_eq, 0);
 
 	fs_handle->dpi_shutdown = false;
 	rc = pthread_create(&fs_handle->dpi_thread, NULL,
 			    dfuse_progress_thread, fs_handle);
 	if (rc != 0)
-		D_GOTO(err, 0);
+		D_GOTO(err_eq, 0);
 
 	pthread_setname_np(fs_handle->dpi_thread, "dfuse_progress");
 
 	if (!dfuse_launch_fuse(dfuse_info, fuse_ops, &args, fs_handle)) {
 		DFUSE_TRA_ERROR(fs_handle, "Unable to register FUSE fs");
-		D_GOTO(err_ie_remove, rc = -DER_INVAL);
+		D_GOTO(err_eq, rc = -DER_INVAL);
 	}
 
 	D_FREE(fuse_ops);
 
 	return -DER_SUCCESS;
 
+err_eq:
+	daos_eq_destroy(fs_handle->dpi_eq, DAOS_EQ_DESTROY_FORCE);
 err_ie_remove:
 	d_hash_rec_delete_at(&fs_handle->dpi_iet, &ie->ie_htl);
 err_iet:
@@ -430,6 +432,12 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 	} else {
 		DFUSE_TRA_INFO(fs_handle, "dropped %lu refs on %u inodes",
 			       refs, handles);
+	}
+
+	rc = daos_eq_destroy(fs_handle->dpi_eq, 0);
+	if (rc) {
+		DFUSE_TRA_WARNING(fs_handle, "Failed to destroy EQ");
+		rcp = EINVAL;
 	}
 
 	rc = d_hash_table_destroy_inplace(&fs_handle->dpi_iet, false);

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -346,14 +346,9 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 				D_GOTO(reply, rc);
 			}
 
-			rc = dfuse_compute_inode(oh->doh_ie->ie_dfs,
-						 &oid,
-						 &stbuf.st_ino);
-			if (rc) {
-				DFUSE_TRA_DEBUG(oh, "Problem looking up file");
-				dfs_release(obj);
-				D_GOTO(reply, 0);
-			}
+			dfuse_compute_inode(oh->doh_ie->ie_dfs,
+					    &oid,
+					    &stbuf.st_ino);
 
 			if (plus) {
 				struct fuse_entry_param	entry = {0};
