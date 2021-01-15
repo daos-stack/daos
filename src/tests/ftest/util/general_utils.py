@@ -27,6 +27,7 @@ import os
 import re
 import random
 import string
+import time
 from getpass import getuser
 from importlib import import_module
 
@@ -37,6 +38,131 @@ from ClusterShell.NodeSet import NodeSet, NodeSetParseError
 
 class DaosTestError(Exception):
     """DAOS API exception class."""
+
+
+class SimpleProfiler(object):
+    """
+    Simple profiler that counts the number of times a function is called
+    and measure its execution time.
+    """
+
+    def __init__(self):
+        self._stats = {}
+        self._logger = None
+
+    def clean(self):
+        """
+        Clean the metrics collect so far.
+        """
+        self._stats = {}
+
+    def run(self, fn, tag, *args, **kwargs):
+        """
+        Run a function and update its stats.
+
+        Parameters:
+            fn (function): Function to be executed
+            args  (tuple): Argument list
+            kwargs (dict): Keyworded, variable-length argument list
+        """
+        self._log("Running function: {0}()".format(fn.__name__))
+
+        start_time = time.time()
+
+        ret = fn(*args, **kwargs)
+
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        self._log(
+            "Execution time: {0}".format(
+                self._pretty_time(elapsed_time)))
+
+        if tag not in self._stats:
+            self._stats[tag] = [0, []]
+
+        self._stats[tag][0] += 1
+        self._stats[tag][1].append(elapsed_time)
+
+        return ret
+
+    def get_stat(self, tag):
+        """
+        Retrieves the stats of a function.
+
+        Parameters:
+            tag (str): Tag to be query
+
+        Return:
+            max, min, avg (tuple): A tuple with the slowest, fastest and
+            average execution times.
+        """
+        data = self._stats.get(tag, [0, []])
+
+        return self._calculate_metrics(data[1])
+
+    def set_logger(self, fn):
+        """
+        Set the function that will be used to print the elapsed time on each
+        function call. If this value is not set, the profiling will be
+        performed silently.
+
+        Parameters:
+            fn (function): Function to be used for logging.
+        """
+        self._logger = fn
+
+    def print_stats(self):
+        """
+        Prints all the stats collected so far. If the logger has not been set,
+        the stats will be printed by using the built-in print function.
+        """
+        self._pmsg("{0:20} {1:5} {2:10} {3:10} {4:10}".format(
+            "Function Tag", "Hits", "Max", "Min", "Average"))
+
+        for fname, data in self._stats.items():
+            max_time, min_time, avg_time = self._calculate_metrics(data[1])
+            self._pmsg(
+                "{0:20} {1:5} {2:10} {3:10} {4:10}".format(
+                    fname,
+                    data[0],
+                    self._pretty_time(max_time),
+                    self._pretty_time(min_time),
+                    self._pretty_time(avg_time)))
+
+    def _log(self, msg):
+        """If logger function is set, print log messages"""
+        if self._logger:
+            self._logger(msg)
+
+    def _pmsg(self, msg):
+        """
+        Print messages using the logger. If it has not been set, print
+        messages using python print() function.
+        """
+        if self._logger:
+            self._log(msg)
+        else:
+            print(msg)
+
+    @classmethod
+    def _pretty_time(cls, ftime):
+        """Convert to pretty time string"""
+        return time.strftime("%H:%M:%S", time.gmtime(ftime))
+
+    @classmethod
+    def _calculate_metrics(cls, data):
+        """
+        Calculate the maximum, minimum and average values of a given list.
+        """
+        max_time = max(data)
+        min_time = min(data)
+
+        if len(data):
+            avg_time = sum(data) / len(data)
+        else:
+            avg_time = 0
+
+        return max_time, min_time, avg_time
 
 
 def human_to_bytes(size):
@@ -378,7 +504,7 @@ def process_host_list(hoststr):
     # 1st split into cluster name and range of hosts
     split_loc = hoststr.index('-')
     cluster = hoststr[0:split_loc]
-    num_range = hoststr[split_loc+1:]
+    num_range = hoststr[split_loc + 1:]
 
     # if its just a single host then nothing to do
     if num_range.isdigit():
@@ -397,7 +523,7 @@ def process_host_list(hoststr):
         else:
             # split the two ends of the range
             host_range = item.split('-')
-            for hostnum in range(int(host_range[0]), int(host_range[1])+1):
+            for hostnum in range(int(host_range[0]), int(host_range[1]) + 1):
                 hostname = "{}-{}".format(cluster, hostnum)
                 host_list.append(hostname)
 

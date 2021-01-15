@@ -394,9 +394,15 @@ bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
 		goto free_mutex;
 	}
 
+	if (nvme_conf == NULL || strlen(nvme_conf) == 0) {
+		D_INFO("NVMe config isn't specified, skip NVMe setup.\n");
+		nvme_glb.bd_nvme_conf = NULL;
+		return 0;
+	}
+
 	fd = open(nvme_conf, O_RDONLY, 0600);
 	if (fd < 0) {
-		D_WARN("Open %s failed("DF_RC"), skip DAOS NVMe setup.\n",
+		D_WARN("Open %s failed, skip DAOS NVMe setup "DF_RC"\n",
 		       nvme_conf, DP_RC(daos_errno2der(errno)));
 		nvme_glb.bd_nvme_conf = NULL;
 		return 0;
