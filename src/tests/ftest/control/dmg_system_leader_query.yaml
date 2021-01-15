@@ -5,4 +5,4 @@ hosts:
     - server-C
 timeout: 120
 server_config:
-    name: daos_server
+  name: daos_server

@@ -865,6 +865,17 @@ class DmgCommand(DmgCommandBase):
             dictionary of output in JSON format
 
         """
+        # Example JSON output:
+        # {
+        #   "response": {
+        #     "CurrentLeader": "127.0.0.1:10001",
+        #     "Replicas": [
+        #       "127.0.0.1:10001"
+        #     ]
+        #   },
+        #   "error": null,
+        #   "status": 0
+        # }
         return self._get_json_result(("system", "leader-query"))
 
     def system_start(self, ranks=None):

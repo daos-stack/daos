@@ -49,7 +49,6 @@ class DmgSystemLeaderQueryTest(ControlTestBase):
         :avocado: tags=basic
         """
         last_result = None
-        original_hostlist = self.dmg.hostlist
         for host in self.hosts:
             print("Querying {0}\n".format(host))
             self.dmg.hostlist = [host]
@@ -64,4 +63,4 @@ class DmgSystemLeaderQueryTest(ControlTestBase):
                                  ("current leader for host {0} didn't match "
                                   "previous").format(host))
             last_result = leader
-        self.dmg.hostlist = original_hostlist
+        self.dmg.hostlist = self.hosts
