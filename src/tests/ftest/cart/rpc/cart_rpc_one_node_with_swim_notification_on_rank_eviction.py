@@ -27,20 +27,19 @@ from __future__ import print_function
 import sys
 import time
 
-from avocado       import Test
-from avocado       import main
+from apricot import TestWithoutServers
 
 sys.path.append('./util')
 
-# Can't all this import before setting sys.path
+# Can't call this import before setting sys.path
 # pylint: disable=wrong-import-position
 from cart_utils import CartUtils
 
-class CartRpcOneNodeSwimNotificationOnRankEvictionTest(Test):
+class CartRpcOneNodeSwimNotificationOnRankEvictionTest(TestWithoutServers):
     """
     Runs basic CaRT RPC tests
 
-    :avocado: tags=all,cart,pr,rpc,one_node,swim_rank_eviction
+    :avocado: recursive
     """
     def setUp(self):
         """ Test setup """
@@ -51,6 +50,7 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(Test):
     def tearDown(self):
         """ Test tear down """
         print("Run TearDown\n")
+
     def _launch_cmd_at_index(self, index, srv_rtn):
         clicmd = self.utils.build_cmd(
             self, self.env, "test_clients", index=index)
@@ -100,7 +100,6 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(Test):
 
         # --rank 0,1 --shut_only"
         self._launch_cmd_at_index(5, srv_rtn)
-
 
 if __name__ == "__main__":
     main()
