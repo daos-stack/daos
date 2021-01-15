@@ -48,6 +48,7 @@ enum btr_probe_rc {
 	PROBE_RC_OK,
 	PROBE_RC_ERR,
 	PROBE_RC_INPROGRESS,
+	PROBE_RC_DATA_LOSS,
 	PROBE_RC_UNAVAILABLE	= PROBE_RC_UNKNOWN,
 };
 
@@ -950,11 +951,11 @@ btr_check_availability(struct btr_context *tcx, struct btr_check_alb *alb)
 	rec = btr_node_rec_at(tcx, alb->nd_off, alb->at);
 	rc = btr_ops(tcx)->to_check_availability(&tcx->tc_tins, rec,
 						 alb->intent);
-	if (rc == -DER_INPROGRESS) /* Unceration */
+	if (rc == -DER_INPROGRESS) /* Uncertain */
 		return PROBE_RC_INPROGRESS;
 
 	if (rc == -DER_DATA_LOSS)
-		return rc;
+		return PROBE_RC_DATA_LOSS;
 
 	if (rc < 0) /* Failure */
 		return PROBE_RC_ERR;
@@ -1590,9 +1591,6 @@ again:
 	rc = PROBE_RC_OK;
  out:
 	tcx->tc_probe_rc = rc;
-	if (rc == -DER_DATA_LOSS)
-		rc = PROBE_RC_ERR;
-
 	if (rc == PROBE_RC_ERR)
 		D_ERROR("Failed to probe: rc = %d\n", tcx->tc_probe_rc);
 	else if (level >= 0)
@@ -1765,13 +1763,15 @@ dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
 	case PROBE_RC_INPROGRESS:
 		D_DEBUG(DB_TRACE, "Target is in some uncommitted DTX.\n");
 		return -DER_INPROGRESS;
+	case PROBE_RC_DATA_LOSS:
+		D_DEBUG(DB_TRACE, "Fetch hit some corrupted transaction.\n");
+		return -DER_DATA_LOSS;
 	case PROBE_RC_NONE:
 		D_DEBUG(DB_TRACE, "Key does not exist.\n");
 		return -DER_NONEXIST;
 	case PROBE_RC_ERR:
 		D_DEBUG(DB_TRACE, "Cannot find key: %d\n", tcx->tc_probe_rc);
-		return tcx->tc_probe_rc == -DER_DATA_LOSS ?
-			tcx->tc_probe_rc : -DER_NONEXIST;
+		return -DER_NONEXIST;
 	default:
 		break;
 	}
@@ -1929,9 +1929,9 @@ btr_upsert(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	case PROBE_RC_INPROGRESS:
 		D_DEBUG(DB_TRACE, "The target is in some uncommitted DTX.");
 		return -DER_INPROGRESS;
-	case -DER_DATA_LOSS:
+	case PROBE_RC_DATA_LOSS:
 		D_DEBUG(DB_TRACE, "Upsert hit some corrupted transaction.\n");
-		return rc;
+		return -DER_DATA_LOSS;
 	}
 
 	tcx->tc_probe_rc = PROBE_RC_UNKNOWN; /* path changed */
@@ -2816,9 +2816,9 @@ dbtree_delete(daos_handle_t toh, dbtree_probe_opc_t opc, d_iov_t *key,
 		return -DER_INPROGRESS;
 	}
 
-	if (rc == -DER_DATA_LOSS) {
+	if (rc == PROBE_RC_DATA_LOSS) {
 		D_DEBUG(DB_TRACE, "Delete hit some corrupted transaction.\n");
-		return rc;
+		return -DER_DATA_LOSS;
 	}
 
 	if (rc != PROBE_RC_OK) {
@@ -3518,20 +3518,19 @@ dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc, uint32_t intent,
 		rc = btr_probe(tcx, opc, intent, key, hkey);
 	}
 
-	if (rc == PROBE_RC_INPROGRESS) {
+	switch (rc) {
+	case PROBE_RC_INPROGRESS:
 		itr->it_state = BTR_ITR_FINI;
 		return -DER_INPROGRESS;
-	}
-
-	if (rc == PROBE_RC_NONE) {
+	case PROBE_RC_DATA_LOSS:
+		itr->it_state = BTR_ITR_FINI;
+		return -DER_DATA_LOSS;
+	case PROBE_RC_NONE:
+	case PROBE_RC_ERR:
 		itr->it_state = BTR_ITR_FINI;
 		return -DER_NONEXIST;
-	}
-
-	if (rc == PROBE_RC_ERR) {
-		itr->it_state = BTR_ITR_FINI;
-		return tcx->tc_probe_rc == -DER_DATA_LOSS ?
-			tcx->tc_probe_rc : -DER_NONEXIST;
+	default:
+		break;
 	}
 
 	itr->it_state = BTR_ITR_READY;
@@ -3594,59 +3593,6 @@ int
 dbtree_iter_prev(daos_handle_t ih)
 {
 	return btr_iter_move(ih, false);
-}
-
-static int
-btr_iter_move_with_intent(daos_handle_t ih, uint32_t intent, bool forward)
-{
-	struct btr_context	*tcx;
-	struct btr_trace	*trace;
-	struct btr_iterator	*itr;
-	struct btr_check_alb	 alb;
-	int			 rc;
-
-	tcx = btr_hdl2tcx(ih);
-	if (tcx == NULL)
-		return -DER_NO_HDL;
-
-	itr = &tcx->tc_itr;
-	alb.intent = intent;
-
-again:
-	rc = btr_iter_move(ih, forward);
-	if (rc != 0)
-		return rc;
-
-	trace = &tcx->tc_trace[tcx->tc_depth - 1];
-	alb.nd_off = trace->tr_node;
-	alb.at = trace->tr_at;
-	rc = btr_check_availability(tcx, &alb);
-	switch (rc) {
-	case PROBE_RC_UNAVAILABLE:
-		goto again;
-	case PROBE_RC_INPROGRESS:
-		itr->it_state = BTR_ITR_FINI;
-		return -DER_INPROGRESS;
-	case PROBE_RC_OK:
-		return 0;
-	case PROBE_RC_ERR:
-	default:
-		itr->it_state = BTR_ITR_FINI;
-		return tcx->tc_probe_rc == -DER_DATA_LOSS ?
-			tcx->tc_probe_rc : -DER_INVAL;
-	}
-}
-
-int
-dbtree_iter_next_with_intent(daos_handle_t ih, uint32_t intent)
-{
-	return btr_iter_move_with_intent(ih, intent, true);
-}
-
-int
-dbtree_iter_prev_with_intent(daos_handle_t ih, uint32_t intent)
-{
-	return btr_iter_move_with_intent(ih, intent, false);
 }
 
 /**

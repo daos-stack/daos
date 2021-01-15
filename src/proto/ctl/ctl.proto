@@ -1,0 +1,66 @@
+//
+// (C) Copyright 2019 Intel Corporation.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+// The Government's rights to use, modify, reproduce, release, perform, display,
+// or disclose this software are subject to the terms of the Apache License as
+// provided in Contract No. 8F-30005.
+// Any reproduction of computer software, computer software documentation, or
+// portions thereof marked with this legend must also reproduce the markings.
+//
+
+syntax = "proto3";
+package ctl;
+
+option go_package = "github.com/daos-stack/daos/src/control/common/proto/ctl";
+
+import "ctl/storage.proto";
+import "ctl/network.proto";
+import "ctl/firmware.proto";
+import "ctl/smd.proto";
+import "ctl/ranks.proto";
+import "shared/ranks.proto";
+
+// Service definitions for communications between gRPC management server and
+// client regarding tasks related to DAOS system and server hardware.
+//
+// All Control service RPCs will terminate at gRPC server and do not interact
+// with the Management Service.
+service CtlSvc {
+	// Prepare nonvolatile storage devices for use with DAOS
+	rpc StoragePrepare(StoragePrepareReq) returns (StoragePrepareResp) {};
+	// Retrieve details of nonvolatile storage on server, including health info
+	rpc StorageScan(StorageScanReq) returns(StorageScanResp) {};
+	// Format nonvolatile storage devices for use with DAOS
+	rpc StorageFormat(StorageFormatReq) returns(StorageFormatResp) {};
+	// Perform a fabric scan to determine the available provider, device, NUMA node combinations
+	rpc NetworkScan (NetworkScanReq) returns (NetworkScanResp) {};
+	// Retrieve firmware details from storage devices on server
+	rpc FirmwareQuery(FirmwareQueryReq) returns (FirmwareQueryResp) {};
+	// Update firmware on storage devices on server
+	rpc FirmwareUpdate(FirmwareUpdateReq) returns (FirmwareUpdateResp) {};
+	// Query the per-server metadata
+	rpc SmdQuery(SmdQueryReq) returns (SmdQueryResp) {}
+	// Prepare DAOS IO servers on a host for controlled shutdown. (gRPC fanout)
+	rpc PrepShutdownRanks(RanksReq) returns (RanksResp) {}
+	// Stop DAOS IO servers on a host. (gRPC fanout)
+	rpc StopRanks(RanksReq) returns (RanksResp) {}
+	// Ping DAOS IO servers on a host. (gRPC fanout)
+	rpc PingRanks(RanksReq) returns (RanksResp) {}
+	// ResetFormat DAOS IO servers on a host. (gRPC fanout)
+	rpc ResetFormatRanks(RanksReq) returns (RanksResp) {}
+	// Start DAOS IO servers on a host. (gRPC fanout)
+	rpc StartRanks(RanksReq) returns (RanksResp) {}
+}

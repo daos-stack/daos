@@ -24,8 +24,10 @@
 syntax = "proto3";
 package ctl;
 
-import "storage_scm.proto";
-import "storage_nvme.proto";
+option go_package = "github.com/daos-stack/daos/src/control/common/proto/ctl";
+
+import "ctl/storage_scm.proto";
+import "ctl/storage_nvme.proto";
 
 message FirmwareQueryReq {
 	bool queryScm = 1; // Should we query SCM devices?

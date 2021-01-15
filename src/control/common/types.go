@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -77,8 +77,8 @@ func (acl *AccessControlList) String() string {
 
 // PoolDiscovery represents the basic discovery information for a pool.
 type PoolDiscovery struct {
-	UUID        string   // Unique identifier
-	SvcReplicas []uint32 `json:"Svcreps"` // Ranks of pool service replicas
+	UUID        string   `json:"uuid"`     // Unique identifier
+	SvcReplicas []uint32 `json:"svc_reps"` // Ranks of pool service replicas
 }
 
 // InterfaceIsNil returns true if the interface itself or its underlying value
@@ -96,4 +96,25 @@ func InterfaceIsNil(i interface{}) bool {
 		return true
 	}
 	return reflect.ValueOf(i).IsNil()
+}
+
+// NormalExit indicates that the process exited without error.
+const NormalExit ExitStatus = "process exited with 0"
+
+// ExitStatus implements the error interface and is used to indicate external
+// process exit conditions.
+type ExitStatus string
+
+func (es ExitStatus) Error() string {
+	return string(es)
+}
+
+// GetExitStatus ensures that a monitored process always returns an error of
+// some sort when it exits so that we can respond appropriately.
+func GetExitStatus(err error) error {
+	if err != nil {
+		return err
+	}
+
+	return NormalExit
 }

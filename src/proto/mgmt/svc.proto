@@ -24,6 +24,8 @@
 syntax = "proto3";
 package mgmt;
 
+option go_package = "github.com/daos-stack/daos/src/control/common/proto/mgmt";
+
 // Management Service Protobuf Definitions related to interactions between
 // DAOS control server and DAOS IO Servers.
 
@@ -46,13 +48,14 @@ message GroupUpdateResp {
 }
 
 message JoinReq {
-	string uuid = 1;	// Servee UUID.
-	uint32 rank = 2;	// Server rank desired, if not -1.
-	string uri = 3;		// Server CaRT base URI (i.e., for context 0).
-	uint32 nctxs = 4;	// Server CaRT context count.
-	string addr = 5;	// Server management address.
-	string srvFaultDomain = 6; // Fault domain for this instance's server
-	uint32 idx = 7;		// Instance index on server node.
+	string sys = 1;		// DAOS system name.
+	string uuid = 2;	// Server UUID.
+	uint32 rank = 3;	// Server rank desired, if not MAX_UINT32.
+	string uri = 4;		// Server CaRT base URI (i.e., for context 0).
+	uint32 nctxs = 5;	// Server CaRT context count.
+	string addr = 6;	// Server management address.
+	string srvFaultDomain = 7; // Fault domain for this instance's server
+	uint32 idx = 8;		// Instance index on server node.
 }
 
 message JoinResp {
@@ -68,7 +71,7 @@ message JoinResp {
 }
 
 message LeaderQueryReq {
-	string system = 1;		// System name.
+	string sys = 1;		// System name.
 }
 
 message LeaderQueryResp {
@@ -76,28 +79,63 @@ message LeaderQueryResp {
 	repeated string replicas = 2;
 }
 
+// RankStateInfo defines extended fields for rank state change related events.
+message RankStateInfo {
+	uint32 instance = 1;	// Control-plane harness instance index.
+	bool errored = 2;	// Rank in error state.
+	string error = 3;	// Message associated with error.
+}
+
+// RASEvent describes a RAS event in the DAOS system.
+message RASEvent {
+	string name = 1;	// Unique identifier, 64-char.
+	string timestamp = 2;	// Fully qualified timestamp (us) incl timezone.
+	uint32 severity = 3;	// Event severity.
+	string msg = 4;		// Human readable message describing event.
+	uint32 id = 5;		// Unique numeric event identifier.
+	uint32 type = 6;	// Event type.
+	uint32 rank = 7; 	// (optional) DAOS rank involved in event.
+	string hostname = 8;	// (optional) Hostname of node involved in event.
+	oneof extended_info {	// (optional) Instance specific info.
+		RankStateInfo rank_state = 9;
+	}
+}
+
+// ClusterEventReq wraps an event subtype e.g. RASEvent.
+message ClusterEventReq {
+	uint64 sequence = 1;	// Sequence identifier for cluster events.
+	oneof event {
+		RASEvent ras = 2;
+	}
+}
+
+// ClusterEventResp acknowledges receipt of an event notification.
+message ClusterEventResp {
+	uint64 sequence = 1;	// Sequence identifier for cluster events.
+}
+
 message GetAttachInfoReq {
 	string sys = 1;		// System name. For daos_agent only.
-	bool allRanks = 2;      // Return PSRs for all ranks, not just the MS replicas.
-	string jobid = 3;	// Job ID to associate instance with.
+	bool all_ranks = 2;	// Return Rank URIs for all ranks.
 }
 
 message GetAttachInfoResp {
-	int32 status = 1;	// DAOS error code
-	message Psr {
+	int32 status = 1;		// DAOS error code
+	message RankUri {
 		uint32 rank = 1;
 		string uri = 2;
 	}
-	repeated Psr psrs = 2;	// CaRT PSRs of the system group.
-				// These CaRT settings are shared with the
-				// libdaos client to aid in CaRT initialization.
-	string Provider = 3;	// CaRT OFI provider
-	string Interface = 4;	// CaRT OFI_INTERFACE
-	string Domain = 5;	// CaRT OFI_DOMAIN for given OFI_INTERFACE
-	uint32 CrtCtxShareAddr = 6; // CaRT CRT_CTX_SHARE_ADDR
-	uint32 CrtTimeout = 7;	// CaRT CRT_TIMEOUT
-	uint32 NetDevClass = 8; // ARP protocol hardware identifier of the
-				// IO server network interface
+	repeated RankUri rank_uris = 2;	// Rank URIs
+					// These CaRT settings are shared with the
+					// libdaos client to aid in CaRT initialization.
+	string provider = 3;		// CaRT OFI provider
+	string interface = 4;		// CaRT OFI_INTERFACE
+	string domain = 5;		// CaRT OFI_DOMAIN for given OFI_INTERFACE
+	uint32 crt_ctx_share_addr = 6;	// CaRT CRT_CTX_SHARE_ADDR
+	uint32 crt_timeout = 7;		// CaRT CRT_TIMEOUT
+	uint32 net_dev_class = 8;	// ARP protocol hardware identifier of the
+					// IO server network interface
+	repeated uint32 ms_ranks = 9;	// Ranks local to MS replicas
 }
 
 message PrepShutdownReq {
@@ -118,3 +156,9 @@ message SetRankReq {
 
 // SetRankResp is identical to DaosResp.
 
+message PoolMonitorReq {
+	string sys = 1; // DAOS system identifier
+	string poolUUID = 2;	// Pool UUID associated with the Pool Handle
+	string poolHandleUUID = 3; // Pool Handle UUID for the connection
+	string jobid = 4;	// Job ID to associate instance with.
+}

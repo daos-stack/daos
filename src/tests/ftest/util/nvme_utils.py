@@ -88,9 +88,12 @@ class ServerFillUp(IorTestBase):
         self.pool = None
         self.dmg = None
         self.set_faulty_device = False
+        self.set_online_rebuild = False
+        self.rank_to_kill = None
         self.scm_fill = False
         self.nvme_fill = False
         self.ior_matrix = None
+        self.fail_on_warning = False
 
     def setUp(self):
         """Set up each test case."""
@@ -279,7 +282,7 @@ class ServerFillUp(IorTestBase):
 
         return self.get_max_capacity(drive_info)
 
-    def start_ior_thread(self, results, operation='WriteRead'):
+    def start_ior_thread(self, results, create_cont, operation='WriteRead'):
         """Start IOR write/read threads and wait until all threads are finished.
 
         Args:
@@ -288,21 +291,22 @@ class ServerFillUp(IorTestBase):
                              Default it will do whatever mention in ior_flags
                              set.
         """
-        _create_cont = True
         self.ior_cmd.flags.value = self.ior_default_flags
-        #For IOR Read only operation, retrieve the stored container UUID
-        if 'Read' in operation:
-            _create_cont = False
-            self.ior_cmd.flags.value = self.ior_read_flags
 
         #For IOR Other operation, calculate the block size based on server %
         #to fill up. Store the container UUID for future reading operation.
-        block_size = self.calculate_ior_block_size()
-        self.ior_cmd.block_size.update('{}'.format(block_size))
+        if operation == 'Write':
+            block_size = self.calculate_ior_block_size()
+            self.ior_cmd.block_size.update('{}'.format(block_size))
+        #For IOR Read only operation, retrieve the stored container UUID
+        elif operation == 'Read':
+            create_cont = False
+            self.ior_cmd.flags.value = self.ior_read_flags
 
         # run IOR Command
         try:
-            out = self.run_ior_with_pool(create_cont=_create_cont)
+            out = self.run_ior_with_pool(create_cont=create_cont,
+                                         fail_on_warning=self.fail_on_warning)
             self.ior_matrix = IorCommand.get_ior_metrics(out)
             results.put("PASS")
         except (CommandFailure, TestFail) as _error:
@@ -362,9 +366,9 @@ class ServerFillUp(IorTestBase):
         self.dmg.hostlist = server
         self.dmg.storage_set_faulty(disk_id)
         result = self.dmg.storage_query_device_health(disk_id)
-        #Check if device state changed to FAULTY.
-        if 'State:FAULTY' not in result.stdout:
-            self.fail("device State {} on host {} suppose to be FAULTY"
+        #Check if device state changed to EVICTED.
+        if 'State:EVICTED' not in result.stdout:
+            self.fail("device State {} on host {} suppose to be EVICTED"
                       .format(disk_id, server))
         # Wait for rebuild to start
         self.pool.wait_for_rebuild(True)
@@ -431,7 +435,8 @@ class ServerFillUp(IorTestBase):
         #Create the Pool
         self.pool.create()
 
-    def start_ior_load(self, storage='NVMe', operation="Write", percent=1):
+    def start_ior_load(self, storage='NVMe', operation="Write", percent=1,
+                       create_cont=True):
         """
         Method to Fill up the server either SCM or NVMe.
         Fill up based on percent amount given using IOR.
@@ -440,7 +445,7 @@ class ServerFillUp(IorTestBase):
             storage(string): SCM or NVMe, by default it will fill NVMe.
             operation(string): Write/Read operation
             percent(int): % of storage to be filled
-
+            create_cont(bool): To create the new container for IOR
         Returns:
             None
         """
@@ -449,13 +454,10 @@ class ServerFillUp(IorTestBase):
         self.nvme_fill = True if 'NVMe' in storage else False
         self.scm_fill = True if 'SCM' in storage else False
 
-        if operation not in ['Read', 'Write']:
-            self.fail('Please provide the valid IO operation instead {}'
-                      .format(operation))
-
         # Create the IOR threads
         job = threading.Thread(target=self.start_ior_thread,
                                kwargs={"results":self.out_queue,
+                                       "create_cont": create_cont,
                                        "operation": operation})
         # Launch the IOR thread
         job.start()
@@ -465,6 +467,13 @@ class ServerFillUp(IorTestBase):
             time.sleep(60)
             #Set the device faulty
             self.set_device_faulty_loop()
+
+        #Kill the server rank while IOR in progress
+        if self.set_online_rebuild:
+            time.sleep(30)
+            # Kill the server rank
+            if self.rank_to_kill is not None:
+                self.get_dmg_command().system_stop(True, self.rank_to_kill)
 
         # Wait to finish the thread
         job.join()

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1146,7 +1146,8 @@ ds_pool_iv_srv_hdl_fetch(struct ds_pool *pool, uuid_t *pool_hdl_uuid,
 	pool_key->pik_entry_size = sizeof(struct pool_iv_entry);
 	rc = ds_iv_fetch(pool->sp_iv_ns, &key, &sgl, false /* retry */);
 	if (rc) {
-		D_ERROR("iv fetch failed "DF_RC"\n", DP_RC(rc));
+		D_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR,
+			 "iv fetch failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1240,7 +1241,7 @@ ds_pool_iv_svc_fetch(struct ds_pool *pool, d_rank_list_t **svc_p)
 	} else {
 		/* create a ULT and schedule it on xstream-0 */
 		rc = dss_ult_execute(cont_pool_svc_ult, &ia, NULL, NULL,
-				     DSS_ULT_POOL_SRV, 0, 0);
+				     DSS_XS_SYS, 0, 0);
 		if (rc)
 			D_GOTO(failed, rc);
 	}

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,19 +54,22 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
 	 * mode.
 	 */
 
-	rc = dfs_lookup_rel(dfs, dir, name, O_RDONLY, &obj, &stbuf.st_mode,
-			    NULL);
+	rc = dfs_lookup_rel(dfs, dir, name, O_RDONLY | O_NOFOLLOW, &obj,
+			    &stbuf.st_mode, NULL);
 	if (rc)
 		return rc;
+
+
+	if (S_ISFIFO(stbuf.st_mode)) {
+		stbuf.st_mode &= ~S_IFIFO;
+		stbuf.st_mode |= S_IFDIR;
+	}
 
 	rc = dfs_obj2id(obj, &oid);
 	if (rc)
 		D_GOTO(out, rc);
 
-	rc = dfuse_compute_inode(udata->inode->ie_dfs, &oid,
-				 &stbuf.st_ino);
-	if (rc)
-		D_GOTO(out, rc);
+	dfuse_compute_inode(udata->inode->ie_dfs, &oid, &stbuf.st_ino);
 
 	/*
 	 * If we are still within the fuse size limit (less than 4k - we have

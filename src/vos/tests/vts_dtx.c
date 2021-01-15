@@ -71,6 +71,7 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_leader_oid = *oid;
 
 	dth->dth_sync = 0;
+	dth->dth_cos_done = 0;
 	dth->dth_resent = 0;
 	dth->dth_touched_leader_oid = 0;
 	dth->dth_local_tx_started = 0;
@@ -80,6 +81,7 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_active = 0;
 	dth->dth_dist = 0;
 	dth->dth_for_migration = 0;
+	dth->dth_ignore_uncommitted = 0;
 
 	dth->dth_dti_cos_count = 0;
 	dth->dth_dti_cos = NULL;
@@ -98,6 +100,7 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	D_INIT_LIST_HEAD(&dth->dth_share_act_list);
 	D_INIT_LIST_HEAD(&dth->dth_share_tbd_list);
 	dth->dth_share_tbd_count = 0;
+	dth->dth_share_tbd_scanned = 0;
 	dth->dth_shares_inited = 1;
 
 	vos_dtx_rsrvd_init(dth);
@@ -127,6 +130,7 @@ vts_dtx_end(struct dtx_handle *dth)
 			D_FREE(dsp);
 
 		dth->dth_share_tbd_count = 0;
+		dth->dth_share_tbd_scanned = 0;
 	}
 
 	vos_dtx_rsrvd_fini(dth);
