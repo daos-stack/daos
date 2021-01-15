@@ -1,5 +1,5 @@
 #!/usr/bin/groovy
-/* Copyright (C) 2019-2020 Intel Corporation
+/* Copyright (C) 2019-2021 Intel Corporation
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -475,7 +475,7 @@ pipeline {
         // preserve stashes so that jobs can be started at the test stage
         preserveStashes(buildCount: 5)
         ansiColor('xterm')
-        buildDiscarder(logRotator(artifactDaysToKeepStr: '350'))
+        buildDiscarder(logRotator(artifactDaysToKeepStr: '200'))
     }
 
     parameters {
@@ -758,8 +758,8 @@ pipeline {
                             filename 'Dockerfile.centos.7'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
-                                '$BUILDARGS_QB_TRUE' +
+                            additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
+                                " -t ${sanitized_JOB_NAME}-centos7 " +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                 quick_build_deps('centos7') + '"' +
@@ -1421,8 +1421,8 @@ pipeline {
                             filename 'Dockerfile.centos.7'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
-                                '$BUILDARGS_QB_TRUE' +
+                            additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
+                                " -t ${sanitized_JOB_NAME}-centos7 " +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                 quick_build_deps('centos7') + '"' +

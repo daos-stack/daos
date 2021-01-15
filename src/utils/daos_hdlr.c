@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -3379,7 +3379,7 @@ obj_query_hdlr(struct cmd_args_s *ap)
 		fprintf(stdout, "grp: %d\n", i);
 		for (j = 0; j < shard->os_replica_nr; j++)
 			fprintf(stdout, "replica %d %d\n", j,
-				shard->os_ranks[j]);
+				shard->os_shard_loc[j].sd_rank);
 	}
 
 	daos_obj_layout_free(layout);
