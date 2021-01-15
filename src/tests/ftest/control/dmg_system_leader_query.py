@@ -61,6 +61,6 @@ class DmgSystemLeaderQueryTest(ControlTestBase):
             leader = result["response"]["CurrentLeader"]
             if last_result:
                 self.assertEqual(leader, last_result,
-                    "result for {0} didn't match previous".format(host))
+                                 "result for {0} didn't match previous".format(host))
             last_result = leader
         self.dmg.hostlist = original_hostlist
