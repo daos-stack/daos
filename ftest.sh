@@ -46,7 +46,7 @@ fi
 
 TEST_TAG_ARG="${1:-quick}"
 
-TEST_TAG_DIR="/tmp/Functional_${TEST_TAG_ARG// /_}"
+TEST_TAG_DIR="$(mktemp -du)"
 
 NFS_SERVER=${NFS_SERVER:-${HOSTNAME%%.*}}
 
@@ -91,8 +91,6 @@ cleanup() {
     done
 }
 
-pre_clean
-
 # shellcheck disable=SC1091
 if ${TEST_RPMS:-false}; then
     PREFIX=/usr
@@ -104,6 +102,8 @@ else
 fi
 
 SCRIPT_LOC="$PREFIX"/lib/daos/TESTING/ftest/scripts
+
+pre_clean
 
 if ${TEARDOWN_ONLY:-false}; then
     cleanup
