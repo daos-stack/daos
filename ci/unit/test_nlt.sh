@@ -1,7 +1,6 @@
 #!/bin/bash
 
-# This is the script used for running unit testing
-# run_tests.sh and run_tests.sh with memcheck stages on the CI
+# This is the script used for running utils/node_local_test.py (NLT)
 set -uex
 
 rm -rf nlt_logs vm_test
