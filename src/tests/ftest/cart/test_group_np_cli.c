@@ -41,8 +41,8 @@ static void
 send_rpc_shutdown(crt_endpoint_t server_ep, crt_rpc_t *rpc_req)
 {
 	int rc = crt_req_create(test_g.t_crt_ctx[0], &server_ep,
-					CRT_PROTO_OPC(TEST_GROUP_BASE,
-						      TEST_GROUP_VER, 1), &rpc_req);
+				CRT_PROTO_OPC(TEST_GROUP_BASE,
+				TEST_GROUP_VER, 1), &rpc_req);
 	D_ASSERTF(rc == 0 && rpc_req != NULL,
 		  "crt_req_create() failed. "
 			"rc: %d, rpc_req: %p\n", rc, rpc_req);
@@ -59,8 +59,9 @@ send_rpc_swim_check(crt_endpoint_t server_ep, crt_rpc_t *rpc_req)
 	/*struct test_swim_status_out	*rpc_req_output; */
 
 	int rc = crt_req_create(test_g.t_crt_ctx[0], &server_ep,
-					CRT_PROTO_OPC(TEST_GROUP_BASE,
-						      TEST_GROUP_VER, 2), &rpc_req);
+				CRT_PROTO_OPC(TEST_GROUP_BASE,
+					      TEST_GROUP_VER, 2), 
+					      &rpc_req);
 	D_ASSERTF(rc == 0 && rpc_req != NULL,
 		  "crt_req_create() failed. "
 			"rc: %d, rpc_req: %p\n", rc, rpc_req);
@@ -90,6 +91,8 @@ test_run(void)
 	crt_rpc_t		*rpc_req = NULL;
 	int			 i;
 	int			 rc = 0;
+	uint32_t		*_cg_ranks;
+	int			 _cg_num_ranks;
 
 	if (test_g.t_skip_init) {
 		DBG_PRINT("Skipping init stage.\n");
@@ -98,14 +101,15 @@ test_run(void)
 
 		if (test_g.t_save_cfg) {
 			rc = crt_group_config_path_set(test_g.t_cfg_path);
-			D_ASSERTF(rc == 0, "crt_group_config_path_set failed %d\n", rc);
+			D_ASSERTF(rc == 0, 
+				  "crt_group_config_path_set failed %d\n", rc);
 		}
 
 		tc_cli_start_basic(test_g.t_local_group_name,
 				   test_g.t_remote_group_name,
-					 &grp, &rank_list, &test_g.t_crt_ctx[0],
-					 &test_g.t_tid[0], test_g.t_srv_ctx_num,
-					 test_g.t_use_cfg, NULL);
+				   &grp, &rank_list, &test_g.t_crt_ctx[0],
+				   &test_g.t_tid[0], test_g.t_srv_ctx_num,
+				   test_g.t_use_cfg, NULL);
 
 		rc = sem_init(&test_g.t_token_to_proceed, 0, 0);
 		D_ASSERTF(rc == 0, "sem_init() failed.\n");
@@ -116,18 +120,25 @@ test_run(void)
 			  rc);
 
 		/* Process the --rank option, e.g., --rank 1,2-4 */
-		if (test_g.cg_num_ranks > -1)
-			rank_list = uint32_array_to_rank_list((uint32_t *)test_g.cg_ranks,
-							      test_g.cg_num_ranks);
+		if (test_g.cg_num_ranks > -1) {
+			_cg_ranks = (uint32_t *)test_g.cg_ranks;
+			_cg_num_ranks = test_g.cg_num_ranks;
+			rank_list = uint32_array_to_rank_list(_cg_ranks,
+							      _cg_num_ranks);
+		}
 
-		rc = tc_wait_for_ranks(test_g.t_crt_ctx[0], grp, rank_list,
-				       test_g.t_srv_ctx_num - 1, test_g.t_srv_ctx_num,
-						5, 150);
+		rc = tc_wait_for_ranks(test_g.t_crt_ctx[0],
+				       grp,
+				       rank_list,
+				       test_g.t_srv_ctx_num - 1,
+				       test_g.t_srv_ctx_num,
+				       5,
+				       150);
 		D_ASSERTF(rc == 0, "wait_for_ranks() failed; rc=%d\n", rc);
 	}
 
 	if (test_g.t_init_only) {
-		DBG_PRINT("Init only.	Returning now.\n");
+		DBG_PRINT("Init only. Returning now.\n");
 		return;
 	}
 
