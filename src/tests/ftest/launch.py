@@ -886,13 +886,6 @@ def run_tests(test_files, tag_filter, args):
                                          args):
                     return_code |= 256
 
-    if args.jenkinslog:
-        test_logs_lnk = os.path.join(avocado_logs_dir, "latest")
-        try:
-            os.remove(test_logs_lnk)
-        except OSError as error:
-            print("Failed to remove sym link latest: {}".format(error))
-
     return return_code
 
 
@@ -1183,24 +1176,25 @@ def rename_logs(avocado_logs_dir, test_file, args):
             "Error renaming {} to {}: {}".format(
                 test_logs_dir, new_test_logs_dir, error))
 
-    xml_file = os.path.join(new_test_logs_dir, "results.xml")
-    try:
-        with open(xml_file) as xml_buffer:
-            xml_data = xml_buffer.read()
-    except OSError as error:
-        print("Error reading {} : {}".format(xml_file, str(error)))
-        return
+    if args.jenkinslog:
+        xml_file = os.path.join(new_test_logs_dir, "results.xml")
+        try:
+            with open(xml_file) as xml_buffer:
+                xml_data = xml_buffer.read()
+        except OSError as error:
+            print("Error reading {} : {}".format(xml_file, str(error)))
+            return
 
-    test_dir = os.path.split(os.path.dirname(test_file))[-1]
-    org_class = "classname=\""
-    new_class = "{}FTEST_{}.".format(org_class, test_dir)
-    xml_data = re.sub(org_class, new_class, xml_data)
+        test_dir = os.path.split(os.path.dirname(test_file))[-1]
+        org_class = "classname=\""
+        new_class = "{}FTEST_{}.".format(org_class, test_dir)
+        xml_data = re.sub(org_class, new_class, xml_data)
 
-    try:
-        with open(xml_file, "w") as xml_buffer:
-            xml_buffer.write(xml_data)
-    except OSError as error:
-        print("Error writing {}: {}".format(xml_file, str(error)))
+        try:
+            with open(xml_file, "w") as xml_buffer:
+                xml_buffer.write(xml_data)
+        except OSError as error:
+            print("Error writing {}: {}".format(xml_file, str(error)))
 
 def check_big_files(avocado_logs_dir, task, test_name, args):
     """Check the contents of the task object, tag big files, create junit xml.
@@ -1256,11 +1250,9 @@ def report_skipped_test(test_file, avocado_logs_dir, reason):
     print(message)
 
     # Generate a fake avocado results.xml file to report the skipped test.
-    # This file currently requires being placed in a job-* subdirectory.
     test_name = get_test_category(test_file)
-    time_stamp = datetime.now().strftime("%Y-%m-%dT%H.%M")
-    destination = os.path.join(
-        avocado_logs_dir, "job-{}-da03911-{}".format(time_stamp, test_name))
+    destination = os.path.join(avocado_logs_dir, "skipped_test")
+    destination = os.path.join(avocado_logs_dir, test_name)
     try:
         os.makedirs(destination)
     except (OSError, FileExistsError) as error:
