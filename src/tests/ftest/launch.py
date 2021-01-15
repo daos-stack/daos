@@ -26,7 +26,6 @@ from __future__ import print_function
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from datetime import datetime
-from getpass import getuser
 import json
 import os
 import re
