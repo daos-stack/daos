@@ -199,8 +199,7 @@ srv_common_cb(crt_rpc_t *rpc_req)
 	D_ASSERTF(rc == 0, "crt_reply_send failed %d\n", rc);
 
 exit:
-
-    dbg("<---%s---", __func__);
+	dbg("<---%s---", __func__);
 }
 
 static void

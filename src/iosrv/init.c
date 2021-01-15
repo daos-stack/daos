@@ -743,9 +743,6 @@ parse(int argc, char **argv)
 	sprintf(modules, "%s", MODULE_LIST);
 	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:t:s:x:I:",
 				opts, NULL)) != -1) {
-		unsigned int	 nr;
-		char		*end;
-
 		switch (c) {
 		case 'm':
 			if (strlen(optarg) > MAX_MODULE_OPTIONS) {
@@ -759,28 +756,13 @@ parse(int argc, char **argv)
 			printf("\"-c\" option is deprecated, please use \"-t\" "
 			       "instead.\n");
 		case 't':
-			nr = strtoul(optarg, &end, 10);
-			if ((end == optarg) || (nr == ULONG_MAX)) {
-				rc = -DER_INVAL;
-				break;
-			}
-			nr_threads = nr;
+			nr_threads = atoi(optarg);
 			break;
 		case 'x':
-			nr = strtoul(optarg, &end, 10);
-			if ((end == optarg) || (nr == ULONG_MAX)) {
-				rc = -DER_INVAL;
-				break;
-			}
-			dss_tgt_offload_xs_nr = nr;
+			dss_tgt_offload_xs_nr = atoi(optarg);
 			break;
 		case 'f':
-			nr = strtoul(optarg, &end, 10);
-			if ((end == optarg) || (nr == ULONG_MAX)) {
-				rc = -DER_INVAL;
-				break;
-			}
-			dss_core_offset = nr;
+			dss_core_offset = atoi(optarg);
 			break;
 		case 'g':
 			if (strnlen(optarg, DAOS_SYS_NAME_MAX + 1) >
@@ -808,12 +790,7 @@ parse(int argc, char **argv)
 			dss_nvme_shm_id = atoi(optarg);
 			break;
 		case 'r':
-			nr = strtoul(optarg, &end, 10);
-			if ((end == optarg) || (nr == ULONG_MAX)) {
-				rc = -DER_INVAL;
-				break;
-			}
-			dss_nvme_mem_size = nr;
+			dss_nvme_mem_size = atoi(optarg);
 			break;
 		case 'h':
 			usage(argv[0], stdout);
