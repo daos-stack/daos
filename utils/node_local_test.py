@@ -922,28 +922,6 @@ def run_daos_cmd(conf, cmd, valgrind=True, fi_file=None, fi_valgrind=False):
     vh.convert_xml()
     return rc
 
-def get_conts(conf, pool, posix=True):
-    """Return a list of all container"""
-
-    cmd = ['pool', 'list-containers', '--svc', '0', '--pool', pool]
-    rc = run_daos_cmd(conf, cmd)
-    print('rc is {}'.format(rc))
-    assert rc.returncode == 0
-    containers = rc.stdout.decode('utf-8').splitlines()
-
-    matched = []
-    for container in containers:
-        cmd = ['container', 'get-prop', '--pool', pool, '--cont', container,
-               '--svc', '0']
-        rc = run_daos_cmd(conf, cmd)
-        for line in rc.stdout.decode('utf-8').splitlines():
-            (key, value) = line.split(':')
-            if key == 'layout type':
-                print(value.strip())
-                if not posix or value.strip() == 'POSIX (1)':
-                    matched.append(container)
-    return matched
-
 def create_cont(conf, pool, posix=False):
     """Create a container and return the uuid"""
     if posix:
@@ -953,7 +931,6 @@ def create_cont(conf, pool, posix=False):
     rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
     assert rc.returncode == 0 # nosec
-    assert rc.returncode == 0
     return rc.stdout.decode().split(' ')[-1].rstrip()
 
 def destroy_container(conf, pool, container):
@@ -986,30 +963,6 @@ def make_pool(daos):
 
     return get_pool_list()
 
-def xattr_test(dfuse):
-    """Perform basic tests with extended attributes"""
-
-    new_file = os.path.join(dfuse.dir, 'attr_file')
-    fd = open(new_file, 'w')
-
-    xattr.set(fd, 'user.mine', 'init_value')
-    # This should fail as a security test.
-    try:
-        xattr.set(fd, 'user.dfuse.ids', b'other_value')
-        assert False
-    except PermissionError:
-        pass
-
-    try:
-        xattr.set(fd, 'user.dfuse', b'other_value')
-        assert False
-    except PermissionError:
-        pass
-
-    xattr.set(fd, 'user.Xfuse.ids', b'other_value')
-    for (key, value) in xattr.get_all(fd):
-        print('xattr is {}:{}'.format(key, value))
-
 def needs_dfuse(method):
     """Decorator function for starting dfuse under posix_tests class"""
     @functools.wraps(method)
@@ -1024,7 +977,6 @@ def needs_dfuse(method):
             self.fatal_errors = True
         return rc
     return _helper
-
 
 class posix_tests():
     """Class for adding standalone unit tests"""
@@ -1079,7 +1031,7 @@ class posix_tests():
         os.stat(newfile)
         post = os.fstat(ofd.fileno())
         print(post)
-        assert pre.st_ino == post.st_ino
+        assert pre.st_ino == post.st_ino # nosec
         ofd.close()
 
     @needs_dfuse
@@ -1109,7 +1061,7 @@ class posix_tests():
         for mode in modes:
             os.chmod(fname, mode)
             attr = os.stat(fname)
-            assert stat.S_IMODE(attr.st_mode) == mode
+            assert stat.S_IMODE(attr.st_mode) == mode # nosec
 
     @needs_dfuse
     def test_fchmod_replaced(self):
@@ -1137,7 +1089,32 @@ class posix_tests():
             print('Failed to fchmod() replaced file')
         ofd.close()
         nf = os.stat(fname)
-        assert stat.S_IMODE(nf.st_mode) == e_mode
+        assert stat.S_IMODE(nf.st_mode) == e_mode # nosec
+
+    @needs_dfuse
+    def test_xattr(self):
+        """Perform basic tests with extended attributes"""
+
+        new_file = os.path.join(self.dfuse.dir, 'attr_file')
+        fd = open(new_file, 'w')
+
+        xattr.set(fd, 'user.mine', 'init_value')
+        # This should fail as a security test.
+        try:
+            xattr.set(fd, 'user.dfuse.ids', b'other_value')
+            assert False # nosec
+        except PermissionError:
+            pass
+
+        try:
+            xattr.set(fd, 'user.dfuse', b'other_value')
+            assert False # nosec
+        except PermissionError:
+            pass
+
+        xattr.set(fd, 'user.Xfuse.ids', b'other_value')
+        for (key, value) in xattr.get_all(fd):
+            print('xattr is {}:{}'.format(key, value))
 
 def run_posix_tests(server, conf, test=None):
     """Run one or all posix tests"""
@@ -1607,25 +1584,18 @@ def run_in_fg(server, conf):
     while len(pools) < 1:
         pools = make_pool(server)
 
-    pool = pools[0]
-
-    containers = get_conts(conf, pool)
-    if not containers:
-
-    container = containers[0]
-    print('Container is {}'.format(container))
-
-    dfuse = DFuse(server, conf, pool=pool, container=container, multi_user=True)
+    dfuse = DFuse(server, conf, pool=pools[0])
     dfuse.start()
+    container = str(uuid.uuid4())
     t_dir = os.path.join(dfuse.dir, container)
+    os.mkdir(t_dir)
     print('Running at {}'.format(t_dir))
     print('daos container create --type POSIX' \
           '--pool {} --path {}/uns-link'.format(
-              pool, t_dir))
+              pools[0], t_dir))
     print('cd {}/uns-link'.format(t_dir))
-
     print('daos container destroy --path {}/uns-link'.format(t_dir))
-    print('daos pool list-containers --pool {}'.format(pool))
+    print('daos pool list-containers --pool {}'.format(pools[0]))
     try:
         dfuse.wait_for_exit()
     except KeyboardInterrupt:
