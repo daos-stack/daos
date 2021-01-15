@@ -90,8 +90,8 @@ dc_debug_set_params(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
-	D_DEBUG(DB_MGMT, "set parameter %d/%u/"DF_U64"\n", args->rank,
-		args->key_id, args->value);
+	D_DEBUG(DB_MGMT, "set parameter %u/%u/"DF_X64"/"DF_U64"\n", args->rank,
+		args->key_id, args->value, args->value_extra);
 
 	/** send the request */
 	return daos_rpc_send(rpc, task);
