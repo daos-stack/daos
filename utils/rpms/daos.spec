@@ -243,7 +243,7 @@ mv %{?buildroot}/%{_prefix}/etc/bash_completion.d %{?buildroot}/%{_sysconfdir}
 
 %pre server
 getent group daos_server >/dev/null || groupadd -r daos_server
-getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r daos_server
+getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_server daos_server
 %post server
 /sbin/ldconfig
 %systemd_post %{server_svc_name}
@@ -255,7 +255,7 @@ getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r daos_server
 
 %pre client
 getent group daos_agent >/dev/null || groupadd -r daos_agent
-getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
+getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent daos_agent
 %post client
 %systemd_post %{agent_svc_name}
 %preun client
