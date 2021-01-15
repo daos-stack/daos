@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -530,6 +530,7 @@ svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
 	rbund->rb_rsize	= irec->ir_size;
 	rbund->rb_gsize	= irec->ir_gsize;
 	rbund->rb_ver	= irec->ir_ver;
+	rbund->rb_dtx_state = vos_dtx_ent_state(irec->ir_dtx);
 	return 0;
 }
 

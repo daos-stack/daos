@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2015-2020 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,6 +80,7 @@ struct ds_cont_child {
 				 sc_dtx_aggregating:1,
 				 sc_dtx_reindex:1,
 				 sc_dtx_reindex_abort:1,
+				 sc_closing:1,
 				 sc_vos_aggregating:1,
 				 sc_abort_vos_aggregating:1,
 				 sc_props_fetched:1,

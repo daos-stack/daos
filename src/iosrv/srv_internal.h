@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -113,7 +113,7 @@ int dss_module_cleanup_all(void);
 /* srv.c */
 int dss_srv_init(void);
 int dss_srv_fini(bool force);
-void dss_dump_ABT_state(void);
+void dss_dump_ABT_state(FILE *fp);
 void dss_xstreams_open_barrier(void);
 struct dss_xstream *dss_get_xstream(int stream_id);
 int dss_xstream_cnt(void);

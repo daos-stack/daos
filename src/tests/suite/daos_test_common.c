@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -843,7 +843,7 @@ daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
 	int		rc;
 
 	/* build and invoke dmg cmd */
-	dts_create_config(dmg_cmd, "dmg pool %s -i --pool=" DF_UUIDF " --rank=%d",
+	dts_create_config(dmg_cmd, "dmg pool %s --pool=" DF_UUIDF " --rank=%d",
 			  sub_cmd, DP_UUID(pool_uuid), rank);
 
 	if (tgt_idx != -1)
@@ -940,7 +940,7 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
 
 	/* build and invoke dmg cmd to stop the server */
-	dts_create_config(dmg_cmd, "dmg system stop -i -r %d --force", rank);
+	dts_create_config(dmg_cmd, "dmg system stop -r %d --force", rank);
 	if (arg->dmg_config != NULL)
 		dts_append_config(dmg_cmd, " -o %s", arg->dmg_config);
 

@@ -474,7 +474,6 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 				},
 				testMembers[2],
 			},
-
 			expFDTree: NewFaultDomainTree(
 				testMembers[0].RankFaultDomain(),
 				testMembers[1].RankFaultDomain(),
@@ -562,7 +561,7 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 				t.Fatalf("expected %d members, got %d", len(tc.expMembers), len(db.data.Members.Uuids))
 			}
 
-			if diff := cmp.Diff(tc.expFDTree, db.data.Members.FaultDomains); diff != "" {
+			if diff := cmp.Diff(tc.expFDTree, db.data.Members.FaultDomains, ignoreFaultDomainIDOption()); diff != "" {
 				t.Fatalf("wrong FaultDomainTree in DB (-want, +got):\n%s\n", diff)
 			}
 		})
@@ -594,6 +593,10 @@ func TestSystem_Database_FaultDomainTree(t *testing.T) {
 
 			if diff := cmp.Diff(tc.fdTree, result); diff != "" {
 				t.Fatalf("(-want, +got):\n%s\n", diff)
+			}
+
+			if result != nil && result == db.data.Members.FaultDomains {
+				t.Fatal("expected fault domain tree to be a copy")
 			}
 		})
 	}

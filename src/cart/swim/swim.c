@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016 UChicago Argonne, LLC
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -267,8 +267,10 @@ swim_member_alive(struct swim_context *ctx, swim_id_t from,
 	}
 
 	/* Do not widely spread the information about bootstrap complete */
-	if (id_state.sms_status == SWIM_MEMBER_INACTIVE)
+	if (id_state.sms_status == SWIM_MEMBER_INACTIVE) {
 		count = ctx->sc_piggyback_tx_max;
+		D_GOTO(update, rc);
+	}
 
 	if (nr > id_state.sms_incarnation)
 		D_GOTO(update, rc);

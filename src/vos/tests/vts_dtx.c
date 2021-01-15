@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,6 +71,7 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_leader_oid = *oid;
 
 	dth->dth_sync = 0;
+	dth->dth_cos_done = 0;
 	dth->dth_resent = 0;
 	dth->dth_touched_leader_oid = 0;
 	dth->dth_local_tx_started = 0;

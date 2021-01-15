@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -321,7 +321,7 @@ func TestControl_GetAttachInfo(t *testing.T) {
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", system.ErrEmptyGroupMap, nil),
 					MockMSResponse("host1", nil, &mgmtpb.GetAttachInfoResp{
-						Psrs: []*mgmtpb.GetAttachInfoResp_Psr{
+						RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 							{
 								Rank: 42,
 								Uri:  "foo://bar",
@@ -344,7 +344,7 @@ func TestControl_GetAttachInfo(t *testing.T) {
 		"success": {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("", nil, &mgmtpb.GetAttachInfoResp{
-					Psrs: []*mgmtpb.GetAttachInfoResp_Psr{
+					RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 						{
 							Rank: 42,
 							Uri:  "foo://bar",

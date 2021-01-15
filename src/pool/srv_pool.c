@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -3842,6 +3842,21 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 	ds_rsvc_request_map_dist(&svc->ps_rsvc);
 
 	replace_failed_replicas(svc, map);
+
+	if (opc == POOL_ADD_IN) {
+		/*
+		 * If we are setting ranks from UP -> UPIN, schedule a reclaim
+		 * operation to garbage collect any unreachable data moved
+		 * during reintegration/addition
+		 */
+		rc = ds_rebuild_schedule(pool_uuid, map_version, tgts,
+					 RB_OP_RECLAIM);
+		if (rc != 0) {
+			D_ERROR("failed to schedule reclaim rc: "DF_RC"\n",
+				DP_RC(rc));
+			D_GOTO(out, rc);
+		}
+	}
 
 out_map:
 	if (map_version_p != NULL)
