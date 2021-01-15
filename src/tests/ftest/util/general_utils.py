@@ -927,7 +927,7 @@ def create_directory(hosts, directory, timeout=10, verbose=True,
         timeout=timeout, verbose=verbose, raise_exception=raise_exception)
 
 
-def change_file_owner(hosts, filename, owner, timeout=10, verbose=True,
+def change_file_owner(hosts, filename, owner, group, timeout=10, verbose=True,
                       raise_exception=True, sudo=False):
     """Create the specified directory on the specified hosts.
 
@@ -935,6 +935,7 @@ def change_file_owner(hosts, filename, owner, timeout=10, verbose=True,
         hosts (list): hosts on which to create the directory
         filename (str): the file for which to change ownership
         owner (str): new owner of the file
+        group (str): new group owner of the file
         timeout (int, optional): command timeout. Defaults to 10 seconds.
         verbose (bool, optional): whether to log the command run and
             stdout/stderr. Defaults to True.
@@ -960,8 +961,8 @@ def change_file_owner(hosts, filename, owner, timeout=10, verbose=True,
 
     """
     return run_command(
-        "{0} chown {1}:{1} {2}".format(
-            get_clush_command(hosts, "-S -v", sudo), owner, filename),
+        "{} chown {}:{} {}".format(
+            get_clush_command(hosts, "-S -v", sudo), owner, group, filename),
         timeout=timeout, verbose=verbose, raise_exception=raise_exception)
 
 
@@ -1018,6 +1019,11 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
             localhost = gethostname().split(".")[0]
             other_hosts = [host for host in hosts if host != localhost]
             if other_hosts:
+                # Existing files with strict file permissions can cause the
+                # subsequent non-sudo copy to fail, so remove the file first
+                rm_command = "{} rm -f {}".format(
+                    get_clush_command(hosts, "-S -v", True), source)
+                run_command(rm_command, verbose=verbose, raise_exception=False)
                 result = distribute_files(
                     other_hosts, source, source, mkdir=True,
                     timeout=timeout, verbose=verbose,
@@ -1039,8 +1045,8 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
         # If requested update the ownership of the destination file
         if owner is not None and result.exit_status == 0:
             change_file_owner(
-                hosts, destination, owner, timeout=timeout, verbose=verbose,
-                raise_exception=raise_exception, sudo=sudo)
+                hosts, destination, owner, owner, timeout=timeout,
+                verbose=verbose, raise_exception=raise_exception, sudo=sudo)
     return result
 
 

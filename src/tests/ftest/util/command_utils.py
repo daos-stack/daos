@@ -890,7 +890,7 @@ class YamlCommand(SubProcessCommand):
                     self.command, directory, user, nodes)
                 try:
                     create_directory(nodes, directory, sudo=True)
-                    change_file_owner(nodes, directory, user, sudo=True)
+                    change_file_owner(nodes, directory, user, user, sudo=True)
                 except DaosTestError as error:
                     raise CommandFailure(
                         "{}: error setting up missing socket directory {} for "

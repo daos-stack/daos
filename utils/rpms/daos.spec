@@ -296,7 +296,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %files server
 %config(noreplace) %{conf_dir}/daos_server.yml
 %dir %{conf_dir}/certs
-%attr(0700,daos_server,daos_server) %{conf_dir}/certs
+%attr(0755,root,root) %{conf_dir}/certs
 %dir %{conf_dir}/certs/clients
 %attr(0700,daos_server,daos_server) %{conf_dir}/certs/clients
 %attr(0644,root,root) %{conf_dir}/daos_server.yml
@@ -378,6 +378,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_datadir}/%{name}/ioil-ld-opts
 %config(noreplace) %{conf_dir}/daos_agent.yml
 %config(noreplace) %{conf_dir}/daos_control.yml
+%dir %{conf_dir}/certs
+%attr(0755,root,root) %{conf_dir}/certs
 %{_unitdir}/%{agent_svc_name}
 %{_mandir}/man8/daos.8*
 %{_mandir}/man8/dmg.8*
