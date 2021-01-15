@@ -53,7 +53,7 @@ const struct daos_task_api dc_funcs[] = {
 	/** Management */
 	{dc_deprecated, 0},
 	{dc_deprecated, 0},
-	{dc_pool_evict, sizeof(daos_pool_evict_t)},
+	{dc_deprecated, 0},
 	{dc_debug_set_params, sizeof(daos_set_params_t)},
 	{dc_mgmt_get_bs_state, sizeof(daos_mgmt_get_bs_state_t)},
 
@@ -175,7 +175,10 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_agent, rc);
 
-	/** get CaRT configuration */
+	/**
+	 * get CaRT configuration (see mgmtModule.handleGetAttachInfo for the
+	 * handling of NULL system names)
+	 */
 	rc = dc_mgmt_net_cfg(NULL);
 	if (rc != 0)
 		D_GOTO(out_job, rc);

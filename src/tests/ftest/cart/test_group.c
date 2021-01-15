@@ -235,6 +235,7 @@ static void *progress_thread(void *arg)
 	do {
 		rc = crt_progress(ctx, 0);
 		if (rc != 0 && rc != -DER_TIMEDOUT) {
+			/* avoid checkpatch warning */
 			D_ERROR("crt_progress failed rc: %d.\n", rc);
 		}
 		if (test_g.t_shutdown == 1 && test_g.t_complete == 1)

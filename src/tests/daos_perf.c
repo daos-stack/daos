@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -219,6 +219,9 @@ stride_buf_op(int opc, char *buf, unsigned offset, int size)
 			pos = i + stride_marks[j];
 			if (pos < offset)
 				continue;
+			/* possible for the last page */
+			if (pos >= stride_buf.sb_size)
+				break;
 
 			if (pos >= offset + size) {
 				/* NB: for single value, unset marks because
@@ -1608,9 +1611,6 @@ The options are as follows:\n\
 	storage space.\n\
 \n\
 -B	Profile performance of both update and fetch.\n\
-\n\
--n	Only run iterate performance test but with nesting iterator\n\
-	enable.  This can only run in vos mode.\n\
 \n\
 -f pathname\n\
 	Full path name of the VOS file.\n\

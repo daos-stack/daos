@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,7 +63,8 @@
 #define DAOS_AGG_THRESHOLD	(DTX_COMMIT_THRESHOLD_AGE + 10) /* seconds */
 
 static inline int
-cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
+cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr,
+		   daos_epoch_t hae, bool is_current)
 {
 	int	rc;
 
@@ -72,19 +73,28 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	 * on ds_cont_child purging.
 	 */
 	D_ASSERT(cont->sc_agg_req != NULL);
+
 	if (dss_ult_exiting(cont->sc_agg_req))
 		return 1;
 
 	rc = ds_obj_ec_aggregate(cont, epr, dss_ult_yield,
-				 (void *)cont->sc_agg_req);
-	if (rc)
-		D_ERROR("EC aggregation returned: "DF_RC"\n", DP_RC(rc));
+				 (void *)cont->sc_agg_req, is_current);
+	if (rc) {
+		if (rc == -DER_NOTLEADER)
+			return -DER_SHUTDOWN;
+		D_ERROR("EC aggregation returned: "DF_RC"\n",
+			DP_RC(rc));
+	}
 
 	if (dss_ult_exiting(cont->sc_agg_req))
 		return 1;
 
-	rc = vos_aggregate(cont->sc_hdl, epr, ds_csum_recalc, dss_ult_yield,
-			   (void *)cont->sc_agg_req);
+	if (cont->sc_ec_agg_eph_boundry > hae && is_current) {
+		epr->epr_hi = cont->sc_ec_agg_eph_boundry;
+		rc = vos_aggregate(cont->sc_hdl, epr, ds_csum_recalc,
+				   dss_ult_yield, (void *)cont->sc_agg_req);
+	} else
+		rc = 2;
 
 	/* Suppress csum error and continue on other epoch ranges */
 	if (rc == -DER_CSUM)
@@ -345,7 +355,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 			tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
 
-		rc = cont_aggregate_epr(cont, &epoch_range);
+		rc = cont_aggregate_epr(cont, &epoch_range, 0ULL, false);
 		if (rc)
 			D_GOTO(free, rc);
 		epoch_range.epr_lo = epoch_range.epr_hi + 1;
@@ -360,7 +370,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 		tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
 
-	rc = cont_aggregate_epr(cont, &epoch_range);
+	rc = cont_aggregate_epr(cont, &epoch_range, cinfo.ci_hae, true);
 out:
 	if (rc == 0 && epoch_min == 0)
 		cont->sc_aggregation_full_scan_hlc = hlc;
@@ -398,6 +408,11 @@ cont_aggregate_ult(void *arg)
 				DP_RC(rc));
 			/* Sleep 2 seconds when last aggregation failed */
 			msecs = 2ULL * 1000;
+		} else if (rc == 2) {
+			/* Sleep 2 seconds when VOS aggregation skipped */
+			msecs = 2ULL * 1000;
+		} else {
+			msecs = 1ULL * 200;
 		}
 
 		if (dss_ult_exiting(cont->sc_agg_req))
@@ -2131,7 +2146,7 @@ struct cont_ec_eph {
 	uuid_t		ce_cont_uuid;
 	d_list_t	ce_list;
 	daos_epoch_t	ce_eph;
-	uint32_t	ce_updated:1;
+	daos_epoch_t	ce_last_eph;
 };
 
 /* Argument to query ec aggregate epoch from each xstream */
@@ -2216,10 +2231,8 @@ cont_ec_eph_reduce(void *agg_arg, void *xs_arg)
 						  x_arg->ephs[i].cont_uuid);
 		if (c_eph->ce_eph == 0 ||
 		    (x_arg->ephs[i].eph != 0 &&
-		     c_eph->ce_eph > x_arg->ephs[i].eph)) {
+		     x_arg->ephs[i].eph > c_eph->ce_last_eph))
 			c_eph->ce_eph = x_arg->ephs[i].eph;
-			c_eph->ce_updated = 1;
-		}
 	}
 }
 
@@ -2324,20 +2337,24 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 		}
 
 		d_list_for_each_entry(ec_eph, &pool->sp_ec_ephs_list, ce_list) {
-			if (ec_eph->ce_eph == 0 || ec_eph->ce_updated)
-				continue;
+			if (ec_eph->ce_eph == 0 ||
+			    ec_eph->ce_eph < ec_eph->ce_last_eph) {
+				ec_eph->ce_eph = 0;
+			}
 
 			D_DEBUG(DB_MD, "eph "DF_U64" "DF_UUID"\n",
 				ec_eph->ce_eph, DP_UUID(ec_eph->ce_cont_uuid));
 			rc = cont_iv_ec_agg_eph_update(pool->sp_iv_ns,
 						       ec_eph->ce_cont_uuid,
 						       ec_eph->ce_eph);
-			if (rc == 0)
-				ec_eph->ce_updated = 0;
-			else
-				D_ERROR(DF_CONT": Update min epoch: %d\n",
-					DP_CONT(pool->sp_uuid,
-						ec_eph->ce_cont_uuid), rc);
+			if (rc == 0) {
+				ec_eph->ce_last_eph = ec_eph->ce_eph;
+				ec_eph->ce_eph = 0;
+			} else {
+				D_INFO(DF_CONT": Update min epoch: %d\n",
+				       DP_CONT(pool->sp_uuid,
+					       ec_eph->ce_cont_uuid), rc);
+			}
 		}
 yield:
 		if (dss_ult_exiting(pool->sp_ec_ephs_req))
