@@ -109,6 +109,16 @@ static struct daos_obj_class daos_obj_classes[] = {
 			.ca_rp_nr		= 2,
 		},
 	},
+	{
+		.oc_name	= "RP_2G4",
+		.oc_id		= OC_RP_2G4,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 4,
+			.ca_rp_nr		= 2,
+		},
+	},
 	/* TODO: add more */
 	{
 		.oc_name	= "RP_2GX",

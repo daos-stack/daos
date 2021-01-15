@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2020 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,6 @@
 #include <daos/common.h>
 #include <daos_mgmt.h>
 #include <daos/object.h>
-#include <daos_srv/bio.h>
 #ifdef DAOS_HAS_VALGRIND
 #include <valgrind/valgrind.h>
 #define DAOS_ON_VALGRIND RUNNING_ON_VALGRIND
@@ -41,6 +40,13 @@
 	int __rc = (r); \
 	if (__rc != 0) \
 		fail_msg("Not successful!! Error code: " DF_RC, DP_RC(__rc)); \
+	} while (0)
+
+#define assert_err(r, errno) do {\
+	int __rc = (r); \
+	if (__rc != errno) \
+		fail_msg("Expected error code \""DF_RC"\" but found " \
+			"\""DF_RC"\"", DP_RC(errno), DP_RC(__rc)); \
 	} while (0)
 
 /** Read a command line from stdin. */
