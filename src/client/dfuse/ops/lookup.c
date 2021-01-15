@@ -54,7 +54,8 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		entry.entry_timeout = ie->ie_dfs->dfs_attr_timeout;
 	}
 
-	if (ie->ie_stat.st_ino == 0) {
+	if (ie->ie_ stat.st_ino == 0) {
+
 		rc = dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 		if (rc)
 			D_GOTO(out_decref, rc);

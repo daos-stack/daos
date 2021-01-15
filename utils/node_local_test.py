@@ -968,7 +968,6 @@ def needs_dfuse(method):
         return rc
     return _helper
 
-
 class posix_tests():
     """Class for adding standalone unit tests"""
 
@@ -984,6 +983,47 @@ class posix_tests():
     def fail(self):
         """Mark a test method as failed"""
         raise NLTestFail
+
+    @needs_dfuse
+    def test_readdir_25(self):
+        self.readdir_test(25, test_all=True)
+
+    # Works, but is very slow so needs to be run without debugging.
+    #@needs_dfuse
+    #def test_readdir_300(self):
+    #    self.readdir_test(300, test_all=False)
+
+    def readdir_test(self, count, test_all=False):
+        """Run a rudimentary readdir test"""
+
+        wide_dir = tempfile.mkdtemp(dir=self.dfuse.dir)
+        if count == 0:
+            files = os.listdir(wide_dir)
+            assert len(files) == 0
+            return
+        start = time.time()
+        for idx in range(count):
+            fd = open(os.path.join(wide_dir, str(idx)), 'w')
+            fd.close()
+            if test_all:
+                files = os.listdir(wide_dir)
+                assert len(files) == idx + 1
+        duration = time.time() - start
+        rate = count / duration
+        print('Created {} files in {:.1f} seconds rate {:.1f}'.format(count,
+                                                                      duration,
+                                                                      rate))
+        print('Listing dir contents')
+        start = time.time()
+        files = os.listdir(wide_dir)
+        duration = time.time() - start
+        rate = count / duration
+        print('Listed {} files in {:.1f} seconds rate {:.1f}'.format(count,
+                                                                     duration,
+                                                                     rate))
+        print(files)
+        print(len(files))
+        assert len(files) == count
 
     @needs_dfuse
     def test_open_replaced(self):
@@ -1085,6 +1125,14 @@ class posix_tests():
 def run_posix_tests(server, conf, test=None):
     """Run one or all posix tests"""
 
+    def _run_test():
+        start = time.time()
+        print('Calling {}'.format(fn))
+        rc = obj()
+        duration = time.time() - start
+        print('rc from {} is {}'.format(fn, rc))
+        print('Took {:.1f} seconds'.format(duration))
+
     pools = get_pool_list()
     while len(pools) < 1:
         pools = make_pool(server)
@@ -1093,9 +1141,9 @@ def run_posix_tests(server, conf, test=None):
 
     pt = posix_tests(server, conf, pool=pool, container=container)
     if test:
-        obj = getattr(pt, 'test_{}'.format(test))
-        rc = obj()
-        print('rc from {} is {}'.format(test, rc))
+        fn = 'test_{}'.format(test)
+        obj = getattr(pt, fn)
+        _run_test()
     else:
 
         for fn in sorted(dir(pt)):
@@ -1104,10 +1152,7 @@ def run_posix_tests(server, conf, test=None):
             obj = getattr(pt, fn)
             if not callable(obj):
                 continue
-
-            print('Calling {}'.format(fn))
-            rc = obj()
-            print('rc from {} is {}'.format(fn, rc))
+            _run_test()
 
     destroy_container(conf, pool, container)
     return pt.fatal_errors
@@ -1169,55 +1214,6 @@ def run_tests(dfuse):
     assert_file_size_fd(ofd, 0)
     os.close(ofd)
     os.chmod(fname, stat.S_IRUSR)
-
-    readdir_test(dfuse, 10)
-
-def dfuse_wrapper(server, conf):
-    """Start a dfuse instance, do something then tear it down"""
-
-    pools = get_pool_list()
-    while len(pools) < 1:
-        pools = make_pool(server)
-
-    pool = pools[0]
-
-    container = create_cont(conf, pool, ctype='POSIX')[0]
-    dfuse = DFuse(server, conf, pool=pool, container=container)
-    dfuse.start()
-    readdir_test(dfuse, 0)
-    readdir_test(dfuse, 25)
-    readdir_test(dfuse, 30)
-    readdir_test(dfuse, 100)
-    readdir_test(dfuse, 300, test_all=False)
-    ret = dfuse.stop()
-    destroy_container(conf, pool, container)
-    return ret
-
-def readdir_test(dfuse, count, test_all=False):
-    """Run a rudimentary readdir test"""
-
-    wide_dir = tempfile.mkdtemp(dir=dfuse.dir)
-    if count == 0:
-        files = os.listdir(wide_dir)
-        assert len(files) == 0
-        return
-    start = time.time()
-    for idx in range(count):
-        fd = open(os.path.join(wide_dir, str(idx)), 'w')
-        fd.close()
-        if test_all:
-            files = os.listdir(wide_dir)
-            assert len(files) == idx + 1
-    duration = time.time() - start
-    rate = count / duration
-    print('Created {} files in {:.1f} seconds rate {:.1f}'.format(count,
-                                                                  duration,
-                                                                  rate))
-    print('Listing dir contents')
-    files = os.listdir(wide_dir)
-    print(files)
-    print(len(files))
-    assert len(files) == count
 
 def stat_and_check(dfuse, pre_stat):
     """Check that dfuse started"""
@@ -1816,8 +1812,6 @@ def main():
         test_pydaos_kv(server, conf)
     elif args.mode == 'overlay':
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
-    elif args.mode == 'readdir':
-        fatal_errors.add_result(dfuse_wrapper(server, conf))
     elif args.mode == 'fi':
         fatal_errors.add_result(test_alloc_fail(server, wf, conf))
     elif args.mode == 'all':
