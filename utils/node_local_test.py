@@ -432,7 +432,6 @@ class DaosServer():
         while True:
             time.sleep(0.5)
             rc = self.run_dmg(cmd)
-            print(rc)
             ready = False
             if rc.returncode == 1:
                 for line in rc.stdout.decode('utf-8').splitlines():
@@ -1970,8 +1969,6 @@ def main():
         fatal_errors.add_result(run_il_test(server, conf))
     elif args.mode == 'kv':
         test_pydaos_kv(server, conf)
-    elif args.mode == 'readdir_perf':
-        check_readdir_perf(server, conf)
     elif args.mode == 'overlay':
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
     elif args.mode == 'fi':
