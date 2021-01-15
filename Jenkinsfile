@@ -189,10 +189,13 @@ String daos_packages_version(String distro) {
     String version = cachedCommitPragma(pragma: 'RPM-test-version')
     if (version != "") {
         String dist = ""
-        if (distro == "centos7") {
-            dist = ".el7"
-        } else if (distro == "leap15") {
-            dist = ".suse.lp152"
+        if (version.indexOf('-') > -1) {
+            // only tack on the %{dist} if the release was specified
+            if (distro == "centos7") {
+                dist = ".el7"
+            } else if (distro == "leap15") {
+                dist = ".suse.lp152"
+            }
         }
         return version + dist
     }
