@@ -26,7 +26,7 @@
  */
 
 #define D_LOGFAC	DD_FAC(client)
-#define ENUM_KEY_BUF		32 /* size of each dkey/akey */
+#define ENUM_KEY_BUF		128 /* size of each dkey/akey */
 #define ENUM_LARGE_KEY_BUF	(512 * 1024) /* 512k large key */
 #define ENUM_DESC_NR		5 /* number of keys/records returned by enum */
 #define ENUM_DESC_BUF		512 /* all keys/records returned by enum */
@@ -3126,8 +3126,9 @@ cont_copy_list_akeys(daos_handle_t *src_oh,
 			buf_len = snprintf(akey, akey_kds[j].kd_key_len + 1,
 					   "%s", ptr);
 			if (buf_len >= ENUM_KEY_BUF) {
-				fprintf(stderr, "akey is too large: %d\n", rc);
-				D_GOTO(out, rc = -1);
+				fprintf(stderr, "akey is too large: %d\n",
+					buf_len);
+				D_GOTO(out, rc = 1);
 			}
 			d_iov_set(&aiov, (void *)akey, akey_kds[j].kd_key_len);
 
@@ -3229,7 +3230,8 @@ cont_copy_list_dkeys(daos_handle_t *src_oh,
 			buf_len = snprintf(dkey, dkey_kds[j].kd_key_len + 1,
 					   "%s", ptr);
 			if (buf_len >= ENUM_KEY_BUF) {
-				fprintf(stderr, "dkey is too large: %d\n", rc);
+				fprintf(stderr, "dkey is too large: %d\n",
+					buf_len);
 				D_GOTO(out, rc = 1);
 			}
 			d_iov_set(&diov, (void *)dkey, dkey_kds[j].kd_key_len);
@@ -3239,7 +3241,7 @@ cont_copy_list_dkeys(daos_handle_t *src_oh,
 			if (rc != 0) {
 				fprintf(stderr, "failed to list akeys: %d\n",
 					rc);
-				D_GOTO(out, rc = 1);
+				D_GOTO(out, rc);
 			}
 			ptr += dkey_kds[j].kd_key_len;
 		}
@@ -3307,7 +3309,6 @@ cont_copy_hdlr(struct cmd_args_s *ap)
 	struct file_dfs		src_cp_type = {0};
 	struct file_dfs		dst_cp_type = {0};
 	daos_epoch_range_t	epr;
-	daos_epoch_t		is_usr_snap = false;
 
 	file_set_defaults_dfs(&src_cp_type);
 	file_set_defaults_dfs(&dst_cp_type);
@@ -3330,19 +3331,12 @@ cont_copy_hdlr(struct cmd_args_s *ap)
 	if (rc != 0) {
 		D_GOTO(out_disconnect, rc);
 	}
-
-	/* use snapshot if one was passed in, otherwise create one */
-	if (ap->epc != 0) {
-		is_usr_snap = true;
-		epoch = ap->epc;
-	} else {
-		rc = daos_cont_create_snap_opt(cp_args.src_coh,
-					       &epoch, NULL,
+	rc = daos_cont_create_snap_opt(cp_args.src_coh,
+				       &epoch, NULL,
 			       DAOS_SNAP_OPT_CR | DAOS_SNAP_OPT_OIT, NULL);
-		if (rc) {
-			fprintf(stderr, "failed to create snapshot: %d\n", rc);
-			D_GOTO(out_disconnect, rc);
-		}
+	if (rc) {
+		fprintf(stderr, "failed to create snapshot: %d\n", rc);
+		D_GOTO(out_disconnect, rc);
 	}
 	rc = daos_oit_open(cp_args.src_coh, epoch, &toh, NULL);
 	if (rc != 0) {
@@ -3410,18 +3404,12 @@ out_disconnect:
 		fprintf(stderr, "failed to close object iterator: %d\n", rc);
 		D_GOTO(out, rc);
 	}
-	/* only destroy snapshot if we created it, and it wasn't
-	 * passed in by the user
-	 */
-	if (!is_usr_snap) {
-		epr.epr_lo = epoch;
-		epr.epr_hi = epoch;
-		rc = daos_cont_destroy_snap(cp_args.src_coh, epr, NULL);
-		if (rc != 0) {
-			fprintf(stderr, "failed to destroy snapshot: %d\n", rc);
-		}
+	epr.epr_lo = epoch;
+	epr.epr_hi = epoch;
+	rc = daos_cont_destroy_snap(cp_args.src_coh, epr, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "failed to destroy snapshot: %d\n", rc);
 	}
-
 	/* close src and dst pools, conts */
 	rc = copy_disconnect(is_posix_copy, &cp_args, &src_cp_type,
 			     &dst_cp_type);
