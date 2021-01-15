@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,13 +24,17 @@
 package server
 
 import (
+	"context"
+	"net"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
@@ -156,8 +160,7 @@ func newMockDrpcClient(cfg *mockDrpcClientConfig) *mockDrpcClient {
 // setupMockDrpcClientBytes sets up the dRPC client for the mgmtSvc to return
 // a set of bytes as a response.
 func setupMockDrpcClientBytes(svc *mgmtSvc, respBytes []byte, err error) {
-	mi, _ := svc.harness.getMSLeaderInstance()
-
+	mi := svc.harness.instances[0]
 	cfg := &mockDrpcClientConfig{}
 	cfg.setSendMsgResponse(drpc.Status_SUCCESS, respBytes, err)
 	mi.setDrpcClient(newMockDrpcClient(cfg))
@@ -184,8 +187,18 @@ func newTestIOServer(log logging.Logger, isAP bool, ioCfg ...*ioserver.Config) *
 		Rank: system.NewRankPtr(0),
 	})
 	srv.ready.SetTrue()
+	srv.OnReady()
 
 	return srv
+}
+
+// mockTCPResolver returns successful resolve results for any input.
+func mockTCPResolver(netString string, address string) (*net.TCPAddr, error) {
+	if netString != "tcp" {
+		return nil, errors.Errorf("unexpected network type in test: %s, want 'tcp'", netString)
+	}
+
+	return &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 10001}, nil
 }
 
 // newTestMgmtSvc creates a mgmtSvc that contains an IOServerInstance
@@ -199,8 +212,8 @@ func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
 	}
 	harness.started.SetTrue()
 
-	db := system.MockDatabase(t, log)
-	return newMgmtSvc(harness, system.NewMembership(log, db), db)
+	ms, db := system.MockMembership(t, log, mockTCPResolver)
+	return newMgmtSvc(harness, ms, db, nil, events.NewPubSub(context.Background(), log))
 }
 
 // newTestMgmtSvcMulti creates a mgmtSvc that contains the requested
@@ -219,7 +232,10 @@ func newTestMgmtSvcMulti(t *testing.T, log logging.Logger, count int, isAP bool)
 	}
 	harness.started.SetTrue()
 
-	return newMgmtSvc(harness, nil, nil)
+	svc := newTestMgmtSvc(t, log)
+	svc.harness = harness
+
+	return svc
 }
 
 // newTestMgmtSvcNonReplica creates a mgmtSvc that is configured to

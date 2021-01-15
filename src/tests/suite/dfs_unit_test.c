@@ -85,6 +85,128 @@ dfs_test_mount(void **state)
 }
 
 static void
+dfs_test_lookup_hlpr(const char *name, mode_t mode)
+{
+	dfs_obj_t		*obj;
+	mode_t			actual_mode;
+	int			rc;
+
+	rc = dfs_lookup(dfs_mt, name, O_RDWR | O_NOFOLLOW, &obj,
+			&actual_mode, NULL);
+	print_message("dfs_test_lookup_hlpr(\"%s\") = %d\n", name, rc);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+	assert_int_equal(actual_mode & S_IFMT, mode & S_IFMT);
+}
+
+static void
+dfs_test_lookup_rel_hlpr(dfs_obj_t *parent, const char *name, mode_t mode)
+{
+	dfs_obj_t		*obj;
+	mode_t			actual_mode;
+	int			rc;
+
+	rc = dfs_lookup_rel(dfs_mt, parent, name, O_RDWR | O_NOFOLLOW, &obj,
+			    &actual_mode, NULL);
+	print_message("dfs_test_lookup_rel_hlpr(\"%s\") = %d\n", name, rc);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+	assert_int_equal(actual_mode & S_IFMT, mode & S_IFMT);
+}
+
+static void
+dfs_test_lookup(void **state)
+{
+	test_arg_t		*arg = *state;
+	dfs_obj_t		*dir;
+	dfs_obj_t		*obj;
+	char			*filename_file1 = "file1";
+	char			*path_file1 = "/file1";
+	char			*filename_file2 = "file2";
+	char			*path_file2 = "/dir1/file2";
+	char			*path_file2_sym_up = "/sym1/dir2/../file2";
+	char			*filename_dir1 = "dir1";
+	char			*path_dir1 = "/dir1";
+	char			*filename_dir2 = "dir2";
+	char			*path_dir2 = "/dir1/dir2";
+	char			*filename_sym1 = "sym1";
+	char			*path_sym1 = "/sym1";
+	char			*filename_sym2 = "sym2";
+	char			*path_sym2 = "/dir1/sym2";
+	mode_t			create_mode = S_IWUSR | S_IRUSR;
+	int			create_flags = O_RDWR | O_CREAT | O_EXCL;
+	int			rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	/** Create /file1 */
+	rc = dfs_open(dfs_mt, NULL, filename_file1, create_mode | S_IFREG,
+		      create_flags, 0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	dfs_test_lookup_hlpr(path_file1, S_IFREG);
+	dfs_test_lookup_rel_hlpr(NULL, filename_file1, S_IFREG);
+
+	/** Create /sym1 -> dir1 */
+	rc = dfs_open(dfs_mt, NULL, filename_sym1, create_mode | S_IFLNK,
+		      create_flags, 0, 0, filename_dir1, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	dfs_test_lookup_hlpr(path_sym1, S_IFLNK);
+	dfs_test_lookup_rel_hlpr(NULL, filename_sym1, S_IFLNK);
+
+	/** Create /dir1 */
+	rc = dfs_open(dfs_mt, NULL, filename_dir1, create_mode | S_IFDIR,
+		      create_flags, 0, 0, NULL, &dir);
+	assert_int_equal(rc, 0);
+
+	dfs_test_lookup_hlpr(path_dir1, S_IFDIR);
+	dfs_test_lookup_rel_hlpr(NULL, filename_dir1, S_IFDIR);
+
+	/** Create /dir1/dir2 */
+	rc = dfs_open(dfs_mt, dir, filename_dir2, create_mode | S_IFDIR,
+		      create_flags, 0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	dfs_test_lookup_hlpr(path_dir2, S_IFDIR);
+	dfs_test_lookup_rel_hlpr(dir, filename_dir2, S_IFDIR);
+
+	/** Create /dir1/file2 */
+	rc = dfs_open(dfs_mt, dir, filename_file2, create_mode | S_IFREG,
+		      create_flags, 0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	dfs_test_lookup_hlpr(path_file2, S_IFREG);
+	dfs_test_lookup_rel_hlpr(dir, filename_file2, S_IFREG);
+	dfs_test_lookup_hlpr(path_file2_sym_up, S_IFREG);
+
+	/** Create /dir1/sym2 -> file2 */
+	rc = dfs_open(dfs_mt, dir, filename_sym2, create_mode | S_IFLNK,
+		      create_flags, 0, 0, filename_file2, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	dfs_test_lookup_hlpr(path_sym2, S_IFLNK);
+	dfs_test_lookup_rel_hlpr(dir, filename_sym2, S_IFLNK);
+
+	/** Close dir1 */
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+}
+
+static void
 dfs_test_syml(void **state)
 {
 	test_arg_t		*arg = *state;
@@ -121,6 +243,139 @@ syml_stat:
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_size, strlen(val));
 	MPI_Barrier(MPI_COMM_WORLD);
+}
+
+static void
+dfs_test_syml_follow_hlpr(const char *name, mode_t mode)
+{
+	dfs_obj_t	*obj;
+	mode_t		actual_mode;
+	char		path[64];
+	int		rc;
+
+	strncpy(path, "/", 2);
+	strncat(path, name, 62);
+
+	/** O_NOFOLLOW should open the link itself */
+	rc = dfs_lookup(dfs_mt, path, O_RDWR | O_NOFOLLOW, &obj,
+			&actual_mode, NULL);
+	print_message("dfs_test_syml_follow(\"%s\", O_NOFOLLOW) = %d\n",
+		      path, rc);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+	assert_true(S_ISLNK(actual_mode));
+
+	/** O_NOFOLLOW should open the link itself */
+	rc = dfs_lookup_rel(dfs_mt, NULL, name, O_RDWR | O_NOFOLLOW, &obj,
+			    &actual_mode, NULL);
+	print_message("dfs_test_syml_follow_rel(\"%s\", O_NOFOLLOW) = %d\n",
+		      name, rc);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+	assert_true(S_ISLNK(actual_mode));
+
+	/** Default should follow the link */
+	rc = dfs_lookup(dfs_mt, path, O_RDWR, &obj,
+			&actual_mode, NULL);
+	print_message("dfs_test_syml_follow(\"%s\") = %d\n", path, rc);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+	assert_int_equal(actual_mode & S_IFMT, mode & S_IFMT);
+
+	/** Default should follow the link */
+	rc = dfs_lookup_rel(dfs_mt, NULL, name, O_RDWR, &obj,
+			    &actual_mode, NULL);
+	print_message("dfs_test_syml_follow_rel(\"%s\") = %d\n", name, rc);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+	assert_int_equal(actual_mode & S_IFMT, mode & S_IFMT);
+
+	/** Default access should follow the link */
+	rc = dfs_access(dfs_mt, NULL, name, R_OK | W_OK);
+	print_message("dfs_test_syml_follow_access(\"%s\") = %d\n", name, rc);
+	assert_int_equal(rc, 0);
+}
+
+static void
+dfs_test_syml_follow(void **state)
+{
+	test_arg_t		*arg = *state;
+	dfs_obj_t		*obj;
+	char			*name_file = "reg_file";
+	char			*name_dir = "test_dir";
+	char			*name_sym_to_file = "sym_to_file";
+	char			*name_sym_to_dir = "sym_to_dir";
+	char			*name_sym_to_sym = "sym_to_sym";
+	char			*name_sym_to_self = "sym_to_self";
+	char			*path_sym_to_self = "/sym_to_self";
+	int			rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	/** Create /file */
+	rc = dfs_open(dfs_mt, NULL, name_file, S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	/** Create /sym_to_file -> file */
+	rc = dfs_open(dfs_mt, NULL, name_sym_to_file, S_IFLNK,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, name_file, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	dfs_test_syml_follow_hlpr(name_sym_to_file, S_IFREG);
+
+	/** Create /dir */
+	rc = dfs_open(dfs_mt, NULL, name_dir, S_IFDIR | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	/** Create /sym_to_dir -> dir */
+	rc = dfs_open(dfs_mt, NULL, name_sym_to_dir, S_IFLNK,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, name_dir, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	dfs_test_syml_follow_hlpr(name_sym_to_dir, S_IFDIR);
+
+	/** Create /sym_to_sym -> sym_to_file */
+	rc = dfs_open(dfs_mt, NULL, name_sym_to_sym, S_IFLNK,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, name_sym_to_file, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	dfs_test_syml_follow_hlpr(name_sym_to_sym, S_IFREG);
+
+	/** Create /sym_to_self -> sym_to_self */
+	rc = dfs_open(dfs_mt, NULL, name_sym_to_self, S_IFLNK,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, name_sym_to_self, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	/* Lookup on link with a loop should return ELOOP */
+	rc = dfs_lookup(dfs_mt, path_sym_to_self, O_RDWR, &obj, NULL, NULL);
+	print_message("dfs_test_syml_follow_eloop(\"%s\") = %d\n",
+		      path_sym_to_self, rc);
+	assert_int_equal(rc, ELOOP);
+
+	rc = dfs_lookup_rel(dfs_mt, NULL, name_sym_to_self, O_RDWR, &obj,
+			    NULL, NULL);
+	print_message("dfs_test_syml_follow_eloop_rel(\"%s\") = %d\n",
+		      name_sym_to_self, rc);
+	assert_int_equal(rc, ELOOP);
 }
 
 static int
@@ -284,9 +539,13 @@ dfs_test_read_shared_file(void **state)
 static const struct CMUnitTest dfs_unit_tests[] = {
 	{ "DFS_UNIT_TEST1: DFS mount / umount",
 	  dfs_test_mount, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST2: Simple Symlinks",
+	{ "DFS_UNIT_TEST2: DFS lookup / lookup_rel",
+	  dfs_test_lookup, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST3: Simple Symlinks",
 	  dfs_test_syml, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST3: multi-threads read shared file",
+	{ "DFS_UNIT_TEST4: Symlinks with / without O_NOFOLLOW",
+	  dfs_test_syml_follow, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST5: multi-threads read shared file",
 	  dfs_test_read_shared_file, async_disable, test_case_teardown},
 };
 

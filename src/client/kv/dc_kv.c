@@ -361,7 +361,7 @@ int
 dc_kv_put(tse_task_t *task)
 {
 	daos_kv_put_t		*args = daos_task_get_args(task);
-	struct dc_kv		*kv;
+	struct dc_kv		*kv = NULL;
 	daos_obj_update_t	*update_args;
 	tse_task_t		*update_task = NULL;
 	struct io_params	*params = NULL;
@@ -422,7 +422,7 @@ dc_kv_put(tse_task_t *task)
 		D_GOTO(err_task, rc);
 
 	tse_sched_progress(tse_task2sched(task));
-
+	kv_decref(kv);
 	return 0;
 
 err_task:
@@ -431,6 +431,8 @@ err_task:
 	if (update_task)
 		tse_task_complete(update_task, rc);
 	tse_task_complete(task, rc);
+	if (kv)
+		kv_decref(kv);
 	return rc;
 }
 
@@ -438,7 +440,7 @@ int
 dc_kv_get(tse_task_t *task)
 {
 	daos_kv_get_t		*args = daos_task_get_args(task);
-	struct dc_kv		*kv;
+	struct dc_kv		*kv = NULL;
 	daos_obj_fetch_t	*fetch_args;
 	tse_task_t		*fetch_task = NULL;
 	struct io_params	*params = NULL;
@@ -516,6 +518,7 @@ dc_kv_get(tse_task_t *task)
 		D_GOTO(err_task, rc);
 
 	tse_sched_progress(tse_task2sched(task));
+	kv_decref(kv);
 
 	return 0;
 
@@ -525,6 +528,8 @@ err_task:
 	if (fetch_task)
 		tse_task_complete(fetch_task, rc);
 	tse_task_complete(task, rc);
+	if (kv)
+		kv_decref(kv);
 	return rc;
 }
 
@@ -532,7 +537,7 @@ int
 dc_kv_remove(tse_task_t *task)
 {
 	daos_kv_remove_t	*args = daos_task_get_args(task);
-	struct dc_kv		*kv;
+	struct dc_kv		*kv = NULL;
 	daos_obj_punch_t	*punch_args;
 	tse_task_t		*punch_task = NULL;
 	struct io_params	*params = NULL;
@@ -579,6 +584,7 @@ dc_kv_remove(tse_task_t *task)
 		D_GOTO(err_task, rc);
 
 	tse_sched_progress(tse_task2sched(task));
+	kv_decref(kv);
 
 	return 0;
 
@@ -588,6 +594,8 @@ err_task:
 	if (punch_task)
 		tse_task_complete(punch_task, rc);
 	tse_task_complete(task, rc);
+	if (kv)
+		kv_decref(kv);
 	return rc;
 }
 
@@ -595,7 +603,7 @@ int
 dc_kv_list(tse_task_t *task)
 {
 	daos_kv_list_t		*args = daos_task_get_args(task);
-	struct dc_kv		*kv;
+	struct dc_kv		*kv = NULL;
 	daos_obj_list_dkey_t	*list_args;
 	tse_task_t		*list_task = NULL;
 	int			rc;
@@ -626,6 +634,7 @@ dc_kv_list(tse_task_t *task)
 		D_GOTO(err_task, rc);
 
 	tse_sched_progress(tse_task2sched(task));
+	kv_decref(kv);
 
 	return 0;
 
@@ -633,5 +642,7 @@ err_task:
 	if (list_task)
 		tse_task_complete(list_task, rc);
 	tse_task_complete(task, rc);
+	if (kv)
+		kv_decref(kv);
 	return rc;
 }

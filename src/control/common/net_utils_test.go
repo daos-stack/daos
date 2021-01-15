@@ -24,10 +24,12 @@
 package common
 
 import (
+	"fmt"
 	"net"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 )
 
 func TestUtils_HasPort(t *testing.T) {
@@ -76,7 +78,7 @@ func TestUtils_SplitPort(t *testing.T) {
 	}
 }
 
-func TestCommon_CmpTcpAddr(t *testing.T) {
+func TestCommon_CmpTCPAddr(t *testing.T) {
 	testA := &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)}
 	testB := &net.TCPAddr{IP: net.IPv4(127, 0, 0, 2)}
 	testC := &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 1}
@@ -119,7 +121,7 @@ func TestCommon_CmpTcpAddr(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if diff := cmp.Diff(tc.expRes, CmpTcpAddr(tc.a, tc.b)); diff != "" {
+			if diff := cmp.Diff(tc.expRes, CmpTCPAddr(tc.a, tc.b)); diff != "" {
 				t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
 			}
 		})
@@ -149,4 +151,73 @@ func TestCommon_IsLocalAddr(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCommon_ParseHostList(t *testing.T) {
+	testPort := 12345
+
+	mockHostList := func(hosts ...string) []string {
+		return hosts
+	}
+
+	for name, tc := range map[string]struct {
+		in     []string
+		expOut []string
+		expErr error
+	}{
+		"nil in, nil out": {},
+		"empty in, nil out": {
+			in: []string{},
+		},
+		"host with too many :": {
+			in:     mockHostList("foo::10"),
+			expErr: errors.New("invalid host"),
+		},
+		"host with non-numeric port": {
+			in:     mockHostList("foo:bar"),
+			expErr: errors.New("invalid host"),
+		},
+		"host with just a port": {
+			in:     mockHostList(":42"),
+			expErr: errors.New("invalid host"),
+		},
+		"should append missing port": {
+			in:     mockHostList("foo"),
+			expOut: mockHostList(fmt.Sprintf("foo:%d", testPort)),
+		},
+		"should append missing port (multiple)": {
+			in: mockHostList("foo", "bar:4242", "baz"),
+			expOut: mockHostList(
+				"bar:4242",
+				fmt.Sprintf("baz:%d", testPort),
+				fmt.Sprintf("foo:%d", testPort),
+			),
+		},
+		"should append missing port (ranges)": {
+			in: mockHostList("foo-[1-4]", "bar[2-4]", "baz[8-9]:4242"),
+			expOut: mockHostList(
+				fmt.Sprintf("bar2:%d", testPort),
+				fmt.Sprintf("bar3:%d", testPort),
+				fmt.Sprintf("bar4:%d", testPort),
+				"baz8:4242",
+				"baz9:4242",
+				fmt.Sprintf("foo-1:%d", testPort),
+				fmt.Sprintf("foo-2:%d", testPort),
+				fmt.Sprintf("foo-3:%d", testPort),
+				fmt.Sprintf("foo-4:%d", testPort),
+			),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotOut, gotErr := ParseHostList(tc.in, testPort)
+			CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+			if diff := cmp.Diff(tc.expOut, gotOut); diff != "" {
+				t.Fatalf("unexpected output (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+
 }

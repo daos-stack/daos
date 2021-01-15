@@ -678,7 +678,7 @@ ilog_root_migrate(struct ilog_context *lctx, const struct ilog_id *id_in)
 	rc = ilog_ptr_set(lctx, root, &tmp);
 
 done:
-	if (!daos_handle_is_inval(toh))
+	if (daos_handle_is_valid(toh))
 		dbtree_close(toh);
 
 	return rc;
@@ -959,7 +959,7 @@ insert:
 	}
 
 done:
-	if (!daos_handle_is_inval(toh))
+	if (daos_handle_is_valid(toh))
 		dbtree_close(toh);
 
 	return rc;
@@ -1231,7 +1231,7 @@ reset:
 	lctx->ic_in_txn = false;
 	lctx->ic_ver_inc = false;
 
-	if (!daos_handle_is_inval(priv->ip_ih)) {
+	if (daos_handle_is_valid(priv->ip_ih)) {
 		dbtree_iter_finish(priv->ip_ih);
 		priv->ip_ih = DAOS_HDL_INVAL;
 	}
@@ -1444,7 +1444,7 @@ ilog_fetch_finish(struct ilog_entries *entries)
 	if (priv->ip_alloc_size)
 		D_FREE(entries->ie_entries);
 
-	if (!daos_handle_is_inval(priv->ip_ih))
+	if (daos_handle_is_valid(priv->ip_ih))
 		dbtree_iter_finish(priv->ip_ih);
 }
 
@@ -1489,6 +1489,7 @@ enum {
 	AGG_RC_NEXT,
 	AGG_RC_REMOVE,
 	AGG_RC_REMOVE_PREV,
+	AGG_RC_ABORT,
 };
 
 static int
@@ -1502,6 +1503,10 @@ check_agg_entry(const struct ilog_entry *entry, struct agg_arg *agg_arg)
 		agg_arg->aa_prev ? agg_arg->aa_prev->ie_id.id_epoch : 0,
 		agg_arg->aa_prior_punch ?
 		agg_arg->aa_prior_punch->ie_id.id_epoch : 0);
+
+	/* Abort ilog aggregation on hitting any uncommitted entry */
+	if (entry->ie_status == ILOG_UNCOMMITTED)
+		D_GOTO(done, rc = AGG_RC_ABORT);
 
 	if (entry->ie_id.id_epoch > agg_arg->aa_epr->epr_hi)
 		D_GOTO(done, rc = AGG_RC_DONE);
@@ -1642,6 +1647,9 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 			if (rc == 0)
 				removed++;
 			break;
+		case AGG_RC_ABORT:
+			rc = -DER_TX_BUSY;
+			goto done;
 		case AGG_RC_REMOVE_PREV:
 			/* Fall through: Should not get this here */
 		default:
@@ -1679,6 +1687,9 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 			if (rc != 0)
 				goto done;
 			break;
+		case AGG_RC_ABORT:
+			rc = -DER_TX_BUSY;
+			goto done;
 		default:
 			/* Unknown return code */
 			D_ASSERT(0);
@@ -1689,7 +1700,7 @@ collapse:
 
 	empty = ilog_empty(root);
 done:
-	if (!daos_handle_is_inval(toh))
+	if (daos_handle_is_valid(toh))
 		dbtree_close(toh);
 
 	rc = ilog_tx_end(lctx, rc);

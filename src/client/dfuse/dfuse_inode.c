@@ -80,10 +80,10 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 		D_MUTEX_LOCK(&fs_handle->dpi_info->di_lock);
 
 		DFUSE_TRA_INFO(ie->ie_dfs, "Closing dfs_root %d %d",
-			       !daos_handle_is_inval(dfp->dfp_poh),
-			       !daos_handle_is_inval(dfs->dfs_coh));
+			       daos_handle_is_valid(dfp->dfp_poh),
+			       daos_handle_is_valid(dfs->dfs_coh));
 
-		if (!daos_handle_is_inval(dfs->dfs_coh)) {
+		if (daos_handle_is_valid(dfs->dfs_coh)) {
 			rc = dfs_umount(dfs->dfs_ns);
 			if (rc != 0)
 				DFUSE_TRA_ERROR(dfs,
@@ -103,7 +103,7 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 		D_FREE(dfs);
 
 		if (d_list_empty(&dfp->dfp_dfs_list)) {
-			if (!daos_handle_is_inval(dfp->dfp_poh)) {
+			if (daos_handle_is_valid(dfp->dfp_poh)) {
 				rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
 				if (rc != -DER_SUCCESS) {
 					DFUSE_TRA_ERROR(dfp,

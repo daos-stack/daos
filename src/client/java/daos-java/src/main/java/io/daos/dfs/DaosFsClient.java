@@ -23,33 +23,23 @@
 
 package io.daos.dfs;
 
-import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.CopyOption;
-import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import io.daos.*;
 import org.apache.commons.lang.ObjectUtils;
-import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Java DAOS FS Client for all local/remote DAOS operations which is indirectly invoked via JNI.
- *
- * <p>
- * Before any operation, there is some preparation work to be done in this class.
- * <li>load dynamic library, libdaos-jni.so</li>
- * <li>load error code</li>
- * <li>start cleaner thread</li>
- * <li>register shutdown hook for DAOS finalization</li>
- * <li>create/open pool and container</li>
- * <li>mount DAOS FS on container</li>
+ * A shareable Java DAOS DFS client to wrap all DFS related operations, including
+ * <li>mount/unmount DAOS FS on container</li>
+ * <li>call DFS methods, including release DFS files in the cleaner executor</li>
+ * <li>construct {@link DaosFile} instance</li>
+ * It registers itself to shutdown manager in {@link DaosClient} to release resources in case of abnormal shutdown.
  *
  * <p>
  * If you have <code>poolId</code> specified, but no <code>containerId</code>, DAOS FS will be mounted on
@@ -89,31 +79,19 @@ import org.slf4j.LoggerFactory;
  * @see DaosFile
  * @see Cleaner
  */
-public final class DaosFsClient {
-
-  private String poolId;
-
-  private String contId;
-
-  private long poolPtr;
-
-  private long contPtr;
+public final class DaosFsClient extends ShareableClient implements ForceCloseable {
 
   private long dfsPtr;
 
-  private DaosFsClientBuilder builder;
-
-  private volatile boolean inited;
-
-  private int refCnt;
-
-  public static final String LIB_NAME = "daos-jni";
+  private long contPtr;
 
   public static final String ROOT_CONT_UUID = "ffffffff-ffff-ffff-ffff-ffffffffffff";
 
-  public static final Runnable FINALIZER;
-
   private static final Logger log = LoggerFactory.getLogger(DaosFsClient.class);
+
+  static {
+    DaosClient.initClient();
+  }
 
   private final ExecutorService cleanerExe = Executors.newSingleThreadExecutor((r) -> {
     Thread thread = new Thread(r, "DAOS file object cleaner thread");
@@ -124,118 +102,27 @@ public final class DaosFsClient {
   // keyed by poolId+contId
   private static final Map<String, DaosFsClient> pcFsMap = new ConcurrentHashMap<>();
 
-  static {
-    loadLib();
-    FINALIZER = new Runnable() {
-      @Override
-      public void run() {
-        try {
-          closeAll();
-          daosFinalize();
-          log.info("daos finalized");
-          ShutdownHookManager.removeHook(this);
-        } catch (IOException e) {
-          log.error("failed to finalize DAOS", e);
-        }
-      }
-    };
-    ShutdownHookManager.addHook(FINALIZER);
-    if (log.isDebugEnabled()) {
-      log.debug("daos finalizer hook added");
-    }
-  }
-
-  private static void loadLib() {
-    String env = "LD_PRELOAD";
-    String preload = System.getenv(env);
-    if (StringUtils.isBlank(preload)) {
-      throw new IllegalStateException(env + " need to be set as environment variable");
-    }
-    File soFile = new File(preload);
-    if ((!preload.endsWith(".so")) || !soFile.exists()) {
-      throw new IllegalArgumentException(env + " need to be set to a existed so file");
-    }
-    try {
-      System.loadLibrary(LIB_NAME);
-      log.info("lib{}.so loaded from library", LIB_NAME);
-    } catch (UnsatisfiedLinkError e) {
-      loadFromJar();
-    }
-  }
-
-  private static void loadFromJar() {
-    File tempDir = null;
-    String filePath = new StringBuilder("/lib").append(LIB_NAME).append(".so").toString();
-
-    try {
-      tempDir = Files.createTempDirectory("daos").toFile();
-      tempDir.deleteOnExit();
-      loadByPath(filePath, tempDir);
-    } catch (IOException e) {
-      if (tempDir != null) {
-        tempDir.delete();
-      }
-      throw new RuntimeException("failed to load lib from jar, " + LIB_NAME, e);
-    }
-    log.info(filePath + " loaded from jar");
-  }
-
-  private static void loadByPath(String path, File tempDir) throws IOException {
-    File tempFile = null;
-    String[] fields = path.split("/");
-    String name = fields[fields.length - 1];
-
-    try (InputStream is = DaosFsClient.class.getResourceAsStream(path)) {
-      tempFile = new File(tempDir, name);
-      tempFile.deleteOnExit();
-      Files.copy(is, tempFile.toPath(), new CopyOption[]{StandardCopyOption.REPLACE_EXISTING});
-      System.load(tempFile.getAbsolutePath());
-    } catch (IOException e) {
-      if (tempFile != null) {
-        tempFile.delete();
-      }
-    }
-  }
-
   private DaosFsClient(String poolId, String contId, DaosFsClientBuilder builder) {
-    this.poolId = poolId;
-    this.contId = contId;
-    this.builder = builder;
+    super(poolId, contId, builder);
   }
 
-  private DaosFsClient(String poolId, DaosFsClientBuilder builder) {
-    this(poolId, null, builder);
-  }
-
-  private DaosFsClient(DaosFsClientBuilder builder) {
-    this(null, null, builder);
-  }
-
-  private synchronized void init() throws IOException {
-    if (inited) {
+  private void init() throws IOException {
+    if (isInited()) {
       return;
     }
-
-    poolPtr = daosOpenPool(poolId, builder.serverGroup,
-            builder.ranks,
-            builder.poolFlags);
-    if (log.isDebugEnabled()) {
-      log.debug("opened pool {}", poolPtr);
-    }
-
-    if (contId != null && !ROOT_CONT_UUID.equals(contId)) {
-      contPtr = daosOpenCont(poolPtr, contId, builder.containerFlags);
-      if (log.isDebugEnabled()) {
-        log.debug("opened container {}", contPtr);
-      }
-      dfsPtr = mountFileSystem(poolPtr, contPtr, builder.readOnlyFs);
+    DaosFsClientBuilder builder = getBuilder();
+    setClient(builder.buildDaosClient());
+    DaosClient client = getClient();
+    if (builder.getContId() != null && !ROOT_CONT_UUID.equals(builder.getContId())) {
+      contPtr = client.getContPtr();
+      dfsPtr = mountFileSystem(client.getPoolPtr(), contPtr, builder.readOnlyFs);
       if (log.isDebugEnabled()) {
         log.debug("mounted FS {}", dfsPtr);
       }
     } else {
-      contId = ROOT_CONT_UUID;
+      setContId(ROOT_CONT_UUID);
       contPtr = -1;
-      dfsPtr = mountFileSystem(poolPtr, -1, builder.readOnlyFs);
+      dfsPtr = mountFileSystem(client.getPoolPtr(), -1, builder.readOnlyFs);
       if (log.isDebugEnabled()) {
         log.debug("mounted FS {} on root container", dfsPtr);
       }
@@ -245,21 +132,18 @@ public final class DaosFsClient {
     if (log.isDebugEnabled()) {
       log.debug("cleaner task running");
     }
-
-    inited = true;
-    log.info("DaosFsClient for {}, {} initialized", poolId, contId);
+    client.registerForShutdown(this);
+    setInited(true);
+    log.info("DaosFsClient for {}, {} initialized", builder.getPoolId(), builder.getContId());
   }
 
   public long getDfsPtr() {
     return dfsPtr;
   }
 
-  public String getPoolId() {
-    return poolId;
-  }
-
-  public String getContId() {
-    return contId;
+  @Override
+  protected DaosFsClientBuilder getBuilder() {
+    return (DaosFsClientBuilder)super.getBuilder();
   }
 
   /**
@@ -300,21 +184,23 @@ public final class DaosFsClient {
    * If there are still references to this object, no actual disconnect will be called. User can call
    * {@link #getRefCnt()} method to double-check the reference count of this object.
    *
+   * @param force
+   * close client forcibly?
    * @throws IOException
    * {@link DaosIOException}
    */
-  public synchronized void disconnect() throws IOException {
-    disconnect(false);
-  }
-
-  private synchronized void disconnect(boolean force) throws IOException {
+  @Override
+  protected synchronized void disconnect(boolean force) throws IOException {
     decrementRef();
-    if (force || refCnt <= 0) {
-      if (inited && dfsPtr != 0) {
+    DaosFsClientBuilder builder = getBuilder();
+    if (force || getRefCnt() <= 0) {
+      if (isInited() && dfsPtr != 0) {
+        log.debug("dfsptr: " + dfsPtr);
         cleanerExe.shutdownNow();
         if (log.isDebugEnabled()) {
           log.debug("cleaner stopped");
         }
+        log.debug("dfsptr: " + dfsPtr);
         if (contPtr == -1) {
           dfsUnmountFsOnRoot(dfsPtr);
           if (log.isDebugEnabled()) {
@@ -325,16 +211,16 @@ public final class DaosFsClient {
           if (log.isDebugEnabled()) {
             log.debug("FS unmounted {}", dfsPtr);
           }
-          daosCloseContainer(contPtr);
-          if (log.isDebugEnabled()) {
-            log.debug("closed container {}", contPtr);
-          }
         }
-        daosClosePool(poolPtr);
-        log.info("DaosFsClient for {}, {} disconnected", poolId, contId);
+        if (force) {
+          getClient().forceClose();
+        } else {
+          getClient().close();
+        }
+        log.info("DaosFsClient for {}, {} disconnected", builder.getPoolId(), builder.getContId());
       }
-      inited = false;
-      pcFsMap.remove(poolId + contId);
+      setInited(false);
+      pcFsMap.remove(builder.getPoolId() + builder.getContId());
     }
   }
 
@@ -346,7 +232,7 @@ public final class DaosFsClient {
    * @return DaosFile
    */
   public DaosFile getFile(String path) {
-    return getFile(path, builder.defaultFileAccessFlags);
+    return getFile(path, getBuilder().defaultFileAccessFlags);
   }
 
   /**
@@ -372,7 +258,7 @@ public final class DaosFsClient {
    * @return DaosFile
    */
   public DaosFile getFile(String parent, String path) {
-    return getFile(parent, path, builder.defaultFileAccessFlags);
+    return getFile(parent, path, getBuilder().defaultFileAccessFlags);
   }
 
   /**
@@ -400,7 +286,7 @@ public final class DaosFsClient {
    * @return DaosFile
    */
   public DaosFile getFile(DaosFile parent, String path) {
-    return getFile(parent, path, builder.defaultFileAccessFlags);
+    return getFile(parent, path, getBuilder().defaultFileAccessFlags);
   }
 
   /**
@@ -504,7 +390,7 @@ public final class DaosFsClient {
    * {@link DaosIOException}
    */
   public void mkdir(String path, boolean recursive) throws IOException {
-    mkdir(DaosUtils.normalize(path), builder.defaultFileMode, recursive);
+    mkdir(DaosUtils.normalize(path), getBuilder().defaultFileMode, recursive);
   }
 
   /**
@@ -545,7 +431,7 @@ public final class DaosFsClient {
   public boolean exists(String path) throws IOException {
     long objId = 0;
     try {
-      objId = dfsLookup(dfsPtr, DaosUtils.normalize(path), builder.defaultFileAccessFlags, -1);
+      objId = dfsLookup(dfsPtr, DaosUtils.normalize(path), getBuilder().defaultFileAccessFlags, -1);
       return true;
     } catch (Exception e) {
       if (!(e instanceof DaosIOException)) { //unexpected exception
@@ -561,12 +447,6 @@ public final class DaosFsClient {
       if (objId > 0) {
         dfsRelease(objId);
       }
-    }
-  }
-
-  static synchronized void closeAll() throws IOException {
-    for (Map.Entry<String, DaosFsClient> entry : pcFsMap.entrySet()) {
-      entry.getValue().disconnect(true);
     }
   }
 
@@ -606,7 +486,7 @@ public final class DaosFsClient {
    * {@link DaosIOException}
    */
   native void move(long dfsPtr, long srcParentObjId, String srcName, long destParentObjId, String destName)
-          throws IOException;
+      throws IOException;
 
   /**
    * make directory denoted by <code>path</code>.
@@ -667,59 +547,6 @@ public final class DaosFsClient {
    */
   native boolean delete(long dfsPtr, String parentPath, String name, boolean force) throws IOException;
 
-  /**
-   * open pool.
-   *
-   * @param poolId
-   * pool id
-   * @param serverGroup
-   * DAOS server group
-   * @param ranks
-   * pool ranks
-   * @param flags
-   * see {@link DaosFsClientBuilder#poolFlags(int)}
-   * @return pool pointer or pool handle
-   * @throws IOException
-   * {@link DaosIOException}
-   */
-  static native long daosOpenPool(String poolId, String serverGroup, String ranks, int flags) throws IOException;
-
-  /**
-   * open container.
-   *
-   * @param poolPtr
-   * pointer to pool
-   * @param contId
-   * container id
-   * @param flags
-   * see {@link DaosFsClientBuilder#containerFlags(int)}
-   * @return container pointer or container handle
-   * @throws IOException
-   * {@link DaosIOException}
-   */
-  static native long daosOpenCont(long poolPtr, String contId, int flags) throws IOException;
-
-  /**
-   * close container.
-   *
-   * @param contPtr
-   * pointer to container
-   * @throws IOException
-   * {@link DaosIOException}
-   */
-  static native void daosCloseContainer(long contPtr) throws IOException;
-
-  /**
-   * close pool.
-   *
-   * @param poolPtr
-   * pointer to pool
-   * @throws IOException
-   * {@link DaosIOException}
-   */
-  static native void daosClosePool(long poolPtr) throws IOException;
-
-
   // DAOS FS corresponding methods
 
   /**
@@ -737,9 +564,7 @@ public final class DaosFsClient {
   /**
    * open a file with opened parent specified by <code>parentObjId</code>.
    *
- * <p>
-   * TODO: make sure buffer is set in the same order as StatAttributes instantiation
-   *
+   * <p>
    * @param dfsPtr
    * pointer of dfs object
    * @param parentObjId
@@ -831,7 +656,7 @@ public final class DaosFsClient {
    * {@link DaosIOException}
    */
   native long dfsRead(long dfsPtr, long objId, long bufferAddress, long offset, long len, int eventNo)
-          throws IOException;
+      throws IOException;
 
   /**
    * write data from buffer to file.
@@ -1118,49 +943,20 @@ public final class DaosFsClient {
 
   //------------------native methods end------------------
 
-
   int getDefaultFileAccessFlags() {
-    return builder.defaultFileAccessFlags;
+    return getBuilder().defaultFileAccessFlags;
   }
 
   int getDefaultFileMode() {
-    return builder.defaultFileMode;
+    return getBuilder().defaultFileMode;
   }
 
   DaosObjectType getDefaultFileObjType() {
-    return builder.defaultFileObjType;
+    return getBuilder().defaultFileObjType;
   }
 
   int getDefaultFileChunkSize() {
-    return builder.defaultFileChunkSize;
-  }
-
-  /**
-   * increase reference count by one.
-   *
-   * @throws IllegalStateException if this client is disconnected.
-   */
-  public synchronized void incrementRef() {
-    if (!inited) {
-      throw new IllegalStateException("DaosFsClient is not initialized or disconnected.");
-    }
-    refCnt++;
-  }
-
-  /**
-   * decrease reference count by one.
-   */
-  public synchronized void decrementRef() {
-    refCnt--;
-  }
-
-  /**
-   * get reference count.
-   *
-   * @return reference count
-   */
-  public synchronized int getRefCnt() {
-    return refCnt;
+    return getBuilder().defaultFileChunkSize;
   }
 
   /**
@@ -1168,115 +964,15 @@ public final class DaosFsClient {
    * makes sure single instance of {@link DaosFsClient} per pool and container.
    *
    * <p>
-   * Please note that new pool and new container will be created if their ids (poolId and containerId) are {@code null}.
+   * poolId should be set at least. ROOT container will be used if containerId is not set.
    */
-  public static class DaosFsClientBuilder implements Cloneable {
-    private String poolId;
-    private String contId;
-    private String ranks = Constants.POOL_DEFAULT_RANKS;
-    private String serverGroup = Constants.POOL_DEFAULT_SERVER_GROUP;
-    private int containerFlags = Constants.ACCESS_FLAG_CONTAINER_READWRITE;
-    private int poolFlags = Constants.ACCESS_FLAG_POOL_READWRITE;
-    private int poolMode = Constants.MODE_POOL_GROUP_READWRITE | Constants.MODE_POOL_OTHER_READWRITE |
-            Constants.MODE_POOL_USER_READWRITE;
+  public static class DaosFsClientBuilder extends DaosClient.DaosClientBuilder<DaosFsClientBuilder> {
     private int defaultFileChunkSize = Constants.FILE_DEFAULT_CHUNK_SIZE;
     private int defaultFileAccessFlags = Constants.ACCESS_FLAG_FILE_READWRITE;
     private int defaultFileMode = Constants.FILE_DEFAULT_FILE_MODE;
     private DaosObjectType defaultFileObjType = DaosObjectType.OC_SX;
     private boolean readOnlyFs = false;
     private boolean shareFsClient = true;
-
-    public DaosFsClientBuilder poolId(String poolId) {
-      this.poolId = poolId;
-      return this;
-    }
-
-    public DaosFsClientBuilder containerId(String contId) {
-      this.contId = contId;
-      return this;
-    }
-
-    /**
-     * one or more ranks separated by ":".
-     *
-     * @param ranks
-     * default is "0"
-     * @return DaosFsClientBuilder
-     */
-    public DaosFsClientBuilder ranks(String ranks) {
-      this.ranks = ranks;
-      return this;
-    }
-
-    /**
-     * set group name of server.
-     *
-     * @param serverGroup
-     * default is 'daos_server'
-     * @return DaosFsClientBuilder
-     */
-    public DaosFsClientBuilder serverGroup(String serverGroup) {
-      this.serverGroup = serverGroup;
-      return this;
-    }
-
-    /**
-     * set container mode when open container.
-     *
-     * @param containerFlags should be one of {@link Constants#ACCESS_FLAG_CONTAINER_READONLY},
-     *                       {@link Constants#ACCESS_FLAG_CONTAINER_READWRITE} and
-     *                       {@link Constants#ACCESS_FLAG_CONTAINER_NOSLIP}
-     *                       Default value is {@link Constants#ACCESS_FLAG_CONTAINER_READWRITE}
-     * @return DaosFsClientBuilder
-     */
-    public DaosFsClientBuilder containerFlags(int containerFlags) {
-      this.containerFlags = containerFlags;
-      return this;
-    }
-
-    /**
-     * set pool mode for creating pool
-     *
-     * @param poolMode should be one or combination of below three groups.
-     *                 <li>
-     *                 user:
-     *                 {@link Constants#MODE_POOL_USER_READONLY}
-     *                 {@link Constants#MODE_POOL_USER_READWRITE}
-     *                 {@link Constants#MODE_POOL_USER_EXECUTE}
-     *                 </li>
-     *                 <li>
-     *                 group:
-     *                 {@link Constants#MODE_POOL_GROUP_READONLY}
-     *                 {@link Constants#MODE_POOL_GROUP_READWRITE}
-     *                 {@link Constants#MODE_POOL_GROUP_EXECUTE}
-     *                 </li>
-     *                 <li>
-     *                 other:
-     *                 {@link Constants#MODE_POOL_OTHER_READONLY}
-     *                 {@link Constants#MODE_POOL_OTHER_READWRITE}
-     *                 {@link Constants#MODE_POOL_OTHER_EXECUTE}
-     *                 </li>
-     * @return DaosFsClientBuilder
-     */
-    public DaosFsClientBuilder poolMode(int poolMode) {
-      this.poolMode = poolMode;
-      return this;
-    }
-
-    /**
-     * set pool flags for opening pool.
-     *
-     * @param poolFlags should be one of
-     *                  {@link Constants#ACCESS_FLAG_POOL_READONLY}
-     *                  {@link Constants#ACCESS_FLAG_POOL_READWRITE}
-     *                  {@link Constants#ACCESS_FLAG_POOL_EXECUTE}
-     *                  Default is {@link Constants#ACCESS_FLAG_POOL_READWRITE}
-     * @return DaosFsClientBuilder
-     */
-    public DaosFsClientBuilder poolFlags(int poolFlags) {
-      this.poolFlags = poolFlags;
-      return this;
-    }
 
     /**
      * set default file access flag.
@@ -1370,35 +1066,39 @@ public final class DaosFsClient {
      * @throws IOException
      * {@link DaosIOException}
      */
+    @Override
     public DaosFsClient build() throws IOException {
-      DaosFsClientBuilder copied = (DaosFsClientBuilder) ObjectUtils.clone(this);
-      DaosFsClient client;
-      if (poolId != null) {
-        client = getClientForCont(copied);
+      String poolId = getPoolId();
+      String contId = getContId();
+      DaosFsClientBuilder builder = (DaosFsClientBuilder) ObjectUtils.clone(this);
+      DaosFsClient fsClient;
+      if (!builder.shareFsClient) {
+        fsClient = new DaosFsClient(poolId, contId, builder);
       } else {
-        throw new IllegalArgumentException("need pool UUID.");
+        //check existing client
+        if (poolId == null) {
+          throw new IllegalArgumentException("need pool UUID.");
+        }
+        if (contId == null) {
+          contId = ROOT_CONT_UUID;
+        }
+        String key = poolId + contId;
+        fsClient = pcFsMap.get(key);
+        if (fsClient == null) {
+          fsClient = new DaosFsClient(poolId, contId, builder);
+          pcFsMap.putIfAbsent(key, fsClient);
+        }
+        fsClient = pcFsMap.get(key);
       }
-      client.init();
-      client.incrementRef();
-      return client;
+      synchronized (fsClient) {
+        fsClient.init();
+        fsClient.incrementRef();
+      }
+      return fsClient;
     }
 
-    private DaosFsClient getClientForCont(DaosFsClientBuilder builder) {
-      DaosFsClient client;
-      if (!builder.shareFsClient) {
-        return new DaosFsClient(poolId, contId, builder);
-      }
-      //check existing client
-      if (contId == null) {
-        contId = ROOT_CONT_UUID;
-      }
-      String key = poolId + contId;
-      client = pcFsMap.get(key);
-      if (client == null) {
-        client = new DaosFsClient(poolId, contId, builder);
-        pcFsMap.putIfAbsent(key, client);
-      }
-      return pcFsMap.get(key);
+    protected DaosClient buildDaosClient() throws IOException {
+      return (DaosClient) super.build();
     }
   }
 }

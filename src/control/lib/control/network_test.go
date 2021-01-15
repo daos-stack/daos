@@ -34,6 +34,7 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 type mockFabricScan struct {
@@ -314,10 +315,36 @@ func TestControl_GetAttachInfo(t *testing.T) {
 			},
 			expErr: errors.New("remote failed"),
 		},
+		"retry after EmptyGroupMap": {
+			req: &GetAttachInfoReq{},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", system.ErrEmptyGroupMap, nil),
+					MockMSResponse("host1", nil, &mgmtpb.GetAttachInfoResp{
+						RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
+							{
+								Rank: 42,
+								Uri:  "foo://bar",
+							},
+						},
+						Provider: "cow",
+					}),
+				},
+			},
+			expResp: &GetAttachInfoResp{
+				ServiceRanks: []*PrimaryServiceRank{
+					{
+						Rank: 42,
+						Uri:  "foo://bar",
+					},
+				},
+				Provider: "cow",
+			},
+		},
 		"success": {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("", nil, &mgmtpb.GetAttachInfoResp{
-					Psrs: []*mgmtpb.GetAttachInfoResp_Psr{
+					RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 						{
 							Rank: 42,
 							Uri:  "foo://bar",

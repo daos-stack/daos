@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,9 +26,9 @@
  */
 #define D_LOGFAC	DD_FAC(hg)
 
+#include "crt_internal.h"
 #include <gurt/mem.h>
 
-#include "crt_internal.h"
 
 #define CRT_PROC_NULL (NULL)
 #define CRT_PROC_TYPE_FUNC(type)				\
@@ -208,14 +208,9 @@ crt_proc_d_rank_list_t(crt_proc_t proc, d_rank_list_t **data)
 			D_GOTO(out, rc = 0);
 		}
 
-		D_ALLOC_PTR(rank_list);
+		rank_list = d_rank_list_alloc(nr);
 		if (rank_list == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
-		D_ALLOC_ARRAY(rank_list->rl_ranks, nr);
-		if (rank_list->rl_ranks == NULL) {
-			D_FREE(rank_list);
-			D_GOTO(out, rc = -DER_NOMEM);
-		}
 		buf = hg_proc_save_ptr(proc, nr * sizeof(*buf));
 		memcpy(rank_list->rl_ranks, buf, nr * sizeof(*buf));
 		rank_list->rl_nr = nr;
@@ -400,6 +395,7 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 	hg_class_t		*hg_class;
 	struct crt_context	*ctx;
 	struct crt_hg_context	*hg_ctx;
+	uint64_t		clock_offset;
 	hg_proc_t		hg_proc = HG_PROC_NULL;
 
 	/* Get extra input buffer; if it's null, get regular input buffer */
@@ -438,16 +434,18 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 
 	/* Sync the HLC. Clients never decode requests. */
 	D_ASSERT(crt_is_service());
-	rc = crt_hlc_get_msg(rpc_priv->crp_req_hdr.cch_hlc, NULL /* hlc_out */);
+	rc = crt_hlc_get_msg(rpc_priv->crp_req_hdr.cch_hlc, NULL /* hlc_out */,
+			     &clock_offset);
 	if (rc != 0) {
 		REPORT_HLC_SYNC_ERR("failed to sync HLC for request: opc=%x ts="
-				    DF_U64" from=%u\n",
+				    DF_U64" offset="DF_U64" from=%u\n",
 				    rpc_priv->crp_req_hdr.cch_opc,
 				    rpc_priv->crp_req_hdr.cch_hlc,
+				    clock_offset,
 				    rpc_priv->crp_req_hdr.cch_src_rank);
 		/* Fail all but SWIM requests. */
 		if (!crt_opc_is_swim(rpc_priv->crp_req_hdr.cch_opc))
-			D_GOTO(out, rc);
+			rpc_priv->crp_fail_hlc = 1;
 		rc = 0;
 	}
 
@@ -671,19 +669,25 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 			struct crt_common_hdr *hdr = &rpc_priv->crp_reply_hdr;
 
 			if (crt_is_service()) {
+				uint64_t clock_offset;
+
 				rc = crt_hlc_get_msg(hdr->cch_hlc,
-						     NULL /* hlc_out */);
+						     NULL /* hlc_out */,
+						     &clock_offset);
 				if (rc != 0) {
 					REPORT_HLC_SYNC_ERR("failed to sync "
 							    "HLC for reply: "
 							    "opc=%x ts="DF_U64
+							    " offset="DF_U64
 							    " from=%u\n",
 							    hdr->cch_opc,
 							    hdr->cch_hlc,
+							    clock_offset,
 							    hdr->cch_dst_rank);
 					/* Fail all but SWIM replies. */
 					if (!crt_opc_is_swim(hdr->cch_opc))
-						D_GOTO(out, rc);
+						rpc_priv->crp_fail_hlc = 1;
+
 					rc = 0;
 				}
 			} else {

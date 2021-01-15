@@ -102,6 +102,8 @@ struct crt_grp_priv {
 	 * up to date.
 	 */
 	d_rank_t		 gp_self;
+	/* List of PSR ranks */
+	d_rank_list_t		 *gp_psr_ranks;
 	/* PSR rank in attached group */
 	d_rank_t		 gp_psr_rank;
 	/* PSR phy addr address in attached group */
@@ -404,5 +406,8 @@ bool
 crt_grp_id_identical(crt_group_id_t grp_id_1, crt_group_id_t grp_id_2);
 int crt_grp_config_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank);
 int crt_grp_psr_reload(struct crt_grp_priv *grp_priv);
+
+int
+grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank);
 
 #endif /* __CRT_GROUP_H__ */

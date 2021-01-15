@@ -496,19 +496,28 @@ def get_test_list(tags):
     """
     test_tags = []
     test_list = []
+    # Check if fault injection is enabled ( 0 return status)
+    faults_disabled = time_command(["fault_status"])
     for tag in tags:
         if ".py" in tag:
             # Assume '.py' indicates a test and just add it to the list
             test_list.append(tag)
+            fault_filter = "--filter-by-tags=-faults"
+            if faults_disabled and fault_filter not in test_tags:
+                test_tags.append(fault_filter)
         else:
             # Otherwise it is assumed that this is a tag
-            test_tags.extend(["--filter-by-tags", str(tag)])
+            if faults_disabled:
+                tag = ",".join((tag, "-faults"))
+            test_tags.append("--filter-by-tags={}".format(tag))
 
     # Update the list of tests with any test that match the specified tags.
     # Exclude any specified tests that do not match the specified tags.  If no
     # tags and no specific tests have been specified then all of the functional
     # tests will be added.
     if test_tags or not test_list:
+        if not test_list:
+            test_list = ["./"]
         command = ["avocado", "list", "--paginator=off"]
         for test_tag in test_tags:
             command.append(str(test_tag))
@@ -961,6 +970,8 @@ def clean_logs(test_yaml, args):
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     host_list = get_hosts_from_yaml(test_yaml, args)
     command = "sudo rm -fr {}".format(os.path.join(logs_dir, "*.log*"))
+    # also remove any ABT infos/stacks dumps
+    command += " /tmp/daos_dump*"
     print("Cleaning logs on {}".format(host_list))
     if not spawn_commands(host_list, command):
         print("Error cleaning logs, aborting")
@@ -1009,9 +1020,11 @@ def archive_daos_logs(avocado_logs_dir, test_files, args):
     print("Archiving host logs from {} in {}".format(hosts, destination))
 
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
+    # and any ULTs stacks dumps
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     task = archive_files(
-        destination, hosts, "{}/*.log*".format(logs_dir), True, args)
+        destination, hosts, "/tmp/daos_dump* {}/*.log*".format(logs_dir), True,
+        args)
 
     # Determine if the command completed successfully across all the hosts
     status = 0
@@ -1282,7 +1295,7 @@ def resolve_debuginfo(pkg):
         pkg (str): a package name
 
     Returns:
-        str: the debuginfo package name
+        dict: dictionary of debug package information
 
     """
     import yum      # pylint: disable=import-error,import-outside-toplevel
@@ -1305,8 +1318,7 @@ def resolve_debuginfo(pkg):
             print("Package {} not installed, "
                   "skipping debuginfo".format(pkg))
             return None
-        else:
-            raise
+        raise
 
     return {'name': debug_pkg,
             'version': pkg_data['version'],
@@ -1316,8 +1328,7 @@ def resolve_debuginfo(pkg):
 
 def install_debuginfos():
     """Install debuginfo packages."""
-    install_pkgs = [{'name': 'gdb'},
-                    {'name': 'python-magic'}]
+    install_pkgs = [{'name': 'gdb'}]
 
     cmds = []
 
@@ -1402,6 +1413,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
     """
     import fnmatch  # pylint: disable=import-outside-toplevel
 
+    return_status = True
     this_host = socket.gethostname().split(".")[0]
     host_list = get_hosts_from_yaml(test_yaml, args)
     daos_cores_dir = os.path.join(avocado_logs_dir, "latest", "stacktraces")
@@ -1420,7 +1432,10 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
         "copied=()",
         "for file in /var/tmp/core.*",
         "do if [ -e $file ]",
-        "then if sudo chmod 644 $file && "
+        "then if [ ! -s $file ]",
+        "then ((rc++))",
+        "ls -al $file",
+        "else if sudo chmod 644 $file && "
         "scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
             this_host, daos_cores_dir),
         "then copied+=($file)",
@@ -1432,11 +1447,15 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
         "ls -al $file",
         "fi",
         "fi",
+        "fi",
         "done",
         "echo Copied ${copied[@]:-no files}",
         "exit $rc",
     ]
-    spawn_commands(host_list, "; ".join(commands), timeout=1800)
+    if not spawn_commands(host_list, "; ".join(commands), timeout=1800):
+        # we might have still gotten some core files, so don't return here
+        # but save a False return status for later
+        return_status = False
 
     cores = os.listdir(daos_cores_dir)
 
@@ -1449,63 +1468,60 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
         print(error)
         print("Removing core files to avoid archiving them")
         for corefile in cores:
-            os.remove(corefile)
+            os.remove(os.path.join(daos_cores_dir, corefile))
         return False
 
-    def run_gdb(pattern):
-        """Run a gdb command on all corefiles matching a pattern.
+    for corefile in cores:
+        if not fnmatch.fnmatch(corefile, 'core.*[0-9]'):
+            continue
+        corefile_fqpn = os.path.join(daos_cores_dir, corefile)
+        # can't use the file python magic binding here due to:
+        # https://bugs.astron.com/view.php?id=225, fixed in:
+        # https://github.com/file/file/commit/6faf2eba2b8c65fbac7acd36602500d757614d2f
+        # but not available to us until that is in a released version
+        # revert the commit this comment is in to see use python magic instead
+        try:
+            gdb_output = run_command(["gdb", "-c", corefile_fqpn, "-ex",
+                                      "info proc exe", "-ex",
+                                      "quit"])
 
-        Args:
-            pattern (str): the fnmatch/glob pattern of core files to
-                           run gdb on
-        """
-        import magic    # pylint: disable=import-error
+            last_line = gdb_output.splitlines()[-1]
+            cmd = last_line[7:-1]
+            # assume there are no arguments on cmd
+            find_char = "'"
+            if cmd.find(" ") > -1:
+                # there are arguments on cmd
+                find_char = " "
+            exe_name = cmd[0:cmd.find(find_char)]
+        except RuntimeError:
+            exe_name = None
 
-        for corefile in cores:
-            if not fnmatch.fnmatch(corefile, pattern):
-                continue
-            corefile_fqpn = os.path.join(daos_cores_dir, corefile)
-            exe_magic = magic.open(magic.NONE)
-            exe_magic.load()
-            exe_type = exe_magic.file(corefile_fqpn)
-            exe_name_end = 0
-            if exe_type:
-                exe_name_start = exe_type.find("execfn: '") + 9
-                if exe_name_start > 8:
-                    exe_name_end = exe_type.find("', platform:")
-                else:
-                    exe_name_start = exe_type.find("from '") + 6
-                    if exe_name_start > 5:
-                        exe_name_end = exe_type[exe_name_start:].find(" ") + \
-                                    exe_name_start
-            if exe_name_end:
-                exe_name = exe_type[exe_name_start:exe_name_end]
-                cmd = [
-                    "gdb", "-cd={}".format(daos_cores_dir),
-                    "-ex", "set pagination off",
-                    "-ex", "thread apply all bt full",
-                    "-ex", "detach",
-                    "-ex", "quit",
-                    exe_name, corefile
-                ]
-                stack_trace_file = os.path.join(
-                    daos_cores_dir, "{}.stacktrace".format(corefile))
-                try:
-                    with open(stack_trace_file, "w") as stack_trace:
-                        stack_trace.writelines(get_output(cmd))
-                except IOError as error:
-                    print(
-                        "Error writing {}: {}".format(stack_trace_file, error))
-            else:
-                print(
-                    "Unable to determine executable name from: '{}'\nNot "
-                    "creating stacktrace".format(exe_type))
-            print("Removing {}".format(corefile_fqpn))
-            os.unlink(corefile_fqpn)
+        if exe_name:
+            cmd = [
+                "gdb", "-cd={}".format(daos_cores_dir),
+                "-ex", "set pagination off",
+                "-ex", "thread apply all bt full",
+                "-ex", "detach",
+                "-ex", "quit",
+                exe_name, corefile
+            ]
+            stack_trace_file = os.path.join(
+                daos_cores_dir, "{}.stacktrace".format(corefile))
+            try:
+                with open(stack_trace_file, "w") as stack_trace:
+                    stack_trace.writelines(get_output(cmd))
+            except IOError as error:
+                print("Error writing {}: {}".format(stack_trace_file, error))
+                return_status = False
+        else:
+            print(
+                "Unable to determine executable name from gdb output: '{}'\n"
+                "Not creating stacktrace".format(gdb_output))
+            return_status = False
+        print("Removing {}".format(corefile_fqpn))
+        os.unlink(corefile_fqpn)
 
-    run_gdb('core.*[0-9]')
-
-    return True
+    return return_status
 
 
 def get_test_category(test_file):

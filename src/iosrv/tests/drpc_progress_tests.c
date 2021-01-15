@@ -481,7 +481,7 @@ test_drpc_progress_single_session_success(void **state)
 	/* ULT spawned to deal with the message */
 	assert_non_null(dss_ult_create_func);
 	assert_non_null(dss_ult_create_arg_ptr);
-	assert_int_equal(dss_ult_create_ult_type, DSS_ULT_DRPC_HANDLER);
+	assert_int_equal(dss_ult_create_ult_type, DSS_XS_SYS);
 	assert_int_equal(dss_ult_create_tgt_idx, 0);
 	assert_int_equal(dss_ult_create_stack_size, 0);
 	assert_null(dss_ult_create_ult_ptr); /* self-freeing ULT */

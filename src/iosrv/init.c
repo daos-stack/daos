@@ -63,7 +63,7 @@ static char	       *daos_sysname = DAOS_DEFAULT_SYS_NAME;
 const char	       *dss_storage_path = "/mnt/daos";
 
 /** NVMe config file */
-const char	       *dss_nvme_conf = "/etc/daos_nvme.conf";
+const char	       *dss_nvme_conf;
 
 /** Socket Directory */
 const char	       *dss_socket_dir = "/var/run/daos_server";
@@ -94,6 +94,9 @@ hwloc_obj_t		numa_obj;
 int			dss_num_cores_numa_node;
 /** Module facility bitmask */
 static uint64_t		dss_mod_facs;
+
+/* stream used to dump ABT infos and ULTs stacks */
+static FILE *abt_infos;
 
 d_rank_t
 dss_self_rank(void)
@@ -132,7 +135,7 @@ register_dbtree_classes(void)
 		return rc;
 	}
 
-	rc = dbtree_class_register(DBTREE_CLASS_NV, 0 /* feats */,
+	rc = dbtree_class_register(DBTREE_CLASS_NV, BTR_FEAT_DIRECT_KEY,
 				   &dbtree_nv_ops);
 	if (rc != 0) {
 		D_ERROR("failed to register DBTREE_CLASS_NV: "DF_RC"\n",
@@ -492,14 +495,6 @@ server_init(int argc, char *argv[])
 		goto exit_abt_init;
 
 	D_INFO("Module interface successfully initialized\n");
-	/* load modules.  Split load an init so first call to dlopen
-	 * is from the ioserver to avoid DAOS-4557
-	 */
-	rc = modules_load();
-	if (rc)
-		/* Some modules may have been loaded successfully. */
-		D_GOTO(exit_mod_loaded, rc);
-	D_INFO("Module %s successfully loaded\n", modules);
 
 	/* initialize the network layer */
 	ctx_nr = dss_ctx_nr_get();
@@ -511,6 +506,15 @@ server_init(int argc, char *argv[])
 	D_INFO("Network successfully initialized\n");
 
 	ds_iv_init();
+
+	/* load modules. Split load and init so first call to dlopen()
+	 * is from the ioserver to avoid DAOS-4557
+	 */
+	rc = modules_load();
+	if (rc)
+		/* Some modules may have been loaded successfully. */
+		D_GOTO(exit_mod_loaded, rc);
+	D_INFO("Module %s successfully loaded\n", modules);
 
 	/* init modules */
 	rc = dss_module_init_all(&dss_mod_facs);
@@ -756,7 +760,7 @@ parse(int argc, char **argv)
 			       "instead.\n");
 		case 't':
 			nr = strtoul(optarg, &end, 10);
-			if (end == optarg || nr == ULONG_MAX) {
+			if ((end == optarg) || (nr == ULONG_MAX)) {
 				rc = -DER_INVAL;
 				break;
 			}
@@ -764,7 +768,7 @@ parse(int argc, char **argv)
 			break;
 		case 'x':
 			nr = strtoul(optarg, &end, 10);
-			if (end == optarg || nr == ULONG_MAX) {
+			if ((end == optarg) || (nr == ULONG_MAX)) {
 				rc = -DER_INVAL;
 				break;
 			}
@@ -772,7 +776,7 @@ parse(int argc, char **argv)
 			break;
 		case 'f':
 			nr = strtoul(optarg, &end, 10);
-			if (end == optarg || nr == ULONG_MAX) {
+			if ((end == optarg) || (nr == ULONG_MAX)) {
 				rc = -DER_INVAL;
 				break;
 			}
@@ -805,7 +809,7 @@ parse(int argc, char **argv)
 			break;
 		case 'r':
 			nr = strtoul(optarg, &end, 10);
-			if (end == optarg || nr == ULONG_MAX) {
+			if ((end == optarg) || (nr == ULONG_MAX)) {
 				rc = -DER_INVAL;
 				break;
 			}
@@ -979,15 +983,76 @@ main(int argc, char **argv)
 			break;
 		}
 
-		/* use this iosrv main thread's context to dump Argobot internal
-		 * infos upon SIGUSR1
+		/* open specific file to dump ABT infos and ULTs stacks */
+		if (sig == SIGUSR1 || sig == SIGUSR2) {
+			struct timeval tv;
+			struct tm *tm = NULL;
+
+			rc = gettimeofday(&tv, NULL);
+			if (rc == 0)
+				tm = localtime(&tv.tv_sec);
+			else
+				D_ERROR("failure to gettimeofday(): %s (%d)\n",
+					strerror(errno), errno);
+
+			 if (abt_infos == NULL) {
+				/* filename format is
+				 * "/tmp/daos_dump_YYYYMMDD_hh_mm.txt"
+				 */
+				char name[34] = "/tmp/daos_dump.txt";
+
+				if (rc != -1 && tm != NULL)
+					snprintf(name, 34,
+						 "/tmp/daos_dump_%04d%02d%02d_%02d_%02d.txt",
+						 tm->tm_year + 1900,
+						 tm->tm_mon + 1, tm->tm_mday,
+						 tm->tm_hour, tm->tm_min);
+
+				abt_infos = fopen(name, "a");
+				if (abt_infos == NULL) {
+					D_ERROR("failed to open file to dump ABT infos and ULTs stacks: %s (%d)\n",
+						strerror(errno), errno);
+					abt_infos = stderr;
+				}
+			}
+
+			/* print header msg with date */
+			fprintf(abt_infos,
+				"=== Dump of ABT infos and ULTs stacks in %s mode (",
+				sig == SIGUSR1 ? "unattended" : "attended");
+			if (rc == -1 || tm == NULL)
+				fprintf(abt_infos, "time unavailable");
+			else
+				fprintf(abt_infos,
+					"%04d/%02d/%02d-%02d:%02d:%02d.%02ld",
+					tm->tm_year + 1900, tm->tm_mon + 1,
+					tm->tm_mday, tm->tm_hour, tm->tm_min,
+					tm->tm_sec,
+					(long int)tv.tv_usec / 10000);
+			fprintf(abt_infos, ")\n");
+		}
+
+		/* use this iosrv main thread's context to dump Argobots
+		 * internal infos and ULTs stacks without internal synchro
 		 */
 		if (sig == SIGUSR1) {
-			dss_dump_ABT_state();
+			D_INFO("got SIGUSR1, dumping Argobots infos and ULTs stacks\n");
+			dss_dump_ABT_state(abt_infos);
 			continue;
 		}
 
-		/* SIGINT/SIGTERM/SIGUSR2 cause server shutdown */
+		/* trigger dump of all Argobots ULTs stacks with internal
+		 * synchro (timeout of 10s)
+		 */
+		if (sig == SIGUSR2) {
+			D_INFO("got SIGUSR2, attempting to trigger dump of all Argobots ULTs stacks\n");
+			ABT_info_trigger_print_all_thread_stacks(abt_infos,
+								 10.0, NULL,
+								 NULL);
+			continue;
+		}
+
+		/* SIGINT/SIGTERM cause server shutdown */
 		break;
 	}
 

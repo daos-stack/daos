@@ -366,7 +366,7 @@ oi_iter_fini(struct vos_iterator *iter)
 
 	oiter = iter2oiter(iter);
 
-	if (!daos_handle_is_inval(oiter->oit_hdl)) {
+	if (daos_handle_is_valid(oiter->oit_hdl)) {
 		rc = dbtree_iter_finish(oiter->oit_hdl);
 		if (rc)
 			D_ERROR("oid_iter_fini failed:"DF_RC"\n", DP_RC(rc));
@@ -485,8 +485,8 @@ oi_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	oiter->oit_flags = param->ip_flags;
 	if (param->ip_flags & VOS_IT_FOR_PURGE)
 		oiter->oit_iter.it_for_purge = 1;
-	if (param->ip_flags & VOS_IT_FOR_REBUILD)
-		oiter->oit_iter.it_for_rebuild = 1;
+	if (param->ip_flags & VOS_IT_FOR_MIGRATION)
+		oiter->oit_iter.it_for_migration = 1;
 
 	rc = dbtree_iter_prepare(cont->vc_btr_hdl, 0, &oiter->oit_hdl);
 	if (rc)
