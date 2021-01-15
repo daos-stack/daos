@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@
 bool crt_initialized(void);
 
 /** crt_register.c */
-int crt_opc_map_create(unsigned int bits);
+int crt_opc_map_create(void);
 void crt_opc_map_destroy(struct crt_opc_map *map);
 struct crt_opc_info *crt_opc_lookup(struct crt_opc_map *map, crt_opcode_t opc,
 				    int locked);

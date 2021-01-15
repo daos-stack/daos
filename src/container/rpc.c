@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -115,7 +115,7 @@ static struct crt_proto_rpc_format cont_proto_rpc_fmt[] = {
 #undef X
 
 struct crt_proto_format cont_proto_fmt = {
-	.cpf_name  = "cont-proto",
+	.cpf_name  = "cont",
 	.cpf_ver   = DAOS_CONT_VERSION,
 	.cpf_count = ARRAY_SIZE(cont_proto_rpc_fmt),
 	.cpf_prf   = cont_proto_rpc_fmt,

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -143,18 +143,6 @@ daos_rpc_tag(int req_type, int tgt_idx)
 	};
 }
 
-static inline struct daos_rpc_handler *
-daos_rpc_handler_find(struct daos_rpc_handler *handlers, crt_opcode_t opc)
-{
-	struct daos_rpc_handler *handler;
-
-	for (handler = handlers; handler->dr_opc != 0; handler++) {
-		if (handler->dr_opc == opc)
-			return handler;
-	}
-	return NULL;
-}
-
 /**
  * Register RPCs for both clients and servers.
  *
@@ -174,6 +162,8 @@ daos_rpc_register(struct crt_proto_format *proto_fmt, uint32_t cli_count,
 		  struct daos_rpc_handler *handlers, int mod_id)
 {
 	uint32_t i;
+
+	/* TODO: mod_in is unused */
 
 	if (proto_fmt == NULL)
 		return 0;

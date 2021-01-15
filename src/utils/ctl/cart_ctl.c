@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -96,11 +96,9 @@ static int cmd2opcode(enum cmd_t cmd)
 	return -1;
 }
 
-
 struct cb_info {
 	enum cmd_t cmd;
 };
-
 
 struct ctl_g {
 	enum cmd_t			 cg_cmd_code;
@@ -445,7 +443,7 @@ ctl_cli_cb(const struct crt_cb_info *cb_info)
 	} else if (info->cmd == CMD_LOG_SET) {
 		out_log_set_args = crt_reply_get(cb_info->cci_rpc);
 		fprintf(stdout, "rc: %d (%s)\n", out_log_set_args->rc,
-				d_errstr(out_log_set_args->rc));
+			d_errstr(out_log_set_args->rc));
 	} else if (info->cmd == CMD_LOG_ADD_MSG) {
 	} else if (cb_info->cci_rc == 0) {
 		fprintf(stdout, "group: %s, rank: %d\n",
@@ -472,9 +470,8 @@ ctl_cli_cb(const struct crt_cb_info *cb_info)
 			out_get_host_args = crt_reply_get(cb_info->cci_rpc);
 
 			fprintf(stdout, "hostname: %s\n",
-			    (char *)out_get_host_args->cgh_hostname.iov_buf);
+				(char *)out_get_host_args->cgh_hostname.iov_buf);
 		} else if (info->cmd == CMD_GET_PID) {
-
 			out_get_pid_args = crt_reply_get(cb_info->cci_rpc);
 
 			fprintf(stdout, "pid: %d\n",
@@ -557,6 +554,12 @@ ctl_fill_rpc_args(crt_rpc_t *rpc_req, int index)
 }
 
 static int
+ctl_register_fi()
+{
+	return crt_register_proto_fi();
+}
+
+static int
 ctl_init()
 {
 	int			 i;
@@ -571,12 +574,13 @@ ctl_init()
 
 	if (ctl_gdata.cg_save_cfg) {
 		rc = crt_group_config_path_set(ctl_gdata.cg_cfg_path);
-		D_ASSERTF(rc == 0, "crt_group_config_path_set failed %d\n", rc);
+		D_ASSERTF(rc == 0, "crt_group_config_path_set() failed, "
+			DF_RC"\n", DP_RC(rc));
 	}
 
 	tc_cli_start_basic("crt_ctl", ctl_gdata.cg_group_name, &grp,
-			    &rank_list, &ctl_gdata.cg_crt_ctx,
-			    &ctl_gdata.cg_tid, 1, true, NULL);
+			   &rank_list, &ctl_gdata.cg_crt_ctx,
+			   &ctl_gdata.cg_tid, 1, true, NULL);
 
 	rc = sem_init(&ctl_gdata.cg_num_reply, 0, 0);
 	D_ASSERTF(rc == 0, "Could not initialize semaphore. rc %d\n", rc);
@@ -599,6 +603,12 @@ ctl_init()
 	ctl_gdata.cg_target_group = grp;
 
 	info.cmd = ctl_gdata.cg_cmd_code;
+
+	if (ctl_gdata.cg_cmd_code == CMD_SET_FI_ATTR) {
+		rc = ctl_register_fi();
+		if (rc != -DER_SUCCESS)
+			return rc;
+	}
 
 	if (ctl_gdata.cg_num_ranks == -1) {
 		num_ranks = rank_list->rl_nr;
@@ -690,6 +700,8 @@ main(int argc, char **argv)
 {
 	int		rc = 0;
 
+	d_log_init();
+
 	rc = parse_args(argc, argv);
 	D_ASSERTF(rc == 0, "parse_args() failed. rc %d\n", rc);
 
@@ -697,7 +709,11 @@ main(int argc, char **argv)
 	tc_test_init(0, 40, false, false);
 
 	rc = ctl_init();
-	D_ASSERTF(rc == 0, "ctl_init() failed, rc %d\n", rc);
+	if (rc)
+		D_ERROR("ctl_init() failed, rc "DF_RC"\n", DP_RC(rc));
 
-	return rc;
+	d_log_fini();
+	if (rc != 0)
+		return 1;
+	return 0;
 }

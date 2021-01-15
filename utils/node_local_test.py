@@ -473,6 +473,8 @@ class DaosServer():
                 self._check_timing("stop", start, max_stop_time)
             except NLTestTimeout as e:
                 print('Failed to stop: {}'.format(e))
+                if time.time() - start > 30:
+                    raise
         print('Server stopped in {:.2f} seconds'.format(time.time() - start))
 
         # daos_server does not correctly shutdown daos_io_server yet
@@ -873,10 +875,10 @@ def run_daos_cmd(conf, cmd, valgrind=True, fi_file=None, fi_valgrind=False):
     log_file = tempfile.NamedTemporaryFile(prefix=prefix,
                                            suffix='.log',
                                            delete=False)
-
+    cmd_env['D_LOG_FILE'] = log_file.name
     if fi_file:
         cmd_env['D_FI_CONFIG'] = fi_file
-    cmd_env['D_LOG_FILE'] = log_file.name
+
     if conf.agent_dir:
         cmd_env['DAOS_AGENT_DRPC_DIR'] = conf.agent_dir
 
@@ -1253,6 +1255,68 @@ def log_test(conf,
         raise NLTestNoFunction('dfuse_write')
 
     return lto.fi_location
+
+def set_server_fi(server):
+    """Run the client code to set server params"""
+
+    cmd_env = get_base_env()
+
+    cmd_env['OFI_INTERFACE'] = 'eth0'
+    cmd_env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
+    vh = ValgrindHelper()
+
+    system_name = 'daos_server'
+
+    exec_cmd = vh.get_cmd_prefix()
+
+    agent_bin = os.path.join(server.conf['PREFIX'], 'bin', 'daos_agent')
+
+    addr_dir = tempfile.TemporaryDirectory(prefix='dnt_addr_',)
+    addr_file = os.path.join(addr_dir.name,
+                             '{}.attach_info_tmp'.format(system_name))
+
+    agent_cmd = [agent_bin,
+                 '-i',
+                 '-s',
+                 server.agent_dir,
+                 'dump-attachinfo',
+                 '-o',
+                 addr_file]
+
+    rc = subprocess.run(agent_cmd, env=cmd_env)
+    print(rc)
+    assert rc.returncode == 0
+
+    cmd = ['set_fi_attr',
+           '--cfg_path',
+           addr_dir.name,
+           '--group-name',
+           'daos_server',
+           '--rank',
+           '0',
+           '--attr',
+           '0,0,0,0,0']
+
+    exec_cmd.append(os.path.join(server.conf['PREFIX'], 'bin', 'cart_ctl'))
+    exec_cmd.extend(cmd)
+
+    prefix = 'dnt_crt_ctl_{}_'.format(get_inc_id())
+    log_file = tempfile.NamedTemporaryFile(prefix=prefix,
+                                           suffix='.log',
+                                           delete=False)
+
+    cmd_env['D_LOG_FILE'] = log_file.name
+    cmd_env['DAOS_AGENT_DRPC_DIR'] = server.agent_dir
+
+    rc = subprocess.run(exec_cmd,
+                        env=cmd_env,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE)
+    print(rc)
+    vh.convert_xml()
+    log_test(server.conf, log_file.name)
+    assert rc.returncode == 0
+    return False # fatal_errors
 
 def create_and_read_via_il(dfuse, path):
     """Create file in dir, write to and read
@@ -1767,6 +1831,8 @@ def main():
         test_pydaos_kv(server, conf)
     elif args.mode == 'overlay':
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
+    elif args.mode == 'set-fi':
+        fatal_errors.add_result(set_server_fi(server))
     elif args.mode == 'fi':
         fatal_errors.add_result(test_alloc_fail(server, wf, conf))
     elif args.mode == 'all':
@@ -1785,6 +1851,7 @@ def main():
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
         fatal_errors.add_result(run_posix_tests(server, conf))
+        fatal_errors.add_result(set_server_fi(server))
 
     if server.stop() != 0:
         fatal_errors.fail()

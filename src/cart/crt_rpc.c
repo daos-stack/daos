@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -216,18 +216,17 @@ char
 		return "SWIM";
 
 	switch (opc) {
-	CRT_INTERNAL_RPCS_LIST
-	CRT_FI_RPCS_LIST
-	default:
-		return "DAOS";
+		CRT_INTERNAL_RPCS_LIST
+		CRT_FI_RPCS_LIST
 	}
+	return "DAOS";
 }
 
 #undef X
 
 /* CRT RPC related APIs or internal functions */
 int
-crt_internal_rpc_register(void)
+crt_internal_rpc_register(bool server)
 {
 	struct crt_proto_format	cpf;
 	int			rc;
@@ -244,6 +243,28 @@ crt_internal_rpc_register(void)
 			DP_RC(rc));
 		return rc;
 	}
+
+	if (!server)
+		return rc;
+
+	cpf.cpf_name  = "fault-injection";
+	cpf.cpf_ver   = CRT_PROTO_FI_VERSION;
+	cpf.cpf_count = ARRAY_SIZE(crt_fi_rpcs);
+	cpf.cpf_prf   = crt_fi_rpcs;
+	cpf.cpf_base  = CRT_OPC_FI_BASE;
+
+	rc = crt_proto_register(&cpf);
+	if (rc != 0)
+		D_ERROR("crt_proto_register() failed, " DF_RC "\n", DP_RC(rc));
+
+	return rc;
+}
+
+int
+crt_register_proto_fi()
+{
+	struct crt_proto_format	cpf;
+	int			rc;
 
 	cpf.cpf_name  = "fault-injection";
 	cpf.cpf_ver   = CRT_PROTO_FI_VERSION;

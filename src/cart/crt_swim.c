@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@
 #include "crt_internal.h"
 #include "swim/swim_internal.h"
 
-#define CRT_OPC_SWIM_VERSION	0
+#define CRT_OPC_SWIM_VERSION	1
 #define CRT_SWIM_FAIL_BASE	((CRT_OPC_SWIM_PROTO >> 16) | \
 				 (CRT_OPC_SWIM_VERSION << 4))
 #define CRT_SWIM_FAIL_DROP_RPC	(CRT_SWIM_FAIL_BASE | 0x1)	/* id: 65025 */
@@ -129,7 +129,7 @@ static struct crt_proto_rpc_format crt_swim_proto_rpc_fmt[] = {
 };
 
 static struct crt_proto_format crt_swim_proto_fmt = {
-	.cpf_name	= "swim-proto",
+	.cpf_name	= "swim",
 	.cpf_ver	= CRT_OPC_SWIM_VERSION,
 	.cpf_count	= ARRAY_SIZE(crt_swim_proto_rpc_fmt),
 	.cpf_prf	= crt_swim_proto_rpc_fmt,
@@ -876,8 +876,7 @@ out_check_self:
 out_unlock:
 	D_SPIN_UNLOCK(&csm->csm_lock);
 out:
-	if (cst != NULL)
-		D_FREE(cst);
+	D_FREE(cst);
 
 	if (rc && rc != -DER_ALREADY) {
 		if (rank_in_list)

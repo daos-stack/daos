@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -99,7 +99,6 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
  */
 int
 crt_context_create(crt_context_t *crt_ctx);
-
 
 /**
  * Set the timeout value for all RPC requests created on the specified context.
@@ -620,7 +619,7 @@ crt_ep_abort(crt_endpoint_t *ep);
 	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_ARRAY, CRT_GEN_GET_KIND(seq)),	\
 		struct {						\
 			uint64_t		 ca_count;		\
-			CRT_GEN_GET_TYPE(seq)	*ca_arrays;		\
+			CRT_GEN_GET_TYPE(seq) * ca_arrays;		\
 		},							\
 		CRT_GEN_GET_TYPE(seq))					\
 	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_PTR, CRT_GEN_GET_KIND(seq)),	\
@@ -628,7 +627,7 @@ crt_ep_abort(crt_endpoint_t *ep);
 
 #define CRT_GEN_STRUCT(struct_type_name, seq)				\
 	struct struct_type_name {					\
-		BOOST_PP_SEQ_FOR_EACH(CRT_GEN_STRUCT_FIELD, , seq)	\
+		BOOST_PP_SEQ_FOR_EACH(CRT_GEN_STRUCT_FIELD,, seq)	\
 	};
 
 /* convert constructed name into proper name */
@@ -643,8 +642,8 @@ crt_ep_abort(crt_endpoint_t *ep);
 	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_ARRAY, CRT_GEN_GET_KIND(seq)),	\
 	{								\
 		uint64_t count = ptr->CRT_GEN_GET_NAME(seq).ca_count;	\
-		CRT_GEN_GET_TYPE(seq)** e_ptrp = &ptr->CRT_GEN_GET_NAME(seq).ca_arrays; \
-		CRT_GEN_GET_TYPE(seq)* e_ptr = ptr->CRT_GEN_GET_NAME(seq).ca_arrays; \
+		CRT_GEN_GET_TYPE(seq) * *e_ptrp = &ptr->CRT_GEN_GET_NAME(seq).ca_arrays; \
+		CRT_GEN_GET_TYPE(seq) * e_ptr = ptr->CRT_GEN_GET_NAME(seq).ca_arrays; \
 		int i;							\
 		crt_proc_op_t proc_op;					\
 		rc = crt_proc_get_op(proc, &proc_op);			\
@@ -680,7 +679,7 @@ crt_ep_abort(crt_endpoint_t *ep);
 	rc = crt_proc_memcpy(proc, &ptr->CRT_GEN_GET_NAME(seq),		\
 			     sizeof(CRT_GEN_GET_TYPE(seq)));		\
 	if (rc)								\
-		D_GOTO(out, rc);,					\
+		D_GOTO(out, rc); ,					\
 	rc = CRT_GEN_GET_FUNC(seq)(proc, &ptr->CRT_GEN_GET_NAME(seq));	\
 	if (rc)								\
 		D_GOTO(out, rc);					\
@@ -693,15 +692,15 @@ crt_ep_abort(crt_endpoint_t *ep);
 		if (proc == NULL || ptr == NULL)			\
 			D_GOTO(out, rc = -DER_INVAL);			\
 		BOOST_PP_SEQ_FOR_EACH(CRT_GEN_PROC_FIELD, ptr, seq)	\
-	out:								\
+out :									\
 		return rc;						\
 	}
 
 #define CRT_RPC_DECLARE(rpc_name, fields_in, fields_out)		\
 	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in),			\
-		CRT_GEN_STRUCT(rpc_name##_in, fields_in), )		\
+		CRT_GEN_STRUCT(rpc_name##_in, fields_in),)		\
 	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_out),			\
-		CRT_GEN_STRUCT(rpc_name##_out, fields_out), )		\
+		CRT_GEN_STRUCT(rpc_name##_out, fields_out),)		\
 	extern struct crt_req_format CQF_##rpc_name;
 
 /* warning was introduced in version 8 of GCC */
@@ -714,9 +713,9 @@ crt_ep_abort(crt_endpoint_t *ep);
 
 #define CRT_RPC_DEFINE(rpc_name, fields_in, fields_out)			\
 	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in),			\
-		CRT_GEN_PROC_FUNC(rpc_name##_in, fields_in), )		\
+		CRT_GEN_PROC_FUNC(rpc_name##_in, fields_in),)		\
 	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_out),			\
-		CRT_GEN_PROC_FUNC(rpc_name##_out, fields_out), )	\
+		CRT_GEN_PROC_FUNC(rpc_name##_out, fields_out),)		\
 	_Pragma("GCC diagnostic push")					\
 	CRT_DISABLE_SIZEOF_POINTER_DIV					\
 	struct crt_req_format CQF_##rpc_name = {			\
@@ -1194,7 +1193,6 @@ crt_group_config_remove(crt_group_t *grp);
 int
 crt_group_detach(crt_group_t *attached_grp);
 
-
 /**
  * Convert a primary group rank to a local subgroup rank. Given a primary group
  * rank \p rank_in, find its rank number \p rank_out within a sub-group \p
@@ -1614,7 +1612,6 @@ crt_register_event_cb(crt_event_cb event_handler, void *arg);
 int
 crt_unregister_event_cb(crt_event_cb event_handler, void *arg);
 
-
 /**
  * A protocol is a set of RPCs. A protocol has a base opcode and a version,
  * member RPCs have opcodes that are contiguous numbers starting from
@@ -1651,7 +1648,6 @@ crt_unregister_event_cb(crt_event_cb event_handler, void *arg);
  * 3) The client registers MY_BASE_OPC with version number MY_VER, then starts
  *    sending RPCs using it's member opcodes.
  */
-
 
 /**
  * 1) define crf for each member RPC. my_rpc_crf_1, my_rpc_crf_2
@@ -1725,6 +1721,8 @@ int
 crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
 		uint32_t *ver, int count, crt_proto_query_cb_t cb, void *arg);
 
+int
+crt_register_proto_fi();
 
 /**
  * Set self rank.
@@ -1794,7 +1792,6 @@ crt_group_rank_remove(crt_group_t *group, d_rank_t rank);
  *                              on failure.
  */
 int crt_self_uri_get(int tag, char **uri);
-
 
 /**
  * Retrieve group information containing ranks and associated uris
@@ -1899,7 +1896,7 @@ int crt_group_psrs_set(crt_group_t *grp, d_rank_list_t *rank_list);
  *                              on failure.
  */
 int crt_group_primary_rank_add(crt_context_t ctx, crt_group_t *grp,
-			d_rank_t primary_rank, char *uri);
+			       d_rank_t primary_rank, char *uri);
 
 /**
  * Add rank to the specified secondary group.
@@ -1912,7 +1909,7 @@ int crt_group_primary_rank_add(crt_context_t ctx, crt_group_t *grp,
  *                              on failure.
  */
 int crt_group_secondary_rank_add(crt_group_t *grp, d_rank_t secondary_rank,
-				d_rank_t primary_rank);
+				 d_rank_t primary_rank);
 /**
  * Create a secondary group.
  *
@@ -1926,8 +1923,8 @@ int crt_group_secondary_rank_add(crt_group_t *grp, d_rank_t secondary_rank,
  *                               failure.
  */
 int crt_group_secondary_create(crt_group_id_t grp_name,
-			crt_group_t *primary_grp, d_rank_list_t *ranks,
-			crt_group_t **ret_grp);
+			       crt_group_t *primary_grp, d_rank_list_t *ranks,
+			       crt_group_t **ret_grp);
 
 /**
  * Destroy a secondary group.
@@ -1938,7 +1935,6 @@ int crt_group_secondary_create(crt_group_id_t grp_name,
  *                               failure.
  */
 int crt_group_secondary_destroy(crt_group_t *grp);
-
 
 /**
  * Perform a primary group modification in an atomic fashion based on the
@@ -1982,8 +1978,8 @@ int crt_group_secondary_destroy(crt_group_t *grp);
  * etc...
  */
 int crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs,
-			int num_ctxs, d_rank_list_t *ranks, char **uris,
-			crt_group_mod_op_t op, uint32_t version);
+			     int num_ctxs, d_rank_list_t *ranks, char **uris,
+			     crt_group_mod_op_t op, uint32_t version);
 
 /**
  * Perform a secondary group modification in an atomic fashion based on the
@@ -2000,8 +1996,8 @@ int crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs,
  *                               failure.
  */
 int crt_group_secondary_modify(crt_group_t *grp, d_rank_list_t *sec_ranks,
-			d_rank_list_t *prim_ranks, crt_group_mod_op_t op,
-			uint32_t version);
+			       d_rank_list_t *prim_ranks, crt_group_mod_op_t op,
+			       uint32_t version);
 
 /**
  * Initialize swim on the specified context index.

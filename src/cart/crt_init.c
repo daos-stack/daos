@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,7 +77,6 @@ mem_pin_workaround(void)
 exit:
 	return crt_rc;
 }
-
 
 /* first step init - for initializing crt_gdata */
 static int data_init(int server, crt_init_options_t *opt)
@@ -230,9 +229,9 @@ crt_plugin_init(void)
 
 	crt_plugin_gdata.cpg_timeout_cbs_old = NULL;
 	D_ALLOC_ARRAY(cbs_timeout, cbs_size);
-	if (cbs_timeout == NULL) {
+	if (cbs_timeout == NULL)
 		D_GOTO(out_destroy_prog, rc = -DER_NOMEM);
-	}
+
 	crt_plugin_gdata.cpg_timeout_size = cbs_size;
 	crt_plugin_gdata.cpg_timeout_cbs  = cbs_timeout;
 
@@ -432,20 +431,20 @@ do_init:
 			rc = crt_na_ofi_config_init();
 			if (rc != 0) {
 				D_ERROR("crt_na_ofi_config_init() failed, "
-					DF_RC "\n", DP_RC(rc));
+					DF_RC"\n", DP_RC(rc));
 				D_GOTO(out, rc);
 			}
 		}
 
 		rc = crt_hg_init();
 		if (rc != 0) {
-			D_ERROR("crt_hg_init() failed, " DF_RC "\n", DP_RC(rc));
+			D_ERROR("crt_hg_init() failed, "DF_RC"\n", DP_RC(rc));
 			D_GOTO(cleanup, rc);
 		}
 
 		rc = crt_grp_init(grpid);
 		if (rc != 0) {
-			D_ERROR("crt_grp_init() failed, " DF_RC "\n",
+			D_ERROR("crt_grp_init() failed, "DF_RC"\n",
 				DP_RC(rc));
 			D_GOTO(cleanup, rc);
 		}
@@ -453,7 +452,7 @@ do_init:
 		if (crt_plugin_gdata.cpg_inited == 0) {
 			rc = crt_plugin_init();
 			if (rc != 0) {
-				D_ERROR("crt_plugin_init() failed, " DF_RC "\n",
+				D_ERROR("crt_plugin_init() failed, "DF_RC"\n",
 					DP_RC(rc));
 				D_GOTO(cleanup, rc);
 			}
@@ -461,13 +460,20 @@ do_init:
 
 		crt_self_test_init();
 
-		rc = crt_opc_map_create(CRT_OPC_MAP_BITS);
+		rc = crt_opc_map_create();
 		if (rc != 0) {
-			D_ERROR("crt_opc_map_create() failed, " DF_RC "\n",
+			D_ERROR("crt_opc_map_create() failed, "DF_RC"\n",
 				DP_RC(rc));
-			crt_self_test_fini();
-			D_GOTO(cleanup, rc);
+			D_GOTO(self_test, rc);
 		}
+
+		rc = crt_internal_rpc_register(server);
+		if (rc != 0) {
+			D_ERROR("crt_internal_rpc_register() failed, "DF_RC"\n",
+				DP_RC(rc));
+			D_GOTO(self_test, rc);
+		}
+
 		D_ASSERT(crt_gdata.cg_opc_map != NULL);
 
 		crt_gdata.cg_inited = 1;
@@ -483,6 +489,9 @@ do_init:
 	crt_gdata.cg_refcount++;
 
 	D_GOTO(unlock, rc);
+
+self_test:
+	crt_self_test_fini();
 
 cleanup:
 	crt_gdata.cg_inited = 0;
@@ -500,7 +509,7 @@ unlock:
 
 out:
 	if (rc != 0) {
-		D_ERROR("failed, " DF_RC "\n", DP_RC(rc));
+		D_ERROR("failed, "DF_RC"\n", DP_RC(rc));
 		d_fault_inject_fini();
 		d_log_fini();
 	}
@@ -723,9 +732,8 @@ int crt_na_ofi_config_init(void)
 	}
 
 	D_STRNDUP(crt_na_ofi_conf.noc_domain, domain, 64);
-	if (!crt_na_ofi_conf.noc_domain) {
+	if (!crt_na_ofi_conf.noc_domain)
 		D_GOTO(out, rc = -DER_NOMEM);
-	}
 
 	rc = getifaddrs(&if_addrs);
 	if (rc != 0) {
@@ -788,7 +796,7 @@ int crt_na_ofi_config_init(void)
 			crt_port_range_verify(port);
 
 			if (crt_gdata.cg_na_plugin == CRT_NA_OFI_PSM2)
-				port = (uint16_t) port << 8;
+				port = (uint16_t)port << 8;
 			D_DEBUG(DB_ALL, "OFI_PORT %d, using it as service "
 					"port.\n", port);
 		}
