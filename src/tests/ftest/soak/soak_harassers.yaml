@@ -100,6 +100,7 @@ soak_harassers:
     joblist:
         - ior_harasser
         - fio_harasser
+        - daos_racer
     harasserlist:
         - snapshot
         - exclude_reintegrate
@@ -152,6 +153,8 @@ fio_harasser:
     rw:
         - 'rw'
         - 'randrw'
+daos_racer:
+    runtime: 120
 dfuse:
     mount_dir: "/tmp/daos_dfuse/"
     disable_direct_io: True
