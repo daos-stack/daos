@@ -176,7 +176,7 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 	rc = crt_reply_send(rpc_req);
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
 
-	DBG_PRINT("tier1 test_srver sent swim_status reply," 
+	DBG_PRINT("tier1 test_srver sent swim_status reply,"
 		  "e_reply->bool_val: %d.\n",
 		  e_reply->bool_val);
 }
@@ -209,8 +209,8 @@ test_ping_delay_handler(crt_rpc_t *rpc_req)
 	rc = crt_reply_send(rpc_req);
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
 
-	DBG_PRINT("tier1 test_srver sent checkin reply, ret: %d, \
-			 room_no: %d.\n", p_reply->ret, p_reply->room_no);
+	DBG_PRINT("tier1 test_srver sent checkin reply, ret: %d, "
+		   "room_no: %d.\n", p_reply->ret, p_reply->room_no);
 }
 
 static void
@@ -264,9 +264,10 @@ client_cb_common(const struct crt_cb_info *cb_info)
 			break;
 		}
 		DBG_PRINT("swim_status result - rank: %d, exp_status: %d, "
-					 "result: %d.\n",
-					 swim_status_rpc_req_input->rank, swim_status_rpc_req_input->exp_status,
-					 swim_status_rpc_req_output->bool_val);
+			  "result: %d.\n",
+			  swim_status_rpc_req_input->rank,
+			  swim_status_rpc_req_input->exp_status,
+			  swim_status_rpc_req_output->bool_val);
 		sem_post(&test_g.t_token_to_proceed);
 		D_ASSERT(swim_status_rpc_req_output->bool_val == true);
 		break;
@@ -464,8 +465,8 @@ parse_verify_swim_status_arg(char *source)
 				strcpy(exp_status, cursorCopy +
 				       groupArray[g].rm_so);
 
-				/* "d(ead)?"=1, a(live)?=0 as 
-				 *   specified in crt_event_type:
+				/* "d(ead)?"=1, a(live)?=0 as
+				 * specified in crt_event_type:
 				 *
 				 * src/include/cart/api.h
 				 * enum crt_event_type {
