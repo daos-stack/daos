@@ -79,7 +79,6 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 	evt->type = (uint32_t)type;
 	evt->severity = (uint32_t)sev;
 	evt->proc_id = (uint64_t)getpid();
-	dmi = get_module_info();
 	if (dmi != NULL)
 		evt->thread_id = (uint64_t)dmi->dmi_xs_id;
 	else
