@@ -22,7 +22,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import ctypes
-import uuid
 import time
 
 from avocado import fail_on
@@ -182,7 +181,7 @@ class OSAUtils(IorTestBase):
         self.obj.close()
         self.container.close()
 
-    def add_container(self, pool):
+    def add_cont(self, pool):
         """Create a container and use it for IOR
 
         Args:
@@ -226,8 +225,7 @@ class OSAUtils(IorTestBase):
 
         # Define the job manager for the IOR command
         self.job_manager = Mpirun(ior_cmd, mpitype="mpich")
-        key = "".join([oclass, api, str(test[2])])
-        self.add_container(self.pool)
+        self.add_cont(self.pool)
         self.job_manager.job.dfs_cont.update(self.container.uuid)
         env = ior_cmd.get_default_env(str(self.job_manager))
         self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
