@@ -92,7 +92,6 @@ class FindCmd(DfuseTestBase):
             "subdirs_per_node", '/run/find_cmd/*')
         files_per_node = self.params.get("files_per_node", '/run/find_cmd/*')
         needles = self.params.get("needles", '/run/find_cmd/*')
-
         temp_dfs_path = ""
 
         dfuses = list()
