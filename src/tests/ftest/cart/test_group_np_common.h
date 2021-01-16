@@ -549,6 +549,7 @@ test_parse_args(int argc, char **argv)
 {
 	int				option_index = 0;
 	int				rc = 0;
+	int				ss;
 	struct option			long_options[] = {
 		{"name", required_argument, 0, 'n'},
 		{"attach_to", required_argument, 0, 'a'},
@@ -630,11 +631,12 @@ test_parse_args(int argc, char **argv)
 			test_g.t_use_cfg = atoi(optarg);
 			break;
 		case 'v':
-
 			vss = parse_verify_swim_status_arg(optarg);
-			test_g.t_verify_swim_status.rank				= vss.rank;
-			test_g.t_verify_swim_status.swim_status = vss.swim_status;
-
+			test_g.t_verify_swim_status.rank	= vss.rank;
+			
+			/* use short name to stay under 80-char width */
+			ss = vss.swim_status;
+			test_g.t_verify_swim_status.swim_status = ss;
 			break;
 		case 'g':
 			test_g.t_get_swim_status = true;
