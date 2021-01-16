@@ -100,6 +100,3 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(TestWithoutServers):
 
         # --rank 0,1 --shut_only"
         self._launch_cmd_at_index(5, srv_rtn)
-
-if __name__ == "__main__":
-    main()

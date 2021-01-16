@@ -633,7 +633,7 @@ test_parse_args(int argc, char **argv)
 		case 'v':
 			vss = parse_verify_swim_status_arg(optarg);
 			test_g.t_verify_swim_status.rank	= vss.rank;
-			
+
 			/* use short name to stay under 80-char width */
 			ss = vss.swim_status;
 			test_g.t_verify_swim_status.swim_status = ss;
