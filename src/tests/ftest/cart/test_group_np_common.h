@@ -176,7 +176,8 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 	rc = crt_reply_send(rpc_req);
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
 
-	DBG_PRINT("tier1 test_srver sent swim_status reply, e_reply->bool_val: %d.\n",
+	DBG_PRINT("tier1 test_srver sent swim_status reply," 
+		  "e_reply->bool_val: %d.\n",
 		  e_reply->bool_val);
 }
 
@@ -242,9 +243,11 @@ client_cb_common(const struct crt_cb_info *cb_info)
 			break;
 		}
 		DBG_PRINT("%s checkin result - ret: %d, room_no: %d, "
-					 "bool_val %d.\n",
-					 test_ping_rpc_req_input->name, test_ping_rpc_req_output->ret,
-					 test_ping_rpc_req_output->room_no, test_ping_rpc_req_output->bool_val);
+			  "bool_val %d.\n",
+			  test_ping_rpc_req_input->name,
+			  test_ping_rpc_req_output->ret,
+			  test_ping_rpc_req_output->room_no,
+			  test_ping_rpc_req_output->bool_val);
 		sem_post(&test_g.t_token_to_proceed);
 		D_ASSERT(test_ping_rpc_req_output->bool_val == true);
 		break;
@@ -451,15 +454,18 @@ parse_verify_swim_status_arg(char *source)
 					 cursorCopy + groupArray[g].rm_so);
 
 			if (g == 1) {
-				ss.rank = atoi(cursorCopy + groupArray[g].rm_so);
+				ss.rank = atoi(cursorCopy +
+					       groupArray[g].rm_so);
 			}
 			if (g == 2) {
 
 				char exp_status[8];
 
-				strcpy(exp_status, cursorCopy + groupArray[g].rm_so);
+				strcpy(exp_status, cursorCopy +
+				       groupArray[g].rm_so);
 
-				/* "d(ead)?"=1, a(live)?=0 as specified in crt_event_type:
+				/* "d(ead)?"=1, a(live)?=0 as 
+				 *   specified in crt_event_type:
 				 *
 				 * src/include/cart/api.h
 				 * enum crt_event_type {
