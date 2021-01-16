@@ -76,18 +76,6 @@ get_module_info(void)
 	return NULL;
 }
 
-static void
-setup_mock_dss_drpc_ctx(void)
-{
-	drpc_connect("non-existent", &dss_drpc_ctx);
-}
-static void
-teardown_mock_dss_drpc_ctx(void)
-{
-	drpc_close(dss_drpc_ctx);
-	dss_drpc_ctx = NULL;
-}
-
 /*
  * Test setup and teardown
  */
@@ -296,9 +284,8 @@ test_drpc_verify_notify_pool_svc_update(void **state)
 	uint32_t	 svc_reps[4] = {0, 1, 2, 3};
 	d_rank_list_t	*svc_ranks;
 
-	setup_mock_dss_drpc_ctx();
-//	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
-//	assert_int_equal(drpc_init(), 0);
+	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
+	assert_int_equal(drpc_init(), 0);
 
 	assert_int_equal(uuid_parse("11111111-1111-1111-1111-111111111111",
 				    pool_uuid), 0);
@@ -311,8 +298,7 @@ test_drpc_verify_notify_pool_svc_update(void **state)
 
 	d_rank_list_free(svc_ranks);
 
-	teardown_mock_dss_drpc_ctx();
-	// drpc_fini();
+	drpc_fini();
 }
 
 static void
