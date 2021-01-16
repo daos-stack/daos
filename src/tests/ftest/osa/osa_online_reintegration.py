@@ -182,7 +182,6 @@ class OSAOnlineReintegration(OSAUtils):
             display_string = "Pool{} space at the End".format(val)
             self.pool = pool[val]
             self.pool.display_pool_daos_space(display_string)
-            pool[val].destroy()
 
     def test_osa_online_reintegration(self):
         """Test ID: DAOS-5075.

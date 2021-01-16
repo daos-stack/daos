@@ -217,7 +217,6 @@ class OSAOnlineParallelTest(OSAUtils):
                 self.log.info("Pool Version at the End %s", pver_end)
                 self.assertTrue(pver_end == 25,
                                 "Pool Version Error:  at the end")
-                pool[val].destroy()
 
     def test_osa_online_parallel_test(self):
         """

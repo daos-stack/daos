@@ -27,6 +27,7 @@ import time
 
 from avocado import fail_on
 from ior_test_base import IorTestBase
+from test_utils_container import TestContainer
 from command_utils import CommandFailure
 from ior_utils import IorCommand
 from job_manager_utils import Mpirun
@@ -181,6 +182,20 @@ class OSAUtils(IorTestBase):
         self.obj.close()
         self.container.close()
 
+    def add_container(self, pool):
+        """Create a container and use it for IOR
+
+        Args:
+            pool: pool to create container
+
+        """
+        # Create a container
+        self.container = TestContainer(pool,
+                                       daos_command=self.get_daos_command())
+        self.container.get_params(self)
+        self.container.create()
+
+
     def ior_thread(self, pool, oclass, api, test, flags, results):
         """Start threads and wait until all threads are finished.
 
@@ -193,7 +208,6 @@ class OSAUtils(IorTestBase):
             results (queue): queue for returning thread results
 
         """
-        container_info = {}
         mpio_util = MpioUtils()
         if mpio_util.mpich_installed(self.hostlist_clients) is False:
             self.fail("Exiting Test : Mpich not installed on :"
@@ -210,15 +224,11 @@ class OSAUtils(IorTestBase):
         ior_cmd.block_size.update(test[3])
         ior_cmd.flags.update(flags)
 
-        container_info["{}{}{}"
-                       .format(oclass,
-                               api,
-                               test[2])] = str(uuid.uuid4())
-
         # Define the job manager for the IOR command
         self.job_manager = Mpirun(ior_cmd, mpitype="mpich")
         key = "".join([oclass, api, str(test[2])])
-        self.job_manager.job.dfs_cont.update(container_info[key])
+        self.add_container(self.pool)
+        self.job_manager.job.dfs_cont.update(self.container.uuid)
         env = ior_cmd.get_default_env(str(self.job_manager))
         self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
         self.job_manager.assign_processes(self.processes)

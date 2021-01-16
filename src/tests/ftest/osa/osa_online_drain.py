@@ -139,7 +139,6 @@ class OSAOnlineDrain(OSAUtils):
             display_string = "Pool{} space at the End".format(val)
             self.pool = pool[val]
             self.pool.display_pool_daos_space(display_string)
-            pool[val].destroy()
 
     def test_osa_online_drain(self):
         """Test ID: DAOS-4750

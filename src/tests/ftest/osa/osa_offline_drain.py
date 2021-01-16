@@ -21,7 +21,6 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-import time
 import random
 from osa_utils import OSAUtils
 from test_utils_pool import TestPool
