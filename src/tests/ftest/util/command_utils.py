@@ -824,7 +824,7 @@ class YamlCommand(SubProcessCommand):
                             owner=self.certificate_owner)
                         if result.exit_status != 0:
                             self.log.info(
-                                "    WARNING: %s copy failed on %s:\n      %s",
+                                "    WARNING: %s copy failed on %s:\n%s",
                                 dst_file, hosts, result)
                     names.add(name)
             yaml = yaml.other_params

@@ -1023,7 +1023,7 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
                 # Existing files with strict file permissions can cause the
                 # subsequent non-sudo copy to fail, so remove the file first
                 rm_command = "{} rm -f {}".format(
-                    get_clush_command(hosts, "-S -v", True), source)
+                    get_clush_command(other_hosts, "-S -v", True), source)
                 run_command(rm_command, verbose=verbose, raise_exception=False)
                 result = distribute_files(
                     other_hosts, source, source, mkdir=True,
