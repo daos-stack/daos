@@ -194,7 +194,6 @@ class OSAUtils(IorTestBase):
         self.container.get_params(self)
         self.container.create()
 
-
     def ior_thread(self, pool, oclass, api, test, flags, results):
         """Start threads and wait until all threads are finished.
 
