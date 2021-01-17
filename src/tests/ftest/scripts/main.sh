@@ -197,7 +197,7 @@ fi
 # daos_test uses cmocka framework which generates a set of xml of its own
 # post-processing the xml files here to put them in proper categories
 # for publishing in Jenkins
-FILES="$logs_prefix/ftest/avocado/daos_test/*/test-results/*/data/*.xml"
+FILES="$logs_prefix/ftest/avocado/job-results/daos_test/*/test-results/*/data/*.xml"
 COMP="FTEST_daos_test"
 for file in $FILES
 do
