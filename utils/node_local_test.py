@@ -1414,7 +1414,6 @@ def run_dfuse(server, conf):
     create_and_read_via_il(dfuse, dfuse.dir)
 
     run_tests(dfuse)
-    xattr_test(dfuse)
 
     fatal_errors.add_result(dfuse.stop())
 
