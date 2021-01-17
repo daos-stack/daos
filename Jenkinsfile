@@ -1,5 +1,5 @@
 #!/usr/bin/groovy
-/* Copyright (C) 2019-2020 Intel Corporation
+/* Copyright (C) 2019-2021 Intel Corporation
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -152,6 +152,7 @@ String unit_packages() {
                            'pmix numactl-devel ' +
                            'libipmctl-devel ' +
                            'python36-tabulate numactl ' +
+                           'libyaml-devel ' +
                            'valgrind-devel'
         if (need_qb) {
             // TODO: these should be gotten from the Requires: of RPM
@@ -475,7 +476,7 @@ pipeline {
         // preserve stashes so that jobs can be started at the test stage
         preserveStashes(buildCount: 5)
         ansiColor('xterm')
-        buildDiscarder(logRotator(artifactDaysToKeepStr: '300'))
+        buildDiscarder(logRotator(artifactDaysToKeepStr: '200'))
     }
 
     parameters {
