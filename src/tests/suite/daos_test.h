@@ -57,10 +57,21 @@
 	} while  (0)
 #endif
 
+#if FAULT_INJECTION
+#define FAULT_INJECTION_REQUIRED() do { } while (0)
+#else
+#define FAULT_INJECTION_REQUIRED() \
+	do { \
+		print_message("Fault injection required for test, skipping...\n"); \
+		skip();\
+	} while (0)
+#endif /* FAULT_INJECTION */
+
 #include <mpi.h>
 #include <daos/debug.h>
 #include <daos/common.h>
 #include <daos/mgmt.h>
+#include <daos/sys_debug.h>
 #include <daos/tests_lib.h>
 #include <daos.h>
 
@@ -144,7 +155,9 @@ typedef struct {
 	uint64_t		fail_loc;
 	uint64_t		fail_num;
 	uint64_t		fail_value;
-	bool			overlap;
+	uint32_t		overlap:1,
+				not_check_result:1,
+				idx_no_jump:1;
 	int			expect_result;
 	daos_size_t		size;
 	int			nr;
@@ -220,6 +233,9 @@ enum {
 #define SMALL_POOL_SIZE		(1ULL << 30)	/* 1GB */
 #define DEFAULT_POOL_SIZE	(4ULL << 30)	/* 4GB */
 
+#define REBUILD_SUBTEST_POOL_SIZE (1ULL << 30)
+#define REBUILD_SMALL_POOL_SIZE (1ULL << 28)
+
 #define WAIT_ON_ASYNC_ERR(arg, ev, err)			\
 	do {						\
 		int _rc;				\
@@ -261,7 +277,7 @@ async_enable(void **state)
 {
 	test_arg_t	*arg = *state;
 
-	arg->overlap = false;
+	arg->overlap = 0;
 	arg->async   = true;
 	return 0;
 }
@@ -271,7 +287,7 @@ async_disable(void **state)
 {
 	test_arg_t	*arg = *state;
 
-	arg->overlap = false;
+	arg->overlap = 0;
 	arg->async   = false;
 	return 0;
 }
@@ -282,7 +298,7 @@ async_overlap(void **state)
 {
 	test_arg_t	*arg = *state;
 
-	arg->overlap = true;
+	arg->overlap = 1;
 	arg->async   = true;
 	return 0;
 }
@@ -309,7 +325,7 @@ enum {
 	HANDLE_CO
 };
 
-int run_daos_mgmt_test(int rank, int size);
+int run_daos_mgmt_test(int rank, int size, int *sub_tests, int sub_tests_size);
 int run_daos_pool_test(int rank, int size);
 int run_daos_cont_test(int rank, int size);
 int run_daos_capa_test(int rank, int size);
@@ -392,6 +408,8 @@ run_daos_sub_tests_only(char *test_name, const struct CMUnitTest *tests,
 void rebuild_io(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr);
 void rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
 			 bool discard);
+void dfs_ec_rebuild_io(void **state, int *shards, int shards_nr);
+
 void rebuild_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
 				int failed_tgt, bool kill);
 void rebuild_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool kill);
@@ -433,6 +451,7 @@ int wait_and_verify_blobstore_state(uuid_t bs_uuid, char *expected_state,
 				    const char *group);
 int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
 				   char *expected_state);
+void save_group_state(void **state);
 
 enum op_type {
 	PARTIAL_UPDATE	=	1,

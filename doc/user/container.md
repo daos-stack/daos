@@ -85,7 +85,8 @@ during container create.
   DAOS_PROP_CO_CSUM_CRC64,
   DAOS_PROP_CO_CSUM_SHA1,
   DAOS_PROP_CO_CSUM_SHA256,
-  DAOS_PROP_CO_CSUM_SHA512
+  DAOS_PROP_CO_CSUM_SHA512,
+  DAOS_PROP_CO_CSUM_ADLER32
 ```
 
 - `DAOS_PROP_CO_CSUM_CHUNK_SIZE`: defines the chunk size used for
@@ -226,7 +227,7 @@ If the user does not have Delete permission on the pool, they will only be able
 to delete containers for which they have been explicitly granted Delete
 permission in the container's ACL.
 
-!!! note:
+!!! note
     In DAOS version 1.0, permissions are set on the _pool_ level and all containers
     in the pool inherit the permissions of the pool. Starting with DAOS version 1.2,
     pool and container permissions are controlled individually.

@@ -32,8 +32,8 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/system"
@@ -76,16 +76,6 @@ func isRetryable(msg proto.Message) (*retryableDrpcReq, bool) {
 	switch msg := msg.(type) {
 	case *retryableDrpcReq:
 		return msg, true
-	// Pool creates are notorious for needing retry logic
-	// while things are starting up in CI testing.
-	case *mgmtpb.PoolCreateReq, *mgmtpb.PoolDestroyReq:
-		return &retryableDrpcReq{
-			Message: msg,
-			RetryableStatuses: []drpc.DaosStatus{
-				drpc.DaosGroupVersionMismatch,
-				drpc.DaosTimedOut,
-			},
-		}, true
 	}
 
 	return nil, false
@@ -136,27 +126,32 @@ func checkSocketDir(sockDir string) error {
 	return nil
 }
 
+type drpcServerSetupReq struct {
+	log     logging.Logger
+	sockDir string
+	iosrvs  []*IOServerInstance
+	tc      *security.TransportConfig
+	sysdb   *system.Database
+	events  *events.PubSub
+}
+
 // drpcServerSetup specifies socket path and starts drpc server.
-func drpcServerSetup(ctx context.Context, log logging.Logger, sockDir string, iosrvs []*IOServerInstance, tc *security.TransportConfig, db *system.Database) error {
+func drpcServerSetup(ctx context.Context, req *drpcServerSetupReq) error {
 	// Clean up any previous execution's sockets before we create any new sockets
-	if err := drpcCleanup(sockDir); err != nil {
+	if err := drpcCleanup(req.sockDir); err != nil {
 		return err
 	}
 
-	sockPath := getDrpcServerSocketPath(sockDir)
-	drpcServer, err := drpc.NewDomainSocketServer(ctx, log, sockPath)
+	sockPath := getDrpcServerSocketPath(req.sockDir)
+	drpcServer, err := drpc.NewDomainSocketServer(ctx, req.log, sockPath)
 	if err != nil {
 		return errors.Wrap(err, "unable to create socket server")
 	}
 
 	// Create and add our modules
-	drpcServer.RegisterRPCModule(NewSecurityModule(log, tc))
-	drpcServer.RegisterRPCModule(&mgmtModule{})
-	drpcServer.RegisterRPCModule(&srvModule{
-		log:    log,
-		sysdb:  db,
-		iosrvs: iosrvs,
-	})
+	drpcServer.RegisterRPCModule(NewSecurityModule(req.log, req.tc))
+	drpcServer.RegisterRPCModule(newMgmtModule())
+	drpcServer.RegisterRPCModule(newSrvModule(req.log, req.sysdb, req.iosrvs, req.events))
 
 	if err := drpcServer.Start(); err != nil {
 		return errors.Wrapf(err, "unable to start socket server on %s", sockPath)

@@ -213,6 +213,29 @@ pl_obj_layout_free(struct pl_obj_layout *layout)
 	D_FREE(layout);
 }
 
+/* Returns whether or not a given layout contains the specified rank */
+bool
+pl_obj_layout_contains(struct pool_map *map, struct pl_obj_layout *layout,
+		       uint32_t rank, uint32_t target_index)
+{
+	struct pool_target *target;
+	int i;
+	int rc;
+
+	D_ASSERT(layout != NULL);
+
+	for (i = 0; i < layout->ol_nr; i++) {
+		rc = pool_map_find_target(map, layout->ol_shards[i].po_target,
+					  &target);
+		if (rc != 0 && target->ta_comp.co_rank == rank &&
+		    target->ta_comp.co_index == target_index)
+			return true; /* Found a target and rank matches */
+	}
+
+	/* No match found */
+	return false;
+}
+
 int
 pl_obj_layout_alloc(unsigned int grp_size, unsigned int grp_nr,
 		struct pl_obj_layout **layout_pp)
@@ -315,8 +338,6 @@ static void
 pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
 		 struct pl_map_init_attr *mia)
 {
-	memset(mia, 0, sizeof(*mia));
-
 	switch (type) {
 	default:
 		D_ASSERTF(0, "Unknown placemet map type: %d.\n", type);
@@ -329,9 +350,8 @@ pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
 		break;
 	case PL_TYPE_JUMP_MAP:
 		mia->ia_type            = PL_TYPE_JUMP_MAP;
-		mia->ia_jump_map.domain  = DSR_JUMP_MAP_DOMAIN;
+		mia->ia_jump_map.domain = DSR_JUMP_MAP_DOMAIN;
 	}
-
 }
 
 struct pl_map *
@@ -571,9 +591,10 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 		 * a parity node) as leader.
 		 */
 		shard = pl_get_shard(data, idx);
-		while (shard->po_rebuilding) {
+		while (shard->po_rebuilding || shard->po_shard == -1 ||
+		       shard->po_target == -1) {
 			idx--;
-			if (++fail_cnt > oc_attr->u.ec.e_p)
+			if (++fail_cnt >= oc_attr->u.ec.e_p)
 				return -DER_IO;
 			shard = pl_get_shard(data, idx);
 		}

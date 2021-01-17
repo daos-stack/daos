@@ -24,7 +24,8 @@
 
 import daos_build
 SRC = ['debug.c', 'dlog.c', 'hash.c', 'misc.c', 'heap.c', 'errno.c',
-       'fault_inject.c', 'dtm.c', 'dyn_hash.c']
+       'fault_inject.c', 'dtm.c', 'telemetry.c', 'dyn_hash']
+
 
 def scons():
     """Scons function"""
@@ -48,6 +49,7 @@ def scons():
     Default(gurt_lib)
     Export('gurt_lib', 'gurt_targets')
 
+    SConscript('examples/SConscript')
     SConscript('tests/SConscript')
 
 if __name__ == "SCons.Script":

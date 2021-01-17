@@ -125,7 +125,7 @@ func TestRunnerContextExit(t *testing.T) {
 	cancel()
 
 	err := <-errOut
-	if errors.Cause(err) == NormalExit {
+	if errors.Cause(err) == common.NormalExit {
 		t.Fatal("expected process to not exit normally")
 	}
 }
@@ -158,7 +158,7 @@ func TestRunnerNormalExit(t *testing.T) {
 	}
 
 	err := <-errOut
-	if errors.Cause(err).Error() != NormalExit.Error() {
+	if errors.Cause(err).Error() != common.NormalExit.Error() {
 		t.Fatalf("expected normal exit; got %s", err)
 	}
 

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	. "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -264,6 +264,8 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 					srv.ready.SetFalse()
 				}
 
+				t.Logf("VMD disabled: %v", cs.bdev.IsVMDDisabled())
+
 				// runs discovery for nvme & scm
 				err := cs.Setup()
 				common.CmpErr(t, tc.expSetupErr, err)
@@ -321,7 +323,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 
 	// expected protobuf output to be returned svc.StorageScan when health
 	// updated over drpc. Override serial uuid with variable argument
-	newCtrlrHealth := func(idx int32, serialIdx ...int32) (*NvmeController, *mgmtpb.BioHealthResp) {
+	newCtrlrHealth := func(idx int32, serialIdx ...int32) (*NvmeController, *ctlpb.BioHealthResp) {
 		ctrlr := proto.MockNvmeController(idx)
 		sIdx := idx
 		if len(serialIdx) > 0 {
@@ -332,7 +334,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 		ctrlr.Healthstats = proto.MockNvmeHealth(idx + 1)
 		ctrlr.Smddevices = nil
 
-		bioHealthResp := new(mgmtpb.BioHealthResp)
+		bioHealthResp := new(ctlpb.BioHealthResp)
 		if err := convert.Types(ctrlr.Healthstats, bioHealthResp); err != nil {
 			t.Fatal(err)
 		}
@@ -347,14 +349,14 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 		c, _ := newCtrlrHealth(idx, serialIdx...)
 		return c
 	}
-	newBioHealthResp := func(idx int32, serialIdx ...int32) *mgmtpb.BioHealthResp {
+	newBioHealthResp := func(idx int32, serialIdx ...int32) *ctlpb.BioHealthResp {
 		_, b := newCtrlrHealth(idx, serialIdx...)
 		return b
 	}
 
 	// expected protobuf output to be returned svc.StorageScan when smd
 	// updated over drpc
-	newCtrlrMeta := func(idx int32) (*NvmeController, *mgmtpb.SmdDevResp_Device) {
+	newCtrlrMeta := func(idx int32) (*NvmeController, *ctlpb.SmdDevResp_Device) {
 		ctrlr := proto.MockNvmeController(idx)
 		ctrlr.Serial = common.MockUUID(idx)
 		ctrlr.Healthstats = nil
@@ -362,7 +364,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 		sd.Rank = uint32(idx)
 		ctrlr.Smddevices = []*NvmeController_SmdDevice{sd}
 
-		smdDevRespDevice := new(mgmtpb.SmdDevResp_Device)
+		smdDevRespDevice := new(ctlpb.SmdDevResp_Device)
 		if err := convert.Types(ctrlr.Smddevices[0], smdDevRespDevice); err != nil {
 			t.Fatal(err)
 		}
@@ -377,7 +379,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 		c, _ := newCtrlrMeta(idx)
 		return c
 	}
-	newSmdDevRespDevice := func(idx int32) *mgmtpb.SmdDevResp_Device {
+	newSmdDevRespDevice := func(idx int32) *ctlpb.SmdDevResp_Device {
 		_, b := newCtrlrMeta(idx)
 		return b
 	}
@@ -408,8 +410,8 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 			drpcResps: map[int][]*mockDrpcResponse{
 				0: {
 					{
-						Message: &mgmtpb.SmdDevResp{
-							Devices: []*mgmtpb.SmdDevResp_Device{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevResp_Device{
 								newSmdDevRespDevice(1),
 							},
 						},
@@ -435,8 +437,8 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 			drpcResps: map[int][]*mockDrpcResponse{
 				0: {
 					{
-						Message: &mgmtpb.SmdDevResp{
-							Devices: []*mgmtpb.SmdDevResp_Device{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevResp_Device{
 								newSmdDevRespDevice(1),
 							},
 						},
@@ -472,8 +474,8 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 			drpcResps: map[int][]*mockDrpcResponse{
 				0: {
 					{
-						Message: &mgmtpb.SmdDevResp{
-							Devices: []*mgmtpb.SmdDevResp_Device{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevResp_Device{
 								newSmdDevRespDevice(1),
 							},
 						},
@@ -482,8 +484,8 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 				},
 				1: {
 					{
-						Message: &mgmtpb.SmdDevResp{
-							Devices: []*mgmtpb.SmdDevResp_Device{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevResp_Device{
 								newSmdDevRespDevice(2),
 							},
 						},
@@ -522,8 +524,8 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 			drpcResps: map[int][]*mockDrpcResponse{
 				0: {
 					{
-						Message: &mgmtpb.SmdDevResp{
-							Devices: []*mgmtpb.SmdDevResp_Device{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevResp_Device{
 								newSmdDevRespDevice(1),
 							},
 						},
@@ -532,8 +534,8 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 				},
 				1: {
 					{
-						Message: &mgmtpb.SmdDevResp{
-							Devices: []*mgmtpb.SmdDevResp_Device{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevResp_Device{
 								newSmdDevRespDevice(2),
 							},
 						},
@@ -574,16 +576,16 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 			drpcResps: map[int][]*mockDrpcResponse{
 				0: {
 					{
-						Message: &mgmtpb.SmdDevResp{
-							Devices: []*mgmtpb.SmdDevResp_Device{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevResp_Device{
 								newSmdDevRespDevice(1),
 							},
 						},
 					},
 					{Message: newBioHealthResp(1)},
 					{
-						Message: &mgmtpb.SmdDevResp{
-							Devices: []*mgmtpb.SmdDevResp_Device{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevResp_Device{
 								newSmdDevRespDevice(1),
 							},
 						},
@@ -592,16 +594,16 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 				},
 				1: {
 					{
-						Message: &mgmtpb.SmdDevResp{
-							Devices: []*mgmtpb.SmdDevResp_Device{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevResp_Device{
 								newSmdDevRespDevice(2),
 							},
 						},
 					},
 					{Message: newBioHealthResp(2)},
 					{
-						Message: &mgmtpb.SmdDevResp{
-							Devices: []*mgmtpb.SmdDevResp_Device{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevResp_Device{
 								newSmdDevRespDevice(2),
 							},
 						},
@@ -640,8 +642,8 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 			drpcResps: map[int][]*mockDrpcResponse{
 				0: {
 					{
-						Message: &mgmtpb.SmdDevResp{
-							Devices: []*mgmtpb.SmdDevResp_Device{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevResp_Device{
 								newSmdDevRespDevice(1),
 								newSmdDevRespDevice(2),
 							},
@@ -652,8 +654,8 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 				},
 				1: {
 					{
-						Message: &mgmtpb.SmdDevResp{
-							Devices: []*mgmtpb.SmdDevResp_Device{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevResp_Device{
 								newSmdDevRespDevice(3),
 								newSmdDevRespDevice(4),
 							},
@@ -832,6 +834,8 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 				newSrv.setDrpcClient(newMockDrpcClient(cfg))
 				newSrv._superblock.Rank = system.NewRankPtr(uint32(i + 1))
 			}
+
+			t.Logf("VMD disabled: %v", cs.bdev.IsVMDDisabled())
 
 			// runs discovery for nvme & scm
 			if err := cs.Setup(); err != nil {
@@ -1482,10 +1486,12 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				GetfsStr:       getFsRetStr,
 				SourceToTarget: devToMount,
 			}
-			cs := mockControlService(t, log, config, tc.bmbc, nil, msc)
+			cs := mockControlServiceNoSB(t, log, config, tc.bmbc, nil, msc)
 
 			instances := cs.harness.Instances()
 			common.AssertEqual(t, len(tc.sMounts), len(instances), name)
+
+			t.Logf("VMD disabled: %v", cs.bdev.IsVMDDisabled())
 
 			// runs discovery for nvme & scm
 			if err := cs.Setup(); err != nil {

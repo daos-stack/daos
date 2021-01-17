@@ -24,7 +24,6 @@
 package server
 
 import (
-	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -42,7 +41,6 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 	testDir, cleanup := CreateTestDir(t)
 	defer cleanup()
 
-	ctrlAddrs := []string{"1.2.3.4:5", "6.7.8.9:10"}
 	h := NewIOServerHarness(log)
 	for idx, mnt := range []string{"one", "two"} {
 		if err := os.MkdirAll(filepath.Join(testDir, mnt), 0777); err != nil {
@@ -66,23 +64,6 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 		}
 	}
 
-	// ugh, this isn't ideal
-	oldGetAddrFn := getInterfaceAddrs
-	defer func() {
-		getInterfaceAddrs = oldGetAddrFn
-	}()
-	getInterfaceAddrs = func() ([]net.Addr, error) {
-		addrs := make([]net.Addr, len(ctrlAddrs))
-		var err error
-		for i, ca := range ctrlAddrs {
-			addrs[i], err = net.ResolveTCPAddr("tcp", ca)
-			if err != nil {
-				return nil, err
-			}
-		}
-		return addrs, nil
-	}
-
 	for _, instance := range h.Instances() {
 		if err := instance.createSuperblock(false); err != nil {
 			t.Fatal(err)
@@ -90,10 +71,7 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 	}
 
 	h.started.SetTrue()
-	mi, err := h.getMSLeaderInstance()
-	if err != nil {
-		t.Fatal(err)
-	}
+	mi := h.instances[0]
 	if mi._superblock == nil {
 		t.Fatal("instance superblock is nil after createSuperblock()")
 	}

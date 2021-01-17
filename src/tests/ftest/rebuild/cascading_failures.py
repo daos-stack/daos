@@ -26,10 +26,13 @@ from rebuild_test_base import RebuildTestBase
 
 
 class CascadingFailures(RebuildTestBase):
+    # pylint: disable=too-many-ancestors
     """Test cascading failures during rebuild.
 
     :avocado: recursive
     """
+
+    CANCEL_FOR_TICKET = [["DAOS-2799", "targets", 8]]
 
     def __init__(self, *args, **kwargs):
         """Initialize a CascadingFailures object."""
@@ -110,7 +113,7 @@ class CascadingFailures(RebuildTestBase):
         self.mode = "simultaneous"
         self.execute_rebuild_test()
 
-    @skipForTicket("DAOS-2469")
+    @skipForTicket("DAOS-6256")
     def test_sequential_failures(self):
         """Jira ID: DAOS-843.
 
@@ -131,7 +134,7 @@ class CascadingFailures(RebuildTestBase):
         self.mode = "sequential"
         self.execute_rebuild_test()
 
-    @skipForTicket("DAOS-3172")
+    @skipForTicket("DAOS-6256")
     def test_cascading_failures(self):
         """Jira ID: DAOS-844.
 

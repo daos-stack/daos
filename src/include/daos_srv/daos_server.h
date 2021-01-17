@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@
 #include <daos_srv/iv.h>
 #include <daos_srv/vos_types.h>
 #include <daos_srv/pool.h>
+#include <daos_srv/ras.h>
 #include <daos_event.h>
 #include <daos_task.h>
 #include <pthread.h>
@@ -43,25 +44,25 @@
 #include <daos/checksum.h>
 
 /** number of target (XS set) per server */
-extern unsigned int	dss_tgt_nr;
+extern unsigned int	 dss_tgt_nr;
 
 /** Storage path (hack) */
-extern const char      *dss_storage_path;
+extern const char	*dss_storage_path;
 
 /** NVMe config file */
-extern const char      *dss_nvme_conf;
+extern const char	*dss_nvme_conf;
 
 /** Socket Directory */
-extern const char      *dss_socket_dir;
+extern const char	*dss_socket_dir;
 
 /** NVMe shm_id for enabling SPDK multi-process mode */
-extern int		dss_nvme_shm_id;
+extern int		 dss_nvme_shm_id;
 
 /** NVMe mem_size for SPDK memory allocation when using primary mode */
-extern int		dss_nvme_mem_size;
+extern int		 dss_nvme_mem_size;
 
 /** IO server instance index */
-extern unsigned int	dss_instance_idx;
+extern unsigned int	 dss_instance_idx;
 
 /**
  * Stackable Module API
@@ -193,6 +194,7 @@ struct dss_xstream;
 bool dss_xstream_exiting(struct dss_xstream *dxs);
 bool dss_xstream_is_busy(void);
 daos_epoch_t dss_get_start_epoch(void);
+void dss_set_start_epoch(void);
 
 struct dss_module_info {
 	crt_context_t		dmi_ctx;
@@ -440,36 +442,23 @@ struct dss_module {
 };
 
 /**
- * DSS_TGT_SELF indicates scheduling ULT on caller's self XS.
+ * Stack size used for ULTs with deep stack
  */
-#define DSS_TGT_SELF	(-1)
+#define DSS_DEEP_STACK_SZ	65536
 
-/** ULT types to determine on which XS to schedule the ULT */
-enum dss_ult_type {
-	/** for dtx_resync */
-	DSS_ULT_DTX_RESYNC = 100,
+enum dss_xs_type {
+	/** current xstream */
+	DSS_XS_SELF	= -1,
+	/** operations needs accessing VOS */
+	DSS_XS_VOS	= 0,
 	/** forward/dispatch IO request for TX coordinator */
-	DSS_ULT_IOFW,
+	DSS_XS_IOFW	= 1,
 	/** EC/checksum/compress computing offload */
-	DSS_ULT_EC,
-	DSS_ULT_CHECKSUM,
-	DSS_ULT_COMPRESS,
-	/** pool service ULT */
-	DSS_ULT_POOL_SRV,
-	/** RDB ULT */
-	DSS_ULT_RDB,
-	/** rebuild ULT such as scanner/puller, status checker etc. */
-	DSS_ULT_REBUILD,
-	/** drpc listener ULT */
-	DSS_ULT_DRPC_LISTENER,
-	/** drpc handler ULT */
-	DSS_ULT_DRPC_HANDLER,
-	/** GC & aggregation ULTs */
-	DSS_ULT_GC,
-	/** miscellaneous ULT */
-	DSS_ULT_MISC,
-	/** I/O ULT */
-	DSS_ULT_IO,
+	DSS_XS_OFFLOAD	= 2,
+	/** pool service, RDB, drpc handler */
+	DSS_XS_SYS	= 3,
+	/** drpc listener */
+	DSS_XS_DRPC	= 4,
 };
 
 int dss_parameters_set(unsigned int key_id, uint64_t value);
@@ -478,12 +467,11 @@ typedef ABT_pool (*dss_abt_pool_choose_cb_t)(crt_rpc_t *rpc, ABT_pool *pools);
 
 void dss_abt_pool_choose_cb_register(unsigned int mod_id,
 				     dss_abt_pool_choose_cb_t cb);
-int dss_ult_create(void (*func)(void *), void *arg, int ult_type, int tgt_id,
+int dss_ult_create(void (*func)(void *), void *arg, int xs_type, int tgt_id,
 		   size_t stack_size, ABT_thread *ult);
 int dss_ult_execute(int (*func)(void *), void *arg, void (*user_cb)(void *),
-		    void *cb_args, int ult_type, int tgt_id, size_t stack_size);
-int dss_ult_create_all(void (*func)(void *), void *arg, int ult_type,
-		       bool main);
+		    void *cb_args, int xs_type, int tgt_id, size_t stack_size);
+int dss_ult_create_all(void (*func)(void *), void *arg, bool main);
 
 struct dss_sleep_ult {
 	ABT_thread	dsu_thread;
@@ -571,16 +559,13 @@ struct dss_coll_args {
  */
 int
 dss_task_collective_reduce(struct dss_coll_ops *ops,
-			   struct dss_coll_args *coll_args, int flag,
-			   int ult_type);
+			   struct dss_coll_args *coll_args, int flag);
 int
 dss_thread_collective_reduce(struct dss_coll_ops *ops,
-			     struct dss_coll_args *coll_args, int flag,
-			     int ult_type);
+			     struct dss_coll_args *coll_args, int flag);
+int dss_task_collective(int (*func)(void *), void *arg, int flag);
+int dss_thread_collective(int (*func)(void *), void *arg, int flag);
 
-int dss_task_collective(int (*func)(void *), void *arg, int flag, int ult_type);
-int dss_thread_collective(int (*func)(void *), void *arg, int flag,
-			  int ult_type);
 struct dss_module *dss_module_get(int mod_id);
 /* Convert Argobots errno to DAOS ones. */
 static inline int
@@ -680,11 +665,15 @@ int dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		  daos_iom_t *maps, unsigned int extra_flag,
 		  unsigned int *extra_arg);
 
+int dsc_obj_update(daos_handle_t oh, uint64_t flags, daos_key_t *dkey,
+		   unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls);
+
 int dsc_obj_list_obj(daos_handle_t oh, daos_epoch_range_t *epr,
 		     daos_key_t *dkey, daos_key_t *akey, daos_size_t *size,
 		     uint32_t *nr, daos_key_desc_t *kds, d_sg_list_t *sgl,
 		     daos_anchor_t *anchor, daos_anchor_t *dkey_anchor,
 		     daos_anchor_t *akey_anchor, d_iov_t *csum);
+
 int dsc_pool_tgt_exclude(const uuid_t uuid, const char *grp,
 			 const d_rank_list_t *svc, struct d_tgt_list *tgts);
 int dsc_pool_tgt_reint(const uuid_t uuid, const char *grp,
@@ -843,8 +832,13 @@ enum dss_media_error_type {
 
 void dss_init_state_set(enum dss_init_state state);
 
-int notify_bio_error(int media_err_type, int tgt_id);
-int get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks);
+/* Notify control-plane of a bio error. */
+int
+ds_notify_bio_error(int media_err_type, int tgt_id);
+
+/* Retrieve current pool service replicas for a given pool UUID. */
+int
+ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks);
 
 bool is_container_from_srv(uuid_t pool_uuid, uuid_t coh_uuid);
 bool is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid);

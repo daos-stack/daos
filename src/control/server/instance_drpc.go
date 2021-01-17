@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
@@ -173,13 +174,13 @@ func (srv *IOServerInstance) TryDrpc(ctx context.Context, method drpc.Method) *s
 	}
 }
 
-func (srv *IOServerInstance) getBioHealth(ctx context.Context, req *mgmtpb.BioHealthReq) (*mgmtpb.BioHealthResp, error) {
+func (srv *IOServerInstance) getBioHealth(ctx context.Context, req *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
 	dresp, err := srv.CallDrpc(ctx, drpc.MethodBioHealth, req)
 	if err != nil {
 		return nil, err
 	}
 
-	resp := &mgmtpb.BioHealthResp{}
+	resp := &ctlpb.BioHealthResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal BioHealthQuery response")
 	}
@@ -191,13 +192,13 @@ func (srv *IOServerInstance) getBioHealth(ctx context.Context, req *mgmtpb.BioHe
 	return resp, nil
 }
 
-func (srv *IOServerInstance) listSmdDevices(ctx context.Context, req *mgmtpb.SmdDevReq) (*mgmtpb.SmdDevResp, error) {
+func (srv *IOServerInstance) listSmdDevices(ctx context.Context, req *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error) {
 	dresp, err := srv.CallDrpc(ctx, drpc.MethodSmdDevs, req)
 	if err != nil {
 		return nil, err
 	}
 
-	resp := new(mgmtpb.SmdDevResp)
+	resp := new(ctlpb.SmdDevResp)
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal SmdListDevs response")
 	}
@@ -217,14 +218,14 @@ func (srv *IOServerInstance) listSmdDevices(ctx context.Context, req *mgmtpb.Smd
 // retrieve metadata and health stats for each SMD device (blobstore) on
 // a given I/O server instance. Update input map with new stats/smd info.
 func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[string]*storage.NvmeController) error {
-	smdDevs, err := srv.listSmdDevices(ctx, new(mgmtpb.SmdDevReq))
+	smdDevs, err := srv.listSmdDevices(ctx, new(ctlpb.SmdDevReq))
 	if err != nil {
 		return errors.Wrapf(err, "instance %d listSmdDevices()", srv.Index())
 	}
 
 	hasUpdatedHealth := make(map[string]bool)
 	for _, dev := range smdDevs.Devices {
-		pbStats, err := srv.getBioHealth(ctx, &mgmtpb.BioHealthReq{
+		pbStats, err := srv.getBioHealth(ctx, &ctlpb.BioHealthReq{
 			DevUuid: dev.Uuid,
 		})
 		if err != nil {
