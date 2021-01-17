@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -239,6 +239,28 @@ struct vos_dtx_act_ent {
 	umem_off_t			*dae_records;
 	/* The capacity of dae_records, NOT including the inlined buffer. */
 	int				 dae_rec_cap;
+	/* The count of objects that are modified by this DTX.
+	 *
+	 * If single object is modified and if it is the same as the
+	 * 'dae_oid', then 'dae_oid_cnt' is zero.
+	 *
+	 * If the single object is differet from 'dae_oid', then the
+	 * 'dae_oid_cnt' is 1, its OID is stored in 'dae_oid_inline'.
+	 *
+	 * These information is used for EC aggregation optimization.
+	 * If server restarts, then we will lose the optimization but
+	 * it is not fatal.
+	 */
+	int				 dae_oid_cnt;
+	union {
+		/* The object OID if different from leader_oid. */
+		daos_unit_oid_t		 dae_oid_inline;
+
+		/* If more than one objects are modified via current DTX,
+		 * then theirs OIDs are stored in the buffer.
+		 */
+		daos_unit_oid_t		*dae_oids;
+	};
 	unsigned int			 dae_committable:1,
 					 dae_committed:1,
 					 dae_aborted:1,
@@ -287,17 +309,25 @@ do {						\
 #define DAE_TGT_CNT(dae)	((dae)->dae_base.dae_tgt_cnt)
 #define DAE_GRP_CNT(dae)	((dae)->dae_base.dae_grp_cnt)
 #define DAE_MBS_DSIZE(dae)	((dae)->dae_base.dae_mbs_dsize)
-#define DAE_OID_CNT(dae)	((dae)->dae_base.dae_oid_cnt)
 #define DAE_INDEX(dae)		((dae)->dae_base.dae_index)
 #define DAE_MBS_INLINE(dae)	((dae)->dae_base.dae_mbs_inline)
 #define DAE_MBS_OFF(dae)	((dae)->dae_base.dae_mbs_off)
-#define DAE_OID_INLINE(dae)	((dae)->dae_base.dae_oid_inline)
-#define DAE_OID_OFF(dae)	((dae)->dae_base.dae_oid_off)
 
 struct vos_dtx_cmt_ent {
 	/* Link into vos_conter::vc_dtx_committed_list */
 	d_list_t			 dce_committed_link;
 	struct vos_dtx_cmt_ent_df	 dce_base;
+	union {
+		/* The object OID if different from leader_oid. */
+		daos_unit_oid_t		 dce_oid_inline;
+
+		/* If more than one objects are modified via current DTX,
+		 * then theirs OIDs are stored in the buffer.
+		 */
+		daos_unit_oid_t		*dce_oids;
+	};
+	/* The count objects modified by current DTX, copy of dae_oid_cnt. */
+	int				 dce_oid_cnt;
 	uint32_t			 dce_reindex:1,
 					 dce_exist:1;
 };
@@ -306,13 +336,6 @@ struct vos_dtx_cmt_ent {
 #define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
 #define DCE_OID(dce)		((dce)->dce_base.dce_oid)
 #define DCE_DKEY_HASH(dce)	((dce)->dce_base.dce_dkey_hash)
-#define DCE_OID_OFF(dce)	((dce)->dce_base.dce_oid_off)
-/*
- * If there are multiple objects (indicated via DCE_OID_OFF()) are modified
- * via current DTX, then the dkey hash in the committed DTX entry is useless.
- * Under such case, re-use it as the count of modified objects.
- */
-#define DCE_OID_CNT(dce)	DCE_DKEY_HASH(dce)
 
 /* in-memory structures standalone instance */
 extern struct bio_xs_context		*vsa_xsctxt_inst;
