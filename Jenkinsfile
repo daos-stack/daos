@@ -152,6 +152,7 @@ String unit_packages() {
                            'pmix numactl-devel ' +
                            'libipmctl-devel python36-pyxattr ' +
                            'python36-tabulate numactl ' +
+                           'libyaml-devel ' +
                            'valgrind-devel'
         if (need_qb) {
             // TODO: these should be gotten from the Requires: of RPM

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@
 #include <daos_srv/iv.h>
 #include <daos_srv/vos_types.h>
 #include <daos_srv/pool.h>
+#include <daos_srv/ras.h>
 #include <daos_event.h>
 #include <daos_task.h>
 #include <pthread.h>
@@ -43,25 +44,25 @@
 #include <daos/checksum.h>
 
 /** number of target (XS set) per server */
-extern unsigned int	dss_tgt_nr;
+extern unsigned int	 dss_tgt_nr;
 
 /** Storage path (hack) */
-extern const char      *dss_storage_path;
+extern const char	*dss_storage_path;
 
 /** NVMe config file */
-extern const char      *dss_nvme_conf;
+extern const char	*dss_nvme_conf;
 
 /** Socket Directory */
-extern const char      *dss_socket_dir;
+extern const char	*dss_socket_dir;
 
 /** NVMe shm_id for enabling SPDK multi-process mode */
-extern int		dss_nvme_shm_id;
+extern int		 dss_nvme_shm_id;
 
 /** NVMe mem_size for SPDK memory allocation when using primary mode */
-extern int		dss_nvme_mem_size;
+extern int		 dss_nvme_mem_size;
 
 /** IO server instance index */
-extern unsigned int	dss_instance_idx;
+extern unsigned int	 dss_instance_idx;
 
 /**
  * Stackable Module API
@@ -831,8 +832,13 @@ enum dss_media_error_type {
 
 void dss_init_state_set(enum dss_init_state state);
 
-int notify_bio_error(int media_err_type, int tgt_id);
-int get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks);
+/* Notify control-plane of a bio error. */
+int
+ds_notify_bio_error(int media_err_type, int tgt_id);
+
+/* Retrieve current pool service replicas for a given pool UUID. */
+int
+ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks);
 
 bool is_container_from_srv(uuid_t pool_uuid, uuid_t coh_uuid);
 bool is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid);
