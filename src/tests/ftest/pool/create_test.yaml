@@ -19,6 +19,7 @@ server_config:
   name: daos_server
   servers:
     0:
+      targets: 4
       bdev_class: nvme
       bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
       scm_class: dcpm
