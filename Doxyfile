@@ -30,7 +30,7 @@ DOXYFILE_ENCODING      = UTF-8
 # double-quotes, unless you are using Doxywizard) that should identify the
 # project for which the documentation is generated. This name is used in the
 # title of most generated pages and in a few other places.
-# The default value is: My Project.
+# The default value is: My Project Test.
 
 PROJECT_NAME           = "DAOS API"
 
