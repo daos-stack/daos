@@ -10,6 +10,11 @@ hosts:
 timeout: 605
 server_config:
   name: daos_server
+  servers:
+    log_mask: DEBUG,MEM=ERR
+    env_vars:
+      - DD_MASK=io,trace
+      - D_LOG_MASK=DEBUG,MEM=ERR
   transport_config:
     allow_insecure: True
 agent_config:

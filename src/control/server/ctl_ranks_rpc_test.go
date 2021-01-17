@@ -375,7 +375,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 			svc.events = ps
 
 			dispatched := &eventsDispatched{cancel: cancel}
-			svc.events.Subscribe(events.RASTypeRankStateChange, dispatched)
+			svc.events.Subscribe(events.RASTypeStateChange, dispatched)
 
 			for i, srv := range svc.harness.instances {
 				if tc.missingSB {
@@ -404,7 +404,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 
 				srv.OnInstanceExit(
 					func(_ context.Context, _ system.Rank, _ error) error {
-						svc.events.Publish(events.NewRankExitEvent("foo",
+						svc.events.Publish(events.NewRankDownEvent("foo",
 							0, 0, common.NormalExit))
 						return nil
 					})
