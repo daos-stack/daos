@@ -1,5 +1,4 @@
 #!/usr/bin/python3
-
 """
 Node local test (NLT).
 
