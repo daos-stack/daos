@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -259,11 +259,6 @@ int
 dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	 int flags, daos_oclass_id_t cid, daos_size_t chunk_size,
 	 const char *value, dfs_obj_t **obj);
-
-int
-dfs_open2(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
-	  int flags, daos_oclass_id_t cid, daos_size_t chunk_size,
-	  const char *value, struct stat *stbuf, dfs_obj_t **obj);
 
 /**
  * Duplicate the DFS object without any RPCs (locally) by using the existing
