@@ -197,7 +197,7 @@ class OSAOnlineParallelTest(OSAUtils):
 
                 # Wait to finish the threads
                 for thrd in threads:
-                    thrd.join(timeout=20)
+                    thrd.join(timeout=100)
 
             # Check data consistency for IOR in future
             # Presently, we are running daos_racer in parallel
