@@ -3,7 +3,7 @@
 # This is the script used for running utils/node_local_test.py (NLT)
 set -uex
 
-rm -rf nlt_logs vm_test
+rm -rf nlt_logs
 
 # shellcheck disable=SC1091
 source ./.build_vars.sh

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This is a script to be run by the utils/node_local_test.sh to run a test
+# This is a script to be run by the ci/unit/test_nlt.sh to run a test
 # on a CI node.
 
 set -uex
