@@ -77,6 +77,10 @@ struct dss_xstream {
 	bool			dx_dsc_started;	/* DSC progress ULT started */
 };
 
+#define DSS_HOSTNAME_MAX_LEN	255
+
+/** Server node hostname */
+extern char		dss_hostname[];
 /** Server node topology */
 extern hwloc_topology_t	dss_topo;
 /** core depth of the topology */
@@ -99,6 +103,9 @@ extern unsigned int	dss_tgt_offload_xs_nr;
 extern unsigned int	dss_sys_xs_nr;
 /** Flag of helper XS as a pool */
 extern bool		dss_helper_pool;
+
+/* init.c */
+d_rank_t dss_self_rank(void);
 
 /* module.c */
 int dss_module_init(void);

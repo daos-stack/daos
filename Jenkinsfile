@@ -152,6 +152,7 @@ String unit_packages() {
                            'pmix numactl-devel ' +
                            'libipmctl-devel ' +
                            'python36-tabulate numactl ' +
+                           'libyaml-devel ' +
                            'valgrind-devel'
         if (need_qb) {
             // TODO: these should be gotten from the Requires: of RPM
@@ -520,9 +521,11 @@ pipeline {
                                                   "src/mgmt/*.pb-c.[ch]:" +
                                                   "src/iosrv/*.pb-c.[ch]:" +
                                                   "src/security/*.pb-c.[ch]:" +
-						  "src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:" +
-						  "src/client/java/daos-java/src/main/native/*.pb-c.[ch]:" +
-						  "src/client/java/daos-java/src/main/native/include/*.pb-c.[ch]:" +
+                                                  "src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:" +
+                                                  "src/client/java/daos-java/src/main/java/io/daos/obj/attr/*:" +
+                                                  "src/client/java/daos-java/src/main/native/include/daos_jni_common.h:" +
+                                                  "src/client/java/daos-java/src/main/native/*.pb-c.[ch]:" +
+                                                  "src/client/java/daos-java/src/main/native/include/*.pb-c.[ch]:" +
                                                   "*.crt:" +
                                                   "*.pem:" +
                                                   "*_test.go:" +
