@@ -1,6 +1,14 @@
 #!/usr/bin/python3
 
-"""Test code for dfuse"""
+"""
+Node local test (NLT).
+
+Test script for running DAOS on a single node over tmpfs and running initial
+smoke/unit tests.
+
+Includes support for DFuse with a number of unit tests, as well as stressing
+the client with fault injection of D_ALLOC() usage.
+"""
 
 # pylint: disable=too-many-lines
 # pylint: disable=too-few-public-methods
@@ -10,7 +18,6 @@ import os
 import sys
 import time
 import uuid
-import yaml
 import json
 import signal
 import stat
@@ -20,8 +27,8 @@ import functools
 import subprocess
 import tempfile
 import pickle
-
 from collections import OrderedDict
+import yaml
 
 class NLTestFail(Exception):
     """Used to indicate test failure"""
@@ -57,7 +64,7 @@ def umount(path):
     print('rc from umount {}'.format(ret.returncode))
     return ret.returncode
 
-class NLT_Conf():
+class NLTConf():
     """Helper class for configuration"""
     def __init__(self, bc):
         self.bc = bc
@@ -256,7 +263,7 @@ def load_conf():
     ofh = open(json_file, 'r')
     conf = json.load(ofh)
     ofh.close()
-    return NLT_Conf(conf)
+    return NLTConf(conf)
 
 def get_base_env():
     """Return the base set of env vars needed for DAOS"""
