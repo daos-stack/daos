@@ -268,6 +268,7 @@ class TestWithoutServers(Test):
         self.cart_prefix = None
         self.cart_bin = None
         self.tmp = None
+        self.test_dir = os.getenv("DAOS_TEST_LOG_DIR", "/tmp")
         self.fault_file = None
         self.context = None
         self.d_log = None
@@ -315,6 +316,8 @@ class TestWithoutServers(Test):
                 'DAOS_TEST_SHARED_DIR', os.path.expanduser('~/daos_test'))
         if not os.path.exists(self.tmp):
             os.makedirs(self.tmp)
+        self.log.debug("Shared test directory: %s", self.tmp)
+        self.log.debug("Common test directory: %s", self.test_dir)
 
         # setup fault injection, this MUST be before API setup
         fault_list = self.params.get("fault_list", '/run/faults/*')
@@ -575,7 +578,8 @@ class TestWithServers(TestWithoutServers):
             for group, hosts in agent_groups.items():
                 if self.agent_manager_class == "Systemctl":
                     agent_config_file = get_default_config_file("agent")
-                    agent_config_temp = self.get_config_file(group, "dmg")
+                    agent_config_temp = self.get_config_file(
+                        group, "agent", self.test_dir)
                 else:
                     agent_config_file = self.get_config_file(group, "agent")
                     agent_config_temp = None
@@ -613,9 +617,11 @@ class TestWithServers(TestWithoutServers):
             for group, hosts in server_groups.items():
                 if self.server_manager_class == "Systemctl":
                     server_config_file = get_default_config_file("server")
-                    server_config_temp = self.get_config_file(group, "server")
+                    server_config_temp = self.get_config_file(
+                        group, "server", self.test_dir)
                     dmg_config_file = get_default_config_file("control")
-                    dmg_config_temp = self.get_config_file(group, "dmg")
+                    dmg_config_temp = self.get_config_file(
+                        group, "dmg", self.test_dir)
                 else:
                     server_config_file = self.get_config_file(group, "server")
                     server_config_temp = None
@@ -633,19 +639,23 @@ class TestWithServers(TestWithoutServers):
                     hosts)
             self.start_server_managers()
 
-    def get_config_file(self, name, command):
+    def get_config_file(self, name, command, path=None):
         """Get the yaml configuration file.
 
         Args:
             name (str): unique part of the configuration file name
             command (str): command owning the configuration file
+            path (str, optional): location for the configuration file. Defaults
+                to None which yields the self.tmp shared directory.
 
         Returns:
             str: daos_agent yaml configuration file full name
 
         """
+        if path is None:
+            path = self.tmp
         filename = "{}_{}_{}.yaml".format(self.config_file_base, name, command)
-        return os.path.join(self.tmp, filename)
+        return os.path.join(path, filename)
 
     def add_agent_manager(self, group=None, config_file=None, config_temp=None):
         """Add a new daos server manager object to the server manager list.
