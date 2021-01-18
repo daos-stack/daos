@@ -1716,7 +1716,7 @@ def run_in_fg(server, conf):
 
     if containers:
         container = containers[0]
-    else
+    else:
         container = create_cont(conf, pool, posix=True)
 
     print('Pool is {}'.format(pool))
