@@ -1343,8 +1343,7 @@ dfs_umount(dfs_t *dfs)
 	daos_obj_close(dfs->root.oh, NULL);
 	daos_obj_close(dfs->super_oh, NULL);
 
-	if (dfs->prefix)
-		D_FREE(dfs->prefix);
+	D_FREE(dfs->prefix);
 
 	D_MUTEX_DESTROY(&dfs->lock);
 	D_FREE(dfs);
@@ -1393,6 +1392,7 @@ swap_dfs_glob(struct dfs_glob *dfs_params)
 	/* skip cont_uuid */
 	/* skip coh_uuid */
 }
+
 static inline daos_size_t
 dfs_glob_buf_size()
 {
@@ -1587,7 +1587,7 @@ dfs_set_prefix(dfs_t *dfs, const char *prefix)
 		return ENOMEM;
 
 	dfs->prefix_len = strlen(dfs->prefix);
-	if (dfs->prefix[dfs->prefix_len-1] == '/')
+	if (dfs->prefix[dfs->prefix_len - 1] == '/')
 		dfs->prefix_len--;
 
 	return 0;
@@ -2508,8 +2508,8 @@ dfs_open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 restart:
 	switch (mode & S_IFMT) {
 	case S_IFREG:
-		rc = open_file(dfs, th, parent, flags, cid, chunk_size, &entry,
-			       stbuf ? &file_size : NULL, len, obj);
+		rc = open_file(dfs, th, parent, flags, cid, chunk_size,
+			       &entry, stbuf ? &file_size : NULL, len, obj);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to open file (%d)\n", rc);
 			D_GOTO(out, rc);
@@ -3154,7 +3154,6 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf)
 	if (rc)
 		return daos_der2errno(rc);
 
-
 	rc = entry_stat(dfs, DAOS_TX_NONE, oh, obj->name, strlen(obj->name),
 			obj, stbuf);
 	if (rc)
@@ -3415,7 +3414,6 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		rstat.st_mtim = stbuf->st_mtim;
 	}
 	if (flags & DFS_SET_ATTR_SIZE) {
-
 		/* It shouldn't be possible to set the size of something which
 		 * isn't a file but check here anyway, as entries which aren't
 		 * files won't have array objects so check and return error here
@@ -4056,8 +4054,7 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 	}
 
 out:
-	if (xname)
-		D_FREE(xname);
+	D_FREE(xname);
 	daos_obj_close(oh, NULL);
 	return rc;
 }
@@ -4196,8 +4193,7 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	}
 
 out:
-	if (xname)
-		D_FREE(xname);
+	D_FREE(xname);
 	daos_obj_close(oh, NULL);
 	return rc;
 }
