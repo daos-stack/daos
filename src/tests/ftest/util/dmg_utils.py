@@ -655,6 +655,9 @@ class DmgCommand(DmgCommandBase):
             r"(?:([0-9a-fA-F][0-9a-fA-F-]+)\s+([*[0-9][0-9,-]*]*))",
             self.result.stdout)
         for info in match:
+            # Clean-up in case of a range in the Svc Replicas
+            if info[1][0] == '[' and info[1][-1] == ']':
+                info[1] = info[1][1:-1]
             data[info[0]] = get_numeric_list(info[1])
         return data
 
