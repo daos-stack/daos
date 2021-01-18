@@ -4,7 +4,7 @@
 #change in this file need to be reverted before landing
 #testing publishing of skipped file in Jenkins
 hosts:
-   test_servers:
+   test_srvrs:
      - 12345
 timeout: 100
 server_config:

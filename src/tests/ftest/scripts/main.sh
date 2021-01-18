@@ -197,15 +197,12 @@ fi
 # daos_test uses cmocka framework which generates a set of xml of its own
 # post-processing the xml files here to put them in proper categories
 # for publishing in Jenkins
-FILES="$logs_prefix/ftest/avocado/job-results/daos_test/*"
-echo $(ls $FILES)
-FILES="$logs_prefix/ftest/avocado/job-results/daos_test/*/test-results/*"
-echo $(ls $FILES)
-FILES="$logs_prefix/ftest/avocado/job-results/daos_test/*/test-results/*/data/*.xml"
+FILES=$logs_prefix/ftest/avocado/job-results/daos_test/*/test-results/*/data/*.xml
 echo $(ls $FILES)
 COMP="FTEST_daos_test"
 for file in $FILES
 do
+    echo "Looping through" "$file"
     if [ -f "$file" ]; then
         echo "Processing XML $file"
 
@@ -214,12 +211,16 @@ do
 
         CLASS=$(grep "<testcase classname" "$file")
         if [ "$CLASS" == "" ]; then
+            echo "class 1"
             sed -i \
             "s/case name/case classname=\"${COMP}.${SUITE}\" name/" "$file"
         else
+            echo "class 2"
             sed -i "s/case classname=\"/case classname=\"${COMP}./" "$file"
         fi
     fi
 done
+
+echo "DONE - postprocessing daos_test"
 
 exit $rc
