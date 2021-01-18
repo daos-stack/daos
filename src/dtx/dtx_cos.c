@@ -470,7 +470,11 @@ out:
 		rc = dbtree_delete(cont->sc_dtx_cos_hdl, BTR_PROBE_EQ,
 				   &kiov, NULL);
 
-	D_CDEBUG(rc != 0, DLOG_ERR, DB_IO, "Remove DTX "DF_DTI" from CoS "
+	if (rc == 0 && found == 0)
+		rc = -DER_NONEXIST;
+
+	D_CDEBUG(rc != 0 && rc != -DER_NONEXIST, DLOG_ERR, DB_IO,
+		 "Remove DTX "DF_DTI" from CoS "
 		 "cache, "DF_UOID", key %lu, %s shared entry: rc = "DF_RC"\n",
 		 DP_DTI(xid), DP_UOID(*oid), (unsigned long)dkey_hash,
 		 found == 1 ? "has" : "has not", DP_RC(rc));
