@@ -52,11 +52,11 @@ container:
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on
     oclass: RP_2G1
 ior:
-  no_parallel_job: 10
+  no_parallel_job: 1
   client_processes:
     np: 2
   test_file: /testFile
-  repetitions: 70
+  repetitions: 10
   dfs_destroy: False
   iorflags:
     ior_flags:
