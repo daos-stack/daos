@@ -590,6 +590,10 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 	int			 orig_pressure, rc;
 
 	D_ASSERT(spi->spi_space_ts <= info->si_cur_ts);
+	/* TLS is destroyed on dss_srv_handler ULT exiting */
+	if (info->si_stop)
+		goto out;
+
 	/* Use cached space presure info */
 	if ((spi->spi_space_ts + SCHED_SPACE_AGE_MAX) > info->si_cur_ts)
 		goto out;
