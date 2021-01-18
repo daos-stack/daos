@@ -1495,7 +1495,13 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
                                       "quit"])
 
             last_line = gdb_output.splitlines()[-1]
-            exe_name = last_line[7:last_line[7:].find(" ") + 7]
+            cmd = last_line[7:-1]
+            # assume there are no arguments on cmd
+            find_char = "'"
+            if cmd.find(" ") > -1:
+                # there are arguments on cmd
+                find_char = " "
+            exe_name = cmd[0:cmd.find(find_char)]
         except RuntimeError:
             exe_name = None
 
