@@ -55,17 +55,7 @@ class InvalidLogFile(Exception):
     """Exception to be raised when log file cannot be parsed"""
     pass
 
-#LOG_LEVELS = {'FATAL' :1,
-#              'EMRG'  :2,
-#              'CRIT'  :3,
-#              'ERR'   :4,
-#              'WARN'  :5,
-#              'NOTE'  :6,
-#              'INFO'  :7,
-#              'DBUG'  :8}
-
-LOG_LEVELS = {
-              'EMIT'  :1,
+LOG_LEVELS = {'EMIT'  :1,
               'FATAL' :2,
               'EMRG'  :3,
               'CRIT'  :4,

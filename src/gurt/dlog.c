@@ -585,7 +585,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 		snprintf(facstore, sizeof(facstore), "%d", fac);
 		facstr = facstore;
 	}
-	(void) gettimeofday(&tv, 0);
+	(void)gettimeofday(&tv, 0);
 	tm = localtime(&tv.tv_sec);
 	if (tm == NULL) {
 		dlog_print_err(errno, "localtime returned NULL\n");
@@ -736,8 +736,8 @@ static int d_log_str2pri(const char *pstr, size_t len)
 	if (strncasecmp(pstr, "ERR", len) == 0)
 		/* has trailing space in the array */
 		return DLOG_ERR;
-	if (strncasecmp(pstr, "DEBUG", len) == 0 || \
-	    strncasecmp(pstr, "DBUG", len) == 0) {
+	if ((strncasecmp(pstr, "DEBUG", len) == 0 || \
+	    strncasecmp(pstr, "DBUG", len) == 0)) {
 		/* check to see is debug mask bits are set */
 		return d_dbglog_data.dd_mask != 0 ?
 		       d_dbglog_data.dd_mask : DLOG_DBG;
