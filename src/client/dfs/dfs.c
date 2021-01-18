@@ -360,7 +360,7 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 
 	rc = daos_obj_fetch(oh, th, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
 	if (rc) {
-		D_ERROR("Failed to fetch entry %s " DF_RC "\n", name,
+		D_ERROR("Failed to fetch entry %s "DF_RC"\n", name,
 			DP_RC(rc));
 		return daos_der2errno(rc);
 	}
@@ -384,7 +384,7 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 		rc = daos_obj_fetch(oh, th, 0, &dkey, 1, &iod, &sgl, NULL,
 				    NULL);
 		if (rc) {
-			D_ERROR("Failed to fetch entry %s " DF_RC "\n", name,
+			D_ERROR("Failed to fetch entry %s "DF_RC"\n", name,
 				DP_RC(rc));
 			D_FREE(value);
 			D_GOTO(out, rc = daos_der2errno(rc));
@@ -1233,7 +1233,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 
 	rc = daos_cont_query(coh, NULL, prop, NULL);
 	if (rc) {
-		D_ERROR("daos_cont_query() Failed (%d)\n", rc);
+		D_ERROR("daos_cont_query() failed, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_prop, rc = daos_der2errno(rc));
 	}
 
@@ -1343,8 +1343,7 @@ dfs_umount(dfs_t *dfs)
 	daos_obj_close(dfs->root.oh, NULL);
 	daos_obj_close(dfs->super_oh, NULL);
 
-	if (dfs->prefix)
-		D_FREE(dfs->prefix);
+	D_FREE(dfs->prefix);
 
 	D_MUTEX_DESTROY(&dfs->lock);
 	D_FREE(dfs);
@@ -1393,6 +1392,7 @@ swap_dfs_glob(struct dfs_glob *dfs_params)
 	/* skip cont_uuid */
 	/* skip coh_uuid */
 }
+
 static inline daos_size_t
 dfs_glob_buf_size()
 {
@@ -1537,7 +1537,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 
 	rc = daos_obj_open(coh, super_oid, DAOS_OO_RO, &dfs->super_oh, NULL);
 	if (rc) {
-		D_ERROR("daos_obj_open() failed, " DF_RC "\n", DP_RC(rc));
+		D_ERROR("daos_obj_open() failed, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_dfs, rc = daos_der2errno(rc));
 	}
 
@@ -1553,7 +1553,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 	obj_mode = get_daos_obj_mode(flags);
 	rc = daos_obj_open(coh, dfs->root.oid, obj_mode, &dfs->root.oh, NULL);
 	if (rc) {
-		D_ERROR("daos_obj_open() failed, " DF_RC "\n", DP_RC(rc));
+		D_ERROR("daos_obj_open() failed, "DF_RC"\n", DP_RC(rc));
 		daos_obj_close(dfs->super_oh, NULL);
 		D_GOTO(err_dfs, rc = daos_der2errno(rc));
 	}
@@ -1587,7 +1587,7 @@ dfs_set_prefix(dfs_t *dfs, const char *prefix)
 		return ENOMEM;
 
 	dfs->prefix_len = strlen(dfs->prefix);
-	if (dfs->prefix[dfs->prefix_len-1] == '/')
+	if (dfs->prefix[dfs->prefix_len - 1] == '/')
 		dfs->prefix_len--;
 
 	return 0;
@@ -2787,7 +2787,7 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 				       daos_mode, 1, obj_glob->chunk_size,
 				       &obj->oh, NULL);
 	if (rc) {
-		D_ERROR("daos_array_open_with_attr() failed, " DF_RC "\n",
+		D_ERROR("daos_array_open_with_attr() failed, "DF_RC"\n",
 			DP_RC(rc));
 		D_FREE(obj);
 		return daos_der2errno(rc);
@@ -2823,7 +2823,7 @@ dfs_release(dfs_obj_t *obj)
 	}
 
 	if (rc) {
-		D_ERROR("daos_obj_close() failed, " DF_RC "\n", DP_RC(rc));
+		D_ERROR("daos_obj_close() failed, "DF_RC"\n", DP_RC(rc));
 		return daos_der2errno(rc);
 	}
 
@@ -2950,7 +2950,7 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 
 		rc = daos_array_read(obj->oh, DAOS_TX_NONE, &iod, sgl, NULL);
 		if (rc) {
-			D_ERROR("daos_array_read() failed, " DF_RC "\n",
+			D_ERROR("daos_array_read() failed, "DF_RC"\n",
 				DP_RC(rc));
 			return daos_der2errno(rc);
 		}
@@ -3146,7 +3146,6 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf)
 	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RO, &oh, NULL);
 	if (rc)
 		return daos_der2errno(rc);
-
 
 	rc = entry_stat(dfs, DAOS_TX_NONE, oh, obj->name, strlen(obj->name),
 			obj, stbuf);
@@ -3408,7 +3407,6 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		rstat.st_mtim = stbuf->st_mtim;
 	}
 	if (flags & DFS_SET_ATTR_SIZE) {
-
 		/* It shouldn't be possible to set the size of something which
 		 * isn't a file but check here anyway, as entries which aren't
 		 * files won't have array objects so check and return error here
@@ -4049,8 +4047,7 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 	}
 
 out:
-	if (xname)
-		D_FREE(xname);
+	D_FREE(xname);
 	daos_obj_close(oh, NULL);
 	return rc;
 }
@@ -4189,8 +4186,7 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	}
 
 out:
-	if (xname)
-		D_FREE(xname);
+	D_FREE(xname);
 	daos_obj_close(oh, NULL);
 	return rc;
 }

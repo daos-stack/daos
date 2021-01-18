@@ -47,7 +47,6 @@ struct dfuse_info {
 	char				*di_cont;
 	char				*di_group;
 	char				*di_mountpoint;
-	d_rank_list_t			*di_svcl;
 	uint32_t			di_thread_count;
 	bool				di_threaded;
 	bool				di_foreground;
@@ -189,8 +188,8 @@ struct dfuse_dfs {
 	dfs_t			*dfs_ns;
 	uuid_t			dfs_cont;
 	daos_handle_t		dfs_coh;
-	daos_cont_info_t	dfs_co_info;
-	ino_t			dfs_root;
+
+	/** Inode number of the root of this container */
 	ino_t			dfs_ino;
 	double			dfs_attr_timeout;
 	/* List of dfuse_dfs entries in the dfuse_pool */
@@ -544,7 +543,7 @@ dfuse_compute_inode(struct dfuse_dfs *dfs,
 {
 	uint64_t hi;
 
-	hi = (oid->hi & (-1ULL >> 32)) | (dfs->dfs_root << 48);
+	hi = (oid->hi & (-1ULL >> 32)) | (dfs->dfs_ino << 48);
 
 	*_ino = hi ^ (oid->lo << 32);
 };

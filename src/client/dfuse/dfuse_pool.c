@@ -50,7 +50,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	 * so check that the lookup is relative to the root of the sub-tree, and
 	 * abort if not.
 	 */
-	D_ASSERT(parent->ie_stat.st_ino == parent->ie_dfs->dfs_root);
+	D_ASSERT(parent->ie_stat.st_ino == parent->ie_dfs->dfs_ino);
 
 	D_ALLOC_PTR(dfp);
 	if (!dfp)
@@ -119,11 +119,18 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	DFUSE_TRA_UP(dfs, dfp, "dfs");
 
 	rc = daos_pool_connect(dfp->dfp_pool, dfuse_info->di_group,
-			       dfuse_info->di_svcl, DAOS_PC_RW,
+			       NULL, DAOS_PC_RW,
 			       &dfp->dfp_poh, &dfp->dfp_pool_info,
 			       NULL);
 	if (rc) {
-		DFUSE_TRA_ERROR(dfp, "daos_pool_connect() failed: (%d)", rc);
+		if (rc == -DER_NO_PERM)
+			DFUSE_TRA_INFO(dfp,
+				       "daos_pool_connect() failed, "DF_RC,
+				       DP_RC(rc));
+		else
+			DFUSE_TRA_ERROR(dfp,
+					"daos_pool_connect() failed, "DF_RC,
+					DP_RC(rc));
 
 		/* This is the error you get when the agent isn't started
 		 * and EHOSTUNREACH seems to better reflect this than ENOTDIR
@@ -195,7 +202,6 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	dfs->dfs_ino = atomic_fetch_add_relaxed(&fs_handle->dpi_ino_next, 1);
 
-	dfs->dfs_root = dfs->dfs_ino;
 	ie->ie_stat.st_ino = dfs->dfs_ino;
 	dfs->dfs_ops = &dfuse_cont_ops;
 
