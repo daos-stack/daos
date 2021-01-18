@@ -31,6 +31,7 @@ enum cont_op {
 	CONT_LIST_OBJS,
 	CONT_QUERY,
 	CONT_STAT,
+	CONT_CHECK,
 	CONT_GET_PROP,
 	CONT_SET_PROP,
 	CONT_LIST_ATTRS,
@@ -204,6 +205,7 @@ int fs_copy_hdlr(struct cmd_args_s *ap);
 int cont_create_hdlr(struct cmd_args_s *ap);
 int cont_create_uns_hdlr(struct cmd_args_s *ap);
 int cont_query_hdlr(struct cmd_args_s *ap);
+int cont_check_hdlr(struct cmd_args_s *ap);
 int cont_destroy_hdlr(struct cmd_args_s *ap);
 int cont_get_prop_hdlr(struct cmd_args_s *ap);
 int cont_set_prop_hdlr(struct cmd_args_s *ap);
