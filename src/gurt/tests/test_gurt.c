@@ -38,11 +38,13 @@
 #include "gurt/dlog.h"
 #include "gurt/hash.h"
 #include "gurt/atomic.h"
+#include "gurt/dyn_hash.h"
 
 /* machine epsilon */
 #define EPSILON (1.0E-16)
 
 static char *__root;
+static uint32_t test_feats;
 
 static void
 test_time(void **state)
@@ -904,6 +906,16 @@ test_gurt_hash_op_rec_free(struct d_hash_table *thtab, d_list_t *link)
 	D_FREE(tlink);
 }
 
+static bool
+test_gurt_hash_op_key_get(void *item, void **key, unsigned int *ksize)
+{
+	d_list_t *link = (d_list_t *)item;
+	struct test_hash_entry *tlink = test_gurt_hash_link2ptr(link);
+	*key = tlink->tl_key;
+	*ksize = TEST_GURT_HASH_KEY_LEN;
+	return true;
+}
+
 static d_hash_table_ops_t th_ops = {
 	.hop_key_cmp	= test_gurt_hash_op_key_cmp,
 	.hop_rec_hash	= test_gurt_hash_op_rec_hash,
@@ -994,7 +1006,7 @@ test_gurt_hash_empty(void **state)
 	assert_non_null(entries);
 
 	/* Create a minimum-size hash table */
-	rc = d_hash_table_create(0, num_bits, NULL, &th_ops, &thtab);
+	rc = d_hash_table_create(test_feats, num_bits, NULL, &th_ops, &thtab);
 	assert_int_equal(rc, 0);
 
 	/* Traverse the empty hash table and look for entries */
@@ -1028,6 +1040,7 @@ static d_hash_table_ops_t th_ops_ref = {
 	.hop_rec_decref		= test_gurt_hash_op_rec_decref,
 	.hop_rec_ndecref	= test_gurt_hash_op_rec_ndecref,
 	.hop_rec_free		= test_gurt_hash_op_rec_free,
+	.hop_key_get		= test_gurt_hash_op_key_get,
 };
 
 static void
@@ -1047,7 +1060,7 @@ test_gurt_hash_insert_lookup_delete(void **state)
 	assert_non_null(entries);
 
 	/* Create a hash table */
-	rc = d_hash_table_create(0, num_bits, NULL, &th_ops, &thtab);
+	rc = d_hash_table_create(test_feats, num_bits, NULL, &th_ops, &thtab);
 	assert_int_equal(rc, 0);
 
 	/* Insert the entries and make sure they succeed - exclusive = true */
@@ -1132,8 +1145,8 @@ test_gurt_hash_decref(void **state)
 	assert_non_null(entry);
 
 	/* Create a minimum-size hash table */
-	rc = d_hash_table_create(D_HASH_FT_EPHEMERAL, num_bits, NULL,
-				 &th_ops_ref, &thtab);
+	rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | test_feats, num_bits,
+				 NULL, &th_ops_ref, &thtab);
 	assert_int_equal(rc, 0);
 
 	rc = d_hash_rec_insert(thtab, entry->tl_key, TEST_GURT_HASH_KEY_LEN,
@@ -1505,7 +1518,8 @@ test_gurt_hash_threaded_same_operations(uint32_t ht_feats)
 	assert_non_null(entries);
 
 	/* Create a hash table */
-	rc = d_hash_table_create(ht_feats, num_bits, NULL, &th_ops, &thtab);
+	rc = d_hash_table_create(ht_feats | test_feats, num_bits, NULL,
+				 &th_ops, &thtab);
 	assert_int_equal(rc, 0);
 
 	/* Test each operation in parallel */
@@ -1564,7 +1578,8 @@ test_gurt_hash_threaded_concurrent_operations(uint32_t ht_feats)
 	assert_non_null(entries);
 
 	/* Create a hash table */
-	rc = d_hash_table_create(ht_feats, num_bits, NULL, &th_ops, &thtab);
+	rc = d_hash_table_create(ht_feats | test_feats, num_bits, NULL,
+				 &th_ops, &thtab);
 	assert_int_equal(rc, 0);
 
 	/* Use barrier to make sure all threads start at the same time */
@@ -1681,6 +1696,7 @@ static d_hash_table_ops_t th_ref_ops = {
 	.hop_rec_hash	= test_gurt_hash_op_rec_hash,
 	.hop_rec_addref	= test_gurt_hash_op_rec_addref_locked,
 	.hop_rec_decref	= test_gurt_hash_op_rec_decref_locked,
+	.hop_key_get	= test_gurt_hash_op_key_get,
 };
 
 /* Check the reference count for all entries is the expected value */
@@ -1712,7 +1728,7 @@ _test_gurt_hash_parallel_refcounting(uint32_t ht_feats)
 	assert_non_null(entries);
 
 	/* Create a hash table */
-	rc = d_hash_table_create(ht_feats, num_bits, NULL,
+	rc = d_hash_table_create(ht_feats | test_feats, num_bits, NULL,
 				 &th_ref_ops, &thtab);
 	assert_int_equal(rc, 0);
 
@@ -1940,6 +1956,7 @@ check_string_buffer(struct d_string_buffer_t *str_buf, int str_size,
 	assert_int_equal(str_buf->buf_size, buf_size);
 	assert_int_equal(str_buf->status, 0);
 	if (test_str != NULL) {
+		/**/
 		assert_string_equal(str_buf->str, test_str);
 	}
 	d_free_string(str_buf);
@@ -2006,10 +2023,10 @@ test_gurt_string_buffer(void **state)
 	d_free_string(&str_buf);
 	assert_null(str_buf.str);
 }
-
 int
 main(int argc, char **argv)
 {
+	int	rc = 0;
 	const struct CMUnitTest	tests[] = {
 		cmocka_unit_test(test_time),
 		cmocka_unit_test(test_d_errstr),
@@ -2032,6 +2049,21 @@ main(int argc, char **argv)
 
 	d_register_alt_assert(mock_assert);
 
-	return cmocka_run_group_tests_name("test_gurt", tests, init_tests,
-		fini_tests);
+	rc =  cmocka_run_group_tests(tests, init_tests, fini_tests);
+	if (rc != 0) {
+		/**/
+		return rc;
+	}
+	test_feats = D_HASH_FT_GLOCK | D_HASH_FT_DYNAMIC | D_HASH_FT_SHRINK;
+	const struct CMUnitTest	dyn_tests[] = {
+		cmocka_unit_test(test_gurt_hash_empty),
+		cmocka_unit_test(test_gurt_hash_insert_lookup_delete),
+		cmocka_unit_test(test_gurt_hash_decref),
+		cmocka_unit_test(test_gurt_hash_parallel_same_operations),
+		cmocka_unit_test(test_gurt_hash_parallel_different_operations),
+		cmocka_unit_test(test_gurt_hash_parallel_refcounting),
+	};
+
+	d_register_alt_assert(mock_assert);
+	return cmocka_run_group_tests(dyn_tests, init_tests, fini_tests);
 }
