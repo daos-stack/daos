@@ -1,4 +1,4 @@
-.\" (C) Copyright 2015-2019 Intel Corporation.
+.\" (C) Copyright 2015-2021 Intel Corporation.
 .\"
 .\" Licensed under the Apache License, Version 2.0 (the "License");
 .\" you may not use this file except in compliance with the License.
@@ -52,6 +52,8 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 .br
 	  \fBlist-cont\fR
 .br
+	  \fBls\fR
+.br
 	  \fBquery\fR            query a pool
 .br
 	  \fBstat\fR             get pool statistics
@@ -61,6 +63,8 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 	  \fBget-attr\fR         get pool user-defined attribute
 .br
 	  \fBget-prop\fR         get pool properties
+.br
+	  \fBautotest\fR         verify setup with smoke tests
 .br
 .TP
 .I pool \fBOPTION\fRs:
@@ -87,6 +91,8 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 	  \fBquery\fR            query a container
 .br
 	  \fBstat\fR             get container statistics
+.br
+	  \fBcheck\fR            check objects consistency in container
 .br
 	  \fBlist-attrs\fR       list container user-defined attributes
 .br

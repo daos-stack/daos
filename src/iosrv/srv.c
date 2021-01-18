@@ -332,7 +332,7 @@ dss_iv_resp_hdlr(crt_context_t *ctx, void *hdlr_arg,
 	struct dss_xstream	*dx = (struct dss_xstream *)arg;
 	int			 rc;
 
-	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_IO], real_rpc_hdlr,
+	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_GENERIC], real_rpc_hdlr,
 			       hdlr_arg, ABT_THREAD_ATTR_NULL, NULL);
 	return dss_abterr2der(rc);
 }
@@ -361,8 +361,8 @@ dss_rpc_hdlr(crt_context_t *ctx, void *hdlr_arg,
 	if (rc == 0)
 		return sched_req_enqueue(dx, &attr, real_rpc_hdlr, rpc);
 
-	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_IO], real_rpc_hdlr, rpc,
-			       ABT_THREAD_ATTR_NULL, NULL);
+	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_GENERIC], real_rpc_hdlr,
+			       rpc, ABT_THREAD_ATTR_NULL, NULL);
 	return dss_abterr2der(rc);
 }
 
@@ -523,6 +523,8 @@ dss_srv_handler(void *arg)
 	}
 
 	if (dx->dx_main_xs) {
+		ABT_thread_attr attr;
+
 		/* Initialize NVMe context for main XS which accesses NVME */
 		rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, dmi->dmi_tgt_id);
 		if (rc != 0) {
@@ -531,9 +533,23 @@ dss_srv_handler(void *arg)
 			D_GOTO(tse_fini, rc);
 		}
 
+		rc = ABT_thread_attr_create(&attr);
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("Create ABT thread attr failed. %d\n", rc);
+			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
+		}
+
+		rc = ABT_thread_attr_set_stacksize(attr, DSS_DEEP_STACK_SZ);
+		if (rc != ABT_SUCCESS) {
+			ABT_thread_attr_free(&attr);
+			D_ERROR("Set ABT stack size failed. %d\n", rc);
+			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
+		}
+
 		rc = ABT_thread_create(dx->dx_pools[DSS_POOL_NVME_POLL],
-				       dss_nvme_poll_ult, NULL,
+				       dss_nvme_poll_ult, attr,
 				       ABT_THREAD_ATTR_NULL, NULL);
+		ABT_thread_attr_free(&attr);
 		if (rc != ABT_SUCCESS) {
 			D_ERROR("create NVMe poll ULT failed: %d\n", rc);
 			ABT_future_set(dx->dx_shutdown, dx);
@@ -749,7 +765,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 		D_GOTO(out_xstream, rc = dss_abterr2der(rc));
 	}
 
-	rc = ABT_thread_attr_set_stacksize(attr, 65536);
+	rc = ABT_thread_attr_set_stacksize(attr, DSS_DEEP_STACK_SZ);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("ABT_thread_attr_set_stacksize fails %d\n", rc);
 		D_GOTO(out_xstream, rc = dss_abterr2der(rc));
@@ -1099,7 +1115,7 @@ dss_acc_offload(struct dss_acc_task *at_args)
 				at_args->at_params,
 				NULL /* user-cb */,
 				NULL /* user-cb args */,
-				DSS_ULT_CHECKSUM, tid,
+				DSS_XS_OFFLOAD, tid,
 				0);
 		break;
 	case DSS_OFFLOAD_ACC:
@@ -1272,33 +1288,56 @@ failed:
 }
 
 void
-dss_dump_ABT_state()
+dss_dump_ABT_state(FILE *fp)
 {
 	int			rc, num_pools, i, idx;
 	struct dss_xstream	*dx;
 	ABT_sched		sched;
 	ABT_pool		pools[DSS_POOL_CNT];
 
-	rc = ABT_info_print_all_xstreams(stderr);
+	/* print Argobots config first */
+	fprintf(fp, " == ABT config ==\n");
+	rc = ABT_info_print_config(fp);
+	if (rc != ABT_SUCCESS)
+		D_ERROR("ABT_info_print_config() error, rc = %d\n", rc);
+
+	fprintf(fp, " == List of all ESs ==\n");
+	rc = ABT_info_print_all_xstreams(fp);
 	if (rc != ABT_SUCCESS)
 		D_ERROR("ABT_info_print_all_xstreams() error, rc = %d\n", rc);
 
 	ABT_mutex_lock(xstream_data.xd_mutex);
 	for (idx = 0; idx < xstream_data.xd_xs_nr; idx++) {
 		dx = xstream_data.xd_xs_ptrs[idx];
-		rc = ABT_info_print_xstream(stderr, dx->dx_xstream);
+		fprintf(fp, "== per ES (%p) details ==\n", dx->dx_xstream);
+		rc = ABT_info_print_xstream(fp, dx->dx_xstream);
 		if (rc != ABT_SUCCESS)
 			D_ERROR("ABT_info_print_xstream() error, rc = %d, for "
 				"DAOS xstream %p, ABT xstream %p\n", rc, dx,
 				dx->dx_xstream);
 		/* one progress ULT per xstream */
 		if (dx->dx_progress != ABT_THREAD_NULL) {
-			rc = ABT_info_print_thread(stderr, dx->dx_progress);
+			fprintf(fp, "== ES (%p) progress ULT (%p) ==\n",
+				dx->dx_xstream, dx->dx_progress);
+			rc = ABT_info_print_thread(fp, dx->dx_progress);
 			if (rc != ABT_SUCCESS)
 				D_ERROR("ABT_info_print_thread() error, "
 					"rc = %d, for DAOS xstream %p, ABT "
 					"xstream %p, progress ULT %p\n", rc, dx,
 					dx->dx_xstream, dx->dx_progress);
+			/* XXX
+			 * do not print stack content as if unwiding with
+			 * libunwind is enabled current implementation runs
+			 * w/o synchronisation/suspend of current ULT which
+			 * is highly racy since unwiding will occur using
+			 * the same stack
+			rc = ABT_info_print_thread_stack(fp, dx->dx_progress);
+			if (rc != ABT_SUCCESS)
+				D_ERROR("ABT_info_print_thread_stack() error, "
+					"rc = %d, for DAOS xstream %p, ABT "
+					"xstream %p, progress ULT %p\n", rc, dx,
+					dx->dx_xstream, dx->dx_progress);
+			 */
 		}
 		/* only one sched per xstream */
 		rc = ABT_xstream_get_main_sched(dx->dx_xstream, &sched);
@@ -1314,14 +1353,14 @@ dss_dump_ABT_state()
 			D_WARN("DAOS xstream main sched %p differs from ABT "
 			       "registered one %p, dumping both\n",
 			       dx->dx_sched, sched);
-			rc = ABT_info_print_sched(stderr, sched);
+			rc = ABT_info_print_sched(fp, sched);
 			if (rc != ABT_SUCCESS)
 				D_ERROR("ABT_info_print_sched() error, rc = "
 					"%d, for DAOS xstream %p, ABT xstream "
 					"%p, sched %p\n", rc, dx,
 					dx->dx_xstream, sched);
 		}
-		rc = ABT_info_print_sched(stderr, dx->dx_sched);
+		rc = ABT_info_print_sched(fp, dx->dx_sched);
 		if (rc != ABT_SUCCESS)
 			D_ERROR("ABT_info_print_sched() error, rc = %d, for "
 				"DAOS xstream %p, ABT xstream %p, sched %p\n",
@@ -1347,6 +1386,7 @@ dss_dump_ABT_state()
 			continue;
 		}
 		for (i = 0; i < num_pools; i++) {
+			fprintf(fp, "== per POOL (%p) details ==\n", pools[i]);
 			if (pools[i] == ABT_POOL_NULL) {
 				D_WARN("DAOS xstream %p, ABT xstream %p, "
 				       "sched %p, no pool[%d]\n", dx,
@@ -1359,17 +1399,23 @@ dss_dump_ABT_state()
 				       i, dx->dx_pools[i], pools[i],
 				       dx->dx_sched);
 			}
-			rc = ABT_info_print_pool(stderr, pools[i]);
+			rc = ABT_info_print_pool(fp, pools[i]);
 			if (rc != ABT_SUCCESS)
 				D_ERROR("ABT_info_print_pool() error, rc = %d, "
 					"for DAOS xstream %p, ABT xstream %p, "
 					"sched %p, pool[%d]\n", rc, dx,
 					dx->dx_xstream, dx->dx_sched, i);
+			/* XXX
+			 * same concern than with ABT_info_print_thread_stack()
+			 * before
+			rc = ABT_info_print_thread_stacks_in_pool(fp, pools[i]);
+			if (rc != ABT_SUCCESS)
+				D_ERROR("ABT_info_print_thread_stacks_in_pool() error, rc = %d, "
+					"for DAOS xstream %p, ABT xstream %p, "
+					"sched %p, pool[%d]\n", rc, dx,
+					dx->dx_xstream, dx->dx_sched, i);
+			 */
 		}
-		/* XXX last, each pool's ULTs infos (and stacks?!) will need to
-		 * be also dumped, when a new pool method will be available to
-		 * list all ULTs in a pool (ABT issue #12)
-		 */
 	}
 	ABT_mutex_unlock(xstream_data.xd_mutex);
 }

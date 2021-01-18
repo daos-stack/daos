@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -129,6 +129,9 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		break;
 	case DRPC_METHOD_MGMT_DEV_REPLACE:
 		ds_mgmt_drpc_dev_replace(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_DEV_IDENTIFY:
+		ds_mgmt_drpc_dev_identify(drpc_req, drpc_resp);
 		break;
 	case DRPC_METHOD_MGMT_POOL_GET_ACL:
 		ds_mgmt_drpc_pool_get_acl(drpc_req, drpc_resp);
@@ -384,7 +387,7 @@ void ds_mgmt_pool_get_svcranks_hdlr(crt_rpc_t *rpc)
 
 	out = crt_reply_get(rpc);
 
-	rc =  get_pool_svc_ranks(in->gsr_puuid, &out->gsr_ranks);
+	rc =  ds_get_pool_svc_ranks(in->gsr_puuid, &out->gsr_ranks);
 	if (rc != 0)
 		D_ERROR(DF_UUID ": get_pool_svc_ranks() upcall failed, "
 			DF_RC "\n", DP_UUID(in->gsr_puuid), DP_RC(rc));

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
  * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
  * The Government's rights to use, modify, reproduce, release, perform, display,
  * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
+ * provided in Contract No. 8F-30005.
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
@@ -49,10 +49,19 @@
 #include "daos_types.h"
 #include "daos_api.h"
 #include "daos_uns.h"
+#include "daos_fs.h"
 #include "daos_hdlr.h"
 #include "dfuse_ioctl.h"
 
 const char		*default_sysname = DAOS_DEFAULT_SYS_NAME;
+
+static enum fs_op
+filesystem_op_parse(const char *str)
+{
+	if (strcmp(str, "copy") == 0)
+		return FS_COPY;
+	return -1;
+}
 
 static enum cont_op
 cont_op_parse(const char *str)
@@ -69,6 +78,8 @@ cont_op_parse(const char *str)
 		return CONT_QUERY;
 	else if (strcmp(str, "stat") == 0)
 		return CONT_STAT;
+	else if (strcmp(str, "check") == 0)
+		return CONT_CHECK;
 	else if (strcmp(str, "get-prop") == 0)
 		return CONT_GET_PROP;
 	else if (strcmp(str, "set-prop") == 0)
@@ -110,6 +121,8 @@ pool_op_parse(const char *str)
 		return POOL_LIST_CONTAINERS;
 	else if (strcmp(str, "list-cont") == 0)
 		return POOL_LIST_CONTAINERS;
+	else if (strcmp(str, "ls") == 0)
+		return POOL_LIST_CONTAINERS;
 	else if (strcmp(str, "query") == 0)
 		return POOL_QUERY;
 	else if (strcmp(str, "stat") == 0)
@@ -124,6 +137,8 @@ pool_op_parse(const char *str)
 		return POOL_DEL_ATTR;
 	else if (strcmp(str, "list-attrs") == 0)
 		return POOL_LIST_ATTRS;
+	else if (strcmp(str, "autotest") == 0)
+		return POOL_AUTOTEST;
 	return -1;
 }
 
@@ -537,6 +552,8 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		{"attr",	required_argument,	NULL,	'a'},
 		{"value",	required_argument,	NULL,	'v'},
 		{"path",	required_argument,	NULL,	'd'},
+		{"src",		required_argument,	NULL,	'S'},
+		{"dst",		required_argument,	NULL,	'D'},
 		{"type",	required_argument,	NULL,	't'},
 		{"oclass",	required_argument,	NULL,	'o'},
 		{"chunk_size",	required_argument,	NULL,	'z'},
@@ -561,9 +578,10 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	char			*cmdname = NULL;
 
 	assert(ap != NULL);
-	ap->p_op = -1;
-	ap->c_op = -1;
-	ap->o_op = -1;
+	ap->p_op  = -1;
+	ap->c_op  = -1;
+	ap->o_op  = -1;
+	ap->fs_op = -1;
 	D_STRNDUP(ap->sysname, default_sysname, strlen(default_sysname));
 	if (ap->sysname == NULL)
 		return RC_NO_HELP;
@@ -573,6 +591,14 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		ap->c_op = cont_op_parse(argv[2]);
 		if (ap->c_op == -1) {
 			fprintf(stderr, "invalid container command: %s\n",
+				argv[2]);
+			return RC_PRINT_HELP;
+		}
+	} else if ((strcmp(argv[1], "filesystem") == 0) ||
+	    (strcmp(argv[1], "fs") == 0)) {
+		ap->fs_op = filesystem_op_parse(argv[2]);
+		if (ap->fs_op == -1) {
+			fprintf(stderr, "invalid filesystem command: %s\n",
 				argv[2]);
 			return RC_PRINT_HELP;
 		}
@@ -661,6 +687,16 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		case 'd':
 			D_STRNDUP(ap->path, optarg, strlen(optarg));
 			if (ap->path == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			break;
+		case 'S':
+			D_STRNDUP(ap->src, optarg, strlen(optarg));
+			if (ap->src == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			break;
+		case 'D':
+			D_STRNDUP(ap->dst, optarg, strlen(optarg));
+			if (ap->dst == NULL)
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			break;
 		case 't':
@@ -795,9 +831,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		D_GOTO(out_free, rc = RC_NO_HELP);
 	}
 
-	if (ap->c_op != -1 &&
-	    (ap->c_op == CONT_LIST_OBJS ||
-	     ap->c_op == CONT_STAT)) {
+	if (ap->c_op != -1 && ap->c_op == CONT_STAT) {
 		fprintf(stderr,
 			"container %s not yet implemented\n", cmdname);
 		D_GOTO(out_free, rc = RC_NO_HELP);
@@ -831,6 +865,10 @@ out_free:
 		D_FREE(ap->value_str);
 	if (ap->path != NULL)
 		D_FREE(ap->path);
+	if (ap->src != NULL)
+		D_FREE(ap->src);
+	if (ap->dst != NULL)
+		D_FREE(ap->dst);
 	if (ap->snapname_str != NULL)
 		D_FREE(ap->snapname_str);
 	if (ap->epcrange_str != NULL)
@@ -894,6 +932,9 @@ pool_op_hdlr(struct cmd_args_s *ap)
 	case POOL_DEL_ATTR:
 		rc = pool_del_attr_hdlr(ap);
 		break;
+	case POOL_AUTOTEST:
+		rc = pool_autotest_hdlr(ap);
+		break;
 	default:
 		break;
 	}
@@ -926,6 +967,31 @@ call_dfuse_ioctl(char *path, struct dfuse_il_reply *reply)
 		return EIO;
 
 	return 0;
+}
+
+static int
+fs_op_hdlr(struct cmd_args_s *ap)
+{
+	int rc = 0;
+	enum fs_op op;
+
+	assert(ap != NULL);
+	op = ap->fs_op;
+
+	switch (op) {
+	case FS_COPY:
+		if (ap->src == NULL || ap->dst == NULL) {
+			fprintf(stderr, "a source and destination path "
+				"must be provided\n");
+		} else {
+			rc = fs_copy_hdlr(ap);
+			assert(rc == 0);
+		}
+		break;
+	default:
+		break;
+	}
+	return rc;
 }
 
 static int
@@ -1027,16 +1093,17 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	case CONT_DESTROY:
 		rc = cont_destroy_hdlr(ap);
 		break;
-
-	/* TODO: implement the following ops */
 	case CONT_LIST_OBJS:
-		/* rc = cont_list_objs_hdlr(ap); */
+		rc = cont_list_objs_hdlr(ap);
 		break;
 	case CONT_QUERY:
 		rc = cont_query_hdlr(ap);
 		break;
 	case CONT_STAT:
 		/* rc = cont_stat_hdlr(ap); */
+		break;
+	case CONT_CHECK:
+		rc = cont_check_hdlr(ap);
 		break;
 	case CONT_GET_PROP:
 		rc = cont_get_prop_hdlr(ap);
@@ -1220,11 +1287,33 @@ do { \
 	"resources:\n" \
 	"	  pool             pool\n" \
 	"	  container (cont) container\n" \
+	"	  filesystem (fs)  copy to and from a POSIX filesystem\n" \
 	"	  object (obj)     object\n" \
 	"	  version          print command version\n" \
 	"	  help             print this message and exit\n"); \
 	fprintf(stream, "\n"); \
 	fprintf(stream, "use 'daos help RESOURCE' for resource specifics\n"); \
+} while (0)
+
+#define FS_COPY_CMDS_HELP() \
+do { \
+	fprintf(stream, "\n" \
+	" copy to and from POSIX filesystem\n" \
+	" filesystem copy options (copy):\n" \
+	"	--src=daos://<pool/cont> | <path>\n" \
+	"	--dst=daos://<pool/cont> | <path>\n" \
+	"	\t type is daos, only specified if pool/cont used\n"); \
+	fprintf(stream, "\n"); \
+} while (0)
+
+#define ALL_FS_CMDS_HELP() \
+do { \
+	fprintf(stream, "\n" \
+	"container (cont) commands:\n" \
+	"	  copy		copy to/from POSIX filesystem\n"); \
+	fprintf(stream, "\n"); \
+	fprintf(stream, "use 'daos help fs|filesystem COMMAND' " \
+	"		for options\n"); \
 } while (0)
 
 #define ALL_CONT_CMDS_HELP() \
@@ -1244,6 +1333,7 @@ do { \
 	"	  delete-acl       delete an entry from a container's ACL\n" \
 	"	  set-owner        change the user and/or group that own a container\n" \
 	"	  stat             get container statistics\n" \
+	"	  check            check objects consistency in container\n" \
 	"	  list-attrs       list container user-defined attributes\n" \
 	"	  del-attr         delete container user-defined attribute\n" \
 	"	  get-attr         get container user-defined attribute\n" \
@@ -1281,17 +1371,24 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 
 	if (argc <= 2) {
 		FIRST_LEVEL_HELP();
+	} else if (strcmp(argv[2], "filesystem") == 0 ||
+			strcmp(argv[2], "fs") == 0) {
+		if (argc == 3 || strcmp(argv[3], "copy") == 0) {
+			FS_COPY_CMDS_HELP();
+		}
 	} else if (strcmp(argv[2], "pool") == 0) {
 		fprintf(stream, "\n"
 		"pool commands:\n"
 		"	  list-containers  list all containers in pool\n"
 		"	  list-cont\n"
+		"	  ls\n"
 		"	  query            query a pool\n"
 		"	  stat             get pool statistics\n"
 		"	  list-attrs       list pool user-defined attributes\n"
 		"	  get-attr         get pool user-defined attribute\n"
 		"	  set-attr         set pool user-defined attribute\n"
-		"	  del-attr         del pool user-defined attribute\n");
+		"	  del-attr         del pool user-defined attribute\n"
+		"	  autotest         verify setup with smoke tests\n");
 
 		fprintf(stream,
 		"pool options:\n"
@@ -1405,6 +1502,7 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			   strcmp(argv[3], "query") == 0 ||
 			   strcmp(argv[3], "get-prop") == 0 ||
 			   strcmp(argv[3], "stat") == 0 ||
+			   strcmp(argv[3], "check") == 0 ||
 			   strcmp(argv[3], "list-attrs") == 0 ||
 			   strcmp(argv[3], "list-snaps") == 0) {
 			ALL_BUT_CONT_CREATE_OPTS_HELP();
@@ -1454,11 +1552,14 @@ main(int argc, char *argv[])
 		help_hdlr(argc, argv, &dargs);
 		return 2;
 	} else if ((strcmp(argv[1], "container") == 0) ||
-		 (strcmp(argv[1], "cont") == 0))
+		 (strcmp(argv[1], "cont") == 0)) {
 		hdlr = cont_op_hdlr;
-	else if (strcmp(argv[1], "pool") == 0)
+	} else if ((strcmp(argv[1], "filesystem") == 0) ||
+		 (strcmp(argv[1], "fs") == 0)) {
+		hdlr = fs_op_hdlr;
+	} else if (strcmp(argv[1], "pool") == 0) {
 		hdlr = pool_op_hdlr;
-	else if ((strcmp(argv[1], "object") == 0) ||
+	} else if ((strcmp(argv[1], "object") == 0) ||
 		 (strcmp(argv[1], "obj") == 0))
 		hdlr = obj_op_hdlr;
 

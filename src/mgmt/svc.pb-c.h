@@ -25,10 +25,11 @@ typedef struct _Mgmt__LeaderQueryReq Mgmt__LeaderQueryReq;
 typedef struct _Mgmt__LeaderQueryResp Mgmt__LeaderQueryResp;
 typedef struct _Mgmt__GetAttachInfoReq Mgmt__GetAttachInfoReq;
 typedef struct _Mgmt__GetAttachInfoResp Mgmt__GetAttachInfoResp;
-typedef struct _Mgmt__GetAttachInfoResp__Psr Mgmt__GetAttachInfoResp__Psr;
+typedef struct _Mgmt__GetAttachInfoResp__RankUri Mgmt__GetAttachInfoResp__RankUri;
 typedef struct _Mgmt__PrepShutdownReq Mgmt__PrepShutdownReq;
 typedef struct _Mgmt__PingRankReq Mgmt__PingRankReq;
 typedef struct _Mgmt__SetRankReq Mgmt__SetRankReq;
+typedef struct _Mgmt__PoolMonitorReq Mgmt__PoolMonitorReq;
 
 
 /* --- enums --- */
@@ -100,11 +101,15 @@ struct  _Mgmt__JoinReq
 {
   ProtobufCMessage base;
   /*
-   * Servee UUID.
+   * DAOS system name.
+   */
+  char *sys;
+  /*
+   * Server UUID.
    */
   char *uuid;
   /*
-   * Server rank desired, if not -1.
+   * Server rank desired, if not MAX_UINT32.
    */
   uint32_t rank;
   /*
@@ -130,7 +135,7 @@ struct  _Mgmt__JoinReq
 };
 #define MGMT__JOIN_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__join_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0 }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0 }
 
 
 struct  _Mgmt__JoinResp
@@ -168,7 +173,7 @@ struct  _Mgmt__LeaderQueryReq
   /*
    * System name.
    */
-  char *system;
+  char *sys;
 };
 #define MGMT__LEADER_QUERY_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__leader_query_req__descriptor) \
@@ -195,27 +200,23 @@ struct  _Mgmt__GetAttachInfoReq
    */
   char *sys;
   /*
-   * Return PSRs for all ranks, not just the MS replicas.
+   * Return Rank URIs for all ranks.
    */
-  protobuf_c_boolean allranks;
-  /*
-   * Job ID to associate instance with.
-   */
-  char *jobid;
+  protobuf_c_boolean all_ranks;
 };
 #define MGMT__GET_ATTACH_INFO_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_attach_info_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string }
+    , (char *)protobuf_c_empty_string, 0 }
 
 
-struct  _Mgmt__GetAttachInfoResp__Psr
+struct  _Mgmt__GetAttachInfoResp__RankUri
 {
   ProtobufCMessage base;
   uint32_t rank;
   char *uri;
 };
-#define MGMT__GET_ATTACH_INFO_RESP__PSR__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_attach_info_resp__psr__descriptor) \
+#define MGMT__GET_ATTACH_INFO_RESP__RANK_URI__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_attach_info_resp__rank_uri__descriptor) \
     , 0, (char *)protobuf_c_empty_string }
 
 
@@ -227,10 +228,10 @@ struct  _Mgmt__GetAttachInfoResp
    */
   int32_t status;
   /*
-   * CaRT PSRs of the system group.
+   * Rank URIs
    */
-  size_t n_psrs;
-  Mgmt__GetAttachInfoResp__Psr **psrs;
+  size_t n_rank_uris;
+  Mgmt__GetAttachInfoResp__RankUri **rank_uris;
   /*
    * These CaRT settings are shared with the
    * libdaos client to aid in CaRT initialization.
@@ -250,19 +251,27 @@ struct  _Mgmt__GetAttachInfoResp
   /*
    * CaRT CRT_CTX_SHARE_ADDR
    */
-  uint32_t crtctxshareaddr;
+  uint32_t crt_ctx_share_addr;
   /*
    * CaRT CRT_TIMEOUT
    */
-  uint32_t crttimeout;
+  uint32_t crt_timeout;
   /*
    * ARP protocol hardware identifier of the
    */
-  uint32_t netdevclass;
+  uint32_t net_dev_class;
+  /*
+   * IO server network interface
+   */
+  /*
+   * Ranks local to MS replicas
+   */
+  size_t n_ms_ranks;
+  uint32_t *ms_ranks;
 };
 #define MGMT__GET_ATTACH_INFO_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_attach_info_resp__descriptor) \
-    , 0, 0,NULL, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0 }
+    , 0, 0,NULL, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, 0,NULL }
 
 
 struct  _Mgmt__PrepShutdownReq
@@ -302,6 +311,31 @@ struct  _Mgmt__SetRankReq
 #define MGMT__SET_RANK_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__set_rank_req__descriptor) \
     , 0 }
+
+
+struct  _Mgmt__PoolMonitorReq
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS system identifier
+   */
+  char *sys;
+  /*
+   * Pool UUID associated with the Pool Handle
+   */
+  char *pooluuid;
+  /*
+   * Pool Handle UUID for the connection
+   */
+  char *poolhandleuuid;
+  /*
+   * Job ID to associate instance with.
+   */
+  char *jobid;
+};
+#define MGMT__POOL_MONITOR_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_monitor_req__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
 /* Mgmt__DaosResp methods */
@@ -459,9 +493,9 @@ Mgmt__GetAttachInfoReq *
 void   mgmt__get_attach_info_req__free_unpacked
                      (Mgmt__GetAttachInfoReq *message,
                       ProtobufCAllocator *allocator);
-/* Mgmt__GetAttachInfoResp__Psr methods */
-void   mgmt__get_attach_info_resp__psr__init
-                     (Mgmt__GetAttachInfoResp__Psr         *message);
+/* Mgmt__GetAttachInfoResp__RankUri methods */
+void   mgmt__get_attach_info_resp__rank_uri__init
+                     (Mgmt__GetAttachInfoResp__RankUri         *message);
 /* Mgmt__GetAttachInfoResp methods */
 void   mgmt__get_attach_info_resp__init
                      (Mgmt__GetAttachInfoResp         *message);
@@ -538,6 +572,25 @@ Mgmt__SetRankReq *
 void   mgmt__set_rank_req__free_unpacked
                      (Mgmt__SetRankReq *message,
                       ProtobufCAllocator *allocator);
+/* Mgmt__PoolMonitorReq methods */
+void   mgmt__pool_monitor_req__init
+                     (Mgmt__PoolMonitorReq         *message);
+size_t mgmt__pool_monitor_req__get_packed_size
+                     (const Mgmt__PoolMonitorReq   *message);
+size_t mgmt__pool_monitor_req__pack
+                     (const Mgmt__PoolMonitorReq   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_monitor_req__pack_to_buffer
+                     (const Mgmt__PoolMonitorReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__PoolMonitorReq *
+       mgmt__pool_monitor_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_monitor_req__free_unpacked
+                     (Mgmt__PoolMonitorReq *message,
+                      ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
 typedef void (*Mgmt__DaosResp_Closure)
@@ -567,8 +620,8 @@ typedef void (*Mgmt__LeaderQueryResp_Closure)
 typedef void (*Mgmt__GetAttachInfoReq_Closure)
                  (const Mgmt__GetAttachInfoReq *message,
                   void *closure_data);
-typedef void (*Mgmt__GetAttachInfoResp__Psr_Closure)
-                 (const Mgmt__GetAttachInfoResp__Psr *message,
+typedef void (*Mgmt__GetAttachInfoResp__RankUri_Closure)
+                 (const Mgmt__GetAttachInfoResp__RankUri *message,
                   void *closure_data);
 typedef void (*Mgmt__GetAttachInfoResp_Closure)
                  (const Mgmt__GetAttachInfoResp *message,
@@ -581,6 +634,9 @@ typedef void (*Mgmt__PingRankReq_Closure)
                   void *closure_data);
 typedef void (*Mgmt__SetRankReq_Closure)
                  (const Mgmt__SetRankReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__PoolMonitorReq_Closure)
+                 (const Mgmt__PoolMonitorReq *message,
                   void *closure_data);
 
 /* --- services --- */
@@ -599,10 +655,11 @@ extern const ProtobufCMessageDescriptor mgmt__leader_query_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__leader_query_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__get_attach_info_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__descriptor;
-extern const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__psr__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__rank_uri__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__prep_shutdown_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__ping_rank_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__set_rank_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_monitor_req__descriptor;
 
 PROTOBUF_C__END_DECLS
 

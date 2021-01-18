@@ -38,7 +38,12 @@ struct dtx_rsrvd_uint {
 };
 
 enum dtx_cos_flags {
-	DCF_SHARED	= (1 << 0),
+	DCF_SHARED		= (1 << 0),
+	/* Some DTX (such as for the distributed transaction across multiple
+	 * RDGs, or for EC object modification) need to be committed via DTX
+	 * RPC instead of piggyback via other dispatched update/punch RPC.
+	 */
+	DCF_EXP_CMT		= (1 << 1),
 };
 
 struct dtx_cos_key {
@@ -58,6 +63,8 @@ enum dtx_entry_flags {
 	 * object modification via standalone update/punch.
 	 */
 	DTE_BLOCK		= (1 << 2),
+	/* The DTX is corrupted, some participant RDG(s) may be lost. */
+	DTE_CORRUPTED		= (1 << 3),
 };
 
 struct dtx_entry {
@@ -306,8 +313,8 @@ enum {
 	VOS_IT_RECX_REVERSE	= (1 << 3),
 	/** The iterator is for purge operation */
 	VOS_IT_FOR_PURGE	= (1 << 4),
-	/** The iterator is for rebuild scan */
-	VOS_IT_FOR_REBUILD	= (1 << 5),
+	/** The iterator is for data migration scan */
+	VOS_IT_FOR_MIGRATION	= (1 << 5),
 	/** Iterate only show punched records in interval */
 	VOS_IT_PUNCHED		= (1 << 6),
 	/** Mask for all flags */
@@ -375,7 +382,7 @@ typedef struct {
 				daos_unit_oid_t	ie_oid;
 			};
 		};
-		/** Array entry */
+		/** Array or SV entry */
 		struct {
 			/** record size */
 			daos_size_t		ie_rsize;
@@ -393,6 +400,8 @@ typedef struct {
 			uint32_t		ie_ver;
 			/** Minor epoch of extent */
 			uint16_t		ie_minor_epc;
+			/** entry dtx state */
+			unsigned int		ie_dtx_state;
 		};
 		/** Active DTX entry. */
 		struct {
@@ -432,9 +441,14 @@ typedef int (*vos_iter_cb_t)(daos_handle_t ih, vos_iter_entry_t *entry,
  * Actions performed in iteration callback
  */
 enum {
-	VOS_ITER_CB_YIELD	= (1UL << 0),	/* Yield */
-	VOS_ITER_CB_DELETE	= (1UL << 1),	/* Delete entry */
-	VOS_ITER_CB_SKIP	= (1UL << 2),	/* Skip entry */
+	/** Yield */
+	VOS_ITER_CB_YIELD	= (1UL << 0),
+	/** Delete entry */
+	VOS_ITER_CB_DELETE	= (1UL << 1),
+	/** Skip entry, don't iterate into next level for current entry */
+	VOS_ITER_CB_SKIP	= (1UL << 2),
+	/** Abort current level iteration */
+	VOS_ITER_CB_ABORT	= (1UL << 3),
 };
 
 /**

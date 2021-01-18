@@ -405,7 +405,7 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 		}
 	}
 
-	while (!daos_handle_is_inval(poh)) {
+	while (daos_handle_is_valid(poh)) {
 		struct daos_rebuild_status *rstat = &pinfo.pi_rebuild_st;
 
 		memset(&pinfo, 0, sizeof(pinfo));
@@ -502,7 +502,7 @@ test_teardown(void **state)
 	if (arg->multi_rank)
 		MPI_Barrier(MPI_COMM_WORLD);
 
-	if (!daos_handle_is_inval(arg->coh)) {
+	if (daos_handle_is_valid(arg->coh)) {
 		rc = test_teardown_cont_hdl(arg);
 		if (rc)
 			return rc;
@@ -527,7 +527,7 @@ test_teardown(void **state)
 	if (!uuid_is_null(arg->pool.pool_uuid) && !arg->pool.slave &&
 	    !arg->pool.destroyed) {
 		if (arg->myrank != 0) {
-			if (!daos_handle_is_inval(arg->pool.poh))
+			if (daos_handle_is_valid(arg->pool.poh))
 				rc = daos_pool_disconnect(arg->pool.poh, NULL);
 		}
 		if (arg->multi_rank)
@@ -545,7 +545,7 @@ test_teardown(void **state)
 		}
 	}
 
-	if (!daos_handle_is_inval(arg->eq)) {
+	if (daos_handle_is_valid(arg->eq)) {
 		rc = daos_eq_destroy(arg->eq, 0);
 		if (rc) {
 			print_message("failed to destroy eq: %d\n", rc);
@@ -843,7 +843,7 @@ daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
 	int		rc;
 
 	/* build and invoke dmg cmd */
-	dts_create_config(dmg_cmd, "dmg pool %s -i --pool=%s --rank=%d",
+	dts_create_config(dmg_cmd, "dmg pool %s --pool=" DF_UUIDF " --rank=%d",
 			  sub_cmd, DP_UUID(pool_uuid), rank);
 
 	if (tgt_idx != -1)
@@ -940,7 +940,7 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
 
 	/* build and invoke dmg cmd to stop the server */
-	dts_create_config(dmg_cmd, "dmg system stop -i -r %d --force", rank);
+	dts_create_config(dmg_cmd, "dmg system stop -r %d --force", rank);
 	if (arg->dmg_config != NULL)
 		dts_append_config(dmg_cmd, " -o %s", arg->dmg_config);
 

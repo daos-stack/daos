@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,8 @@
  * tests/suite/daos_obj.c
  */
 #define D_LOGFAC	DD_FAC(tests)
+#include "daos_test.h"
+
 #include "daos_iotest.h"
 #include <daos_types.h>
 #include <daos/checksum.h>
@@ -185,7 +187,8 @@ ioreq_iod_simple_set(struct ioreq *req, daos_size_t *iod_size, bool lookup,
 		iod[i].iod_type = req->iod_type;
 		iod[i].iod_size = iod_size[i];
 		if (req->iod_type == DAOS_IOD_ARRAY) {
-			iod[i].iod_recxs[0].rx_idx = idx[i] + i * SEGMENT_SIZE;
+			iod[i].iod_recxs[0].rx_idx = idx[i] +
+				(req->arg->idx_no_jump ? 0 : i * SEGMENT_SIZE);
 			iod[i].iod_recxs[0].rx_nr = rx_nr[i];
 		}
 		iod[i].iod_nr = 1;
@@ -441,15 +444,21 @@ lookup_internal(daos_key_t *dkey, int nr, d_sg_list_t *sgls,
 		daos_iod_t *iods, daos_handle_t th, struct ioreq *req,
 		bool empty)
 {
+	uint64_t api_flags;
 	bool ev_flag;
 	int rc;
 
+	if (empty)
+		api_flags = DAOS_COND_DKEY_FETCH | DAOS_COND_AKEY_FETCH;
+	else
+		api_flags = 0;
+
 	/** execute fetch operation */
-	rc = daos_obj_fetch(req->oh, th, 0, dkey, nr, iods, sgls,
+	rc = daos_obj_fetch(req->oh, th, api_flags, dkey, nr, iods, sgls,
 			    NULL, req->arg->async ? &req->ev : NULL);
 	if (!req->arg->async) {
 		req->result = rc;
-		if (rc != -DER_INPROGRESS)
+		if (rc != -DER_INPROGRESS && !req->arg->not_check_result)
 			assert_int_equal(rc, req->arg->expect_result);
 		return;
 	}
@@ -459,7 +468,7 @@ lookup_internal(daos_key_t *dkey, int nr, d_sg_list_t *sgls,
 	assert_int_equal(rc, 0);
 	assert_int_equal(ev_flag, true);
 	req->result = req->ev.ev_error;
-	if (req->ev.ev_error != -DER_INPROGRESS)
+	if (req->ev.ev_error != -DER_INPROGRESS && !req->arg->not_check_result)
 		assert_int_equal(req->ev.ev_error, req->arg->expect_result);
 }
 
@@ -697,6 +706,13 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 	/* Disabled Pool Aggrgation */
 	rc = set_pool_reclaim_strategy(state, aggr_disabled);
 	assert_int_equal(rc, 0);
+	/**
+	 * set_pool_reclaim_strategy() to disable aggregation
+	 * assumes all aggregation ULTs on all servers taking
+	 * effect immediately, this may not be the case.
+	 * Adding delay so that ULTs finish the round of aggregation.
+	 */
+	sleep(10);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
@@ -912,9 +928,16 @@ io_rewritten_array_with_mixed_size(void **state)
 	assert_non_null(fbuf);
 	memset(fbuf, 0, size);
 
-	/* Disabled Pool Aggrgation */
+	/* Disabled Pool Aggregation */
 	rc = set_pool_reclaim_strategy(state, aggr_disabled);
 	assert_int_equal(rc, 0);
+	/**
+	 * set_pool_reclaim_strategy() to disable aggregation
+	 * assumes all aggregation ULTs on all servers taking
+	 * effect immediately, this may not be the case.
+	 * So adding delay so that ULTs finish the round of aggregation.
+	 */
+	sleep(10);
 
 	/* Get the pool info at the beginning */
 	rc = pool_storage_info(state, &pinfo);
@@ -3039,7 +3062,7 @@ tgt_idx_change_retry(void **state)
 	arg->fail_loc = DAOS_OBJ_TGT_IDX_CHANGE;
 	arg->fail_num = replica;
 	if (arg->myrank == 0) {
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				     DAOS_OBJ_TGT_IDX_CHANGE,
 				     replica, NULL);
 	}
@@ -3076,7 +3099,7 @@ tgt_idx_change_retry(void **state)
 		assert_int_equal(layout->ol_shards[0]->os_replica_nr, 3);
 		/* FIXME disable rank compare until we fix the layout_get */
 		/* assert_int_equal(layout->ol_shards[0]->os_ranks[0], 2); */
-		rank = layout->ol_shards[0]->os_ranks[replica];
+		rank = layout->ol_shards[0]->os_shard_loc[replica].sd_rank;
 		rc = daos_obj_layout_free(layout);
 		assert_int_equal(rc, 0);
 
@@ -3102,14 +3125,15 @@ tgt_idx_change_retry(void **state)
 		 *		     rank);
 		*/
 		print_message("target of shard %d changed from %d to %d\n",
-			      replica, rank, layout->ol_shards[0]->os_ranks[0]);
+			      replica, rank,
+			      layout->ol_shards[0]->os_shard_loc[0].sd_rank);
 		rc = daos_obj_layout_free(layout);
 		assert_int_equal(rc, 0);
 	}
 
 	daos_fail_loc_set(0);
 	if (arg->myrank == 0) {
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
 				     0, NULL);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -3731,18 +3755,23 @@ io_pool_map_refresh_trigger(void **state)
 	daos_obj_id_t	oid;
 	struct ioreq	req;
 	d_rank_t	leader;
+	d_rank_t	rank = 1;
 
 	/* needs at lest 2 targets */
 	if (!test_runable(arg, 2))
 		skip();
 
+	/* Choose an rank other than leader */
 	test_get_leader(arg, &leader);
-	D_ASSERT(leader > 0);
+	while (rank == leader)
+		rank = (rank + 1) % arg->srv_nnodes;
+
+	print_message("leader %u rank %u\n", leader, rank);
 	oid = dts_oid_gen(DAOS_OC_R1S_SPEC_RANK, 0, arg->myrank);
-	oid = dts_oid_set_rank(oid, leader - 1);
+	oid = dts_oid_set_rank(oid, rank);
 
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				 DAOS_FORCE_REFRESH_POOL_MAP | DAOS_FAIL_ONCE,
 				 0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -3753,7 +3782,7 @@ io_pool_map_refresh_trigger(void **state)
 		      strlen("data") + 1, DAOS_TX_NONE, &req);
 
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				     0, 0, NULL);
 
 	ioreq_fini(&req);
@@ -3942,7 +3971,7 @@ io_capa_iv_fetch(void **state)
 	oid = dts_oid_set_rank(oid, leader - 1);
 
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				 DAOS_FORCE_CAPA_FETCH | DAOS_FAIL_ONCE,
 				 0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -3953,7 +3982,7 @@ io_capa_iv_fetch(void **state)
 		      strlen("data") + 1, DAOS_TX_NONE, &req);
 
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				     0, 0, NULL);
 
 	ioreq_fini(&req);
@@ -4073,7 +4102,7 @@ io_fetch_retry_another_replica(void **state)
 
 	/* Fail the first try */
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
+		daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
 				 DAOS_OBJ_FETCH_DATA_LOST | DAOS_FAIL_ONCE,
 				 0, NULL);
 

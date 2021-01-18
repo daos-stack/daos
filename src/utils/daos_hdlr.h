@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,14 @@
  * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
  * The Government's rights to use, modify, reproduce, release, perform, display,
  * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
+ * provided in Contract No. B620873.
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
+
+enum fs_op {
+	FS_COPY
+};
 
 enum cont_op {
 	CONT_CREATE,
@@ -27,6 +31,7 @@ enum cont_op {
 	CONT_LIST_OBJS,
 	CONT_QUERY,
 	CONT_STAT,
+	CONT_CHECK,
 	CONT_GET_PROP,
 	CONT_SET_PROP,
 	CONT_LIST_ATTRS,
@@ -52,7 +57,8 @@ enum pool_op {
 	POOL_SET_ATTR,
 	POOL_GET_ATTR,
 	POOL_LIST_ATTRS,
-	POOL_DEL_ATTR
+	POOL_DEL_ATTR,
+	POOL_AUTOTEST,
 };
 
 enum obj_op {
@@ -69,6 +75,7 @@ struct cmd_args_s {
 	enum pool_op		p_op;		/* pool sub-command */
 	enum cont_op		c_op;		/* cont sub-command */
 	enum obj_op		o_op;		/* obj sub-command */
+	enum fs_op		fs_op;		/* filesystem sub-command */
 	char			*sysname;	/* --sys-name or --sys */
 	uuid_t			p_uuid;		/* --pool */
 	daos_handle_t		pool;
@@ -82,6 +89,8 @@ struct cmd_args_s {
 
 	/* Container unified namespace (path) related */
 	char			*path;		/* --path cont namespace */
+	char			*src;		/* --src path for fs copy */
+	char			*dst;		/* --dst path for fs copy */
 	daos_cont_layout_t	type;		/* --type cont type */
 	daos_oclass_id_t	oclass;		/* --oclass object class */
 	daos_size_t		chunk_size;	/* --chunk_size of cont objs */
@@ -184,15 +193,19 @@ int pool_set_attr_hdlr(struct cmd_args_s *ap);
 int pool_del_attr_hdlr(struct cmd_args_s *ap);
 int pool_get_attr_hdlr(struct cmd_args_s *ap);
 int pool_list_attrs_hdlr(struct cmd_args_s *ap);
+int pool_autotest_hdlr(struct cmd_args_s *ap);
 /* TODO: implement these pool op functions
- * int pool_list_cont_hdlr(struct cmd_args_s *ap);
  * int pool_stat_hdlr(struct cmd_args_s *ap);
  */
+
+/* filesystem operations */
+int fs_copy_hdlr(struct cmd_args_s *ap);
 
 /* Container operations */
 int cont_create_hdlr(struct cmd_args_s *ap);
 int cont_create_uns_hdlr(struct cmd_args_s *ap);
 int cont_query_hdlr(struct cmd_args_s *ap);
+int cont_check_hdlr(struct cmd_args_s *ap);
 int cont_destroy_hdlr(struct cmd_args_s *ap);
 int cont_get_prop_hdlr(struct cmd_args_s *ap);
 int cont_set_prop_hdlr(struct cmd_args_s *ap);
@@ -210,14 +223,13 @@ int cont_update_acl_hdlr(struct cmd_args_s *ap);
 int cont_delete_acl_hdlr(struct cmd_args_s *ap);
 int cont_set_owner_hdlr(struct cmd_args_s *ap);
 int cont_rollback_hdlr(struct cmd_args_s *ap);
+int cont_list_objs_hdlr(struct cmd_args_s *ap);
 
 /* TODO implement the following container op functions
  * all with signatures similar to this:
  * int cont_FN_hdlr(struct cmd_args_s *ap)
  *
- * cont_list_objs_hdlr()
  * int cont_stat_hdlr()
- * int cont_del_attr_hdlr()
  * int cont_rollback_hdlr()
  */
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -98,13 +98,27 @@ enum {
 	DAOS_OC_EC_K2P2_L32K,	/* Erasure code, 2 data cells, 2 parity cells,
 				 * cell size 32K.
 				 */
+	DAOS_OC_EC_K4P1_L32K,	/* Erasure code, 4 data cells, 1 parity cells,
+				 * cell size 32K.
+				 */
+
 	DAOS_OC_EC_K4P2_L32K,	/* Erasure code, 4 data cells, 2 parity cells,
 				 * cell size 32K.
 				 */
 
 	DAOS_OC_EC_K2P1_SPEC_RANK_L32K,
 	DAOS_OC_EC_K4P1_SPEC_RANK_L32K,
+	/**
+	 * Object class reserved by Object Index Table (OIT)
+	 * It is the 1st version and could be changed in the future
+	 *
+	 * NB: it should be smaller than OC_BACK_COMPAT (50)
+	 */
+	DAOS_OC_OIT_V1	= 45,
 };
+
+/* default version of OIT object class */
+#define DAOS_OC_OIT	DAOS_OC_OIT_V1
 
 static inline bool
 daos_obj_is_echo(daos_obj_id_t oid)
@@ -172,12 +186,17 @@ struct daos_obj_shard_md {
 	uint32_t		smd_padding;
 };
 
+struct daos_shard_loc {
+	uint32_t	sd_rank;
+	uint32_t	sd_tgt_idx;
+};
+
 /**
  * object layout information.
  **/
 struct daos_obj_shard {
-	uint32_t	os_replica_nr;
-	uint32_t	os_ranks[0];
+	uint32_t		os_replica_nr;
+	struct daos_shard_loc	os_shard_loc[0];
 };
 
 struct daos_obj_layout {
@@ -307,6 +326,17 @@ daos_oclass_is_ec(daos_obj_id_t oid, struct daos_oclass_attr **attr)
 	return DAOS_OC_IS_EC(oca);
 }
 
+/* generate ID for Object ID Table which is just an object */
+static inline daos_obj_id_t
+daos_oit_gen_id(daos_epoch_t epoch)
+{
+	daos_obj_id_t	oid = {0};
+
+	daos_obj_generate_id(&oid, 0, DAOS_OC_OIT, 0);
+	oid.lo = epoch;
+	return oid;
+}
+
 static inline bool
 daos_unit_oid_is_null(daos_unit_oid_t oid)
 {
@@ -404,6 +434,8 @@ enum daos_io_flags {
 	DIOF_CHECK_EXISTENCE	= 0x10,
 	/* The RPC will be sent to specified redundancy group. */
 	DIOF_TO_SPEC_GROUP	= 0x20,
+	/* For data migration. */
+	DIOF_FOR_MIGRATION	= 0x40,
 };
 
 /**
@@ -462,8 +494,7 @@ struct daos_recx_ep_list {
 static inline void
 daos_recx_ep_free(struct daos_recx_ep_list *list)
 {
-	if (list->re_items != NULL)
-		D_FREE(list->re_items);
+	D_FREE(list->re_items);
 	list->re_nr = 0;
 	list->re_total = 0;
 }

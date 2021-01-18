@@ -27,6 +27,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 )
 
@@ -473,6 +475,31 @@ func TestHostList_Etc(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestHostList_Slice(t *testing.T) {
+	for name, tc := range map[string]struct {
+		startList *string
+		expOut    []string
+	}{
+		"empty list": {
+			startList: makeStringRef(""),
+			expOut:    []string{""},
+		},
+		"normal": {
+			startList: makeStringRef("foo-1,foo-2,foo-[8-10]"),
+			expOut:    []string{"foo-1", "foo-2", "foo-8", "foo-9", "foo-10"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			hl := hostlist.MustCreate(*tc.startList)
+
+			if diff := cmp.Diff(tc.expOut, hl.Slice()); diff != "" {
+				t.Fatalf("unexpected Slice() (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+
 }
 
 func TestHostList_Nth(t *testing.T) {

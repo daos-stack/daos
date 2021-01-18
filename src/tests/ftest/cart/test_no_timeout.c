@@ -301,7 +301,7 @@ test_parse_args(int argc, char **argv)
 		{0, 0, 0, 0}
 	};
 
-  test_g.t_use_cfg = true;
+	test_g.t_use_cfg = true;
 
 	while (1) {
 		rc = getopt_long(argc, argv, "n:a:c:u:h:", long_options,

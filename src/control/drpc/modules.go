@@ -236,8 +236,14 @@ const (
 	MethodContSetOwner MgmtMethod = C.DRPC_METHOD_MGMT_CONT_SET_OWNER
 	// MethodGroupUpdate defines a method for updating the group map
 	MethodGroupUpdate MgmtMethod = C.DRPC_METHOD_MGMT_GROUP_UPDATE
-	// MethodDisconnect defines a method for signaling a clean client shutdown
-	MethodDisconnect MgmtMethod = C.DRPC_METHOD_MGMT_DISCONNECT
+	// MethodNotifyPoolConnect defines a method to indicate a successful pool connect call
+	MethodNotifyPoolConnect MgmtMethod = C.DRPC_METHOD_MGMT_NOTIFY_POOL_CONNECT
+	// MethodNotifyPoolDisconnect defines a method to indicate a successful pool disconnect call
+	MethodNotifyPoolDisconnect MgmtMethod = C.DRPC_METHOD_MGMT_NOTIFY_POOL_DISCONNECT
+	// MethodNotifyExit defines a method for signaling a clean client shutdown
+	MethodNotifyExit MgmtMethod = C.DRPC_METHOD_MGMT_NOTIFY_EXIT
+	// MethodIdentifyStorage is a ModuleMgmt method
+	MethodIdentifyStorage MgmtMethod = C.DRPC_METHOD_MGMT_DEV_IDENTIFY
 )
 
 type srvMethod int32
@@ -252,8 +258,9 @@ func (m srvMethod) ID() int32 {
 
 func (m srvMethod) String() string {
 	if s, ok := map[srvMethod]string{
-		MethodNotifyReady: "notify ready",
-		MethodBIOError:    "block i/o error",
+		MethodNotifyReady:  "notify ready",
+		MethodBIOError:     "block i/o error",
+		MethodClusterEvent: "cluster event",
 	}[m]; ok {
 		return s
 	}
@@ -279,6 +286,8 @@ const (
 	MethodBIOError srvMethod = C.DRPC_METHOD_SRV_BIO_ERR
 	// MethodGetPoolServiceRanks requests the service ranks for a pool
 	MethodGetPoolServiceRanks srvMethod = C.DRPC_METHOD_SRV_GET_POOL_SVC
+	// MethodClusterEvent notifies of a cluster event in the iosrv.
+	MethodClusterEvent srvMethod = C.DRPC_METHOD_SRV_CLUSTER_EVENT
 )
 
 type securityMethod int32

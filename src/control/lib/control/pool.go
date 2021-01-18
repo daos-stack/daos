@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,21 +27,24 @@ import (
 	"context"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
-	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/security/auth"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
-	defaultSvcReps = 1
+	// PoolCreateTimeout defines the amount of time a pool create
+	// request can take before being timed out.
+	PoolCreateTimeout = 10 * time.Minute // be generous for large pools
 )
 
 type (
@@ -112,13 +115,11 @@ func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err err
 		return nil, err
 	}
 
-	if in.NumSvcReps == 0 {
-		in.NumSvcReps = defaultSvcReps
+	if in.TotalBytes > 0 && (in.ScmBytes > 0 || in.NvmeBytes > 0) {
+		return nil, errors.New("can't mix TotalBytes and ScmBytes/NvmeBytes")
 	}
-
-	// ensure we have a system name in the request
-	if in.Sys == "" {
-		in.Sys = build.DefaultSystemName
+	if in.TotalBytes == 0 && in.ScmBytes == 0 {
+		return nil, errors.New("can't create pool with 0 SCM")
 	}
 
 	out = new(mgmtpb.PoolCreateReq)
@@ -126,11 +127,8 @@ func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err err
 		return nil, err
 	}
 
-	genUUID, err := uuid.NewRandom()
-	if err != nil {
-		return nil, err
-	}
-	out.Uuid = genUUID.String()
+	out.Sys = in.getSystem()
+	out.Uuid = uuid.New().String()
 
 	return
 }
@@ -140,21 +138,29 @@ type (
 	PoolCreateReq struct {
 		msRequest
 		unaryRequest
-		ScmBytes   uint64
-		NvmeBytes  uint64
-		Ranks      []system.Rank
-		NumSvcReps uint32
-		Sys        string
+		retryableRequest
+		Name       string
 		User       string
 		UserGroup  string
 		ACL        *AccessControlList
+		NumSvcReps uint32
+		// auto-config params
+		TotalBytes uint64
+		ScmRatio   float64
+		NumRanks   uint32
+		// manual params
+		Ranks     []system.Rank
+		ScmBytes  uint64
+		NvmeBytes uint64
 	}
 
 	// PoolCreateResp contains the response from a pool create request.
 	PoolCreateResp struct {
-		UUID     string
-		SvcReps  []uint32 `json:"Svcreps"`
-		NumRanks uint32   `json:"Numranks"`
+		UUID      string   `json:"uuid"`
+		SvcReps   []uint32 `json:"svc_reps"`
+		TgtRanks  []uint32 `json:"tgt_ranks"`
+		ScmBytes  uint64   `json:"scm_bytes"`
+		NvmeBytes uint64   `json:"nvme_bytes"`
 	}
 )
 
@@ -166,9 +172,27 @@ func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to generate PoolCreate request")
 	}
+	// TODO: Set this timeout based on the SCM size, when we have a
+	// better understanding of the relationship.
+	req.SetTimeout(PoolCreateTimeout)
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolCreate(ctx, pbReq)
 	})
+	req.retryTestFn = func(reqErr error, _ uint) bool {
+		switch e := reqErr.(type) {
+		case drpc.DaosStatus:
+			switch e {
+			// These create errors can be retried.
+			case drpc.DaosTimedOut, drpc.DaosGroupVersionMismatch,
+				drpc.DaosTryAgain:
+				return true
+			default:
+				return false
+			}
+		default:
+			return false
+		}
+	}
 
 	rpcClient.Debugf("Create DAOS pool request: %+v\n", req)
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
@@ -187,11 +211,9 @@ func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq)
 		return nil, errors.New("unable to extract PoolCreateResp from MS response")
 	}
 
-	return &PoolCreateResp{
-		UUID:     pbReq.Uuid,
-		SvcReps:  pbPcr.GetSvcreps(),
-		NumRanks: pbPcr.GetNumranks(),
-	}, nil
+	pcr := new(PoolCreateResp)
+	pcr.UUID = pbReq.Uuid
+	return pcr, convert.Types(pbPcr, pcr)
 }
 
 type (
@@ -214,6 +236,7 @@ type (
 func PoolResolveID(ctx context.Context, rpcClient UnaryInvoker, req *PoolResolveIDReq) (*PoolResolveIDResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolResolveID(ctx, &mgmtpb.PoolResolveIDReq{
+			Sys:     req.getSystem(),
 			HumanID: req.HumanID,
 		})
 	})
@@ -248,6 +271,7 @@ func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyRe
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolDestroy(ctx, &mgmtpb.PoolDestroyReq{
+			Sys:   req.getSystem(),
 			Uuid:  req.UUID,
 			Force: req.Force,
 		})
@@ -272,8 +296,9 @@ func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyRe
 type PoolEvictReq struct {
 	msRequest
 	unaryRequest
-	UUID string
-	Sys  string
+	UUID    string
+	Sys     string
+	Handles []string
 }
 
 // PoolEvict performs a pool connection evict operation on a DAOS Management Server instance.
@@ -282,15 +307,11 @@ func PoolEvict(ctx context.Context, rpcClient UnaryInvoker, req *PoolEvictReq) e
 		return err
 	}
 
-	// ensure we have a system name in the request
-	if req.Sys == "" {
-		req.Sys = build.DefaultSystemName
-	}
-
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolEvict(ctx, &mgmtpb.PoolEvictReq{
-			Uuid: req.UUID,
-			Sys:  req.Sys,
+			Uuid:    req.UUID,
+			Sys:     req.getSystem(),
+			Handles: req.Handles,
 		})
 	})
 
@@ -378,7 +399,10 @@ func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (
 		return nil, err
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).PoolQuery(ctx, &mgmtpb.PoolQueryReq{Uuid: req.UUID})
+		return mgmtpb.NewMgmtSvcClient(conn).PoolQuery(ctx, &mgmtpb.PoolQueryReq{
+			Sys:  req.getSystem(),
+			Uuid: req.UUID,
+		})
 	})
 
 	rpcClient.Debugf("Query DAOS pool request: %v\n", req)
@@ -435,6 +459,7 @@ func PoolSetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolSetPropRe
 	}
 
 	pbReq := &mgmtpb.PoolSetPropReq{
+		Sys:  req.getSystem(),
 		Uuid: req.UUID,
 	}
 	pbReq.SetPropertyName(req.Property)
@@ -505,6 +530,7 @@ func PoolExclude(ctx context.Context, rpcClient UnaryInvoker, req *PoolExcludeRe
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolExclude(ctx, &mgmtpb.PoolExcludeReq{
+			Sys:       req.getSystem(),
 			Uuid:      req.UUID,
 			Rank:      req.Rank.Uint32(),
 			Targetidx: req.Targetidx,
@@ -547,6 +573,7 @@ func PoolDrain(ctx context.Context, rpcClient UnaryInvoker, req *PoolDrainReq) e
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolDrain(ctx, &mgmtpb.PoolDrainReq{
+			Sys:       req.getSystem(),
 			Uuid:      req.UUID,
 			Rank:      req.Rank.Uint32(),
 			Targetidx: req.Targetidx,
@@ -574,6 +601,7 @@ func genPoolExtendRequest(in *PoolExtendReq) (out *mgmtpb.PoolExtendReq, err err
 	if err = convert.Types(in, out); err != nil {
 		return nil, err
 	}
+	out.Sys = in.getSystem()
 
 	return
 }
@@ -642,6 +670,7 @@ func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolReint
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolReintegrate(ctx, &mgmtpb.PoolReintegrateReq{
+			Sys:       req.getSystem(),
 			Uuid:      req.UUID,
 			Rank:      req.Rank.Uint32(),
 			Targetidx: req.Targetidx,

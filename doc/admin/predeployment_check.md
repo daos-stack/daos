@@ -31,6 +31,11 @@ $ sudo reboot
 !!! warning
     VFIO support is a new feature for DAOS 1.2 and has been tested on CentOS 7.7
 
+To force SPDK to use UIO rather than VFIO at daos_server runtime, set
+'disable_vfio' in the
+[server config file](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml#L109),
+but note that this will require running daos_server as root.
+
 ## Time Synchronization
 
 The DAOS transaction model relies on timestamps and requires time to be
