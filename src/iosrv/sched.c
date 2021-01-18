@@ -1269,8 +1269,9 @@ sched_pop_net_poll(struct sched_data *data, ABT_pool pool)
 }
 
 static bool
-need_nvme_poll(struct sched_cycle *cycle)
+need_nvme_poll(struct dss_xstream *dx, struct sched_cycle *cycle)
 {
+	struct sched_info	*info = &dx->dx_sched_info;
 	struct dss_module_info	*dmi;
 
 	/* Need net poll to start new cycle */
@@ -1290,6 +1291,10 @@ need_nvme_poll(struct sched_cycle *cycle)
 	if (cycle->sc_age_nvme > SCHED_AGE_NVME_MAX)
 		return true;
 
+	/* TLS is destroyed on dss_srv_handler ULT exiting */
+	if (info->si_stop)
+		return false;
+
 	dmi = dss_get_module_info();
 	D_ASSERT(dmi != NULL);
 	return bio_need_nvme_poll(dmi->dmi_nvme_ctxt);
@@ -1303,7 +1308,7 @@ sched_pop_nvme_poll(struct sched_data *data, ABT_pool pool)
 	ABT_unit		 unit;
 	int			 ret;
 
-	if (!need_nvme_poll(cycle))
+	if (!need_nvme_poll(dx, cycle))
 		return ABT_UNIT_NULL;
 
 	D_ASSERT(cycle->sc_cycle_started);
