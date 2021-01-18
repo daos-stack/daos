@@ -950,29 +950,6 @@ def run_daos_cmd(conf, cmd, valgrind=True, fi_file=None, fi_valgrind=False):
     vh.convert_xml()
     return rc
 
-def get_conts(conf, pool, posix=True):
-    """Return a list of all container"""
-
-    cmd = ['pool', 'list-containers', '--pool', pool]
-    rc = run_daos_cmd(conf, cmd)
-    print('rc is {}'.format(rc))
-    if rc.returncode != 0:
-        return []
-
-    containers = rc.stdout.decode('utf-8').splitlines()
-
-    matched = []
-    for container in sorted(containers):
-        cmd = ['container', 'get-prop', '--pool', pool, '--cont', container]
-        rc = run_daos_cmd(conf, cmd)
-        for line in rc.stdout.decode('utf-8').splitlines():
-            (key, value) = line.split(':', maxsplit=1)
-            if key == 'layout type':
-                if not posix or value.strip() == 'POSIX (1)':
-                    matched.append(container)
-                    return matched
-    return matched
-
 def create_cont(conf, pool, posix=False):
     """Create a container and return the uuid"""
     if posix:
@@ -982,8 +959,6 @@ def create_cont(conf, pool, posix=False):
     rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
     assert rc.returncode == 0 # nosec
-    new_container = rc.stdout.decode().split(' ')[-1].rstrip()
-    assert rc.returncode == 0
     return rc.stdout.decode().split(' ')[-1].rstrip()
 
 def destroy_container(conf, pool, container):
@@ -992,19 +967,6 @@ def destroy_container(conf, pool, container):
     rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
     assert rc.returncode == 0
-    containers = rc.stdout.decode().split()
-    containers.remove(new_container)
-    containers.insert(0, new_container)
-    return containers
-
-def destroy_container(conf, pool, container):
-    """Destroy a container"""
-    cmd = ['container', 'destroy', '--svc', '0',
-           '--pool', pool, '--cont', container]
-    rc = run_daos_cmd(conf, cmd)
-    print('rc is {}'.format(rc))
-    assert rc.returncode == 0 # nosec
-    return rc.stdout.decode('utf-8').strip()
 
 def make_pool(daos):
     """Create a DAOS pool"""
@@ -1251,7 +1213,7 @@ def run_tests(dfuse):
     # Note that this doesn't test dfs because fuse will do a
     # lookup to check if the file exists rather than just trying
     # to create it.
-    fname = os.path.join(path, 'test_file4')
+    fname = os.path.join(path, 'test_file5')
     fd = os.open(fname, os.O_CREAT | os.O_EXCL)
     os.close(fd)
     try:
@@ -1263,7 +1225,7 @@ def run_tests(dfuse):
     os.unlink(fname)
 
     # DAOS-6238
-    fname = os.path.join(path, 'test_file5')
+    fname = os.path.join(path, 'test_file4')
     ofd = os.open(fname, os.O_CREAT | os.O_RDONLY | os.O_EXCL)
     assert_file_size_fd(ofd, 0)
     os.close(ofd)
@@ -1700,44 +1662,21 @@ def run_in_fg(server, conf):
     while len(pools) < 1:
         pools = make_pool(server)
 
-    # Load the first available container, but skip over any which are not
-    # suitable.
-    pool = None
-    if conf.args.pool:
-        pool = conf.args.pool
-        containers = get_conts(conf, pool, posix=True)
-    else:
-        for pool in pools:
-            containers = get_conts(conf, pool, posix=True)
-            if containers:
-                break
-
-    assert pool
-
-    if containers:
-        container = containers[0]
-    else:
-        container = create_cont(conf, pool, posix=True)
-
-    print('Pool is {}'.format(pool))
-    print('Container is {}'.format(container))
-
-    dfuse = DFuse(server,
-                  conf,
-                  pool=pool,
-                  container=container,
-                  multi_user=conf.args.multi_user)
+    dfuse = DFuse(server, conf, pool=pools[0])
     dfuse.start()
+    container = str(uuid.uuid4())
+    t_dir = os.path.join(dfuse.dir, container)
+    os.mkdir(t_dir)
     t_dir = dfuse.dir
     print('Running at {}'.format(t_dir))
     print('export DAOS_AGENT_DRPC_DIR={}'.format(conf.agent_dir))
     print('daos container create --type POSIX ' \
           '--pool {} --path {}/uns-link'.format(
-              pool, t_dir))
+              pools[0], t_dir))
     print('cd {}/uns-link'.format(t_dir))
 
     print('daos container destroy --path {}/uns-link'.format(t_dir))
-    print('daos pool list-containers --pool {}'.format(pool))
+    print('daos pool list-containers --pool {}'.format(pools[0]))
     try:
         dfuse.wait_for_exit()
     except KeyboardInterrupt:
