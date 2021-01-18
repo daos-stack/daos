@@ -194,11 +194,7 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 #define D_ALERT(fmt, ...)	D_DEBUG(DLOG_ALERT, fmt, ## __VA_ARGS__)
 #define D_CRIT(fmt, ...)	D_DEBUG(DLOG_CRIT, fmt, ## __VA_ARGS__)
 #define D_FATAL(fmt, ...)	D_DEBUG(DLOG_EMERG, fmt, ## __VA_ARGS__)
-#if 0
 #define D_EMIT(fmt, ...)	D_DEBUG(DLOG_EMIT, fmt, ## __VA_ARGS__)
-#else
-#define D_EMIT(fmt, ...)	D_DEBUG(DLOG_ERR, fmt, ## __VA_ARGS__)
-#endif
 
 #define D_TRACE_INFO(ptr, fmt, ...)	\
 	D_TRACE_DEBUG(DLOG_INFO, ptr, fmt, ## __VA_ARGS__)
