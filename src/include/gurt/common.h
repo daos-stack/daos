@@ -90,12 +90,12 @@ void *d_realloc(void *, size_t);
 			if ((count) <= 1)				\
 				D_DEBUG(DB_MEM,				\
 					"alloc(" #func ") '" name	\
-					"': %i at %p\n",		\
+					"': %i at %p.\n",		\
 					(int)(size), (ptr));		\
 			else						\
 				D_DEBUG(DB_MEM,				\
 					"alloc(" #func ") '" name	\
-					"': %i * '" cname "': %i at %p\n", \
+					"': %i * '" cname "':%i at %p.\n", \
 					(int)(size), (int)(count), (ptr)); \
 			break;						\
 		}							\
@@ -174,14 +174,14 @@ void *d_realloc(void *, size_t);
 				D_DEBUG(DB_MEM,				\
 					"realloc '" #newptr		\
 					"': %zu at %p (old '" #oldptr	\
-					"': %p).\n",			\
+					"':%p).\n",			\
 					_esz, (newptr), (oldptr));	\
 			else						\
 				D_DEBUG(DB_MEM,				\
 					"realloc '" #newptr		\
 					"': %zu * '" #cnt		\
-					"': %zu at %p (old '" #oldptr	\
-					"': %p).\n",			\
+					"':%zu at %p (old '" #oldptr	\
+					"':%p).\n",			\
 					_esz, _cnt, (newptr), (oldptr));\
 			(oldptr) = NULL;				\
 			break;						\
