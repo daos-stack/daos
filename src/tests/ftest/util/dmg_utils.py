@@ -652,7 +652,7 @@ class DmgCommand(DmgCommandBase):
         #    98736dfe-cb92-12cd-de45-9b09875092cd 1
         data = {}
         match = re.findall(
-            r"(?:([0-9a-fA-F][0-9a-fA-F-]+)\s+([0-9][0-9,-]*))",
+            r"(?:([0-9a-fA-F][0-9a-fA-F-]+)\s+([*[0-9][0-9,-]*]*))",
             self.result.stdout)
         for info in match:
             data[info[0]] = get_numeric_list(info[1])
