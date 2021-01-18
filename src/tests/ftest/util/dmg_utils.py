@@ -657,8 +657,10 @@ class DmgCommand(DmgCommandBase):
         for info in match:
             # Clean-up in case of a range in the Svc Replicas
             if info[1][0] == '[' and info[1][-1] == ']':
-                info[1] = info[1][1:-1]
-            data[info[0]] = get_numeric_list(info[1])
+                strInfo = info[1][1:-1]
+            else:
+                strInfo = info[1]
+            data[info[0]] = get_numeric_list(strInfo)
         return data
 
     def pool_set_prop(self, pool, name, value):
