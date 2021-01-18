@@ -71,7 +71,9 @@ class FindCmd(DfuseTestBase):
 
         :avocado: tags=all,hw,daosio,medium,ib2,full_regression,findcmd_perf
         """
+        # Number of repetitions each test will run.
         samples = self.params.get("samples", '/run/perf/*')
+        # Challenger file system path. Ex: /mnt/lustre
         challenger_path = self.params.get("challenger_path", '/run/perf/*')
         self._test_findcmd(samples, challenger_path)
 
@@ -84,13 +86,24 @@ class FindCmd(DfuseTestBase):
         run on it and compare the performance of the provided file system
         against DAOS File System. The test will run sample times and will
         maximum data points.
+
+        Parameters:
+            samples         (int): Number of repetitions each test will run.
+            challenger_path (str): Path where the challenger file system is
+                                   mounted. Example: /mnt/lustre
         """
+        # Number of containers to be created and mounted.
         cont_count = self.params.get("cont_count", '/run/container/*')
+        # Common root directory where the containers will be mounted.
         dfs_path = self.params.get("dfs_path", '/run/find_cmd/*')
+        # Height of the directory-tree.
         height = self.params.get("height", '/run/find_cmd/*')
+        # Number of sub directories per directories.
         subdirs_per_node = self.params.get(
             "subdirs_per_node", '/run/find_cmd/*')
+        # Number of files created per directory.
         files_per_node = self.params.get("files_per_node", '/run/find_cmd/*')
+        # Number of *.needle files that will be created.
         needles = self.params.get("needles", '/run/find_cmd/*')
         temp_dfs_path = ""
 
