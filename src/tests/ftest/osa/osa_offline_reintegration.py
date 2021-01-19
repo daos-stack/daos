@@ -24,7 +24,6 @@
 import random
 from osa_utils import OSAUtils
 from test_utils_pool import TestPool
-from apricot import skipForTicket
 
 class OSAOfflineReintegration(OSAUtils):
     # pylint: disable=too-many-ancestors
@@ -114,7 +113,6 @@ class OSAOfflineReintegration(OSAUtils):
         if data:
             self.verify_single_object()
 
-    @skipForTicket("DAOS-6521")
     def test_osa_offline_reintegration(self):
         """Test ID: DAOS-4749
         Test Description: Validate Offline Reintegration
