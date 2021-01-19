@@ -72,6 +72,8 @@ CRT_RPC_DECLARE(test_ping_check,
 CRT_RPC_DEFINE(test_ping_check,
 		CRT_ISEQ_TEST_PING_CHECK, CRT_OSEQ_TEST_PING_CHECK)
 
+int global_client_cb_arg = -1;
+
 static void
 test_checkin_handler(crt_rpc_t *rpc_req)
 {
@@ -148,10 +150,15 @@ client_cb_common(const struct crt_cb_info *cb_info)
 	struct test_ping_check_in	*rpc_req_input;
 	struct test_ping_check_out	*rpc_req_output;
 
+	/* The server rank has been passed to the client callback */
+	int aborted_rank = -1;
+
 	rpc_req = cb_info->cci_rpc;
 
-	if (cb_info->cci_arg != NULL)
+	if (cb_info->cci_arg != NULL) {
+		aborted_rank = *(int *) cb_info->cci_arg;
 		*(int *) cb_info->cci_arg = 1;
+	}
 
 	switch (cb_info->cci_rpc->cr_opc) {
 	case TEST_OPC_CHECKIN:
@@ -162,7 +169,8 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		if (rpc_req_output == NULL)
 			return;
 
-    if (test_g.t_issue_crt_ep_abort) {
+    if (test_g.t_issue_crt_ep_abort > -1 &&
+				test_g.t_issue_crt_ep_abort == aborted_rank) {
       D_ASSERT(cb_info->cci_rc == -DER_CANCELED);
       DBG_PRINT("rpc (opc: %#x) failed (as expected), rc: %d.\n",
         rpc_req->cr_opc, cb_info->cci_rc);
@@ -294,11 +302,12 @@ check_in(crt_group_t *remote_group, int rank, int tag)
 		rpc_req_input->age, rpc_req_input->days,
 		rpc_req_input->bool_val);
 
-	rc = crt_req_send(rpc_req, client_cb_common, NULL);
+	global_client_cb_arg = rank;
+	rc = crt_req_send(rpc_req, client_cb_common, &global_client_cb_arg);
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 
   // If we're testing crt_ep_abort(), abort the previous RPC
-  if (test_g.t_issue_crt_ep_abort) {
+  if (test_g.t_issue_crt_ep_abort == rank) {
     rc = crt_ep_abort(&server_ep);
     D_ASSERTF(rc == 0, "crt_ep_abort() failed. rc: %d\n", rc);
     DBG_PRINT("crt_ep_abort called, rc = %d.\n", rc);
@@ -319,13 +328,14 @@ test_parse_args(int argc, char **argv)
 		{"shut_only", no_argument, &test_g.t_shut_only, 1},
 		{"cfg_path", required_argument, 0, 's'},
 		{"use_cfg", required_argument, 0, 'u'},
-		{"issue_crt_ep_abort", no_argument, &test_g.t_issue_crt_ep_abort, 1},
+		{"issue_crt_ep_abort", required_argument, 0, 'i'},
 		{"num_checkins_to_send", required_argument, 0, 'm'},
 		{0, 0, 0, 0}
 	};
 
 	test_g.t_use_cfg = true;
 	test_g.t_num_checkins_to_send = 1;
+	test_g.t_issue_crt_ep_abort = -1;
 
 	while (1) {
 		rc = getopt_long(argc, argv, "n:a:c:h:u:m:", long_options,
@@ -372,6 +382,9 @@ test_parse_args(int argc, char **argv)
 			break;
 		case 'm':
 			test_g.t_num_checkins_to_send = atoi(optarg);
+			break;
+		case 'i':
+			test_g.t_issue_crt_ep_abort = atoi(optarg);
 			break;
 		case '?':
 			return 1;
