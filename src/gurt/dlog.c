@@ -736,8 +736,8 @@ static int d_log_str2pri(const char *pstr, size_t len)
 	if (strncasecmp(pstr, "ERR", len) == 0)
 		/* has trailing space in the array */
 		return DLOG_ERR;
-	if ((strncasecmp(pstr, "DEBUG", len) == 0 || \
-	    strncasecmp(pstr, "DBUG", len) == 0)) {
+	if (((strncasecmp(pstr, "DEBUG", len) == 0) ||
+	     (strncasecmp(pstr, "DBUG", len) == 0))) {
 		/* check to see is debug mask bits are set */
 		return d_dbglog_data.dd_mask != 0 ?
 		       d_dbglog_data.dd_mask : DLOG_DBG;

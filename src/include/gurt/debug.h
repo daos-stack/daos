@@ -287,7 +287,7 @@ int d_log_getdbgbit(d_dbug_t *dbgbit, char *bitname);
  * \return			0 on success, -DER_INVAL on error
  */
 int d_register_alt_assert(void (*alt_assert)(const int, const char*,
-			  const char*, const int));
+					     const char*, const int));
 
 /**
  * D_PRINT can be used for output to stdout with or without clog being enabled

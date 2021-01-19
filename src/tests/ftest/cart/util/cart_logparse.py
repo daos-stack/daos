@@ -55,17 +55,16 @@ class InvalidLogFile(Exception):
     """Exception to be raised when log file cannot be parsed"""
     pass
 
-LOG_LEVELS = {'EMIT'  :1,
-              'FATAL' :2,
-              'EMRG'  :3,
-              'CRIT'  :4,
-              'ERR'   :5,
-              'WARN'  :6,
-              'NOTE'  :7,
-              'INFO'  :8,
-              'DBUG'  :9}
-
-
+LOG_LEVELS = {
+    'EMIT'  :1,
+    'FATAL' :2,
+    'EMRG'  :3,
+    'CRIT'  :4,
+    'ERR'   :5,
+    'WARN'  :6,
+    'NOTE'  :7,
+    'INFO'  :8,
+    'DBUG'  :9}
 
 # Make a reverse lookup from log level to name.
 LOG_NAMES = {}
