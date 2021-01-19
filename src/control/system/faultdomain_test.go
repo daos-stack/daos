@@ -47,8 +47,16 @@ func TestSystem_NewFaultDomain(t *testing.T) {
 			input:  []string{"ok", ""},
 			expErr: errors.New("invalid fault domain"),
 		},
+		"explicit root": {
+			input:  []string{"/"},
+			expErr: errors.New("invalid fault domain"),
+		},
 		"whitespace-only strings": {
 			input:  []string{"ok", "\t    "},
+			expErr: errors.New("invalid fault domain"),
+		},
+		"name contains separator": {
+			input:  []string{"ok", "alpha/beta"},
 			expErr: errors.New("invalid fault domain"),
 		},
 		"single-level": {
@@ -565,6 +573,13 @@ func TestSystem_FaultDomain_NewChild(t *testing.T) {
 			childLevel: "   ",
 			expErr:     errors.New("invalid fault domain"),
 		},
+		"child level is root": {
+			orig: &FaultDomain{
+				Domains: []string{"parent"},
+			},
+			childLevel: "/",
+			expErr:     errors.New("invalid fault domain"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			result, err := tc.orig.NewChild(tc.childLevel)
@@ -1001,16 +1016,15 @@ func TestSystem_FaultDomainTree_AddDomain(t *testing.T) {
 	}{
 		"nil tree": {
 			toAdd:  MustCreateFaultDomain(),
-			expErr: errors.New("can't add to nil FaultDomainTree"),
+			expErr: errors.New("nil FaultDomainTree"),
 		},
 		"nil input": {
 			tree:   NewFaultDomainTree(),
-			expErr: errors.New("can't add empty fault domain to tree"),
+			expErr: errors.New("nil domain"),
 		},
-		"empty input": {
-			tree:   NewFaultDomainTree(),
-			toAdd:  MustCreateFaultDomain(),
-			expErr: errors.New("can't add empty fault domain to tree"),
+		"root domain": {
+			tree:  NewFaultDomainTree(),
+			toAdd: MustCreateFaultDomain(),
 		},
 		"single level": {
 			tree:  NewFaultDomainTree(),

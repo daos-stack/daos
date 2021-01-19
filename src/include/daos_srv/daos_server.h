@@ -256,6 +256,7 @@ enum {
 	SCHED_REQ_GC,
 	SCHED_REQ_SCRUB,
 	SCHED_REQ_MIGRATE,
+	SCHED_REQ_ANONYM,
 	SCHED_REQ_MAX,
 };
 
@@ -473,16 +474,6 @@ int dss_ult_execute(int (*func)(void *), void *arg, void (*user_cb)(void *),
 		    void *cb_args, int xs_type, int tgt_id, size_t stack_size);
 int dss_ult_create_all(void (*func)(void *), void *arg, bool main);
 
-struct dss_sleep_ult {
-	ABT_thread	dsu_thread;
-	uint64_t	dsu_expire_time;
-	d_list_t	dsu_list;
-};
-
-struct dss_sleep_ult *dss_sleep_ult_create(void);
-void dss_sleep_ult_destroy(struct dss_sleep_ult *dsu);
-void dss_ult_sleep(struct dss_sleep_ult *dsu, uint64_t expire_secs);
-void dss_ult_wakeup(struct dss_sleep_ult *dsu);
 int dss_sleep(uint64_t ms);
 
 /* Pack return codes with additional argument to reduce */
