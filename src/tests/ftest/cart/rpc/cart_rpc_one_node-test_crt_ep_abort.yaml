@@ -1,0 +1,57 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+
+defaultENV:
+  #!filter-only : /run/env_CRT_CTX_SHARE_ADDR/sep
+  #!filter-only : /run/tests/proto_np
+  D_LOG_MASK: "DEBUG,MEM=ERR"
+  CRT_PHY_ADDR_STR: "ofi+sockets"
+  OFI_INTERFACE: "eth0"
+  test_servers_CRT_CTX_NUM: "16"
+  test_clients_CRT_CTX_NUM: "16"
+env_CRT_CTX_SHARE_ADDR: !mux
+  sep:
+    env: sep
+    CRT_CTX_SHARE_ADDR: "1"
+# no_sep:
+#   env: no_sep
+#   CRT_CTX_SHARE_ADDR: "0"
+timeout: 300
+hosts: !mux
+  hosts_1:
+    config: one_node
+    test_servers:
+       - boro-A
+    test_clients:
+       - boro-A
+tests: !mux
+  test_group_single_server_single_rpc:
+    name: test_group_single_server_single_rpc
+    test_servers_bin: crt_launch
+    test_servers_arg: "-e ../tests/test_group_np_srv --name tg_srv_grp --use_cfg 0 --holdtime 15"
+    test_servers_env: ""
+    test_servers_ppn: 1
+    test_clients_ppn: 1
+    test_clients_bin: ../tests/test_group_np_cli
+    test_clients_env: ""
+    test_clients_arg: "--name client_group --attach_to tg_srv_grp --issue_crt_ep_abort 0 --num_checkins_to_send 1"
+  test_group_multiple_server_single_rpc:
+    name: test_group_multiple_server_single_rpc
+    test_servers_bin: crt_launch
+    test_servers_arg: "-e ../tests/test_group_np_srv --name tg_srv_grp --use_cfg 0 --holdtime 15"
+    test_servers_env: ""
+    test_servers_ppn: 1
+    test_clients_ppn: 1
+    test_clients_bin: ../tests/test_group_np_cli
+    test_clients_env: ""
+    test_clients_arg: "--name client_group --attach_to tg_srv_grp --issue_crt_ep_abort 0 --num_checkins_to_send 3"
+  test_group_multiple_server_multiple_rpc:
+    name: test_group_multiple_server_multiple_rpc
+    test_servers_bin: crt_launch
+    test_servers_arg: "-e ../tests/test_group_np_srv --name tg_srv_grp --use_cfg 0 --holdtime 15"
+    test_servers_env: ""
+    test_servers_ppn: 3
+    test_clients_ppn: 1
+    test_clients_bin: ../tests/test_group_np_cli
+    test_clients_env: ""
+    test_clients_arg: "--name client_group --attach_to tg_srv_grp --issue_crt_ep_abort 2 --num_checkins_to_send 1"

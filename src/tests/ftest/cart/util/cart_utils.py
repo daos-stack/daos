@@ -234,6 +234,8 @@ class CartUtils():
                                       "/run/tests/*/")
         _tst_slt = cartobj.params.get("{}_slt".format(host),
                                       "/run/tests/*/")
+        _tst_ppn = cartobj.params.get("{}_ppn".format(host),
+                                     "/run/tests/*")
         _tst_ctx = cartobj.params.get("{}_CRT_CTX_NUM".format(host),
                                      "/run/defaultENV/")
 
@@ -243,9 +245,10 @@ class CartUtils():
         tst_env = self.get_yaml_list_elem(_tst_env, index)
         tst_slt = self.get_yaml_list_elem(_tst_slt, index)
         tst_ctx = self.get_yaml_list_elem(_tst_ctx, index)
+        tst_ppn = self.get_yaml_list_elem(_tst_ppn, index)
 
         tst_host = cartobj.params.get("{}".format(host), "/run/hosts/*/")
-        tst_ppn = cartobj.params.get("{}_ppn".format(host), "/run/tests/*/")
+        #tst_ppn = cartobj.params.get("{}_ppn".format(host), "/run/tests/*/")
         logparse = cartobj.params.get("logparse", "/run/tests/*/")
 
         # Write group attach info file(s) to HOME or DAOS_TEST_SHARED_DIR.

@@ -39,7 +39,7 @@ class CartRpcOneNodeCrtEpAbortTest(Test):
     """
     Runs basic CaRT RPC tests
 
-    :avocado: tags=all,cart,pr,daily_regression,rpc,test_crt_ep_abort
+    :avocado: recursive
     """
     def setUp(self):
         """ Test setup """
