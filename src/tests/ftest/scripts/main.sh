@@ -221,6 +221,4 @@ do
     fi
 done
 
-echo "DONE - postprocessing daos_test"
-
 exit $rc
