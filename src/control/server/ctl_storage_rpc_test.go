@@ -379,7 +379,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 			}
 			smdDevRespDevices[i] = smdPB
 
-			// expect resultant controller to have updated utilisation values
+			// expect resultant controller to have updated utilization values
 			ctrlr.Smddevices[i].TotalBytes = uint64(idx) * uint64(humanize.TByte)
 			ctrlr.Smddevices[i].AvailBytes = uint64(idx) * uint64(humanize.TByte/2)
 			ctrlr.Namespaces[i] = proto.MockNvmeNamespace(int32(i + 1))
