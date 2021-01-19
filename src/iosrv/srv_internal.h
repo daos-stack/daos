@@ -61,7 +61,6 @@ struct dss_xstream {
 	ABT_sched		dx_sched;
 	ABT_thread		dx_progress;
 	struct sched_info	dx_sched_info;
-	d_list_t		dx_sleep_ult_list;
 	tse_sched_t		dx_sched_dsc;
 	struct dss_rpc_cntr	dx_rpc_cntrs[DSS_RC_MAX];
 	/* xstream id, [0, DSS_XS_NR_TOTAL - 1] */

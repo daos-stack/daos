@@ -36,16 +36,31 @@ section.
 
 ### Running CaRT self_test
 
-Instructions to run CaRT `self_test` with test_group as the target server are
-as follows.
+Instructions to run CaRT `self_test` are as follows.
 
-**Prepare server_hostfile and client_hostfile**
+**Start DAOS server**
 
--   **server_hostfile** - contains a list of nodes from which servers will
-    launch.
+`self_test` requires DAOS server to be running before attempt running
+`self_test`. For detailed instruction on how to start DAOS server, please refer
+to the [server startup][4] documentation.
 
--   **client_hostfile** - contains a list of nodes from which `self_test` will
-    launch.
+**Dump system attachinfo**
+
+`self_test` will use the address information in `daos_server.attach_info_tmp`
+file. To create such file, run the following command:
+
+```bash
+./bin/daos_agent dump-attachinfo -o ./daos_server.attach_info_tmp
+```
+
+**Prepare hostfile**
+
+The list of nodes from which `self_test` will run can be specified in a
+hostfile (referred to as ${hostfile}). Hostfile used here is the same as the
+ones used by OpenMPI. For additional details, please refer to the
+[mpirun documentation][5].
+
+**Run CaRT self_test**
 
 The example below uses an Ethernet interface and Sockets provider.
 In the `self_test` commands:
@@ -75,25 +90,14 @@ For a full description of `self_test` usage, run:
 $ ./bin/self_test --help
 ```
 
-**To start test_group server:**
-```bash
-$ /usr/lib64/openmpi3/bin/orterun --mca btl self,tcp -N 1 \
-  --hostfile server_hostfile --output-filename testLogs/ \
-  -x D_LOG_FILE=testLogs/test_group_srv.log -x D_LOG_FILE_APPEND_PID=1 \
-  -x D_LOG_MASK=WARN -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 \
-  -x CRT_CTX_SHARE_ADDR=0 -x CRT_CTX_NUM=16 -x CRT_ATTACH_INFO_PATH=. \
-  ./bin/crt_launch -e lib/daos/TESTING/tests/test_group_np_srv \
-  --name self_test_srv_grp --cfg_path=. &
-```
-
 **To run self_test in client-to-servers mode:**
 ```bash
 $ /usr/lib64/openmpi3/bin/orterun --mca btl self,tcp -N 1 \
-  --hostfile client_hostfile --output-filename testLogs/ \
+  --hostfile ${hostfile} --output-filename testLogs/ \
   -x D_LOG_FILE=testLogs/self_test.log -x D_LOG_FILE_APPEND_PID=1 \
   -x D_LOG_MASK=WARN -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 \
   -x CRT_CTX_SHARE_ADDR=0 -x CRT_CTX_NUM=16 \
-  ./bin/self_test --group-name self_test_srv_grp --endpoint 0-<MAX_SERVER-1>:0 \
+  ./bin/self_test --group-name daos_server --endpoint 0-<MAX_SERVER-1>:0 \
   --message-sizes "b1048576,b1048576 0,0 b1048576,i2048,i2048 0,0 i2048" \
   --max-inflight-rpcs 16 --repetitions 100 -t -n -p .
 ```
@@ -101,26 +105,14 @@ $ /usr/lib64/openmpi3/bin/orterun --mca btl self,tcp -N 1 \
 **To run self_test in cross-servers mode:**
 ```bash
 $ /usr/lib64/openmpi3/bin/orterun --mca btl self,tcp -N 1 \
-  --hostfile client_hostfile --output-filename testLogs/ \
+  --hostfile ${hostfile} --output-filename testLogs/ \
   -x D_LOG_FILE=testLogs/self_test.log -x D_LOG_FILE_APPEND_PID=1 \
   -x D_LOG_MASK=WARN -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 \
   -x CRT_CTX_SHARE_ADDR=0 -x CRT_CTX_NUM=16  \
-  ./bin/self_test --group-name self_test_srv_grp --endpoint 0-<MAX_SERVER-1>:0 \
+  ./bin/self_test --group-name daos_server --endpoint 0-<MAX_SERVER-1>:0 \
   --master-endpoint 0-<MAX_SERVER-1>:0 \
   --message-sizes "b1048576,b1048576 0,0 b1048576,i2048,i2048 0,0 i2048" \
   --max-inflight-rpcs 16 --repetitions 100 -t -n -p .
-```
-
-**To shutdown test_group server:**
-```bash
-$ /usr/lib64/openmpi3/bin/orterun --mca btl self,tcp  -N 1 \
-  --hostfile client_hostfile --output-filename testLogs/ \
-  -x D_LOG_FILE=testLogs/test_group_cli.log \
-  -x D_LOG_FILE_APPEND_PID=1 -x D_LOG_MASK=WARN \
-  -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 \
-  -x CRT_CTX_SHARE_ADDR=0 \
-  lib/daos/TESTING/tests/test_group_np_cli --name client-group \
-  --attach_to self_test_srv_grp --shut_only --cfg_path=.
 ```
 
 ## Benchmarking DAOS
@@ -238,10 +230,12 @@ GetAttachInfo agent caching has been disabled
 
 If the network configuration changes while the Agent is running, it must be
 restarted to gain visibility to these changes. For additional information,
-please refer to the [System Deployment: Agent Startup][4] documentation
+please refer to the [System Deployment: Agent Startup][6] documentation
 section.
 
 [1]: <https://github.com/daos-stack/daos/tree/master/src/cart> (Collective and RPC Transport)
 [2]: <https://github.com/daos-stack/daos/blob/master/doc/admin/installation.md#distribution-packages> (DAOS distribution packages)
 [3]: <https://github.com/daos-stack/daos/blob/master/doc/admin/installation.md#building-daos--dependencies> (DAOS build documentation)
-[4]: <https://github.com/daos-stack/daos/blob/master/doc/admin/deployment.md#disable-agent-cache-optional> (System Deployment Agent Startup)
+[4]: <https://github.com/daos-stack/daos/blob/master/doc/admin/deployment.md#server-startup> (DAOS server startup documentation)
+[5]: <https://www.open-mpi.org/faq/?category=running#mpirun-hostfile> (mpirun hostfile)
+[6]: <https://github.com/daos-stack/daos/blob/master/doc/admin/deployment.md#disable-agent-cache-optional> (System Deployment Agent Startup)
