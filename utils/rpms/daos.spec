@@ -305,6 +305,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 # set daos_server to be setgid daos_admins in order to invoke daos_admin
 %attr(2755,root,daos_admins) %{_bindir}/daos_server
 %{_bindir}/daos_io_server
+%{_bindir}/daos_ssd
 %dir %{_libdir}/daos_srv
 %{_libdir}/daos_srv/libcont.so
 %{_libdir}/daos_srv/libdtx.so
