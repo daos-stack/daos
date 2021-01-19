@@ -1,5 +1,5 @@
 #!/bin/sh
 set -e
 
-addgroup --system daos_admins
-adduser --system --ingroup daos_admins daos_server
+addgroup --system daos_server
+adduser --system --ingroup daos_server daos_server
