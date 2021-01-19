@@ -133,14 +133,17 @@ class Test(avocadoTest):
         #     test_quick: 120
         #     test_long: 1200
         self.timeouts = self.params.get(self.test_id, "/run/timeouts/*")
+        self._timeout = self.params.get("test_timeout", "/run/*", None)
 
         # If not specified, set a default timeout of 1 minute.
         # Tests that require a longer timeout should set a "timeout: <int>"
         # entry in their yaml file.  All tests should have a timeout defined.
-        if (not self.timeout) and (not self.timeouts):
+        if (not self.timeout) and (not self.timeouts) and (not self._timeout):
             self.timeout = 60
         elif self.timeouts:
             self.timeout = self.timeouts
+        elif self._timeout:
+            self.timeout = self._timeout
         self.log.info("self.timeout: %s", self.timeout)
 
         item_list = self.logdir.split('/')

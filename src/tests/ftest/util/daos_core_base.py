@@ -47,11 +47,6 @@ class DaosCoreBase(TestWithServers):
         super(DaosCoreBase, self).__init__(*args, **kwargs)
         self.subtest_name = None
 
-        test_timeout = self.params.get("test_timeout", self.TEST_PATH)
-        if test_timeout:
-            self.log.info("Test timeout updated to %s", test_timeout)
-            self.timeout = test_timeout
-
     def setUp(self):
         """Set up before each test."""
         self.subtest_name = self.params.get("test_name", self.TEST_PATH)
