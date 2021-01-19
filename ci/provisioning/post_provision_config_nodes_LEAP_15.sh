@@ -1,19 +1,35 @@
 #!/bin/bash
 
 url_to_repo() {
-    local URL="$1"
+    local url="$1"
 
-    local repo=${URL#*://}
+    local repo=${url#*://}
     repo="${repo//%252F/_}"
     repo="${repo//\//_}"
 
     echo "$repo"
 }
 
-disable_gpg_check() {
-    local REPO="$1"
+add_repo() {
+    local repo="$1"
+    local gpg_check="${2:-true}"
 
-    dnf config-manager --save --setopt="$(url_to_repo "$REPO")".gpgcheck=0
+    if [ -n "$repo" ]; then
+        repo="${REPOSITORY_URL}${repo}"
+        if ! dnf repolist | grep "$(url_to_repo "$repo")"; then
+            dnf config-manager --add-repo="${repo}"
+            if ! $gpg_check; then
+                disable_gpg_check "$repo"
+            fi
+        fi
+    fi
+}
+
+
+disable_gpg_check() {
+    local repo="$1"
+
+    dnf config-manager --save --setopt="$(url_to_repo "$repo")".gpgcheck=0
 }
 
 post_provision_config_nodes() {
@@ -34,22 +50,13 @@ post_provision_config_nodes() {
 
     local dnf_repo_args="--disablerepo=*"
 
+    add_repo "$DAOS_STACK_GROUP_REPO"
     if [ -n "$DAOS_STACK_GROUP_REPO" ]; then
-         rm -f /etc/dnf.repos.d/*"$DAOS_STACK_GROUP_REPO"
-         dnf config-manager \
-             --add-repo="${REPOSITORY_URL}${DAOS_STACK_GROUP_REPO}"
-         # Need the GPG key for the GO language repo (part of the group
-         # repo above)
-         rpm --import \
-           "${REPOSITORY_URL}${DAOS_STACK_GROUP_REPO%/*}/opensuse-15.2-devel-languages-go-x86_64-proxy/repodata/repomd.xml.key"
+        rpm --import \
+            "${REPOSITORY_URL}${DAOS_STACK_GROUP_REPO%/*}/opensuse-15.2-devel-languages-go-x86_64-proxy/repodata/repomd.xml.key"
     fi
 
-    if [ -n "$DAOS_STACK_LOCAL_REPO" ]; then
-        rm -f /etc/dnf.repos.d/*"$DAOS_STACK_LOCAL_REPO"
-        local repo="${REPOSITORY_URL}${DAOS_STACK_LOCAL_REPO}"
-        dnf config-manager --add-repo="${repo}"
-        disable_gpg_check "$repo"
-    fi
+    add_repo "${DAOS_STACK_LOCAL_REPO}" false
 
     # TODO: this should be per repo for the above two repos
     dnf_repo_args+=" --enablerepo=repo.dc.hpdd.intel.com_repository_*"
@@ -105,5 +112,10 @@ post_provision_config_nodes() {
     fi
 
     # now make sure everything is fully up-to-date
-    time dnf -y upgrade --exclude fuse,fuse-libs,fuse-devel,mercury,daos,daos-\*
+    if ! time dnf -y upgrade \
+                  --exclude fuse,fuse-libs,fuse-devel,mercury,daos,daos-\*; then
+        exit 1
+    fi
+
+    exit 0
 }
