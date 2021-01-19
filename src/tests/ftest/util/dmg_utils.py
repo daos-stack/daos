@@ -652,15 +652,10 @@ class DmgCommand(DmgCommandBase):
         #    98736dfe-cb92-12cd-de45-9b09875092cd 1
         data = {}
         match = re.findall(
-            r"(?:([0-9a-fA-F][0-9a-fA-F-]+)\s+([*[0-9][0-9,-]*]*))",
+            r"(?:([0-9a-fA-F][0-9a-fA-F-]+)\W+([0-9][0-9,-]*))",
             self.result.stdout)
         for info in match:
-            # Clean-up in case of a range in the Svc Replicas
-            if info[1][0] == '[' and info[1][-1] == ']':
-                strInfo = info[1][1:-1]
-            else:
-                strInfo = info[1]
-            data[info[0]] = get_numeric_list(strInfo)
+            data[info[0]] = get_numeric_list(info[1])
         return data
 
     def pool_set_prop(self, pool, name, value):
