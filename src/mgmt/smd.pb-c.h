@@ -386,7 +386,7 @@ struct  _Ctl__SmdQueryResp__Device
   /*
    * Transport address of blobstore
    */
-  char *traddr;
+  char *tr_addr;
   /*
    * optional BIO health
    */

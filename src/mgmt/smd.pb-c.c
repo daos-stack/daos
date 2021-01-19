@@ -1848,12 +1848,12 @@ static const ProtobufCFieldDescriptor ctl__smd_query_resp__device__field_descrip
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "trAddr",
+    "tr_addr",
     4,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Ctl__SmdQueryResp__Device, traddr),
+    offsetof(Ctl__SmdQueryResp__Device, tr_addr),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -1876,7 +1876,7 @@ static const unsigned ctl__smd_query_resp__device__field_indices_by_name[] = {
   4,   /* field[4] = health */
   2,   /* field[2] = state */
   1,   /* field[1] = tgt_ids */
-  3,   /* field[3] = trAddr */
+  3,   /* field[3] = tr_addr */
   0,   /* field[0] = uuid */
 };
 static const ProtobufCIntRange ctl__smd_query_resp__device__number_ranges[1 + 1] =

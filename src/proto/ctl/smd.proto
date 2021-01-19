@@ -144,7 +144,7 @@ message SmdQueryResp {
 		string uuid = 1; // UUID of blobstore
 		repeated int32 tgt_ids = 2; // VOS target IDs
 		string state = 3; // BIO device state
-		string trAddr = 4; // Transport address of blobstore
+		string tr_addr = 4; // Transport address of blobstore
 		BioHealthResp health = 5; // optional BIO health
 	}
 	message Pool {
