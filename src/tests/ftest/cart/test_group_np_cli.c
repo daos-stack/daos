@@ -175,8 +175,8 @@ test_run(void)
 			server_ep.ep_rank = rank_list->rl_ranks[i];
 			send_rpc_swim_check(server_ep, rpc_req);
 		}
-	} 
-	
+	}
+
 	if (test_g.t_skip_shutdown) {
 		DBG_PRINT("Skipping shutdown stage.\n");
 	} else {
