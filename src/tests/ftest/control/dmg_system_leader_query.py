@@ -45,8 +45,7 @@ class DmgSystemLeaderQueryTest(ControlTestBase):
         JIRA ID: DAOS-4822
         Test Description: Test that system leader-query command reports leader
             consistently regardless of which server is queried.
-        :avocado: tags=all,small,daily_regression,hw,dmg,system_leader_query
-        :avocado: tags=basic
+        :avocado: tags=all,basic,daily_regression,dmg,system_leader_query
         """
         last_result = None
         for host in self.hosts:
