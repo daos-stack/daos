@@ -92,32 +92,32 @@ func TestNvmFwInfo(t *testing.T) {
 	}
 }
 
-func TestNvmFwUpdate_BadFile(t *testing.T) {
-	for _, tt := range []struct {
-		desc      string
-		inputPath string
-		expErr    error
-	}{
-		{
-			desc:   "empty path",
-			expErr: errors.New("firmware path is required"),
-		},
-		{
-			desc:      "non-existent path",
-			inputPath: "/not/a/real/path.bin",
-			expErr:    errors.New("unable to access firmware file"),
-		},
-	} {
-		t.Run(tt.desc, func(t *testing.T) {
-			var devUID DeviceUID // don't care - this test shouldn't reach the API
-
-			mgmt := NvmMgmt{}
-			err := mgmt.UpdateFirmware(devUID, tt.inputPath, false)
-
-			common.CmpErr(t, tt.expErr, err)
-		})
-	}
-}
+//func TestNvmFwUpdate_BadFile(t *testing.T) {
+//	for _, tt := range []struct {
+//		desc      string
+//		inputPath string
+//		expErr    error
+//	}{
+//		{
+//			desc:   "empty path",
+//			expErr: errors.New("firmware path is required"),
+//		},
+//		{
+//			desc:      "non-existent path",
+//			inputPath: "/not/a/real/path.bin",
+//			expErr:    errors.New("unable to access firmware file"),
+//		},
+//	} {
+//		t.Run(tt.desc, func(t *testing.T) {
+//			var devUID DeviceUID // don't care - this test shouldn't reach the API
+//
+//			mgmt := NvmMgmt{}
+//			err := mgmt.UpdateFirmware(devUID, tt.inputPath, false)
+//
+//			common.CmpErr(t, tt.expErr, err)
+//		})
+//	}
+//}
 
 func TestNvmFwUpdate(t *testing.T) {
 	skipNoPerms(t)
