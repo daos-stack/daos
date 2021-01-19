@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,12 +28,25 @@
 #include <gurt/atomic.h>
 #include <time.h>
 
-#define CRT_HLC_MASK 0xFFFFULL
+/**
+ * HLC timestamp unit (given in the HLC timestamp value for 1 ns) (i.e.,
+ * 1/16 ns, offering a 36-year range)
+ */
+#define CRT_HLC_NSEC 16ULL
+
+/**
+ * HLC start time (given in the Unix time for 2021-01-01 00:00:00 +0000 UTC in
+ * seconds) (i.e., together with CRT_HLC_NSEC, offering a range of [2021, 2057])
+ */
+#define CRT_HLC_START 1609459200ULL
+
+/** Mask for the 18 logical bits */
+#define CRT_HLC_MASK 0x3FFFFULL
 
 static ATOMIC uint64_t crt_hlc;
 
 /** See crt_hlc_epsilon_set's API doc */
-static uint64_t crt_hlc_epsilon = 1000 * 1000 * 1000;
+static uint64_t crt_hlc_epsilon = 1ULL * NSEC_PER_SEC * CRT_HLC_NSEC;
 
 /** Get local physical time */
 static inline uint64_t crt_hlc_localtime_get(void)
@@ -43,12 +56,12 @@ static inline uint64_t crt_hlc_localtime_get(void)
 	int		rc;
 
 	rc = clock_gettime(CLOCK_REALTIME, &now);
-	pt = rc ? crt_hlc : (now.tv_sec * NSEC_PER_SEC + now.tv_nsec);
+	D_ASSERTF(rc == 0, "clock_gettime: %d\n", errno);
+	D_ASSERT(now.tv_sec > CRT_HLC_START);
+	pt = ((now.tv_sec - CRT_HLC_START) * NSEC_PER_SEC + now.tv_nsec) *
+	     CRT_HLC_NSEC;
 
-	/**
-	 * Return the most significant 48 bits of time.
-	 * In case of error of retrieving a system time use previous time.
-	 */
+	/** Return the most significant 46 bits of time. */
 	return pt & ~CRT_HLC_MASK;
 }
 
@@ -96,9 +109,35 @@ int crt_hlc_get_msg(uint64_t msg, uint64_t *hlc_out, uint64_t *offset)
 	return 0;
 }
 
-uint64_t crt_hlc2sec(uint64_t hlc)
+uint64_t crt_hlc2nsec(uint64_t hlc)
 {
-	return (hlc & ~CRT_HLC_MASK) / NSEC_PER_SEC;
+	return hlc / CRT_HLC_NSEC;
+}
+
+uint64_t crt_hlc_from_nsec(uint64_t nsec)
+{
+	return nsec * CRT_HLC_NSEC;
+}
+
+uint64_t crt_hlc2unixnsec(uint64_t hlc)
+{
+	return hlc / CRT_HLC_NSEC + CRT_HLC_START * NSEC_PER_SEC;
+}
+
+int crt_hlc_from_unixnsec(uint64_t unixnsec, uint64_t *hlc)
+{
+	uint64_t start = CRT_HLC_START * NSEC_PER_SEC;
+
+	/*
+	 * If the time represented by unixnsec is before the time represented by
+	 * CRT_HLC_START, then the conversion is impossible.
+	 */
+	if (unixnsec < start)
+		return -DER_INVAL;
+
+	*hlc = (unixnsec - start) * CRT_HLC_NSEC;
+
+	return 0;
 }
 
 void crt_hlc_epsilon_set(uint64_t epsilon)

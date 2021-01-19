@@ -580,8 +580,8 @@ server_init(int argc, char *argv[])
 	if (diff > 0) {
 		struct timespec		tv;
 
-		tv.tv_sec = diff / NSEC_PER_SEC;
-		tv.tv_nsec = diff % NSEC_PER_SEC;
+		tv.tv_sec = crt_hlc2nsec(diff) / NSEC_PER_SEC;
+		tv.tv_nsec = crt_hlc2nsec(diff) % NSEC_PER_SEC;
 
 		/* XXX: If the server restart so quickly as to all related
 		 *	things are handled within HLC epsilon, then it is

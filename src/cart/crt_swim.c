@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -170,8 +170,7 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc_req)
 	 * this request.
 	 */
 	if (hlc > rpc_priv->crp_req_hdr.cch_hlc)
-		rcv_delay = (hlc - rpc_priv->crp_req_hdr.cch_hlc)
-			  / NSEC_PER_MSEC;
+		rcv_delay = crt_hlc2msec(hlc - rpc_priv->crp_req_hdr.cch_hlc);
 
 	/* Update all piggybacked members with remote delays */
 	D_SPIN_LOCK(&csm->csm_lock);
@@ -198,10 +197,11 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc_req)
 
 				if (crt_swim_fail_delay &&
 				    crt_swim_fail_id == id) {
-					crt_swim_fail_hlc = hlc
-							  - l * NSEC_PER_MSEC
-							  + crt_swim_fail_delay
-							  * NSEC_PER_SEC;
+					uint64_t d = crt_swim_fail_delay;
+
+					crt_swim_fail_hlc =
+						hlc - crt_hlc_from_msec(l) +
+						crt_hlc_from_sec(d);
 					crt_swim_fail_delay = 0;
 				}
 				break;
@@ -298,8 +298,8 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 
 out:
 	if (crt_swim_fail_delay && crt_swim_fail_id == self_id) {
-		crt_swim_fail_hlc = crt_hlc_get()
-				  + crt_swim_fail_delay * NSEC_PER_SEC;
+		crt_swim_fail_hlc = crt_hlc_get() +
+				    crt_hlc_from_sec(crt_swim_fail_delay);
 		crt_swim_fail_delay = 0;
 	}
 

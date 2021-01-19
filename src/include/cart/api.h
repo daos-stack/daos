@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -469,14 +469,88 @@ int
 crt_hlc_get_msg(uint64_t msg, uint64_t *hlc_out, uint64_t *offset);
 
 /**
- * Return the second timestamp of hlc.
+ * Return the nanosecond timestamp of hlc.
  *
  * \param[in] hlc              HLC timestamp
  *
- * \return                     The timestamp in second
+ * \return                     Nanosecond timestamp
  */
 uint64_t
-crt_hlc2sec(uint64_t hlc);
+crt_hlc2nsec(uint64_t hlc);
+
+/** See crt_hlc2nsec. */
+static inline uint64_t
+crt_hlc2usec(uint64_t hlc)
+{
+	return crt_hlc2nsec(hlc) / 1000;
+}
+
+/** See crt_hlc2nsec. */
+static inline uint64_t
+crt_hlc2msec(uint64_t hlc)
+{
+	return crt_hlc2nsec(hlc) / (1000 * 1000);
+}
+
+/** See crt_hlc2nsec. */
+static inline uint64_t
+crt_hlc2sec(uint64_t hlc)
+{
+	return crt_hlc2nsec(hlc) / (1000 * 1000 * 1000);
+}
+
+/**
+ * Return the HLC timestamp from nsec.
+ *
+ * \param[in] nsec             Nanosecond timestamp
+ *
+ * \return                     HLC timestamp
+ */
+uint64_t
+crt_hlc_from_nsec(uint64_t nsec);
+
+/** See crt_hlc_from_nsec. */
+static inline uint64_t
+crt_hlc_from_usec(uint64_t usec)
+{
+	return crt_hlc_from_nsec(usec * 1000);
+}
+
+/** See crt_hlc_from_nsec. */
+static inline uint64_t
+crt_hlc_from_msec(uint64_t msec)
+{
+	return crt_hlc_from_nsec(msec * 1000 * 1000);
+}
+
+/** See crt_hlc_from_nsec. */
+static inline uint64_t
+crt_hlc_from_sec(uint64_t sec)
+{
+	return crt_hlc_from_nsec(sec * 1000 * 1000 * 1000);
+}
+
+/**
+ * Return the Unix nanosecond timestamp of hlc.
+ *
+ * \param[in] hlc              HLC timestamp
+ *
+ * \return                     Unix nanosecond timestamp
+ */
+uint64_t
+crt_hlc2unixnsec(uint64_t hlc);
+
+/**
+ * Return the HLC timestamp of unixnsec in hlc.
+ *
+ * \param[in] unixnsec         Unix nanosecond timestamp
+ * \param[out] hlc             HLC timestamp
+ *
+ * \return                     DER_SUCCESS on success, or -DER_INVAL when it is
+ *                             impossible to convert unixnsec to hlc
+ */
+int
+crt_hlc_from_unixnsec(uint64_t unixnsec, uint64_t *hlc);
 
 /**
  * Set the maximum system clock offset.
