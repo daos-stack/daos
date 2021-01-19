@@ -32,6 +32,7 @@ from write_host_file import write_host_file
 from command_utils import CommandFailure
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
+from apricot import skipForTicket
 
 try:
     # python 3.x
@@ -218,6 +219,7 @@ class OSAOnlineParallelTest(OSAUtils):
                 self.assertTrue(pver_end == 25,
                                 "Pool Version Error:  at the end")
 
+    @skipForTicket("DAOS-6543")
     def test_osa_online_parallel_test(self):
         """
         JIRA ID: DAOS-4752
