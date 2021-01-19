@@ -130,6 +130,11 @@ struct ds_cont_child {
 	d_list_t		 sc_dtx_cos_list;
 	/* The pool map version for the latest DTX resync on the container. */
 	uint32_t		 sc_dtx_resync_ver;
+	/* Cached remote handles for EC aggregation */
+	daos_handle_t		 sc_remote_poh;
+	daos_handle_t		 sc_remote_coh;
+	uuid_t			 sc_poh_uuid;
+	uuid_t			 sc_coh_uuid;
 };
 
 /*

@@ -103,7 +103,7 @@ collective_reduce(void **arg)
 static int
 dss_collective_reduce_internal(struct dss_coll_ops *ops,
 			       struct dss_coll_args *args, bool create_ult,
-			       int flag)
+			       unsigned int flags)
 {
 	struct collective_arg		carg;
 	struct dss_coll_stream_args	*stream_args;
@@ -170,7 +170,6 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 	rc = ABT_future_set(future, (void *)&aggregator);
 	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 	for (tid = 0; tid < xs_nr; tid++) {
-		ABT_pool pool;
 		stream			= &stream_args->csa_streams[tid];
 		stream->st_coll_args	= &carg;
 
@@ -190,16 +189,15 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 		}
 
 		dx = dss_get_xstream(DSS_MAIN_XS_ID(tid));
-		pool = dx->dx_pools[DSS_POOL_GENERIC];
 		if (create_ult)
-			rc = ABT_thread_create(pool, collective_func, stream,
-					       ABT_THREAD_ATTR_NULL, NULL);
+			rc = sched_create_thread(dx, collective_func, stream,
+						 ABT_THREAD_ATTR_NULL, NULL,
+						 flags);
 		else
-			rc = ABT_task_create(pool, collective_func, stream,
-					     NULL);
-
-		if (rc != ABT_SUCCESS) {
-			stream->st_rc = dss_abterr2der(rc);
+			rc = sched_create_task(dx, collective_func, stream,
+					       NULL, flags);
+		if (rc != 0) {
+			stream->st_rc = rc;
 			rc = ABT_future_set(future, (void *)stream);
 			D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 		}
@@ -233,15 +231,15 @@ out_streams:
  *				server xstreams.
  * \param[in] args		All arguments required for dss_collective
  *				including func args.
- * \param[in] flag		collective flag, reserved for future usage.
+ * \param[in] flags		Flags of dss_ult_flags
  *
  * \return			number of failed xstreams or error code
  */
 int
 dss_task_collective_reduce(struct dss_coll_ops *ops,
-			   struct dss_coll_args *args, int flag)
+			   struct dss_coll_args *args, unsigned int flags)
 {
-	return dss_collective_reduce_internal(ops, args, false, flag);
+	return dss_collective_reduce_internal(ops, args, false, flags);
 }
 
 /**
@@ -255,19 +253,20 @@ dss_task_collective_reduce(struct dss_coll_ops *ops,
  *				server xstreams.
  * \param[in] args		All arguments required for dss_collective
  *				including func args.
- * \param[in] flag		collective flag, reserved for future usage.
+ * \param[in] flags		Flags from dss_ult_flags
  *
  * \return			number of failed xstreams or error code
  */
 int
 dss_thread_collective_reduce(struct dss_coll_ops *ops,
-			     struct dss_coll_args *args, int flag)
+			     struct dss_coll_args *args, unsigned int flags)
 {
-	return dss_collective_reduce_internal(ops, args, true, flag);
+	return dss_collective_reduce_internal(ops, args, true, flags);
 }
 
 static int
-dss_collective_internal(int (*func)(void *), void *arg, bool thread, int flag)
+dss_collective_internal(int (*func)(void *), void *arg, bool thread,
+			unsigned int flags)
 {
 	int				rc;
 	struct dss_coll_ops		coll_ops = { 0 };
@@ -277,9 +276,9 @@ dss_collective_internal(int (*func)(void *), void *arg, bool thread, int flag)
 	coll_args.ca_func_args	= arg;
 
 	if (thread)
-		rc = dss_thread_collective_reduce(&coll_ops, &coll_args, flag);
+		rc = dss_thread_collective_reduce(&coll_ops, &coll_args, flags);
 	else
-		rc = dss_task_collective_reduce(&coll_ops, &coll_args, flag);
+		rc = dss_task_collective_reduce(&coll_ops, &coll_args, flags);
 
 	return rc;
 }
@@ -290,14 +289,14 @@ dss_collective_internal(int (*func)(void *), void *arg, bool thread, int flag)
  *
  * \param[in] func	function to be executed
  * \param[in] arg	argument to be passed to \a func
- * \param[in] flag	collective flag, reserved for future usage.
+ * \param[in] flags	Flags from dss_ult_flags
  *
  * \return		number of failed xstreams or error code
  */
 int
-dss_task_collective(int (*func)(void *), void *arg, int flag)
+dss_task_collective(int (*func)(void *), void *arg, unsigned int flags)
 {
-	return dss_collective_internal(func, arg, false, flag);
+	return dss_collective_internal(func, arg, false, flags);
 }
 
 /**
@@ -306,15 +305,15 @@ dss_task_collective(int (*func)(void *), void *arg, int flag)
  *
  * \param[in] func	function to be executed
  * \param[in] arg	argument to be passed to \a func
- * \param[in] flag	collective flag, reserved for future usage.
+ * \param[in] flags	Flags from dss_ult_flags
  *
  * \return		number of failed xstreams or error code
  */
 
 int
-dss_thread_collective(int (*func)(void *), void *arg, int flag)
+dss_thread_collective(int (*func)(void *), void *arg, unsigned int flags)
 {
-	return dss_collective_internal(func, arg, true, flag);
+	return dss_collective_internal(func, arg, true, flags);
 }
 
 /* ============== ULT create functions =================================== */
@@ -365,21 +364,9 @@ sched_ult2xs(int xs_type, int tgt_id)
 	}
 }
 
-/**
- * Create a ULT to execute \a func(\a arg). If \a ult is not NULL, the caller
- * is responsible for freeing the ULT handle with ABT_thread_free().
- *
- * \param[in]	func		function to execute
- * \param[in]	arg		argument for \a func
- * \param[in]	xs_type		xstream type
- * \param[in]	tgt_idx		VOS target index
- * \param[in]	stack_size	stacksize of the ULT, if it is 0, then create
- *				default size of ULT.
- * \param[out]	ult		ULT handle if not NULL
- */
-int
-dss_ult_create(void (*func)(void *), void *arg, int xs_type, int tgt_idx,
-	       size_t stack_size, ABT_thread *ult)
+static int
+ult_create_internal(void (*func)(void *), void *arg, int xs_type, int tgt_idx,
+		    size_t stack_size, ABT_thread *ult, unsigned int flags)
 {
 	ABT_thread_attr		 attr;
 	struct dss_xstream	*dx;
@@ -403,8 +390,7 @@ dss_ult_create(void (*func)(void *), void *arg, int xs_type, int tgt_idx,
 		attr = ABT_THREAD_ATTR_NULL;
 	}
 
-	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_GENERIC], func,
-			       arg, attr, ult);
+	rc = sched_create_thread(dx, func, arg, attr, ult, flags);
 
 free:
 	if (attr != ABT_THREAD_ATTR_NULL) {
@@ -423,7 +409,35 @@ free:
 				dss_abterr2der(rc1));
 	}
 
-	return dss_abterr2der(rc);
+	return rc;
+}
+
+/**
+ * Create a ULT to execute \a func(\a arg). If \a ult is not NULL, the caller
+ * is responsible for freeing the ULT handle with ABT_thread_free().
+ *
+ * \param[in]	func		function to execute
+ * \param[in]	arg		argument for \a func
+ * \param[in]	xs_type		xstream type
+ * \param[in]	tgt_idx		VOS target index
+ * \param[in]	stack_size	stacksize of the ULT, if it is 0, then create
+ *				default size of ULT.
+ * \param[out]	ult		ULT handle if not NULL
+ */
+int
+dss_ult_create(void (*func)(void *), void *arg, int xs_type, int tgt_idx,
+	       size_t stack_size, ABT_thread *ult)
+{
+	return ult_create_internal(func, arg, xs_type, tgt_idx, stack_size,
+				   ult, 0);
+}
+
+int
+dss_ult_periodic(void (*func)(void *), void *arg, int xs_type, int tgt_idx,
+		 size_t stack_size, ABT_thread *ult)
+{
+	return ult_create_internal(func, arg, xs_type, tgt_idx, stack_size,
+				   ult, DSS_ULT_FL_PERIODIC);
 }
 
 static void
@@ -455,7 +469,8 @@ ult_execute_cb(void *data)
  * \param[in]	arg		argument for \a user callback
  * \param[in]	xs_type		xstream type
  * \param[in]	tgt_id		target index
- * \param[out]			error code.
+ * \param[in]	stack_size	stacksize of the ULT, if it is 0, then create
+ *				default size of ULT.
  */
 int
 dss_ult_execute(int (*func)(void *), void *arg, void (*user_cb)(void *),
@@ -522,12 +537,10 @@ dss_ult_create_all(void (*func)(void *), void *arg, bool main)
 		if (main && !dx->dx_main_xs)
 			continue;
 
-		rc = ABT_thread_create(dx->dx_pools[DSS_POOL_GENERIC],
-				       func, arg, ABT_THREAD_ATTR_NULL, NULL);
-		if (rc != ABT_SUCCESS) {
-			rc = dss_abterr2der(rc);
+		rc = sched_create_thread(dx, func, arg, ABT_THREAD_ATTR_NULL,
+					 NULL, 0);
+		if (rc != 0)
 			break;
-		}
 	}
 
 	return rc;

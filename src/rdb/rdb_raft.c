@@ -1497,7 +1497,7 @@ rdb_compactd(void *arg)
 				break;
 			if (stop)
 				break;
-			ABT_cond_wait(db->d_compact_cv, db->d_raft_mutex);
+			sched_cond_wait(db->d_compact_cv, db->d_raft_mutex);
 		}
 		ABT_mutex_unlock(db->d_raft_mutex);
 		if (stop)
@@ -1656,7 +1656,7 @@ rdb_callbackd(void *arg)
 			}
 			if (stop)
 				break;
-			ABT_cond_wait(db->d_events_cv, db->d_raft_mutex);
+			sched_cond_wait(db->d_events_cv, db->d_raft_mutex);
 		}
 		ABT_mutex_unlock(db->d_raft_mutex);
 		if (stop)
@@ -1985,8 +1985,20 @@ rdb_timerd(void *arg)
 	double		t;		/* timestamp of beat (s) */
 	double		t_prev;		/* timestamp of previous beat (s) */
 	int		rc;
+	struct sched_req_attr	 attr = { 0 };
+	uuid_t			 anonym_uuid;
+	struct sched_request	*sched_req;
 
 	D_DEBUG(DB_MD, DF_DB": timerd starting\n", DP_DB(db));
+
+	uuid_clear(anonym_uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
+	sched_req = sched_req_get(&attr, ABT_THREAD_NULL);
+	if (sched_req == NULL) {
+		D_ERROR(DF_DB": failed to get sched req.\n", DP_DB(db));
+		return;
+	}
+
 	t = ABT_get_wtime();
 	t_prev = t;
 	do {
@@ -2005,13 +2017,19 @@ rdb_timerd(void *arg)
 		if (rc != 0)
 			D_ERROR(DF_DB": raft_periodic() failed: %d\n",
 				DP_DB(db), rc);
+		if (db->d_stop)
+			break;
 
-		t_prev = t;
 		/* Wait for d in [d_min, d_max] before the next beat. */
 		d = d_min + (d_max - d_min) * rdb_raft_rand();
-		while ((t = ABT_get_wtime()) < t_prev + d && !db->d_stop)
-			ABT_thread_yield();
+		sched_req_sleep(sched_req, (uint32_t)(d * 1000));
+
+		t_prev = t;
+		t = ABT_get_wtime();
 	} while (!db->d_stop);
+
+	sched_req_put(sched_req);
+
 	D_DEBUG(DB_MD, DF_DB": timerd stopping\n", DP_DB(db));
 }
 

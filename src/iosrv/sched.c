@@ -74,7 +74,12 @@ struct sched_request {
 	unsigned int		 sr_abort:1;
 };
 
-static bool	sched_prio_disabled;
+bool		sched_prio_disabled;
+bool		sched_relax_disabled;
+unsigned int	sched_stats_intvl;
+unsigned int	sched_relax_intvl = SCHED_RELAX_INTVL_DEFAULT;
+/* CPU relax mode: 0 - sleep; 1 - block cart progress; */
+unsigned int	sched_relax_mode;
 
 enum {
 	/* All requests for various pools are processed in FIFO */
@@ -409,11 +414,17 @@ sched_info_init(struct dss_xstream *dx)
 	int			 rc;
 
 	info->si_cur_ts = daos_getntime_coarse() / NSEC_PER_MSEC;
+	info->si_stats.ss_tot_time = 0;
+	info->si_stats.ss_relax_time = 0;
+	info->si_stats.ss_busy_ts = info->si_cur_ts;
+	info->si_stats.ss_print_ts = 0;
 	D_INIT_LIST_HEAD(&info->si_idle_list);
 	D_INIT_LIST_HEAD(&info->si_sleep_list);
 	D_INIT_LIST_HEAD(&info->si_fifo_list);
 	D_INIT_LIST_HEAD(&info->si_purge_list);
 	info->si_req_cnt = 0;
+	info->si_sleep_cnt = 0;
+	info->si_wait_cnt = 0;
 	info->si_stop = 0;
 
 	rc = d_hash_table_create(D_HASH_FT_NOLOCK, 4,
@@ -524,29 +535,15 @@ req_put(struct dss_xstream *dx, struct sched_request *req)
 		d_list_add_tail(&req->sr_link, &info->si_idle_list);
 }
 
-static int
+static inline int
 req_kickoff_internal(struct dss_xstream *dx, struct sched_req_attr *attr,
 		     void (*func)(void *), void *arg)
 {
-	ABT_pool	abt_pool = dx->dx_pools[DSS_POOL_GENERIC];
-	int		rc;
-
 	D_ASSERT(attr && func && arg);
-	switch (attr->sra_type) {
-	case SCHED_REQ_UPDATE:
-	case SCHED_REQ_FETCH:
-	case SCHED_REQ_GC:
-	case SCHED_REQ_SCRUB:
-	case SCHED_REQ_MIGRATE:
-		break;
-	default:
-		D_ASSERTF(0, "Invalid req type: %u\n", attr->sra_type);
-		break;
-	}
+	D_ASSERT(attr->sra_type < SCHED_REQ_MAX);
 
-	rc = ABT_thread_create(abt_pool, func, arg, ABT_THREAD_ATTR_NULL, NULL);
-
-	return dss_abterr2der(rc);
+	return sched_create_thread(dx, func, arg, ABT_THREAD_ATTR_NULL, NULL,
+				   0);
 }
 
 static int
@@ -974,9 +971,13 @@ sched_req_yield(struct sched_request *req)
 }
 
 static inline void
-gc_sleep_counting(struct sched_request *req, int sleep)
+sleep_counting(struct dss_xstream *dx, struct sched_request *req, int sleep)
 {
+	struct sched_info	*info = &dx->dx_sched_info;
 	struct sched_pool_info	*spi = req->sr_pool_info;
+
+	info->si_sleep_cnt += sleep;
+	D_ASSERT(info->si_sleep_cnt >= 0);
 
 	if (req->sr_attr.sra_type == SCHED_REQ_ANONYM)
 		return;
@@ -1020,13 +1021,13 @@ sched_req_sleep(struct sched_request *req, uint32_t msecs)
 	if (d_list_empty(&req->sr_link))
 		d_list_add(&req->sr_link, &info->si_sleep_list);
 
-	gc_sleep_counting(req, 1);
+	sleep_counting(dx, req, 1);
 
 	ABT_self_suspend();
 }
 
-void
-sched_req_wakeup(struct sched_request *req)
+static void
+req_wakeup_internal(struct dss_xstream *dx, struct sched_request *req)
 {
 	D_ASSERT(req != NULL);
 	/* The request is not in sleep */
@@ -1037,10 +1038,18 @@ sched_req_wakeup(struct sched_request *req)
 	d_list_del_init(&req->sr_link);
 	req->sr_wakeup_time = 0;
 
-	gc_sleep_counting(req, -1);
+	sleep_counting(dx, req, -1);
 
 	D_ASSERT(req->sr_ult != ABT_THREAD_NULL);
 	ABT_thread_resume(req->sr_ult);
+}
+
+void
+sched_req_wakeup(struct sched_request *req)
+{
+	struct dss_xstream *dx = dss_current_xstream();
+
+	return req_wakeup_internal(dx, req);
 }
 
 void
@@ -1076,9 +1085,13 @@ wakeup_all(struct dss_xstream *dx)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct sched_request	*req, *tmp;
+	uint64_t		 cur_ts;
 
 	/* Update current ts stored in sched_info */
-	info->si_cur_ts = daos_getntime_coarse() / NSEC_PER_MSEC;
+	cur_ts = daos_getntime_coarse() / NSEC_PER_MSEC;
+	D_ASSERT(cur_ts >= info->si_cur_ts);
+	info->si_stats.ss_tot_time += (cur_ts - info->si_cur_ts);
+	info->si_cur_ts = cur_ts;
 
 	d_list_for_each_entry_safe(req, tmp, &info->si_sleep_list, sr_link) {
 		D_ASSERT(req->sr_wakeup_time > 0);
@@ -1086,11 +1099,11 @@ wakeup_all(struct dss_xstream *dx)
 			break;
 
 		if (!should_enqueue_req(dx, &req->sr_attr)) {
-			sched_req_wakeup(req);
+			req_wakeup_internal(dx, req);
 		} else {
 			d_list_del_init(&req->sr_link);
 			req->sr_wakeup_time = 0;
-			gc_sleep_counting(req, -1);
+			sleep_counting(dx, req, -1);
 			D_ASSERT(req->sr_ult != ABT_THREAD_NULL);
 			req_enqueue(dx, req);
 		}
@@ -1149,6 +1162,18 @@ sched_stop(struct dss_xstream *dx)
 	info->si_stop = 1;
 	wakeup_all(dx);
 	process_all(dx);
+}
+
+void
+sched_cond_wait(ABT_cond cond, ABT_mutex mutex)
+{
+	struct dss_xstream	*dx = dss_current_xstream();
+	struct sched_info	*info = &dx->dx_sched_info;
+
+	info->si_wait_cnt += 1;
+	ABT_cond_wait(cond, mutex);
+	D_ASSERT(info->si_wait_cnt > 0);
+	info->si_wait_cnt -= 1;
 }
 
 /*
@@ -1376,10 +1401,106 @@ sched_pop_one(struct sched_data *data, ABT_pool pool, int pool_idx)
 	return unit;
 }
 
+#define SCHED_IDLE_THRESH	8000UL	/* msecs */
+
+/*
+ * Try to relax CPU for a short period when the xstream is idle. The relaxing
+ * period can't be too long, otherwise, potential external events like:
+ * incoming network requests, new ULTs created by other xstream (from the
+ * collective call or offloading call) could be delayed too much.
+ *
+ * There are also some periodical internal events from BIO, like hotplug
+ * poller, health/io stats collecting, blobstore state transition, etc. It's
+ * not easy to accurately predict the next occurrence of those events.
+ */
+static void
+sched_try_relax(struct dss_xstream *dx, ABT_pool *pools, uint32_t running)
+{
+	struct sched_info	*info = &dx->dx_sched_info;
+	unsigned int		 sleep_time = sched_relax_intvl;
+	size_t			 blocked;
+	int			 ret;
+
+	dx->dx_timeout = 0;
+
+	if (info->si_stop)
+		return;
+
+	/*
+	 * There are running ULTs in current schedule cycle.
+	 *
+	 * NB. DRPC listener ULT is currently always running (it waits on
+	 * drpc_progress(), so the DRPC listener xstream will never sleep
+	 * in this function.
+	 */
+	if (running != 0)
+		return;
+
+	/* There are queued requests to be processed */
+	if (info->si_req_cnt != 0)
+		return;
+
+	ret = ABT_pool_get_total_size(pools[DSS_POOL_GENERIC], &blocked);
+	if (ret != ABT_SUCCESS) {
+		D_ERROR("XS(%d) get ABT pool(%d) total size error: %d\n",
+			dx->dx_xs_id, DSS_POOL_GENERIC, ret);
+		return;
+	}
+	D_ASSERTF(info->si_sleep_cnt + info->si_wait_cnt <= blocked,
+		  "sleep:%d + wait:%d > blocked:%zd\n",
+		  info->si_sleep_cnt, info->si_wait_cnt, blocked);
+
+	/*
+	 * Only start relaxing when all blocked ULTs are either sleeping
+	 * ULT or long wait ULT.
+	 */
+	if (blocked > info->si_sleep_cnt + info->si_wait_cnt)
+		return;
+
+	/*
+	 * System is currently idle, but we only start relaxing when there is
+	 * no external events for a short period of SCHED_IDLE_THRESH.
+	 */
+	D_ASSERT(info->si_cur_ts >= info->si_stats.ss_busy_ts);
+	if (info->si_cur_ts - info->si_stats.ss_busy_ts < SCHED_IDLE_THRESH)
+		return;
+
+	/* Adjust sleep time according to the first sleeping ULT */
+	if (info->si_sleep_cnt > 0) {
+		struct sched_request	*req;
+
+		D_ASSERT(!d_list_empty(&info->si_sleep_list));
+		req = d_list_entry(info->si_sleep_list.next,
+				   struct sched_request, sr_link);
+
+		D_ASSERT(req->sr_wakeup_time > info->si_cur_ts);
+		if (sleep_time > req->sr_wakeup_time - info->si_cur_ts)
+			sleep_time = req->sr_wakeup_time - info->si_cur_ts;
+	}
+
+	/*
+	 * Wait on external network request if the xstream has Cart context,
+	 * otherwise, sleep for a while.
+	 */
+	if (sched_relax_mode != 0 && dx->dx_comm) {
+		/* convert to micro-seconds */
+		dx->dx_timeout = sleep_time * 1000;
+	} else {
+		ret = usleep(sleep_time * 1000);
+		if (ret)
+			D_ERROR("XS(%d) sleep error: %s\n", dx->dx_xs_id,
+				strerror(errno));
+	}
+
+	/* Rough stats, interruption isn't taken into account */
+	info->si_stats.ss_relax_time += sleep_time;
+}
+
 static void
 sched_start_cycle(struct sched_data *data, ABT_pool *pools)
 {
 	struct dss_xstream	*dx = data->sd_dx;
+	struct sched_info	*info = &dx->dx_sched_info;
 	struct sched_cycle	*cycle = &data->sd_cycle;
 	size_t			 cnt;
 	int			 ret;
@@ -1404,6 +1525,18 @@ sched_start_cycle(struct sched_data *data, ABT_pool *pools)
 	}
 	cycle->sc_ults_cnt[DSS_POOL_GENERIC] = cnt;
 	cycle->sc_ults_tot += cycle->sc_ults_cnt[DSS_POOL_GENERIC];
+
+	if (!sched_relax_disabled)
+		sched_try_relax(dx, pools, cycle->sc_ults_tot);
+
+	if (sched_stats_intvl != 0 &&
+	    (info->si_stats.ss_print_ts + sched_stats_intvl) <
+	    info->si_cur_ts) {
+		D_PRINT("XS(%d) CPU time(ms): Total:"DF_U64", Relax:"DF_U64"\n",
+			dx->dx_xs_id, info->si_stats.ss_tot_time,
+			info->si_stats.ss_relax_time);
+		info->si_stats.ss_print_ts = info->si_cur_ts;
+	}
 }
 
 static void

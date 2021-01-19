@@ -617,7 +617,7 @@ map_distd(void *arg)
 				svc->s_map_dist = false;
 				break;
 			}
-			ABT_cond_wait(svc->s_map_dist_cv, svc->s_mutex);
+			sched_cond_wait(svc->s_map_dist_cv, svc->s_mutex);
 		}
 		ABT_mutex_unlock(svc->s_mutex);
 		if (stop)

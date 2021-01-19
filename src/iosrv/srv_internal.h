@@ -40,14 +40,24 @@ enum {
 	DSS_POOL_CNT,
 };
 
+struct sched_stats {
+	uint64_t	ss_tot_time;	/* Total CPU time (ms) */
+	uint64_t	ss_relax_time;	/* CPU relax time (ms) */
+	uint64_t	ss_busy_ts;	/* Last busy timestamp (ms) */
+	uint64_t	ss_print_ts;	/* Last stats print timestamp (ms) */
+};
+
 struct sched_info {
-	uint64_t		 si_cur_ts;	/* Current timestamp */
+	uint64_t		 si_cur_ts;	/* Current timestamp (ms) */
+	struct sched_stats	 si_stats;	/* Sched stats */
 	d_list_t		 si_idle_list;	/* All unused requests */
 	d_list_t		 si_sleep_list;	/* All sleeping requests */
 	d_list_t		 si_fifo_list;	/* All IO requests in FIFO */
 	d_list_t		 si_purge_list;	/* Stale sched_pool_info */
 	struct d_hash_table	*si_pool_hash;	/* All sched_pool_info */
 	uint32_t		 si_req_cnt;	/* Total inuse request count */
+	int			 si_sleep_cnt;	/* Sleeping request count */
+	int			 si_wait_cnt;	/* Long wait request count */
 	unsigned int		 si_stop:1;
 };
 
@@ -71,6 +81,8 @@ struct dss_xstream {
 	int			dx_tgt_id;
 	/* CART context id, invalid (-1) for the offload XS w/o CART context */
 	int			dx_ctx_id;
+	/* Cart progress timeout in micro-seconds */
+	unsigned int		dx_timeout;
 	bool			dx_main_xs;	/* true for main XS */
 	bool			dx_comm;	/* true with cart context */
 	bool			dx_dsc_started;	/* DSC progress ULT started */
@@ -128,12 +140,55 @@ struct dss_xstream *dss_get_xstream(int stream_id);
 int dss_xstream_cnt(void);
 
 /* sched.c */
+#define SCHED_RELAX_INTVL_DEFAULT	50 /* msec */
+
+extern bool sched_prio_disabled;
+extern bool sched_relax_disabled;
+extern unsigned int sched_stats_intvl;
+extern unsigned int sched_relax_intvl;
+extern unsigned int sched_relax_mode;
+
 void dss_sched_fini(struct dss_xstream *dx);
 int dss_sched_init(struct dss_xstream *dx);
 int sched_set_throttle(unsigned int type, unsigned int percent);
 int sched_req_enqueue(struct dss_xstream *dx, struct sched_req_attr *attr,
 		      void (*func)(void *), void *arg);
 void sched_stop(struct dss_xstream *dx);
+
+static inline int
+sched_create_task(struct dss_xstream *dx, void (*func)(void *), void *arg,
+		  ABT_task *task, unsigned int flags)
+{
+	ABT_pool		 abt_pool = dx->dx_pools[DSS_POOL_GENERIC];
+	struct sched_info	*info = &dx->dx_sched_info;
+	int			 rc;
+
+	/* Avoid bumping busy ts for internal periodically created tasks */
+	if (!(flags & DSS_ULT_FL_PERIODIC))
+		/* Atomic integer assignment from different xstream */
+		info->si_stats.ss_busy_ts = info->si_cur_ts;
+
+	rc = ABT_task_create(abt_pool, func, arg, task);
+	return dss_abterr2der(rc);
+}
+
+static inline int
+sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
+		    ABT_thread_attr t_attr, ABT_thread *thread,
+		    unsigned int flags)
+{
+	ABT_pool		 abt_pool = dx->dx_pools[DSS_POOL_GENERIC];
+	struct sched_info	*info = &dx->dx_sched_info;
+	int			 rc;
+
+	/* Avoid bumping busy ts for internal periodically created ULTs */
+	if (!(flags & DSS_ULT_FL_PERIODIC))
+		/* Atomic integer assignment from different xstream */
+		info->si_stats.ss_busy_ts = info->si_cur_ts;
+
+	rc = ABT_thread_create(abt_pool, func, arg, t_attr, thread);
+	return dss_abterr2der(rc);
+}
 
 /* tls.c */
 void dss_tls_fini(struct dss_thread_local_storage *dtls);
