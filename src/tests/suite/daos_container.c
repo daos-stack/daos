@@ -2160,7 +2160,7 @@ run_daos_cont_test(int rank, int size)
 {
 	int rc = 0;
 
-	rc = cmocka_run_group_tests_name("DAOS container tests",
+	rc = cmocka_run_group_tests_name("DAOS_Container",
 					 co_tests, setup, test_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;

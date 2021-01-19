@@ -198,11 +198,9 @@ fi
 # post-processing the xml files here to put them in proper categories
 # for publishing in Jenkins
 FILES=$logs_prefix/ftest/avocado/job-results/daos_test/*/test-results/*/data/*.xml
-echo $(ls $FILES)
 COMP="FTEST_daos_test"
 for file in $FILES
 do
-    echo "Looping through" "$file"
     if [ -f "$file" ]; then
         echo "Processing XML $file"
 
