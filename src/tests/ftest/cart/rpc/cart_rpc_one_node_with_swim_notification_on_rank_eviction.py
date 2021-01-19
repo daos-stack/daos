@@ -77,8 +77,8 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(TestWithoutServers):
             self.fail("Server did not launch, return code %s" \
                        % procrtn)
 
-            # Wait a bit for swim to become 'active' between servers
-            time.sleep(10)
+        # Wait a bit for swim to become 'active' between servers
+        time.sleep(10)
 
         # --init_only"
         self._launch_cmd_at_index(0, srv_rtn)
@@ -89,7 +89,7 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(TestWithoutServers):
         # Wait a bit for swim status to propagate to all servers
         #
         # TODO: Why is this necessary?
-        time.sleep(10)
+        time.sleep(5)
 
         # --rank 0,1 --verify_swim_status 'rank2=dead'"
         self._launch_cmd_at_index(2, srv_rtn)
