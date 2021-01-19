@@ -69,11 +69,16 @@ dss_self_rank(void)
 	return (d_rank_t)mock_self_rank;
 }
 
-/* satisfy symbol definitions for srv.c and tls.c not included in build */
+struct dss_module_info	*mock_dmi = NULL;
+static uint32_t		 mock_xs_id = 1;
 struct dss_module_info	*
 get_module_info(void)
 {
-	return NULL;
+	D_ALLOC(mock_dmi, sizeof(struct dss_module_info));
+
+	mock_dmi->dmi_xs_id = mock_xs_id;
+
+	return mock_dmi;
 }
 
 /*
@@ -96,6 +101,11 @@ drpc_client_test_setup(void **state)
 static int
 drpc_client_test_teardown(void **state)
 {
+	if (mock_dmi != NULL) {
+		D_FREE(mock_dmi);
+		mock_dmi = NULL;
+	}
+
 	return 0;
 }
 
@@ -385,6 +395,8 @@ verify_cluster_event(uint32_t id, char *msg, uint32_t type, uint32_t sev,
 	assert_string_equal(req->event->msg, msg);
 	assert_int_equal(req->event->type, type);
 	assert_int_equal(req->event->severity, sev);
+	assert_int_equal(req->event->proc_id, getpid());
+	assert_int_equal(req->event->thread_id, mock_xs_id);
 	assert_string_equal(req->event->hw_id, hwid);
 	assert_string_equal(req->event->job_id, jobid);
 	assert_string_equal(req->event->pool_uuid, pool);

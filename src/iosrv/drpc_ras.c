@@ -72,17 +72,19 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 			   (long)tv.tv_usec / 10000);
 	} else {
 		D_ERROR("unable to generate timestamp\n");
-		evt->timestamp = NULL;
+		D_GOTO(out, rc = -DER_UNINIT);
 	}
 
 	evt->id = (uint32_t)id;
 	evt->type = (uint32_t)type;
 	evt->severity = (uint32_t)sev;
 	evt->proc_id = (uint64_t)getpid();
-	if (dmi != NULL)
+	if (dmi != NULL) {
 		evt->thread_id = (uint64_t)dmi->dmi_xs_id;
-	else
+	} else {
 		D_ERROR("failed to retrieve xstream id");
+		D_GOTO(out_ts, rc = -DER_UNINIT);
+	}
 
 	if (strnlen(dss_hostname, DSS_HOSTNAME_MAX_LEN) == 0) {
 		D_ERROR("missing hostname parameter\n");
@@ -92,7 +94,7 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 
 	if ((msg == NULL) || strnlen(msg, DAOS_RAS_STR_FIELD_SIZE) == 0) {
 		D_ERROR("missing msg parameter\n");
-		D_GOTO(out_host, rc = -DER_INVAL);
+		D_GOTO(out_hn, rc = -DER_INVAL);
 	}
 	evt->msg = msg;
 
@@ -121,13 +123,13 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 
 	return 0;
 
-out_host:
+out_hn:
 	if (evt->hostname != NULL)
 		D_FREE(evt->hostname);
 out_ts:
 	if (evt->timestamp != NULL)
 		D_FREE(evt->timestamp);
-
+out:
 	return rc;
 }
 
@@ -155,6 +157,8 @@ log_event(Shared__RASEvent *evt)
 		  ras_sev2str(evt->severity));
 	if (evt->msg != NULL)
 		D_FPRINTF(stream, " msg: [%s]", evt->msg);
+	D_FPRINTF(stream, " pid: [%lu]", evt->proc_id);
+	D_FPRINTF(stream, " tid: [%lu]", evt->thread_id);
 
 	/* Log optional RAS fields. */
 	if (evt->hw_id != NULL)
