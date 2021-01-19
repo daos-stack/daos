@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -127,7 +127,7 @@ func (c *StorageControlService) StoragePrepare(ctx context.Context, req *ctlpb.S
 	return resp, nil
 }
 
-// mapCtrlrs maps controllers to PCI address) key.
+// mapCtrlrs maps each controller to it's PCI address.
 func mapCtrlrs(ctrlrs storage.NvmeControllers) (map[string]*storage.NvmeController, error) {
 	ctrlrMap := make(map[string]*storage.NvmeController)
 
