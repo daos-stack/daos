@@ -36,7 +36,7 @@ from command_utils_base import \
     CommandWithParameters, YamlParameters, EnvironmentVariables, LogParameter
 from general_utils import check_file_exists, stop_processes, get_log_file, \
     run_command, DaosTestError, get_job_manager_class, create_directory, \
-    distribute_files, change_file_owner, get_clush_command
+    distribute_files, change_file_owner, get_clush_command, get_file_listing
 
 
 class ExecutableCommand(CommandWithParameters):
@@ -834,11 +834,7 @@ class YamlCommand(SubProcessCommand):
             self.log.debug(
                 "Copied certificates for %s (in %s):",
                 self._command, ", ".join(names))
-            result = run_command(
-                "{} /usr/bin/ls -la {}".format(
-                    get_clush_command(hosts, "-S -v", True), " ".join(names)),
-                verbose=False)
-            for line in result.stdout.splitlines():
+            for line in get_file_listing(hosts, names).stdout.splitlines():
                 self.log.debug("  %s", line)
 
     def copy_configuration(self, sudo=False):

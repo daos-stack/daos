@@ -874,18 +874,21 @@ def get_job_manager_class(name, job=None, subprocess=False, mpi="openmpi"):
     return manager
 
 
-def convert_string(item):
+def convert_string(item, separator=","):
     """Convert the object into a string.
 
     If the object is a list, tuple, NodeSet, etc. return a comma-separated
     string of the values.
 
+    Args:
+        separator (str, optional): list item separator. Defaults to ",".
+
     Returns:
         str: item to convert into a string
 
     """
-    if isinstance(item, (list, tuple)):
-        item = convert_list(item)
+    if isinstance(item, (list, tuple, set)):
+        item = convert_list(item, separator)
     elif not isinstance(item, str):
         item = str(item)
     return item
@@ -1087,3 +1090,31 @@ def get_default_config_file(name):
     """
     file_name = "".join(["daos_", name, ".yml"])
     return os.path.join(os.sep, "etc", "daos", file_name)
+
+
+def get_file_listing(hosts, files):
+    """Get the file listing from multiple hosts.
+
+    Args:
+        hosts (object): hosts with which to use the clush command
+        files (object): list of multiple files to list or a single file as a str
+
+    Returns:
+        CmdResult: an avocado.utils.process CmdResult object containing the
+            result of the command execution.  A CmdResult object has the
+            following properties:
+                command         - command string
+                exit_status     - exit_status of the command
+                stdout          - the stdout
+                stderr          - the stderr
+                duration        - command execution time
+                interrupted     - whether the command completed within timeout
+                pid             - command's pid
+
+    """
+    result = run_command(
+        "{} /usr/bin/ls -la {}".format(
+            get_clush_command(hosts, "-S -v", True),
+            convert_string(files, " ")),
+        verbose=False, raise_exception=False)
+    return result

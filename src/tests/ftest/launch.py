@@ -214,17 +214,6 @@ def set_test_environment(args):
     os.environ["D_LOG_FILE"] = os.path.join(
         os.environ["DAOS_TEST_LOG_DIR"], "daos.log")
 
-    # Ensure the daos log files directory exists on each possible test node
-    test_hosts = NodeSet(socket.gethostname().split(".")[0])
-    test_hosts.update(args.test_clients)
-    test_hosts.update(args.test_servers)
-    test_dir = os.environ["DAOS_TEST_LOG_DIR"]
-    spawn_commands(test_hosts, "mkdir -p {}".format(test_dir))
-    spawn_commands(test_hosts, "chmod a+wr {}".format(test_dir))
-    spawn_commands(
-        test_hosts, "ls -al {} | grep {}".format(
-            os.path.dirname(test_dir), os.path.basename(test_dir)))
-
     # Python paths required for functional testing
     python_version = "python{}{}".format(
         version_info.major,
@@ -383,16 +372,19 @@ def check_remote_output(task, command):
         for output, o_hosts in output_data:
             n_set = NodeSet.fromlist(o_hosts)
             lines = str(output).splitlines()
-            print("There are {} lines of output".format(len(lines)))
             if len(lines) > 1:
                 print("    {}: rc={}, output:".format(n_set, code))
-                for line in lines:
+                for number, line in enumerate(lines):
                     try:
                         print("      {}".format(line))
                     except IOError:
                         # DAOS-5781 Jenkins doesn't like receiving large
                         # amounts of data in a short space of time so catch
                         # this and retry.
+                        print(
+                            "*** DAOS-5781: Handling IOError detected while "
+                            "processing line {}/{} with retry ***".format(
+                                number + 1, len(lines)))
                         time.sleep(5)
                         print("      {}".format(line))
             else:
@@ -786,6 +778,37 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
     return yaml_file
 
 
+def setup_test_directory(args, mode="all"):
+    """Setup the common test directory on all hosts.
+
+    Ensure the common test directory exists on each possible test node.
+
+    Args:
+        args (argparse.Namespace): command line arguments for this program
+        mode (str, optional): setup mode. Defaults to "all".
+            "rm"    = remove the directory
+            "mkdir" = create the directory
+            "chmod" = change the permissions of the directory (a+rw)
+            "list"  = list the contents of the directory
+            "all"  = execute all of the mode options
+    """
+    host_list = NodeSet(socket.gethostname().split(".")[0])
+    host_list.update(args.test_clients)
+    host_list.update(args.test_servers)
+    test_dir = os.environ["DAOS_TEST_LOG_DIR"]
+    print(
+        "Setting up '{}' on {}:".format(
+            test_dir, str(NodeSet.fromlist(host_list))))
+    if mode in ["all", "rm"]:
+        spawn_commands(host_list, "sudo rm -fr {}".format(test_dir))
+    if mode in ["all", "mkdir"]:
+        spawn_commands(host_list, "mkdir -p {}".format(test_dir))
+    if mode in ["all", "chmod"]:
+        spawn_commands(host_list, "chmod a+wr {}".format(test_dir))
+    if mode in ["all", "list"]:
+        spawn_commands(host_list, "ls -al {}".format(test_dir))
+
+
 def generate_certs():
     """Generate the certificates for the test."""
     daos_test_log_dir = os.environ["DAOS_TEST_LOG_DIR"]
@@ -1028,10 +1051,9 @@ def archive_daos_logs(avocado_logs_dir, test_files, args):
     print("Archiving host logs from {} in {}".format(hosts, destination))
 
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
-    # and any ULTs stacks dumps
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     task = archive_files(
-        destination, hosts, "/tmp/daos_dump* {}/*.log*".format(logs_dir), True,
+        destination, hosts, "{}/*.log*".format(logs_dir), True,
         args)
 
     # Determine if the command completed successfully across all the hosts
@@ -1732,6 +1754,9 @@ def main():
     test_files = get_test_files(test_list, args, tmp_dir)
     if args.modify:
         exit(0)
+
+    # Setup (clean/create/list) the common test directory
+    setup_test_directory(args)
 
     # Generate certificate files
     generate_certs()

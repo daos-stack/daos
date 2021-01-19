@@ -45,7 +45,7 @@ from daos_utils import DaosCommand
 from server_utils import DaosServerManager
 from general_utils import \
     get_partition_hosts, stop_processes, get_job_manager_class, \
-    get_default_config_file, pcmd
+    get_default_config_file, pcmd, get_file_listing
 from logger_utils import TestLogger
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
@@ -341,6 +341,19 @@ class TestWithoutServers(Test):
         if self.fault_file:
             os.remove(self.fault_file)
 
+    def stop_leftover_processes(self, processes, hosts):
+        """Stop leftover processes on the specified hosts before starting tests.
+
+        Args:
+            processes (list): list of process names to stop
+            hosts (list): list of hosts on which to stop the leftover processes
+        """
+        if processes:
+            self.log.info(
+                "Stopping any of the following commands left running on %s: %s",
+                hosts, ",".join(processes))
+            stop_processes(hosts, "'({})'".format("|".join(processes)))
+
 
 class TestWithServers(TestWithoutServers):
     # pylint: disable=too-many-public-methods
@@ -476,6 +489,14 @@ class TestWithServers(TestWithoutServers):
         self.log.info("server_reservation:  %s", self.server_reservation)
         self.log.info("client_reservation:  %s", self.client_reservation)
 
+        # List common test directory contents before running the test
+        self.log.debug("Common test directory (%s) contents:", self.test_dir)
+        hosts = list(self.hostlist_servers)
+        if self.hostlist_clients:
+            hosts.extend(self.hostlist_clients)
+        for line in get_file_listing(hosts, self.test_dir).stdout.splitlines():
+            self.log.debug("  %s", line)
+
         if not self.start_servers_once or self.get_test_info()["id"] == 1:
             # Kill commands left running on the hosts (from a previous test)
             # before starting any tests.  Currently only handles 'orterun'
@@ -535,19 +556,6 @@ class TestWithServers(TestWithoutServers):
                     "job_manager_timeout", default=None)
                 if self.job_manager.timeout is None:
                     self.job_manager.timeout = self.timeout - 30
-
-    def stop_leftover_processes(self, processes, hosts):
-        """Stop leftover processes on the specified hosts before starting tests.
-
-        Args:
-            processes (list): list of process names to stop
-            hosts (list): list of hosts on which to stop the leftover processes
-        """
-        if processes:
-            self.log.info(
-                "Stopping any of the following commands left running on %s: %s",
-                hosts, ",".join(processes))
-            stop_processes(hosts, "'({})'".format("|".join(processes)))
 
     def start_agents(self, agent_groups=None, servers=None):
         """Start the daos_agent processes.
