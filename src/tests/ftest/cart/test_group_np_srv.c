@@ -40,31 +40,30 @@ static void
 swim_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		  enum crt_event_type type, void *arg)
 {
+	/* Example output for SWIM CRT_EVT_DEAD on rank #2:
+	 *	 rank = 2, crt_event_source = 1, crt_event_type = 1
+	 *
+	 *		enum crt_event_type {
+	 *			CRT_EVT_ALIVE,
+	 *			CRT_EVT_DEAD,
+	 *		};
+	 *		enum crt_event_source {
+	 *			CRT_EVS_UNKNOWN,
+	 *			CRT_EVS_SWIM,
+	 *		};
+	 */
 
-		/* Example output for SWIM CRT_EVT_DEAD on rank #2:
-		 *	 rank = 2, crt_event_source = 1, crt_event_type = 1
-		 *
-		 *		enum crt_event_type {
-		 *			CRT_EVT_ALIVE,
-		 *			CRT_EVT_DEAD,
-		 *		};
-		 *		enum crt_event_source {
-		 *			CRT_EVS_UNKNOWN,
-		 *			CRT_EVS_SWIM,
-		 *		};
-		 */
+	D_DEBUG(DB_TEST, "Cart callback event: "
+		"rank = %d, "
+		"crt_event_source = %d, "
+		"crt_event_type = %d\n",
+		 rank, src, type);
 
-		D_DEBUG(DB_TEST, "Cart callback event: "
-			"rank = %d, "
-			"crt_event_source = %d, "
-			"crt_event_type = %d\n",
-			 rank, src, type);
+	if (src == CRT_EVS_SWIM) {
+		swim_status_by_rank[rank] = type;
+	}
 
-		if (src == 1) {
-			swim_status_by_rank[rank] = type;
-		}
-
-		return;
+	return;
 }
 
 void
@@ -115,9 +114,8 @@ test_run(d_rank_t my_rank)
 	}
 
 
-	if (test_g.t_hold) {
+	if (test_g.t_hold)
 		sleep(test_g.t_hold_time);
-	}
 
 	for (i = 0; i < test_g.t_srv_ctx_num; i++) {
 

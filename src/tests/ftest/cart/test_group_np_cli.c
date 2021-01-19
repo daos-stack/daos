@@ -56,7 +56,6 @@ static void
 send_rpc_swim_check(crt_endpoint_t server_ep, crt_rpc_t *rpc_req)
 {
 	struct test_swim_status_in	*rpc_req_input;
-	/*struct test_swim_status_out	*rpc_req_output; */
 
 	int rc = crt_req_create(test_g.t_crt_ctx[0], &server_ep,
 				CRT_PROTO_OPC(TEST_GROUP_BASE,
@@ -97,7 +96,7 @@ test_run(void)
 	if (test_g.t_skip_init) {
 		DBG_PRINT("Skipping init stage.\n");
 
-	} else if (!test_g.t_skip_init) {
+	} else {
 
 		if (test_g.t_save_cfg) {
 			rc = crt_group_config_path_set(test_g.t_cfg_path);
@@ -120,7 +119,7 @@ test_run(void)
 			  rc);
 
 		/* Process the --rank option, e.g., --rank 1,2-4 */
-		if (test_g.cg_num_ranks > -1) {
+		if (test_g.cg_num_ranks > 0) {
 			_cg_ranks = (uint32_t *)test_g.cg_ranks;
 			_cg_num_ranks = test_g.cg_num_ranks;
 			rank_list = uint32_array_to_rank_list(_cg_ranks,
@@ -176,9 +175,11 @@ test_run(void)
 			server_ep.ep_rank = rank_list->rl_ranks[i];
 			send_rpc_swim_check(server_ep, rpc_req);
 		}
-	} else if (test_g.t_skip_shutdown) {
+	} 
+	
+	if (test_g.t_skip_shutdown) {
 		DBG_PRINT("Skipping shutdown stage.\n");
-	} else if (!test_g.t_skip_shutdown) {
+	} else {
 
 		/* Shutdown all ranks */
 		for (i = 0; i < rank_list->rl_nr; i++) {

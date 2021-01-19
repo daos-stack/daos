@@ -577,7 +577,7 @@ test_parse_args(int argc, char **argv)
 		{0, 0, 0, 0}
 	};
 
-	test_g.cg_num_ranks = -1;
+	test_g.cg_num_ranks = 0;
 	test_g.t_use_cfg = true;
 	test_g.t_register_swim_callback = false;
 
