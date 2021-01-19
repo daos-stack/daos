@@ -1284,6 +1284,7 @@ do { \
 	"	  container (cont) container\n" \
 	"	  filesystem (fs)  copy to and from a POSIX filesystem\n" \
 	"	  object (obj)     object\n" \
+	"	  shell            shell\n" \
 	"	  version          print command version\n" \
 	"	  help             print this message and exit\n"); \
 	fprintf(stream, "\n"); \
@@ -1555,7 +1556,10 @@ main(int argc, char *argv[])
 	} else if ((strcmp(argv[1], "object") == 0) ||
 		 (strcmp(argv[1], "obj") == 0))
 		hdlr = obj_op_hdlr;
-
+	} else if (strcmp(argv[1], "shell") == 0) {
+		rc = shell(argc, argv);
+		return rc;
+	}
 	if (hdlr == NULL) {
 		dargs.ostream = stderr;
 		help_hdlr(argc, argv, &dargs);

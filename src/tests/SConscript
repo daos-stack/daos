@@ -38,10 +38,10 @@ def scons():
                                     LIBS=libs)
     denv.Install('$PREFIX/bin/', daos_racer)
 
-    obj_ctl = daos_build.program(denv, 'obj_ctl',
-                                 ['obj_ctl.c'],
+    vos_obj_ctl = daos_build.program(denv, 'vos_obj_ctl',
+                                 ['vos_obj_ctl.c'],
                                  LIBS=libs)
-    denv.Install('$PREFIX/bin/', obj_ctl)
+    denv.Install('$PREFIX/bin/', vos_obj_ctl)
 
     jobtest = daos_build.program(denv, 'jobtest', ['jobtest.c'], LIBS=libs)
     denv.Install('$PREFIX/bin/', jobtest)
