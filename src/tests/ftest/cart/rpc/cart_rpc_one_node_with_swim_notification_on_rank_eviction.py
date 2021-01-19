@@ -87,6 +87,8 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(TestWithoutServers):
         self._launch_cmd_at_index(1, srv_rtn)
 
         # Wait a bit for swim status to propagate to all servers
+        #
+        # TODO: Why is this necessary?
         time.sleep(10)
 
         # --rank 0,1 --verify_swim_status 'rank2=dead'"
