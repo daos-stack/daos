@@ -177,22 +177,27 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		}
 	}
 
-	log.Debugf("automatic NVMe prepare req: %+v", prepReq)
-	if _, err := bdevProvider.Prepare(prepReq); err != nil {
-		log.Errorf("automatic NVMe prepare failed (check configuration?)\n%s", err)
-	}
+	/*
+		log.Debugf("automatic NVMe prepare req: %+v", prepReq)
+		if _, err := bdevProvider.Prepare(prepReq); err != nil {
+			log.Errorf("automatic NVMe prepare failed (check configuration?)\n%s", err)
+		}
+	*/
+	log.Info("automatic NVMe prepare disabled on Endeavour")
 
 	hugePages, err := getHugePageInfo()
 	if err != nil {
 		return errors.Wrap(err, "unable to read system hugepage info")
 	}
 
-	if cfgHasBdev(cfg) {
-		// Double-check that we got the requested number of huge pages after prepare.
-		if hugePages.Free < prepReq.HugePageCount {
-			return FaultInsufficientFreeHugePages(hugePages.Free, prepReq.HugePageCount)
+	/*
+		if cfgHasBdev(cfg) {
+			// Double-check that we got the requested number of huge pages after prepare.
+			if hugePages.Free < prepReq.HugePageCount {
+				return FaultInsufficientFreeHugePages(hugePages.Free, prepReq.HugePageCount)
+			}
 		}
-	}
+	*/
 
 	var dbReplicas []*net.TCPAddr
 	for _, ap := range cfg.AccessPoints {
