@@ -364,7 +364,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 		if len(smdIndexes) == 0 {
 			smdIndexes = append(smdIndexes, ctrlrIdx)
 		}
-		smdDevRespDevices := make([]*mgmtpb.SmdDevResp_Device, len(smdIndexes))
+		smdDevRespDevices := make([]*ctlpb.SmdDevResp_Device, len(smdIndexes))
 		ctrlr.Smddevices = make([]*NvmeController_SmdDevice, len(smdIndexes))
 		ctrlr.Namespaces = make([]*NvmeController_Namespace, len(smdIndexes))
 		for i, idx := range smdIndexes {
@@ -373,7 +373,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 			sd.TrAddr = ctrlr.Pciaddr
 			ctrlr.Smddevices[i] = sd
 
-			smdPB := new(mgmtpb.SmdDevResp_Device)
+			smdPB := new(ctlpb.SmdDevResp_Device)
 			if err := convert.Types(sd, smdPB); err != nil {
 				t.Fatal(err)
 			}
@@ -385,7 +385,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 			ctrlr.Namespaces[i] = proto.MockNvmeNamespace(int32(i + 1))
 		}
 
-		return ctrlr, &mgmtpb.SmdDevResp{Devices: smdDevRespDevices}
+		return ctrlr, &ctlpb.SmdDevResp{Devices: smdDevRespDevices}
 	}
 	newCtrlrPBwMeta := func(idx int32, smdIndexes ...int32) *NvmeController {
 		c, _ := newCtrlrMeta(idx, smdIndexes...)

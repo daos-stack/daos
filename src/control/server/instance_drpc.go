@@ -225,6 +225,14 @@ func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[
 
 	hasUpdatedHealth := make(map[string]bool)
 	for _, dev := range smdDevs.Devices {
+		msg := fmt.Sprintf("instance %d: smd %s with transport address %s",
+			srv.Index(), dev.GetUuid(), dev.GetTrAddr())
+
+		ctrlr, exists := ctrlrMap[dev.GetTrAddr()]
+		if !exists {
+			return errors.Errorf("%s: didn't match any known controllers", msg)
+		}
+
 		pbStats, err := srv.getBioHealth(ctx, &ctlpb.BioHealthReq{
 			DevUuid: dev.GetUuid(),
 		})
