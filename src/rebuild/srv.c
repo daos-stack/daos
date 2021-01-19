@@ -39,7 +39,7 @@
 #include "rpc.h"
 #include "rebuild_internal.h"
 
-#define RBLD_CHECK_INTV	 (2 * NSEC_PER_SEC)	/* seconds interval to check*/
+#define RBLD_CHECK_INTV	 2000	/* milliseconds interval to check*/
 struct rebuild_global	rebuild_gst;
 
 struct pool_map *
@@ -538,12 +538,14 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 	double		last_print = 0;
 	unsigned int	total;
 	int		rc;
+	struct sched_req_attr	attr = { 0 };
 
 	rc = crt_group_size(pool->sp_group, &total);
 	if (rc)
 		return;
 
-	rgt->rgt_ult = dss_sleep_ult_create();
+	sched_req_attr_init(&attr, SCHED_REQ_MIGRATE, &rgt->rgt_pool_uuid);
+	rgt->rgt_ult = sched_req_get(&attr, ABT_THREAD_NULL);
 	if (rgt->rgt_ult == NULL)
 		return;
 
@@ -656,10 +658,10 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 			D_PRINT("%s", sbuf);
 		}
 
-		dss_ult_sleep(rgt->rgt_ult, RBLD_CHECK_INTV);
+		sched_req_sleep(rgt->rgt_ult, RBLD_CHECK_INTV);
 	}
 
-	dss_sleep_ult_destroy(rgt->rgt_ult);
+	sched_req_put(rgt->rgt_ult);
 	rgt->rgt_ult = NULL;
 }
 
@@ -1731,9 +1733,11 @@ void
 rebuild_tgt_status_check_ult(void *arg)
 {
 	struct rebuild_tgt_pool_tracker	*rpt = arg;
+	struct sched_req_attr	attr = { 0 };
 
 	D_ASSERT(rpt != NULL);
-	rpt->rt_ult = dss_sleep_ult_create();
+	sched_req_attr_init(&attr, SCHED_REQ_MIGRATE, &rpt->rt_pool_uuid);
+	rpt->rt_ult = sched_req_get(&attr, ABT_THREAD_NULL);
 	if (rpt->rt_ult == NULL) {
 		D_ERROR("Can not start rebuild status check\n");
 		return;
@@ -1877,10 +1881,10 @@ rebuild_tgt_status_check_ult(void *arg)
 		if (rpt->rt_global_done || rpt->rt_abort)
 			break;
 
-		dss_ult_sleep(rpt->rt_ult, RBLD_CHECK_INTV);
+		sched_req_sleep(rpt->rt_ult, RBLD_CHECK_INTV);
 	}
 
-	dss_sleep_ult_destroy(rpt->rt_ult);
+	sched_req_put(rpt->rt_ult);
 	rpt->rt_ult = NULL;
 
 	rpt_put(rpt);
