@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,11 +34,17 @@
 
 #include <daos/drpc.h>
 #include <gurt/list.h>
+#include <daos_srv/ras.h>
 
 /**
  * Path to the Unix Domain Socket used by the dRPC listener thread
  */
 extern char *drpc_listener_socket_path;
+
+/**
+ * Client context
+ */
+extern struct drpc *dss_drpc_ctx;
 
 /**
  * Context for listener's drpc_progress loop. Includes the context for the

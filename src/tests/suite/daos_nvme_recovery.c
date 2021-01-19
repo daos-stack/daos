@@ -315,7 +315,7 @@ nvme_test_verify_device_stats(void **state)
 		if (devices[i].rank == 0)
 			rank_pos = i;
 	}
-	assert_string_equal(devices[rank_pos].state, "\"FAULTY\"");
+	assert_string_equal(devices[rank_pos].state, "\"EVICTED\"");
 
 	rc = verify_state_in_log(devices[rank_pos].host, log_file,
 				 "NORMAL -> FAULTY");
