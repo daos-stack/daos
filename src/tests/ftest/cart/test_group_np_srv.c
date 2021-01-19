@@ -62,8 +62,6 @@ swim_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 	if (src == CRT_EVS_SWIM) {
 		swim_status_by_rank[rank] = type;
 	}
-
-	return;
 }
 
 void
