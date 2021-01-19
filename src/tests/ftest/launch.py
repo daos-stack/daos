@@ -1001,8 +1001,6 @@ def clean_logs(test_yaml, args):
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     host_list = get_hosts_from_yaml(test_yaml, args)
     command = "sudo rm -fr {}".format(os.path.join(logs_dir, "*.log*"))
-    # also remove any ABT infos/stacks dumps
-    command += " /tmp/daos_dump*"
     print("Cleaning logs on {}".format(host_list))
     if not spawn_commands(host_list, command):
         print("Error cleaning logs, aborting")
@@ -1053,8 +1051,7 @@ def archive_daos_logs(avocado_logs_dir, test_files, args):
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     task = archive_files(
-        destination, hosts, "{}/*.log*".format(logs_dir), True,
-        args)
+        destination, hosts, "{}/*.log*".format(logs_dir), True, args)
 
     # Determine if the command completed successfully across all the hosts
     status = 0
