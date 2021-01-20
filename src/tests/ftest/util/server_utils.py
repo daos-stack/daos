@@ -464,16 +464,16 @@ class DaosServerManager(SubprocessManager):
         # Clean up any files that exist on the hosts
         self.clean_files()
 
-        # Make sure log file has been created for ownership change
-        if self.manager.job.using_nvme:
-            cmd_list = []
-            for server_params in self.manager.job.yaml.server_params:
-                log_file = server_params.log_file.value
-                if log_file is not None:
-                    self.log.info("Creating log file: %s", log_file)
-                    cmd_list.append("touch {}".format(log_file))
-            if cmd_list:
-                pcmd(self._hosts, "; ".join(cmd_list), False)
+        # # Make sure log file has been created for ownership change
+        # if self.manager.job.using_nvme:
+        #     cmd_list = []
+        #     for server_params in self.manager.job.yaml.server_params:
+        #         log_file = server_params.log_file.value
+        #         if log_file is not None:
+        #             self.log.info("Creating log file: %s", log_file)
+        #             cmd_list.append("touch {}".format(log_file))
+        #     if cmd_list:
+        #         pcmd(self._hosts, "; ".join(cmd_list), False)
 
         if storage:
             # Prepare server storage
