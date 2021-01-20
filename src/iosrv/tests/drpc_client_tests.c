@@ -69,7 +69,7 @@ dss_self_rank(void)
 	return (d_rank_t)mock_self_rank;
 }
 
-struct dss_module_info	*mock_dmi = NULL;
+struct dss_module_info	*mock_dmi;
 static uint32_t		 mock_xs_id = 1;
 struct dss_module_info	*
 get_module_info(void)
@@ -94,6 +94,7 @@ drpc_client_test_setup(void **state)
 	mock_close_setup();
 
 	crt_self_uri_get_return = 0;
+	mock_dmi = NULL;
 
 	return 0;
 }

@@ -64,27 +64,24 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 
 	(void)gettimeofday(&tv, 0);
 	tm = localtime(&tv.tv_sec);
-	if (tm != NULL) {
-		D_ASPRINTF(evt->timestamp,
-			   "%04d/%02d/%02d-%02d:%02d:%02d.%02ld",
-			   tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
-			   tm->tm_hour, tm->tm_min, tm->tm_sec,
-			   (long)tv.tv_usec / 10000);
-	} else {
+	if (tm == NULL) {
 		D_ERROR("unable to generate timestamp\n");
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
+	D_ASPRINTF(evt->timestamp, "%04d/%02d/%02d-%02d:%02d:%02d.%02ld",
+		   tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, tm->tm_hour,
+		   tm->tm_min, tm->tm_sec, (long)tv.tv_usec / 10000);
 
 	evt->id = (uint32_t)id;
 	evt->type = (uint32_t)type;
 	evt->severity = (uint32_t)sev;
 	evt->proc_id = (uint64_t)getpid();
-	if (dmi != NULL) {
-		evt->thread_id = (uint64_t)dmi->dmi_xs_id;
-	} else {
+
+	if (dmi == NULL) {
 		D_ERROR("failed to retrieve xstream id");
 		D_GOTO(out_ts, rc = -DER_UNINIT);
 	}
+	evt->thread_id = (uint64_t)dmi->dmi_xs_id;
 
 	if (strnlen(dss_hostname, DSS_HOSTNAME_MAX_LEN) == 0) {
 		D_ERROR("missing hostname parameter\n");
