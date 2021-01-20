@@ -2339,10 +2339,10 @@ fs_copy(struct file_dfs *src_file_dfs,
 	int	rc = 0;
 	DIR	*src_dir = NULL;
 	struct	stat st_dir_name;
-	char	*filename;
-	char	*dst_filename;
-	char	*next_path;
-	char	*next_dpath;
+	char	*filename = NULL;
+	char	*dst_filename= NULL;
+	char	*next_path = NULL;
+	char	*next_dpath = NULL;
 
 
 	/* stat the source, and make sure it is a directory  */
