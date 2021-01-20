@@ -2,6 +2,31 @@
 * (C) Copyright 2019-2021 Intel Corporation.
 *
 * SPDX-License-Identifier: BSD-2-Clause-Patent
+*/
+
+#include <stdarg.h>
+#include <stddef.h>
+#include <setjmp.h>
+#include <cmocka.h>
+
+#include <gurt/types.h>
+#include <spdk/stdinc.h>
+#include <spdk/nvme.h>
+#include <spdk/env.h>
+#include "nvme_internal.h"
+
+#include "../include/nvme_control_common.h"
+
+#if D_HAS_WARNING(4, "-Wframe-larger-than=")
+	#pragma GCC diagnostic ignored "-Wframe-larger-than="
+#endif
+
+static struct ret_t	*test_ret;
+
+/**
+ * ==============================
+ * nvme_control mock functions
+ * ==============================
  */
 
 static int

@@ -2,6 +2,17 @@
 * (C) Copyright 2019-2021 Intel Corporation.
 *
 * SPDX-License-Identifier: BSD-2-Clause-Patent
+*/
+
+#ifndef NVMECONTROL_COMMON_H
+#define NVMECONTROL_COMMON_H
+
+#include <stdbool.h>
+
+#define BUFLEN 1024
+
+/**
+ * \brief NVMECONTROL return codes
  */
 enum nvme_control_status_code {
 	NVMEC_SUCCESS			= 0x0,

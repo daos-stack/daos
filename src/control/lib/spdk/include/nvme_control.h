@@ -2,6 +2,16 @@
 * (C) Copyright 2018-2021 Intel Corporation.
 *
 * SPDX-License-Identifier: BSD-2-Clause-Patent
+*/
+
+#ifndef NVMECONTROL_H
+#define NVMECONTROL_H
+
+/**
+ * Discover NVMe controllers and namespaces, as well as return device health
+ * information.
+ *
+ * \return a pointer to a return struct (ret_t).
  */
 struct ret_t *
 nvme_discover(void);
