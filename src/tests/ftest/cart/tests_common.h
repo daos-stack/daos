@@ -55,7 +55,8 @@ struct test_options {
 
 static struct test_options opts = { .is_initialized = false };
 
-int g_shutdown;
+int g_shutdown = 0;
+int g_delay_shutdown_sec = 0;
 
 void
 tc_test_init(d_rank_t rank, int num_attach_retries, bool is_server,
@@ -98,6 +99,12 @@ tc_drain_queue(crt_context_t ctx)
 }
 
 void
+tc_set_shutdown_delay(int delay_sec)
+{
+	g_delay_shutdown_sec = delay_sec;
+}
+
+void
 tc_progress_stop(void)
 {
 	g_shutdown = 1;
@@ -123,6 +130,9 @@ tc_progress_fn(void *data)
 
 	if (idx == 0)
 		crt_swim_fini();
+
+	if (g_delay_shutdown_sec > 0)
+		sleep(g_delay_shutdown_sec);
 
 	rc = tc_drain_queue(*p_ctx);
 	D_ASSERTF(rc == 0, "tc_drain_queue() failed with rc=%d\n", rc);
