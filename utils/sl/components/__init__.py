@@ -288,7 +288,7 @@ def define_components(reqs):
                           './autogen.sh',
                           './configure --prefix=$ARGOBOTS_PREFIX CC=gcc'
                           ' --enable-valgrind'
-			  ' --with-libunwind=/usr/lib64 --enable-stack-unwind',
+			  ' --enable-stack-unwind',
                           'make $JOBS_OPT',
                           'make $JOBS_OPT install'],
                 requires=['valgrind_devel'],
