@@ -59,7 +59,6 @@ class CopyBasicsTest(DataMoverTestBase):
         cmd = "mkdir -p {}".format(self.get_posix_test_path_string())
         self.execute_cmd(cmd)
 
-    @skipForTicket("DAOS-6484")
     def test_copy_types(self):
         """
         Test Description:
@@ -84,7 +83,7 @@ class CopyBasicsTest(DataMoverTestBase):
             Copy all data from POSIX to cont2 (UUIDs).
             Copy all data from POSIX to cont2 (UNS).
             Copy all data from POSIX FS to a different POSIX FS.
-        :avocado: tags=all,datamover,daily_regression
+        :avocado: tags=all,datamover,daily_regression,pr
         :avocado: tags=copy_basics,copy_types
         """
         # Start dfuse to hold all pools/containers
