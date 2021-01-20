@@ -2382,8 +2382,6 @@ fs_copy(struct file_dfs *src_file_dfs,
 		d_name = entry->d_name;
 		D_ASPRINTF(filename, "%s/%s", dir_name, d_name);
 		if (filename == NULL) {
-			fprintf(stderr, "failed to allocate memory for source "
-				"filename\n");
 			D_GOTO(out, rc = -DER_NOMEM);
 		}
 
@@ -2400,8 +2398,6 @@ fs_copy(struct file_dfs *src_file_dfs,
 		D_ASPRINTF(dst_filename, "%s/%s", fs_dst_prefix,
 			   filename + dfs_prefix_len);
 		if (dst_filename == NULL) {
-			fprintf(stderr, "failed to allocate memory for "
-				"destintaion filename\n");
 			D_GOTO(out, rc = -DER_NOMEM);
 		}
 
@@ -2485,17 +2481,11 @@ fs_copy(struct file_dfs *src_file_dfs,
 			    (strcmp(d_name, ".") != 0)) {
 				next_path = strdup(filename);
 				if (next_path == NULL) {
-					fprintf(stderr, "failed to allocate "
-						"memory for next source "
-						"filename\n");
-						D_GOTO(out, rc = -DER_NOMEM);
+					D_GOTO(out, rc = -DER_NOMEM);
 				}
 				next_dpath = strdup(dst_filename);
 				if (next_dpath == NULL) {
-					fprintf(stderr, "failed to allocate "
-						"memory for next destination "
-						"filename\n");
-						D_GOTO(out, rc = -DER_NOMEM);
+					D_GOTO(out, rc = -DER_NOMEM);
 				}
 
 				mode_t tmp_mode_dir = S_IRWXU;
