@@ -55,6 +55,7 @@ class SoakTestBase(TestWithServers):
         self.harasser_args = None
         self.harasser_loop_time = None
         self.all_failed_harassers = None
+        self.soak_errors = None
 
     def setUp(self):
         """Define test setup to be done."""
@@ -114,6 +115,7 @@ class SoakTestBase(TestWithServers):
             steps have been attempted
 
         """
+        self.log.info("<<preTearDown Started>> at %s", time.ctime())
         errors = []
         # clear out any jobs in squeue;
         if self.failed_job_id_list:
@@ -132,6 +134,8 @@ class SoakTestBase(TestWithServers):
                 " ,".join(str(j_id) for j_id in self.all_failed_jobs)))
         if self.all_failed_harassers:
             errors.extend(self.all_failed_harassers)
+        if self.soak_errors:
+            errors.extend(self.soak_errors)
         # Check if any dfuse mount points need to be cleaned
         if self.dfuse:
             try:
@@ -142,6 +146,8 @@ class SoakTestBase(TestWithServers):
         # daos_agent is always started on this node when start agent is false
         if not self.setup_start_agents:
             self.hostlist_clients = [socket.gethostname().split('.', 1)[0]]
+        for error in errors:
+            self.log.info("<<ERRORS: %s >>\n", error)
         return errors
 
     def launch_harasser(self, harasser, pool):
@@ -450,6 +456,7 @@ class SoakTestBase(TestWithServers):
         run_harasser = False
         self.all_failed_jobs = []
         self.all_failed_harassers = []
+        self.soak_errors = []
         test_to = self.params.get("test_timeout", test_param + "*")
         self.job_timeout = self.params.get("job_timeout", test_param + "*")
         self.test_name = self.params.get("name", test_param + "*")
@@ -463,7 +470,7 @@ class SoakTestBase(TestWithServers):
             harasserlist = get_harassers(harassers)
             self.harassers = harasserlist[:]
             run_harasser = True
-            self.log.info("<<< Initial harrasser list = %s", " ".join(
+            self.log.info("<< Initial harrasser list = %s>>", " ".join(
                 [harasser for harasser in self.harassers]))
         # Create the reserved pool with data
         # self.pool is a list of all the pools used in soak
@@ -504,7 +511,7 @@ class SoakTestBase(TestWithServers):
             # Start new pass
             start_loop_time = time.time()
             self.log.info(
-                "<<Soak PASS %s: time until done %s>>", self.loop,
+                "<<SOAK LOOP %s: time until done %s>>", self.loop,
                 DDHHMMSS_format(self.end_time - time.time()))
             # Create pool for jobs
             add_pools(self, ["pool_jobs"])
@@ -521,34 +528,36 @@ class SoakTestBase(TestWithServers):
             except SoakTestError as error:
                 self.fail(error)
             # Check space after jobs done
-            self.pool[1].display_pool_daos_space()
-            errors = self.destroy_containers(self.container)
-            errors.extend(self.destroy_pools(self.pool[1]))
+            for pool in self.pool:
+                self.dmg_command.pool_query(pool.uuid)
+            self.soak_errors.extend(self.destroy_containers(self.container))
+            self.soak_errors.extend(self.destroy_pools(self.pool[1]))
             # remove the test pools from self.pool; preserving reserved pool
             self.container = []
             self.pool = [self.pool[0]]
             self.log.info(
                 "Current pools: %s",
                 " ".join([pool.uuid for pool in self.pool]))
-            self.assertEqual(len(errors), 0, "\n".join(errors))
+            # fail if the pool/containers did not clean up correctly
+            self.assertEqual(
+                len(self.soak_errors), 0, "\n".join(self.soak_errors))
             # Break out of loop if smoke
             if "smoke" in self.test_name:
                 break
             loop_time = time.time() - start_loop_time
             self.log.info(
-                "<<PASS %s completed in %s at %s>>", self.loop, DDHHMMSS_format(
+                "<<LOOP %s completed in %s at %s>>", self.loop, DDHHMMSS_format(
                     loop_time), time.ctime())
             # Initialize harasser loop time from first pass loop time
             if self.loop == 1 and self.harassers:
                 self.harasser_loop_time = loop_time
             self.loop += 1
         # TO-DO: use IOR
-        self.assertTrue(
-            resv_cont.read_objects(),
-            "Data verification error on reserved pool"
-            "after SOAK completed")
+        if not resv_cont.read_objects():
+            self.soak_errors.append("Data verification error on reserved pool"
+                                    "after SOAK completed")
         self.container.append(resv_cont)
         # gather the daos logs from the client nodes
         self.log.info(
-            "<<<<SOAK TOTAL TEST TIME = %s>>>", DDHHMMSS_format(
+            "<<<<SOAK TOTAL TEST TIME = %s>>>>", DDHHMMSS_format(
                 time.time() - start_time))

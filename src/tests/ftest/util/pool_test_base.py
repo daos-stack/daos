@@ -4,6 +4,7 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import time
 
 from apricot import TestWithServers
 from general_utils import bytes_to_human, human_to_bytes
@@ -107,3 +108,28 @@ class PoolTestBase(TestWithServers):
                     bytes_to_human(nvme_multiple), "nvme_size")
 
         return pool_list
+
+    def check_pool_creation(self, max_duration):
+        """Check the duration of each pool creation meets the requirement.
+
+        Args:
+            max_duration (int): max pool creation duration allowed in seconds
+
+        """
+        durations = []
+        for index, pool in enumerate(self.pool):
+            start = float(time.time())
+            pool.create()
+            durations.append(float(time.time()) - start)
+            self.log.info(
+                "Pool %s creation: %s seconds", index + 1, durations[-1])
+
+        exceeding_duration = 0
+        for index, duration in enumerate(durations):
+            if duration > max_duration:
+                exceeding_duration += 1
+
+        self.assertEqual(
+            exceeding_duration, 0,
+            "Pool creation took longer than {} seconds on {} pool(s)".format(
+                max_duration, exceeding_duration))
