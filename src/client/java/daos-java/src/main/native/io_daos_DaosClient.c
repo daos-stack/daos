@@ -45,54 +45,37 @@ JNIEXPORT jlong JNICALL
 Java_io_daos_DaosClient_daosOpenPool(JNIEnv *env,
 					 jclass clientClass, jstring poolId,
 					 jstring serverGroup,
-					 jstring ranks, jint flags)
+					 jint flags)
 {
 	const char *pool_str = (*env)->GetStringUTFChars(env, poolId, 0);
 	const char *server_group = (*env)->GetStringUTFChars(env, serverGroup,
 								0);
-	const char *svc_ranks = (*env)->GetStringUTFChars(env, ranks, 0);
 	uuid_t pool_uuid;
-	d_rank_list_t *svcl = daos_rank_list_parse(svc_ranks, ":");
 	jlong ret;
+	daos_handle_t poh;
+    int rc;
 
 	uuid_parse(pool_str, pool_uuid);
-	if (svcl == NULL) {
-		char *tmp = "Invalid pool service rank list (%s) when "
-					"open pool (%s)";
-		char *msg = (char *)malloc(strlen(tmp) + strlen(svc_ranks) +
-				strlen(pool_str));
+    rc = daos_pool_connect(pool_uuid, server_group,
+                   flags,
+                   &poh /* returned pool handle */,
+                   NULL /* returned pool info */,
+                   NULL /* event */);
 
-		sprintf(msg, tmp, ranks, pool_str);
-		throw_exception(env, msg, CUSTOM_ERR2);
-		ret = -1;
-	} else {
-		daos_handle_t poh;
-		int rc;
+    if (rc) {
+        char *tmp = "Failed to connect to pool (%s)";
+        char *msg = (char *)malloc(strlen(tmp) +
+                strlen(pool_str));
 
-		rc = daos_pool_connect(pool_uuid, server_group, svcl,
-					   flags,
-					   &poh /* returned pool handle */,
-					   NULL /* returned pool info */,
-					   NULL /* event */);
-
-		if (rc) {
-			char *tmp = "Failed to connect to pool (%s)";
-			char *msg = (char *)malloc(strlen(tmp) +
-					strlen(pool_str));
-
-			sprintf(msg, tmp, pool_str);
-			throw_exception_base(env, msg, rc, 1, 0);
-			ret = -1;
-		} else {
-			memcpy(&ret, &poh, sizeof(poh));
-		}
-	}
+        sprintf(msg, tmp, pool_str);
+        throw_exception_base(env, msg, rc, 1, 0);
+        ret = -1;
+    } else {
+        memcpy(&ret, &poh, sizeof(poh));
+    }
 	(*env)->ReleaseStringUTFChars(env, poolId, pool_str);
 	if (serverGroup != NULL) {
 		(*env)->ReleaseStringUTFChars(env, serverGroup, server_group);
-	}
-	if (ranks != NULL) {
-		(*env)->ReleaseStringUTFChars(env, ranks, svc_ranks);
 	}
 	return ret;
 }
