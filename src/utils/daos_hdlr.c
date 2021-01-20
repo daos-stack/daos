@@ -2727,7 +2727,7 @@ fs_copy_parse_path(struct file_dfs *file, char *path,
 		/* Error, since we expect a DAOS path */
 		D_GOTO(out, rc = 1);
 	} else {
-		/* not a DAOS path, set type to POSIX, 
+		/* not a DAOS path, set type to POSIX,
 		 * POSIX dir will be checked with stat
 		 * at the beginning of fs_copy
 		 */
