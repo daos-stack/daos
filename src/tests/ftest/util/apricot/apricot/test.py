@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2021 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -30,7 +30,6 @@ from __future__ import print_function
 import os
 import json
 import re
-from getpass import getuser
 
 from avocado import Test as avocadoTest
 from avocado import skip, TestFail, fail_on
@@ -380,9 +379,31 @@ class TestWithServers(TestWithoutServers):
         self.server_group = None
         self.agent_managers = []
         self.server_managers = []
-        self.start_servers_once = True
-        self.server_manager_class = "Systemctl"
-        self.agent_manager_class = "Systemctl"
+        # Options to control how servers are started for each test variant:
+        #   start_servers_once:
+        #       True        = start the DAOS servers once per test file allowing
+        #                     the same server instances to be used for each test
+        #                     variant.
+        #       False       = start an new set of DAOS servers for each test
+        #                     variant.
+        #   server_manager_class / agent_manager_class:
+        #       "Orterun"   = use the orterun command to launch DAOS servers /
+        #                     agents. Not supported with (start_servers_once set
+        #                     to True).
+        #       "Systemctl" = use clush and systemctl to launch DAOS servers /
+        #                     agents.
+        #   setup_start_servers / setup_start_agents:
+        #       True        = start the DAOS servers / agents in setUp()
+        #       False       = do not start the DAOS servers / agents in setUp()
+        #
+        # Notes:
+        #   - when the setup_start_{servers|agents} is set to False the
+        #       start_servers_once attribute will most likely also want to be
+        #       set to False to ensure the servers are not running at the start
+        #       of each test variant.
+        self.start_servers_once = False
+        self.server_manager_class = "Orterun"
+        self.agent_manager_class = "Orterun"
         self.setup_start_servers = True
         self.setup_start_agents = True
         self.hostlist_servers = None
@@ -820,14 +841,12 @@ class TestWithServers(TestWithoutServers):
             name (str): manager name
             manager_list (list): list of SubprocessManager objects to start
         """
-        user = getuser()
         # We probably want to do this parallel if end up with multiple managers
         for manager in manager_list:
             self.log.info(
                 "Starting %s: group=%s, hosts=%s, config=%s",
                 name, manager.get_config_value("name"), manager.hosts,
                 manager.get_config_value("filename"))
-            manager.verify_socket_directory(user)
             manager.start()
 
     def tearDown(self):
