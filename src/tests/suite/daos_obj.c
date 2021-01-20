@@ -910,6 +910,7 @@ io_rewritten_array_with_mixed_size(void **state)
 	int			rx_nr; /* number of record extents */
 	int			record_set;
 	int			rc;
+	int			tmp;
 	daos_size_t		nvme_initial_size;
 	daos_size_t		nvme_current_size;
 	void const *const aggr_disabled[] = {"disabled"};
@@ -931,13 +932,6 @@ io_rewritten_array_with_mixed_size(void **state)
 	/* Disabled Pool Aggregation */
 	rc = set_pool_reclaim_strategy(state, aggr_disabled);
 	assert_int_equal(rc, 0);
-	/**
-	 * set_pool_reclaim_strategy() to disable aggregation
-	 * assumes all aggregation ULTs on all servers taking
-	 * effect immediately, this may not be the case.
-	 * So adding delay so that ULTs finish the round of aggregation.
-	 */
-	sleep(10);
 
 	/* Get the pool info at the beginning */
 	rc = pool_storage_info(state, &pinfo);
@@ -989,22 +983,44 @@ io_rewritten_array_with_mixed_size(void **state)
 			OW_IOD_SIZE, size, DAOS_TX_NONE, &req);
 		assert_memory_equal(ow_buf, fbuf, size);
 
-		/*Verify the pool size*/
-		rc = pool_storage_info(state, &pinfo);
-		assert_int_equal(rc, 0);
-		nvme_current_size = pinfo.pi_space.ps_space.s_free[1];
 		/**
-		*Data written on SCM so NVMe free size should not change.
-		*/
-		if (nvme_current_size != nvme_initial_size) {
-			fail_msg("NVMe_current_size =%"
-				PRIu64" != NVMe_initial_size %" PRIu64"",
-				nvme_current_size, nvme_initial_size);
+		 * Data written on SCM so NVMe free size should not change.
+		 * However VEA free (called from aggregation) usually put the
+		 * freed extent in an aging buffer for 10 seconds
+		 * so this while loop will check the size every 2 seconds
+		 * for a 30 seconds.
+		 */
+		tmp = 1;
+		while (tmp <= 15) {
+			/*Verify the pool size*/
+			rc = pool_storage_info(state, &pinfo);
+			assert_int_equal(rc, 0);
+			nvme_current_size = pinfo.pi_space.ps_space.s_free[1];
+
+			if (nvme_current_size == nvme_initial_size)
+				break;
+
+			/**
+			* Test will fail if it has been tried for
+			* 15 times (30 seconds) and NVMe size is not
+			* the same as initial size.
+			*/
+			if ((nvme_current_size != nvme_initial_size) &&
+			     tmp == 20) {
+				fail_msg("NVMe_current_size =%"
+					PRIu64" != NVMe_initial_size %"
+					PRIu64" for record set=%d",
+					nvme_current_size, nvme_initial_size,
+					record_set);
+			}
+			sleep(2);
+			tmp++;
 		}
+
 		nvme_initial_size = pinfo.pi_space.ps_space.s_free[1];
 	}
 
-	/* Enabled Pool Aggrgation */
+	/* Enabled Pool Aggregation */
 	rc = set_pool_reclaim_strategy(state, aggr_set_time);
 	assert_int_equal(rc, 0);
 
