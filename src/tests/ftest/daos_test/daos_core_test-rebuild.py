@@ -47,7 +47,7 @@ class DaosCoreTestRebuild(DaosCoreBase):
         Use case:
             Balance testing load between hardware and VM clusters.
 
-        :avocado: tags=all,pr,daily_regression,hw,medium,ib2,unittest
+        :avocado: tags=all,pr,daily_regression,hw,ib2,unittest
         :avocado: tags=daos_test_rebuild
         :avocado: tags=DAOS_5610
         """
