@@ -855,6 +855,29 @@ class DmgCommand(DmgCommandBase):
         self.log.info("system_query data: %s", str(data))
         return data
 
+    def system_leader_query(self):
+        """Query system to obtain the MS leader and replica information.
+
+        Raises:
+            CommandFailure: if the dmg system query command fails.
+
+        Returns:
+            dictionary of output in JSON format
+
+        """
+        # Example JSON output:
+        # {
+        #   "response": {
+        #     "CurrentLeader": "127.0.0.1:10001",
+        #     "Replicas": [
+        #       "127.0.0.1:10001"
+        #     ]
+        #   },
+        #   "error": null,
+        #   "status": 0
+        # }
+        return self._get_json_result(("system", "leader-query"))
+
     def system_start(self, ranks=None):
         """Start the system.
 
