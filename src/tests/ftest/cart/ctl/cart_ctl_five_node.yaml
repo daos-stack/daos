@@ -5,7 +5,6 @@ defaultENV:
   #!filter-only : /run/env_CRT_CTX_SHARE_ADDR/sep
   #!filter-only : /run/tests/ctl
   D_LOG_MASK: "DEBUG,MEM=ERR"
-  CRT_PHY_ADDR_STR: "ofi+sockets"
   CRT_PHY_ADDR_STR: "\"ofi+verbs;ofi_rxm\""
   OFI_INTERFACE: "ib0"
   OFI_DOMAIN: "mlx5_0"
