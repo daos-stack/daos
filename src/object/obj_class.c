@@ -422,43 +422,25 @@ static struct daos_obj_class daos_obj_classes[] = {
 	},
 };
 
+static struct daos_obj_class **obj_classes;
+static struct daos_obj_class  *obj_class_id2cl(int oc_id);
+
 /** find the object class attributes for the provided @oid */
 struct daos_oclass_attr *
 daos_oclass_attr_find(daos_obj_id_t oid)
 {
 	struct daos_obj_class	*oc;
-	daos_oclass_id_t	 ocid;
 
 	/* see daos_objid_generate */
-	ocid = daos_obj_id2class(oid);
-	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
-		if (oc->oc_id == ocid)
-			break;
-	}
-
-	if (oc->oc_id == OC_UNKNOWN) {
+	oc = obj_class_id2cl(daos_obj_id2class(oid));
+	if (!oc) {
 		D_DEBUG(DB_PL, "Unknown object class %d for "DF_OID"\n",
-			ocid, DP_OID(oid));
+			daos_obj_id2class(oid), DP_OID(oid));
 		return NULL;
 	}
-
 	D_DEBUG(DB_PL, "Find class %s for oid "DF_OID"\n",
 		oc->oc_name, DP_OID(oid));
 	return &oc->oc_attr;
-}
-
-int
-daos_oclass_name2id(const char *name)
-{
-	struct daos_obj_class	*oc;
-
-	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
-		if (strncmp(oc->oc_name, name, strlen(name)) == 0)
-			return oc->oc_id;
-	}
-
-	D_ASSERT(oc->oc_id == OC_UNKNOWN);
-	return OC_UNKNOWN;
 }
 
 int
@@ -466,16 +448,28 @@ daos_oclass_id2name(daos_oclass_id_t oc_id, char *str)
 {
 	struct daos_obj_class   *oc;
 
+	oc = obj_class_id2cl(oc_id);
+	if (!oc) {
+		strcpy(str, "UNKNOWN");
+		return -1;
+	}
+	strcpy(str, oc->oc_name);
+	return 0;
+}
+
+int
+daos_oclass_name2id(const char *name)
+{
+	struct daos_obj_class	*oc;
+
+	/* slow search path, it's for tool and not performance sensitive. */
 	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
-		if (oc->oc_id == oc_id) {
-			strcpy(str, oc->oc_name);
-			return 0;
-		}
+		if (strncmp(oc->oc_name, name, strlen(name)) == 0)
+			return oc->oc_id;
 	}
 
 	D_ASSERT(oc->oc_id == OC_UNKNOWN);
-	strcpy(str, "UNKNOWN");
-	return -1;
+	return OC_UNKNOWN;
 }
 
 /** Return the list of registered oclass names */
@@ -761,4 +755,100 @@ out:
 	for (i = 0; i < lcnt; i++)
 		D_FREE(ldata[i]);
 	return rc;
+}
+
+static void
+oc_sop_swap(void *array, int a, int b)
+{
+	struct daos_obj_class **ocs = (struct daos_obj_class **)array;
+	struct daos_obj_class  *tmp;
+
+	tmp = ocs[a];
+	ocs[a] = ocs[b];
+	ocs[b] = tmp;
+}
+
+static int
+oc_sop_cmp(void *array, int a, int b)
+{
+	struct daos_obj_class **ocs = (struct daos_obj_class **)array;
+
+	if (ocs[a]->oc_id > ocs[b]->oc_id)
+		return 1;
+	if (ocs[a]->oc_id < ocs[b]->oc_id)
+		return -1;
+	return 0;
+}
+
+static int
+oc_sop_cmp_key(void *array, int i, uint64_t key)
+{
+	struct daos_obj_class **ocs = (struct daos_obj_class **)array;
+	unsigned int		id  = (unsigned int)key;
+
+	if (ocs[i]->oc_id > id)
+		return 1;
+	if (ocs[i]->oc_id < id)
+		return -1;
+	return 0;
+}
+
+static daos_sort_ops_t	oc_sort_ops = {
+	.so_swap	= oc_sop_swap,
+	.so_cmp		= oc_sop_cmp,
+	.so_cmp_key	= oc_sop_cmp_key,
+};
+
+/* NB: ignore the last one which is UNKNOWN */
+#define OC_NR	ARRAY_SIZE(daos_obj_classes)
+
+static struct daos_obj_class *
+obj_class_id2cl(int oc_id)
+{
+	int	idx;
+
+	if (oc_id == OC_UNKNOWN)
+		return NULL;
+
+	idx = daos_array_find(obj_classes, OC_NR, oc_id, &oc_sort_ops);
+	if (idx < 0)
+		return NULL;
+
+	return obj_classes[idx];
+}
+
+int
+obj_class_init(void)
+{
+	int	i;
+	int	rc;
+
+	if (obj_classes)
+		return 0;
+
+	D_ALLOC_ARRAY(obj_classes, OC_NR);
+	if (!obj_classes)
+		return -DER_NOMEM;
+
+	for (i = 0; i < OC_NR; i++)
+		obj_classes[i] = &daos_obj_classes[i];
+
+	rc = daos_array_sort(obj_classes, OC_NR, true, &oc_sort_ops);
+	if (rc) {
+		D_ERROR("object class ID should be unique\n");
+		goto failed;
+	}
+	return 0;
+failed:
+	obj_class_fini();
+	return rc;
+}
+
+void
+obj_class_fini(void)
+{
+	if (obj_classes) {
+		D_FREE(obj_classes);
+		obj_classes = NULL;
+	}
 }

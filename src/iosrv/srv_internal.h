@@ -100,6 +100,7 @@ int dss_module_setup_all(void);
 int dss_module_cleanup_all(void);
 
 /* srv.c */
+extern struct dss_module_key daos_srv_modkey;
 int dss_srv_init(void);
 int dss_srv_fini(bool force);
 void dss_dump_ABT_state(FILE *fp);

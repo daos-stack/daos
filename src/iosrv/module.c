@@ -236,6 +236,12 @@ dss_module_init_all(uint64_t *mod_facs)
 	uint64_t		 fac;
 	int			 rc = 0;
 
+	/*
+	 * first register global tls accessible to all modules,
+	 * it'll be first initialized and last finialized.
+	 */
+	dss_register_key(&daos_srv_modkey);
+
 	/* lookup the module from the loaded module list */
 	D_MUTEX_LOCK(&loaded_mod_list_lock);
 	d_list_for_each_entry_safe(lmod, tmp, &loaded_mod_list, lm_lk) {

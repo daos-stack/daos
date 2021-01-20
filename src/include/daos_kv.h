@@ -30,6 +30,7 @@ extern "C" {
 
 /**
  * Open a KV object. This is a local operation (no RPC involved).
+ * The feat bits in the oid must set DAOS_OF_KV_FLAT.
  *
  * \param[in]	coh	Container open handle.
  * \param[in]	oid	Object ID. It is required that the feat for dkey type
@@ -84,10 +85,9 @@ int
 daos_kv_destroy(daos_handle_t oh, daos_handle_t th, daos_event_t *ev);
 
 /**
- * Insert or update a single object KV pair. The key specified will be mapped to
- * a dkey in DAOS. The object akey will be the same as the dkey. If a value
- * existed before it will be overwritten (punched first if not previously an
- * atomic value) with the new atomic value described by the sgl.
+ * Insert or update a single object KV pair. If a value existed before it will
+ * be overwritten (punched first if not previously an atomic value) with the new
+ * atomic value described by the sgl.
  *
  * \param[in]	oh	Object open handle.
  * \param[in]	th	Transaction handle.

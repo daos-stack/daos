@@ -21,7 +21,11 @@
 /** @addtogroup GURT
  * @{
  */
+#ifdef __GNUC__
+#define prefetch(a) __builtin_prefetch((a), 0, 1)
+#else
 #define prefetch(a) ((void)a)
+#endif
 
 struct d_list_head {
 	struct d_list_head *next, *prev;
