@@ -51,6 +51,10 @@ class CartNoPmixOneNodeTest(TestWithoutServers):
         ofi_ctx_num = self.params.get("CRT_CTX_NUM", '/run/defaultENV/')
         ofi_share_addr = self.params.get("CRT_CTX_SHARE_ADDR",
                                          '/run/defaultENV/')
+    def tearDown(self):
+        """ Tear down """
+        super(TestWithoutServers, self).tearDown()
+        self.utils.cleanup_processes()
 
         self.pass_env = {"CRT_PHY_ADDR_STR": crt_phy_addr,
                          "OFI_INTERFACE": ofi_interface,

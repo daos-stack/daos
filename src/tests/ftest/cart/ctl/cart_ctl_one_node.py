@@ -46,6 +46,11 @@ class CartCtlOneNodeTest(TestWithoutServers):
         self.utils = CartUtils()
         self.env = self.utils.get_env(self)
 
+    def tearDown(self):
+        """ Tear down """
+        super(TestWithoutServers, self).tearDown()
+        self.utils.cleanup_processes()
+
     def test_cart_ctl(self):
         """
         Test CaRT ctl
