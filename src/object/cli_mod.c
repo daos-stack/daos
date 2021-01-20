@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,17 +61,20 @@ dc_obj_init(void)
 		goto out;
 
 	rc = daos_rpc_register(&obj_proto_fmt, OBJ_PROTO_CLI_COUNT,
-				NULL, DAOS_OBJ_MODULE);
+			       NULL, DAOS_OBJ_MODULE);
 	if (rc != 0) {
 		D_ERROR("failed to register daos obj RPCs: "DF_RC"\n",
 			DP_RC(rc));
-		D_GOTO(out, rc);
+		D_GOTO(out_fini, rc);
 	}
 
 	rc = obj_ec_codec_init();
 	if (rc != 0)
 		D_ERROR("failed to obj_ec_codec_init: "DF_RC"\n", DP_RC(rc));
 
+	return rc;
+out_fini:
+	obj_class_fini();
 out:
 	return rc;
 }

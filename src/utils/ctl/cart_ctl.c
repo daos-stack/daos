@@ -413,7 +413,6 @@ ctl_cli_cb(const struct crt_cb_info *cb_info)
 	struct crt_ctl_ep_ls_in			*in_args;
 	struct crt_ctl_get_uri_cache_out	*out_uri_cache_args;
 	struct crt_ctl_ep_ls_out		*out_ls_args;
-	struct crt_ctl_get_host_out		*out_get_host_args;
 	struct crt_ctl_get_pid_out		*out_get_pid_args;
 	struct crt_ctl_fi_attr_set_out		*out_set_fi_attr_args;
 	struct crt_ctl_fi_toggle_out		*out_fi_toggle_args;
@@ -467,10 +466,11 @@ ctl_cli_cb(const struct crt_cb_info *cb_info)
 				addr_str += (strlen(addr_str) + 1);
 			}
 		} else if (info->cmd == CMD_GET_HOSTNAME) {
-			out_get_host_args = crt_reply_get(cb_info->cci_rpc);
+			struct crt_ctl_get_host_out *out;
 
+			out = crt_reply_get(cb_info->cci_rpc);
 			fprintf(stdout, "hostname: %s\n",
-				(char *)out_get_host_args->cgh_hostname.iov_buf);
+				(char *)out->cgh_hostname.iov_buf);
 		} else if (info->cmd == CMD_GET_PID) {
 			out_get_pid_args = crt_reply_get(cb_info->cci_rpc);
 
@@ -554,9 +554,9 @@ ctl_fill_rpc_args(crt_rpc_t *rpc_req, int index)
 }
 
 static int
-ctl_register_fi()
+ctl_register_fi(crt_endpoint_t *ep)
 {
-	return crt_register_proto_fi();
+	return crt_register_proto_fi(ep);
 }
 
 static int
@@ -604,18 +604,22 @@ ctl_init()
 
 	info.cmd = ctl_gdata.cg_cmd_code;
 
-	if (ctl_gdata.cg_cmd_code == CMD_SET_FI_ATTR) {
-		rc = ctl_register_fi();
-		if (rc != -DER_SUCCESS)
-			return rc;
-	}
-
 	if (ctl_gdata.cg_num_ranks == -1) {
 		num_ranks = rank_list->rl_nr;
 		ranks_to_send = rank_list->rl_ranks;
 	} else {
 		num_ranks = ctl_gdata.cg_num_ranks;
 		ranks_to_send = ctl_gdata.cg_ranks;
+	}
+
+	if (ctl_gdata.cg_cmd_code == CMD_SET_FI_ATTR) {
+		ep.ep_grp = grp;
+		ep.ep_rank = ranks_to_send[0];
+		ep.ep_tag = 0;
+
+		rc = ctl_register_fi(&ep);
+		if (rc != -DER_SUCCESS)
+			return rc;
 	}
 
 	for (i = 0; i < num_ranks; i++) {

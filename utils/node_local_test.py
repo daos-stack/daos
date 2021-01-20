@@ -875,10 +875,10 @@ def run_daos_cmd(conf, cmd, valgrind=True, fi_file=None, fi_valgrind=False):
     log_file = tempfile.NamedTemporaryFile(prefix=prefix,
                                            suffix='.log',
                                            delete=False)
-    cmd_env['D_LOG_FILE'] = log_file.name
+
     if fi_file:
         cmd_env['D_FI_CONFIG'] = fi_file
-
+    cmd_env['D_LOG_FILE'] = log_file.name
     if conf.agent_dir:
         cmd_env['DAOS_AGENT_DRPC_DIR'] = conf.agent_dir
 

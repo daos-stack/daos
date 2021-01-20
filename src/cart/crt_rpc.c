@@ -25,6 +25,8 @@
  */
 #define D_LOGFAC	DD_FAC(rpc)
 
+#include <semaphore.h>
+
 #include "crt_internal.h"
 
 #define CRT_CTL_MAX_LOG_MSG_SIZE 256
@@ -260,11 +262,36 @@ crt_internal_rpc_register(bool server)
 	return rc;
 }
 
-int
-crt_register_proto_fi()
+struct crt_pfi {
+	int	pfi_ver;
+	int	pfi_rc;
+	sem_t	pfi_sem;
+};
+
+static void
+crt_pfi_cb(struct crt_proto_query_cb_info *cb_info)
 {
-	struct crt_proto_format	cpf;
-	int			rc;
+	struct crt_pfi *pfi = cb_info->pq_arg;
+
+	if (cb_info->pq_rc != -DER_SUCCESS)
+		return;
+
+	pfi->pfi_ver = cb_info->pq_ver;
+
+	sem_post(&pfi->pfi_sem);
+}
+
+/* Register the FI protocol against an endpoint.
+ * This is from client code, so pass in an endpoint, and query the target for
+ * what version it supports.  The client only supports one version so abort
+ * if there is any error.
+ */
+int
+crt_register_proto_fi(crt_endpoint_t *ep)
+{
+	struct crt_proto_format cpf;
+	struct crt_pfi	pfi = {};
+	int		rc;
 
 	cpf.cpf_name  = "fault-injection";
 	cpf.cpf_ver   = CRT_PROTO_FI_VERSION;
@@ -272,9 +299,29 @@ crt_register_proto_fi()
 	cpf.cpf_prf   = crt_fi_rpcs;
 	cpf.cpf_base  = CRT_OPC_FI_BASE;
 
+	rc = sem_init(&pfi.pfi_sem, 0, 0);
+	if (rc != 0)
+		return -DER_MISC;
+
+	rc = crt_proto_query(ep, CRT_OPC_FI_BASE, &cpf.cpf_ver,
+			     1, crt_pfi_cb, &pfi);
+	if (rc != -DER_SUCCESS)
+		D_GOTO(out, rc);
+
+	sem_wait(&pfi.pfi_sem);
+
+	if (pfi.pfi_rc != -DER_SUCCESS)
+		D_GOTO(out, rc = pfi.pfi_rc);
+
+	if (pfi.pfi_ver != CRT_PROTO_FI_VERSION)
+		D_GOTO(out, rc = -DER_MISMATCH);
+
 	rc = crt_proto_register(&cpf);
 	if (rc != 0)
 		D_ERROR("crt_proto_register() failed, " DF_RC "\n", DP_RC(rc));
+
+out:
+	sem_destroy(&pfi.pfi_sem);
 
 	return rc;
 }

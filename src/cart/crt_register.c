@@ -57,6 +57,8 @@ crt_opc_map_create()
 	if (map == NULL)
 		return -DER_NOMEM;
 
+	D_INIT_LIST_HEAD(&map->com_coq_list);
+
 	count = ~(0xFFFFFFFFUL >> bits << bits) + 1;
 	D_ALLOC_ARRAY(map->com_map, count);
 	if (map->com_map == NULL)
@@ -78,8 +80,6 @@ crt_opc_map_create()
 		D_ERROR("Failed to create mutex for CaRT opc map.\n");
 		D_GOTO(out, rc);
 	}
-
-	D_INIT_LIST_HEAD(&map->com_coq_list);
 
 	crt_gdata.cg_opc_map = map;
 
@@ -120,6 +120,7 @@ crt_opc_map_L2_destroy(struct crt_opc_map_L2 *L2_entry)
 void
 crt_opc_map_destroy(struct crt_opc_map *map)
 {
+	struct crt_opc_queried *coq, *next;
 	int			i;
 
 	D_ASSERT(map != NULL);
@@ -132,6 +133,9 @@ crt_opc_map_destroy(struct crt_opc_map *map)
 	for (i = 0; i < map->com_num_slots_total; i++)
 		crt_opc_map_L2_destroy(&map->com_map[i]);
 	D_FREE(map->com_map);
+
+	d_list_for_each_entry_safe(coq, next, &map->com_coq_list, coq_list)
+		D_FREE(coq);
 
 skip:
 	D_RWLOCK_DESTROY(&map->com_rwlock);
@@ -460,8 +464,32 @@ crt_proto_register_common(struct crt_proto_format *cpf)
 		return -DER_INVAL;
 	}
 
-	D_ERROR("Attempt to register prototcol %s.%#x %d\n",
-		cpf->cpf_name, cpf->cpf_base, cpf->cpf_ver);
+	/* Check the list of previously queried protocols, and log a warning if
+	 * a client is using a protocol without checking the version.
+	 */
+	if (!crt_gdata.cg_server) {
+		struct crt_opc_queried	*coq;
+		bool			found = false;
+
+		/* Allow the internal protocol to be registered, it contains the
+		 * proto query RPC so needs to be
+		 */
+		if (cpf->cpf_base == CRT_OPC_INTERNAL_BASE)
+			found = true;
+
+		d_list_for_each_entry(coq, &crt_gdata.cg_opc_map->com_coq_list,
+				      coq_list) {
+			if ((coq->coq_base == cpf->cpf_base) &&
+			    (coq->coq_version == cpf->cpf_ver)) {
+				found = true;
+				break;
+			}
+		}
+
+		if (!found)
+			D_WARN("Attempt to register prototcol %s.%#x %d\n",
+			       cpf->cpf_name, cpf->cpf_base, cpf->cpf_ver);
+	}
 
 	/* reg L1 */
 	rc = crt_proto_reg_L1(crt_gdata.cg_opc_map, cpf);
@@ -542,12 +570,11 @@ proto_query_cb(const struct crt_cb_info *cb_info)
 
 out:
 	if (user_cb_info.pq_rc == 0) {
-		struct crt_opc_queried  *coq = proto_query->pq_coq;
+		struct crt_opc_queried *coq = proto_query->pq_coq;
 
 		coq->coq_version = user_cb_info.pq_ver;
 		d_list_add(&coq->coq_list,
 			   &crt_gdata.cg_opc_map->com_coq_list);
-		D_ERROR("Query protocol %#x\n", coq->coq_version);
 	} else {
 		D_FREE(proto_query->pq_coq);
 	}
