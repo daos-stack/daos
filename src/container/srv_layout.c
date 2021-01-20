@@ -109,6 +109,9 @@ struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
 	}, {
 		.dpe_type	= DAOS_PROP_CO_DEDUP_THRESHOLD,
 		.dpe_val	= 4096,
+	}, {
+		.dpe_type	= DAOS_PROP_CO_MAX_OID,
+		.dpe_val	= 0,
 	}
 };
 

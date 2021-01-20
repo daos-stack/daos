@@ -200,6 +200,8 @@ enum daos_cont_props {
 	 * Default: 4K
 	 */
 	DAOS_PROP_CO_DEDUP_THRESHOLD,
+	/** OID value to start allocation from */
+	DAOS_PROP_CO_MAX_OID,
 	DAOS_PROP_CO_MAX,
 };
 
