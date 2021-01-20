@@ -10,9 +10,6 @@ defaultENV:
   OFI_DOMAIN: "mlx5_0"
   test_servers_CRT_CTX_NUM: "16"
 env_CRT_CTX_SHARE_ADDR: !mux
-  sep:
-    env: sep
-    CRT_CTX_SHARE_ADDR: "1"
   no_sep:
     env: no_sep
     CRT_CTX_SHARE_ADDR: "0"
