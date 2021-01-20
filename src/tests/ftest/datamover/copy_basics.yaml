@@ -31,13 +31,23 @@ datamover:
 dfuse:
     mount_dir: "/tmp/daos_dfuse"
 dummy_iterations: !mux
-    iteration1: 1
-    iteration2: 2
-    iteration3: 3
-    iteration4: 4
-    iteration5: 5
-    iteration6: 6
-    iteration7: 7
-    iteration8: 8
-    iteration9: 9
-    iteration10: 10
+    iteration1:
+        num: 1
+    iteration2:
+        num: 2
+    iteration3:
+        num: 3
+    iteration4:
+        num: 4
+    iteration5:
+        num: 5
+    iteration6:
+        num: 6
+    iteration7:
+        num: 7
+    iteration8:
+        num: 8
+    iteration9:
+        num: 9
+    iteration10:
+        num: 10
