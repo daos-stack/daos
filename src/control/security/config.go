@@ -20,8 +20,8 @@ const (
 	defaultCACert        = certDir + "daosCA.crt"
 	defaultServerCert    = certDir + "server.crt"
 	defaultServerKey     = certDir + "server.key"
-	defaultClientCert    = certDir + "client.crt"
-	defaultClientKey     = certDir + "client.key"
+	defaultAdminCert     = certDir + "admin.crt"
+	defaultAdminKey      = certDir + "admin.key"
 	defaultAgentCert     = certDir + "agent.crt"
 	defaultAgentKey      = certDir + "agent.key"
 	defaultClientCertDir = certDir + "clients"
@@ -82,8 +82,8 @@ func DefaultClientTransportConfig() *TransportConfig {
 			ServerName:      defaultServer,
 			ClientCertDir:   "",
 			CARootPath:      defaultCACert,
-			CertificatePath: defaultClientCert,
-			PrivateKeyPath:  defaultClientKey,
+			CertificatePath: defaultAdminCert,
+			PrivateKeyPath:  defaultAdminKey,
 			tlsKeypair:      nil,
 			caPool:          nil,
 		},

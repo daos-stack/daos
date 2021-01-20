@@ -112,7 +112,7 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 	}
 
 	var err error
-	numaNode := mod.aiCache.defaultNumaNode
+	var numaNode int
 
 	if mod.numaAware {
 		numaNode, err = netdetect.GetNUMASocketIDForPid(mod.netCtx, pid)
@@ -121,21 +121,14 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 		}
 	}
 
-	// The flow is optimized for the case where isCached() is true.  In the normal case,
-	// caching is enabled, there's data in the info cache and the agent can quickly return
-	// a response without the overhead of a mutex.
-	if mod.aiCache.isCached() {
-		return mod.aiCache.getResponse(numaNode)
-	}
-
-	// If the cache was not initialized, protect cache initialization
-	// and check the initialization status once the mutex is obtained.
+	// synchronize access to mod.aiCache.* resources used below
 	mod.mutex.Lock()
 	defer mod.mutex.Unlock()
 
-	// If another thread succeeded in initializing the cache while this thread waited
-	// to get the mutex, return the cached response instead of initializing the cache again.
 	if mod.aiCache.isCached() {
+		if !mod.numaAware {
+			numaNode = mod.aiCache.defaultNumaNode
+		}
 		return mod.aiCache.getResponse(numaNode)
 	}
 
@@ -169,6 +162,10 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 	err = mod.aiCache.initResponseCache(mod.netCtx, pbResp, scanResults)
 	if err != nil {
 		return nil, err
+	}
+
+	if !mod.numaAware {
+		numaNode = mod.aiCache.defaultNumaNode
 	}
 
 	cacheResp, err := mod.aiCache.getResponse(numaNode)
