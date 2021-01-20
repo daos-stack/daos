@@ -154,7 +154,7 @@ func (f *FaultDomain) MustCreateChild(childLevel string) *FaultDomain {
 func NewFaultDomain(domains ...string) (*FaultDomain, error) {
 	for i := range domains {
 		domains[i] = strings.TrimSpace(domains[i])
-		if domains[i] == "" {
+		if domains[i] == "" || strings.Contains(domains[i], FaultDomainSeparator) {
 			return nil, errors.New("invalid fault domain")
 		}
 		domains[i] = strings.ToLower(domains[i])
@@ -258,15 +258,19 @@ func (t *FaultDomainTree) nextID() uint32 {
 // fault domain tree.
 func (t *FaultDomainTree) AddDomain(domain *FaultDomain) error {
 	if t == nil {
-		return errors.New("can't add to nil FaultDomainTree")
+		return errors.New("nil FaultDomainTree")
+	}
+
+	if domain == nil {
+		return errors.New("nil domain")
 	}
 
 	if domain.Empty() {
-		return errors.New("can't add empty fault domain to tree")
+		// nothing to do
+		return nil
 	}
 
 	domainAsTree := NewFaultDomainTree(domain)
-
 	return t.Merge(domainAsTree)
 }
 
