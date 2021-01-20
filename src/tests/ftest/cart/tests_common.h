@@ -51,12 +51,12 @@ struct test_options {
 	int		num_attach_retries;
 	bool		is_server;
 	bool		assert_on_error;
+	int		shutdown;
+	int		delay_shutdown_sec;
 };
 
 static struct test_options opts = { .is_initialized = false };
 
-int g_shutdown = 0;
-int g_delay_shutdown_sec = 0;
 
 void
 tc_test_init(d_rank_t rank, int num_attach_retries, bool is_server,
@@ -68,6 +68,9 @@ tc_test_init(d_rank_t rank, int num_attach_retries, bool is_server,
 	opts.is_server		= is_server;
 	opts.num_attach_retries	= num_attach_retries;
 	opts.assert_on_error		= assert_on_error;
+
+	opts.shutdown = 0;
+	opts.delay_shutdown_sec = 0;
 }
 
 static inline int
@@ -101,13 +104,13 @@ tc_drain_queue(crt_context_t ctx)
 void
 tc_set_shutdown_delay(int delay_sec)
 {
-	g_delay_shutdown_sec = delay_sec;
+	opts.delay_shutdown_sec = delay_sec;
 }
 
 void
 tc_progress_stop(void)
 {
-	g_shutdown = 1;
+	opts.shutdown = 1;
 }
 
 void *
@@ -125,14 +128,14 @@ tc_progress_fn(void *data)
 		assert(0);
 	}
 
-	while (g_shutdown == 0)
+	while (opts.shutdown == 0)
 		crt_progress(*p_ctx, 1000);
 
 	if (idx == 0)
 		crt_swim_fini();
 
-	if (g_delay_shutdown_sec > 0)
-		sleep(g_delay_shutdown_sec);
+	if (opts.delay_shutdown_sec > 0)
+		sleep(opts.delay_shutdown_sec);
 
 	rc = tc_drain_queue(*p_ctx);
 	D_ASSERTF(rc == 0, "tc_drain_queue() failed with rc=%d\n", rc);
