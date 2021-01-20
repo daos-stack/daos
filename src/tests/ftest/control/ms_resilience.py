@@ -28,6 +28,7 @@ from general_utils import stop_processes
 from avocado.core.exceptions import TestFail
 import random
 import socket
+import time
 
 
 class ManagementServiceResilience(TestWithServers):
@@ -40,6 +41,7 @@ class ManagementServiceResilience(TestWithServers):
         """Inititialize a ManagementServiceResilience object."""
         super(ManagementServiceResilience, self).__init__(*args, **kwargs)
         self.setup_start_servers = False
+        self.L_QUERY_TIMER = 10
 
     def update_and_verify(self, ignore_status=False):
         """Create a pool on the server group
@@ -62,7 +64,7 @@ class ManagementServiceResilience(TestWithServers):
             self.log.info("Pool UUID %s on server group: %s",
                           self.pool.uuid, self.server_group)
             # Verify that the pool persisted.
-            pool_data = self.server_managers[-1].dmg.pool_list()
+            pool_data = self.get_dmg_command().pool_list()
             if pool_data and self.pool.uuid in pool_data:
                 self.log.info("Found pool in system.")
             else:
@@ -80,7 +82,14 @@ class ManagementServiceResilience(TestWithServers):
                 access_list, the test will fail.
 
         """
-        l_addr = self.server_managers[-1].dmg.system_leader_query()["leader"]
+        l_addr = None
+        start = time.time()
+        while not l_addr and (time.time() - start) < self.L_QUERY_TIMER:
+            l_addr = self.get_dmg_command().system_leader_query()["leader"]
+
+        if not l_addr:
+            self.fail("Timer exceeded for verifying leader. No leader found!")
+
         l_hostname, _, _ = socket.gethostbyaddr(l_addr.split(":")[0])
         l_hostname = l_hostname.split(".")[0]
 
@@ -125,7 +134,7 @@ class ManagementServiceResilience(TestWithServers):
         stop_processes([leader], "daos_server")
 
         access_list = [x for x in access_list if x != leader]
-        self.server_managers[-1].dmg.hostlist = access_list[0]
+        self.get_dmg_command().hostlist = access_list[0]
 
         self.verify_leader(access_list)
         self.update_and_verify(ignore_status=False)
@@ -148,7 +157,7 @@ class ManagementServiceResilience(TestWithServers):
         stop_processes(kill_list, "daos_server")
 
         access_list = [x for x in access_list if x not in kill_list]
-        self.server_managers[-1].dmg.hostlist = access_list[0]
+        self.get_dmg_command().hostlist = access_list[0]
 
         self.verify_leader(access_list)
         self.update_and_verify(ignore_status=True)
