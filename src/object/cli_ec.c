@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -945,8 +945,8 @@ obj_reasb_req_dump(struct obj_reasb_req *reasb_req, d_sg_list_t *usgl,
 	tgt_recx_nrs = ec_recx_array->oer_tgt_recx_nrs;
 	tgt_recx_idxs = ec_recx_array->oer_tgt_recx_idxs;
 	D_PRINT("================ reasb req %d ================\n", i);
-	D_PRINT("iod, akey %s, iod_size "DF_U64", iod_nr %d\n",
-		(char *)iod->iod_name.iov_buf, iod->iod_size,
+	D_PRINT("iod, akey "DF_KEY", iod_size "DF_U64", iod_nr %d\n",
+		DP_KEY(&iod->iod_name), iod->iod_size,
 		iod->iod_nr);
 	D_PRINT("recxs per target [daos_idx, nr]:\n");
 	for (tgt = 0; tgt < obj_ec_tgt_nr(oca); tgt++) {
@@ -2157,7 +2157,7 @@ obj_ec_recov_task_fini(struct obj_reasb_req *reasb_req)
 
 	for (i = 0; i < fail_info->efi_recov_ntasks; i++) {
 		d_sgl_fini(&fail_info->efi_recov_tasks[i].ert_sgl, false);
-		if (!daos_handle_is_inval(fail_info->efi_recov_tasks[i].ert_th))
+		if (daos_handle_is_valid(fail_info->efi_recov_tasks[i].ert_th))
 			dc_tx_local_close(fail_info->efi_recov_tasks[i].ert_th);
 	}
 	D_FREE(fail_info->efi_recov_tasks);
@@ -2806,7 +2806,6 @@ obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, int shard,
 
 	if (total == 0) {
 		D_FREE(*recxs_p);
-		*recxs_p = NULL;
 		*iod_nr = 0;
 		return 0;
 	}

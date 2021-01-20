@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -706,6 +706,13 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 	/* Disabled Pool Aggrgation */
 	rc = set_pool_reclaim_strategy(state, aggr_disabled);
 	assert_int_equal(rc, 0);
+	/**
+	 * set_pool_reclaim_strategy() to disable aggregation
+	 * assumes all aggregation ULTs on all servers taking
+	 * effect immediately, this may not be the case.
+	 * Adding delay so that ULTs finish the round of aggregation.
+	 */
+	sleep(10);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
@@ -921,9 +928,16 @@ io_rewritten_array_with_mixed_size(void **state)
 	assert_non_null(fbuf);
 	memset(fbuf, 0, size);
 
-	/* Disabled Pool Aggrgation */
+	/* Disabled Pool Aggregation */
 	rc = set_pool_reclaim_strategy(state, aggr_disabled);
 	assert_int_equal(rc, 0);
+	/**
+	 * set_pool_reclaim_strategy() to disable aggregation
+	 * assumes all aggregation ULTs on all servers taking
+	 * effect immediately, this may not be the case.
+	 * So adding delay so that ULTs finish the round of aggregation.
+	 */
+	sleep(10);
 
 	/* Get the pool info at the beginning */
 	rc = pool_storage_info(state, &pinfo);
@@ -3085,7 +3099,7 @@ tgt_idx_change_retry(void **state)
 		assert_int_equal(layout->ol_shards[0]->os_replica_nr, 3);
 		/* FIXME disable rank compare until we fix the layout_get */
 		/* assert_int_equal(layout->ol_shards[0]->os_ranks[0], 2); */
-		rank = layout->ol_shards[0]->os_ranks[replica];
+		rank = layout->ol_shards[0]->os_shard_loc[replica].sd_rank;
 		rc = daos_obj_layout_free(layout);
 		assert_int_equal(rc, 0);
 
@@ -3111,7 +3125,8 @@ tgt_idx_change_retry(void **state)
 		 *		     rank);
 		*/
 		print_message("target of shard %d changed from %d to %d\n",
-			      replica, rank, layout->ol_shards[0]->os_ranks[0]);
+			      replica, rank,
+			      layout->ol_shards[0]->os_shard_loc[0].sd_rank);
 		rc = daos_obj_layout_free(layout);
 		assert_int_equal(rc, 0);
 	}
@@ -3740,15 +3755,20 @@ io_pool_map_refresh_trigger(void **state)
 	daos_obj_id_t	oid;
 	struct ioreq	req;
 	d_rank_t	leader;
+	d_rank_t	rank = 1;
 
 	/* needs at lest 2 targets */
 	if (!test_runable(arg, 2))
 		skip();
 
+	/* Choose an rank other than leader */
 	test_get_leader(arg, &leader);
-	D_ASSERT(leader > 0);
+	while (rank == leader)
+		rank = (rank + 1) % arg->srv_nnodes;
+
+	print_message("leader %u rank %u\n", leader, rank);
 	oid = dts_oid_gen(DAOS_OC_R1S_SPEC_RANK, 0, arg->myrank);
-	oid = dts_oid_set_rank(oid, leader - 1);
+	oid = dts_oid_set_rank(oid, rank);
 
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,

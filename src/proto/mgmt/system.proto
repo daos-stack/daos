@@ -1,0 +1,107 @@
+//
+// (C) Copyright 2019-2020 Intel Corporation.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+// The Government's rights to use, modify, reproduce, release, perform, display,
+// or disclose this software are subject to the terms of the Apache License as
+// provided in Contract No. 8F-30005.
+// Any reproduction of computer software, computer software documentation, or
+// portions thereof marked with this legend must also reproduce the markings.
+//
+
+syntax = "proto3";
+package mgmt;
+
+option go_package = "github.com/daos-stack/daos/src/control/common/proto/mgmt";
+
+import "shared/ranks.proto";
+
+// Management Service Protobuf Definitions related to interactions between
+// DAOS control server and DAOS system.
+
+// SystemMember refers to a data-plane instance that is a member of DAOS
+// system running on host with the control-plane listening at "Addr".
+message SystemMember {
+	string addr = 1;
+	string uuid = 2;
+	uint32 rank = 3;
+	uint32 state = 4;
+	// ancillary info e.g. error msg or reason for state change
+	string info = 5;
+	string faultDomain = 6;
+}
+
+// SystemStopReq supplies system shutdown parameters.
+message SystemStopReq {
+	string sys = 1; // DAOS system name
+	bool prep = 2; // indicates that the prep stage should be performed
+	bool kill = 3; // indicates that the kill stage should be performed
+	bool force = 4;
+	string ranks = 5; // rankset to query
+	string hosts = 6; // hostset to query
+}
+
+// SystemStopResp returns status of shutdown attempt and results
+// of attempts to stop system members.
+message SystemStopResp {
+	repeated shared.RankResult results = 1;
+	string absentranks = 2; // rankset missing from membership
+	string absenthosts = 3; // hostset missing from membership
+}
+
+// SystemResetFormatReq supplies system reset format parameters.
+message SystemResetFormatReq {
+	string sys = 1; // DAOS system name
+	string ranks = 2; // rankset to query
+	string hosts = 3; // hostset to query
+}
+
+// SystemResetFormatResp returns status of reset format attempt and results
+// of attempts to reset format of system members.
+message SystemResetFormatResp {
+	repeated shared.RankResult results = 1;
+	string absentranks = 2; // rankset missing from membership
+	string absenthosts = 3; // hostset missing from membership
+}
+
+// SystemStartReq supplies system restart parameters.
+message SystemStartReq {
+	string sys = 1; // DAOS system name
+	string ranks = 2; // rankset to query
+	string hosts = 3; // hostset to query
+}
+
+// SystemStartResp returns status of restart attempt and results
+// of attempts to start system members.
+message SystemStartResp {
+	repeated shared.RankResult results = 1;
+	string absentranks = 2; // rankset missing from membership
+	string absenthosts = 3; // hostset missing from membership
+}
+
+// SystemQueryReq supplies system query parameters.
+message SystemQueryReq {
+	string sys = 1; // DAOS system name
+	string ranks = 2; // rankset to query
+	string hosts = 3; // hostset to query
+}
+
+// SystemQueryResp returns active system members.
+message SystemQueryResp {
+	repeated SystemMember members = 1;
+	string absentranks = 2; // rankset missing from membership
+	string absenthosts = 3; // hostset missing from membership
+}
+

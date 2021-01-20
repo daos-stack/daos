@@ -152,7 +152,6 @@ int ds_pool_tgt_disconnect_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 void ds_pool_tgt_query_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				 void *priv);
-void ds_pool_child_purge(struct pool_tls *tls);
 void ds_pool_replicas_update_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop);
 int ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic);
@@ -162,7 +161,7 @@ int ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic);
  */
 int ds_pool_map_tgts_update(struct pool_map *map,
 			    struct pool_target_id_list *tgts, int opc,
-			    bool evict_rank);
+			    bool evict_rank, uint32_t *tgt_map_ver);
 int ds_pool_check_failed_replicas(struct pool_map *map, d_rank_list_t *replicas,
 				  d_rank_list_t *failed, d_rank_list_t *alt);
 extern struct bio_reaction_ops nvme_reaction_ops;

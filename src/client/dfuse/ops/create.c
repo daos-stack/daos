@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct fuse_file_info	        fi_out = {0};
 	int rc;
 
-	DFUSE_TRA_INFO(fs_handle, "Parent:%lu '%s'", parent->ie_stat.st_ino,
+	DFUSE_TRA_INFO(parent, "Parent:%lu '%s'", parent->ie_stat.st_ino,
 		       name);
 
 	/* O_LARGEFILE should always be set on 64 bit systems, and in fact is
@@ -42,21 +42,24 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	 * would otherwise be using and check that is set.
 	 */
 	if (!(fi->flags & LARGEFILE)) {
-		DFUSE_TRA_INFO(req, "O_LARGEFILE required 0%o", fi->flags);
+		DFUSE_TRA_INFO(parent, "O_LARGEFILE required 0%o",
+			       fi->flags);
 		D_GOTO(err, rc = ENOTSUP);
 	}
 
 	/* Check for flags that do not make sense in this context.
 	 */
 	if (fi->flags & DFUSE_UNSUPPORTED_CREATE_FLAGS) {
-		DFUSE_TRA_INFO(req, "unsupported flag requested 0%o",
+		DFUSE_TRA_INFO(parent, "unsupported flag requested 0%o",
 			       fi->flags);
 		D_GOTO(err, rc = ENOTSUP);
 	}
 
 	/* Check that only the flag for a regular file is specified */
-	if ((mode & S_IFMT) != S_IFREG) {
-		DFUSE_TRA_INFO(req, "unsupported mode requested 0%o", mode);
+	if (!S_ISREG(mode)) {
+		DFUSE_TRA_INFO(parent,
+			       "unsupported mode requested 0%o",
+			       mode);
 		D_GOTO(err, rc = ENOTSUP);
 	}
 
@@ -73,20 +76,16 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	DFUSE_TRA_DEBUG(ie, "file '%s' flags 0%o mode 0%o", name, fi->flags,
 			mode);
 
-	rc = dfs_open(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
-		      mode, fi->flags, 0, 0, NULL, &ie->ie_obj);
-	if (rc) {
-		DFUSE_TRA_DEBUG(parent, "dfs_open() failed %d", rc);
+	rc = dfs_open_stat(parent->ie_dfs->dfs_ns, parent->ie_obj, name, mode,
+			   fi->flags, 0, 0, NULL, &oh->doh_obj, &ie->ie_stat);
+	if (rc)
 		D_GOTO(err, rc);
-	}
 
 	/** duplicate the file handle for the fuse handle */
-	rc = dfs_dup(parent->ie_dfs->dfs_ns, ie->ie_obj, fi->flags,
-		     &oh->doh_obj);
-	if (rc) {
-		DFUSE_TRA_DEBUG(parent, "dfs_dup() failed %d", rc);
-		D_GOTO(release1, rc);
-	}
+	rc = dfs_dup(parent->ie_dfs->dfs_ns, oh->doh_obj, O_RDWR,
+		     &ie->ie_obj);
+	if (rc)
+		D_GOTO(release, rc);
 
 	oh->doh_dfs = parent->ie_dfs->dfs_ns;
 	oh->doh_ie = ie;
@@ -109,25 +108,17 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_truncated = false;
 	atomic_store_relaxed(&ie->ie_ref, 1);
 
-	rc = dfs_ostat(oh->doh_dfs, oh->doh_obj, &ie->ie_stat);
-	if (rc) {
-		DFUSE_TRA_DEBUG(parent, "dfs_ostat() failed %d", rc);
-		D_GOTO(release2, rc);
-	}
-
 	LOG_FLAGS(ie, fi->flags);
 	LOG_MODES(ie, mode);
 
 	/* Return the new inode data, and keep the parent ref */
-	dfuse_reply_entry(fs_handle, ie, &fi_out, req);
+	dfuse_reply_entry(fs_handle, ie, &fi_out, true, req);
 
 	return;
-release2:
-	dfs_release(oh->doh_obj);
-release1:
+release:
 	dfs_release(ie->ie_obj);
 err:
-	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+	DFUSE_REPLY_ERR_RAW(parent, req, rc);
 	D_FREE(oh);
 	D_FREE(ie);
 }

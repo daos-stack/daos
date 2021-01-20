@@ -410,7 +410,7 @@ init_map_distd(struct ds_rsvc *svc)
 
 	ds_rsvc_get(svc);
 	get_leader(svc);
-	rc = dss_ult_create(map_distd, svc, DSS_ULT_MISC, DSS_TGT_SELF, 0,
+	rc = dss_ult_create(map_distd, svc, DSS_XS_SELF, 0, 0,
 			    &svc->s_map_distd);
 	if (rc != 0) {
 		D_ERROR("%s: failed to start map_distd: "DF_RC"\n", svc->s_name,
@@ -584,8 +584,7 @@ rsvc_stop_cb(struct rdb *db, int err, void *arg)
 	int		rc;
 
 	ds_rsvc_get(svc);
-	rc = dss_ult_create(rsvc_stopper, svc, DSS_ULT_MISC, DSS_TGT_SELF,
-			    0, NULL);
+	rc = dss_ult_create(rsvc_stopper, svc, DSS_XS_SELF, 0, 0, NULL);
 	if (rc != 0) {
 		D_ERROR("%s: failed to create service stopper: "DF_RC"\n",
 			svc->s_name, DP_RC(rc));
@@ -927,7 +926,7 @@ stop_all_cb(d_list_t *entry, void *varg)
 		return -DER_NOMEM;
 
 	d_hash_rec_addref(&rsvc_hash, &svc->s_entry);
-	rc = dss_ult_create(rsvc_stopper, svc, DSS_ULT_POOL_SRV, 0, 0,
+	rc = dss_ult_create(rsvc_stopper, svc, DSS_XS_SYS, 0, 0,
 			    &ult->su_thread);
 	if (rc != 0) {
 		d_hash_rec_decref(&rsvc_hash, &svc->s_entry);

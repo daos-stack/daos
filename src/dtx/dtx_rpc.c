@@ -619,14 +619,10 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 
 	rc1 = vos_dtx_commit(cont->sc_hdl, dti, count, dcks);
 
-	/* -DER_NONEXIST may be caused by race or repeated commit, ignore it. */
-	if (rc1 == -DER_NONEXIST)
-		rc1 = 0;
-
-	if (rc1 > 0 && drop_cos) {
+	if (rc1 >= 0 && drop_cos) {
 		int	i;
 
-		for (i = 0; i < rc1; i++) {
+		for (i = 0; i < count; i++) {
 			if (!daos_oid_is_null(dcks[i].oid.id_pub))
 				dtx_del_cos(cont, &dti[i], &dcks[i].oid,
 					    dcks[i].dkey_hash);
@@ -635,6 +631,10 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 
 	D_FREE(dcks);
 
+	/* -DER_NONEXIST may be caused by race or repeated commit, ignore it. */
+	if (rc1 == -DER_NONEXIST)
+		rc1 = 0;
+
 	if (dra.dra_future != ABT_FUTURE_NULL) {
 		rc2 = dtx_req_wait(&dra);
 		if (rc2 == -DER_NONEXIST)
@@ -642,13 +642,13 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 	}
 
 out:
-	D_CDEBUG(rc < 0 || rc1 < 0 || rc2 < 0, DLOG_ERR, DB_TRACE,
+	D_CDEBUG(rc < 0 || rc1 < 0 || rc2 < 0, DLOG_ERR, DB_IO,
 		 "Commit DTXs "DF_DTI", count %d: rc %d %d %d\n",
-		 DP_DTI(&dtes[0]->dte_xid), count, rc, rc1, rc2);
+		 DP_DTI(&dti[0]), count, rc, rc1, rc2);
 
 	D_FREE(dti);
 
-	if (!daos_handle_is_inval(tree_hdl))
+	if (daos_handle_is_valid(tree_hdl))
 		dbtree_destroy(tree_hdl, NULL);
 
 	D_ASSERT(d_list_empty(&head));
@@ -702,13 +702,13 @@ dtx_abort(struct ds_cont_child *cont, daos_epoch_t epoch,
 	}
 
 out:
-	D_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE,
+	D_CDEBUG(rc != 0, DLOG_ERR, DB_IO,
 		 "Abort DTXs "DF_DTI", count %d: rc %d\n",
 		 DP_DTI(&dtes[0]->dte_xid), count, rc);
 
 	D_FREE(dti);
 
-	if (!daos_handle_is_inval(tree_hdl))
+	if (daos_handle_is_valid(tree_hdl))
 		dbtree_destroy(tree_hdl, NULL);
 
 	D_ASSERT(d_list_empty(&head));

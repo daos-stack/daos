@@ -99,7 +99,8 @@ cont_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	args = (struct cont_df_args *)val_iov->iov_buf;
 	pool = args->ca_pool;
 
-	D_DEBUG(DB_DF, "Allocating container uuid=%s\n", DP_UUID(ukey->uuid));
+	D_DEBUG(DB_DF, "Allocating container uuid=" DF_UUID "\n",
+		DP_UUID(ukey->uuid));
 	offset = umem_zalloc(&tins->ti_umm, sizeof(struct vos_cont_df));
 	if (UMOFF_IS_NULL(offset))
 		return -DER_NOSPACE;
@@ -191,9 +192,9 @@ cont_free_internal(struct vos_container *cont)
 
 	D_ASSERT(cont->vc_open_count == 0);
 
-	if (!daos_handle_is_inval(cont->vc_dtx_active_hdl))
+	if (daos_handle_is_valid(cont->vc_dtx_active_hdl))
 		dbtree_destroy(cont->vc_dtx_active_hdl, NULL);
-	if (!daos_handle_is_inval(cont->vc_dtx_committed_hdl))
+	if (daos_handle_is_valid(cont->vc_dtx_committed_hdl))
 		dbtree_destroy(cont->vc_dtx_committed_hdl, NULL);
 
 	if (cont->vc_dtx_array)
@@ -671,7 +672,7 @@ cont_iter_fini(struct vos_iterator *iter)
 
 	co_iter = vos_iter2co_iter(iter);
 
-	if (!daos_handle_is_inval(co_iter->cot_hdl)) {
+	if (daos_handle_is_valid(co_iter->cot_hdl)) {
 		rc = dbtree_iter_finish(co_iter->cot_hdl);
 		if (rc)
 			D_ERROR("co_iter_fini failed: "DF_RC"\n", DP_RC(rc));

@@ -305,8 +305,7 @@ ds_start_scrubbing_ult(struct ds_pool_child *child)
 		"xs_id: %d, tgt_id: %d, ctx_id: %d, ",
 		dmi->dmi_xs_id, dmi->dmi_tgt_id, dmi->dmi_ctx_id);
 
-	rc = dss_ult_create(scrubbing_ult, child, DSS_ULT_IO, DSS_TGT_SELF,
-			    0, &thread);
+	rc = dss_ult_create(scrubbing_ult, child, DSS_XS_SELF, 0, 0, &thread);
 	if (rc) {
 		D_ERROR(DF_UUID"[%d]: Failed to create Scrubbing ULT. %d\n",
 			DP_UUID(child->spc_uuid), dmi->dmi_tgt_id, rc);

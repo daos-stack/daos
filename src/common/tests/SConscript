@@ -1,17 +1,15 @@
 """Build daos common tests"""
 import daos_build
-from prereq_tools import GitRepoRetriever
 
-def define_checksum_timing(build, env, prereqs):
+def define_checksum_timing(build, env):
     """Define the Checksum Timing build"""
     checksum_timing_libs = ['daos_common', 'gurt']
     build.test(env, 'checksum_timing', 'checksum_timing.c',
                LIBS=checksum_timing_libs)
 
-
 def scons():
     """Execute build"""
-    Import('tenv', 'prereqs')
+    Import('tenv')
 
     common_test_utils = tenv.SharedObject(['test_mocks.c', 'test_utils.c'])
     Export('common_test_utils')
@@ -28,10 +26,10 @@ def scons():
     daos_build.test(tenv, 'other', 'other.c',
                     LIBS=['daos_common', 'gurt', 'cart'])
     common_test = daos_build.test(tenv, 'common_test',
-                    ['common_test.c', 'checksum_tests.c', 'compress_tests.c',
-                    'misc_tests.c'],
-                    LIBS=['daos_common', 'daos_tests', 'gurt', 'cart',
-                          'cmocka'])
+                                  ['common_test.c', 'checksum_tests.c',
+                                   'compress_tests.c', 'misc_tests.c'],
+                                  LIBS=['daos_common', 'daos_tests',
+                                        'gurt', 'cart', 'cmocka'])
     daos_build.test(tenv, 'lru', 'lru.c',
                     LIBS=['daos_common', 'gurt', 'cart'])
     daos_build.test(tenv, 'sched', 'sched.c',
@@ -42,7 +40,7 @@ def scons():
                     LIBS=['daos_common', 'gurt', 'cmocka'])
     daos_build.test(tenv, 'prop_tests', 'prop_tests.c',
                     LIBS=['daos_common', 'gurt', 'cmocka'])
-    define_checksum_timing(daos_build, tenv, prereqs)
+    define_checksum_timing(daos_build, tenv)
 
     tenv.Install('$PREFIX/bin/', [common_test])
 

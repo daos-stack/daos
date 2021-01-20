@@ -39,6 +39,7 @@
 This provides consistency checking for CaRT log files.
 """
 
+import sys
 import time
 import argparse
 HAVE_TABULATE = True
@@ -163,108 +164,45 @@ class RegionCounter():
 # error lines.
 shown_logs = set()
 
-# List of known locations where there may be a mismatch, this is a
-# dict of functions, each with a unordered list of variables that are
-# freed by the function.
-# Typically this is where memory is allocated in one file, and freed in
-# another.
-# pylint: disable=line-too-long
+# List of known areas where there may be a mismatch between the facility used
+# for alloc vs free.  Typically this is where memory is allocated in one file
+# but freed in another, however allocations in header file also feature.
+
+# First is a lookup dict of commonly shared facilities, key is allocation
+# facility, value is set of free facilities.
+
+# Second part is a unordered dict of functions which are whitelisted
+# specifically, key is function name, value is list of variables.
+# Both the alloc and free function need to be whitelisted.
+
+mismatch_table = {'container': ('common'),
+                  'common': ('container', 'pool'),
+                  'daos': ('common'),
+                  'mgmt': ('common', 'daos', 'pool'),
+                  'misc': ('common', 'mgmt'),
+                  'pool': ('common'),
+                  'server': ('daos')}
+
 mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
                      'crt_rpc_handler_common': ('rpc_priv'),
-                     'crt_proc_d_iov_t': ('div->iov_buf'),
-                     'grp_add_to_membs_list': ('tmp'),
-                     'grp_regen_linear_list': ('tmp_ptr'),
-                     'crt_proc_d_string_t': ('*data'),
-                     'crt_hg_init': ('*addr'),
-                     'create_pool_props': ('out_owner',
-                                           'out_owner_grp'),
-                     'crt_proc_d_rank_list_t': ('rank_list',
-                                                'rank_list->rl_ranks'),
-                     'path_gen': ('*fpath'),
-                     'gen_pool_buf': ('uuids'),
-                     'ds_pool_tgt_map_update': ('arg'),
-                     'get_attach_info': ('reqb'),
-                     'iod_fetch': ('biovs'),
                      'bio_sgl_init': ('sgl->bs_iovs'),
-                     'process_credential_response': ('bytes'),
-                     'pool_map_find_tgts': ('*tgt_pp'),
-                     'daos_acl_dup': ('acl_copy'),
-                     'cont_iv_ent_init': ('entry->iv_value.sg_iovs[0].iov_buf'),
-                     'dfuse_pool_lookup': ('ie', 'dfs', 'dfp'),
-                     'pool_prop_read': ('prop->dpp_entries[idx].dpe_str',
-                                        'prop->dpp_entries[idx].dpe_val_ptr'),
-                     'cont_prop_read': ('prop->dpp_entries[idx].dpe_str',
-                                        'prop->dpp_entries[idx].dpe_val_ptr'),
-                     'cont_prop_default_copy': ('entry_def->dpe_str'),
-                     'cont_iv_prop_g2l': ('prop_entry->dpe_str'),
-                     'ds_mgmt_drpc_group_update': ('body'),
-                     'enum_cont_cb': ('ptr'),
-                     'pool_iv_conns_resize': ('new_conns'),
-                     'obj_enum_prep_sgls': ('dst_sgls[i].sg_iovs',
-                                            'dst_sgls[i].sg_iovs[j].iov_buf'),
-                     'notify_ready': ('reqb'),
-                     'test_iv_fetch': ('buf'),
-                     'iv_on_get': ('iv_value->sg_iovs[0].iov_buf'),
-                     'oid_iv_ent_init': ('oid_entry'),
                      'pool_svc_name_cb': ('s'),
                      'daos_iov_copy': ('dst->iov_buf'),
-                     'local_name_to_principal_name': ('*name'),
-                     'pack_daos_response': ('body'),
-                     'ds_mgmt_drpc_get_attach_info': ('body'),
-                     'ds_mgmt_drpc_pool_create': ('body'),
-                     'mgmt_svc_locate_cb': ('s'),
-                     'mgmt_svc_name_cb': ('s'),
-                     'pool_prop_default_copy': ('entry_def->dpe_str'),
-                     'pool_iv_prop_g2l': ('prop_entry->dpe_str'),
-                     'pool_iv_value_alloc_internal': ('sgl->sg_iovs[0].iov_buf'),
-                     'daos_prop_entry_copy': ('entry_dup->dpe_str'),
-                     'daos_prop_dup': ('entry_dup->dpe_str'),
-                     'rank_list_to_uint32_array': ('*ints'),
-                     'auth_cred_to_iov': ('packed'),
+                     'ds_pool_tgt_map_update': ('arg'),
+                     'enum_cont_cb': ('ptr'),
+                     'path_gen': ('*fpath'),
                      'd_sgl_init': ('sgl->sg_iovs'),
-                     'daos_csummer_alloc_iods_csums': ('buf'),
-                     'get_pool_svc_ranks': ('req')}
-# pylint: enable=line-too-long
+                     'iod_fetch': ('biovs')}
 
-mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
-                    'crt_group_psr_set': ('uri'),
-                    'crt_hdlr_uri_lookup': ('tmp_uri'),
-                    'crt_rpc_priv_free': ('rpc_priv'),
-                    'crt_group_config_save': ('url'),
-                    'get_self_uri': ('uri'),
-                    'tc_srv_start_basic': ('my_uri'),
-                    'crt_init_opt': ('crt_gdata.cg_addr'),
-                    'cont_prop_default_copy': ('entry_def->dpe_str'),
-                    'ds_pool_list_cont_handler': ('cont_buf'),
-                    'dtx_resync_ult': ('arg'),
-                    'init_pool_metadata': ('uuids'),
+mismatch_free_ok = {'crt_rpc_priv_free': ('rpc_priv'),
+                    'bio_sgl_fini': ('sgl->bs_iovs'),
                     'fini_free': ('svc->s_name',
                                   'svc->s_db_path'),
                     'd_sgl_fini': ('sgl->sg_iovs[i].iov_buf',
                                    'sgl->sg_iovs'),
-                    'd_rank_list_free': ('rank_list',
-                                         'rank_list->rl_ranks'),
-                    'pool_prop_default_copy': ('entry_def->dpe_str'),
-                    'pool_svc_store_uuid_cb': ('path'),
-                    'ds_mgmt_svc_start': ('uri'),
-                    'ds_mgmt_drpc_pool_create': ('resp.svcreps'),
-                    'ds_rsvc_lookup': ('path'),
-                    'daos_acl_free': ('acl'),
-                    'update_done': ('iv_value->sg_iovs'),
-                    'daos_drpc_free': ('pointer'),
-                    'pool_child_add_one': ('path'),
-                    'bio_sgl_fini': ('sgl->bs_iovs'),
-                    'daos_iov_free': ('iov->iov_buf'),
-                    'daos_prop_entry_free_value': ('entry->dpe_str',
-                                                   'entry->dpe_val_ptr'),
-                    'main': ('dfs'),
-                    'start_one': ('path'),
-                    'pool_svc_load_uuid_cb': ('path'),
-                    'ie_sclose': ('ie', 'dfs', 'dfp'),
-                    'notify_ready': ('req.uri'),
-                    'get_tgt_rank': ('tgts'),
-                    'obj_rw_reply': ('orwo->orw_iod_csums.ca_arrays'),
-                    'ds_csum_agg_recalc': ('sgl.sg_iovs')}
+                    'dtx_resync_ult': ('arg'),
+                    'ds_pool_list_cont_handler': ('cont_buf'),
+                    'notify_ready': ('req.uri')}
 
 wf = None
 
@@ -476,12 +414,14 @@ class LogTest():
 
                             src_offset = line.lineno - self.fi_location.lineno
                             if line.filename == self.fi_location.filename:
-                                src_offset = line.lineno - self.fi_location.lineno
+                                src_offset = line.lineno
+                                src_offset -= self.fi_location.lineno
                                 if src_offset > 0 and src_offset < 5:
                                     show_line(line, 'NORMAL',
                                               'Logging allocation failure')
 
-                            if not line.get_msg().endswith("DER_NOMEM(-1009): 'Out of memory'"):
+                            if not line.get_msg().endswith(
+                                    "DER_NOMEM(-1009): 'Out of memory'"):
                                 show_line(line, 'LOW',
                                           'Error does not use DF_RC')
                             # For the fault injection test do not report
@@ -581,11 +521,19 @@ class LogTest():
                                afunc in mismatch_alloc_ok and \
                                avar in mismatch_alloc_ok[afunc]:
                                 pass
+                            elif regions[pointer].fac in mismatch_table \
+                                 and line.fac in  \
+                                 mismatch_table[regions[pointer].fac]:
+                                pass
                             else:
                                 show_line(regions[pointer], 'LOW',
-                                          'facility mismatch in alloc/free')
+                                          'facility mismatch in alloc/free ' +
+                                          '{} != {}'.format(
+                                              regions[pointer].fac, line.fac))
                                 show_line(line, 'LOW',
-                                          'facility mismatch in alloc/free')
+                                          'facility mismatch in alloc/free ' +
+                                          '{} != {}'.format(
+                                              regions[pointer].fac, line.fac))
                                 err_count += 1
                         if line.level != regions[pointer].level:
                             show_line(regions[pointer], 'LOW',
@@ -795,9 +743,16 @@ def run():
     args = parser.parse_args()
     try:
         log_iter = cart_logparse.LogIter(args.file)
-    except IsADirectoryError:
-        print('Log tracing on directory not possible')
-        return
+    except UnicodeDecodeError:
+        # If there is a unicode error in the log file then retry with checks
+        # enabled which should both report the error and run in latin-1 so
+        # perform the log parsing anyway.  The check for log_iter.file_corrupt
+        # later on will ensure that this error does not get logged, then
+        # ignored.
+        # The only possible danger here is the file is simply too big to check
+        # the encoding on, in which case this second attempt would fail with
+        # an out-of-memory error.
+        log_iter = cart_logparse.LogIter(args.file, check_encoding=True)
     test_iter = LogTest(log_iter)
     if args.dfuse:
         test_iter.check_dfuse_io()
@@ -808,6 +763,8 @@ def run():
             print('Errors in log file, ignoring')
         except NotAllFreed:
             print('Memory leaks, ignoring')
+    if log_iter.file_corrupt:
+        sys.exit(1)
 
 if __name__ == '__main__':
     run()

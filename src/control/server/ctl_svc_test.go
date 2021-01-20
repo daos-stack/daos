@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,8 +24,11 @@
 package server
 
 import (
+	"context"
 	"testing"
 
+	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
@@ -39,8 +42,13 @@ import (
 func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bmbc *bdev.MockBackendConfig, smbc *scm.MockBackendConfig, smsc *scm.MockSysConfig) *ControlService {
 	t.Helper()
 
-	db := system.MockDatabase(t, log)
-	cs := ControlService{
+	if cfg == nil {
+		cfg = config.DefaultServer().WithServers(
+			ioserver.NewConfig().WithTargetCount(1),
+		)
+	}
+
+	cs := &ControlService{
 		StorageControlService: *NewStorageControlService(log,
 			bdev.NewMockProvider(log, bmbc),
 			scm.NewMockProvider(log, smbc, smsc),
@@ -49,22 +57,37 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 		harness: &IOServerHarness{
 			log: log,
 		},
-		membership: system.NewMembership(log, db),
-		sysdb:      db,
+		events: events.NewPubSub(context.TODO(), log),
 	}
 
-	scmProvider := cs.StorageControlService.scm
 	for _, srvCfg := range cfg.Servers {
 		bp, err := bdev.NewClassProvider(log, "", &srvCfg.Storage.Bdev)
 		if err != nil {
 			t.Fatal(err)
 		}
-		runner := ioserver.NewRunner(log, srvCfg)
-		instance := NewIOServerInstance(log, bp, scmProvider, nil, runner)
+		runner := ioserver.NewTestRunner(&ioserver.TestRunnerConfig{
+			Running: atm.NewBool(true),
+		}, srvCfg)
+		instance := NewIOServerInstance(log, bp, cs.scm, nil, runner)
+		instance.setSuperblock(&Superblock{
+			Rank: system.NewRankPtr(srvCfg.Rank.Uint32()),
+		})
 		if err := cs.harness.AddInstance(instance); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	return &cs
+	return cs
+}
+
+func mockControlServiceNoSB(t *testing.T, log logging.Logger, cfg *config.Server, bmbc *bdev.MockBackendConfig, smbc *scm.MockBackendConfig, smsc *scm.MockSysConfig) *ControlService {
+	cs := mockControlService(t, log, cfg, bmbc, smbc, smsc)
+
+	// don't set a superblock and init with a stopped test runner
+	for i, srv := range cs.harness.instances {
+		srv.setSuperblock(nil)
+		srv.runner = ioserver.NewTestRunner(nil, cfg.Servers[i])
+	}
+
+	return cs
 }

@@ -279,18 +279,24 @@ vos_ts_evict_lru(struct vos_ts_table *ts_table, struct vos_ts_entry **entryp,
 int
 vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
 		    uint16_t cflags, uint32_t akey_nr,
-		    const struct dtx_id *tx_id)
+		    const struct dtx_handle *dth)
 {
-	uint32_t	size;
-	uint64_t	array_size;
-	uint64_t	cond_mask = VOS_COND_FETCH_MASK | VOS_COND_UPDATE_MASK |
-		VOS_OF_COND_PER_AKEY;
+	const struct dtx_id	*tx_id = NULL;
+	uint32_t		 size;
+	uint64_t		 array_size;
+	uint64_t		 cond_mask = VOS_COND_FETCH_MASK |
+					     VOS_COND_UPDATE_MASK |
+					     VOS_OF_COND_PER_AKEY;
 
 	vos_kh_clear();
 
 	*ts_set = NULL;
-	if (tx_id == NULL && (flags & cond_mask) == 0)
-		return 0;
+	if (!dtx_is_valid_handle(dth)) {
+		if ((flags & cond_mask) == 0)
+			return 0;
+	} else {
+		tx_id = &dth->dth_xid;
+	}
 
 	size = VOS_TS_TYPE_AKEY + akey_nr;
 	array_size = size * sizeof((*ts_set)->ts_entries[0]);

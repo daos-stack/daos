@@ -27,7 +27,7 @@ server_config:
       scm_mount: /mnt/daos0
       log_mask: DEBUG,MEM=ERR
       env_vars:
-        - DD_MASK=mgmt,io,md,epc,rebuild
+        - DD_MASK=mgmt,io,md,epc,dsms,rebuild
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -42,15 +42,15 @@ server_config:
       scm_mount: /mnt/daos1
       log_mask: DEBUG,MEM=ERR
       env_vars:
-        - DD_MASK=mgmt,io,md,epc,rebuild
+        - DD_MASK=mgmt,io,md,epc,dsms,rebuild
   transport_config:
-    allow_insecure: True
+    allow_insecure: False
 agent_config:
   transport_config:
-    allow_insecure: True
+    allow_insecure: False
 dmg:
   transport_config:
-    allow_insecure: True
+    allow_insecure: False
 daos_tests:
   num_clients:
     num_clients: 1
@@ -75,11 +75,10 @@ daos_tests:
       daos_test: r
       test_name: rebuild tests 17
       args: -s3 -u subtests="17"
-# Skipped for DAOS-6247
-#    test_r_18:
-#      daos_test: r
-#      test_name: rebuild tests 18
-#      args: -s3 -u subtests="18"
+    test_r_18:
+      daos_test: r
+      test_name: rebuild tests 18
+      args: -s3 -u subtests="18"
     test_r_19:
       daos_test: r
       test_name: rebuild tests 19
@@ -108,13 +107,16 @@ daos_tests:
       daos_test: r
       test_name: rebuild tests 25
       args: -s3 -u subtests="25"
-#Skipped for DAOS-5852
-#    test_r_26:
-#      daos_test: r
-#      test_name: rebuild tests 26
-#      args: -s3 -u subtests="26"
+    test_r_26:
+      daos_test: r
+      test_name: rebuild tests 26
+      args: -s3 -u subtests="26"
     test_r_27:
       daos_test: r
       test_name: rebuild tests 27
-      args: -s3 -u subtests="27"
+      args: -s6 -u subtests="27"
       test_timeout: 1500
+    test_r_28:
+      daos_test: r
+      test_name: rebuild tests 28
+      args: -s3 -u subtests="28"

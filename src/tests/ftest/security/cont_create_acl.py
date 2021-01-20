@@ -33,7 +33,6 @@ class CreateContainterACLTest(ContSecurityTestBase):
 
     :avocado: recursive
     """
-
     def test_container_basics(self):
         """Test basic container create/destroy/open/close/query.
 
@@ -46,7 +45,8 @@ class CreateContainterACLTest(ContSecurityTestBase):
                file passed.
             7. Remove all files created
 
-        :avocado: tags=all,pr,security,container_acl,cont_create_acl
+        :avocado: tags=all,daily_regression,security,container_acl
+        :avocado: tags=cont_create_acl
         """
         acl_args = {"tmp_dir": self.tmp,
                     "user": self.current_user,

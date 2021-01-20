@@ -7,9 +7,9 @@
 
 # Pull base image
 FROM ubuntu:20.04
-MAINTAINER <daos@daos.groups.io>
+LABEL maintainer="daos@daos.groups.io"
 
-# Build arguments can be set via -build-arg
+# Build arguments can be set via --build-arg
 # use same UID as host and default value of 1000 if not specified
 ARG UID=1000
 
@@ -54,12 +54,10 @@ RUN useradd -u $UID -ms /bin/bash $USER
 RUN echo "$USER:$PASSWD" | chpasswd
 
 # Create directory for DAOS backend storage
-RUN mkdir /mnt/daos
-RUN chown daos.daos /mnt/daos
-RUN mkdir /var/run/daos_server
-RUN chown daos.daos /var/run/daos_server
-RUN mkdir /var/run/daos_agent
-RUN chown daos.daos /var/run/daos_agent
+RUN mkdir -p /opt/daos && chown -R daos.daos /opt/daos
+RUN mkdir /mnt/daos && chown daos.daos /mnt/daos
+RUN mkdir /var/run/daos_server && chown daos.daos /var/run/daos_server
+RUN mkdir /var/run/daos_agent && chown daos.daos /var/run/daos_agent
 
 # Set maven repo mirror
 RUN mkdir -p /root/.m2
@@ -74,25 +72,34 @@ RUN echo -e "<settings>\n\
 	</mirrors>\n\
 </settings>" > /root/.m2/settings.xml
 
-# Switch to new user
-#USER $USER
-WORKDIR /home/$USER
-
-# set NOBUILD to disable git clone & build
+# set NOBUILD to disable build
 ARG NOBUILD
 
-# Fetch DAOS code
-RUN if [ "x$NOBUILD" = "x" ] ; then \
-  git clone https://github.com/daos-stack/daos.git; fi
-WORKDIR /home/$USER/daos
+# select compiler to use
+ARG COMPILER=gcc
+
+# copy DAOS tree
+WORKDIR /home/daos
+COPY ./ .
 
 # Build DAOS & dependencies
 RUN if [ "x$NOBUILD" = "x" ] ; then \
-  git submodule init && git submodule update; fi
-RUN if [ "x$NOBUILD" = "x" ] ; then \
-  scons --build-deps=yes install PREFIX=/usr/local; fi
+    scons --build-deps=yes -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER; fi
 
 # Set environment variables
-ENV LD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib64:$LD_LIBRARY_PATH
-ENV PATH=/usr/local/bin:$PATH
+ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:$LD_LIBRARY_PATH
+ENV PATH=/opt/daos/bin:$PATH
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
+
+# Copy example config files to /opt/daos
+RUN if [ "x$NOBUILD" = "x" ] ; then \
+    cp -r utils/config/examples /opt/daos; fi
+
+# Build java and hadoop bindings
+RUN if [ "x$NOBUILD" = "x" ] ; then \
+    pushd src/client/java && \
+    mvn clean install -T 1C -DskipITs -Ddaos.install.path=/opt/daos && \
+    popd; fi
+
+# Remove local copy
+RUN rm -rf /home/daos/*

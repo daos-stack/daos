@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2020 Intel Corporation.
+// (C) Copyright 2018-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ package control
 import (
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/mitchellh/hashstructure"
@@ -39,6 +38,7 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 // HostFabricInterface describes a host fabric interface.
@@ -182,7 +182,7 @@ type (
 // containing results for all host scan operations.
 func NetworkScan(ctx context.Context, rpcClient UnaryInvoker, req *NetworkScanReq) (*NetworkScanResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return ctlpb.NewMgmtCtlClient(conn).NetworkScan(ctx, &ctlpb.NetworkScanReq{
+		return ctlpb.NewCtlSvcClient(conn).NetworkScan(ctx, &ctlpb.NetworkScanReq{
 			Provider: req.Provider,
 		})
 	})
@@ -214,6 +214,7 @@ type (
 	GetAttachInfoReq struct {
 		unaryRequest
 		msRequest
+		retryableRequest
 		System   string
 		AllRanks bool
 	}
@@ -226,29 +227,29 @@ type (
 	}
 
 	GetAttachInfoResp struct {
-		ServiceRanks []*PrimaryServiceRank `json:"Psrs"`
+		ServiceRanks []*PrimaryServiceRank `json:"rank_uris"`
 		// These CaRT settings are shared with the
 		// libdaos client to aid in CaRT initialization.
-		Provider        string
-		Interface       string
-		Domain          string
-		CrtCtxShareAddr uint32
-		CrtTimeout      uint32
-		NetDevClass     uint32
+		Provider        string   `json:"provider"`
+		Interface       string   `json:"interface"`
+		Domain          string   `json:"domain"`
+		CrtCtxShareAddr uint32   `json:"crt_ctx_share_addr"`
+		CrtTimeout      uint32   `json:"crt_timeout"`
+		NetDevClass     uint32   `json:"net_dev_class"`
+		MSRanks         []uint32 `json:"ms_ranks"`
 	}
 )
 
 func (gair *GetAttachInfoResp) String() string {
-	psrs := make([]string, len(gair.ServiceRanks))
-	for i, psr := range gair.ServiceRanks {
-		psrs[i] = fmt.Sprintf("%d:%s", psr.Rank, psr.Uri)
-	}
+	// gair.ServiceRanks may contain thousands of elements. Print a few
+	// (just one!) at most to avoid flooding logs.
+	rankURI := fmt.Sprintf("%d:%s", gair.ServiceRanks[0].Rank, gair.ServiceRanks[0].Uri)
 
 	// Condensed format for debugging...
-	return fmt.Sprintf("p=%s i=%s d=%s a=%d t=%d c=%d, psrs(%d)=%s",
+	return fmt.Sprintf("p=%s i=%s d=%s a=%d t=%d c=%d, rus(%d)=%s, mss=%v",
 		gair.Provider, gair.Interface, gair.Domain,
 		gair.CrtCtxShareAddr, gair.CrtTimeout, gair.NetDevClass,
-		len(psrs), strings.Join(psrs, ","),
+		len(gair.ServiceRanks), rankURI, gair.MSRanks,
 	)
 }
 
@@ -258,10 +259,14 @@ func (gair *GetAttachInfoResp) String() string {
 func GetAttachInfo(ctx context.Context, rpcClient UnaryInvoker, req *GetAttachInfoReq) (*GetAttachInfoResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).GetAttachInfo(ctx, &mgmtpb.GetAttachInfoReq{
-			Sys:      req.System,
+			Sys:      req.getSystem(),
 			AllRanks: req.AllRanks,
 		})
 	})
+	req.retryTestFn = func(err error, _ uint) bool {
+		// If the MS hasn't added any members yet, retry the request.
+		return system.IsEmptyGroupMap(err)
+	}
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {

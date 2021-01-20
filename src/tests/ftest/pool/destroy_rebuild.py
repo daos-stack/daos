@@ -45,7 +45,7 @@ class DestroyRebuild(TestWithServers):
         Use Cases:
             Verifying that a pool can be destroyed during rebuild.
 
-        :avocado: tags=all,pr,medium,pool,destroypoolrebuild
+        :avocado: tags=all,daily_regression,medium,pool,destroypoolrebuild
         """
         # Get the test parameters
         self.pool = TestPool(self.context, self.get_dmg_command())

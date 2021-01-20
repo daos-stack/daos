@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -296,7 +296,7 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt,
 
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	D_ASSERT(tls != NULL);
-	D_ASSERT(!daos_handle_is_inval(tls->rebuild_tree_hdl));
+	D_ASSERT(daos_handle_is_valid(tls->rebuild_tree_hdl));
 
 	tls->rebuild_pool_obj_count++;
 	val.eph = epoch;
@@ -527,11 +527,64 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 				DP_UOID(oid), DP_RC(rc));
 			D_GOTO(out, rc);
 		}
+	} else if (rpt->rt_rebuild_op == RB_OP_RECLAIM) {
+		struct pl_obj_layout *layout = NULL;
+		bool still_needed;
+		uint32_t mytarget = dss_get_module_info()->dmi_tgt_id;
+
+		/*
+		 * Compute placement for the object, then check if the layout
+		 * still includes the current rank. If not, the object can be
+		 * deleted/reclaimed because it is no longer reachable
+		 */
+		rc = pl_obj_place(map, &md, NULL, &layout);
+		if (rc != 0)
+			D_GOTO(out, rc);
+
+		still_needed = pl_obj_layout_contains(rpt->rt_pool->sp_map,
+						      layout, myrank, mytarget);
+		if (!still_needed) {
+			D_DEBUG(DB_REBUILD, "deleting object "DF_UOID
+				" which is not reachable on rank %u tgt %u",
+				DP_UOID(oid), myrank, mytarget);
+			/*
+			 * It's possible this object might still be being
+			 * accessed elsewhere - retry until until it is possible
+			 * to delete
+			 */
+			do {
+				/* Inform the iterator and delete the object */
+				*acts |= VOS_ITER_CB_DELETE;
+				rc = vos_obj_delete(param->ip_hdl, oid);
+				if (rc == -DER_BUSY || rc == -DER_INPROGRESS) {
+					D_DEBUG(DB_REBUILD,
+						"got "DF_RC
+						" error while deleting object "
+						DF_UOID
+						" during reclaim; retrying\n",
+						DP_RC(rc), DP_UOID(oid));
+					/* Busy - inform iterator and yield */
+					*acts |= VOS_ITER_CB_YIELD;
+					ABT_thread_yield();
+				}
+			} while (rc == -DER_BUSY || rc == -DER_INPROGRESS);
+
+			if (rc != 0) {
+				D_ERROR("Failed to delete object "DF_UOID
+					" during reclaim: "DF_RC,
+					DP_UOID(oid), DP_RC(rc));
+				D_GOTO(out, rc);
+			}
+		}
+
+		/* Reclaim does not require sending any objects */
+		rebuild_nr = 0;
 	} else {
 		D_ASSERT(rpt->rt_rebuild_op == RB_OP_FAIL ||
 			 rpt->rt_rebuild_op == RB_OP_DRAIN ||
 			 rpt->rt_rebuild_op == RB_OP_REINT ||
-			 rpt->rt_rebuild_op == RB_OP_EXTEND);
+			 rpt->rt_rebuild_op == RB_OP_EXTEND ||
+			 rpt->rt_rebuild_op == RB_OP_RECLAIM);
 	}
 	if (rebuild_nr <= 0) /* No need rebuild */
 		D_GOTO(out, rc = rebuild_nr);
@@ -590,6 +643,10 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	vos_iter_param_t		param = { 0 };
 	struct vos_iter_anchors		anchor = { 0 };
 	daos_handle_t			coh;
+	struct dtx_handle		dth = { 0 };
+	struct dtx_id			dti = { 0 };
+	struct dtx_epoch		epoch = { 0 };
+	daos_unit_oid_t			oid = { 0 };
 	int				rc;
 
 	if (uuid_compare(arg->co_uuid, entry->ie_couuid) == 0) {
@@ -605,6 +662,10 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return rc;
 	}
 
+	epoch.oe_value = rpt->rt_stable_epoch;
+	rc = dtx_begin(coh, &dti, &epoch, 0, rpt->rt_rebuild_ver,
+		       &oid, NULL, 0, DTX_IGNORE_UNCOMMITTED, NULL, &dth);
+	D_ASSERT(rc == 0);
 	memset(&param, 0, sizeof(param));
 	param.ip_hdl = coh;
 	param.ip_epr.epr_lo = 0;
@@ -612,7 +673,8 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	param.ip_flags = VOS_IT_FOR_MIGRATION;
 	uuid_copy(arg->co_uuid, entry->ie_couuid);
 	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor,
-			 rebuild_obj_scan_cb, NULL, arg, NULL);
+			 rebuild_obj_scan_cb, NULL, arg, &dth);
+	dtx_end(&dth, NULL, rc);
 	vos_cont_close(coh);
 
 	*acts |= VOS_ITER_CB_YIELD;
@@ -657,7 +719,7 @@ rebuild_scanner(void *data)
 	/* Create object tree root */
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
-	rc = dbtree_create(DBTREE_CLASS_NV, 0, 4, &uma, NULL,
+	rc = dbtree_create(DBTREE_CLASS_UV, 0, 4, &uma, NULL,
 			   &tls->rebuild_tree_hdl);
 	if (rc != 0) {
 		D_ERROR("failed to create rebuild tree: "DF_RC"\n", DP_RC(rc));
@@ -665,8 +727,8 @@ rebuild_scanner(void *data)
 	}
 
 	rpt_get(rpt);
-	rc = dss_ult_create(rebuild_objects_send_ult, rpt, DSS_ULT_REBUILD,
-			    DSS_TGT_SELF, 0, &ult_send);
+	rc = dss_ult_create(rebuild_objects_send_ult, rpt, DSS_XS_SELF,
+			    0, 0, &ult_send);
 	if (rc != 0) {
 		rpt_put(rpt);
 		D_GOTO(out, rc);
@@ -719,7 +781,7 @@ rebuild_scan_leader(void *data)
 	while (rpt->rt_pool->sp_dtx_resync_version < rpt->rt_rebuild_ver)
 		ABT_thread_yield();
 
-	rc = dss_thread_collective(rebuild_scanner, rpt, 0, DSS_ULT_REBUILD);
+	rc = dss_thread_collective(rebuild_scanner, rpt, 0);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -727,7 +789,7 @@ rebuild_scan_leader(void *data)
 		DP_UUID(rpt->rt_pool_uuid));
 
 	ABT_mutex_lock(rpt->rt_lock);
-	rc = dss_task_collective(rebuild_scan_done, rpt, 0, DSS_ULT_REBUILD);
+	rc = dss_task_collective(rebuild_scan_done, rpt, 0);
 	ABT_mutex_unlock(rpt->rt_lock);
 	if (rc) {
 		D_ERROR(DF_UUID" send rebuild object list failed:%d\n",
@@ -767,6 +829,14 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	/* check if the rebuild is already started */
 	rpt = rpt_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver);
 	if (rpt != NULL) {
+		if (rpt->rt_global_done) {
+			D_WARN("the previous rebuild "DF_UUID"/%d"
+			       " is not cleanup yet\n",
+			       DP_UUID(rsi->rsi_pool_uuid),
+		               rsi->rsi_rebuild_ver);
+			D_GOTO(out, rc = -DER_BUSY);
+		}
+
 		/* Rebuild should never skip the version */
 		D_ASSERTF(rsi->rsi_rebuild_ver == rpt->rt_rebuild_ver,
 			  "rsi_rebuild_ver %d != rt_rebuild_ver %d\n",
@@ -824,8 +894,8 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 
 	rpt_get(rpt);
-	rc = dss_ult_create(rebuild_tgt_status_check_ult, rpt, DSS_ULT_REBUILD,
-			    DSS_TGT_SELF, 0, NULL);
+	rc = dss_ult_create(rebuild_tgt_status_check_ult, rpt, DSS_XS_SELF,
+			    0, 0, NULL);
 	if (rc) {
 		rpt_put(rpt);
 		D_GOTO(out, rc);
@@ -833,8 +903,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 
 	rpt_get(rpt);
 	/* step-3: start scan leader */
-	rc = dss_ult_create(rebuild_scan_leader, rpt, DSS_ULT_REBUILD,
-			    DSS_TGT_SELF, 0, NULL);
+	rc = dss_ult_create(rebuild_scan_leader, rpt, DSS_XS_SELF, 0, 0, NULL);
 	if (rc != 0) {
 		rpt_put(rpt);
 		D_GOTO(out, rc);
