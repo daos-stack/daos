@@ -2,6 +2,8 @@
 // (C) Copyright 2019 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
+//
+
 // This file defines the messages used by DRPC_MODULE_SRV.
 
 syntax = "proto3";
