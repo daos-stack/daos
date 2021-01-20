@@ -1006,7 +1006,7 @@ io_rewritten_array_with_mixed_size(void **state)
 			* the same as initial size.
 			*/
 			if ((nvme_current_size != nvme_initial_size) &&
-			     tmp == 20) {
+			    tmp == 20) {
 				fail_msg("NVMe_current_size =%"
 					PRIu64" != NVMe_initial_size %"
 					PRIu64" for record set=%d",
