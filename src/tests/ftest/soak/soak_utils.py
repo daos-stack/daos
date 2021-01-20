@@ -30,7 +30,7 @@ from ior_utils import IorCommand
 from fio_utils import FioCommand
 from dfuse_utils import Dfuse
 from job_manager_utils import Srun
-from command_utils_base import BasicParameter, CommandFailure
+from command_utils_base import BasicParameter
 from general_utils import get_random_string, run_command, DaosTestError
 import slurm_utils
 from test_utils_pool import TestPool
@@ -296,7 +296,7 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
         try:
             pool.exclude(rank, tgt_idx=tgt_idx)
             status = True
-        except CommandFailure as error:
+        except TestFail as error:
             self.log.error(
                 "<<<FAILED:dmg pool exclude failed", exc_info=error)
             status = False
@@ -313,7 +313,7 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
             try:
                 pool.reintegrate(rank, tgt_idx)
                 status = True
-            except CommandFailure as error:
+            except TestFail as error:
                 self.log.error(
                     "<<<FAILED:dmg pool reintegrate failed", exc_info=error)
                 status = False
@@ -369,7 +369,7 @@ def launch_server_stop_start(self, pools, name, results, args):
             for pool in pools:
                 try:
                     pool.drain(rank)
-                except CommandFailure as error:
+                except TestFail as error:
                     self.log.error(
                         "<<<FAILED:dmg pool {} drain failed".format(
                             pool.uuid), exc_info=error)
@@ -386,7 +386,7 @@ def launch_server_stop_start(self, pools, name, results, args):
             # Shutdown the server
             try:
                 self.dmg_command.system_stop(ranks=rank)
-            except CommandFailure as error:
+            except TestFail as error:
                 self.log.error(
                     "<<<FAILED:dmg system stop failed", exc_info=error)
                 status = False
@@ -399,7 +399,7 @@ def launch_server_stop_start(self, pools, name, results, args):
             try:
                 self.dmg_command.system_start(ranks=rank)
                 status = True
-            except CommandFailure as error:
+            except TestFail as error:
                 self.log.error(
                     "<<<FAILED:dmg system start failed", exc_info=error)
                 status = False
@@ -409,7 +409,7 @@ def launch_server_stop_start(self, pools, name, results, args):
                 try:
                     pool.reintegrate(rank)
                     status = True
-                except CommandFailure as error:
+                except TestFail as error:
                     self.log.error(
                         "<<<FAILED:dmg pool {} reintegrate failed".format(
                             pool.uuid), exc_info=error)

@@ -166,123 +166,26 @@ dss_get_xstream(int stream_id)
 	return xstream_data.xd_xs_ptrs[stream_id];
 }
 
-/* Add to the sorted(by expire time) list */
-static void
-add_sleep_list(struct dss_xstream *dx, struct dss_sleep_ult *new)
-{
-	struct dss_sleep_ult	*dsu;
-
-	d_list_for_each_entry(dsu, &dx->dx_sleep_ult_list, dsu_list) {
-		if (dsu->dsu_expire_time > new->dsu_expire_time) {
-			d_list_add_tail(&new->dsu_list, &dsu->dsu_list);
-			return;
-		}
-	}
-
-	d_list_add_tail(&new->dsu_list, &dx->dx_sleep_ult_list);
-}
-
-struct dss_sleep_ult
-*dss_sleep_ult_create(void)
-{
-	struct dss_sleep_ult *dsu;
-	ABT_thread	     self;
-
-	D_ALLOC_PTR(dsu);
-	if (dsu == NULL)
-		return NULL;
-
-	ABT_thread_self(&self);
-	dsu->dsu_expire_time = 0;
-	dsu->dsu_thread = self;
-	D_INIT_LIST_HEAD(&dsu->dsu_list);
-
-	return dsu;
-}
-
-void
-dss_sleep_ult_destroy(struct dss_sleep_ult *dsu)
-{
-	D_ASSERT(d_list_empty(&dsu->dsu_list));
-	D_FREE_PTR(dsu);
-}
-
-/* Reset the expire to force the ult to exit now */
-void
-dss_ult_wakeup(struct dss_sleep_ult *dsu)
-{
-	ABT_thread thread;
-
-	/* Wakeup the thread if it was put in the sleep list */
-	if (!d_list_empty(&dsu->dsu_list)) {
-		ABT_thread_self(&thread);
-		/* Only others can force the ULT to exit */
-		D_ASSERT(thread != dsu->dsu_thread);
-		d_list_del_init(&dsu->dsu_list);
-		dsu->dsu_expire_time = 0;
-		ABT_thread_resume(dsu->dsu_thread);
-	}
-}
-
-/* Schedule the ULT(dtu->ult) and reschedule in @expire_secs nano seconds */
-void
-dss_ult_sleep(struct dss_sleep_ult *dsu, uint64_t expire_nsecs)
-{
-	struct dss_xstream	*dx = dss_current_xstream();
-	ABT_thread		thread;
-	uint64_t		now = 0;
-
-	D_ASSERT(dsu != NULL);
-	ABT_thread_self(&thread);
-	D_ASSERT(thread == dsu->dsu_thread);
-
-	D_ASSERT(d_list_empty(&dsu->dsu_list));
-	now = daos_getntime_coarse();
-	dsu->dsu_expire_time = now + expire_nsecs;
-	add_sleep_list(dx, dsu);
-	ABT_self_suspend();
-}
-
-static void
-check_sleep_list()
-{
-	struct dss_xstream	*dx;
-	uint64_t		now = 0;
-	bool			shutdown = false;
-	struct dss_sleep_ult	*dsu;
-	struct dss_sleep_ult	*tmp;
-
-	dx = dss_current_xstream();
-	if (dss_xstream_exiting(dx))
-		shutdown = true;
-
-	if (d_list_empty(&dx->dx_sleep_ult_list))
-		return;
-
-	now = daos_getntime_coarse();
-	d_list_for_each_entry_safe(dsu, tmp, &dx->dx_sleep_ult_list, dsu_list) {
-		if (dsu->dsu_expire_time <= now || shutdown)
-			dss_ult_wakeup(dsu);
-		else
-			break;
-	}
-}
-
 /**
- * sleep micro seconds, then being rescheduled.
- * \param[in]	us	milli seconds to sleep for
+ * sleep milliseconds, then being rescheduled.
+ *
+ * \param[in]	msec	milliseconds to sleep for
  */
 int
-dss_sleep(uint64_t sleep_msec)
+dss_sleep(uint64_t msec)
 {
-	struct dss_sleep_ult *dsu;
+	struct sched_req_attr	 attr = { 0 };
+	struct sched_request	*req;
+	uuid_t			 anonym_uuid;
 
-	dsu = dss_sleep_ult_create();
-	if (dsu == NULL)
+	uuid_clear(anonym_uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
+	req = sched_req_get(&attr, ABT_THREAD_NULL);
+	if (req == NULL)
 		return -DER_NOMEM;
 
-	dss_ult_sleep(dsu, sleep_msec * 1000000);
-	dss_sleep_ult_destroy(dsu);
+	sched_req_sleep(req, msec);
+	sched_req_put(req);
 	return 0;
 }
 
@@ -587,14 +490,11 @@ dss_srv_handler(void *arg)
 			}
 		}
 
-		check_sleep_list();
-
 		if (dss_xstream_exiting(dx))
 			break;
 
 		ABT_thread_yield();
 	}
-	D_ASSERT(d_list_empty(&dx->dx_sleep_ult_list));
 
 	wait_all_exited(dx);
 	if (dmi->dmi_dp) {
@@ -723,7 +623,6 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 		dx->dx_main_xs	= xs_id >= dss_sys_xs_nr && xs_offset == 0;
 	}
 	dx->dx_dsc_started = false;
-	D_INIT_LIST_HEAD(&dx->dx_sleep_ult_list);
 
 	/**
 	 * Generate name for each xstreams so that they can be easily identified
@@ -1288,33 +1187,56 @@ failed:
 }
 
 void
-dss_dump_ABT_state()
+dss_dump_ABT_state(FILE *fp)
 {
 	int			rc, num_pools, i, idx;
 	struct dss_xstream	*dx;
 	ABT_sched		sched;
 	ABT_pool		pools[DSS_POOL_CNT];
 
-	rc = ABT_info_print_all_xstreams(stderr);
+	/* print Argobots config first */
+	fprintf(fp, " == ABT config ==\n");
+	rc = ABT_info_print_config(fp);
+	if (rc != ABT_SUCCESS)
+		D_ERROR("ABT_info_print_config() error, rc = %d\n", rc);
+
+	fprintf(fp, " == List of all ESs ==\n");
+	rc = ABT_info_print_all_xstreams(fp);
 	if (rc != ABT_SUCCESS)
 		D_ERROR("ABT_info_print_all_xstreams() error, rc = %d\n", rc);
 
 	ABT_mutex_lock(xstream_data.xd_mutex);
 	for (idx = 0; idx < xstream_data.xd_xs_nr; idx++) {
 		dx = xstream_data.xd_xs_ptrs[idx];
-		rc = ABT_info_print_xstream(stderr, dx->dx_xstream);
+		fprintf(fp, "== per ES (%p) details ==\n", dx->dx_xstream);
+		rc = ABT_info_print_xstream(fp, dx->dx_xstream);
 		if (rc != ABT_SUCCESS)
 			D_ERROR("ABT_info_print_xstream() error, rc = %d, for "
 				"DAOS xstream %p, ABT xstream %p\n", rc, dx,
 				dx->dx_xstream);
 		/* one progress ULT per xstream */
 		if (dx->dx_progress != ABT_THREAD_NULL) {
-			rc = ABT_info_print_thread(stderr, dx->dx_progress);
+			fprintf(fp, "== ES (%p) progress ULT (%p) ==\n",
+				dx->dx_xstream, dx->dx_progress);
+			rc = ABT_info_print_thread(fp, dx->dx_progress);
 			if (rc != ABT_SUCCESS)
 				D_ERROR("ABT_info_print_thread() error, "
 					"rc = %d, for DAOS xstream %p, ABT "
 					"xstream %p, progress ULT %p\n", rc, dx,
 					dx->dx_xstream, dx->dx_progress);
+			/* XXX
+			 * do not print stack content as if unwiding with
+			 * libunwind is enabled current implementation runs
+			 * w/o synchronisation/suspend of current ULT which
+			 * is highly racy since unwiding will occur using
+			 * the same stack
+			rc = ABT_info_print_thread_stack(fp, dx->dx_progress);
+			if (rc != ABT_SUCCESS)
+				D_ERROR("ABT_info_print_thread_stack() error, "
+					"rc = %d, for DAOS xstream %p, ABT "
+					"xstream %p, progress ULT %p\n", rc, dx,
+					dx->dx_xstream, dx->dx_progress);
+			 */
 		}
 		/* only one sched per xstream */
 		rc = ABT_xstream_get_main_sched(dx->dx_xstream, &sched);
@@ -1330,14 +1252,14 @@ dss_dump_ABT_state()
 			D_WARN("DAOS xstream main sched %p differs from ABT "
 			       "registered one %p, dumping both\n",
 			       dx->dx_sched, sched);
-			rc = ABT_info_print_sched(stderr, sched);
+			rc = ABT_info_print_sched(fp, sched);
 			if (rc != ABT_SUCCESS)
 				D_ERROR("ABT_info_print_sched() error, rc = "
 					"%d, for DAOS xstream %p, ABT xstream "
 					"%p, sched %p\n", rc, dx,
 					dx->dx_xstream, sched);
 		}
-		rc = ABT_info_print_sched(stderr, dx->dx_sched);
+		rc = ABT_info_print_sched(fp, dx->dx_sched);
 		if (rc != ABT_SUCCESS)
 			D_ERROR("ABT_info_print_sched() error, rc = %d, for "
 				"DAOS xstream %p, ABT xstream %p, sched %p\n",
@@ -1363,6 +1285,7 @@ dss_dump_ABT_state()
 			continue;
 		}
 		for (i = 0; i < num_pools; i++) {
+			fprintf(fp, "== per POOL (%p) details ==\n", pools[i]);
 			if (pools[i] == ABT_POOL_NULL) {
 				D_WARN("DAOS xstream %p, ABT xstream %p, "
 				       "sched %p, no pool[%d]\n", dx,
@@ -1375,17 +1298,23 @@ dss_dump_ABT_state()
 				       i, dx->dx_pools[i], pools[i],
 				       dx->dx_sched);
 			}
-			rc = ABT_info_print_pool(stderr, pools[i]);
+			rc = ABT_info_print_pool(fp, pools[i]);
 			if (rc != ABT_SUCCESS)
 				D_ERROR("ABT_info_print_pool() error, rc = %d, "
 					"for DAOS xstream %p, ABT xstream %p, "
 					"sched %p, pool[%d]\n", rc, dx,
 					dx->dx_xstream, dx->dx_sched, i);
+			/* XXX
+			 * same concern than with ABT_info_print_thread_stack()
+			 * before
+			rc = ABT_info_print_thread_stacks_in_pool(fp, pools[i]);
+			if (rc != ABT_SUCCESS)
+				D_ERROR("ABT_info_print_thread_stacks_in_pool() error, rc = %d, "
+					"for DAOS xstream %p, ABT xstream %p, "
+					"sched %p, pool[%d]\n", rc, dx,
+					dx->dx_xstream, dx->dx_sched, i);
+			 */
 		}
-		/* XXX last, each pool's ULTs infos (and stacks?!) will need to
-		 * be also dumped, when a new pool method will be available to
-		 * list all ULTs in a pool (ABT issue #12)
-		 */
 	}
 	ABT_mutex_unlock(xstream_data.xd_mutex);
 }

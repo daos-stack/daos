@@ -33,7 +33,6 @@ class CreateContainterACLTest(ContSecurityTestBase):
 
     :avocado: recursive
     """
-
     def test_container_basics(self):
         """Test basic container create/destroy/open/close/query.
 

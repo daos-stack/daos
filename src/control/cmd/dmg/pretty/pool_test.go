@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,10 +24,12 @@
 package pretty
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -127,6 +129,78 @@ Rebuild failed, rc=0, status=2
 			var bld strings.Builder
 			if err := PrintPoolQueryResponse(tc.pqr, &bld); err != nil {
 				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
+				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func mockRanks(ranks ...uint32) []uint32 {
+	return ranks
+}
+
+func TestPretty_PrintPoolCreateResp(t *testing.T) {
+	for name, tc := range map[string]struct {
+		pcr         *control.PoolCreateResp
+		expPrintStr string
+		expErr      error
+	}{
+		"nil response": {
+			expErr: errors.New("nil response"),
+		},
+		"empty response": {
+			pcr:    &control.PoolCreateResp{},
+			expErr: errors.New("target ranks"),
+		},
+		"basic": {
+			pcr: &control.PoolCreateResp{
+				UUID:      common.MockUUID(),
+				SvcReps:   mockRanks(0, 1, 2),
+				TgtRanks:  mockRanks(0, 1, 2, 3),
+				ScmBytes:  600 * humanize.MByte,
+				NvmeBytes: 10 * humanize.GByte,
+			},
+			expPrintStr: fmt.Sprintf(`
+Pool created with 6.00%%%% SCM/NVMe ratio
+---------------------------------------
+  UUID          : %s
+  Service Ranks : [0-2]                               
+  Storage Ranks : [0-3]                               
+  Total Size    : 42 GB                               
+  SCM           : 2.4 GB (600 MB / rank)              
+  NVMe          : 40 GB (10 GB / rank)                
+
+`, common.MockUUID()),
+		},
+		"no nvme": {
+			pcr: &control.PoolCreateResp{
+				UUID:     common.MockUUID(),
+				SvcReps:  mockRanks(0, 1, 2),
+				TgtRanks: mockRanks(0, 1, 2, 3),
+				ScmBytes: 600 * humanize.MByte,
+			},
+			expPrintStr: fmt.Sprintf(`
+Pool created with 100.00%%%% SCM/NVMe ratio
+-----------------------------------------
+  UUID          : %s
+  Service Ranks : [0-2]                               
+  Storage Ranks : [0-3]                               
+  Total Size    : 2.4 GB                              
+  SCM           : 2.4 GB (600 MB / rank)              
+  NVMe          : 0 B (0 B / rank)                    
+
+`, common.MockUUID()),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var bld strings.Builder
+			gotErr := PrintPoolCreateResponse(tc.pcr, &bld)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
 			}
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {

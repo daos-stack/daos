@@ -109,8 +109,27 @@ func (mod *mgmtModule) ID() drpc.ModuleID {
 // The use of cached data may be disabled by exporting
 // "DAOS_AGENT_DISABLE_CACHE=true" in the environment running the daos_agent.
 func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid int32) ([]byte, error) {
+	pbReq := new(mgmtpb.GetAttachInfoReq)
+	if err := proto.Unmarshal(reqb, pbReq); err != nil {
+		return nil, drpc.UnmarshalingPayloadFailure()
+	}
+
+	mod.log.Debugf("GetAttachInfo req from client: %+v", pbReq)
+
+	// Check the system name. Due to the special daos_init-dc_mgmt_net_cfg
+	// case, where the system name is not available, we let an empty
+	// system name indicates such, and hence skip the check.
+	if pbReq.Sys != "" && pbReq.Sys != mod.sys {
+		mod.log.Errorf("GetAttachInfo: %s: unknown system name", pbReq.Sys)
+		respb, err := proto.Marshal(&mgmtpb.GetAttachInfoResp{Status: int32(drpc.DaosInvalidInput)})
+		if err != nil {
+			return nil, drpc.MarshalingFailure()
+		}
+		return respb, err
+	}
+
 	var err error
-	numaNode := mod.aiCache.defaultNumaNode
+	var numaNode int
 
 	if mod.numaAware {
 		numaNode, err = netdetect.GetNUMASocketIDForPid(mod.netCtx, pid)
@@ -119,44 +138,29 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 		}
 	}
 
-	// The flow is optimized for the case where isCached() is true.  In the normal case,
-	// caching is enabled, there's data in the info cache and the agent can quickly return
-	// a response without the overhead of a mutex.
-	if mod.aiCache.isCached() {
-		return mod.aiCache.getResponse(numaNode)
-	}
-
-	// If the cache was not initialized, protect cache initialization
-	// and check the initialization status once the mutex is obtained.
+	// synchronize access to mod.aiCache.* resources used below
 	mod.mutex.Lock()
 	defer mod.mutex.Unlock()
 
-	// If another thread succeeded in initializing the cache while this thread waited
-	// to get the mutex, return the cached response instead of initializing the cache again.
 	if mod.aiCache.isCached() {
+		if !mod.numaAware {
+			numaNode = mod.aiCache.defaultNumaNode
+		}
 		return mod.aiCache.getResponse(numaNode)
 	}
 
-	pbReq := new(mgmtpb.GetAttachInfoReq)
-	if err := proto.Unmarshal(reqb, pbReq); err != nil {
-		return nil, drpc.UnmarshalingPayloadFailure()
-	}
-
-	mod.log.Debugf("GetAttachInfo req from client: %+v", pbReq)
-
-	if pbReq.Sys != mod.sys {
-		return nil, errors.Errorf("unknown system name %s", pbReq.Sys)
-	}
-
+	// Ask the MS for _all_ info, regardless of pbReq.AllRanks, so that the
+	// cache can serve future "pbReq.AllRanks == true" requests.
 	req := new(control.GetAttachInfoReq)
 	req.SetSystem(pbReq.GetSys())
+	req.AllRanks = true
 	resp, err := control.GetAttachInfo(ctx, mod.ctlInvoker, req)
 	if err != nil {
 		return nil, errors.Wrapf(err, "GetAttachInfo %+v", pbReq)
 	}
 
 	if resp.Provider == "" {
-		return nil, errors.New("GetAttachInfo response contained no provider.")
+		return nil, errors.New("GetAttachInfo response contained no provider")
 	}
 
 	// Scan the local fabric to determine what devices are available that match our provider
@@ -177,10 +181,19 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 		return nil, err
 	}
 
+	if !mod.numaAware {
+		numaNode = mod.aiCache.defaultNumaNode
+	}
+
 	cacheResp, err := mod.aiCache.getResponse(numaNode)
 	if err != nil {
 		return nil, err
 	}
+
+	// If pbReq.AllRanks == false, we shouldn't return the rank URIs.
+	// Implementing that may require changing the cache to either hold
+	// unmarshalled responses (more computation work for daos_agent) or
+	// two variants of marshalled responses.
 
 	return cacheResp, err
 }
