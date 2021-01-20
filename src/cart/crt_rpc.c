@@ -26,8 +26,6 @@
 #define D_LOGFAC	DD_FAC(rpc)
 
 #include "crt_internal.h"
-#include <gurt/telemetry_common.h>
-#include <gurt/telemetry_producer.h>
 
 #define CRT_CTL_MAX_LOG_MSG_SIZE 256
 
@@ -745,34 +743,23 @@ crt_client_get_contact_rank(crt_context_t crt_ctx, crt_group_t *grp,
 			    d_rank_t query_rank, uint32_t query_tag,
 			    int *ret_idx)
 {
-	struct crt_grp_priv		*grp_priv;
-	d_rank_t			 contact_rank = CRT_NO_RANK;
-	char				*cached_uri = NULL;
-	struct crt_context		*ctx;
-	d_rank_list_t			*membs;
-	static struct d_tm_node_t	*uri_lookup_requests;
-	static struct d_tm_node_t	*uri_lookup_cache_hit;
-	static struct d_tm_node_t	*uri_lookup_cache_miss;
+	struct crt_grp_priv	*grp_priv;
+	d_rank_t		 contact_rank = CRT_NO_RANK;
+	char			*cached_uri = NULL;
+	struct crt_context	*ctx;
+	d_rank_list_t		*membs;
 
 	grp_priv = crt_grp_pub2priv(grp);
 	ctx = crt_ctx;
-
-	d_tm_increment_counter(&uri_lookup_requests, "RPC/uri/lookup",
-			       "requests", NULL);
 
 	/* If query_rank:tag=0 is in cache, use it as contact destination */
 	if (query_tag != 0) {
 		crt_grp_lc_lookup(grp_priv, ctx->cc_idx,
 				  query_rank, 0, &cached_uri, NULL);
 		if (cached_uri != NULL) {
-			d_tm_increment_counter(&uri_lookup_cache_hit,
-					       "RPC/uri/lookup", "cache_hit",
-					       NULL);
 			*ret_idx = -1;
 			D_GOTO(out, contact_rank = query_rank);
 		}
-		d_tm_increment_counter(&uri_lookup_cache_miss, "RPC/uri/lookup",
-				       "cache_miss", NULL);
 	}
 
 	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
@@ -803,19 +790,15 @@ out:
 static int
 crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 {
-	crt_endpoint_t			*tgt_ep;
-	crt_context_t			 ctx;
-	crt_group_t			*grp;
-	int				 ret_idx;
-	int				 rc;
-	static struct d_tm_node_t	*uri_lookup_requests;
+	crt_endpoint_t		*tgt_ep;
+	crt_context_t		 ctx;
+	crt_group_t		*grp;
+	int			 ret_idx;
+	int			 rc;
 
 	tgt_ep = &rpc_priv->crp_pub.cr_ep;
 	ctx = rpc_priv->crp_pub.cr_ctx;
 	grp = tgt_ep->ep_grp;
-
-	d_tm_increment_counter(&uri_lookup_requests, "RPC/uri/lookup",
-			       "requests", NULL);
 
 	/* Client handling */
 	if (!crt_is_service()) {

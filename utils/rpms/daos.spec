@@ -10,7 +10,7 @@
 
 Name:          daos
 Version:       1.1.2.1
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -412,7 +412,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
-* Wed Jan 13 2021 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.2.1-3
+* Wed Jan 20 2021 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.2.1-4
 - Install daos_metrics utility to %{_bindir}
 
 * Fri Jan 15 2021 Michael Hennecke <mhennecke@lenovo.com> 1.1.2.1-3
