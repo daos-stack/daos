@@ -26,7 +26,7 @@ dfuse_forget_one(struct dfuse_projection_info *fs_handle,
 		return;
 	}
 
-	DFUSE_TRA_DEBUG(container_of(rlink, struct dfuse_inode_entry, ie_htl),
+	DFUSE_TRA_INFO(container_of(rlink, struct dfuse_inode_entry, ie_htl),
 			"ino %lu count %lu",
 			ino, nlookup);
 

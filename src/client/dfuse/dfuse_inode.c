@@ -43,8 +43,8 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 	int			rc;
 	int			ref = atomic_load_relaxed(&ie->ie_ref);
 
-	DFUSE_TRA_DEBUG(ie, "closing, inode %#lx ref %u, name '%s', parent %lu",
-			ie->ie_stat.st_ino, ref, ie->ie_name, ie->ie_parent);
+	DFUSE_TRA_INFO(ie, "closing, inode %#lx ref %u, name '%s', parent %lu",
+		       ie->ie_stat.st_ino, ref, ie->ie_name, ie->ie_parent);
 
 	D_ASSERT(ref == 0);
 
@@ -62,7 +62,7 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 
 		D_MUTEX_LOCK(&fs_handle->dpi_info->di_lock);
 
-		DFUSE_TRA_INFO(ie->ie_dfs, "Closing poh %d coh %d",
+		DFUSE_TRA_INFO(ie, "Closing poh %d coh %d",
 			       daos_handle_is_valid(dfp->dfp_poh),
 			       daos_handle_is_valid(dfs->dfs_coh));
 

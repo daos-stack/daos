@@ -1,3 +1,44 @@
+dummy_iterations: !mux
+    iteration1:
+        num: 1
+    iteration2:
+        num: 2
+    iteration3:
+        num: 3
+    iteration4:
+        num: 4
+    iteration5:
+        num: 5
+    iteration6:
+        num: 6
+    iteration7:
+        num: 7
+    iteration8:
+        num: 8
+    iteration9:
+        num: 9
+    iteration10:
+        num: 10
+    iteration11:
+        num: 11
+    iteration12:
+        num: 12
+    iteration13:
+        num: 13
+    iteration14:
+        num: 14
+    iteration15:
+        num: 15
+    iteration16:
+        num: 16
+    iteration17:
+        num: 17
+    iteration18:
+        num: 18
+    iteration19:
+        num: 19
+    iteration20:
+        num: 20
 hosts:
     test_servers:
         - server-A

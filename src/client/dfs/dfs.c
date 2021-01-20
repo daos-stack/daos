@@ -432,8 +432,8 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 	rc = daos_obj_fetch(oh, th, 0, &dkey, xnr + 1, iods ? iods : iod,
 			    sgls ? sgls : sgl, NULL, NULL);
 	if (rc) {
-		D_ERROR("Failed to fetch entry %s "DF_RC"\n", name,
-			DP_RC(rc));
+		D_ERROR("Failed to fetch entry %lx %s "DF_RC"\n",
+			oh.cookie, name, DP_RC(rc));
 		return daos_der2errno(rc);
 	}
 
@@ -459,8 +459,8 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 		rc = daos_obj_fetch(oh, th, 0, &dkey, 1, iod, sgl, NULL,
 				    NULL);
 		if (rc) {
-			D_ERROR("Failed to fetch entry %s "DF_RC"\n", name,
-				DP_RC(rc));
+			D_ERROR("Failed to fetch entry %lx %s "DF_RC"\n",
+				oh.cookie, name, DP_RC(rc));
 			D_FREE(value);
 			D_GOTO(out, rc = daos_der2errno(rc));
 		}
