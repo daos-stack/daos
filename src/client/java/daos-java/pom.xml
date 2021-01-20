@@ -270,7 +270,7 @@
         <artifactId>maven-shade-plugin</artifactId>
         <executions>
           <execution>
-            <id>shade-protobuf3</id>
+            <id>shade-protobuf3-netty4</id>
             <phase>package</phase>
             <goals>
               <goal>shade</goal>
@@ -294,14 +294,13 @@
               <artifactSet>
                 <excludes>
                   <exclude>org.slf4j:slf4j-api</exclude>
-                  <exclude>org.apache.logging.log4j:log4j-slf4j-impl</exclude>
-                  <exclude>org.apache.logging.log4j:log4j-core</exclude>
+                  <exclude>org.apache.logging.log4j:*</exclude>
                   <exclude>commons-lang:commons-lang</exclude>
                   <exclude>com.google.code.findbugs:jsr305</exclude>
                   <exclude>org.javassist:javassist</exclude>
                 </excludes>
               </artifactSet>
-              <finalName>${artifactId}-${version}-proto3-netty4-shaded</finalName>
+              <finalName>${artifactId}-${version}-protobuf3-netty4-shaded</finalName>
             </configuration>
           </execution>
           <execution>
@@ -344,9 +343,9 @@
             <configuration>
               <artifacts>
                 <artifact>
-                  <file>target/${artifactId}-${version}-proto3-netty4-shaded.jar</file>
+                  <file>target/${artifactId}-${version}-protobuf3-netty4-shaded.jar</file>
                   <type>jar</type>
-                  <classifier>proto3-netty4-shaded</classifier>
+                  <classifier>protobuf3-netty4-shaded</classifier>
                 </artifact>
                 <artifact>
                   <file>target/${artifactId}-${version}-shaded.jar</file>

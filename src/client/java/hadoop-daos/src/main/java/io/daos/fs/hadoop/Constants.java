@@ -83,4 +83,7 @@ public final class Constants {
   public static final int MINIMUM_DAOS_BLOCK_SIZE = 16 * 1024 * 1024;
   public static final int MAXIMUM_DAOS_BLOCK_SIZE = Integer.MAX_VALUE;
 
+  public static final String UNS_PATH_SEARCH_RECURSIVE = "fs.daos.uns.search.recursive";
+  public static final boolean DEFAULT_UNS_PATH_SEARCH_RECURSIVE = false;
+
 }

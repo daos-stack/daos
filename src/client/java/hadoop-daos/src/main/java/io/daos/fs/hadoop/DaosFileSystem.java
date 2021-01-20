@@ -191,14 +191,15 @@ public class DaosFileSystem extends FileSystem {
     if (!getScheme().equals(name.getScheme())) {
       throw new IllegalArgumentException("schema should be " + getScheme());
     }
-    DunsInfo info = searchUnsPath(name.getPath());
+    DunsInfo info = searchUnsPath(name.getPath(),
+        conf.getBoolean(Constants.UNS_PATH_SEARCH_RECURSIVE, Constants.DEFAULT_UNS_PATH_SEARCH_RECURSIVE));
     if (info != null) {
       LOG.info("initializing from uns path, " + name);
       uns = true;
       unsPrefix = info.getPrefix();
       initializeFromUns(name, conf, info);
     } else {
-      LOG.info("initializing from config file, " + name);
+      LOG.info("initializing from config file");
       uns = false;
       initializeFromConfigFile(name, conf);
     }
@@ -238,11 +239,13 @@ public class DaosFileSystem extends FileSystem {
    *
    * @param path
    * path of URI
+   * @param recursive
+   * search UNS path recursively?
    * @return DunsInfo
    * @throws IOException
    * {@link DaosIOException}
    */
-  private DunsInfo searchUnsPath(String path) throws IOException {
+  private DunsInfo searchUnsPath(String path, boolean recursive) throws IOException {
     if ("/".equals(path) || !path.startsWith("/")) {
       return null;
     }
@@ -252,7 +255,7 @@ public class DaosFileSystem extends FileSystem {
       try {
         info = DaosUns.getAccessInfo(file.getAbsolutePath(), Constants.UNS_ATTR_NAME_HADOOP,
           io.daos.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT, false);
-        if (info != null) {
+        if (info != null || !recursive) {
           break;
         }
       } catch (DaosIOException e) {
