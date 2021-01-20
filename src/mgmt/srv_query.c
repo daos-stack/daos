@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -255,7 +255,7 @@ bio_query_dev_list(void *arg)
 }
 
 int
-ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
+ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 {
 	struct bio_dev_info	   *dev_info = NULL, *tmp;
 	struct bio_list_devs_info   list_devs_info = { 0 };
@@ -288,7 +288,7 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 			rc = -DER_NOMEM;
 			break;
 		}
-		mgmt__smd_dev_resp__device__init(resp->devices[i]);
+		ctl__smd_dev_resp__device__init(resp->devices[i]);
 		/*
 		 * XXX: These fields are initialized as "empty string" by above
 		 * protobuf auto-generated function, to avoid error cleanup
@@ -297,7 +297,7 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 		 */
 		resp->devices[i]->uuid = NULL;
 		resp->devices[i]->state = NULL;
-		resp->devices[i]->traddr = NULL;
+		resp->devices[i]->tr_addr = NULL;
 
 		D_ALLOC(resp->devices[i]->uuid, DAOS_UUID_STR_SIZE);
 		if (resp->devices[i]->uuid == NULL) {
@@ -329,14 +329,14 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 
 		if (dev_info->bdi_traddr != NULL) {
 			buflen = strlen(dev_info->bdi_traddr) + 1;
-			D_ALLOC(resp->devices[i]->traddr, buflen);
-			if (resp->devices[i]->traddr == NULL) {
-				D_ERROR("Failed to allocate device traddr");
+			D_ALLOC(resp->devices[i]->tr_addr, buflen);
+			if (resp->devices[i]->tr_addr == NULL) {
+				D_ERROR("Failed to allocate device tr_addr");
 				rc = -DER_NOMEM;
 				break;
 			}
 			/* Transport Addr -> Blobstore UUID mapping */
-			strncpy(resp->devices[i]->traddr, dev_info->bdi_traddr,
+			strncpy(resp->devices[i]->tr_addr, dev_info->bdi_traddr,
 				buflen);
 		}
 
@@ -374,8 +374,8 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 					D_FREE(resp->devices[i]->tgt_ids);
 				if (resp->devices[i]->state != NULL)
 					D_FREE(resp->devices[i]->state);
-				if (resp->devices[i]->traddr != NULL)
-					D_FREE(resp->devices[i]->traddr);
+				if (resp->devices[i]->tr_addr != NULL)
+					D_FREE(resp->devices[i]->tr_addr);
 				D_FREE(resp->devices[i]);
 			}
 		}
@@ -392,7 +392,7 @@ out:
 }
 
 int
-ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp)
+ds_mgmt_smd_list_pools(Ctl__SmdPoolResp *resp)
 {
 	struct smd_pool_info	*pool_info = NULL, *tmp;
 	d_list_t		 pool_list;
@@ -421,7 +421,7 @@ ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp)
 			rc = -DER_NOMEM;
 			break;
 		}
-		mgmt__smd_pool_resp__pool__init(resp->pools[i]);
+		ctl__smd_pool_resp__pool__init(resp->pools[i]);
 		/* See "empty string" comments in ds_mgmt_smd_list_devs() */
 		resp->pools[i]->uuid = NULL;
 
@@ -490,7 +490,7 @@ out:
 }
 
 int
-ds_mgmt_dev_state_query(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
+ds_mgmt_dev_state_query(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 {
 	struct smd_dev_info	*dev_info;
 	int			 buflen = 10;
@@ -603,7 +603,7 @@ bio_faulty_state_set(void *arg)
 }
 
 int
-ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
+ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 {
 	struct bio_faulty_dev_info  faulty_info = { 0 };
 	struct smd_dev_info	   *dev_info;
@@ -722,7 +722,7 @@ bio_storage_dev_replace(void *arg)
 
 int
 ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid,
-		    Mgmt__DevReplaceResp *resp)
+		    Ctl__DevReplaceResp *resp)
 {
 	struct bio_replace_dev_info	 replace_dev_info = { 0 };
 	int				 buflen = 10;
@@ -809,7 +809,7 @@ bio_storage_dev_identify(void *arg)
 
 
 int
-ds_mgmt_dev_identify(uuid_t dev_uuid, Mgmt__DevIdentifyResp *resp)
+ds_mgmt_dev_identify(uuid_t dev_uuid, Ctl__DevIdentifyResp *resp)
 {
 	struct bio_identify_dev_info identify_info = { 0 };
 	int			     buflen = 10;

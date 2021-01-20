@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,24 @@
 
 #include <stdarg.h>
 #include <gurt/common.h>
+
+void
+d_free(void *ptr)
+{
+	free(ptr);
+}
+
+void *
+d_calloc(size_t count, size_t eltsize)
+{
+	return calloc(count, eltsize);
+}
+
+void *
+d_realloc(void *ptr, size_t size)
+{
+	return realloc(ptr, size);
+}
 
 int
 d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src)
@@ -206,7 +224,6 @@ d_rank_list_realloc(d_rank_list_t *ptr, uint32_t size)
 		ptr->rl_ranks = new_rl_ranks;
 		ptr->rl_nr = size;
 	} else {
-		D_ERROR("d_rank_list_realloc() failed.\n");
 		ptr = NULL;
 	}
 
