@@ -228,8 +228,7 @@ def set_test_environment(args):
         test_hosts.update(args.test_clients)
         test_hosts.update(args.test_servers)
         spawn_commands(
-            test_hosts, "mkdir -p {}".format(os.environ["DAOS_TEST_LOG_DIR"]),
-            args)
+            test_hosts, "mkdir -p {}".format(os.environ["DAOS_TEST_LOG_DIR"]))
 
         # Assign the default value for transport configuration insecure mode
         os.environ["DAOS_INSECURE_MODE"] = str(args.insecure_mode)
