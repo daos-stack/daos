@@ -65,8 +65,8 @@ class ErasureCodeIor(ServerFillUp):
         self.ec_container.oclass.update(oclass)
         # update object class for container create, if supplied
         # explicitly.
-        data_parity = self.get_data_parity_number(oclass)
-        self.ec_container.properties.update("rf:{}".format(data_parity[1]))
+        ec_object = self.get_data_parity_number(oclass)
+        self.ec_container.properties.update("rf:{}".format(ec_object['parity']))
 
         # create container
         self.ec_container.create()
@@ -84,7 +84,8 @@ class ErasureCodeIor(ServerFillUp):
                            str(oclass))
             return 0
 
-        return re.findall(r'\d+', oclass)
+        tmp = re.findall(r'\d+', oclass)
+        return {'data': tmp[0], 'parity': tmp[1]}
 
     def ior_param_update(self, oclass, sizes):
         """Update the IOR command parameters.
