@@ -48,7 +48,7 @@ class CartNoPmixLauncherOneNodeTest(TestWithoutServers):
 
     def tearDown(self):
         """ Tear down """
-        super(TestWithoutServers, self).tearDown()
+        super(CartNoPmixLauncherOneNodeTest, self).tearDown()
         self.utils.cleanup_processes()
 
     def test_cart_no_pmix_launcher(self):

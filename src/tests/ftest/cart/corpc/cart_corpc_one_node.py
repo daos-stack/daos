@@ -48,7 +48,7 @@ class CartCoRpcOneNodeTest(TestWithoutServers):
 
     def tearDown(self):
         """ Tear down """
-        super(TestWithoutServers, self).tearDown()
+        super(CartCoRpcOneNodeTest, self).tearDown()
         self.utils.cleanup_processes()
 
     def test_cart_corpc(self):

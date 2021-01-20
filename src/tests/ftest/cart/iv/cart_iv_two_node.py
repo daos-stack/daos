@@ -104,7 +104,7 @@ class CartIvTwoNodeTest(TestWithoutServers):
 
     def tearDown(self):
         """ Tear down """
-        super(TestWithoutServers, self).tearDown()
+        super(CartIvTwoNodeTest, self).tearDown()
         self.utils.cleanup_processes()
 
     def _verify_action(self, action):

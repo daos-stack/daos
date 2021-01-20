@@ -53,7 +53,7 @@ class CartNoPmixOneNodeTest(TestWithoutServers):
                                          '/run/defaultENV/')
     def tearDown(self):
         """ Tear down """
-        super(TestWithoutServers, self).tearDown()
+        super(CartNoPmixOneNodeTest, self).tearDown()
         self.utils.cleanup_processes()
 
         self.pass_env = {"CRT_PHY_ADDR_STR": crt_phy_addr,

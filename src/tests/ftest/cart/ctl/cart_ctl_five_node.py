@@ -49,7 +49,7 @@ class CartCtlFiveNodeTest(TestWithoutServers):
 
     def tearDown(self):
         """ Tear down """
-        super(TestWithoutServers, self).tearDown()
+        super(CartCtlFiveNodeTest, self).tearDown()
         self.utils.cleanup_processes()
 
     def test_cart_ctl(self):
