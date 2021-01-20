@@ -40,9 +40,9 @@ uint64_t		*shmem_root;
 static int
 init_tests(void **state)
 {
-	int		simulated_rank = 99;
+	int	simulated_srv_idx = 99;
 
-	shmem_root = d_tm_get_shared_memory(simulated_rank);
+	shmem_root = d_tm_get_shared_memory(simulated_srv_idx);
 	assert_non_null(shmem_root);
 
 	root = d_tm_get_root(shmem_root);

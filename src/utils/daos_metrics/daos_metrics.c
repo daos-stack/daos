@@ -42,12 +42,7 @@ print_my_children(uint64_t *shmem_root, struct d_tm_node_t *node, int filter,
 
 	node = node->dtn_child;
 	node = d_tm_conv_ptr(shmem_root, node);
-	if (node == NULL)
-		return;
 
-	print_my_children(shmem_root, node, filter, level + 1, stream);
-	node = node->dtn_sibling;
-	node = d_tm_conv_ptr(shmem_root, node);
 	while (node != NULL) {
 		print_my_children(shmem_root, node, filter, level + 1, stream);
 		node = node->dtn_sibling;
@@ -103,7 +98,7 @@ main(int argc, char **argv)
 	int			num_iter = 0;
 	int			filter = 0;
 	int			delay = 1;
-	int			c;
+	int			opt;
 
 	sprintf(dirname, "/");
 
@@ -123,12 +118,12 @@ main(int argc, char **argv)
 			{NULL, 0, NULL, 0}
 		};
 
-		c = getopt_long_only(argc, argv, "S:cdtsgi:p:D:h",
-				     long_options, NULL);
-		if (c == -1)
+		opt = getopt_long_only(argc, argv, "S:cdtsgi:p:D:h",
+				       long_options, NULL);
+		if (opt == -1)
 			break;
 
-		switch (c) {
+		switch (opt) {
 		case 'S':
 			srv_idx = atoi(optarg);
 			break;
@@ -192,7 +187,7 @@ main(int argc, char **argv)
 				  stdout);
 		iteration++;
 		sleep(delay);
-			printf("\n\n");
+		printf("\n\n");
 	}
 
 	return 0;

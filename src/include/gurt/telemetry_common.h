@@ -16,7 +16,7 @@
  * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
  * The Government's rights to use, modify, reproduce, release, perform, display,
  * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
+ * provided in Contract No. 8F-30005.
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
@@ -71,7 +71,7 @@ struct d_tm_nodeList_t {
 };
 
 void *d_tm_shmalloc(int length);
-uint64_t *d_tm_allocate_shared_memory(int rank, size_t mem_size);
+uint64_t *d_tm_allocate_shared_memory(int srv_idx, size_t mem_size);
 int d_tm_clock_id(int clk_id);
 bool d_tm_validate_shmem_ptr(uint64_t *shmem_root, void *ptr);
 int d_tm_add_node(struct d_tm_node_t *src, struct d_tm_nodeList_t **nodelist);

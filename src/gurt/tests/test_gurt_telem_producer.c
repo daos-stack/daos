@@ -34,10 +34,10 @@
 static int
 init_tests(void **state)
 {
-	int		simulated_rank = 99;
+	int		simulated_srv_idx = 99;
 	int		rc;
 
-	rc = d_tm_init(simulated_rank, D_TM_SHARED_MEMORY_SIZE);
+	rc = d_tm_init(simulated_srv_idx, D_TM_SHARED_MEMORY_SIZE);
 	assert_true(rc == D_TM_SUCCESS);
 
 	return d_log_init();

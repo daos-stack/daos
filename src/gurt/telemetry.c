@@ -16,7 +16,7 @@
  * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
  * The Government's rights to use, modify, reproduce, release, perform, display,
  * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
+ * provided in Contract No. 8F-30005.
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
@@ -224,7 +224,7 @@ failure:
  * Initialize an instance of the telemetry and metrics API for the producer
  * process.
  *
- * \param[in]	rank		Identifies the server process amongst others on
+ * \param[in]	srv_idx		Identifies the server process amongst others on
  *				the same machine
  * \param[in]	mem_size	Size in bytes of the shared memory segment that
  *				is allocated
@@ -234,18 +234,18 @@ failure:
  *			-DER_EXCEEDS_PATH_LEN	Root node name exceeds path len
  */
 int
-d_tm_init(int rank, uint64_t mem_size)
+d_tm_init(int srv_idx, uint64_t mem_size)
 {
 	uint64_t	*base_addr = NULL;
 	char		tmp[D_TM_MAX_NAME_LEN];
 	int		rc = D_TM_SUCCESS;
 
 	if ((d_tm_shmem_root != NULL) && (d_tm_root != NULL)) {
-		D_INFO("d_tm_init already completed for srv_idx %d\n", rank);
+		D_INFO("d_tm_init already completed for srv_idx %d\n", srv_idx);
 		return rc;
 	}
 
-	d_tm_shmem_root = d_tm_allocate_shared_memory(rank, mem_size);
+	d_tm_shmem_root = d_tm_allocate_shared_memory(srv_idx, mem_size);
 
 	if (d_tm_shmem_root == NULL) {
 		rc = -DER_NO_SHMEM;
@@ -270,7 +270,7 @@ d_tm_init(int rank, uint64_t mem_size)
 	}
 	*base_addr = (uint64_t)d_tm_shmem_root;
 
-	snprintf(tmp, sizeof(tmp), "srv_idx %d", rank);
+	snprintf(tmp, sizeof(tmp), "srv_idx %d", srv_idx);
 	rc = d_tm_alloc_node(&d_tm_root, tmp);
 	if (rc != D_TM_SUCCESS)
 		goto failure;
@@ -281,12 +281,12 @@ d_tm_init(int rank, uint64_t mem_size)
 		goto failure;
 	}
 
-	D_INFO("Telemetry and metrics initialized for srv_idx %u\n", rank);
+	D_INFO("Telemetry and metrics initialized for srv_idx %u\n", srv_idx);
 	return rc;
 
 failure:
 	D_ERROR("Failed to initialize telemetry and metrics for srv_idx %u: "
-		"rc = %d\n", rank, rc);
+		"rc = %d\n", srv_idx, rc);
 	return rc;
 }
 
@@ -2114,9 +2114,10 @@ d_tm_add_node(struct d_tm_node_t *src, struct d_tm_nodeList_t **nodelist)
 	return -DER_NOMEM;
 }
 /**
- * Server side function that allocates the shared memory segment for this rank.
+ * Server side function that allocates the shared memory segment for this
+ * server instance
  *
- * \param[in]	rank		A unique value that identifies the producer
+ * \param[in]	srv_idx		A unique value that identifies the producer
  *				process
  * \param[in]	mem_size	Size in bytes of the shared memory region
  *
@@ -2124,13 +2125,13 @@ d_tm_add_node(struct d_tm_node_t *src, struct d_tm_nodeList_t **nodelist)
  *				NULL if failure
  */
 uint64_t *
-d_tm_allocate_shared_memory(int rank, size_t mem_size)
+d_tm_allocate_shared_memory(int srv_idx, size_t mem_size)
 {
 	key_t	key;
 	int	shmid;
 
-	/** create a unique key for this rank */
-	key = D_TM_SHARED_MEMORY_KEY + rank;
+	/** create a unique key for this instance */
+	key = D_TM_SHARED_MEMORY_KEY + srv_idx;
 	shmid = shmget(key, mem_size, IPC_CREAT | 0666);
 	if (shmid < 0)
 		return NULL;
@@ -2140,21 +2141,21 @@ d_tm_allocate_shared_memory(int rank, size_t mem_size)
 
 /**
  * Client side function that retrieves a pointer to the shared memory segment
- * for this rank.
+ * for this server instance.
  *
- * \param[in]	rank		A unique value that identifies the producer
+ * \param[in]	srv_idx		A unique value that identifies the producer
  *				process that the client seeks to read data from
  * \return			Address of the shared memory region
  *				NULL if failure
  */
 uint64_t *
-d_tm_get_shared_memory(int rank)
+d_tm_get_shared_memory(int srv_idx)
 {
 	key_t	key;
 	int	shmid;
 
-	/** create a unique key for this rank */
-	key = D_TM_SHARED_MEMORY_KEY + rank;
+	/** create a unique key for this instance */
+	key = D_TM_SHARED_MEMORY_KEY + srv_idx;
 	shmid = shmget(key, 0, 0666);
 	if (shmid < 0)
 		return NULL;

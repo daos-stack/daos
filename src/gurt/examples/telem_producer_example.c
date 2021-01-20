@@ -309,23 +309,25 @@ main(int argc, char **argv)
 	static struct d_tm_node_t	*timer2;
 	struct d_tm_nodeList_t		*node_list;
 	int				rc;
-	int				simulated_rank = 0;
+	int				simulated_srv_idx = 0;
 	int				i;
 
 	if (argc < 2) {
 		printf("Specify an integer that identifies this producer's "
-		       "rank.  Specify the same value to the consumer.\n");
+		       "sever instance.  "
+		       "Specify the same value to the consumer.\n");
 		exit(0);
 	}
 
-	simulated_rank = atoi(argv[1]);
-	printf("This simulated rank has ID: %d\n", simulated_rank);
+	simulated_srv_idx = atoi(argv[1]);
+	printf("This simulated server instance has ID: %d\n",
+	       simulated_srv_idx);
 
 	/**
 	 * Call d_tm_init() only once per process,
 	 * i.e. in iosrv/init.c/server_init()
 	 */
-	rc = d_tm_init(simulated_rank, D_TM_SHARED_MEMORY_SIZE);
+	rc = d_tm_init(simulated_srv_idx, D_TM_SHARED_MEMORY_SIZE);
 	if (rc != 0)
 		goto failure;
 

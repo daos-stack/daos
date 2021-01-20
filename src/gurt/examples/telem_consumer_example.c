@@ -162,25 +162,23 @@ main(int argc, char **argv)
 	uint64_t		*shmem_root = NULL;
 	char			dirname[D_TM_MAX_NAME_LEN] = {0};
 	bool			show_meta = false;
-	int			simulated_rank = 0;
+	int			simulated_srv_idx = 0;
 	int			iteration = 0;
 	int			filter;
 
 	if (argc < 2) {
 		printf("Specify an integer that identifies the producer's "
-		       "rank to monitor.\n");
+		       "server instance to monitor.\n");
 		exit(0);
 	}
 
-	simulated_rank = atoi(argv[1]);
-	printf("This simulated rank has ID: %d\n", simulated_rank);
+	simulated_srv_idx = atoi(argv[1]);
+	printf("This simulated server instance has ID: %d\n",
+	       simulated_srv_idx);
 
-	shmem_root = d_tm_get_shared_memory(simulated_rank);
+	shmem_root = d_tm_get_shared_memory(simulated_srv_idx);
 	if (!shmem_root)
 		goto failure;
-
-	printf("Base address of client shared memory for rank %d is "
-	       "0x%" PRIx64 "\n", simulated_rank, (uint64_t)shmem_root);
 
 	root = d_tm_get_root(shmem_root);
 
@@ -209,9 +207,10 @@ main(int argc, char **argv)
 	return 0;
 
 failure:
-	printf("Unable to attach to the shared memory for the rank: %d\n"
-	       "Make sure to run the producer with the same rank to initialize "
-	       "the shared memory and populate it with metrics.\n",
-	       simulated_rank);
+	printf("Unable to attach to the shared memory for the server instance: "
+	       "%d\n"
+	       "Make sure to run the producer with the same server instance to "
+	       "initialize the shared memory and populate it with metrics.\n",
+	       simulated_srv_idx);
 	return -1;
 }
