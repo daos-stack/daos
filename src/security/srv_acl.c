@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -798,9 +798,10 @@ uint64_t
 ds_sec_get_rebuild_cont_capabilities(void)
 {
 	/*
-	 * Internally generated rebuild container handles can read data
+	 * Internally generated rebuild container handles can read data or write
+	 * data.
 	 */
-	return CONT_CAPA_READ_DATA;
+	return CONT_CAPA_READ_DATA | CONT_CAPA_WRITE_DATA;
 }
 
 uint64_t

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -606,6 +606,8 @@ void ds_obj_tgt_punch_handler(crt_rpc_t *rpc);
 void ds_obj_query_key_handler(crt_rpc_t *rpc);
 void ds_obj_sync_handler(crt_rpc_t *rpc);
 void ds_obj_migrate_handler(crt_rpc_t *rpc);
+void ds_obj_ec_agg_handler(crt_rpc_t *rpc);
+void ds_obj_ec_rep_handler(crt_rpc_t *rpc);
 void ds_obj_cpd_handler(crt_rpc_t *rpc);
 typedef int (*ds_iofw_cb_t)(crt_rpc_t *req, void *arg);
 
@@ -615,6 +617,7 @@ struct daos_cpd_args {
 	ABT_future		 dca_future;
 	uint32_t		 dca_idx;
 };
+
 
 static inline struct daos_cpd_sub_head *
 ds_obj_cpd_get_dcsh(crt_rpc_t *rpc, int dtx_idx)
@@ -775,6 +778,8 @@ daos_iom_dump(daos_iom_t *iom)
 	D_PRINT("\n");
 }
 
+int  obj_class_init(void);
+void obj_class_fini(void);
 int  obj_utils_init(void);
 void obj_utils_fini(void);
 

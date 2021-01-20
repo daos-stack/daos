@@ -253,7 +253,7 @@ class DataMoverTestBase(IorTestBase):
                 which ignores other container attributes
             display (bool, optional): print updated params. Defaults to True.
         """
-        assert src_or_dst in ["src", "dst"]
+        assert src_or_dst in ["src", "dst"] # nosec
         param_type = self.validate_param_type(param_type)
 
         # Get refs to either src or dst
