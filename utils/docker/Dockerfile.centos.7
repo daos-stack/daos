@@ -79,7 +79,7 @@ RUN yum -y install \
 RUN yum -y install openmpi3-devel
 
 # libunwind for Argobots
-RUN yum -y install libunwind libunwind-devel
+RUN yum -y install libunwind-devel
 
 # DAOS python 3 packages required for pylint
 #  - excluding mpi4py as it depends on CORCI-635

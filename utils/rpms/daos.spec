@@ -142,8 +142,6 @@ Requires(postun): /sbin/ldconfig
 Requires: libfabric >= 1.11.0
 %{?systemd_requires}
 Obsoletes: cart
-# libunwind for Argobots
-Requires: libunwind
 
 %description server
 This is the package needed to run a DAOS server
