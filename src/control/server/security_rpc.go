@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,11 +45,10 @@ type SecurityModule struct {
 
 // NewSecurityModule creates a new security module with a transport config
 func NewSecurityModule(log logging.Logger, tc *security.TransportConfig) *SecurityModule {
-	mod := &SecurityModule{
+	return &SecurityModule{
 		log:    log,
 		config: tc,
 	}
-	return mod
 }
 
 func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error) {
@@ -95,8 +94,7 @@ func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error)
 }
 
 func (m *SecurityModule) validateRespWithStatus(status drpc.DaosStatus) ([]byte, error) {
-	resp := &auth.ValidateCredResp{Status: int32(status)}
-	return drpc.Marshal(resp)
+	return drpc.Marshal(&auth.ValidateCredResp{Status: int32(status)})
 }
 
 // HandleCall is the handler for calls to the SecurityModule

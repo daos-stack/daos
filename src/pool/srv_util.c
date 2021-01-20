@@ -923,7 +923,7 @@ nvme_bio_error(int media_err_type, int tgt_id)
 {
 	int rc;
 
-	rc = notify_bio_error(media_err_type, tgt_id);
+	rc = ds_notify_bio_error(media_err_type, tgt_id);
 
 	return rc;
 }

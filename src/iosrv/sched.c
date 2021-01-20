@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -482,11 +482,15 @@ req_get(struct dss_xstream *dx, struct sched_req_attr *attr,
 	struct sched_request	*req;
 	int			 rc;
 
-	spi = cur_pool_info(info, attr->sra_pool_id);
-	if (spi == NULL) {
-		D_ERROR("XS(%d): get pool info "DF_UUID" failed.\n",
-			dx->dx_xs_id, DP_UUID(attr->sra_pool_id));
-		return NULL;
+	if (attr->sra_type == SCHED_REQ_ANONYM) {
+		spi = NULL;
+	} else {
+		spi = cur_pool_info(info, attr->sra_pool_id);
+		if (spi == NULL) {
+			D_ERROR("XS(%d): get pool info "DF_UUID" failed.\n",
+				dx->dx_xs_id, DP_UUID(attr->sra_pool_id));
+			return NULL;
+		}
 	}
 
 	if (d_list_empty(&info->si_idle_list)) {
@@ -894,11 +898,9 @@ should_enqueue_req(struct dss_xstream *dx, struct sched_req_attr *attr)
 	if (sched_prio_disabled || info->si_stop)
 		return false;
 
-	D_ASSERT(attr->sra_type == SCHED_REQ_GC ||
-		 attr->sra_type == SCHED_REQ_UPDATE ||
-		 attr->sra_type == SCHED_REQ_FETCH ||
-		 attr->sra_type == SCHED_REQ_SCRUB ||
-		 attr->sra_type == SCHED_REQ_MIGRATE);
+	D_ASSERT(attr->sra_type < SCHED_REQ_MAX);
+	if (attr->sra_type == SCHED_REQ_ANONYM)
+		return false;
 
 	/* For VOS xstream only */
 	return dx->dx_main_xs;
@@ -971,6 +973,9 @@ static inline void
 gc_sleep_counting(struct sched_request *req, int sleep)
 {
 	struct sched_pool_info	*spi = req->sr_pool_info;
+
+	if (req->sr_attr.sra_type == SCHED_REQ_ANONYM)
+		return;
 
 	D_ASSERT(spi != NULL);
 	if (req->sr_attr.sra_type != SCHED_REQ_GC)
@@ -1095,11 +1100,7 @@ sched_req_get(struct sched_req_attr *attr, ABT_thread ult)
 	struct sched_request	*req;
 	int			 rc;
 
-	D_ASSERT(attr->sra_type == SCHED_REQ_GC ||
-		 attr->sra_type == SCHED_REQ_UPDATE ||
-		 attr->sra_type == SCHED_REQ_FETCH ||
-		 attr->sra_type == SCHED_REQ_SCRUB ||
-		 attr->sra_type == SCHED_REQ_MIGRATE);
+	D_ASSERT(attr->sra_type < SCHED_REQ_MAX);
 
 	if (ult == ABT_THREAD_NULL) {
 		ABT_thread	self;

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -199,8 +199,7 @@ srv_common_cb(crt_rpc_t *rpc_req)
 	D_ASSERTF(rc == 0, "crt_reply_send failed %d\n", rc);
 
 exit:
-
-    dbg("<---%s---", __func__);
+	dbg("<---%s---", __func__);
 }
 
 static void

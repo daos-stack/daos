@@ -970,8 +970,6 @@ def clean_logs(test_yaml, args):
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     host_list = get_hosts_from_yaml(test_yaml, args)
     command = "sudo rm -fr {}".format(os.path.join(logs_dir, "*.log*"))
-    # also remove any ABT infos/stacks dumps
-    command += " /tmp/daos_dump*"
     print("Cleaning logs on {}".format(host_list))
     if not spawn_commands(host_list, command):
         print("Error cleaning logs, aborting")
@@ -1020,11 +1018,9 @@ def archive_daos_logs(avocado_logs_dir, test_files, args):
     print("Archiving host logs from {} in {}".format(hosts, destination))
 
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
-    # and any ULTs stacks dumps
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     task = archive_files(
-        destination, hosts, "/tmp/daos_dump* {}/*.log*".format(logs_dir), True,
-        args)
+        destination, hosts, "{}/*.log*".format(logs_dir), True, args)
 
     # Determine if the command completed successfully across all the hosts
     status = 0
@@ -1486,7 +1482,13 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
                                       "quit"])
 
             last_line = gdb_output.splitlines()[-1]
-            exe_name = last_line[7:last_line[7:].find(" ") + 7]
+            cmd = last_line[7:-1]
+            # assume there are no arguments on cmd
+            find_char = "'"
+            if cmd.find(" ") > -1:
+                # there are arguments on cmd
+                find_char = " "
+            exe_name = cmd[0:cmd.find(find_char)]
         except RuntimeError:
             exe_name = None
 
