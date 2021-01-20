@@ -51,6 +51,7 @@
 
 #define NUM_DIRENTS 24
 #define MAX_FILENAME 256
+#define OID_ARR_SIZE 8
 
 struct fs_copy_dirent {
 	dfs_obj_t *dir;
@@ -651,6 +652,103 @@ out_disconnect:
 
 	if (rc == 0)
 		rc = rc2;
+out:
+	return rc;
+}
+
+int
+cont_check_hdlr(struct cmd_args_s *ap)
+{
+	daos_obj_id_t		oids[OID_ARR_SIZE];
+	daos_handle_t		oit;
+	daos_anchor_t		anchor = { 0 };
+	uint64_t		begin = 0;
+	uint64_t		end = 0;
+	unsigned long		duration;
+	unsigned long		checked = 0;
+	unsigned long		skipped = 0;
+	unsigned long		inconsistent = 0;
+	uint32_t		oids_nr;
+	int			rc, i;
+
+	/* Create a snapshot with OIT */
+	rc = daos_cont_create_snap_opt(ap->cont, &ap->epc, NULL,
+				       DAOS_SNAP_OPT_CR | DAOS_SNAP_OPT_OIT,
+				       NULL);
+	if (rc != 0)
+		goto out;
+
+	/* Open OIT */
+	rc = daos_oit_open(ap->cont, ap->epc, &oit, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "open of container's OIT failed: "DF_RC"\n",
+			DP_RC(rc));
+		goto out_snap;
+	}
+
+	D_PRINT("check container "DF_UUIDF" stated at: %s\n",
+		DP_UUID(ap->c_uuid), ctime(NULL));
+
+	daos_gettime_coarse(&begin);
+
+	while (!daos_anchor_is_eof(&anchor)) {
+		oids_nr = OID_ARR_SIZE;
+		rc = daos_oit_list(oit, oids, &oids_nr, &anchor, NULL);
+		if (rc != 0) {
+			fprintf(stderr,
+				"object IDs enumeration failed: "DF_RC"\n",
+				DP_RC(rc));
+			D_GOTO(out_close, rc);
+		}
+
+		for (i = 0; i < oids_nr; i++) {
+			rc = daos_obj_verify(ap->cont, oids[i], ap->epc);
+			if (rc == -DER_NOSYS) {
+				/* XXX: NOT support to verif EC object yet. */
+				skipped++;
+				continue;
+			}
+
+			checked++;
+			if (rc == -DER_MISMATCH) {
+				fprintf(stderr,
+					"found data inconsistency for object: "
+					DF_OID"\n", DP_OID(oids[i]));
+				inconsistent++;
+				continue;
+			}
+
+			if (rc < 0) {
+				fprintf(stderr,
+					"check object "DF_OID" failed: "
+					DF_RC"\n", DP_OID(oids[i]), DP_RC(rc));
+				D_GOTO(out_close, rc);
+			}
+		}
+	}
+
+	daos_gettime_coarse(&end);
+
+	duration = end - begin;
+	if (duration == 0)
+		duration = 1;
+
+	if (rc == 0 || rc == -DER_NOSYS || rc == -DER_MISMATCH) {
+		D_PRINT("check container "DF_UUIDF" completed at %s\n"
+			"checked: %lu\n"
+			"skipped: %lu\n"
+			"inconsistent: %lu\n"
+			"run_time: %lu seconds\n"
+			"scan_speed: %lu objs/sec\n",
+			DP_UUID(ap->c_uuid), ctime(NULL), checked, skipped,
+			inconsistent, duration, (checked + skipped) / duration);
+		rc = 0;
+	}
+
+out_close:
+	daos_oit_close(oit, NULL);
+out_snap:
+	cont_destroy_snap_hdlr(ap);
 out:
 	return rc;
 }
@@ -3309,7 +3407,6 @@ cont_rollback_hdlr(struct cmd_args_s *ap)
 int
 cont_list_objs_hdlr(struct cmd_args_s *ap)
 {
-	static const int	OID_ARR_SIZE = 8;
 	daos_obj_id_t		oids[OID_ARR_SIZE];
 	daos_handle_t		oit;
 	daos_anchor_t		anchor = {0};
