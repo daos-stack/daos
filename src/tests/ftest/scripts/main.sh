@@ -207,7 +207,7 @@ do
         SUITE=$(grep "testsuite name=" "$file" | \
                grep -Po "name=\"\K.*(?=\" time=)")
 
-        CLASS=$(grep "<testcase classname" "$file")
+        CLASS=$(grep "<testcase classname" "$file" || true)
         if [ "$CLASS" == "" ]; then
             echo "class 1"
             sed -i \
