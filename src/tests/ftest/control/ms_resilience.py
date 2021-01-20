@@ -85,7 +85,8 @@ class ManagementServiceResilience(TestWithServers):
         l_addr = None
         start = time.time()
         while not l_addr and (time.time() - start) < self.L_QUERY_TIMER:
-            l_addr = self.get_dmg_command().system_leader_query()["leader"]
+            sys_leader_info = self.get_dmg_command().system_leader_query()
+            l_addr = sys_leader_info["response"]["CurrentLeader"]
 
         if not l_addr:
             self.fail("Timer exceeded for verifying leader. No leader found!")
