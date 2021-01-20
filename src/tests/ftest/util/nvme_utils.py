@@ -60,7 +60,8 @@ def get_device_ids(dmg, servers):
         try:
             result = dmg.run()
         except CommandFailure as _error:
-            raise "dmg command failed for list-devices"
+            raise CommandFailure(
+                "dmg list-devices failed with error {}".format(_error))
         drive_list = []
         for line in result.stdout.split('\n'):
             if 'UUID' in line:

@@ -166,123 +166,26 @@ dss_get_xstream(int stream_id)
 	return xstream_data.xd_xs_ptrs[stream_id];
 }
 
-/* Add to the sorted(by expire time) list */
-static void
-add_sleep_list(struct dss_xstream *dx, struct dss_sleep_ult *new)
-{
-	struct dss_sleep_ult	*dsu;
-
-	d_list_for_each_entry(dsu, &dx->dx_sleep_ult_list, dsu_list) {
-		if (dsu->dsu_expire_time > new->dsu_expire_time) {
-			d_list_add_tail(&new->dsu_list, &dsu->dsu_list);
-			return;
-		}
-	}
-
-	d_list_add_tail(&new->dsu_list, &dx->dx_sleep_ult_list);
-}
-
-struct dss_sleep_ult
-*dss_sleep_ult_create(void)
-{
-	struct dss_sleep_ult *dsu;
-	ABT_thread	     self;
-
-	D_ALLOC_PTR(dsu);
-	if (dsu == NULL)
-		return NULL;
-
-	ABT_thread_self(&self);
-	dsu->dsu_expire_time = 0;
-	dsu->dsu_thread = self;
-	D_INIT_LIST_HEAD(&dsu->dsu_list);
-
-	return dsu;
-}
-
-void
-dss_sleep_ult_destroy(struct dss_sleep_ult *dsu)
-{
-	D_ASSERT(d_list_empty(&dsu->dsu_list));
-	D_FREE_PTR(dsu);
-}
-
-/* Reset the expire to force the ult to exit now */
-void
-dss_ult_wakeup(struct dss_sleep_ult *dsu)
-{
-	ABT_thread thread;
-
-	/* Wakeup the thread if it was put in the sleep list */
-	if (!d_list_empty(&dsu->dsu_list)) {
-		ABT_thread_self(&thread);
-		/* Only others can force the ULT to exit */
-		D_ASSERT(thread != dsu->dsu_thread);
-		d_list_del_init(&dsu->dsu_list);
-		dsu->dsu_expire_time = 0;
-		ABT_thread_resume(dsu->dsu_thread);
-	}
-}
-
-/* Schedule the ULT(dtu->ult) and reschedule in @expire_secs nano seconds */
-void
-dss_ult_sleep(struct dss_sleep_ult *dsu, uint64_t expire_nsecs)
-{
-	struct dss_xstream	*dx = dss_current_xstream();
-	ABT_thread		thread;
-	uint64_t		now = 0;
-
-	D_ASSERT(dsu != NULL);
-	ABT_thread_self(&thread);
-	D_ASSERT(thread == dsu->dsu_thread);
-
-	D_ASSERT(d_list_empty(&dsu->dsu_list));
-	now = daos_getntime_coarse();
-	dsu->dsu_expire_time = now + expire_nsecs;
-	add_sleep_list(dx, dsu);
-	ABT_self_suspend();
-}
-
-static void
-check_sleep_list()
-{
-	struct dss_xstream	*dx;
-	uint64_t		now = 0;
-	bool			shutdown = false;
-	struct dss_sleep_ult	*dsu;
-	struct dss_sleep_ult	*tmp;
-
-	dx = dss_current_xstream();
-	if (dss_xstream_exiting(dx))
-		shutdown = true;
-
-	if (d_list_empty(&dx->dx_sleep_ult_list))
-		return;
-
-	now = daos_getntime_coarse();
-	d_list_for_each_entry_safe(dsu, tmp, &dx->dx_sleep_ult_list, dsu_list) {
-		if (dsu->dsu_expire_time <= now || shutdown)
-			dss_ult_wakeup(dsu);
-		else
-			break;
-	}
-}
-
 /**
- * sleep micro seconds, then being rescheduled.
- * \param[in]	us	milli seconds to sleep for
+ * sleep milliseconds, then being rescheduled.
+ *
+ * \param[in]	msec	milliseconds to sleep for
  */
 int
-dss_sleep(uint64_t sleep_msec)
+dss_sleep(uint64_t msec)
 {
-	struct dss_sleep_ult *dsu;
+	struct sched_req_attr	 attr = { 0 };
+	struct sched_request	*req;
+	uuid_t			 anonym_uuid;
 
-	dsu = dss_sleep_ult_create();
-	if (dsu == NULL)
+	uuid_clear(anonym_uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
+	req = sched_req_get(&attr, ABT_THREAD_NULL);
+	if (req == NULL)
 		return -DER_NOMEM;
 
-	dss_ult_sleep(dsu, sleep_msec * 1000000);
-	dss_sleep_ult_destroy(dsu);
+	sched_req_sleep(req, msec);
+	sched_req_put(req);
 	return 0;
 }
 
@@ -587,14 +490,11 @@ dss_srv_handler(void *arg)
 			}
 		}
 
-		check_sleep_list();
-
 		if (dss_xstream_exiting(dx))
 			break;
 
 		ABT_thread_yield();
 	}
-	D_ASSERT(d_list_empty(&dx->dx_sleep_ult_list));
 
 	wait_all_exited(dx);
 	if (dmi->dmi_dp) {
@@ -723,7 +623,6 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 		dx->dx_main_xs	= xs_id >= dss_sys_xs_nr && xs_offset == 0;
 	}
 	dx->dx_dsc_started = false;
-	D_INIT_LIST_HEAD(&dx->dx_sleep_ult_list);
 
 	/**
 	 * Generate name for each xstreams so that they can be easily identified
@@ -1175,7 +1074,6 @@ enum {
 	XD_INIT_MUTEX,
 	XD_INIT_ULT_INIT,
 	XD_INIT_ULT_BARRIER,
-	XD_INIT_REG_KEY,
 	XD_INIT_NVME,
 	XD_INIT_XSTREAMS,
 	XD_INIT_DRPC,
@@ -1198,9 +1096,6 @@ dss_srv_fini(bool force)
 		/* fall through */
 	case XD_INIT_NVME:
 		bio_nvme_fini();
-		/* fall through */
-	case XD_INIT_REG_KEY:
-		dss_unregister_key(&daos_srv_modkey);
 		/* fall through */
 	case XD_INIT_ULT_BARRIER:
 		ABT_cond_free(&xstream_data.xd_ult_barrier);
@@ -1253,10 +1148,6 @@ dss_srv_init()
 		D_GOTO(failed, rc);
 	}
 	xstream_data.xd_init_step = XD_INIT_ULT_BARRIER;
-
-	/** register global tls accessible to all modules */
-	dss_register_key(&daos_srv_modkey);
-	xstream_data.xd_init_step = XD_INIT_REG_KEY;
 
 	rc = bio_nvme_init(dss_storage_path, dss_nvme_conf, dss_nvme_shm_id,
 		dss_nvme_mem_size);
