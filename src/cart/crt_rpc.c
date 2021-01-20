@@ -273,11 +273,8 @@ crt_pfi_cb(struct crt_proto_query_cb_info *cb_info)
 {
 	struct crt_pfi *pfi = cb_info->pq_arg;
 
-	if (cb_info->pq_rc != -DER_SUCCESS)
-		return;
-
+	pfi->pfi_rc = cb_info->pq_rc;
 	pfi->pfi_ver = cb_info->pq_ver;
-
 	sem_post(&pfi->pfi_sem);
 }
 
