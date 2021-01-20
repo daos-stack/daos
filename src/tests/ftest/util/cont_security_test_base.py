@@ -28,12 +28,14 @@ import grp
 import re
 from apricot import TestWithServers
 from avocado import fail_on
+from avocado.core.exceptions import TestFail
 from daos_utils import DaosCommand
 from command_utils import CommandFailure
 import general_utils
 from general_utils import DaosTestError
 import security_test_base as secTestBase
 from test_utils_container import TestContainer
+
 
 class ContSecurityTestBase(TestWithServers):
     """Container security test cases.
@@ -72,7 +74,7 @@ class ContSecurityTestBase(TestWithServers):
 
     @fail_on(CommandFailure)
     def create_pool_with_dmg(self):
-        """Create a pool with the dmg tool
+        """Create a pool with the dmg tool.
 
         Also, obtains the pool uuid and svc from the operation's
         result
@@ -80,6 +82,7 @@ class ContSecurityTestBase(TestWithServers):
         Returns:
             pool_uuid (str): Pool UUID, randomly generated.
             pool_svc (str): Pool service replica rank list
+
         """
         self.prepare_pool()
         pool_uuid = self.pool.pool.get_uuid_str()
@@ -88,7 +91,7 @@ class ContSecurityTestBase(TestWithServers):
         return pool_uuid, pool_svc
 
     def create_container_with_daos(self, pool, acl_type=None, acl_file=None):
-        """Create a container with the daos tool
+        """Create a container with the daos tool.
 
         Also, obtains the container uuid from the operation's result.
 
@@ -98,6 +101,7 @@ class ContSecurityTestBase(TestWithServers):
 
         Returns:
             container_uuid: Container UUID created.
+
         """
         file_name = None
         get_acl_file = None
@@ -121,8 +125,8 @@ class ContSecurityTestBase(TestWithServers):
             self.container.get_params(self)
             self.container.create(acl_file=file_name)
             container_uuid = self.container.uuid
-        except CommandFailure:
-            if acl_type is not "invalid":
+        except TestFail:
+            if acl_type != "invalid":
                 raise DaosTestError(
                     "Could not create a container when expecting one")
             container_uuid = None
@@ -264,7 +268,6 @@ class ContSecurityTestBase(TestWithServers):
             pool_uuid, container_uuid)
         return result
 
-
     def set_container_property(
             self, pool_uuid, container_uuid, prop, value):
         """Write/Set container property.
@@ -317,13 +320,15 @@ class ContSecurityTestBase(TestWithServers):
         return result
 
     def compare_acl_lists(self, get_acl_list, expected_list):
-        """Compares two permission lists
+        """Compare two permission lists.
+
         Args:
             get_acl_list (str list): list of permissions obtained by get-acl
             expected_list (str list): list of expected permissions
 
         Returns:
             True or False if both permission lists are identical or not
+
         """
         self.log.info("    ===> get-acl ACL:  %s", get_acl_list)
         self.log.info("    ===> Expected ACL: %s", expected_list)
@@ -339,13 +344,14 @@ class ContSecurityTestBase(TestWithServers):
         return True
 
     def get_base_acl_entries(self, test_user):
-        """Get initial or base container acl entries per container enforcement
-           order for test_user.
+        """Get container acl entries per cont enforcement order for test_user.
+
         Args:
             test_user (str): test user.
 
         Returns (list str):
             List of base container acl entries for the test_user.
+
         """
         if test_user == "OWNER":
             base_acl_entries = [
@@ -387,10 +393,11 @@ class ContSecurityTestBase(TestWithServers):
         return base_acl_entries
 
     def cleanup(self, types):
-        """Removes all temporal acl files created during the test.
+        """Remove all temporal acl files created during the test.
 
         Args:
             types (list): types of acl files [valid, invalid]
+
         """
         for typ in types:
             get_acl_file = "acl_{}.txt".format(typ)
@@ -427,7 +434,7 @@ class ContSecurityTestBase(TestWithServers):
         return test_errs
 
     def acl_file_diff(self, prev_acl, flag=True):
-        """Helper function to compare current content of acl-file.
+        """Compare current content of acl-file with helper function.
 
         If provided  prev_acl file information is different from current acl
         file information test will fail if flag=True. If flag=False, test will
@@ -439,6 +446,7 @@ class ContSecurityTestBase(TestWithServers):
             flag (bool, optional): if True, test will fail when acl-file
                 contents are different, else test will fail when acl-file
                 contents are same. Defaults to True.
+
         """
         current_acl = self.get_container_acl_list(
             self.pool.uuid, self.container.uuid)

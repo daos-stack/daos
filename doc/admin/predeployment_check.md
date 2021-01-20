@@ -153,7 +153,7 @@ $ chown user:user /var/run/daos_agent (where user is the user you
 
 ### Default Directory (persistent)
 
-If the server hosting daos_server or daos_agent will be rebooted often,
+If the server hosting `daos_server` or `daos_agent` will be rebooted often,
 systemd provides a persistent mechanism for creating the required
 directories called tmpfiles.d. This mechanism will be required every
 time the system is provisioned and requires a reboot to take effect.
@@ -177,16 +177,16 @@ that require elevated privileges on behalf of `daos_server`.
 ### Privileged Helper Configuration
 
 When DAOS is installed from RPM, the `daos_admin` helper is automatically installed
-to the correct location with the correct permissions. The RPM creates a "daos_admins"
+to the correct location with the correct permissions. The RPM creates a "daos_server"
 system group and configures permissions such that `daos_admin` may only be invoked
 from `daos_server`.
 
 For non-RPM installations, there are two supported scenarios:
 
 1. `daos_server` is run as root, which means that `daos_admin` is also invoked as root,
-and therefore no additional setup is necessary
+and therefore no additional setup is necessary.
 2. `daos_server` is run as a non-root user, which means that `daos_admin` must be
-manually installed and configured
+manually installed and configured.
 
 The steps to enable the second scenario are as follows (steps are assumed to be
 running out of a DAOS source tree which may be on a NFS share):
