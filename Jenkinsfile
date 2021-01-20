@@ -252,14 +252,8 @@ String functional_packages(String distro) {
                   "MACSio-openmpi3-daos-0 " +
                   "mpifileutils-mpich-daos-0 "
     if (distro == "leap15") {
-        if (quickbuild()) {
-            pkgs += " spdk-tools"
-        }
         return daos_pkgs + pkgs
     } else if (distro == "centos7") {
-        if (quickbuild()) {
-            pkgs += " spdk_tools"
-        }
         // need to exclude openmpi until we remove it from the repo
         return  "--exclude openmpi " + daos_pkgs + pkgs
     } else if (distro.startsWith('ubuntu20')) {
