@@ -45,7 +45,7 @@
 struct rebuild_tgt_pool_tracker {
 	/** pin the pool during the rebuild */
 	struct ds_pool		*rt_pool;
-	struct dss_sleep_ult	*rt_ult;
+	struct sched_request	*rt_ult;
 
 	/** the current version being rebuilt, only used by leader */
 	uint32_t		rt_rebuild_ver;
@@ -116,7 +116,7 @@ struct rebuild_global_pool_tracker {
 	/* rebuild status */
 	struct daos_rebuild_status	rgt_status;
 
-	struct dss_sleep_ult		*rgt_ult;
+	struct sched_request	*rgt_ult;
 	/* link to rebuild_global.rg_global_tracker_list */
 	d_list_t	rgt_list;
 

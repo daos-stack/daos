@@ -121,11 +121,11 @@ struct  _Shared__RASEvent
   /*
    * (optional) Process involved in event.
    */
-  char *proc_id;
+  uint64_t proc_id;
   /*
    * (optional) Thread involved in event.
    */
-  char *thread_id;
+  uint64_t thread_id;
   /*
    * (optional) Job involved in event.
    */
@@ -158,7 +158,7 @@ struct  _Shared__RASEvent
 };
 #define SHARED__RASEVENT__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&shared__rasevent__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, SHARED__RASEVENT__EXTENDED_INFO__NOT_SET, {0} }
+    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, SHARED__RASEVENT__EXTENDED_INFO__NOT_SET, {0} }
 
 
 /*
@@ -182,7 +182,7 @@ struct  _Shared__ClusterEventReq
 
 
 /*
- * RASEventResp acknowledges receipt of an event notification.
+ * ClusterEventResp acknowledges receipt of an event notification.
  */
 struct  _Shared__ClusterEventResp
 {
