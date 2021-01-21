@@ -195,7 +195,7 @@ class ZeroConfigTest(TestWithServers):
             self.server_managers[0],
             self.hostlist_servers,
             self.hostfile_servers_slots,
-            self.hostlist_servers)
+            self.access_points)
         self.assertTrue(
             self.server_managers[0].set_config_value(
                 "fabric_iface", exp_iface),

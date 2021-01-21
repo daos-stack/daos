@@ -81,7 +81,7 @@ class CartSelfTest(TestWithServers):
             self.server_managers[-1],
             self.hostlist_servers,
             self.hostfile_servers_slots,
-            self.hostlist_servers)
+            self.access_points)
         self.assertTrue(
             self.server_managers[-1].set_config_value(
                 "crt_ctx_share_addr", share_addr),
