@@ -35,7 +35,6 @@ class DaosCoreTestRebuild(DaosCoreBase):
     # Test variants that should be skipped
     CANCEL_FOR_TICKET = [
         ["DAOS-5851", "test_name", "rebuild tests 0-10"],
-        ["DAOS-6442", "test_name", "rebuild tests 18"]
     ]
 
     def test_rebuild(self):
