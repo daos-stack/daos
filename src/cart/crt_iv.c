@@ -3353,7 +3353,9 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 		D_GOTO(exit, rc);
 
 	} else {
-		D_ERROR("ivo_on_update failed with rc = %d\n", rc);
+		D_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR,
+			 "ivo_on_update failed with rc = "DF_RC"\n",
+			 DP_RC(rc));
 
 		update_comp_cb(ivns, class_id, iv_key, NULL,
 			       iv_value, rc, cb_arg);

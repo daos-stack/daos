@@ -1149,9 +1149,12 @@ cont_agg_eph_leader_ult(void *arg)
 			rc = cont_iv_ec_agg_eph_refresh(pool->sp_iv_ns,
 						ec_agg->ea_cont_uuid, min_eph);
 			if (rc) {
-				D_ERROR(DF_CONT": refresh failed: %d\n",
-					DP_CONT(svc->cs_pool_uuid,
-						ec_agg->ea_cont_uuid), rc);
+				D_CDEBUG(rc == -DER_NONEXIST,
+					 DLOG_INFO, DLOG_ERR,
+					 DF_CONT": refresh failed: "DF_RC"\n",
+					 DP_CONT(svc->cs_pool_uuid,
+						 ec_agg->ea_cont_uuid),
+					DP_RC(rc));
 				continue;
 			}
 			ec_agg->ea_current_eph = min_eph;

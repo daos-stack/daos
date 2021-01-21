@@ -463,8 +463,9 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 				     priv_entry ? priv_entry->priv : NULL);
 	}
 	if (rc != -DER_IVCB_FORWARD && rc != 0) {
-		D_ERROR("key id %d update failed: rc = %d\n",
-			key.class_id, rc);
+		D_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR,
+			 "key id %d update failed: rc = "DF_RC"\n",
+			key.class_id, DP_RC(rc));
 		return rc;
 	}
 
