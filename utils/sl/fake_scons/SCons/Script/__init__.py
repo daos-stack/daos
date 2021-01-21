@@ -313,6 +313,9 @@ class Dir():
         """Fake srcnode"""
         return self
 
+class File():
+    """Fake File"""
+    pass
 
 def VariantDir(*_args, **_kw):
     """Fake VariantDir"""

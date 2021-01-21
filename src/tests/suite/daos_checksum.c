@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1709,7 +1709,8 @@ rank_in_placement(uint32_t rank, struct daos_obj_layout *placement)
 
 	for (s = 0; s < placement->ol_nr; s++) {
 		for (r = 0; r < placement->ol_shards[s]->os_replica_nr; r++) {
-			if (rank == placement->ol_shards[s]->os_ranks[r])
+			if (rank ==
+			    placement->ol_shards[s]->os_shard_loc[r].sd_rank)
 				return true;
 		}
 	}
@@ -1726,7 +1727,7 @@ get_rank_not_in_placement(struct daos_obj_layout *placement,
 		struct daos_obj_shard *shard = placement->ol_shards[s];
 
 		for (r = 0; r < shard->os_replica_nr; r++) {
-			uint32_t rank = shard->os_ranks[r];
+			uint32_t rank = shard->os_shard_loc[r].sd_rank;
 
 			if (!rank_in_placement(rank, not_in_placement))
 				return rank;
@@ -1783,15 +1784,15 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 	rc = daos_obj_layout_get(ctx.coh, ctx.oid, &layout1);
 	assert_success(rc);
 	print_message("Before rebuild: Object replicated across ranks %d, %d\n",
-		      layout1->ol_shards[0]->os_ranks[0],
-		      layout1->ol_shards[0]->os_ranks[1]);
+		      layout1->ol_shards[0]->os_shard_loc[0].sd_rank,
+		      layout1->ol_shards[0]->os_shard_loc[1].sd_rank);
 
-	rank_to_exclude = layout1->ol_shards[0]->os_ranks[0];
+	rank_to_exclude = layout1->ol_shards[0]->os_shard_loc[0].sd_rank;
 	print_message("Excluding rank %d\n", rank_to_exclude);
 	disabled_nr = disabled_targets(arg);
 	daos_exclude_server(arg->pool.pool_uuid, arg->group,
-			    arg->dmg_config, NULL /* arg->pool.alive_svc */,
-			    layout1->ol_shards[0]->os_ranks[0]);
+			    arg->dmg_config, arg->pool.alive_svc,
+			    layout1->ol_shards[0]->os_shard_loc[0].sd_rank);
 	assert_true(disabled_nr < disabled_targets(arg));
 
 	/** wait for rebuild */
@@ -1801,8 +1802,8 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 	assert_success(rc);
 
 	print_message("After rebuild: Object replicated across ranks %d, %d\n",
-		      layout2->ol_shards[0]->os_ranks[0],
-		      layout2->ol_shards[0]->os_ranks[1]);
+		      layout2->ol_shards[0]->os_shard_loc[0].sd_rank,
+		      layout2->ol_shards[0]->os_shard_loc[1].sd_rank);
 
 	/** force to fetch from rank that was rebuilt to ensure checksum
 	 * was rebuilt appropriately

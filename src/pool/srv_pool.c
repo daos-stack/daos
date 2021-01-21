@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1406,6 +1406,24 @@ ds_pool_start_all(void)
 	return 0;
 }
 
+static int
+stop_one(uuid_t uuid, void *varg)
+{
+	D_DEBUG(DB_MD, DF_UUID": stopping pool\n", DP_UUID(uuid));
+	ds_pool_stop(uuid);
+	return 0;
+}
+
+static void
+pool_stop_all(void *arg)
+{
+	int	rc;
+
+	rc = ds_mgmt_tgt_pool_iterate(stop_one, NULL /* arg */);
+	if (rc != 0)
+		D_ERROR("failed to stop all pools: "DF_RC"\n", DP_RC(rc));
+}
+
 /*
  * Note that this function is currently called from the main xstream to save
  * one ULT creation.
@@ -1413,11 +1431,25 @@ ds_pool_start_all(void)
 int
 ds_pool_stop_all(void)
 {
-	/*
-	 * TODO: Before returning, release the ds_pool references held by
-	 * ds_pool_start_all.
-	 */
-	return ds_rsvc_stop_all(DS_RSVC_CLASS_POOL);
+	ABT_thread	thread;
+	int		rc;
+
+	rc = ds_rsvc_stop_all(DS_RSVC_CLASS_POOL);
+	if (rc)
+		D_ERROR("failed to stop all pool svcs: "DF_RC"\n", DP_RC(rc));
+
+	/* Create a ULT to stop pools, since it requires TLS */
+	rc = dss_ult_create(pool_stop_all, NULL /* arg */, DSS_XS_SYS,
+			    0 /* tgt_idx */, 0 /* stack_size */, &thread);
+	if (rc != 0) {
+		D_ERROR("failed to create pool stop ULT: "DF_RC"\n",
+			DP_RC(rc));
+		return rc;
+	}
+	ABT_thread_join(thread);
+	ABT_thread_free(&thread);
+
+	return 0;
 }
 
 static int
@@ -3724,39 +3756,60 @@ out:
 static int
 replace_failed_replicas(struct pool_svc *svc, struct pool_map *map)
 {
-	d_rank_list_t	*replicas;
-	d_rank_list_t	*tmp_replicas;
-	d_rank_list_t	 failed_ranks;
-	d_rank_list_t	 replace_ranks;
-	int		 rc;
+	d_rank_list_t	*old, *new, *current, failed, replacement;
+	int              rc;
 
-	rc = rdb_get_ranks(svc->ps_rsvc.s_db, &replicas);
+	rc = rdb_get_ranks(svc->ps_rsvc.s_db, &current);
 	if (rc != 0)
-		D_GOTO(out, rc);
-	rc = ds_pool_check_failed_replicas(map, replicas, &failed_ranks,
-					   &replace_ranks);
+		goto out;
+
+	rc = daos_rank_list_dup(&old, current);
+	if (rc != 0)
+		goto out_cur;
+
+	rc = ds_pool_check_failed_replicas(map, current, &failed, &replacement);
 	if (rc != 0) {
 		D_DEBUG(DB_MD, DF_UUID": cannot replace failed replicas: "
 			""DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
-		D_GOTO(out, rc);
+		goto out_old;
 	}
-	if (replace_ranks.rl_nr > 0)
-		ds_rsvc_add_replicas_s(&svc->ps_rsvc, &replace_ranks,
-				       ds_rsvc_get_md_cap());
-	if (failed_ranks.rl_nr > 0)
-		ds_rsvc_remove_replicas_s(&svc->ps_rsvc, &failed_ranks);
-	/** `replace_ranks.rl_ranks` is not allocated and shouldn't be freed **/
-	D_FREE(failed_ranks.rl_ranks);
 
-	if (rdb_get_ranks(svc->ps_rsvc.s_db, &tmp_replicas) == 0) {
-		daos_rank_list_sort(replicas);
-		daos_rank_list_sort(tmp_replicas);
-		if (!daos_rank_list_identical(replicas, tmp_replicas))
+	if (failed.rl_nr < 1)
+		goto out_old;
+	if (replacement.rl_nr > 0)
+		ds_rsvc_add_replicas_s(&svc->ps_rsvc, &replacement,
+				       ds_rsvc_get_md_cap());
+	ds_rsvc_remove_replicas_s(&svc->ps_rsvc, &failed);
+	/** `replacement.rl_ranks` is not allocated and shouldn't be freed **/
+	D_FREE(failed.rl_ranks);
+
+	if (rdb_get_ranks(svc->ps_rsvc.s_db, &new) == 0) {
+		daos_rank_list_sort(current);
+		daos_rank_list_sort(old);
+		daos_rank_list_sort(new);
+
+		if (!daos_rank_list_identical(current, new)) {
 			D_DEBUG(DB_MD, DF_UUID": failed to update replicas\n",
 				DP_UUID(svc->ps_uuid));
-		d_rank_list_free(tmp_replicas);
+		} else if (!daos_rank_list_identical(new, old)) {
+			/*
+			 * Send RAS event to control-plane over dRPC to indicate
+			 * change in pool service replicas.
+			 */
+			rc = ds_notify_pool_svc_update(&svc->ps_uuid, new);
+			if (rc != 0)
+				D_DEBUG(DB_MD, DF_UUID": replica update notify "
+					"failure: "DF_RC"\n",
+					DP_UUID(svc->ps_uuid), DP_RC(rc));
+		}
+
+		d_rank_list_free(new);
 	}
-	d_rank_list_free(replicas);
+
+out_old:
+	d_rank_list_free(old);
+out_cur:
+	d_rank_list_free(current);
 out:
 	return rc;
 }
@@ -3841,6 +3894,21 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 	ds_rsvc_request_map_dist(&svc->ps_rsvc);
 
 	replace_failed_replicas(svc, map);
+
+	if (opc == POOL_ADD_IN) {
+		/*
+		 * If we are setting ranks from UP -> UPIN, schedule a reclaim
+		 * operation to garbage collect any unreachable data moved
+		 * during reintegration/addition
+		 */
+		rc = ds_rebuild_schedule(pool_uuid, map_version, tgts,
+					 RB_OP_RECLAIM);
+		if (rc != 0) {
+			D_ERROR("failed to schedule reclaim rc: "DF_RC"\n",
+				DP_RC(rc));
+			D_GOTO(out, rc);
+		}
+	}
 
 out_map:
 	if (map_version_p != NULL)

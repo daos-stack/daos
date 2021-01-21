@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,6 +78,8 @@ cont_op_parse(const char *str)
 		return CONT_QUERY;
 	else if (strcmp(str, "stat") == 0)
 		return CONT_STAT;
+	else if (strcmp(str, "check") == 0)
+		return CONT_CHECK;
 	else if (strcmp(str, "get-prop") == 0)
 		return CONT_GET_PROP;
 	else if (strcmp(str, "set-prop") == 0)
@@ -983,7 +985,6 @@ fs_op_hdlr(struct cmd_args_s *ap)
 				"must be provided\n");
 		} else {
 			rc = fs_copy_hdlr(ap);
-			assert(rc == 0);
 		}
 		break;
 	default:
@@ -1099,6 +1100,9 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		break;
 	case CONT_STAT:
 		/* rc = cont_stat_hdlr(ap); */
+		break;
+	case CONT_CHECK:
+		rc = cont_check_hdlr(ap);
 		break;
 	case CONT_GET_PROP:
 		rc = cont_get_prop_hdlr(ap);
@@ -1328,6 +1332,7 @@ do { \
 	"	  delete-acl       delete an entry from a container's ACL\n" \
 	"	  set-owner        change the user and/or group that own a container\n" \
 	"	  stat             get container statistics\n" \
+	"	  check            check objects consistency in container\n" \
 	"	  list-attrs       list container user-defined attributes\n" \
 	"	  del-attr         delete container user-defined attribute\n" \
 	"	  get-attr         get container user-defined attribute\n" \
@@ -1496,6 +1501,7 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			   strcmp(argv[3], "query") == 0 ||
 			   strcmp(argv[3], "get-prop") == 0 ||
 			   strcmp(argv[3], "stat") == 0 ||
+			   strcmp(argv[3], "check") == 0 ||
 			   strcmp(argv[3], "list-attrs") == 0 ||
 			   strcmp(argv[3], "list-snaps") == 0) {
 			ALL_BUT_CONT_CREATE_OPTS_HELP();
