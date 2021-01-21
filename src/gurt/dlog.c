@@ -900,7 +900,7 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 			if (freopen(mst.log_file, truncate ? "w" : "a",
 				    stderr) == NULL) {
 				fprintf(stderr, "d_log_open: cannot "
-					"pen %s: %s\n",
+					"open %s: %s\n",
 					mst.log_file, strerror(errno));
 				goto error;
 			}
