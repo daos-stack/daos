@@ -555,7 +555,7 @@ public class DaosObject {
    * @return {@link IODataDesc}
    * @throws IOException
    */
-  public static IODataDesc createDataDescForUpdate(String dkey, IODataDesc.IodType iodType, int recordSize)
+  public IODataDesc createDataDescForUpdate(String dkey, IODataDesc.IodType iodType, int recordSize)
       throws IOException {
     IODataDesc desc = new IODataDesc(dkey, iodType, recordSize, true);
     return desc;
@@ -574,7 +574,7 @@ public class DaosObject {
    * @return {@link IODataDesc}
    * @throws IOException
    */
-  public static IODataDesc createDataDescForFetch(String dkey, IODataDesc.IodType iodType, int recordSize)
+  public IODataDesc createDataDescForFetch(String dkey, IODataDesc.IodType iodType, int recordSize)
       throws IOException {
     IODataDesc desc = new IODataDesc(dkey, iodType, recordSize, false);
     return desc;

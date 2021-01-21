@@ -209,20 +209,29 @@ public class IODataDesc {
     return totalRequestSize;
   }
 
-//  /**
-//   * duplicate this object and all its entries.
-//   * Do not forget to release this object and its entries.
-//   *
-//   * @return duplicated IODataDesc
-//   * @throws IOException
-//   */
-//  public IODataDesc duplicate() throws IOException {
-//    List<Entry> newEntries = new ArrayList<>(akeyEntries.size());
-//    for (Entry e : akeyEntries) {
-//      newEntries.add(e.duplicate());
-//    }
-//    return new IODataDesc(dkey, newEntries, updateOrFetch);
-//  }
+  /**
+   * duplicate this object and all its entries if it's non-reusable desc.
+   * Reusable desc should not call this method. Otherwise UnsupportedOperationException will be thrown.
+   * Do not forget to release this object and its entries.
+   *
+   * @return duplicated IODataDesc
+   * @throws IOException
+   * @throws UnsupportedOperationException
+   */
+  public IODataDesc duplicate() throws IOException {
+    if (isReusable()) {
+      throw new UnsupportedOperationException("reusable desc cannot be duplicated");
+    }
+    IODataDesc dup = new IODataDesc(dkey, IodType.ARRAY, recordSize, updateOrFetch);
+    for (Entry e : akeyEntries) {
+      if (updateOrFetch) {
+        dup.addEntryForUpdate(e.key, e.offset, e.dataBuffer);
+      } else {
+        dup.addEntryForFetch(e.key, e.offset, e.dataSize);
+      }
+    }
+    return dup;
+  }
 
   private String updateOrFetchStr(boolean v) {
     return v ? "update" : "fetch";
