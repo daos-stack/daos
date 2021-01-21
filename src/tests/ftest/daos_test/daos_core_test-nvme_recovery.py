@@ -27,19 +27,51 @@ from daos_core_base import DaosCoreBase
 class DaosCoreTestNvme(DaosCoreBase):
     # pylint: disable=too-many-ancestors
     """Run just the daos_test NVMe Recovery tests.
+       Jira ID: DAOS-3846.
+
+       Test Description:
+           Purpose of this test is to run just the daos_test NVMe recovery
+           tests.
 
     :avocado: recursive
     """
 
-    def test_nvme(self):
-        """Jira ID: DAOS-3846.
-
-        Test Description:
-            Purpose of this test is to run just the daos_test NVMe recovery
-            tests.
+    def test_nvme_1(self):
+        """Run daos_test -N subtest 1
 
         :avocado: tags=all,hw,medium,nvme,ib2,full_regression
         :avocado: tags=unittest,daos_test_nvme_recovery
 
         """
-        DaosCoreBase.run_subtest(self)
+        DaosCoreBase.run_subtest(self, "N", "DAOS Nvme Recovery 1", 60,
+                                 "-u subtests='1'")
+
+    def test_nvme_2(self):
+        """Run daos_test -N subtest 2
+
+        :avocado: tags=all,hw,medium,nvme,ib2,full_regression
+        :avocado: tags=unittest,daos_test_nvme_recovery
+
+        """
+        DaosCoreBase.run_subtest(self, "N", "DAOS Nvme Recovery 2", 60,
+                                 "-u subtests='2'")
+
+    def test_nvme_3(self):
+        """Run daos_test -N subtest 3
+
+        :avocado: tags=all,hw,medium,nvme,ib2,full_regression
+        :avocado: tags=unittest,daos_test_nvme_recovery
+
+        """
+        DaosCoreBase.run_subtest(self, "N", "DAOS Nvme Recovery 3", 60,
+                                 "-u subtests='3'")
+
+    def test_nvme_4(self):
+        """Run daos_test -N subtest 4
+
+        :avocado: tags=all,hw,medium,nvme,ib2,full_regression
+        :avocado: tags=unittest,daos_test_nvme_recovery
+
+        """
+        DaosCoreBase.run_subtest(self, "N", "DAOS Nvme Recovery 4", 60,
+                                 "-u subtests='4'")

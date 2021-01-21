@@ -47,20 +47,3 @@ dmg:
 daos_tests:
   num_clients:
     num_clients: 1
-  Tests: !mux
-    test_n_1:
-      daos_test: N
-      test_name: nvme_recovery tests 1
-      args: -u subtests="1"
-    test_n_2:
-      daos_test: N
-      test_name: nvme_recovery tests 2
-      args: -u subtests="2"
-    test_n_3:
-      daos_test: N
-      test_name: nvme_recovery tests 3
-      args: -u subtests="3"
-    test_n_4:
-      daos_test: N
-      test_name: nvme_recovery tests 4
-      args: -u subtests="4"

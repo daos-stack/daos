@@ -29,6 +29,12 @@ class DaosCoreTestDfs(DaosCoreBase):
     """
     Runs DAOS file system (DFS) tests.
 
+    Test ID: DAOS-5409
+
+    Test Description: Run DAOS file system tests 'dfs_test'
+
+    Use Cases: Daos File system tests
+
     :avocado: recursive
     """
 
@@ -36,16 +42,20 @@ class DaosCoreTestDfs(DaosCoreBase):
         """Initialize the DaosCoreBase object."""
         super(DaosCoreTestDfs, self).__init__(*args, **kwargs)
         self.hostfile_clients_slots = None
+        self.daos_test = os.path.join(self.bin, 'dfs_test')
 
-    def test_subtest(self):
-        """
-        Test ID: DAOS-5409
-
-        Test Description: Run DAOS file system tests 'dfs_test'
-
-        Use Cases: Daos File system tests
+    def test_dfs_unit(self):
+        """Run daos_test -u
 
         :avocado: tags=all,pr,daily_regression,hw,large,dfs_test
         """
-        self.daos_test = os.path.join(self.bin, 'dfs_test')
-        DaosCoreBase.run_subtest(self)
+        self.num_clients = 1
+        DaosCoreBase.run_subtest(self, "u", "DFS Unit", 250)
+
+    def test_dfs_parallel(self):
+        """Run daos_test -p
+
+        :avocado: tags=all,pr,daily_regression,hw,large,dfs_test
+        """
+        self.num_clients = 32
+        DaosCoreBase.run_subtest(self, "p", "DFS Parallel", 200)

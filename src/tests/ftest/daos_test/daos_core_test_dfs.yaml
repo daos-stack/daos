@@ -48,15 +48,3 @@ agent_config:
 dmg:
   transport_config:
     allow_insecure: True
-daos_tests:
-  Tests: !mux
-    test_u:
-      daos_test: u
-      num_clients: 1
-      test_name: DFS unit tests
-      test_timeout: 250
-    test_p:
-      daos_test: p
-      num_clients: 32
-      test_name: DFS parallel tests
-      test_timeout: 200
