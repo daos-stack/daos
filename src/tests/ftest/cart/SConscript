@@ -68,7 +68,7 @@ def scons():
     tenv = env.Clone()
 
     tenv.AppendUnique(CPPPATH=['#/src/cart/src/cart'])
-    tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread'])
+    tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm'])
     prereqs.require(tenv, 'crypto', 'mercury')
 
     tests_dir = os.path.join("$PREFIX", 'lib', 'daos', 'TESTING', 'tests')

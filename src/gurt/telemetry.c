@@ -26,6 +26,8 @@
  */
 #define D_LOGFAC	DD_FAC(telem)
 
+#include <math.h>
+#include <float.h>
 #include <gurt/common.h>
 #include <sys/shm.h>
 #include "gurt/telemetry_common.h"
@@ -698,6 +700,54 @@ failure:
 	return rc;
 }
 
+void d_tm_compute_gauge_stats(struct d_tm_node_t *node)
+{
+	long double mean;
+	long double s;
+	long double variance;
+
+	node->dtn_metric->dtm_stats->k++;
+	mean = node->dtn_metric->dtm_stats->mean + ((node->dtn_metric->dtm_data.value - node->dtn_metric->dtm_stats->mean) / node->dtn_metric->dtm_stats->k);
+	s = node->dtn_metric->dtm_stats->s + ((node->dtn_metric->dtm_data.value - node->dtn_metric->dtm_stats->mean) * (node->dtn_metric->dtm_data.value - mean));
+	node->dtn_metric->dtm_stats->mean = mean;
+	node->dtn_metric->dtm_stats->s = s;
+
+	if (node->dtn_metric->dtm_stats->k > 2) {
+		variance = s / (node->dtn_metric->dtm_stats->k - 1);
+		node->dtn_metric->dtm_stats->std_dev = sqrtl(variance);
+	}
+
+	if (node->dtn_metric->dtm_data.value > node->dtn_metric->dtm_stats->max)
+		node->dtn_metric->dtm_stats->max = node->dtn_metric->dtm_data.value;
+
+	if (node->dtn_metric->dtm_data.value < node->dtn_metric->dtm_stats->min)
+		node->dtn_metric->dtm_stats->min = node->dtn_metric->dtm_data.value;
+}
+
+void d_tm_compute_time_stats(struct d_tm_node_t *node)
+{
+	long double mean;
+	long double s;
+	long double variance;
+
+	node->dtn_metric->dtm_stats->k++;
+	mean = node->dtn_metric->dtm_stats->mean + ((node->dtn_metric->dtm_data.value - node->dtn_metric->dtm_stats->mean) / node->dtn_metric->dtm_stats->k);
+	s = node->dtn_metric->dtm_stats->s + ((node->dtn_metric->dtm_data.value - node->dtn_metric->dtm_stats->mean) * (node->dtn_metric->dtm_data.value - mean));
+	node->dtn_metric->dtm_stats->mean = mean;
+	node->dtn_metric->dtm_stats->s = s;
+
+	if (node->dtn_metric->dtm_stats->k > 2) {
+		variance = s / (node->dtn_metric->dtm_stats->k - 1);
+		node->dtn_metric->dtm_stats->std_dev = sqrtl(variance);
+	}
+
+	if (node->dtn_metric->dtm_data.value > node->dtn_metric->dtm_stats->max)
+		node->dtn_metric->dtm_stats->max = node->dtn_metric->dtm_data.value;
+
+	if (node->dtn_metric->dtm_data.value < node->dtn_metric->dtm_stats->min)
+		node->dtn_metric->dtm_stats->min = node->dtn_metric->dtm_data.value;
+}
+
 /**
  * Increment the given counter
  *
@@ -1239,6 +1289,7 @@ d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value, char *item, ...)
 	if (node->dtn_type == D_TM_GAUGE) {
 		D_MUTEX_LOCK(&node->dtn_lock);
 		node->dtn_metric->dtm_data.value = value;
+		d_tm_compute_gauge_stats(node);
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
@@ -1599,6 +1650,23 @@ d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
 	temp->dtn_metric->dtm_data.tms[1].tv_sec = 0;
 	temp->dtn_metric->dtm_data.tms[1].tv_nsec = 0;
 
+	temp->dtn_metric->dtm_stats = NULL;
+	if (metric_type == D_TM_GAUGE) {
+		temp->dtn_metric->dtm_stats = d_tm_shmalloc(sizeof(struct d_tm_stats_t));
+		if (temp->dtn_metric->dtm_stats == NULL) {
+			rc = -DER_NO_SHMEM;
+			goto failure;
+		}
+
+		temp->dtn_metric->dtm_stats->dtm_min_max.min_max_int.min = 0;
+		temp->dtn_metric->dtm_stats->min = LDBL_MAX_10_EXP;
+		temp->dtn_metric->dtm_stats->max = 0;
+		temp->dtn_metric->dtm_stats->std_dev = 0.0;
+		temp->dtn_metric->dtm_stats->mean = 0.0;
+		temp->dtn_metric->dtm_stats->s = 0.0;
+		temp->dtn_metric->dtm_stats->k = 0;
+	}
+
 	buff_len = strnlen(sh_desc, D_TM_MAX_SHORT_LEN);
 	if (buff_len == D_TM_MAX_SHORT_LEN) {
 		rc = -DER_EXCEEDS_PATH_LEN;
@@ -1901,6 +1969,75 @@ d_tm_get_gauge(uint64_t *val, uint64_t *shmem_root, struct d_tm_node_t *node,
 	}
 	return D_TM_SUCCESS;
 }
+
+/**
+ * Client function to read the specified gauge stats.  If the node is provided,
+ * that pointer is used for the read.  Otherwise, a lookup by the metric name
+ * is performed.  Access to the data is guarded by the use of the shared
+ * mutex for this specific node.
+ * Provide a valid pointer for one or more desired statistic.  It is an error
+ * if there is not at least one valid pointer.
+ *
+ * \param[in,out]	min		The min val of the gauge is stored here
+ * \param[in,out]	max		The max val of the gauge is stored here
+ * \param[in,out]	avg		The avg val of the gauge is stored here
+ * \param[in,out]	std_dev		The std deviation of the gauge is stored
+ *					here
+ * \param[in]		shmem_root	Pointer to the shared memory segment
+ * \param[in]		node		Pointer to the stored metric node
+ * \param[in]		metric		Full path name to the stored metric
+ *
+ * \return		D_TM_SUCCESS		Success
+ *			-DER_INVAL		Bad \a min, \a max, \a avg
+ *						\a std_dev pointer
+ *			-DER_METRIC_NOT_FOUND	Metric not found
+ *			-DER_OP_NOT_PERMITTED	Metric was not a gauge
+ */
+int
+d_tm_get_gauge_stats(uint64_t *min, uint64_t *max, uint64_t *avg,
+		     uint64_t *std_dev, uint64_t *shmem_root,
+		     struct d_tm_node_t *node, char *metric)
+{
+	struct d_tm_metric_t	*metric_data = NULL;
+	struct d_tm_stats_t	*dtm_stats = NULL;
+
+	if ((min == NULL) && (max == NULL) &&
+	    (avg == NULL) && (std_dev == NULL))
+		return -DER_INVAL;
+
+	if (node == NULL) {
+		node = d_tm_find_metric(shmem_root, metric);
+		if (node == NULL)
+			return -DER_METRIC_NOT_FOUND;
+	}
+
+	if (!d_tm_validate_shmem_ptr(shmem_root, (void *)node))
+		return -DER_METRIC_NOT_FOUND;
+
+	if (node->dtn_type != D_TM_GAUGE)
+		return -DER_OP_NOT_PERMITTED;
+
+	metric_data = d_tm_conv_ptr(shmem_root, node->dtn_metric);
+	if (metric_data != NULL) {
+
+		dtm_stats = d_tm_conv_ptr(shmem_root, metric_data->dtm_stats);
+		D_MUTEX_LOCK(&node->dtn_lock);
+		if (min != NULL)
+			*min = dtm_stats->min;
+		if (max != NULL)
+			*max = dtm_stats->max;
+		if (std_dev != NULL)
+			*std_dev = dtm_stats->std_dev;
+		if (avg != NULL)
+			*avg = dtm_stats->mean;
+		D_MUTEX_UNLOCK(&node->dtn_lock);
+	} else {
+		return -DER_METRIC_NOT_FOUND;
+	}
+	return D_TM_SUCCESS;
+}
+
+
 
 /**
  * Client function to read the metadata for the specified metric.  If the node

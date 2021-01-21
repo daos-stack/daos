@@ -34,6 +34,9 @@ int d_tm_get_duration(struct timespec *tms, uint64_t *shmem_root,
 		      struct d_tm_node_t *node, char *metric);
 int d_tm_get_gauge(uint64_t *val, uint64_t *shmem_root,
 		   struct d_tm_node_t *node, char *metric);
+int d_tm_get_gauge_stats(uint64_t *min, uint64_t *max, uint64_t *avg,
+			 uint64_t *std_dev, uint64_t *shmem_root,
+			 struct d_tm_node_t *node, char *metric);
 int d_tm_get_metadata(char **sh_desc, char **lng_desc, uint64_t *shmem_root,
 		      struct d_tm_node_t *node, char *metric);
 

@@ -45,11 +45,31 @@ enum {
 	D_TM_CLOCK_THREAD_CPUTIME	= 0x100,
 };
 
+struct d_tm_stats_t {
+	union min_max {
+		union x {
+			uint64_t min;
+			uint64_t max;
+		} min_max_int;
+		union y {
+			long double min;
+			long double max;
+		} min_max_float;
+	} dtm_min_max;
+	uint64_t min;
+	uint64_t max;
+	long double std_dev;
+	long double mean;
+	long double s;
+	uint64_t k;
+};
+
 struct d_tm_metric_t {
 	union data {
 		uint64_t value;
 		struct timespec tms[2];
 	} dtm_data;
+	struct d_tm_stats_t *dtm_stats;
 	char *dtm_sh_desc;
 	char *dtm_lng_desc;
 };
