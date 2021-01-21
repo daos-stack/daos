@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,6 +27,10 @@ import (
 	"bytes"
 	"fmt"
 	"text/tabwriter"
+)
+
+const (
+	defEntityRowIndent = 2
 )
 
 // EntityFormatter can be used for neatly displaying attributes
@@ -57,9 +61,10 @@ func (f *EntityFormatter) formatHeader() {
 func (f *EntityFormatter) Format(table []TableRow) string {
 	f.formatHeader()
 
+	iw := NewIndentWriter(f.writer, WithPadCount(defEntityRowIndent))
 	for _, row := range table {
 		for key, val := range row {
-			fmt.Fprintf(f.writer, "%s\t%s%s\t\n", key, f.Separator, val)
+			fmt.Fprintf(iw, "%s\t%s%s\t\n", key, f.Separator, val)
 		}
 	}
 
@@ -99,6 +104,6 @@ func GetEntityPadding(table []TableRow) (padding int) {
 // FormatEntity returns a formatted string from the supplied entity title
 // and table of attributes.
 func FormatEntity(title string, attrs []TableRow) string {
-	f := NewEntityFormatter(title, GetEntityPadding(attrs))
+	f := NewEntityFormatter(title, GetEntityPadding(attrs)+defEntityRowIndent)
 	return f.Format(attrs)
 }

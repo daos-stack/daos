@@ -21,6 +21,7 @@ provided in Contract No. B609815.
 Any reproduction of computer software, computer software documentation, or
 portions thereof marked with this legend must also reproduce the markings.
 """
+import time
 
 from apricot import TestWithServers
 from general_utils import bytes_to_human, human_to_bytes
@@ -71,7 +72,7 @@ class PoolTestBase(TestWithServers):
                     str(sizes[index]), bytes_to_human(sizes[index]))
         return sizes
 
-    def get_pool_list(self, quantity, scm_ratio, nvme_ratio):
+    def get_pool_list(self, quantity, scm_ratio, nvme_ratio, svcn=None):
         """Get a list of TestPool objects.
 
         Set each TestPool's scm_size and nvme_size attributes using the
@@ -85,6 +86,8 @@ class PoolTestBase(TestWithServers):
             nvme_ratio (float): percentage of the maximum NVMe capacity to use
                 for the pool sizes, e.g. 0.9 for 90%. Specifying None will
                 setup each pool without NVMe.
+            svcn (int): Number of pool service replicas. The default value
+                of None will use the default set on the server.
 
         Returns:
             list: a list of TestPool objects equal in length to the quantity
@@ -96,6 +99,7 @@ class PoolTestBase(TestWithServers):
         pool_list = [
             self.get_pool(create=False, connect=False) for _ in range(quantity)]
         for pool in pool_list:
+            pool.svcn.update(svcn)
             pool.scm_size.update(bytes_to_human(sizes[0]), "scm_size")
             if nvme_ratio is not None:
                 if sizes[1] is None:
@@ -121,3 +125,28 @@ class PoolTestBase(TestWithServers):
                     bytes_to_human(nvme_multiple), "nvme_size")
 
         return pool_list
+
+    def check_pool_creation(self, max_duration):
+        """Check the duration of each pool creation meets the requirement.
+
+        Args:
+            max_duration (int): max pool creation duration allowed in seconds
+
+        """
+        durations = []
+        for index, pool in enumerate(self.pool):
+            start = float(time.time())
+            pool.create()
+            durations.append(float(time.time()) - start)
+            self.log.info(
+                "Pool %s creation: %s seconds", index + 1, durations[-1])
+
+        exceeding_duration = 0
+        for index, duration in enumerate(durations):
+            if duration > max_duration:
+                exceeding_duration += 1
+
+        self.assertEqual(
+            exceeding_duration, 0,
+            "Pool creation took longer than {} seconds on {} pool(s)".format(
+                max_duration, exceeding_duration))

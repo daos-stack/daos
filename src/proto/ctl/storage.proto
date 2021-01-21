@@ -24,8 +24,10 @@
 syntax = "proto3";
 package ctl;
 
-import "storage_nvme.proto";
-import "storage_scm.proto";
+option go_package = "github.com/daos-stack/daos/src/control/common/proto/ctl";
+
+import "ctl/storage_nvme.proto";
+import "ctl/storage_scm.proto";
 
 // Management Service Protobuf Definitions related to interactions between
 // DAOS control server and locally attached storage.

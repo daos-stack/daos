@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@
 
 #include "../drpc_internal.h"
 #include "../srv.pb-c.h"
+#include "../event.pb-c.h"
 #include "../srv_internal.h"
 #include <daos/test_mocks.h>
 #include <daos/test_utils.h>
@@ -42,6 +43,7 @@
  */
 const char	*dss_socket_dir = "/my/fake/path";
 char		*drpc_listener_socket_path = "/fake/listener.sock";
+char		 dss_hostname[DSS_HOSTNAME_MAX_LEN] = "foo-host";
 
 /* DAOS internal globals - arbitrary values okay */
 uint32_t	dss_tgt_offload_xs_nr = 3;
@@ -58,6 +60,13 @@ crt_self_uri_get(int tag, char **uri)
 		D_STRNDUP(*uri, crt_self_uri_get_uri,
 			  strlen(crt_self_uri_get_uri));
 	return crt_self_uri_get_return;
+}
+
+static uint32_t	mock_self_rank = 1;
+d_rank_t
+dss_self_rank(void)
+{
+	return (d_rank_t)mock_self_rank;
 }
 
 /*
@@ -89,6 +98,7 @@ drpc_client_test_teardown(void **state)
 static void
 test_drpc_init_connect_fails(void **state)
 {
+	skip(); /* DAOS-6436 */
 	connect_return = -1;
 
 	assert_int_equal(drpc_init(), -DER_NOMEM);
@@ -98,7 +108,6 @@ static void
 test_drpc_init_crt_get_uri_fails(void **state)
 {
 	crt_self_uri_get_return = -DER_BUSY;
-
 	assert_int_equal(drpc_init(), crt_self_uri_get_return);
 
 	/* make sure socket was closed */
@@ -108,6 +117,7 @@ test_drpc_init_crt_get_uri_fails(void **state)
 static void
 test_drpc_init_sendmsg_fails(void **state)
 {
+	skip(); /* DAOS-6436 */
 	sendmsg_return = -1;
 	errno = EPERM;
 
@@ -148,7 +158,6 @@ static void
 test_drpc_init_fini(void **state)
 {
 	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
-
 	assert_int_equal(drpc_init(), 0);
 
 	/* drpc connection created */
@@ -172,7 +181,6 @@ static void
 test_drpc_init_bad_response(void **state)
 {
 	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__FAILURE);
-
 	assert_int_equal(drpc_init(), -DER_IO);
 
 	/* make sure socket was closed */
@@ -211,21 +219,10 @@ verify_notify_bio_error(void)
 static void
 test_drpc_verify_notify_bio_error(void **state)
 {
-
 	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
-
 	assert_int_equal(drpc_init(), 0);
 
-	/* drpc connection created */
-	assert_int_equal(connect_sockfd, socket_return);
-
-	/* socket was left open */
-	assert_int_equal(close_call_count, 0);
-
-	/* Message was sent */
-	assert_non_null(sendmsg_msg_ptr);
-
-	assert_int_equal(notify_bio_error(MET_WRITE, 0), 0);
+	assert_int_equal(ds_notify_bio_error(MET_WRITE, 0), 0);
 	verify_notify_bio_error();
 
 	/* Now let's shut things down... */
@@ -235,6 +232,276 @@ test_drpc_verify_notify_bio_error(void **state)
 	assert_int_equal(close_call_count, 1);
 }
 
+static void
+verify_notify_pool_svc_update(uuid_t *pool_uuid, d_rank_list_t *svc_reps)
+{
+	Drpc__Call		*call;
+	Shared__ClusterEventReq	*req;
+	d_rank_list_t		*reps;
+	uuid_t			 puuid;
+	int			 reps_match;
+
+	call = drpc__call__unpack(NULL, sendmsg_msg_iov_len,
+				  sendmsg_msg_content);
+	assert_non_null(call);
+	assert_int_equal(call->module, DRPC_MODULE_SRV);
+	assert_int_equal(call->method, DRPC_METHOD_SRV_CLUSTER_EVENT);
+
+	/* Verify payload contents */
+	req = shared__cluster_event_req__unpack(NULL, call->body.len,
+						call->body.data);
+	assert_non_null(req);
+
+	assert_string_equal(req->event->hostname, dss_hostname);
+	/* populated by mock dss_self_rank */
+	assert_int_equal(req->event->rank, mock_self_rank);
+	assert_int_equal(uuid_parse(req->event->pool_uuid, puuid), 0);
+	assert_int_equal(uuid_compare(puuid, *pool_uuid), 0);
+	assert_int_equal(req->event->pool_svc_info->n_svc_reps,
+			 svc_reps->rl_nr);
+	reps = uint32_array_to_rank_list(req->event->pool_svc_info->svc_reps,
+					 svc_reps->rl_nr);
+	reps_match = daos_rank_list_identical(svc_reps, reps);
+	d_rank_list_free(reps);
+	assert_true(reps_match);
+
+	/* Cleanup */
+	shared__cluster_event_req__free_unpacked(req, NULL);
+	drpc__call__free_unpacked(call, NULL);
+}
+
+static void
+test_drpc_verify_notify_pool_svc_update(void **state)
+{
+	uuid_t		 pool_uuid;
+	uint32_t	 svc_reps[4] = {0, 1, 2, 3};
+	d_rank_list_t	*svc_ranks;
+
+	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
+	assert_int_equal(drpc_init(), 0);
+
+	assert_int_equal(uuid_parse("11111111-1111-1111-1111-111111111111",
+				    pool_uuid), 0);
+
+	svc_ranks = uint32_array_to_rank_list(svc_reps, 4);
+	assert_non_null(svc_ranks);
+
+	assert_int_equal(ds_notify_pool_svc_update(&pool_uuid, svc_ranks), 0);
+	verify_notify_pool_svc_update(&pool_uuid, svc_ranks);
+
+	d_rank_list_free(svc_ranks);
+
+	drpc_fini();
+}
+
+static void
+verify_cluster_event_not_sent()
+{
+	Drpc__Call		*call;
+	Shared__ClusterEventReq	*req;
+
+	call = drpc__call__unpack(NULL, sendmsg_msg_iov_len,
+				  sendmsg_msg_content);
+	assert_non_null(call);
+	assert_int_equal(call->module, DRPC_MODULE_SRV);
+
+	/* Verify NULL payload content */
+	req = shared__cluster_event_req__unpack(NULL, call->body.len,
+						call->body.data);
+	assert_true(req == NULL);
+
+	/* Cleanup */
+	drpc__call__free_unpacked(call, NULL);
+}
+
+static void
+test_drpc_verify_notify_pool_svc_update_noreps(void **state)
+{
+	uuid_t	pool_uuid;
+
+	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
+	assert_int_equal(drpc_init(), 0);
+
+	assert_int_equal(uuid_parse("11111111-1111-1111-1111-111111111111",
+				    pool_uuid), 0);
+
+	assert_int_equal(ds_notify_pool_svc_update(&pool_uuid, NULL),
+			 -DER_INVAL);
+	verify_cluster_event_not_sent();
+
+	drpc_fini();
+}
+
+static void
+test_drpc_verify_notify_pool_svc_update_nopool(void **state)
+{
+	uint32_t	 svc_reps[4] = {0, 1, 2, 3};
+	d_rank_list_t	*svc_ranks;
+
+	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
+	assert_int_equal(drpc_init(), 0);
+
+	svc_ranks = uint32_array_to_rank_list(svc_reps, 4);
+	assert_non_null(svc_ranks);
+
+	assert_int_equal(ds_notify_pool_svc_update(NULL, svc_ranks),
+			 -DER_INVAL);
+	verify_cluster_event_not_sent();
+
+	d_rank_list_free(svc_ranks);
+
+	drpc_fini();
+}
+
+static void
+verify_notify_ras(ras_event_t id, char *msg, ras_type_t type,
+		  ras_sev_t sev, char *hid, d_rank_t *rank, char *jid,
+		  uuid_t *puuid, uuid_t *cuuid, daos_obj_id_t *oid,
+		  char *cop, char *data)
+{
+	Drpc__Call		*call;
+	Shared__ClusterEventReq	*req;
+	uuid_t			 req_puuid, req_cuuid;
+
+	call = drpc__call__unpack(NULL, sendmsg_msg_iov_len,
+				  sendmsg_msg_content);
+	assert_non_null(call);
+	assert_int_equal(call->module, DRPC_MODULE_SRV);
+	assert_int_equal(call->method, DRPC_METHOD_SRV_CLUSTER_EVENT);
+
+	/* Verify payload contents */
+	req = shared__cluster_event_req__unpack(NULL, call->body.len,
+						call->body.data);
+	assert_non_null(req);
+
+	assert_string_equal(req->event->hostname, dss_hostname);
+	assert_int_equal((uint32_t)req->event->rank, (uint32_t)*rank);
+	assert_int_equal((uint32_t)req->event->id, (uint32_t)id);
+	assert_string_equal(req->event->msg, msg);
+	assert_int_equal((uint32_t)req->event->type, (uint32_t)type);
+	assert_int_equal((uint32_t)req->event->severity, (uint32_t)sev);
+	assert_string_equal(req->event->hw_id, hid);
+	assert_string_equal(req->event->job_id, jid);
+	assert_int_equal(uuid_parse(req->event->pool_uuid, req_puuid), 0);
+	assert_int_equal(uuid_compare(req_puuid, *puuid), 0);
+	assert_int_equal(uuid_parse(req->event->cont_uuid, req_cuuid), 0);
+	assert_int_equal(uuid_compare(req_cuuid, *cuuid), 0);
+	assert_string_equal(req->event->obj_id, "1.1");
+	assert_string_equal(req->event->ctl_op, cop);
+	assert_string_equal(req->event->str_info, data);
+
+	/* Cleanup */
+	shared__cluster_event_req__free_unpacked(req, NULL);
+	drpc__call__free_unpacked(call, NULL);
+}
+
+static void
+test_drpc_verify_notify_ras(void **state)
+{
+	uuid_t		puuid, cuuid;
+	d_rank_t	rank = 1;
+	daos_obj_id_t	oid = { .hi = 1, .lo = 1 };
+
+	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
+	assert_int_equal(drpc_init(), 0);
+
+	assert_int_equal(uuid_parse("11111111-1111-1111-1111-111111111111",
+				    puuid), 0);
+	assert_int_equal(uuid_parse("22222222-2222-2222-2222-222222222222",
+				    cuuid), 0);
+
+	ds_notify_ras_event(RAS_RANK_NO_RESPONSE, "no response", RAS_TYPE_INFO,
+			    RAS_SEV_WARN, "exhwid", &rank, "exjobid", &puuid,
+			    &cuuid, &oid, "exctlop",
+			    "{\"people\":[\"bill\",\"steve\",\"bob\"]}");
+	verify_notify_ras(RAS_RANK_NO_RESPONSE, "no response", RAS_TYPE_INFO,
+			  RAS_SEV_WARN, "exhwid", &rank, "exjobid", &puuid,
+			  &cuuid, &oid, "exctlop",
+			  "{\"people\":[\"bill\",\"steve\",\"bob\"]}");
+
+	drpc_fini();
+}
+
+static void
+verify_notify_ras_min_viable(ras_event_t id, char *msg, ras_type_t type,
+			     ras_sev_t sev)
+{
+	Drpc__Call		*call;
+	Shared__ClusterEventReq	*req;
+
+	call = drpc__call__unpack(NULL, sendmsg_msg_iov_len,
+				  sendmsg_msg_content);
+	assert_non_null(call);
+	assert_int_equal(call->module, DRPC_MODULE_SRV);
+	assert_int_equal(call->method, DRPC_METHOD_SRV_CLUSTER_EVENT);
+
+	/* Verify payload contents */
+	req = shared__cluster_event_req__unpack(NULL, call->body.len,
+						call->body.data);
+	assert_non_null(req);
+
+	assert_string_equal(req->event->hostname, dss_hostname);
+	/* populated by mock dss_self_rank */
+	assert_int_equal(req->event->rank, mock_self_rank);
+	assert_int_equal((uint32_t)req->event->id, (uint32_t)id);
+	assert_string_equal(req->event->msg, msg);
+	assert_int_equal((uint32_t)req->event->type, (uint32_t)type);
+	assert_int_equal((uint32_t)req->event->severity, (uint32_t)sev);
+	assert_string_equal(req->event->hw_id, "");
+	assert_string_equal(req->event->job_id, "");
+	assert_string_equal(req->event->pool_uuid, "");
+	assert_string_equal(req->event->cont_uuid, "");
+	assert_string_equal(req->event->obj_id, "");
+	assert_string_equal(req->event->ctl_op, "");
+	assert_true(req->event->str_info == NULL);
+
+	/* Cleanup */
+	shared__cluster_event_req__free_unpacked(req, NULL);
+	drpc__call__free_unpacked(call, NULL);
+}
+
+static void
+test_drpc_verify_notify_ras_min_viable(void **state)
+{
+	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
+	assert_int_equal(drpc_init(), 0);
+
+	ds_notify_ras_event(RAS_RANK_DOWN, "rank down", RAS_TYPE_STATE_CHANGE,
+			    RAS_SEV_ERROR, NULL, NULL, NULL, NULL, NULL, NULL,
+			    NULL, NULL);
+	verify_notify_ras_min_viable(RAS_RANK_DOWN, "rank down",
+				     RAS_TYPE_STATE_CHANGE, RAS_SEV_ERROR);
+
+	drpc_fini();
+}
+
+static void
+test_drpc_verify_notify_ras_emptymsg(void **state)
+{
+	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
+	assert_int_equal(drpc_init(), 0);
+
+	ds_notify_ras_event(RAS_RANK_DOWN, "", RAS_TYPE_STATE_CHANGE,
+			    RAS_SEV_ERROR, NULL, NULL, NULL, NULL, NULL, NULL,
+			    NULL, NULL);
+	verify_cluster_event_not_sent();
+
+	drpc_fini();
+}
+
+static void
+test_drpc_verify_notify_ras_nomsg(void **state)
+{
+	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
+	assert_int_equal(drpc_init(), 0);
+
+	ds_notify_ras_event(RAS_RANK_DOWN, NULL, RAS_TYPE_STATE_CHANGE,
+			    RAS_SEV_ERROR, NULL, NULL, NULL, NULL, NULL, NULL,
+			    NULL, NULL);
+	verify_cluster_event_not_sent();
+
+	drpc_fini();
+}
 
 /* Convenience macros for unit tests */
 #define UTEST(x)	cmocka_unit_test_setup_teardown(x,	\
@@ -251,6 +518,13 @@ main(void)
 		UTEST(test_drpc_init_fini),
 		UTEST(test_drpc_init_bad_response),
 		UTEST(test_drpc_verify_notify_bio_error),
+		UTEST(test_drpc_verify_notify_pool_svc_update),
+		UTEST(test_drpc_verify_notify_pool_svc_update_noreps),
+		UTEST(test_drpc_verify_notify_pool_svc_update_nopool),
+		UTEST(test_drpc_verify_notify_ras),
+		UTEST(test_drpc_verify_notify_ras_min_viable),
+		UTEST(test_drpc_verify_notify_ras_emptymsg),
+		UTEST(test_drpc_verify_notify_ras_nomsg),
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);

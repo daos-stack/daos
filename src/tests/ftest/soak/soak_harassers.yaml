@@ -153,6 +153,8 @@ fio_harasser:
     rw:
         - 'rw'
         - 'randrw'
+    oclass:
+        - 'RP_2G1'
 daos_racer:
     runtime: 120
 dfuse:

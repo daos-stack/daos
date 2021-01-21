@@ -52,6 +52,7 @@ func PoolGetACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetACLReq)
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolGetACL(ctx, &mgmtpb.GetACLReq{
+			Sys:  req.getSystem(),
 			Uuid: req.UUID,
 		})
 	})
@@ -95,6 +96,7 @@ func PoolOverwriteACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolOver
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolOverwriteACL(ctx, &mgmtpb.ModifyACLReq{
+			Sys:  req.getSystem(),
 			Uuid: req.UUID,
 			ACL:  req.ACL.Entries,
 		})
@@ -140,6 +142,7 @@ func PoolUpdateACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolUpdateA
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolUpdateACL(ctx, &mgmtpb.ModifyACLReq{
+			Sys:  req.getSystem(),
 			Uuid: req.UUID,
 			ACL:  req.ACL.Entries,
 		})
@@ -185,6 +188,7 @@ func PoolDeleteACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolDeleteA
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolDeleteACL(ctx, &mgmtpb.DeleteACLReq{
+			Sys:       req.getSystem(),
 			Uuid:      req.UUID,
 			Principal: req.Principal,
 		})
