@@ -476,7 +476,7 @@ ds_pool_map_tgts_update(struct pool_map *map,
 		D_DEBUG(DF_DSMS, "generating map %p version %u:\n",
 			map, version);
 		rc = pool_map_set_version(map, version);
-		D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
+		D_ASSERTF(rc == 0, DF_RC"\n", DP_RC(rc));
 	}
 
 	return 0;
@@ -811,7 +811,7 @@ update_targets_ult(void *arg)
 		rc = dsc_pool_tgt_exclude(uta->uta_pool_id, NULL /* grp */,
 					  &svc, &tgt_list);
 	if (rc)
-		D_ERROR(DF_UUID": %s targets failed. " DF_RC "\n",
+		D_ERROR(DF_UUID": %s targets failed. "DF_RC"\n",
 			DP_UUID(uta->uta_pool_id),
 			uta->uta_reint ? "Reint" : "Exclude",
 			DP_RC(rc));

@@ -555,7 +555,7 @@ csum_report_cb(const struct crt_cb_info *cb_info)
 	crt_rpc_t	*rpc = cb_info->cci_arg;
 	int		 rc = cb_info->cci_rc;
 
-	D_DEBUG(DB_IO, "rpc %p, csum report " DF_RC "\n", rpc, DP_RC(rc));
+	D_DEBUG(DB_IO, "rpc %p, csum report "DF_RC"\n", rpc, DP_RC(rc));
 	crt_req_decref(rpc);
 	crt_req_decref(cb_info->cci_rpc);
 }
@@ -591,7 +591,7 @@ dc_shard_csum_report(tse_task_t *task, crt_rpc_t *rpc)
 	crt_req_addref(rpc);
 	rc = crt_req_send(csum_rpc, csum_report_cb, rpc);
 	if (rc != 0)
-		D_ERROR("Fail to send csum report, rpc %p, " DF_RC "\n",
+		D_ERROR("Fail to send csum report, rpc %p, "DF_RC"\n",
 			rpc, DP_RC(rc));
 
 	return rc;

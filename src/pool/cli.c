@@ -207,8 +207,8 @@ choose:
 			D_MUTEX_UNLOCK(cli_lock);
 		rc = dc_mgmt_get_pool_svc_ranks(sys, puuid, &new_ranklist);
 		if (rc) {
-			D_ERROR(DF_UUID ": dc_mgmt_get_pool_svc_ranks() "
-				"failed, " DF_RC "\n", DP_UUID(puuid),
+			D_ERROR(DF_UUID": dc_mgmt_get_pool_svc_ranks() "
+				"failed, "DF_RC"\n", DP_UUID(puuid),
 				DP_RC(rc));
 			return rc;
 		}
@@ -1473,7 +1473,7 @@ dc_pool_list_cont(tse_task_t *task)
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_LIST_CONT, &rpc);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create pool list cont rpc: "
-			DF_RC "\n",
+			DF_RC"\n",
 			DP_UUID(pool->dp_pool), DP_RC(rc));
 		D_GOTO(out_pool, rc);
 	}

@@ -279,7 +279,7 @@ vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
 		(bound), (leaf));					\
 	__rc = vos_ilog_punch_(cont, ilog, epr, bound, parent, info,	\
 			       ts_set, leaf, replay);			\
-	D_DEBUG(DB_TRACE, "vos_ilog_punch: returned " DF_RC"\n",	\
+	D_DEBUG(DB_TRACE, "vos_ilog_punch: returned "DF_RC"\n",		\
 		DP_RC(__rc));						\
 	__rc;								\
 })

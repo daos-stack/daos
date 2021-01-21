@@ -118,7 +118,8 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 	ctx = crt_ctx;
 	rc = crt_hg_bulk_create(&ctx->cc_hg_ctx, sgl, bulk_perm, bulk_hdl);
 	if (rc != 0)
-		D_ERROR("crt_hg_bulk_create() failed, rc: " DF_RC "\n", DP_RC(rc));
+		D_ERROR("crt_hg_bulk_create() failed, rc: "DF_RC"\n",
+			DP_RC(rc));
 
 out:
 	return rc;
