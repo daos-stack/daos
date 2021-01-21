@@ -1661,7 +1661,7 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 	D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	if (rc != 0) {
 		D_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR,
-			 "ivo_on_hash() failed, rc="DF_RC"\n",
+			 "Failed to get hash, rc="DF_RC"\n",
 			 DP_RC(rc));
 		D_GOTO(exit, rc);
 	}
@@ -1769,7 +1769,7 @@ exit:
 		if (put_needed)
 			iv_ops->ivo_on_put(ivns, iv_value, user_priv);
 		D_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR,
-			 "ivo_on_put() failed, rc="DF_RC"\n",
+			 "Failed to issue IV fetch, rc="DF_RC"\n",
 			 DP_RC(rc));
 
 		if (cb_info) {
