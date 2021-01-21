@@ -893,7 +893,7 @@ def run_tests(test_files, tag_filter, args):
             test_command_list.extend([
                 "--mux-yaml", test_file["yaml"], "--", test_file["py"]])
             return_code |= time_command(test_command_list)
-            return_code |= stop_daos_processes(test_file["py"], args)
+            return_code |= stop_daos_server_service(test_file["py"], args)
 
             # Optionally store all of the server and client config files
             # and archive remote logs and report big log files, if any.
@@ -1567,8 +1567,8 @@ def get_test_category(test_file):
         [os.path.splitext(os.path.basename(part))[0] for part in file_parts])
 
 
-def stop_daos_processes(test_file, args):
-    """Stop any daos processes running on the hosts running servers.
+def stop_daos_server_service(test_file, args):
+    """Stop any daos_server.service running on the hosts running servers.
 
     Args:
         test_file (str): the test python file
@@ -1578,13 +1578,92 @@ def stop_daos_processes(test_file, args):
         int: status code: 0 = success, 512 = failure
 
     """
-    status = 0
-    host_list = list(args.test_servers)
-    print("Stopping daos servers after running '{}'".format(test_file))
-    result = stop_processes(host_list, "daos_server|daos_io_server", False)
-    if 0 not in result or len(result) > 1:
-        status = 512
+    hosts = list(args.test_servers)
+    print("Verifying daos_server.service after running '{}'".format(test_file))
+    status, stop_hosts, disable_hosts = get_daos_server_service_status(hosts)
+    if stop_hosts:
+        print("Stopping daos_server.service on {}".format(stop_hosts))
+        command = "sudo systemctl stop daos_server.service"
+        get_remote_output(str(stop_hosts), command)
+    if disable_hosts:
+        print("Disabling daos_server.service on {}".format(stop_hosts))
+        command = "sudo systemctl disable daos_server.service"
+        get_remote_output(str(disable_hosts), command)
+    if stop_hosts or disable_hosts:
+        check_hosts = NodeSet()
+        check_hosts.add(stop_hosts)
+        check_hosts.add(disable_hosts)
+        result = get_daos_server_service_status(hosts)
+        if result[1]:
+            print(
+                "Error daos_server.service still active on {}".format(
+                    result[1]))
+            status = 512
+        if result[2]:
+            print(
+                "Error daos_server.service still enabled on {}".format(
+                    result[2]))
+            status = 512
+        if result[0] != 0:
+            status = 512
     return status
+
+
+def get_daos_server_service_status(host_list, verbose=True):
+    """Get the status of the daos_server.service.
+
+    Args:
+        host_list (list): [description]
+
+    Returns:
+        tuple: a tuple containing:
+            - (int): status code: 0 = success, 512 = failure
+            - (NodeSet): hosts with an active daos_server.service
+            - (NodeSet): hosts with a loaded daos_server.service
+
+    """
+    status = 0
+    disable_hosts = NodeSet()
+    stop_hosts = NodeSet()
+    command = "sudo systemctl --lines=0 status daos_server.service"
+    task = get_remote_output(host_list, command)
+    for output, nodelist in task.iter_buffers():
+        nodeset = NodeSet.fromlist(nodelist)
+        match = re.findall(r"(Loaded|Active):\s+\w+\s\((.*)\)", str(output))
+        if match:
+            data = {key: value for key, value in match}
+            if "enabled;" in data["Loaded"]:
+                disable_hosts.add(nodeset)
+            if "running" in data["Active"]:
+                stop_hosts.add(nodeset)
+            if verbose:
+                indented_output = indent_text(2, str(output).splitlines())
+                print("  {}:\n{}".format(nodeset, indented_output))
+        else:
+            indented_output = indent_text(2, str(output).splitlines())
+            print(
+                "Error detecting daos_server.service status on {}: regex "
+                "failed:\n{}".format(nodeset, indented_output))
+            status = 512
+    return status, stop_hosts, disable_hosts
+
+
+def indent_text(indent, text):
+    """Append the specified number of spaces to the specified text.
+
+    Args:
+        indent (int): [description]
+        text (object): text to indent. lists will be converted into a
+            newline-separated str with indents added to each line
+
+    Returns:
+        str: indented text
+
+    """
+    if isinstance(text, (list,tuple)):
+        return "\n".join(["{}{}".format(" " * indent, line) for line in text])
+    else:
+        return " " * indent + str(text)
 
 
 def main():

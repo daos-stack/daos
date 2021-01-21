@@ -119,8 +119,10 @@ class DmgCommand(DmgCommandBase):
         """Wraps the base _get_result method to force JSON output."""
         prev_json_val = self.json.value
         self.json.update(True)
-        self._get_result(sub_command_list, **kwargs)
-        self.json.update(prev_json_val)
+        try:
+            self._get_result(sub_command_list, **kwargs)
+        finally:
+            self.json.update(prev_json_val)
         return json.loads(self.result.stdout)
 
     def network_scan(self, provider=None, all_devs=False):
