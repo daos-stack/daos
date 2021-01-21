@@ -1,4 +1,4 @@
-.\" (C) Copyright 2015-2019 Intel Corporation.
+.\" (C) Copyright 2015-2021 Intel Corporation.
 .\"
 .\" Licensed under the Apache License, Version 2.0 (the "License");
 .\" you may not use this file except in compliance with the License.
@@ -28,7 +28,8 @@ daos \- command to manage DAOS pool/container/object
 .SH DESCRIPTION
 .B daos
 can be used to manage/query a pool content, create/query/manage/destroy a
-container inside a pool or query/manage an object inside a container.
+container inside a pool, copy data to/from a POSIX container to a POSIX,
+filesystem, or query/manage an object inside a container.
 .br
 The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \fBdaos\fR are listed below.
 .SH RESOURCE\fRs/\fBCOMMAND\fRs/\fBOPTION\fRs
@@ -38,6 +39,8 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 	  \fBpool\fR             pool
 .br
 	  \fBcontainer \fR(\fBcont\fR) container in a pool
+.br
+	  \fBfilesystem \fR(\fBfs\fR) POSIX filesystem path or POSIX container
 .br
 	  \fBobject \fR(\fBobj\fR)     object in a container
 .br
@@ -93,6 +96,8 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 	  \fBquery\fR            query a container
 .br
 	  \fBstat\fR             get container statistics
+.br
+	  \fBcheck\fR            check objects consistency in container
 .br
 	  \fBlist-attrs\fR       list container user-defined attributes
 .br
@@ -202,6 +207,17 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 	  \fB--epc=\fREPOCHNUM     container epoch (destroy-snap, rollback)
 .br
 	  \fB--epcrange=\fRB-E     container epoch range (destroy-snap)
+.TP
+.I filesystem \fR(\fIfs\fR) \fBCOMMAND\fRs:
+	  \fBcopy\fR           	 copy data to/from a container to POSIX path
+.TP
+.I filesystem \fR(\fIfs\fR) \fBOPTION\fRs:
+.br
+	  \fB--src=\fRSTR     src=daos://<pool/cont>[/<path>] | <path>
+.br
+	  \fB--dst=\fRSTR     dst=daos://<pool/cont>[/<path>] | <path>
+.br
+		type is daos, only specified if pool/cont used
 .TP
 .I object \fR(\fIobj\fR) \fBCOMMAND\fRs:
 	  \fBquery\fR            query an object's layout
