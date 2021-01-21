@@ -7,6 +7,7 @@
 # pylint: disable=protected-access
 
 import os
+import bz2
 import sys
 import time
 import uuid
@@ -1251,6 +1252,23 @@ def log_test(conf,
 
     if check_write and 'dfuse_write' not in functions:
         raise NLTestNoFunction('dfuse_write')
+
+    small = bz2.BZ2Compressor()
+
+    fd = open(filename, 'rb')
+
+    nfd = open('{}.bz2'.format(filename), 'wb')
+    lines = fd.read(64*1024)
+    while lines:
+        new_data = bz2.compress(lines)
+        if new_data:
+            nfd.write(new_data)
+        lines = fd.read(64*1024)
+    new_data = small.flush()
+    if new_data:
+        nfd.write(new_data)
+
+    os.unlink(filename)
 
     return lto.fi_location
 
