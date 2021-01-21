@@ -33,6 +33,9 @@
 #define USE_TIME_PROFILING
 #include "benchmark_util.h"
 
+extern int  obj_class_init(void);
+extern void obj_class_fini(void);
+
 /*
  * These are only at the top of the file for reference / easy changing
  * Do not use these anywhere except in the main function where arguments are
@@ -692,6 +695,10 @@ main(int argc, char **argv)
 	if (rc != 0)
 		return rc;
 
+	rc = obj_class_init();
+	if (rc)
+		return rc;
+
 	rc = pl_init();
 	if (rc != 0) {
 		daos_debug_fini();
@@ -700,6 +707,7 @@ main(int argc, char **argv)
 
 	operation(argc, argv, num_domains, nodes_per_domain, vos_per_target);
 
+	obj_class_fini();
 	pl_fini();
 	daos_debug_fini();
 
