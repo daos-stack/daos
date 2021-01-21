@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -30,7 +30,6 @@ from __future__ import print_function
 import os
 import json
 import re
-from getpass import getuser
 
 from avocado import Test as avocadoTest
 from avocado import skip, TestFail, fail_on
@@ -862,14 +861,12 @@ class TestWithServers(TestWithoutServers):
             name (str): manager name
             manager_list (list): list of SubprocessManager objects to start
         """
-        user = getuser()
         # We probably want to do this parallel if end up with multiple managers
         for manager in manager_list:
             self.log.info(
                 "Starting %s: group=%s, hosts=%s, config=%s",
                 name, manager.get_config_value("name"), manager.hosts,
                 manager.get_config_value("filename"))
-            manager.verify_socket_directory(user)
             manager.start()
 
     def tearDown(self):

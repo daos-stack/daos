@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 # pylint: disable=too-many-lines
-import getpass
+from getpass import getuser
 import os
 import socket
 import time
@@ -369,7 +369,7 @@ class DaosServerManager(SubprocessManager):
         # Set the correct certificate file ownership
         if manager == "Systemctl":
             self.manager.job.certificate_owner = "daos_server"
-            self.dmg.certificate_owner = getpass.getuser()
+            self.dmg.certificate_owner = getuser()
 
         # An internal dictionary used to define the expected states of each
         # server rank when checking their states. It will be populated with
@@ -463,17 +463,6 @@ class DaosServerManager(SubprocessManager):
 
         # Clean up any files that exist on the hosts
         self.clean_files()
-
-        # # Make sure log file has been created for ownership change
-        # if self.manager.job.using_nvme:
-        #     cmd_list = []
-        #     for server_params in self.manager.job.yaml.server_params:
-        #         log_file = server_params.log_file.value
-        #         if log_file is not None:
-        #             self.log.info("Creating log file: %s", log_file)
-        #             cmd_list.append("touch {}".format(log_file))
-        #     if cmd_list:
-        #         pcmd(self._hosts, "; ".join(cmd_list), False)
 
         if storage:
             # Prepare server storage
@@ -653,7 +642,7 @@ class DaosServerManager(SubprocessManager):
             verbose (bool, optional): display commands. Defaults to False.
 
         """
-        user = getpass.getuser() if user is None else user
+        user = getuser() if user is None else user
 
         cmd_list = set()
         for server_params in self.manager.job.yaml.server_params:
@@ -674,6 +663,9 @@ class DaosServerManager(SubprocessManager):
         """Start the server through the job manager."""
         # Prepare the servers
         self.prepare()
+
+        # Verify the socket directory exists when using a non-systemctl manager
+        self.verify_socket_directory(getuser())
 
         # Start the servers and wait for them to be ready for storage format
         self.detect_format_ready()

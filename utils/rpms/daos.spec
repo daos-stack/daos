@@ -10,7 +10,7 @@
 
 Name:          daos
 Version:       1.1.2.1
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -411,6 +411,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+
+* Thu Jan 21 2021 Phillip Henderson <phillip.henderson@intel.com> 1.1.2.1-4
+- Change ownership and permissions for the /etc/daos/certs directory.
 
 * Fri Jan 15 2021 Michael Hennecke <mhennecke@lenovo.com> 1.1.2.1-3
 - Harmonize daos_server and daos_agent groups.

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -44,6 +44,7 @@ class DaosAdminPrivTest(TestWithServers):
     def __init__(self, *args, **kwargs):
         """Initialize a DaosAdminPrivTest object."""
         super(DaosAdminPrivTest, self).__init__(*args, **kwargs)
+        self.start_servers_once = False
         self.setup_start_agents = False
         self.setup_start_servers = False
 

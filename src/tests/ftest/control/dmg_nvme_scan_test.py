@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -39,6 +39,7 @@ class DmgNvmeScanTest(TestWithServers):
     def __init__(self, *args, **kwargs):
         """Initialize a DmgNvmeScanTest object."""
         super(DmgNvmeScanTest, self).__init__(*args, **kwargs)
+        self.start_servers_once = False
         self.setup_start_agents = False
 
     def test_dmg_nvme_scan_basic(self):

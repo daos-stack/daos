@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -871,6 +871,7 @@ class YamlCommand(SubProcessCommand):
 
         Args:
             user (str): user to verify has ownership of the directory
+            hosts (list): list of hosts on which to verify the directory exists
 
         Raises:
             CommandFailure: if the socket directory does not exist or is not
@@ -879,6 +880,8 @@ class YamlCommand(SubProcessCommand):
         """
         if isinstance(self.yaml, YamlParameters):
             directory = self.get_user_file()
+            self.log.info(
+                "Verifying %s socket directory: %s", self.command, directory)
             status, nodes = check_file_exists(hosts, directory, user)
             if not status:
                 self.log.info(

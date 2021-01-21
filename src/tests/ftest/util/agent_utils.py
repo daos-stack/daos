@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2020 Intel Corporation.
+  (C) Copyright 2019-2021 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import socket
+from getpass import getuser
 
 from command_utils_base import \
     CommandFailure, FormattedParameter, YamlParameters, EnvironmentVariables, \
@@ -148,7 +149,7 @@ class DaosAgentCommand(YamlCommand):
             self.output = FormattedParameter("--output {}", None)
 
     def dump_attachinfo(self, output="uri.txt"):
-        """Write CaRT attachinfo file
+        """Write CaRT attachinfo file.
 
         Args:
             output (str): File to which attachinfo dump should be written.
@@ -230,9 +231,14 @@ class DaosAgentManager(SubprocessManager):
         self.log.info(
             "<AGENT> Starting daos_agent on %s with %s",
             self._hosts, self.manager.command)
+
         # Copy certificates
         self.manager.job.copy_certificates(
             get_log_file("daosCA/certs"), self._hosts)
+
+        # Verify the socket directory exists when using a non-systemctl manager
+        self.verify_socket_directory(getuser())
+
         super(DaosAgentManager, self).start()
 
     def stop(self):
