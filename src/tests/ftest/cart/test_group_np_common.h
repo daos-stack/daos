@@ -50,6 +50,7 @@ struct test_t {
 	int			 t_init_only;
 	int			 t_skip_init;
 	int			 t_skip_shutdown;
+	int			 t_skip_check_in;
 	bool			 t_save_cfg;
 	bool			 t_use_cfg;
 	bool			 t_register_swim_callback;
@@ -567,6 +568,7 @@ test_parse_args(int argc, char **argv)
 		{"init_only", no_argument, &test_g.t_init_only, 1},
 		{"skip_init", no_argument, &test_g.t_skip_init, 1},
 		{"skip_shutdown", no_argument, &test_g.t_skip_shutdown, 1},
+		{"skip_check_in", no_argument, &test_g.t_skip_check_in, 1},
 		{"delete_rank_from_ranklist", required_argument, 0, 'd'},
 		{"rank", required_argument, 0, 'r'},
 		{"cfg_path", required_argument, 0, 's'},
