@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 %if (0%{?suse_version} >= 1500)
 # until we get an updated mercury build on 15.2
-%global mercury_version 2.0.1~rc1-1.suse.lp151
+%global mercury_version 2.0.1~rc1-1.suse.lp152
 %else
 %global mercury_version 2.0.1~rc1-1%{?dist}
 %endif
