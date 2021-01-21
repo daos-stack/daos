@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -503,6 +503,9 @@ get_access_props(uuid_t pool_uuid, d_rank_list_t *ranks, daos_prop_t **prop)
 	daos_prop_t		*new_prop;
 
 	new_prop = daos_prop_alloc(ACCESS_PROPS_LEN);
+	if (new_prop == NULL)
+		return -DER_NOMEM;
+
 	for (i = 0; i < ACCESS_PROPS_LEN; i++)
 		new_prop->dpp_entries[i].dpe_type = ACCESS_PROPS[i];
 
@@ -630,6 +633,9 @@ ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		goto out;
 
 	res_prop = daos_prop_alloc(prop->dpp_nr);
+	if (res_prop == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
 	for (i = 0; i < prop->dpp_nr; i++)
 		res_prop->dpp_entries[i].dpe_type =
 			prop->dpp_entries[i].dpe_type;

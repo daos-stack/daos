@@ -125,7 +125,9 @@ obj_rw_complete(crt_rpc_t *rpc, unsigned int map_version,
 		}
 
 		if (rc != 0) {
-			D_CDEBUG(rc == -DER_REC2BIG, DLOG_DBG, DLOG_ERR,
+			D_CDEBUG(rc == -DER_REC2BIG || rc == -DER_INPROGRESS ||
+				 rc == -DER_TX_RESTART,
+				 DLOG_DBG, DLOG_ERR,
 				 DF_UOID " %s end failed: %d\n",
 				 DP_UOID(orwi->orw_oid),
 				 update ? "Update" : "Fetch", rc);
@@ -1406,8 +1408,8 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				     dth);
 		daos_recx_ep_list_free(shadows, orw->orw_nr);
 		if (rc) {
-			D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_NONEXIST,
-				 DB_IO, DLOG_ERR,
+			D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_NONEXIST ||
+				 rc == -DER_TX_RESTART, DB_IO, DLOG_ERR,
 				 "Fetch begin for "DF_UOID" failed: "DF_RC"\n",
 				 DP_UOID(orw->orw_oid), DP_RC(rc));
 			goto out;
@@ -2971,7 +2973,8 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	/* local RPC handler */
 	rc = obj_local_punch(opi, opc_get(rpc->cr_opc), &ioc, &dth);
 	if (rc != 0) {
-		D_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR,
+		D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART,
+			 DB_IO, DLOG_ERR,
 			 DF_UOID": error="DF_RC".\n", DP_UOID(opi->opi_oid),
 			 DP_RC(rc));
 		D_GOTO(out, rc);
@@ -3957,7 +3960,8 @@ again:
 	rc = dtx_end(&dth, ioc->ioc_coc, rc);
 
 out:
-	D_CDEBUG(rc != 0, DLOG_ERR, DB_IO,
+	D_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART,
+		 DLOG_ERR, DB_IO,
 		 "Handled DTX "DF_DTI" on non-leader: "DF_RC"\n",
 		 DP_DTI(&dcsh->dcsh_xid), DP_RC(rc));
 
@@ -4200,7 +4204,8 @@ ds_obj_dtx_leader_ult(void *arg)
 	rc = dtx_leader_end(&dlh, dca->dca_ioc->ioc_coc, rc);
 
 out:
-	D_CDEBUG(rc != 0, DLOG_ERR, DB_IO,
+	D_CDEBUG(rc != 0 && rc != DER_INPROGRESS && rc != -DER_TX_RESTART,
+		 DLOG_ERR, DB_IO,
 		 "Handled DTX "DF_DTI" on leader, idx %u: "DF_RC"\n",
 		 DP_DTI(&dcsh->dcsh_xid), dca->dca_idx, DP_RC(rc));
 

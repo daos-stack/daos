@@ -985,7 +985,6 @@ fs_op_hdlr(struct cmd_args_s *ap)
 				"must be provided\n");
 		} else {
 			rc = fs_copy_hdlr(ap);
-			assert(rc == 0);
 		}
 		break;
 	default:
