@@ -368,7 +368,7 @@ parse_args(int argc, char **argv)
 	}
 
 	if (ctl_gdata.cg_cmd_code == CMD_LOG_ADD_MSG &&
-	    ctl_gdata.cg_log_msg_set == false) {
+	    !ctl_gdata.cg_log_msg_set) {
 		D_ERROR("log msg (-m 'message') missing for add_log_msg\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
@@ -591,7 +591,7 @@ ctl_init()
 	 * 5 - ping timeout
 	 * 150 - total timeout
 	 */
-	if (ctl_gdata.cg_no_wait_for_ranks == false) {
+	if (!ctl_gdata.cg_no_wait_for_ranks) {
 		rc = tc_wait_for_ranks(ctl_gdata.cg_crt_ctx, grp, rank_list,
 				       0, 1, 5, 150);
 		if (rc != 0) {
@@ -612,7 +612,9 @@ ctl_init()
 		ranks_to_send = ctl_gdata.cg_ranks;
 	}
 
-	if (ctl_gdata.cg_cmd_code == CMD_SET_FI_ATTR) {
+	if (ctl_gdata.cg_cmd_code == CMD_SET_FI_ATTR ||
+	    ctl_gdata.cg_cmd_code == CMD_DISABLE_FI ||
+	    ctl_gdata.cg_cmd_code == CMD_ENABLE_FI) {
 		ep.ep_grp = grp;
 		ep.ep_rank = ranks_to_send[0];
 		ep.ep_tag = 0;
