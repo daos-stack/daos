@@ -181,8 +181,8 @@ else
 fi
 
 # Clean stale job results
-if [ -d "$logs_prefix/ftest/avocado/job-results" ]; then
-    rm -rf "$logs_prefix/ftest/avocado/job-results"
+if [ -d "${logs_prefix}/ftest/avocado/job-results" ]; then
+    rm -rf "${logs_prefix}/ftest/avocado/job-results"
 fi
 
 # now run it!
@@ -197,7 +197,8 @@ fi
 # daos_test uses cmocka framework which generates a set of xml of its own.
 # Post-processing the xml files here to put them in proper categories
 # for publishing in Jenkins
-FILES=($logs_prefix/ftest/avocado/job-results/daos_test/*/test-results/*/data/*.xml)
+dt_xml_path="${logs_prefix}/ftest/avocado/job-results/daos_test"
+FILES=(${dt_xml_path}/*/test-results/*/data/*.xml)
 COMP="FTEST_daos_test"
 for file in "${FILES[@]}"
 do
@@ -205,15 +206,13 @@ do
         echo "Processing XML $file"
 
         SUITE=$(grep "testsuite name=" "$file" | \
-               grep -Po "name=\"\K.*(?=\" time=)")
+               grep -Po "name=\"\K.*(?=\" time=)" || true)
 
         CLASS=$(grep "<testcase classname" "$file" || true)
         if [ "$CLASS" == "" ]; then
-            echo "class 1"
             sed -i \
             "s/case name/case classname=\"${COMP}.${SUITE}\" name/" "$file"
         else
-            echo "class 2"
             sed -i "s/case classname=\"/case classname=\"${COMP}./" "$file"
         fi
     fi
