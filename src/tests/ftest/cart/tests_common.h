@@ -68,7 +68,7 @@ tc_test_init(d_rank_t rank, int num_attach_retries, bool is_server,
 	opts.is_server		= is_server;
 	opts.num_attach_retries	= num_attach_retries;
 	opts.assert_on_error	= assert_on_error;
-	opts.shutdown 		= 0;
+	opts.shutdown		= 0;
 	opts.delay_shutdown_sec	= 0;
 }
 
