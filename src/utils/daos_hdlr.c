@@ -2776,8 +2776,6 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	char			dst_str[1028];
 	daos_cont_info_t	src_cont_info = {0};
 	daos_cont_info_t	dst_cont_info = {0};
-	struct duns_attr_t	src_dattr = {0};
-	struct duns_attr_t	dst_dattr = {0};
 	struct file_dfs		src_file_dfs = {0};
 	struct file_dfs		dst_file_dfs = {0};
 	struct copy_args	ca = {0};
@@ -3206,7 +3204,6 @@ cont_copy_hdlr(struct cmd_args_s *ap)
 	int			i = 0;
 	daos_cont_info_t	src_cont_info;
 	daos_cont_info_t	dst_cont_info;
-	static const int	OID_ARR_SIZE = 50;
 	daos_obj_id_t		oids[OID_ARR_SIZE];
 	daos_anchor_t		anchor;
 	uint32_t		oids_nr;
