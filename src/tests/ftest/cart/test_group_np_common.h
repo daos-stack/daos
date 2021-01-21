@@ -143,8 +143,14 @@ test_checkin_handler(crt_rpc_t *rpc_req)
 			 room_no: %d.\n", e_reply->ret, e_reply->room_no);
 }
 
+/* Track number of dead-alive swim status changes */
+struct rank_status {
+  uint32_t num_alive;
+  uint32_t num_dead;
+};
+
 /* Keep a table of whether each rank is alive (0) or dead (1) */
-static int swim_status_by_rank[MAX_NUM_RANKS];
+static struct rank_status swim_status_by_rank[MAX_NUM_RANKS] = {0,0};
 
 static void
 test_swim_status_handler(crt_rpc_t *rpc_req)
@@ -162,8 +168,18 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 	DBG_PRINT("tier1 swim_status input - rank: %d, exp_status: %d.\n",
 		  e_req->rank, e_req->exp_status);
 
-	D_ASSERTF(swim_status_by_rank[e_req->rank] == e_req->exp_status,
-		  "Unexpected SWIM status.\n");
+	if (e_req->exp_status == CRT_EVT_ALIVE) {
+		D_ASSERTF(swim_status_by_rank[e_req->rank].num_alive >= 0,
+			  "Unexpected SWIM status.\n");
+		D_ASSERTF(swim_status_by_rank[e_req->rank].num_dead < 1,
+			  "Unexpected SWIM status.\n");
+	}
+	else if (e_req->exp_status == CRT_EVT_DEAD) {
+		D_ASSERTF(swim_status_by_rank[e_req->rank].num_dead > 0,
+			  "Unexpected SWIM status.\n");
+		D_ASSERTF(swim_status_by_rank[e_req->rank].num_alive < 1,
+			  "Unexpected SWIM status.\n");
+	}
 	DBG_PRINT("Rank [%d] is in SWIM state [%d], as expected.\n",
 		  e_req->rank, e_req->exp_status);
 

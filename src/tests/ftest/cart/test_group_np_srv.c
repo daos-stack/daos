@@ -59,9 +59,10 @@ swim_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		"crt_event_type = %d\n",
 		 rank, src, type);
 
-	if (src == CRT_EVS_SWIM) {
-		swim_status_by_rank[rank] = type;
-	}
+	if (type == CRT_EVT_ALIVE)
+		swim_status_by_rank[rank].num_alive++;
+	else if (type == CRT_EVT_DEAD)
+		swim_status_by_rank[rank].num_dead++;
 }
 
 void
