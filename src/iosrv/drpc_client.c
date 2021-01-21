@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,6 @@
 #include <daos_types.h>
 #include <daos/drpc.h>
 #include <daos/drpc_modules.h>
-#include <daos_srv/daos_server.h>
 #include "srv.pb-c.h"
 #include "srv_internal.h"
 #include "drpc_internal.h"
@@ -95,7 +94,7 @@ out:
 
 /* Notify daos_server that there has been a I/O error. */
 int
-notify_bio_error(int media_err_type, int tgt_id)
+ds_notify_bio_error(int media_err_type, int tgt_id)
 {
 	Srv__BioErrorReq	 bioerr_req = SRV__BIO_ERROR_REQ__INIT;
 	Drpc__Call		*dreq;
@@ -105,11 +104,9 @@ notify_bio_error(int media_err_type, int tgt_id)
 	int			 rc;
 
 	if (dss_drpc_ctx == NULL) {
-		D_ERROR("DRPC not connected\n");
+		D_ERROR("dRPC not connected\n");
 		return -DER_INVAL;
 	}
-
-	/* TODO: How does this get freed on error? */
 	rc = crt_self_uri_get(0 /* tag */, &bioerr_req.uri);
 	if (rc != 0)
 		return rc;
@@ -128,14 +125,14 @@ notify_bio_error(int media_err_type, int tgt_id)
 	req_size = srv__bio_error_req__get_packed_size(&bioerr_req);
 	D_ALLOC(req, req_size);
 	if (req == NULL)
-		return -DER_NOMEM;
+		D_GOTO(out_uri, rc = -DER_NOMEM);
 
 	srv__bio_error_req__pack(&bioerr_req, req);
 	rc = drpc_call_create(dss_drpc_ctx, DRPC_MODULE_SRV,
 			      DRPC_METHOD_SRV_BIO_ERR, &dreq);
 	if (rc != 0) {
 		D_FREE(req);
-		return rc;
+		goto out_uri;
 	}
 
 	dreq->body.len = req_size;
@@ -154,12 +151,14 @@ notify_bio_error(int media_err_type, int tgt_id)
 
 out_dreq:
 	drpc_call_free(dreq);
+out_uri:
+	D_FREE(bioerr_req.uri);
 
 	return rc;
 }
 
 int
-get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
+ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 {
 	Srv__GetPoolSvcReq	gps_req = SRV__GET_POOL_SVC_REQ__INIT;
 	Srv__GetPoolSvcResp	*gps_resp = NULL;
@@ -171,7 +170,7 @@ get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 	int			 rc;
 
 	if (dss_drpc_ctx == NULL) {
-		D_ERROR("DRPC not connected\n");
+		D_ERROR("dRPC not connected\n");
 		return -DER_UNINIT;
 	}
 
@@ -207,8 +206,7 @@ get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 	if (dresp->status != DRPC__STATUS__SUCCESS) {
 		D_ERROR("received erroneous dRPC response: %d\n",
 			dresp->status);
-		rc = -DER_IO;
-		goto out_dresp;
+		D_GOTO(out_dresp, rc = -DER_IO);
 	}
 
 	gps_resp = srv__get_pool_svc_resp__unpack(
@@ -247,13 +245,12 @@ out:
 int
 drpc_init(void)
 {
-	char   *path;
-	int	rc;
+	char	*path;
+	int	 rc;
 
 	D_ASPRINTF(path, "%s/%s", dss_socket_dir, "daos_server.sock");
-	if (path == NULL) {
+	if (path == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	}
 
 	D_ASSERT(dss_drpc_ctx == NULL);
 	rc = drpc_connect(path, &dss_drpc_ctx);

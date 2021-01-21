@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -72,8 +72,6 @@ bio_dev_state_enum_to_str(enum bio_dev_state state)
 	return "Undefined state";
 }
 
-#define HEALTH_STAT_STR_LEN 128
-
 /*
  * Current device health state (health statistics). Periodically updated in
  * bio_bs_monitor(). Used to determine faulty device status.
@@ -81,9 +79,6 @@ bio_dev_state_enum_to_str(enum bio_dev_state state)
  */
 struct nvme_stats {
 	uint64_t	 timestamp;
-	/* Device identifiers */
-	char		 model[HEALTH_STAT_STR_LEN];
-	char		 serial[HEALTH_STAT_STR_LEN];
 	/* Device space utilization */
 	uint64_t	 total_bytes;
 	uint64_t	 avail_bytes;
