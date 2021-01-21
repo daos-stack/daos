@@ -152,7 +152,6 @@ int ds_pool_tgt_disconnect_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 void ds_pool_tgt_query_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				 void *priv);
-void ds_pool_child_purge(struct pool_tls *tls);
 void ds_pool_replicas_update_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop);
 int ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic);

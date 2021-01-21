@@ -299,23 +299,25 @@ host1
 -----
 PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
   SMD Devices
-    UUID:%s [TrAddr:]
+    UUID:%s [TrAddr:%s]
       Targets:%v Rank:%d State:%s
 
 PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
   SMD Devices
-    UUID:%s [TrAddr:]
+    UUID:%s [TrAddr:%s]
       Targets:%v Rank:%d State:%s
 
 `,
 				controllerC.PciAddr, controllerC.Model, controllerC.FwRev,
 				controllerC.SocketID, humanize.Bytes(controllerC.Capacity()),
-				controllerC.SmdDevices[0].UUID, controllerC.SmdDevices[0].TargetIDs,
+				controllerC.SmdDevices[0].UUID, controllerC.PciAddr,
+				controllerC.SmdDevices[0].TargetIDs,
 				controllerC.SmdDevices[0].Rank, controllerC.SmdDevices[0].State,
 
 				controllerD.PciAddr, controllerD.Model, controllerD.FwRev,
 				controllerD.SocketID, humanize.Bytes(controllerD.Capacity()),
-				controllerD.SmdDevices[0].UUID, controllerD.SmdDevices[0].TargetIDs,
+				controllerD.SmdDevices[0].UUID, controllerD.PciAddr,
+				controllerD.SmdDevices[0].TargetIDs,
 				controllerD.SmdDevices[0].Rank, controllerD.SmdDevices[0].State),
 		},
 		"multiple smd devices on each controller": {

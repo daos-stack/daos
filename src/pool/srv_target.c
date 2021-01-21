@@ -92,21 +92,6 @@ ds_pool_child_put(struct ds_pool_child *child)
 	}
 }
 
-void
-ds_pool_child_purge(struct pool_tls *tls)
-{
-	struct ds_pool_child   *child;
-	struct ds_pool_child   *n;
-
-	d_list_for_each_entry_safe(child, n, &tls->dt_pool_list, spc_list) {
-		d_list_del_init(&child->spc_list);
-		ds_cont_child_stop_all(child);
-		D_ASSERTF(child->spc_ref == 1, DF_UUID": %d\n",
-			  DP_UUID(child->spc_uuid), child->spc_ref);
-		ds_pool_child_put(child);
-	}
-}
-
 static void
 gc_ult(void *arg)
 {

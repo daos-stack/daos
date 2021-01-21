@@ -649,7 +649,7 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 	/* propagate failure rc to parent */
 	if (child_rpc_priv->crp_reply_hdr.cch_rc != 0)
 		crt_corpc_fail_parent_rpc(parent_rpc_priv,
-			child_rpc_priv->crp_reply_hdr.cch_rc);
+					  child_rpc_priv->crp_reply_hdr.cch_rc);
 
 	co_ops = opc_info->coi_co_ops;
 	if (co_ops == NULL) {
@@ -927,7 +927,6 @@ forward_done:
 
 		rc = 0;
 	}
-
 
 out:
 	if (children_rank_list != NULL)

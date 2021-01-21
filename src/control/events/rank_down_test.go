@@ -31,8 +31,8 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 )
 
-func TestEvents_ConvertRankExit(t *testing.T) {
-	event := NewRankExitEvent("foo", 1, 1, common.ExitStatus("test"))
+func TestEvents_ConvertRankDown(t *testing.T) {
+	event := NewRankDownEvent("foo", 1, 1, common.ExitStatus("test"))
 
 	pbEvent, err := event.ToProto()
 	if err != nil {
@@ -41,12 +41,12 @@ func TestEvents_ConvertRankExit(t *testing.T) {
 
 	t.Logf("proto event: %+v (%T)", pbEvent, pbEvent)
 
-	returnedEvent := new(RankExit)
+	returnedEvent := new(RASEvent)
 	if err := returnedEvent.FromProto(pbEvent); err != nil {
 		t.Fatal(err)
 	}
 
-	t.Logf("native event: %v", returnedEvent)
+	t.Logf("native event: %+v, %+v", returnedEvent, returnedEvent.ExtendedInfo)
 
 	if diff := cmp.Diff(event, returnedEvent); diff != "" {
 		t.Fatalf("unexpected event (-want, +got):\n%s\n", diff)

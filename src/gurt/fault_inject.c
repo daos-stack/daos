@@ -34,6 +34,7 @@
 #include <gurt/common.h>
 #include <gurt/hash.h>
 #include "fi.h"
+#include <yaml.h>
 
 /**
  * global switch for fault injection. zero globally turns off fault injection,

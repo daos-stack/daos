@@ -387,7 +387,7 @@ void ds_mgmt_pool_get_svcranks_hdlr(crt_rpc_t *rpc)
 
 	out = crt_reply_get(rpc);
 
-	rc =  get_pool_svc_ranks(in->gsr_puuid, &out->gsr_ranks);
+	rc =  ds_get_pool_svc_ranks(in->gsr_puuid, &out->gsr_ranks);
 	if (rc != 0)
 		D_ERROR(DF_UUID ": get_pool_svc_ranks() upcall failed, "
 			DF_RC "\n", DP_UUID(in->gsr_puuid), DP_RC(rc));
