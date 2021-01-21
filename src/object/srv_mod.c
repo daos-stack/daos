@@ -46,14 +46,20 @@ obj_mod_init(void)
 
 	rc = obj_class_init();
 	if (rc)
-		goto out;
+		goto out_utils;
 
 	rc = obj_ec_codec_init();
-	if (rc != 0) {
+	if (rc) {
 		D_ERROR("failed to obj_ec_codec_init\n");
-		goto out;
+		goto out_class;
 	}
+
 	return 0;
+
+out_class:
+	obj_class_fini();
+out_utils:
+	obj_utils_fini();
 out:
 	D_ERROR("Object module init error: %s\n", d_errstr(rc));
 	return rc;
