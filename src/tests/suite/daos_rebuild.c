@@ -1198,7 +1198,7 @@ multi_pools_rebuild_concurrently(void **state)
 {
 #define POOL_NUM		4
 #define CONT_PER_POOL		2
-#define OBJ_PER_CONT		8
+#define OBJ_PER_CONT		32
 	test_arg_t		*arg = *state;
 	test_arg_t		*args[POOL_NUM * CONT_PER_POOL] = { 0 };
 	daos_obj_id_t		oids[OBJ_PER_CONT];

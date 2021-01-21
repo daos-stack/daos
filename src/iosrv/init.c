@@ -112,6 +112,12 @@ dss_self_rank(void)
 	return rank;
 }
 
+struct dss_module_info *
+get_module_info(void)
+{
+	return dss_get_module_info();
+}
+
 /*
  * Register the dbtree classes used by native server-side modules (e.g.,
  * ds_pool, ds_cont, etc.). Unregistering is currently not supported.
