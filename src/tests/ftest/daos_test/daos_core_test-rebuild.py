@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -35,7 +35,6 @@ class DaosCoreTestRebuild(DaosCoreBase):
     # Test variants that should be skipped
     CANCEL_FOR_TICKET = [
         ["DAOS-5851", "test_name", "rebuild tests 0-10"],
-        ["DAOS-6442", "test_name", "rebuild tests 18"]
     ]
 
     def test_rebuild(self):

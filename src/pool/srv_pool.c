@@ -3739,49 +3739,60 @@ out:
 static int
 replace_failed_replicas(struct pool_svc *svc, struct pool_map *map)
 {
-	d_rank_list_t	*replicas;
-	d_rank_list_t	*tmp_replicas;
-	d_rank_list_t	 failed_ranks;
-	d_rank_list_t	 replace_ranks;
-	int		 rc;
+	d_rank_list_t	*old, *new, *current, failed, replacement;
+	int              rc;
 
-	rc = rdb_get_ranks(svc->ps_rsvc.s_db, &replicas);
+	rc = rdb_get_ranks(svc->ps_rsvc.s_db, &current);
 	if (rc != 0)
-		D_GOTO(out, rc);
-	rc = ds_pool_check_failed_replicas(map, replicas, &failed_ranks,
-					   &replace_ranks);
+		goto out;
+
+	rc = daos_rank_list_dup(&old, current);
+	if (rc != 0)
+		goto out_cur;
+
+	rc = ds_pool_check_failed_replicas(map, current, &failed, &replacement);
 	if (rc != 0) {
 		D_DEBUG(DB_MD, DF_UUID": cannot replace failed replicas: "
 			""DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
-		D_GOTO(out, rc);
+		goto out_old;
 	}
-	if (replace_ranks.rl_nr > 0)
-		ds_rsvc_add_replicas_s(&svc->ps_rsvc, &replace_ranks,
-				       ds_rsvc_get_md_cap());
-	if (failed_ranks.rl_nr > 0)
-		ds_rsvc_remove_replicas_s(&svc->ps_rsvc, &failed_ranks);
-	/** `replace_ranks.rl_ranks` is not allocated and shouldn't be freed **/
-	D_FREE(failed_ranks.rl_ranks);
 
-	if (rdb_get_ranks(svc->ps_rsvc.s_db, &tmp_replicas) == 0) {
-		daos_rank_list_sort(replicas);
-		daos_rank_list_sort(tmp_replicas);
-		if (!daos_rank_list_identical(replicas, tmp_replicas))
+	if (failed.rl_nr < 1)
+		goto out_old;
+	if (replacement.rl_nr > 0)
+		ds_rsvc_add_replicas_s(&svc->ps_rsvc, &replacement,
+				       ds_rsvc_get_md_cap());
+	ds_rsvc_remove_replicas_s(&svc->ps_rsvc, &failed);
+	/** `replacement.rl_ranks` is not allocated and shouldn't be freed **/
+	D_FREE(failed.rl_ranks);
+
+	if (rdb_get_ranks(svc->ps_rsvc.s_db, &new) == 0) {
+		daos_rank_list_sort(current);
+		daos_rank_list_sort(old);
+		daos_rank_list_sort(new);
+
+		if (!daos_rank_list_identical(current, new)) {
 			D_DEBUG(DB_MD, DF_UUID": failed to update replicas\n",
 				DP_UUID(svc->ps_uuid));
-		d_rank_list_free(tmp_replicas);
+		} else if (!daos_rank_list_identical(new, old)) {
+			/*
+			 * Send RAS event to control-plane over dRPC to indicate
+			 * change in pool service replicas.
+			 */
+			rc = ds_notify_pool_svc_update(&svc->ps_uuid, new);
+			if (rc != 0)
+				D_DEBUG(DB_MD, DF_UUID": replica update notify "
+					"failure: "DF_RC"\n",
+					DP_UUID(svc->ps_uuid), DP_RC(rc));
+		}
+
+		d_rank_list_free(new);
 	}
 
-	/*
-	 * Send RAS event to control-plane over dRPC to indicate change in pool
-	 * service replicas.
-	 */
-	rc = ds_notify_pool_svc_update(&svc->ps_uuid, replicas);
-	if (rc != 0)
-		D_DEBUG(DB_MGMT, DF_UUID": replica update notify failure: "
-			DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
-
-	d_rank_list_free(replicas);
+out_old:
+	d_rank_list_free(old);
+out_cur:
+	d_rank_list_free(current);
 out:
 	return rc;
 }

@@ -85,6 +85,8 @@ extern unsigned int	dss_tgt_offload_xs_nr;
 extern unsigned int	dss_sys_xs_nr;
 /** Flag of helper XS as a pool */
 extern bool		dss_helper_pool;
+/** Shadow dss_get_module_info */
+struct dss_module_info *get_module_info(void);
 
 /* init.c */
 d_rank_t dss_self_rank(void);

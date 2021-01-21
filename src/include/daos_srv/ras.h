@@ -98,31 +98,32 @@ ras_sev2str(ras_sev_t severity)
  * \param[in] msg	Human readable message.
  * \param[in] type	Event type.
  * \param[in] sev	Event instance severity.
- * \param[in] hid	(Optional) Hardware component involved.
+ * \param[in] hwid	(Optional) Hardware component involved.
  * \param[in] rank	(Optional) DAOS rank involved.
- * \param[in] jid	(Optional) Client job involved.
- * \param[in] puuid	(Optional) DAOS pool involved.
- * \param[in] cuuid	(Optional) DAOS container involved.
- * \param[in] oid	(Optional) DAOS object involved.
- * \param[in] cop	(Optional) Recommended automatic control operation.
+ * \param[in] jobid	(Optional) Client job involved.
+ * \param[in] pool	(Optional) DAOS pool involved.
+ * \param[in] cont	(Optional) DAOS container involved.
+ * \param[in] objid	(Optional) DAOS object involved.
+ * \param[in] ctlop	(Optional) Recommended automatic control operation.
  * \param[in] data	(Optional) Specific instance data treated as a blob.
  *
  * \retval		N/A
  */
 void
 ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
-		    char *hid, d_rank_t *rank, char *jid, uuid_t *puuid,
-		    uuid_t *cuuid, daos_obj_id_t *oid, char *cop, char *data);
+		    char *hwid, d_rank_t *rank, char *jobid, uuid_t *pool,
+		    uuid_t *cont, daos_obj_id_t *objid, char *ctlop,
+		    char *data);
 
 /**
  * Notify control-plane of an update to a pool's service replicas.
  *
- * \param[in] puuid	UUID of DAOS pool with updated service replicas.
- * \param[in] svc	New list of pool service replica ranks.
+ * \param[in] pool	UUID of DAOS pool with updated service replicas.
+ * \param[in] svcl	New list of pool service replica ranks.
  *
  * \retval		Zero on success, non-zero otherwise.
  */
 int
-ds_notify_pool_svc_update(uuid_t *puuid, d_rank_list_t *svc);
+ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl);
 
 #endif /* __DAOS_RAS_H_ */
