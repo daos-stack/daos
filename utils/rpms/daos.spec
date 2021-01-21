@@ -3,14 +3,14 @@
 %define agent_svc_name daos_agent.service
 %if (0%{?suse_version} >= 1500)
 # until we get an updated mercury build on 15.2
-%global mercury_version 2.0.0~rc1-1.suse.lp151
+%global mercury_version 2.0.1~rc1-1.suse.lp151
 %else
-%global mercury_version 2.0.0~rc1-1%{?dist}
+%global mercury_version 2.0.1~rc1-1%{?dist}
 %endif
 
 Name:          daos
 Version:       1.1.2.1
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -411,6 +411,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+
+* Thu Jan 21 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.1.2.1-4
+- Update to mercury v2.0.1rc1
 
 * Fri Jan 15 2021 Michael Hennecke <mhennecke@lenovo.com> 1.1.2.1-3
 - Harmonize daos_server and daos_agent groups.

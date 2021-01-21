@@ -1,3 +1,8 @@
+daos (1.1.2.1-4) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * Update to mercury v2.0.1rc1
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Thu, 21 Jan 2021 13:33:21 -0000
 
 daos (1.1.2.1-2) unstable; urgency=medium
   [ Ashley Pittman ]
