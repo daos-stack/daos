@@ -145,8 +145,8 @@ test_checkin_handler(crt_rpc_t *rpc_req)
 
 /* Track number of dead-alive swim status changes */
 struct rank_status {
-  uint32_t num_alive;
-  uint32_t num_dead;
+  int num_alive;
+  int num_dead;
 };
 
 /* Keep a table of whether each rank is alive (0) or dead (1) */
