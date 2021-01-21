@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -927,7 +927,7 @@ nvme_bio_error(int media_err_type, int tgt_id)
 {
 	int rc;
 
-	rc = notify_bio_error(media_err_type, tgt_id);
+	rc = ds_notify_bio_error(media_err_type, tgt_id);
 
 	return rc;
 }

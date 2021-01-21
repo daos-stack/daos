@@ -59,6 +59,9 @@ static unsigned int	nr_threads;
 /** DAOS system name (corresponds to crt group ID) */
 static char	       *daos_sysname = DAOS_DEFAULT_SYS_NAME;
 
+/** Storage node hostname */
+char		        dss_hostname[DSS_HOSTNAME_MAX_LEN];
+
 /** Storage path (hack) */
 const char	       *dss_storage_path = "/mnt/daos";
 
@@ -107,6 +110,12 @@ dss_self_rank(void)
 	rc = crt_group_rank(NULL /* grp */, &rank);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	return rank;
+}
+
+struct dss_module_info *
+get_module_info(void)
+{
+	return dss_get_module_info();
 }
 
 /*
@@ -467,7 +476,6 @@ server_init(int argc, char *argv[])
 	uint64_t	bound;
 	int64_t		diff;
 	unsigned int	ctx_nr;
-	char		hostname[256] = { 0 };
 	int		rc;
 
 	bound = crt_hlc_epsilon_get_bound(crt_hlc_get());
@@ -606,11 +614,12 @@ server_init(int argc, char *argv[])
 	dss_xstreams_open_barrier();
 	D_INFO("Service fully up\n");
 
-	gethostname(hostname, 255);
+	gethostname(dss_hostname, DSS_HOSTNAME_MAX_LEN);
+
 	D_PRINT("DAOS I/O server (v%s) process %u started on rank %u "
 		"with %u target, %d helper XS, firstcore %d, host %s.\n",
 		DAOS_VERSION, getpid(), dss_self_rank(), dss_tgt_nr,
-		dss_tgt_offload_xs_nr, dss_core_offset, hostname);
+		dss_tgt_offload_xs_nr, dss_core_offset, dss_hostname);
 
 	if (numa_obj)
 		D_PRINT("Using NUMA node: %d", dss_numa_node);
@@ -743,9 +752,6 @@ parse(int argc, char **argv)
 	sprintf(modules, "%s", MODULE_LIST);
 	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:t:s:x:I:",
 				opts, NULL)) != -1) {
-		unsigned int	 nr;
-		char		*end;
-
 		switch (c) {
 		case 'm':
 			if (strlen(optarg) > MAX_MODULE_OPTIONS) {
@@ -759,28 +765,13 @@ parse(int argc, char **argv)
 			printf("\"-c\" option is deprecated, please use \"-t\" "
 			       "instead.\n");
 		case 't':
-			nr = strtoul(optarg, &end, 10);
-			if ((end == optarg) || (nr == ULONG_MAX)) {
-				rc = -DER_INVAL;
-				break;
-			}
-			nr_threads = nr;
+			nr_threads = atoi(optarg);
 			break;
 		case 'x':
-			nr = strtoul(optarg, &end, 10);
-			if ((end == optarg) || (nr == ULONG_MAX)) {
-				rc = -DER_INVAL;
-				break;
-			}
-			dss_tgt_offload_xs_nr = nr;
+			dss_tgt_offload_xs_nr = atoi(optarg);
 			break;
 		case 'f':
-			nr = strtoul(optarg, &end, 10);
-			if ((end == optarg) || (nr == ULONG_MAX)) {
-				rc = -DER_INVAL;
-				break;
-			}
-			dss_core_offset = nr;
+			dss_core_offset = atoi(optarg);
 			break;
 		case 'g':
 			if (strnlen(optarg, DAOS_SYS_NAME_MAX + 1) >
@@ -808,12 +799,7 @@ parse(int argc, char **argv)
 			dss_nvme_shm_id = atoi(optarg);
 			break;
 		case 'r':
-			nr = strtoul(optarg, &end, 10);
-			if ((end == optarg) || (nr == ULONG_MAX)) {
-				rc = -DER_INVAL;
-				break;
-			}
-			dss_nvme_mem_size = nr;
+			dss_nvme_mem_size = atoi(optarg);
 			break;
 		case 'h':
 			usage(argv[0], stdout);
