@@ -55,6 +55,7 @@ daos_prop_entry_free_value(struct daos_prop_entry *entry)
 		break;
 	case DAOS_PROP_PO_ACL:
 	case DAOS_PROP_CO_ACL:
+	case DAOS_PROP_CO_ROOTS:
 		if (entry->dpe_val_ptr)
 			D_FREE(entry->dpe_val_ptr);
 		break;
@@ -413,6 +414,8 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			break;
 		case DAOS_PROP_CO_SNAPSHOT_MAX:
 			break;
+		case DAOS_PROP_CO_ROOTS:
+			break;
 		default:
 			D_ERROR("invalid dpe_type %d.\n", type);
 			return false;
@@ -425,6 +428,7 @@ int
 daos_prop_entry_copy(struct daos_prop_entry *entry,
 		     struct daos_prop_entry *entry_dup)
 {
+	struct daos_prop_co_roots *roots;
 	struct daos_acl		*acl_ptr;
 	const d_rank_list_t	*svc_list;
 	d_rank_list_t		*dst_list;
@@ -476,6 +480,15 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 			return rc;
 		}
 		entry_dup->dpe_val_ptr = dst_list;
+		break;
+	case DAOS_PROP_CO_ROOTS:
+		roots = entry->dpe_val_ptr;
+		D_ALLOC(entry_dup->dpe_val_ptr, sizeof(*roots));
+		if (entry_dup->dpe_val_ptr == NULL) {
+			D_ERROR("failed to dup roots\n");
+			return -DER_NOMEM;
+		}
+		memcpy(entry_dup->dpe_val_ptr, roots, sizeof(*roots));
 		break;
 	default:
 		entry_dup->dpe_val = entry->dpe_val;
@@ -573,6 +586,7 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 	bool			 owner_alloc = false;
 	bool			 group_alloc = false;
 	bool			 svc_list_alloc = false;
+	bool			 roots_alloc = false;
 	struct daos_acl		*acl;
 	d_rank_list_t		*dst_list;
 	uint32_t		 type;
@@ -642,6 +656,17 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 				D_GOTO(out, rc);
 			svc_list_alloc = true;
 			entry_req->dpe_val_ptr = dst_list;
+		} else if (type == DAOS_PROP_CO_ROOTS) {
+			struct daos_prop_co_roots *roots;
+
+			roots = entry_reply->dpe_val_ptr;
+			D_ALLOC(entry_req->dpe_val_ptr, sizeof(*roots));
+			if (entry_req->dpe_val_ptr == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+
+			memcpy(entry_req->dpe_val_ptr, roots, sizeof(*roots));
+			roots_alloc = true;
+
 		} else {
 			entry_req->dpe_val = entry_reply->dpe_val;
 		}
@@ -670,6 +695,8 @@ out:
 						DAOS_PROP_PO_SVC_LIST);
 			d_rank_list_free(entry_req->dpe_val_ptr);
 		}
+		if (roots_alloc)
+			free_ptr_prop_entry(prop_req, DAOS_PROP_CO_ROOTS);
 
 		if (entries_alloc)
 			D_FREE(prop_req->dpp_entries);
