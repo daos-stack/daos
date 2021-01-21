@@ -162,9 +162,6 @@ test_run(void)
 		}
 	}
 
-	if (test_g.t_hold)
-		sleep(test_g.t_hold_time);
-
 	server_ep.ep_grp = grp;
 
 	/* Shutdown one particular rank */
@@ -213,6 +210,13 @@ test_run(void)
 	D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
 
 	D_DEBUG(DB_TEST, "exiting.\n");
+
+	if (test_g.t_hold) {
+		DBG_PRINT("Before sleep of %d seconds\n", test_g.t_hold_time);
+		sleep(test_g.t_hold_time);
+		DBG_PRINT("After sleep\n");
+	}
+	
 
 	d_log_fini();
 }
