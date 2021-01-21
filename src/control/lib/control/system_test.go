@@ -1143,11 +1143,12 @@ func TestControl_EventForwarder_OnEvent(t *testing.T) {
 	rasEventRankDown := events.NewRankDownEvent("foo", 0, 0, common.NormalExit)
 
 	for name, tc := range map[string]struct {
-		aps            []string
-		event          *events.RASEvent
-		nilClient      bool
-		expInvokeCount int
-		expErr         error
+		aps             []string
+		event           *events.RASEvent
+		nilClient       bool
+		expInvokeCount  int
+		expNextSequence uint64
+		expErr          error
 	}{
 		"nil event": {
 			event: nil,
@@ -1156,14 +1157,19 @@ func TestControl_EventForwarder_OnEvent(t *testing.T) {
 			event: rasEventRankDown,
 		},
 		"successful forward": {
-			event:          rasEventRankDown,
-			aps:            []string{"192.168.1.1"},
-			expInvokeCount: 1,
+			event:           rasEventRankDown,
+			aps:             []string{"192.168.1.1"},
+			expInvokeCount:  2,
+			expNextSequence: 3,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
+
+			if tc.expNextSequence == 0 {
+				tc.expNextSequence = 1 // sequence will start at one
+			}
 
 			mi := NewMockInvoker(log, &MockInvokerConfig{})
 			if tc.nilClient {
@@ -1172,9 +1178,12 @@ func TestControl_EventForwarder_OnEvent(t *testing.T) {
 
 			ef := NewEventForwarder(mi, tc.aps)
 			ef.OnEvent(context.TODO(), tc.event)
+			ef.OnEvent(context.TODO(), tc.event)
 
 			common.AssertEqual(t, tc.expInvokeCount, mi.invokeCount,
 				"unexpected number of rpc calls")
+			common.AssertEqual(t, tc.expNextSequence, <-ef.seq,
+				"unexpected next forwarding sequence")
 		})
 	}
 }
