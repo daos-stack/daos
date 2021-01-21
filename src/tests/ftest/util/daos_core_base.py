@@ -147,9 +147,16 @@ class DaosCoreBase(TestWithServers):
 
         # Update the expected status for each ranks that will be stopped by this
         # test to avoid a false failure during tearDown().
-        for rank in stopped_ranks:
-            for manager in self.server_managers:
-                manager.update_expected_states(rank, "Stopped")
+        if "random" in stopped_ranks:
+            # Set each expected rank state to be either stopped or running
+            host_qty = len(self.server_managers[index].hosts)
+            for this_rank in range(len(manager.hosts)):
+                manager.update_expected_states(this_rank, ["Joined", "Stopped"])
+        else:
+            # Set the specific expected rank state to stopped
+            for rank in stopped_ranks:
+                for manager in self.server_managers:
+                    manager.update_expected_states(rank, "Stopped")
 
         try:
             process.run(cmd, env=env)

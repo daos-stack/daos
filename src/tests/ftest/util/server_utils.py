@@ -948,7 +948,8 @@ class DaosServerManager(SubprocessManager):
 
         Args:
             rank (int): server rank to update
-            state (str): new state to assign as the expected state of this rank
+            state (object): new state to assign as the expected state of this
+                rank. Can be a str or a list.
         """
         if rank in self._expected_states:
             self.log.info(
@@ -988,7 +989,7 @@ class DaosServerManager(SubprocessManager):
             "<SERVER> Verifying server states: group=%s, hosts=%s",
             self.get_config_value("name"), NodeSet.fromlist(self._hosts))
         if current_states:
-            log_format = "  %-4s  %-15s  %-36s  %-14s  %-14s  %s"
+            log_format = "  %-4s  %-15s  %-36s  %-22s  %-14s  %s"
             self.log.info(
                 log_format,
                 "Rank", "Host", "UUID", "Expected State", "Current State",
@@ -1000,7 +1001,11 @@ class DaosServerManager(SubprocessManager):
             # Verify that each expected rank appears in the current states
             for rank in sorted(self._expected_states):
                 domain = self._expected_states[rank]["domain"].split(".")
-                expected = self._expected_states[rank]["state"].lower()
+                expected = self._expected_states[rank]["state"]
+                if isinstance(expected, (list, tuple)):
+                    expected = [item.lower() for item in expected]
+                else:
+                    expected = [expected.lower()]
                 try:
                     current_rank = current_states.pop(rank)
                     current = current_rank["state"].lower()
@@ -1008,8 +1013,8 @@ class DaosServerManager(SubprocessManager):
                     current = "not detected"
 
                 # Check if the rank's expected state matches the current state
-                result = "PASS" if current == expected else "FAIL"
-                status["expected"] &= current == expected
+                result = "PASS" if current in expected else "FAIL"
+                status["expected"] &= current in expected
 
                 # Restart all ranks if the expected rank is not running
                 if current not in running_states:
@@ -1037,5 +1042,6 @@ class DaosServerManager(SubprocessManager):
         # Any unexpected state detected warrants a restart of all servers
         if not status["expected"]:
             status["restart"] = True
+
 
         return status

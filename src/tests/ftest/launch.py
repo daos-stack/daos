@@ -41,7 +41,6 @@ from xml.dom import minidom
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
-from util.general_utils import stop_processes
 
 try:
     # For python versions >= 3.2
@@ -1660,7 +1659,7 @@ def indent_text(indent, text):
         str: indented text
 
     """
-    if isinstance(text, (list,tuple)):
+    if isinstance(text, (list, tuple)):
         return "\n".join(["{}{}".format(" " * indent, line) for line in text])
     else:
         return " " * indent + str(text)

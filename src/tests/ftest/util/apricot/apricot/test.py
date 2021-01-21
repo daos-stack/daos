@@ -397,7 +397,7 @@ class TestWithoutServers(Test):
 
 
 class TestWithServers(TestWithoutServers):
-    # pylint: disable=too-many-public-methods
+    # pylint: disable=too-many-public-methods,too-many-instance-attributes
     """Run tests with DAOS servers and at least one client.
 
     Optionally run DAOS clients on specified hosts.  By default run a single
@@ -421,9 +421,31 @@ class TestWithServers(TestWithoutServers):
         self.server_group = None
         self.agent_managers = []
         self.server_managers = []
-        self.start_servers_once = True
-        self.server_manager_class = "Systemctl"
-        self.agent_manager_class = "Systemctl"
+        # Options to control how servers are started for each test variant:
+        #   start_servers_once:
+        #       True        = start the DAOS servers once per test file allowing
+        #                     the same server instances to be used for each test
+        #                     variant.
+        #       False       = start an new set of DAOS servers for each test
+        #                     variant.
+        #   server_manager_class / agent_manager_class:
+        #       "Orterun"   = use the orterun command to launch DAOS servers /
+        #                     agents. Not supported with (start_servers_once set
+        #                     to True).
+        #       "Systemctl" = use clush and systemctl to launch DAOS servers /
+        #                     agents.
+        #   setup_start_servers / setup_start_agents:
+        #       True        = start the DAOS servers / agents in setUp()
+        #       False       = do not start the DAOS servers / agents in setUp()
+        #
+        # Notes:
+        #   - when the setup_start_{servers|agents} is set to False the
+        #       start_servers_once attribute will most likely also want to be
+        #       set to False to ensure the servers are not running at the start
+        #       of each test variant.
+        self.start_servers_once = False
+        self.server_manager_class = "Orterun"
+        self.agent_manager_class = "Orterun"
         self.setup_start_servers = True
         self.setup_start_agents = True
         self.hostlist_servers = None
@@ -435,6 +457,7 @@ class TestWithServers(TestWithoutServers):
         self.client_reservation = None
         self.hostfile_servers_slots = 1
         self.hostfile_clients_slots = 1
+        self.access_points = None
         self.pool = None
         self.container = None
         self.agent_log = None
@@ -521,14 +544,19 @@ class TestWithServers(TestWithoutServers):
                 self.hostlist_clients, self.workdir,
                 self.hostfile_clients_slots)
 
+        # Access points to use by default when starting servers and agents
+        self.access_points = self.params.get(
+            "access_points", "/run/setup/*", self.hostlist_servers[:1])
+
         # Display host information
         self.log.info("--- HOST INFORMATION ---")
-        self.log.info("hostlist_servers:  %s", self.hostlist_servers)
-        self.log.info("hostlist_clients:  %s", self.hostlist_clients)
-        self.log.info("server_partition:  %s", self.server_partition)
-        self.log.info("client_partition:  %s", self.client_partition)
+        self.log.info("hostlist_servers:    %s", self.hostlist_servers)
+        self.log.info("hostlist_clients:    %s", self.hostlist_clients)
+        self.log.info("server_partition:    %s", self.server_partition)
+        self.log.info("client_partition:    %s", self.client_partition)
         self.log.info("server_reservation:  %s", self.server_reservation)
         self.log.info("client_reservation:  %s", self.client_reservation)
+        self.log.info("access_points:       %s", self.access_points)
 
         # List common test directory contents before running the test
         self.log.debug("Common test directory (%s) contents:", self.test_dir)
@@ -598,7 +626,7 @@ class TestWithServers(TestWithoutServers):
                 if self.job_manager.timeout is None:
                     self.job_manager.timeout = self.timeout - 30
 
-    def start_agents(self, agent_groups=None, servers=None):
+    def start_agents(self, agent_groups=None):
         """Start the daos_agent processes.
 
         Args:
@@ -607,8 +635,6 @@ class TestWithServers(TestWithoutServers):
                 key. Defaults to None which will use the server group name from
                 the test's yaml file to start the daos agents on all client
                 hosts specified in the test's yaml file.
-            servers (list): list of hosts running the daos servers to be used to
-                define the access points in the agent yaml config file
 
         Raises:
             avocado.core.exceptions.TestFail: if there is an error starting the
@@ -619,12 +645,16 @@ class TestWithServers(TestWithoutServers):
             # Include running the daos_agent on the test control host for API
             # calls and calling the daos command from this host.
             agent_groups = {
-                self.server_group: include_local_host(self.hostlist_clients)}
+                self.server_group: {
+                    "hosts": include_local_host(self.hostlist_clients),
+                    "access_points": self.access_points
+                }
+            }
 
         self.log.debug("--- STARTING AGENT GROUPS: %s ---", agent_groups)
 
         if isinstance(agent_groups, dict):
-            for group, hosts in agent_groups.items():
+            for group, info in agent_groups.items():
                 if self.agent_manager_class == "Systemctl":
                     agent_config_file = get_default_config_file("agent")
                     agent_config_temp = self.get_config_file(
@@ -637,20 +667,21 @@ class TestWithServers(TestWithoutServers):
                 self.configure_manager(
                     "agent",
                     self.agent_managers[-1],
-                    hosts,
+                    info["hosts"],
                     self.hostfile_clients_slots,
-                    servers)
+                    info["access_points"])
             self.start_agent_managers()
 
     def start_servers(self, server_groups=None):
         """Start the daos_server processes.
 
         Args:
-            server_groups (dict, optional): dictionary of lists of hosts on
-                which to start the daos server using a unique server group name
-                key. Defaults to None which will use the server group name from
-                the test's yaml file to start the daos server on all server
-                hosts specified in the test's yaml file.
+            server_groups (dict, optional): dictionary of dictionaries,
+                containing the list of hosts on which to start the daos server
+                and the list of access points, using a unique server group name
+                key. Defaults to None which will use the server group name, all
+                of the server hosts, and the access points from the test's yaml
+                file to define a single server group entry.
 
         Raises:
             avocado.core.exceptions.TestFail: if there is an error starting the
@@ -658,12 +689,17 @@ class TestWithServers(TestWithoutServers):
 
         """
         if server_groups is None:
-            server_groups = {self.server_group: self.hostlist_servers}
+            server_groups = {
+                self.server_group: {
+                    "hosts": self.hostlist_servers,
+                    "access_points": self.access_points
+                }
+            }
 
         self.log.debug("--- STARTING SERVER GROUPS: %s ---", server_groups)
 
         if isinstance(server_groups, dict):
-            for group, hosts in server_groups.items():
+            for group, info in server_groups.items():
                 if self.server_manager_class == "Systemctl":
                     server_config_file = get_default_config_file("server")
                     server_config_temp = self.get_config_file(
@@ -683,9 +719,9 @@ class TestWithServers(TestWithoutServers):
                 self.configure_manager(
                     "server",
                     self.server_managers[-1],
-                    hosts,
+                    info["hosts"],
                     self.hostfile_servers_slots,
-                    hosts)
+                    info["access_points"])
             self.start_server_managers()
 
     def get_config_file(self, name, command, path=None):
@@ -776,15 +812,16 @@ class TestWithServers(TestWithoutServers):
             manager (SubprocessManager): the daos agent/server process manager
             hosts (list): list of hosts on which to start the daos agent/server
             slots (int): number of slots per server to define in the hostfile
-            access_list (list): list of access point hosts
+            access_list (list, optional): list of access point hosts. Defaults
+                to None which uses self.access_points.
         """
         self.log.info("--- CONFIGURING %s MANAGER ---", name.upper())
         if access_list is None:
-            access_list = self.hostlist_servers
+            access_list = self.access_points
         # Calling get_params() will set the test-specific log names
         manager.get_params(self)
         # Only use the first host in the access list
-        manager.set_config_value("access_points", access_list[:1])
+        manager.set_config_value("access_points", access_list)
         manager.manager.assign_environment(
             EnvironmentVariables({"PATH": None}), True)
         manager.hosts = (hosts, self.workdir, slots)
@@ -1216,6 +1253,6 @@ class TestWithServers(TestWithoutServers):
             self.server_managers[-1],
             additional_servers,
             self.hostfile_servers_slots,
-            additional_servers
+            additional_servers[:1]
         )
         self._start_manager_list("server", [self.server_managers[-1]])
