@@ -142,18 +142,13 @@ String unit_packages() {
         need_qb = true
     }
     if (stage_info['target'] == 'centos7') {
-        String packages =  'gotestsum openmpi3 ' +
-                           'hwloc-devel argobots ' +
+        String packages =  'openmpi3 ' +
+                           'hwloc-devel ' +
                            'fuse3-libs fuse3 ' +
                            'boost-devel ' +
-                           'libisa-l-devel libpmem ' +
-                           'libpmemobj protobuf-c ' +
-                           'spdk-devel libfabric-devel '+
-                           'pmix numactl-devel ' +
                            'libipmctl-devel ' +
-                           'python36-tabulate numactl ' +
-                           'libyaml-devel ' +
-                           'valgrind-devel'
+                           'python36-tabulate ' +
+                           'patchelf'
         if (need_qb) {
             // TODO: these should be gotten from the Requires: of RPM
             packages += " spdk-tools mercury-2.0.0~rc1" +
