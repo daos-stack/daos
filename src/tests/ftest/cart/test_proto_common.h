@@ -129,7 +129,6 @@ shutdown_handler(crt_rpc_t *rpc_req)
 	D_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");
 	D_ASSERTF(rpc_req->cr_output == NULL, "RPC request output is NULL\n");
 
-	tc_set_shutdown_delay(2);
 	tc_progress_stop();
 	DBG_PRINT("server set shutdown flag.\n");
 }
