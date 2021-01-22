@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015, 2016 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -13,7 +13,7 @@
 
 int
 daos_pool_connect(const uuid_t uuid, const char *grp,
-		  const d_rank_list_t *svc, unsigned int flags,
+		  unsigned int flags,
 		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev)
 {
 	daos_pool_connect_t	*args;
@@ -30,7 +30,6 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
 
 	args = dc_task_get_args(task);
 	args->grp		= grp;
-	args->svc		= svc;
 	args->flags		= flags;
 	args->poh		= poh;
 	args->info		= info;

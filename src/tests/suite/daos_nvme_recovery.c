@@ -370,6 +370,7 @@ nvme_test_get_blobstore_state(void **state)
 	int		 blobstore_state;
 	int		 i, j;
 	int		 ndisks;
+	int		 faulty_disk_idx = 0;
 	int		 rc;
 
 	if (!is_nvme_enabled(arg)) {
@@ -390,11 +391,14 @@ nvme_test_get_blobstore_state(void **state)
 	D_ALLOC_ARRAY(devices, ndisks);
 	rc = dmg_storage_device_list(dmg_config_file, NULL, devices);
 	assert_int_equal(rc, 0);
-	for (i = 0; i < ndisks; i++)
+	for (i = 0; i < ndisks; i++) {
 		print_message("Rank=%d UUID=" DF_UUIDF " state=%s host=%s\n",
 			      devices[i].rank, DP_UUID(devices[i].device_id),
-			devices[i].state, devices[i].host);
+			      devices[i].state, devices[i].host);
 
+		if (devices[i].rank == 0)
+			faulty_disk_idx = i;
+	}
 
 	/**
 	 * Set the object class and generate data on objects.
@@ -424,7 +428,8 @@ nvme_test_get_blobstore_state(void **state)
 	 * Verify blobstore of first device returned is in "NORMAL" state
 	 * before setting to faulty.
 	 */
-	rc = daos_mgmt_get_bs_state(arg->group, devices[0].device_id,
+	rc = daos_mgmt_get_bs_state(arg->group,
+				    devices[faulty_disk_idx].device_id,
 				    &blobstore_state, NULL /*ev*/);
 	assert_int_equal(rc, 0);
 
@@ -437,17 +442,19 @@ nvme_test_get_blobstore_state(void **state)
 	 * 'dmg storage set nvme-faulty'.
 	 */
 	print_message("NVMe with UUID=" DF_UUIDF " on host=%s\" set to Faulty\n",
-		      DP_UUID(devices[0].device_id),
-		      devices[0].host);
-	rc = dmg_storage_set_nvme_fault(dmg_config_file, devices[0].host,
-					devices[0].device_id, 1);
+		      DP_UUID(devices[faulty_disk_idx].device_id),
+		      devices[faulty_disk_idx].host);
+	rc = dmg_storage_set_nvme_fault(dmg_config_file,
+					devices[faulty_disk_idx].host,
+					devices[faulty_disk_idx].device_id,
+					1);
 	assert_int_equal(rc, 0);
 
 	/**
 	 *  Continue to check blobstore state until "OUT" state is returned
 	 *  or max test retry count is hit (5 min).
 	 */
-	rc = wait_and_verify_blobstore_state(devices[0].device_id,
+	rc = wait_and_verify_blobstore_state(devices[faulty_disk_idx].device_id,
 					     /*expected state*/"out",
 					     arg->group);
 	assert_int_equal(rc, 0);
