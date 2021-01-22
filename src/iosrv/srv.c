@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1074,7 +1074,6 @@ enum {
 	XD_INIT_MUTEX,
 	XD_INIT_ULT_INIT,
 	XD_INIT_ULT_BARRIER,
-	XD_INIT_REG_KEY,
 	XD_INIT_NVME,
 	XD_INIT_XSTREAMS,
 	XD_INIT_DRPC,
@@ -1097,9 +1096,6 @@ dss_srv_fini(bool force)
 		/* fall through */
 	case XD_INIT_NVME:
 		bio_nvme_fini();
-		/* fall through */
-	case XD_INIT_REG_KEY:
-		dss_unregister_key(&daos_srv_modkey);
 		/* fall through */
 	case XD_INIT_ULT_BARRIER:
 		ABT_cond_free(&xstream_data.xd_ult_barrier);
@@ -1152,10 +1148,6 @@ dss_srv_init()
 		D_GOTO(failed, rc);
 	}
 	xstream_data.xd_init_step = XD_INIT_ULT_BARRIER;
-
-	/** register global tls accessible to all modules */
-	dss_register_key(&daos_srv_modkey);
-	xstream_data.xd_init_step = XD_INIT_REG_KEY;
 
 	rc = bio_nvme_init(dss_storage_path, dss_nvme_conf, dss_nvme_shm_id,
 		dss_nvme_mem_size);

@@ -57,7 +57,6 @@ class ContSecurityTestBase(TestWithServers):
         self.current_user = None
         self.current_group = None
         self.pool_uuid = None
-        self.pool_svc = None
         self.container_uuid = None
 
     def setUp(self):
@@ -76,19 +75,15 @@ class ContSecurityTestBase(TestWithServers):
     def create_pool_with_dmg(self):
         """Create a pool with the dmg tool.
 
-        Also, obtains the pool uuid and svc from the operation's
-        result
+        Obtains the pool uuid from the operation's result
 
         Returns:
             pool_uuid (str): Pool UUID, randomly generated.
-            pool_svc (str): Pool service replica rank list
-
         """
         self.prepare_pool()
         pool_uuid = self.pool.pool.get_uuid_str()
-        pool_svc = self.pool.svc_ranks
 
-        return pool_uuid, pool_svc
+        return pool_uuid
 
     def create_container_with_daos(self, pool, acl_type=None, acl_file=None):
         """Create a container with the daos tool.
