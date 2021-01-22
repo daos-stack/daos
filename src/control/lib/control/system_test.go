@@ -1165,9 +1165,6 @@ func TestControl_EventForwarder_OnEvent(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			if tc.expInvokeCount == 0 {
-				tc.expInvokeCount = 1 // default
-			}
 			expNextSeq := uint64(tc.expInvokeCount + 1)
 
 			mi := NewMockInvoker(log, &MockInvokerConfig{})
@@ -1175,8 +1172,13 @@ func TestControl_EventForwarder_OnEvent(t *testing.T) {
 				mi = nil
 			}
 
+			callCount := tc.expInvokeCount
+			if callCount == 0 {
+				callCount++ // call at least once
+			}
+
 			ef := NewEventForwarder(mi, tc.aps)
-			for i := 0; i < tc.expInvokeCount; i++ {
+			for i := 0; i < callCount; i++ {
 				ef.OnEvent(context.TODO(), tc.event)
 			}
 
