@@ -152,6 +152,7 @@ String unit_packages() {
                            'pmix numactl-devel ' +
                            'libipmctl-devel ' +
                            'python36-tabulate numactl ' +
+                           'libyaml-devel ' +
                            'valgrind-devel'
         if (need_qb) {
             // TODO: these should be gotten from the Requires: of RPM
@@ -188,10 +189,13 @@ String daos_packages_version(String distro) {
     String version = cachedCommitPragma(pragma: 'RPM-test-version')
     if (version != "") {
         String dist = ""
-        if (distro == "centos7") {
-            dist = ".el7"
-        } else if (distro == "leap15") {
-            dist = ".suse.lp152"
+        if (version.indexOf('-') > -1) {
+            // only tack on the %{dist} if the release was specified
+            if (distro == "centos7") {
+                dist = ".el7"
+            } else if (distro == "leap15") {
+                dist = ".suse.lp152"
+            }
         }
         return version + dist
     }
@@ -235,17 +239,17 @@ String functional_packages() {
 String functional_packages(String distro) {
     String daos_pkgs = get_daos_packages(distro)
     String pkgs = " openmpi3 hwloc ndctl fio " +
-                  "patchutils ior-hpc-daos-0 " +
-                  "romio-tests-cart-4-daos-0 " +
-                  "testmpio-cart-4-daos-0 " +
-                  "mpi4py-tests-cart-4-daos-0 " +
-                  "hdf5-mpich2-tests-daos-0 " +
-                  "hdf5-openmpi3-tests-daos-0 " +
-                  "hdf5-vol-daos-mpich2-tests-daos-0 " +
-                  "hdf5-vol-daos-openmpi3-tests-daos-0 " +
-                  "MACSio-mpich2-daos-0 " +
-                  "MACSio-openmpi3-daos-0 " +
-                  "mpifileutils-mpich-daos-0 "
+                  "patchutils ior-hpc-daos-1 " +
+                  "romio-tests-daos-1 " +
+                  "testmpio " +
+                  "mpi4py-tests " +
+                  "hdf5-mpich-tests " +
+                  "hdf5-openmpi3-tests " +
+                  "hdf5-vol-daos-mpich2-tests-daos-1 " +
+                  "hdf5-vol-daos-openmpi3-tests-daos-1 " +
+                  "MACSio-mpich " +
+                  "MACSio-openmpi3 " +
+                  "mpifileutils-mpich-daos-1 "
     if (distro == "leap15") {
         if (quickbuild()) {
             pkgs += " spdk-tools"
@@ -475,7 +479,7 @@ pipeline {
         // preserve stashes so that jobs can be started at the test stage
         preserveStashes(buildCount: 5)
         ansiColor('xterm')
-        buildDiscarder(logRotator(artifactDaysToKeepStr: '200'))
+        buildDiscarder(logRotator(artifactDaysToKeepStr: '100'))
     }
 
     parameters {
@@ -520,9 +524,11 @@ pipeline {
                                                   "src/mgmt/*.pb-c.[ch]:" +
                                                   "src/iosrv/*.pb-c.[ch]:" +
                                                   "src/security/*.pb-c.[ch]:" +
-						  "src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:" +
-						  "src/client/java/daos-java/src/main/native/*.pb-c.[ch]:" +
-						  "src/client/java/daos-java/src/main/native/include/*.pb-c.[ch]:" +
+                                                  "src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:" +
+                                                  "src/client/java/daos-java/src/main/java/io/daos/obj/attr/*:" +
+                                                  "src/client/java/daos-java/src/main/native/include/daos_jni_common.h:" +
+                                                  "src/client/java/daos-java/src/main/native/*.pb-c.[ch]:" +
+                                                  "src/client/java/daos-java/src/main/native/include/*.pb-c.[ch]:" +
                                                   "*.crt:" +
                                                   "*.pem:" +
                                                   "*_test.go:" +

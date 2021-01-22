@@ -77,14 +77,13 @@ class MpioUtils():
         return False
 
     # pylint: disable=R0913
-    def run_mpiio_tests(self, hostfile, pool_uuid, svcl, test_repo,
+    def run_mpiio_tests(self, hostfile, pool_uuid, test_repo,
                         test_name, client_processes, cont_uuid):
         """Run the LLNL, MPI4PY, and HDF5 testsuites.
 
         Args:
             hostfile (str): client hostfile
             pool_uuid (str): pool UUID
-            svcl (list): pool SVCL
             test_repo (str): test repo location
             test_name (str): name of test to be tested
             client_processes (int): number of client processes
@@ -99,7 +98,6 @@ class MpioUtils():
         # environment variables only to be set on client node
         env = EnvironmentVariables()
         env["DAOS_POOL"] = "{}".format(pool_uuid)
-        env["DAOS_SVCL"] = "{}".format(",".join([str(item) for item in svcl]))
         env["DAOS_CONT"] = "{}".format(cont_uuid)
         env["DAOS_BYPASS_DUNS"] = "1"
         mpirun = os.path.join(self.mpichinstall, "bin", "mpirun")

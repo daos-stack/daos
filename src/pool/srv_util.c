@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -794,11 +794,7 @@ update_targets_ult(void *arg)
 {
 	struct update_targets_arg	*uta = arg;
 	struct d_tgt_list		 tgt_list;
-	d_rank_list_t			 svc;
 	int				 rc;
-
-	svc.rl_ranks = &uta->uta_pl_rank;
-	svc.rl_nr = 1;
 
 	tgt_list.tl_nr = uta->uta_nr;
 	tgt_list.tl_ranks = uta->uta_ranks;
@@ -806,10 +802,10 @@ update_targets_ult(void *arg)
 
 	if (uta->uta_reint)
 		rc = dsc_pool_tgt_reint(uta->uta_pool_id, NULL /* grp */,
-					&svc, &tgt_list);
+					&tgt_list);
 	else
 		rc = dsc_pool_tgt_exclude(uta->uta_pool_id, NULL /* grp */,
-					  &svc, &tgt_list);
+					  &tgt_list);
 	if (rc)
 		D_ERROR(DF_UUID": %s targets failed. " DF_RC "\n",
 			DP_UUID(uta->uta_pool_id),
@@ -927,7 +923,7 @@ nvme_bio_error(int media_err_type, int tgt_id)
 {
 	int rc;
 
-	rc = notify_bio_error(media_err_type, tgt_id);
+	rc = ds_notify_bio_error(media_err_type, tgt_id);
 
 	return rc;
 }

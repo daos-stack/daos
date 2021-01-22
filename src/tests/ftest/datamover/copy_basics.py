@@ -59,6 +59,7 @@ class CopyBasicsTest(DataMoverTestBase):
         cmd = "mkdir -p {}".format(self.get_posix_test_path_string())
         self.execute_cmd(cmd)
 
+    @skipForTicket("DAOS-6484")
     def test_copy_types(self):
         """
         Test Description:

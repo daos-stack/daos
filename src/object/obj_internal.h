@@ -778,6 +778,8 @@ daos_iom_dump(daos_iom_t *iom)
 	D_PRINT("\n");
 }
 
+int  obj_class_init(void);
+void obj_class_fini(void);
 int  obj_utils_init(void);
 void obj_utils_fini(void);
 
