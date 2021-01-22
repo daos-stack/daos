@@ -33,7 +33,7 @@ def scons():
 
     configure_lustre(denv)
 
-    denv.AppendUnique(CPPDEFINES=['-DFUSE_USE_VERSION=35'])
+    denv.AppendUnique(CPPDEFINES=['-DFUSE_USE_VERSION=34'])
 
     libraries = ['$LIBS', 'daos_common', 'daos', 'uuid', 'gurt']
 
