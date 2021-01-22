@@ -1,5 +1,5 @@
 /*
- *  (C) Copyright 2016-2020 Intel Corporation.
+ *  (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1639,6 +1639,9 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 		if (daos_anchor_get_flags(args->la_dkey_anchor) &
 		    DIOF_FOR_MIGRATION)
 			oei->oei_flags |= ORF_FOR_MIGRATION;
+		if (daos_anchor_get_flags(args->la_dkey_anchor) &
+		    DIOF_TO_SPEC_SHARD)
+			oei->oei_flags |= ORF_DTX_REFRESH;
 	}
 	if (args->la_akey_anchor != NULL)
 		enum_anchor_copy(&oei->oei_akey_anchor, args->la_akey_anchor);

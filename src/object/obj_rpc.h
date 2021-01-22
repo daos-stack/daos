@@ -168,6 +168,8 @@ enum obj_rpc_flags {
 	ORF_CREATE_MAP_DETAIL	= (1 << 13),
 	/* For data migration. */
 	ORF_FOR_MIGRATION	= (1 << 14),
+	/* Force DTX refresh if hit non-committed DTX on non-leader. */
+	ORF_DTX_REFRESH		= (1 << 15),
 };
 
 /* common for update/fetch */

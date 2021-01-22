@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -199,8 +199,7 @@ enum daos_ops_intent {
 	DAOS_INTENT_MIGRATION		= 4, /* for migration related scan */
 	DAOS_INTENT_CHECK		= 5, /* check aborted or not */
 	DAOS_INTENT_KILL		= 6, /* delete object/key */
-	DAOS_INTENT_COS			= 7, /* add something into CoS cache. */
-	DAOS_INTENT_IGNORE_NONCOMMITTED	= 8, /* ignore non-committed DTX. */
+	DAOS_INTENT_IGNORE_NONCOMMITTED	= 7, /* ignore non-committed DTX. */
 };
 
 /**

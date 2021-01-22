@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -307,8 +307,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	}
 
 check_object:
-	if (intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH ||
-	    intent == DAOS_INTENT_COS)
+	if (intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH)
 		goto out;
 
 	if (!create) {
@@ -365,8 +364,8 @@ out:
 		obj->obj_sync_epoch = obj->obj_df->vo_sync;
 
 	if (obj->obj_df != NULL && epr->epr_hi <= obj->obj_sync_epoch &&
-	    (intent == DAOS_INTENT_COS || (vos_dth_get() != NULL &&
-	     (intent == DAOS_INTENT_PUNCH || intent == DAOS_INTENT_UPDATE)))) {
+	    vos_dth_get() != NULL &&
+	    (intent == DAOS_INTENT_PUNCH || intent == DAOS_INTENT_UPDATE)) {
 		/* If someone has synced the object against the
 		 * obj->obj_sync_epoch, then we do not allow to modify the
 		 * object with old epoch. Let's ask the caller to retry with
