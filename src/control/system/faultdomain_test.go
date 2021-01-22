@@ -31,7 +31,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 func TestSystem_NewFaultDomain(t *testing.T) {
@@ -1568,108 +1567,6 @@ func TestSystem_FaultDomainTree_String(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			common.AssertEqual(t, tc.tree.String(), tc.expResult, "")
-		})
-	}
-}
-
-func TestSystem_FaultDomainTree_ToProto(t *testing.T) {
-	for name, tc := range map[string]struct {
-		tree      *FaultDomainTree
-		expResult []*mgmtpb.FaultDomain
-	}{
-		"nil": {},
-		"root only": {
-			tree: NewFaultDomainTree(),
-			expResult: []*mgmtpb.FaultDomain{
-				{
-					Domain: "/",
-					Id:     expFaultDomainID(0),
-				},
-			},
-		},
-		"single branch": {
-			tree: NewFaultDomainTree(
-				MustCreateFaultDomain("one", "two", "three"),
-			),
-			expResult: []*mgmtpb.FaultDomain{
-				{
-					Domain:   "/",
-					Id:       expFaultDomainID(0),
-					Children: []uint32{expFaultDomainID(1)},
-				},
-				{
-					Domain:   "/one",
-					Id:       expFaultDomainID(1),
-					Children: []uint32{expFaultDomainID(2)},
-				},
-				{
-					Domain:   "/one/two",
-					Id:       expFaultDomainID(2),
-					Children: []uint32{expFaultDomainID(3)},
-				},
-				{
-					Domain: "/one/two/three",
-					Id:     expFaultDomainID(3),
-				},
-			},
-		},
-		"multi branch": {
-			tree: NewFaultDomainTree(
-				MustCreateFaultDomainFromString("/rack0/pdu0"),
-				MustCreateFaultDomainFromString("/rack0/pdu1"),
-				MustCreateFaultDomainFromString("/rack1/pdu2"),
-				MustCreateFaultDomainFromString("/rack1/pdu3"),
-			),
-			expResult: []*mgmtpb.FaultDomain{
-				{
-					Domain: "/",
-					Id:     expFaultDomainID(0),
-					Children: []uint32{
-						expFaultDomainID(1),
-						expFaultDomainID(4),
-					},
-				},
-				{
-					Domain: "/rack0",
-					Id:     expFaultDomainID(1),
-					Children: []uint32{
-						expFaultDomainID(2),
-						expFaultDomainID(3),
-					},
-				},
-				{
-					Domain: "/rack1",
-					Id:     expFaultDomainID(4),
-					Children: []uint32{
-						expFaultDomainID(5),
-						expFaultDomainID(6),
-					},
-				},
-				{
-					Domain: "/rack0/pdu0",
-					Id:     expFaultDomainID(2),
-				},
-				{
-					Domain: "/rack0/pdu1",
-					Id:     expFaultDomainID(3),
-				},
-				{
-					Domain: "/rack1/pdu2",
-					Id:     expFaultDomainID(5),
-				},
-				{
-					Domain: "/rack1/pdu3",
-					Id:     expFaultDomainID(6),
-				},
-			},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			result := tc.tree.ToProto()
-
-			if diff := cmp.Diff(tc.expResult, result); diff != "" {
-				t.Fatalf("(-want, +got): %s", diff)
-			}
 		})
 	}
 }

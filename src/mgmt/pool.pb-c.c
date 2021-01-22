@@ -7,51 +7,6 @@
 #endif
 
 #include "pool.pb-c.h"
-void   mgmt__fault_domain__init
-                     (Mgmt__FaultDomain         *message)
-{
-  static const Mgmt__FaultDomain init_value = MGMT__FAULT_DOMAIN__INIT;
-  *message = init_value;
-}
-size_t mgmt__fault_domain__get_packed_size
-                     (const Mgmt__FaultDomain *message)
-{
-  assert(message->base.descriptor == &mgmt__fault_domain__descriptor);
-  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
-}
-size_t mgmt__fault_domain__pack
-                     (const Mgmt__FaultDomain *message,
-                      uint8_t       *out)
-{
-  assert(message->base.descriptor == &mgmt__fault_domain__descriptor);
-  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
-}
-size_t mgmt__fault_domain__pack_to_buffer
-                     (const Mgmt__FaultDomain *message,
-                      ProtobufCBuffer *buffer)
-{
-  assert(message->base.descriptor == &mgmt__fault_domain__descriptor);
-  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
-}
-Mgmt__FaultDomain *
-       mgmt__fault_domain__unpack
-                     (ProtobufCAllocator  *allocator,
-                      size_t               len,
-                      const uint8_t       *data)
-{
-  return (Mgmt__FaultDomain *)
-     protobuf_c_message_unpack (&mgmt__fault_domain__descriptor,
-                                allocator, len, data);
-}
-void   mgmt__fault_domain__free_unpacked
-                     (Mgmt__FaultDomain *message,
-                      ProtobufCAllocator *allocator)
-{
-  if(!message)
-    return;
-  assert(message->base.descriptor == &mgmt__fault_domain__descriptor);
-  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
-}
 void   mgmt__pool_create_req__init
                      (Mgmt__PoolCreateReq         *message)
 {
@@ -1234,70 +1189,6 @@ void   mgmt__pool_set_prop_resp__free_unpacked
   assert(message->base.descriptor == &mgmt__pool_set_prop_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-static const ProtobufCFieldDescriptor mgmt__fault_domain__field_descriptors[3] =
-{
-  {
-    "domain",
-    1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__FaultDomain, domain),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "id",
-    2,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__FaultDomain, id),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "children",
-    3,
-    PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_UINT32,
-    offsetof(Mgmt__FaultDomain, n_children),
-    offsetof(Mgmt__FaultDomain, children),
-    NULL,
-    NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-};
-static const unsigned mgmt__fault_domain__field_indices_by_name[] = {
-  2,   /* field[2] = children */
-  0,   /* field[0] = domain */
-  1,   /* field[1] = id */
-};
-static const ProtobufCIntRange mgmt__fault_domain__number_ranges[1 + 1] =
-{
-  { 1, 0 },
-  { 0, 3 }
-};
-const ProtobufCMessageDescriptor mgmt__fault_domain__descriptor =
-{
-  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "mgmt.FaultDomain",
-  "FaultDomain",
-  "Mgmt__FaultDomain",
-  "mgmt",
-  sizeof(Mgmt__FaultDomain),
-  3,
-  mgmt__fault_domain__field_descriptors,
-  mgmt__fault_domain__field_indices_by_name,
-  1,  mgmt__fault_domain__number_ranges,
-  (ProtobufCMessageInit) mgmt__fault_domain__init,
-  NULL,NULL,NULL    /* reserved[123] */
-};
 static const ProtobufCFieldDescriptor mgmt__pool_create_req__field_descriptors[14] =
 {
   {
@@ -1376,12 +1267,12 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_req__field_descriptors[1
     "faultDomains",
     7,
     PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_MESSAGE,
+    PROTOBUF_C_TYPE_UINT32,
     offsetof(Mgmt__PoolCreateReq, n_faultdomains),
     offsetof(Mgmt__PoolCreateReq, faultdomains),
-    &mgmt__fault_domain__descriptor,
     NULL,
-    0,             /* flags */
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -2159,12 +2050,12 @@ static const ProtobufCFieldDescriptor mgmt__pool_extend_req__field_descriptors[7
     "faultDomains",
     7,
     PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_MESSAGE,
+    PROTOBUF_C_TYPE_UINT32,
     offsetof(Mgmt__PoolExtendReq, n_faultdomains),
     offsetof(Mgmt__PoolExtendReq, faultdomains),
-    &mgmt__fault_domain__descriptor,
     NULL,
-    0,             /* flags */
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };

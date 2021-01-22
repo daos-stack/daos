@@ -289,43 +289,6 @@ err_out:
 	return rc;
 }
 
-/* Returns either an error or the length of the comps array. */
-static int
-proto_fault_domains_to_pool_comps(Mgmt__FaultDomain **proto, size_t proto_len,
-				  struct pool_component **comps)
-{
-	struct pool_component	*tmp_comps;
-	size_t			n_comps = 0;
-	size_t			i;
-
-	if (proto == NULL || proto_len == 0) {
-		*comps = NULL;
-		return 0;
-	}
-
-	D_ALLOC_ARRAY(tmp_comps, proto_len);
-	if (tmp_comps == NULL)
-		return -DER_NOMEM;
-
-	/* Don't include the root node for the moment */
-	for (i = 1; i < proto_len; i++) {
-		struct pool_component *comp = &tmp_comps[n_comps];
-
-		/* skip leaves - these are the actual ranks */
-		if (proto[i] == NULL ||
-		    proto[i]->n_children == 0)
-			continue;
-
-		n_comps++;
-		comp->co_type = PO_COMP_TP_RACK;
-		comp->co_id = proto[i]->id;
-		comp->co_nr = proto[i]->n_children;
-	}
-
-	*comps = tmp_comps;
-	return n_comps;
-}
-
 void
 ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
@@ -334,8 +297,6 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__PoolCreateResp	 resp = MGMT__POOL_CREATE_RESP__INIT;
 	d_rank_list_t		*targets = NULL;
 	d_rank_list_t		*svc = NULL;
-	struct pool_component	*domains = NULL;
-	int			domains_nr;
 	uuid_t			 pool_uuid;
 	daos_prop_t		*prop = NULL;
 	uint8_t			*body;
@@ -352,12 +313,6 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 
 	D_INFO("Received request to create pool on %zu ranks\n", req->n_ranks);
-
-	rc = proto_fault_domains_to_pool_comps(req->faultdomains,
-					       req->n_faultdomains, &domains);
-	if (rc < 0)
-		D_GOTO(out, rc);
-	domains_nr = rc;
 
 	if (req->n_ranks > 0) {
 		targets = uint32_array_to_rank_list(req->ranks, req->n_ranks);
@@ -381,8 +336,8 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	/* Ranks to allocate targets (in) & svc for pool replicas (out). */
 	rc = ds_mgmt_create_pool(pool_uuid, req->sys, "pmem", targets,
 				 req->scmbytes, req->nvmebytes,
-				 prop, req->numsvcreps, &svc, domains_nr,
-				 domains);
+				 prop, req->numsvcreps, &svc,
+				 req->n_faultdomains, req->faultdomains);
 	if (targets != NULL)
 		d_rank_list_free(targets);
 	if (rc != 0) {
@@ -418,7 +373,6 @@ out:
 	daos_prop_free(prop);
 
 	D_FREE(resp.svc_reps);
-	D_FREE(domains);
 }
 
 void
@@ -716,8 +670,6 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__PoolExtendResp	resp;
 	d_rank_list_t		*rank_list = NULL;
 	d_rank_list_t		*svc_ranks = NULL;
-	int			domains_nr;
-	struct pool_component	*domains = NULL;
 	uuid_t			uuid;
 	uint8_t			*body;
 	size_t			len;
@@ -736,12 +688,6 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	rc = proto_fault_domains_to_pool_comps(req->faultdomains,
-					       req->n_faultdomains, &domains);
-	if (rc < 0)
-		D_GOTO(out, rc);
-	domains_nr = rc;
-
 	rc = uuid_parse(req->uuid, uuid);
 	if (rc != 0) {
 		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", req->uuid,
@@ -758,8 +704,8 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out_list, rc = -DER_NOMEM);
 
 	rc = ds_mgmt_pool_extend(uuid, svc_ranks, rank_list, "pmem",
-				 req->scmbytes, req->nvmebytes, domains_nr,
-				 domains);
+				 req->scmbytes, req->nvmebytes,
+				 req->n_faultdomains, req->faultdomains);
 
 	if (rc != 0)
 		D_ERROR("Failed to extend pool %s: "DF_RC"\n", req->uuid,

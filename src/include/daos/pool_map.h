@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -176,7 +176,7 @@ int  pool_buf_attach(struct pool_buf *buf, struct pool_component *comps,
 		     unsigned int comp_nr);
 int gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 		int map_version, int ndomains, int nnodes, int ntargets,
-		const struct pool_component *domains, uuid_t target_uuids[],
+		const uint32_t *domains, uuid_t target_uuids[],
 		const d_rank_list_t *target_addrs, uuid_t **uuids_out,
 		uint32_t dss_tgt_nr);
 

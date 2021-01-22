@@ -206,7 +206,7 @@ ds_mgmt_pool_svc_create(uuid_t pool_uuid,
 			int ntargets, uuid_t target_uuids[],
 			const char *group, d_rank_list_t *ranks,
 			daos_prop_t *prop, d_rank_list_t *svc_list,
-			size_t domains_nr, struct pool_component *domains)
+			size_t domains_nr, uint32_t *domains)
 {
 	int	rc;
 
@@ -228,7 +228,7 @@ int
 ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 		    d_rank_list_t *targets, size_t scm_size, size_t nvme_size,
 		    daos_prop_t *prop, uint32_t svc_nr, d_rank_list_t **svcp,
-		    int domains_nr, struct pool_component *domains)
+		    int domains_nr, uint32_t *domains)
 {
 	uuid_t				*tgt_uuids = NULL;
 	d_rank_list_t			*filtered_targets = NULL;
@@ -350,7 +350,7 @@ int
 ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		    d_rank_list_t *rank_list,
 		    char *tgt_dev,  size_t scm_size, size_t nvme_size,
-		    size_t domains_nr, struct pool_component *domains)
+		    size_t domains_nr, uint32_t *domains)
 {
 	d_rank_list_t		*unique_add_ranks = NULL;
 	uuid_t			*tgt_uuids = NULL;

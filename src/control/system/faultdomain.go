@@ -30,8 +30,6 @@ import (
 	"math"
 	"sort"
 	"strings"
-
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 const (
@@ -429,41 +427,6 @@ func (t *FaultDomainTree) nodeToString(w io.Writer, depth int, fullDomain bool) 
 	for _, c := range t.Children {
 		c.nodeToString(w, depth+1, false)
 	}
-}
-
-// ToProto converts the FaultDomainTree into a list of protobuf structures,
-// in the order of a breadth-first traversal.
-func (t *FaultDomainTree) ToProto() []*mgmtpb.FaultDomain {
-	if t == nil {
-		return nil
-	}
-
-	result := make([]*mgmtpb.FaultDomain, 0)
-
-	queue := make([]*FaultDomainTree, 0)
-	queue = append(queue, t)
-
-	for len(queue) > 0 {
-		cur := queue[0]
-		queue = queue[1:]
-
-		result = append(result, cur.toProtoSingle())
-		for _, child := range cur.Children {
-			queue = append(queue, child)
-		}
-	}
-	return result
-}
-
-func (t *FaultDomainTree) toProtoSingle() *mgmtpb.FaultDomain {
-	result := &mgmtpb.FaultDomain{
-		Domain: t.Domain.String(),
-		Id:     t.ID,
-	}
-	for _, child := range t.Children {
-		result.Children = append(result.Children, child.ID)
-	}
-	return result
 }
 
 // Copy creates a copy of the full FaultDomainTree in memory.

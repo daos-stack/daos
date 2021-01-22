@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -228,12 +228,6 @@ func (sm *Member) WithInfo(msg string) *Member {
 func (sm *Member) WithFaultDomain(fd *FaultDomain) *Member {
 	sm.FaultDomain = fd
 	return sm
-}
-
-// RankFaultDomain generates the fault domain representing this Member rank.
-func (sm *Member) RankFaultDomain() *FaultDomain {
-	rankDomain := fmt.Sprintf("rank%d", uint32(sm.Rank))
-	return sm.FaultDomain.MustCreateChild(rankDomain) // "rankX" string can't fail
 }
 
 // NewMember returns a reference to a new member struct.

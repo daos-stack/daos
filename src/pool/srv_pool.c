@@ -448,7 +448,7 @@ static int
 init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 		   uint32_t nnodes, uuid_t target_uuids[], const char *group,
 		   const d_rank_list_t *target_addrs, daos_prop_t *prop,
-		   uint32_t ndomains, const struct pool_component *domains)
+		   uint32_t ndomains, const uint32_t *domains)
 {
 	struct pool_buf	       *map_buf;
 	uint32_t		map_version = 1;
@@ -519,12 +519,12 @@ out_map_buf:
  */
 static int
 select_svc_ranks(int nreplicas, const d_rank_list_t *target_addrs,
-		 int ndomains, const struct pool_component *domains,
+		 int ndomains, const uint32_t *domains,
 		 d_rank_list_t **ranksp)
 {
 	int			i_rank_zero = -1;
 	int			selectable;
-	d_rank_list_t       *ranks;
+	d_rank_list_t		*ranks;
 	int			i;
 	int			j;
 
@@ -587,7 +587,7 @@ select_svc_ranks(int nreplicas, const d_rank_list_t *target_addrs,
 int
 ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
 		   const char *group, const d_rank_list_t *target_addrs,
-		   int ndomains, const struct pool_component *domains,
+		   int ndomains, const uint32_t *domains,
 		   daos_prop_t *prop, d_rank_list_t *svc_addrs)
 {
 	d_rank_list_t	       *ranks;
@@ -646,7 +646,7 @@ rechoose:
 	in->pri_prop = prop;
 	in->pri_ndomains = ndomains;
 	in->pri_domains.ca_count = ndomains;
-	in->pri_domains.ca_arrays = (struct pool_component *)domains;
+	in->pri_domains.ca_arrays = (uint32_t *)domains;
 
 	/* Send the POOL_CREATE request. */
 	rc = dss_rpc_send(rpc);
@@ -1645,7 +1645,7 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	struct pool_create_out *out = crt_reply_get(rpc);
 	struct pool_svc	       *svc;
 	struct rdb_tx		tx;
-	d_iov_t		value;
+	d_iov_t			value;
 	struct rdb_kvs_attr	attr;
 	daos_prop_t	       *prop_dup = NULL;
 	int			rc;
@@ -3109,7 +3109,7 @@ out:
 int
 ds_pool_extend(uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
 	       const d_rank_list_t *rank_list, int ndomains,
-	       const struct pool_component *domains, d_rank_list_t *svc_ranks)
+	       const uint32_t *domains, d_rank_list_t *svc_ranks)
 {
 	int				rc;
 	struct rsvc_client		client;
@@ -3143,7 +3143,7 @@ rechoose:
 	in->pei_tgt_uuids.ca_arrays = target_uuids;
 	in->pei_tgt_ranks = (d_rank_list_t *)rank_list;
 	in->pei_domains.ca_count = ndomains;
-	in->pei_domains.ca_arrays = (struct pool_component *)domains;
+	in->pei_domains.ca_arrays = (uint32_t *)domains;
 
 	rc = dss_rpc_send(rpc);
 	out = crt_reply_get(rpc);
@@ -4307,7 +4307,7 @@ static int
 pool_extend_map(struct rdb_tx *tx, struct pool_svc *svc,
 		uint32_t nnodes, uuid_t target_uuids[],
 		d_rank_list_t *rank_list, uint32_t ndomains,
-		struct pool_component *domains, bool *updated_p,
+		uint32_t *domains, bool *updated_p,
 		uint32_t *map_version_p, struct rsvc_hint *hint)
 {
 	struct pool_buf		*map_buf = NULL;
@@ -4390,7 +4390,7 @@ static int
 pool_extend_internal(uuid_t pool_uuid, struct rsvc_hint *hint,
 		     uint32_t nnodes,
 		     uuid_t target_uuids[], d_rank_list_t *rank_list,
-		     uint32_t ndomains, struct pool_component *domains,
+		     uint32_t ndomains, uint32_t *domains,
 		     uint32_t *map_version_p)
 {
 	struct pool_svc		*svc;
@@ -4455,8 +4455,8 @@ ds_pool_extend_handler(crt_rpc_t *rpc)
 	uuid_t			*target_uuids;
 	d_rank_list_t		rank_list;
 	uint32_t		ndomains;
-	struct pool_component	*domains;
-	int rc;
+	uint32_t		*domains;
+	int			rc;
 
 	uuid_copy(pool_uuid, in->pei_op.pi_uuid);
 	target_uuids = in->pei_tgt_uuids.ca_arrays;

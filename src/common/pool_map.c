@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1343,14 +1343,14 @@ uuid_compare_cb(const void *a, const void *b)
 int
 gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 		int map_version, int ndomains, int nnodes, int ntargets,
-		const struct pool_component *domains, uuid_t target_uuids[],
+		const uint32_t *domains, uuid_t target_uuids[],
 		const d_rank_list_t *target_addrs, uuid_t **uuids_out,
 		uint32_t dss_tgt_nr)
 {
 	struct pool_component	map_comp;
 	struct pool_buf		*map_buf;
-	struct pool_domain      *found_dom;
-	uuid_t		        *uuids = NULL;
+	struct pool_domain	*found_dom;
+	uuid_t			*uuids = NULL;
 	uint32_t		num_comps;
 	uint8_t			new_status;
 	bool			updated;
@@ -1379,15 +1379,16 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 		num_comps = 0;
 	}
 	/* fill user-defined fault domains */
+	/* TODO KJ: parse incoming tree correctly with ranks */
 	for (i = 0; i < ndomains; i++) {
-		map_comp.co_type = domains[i].co_type;
+		map_comp.co_type = PO_COMP_TP_RACK;
 		map_comp.co_status = new_status;
 		map_comp.co_index = i + num_comps;
-		map_comp.co_id = domains[i].co_id;
+		map_comp.co_id = domains[i++];
 		map_comp.co_rank = 0;
 		map_comp.co_ver = map_version;
 		map_comp.co_fseq = 1;
-		map_comp.co_nr = domains[i].co_nr;
+		map_comp.co_nr = domains[i];
 
 		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
 		if (rc != 0)

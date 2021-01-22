@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -171,7 +171,7 @@ CRT_RPC_DECLARE(pool_op, DAOS_ISEQ_POOL_OP, DAOS_OSEQ_POOL_OP)
 	((daos_prop_t)		(pri_prop)		CRT_PTR) \
 	((uint32_t)		(pri_ndomains)		CRT_VAR) \
 	((uint32_t)		(pri_ntgts)		CRT_VAR) \
-	((struct pool_component)(pri_domains)		CRT_ARRAY)
+	((uint32_t)		(pri_domains)		CRT_ARRAY)
 
 #define DAOS_OSEQ_POOL_CREATE	/* output fields */		 \
 	((struct pool_op_out)	(pro_op)		CRT_VAR)
@@ -308,7 +308,7 @@ struct pool_target_addr_list {
 	((uuid_t)		(pei_tgt_uuids)		CRT_ARRAY) \
 	((d_rank_list_t)	(pei_tgt_ranks)		CRT_PTR) \
 	((uint32_t)		(pei_ndomains)		CRT_VAR) \
-	((struct pool_component)(pei_domains)		CRT_ARRAY)
+	((uint32_t)		(pei_domains)		CRT_ARRAY)
 
 
 #define DAOS_OSEQ_POOL_EXTEND /* output fields */		 \

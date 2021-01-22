@@ -25,6 +25,7 @@ package system
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"os"
 	"sort"
@@ -736,6 +737,50 @@ func (db *Database) FaultDomainTree() *FaultDomainTree {
 	defer db.data.RUnlock()
 
 	return db.data.Members.FaultDomains.Copy()
+}
+
+func getFaultDomainRank(fd *FaultDomain) (uint32, bool) {
+	fmtStr := rankFaultDomainPrefix + "%d"
+	var rank uint32
+	n, err := fmt.Sscanf(fd.BottomLevel(), fmtStr, &rank)
+	if err != nil || n != 1 {
+		return 0, false
+	}
+	return rank, true
+}
+
+// CompressedFaultDomainTree returns the tree of fault domains of joined
+// members in a compressed format.
+// Each domain is represented as a tuple: (ID, number of children)
+// Except for the rank, which is represented as: (rank)
+// The order of items is a breadth-first traversal of the tree.
+func (db *Database) CompressedFaultDomainTree() ([]uint32, error) {
+	tree := db.FaultDomainTree()
+	if tree == nil {
+		return nil, errors.New("uninitialized fault domain tree")
+	}
+
+	result := []uint32{}
+	queue := make([]*FaultDomainTree, 0)
+	queue = append(queue, tree)
+
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+
+		if rank, ok := getFaultDomainRank(cur.Domain); ok && cur.IsLeaf() {
+			result = append(result, rank)
+			continue
+		}
+
+		result = append(result,
+			cur.ID,
+			uint32(len(cur.Children)))
+		for _, child := range cur.Children {
+			queue = append(queue, child)
+		}
+	}
+	return result, nil
 }
 
 // copyPoolService makes a copy of the supplied PoolService pointer

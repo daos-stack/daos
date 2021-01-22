@@ -452,7 +452,7 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 			expMembers: []*Member{
 				testMembers[0],
 			},
-			expFDTree: NewFaultDomainTree(testMembers[0].RankFaultDomain()),
+			expFDTree: NewFaultDomainTree(memberFaultDomain(testMembers[0])),
 		},
 		"update state success": {
 			startingMembers: testMembers,
@@ -476,9 +476,10 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 				testMembers[2],
 			},
 			expFDTree: NewFaultDomainTree(
-				testMembers[0].RankFaultDomain(),
-				testMembers[1].RankFaultDomain(),
-				testMembers[2].RankFaultDomain()),
+				memberFaultDomain(testMembers[0]),
+				memberFaultDomain(testMembers[1]),
+				memberFaultDomain(testMembers[2]),
+			),
 		},
 		"update fault domain success": {
 			startingMembers: testMembers,
@@ -490,9 +491,10 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 				testMembers[2],
 			},
 			expFDTree: NewFaultDomainTree(
-				testMembers[0].RankFaultDomain(),
-				changedFaultDomainMember.RankFaultDomain(),
-				testMembers[2].RankFaultDomain()),
+				memberFaultDomain(testMembers[0]),
+				memberFaultDomain(changedFaultDomainMember),
+				memberFaultDomain(testMembers[2]),
+			),
 		},
 		"remove success": {
 			startingMembers: testMembers,
@@ -503,8 +505,9 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 				testMembers[1],
 			},
 			expFDTree: NewFaultDomainTree(
-				testMembers[0].RankFaultDomain(),
-				testMembers[1].RankFaultDomain()),
+				memberFaultDomain(testMembers[0]),
+				memberFaultDomain(testMembers[1]),
+			),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -569,6 +572,43 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 	}
 }
 
+func testMemberWithFaultDomain(rank Rank, fd *FaultDomain) *Member {
+	return NewMember(rank, uuid.New().String(), "dontcare", &net.TCPAddr{},
+		MemberStateJoined).WithFaultDomain(fd)
+}
+
+func TestSystem_Database_memberFaultDomain(t *testing.T) {
+	for name, tc := range map[string]struct {
+		rank        Rank
+		faultDomain *FaultDomain
+		expResult   *FaultDomain
+	}{
+		"nil fault domain": {
+			expResult: MustCreateFaultDomain("rank0"),
+		},
+		"empty fault domain": {
+			rank:        Rank(2),
+			faultDomain: MustCreateFaultDomain(),
+			expResult:   MustCreateFaultDomain("rank2"),
+		},
+		"existing fault domain": {
+			rank:        Rank(1),
+			faultDomain: MustCreateFaultDomain("one", "two"),
+			expResult:   MustCreateFaultDomain("one", "two", "rank1"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := testMemberWithFaultDomain(tc.rank, tc.faultDomain)
+
+			result := memberFaultDomain(m)
+
+			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestSystem_Database_FaultDomainTree(t *testing.T) {
 	for name, tc := range map[string]struct {
 		fdTree *FaultDomainTree
@@ -598,6 +638,160 @@ func TestSystem_Database_FaultDomainTree(t *testing.T) {
 
 			if result != nil && result == db.data.Members.FaultDomains {
 				t.Fatal("expected fault domain tree to be a copy")
+			}
+		})
+	}
+}
+
+func TestSystem_Database_CompressedFaultDomainTree(t *testing.T) {
+	rankDomain := func(parent string, rank uint32) *FaultDomain {
+		parentFd := MustCreateFaultDomainFromString(parent)
+		member := testMemberWithFaultDomain(Rank(rank), parentFd)
+		return memberFaultDomain(member)
+	}
+
+	for name, tc := range map[string]struct {
+		tree      *FaultDomainTree
+		expResult []uint32
+		expErr    error
+	}{
+		"nil": {
+			expErr: errors.New("uninitialized fault domain tree"),
+		},
+		"root only": {
+			tree: NewFaultDomainTree(),
+			expResult: []uint32{
+				expFaultDomainID(0),
+				0,
+			},
+		},
+		"single branch, no ranks": {
+			tree: NewFaultDomainTree(
+				MustCreateFaultDomain("one", "two", "three"),
+			),
+			expResult: []uint32{
+				expFaultDomainID(0),
+				1,
+				expFaultDomainID(1),
+				1,
+				expFaultDomainID(2),
+				1,
+				expFaultDomainID(3),
+				0,
+			},
+		},
+		"multi branch, no ranks": {
+			tree: NewFaultDomainTree(
+				MustCreateFaultDomainFromString("/rack0/pdu0"),
+				MustCreateFaultDomainFromString("/rack0/pdu1"),
+				MustCreateFaultDomainFromString("/rack1/pdu2"),
+				MustCreateFaultDomainFromString("/rack1/pdu3"),
+				MustCreateFaultDomainFromString("/rack2/pdu4"),
+			),
+			expResult: []uint32{
+				expFaultDomainID(0), // root
+				3,
+				expFaultDomainID(1), // rack0
+				2,
+				expFaultDomainID(4), // rack1
+				2,
+				expFaultDomainID(7), // rack2
+				1,
+				expFaultDomainID(2), // pdu0
+				0,
+				expFaultDomainID(3), // pdu1
+				0,
+				expFaultDomainID(5), // pdu2
+				0,
+				expFaultDomainID(6), // pdu3
+				0,
+				expFaultDomainID(8), // pdu4
+				0,
+			},
+		},
+		"single branch with rank": {
+			tree: NewFaultDomainTree(
+				rankDomain("/one/two/three", 5),
+			),
+			expResult: []uint32{
+				expFaultDomainID(0),
+				1,
+				expFaultDomainID(1),
+				1,
+				expFaultDomainID(2),
+				1,
+				expFaultDomainID(3),
+				1,
+				5,
+			},
+		},
+		"multi branch with ranks": {
+			tree: NewFaultDomainTree(
+				rankDomain("/rack0/pdu0", 0),
+				rankDomain("/rack0/pdu1", 1),
+				rankDomain("/rack1/pdu2", 2),
+				rankDomain("/rack1/pdu3", 3),
+				rankDomain("/rack1/pdu3", 4),
+				rankDomain("/rack2/pdu4", 5),
+			),
+			expResult: []uint32{
+				expFaultDomainID(0), // root
+				3,
+				expFaultDomainID(1), // rack0
+				2,
+				expFaultDomainID(6), // rack1
+				2,
+				expFaultDomainID(12), // rack2
+				1,
+				expFaultDomainID(2), // pdu0
+				1,
+				expFaultDomainID(4), // pdu1
+				1,
+				expFaultDomainID(7), // pdu2
+				1,
+				expFaultDomainID(9), // pdu3
+				2,
+				expFaultDomainID(13), // pdu4
+				1,
+				// ranks
+				0,
+				1,
+				2,
+				3,
+				4,
+				5,
+			},
+		},
+		"parent domain has name like rank": {
+			tree: NewFaultDomainTree(
+				rankDomain(fmt.Sprintf("/top/%s2/bottom", rankFaultDomainPrefix), 1),
+			),
+			expResult: []uint32{
+				expFaultDomainID(0), // root
+				1,
+				expFaultDomainID(1), // top
+				1,
+				expFaultDomainID(2), // rank2
+				1,
+				expFaultDomainID(3), // bottom
+				1,
+				1, // rank
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			db := MockDatabase(t, log)
+			db.data.Members.FaultDomains = tc.tree
+
+			result, err := db.CompressedFaultDomainTree()
+
+			common.CmpErr(t, tc.expErr, err)
+
+			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+				t.Fatalf("(-want, +got): %s", diff)
 			}
 		})
 	}

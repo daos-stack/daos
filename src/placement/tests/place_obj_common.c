@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -629,7 +629,7 @@ int
 extend_test_pool_map(struct pool_map *map,
 		     uint32_t nnodes, uuid_t target_uuids[],
 		     d_rank_list_t *rank_list, uint32_t ndomains,
-		     struct pool_component *domains, bool *updated_p,
+		     uint32_t *domains, bool *updated_p,
 		     uint32_t *map_version_p,
 		     uint32_t dss_tgt_nr)
 {

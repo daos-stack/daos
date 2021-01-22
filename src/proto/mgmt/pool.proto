@@ -29,14 +29,6 @@ option go_package = "github.com/daos-stack/daos/src/control/common/proto/mgmt";
 // Management Service Protobuf Definitions related to interactions between
 // DAOS control server and DAOS pools.
 
-// FaultDomain represents a node in a tree of fault domains. A list of them
-// is sufficient to reconstruct the tree.
-message FaultDomain {
-	string domain = 1; // full domain string
-	uint32 id = 2; // numeric ID
-	repeated uint32 children = 3; // IDs of children
-}
-
 // PoolCreateReq supplies new pool parameters.
 message PoolCreateReq {
 	string uuid = 1; // UUID for new pool, generated on the client
@@ -45,7 +37,7 @@ message PoolCreateReq {
 	string user = 4; // formatted user e.g. "bob@"
 	string usergroup = 5; // formatted group e.g. "builders@"
 	repeated string acl = 6; // Access Control Entries in short string format
-	repeated FaultDomain faultDomains = 7; // Fault domains in system
+	repeated uint32 faultDomains = 7; // Fault domain tree, minimal format
 	uint32 numsvcreps = 8; // desired number of pool service replicas
 	uint64 totalbytes = 9; // Total pool size in bytes (auto config)
 	double scmratio = 10; // Ratio of SCM:NVMe expressed as % (auto config)
@@ -126,7 +118,7 @@ message PoolExtendReq {
 	repeated uint32 svc_ranks = 4; // List of pool service ranks
 	uint64 scmbytes = 5; // SCM size in bytes
 	uint64 nvmebytes = 6; // NVMe size in bytes
-	repeated FaultDomain faultDomains = 7; // fault domains in system
+	repeated uint32 faultDomains = 7; // fault domain tree, minimal format
 }
 
 // PoolExtendResp returns resultant state of Extend operation.
