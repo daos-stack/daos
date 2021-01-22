@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@
 
 #include <daos/common.h>
 #include <daos_srv/vos.h>
+#include <daos_srv/ras.h>
 #include <daos_errno.h>
 #include <gurt/hash.h>
 #include <sys/stat.h>
@@ -670,6 +671,12 @@ vos_pool_open(const char *path, uuid_t uuid, bool small, daos_handle_t *poh)
 	if (pool_df->pd_version > POOL_DF_VERSION ||
 	    pool_df->pd_version < POOL_DF_VER_1) {
 		D_ERROR("Unsupported DF version %x\n", pool_df->pd_version);
+		if (ds_notify_df_incompat != NULL) {
+			/** Send a RAS notification */
+			ds_notify_df_incompat("VOS pool", pool_df->pd_version,
+					      POOL_DF_VER_1, POOL_DF_VERSION,
+					      &ukey.uuid);
+		}
 		D_GOTO(failed, rc = -DER_DF_INCOMPT);
 	}
 

@@ -42,11 +42,12 @@
  *   The identifier just be prefixed by component_
  *   Carried over with the RAS event.
  */
-#define RAS_EVENT_LIST						\
-	X(RAS_RANK_UP,		"engine_status_up")		\
-	X(RAS_RANK_DOWN,	"engine_status_down")		\
-	X(RAS_RANK_NO_RESPONSE,	"engine_status_no_response")	\
-	X(RAS_POOL_REPS_UPDATE,	"pool_replicas_updated")
+#define RAS_EVENT_LIST							\
+	X(RAS_RANK_UP,		"engine_status_up")			\
+	X(RAS_RANK_DOWN,	"engine_status_down")			\
+	X(RAS_RANK_NO_RESPONSE,	"engine_status_no_response")		\
+	X(RAS_POOL_REPS_UPDATE,	"pool_replicas_updated")		\
+	X(RAS_POOL_DF_INCOMPAT,	"pool_durable_format_incompatible")
 
 /** Define RAS event enum */
 typedef enum {
@@ -142,5 +143,18 @@ ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
  */
 int
 ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl);
+
+/** Raise a RAS event on incompatible durable format
+ *
+ * \param[in] type		Type of object with durable format
+ *				incompatibility (e.g. VOS pool)
+ * \param[in] version		Version of the object
+ * \param[in] min_version	Minimum supported version
+ * \param[in] max_version	Maximum supported version
+ * \param[in] pool		(Optional) associated pool uuid
+ */
+void __attribute__((weak))
+ds_notify_df_incompat(const char *type, int version, int min_version,
+		      int max_version, uuid_t *uuid);
 
 #endif /* __DAOS_RAS_H_ */
