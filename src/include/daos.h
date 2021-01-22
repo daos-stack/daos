@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #ifndef __DAOS_H__
 #define __DAOS_H__
 
+#include <daos_version.h>
 #include <daos_types.h>
 #include <daos_event.h>
 

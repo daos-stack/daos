@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -200,9 +200,8 @@ main(int argc, char **argv)
 		int j;
 
 		for (j = 0; j < handles_per_pool; j++) {
-			rc = daos_pool_connect(pool_uuids[i], NULL, NULL,
-					       DAOS_PC_RW, &pool_handles[i][j],
-					       NULL, NULL);
+			rc = daos_pool_connect(pool_uuids[i], NULL, DAOS_PC_RW,
+					       &pool_handles[i][j], NULL, NULL);
 			if (rc != 0) {
 				char		uuid_str[64];
 

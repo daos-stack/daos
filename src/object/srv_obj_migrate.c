@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2280,6 +2280,7 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 	uuid_t			cont_uuid;
 	uint64_t		*snapshots = NULL;
 	int			snap_cnt;
+	d_iov_t			tmp_iov;
 	int			rc;
 	int			rc1;
 
@@ -2352,12 +2353,13 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 	if (rc1 != 0 || rc != 0)
 		D_GOTO(free, rc = rc ? rc : rc1);
 
-	D_DEBUG(DB_TRACE, "iter cont "DF_UUID"/%"PRIx64" finish.\n",
+	D_DEBUG(DB_REBUILD, "iter cont "DF_UUID"/%"PRIx64" finish.\n",
 		DP_UUID(cont_uuid), ih.cookie);
 
 	/* Snapshot fetch will yield the ULT, let's reprobe before delete  */
+	d_iov_set(&tmp_iov, cont_uuid, sizeof(uuid_t));
 	rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, DAOS_INTENT_MIGRATION,
-			       key_iov, NULL);
+			       &tmp_iov, NULL);
 	if (rc) {
 		D_ASSERT(rc != -DER_NONEXIST);
 		D_GOTO(free, rc);

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -253,7 +253,7 @@ pool_init(struct dts_context *tsc)
 		if (rc)
 			goto bcast;
 
-		rc = daos_pool_connect(tsc->tsc_pool_uuid, NULL, NULL /* svc */,
+		rc = daos_pool_connect(tsc->tsc_pool_uuid, NULL,
 				       DAOS_PC_EX, &poh, NULL, NULL);
 		if (rc)
 			goto bcast;

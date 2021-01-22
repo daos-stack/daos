@@ -443,9 +443,12 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.ior_cmd.dfs_pool.update(None)
         self.ior_cmd.dfs_cont.update(None)
         self.ior_cmd.dfs_group.update(None)
+<<<<<<< HEAD
 
         if flags:
             self.ior_cmd.flags.update(flags, "flags" if display else None)
+=======
+>>>>>>> master
 
         display_api = "api" if display else None
         display_test_file = "test_file" if display else None

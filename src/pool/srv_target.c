@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,21 +89,6 @@ ds_pool_child_put(struct ds_pool_child *child)
 		D_ASSERT(d_list_empty(&child->spc_cont_list));
 		vos_pool_close(child->spc_hdl);
 		D_FREE(child);
-	}
-}
-
-void
-ds_pool_child_purge(struct pool_tls *tls)
-{
-	struct ds_pool_child   *child;
-	struct ds_pool_child   *n;
-
-	d_list_for_each_entry_safe(child, n, &tls->dt_pool_list, spc_list) {
-		d_list_del_init(&child->spc_list);
-		ds_cont_child_stop_all(child);
-		D_ASSERTF(child->spc_ref == 1, DF_UUID": %d\n",
-			  DP_UUID(child->spc_uuid), child->spc_ref);
-		ds_pool_child_put(child);
 	}
 }
 

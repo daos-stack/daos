@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -309,7 +309,8 @@ dtx_req_list_cb(void **args)
 		}
 
 		drr = args[0];
-		D_CDEBUG(dra->dra_result < 0, DLOG_ERR, DB_TRACE,
+		D_CDEBUG(dra->dra_result < 0 &&
+			 dra->dra_result != -DER_NONEXIST, DLOG_ERR, DB_TRACE,
 			 "DTX req for opc %x ("DF_DTI") %s, count %d: %d.\n",
 			 dra->dra_opc, DP_DTI(drr->drr_dti),
 			 dra->dra_result < 0 ? "failed" : "succeed",

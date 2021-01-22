@@ -105,8 +105,8 @@ class MpiioTests(TestWithServers):
         try:
             # running tests
             self.mpio.run_mpiio_tests(
-                self.hostfile_clients, self.pool.uuid, self.pool.svc_ranks,
-                test_repo, test_name, client_processes, self.cont_uuid)
+                self.hostfile_clients, self.pool.uuid, test_repo, test_name,
+                client_processes, self.cont_uuid)
         except MpioFailed as excep:
             self.fail("<{0} Test Failed> \n{1}".format(test_name, excep))
 

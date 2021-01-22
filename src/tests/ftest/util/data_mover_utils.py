@@ -107,6 +107,7 @@ class DcpCommand(ExecutableCommand):
         if src_pool:
             self.daos_src_pool.update(src_pool,
                                       "daos_src_pool" if display else None)
+
         if src_cont:
             self.daos_src_cont.update(src_cont,
                                       "daos_src_cont" if display else None)

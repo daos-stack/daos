@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,6 @@
 #define __FAULT_INJECT__
 
 #include <stdbool.h>
-#include <yaml.h>
 #include <stdint.h>
 #include <gurt/debug.h>
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -153,8 +153,7 @@ pconnect(void)
 
 	/** Connect to pool */
 	rc = daos_pool_connect(autotest_ap->p_uuid, autotest_ap->sysname,
-			       autotest_ap->mdsrv, DAOS_PC_RW, &poh, NULL,
-			       NULL);
+			       DAOS_PC_RW, &poh, NULL, NULL);
 	if (rc) {
 		step_fail(d_errdesc(rc));
 		return -1;

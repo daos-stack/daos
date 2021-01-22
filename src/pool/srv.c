@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -97,7 +97,13 @@ setup(void)
 static int
 cleanup(void)
 {
-	return ds_pool_stop_all();
+	int rc;
+
+	rc = ds_pool_stop_all();
+	if (rc)
+		D_ERROR("Stop pools failed. "DF_RC"\n", DP_RC(rc));
+
+	return rc;
 }
 
 static struct crt_corpc_ops ds_pool_tgt_disconnect_co_ops = {
@@ -145,9 +151,16 @@ static void
 pool_tls_fini(const struct dss_thread_local_storage *dtls,
 	      struct dss_module_key *key, void *data)
 {
-	struct pool_tls *tls = data;
+	struct pool_tls		*tls = data;
+	struct ds_pool_child	*child;
 
-	ds_pool_child_purge(tls);
+	D_ASSERT(tls != NULL);
+	/* pool child cache should be empty now */
+	d_list_for_each_entry(child, &tls->dt_pool_list, spc_list) {
+		D_ASSERTF(0, DF_UUID": ref: %d\n",
+			  DP_UUID(child->spc_uuid), child->spc_ref);
+	}
+
 	D_ASSERT(d_list_empty(&tls->dt_pool_list));
 	D_FREE(tls);
 }

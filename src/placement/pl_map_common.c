@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -382,7 +382,8 @@ grp_map_extend(uint32_t *grp_map, uint32_t *grp_map_size)
 }
 
 int
-pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
+pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list,
+	      bool is_pool_adding)
 {
 	struct pl_obj_shard	*new_shards;
 	struct pl_obj_shard     *org_shard;
@@ -466,8 +467,9 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 		new_shards[grp_idx].po_fseq = f_shard->fs_fseq;
 		new_shards[grp_idx].po_shard = f_shard->fs_shard_idx;
 		new_shards[grp_idx].po_target = f_shard->fs_tgt_id;
-		if (org_shard->po_fseq > f_shard->fs_shard_idx &&
-				org_shard->po_target != -1)
+		if (org_shard->po_target != -1 &&
+		    (is_pool_adding ||
+		     org_shard->po_fseq > f_shard->fs_fseq))
 			new_shards[grp_idx].po_rebuilding = 1;
 		else
 			new_shards[grp_idx].po_rebuilding = 0;
