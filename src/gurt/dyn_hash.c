@@ -65,7 +65,7 @@ typedef struct dh_bucket {
 const char keys[16] = { 0, 1, 2, 3, 4, 5, 6, 7, 8,
 	   9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf };
 
-/* SipHash computes 64-bit massage authentification from a variable message
+/* SipHash computes 64-bit massage authentication from a variable message
  * length and 128-bit secret key. In dynamic hash SipHash is generated for
  * each unique record key as random hash key.
  */
@@ -899,7 +899,7 @@ dyn_hash_table_traverse(struct d_hash_table *gtable, d_hash_traverse_cb_t cb,
 		}
 		prev = bucket;
 		for (ix = 0; ix < bucket->counter; ix++) {
-			rc = cb(bucket->field[idx].record, arg);
+			rc = cb(bucket->field[ix].record, arg);
 			if (rc != 0) {
 				/* done */
 				break;
@@ -949,7 +949,7 @@ dyn_hash_table_destroy_inplace(struct d_hash_table *gtable, bool force)
 		}
 		prev = bucket;
 		if (!(gtable->ht_feats & D_HASH_FT_NOLOCK)) {
-			/* destry mutex */
+			/* destroy mutex */
 			D_MUTEX_DESTROY(&bucket->mtx);
 		}
 		D_FREE(bucket);
