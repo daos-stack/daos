@@ -473,6 +473,9 @@ class DaosServerManager(SubprocessManager):
                     self.manager.mca.update(
                         {"plm_rsh_args": "-l root"}, "orterun.mca", True)
 
+        # Verify the socket directory exists when using a non-systemctl manager
+        self.verify_socket_directory(getuser())
+
     def clean_files(self, verbose=True):
         """Clean up the daos server files.
 
@@ -663,9 +666,6 @@ class DaosServerManager(SubprocessManager):
         """Start the server through the job manager."""
         # Prepare the servers
         self.prepare()
-
-        # Verify the socket directory exists when using a non-systemctl manager
-        self.verify_socket_directory(getuser())
 
         # Start the servers and wait for them to be ready for storage format
         self.detect_format_ready()
@@ -1003,7 +1003,7 @@ class DaosServerManager(SubprocessManager):
                 "Result")
             self.log.info(
                 log_format,
-                "-" * 4, "-" * 15, "-" * 36, "-" * 14, "-" * 14, "-" * 6)
+                "-" * 4, "-" * 15, "-" * 36, "-" * 22, "-" * 14, "-" * 6)
 
             # Verify that each expected rank appears in the current states
             for rank in sorted(self._expected_states):
@@ -1020,12 +1020,13 @@ class DaosServerManager(SubprocessManager):
                     current = "not detected"
 
                 # Check if the rank's expected state matches the current state
-                result = "PASS" if current in expected else "FAIL"
+                result = "PASS" if current in expected else "FAIL (mismatch)"
                 status["expected"] &= current in expected
 
                 # Restart all ranks if the expected rank is not running
                 if current not in running_states:
                     status["restart"] = True
+                    result = "FAIL (not running)"
 
                 self.log.info(
                     log_format, rank, domain[0].replace("/", ""),
@@ -1043,7 +1044,9 @@ class DaosServerManager(SubprocessManager):
 
         else:
             # Any failure to obtain the current rank information is an error
-            self.log.info("  Unable to obtain current server state")
+            self.log.info(
+                "  Unable to obtain current server state.  If the servers are "
+                "not running this is expected.")
             status["expected"] = False
 
         # Any unexpected state detected warrants a restart of all servers

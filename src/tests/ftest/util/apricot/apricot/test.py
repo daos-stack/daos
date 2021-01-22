@@ -747,8 +747,11 @@ class TestWithServers(TestWithoutServers):
 
         Args:
             group (str, optional): server group name. Defaults to None.
-            config_file (str, optional): [description]. Defaults to None.
-            config_temp (str, optional): [description]. Defaults to None.
+            config_file (str, optional): daos_agent configuration file name and
+                path. Defaults to None which will use the default filename.
+            config_temp (str, optional): file name and path used to generate
+                the daos_agent configuration file locally and copy it to all
+                the hosts using the config_file specification. Defaults to None.
         """
         if group is None:
             group = self.server_group
@@ -774,10 +777,16 @@ class TestWithServers(TestWithoutServers):
 
         Args:
             group (str, optional): server group name. Defaults to None.
-            svr_config_file (str, optional): [description]. Defaults to None.
-            dmg_config_file (str, optional): [description]. Defaults to None.
-            svr_config_temp (str, optional): [description]. Defaults to None.
-            dmg_config_temp (str, optional): [description]. Defaults to None.
+            svr_config_file (str, optional): daos_server configuration file name
+                and path. Defaults to None.
+            dmg_config_file (str, optional): dmg configuration file name and
+                path. Defaults to None.
+            svr_config_temp (str, optional): file name and path used to generate
+                the daos_server configuration file locally and copy it to all
+                the hosts using the config_file specification. Defaults to None.
+            dmg_config_temp (str, optional): file name and path used to generate
+                the dmg configuration file locally and copy it to all the hosts
+                using the config_file specification. Defaults to None.
         """
         if group is None:
             group = self.server_group

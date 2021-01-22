@@ -889,7 +889,8 @@ class Systemctl(JobManager):
                 to None, in which case it is not utilized.
             quantity (int, optional): number of times to expect the search
                 pattern per host. Defaults to 1.
-            timeout (int, optional): [description]. Defaults to 60.
+            timeout (int, optional): maximum number of seconds to wait to detect
+                the specified pattern. Defaults to 60.
 
         Returns:
             bool: whether or not the search string was found in the logs on each

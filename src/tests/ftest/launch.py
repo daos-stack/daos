@@ -1428,7 +1428,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
     """Copy all of the host test log files to the avocado results directory.
 
     Args:
-        avocado_logs_dir ([type]): [description]
+        avocado_logs_dir (str): location of the avocado job logs
         test_yaml (str): yaml file containing host names
         args (argparse.Namespace): command line arguments for this program
 
@@ -1611,7 +1611,10 @@ def get_daos_server_service_status(host_list, verbose=True):
     """Get the status of the daos_server.service.
 
     Args:
-        host_list (list): [description]
+        host_list (list): list of hosts on which to determine the state of the
+            daos_server.service.
+        verbose (bool, optional): whether or not the command output should be
+            displayed. Defaults to True.
 
     Returns:
         tuple: a tuple containing:
@@ -1650,7 +1653,7 @@ def indent_text(indent, text):
     """Append the specified number of spaces to the specified text.
 
     Args:
-        indent (int): [description]
+        indent (int): the number of spaces to use as an indentation
         text (object): text to indent. lists will be converted into a
             newline-separated str with indents added to each line
 
