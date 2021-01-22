@@ -48,10 +48,6 @@ class DataMoverCommand(ExecutableCommand):
         self.daos_src_cont = FormattedParameter("--daos-src-cont {}")
         # DAOS destination container
         self.daos_dst_cont = FormattedParameter("--daos-dst-cont {}")
-        # Source service level
-        self.daos_src_svcl = FormattedParameter("--daos-src-svcl {}")
-        # Destination service level
-        self.daos_dst_svcl = FormattedParameter("--daos-dst-svcl {}")
         # DAOS prefix for unified namespace path
         self.daos_prefix = FormattedParameter("--daos-prefix {}")
         # read source list from file
@@ -103,23 +99,10 @@ class DataMoverCommand(ExecutableCommand):
         if src_pool:
             self.daos_src_pool.update(src_pool.uuid,
                                       "daos_src_pool" if display else None)
-            # setting src service level
-            src_svcl = ":".join(
-                [str(item) for item in [
-                    int(src_pool.pool.svc.rl_ranks[index])
-                    for index in range(src_pool.pool.svc.rl_nr)]])
-            self.daos_src_svcl.update(src_svcl, "src_svcl" if display else None)
 
         if dst_pool:
             self.daos_dst_pool.update(dst_pool.uuid,
                                       "daos_dst_pool" if display else None)
-            # setting destination service level
-            dst_svcl = ":".join(
-                [str(item) for item in [
-                    int(dst_pool.pool.svc.rl_ranks[index])
-                    for index in range(dst_pool.pool.svc.rl_nr)]])
-            self.daos_dst_svcl.update(dst_svcl, "dst_svcl" if display else None)
-
         if src_cont:
             self.daos_src_cont.update(src_cont.uuid,
                                       "daos_src_cont" if display else None)
@@ -142,7 +125,6 @@ class DataMover(DataMoverCommand):
         self.tmp = tmp
 
         # Compatibility option
-        self.has_svcl = False
         self.has_src_pool = False
 
         self.exit_status_exception = False
@@ -153,8 +135,6 @@ class DataMover(DataMoverCommand):
         """Checks which version of dcp is available."""
         self.print_usage.update(True)
         result = self.run(self.tmp, 1)
-        if "--daos-src-svcl" in result.stdout:
-            self.has_svcl = True
         if "--daos-src-pool" in result.stdout:
             self.has_src_pool = True
 
@@ -172,10 +152,6 @@ class DataMover(DataMoverCommand):
         self.log.info('Starting datamover')
 
         # Handle compatibility
-        if not self.has_svcl:
-            self.log.info('Removing svcl from dcp command')
-            self.daos_src_svcl.update(None)
-            self.daos_dst_svcl.update(None)
         if not self.has_src_pool:
             src_pool = self.daos_src_pool.value
             src_cont = self.daos_src_cont.value
@@ -189,7 +165,6 @@ class DataMover(DataMoverCommand):
                 src_path = "daos://{}/{}/{}".format(
                     src_pool, src_cont, src_path)
                 self.src_path.update(src_path)
-                self.daos_src_svcl.update(None)
                 self.daos_src_pool.update(None)
                 self.daos_src_cont.update(None)
             if dst_pool or dst_cont:
@@ -198,7 +173,6 @@ class DataMover(DataMoverCommand):
                 dst_path = "daos://{}/{}/{}".format(
                     dst_pool, dst_cont, dst_path)
                 self.dest_path.update(dst_path)
-                self.daos_dst_svcl.update(None)
                 self.daos_dst_pool.update(None)
                 self.daos_dst_cont.update(None)
 
