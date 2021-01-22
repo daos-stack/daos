@@ -115,13 +115,15 @@ daos_tests:
       daos_test: r
       test_name: rebuild tests 26
       args: -s3 -u subtests="26"
-      stopped_ranks: [6, 7]
+      stopped_ranks: ["random"]
     test_r_27:
       daos_test: r
       test_name: rebuild tests 27
       args: -s6 -u subtests="27"
       test_timeout: 1500
+      stopped_ranks: ["random"]
     test_r_28:
       daos_test: r
       test_name: rebuild tests 28
       args: -s3 -u subtests="28"
+      stopped_ranks: [7]

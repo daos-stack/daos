@@ -36,7 +36,7 @@ from command_utils_base import \
     CommandWithParameters, YamlParameters, EnvironmentVariables, LogParameter
 from general_utils import check_file_exists, stop_processes, get_log_file, \
     run_command, DaosTestError, get_job_manager_class, create_directory, \
-    distribute_files, change_file_owner, get_clush_command, get_file_listing
+    distribute_files, change_file_owner, get_file_listing
 
 
 class ExecutableCommand(CommandWithParameters):

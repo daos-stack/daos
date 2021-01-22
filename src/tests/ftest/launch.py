@@ -41,8 +41,6 @@ from xml.dom import minidom
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
-from util.general_utils import stop_processes
-
 try:
     # For python versions >= 3.2
     from tempfile import TemporaryDirectory
@@ -779,7 +777,7 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
 
 
 def setup_test_directory(args, mode="all"):
-    """Setup the common test directory on all hosts.
+    """Set up the common test directory on all hosts.
 
     Ensure the common test directory exists on each possible test node.
 
@@ -1660,10 +1658,9 @@ def indent_text(indent, text):
         str: indented text
 
     """
-    if isinstance(text, (list,tuple)):
+    if isinstance(text, (list, tuple)):
         return "\n".join(["{}{}".format(" " * indent, line) for line in text])
-    else:
-        return " " * indent + str(text)
+    return " " * indent + str(text)
 
 
 def main():

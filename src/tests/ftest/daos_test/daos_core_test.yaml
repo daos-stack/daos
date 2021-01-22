@@ -63,6 +63,7 @@ daos_tests:
       test_name: DAOS degraded-mode tests
       test_timeout: 450
       scalable_endpoint: True
+      stopped_ranks: [5, 6, 7]
     test_m:
       daos_test: m
       test_name: Management tests
