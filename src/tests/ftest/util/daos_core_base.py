@@ -106,7 +106,7 @@ class DaosCoreBase(TestWithServers):
 
         if self.num_clients is None:
             self.num_clients = self.params.get("num_clients",
-                                          '/run/daos_tests/num_clients/*')
+                                               '/run/daos_tests/num_clients/*')
         scm_size = self.params.get("scm_size", '/run/pool/*')
         nvme_size = self.params.get("nvme_size", '/run/pool/*')
         dmg = self.get_dmg_command()
