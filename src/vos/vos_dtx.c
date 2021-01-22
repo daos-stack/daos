@@ -626,8 +626,6 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 	int				 i;
 	int				 rc = 0;
 
-	D_ASSERT(DAE_INDEX(dae) >= 0);
-
 	if (dae->dae_dbd == NULL)
 		return 0;
 

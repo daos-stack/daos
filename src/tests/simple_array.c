@@ -487,7 +487,7 @@ main(int argc, char **argv)
 		pool_create();
 
 		/** connect to the just created DAOS pool */
-		rc = daos_pool_connect(pool_uuid, DSS_PSETID, NULL /* svc */,
+		rc = daos_pool_connect(pool_uuid, DSS_PSETID,
 				       DAOS_PC_EX /* exclusive access */,
 				       &poh /* returned pool handle */,
 				       NULL /* returned pool info */,

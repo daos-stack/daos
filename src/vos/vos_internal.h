@@ -888,7 +888,7 @@ struct vos_iter_ops {
 	int	(*iop_nested_prepare)(vos_iter_type_t type,
 				      struct vos_iter_info *info,
 				      struct vos_iterator **iter_pp);
-	/** finalise a iterator */
+	/** finalize a iterator */
 	int	(*iop_finish)(struct vos_iterator *iter);
 	/** Set the iterating cursor to the provided @anchor */
 	int	(*iop_probe)(struct vos_iterator *iter,

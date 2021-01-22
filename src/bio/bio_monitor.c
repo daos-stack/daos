@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ struct bio_dev_list_msg_arg {
 };
 
 
-/* Collect space utilisation for blobstore */
+/* Collect space utilization for blobstore */
 static void
 collect_bs_usage(struct spdk_blob_store *bs, struct nvme_stats *stats)
 {
@@ -222,25 +222,6 @@ out:
 	spdk_bdev_free_io(bdev_io);
 }
 
-static int
-populate_health_cdata(const struct spdk_nvme_ctrlr_data *cdata,
-		      struct nvme_stats *state)
-{
-	if (copy_ascii(state->model, sizeof(state->model), cdata->mn,
-		       sizeof(cdata->mn)) != 0) {
-		D_ERROR("data truncated when writing model to health state");
-		return -DER_TRUNC;
-	}
-
-	if (copy_ascii(state->serial, sizeof(state->serial), cdata->sn,
-		       sizeof(cdata->sn)) != 0) {
-		D_ERROR("data truncated when writing serial to health state");
-		return -DER_TRUNC;
-	}
-
-	return 0;
-}
-
 static void
 get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 				   void *cb_arg)
@@ -274,13 +255,6 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 	bdev = spdk_bdev_desc_get_bdev(dev_health->bdh_desc);
 	D_ASSERT(bdev != NULL);
 
-	/* Store ctrlr details in in-memory health state log. */
-	cdata = dev_health->bdh_ctrlr_buf;
-	rc = populate_health_cdata(cdata, &dev_health->bdh_health_state);
-	if (rc != 0) {
-		goto out;
-	}
-
 	/* Prep NVMe command to get device error log pages */
 	ep_sz = sizeof(struct spdk_nvme_error_information_entry);
 	numd = ep_sz / sizeof(uint32_t) - 1u;
@@ -292,6 +266,7 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 	cmd.cdw10 = numdl << 16;
 	cmd.cdw10 |= SPDK_NVME_LOG_ERROR;
 	cmd.cdw11 = numdu;
+	cdata = dev_health->bdh_ctrlr_buf;
 	if (cdata->elpe >= NVME_MAX_ERROR_LOG_PAGES) {
 		D_ERROR("Device error log page size exceeds buffer size\n");
 		dev_health->bdh_inflights--;

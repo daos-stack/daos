@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -482,11 +482,15 @@ req_get(struct dss_xstream *dx, struct sched_req_attr *attr,
 	struct sched_request	*req;
 	int			 rc;
 
-	spi = cur_pool_info(info, attr->sra_pool_id);
-	if (spi == NULL) {
-		D_ERROR("XS(%d): get pool info "DF_UUID" failed.\n",
-			dx->dx_xs_id, DP_UUID(attr->sra_pool_id));
-		return NULL;
+	if (attr->sra_type == SCHED_REQ_ANONYM) {
+		spi = NULL;
+	} else {
+		spi = cur_pool_info(info, attr->sra_pool_id);
+		if (spi == NULL) {
+			D_ERROR("XS(%d): get pool info "DF_UUID" failed.\n",
+				dx->dx_xs_id, DP_UUID(attr->sra_pool_id));
+			return NULL;
+		}
 	}
 
 	if (d_list_empty(&info->si_idle_list)) {
@@ -590,6 +594,10 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 	int			 orig_pressure, rc;
 
 	D_ASSERT(spi->spi_space_ts <= info->si_cur_ts);
+	/* TLS is destroyed on dss_srv_handler ULT exiting */
+	if (info->si_stop)
+		goto out;
+
 	/* Use cached space presure info */
 	if ((spi->spi_space_ts + SCHED_SPACE_AGE_MAX) > info->si_cur_ts)
 		goto out;
@@ -894,11 +902,9 @@ should_enqueue_req(struct dss_xstream *dx, struct sched_req_attr *attr)
 	if (sched_prio_disabled || info->si_stop)
 		return false;
 
-	D_ASSERT(attr->sra_type == SCHED_REQ_GC ||
-		 attr->sra_type == SCHED_REQ_UPDATE ||
-		 attr->sra_type == SCHED_REQ_FETCH ||
-		 attr->sra_type == SCHED_REQ_SCRUB ||
-		 attr->sra_type == SCHED_REQ_MIGRATE);
+	D_ASSERT(attr->sra_type < SCHED_REQ_MAX);
+	if (attr->sra_type == SCHED_REQ_ANONYM)
+		return false;
 
 	/* For VOS xstream only */
 	return dx->dx_main_xs;
@@ -971,6 +977,9 @@ static inline void
 gc_sleep_counting(struct sched_request *req, int sleep)
 {
 	struct sched_pool_info	*spi = req->sr_pool_info;
+
+	if (req->sr_attr.sra_type == SCHED_REQ_ANONYM)
+		return;
 
 	D_ASSERT(spi != NULL);
 	if (req->sr_attr.sra_type != SCHED_REQ_GC)
@@ -1095,11 +1104,7 @@ sched_req_get(struct sched_req_attr *attr, ABT_thread ult)
 	struct sched_request	*req;
 	int			 rc;
 
-	D_ASSERT(attr->sra_type == SCHED_REQ_GC ||
-		 attr->sra_type == SCHED_REQ_UPDATE ||
-		 attr->sra_type == SCHED_REQ_FETCH ||
-		 attr->sra_type == SCHED_REQ_SCRUB ||
-		 attr->sra_type == SCHED_REQ_MIGRATE);
+	D_ASSERT(attr->sra_type < SCHED_REQ_MAX);
 
 	if (ult == ABT_THREAD_NULL) {
 		ABT_thread	self;
@@ -1269,8 +1274,9 @@ sched_pop_net_poll(struct sched_data *data, ABT_pool pool)
 }
 
 static bool
-need_nvme_poll(struct sched_cycle *cycle)
+need_nvme_poll(struct dss_xstream *dx, struct sched_cycle *cycle)
 {
+	struct sched_info	*info = &dx->dx_sched_info;
 	struct dss_module_info	*dmi;
 
 	/* Need net poll to start new cycle */
@@ -1290,6 +1296,10 @@ need_nvme_poll(struct sched_cycle *cycle)
 	if (cycle->sc_age_nvme > SCHED_AGE_NVME_MAX)
 		return true;
 
+	/* TLS is destroyed on dss_srv_handler ULT exiting */
+	if (info->si_stop)
+		return false;
+
 	dmi = dss_get_module_info();
 	D_ASSERT(dmi != NULL);
 	return bio_need_nvme_poll(dmi->dmi_nvme_ctxt);
@@ -1303,7 +1313,7 @@ sched_pop_nvme_poll(struct sched_data *data, ABT_pool pool)
 	ABT_unit		 unit;
 	int			 ret;
 
-	if (!need_nvme_poll(cycle))
+	if (!need_nvme_poll(dx, cycle))
 		return ABT_UNIT_NULL;
 
 	D_ASSERT(cycle->sc_cycle_started);
