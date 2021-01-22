@@ -320,7 +320,7 @@ static void
 comp_sorter_fini(struct pool_comp_sorter *sorter)
 {
 	if (sorter->cs_comps != NULL) {
-		D_DEBUG(DB_TRACE, "Finalise sorter for %s\n",
+		D_DEBUG(DB_TRACE, "Finalize sorter for %s\n",
 			pool_comp_type2str(sorter->cs_type));
 
 		D_FREE(sorter->cs_comps);
