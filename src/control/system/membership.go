@@ -460,18 +460,19 @@ func (m *Membership) handleRankDown(evt *events.RASEvent) {
 	// performing lookup on provided hostname and matching returned
 	// addresses with the member address with matching rank.
 
-	if err := m.UpdateMemberStates(MemberResults{
-		NewMemberResult(Rank(evt.Rank),
-			errors.Wrap(ei.ExitErr, evt.Msg),
-			MemberStateErrored),
-	}, true); err != nil {
+	mr := NewMemberResult(Rank(evt.Rank), errors.Wrap(ei.ExitErr, evt.Msg), MemberStateErrored)
+
+	if err := m.UpdateMemberStates(MemberResults{mr}, true); err != nil {
 		m.log.Errorf("updating member states: %s", err)
 		return
 	}
 
-	member, _ := m.Get(Rank(evt.Rank))
-	m.log.Debugf("update rank %d to %+v (%s)", evt.Rank, member,
-		member.Info)
+	member, err := m.Get(Rank(evt.Rank))
+	if err != nil {
+		m.log.Errorf("member with rank %d not found", evt.Rank)
+		return
+	}
+	m.log.Debugf("update rank %d to %+v (%s)", evt.Rank, member, member.Info)
 }
 
 // OnEvent handles events on channel and updates member states accordingly.
