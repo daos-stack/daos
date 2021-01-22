@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
@@ -248,6 +249,10 @@ func newScanNvmeResp(req *ctlpb.ScanNvmeReq, inResp *bdev.ScanResponse, inErr er
 // scanBdevs updates transient details if health statistics or server metadata
 // is requested otherwise just retrieves cached static controller details.
 func (c *ControlService) scanBdevs(ctx context.Context, req *ctlpb.ScanNvmeReq) (*ctlpb.ScanNvmeResp, error) {
+	if req == nil {
+		return nil, errors.New("nil bdev request")
+	}
+
 	if req.Health || req.Meta {
 		// filter results based on config file bdev_list contents
 		resp, err := c.scanInstanceBdevs(ctx)
@@ -259,49 +264,6 @@ func (c *ControlService) scanBdevs(ctx context.Context, req *ctlpb.ScanNvmeReq) 
 	resp, err := c.NvmeScan(bdev.ScanRequest{})
 
 	return newScanNvmeResp(req, resp, err)
-}
-
-func pmemNameInList(paths []string, name string) bool {
-	if strings.TrimSpace(name) == "" {
-		return false
-	}
-
-	for _, path := range paths {
-		if filepath.Base(path) == name {
-			return true
-		}
-	}
-
-	return false
-}
-
-func (c *ControlService) scanInstanceScm(ctx context.Context, resp *scm.ScanResponse) (*scm.ScanResponse, error) {
-	instances := c.harness.Instances()
-
-	// get utilisation for any mounted namespaces
-	for _, ns := range resp.Namespaces {
-		for _, srv := range instances {
-			if !srv.isReady() {
-				continue
-			}
-
-			cfg := srv.scmConfig()
-			if !pmemNameInList(cfg.DeviceList, ns.BlockDevice) {
-				continue
-			}
-
-			mount, err := srv.scmProvider.GetfsUsage(cfg.MountPoint)
-			if err != nil {
-				return nil, err
-			}
-			ns.Mount = mount
-
-			c.log.Debugf("updating scm fs usage on device %s mounted at %s: %+v",
-				ns.BlockDevice, cfg.MountPoint, ns.Mount)
-		}
-	}
-
-	return resp, nil
 }
 
 // newScanScmResp sets protobuf SCM scan response with module or namespace info.
@@ -331,22 +293,93 @@ func newScanScmResp(inResp *scm.ScanResponse, inErr error) (*ctlpb.ScanScmResp, 
 	return outResp, nil
 }
 
-func (c *ControlService) scanScm(ctx context.Context) (*ctlpb.ScanScmResp, error) {
-	// rescan scm storage details by default
-	scmReq := scm.ScanRequest{Rescan: true}
-	ssr, scanErr := c.ScmScan(scmReq)
-	if scanErr == nil && len(ssr.Namespaces) > 0 {
-		// update namespace info if storage is online
-		ssr, scanErr = c.scanInstanceScm(ctx, ssr)
+func findPMemInScan(ssr *scm.ScanResponse, cfg *storage.ScmConfig) *storage.ScmNamespace {
+	for _, scanned := range ssr.Namespaces {
+		for _, path := range cfg.DeviceList {
+			if strings.TrimSpace(path) == "" {
+				continue
+			}
+			if filepath.Base(path) == scanned.BlockDevice {
+				return scanned
+			}
+		}
 	}
 
-	return newScanScmResp(ssr, scanErr)
+	return nil
+}
+
+// getScmUsage will retrieve usage statistics (how much space is available for
+// new DAOS pools) for either PMem namespaces or SCM emulation with ramdisk.
+//
+// Usage is only retrieved for active mountpoints being used by online DAOS I/O
+// Server instances.
+func (c *ControlService) getScmUsage(ssr *scm.ScanResponse) (*scm.ScanResponse, error) {
+	instances := c.harness.Instances()
+
+	nss := make(storage.ScmNamespaces, len(instances))
+	for idx, srv := range instances {
+		if !srv.isReady() {
+			continue // skip if not running
+		}
+
+		cfg := srv.scmConfig()
+
+		mount, err := srv.scmProvider.GetfsUsage(cfg.MountPoint)
+		if err != nil {
+			return nil, err
+		}
+
+		switch cfg.Class {
+		case storage.ScmClassRAM: // generate fake namespace for emulated ramdisk mounts
+			nss[idx] = &storage.ScmNamespace{
+				Mount:       mount,
+				BlockDevice: "ramdisk",
+				Size:        uint64(humanize.GiByte * cfg.RamdiskSize),
+			}
+		case storage.ScmClassDCPM: // update namespace mount info for online storage
+			ns := findPMemInScan(ssr, &cfg)
+			if ns == nil {
+				return nil, errors.Errorf("instance %d: no pmem namespace for mount %s",
+					srv.Index(), cfg.MountPoint)
+			}
+			ns.Mount = mount
+			nss[idx] = ns
+		default:
+			return nil, errors.Errorf("instance %d: unsupported scm class %q",
+				srv.Index(), cfg.Class)
+		}
+
+		c.log.Debugf("updated scm fs usage on device %s mounted at %s: %+v",
+			nss[idx].BlockDevice, cfg.MountPoint, nss[idx].Mount)
+	}
+
+	return &scm.ScanResponse{Namespaces: nss}, nil
+}
+
+// scanScm will return mount details and usage for either emulated RAM or real PMem.
+func (c *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq) (*ctlpb.ScanScmResp, error) {
+	if req == nil {
+		return nil, errors.New("nil scm request")
+	}
+
+	// scan SCM, rescan scm storage details by default
+	scmReq := scm.ScanRequest{Rescan: true}
+	ssr, scanErr := c.ScmScan(scmReq)
+
+	if scanErr != nil || !req.GetUsage() {
+		return newScanScmResp(ssr, scanErr)
+	}
+
+	return newScanScmResp(c.getScmUsage(ssr))
 }
 
 // StorageScan discovers non-volatile storage hardware on node.
 func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScanReq) (*ctlpb.StorageScanResp, error) {
 	c.log.Debug("received StorageScan RPC")
 
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
 	resp := new(ctlpb.StorageScanResp)
 
 	respNvme, err := c.scanBdevs(ctx, req.Nvme)
@@ -355,7 +388,7 @@ func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScan
 	}
 	resp.Nvme = respNvme
 
-	respScm, err := c.scanScm(ctx)
+	respScm, err := c.scanScm(ctx, req.Scm)
 	if err != nil {
 		return nil, err
 	}
