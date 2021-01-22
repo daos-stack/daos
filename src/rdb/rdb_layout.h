@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,8 @@
  *     Container <db_uuid>		// metadata container (MC)
  *       Object RDB_MC_ATTRS		// attribute object
  *         D-key rdb_dkey
- *           A-key rdb_mc_version	// layout version (see rdb_create())
+ *           A-key rdb_mc_uuid		// <db_uuid> (see rdb_create())
+ *           A-key rdb_mc_version	// layout version
  *           A-key rdb_mc_term		// term
  *           A-key rdb_mc_vote		// vote for term
  *           A-key rdb_mc_lc		// log container record
@@ -135,6 +136,7 @@ struct rdb_anchor {
  * Flattened together with the Raft attributes. These are defined in
  * rdb_layout.c using RDB_STRING_KEY().
  */
+extern d_iov_t rdb_mc_uuid;		/* uuid_t */
 extern d_iov_t rdb_mc_version;		/* uint32_t */
 extern d_iov_t rdb_mc_term;		/* uint64_t */
 extern d_iov_t rdb_mc_vote;		/* int */

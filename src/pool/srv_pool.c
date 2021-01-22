@@ -1034,6 +1034,7 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
 {
 	struct rdb_tx	tx;
 	d_iov_t		value;
+	bool		version_exists = false;
 	uint32_t	version;
 	int		rc;
 
@@ -1045,17 +1046,21 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
 	/* Check the layout version. */
 	d_iov_set(&value, &version, sizeof(version));
 	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_version, &value);
-	if (rc != 0) {
-		if (rc == -DER_NONEXIST) {
-			D_DEBUG(DB_MD, DF_UUID": new db\n",
-				DP_UUID(svc->ps_uuid));
-			rc = +DER_UNINIT;
-		} else {
-			D_ERROR(DF_UUID": failed to look up layout version: "
-				DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
-		}
+	if (rc == -DER_NONEXIST) {
+		/*
+		 * This DB may be new or incompatible. Check the existence of
+		 * the pool map to find out which is the case. (See the
+		 * references to version_exists below.)
+		 */
+		D_DEBUG(DB_MD, DF_UUID": no layout version\n",
+			DP_UUID(svc->ps_uuid));
+		goto check_map;
+	} else if (rc != 0) {
+		D_ERROR(DF_UUID": failed to look up layout version: "DF_RC"\n",
+			DP_UUID(svc->ps_uuid), DP_RC(rc));
 		goto out_lock;
 	}
+	version_exists = true;
 	if (version < DS_POOL_MD_VERSION_LOW || version > DS_POOL_MD_VERSION) {
 		D_ERROR(DF_UUID": incompatible layout version: %u not in "
 			"[%u, %u]\n", DP_UUID(svc->ps_uuid), version,
@@ -1064,10 +1069,29 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
 		goto out_lock;
 	}
 
+check_map:
 	rc = read_map_buf(&tx, &svc->ps_root, map_buf, map_version);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to read pool map buffer: "DF_RC"\n",
-			DP_UUID(svc->ps_uuid), DP_RC(rc));
+		if (rc == -DER_NONEXIST && !version_exists) {
+			/*
+			 * This DB is new. Note that if the layout version
+			 * exists, then the pool map must also exist;
+			 * otherwise, it is an error.
+			 */
+			D_DEBUG(DB_MD, DF_UUID": new db\n",
+				DP_UUID(svc->ps_uuid));
+			rc = +DER_UNINIT;
+		} else {
+			D_ERROR(DF_UUID": failed to read pool map buffer: "DF_RC
+				"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
+		}
+		goto out_lock;
+	}
+	if (!version_exists) {
+		/* This DB is not new and uses a layout that lacks a version. */
+		D_ERROR(DF_UUID": incompatible layout version\n",
+			DP_UUID(svc->ps_uuid));
+		rc = -DER_DF_INCOMPT;
 		goto out_lock;
 	}
 
@@ -1686,7 +1710,6 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	struct pool_svc	       *svc;
 	struct rdb_tx		tx;
 	d_iov_t			value;
-	uint32_t		version;
 	struct rdb_kvs_attr	attr;
 	daos_prop_t	       *prop_dup = NULL;
 	int			rc;
@@ -1724,28 +1747,16 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	ds_cont_wrlock_metadata(svc->ps_cont_svc);
 
 	/* See if the DB has already been initialized. */
-	d_iov_set(&value, &version, sizeof(version));
-	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_version, &value);
+	d_iov_set(&value, NULL /* buf */, 0 /* size */);
+	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_map_buffer,
+			   &value);
 	if (rc != -DER_NONEXIST) {
-		if (rc == 0) {
-			D_DEBUG(DF_DSMS,
-				DF_UUID": db already initialized: version=%u\n",
-				DP_UUID(svc->ps_uuid), version);
-			if (version < DS_POOL_MD_VERSION_LOW ||
-			    version > DS_POOL_MD_VERSION) {
-				D_ERROR(DF_UUID": incompatible pool metadata "
-					"layout version: %u not in [%u, %u]\n",
-					DP_UUID(svc->ps_uuid), version,
-					DS_POOL_MD_VERSION_LOW,
-					DS_POOL_MD_VERSION);
-				rc = -DER_DF_INCOMPT;
-				goto out_tx;
-			}
-		} else {
-			D_ERROR(DF_UUID": failed to look up pool metadata "
-				"layout version: "DF_RC"\n",
-				DP_UUID(svc->ps_uuid), DP_RC(rc));
-		}
+		if (rc == 0)
+			D_DEBUG(DF_DSMS, DF_UUID": db already initialized\n",
+				DP_UUID(svc->ps_uuid));
+		else
+			D_ERROR(DF_UUID": failed to look up pool map: "
+				DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
 		D_GOTO(out_tx, rc);
 	}
 

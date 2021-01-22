@@ -215,7 +215,12 @@ ds_cont_svc_step_up(struct cont_svc *svc)
 	/* Check the layout version. */
 	d_iov_set(&value, &version, sizeof(version));
 	rc = rdb_tx_lookup(&tx, &svc->cs_root, &ds_cont_prop_version, &value);
-	if (rc != 0) {
+	if (rc == -DER_NONEXIST) {
+		D_ERROR(DF_UUID": incompatible layout version\n",
+			DP_UUID(svc->cs_pool_uuid));
+		rc = -DER_DF_INCOMPT;
+		goto out_lock;
+	} else if (rc != 0) {
 		D_ERROR(DF_UUID": failed to look up layout version: "DF_RC"\n",
 			DP_UUID(svc->cs_pool_uuid), DP_RC(rc));
 		goto out_lock;

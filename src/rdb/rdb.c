@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -72,18 +72,24 @@ rdb_create(const char *path, const uuid_t uuid, size_t size,
 	if (rc != 0)
 		goto out_pool_hdl;
 
+	/* Initialize the layout version. */
+	d_iov_set(&value, &version, sizeof(version));
+	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_version,
+			   &value);
+	if (rc != 0)
+		goto out_mc_hdl;
+
 	/* Initialize Raft. */
 	rc = rdb_raft_init(pool, mc, replicas);
 	if (rc != 0)
 		goto out_mc_hdl;
 
 	/*
-	 * Mark this replica as fully initialized by storing its layout
-	 * version. rdb_start() checks this attribute when starting a DB.
+	 * Mark this replica as fully initialized by storing its UUID.
+	 * rdb_start() checks this attribute when starting a DB.
 	 */
-	d_iov_set(&value, &version, sizeof(version));
-	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_version,
-			   &value);
+	d_iov_set(&value, (void *)uuid, sizeof(uuid_t));
+	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_uuid, &value);
 
 out_mc_hdl:
 	vos_cont_close(mc);
@@ -228,6 +234,7 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 {
 	struct rdb	       *db;
 	d_iov_t			value;
+	uuid_t			uuid_persist;
 	uint32_t		version;
 	int			rc;
 	struct vos_pool_space	vps;
@@ -325,20 +332,30 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 	}
 
 	/* Check if this replica is fully initialized. See rdb_create(). */
+	d_iov_set(&value, uuid_persist, sizeof(uuid_t));
+	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_uuid, &value);
+	if (rc == -DER_NONEXIST) {
+		D_ERROR(DF_DB": not fully initialized\n", DP_DB(db));
+		rc = -DER_DF_INVAL;
+		goto err_mc;
+	} else if (rc != 0) {
+		D_ERROR(DF_DB": failed to look up UUID: "DF_RC"\n", DP_DB(db),
+			DP_RC(rc));
+		goto err_mc;
+	}
+
+	/* Check if the layout version is compatible. */
 	d_iov_set(&value, &version, sizeof(version));
 	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_version, &value);
 	if (rc == -DER_NONEXIST) {
-		D_ERROR(DF_DB": layout invalid or not fully initialized\n",
-			DP_DB(db));
-		rc = -DER_DF_INVAL;
+		D_ERROR(DF_DB": incompatible layout version\n", DP_DB(db));
+		rc = -DER_DF_INCOMPT;
 		goto err_mc;
 	} else if (rc != 0) {
 		D_ERROR(DF_DB": failed to look up layout version: "DF_RC"\n",
 			DP_DB(db), DP_RC(rc));
 		goto err_mc;
 	}
-
-	/* Check if the layout version is compatible. */
 	if (version < RDB_LAYOUT_VERSION_LOW || version > RDB_LAYOUT_VERSION) {
 		D_ERROR(DF_DB": incompatible layout version: %u not in [%u, %u]"
 			"\n", DP_DB(db), version, RDB_LAYOUT_VERSION_LOW,
