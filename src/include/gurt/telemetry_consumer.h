@@ -30,8 +30,9 @@ int d_tm_get_timestamp(time_t *val, uint64_t *shmem_root,
 		       struct d_tm_node_t *node, char *metric);
 int d_tm_get_timer_snapshot(struct timespec *tms, uint64_t *shmem_root,
 			    struct d_tm_node_t *node, char *metric);
-int d_tm_get_gauge(uint64_t *val, struct d_tm_stats_t *stats, uint64_t *shmem_root,
-		   struct d_tm_node_t *node, char *metric);
+int d_tm_get_gauge(uint64_t *val, struct d_tm_stats_t *stats,
+		   uint64_t *shmem_root, struct d_tm_node_t *node,
+		   char *metric);
 int d_tm_get_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 		      uint64_t *shmem_root, struct d_tm_node_t *node,
 		      char *metric);

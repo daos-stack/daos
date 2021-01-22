@@ -505,7 +505,7 @@ d_tm_print_duration(struct timespec *tms, struct d_tm_stats_t *stats,
  */
 void
 d_tm_print_gauge(uint64_t val, struct d_tm_stats_t *stats, char *name,
-		  FILE *stream)
+		 FILE *stream)
 {
 	if ((name == NULL) || (stream == NULL))
 		return;
@@ -1725,7 +1725,8 @@ d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
 
 	temp->dtn_metric->dtm_stats = NULL;
 	if (metric_type == D_TM_GAUGE) {
-		temp->dtn_metric->dtm_stats = d_tm_shmalloc(sizeof(struct d_tm_stats_t));
+		temp->dtn_metric->dtm_stats =
+				     d_tm_shmalloc(sizeof(struct d_tm_stats_t));
 		if (temp->dtn_metric->dtm_stats == NULL) {
 			rc = -DER_NO_SHMEM;
 			goto failure;
@@ -1738,13 +1739,15 @@ d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
 		temp->dtn_metric->dtm_stats->k = 0;
 	}
 
-	if (metric_type &= D_TM_DURATION) {
-		temp->dtn_metric->dtm_stats = d_tm_shmalloc(sizeof(struct d_tm_stats_t));
+	if (metric_type & D_TM_DURATION) {
+		temp->dtn_metric->dtm_stats =
+				     d_tm_shmalloc(sizeof(struct d_tm_stats_t));
 		if (temp->dtn_metric->dtm_stats == NULL) {
 			rc = -DER_NO_SHMEM;
 			goto failure;
 		}
-		temp->dtn_metric->dtm_stats->dtm_min.min_float = LDBL_MAX_10_EXP;
+		temp->dtn_metric->dtm_stats->dtm_min.min_float =
+								LDBL_MAX_10_EXP;
 		temp->dtn_metric->dtm_stats->dtm_max.max_float = 0.0;
 		temp->dtn_metric->dtm_stats->std_dev = 0.0;
 		temp->dtn_metric->dtm_stats->mean = 0.0;
