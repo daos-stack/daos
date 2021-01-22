@@ -548,7 +548,7 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 	}
 
 	if (op_type == PL_PLACE_EXTENDED) {
-		rc = pl_map_extend(layout, extend_list);
+		rc = pl_map_extend(layout, extend_list, false);
 		if (rc != 0)
 			return rc;
 	}
@@ -921,7 +921,7 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 
 		if (!d_list_empty(&add_list)) {
 
-			rc = pl_map_extend(layout, &add_list);
+			rc = pl_map_extend(layout, &add_list, true);
 			if (rc != 0)
 				return rc;
 		}
