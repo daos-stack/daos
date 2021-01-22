@@ -165,7 +165,7 @@ $(DEB_BUILD).tar.$(SRC_EXT): $(notdir $(SOURCE)) | $(DEB_TOP)/
 	ln -f $< $@
 
 $(DEB_TARBASE).orig.tar.$(SRC_EXT): $(DEB_BUILD).tar.$(SRC_EXT)
-	rm -f $(DEB_TOP)/*.orig.tar.*
+	rm -rf $(DEB_TOP)/*.orig.tar.*
 	ln -f $< $@
 
 deb_detar: $(notdir $(SOURCE)) $(DEB_TARBASE).orig.tar.$(SRC_EXT)

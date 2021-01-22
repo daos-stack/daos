@@ -42,6 +42,14 @@
 	if (__rc != 0) \
 		fail_msg("Not successful!! Error code: " DF_RC, DP_RC(__rc)); \
 	} while (0)
+#define assert_rc_equal(rc, expected_rc) \
+	do { \
+		if ((rc) == (expected_rc)) \
+			break; \
+		print_message("assert_rc_equal: %d != %d\n", rc, expected_rc); \
+		assert_string_equal(d_errstr(rc), d_errstr(expected_rc)); \
+	} while (0)
+
 
 /** Read a command line from stdin. */
 char *dts_readline(const char *prompt);
