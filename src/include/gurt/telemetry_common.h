@@ -49,10 +49,12 @@ struct d_tm_stats_t {
 	union {
 		uint64_t min_int;
 		long double min_float;
+
 	} dtm_min;
 	union {
 		uint64_t max_int;
 		long double max_float;
+
 	} dtm_max;
 	long double std_dev;
 	long double mean;
