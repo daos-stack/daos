@@ -486,7 +486,7 @@ d_tm_print_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 
 	if (printStats)
 		fprintf(stream,
-			" min: %Lf max: %Lf mean: %Lf std dev: %Lf",
+			" min: %lf max: %lf mean: %lf std dev: %lf",
 			stats->dtm_min.min_float,
 			stats->dtm_max.max_float,
 			stats->mean,
@@ -514,8 +514,8 @@ d_tm_print_gauge(uint64_t val, struct d_tm_stats_t *stats, char *name,
 
 	if (stats != NULL)
 		fprintf(stream,
-			" min: %" PRIu64 " max: %" PRIu64 " mean: %Lf"
-			" std dev: %Lf",
+			" min: %" PRIu64 " max: %" PRIu64 " mean: %lf"
+			" std dev: %lf",
 			stats->dtm_min.min_int,
 			stats->dtm_max.max_int,
 			stats->mean,
@@ -744,9 +744,9 @@ failure:
 void
 d_tm_compute_gauge_stats(struct d_tm_node_t *node)
 {
-	long double mean;
-	long double s;
-	long double variance;
+	double mean;
+	double s;
+	double variance;
 	uint64_t value;
 
 	value = node->dtn_metric->dtm_data.value;
@@ -786,10 +786,10 @@ d_tm_compute_gauge_stats(struct d_tm_node_t *node)
 void
 d_tm_compute_duration_stats(struct d_tm_node_t *node)
 {
-	long double mean;
-	long double s;
-	long double variance;
-	long double value;
+	double mean;
+	double s;
+	double variance;
+	double value;
 
 	value = node->dtn_metric->dtm_data.tms[0].tv_sec +
 		(node->dtn_metric->dtm_data.tms[0].tv_nsec / 1E9);

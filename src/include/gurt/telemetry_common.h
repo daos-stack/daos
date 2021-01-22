@@ -46,19 +46,17 @@ enum {
 };
 
 struct d_tm_stats_t {
-	union {
+	union minval {
 		uint64_t min_int;
-		long double min_float;
-
+		double min_float;
 	} dtm_min;
-	union {
+	union maxval {
 		uint64_t max_int;
-		long double max_float;
-
+		double max_float;
 	} dtm_max;
-	long double std_dev;
-	long double mean;
-	long double s;
+	double std_dev;
+	double mean;
+	double s;
 	uint64_t k;
 };
 

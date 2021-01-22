@@ -222,8 +222,8 @@ test_gauge_stats(void **state)
 	assert(val == 20);
 	assert(stats.dtm_min.min_int == 2);
 	assert(stats.dtm_max.max_int == 20);
-	assert(floor(stats.mean * 10.0) == 110.0);
-	assert(floor(stats.std_dev * 100000.0) == 589379.0);
+	assert(fabs(stats.mean - 11.0) < 0.1);
+	assert(fabs(stats.std_dev - 5.89379) < 0.00001);
 }
 
 static void
@@ -237,10 +237,10 @@ test_duration_stats(void **state)
 			       "gurt/tests/telem/duration-stats");
 	assert(rc == D_TM_SUCCESS);
 
-	assert(floor(stats.dtm_min.min_float * 1000.0) == 1125.0);
-	assert(floor(stats.dtm_max.max_float * 10) == 56.0);
-	assert(floor(stats.mean * 100) == 325.0);
-	assert(floor(stats.std_dev * 100000) == 174329.0);
+	assert(fabs(stats.dtm_min.min_float - 1.125) < 0.001);
+	assert(fabs(stats.dtm_max.max_float - 5.6) < 0.1);
+	assert(fabs(stats.mean - 3.25) < 0.01);
+	assert(fabs(stats.std_dev - 1.74329) < 0.00001);
 }
 
 static int
