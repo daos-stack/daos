@@ -470,7 +470,7 @@ main(int argc, char **argv)
 	if (uuid_is_null(dfp->dfp_pool) == 0) {
 		/** Connect to DAOS pool */
 		rc = daos_pool_connect(dfp->dfp_pool, dfuse_info->di_group,
-				       NULL, DAOS_PC_RW,
+				       DAOS_PC_RW,
 				       &dfp->dfp_poh, &dfp->dfp_pool_info,
 				       NULL);
 		if (rc != -DER_SUCCESS) {
@@ -552,6 +552,7 @@ out_dfs:
 		DFUSE_TRA_DOWN(dfp);
 		D_FREE(dfp);
 	}
+
 	DFUSE_TRA_DOWN(dfuse_info);
 	D_MUTEX_DESTROY(&dfuse_info->di_lock);
 	daos_fini();
