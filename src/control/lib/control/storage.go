@@ -132,6 +132,7 @@ type (
 	// StorageScanReq contains the parameters for a storage scan request.
 	StorageScanReq struct {
 		unaryRequest
+		Usage      bool
 		NvmeHealth bool
 		NvmeMeta   bool
 		NvmeBasic  bool
@@ -221,10 +222,14 @@ func (ssp *StorageScanResp) addHostResponse(hr *HostResponse) error {
 func StorageScan(ctx context.Context, rpcClient UnaryInvoker, req *StorageScanReq) (*StorageScanResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return ctlpb.NewCtlSvcClient(conn).StorageScan(ctx, &ctlpb.StorageScanReq{
+			Scm: &ctlpb.ScanScmReq{
+				Usage: req.Usage,
+			},
 			Nvme: &ctlpb.ScanNvmeReq{
 				Health: req.NvmeHealth,
-				Meta:   req.NvmeMeta,
-				Basic:  req.NvmeBasic,
+				// NVMe meta option will populate usage statistics
+				Meta:  req.NvmeMeta || req.Usage,
+				Basic: req.NvmeBasic,
 			},
 		})
 	})
