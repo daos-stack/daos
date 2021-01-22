@@ -197,7 +197,7 @@ pool_get_prop_hdlr(struct cmd_args_s *ap)
 	assert(ap->p_op == POOL_GET_PROP);
 
 	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
-			       ap->mdsrv, DAOS_PC_RO, &ap->pool,
+			       DAOS_PC_RO, &ap->pool,
 			       NULL /* info */, NULL /* ev */);
 	if (rc != 0) {
 		fprintf(stderr, "failed to connect to pool "DF_UUIDF
@@ -252,7 +252,7 @@ pool_set_attr_hdlr(struct cmd_args_s *ap)
 	}
 
 	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
-			       ap->mdsrv, DAOS_PC_RW, &ap->pool,
+			       DAOS_PC_RW, &ap->pool,
 			       NULL /* info */, NULL /* ev */);
 	if (rc != 0) {
 		fprintf(stderr, "failed to connect to pool "DF_UUIDF
@@ -302,7 +302,7 @@ pool_del_attr_hdlr(struct cmd_args_s *ap)
 	}
 
 	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
-			       ap->mdsrv, DAOS_PC_RW, &ap->pool,
+			       DAOS_PC_RW, &ap->pool,
 			       NULL /* info */, NULL /* ev */);
 	if (rc != 0) {
 		fprintf(stderr, "failed to connect to pool "DF_UUIDF
@@ -351,7 +351,7 @@ pool_get_attr_hdlr(struct cmd_args_s *ap)
 	}
 
 	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
-			       ap->mdsrv, DAOS_PC_RO, &ap->pool,
+			       DAOS_PC_RO, &ap->pool,
 			       NULL /* info */, NULL /* ev */);
 	if (rc != 0) {
 		fprintf(stderr, "failed to connect to pool "DF_UUIDF
@@ -427,7 +427,7 @@ pool_list_attrs_hdlr(struct cmd_args_s *ap)
 	assert(ap->p_op == POOL_LIST_ATTRS);
 
 	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
-			       ap->mdsrv, DAOS_PC_RO, &ap->pool,
+			       DAOS_PC_RO, &ap->pool,
 			       NULL /* info */, NULL /* ev */);
 	if (rc != 0) {
 		fprintf(stderr, "failed to connect to pool "DF_UUIDF
@@ -507,7 +507,7 @@ pool_list_containers_hdlr(struct cmd_args_s *ap)
 	assert(ap->p_op == POOL_LIST_CONTAINERS);
 
 	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
-			       ap->mdsrv, DAOS_PC_RO, &ap->pool,
+			       DAOS_PC_RO, &ap->pool,
 			       NULL /* info */, NULL /* ev */);
 	if (rc != 0) {
 		fprintf(stderr, "failed to connect to pool "DF_UUIDF
@@ -593,7 +593,7 @@ pool_query_hdlr(struct cmd_args_s *ap)
 	assert(ap->p_op == POOL_QUERY);
 
 	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
-			       ap->mdsrv, DAOS_PC_RO, &ap->pool,
+			       DAOS_PC_RO, &ap->pool,
 			       NULL /* info */, NULL /* ev */);
 	if (rc != 0) {
 		fprintf(stderr, "failed to connect to pool "DF_UUIDF
@@ -2572,7 +2572,7 @@ fs_copy_connect(struct file_dfs *src_file_dfs,
 
 	/* open src pool, src cont, and mount dfs */
 	if (src_file_dfs->type == DAOS) {
-		rc = daos_pool_connect(fa->src_p_uuid, sysname, NULL,
+		rc = daos_pool_connect(fa->src_p_uuid, sysname,
 				       DAOS_PC_RW, &fa->src_poh, NULL, NULL);
 		if (rc != 0) {
 			fprintf(stderr, "failed to connect to destination "
@@ -2596,7 +2596,7 @@ fs_copy_connect(struct file_dfs *src_file_dfs,
 
 	/* open dst pool, dst cont, and mount dfs */
 	if (dst_file_dfs->type == DAOS) {
-		rc = daos_pool_connect(fa->dst_p_uuid, sysname, NULL,
+		rc = daos_pool_connect(fa->dst_p_uuid, sysname,
 				       DAOS_PC_RW, &fa->dst_poh, NULL, NULL);
 		if (rc != 0) {
 			fprintf(stderr, "failed to connect to destination "
