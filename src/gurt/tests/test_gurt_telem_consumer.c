@@ -30,6 +30,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <math.h>
 #include "wrap_cmocka.h"
 #include "gurt/common.h"
 #include "gurt/telemetry_common.h"
@@ -73,11 +74,11 @@ test_verify_object_count(void **state)
 
 	num = d_tm_get_num_objects(shmem_root, "gurt/tests/telem",
 				   D_TM_GAUGE);
-	assert(num == 1);
+	assert(num == 2);
 
 	num = d_tm_get_num_objects(shmem_root, "gurt/tests/telem",
 				   D_TM_DURATION);
-	assert(num == 1);
+	assert(num == 2);
 
 	num = d_tm_get_num_objects(shmem_root, "gurt/tests/telem",
 				   D_TM_TIMESTAMP);
@@ -90,7 +91,7 @@ test_verify_object_count(void **state)
 	num = d_tm_get_num_objects(shmem_root, "gurt/tests/telem",
 				   D_TM_COUNTER | D_TM_GAUGE | D_TM_DURATION |
 				   D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT);
-	assert(num == 7);
+	assert(num == 9);
 }
 
 static void
@@ -164,10 +165,15 @@ test_find_metric(void **state)
 static void
 test_verify_gauge(void **state)
 {
-	uint64_t	val;
-	int		rc;
+	struct d_tm_stats_t	stats;
+	uint64_t		val;
+	int			rc;
 
-	rc = d_tm_get_gauge(&val, shmem_root, NULL,
+	rc = d_tm_get_gauge(&val, &stats, shmem_root, NULL,
+			    "gurt/tests/telem/gauge");
+	assert(rc == D_TM_SUCCESS);
+
+	rc = d_tm_get_gauge(&val, NULL, shmem_root, NULL,
 			    "gurt/tests/telem/gauge");
 	assert(rc == D_TM_SUCCESS);
 
@@ -202,6 +208,41 @@ test_timer_snapshot(void **state)
 	assert((tms3.tv_sec + tms3.tv_nsec) > 0);
 }
 
+static void
+test_gauge_stats(void **state)
+{
+	struct d_tm_stats_t	stats;
+	uint64_t		val;
+	int			rc;
+
+	rc = d_tm_get_gauge(&val, &stats, shmem_root, NULL,
+			    "gurt/tests/telem/gauge-stats");
+	assert(rc == D_TM_SUCCESS);
+
+	assert(val == 20);
+	assert(stats.dtm_min.min_int == 2);
+	assert(stats.dtm_max.max_int == 20);
+	assert(floor(stats.mean * 10.0) == 110.0); // 11.0
+	assert(floor(stats.std_dev * 100000.0) == 589379.0); // 5.89379
+}
+
+static void
+test_duration_stats(void **state)
+{
+	struct d_tm_stats_t	stats;
+	struct timespec		tms;
+	int			rc;
+
+	rc = d_tm_get_duration(&tms, &stats, shmem_root, NULL,
+			       "gurt/tests/telem/duration-stats");
+	assert(rc == D_TM_SUCCESS);
+
+	assert(floor(stats.dtm_min.min_float * 1000.0) == 1125.0); // 1.125
+	assert(floor(stats.dtm_max.max_float * 10) == 56.0); // 5.6
+	assert(floor(stats.mean * 100) == 325.0); // 3.25
+	assert(floor(stats.std_dev * 100000) == 174329.0); // 1.74329
+}
+
 static int
 fini_tests(void **state)
 {
@@ -222,6 +263,8 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_find_metric),
 		cmocka_unit_test(test_verify_gauge),
 		cmocka_unit_test(test_timer_snapshot),
+		cmocka_unit_test(test_gauge_stats),
+		cmocka_unit_test(test_duration_stats),
 	};
 
 	d_register_alt_assert(mock_assert);

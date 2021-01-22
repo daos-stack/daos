@@ -41,6 +41,7 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 {
 	struct d_tm_nodeList_t	*nodelist = NULL;
 	struct d_tm_nodeList_t	*head = NULL;
+	struct d_tm_stats_t	stats;
 	struct timespec		tms;
 	uint64_t		val;
 	time_t			clk;
@@ -112,24 +113,24 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 		case D_TM_DURATION | D_TM_CLOCK_REALTIME:
 		case D_TM_DURATION | D_TM_CLOCK_PROCESS_CPUTIME:
 		case D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME:
-			rc = d_tm_get_duration(&tms, shmem_root,
+			rc = d_tm_get_duration(&tms, &stats, shmem_root,
 					       nodelist->dtnl_node, NULL);
 			if (rc != D_TM_SUCCESS) {
 				printf("Error on duration read: %d\n", rc);
 				break;
 			}
-			d_tm_print_duration(&tms, name,
+			d_tm_print_duration(&tms, &stats, name,
 					    nodelist->dtnl_node->dtn_type,
 					    stdout);
 			break;
 		case D_TM_GAUGE:
-			rc = d_tm_get_gauge(&val, shmem_root,
+			rc = d_tm_get_gauge(&val, &stats, shmem_root,
 					    nodelist->dtnl_node, NULL);
 			if (rc != D_TM_SUCCESS) {
 				printf("Error on gauge read: %d\n", rc);
 				break;
 			}
-			d_tm_print_gauge(val, name, stdout);
+			d_tm_print_gauge(val, &stats, name, stdout);
 			break;
 		default:
 			printf("Item: %s has unknown type: 0x%x\n",

@@ -46,18 +46,14 @@ enum {
 };
 
 struct d_tm_stats_t {
-	union min_max {
-		union x {
-			uint64_t min;
-			uint64_t max;
-		} min_max_int;
-		union y {
-			long double min;
-			long double max;
-		} min_max_float;
-	} dtm_min_max;
-	uint64_t min;
-	uint64_t max;
+	union {
+		uint64_t min_int;
+		long double min_float;
+	} dtm_min;
+	union {
+		uint64_t max_int;
+		long double max_float;
+	} dtm_max;
 	long double std_dev;
 	long double mean;
 	long double s;
@@ -103,4 +99,6 @@ int d_tm_alloc_node(struct d_tm_node_t **newnode, char *name);
 int d_tm_add_child(struct d_tm_node_t **newnode, struct d_tm_node_t *parent,
 		   char *name);
 int d_tm_get_version(void);
+void d_tm_compute_duration_stats(struct d_tm_node_t *node);
+void d_tm_compute_gauge_stats(struct d_tm_node_t *node);
 #endif /* __TELEMETRY_COMMON_H__ */
