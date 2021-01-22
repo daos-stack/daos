@@ -309,7 +309,7 @@ decompress_calgary_file(uint8_t *src, size_t src_len,
 /**
  * Test steps:
  * - Read and decompress the compressed calgary file to source buffer
- * - Devide the source buffer into multiple blocks
+ * - Divide the source buffer into multiple blocks
  * - Compress each block statelessly
  * - Decompress the compressed blocks
  * - Calculate performance number
@@ -386,11 +386,11 @@ run_timings(struct compress_ft *fts[],
 		uint32_t			blk_index = 0;
 		enum COMPRESS_DIR		dir = DIR_COMPRESS;
 
-		/** Devide the calgary data (3.2MB) into multiple blocks */
+		/** Divide the calgary data (3.2MB) into multiple blocks */
 		blk_count = (total_sz / size)
 				+ (total_sz % size ? 1 : 0);
 
-		/** Alloc block array, each block is compressed seperately */
+		/** Alloc block array, each block is compressed separately */
 		D_ALLOC(blk_array, blk_count * sizeof(struct blk_info *));
 
 		args.blk_array = blk_array;
