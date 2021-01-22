@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -390,7 +390,6 @@ main(int argc, char **argv)
 	dfuse_info->di_thread_count -= 1;
 
 	if (dfuse_info->di_pool) {
-
 		if (uuid_parse(dfuse_info->di_pool, tmp_uuid) < 0) {
 			printf("Invalid pool uuid\n");
 			exit(1);
@@ -403,22 +402,8 @@ main(int argc, char **argv)
 			}
 		}
 
-		/* svcl is optional. If unspecified libdaos will query
-		 * management service to get list of pool service replicas.
-		 */
-
-		if (svcl) {
-			svcl_rl = daos_rank_list_parse(svcl, ":");
-			if (svcl_rl == NULL) {
-				printf("Invalid pool service rank list\n");
-				D_GOTO(out_dfuse, ret = -DER_INVAL);
-			}
-		}
 	} else if (dfuse_info->di_cont) {
 		printf("Pool uuid required with container uuid\n");
-		exit(1);
-	} else if (svcl) {
-		printf("Svcl not meaningful without pool uuid\n");
 		exit(1);
 	}
 
@@ -537,11 +522,10 @@ main(int argc, char **argv)
 				printf("dfs_mount failed (%d)\n", rc);
 				D_GOTO(out_dfs, ret = rc);
 			}
-			if (dfuse_info->di_multi_user) {
+			if (dfuse_info->di_multi_user)
 				dfs->dfs_ops = &dfuse_login_ops;
-			} else {
+			else
 				dfs->dfs_ops = &dfuse_dfs_ops;
-			}
 		} else {
 			dfs->dfs_ops = &dfuse_cont_ops;
 		}
@@ -603,9 +587,6 @@ out_dfuse:
 	D_MUTEX_DESTROY(&dfuse_info->di_lock);
 	daos_fini();
 out_debug:
-
-	if (svcl_rl)
-		d_rank_list_free(svcl_rl);
 
 	D_FREE(dfuse_info);
 	DFUSE_LOG_INFO("Exiting with status %d", ret);
