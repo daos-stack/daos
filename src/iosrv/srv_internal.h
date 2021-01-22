@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,7 +61,6 @@ struct dss_xstream {
 	ABT_sched		dx_sched;
 	ABT_thread		dx_progress;
 	struct sched_info	dx_sched_info;
-	d_list_t		dx_sleep_ult_list;
 	tse_sched_t		dx_sched_dsc;
 	struct dss_rpc_cntr	dx_rpc_cntrs[DSS_RC_MAX];
 	/* xstream id, [0, DSS_XS_NR_TOTAL - 1] */
@@ -103,6 +102,8 @@ extern unsigned int	dss_tgt_offload_xs_nr;
 extern unsigned int	dss_sys_xs_nr;
 /** Flag of helper XS as a pool */
 extern bool		dss_helper_pool;
+/** Shadow dss_get_module_info */
+struct dss_module_info *get_module_info(void);
 
 /* init.c */
 d_rank_t dss_self_rank(void);
@@ -118,6 +119,7 @@ int dss_module_setup_all(void);
 int dss_module_cleanup_all(void);
 
 /* srv.c */
+extern struct dss_module_key daos_srv_modkey;
 int dss_srv_init(void);
 int dss_srv_fini(bool force);
 void dss_dump_ABT_state(FILE *fp);

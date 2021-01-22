@@ -221,13 +221,6 @@ class DataMoverTestBase(IorTestBase):
             return join(prefix, daos_dir)
         return join("/", daos_dir)
 
-    @staticmethod
-    def svcl_from_pool(pool):
-        """Get the string svc for a pool."""
-        if not hasattr(pool, "svc_ranks"):
-            return None
-        return ":".join(map(str, pool.svc_ranks))
-
     def set_src_location(self, *args, **kwargs):
         """Shorthand for set_location("src", ...)."""
         self.set_location("src", *args, **kwargs)
@@ -260,20 +253,16 @@ class DataMoverTestBase(IorTestBase):
         if src_or_dst == "src":
             dm_path = self.dm_cmd.src_path
             dm_pool = self.dm_cmd.daos_src_pool
-            dm_svcl = self.dm_cmd.daos_src_svcl
             dm_cont = self.dm_cmd.daos_src_cont
             display_path = "src_path" if display else None
             display_pool = "daos_src_pool" if display else None
-            display_svcl = "daos_src_svcl" if display else None
             display_cont = "daos_src_cont" if display else None
         elif src_or_dst == "dst":
             dm_path = self.dm_cmd.dest_path
             dm_pool = self.dm_cmd.daos_dst_pool
-            dm_svcl = self.dm_cmd.daos_dst_svcl
             dm_cont = self.dm_cmd.daos_dst_cont
             display_path = "dest_path" if display else None
             display_pool = "daos_dst_pool" if display else None
-            display_svcl = "daos_dst_svcl" if display else None
             display_cont = "daos_dst_cont" if display else None
 
         # Only a single prefix supported at this time.
@@ -285,7 +274,6 @@ class DataMoverTestBase(IorTestBase):
         # Reset params
         dm_path.update(None)
         dm_pool.update(None)
-        dm_svcl.update(None)
         dm_cont.update(None)
         dm_prefix.update(None)
 
@@ -295,10 +283,8 @@ class DataMoverTestBase(IorTestBase):
         # Allow pool to be either the pool or the uuid
         if hasattr(pool, "uuid"):
             pool_uuid = pool.uuid
-            pool_svcl = self.svcl_from_pool(pool)
         else:
             pool_uuid = pool
-            pool_svcl = None
 
         if param_type == "POSIX":
             dm_path.update(path, display_path)
@@ -306,8 +292,6 @@ class DataMoverTestBase(IorTestBase):
             dm_path.update(path, display_path)
             if pool_uuid:
                 dm_pool.update(pool_uuid, display_pool)
-            if pool_svcl:
-                dm_svcl.update(pool_svcl, display_svcl)
             if cont_uuid:
                 dm_cont.update(cont_uuid, display_cont)
         elif param_type == "DAOS_UNS":
@@ -317,8 +301,6 @@ class DataMoverTestBase(IorTestBase):
                 else:
                     dm_prefix.update(cont.path, display_prefix)
                     dm_path.update(str(cont.path) + path, display_path)
-            if pool_svcl:
-                dm_svcl.update(pool_svcl, display_svcl)
 
     def set_ior_location(self, param_type, path, pool=None, cont=None,
                          path_suffix=None, display=True):
@@ -343,7 +325,6 @@ class DataMoverTestBase(IorTestBase):
         self.ior_cmd.dfs_pool.update(None)
         self.ior_cmd.dfs_cont.update(None)
         self.ior_cmd.dfs_group.update(None)
-        self.ior_cmd.dfs_svcl.update(None)
 
         display_api = "api" if display else None
         display_test_file = "test_file" if display else None

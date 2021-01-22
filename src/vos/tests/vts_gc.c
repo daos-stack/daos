@@ -292,7 +292,7 @@ gc_obj_test(void **state)
 	int		     rc;
 
 	rc = gc_obj_run(args);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 static void
@@ -303,7 +303,7 @@ gc_obj_bio_test(void **state)
 
 	args->gc_array = true;
 	rc = gc_obj_run(args);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 static int
@@ -370,7 +370,7 @@ gc_cont_test(void **state)
 	int		     rc;
 
 	rc = gc_cont_run(args);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 static int

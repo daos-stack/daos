@@ -513,7 +513,7 @@ ioil_open_cont_handles(int fd, struct dfuse_il_reply *il_reply,
 	struct ioil_pool       *pool = cont->ioc_pool;
 
 	if (daos_handle_is_inval(pool->iop_poh)) {
-		rc = daos_pool_connect(il_reply->fir_pool, NULL, NULL,
+		rc = daos_pool_connect(il_reply->fir_pool, NULL,
 				       DAOS_PC_RW, &pool->iop_poh, NULL, NULL);
 		if (rc)
 			return false;

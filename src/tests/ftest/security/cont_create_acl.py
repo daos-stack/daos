@@ -21,7 +21,6 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from apricot import skipForTicket
 from cont_security_test_base import ContSecurityTestBase
 from security_test_base import generate_acl_file
 
@@ -34,7 +33,6 @@ class CreateContainterACLTest(ContSecurityTestBase):
 
     :avocado: recursive
     """
-    @skipForTicket("DAOS-6479")
     def test_container_basics(self):
         """Test basic container create/destroy/open/close/query.
 
@@ -58,9 +56,9 @@ class CreateContainterACLTest(ContSecurityTestBase):
         ## Getting the default ACL list
         expected_acl = generate_acl_file("default", acl_args)
 
-        ## 1. Create a pool and obtain its UUID and SVC
+        ## 1. Create a pool and obtain its UUID
         self.log.info("===> Creating a pool with no ACL file passed")
-        self.pool_uuid, self.pool_svc = self.create_pool_with_dmg()
+        self.pool_uuid = self.create_pool_with_dmg()
 
         ## 2. Create a container with no ACL file passed
         self.log.info("===> Creating a container with no ACL file passed")
