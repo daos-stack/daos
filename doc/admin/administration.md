@@ -50,30 +50,41 @@ Useful admin dmg commands to query NVMe SSD health:
   - `dmg storage query (list-devices|list-pools)`
   - `dmg storage scan --nvme-meta` shows mapping of metadata to NVMe controllers
 
-Queries persistently stored device and pool metadata tables. The device table maps
-the internal device UUID to attached VOS target IDs. The rank number of the server
-where the device is located is also listed, along with the current device state.
-The available device states are the following:
+The NVMe storage query list-devices and list-pools commands query the persistently
+stored SMD device and pool tables respectively. The device table maps the internal
+device UUID to attached VOS target IDs. The rank number of the server where the device
+is located is also listed, along with the current device state. The current device
+states are the following:
   - NORMAL: a fully, functional device in-use by DAOS
   - EVICTED: the device is no longer in-use by DAOS
   - UNPLUGGED: the device is currently unplugged from the system (may or not be evicted)
   - NEW: the device is plugged and available, and not currently in-use by DAOS
 
-The pool table maps the DAOS pool UUID to attached VOS target IDs, and will list
-all of the server ranks that the pool is distributed on. With the additional
---verbose flag, the mapping of SPDK blob IDs to VOS target IDs is also displayed.
+The transport address is also listed for the device. This is either the PCIe address
+for normal NVMe SSDs, or the BDF format address of the backing NVMe SSDs behind a
+VMD (Volume Management Device) address. In the example below, the last two listed devices
+are both VMD devices with transport addresses in the BDF format behind the VMD address
+0000:5d:05.5.
+
+The pool table maps the DAOS pool UUID to attached VOS target IDs and will list all
+of the server ranks that the pool is distributed on. With the additional verbose flag,
+the mapping of SPDK blob IDs to VOS target IDs will also be displayed.
 ```bash
 $ dmg -l boro-11,boro-13 storage query list-devices
 -------
 boro-11
 -------
   Devices
-    UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 Targets:[0 2] Rank:0 State:NORMAL
-    UUID:80c9f1be-84b9-4318-a1be-c416c96ca48b Targets:[1 3] Rank:0 State:FAULTY
-    UUID:051b77e4-1524-4662-9f32-f8e4d2542c2d Targets:[] Rank:0 State:NEW
-    UUID:81905b24-be44-4106-8ff9-03002e9dd86a Targets:[0 2] Rank:1 State:UNPLUGGED
-    UUID:2ccb8afb-5d32-454e-86e3-762ec5dca7be Targets:[1 3] Rank:1 State:NORMAL
-    UUID:3f08da48-d88d-42dc-bca5-d1ab8419a401 Targets:[] Rank:1 State:NEW
+    UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 [TrAddr:0000:8a:00.0]
+      Targets:[0 2] Rank:0 State:NORMAL
+    UUID:80c9f1be-84b9-4318-a1be-c416c96ca48b [TrAddr:0000:8b:00.0]
+      Targets:[1 3] Rank:0 State:NORMAL
+    UUID:051b77e4-1524-4662-9f32-f8e4d2542c2d [TrAddr:0000:8c:00.0]
+      Targets:[] Rank:0 State:NEW
+    UUID:81905b24-be44-4106-8ff9-03002e9dd86a [TrAddr:5d0505:01:00.0]
+      Targets:[0 2] Rank:1 State:EVICTED
+    UUID:2ccb8afb-5d32-454e-86e3-762ec5dca7be [TrAddr:5d0505:03:00.0]
+      Targets:[1 3] Rank:1 State:NORMAL
 ```
 ```bash
 $ dmg -l boro-11,boro-13 storage query list-pools
@@ -100,10 +111,11 @@ boro-11
   - `dmg storage query (device-health|target-health)`
   - `dmg storage scan --nvme-health` shows NVMe controller health stats
 
-Queries device health data, including NVMe SSD health stats and in-memory I/O error
-and checksum error counters. The server rank and device state are also listed.
-The device health data can either be queried by device UUID (device-health) or by
-VOS target ID along with server rank (target-health). The same device health info
+The NVMe storage query device-health and target-health commands query the device
+health data, including NVMe SSD health stats and in-memory I/O error and checksum
+error counters. The server rank and device state are also listed. The device health
+data can either be queried by device UUID (device-health command) or by VOS target ID
+along with the server rank (target-health command). The same device health information
 is displayed with both command options.
 ```bash
 $ dmg -l boro-11 storage query device-health
@@ -115,7 +127,8 @@ $ dmg -l boro-11 storage query target-health
 boro-11
 -------
   Devices
-    UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 Targets:[0 1 2 3] Rank:0 State:NORMAL
+    UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 [TrAddr:0000:8a:00.0]
+      Targets:[0 1 2 3] Rank:0 State:NORMAL
       Health Stats:
         Temperature:289K(15C)
         Controller Busy Time:0s
@@ -153,6 +166,8 @@ The device state will transition from "NORMAL" to "FAULTY" (shown above), which 
 trigger the faulty device reaction (all targets on the SSD will be rebuilt and the SSD
 will remain evicted until device replacement occurs).
 
+**Full NVMe hot plug capability will be available and supported in DAOS 2.0 release. Use is currently intended for testing only and is not supported for production.**
+
 - Replace an Evicted SSD with a New Device: `dmg storage replace nvme`
 
 To replace an NVMe SSD with an evicted device and reintegrate it into use with
@@ -184,6 +199,37 @@ boro-11
 The FAULTY device will transition from an "EVICTED" state back to a "NORMAL" state,
 and will again be available for use with DAOS. The use case of this command will mainly
 be for testing, or for accidental device eviction.
+
+### NVMe SSD Identification
+
+The SSD identification feature is simply a way to quickly and visually locate a
+device. It requires the use of Intel VMD (Volume Management Device), which needs
+to be physically available on the hardware as well as enabled in the system BIOS.
+The feature supports two LED device events: locating a healthy device and locating
+an evicted device.
+
+- Locate a Healthy SSD: `dmg storage identify vmd`
+
+To quickly identify an SSD in question, an administrator can run the following
+command:
+```bash
+$ dmg -l boro-11 storage identify vmd --uuid=6fccb374-413b-441a-bfbe-860099ac5e8d
+
+If a non-VMD device UUID is used with the command, the following error will occur:
+localhost DAOS error (-1010): DER_NOSYS
+
+```
+The status LED on the VMD device is now set to an "IDENTIFY" state, represented
+by a quick, 4Hz blinking amber light. The device will quickly blink by default for
+about 60 seconds and then return to the default "OFF" state.
+
+- Locate an Evicted SSD: `dmg storage set nvme-faulty`
+
+If an NVMe SSD is evicted, the status LED on the VMD device is set to a "FAULT"
+state, represented by a solidly ON amber light. No additional command apart from
+the SSD eviction command would be needed, and this would visually indicate that the
+device needs to be replaced and is no longer in use by DAOS. The LED of the VMD
+device would remain in this state until replaced by a new device.
 
 ## System Operations
 
