@@ -51,7 +51,7 @@ struct test_options {
 	int		num_attach_retries;
 	bool		is_server;
 	bool		assert_on_error;
-	int		shutdown;
+	volatile int	shutdown;
 	int		delay_shutdown_sec;
 };
 
