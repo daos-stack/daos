@@ -321,5 +321,5 @@ main(void)
 						teardown),
 	};
 
-	return cmocka_run_group_tests(tests, NULL, NULL);
+	return cmocka_run_group_tests_name("control_nvme_control_ut", tests, NULL, NULL);
 }
