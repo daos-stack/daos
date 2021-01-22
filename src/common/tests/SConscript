@@ -7,6 +7,12 @@ def define_checksum_timing(build, env):
     build.test(env, 'checksum_timing', 'checksum_timing.c',
                LIBS=checksum_timing_libs)
 
+def define_compress_timing(build, env):
+    """Define the Compress Timing build"""
+    compress_timing_libs = ['daos_common', 'gurt']
+    build.test(env, 'compress_timing', 'compress_timing.c',
+               LIBS=compress_timing_libs)
+
 def scons():
     """Execute build"""
     Import('tenv')
@@ -41,6 +47,7 @@ def scons():
     daos_build.test(tenv, 'prop_tests', 'prop_tests.c',
                     LIBS=['daos_common', 'gurt', 'cmocka'])
     define_checksum_timing(daos_build, tenv)
+    define_compress_timing(daos_build, tenv)
 
     tenv.Install('$PREFIX/bin/', [common_test])
 
