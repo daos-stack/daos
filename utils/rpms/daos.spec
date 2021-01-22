@@ -415,6 +415,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 * Wed Jan 20 2021 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.2.1-4
 - Install daos_metrics utility to %{_bindir}
 
+* Wed Jan 20 2021 Kenneth Cain <kenneth.c.cain@intel.com> 1.1.2.1-4
+- Version update for API major version 1, libdaos.so.1 (1.0.0)
+
 * Fri Jan 15 2021 Michael Hennecke <mhennecke@lenovo.com> 1.1.2.1-3
 - Harmonize daos_server and daos_agent groups.
 
