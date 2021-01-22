@@ -241,7 +241,6 @@ show_help(char *name)
 	printf("usage: %s -m=PATHSTR -s=RANKS\n"
 		"\n"
 		"	-m --mountpoint=PATHSTR	Mount point to use\n"
-		"	-s --svc=RANKS		pool service replicas like 1,2,3\n"
 		"	   --pool=UUID		pool UUID\n"
 		"	   --container=UUID	container UUID\n"
 		"	   --sys-name=STR	DAOS system name context for servers\n"
@@ -256,8 +255,6 @@ int
 main(int argc, char **argv)
 {
 	struct dfuse_info	*dfuse_info = NULL;
-	char			*svcl = NULL;
-	d_rank_list_t		*svcl_rl = NULL;
 	struct dfuse_pool	*dfp = NULL;
 	struct dfuse_pool	*dfpn;
 	struct dfuse_dfs	*dfs = NULL;
@@ -277,7 +274,6 @@ main(int argc, char **argv)
 	struct option long_options[] = {
 		{"pool",		required_argument, 0, 'p'},
 		{"container",		required_argument, 0, 'c'},
-		{"svc",			required_argument, 0, 's'},
 		{"sys-name",		required_argument, 0, 'G'},
 		{"mountpoint",		required_argument, 0, 'm'},
 		{"multi-user",		no_argument,	   0, 'M'},
@@ -319,9 +315,6 @@ main(int argc, char **argv)
 			break;
 		case 'c':
 			dfuse_info->di_cont = optarg;
-			break;
-		case 's':
-			svcl = optarg;
 			break;
 		case 'G':
 			dfuse_info->di_group = optarg;
@@ -519,7 +512,7 @@ main(int argc, char **argv)
 	if (uuid_is_null(dfp->dfp_pool) == 0) {
 		/** Connect to DAOS pool */
 		rc = daos_pool_connect(dfp->dfp_pool, dfuse_info->di_group,
-				       svcl_rl, DAOS_PC_RW,
+				       DAOS_PC_RW,
 				       &dfp->dfp_poh, &dfp->dfp_pool_info,
 				       NULL);
 		if (rc != -DER_SUCCESS) {

@@ -62,7 +62,7 @@ with DAOS command or Java DAOS UNS method, DaosUns.create(). "\[sub path\]" is o
 with below command.
 
 ```bash
-$ daos cont create --pool <pool UUID> --svc <svc list> -path <your path> --type=POSIX
+$ daos cont create --pool <pool UUID> --path <your path> --type=POSIX
 ```
 Or
 
