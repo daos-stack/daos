@@ -135,7 +135,8 @@ function generate_agent_cert () {
     echo "Generating Agent Certificate"
     # Generate Private key and set its permissions
     openssl genrsa -out "${CERTS}/agent.key" 3072
-    [[ $EUID -eq 0 ]] && chown daos_agent.daos_agent "${CERTS}/agent.key" 2>/dev/null
+    [[ $EUID -eq 0 ]] \
+        && chown daos_agent.daos_agent "${CERTS}/agent.key" 2>/dev/null
     chmod 0400 "${CERTS}/agent.key"
     # Generate a Certificate Signing Request (CRS)
     openssl req -new -config "${CONFIGS}/agent.cnf" -key "${CERTS}/agent.key" \
@@ -145,7 +146,8 @@ function generate_agent_cert () {
         -cert "${CERTS}/daosCA.crt" -policy signing_policy \
         -extensions signing_agent -out "${CERTS}/agent.crt" \
         -outdir "${CERTS}" -in "${CA_HOME}/agent.csr" -batch
-    [[ $EUID -eq 0 ]] && chown daos_agent.daos_agent "${CERTS}/agent.crt" 2>/dev/null
+    [[ $EUID -eq 0 ]] \
+        && chown daos_agent.daos_agent "${CERTS}/agent.crt" 2>/dev/null
     chmod 0664 "${CERTS}/agent.crt"
 
     echo "Required Agent Certificate Files:
