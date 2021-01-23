@@ -57,3 +57,104 @@ dmg:
 daos_tests:
   num_clients:
     num_clients: 1
+  Tests:
+    test_daos_degraded_mode:
+      daos_test: d
+      test_name: DAOS_Degraded_Mode
+      test_timeout: 450
+      scalable_endpoint: True
+    test_daos_management:
+      daos_test: m
+      test_name: DAOS_Management
+      test_timeout: 110
+    test_daos_pool:
+      daos_test: p
+      test_name: DAOS_Pool
+      test_timeout: 120
+    test_daos_container:
+      daos_test: c
+      test_name: DAOS_Container
+      test_timeout: 135
+    test_daos_epoch:
+      daos_test: e
+      test_name: DAOS_Epoch
+      test_timeout: 125
+    test_daos_single_rdg_tx:
+      daos_test: t
+      test_name: DAOS_Single_RDG_TX
+    test_daos_distributed_tx:
+      daos_test: T
+      test_name: DAOS_Distributed_TX
+    test_daos_verify_consistency:
+      daos_test: V
+      test_name: DAOS_Verify_Consistency
+      test_timeout: 105
+    test_daos_io:
+      daos_test: i
+      test_name: DAOS_IO
+      test_timeout: 280
+    test_daos_object_array:
+      daos_test: A
+      test_name: DAOS_Object_Array
+      test_timeout: 105
+    test_daos_array:
+      daos_test: D
+      test_name: DAOS_Array
+      test_timeout: 106
+    test_daos_kv:
+      daos_test: K
+      test_name: DAOS_KV
+      test_timeout: 105
+    test_daos_file_system:
+      daos_test: F
+      test_name: DAOS_File_System
+      test_timeout: 140
+    test_daos_capability:
+      daos_test: C
+      test_name: DAOS_Capability
+      test_timeout: 104
+    test_daos_epoch_recovery:
+      daos_test: o
+      test_name: DAOS_Epoch_Recovery
+      test_timeout: 104
+    test_daos_md_replication:
+      daos_test: R
+      test_name: DAOS_MD_Replication
+      test_timeout: 104
+    test_daos_rebuild_simple:
+      daos_test: v
+      test_name: DAOS_Rebuild_Simple
+      test_timeout: 500
+    test_daos_drain_simple:
+      daos_test: b
+      test_name: DAOS_Drain_Simple
+      test_timeout: 500
+    test_daos_oid_allocator:
+      daos_test: O
+      test_name: DAOS_OID_Allocator
+      test_timeout: 320
+    test_daos_checksum:
+      daos_test: z
+      test_name: DAOS_Checksum
+      test_timeout: 240
+    test_daos_rebuild_ec:
+      daos_test: S
+      test_name: DAOS_Rebuild_EC
+      test_timeout: 900
+    test_daos_aggregate_ec:
+      daos_test: Z
+      test_name: DAOS_Aggregate_EC
+    test_daos_degraded_ec_0to6:
+      daos_test: X
+      test_name: DAOS_Degraded_EC_0to6
+      args: -u subtests="0-6"
+      test_timeout: 900
+    test_daos_degraded_ec_8to22:
+      daos_test: X
+      test_name: DAOS_Degraded_EC_8to22
+      args: -u subtests="8-22"
+      test_timeout: 900
+    test_daos_dedup:
+      daos_test: U
+      test_name: DAOS_Dedup
+      test_timeout: 220

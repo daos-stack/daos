@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -26,14 +26,7 @@ import os
 from daos_core_base import DaosCoreBase
 
 class DaosCoreTestDfs(DaosCoreBase):
-    """
-    Runs DAOS file system (DFS) tests.
-
-    Test ID: DAOS-5409
-
-    Test Description: Run DAOS file system tests 'dfs_test'
-
-    Use Cases: Daos File system tests
+    """Runs DAOS file system (DFS) tests.
 
     :avocado: recursive
     """
@@ -44,18 +37,34 @@ class DaosCoreTestDfs(DaosCoreBase):
         self.hostfile_clients_slots = None
         self.daos_test = os.path.join(self.bin, 'dfs_test')
 
-    def test_dfs_unit(self):
-        """Run daos_test -u
+    def test_daos_dfs_unit(self):
+        """Jira ID: DAOS-5409
 
-        :avocado: tags=all,pr,daily_regression,hw,large,dfs_test
+        Test Description:
+            Run daos_test -u
+
+        Use cases:
+            Daos File system tests
+
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,large
+        :avocado: tags=dfs_test
+        :avocado: tags=daos_dfs_unit
         """
-        self.num_clients = 1
-        DaosCoreBase.run_subtest(self, "u", "DFS Unit", 250)
+        self.run_subtest()
 
-    def test_dfs_parallel(self):
-        """Run daos_test -p
+    def test_daos_dfs_parallel(self):
+        """Jira ID: DAOS-5409
 
-        :avocado: tags=all,pr,daily_regression,hw,large,dfs_test
+        Test Description:
+            Run daos_test -p
+
+        Use cases:
+            Daos File system tests
+
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,large
+        :avocado: tags=dfs_test
+        :avocado: tags=daos_dfs_parallel
         """
-        self.num_clients = 32
-        DaosCoreBase.run_subtest(self, "p", "DFS Parallel", 200)
+        self.run_subtest()

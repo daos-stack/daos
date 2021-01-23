@@ -40,15 +40,27 @@ class DaosCoreBase(TestWithServers):
     :avocado: recursive
     """
 
+    TEST_PATH = "/run/daos_tests/Tests/*"
+
     def __init__(self, *args, **kwargs):
         """Initialize the DaosCoreBase object."""
         super(DaosCoreBase, self).__init__(*args, **kwargs)
+        self.subtest_name = None
 
-        self.num_clients = None
-        self.scalable_ep = None
+        self.TEST_PATH = "/run/daos_tests/Tests/{}".format(self.get_test_name())
+
+        test_timeout = self.params.get("test_timeout", self.TEST_PATH)
+        if test_timeout:
+            self.timeout = test_timeout
 
     def setUp(self):
         """Set up before each test."""
+        self.subtest_name = self.params.get("test_name", self.TEST_PATH)
+        self.subtest_name = self.subtest_name.replace(" ", "_")
+
+        # obtain separate logs
+        self.update_log_file_names(self.subtest_name)
+
         super(DaosCoreBase, self).setUp()
 
         # if no client specified update self.hostlist_clients to local host
@@ -62,14 +74,12 @@ class DaosCoreBase(TestWithServers):
     def start_server_managers(self):
         """Start the daos_server processes on each specified list of hosts.
 
-        Enable scalable endpoint if requested
+        Enable scalable endpoint if requested with a test-specific
+        'scalable_endpoint' yaml parameter.
         """
         # Enable scalable endpoint (if requested) prior to starting the servers
-        if self.scalable_ep is None:
-            self.scalable_ep = self.params.get("scalable_ep",
-                                               '/run/daos_tests/scalable_ep/*')
-
-        if self.scalable_ep:
+        scalable_endpoint = self.params.get("scalable_endpoint", self.TEST_PATH)
+        if scalable_endpoint:
             for server_mgr in self.server_managers:
                 for server_params in server_mgr.manager.job.yaml.server_params:
                     # Number of CaRT contexts should equal or be greater than
@@ -95,20 +105,16 @@ class DaosCoreBase(TestWithServers):
         # Start the servers
         super(DaosCoreBase, self).start_server_managers()
 
-    def run_subtest(self, test_option, test_name, test_timeout, test_args=""):
+    def run_subtest(self):
         """Run daos_test with a subtest argument."""
-        self.timeout = test_timeout
-
-        test_name = test_name.replace(" ", "_")
-
-        # obtain separate logs
-        self.update_log_file_names(test_name)
-
-        if self.num_clients is None:
-            self.num_clients = self.params.get("num_clients",
-                                               '/run/daos_tests/num_clients/*')
+        subtest = self.params.get("daos_test", self.TEST_PATH)
+        num_clients = self.params.get("num_clients", self.TEST_PATH)
+        if num_clients is None:
+            num_clients = self.params.get("num_clients",
+                                          '/run/daos_tests/num_clients/*')
         scm_size = self.params.get("scm_size", '/run/pool/*')
         nvme_size = self.params.get("nvme_size", '/run/pool/*')
+        args = self.params.get("args", self.TEST_PATH, "")
         dmg = self.get_dmg_command()
         dmg_config_file = dmg.yaml.filename
         self.client_mca += " --mca btl_tcp_if_include eth0"
@@ -117,15 +123,15 @@ class DaosCoreBase(TestWithServers):
             [
                 self.orterun,
                 self.client_mca,
-                "-n", str(self.num_clients),
+                "-n", str(num_clients),
                 "--hostfile", self.hostfile_clients,
                 "-x", "=".join(["D_LOG_FILE", get_log_file(self.client_log)]),
                 "--map-by node", "-x", "D_LOG_MASK=DEBUG",
                 "-x", "DD_MASK=mgmt,io,md,epc,rebuild",
                 self.daos_test,
                 "-n", dmg_config_file,
-                "".join(["-", test_option]),
-                str(test_args)
+                "".join(["-", subtest]),
+                str(args)
             ]
         )
 
@@ -145,7 +151,7 @@ class DaosCoreBase(TestWithServers):
         except process.CmdError as result:
             if result.result.exit_status != 0:
                 # fake a JUnit failure output
-                self.create_results_xml(test_name, result)
+                self.create_results_xml(self.subtest_name, result)
                 self.fail(
                     "{0} failed with return code={1}.\n".format(
                         cmd, result.result.exit_status))

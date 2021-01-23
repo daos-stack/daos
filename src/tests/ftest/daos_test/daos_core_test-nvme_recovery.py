@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -27,51 +27,70 @@ from daos_core_base import DaosCoreBase
 class DaosCoreTestNvme(DaosCoreBase):
     # pylint: disable=too-many-ancestors
     """Run just the daos_test NVMe Recovery tests.
-       Jira ID: DAOS-3846.
-
-       Test Description:
-           Purpose of this test is to run just the daos_test NVMe recovery
-           tests.
 
     :avocado: recursive
     """
 
-    def test_nvme_1(self):
-        """Run daos_test -N subtest 1
+    def test_daos_nvme_recovery_1(self):
+        """Jira ID: DAOS-3846.
 
-        :avocado: tags=all,hw,medium,nvme,ib2,full_regression
-        :avocado: tags=unittest,daos_test_nvme_recovery
+        Test Description:
+            Run daos_test -N subtest 1
 
+        Use cases:
+            daos_test NVMe recovery test
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=nvme
+        :avocado: tags=daos_nvme_recovery_1,unittest
         """
-        DaosCoreBase.run_subtest(self, "N", "DAOS Nvme Recovery 1", 60,
-                                 "-u subtests='1'")
+        self.run_subtest()
 
-    def test_nvme_2(self):
-        """Run daos_test -N subtest 2
+    def test_daos_nvme_recovery_2(self):
+        """Jira ID: DAOS-3846.
 
-        :avocado: tags=all,hw,medium,nvme,ib2,full_regression
-        :avocado: tags=unittest,daos_test_nvme_recovery
+        Test Description:
+            Run daos_test -N subtest 2
 
+        Use cases:
+            daos_test NVMe recovery test
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=nvme
+        :avocado: tags=daos_nvme_recovery_2,unittest
         """
-        DaosCoreBase.run_subtest(self, "N", "DAOS Nvme Recovery 2", 60,
-                                 "-u subtests='2'")
+        self.run_subtest()
 
-    def test_nvme_3(self):
-        """Run daos_test -N subtest 3
+    def test_daos_nvme_recovery_3(self):
+        """Jira ID: DAOS-3846.
 
-        :avocado: tags=all,hw,medium,nvme,ib2,full_regression
-        :avocado: tags=unittest,daos_test_nvme_recovery
+        Test Description:
+            Run daos_test -N subtest 3
 
+        Use cases:
+            daos_test NVMe recovery test
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=nvme
+        :avocado: tags=daos_nvme_recovery_3,unittest
         """
-        DaosCoreBase.run_subtest(self, "N", "DAOS Nvme Recovery 3", 60,
-                                 "-u subtests='3'")
+        self.run_subtest()
 
-    def test_nvme_4(self):
-        """Run daos_test -N subtest 4
+    def test_daos_nvme_recovery_4(self):
+        """Jira ID: DAOS-3846.
 
-        :avocado: tags=all,hw,medium,nvme,ib2,full_regression
-        :avocado: tags=unittest,daos_test_nvme_recovery
+        Test Description:
+            Run daos_test -N subtest 4
 
+        Use cases:
+            daos_test NVMe recovery test
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=nvme
+        :avocado: tags=daos_nvme_recovery_4,unittest
         """
-        DaosCoreBase.run_subtest(self, "N", "DAOS Nvme Recovery 4", 60,
-                                 "-u subtests='4'")
+        self.run_subtest()
