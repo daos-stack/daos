@@ -291,8 +291,8 @@ insert_wait(struct ioreq *req)
  */
 void
 insert(const char *dkey, int nr, const char **akey, daos_size_t *iod_size,
-       int *rx_nr, uint64_t *idx, void **val, daos_handle_t th,
-       struct ioreq *req, uint64_t flags)
+	int *rx_nr, uint64_t *idx, void **val, daos_handle_t th,
+	struct ioreq *req, uint64_t flags)
 {
 	insert_nowait(dkey, nr, akey, iod_size, rx_nr, idx, val, th, req,
 		      flags);
@@ -910,7 +910,8 @@ io_rewritten_array_with_mixed_size(void **state)
 	int			rx_nr; /* number of record extents */
 	int			record_set;
 	int			rc;
-	int			tmp;
+	int			test_run_time = 0;
+	int			total_run_time = 20;
 	daos_size_t		nvme_initial_size;
 	daos_size_t		nvme_current_size;
 	void const *const aggr_disabled[] = {"disabled"};
@@ -983,39 +984,37 @@ io_rewritten_array_with_mixed_size(void **state)
 			OW_IOD_SIZE, size, DAOS_TX_NONE, &req);
 		assert_memory_equal(ow_buf, fbuf, size);
 
+		/*Verify the pool size*/
+		rc = pool_storage_info(state, &pinfo);
+		assert_int_equal(rc, 0);
+		nvme_current_size = pinfo.pi_space.ps_space.s_free[1];
+
 		/**
-		 * Data written on SCM so NVMe free size should not change.
-		 * However VEA free (called from aggregation) usually put the
-		 * freed extent in an aging buffer for 10 seconds
-		 * so this while loop will check the size every 2 seconds
-		 * for a 30 seconds.
-		 */
-		tmp = 1;
-		while (tmp <= 15) {
-			/*Verify the pool size*/
-			rc = pool_storage_info(state, &pinfo);
-			assert_int_equal(rc, 0);
-			nvme_current_size = pinfo.pi_space.ps_space.s_free[1];
+		* Data written on SCM so NVMe free size should not change.
+		* However VEA free (called from aggregation) usually put the
+		* freed extent in an aging buffer for 10 seconds
+		* so sleep two seconds before next record update.
+		*/
 
-			if (nvme_current_size == nvme_initial_size)
-				break;
-
-			/**
-			* Test will fail if it has been tried for
-			* 15 times (30 seconds) and NVMe size is not
-			* the same as initial size.
-			*/
-			if ((nvme_current_size != nvme_initial_size) &&
-			    tmp == 20) {
-				fail_msg("NVMe_current_size =%"
-					PRIu64" != NVMe_initial_size %"
-					PRIu64" for record set=%d",
-					nvme_current_size, nvme_initial_size,
-					record_set);
-			}
+		if (nvme_current_size != nvme_initial_size) {
+			print_message("Size verification: Partial FAIL "
+				"record set=%d Sleep for 2 seconds",
+				record_set);
 			sleep(2);
-			tmp++;
-		}
+			test_run_time = test_run_time + 2;
+		} else
+			print_message("Size verification: PASS for "
+				"record set=%d\n", record_set);
+
+		/**
+		* Fail the test if the test run time is higher than
+		* total timeout (20 seconds) while writing all 10 records.
+		*/
+
+		if (test_run_time >= total_run_time)
+			fail_msg("NVMe Free size should not be changed "
+				"after writing all %d records to SCM",
+				record_set);
 
 		nvme_initial_size = pinfo.pi_space.ps_space.s_free[1];
 	}
@@ -1940,9 +1939,9 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 
 	D_FREE(buf);
 	D_FREE(data_buf);
-	for (i = 0; i < PUNCH_NUM_KEYS; i++) {
+	for (i = 0; i < PUNCH_NUM_KEYS; i++)
 		D_FREE(dkeys[i]);
-	}
+
 	ioreq_fini(&req);
 	MPI_Barrier(MPI_COMM_WORLD);
 }
