@@ -605,7 +605,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		return ENOMEM;
 
 	spart = dirname(part);
-	dfd = open(spart, O_PATH, O_DIRECTORY);
+	dfd = open(spart, O_PATH | O_DIRECTORY);
 	if (dfd == -1) {
 		int err = errno;
 
