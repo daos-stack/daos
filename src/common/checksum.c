@@ -78,6 +78,8 @@ daos_csummer_init(struct daos_csummer **obj, struct hash_ft *ft,
 
 	if (rc == 0)
 		*obj = result;
+	else
+		D_FREE_PTR(result);
 
 	return rc;
 }
