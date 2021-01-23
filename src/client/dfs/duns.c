@@ -607,22 +607,19 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 	spart = dirname(part);
 	dfd = open(spart, O_PATH | O_DIRECTORY);
 	if (dfd == -1) {
-		int err = errno;
-
+		rc = errno;
 		D_ERROR("Failed to open parent directory %s: %s\n",
-			spart, strerror(err));
+			spart, strerror(rc));
 		D_FREE(part);
-		return err;
+		return rc;
 	}
 
 	rc = fstatfs(dfd, &fs);
 	if (rc == -1) {
-		int err = errno;
-
+		rc = errno;
 		D_ERROR("Failed to statfs dir %s: %s\n",
-			spart, strerror(errno));
-		D_FREE(part);
-		return err;
+			spart, strerror(rc));
+		goto err_close;
 	}
 
 	D_FREE(part);
@@ -711,21 +708,20 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 
 		rc = lsetxattr(path, DUNS_XATTR_NAME, str, len + 1, 0);
 		if (rc) {
-			int err = errno;
-
-			if (err == ENOTSUP) {
+			rc = errno;
+			if (rc == ENOTSUP) {
 				D_INFO("Path is not in a filesystem that "
 					"supports the DAOS unified "
 					"namespace\n");
 			} else {
 				D_ERROR("Failed to set DAOS xattr: %s\n",
-					strerror(err));
+					strerror(rc));
 			}
-			D_GOTO(err_link, rc = err);
+			goto err_link;
 		}
 
 		if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
-			dfs_attr_t	dfs_attr = { 0 };
+			dfs_attr_t dfs_attr = {};
 
 			/** TODO: set Lustre FID here. */
 			dfs_attr.da_id = 0;
@@ -772,11 +768,10 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			rc = lsetxattr(path, DUNS_XATTR_NAME, str,
 				       len + 1, XATTR_CREATE);
 			if (rc) {
-				int err = errno;
-
-				D_ERROR("Failed to set DAOS xattr (rc = %d).\n",
-					err);
-				D_GOTO(err_link, rc = err);
+				rc = errno;
+				D_ERROR("Failed to set DAOS xattr: %s\n",
+					strerror(rc));
+				goto err_link;
 			}
 		}
 
