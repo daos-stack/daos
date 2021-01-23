@@ -448,6 +448,7 @@ class TestWithServers(TestWithoutServers):
         self.agent_manager_class = "Systemctl"
         self.setup_start_servers = True
         self.setup_start_agents = True
+
         self.hostlist_servers = None
         self.hostlist_clients = None
         self.hostfile_clients = None
