@@ -91,7 +91,7 @@ func (srv *IOServerInstance) CallDrpc(ctx context.Context, method drpc.Method, b
 	if sb := srv.getSuperblock(); sb != nil {
 		rankMsg = fmt.Sprintf(" (rank %s)", sb.Rank)
 	}
-	srv.log.Debugf("dRPC to index %d%s: %s", srv.Index(), rankMsg, method)
+	srv.log.Debugf("%dB dRPC to index %d%s: %s", proto.Size(body), srv.Index(), rankMsg, method)
 
 	return makeDrpcCall(ctx, srv.log, dc, method, body)
 }

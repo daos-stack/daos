@@ -240,7 +240,7 @@ func makeDrpcCall(ctx context.Context, log logging.Logger, client drpc.DomainSoc
 		defer client.Close()
 
 		if drpcResp, err = client.SendMsg(drpcCall); err != nil {
-			return nil, errors.Wrap(err, "send message")
+			return nil, errors.Wrapf(err, "failed to send %dB message", proto.Size(msg))
 		}
 
 		if err = checkDrpcResponse(drpcResp); err != nil {
