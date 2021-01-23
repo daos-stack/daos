@@ -159,8 +159,8 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 	struct test_swim_status_in	*e_req;
 	struct test_swim_status_out	*e_reply;
 	int				 rc = 0;
-	regex_t 			 regex_alive;
-	regex_t 			 regex_dead;
+	regex_t				 regex_alive;
+	regex_t				 regex_dead;
 	static const char 		*dead_regex = ".?0*1";
 	static const char 		*alive_regex = ".?0*";
 	char				*swim_seq = malloc(MAX_SWIM_STATUSES);

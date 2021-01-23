@@ -66,7 +66,7 @@ swim_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 	snprintf(type_to_a, 2, "%d", type);
 
 	if (swim_status_by_rank[rank] == NULL)
-	 	swim_status_by_rank[rank] = (char*)malloc(max * sizeof(char));
+		swim_status_by_rank[rank] = (char *)malloc(max * sizeof(char));
 
 	strncat(swim_status_by_rank[rank], type_to_a, 1);
 }
