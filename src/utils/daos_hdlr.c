@@ -113,12 +113,18 @@ struct hdf5_args {
 	hid_t rx_dspace;
 	hid_t rx_memspace;
 	hid_t attr_dspace;
+	hid_t attr_dtype;
 	hid_t rx_dset;
 	hid_t single_dspace;
 	hid_t single_dset;
 	hid_t rx_dtype;
+	hid_t usr_attr_num;
+	hid_t usr_attr;
 	hid_t selection_attr;
+	hid_t version_attr;
 	hid_t single_dtype;
+	hid_t version_attr_dspace;
+	hid_t version_attr_type;
 	/* dims for dsets */
 	hsize_t oid_dims[1];
 	hsize_t dkey_dims[1];     
@@ -129,6 +135,7 @@ struct hdf5_args {
 	hsize_t rx_chunk_dims[1];
 	hsize_t rx_max_dims[1];
 	hsize_t single_dims[1];
+	hsize_t version_attr_dims[1];
 	/* data for keys */
 	oid_t *oid_data;
 	dkey_t *dkey_data;
@@ -3639,6 +3646,234 @@ out:
 	return rc;
 }
 
+static int
+cont_serialize_version(struct hdf5_args *hdf5, float version)
+{
+	int	rc = 0;
+	hid_t	status = 0;
+	char	*version_name = "Version";
+
+	hdf5->version_attr_dims[0] = 1;
+	hdf5->version_attr_type = H5Tcopy(H5T_NATIVE_FLOAT);
+	status = H5Tset_size(hdf5->version_attr_type, 4);
+	if (status < 0) {
+		fprintf(stderr, "failed to create version dtype\n");
+		D_GOTO(out, rc = 1);
+	}
+	if (hdf5->version_attr_type < 0) {
+		fprintf(stderr, "failed to create version attr type\n");
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->version_attr_dspace = H5Screate_simple(1, hdf5->version_attr_dims,
+				                     NULL);
+	if (hdf5->version_attr_dspace < 0) {
+		fprintf(stderr, "failed to create version attribute "
+			"dataspace\n");
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->version_attr = H5Acreate2(hdf5->file,
+		            	       version_name,
+				       hdf5->version_attr_type,
+				       hdf5->version_attr_dspace,
+				       H5P_DEFAULT,
+				       H5P_DEFAULT);
+	if (hdf5->version_attr < 0) {
+		fprintf(stderr, "failed to create version "
+			"attribute\n");
+		D_GOTO(out, rc = 1);
+	}	
+	status = H5Awrite(hdf5->version_attr, hdf5->version_attr_type,
+			  &version);
+	if (status < 0) {
+		fprintf(stderr, "failed to write attribute\n");
+		D_GOTO(out, rc = 1);
+	}
+	status = H5Aclose(hdf5->version_attr);
+	if (status < 0) {
+		fprintf(stderr, "failed to close attribute\n");
+		D_GOTO(out, rc = 1);
+	}
+out:
+	return rc;
+}
+
+static int
+cont_serialize_num_usr_attrs(struct hdf5_args *hdf5,
+			     daos_handle_t cont,
+			     uint64_t *total_size)
+{
+	int		rc = 0;
+	hid_t		status = 0;
+	char		*total_usr_attrs = "Total User Attributes";
+
+	/* record total number of user defined attributes, if it is 0,
+	 * then we don't write any more attrs */
+	rc = daos_cont_list_attr(cont, NULL, total_size, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "failed to retrieve number of attributes for "
+			"container\n");
+		D_GOTO(out, rc);
+	}
+
+	hdf5->attr_dims[0] = 1;
+	hdf5->attr_dtype = H5Tcopy(H5T_NATIVE_INT);
+	status = H5Tset_size(hdf5->attr_dtype, 8);
+	if (status < 0) {
+		fprintf(stderr, "failed to create version dtype\n");
+		D_GOTO(out, rc = 1);
+	}
+	if (hdf5->attr_dtype < 0) {
+		fprintf(stderr, "failed to create usr attr type\n");
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->attr_dspace = H5Screate_simple(1, hdf5->attr_dims,
+				             NULL);
+	if (hdf5->attr_dspace < 0) {
+		fprintf(stderr, "failed to create version attribute "
+			"dataspace\n");
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->usr_attr_num = H5Acreate2(hdf5->file,
+		            	       total_usr_attrs,
+				       hdf5->attr_dtype,
+				       hdf5->attr_dspace,
+				       H5P_DEFAULT,
+				       H5P_DEFAULT);
+	if (hdf5->usr_attr_num < 0) {
+		fprintf(stderr, "failed to create version "
+			"attribute\n");
+		D_GOTO(out, rc = 1);
+	}	
+	status = H5Awrite(hdf5->usr_attr_num, hdf5->attr_dtype,
+			  total_size);
+	if (status < 0) {
+		fprintf(stderr, "failed to write attribute\n");
+		D_GOTO(out, rc = 1);
+	}
+	status = H5Aclose(hdf5->usr_attr_num);
+	if (status < 0) {
+		fprintf(stderr, "failed to close attribute\n");
+		D_GOTO(out, rc = 1);
+	}
+out:
+	return rc;
+}
+
+static int
+cont_serialize_usr_attrs(struct hdf5_args *hdf5, daos_handle_t cont)
+{
+	int		rc = 0;
+	int		i = 0;
+	int		j = 0;
+	//hid_t		status = 0;
+	uint64_t	total_size = 0;
+	uint64_t	size = 0;
+	uint64_t	expected_size = 0;
+	uint64_t	cur = 0;
+	uint64_t	len = 0;
+	char		*buf = NULL;
+	char		**names = NULL;
+	int		num_attrs = 0;
+
+	rc = cont_serialize_num_usr_attrs(hdf5, cont, &total_size);
+	if (rc != 0) {
+		fprintf(stderr, "failed to serialize number of user attrs\n");
+		//D_GOTO(out, rc);
+	}
+
+	/* skip serializing attrs if total_size is zero */
+	if (total_size == 0) {
+		D_PRINT("No attributes\n");
+		//D_GOTO(out, rc);
+	}
+
+	D_ALLOC(buf, total_size);
+	if (buf == NULL) {
+		//D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	expected_size = total_size;
+	rc = daos_cont_list_attr(cont, buf, &total_size, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "failed to list attributes for container\n");
+		//D_GOTO(out, rc);
+	}
+
+	if (expected_size < total_size)
+		fprintf(stderr, "size required to gather all attributes has "
+			"raised, list has been truncated\n");
+	size = min(expected_size, total_size);
+	while (cur < size) {
+		len = strnlen(buf + cur, size - cur);
+		if (len == size - cur) {
+			fprintf(stderr,
+				"end of buf reached but no end of string "
+				"encountered, ignoring\n");
+			break;
+		}
+		num_attrs++;
+		cur += len + 1;
+	}
+
+	/* allocate array of null-terminated attribute names */
+	names = malloc(num_attrs * sizeof(char *));
+	if (names == NULL) {
+		//D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	cur = 0;
+	/* create array of attribute names to pass to daos_cont_get_attr */
+	for (i = 0; i < num_attrs; i++) {
+		len = strnlen(buf + cur, size - cur);
+		if (len == size - cur) {
+			fprintf(stderr,
+				"end of buf reached but no end of "
+				"string encountered, ignoring\n");
+			break;
+		}
+		names[i] = strdup(buf + cur);
+		cur += len + 1;
+	}
+
+	size_t	sizes[num_attrs];
+	void	*val_buf[num_attrs];
+
+	rc = daos_cont_get_attr(cont, num_attrs,
+				(const char* const*)names,
+				NULL, sizes, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "failed to get attr size\n");
+		D_GOTO(out, rc);
+	}
+	for (j = 0; j < num_attrs; j++) {
+		D_ALLOC(val_buf[j], 256);
+	}
+	rc = daos_cont_get_attr(cont, num_attrs,
+				(const char* const*)names,
+				(void * const*)&val_buf, sizes,
+				NULL);
+	if (rc != 0) {
+		fprintf(stderr, "failed to get attr value\n");
+		D_GOTO(out, rc);
+	}
+	for (i = 0; i < num_attrs; i++) {
+		printf("attr size: %d\n", (int)sizes[i]);
+		char str[256];
+		snprintf(str, sizes[i] + 1, "%s", (char *)val_buf[i]);
+		printf("attr val: %s\n", str);
+	}
+	/* TODO: write user attrs to hdf5 file */
+out:
+	if (buf != NULL)
+		D_FREE(buf);
+	for (j = 0; j < num_attrs; j++) {
+		D_FREE(val_buf[j]);
+	}
+	if (names != NULL) 
+		D_FREE(names);
+	return rc;
+}
+
 int
 cont_serialize_hdlr(struct cmd_args_s *ap)
 {
@@ -3663,6 +3898,7 @@ cont_serialize_hdlr(struct cmd_args_s *ap)
  	daos_epoch_t	epoch;
 	uint32_t	total = 0;
 	daos_handle_t	oh;
+	float		version = 0.0;
 
 	/* init HDF5 args */
 	init_hdf5_args(&hdf5);
@@ -3765,6 +4001,22 @@ cont_serialize_hdlr(struct cmd_args_s *ap)
 
 	        printf("total dkeys: %lu\n", total_dkeys);
 	        printf("total akeys: %lu\n", total_akeys);
+
+		/* write container version as attribute */
+		rc = cont_serialize_version(&hdf5, version);
+		if (rc != 0) {
+			fprintf(stderr, "failed to serialize version: %d\n",
+				rc);
+			D_GOTO(out, rc);
+		}
+
+		rc = cont_serialize_usr_attrs(&hdf5, ap->cont);
+		if (rc != 0) {
+			fprintf(stderr, "failed to serialize usser attributes: "
+				"%d\n", rc);
+			D_GOTO(out, rc);
+		}
+
 		hdf5.dkey_dims[0] = total_dkeys;     
 		hdf5.dkey_dspace = H5Screate_simple(1, hdf5.dkey_dims, NULL);
 		if (hdf5.dkey_dspace < 0) {
