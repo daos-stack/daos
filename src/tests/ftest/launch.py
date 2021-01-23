@@ -1650,12 +1650,12 @@ def get_daos_server_service_status(host_list, verbose=True):
 
 
 def indent_text(indent, text):
-    """Append the specified number of spaces to the specified text.
+    """Prepend the specified number of spaces to the specified text.
 
     Args:
         indent (int): the number of spaces to use as an indentation
         text (object): text to indent. lists will be converted into a
-            newline-separated str with indents added to each line
+            newline-separated str with spaces prepended to each line
 
     Returns:
         str: indented text

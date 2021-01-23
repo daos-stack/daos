@@ -116,9 +116,10 @@ class DaosCoreBase(TestWithServers):
         stopped_ranks = self.params.get("stopped_ranks", self.TEST_PATH, [])
         dmg = self.get_dmg_command()
         dmg_config_file = dmg.yaml.filename
-        if self.hostfile_clients:
+        if self.hostlist_clients:
             dmg.copy_certificates(
-                get_log_file("daosCA/certs"), self.hostfile_clients)
+                get_log_file("daosCA/certs"), self.hostlist_clients)
+            dmg.copy_configuration(self.hostlist_clients)
         self.client_mca += " --mca btl_tcp_if_include eth0"
 
         cmd = " ".join(

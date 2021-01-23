@@ -742,7 +742,7 @@ class YamlCommand(SubProcessCommand):
         """
         if isinstance(self.yaml, YamlParameters):
             self.yaml.create_yaml(self.temporary_file)
-            self.copy_configuration(self.temporary_file is not None)
+            self.copy_configuration(self.temporary_file_hosts)
 
     def set_config_value(self, name, value):
         """Set the yaml configuration parameter value.
@@ -837,34 +837,32 @@ class YamlCommand(SubProcessCommand):
             for line in get_file_listing(hosts, names).stdout.splitlines():
                 self.log.debug("  %s", line)
 
-    def copy_configuration(self, sudo=False):
+    def copy_configuration(self, hosts):
         """Copy the yaml configuration file to the hosts.
 
-        If defined self.temporary_file is copied to each self.hosts using the
-        path/file specified by the YamlParameters.filename.
+        If defined self.temporary_file is copied to hosts using the path/file
+        specified by the YamlParameters.filename.
 
         Args:
-            sudo (bool, optional): whether to run the command via sudo. Defaults
-                to False.
+            hosts (list): hosts to which to copy the configuration file.
 
         Raises:
             CommandFailure: if there is an error copying the configuration file
 
         """
         if isinstance(self.yaml, YamlParameters):
-            if self.temporary_file and self.temporary_file_hosts:
+            if self.temporary_file and hosts:
                 self.log.info(
                     "Copying %s yaml configuration file to %s on %s",
-                    self.temporary_file, self.yaml.filename,
-                    self.temporary_file_hosts)
+                    self.temporary_file, self.yaml.filename, hosts)
                 try:
                     distribute_files(
-                        self.temporary_file_hosts, self.temporary_file,
-                        self.yaml.filename, verbose=False, sudo=sudo)
+                        hosts, self.temporary_file, self.yaml.filename,
+                        verbose=False, sudo=True)
                 except DaosTestError as error:
                     raise CommandFailure(
                         "ERROR: Copying yaml configuration file to {}: "
-                        "{}".format(self.temporary_file_hosts, error))
+                        "{}".format(hosts, error))
 
     def verify_socket_directory(self, user, hosts):
         """Verify the domain socket directory is present and owned by this user.
