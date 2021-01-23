@@ -291,7 +291,7 @@ insert_wait(struct ioreq *req)
  */
 void
 insert(const char *dkey, int nr, const char **akey, daos_size_t *iod_size,
-	int *rx_nr, uint64_t *idx, void **val, daos_handle_t th,
+       int *rx_nr, uint64_t *idx, void **val, daos_handle_t th,
 	struct ioreq *req, uint64_t flags)
 {
 	insert_nowait(dkey, nr, akey, iod_size, rx_nr, idx, val, th, req,
