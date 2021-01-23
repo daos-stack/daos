@@ -1746,8 +1746,7 @@ d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
 			rc = -DER_NO_SHMEM;
 			goto failure;
 		}
-		temp->dtn_metric->dtm_stats->dtm_min.min_float =
-								LDBL_MAX_10_EXP;
+		temp->dtn_metric->dtm_stats->dtm_min.min_float = DBL_MAX;
 		temp->dtn_metric->dtm_stats->dtm_max.max_float = 0.0;
 		temp->dtn_metric->dtm_stats->std_dev = 0.0;
 		temp->dtn_metric->dtm_stats->mean = 0.0;
