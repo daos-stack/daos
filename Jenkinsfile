@@ -205,17 +205,17 @@ String functional_packages() {
 String functional_packages(String distro) {
     String daos_pkgs = get_daos_packages(distro)
     String pkgs = " openmpi3 hwloc ndctl fio " +
-                  "patchutils ior-hpc-daos-0 " +
-                  "romio-tests-cart-4-daos-0 " +
-                  "testmpio-cart-4-daos-0 " +
-                  "mpi4py-tests-cart-4-daos-0 " +
-                  "hdf5-mpich2-tests-daos-0 " +
-                  "hdf5-openmpi3-tests-daos-0 " +
-                  "hdf5-vol-daos-mpich2-tests-daos-0 " +
-                  "hdf5-vol-daos-openmpi3-tests-daos-0 " +
-                  "MACSio-mpich2-daos-0 " +
-                  "MACSio-openmpi3-daos-0 " +
-                  "mpifileutils-mpich-daos-0 "
+                  "patchutils ior-hpc-daos-1 " +
+                  "romio-tests-daos-1 " +
+                  "testmpio " +
+                  "mpi4py-tests " +
+                  "hdf5-mpich-tests " +
+                  "hdf5-openmpi3-tests " +
+                  "hdf5-vol-daos-mpich2-tests-daos-1 " +
+                  "hdf5-vol-daos-openmpi3-tests-daos-1 " +
+                  "MACSio-mpich " +
+                  "MACSio-openmpi3 " +
+                  "mpifileutils-mpich-daos-1 "
     if (distro == "leap15") {
         if (quickbuild()) {
             pkgs += " spdk-tools"
@@ -257,7 +257,8 @@ if (!env.CHANGE_ID &&
 // in faster time-to-result for PRs.
 
 String get_priority() {
-    if (env.BRANCH_NAME == 'master') {
+    if (env.BRANCH_NAME == 'master' ||
+        env.BRANCH_NAME == 'weekly-testing') {
         string p = '2'
     } else {
         string p = ''
