@@ -46,6 +46,11 @@ class CartRpcOneNodeTest(TestWithoutServers):
         self.utils = CartUtils()
         self.env = self.utils.get_env(self)
 
+    def tearDown(self):
+        """ Tear down """
+        super(CartRpcOneNodeTest, self).tearDown()
+        self.utils.cleanup_processes()
+
     def test_cart_rpc(self):
         """
         Test CaRT RPC

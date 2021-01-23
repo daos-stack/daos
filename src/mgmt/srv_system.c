@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -354,13 +354,28 @@ ds_mgmt_svc_start(void)
 int
 ds_mgmt_svc_stop(void)
 {
+	struct ds_rsvc *rsvc;
 	int rc;
 
-	rc = ds_rsvc_stop_all(DS_RSVC_CLASS_MGMT);
+	/*
+	 * NB: As this cut-down mgmt svc is only being used
+	 * to broadcast the map and doesn't have a raft db
+	 * backing it, we just need to stop the map distribution
+	 * thread on our way out, otherwise it will block shutdown.
+	 */
+	rc = ds_rsvc_lookup(DS_RSVC_CLASS_MGMT, &mgmt_svc_id, &rsvc);
 	if (rc != 0)
-		D_ERROR("failed to stop management service: "DF_RC"\n",
-			DP_RC(rc));
-	return rc;
+		return rc;
+
+	ABT_mutex_lock(rsvc->s_mutex);
+	rsvc->s_state = DS_RSVC_DOWN;
+	rsvc->s_map_distd_stop = true;
+	ABT_mutex_unlock(rsvc->s_mutex);
+	ABT_cond_broadcast(rsvc->s_map_dist_cv);
+
+	ds_rsvc_put(rsvc);
+
+	return 0;
 }
 
 int
