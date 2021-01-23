@@ -40,6 +40,9 @@ static void
 swim_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		  enum crt_event_type type, void *arg)
 {
+	char type_to_a[2];
+	int max = MAX_SWIM_STATUSES;
+
 	/* Example output for SWIM CRT_EVT_DEAD on rank #2:
 	 *	 rank = 2, crt_event_source = 1, crt_event_type = 1
 	 *
@@ -59,10 +62,13 @@ swim_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		"crt_event_type = %d\n",
 		 rank, src, type);
 
-	if (type == CRT_EVT_ALIVE)
-		swim_status_by_rank[rank].num_alive++;
-	else if (type == CRT_EVT_DEAD)
-		swim_status_by_rank[rank].num_dead++;
+	/* convert integer to string */
+	snprintf(type_to_a, 2, "%d", type);
+
+	if (swim_status_by_rank[rank] == NULL)
+	 	swim_status_by_rank[rank] = (char*)malloc(max * sizeof(char));
+
+	strncat(swim_status_by_rank[rank], type_to_a, 1);
 }
 
 void

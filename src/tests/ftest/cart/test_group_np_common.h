@@ -32,6 +32,7 @@
 #define TEST_GROUP_VER					 0
 
 #define MAX_NUM_RANKS		1024
+#define MAX_SWIM_STATUSES	1024
 #define CRT_CTL_MAX_ARG_STR_LEN (1 << 16)
 
 #include <regex.h>
@@ -150,7 +151,7 @@ struct rank_status {
 };
 
 /* Keep a table of whether each rank is alive (0) or dead (1) */
-static struct rank_status swim_status_by_rank[MAX_NUM_RANKS] = {0,0};
+static char *swim_status_by_rank[MAX_NUM_RANKS];
 
 static void
 test_swim_status_handler(crt_rpc_t *rpc_req)
@@ -158,9 +159,31 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 	struct test_swim_status_in	*e_req;
 	struct test_swim_status_out	*e_reply;
 	int				 rc = 0;
+	int				 i = 0;
+	regex_t 			 regex_alive;
+	regex_t 			 regex_dead;
+	static const char 		*dead_regex = ".?0*1";
+	static const char 		*alive_regex = ".?0*";
+	char				*swim_seq = malloc(MAX_SWIM_STATUSES);
 
 	/* CaRT internally already allocated the input/output buffer */
 	e_req = crt_req_get(rpc_req);
+
+	if (swim_status_by_rank[e_req->rank] != NULL)
+		strcpy(swim_seq, swim_status_by_rank[e_req->rank]);
+	else
+		swim_seq = "";
+
+	/* compile and run regex's */
+	regcomp(&regex_dead, dead_regex, REG_EXTENDED);
+	int rc_dead = regexec(&regex_dead,
+			      swim_seq,
+			      0, NULL, 0);
+	regcomp(&regex_alive, alive_regex, REG_EXTENDED);
+	int rc_alive = regexec(&regex_alive,
+			       swim_seq,
+			       0, NULL, 0);
+
 	D_ASSERTF(e_req != NULL, "crt_req_get() failed. e_req: %p\n", e_req);
 
 	DBG_PRINT("tier1 test_server recv'd swim_status, opc: %#x.\n",
@@ -168,20 +191,21 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 	DBG_PRINT("tier1 swim_status input - rank: %d, exp_status: %d.\n",
 		  e_req->rank, e_req->exp_status);
 
-	if (e_req->exp_status == CRT_EVT_ALIVE) {
-		D_ASSERTF(swim_status_by_rank[e_req->rank].num_alive >= 0,
-			  "Unexpected SWIM status.\n");
-		D_ASSERTF(swim_status_by_rank[e_req->rank].num_dead < 1,
-			  "Unexpected SWIM status.\n");
-	}
-	else if (e_req->exp_status == CRT_EVT_DEAD) {
-		D_ASSERTF(swim_status_by_rank[e_req->rank].num_dead > 0,
-			  "Unexpected SWIM status.\n");
-		D_ASSERTF(swim_status_by_rank[e_req->rank].num_alive < 1,
-			  "Unexpected SWIM status.\n");
-	}
-	DBG_PRINT("Rank [%d] is in SWIM state [%d], as expected.\n",
-		  e_req->rank, e_req->exp_status);
+	if (e_req->exp_status == CRT_EVT_ALIVE)
+		D_ASSERTF(rc_alive == 0,
+			 "Swim status sequence (%s) does not match '%s'.\n",
+			 swim_seq,
+			 alive_regex);
+	else if (e_req->exp_status == CRT_EVT_DEAD)
+		D_ASSERTF(rc_dead == 0, 
+			"Swim status sequence (%s) does not match '%s'.\n",
+			 swim_seq,
+			 dead_regex);
+
+	DBG_PRINT("Rank [%d] SWIM state sequence (%s) for "
+		  "status [%d] is as expected.\n",
+		  e_req->rank, swim_seq,
+ 		  e_req->exp_status);
 
 	e_reply = crt_reply_get(rpc_req);
 
