@@ -1177,7 +1177,7 @@ main(void)
 	};
 
 	return cmocka_run_group_tests_name("common_acl_util",
-                                           tests, NULL, NULL);
+					   tests, NULL, NULL);
 }
 
 #undef TEST_EXPECTED_BUF_SIZE

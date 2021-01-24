@@ -906,5 +906,5 @@ main(void)
 	};
 
 	return cmocka_run_group_tests_name("common_acl_principal",
-                                           tests, NULL, NULL);
+					   tests, NULL, NULL);
 }

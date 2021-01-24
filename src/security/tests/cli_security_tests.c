@@ -402,7 +402,7 @@ main(void)
 	};
 
 	return cmocka_run_group_tests_name("security_cli_security",
-                                           tests, NULL, NULL);
+					   tests, NULL, NULL);
 }
 
 #undef SECURITY_UTEST

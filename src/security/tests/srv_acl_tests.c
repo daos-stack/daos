@@ -2129,7 +2129,7 @@ main(void)
 	};
 
 	return cmocka_run_group_tests_name("security_srv_acl",
-                                           tests, NULL, NULL);
+					   tests, NULL, NULL);
 }
 
 #undef ACL_UTEST

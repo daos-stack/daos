@@ -509,7 +509,7 @@ main(void)
 	};
 
 	return cmocka_run_group_tests_name("iosrv_drpc_client",
-                                           tests, NULL, NULL);
+					   tests, NULL, NULL);
 }
 
 #undef UTEST

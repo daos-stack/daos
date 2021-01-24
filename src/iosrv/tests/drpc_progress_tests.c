@@ -857,7 +857,7 @@ main(void)
 	};
 
 	return cmocka_run_group_tests_name("iosrv_drpc_progress",
-                                           tests, NULL, NULL);
+					   tests, NULL, NULL);
 }
 
 #undef DRPC_UTEST
