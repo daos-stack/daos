@@ -588,7 +588,7 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 	case (D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME):
 		rc = d_tm_get_duration(&tms, &stats, shmem_root, node, NULL);
 		if (rc != D_TM_SUCCESS) {
-			printf("Error on duration read: %d\n", rc);
+			fprintf(stream, "Error on duration read: %d\n", rc);
 			break;
 		}
 		d_tm_print_duration(&tms, &stats, name, node->dtn_type,
