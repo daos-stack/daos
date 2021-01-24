@@ -105,7 +105,7 @@ enum vos_gc_type {
 #define POOL_DF_MAGIC				0x5ca1ab1e
 
 /** Lowest supported durable format version */
-#define POOL_DF_VER_1				12
+#define POOL_DF_VER_1				13
 /** Current durable format version */
 #define POOL_DF_VERSION				POOL_DF_VER_1
 
