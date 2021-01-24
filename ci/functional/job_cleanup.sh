@@ -27,5 +27,5 @@ arts="$arts$(ls -d \
   arts="$arts"$'\n'
 if [ -n "$arts" ]; then
   # shellcheck disable=SC2046,SC2086
-  mv $(echo $arts | tr '\n' ' ') "Functional/"
+  mv $(echo $arts | tr '\n' ' ') "${STAGE_NAME}/"
 fi
