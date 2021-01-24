@@ -42,6 +42,7 @@ import (
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -264,6 +265,22 @@ func NewEventForwarder(rpcClient UnaryInvoker, accessPts []string) *EventForward
 		client:    rpcClient,
 		accessPts: accessPts,
 	}
+}
+
+// EventLogger implements the events.Handler interface and logs RAS event to
+// INFO.
+type EventLogger struct {
+	log logging.Logger
+}
+
+// OnEvent implements the events.Handler interface.
+func (el *EventLogger) OnEvent(_ context.Context, evt *events.RASEvent) {
+	el.log.Infof("RAS event received: %+v", evt)
+}
+
+// NewEventLogger returns an initialized EventLogger.
+func NewEventLogger(log logging.Logger) *EventLogger {
+	return &EventLogger{log: log}
 }
 
 // SystemQueryReq contains the inputs for the system query request.
