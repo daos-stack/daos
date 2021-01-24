@@ -42,11 +42,12 @@
  *   The identifier just be prefixed by component_
  *   Carried over with the RAS event.
  */
-#define RAS_EVENT_LIST						\
-	X(RAS_RANK_UP,		"engine_status_up")		\
-	X(RAS_RANK_DOWN,	"engine_status_down")		\
-	X(RAS_RANK_NO_RESPONSE,	"engine_status_no_response")	\
-	X(RAS_POOL_REPS_UPDATE,	"pool_replicas_updated")
+#define RAS_EVENT_LIST							\
+	X(RAS_RANK_UP,		"engine_status_up")			\
+	X(RAS_RANK_DOWN,	"engine_status_down")			\
+	X(RAS_RANK_NO_RESPONSE,	"engine_status_no_response")		\
+	X(RAS_POOL_REPS_UPDATE,	"pool_replicas_updated")		\
+	X(RAS_POOL_DF_INCOMPAT,	"pool_durable_format_incompatible")
 
 /** Define RAS event enum */
 typedef enum {
