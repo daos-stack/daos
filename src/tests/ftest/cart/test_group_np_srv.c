@@ -65,10 +65,12 @@ swim_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 	/* convert integer to string */
 	snprintf(type_to_a, 2, "%d", type);
 
-	if (swim_status_by_rank[rank] == NULL)
+	if (swim_status_by_rank[rank] == NULL) {
 		swim_status_by_rank[rank] = (char *)malloc(max * sizeof(char));
+		strcpy(swim_status_by_rank[rank], "\0");
+	}
 
-	strncat(swim_status_by_rank[rank], type_to_a, 1);
+	strcat(swim_status_by_rank[rank], type_to_a);
 }
 
 void
