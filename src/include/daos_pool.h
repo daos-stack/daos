@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -186,8 +186,6 @@ struct daos_pool_cont_info {
  *
  * \param[in]	uuid	UUID to identify a pool.
  * \param[in]	grp	Process set name of the DAOS servers managing the pool
- * \param[in]	svc	Optional, pool service replica ranks, as reported by
- *			daos_pool_create().
  * \param[in]	flags	Connect mode represented by the DAOS_PC_ bits.
  * \param[out]	poh	Returned open handle.
  * \param[in,out]
@@ -206,7 +204,7 @@ struct daos_pool_cont_info {
  */
 int
 daos_pool_connect(const uuid_t uuid, const char *grp,
-		  const d_rank_list_t *svc, unsigned int flags,
+		  unsigned int flags,
 		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev);
 
 /**
