@@ -47,7 +47,7 @@ class DaosCoreBase(TestWithServers):
         super(DaosCoreBase, self).__init__(*args, **kwargs)
         self.subtest_name = None
 
-        self.TEST_PATH = "/run/daos_tests/Tests/{}".format(self.get_test_name())
+        self.TEST_PATH = "/run/daos_tests/Tests/{}/*".format(self.get_test_name())
 
         test_timeout = self.params.get("test_timeout", self.TEST_PATH)
         if test_timeout:

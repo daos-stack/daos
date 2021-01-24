@@ -48,6 +48,7 @@ agent_config:
 dmg:
   transport_config:
     allow_insecure: True
+daos_tests:
   Tests:
     test_daos_dfs_unit:
       daos_test: u
