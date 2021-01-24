@@ -161,8 +161,8 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 	int				 rc = 0;
 	regex_t				 regex_alive;
 	regex_t				 regex_dead;
-	static const char 		*dead_regex = ".?0*1";
-	static const char 		*alive_regex = ".?0*";
+	static const char		*dead_regex = ".?0*1";
+	static const char		*alive_regex = ".?0*";
 	char				*swim_seq = malloc(MAX_SWIM_STATUSES);
 
 	/* CaRT internally already allocated the input/output buffer */
@@ -196,7 +196,7 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 			 swim_seq,
 			 alive_regex);
 	else if (e_req->exp_status == CRT_EVT_DEAD)
-		D_ASSERTF(rc_dead == 0, 
+		D_ASSERTF(rc_dead == 0,
 			"Swim status sequence (%s) does not match '%s'.\n",
 			 swim_seq,
 			 dead_regex);
@@ -204,7 +204,7 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 	DBG_PRINT("Rank [%d] SWIM state sequence (%s) for "
 		  "status [%d] is as expected.\n",
 		  e_req->rank, swim_seq,
- 		  e_req->exp_status);
+		  e_req->exp_status);
 
 	e_reply = crt_reply_get(rpc_req);
 
