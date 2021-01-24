@@ -46,6 +46,11 @@ class CartCoRpcTwoNodeTest(TestWithoutServers):
         self.utils = CartUtils()
         self.env = self.utils.get_env(self)
 
+    def tearDown(self):
+        """ Tear down """
+        super(CartCoRpcTwoNodeTest, self).tearDown()
+        self.utils.cleanup_processes()
+
     def test_cart_corpc(self):
         """
         Test CaRT CoRPC
