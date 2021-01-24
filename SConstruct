@@ -370,7 +370,7 @@ def scons(): # pylint: disable=too-many-locals
     sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils/sl'))
     from prereq_tools import PreReqComponent
 
-    env = Environment(TOOLS=['extra', 'default'])
+    env = Environment(TOOLS=['extra', 'default', 'textfile'])
 
     if os.path.exists("daos_m.conf"):
         os.rename("daos_m.conf", "daos.conf")
