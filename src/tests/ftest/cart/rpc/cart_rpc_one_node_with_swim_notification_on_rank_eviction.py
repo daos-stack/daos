@@ -48,13 +48,9 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(TestWithoutServers):
         self.env = self.utils.get_env(self)
 
     def tearDown(self):
-        """ Test tear down """
-        print("Run TearDown\n")
-
-    def _launch_cmd_at_index(self, index, srv_rtn):
-        clicmd = self.utils.build_cmd(
-            self, self.env, "test_clients", index=index)
-        self.utils.launch_test(self, clicmd, srv_rtn)
+        """Tear down."""
+        print("tearDown() start")
+        super(TestWithoutServers, self).tearDown()
 
     def test_cart_rpc(self):
         """
@@ -77,28 +73,8 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(TestWithoutServers):
             self.fail("Server did not launch, return code %s" \
                        % procrtn)
 
-        # Wait a bit for swim to become 'active' between servers
-        time.sleep(10)
+        for index in range(6):
+            clicmd = self.utils.build_cmd(
+                self, self.env, "test_clients", index=index)
+            self.utils.launch_test(self, clicmd, srv_rtn)
 
-        # --init_only"
-        self._launch_cmd_at_index(0, srv_rtn)
-
-        # --rank 2   --shut_only --holdtime 5"
-        self._launch_cmd_at_index(1, srv_rtn)
-
-        # Wait a bit for swim status to propagate to all servers
-        #
-        # TODO: Why is this necessary?
-        time.sleep(5)
-
-        # --rank 0,1 --verify_swim_status 'rank2=dead'"
-        self._launch_cmd_at_index(2, srv_rtn)
-
-        # --rank 0,1 --verify_swim_status 'rank1=alive'"
-        self._launch_cmd_at_index(3, srv_rtn)
-
-        # --rank 0,1 --verify_swim_status 'rank0=alive'"
-        self._launch_cmd_at_index(4, srv_rtn)
-
-        # --rank 0,1 --shut_only"
-        self._launch_cmd_at_index(5, srv_rtn)

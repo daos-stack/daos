@@ -211,12 +211,8 @@ test_run(void)
 
 	D_DEBUG(DB_TEST, "exiting.\n");
 
-	if (test_g.t_hold) {
-		DBG_PRINT("Before sleep of %d seconds\n", test_g.t_hold_time);
+	if (test_g.t_hold)
 		sleep(test_g.t_hold_time);
-		DBG_PRINT("After sleep\n");
-	}
-
 
 	d_log_fini();
 }
