@@ -835,7 +835,7 @@ again:
 
 	if (rc != 0 && epoch < dth->dth_epoch) {
 		D_WARN(DF_UUID": Fail to add DTX "DF_DTI" to CoS cache: "
-		       DF_RC". Try to commit it sychronously.\n",
+		       DF_RC". Try to commit it synchronously.\n",
 		       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid),
 		       DP_RC(rc));
 		dth->dth_sync = 1;
