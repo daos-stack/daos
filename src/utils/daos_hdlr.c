@@ -2800,7 +2800,8 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	dst_str_len = strlen(ap->dst);
 	D_STRNDUP(dst_str, ap->dst, dst_str_len);
 	if (dst_str == NULL) {
-		fprintf(stderr, "Unable to allocate memory for destination path.");
+		fprintf(stderr,
+			"Unable to allocate memory for destination path.");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	rc = fs_copy_parse_path(&dst_file_dfs, dst_str, dst_str_len,
@@ -2827,7 +2828,8 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	src_str_len = strlen(dname);
 	D_ASPRINTF(dst_dir, "%s/%s", dst_str, src_str + src_str_len);
 	if (dst_dir == NULL) {
-		fprintf(stderr, "Unable to allocate memory for destination path.\n");
+		fprintf(stderr,
+			"Unable to allocate memory for destination path.\n");
 		D_GOTO(out_disconnect, rc = -DER_NOMEM);
 	}
 	/* set paths based on file type for source and destination */
