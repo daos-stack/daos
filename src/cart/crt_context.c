@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -806,12 +806,6 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 		crt_req_timeout_untrack(rpc_priv);
 
 		d_list_add_tail(&rpc_priv->crp_tmp_link, &timeout_list);
-		RPC_ERROR(rpc_priv,
-			  "ctx_id %d, (status: %#x) timed out, tgt rank %d, tag %d\n",
-			  crt_ctx->cc_idx,
-			  rpc_priv->crp_state,
-			  rpc_priv->crp_pub.cr_ep.ep_rank,
-			  rpc_priv->crp_pub.cr_ep.ep_tag);
 	};
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
@@ -819,6 +813,15 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	while ((rpc_priv = d_list_pop_entry(&timeout_list,
 					    struct crt_rpc_priv,
 					    crp_tmp_link))) {
+		RPC_ERROR(rpc_priv,
+			  "ctx_id %d, (status: %#x) timed out (%d seconds), "
+			  "target (%d:%d)\n",
+			  crt_ctx->cc_idx,
+			  rpc_priv->crp_state,
+			  rpc_priv->crp_timeout_sec,
+			  rpc_priv->crp_pub.cr_ep.ep_rank,
+			  rpc_priv->crp_pub.cr_ep.ep_tag);
+
 		/* check for and execute RPC timeout callbacks here */
 		crt_exec_timeout_cb(rpc_priv);
 		crt_req_timeout_hdlr(rpc_priv);
@@ -841,7 +844,6 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	d_rank_t		 ep_rank;
 	int			 rc = 0;
 	struct crt_grp_priv	*grp_priv;
-
 
 	D_ASSERT(crt_ctx != NULL);
 
@@ -996,10 +998,11 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 
 	/* remove from inflight queue */
 	d_list_del_init(&rpc_priv->crp_epi_link);
-	if (rpc_priv->crp_state == RPC_STATE_COMPLETED)
+	if (rpc_priv->crp_state == RPC_STATE_COMPLETED) {
 		epi->epi_reply_num++;
-	else /* RPC_CANCELED or RPC_INITED or RPC_TIMEOUT */
+	} else {/* RPC_CANCELED or RPC_INITED or RPC_TIMEOUT */
 		epi->epi_req_num--;
+	}
 	D_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
 
 	if (!crt_req_timedout(rpc_priv)) {

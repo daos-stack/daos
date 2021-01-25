@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1093,8 +1093,7 @@ ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 	uuid_copy(arg.cont_uuid, cont_uuid);
 	arg.min_eph = eph;
 
-	rc = dss_task_collective(cont_refresh_vos_agg_eph_one, &arg, 0,
-				 DSS_ULT_IO);
+	rc = dss_task_collective(cont_refresh_vos_agg_eph_one, &arg, 0);
 	return rc;
 }
 
@@ -1183,7 +1182,7 @@ cont_svc_ec_agg_leader_start(struct cont_svc *svc)
 
 	D_INIT_LIST_HEAD(&svc->cs_ec_agg_list);
 
-	rc = dss_ult_create(cont_agg_eph_leader_ult, svc, DSS_ULT_POOL_SRV,
+	rc = dss_ult_create(cont_agg_eph_leader_ult, svc, DSS_XS_SYS,
 			    0, 0, &ec_eph_leader_ult);
 	if (rc) {
 		D_ERROR(DF_UUID" Failed to create aggregation ULT. %d\n",
@@ -2235,13 +2234,20 @@ set_acl(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	int		rc;
 
 	prop = daos_prop_alloc(1);
+	if (prop == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_ACL;
 	prop->dpp_entries[0].dpe_val_ptr = daos_acl_dup(acl);
+	if (prop->dpp_entries[0].dpe_val_ptr == NULL)
+		D_GOTO(out_prop, rc = -DER_NOMEM);
 
 	rc = set_prop(tx, pool_hdl->sph_pool, cont, hdl->ch_sec_capas,
 		      hdl_uuid, prop);
-	daos_prop_free(prop);
 
+out_prop:
+	daos_prop_free(prop);
+out:
 	return rc;
 }
 

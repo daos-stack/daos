@@ -200,9 +200,8 @@ main(int argc, char **argv)
 		int j;
 
 		for (j = 0; j < handles_per_pool; j++) {
-			rc = daos_pool_connect(pool_uuids[i], NULL, NULL,
-					       DAOS_PC_RW, &pool_handles[i][j],
-					       NULL, NULL);
+			rc = daos_pool_connect(pool_uuids[i], NULL, DAOS_PC_RW,
+					       &pool_handles[i][j], NULL, NULL);
 			if (rc != 0) {
 				char		uuid_str[64];
 
@@ -220,6 +219,26 @@ main(int argc, char **argv)
 
 	/** Give a sleep grace period then exit based on -x switch */
 	sleep(sleep_seconds);
+
+	/* User our handles */
+	for (i = 0; i < num_pools; i++) {
+		int j;
+
+		for (j = 0; j < handles_per_pool; j++) {
+			uuid_t c_uuid;
+
+			uuid_generate(c_uuid);
+			printf("Creating container using handle %" PRIu64 "\n",
+			       pool_handles[i][j].cookie);
+			rc = daos_cont_create(pool_handles[i][j], c_uuid, NULL,
+					      NULL);
+			if (rc != 0) {
+				printf("Unable to create container using handle"
+				       " %" PRIu64 " rc: %d\n",
+				       pool_handles[i][j].cookie, rc);
+			}
+		}
+	}
 
 	if (abnormal_exit)
 		exit(-1);

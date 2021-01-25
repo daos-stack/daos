@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,12 +25,18 @@ package control
 
 import (
 	"context"
+	"math/rand"
 	"sync"
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -40,7 +46,13 @@ const (
 	// it almost certainly needs to be fixed.
 	defaultRequestTimeout = 5 * time.Minute
 
-	defaultMSRetry = 250 * time.Millisecond
+	baseMSBackoff      = 250 * time.Millisecond
+	maxMSBackoffFactor = 7 // 8s
+	maxMSCandidates    = 5
+)
+
+var (
+	msCandidateRandSource = rand.NewSource(time.Now().UnixNano())
 )
 
 type (
@@ -189,7 +201,7 @@ func setDeadlineIfUnset(parent context.Context, req UnaryRequest) (context.Conte
 }
 
 // InvokeUnaryRPCAsync performs an asynchronous invocation of the given RPC
-// across all hosts in the provided host list. The returned HostResponseChan
+// across all hosts in the request's host list. The returned HostResponseChan
 // provides access to a stream of HostResponse items as they are received, and
 // is closed when no more responses are expected.
 func (c *Client) InvokeUnaryRPCAsync(parent context.Context, req UnaryRequest) (HostResponseChan, error) {
@@ -241,7 +253,7 @@ func (c *Client) InvokeUnaryRPCAsync(parent context.Context, req UnaryRequest) (
 // invokeUnaryRPC is the actual implementation which is called by the
 // real Client as well as the MockInvoker. This allows us to ensure that
 // the retry logic here gets adequate test coverage.
-func invokeUnaryRPC(parent context.Context, log debugLogger, c UnaryInvoker, req UnaryRequest) (*UnaryResponse, error) {
+func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, req UnaryRequest, defaultHosts []string) (*UnaryResponse, error) {
 	gatherResponses := func(ctx context.Context, respChan chan *HostResponse, ur *UnaryResponse) error {
 		for {
 			select {
@@ -257,27 +269,86 @@ func invokeUnaryRPC(parent context.Context, log debugLogger, c UnaryInvoker, req
 	}
 
 	// Set a deadline for the request across all retries.
-	ctx, cancel := setDeadlineIfUnset(parent, req)
+	reqCtx, cancel := setDeadlineIfUnset(parentCtx, req)
 	defer cancel()
 
-	var tries uint = 0
-	for {
-		tries++
-		respChan, err := c.InvokeUnaryRPCAsync(ctx, req)
+	// For non-MS requests, just keep things simple. Fan-out, fan-in,
+	// no retries possible.
+	if !req.isMSRequest() {
+		respChan, err := c.InvokeUnaryRPCAsync(reqCtx, req)
 		if err != nil {
 			return nil, err
 		}
 
-		ur := &UnaryResponse{
-			fromMS: req.isMSRequest(),
+		ur := new(UnaryResponse)
+		if err := gatherResponses(reqCtx, respChan, ur); err != nil {
+			return nil, err
 		}
-		if err := gatherResponses(ctx, respChan, ur); err != nil {
+		return ur, nil
+	}
+
+	if len(req.getHostList()) == 0 {
+		// For a MS request with no specific hostlist, choose a random subset
+		// of the default hostlist, with the idea that at least one of them
+		// will be up and running enough to return ErrNotReplica in order to
+		// learn the actual list of MS replicas. We may also get lucky and
+		// send the request to a server that can handle the request directly.
+		rnd := rand.New(msCandidateRandSource)
+		msCandidates := hostlist.MustCreateSet("")
+		for i := 0; i < len(defaultHosts) && msCandidates.Count() < maxMSCandidates; i++ {
+			if _, err := msCandidates.Insert(defaultHosts[rnd.Intn(len(defaultHosts))]); err != nil {
+				return nil, errors.Wrap(err, "failed to build MS candidates set")
+			}
+		}
+		req.SetHostList(msCandidates.Slice())
+		if len(req.getHostList()) == 0 {
+			return nil, errors.New("unable to select MS candidates")
+		}
+	}
+
+	isHardFailure := func(err error, reqCtx context.Context) bool {
+		if err == nil {
+			return false
+		}
+
+		// If the error is something other than a context error,
+		// then it's considered a hard failure and not retryable.
+		code := status.Code(errors.Cause(err))
+		if code != codes.Canceled && code != codes.DeadlineExceeded {
+			return true
+		}
+
+		// If the context error is from the overall request context,
+		// then it's a hard failure. Otherwise, it's a soft failure
+		// and can be retried.
+		return errors.Cause(err) == reqCtx.Err()
+	}
+
+	// MS requests are a little more complicated. The general idea here is that
+	// we want to discover the current MS leader for requests that must be
+	// handled by the leader; otherwise we want to find at least one MS replica
+	// to service the request. In this case we may get multiple responses, and
+	// we just return the first successful response as we assume that every
+	// replica is returning the same answer.
+	var try uint = 0
+	for {
+		tryCtx := reqCtx
+		if tryTimeout := req.getRetryTimeout(); tryTimeout > 0 {
+			var tryCancel context.CancelFunc
+			tryCtx, tryCancel = context.WithTimeout(reqCtx, tryTimeout)
+			defer tryCancel()
+		}
+		respChan, err := c.InvokeUnaryRPCAsync(tryCtx, req)
+		if isHardFailure(err, reqCtx) {
 			return nil, err
 		}
 
-		if !ur.fromMS {
-			return ur, nil
+		ur := &UnaryResponse{fromMS: true}
+		err = gatherResponses(tryCtx, respChan, ur)
+		if isHardFailure(err, reqCtx) {
+			return nil, err
 		}
+
 		_, err = ur.getMSResponse()
 		switch e := err.(type) {
 		case *system.ErrNotLeader:
@@ -287,7 +358,9 @@ func invokeUnaryRPC(parent context.Context, log debugLogger, c UnaryInvoker, req
 			// empty (as can happen during an election), just send
 			// the retry to all of the replicas.
 			if e.LeaderHint == "" {
-				req.SetHostList(e.Replicas)
+				if len(e.Replicas) > 0 {
+					req.SetHostList(e.Replicas)
+				}
 				break
 			}
 			req.SetHostList([]string{e.LeaderHint})
@@ -296,33 +369,38 @@ func invokeUnaryRPC(parent context.Context, log debugLogger, c UnaryInvoker, req
 			// the error should give us the list of replicas to try.
 			// One of them should be the current leader and will
 			// service the request.
-			req.SetHostList(e.Replicas)
+			if len(e.Replicas) > 0 {
+				req.SetHostList(e.Replicas)
+			}
 		default:
-			// If the request defines its own retry criteria, run
+			// If the request defines its own retry logic for the error, run
 			// that logic and break out early.
-			if req.canRetry(err, tries) {
-				if err := req.onRetry(ctx, tries); err != nil {
+			if req.canRetry(err, try) {
+				if err := req.onRetry(tryCtx, try); err != nil {
 					return ur, nil
 				}
 				break
 			}
 
-			// If the request succeeded, or there was only one host to try,
-			// return now. Otherwise, remove the failed host from the list
-			// and try again.
-			if err == nil || len(req.getHostList()) < 2 {
-				return ur, nil
+			// One special case here for system startup. If the
+			// request was sent to a MS replica but the DB wasn't
+			// started yet, it's always valid to retry.
+			if system.IsUnavailable(err) {
+				break
 			}
-			log.Debugf("removing %s from request hosts due to %s", req.getHostList()[0], e)
-			req.SetHostList(req.getHostList()[1:])
+
+			// Otherwise, we're finished trying.
+			return ur, nil
 		}
 
-		log.Debugf("MS request error: %v; retrying after %s", err, defaultMSRetry)
+		backoff := common.ExpBackoff(req.retryAfter(baseMSBackoff), uint64(try), maxMSBackoffFactor)
+		log.Debugf("MS request error: %v; retrying after %s", err, backoff)
 		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-req.retryAfter(defaultMSRetry):
+		case <-reqCtx.Done():
+			return nil, reqCtx.Err()
+		case <-time.After(backoff):
 		}
+		try++
 	}
 }
 
@@ -331,5 +409,5 @@ func invokeUnaryRPC(parent context.Context, log debugLogger, c UnaryInvoker, req
 // items which represent the success or failure of the RPC invocation for each host
 // in the request.
 func (c *Client) InvokeUnaryRPC(ctx context.Context, req UnaryRequest) (*UnaryResponse, error) {
-	return invokeUnaryRPC(ctx, c.log, c, req)
+	return invokeUnaryRPC(ctx, c.log, c, req, c.config.HostList)
 }

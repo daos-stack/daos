@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -94,6 +94,7 @@ enum drpc_srv_method {
 	DRPC_METHOD_SRV_NOTIFY_READY		= 301,
 	DRPC_METHOD_SRV_BIO_ERR			= 302,
 	DRPC_METHOD_SRV_GET_POOL_SVC		= 303,
+	DRPC_METHOD_SRV_CLUSTER_EVENT		= 304,
 
 	NUM_DRPC_SRV_METHODS			/* Must be last */
 };

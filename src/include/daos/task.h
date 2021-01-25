@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2020 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,7 +41,6 @@ struct daos_task_args {
 		/** Management */
 		daos_pool_create_t	pool_create;
 		daos_pool_destroy_t	pool_destroy;
-		daos_pool_evict_t	pool_evict;
 		daos_set_params_t	mgmt_set_params;
 		daos_pool_replicas_t	pool_add_replicas;
 		daos_pool_replicas_t	pool_remove_replicas;

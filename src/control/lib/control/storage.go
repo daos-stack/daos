@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -132,6 +132,7 @@ type (
 	// StorageScanReq contains the parameters for a storage scan request.
 	StorageScanReq struct {
 		unaryRequest
+		Usage      bool
 		NvmeHealth bool
 		NvmeMeta   bool
 		NvmeBasic  bool
@@ -220,11 +221,15 @@ func (ssp *StorageScanResp) addHostResponse(hr *HostResponse) error {
 // NumaBasic option strips SSD details down to only the most basic.
 func StorageScan(ctx context.Context, rpcClient UnaryInvoker, req *StorageScanReq) (*StorageScanResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return ctlpb.NewMgmtCtlClient(conn).StorageScan(ctx, &ctlpb.StorageScanReq{
+		return ctlpb.NewCtlSvcClient(conn).StorageScan(ctx, &ctlpb.StorageScanReq{
+			Scm: &ctlpb.ScanScmReq{
+				Usage: req.Usage,
+			},
 			Nvme: &ctlpb.ScanNvmeReq{
 				Health: req.NvmeHealth,
-				Meta:   req.NvmeMeta,
-				Basic:  req.NvmeBasic,
+				// NVMe meta option will populate usage statistics
+				Meta:  req.NvmeMeta || req.Usage,
+				Basic: req.NvmeBasic,
 			},
 		})
 	})
@@ -327,7 +332,7 @@ func StoragePrepare(ctx context.Context, rpcClient UnaryInvoker, req *StoragePre
 		return nil, err
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return ctlpb.NewMgmtCtlClient(conn).StoragePrepare(ctx, pbReq)
+		return ctlpb.NewCtlSvcClient(conn).StoragePrepare(ctx, pbReq)
 	})
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
@@ -438,7 +443,7 @@ func StorageFormat(ctx context.Context, rpcClient UnaryInvoker, req *StorageForm
 		return nil, err
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return ctlpb.NewMgmtCtlClient(conn).StorageFormat(ctx, pbReq)
+		return ctlpb.NewCtlSvcClient(conn).StorageFormat(ctx, pbReq)
 	})
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)

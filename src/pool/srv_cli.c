@@ -58,7 +58,7 @@ dsc_pool_open(uuid_t pool_uuid, uuid_t poh_uuid, unsigned int flags,
 	struct dc_pool	*pool;
 	int		rc = 0;
 
-	if (!daos_handle_is_inval(*ph)) {
+	if (daos_handle_is_valid(*ph)) {
 		pool = dc_hdl2pool(*ph);
 		if (pool != NULL)
 			D_GOTO(out, rc = 0);
@@ -103,7 +103,7 @@ out:
 
 int
 dsc_pool_tgt_exclude(const uuid_t uuid, const char *grp,
-		     const d_rank_list_t *svc, struct d_tgt_list *tgts)
+		     struct d_tgt_list *tgts)
 {
 	daos_pool_update_t	*args;
 	tse_task_t		*task;
@@ -117,7 +117,6 @@ dsc_pool_tgt_exclude(const uuid_t uuid, const char *grp,
 
 	args = dc_task_get_args(task);
 	args->grp	= grp;
-	args->svc	= (d_rank_list_t *)svc;
 	args->tgts	= tgts;
 	uuid_copy((unsigned char *)args->uuid, uuid);
 
@@ -126,7 +125,7 @@ dsc_pool_tgt_exclude(const uuid_t uuid, const char *grp,
 
 int
 dsc_pool_tgt_reint(const uuid_t uuid, const char *grp,
-		   const d_rank_list_t *svc, struct d_tgt_list *tgts)
+		   struct d_tgt_list *tgts)
 {
 	daos_pool_update_t	*args;
 	tse_task_t		*task;
@@ -140,7 +139,6 @@ dsc_pool_tgt_reint(const uuid_t uuid, const char *grp,
 
 	args = dc_task_get_args(task);
 	args->grp	= grp;
-	args->svc	= (d_rank_list_t *)svc;
 	args->tgts	= tgts;
 	uuid_copy((unsigned char *)args->uuid, uuid);
 

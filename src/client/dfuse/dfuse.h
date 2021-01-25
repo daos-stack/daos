@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +36,8 @@
 #include "daos.h"
 #include "daos_fs.h"
 
+#include "dfs_internal.h"
+
 #include "dfuse_common.h"
 
 struct dfuse_info {
@@ -45,7 +47,6 @@ struct dfuse_info {
 	char				*di_cont;
 	char				*di_group;
 	char				*di_mountpoint;
-	d_rank_list_t			*di_svcl;
 	uint32_t			di_thread_count;
 	bool				di_threaded;
 	bool				di_foreground;
@@ -130,7 +131,7 @@ struct dfuse_inode_ops {
 			struct stat *attr, int to_set);
 	void (*lookup)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		       const char *name);
-	void (*mkdir)(fuse_req_t req, struct dfuse_inode_entry *parent,
+	void (*mknod)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		      const char *name, mode_t mode);
 	void (*opendir)(fuse_req_t req, struct dfuse_inode_entry *inode,
 			struct fuse_file_info *fi);
@@ -284,6 +285,8 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 #define LOG_MODES(HANDLE, INPUT) do {					\
 		int _flag = (INPUT) & S_IFMT;				\
 		LOG_MODE((HANDLE), _flag, S_IFREG);			\
+		LOG_MODE((HANDLE), _flag, S_IFDIR);			\
+		LOG_MODE((HANDLE), _flag, S_IFIFO);			\
 		LOG_MODE((HANDLE), _flag, S_ISUID);			\
 		LOG_MODE((HANDLE), _flag, S_ISGID);			\
 		LOG_MODE((HANDLE), _flag, S_ISVTX);			\
@@ -306,7 +309,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					"Invalid call to fuse_reply_err: 0"); \
 			__err = EIO;					\
 		}							\
-		if (__err == ENOTSUP || __err == EIO || __err == EINVAL) \
+		if (__err == EIO || __err == EINVAL) \
 			DFUSE_TRA_WARNING(desc, "Returning %d '%s'",	\
 					  __err, strerror(__err));	\
 		else							\
@@ -333,9 +336,10 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 #define DFUSE_REPLY_ATTR(ie, req, attr)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(ie, "Returning attr mode %#o dir:%d",	\
-				(attr)->st_mode,			\
-				S_ISDIR(((attr)->st_mode)));		\
+		DFUSE_TRA_DEBUG(ie,					\
+				"Returning attr inode %#lx mode %#o",	\
+				(attr)->st_ino,				\
+				(attr)->st_mode);			\
 		__rc = fuse_reply_attr(req, attr,			\
 				(ie)->ie_dfs->dfs_attr_timeout);	\
 		if (__rc != 0)						\
@@ -428,10 +432,9 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 	do {								\
 		int __rc;						\
 		DFUSE_TRA_DEBUG(desc,					\
-				"Returning entry inode %#lx mode %#o dir:%d", \
+				"Returning entry inode %#lx mode %#o",	\
 				(entry).attr.st_ino,			\
-				(entry).attr.st_mode,			\
-				S_ISDIR((entry).attr.st_mode));		\
+				(entry).attr.st_mode);			\
 		__rc = fuse_reply_entry(req, &entry);			\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(desc,				\
@@ -533,7 +536,7 @@ struct dfuse_inode_entry {
  * different parts of the inode, then or in the inode number of the root
  * of this dfs object, to avoid conflicts across containers.
  */
-static inline int
+static inline void
 dfuse_compute_inode(struct dfuse_dfs *dfs,
 		    daos_obj_id_t *oid,
 		    ino_t *_ino)
@@ -543,7 +546,6 @@ dfuse_compute_inode(struct dfuse_dfs *dfs,
 	hi = (oid->hi & (-1ULL >> 32)) | (dfs->dfs_root << 48);
 
 	*_ino = hi ^ (oid->lo << 32);
-	return 0;
 };
 
 /* dfuse_inode.c */
@@ -578,7 +580,7 @@ void
 dfuse_cb_readlink(fuse_req_t, fuse_ino_t);
 
 void
-dfuse_cb_mkdir(fuse_req_t, struct dfuse_inode_entry *,
+dfuse_cb_mknod(fuse_req_t, struct dfuse_inode_entry *,
 	       const char *, mode_t);
 
 void
@@ -655,6 +657,7 @@ void
 dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  struct dfuse_inode_entry *inode,
 		  struct fuse_file_info *fi_out,
+		  bool is_new,
 		  fuse_req_t req);
 
 /* dfuse_cont.c */
@@ -663,7 +666,7 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		  const char *name);
 
 void
-dfuse_cont_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
+dfuse_cont_mknod(fuse_req_t req, struct dfuse_inode_entry *parent,
 		 const char *name, mode_t mode);
 
 /* dfuse_pool.c */

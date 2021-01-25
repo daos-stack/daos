@@ -224,7 +224,7 @@ out:
 
 static int
 swim_updates_notify(struct swim_context *ctx, swim_id_t from, swim_id_t id,
-		    struct swim_member_state *id_state)
+		    struct swim_member_state *id_state, uint64_t count)
 {
 	struct swim_item *item;
 
@@ -232,7 +232,7 @@ swim_updates_notify(struct swim_context *ctx, swim_id_t from, swim_id_t id,
 	TAILQ_FOREACH(item, &ctx->sc_updates, si_link) {
 		if (item->si_id == id) {
 			item->si_from = from;
-			item->u.si_count = 0;
+			item->u.si_count = count;
 			D_GOTO(update, 0);
 		}
 	}
@@ -244,7 +244,7 @@ swim_updates_notify(struct swim_context *ctx, swim_id_t from, swim_id_t id,
 	if (item != NULL) {
 		item->si_id   = id;
 		item->si_from = from;
-		item->u.si_count = 0;
+		item->u.si_count = count;
 		TAILQ_INSERT_HEAD(&ctx->sc_updates, item, si_link);
 	}
 update:
@@ -257,6 +257,7 @@ swim_member_alive(struct swim_context *ctx, swim_id_t from,
 {
 	struct swim_member_state id_state;
 	struct swim_item *item;
+	uint64_t count = 0;
 	int rc;
 
 	rc = ctx->sc_ops->get_member_state(ctx, id, &id_state);
@@ -265,13 +266,19 @@ swim_member_alive(struct swim_context *ctx, swim_id_t from,
 		D_GOTO(out, rc);
 	}
 
+	/* Do not widely spread the information about bootstrap complete */
+	if (id_state.sms_status == SWIM_MEMBER_INACTIVE) {
+		count = ctx->sc_piggyback_tx_max;
+		D_GOTO(update, rc);
+	}
+
 	if (nr > id_state.sms_incarnation)
 		D_GOTO(update, rc);
 
 	/* ignore old updates or updates for dead members */
 	if (id_state.sms_status == SWIM_MEMBER_DEAD ||
 	    id_state.sms_status == SWIM_MEMBER_ALIVE ||
-	    id_state.sms_incarnation > nr)
+	    id_state.sms_incarnation >= nr)
 		D_GOTO(out, rc = -EALREADY);
 
 update:
@@ -287,7 +294,7 @@ update:
 
 	id_state.sms_incarnation = nr;
 	id_state.sms_status = SWIM_MEMBER_ALIVE;
-	rc = swim_updates_notify(ctx, from, id, &id_state);
+	rc = swim_updates_notify(ctx, from, id, &id_state, count);
 out:
 	return rc;
 }
@@ -327,7 +334,7 @@ update:
 
 	id_state.sms_incarnation = nr;
 	id_state.sms_status = SWIM_MEMBER_DEAD;
-	rc = swim_updates_notify(ctx, from, id, &id_state);
+	rc = swim_updates_notify(ctx, from, id, &id_state, 0);
 out:
 	return rc;
 }
@@ -378,7 +385,7 @@ search:
 update:
 	id_state.sms_incarnation = nr;
 	id_state.sms_status = SWIM_MEMBER_SUSPECT;
-	rc = swim_updates_notify(ctx, from, id, &id_state);
+	rc = swim_updates_notify(ctx, from, id, &id_state, 0);
 out:
 	return rc;
 }
@@ -879,7 +886,7 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 	enum swim_context_state ctx_state;
 	struct swim_member_state self_state;
 	swim_id_t self_id = swim_self_get(ctx);
-	swim_id_t id_target, id_sendto, to;
+	swim_id_t id_target, id_sendto, to, id;
 	bool send_updates = false;
 	size_t i;
 	int rc = 0;
@@ -898,6 +905,8 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 
 	to = upds[0].smu_id; /* save first index from update */
 	for (i = 0; i < nupds; i++) {
+		id = upds[i].smu_id;
+
 		switch (upds[i].smu_state.sms_status) {
 		case SWIM_MEMBER_INACTIVE:
 			/* ignore inactive updates.
@@ -906,19 +915,17 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 			 */
 			break;
 		case SWIM_MEMBER_ALIVE:
-			/* ignore alive updates for self */
-			if (upds[i].smu_id == self_id)
-				break;
+			if (id == self_id)
+				break; /* ignore alive updates for self */
 
-			if (ctx_state == SCS_IPINGED &&
-			    upds[i].smu_id == ctx->sc_target)
+			if (id == ctx->sc_target && ctx_state == SCS_IPINGED)
 				ctx_state = SCS_ACKED;
 
-			swim_member_alive(ctx, from, upds[i].smu_id,
+			swim_member_alive(ctx, from, id,
 					  upds[i].smu_state.sms_incarnation);
 			break;
 		case SWIM_MEMBER_SUSPECT:
-			if (upds[i].smu_id == self_id) {
+			if (id == self_id) {
 				/* increment our incarnation number if we are
 				 * suspected in the current incarnation
 				 */
@@ -947,7 +954,7 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 
 				self_state.sms_incarnation++;
 				rc = swim_updates_notify(ctx, self_id, self_id,
-							 &self_state);
+							 &self_state, 0);
 				if (rc) {
 					swim_ctx_unlock(ctx);
 					SWIM_ERROR("swim_updates_notify() "
@@ -957,14 +964,14 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 				break;
 			}
 
-			swim_member_suspect(ctx, from, upds[i].smu_id,
+			swim_member_suspect(ctx, from, id,
 					    upds[i].smu_state.sms_incarnation);
 			break;
 		case SWIM_MEMBER_DEAD:
 			/* if we get an update that we are dead,
 			 * just shut down
 			 */
-			if (upds[i].smu_id == self_id) {
+			if (id == self_id) {
 				swim_ctx_unlock(ctx);
 				SWIM_ERROR("%lu: self confirmed DEAD received "
 					   "{%lu %c %lu} from %lu\n", self_id,
@@ -976,11 +983,11 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 			}
 
 			SWIM_ERROR("%lu: DEAD received {%lu %c %lu} from %lu\n",
-				   self_id, upds[i].smu_id, SWIM_STATUS_CHARS[
+				   self_id, id, SWIM_STATUS_CHARS[
 						  upds[i].smu_state.sms_status],
 				   upds[i].smu_state.sms_incarnation, from);
 
-			swim_member_dead(ctx, from, upds[i].smu_id,
+			swim_member_dead(ctx, from, id,
 					 upds[i].smu_state.sms_incarnation);
 			break;
 		}

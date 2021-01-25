@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ import (
 	"github.com/dustin/go-humanize/english"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
@@ -405,18 +406,6 @@ type systemListPoolsCmd struct {
 	jsonOutputCmd
 }
 
-func formatPoolSvcReps(svcReps []uint32) string {
-	var b strings.Builder
-	for i, rep := range svcReps {
-		if i != 0 {
-			b.WriteString(",")
-		}
-		fmt.Fprintf(&b, "%d", rep)
-	}
-
-	return b.String()
-}
-
 // Execute is run when systemListPoolsCmd activates
 func (cmd *systemListPoolsCmd) Execute(_ []string) error {
 	if cmd.config == nil {
@@ -424,9 +413,9 @@ func (cmd *systemListPoolsCmd) Execute(_ []string) error {
 	}
 
 	ctx := context.Background()
-	resp, err := control.ListPools(ctx, cmd.ctlInvoker, &control.ListPoolsReq{
-		System: cmd.config.SystemName,
-	})
+	req := new(control.ListPoolsReq)
+	req.SetSystem(cmd.config.SystemName)
+	resp, err := control.ListPools(ctx, cmd.ctlInvoker, req)
 
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(resp, err)
@@ -451,7 +440,7 @@ func (cmd *systemListPoolsCmd) Execute(_ []string) error {
 		row := txtfmt.TableRow{uuidTitle: pool.UUID}
 
 		if len(pool.SvcReplicas) != 0 {
-			row[svcRepTitle] = formatPoolSvcReps(pool.SvcReplicas)
+			row[svcRepTitle] = pretty.FormatRanks(pool.SvcReplicas)
 		}
 
 		table = append(table, row)

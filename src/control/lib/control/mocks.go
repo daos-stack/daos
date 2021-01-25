@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -89,7 +89,7 @@ func (mi *MockInvoker) Debugf(fmtStr string, args ...interface{}) {
 }
 
 func (mi *MockInvoker) InvokeUnaryRPC(ctx context.Context, uReq UnaryRequest) (*UnaryResponse, error) {
-	return invokeUnaryRPC(ctx, mi.log, mi, uReq)
+	return invokeUnaryRPC(ctx, mi.log, mi, uReq, nil)
 }
 
 func (mi *MockInvoker) InvokeUnaryRPCAsync(ctx context.Context, uReq UnaryRequest) (HostResponseChan, error) {
@@ -287,12 +287,12 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		}
 		ncs := make(storage.NvmeControllers, 0)
 		for _, i := range []int{1, 2, 3, 4, 5, 6, 7, 8} {
-			sd := storage.MockSmdDevice(int32(i))
+			nc := storage.MockNvmeController(int32(i))
+			nc.SocketID = int32(i % 2)
+			sd := storage.MockSmdDevice(nc.PciAddr, int32(i))
 			sd.TotalBytes = uint64(humanize.TByte) * uint64(i)
 			sd.AvailBytes = uint64((humanize.TByte/4)*3) * uint64(i) // 25% used
-			nc := storage.MockNvmeController(int32(i))
 			nc.SmdDevices = append(nc.SmdDevices, sd)
-			nc.SocketID = int32(i % 2)
 			ncs = append(ncs, nc)
 		}
 		if err := convert.Types(ncs, &ssr.Nvme.Ctrlrs); err != nil {
@@ -364,7 +364,7 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		}
 	case "standard":
 	default:
-		t.Fatalf("MockServerScanResp(): variant %s unrecognised", variant)
+		t.Fatalf("MockServerScanResp(): variant %s unrecognized", variant)
 	}
 	return ssr
 }

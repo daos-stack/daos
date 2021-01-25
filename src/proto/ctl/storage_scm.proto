@@ -24,7 +24,9 @@
 syntax = "proto3";
 package ctl;
 
-import "common.proto";
+option go_package = "github.com/daos-stack/daos/src/control/common/proto/ctl";
+
+import "ctl/common.proto";
 
 // SCM Storage Protobuf Definitions related to interactions between
 // DAOS control server and locally attached storage devices.
@@ -83,7 +85,9 @@ message PrepareScmResp {
 	bool rebootrequired = 3;
 }
 
-message ScanScmReq {}
+message ScanScmReq {
+	bool usage = 1;			// Populate usage statistics in scan
+}
 
 message ScanScmResp {
 	repeated ScmModule modules = 1;

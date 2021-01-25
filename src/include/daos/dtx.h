@@ -177,7 +177,7 @@ daos_dti_copy(struct dtx_id *des, const struct dtx_id *src)
 }
 
 static inline bool
-daos_is_zero_dti(struct dtx_id *dti)
+daos_is_zero_dti(const struct dtx_id *dti)
 {
 	return dti->dti_hlc == 0;
 }
@@ -203,14 +203,49 @@ enum daos_ops_intent {
 	DAOS_INTENT_IGNORE_NONCOMMITTED	= 8, /* ignore non-committed DTX. */
 };
 
+/**
+ * DAOS two-phase commit transaction status.
+ */
+enum dtx_status {
+	/** Local participant has done the modification. */
+	DTX_ST_PREPARED		= 1,
+	/** The DTX has been committed. */
+	DTX_ST_COMMITTED	= 2,
+	/** The DTX is corrupted, some participant RDG(s) may be lost. */
+	DTX_ST_CORRUPTED	= 3,
+	/** The DTX is committable, but not committed, non-persistent status. */
+	DTX_ST_COMMITTABLE	= 4,
+	/** The DTX is aborted. */
+	DTX_ST_ABORTED		= 5,
+};
+
 enum daos_dtx_alb {
 	/* unavailable case */
 	ALB_UNAVAILABLE		= 0,
 	/* available, no (or not care) pending modification */
 	ALB_AVAILABLE_CLEAN	= 1,
-	/* available but with dirty modification or garbage */
+	/* available but with dirty modification */
 	ALB_AVAILABLE_DIRTY	= 2,
+	/* available, aborted or garbage */
+	ALB_AVAILABLE_ABORTED	= 3,
 };
+
+static inline unsigned int
+dtx_alb2state(int alb)
+{
+	switch (alb) {
+	case ALB_UNAVAILABLE:
+	case ALB_AVAILABLE_DIRTY:
+		return DTX_ST_PREPARED;
+	case ALB_AVAILABLE_CLEAN:
+		return DTX_ST_COMMITTED;
+	case ALB_AVAILABLE_ABORTED:
+		return DTX_ST_ABORTED;
+	default:
+		D_ASSERTF(0, "Invalid alb:%d\n", alb);
+		return DTX_ST_PREPARED;
+	}
+}
 
 enum daos_tx_flags {
 	DTF_RETRY_COMMIT	= 1, /* TX commit will be retry. */

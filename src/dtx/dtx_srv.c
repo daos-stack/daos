@@ -96,11 +96,13 @@ dtx_handler(crt_rpc_t *rpc)
 	case DTX_CHECK:
 		/* Currently, only support to check single DTX state. */
 		if (din->di_dtx_array.ca_count != 1)
-			rc = -DER_PROTO;
-		else
-			rc = vos_dtx_check(cont->sc_hdl,
-					   din->di_dtx_array.ca_arrays,
-					   NULL, NULL, NULL, false);
+			D_GOTO(out, rc = -DER_PROTO);
+
+		rc = vos_dtx_check(cont->sc_hdl, din->di_dtx_array.ca_arrays,
+				   NULL, NULL, NULL, false);
+		if (rc == -DER_NONEXIST && cont->sc_dtx_reindex)
+			rc = -DER_INPROGRESS;
+
 		break;
 	case DTX_REFRESH:
 		count = din->di_dtx_array.ca_count;
@@ -123,8 +125,9 @@ dtx_handler(crt_rpc_t *rpc)
 			*ptr = vos_dtx_check(cont->sc_hdl, dtis, NULL, &vers[i],
 					     &mbs[i], false);
 			/* The DTX status may be changes by DTX resync soon. */
-			if (*ptr == DTX_ST_PREPARED &&
-			    vers[i] < cont->sc_dtx_resync_ver)
+			if ((*ptr == DTX_ST_PREPARED &&
+			     cont->sc_dtx_resyncing) ||
+			    (*ptr == -DER_NONEXIST && cont->sc_dtx_reindex))
 				*ptr = -DER_INPROGRESS;
 			if (mbs[i] != NULL)
 				rc1++;
@@ -211,7 +214,7 @@ dtx_setup(void)
 {
 	int	rc;
 
-	rc = dss_ult_create_all(dtx_batched_commit, NULL, DSS_ULT_GC, true);
+	rc = dss_ult_create_all(dtx_batched_commit, NULL, true);
 	if (rc != 0)
 		D_ERROR("Failed to create DTX batched commit ULT: "DF_RC"\n",
 			DP_RC(rc));

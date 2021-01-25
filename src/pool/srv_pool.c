@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,6 +51,7 @@
 #include "rpc.h"
 #include "srv_internal.h"
 #include "srv_layout.h"
+#include "srv_pool_map.h"
 
 /* Pool service */
 struct pool_svc {
@@ -917,8 +918,8 @@ pool_evict_rank(struct pool_svc *svc, d_rank_t rank)
 	pool_svc_get(svc);
 	ult_arg->svc = svc;
 	ult_arg->rank = rank;
-	rc = dss_ult_create(pool_evict_rank_ult, ult_arg, DSS_ULT_MISC,
-			    DSS_TGT_SELF, 0, NULL);
+	rc = dss_ult_create(pool_evict_rank_ult, ult_arg, DSS_XS_SELF,
+			    0, 0, NULL);
 	if (rc) {
 		pool_svc_put(svc);
 		D_FREE_PTR(ult_arg);
@@ -1394,7 +1395,7 @@ ds_pool_start_all(void)
 	int		rc;
 
 	/* Create a ULT to call ds_rsvc_start() in xstream 0. */
-	rc = dss_ult_create(pool_start_all, NULL /* arg */, DSS_ULT_POOL_SRV,
+	rc = dss_ult_create(pool_start_all, NULL /* arg */, DSS_XS_SYS,
 			    0 /* tgt_idx */, 0 /* stack_size */, &thread);
 	if (rc != 0) {
 		D_ERROR("failed to create pool start ULT: "DF_RC"\n",
@@ -1406,6 +1407,24 @@ ds_pool_start_all(void)
 	return 0;
 }
 
+static int
+stop_one(uuid_t uuid, void *varg)
+{
+	D_DEBUG(DB_MD, DF_UUID": stopping pool\n", DP_UUID(uuid));
+	ds_pool_stop(uuid);
+	return 0;
+}
+
+static void
+pool_stop_all(void *arg)
+{
+	int	rc;
+
+	rc = ds_mgmt_tgt_pool_iterate(stop_one, NULL /* arg */);
+	if (rc != 0)
+		D_ERROR("failed to stop all pools: "DF_RC"\n", DP_RC(rc));
+}
+
 /*
  * Note that this function is currently called from the main xstream to save
  * one ULT creation.
@@ -1413,11 +1432,25 @@ ds_pool_start_all(void)
 int
 ds_pool_stop_all(void)
 {
-	/*
-	 * TODO: Before returning, release the ds_pool references held by
-	 * ds_pool_start_all.
-	 */
-	return ds_rsvc_stop_all(DS_RSVC_CLASS_POOL);
+	ABT_thread	thread;
+	int		rc;
+
+	rc = ds_rsvc_stop_all(DS_RSVC_CLASS_POOL);
+	if (rc)
+		D_ERROR("failed to stop all pool svcs: "DF_RC"\n", DP_RC(rc));
+
+	/* Create a ULT to stop pools, since it requires TLS */
+	rc = dss_ult_create(pool_stop_all, NULL /* arg */, DSS_XS_SYS,
+			    0 /* tgt_idx */, 0 /* stack_size */, &thread);
+	if (rc != 0) {
+		D_ERROR("failed to create pool stop ULT: "DF_RC"\n",
+			DP_RC(rc));
+		return rc;
+	}
+	ABT_thread_join(thread);
+	ABT_thread_free(&thread);
+
+	return 0;
 }
 
 static int
@@ -3724,39 +3757,60 @@ out:
 static int
 replace_failed_replicas(struct pool_svc *svc, struct pool_map *map)
 {
-	d_rank_list_t	*replicas;
-	d_rank_list_t	*tmp_replicas;
-	d_rank_list_t	 failed_ranks;
-	d_rank_list_t	 replace_ranks;
-	int		 rc;
+	d_rank_list_t	*old, *new, *current, failed, replacement;
+	int              rc;
 
-	rc = rdb_get_ranks(svc->ps_rsvc.s_db, &replicas);
+	rc = rdb_get_ranks(svc->ps_rsvc.s_db, &current);
 	if (rc != 0)
-		D_GOTO(out, rc);
-	rc = ds_pool_check_failed_replicas(map, replicas, &failed_ranks,
-					   &replace_ranks);
+		goto out;
+
+	rc = daos_rank_list_dup(&old, current);
+	if (rc != 0)
+		goto out_cur;
+
+	rc = ds_pool_check_failed_replicas(map, current, &failed, &replacement);
 	if (rc != 0) {
 		D_DEBUG(DB_MD, DF_UUID": cannot replace failed replicas: "
 			""DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
-		D_GOTO(out, rc);
+		goto out_old;
 	}
-	if (replace_ranks.rl_nr > 0)
-		ds_rsvc_add_replicas_s(&svc->ps_rsvc, &replace_ranks,
-				       ds_rsvc_get_md_cap());
-	if (failed_ranks.rl_nr > 0)
-		ds_rsvc_remove_replicas_s(&svc->ps_rsvc, &failed_ranks);
-	/** `replace_ranks.rl_ranks` is not allocated and shouldn't be freed **/
-	D_FREE(failed_ranks.rl_ranks);
 
-	if (rdb_get_ranks(svc->ps_rsvc.s_db, &tmp_replicas) == 0) {
-		daos_rank_list_sort(replicas);
-		daos_rank_list_sort(tmp_replicas);
-		if (!daos_rank_list_identical(replicas, tmp_replicas))
+	if (failed.rl_nr < 1)
+		goto out_old;
+	if (replacement.rl_nr > 0)
+		ds_rsvc_add_replicas_s(&svc->ps_rsvc, &replacement,
+				       ds_rsvc_get_md_cap());
+	ds_rsvc_remove_replicas_s(&svc->ps_rsvc, &failed);
+	/** `replacement.rl_ranks` is not allocated and shouldn't be freed **/
+	D_FREE(failed.rl_ranks);
+
+	if (rdb_get_ranks(svc->ps_rsvc.s_db, &new) == 0) {
+		daos_rank_list_sort(current);
+		daos_rank_list_sort(old);
+		daos_rank_list_sort(new);
+
+		if (!daos_rank_list_identical(current, new)) {
 			D_DEBUG(DB_MD, DF_UUID": failed to update replicas\n",
 				DP_UUID(svc->ps_uuid));
-		d_rank_list_free(tmp_replicas);
+		} else if (!daos_rank_list_identical(new, old)) {
+			/*
+			 * Send RAS event to control-plane over dRPC to indicate
+			 * change in pool service replicas.
+			 */
+			rc = ds_notify_pool_svc_update(&svc->ps_uuid, new);
+			if (rc != 0)
+				D_DEBUG(DB_MD, DF_UUID": replica update notify "
+					"failure: "DF_RC"\n",
+					DP_UUID(svc->ps_uuid), DP_RC(rc));
+		}
+
+		d_rank_list_free(new);
 	}
-	d_rank_list_free(replicas);
+
+out_old:
+	d_rank_list_free(old);
+out_cur:
+	d_rank_list_free(current);
 out:
 	return rc;
 }
@@ -3796,7 +3850,8 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 	 * before and after. If the version hasn't changed, we are done.
 	 */
 	map_version_before = pool_map_get_version(map);
-	rc = ds_pool_map_tgts_update(map, tgts, opc, evict_rank, tgt_map_ver);
+	rc = ds_pool_map_tgts_update(map, tgts, opc, evict_rank, tgt_map_ver,
+				     true);
 	if (rc != 0)
 		D_GOTO(out_map, rc);
 
@@ -3841,6 +3896,21 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 	ds_rsvc_request_map_dist(&svc->ps_rsvc);
 
 	replace_failed_replicas(svc, map);
+
+	if (opc == POOL_ADD_IN) {
+		/*
+		 * If we are setting ranks from UP -> UPIN, schedule a reclaim
+		 * operation to garbage collect any unreachable data moved
+		 * during reintegration/addition
+		 */
+		rc = ds_rebuild_schedule(pool_uuid, map_version, tgts,
+					 RB_OP_RECLAIM);
+		if (rc != 0) {
+			D_ERROR("failed to schedule reclaim rc: "DF_RC"\n",
+				DP_RC(rc));
+			D_GOTO(out, rc);
+		}
+	}
 
 out_map:
 	if (map_version_p != NULL)
@@ -4541,6 +4611,57 @@ find_hdls_to_evict(struct rdb_tx *tx, struct pool_svc *svc, uuid_t **hdl_uuids,
 	return 0;
 }
 
+/*
+ * Callers are responsible for freeing *hdl_uuids if this function returns zero.
+ */
+static int
+validate_hdls_to_evict(struct rdb_tx *tx, struct pool_svc *svc,
+		       uuid_t **hdl_uuids, int *n_hdl_uuids, uuid_t *hdl_list,
+		       int n_hdl_list) {
+	uuid_t		*valid_list;
+	int		n_valid_list = 0;
+	int		i;
+	int		rc = 0;
+	d_iov_t		key;
+	d_iov_t		value;
+	struct pool_hdl	hdl;
+
+	if (hdl_list == NULL || n_hdl_list == 0) {
+		return -DER_INVAL;
+	}
+
+	/* Assume the entire list is valid */
+	D_ALLOC(valid_list, sizeof(uuid_t) * n_hdl_list);
+	if (valid_list == NULL)
+		return -DER_NOMEM;
+
+	for (i = 0; i < n_hdl_list; i++) {
+		d_iov_set(&key, hdl_list[i], sizeof(uuid_t));
+		d_iov_set(&value, &hdl, sizeof(hdl));
+		rc = rdb_tx_lookup(tx, &svc->ps_handles, &key, &value);
+
+		if (rc == 0) {
+			uuid_copy(valid_list[n_valid_list], hdl_list[i]);
+			n_valid_list++;
+		} else if (rc == -DER_NONEXIST) {
+			D_DEBUG(DF_DSMS, "Skipping invalid handle" DF_UUID "\n",
+				DP_UUID(hdl_list[i]));
+			/* Reset RC in case we're the last entry */
+			rc = 0;
+			continue;
+		} else {
+			D_FREE(valid_list);
+			D_GOTO(out, rc);
+		}
+	}
+
+	*hdl_uuids = valid_list;
+	*n_hdl_uuids = n_valid_list;
+
+out:
+	return rc;
+}
+
 void
 ds_pool_evict_handler(crt_rpc_t *rpc)
 {
@@ -4548,9 +4669,9 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 	struct pool_evict_out  *out = crt_reply_get(rpc);
 	struct pool_svc	       *svc;
 	struct rdb_tx		tx;
-	uuid_t		       *hdl_uuids;
+	uuid_t		       *hdl_uuids = NULL;
 	size_t			hdl_uuids_size;
-	int			n_hdl_uuids;
+	int			n_hdl_uuids = 0;
 	int			rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
@@ -4567,8 +4688,19 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 
 	ABT_rwlock_wrlock(svc->ps_lock);
 
-	rc = find_hdls_to_evict(&tx, svc, &hdl_uuids, &hdl_uuids_size,
-				&n_hdl_uuids);
+	/*
+	 * If a subset of handles is specified use them instead of iterating
+	 * through all handles for the pool uuid
+	 */
+	if (in->pvi_hdls.ca_arrays) {
+		rc = validate_hdls_to_evict(&tx, svc, &hdl_uuids, &n_hdl_uuids,
+					    in->pvi_hdls.ca_arrays,
+					    in->pvi_hdls.ca_count);
+	} else {
+		rc = find_hdls_to_evict(&tx, svc, &hdl_uuids, &hdl_uuids_size,
+					&n_hdl_uuids);
+	}
+
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 
@@ -4622,19 +4754,26 @@ out:
 }
 
 /**
- * Send a CaRT message to the pool svc during pool destroy to test and
- * (if applicable based on force option) evict all open handles on a pool.
+ * Send a CaRT message to the pool svc to test and
+ * (if applicable based on destoy and force option) evict all open handles
+ * on a pool.
  *
  * \param[in]	pool_uuid	UUID of the pool
  * \param[in]	ranks		Pool service replicas
- * \param[in]	force		If true request all handles be forcibly evicted
+ * \param[in]	handles		List of handles to selectively evict
+ * \param[in]	n_handles	Number of items in handles
+ * \param[in]	destroy		If true the evict request is a destroy request
+ * \param[in]	force		If true and destroy is true request all handles
+ *				be forcibly evicted
  *
  * \return	0		Success
  *		-DER_BUSY	Open pool handles exist and no force requested
  *
  */
 int
-ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks, uint32_t force)
+ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks,
+			uuid_t *handles, size_t n_handles,
+			uint32_t destroy, uint32_t force)
 {
 	int			 rc;
 	struct rsvc_client	 client;
@@ -4671,11 +4810,13 @@ rechoose:
 	in = crt_req_get(rpc);
 	uuid_copy(in->pvi_op.pi_uuid, pool_uuid);
 	uuid_clear(in->pvi_op.pi_hdl);
+	in->pvi_hdls.ca_arrays = handles;
+	in->pvi_hdls.ca_count = n_handles;
 
 	/* Pool destroy (force=false): assert no open handles / do not evict.
 	 * Pool destroy (force=true): evict any/all open handles on the pool.
 	 */
-	in->pvi_pool_destroy = 1;
+	in->pvi_pool_destroy = destroy;
 	in->pvi_pool_destroy_force = force;
 
 	rc = dss_rpc_send(rpc);
@@ -5073,7 +5214,7 @@ ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc)
 	uuid_copy(arg.iua_pool_uuid, dpc->spc_uuid);
 	arg.iua_eventual = eventual;
 
-	rc = dss_ult_create(ds_pool_map_refresh_ult, &arg, DSS_ULT_POOL_SRV,
+	rc = dss_ult_create(ds_pool_map_refresh_ult, &arg, DSS_XS_SYS,
 			    0, 0, NULL);
 	if (rc)
 		D_GOTO(out_eventual, rc);
@@ -5101,7 +5242,7 @@ ds_pool_child_map_refresh_async(struct ds_pool_child *dpc)
 	arg->iua_pool_version = dpc->spc_map_version;
 	uuid_copy(arg->iua_pool_uuid, dpc->spc_uuid);
 
-	rc = dss_ult_create(ds_pool_map_refresh_ult, arg, DSS_ULT_POOL_SRV,
+	rc = dss_ult_create(ds_pool_map_refresh_ult, arg, DSS_XS_SYS,
 			    0, 0, NULL);
 	return rc;
 }

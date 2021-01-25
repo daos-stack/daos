@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,8 +60,9 @@
 #define RPC_ERROR(rpc, fmt, ...)					\
 	do {								\
 		D_TRACE_ERROR((rpc),					\
-			"[opc=%#x rpcid=%#lx rank:tag=%d:%d] " fmt,	\
+			"[opc=%#x (%s) rpcid=%#lx rank:tag=%d:%d] " fmt,\
 			(rpc)->crp_pub.cr_opc,				\
+			crt_opc_to_str((rpc)->crp_pub.cr_opc),		\
 			(rpc)->crp_req_hdr.cch_rpcid,			\
 			(rpc)->crp_pub.cr_ep.ep_rank,			\
 			(rpc)->crp_pub.cr_ep.ep_tag,			\
@@ -69,5 +70,17 @@
 	} while (0)
 
 extern uint32_t crt_swim_rpc_timeout;
+
+#ifdef CRT_DEBUG_TRACE
+#	define CRT_ENTRY()					\
+		D_DEBUG(DB_TRACE, ">>>> Entered %s: %d\n", __func__, __LINE__)
+
+#	define CRT_EXIT()					\
+		D_DEBUG(DB_TRACE, "<<<< Exit %s: %d\n", __func__, __LINE__)
+#else
+#	define CRT_ENTRY()	/* */
+#	define CRT_EXIT()	/* */
+
+#endif
 
 #endif /* __CRT_INTERNAL_H__ */

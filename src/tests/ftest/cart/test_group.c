@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -235,6 +235,7 @@ static void *progress_thread(void *arg)
 	do {
 		rc = crt_progress(ctx, 0);
 		if (rc != 0 && rc != -DER_TIMEDOUT) {
+			/* avoid checkpatch warning */
 			D_ERROR("crt_progress failed rc: %d.\n", rc);
 		}
 		if (test_g.t_shutdown == 1 && test_g.t_complete == 1)

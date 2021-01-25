@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,12 +21,17 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
+enum fs_op {
+	FS_COPY
+};
+
 enum cont_op {
 	CONT_CREATE,
 	CONT_DESTROY,
 	CONT_LIST_OBJS,
 	CONT_QUERY,
 	CONT_STAT,
+	CONT_CHECK,
 	CONT_GET_PROP,
 	CONT_SET_PROP,
 	CONT_LIST_ATTRS,
@@ -70,19 +75,20 @@ struct cmd_args_s {
 	enum pool_op		p_op;		/* pool sub-command */
 	enum cont_op		c_op;		/* cont sub-command */
 	enum obj_op		o_op;		/* obj sub-command */
+	enum fs_op		fs_op;		/* filesystem sub-command */
 	char			*sysname;	/* --sys-name or --sys */
 	uuid_t			p_uuid;		/* --pool */
 	daos_handle_t		pool;
 	uuid_t			c_uuid;		/* --cont */
 	daos_handle_t		cont;
-	char			*mdsrv_str;	/* --svc */
-	d_rank_list_t		*mdsrv;
 	int			force;		/* --force */
 	char			*attrname_str;	/* --attr attribute name */
 	char			*value_str;	/* --value attribute value */
 
 	/* Container unified namespace (path) related */
 	char			*path;		/* --path cont namespace */
+	char			*src;		/* --src path for fs copy */
+	char			*dst;		/* --dst path for fs copy */
 	daos_cont_layout_t	type;		/* --type cont type */
 	daos_oclass_id_t	oclass;		/* --oclass object class */
 	daos_size_t		chunk_size;	/* --chunk_size of cont objs */
@@ -112,20 +118,6 @@ struct cmd_args_s {
 			fprintf(stderr, "pool UUID required\n");\
 			D_GOTO(label, (rcexpr));		\
 		}						\
-	} while (0)
-
-/* --svc argument is optional. If provided by user, perform these checks */
-#define ARGS_VERIFY_MDSRV(ap, label, rcexpr)				\
-	do {								\
-		if (((ap)->mdsrv_str) && ((ap)->mdsrv == NULL)) {	\
-			fprintf(stderr, "failed to parse --svc=%s\n",	\
-					(ap)->mdsrv_str);		\
-			D_GOTO(label, (rcexpr));			\
-		}							\
-		if (((ap)->mdsrv) && ((ap)->mdsrv->rl_nr == 0)) {	\
-			fprintf(stderr, "--svc must not be empty\n");	\
-			D_GOTO(label, (rcexpr));			\
-		}							\
 	} while (0)
 
 #define ARGS_VERIFY_CUUID(ap, label, rcexpr)				\
@@ -190,10 +182,14 @@ int pool_autotest_hdlr(struct cmd_args_s *ap);
  * int pool_stat_hdlr(struct cmd_args_s *ap);
  */
 
+/* filesystem operations */
+int fs_copy_hdlr(struct cmd_args_s *ap);
+
 /* Container operations */
 int cont_create_hdlr(struct cmd_args_s *ap);
 int cont_create_uns_hdlr(struct cmd_args_s *ap);
 int cont_query_hdlr(struct cmd_args_s *ap);
+int cont_check_hdlr(struct cmd_args_s *ap);
 int cont_destroy_hdlr(struct cmd_args_s *ap);
 int cont_get_prop_hdlr(struct cmd_args_s *ap);
 int cont_set_prop_hdlr(struct cmd_args_s *ap);

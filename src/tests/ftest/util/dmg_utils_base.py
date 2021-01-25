@@ -620,6 +620,7 @@ class DmgCommandBase(YamlCommand):
                     self).__init__(
                         "/run/dmg/system/start/*", "start")
                 self.ranks = FormattedParameter("--ranks={}")
+                self.rank_hosts = FormattedParameter("--rank-hosts={}")
 
         class StopSubCommand(CommandWithParameters):
             """Defines an object for the dmg system stop command."""
