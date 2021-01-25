@@ -183,7 +183,9 @@ ds_rsvc_put(struct ds_rsvc *svc)
 	D_ASSERTF(svc->s_ref > 0, "%d\n", svc->s_ref);
 	svc->s_ref--;
 	if (svc->s_ref == 0) {
-		rdb_stop(svc->s_db);
+		/* For ds_rsvc_start_nodb. */
+		if (svc->s_db != NULL)
+			rdb_stop(svc->s_db);
 		fini_free(svc);
 	}
 }
@@ -853,6 +855,22 @@ stop(struct ds_rsvc *svc, bool destroy)
 	svc->s_stop = true;
 	D_DEBUG(DB_MD, "%s: stopping\n", svc->s_name);
 
+	/* For ds_rsvc_start_nodb. */
+	if (svc->s_db == NULL) {
+		change_state(svc, DS_RSVC_DRAINING);
+		drain_map_distd(svc);
+		for (;;) {
+			if (svc->s_leader_ref == 0)
+				break;
+			D_DEBUG(DB_MD, "%s: waiting for %d leader refs\n",
+				svc->s_name, svc->s_leader_ref);
+			ABT_cond_wait(svc->s_leader_ref_cv, svc->s_mutex);
+		}
+		fini_map_distd(svc);
+		change_state(svc, DS_RSVC_DOWN);
+		goto out;
+	}
+
 	if (svc->s_state == DS_RSVC_UP || svc->s_state == DS_RSVC_UP_EMPTY)
 		/*
 		 * The service has stepped up. If it is still the leader of
@@ -868,6 +886,7 @@ stop(struct ds_rsvc *svc, bool destroy)
 	if (destroy)
 		rc = remove(svc->s_db_path);
 
+out:
 	ABT_mutex_unlock(svc->s_mutex);
 	ds_rsvc_put(svc);
 	return rc;
