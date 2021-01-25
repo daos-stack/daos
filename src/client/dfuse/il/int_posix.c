@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -513,7 +513,7 @@ ioil_open_cont_handles(int fd, struct dfuse_il_reply *il_reply,
 	struct ioil_pool       *pool = cont->ioc_pool;
 
 	if (daos_handle_is_inval(pool->iop_poh)) {
-		rc = daos_pool_connect(il_reply->fir_pool, NULL, NULL,
+		rc = daos_pool_connect(il_reply->fir_pool, NULL,
 				       DAOS_PC_RW, &pool->iop_poh, NULL, NULL);
 		if (rc)
 			return false;

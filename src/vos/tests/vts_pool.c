@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -102,18 +102,18 @@ pool_ref_count_test(void **state)
 	for (i = 0; i < num; i++) {
 		ret = vos_pool_open(arg->fname[0], uuid, false /*small */,
 				    &arg->poh[i]);
-		assert_int_equal(ret, 0);
+		assert_rc_equal(ret, 0);
 	}
 	for (i = 0; i < num - 1; i++) {
 		ret = vos_pool_close(arg->poh[i]);
-		assert_int_equal(ret, 0);
+		assert_rc_equal(ret, 0);
 	}
 	ret = vos_pool_destroy(arg->fname[0], uuid);
-	assert_int_equal(ret, -DER_BUSY);
+	assert_rc_equal(ret, -DER_BUSY);
 	ret = vos_pool_close(arg->poh[num - 1]);
-	assert_int_equal(ret, 0);
+	assert_rc_equal(ret, 0);
 	ret = vos_pool_destroy(arg->fname[0], uuid);
-	assert_int_equal(ret, 0);
+	assert_rc_equal(ret, 0);
 }
 
 static void
@@ -130,13 +130,13 @@ pool_interop(void **state)
 
 	daos_fail_loc_set(FLC_POOL_DF_VER | DAOS_FAIL_ONCE);
 	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0);
-	assert_int_equal(ret, 0);
+	assert_rc_equal(ret, 0);
 
 	ret = vos_pool_open(arg->fname[0], uuid, false, &poh);
-	assert_int_equal(ret, -DER_DF_INCOMPT);
+	assert_rc_equal(ret, -DER_DF_INCOMPT);
 
 	ret = vos_pool_destroy(arg->fname[0], uuid);
-	assert_int_equal(ret, 0);
+	assert_rc_equal(ret, 0);
 }
 
 static void
@@ -183,7 +183,7 @@ pool_ops_run(void **state)
 				break;
 			case QUERY:
 				ret = vos_pool_query(arg->poh[j], &pinfo);
-				assert_int_equal(ret, 0);
+				assert_rc_equal(ret, 0);
 				assert_int_equal(pinfo.pif_cont_nr, 0);
 				assert_false(SCM_TOTAL(&pinfo.pif_space) !=
 						VPOOL_16M);
@@ -197,7 +197,7 @@ pool_ops_run(void **state)
 				break;
 			}
 			if (arg->ops_seq[j][i] != QUERY)
-				assert_int_equal(ret, 0);
+				assert_rc_equal(ret, 0);
 		}
 	}
 }

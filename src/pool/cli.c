@@ -508,7 +508,7 @@ dc_pool_connect(tse_task_t *task)
 		/** sy_info.crt_ctx_share_addr */
 		/** sy_info.crt_timeout */
 
-		rc = rsvc_client_init(&pool->dp_client, args->svc);
+		rc = rsvc_client_init(&pool->dp_client, NULL);
 		if (rc != 0)
 			D_GOTO(out_pool, rc);
 
@@ -1113,7 +1113,7 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 				DP_UUID(args->uuid), rc);
 			D_GOTO(out_state, rc);
 		}
-		rc = rsvc_client_init(&state->client, args->svc);
+		rc = rsvc_client_init(&state->client, NULL);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": failed to rsvc_client_init, rc %d.\n",
 				DP_UUID(args->uuid), rc);

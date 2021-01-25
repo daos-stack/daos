@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -813,7 +813,7 @@ func (p *Provider) IsMounted(target string) (bool, error) {
 	return p.sys.IsMounted(target)
 }
 
-// GetfsUsage returns space utilisation info for a mount point.
+// GetfsUsage returns space utilization info for a mount point.
 func (p *Provider) GetfsUsage(target string) (*storage.ScmMountPoint, error) {
 	total, avail, err := p.sys.GetfsUsage(target)
 	if err != nil {

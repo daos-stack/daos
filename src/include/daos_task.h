@@ -194,8 +194,6 @@ typedef struct {
 	uuid_t			uuid;
 	/** Process set name of the DAOS servers managing the pool. */
 	const char		*grp;
-	/** Pool service replica ranks. */
-	const d_rank_list_t	*svc;
 	/** Connect mode represented by the DAOS_PC_ bits. */
 	unsigned int		flags;
 	/** Returned open handle. */
@@ -216,8 +214,6 @@ typedef struct {
 	uuid_t			uuid;
 	/** Process set name of the DAOS servers managing the pool */
 	const char		*grp;
-	/** Pool service replica ranks. */
-	d_rank_list_t		*svc;
 	/** Target array */
 	struct d_tgt_list	*tgts;
 } daos_pool_update_t;
@@ -310,8 +306,6 @@ typedef struct {
 	uuid_t			uuid;
 	/** Name of DAOS server process set managing the service. */
 	const char		*group;
-	/** List of service ranks. */
-	d_rank_list_t		*svc;
 	/** Ranks of the replicas to be added/removed. */
 	d_rank_list_t		*targets;
 	/** Optional, list of ranks which could not be added/removed. */

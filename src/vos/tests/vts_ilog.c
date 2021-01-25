@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,7 +66,7 @@ ilog_alloc_root(struct umem_instance *umm)
 
 	rc = umem_tx_end(umm, rc);
 done:
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	return umem_off2ptr(umm, ilog_off);
 }
@@ -86,7 +86,7 @@ ilog_free_root(struct umem_instance *umm, struct ilog_df *ilog)
 
 	rc = umem_tx_end(umm, rc);
 done:
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 enum {
@@ -179,7 +179,7 @@ fake_tx_log_add(struct umem_instance *umm, umem_off_t offset, uint32_t *tx_id,
 	int			 rc;
 
 	rc = lrua_allocx(array, &idx, epoch, &entry);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	assert_non_null(entry);
 
 	entry->tx_id = idx;
@@ -534,9 +534,9 @@ ilog_test_update(void **state)
 	LOG_FAIL(rc, 0, "Failed to insert ilog entry\n");
 
 	rc = entries_set(entries, ENTRY_NEW, 1, false, ENTRIES_END);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/* Test upgrade to punch in root */
 	rc = ilog_update(loh, NULL, epoch, 2, true);
@@ -545,9 +545,9 @@ ilog_test_update(void **state)
 	version_cache_fetch(&version_cache, loh, true);
 
 	rc = entries_set(entries, ENTRY_REPLACE, 1, true, ENTRIES_END);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/** Same epoch, different transaction, same operation.  In other
 	 *  words, both the existing entry and this one are punches so
@@ -575,7 +575,7 @@ ilog_test_update(void **state)
 
 	/** no change */
 	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/** New epoch, creation */
 	epoch = 2;
@@ -584,9 +584,9 @@ ilog_test_update(void **state)
 	version_cache_fetch(&version_cache, loh, true);
 
 	rc = entries_set(entries, ENTRY_APPEND, 2, false, ENTRIES_END);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/** New epoch, upgrade to punch */
 	rc = ilog_update(loh, NULL, epoch, 2, true);
@@ -594,9 +594,9 @@ ilog_test_update(void **state)
 	version_cache_fetch(&version_cache, loh, true);
 
 	rc = entries_set(entries, ENTRY_REPLACE, 2, true, ENTRIES_END);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 
 	epoch = 3;
@@ -623,10 +623,10 @@ ilog_test_update(void **state)
 	LOG_FAIL(rc, 0, "Failed to insert log entry\n");
 
 	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	ilog_close(loh);
 	rc = ilog_destroy(umm, &ilog_callbacks, ilog);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	assert_true(d_list_empty(&fake_tx_list));
 
@@ -675,9 +675,9 @@ ilog_test_abort(void **state)
 	version_cache_fetch(&version_cache, loh, true);
 
 	rc = entries_set(entries, ENTRY_NEW, 1, false, ENTRIES_END);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	id = current_tx_id;
 	rc = ilog_abort(loh, &id);
@@ -685,10 +685,10 @@ ilog_test_abort(void **state)
 	version_cache_fetch(&version_cache, loh, true);
 
 	rc = entries_set(entries, ENTRY_NEW, ENTRIES_END);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, -DER_NONEXIST,
 			   entries);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	rc = ilog_update(loh, NULL, id.id_epoch, 2, false);
 	LOG_FAIL(rc, 0, "Failed to insert log entry\n");
@@ -696,10 +696,10 @@ ilog_test_abort(void **state)
 
 	for (iter = 0; iter < 5; iter++) {
 		rc = entries_set(entries, ENTRY_NEW, 1, false, ENTRIES_END);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0,
 				   entries);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 
 		id.id_epoch = 2 + NUM_REC * iter;
 		/* Insert a bunch then delete them */
@@ -718,7 +718,7 @@ ilog_test_abort(void **state)
 
 		rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0,
 				   entries);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 
 		/* delete the same entries, leaving the one entry in the tree */
 		id.id_epoch = 2 + NUM_REC * iter;
@@ -738,13 +738,13 @@ ilog_test_abort(void **state)
 	}
 
 	rc = entries_set(entries, ENTRY_NEW, 1, false, ENTRIES_END);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	ilog_close(loh);
 	rc = ilog_destroy(umm, &ilog_callbacks, ilog);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	assert_true(d_list_empty(&fake_tx_list));
 	ilog_free_root(umm, ilog);
@@ -810,9 +810,9 @@ ilog_test_persist(void **state)
 
 	rc = entries_set(entries, ENTRY_NEW, 1, false, 2, false, 3, false,
 			 4, true, ENTRIES_END);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	id = saved_tx_id1;
 	rc = ilog_persist(loh, &id);
@@ -821,13 +821,13 @@ ilog_test_persist(void **state)
 
 	rc = entries_set(entries, ENTRY_NEW, 1, false, 2, false, 3, false, 4,
 			 true, ENTRIES_END);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	ilog_close(loh);
 	rc = ilog_destroy(umm, &ilog_callbacks, ilog);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	assert_true(d_list_empty(&fake_tx_list));
 	ilog_free_root(umm, ilog);
 }
@@ -894,9 +894,9 @@ ilog_test_aggregate(void **state)
 	version_cache_fetch(&version_cache, loh, true);
 
 	rc = entries_set(entries, ENTRY_NEW, 1, false, 4, true, ENTRIES_END);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	id.id_epoch = 5;
 	rc = ilog_update(loh, NULL, id.id_epoch, 1, true);
@@ -917,9 +917,9 @@ ilog_test_aggregate(void **state)
 	LOG_FAIL(rc, 0, "Failed to aggregate ilog\n");
 	version_cache_fetch(&version_cache, loh, true);
 	rc = entries_set(entries, ENTRY_NEW, 6, false, ENTRIES_END);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	id.id_epoch = 7;
 	rc = ilog_update(loh, NULL, id.id_epoch, 1, true);
@@ -934,15 +934,15 @@ ilog_test_aggregate(void **state)
 	version_cache_fetch(&version_cache, loh, true);
 
 	rc = entries_set(entries, ENTRY_NEW, ENTRIES_END);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, -DER_NONEXIST,
 			   entries);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	assert_true(d_list_empty(&fake_tx_list));
 
 	ilog_close(loh);
 	rc = ilog_destroy(umm, &ilog_callbacks, ilog);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	ilog_free_root(umm, ilog);
 	ilog_fetch_finish(&ilents);
@@ -1009,9 +1009,9 @@ ilog_test_discard(void **state)
 	version_cache_fetch(&version_cache, loh, true);
 
 	rc = entries_set(entries, ENTRY_NEW, 1, false, ENTRIES_END);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	id.id_epoch = 5;
 	rc = ilog_update(loh, NULL, id.id_epoch, 1, true);
@@ -1031,10 +1031,10 @@ ilog_test_discard(void **state)
 	LOG_FAIL(rc, 1, "Failed to aggregate ilog\n");
 	version_cache_fetch(&version_cache, loh, true);
 	rc = entries_set(entries, ENTRY_NEW, ENTRIES_END);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, -DER_NONEXIST,
 			   entries);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	id.id_epoch = 7;
 	rc = ilog_update(loh, NULL, id.id_epoch, 1, false);
@@ -1049,15 +1049,15 @@ ilog_test_discard(void **state)
 	version_cache_fetch(&version_cache, loh, true);
 
 	rc = entries_set(entries, ENTRY_NEW, ENTRIES_END);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, -DER_NONEXIST,
 			   entries);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	assert_true(d_list_empty(&fake_tx_list));
 
 	ilog_close(loh);
 	rc = ilog_destroy(umm, &ilog_callbacks, ilog);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	ilog_free_root(umm, ilog);
 	ilog_fetch_finish(&ilents);

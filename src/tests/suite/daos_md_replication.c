@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,7 +66,7 @@ mdr_stop_pool_svc(void **argv)
 	/* Connect to the pool. */
 	if (arg->myrank == 0) {
 		print_message("connecting to pool\n");
-		rc = daos_pool_connect(uuid, arg->group, NULL /* svc */,
+		rc = daos_pool_connect(uuid, arg->group,
 				       DAOS_PC_RW, &poh, NULL /* info */,
 				       NULL /* ev */);
 	}
@@ -150,7 +150,7 @@ mdr_stop_cont_svc(void **argv)
 	}
 
 	print_message("connecting to pool\n");
-	rc = daos_pool_connect(pool_uuid, arg->group, NULL /* svc */,
+	rc = daos_pool_connect(pool_uuid, arg->group,
 			       DAOS_PC_RW, &poh, NULL, NULL /* ev */);
 	assert_int_equal(rc, 0);
 	print_message("creating container\n");

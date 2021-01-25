@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -646,7 +646,7 @@ enum {
 int evt_iter_prepare(daos_handle_t toh, unsigned int options,
 		     const struct evt_filter *filter, daos_handle_t *ih);
 /**
- * Finalise iterator.
+ * Finalize iterator.
  */
 int evt_iter_finish(daos_handle_t ih);
 

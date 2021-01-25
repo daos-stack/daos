@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -487,7 +487,7 @@ main(int argc, char **argv)
 		pool_create();
 
 		/** connect to the just created DAOS pool */
-		rc = daos_pool_connect(pool_uuid, DSS_PSETID, NULL /* svc */,
+		rc = daos_pool_connect(pool_uuid, DSS_PSETID,
 				       DAOS_PC_EX /* exclusive access */,
 				       &poh /* returned pool handle */,
 				       NULL /* returned pool info */,

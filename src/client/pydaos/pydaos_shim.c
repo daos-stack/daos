@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -145,7 +145,7 @@ cont_open(int ret, uuid_t puuid, uuid_t cuuid, int flags)
 	}
 
 	/** Connect to pool */
-	rc = daos_pool_connect(puuid, "daos_server", NULL, DAOS_PC_RW, &poh,
+	rc = daos_pool_connect(puuid, "daos_server", DAOS_PC_RW, &poh,
 			       NULL, NULL);
 	if (rc)
 		goto out;

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -217,7 +217,7 @@ func TestControl_StorageScan(t *testing.T) {
 				HostStorage:    MockHostStorageMap(t, &MockStorageScan{"host1", withNamespacesScan}),
 			},
 		},
-		"single host with space utilisation": {
+		"single host with space utilization": {
 			mic: &MockInvokerConfig{
 				UnaryResponse: &UnaryResponse{
 					Responses: []*HostResponse{

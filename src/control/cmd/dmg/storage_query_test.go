@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -136,9 +136,9 @@ func TestStorageQueryCommands(t *testing.T) {
 			nil,
 		},
 		{
-			"per-server storage space utilisation query",
+			"per-server storage space utilization query",
 			"storage query usage",
-			printRequest(t, &control.StorageScanReq{NvmeMeta: true}),
+			printRequest(t, &control.StorageScanReq{Usage: true}),
 			nil,
 		},
 		{
