@@ -44,7 +44,7 @@
  */
 #define CTL_SEP_VAL		'='
 #define CTL_SEP			','
-#define CTL_BUF_LEN		4096
+#define CTL_BUF_LEN		512
 
 static long			 ctl_epoch;
 static daos_unit_oid_t		 ctl_oid;

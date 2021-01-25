@@ -6,7 +6,7 @@ Import('env', 'prereqs')
 def scons():
     """Execute build"""
     libs = ['daos', 'daos_common', 'uuid', 'dfs', 'duns', 'gurt', 'cart']
-    libs += ['vos', 'bio', 'pthread', 'abt', 'dts']
+    libs += ['daos_tests', 'vos', 'bio', 'abt', 'dts']
 
     denv = env.Clone()
 
@@ -28,8 +28,8 @@ def scons():
     # denv.AppendUnique(CPPPATH=["../tests/suite"])
 
     # Add runtime paths for daos libraries
-    denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
-    prereqs.require(denv, 'argobots', 'hwloc', 'protobufc')
+    # denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
+    prereqs.require(denv, 'argobots', 'protobufc')
 
     daos_extra_files = denv.Object(['daos_hdlr.c', 'daos_autotest.c'])
     daos_obj_ctl = denv.Object('daos_obj_ctl.c')

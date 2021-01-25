@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -389,6 +389,9 @@ main(int argc, char *argv[])
 {
 	int	rc;
 
+	if (argc ==2 )
+		goto out_usage;
+
 	uuid_generate(ctl_ctx.tsc_pool_uuid);
 	uuid_generate(ctl_ctx.tsc_cont_uuid);
 
@@ -399,8 +402,8 @@ main(int argc, char *argv[])
 	ctl_ctx.tsc_mpi_rank	= 0;
 	ctl_ctx.tsc_mpi_size	= 1;	/* just one rank */
 
-	if (argc == 2)
-		strncpy(pmem_file, argv[1], PATH_MAX - 1);
+	if (argc == 3)
+		strncpy(pmem_file, argv[2], PATH_MAX - 1);
 	else
 		strcpy(pmem_file, "/mnt/daos/vos_ctl.pmem");
 
@@ -415,10 +418,8 @@ main(int argc, char *argv[])
 
 	rc = dts_cmd_parser(ctl_ops, "$ > ", ctl_cmd_run);
 	if (rc)
-		D_GOTO(out_ctx, rc);
+		dts_ctx_fini(&ctl_ctx);
 
- out_ctx:
-	dts_ctx_fini(&ctl_ctx);
 	return rc;
 
  out_usage:
