@@ -249,7 +249,6 @@ class NvmePoolExclude(TestWithServers):
             self.pool.display_pool_daos_space(display_string)
             pool[val].destroy()
 
-    @skipForTicket("DAOS-6108")
     def test_nvme_pool_excluded(self):
         """Test ID: DAOS-2086
         Test Description: This method is called from

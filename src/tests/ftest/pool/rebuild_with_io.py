@@ -36,7 +36,6 @@ class RebuildWithIO(TestWithServers):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-5611")
     def test_rebuild_with_io(self):
         """JIRA ID: Rebuild-003.
 

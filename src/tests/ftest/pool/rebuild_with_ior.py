@@ -37,7 +37,6 @@ class RebuildWithIOR(IorTestBase):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-2773")
     def test_rebuild_with_ior(self):
         """Jira ID: DAOS-951.
 
@@ -48,7 +47,7 @@ class RebuildWithIOR(IorTestBase):
           -- single pool, single client performing continuous read/write/verify
              sequence while failure/rebuild is triggered in another process
 
-        :avocado: tags=all,daily_regression,small,pool,rebuild,rebuildwithior
+        :avocado: tags=all,daily_regression,hw,small,pool,rebuild,rebuildwithior
         """
         # set params
         targets = self.params.get("targets", "/run/server_config/*")
