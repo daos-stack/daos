@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,12 @@
 #include <daos/common.h>
 #include <daos/placement.h>
 #include <daos.h>
+
+#include <stdarg.h>
+#include <stddef.h>
+#include <setjmp.h>
+#include <cmocka.h>
+#include <daos/tests_lib.h>
 #include "place_obj_common.h"
 
 #define DOM_NR          8
@@ -84,7 +90,7 @@ main(int argc, char **argv)
 	/* initial placement when all nodes alive */
 	daos_obj_generate_id(&oid, 0, OC_RP_4G2, 0);
 	D_PRINT("\ntest initial placement when no failed shard ...\n");
-	plt_obj_place(oid, &lo_1, pl_map, true);
+	assert_success(plt_obj_place(oid, &lo_1, pl_map, true));
 	plt_obj_layout_check(lo_1, COMPONENT_NR, 0);
 
 	/* test plt_obj_place when some/all shards failed */
@@ -92,7 +98,7 @@ main(int argc, char **argv)
 	for (i = 0; i < SPARE_MAX_NUM && i < lo_1->ol_nr; i++)
 		plt_fail_tgt(lo_1->ol_shards[i].po_target, &po_ver, po_map,
 			     pl_debug_msg);
-	plt_obj_place(oid, &lo_2, pl_map, true);
+	assert_success(plt_obj_place(oid, &lo_2, pl_map, true));
 	plt_obj_layout_check(lo_2, COMPONENT_NR, 0);
 	D_ASSERT(!plt_obj_layout_match(lo_1, lo_2));
 	D_PRINT("spare target candidate:");
@@ -106,7 +112,7 @@ main(int argc, char **argv)
 	for (i = 0; i < SPARE_MAX_NUM && i < lo_1->ol_nr; i++)
 		plt_reint_tgt_up(lo_1->ol_shards[i].po_target, &po_ver, po_map,
 			    pl_debug_msg);
-	plt_obj_place(oid, &lo_3, pl_map, true);
+	assert_success(plt_obj_place(oid, &lo_3, pl_map, true));
 	plt_obj_layout_check(lo_3, COMPONENT_NR, 0);
 	D_ASSERT(plt_obj_layout_match(lo_1, lo_3));
 

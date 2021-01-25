@@ -102,6 +102,11 @@ class CartIvTwoNodeTest(TestWithoutServers):
         self.utils = CartUtils()
         self.env = self.utils.get_env(self)
 
+    def tearDown(self):
+        """ Tear down """
+        super(CartIvTwoNodeTest, self).tearDown()
+        self.utils.cleanup_processes()
+
     def _verify_action(self, action):
         """verify the action"""
         if (('operation' not in action) or
