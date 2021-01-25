@@ -545,7 +545,7 @@ rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
 			continue;
 
 		rc = daos_obj_verify(arg->coh, oids[i], DAOS_EPOCH_MAX);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 }
 
@@ -826,10 +826,10 @@ dfs_ec_rebuild_io(void **state, int *shards, int shards_nr)
 	assert_int_equal(rc, 0);
 
 	rc = daos_cont_close(co_hdl, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 #if 0
 	while (idx > 0)

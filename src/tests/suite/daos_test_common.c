@@ -1009,7 +1009,7 @@ get_daos_prop_with_user_acl_perms(uint64_t perms)
 	struct daos_ace	*ace;
 	char		*user = NULL;
 
-	assert_int_equal(daos_acl_uid_to_principal(geteuid(), &user), 0);
+	assert_rc_equal(daos_acl_uid_to_principal(geteuid(), &user), 0);
 
 	acl = get_daos_acl_with_owner_perms(0);
 
@@ -1019,7 +1019,7 @@ get_daos_prop_with_user_acl_perms(uint64_t perms)
 	ace->dae_allow_perms = perms;
 	assert_true(daos_ace_is_valid(ace));
 
-	assert_int_equal(daos_acl_add_ace(&acl, ace), 0);
+	assert_rc_equal(daos_acl_add_ace(&acl, ace), 0);
 
 	/* Set effective user up as non-owner */
 	prop = get_daos_prop_with_owner_and_acl("nobody@", DAOS_PROP_CO_OWNER,
@@ -1070,7 +1070,7 @@ get_server_config(char *host, char *server_config_file)
 
 	D_ALLOC(dpid, 16);
 	rc = get_pid_of_process(host, dpid, daos_proc);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	snprintf(command, sizeof(command),
 		 "ssh %s ps ux -A | grep %s", host, dpid);
