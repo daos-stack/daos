@@ -37,6 +37,14 @@ type Handler interface {
 	OnEvent(context.Context, *RASEvent)
 }
 
+// HandlerFunc is an adapter to allow an ordinary function to be
+// used as a Handler.
+type HandlerFunc func(context.Context, *RASEvent)
+
+func (f HandlerFunc) OnEvent(ctx context.Context, evt *RASEvent) {
+	f(ctx, evt)
+}
+
 type subscriber struct {
 	topic   RASTypeID
 	handler Handler

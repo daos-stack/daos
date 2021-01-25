@@ -59,6 +59,8 @@ const (
 	RASRankDown       RASID = C.RAS_RANK_DOWN
 	RASRankNoResponse RASID = C.RAS_RANK_NO_RESPONSE
 	RASPoolRepsUpdate RASID = C.RAS_POOL_REPS_UPDATE
+	RASSwimRankAlive  RASID = C.RAS_SWIM_RANK_ALIVE
+	RASSwimRankDead   RASID = C.RAS_SWIM_RANK_DEAD
 )
 
 func (id RASID) String() string {
@@ -215,6 +217,8 @@ func (evt *RASEvent) FromProto(pbEvt *sharedpb.RASEvent) (err error) {
 		evt.ExtendedInfo, err = PoolSvcInfoFromProto(ei)
 	case *sharedpb.RASEvent_StrInfo:
 		evt.ExtendedInfo, err = StrInfoFromProto(ei)
+	case nil:
+		// no extended info
 	default:
 		err = errors.New("unknown extended info type")
 	}

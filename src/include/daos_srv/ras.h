@@ -46,7 +46,9 @@
 	X(RAS_RANK_UP,		"engine_status_up")		\
 	X(RAS_RANK_DOWN,	"engine_status_down")		\
 	X(RAS_RANK_NO_RESPONSE,	"engine_status_no_response")	\
-	X(RAS_POOL_REPS_UPDATE,	"pool_replicas_updated")
+	X(RAS_POOL_REPS_UPDATE,	"pool_replicas_updated")	\
+	X(RAS_SWIM_RANK_ALIVE,	"swim_rank_alive")		\
+	X(RAS_SWIM_RANK_DEAD,	"swim_rank_dead")
 
 /** Define RAS event enum */
 typedef enum {
@@ -142,5 +144,15 @@ ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
  */
 int
 ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl);
+
+/**
+ * Notify control plane that swim has detected a dead rank.
+ *
+ * \param[in] rank	Rank that was marked dead.
+ *
+ * \retval		Zero on success, non-zero otherwise.
+ */
+int
+ds_notify_swim_rank_dead(d_rank_t rank);
 
 #endif /* __DAOS_RAS_H_ */

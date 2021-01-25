@@ -447,6 +447,16 @@ func (m *Membership) CheckHosts(hosts string, ctlPort int) (*RankSet, *hostlist.
 	return rs, missHS, nil
 }
 
+func (m *Membership) MarkRankDead(rank Rank) error {
+	member, err := m.db.FindMemberByRank(rank)
+	if err != nil {
+		return err
+	}
+
+	member.state = MemberStateEvicted
+	return m.db.UpdateMember(member)
+}
+
 // OnEvent handles events on channel and updates member states accordingly.
 func (m *Membership) OnEvent(_ context.Context, evt *events.RASEvent) {
 	switch evt.ID {

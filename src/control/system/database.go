@@ -461,8 +461,11 @@ func (db *Database) GroupMap() (*GroupMap, error) {
 
 	gm := newGroupMap(db.data.MapVersion)
 	for _, srv := range db.data.Members.Ranks {
+		if srv.state&AvailableMemberFilter == 0 {
+			continue
+		}
 		gm.RankURIs[srv.Rank] = srv.FabricURI
-		if srv.state&AvailableMemberFilter > 0 && db.isReplica(srv.Addr) {
+		if db.isReplica(srv.Addr) {
 			gm.MSRanks = append(gm.MSRanks, srv.Rank)
 		}
 	}
