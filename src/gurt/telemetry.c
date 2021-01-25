@@ -2132,7 +2132,7 @@ d_tm_allocate_shared_memory(int srv_idx, size_t mem_size)
 
 	/** create a unique key for this instance */
 	key = D_TM_SHARED_MEMORY_KEY + srv_idx;
-	shmid = shmget(key, mem_size, IPC_CREAT | 0666);
+	shmid = shmget(key, mem_size, IPC_CREAT | 0660);
 	if (shmid < 0)
 		return NULL;
 
@@ -2156,7 +2156,7 @@ d_tm_get_shared_memory(int srv_idx)
 
 	/** create a unique key for this instance */
 	key = D_TM_SHARED_MEMORY_KEY + srv_idx;
-	shmid = shmget(key, 0, 0666);
+	shmid = shmget(key, 0, 0);
 	if (shmid < 0)
 		return NULL;
 
