@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -94,8 +94,8 @@ typedef struct {
 } dfs_iod_t;
 
 /**
- * Create a DFS container with the the POSIX property layout set.
- * Optionally set attributes for hints on the container.
+ * Create a DFS container with the POSIX property layout set.  Optionally set
+ * attributes for hints on the container.
  *
  * \param[in]	poh	Pool open handle.
  * \param[in]	co_uuid	Container UUID.
@@ -186,7 +186,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 
 /**
  * Optionally set a prefix on the dfs mount where all paths passed to dfs_lookup
- * are trimmed of that prefix. This is helpful when using DFS API with a dfuse
+ * are trimmed off that prefix. This is helpful when using DFS API with a dfuse
  * mount and the user would like to reference files in the dfuse mount instead
  * of the absolute path from the root of the DFS container.
  *

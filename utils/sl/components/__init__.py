@@ -312,8 +312,8 @@ def define_components(reqs):
                 libs=['rte_bus_pci'], patch_rpath=['lib'])
 
     url = 'https://github.com/protobuf-c/protobuf-c/releases/download/' \
-        'v1.3.0/protobuf-c-1.3.0.tar.gz'
-    web_retriever = WebRetriever(url, "08804f8bdbb3d6d44c2ec9e71e47ef6f")
+        'v1.3.3/protobuf-c-1.3.3.tar.gz'
+    web_retriever = WebRetriever(url, "dabc05a5f11c21b96d8d6db4153f5343")
     reqs.define('protobufc',
                 retriever=web_retriever,
                 commands=['./configure --prefix=$PROTOBUFC_PREFIX '

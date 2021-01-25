@@ -42,7 +42,6 @@
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/security.h>
 #include <daos/checksum.h>
-#include <gurt/mem.h>
 #include "daos_srv/srv_csum.h"
 #include "obj_rpc.h"
 #include "obj_internal.h"
@@ -125,7 +124,9 @@ obj_rw_complete(crt_rpc_t *rpc, unsigned int map_version,
 		}
 
 		if (rc != 0) {
-			D_CDEBUG(rc == -DER_REC2BIG, DLOG_DBG, DLOG_ERR,
+			D_CDEBUG(rc == -DER_REC2BIG || rc == -DER_INPROGRESS ||
+				 rc == -DER_TX_RESTART,
+				 DLOG_DBG, DLOG_ERR,
 				 DF_UOID " %s end failed: %d\n",
 				 DP_UOID(orwi->orw_oid),
 				 update ? "Update" : "Fetch", rc);
@@ -1082,8 +1083,8 @@ obj_dedup_verify(daos_handle_t ioh, struct bio_sglist *bsgls_dup, int sgl_nr)
 			D_ASSERT(biov_dup->bi_addr.ba_dedup);
 
 			D_ASSERT(bio_iov2len(biov) == bio_iov2len(biov_dup));
-			rc = d_memcmp(bio_iov2buf(biov), bio_iov2buf(biov_dup),
-				      bio_iov2len(biov));
+			rc = memcmp(bio_iov2buf(biov), bio_iov2buf(biov_dup),
+				    bio_iov2len(biov));
 
 			if (rc == 0) {	/* verify succeeded */
 				D_DEBUG(DB_IO, "Verify dedup succeeded\n");
@@ -1406,8 +1407,8 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				     dth);
 		daos_recx_ep_list_free(shadows, orw->orw_nr);
 		if (rc) {
-			D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_NONEXIST,
-				 DB_IO, DLOG_ERR,
+			D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_NONEXIST ||
+				 rc == -DER_TX_RESTART, DB_IO, DLOG_ERR,
 				 "Fetch begin for "DF_UOID" failed: "DF_RC"\n",
 				 DP_UOID(orw->orw_oid), DP_RC(rc));
 			goto out;
@@ -2231,7 +2232,7 @@ re_fetch:
 				D_GOTO(out, rc = -DER_TX_BUSY);
 
 			/* XXX: Currently, we commit the distributed transaction
-			 *	sychronously. Normally, it will be very quickly.
+			 *	synchronously. Normally it will be very quickly.
 			 *	So let's yield then retry. If related
 			 *	distributed transaction is still not committed
 			 *	after several cycles, replies '-DER_TX_BUSY' to
@@ -2629,7 +2630,7 @@ re_pack:
 			D_GOTO(out, rc = -DER_TX_BUSY);
 
 		/* XXX: Currently, we commit the distributed transaction
-		 *	sychronously. Normally, it will be very quickly.
+		 *	synchronously. Normally it will be very quickly.
 		 *	So let's yield then retry. If related distributed
 		 *	transaction is still not committed after several
 		 *	cycles, replies '-DER_TX_BUSY' to the client.
@@ -2971,7 +2972,8 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	/* local RPC handler */
 	rc = obj_local_punch(opi, opc_get(rpc->cr_opc), &ioc, &dth);
 	if (rc != 0) {
-		D_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR,
+		D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART,
+			 DB_IO, DLOG_ERR,
 			 DF_UOID": error="DF_RC".\n", DP_UOID(opi->opi_oid),
 			 DP_RC(rc));
 		D_GOTO(out, rc);
@@ -3320,7 +3322,7 @@ out:
 			D_GOTO(failed, rc = -DER_TX_BUSY);
 
 		/* XXX: Currently, we commit the distributed transaction
-		 *	sychronously. Normally, it will be very quickly.
+		 *	synchronously. Normally it will be very quickly.
 		 *	So let's yield then retry. If related distributed
 		 *	transaction is still not committed after several
 		 *	cycles, then replies '-DER_TX_BUSY' to the client.
@@ -3957,7 +3959,8 @@ again:
 	rc = dtx_end(&dth, ioc->ioc_coc, rc);
 
 out:
-	D_CDEBUG(rc != 0, DLOG_ERR, DB_IO,
+	D_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART,
+		 DLOG_ERR, DB_IO,
 		 "Handled DTX "DF_DTI" on non-leader: "DF_RC"\n",
 		 DP_DTI(&dcsh->dcsh_xid), DP_RC(rc));
 
@@ -4200,7 +4203,8 @@ ds_obj_dtx_leader_ult(void *arg)
 	rc = dtx_leader_end(&dlh, dca->dca_ioc->ioc_coc, rc);
 
 out:
-	D_CDEBUG(rc != 0, DLOG_ERR, DB_IO,
+	D_CDEBUG(rc != 0 && rc != DER_INPROGRESS && rc != -DER_TX_RESTART,
+		 DLOG_ERR, DB_IO,
 		 "Handled DTX "DF_DTI" on leader, idx %u: "DF_RC"\n",
 		 DP_DTI(&dcsh->dcsh_xid), dca->dca_idx, DP_RC(rc));
 
