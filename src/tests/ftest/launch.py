@@ -96,7 +96,7 @@ def display_disk_space(path):
     print(get_output(["df", "-h", path]))
 
 
-def get_build_environment():
+def get_build_environment(args):
     """Obtain DAOS build environment variables from the .build_vars.json file.
 
     Returns:
@@ -110,13 +110,17 @@ def get_build_environment():
         with open(build_vars_file) as vars_file:
             return json.load(vars_file)
     except ValueError:
+        if not args.list:
+            raise
         return json.loads('{{"PREFIX": "{}"}}'.format(os.getcwd()))
     except IOError as error:
         if error.errno == errno.ENOENT:
+            if not args.list:
+                raise
             return json.loads('{{"PREFIX": "{}"}}'.format(os.getcwd()))
 
 
-def get_temporary_directory(base_dir=None):
+def get_temporary_directory(args, base_dir=None):
     """Get the temporary directory used by functional tests.
 
     Args:
@@ -127,7 +131,7 @@ def get_temporary_directory(base_dir=None):
 
     """
     if base_dir is None:
-        base_dir = get_build_environment()["PREFIX"]
+        base_dir = get_build_environment(args)["PREFIX"]
     if base_dir == "/usr":
         tmp_dir = os.getenv(
             "DAOS_TEST_SHARED_DIR", os.path.expanduser("~/daos_test"))
@@ -151,7 +155,7 @@ def set_test_environment(args):
         None
 
     """
-    base_dir = get_build_environment()["PREFIX"]
+    base_dir = get_build_environment(args)["PREFIX"]
     bin_dir = os.path.join(base_dir, "bin")
     sbin_dir = os.path.join(base_dir, "sbin")
     # /usr/sbin is not setup on non-root user for CI nodes.
@@ -194,8 +198,8 @@ def set_test_environment(args):
                     print(
                         "  - {0:<5} (speed: {1:>6} state: {2})".format(
                             device, speed, state))
-                    # Only include the first active interface for each speed
-                    # First # is determined by an alphabetic sort: ib0 will be
+                    # Only include the first active interface for each speed -
+                    # first is determined by an alphabetic sort: ib0 will be
                     # checked before ib1
                     if speed not in available_interfaces:
                         available_interfaces[speed] = device
@@ -1111,8 +1115,8 @@ def archive_config_files(avocado_logs_dir, args):
     print("Archiving config files from {} in {}".format(host_list, destination))
 
     # Copy any config files
-    base_dir = get_build_environment()["PREFIX"]
-    configs_dir = get_temporary_directory(base_dir)
+    base_dir = get_build_environment(args)["PREFIX"]
+    configs_dir = get_temporary_directory(args, base_dir)
     task = archive_files(
         destination, host_list, "{}/*_*_*.yaml".format(configs_dir), False,
         args)

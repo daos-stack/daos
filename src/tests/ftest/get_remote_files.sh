@@ -269,7 +269,7 @@ if ! ret=$(check_files_input "${FILES_TO_PROCESS}"); then
         exit 1
     elif [[ ${ret} -eq 2 ]]; then
         echo "No files matched ${FILES_TO_PROCESS}. Nothing to do."
-        if [ -n "${ARCHIVE_DEST}" ]; then
+        if ! "${VERBOSE}" && [ -n "${ARCHIVE_DEST}" ]; then
             if ! scp_files "${log_file}" "${ARCHIVE_DEST}"; then
                 exit 1
             fi
