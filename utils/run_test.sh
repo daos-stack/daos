@@ -133,6 +133,7 @@ if [ -d "/mnt/daos" ]; then
              -a 5 -n 10
     run_test "${SL_PREFIX}/bin/daos_perf" -T vos -R '"U;p F;p V"' -o 5 -d 5 \
              -a 5 -n 10 -A
+    run_test "${SL_PREFIX}/bin/jump_pl_map"
 
     # Tests launched by scripts
     export USE_VALGRIND=${RUN_TEST_VALGRIND}

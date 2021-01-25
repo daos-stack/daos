@@ -25,6 +25,7 @@
 #include <daos/common.h>
 #include <daos/placement.h>
 #include <daos.h>
+#include <daos/object.h>
 #include "place_obj_common.h"
 /* Gain some internal knowledge of pool server */
 #include "../../pool/rpc.h"
@@ -102,6 +103,7 @@ object_class_is_verified(void **state)
 {
 	struct pool_map		*po_map;
 	struct pl_map		*pl_map;
+
 #define DAOS_6295 0
 	/*
 	 * ---------------------------------------------------------
@@ -298,7 +300,7 @@ struct jm_test_ctx {
 	struct pool_map		*po_map;
 	struct pl_map		*pl_map;
 	struct pl_obj_layout	*layout;
-
+	uuid_t			 pl_uuid;
 	/* remember shard's original targets */
 	uint32_t		*shard_targets;
 
@@ -341,15 +343,20 @@ struct jm_test_ctx {
 static void
 __jtc_maps_free(struct jm_test_ctx *ctx)
 {
-	if (ctx->are_maps_generated)
+	if (ctx->are_maps_generated) {
 		free_pool_and_placement_map(ctx->po_map, ctx->pl_map);
+		ctx->po_map = NULL;
+		ctx->pl_map = NULL;
+	}
 }
 
 static void
 __jtc_layout_free(struct jm_test_ctx *ctx)
 {
-	if (ctx->is_layout_set)
+	if (ctx->is_layout_set) {
 		pl_obj_layout_free(ctx->layout);
+		ctx->layout = NULL;
+	}
 }
 
 static void
@@ -420,6 +427,7 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 
 	/* Extend the current pool map */
 	rc = pool_map_extend(ctx->po_map, map_version, map_buf);
+	D_FREE(map_buf);
 	assert_success(rc);
 
 	ctx->domain_nr += domain_count;
@@ -481,8 +489,6 @@ static void
 jtc_set_status_on_target(struct jm_test_ctx *ctx, const int status,
 			 const uint32_t id)
 {
-	uuid_t uuid;
-
 	struct pool_target_id_list tgts;
 	struct pool_target_id tgt_id = {.pti_id = id};
 
@@ -500,7 +506,7 @@ jtc_set_status_on_target(struct jm_test_ctx *ctx, const int status,
 	rc = pool_map_set_version(ctx->po_map, ctx->ver);
 	assert_success(rc);
 
-	pl_map_update(uuid, ctx->po_map, false, PL_TYPE_JUMP_MAP);
+	pl_map_update(ctx->pl_uuid, ctx->po_map, false, PL_TYPE_JUMP_MAP);
 	jtc_print_pool(ctx);
 }
 
@@ -617,7 +623,6 @@ jtc_layout_has_duplicate(struct jm_test_ctx *ctx)
 static void
 jtc_enable_debug(struct jm_test_ctx *ctx)
 {
-	ctx->enable_print_pool = true;
 	ctx->enable_print_layout = true;
 	ctx->enable_print_debug_msgs = true;
 }
@@ -643,7 +648,7 @@ __jtc_init(struct jm_test_ctx *ctx, daos_oclass_id_t object_class,
 		jtc_enable_debug(ctx);
 
 	ctx->ver = 1; /* Should start with pool map version 1 */
-
+	uuid_generate(ctx->pl_uuid);
 
 	jtc_set_object_meta(ctx, object_class, 1, UINT64_MAX);
 
@@ -678,7 +683,7 @@ jtc_init_non_standard(struct jm_test_ctx *ctx, uint32_t domain_nr,
 						PL_TYPE_JUMP_MAP,
 						&ctx->po_map,
 						&ctx->pl_map);
-
+	ctx->are_maps_generated = true;
 }
 
 static void
@@ -874,10 +879,18 @@ jtc_snapshot_layout_targets(struct jm_test_ctx *ctx)
 #define jtc_assert_rebuild_reint_new(ctx, l_rebuilding, s_rebuild, s_reint, \
 				     s_new) \
 	do {\
-	assert_int_equal(l_rebuilding, jtc_get_layout_rebuild_count(&ctx)); \
-	assert_int_equal(s_rebuild, ctx.rebuild.out_nr); \
-	assert_int_equal(s_reint, ctx.reint.out_nr); \
-	assert_int_equal(s_new, ctx.new.out_nr); \
+	if (l_rebuilding != jtc_get_layout_rebuild_count(&ctx)) \
+		fail_msg("Expected %d rebuilding but found %d", l_rebuilding, \
+		jtc_get_layout_rebuild_count(&ctx)); \
+	if (s_rebuild != ctx.rebuild.out_nr) \
+		fail_msg("Expected rebuild scan to return %d but found %d", \
+		s_rebuild, ctx.rebuild.out_nr); \
+	if (s_reint != ctx.reint.out_nr) \
+		fail_msg("Expected reint scan to return %d but found %d", \
+		s_reint, ctx.reint.out_nr); \
+	if (s_new != ctx.new.out_nr) \
+		fail_msg("Expected new scan to return %d but found %d", \
+		s_new, ctx.new.out_nr); \
 	} while (0)
 
 #define UP	POOL_REINT
@@ -971,6 +984,7 @@ all_healthy(void **state)
 		jtc_set_object_meta(&ctx, object_classes[i], 0, 1);
 		JTC_CREATE_AND_ASSERT_HEALTHY_LAYOUT(&ctx);
 	}
+	D_FREE(object_classes);
 	jtc_fini(&ctx);
 }
 
@@ -989,6 +1003,7 @@ down_to_target(void **state)
 	assert_success(jtc_create_layout(&ctx));
 	jtc_scan(&ctx);
 
+	jtc_fini(&ctx);
 	skip_msg("DAOS-6515: Plenty of targets, but not being rebuilt.");
 	assert_int_equal(ctx.rebuild.out_nr, 1);
 	assert_int_equal(0, jtc_get_layout_bad_count(&ctx));
@@ -1126,6 +1141,7 @@ one_is_being_reintegrated(void **state)
 {
 	struct jm_test_ctx	ctx;
 	uint32_t		orig_target;
+	uint32_t		rebuilt_target;
 	int			shard_idx;
 	const daos_oclass_id_t	oc = OC_RP_3G2;
 	const uint32_t		oc_expected_target = 6;
@@ -1135,7 +1151,6 @@ one_is_being_reintegrated(void **state)
 		/* create a layout with 4 targets (2 replica, 2 shards) */
 		jtc_init_with_layout(&ctx, oc_expected_target + 1, 1, 2, oc,
 				     g_verbose);
-		ctx.enable_print_pool = false;
 
 		/* simulate that the original target went down, but is now being
 		 * reintegrated
@@ -1144,6 +1159,9 @@ one_is_being_reintegrated(void **state)
 
 		jtc_set_status_on_target(&ctx, DOWN, orig_target);
 		jtc_set_status_on_target(&ctx, DOWNOUT, orig_target);
+		jtc_assert_scan_and_layout(&ctx);
+		rebuilt_target = jtc_layout_shard_tgt(&ctx, shard_idx);
+
 		jtc_set_status_on_target(&ctx, UP, orig_target);
 		ctx.rebuild.skip = true; /* DAOS-6516 */
 		jtc_assert_scan_and_layout(&ctx);
@@ -1151,29 +1169,21 @@ one_is_being_reintegrated(void **state)
 		/* Should have 1 target rebuilding and 1 returned
 		 * from find_reint
 		 */
-		if (jtc_get_layout_rebuild_count(&ctx) != 1) {
-			print_message("ERROR: For shard_idx %d, rebuilding "
-				      "count is: %d\n", shard_idx,
-				      jtc_get_layout_rebuild_count(&ctx));
-			skip_msg("DAOS-6302");
-		} else {
-			jtc_assert_rebuild_reint_new(ctx, 1, 0, 1, 0);
-			/*
-			 * make sure there's a target in rebuilding and one
-			 * not for the current shard_idx
-			 */
-			is_true(jtc_has_shard_with_rebuilding_not_set(&ctx,
-				shard_idx));
-			is_true(jtc_has_shard_with_target_rebuilding(&ctx,
-				shard_idx, NULL));
-		}
+		jtc_assert_rebuild_reint_new(ctx, 1, 0, 1, 0);
+		/*
+		 * make sure the original target is rebuilding and target
+		 * that was rebuilt to when the target original target
+		 * went down is not rebuilding
+		 */
+		is_true(jtc_has_shard_target_rebuilding(&ctx, shard_idx,
+							orig_target));
+		is_true(jtc_has_shard_target_not_rebuilding(&ctx, shard_idx,
+							    rebuilt_target));
 
-		assert_int_equal(0, ctx.rebuild.out_nr);
-
-		/* Should have 5 items in the layout, 4 with no rebuild set, but
-		 * the third shard (had UP set on it) should also have an
-		 * item with rebuild set.
-		 * Will actually have 6 items because the groups need to
+		/* Make sure the number of shard/targets in the layout is
+		 * correct. There should be 1 extra shard/target item in the
+		 * layout which has rebuilding set.
+		 * Will actually have more items because the groups need to
 		 * have the same size, but one of the groups will have an
 		 * invalid shard/target.
 		 */
@@ -1220,6 +1230,8 @@ down_back_to_up_in_same_order(void **state)
 
 	jtc_set_status_on_target(&ctx, UP, orig_shard_targets[0]);
 	jtc_assert_scan_and_layout(&ctx);
+
+	jtc_fini(&ctx);
 	skip_msg("DAOS-6519: too many things are in the reint scan");
 	assert_int_equal(1, ctx.reint.out_nr);
 	jtc_assert_rebuild_reint_new(ctx, 1, 0, 1, 0);
@@ -1291,7 +1303,7 @@ all_are_being_reintegrated(void **state)
 	/* simulate that the original targets went down, but are now being
 	 * reintegrated
 	 */
-	jtc_snapshot_layout_targets(&ctx);
+	jtc_snapshot_layout_targets(&ctx); /* snapshot original targets */
 	for (i = 0; i < jtc_get_layout_nr(&ctx); i++) {
 		jtc_set_status_on_target(&ctx, DOWN, ctx.shard_targets[i]);
 		jtc_set_status_on_target(&ctx, DOWNOUT, ctx.shard_targets[i]);
@@ -1299,15 +1311,11 @@ all_are_being_reintegrated(void **state)
 	for (i = 0; i < jtc_get_layout_nr(&ctx); i++)
 		jtc_set_status_on_target(&ctx, UP, ctx.shard_targets[i]);
 
-	jtc_create_layout(&ctx);
-
 	ctx.rebuild.skip = true; /* DAOS-6516 */
-	jtc_scan(&ctx);
+	jtc_assert_scan_and_layout(&ctx);
 
 	/* Should be all 6 targets */
 	assert_int_equal(6, ctx.reint.out_nr);
-	skip_msg("DAOS-6302: only 4 are targets in layout are marked "
-		 "rebuilding\n");
 	assert_int_equal(6, jtc_get_layout_rebuild_count(&ctx));
 
 	/* should have nothing in rebuild or addition */
@@ -1315,11 +1323,13 @@ all_are_being_reintegrated(void **state)
 	assert_int_equal(0, ctx.new.out_nr);
 
 	/* each shard idx should have a rebuild target and a non
-	 * rebuild target
+	 * rebuild target. The rebuild target should be the original shard
+	 * before all went down.
 	 */
 	for (i = 0; i < 6; i++) {
-		is_true(jtc_has_shard_with_target_rebuilding(&ctx, i, NULL));
 		is_true(jtc_has_shard_with_rebuilding_not_set(&ctx, i));
+		is_true(jtc_has_shard_target_rebuilding(&ctx, i,
+							ctx.shard_targets[i]));
 	}
 
 	jtc_fini(&ctx);
@@ -1354,6 +1364,8 @@ down_up_sequences(void **state)
 	jtc_set_status_on_target(&ctx, UP, shard_target_2);
 	jtc_assert_scan_and_layout(&ctx);
 	is_true(jtc_has_shard_moving_to_target(&ctx, 0, shard_target_1));
+
+	jtc_fini(&ctx);
 	skip_msg("DAOS-6520: Should only be moving shard to target 1");
 	is_false(jtc_has_shard_moving_to_target(&ctx, 0, shard_target_2));
 
@@ -1389,6 +1401,8 @@ down_up_sequences1(void **state)
 	jtc_set_status_on_target(&ctx, UP, shard_target_1);
 	jtc_assert_scan_and_layout(&ctx);
 	is_true(jtc_has_shard_moving_to_target(&ctx, 0, shard_target_1));
+
+	jtc_fini(&ctx);
 	skip_msg("DAOS-6520: Should only be moving shard to target 1");
 	is_false(jtc_has_shard_moving_to_target(&ctx, 0, shard_target_2));
 
@@ -1423,6 +1437,8 @@ drain_all_with_extra_domains(void **state)
 	 * rebuilding and one not
 	 */
 	assert_int_equal(8, jtc_get_layout_target_count(&ctx));
+
+	jtc_fini(&ctx);
 	skip_msg("DAOS-6300 - too many are marked as rebuild");
 	assert_int_equal(4, jtc_get_layout_rebuild_count(&ctx));
 	for (i = 0; i < shards_nr; i++) {
@@ -1454,6 +1470,7 @@ drain_all_with_enough_targets(void **state)
 	 * rebuilding and one not
 	 */
 	for (i = 0; i < shards_nr; i++) {
+		jtc_fini(&ctx);
 		skip_msg("DAOS-6300 - Not drained to other target?");
 		assert_int_equal(0, jtc_get_layout_bad_count(&ctx));
 		is_true(jtc_has_shard_with_target_rebuilding(&ctx, i, NULL));
@@ -1485,6 +1502,7 @@ drain_target_same_shard_repeatedly_for_all_shards(void **state)
 			is_true(jtc_has_shard_with_target_rebuilding(&ctx,
 				shard_id, &new_target));
 
+			jtc_fini(&ctx);
 			skip_msg("DAOS-6300: All are marked as rebuilding");
 			is_true(jtc_has_shard_target_not_rebuilding(&ctx,
 				shard_id, target));
@@ -1538,6 +1556,7 @@ one_server_is_added(void **state)
 	assert_int_equal(0, ctx.rebuild.out_nr);
 	assert_int_equal(0, ctx.reint.out_nr);
 
+	jtc_fini(&ctx);
 	skip_msg("DAOS-6303 - should have targets marked as rebuild");
 	assert_int_equal(ctx.new.out_nr, jtc_get_layout_rebuild_count(&ctx));
 
@@ -1565,6 +1584,7 @@ placement_handles_multiple_states(void **state)
 	/* a new domain is added */
 	jtc_pool_map_extend(&ctx, 1, 1, 1);
 
+	jtc_fini(&ctx);
 	skip_msg("DAOS-6301: Hits D_ASSERT(original->ol_nr == new->ol_nr)");
 	assert_success(jtc_create_layout(&ctx));
 
@@ -1681,6 +1701,8 @@ unbalanced_config(void **state)
 static int
 placement_test_setup(void **state)
 {
+	assert_success(obj_class_init());
+
 	return pl_init();
 }
 
@@ -1688,11 +1710,14 @@ static int
 placement_test_teardown(void **state)
 {
 	pl_fini();
+	obj_class_fini();
 
 	return 0;
 }
 
-#define T(dsc, test) { "PLACEMENT "STR(__COUNTER__)": " dsc, test, \
+#define WIP(dsc, test) { "WIP PLACEMENT "STR(__COUNTER__)" ("#test"): " dsc, \
+			  test, placement_test_setup, placement_test_teardown }
+#define T(dsc, test) { "PLACEMENT "STR(__COUNTER__)" ("#test"): " dsc, test, \
 			  placement_test_setup, placement_test_teardown }
 
 static const struct CMUnitTest tests[] = {
@@ -1711,19 +1736,22 @@ static const struct CMUnitTest tests[] = {
 	  chained_rebuild_completes_first_shard),
 	T("Rebuild all shards' targets", chained_rebuild_completes_all_at_once),
 	/* UP */
-	T("One target is being reintegrated", one_is_being_reintegrated),
-	T("With all targets being reintegrated", all_are_being_reintegrated),
+	T("For each shard at a time, take the shard's target "
+	    "DOWN->DOWNOUT->UP. Then verify that the reintegration looks "
+	    "correct", one_is_being_reintegrated),
+	T("With all targets being reintegrated, make sure the correct "
+	    "targets are being rebuilt.", all_are_being_reintegrated),
 	T("Take a single shard's target down, downout, then again with the "
 	  "new target. Then reintegrate the first downed target, "
 	  "then the second.", down_up_sequences),
 	T("Take a single shard's target down, downout, then again with the "
 	  "new target. Then reintegrate the second downed target, "
-	  "then the first.", down_up_sequences1),
+	  "then the first (Reverse of previous test).", down_up_sequences1),
 	T("multiple shard targets go down, then are reintegrated in the "
 	  "same order they were brought down",
 	  down_back_to_up_in_same_order),
-	T("multiple shard targets go down, then are reintegrated in reverse "
-	  "order than how they were brought down",
+	T("multiple targets go down for the same shard, then are reintegrated "
+	  "in reverse order than how they were brought down",
 	  down_back_to_up_in_reverse_order),
 	/* DRAIN */
 	T("Drain all shards with extra domains", drain_all_with_extra_domains),

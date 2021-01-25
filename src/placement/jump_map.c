@@ -1,6 +1,6 @@
 /**
  *
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -905,6 +905,11 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 		/* Allocate space to hold the layout */
 		rc = pl_obj_layout_alloc(jmop.jmop_grp_size, jmop.jmop_grp_nr,
 					 &add_layout);
+		if (rc != 0) {
+			D_ERROR("pl_obj_layout_alloc failed, rc "DF_RC"\n",
+				DP_RC(rc));
+			return rc;
+		}
 
 		remap_list_free_all(&remap_list);
 		D_INIT_LIST_HEAD(&remap_list);
@@ -914,9 +919,9 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 		assert(rc == 0);
 		D_INIT_LIST_HEAD(&add_list);
 		layout_find_diff(jmap, layout, add_layout, &add_list);
-
+		/* done with add_layout so free */
+		pl_obj_layout_free(add_layout);
 		if (!d_list_empty(&add_list)) {
-
 			rc = pl_map_extend(layout, &add_list, true);
 			if (rc != 0)
 				return rc;
