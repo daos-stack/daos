@@ -73,7 +73,7 @@ String get_daos_packages() {
 String get_daos_packages(String distro) {
     String pkgs
     if (env.TEST_RPMS == 'true') {
-        pkgs = "daos{,-{client,tests,server}}"
+        pkgs = "daos{,-{client,tests,server,tests-java,devel,debuginfo}}"
     } else {
         pkgs = "daos{,-client}"
     }

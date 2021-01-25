@@ -180,6 +180,14 @@ Requires: libpsm_infinipath1
 %description tests
 This is the package needed to run the DAOS test suite
 
+%package tests-java
+Summary: The DAOS Java test suite
+Requires: %{name}-tests = %{version}-%{release}
+Requires: maven
+
+%description tests-java
+This is the package needed to run the DAOS java test suite
+
 %package devel
 # Leap 15 doesn't seem to be creating dependencies as richly as EL7
 # for example, EL7 automatically adds:
@@ -240,6 +248,7 @@ install -m 644 utils/systemd/%{server_svc_name} %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
 mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
 mv %{?buildroot}/%{_prefix}/etc/bash_completion.d %{?buildroot}/%{_sysconfdir}
+install -m src/client/java %{_prefix}/lib/daos/TESTING/ftest/java/
 
 %pre server
 getent group daos_metrics >/dev/null || groupadd -r daos_metrics
@@ -406,6 +415,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # For avocado tests
 %{_prefix}/lib/daos/.build_vars.json
 %{_prefix}/lib/daos/.build_vars.sh
+
+%files tests-java
+%dir %{_prefix}//lib/daos/TESTING/ftest/java/
 
 %files devel
 %{_includedir}/*
