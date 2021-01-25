@@ -2425,7 +2425,7 @@ fs_copy(struct file_dfs *src_file_dfs,
 
 			D_ALLOC(buf, buf_size * sizeof(char));
 			if (buf == NULL)
-				return ENOMEM;
+				D_GOTO(out, rc = -DER_NOMEM);
 			while (total_bytes < file_length) {
 				size_t left_to_read = buf_size;
 				uint64_t bytes_left = file_length - total_bytes;
@@ -2485,6 +2485,7 @@ fs_copy(struct file_dfs *src_file_dfs,
 				}
 				next_dpath = strdup(dst_filename);
 				if (next_dpath == NULL) {
+					D_FREE(next_path);
 					D_GOTO(out, rc = -DER_NOMEM);
 				}
 
@@ -2496,6 +2497,8 @@ fs_copy(struct file_dfs *src_file_dfs,
 				 * fail otherwise
 				 */
 				if (rc != EEXIST && rc != 0) {
+					D_FREE(next_path);
+					D_FREE(next_dpath);
 					D_GOTO(out, rc);
 				}
 				/* Recursively call "fs_copy"
@@ -2507,6 +2510,8 @@ fs_copy(struct file_dfs *src_file_dfs,
 				if (rc != 0) {
 					fprintf(stderr, "filesystem copy "
 						"failed, %d.\n", rc);
+					D_FREE(next_path);
+					D_FREE(next_dpath);
 					D_GOTO(out, rc);
 				}
 
@@ -2519,6 +2524,8 @@ fs_copy(struct file_dfs *src_file_dfs,
 					fprintf(stderr, "updating destination "
 						"permissions failed on %s "
 						"(%d)\n", next_dpath, rc);
+					D_FREE(next_path);
+					D_FREE(next_dpath);
 					D_GOTO(out, rc);
 				}
 				D_FREE(next_path);
@@ -2545,7 +2552,7 @@ out:
 	/* don't try to closedir on something that is not a directory,
 	 * otherwise always close it before returning
 	 */
-	if (S_ISDIR(st_dir_name.st_mode)) {
+	if (S_ISDIR(st_dir_name.st_mode) && (src_dir != NULL)) {
 		rc = file_closedir(src_file_dfs, src_dir);
 		if (rc != 0) {
 			fprintf(stderr, "Could not close '%s': %d\n",
@@ -2857,6 +2864,8 @@ out_disconnect:
 	if (rc != 0)
 		fprintf(stderr, "failed to disconnect (%d)\n", rc);
 out:
+	D_FREE(name);
+	D_FREE(dname);
 	return rc;
 }
 
