@@ -138,6 +138,10 @@
 	X(POOL_ACL_DELETE,						\
 		0, &CQF_pool_acl_delete,				\
 		ds_pool_acl_delete_handler,				\
+		NULL),							\
+	X(POOL_RANKS_GET,						\
+		0, &CQF_pool_ranks_get,					\
+		ds_pool_ranks_get_handler,				\
 		NULL)
 
 /* Define for RPC enum population below */
@@ -430,6 +434,18 @@ CRT_RPC_DECLARE(pool_acl_delete, DAOS_ISEQ_POOL_ACL_DELETE,
 
 CRT_RPC_DECLARE(pool_list_cont, DAOS_ISEQ_POOL_LIST_CONT,
 		DAOS_OSEQ_POOL_LIST_CONT)
+
+#define DAOS_ISEQ_POOL_RANKS_GET	/* input fields */		 \
+	((struct pool_op_in)	(prgi_op)			CRT_VAR) \
+	((crt_bulk_t)		(prgi_ranks_bulk)		CRT_VAR) \
+	((uint32_t)		(prgi_nranks)			CRT_VAR)
+
+#define DAOS_OSEQ_POOL_RANKS_GET	/* output fields */		 \
+	((struct pool_op_out)	(prgo_op)			CRT_VAR) \
+	((uint32_t)		(prgo_nranks)			CRT_VAR)
+
+CRT_RPC_DECLARE(pool_ranks_get, DAOS_ISEQ_POOL_RANKS_GET,
+		DAOS_OSEQ_POOL_RANKS_GET)
 
 static inline int
 pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,

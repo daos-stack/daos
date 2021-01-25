@@ -684,23 +684,16 @@ out:
 }
 
 int
-ds_pool_svc_destroy(const uuid_t pool_uuid)
+ds_pool_svc_destroy(const uuid_t pool_uuid, d_rank_list_t *svc_ranks)
 {
 	d_iov_t		psid;
-	d_rank_list_t	included = { 0 };
 	int		rc;
 
 	ds_rebuild_leader_stop(pool_uuid, -1);
-	rc = ds_pool_get_ranks(pool_uuid, MAP_RANKS_UP, &included);
-	if (rc)
-		return rc;
 
-	D_DEBUG(DB_MD, DF_UUID ": send rsvc dist stop to %u UP ranks:\n",
-		DP_UUID(pool_uuid), included.rl_nr);
 	d_iov_set(&psid, (void *)pool_uuid, sizeof(uuid_t));
-	rc = ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, &psid, &included /* ranks */,
+	rc = ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, &psid, svc_ranks,
 			       NULL /* excluded */, true /* destroy */);
-	map_ranks_fini(&included);
 	if (rc != 0)
 		D_ERROR(DF_UUID": failed to destroy pool service: "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
@@ -4845,6 +4838,276 @@ out_client:
 out:
 	return rc;
 }
+
+static int
+ranks_get_bulk_create(crt_context_t ctx, crt_bulk_t *bulk,
+		      d_rank_t *buf, daos_size_t nranks)
+{
+	d_iov_t		iov;
+	d_sg_list_t	sgl;
+
+	d_iov_set(&iov, buf, nranks * sizeof(d_rank_t));
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs = &iov;
+
+	return crt_bulk_create(ctx, &sgl, CRT_BULK_RW, bulk);
+}
+
+static void
+ranks_get_bulk_destroy(crt_bulk_t bulk)
+{
+	if (bulk != CRT_BULK_NULL)
+		crt_bulk_free(bulk);
+}
+
+/*
+ * Transfer list of pool ranks to "remote_bulk". If the remote bulk buffer
+ * is too small, then return -DER_TRUNC. RPC response will contain the number
+ * of ranks in the pool that the client can use to resize its buffer
+ * for another RPC request.
+ */
+static int
+transfer_ranks_buf(d_rank_t *ranks_buf, size_t nranks,
+		   struct pool_svc *svc, crt_rpc_t *rpc, crt_bulk_t remote_bulk)
+{
+	size_t				 ranks_buf_size;
+	daos_size_t			 remote_bulk_size;
+	d_iov_t				 ranks_iov;
+	d_sg_list_t			 ranks_sgl;
+	crt_bulk_t			 bulk = CRT_BULK_NULL;
+	struct crt_bulk_desc		 bulk_desc;
+	crt_bulk_opid_t			 bulk_opid;
+	ABT_eventual			 eventual;
+	int				*status;
+	int				 rc;
+
+	D_ASSERT(nranks > 0);
+	ranks_buf_size = nranks * sizeof(d_rank_t);
+
+	/* Check if the client bulk buffer is large enough. */
+	rc = crt_bulk_get_len(remote_bulk, &remote_bulk_size);
+	if (rc != 0)
+		D_GOTO(out, rc);
+	if (remote_bulk_size < ranks_buf_size) {
+		D_ERROR(DF_UUID": remote ranks buffer("DF_U64")"
+			" < required (%lu)\n", DP_UUID(svc->ps_uuid),
+			remote_bulk_size, ranks_buf_size);
+		D_GOTO(out, rc = -DER_TRUNC);
+	}
+
+	d_iov_set(&ranks_iov, ranks_buf, ranks_buf_size);
+	ranks_sgl.sg_nr = 1;
+	ranks_sgl.sg_nr_out = 0;
+	ranks_sgl.sg_iovs = &ranks_iov;
+
+	rc = crt_bulk_create(rpc->cr_ctx, &ranks_sgl, CRT_BULK_RO, &bulk);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	/* Prepare for crt_bulk_transfer(). */
+	bulk_desc.bd_rpc = rpc;
+	bulk_desc.bd_bulk_op = CRT_BULK_PUT;
+	bulk_desc.bd_remote_hdl = remote_bulk;
+	bulk_desc.bd_remote_off = 0;
+	bulk_desc.bd_local_hdl = bulk;
+	bulk_desc.bd_local_off = 0;
+	bulk_desc.bd_len = ranks_iov.iov_len;
+
+	rc = ABT_eventual_create(sizeof(*status), &eventual);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(out_bulk, rc = dss_abterr2der(rc));
+
+	rc = crt_bulk_transfer(&bulk_desc, bulk_cb, &eventual, &bulk_opid);
+	if (rc != 0)
+		D_GOTO(out_eventual, rc);
+
+	rc = ABT_eventual_wait(eventual, (void **)&status);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
+
+	if (*status != 0)
+		D_GOTO(out_eventual, rc = *status);
+
+out_eventual:
+	ABT_eventual_free(&eventual);
+out_bulk:
+	if (bulk != CRT_BULK_NULL)
+		crt_bulk_free(bulk);
+out:
+	return rc;
+}
+
+
+/**
+ * Send CaRT RPC to pool svc to get list of storage server ranks.
+ *
+ * \param[in]	uuid		UUID of the pool
+ * \param[in]	svc_ranks	Pool service replicas
+ * \param[out]	ranks		Storage server ranks (allocated, caller-freed)
+ *
+ * return	0		Success
+ *
+ */
+int
+ds_pool_svc_ranks_get(uuid_t uuid, d_rank_list_t *svc_ranks,
+		      d_rank_list_t **ranks)
+{
+	int				 rc;
+	struct rsvc_client		 client;
+	crt_endpoint_t			 ep;
+	struct dss_module_info		*info = dss_get_module_info();
+	crt_rpc_t			*rpc;
+	struct pool_ranks_get_in	*in;
+	struct pool_ranks_get_out	*out;
+	uint32_t			 resp_nranks = 2048;
+	d_rank_list_t			*out_ranks = NULL;
+
+	D_DEBUG(DB_MGMT, DF_UUID ": Getting storage ranks\n", DP_UUID(uuid));
+
+	rc = rsvc_client_init(&client, svc_ranks);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+rechoose:
+	ep.ep_grp = NULL; /* primary group */
+	rc = rsvc_client_choose(&client, &ep);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": cannot find pool service: " DF_RC "\n",
+			DP_UUID(uuid), DP_RC(rc));
+		goto out_client;
+	}
+
+realloc_resp:
+	rc = pool_req_create(info->dmi_ctx, &ep, POOL_RANKS_GET, &rpc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create POOL_RANKS_GET rpc, "
+			DF_RC "\n", DP_UUID(uuid), DP_RC(rc));
+		D_GOTO(out_client, rc);
+	}
+
+	/* Allocate response buffer */
+	out_ranks = d_rank_list_realloc(out_ranks, resp_nranks);
+	if (out_ranks == NULL)
+		D_GOTO(out_rpc, rc = -DER_NOMEM);
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->prgi_op.pi_uuid, uuid);
+	uuid_clear(in->prgi_op.pi_hdl);
+	in->prgi_nranks = resp_nranks;
+	rc = ranks_get_bulk_create(info->dmi_ctx, &in->prgi_ranks_bulk,
+				   out_ranks->rl_ranks, in->prgi_nranks);
+	if (rc != 0)
+		D_GOTO(out_resp_buf, rc);
+
+	D_DEBUG(DF_DSMS, DF_UUID ": send POOL_RANKS_GET to PS rank %u, "
+		"reply capacity %u\n", DP_UUID(uuid), ep.ep_rank, resp_nranks);
+
+	rc = dss_rpc_send(rpc);
+	out = crt_reply_get(rpc);
+	D_ASSERT(out != NULL);
+
+	rc = rsvc_client_complete_rpc(&client, &ep, rc,
+				      out->prgo_op.po_rc,
+				      &out->prgo_op.po_hint);
+	if (rc == RSVC_CLIENT_RECHOOSE) {
+		/* To simplify logic, destroy bulk hdl and buffer each time */
+		ranks_get_bulk_destroy(in->prgi_ranks_bulk);
+		d_rank_list_free(out_ranks);
+		crt_req_decref(rpc);
+		dss_sleep(1000 /* ms */);
+		D_GOTO(rechoose, rc);
+	}
+
+	rc = out->prgo_op.po_rc;
+	if (rc == -DER_TRUNC) {
+		/* out_ranks too small - realloc with server-provided nranks */
+		resp_nranks = out->prgo_nranks;
+		ranks_get_bulk_destroy(in->prgi_ranks_bulk);
+		d_rank_list_free(out_ranks);
+		crt_req_decref(rpc);
+		dss_sleep(1000 /* ms */);
+		D_GOTO(realloc_resp, rc);
+	} else if (rc != 0) {
+		D_ERROR(DF_UUID": failed to get ranks, " DF_RC "\n",
+			DP_UUID(uuid), DP_RC(rc));
+	} else {
+		out_ranks->rl_nr = out->prgo_nranks;
+		*ranks = out_ranks;
+	}
+
+	ranks_get_bulk_destroy(in->prgi_ranks_bulk);
+out_resp_buf:
+	if (rc != 0)
+		d_rank_list_free(out_ranks);
+out_rpc:
+	crt_req_decref(rpc);
+out_client:
+	rsvc_client_fini(&client);
+out:
+	return rc;
+}
+
+/* CaRT RPC handler run in PS leader to return pool storage ranks
+ */
+void
+ds_pool_ranks_get_handler(crt_rpc_t *rpc)
+{
+	struct pool_ranks_get_in	*in = crt_req_get(rpc);
+	struct pool_ranks_get_out	*out = crt_reply_get(rpc);
+	uint32_t			 nranks = 0;
+	d_rank_list_t			out_ranks = {0};
+	struct pool_svc			*svc;
+	int				 rc;
+
+	D_DEBUG(DF_DSMS, DF_UUID ": processing rpc %p: \n",
+		DP_UUID(in->prgi_op.pi_uuid), rpc);
+
+	rc = pool_svc_lookup_leader(in->prgi_op.pi_uuid, &svc,
+				    &out->prgo_op.po_hint);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	/* This is a server to server RPC only */
+	if (daos_rpc_from_client(rpc))
+		D_GOTO(out, rc = -DER_INVAL);
+
+	rc = ds_pool_get_ranks(in->prgi_op.pi_uuid, MAP_RANKS_UP, &out_ranks);
+	if (rc != 0) {
+		D_ERROR(DF_UUID ": get ranks failed, " DF_RC "\n",
+			DP_UUID(in->prgi_op.pi_uuid), DP_RC(rc));
+		D_GOTO(out_svc, rc);
+	} else if ((in->prgi_nranks > 0) &&
+		   (out_ranks.rl_nr > in->prgi_nranks)) {
+		D_DEBUG(DF_DSMS, DF_UUID ": %u ranks (more than client: %u)\n",
+			DP_UUID(in->prgi_op.pi_uuid), out_ranks.rl_nr,
+			in->prgi_nranks);
+		D_GOTO(out_free, rc = -DER_TRUNC);
+	} else {
+		D_DEBUG(DF_DSMS, DF_UUID ": %u ranks\n",
+			DP_UUID(in->prgi_op.pi_uuid), out_ranks.rl_nr);
+		if ((out_ranks.rl_nr > 0) && (in->prgi_nranks > 0) &&
+		    (in->prgi_ranks_bulk != CRT_BULK_NULL))
+			rc = transfer_ranks_buf(out_ranks.rl_ranks,
+						out_ranks.rl_nr, svc, rpc,
+						in->prgi_ranks_bulk);
+	}
+
+out_free:
+	nranks = out_ranks.rl_nr;
+	map_ranks_fini(&out_ranks);
+
+out_svc:
+	ds_rsvc_set_hint(&svc->ps_rsvc, &out->prgo_op.po_hint);
+	pool_svc_put_leader(svc);
+out:
+	out->prgo_op.po_rc = rc;
+	out->prgo_nranks = nranks;
+	D_DEBUG(DF_DSMS, DF_UUID ": replying rpc %p: %d\n",
+		DP_UUID(in->prgi_op.pi_uuid), rpc, rc);
+	crt_reply_send(rpc);
+}
+
 
 /* This RPC could be implemented by ds_rsvc. */
 void

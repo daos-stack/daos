@@ -271,7 +271,7 @@ ds_rsvc_lookup(enum ds_rsvc_class_id class, d_iov_t *id,
 
 	entry = d_hash_rec_find(&rsvc_hash, id->iov_buf, id->iov_len);
 	if (entry == NULL) {
-		char	       *path;
+		char	       *path = NULL;
 		struct stat	buf;
 		int		rc;
 

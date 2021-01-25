@@ -84,25 +84,17 @@ fini_ranks:
 }
 
 /**
- * Destroy the pool on every DOWN rank
+ * Destroy the pool on specified storage ranks
  */
 static int
-ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid)
+ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid, d_rank_list_t *ranks)
 {
-	d_rank_list_t			included = { 0 };
-	int				rc;
-
-	rc = ds_pool_get_ranks(pool_uuid, MAP_RANKS_UP, &included);
-	if (rc)
-		return rc;
+	int				 rc;
 
 	D_DEBUG(DB_MD, DF_UUID ": send tgt destroy to %u UP ranks:\n",
-		DP_UUID(pool_uuid), included.rl_nr);
-	rc = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, &included, true);
-	if (rc)
-		D_GOTO(fini_ranks, rc);
-fini_ranks:
-	map_ranks_fini(&included);
+		DP_UUID(pool_uuid), ranks->rl_nr);
+	rc = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, ranks, true);
+
 	return rc;
 }
 
@@ -312,7 +304,8 @@ int
 ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		     const char *group, uint32_t force)
 {
-	int		rc;
+	int		 rc;
+	d_rank_list_t	*ranks = NULL;
 
 	D_DEBUG(DB_MGMT, "Destroying pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
@@ -325,27 +318,37 @@ ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	rc = ds_pool_svc_check_evict(pool_uuid, svc_ranks, NULL, 0, true,
 				     force);
 	if (rc != 0) {
-		D_ERROR("Failed to check/evict pool handles "DF_UUID" rc: %d\n",
-			DP_UUID(pool_uuid), rc);
+		D_ERROR("Failed to check/evict pool handles " DF_UUID ", "
+			DF_RC "\n",  DP_UUID(pool_uuid), DP_RC(rc));
 		goto out;
 	}
 
-	rc = ds_pool_svc_destroy(pool_uuid);
+	/* Ask PS for list of storage ranks (tgt corpc destinations) */
+	rc = ds_pool_svc_ranks_get(pool_uuid, svc_ranks, &ranks);
+	if (rc) {
+		D_ERROR(DF_UUID ": failed to get pool storage ranks, "
+			DF_RC "\n", DP_UUID(pool_uuid), DP_RC(rc));
+		goto out;
+	}
+
+	rc = ds_pool_svc_destroy(pool_uuid, svc_ranks);
 	if (rc != 0) {
-		D_ERROR("Failed to destroy pool service "DF_UUID": "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
-		goto out;
+		D_ERROR("Failed to destroy pool service " DF_UUID ", "
+			DF_RC "\n", DP_UUID(pool_uuid), DP_RC(rc));
+		goto free_ranks;
 	}
 
-	rc = ds_mgmt_tgt_pool_destroy(pool_uuid);
+	rc = ds_mgmt_tgt_pool_destroy(pool_uuid, ranks);
 	if (rc != 0) {
-		D_ERROR("Destroying pool "DF_UUID" failed, rc: "DF_RC".\n",
+		D_ERROR("Destroying pool "DF_UUID" failed, " DF_RC ".\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
-		goto out;
+		goto free_ranks;
 	}
 
-	D_DEBUG(DB_MGMT, "Destroying pool "DF_UUID" succeed.\n",
+	D_DEBUG(DB_MGMT, "Destroying pool " DF_UUID " succeeded.\n",
 		DP_UUID(pool_uuid));
+free_ranks:
+	d_rank_list_free(ranks);
 out:
 	return rc;
 }

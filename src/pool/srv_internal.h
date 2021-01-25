@@ -138,6 +138,7 @@ void ds_pool_attr_del_handler(crt_rpc_t *rpc);
 void ds_pool_list_cont_handler(crt_rpc_t *rpc);
 int ds_pool_evict_rank(uuid_t pool_uuid, d_rank_t rank);
 void ds_pool_query_info_handler(crt_rpc_t *rpc);
+void ds_pool_ranks_get_handler(crt_rpc_t *rpc);
 
 /*
  * srv_target.c
