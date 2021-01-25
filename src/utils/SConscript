@@ -28,7 +28,7 @@ def scons():
     # denv.AppendUnique(CPPPATH=["../tests/suite"])
 
     # Add runtime paths for daos libraries
-    # denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
+    denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     prereqs.require(denv, 'argobots', 'protobufc')
 
     daos_extra_files = denv.Object(['daos_hdlr.c', 'daos_autotest.c'])

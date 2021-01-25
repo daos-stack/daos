@@ -1531,7 +1531,10 @@ main(int argc, char *argv[])
 		dargs.ostream = stdout;
 		help_hdlr(argc, argv, &dargs);
 		return 0;
-	} else if (argc <= 2) {
+	}  else if (strcmp(argv[1], "shell") == 0) {
+                rc = obj_ctl_shell(argc, argv);
+                return rc;
+        } else if (argc <= 2) {
 		dargs.ostream = stdout;
 		help_hdlr(argc, argv, &dargs);
 		return 2;

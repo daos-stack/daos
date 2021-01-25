@@ -378,8 +378,8 @@ obj_ctl_shell(int argc, char *argv[])
 {
 	int	rc;
 
-	if (argc < 2)
-		goto out_usage;
+	fprintf(stderr, "argc = %d, argv[0] %s, argv[1] %s\n",
+		argc, argv[0], argv[1]);
 
 	uuid_generate(ctl_ctx.tsc_pool_uuid);
 	uuid_generate(ctl_ctx.tsc_cont_uuid);
@@ -403,13 +403,6 @@ obj_ctl_shell(int argc, char *argv[])
 
 	rc = dts_cmd_parser(ctl_ops, "$ > ", ctl_cmd_run);
 	if (rc)
-		D_GOTO(out_ctx, rc);
-
- out_ctx:
-	dts_ctx_fini(&ctl_ctx);
+		dts_ctx_fini(&ctl_ctx);
 	return rc;
-
- out_usage:
-	printf("%s %s\n", argv[0], argv[1]);
-	return -1;
 }
