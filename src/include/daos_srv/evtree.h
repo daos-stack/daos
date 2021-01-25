@@ -646,7 +646,7 @@ enum {
 int evt_iter_prepare(daos_handle_t toh, unsigned int options,
 		     const struct evt_filter *filter, daos_handle_t *ih);
 /**
- * Finalise iterator.
+ * Finalize iterator.
  */
 int evt_iter_finish(daos_handle_t ih);
 
