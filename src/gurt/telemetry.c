@@ -483,13 +483,17 @@ d_tm_print_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 		break;
 	}
 
-	if (printStats)
+	if (printStats) {
 		fprintf(stream,
-			" min: %lf max: %lf mean: %lf std dev: %lf",
+			" min: %lf max: %lf mean: %lf size: %"
+			PRIu64,
 			stats->dtm_min.min_float,
 			stats->dtm_max.max_float,
 			stats->mean,
-			stats->std_dev);
+			stats->k);
+		if (stats->k > 2)
+			fprintf(stream, " std dev: %lf", stats->std_dev);
+	}
 
 	fprintf(stream, "\n");
 }
@@ -511,14 +515,17 @@ d_tm_print_gauge(uint64_t val, struct d_tm_stats_t *stats, char *name,
 
 	fprintf(stream, "Gauge: %s = %" PRIu64, name, val);
 
-	if ((stats != NULL) && (stats->k > 0))
+	if ((stats != NULL) && (stats->k > 0)) {
 		fprintf(stream,
-			" min: %" PRIu64 " max: %" PRIu64 " mean: %lf"
-			" std dev: %lf",
+			" min: %" PRIu64 " max: %" PRIu64 " mean: %lf size: %"
+			PRIu64,
 			stats->dtm_min.min_int,
 			stats->dtm_max.max_int,
 			stats->mean,
-			stats->std_dev);
+			stats->k);
+		if (stats->k > 2)
+			fprintf(stream, " std dev: %lf", stats->std_dev);
+	}
 
 	fprintf(stream, "\n");
 }
@@ -848,7 +855,7 @@ d_tm_compute_duration_stats(struct d_tm_node_t *node)
  *							are NULL
  */
 int
-d_tm_increment_counter(struct d_tm_node_t **metric, char *item, ...)
+d_tm_increment_counter(struct d_tm_node_t **metric, bool protect, char *item, ...)
 {
 	struct d_tm_node_t	*node = NULL;
 	char			path[D_TM_MAX_NAME_LEN] = {};
@@ -881,7 +888,7 @@ d_tm_increment_counter(struct d_tm_node_t **metric, char *item, ...)
 	}
 
 	if (node == NULL) {
-		rc = d_tm_add_metric(&node, path, D_TM_COUNTER, "N/A", "N/A");
+		rc = d_tm_add_metric(&node, protect, path, D_TM_COUNTER, "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to add and incremement counter [%s]: "
 				"rc = %d\n", path, rc);
@@ -892,9 +899,11 @@ d_tm_increment_counter(struct d_tm_node_t **metric, char *item, ...)
 	}
 
 	if (node->dtn_type == D_TM_COUNTER) {
-		D_MUTEX_LOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_LOCK(&node->dtn_lock);
 		node->dtn_metric->dtm_data.value++;
-		D_MUTEX_UNLOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to increment counter [%s] on item not a "
@@ -936,7 +945,7 @@ failure:
  *							are NULL
  */
 int
-d_tm_record_timestamp(struct d_tm_node_t **metric, char *item, ...)
+d_tm_record_timestamp(struct d_tm_node_t **metric, bool protect, char *item, ...)
 {
 	struct d_tm_node_t	*node = NULL;
 	char			path[D_TM_MAX_NAME_LEN] = {};
@@ -968,7 +977,7 @@ d_tm_record_timestamp(struct d_tm_node_t **metric, char *item, ...)
 	}
 
 	if (node == NULL) {
-		rc = d_tm_add_metric(&node, path, D_TM_TIMESTAMP, "N/A", "N/A");
+		rc = d_tm_add_metric(&node, protect, path, D_TM_TIMESTAMP, "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to add and record timestamp [%s]: "
 				"rc = %d\n", path, rc);
@@ -979,9 +988,11 @@ d_tm_record_timestamp(struct d_tm_node_t **metric, char *item, ...)
 	}
 
 	if (node->dtn_type == D_TM_TIMESTAMP) {
-		D_MUTEX_LOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_LOCK(&node->dtn_lock);
 		node->dtn_metric->dtm_data.value = (uint64_t)time(NULL);
-		D_MUTEX_UNLOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to record timestamp [%s] on item not a "
@@ -1024,7 +1035,7 @@ failure:
  *							Invalid \a clk_id
  */
 int
-d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
+d_tm_take_timer_snapshot(struct d_tm_node_t **metric, bool protect, int clk_id,
 			 char *item, ...)
 {
 	struct d_tm_node_t	*node = NULL;
@@ -1065,7 +1076,7 @@ d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
 				"Failed to add metric: rc = %d\n", path, rc);
 			goto failure;
 		}
-		rc = d_tm_add_metric(&node, path, D_TM_TIMER_SNAPSHOT | clk_id,
+		rc = d_tm_add_metric(&node, protect, path, D_TM_TIMER_SNAPSHOT | clk_id,
 				     "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to add and record high resolution timer"
@@ -1077,11 +1088,13 @@ d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
 	}
 
 	if (node->dtn_type & D_TM_TIMER_SNAPSHOT) {
-		D_MUTEX_LOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_LOCK(&node->dtn_lock);
 		clock_gettime(d_tm_clock_id(node->dtn_type &
 					    ~D_TM_TIMER_SNAPSHOT),
 			      &node->dtn_metric->dtm_data.tms[0]);
-		D_MUTEX_UNLOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to record high resolution timer [%s] on item "
@@ -1125,7 +1138,7 @@ failure:
  *							Invalid \a clk_id
  */
 int
-d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
+d_tm_mark_duration_start(struct d_tm_node_t **metric, bool protect, int clk_id,
 			 char *item, ...)
 {
 	struct d_tm_node_t	*node = NULL;
@@ -1166,7 +1179,7 @@ d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
 				"Failed to add metric: rc = %d\n", path, rc);
 			goto failure;
 		}
-		rc = d_tm_add_metric(&node, path, D_TM_DURATION | clk_id,
+		rc = d_tm_add_metric(&node, protect, path, D_TM_DURATION | clk_id,
 				     "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to add and mark duration start [%s]: "
@@ -1178,10 +1191,12 @@ d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
 	}
 
 	if (node->dtn_type & D_TM_DURATION) {
-		D_MUTEX_LOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_LOCK(&node->dtn_lock);
 		clock_gettime(d_tm_clock_id(node->dtn_type & ~D_TM_DURATION),
 			      &node->dtn_metric->dtm_data.tms[1]);
-		D_MUTEX_UNLOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to mark duration start [%s] on item "
@@ -1267,13 +1282,15 @@ d_tm_mark_duration_end(struct d_tm_node_t **metric, char *item, ...)
 	}
 
 	if (node->dtn_type & D_TM_DURATION) {
-		D_MUTEX_LOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_LOCK(&node->dtn_lock);
 		clock_gettime(d_tm_clock_id(node->dtn_type & ~D_TM_DURATION),
 			      &end);
 		node->dtn_metric->dtm_data.tms[0] = d_timediff(
 					node->dtn_metric->dtm_data.tms[1], end);
 		d_tm_compute_duration_stats(node);
-		D_MUTEX_UNLOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to mark duration end [%s] on item "
@@ -1316,7 +1333,7 @@ failure:
  *							are NULL
  */
 int
-d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value, char *item, ...)
+d_tm_set_gauge(struct d_tm_node_t **metric, bool protect, uint64_t value, char *item, ...)
 {
 	struct d_tm_node_t	*node = NULL;
 	char			path[D_TM_MAX_NAME_LEN] = {};
@@ -1348,7 +1365,7 @@ d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value, char *item, ...)
 	}
 
 	if (node == NULL) {
-		rc = d_tm_add_metric(&node, path, D_TM_GAUGE, "N/A", "N/A");
+		rc = d_tm_add_metric(&node, protect, path, D_TM_GAUGE, "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to add and set gauge [%s]: "
 				"rc = %d\n", path, rc);
@@ -1359,10 +1376,12 @@ d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value, char *item, ...)
 	}
 
 	if (node->dtn_type == D_TM_GAUGE) {
-		D_MUTEX_LOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_LOCK(&node->dtn_lock);
 		node->dtn_metric->dtm_data.value = value;
 		d_tm_compute_gauge_stats(node);
-		D_MUTEX_UNLOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to set gauge [%s] on item "
@@ -1405,7 +1424,7 @@ failure:
  *							are NULL
  */
 int
-d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
+d_tm_increment_gauge(struct d_tm_node_t **metric, bool protect, uint64_t value,
 		     char *item, ...)
 {
 	struct d_tm_node_t	*node = NULL;
@@ -1438,7 +1457,7 @@ d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
 	}
 
 	if (node == NULL) {
-		rc = d_tm_add_metric(&node, path, D_TM_GAUGE, "N/A", "N/A");
+		rc = d_tm_add_metric(&node, protect, path, D_TM_GAUGE, "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to add and incremement gauge [%s]: "
 				"rc = %d\n", path, rc);
@@ -1449,10 +1468,12 @@ d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
 	}
 
 	if (node->dtn_type == D_TM_GAUGE) {
-		D_MUTEX_LOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_LOCK(&node->dtn_lock);
 		node->dtn_metric->dtm_data.value += value;
 		d_tm_compute_gauge_stats(node);
-		D_MUTEX_UNLOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to increment gauge [%s] on item "
@@ -1495,7 +1516,7 @@ failure:
  *							are NULL
  */
 int
-d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
+d_tm_decrement_gauge(struct d_tm_node_t **metric, bool protect, uint64_t value,
 		     char *item, ...)
 {
 	struct d_tm_node_t	*node = NULL;
@@ -1528,7 +1549,7 @@ d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
 	}
 
 	if (node == NULL) {
-		rc = d_tm_add_metric(&node, path, D_TM_GAUGE, "N/A", "N/A");
+		rc = d_tm_add_metric(&node, protect, path, D_TM_GAUGE, "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to add and decrement gauge [%s]: "
 				"rc = %d\n", path, rc);
@@ -1539,10 +1560,12 @@ d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
 	}
 
 	if (node->dtn_type == D_TM_GAUGE) {
-		D_MUTEX_LOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_LOCK(&node->dtn_lock);
 		node->dtn_metric->dtm_data.value -= value;
 		d_tm_compute_gauge_stats(node);
-		D_MUTEX_UNLOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to decrement gauge [%s] on item "
@@ -1640,7 +1663,7 @@ d_tm_find_metric(uint64_t *shmem_root, char *path)
  *				-DER_UNINIT		API not initialized
  */
 int
-d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
+d_tm_add_metric(struct d_tm_node_t **node, bool protect, char *metric, int metric_type,
 		char *sh_desc, char *lng_desc)
 {
 	pthread_mutexattr_t	mattr;
@@ -1781,25 +1804,27 @@ d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
 	}
 	strncpy(temp->dtn_metric->dtm_lng_desc, lng_desc, buff_len);
 
-	rc = pthread_mutexattr_init(&mattr);
-	if (rc != 0) {
-		D_ERROR("pthread_mutexattr_init failed: rc = %d\n", rc);
-		goto failure;
-	}
+	if (temp->dtn_protect) {
+		rc = pthread_mutexattr_init(&mattr);
+		if (rc != 0) {
+			D_ERROR("pthread_mutexattr_init failed: rc = %d\n", rc);
+			goto failure;
+		}
 
-	rc = pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED);
-	if (rc != 0) {
-		D_ERROR("pthread_mutexattr_setpshared failed: rc = %d\n", rc);
-		goto failure;
-	}
+		rc = pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED);
+		if (rc != 0) {
+			D_ERROR("pthread_mutexattr_setpshared failed: rc = %d\n", rc);
+			goto failure;
+		}
 
-	rc = D_MUTEX_INIT(&temp->dtn_lock, &mattr);
-	if (rc != 0) {
-		D_ERROR("Mutex init failed: rc = %d\n", rc);
-		goto failure;
-	}
+		rc = D_MUTEX_INIT(&temp->dtn_lock, &mattr);
+		if (rc != 0) {
+			D_ERROR("Mutex init failed: rc = %d\n", rc);
+			goto failure;
+		}
 
-	pthread_mutexattr_destroy(&mattr);
+		pthread_mutexattr_destroy(&mattr);
+	}
 	*node = temp;
 
 	D_DEBUG(DB_TRACE, "successfully added item: [%s]\n", metric);
@@ -1853,9 +1878,11 @@ d_tm_get_counter(uint64_t *val, uint64_t *shmem_root, struct d_tm_node_t *node,
 
 	metric_data = d_tm_conv_ptr(shmem_root, node->dtn_metric);
 	if (metric_data != NULL) {
-		D_MUTEX_LOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_LOCK(&node->dtn_lock);
 		*val = metric_data->dtm_data.value;
-		D_MUTEX_UNLOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		return -DER_METRIC_NOT_FOUND;
 	}
@@ -1902,9 +1929,11 @@ d_tm_get_timestamp(time_t *val, uint64_t *shmem_root, struct d_tm_node_t *node,
 
 	metric_data = d_tm_conv_ptr(shmem_root, node->dtn_metric);
 	if (metric_data != NULL) {
-		D_MUTEX_LOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_LOCK(&node->dtn_lock);
 		*val = metric_data->dtm_data.value;
-		D_MUTEX_UNLOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		return -DER_METRIC_NOT_FOUND;
 	}
@@ -1951,10 +1980,12 @@ d_tm_get_timer_snapshot(struct timespec *tms, uint64_t *shmem_root,
 
 	metric_data = d_tm_conv_ptr(shmem_root, node->dtn_metric);
 	if (metric_data != NULL) {
-		D_MUTEX_LOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_LOCK(&node->dtn_lock);
 		tms->tv_sec = metric_data->dtm_data.tms[0].tv_sec;
 		tms->tv_nsec = metric_data->dtm_data.tms[0].tv_nsec;
-		D_MUTEX_UNLOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		return -DER_METRIC_NOT_FOUND;
 	}
@@ -2005,15 +2036,18 @@ d_tm_get_gauge(uint64_t *val, struct d_tm_stats_t *stats, uint64_t *shmem_root,
 	if (metric_data != NULL) {
 
 		dtm_stats = d_tm_conv_ptr(shmem_root, metric_data->dtm_stats);
-		D_MUTEX_LOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_LOCK(&node->dtn_lock);
 		*val = metric_data->dtm_data.value;
 		if (stats != NULL) {
 			stats->dtm_min.min_int = dtm_stats->dtm_min.min_int;
 			stats->dtm_max.max_int = dtm_stats->dtm_max.max_int;
 			stats->std_dev = dtm_stats->std_dev;
 			stats->mean = dtm_stats->mean;
+			stats->k = dtm_stats->k;
 		}
-		D_MUTEX_UNLOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		return -DER_METRIC_NOT_FOUND;
 	}
@@ -2064,7 +2098,8 @@ d_tm_get_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 	metric_data = d_tm_conv_ptr(shmem_root, node->dtn_metric);
 	if (metric_data != NULL) {
 		dtm_stats = d_tm_conv_ptr(shmem_root, metric_data->dtm_stats);
-		D_MUTEX_LOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_LOCK(&node->dtn_lock);
 		tms->tv_sec = metric_data->dtm_data.tms[0].tv_sec;
 		tms->tv_nsec = metric_data->dtm_data.tms[0].tv_nsec;
 		if (stats != NULL) {
@@ -2072,8 +2107,10 @@ d_tm_get_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 			stats->dtm_max.max_float = dtm_stats->dtm_max.max_float;
 			stats->std_dev = dtm_stats->std_dev;
 			stats->mean = dtm_stats->mean;
+			stats->k = dtm_stats->k;
 		}
-		D_MUTEX_UNLOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		return -DER_METRIC_NOT_FOUND;
 	}
@@ -2125,7 +2162,8 @@ int d_tm_get_metadata(char **sh_desc, char **lng_desc, uint64_t *shmem_root,
 
 	metric_data = d_tm_conv_ptr(shmem_root, node->dtn_metric);
 	if (metric_data != NULL) {
-		D_MUTEX_LOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_LOCK(&node->dtn_lock);
 		sh_desc_str = d_tm_conv_ptr(shmem_root,
 					    metric_data->dtm_sh_desc);
 		if ((sh_desc != NULL) && (sh_desc_str != NULL))
@@ -2136,7 +2174,8 @@ int d_tm_get_metadata(char **sh_desc, char **lng_desc, uint64_t *shmem_root,
 		if ((lng_desc != NULL) && (lng_desc_str != NULL))
 			D_STRNDUP(*lng_desc, lng_desc_str ? lng_desc_str :
 				  "N/A", D_TM_MAX_LONG_LEN);
-		D_MUTEX_UNLOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		return -DER_METRIC_NOT_FOUND;
 	}

@@ -492,7 +492,7 @@ server_init(int argc, char *argv[])
 	if (rc != 0)
 		goto exit_debug_init;
 
-	d_tm_mark_duration_start(&startup_dur, D_TM_CLOCK_REALTIME,
+	d_tm_mark_duration_start(&startup_dur, false, D_TM_CLOCK_REALTIME,
 				 "server", "startup_duration", NULL);
 
 	rc = register_dbtree_classes();
@@ -627,9 +627,9 @@ server_init(int argc, char *argv[])
 
 	d_tm_mark_duration_end(&startup_dur, NULL);
 
-	d_tm_record_timestamp(&started_ts, "server", "started_at", NULL);
+	d_tm_record_timestamp(&started_ts, false, "server", "started_at", NULL);
 
-	d_tm_set_gauge(NULL, dss_self_rank(), "server", "rank", NULL);
+	d_tm_set_gauge(NULL, false, dss_self_rank(), "server", "rank", NULL);
 
 	gethostname(dss_hostname, DSS_HOSTNAME_MAX_LEN);
 

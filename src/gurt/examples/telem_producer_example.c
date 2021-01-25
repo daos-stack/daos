@@ -46,7 +46,7 @@ void test_function1(int count)
 	 * if desired.  See the final d_tm_increment_counter() below.
 	 */
 	for (i = 0; i < count - 1; i++) {
-		rc = d_tm_increment_counter(&loop, __FILE__, __func__,
+		rc = d_tm_increment_counter(&loop, false, __FILE__, __func__,
 					    "loop counter", NULL);
 		if (rc != D_TM_SUCCESS) {
 			printf("d_tm_increment_counter failed, rc = %d\n", rc);
@@ -60,7 +60,7 @@ void test_function1(int count)
 	 * provided, and only uses the name if the pointer doesn't reference
 	 * anything.
 	 */
-	rc = d_tm_increment_counter(&loop, NULL);
+	rc = d_tm_increment_counter(&loop, false, NULL);
 	if (rc != D_TM_SUCCESS)
 		printf("d_tm_increment_counter failed, rc = %d\n", rc);
 
@@ -75,7 +75,7 @@ void test_function2(void)
 	static struct d_tm_node_t	*ts;
 	int				rc;
 
-	rc = d_tm_record_timestamp(&ts, __FILE__, __func__, "last executed",
+	rc = d_tm_record_timestamp(&ts, false, __FILE__, __func__, "last executed",
 				   NULL);
 	if (rc != D_TM_SUCCESS)
 		printf("d_tm_record_timestamp failed, rc = %d\n", rc);
@@ -99,7 +99,7 @@ void test_open_handle(void)
 	 * incremented by an arbitrary value.  We will incrememt by one for this
 	 * example.
 	 */
-	rc = d_tm_increment_gauge(&num_open_handles, 1, __FILE__,
+	rc = d_tm_increment_gauge(&num_open_handles, false, 1, __FILE__,
 				  "open handles", NULL);
 	if (rc != D_TM_SUCCESS)
 		printf("d_tm_increment_gauge failed, rc = %d\n", rc);
@@ -121,7 +121,7 @@ void test_close_handle(void)
 	 * that increments in test_open_handle() are changing the same metric
 	 * as the one used here.
 	 */
-	rc = d_tm_decrement_gauge(&num_open_handles, 1, __FILE__,
+	rc = d_tm_decrement_gauge(&num_open_handles, false, 1, __FILE__,
 				  "open handles", NULL);
 	if (rc != D_TM_SUCCESS)
 		printf("d_tm_decrement_gauge failed, rc = %d\n", rc);
@@ -148,7 +148,7 @@ void timer_snapshot(void)
 	struct timespec			ts;
 	int				rc;
 
-	rc = d_tm_take_timer_snapshot(&t1, D_TM_CLOCK_REALTIME, __FILE__,
+	rc = d_tm_take_timer_snapshot(&t1, false, D_TM_CLOCK_REALTIME, __FILE__,
 				      __func__, "snapshot 1", NULL);
 	if (rc != D_TM_SUCCESS)
 		printf("d_tm_take_timer_snapshot failed, rc = %d\n", rc);
@@ -156,7 +156,7 @@ void timer_snapshot(void)
 	/** Do some stuff */
 	sleep(1);
 
-	rc = d_tm_take_timer_snapshot(&t2, D_TM_CLOCK_REALTIME, __FILE__,
+	rc = d_tm_take_timer_snapshot(&t2, false, D_TM_CLOCK_REALTIME, __FILE__,
 				      __func__, "snapshot 2", NULL);
 	if (rc != D_TM_SUCCESS)
 		printf("d_tm_take_timer_snapshot failed, rc = %d\n", rc);
@@ -166,7 +166,7 @@ void timer_snapshot(void)
 	ts.tv_nsec = 50000000;
 	nanosleep(&ts, NULL);
 
-	rc = d_tm_take_timer_snapshot(&t3, D_TM_CLOCK_REALTIME, __FILE__,
+	rc = d_tm_take_timer_snapshot(&t3, false, D_TM_CLOCK_REALTIME, __FILE__,
 				      __func__, "snapshot 3", NULL);
 	if (rc != D_TM_SUCCESS)
 		printf("d_tm_take_timer_snapshot failed, rc = %d\n", rc);
@@ -176,7 +176,7 @@ void timer_snapshot(void)
 	ts.tv_nsec = 500000000;
 	nanosleep(&ts, NULL);
 
-	rc = d_tm_take_timer_snapshot(&t4, D_TM_CLOCK_REALTIME, __FILE__,
+	rc = d_tm_take_timer_snapshot(&t4, false, D_TM_CLOCK_REALTIME, __FILE__,
 				      __func__, "snapshot 4", NULL);
 	if (rc != D_TM_SUCCESS)
 		printf("d_tm_take_timer_snapshot failed, rc = %d\n", rc);
@@ -192,13 +192,13 @@ void timer_snapshot(void)
 	 */
 
 	/** This is how to specify a high resolution process CPU timer */
-	rc = d_tm_take_timer_snapshot(&t5, D_TM_CLOCK_PROCESS_CPUTIME,
+	rc = d_tm_take_timer_snapshot(&t5, false, D_TM_CLOCK_PROCESS_CPUTIME,
 				      __FILE__, __func__, "snapshot 5", NULL);
 	if (rc != D_TM_SUCCESS)
 		printf("d_tm_take_timer_snapshot failed, rc = %d\n", rc);
 
 	/** This is how to specify a high resolution thread CPU timer */
-	rc = d_tm_take_timer_snapshot(&t6, D_TM_CLOCK_THREAD_CPUTIME,
+	rc = d_tm_take_timer_snapshot(&t6, false, D_TM_CLOCK_THREAD_CPUTIME,
 				      __FILE__, __func__, "snapshot 6", NULL);
 	if (rc != D_TM_SUCCESS)
 		printf("d_tm_take_timer_snapshot failed, rc = %d\n", rc);
@@ -228,7 +228,7 @@ struct d_tm_nodeList_t *add_metrics_manually(void)
 	 * adding them to a d_tm_nodeList_t for later usage.
 	 */
 	snprintf(path, sizeof(path), "%s/manually added/counter 1", __FILE__);
-	rc = d_tm_add_metric(&counter1, path, D_TM_COUNTER,
+	rc = d_tm_add_metric(&counter1, false, path, D_TM_COUNTER,
 			     "A manually added counter",
 			     "If I had a lot to say about it, I'd write that "
 			     "here.  I have D_TM_MAX_LONG_LEN characters "
@@ -245,7 +245,7 @@ struct d_tm_nodeList_t *add_metrics_manually(void)
 	}
 
 	snprintf(path, sizeof(path), "%s/manually added/counter 2", __FILE__);
-	rc = d_tm_add_metric(&counter2, path, D_TM_COUNTER,
+	rc = d_tm_add_metric(&counter2, false, path, D_TM_COUNTER,
 			     "Another manually added counter",
 			     "Much less metadata to report this time.");
 	if (rc != D_TM_SUCCESS) {
@@ -258,6 +258,7 @@ struct d_tm_nodeList_t *add_metrics_manually(void)
 	if (rc != D_TM_SUCCESS) {
 		d_tm_list_free(node_list);
 		printf("d_tm_add_metric failed, rc = %d\n", rc);
+		return NULL;
 	}
 
 	return node_list;
@@ -284,7 +285,7 @@ void use_manually_added_metrics(struct d_tm_nodeList_t *node_list)
 			 * so it is only used and not created implicitly here.
 			 */
 			rc = d_tm_increment_counter(&node_list->dtnl_node,
-						    NULL);
+						    false, NULL);
 			if (rc != D_TM_SUCCESS) {
 				printf("d_tm_increment_counter failed, "
 				       "rc = %d\n", rc);
@@ -342,7 +343,7 @@ main(int argc, char **argv)
 	 * it.  The counter is created, and incremented by one.  It now has the
 	 * value 1.
 	 */
-	rc = d_tm_increment_counter(&entry, __FILE__, __func__,
+	rc = d_tm_increment_counter(&entry, false, __FILE__, __func__,
 				    "sample counter", NULL);
 	if (rc != D_TM_SUCCESS) {
 		printf("d_tm_increment_counter failed, rc = %d\n", rc);
@@ -356,7 +357,7 @@ main(int argc, char **argv)
 	 * for faster lookup.
 	 */
 	for (i = 0; i < 1000; i++) {
-		rc = d_tm_increment_counter(&loop, __FILE__, __func__,
+		rc = d_tm_increment_counter(&loop, false, __FILE__, __func__,
 					    "loop counter", NULL);
 		if (rc != D_TM_SUCCESS) {
 			printf("d_tm_increment_counter failed, rc = %d\n", rc);
@@ -373,7 +374,7 @@ main(int argc, char **argv)
 	 */
 
 	/** For the first timer, let's use the realtime clock */
-	rc = d_tm_mark_duration_start(&timer1, D_TM_CLOCK_REALTIME, __FILE__,
+	rc = d_tm_mark_duration_start(&timer1, false, D_TM_CLOCK_REALTIME, __FILE__,
 				      __func__,
 				      "10000 iterations with rt clock",
 				      NULL);
@@ -390,7 +391,7 @@ main(int argc, char **argv)
 	}
 
 	/** For the second timer, let's use the process clock */
-	rc = d_tm_mark_duration_start(&timer2, D_TM_CLOCK_PROCESS_CPUTIME,
+	rc = d_tm_mark_duration_start(&timer2, false, D_TM_CLOCK_PROCESS_CPUTIME,
 				      __FILE__, __func__,
 				      "10000 iterations with process clock",
 				      NULL);

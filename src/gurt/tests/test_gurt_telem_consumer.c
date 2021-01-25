@@ -72,13 +72,13 @@ test_verify_object_count(void **state)
 	assert_non_null(node);
 
 	num = d_tm_count_metrics(shmem_root, node, D_TM_COUNTER);
-	assert(num == 2);
+	assert(num == 3);
 
 	num = d_tm_count_metrics(shmem_root, node, D_TM_GAUGE);
 	assert(num == 2);
 
 	num = d_tm_count_metrics(shmem_root, node, D_TM_DURATION);
-	assert(num == 2);
+	assert(num == 4);
 
 	num = d_tm_count_metrics(shmem_root, node, D_TM_TIMESTAMP);
 	assert(num == 1);
@@ -89,7 +89,7 @@ test_verify_object_count(void **state)
 	num = d_tm_count_metrics(shmem_root, node,
 				 D_TM_COUNTER | D_TM_GAUGE | D_TM_DURATION |
 				 D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT);
-	assert(num == 9);
+	assert(num == 12);
 }
 
 static void

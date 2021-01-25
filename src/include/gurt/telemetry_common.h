@@ -79,6 +79,7 @@ struct d_tm_node_t {
 	int dtn_type;
 	pthread_mutex_t dtn_lock;
 	struct d_tm_metric_t *dtn_metric;
+	bool dtn_protect;
 };
 
 struct d_tm_nodeList_t {

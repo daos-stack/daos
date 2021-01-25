@@ -47,13 +47,20 @@ static void
 test_increment_counter(void **state)
 {
 	static struct d_tm_node_t	*loop;
+	static struct d_tm_node_t	*timer;
 	int				count = 5000;
 	int				rc;
 	int				i;
 
+	rc = d_tm_mark_duration_start(&timer, false, D_TM_CLOCK_REALTIME,
+				      "gurt", "tests", "telem",
+				      "increment no mutex", NULL);
+
+	assert(rc == D_TM_SUCCESS);
+
 	for (i = 0; i < count - 1; i++) {
-		rc = d_tm_increment_counter(&loop, "gurt", "tests", "telem",
-					    "loop counter", NULL);
+		rc = d_tm_increment_counter(&loop, false, "gurt", "tests",
+					    "telem", "loop counter", NULL);
 		assert(rc == D_TM_SUCCESS);
 	}
 
@@ -61,9 +68,44 @@ test_increment_counter(void **state)
 	 * Use the pointer without the name provided to show that it still
 	 * increments the loop counter.
 	 */
-	rc = d_tm_increment_counter(&loop, NULL);
+	rc = d_tm_increment_counter(&loop, false, NULL);
+	assert(rc == D_TM_SUCCESS);
+
+	rc = d_tm_mark_duration_end(&timer, NULL);
 	assert(rc == D_TM_SUCCESS);
 }
+
+static void
+test_increment_counter_with_mutex(void **state)
+{
+	static struct d_tm_node_t	*loop;
+	static struct d_tm_node_t	*timer;
+	int				count = 5000;
+	int				rc;
+	int				i;
+
+	rc = d_tm_mark_duration_start(&timer, false, D_TM_CLOCK_REALTIME,
+				      "gurt", "tests", "telem",
+				      "increment with mutex", NULL);
+
+	for (i = 0; i < count - 1; i++) {
+		rc = d_tm_increment_counter(&loop, true, "gurt", "tests",
+					    "telem", "loop counter with mutex",
+					    NULL);
+		assert(rc == D_TM_SUCCESS);
+	}
+
+	/**
+	 * Use the pointer without the name provided to show that it still
+	 * increments the loop counter.
+	 */
+	rc = d_tm_increment_counter(&loop, true, NULL);
+	assert(rc == D_TM_SUCCESS);
+
+	rc = d_tm_mark_duration_end(&timer, NULL);
+	assert(rc == D_TM_SUCCESS);
+}
+
 
 static void
 test_gauge(void **state)
@@ -75,18 +117,18 @@ test_gauge(void **state)
 	int				rc;
 	int				i;
 
-	rc = d_tm_set_gauge(&gauge, init_val, "gurt", "tests", "telem",
+	rc = d_tm_set_gauge(&gauge, false, init_val, "gurt", "tests", "telem",
 			    "gauge", NULL);
 	assert(rc == D_TM_SUCCESS);
 
 	for (i = 0; i < inc_count; i++) {
-		rc = d_tm_increment_gauge(&gauge, 1, "gurt", "tests", "telem",
+		rc = d_tm_increment_gauge(&gauge, false, 1, "gurt", "tests", "telem",
 					  "gauge", NULL);
 		assert(rc == D_TM_SUCCESS);
 	}
 
 	for (i = 0; i < dec_count; i++) {
-		rc = d_tm_decrement_gauge(&gauge, 1, "gurt", "tests", "telem",
+		rc = d_tm_decrement_gauge(&gauge, false, 1, "gurt", "tests", "telem",
 					  "gauge", NULL);
 		assert(rc == D_TM_SUCCESS);
 	}
@@ -98,7 +140,7 @@ test_record_timestamp(void **state)
 	static struct d_tm_node_t	*ts;
 	int				rc;
 
-	rc = d_tm_record_timestamp(&ts, "gurt", "tests", "telem",
+	rc = d_tm_record_timestamp(&ts, false, "gurt", "tests", "telem",
 				   "last executed", NULL);
 	assert(rc == D_TM_SUCCESS);
 }
@@ -110,7 +152,7 @@ test_interval_timer(void **state)
 	struct timespec			ts;
 	int				rc;
 
-	rc = d_tm_mark_duration_start(&timer, D_TM_CLOCK_REALTIME,
+	rc = d_tm_mark_duration_start(&timer, false, D_TM_CLOCK_REALTIME,
 				      "gurt", "tests", "telem", "interval",
 				      NULL);
 
@@ -130,7 +172,7 @@ test_timer_snapshot_sample_1(void **state)
 	static struct d_tm_node_t	*snapshot;
 	int				rc;
 
-	rc = d_tm_take_timer_snapshot(&snapshot, D_TM_CLOCK_REALTIME,
+	rc = d_tm_take_timer_snapshot(&snapshot, false, D_TM_CLOCK_REALTIME,
 				      "gurt", "tests", "telem",
 				      "snapshot sample 1", NULL);
 	assert(rc == D_TM_SUCCESS);
@@ -142,7 +184,7 @@ test_timer_snapshot_sample_2(void **state)
 	static struct d_tm_node_t	*snapshot;
 	int				rc;
 
-	rc = d_tm_take_timer_snapshot(&snapshot, D_TM_CLOCK_REALTIME,
+	rc = d_tm_take_timer_snapshot(&snapshot, false, D_TM_CLOCK_REALTIME,
 				      "gurt", "tests", "telem",
 				      "snapshot sample 2", NULL);
 	assert(rc == D_TM_SUCCESS);
@@ -158,36 +200,36 @@ test_input_validation(void **state)
 	int				i;
 
 	/** uninitialized node ptr at initialization time */
-	rc = d_tm_increment_counter(&node, "gurt", "tests", "telem",
+	rc = d_tm_increment_counter(&node, false, "gurt", "tests", "telem",
 				    "counter 1", NULL);
 	assert(rc == D_TM_SUCCESS);
 
 	/** Use the initialized node without specifying a name */
-	rc = d_tm_increment_counter(&node, NULL);
+	rc = d_tm_increment_counter(&node, false, NULL);
 	assert(rc == D_TM_SUCCESS);
 
 	/** Provide a NULL node pointer, force the API to use the name */
-	rc = d_tm_increment_counter(NULL, "gurt", "tests", "telem",
+	rc = d_tm_increment_counter(NULL, false, "gurt", "tests", "telem",
 				    "counter 1", NULL);
 	assert(rc == D_TM_SUCCESS);
 
 	/** Verify correct function associated with this metric type is used */
 	printf("This operation is expected to generate an error:\n");
-	rc = d_tm_increment_gauge(NULL, 1, "gurt", "tests", "telem",
+	rc = d_tm_increment_gauge(NULL, false, 1, "gurt", "tests", "telem",
 				  "counter 1", NULL);
 	assert(rc == -DER_OP_NOT_PERMITTED);
 
 	/** Verify correct function associated with this metric type is used */
 	printf("This operation is expected to generate an error:\n");
-	rc = d_tm_increment_gauge(&node, 1, NULL);
+	rc = d_tm_increment_gauge(&node, false, 1, NULL);
 	assert(rc == -DER_OP_NOT_PERMITTED);
 
 	/** Specifying a null pointer and no path should fail */
-	rc = d_tm_increment_counter(NULL, NULL);
+	rc = d_tm_increment_counter(NULL, false, NULL);
 	assert(rc == -DER_INVAL);
 
 	/** Specifying a null pointer and no path should fail */
-	rc = d_tm_increment_counter(&temp, NULL);
+	rc = d_tm_increment_counter(&temp, false, NULL);
 	assert(rc == -DER_INVAL);
 
 	/**
@@ -201,12 +243,12 @@ test_input_validation(void **state)
 	for (i = 0; i < D_TM_MAX_NAME_LEN; i++)
 		path[i] = '0' + i % 10;
 	path[D_TM_MAX_NAME_LEN] = 0;
-	rc = d_tm_increment_counter(NULL, path, NULL);
+	rc = d_tm_increment_counter(NULL, false, path, NULL);
 	assert(rc == -DER_EXCEEDS_PATH_LEN);
 
 	/** Now trim the path by 1 character to make it fit */
 	path[D_TM_MAX_NAME_LEN - 1] = 0;
-	rc = d_tm_increment_counter(NULL, path, NULL);
+	rc = d_tm_increment_counter(NULL, false, path, NULL);
 	assert(rc == D_TM_SUCCESS);
 
 	/**
@@ -214,7 +256,7 @@ test_input_validation(void **state)
 	 * Note that the "/" is added by the API when building the full path.
 	 */
 	path[D_TM_MAX_NAME_LEN - 5]  = 0;
-	rc = d_tm_increment_counter(NULL, "root", path, NULL);
+	rc = d_tm_increment_counter(NULL, false, "root", path, NULL);
 	assert(rc == -DER_EXCEEDS_PATH_LEN);
 
 	/**
@@ -222,7 +264,7 @@ test_input_validation(void **state)
 	 * Note that the "/" is added by the API when building the full path.
 	 */
 	path[D_TM_MAX_NAME_LEN - 6] = 0;
-	rc = d_tm_increment_counter(NULL, "root", path, NULL);
+	rc = d_tm_increment_counter(NULL, false, "root", path, NULL);
 	assert(rc == D_TM_SUCCESS);
 	D_FREE_PTR(path);
 }
@@ -233,45 +275,45 @@ test_gauge_stats(void **state)
 	static struct d_tm_node_t	*node;
 	int				rc;
 
-	rc = d_tm_set_gauge(&node, 2, "gurt/tests/telem/gauge-stats", NULL);
+	rc = d_tm_set_gauge(&node, false, 2, "gurt/tests/telem/gauge-stats", NULL);
 	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 4, NULL);
+	rc = d_tm_set_gauge(&node, false, 4, NULL);
 	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 6, NULL);
+	rc = d_tm_set_gauge(&node, false, 6, NULL);
 	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 8, NULL);
+	rc = d_tm_set_gauge(&node, false, 8, NULL);
 	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 10, NULL);
+	rc = d_tm_set_gauge(&node, false, 10, NULL);
 	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 12, NULL);
+	rc = d_tm_set_gauge(&node, false, 12, NULL);
 	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 14, NULL);
+	rc = d_tm_set_gauge(&node, false, 14, NULL);
 	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 16, NULL);
+	rc = d_tm_set_gauge(&node, false, 16, NULL);
 	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 18, NULL);
+	rc = d_tm_set_gauge(&node, false, 18, NULL);
 	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 20, NULL);
+	rc = d_tm_set_gauge(&node, false, 20, NULL);
 	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 2, NULL);
+	rc = d_tm_set_gauge(&node, false, 2, NULL);
 	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 4, NULL);
+	rc = d_tm_set_gauge(&node, false, 4, NULL);
 	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 6, NULL);
+	rc = d_tm_set_gauge(&node, false, 6, NULL);
 	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 8, NULL);
+	rc = d_tm_set_gauge(&node, false, 8, NULL);
 	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 10, NULL);
+	rc = d_tm_set_gauge(&node, false, 10, NULL);
 	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 12, NULL);
+	rc = d_tm_set_gauge(&node, false, 12, NULL);
 	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 14, NULL);
+	rc = d_tm_set_gauge(&node, false, 14, NULL);
 	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 16, NULL);
+	rc = d_tm_set_gauge(&node, false, 16, NULL);
 	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 18, NULL);
+	rc = d_tm_set_gauge(&node, false, 18, NULL);
 	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 20, NULL);
+	rc = d_tm_set_gauge(&node, false, 20, NULL);
 	assert(rc == D_TM_SUCCESS);
 
 }
@@ -295,7 +337,7 @@ test_duration_stats(void **state)
 	 * or failure.
 	 */
 
-	rc = d_tm_add_metric(&timer, "gurt/tests/telem/duration-stats",
+	rc = d_tm_add_metric(&timer, false, "gurt/tests/telem/duration-stats",
 			     D_TM_DURATION | D_TM_CLOCK_REALTIME, "N/A", "N/A");
 	assert(rc == D_TM_SUCCESS);
 
@@ -335,6 +377,7 @@ main(int argc, char **argv)
 	const struct CMUnitTest	tests[] = {
 		cmocka_unit_test(test_timer_snapshot_sample_1),
 		cmocka_unit_test(test_increment_counter),
+		cmocka_unit_test(test_increment_counter_with_mutex),
 		cmocka_unit_test(test_timer_snapshot_sample_2),
 		cmocka_unit_test(test_gauge),
 		cmocka_unit_test(test_record_timestamp),
