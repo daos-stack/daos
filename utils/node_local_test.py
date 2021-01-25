@@ -405,7 +405,7 @@ class DaosServer():
                      '--config-path', agent_config,
                      '--insecure',
                      '--runtime_dir', self.agent_dir,
-                     '--logfile', self.agent_log_file]
+                     '--logfile', self.agent_log.name]
 
         if not self.conf.args.server_debug:
             agent_cmd.append('--debug')
