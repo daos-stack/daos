@@ -1,6 +1,13 @@
 #!/usr/bin/python3
+"""
+Node local test (NLT).
 
-"""Test code for dfuse"""
+Test script for running DAOS on a single node over tmpfs and running initial
+smoke/unit tests.
+
+Includes support for DFuse with a number of unit tests, as well as stressing
+the client with fault injection of D_ALLOC() usage.
+"""
 
 # pylint: disable=too-many-lines
 # pylint: disable=too-few-public-methods
@@ -11,7 +18,6 @@ import bz2
 import sys
 import time
 import uuid
-import yaml
 import json
 import signal
 import stat
@@ -21,8 +27,8 @@ import functools
 import subprocess
 import tempfile
 import pickle
-
 from collections import OrderedDict
+import yaml
 
 class NLTestFail(Exception):
     """Used to indicate test failure"""
@@ -58,7 +64,7 @@ def umount(path):
     print('rc from umount {}'.format(ret.returncode))
     return ret.returncode
 
-class NLT_Conf():
+class NLTConf():
     """Helper class for configuration"""
     def __init__(self, bc):
         self.bc = bc
@@ -257,7 +263,7 @@ def load_conf():
     ofh = open(json_file, 'r')
     conf = json.load(ofh)
     ofh.close()
-    return NLT_Conf(conf)
+    return NLTConf(conf)
 
 def get_base_env():
     """Return the base set of env vars needed for DAOS"""
@@ -589,9 +595,10 @@ class ValgrindHelper():
     Jenkins in locating the source code.
     """
 
-    def __init__(self, logid=None):
+    def __init__(self, conf, logid=None):
 
         # Set this to False to disable valgrind, which will run faster.
+        self.conf = conf
         self.use_valgrind = True
         self.full_check = True
         self._xml_file = None
@@ -618,11 +625,17 @@ class ValgrindHelper():
         else:
             cmd.append('--leak-check=no')
 
-        cmd.append('--suppressions={}'.format(
-            os.path.join('src',
-                         'cart',
-                         'utils',
-                         'memcheck-cart.supp')))
+        src_suppression_file = os.path.join('src',
+                                            'cart',
+                                            'utils',
+                                            'memcheck-cart.supp')
+        if os.path.exists(src_suppression_file):
+            cmd.append('--suppressions={}'.format(src_suppression_file))
+        else:
+            cmd.append('--suppressions={}'.format(
+                os.path.join(self.conf['PREFIX'],
+                             'etc',
+                             'memcheck-cart.supp')))
 
         cmd.append('--error-exitcode=42')
 
@@ -700,7 +713,7 @@ class DFuse():
         if self.conf.args.dtx == 'yes':
             my_env['DFS_USE_DTX'] = '1'
 
-        self.valgrind = ValgrindHelper(v_hint)
+        self.valgrind = ValgrindHelper(self.conf, v_hint)
         if self.conf.args.memcheck == 'no':
             self.valgrind.use_valgrind = False
 
@@ -862,7 +875,7 @@ def run_daos_cmd(conf,
     if prefix is set to False do not run a DAOS command, but instead run what's
     provided, however run it under the IL.
     """
-    vh = ValgrindHelper()
+    vh = ValgrindHelper(conf)
 
     if conf.args.memcheck == 'no':
         valgrind = False
@@ -1187,9 +1200,18 @@ lt = None
 
 def setup_log_test(conf):
     """Setup and import the log tracing code"""
+
+    # Try and pick this up from the src tree if possible.
     file_self = os.path.dirname(os.path.abspath(__file__))
     logparse_dir = os.path.join(file_self,
                                 '../src/tests/ftest/cart/util')
+    crt_mod_dir = os.path.realpath(logparse_dir)
+    if crt_mod_dir not in sys.path:
+        sys.path.append(crt_mod_dir)
+
+    # Or back off to the install dir if not.
+    logparse_dir = os.path.join(conf['PREFIX'],
+                                'lib/daos/TESTING/ftest/cart')
     crt_mod_dir = os.path.realpath(logparse_dir)
     if crt_mod_dir not in sys.path:
         sys.path.append(crt_mod_dir)
@@ -2000,7 +2022,6 @@ def main():
 
     parser = argparse.ArgumentParser(
         description='Run DAOS client on local node')
-    parser.add_argument('--output-file', default='nlt-errors.json')
     parser.add_argument('--server-debug', default=None)
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
@@ -2023,7 +2044,7 @@ def main():
 
     conf = load_conf()
 
-    wf = WarningsFactory(args.output_file)
+    wf = WarningsFactory('nlt-errors.json')
 
     conf.set_wf(wf)
     conf.set_args(args)
