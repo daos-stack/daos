@@ -785,7 +785,7 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 			event:      nil,
 			expMembers: members,
 		},
-		"event on unrecognised rank": {
+		"event on unrecognized rank": {
 			members:    members,
 			event:      events.NewRankDownEvent("foo", 0, 4, common.NormalExit),
 			expMembers: members,
