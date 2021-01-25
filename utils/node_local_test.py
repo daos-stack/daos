@@ -470,64 +470,13 @@ class DaosServer():
             except NLTestTimeout as e:
                 print('Failed to stop: {}'.format(e))
         print('Server stopped in {:.2f} seconds'.format(time.time() - start))
-
-        # daos_server does not correctly shutdown daos_io_server yet
-        # so find and kill daos_io_server directly.  This may cause
-        # a assert in daos_io_server, but at least we can check that.
-        # call daos_io_server, wait, and then call daos_server.
-        # When parsing the server logs do not report on memory leaks
-        # yet, as if it fails then lots of memory won't be freed and
-        # it's not helpful at this stage to report that.
-        # TODO:                              # pylint: disable=W0511
-        # Remove this block when daos_server shutdown works.
-        parent_pid = self._sp.pid
-        procs = []
-        for proc_id in os.listdir('/proc/'):
-            if proc_id == 'self':
-                continue
-            status_file = '/proc/{}/status'.format(proc_id)
-            if not os.path.exists(status_file):
-                continue
-            fd = open(status_file, 'r')
-            this_proc = False
-            for line in fd.readlines():
-                try:
-                    key, v = line.split(':', maxsplit=2)
-                except ValueError:
-                    continue
-                value = v.strip()
-                if key == 'Name' and value != self.__process_name:
-                    break
-                if key != 'PPid':
-                    continue
-                if int(value) == parent_pid:
-                    this_proc = True
-                    break
-            if not this_proc:
-                continue
-            print('Target pid is {}'.format(proc_id))
-            procs.append(proc_id)
-            os.kill(int(proc_id), signal.SIGTERM)
-            time.sleep(5)
-
         self._sp.send_signal(signal.SIGTERM)
         ret = self._sp.wait(timeout=5)
         print('rc from server is {}'.format(ret))
 
-        for proc_id in procs:
-            try:
-                os.kill(int(proc_id), signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-
         compress_file(self.agent_log.name)
         compress_file(self.control_log.name)
-
-        # Show errors from server logs bug suppress memory leaks as the server
-        # often segfaults at shutdown.
-        # TODO:                              # pylint: disable=W0511
-        # Enable memleak checking when server shutdown works.
-        log_test(self.conf, self.server_log.name, show_memleaks=False)
+        log_test(self.conf, self.server_log.name, show_memleaks=True)
         self.running = False
         return ret
 

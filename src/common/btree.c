@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -361,8 +361,6 @@ btr_trace_set(struct btr_context *tcx, int level,
 	D_ASSERT(level >= 0 && level < tcx->tc_depth);
 	D_ASSERT(&tcx->tc_trace[level] < &tcx->tc_traces[BTR_TRACE_MAX]);
 
-	D_DEBUG(DB_TRACE, "trace[%d] "DF_X64"/%d\n", level, nd_off, at);
-
 	tcx->tc_trace[level].tr_node = nd_off;
 	tcx->tc_trace[level].tr_at = at;
 }
@@ -492,7 +490,7 @@ btr_key_cmp(struct btr_context *tcx, struct btr_record *rec, d_iov_t *key)
 
 static int
 btr_rec_alloc(struct btr_context *tcx, d_iov_t *key, d_iov_t *val,
-	       struct btr_record *rec)
+	      struct btr_record *rec)
 {
 	return btr_ops(tcx)->to_rec_alloc(&tcx->tc_tins, key, val, rec);
 }
@@ -628,6 +626,7 @@ static int
 btr_node_free(struct btr_context *tcx, umem_off_t nd_off)
 {
 	int	rc;
+
 	D_DEBUG(DB_TRACE, "Free node "DF_X64"\n", nd_off);
 	rc = umem_free(btr_umm(tcx), nd_off);
 	if (rc != 0)
@@ -1306,11 +1305,10 @@ btr_cmp(struct btr_context *tcx, umem_off_t nd_off,
 		}
 	}
 	D_ASSERT((cmp & (BTR_CMP_LT | BTR_CMP_GT)) != 0 ||
-		  cmp == BTR_CMP_EQ || cmp == BTR_CMP_ERR);
+		 cmp == BTR_CMP_EQ || cmp == BTR_CMP_ERR);
 	D_ASSERT((cmp & (BTR_CMP_LT | BTR_CMP_GT)) !=
 		 (BTR_CMP_LT | BTR_CMP_GT));
 
-	D_DEBUG(DB_TRACE, "compared record at %d, cmp %d\n", at, cmp);
 	return cmp;
 }
 
@@ -1377,10 +1375,6 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 			start	= 0;
 			nd	= btr_off2ptr(tcx, nd_off);
 			end	= nd->tn_keyn - 1;
-
-			D_DEBUG(DB_TRACE,
-				"Probe level %d, node "DF_X64" keyn %d\n",
-				level, nd_off, end + 1);
 		}
 
 		if (probe_opc == BTR_PROBE_FIRST) {
@@ -1905,7 +1899,7 @@ btr_upsert(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	switch (rc) {
 	default:
 		D_ASSERTF(false, "unknown returned value: "DF_RC"\n",
-			DP_RC(rc));
+			  DP_RC(rc));
 		break;
 
 	case PROBE_RC_OK:
@@ -2598,11 +2592,11 @@ btr_node_del_rec(struct btr_context *tcx, struct btr_trace *par_tr,
 		} else if (par_tr->tr_at == par_nd->tn_keyn) {
 			/* only has sibling on the left side */
 			sib_off = btr_node_child_at(tcx, par_tr->tr_node,
-						     par_tr->tr_at - 1);
+						    par_tr->tr_at - 1);
 			sib_on_right = false;
 		} else {
 			sib_off = btr_node_child_at(tcx, par_tr->tr_node,
-						     par_tr->tr_at + 1);
+						    par_tr->tr_at + 1);
 			sib_nd = btr_off2ptr(tcx, sib_off);
 			D_ASSERT(sib_nd->tn_keyn > 0);
 
@@ -2689,7 +2683,6 @@ btr_root_del_rec(struct btr_context *tcx, struct btr_trace *trace, void *args)
 
 			rc = btr_node_del_leaf_only(tcx, trace, true, args);
 		} else {
-
 			rc = btr_node_destroy(tcx, trace->tr_node, args, NULL);
 			if (rc != 0)
 				return rc;
@@ -3438,7 +3431,7 @@ dbtree_iter_prepare(daos_handle_t toh, unsigned int options, daos_handle_t *ih)
 }
 
 /**
- * Finalise iterator.
+ * Finalize iterator.
  */
 int
 dbtree_iter_finish(daos_handle_t ih)
@@ -3540,7 +3533,6 @@ dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc, uint32_t intent,
 static int
 btr_iter_is_ready(struct btr_iterator *iter)
 {
-
 	if (likely(iter->it_state == BTR_ITR_READY))
 		return 0;
 
