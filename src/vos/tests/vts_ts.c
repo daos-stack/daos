@@ -341,7 +341,7 @@ lru_array_test(void **state)
 
 	for (i = 0; i < NUM_INDEXES; i++) {
 		rc = lrua_alloc(ts_arg->array, &ts_arg->indexes[i].idx, &entry);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		assert_non_null(entry);
 
 		entry->record = &ts_arg->indexes[i];
@@ -378,7 +378,7 @@ lru_array_test(void **state)
 				    &entry);
 		assert_false(found);
 		rc = lrua_alloc(ts_arg->array, &ts_arg->indexes[i].idx, &entry);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		assert_non_null(entry);
 
 		entry->record = &ts_arg->indexes[i];
@@ -442,7 +442,7 @@ lru_array_stress_test(void **state)
 				continue;
 			rc = lrua_alloc(ts_arg->array, &stress_entries[i].idx,
 					&entry);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			assert_non_null(entry);
 			entry->record = &ts_arg->indexes[i];
 			ts_arg->indexes[i].value = i;
@@ -481,7 +481,7 @@ lru_array_stress_test(void **state)
 		if (op < 7) {
 			rc = lrua_alloc(ts_arg->array, &stress_entries[i].idx,
 					&entry);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			assert_non_null(entry);
 
 			entry->record = &stress_entries[i];
@@ -524,7 +524,7 @@ lru_array_stress_test(void **state)
 
 	for (i = 0; i < LRU_ARRAY_SIZE; i++) {
 		rc = lrua_alloc(ts_arg->array, &stress_entries[i].idx, &entry);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		assert_non_null(entry);
 		entry->record = &stress_entries[i];
 		stress_entries[i].value = i;
@@ -535,7 +535,7 @@ lru_array_stress_test(void **state)
 	for (i = 0; i < LRU_ARRAY_SIZE; i++) {
 		j = i + LRU_ARRAY_SIZE;
 		rc = lrua_alloc(ts_arg->array, &stress_entries[j].idx, &entry);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		assert_non_null(entry);
 		entry->record = &stress_entries[j];
 		stress_entries[j].value = j;
@@ -544,7 +544,7 @@ lru_array_stress_test(void **state)
 	for (i = LRU_ARRAY_SIZE - 1; i >= 0; i--) {
 		j = i +  2 * LRU_ARRAY_SIZE;
 		rc = lrua_alloc(ts_arg->array, &stress_entries[j].idx, &entry);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		assert_non_null(entry);
 		entry->record = &stress_entries[j];
 		stress_entries[j].value = j;
@@ -585,7 +585,7 @@ lru_array_multi_test_iter(void **state)
 			rc = lrua_alloc(ts_arg->array, &ts_arg->indexes[i].idx,
 					&entry);
 		}
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		assert_non_null(entry);
 		entry->record = &ts_arg->indexes[i];
 		ts_arg->indexes[i].value = i;
@@ -621,7 +621,7 @@ inplace_test(struct lru_arg *ts_arg, uint32_t idx, uint64_t key1, uint64_t key2)
 
 	rc = lrua_allocx_inplace(ts_arg->array, idx, key1,
 				 &entry);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	assert_non_null(entry);
 	assert_true(entry->magic1 == MAGIC1);
 	assert_true(entry->magic2 == MAGIC2);

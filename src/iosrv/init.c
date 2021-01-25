@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,6 +41,8 @@
 #include <daos/placement.h>
 #include "srv_internal.h"
 #include "drpc_internal.h"
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 #include <daos.h> /* for daos_init() */
 
@@ -110,6 +112,12 @@ dss_self_rank(void)
 	rc = crt_group_rank(NULL /* grp */, &rank);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	return rank;
+}
+
+struct dss_module_info *
+get_module_info(void)
+{
+	return dss_get_module_info();
 }
 
 /*
@@ -467,10 +475,12 @@ abt_fini(void)
 static int
 server_init(int argc, char *argv[])
 {
-	uint64_t	bound;
-	int64_t		diff;
-	unsigned int	ctx_nr;
-	int		rc;
+	static struct d_tm_node_t	*startup_dur;
+	static struct d_tm_node_t	*started_ts;
+	uint64_t			 bound;
+	int64_t				 diff;
+	unsigned int			 ctx_nr;
+	int				 rc;
 
 	bound = crt_hlc_epsilon_get_bound(crt_hlc_get());
 
@@ -478,18 +488,25 @@ server_init(int argc, char *argv[])
 	if (rc != 0)
 		return rc;
 
+	rc = d_tm_init(dss_instance_idx, D_TM_SHARED_MEMORY_SIZE);
+	if (rc != 0)
+		goto exit_debug_init;
+
+	d_tm_mark_duration_start(&startup_dur, D_TM_CLOCK_REALTIME,
+				 "server", "startup_duration", NULL);
+
 	rc = register_dbtree_classes();
 	if (rc != 0)
-		D_GOTO(exit_debug_init, rc);
+		D_GOTO(exit_telemetry_init, rc);
 
 	/** initialize server topology data */
 	rc = dss_topo_init();
 	if (rc != 0)
-		D_GOTO(exit_debug_init, rc);
+		D_GOTO(exit_telemetry_init, rc);
 
 	rc = abt_init(argc, argv);
 	if (rc != 0)
-		goto exit_debug_init;
+		goto exit_telemetry_init;
 
 	/* initialize the modular interface */
 	rc = dss_module_init();
@@ -608,6 +625,12 @@ server_init(int argc, char *argv[])
 	dss_xstreams_open_barrier();
 	D_INFO("Service fully up\n");
 
+	d_tm_mark_duration_end(&startup_dur, NULL);
+
+	d_tm_record_timestamp(&started_ts, "server", "started_at", NULL);
+
+	d_tm_set_gauge(NULL, dss_self_rank(), "server", "rank", NULL);
+
 	gethostname(dss_hostname, DSS_HOSTNAME_MAX_LEN);
 
 	D_PRINT("DAOS I/O server (v%s) process %u started on rank %u "
@@ -641,6 +664,8 @@ exit_mod_init:
 	dss_module_fini(true);
 exit_abt_init:
 	abt_fini();
+exit_telemetry_init:
+	d_tm_fini();
 exit_debug_init:
 	daos_debug_fini();
 	return rc;

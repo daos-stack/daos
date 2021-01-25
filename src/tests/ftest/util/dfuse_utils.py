@@ -24,7 +24,6 @@ class DfuseCommand(ExecutableCommand):
         self.puuid = FormattedParameter("--pool {}")
         self.cuuid = FormattedParameter("--container {}")
         self.mount_dir = FormattedParameter("--mountpoint {}")
-        #self.svcl = FormattedParameter("--svc {}", 0)
         self.sys_name = FormattedParameter("--sys-name {}")
         self.singlethreaded = FormattedParameter("--singlethreaded", False)
         self.foreground = FormattedParameter("--foreground", False)

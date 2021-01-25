@@ -27,7 +27,7 @@ pool_connect_nonexist(void **state)
 
 	/* Contact pool service replicas as returned by pool create */
 	uuid_generate(uuid);
-	rc = daos_pool_connect(uuid, arg->group, NULL /* svc */, DAOS_PC_RW,
+	rc = daos_pool_connect(uuid, arg->group, DAOS_PC_RW,
 			       &poh, NULL /* info */, NULL /* ev */);
 	assert_int_equal(rc, -DER_NONEXIST);
 }
@@ -55,7 +55,7 @@ pool_connect(void **state)
 		print_message("rank 0 connecting to pool %ssynchronously ... ",
 			      arg->async ? "a" : "");
 		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-				       NULL /* svc */, DAOS_PC_RW, &poh, &info,
+				       DAOS_PC_RW, &poh, &info,
 				       arg->async ? &ev : NULL /* ev */);
 		assert_int_equal(rc, 0);
 		WAIT_ON_ASYNC(arg, ev);
@@ -111,12 +111,12 @@ pool_connect_exclusively(void **state)
 	print_message("SUBTEST 1: other connections already exist; shall get "
 		      "%d\n", -DER_BUSY);
 	print_message("establishing a non-exclusive connection\n");
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, NULL /* svc */,
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
 			       DAOS_PC_RW, &poh, NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, 0);
 	print_message("trying to establish an exclusive connection\n");
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, NULL /* svc */,
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
 			       DAOS_PC_EX, &poh_ex, NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, -DER_BUSY);
@@ -126,7 +126,7 @@ pool_connect_exclusively(void **state)
 
 	print_message("SUBTEST 2: no other connections; shall succeed\n");
 	print_message("establishing an exclusive connection\n");
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, NULL /* svc */,
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
 			       DAOS_PC_EX, &poh_ex, NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, 0);
@@ -134,7 +134,7 @@ pool_connect_exclusively(void **state)
 	print_message("SUBTEST 3: shall prevent other connections (%d)\n",
 		      -DER_BUSY);
 	print_message("trying to establish a non-exclusive connection\n");
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, NULL /* svc */,
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
 			       DAOS_PC_RW, &poh, NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, -DER_BUSY);
@@ -174,7 +174,7 @@ pool_exclude(void **state)
 	/** connect to pool */
 	print_message("rank 0 connecting to pool %ssynchronously... ",
 		      arg->async ? "a" : "");
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, NULL /* svc */,
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
 			       DAOS_PC_RW, &poh, &info,
 			       arg->async ? &ev : NULL /* ev */);
 	assert_int_equal(rc, 0);
@@ -190,7 +190,7 @@ pool_exclude(void **state)
 	print_message("rank 0 excluding rank %u... ", rank);
 	for (idx = 0; idx < arg->pool.svc->rl_nr; idx++) {
 		daos_exclude_target(arg->pool.pool_uuid, arg->group,
-				    arg->dmg_config, NULL /* svc */,
+				    arg->dmg_config,
 				    arg->pool.svc->rl_ranks[idx], tgt);
 	}
 	WAIT_ON_ASYNC(arg, ev);
@@ -371,7 +371,7 @@ init_fini_conn(void **state)
 	assert_int_equal(rc, 0);
 
 	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-			       NULL /* svc */, DAOS_PC_RW,
+			       DAOS_PC_RW,
 			       &arg->pool.poh, &arg->pool.pool_info,
 			       NULL /* ev */);
 	if (rc)
@@ -587,7 +587,7 @@ pool_op_retry(void **state)
 
 	print_message("connecting to pool ... ");
 	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-			       NULL /* svc */, DAOS_PC_RW, &poh, &info,
+			       DAOS_PC_RW, &poh, &info,
 			       NULL /* ev */);
 	assert_int_equal(rc, 0);
 	assert_memory_equal(info.pi_uuid, arg->pool.pool_uuid,
@@ -686,7 +686,7 @@ setup_containers(void **state, daos_size_t nconts)
 	/* TODO: make test_setup_pool_connect() more generic, call here */
 	if (arg->myrank == 0) {
 		rc = daos_pool_connect(lcarg->tpool.pool_uuid, arg->group,
-				       NULL /* svc */, DAOS_PC_RW,
+				       DAOS_PC_RW,
 				       &lcarg->tpool.poh, NULL /* pool info */,
 				       NULL /* ev */);
 		if (rc != 0)

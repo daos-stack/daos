@@ -87,7 +87,7 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
         #(2)Create pool and container with acl
         self.log.info("(2)==>Create a pool and a container with acl\n"
                       "   base_acl_entries= %s\n", base_acl_entries)
-        self.pool_uuid, self.pool_svc = self.create_pool_with_dmg()
+        self.pool_uuid = self.create_pool_with_dmg()
         secTestBase.create_acl_file(acl_file_name, base_acl_entries)
         self.container_uuid = self.create_container_with_daos(
             self.pool, None, acl_file_name)
