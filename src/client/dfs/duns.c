@@ -698,8 +698,6 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		       cont);
 	}
 	do {
-		int fd;
-
 		if (try_multiple) {
 			uuid_generate(attrp->da_cuuid);
 			uuid_unparse(attrp->da_cuuid, cont);
@@ -712,16 +710,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			D_GOTO(err_link, rc = EINVAL);
 		}
 
-		fd = openat(dfd, spart, O_RDONLY);
-		if (fd == -1) {
-			rc = errno;
-			D_ERROR("Failed to set DAOS xattr: %s\n",
-				strerror(rc));
-			goto err_link;
-		}
-
-		rc = fsetxattr(fd, DUNS_XATTR_NAME, str, len + 1, 0);
-		close(fd);
+		rc = lsetxattr(path, DUNS_XATTR_NAME, str, len + 1, 0);
 		if (rc) {
 			rc = errno;
 			if (rc == ENOTSUP) {
@@ -779,17 +768,8 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			 * therefore this xattr will be set in the root of the
 			 * new container, not the directory.
 			 */
-			fd = openat(dfd, spart, O_RDONLY);
-			if (fd == -1) {
-				rc = errno;
-				D_ERROR("Failed to set DAOS xattr: %s\n",
-					strerror(rc));
-				goto err_link;
-			}
-
-			rc = fsetxattr(fd, DUNS_XATTR_NAME, str,
+			rc = lsetxattr(path, DUNS_XATTR_NAME, str,
 				       len + 1, XATTR_CREATE);
-			close(fd);
 			if (rc) {
 				rc = errno;
 				D_ERROR("Failed to set DAOS xattr: %s\n",
