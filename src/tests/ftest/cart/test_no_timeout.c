@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -301,7 +301,7 @@ test_parse_args(int argc, char **argv)
 		{0, 0, 0, 0}
 	};
 
-  test_g.t_use_cfg = true;
+	test_g.t_use_cfg = true;
 
 	while (1) {
 		rc = getopt_long(argc, argv, "n:a:c:u:h:", long_options,

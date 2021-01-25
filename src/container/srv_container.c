@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2234,13 +2234,20 @@ set_acl(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	int		rc;
 
 	prop = daos_prop_alloc(1);
+	if (prop == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_ACL;
 	prop->dpp_entries[0].dpe_val_ptr = daos_acl_dup(acl);
+	if (prop->dpp_entries[0].dpe_val_ptr == NULL)
+		D_GOTO(out_prop, rc = -DER_NOMEM);
 
 	rc = set_prop(tx, pool_hdl->sph_pool, cont, hdl->ch_sec_capas,
 		      hdl_uuid, prop);
-	daos_prop_free(prop);
 
+out_prop:
+	daos_prop_free(prop);
+out:
 	return rc;
 }
 

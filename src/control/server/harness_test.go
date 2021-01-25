@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -298,7 +298,7 @@ func TestServer_Harness_Start(t *testing.T) {
 			membership, sysdb := system.MockMembership(t, log, mockTCPResolver)
 			done := make(chan struct{})
 			go func(ctxIn context.Context) {
-				gotErr = harness.Start(ctxIn, sysdb, config)
+				gotErr = harness.Start(ctxIn, sysdb, nil, config)
 				close(done)
 			}(ctx)
 

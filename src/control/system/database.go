@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,10 +37,12 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 const (
+	// CurrentSchemaVersion indicates the current db schema version.
 	CurrentSchemaVersion = 0
 )
 
@@ -119,6 +121,7 @@ type (
 	GroupMap struct {
 		Version  uint32
 		RankURIs map[Rank]string
+		MSRanks  []Rank
 	}
 )
 
@@ -382,7 +385,7 @@ func (db *Database) Start(parent context.Context) error {
 // tasks and release any resources.
 func (db *Database) Stop() error {
 	if db.shutdownCb == nil {
-		return errors.New("no shutdown callback set?!")
+		return errors.New("no shutdown callback set")
 	}
 
 	db.shutdownCb()
@@ -459,29 +462,9 @@ func (db *Database) GroupMap() (*GroupMap, error) {
 	gm := newGroupMap(db.data.MapVersion)
 	for _, srv := range db.data.Members.Ranks {
 		gm.RankURIs[srv.Rank] = srv.FabricURI
-	}
-
-	if len(gm.RankURIs) == 0 {
-		return nil, ErrEmptyGroupMap
-	}
-
-	return gm, nil
-}
-
-// ReplicaRanks returns the set of ranks associated with MS replicas.
-func (db *Database) ReplicaRanks() (*GroupMap, error) {
-	if err := db.CheckReplica(); err != nil {
-		return nil, err
-	}
-	db.data.RLock()
-	defer db.data.RUnlock()
-
-	gm := newGroupMap(db.data.MapVersion)
-	for _, srv := range db.filterMembers(AvailableMemberFilter) {
-		if !db.isReplica(srv.Addr) {
-			continue
+		if srv.state&AvailableMemberFilter > 0 && db.isReplica(srv.Addr) {
+			gm.MSRanks = append(gm.MSRanks, srv.Rank)
 		}
-		gm.RankURIs[srv.Rank] = srv.FabricURI
 	}
 
 	if len(gm.RankURIs) == 0 {
@@ -752,7 +735,7 @@ func (db *Database) FaultDomainTree() *FaultDomainTree {
 	db.data.RLock()
 	defer db.data.RUnlock()
 
-	return db.data.Members.FaultDomains
+	return db.data.Members.FaultDomains.Copy()
 }
 
 // copyPoolService makes a copy of the supplied PoolService pointer
@@ -873,4 +856,43 @@ func (db *Database) UpdatePoolService(ps *PoolService) error {
 	}
 
 	return nil
+}
+
+func (db *Database) handlePoolRepsUpdate(evt *events.RASEvent) {
+	ei := evt.GetPoolSvcInfo()
+	if ei == nil {
+		db.log.Error("no extended info in PoolSvcReplicasUpdate event received")
+		return
+	}
+	db.log.Debugf("processing RAS event %q for pool %s with info %+v on host %q",
+		evt.Msg, evt.PoolUUID, ei, evt.Hostname)
+
+	uuid, err := uuid.Parse(evt.PoolUUID)
+	if err != nil {
+		db.log.Errorf("failed to parse pool UUID %q: %s", evt.PoolUUID, err)
+		return
+	}
+
+	ps, err := db.FindPoolServiceByUUID(uuid)
+	if err != nil {
+		db.log.Errorf("failed to find pool with UUID %q: %s", evt.PoolUUID, err)
+		return
+	}
+
+	db.log.Debugf("update pool %s (state=%s) svc ranks %v->%v",
+		ps.PoolUUID, ps.State, ps.Replicas, ei.SvcReplicas)
+
+	ps.Replicas = RanksFromUint32(ei.SvcReplicas)
+
+	if err := db.UpdatePoolService(ps); err != nil {
+		db.log.Errorf("failed to apply pool service update: %s", err)
+	}
+}
+
+// OnEvent handles events and updates system database accordingly.
+func (db *Database) OnEvent(_ context.Context, evt *events.RASEvent) {
+	switch evt.ID {
+	case events.RASPoolRepsUpdate:
+		db.handlePoolRepsUpdate(evt)
+	}
 }

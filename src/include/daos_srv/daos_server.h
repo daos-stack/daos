@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@
 #include <daos_srv/iv.h>
 #include <daos_srv/vos_types.h>
 #include <daos_srv/pool.h>
+#include <daos_srv/ras.h>
 #include <daos_event.h>
 #include <daos_task.h>
 #include <pthread.h>
@@ -43,25 +44,25 @@
 #include <daos/checksum.h>
 
 /** number of target (XS set) per server */
-extern unsigned int	dss_tgt_nr;
+extern unsigned int	 dss_tgt_nr;
 
 /** Storage path (hack) */
-extern const char      *dss_storage_path;
+extern const char	*dss_storage_path;
 
 /** NVMe config file */
-extern const char      *dss_nvme_conf;
+extern const char	*dss_nvme_conf;
 
 /** Socket Directory */
-extern const char      *dss_socket_dir;
+extern const char	*dss_socket_dir;
 
 /** NVMe shm_id for enabling SPDK multi-process mode */
-extern int		dss_nvme_shm_id;
+extern int		 dss_nvme_shm_id;
 
 /** NVMe mem_size for SPDK memory allocation when using primary mode */
-extern int		dss_nvme_mem_size;
+extern int		 dss_nvme_mem_size;
 
 /** IO server instance index */
-extern unsigned int	dss_instance_idx;
+extern unsigned int	 dss_instance_idx;
 
 /**
  * Stackable Module API
@@ -255,6 +256,7 @@ enum {
 	SCHED_REQ_GC,
 	SCHED_REQ_SCRUB,
 	SCHED_REQ_MIGRATE,
+	SCHED_REQ_ANONYM,
 	SCHED_REQ_MAX,
 };
 
@@ -472,16 +474,6 @@ int dss_ult_execute(int (*func)(void *), void *arg, void (*user_cb)(void *),
 		    void *cb_args, int xs_type, int tgt_id, size_t stack_size);
 int dss_ult_create_all(void (*func)(void *), void *arg, bool main);
 
-struct dss_sleep_ult {
-	ABT_thread	dsu_thread;
-	uint64_t	dsu_expire_time;
-	d_list_t	dsu_list;
-};
-
-struct dss_sleep_ult *dss_sleep_ult_create(void);
-void dss_sleep_ult_destroy(struct dss_sleep_ult *dsu);
-void dss_ult_sleep(struct dss_sleep_ult *dsu, uint64_t expire_secs);
-void dss_ult_wakeup(struct dss_sleep_ult *dsu);
 int dss_sleep(uint64_t ms);
 
 /* Pack return codes with additional argument to reduce */
@@ -674,9 +666,9 @@ int dsc_obj_list_obj(daos_handle_t oh, daos_epoch_range_t *epr,
 		     daos_anchor_t *akey_anchor, d_iov_t *csum);
 
 int dsc_pool_tgt_exclude(const uuid_t uuid, const char *grp,
-			 const d_rank_list_t *svc, struct d_tgt_list *tgts);
+			 struct d_tgt_list *tgts);
 int dsc_pool_tgt_reint(const uuid_t uuid, const char *grp,
-		       const d_rank_list_t *svc, struct d_tgt_list *tgts);
+		       struct d_tgt_list *tgts);
 
 int dsc_task_run(tse_task_t *task, tse_task_cb_t retry_cb, void *arg,
 		 int arg_size, bool sync);
@@ -831,8 +823,13 @@ enum dss_media_error_type {
 
 void dss_init_state_set(enum dss_init_state state);
 
-int notify_bio_error(int media_err_type, int tgt_id);
-int get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks);
+/* Notify control-plane of a bio error. */
+int
+ds_notify_bio_error(int media_err_type, int tgt_id);
+
+/* Retrieve current pool service replicas for a given pool UUID. */
+int
+ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks);
 
 bool is_container_from_srv(uuid_t pool_uuid, uuid_t coh_uuid);
 bool is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid);

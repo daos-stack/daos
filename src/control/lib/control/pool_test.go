@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -240,21 +240,21 @@ func TestControl_PoolCreate(t *testing.T) {
 		expErr  error
 	}{
 		"local failure": {
-			req: &PoolCreateReq{},
+			req: &PoolCreateReq{TotalBytes: 10},
 			mic: &MockInvokerConfig{
 				UnaryError: errors.New("local failed"),
 			},
 			expErr: errors.New("local failed"),
 		},
 		"remote failure": {
-			req: &PoolCreateReq{},
+			req: &PoolCreateReq{TotalBytes: 10},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
 			},
 			expErr: errors.New("remote failed"),
 		},
 		"non-retryable failure": {
-			req: &PoolCreateReq{},
+			req: &PoolCreateReq{TotalBytes: 10},
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", drpc.DaosIOError, nil),
@@ -262,8 +262,19 @@ func TestControl_PoolCreate(t *testing.T) {
 			},
 			expErr: drpc.DaosIOError,
 		},
+		"mixture of auto/manual storage params": {
+			req: &PoolCreateReq{
+				TotalBytes: 10,
+				ScmBytes:   20,
+			},
+			expErr: errors.New("can't mix"),
+		},
+		"missing storage params": {
+			req:    &PoolCreateReq{},
+			expErr: errors.New("0 SCM"),
+		},
 		"create -DER_TIMEDOUT is retried": {
-			req: &PoolCreateReq{},
+			req: &PoolCreateReq{TotalBytes: 10},
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", drpc.DaosTimedOut, nil),
@@ -273,7 +284,7 @@ func TestControl_PoolCreate(t *testing.T) {
 			expResp: &PoolCreateResp{},
 		},
 		"create -DER_GRPVER is retried": {
-			req: &PoolCreateReq{},
+			req: &PoolCreateReq{TotalBytes: 10},
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", drpc.DaosGroupVersionMismatch, nil),
@@ -283,7 +294,7 @@ func TestControl_PoolCreate(t *testing.T) {
 			expResp: &PoolCreateResp{},
 		},
 		"create -DER_AGAIN is retried": {
-			req: &PoolCreateReq{},
+			req: &PoolCreateReq{TotalBytes: 10},
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", drpc.DaosTryAgain, nil),
@@ -293,18 +304,18 @@ func TestControl_PoolCreate(t *testing.T) {
 			expResp: &PoolCreateResp{},
 		},
 		"success": {
-			req: &PoolCreateReq{},
+			req: &PoolCreateReq{TotalBytes: 10},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
 					&mgmtpb.PoolCreateResp{
-						Svcreps:  []uint32{0, 1, 2},
-						Numranks: 32,
+						SvcReps:  []uint32{0, 1, 2},
+						TgtRanks: []uint32{0, 1, 2},
 					},
 				),
 			},
 			expResp: &PoolCreateResp{
 				SvcReps:  []uint32{0, 1, 2},
-				NumRanks: 32,
+				TgtRanks: []uint32{0, 1, 2},
 			},
 		},
 	} {
@@ -643,7 +654,7 @@ func TestControl_ListPools(t *testing.T) {
 						Pools: []*mgmtpb.ListPoolsResp_Pool{
 							{
 								Uuid:    common.MockUUID(),
-								Svcreps: []uint32{1, 3, 5, 8},
+								SvcReps: []uint32{1, 3, 5, 8},
 							},
 						},
 					},
