@@ -589,66 +589,55 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 	bool		try_multiple = true;
 	int		rc;
 	bool		backend_dfuse = false;
-	char		*part;
-	char		*spart;
-	int		dfd;
-	struct statfs	fs;
-	int		unlink_flag = 0;
+	size_t		path_len;
 
 	if (path == NULL) {
 		D_ERROR("Invalid path\n");
 		return EINVAL;
 	}
 
-	D_STRNDUP(part, path, MAXPATHLEN);
-	if (part == 0)
-		return ENOMEM;
-
-	spart = dirname(part);
-	dfd = open(spart, O_PATH | O_DIRECTORY);
-	if (dfd == -1) {
-		rc = errno;
-		D_ERROR("Failed to open parent directory %s: %s\n",
-			spart, strerror(rc));
-		D_FREE(part);
-		return rc;
-	}
-
-	rc = fstatfs(dfd, &fs);
-	if (rc == -1) {
-		rc = errno;
-		D_ERROR("Failed to statfs dir %s: %s\n",
-			spart, strerror(rc));
-		goto err_close;
-	}
-
-	D_FREE(part);
-
-	D_STRNDUP(part, path, MAXPATHLEN);
-	if (part == NULL) {
-		rc = ENOMEM;
-		goto err_close;
-	}
-	spart = basename(part);
+	path_len = strlen(path);
 
 	if (attrp->da_type == DAOS_PROP_CO_LAYOUT_HDF5) {
 		/** create a new file if HDF5 container */
 		int fd;
 
-		fd = openat(dfd, spart, O_CREAT | O_EXCL,
-			    S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);
+		fd = open(path, O_CREAT | O_EXCL,
+			  S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);
 		if (fd == -1) {
-			int err = errno;
+			rc = errno;
 
 			D_ERROR("Failed to create file %s: %s\n", path,
-				strerror(errno));
-			D_GOTO(err_close, rc = err);
+				strerror(rc));
+			return rc;
 		}
 		close(fd);
 	} else if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
+		struct statfs   fs;
+		char            *dir, *dirp;
 		mode_t		mode = S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH;
 
-		unlink_flag = AT_REMOVEDIR;
+		D_STRNDUP(dir, path, path_len);
+		if (dir == NULL) {
+			D_ERROR("Failed copy path %s: %s\n", path,
+				strerror(errno));
+			return ENOMEM;
+		}
+
+		/* dirname() may modify dir content or not, so use an
+		 * alternate pointer (see dirname() man page)
+		 */
+		dirp = dirname(dir);
+		rc = statfs(dirp, &fs);
+		if (rc == -1) {
+			int err = errno;
+
+			D_ERROR("Failed to statfs dir %s: %s\n",
+				dirp, strerror(errno));
+			D_FREE(dir);
+			return err;
+		}
+		D_FREE(dir);
 
 		if (fs.f_type == FUSE_SUPER_MAGIC)
 			backend_dfuse = true;
@@ -657,7 +646,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		if (fs.f_type == LL_SUPER_MAGIC) {
 			rc = duns_create_lustre_path(poh, path, attrp);
 			if (rc == 0)
-				D_GOTO(err_close, rc = 0);
+				return 0;
 			/* if Lustre specific method fails, fallback to try
 			 * the normal way...
 			 */
@@ -666,19 +655,19 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 
 		/** create a new directory if POSIX/MPI-IO container */
 		if (backend_dfuse)
-			rc = mknodat(dfd, spart, mode | S_IFIFO, 0);
+			rc = mknod(path, mode | S_IFIFO, 0);
 		else
-			rc = mkdirat(dfd, spart, mode);
+			rc = mkdir(path, mode);
 		if (rc == -1) {
-			int err = errno;
+			rc = errno;
 
 			D_ERROR("Failed to create dir %s: %s\n",
-				path, strerror(errno));
-			D_GOTO(err_close, rc = err);
+				path, strerror(rc));
+			return rc;
 		}
 	} else {
 		D_ERROR("Invalid container layout.\n");
-		D_GOTO(err_close, rc = EINVAL);
+		return EINVAL;
 	}
 
 	uuid_unparse(attrp->da_puuid, pool);
@@ -784,12 +773,12 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		D_GOTO(err_link, rc = daos_der2errno(rc));
 	}
 
-	goto err_close;
+	return rc;
 err_link:
-	unlinkat(dfd, spart, unlink_flag);
-err_close:
-	D_FREE(part);
-	close(dfd);
+	if (attrp->da_type == DAOS_PROP_CO_LAYOUT_HDF5)
+		unlink(path);
+	else if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX)
+		rmdir(path);
 	return rc;
 }
 
