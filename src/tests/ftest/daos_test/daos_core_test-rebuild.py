@@ -47,7 +47,7 @@ class DaosCoreTestRebuild(DaosCoreBase):
         :avocado: tags=daos_test_rebuild,unittest
         :avocado: tags=daos_rebuild_0to10
         """
-        self.run_subtest(self)
+        self.run_subtest()
 
     def test_rebuild_12to15(self):
         """Jira ID: DAOS-2770
@@ -63,7 +63,7 @@ class DaosCoreTestRebuild(DaosCoreBase):
         :avocado: tags=daos_test_rebuild,unittest
         :avocado: tags=daos_rebuild_12to15
         """
-        self.run_subtest(self)
+        self.run_subtest()
 
     def test_rebuild_16(self):
         """Jira ID: DAOS-2770
@@ -79,7 +79,7 @@ class DaosCoreTestRebuild(DaosCoreBase):
         :avocado: tags=daos_test_rebuild,unittest
         :avocado: tags=daos_rebuild_16
         """
-        self.run_subtest(self)
+        self.run_subtest()
 
     def test_rebuild_17(self):
         """Jira ID: DAOS-2770
@@ -95,7 +95,7 @@ class DaosCoreTestRebuild(DaosCoreBase):
         :avocado: tags=daos_test_rebuild,unittest
         :avocado: tags=daos_rebuild_17
         """
-        self.run_subtest(self)
+        self.run_subtest()
 
     def test_rebuild_18(self):
         """Jira ID: DAOS-2770
@@ -111,7 +111,7 @@ class DaosCoreTestRebuild(DaosCoreBase):
         :avocado: tags=daos_test_rebuild,unittest
         :avocado: tags=daos_rebuild_18
         """
-        self.run_subtest(self)
+        self.run_subtest()
 
     def test_rebuild_19(self):
         """Jira ID: DAOS-2770
@@ -127,7 +127,7 @@ class DaosCoreTestRebuild(DaosCoreBase):
         :avocado: tags=daos_test_rebuild,unittest
         :avocado: tags=daos_rebuild_19
         """
-        self.run_subtest(self)
+        self.run_subtest()
 
     def test_rebuild_20(self):
         """Jira ID: DAOS-2770
@@ -143,7 +143,7 @@ class DaosCoreTestRebuild(DaosCoreBase):
         :avocado: tags=daos_test_rebuild,unittest
         :avocado: tags=daos_rebuild_20
         """
-        self.run_subtest(self)
+        self.run_subtest()
 
     def test_rebuild_21(self):
         """Jira ID: DAOS-2770
@@ -159,7 +159,7 @@ class DaosCoreTestRebuild(DaosCoreBase):
         :avocado: tags=daos_test_rebuild,unittest
         :avocado: tags=daos_rebuild_21
         """
-        self.run_subtest(self)
+        self.run_subtest()
 
     def test_rebuild_22(self):
         """Jira ID: DAOS-2770
@@ -175,7 +175,7 @@ class DaosCoreTestRebuild(DaosCoreBase):
         :avocado: tags=daos_test_rebuild,unittest
         :avocado: tags=daos_rebuild_22
         """
-        self.run_subtest(self)
+        self.run_subtest()
 
     def test_rebuild_23(self):
         """Jira ID: DAOS-2770
@@ -191,7 +191,7 @@ class DaosCoreTestRebuild(DaosCoreBase):
         :avocado: tags=daos_test_rebuild,unittest
         :avocado: tags=daos_rebuild_23
         """
-        self.run_subtest(self)
+        self.run_subtest()
 
     def test_rebuild_24(self):
         """Jira ID: DAOS-2770
@@ -207,7 +207,7 @@ class DaosCoreTestRebuild(DaosCoreBase):
         :avocado: tags=daos_test_rebuild,unittest
         :avocado: tags=daos_rebuild_24
         """
-        self.run_subtest(self)
+        self.run_subtest()
 
     def test_rebuild_25(self):
         """Jira ID: DAOS-2770
@@ -223,7 +223,7 @@ class DaosCoreTestRebuild(DaosCoreBase):
         :avocado: tags=daos_test_rebuild,unittest
         :avocado: tags=daos_rebuild_25
         """
-        self.run_subtest(self)
+        self.run_subtest()
 
     def test_rebuild_26(self):
         """Jira ID: DAOS-2770
@@ -239,7 +239,7 @@ class DaosCoreTestRebuild(DaosCoreBase):
         :avocado: tags=daos_test_rebuild,unittest
         :avocado: tags=daos_rebuild_26
         """
-        self.run_subtest(self)
+        self.run_subtest()
 
     def test_rebuild_27(self):
         """Jira ID: DAOS-2770
@@ -255,7 +255,7 @@ class DaosCoreTestRebuild(DaosCoreBase):
         :avocado: tags=daos_test_rebuild,unittest
         :avocado: tags=daos_rebuild_27
         """
-        self.run_subtest(self)
+        self.run_subtest()
 
     def test_rebuild_28(self):
         """Jira ID: DAOS-2770
@@ -271,4 +271,4 @@ class DaosCoreTestRebuild(DaosCoreBase):
         :avocado: tags=daos_test_rebuild,unittest
         :avocado: tags=daos_rebuild_28
         """
-        self.run_subtest(self)
+        self.run_subtest()
