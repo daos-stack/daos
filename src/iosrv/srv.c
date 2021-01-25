@@ -1219,7 +1219,7 @@ dss_dump_ABT_state(FILE *fp)
 			/* XXX
 			 * do not print stack content as if unwiding with
 			 * libunwind is enabled current implementation runs
-			 * w/o synchronisation/suspend of current ULT which
+			 * w/o synchronization/suspend of current ULT which
 			 * is highly racy since unwiding will occur using
 			 * the same stack
 			rc = ABT_info_print_thread_stack(fp, dx->dx_progress);

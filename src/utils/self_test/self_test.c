@@ -520,7 +520,7 @@ static int test_msg_size(crt_context_t crt_ctx,
 
 	/*
 	 * Launch self-test 1:many sessions on each master endpoint
-	 * as simultaneously as possible (don't wait for acknowledgement)
+	 * as simultaneously as possible (don't wait for acknowledgment)
 	 */
 	for (m_idx = 0; m_idx < num_ms_endpts; m_idx++) {
 		crt_endpoint_t *endpt = &ms_endpts[m_idx].endpt;
