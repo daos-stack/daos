@@ -75,8 +75,8 @@ void test_function2(void)
 	static struct d_tm_node_t	*ts;
 	int				rc;
 
-	rc = d_tm_record_timestamp(&ts, false, __FILE__, __func__, "last executed",
-				   NULL);
+	rc = d_tm_record_timestamp(&ts, false, __FILE__, __func__,
+				   "last executed", NULL);
 	if (rc != D_TM_SUCCESS)
 		printf("d_tm_record_timestamp failed, rc = %d\n", rc);
 }
@@ -374,7 +374,8 @@ main(int argc, char **argv)
 	 */
 
 	/** For the first timer, let's use the realtime clock */
-	rc = d_tm_mark_duration_start(&timer1, false, D_TM_CLOCK_REALTIME, __FILE__,
+	rc = d_tm_mark_duration_start(&timer1, false, D_TM_CLOCK_REALTIME,
+				      __FILE__,
 				      __func__,
 				      "10000 iterations with rt clock",
 				      NULL);
@@ -391,7 +392,8 @@ main(int argc, char **argv)
 	}
 
 	/** For the second timer, let's use the process clock */
-	rc = d_tm_mark_duration_start(&timer2, false, D_TM_CLOCK_PROCESS_CPUTIME,
+	rc = d_tm_mark_duration_start(&timer2, false,
+				      D_TM_CLOCK_PROCESS_CPUTIME,
 				      __FILE__, __func__,
 				      "10000 iterations with process clock",
 				      NULL);

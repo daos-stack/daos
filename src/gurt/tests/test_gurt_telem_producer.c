@@ -122,14 +122,14 @@ test_gauge(void **state)
 	assert(rc == D_TM_SUCCESS);
 
 	for (i = 0; i < inc_count; i++) {
-		rc = d_tm_increment_gauge(&gauge, false, 1, "gurt", "tests", "telem",
-					  "gauge", NULL);
+		rc = d_tm_increment_gauge(&gauge, false, 1, "gurt", "tests",
+					  "telem", "gauge", NULL);
 		assert(rc == D_TM_SUCCESS);
 	}
 
 	for (i = 0; i < dec_count; i++) {
-		rc = d_tm_decrement_gauge(&gauge, false, 1, "gurt", "tests", "telem",
-					  "gauge", NULL);
+		rc = d_tm_decrement_gauge(&gauge, false, 1, "gurt", "tests",
+					  "telem", "gauge", NULL);
 		assert(rc == D_TM_SUCCESS);
 	}
 }
@@ -275,7 +275,8 @@ test_gauge_stats(void **state)
 	static struct d_tm_node_t	*node;
 	int				rc;
 
-	rc = d_tm_set_gauge(&node, false, 2, "gurt/tests/telem/gauge-stats", NULL);
+	rc = d_tm_set_gauge(&node, false, 2, "gurt/tests/telem/gauge-stats",
+			    NULL);
 	assert(rc == D_TM_SUCCESS);
 	rc = d_tm_set_gauge(&node, false, 4, NULL);
 	assert(rc == D_TM_SUCCESS);

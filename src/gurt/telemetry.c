@@ -839,6 +839,7 @@ d_tm_compute_duration_stats(struct d_tm_node_t *node)
  * faster access.
  *
  * \param[in,out]	metric	Pointer to the metric
+ * \param[in]		protect Enable or disable mutex protection
  * \param[in]		item	Full path name to this \a item
  *				If supplied, the path name is specified by the
  *				\a item and any strings following it.  The last
@@ -855,7 +856,8 @@ d_tm_compute_duration_stats(struct d_tm_node_t *node)
  *							are NULL
  */
 int
-d_tm_increment_counter(struct d_tm_node_t **metric, bool protect, char *item, ...)
+d_tm_increment_counter(struct d_tm_node_t **metric, bool protect,
+		       char *item, ...)
 {
 	struct d_tm_node_t	*node = NULL;
 	char			path[D_TM_MAX_NAME_LEN] = {};
@@ -888,7 +890,8 @@ d_tm_increment_counter(struct d_tm_node_t **metric, bool protect, char *item, ..
 	}
 
 	if (node == NULL) {
-		rc = d_tm_add_metric(&node, protect, path, D_TM_COUNTER, "N/A", "N/A");
+		rc = d_tm_add_metric(&node, protect, path, D_TM_COUNTER,
+				     "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to add and incremement counter [%s]: "
 				"rc = %d\n", path, rc);
@@ -929,6 +932,7 @@ failure:
  * faster access.
  *
  * \param[in,out]	metric	Pointer to the metric
+ * \param[in]		protect Enable or disable mutex protection
  * \param[in]		item	Full path name to this \a item
  *				If supplied, the path name is specified by the
  *				\a item and any strings following it.  The last
@@ -945,7 +949,8 @@ failure:
  *							are NULL
  */
 int
-d_tm_record_timestamp(struct d_tm_node_t **metric, bool protect, char *item, ...)
+d_tm_record_timestamp(struct d_tm_node_t **metric, bool protect,
+		      char *item, ...)
 {
 	struct d_tm_node_t	*node = NULL;
 	char			path[D_TM_MAX_NAME_LEN] = {};
@@ -977,7 +982,8 @@ d_tm_record_timestamp(struct d_tm_node_t **metric, bool protect, char *item, ...
 	}
 
 	if (node == NULL) {
-		rc = d_tm_add_metric(&node, protect, path, D_TM_TIMESTAMP, "N/A", "N/A");
+		rc = d_tm_add_metric(&node, protect, path, D_TM_TIMESTAMP,
+				     "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to add and record timestamp [%s]: "
 				"rc = %d\n", path, rc);
@@ -1016,6 +1022,7 @@ failure:
  * faster access.
  *
  * \param[in,out]	metric	Pointer to the metric
+ * \param[in]		protect Enable or disable mutex protection
  * \param[in]		clk_id	A D_TM_CLOCK_* that identifies the clock type
  * \param[in]		item	Full path name to this \a item
  *				If supplied, the path name is specified by the
@@ -1076,7 +1083,8 @@ d_tm_take_timer_snapshot(struct d_tm_node_t **metric, bool protect, int clk_id,
 				"Failed to add metric: rc = %d\n", path, rc);
 			goto failure;
 		}
-		rc = d_tm_add_metric(&node, protect, path, D_TM_TIMER_SNAPSHOT | clk_id,
+		rc = d_tm_add_metric(&node, protect, path,
+				     D_TM_TIMER_SNAPSHOT | clk_id,
 				     "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to add and record high resolution timer"
@@ -1120,6 +1128,7 @@ failure:
  * faster access.
  *
  * \param[in,out]	metric	Pointer to the metric
+ * \param[in]		protect Enable or disable mutex protection
  * \param[in]		clk_id	A D_TM_CLOCK_* that identifies the clock type
  * \param[in]		item	Full path name to this \a item
  *				If supplied, the path name is specified by the
@@ -1179,7 +1188,8 @@ d_tm_mark_duration_start(struct d_tm_node_t **metric, bool protect, int clk_id,
 				"Failed to add metric: rc = %d\n", path, rc);
 			goto failure;
 		}
-		rc = d_tm_add_metric(&node, protect, path, D_TM_DURATION | clk_id,
+		rc = d_tm_add_metric(&node, protect, path,
+				     D_TM_DURATION | clk_id,
 				     "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to add and mark duration start [%s]: "
@@ -1316,6 +1326,7 @@ failure:
  * faster access.
  *
  * \param[in,out]	metric	Pointer to the metric
+ * \param[in]		protect Enable or disable mutex protection
  * \param[in]		value	Set the gauge to this value
  * \param[in]		item	Full path name to this \a item
  *				If supplied, the path name is specified by the
@@ -1333,7 +1344,8 @@ failure:
  *							are NULL
  */
 int
-d_tm_set_gauge(struct d_tm_node_t **metric, bool protect, uint64_t value, char *item, ...)
+d_tm_set_gauge(struct d_tm_node_t **metric, bool protect, uint64_t value,
+	       char *item, ...)
 {
 	struct d_tm_node_t	*node = NULL;
 	char			path[D_TM_MAX_NAME_LEN] = {};
@@ -1365,7 +1377,8 @@ d_tm_set_gauge(struct d_tm_node_t **metric, bool protect, uint64_t value, char *
 	}
 
 	if (node == NULL) {
-		rc = d_tm_add_metric(&node, protect, path, D_TM_GAUGE, "N/A", "N/A");
+		rc = d_tm_add_metric(&node, protect, path, D_TM_GAUGE,
+				     "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to add and set gauge [%s]: "
 				"rc = %d\n", path, rc);
@@ -1407,6 +1420,7 @@ failure:
  * faster access.
  *
  * \param[in,out]	metric	Pointer to the metric
+ * \param[in]		protect Enable or disable mutex protection
  * \param[in]		value	Increment the gauge by this value
  * \param[in]		item	Full path name to this \a item
  *				If supplied, the path name is specified by the
@@ -1457,7 +1471,8 @@ d_tm_increment_gauge(struct d_tm_node_t **metric, bool protect, uint64_t value,
 	}
 
 	if (node == NULL) {
-		rc = d_tm_add_metric(&node, protect, path, D_TM_GAUGE, "N/A", "N/A");
+		rc = d_tm_add_metric(&node, protect, path, D_TM_GAUGE,
+				     "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to add and incremement gauge [%s]: "
 				"rc = %d\n", path, rc);
@@ -1499,6 +1514,7 @@ failure:
  * faster access.
  *
  * \param[in,out]	metric	Pointer to the metric
+ * \param[in]		protect Enable or disable mutex protection
  * \param[in]		value	Decrement the gauge by this value
  * \param[in]		item	Full path name to this \a item
  *				If supplied, the path name is specified by the
@@ -1549,7 +1565,8 @@ d_tm_decrement_gauge(struct d_tm_node_t **metric, bool protect, uint64_t value,
 	}
 
 	if (node == NULL) {
-		rc = d_tm_add_metric(&node, protect, path, D_TM_GAUGE, "N/A", "N/A");
+		rc = d_tm_add_metric(&node, protect, path, D_TM_GAUGE,
+				     "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to add and decrement gauge [%s]: "
 				"rc = %d\n", path, rc);
@@ -1646,6 +1663,7 @@ d_tm_find_metric(uint64_t *shmem_root, char *path)
  * critical time.
  *
  * \param[out]	node		Points to the new metric if supplied
+ * \param[in]	protect		Enable or disable mutex protection
  * \param[in]	metric		Full path name of the new metric to create
  * \param[in]	metric_type	One of the corresponding d_tm_metric_types
  * \param[in]	sh_desc		A short description of the metric containing
@@ -1663,8 +1681,8 @@ d_tm_find_metric(uint64_t *shmem_root, char *path)
  *				-DER_UNINIT		API not initialized
  */
 int
-d_tm_add_metric(struct d_tm_node_t **node, bool protect, char *metric, int metric_type,
-		char *sh_desc, char *lng_desc)
+d_tm_add_metric(struct d_tm_node_t **node, bool protect, char *metric,
+		int metric_type, char *sh_desc, char *lng_desc)
 {
 	pthread_mutexattr_t	mattr;
 	struct d_tm_node_t	*parent_node;
@@ -1811,9 +1829,11 @@ d_tm_add_metric(struct d_tm_node_t **node, bool protect, char *metric, int metri
 			goto failure;
 		}
 
-		rc = pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED);
+		rc = pthread_mutexattr_setpshared(&mattr,
+						  PTHREAD_PROCESS_SHARED);
 		if (rc != 0) {
-			D_ERROR("pthread_mutexattr_setpshared failed: rc = %d\n", rc);
+			D_ERROR("pthread_mutexattr_setpshared failed: "
+			"rc = %d\n", rc);
 			goto failure;
 		}
 
