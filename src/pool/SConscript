@@ -15,7 +15,8 @@ def scons():
     ds_pool = daos_build.library(denv, 'pool',
                                  ['srv.c', 'srv_pool.c', 'srv_layout.c',
                                   'srv_target.c', 'srv_util.c', 'srv_iv.c',
-                                  'srv_cli.c', 'srv_pool_scrub.c', common],
+                                  'srv_cli.c', 'srv_pool_scrub.c',
+                                  'srv_pool_map.c', common],
                                  install_off="../..")
     denv.Install('$PREFIX/lib64/daos_srv', ds_pool)
 
