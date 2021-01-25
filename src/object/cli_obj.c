@@ -3750,7 +3750,8 @@ obj_comp_cb(tse_task_t *task, void *data)
 			memset(obj_auxi, 0, sizeof(*obj_auxi));
 		}
 	} else {
-		obj_ec_fail_info_reset(&obj_auxi->reasb_req);
+		if (!obj_auxi->ec_in_recov)
+			obj_ec_fail_info_reset(&obj_auxi->reasb_req);
 	}
 
 	obj_decref(obj);

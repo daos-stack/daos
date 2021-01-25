@@ -37,6 +37,8 @@ import logging
 import cart_logparse
 import cart_logtest
 
+from general_utils import stop_processes
+
 from write_host_file import write_host_file
 
 class CartUtils():
@@ -74,6 +76,11 @@ class CartUtils():
                 i = i - 1
 
         return procrtn
+
+    @staticmethod
+    def cleanup_processes():
+        """ Clean up cart processes, in case avocado/apricot does not. """
+        stop_processes(["localhost"], "'(crt_launch|orterun)'")
 
     @staticmethod
     def stop_process(proc):

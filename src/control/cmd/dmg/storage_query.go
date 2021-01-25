@@ -165,8 +165,7 @@ type usageQueryCmd struct {
 // Queries NVMe and SCM usage on hosts.
 func (cmd *usageQueryCmd) Execute(_ []string) error {
 	ctx := context.Background()
-	// retrieve nvme metadata as it contains storage space usage
-	req := &control.StorageScanReq{NvmeMeta: true}
+	req := &control.StorageScanReq{Usage: true}
 	req.SetHostList(cmd.hostlist)
 	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, req)
 

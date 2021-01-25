@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -835,7 +835,7 @@ again:
 
 	if (rc != 0 && epoch < dth->dth_epoch) {
 		D_WARN(DF_UUID": Fail to add DTX "DF_DTI" to CoS cache: "
-		       DF_RC". Try to commit it sychronously.\n",
+		       DF_RC". Try to commit it synchronously.\n",
 		       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid),
 		       DP_RC(rc));
 		dth->dth_sync = 1;

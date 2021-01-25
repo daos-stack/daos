@@ -813,7 +813,7 @@ func (p *Provider) IsMounted(target string) (bool, error) {
 	return p.sys.IsMounted(target)
 }
 
-// GetfsUsage returns space utilisation info for a mount point.
+// GetfsUsage returns space utilization info for a mount point.
 func (p *Provider) GetfsUsage(target string) (*storage.ScmMountPoint, error) {
 	total, avail, err := p.sys.GetfsUsage(target)
 	if err != nil {
