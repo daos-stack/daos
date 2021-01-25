@@ -924,7 +924,6 @@ rebuild_multiple_tgts(void **state)
 				daos_exclude_server(arg->pool.pool_uuid,
 						    arg->group,
 						    arg->dmg_config,
-						    NULL /* svc */,
 						    rank);
 				if (++fail_cnt >= 2)
 					break;
@@ -950,7 +949,7 @@ rebuild_multiple_tgts(void **state)
 	if (arg->myrank == 0) {
 		for (i = 0; i < 2; i++)
 			daos_reint_server(arg->pool.pool_uuid, arg->group,
-					  arg->dmg_config, arg->pool.svc,
+					  arg->dmg_config,
 					  exclude_ranks[i]);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -1015,13 +1014,13 @@ rebuild_master_failure(void **state)
 	/* Verify the POOL_QUERY get same rebuild status after leader change */
 	pinfo.pi_bits = DPI_REBUILD_STATUS;
 	rc = test_pool_get_info(arg, &pinfo);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	assert_int_equal(pinfo.pi_rebuild_st.rs_done, 1);
 	rc = rebuild_change_leader_cb(arg);
 	assert_int_equal(rc, 0);
 	pinfo_new.pi_bits = DPI_REBUILD_STATUS;
 	rc = test_pool_get_info(arg, &pinfo_new);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	assert_int_equal(pinfo_new.pi_rebuild_st.rs_done, 1);
 	rc = memcmp(&pinfo.pi_rebuild_st, &pinfo_new.pi_rebuild_st,
 		    sizeof(pinfo.pi_rebuild_st));
@@ -1278,7 +1277,7 @@ rebuild_kill_rank_during_rebuild(void **state)
 	new_arg->rebuild_cb = rebuild_destroy_pool_cb;
 
 	daos_exclude_target(arg->pool.pool_uuid, arg->group, arg->dmg_config,
-			    NULL /* svc */, ranks_to_kill[0], -1);
+			    ranks_to_kill[0], -1);
 
 	sleep(2);
 	daos_kill_server(arg, arg->pool.pool_uuid, arg->group,

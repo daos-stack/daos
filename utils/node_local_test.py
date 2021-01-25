@@ -7,6 +7,7 @@
 # pylint: disable=protected-access
 
 import os
+import bz2
 import sys
 import time
 import uuid
@@ -279,11 +280,15 @@ class DaosServer():
         self.conf = conf
         self.valgrind = valgrind
         self._agent = None
-        self.agent_dir = None
-        server_log_file = tempfile.NamedTemporaryFile(prefix='dnt_server_',
+        self.control_log = tempfile.NamedTemporaryFile(prefix='dnt_control_',
+                                                       suffix='.log',
+                                                       delete=False)
+        self.agent_log = tempfile.NamedTemporaryFile(prefix='dnt_agent_',
+                                                     suffix='.log',
+                                                     delete=False)
+        self.server_log = tempfile.NamedTemporaryFile(prefix='dnt_server_',
                                                       suffix='.log',
                                                       delete=False)
-        self._log_file = server_log_file.name
         self.__process_name = 'daos_io_server'
         if self.valgrind:
             self.__process_name = 'valgrind'
@@ -291,8 +296,6 @@ class DaosServer():
         socket_dir = '/tmp/dnt_sockets'
         if not os.path.exists(socket_dir):
             os.mkdir(socket_dir)
-        if os.path.exists(self._log_file):
-            os.unlink(self._log_file)
 
         self._agent_dir = tempfile.TemporaryDirectory(prefix='dnt_agent_')
         self.agent_dir = self._agent_dir.name
@@ -346,15 +349,12 @@ class DaosServer():
         # server runs do not overwrite each other.
         scfd = open(os.path.join(self_dir, 'nlt_server.yaml'), 'r')
 
-        control_log_file = tempfile.NamedTemporaryFile(prefix='dnt_control_',
-                                                       suffix='.log',
-                                                       delete=False)
         scyaml = yaml.safe_load(scfd)
-        scyaml['servers'][0]['log_file'] = self._log_file
+        scyaml['servers'][0]['log_file'] = self.server_log.name
         if self.conf.args.server_debug:
             scyaml['control_log_mask'] = 'ERROR'
             scyaml['servers'][0]['log_mask'] = self.conf.args.server_debug
-        scyaml['control_log_file'] = control_log_file.name
+        scyaml['control_log_file'] = self.control_log.name
 
         self._yaml_file = tempfile.NamedTemporaryFile(
             prefix='nlt-server-config-',
@@ -401,15 +401,11 @@ class DaosServer():
 
         agent_bin = os.path.join(self.conf['PREFIX'], 'bin', 'daos_agent')
 
-        agent_log_file = tempfile.NamedTemporaryFile(prefix='dnt_agent_',
-                                                     suffix='.log',
-                                                     delete=False)
-
         agent_cmd = [agent_bin,
                      '--config-path', agent_config,
                      '--insecure',
                      '--runtime_dir', self.agent_dir,
-                     '--logfile', agent_log_file.name]
+                     '--logfile', self.agent_log_file]
 
         if not self.conf.args.server_debug:
             agent_cmd.append('--debug')
@@ -530,12 +526,14 @@ class DaosServer():
             except ProcessLookupError:
                 pass
 
+        compress_file(self.agent_log.name)
+        compress_file(self.control_log.name)
+
         # Show errors from server logs bug suppress memory leaks as the server
         # often segfaults at shutdown.
-        if os.path.exists(self._log_file):
-            # TODO:                              # pylint: disable=W0511
-            # Enable memleak checking when server shutdown works.
-            log_test(self.conf, self._log_file, show_memleaks=False)
+        # TODO:                              # pylint: disable=W0511
+        # Enable memleak checking when server shutdown works.
+        log_test(self.conf, self.server_log.name, show_memleaks=False)
         self.running = False
         return ret
 
@@ -1225,6 +1223,25 @@ def setup_log_test(conf):
 
     lt.wf = conf.wf
 
+def compress_file(filename):
+    """Compress a file using bz2 for space reasons"""
+    small = bz2.BZ2Compressor()
+
+    fd = open(filename, 'rb')
+
+    nfd = open('{}.bz2'.format(filename), 'wb')
+    lines = fd.read(64*1024)
+    while lines:
+        new_data = bz2.compress(lines)
+        if new_data:
+            nfd.write(new_data)
+        lines = fd.read(64*1024)
+    new_data = small.flush()
+    if new_data:
+        nfd.write(new_data)
+
+    os.unlink(filename)
+
 def log_test(conf,
              filename,
              show_memleaks=True,
@@ -1257,6 +1274,7 @@ def log_test(conf,
                             os.path.basename(filename),
                             fi_signal)
         if not lto.fi_triggered:
+            compress_file(filename)
             raise NLTestNoFi
 
     functions = set()
@@ -1270,6 +1288,8 @@ def log_test(conf,
 
     if check_write and 'dfuse_write' not in functions:
         raise NLTestNoFunction('dfuse_write')
+
+    compress_file(filename)
 
     return lto.fi_location
 

@@ -304,7 +304,7 @@ typedef int (*d_hash_traverse_cb_t)(d_list_t *link, void *arg);
  * Traverse a hash table, call the traverse callback function on every item.
  * Break once the callback returns non-zero.
  *
- * \param[in] htable		The hash table to be finalised.
+ * \param[in] htable		The hash table to be finalized.
  * \param[in] cb		Traverse callback, will be called on every item
  *				in the hash table.
  *				See \a d_hash_traverse_cb_t.
@@ -331,16 +331,16 @@ int  d_hash_table_traverse(struct d_hash_table *htable,
 int  d_hash_table_destroy(struct d_hash_table *htable, bool force);
 
 /**
- * Finalise a hash table, reset all struct members.
+ * Finalize a hash table, reset all struct members.
  *
  * Note this does NOT free htable itself - only the members it contains.
  *
- * \param[in] htable		The hash table to be finalised.
+ * \param[in] htable		The hash table to be finalized.
  * \param[in] force		true:
- *				Finalise the hash table even it is not empty,
+ *				Finalize the hash table even it is not empty,
  *				all pending items will be deleted.
  *				false:
- *				Finalise the hash table only if it is empty,
+ *				Finalize the hash table only if it is empty,
  *				otherwise returns error
  *
  * \return			zero on success, negative value if error.

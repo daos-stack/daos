@@ -1712,7 +1712,7 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	/* close the rebuild pool/container on all main XS */
 	rc = dss_task_collective(rebuild_fini_one, rpt, 0);
 
-	/* destory the migrate_tls of 0-xstream */
+	/* destroy the migrate_tls of 0-xstream */
 	ds_migrate_fini_one(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	rpt_put(rpt);
 	/* No one should access rpt after rebuild_fini_one.

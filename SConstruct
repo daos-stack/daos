@@ -58,7 +58,11 @@ def get_version():
         return version_file.read().rstrip()
 
 DAOS_VERSION = get_version()
-API_VERSION = "0.9.0"
+API_VERSION_MAJOR = "1"
+API_VERSION_MINOR = "0"
+API_VERSION_FIX = "0"
+API_VERSION = "{}.{}.{}".format(API_VERSION_MAJOR, API_VERSION_MINOR,
+                                API_VERSION_FIX)
 
 def update_rpm_version(version, tag):
     """ Update the version (and release) in the RPM specfile """
@@ -130,6 +134,10 @@ def set_defaults(env):
               action='store_true',
               default=False,
               help='Disable rpath')
+
+    env.Append(API_VERSION_MAJOR=API_VERSION_MAJOR)
+    env.Append(API_VERSION_MINOR=API_VERSION_MINOR)
+    env.Append(API_VERSION_FIX=API_VERSION_FIX)
 
     env.Append(CCFLAGS=['-g', '-Wshadow', '-Wall', '-Wno-missing-braces',
                         '-fpic', '-D_GNU_SOURCE', '-DD_LOG_V2'])
@@ -362,7 +370,7 @@ def scons(): # pylint: disable=too-many-locals
     sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils/sl'))
     from prereq_tools import PreReqComponent
 
-    env = Environment(TOOLS=['extra', 'default'])
+    env = Environment(TOOLS=['extra', 'default', 'textfile'])
 
     if os.path.exists("daos_m.conf"):
         os.rename("daos_m.conf", "daos.conf")

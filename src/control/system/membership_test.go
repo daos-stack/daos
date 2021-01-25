@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -785,7 +785,7 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 			event:      nil,
 			expMembers: members,
 		},
-		"event on unrecognised rank": {
+		"event on unrecognized rank": {
 			members:    members,
 			event:      events.NewRankDownEvent("foo", 0, 4, common.NormalExit),
 			expMembers: members,
