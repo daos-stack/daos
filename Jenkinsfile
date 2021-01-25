@@ -249,7 +249,8 @@ String functional_packages(String distro) {
                   "hdf5-vol-daos-openmpi3-tests-daos-1 " +
                   "MACSio-mpich " +
                   "MACSio-openmpi3 " +
-                  "mpifileutils-mpich-daos-1 "
+                  "mpifileutils-mpich-daos-1 " +
+                  "maven "
     if (distro == "leap15") {
         if (quickbuild()) {
             pkgs += " spdk-tools"

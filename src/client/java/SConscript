@@ -1,0 +1,76 @@
+"Build Java Hadoop"""
+
+import os
+
+from subprocess import Popen, PIPE, CalledProcessError
+from os.path import join
+
+def scons():
+    """Execute build"""
+    Import('env')
+
+    ftest_dir = '$PREFIX/lib64/java'
+    env.Install(ftest_dir, "pom.xml")
+
+    dirs = ['dev',
+            'dev/checkstyle',
+            'daos-java',
+            'daos-java/src',
+            'daos-java/src/main',
+            'daos-java/src/main/native',
+            'daos-java/src/main/native/include',
+            'daos-java/src/main/resources',
+            'daos-java/src/main/java',
+            'daos-java/src/main/java/io',
+            'daos-java/src/main/java/io/daos',
+            'daos-java/src/main/java/io/daos/dfs',
+            'daos-java/src/main/java/io/daos/dfs/uns',
+            'daos-java/src/test/java',
+            'daos-java/src/test/java/io',
+            'daos-java/src/test/java/io/daos',
+            'daos-java/src/test/java/io/daos/dfs',
+            'distribution',
+            'distribution/src',
+            'distribution/src/assembly',
+            'hadoop-daos',
+            'hadoop-daos/src',
+            'hadoop-daos/src/main',
+            'hadoop-daos/src/main/java',
+            'hadoop-daos/src/main/java/io',
+            'hadoop-daos/src/main/java/io/daos',
+            'hadoop-daos/src/main/java/io/daos/fs',
+            'hadoop-daos/src/main/java/io/daos/fs/hadoop',
+            'hadoop-daos/src/main/resources',
+            'hadoop-daos/src/main/resources/META-INF',
+            'hadoop-daos/src/main/resources/META-INF/services',
+            'hadoop-daos/src/test',
+            'hadoop-daos/src/test/java',
+            'hadoop-daos/src/test/java/io',
+            'hadoop-daos/src/test/java/io/daos',
+            'hadoop-daos/src/test/java/io/daos/fs',
+            'hadoop-daos/src/test/java/io/daos/fs/hadoop',
+            'hadoop-daos/src/test/java/io/daos/fs/hadoop/contract',
+            'hadoop-daos/src/test/java/io/daos/fs/hadoop/multiple',
+            'hadoop-daos/src/test/java/io/daos/fs/hadoop/perf',
+            'hadoop-daos/src/test/resources',
+            'hadoop-daos/src/test/resources/contract',
+            'hadoop-daos/src/test/resources/mockito-extensions'
+           ]
+
+    for sub_dir in dirs:
+        env.Install(join(ftest_dir, sub_dir),
+                    Glob('%s/*.*' % sub_dir))
+
+    cmd = "mvn clean install -DskipITs -Ddaos.install.path={}".format(env.get("PREFIX"))
+
+    print("Building Java src...")
+    result = Popen([cmd], stdin=PIPE, stdout=PIPE, stderr=PIPE, shell=True)
+    out, err = result.communicate()
+    if result.returncode == 0:
+        print("Java src build successful\n")
+    else:
+        print("***Java src build failed with rc:{} ***\n{}".\
+               format(result.returncode, out))
+
+if __name__ == "SCons.Script":
+    scons()
