@@ -248,7 +248,7 @@ func (fwdr *EventForwarder) OnEvent(ctx context.Context, evt *events.RASEvent) {
 
 	req := &SystemNotifyReq{
 		Sequence: <-fwdr.seq,
-		Event:    evt,
+		Event:    evt.WithIsForwarded(true),
 	}
 	req.SetHostList(fwdr.accessPts)
 	fwdr.client.Debugf("forwarding %s event to MS access points %v (seq: %d)",
@@ -283,7 +283,10 @@ type EventLogger struct {
 
 // OnEvent implements the events.Handler interface.
 func (el *EventLogger) OnEvent(_ context.Context, evt *events.RASEvent) {
-	el.log.Infof("RAS event received: %+v", evt)
+	if evt.IsForwarded() {
+		return // event has already been logged at source
+	}
+	el.log.Info(evt.PrintRAS())
 }
 
 // NewEventLogger returns an initialized EventLogger.
