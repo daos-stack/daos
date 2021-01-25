@@ -240,7 +240,6 @@ show_help(char *name)
 	printf("usage: %s -m=PATHSTR -s=RANKS\n"
 		"\n"
 		"	-m --mountpoint=PATHSTR	Mount point to use\n"
-		"	-s --svc=RANKS		pool service replicas like 1,2,3\n"
 		"	   --pool=UUID		pool UUID\n"
 		"	   --container=UUID	container UUID\n"
 		"	   --sys-name=STR	DAOS system name context for servers\n"
@@ -255,7 +254,6 @@ int
 main(int argc, char **argv)
 {
 	struct dfuse_info	*dfuse_info = NULL;
-	char			*svcl = NULL;
 	struct dfuse_pool	*dfp = NULL;
 	struct dfuse_pool	*dfpn;
 	struct dfuse_dfs	*dfs = NULL;
@@ -275,7 +273,6 @@ main(int argc, char **argv)
 	struct option long_options[] = {
 		{"pool",		required_argument, 0, 'p'},
 		{"container",		required_argument, 0, 'c'},
-		{"svc",			required_argument, 0, 's'},
 		{"sys-name",		required_argument, 0, 'G'},
 		{"mountpoint",		required_argument, 0, 'm'},
 		{"thread-count",	required_argument, 0, 't'},
@@ -316,9 +313,6 @@ main(int argc, char **argv)
 			break;
 		case 'c':
 			dfuse_info->di_cont = optarg;
-			break;
-		case 's':
-			svcl = optarg;
 			break;
 		case 'G':
 			dfuse_info->di_group = optarg;
@@ -422,17 +416,9 @@ main(int argc, char **argv)
 
 	DFUSE_TRA_ROOT(dfuse_info, "dfuse_info");
 
-	if (svcl) {
-		dfuse_info->di_svcl = daos_rank_list_parse(svcl, ":");
-		if (dfuse_info->di_svcl == NULL) {
-			printf("Invalid pool service rank list\n");
-			D_GOTO(out_dfuse, ret = -DER_INVAL);
-		}
-	}
-
 	D_ALLOC_PTR(dfp);
 	if (!dfp)
-		D_GOTO(out_svcl, ret = -DER_NOMEM);
+		D_GOTO(out_dfuse, ret = -DER_NOMEM);
 
 	DFUSE_TRA_UP(dfp, dfuse_info, "dfp");
 	D_INIT_LIST_HEAD(&dfp->dfp_dfs_list);
@@ -488,7 +474,7 @@ main(int argc, char **argv)
 	if (uuid_is_null(dfp->dfp_pool) == 0) {
 		/** Connect to DAOS pool */
 		rc = daos_pool_connect(dfp->dfp_pool, dfuse_info->di_group,
-				       dfuse_info->di_svcl, DAOS_PC_RW,
+				       DAOS_PC_RW,
 				       &dfp->dfp_poh, &dfp->dfp_pool_info,
 				       NULL);
 		if (rc != -DER_SUCCESS) {
@@ -570,8 +556,6 @@ out_dfs:
 		DFUSE_TRA_DOWN(dfp);
 		D_FREE(dfp);
 	}
-out_svcl:
-	d_rank_list_free(dfuse_info->di_svcl);
 out_dfuse:
 	DFUSE_TRA_DOWN(dfuse_info);
 	D_MUTEX_DESTROY(&dfuse_info->di_lock);
