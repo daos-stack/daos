@@ -483,13 +483,17 @@ d_tm_print_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 		break;
 	}
 
-	if (printStats)
+	if (printStats) {
 		fprintf(stream,
-			" min: %lf max: %lf mean: %lf std dev: %lf",
+			" min: %lf max: %lf mean: %lf size: %"
+			PRIu64,
 			stats->dtm_min.min_float,
 			stats->dtm_max.max_float,
 			stats->mean,
-			stats->std_dev);
+			stats->k);
+		if (stats->k > 2)
+			fprintf(stream, " std dev: %lf", stats->std_dev);
+	}
 
 	fprintf(stream, "\n");
 }
@@ -511,14 +515,17 @@ d_tm_print_gauge(uint64_t val, struct d_tm_stats_t *stats, char *name,
 
 	fprintf(stream, "Gauge: %s = %" PRIu64, name, val);
 
-	if ((stats != NULL) && (stats->k > 0))
+	if ((stats != NULL) && (stats->k > 0)) {
 		fprintf(stream,
-			" min: %" PRIu64 " max: %" PRIu64 " mean: %lf"
-			" std dev: %lf",
+			" min: %" PRIu64 " max: %" PRIu64 " mean: %lf size: %"
+			PRIu64,
 			stats->dtm_min.min_int,
 			stats->dtm_max.max_int,
 			stats->mean,
-			stats->std_dev);
+			stats->k);
+		if (stats->k > 2)
+			fprintf(stream, " std dev: %lf", stats->std_dev);
+	}
 
 	fprintf(stream, "\n");
 }
@@ -2012,6 +2019,7 @@ d_tm_get_gauge(uint64_t *val, struct d_tm_stats_t *stats, uint64_t *shmem_root,
 			stats->dtm_max.max_int = dtm_stats->dtm_max.max_int;
 			stats->std_dev = dtm_stats->std_dev;
 			stats->mean = dtm_stats->mean;
+			stats->k = dtm_stats->k;
 		}
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
@@ -2072,6 +2080,7 @@ d_tm_get_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 			stats->dtm_max.max_float = dtm_stats->dtm_max.max_float;
 			stats->std_dev = dtm_stats->std_dev;
 			stats->mean = dtm_stats->mean;
+			stats->k = dtm_stats->k;
 		}
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
