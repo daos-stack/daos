@@ -117,7 +117,7 @@ class JavaCIIntegration(TestWithServers):
         version = self.java_version()
 
         # generate jar files
-        jdir = "{}/lib64/java".format(self.prefix)
+#        jdir = "{}/lib64/java".format(self.prefix)
 #        cmd = "cd {};".format(jdir)
 #        cmd += "mvn -X clean install -DskipITs -Ddaos.install.path={}".\
 #                format(self.prefix)
@@ -126,7 +126,7 @@ class JavaCIIntegration(TestWithServers):
 
 
         # run intergration-test
-#        jdir = "{}/java".format(os.getcwd())
+        jdir = "{}/java".format(os.getcwd())
         cmd = "cd {};".format(jdir)
         cmd += " export LD_PRELOAD=/usr/lib/jvm/"
         cmd += "java-{}-openjdk-{}-0.el7_8.x86_64/".format(version[:-8],
