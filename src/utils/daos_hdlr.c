@@ -2778,7 +2778,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	struct fs_copy_args	fa = {0};
 	char			*name = NULL;
 	char			*dname = NULL;
-	char			*dst_dir;
+	char			*dst_dir = NULL;
 	mode_t			tmp_mode_dir = S_IRWXU;
 
 	file_set_defaults_dfs(&src_file_dfs);
