@@ -2879,6 +2879,8 @@ out_disconnect:
 out:
 	D_FREE(name);
 	D_FREE(dname);
+	D_FREE(src_str);
+	D_FREE(dst_str);
 	D_FREE(dst_dir);
 	return rc;
 }
