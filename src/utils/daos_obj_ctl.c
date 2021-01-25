@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,11 +34,9 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <getopt.h>
-#include <mpi.h>
 #include <daos/common.h>
 #include <daos/tests_lib.h>
 #include <daos_srv/vos.h>
-#include <daos_test.h>
 #include <daos/dts.h>
 
 /**
@@ -376,7 +374,7 @@ static struct option ctl_ops[] = {
 };
 
 int
-shell(int argc, char *argv[])
+obj_ctl_shell(int argc, char *argv[])
 {
 	int	rc;
 
