@@ -192,14 +192,12 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 
 	if (e_req->exp_status == CRT_EVT_ALIVE)
 		D_ASSERTF(rc_alive == 0,
-			 "Swim status sequence (%s) does not match '%s'.\n",
-			 swim_seq,
-			 alive_regex);
+			  "Swim status sequence (%s) does not match '%s'.\n",
+			  swim_seq, alive_regex);
 	else if (e_req->exp_status == CRT_EVT_DEAD)
 		D_ASSERTF(rc_dead == 0,
-			"Swim status sequence (%s) does not match '%s'.\n",
-			 swim_seq,
-			 dead_regex);
+			  "Swim status sequence (%s) does not match '%s'.\n",
+			  swim_seq, dead_regex);
 
 	DBG_PRINT("Rank [%d] SWIM state sequence (%s) for "
 		  "status [%d] is as expected.\n",
