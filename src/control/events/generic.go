@@ -24,6 +24,10 @@
 package events
 
 import (
+	"os"
+	"time"
+
+	"github.com/daos-stack/daos/src/control/common"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 )
 
@@ -57,4 +61,32 @@ func StrInfoToProto(si *StrInfo) (*sharedpb.RASEvent_StrInfo, error) {
 	}
 
 	return pbInfo, nil
+}
+
+// NewGenericEvent creates a generic RAS event from given inputs.
+func NewGenericEvent(id RASID, typ RASTypeID, sev RASSeverityID, msg string,
+	rank uint32, hwID, jobID, poolUUID, contUUID, objID, ctlOp, data string) (*RASEvent, error) {
+
+	hn, err := os.Hostname()
+	if err != nil {
+		return nil, err
+	}
+	si := StrInfo(data)
+
+	return &RASEvent{
+		Timestamp:    common.FormatTime(time.Now()),
+		Msg:          msg,
+		ID:           id,
+		Hostname:     hn,
+		Rank:         rank,
+		Type:         typ,
+		Severity:     sev,
+		HWID:         hwID,
+		JobID:        jobID,
+		PoolUUID:     poolUUID,
+		ContUUID:     contUUID,
+		ObjID:        objID,
+		CtlOp:        ctlOp,
+		ExtendedInfo: &si,
+	}, nil
 }

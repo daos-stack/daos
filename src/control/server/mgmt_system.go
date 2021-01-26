@@ -40,6 +40,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/system"
@@ -591,6 +592,19 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, pbReq *mgmtpb.SystemStopReq)
 	}
 	svc.log.Debug("Received SystemStop RPC")
 
+	// Raise event on systemwide shutdown
+	if pbReq.GetHosts() == "" && pbReq.GetRanks() == "" && pbReq.GetKill() {
+		evt, err := events.NewGenericEvent(events.RASSystemStop,
+			events.RASTypeInfoOnly, events.RASSeverityInfo,
+			"System-wide shutdown requested", uint32(system.NilRank),
+			"", "", "", "", "", "", "")
+		if err != nil {
+			svc.log.Errorf("creating generic event: %s", err)
+		} else {
+			svc.events.Publish(evt)
+		}
+	}
+
 	// TODO: consider locking to prevent join attempts when shutting down
 	pbResp := new(mgmtpb.SystemStopResp)
 
@@ -650,6 +664,19 @@ func (svc *mgmtSvc) SystemStart(ctx context.Context, pbReq *mgmtpb.SystemStartRe
 		return nil, err
 	}
 	svc.log.Debug("Received SystemStart RPC")
+
+	// Raise event on systemwide start
+	if pbReq.GetHosts() == "" && pbReq.GetRanks() == "" {
+		evt, err := events.NewGenericEvent(events.RASSystemStart,
+			events.RASTypeInfoOnly, events.RASSeverityInfo,
+			"System-wide start requested", uint32(system.NilRank),
+			"", "", "", "", "", "", "")
+		if err != nil {
+			svc.log.Errorf("creating generic event: %s", err)
+		} else {
+			svc.events.Publish(evt)
+		}
+	}
 
 	fanResp, _, err := svc.rpcFanout(ctx, fanoutRequest{
 		Method: control.StartRanks,

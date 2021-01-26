@@ -59,6 +59,8 @@ const (
 	RASRankDown       RASID = C.RAS_RANK_DOWN
 	RASRankNoResponse RASID = C.RAS_RANK_NO_RESPONSE
 	RASPoolRepsUpdate RASID = C.RAS_POOL_REPS_UPDATE
+	RASSystemStop     RASID = C.RAS_SYSTEM_STOP
+	RASSystemStart    RASID = C.RAS_SYSTEM_START
 )
 
 func (id RASID) String() string {
