@@ -771,6 +771,7 @@ pool_tree_free(struct pool_domain *tree)
 static bool
 pool_tree_sane(struct pool_domain *tree, uint32_t version)
 {
+	struct pool_domain	*parent = NULL;
 	struct pool_target	*targets = tree[0].do_targets;
 	struct pool_comp_cntr	 cntr;
 	int			 dom_nr;
@@ -787,6 +788,18 @@ pool_tree_sane(struct pool_domain *tree, uint32_t version)
 	     tree = tree[0].do_children) {
 		struct pool_domain *prev = &tree[0];
 		int		    child_nr = 0;
+
+		if (parent != NULL &&
+		    parent->do_comp.co_type >= tree[0].do_comp.co_type) {
+			D_DEBUG(DB_MGMT,
+				"Type of parent domain %d(%s) should be "
+				"smaller than child domain %d(%s)\n",
+				parent->do_comp.co_type,
+				pool_domain_name(parent),
+				tree[0].do_comp.co_type,
+				pool_domain_name(&tree[0]));
+			return false;
+		}
 
 		for (i = 0; i < dom_nr; i++) {
 			if (tree[i].do_comp.co_ver > version) {
@@ -844,6 +857,7 @@ pool_tree_sane(struct pool_domain *tree, uint32_t version)
 
 			prev = &tree[i];
 		}
+		parent = &tree[0];
 		dom_nr = child_nr;
 	}
 

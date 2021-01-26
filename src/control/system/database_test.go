@@ -661,6 +661,7 @@ func TestSystem_Database_CompressedFaultDomainTree(t *testing.T) {
 		"root only": {
 			tree: NewFaultDomainTree(),
 			expResult: []uint32{
+				0,
 				expFaultDomainID(0),
 				0,
 			},
@@ -670,12 +671,16 @@ func TestSystem_Database_CompressedFaultDomainTree(t *testing.T) {
 				MustCreateFaultDomain("one", "two", "three"),
 			),
 			expResult: []uint32{
+				3,
 				expFaultDomainID(0),
 				1,
+				2,
 				expFaultDomainID(1),
+				1,
 				1,
 				expFaultDomainID(2),
 				1,
+				0,
 				expFaultDomainID(3),
 				0,
 			},
@@ -689,23 +694,32 @@ func TestSystem_Database_CompressedFaultDomainTree(t *testing.T) {
 				MustCreateFaultDomainFromString("/rack2/pdu4"),
 			),
 			expResult: []uint32{
-				expFaultDomainID(0), // root
+				2, // root
+				expFaultDomainID(0),
 				3,
-				expFaultDomainID(1), // rack0
+				1, // rack0
+				expFaultDomainID(1),
 				2,
-				expFaultDomainID(4), // rack1
+				1, // rack1
+				expFaultDomainID(4),
 				2,
-				expFaultDomainID(7), // rack2
+				1, // rack2
+				expFaultDomainID(7),
 				1,
-				expFaultDomainID(2), // pdu0
+				0, // pdu0
+				expFaultDomainID(2),
 				0,
-				expFaultDomainID(3), // pdu1
+				0, // pdu1
+				expFaultDomainID(3),
 				0,
-				expFaultDomainID(5), // pdu2
+				0, // pdu2
+				expFaultDomainID(5),
 				0,
-				expFaultDomainID(6), // pdu3
+				0, // pdu3
+				expFaultDomainID(6),
 				0,
-				expFaultDomainID(8), // pdu4
+				0, // pdu4
+				expFaultDomainID(8),
 				0,
 			},
 		},
@@ -714,11 +728,15 @@ func TestSystem_Database_CompressedFaultDomainTree(t *testing.T) {
 				rankDomain("/one/two/three", 5),
 			),
 			expResult: []uint32{
+				4,
 				expFaultDomainID(0),
 				1,
+				3,
 				expFaultDomainID(1),
 				1,
+				2,
 				expFaultDomainID(2),
+				1,
 				1,
 				expFaultDomainID(3),
 				1,
@@ -735,22 +753,31 @@ func TestSystem_Database_CompressedFaultDomainTree(t *testing.T) {
 				rankDomain("/rack2/pdu4", 5),
 			),
 			expResult: []uint32{
+				3,
 				expFaultDomainID(0), // root
 				3,
+				2,
 				expFaultDomainID(1), // rack0
+				2,
 				2,
 				expFaultDomainID(6), // rack1
 				2,
+				2,
 				expFaultDomainID(12), // rack2
+				1,
 				1,
 				expFaultDomainID(2), // pdu0
 				1,
+				1,
 				expFaultDomainID(4), // pdu1
+				1,
 				1,
 				expFaultDomainID(7), // pdu2
 				1,
+				1,
 				expFaultDomainID(9), // pdu3
 				2,
+				1,
 				expFaultDomainID(13), // pdu4
 				1,
 				// ranks
@@ -767,11 +794,15 @@ func TestSystem_Database_CompressedFaultDomainTree(t *testing.T) {
 				rankDomain(fmt.Sprintf("/top/%s2/bottom", rankFaultDomainPrefix), 1),
 			),
 			expResult: []uint32{
+				4,
 				expFaultDomainID(0), // root
 				1,
+				3,
 				expFaultDomainID(1), // top
 				1,
+				2,
 				expFaultDomainID(2), // rank2
+				1,
 				1,
 				expFaultDomainID(3), // bottom
 				1,

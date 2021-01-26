@@ -392,7 +392,7 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 	int		ntargets;
 	int		rc, i;
 	d_rank_list_t		rank_list;
-	int32_t domains[] = {1, 1, 1, 1, 1};
+	uint32_t domains[] = {1, 1, 1, 1, 1};
 	uuid_t target_uuids[] = {"12345678", "23456789",
 				 "34567890", "4567890a" };
 

@@ -751,7 +751,7 @@ func getFaultDomainRank(fd *FaultDomain) (uint32, bool) {
 
 // CompressedFaultDomainTree returns the tree of fault domains of joined
 // members in a compressed format.
-// Each domain is represented as a tuple: (ID, number of children)
+// Each domain is represented as a tuple: (level, ID, number of children)
 // Except for the rank, which is represented as: (rank)
 // The order of items is a breadth-first traversal of the tree.
 func (db *Database) CompressedFaultDomainTree() ([]uint32, error) {
@@ -764,9 +764,24 @@ func (db *Database) CompressedFaultDomainTree() ([]uint32, error) {
 	queue := make([]*FaultDomainTree, 0)
 	queue = append(queue, tree)
 
+	numLevel := 1
+	numNextLevel := 0
+	seenThisLevel := 0
+	level := tree.Depth()
+
 	for len(queue) > 0 {
+		if seenThisLevel == numLevel {
+			numLevel = numNextLevel
+			seenThisLevel = 0
+			numNextLevel = 0
+			level--
+			if level < 0 {
+				panic("dev error: decremented levels below 0")
+			}
+		}
 		cur := queue[0]
 		queue = queue[1:]
+		seenThisLevel++
 
 		if rank, ok := getFaultDomainRank(cur.Domain); ok && cur.IsLeaf() {
 			result = append(result, rank)
@@ -774,10 +789,12 @@ func (db *Database) CompressedFaultDomainTree() ([]uint32, error) {
 		}
 
 		result = append(result,
+			uint32(level),
 			cur.ID,
 			uint32(len(cur.Children)))
 		for _, child := range cur.Children {
 			queue = append(queue, child)
+			numNextLevel++
 		}
 	}
 	return result, nil

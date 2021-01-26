@@ -377,20 +377,25 @@ func (t *FaultDomainTree) IsBalanced() bool {
 	if t == nil {
 		return true
 	}
-	maxDepth := t.getMaxDepth()
+	maxDepth := t.Depth()
 	minDepth := t.getMinDepth()
 	return maxDepth == minDepth
 }
 
-func (t *FaultDomainTree) getMaxDepth() int {
-	maxDepth := 0
+// Depth determines the overall depth of the tree.
+func (t *FaultDomainTree) Depth() int {
+	if t == nil {
+		return 0
+	}
+
+	depth := 0
 	for _, c := range t.Children {
-		childMax := c.getMaxDepth() + 1
-		if childMax > maxDepth {
-			maxDepth = childMax
+		childMax := c.Depth() + 1
+		if childMax > depth {
+			depth = childMax
 		}
 	}
-	return maxDepth
+	return depth
 }
 
 func (t *FaultDomainTree) getMinDepth() int {

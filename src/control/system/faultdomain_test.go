@@ -1620,6 +1620,46 @@ func TestSystem_FaultDomainTree_Copy(t *testing.T) {
 	}
 }
 
+func TestSystem_FaultDomain_Depth(t *testing.T) {
+	for name, tc := range map[string]struct {
+		tree     *FaultDomainTree
+		expDepth int
+	}{
+		"nil": {},
+		"empty tree": {
+			tree: NewFaultDomainTree(),
+		},
+		"single node": {
+			tree: NewFaultDomainTree(
+				MustCreateFaultDomainFromString("/rack0"),
+			),
+			expDepth: 1,
+		},
+		"balanced multi-branch": {
+			tree: NewFaultDomainTree(
+				MustCreateFaultDomainFromString("/rack0/pdu0"),
+				MustCreateFaultDomainFromString("/rack0/pdu1"),
+				MustCreateFaultDomainFromString("/rack1/pdu2"),
+				MustCreateFaultDomainFromString("/rack1/pdu3"),
+			),
+			expDepth: 2,
+		},
+		"unbalanced": {
+			tree: NewFaultDomainTree(
+				MustCreateFaultDomainFromString("/rack0/pdu0"),
+				MustCreateFaultDomainFromString("/rack0/pdu1"),
+				MustCreateFaultDomainFromString("/rack1/pdu2/shelf0/node1"),
+				MustCreateFaultDomainFromString("/rack1/pdu3/node0"),
+			),
+			expDepth: 4,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			common.AssertEqual(t, tc.tree.Depth(), tc.expDepth, "")
+		})
+	}
+}
+
 func TestSystem_FaultDomainTree_iterative_building(t *testing.T) {
 	mustAddDomain := func(t *FaultDomainTree, d *FaultDomain) {
 		if err := t.AddDomain(d); err != nil {

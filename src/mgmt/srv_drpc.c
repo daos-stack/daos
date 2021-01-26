@@ -729,9 +729,6 @@ out:
 	}
 
 	mgmt__pool_extend_req__free_unpacked(req, &alloc.alloc);
-
-	if (domains != NULL)
-		D_FREE(domains);
 }
 
 void

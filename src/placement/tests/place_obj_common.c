@@ -373,8 +373,6 @@ plt_next_level(pool_comp_type_t current)
 		return PO_COMP_TP_TARGET;
 
 	/* these are not used by the test layout */
-	case PO_COMP_TP_BLADE:
-	case PO_COMP_TP_BOARD:
 	case PO_COMP_TP_TARGET:
 	case PO_COMP_TP_UNKNOWN:
 	default:
