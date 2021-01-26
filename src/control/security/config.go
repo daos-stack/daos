@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,8 +37,8 @@ const (
 	defaultCACert        = certDir + "daosCA.crt"
 	defaultServerCert    = certDir + "server.crt"
 	defaultServerKey     = certDir + "server.key"
-	defaultClientCert    = certDir + "client.crt"
-	defaultClientKey     = certDir + "client.key"
+	defaultAdminCert     = certDir + "admin.crt"
+	defaultAdminKey      = certDir + "admin.key"
 	defaultAgentCert     = certDir + "agent.crt"
 	defaultAgentKey      = certDir + "agent.key"
 	defaultClientCertDir = certDir + "clients"
@@ -99,8 +99,8 @@ func DefaultClientTransportConfig() *TransportConfig {
 			ServerName:      defaultServer,
 			ClientCertDir:   "",
 			CARootPath:      defaultCACert,
-			CertificatePath: defaultClientCert,
-			PrivateKeyPath:  defaultClientKey,
+			CertificatePath: defaultAdminCert,
+			PrivateKeyPath:  defaultAdminKey,
 			tlsKeypair:      nil,
 			caPool:          nil,
 		},

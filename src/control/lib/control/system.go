@@ -39,8 +39,10 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -172,13 +174,13 @@ func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq)
 type SystemNotifyReq struct {
 	unaryRequest
 	msRequest
-	Event    events.Event
+	Event    *events.RASEvent
 	Sequence uint64
 }
 
-// toClusterEventReq converts the system notify request to a cluster events
+// toClusterEventReq converts the system notify request to a cluster event
 // request. Resolve control address to a hostname if possible.
-func (req *SystemNotifyReq) toClusterEventReq() (*mgmtpb.ClusterEventReq, error) {
+func (req *SystemNotifyReq) toClusterEventReq() (*sharedpb.ClusterEventReq, error) {
 	if req.Event == nil {
 		return nil, errors.New("nil event in request")
 	}
@@ -188,10 +190,7 @@ func (req *SystemNotifyReq) toClusterEventReq() (*mgmtpb.ClusterEventReq, error)
 		return nil, errors.Wrap(err, "convert event to proto")
 	}
 
-	return &mgmtpb.ClusterEventReq{
-		Sequence: req.Sequence,
-		Event:    &mgmtpb.ClusterEventReq_Ras{Ras: pbRASEvent},
-	}, nil
+	return &sharedpb.ClusterEventReq{Sequence: req.Sequence, Event: pbRASEvent}, nil
 }
 
 // SystemNotifyResp contains the request response.
@@ -210,10 +209,9 @@ func SystemNotify(ctx context.Context, rpcClient UnaryInvoker, req *SystemNotify
 		return nil, errors.New("nil rpc client")
 	}
 
-	rpcClient.Debugf("DAOS system notify request: %+v, event: %+v", req, req.Event)
 	pbReq, err := req.toClusterEventReq()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "decoding system notify request")
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).ClusterEvent(ctx, pbReq)
@@ -232,29 +230,29 @@ func SystemNotify(ctx context.Context, rpcClient UnaryInvoker, req *SystemNotify
 // EventForwarder implements the events.Handler interface, increments sequence
 // number for each event forwarded and distributes requests to MS access points.
 type EventForwarder struct {
-	seq       uint64
+	seq       <-chan uint64
 	client    UnaryInvoker
 	accessPts []string
 }
 
 // OnEvent implements the events.Handler interface.
-func (fwdr *EventForwarder) OnEvent(ctx context.Context, evt events.Event) {
+func (fwdr *EventForwarder) OnEvent(ctx context.Context, evt *events.RASEvent) {
 	switch {
-	case common.InterfaceIsNil(evt):
+	case evt == nil:
 		fwdr.client.Debug("skip event forwarding, nil event")
 		return
 	case len(fwdr.accessPts) == 0:
 		fwdr.client.Debug("skip event forwarding, missing access points")
 		return
 	}
-	fwdr.seq++
-	fwdr.client.Debugf("forwarding %s event to MS (seq: %d)", evt.GetID(), fwdr.seq)
 
 	req := &SystemNotifyReq{
-		Sequence: fwdr.seq,
+		Sequence: <-fwdr.seq,
 		Event:    evt,
 	}
 	req.SetHostList(fwdr.accessPts)
+	fwdr.client.Debugf("forwarding %s event to MS access points %v (seq: %d)",
+		evt.ID, fwdr.accessPts, req.Sequence)
 
 	if _, err := SystemNotify(ctx, fwdr.client, req); err != nil {
 		fwdr.client.Debugf("failed to forward event to MS: %s", err)
@@ -263,10 +261,34 @@ func (fwdr *EventForwarder) OnEvent(ctx context.Context, evt events.Event) {
 
 // NewEventForwarder returns an initialized EventForwarder.
 func NewEventForwarder(rpcClient UnaryInvoker, accessPts []string) *EventForwarder {
+	seqCh := make(chan uint64)
+	go func(ch chan<- uint64) {
+		for i := uint64(1); ; i++ {
+			ch <- i
+		}
+	}(seqCh)
+
 	return &EventForwarder{
+		seq:       seqCh,
 		client:    rpcClient,
 		accessPts: accessPts,
 	}
+}
+
+// EventLogger implements the events.Handler interface and logs RAS event to
+// INFO.
+type EventLogger struct {
+	log logging.Logger
+}
+
+// OnEvent implements the events.Handler interface.
+func (el *EventLogger) OnEvent(_ context.Context, evt *events.RASEvent) {
+	el.log.Infof("RAS event received: %+v", evt)
+}
+
+// NewEventLogger returns an initialized EventLogger.
+func NewEventLogger(log logging.Logger) *EventLogger {
+	return &EventLogger{log: log}
 }
 
 // SystemQueryReq contains the inputs for the system query request.
@@ -313,13 +335,13 @@ func SystemQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemQueryRe
 		return nil, errors.Errorf("nil %T request", req)
 	}
 
-	pbReq := new(ctlpb.SystemQueryReq)
+	pbReq := new(mgmtpb.SystemQueryReq)
 	pbReq.Hosts = req.Hosts.String()
 	pbReq.Ranks = req.Ranks.String()
 	pbReq.Sys = req.getSystem()
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return ctlpb.NewMgmtCtlClient(conn).SystemQuery(ctx, pbReq)
+		return mgmtpb.NewMgmtSvcClient(conn).SystemQuery(ctx, pbReq)
 	})
 	rpcClient.Debugf("DAOS system query request: %s", req)
 
@@ -376,13 +398,13 @@ func SystemStart(ctx context.Context, rpcClient UnaryInvoker, req *SystemStartRe
 		return nil, errors.Errorf("nil %T request", req)
 	}
 
-	pbReq := new(ctlpb.SystemStartReq)
+	pbReq := new(mgmtpb.SystemStartReq)
 	pbReq.Hosts = req.Hosts.String()
 	pbReq.Ranks = req.Ranks.String()
 	pbReq.Sys = req.getSystem()
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return ctlpb.NewMgmtCtlClient(conn).SystemStart(ctx, pbReq)
+		return mgmtpb.NewMgmtSvcClient(conn).SystemStart(ctx, pbReq)
 	})
 	rpcClient.Debugf("DAOS system start request: %+v", req)
 
@@ -443,7 +465,7 @@ func SystemStop(ctx context.Context, rpcClient UnaryInvoker, req *SystemStopReq)
 		return nil, errors.Errorf("nil %T request", req)
 	}
 
-	pbReq := new(ctlpb.SystemStopReq)
+	pbReq := new(mgmtpb.SystemStopReq)
 	pbReq.Hosts = req.Hosts.String()
 	pbReq.Ranks = req.Ranks.String()
 	pbReq.Prep = req.Prep
@@ -452,7 +474,7 @@ func SystemStop(ctx context.Context, rpcClient UnaryInvoker, req *SystemStopReq)
 	pbReq.Sys = req.getSystem()
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return ctlpb.NewMgmtCtlClient(conn).SystemStop(ctx, pbReq)
+		return mgmtpb.NewMgmtSvcClient(conn).SystemStop(ctx, pbReq)
 	})
 	rpcClient.Debugf("DAOS system stop request: %+v", req)
 
@@ -526,11 +548,11 @@ func SystemReformat(ctx context.Context, rpcClient UnaryInvoker, resetReq *Syste
 		return nil, errors.Errorf("nil %T request", resetReq)
 	}
 
-	pbReq := new(ctlpb.SystemResetFormatReq)
+	pbReq := new(mgmtpb.SystemResetFormatReq)
 	pbReq.Sys = resetReq.getSystem()
 
 	resetReq.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return ctlpb.NewMgmtCtlClient(conn).SystemResetFormat(ctx, pbReq)
+		return mgmtpb.NewMgmtSvcClient(conn).SystemResetFormat(ctx, pbReq)
 	})
 	rpcClient.Debugf("DAOS system-reset-format request: %s", resetReq)
 
@@ -624,7 +646,7 @@ type ListPoolsReq struct {
 // of pools in the system.
 type ListPoolsResp struct {
 	Status int32
-	Pools  []*common.PoolDiscovery
+	Pools  []*common.PoolDiscovery `json:"pools"`
 }
 
 // ListPools fetches the list of all pools and their service replicas from the
@@ -660,9 +682,9 @@ type RanksResp struct {
 }
 
 // addHostResponse is responsible for validating the given HostResponse
-// and adding it's results to the RanksResp.
+// and adding its results to the RanksResp.
 func (srr *RanksResp) addHostResponse(hr *HostResponse) (err error) {
-	pbResp, ok := hr.Message.(*mgmtpb.RanksResp)
+	pbResp, ok := hr.Message.(interface{ GetResults() []*sharedpb.RankResult })
 	if !ok {
 		return errors.Errorf("unable to unpack message: %+v", hr.Message)
 	}
@@ -715,12 +737,12 @@ func invokeRPCFanout(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq)
 // Returns a single response structure containing results generated with
 // request responses from each selected rank.
 func PrepShutdownRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
-	pbReq := new(mgmtpb.RanksReq)
+	pbReq := new(ctlpb.RanksReq)
 	if err := convert.Types(req, pbReq); err != nil {
 		return nil, errors.Wrapf(err, "convert request type %T->%T", req, pbReq)
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).PrepShutdownRanks(ctx, pbReq)
+		return ctlpb.NewCtlSvcClient(conn).PrepShutdownRanks(ctx, pbReq)
 	})
 	rpcClient.Debugf("DAOS system prep shutdown-ranks request: %+v", req)
 
@@ -736,12 +758,12 @@ func PrepShutdownRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksRe
 // Returns a single response structure containing results generated with
 // request responses from each selected rank.
 func StopRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
-	pbReq := new(mgmtpb.RanksReq)
+	pbReq := new(ctlpb.RanksReq)
 	if err := convert.Types(req, pbReq); err != nil {
 		return nil, errors.Wrapf(err, "convert request type %T->%T", req, pbReq)
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).StopRanks(ctx, pbReq)
+		return ctlpb.NewCtlSvcClient(conn).StopRanks(ctx, pbReq)
 	})
 	rpcClient.Debugf("DAOS system stop-ranks request: %+v", req)
 
@@ -757,12 +779,12 @@ func StopRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*Ran
 // Returns a single response structure containing results generated with
 // request responses from each selected rank.
 func ResetFormatRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
-	pbReq := new(mgmtpb.RanksReq)
+	pbReq := new(ctlpb.RanksReq)
 	if err := convert.Types(req, pbReq); err != nil {
 		return nil, errors.Wrapf(err, "convert request type %T->%T", req, pbReq)
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).ResetFormatRanks(ctx, pbReq)
+		return ctlpb.NewCtlSvcClient(conn).ResetFormatRanks(ctx, pbReq)
 	})
 	rpcClient.Debugf("DAOS system reset-format-ranks request: %+v", req)
 
@@ -778,12 +800,12 @@ func ResetFormatRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq
 // Returns a single response structure containing results generated with
 // request responses from each selected rank.
 func StartRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
-	pbReq := new(mgmtpb.RanksReq)
+	pbReq := new(ctlpb.RanksReq)
 	if err := convert.Types(req, pbReq); err != nil {
 		return nil, errors.Wrapf(err, "convert request type %T->%T", req, pbReq)
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).StartRanks(ctx, pbReq)
+		return ctlpb.NewCtlSvcClient(conn).StartRanks(ctx, pbReq)
 	})
 	rpcClient.Debugf("DAOS system start-ranks request: %+v", req)
 
@@ -799,12 +821,12 @@ func StartRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*Ra
 // Returns a single response structure containing results generated with
 // request responses from each selected rank.
 func PingRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
-	pbReq := new(mgmtpb.RanksReq)
+	pbReq := new(ctlpb.RanksReq)
 	if err := convert.Types(req, pbReq); err != nil {
 		return nil, errors.Wrapf(err, "convert request type %T->%T", req, pbReq)
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).PingRanks(ctx, pbReq)
+		return ctlpb.NewCtlSvcClient(conn).PingRanks(ctx, pbReq)
 	})
 	rpcClient.Debugf("DAOS system ping-ranks request: %+v", req)
 

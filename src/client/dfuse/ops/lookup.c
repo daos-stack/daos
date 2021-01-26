@@ -223,7 +223,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		/* Connect to DAOS pool */
 		rc = daos_pool_connect(dfp->dfp_pool,
 				       fs_handle->dpi_info->di_group,
-				       fs_handle->dpi_info->di_svcl, DAOS_PC_RW,
+				       DAOS_PC_RW,
 				       &dfp->dfp_poh, &dfp->dfp_pool_info,
 				       NULL);
 		if (rc != -DER_SUCCESS) {
@@ -356,7 +356,8 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_dfs = parent->ie_dfs;
 
 	rc = dfs_lookup_rel(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
-			    O_RDWR, &ie->ie_obj, NULL, &ie->ie_stat);
+			    O_RDWR | O_NOFOLLOW, &ie->ie_obj,
+			    NULL, &ie->ie_stat);
 	if (rc) {
 		DFUSE_TRA_DEBUG(parent, "dfs_lookup() failed: (%s)",
 				strerror(rc));

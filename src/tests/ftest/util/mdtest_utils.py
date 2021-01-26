@@ -87,7 +87,6 @@ class MdtestCommand(ExecutableCommand):
         # Module DFS
         # Required arguments
         #  --dfs.pool=STRING             DAOS pool uuid
-        #  --dfs.svcl=STRING             DAOS pool SVCL
         #  --dfs.cont=STRING             DFS container uuid
 
         # Flags
@@ -101,7 +100,6 @@ class MdtestCommand(ExecutableCommand):
         #  --dfs.prefix=STRING           Mount prefix
 
         self.dfs_pool_uuid = FormattedParameter("--dfs.pool {}")
-        self.dfs_svcl = FormattedParameter("--dfs.svcl {}")
         self.dfs_cont = FormattedParameter("--dfs.cont {}")
         self.dfs_group = FormattedParameter("--dfs.group {}")
         self.dfs_destroy = FormattedParameter("--dfs.destroy", True)
@@ -152,20 +150,6 @@ class MdtestCommand(ExecutableCommand):
         """
         self.dfs_pool_uuid.update(
             pool.pool.get_uuid_str(), "dfs_pool" if display else None)
-        self.set_daos_svcl_param(pool, display)
-
-    def set_daos_svcl_param(self, pool, display=True):
-        """Set the Mdtest daos_svcl param from the ranks of a DAOS pool object.
-
-        Args:
-            pool (TestPool): DAOS test pool object
-            display (bool, optional): print updated params. Defaults to True.
-        """
-        svcl = ":".join(
-            [str(item) for item in [
-                int(pool.pool.svc.rl_ranks[index])
-                for index in range(pool.pool.svc.rl_nr)]])
-        self.dfs_svcl.update(svcl, "dfs_svcl" if display else None)
 
     def get_default_env(self, manager_cmd, log_file=None):
         """Get the default environment settings for running mdtest.
@@ -184,7 +168,6 @@ class MdtestCommand(ExecutableCommand):
 
         if "mpirun" in manager_cmd or "srun" in manager_cmd:
             env["DAOS_POOL"] = self.dfs_pool_uuid.value
-            env["DAOS_SVCL"] = self.dfs_svcl.value
             env["DAOS_CONT"] = self.dfs_cont.value
             env["IOR_HINT__MPI__romio_daos_obj_class"] = \
                 self.dfs_oclass.value

@@ -33,6 +33,9 @@ servers:
   scm_class: ram
   scm_size: 4
 
+  # When bdev_class is set to file, Linux AIO will be used to emulate NVMe.
+  # The size of file that will be created is specified by bdev_size in GB units.
+  # The location of the files that will be created is specified in bdev_list.
   bdev_class: file
   bdev_size: 16
   bdev_list: [/tmp/daos-bdev]

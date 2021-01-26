@@ -41,7 +41,7 @@ class EcOnlineRebuild(ErasureCodeIor):
         #Enabled Online rebuild
         self.set_online_rebuild = True
 
-    @skipForTicket("DAOS-5377")
+    @skipForTicket("DAOS-6546")
     def test_ec_offline_rebuild(self):
         """Jira ID: DAOS-5894.
 

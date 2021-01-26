@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -258,8 +258,9 @@ func (m srvMethod) ID() int32 {
 
 func (m srvMethod) String() string {
 	if s, ok := map[srvMethod]string{
-		MethodNotifyReady: "notify ready",
-		MethodBIOError:    "block i/o error",
+		MethodNotifyReady:  "notify ready",
+		MethodBIOError:     "block i/o error",
+		MethodClusterEvent: "cluster event",
 	}[m]; ok {
 		return s
 	}
@@ -285,6 +286,8 @@ const (
 	MethodBIOError srvMethod = C.DRPC_METHOD_SRV_BIO_ERR
 	// MethodGetPoolServiceRanks requests the service ranks for a pool
 	MethodGetPoolServiceRanks srvMethod = C.DRPC_METHOD_SRV_GET_POOL_SVC
+	// MethodClusterEvent notifies of a cluster event in the iosrv.
+	MethodClusterEvent srvMethod = C.DRPC_METHOD_SRV_CLUSTER_EVENT
 )
 
 type securityMethod int32

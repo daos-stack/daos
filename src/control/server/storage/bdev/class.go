@@ -69,7 +69,7 @@ const (
 	msgBdevBadSize = "backfile_size should be greater than 0"
 )
 
-// bdev describes parameters and behaviours for a particular bdev class.
+// bdev describes parameters and behaviors for a particular bdev class.
 type bdev struct {
 	templ   string
 	vosEnv  string

@@ -32,6 +32,8 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto/shared"
+	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -340,4 +342,38 @@ func TestSrvModule_HandleBioErr_IdxOutOfRange(t *testing.T) {
 	}
 
 	common.CmpErr(t, expectedError, err)
+}
+
+func getTestClusterEventReqBytes(t *testing.T, event *sharedpb.RASEvent, seq uint64) []byte {
+	req := &shared.ClusterEventReq{Event: event, Sequence: seq}
+	reqBytes, err := proto.Marshal(req)
+
+	if err != nil {
+		t.Fatalf("Couldn't create fake request: %v", err)
+	}
+
+	return reqBytes
+}
+
+func TestSrvModule_HandleClusterEvent_Invalid(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	expectedErr := errors.New("unmarshal method-specific payload")
+	mod := &srvModule{}
+	addIOServerInstances(mod, 1, log)
+
+	// Some arbitrary bytes, shouldn't translate to a request
+	badBytes := make([]byte, 16)
+	for i := range badBytes {
+		badBytes[i] = byte(i)
+	}
+
+	_, err := mod.handleClusterEvent(badBytes)
+
+	if err == nil {
+		t.Fatalf("Expected error, got nil")
+	}
+
+	common.CmpErr(t, expectedErr, err)
 }

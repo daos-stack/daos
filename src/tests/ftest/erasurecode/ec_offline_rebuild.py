@@ -39,7 +39,7 @@ class EcOfflineRebuild(ErasureCodeIor):
         """Set up for test case."""
         super(EcOfflineRebuild, self).setUp()
 
-    @skipForTicket("DAOS-5377")
+    @skipForTicket("DAOS-6450")
     def test_ec_offline_rebuild(self):
         """Jira ID: DAOS-5894.
 
