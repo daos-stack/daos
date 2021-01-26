@@ -938,10 +938,6 @@ class Systemctl(JobManager):
                     "If needed the %s second timeout can be adjusted via "
                     "the 'pattern_timeout' test yaml parameter under %s",
                     timeout, self.namespace)
-
-            # # Stop the timed out process
-            # if timed_out:
-            #     self.stop()
         else:
             # Report the successful start
             # self.display_log_data(log_data)
