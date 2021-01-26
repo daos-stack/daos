@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -172,8 +172,6 @@ func TestEvents_PubSub_DisableEvent(t *testing.T) {
 	common.AssertEqual(t, 2, len(tly1.getRx()), "unexpected number of received events")
 }
 
-// TODO: update subscribe any topic test to use events of different types when
-// more events exist.
 func TestEvents_PubSub_SubscribeAnyTopic(t *testing.T) {
 	evt1 := NewRankDownEvent("foo", 1, 1, common.ExitStatus("test"))
 
@@ -185,7 +183,7 @@ func TestEvents_PubSub_SubscribeAnyTopic(t *testing.T) {
 	ps := NewPubSub(ctx, log)
 	defer ps.Close()
 
-	tly1 := newTally(2)
+	tly1 := newTally(3)
 	tly2 := newTally(2)
 
 	ps.Subscribe(RASTypeAny, tly1)
@@ -193,14 +191,19 @@ func TestEvents_PubSub_SubscribeAnyTopic(t *testing.T) {
 
 	ps.Publish(evt1)
 	ps.Publish(evt1)
+	ps.Publish(mockGenericEvent()) // of type InfoOnly will only match Any
 
 	<-tly1.finished
 	<-tly2.finished
 
 	common.AssertStringsEqual(t, []string{
-		RASTypeStateChange.String(), RASTypeStateChange.String(),
+		RASTypeInfoOnly.String(),
+		RASTypeStateChange.String(),
+		RASTypeStateChange.String(),
 	}, tly1.getRx(), "tly1 unexpected slice of received events")
+
 	common.AssertStringsEqual(t, []string{
-		RASTypeStateChange.String(), RASTypeStateChange.String(),
+		RASTypeStateChange.String(),
+		RASTypeStateChange.String(),
 	}, tly2.getRx(), "tly2 unexpected slice of received events")
 }

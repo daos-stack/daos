@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2020 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -203,7 +203,7 @@ typedef struct {
 typedef enum {
 	/** is a dkey */
 	DAOS_IOD_NONE		= 0,
-	/** one indivisble value update atomically */
+	/** one indivisible value update atomically */
 	DAOS_IOD_SINGLE		= 1,
 	/** an array of records where each record is update atomically */
 	DAOS_IOD_ARRAY		= 2,
@@ -345,7 +345,7 @@ typedef struct {
  *			the container. [out]: Fully populated DAOS object
  *			identifier with the the low 96 bits untouched and the
  *			DAOS private bits (the high 32 bits) encoded.
- * \param[in]	ofeat	Feature bits specific to object
+ * \param[in]	ofeats	Feature bits specific to object
  * \param[in]	cid	Class Identifier
  * \param[in]	args	Reserved.
  */
@@ -882,8 +882,8 @@ daos_obj_anchor_split(daos_handle_t oh, uint32_t *nr, daos_anchor_t *anchors);
 
 /**
  * Set an anchor with an index based on split done with daos_obj_anchor_split.
- * The anchor passed will be re-intialized and set to start and finish iteration
- * based on the specified index.
+ * The anchor passed will be re-initialized and set to start and finish
+ * iteration based on the specified index.
  *
  * \param[in]   oh	Open object handle.
  * \param[in]	index	Index of set this anchor for iteration.

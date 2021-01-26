@@ -153,8 +153,7 @@ pconnect(void)
 
 	/** Connect to pool */
 	rc = daos_pool_connect(autotest_ap->p_uuid, autotest_ap->sysname,
-			       autotest_ap->mdsrv, DAOS_PC_RW, &poh, NULL,
-			       NULL);
+			       DAOS_PC_RW, &poh, NULL, NULL);
 	if (rc) {
 		step_fail(d_errdesc(rc));
 		return -1;
