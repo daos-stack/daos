@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,7 +79,7 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 
 		D_MUTEX_LOCK(&fs_handle->dpi_info->di_lock);
 
-		DFUSE_TRA_INFO(ie->ie_dfs, "Closing dfs_root %d %d",
+		DFUSE_TRA_INFO(ie->ie_dfs, "Closing poh %d coh %d",
 			       daos_handle_is_valid(dfp->dfp_poh),
 			       daos_handle_is_valid(dfs->dfs_coh));
 

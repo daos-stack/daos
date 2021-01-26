@@ -74,17 +74,17 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 
 	if (to_set) {
 		DFUSE_TRA_WARNING(ie, "Unknown flags %#x", to_set);
-		DFUSE_REPLY_ERR_RAW(ie, req, ENOTSUP);
-		return;
+		D_GOTO(err, rc = ENOTSUP);
 	}
 
 	rc = dfs_osetattr(ie->ie_dfs->dfs_ns, ie->ie_obj, attr, dfs_flags);
-	if (rc) {
-		DFUSE_REPLY_ERR_RAW(ie, req, rc);
-		return;
-	}
+	if (rc)
+		D_GOTO(err, rc);
 
 	attr->st_ino = ie->ie_stat.st_ino;
 
 	DFUSE_REPLY_ATTR(ie, req, attr);
+	return;
+err:
+	DFUSE_REPLY_ERR_RAW(ie, req, rc);
 }
