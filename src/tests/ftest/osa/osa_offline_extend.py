@@ -118,8 +118,10 @@ class OSAOfflineExtend(OSAUtils):
 
         Test Description: Validate Offline Extend
 
-        :avocado: tags=all,daily_regression,hw,medium,ib2
-        :avocado: tags=osa,osa_extend,offline_extend
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,checksum
+        :avocado: tags=osa_extend,offline_extend
         """
         # Perform extend testing with 1 pool
         self.run_offline_extend_test(1, True)
