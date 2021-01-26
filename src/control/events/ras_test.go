@@ -50,6 +50,7 @@ func TestEvents_HandleClusterEvent(t *testing.T) {
 	for name, tc := range map[string]struct {
 		req         *sharedpb.ClusterEventReq
 		subType     RASTypeID
+		fwded       bool
 		expEvtTypes []string
 		expResp     *sharedpb.ClusterEventResp
 		expErr      error
@@ -120,7 +121,7 @@ func TestEvents_HandleClusterEvent(t *testing.T) {
 
 			ps.Subscribe(tc.subType, tly1)
 
-			resp, err := ps.HandleClusterEvent(tc.req)
+			resp, err := ps.HandleClusterEvent(tc.req, tc.fwded)
 			common.CmpErr(t, tc.expErr, err)
 			if err != nil {
 				return

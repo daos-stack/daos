@@ -38,6 +38,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 )
 
 // RASExtendedInfo provides extended information for an event.
@@ -132,17 +133,17 @@ type RASEvent struct {
 	CtlOp        string          `json:"ctl_op"`
 	ExtendedInfo RASExtendedInfo `json:"extended_info"`
 
-	forwarded bool
+	forwarded atm.Bool
 }
 
 // IsForwarded returns true if event has been forwarded between hosts.
 func (evt *RASEvent) IsForwarded() bool {
-	return evt.forwarded
+	return evt.forwarded.Load()
 }
 
 // WithIsForwarded sets the forwarded state of this event.
 func (evt *RASEvent) WithIsForwarded(isForwarded bool) *RASEvent {
-	evt.forwarded = isForwarded
+	evt.forwarded = atm.NewBool(isForwarded)
 
 	return evt
 }
@@ -224,6 +225,7 @@ func (evt *RASEvent) FromProto(pbEvt *sharedpb.RASEvent) (err error) {
 		ContUUID:  pbEvt.ContUuid,
 		ObjID:     pbEvt.ObjId,
 		CtlOp:     pbEvt.CtlOp,
+		forwarded: atm.NewBool(false),
 	}
 
 	switch ei := pbEvt.GetExtendedInfo().(type) {
@@ -257,8 +259,12 @@ func (evt *RASEvent) PrintRAS() string {
 	if evt.Msg != "" {
 		fmt.Fprintf(&b, " msg: [%s]", evt.Msg)
 	}
-	fmt.Fprintf(&b, " pid: [%d]", evt.ProcID)
-	fmt.Fprintf(&b, " tid: [%d]", evt.ThreadID)
+	if evt.ProcID != 0 {
+		fmt.Fprintf(&b, " pid: [%d]", evt.ProcID)
+	}
+	if evt.ThreadID != 0 {
+		fmt.Fprintf(&b, " tid: [%d]", evt.ThreadID)
+	}
 
 	/* Log optional RAS fields. */
 	if evt.HWID != "" {
@@ -284,7 +290,7 @@ func (evt *RASEvent) PrintRAS() string {
 	}
 
 	/* Log data blob if event info is non-specific */
-	if ei := evt.GetStrInfo(); ei != nil {
+	if ei := evt.GetStrInfo(); ei != nil && *ei != "" {
 		fmt.Fprintf(&b, " data: [%s]", *ei)
 	}
 
@@ -292,10 +298,10 @@ func (evt *RASEvent) PrintRAS() string {
 }
 
 // HandleClusterEvent extracts event field from protobuf request message and
-// converts to concrete event type that implements the Event interface.
+// converts to native event type.
 // The Event is then published to make available to locally subscribed consumers
 // to act upon.
-func (ps *PubSub) HandleClusterEvent(req *sharedpb.ClusterEventReq) (*sharedpb.ClusterEventResp, error) {
+func (ps *PubSub) HandleClusterEvent(req *sharedpb.ClusterEventReq, forwarded bool) (*sharedpb.ClusterEventResp, error) {
 	switch {
 	case req == nil:
 		return nil, errors.New("nil request")
@@ -307,7 +313,7 @@ func (ps *PubSub) HandleClusterEvent(req *sharedpb.ClusterEventReq) (*sharedpb.C
 	if err != nil {
 		return nil, err
 	}
-	ps.Publish(event)
+	ps.Publish(event.WithIsForwarded(forwarded))
 
 	return &sharedpb.ClusterEventResp{Sequence: req.Sequence}, nil
 }

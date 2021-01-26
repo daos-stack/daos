@@ -29,6 +29,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 )
 
 // PoolSvcInfo describes details of a pool service.
@@ -79,5 +80,6 @@ func NewPoolSvcReplicasUpdateEvent(hostname string, rank uint32, poolUUID string
 			SvcReplicas:    svcReplicas,
 			RaftLeaderTerm: leaderTerm,
 		},
+		forwarded: atm.NewBool(false),
 	}
 }

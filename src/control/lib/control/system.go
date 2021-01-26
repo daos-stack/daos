@@ -236,26 +236,26 @@ type EventForwarder struct {
 }
 
 // OnEvent implements the events.Handler interface.
-func (fwdr *EventForwarder) OnEvent(ctx context.Context, evt *events.RASEvent) {
+func (ef *EventForwarder) OnEvent(ctx context.Context, evt *events.RASEvent) {
 	switch {
 	case evt == nil:
-		fwdr.client.Debug("skip event forwarding, nil event")
+		ef.client.Debug("skip event forwarding, nil event")
 		return
-	case len(fwdr.accessPts) == 0:
-		fwdr.client.Debug("skip event forwarding, missing access points")
+	case len(ef.accessPts) == 0:
+		ef.client.Debug("skip event forwarding, missing access points")
 		return
 	}
 
 	req := &SystemNotifyReq{
-		Sequence: <-fwdr.seq,
-		Event:    evt.WithIsForwarded(true),
+		Sequence: <-ef.seq,
+		Event:    evt,
 	}
-	req.SetHostList(fwdr.accessPts)
-	fwdr.client.Debugf("forwarding %s event to MS access points %v (seq: %d)",
-		evt.ID, fwdr.accessPts, req.Sequence)
+	req.SetHostList(ef.accessPts)
+	ef.client.Debugf("forwarding %s event to MS access points %v (seq: %d)",
+		evt.ID, ef.accessPts, req.Sequence)
 
-	if _, err := SystemNotify(ctx, fwdr.client, req); err != nil {
-		fwdr.client.Debugf("failed to forward event to MS: %s", err)
+	if _, err := SystemNotify(ctx, ef.client, req); err != nil {
+		ef.client.Debugf("failed to forward event to MS: %s", err)
 	}
 }
 
@@ -283,9 +283,14 @@ type EventLogger struct {
 
 // OnEvent implements the events.Handler interface.
 func (el *EventLogger) OnEvent(_ context.Context, evt *events.RASEvent) {
+	if evt == nil {
+		el.log.Debug("skip event forwarding, nil event")
+		return
+	}
 	if evt.IsForwarded() {
 		return // event has already been logged at source
 	}
+	// TODO: DAOS-6327 write directly to syslog
 	el.log.Info(evt.PrintRAS())
 }
 

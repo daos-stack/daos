@@ -12,6 +12,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 )
 
 // StrInfo contains opaque blob of type string to hold custom details for a
@@ -61,6 +62,7 @@ func NewGenericEvent(id RASID, typ RASTypeID, sev RASSeverityID, msg string,
 		Msg:          msg,
 		ID:           id,
 		Hostname:     hn,
+		ProcID:       uint64(os.Getpid()),
 		Rank:         rank,
 		Type:         typ,
 		Severity:     sev,
@@ -71,5 +73,6 @@ func NewGenericEvent(id RASID, typ RASTypeID, sev RASSeverityID, msg string,
 		ObjID:        objID,
 		CtlOp:        ctlOp,
 		ExtendedInfo: &si,
+		forwarded:    atm.NewBool(false),
 	}, nil
 }

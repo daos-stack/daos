@@ -9,26 +9,16 @@ package events
 import (
 	"math"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
-
-	"github.com/daos-stack/daos/src/control/common"
 )
 
 func mockGenericEvent() *RASEvent {
-	si := StrInfo("{\"people\":[\"bill\",\"steve\",\"bob\"]}")
-
-	return &RASEvent{
-		Timestamp:    common.FormatTime(time.Now()),
-		Msg:          "DAOS generic test event",
-		ID:           math.MaxInt32 - 1,
-		Hostname:     "foo",
-		Rank:         1,
-		Type:         RASTypeInfoOnly,
-		Severity:     RASSeverityError,
-		ExtendedInfo: &si,
-	}
+	evt, _ := NewGenericEvent(
+		math.MaxInt32-1, RASTypeInfoOnly, RASSeverityError,
+		"DAOS generic test event", 1, "", "", "", "", "", "",
+		"{\"people\":[\"bill\",\"steve\",\"bob\"]}")
+	return evt
 }
 
 func TestEvents_ConvertGeneric(t *testing.T) {

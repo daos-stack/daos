@@ -411,6 +411,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		// Stop forwarding events to MS and instead start handling
 		// received forwarded (and local) events.
 		eventPubSub.Reset()
+		eventPubSub.Subscribe(events.RASTypeAny, eventLogger)
 		eventPubSub.Subscribe(events.RASTypeStateChange, membership)
 		eventPubSub.Subscribe(events.RASTypeStateChange, sysdb)
 
@@ -422,6 +423,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		// Stop handling received forwarded (in addition to local)
 		// events and start forwarding events to the new MS leader.
 		eventPubSub.Reset()
+		eventPubSub.Subscribe(events.RASTypeAny, eventLogger)
 		eventPubSub.Subscribe(events.RASTypeStateChange, eventForwarder)
 
 		return nil

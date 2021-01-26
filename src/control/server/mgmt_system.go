@@ -757,7 +757,8 @@ func (svc *mgmtSvc) ClusterEvent(ctx context.Context, req *sharedpb.ClusterEvent
 		return nil, err
 	}
 
-	resp, err := svc.events.HandleClusterEvent(req)
+	// indicate to handler that event has been forwarded
+	resp, err := svc.events.HandleClusterEvent(req, true)
 	if err != nil {
 		return nil, errors.Wrapf(err, "handle cluster event %+v", req)
 	}
