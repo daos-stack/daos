@@ -52,7 +52,7 @@ container:
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on
     oclass: RP_2G1
 ior:
-  no_parallel_job: 1
+  no_parallel_job: 2
   client_processes:
     np: 2
   test_file: /testFile

@@ -181,19 +181,6 @@ class OSAUtils(IorTestBase):
         self.obj.close()
         self.container.close()
 
-    def add_cont(self, pool):
-        """Create a container and use it for IOR
-
-        Args:
-            pool: pool to create container
-
-        """
-        # Create a container
-        self.container = TestContainer(pool,
-                                       daos_command=self.get_daos_command())
-        self.container.get_params(self)
-        self.container.create()
-
     def ior_thread(self, pool, oclass, api, test, flags, results):
         """Start threads and wait until all threads are finished.
 
@@ -224,7 +211,9 @@ class OSAUtils(IorTestBase):
 
         # Define the job manager for the IOR command
         self.job_manager = Mpirun(ior_cmd, mpitype="mpich")
-        self.add_cont(self.pool)
+        # Create container only
+        if self.container is None:
+            self.add_container(self.pool)
         self.job_manager.job.dfs_cont.update(self.container.uuid)
         env = ior_cmd.get_default_env(str(self.job_manager))
         self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
