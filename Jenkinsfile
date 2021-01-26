@@ -148,12 +148,12 @@ String unit_packages() {
                            'boost-devel ' +
                            'libisa-l-devel libpmem ' +
                            'libpmemobj protobuf-c ' +
-                           'spdk-devel libfabric-devel '+
+                           'spdk-devel libfabric-devel ' +
                            'pmix numactl-devel ' +
                            'libipmctl-devel python36-pyxattr ' +
                            'python36-tabulate numactl ' +
                            'libyaml-devel ' +
-                           'valgrind-devel'
+                           'valgrind-devel patchelf'
         if (need_qb) {
             // TODO: these should be gotten from the Requires: of RPM
             packages += " spdk-tools mercury-2.0.0~rc1" +
@@ -1151,8 +1151,7 @@ pipeline {
                     }
                     post {
                       always {
-                            unitTestPost artifacts: ['unit_test_logs/*'],
-                                         record_issues: false
+                            unitTestPost artifacts: ['unit_test_logs/*']
                         }
                     }
                 }
@@ -1162,17 +1161,19 @@ pipeline {
                       expression { ! skip_stage('nlt') }
                     }
                     agent {
-                        label 'ci_hdwr1'
+                        label 'ci_nlt_1'
                     }
                     steps {
                         unitTest timeout_time: 20,
                                  inst_repos: pr_repos(),
+                                 test_script: 'ci/unit/test_nlt.sh',
                                  inst_rpms: unit_packages()
                     }
                     post {
                       always {
                             unitTestPost artifacts: ['nlt_logs/*'],
                                          testResults: 'None',
+                                         always_script: 'ci/unit/test_nlt_post.sh',
                                          valgrind_stash: 'centos7-gcc-nlt-memcheck'
                         }
                     }
