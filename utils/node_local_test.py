@@ -1710,7 +1710,7 @@ def check_readdir_perf(server, conf):
     dfuse = DFuse(server, conf, pool=pool)
 
     print('Creating container and populating')
-    count = 4
+    count = 1024
     dfuse.start()
     parent = os.path.join(dfuse.dir, container)
     try:
@@ -2053,7 +2053,7 @@ def main():
     if args.perf_check:
         args.server_debug = 'INFO'
         args.memcheck = 'no'
-        args.dfuse_debug = 'ERR'
+        args.dfuse_debug = 'WARN'
         server = DaosServer(conf)
         server.start()
         check_readdir_perf(server, conf)
