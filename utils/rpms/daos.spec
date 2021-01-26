@@ -177,16 +177,6 @@ Requires: lbzip2
 Requires: libpsm_infinipath1
 %endif
 
-%description tests
-This is the package needed to run the DAOS test suite
-
-%package tests-java
-Summary: The DAOS Java test suite
-Requires: maven
-
-%description tests-java
-This is the package needed to run the DAOS java test suite
-
 %package devel
 # Leap 15 doesn't seem to be creating dependencies as richly as EL7
 # for example, EL7 automatically adds:
@@ -210,6 +200,14 @@ Summary: The DAOS development libraries and headers
 
 %description devel
 This is the package needed to build software with the DAOS library.
+
+%package tests-java
+Summary: The DAOS Java test suite
+Requires: %{name}-devel = %{version}-%{release}
+Requires: maven
+
+%description tests-java
+This is the package needed to run the DAOS java test suite
 
 %prep
 %autosetup
@@ -247,7 +245,7 @@ install -m 644 utils/systemd/%{server_svc_name} %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
 mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
 mv %{?buildroot}/%{_prefix}/etc/bash_completion.d %{?buildroot}/%{_sysconfdir}
-install -m src/client/java %{_prefix}/lib/daos/TESTING/java/
+install -m 755 src/client/java %{_prefix}/lib/daos/TESTING/
 
 %pre server
 getent group daos_metrics >/dev/null || groupadd -r daos_metrics
