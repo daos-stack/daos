@@ -1883,6 +1883,7 @@ def main():
         fatal_errors.add_result(run_posix_tests(server, conf))
         test_pydaos_kv(server, conf)
         fatal_errors.add_result(test_alloc_fail(server, wf, conf))
+        fatal_errors.add_result(set_server_fi(server))
     elif args.test:
         if args.test == 'all':
             fatal_errors.add_result(run_posix_tests(server, conf))
