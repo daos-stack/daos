@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2015-2020 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -84,7 +84,8 @@ struct ds_cont_child {
 				 sc_vos_aggregating:1,
 				 sc_abort_vos_aggregating:1,
 				 sc_props_fetched:1,
-				 sc_stopping:1;
+				 sc_stopping:1,
+				 sc_cos_shutdown:1;
 	/* Tracks the schedule request for aggregation ULT */
 	struct sched_request	*sc_agg_req;
 

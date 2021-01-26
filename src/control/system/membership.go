@@ -447,6 +447,8 @@ func (m *Membership) CheckHosts(hosts string, ctlPort int) (*RankSet, *hostlist.
 	return rs, missHS, nil
 }
 
+// MarkRankDead is a helper method to mark a rank as dead in
+// response to a swim_rank_dead event.
 func (m *Membership) MarkRankDead(rank Rank) error {
 	member, err := m.db.FindMemberByRank(rank)
 	if err != nil {
@@ -457,33 +459,38 @@ func (m *Membership) MarkRankDead(rank Rank) error {
 	return m.db.UpdateMember(member)
 }
 
+func (m *Membership) handleRankDown(evt *events.RASEvent) {
+	ei := evt.GetRankStateInfo()
+	if ei == nil {
+		m.log.Error("no extended info in RankDown event received")
+		return
+	}
+	m.log.Debugf("processing RAS event %q from rank %d on host %q",
+		evt.Msg, evt.Rank, evt.Hostname)
+
+	// TODO: sanity check that the correct member is being updated by
+	// performing lookup on provided hostname and matching returned
+	// addresses with the member address with matching rank.
+
+	mr := NewMemberResult(Rank(evt.Rank), errors.Wrap(ei.ExitErr, evt.Msg), MemberStateErrored)
+
+	if err := m.UpdateMemberStates(MemberResults{mr}, true); err != nil {
+		m.log.Errorf("updating member states: %s", err)
+		return
+	}
+
+	member, err := m.Get(Rank(evt.Rank))
+	if err != nil {
+		m.log.Errorf("member with rank %d not found", evt.Rank)
+		return
+	}
+	m.log.Debugf("update rank %d to %+v (%s)", evt.Rank, member, member.Info)
+}
+
 // OnEvent handles events on channel and updates member states accordingly.
 func (m *Membership) OnEvent(_ context.Context, evt *events.RASEvent) {
 	switch evt.ID {
 	case events.RASRankDown:
-		ei := evt.GetRankStateInfo()
-		if ei == nil {
-			m.log.Error("no extended info in RankDown event received")
-			return
-		}
-		m.log.Debugf("processing RAS event %q from rank %d on host %q",
-			evt.Msg, evt.Rank, evt.Hostname)
-
-		// TODO: sanity check that the correct member is being updated by
-		// performing lookup on provided hostname and matching returned
-		// addresses with the member address with matching rank.
-
-		if err := m.UpdateMemberStates(MemberResults{
-			NewMemberResult(Rank(evt.Rank),
-				errors.Wrap(ei.ExitErr, evt.Msg),
-				MemberStateErrored),
-		}, true); err != nil {
-			m.log.Errorf("updating member states: %s", err)
-			return
-		}
-
-		member, _ := m.Get(Rank(evt.Rank))
-		m.log.Debugf("update rank %d to %+v (%s)", evt.Rank, member,
-			member.Info)
+		m.handleRankDown(evt)
 	}
 }
