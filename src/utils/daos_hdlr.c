@@ -1575,6 +1575,10 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 	 */
 	ARGS_VERIFY_PATH_CREATE(ap, err_rc, rc = RC_PRINT_HELP);
 
+	rc = update_props_for_access_control(ap);
+	if (rc != 0)
+		return rc;
+
 	uuid_copy(dattr.da_puuid, ap->p_uuid);
 	uuid_copy(dattr.da_cuuid, ap->c_uuid);
 	dattr.da_type = ap->type;

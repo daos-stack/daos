@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,11 @@
 #include "place_obj_common.h"
 #include <daos_obj_class.h>
 #include <daos/pool_map.h>
+#include <stdarg.h>
+#include <stddef.h>
+#include <setjmp.h>
+#include <cmocka.h>
+#include <daos/tests_lib.h>
 
 void
 print_layout(struct pl_obj_layout *layout)
@@ -39,15 +44,19 @@ print_layout(struct pl_obj_layout *layout)
 	for (grp = 0; grp < layout->ol_grp_nr; ++grp) {
 		printf("[");
 		for (sz = 0; sz < layout->ol_grp_size; ++sz) {
+			struct pl_obj_shard shard;
+
 			index = (grp * layout->ol_grp_size) + sz;
-			printf("%d ", layout->ol_shards[index].po_target);
+			shard = layout->ol_shards[index];
+			printf("%d=>%d%s ", shard.po_shard, shard.po_target,
+			       shard.po_rebuilding ? "R" : "");
 		}
 		printf("\b]");
 	}
 	printf("\n");
 }
 
-void
+int
 plt_obj_place(daos_obj_id_t oid, struct pl_obj_layout **layout,
 		struct pl_map *pl_map, bool print_layout_flag)
 {
@@ -56,15 +65,24 @@ plt_obj_place(daos_obj_id_t oid, struct pl_obj_layout **layout,
 
 	memset(&md, 0, sizeof(md));
 	md.omd_id  = oid;
-	md.omd_ver = 1;
+	md.omd_ver = pool_map_get_version(pl_map->pl_poolmap);
 
 	rc = pl_obj_place(pl_map, &md, NULL, layout);
-	D_ASSERT(rc == 0);
 
-	if (print_layout_flag)
-		print_layout(*layout);
+	if (print_layout_flag) {
+		if (*layout != NULL)
+			print_layout(*layout);
+		else
+			print_message("No layout created.\n");
+	}
+
+	return rc;
 }
 
+/*
+ * Verifies that num_allowed_failures (-1 target) is not exceeded and the same
+ * target isn't used more than once.
+ */
 void
 plt_obj_layout_check(struct pl_obj_layout *layout, uint32_t pool_size,
 		int num_allowed_failures)
@@ -84,7 +102,6 @@ plt_obj_layout_check(struct pl_obj_layout *layout, uint32_t pool_size,
 		D_ASSERT(num_allowed_failures >= 0);
 
 		if (target_num != -1) {
-
 			D_ASSERT(target_set[target_num] != 1);
 			target_set[target_num] = 1;
 		}
@@ -263,8 +280,6 @@ plt_obj_add_layout_check(struct pl_obj_layout *layout,
 	bool		contains_new_tgt;
 	int		i;
 
-	print_layout(layout);
-	print_layout(org_layout);
 	D_ALLOC_ARRAY(target_set, pool_size);
 	D_ASSERT(target_set != NULL);
 
@@ -346,8 +361,91 @@ plt_obj_layout_match(struct pl_obj_layout *lo_1, struct pl_obj_layout *lo_2)
 	return true;
 }
 
+static pool_comp_type_t
+plt_next_level(pool_comp_type_t current)
+{
+	switch (current) {
+	case PO_COMP_TP_ROOT:
+		return PO_COMP_TP_RACK;
+	case PO_COMP_TP_RACK:
+		return PO_COMP_TP_NODE;
+	case PO_COMP_TP_NODE:
+		return PO_COMP_TP_TARGET;
+
+	/* these are not used by the test layout */
+	case PO_COMP_TP_BLADE:
+	case PO_COMP_TP_BOARD:
+	case PO_COMP_TP_TARGET:
+	case PO_COMP_TP_UNKNOWN:
+	default:
+		return PO_COMP_TP_UNKNOWN;
+	}
+}
+
 void
-plt_set_tgt_status(uint32_t id, int status, uint32_t ver,
+plt_set_domain_status(uint32_t id, int status, uint32_t *ver,
+		      struct pool_map *po_map, bool pl_debug_msg,
+		      enum pool_comp_type level)
+{
+	struct pool_domain	*domain;
+	char			*str;
+	int			 rc;
+
+	switch (status) {
+	case PO_COMP_ST_UP:
+		str = "PO_COMP_ST_UP";
+		break;
+	case PO_COMP_ST_UPIN:
+		str = "PO_COMP_ST_UPIN";
+		break;
+	case PO_COMP_ST_DOWN:
+		str = "PO_COMP_ST_DOWN";
+		break;
+	case PO_COMP_ST_DRAIN:
+		str = "PO_COMP_ST_DRAIN";
+		break;
+	case PO_COMP_ST_DOWNOUT:
+		str = "PO_COMP_ST_DOWNOUT";
+		break;
+	case PO_COMP_ST_NEW:
+		str = "PO_COMP_ST_NEW";
+		break;
+	default:
+		str = "unknown";
+		break;
+	}
+
+	rc = pool_map_find_domain(po_map, level, id, &domain);
+	D_ASSERT(rc == 1);
+
+	int i;
+
+	for (i = 0; i < domain->do_child_nr; i++) {
+		plt_set_domain_status(domain->do_children[i].do_comp.co_id,
+				      status, ver,
+				      po_map, pl_debug_msg,
+				      plt_next_level(level));
+	}
+	if (level == PO_COMP_TP_NODE) {
+		for (i = 0; i < domain->do_target_nr; i++) {
+			plt_set_tgt_status(domain->do_targets[i].ta_comp.co_id,
+				status, ver, po_map, pl_debug_msg);
+		}
+	}
+
+	if (pl_debug_msg)
+		D_PRINT("set domain id %d, rank %d as %s, ver %d.\n",
+			id, domain->do_comp.co_rank, str, *ver);
+	domain->do_comp.co_status = status;
+	domain->do_comp.co_fseq = *ver;
+
+	pool_map_update_failed_cnt(po_map);
+	rc = pool_map_set_version(po_map, *ver);
+	D_ASSERT(rc == 0);
+}
+
+void
+plt_set_tgt_status(uint32_t id, int status, uint32_t *ver,
 		struct pool_map *po_map, bool pl_debug_msg)
 {
 	struct pool_target	*target;
@@ -370,6 +468,9 @@ plt_set_tgt_status(uint32_t id, int status, uint32_t ver,
 	case PO_COMP_ST_DOWNOUT:
 		str = "PO_COMP_ST_DOWNOUT";
 		break;
+	case PO_COMP_ST_NEW:
+		str = "PO_COMP_ST_NEW";
+		break;
 	default:
 		str = "unknown";
 		break;
@@ -377,13 +478,16 @@ plt_set_tgt_status(uint32_t id, int status, uint32_t ver,
 
 	rc = pool_map_find_target(po_map, id, &target);
 	D_ASSERT(rc == 1);
+	(*ver)++;
+	target->ta_comp.co_status = status;
+
+	if (status == PO_COMP_ST_DRAIN || status == PO_COMP_ST_DOWN)
+		target->ta_comp.co_fseq = *ver;
 	if (pl_debug_msg)
 		D_PRINT("set target id %d, rank %d as %s, ver %d.\n",
-			id, target->ta_comp.co_rank, str, ver);
-	target->ta_comp.co_status = status;
-	target->ta_comp.co_fseq = ver;
+			id, target->ta_comp.co_rank, str, *ver);
 	pool_map_update_failed_cnt(po_map);
-	rc = pool_map_set_version(po_map, ver);
+	rc = pool_map_set_version(po_map, *ver);
 	D_ASSERT(rc == 0);
 }
 
@@ -391,24 +495,21 @@ void
 plt_drain_tgt(uint32_t id, uint32_t *po_ver, struct pool_map *po_map,
 		bool pl_debug_msg)
 {
-	(*po_ver)++;
-	plt_set_tgt_status(id, PO_COMP_ST_DRAIN, *po_ver, po_map, pl_debug_msg);
+	plt_set_tgt_status(id, PO_COMP_ST_DRAIN, po_ver, po_map, pl_debug_msg);
 }
 
 void
 plt_fail_tgt(uint32_t id, uint32_t *po_ver, struct pool_map *po_map,
 		bool pl_debug_msg)
 {
-	(*po_ver)++;
-	plt_set_tgt_status(id, PO_COMP_ST_DOWN, *po_ver, po_map, pl_debug_msg);
+	plt_set_tgt_status(id, PO_COMP_ST_DOWN, po_ver, po_map, pl_debug_msg);
 }
 
 void
 plt_fail_tgt_out(uint32_t id, uint32_t *po_ver, struct pool_map *po_map,
 		bool pl_debug_msg)
 {
-	(*po_ver)++;
-	plt_set_tgt_status(id, PO_COMP_ST_DOWNOUT, *po_ver, po_map,
+	plt_set_tgt_status(id, PO_COMP_ST_DOWNOUT, po_ver, po_map,
 			   pl_debug_msg);
 }
 
@@ -416,16 +517,14 @@ void
 plt_reint_tgt(uint32_t id, uint32_t *po_ver, struct pool_map *po_map,
 		bool pl_debug_msg)
 {
-	(*po_ver)++;
-	plt_set_tgt_status(id, PO_COMP_ST_UP, *po_ver, po_map, pl_debug_msg);
+	plt_set_tgt_status(id, PO_COMP_ST_UP, po_ver, po_map, pl_debug_msg);
 }
 
 void
 plt_reint_tgt_up(uint32_t id, uint32_t *po_ver, struct pool_map *po_map,
 		bool pl_debug_msg)
 {
-	(*po_ver)++;
-	plt_set_tgt_status(id, PO_COMP_ST_UPIN, *po_ver, po_map, pl_debug_msg);
+	plt_set_tgt_status(id, PO_COMP_ST_UPIN, po_ver, po_map, pl_debug_msg);
 }
 
 void
@@ -443,7 +542,7 @@ plt_spare_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 		plt_fail_tgt(failed_tgts[i], po_ver, po_map, pl_debug_msg);
 
 	rc = pl_map_update(pl_uuid, po_map, false, map_type);
-	D_ASSERT(rc == 0);
+	assert_success(rc);
 	pl_map = pl_map_find(pl_uuid, oid);
 	D_ASSERT(pl_map != NULL);
 	dc_obj_fetch_md(oid, &md);
@@ -505,7 +604,8 @@ gen_pool_and_placement_map(int num_domains, int nodes_per_domain,
 		comp->co_type   = PO_COMP_TP_TARGET;
 		comp->co_status = PO_COMP_ST_UPIN;
 		comp->co_id     = i;
-		comp->co_rank   = i;
+		comp->co_rank   = i / vos_per_target;
+		comp->co_index	= i % vos_per_target;
 		comp->co_ver    = 1;
 		comp->co_nr     = 1;
 	}
@@ -514,20 +614,110 @@ gen_pool_and_placement_map(int num_domains, int nodes_per_domain,
 	D_ASSERT(buf != NULL);
 
 	rc = pool_buf_attach(buf, comps, nr);
-	D_ASSERT(rc == 0);
+	assert_success(rc);
 
 	/* No longer needed, copied into pool buf */
 	D_FREE(comps);
 
 	rc = pool_map_create(buf, 1, po_map_out);
-	D_ASSERT(rc == 0);
+	assert_success(rc);
+
+	/* No longer needed, copied into pool map */
+	D_FREE(buf);
 
 	mia.ia_type         = pl_type;
 	mia.ia_ring.ring_nr = 1;
 	mia.ia_ring.domain  = PO_COMP_TP_RACK;
 
 	rc = pl_map_create(*po_map_out, &mia, pl_map_out);
-	D_ASSERT(rc == 0);
+	assert_success(rc);
+}
+
+void
+gen_pool_and_placement_map_non_standard(int num_domains,
+			   int domain_targets[], pl_map_type_t pl_type,
+			   struct pool_map **po_map_out,
+			   struct pl_map **pl_map_out)
+{
+	struct pl_map_init_attr	 mia;
+	struct pool_buf		*buf;
+	struct pool_component	*comps;
+	struct pool_component	*comp;
+	int			 i;
+	int			 nr;
+	uint32_t		 node_idx = 0;
+	uint32_t		 node_tgt_count = 0;
+	int			 rc;
+
+	/* count total components */
+	nr = num_domains * 2; /* 1 for rack and 1 for node */
+	for (i = 0; i < num_domains; i++)
+		nr += domain_targets[i];
+
+	D_ALLOC_ARRAY(comps, nr);
+	D_ASSERT(comps != NULL);
+
+	comp = &comps[0];
+	/* fake the pool map */
+	for (i = 0; i < num_domains; i++, comp++) {
+		comp->co_type   = PO_COMP_TP_RACK;
+		comp->co_status = PO_COMP_ST_UPIN;
+		comp->co_id     = i;
+		comp->co_rank   = i;
+		comp->co_ver    = 1;
+		comp->co_nr     = 1; /* hard code 1 node each */
+	}
+
+	/* Using 1 node for each domain */
+	for (i = 0; i < num_domains; i++, comp++) {
+		comp->co_type   = PO_COMP_TP_NODE;
+		comp->co_status = PO_COMP_ST_UPIN;
+		comp->co_id     = i;
+		comp->co_rank   = i;
+		comp->co_ver    = 1;
+		comp->co_nr     = domain_targets[i];
+	}
+
+
+
+	/* what's left are targets */
+	for (i = 0; i < nr - (num_domains * 2); i++, comp++) {
+		comp->co_type   = PO_COMP_TP_TARGET;
+		comp->co_status = PO_COMP_ST_UPIN;
+		comp->co_id     = i;
+		if (domain_targets[node_idx] < node_tgt_count) {
+			node_idx++;
+			node_tgt_count = 0;
+		} else {
+			node_tgt_count++;
+		}
+		comp->co_rank   = node_idx;
+
+		comp->co_ver    = 1;
+		comp->co_nr     = 1;
+	}
+
+	buf = pool_buf_alloc(nr);
+	D_ASSERT(buf != NULL);
+
+	rc = pool_buf_attach(buf, comps, nr);
+	assert_success(rc);
+
+	/* No longer needed, copied into pool buf */
+	D_FREE(comps);
+
+	rc = pool_map_create(buf, 1, po_map_out);
+	assert_success(rc);
+
+	/* No longer needed, copied into pool map */
+	D_FREE(buf);
+
+	mia.ia_type         = pl_type;
+	mia.ia_ring.ring_nr = 1;
+	mia.ia_ring.domain  = PO_COMP_TP_RACK;
+
+	rc = pl_map_create(*po_map_out, &mia, pl_map_out);
+	assert_success(rc);
 }
 
 void
@@ -562,7 +752,7 @@ plt_reint_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 		plt_reint_tgt(reint_tgts[i], po_ver, po_map, pl_debug_msg);
 
 	rc = pl_map_update(pl_uuid, po_map, false, map_type);
-	D_ASSERT(rc == 0);
+	assert_success(rc);
 	pl_map = pl_map_find(pl_uuid, oid);
 	D_ASSERT(pl_map != NULL);
 	dc_obj_fetch_md(oid, &md);
@@ -588,7 +778,7 @@ plt_reint_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 }
 
 int
-getObjectClasses(daos_oclass_id_t **oclass_id_pp)
+get_object_classes(daos_oclass_id_t **oclass_id_pp)
 {
 	const uint32_t str_size = 2560;
 	char oclass_names[str_size];
@@ -644,11 +834,11 @@ extend_test_pool_map(struct pool_map *map,
 	rc = gen_pool_buf(map, &map_buf, map_version, ndomains, nnodes,
 			  ntargets, domains, target_uuids, rank_list, NULL,
 			dss_tgt_nr);
-	D_ASSERT(rc == 0);
+	assert_success(rc);
 
 	/* Extend the current pool map */
 	rc = pool_map_extend(map, map_version, map_buf);
-	D_ASSERT(rc == 0);
+	assert_success(rc);
 
 	return rc;
 }
