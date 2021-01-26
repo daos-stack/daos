@@ -172,7 +172,7 @@ test_run()
 		D_ASSERTF(rc == 0, "crt_group_detach failed, rc: %d\n", rc);
 	}
 
-	g_shutdown = 1;
+	tc_progress_stop();
 
 	rc = pthread_join(test.tg_tid, NULL);
 	D_ASSERTF(rc == 0, "pthread_join failed. rc: %d\n", rc);
