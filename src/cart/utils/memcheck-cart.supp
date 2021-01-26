@@ -16,8 +16,6 @@
    match-leak-kinds: possible
    ...
    fun:rdma_bind_addr
-   fun:vrb_ifa_rdma_info
-   fun:vrb_getifaddrs
    ...
 }
 {
