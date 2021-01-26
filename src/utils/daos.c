@@ -1549,10 +1549,8 @@ main(int argc, char *argv[])
 	} else if ((strcmp(argv[1], "object") == 0) ||
 		 (strcmp(argv[1], "obj") == 0)) {
 		hdlr = obj_op_hdlr;
-	} else if (strcmp(argv[1], "shell") == 0) {
-		rc = obj_ctl_shell(argc, argv);
-		return rc;
 	}
+
 	if (hdlr == NULL) {
 		dargs.ostream = stderr;
 		help_hdlr(argc, argv, &dargs);
