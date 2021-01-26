@@ -25,7 +25,6 @@
 from __future__ import print_function
 
 import sys
-import time
 
 from apricot import TestWithoutServers
 
@@ -50,7 +49,7 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(TestWithoutServers):
     def tearDown(self):
         """Tear down."""
         print("tearDown() start")
-        super(TestWithoutServers, self).tearDown()
+        super(CartRpcOneNodeSwimNotificationOnRankEvictionTest, self).tearDown()
 
     def test_cart_rpc(self):
         """
@@ -77,4 +76,3 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(TestWithoutServers):
             clicmd = self.utils.build_cmd(
                 self, self.env, "test_clients", index=index)
             self.utils.launch_test(self, clicmd, srv_rtn)
-
