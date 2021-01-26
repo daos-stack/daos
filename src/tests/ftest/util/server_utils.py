@@ -450,7 +450,6 @@ class DaosServerManager(SubprocessManager):
         self._prepare_dmg_certificates()
 
         # Prepare dmg for running storage format on all server hosts
-        self.dmg.temporary_file_hosts = socket.gethostname().split(".")[0:1]
         self._prepare_dmg_hostlist(self._hosts)
         if not self.dmg.yaml:
             # If using a dmg config file, transport security was
@@ -1047,7 +1046,17 @@ class DaosServerManager(SubprocessManager):
             self.log.info(
                 "  Unable to obtain current server state.  If the servers are "
                 "not running this is expected.")
-            status["expected"] = False
+
+            # Do not report an error if all servers are expected to be stopped
+            all_stopped = all(
+                [state.lower() == "stopped"
+                 for state in self._expected_states.values()]
+            )
+            if all_stopped:
+                self.log.info("  All servers are expected to be stopped.")
+                status["restart"] = True
+            else:
+                status["expected"] = False
 
         # Any unexpected state detected warrants a restart of all servers
         if not status["expected"]:

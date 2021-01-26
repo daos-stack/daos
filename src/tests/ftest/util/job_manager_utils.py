@@ -577,7 +577,6 @@ class Systemctl(JobManager):
             bool: whether or not the command progress has been detected
 
         """
-        # return self.job.check_subprocess_status(sub_process)
         return self.check_logs(
             self.job.pattern, self.timestamps["start"], None,
             self.job.pattern_count, self.job.pattern_timeout.value)

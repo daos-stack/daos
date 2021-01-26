@@ -655,15 +655,7 @@ class TestWithServers(TestWithoutServers):
 
         if isinstance(agent_groups, dict):
             for group, info in agent_groups.items():
-                if self.agent_manager_class == "Systemctl":
-                    agent_config_file = get_default_config_file("agent")
-                    agent_config_temp = self.get_config_file(
-                        group, "agent", self.test_dir)
-                else:
-                    agent_config_file = self.get_config_file(group, "agent")
-                    agent_config_temp = None
-                self.add_agent_manager(
-                    group, agent_config_file, agent_config_temp)
+                self.add_agent_manager(group)
                 self.configure_manager(
                     "agent",
                     self.agent_managers[-1],
@@ -700,22 +692,7 @@ class TestWithServers(TestWithoutServers):
 
         if isinstance(server_groups, dict):
             for group, info in server_groups.items():
-                if self.server_manager_class == "Systemctl":
-                    server_config_file = get_default_config_file("server")
-                    server_config_temp = self.get_config_file(
-                        group, "server", self.test_dir)
-                    dmg_config_file = get_default_config_file("control")
-                    dmg_config_temp = self.get_config_file(
-                        group, "dmg", self.test_dir)
-                else:
-                    server_config_file = self.get_config_file(group, "server")
-                    server_config_temp = None
-                    dmg_config_file = self.get_config_file(group, "dmg")
-                    dmg_config_temp = None
-
-                self.add_server_manager(
-                    group, server_config_file, dmg_config_file,
-                    server_config_temp, dmg_config_temp)
+                self.add_server_manager(group)
                 self.configure_manager(
                     "server",
                     self.server_managers[-1],
@@ -752,11 +729,26 @@ class TestWithServers(TestWithoutServers):
             config_temp (str, optional): file name and path used to generate
                 the daos_agent configuration file locally and copy it to all
                 the hosts using the config_file specification. Defaults to None.
+
+        Raises:
+            avocado.core.exceptions.TestFail: if there is an error specifying
+                files to use with the Systemctl job manager class.
+
         """
         if group is None:
             group = self.server_group
-        if config_file is None:
-            config_file = self.get_config_file(self.server_group, "agent")
+        if config_file is None and self.agent_manager_class == "Systemctl":
+            config_file = get_default_config_file("agent")
+            config_temp = self.get_config_file(group, "agent", self.test_dir)
+        elif config_file is None:
+            config_file = self.get_config_file(group, "agent")
+            config_temp = None
+
+        # Verify the correct configuration files have been provided
+        if self.agent_manager_class == "Systemctl" and config_temp is None:
+            self.fail(
+                "Error adding a DaosAgentManager: no temporary configuration "
+                "file provided for the Systemctl manager class!")
 
         # Define the location of the certificates
         if self.agent_manager_class == "Systemctl":
@@ -787,13 +779,33 @@ class TestWithServers(TestWithoutServers):
             dmg_config_temp (str, optional): file name and path used to generate
                 the dmg configuration file locally and copy it to all the hosts
                 using the config_file specification. Defaults to None.
+
+        Raises:
+            avocado.core.exceptions.TestFail: if there is an error specifying
+                files to use with the Systemctl job manager class.
+
         """
         if group is None:
             group = self.server_group
-        if svr_config_file is None:
-            svr_config_file = self.get_config_file(self.server_group, "server")
-        if dmg_config_file is None:
-            dmg_config_file = self.get_config_file(self.server_group, "dmg")
+        if svr_config_file is None and self.server_manager_class == "Systemctl":
+            svr_config_file = get_default_config_file("server")
+            svr_config_temp = self.get_config_file(
+                group, "server", self.test_dir)
+        elif svr_config_file is None:
+            svr_config_file = self.get_config_file(group, "server")
+            svr_config_temp = None
+        if dmg_config_file is None and self.server_manager_class == "Systemctl":
+            dmg_config_file = get_default_config_file("control")
+            dmg_config_temp = self.get_config_file(group, "dmg", self.test_dir)
+        elif dmg_config_file is None:
+            dmg_config_file = self.get_config_file(group, "dmg")
+            dmg_config_temp = None
+
+        # Verify the correct configuration files have been provided
+        if self.server_manager_class == "Systemctl" and svr_config_temp is None:
+            self.fail(
+                "Error adding a DaosServerManager: no temporary configuration "
+                "file provided for the Systemctl manager class!")
 
         # Define the location of the certificates
         if self.server_manager_class == "Systemctl":

@@ -82,3 +82,7 @@ class DaosServerConfigTest(TestWithServers):
         elif c_val[2] == "PASS" and exception is not None:
             self.log.error("Server was expected to start")
             self.fail("{}".format(exception))
+
+        # Updated the expected state for servers that should fail to start
+        if c_val[2] == "FAIL":
+            self.server_managers[-1].update_expected_states(None, "Stopped")
