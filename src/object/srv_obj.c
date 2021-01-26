@@ -2232,7 +2232,7 @@ re_fetch:
 				D_GOTO(out, rc = -DER_TX_BUSY);
 
 			/* XXX: Currently, we commit the distributed transaction
-			 *	sychronously. Normally, it will be very quickly.
+			 *	synchronously. Normally it will be very quickly.
 			 *	So let's yield then retry. If related
 			 *	distributed transaction is still not committed
 			 *	after several cycles, replies '-DER_TX_BUSY' to
@@ -2630,7 +2630,7 @@ re_pack:
 			D_GOTO(out, rc = -DER_TX_BUSY);
 
 		/* XXX: Currently, we commit the distributed transaction
-		 *	sychronously. Normally, it will be very quickly.
+		 *	synchronously. Normally it will be very quickly.
 		 *	So let's yield then retry. If related distributed
 		 *	transaction is still not committed after several
 		 *	cycles, replies '-DER_TX_BUSY' to the client.
@@ -3322,7 +3322,7 @@ out:
 			D_GOTO(failed, rc = -DER_TX_BUSY);
 
 		/* XXX: Currently, we commit the distributed transaction
-		 *	sychronously. Normally, it will be very quickly.
+		 *	synchronously. Normally it will be very quickly.
 		 *	So let's yield then retry. If related distributed
 		 *	transaction is still not committed after several
 		 *	cycles, then replies '-DER_TX_BUSY' to the client.

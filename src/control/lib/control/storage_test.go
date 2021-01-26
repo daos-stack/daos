@@ -217,7 +217,7 @@ func TestControl_StorageScan(t *testing.T) {
 				HostStorage:    MockHostStorageMap(t, &MockStorageScan{"host1", withNamespacesScan}),
 			},
 		},
-		"single host with space utilisation": {
+		"single host with space utilization": {
 			mic: &MockInvokerConfig{
 				UnaryResponse: &UnaryResponse{
 					Responses: []*HostResponse{

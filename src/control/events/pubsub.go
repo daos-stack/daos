@@ -26,17 +26,14 @@ package events
 import (
 	"context"
 
-	"github.com/pkg/errors"
-
 	"github.com/daos-stack/daos/src/control/common"
-	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // Handler defines an interface to be implemented by event receivers.
 type Handler interface {
 	// OnEvent takes an event to be processed and a context,
-	// implementation must return on context.Done().
+	// implementation must return on context.Done() and be thread safe.
 	OnEvent(context.Context, *RASEvent)
 }
 
@@ -157,27 +154,4 @@ func (ps *PubSub) Close() {
 func (ps *PubSub) Reset() {
 	ps.log.Debug("called Reset()")
 	ps.reset <- struct{}{}
-}
-
-// HandleClusterEvent extracts event field from protobuf request message and
-// converts to concrete event type that implements the Event interface.
-// The Event is then published to make available to locally subscribed consumers
-// to act upon.
-func (ps *PubSub) HandleClusterEvent(req *sharedpb.ClusterEventReq) (*sharedpb.ClusterEventResp, error) {
-	switch {
-	case req.Sequence < 0:
-		ps.log.Debug("no sequence number in ClusterEventReq")
-	case req == nil:
-		return nil, errors.New("nil ClusterEventReq")
-	case req.Event == nil:
-		return nil, errors.New("nil Event in ClusterEventReq")
-	}
-
-	event, err := NewFromProto(req.Event)
-	if err != nil {
-		return nil, err
-	}
-	ps.Publish(event)
-
-	return &sharedpb.ClusterEventResp{Sequence: req.Sequence}, nil
 }
