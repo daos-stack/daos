@@ -566,11 +566,13 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 		break;
 	case S_IFREG:
 	{
-		daos_handle_t	file_oh;
+		daos_handle_t file_oh;
 
 		rc = daos_array_open_with_attr(dfs->coh, entry.oid, th,
-			DAOS_OO_RO, 1, entry.chunk_size ? entry.chunk_size :
-			dfs->attr.da_chunk_size, &file_oh, NULL);
+					       DAOS_OO_RO, 1, entry.chunk_size ?
+					       entry.chunk_size :
+					       dfs->attr.da_chunk_size,
+					       &file_oh, NULL);
 		if (rc) {
 			D_ERROR("daos_array_open_with_attr() failed (%d)\n",
 				rc);
@@ -715,8 +717,10 @@ open_file(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 
 		/** Open the array object for the file */
 		rc = daos_array_open_with_attr(dfs->coh, file->oid, th,
-			DAOS_OO_RW, 1, chunk_size ? chunk_size :
-			dfs->attr.da_chunk_size, &file->oh, NULL);
+					       DAOS_OO_RW, 1,
+					       chunk_size ? chunk_size :
+					       dfs->attr.da_chunk_size,
+					       &file->oh, NULL);
 		if (rc != 0) {
 			D_ERROR("daos_array_open_with_attr() failed (%d)\n",
 				rc);
@@ -951,9 +955,9 @@ set_inode_params(bool for_update, daos_iod_t *iods, daos_key_t *dkey)
 
 	set_daos_iod(for_update, &iods[i++], MAGIC_NAME, sizeof(dfs_magic_t));
 	set_daos_iod(for_update, &iods[i++],
-		SB_VERSION_NAME, sizeof(dfs_sb_ver_t));
+		     SB_VERSION_NAME, sizeof(dfs_sb_ver_t));
 	set_daos_iod(for_update, &iods[i++],
-		LAYOUT_NAME, sizeof(dfs_layout_ver_t));
+		     LAYOUT_NAME, sizeof(dfs_layout_ver_t));
 	set_daos_iod(for_update, &iods[i++], CS_NAME, sizeof(daos_size_t));
 	set_daos_iod(for_update, &iods[i++], OC_NAME, sizeof(daos_oclass_id_t));
 }
@@ -1343,8 +1347,7 @@ dfs_umount(dfs_t *dfs)
 	daos_obj_close(dfs->root.oh, NULL);
 	daos_obj_close(dfs->super_oh, NULL);
 
-	if (dfs->prefix)
-		D_FREE(dfs->prefix);
+	D_FREE(dfs->prefix);
 
 	D_MUTEX_DESTROY(&dfs->lock);
 	D_FREE(dfs);
@@ -1393,6 +1396,7 @@ swap_dfs_glob(struct dfs_glob *dfs_params)
 	/* skip cont_uuid */
 	/* skip coh_uuid */
 }
+
 static inline daos_size_t
 dfs_glob_buf_size()
 {
@@ -1417,7 +1421,7 @@ dfs_local2global(dfs_t *dfs, d_iov_t *glob)
 	}
 
 	if (glob->iov_buf != NULL && (glob->iov_buf_len == 0 ||
-	    glob->iov_buf_len < glob->iov_len)) {
+				      glob->iov_buf_len < glob->iov_len)) {
 		D_ERROR("Invalid parameter of glob, iov_buf %p, iov_buf_len "
 			""DF_U64", iov_len "DF_U64".\n", glob->iov_buf,
 			glob->iov_buf_len, glob->iov_len);
@@ -1587,7 +1591,7 @@ dfs_set_prefix(dfs_t *dfs, const char *prefix)
 		return ENOMEM;
 
 	dfs->prefix_len = strlen(dfs->prefix);
-	if (dfs->prefix[dfs->prefix_len-1] == '/')
+	if (dfs->prefix[dfs->prefix_len - 1] == '/')
 		dfs->prefix_len--;
 
 	return 0;
@@ -1965,9 +1969,11 @@ lookup_rel_path_loop:
 			}
 
 			rc = daos_array_open_with_attr(dfs->coh, entry.oid,
-				DAOS_TX_NONE, daos_mode, 1, entry.chunk_size ?
-				entry.chunk_size : dfs->attr.da_chunk_size,
-				&obj->oh, NULL);
+						       DAOS_TX_NONE, daos_mode,
+						       1, entry.chunk_size ?
+						       entry.chunk_size :
+						       dfs->attr.da_chunk_size,
+						       &obj->oh, NULL);
 			if (rc != 0) {
 				D_ERROR("daos_array_open() Failed (%d)\n", rc);
 				D_GOTO(err_obj, rc = daos_der2errno(rc));
@@ -2349,9 +2355,11 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 	switch (entry.mode & S_IFMT) {
 	case S_IFREG:
 		rc = daos_array_open_with_attr(dfs->coh, entry.oid,
-			DAOS_TX_NONE, daos_mode, 1, entry.chunk_size ?
-			entry.chunk_size : dfs->attr.da_chunk_size, &obj->oh,
-			NULL);
+					       DAOS_TX_NONE, daos_mode, 1,
+					       entry.chunk_size ?
+					       entry.chunk_size :
+					       dfs->attr.da_chunk_size,
+					       &obj->oh, NULL);
 		if (rc != 0) {
 			D_ERROR("daos_array_open_with_attr() Failed (%d)\n",
 				rc);
@@ -2540,25 +2548,25 @@ restart:
 		}
 	}
 
-	*_obj = obj;
-
 out:
 	rc = check_tx(th, rc);
 	if (rc == ERESTART)
 		goto restart;
 
-	if (rc != 0)
+	if (rc == 0) {
+		if (stbuf) {
+			stbuf->st_size = file_size;
+			stbuf->st_nlink = 1;
+			stbuf->st_mode = entry.mode;
+			stbuf->st_uid = dfs->uid;
+			stbuf->st_gid = dfs->gid;
+			stbuf->st_atim.tv_sec = entry.atime;
+			stbuf->st_mtim.tv_sec = entry.mtime;
+			stbuf->st_ctim.tv_sec = entry.ctime;
+		}
+		*_obj = obj;
+	} else {
 		D_FREE(obj);
-
-	if (rc == 0 && stbuf) {
-		stbuf->st_size = file_size;
-		stbuf->st_nlink = 1;
-		stbuf->st_mode = entry.mode;
-		stbuf->st_uid = dfs->uid;
-		stbuf->st_gid = dfs->gid;
-		stbuf->st_atim.tv_sec = entry.atime;
-		stbuf->st_mtim.tv_sec = entry.mtime;
-		stbuf->st_ctim.tv_sec = entry.ctime;
 	}
 
 	return rc;
@@ -2687,7 +2695,7 @@ dfs_obj_local2global(dfs_t *dfs, dfs_obj_t *obj, d_iov_t *glob)
 	}
 
 	if (glob->iov_buf != NULL && (glob->iov_buf_len == 0 ||
-	    glob->iov_buf_len < glob->iov_len)) {
+				      glob->iov_buf_len < glob->iov_len)) {
 		D_ERROR("Invalid parameter of glob, iov_buf %p, iov_buf_len "
 			""DF_U64", iov_len "DF_U64".\n", glob->iov_buf,
 			glob->iov_buf_len, glob->iov_len);
@@ -3147,7 +3155,6 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf)
 	if (rc)
 		return daos_der2errno(rc);
 
-
 	rc = entry_stat(dfs, DAOS_TX_NONE, oh, obj->name, strlen(obj->name),
 			obj, stbuf);
 	if (rc)
@@ -3408,7 +3415,6 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		rstat.st_mtim = stbuf->st_mtim;
 	}
 	if (flags & DFS_SET_ATTR_SIZE) {
-
 		/* It shouldn't be possible to set the size of something which
 		 * isn't a file but check here anyway, as entries which aren't
 		 * files won't have array objects so check and return error here
@@ -4049,8 +4055,7 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 	}
 
 out:
-	if (xname)
-		D_FREE(xname);
+	D_FREE(xname);
 	daos_obj_close(oh, NULL);
 	return rc;
 }
@@ -4184,13 +4189,12 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	rc = daos_obj_punch_akeys(oh, th, cond, &dkey, 1, &akey, NULL);
 	if (rc) {
 		D_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR,
-			"Failed to punch extended attribute '%s'\n", name);
+			 "Failed to punch extended attribute '%s'\n", name);
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
 out:
-	if (xname)
-		D_FREE(xname);
+	D_FREE(xname);
 	daos_obj_close(oh, NULL);
 	return rc;
 }
