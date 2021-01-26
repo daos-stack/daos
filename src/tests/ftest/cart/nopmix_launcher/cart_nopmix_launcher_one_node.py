@@ -48,8 +48,9 @@ class CartNoPmixLauncherOneNodeTest(TestWithoutServers):
 
     def tearDown(self):
         """ Tear down """
+        self.report_timeout()
+        self._teardown_errors.extend(self.utils.cleanup_processes())
         super(CartNoPmixLauncherOneNodeTest, self).tearDown()
-        self.utils.cleanup_processes()
 
     def test_cart_no_pmix_launcher(self):
         """
