@@ -1946,7 +1946,7 @@ class AllocFailTest():
 
         aftf = AllocFailTestRun(self, self.cmd, cmd_env, loc)
         if valgrind:
-            aftf.vh = ValgrindHelper()
+            aftf.vh = ValgrindHelper(self.conf)
             # Turn off leak checking in this case, as we're just interested in
             # why it crashed.
             aftf.vh.full_check = False
