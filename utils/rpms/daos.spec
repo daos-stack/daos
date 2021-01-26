@@ -177,6 +177,9 @@ Requires: lbzip2
 Requires: libpsm_infinipath1
 %endif
 
+%description tests
+This is the package needed to run the DAOS test suite
+
 %package devel
 # Leap 15 doesn't seem to be creating dependencies as richly as EL7
 # for example, EL7 automatically adds:
