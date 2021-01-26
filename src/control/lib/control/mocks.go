@@ -364,7 +364,7 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		}
 	case "standard":
 	default:
-		t.Fatalf("MockServerScanResp(): variant %s unrecognised", variant)
+		t.Fatalf("MockServerScanResp(): variant %s unrecognized", variant)
 	}
 	return ssr
 }
