@@ -53,14 +53,6 @@
 		assert_string_equal(d_errstr(rc), d_errstr(expected_rc)); \
 	} while (0)
 
-#define assert_err(r, errno)						\
-	do {								\
-		int __rc = (r);						\
-		if (__rc != errno)					\
-			fail_msg("Expected error code \""DF_RC"\" but found " \
-				"\""DF_RC"\"", DP_RC(errno), DP_RC(__rc)); \
-	} while (0)
-
 /** Read a command line from stdin. */
 char *dts_readline(const char *prompt);
 
@@ -230,7 +222,7 @@ dts_sgl_init_with_strings(d_sg_list_t *sgl, uint32_t count, char *d, ...);
  */
 void
 dts_sgl_init_with_strings_repeat(d_sg_list_t *sgl, uint32_t repeat,
-	uint32_t count, char *d, ...);
+				 uint32_t count, char *d, ...);
 
 #define DTS_CFG_MAX 256
 __attribute__ ((__format__(__printf__, 2, 3)))
@@ -396,6 +388,6 @@ int dmg_storage_query_device_health(const char *dmg_config_file, char *host,
  */
 int verify_blobstore_state(int state, const char *state_str);
 
-const char * daos_target_state_enum_to_str(int state);
+const char *daos_target_state_enum_to_str(int state);
 
 #endif /* __DAOS_TESTS_LIB_H__ */

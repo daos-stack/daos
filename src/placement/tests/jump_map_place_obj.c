@@ -88,13 +88,16 @@ gen_oid(daos_obj_id_t *oid, uint64_t lo, uint64_t hi, daos_oclass_id_t cid)
 				false)); \
 		pl_obj_layout_free(__layout); \
 	} while (0)
-#define assert_invalid_param(pl_map, cid) \
-	do {\
-		daos_obj_id_t __oid; \
-		struct pl_obj_layout *__layout = NULL; \
-		gen_oid(&__oid, 1, UINT64_MAX, cid); \
-		assert_err(plt_obj_place(__oid, &__layout, pl_map, \
-				false), -DER_INVAL); \
+
+#define assert_invalid_param(pl_map, cid)		\
+	do {						\
+		daos_obj_id_t __oid;			\
+		struct pl_obj_layout *__layout = NULL;	\
+		int rc;					\
+		gen_oid(&__oid, 1, UINT64_MAX, cid);	\
+		rc = plt_obj_place(__oid, &__layout,	\
+				pl_map,	false);		\
+		assert_rc_equal(rc, -DER_INVAL);	\
 	} while (0)
 
 static void
@@ -128,7 +131,6 @@ object_class_is_verified(void **state)
 	assert_invalid_param(pl_map, OC_S512);
 #endif
 	free_pool_and_placement_map(po_map, pl_map);
-
 
 	/*
 	 * ---------------------------------------------------------
@@ -260,7 +262,6 @@ rr_reset(struct remap_result *rr)
 	rr->out_nr = 0;
 }
 
-
 static void
 rr_print(struct remap_result *map)
 {
@@ -302,12 +303,10 @@ struct jm_test_ctx {
 	/* remember shard's original targets */
 	uint32_t		*shard_targets;
 
-
 	/* results from scanning (find_rebuild/reint/addition) */
 	struct remap_result	rebuild;
 	struct remap_result	reint;
 	struct remap_result	new;
-
 
 	uint32_t		 ver; /* Maintain version of pool map */
 
@@ -381,7 +380,6 @@ jtc_maps_gen(struct jm_test_ctx *ctx)
 	assert_non_null(ctx->pl_map);
 	ctx->are_maps_generated = true;
 }
-
 
 static int
 jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
@@ -566,7 +564,6 @@ jtc_get_layout_bad_count(struct jm_test_ctx *ctx)
 			result++;
 
 	return result;
-
 }
 
 static int
@@ -644,7 +641,6 @@ __jtc_init(struct jm_test_ctx *ctx, daos_oclass_id_t object_class,
 
 	ctx->ver = 1; /* Should start with pool map version 1 */
 
-
 	jtc_set_object_meta(ctx, object_class, 1, UINT64_MAX);
 
 	/* hopefully 10x domain is enough */
@@ -678,7 +674,6 @@ jtc_init_non_standard(struct jm_test_ctx *ctx, uint32_t domain_nr,
 						PL_TYPE_JUMP_MAP,
 						&ctx->po_map,
 						&ctx->pl_map);
-
 }
 
 static void
@@ -701,8 +696,7 @@ jtc_fini(struct jm_test_ctx *ctx)
 	rr_fini(&ctx->reint);
 	rr_fini(&ctx->new);
 
-	if (ctx->shard_targets)
-		D_FREE(ctx->shard_targets);
+	D_FREE(ctx->shard_targets);
 
 	memset(ctx, 0, sizeof(*ctx));
 }
@@ -781,7 +775,7 @@ jtc_has_shard_with_rebuilding_not_set(struct jm_test_ctx *ctx, int shard_id)
 
 static bool
 jtc_has_shard_target_rebuilding(struct jm_test_ctx *ctx, uint32_t shard_id,
-			       uint32_t target)
+				uint32_t target)
 {
 	struct pl_obj_shard	*shard;
 	int			 i;
@@ -853,8 +847,7 @@ jtc_snapshot_layout_targets(struct jm_test_ctx *ctx)
 	struct pl_obj_shard *shard;
 	int i;
 
-	if (ctx->shard_targets)
-		D_FREE(ctx->shard_targets);
+	D_FREE(ctx->shard_targets);
 	D_ALLOC_ARRAY(ctx->shard_targets, jtc_get_layout_nr(ctx));
 
 	jtc_for_each_layout_shard(ctx, shard, i) {
@@ -1022,7 +1015,7 @@ down_continuously(void **state)
 		 * state, but none in good state
 		 */
 		is_true(jtc_has_shard_with_target_rebuilding(&ctx, 0,
-								 NULL));
+							     NULL));
 		is_false(jtc_has_shard_with_rebuilding_not_set(&ctx, 0));
 		/* scan returns 1 target to rebuild, shard id should be 0,
 		 * target should not be the "DOWN"ed target, and rebuild target
@@ -1163,9 +1156,9 @@ one_is_being_reintegrated(void **state)
 			 * not for the current shard_idx
 			 */
 			is_true(jtc_has_shard_with_rebuilding_not_set(&ctx,
-				shard_idx));
+								      shard_idx));
 			is_true(jtc_has_shard_with_target_rebuilding(&ctx,
-				shard_idx, NULL));
+								     shard_idx, NULL));
 		}
 
 		assert_int_equal(0, ctx.rebuild.out_nr);
@@ -1228,7 +1221,6 @@ down_back_to_up_in_same_order(void **state)
 	jtc_set_status_on_target(&ctx, UP, orig_shard_targets[1]);
 	jtc_assert_scan_and_layout(&ctx);
 	jtc_assert_rebuild_reint_new(ctx, 2, 0, 2, 0);
-
 
 	jtc_fini(&ctx);
 }
@@ -1483,17 +1475,17 @@ drain_target_same_shard_repeatedly_for_all_shards(void **state)
 			jtc_set_status_on_target(&ctx, DRAIN, target);
 			jtc_assert_scan_and_layout(&ctx);
 			is_true(jtc_has_shard_with_target_rebuilding(&ctx,
-				shard_id, &new_target));
+								     shard_id, &new_target));
 
 			skip_msg("DAOS-6300: All are marked as rebuilding");
 			is_true(jtc_has_shard_target_not_rebuilding(&ctx,
-				shard_id, target));
+								    shard_id, target));
 
 			/* Drain finished, take target all the way down */
 			jtc_set_status_on_target(&ctx, DOWNOUT, target);
 			jtc_assert_scan_and_layout(&ctx);
 			is_true(jtc_has_shard_target_not_rebuilding(&ctx,
-				shard_id, new_target));
+								    shard_id, new_target));
 			verbose_msg("%d finished successfully\n\n", i);
 		}
 
@@ -1504,7 +1496,7 @@ drain_target_same_shard_repeatedly_for_all_shards(void **state)
 
 		/* shouldn't be any left to drain to so nothing is rebuilding */
 		is_false(jtc_has_shard_with_target_rebuilding(&ctx, shard_id,
-			 NULL));
+							      NULL));
 
 		jtc_fini(&ctx);
 	}
