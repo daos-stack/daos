@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
  * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
  * The Government's rights to use, modify, reproduce, release, perform, display,
  * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
+ * provided in Contract No. 8F-30005.
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
@@ -39,7 +39,7 @@ int d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
 			 char *item, ...);
 
 /* Other server functions */
-int d_tm_init(int rank, uint64_t mem_size);
+int d_tm_init(int srv_idx, uint64_t mem_size);
 int d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
 		    char *sh_desc, char *lng_desc);
 void d_tm_fini(void);

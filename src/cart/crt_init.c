@@ -71,7 +71,7 @@ mem_pin_workaround(void)
 	rc = mallopt(M_MXFAST, 0);
 	if (rc != 1)
 		D_WARN("Failed to disable malloc fastbins: %d (%s)\n",
-			errno, strerror(errno));
+		       errno, strerror(errno));
 
 	D_DEBUG(DB_ALL, "Memory pinning workaround enabled\n");
 exit:
@@ -353,7 +353,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 		D_DEBUG(DB_ALL, "Server bit set to %d\n", server);
 		D_DEBUG(DB_ALL, "Swim auto disable set to %d\n",
-				crt_gdata.cg_auto_swim_disable);
+			crt_gdata.cg_auto_swim_disable);
 
 		path = getenv("CRT_ATTACH_INFO_PATH");
 		if (path != NULL && strlen(path) > 0) {
@@ -381,7 +381,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		for (plugin_idx = 0; crt_na_dict[plugin_idx].nad_str != NULL;
 		     plugin_idx++) {
 			if (!strncmp(addr_env, crt_na_dict[plugin_idx].nad_str,
-				strlen(crt_na_dict[plugin_idx].nad_str) + 1)) {
+				     strlen(crt_na_dict[plugin_idx].nad_str) + 1)) {
 				crt_gdata.cg_na_plugin =
 					crt_na_dict[plugin_idx].nad_type;
 				provider_found = true;
@@ -693,12 +693,13 @@ crt_port_range_verify(int port)
 	if (start_port == -1)
 		return;
 
-	if (port >= start_port && port <= end_port)
-		D_WARN("\nRequested port %d is inside of the local port range "
-		       "as specified by file\n'%s'\nIn order to avoid port "
-		       "conflicts pick a different value outside of the "
-		       "%d-%d range\n",
-		       port, proc, start_port, end_port);
+	if (port >= start_port && port <= end_port) {
+		D_WARN("Requested port %d is inside of the local port range "
+		       "as specified by file '%s'\n", port, proc);
+		D_WARN("In order to avoid port conflicts pick a different "
+		       "value outside of the %d-%d range\n",
+		       start_port, end_port);
+	}
 }
 
 int crt_na_ofi_config_init(void)
@@ -738,7 +739,7 @@ int crt_na_ofi_config_init(void)
 	rc = getifaddrs(&if_addrs);
 	if (rc != 0) {
 		D_ERROR("cannot getifaddrs, errno: %d(%s).\n",
-			     errno, strerror(errno));
+			errno, strerror(errno));
 		D_GOTO(out, rc = -DER_PROTO);
 	}
 
