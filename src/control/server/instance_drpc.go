@@ -264,7 +264,7 @@ func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[
 		}
 		smdDev.Rank = srvRank
 		smdDev.TrAddr = dev.GetTrAddr()
-		// space utilisation stats for each smd device
+		// space utilization stats for each smd device
 		smdDev.TotalBytes = pbStats.TotalBytes
 		smdDev.AvailBytes = pbStats.AvailBytes
 
