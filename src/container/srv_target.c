@@ -2145,6 +2145,7 @@ struct cont_ec_eph {
 	d_list_t	ce_list;
 	daos_epoch_t	ce_eph;
 	daos_epoch_t	ce_last_eph;
+	int		ce_destroy:1;
 };
 
 /* Argument to query ec aggregate epoch from each xstream */
@@ -2296,7 +2297,7 @@ cont_delete_ec_agg(uuid_t pool_uuid, uuid_t cont_uuid)
 
 	ec_eph = lookup_cont_ec_eph(&pool->sp_ec_ephs_list, cont_uuid);
 	if (ec_eph)
-		cont_ec_eph_destroy(ec_eph);
+		ec_eph->ce_destroy = 1;
 	ds_pool_put(pool);
 }
 
@@ -2334,11 +2335,16 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 			D_GOTO(yield, rc);
 		}
 
-		d_list_for_each_entry(ec_eph, &pool->sp_ec_ephs_list, ce_list) {
-			if (ec_eph->ce_eph == 0 ||
-			    ec_eph->ce_eph < ec_eph->ce_last_eph) {
-				ec_eph->ce_eph = 0;
+		d_list_for_each_entry_safe(ec_eph, tmp, &pool->sp_ec_ephs_list,
+					   ce_list) {
+			if (ec_eph->ce_destroy) {
+				cont_ec_eph_destroy(ec_eph);
+				continue;
 			}
+
+			if (ec_eph->ce_eph == 0 ||
+			    ec_eph->ce_eph < ec_eph->ce_last_eph)
+				ec_eph->ce_eph = 0;
 
 			D_DEBUG(DB_MD, "eph "DF_U64" "DF_UUID"\n",
 				ec_eph->ce_eph, DP_UUID(ec_eph->ce_cont_uuid));

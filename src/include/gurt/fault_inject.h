@@ -32,7 +32,6 @@
 #define __FAULT_INJECT__
 
 #include <stdbool.h>
-#include <yaml.h>
 #include <stdint.h>
 #include <gurt/debug.h>
 

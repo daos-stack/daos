@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,6 +44,10 @@ obj_mod_init(void)
 	if (rc)
 		goto out;
 
+	rc = obj_class_init();
+	if (rc)
+		goto out;
+
 	rc = obj_ec_codec_init();
 	if (rc != 0) {
 		D_ERROR("failed to obj_ec_codec_init\n");
@@ -59,6 +63,7 @@ static int
 obj_mod_fini(void)
 {
 	obj_ec_codec_fini();
+	obj_class_fini();
 	obj_utils_fini();
 	return 0;
 }

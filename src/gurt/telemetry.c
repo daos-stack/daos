@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
  * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
  * The Government's rights to use, modify, reproduce, release, perform, display,
  * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
+ * provided in Contract No. 8F-30005.
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
@@ -26,7 +26,6 @@
  */
 #define D_LOGFAC	DD_FAC(telem)
 
-#include <gurt/common.h>
 #include <sys/shm.h>
 #include "gurt/telemetry_common.h"
 #include "gurt/telemetry_producer.h"
@@ -96,7 +95,7 @@ d_tm_find_child(uint64_t *shmem_root, struct d_tm_node_t *parent, char *name)
 	if (child != NULL)
 		client_name = d_tm_conv_ptr(shmem_root, child->dtn_name);
 
-	while ((child != NULL) &&
+	while ((child != NULL) && (client_name != NULL) &&
 	       strncmp(client_name, name, D_TM_MAX_NAME_LEN) != 0) {
 		child = d_tm_conv_ptr(shmem_root, child->dtn_sibling);
 		client_name = NULL;
@@ -159,7 +158,6 @@ d_tm_alloc_node(struct d_tm_node_t **newnode, char *name)
 failure:
 	return rc;
 }
-
 
 /**
  * Add a child node the \a parent node in shared memory.
@@ -226,7 +224,7 @@ failure:
  * Initialize an instance of the telemetry and metrics API for the producer
  * process.
  *
- * \param[in]	rank		Identifies the server process amongst others on
+ * \param[in]	srv_idx		Identifies the server process amongst others on
  *				the same machine
  * \param[in]	mem_size	Size in bytes of the shared memory segment that
  *				is allocated
@@ -236,18 +234,18 @@ failure:
  *			-DER_EXCEEDS_PATH_LEN	Root node name exceeds path len
  */
 int
-d_tm_init(int rank, uint64_t mem_size)
+d_tm_init(int srv_idx, uint64_t mem_size)
 {
 	uint64_t	*base_addr = NULL;
 	char		tmp[D_TM_MAX_NAME_LEN];
 	int		rc = D_TM_SUCCESS;
 
 	if ((d_tm_shmem_root != NULL) && (d_tm_root != NULL)) {
-		D_INFO("d_tm_init already completed for rank %d\n", rank);
+		D_INFO("d_tm_init already completed for srv_idx %d\n", srv_idx);
 		return rc;
 	}
 
-	d_tm_shmem_root = d_tm_allocate_shared_memory(rank, mem_size);
+	d_tm_shmem_root = d_tm_allocate_shared_memory(srv_idx, mem_size);
 
 	if (d_tm_shmem_root == NULL) {
 		rc = -DER_NO_SHMEM;
@@ -257,7 +255,7 @@ d_tm_init(int rank, uint64_t mem_size)
 	d_tm_shmem_idx = (uint8_t *)d_tm_shmem_root;
 	d_tm_shmem_free = mem_size;
 	D_DEBUG(DB_TRACE, "Shared memory allocation success!\n"
-		"Memory size is %"PRIu64" bytes at address 0x%"PRIx64
+		"Memory size is %" PRIu64 " bytes at address 0x%" PRIx64
 		"\n", mem_size, (uint64_t)d_tm_shmem_root);
 	/**
 	 * Store the base address of the shared memory as seen by the
@@ -272,7 +270,7 @@ d_tm_init(int rank, uint64_t mem_size)
 	}
 	*base_addr = (uint64_t)d_tm_shmem_root;
 
-	snprintf(tmp, sizeof(tmp), "rank %d", rank);
+	snprintf(tmp, sizeof(tmp), "srv_idx %d", srv_idx);
 	rc = d_tm_alloc_node(&d_tm_root, tmp);
 	if (rc != D_TM_SUCCESS)
 		goto failure;
@@ -283,12 +281,12 @@ d_tm_init(int rank, uint64_t mem_size)
 		goto failure;
 	}
 
-	D_INFO("Telemetry and metrics initialized for rank %u\n", rank);
+	D_INFO("Telemetry and metrics initialized for srv_idx %u\n", srv_idx);
 	return rc;
 
 failure:
-	D_ERROR("Failed to initialize telemetry and metrics for rank %u: "
-		"rc = %d\n", rank, rc);
+	D_ERROR("Failed to initialize telemetry and metrics for srv_idx %u: "
+		"rc = %d\n", srv_idx, rc);
 	return rc;
 }
 
@@ -614,18 +612,21 @@ d_tm_print_my_children(uint64_t *shmem_root, struct d_tm_node_t *node,
  *
  * \param[in]	shmem_root	Pointer to the shared memory segment
  * \param[in]	node		Pointer to a parent or child node
+ * \param[in]	d_tm_type	A bitmask of d_tm_metric_types that
+ *				determines if an item should be counted
  *
  * \return			Number of metrics found
  */
 uint64_t
-d_tm_count_metrics(uint64_t *shmem_root, struct d_tm_node_t *node)
+d_tm_count_metrics(uint64_t *shmem_root, struct d_tm_node_t *node,
+		   int d_tm_type)
 {
 	uint64_t	count = 0;
 
 	if (node == NULL)
 		return 0;
 
-	if (node->dtn_type != D_TM_DIRECTORY)
+	if (d_tm_type & node->dtn_type)
 		count++;
 
 	node = node->dtn_child;
@@ -633,11 +634,11 @@ d_tm_count_metrics(uint64_t *shmem_root, struct d_tm_node_t *node)
 	if (node == NULL)
 		return count;
 
-	count += d_tm_count_metrics(shmem_root, node);
+	count += d_tm_count_metrics(shmem_root, node, d_tm_type);
 	node = node->dtn_sibling;
 	node = d_tm_conv_ptr(shmem_root, node);
 	while (node != NULL) {
-		count += d_tm_count_metrics(shmem_root, node);
+		count += d_tm_count_metrics(shmem_root, node, d_tm_type);
 		node = node->dtn_sibling;
 		node = d_tm_conv_ptr(shmem_root, node);
 	}
@@ -785,7 +786,6 @@ d_tm_increment_counter(struct d_tm_node_t **metric, char *item, ...)
 failure:
 	return rc;
 }
-
 
 /**
  * Record the current timestamp
@@ -1981,172 +1981,75 @@ d_tm_get_version(void)
 }
 
 /**
- * Perform a directory listing at the path provided for the items described by
- * the \a d_tm_type bitmask.  A result is added to the list it if matches
- * one of the metric types specified by that filter mask. The mask may
- * be a combination of d_tm_metric_types.  The search is performed only on the
- * direct children specified by the path.  Returns a linked list that points to
+ * Perform a recursive directory listing from the given \a node for the items
+ * described by the \a d_tm_type bitmask.  A result is added to the list if it
+ * matches one of the metric types specified by that filter mask. The mask may
+ * be a combination of d_tm_metric_types.  Creates a linked list that points to
  * each node found that matches the search criteria.  Adds elements to an
  * existing node list if head is already initialized. The client should free the
  * memory with d_tm_list_free().
  *
  * \param[in,out]	head		Pointer to a nodelist
  * \param[in]		shmem_root	Pointer to the shared memory segment
- * \param[in]		path		Full path name to the directory or
- *					metric to list
+ * \param[in]		node		The recursive directory listing starts
+ *					from this node.
  * \param[in]		d_tm_type	A bitmask of d_tm_metric_types that
  *					filters the results.
  *
  * \return		D_TM_SUCCESS		Success
  *			-DER_NOMEM		Out of global heap
- *			-DER_EXCEEDS_PATH_LEN	The full name length is
- *						too long
- *			-DER_METRIC_NOT_FOUND	No items were found at the path
- *						provided
  *			-DER_INVAL		Invalid pointer for \a head or
- *						\a path
+ *						\a node
  */
 int
-d_tm_list(struct d_tm_nodeList_t **head, uint64_t *shmem_root, char *path,
-	  int d_tm_type)
+d_tm_list(struct d_tm_nodeList_t **head, uint64_t *shmem_root,
+	  struct d_tm_node_t *node, int d_tm_type)
 {
-	struct d_tm_nodeList_t	*nodelist = NULL;
-	struct d_tm_node_t	*node = NULL;
-	struct d_tm_node_t	*parent_node = NULL;
-	char			*str = NULL;
-	char			*token;
-	char			*rest;
-	int			rc = D_TM_SUCCESS;
-	bool			search_siblings = false;
+	int	rc = D_TM_SUCCESS;
 
-	if ((head == NULL) || (path == NULL)) {
+	if ((head == NULL) || (node == NULL)) {
 		rc = -DER_INVAL;
 		goto failure;
 	}
 
-	D_STRNDUP(str, path, D_TM_MAX_NAME_LEN);
+	if (d_tm_type & node->dtn_type) {
+		rc = d_tm_add_node(node, head);
+		if (rc != D_TM_SUCCESS)
+			goto failure;
+	}
 
-	if (str == NULL) {
-		rc = -DER_NOMEM;
-		D_ERROR("Failed to allocate memory for path [%s]: rc = %d\n",
-			path, rc);
+	node = node->dtn_child;
+	if (node == NULL)
+		goto success;
+
+	node = d_tm_conv_ptr(shmem_root, node);
+	if (node == NULL) {
+		rc = -DER_INVAL;
 		goto failure;
 	}
 
-	if (strnlen(str, D_TM_MAX_NAME_LEN) == D_TM_MAX_NAME_LEN) {
-		rc = -DER_EXCEEDS_PATH_LEN;
-		D_ERROR("Path [%s] exceeds max length: rc = %d\n", path, rc);
+	rc = d_tm_list(head, shmem_root, node, d_tm_type);
+	if (rc != D_TM_SUCCESS)
 		goto failure;
+
+	node = node->dtn_sibling;
+	if (node == NULL)
+		return rc;
+
+	node = d_tm_conv_ptr(shmem_root, node);
+	while (node != NULL) {
+		rc = d_tm_list(head, shmem_root, node, d_tm_type);
+		if (rc != D_TM_SUCCESS)
+			goto failure;
+		node = node->dtn_sibling;
+		node = d_tm_conv_ptr(shmem_root, node);
 	}
-
-	rest = str;
-	parent_node = d_tm_get_root(shmem_root);
-	node = parent_node;
-	if (parent_node != NULL) {
-		token = strtok_r(rest, "/", &rest);
-		while (token != NULL) {
-			node = d_tm_find_child(shmem_root, parent_node, token);
-			if (node == NULL) {
-				rc = -DER_METRIC_NOT_FOUND;
-				goto failure;
-			}
-			parent_node = node;
-			token = strtok_r(rest, "/", &rest);
-		}
-
-		if (node == NULL)
-			node = parent_node;
-
-		if (node->dtn_type == D_TM_DIRECTORY) {
-			search_siblings = true;
-			node = d_tm_conv_ptr(shmem_root, node->dtn_child);
-		}
-
-		nodelist = *head;
-		while (node != NULL) {
-			if (d_tm_type & node->dtn_type) {
-				nodelist = d_tm_add_node(node, nodelist);
-				if (*head == NULL)
-					*head = nodelist;
-			}
-			if (search_siblings)
-				node =	d_tm_conv_ptr(shmem_root,
-						      node->dtn_sibling);
-			else
-				node = NULL;
-		}
-	}
-	D_FREE_PTR(str);
+success:
 	return rc;
 
 failure:
-	D_FREE_PTR(str);
 	return rc;
 }
-
-/**
- * Returns the number of metrics found at the \a path provided for the items
- * matching an element of the \a d_tm_type bitmask.  A result is counted if it
- * matches one of the metric types specified by that filter mask. The mask may
- * be a combination of d_tm_metric_types.  The count is performed only on the
- * direct children specified by the path.
- *
- * \param[in]		shmem_root	Pointer to the shared memory segment
- * \param[in]		path		Full path name to the directory or
- *					metric to count
- * \param[in]		d_tm_type	A bitmask of d_tm_metric_types that
- *					determines if an item should be counted
- *
- * \return		D_TM_SUCCESS		Success
- *			-DER_NOMEM		Out of global heap
- *			-DER_EXCEEDS_PATH_LEN	The full name length is
- *						too long
- *			-DER_METRIC_NOT_FOUND	No items were found at the path
- *						provided
- */
-uint64_t
-d_tm_get_num_objects(uint64_t *shmem_root, char *path, int d_tm_type)
-{
-	struct d_tm_node_t	*parent_node = NULL;
-	struct d_tm_node_t	*node = NULL;
-	uint64_t		count = 0;
-	char			str[D_TM_MAX_NAME_LEN];
-	char			*token;
-	char			*rest = str;
-
-	snprintf(str, sizeof(str), "%s", path);
-
-	parent_node = d_tm_get_root(shmem_root);
-	node = parent_node;
-	if (parent_node != NULL) {
-		token = strtok_r(rest, "/", &rest);
-		while (token != NULL) {
-			node = d_tm_find_child(shmem_root, parent_node, token);
-			if (node == NULL)
-				/** no node was found matching the token */
-				return count;
-			parent_node = node;
-			token = strtok_r(rest, "/", &rest);
-		}
-		if (node == NULL)
-			node = parent_node;
-
-		if (node->dtn_type == D_TM_DIRECTORY) {
-			node = d_tm_conv_ptr(shmem_root, node->dtn_child);
-			while (node != NULL) {
-				if (d_tm_type & node->dtn_type)
-					count++;
-				node = d_tm_conv_ptr(shmem_root,
-						     node->dtn_sibling);
-			}
-		} else {
-			if (d_tm_type & node->dtn_type)
-				count++;
-		}
-	}
-	return count;
-}
-
 
 /**
  * Frees the memory allocated for the given \a nodeList
@@ -2169,30 +2072,33 @@ d_tm_list_free(struct d_tm_nodeList_t *nodeList)
 /**
  * Adds a node to an existing nodeList, or creates it if the list is empty.
  *
- * \param[in]	src		The src node to add
- * \param[in]	nodelist	The nodelist to add \a src to
+ * \param[in]		src		The src node to add
+ * \param[in,out]	nodelist	The nodelist to add \a src to
  *
- * \return			Pointer to the new entry that was added.
- *				Subsequent calls can pass this back here
- *				as \a nodelist so that the new node can be added
- *				without traversing the list
+ * \return		D_TM_SUCCESS	Success
+ *			-DER_NOMEM	Out of global heap
+ *			-DER_INVAL	Invalid pointer for \a head or
+ *					\a node
  */
-struct d_tm_nodeList_t *
-d_tm_add_node(struct d_tm_node_t *src, struct d_tm_nodeList_t *nodelist)
+int
+d_tm_add_node(struct d_tm_node_t *src, struct d_tm_nodeList_t **nodelist)
 {
 	struct d_tm_nodeList_t	*list = NULL;
 
-	if (nodelist == NULL) {
-		D_ALLOC_PTR(nodelist);
-		if (nodelist) {
-			nodelist->dtnl_node = src;
-			nodelist->dtnl_next = NULL;
-			return nodelist;
+	if (nodelist == NULL)
+		return -DER_INVAL;
+
+	if (*nodelist == NULL) {
+		D_ALLOC_PTR(*nodelist);
+		if (*nodelist) {
+			(*nodelist)->dtnl_node = src;
+			(*nodelist)->dtnl_next = NULL;
+			return D_TM_SUCCESS;
 		}
-		return NULL;
+		return -DER_NOMEM;
 	}
 
-	list = nodelist;
+	list = *nodelist;
 
 	/** advance to the last node in the list */
 	while (list->dtnl_next)
@@ -2203,15 +2109,15 @@ d_tm_add_node(struct d_tm_node_t *src, struct d_tm_nodeList_t *nodelist)
 		list = list->dtnl_next;
 		list->dtnl_node = src;
 		list->dtnl_next = NULL;
-		return list;
+		return D_TM_SUCCESS;
 	}
-	return NULL;
+	return -DER_NOMEM;
 }
-
 /**
- * Server side function that allocates the shared memory segment for this rank.
+ * Server side function that allocates the shared memory segment for this
+ * server instance
  *
- * \param[in]	rank		A unique value that identifies the producer
+ * \param[in]	srv_idx		A unique value that identifies the producer
  *				process
  * \param[in]	mem_size	Size in bytes of the shared memory region
  *
@@ -2219,13 +2125,13 @@ d_tm_add_node(struct d_tm_node_t *src, struct d_tm_nodeList_t *nodelist)
  *				NULL if failure
  */
 uint64_t *
-d_tm_allocate_shared_memory(int rank, size_t mem_size)
+d_tm_allocate_shared_memory(int srv_idx, size_t mem_size)
 {
 	key_t	key;
 	int	shmid;
 
-	/** create a unique key for this rank */
-	key = D_TM_SHARED_MEMORY_KEY + rank;
+	/** create a unique key for this instance */
+	key = D_TM_SHARED_MEMORY_KEY + srv_idx;
 	shmid = shmget(key, mem_size, IPC_CREAT | 0666);
 	if (shmid < 0)
 		return NULL;
@@ -2235,21 +2141,21 @@ d_tm_allocate_shared_memory(int rank, size_t mem_size)
 
 /**
  * Client side function that retrieves a pointer to the shared memory segment
- * for this rank.
+ * for this server instance.
  *
- * \param[in]	rank		A unique value that identifies the producer
+ * \param[in]	srv_idx		A unique value that identifies the producer
  *				process that the client seeks to read data from
  * \return			Address of the shared memory region
  *				NULL if failure
  */
 uint64_t *
-d_tm_get_shared_memory(int rank)
+d_tm_get_shared_memory(int srv_idx)
 {
 	key_t	key;
 	int	shmid;
 
-	/** create a unique key for this rank */
-	key = D_TM_SHARED_MEMORY_KEY + rank;
+	/** create a unique key for this instance */
+	key = D_TM_SHARED_MEMORY_KEY + srv_idx;
 	shmid = shmget(key, 0, 0666);
 	if (shmid < 0)
 		return NULL;
@@ -2304,8 +2210,8 @@ d_tm_validate_shmem_ptr(uint64_t *shmem_root, void *ptr)
 	if (((uint64_t)ptr < (uint64_t)shmem_root) ||
 	    ((uint64_t)ptr >= (uint64_t)shmem_root + D_TM_SHARED_MEMORY_SIZE)) {
 		D_DEBUG(DB_TRACE,
-			"shmem ptr 0x%"PRIx64" was outside the shmem range "
-			"0x%"PRIx64" to 0x%"PRIx64, (uint64_t)ptr,
+			"shmem ptr 0x%" PRIx64 " was outside the shmem range "
+			"0x%" PRIx64 " to 0x%" PRIx64, (uint64_t)ptr,
 			(uint64_t)shmem_root, (uint64_t)shmem_root +
 			D_TM_SHARED_MEMORY_SIZE);
 		return false;

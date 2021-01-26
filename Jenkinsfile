@@ -148,12 +148,12 @@ String unit_packages() {
                            'boost-devel ' +
                            'libisa-l-devel libpmem ' +
                            'libpmemobj protobuf-c ' +
-                           'spdk-devel libfabric-devel '+
+                           'spdk-devel libfabric-devel ' +
                            'pmix numactl-devel ' +
                            'libipmctl-devel ' +
                            'python36-tabulate numactl ' +
                            'libyaml-devel ' +
-                           'valgrind-devel'
+                           'valgrind-devel patchelf'
         if (need_qb) {
             // TODO: these should be gotten from the Requires: of RPM
             packages += " spdk-tools mercury-2.0.0~rc1" +
@@ -189,10 +189,13 @@ String daos_packages_version(String distro) {
     String version = cachedCommitPragma(pragma: 'RPM-test-version')
     if (version != "") {
         String dist = ""
-        if (distro == "centos7") {
-            dist = ".el7"
-        } else if (distro == "leap15") {
-            dist = ".suse.lp152"
+        if (version.indexOf('-') > -1) {
+            // only tack on the %{dist} if the release was specified
+            if (distro == "centos7") {
+                dist = ".el7"
+            } else if (distro == "leap15") {
+                dist = ".suse.lp152"
+            }
         }
         return version + dist
     }
@@ -236,17 +239,17 @@ String functional_packages() {
 String functional_packages(String distro) {
     String daos_pkgs = get_daos_packages(distro)
     String pkgs = " openmpi3 hwloc ndctl fio " +
-                  "patchutils ior-hpc-daos-0 " +
-                  "romio-tests-cart-4-daos-0 " +
-                  "testmpio-cart-4-daos-0 " +
-                  "mpi4py-tests-cart-4-daos-0 " +
-                  "hdf5-mpich2-tests-daos-0 " +
-                  "hdf5-openmpi3-tests-daos-0 " +
-                  "hdf5-vol-daos-mpich2-tests-daos-0 " +
-                  "hdf5-vol-daos-openmpi3-tests-daos-0 " +
-                  "MACSio-mpich2-daos-0 " +
-                  "MACSio-openmpi3-daos-0 " +
-                  "mpifileutils-mpich-daos-0 "
+                  "patchutils ior-hpc-daos-1 " +
+                  "romio-tests-daos-1 " +
+                  "testmpio " +
+                  "mpi4py-tests " +
+                  "hdf5-mpich-tests " +
+                  "hdf5-openmpi3-tests " +
+                  "hdf5-vol-daos-mpich2-tests-daos-1 " +
+                  "hdf5-vol-daos-openmpi3-tests-daos-1 " +
+                  "MACSio-mpich " +
+                  "MACSio-openmpi3 " +
+                  "mpifileutils-mpich-daos-1 "
     if (distro == "leap15") {
         if (quickbuild()) {
             pkgs += " spdk-tools"
@@ -476,7 +479,7 @@ pipeline {
         // preserve stashes so that jobs can be started at the test stage
         preserveStashes(buildCount: 5)
         ansiColor('xterm')
-        buildDiscarder(logRotator(artifactDaysToKeepStr: '200'))
+        buildDiscarder(logRotator(artifactDaysToKeepStr: '100'))
     }
 
     parameters {
@@ -1148,8 +1151,7 @@ pipeline {
                     }
                     post {
                       always {
-                            unitTestPost artifacts: ['unit_test_logs/*'],
-                                         record_issues: false
+                            unitTestPost artifacts: ['unit_test_logs/*']
                         }
                     }
                 }
@@ -1159,17 +1161,19 @@ pipeline {
                       expression { ! skip_stage('nlt') }
                     }
                     agent {
-                        label 'ci_hdwr1'
+                        label 'ci_nlt_1'
                     }
                     steps {
                         unitTest timeout_time: 20,
                                  inst_repos: pr_repos(),
+                                 test_script: 'ci/unit/test_nlt.sh',
                                  inst_rpms: unit_packages()
                     }
                     post {
                       always {
                             unitTestPost artifacts: ['nlt_logs/*'],
                                          testResults: 'None',
+                                         always_script: 'ci/unit/test_nlt_post.sh',
                                          valgrind_stash: 'centos7-gcc-nlt-memcheck'
                         }
                     }

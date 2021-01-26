@@ -55,7 +55,7 @@ daos_debug_set_params(const char *grp, d_rank_t rank, unsigned int key_id,
 
 int
 daos_pool_reint_tgt(const uuid_t uuid, const char *grp,
-		    const d_rank_list_t *svc, struct d_tgt_list *tgts,
+		    struct d_tgt_list *tgts,
 		    daos_event_t *ev)
 {
 	daos_pool_update_t	*args;
@@ -71,7 +71,6 @@ daos_pool_reint_tgt(const uuid_t uuid, const char *grp,
 
 	args = dc_task_get_args(task);
 	args->grp	= grp;
-	args->svc	= (d_rank_list_t *)svc;
 	args->tgts	= tgts;
 	uuid_copy((unsigned char *)args->uuid, uuid);
 
@@ -80,8 +79,7 @@ daos_pool_reint_tgt(const uuid_t uuid, const char *grp,
 
 int
 daos_pool_drain_tgt(const uuid_t uuid, const char *grp,
-		  const d_rank_list_t *svc, struct d_tgt_list *tgts,
-		  daos_event_t *ev)
+		    struct d_tgt_list *tgts, daos_event_t *ev)
 {
 	daos_pool_update_t	*args;
 	tse_task_t		*task;
@@ -96,7 +94,6 @@ daos_pool_drain_tgt(const uuid_t uuid, const char *grp,
 
 	args = dc_task_get_args(task);
 	args->grp	= grp;
-	args->svc	= (d_rank_list_t *)svc;
 	args->tgts	= tgts;
 	uuid_copy((unsigned char *)args->uuid, uuid);
 
@@ -105,7 +102,7 @@ daos_pool_drain_tgt(const uuid_t uuid, const char *grp,
 
 int
 daos_pool_tgt_exclude_out(const uuid_t uuid, const char *grp,
-			  const d_rank_list_t *svc, struct d_tgt_list *tgts,
+			  struct d_tgt_list *tgts,
 			  daos_event_t *ev)
 {
 	daos_pool_update_t	*args;
@@ -121,7 +118,6 @@ daos_pool_tgt_exclude_out(const uuid_t uuid, const char *grp,
 
 	args = dc_task_get_args(task);
 	args->grp	= grp;
-	args->svc	= (d_rank_list_t *)svc;
 	args->tgts	= tgts;
 	uuid_copy((unsigned char *)args->uuid, uuid);
 
@@ -130,7 +126,7 @@ daos_pool_tgt_exclude_out(const uuid_t uuid, const char *grp,
 
 int
 daos_pool_tgt_exclude(const uuid_t uuid, const char *grp,
-		      const d_rank_list_t *svc, struct d_tgt_list *tgts,
+		      struct d_tgt_list *tgts,
 		      daos_event_t *ev)
 {
 	daos_pool_update_t	*args;
@@ -147,7 +143,6 @@ daos_pool_tgt_exclude(const uuid_t uuid, const char *grp,
 
 	args = dc_task_get_args(task);
 	args->grp	= grp;
-	args->svc	= (d_rank_list_t *)svc;
 	args->tgts	= tgts;
 	uuid_copy((unsigned char *)args->uuid, uuid);
 

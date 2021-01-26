@@ -52,7 +52,6 @@ typedef struct {
  *
  * \param uuid	[IN]	UUID of the pool
  * \param grp	[IN]	process set name of the DAOS servers managing the pool
- * \param svc	[IN]	list of pool service ranks
  * \param tgts	[IN]	Target to be excluded from the pool.
  *			Now can-only exclude one target per API calling. If
  *			tl_tgts = -1, it means it will exclude all targets
@@ -69,7 +68,7 @@ typedef struct {
  */
 int
 daos_pool_tgt_exclude(const uuid_t uuid, const char *grp,
-		      const d_rank_list_t *svc, struct d_tgt_list *tgts,
+		      struct d_tgt_list *tgts,
 		      daos_event_t *ev);
 
 /**
@@ -77,7 +76,6 @@ daos_pool_tgt_exclude(const uuid_t uuid, const char *grp,
  *
  * \param uuid	[IN]	UUID of the pool
  * \param grp	[IN]	process set name of the DAOS servers managing the pool
- * \param svc	[IN]	list of pool service ranks
  * \param tgts	[IN]	Target array to be reintegrated from the pool.  If
  *			tl_tgts = -1, it means it will reintegrate all targets
  *			on the rank.
@@ -93,7 +91,7 @@ daos_pool_tgt_exclude(const uuid_t uuid, const char *grp,
  */
 int
 daos_pool_reint_tgt(const uuid_t uuid, const char *grp,
-		    const d_rank_list_t *svc, struct d_tgt_list *tgts,
+		    struct d_tgt_list *tgts,
 		    daos_event_t *ev);
 
 /**
@@ -101,7 +99,6 @@ daos_pool_reint_tgt(const uuid_t uuid, const char *grp,
  *
  * \param uuid	[IN]	UUID of the pool
  * \param grp	[IN]	process set name of the DAOS servers managing the pool
- * \param svc	[IN]	list of pool service ranks
  * \param tgts	[IN]	Target array to be added from the pool.  If
  *			tl_tgts = -1, it means it will add all targets
  *			on the rank.
@@ -117,7 +114,7 @@ daos_pool_reint_tgt(const uuid_t uuid, const char *grp,
  */
 int
 daos_pool_drain_tgt(const uuid_t uuid, const char *grp,
-		    const d_rank_list_t *svc, struct d_tgt_list *tgts,
+		    struct d_tgt_list *tgts,
 		    daos_event_t *ev);
 
 
@@ -129,7 +126,6 @@ daos_pool_drain_tgt(const uuid_t uuid, const char *grp,
  *
  * \param uuid	[IN]	UUID of the pool
  * \param grp	[IN]	process set name of the DAOS servers managing the pool
- * \param svc	[IN]	list of pool service ranks
  * \param tgts	[IN]	Target array to be excluded from the pool.
  *			Now can-only exclude out one target per API calling. If
  *			tl_tgts = -1, it means it will exclude out all targets
@@ -146,7 +142,7 @@ daos_pool_drain_tgt(const uuid_t uuid, const char *grp,
  */
 int
 daos_pool_tgt_exclude_out(const uuid_t uuid, const char *grp,
-			  const d_rank_list_t *svc, struct d_tgt_list *tgts,
+			  struct d_tgt_list *tgts,
 			  daos_event_t *ev);
 
 /**

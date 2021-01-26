@@ -1137,7 +1137,7 @@ int main(int argc, char *argv[])
 	}
 
 	/** Connect to DAOS pool */
-	rc = daos_pool_connect(pool_uuid, dfuse_fs.group, NULL, DAOS_PC_RW,
+	rc = daos_pool_connect(pool_uuid, dfuse_fs.group, DAOS_PC_RW,
 			       &poh, &pool_info, NULL);
 	if (rc < 0) {
 		fprintf(stderr, "Failed to connect to pool (%d)\n", rc);

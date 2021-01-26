@@ -720,7 +720,7 @@ main(int argc, char **argv)
 
 	/** Call connect on rank 0 only and broadcast handle to others */
 	if (rank == 0) {
-		rc = daos_pool_connect(pool_uuid, NULL, NULL, DAOS_PC_RW, &poh,
+		rc = daos_pool_connect(pool_uuid, NULL, DAOS_PC_RW, &poh,
 				       NULL, NULL);
 		ASSERT(rc == 0, "pool connect failed with %d", rc);
 	}
