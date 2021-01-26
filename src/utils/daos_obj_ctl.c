@@ -378,9 +378,6 @@ obj_ctl_shell(int argc, char *argv[])
 {
 	int	rc;
 
-	fprintf(stderr, "argc = %d, argv[0] %s, argv[1] %s\n",
-		argc, argv[0], argv[1]);
-
 	uuid_generate(ctl_ctx.tsc_pool_uuid);
 	uuid_generate(ctl_ctx.tsc_cont_uuid);
 
