@@ -1,3 +1,9 @@
+daos (1.1.2.1-6) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * Update to mercury v2.0.1rc1
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Sat, 23 Jan 2021 13:40:00 -0500
+
 daos (1.1.2.1-5) unstable; urgency=medium
   [ Michael MacDonald ]
   * Install daos_metrics to bin

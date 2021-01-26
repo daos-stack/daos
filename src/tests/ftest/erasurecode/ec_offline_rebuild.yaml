@@ -54,11 +54,11 @@ pool:
     name: daos_server
     scm_size: 500G
     nvme_size: 500G
+    svcn: 1
     control_method: dmg
 container:
     type: POSIX
     control_method: daos
-    properties: rf:4
 ior:
   api: "DFS"
   client_processes:
