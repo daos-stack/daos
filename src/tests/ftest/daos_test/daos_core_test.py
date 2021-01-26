@@ -32,6 +32,12 @@ class DaosCoreTest(DaosCoreBase):
     :avocado: recursive
     """
 
+    # Test variants that should be skipped
+    CANCEL_FOR_TICKET = [
+        ["DAOS-5852", "test_name", "Management tests"],
+        ["DAOS-6615", "test_name", "Distributed TX tests"]
+    ]
+
     def test_subtest(self):
         """Run daos_test tests/subtests.
 
