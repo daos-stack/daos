@@ -108,8 +108,8 @@ extern d_iov_t ds_cont_prop_handles;		/* handle index KVS */
 /*
  * User attribute KVS (RDB_KVS_GENERIC)
  *
- * A key is a user-specified byte array. A value is also a user-specified byte
- * array.
+ * A key is a (null-terminated) string. A value is a user-defined byte array.
+ * Sizes of keys (or values) may vary.
  */
 
 /*

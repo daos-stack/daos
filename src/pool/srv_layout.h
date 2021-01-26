@@ -88,8 +88,8 @@ struct pool_hdl {
 /*
  * Pool user attribute KVS (RDB_KVS_GENERIC)
  *
- * Each key is a null-terminated string. Each value is an array of bytes. Sizes
- * of keys (or values) may vary.
+ * Each key is a (null-terminated) string. Each value is a user-defined byte
+ * array. Sizes of keys (or values) may vary.
  */
 
 extern daos_prop_t pool_prop_default;
