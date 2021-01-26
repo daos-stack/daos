@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -271,7 +271,7 @@ ds_rsvc_lookup(enum ds_rsvc_class_id class, d_iov_t *id,
 
 	entry = d_hash_rec_find(&rsvc_hash, id->iov_buf, id->iov_len);
 	if (entry == NULL) {
-		char	       *path;
+		char	       *path = NULL;
 		struct stat	buf;
 		int		rc;
 
