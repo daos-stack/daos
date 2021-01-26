@@ -151,10 +151,6 @@ RUN if [ "x$BULLSEYE" != "x" ]; then \
       rm -rf bullseye; \
     fi
 
-# force an upgrade to get any newly built RPMs
-ARG CACHEBUST=1
-RUN yum -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury
-
 # set NOBUILD to disable build
 ARG NOBUILD
 
@@ -167,12 +163,12 @@ COPY ./ .
 
 # Build DAOS & dependencies
 RUN if [ "x$NOBUILD" = "x" ] ; then \
+    echo -e "Import('env')\nenv.AppendUnique(CPPDEFINES=['FUSE_IOCTL_USE_INT'])" > ~/.scons_localrc; \
     scons-3 --build-deps=yes -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER; fi
 
 # Set environment variables
 ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:$LD_LIBRARY_PATH
 ENV PATH=/opt/daos/bin:$PATH
-ENV FI_SOCKETS_MAX_CONN_RETRY=1
 
 # Copy example config files to /opt/daos
 RUN if [ "x$NOBUILD" = "x" ] ; then \
