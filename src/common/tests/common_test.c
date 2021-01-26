@@ -31,7 +31,8 @@ static struct option l_opts[] = {
 	{"help",    no_argument,       NULL, 'h'}
 };
 
-bool show_help(int argc, char *argv[])
+static bool
+show_help(int argc, char *argv[])
 {
 	bool result = false;
 	int t_optind = optind;

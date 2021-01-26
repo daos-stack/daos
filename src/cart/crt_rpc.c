@@ -727,7 +727,7 @@ crt_client_get_contact_rank(crt_context_t crt_ctx, crt_group_t *grp,
 			    int *ret_idx)
 {
 	struct crt_grp_priv	*grp_priv;
-	d_rank_t		contact_rank = CRT_NO_RANK;
+	d_rank_t		 contact_rank = CRT_NO_RANK;
 	char			*cached_uri = NULL;
 	struct crt_context	*ctx;
 	d_rank_list_t		*membs;
@@ -773,11 +773,11 @@ out:
 static int
 crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 {
-	crt_endpoint_t	*tgt_ep;
-	crt_context_t	ctx;
-	crt_group_t	*grp;
-	int		ret_idx;
-	int		rc;
+	crt_endpoint_t		*tgt_ep;
+	crt_context_t		 ctx;
+	crt_group_t		*grp;
+	int			 ret_idx;
+	int			 rc;
 
 	tgt_ep = &rpc_priv->crp_pub.cr_ep;
 	ctx = rpc_priv->crp_pub.cr_ctx;

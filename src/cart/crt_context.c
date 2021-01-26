@@ -828,7 +828,6 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	int			 rc = 0;
 	struct crt_grp_priv	*grp_priv;
 
-
 	D_ASSERT(crt_ctx != NULL);
 
 	if (rpc_priv->crp_pub.cr_opc == CRT_OPC_URI_LOOKUP) {
@@ -982,10 +981,11 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 
 	/* remove from inflight queue */
 	d_list_del_init(&rpc_priv->crp_epi_link);
-	if (rpc_priv->crp_state == RPC_STATE_COMPLETED)
+	if (rpc_priv->crp_state == RPC_STATE_COMPLETED) {
 		epi->epi_reply_num++;
-	else /* RPC_CANCELED or RPC_INITED or RPC_TIMEOUT */
+	} else {/* RPC_CANCELED or RPC_INITED or RPC_TIMEOUT */
 		epi->epi_req_num--;
+	}
 	D_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
 
 	if (!crt_req_timedout(rpc_priv)) {

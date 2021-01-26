@@ -38,7 +38,7 @@ struct bio_dev_list_msg_arg {
 };
 
 
-/* Collect space utilisation for blobstore */
+/* Collect space utilization for blobstore */
 static void
 collect_bs_usage(struct spdk_blob_store *bs, struct nvme_stats *stats)
 {

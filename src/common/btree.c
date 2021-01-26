@@ -3421,7 +3421,7 @@ dbtree_iter_prepare(daos_handle_t toh, unsigned int options, daos_handle_t *ih)
 }
 
 /**
- * Finalise iterator.
+ * Finalize iterator.
  */
 int
 dbtree_iter_finish(daos_handle_t ih)

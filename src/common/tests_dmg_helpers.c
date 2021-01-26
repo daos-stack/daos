@@ -12,6 +12,7 @@
 #include <daos/common.h>
 #include <daos/tests_lib.h>
 #include <daos.h>
+#include <daos_srv/bio.h>
 
 static void
 cmd_free_args(char **args, int argcount)
