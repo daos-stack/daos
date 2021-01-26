@@ -1305,7 +1305,7 @@ def set_server_fi(server):
 
     cmd_env['OFI_INTERFACE'] = 'eth0'
     cmd_env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
-    vh = ValgrindHelper()
+    vh = ValgrindHelper(server.conf)
 
     system_name = 'daos_server'
 
