@@ -3765,7 +3765,7 @@ cont_serialize_usr_attrs(struct hdf5_args *hdf5, daos_handle_t cont)
 	int		rc = 0;
 	int		i = 0;
 	int		j = 0;
-	//hid_t		status = 0;
+	hid_t		status = 0;
 	uint64_t	total_size = 0;
 	uint64_t	size = 0;
 	uint64_t	expected_size = 0;
@@ -3774,29 +3774,31 @@ cont_serialize_usr_attrs(struct hdf5_args *hdf5, daos_handle_t cont)
 	char		*buf = NULL;
 	char		**names = NULL;
 	int		num_attrs = 0;
+	void		**val_buf = NULL;
+	size_t		*sizes = NULL;
 
 	rc = cont_serialize_num_usr_attrs(hdf5, cont, &total_size);
 	if (rc != 0) {
 		fprintf(stderr, "failed to serialize number of user attrs\n");
-		//D_GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	/* skip serializing attrs if total_size is zero */
 	if (total_size == 0) {
 		D_PRINT("No attributes\n");
-		//D_GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	D_ALLOC(buf, total_size);
 	if (buf == NULL) {
-		//D_GOTO(out, rc = -DER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	expected_size = total_size;
 	rc = daos_cont_list_attr(cont, buf, &total_size, NULL);
 	if (rc != 0) {
 		fprintf(stderr, "failed to list attributes for container\n");
-		//D_GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	if (expected_size < total_size)
@@ -3818,7 +3820,7 @@ cont_serialize_usr_attrs(struct hdf5_args *hdf5, daos_handle_t cont)
 	/* allocate array of null-terminated attribute names */
 	names = malloc(num_attrs * sizeof(char *));
 	if (names == NULL) {
-		//D_GOTO(out, rc = -DER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	cur = 0;
@@ -3831,12 +3833,18 @@ cont_serialize_usr_attrs(struct hdf5_args *hdf5, daos_handle_t cont)
 				"string encountered, ignoring\n");
 			break;
 		}
-		names[i] = strdup(buf + cur);
+		names[i] = strndup(buf + cur, len + 1);
 		cur += len + 1;
 	}
 
-	size_t	sizes[num_attrs];
-	void	*val_buf[num_attrs];
+	sizes = malloc(num_attrs * sizeof(size_t));
+	if (sizes == NULL) {
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+	val_buf = malloc(num_attrs * sizeof(void*));
+	if (val_buf == NULL) {
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
 
 	rc = daos_cont_get_attr(cont, num_attrs,
 				(const char* const*)names,
@@ -3846,31 +3854,370 @@ cont_serialize_usr_attrs(struct hdf5_args *hdf5, daos_handle_t cont)
 		D_GOTO(out, rc);
 	}
 	for (j = 0; j < num_attrs; j++) {
-		D_ALLOC(val_buf[j], 256);
+		D_ALLOC(val_buf[j], sizes[j]);
+		if (val_buf[j] == NULL) {
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
 	}
 	rc = daos_cont_get_attr(cont, num_attrs,
 				(const char* const*)names,
-				(void * const*)&val_buf, sizes,
+				(void * const*)val_buf, sizes,
 				NULL);
 	if (rc != 0) {
 		fprintf(stderr, "failed to get attr value\n");
 		D_GOTO(out, rc);
 	}
+	/* write user attrs to hdf5 file */
 	for (i = 0; i < num_attrs; i++) {
+		/* TODO: remove debug code 
 		printf("attr size: %d\n", (int)sizes[i]);
+		printf("attr name: %s\n", (char*)names[i]);
 		char str[256];
 		snprintf(str, sizes[i] + 1, "%s", (char *)val_buf[i]);
 		printf("attr val: %s\n", str);
+		*/
+		hdf5->attr_dims[0] = 1;
+		hdf5->attr_dtype = H5Tcreate(H5T_OPAQUE, sizes[i]);
+		if (hdf5->attr_dtype < 0) {
+			fprintf(stderr, "failed to create usr attr type\n");
+			D_GOTO(out, rc = 1);
+		}
+		hdf5->attr_dspace = H5Screate_simple(1, hdf5->attr_dims,
+				             	     NULL);
+		if (hdf5->attr_dspace < 0) {
+			fprintf(stderr, "failed to create version attribute "
+				"dataspace\n");
+			D_GOTO(out, rc = 1);
+		}
+		hdf5->usr_attr = H5Acreate2(hdf5->file,
+		            	       	    names[i],
+				           hdf5->attr_dtype,
+				           hdf5->attr_dspace,
+				           H5P_DEFAULT,
+				           H5P_DEFAULT);
+		if (hdf5->usr_attr < 0) {
+			fprintf(stderr, "failed to create user attribute name "
+				"attribute\n");
+			D_GOTO(out, rc = 1);
+		}	
+		status = H5Awrite(hdf5->usr_attr, hdf5->attr_dtype,
+			  	  val_buf[i]);
+		if (status < 0) {
+			fprintf(stderr, "failed to write attribute\n");
+			D_GOTO(out, rc = 1);
+		}
+		status = H5Aclose(hdf5->usr_attr);
+		if (status < 0) {
+			fprintf(stderr, "failed to close attribute\n");
+			D_GOTO(out, rc = 1);
+		}
 	}
-	/* TODO: write user attrs to hdf5 file */
 out:
 	if (buf != NULL)
 		D_FREE(buf);
 	for (j = 0; j < num_attrs; j++) {
 		D_FREE(val_buf[j]);
 	}
-	if (names != NULL) 
+	if (val_buf != NULL) {
+		D_FREE(val_buf);
+	}
+	if (sizes != NULL) {
+		D_FREE(sizes);
+	}
+	if (names != NULL) {
 		D_FREE(names);
+	}
+	return rc;
+}
+
+static int
+cont_serialize_prop_uint(struct hdf5_args *hdf5,
+	   uint64_t *attr_enum, uint64_t *attr_val,
+	   char *prop_str)
+{
+	int rc = 0;
+	hid_t status = 0;
+
+	hdf5->attr_dims[0] = 1;
+	hdf5->attr_dtype = H5Tcopy(H5T_NATIVE_UINT64);
+	status = H5Tset_size(hdf5->attr_dtype, 8);
+	if (status < 0) {
+		fprintf(stderr, "failed to create version dtype\n");
+		D_GOTO(out, rc = 1);
+	}
+	if (hdf5->attr_dtype < 0) {
+		fprintf(stderr, "failed to create usr attr type\n");
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->attr_dspace = H5Screate_simple(1, hdf5->attr_dims,
+				             NULL);
+	if (hdf5->attr_dspace < 0) {
+		fprintf(stderr, "failed to create version attribute "
+			"dataspace\n");
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->usr_attr_num = H5Acreate2(hdf5->file,
+		            	       prop_str,
+				       hdf5->attr_dtype,
+				       hdf5->attr_dspace,
+				       H5P_DEFAULT,
+				       H5P_DEFAULT);
+	if (hdf5->usr_attr_num < 0) {
+		fprintf(stderr, "failed to create version "
+			"attribute\n");
+		D_GOTO(out, rc = 1);
+	}	
+	status = H5Awrite(hdf5->usr_attr, hdf5->attr_dtype,
+			  attr_val);
+	if (status < 0) {
+		fprintf(stderr, "failed to write attribute\n");
+		D_GOTO(out, rc = 1);
+	}
+	status = H5Aclose(hdf5->usr_attr);
+	if (status < 0) {
+		fprintf(stderr, "failed to close attribute\n");
+		D_GOTO(out, rc = 1);
+	}
+
+out:
+	return rc;
+}
+
+static int
+cont_serialize_props(struct hdf5_args *hdf5,
+		     daos_handle_t cont)
+{
+	int			rc = 0;
+	daos_prop_t		*prop_query;
+	daos_prop_t		*prop_acl = NULL;
+	uint32_t		i;
+	uint32_t		entry_type;
+	struct daos_prop_entry	*entry;
+	char			cont_str[64];
+	int			len = 0;
+	uint64_t		attr_enum = 0;
+
+	/*
+	 * Get all props except the ACL first.
+	 */
+	prop_query = daos_prop_alloc(DAOS_PROP_CO_NUM - 1);
+	if (prop_query == NULL)
+		return -DER_NOMEM;
+
+	entry_type = DAOS_PROP_CO_MIN + 1;
+	for (i = 0; i < prop_query->dpp_nr; entry_type++) {
+		if (entry_type == DAOS_PROP_CO_ACL)
+			continue; /* skip ACL */
+		prop_query->dpp_entries[i].dpe_type = entry_type;
+		i++;
+	}
+
+	rc = daos_cont_query(cont, NULL, prop_query, NULL);
+	if (rc) {
+		fprintf(stderr, "failed to query container: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	/* Fetch the ACL separately in case user doesn't have access */
+	rc = daos_cont_get_acl(cont, &prop_acl, NULL);
+	if (rc && rc != -DER_NO_PERM) {
+		fprintf(stderr, "failed to query container ACL: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	/* serialize cont property values that are integers */
+	/* DAOS_PROP_CO_LAYOUT_TYPE */
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_LAYOUT_TYPE);
+	if (entry == NULL) {
+		fprintf(stderr, "property not found\n");
+		rc = -DER_INVAL;
+	}
+	//rc = cont_decode_props(prop_query, prop_acl);
+	len = snprintf(cont_str, 64, "%s", "DAOS_PROP_CO_LAYOUT_TYPE");
+	if (len >= 64) {
+		fprintf(stderr, "cont prop string is too long\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	printf("cont_str: %s\n", cont_str);
+	attr_enum = DAOS_PROP_CO_LAYOUT_TYPE;
+	rc = cont_serialize_prop_uint(hdf5, &attr_enum, &entry->dpe_val,
+				      "DAOS_PROP_CO_LAYOUT_TYPE");
+	/* DAOS_PROP_CO_LAYOUT_VER */
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_LAYOUT_VER);
+	if (entry == NULL) {
+		fprintf(stderr, "property not found\n");
+		rc = -DER_INVAL;
+	}
+	len = snprintf(cont_str, 64, "%s", "DAOS_PROP_CO_LAYOUT_VER");
+	if (len >= 64) {
+		fprintf(stderr, "cont prop string is too long\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	printf("cont prop str: %s\n", cont_str);
+	attr_enum = DAOS_PROP_CO_LAYOUT_VER;
+	rc = cont_serialize_prop_uint(hdf5, &attr_enum, &entry->dpe_val,
+	      			      "DAOS_PROP_CO_LAYOUT_VER");
+	/* DAOS_PROP_CO_CSUM */
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_CSUM);
+	if (entry == NULL) {
+		fprintf(stderr, "property not found\n");
+		rc = -DER_INVAL;
+	}
+	len = snprintf(cont_str, 64, "%s", "DAOS_PROP_CO_CSUM");
+	if (len >= 64) {
+		fprintf(stderr, "cont prop string is too long\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	printf("cont prop str: %s\n", cont_str);
+	attr_enum = DAOS_PROP_CO_CSUM;
+	rc = cont_serialize_prop_uint(hdf5, &attr_enum, &entry->dpe_val,
+	      			      "DAOS_PROP_CO_CSUM");
+	/* DAOS_PROP_CO_CSUM_CHUNK_SIZE */
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_CSUM_CHUNK_SIZE);
+	if (entry == NULL) {
+		fprintf(stderr, "property not found\n");
+		rc = -DER_INVAL;
+	}
+	len = snprintf(cont_str, 64, "%s", "DAOS_PROP_CO_CSUM_CHUNK_SIZE");
+	if (len >= 64) {
+		fprintf(stderr, "cont prop string is too long\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	printf("cont prop str: %s\n", cont_str);
+	attr_enum = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
+	rc = cont_serialize_prop_uint(hdf5, &attr_enum, &entry->dpe_val,
+	      			      "DAOS_PROP_CO_CSUM_CHUNK_SIZE");
+	/* DAOS_PROP_CO_CSUM_SERVER_VERIFY */
+	entry = daos_prop_entry_get(prop_query,
+				    DAOS_PROP_CO_CSUM_SERVER_VERIFY);
+	if (entry == NULL) {
+		fprintf(stderr, "property not found\n");
+		rc = -DER_INVAL;
+	}
+	len = snprintf(cont_str, 64, "%s", "DAOS_PROP_CO_CSUM_SERVER_VERIFY");
+	if (len >= 64) {
+		fprintf(stderr, "cont prop string is too long\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	printf("cont prop str: %s\n", cont_str);
+	attr_enum = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
+	rc = cont_serialize_prop_uint(hdf5, &attr_enum, &entry->dpe_val,
+	      			      "DAOS_PROP_CO_CSUM_SERVER_VERIFY");
+	/* DAOS_PROP_CO_REDUN_FAC */
+	entry = daos_prop_entry_get(prop_query,
+				    DAOS_PROP_CO_REDUN_FAC);
+	if (entry == NULL) {
+		fprintf(stderr, "property not found\n");
+		rc = -DER_INVAL;
+	}
+	len = snprintf(cont_str, 64, "%s", "DAOS_PROP_CO_REDUN_FAC");
+	if (len >= 64) {
+		fprintf(stderr, "cont prop string is too long\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	printf("cont prop str: %s\n", cont_str);
+	attr_enum = DAOS_PROP_CO_REDUN_FAC;
+	rc = cont_serialize_prop_uint(hdf5, &attr_enum, &entry->dpe_val,
+	      			      "DAOS_PROP_CO_REDUN_FAC");
+	/* DAOS_PROP_CO_REDUN_LVL */
+	entry = daos_prop_entry_get(prop_query,
+				    DAOS_PROP_CO_REDUN_LVL);
+	if (entry == NULL) {
+		fprintf(stderr, "property not found\n");
+		rc = -DER_INVAL;
+	}
+	len = snprintf(cont_str, 64, "%s", "DAOS_PROP_CO_REDUN_LVL");
+	if (len >= 64) {
+		fprintf(stderr, "cont prop string is too long\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	printf("cont prop str: %s\n", cont_str);
+	attr_enum = DAOS_PROP_CO_REDUN_LVL;
+	rc = cont_serialize_prop_uint(hdf5, &attr_enum, &entry->dpe_val,
+	      			      "DAOS_PROP_CO_REDUN_LVL");
+	/* DAOS_PROP_CO_SNAPSHOT_MAX */
+	entry = daos_prop_entry_get(prop_query,
+				    DAOS_PROP_CO_SNAPSHOT_MAX);
+	if (entry == NULL) {
+		fprintf(stderr, "property not found\n");
+		rc = -DER_INVAL;
+	}
+	len = snprintf(cont_str, 64, "%s", "DAOS_PROP_CO_SNAPSHOT_MAX");
+	if (len >= 64) {
+		fprintf(stderr, "cont prop string is too long\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	printf("cont prop str: %s\n", cont_str);
+	attr_enum = DAOS_PROP_CO_SNAPSHOT_MAX;
+	rc = cont_serialize_prop_uint(hdf5, &attr_enum, &entry->dpe_val,
+	      			      "DAOS_PROP_CO_SNAPSHOT_MAX");
+	/* DAOS_PROP_CO_COMPRESS */
+	entry = daos_prop_entry_get(prop_query,
+				    DAOS_PROP_CO_COMPRESS);
+	if (entry == NULL) {
+		fprintf(stderr, "property not found\n");
+		rc = -DER_INVAL;
+	}
+	len = snprintf(cont_str, 64, "%s", "DAOS_PROP_CO_COMPRESS");
+	if (len >= 64) {
+		fprintf(stderr, "cont prop string is too long\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	printf("cont prop str: %s\n", cont_str);
+	attr_enum = DAOS_PROP_CO_COMPRESS;
+	rc = cont_serialize_prop_uint(hdf5, &attr_enum, &entry->dpe_val,
+	      			      "DAOS_PROP_CO_COMPRESS");
+	/* DAOS_PROP_CO_ENCRYPT */
+	entry = daos_prop_entry_get(prop_query,
+				    DAOS_PROP_CO_ENCRYPT);
+	if (entry == NULL) {
+		fprintf(stderr, "property not found\n");
+		rc = -DER_INVAL;
+	}
+	len = snprintf(cont_str, 64, "%s", "DAOS_PROP_CO_ENCRYPT");
+	if (len >= 64) {
+		fprintf(stderr, "cont prop string is too long\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	printf("cont prop str: %s\n", cont_str);
+	attr_enum = DAOS_PROP_CO_ENCRYPT;
+	rc = cont_serialize_prop_uint(hdf5, &attr_enum, &entry->dpe_val,
+	      			      "DAOS_PROP_CO_ENCRYPT");
+	/* DAOS_PROP_CO_DEDUP */
+	entry = daos_prop_entry_get(prop_query,
+				    DAOS_PROP_CO_DEDUP);
+	if (entry == NULL) {
+		fprintf(stderr, "property not found\n");
+		rc = -DER_INVAL;
+	}
+	len = snprintf(cont_str, 64, "%s", "DAOS_PROP_CO_DEDUP");
+	if (len >= 64) {
+		fprintf(stderr, "cont prop string is too long\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	printf("cont prop str: %s\n", cont_str);
+	attr_enum = DAOS_PROP_CO_DEDUP;
+	rc = cont_serialize_prop_uint(hdf5, &attr_enum, &entry->dpe_val,
+	      			      "DAOS_PROP_CO_DEDUP");
+	/* DAOS_PROP_CO_DEDUP_THRESHOLD */
+	entry = daos_prop_entry_get(prop_query,
+				    DAOS_PROP_CO_DEDUP_THRESHOLD);
+	if (entry == NULL) {
+		fprintf(stderr, "property not found\n");
+		rc = -DER_INVAL;
+	}
+	len = snprintf(cont_str, 64, "%s", "DAOS_PROP_CO_DEDUP_THRESHOLD");
+	if (len >= 64) {
+		fprintf(stderr, "cont prop string is too long\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	printf("cont prop str: %s\n", cont_str);
+	attr_enum = DAOS_PROP_CO_DEDUP_THRESHOLD;
+	rc = cont_serialize_prop_uint(hdf5, &attr_enum, &entry->dpe_val,
+	      			      "DAOS_PROP_CO_DEDUP_THRESHOLD");
+out:
+	daos_prop_free(prop_query);
+	daos_prop_free(prop_acl);
 	return rc;
 }
 
@@ -3985,8 +4332,8 @@ cont_serialize_hdlr(struct cmd_args_s *ap)
 						 &total_dkeys, &total_akeys,
 						 &oh, &i);
 			if (rc != 0) {
-				fprintf(stderr, "failed to serialize keys: %d\n",
-					rc);
+				fprintf(stderr, "failed to serialize keys: "
+					"%d\n", rc);
 					D_GOTO(out, rc);
 			}
 			/* close source and destination object */
@@ -3999,9 +4346,6 @@ cont_serialize_hdlr(struct cmd_args_s *ap)
  			total++;
 	        }
 
-	        printf("total dkeys: %lu\n", total_dkeys);
-	        printf("total akeys: %lu\n", total_akeys);
-
 		/* write container version as attribute */
 		rc = cont_serialize_version(&hdf5, version);
 		if (rc != 0) {
@@ -4012,10 +4356,20 @@ cont_serialize_hdlr(struct cmd_args_s *ap)
 
 		rc = cont_serialize_usr_attrs(&hdf5, ap->cont);
 		if (rc != 0) {
-			fprintf(stderr, "failed to serialize usser attributes: "
+			fprintf(stderr, "failed to serialize user attributes: "
 				"%d\n", rc);
 			D_GOTO(out, rc);
 		}
+
+		rc = cont_serialize_props(&hdf5, ap->cont);
+		if (rc != 0) {
+			fprintf(stderr, "failed to serialize cont properties: "
+				"%d\n", rc);
+			D_GOTO(out, rc);
+		}
+
+	        printf("total dkeys: %lu\n", total_dkeys);
+	        printf("total akeys: %lu\n", total_akeys);
 
 		hdf5.dkey_dims[0] = total_dkeys;     
 		hdf5.dkey_dspace = H5Screate_simple(1, hdf5.dkey_dims, NULL);
