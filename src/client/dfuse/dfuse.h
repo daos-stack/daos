@@ -645,9 +645,15 @@ dfuse_cb_setattr(fuse_req_t, struct dfuse_inode_entry *, struct stat *, int);
 void
 dfuse_cb_statfs(fuse_req_t, struct dfuse_inode_entry *);
 
+#ifdef FUSE_IOCTL_USE_INT
+void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
+		    struct fuse_file_info *fi, unsigned int flags,
+		    const void *in_buf, size_t in_bufsz, size_t out_bufsz);
+#else
 void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 		    struct fuse_file_info *fi, unsigned int flags,
 		    const void *in_buf, size_t in_bufsz, size_t out_bufsz);
+#endif
 
 /* Return inode information to fuse
  *

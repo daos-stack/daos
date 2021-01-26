@@ -234,9 +234,15 @@ err:
 	DFUSE_REPLY_ERR_RAW(oh, req, rc);
 }
 
+#ifdef FUSE_IOCTL_USE_INT
+void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
+		    struct fuse_file_info *fi, unsigned int flags,
+		    const void *in_buf, size_t in_bufsz, size_t out_bufsz)
+#else
 void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 		    struct fuse_file_info *fi, unsigned int flags,
 		    const void *in_buf, size_t in_bufsz, size_t out_bufsz)
+#endif
 {
 	struct dfuse_obj_hdl	*oh = (struct dfuse_obj_hdl *)fi->fh;
 	int			rc;
