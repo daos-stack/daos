@@ -223,7 +223,7 @@ The status LED on the VMD device is now set to an "IDENTIFY" state, represented
 by a quick, 4Hz blinking amber light. The device will quickly blink by default for
 about 60 seconds and then return to the default "OFF" state.
 
-- Locate an Evicted SSD: `dmg storage set nvme-faulty`
+- Locate an Evicted SSD:
 
 If an NVMe SSD is evicted, the status LED on the VMD device is set to a "FAULT"
 state, represented by a solidly ON amber light. No additional command apart from
