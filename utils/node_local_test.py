@@ -616,7 +616,7 @@ class ValgrindHelper():
 
         self._xml_file = 'dnt.{}.memcheck'.format(self._logid)
 
-        cmd = ['valgrind', '--quiet', '--fair-sched=yes']
+        cmd = ['valgrind', '--fair-sched=yes']
 
         if self.full_check:
             cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
