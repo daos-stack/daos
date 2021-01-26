@@ -266,7 +266,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 		epoch_min = cinfo.ci_hae;
 	}
 
-	interval = crt_hlc_from_sec(DAOS_AGG_THRESHOLD);
+	interval = crt_sec2hlc(DAOS_AGG_THRESHOLD);
 	D_ASSERT(hlc > (interval * 2));
 	/*
 	 * Assume 'current hlc - interval' as the highest stable view (all

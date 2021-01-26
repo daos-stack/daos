@@ -507,27 +507,27 @@ crt_hlc2sec(uint64_t hlc)
  * \return                     HLC timestamp
  */
 uint64_t
-crt_hlc_from_nsec(uint64_t nsec);
+crt_nsec2hlc(uint64_t nsec);
 
-/** See crt_hlc_from_nsec. */
+/** See crt_nsec2hlc. */
 static inline uint64_t
-crt_hlc_from_usec(uint64_t usec)
+crt_usec2hlc(uint64_t usec)
 {
-	return crt_hlc_from_nsec(usec * 1000);
+	return crt_nsec2hlc(usec * 1000);
 }
 
-/** See crt_hlc_from_nsec. */
+/** See crt_nsec2hlc. */
 static inline uint64_t
-crt_hlc_from_msec(uint64_t msec)
+crt_msec2hlc(uint64_t msec)
 {
-	return crt_hlc_from_nsec(msec * 1000 * 1000);
+	return crt_nsec2hlc(msec * 1000 * 1000);
 }
 
-/** See crt_hlc_from_nsec. */
+/** See crt_nsec2hlc. */
 static inline uint64_t
-crt_hlc_from_sec(uint64_t sec)
+crt_sec2hlc(uint64_t sec)
 {
-	return crt_hlc_from_nsec(sec * 1000 * 1000 * 1000);
+	return crt_nsec2hlc(sec * 1000 * 1000 * 1000);
 }
 
 /**
@@ -550,7 +550,7 @@ crt_hlc2unixnsec(uint64_t hlc);
  *                             impossible to convert unixnsec to hlc
  */
 int
-crt_hlc_from_unixnsec(uint64_t unixnsec, uint64_t *hlc);
+crt_unixnsec2hlc(uint64_t unixnsec, uint64_t *hlc);
 
 /**
  * Set the maximum system clock offset.

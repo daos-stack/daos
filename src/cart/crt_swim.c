@@ -199,9 +199,9 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc_req)
 				    crt_swim_fail_id == id) {
 					uint64_t d = crt_swim_fail_delay;
 
-					crt_swim_fail_hlc =
-						hlc - crt_hlc_from_msec(l) +
-						crt_hlc_from_sec(d);
+					crt_swim_fail_hlc = hlc -
+							    crt_msec2hlc(l) +
+							    crt_sec2hlc(d);
 					crt_swim_fail_delay = 0;
 				}
 				break;
@@ -299,7 +299,7 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 out:
 	if (crt_swim_fail_delay && crt_swim_fail_id == self_id) {
 		crt_swim_fail_hlc = crt_hlc_get() +
-				    crt_hlc_from_sec(crt_swim_fail_delay);
+				    crt_sec2hlc(crt_swim_fail_delay);
 		crt_swim_fail_delay = 0;
 	}
 

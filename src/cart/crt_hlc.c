@@ -38,7 +38,7 @@
  * HLC start time (given in the Unix time for 2021-01-01 00:00:00 +0000 UTC in
  * seconds) (i.e., together with CRT_HLC_NSEC, offering a range of [2021, 2057])
  */
-#define CRT_HLC_START 1609459200ULL
+#define CRT_HLC_START_SEC 1609459200ULL
 
 /** Mask for the 18 logical bits */
 #define CRT_HLC_MASK 0x3FFFFULL
@@ -57,8 +57,8 @@ static inline uint64_t crt_hlc_localtime_get(void)
 
 	rc = clock_gettime(CLOCK_REALTIME, &now);
 	D_ASSERTF(rc == 0, "clock_gettime: %d\n", errno);
-	D_ASSERT(now.tv_sec > CRT_HLC_START);
-	pt = ((now.tv_sec - CRT_HLC_START) * NSEC_PER_SEC + now.tv_nsec) *
+	D_ASSERT(now.tv_sec > CRT_HLC_START_SEC);
+	pt = ((now.tv_sec - CRT_HLC_START_SEC) * NSEC_PER_SEC + now.tv_nsec) *
 	     CRT_HLC_NSEC;
 
 	/** Return the most significant 46 bits of time. */
@@ -114,23 +114,23 @@ uint64_t crt_hlc2nsec(uint64_t hlc)
 	return hlc / CRT_HLC_NSEC;
 }
 
-uint64_t crt_hlc_from_nsec(uint64_t nsec)
+uint64_t crt_nsec2hlc(uint64_t nsec)
 {
 	return nsec * CRT_HLC_NSEC;
 }
 
 uint64_t crt_hlc2unixnsec(uint64_t hlc)
 {
-	return hlc / CRT_HLC_NSEC + CRT_HLC_START * NSEC_PER_SEC;
+	return hlc / CRT_HLC_NSEC + CRT_HLC_START_SEC * NSEC_PER_SEC;
 }
 
-int crt_hlc_from_unixnsec(uint64_t unixnsec, uint64_t *hlc)
+int crt_unixnsec2hlc(uint64_t unixnsec, uint64_t *hlc)
 {
-	uint64_t start = CRT_HLC_START * NSEC_PER_SEC;
+	uint64_t start = CRT_HLC_START_SEC * NSEC_PER_SEC;
 
 	/*
 	 * If the time represented by unixnsec is before the time represented by
-	 * CRT_HLC_START, then the conversion is impossible.
+	 * CRT_HLC_START_SEC, then the conversion is impossible.
 	 */
 	if (unixnsec < start)
 		return -DER_INVAL;
