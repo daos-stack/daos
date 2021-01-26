@@ -21,7 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 
