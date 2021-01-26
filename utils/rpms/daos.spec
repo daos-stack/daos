@@ -182,7 +182,6 @@ This is the package needed to run the DAOS test suite
 
 %package tests-java
 Summary: The DAOS Java test suite
-Requires: %{name}-tests = %{version}-%{release}
 Requires: maven
 
 %description tests-java
@@ -248,7 +247,7 @@ install -m 644 utils/systemd/%{server_svc_name} %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
 mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
 mv %{?buildroot}/%{_prefix}/etc/bash_completion.d %{?buildroot}/%{_sysconfdir}
-install -m src/client/java %{_prefix}/lib/daos/TESTING/ftest/java/
+install -m src/client/java %{_prefix}/lib/daos/TESTING/java/
 
 %pre server
 getent group daos_metrics >/dev/null || groupadd -r daos_metrics
@@ -417,7 +416,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_prefix}/lib/daos/.build_vars.sh
 
 %files tests-java
-%dir %{_prefix}//lib/daos/TESTING/ftest/java/
+%{_prefix}/lib/daos/TESTING/java/
 
 %files devel
 %{_includedir}/*
@@ -425,6 +424,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Tue Jan 26 2021 Saurabh Tandan <saurabh.tandan@intel.com> 1.1.2.1-6
+- Add daos-tests-java package
+
 * Fri Jan 22 2021 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.2.1-5
 - Install daos_metrics utility to %{_bindir}
 

@@ -92,7 +92,7 @@ class JavaCIIntegration(TestWithServers):
         # looking for a string something like this 1.8.0_262-b10
         pattern = r"(\d+\.\d+\.\d+\_\d+\-[a-b]\d+)"
 
-        # replacing '-' and '-' with '.' and returning the result
+        # replacing '_' and '-' with '.' and returning the result
         return re.search(pattern,
                          result).groups()[0].replace("_", ".").replace("-", ".")
 
@@ -126,7 +126,7 @@ class JavaCIIntegration(TestWithServers):
 
 
         # run intergration-test
-        jdir = "{}/java".format(os.getcwd())
+        jdir = "{}/../java".format(os.getcwd())
         cmd = "cd {};".format(jdir)
         cmd += " export LD_PRELOAD=/usr/lib/jvm/"
         cmd += "java-{}-openjdk-{}-0.el7_8.x86_64/".format(version[:-8],
