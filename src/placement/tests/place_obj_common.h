@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@
 void
 print_layout(struct pl_obj_layout *layout);
 
-void
+int
 plt_obj_place(daos_obj_id_t oid, struct pl_obj_layout **layout,
 		struct pl_map *pl_map, bool print_layout);
 
@@ -75,7 +75,12 @@ bool
 plt_obj_layout_match(struct pl_obj_layout *lo_1, struct pl_obj_layout *lo_2);
 
 void
-plt_set_tgt_status(uint32_t id, int status, uint32_t ver,
+plt_set_domain_status(uint32_t id, int status, uint32_t *ver,
+		      struct pool_map *po_map, bool pl_debug_msg,
+		      enum pool_comp_type level);
+
+void
+plt_set_tgt_status(uint32_t id, int status, uint32_t *ver,
 		struct pool_map *po_map, bool pl_debug_msg);
 
 void
@@ -112,6 +117,13 @@ gen_pool_and_placement_map(int num_domains, int nodes_per_domain,
 			   struct pl_map **pl_map_out);
 
 void
+gen_pool_and_placement_map_non_standard(int num_domains,
+					int *domain_targets,
+					pl_map_type_t pl_type,
+					struct pool_map **po_map_out,
+					struct pl_map **pl_map_out);
+
+void
 free_pool_and_placement_map(struct pool_map *po_map_in,
 			    struct pl_map *pl_map_in);
 
@@ -124,7 +136,7 @@ plt_reint_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 		   struct pl_map *pl_map, uint32_t *po_ver, bool pl_debug_msg);
 
 int
-getObjectClasses(daos_oclass_id_t **oclass_id_pp);
+get_object_classes(daos_oclass_id_t **oclass_id_pp);
 
 int
 extend_test_pool_map(struct pool_map *map, uint32_t nnodes,

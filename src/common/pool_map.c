@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -320,7 +320,7 @@ static void
 comp_sorter_fini(struct pool_comp_sorter *sorter)
 {
 	if (sorter->cs_comps != NULL) {
-		D_DEBUG(DB_TRACE, "Finalise sorter for %s\n",
+		D_DEBUG(DB_TRACE, "Finalize sorter for %s\n",
 			pool_comp_type2str(sorter->cs_type));
 
 		D_FREE(sorter->cs_comps);
@@ -2252,7 +2252,7 @@ pool_domain_print(struct pool_domain *domain, int dep)
 {
 	int		i;
 
-	D_PRINT("%*s%s[%d] %d %s\n", dep * 8, "", pool_domain_name(domain),
+	D_PRINT("%*s%s[%d] v%d %s\n", dep * 8, "", pool_domain_name(domain),
 		domain->do_comp.co_id, domain->do_comp.co_ver,
 		pool_comp_state2str(domain->do_comp.co_status));
 
@@ -2270,10 +2270,11 @@ pool_domain_print(struct pool_domain *domain, int dep)
 		D_ASSERTF(comp->co_type == PO_COMP_TP_TARGET,
 			  "%s\n", pool_comp_type2str(comp->co_type));
 
-		D_PRINT("%*s%s[%d] %d %s\n", (dep + 1) * 8, "",
+		D_PRINT("%*s%s[%d] v%d %s (fseq=%d)\n", (dep + 1) * 8, "",
 			pool_comp_type2str(comp->co_type),
 			comp->co_id, comp->co_ver,
-			pool_comp_state2str(comp->co_status));
+			pool_comp_state2str(comp->co_status),
+			comp->co_fseq);
 	}
 }
 
