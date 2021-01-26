@@ -229,7 +229,7 @@ func SystemNotify(ctx context.Context, rpcClient UnaryInvoker, req *SystemNotify
 // EventForwarder implements the events.Handler interface, increments sequence
 // number for each event forwarded and distributes requests to MS access points.
 type EventForwarder struct {
-	seq       uint64
+	seq       <-chan uint64
 	client    UnaryInvoker
 	accessPts []string
 }
@@ -244,14 +244,14 @@ func (fwdr *EventForwarder) OnEvent(ctx context.Context, evt *events.RASEvent) {
 		fwdr.client.Debug("skip event forwarding, missing access points")
 		return
 	}
-	fwdr.seq++
-	fwdr.client.Debugf("forwarding %s event to MS (seq: %d)", evt.ID, fwdr.seq)
 
 	req := &SystemNotifyReq{
-		Sequence: fwdr.seq,
+		Sequence: <-fwdr.seq,
 		Event:    evt,
 	}
 	req.SetHostList(fwdr.accessPts)
+	fwdr.client.Debugf("forwarding %s event to MS access points %v (seq: %d)",
+		evt.ID, fwdr.accessPts, req.Sequence)
 
 	if _, err := SystemNotify(ctx, fwdr.client, req); err != nil {
 		fwdr.client.Debugf("failed to forward event to MS: %s", err)
@@ -260,7 +260,15 @@ func (fwdr *EventForwarder) OnEvent(ctx context.Context, evt *events.RASEvent) {
 
 // NewEventForwarder returns an initialized EventForwarder.
 func NewEventForwarder(rpcClient UnaryInvoker, accessPts []string) *EventForwarder {
+	seqCh := make(chan uint64)
+	go func(ch chan<- uint64) {
+		for i := uint64(1); ; i++ {
+			ch <- i
+		}
+	}(seqCh)
+
 	return &EventForwarder{
+		seq:       seqCh,
 		client:    rpcClient,
 		accessPts: accessPts,
 	}
