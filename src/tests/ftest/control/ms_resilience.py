@@ -41,7 +41,7 @@ class ManagementServiceResilience(TestWithServers):
         """Inititialize a ManagementServiceResilience object."""
         super(ManagementServiceResilience, self).__init__(*args, **kwargs)
         self.setup_start_servers = False
-        self.L_QUERY_TIMER = 10
+        self.L_QUERY_TIMER = 15
 
     def update_and_verify(self, ignore_status=False):
         """Create a pool on the server group
@@ -87,6 +87,7 @@ class ManagementServiceResilience(TestWithServers):
         while not l_addr and (time.time() - start) < self.L_QUERY_TIMER:
             sys_leader_info = self.get_dmg_command().system_leader_query()
             l_addr = sys_leader_info["response"]["CurrentLeader"]
+            time.sleep(1)
 
         if not l_addr:
             self.fail("Timer exceeded for verifying leader. No leader found!")
@@ -138,7 +139,7 @@ class ManagementServiceResilience(TestWithServers):
         self.get_dmg_command().hostlist = access_list[0]
 
         self.verify_leader(access_list)
-        self.update_and_verify(ignore_status=False)
+        self.update_and_verify(ignore_status=True)
 
     def verify_lost_resiliency(self, N):
         """Test that even with 2N+1 resiliency lost, reads still work.
