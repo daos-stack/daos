@@ -668,7 +668,7 @@ ctl_init()
 			  "crt_group_view_destroy() failed; rc=%d\n", rc);
 	}
 
-	g_shutdown = 1;
+	tc_progress_stop();
 
 	rc = pthread_join(ctl_gdata.cg_tid, NULL);
 	D_ASSERTF(rc == 0, "pthread_join failed. rc: %d\n", rc);

@@ -125,7 +125,7 @@ test_run(void)
 			  "crt_group_view_destroy() failed; rc=%d\n", rc);
 	}
 
-	g_shutdown = 1;
+	tc_progress_stop();
 
 	rc = pthread_join(test_g.t_tid[0], NULL);
 	if (rc != 0)
