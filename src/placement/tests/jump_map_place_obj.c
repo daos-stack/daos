@@ -96,7 +96,7 @@ gen_oid(daos_obj_id_t *oid, uint64_t lo, uint64_t hi, daos_oclass_id_t cid)
 		int rc;					\
 		gen_oid(&__oid, 1, UINT64_MAX, cid);	\
 		rc = plt_obj_place(__oid, &__layout,	\
-				pl_map,	false);		\
+				   pl_map, false);	\
 		assert_rc_equal(rc, -DER_INVAL);	\
 	} while (0)
 
