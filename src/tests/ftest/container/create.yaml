@@ -1,8 +1,6 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
 
-#change in this file need to be reverted before landing
-#testing publishing of skipped file in Jenkins
 hosts:
    test_servers:
      - server-A
