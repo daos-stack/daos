@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -193,7 +193,7 @@ out:
 static void
 ctl_print_usage(void)
 {
-	printf("daos_ctl -- interactive function testing shell for DAOS\n");
+	printf("obj_ctl -- interactive function testing shell for VOS\n");
 	printf("Usage:\n");
 	printf("update\to=...,d=...,a=...,v=...,e=...\n");
 	printf("fetch\to=...d=...,a=...,e=...\n");
@@ -389,7 +389,7 @@ main(int argc, char *argv[])
 {
 	int	rc;
 
-	if (argc < 2)
+	if (argc ==2 )
 		goto out_usage;
 
 	uuid_generate(ctl_ctx.tsc_pool_uuid);
@@ -402,17 +402,12 @@ main(int argc, char *argv[])
 	ctl_ctx.tsc_mpi_rank	= 0;
 	ctl_ctx.tsc_mpi_size	= 1;	/* just one rank */
 
-	if (!strcasecmp(argv[1], "vos")) {
-		if (argc == 3)
-			strncpy(pmem_file, argv[3], PATH_MAX - 1);
-		else
-			strcpy(pmem_file, "/mnt/daos/vos_ctl.pmem");
+	if (argc == 3)
+		strncpy(pmem_file, argv[2], PATH_MAX - 1);
+	else
+		strcpy(pmem_file, "/mnt/daos/vos_ctl.pmem");
 
-		ctl_ctx.tsc_pmem_file = pmem_file;
-	} else {
-		fprintf(stderr, "Unknown test mode %s\n", argv[1]);
-		goto out_usage;
-	}
+	ctl_ctx.tsc_pmem_file = pmem_file;
 
 	rc = dts_ctx_init(&ctl_ctx);
 	if (rc != 0) {
@@ -423,13 +418,11 @@ main(int argc, char *argv[])
 
 	rc = dts_cmd_parser(ctl_ops, "$ > ", ctl_cmd_run);
 	if (rc)
-		D_GOTO(out_ctx, rc);
+		dts_ctx_fini(&ctl_ctx);
 
- out_ctx:
-	dts_ctx_fini(&ctl_ctx);
 	return rc;
 
  out_usage:
-	printf("%s daos|vos [pmem_file]\n", argv[0]);
+	printf("%s [pmem_file]\n", argv[0]);
 	return -1;
 }
