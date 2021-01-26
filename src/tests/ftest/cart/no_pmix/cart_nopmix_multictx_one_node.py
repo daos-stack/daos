@@ -48,12 +48,14 @@ class CartNoPmixOneNodeTest(TestWithoutServers):
         self.env = self.utils.get_env(self)
         crt_phy_addr = self.params.get("CRT_PHY_ADDR_STR", '/run/defaultENV/')
         ofi_interface = self.params.get("OFI_INTERFACE", '/run/defaultENV/')
+        ofi_domain = self.params.get("OFI_DOMAIN", '/run/defaultENV/')
         ofi_ctx_num = self.params.get("CRT_CTX_NUM", '/run/defaultENV/')
         ofi_share_addr = self.params.get("CRT_CTX_SHARE_ADDR",
                                          '/run/defaultENV/')
 
         self.pass_env = {"CRT_PHY_ADDR_STR": crt_phy_addr,
                          "OFI_INTERFACE": ofi_interface,
+                         "OFI_DOMAIN": ofi_domain,
                          "CRT_CTX_SHARE_ADDR": ofi_share_addr,
                          "CRT_CTX_NUM": ofi_ctx_num}
 

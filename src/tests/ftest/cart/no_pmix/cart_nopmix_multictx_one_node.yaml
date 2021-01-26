@@ -3,7 +3,7 @@
 
 defaultENV:
   #!filter-only : /run/tests/no_pmix_multi_ctx
-  CRT_PHY_ADDR_STR: "\"ofi+verbs;ofi_rxm\""
+  CRT_PHY_ADDR_STR: "ofi+verbs;ofi_rxm"
   OFI_INTERFACE: "ib0"
   OFI_DOMAIN: "mlx5_0"
   CRT_CTX_NUM: "8"
