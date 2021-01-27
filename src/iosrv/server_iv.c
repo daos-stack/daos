@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@ static int			 ds_iv_ns_tree_topo;
 static d_list_t			 ds_iv_class_list;
 static int			 ds_iv_class_nr;
 static int			 crt_iv_class_nr;
-static struct crt_iv_class	*crt_iv_class = NULL;
+static struct crt_iv_class	*crt_iv_class;
 
 struct ds_iv_class *
 iv_class_lookup(unsigned int class_id)
@@ -463,8 +463,9 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 				     priv_entry ? priv_entry->priv : NULL);
 	}
 	if (rc != -DER_IVCB_FORWARD && rc != 0) {
-		D_ERROR("key id %d update failed: rc = %d\n",
-			key.class_id, rc);
+		D_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR,
+			 "key id %d update failed: rc = "DF_RC"\n",
+			 key.class_id, DP_RC(rc));
 		return rc;
 	}
 
@@ -711,7 +712,7 @@ iv_ns_create_internal(unsigned int ns_id, uuid_t pool_uuid,
 	ns->iv_master_rank = master_rank;
 	rc = ABT_mutex_create(&ns->iv_lock);
 	if (rc != ABT_SUCCESS) {
-		D_FREE_PTR(ns);
+		D_FREE(ns);
 		return dss_abterr2der(rc);
 	}
 	d_list_add(&ns->iv_ns_link, &ds_iv_ns_list);
@@ -981,7 +982,7 @@ retry:
 		if (value) {
 			rc = daos_sgl_alloc_copy_data(&arg->iv_value, value);
 			if (rc) {
-				D_FREE_PTR(arg);
+				D_FREE(arg);
 				return -DER_NOMEM;
 			}
 		}

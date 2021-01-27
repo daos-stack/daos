@@ -231,9 +231,12 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	// Init management RPC subsystem.
 	mgmtSvc := newMgmtSvc(harness, membership, sysdb, rpcClient, eventPubSub)
 
-	// Forward received events to management service by default.
+	// By default, forward received RASTypeStateChange events to management
+	// service leader to be handled and log RASTypeInfoOnly to INFO.
 	eventForwarder := control.NewEventForwarder(rpcClient, cfg.AccessPoints)
-	eventPubSub.Subscribe(events.RASTypeAny, eventForwarder)
+	eventPubSub.Subscribe(events.RASTypeStateChange, eventForwarder)
+	eventLogger := control.NewEventLogger(log)
+	eventPubSub.Subscribe(events.RASTypeInfoOnly, eventLogger)
 
 	var netDevClass uint32
 
@@ -407,8 +410,8 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		// Stop forwarding events to MS and instead start handling
 		// received forwarded (and local) events.
 		eventPubSub.Reset()
-		eventPubSub.Subscribe(events.RASTypeAny, membership)
-		eventPubSub.Subscribe(events.RASTypeAny, sysdb)
+		eventPubSub.Subscribe(events.RASTypeStateChange, membership)
+		eventPubSub.Subscribe(events.RASTypeStateChange, sysdb)
 
 		return nil
 	})
@@ -418,7 +421,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		// Stop handling received forwarded (in addition to local)
 		// events and start forwarding events to the new MS leader.
 		eventPubSub.Reset()
-		eventPubSub.Subscribe(events.RASTypeAny, eventForwarder)
+		eventPubSub.Subscribe(events.RASTypeStateChange, eventForwarder)
 
 		return nil
 	})
