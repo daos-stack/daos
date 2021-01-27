@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -289,7 +289,7 @@ daos_acl_get_ace_for_principal(struct daos_acl *acl,
 
 /**
  * Insert an Access Control Entry in the appropriate location in the ACE
- * list. The expected order is: Owner, Users, Assigned Group, Groups, Everyone.
+ * list. The expected order is: Owner, Users, Owner-Group, Groups, Everyone.
  *
  * The ACL structure may be reallocated to make room for the new ACE. If so the
  * old structure will be freed.
@@ -416,7 +416,7 @@ ssize_t
 daos_ace_get_size(struct daos_ace *ace);
 
 /**
- * Print the Access Control Entry to stdout in a human-readable format.
+ * Print the Access Control Entry to stdout in a verbose human-readable format.
  *
  * \param	ace	Access Control Entry to print
  * \param	tabs	Number of tabs to indent at top level

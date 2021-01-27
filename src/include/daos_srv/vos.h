@@ -642,7 +642,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
  * arrays of the given object. The caller can directly use these buffers
  * for RMA read.
  *
- * The upper layer must explicitly call \a vos_fetch_end to finalise the
+ * The upper layer must explicitly call \a vos_fetch_end to finalize the
  * I/O and release resources.
  *
  * TODO: add more detail descriptions for punched or missing records.
@@ -689,7 +689,7 @@ vos_fetch_end(daos_handle_t ioh, int err);
  * Prepare IO sink buffers for the specified arrays of the given
  * object. The caller can directly use thse buffers for RMA write.
  *
- * The upper layer must explicitly call \a vos_update_end to finalise the
+ * The upper layer must explicitly call \a vos_update_end to finalize the
  * ZC I/O and release resources.
  *
  * \param coh	[IN]	Container open handle

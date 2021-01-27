@@ -191,8 +191,10 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 #define D_NOTE(fmt, ...)	D_DEBUG(DLOG_NOTE, fmt, ## __VA_ARGS__)
 #define D_WARN(fmt, ...)	D_DEBUG(DLOG_WARN, fmt, ## __VA_ARGS__)
 #define D_ERROR(fmt, ...)	D_DEBUG(DLOG_ERR, fmt, ## __VA_ARGS__)
+#define D_ALERT(fmt, ...)	D_DEBUG(DLOG_ALERT, fmt, ## __VA_ARGS__)
 #define D_CRIT(fmt, ...)	D_DEBUG(DLOG_CRIT, fmt, ## __VA_ARGS__)
 #define D_FATAL(fmt, ...)	D_DEBUG(DLOG_EMERG, fmt, ## __VA_ARGS__)
+#define D_EMIT(fmt, ...)	D_DEBUG(DLOG_EMIT, fmt, ## __VA_ARGS__)
 
 #define D_TRACE_INFO(ptr, fmt, ...)	\
 	D_TRACE_DEBUG(DLOG_INFO, ptr, fmt, ## __VA_ARGS__)
@@ -202,10 +204,14 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 	D_TRACE_DEBUG(DLOG_WARN, ptr, fmt, ## __VA_ARGS__)
 #define D_TRACE_ERROR(ptr, fmt, ...)	\
 	D_TRACE_DEBUG(DLOG_ERR, ptr, fmt, ## __VA_ARGS__)
+#define D_TRACE_ALERT(ptr, fmt, ...)	\
+	D_TRACE_DEBUG(DLOG_ALERT, ptr, fmt, ## __VA_ARGS__)
 #define D_TRACE_CRIT(ptr, fmt, ...)	\
 	D_TRACE_DEBUG(DLOG_CRIT, ptr, fmt, ## __VA_ARGS__)
 #define D_TRACE_FATAL(ptr, fmt, ...)	\
 	D_TRACE_DEBUG(DLOG_EMERG, ptr, fmt, ## __VA_ARGS__)
+#define D_TRACE_EMIT(ptr, fmt, ...)	\
+	D_TRACE_DEBUG(DLOG_EMIT, ptr, fmt, ## __VA_ARGS__)
 
 #ifdef D_USE_GURT_FAC
 D_FOREACH_GURT_FAC(D_LOG_DECLARE_FAC, D_NOOP)
@@ -281,7 +287,7 @@ int d_log_getdbgbit(d_dbug_t *dbgbit, char *bitname);
  * \return			0 on success, -DER_INVAL on error
  */
 int d_register_alt_assert(void (*alt_assert)(const int, const char*,
-			  const char*, const int));
+					     const char*, const int));
 
 /**
  * D_PRINT can be used for output to stdout with or without clog being enabled
@@ -311,7 +317,6 @@ do {									\
 		d_alt_assert((int64_t)(cond), #cond, __FILE__, __LINE__);\
 	assert(cond);							\
 } while (0)
-
 
 #define D_CASSERT(cond, ...)						\
 	_Static_assert(cond, #cond ": " __VA_ARGS__)
