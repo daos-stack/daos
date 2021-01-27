@@ -45,5 +45,5 @@ test:
     last_rank:
       rank: 4
   containers: 70
-  container_obj_class: "OC_RP_3GX"
+  container_obj_class: "OC_RP_3G1"
   use_ior: True
