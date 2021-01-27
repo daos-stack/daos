@@ -145,7 +145,7 @@ d_log_dbg_bit_dealloc(char *name)
 				d->db_lname = NULL;
 				d->db_name_size = 0;
 				d->db_lname_size = 0;
-				*(d->db_bit) = 0;
+				*d->db_bit = 0;
 
 				D_ASSERT(d_dbglog_data.dbg_bit_cnt > 0);
 				d_dbglog_data.dbg_bit_cnt--;
@@ -214,16 +214,16 @@ d_log_dbg_bit_alloc(d_dbug_t *dbgbit, char *name, char *lname)
 		d = &d_dbg_bit_dict[i];
 		if (d->db_name != NULL) {
 			if (strncasecmp(d->db_name, name, name_sz) == 0) {
-				if (*(d->db_bit) == 0) {
+				if (*d->db_bit == 0) {
 					/* DB_ALL = DLOG_DBG */
 					if (strncasecmp(name, DB_ALL_BITS,
 							name_sz) == 0)
 						*dbgbit = DLOG_DBG;
 					else
 						*dbgbit = bit;
-					*(d->db_bit) = bit;
+					*d->db_bit = bit;
 				} else /* debug bit already assigned */
-					*dbgbit = *(d->db_bit);
+					*dbgbit = *d->db_bit;
 				return 0;
 			}
 		/* Allocate configurable debug bit along with name */
@@ -232,7 +232,7 @@ d_log_dbg_bit_alloc(d_dbug_t *dbgbit, char *name, char *lname)
 			d->db_lname = lname;
 			d->db_name_size = name_sz;
 			d->db_lname_size = lname_sz;
-			*(d->db_bit) = bit;
+			*d->db_bit = bit;
 
 			*dbgbit = bit;
 			return 0;
@@ -308,13 +308,13 @@ debug_mask_load(const char *mask_name)
 			if (d->db_name != NULL &&
 			    strncasecmp(cur, d->db_name,
 					d->db_name_size) == 0) {
-				d_dbglog_data.dd_mask |= *(d->db_bit);
+				d_dbglog_data.dd_mask |= *d->db_bit;
 				break;
 			}
 			if (d->db_lname != NULL &&
 			    strncasecmp(cur, d->db_lname,
 					d->db_lname_size) == 0) {
-				d_dbglog_data.dd_mask |= *(d->db_bit);
+				d_dbglog_data.dd_mask |= *d->db_bit;
 				break;
 			}
 		}
@@ -441,8 +441,10 @@ d_log_sync_mask(void)
 
 	/* load facility mask environment (D_LOG_MASK) */
 	log_mask = getenv(D_LOG_MASK_ENV);
-	if (log_mask != NULL)
+	if (log_mask != NULL) {
+		/* Prevent checkpatch warning */
 		d_log_setmasks(log_mask, -1);
+	}
 
 	D_MUTEX_UNLOCK(&d_log_lock);
 }
@@ -478,7 +480,7 @@ cleanup_dbg_namebit(void)
 			 */
 			if (strncasecmp(d->db_name, DB_ALL_BITS,
 					d->db_name_size) != 0) {
-				*(d->db_bit) = 0;
+				*d->db_bit = 0;
 
 				D_ASSERT(d_dbglog_data.dbg_bit_cnt > 0);
 				d_dbglog_data.dbg_bit_cnt--;
@@ -486,7 +488,6 @@ cleanup_dbg_namebit(void)
 		}
 	}
 }
-
 
 /**
  * Setup the debug names and mask bits.
@@ -515,7 +516,7 @@ setup_dbg_namebit(void)
 				return -DER_UNINIT;
 			}
 
-			*(d->db_bit) = allocd_dbg_bit;
+			*d->db_bit = allocd_dbg_bit;
 		}
 	}
 
@@ -524,7 +525,7 @@ setup_dbg_namebit(void)
 
 int
 d_log_init_adv(char *log_tag, char *log_file, unsigned int flavor,
-		 d_dbug_t def_mask, d_dbug_t err_mask)
+	       d_dbug_t def_mask, d_dbug_t err_mask)
 {
 	int rc = 0;
 
@@ -622,7 +623,7 @@ int d_log_getdbgbit(d_dbug_t *dbgbit, char *bitname)
 		d = &d_dbg_bit_dict[i];
 		if (d->db_name != NULL &&
 		    strncasecmp(bitname, d->db_name, d->db_name_size) == 0) {
-			*dbgbit = *(d->db_bit);
+			*dbgbit = *d->db_bit;
 			return 0;
 		}
 	}
@@ -631,7 +632,7 @@ int d_log_getdbgbit(d_dbug_t *dbgbit, char *bitname)
 }
 
 int d_register_alt_assert(void (*alt_assert)(const int, const char*,
-			  const char*, const int))
+					     const char*, const int))
 {
 	if (alt_assert != NULL) {
 		d_alt_assert = alt_assert;

@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include "io_daos_DaosClient.h"
@@ -53,26 +36,26 @@ Java_io_daos_DaosClient_daosOpenPool(JNIEnv *env,
 	uuid_t pool_uuid;
 	jlong ret;
 	daos_handle_t poh;
-    int rc;
+	int rc;
 
 	uuid_parse(pool_str, pool_uuid);
-    rc = daos_pool_connect(pool_uuid, server_group,
-                   flags,
-                   &poh /* returned pool handle */,
-                   NULL /* returned pool info */,
-                   NULL /* event */);
 
-    if (rc) {
-        char *tmp = "Failed to connect to pool (%s)";
-        char *msg = (char *)malloc(strlen(tmp) +
-                strlen(pool_str));
+	rc = daos_pool_connect(pool_uuid, server_group,
+			       flags,
+			       &poh /* returned pool handle */,
+			       NULL /* returned pool info */,
+			       NULL /* event */);
+	if (rc) {
+		char *tmp = "Failed to connect to pool (%s)";
+		char *msg = (char *)malloc(strlen(tmp) +
+				strlen(pool_str));
 
-        sprintf(msg, tmp, pool_str);
-        throw_exception_base(env, msg, rc, 1, 0);
-        ret = -1;
-    } else {
-        memcpy(&ret, &poh, sizeof(poh));
-    }
+		sprintf(msg, tmp, pool_str);
+		throw_exception_base(env, msg, rc, 1, 0);
+		ret = -1;
+	} else {
+		memcpy(&ret, &poh, sizeof(poh));
+	}
 	(*env)->ReleaseStringUTFChars(env, poolId, pool_str);
 	if (serverGroup != NULL) {
 		(*env)->ReleaseStringUTFChars(env, serverGroup, server_group);
