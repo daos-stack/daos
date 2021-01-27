@@ -1,8 +1,26 @@
-daos (1.1.2.1-3) unstable; urgency=medium
+daos (1.1.2.1-6) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * Update to mercury v2.0.1rc1
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Sat, 23 Jan 2021 13:40:00 -0500
+
+daos (1.1.2.1-5) unstable; urgency=medium
+  [ Michael MacDonald ]
+  * Install daos_metrics to bin
+
+ -- Michael MacDonald <mjmac.macdonald@intel.com>  Fri, 22 Jan 2021 17:58:03 -0000
+
+daos (1.1.2.1-4) unstable; urgency=medium
   [ Kenneth Cain ]
   * Version bump for API major version libdaos.so.1 (1.0.0)
 
  -- Kenneth Cain <kenneth.c.cain@intel.com>  Tue, 05 Jan 2021 13:40:00 -0500
+
+daos (1.1.2.1-3) unstable; urgency=medium
+  [ Michael Hennecke ]
+  * Harmonize daos_server and daos_agent groups
+
+ -- Michael Hennecke <mhennecke@lenovo.com> Fri, 15 Jan 2021 16:22:18 -0000
 
 daos (1.1.2.1-2) unstable; urgency=medium
   [ Ashley Pittman ]

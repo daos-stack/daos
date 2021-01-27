@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include "dfuse_common.h"
@@ -228,12 +211,12 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		if (rc != -DER_SUCCESS) {
 			if (rc == -DER_NO_PERM)
 				DFUSE_TRA_DEBUG(ie,
-						"daos_pool_connect() failed, " DF_RC "\n",
-						DP_RC(rc));
+						"daos_pool_connect() failed, "
+						DF_RC"\n", DP_RC(rc));
 			else
 				DFUSE_TRA_WARNING(ie,
-						  "daos_pool_connect() failed, " DF_RC "\n",
-						  DP_RC(rc));
+						  "daos_pool_connect() failed, "
+						  DF_RC "\n", DP_RC(rc));
 			D_GOTO(out_err, ret = daos_der2errno(rc));
 		}
 	}
@@ -258,6 +241,8 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 			dfs->dfs_ops = &dfuse_dfs_ops;
 		DFUSE_TRA_UP(dfs, dfp, "dfs");
 		uuid_copy(dfs->dfs_cont, dattr.da_cuuid);
+		d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
+		new_cont = true;
 
 		d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
 
@@ -310,8 +295,8 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 
 	ie->ie_dfs = dfs;
 
-	DFUSE_TRA_DEBUG(dfs, "UNS entry point activated, root %lu",
-			dfs->dfs_ino);
+	DFUSE_TRA_INFO(dfs, "UNS entry point activated, root %lu",
+		       dfs->dfs_ino);
 
 	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 	return 0;

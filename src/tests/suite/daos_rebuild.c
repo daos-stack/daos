@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -1014,13 +997,13 @@ rebuild_master_failure(void **state)
 	/* Verify the POOL_QUERY get same rebuild status after leader change */
 	pinfo.pi_bits = DPI_REBUILD_STATUS;
 	rc = test_pool_get_info(arg, &pinfo);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	assert_int_equal(pinfo.pi_rebuild_st.rs_done, 1);
 	rc = rebuild_change_leader_cb(arg);
 	assert_int_equal(rc, 0);
 	pinfo_new.pi_bits = DPI_REBUILD_STATUS;
 	rc = test_pool_get_info(arg, &pinfo_new);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	assert_int_equal(pinfo_new.pi_rebuild_st.rs_done, 1);
 	rc = memcmp(&pinfo.pi_rebuild_st, &pinfo_new.pi_rebuild_st,
 		    sizeof(pinfo.pi_rebuild_st));
@@ -1161,7 +1144,7 @@ rebuild_fail_all_replicas(void **state)
 	 * the new leader can be chosen.
 	 */
 	if (!test_runable(arg, 6) || arg->pool.alive_svc->rl_nr < 6) {
-		print_message("need at least 6 svcs, -s5\n");
+		print_message("need at least 6 svcs, -s6\n");
 		return;
 	}
 
@@ -1179,6 +1162,9 @@ rebuild_fail_all_replicas(void **state)
 			d_rank_t rank =
 				layout->ol_shards[i]->os_shard_loc[j].sd_rank;
 
+			/* Skip rank 0 temporarily due to DAOS-6564 XXX */
+			if (rank == 0)
+				continue;
 			daos_kill_server(arg, arg->pool.pool_uuid,
 					 arg->group, arg->pool.alive_svc,
 					 rank);
