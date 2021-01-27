@@ -4986,7 +4986,7 @@ realloc_resp:
 	}
 
 	/* Allocate response buffer */
-	out_ranks = d_rank_list_realloc(out_ranks, resp_nranks);
+	out_ranks = d_rank_list_alloc(resp_nranks);
 	if (out_ranks == NULL)
 		D_GOTO(out_rpc, rc = -DER_NOMEM);
 
