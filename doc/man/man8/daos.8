@@ -27,9 +27,10 @@ daos \- command to manage DAOS pool/container/object
 .B daos RESOURCE COMMAND \fR[\fBOPTION\fRs]
 .SH DESCRIPTION
 .B daos
-can be used to manage/query a pool content, create/query/manage/destroy a
-container inside a pool, copy data to/from a POSIX container to a POSIX,
-filesystem, or query/manage an object inside a container.
+can be used to manage/query pool content, create/query/manage/destroy a
+container inside a pool, copy data to/from a POSIX container to a POSIX
+filesystem, clone a DAOS container, or query/manage an object inside a
+container.
 .br
 The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \fBdaos\fR are listed below.
 .SH RESOURCE\fRs/\fBCOMMAND\fRs/\fBOPTION\fRs
@@ -83,7 +84,7 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 .I container \fR(\fIcont\fR) \fBCOMMAND\fRs:
 	  \fBcreate\fR           create a container
 .br
-	  \fBcopy\fR             copy a container
+	  \fBclone\fR            clone a container
 .br
 	  \fBdestroy\fR          destroy a container
 .br
@@ -124,7 +125,7 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 .br
 	  \fB--cont=\fRUUID      (optional) container UUID (or generated)
 .TP
-.I container \fBOPTION\fRs (copy a container):
+.I container \fBOPTION\fRs (clone a container):
 	  \fB--src=\fRSTR      <pool uuid>/<cont uuid> | <UNS path>
 .br
 	  \fB--dst=\fRSTR      <pool uuid>/<cont uuid> | <UNS path>
