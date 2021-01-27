@@ -814,8 +814,8 @@ retry:
 	 */
 	rc = ds_pool_bcast_create(dss_get_module_info()->dmi_ctx,
 				  pool, DAOS_REBUILD_MODULE,
-				  REBUILD_OBJECTS_SCAN, &rpc, NULL,
-				  NULL);
+				  REBUILD_OBJECTS_SCAN, DAOS_REBUILD_VERSION,
+				  &rpc, NULL, NULL);
 	if (rc != 0) {
 		D_ERROR("pool map broad cast failed: rc "DF_RC"\n", DP_RC(rc));
 		return rc;

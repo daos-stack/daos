@@ -257,7 +257,8 @@ map_update_bcast(crt_context_t ctx, struct mgmt_svc *svc, uint32_t map_version,
 	D_DEBUG(DB_MGMT, "enter: version=%u nservers=%d\n", map_version,
 		nservers);
 
-	opc = DAOS_RPC_OPCODE(MGMT_TGT_MAP_UPDATE, DAOS_MGMT_MODULE, 1);
+	opc = DAOS_RPC_OPCODE(MGMT_TGT_MAP_UPDATE, DAOS_MGMT_MODULE,
+			      DAOS_MGMT_VERSION);
 	rc = crt_corpc_req_create(ctx, NULL /* grp */,
 				  NULL /* excluded_ranks */, opc,
 				  NULL /* co_bulk_hdl */, NULL /* priv */,
