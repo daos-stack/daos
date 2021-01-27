@@ -81,8 +81,9 @@ class CartUtils():
     @staticmethod
     def cleanup_processes():
         """ Clean up cart processes, in case avocado/apricot does not. """
+        error_list = []
         localhost = socket.gethostname().split(".")[0] 
-        result = stop_processes([localhost], "'(crt_launch|orterun)'")
+        result = stop_processes(localhost, "'(crt_launch|orterun)'")
         if 0 in result and len(result) == 1:
             error_list.append("Error cleaning up cart processes!")
         return error_list
