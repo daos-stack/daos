@@ -139,12 +139,14 @@ pool_tls_fini(const struct dss_thread_local_storage *dtls,
 
 	D_ASSERT(tls != NULL);
 	/* pool child cache should be empty now */
+
 	d_list_for_each_entry(child, &tls->dt_pool_list, spc_list) {
-		D_ASSERTF(0, DF_UUID": ref: %d\n",
-			  DP_UUID(child->spc_uuid), child->spc_ref);
+		D_ERROR(DF_UUID": ref: %d\n",
+			DP_UUID(child->spc_uuid), child->spc_ref);
 	}
 
-	D_ASSERT(d_list_empty(&tls->dt_pool_list));
+	if (!d_list_empty(&tls->dt_pool_list))
+		D_ERROR("pool list not empty\n");
 	D_FREE(tls);
 }
 

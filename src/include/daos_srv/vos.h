@@ -1068,4 +1068,18 @@ vos_dedup_dup_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl,
 void
 vos_dedup_free_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl);
 
+/** Raise a RAS event on incompatible durable format
+ *
+ * \param[in] type		Type of object with layout format
+ *				incompatibility (e.g. VOS pool)
+ * \param[in] version		Version of the object
+ * \param[in] min_version	Minimum supported version
+ * \param[in] max_version	Maximum supported version
+ * \param[in] pool		(Optional) associated pool uuid
+ */
+void
+vos_report_layout_incompat(const char *type, int version, int min_version,
+			   int max_version, uuid_t *uuid);
+
+
 #endif /* __VOS_API_H */

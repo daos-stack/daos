@@ -257,15 +257,17 @@ ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 		    uuid_t *cont, daos_obj_id_t *objid, char *ctlop, char *data)
 {
 	Shared__RASEvent	evt = SHARED__RASEVENT__INIT;
-	d_rank_t		this_rank = dss_self_rank();
+	d_rank_t		this_rank;
 
 	/* use opaque blob oneof case for extended info for passthrough event */
 	evt.extended_info_case = SHARED__RASEVENT__EXTENDED_INFO_STR_INFO;
 	evt.str_info = (data == NULL) ? "" : data;
 
 	/* populate rank param if empty */
-	if (rank == NULL)
+	if (rank == NULL) {
+		this_rank = dss_self_rank();
 		rank = &this_rank;
+	}
 
 	raise_ras(id, msg, type, sev, hwid, rank, jobid, pool, cont, objid,
 		  ctlop, &evt);

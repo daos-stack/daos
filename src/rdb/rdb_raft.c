@@ -105,8 +105,7 @@ rdb_raft_fini_ae(msg_appendentries_t *ae)
 		for (i = 0; i < ae->n_entries; i++) {
 			msg_entry_t *e = &ae->entries[i];
 
-			if (e->data.buf != NULL)
-				D_FREE(e->data.buf);
+			D_FREE(e->data.buf);
 		}
 		D_FREE(ae->entries);
 	}
@@ -269,7 +268,7 @@ rdb_raft_load_replicas(struct rdb *db, uint64_t index)
 		goto err;
 	}
 	d_iov_set(&value, db->d_replicas->rl_ranks,
-		     sizeof(*db->d_replicas->rl_ranks) * nreplicas);
+		  sizeof(*db->d_replicas->rl_ranks) * nreplicas);
 	rc = rdb_lc_lookup(db->d_lc, index, RDB_LC_ATTRS,
 			   &rdb_lc_replicas, &value);
 	if (rc != 0) {
@@ -689,11 +688,11 @@ rdb_raft_exec_unpack_io(struct dss_enum_unpack_io *io, void *arg)
 	for (i = 0; i < io->ui_iods_len; i++) {
 		D_ASSERT(io->ui_iods[i].iod_type == DAOS_IOD_SINGLE);
 		D_ASSERTF(io->ui_iods[i].iod_nr == 1, "%u\n",
-			 io->ui_iods[i].iod_nr);
+			  io->ui_iods[i].iod_nr);
 		D_ASSERTF(io->ui_iods[i].iod_recxs[0].rx_idx == 0, DF_U64"\n",
-			 io->ui_iods[i].iod_recxs[0].rx_idx);
+			  io->ui_iods[i].iod_recxs[0].rx_idx);
 		D_ASSERTF(io->ui_iods[i].iod_recxs[0].rx_nr == 1, DF_U64"\n",
-			 io->ui_iods[i].iod_recxs[0].rx_nr);
+			  io->ui_iods[i].iod_recxs[0].rx_nr);
 
 		D_ASSERT(io->ui_sgls != NULL);
 		D_ASSERTF(io->ui_sgls[i].sg_nr == 1, "%u\n",
@@ -1313,7 +1312,7 @@ static raft_node_id_t
 rdb_raft_cb_log_get_node_id(raft_server_t *raft, void *arg, raft_entry_t *entry,
 			    raft_index_t index)
 {
-	return *((d_rank_t *) entry->data.buf);
+	return *((d_rank_t *)entry->data.buf);
 }
 
 static void
@@ -2480,7 +2479,6 @@ rdb_raft_stop(struct rdb *db)
 {
 	int rc;
 
-
 	/* Stop sending any new RPCs. */
 	db->d_stop = true;
 
@@ -2539,10 +2537,6 @@ rdb_raft_resign(struct rdb *db, uint64_t term)
 	struct rdb_raft_state	state;
 	int			rc;
 
-	if (db == NULL) {
-		D_ERROR("db cannot be NULL\n");
-		return;
-	}
 	ABT_mutex_lock(db->d_raft_mutex);
 	if (term != raft_get_current_term(db->d_raft) ||
 	    !raft_is_leader(db->d_raft)) {
@@ -2556,7 +2550,7 @@ rdb_raft_resign(struct rdb *db, uint64_t term)
 	raft_become_follower(db->d_raft);
 	rc = rdb_raft_check_state(db, &state, 0 /* raft_rc */);
 	ABT_mutex_unlock(db->d_raft_mutex);
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
+	D_ASSERTF(rc == 0, DF_RC"\n", DP_RC(rc));
 }
 
 /* Call new election (campaign to be leader) by a follower */
