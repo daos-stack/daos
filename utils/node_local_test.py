@@ -462,6 +462,45 @@ class DaosServer():
 
         if not self._sp:
             return
+
+        # Check the correct number of processes are still running at this
+        # point, in case anything has crashed.  daos_server does not
+        # propagate errors, so check this here.
+        parent_pid = self._sp.pid
+        procs = []
+        for proc_id in os.listdir('/proc/'):
+            if proc_id == 'self':
+                continue
+            status_file = '/proc/{}/status'.format(proc_id)
+            if not os.path.exists(status_file):
+                continue
+            fd = open(status_file, 'r')
+            this_proc = False
+            for line in fd.readlines():
+                try:
+                    key, v = line.split(':', maxsplit=2)
+                except ValueError:
+                    continue
+                value = v.strip()
+                if key == 'Name' and value != self.__process_name:
+                    break
+                if key != 'PPid':
+                    continue
+                if int(value) == parent_pid:
+                    procs.append(proc_id)
+                    break
+
+        if (len(procs) != 1):
+            entry = {}
+            fname = __file__.lstrip('./')
+            entry['fileName'] = os.path.basename(fname)
+            entry['directory'] = os.path.dirname(fname)
+            # pylint: disable=protected-access
+            entry['lineStart'] = sys._getframe().f_lineno
+            entry['severity'] = 'ERROR'
+            entry['message'] = 'daos_io_server died during testing'
+            self.conf.wf.issues.append(entry)
+
         rc = self.run_dmg(['system', 'stop'])
         assert rc.returncode == 0 # nosec
 
@@ -476,13 +515,14 @@ class DaosServer():
             except NLTestTimeout as e:
                 print('Failed to stop: {}'.format(e))
         print('Server stopped in {:.2f} seconds'.format(time.time() - start))
+
         self._sp.send_signal(signal.SIGTERM)
         ret = self._sp.wait(timeout=5)
         print('rc from server is {}'.format(ret))
 
         compress_file(self.agent_log.name)
         compress_file(self.control_log.name)
-        log_test(self.conf, self.server_log.name, show_memleaks=True)
+        log_test(self.conf, self.server_log.name, show_memleaks=False)
         self.running = False
         return ret
 
