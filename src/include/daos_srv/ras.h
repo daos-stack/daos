@@ -42,11 +42,12 @@
  *   The identifier just be prefixed by component_
  *   Carried over with the RAS event.
  */
-#define RAS_EVENT_LIST						\
-	X(RAS_RANK_UP,		"engine_status_up")		\
-	X(RAS_RANK_DOWN,	"engine_status_down")		\
-	X(RAS_RANK_NO_RESPONSE,	"engine_status_no_response")	\
-	X(RAS_POOL_REPS_UPDATE,	"pool_replicas_updated")
+#define RAS_EVENT_LIST							\
+	X(RAS_RANK_UP,		"engine_status_up")			\
+	X(RAS_RANK_DOWN,	"engine_status_down")			\
+	X(RAS_RANK_NO_RESPONSE,	"engine_status_no_response")		\
+	X(RAS_POOL_REPS_UPDATE,	"pool_replicas_updated")		\
+	X(RAS_POOL_DF_INCOMPAT,	"pool_durable_format_incompatible")
 
 /** Define RAS event enum */
 typedef enum {
@@ -126,7 +127,7 @@ ras_sev2str(ras_sev_t severity)
  *
  * \retval		N/A
  */
-void
+void __attribute__((weak))
 ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 		    char *hwid, d_rank_t *rank, char *jobid, uuid_t *pool,
 		    uuid_t *cont, daos_obj_id_t *objid, char *ctlop,

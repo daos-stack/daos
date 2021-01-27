@@ -551,6 +551,9 @@ server_init(int argc, char *argv[])
 			dss_storage_path);
 		D_GOTO(exit_mod_loaded, rc);
 	}
+
+	gethostname(dss_hostname, DSS_HOSTNAME_MAX_LEN);
+
 	D_INFO("Service initialized\n");
 
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
@@ -630,8 +633,6 @@ server_init(int argc, char *argv[])
 	d_tm_record_timestamp(&started_ts, "server", "started_at", NULL);
 
 	d_tm_set_gauge(NULL, dss_self_rank(), "server", "rank", NULL);
-
-	gethostname(dss_hostname, DSS_HOSTNAME_MAX_LEN);
 
 	D_PRINT("DAOS I/O server (v%s) process %u started on rank %u "
 		"with %u target, %d helper XS, firstcore %d, host %s.\n",

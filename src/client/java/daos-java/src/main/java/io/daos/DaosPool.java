@@ -46,7 +46,7 @@ public class DaosPool extends Shareable implements Closeable {
     this.uuid = poolUuid;
   }
 
-  protected static DaosPool getInstance(String poolUuid, String serverGroup, String ranks, int flags)
+  protected static DaosPool getInstance(String poolUuid, String serverGroup, int flags)
       throws IOException {
     DaosPool dp = poolMap.get(poolUuid);
     if (dp == null) {
@@ -55,17 +55,17 @@ public class DaosPool extends Shareable implements Closeable {
       dp = poolMap.get(poolUuid);
     }
     synchronized (dp) {
-      dp.init(serverGroup, ranks, flags);
+      dp.init(serverGroup, flags);
       dp.incrementRef();
     }
     return dp;
   }
 
-  private void init(String serverGroup, String ranks, int flags) throws IOException {
+  private void init(String serverGroup, int flags) throws IOException {
     if (isInited()) {
       return;
     }
-    poolPtr = DaosClient.daosOpenPool(uuid, serverGroup, ranks, flags);
+    poolPtr = DaosClient.daosOpenPool(uuid, serverGroup, flags);
     setInited(true);
     if (log.isDebugEnabled()) {
       log.debug("opened pool {} with ptr {}", uuid, poolPtr);

@@ -305,6 +305,16 @@ pool_target_unavail(struct pool_target *tgt, bool for_reint)
 	return pool_component_unavail(&tgt->ta_comp, for_reint);
 }
 
+/** Check if the target is in PO_COMP_ST_DOWN status */
+static inline bool
+pool_target_down(struct pool_target *tgt)
+{
+	struct pool_component	*comp = &tgt->ta_comp;
+	uint8_t			 status = comp->co_status;
+
+	return (status == PO_COMP_ST_DOWN);
+}
+
 pool_comp_state_t pool_comp_str2state(const char *name);
 const char *pool_comp_state2str(pool_comp_state_t state);
 
