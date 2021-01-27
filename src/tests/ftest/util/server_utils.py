@@ -373,6 +373,7 @@ class DaosServerManager(SubprocessManager):
             verbose (bool, optional): display clean commands. Defaults to True.
         """
         clean_cmds = []
+        NUM_IO_SERVERS = 2
         for server_params in self.manager.job.yaml.server_params:
             scm_mount = server_params.get_value("scm_mount")
             self.log.info("Cleaning up the %s directory.", str(scm_mount))
@@ -381,6 +382,13 @@ class DaosServerManager(SubprocessManager):
             cmd = "sudo rm -fr {}/*".format(scm_mount)
             if cmd not in clean_cmds:
                 clean_cmds.append(cmd)
+
+            # Remove the shared memory segment associated with each io server
+            for srv_idx in range(NUM_IO_SERVERS):
+                key = 0x10242048 + srv_idx
+                cmd = "sudo ipcrm -M {}".format(key)
+                clean_cmds.append(cmd)
+                self.log.info("Cleaning up shmem segment: {}".format(cmd))
 
             # Dismount the scm mount point
             cmd = "while sudo umount {}; do continue; done".format(scm_mount)
