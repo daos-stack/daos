@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -152,6 +152,7 @@ pool_tls_fini(const struct dss_thread_local_storage *dtls,
 	      struct dss_module_key *key, void *data)
 {
 	struct pool_tls		*tls = data;
+#if 0
 	struct ds_pool_child	*child;
 
 	D_ASSERT(tls != NULL);
@@ -162,6 +163,7 @@ pool_tls_fini(const struct dss_thread_local_storage *dtls,
 	}
 
 	D_ASSERT(d_list_empty(&tls->dt_pool_list));
+#endif
 	D_FREE(tls);
 }
 
