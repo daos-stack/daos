@@ -253,7 +253,8 @@ smd_store_open(char *fname)
 
 	if (smd_df->smd_version > SMD_DF_VERSION ||
 	    smd_df->smd_version < SMD_DF_VER_1) {
-		D_ERROR("Unsupported DF version %d\n", smd_df->smd_version);
+		D_CRIT("Unsupported DF version %d.  Supported range: %d-%d\n",
+		       smd_df->smd_version, SMD_DF_VER_1, SMD_DF_VERSION);
 		rc = -DER_DF_INCOMPT;
 		goto error;
 	}
