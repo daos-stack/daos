@@ -106,9 +106,6 @@ extendedKeyUsage = serverAuth, clientAuth
 keyUsage = critical,digitalSignature,keyEncipherment
 extendedKeyUsage = clientAuth
 
-[ signing_test ]
-keyUsage = critical,digitalSignature,keyEncipherment
-extendedKeyUsage = clientAuth
 " > "${CA_HOME}/ca.cnf"
 }
 
@@ -202,40 +199,11 @@ function generate_server_cert () {
     ${CERTS}/server.crt"
 }
 
-function generate_test_cert () {
-    # Don't try to generate the test cert in production installs.
-    if ! [ -f "$CONFIGS/test.cnf" ]; then
-        return
-    fi
-
-    echo "Generating Test Certificate"
-    # Generate Private key and set its permissions
-    openssl genrsa -out "${CERTS}/test.key" 3072
-    # TODO [[ $EUID -eq 0 ]] && chown ?.? "${CERTS}/test.key"
-    chmod 0400 "${CERTS}/test.key"
-    # Generate a Certificate Signing Request (CRS)
-    openssl req -new -config "${CONFIGS}/test.cnf" -key "${CERTS}/test.key" \
-        -out "${CA_HOME}/test.csr" -batch
-    # Create Certificate from request
-    openssl ca -config "${CA_HOME}/ca.cnf" -keyfile "${PRIVATE}/daosCA.key" \
-        -cert "${CERTS}/daosCA.crt" -policy signing_policy \
-        -extensions signing_test -out "${CERTS}/test.crt" \
-        -outdir "${CERTS}" -in "${CA_HOME}/test.csr" -batch
-    # TODO [[ $EUID -eq 0 ]] && chown ?.? "${CERTS}/test.crt"
-    chmod 0644 "${CERTS}/test.crt"
-
-    echo "Required Test Certificate Files:
-    ${CERTS}/daosCA.crt
-    ${CERTS}/test.key
-    ${CERTS}/test.crt"
-}
-
 function cleanup () {
     rm -f "${CERTS}/*pem"
     rm -f "${CA_HOME}/agent.csr"
     rm -f "${CA_HOME}/admin.csr"
     rm -f "${CA_HOME}/server.csr"
-    rm -f "${CA_HOME}/test.csr"
     rm -f "${CA_HOME}/ca.cnf"
 }
 
@@ -246,7 +214,6 @@ function main () {
     generate_server_cert
     generate_agent_cert
     generate_admin_cert
-    generate_test_cert
     cleanup
 }
 
