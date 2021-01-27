@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,6 +56,10 @@ dc_obj_init(void)
 	if (rc)
 		goto out;
 
+	rc = obj_class_init();
+	if (rc)
+		goto out;
+
 	rc = daos_rpc_register(&obj_proto_fmt, OBJ_PROTO_CLI_COUNT,
 				NULL, DAOS_OBJ_MODULE);
 	if (rc != 0) {
@@ -80,5 +84,6 @@ dc_obj_fini(void)
 {
 	daos_rpc_unregister(&obj_proto_fmt);
 	obj_ec_codec_fini();
+	obj_class_fini();
 	obj_utils_fini();
 }

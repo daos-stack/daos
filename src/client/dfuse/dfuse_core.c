@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include <pthread.h>
@@ -41,7 +24,6 @@ dfuse_progress_thread(void *arg)
 	struct dfuse_event *ev;
 
 	while (1) {
-
 		errno = 0;
 		rc = sem_wait(&fs_handle->dpi_sem);
 		if (rc != 0) {
@@ -279,8 +261,7 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	ie->ie_stat.st_uid = geteuid();
 	ie->ie_stat.st_gid = getegid();
 	ie->ie_stat.st_mode = 0700 | S_IFDIR;
-	dfs->dfs_root = ie->ie_stat.st_ino;
-	dfs->dfs_ino = dfs->dfs_root;
+	dfs->dfs_ino = ie->ie_stat.st_ino;
 
 	if (dfs->dfs_ops == &dfuse_dfs_ops) {
 		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj,
@@ -309,25 +290,27 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 
 	rc = sem_init(&fs_handle->dpi_sem, 0, 0);
 	if (rc != 0)
-		D_GOTO(err, 0);
+		D_GOTO(err_eq, 0);
 
 	fs_handle->dpi_shutdown = false;
 	rc = pthread_create(&fs_handle->dpi_thread, NULL,
 			    dfuse_progress_thread, fs_handle);
 	if (rc != 0)
-		D_GOTO(err, 0);
+		D_GOTO(err_eq, 0);
 
 	pthread_setname_np(fs_handle->dpi_thread, "dfuse_progress");
 
 	if (!dfuse_launch_fuse(dfuse_info, fuse_ops, &args, fs_handle)) {
 		DFUSE_TRA_ERROR(fs_handle, "Unable to register FUSE fs");
-		D_GOTO(err_ie_remove, rc = -DER_INVAL);
+		D_GOTO(err_eq, rc = -DER_INVAL);
 	}
 
 	D_FREE(fuse_ops);
 
 	return -DER_SUCCESS;
 
+err_eq:
+	daos_eq_destroy(fs_handle->dpi_eq, DAOS_EQ_DESTROY_FORCE);
 err_ie_remove:
 	d_hash_rec_delete_at(&fs_handle->dpi_iet, &ie->ie_htl);
 err_iet:
@@ -391,7 +374,6 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 
 	DFUSE_TRA_INFO(fs_handle, "Flushing inode table");
 
-
 	fs_handle->dpi_shutdown = true;
 	sem_post(&fs_handle->dpi_sem);
 
@@ -430,6 +412,12 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 	} else {
 		DFUSE_TRA_INFO(fs_handle, "dropped %lu refs on %u inodes",
 			       refs, handles);
+	}
+
+	rc = daos_eq_destroy(fs_handle->dpi_eq, 0);
+	if (rc) {
+		DFUSE_TRA_WARNING(fs_handle, "Failed to destroy EQ");
+		rcp = EINVAL;
 	}
 
 	rc = d_hash_table_destroy_inplace(&fs_handle->dpi_iet, false);

@@ -58,7 +58,7 @@ public class DaosConfigFileTest {
   @Test
   public void testFsConfigNamesSize() throws Exception {
     DaosConfigFile cf = DaosConfigFile.getInstance();
-    Assert.assertEquals(11, cf.getFsConfigNames().size());
+    Assert.assertEquals(12, cf.getFsConfigNames().size());
   }
 
   @Test

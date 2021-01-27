@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -320,7 +320,8 @@ ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	}
 
 	/* Check active pool connections, evict only if force */
-	rc = ds_pool_svc_check_evict(pool_uuid, svc_ranks, force);
+	rc = ds_pool_svc_check_evict(pool_uuid, svc_ranks, NULL, 0, true,
+				     force);
 	if (rc != 0) {
 		D_ERROR("Failed to check/evict pool handles "DF_UUID" rc: %d\n",
 			DP_UUID(pool_uuid), rc);
@@ -391,14 +392,15 @@ out:
 
 int
 ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-		   const char *group)
+		   uuid_t *handles, size_t n_handles, const char *group)
 {
 	int		 rc;
 
 	D_DEBUG(DB_MGMT, "evict pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
 	/* Evict active pool connections if they exist*/
-	rc = ds_pool_svc_check_evict(pool_uuid, svc_ranks, true);
+	rc = ds_pool_svc_check_evict(pool_uuid, svc_ranks, handles, n_handles,
+				     false, false);
 	if (rc != 0) {
 		D_ERROR("Failed to evict pool handles"DF_UUID" rc: %d\n",
 			DP_UUID(pool_uuid), rc);
@@ -507,6 +509,9 @@ get_access_props(uuid_t pool_uuid, d_rank_list_t *ranks, daos_prop_t **prop)
 	daos_prop_t		*new_prop;
 
 	new_prop = daos_prop_alloc(ACCESS_PROPS_LEN);
+	if (new_prop == NULL)
+		return -DER_NOMEM;
+
 	for (i = 0; i < ACCESS_PROPS_LEN; i++)
 		new_prop->dpp_entries[i].dpe_type = ACCESS_PROPS[i];
 
@@ -634,6 +639,9 @@ ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		goto out;
 
 	res_prop = daos_prop_alloc(prop->dpp_nr);
+	if (res_prop == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
 	for (i = 0; i < prop->dpp_nr; i++)
 		res_prop->dpp_entries[i].dpe_type =
 			prop->dpp_entries[i].dpe_type;

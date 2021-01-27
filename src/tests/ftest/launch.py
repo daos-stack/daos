@@ -1,25 +1,8 @@
 #!/usr/bin/python2 -u
 """
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
 from __future__ import print_function
@@ -1324,8 +1307,7 @@ def resolve_debuginfo(pkg):
 
 def install_debuginfos():
     """Install debuginfo packages."""
-    install_pkgs = [{'name': 'gdb'},
-                    {'name': 'python-magic'}]
+    install_pkgs = [{'name': 'gdb'}]
 
     cmds = []
 
@@ -1468,28 +1450,32 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
             os.remove(os.path.join(daos_cores_dir, corefile))
         return False
 
-    # here because it's installed in install_debuginfos()
-    import magic    # pylint: disable=import-outside-toplevel,import-error
-
     for corefile in cores:
         if not fnmatch.fnmatch(corefile, 'core.*[0-9]'):
             continue
         corefile_fqpn = os.path.join(daos_cores_dir, corefile)
-        exe_magic = magic.open(magic.NONE)
-        exe_magic.load()
-        exe_type = exe_magic.file(corefile_fqpn)
-        exe_name_end = 0
-        if exe_type:
-            exe_name_start = exe_type.find("execfn: '") + 9
-            if exe_name_start > 8:
-                exe_name_end = exe_type.find("', platform:")
-            else:
-                exe_name_start = exe_type.find("from '") + 6
-                if exe_name_start > 5:
-                    exe_name_end = exe_type[exe_name_start:].find(" ") + \
-                                exe_name_start
-        if exe_name_end:
-            exe_name = exe_type[exe_name_start:exe_name_end]
+        # can't use the file python magic binding here due to:
+        # https://bugs.astron.com/view.php?id=225, fixed in:
+        # https://github.com/file/file/commit/6faf2eba2b8c65fbac7acd36602500d757614d2f
+        # but not available to us until that is in a released version
+        # revert the commit this comment is in to see use python magic instead
+        try:
+            gdb_output = run_command(["gdb", "-c", corefile_fqpn, "-ex",
+                                      "info proc exe", "-ex",
+                                      "quit"])
+
+            last_line = gdb_output.splitlines()[-1]
+            cmd = last_line[7:-1]
+            # assume there are no arguments on cmd
+            find_char = "'"
+            if cmd.find(" ") > -1:
+                # there are arguments on cmd
+                find_char = " "
+            exe_name = cmd[0:cmd.find(find_char)]
+        except RuntimeError:
+            exe_name = None
+
+        if exe_name:
             cmd = [
                 "gdb", "-cd={}".format(daos_cores_dir),
                 "-ex", "set pagination off",
@@ -1504,13 +1490,13 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
                 with open(stack_trace_file, "w") as stack_trace:
                     stack_trace.writelines(get_output(cmd))
             except IOError as error:
-                print(
-                    "Error writing {}: {}".format(stack_trace_file, error))
+                print("Error writing {}: {}".format(stack_trace_file, error))
+                return_status = False
         else:
             print(
-                "Unable to determine executable name from: '{}'\nNot "
-                "creating stacktrace".format(exe_type))
-            print("core magic reports: {}".format(exe_type))
+                "Unable to determine executable name from gdb output: '{}'\n"
+                "Not creating stacktrace".format(gdb_output))
+            return_status = False
         print("Removing {}".format(corefile_fqpn))
         os.unlink(corefile_fqpn)
 

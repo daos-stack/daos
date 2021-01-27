@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(bio)
 
@@ -40,8 +23,8 @@ smd_dev_assign(uuid_t dev_id, int tgt_id)
 	struct d_uuid		key_dev, bond_dev;
 	int			rc;
 
-	D_ASSERT(!daos_handle_is_inval(smd_store.ss_dev_hdl));
-	D_ASSERT(!daos_handle_is_inval(smd_store.ss_tgt_hdl));
+	D_ASSERT(daos_handle_is_valid(smd_store.ss_dev_hdl));
+	D_ASSERT(daos_handle_is_valid(smd_store.ss_tgt_hdl));
 
 	uuid_copy(key_dev.uuid, dev_id);
 	smd_lock(&smd_store);
@@ -139,7 +122,7 @@ smd_dev_set_state(uuid_t dev_id, enum smd_dev_state state)
 	int			rc;
 
 	D_ASSERT(state == SMD_DEV_NORMAL || state == SMD_DEV_FAULTY);
-	D_ASSERT(!daos_handle_is_inval(smd_store.ss_dev_hdl));
+	D_ASSERT(daos_handle_is_valid(smd_store.ss_dev_hdl));
 
 	uuid_copy(key_dev.uuid, dev_id);
 	smd_lock(&smd_store);
@@ -204,7 +187,7 @@ fetch_dev_info(uuid_t dev_id, struct smd_dev_info **dev_info)
 	d_iov_t			 key, val;
 	int			 rc;
 
-	D_ASSERT(!daos_handle_is_inval(smd_store.ss_dev_hdl));
+	D_ASSERT(daos_handle_is_valid(smd_store.ss_dev_hdl));
 
 	uuid_copy(key_dev.uuid, dev_id);
 
@@ -245,7 +228,7 @@ smd_dev_get_by_tgt(int tgt_id, struct smd_dev_info **dev_info)
 	d_iov_t		key, val;
 	int		rc;
 
-	D_ASSERT(!daos_handle_is_inval(smd_store.ss_tgt_hdl));
+	D_ASSERT(daos_handle_is_valid(smd_store.ss_tgt_hdl));
 	smd_lock(&smd_store);
 
 	d_iov_set(&key, &tgt_id, sizeof(tgt_id));
@@ -277,7 +260,7 @@ smd_dev_list(d_list_t *dev_list, int *devs)
 	int			 rc;
 
 	D_ASSERT(dev_list && d_list_empty(dev_list));
-	D_ASSERT(!daos_handle_is_inval(smd_store.ss_dev_hdl));
+	D_ASSERT(daos_handle_is_valid(smd_store.ss_dev_hdl));
 
 	smd_lock(&smd_store);
 
@@ -350,8 +333,8 @@ smd_dev_replace(uuid_t old_id, uuid_t new_id, d_list_t *pool_list)
 	int			 i, tgt_id, rc;
 
 	D_ASSERT(uuid_compare(old_id, new_id) != 0);
-	D_ASSERT(!daos_handle_is_inval(smd_store.ss_dev_hdl));
-	D_ASSERT(!daos_handle_is_inval(smd_store.ss_tgt_hdl));
+	D_ASSERT(daos_handle_is_valid(smd_store.ss_dev_hdl));
+	D_ASSERT(daos_handle_is_valid(smd_store.ss_tgt_hdl));
 
 	uuid_copy(key_dev.uuid, new_id);
 	smd_lock(&smd_store);

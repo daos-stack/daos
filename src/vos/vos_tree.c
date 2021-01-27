@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -315,28 +298,15 @@ static void
 ktr_key_encode(struct btr_instance *tins, d_iov_t *key,
 	       daos_anchor_t *anchor)
 {
-	if (key) {
-		struct vos_embedded_key *embedded =
-			(struct vos_embedded_key *)anchor->da_buf;
-		D_ASSERT(key->iov_len <= sizeof(embedded->ek_key));
-
-		memcpy(embedded->ek_key, key->iov_buf, key->iov_len);
-		/** Pointers will have to be set on decode. */
-		embedded->ek_kiov.iov_len = key->iov_len;
-		embedded->ek_kiov.iov_buf_len = sizeof(embedded->ek_key);
-	}
+	if (key)
+		embedded_key_encode(key, anchor);
 }
 
 static void
 ktr_key_decode(struct btr_instance *tins, d_iov_t *key,
 	       daos_anchor_t *anchor)
 {
-	struct vos_embedded_key *embedded =
-		(struct vos_embedded_key *) anchor->da_buf;
-
-	/* Fix the pointer first */
-	embedded->ek_kiov.iov_buf = &embedded->ek_key[0];
-	*key = embedded->ek_kiov;
+	embedded_key_decode(key, anchor);
 }
 
 /** create a new key-record, or install an externally allocated key-record */
@@ -543,6 +513,7 @@ svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
 	rbund->rb_rsize	= irec->ir_size;
 	rbund->rb_gsize	= irec->ir_gsize;
 	rbund->rb_ver	= irec->ir_ver;
+	rbund->rb_dtx_state = vos_dtx_ent_state(irec->ir_dtx);
 	return 0;
 }
 
@@ -1208,7 +1179,7 @@ obj_tree_init(struct vos_object *obj)
 	struct vos_btr_attr *ta	= &vos_btr_attrs[0];
 	int		     rc;
 
-	if (!daos_handle_is_inval(obj->obj_toh))
+	if (daos_handle_is_valid(obj->obj_toh))
 		return 0;
 
 	D_ASSERT(obj->obj_df);
@@ -1249,7 +1220,7 @@ obj_tree_fini(struct vos_object *obj)
 	int	rc = 0;
 
 	/* NB: tree is created inplace, so don't need to destroy */
-	if (!daos_handle_is_inval(obj->obj_toh)) {
+	if (daos_handle_is_valid(obj->obj_toh)) {
 		D_ASSERT(obj->obj_df);
 		rc = dbtree_close(obj->obj_toh);
 		obj->obj_toh = DAOS_HDL_INVAL;

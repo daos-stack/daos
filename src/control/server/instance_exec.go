@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -135,12 +135,12 @@ func (srv *IOServerInstance) finishStartup(ctx context.Context, ready *srvpb.Not
 
 // publishInstanceExitFn returns onInstanceExitFn which will publish an exit
 // event using the provided publish function.
-func publishInstanceExitFn(publishFn func(events.Event), hostname string, srvIdx uint32) onInstanceExitFn {
+func publishInstanceExitFn(publishFn func(*events.RASEvent), hostname string, srvIdx uint32) onInstanceExitFn {
 	return func(_ context.Context, rank system.Rank, exitErr error) error {
 		if exitErr == nil {
 			return errors.New("expected non-nil exit error")
 		}
-		publishFn(events.NewRankExitEvent(hostname, srvIdx, rank.Uint32(),
+		publishFn(events.NewRankDownEvent(hostname, srvIdx, rank.Uint32(),
 			common.ExitStatus(exitErr.Error())))
 
 		return nil

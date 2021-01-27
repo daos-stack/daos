@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from __future__ import print_function
 
@@ -48,10 +31,6 @@ class DataMoverCommand(ExecutableCommand):
         self.daos_src_cont = FormattedParameter("--daos-src-cont {}")
         # DAOS destination container
         self.daos_dst_cont = FormattedParameter("--daos-dst-cont {}")
-        # Source service level
-        self.daos_src_svcl = FormattedParameter("--daos-src-svcl {}")
-        # Destination service level
-        self.daos_dst_svcl = FormattedParameter("--daos-dst-svcl {}")
         # DAOS prefix for unified namespace path
         self.daos_prefix = FormattedParameter("--daos-prefix {}")
         # read source list from file
@@ -103,23 +82,10 @@ class DataMoverCommand(ExecutableCommand):
         if src_pool:
             self.daos_src_pool.update(src_pool.uuid,
                                       "daos_src_pool" if display else None)
-            # setting src service level
-            src_svcl = ":".join(
-                [str(item) for item in [
-                    int(src_pool.pool.svc.rl_ranks[index])
-                    for index in range(src_pool.pool.svc.rl_nr)]])
-            self.daos_src_svcl.update(src_svcl, "src_svcl" if display else None)
 
         if dst_pool:
             self.daos_dst_pool.update(dst_pool.uuid,
                                       "daos_dst_pool" if display else None)
-            # setting destination service level
-            dst_svcl = ":".join(
-                [str(item) for item in [
-                    int(dst_pool.pool.svc.rl_ranks[index])
-                    for index in range(dst_pool.pool.svc.rl_nr)]])
-            self.daos_dst_svcl.update(dst_svcl, "dst_svcl" if display else None)
-
         if src_cont:
             self.daos_src_cont.update(src_cont.uuid,
                                       "daos_src_cont" if display else None)
@@ -131,7 +97,7 @@ class DataMoverCommand(ExecutableCommand):
 class DataMover(DataMoverCommand):
     """Class defining an object of type DataMoverCommand."""
 
-    def __init__(self, hosts, timeout=30):
+    def __init__(self, hosts, tmp, timeout=30):
         """Create a datamover object."""
         super(DataMover, self).__init__(
             "/run/datamover/*", "dcp")
@@ -139,6 +105,21 @@ class DataMover(DataMoverCommand):
         # set params
         self.timeout = timeout
         self.hosts = hosts
+        self.tmp = tmp
+
+        # Compatibility option
+        self.has_src_pool = False
+
+        self.exit_status_exception = False
+        self.get_version()
+        self.exit_status_exception = True
+
+    def get_version(self):
+        """Checks which version of dcp is available."""
+        self.print_usage.update(True)
+        result = self.run(self.tmp, 1)
+        if "--daos-src-pool" in result.stdout:
+            self.has_src_pool = True
 
     def run(self, tmp, processes):
         # pylint: disable=arguments-differ
@@ -152,6 +133,31 @@ class DataMover(DataMoverCommand):
 
         """
         self.log.info('Starting datamover')
+
+        # Handle compatibility
+        if not self.has_src_pool:
+            src_pool = self.daos_src_pool.value
+            src_cont = self.daos_src_cont.value
+            src_path = self.src_path.value
+            dst_pool = self.daos_dst_pool.value
+            dst_cont = self.daos_dst_cont.value
+            dst_path = self.dest_path.value
+            if src_pool or src_cont:
+                self.log.info(
+                    "Converting --daos-src-pool to daos://pool/cont/path")
+                src_path = "daos://{}/{}/{}".format(
+                    src_pool, src_cont, src_path)
+                self.src_path.update(src_path)
+                self.daos_src_pool.update(None)
+                self.daos_src_cont.update(None)
+            if dst_pool or dst_cont:
+                self.log.info(
+                    "Converting --daos-dst-pool to daos://pool/cont/path")
+                dst_path = "daos://{}/{}/{}".format(
+                    dst_pool, dst_cont, dst_path)
+                self.dest_path.update(dst_path)
+                self.daos_dst_pool.update(None)
+                self.daos_dst_cont.update(None)
 
         # Get job manager cmd
         mpirun = Mpirun(self, mpitype="mpich")

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@
 #include <daos_prop.h>
 
 #include "svc.pb-c.h"
-#include "storage_query.pb-c.h"
+#include "smd.pb-c.h"
 #include "rpc.h"
 #include "srv_layout.h"
 
@@ -86,7 +86,7 @@ int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 int ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			 const char *group, uint32_t force);
 int ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-		       const char *group);
+		       uuid_t *handles, size_t n_handles, const char *group);
 int ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 				     uint32_t rank,
 				     struct pool_target_id_list *tgt_list,
@@ -126,15 +126,15 @@ struct mgmt_bio_health {
 
 int ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid,
 			     char *tgt_id);
-int ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp);
-int ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp);
-int ds_mgmt_dev_state_query(uuid_t uuid, Mgmt__DevStateResp *resp);
-int ds_mgmt_dev_set_faulty(uuid_t uuid, Mgmt__DevStateResp *resp);
+int ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp);
+int ds_mgmt_smd_list_pools(Ctl__SmdPoolResp *resp);
+int ds_mgmt_dev_state_query(uuid_t uuid, Ctl__DevStateResp *resp);
+int ds_mgmt_dev_set_faulty(uuid_t uuid, Ctl__DevStateResp *resp);
 int ds_mgmt_get_bs_state(uuid_t bs_uuid, int *bs_state);
 void ds_mgmt_hdlr_get_bs_state(crt_rpc_t *rpc_req);
 int ds_mgmt_dev_replace(uuid_t old_uuid, uuid_t new_uuid,
-			Mgmt__DevReplaceResp *resp);
-int ds_mgmt_dev_identify(uuid_t uuid, Mgmt__DevIdentifyResp *resp);
+			Ctl__DevReplaceResp *resp);
+int ds_mgmt_dev_identify(uuid_t uuid, Ctl__DevIdentifyResp *resp);
 
 /** srv_target.c */
 int ds_mgmt_tgt_setup(void);

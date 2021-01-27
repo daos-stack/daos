@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B620873.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(vos)
 
@@ -166,7 +149,7 @@ merge_free_ext(struct vea_space_info *vsi, struct vea_free_extent *ext_in,
 	else
 		return -DER_INVAL;
 
-	D_ASSERT(!daos_handle_is_inval(btr_hdl));
+	D_ASSERT(daos_handle_is_valid(btr_hdl));
 	d_iov_set(&key, &ext_in->vfe_blk_off, sizeof(ext_in->vfe_blk_off));
 repeat:
 	d_iov_set(&key_out, NULL, 0);
@@ -295,7 +278,7 @@ compound_free(struct vea_space_info *vsi, struct vea_free_extent *vfe,
 	dummy.ve_ext = *vfe;
 
 	/* Add to in-memory free extent tree */
-	D_ASSERT(!daos_handle_is_inval(vsi->vsi_free_btr));
+	D_ASSERT(daos_handle_is_valid(vsi->vsi_free_btr));
 	d_iov_set(&key, &dummy.ve_ext.vfe_blk_off,
 		  sizeof(dummy.ve_ext.vfe_blk_off));
 	d_iov_set(&val, &dummy, sizeof(dummy));
@@ -346,7 +329,7 @@ persistent_free(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 	dummy.vfe_age = VEA_EXT_AGE_MAX;
 
 	/* Add to persistent free extent tree */
-	D_ASSERT(!daos_handle_is_inval(btr_hdl));
+	D_ASSERT(daos_handle_is_valid(btr_hdl));
 	d_iov_set(&key, &dummy.vfe_blk_off, sizeof(dummy.vfe_blk_off));
 	d_iov_set(&val, &dummy, sizeof(dummy));
 
@@ -378,7 +361,7 @@ aggregated_free(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 	dummy.ve_ext = *vfe;
 
 	/* Add to in-memory aggregate free extent tree */
-	D_ASSERT(!daos_handle_is_inval(btr_hdl));
+	D_ASSERT(daos_handle_is_valid(btr_hdl));
 	d_iov_set(&key, &dummy.ve_ext.vfe_blk_off,
 		  sizeof(dummy.ve_ext.vfe_blk_off));
 	d_iov_set(&val, &dummy, sizeof(dummy));
@@ -454,7 +437,7 @@ migrate_end_cb(void *data, bool noop)
 		 * deletion.
 		 */
 		d_iov_set(&key, &vfe.vfe_blk_off, sizeof(vfe.vfe_blk_off));
-		D_ASSERT(!daos_handle_is_inval(vsi->vsi_agg_btr));
+		D_ASSERT(daos_handle_is_valid(vsi->vsi_agg_btr));
 		rc = dbtree_delete(vsi->vsi_agg_btr, BTR_PROBE_EQ, &key, NULL);
 		if (rc) {
 			D_ERROR("Remove ["DF_U64", %u] from aggregated "

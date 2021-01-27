@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(bio)
 
@@ -53,7 +36,7 @@ smd_pool_assign(uuid_t pool_id, int tgt_id, uint64_t blob_id, uint64_t blob_sz)
 	d_iov_t			key, val;
 	int			tgt_idx, rc;
 
-	D_ASSERT(!daos_handle_is_inval(smd_store.ss_pool_hdl));
+	D_ASSERT(daos_handle_is_valid(smd_store.ss_pool_hdl));
 
 	uuid_copy(key_pool.uuid, pool_id);
 	smd_lock(&smd_store);
@@ -123,7 +106,7 @@ smd_pool_unassign(uuid_t pool_id, int tgt_id)
 	uint64_t		*blob_src, *blob_tgt;
 	int			 tgt_idx, rc, move_cnt;
 
-	D_ASSERT(!daos_handle_is_inval(smd_store.ss_pool_hdl));
+	D_ASSERT(daos_handle_is_valid(smd_store.ss_pool_hdl));
 
 	uuid_copy(key_pool.uuid, pool_id);
 	smd_lock(&smd_store);
@@ -220,7 +203,7 @@ smd_pool_get(uuid_t pool_id, struct smd_pool_info **pool_info)
 	d_iov_t			 key, val;
 	int			 rc;
 
-	D_ASSERT(!daos_handle_is_inval(smd_store.ss_pool_hdl));
+	D_ASSERT(daos_handle_is_valid(smd_store.ss_pool_hdl));
 
 	uuid_copy(key_pool.uuid, pool_id);
 	smd_lock(&smd_store);
@@ -254,7 +237,7 @@ smd_pool_get_blob(uuid_t pool_id, int tgt_id, uint64_t *blob_id)
 	d_iov_t			key, val;
 	int			tgt_idx, rc;
 
-	D_ASSERT(!daos_handle_is_inval(smd_store.ss_pool_hdl));
+	D_ASSERT(daos_handle_is_valid(smd_store.ss_pool_hdl));
 
 	uuid_copy(key_pool.uuid, pool_id);
 	smd_lock(&smd_store);
@@ -295,7 +278,7 @@ smd_pool_list(d_list_t *pool_list, int *pools)
 	int			 rc;
 
 	D_ASSERT(pool_list && d_list_empty(pool_list));
-	D_ASSERT(!daos_handle_is_inval(smd_store.ss_pool_hdl));
+	D_ASSERT(daos_handle_is_valid(smd_store.ss_pool_hdl));
 
 	smd_lock(&smd_store);
 
@@ -367,7 +350,7 @@ smd_replace_blobs(struct smd_pool_info *info, uint32_t tgt_cnt, int *tgts)
 	int			tgt_id, tgt_idx;
 	int			i, rc;
 
-	D_ASSERT(!daos_handle_is_inval(smd_store.ss_pool_hdl));
+	D_ASSERT(daos_handle_is_valid(smd_store.ss_pool_hdl));
 
 	uuid_copy(key_pool.uuid, info->spi_id);
 

@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -167,7 +150,6 @@ test_setup_pool_connect(void **state, struct test_pool *pool)
 
 		print_message("setup: connecting to pool\n");
 		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-				       NULL /* arg->pool.svc */,
 				       arg->pool.pool_connect_flags,
 				       &arg->pool.poh, &arg->pool.pool_info,
 				       NULL /* ev */);
@@ -396,7 +378,7 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 
 	if (daos_handle_is_inval(poh)) {
 		rc = daos_pool_connect(pool->pool_uuid, arg->group,
-				       NULL /* svc */, DAOS_PC_RW,
+				       DAOS_PC_RW,
 				       &poh, &pool->pool_info,
 				       NULL /* ev */);
 		if (rc != 0) { /* destroy straight away */
@@ -405,7 +387,7 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 		}
 	}
 
-	while (!daos_handle_is_inval(poh)) {
+	while (daos_handle_is_valid(poh)) {
 		struct daos_rebuild_status *rstat = &pinfo.pi_rebuild_st;
 
 		memset(&pinfo, 0, sizeof(pinfo));
@@ -502,7 +484,7 @@ test_teardown(void **state)
 	if (arg->multi_rank)
 		MPI_Barrier(MPI_COMM_WORLD);
 
-	if (!daos_handle_is_inval(arg->coh)) {
+	if (daos_handle_is_valid(arg->coh)) {
 		rc = test_teardown_cont_hdl(arg);
 		if (rc)
 			return rc;
@@ -527,7 +509,7 @@ test_teardown(void **state)
 	if (!uuid_is_null(arg->pool.pool_uuid) && !arg->pool.slave &&
 	    !arg->pool.destroyed) {
 		if (arg->myrank != 0) {
-			if (!daos_handle_is_inval(arg->pool.poh))
+			if (daos_handle_is_valid(arg->pool.poh))
 				rc = daos_pool_disconnect(arg->pool.poh, NULL);
 		}
 		if (arg->multi_rank)
@@ -545,7 +527,7 @@ test_teardown(void **state)
 		}
 	}
 
-	if (!daos_handle_is_inval(arg->eq)) {
+	if (daos_handle_is_valid(arg->eq)) {
 		rc = daos_eq_destroy(arg->eq, 0);
 		if (rc) {
 			print_message("failed to destroy eq: %d\n", rc);
@@ -637,7 +619,7 @@ test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo)
 
 	if (daos_handle_is_inval(arg->pool.poh)) {
 		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-				       NULL /* svc */, DAOS_PC_RW,
+				       DAOS_PC_RW,
 				       &arg->pool.poh, pinfo,
 				       NULL /* ev */);
 		if (rc) {
@@ -837,13 +819,13 @@ run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
 static void
 daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
 		     const char *grp, const char *dmg_config,
-		     const d_rank_list_t *svc, d_rank_t rank, int tgt_idx)
+		     d_rank_t rank, int tgt_idx)
 {
 	char		dmg_cmd[DTS_CFG_MAX];
 	int		rc;
 
 	/* build and invoke dmg cmd */
-	dts_create_config(dmg_cmd, "dmg pool %s -i --pool=" DF_UUIDF " --rank=%d",
+	dts_create_config(dmg_cmd, "dmg pool %s --pool=" DF_UUIDF " --rank=%d",
 			  sub_cmd, DP_UUID(pool_uuid), rank);
 
 	if (tgt_idx != -1)
@@ -858,46 +840,42 @@ daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
 
 void
 daos_exclude_target(const uuid_t pool_uuid, const char *grp,
-		    const char *dmg_config, const d_rank_list_t *svc,
+		    const char *dmg_config,
 		    d_rank_t rank, int tgt_idx)
 {
-	daos_dmg_pool_target("exclude", pool_uuid, grp, dmg_config, svc,
+	daos_dmg_pool_target("exclude", pool_uuid, grp, dmg_config,
 			     rank, tgt_idx);
 }
 
 void
 daos_reint_target(const uuid_t pool_uuid, const char *grp,
-		  const char *dmg_config, const d_rank_list_t *svc,
-		  d_rank_t rank, int tgt_idx)
+		  const char *dmg_config, d_rank_t rank, int tgt_idx)
 {
-	daos_dmg_pool_target("reintegrate", pool_uuid, grp, dmg_config, svc,
+	daos_dmg_pool_target("reintegrate", pool_uuid, grp, dmg_config,
 			     rank, tgt_idx);
 }
 
 void
 daos_drain_target(const uuid_t pool_uuid, const char *grp,
-		  const char *dmg_config, const d_rank_list_t *svc,
-		  d_rank_t rank, int tgt_idx)
+		  const char *dmg_config, d_rank_t rank, int tgt_idx)
 {
 
-	daos_dmg_pool_target("drain", pool_uuid, grp, dmg_config, svc,
+	daos_dmg_pool_target("drain", pool_uuid, grp, dmg_config,
 			     rank, tgt_idx);
 }
 
 void
 daos_exclude_server(const uuid_t pool_uuid, const char *grp,
-		    const char *dmg_config, const d_rank_list_t *svc,
-		    d_rank_t rank)
+		    const char *dmg_config, d_rank_t rank)
 {
-	daos_exclude_target(pool_uuid, grp, dmg_config, svc, rank, -1);
+	daos_exclude_target(pool_uuid, grp, dmg_config, rank, -1);
 }
 
 void
 daos_reint_server(const uuid_t pool_uuid, const char *grp,
-		  const char *dmg_config, const d_rank_list_t *svc,
-		  d_rank_t rank)
+		  const char *dmg_config, d_rank_t rank)
 {
-	daos_reint_target(pool_uuid, grp, dmg_config, svc, rank, -1);
+	daos_reint_target(pool_uuid, grp, dmg_config, rank, -1);
 }
 
 void
@@ -940,7 +918,7 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
 
 	/* build and invoke dmg cmd to stop the server */
-	dts_create_config(dmg_cmd, "dmg system stop -i -r %d --force", rank);
+	dts_create_config(dmg_cmd, "dmg system stop -r %d --force", rank);
 	if (arg->dmg_config != NULL)
 		dts_append_config(dmg_cmd, " -o %s", arg->dmg_config);
 

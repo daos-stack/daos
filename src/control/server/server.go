@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2020 Intel Corporation.
+// (C) Copyright 2018-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -229,11 +229,14 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	defer eventPubSub.Close()
 
 	// Init management RPC subsystem.
-	mgmtSvc := newMgmtSvc(harness, membership, sysdb, eventPubSub)
+	mgmtSvc := newMgmtSvc(harness, membership, sysdb, rpcClient, eventPubSub)
 
-	// Forward received events to management service by default.
+	// By default, forward received RASTypeStateChange events to management
+	// service leader to be handled and log RASTypeInfoOnly to INFO.
 	eventForwarder := control.NewEventForwarder(rpcClient, cfg.AccessPoints)
-	eventPubSub.Subscribe(events.RASTypeAny, eventForwarder)
+	eventPubSub.Subscribe(events.RASTypeStateChange, eventForwarder)
+	eventLogger := control.NewEventLogger(log)
+	eventPubSub.Subscribe(events.RASTypeInfoOnly, eventLogger)
 
 	var netDevClass uint32
 
@@ -253,6 +256,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	// Create a closure to be used for joining ioserver instances.
 	joinInstance := func(ctx context.Context, req *control.SystemJoinReq) (*control.SystemJoinResp, error) {
 		req.SetHostList(cfg.AccessPoints)
+		req.SetSystem(cfg.SystemName)
 		req.ControlAddr = controlAddr
 		return control.SystemJoin(ctx, rpcClient, req)
 	}
@@ -339,7 +343,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	}
 
 	// Create and setup control service.
-	controlService := NewControlService(log, harness, bdevProvider, scmProvider, cfg, membership, sysdb, rpcClient)
+	controlService := NewControlService(log, harness, bdevProvider, scmProvider, cfg, eventPubSub)
 	if err := controlService.Setup(); err != nil {
 		return errors.Wrap(err, "setup control service")
 	}
@@ -384,7 +388,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	}...)
 
 	grpcServer := grpc.NewServer(srvOpts...)
-	ctlpb.RegisterMgmtCtlServer(grpcServer, controlService)
+	ctlpb.RegisterCtlSvcServer(grpcServer, controlService)
 
 	mgmtSvc.clientNetworkCfg = &config.ClientNetworkCfg{
 		Provider:        cfg.Fabric.Provider,
@@ -406,7 +410,8 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		// Stop forwarding events to MS and instead start handling
 		// received forwarded (and local) events.
 		eventPubSub.Reset()
-		eventPubSub.Subscribe(events.RASTypeRankStateChange, membership)
+		eventPubSub.Subscribe(events.RASTypeStateChange, membership)
+		eventPubSub.Subscribe(events.RASTypeStateChange, sysdb)
 
 		return nil
 	})
@@ -416,7 +421,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		// Stop handling received forwarded (in addition to local)
 		// events and start forwarding events to the new MS leader.
 		eventPubSub.Reset()
-		eventPubSub.Subscribe(events.RASTypeAny, eventForwarder)
+		eventPubSub.Subscribe(events.RASTypeStateChange, eventForwarder)
 
 		return nil
 	})
@@ -439,5 +444,5 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		shutdown()
 	}()
 
-	return errors.Wrapf(harness.Start(ctx, sysdb, cfg), "%s exited with error", build.DataPlaneName)
+	return errors.Wrapf(harness.Start(ctx, sysdb, eventPubSub, cfg), "%s exited with error", build.DataPlaneName)
 }

@@ -269,14 +269,6 @@ public class DaosEventQueue {
     }
   }
 
-//  public void releaseEvent(int idx) {
-//    if (idx >= nbrOfEvents) {
-//      throw new IllegalArgumentException("event index " + idx + " should not exceed number of total events, " +
-//          nbrOfEvents);
-//    }
-//    events[idx].putBack();
-//  }
-
   /**
    * It's just for accessing event without acquiring it for DAOS API calls.
    * Use {@link #acquireEvent()} or {@link #acquireEventBlocking(int, List)} instead for DAOS API calls.
@@ -476,5 +468,4 @@ public class DaosEventQueue {
      */
     void release();
   }
-
 }

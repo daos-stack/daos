@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -777,7 +777,7 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		members    Members
-		event      events.Event
+		event      *events.RASEvent
 		expMembers Members
 	}{
 		"nil event": {
@@ -785,18 +785,18 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 			event:      nil,
 			expMembers: members,
 		},
-		"event on unrecognised rank": {
+		"event on unrecognized rank": {
 			members:    members,
-			event:      events.NewRankExitEvent("foo", 0, 4, common.NormalExit),
+			event:      events.NewRankDownEvent("foo", 0, 4, common.NormalExit),
 			expMembers: members,
 		},
 		"state updated on unscheduled exit": {
 			members: members,
-			event:   events.NewRankExitEvent("foo", 0, 1, common.NormalExit),
+			event:   events.NewRankDownEvent("foo", 0, 1, common.NormalExit),
 			expMembers: Members{
 				MockMember(t, 0, MemberStateJoined),
 				MockMember(t, 1, MemberStateErrored).WithInfo(
-					errors.Wrap(common.NormalExit, events.RASRankExit.Desc()).Error()),
+					errors.Wrap(common.NormalExit, "DAOS rank exited unexpectedly").Error()),
 				MockMember(t, 2, MemberStateStopped),
 				MockMember(t, 3, MemberStateEvicted),
 			},
@@ -814,7 +814,7 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 			ps := events.NewPubSub(ctx, log)
 			defer ps.Close()
 
-			ps.Subscribe(events.RASTypeRankStateChange, ms)
+			ps.Subscribe(events.RASTypeStateChange, ms)
 
 			ps.Publish(tc.event)
 

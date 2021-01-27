@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -508,7 +508,7 @@ dc_pool_connect(tse_task_t *task)
 		/** sy_info.crt_ctx_share_addr */
 		/** sy_info.crt_timeout */
 
-		rc = rsvc_client_init(&pool->dp_client, args->svc);
+		rc = rsvc_client_init(&pool->dp_client, NULL);
 		if (rc != 0)
 			D_GOTO(out_pool, rc);
 
@@ -1113,7 +1113,7 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 				DP_UUID(args->uuid), rc);
 			D_GOTO(out_state, rc);
 		}
-		rc = rsvc_client_init(&state->client, args->svc);
+		rc = rsvc_client_init(&state->client, NULL);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": failed to rsvc_client_init, rc %d.\n",
 				DP_UUID(args->uuid), rc);
@@ -1541,130 +1541,6 @@ struct pool_evict_state {
 	struct rsvc_client	client;
 	struct dc_mgmt_sys     *sys;
 };
-
-static int
-pool_evict_cp(tse_task_t *task, void *data)
-{
-	struct pool_evict_state	*state = dc_task_get_priv(task);
-	crt_rpc_t		*rpc = *((crt_rpc_t **)data);
-	struct pool_evict_in	*in = crt_req_get(rpc);
-	struct pool_evict_out	*out = crt_reply_get(rpc);
-	bool			 free_state = true;
-	int			 rc = task->dt_result;
-
-	rc = rsvc_client_complete_rpc(&state->client, &rpc->cr_ep, rc,
-				      out->pvo_op.po_rc, &out->pvo_op.po_hint);
-	if (rc == RSVC_CLIENT_RECHOOSE ||
-	    (rc == RSVC_CLIENT_PROCEED &&
-	     daos_rpc_retryable_rc(out->pvo_op.po_rc))) {
-		rc = tse_task_reinit(task);
-		if (rc != 0)
-			D_GOTO(out, rc);
-		free_state = false;
-		D_GOTO(out, rc = 0);
-	}
-
-	if (rc != 0) {
-		D_ERROR("RPC error while evicting pool handles: "DF_RC"\n",
-			DP_RC(rc));
-		D_GOTO(out, rc);
-	}
-
-	rc = out->pvo_op.po_rc;
-	if (rc != 0) {
-		D_ERROR("failed to evict pool handles: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc);
-	}
-
-	D_DEBUG(DF_DSMC, DF_UUID": evicted\n", DP_UUID(in->pvi_op.pi_uuid));
-
-out:
-	crt_req_decref(rpc);
-	if (free_state) {
-		rsvc_client_fini(&state->client);
-		dc_mgmt_sys_detach(state->sys);
-		D_FREE(state);
-	}
-	return rc;
-}
-
-int
-dc_pool_evict(tse_task_t *task)
-{
-	struct pool_evict_state	*state;
-	crt_endpoint_t		 ep;
-	daos_pool_evict_t	*args;
-	crt_rpc_t		*rpc;
-	struct pool_evict_in	*in;
-	int			 rc;
-
-	args = dc_task_get_args(task);
-	state = dc_task_get_priv(task);
-
-	if (state == NULL) {
-		if (!daos_uuid_valid(args->uuid))
-			D_GOTO(out_task, rc = -DER_INVAL);
-
-		D_DEBUG(DF_DSMC, DF_UUID": evicting\n", DP_UUID(args->uuid));
-
-		D_ALLOC_PTR(state);
-		if (state == NULL) {
-			D_GOTO(out_task, rc = -DER_NOMEM);
-		}
-
-		rc = dc_mgmt_sys_attach(args->grp, &state->sys);
-		if (rc != 0)
-			D_GOTO(out_state, rc);
-		rc = rsvc_client_init(&state->client, args->svc);
-		if (rc != 0)
-			D_GOTO(out_group, rc);
-
-		daos_task_set_priv(task, state);
-	}
-
-	ep.ep_grp = state->sys->sy_group;
-	rc = dc_pool_choose_svc_rank(args->uuid, &state->client,
-				     NULL /* mutex */, state->sys, &ep);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
-			DP_UUID(args->uuid), DP_RC(rc));
-		goto out_client;
-	}
-	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_EVICT, &rpc);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create pool evict rpc: %d\n",
-			DP_UUID(args->uuid), rc);
-		D_GOTO(out_client, rc);
-	}
-
-	in = crt_req_get(rpc);
-	uuid_copy(in->pvi_op.pi_uuid, args->uuid);
-
-	crt_req_addref(rpc);
-
-	rc = tse_task_register_comp_cb(task, pool_evict_cp, &rpc, sizeof(rpc));
-	if (rc != 0)
-		D_GOTO(out_rpc, rc);
-
-	rc = daos_rpc_send(rpc, task);
-	if (rc != 0)
-		D_GOTO(out_rpc, rc);
-
-	return rc;
-
-out_rpc:
-	crt_req_decref(rpc);
-	crt_req_decref(rpc);
-out_client:
-	rsvc_client_fini(&state->client);
-out_group:
-	dc_mgmt_sys_detach(state->sys);
-out_state:
-	D_FREE(state);
-out_task:
-	tse_task_complete(task, rc);
-	return rc;
-}
 
 int
 dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver)
