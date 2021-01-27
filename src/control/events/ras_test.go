@@ -29,12 +29,15 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/logging"
 )
+
+var defEvtCmpOpts = []cmp.Option{cmpopts.IgnoreUnexported(RASEvent{})}
 
 func TestEvents_HandleClusterEvent(t *testing.T) {
 	genericEvent := mockGenericEvent()

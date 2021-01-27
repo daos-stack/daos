@@ -30,6 +30,8 @@ import "C"
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 
 	"github.com/pkg/errors"
 
@@ -129,6 +131,20 @@ type RASEvent struct {
 	ObjID        string          `json:"obj_id"`
 	CtlOp        string          `json:"ctl_op"`
 	ExtendedInfo RASExtendedInfo `json:"extended_info"`
+
+	forwarded bool
+}
+
+// IsForwarded returns true if event has been forwarded between hosts.
+func (evt *RASEvent) IsForwarded() bool {
+	return evt.forwarded
+}
+
+// WithIsForwarded sets the forwarded state of this event.
+func (evt *RASEvent) WithIsForwarded(isForwarded bool) *RASEvent {
+	evt.forwarded = isForwarded
+
+	return evt
 }
 
 // MarshalJSON marshals RASEvent to JSON.
@@ -224,6 +240,57 @@ func (evt *RASEvent) FromProto(pbEvt *sharedpb.RASEvent) (err error) {
 	return
 }
 
+// PrintRAS generates a string representation of the event consistent with
+// what is logged in the data plane.
+func (evt *RASEvent) PrintRAS() string {
+	var b strings.Builder
+
+	/* Log mandatory RAS fields. */
+	fmt.Fprintf(&b, "&&& RAS EVENT id: [%s]", evt.ID)
+	if evt.Timestamp != "" {
+		fmt.Fprintf(&b, " ts: [%s]", evt.Timestamp)
+	}
+	if evt.Hostname != "" {
+		fmt.Fprintf(&b, " host: [%s]", evt.Hostname)
+	}
+	fmt.Fprintf(&b, " type: [%s] sev: [%s]", evt.Type, evt.Severity)
+	if evt.Msg != "" {
+		fmt.Fprintf(&b, " msg: [%s]", evt.Msg)
+	}
+	fmt.Fprintf(&b, " pid: [%d]", evt.ProcID)
+	fmt.Fprintf(&b, " tid: [%d]", evt.ThreadID)
+
+	/* Log optional RAS fields. */
+	if evt.HWID != "" {
+		fmt.Fprintf(&b, " hwid: [%s]", evt.HWID)
+	}
+	if evt.Rank != C.CRT_NO_RANK {
+		fmt.Fprintf(&b, " rank: [%d]", evt.Rank)
+	}
+	if evt.JobID != "" {
+		fmt.Fprintf(&b, " jobid: [%s]", evt.JobID)
+	}
+	if evt.PoolUUID != "" {
+		fmt.Fprintf(&b, " pool: [%s]", evt.PoolUUID)
+	}
+	if evt.ContUUID != "" {
+		fmt.Fprintf(&b, " container: [%s]", evt.ContUUID)
+	}
+	if evt.ObjID != "" {
+		fmt.Fprintf(&b, " objid: [%s]", evt.ObjID)
+	}
+	if evt.CtlOp != "" {
+		fmt.Fprintf(&b, " ctlop: [%s]", evt.CtlOp)
+	}
+
+	/* Log data blob if event info is non-specific */
+	if ei := evt.GetStrInfo(); ei != nil {
+		fmt.Fprintf(&b, " data: [%s]", *ei)
+	}
+
+	return b.String()
+}
+
 // HandleClusterEvent extracts event field from protobuf request message and
 // converts to concrete event type that implements the Event interface.
 // The Event is then published to make available to locally subscribed consumers
@@ -234,8 +301,6 @@ func (ps *PubSub) HandleClusterEvent(req *sharedpb.ClusterEventReq) (*sharedpb.C
 		return nil, errors.New("nil request")
 	case req.Event == nil:
 		return nil, errors.New("nil event in request")
-	case req.Sequence == 0:
-		ps.log.Debug("no sequence number in request")
 	}
 
 	event, err := NewFromProto(req.Event)

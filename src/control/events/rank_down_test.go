@@ -48,7 +48,7 @@ func TestEvents_ConvertRankDown(t *testing.T) {
 
 	t.Logf("native event: %+v, %+v", returnedEvent, returnedEvent.ExtendedInfo)
 
-	if diff := cmp.Diff(event, returnedEvent); diff != "" {
+	if diff := cmp.Diff(event, returnedEvent, defEvtCmpOpts...); diff != "" {
 		t.Fatalf("unexpected event (-want, +got):\n%s\n", diff)
 	}
 }

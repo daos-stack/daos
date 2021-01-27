@@ -231,12 +231,13 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	// Init management RPC subsystem.
 	mgmtSvc := newMgmtSvc(harness, membership, sysdb, rpcClient, eventPubSub)
 
-	// By default, forward received RASTypeStateChange events to management
-	// service leader to be handled and log RASTypeInfoOnly to INFO.
+	// Forward published actionable events (type RASTypeStateChange) to the
+	// management service leader, behavior is updated on leadership change.
 	eventForwarder := control.NewEventForwarder(rpcClient, cfg.AccessPoints)
 	eventPubSub.Subscribe(events.RASTypeStateChange, eventForwarder)
+	// Log events on the host that they were raised (and first published) on.
 	eventLogger := control.NewEventLogger(log)
-	eventPubSub.Subscribe(events.RASTypeInfoOnly, eventLogger)
+	eventPubSub.Subscribe(events.RASTypeAny, eventLogger)
 
 	var netDevClass uint32
 
