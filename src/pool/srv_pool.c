@@ -4890,7 +4890,7 @@ transfer_ranks_buf(d_rank_t *ranks_buf, size_t nranks,
 	if (rc != 0)
 		D_GOTO(out, rc);
 	if (remote_bulk_size < ranks_buf_size) {
-		D_ERROR(DF_UUID": remote ranks buffer("DF_U64")"
+		D_ERROR(DF_UUID ": remote ranks buffer(" DF_U64 ")"
 			" < required (%lu)\n", DP_UUID(svc->ps_uuid),
 			remote_bulk_size, ranks_buf_size);
 		D_GOTO(out, rc = -DER_TRUNC);
@@ -4938,7 +4938,6 @@ out:
 	return rc;
 }
 
-
 /**
  * Send CaRT RPC to pool svc to get list of storage server ranks.
  *
@@ -4973,7 +4972,7 @@ rechoose:
 	ep.ep_grp = NULL; /* primary group */
 	rc = rsvc_client_choose(&client, &ep);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": cannot find pool service: " DF_RC "\n",
+		D_ERROR(DF_UUID ": cannot find pool service: " DF_RC "\n",
 			DP_UUID(uuid), DP_RC(rc));
 		goto out_client;
 	}
@@ -4981,7 +4980,7 @@ rechoose:
 realloc_resp:
 	rc = pool_req_create(info->dmi_ctx, &ep, POOL_RANKS_GET, &rpc);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create POOL_RANKS_GET rpc, "
+		D_ERROR(DF_UUID ": failed to create POOL_RANKS_GET rpc, "
 			DF_RC "\n", DP_UUID(uuid), DP_RC(rc));
 		D_GOTO(out_client, rc);
 	}
@@ -5029,7 +5028,7 @@ realloc_resp:
 		dss_sleep(1000 /* ms */);
 		D_GOTO(realloc_resp, rc);
 	} else if (rc != 0) {
-		D_ERROR(DF_UUID": failed to get ranks, " DF_RC "\n",
+		D_ERROR(DF_UUID ": failed to get ranks, " DF_RC "\n",
 			DP_UUID(uuid), DP_RC(rc));
 	} else {
 		out_ranks->rl_nr = out->prgo_nranks;
@@ -5060,7 +5059,7 @@ ds_pool_ranks_get_handler(crt_rpc_t *rpc)
 	struct pool_svc			*svc;
 	int				 rc;
 
-	D_DEBUG(DF_DSMS, DF_UUID ": processing rpc %p: \n",
+	D_DEBUG(DF_DSMS, DF_UUID ": processing rpc %p:\n",
 		DP_UUID(in->prgi_op.pi_uuid), rpc);
 
 	rc = pool_svc_lookup_leader(in->prgi_op.pi_uuid, &svc,
@@ -5107,7 +5106,6 @@ out:
 		DP_UUID(in->prgi_op.pi_uuid), rpc, rc);
 	crt_reply_send(rpc);
 }
-
 
 /* This RPC could be implemented by ds_rsvc. */
 void

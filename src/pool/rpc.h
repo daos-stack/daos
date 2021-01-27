@@ -315,7 +315,6 @@ struct pool_target_addr_list {
 	((uint32_t)		(pei_ndomains)		CRT_VAR) \
 	((int32_t)		(pei_domains)		CRT_ARRAY)
 
-
 #define DAOS_OSEQ_POOL_EXTEND /* output fields */		 \
 	((struct pool_op_out)	(peo_op)		CRT_VAR) \
 

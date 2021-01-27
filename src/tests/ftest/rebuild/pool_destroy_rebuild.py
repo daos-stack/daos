@@ -6,7 +6,6 @@
 """
 from __future__ import print_function
 
-from apricot import skipForTicket
 from ior_test_base import IorTestBase
 
 # pylint: disable=too-few-public-methods,too-many-ancestors
