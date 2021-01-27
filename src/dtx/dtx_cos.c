@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -372,6 +372,9 @@ dtx_add_cos(struct ds_cont_child *cont, struct dtx_entry *dte,
 	d_iov_t				kiov;
 	d_iov_t				riov;
 	int				rc;
+
+	if (cont->sc_cos_shutdown)
+		return -DER_SHUTDOWN;
 
 	D_ASSERT(dte->dte_mbs != NULL);
 	D_ASSERT(epoch != DAOS_EPOCH_MAX);

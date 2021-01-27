@@ -1,16 +1,23 @@
 #!/usr/bin/python3
+"""
+Node local test (NLT).
 
-"""Test code for dfuse"""
+Test script for running DAOS on a single node over tmpfs and running initial
+smoke/unit tests.
+
+Includes support for DFuse with a number of unit tests, as well as stressing
+the client with fault injection of D_ALLOC() usage.
+"""
 
 # pylint: disable=too-many-lines
 # pylint: disable=too-few-public-methods
 # pylint: disable=protected-access
 
 import os
+import bz2
 import sys
 import time
 import uuid
-import yaml
 import json
 import signal
 import stat
@@ -20,8 +27,8 @@ import functools
 import subprocess
 import tempfile
 import pickle
-
 from collections import OrderedDict
+import yaml
 
 class NLTestFail(Exception):
     """Used to indicate test failure"""
@@ -57,7 +64,7 @@ def umount(path):
     print('rc from umount {}'.format(ret.returncode))
     return ret.returncode
 
-class NLT_Conf():
+class NLTConf():
     """Helper class for configuration"""
     def __init__(self, bc):
         self.bc = bc
@@ -256,7 +263,7 @@ def load_conf():
     ofh = open(json_file, 'r')
     conf = json.load(ofh)
     ofh.close()
-    return NLT_Conf(conf)
+    return NLTConf(conf)
 
 def get_base_env():
     """Return the base set of env vars needed for DAOS"""
@@ -278,11 +285,15 @@ class DaosServer():
         self.conf = conf
         self.valgrind = valgrind
         self._agent = None
-        self.agent_dir = None
-        server_log_file = tempfile.NamedTemporaryFile(prefix='dnt_server_',
+        self.control_log = tempfile.NamedTemporaryFile(prefix='dnt_control_',
+                                                       suffix='.log',
+                                                       delete=False)
+        self.agent_log = tempfile.NamedTemporaryFile(prefix='dnt_agent_',
+                                                     suffix='.log',
+                                                     delete=False)
+        self.server_log = tempfile.NamedTemporaryFile(prefix='dnt_server_',
                                                       suffix='.log',
                                                       delete=False)
-        self._log_file = server_log_file.name
         self.__process_name = 'daos_io_server'
         if self.valgrind:
             self.__process_name = 'valgrind'
@@ -290,8 +301,6 @@ class DaosServer():
         socket_dir = '/tmp/dnt_sockets'
         if not os.path.exists(socket_dir):
             os.mkdir(socket_dir)
-        if os.path.exists(self._log_file):
-            os.unlink(self._log_file)
 
         self._agent_dir = tempfile.TemporaryDirectory(prefix='dnt_agent_')
         self.agent_dir = self._agent_dir.name
@@ -345,14 +354,11 @@ class DaosServer():
         # server runs do not overwrite each other.
         scfd = open(os.path.join(self_dir, 'nlt_server.yaml'), 'r')
 
-        control_log_file = tempfile.NamedTemporaryFile(prefix='dnt_control_',
-                                                       suffix='.log',
-                                                       delete=False)
         scyaml = yaml.safe_load(scfd)
-        scyaml['servers'][0]['log_file'] = self._log_file
+        scyaml['servers'][0]['log_file'] = self.server_log.name
         if self.conf.args.server_debug:
             scyaml['servers'][0]['log_mask'] = self.conf.args.server_debug
-        scyaml['control_log_file'] = control_log_file.name
+        scyaml['control_log_file'] = self.control_log.name
 
         self._yaml_file = tempfile.NamedTemporaryFile(
             prefix='nlt-server-config-',
@@ -399,16 +405,12 @@ class DaosServer():
 
         agent_bin = os.path.join(self.conf['PREFIX'], 'bin', 'daos_agent')
 
-        agent_log_file = tempfile.NamedTemporaryFile(prefix='dnt_agent_',
-                                                     suffix='.log',
-                                                     delete=False)
-
         self._agent = subprocess.Popen([agent_bin,
                                         '--config-path', agent_config,
                                         '--insecure',
                                         '--debug',
                                         '--runtime_dir', self.agent_dir,
-                                        '--logfile', agent_log_file.name],
+                                        '--logfile', self.agent_log.name],
                                        env=os.environ.copy())
         self.conf.agent_dir = self.agent_dir
         self.running = True
@@ -524,12 +526,14 @@ class DaosServer():
             except ProcessLookupError:
                 pass
 
+        compress_file(self.agent_log.name)
+        compress_file(self.control_log.name)
+
         # Show errors from server logs bug suppress memory leaks as the server
         # often segfaults at shutdown.
-        if os.path.exists(self._log_file):
-            # TODO:                              # pylint: disable=W0511
-            # Enable memleak checking when server shutdown works.
-            log_test(self.conf, self._log_file, show_memleaks=False)
+        # TODO:                              # pylint: disable=W0511
+        # Enable memleak checking when server shutdown works.
+        log_test(self.conf, self.server_log.name, show_memleaks=False)
         self.running = False
         return ret
 
@@ -589,9 +593,10 @@ class ValgrindHelper():
     Jenkins in locating the source code.
     """
 
-    def __init__(self, logid=None):
+    def __init__(self, conf, logid=None):
 
         # Set this to False to disable valgrind, which will run faster.
+        self.conf = conf
         self.use_valgrind = True
         self.full_check = True
         self._xml_file = None
@@ -618,11 +623,17 @@ class ValgrindHelper():
         else:
             cmd.extend(['--leak-check=no'])
 
-        cmd.append('--suppressions={}'.format(
-            os.path.join('src',
-                         'cart',
-                         'utils',
-                         'memcheck-cart.supp')))
+        src_suppression_file = os.path.join('src',
+                                            'cart',
+                                            'utils',
+                                            'memcheck-cart.supp')
+        if os.path.exists(src_suppression_file):
+            cmd.append('--suppressions={}'.format(src_suppression_file))
+        else:
+            cmd.append('--suppressions={}'.format(
+                os.path.join(self.conf['PREFIX'],
+                             'etc',
+                             'memcheck-cart.supp')))
 
         cmd.append('--error-exitcode=42')
 
@@ -693,7 +704,7 @@ class DFuse():
         if self.conf.args.dtx == 'yes':
             my_env['DFS_USE_DTX'] = '1'
 
-        self.valgrind = ValgrindHelper(v_hint)
+        self.valgrind = ValgrindHelper(self.conf, v_hint)
         if self.conf.args.memcheck == 'no':
             self.valgrind.use_valgrind = False
 
@@ -704,7 +715,7 @@ class DFuse():
 
         cmd.extend(self.valgrind.get_cmd_prefix())
 
-        cmd.extend([dfuse_bin, '-s', '0', '-m', self.dir, '-f'])
+        cmd.extend([dfuse_bin, '-m', self.dir, '-f'])
 
         if single_threaded:
             cmd.append('-S')
@@ -847,7 +858,7 @@ def run_daos_cmd(conf, cmd, valgrind=True, fi_file=None, fi_valgrind=False):
 
     Enable logging, and valgrind for the command.
     """
-    vh = ValgrindHelper()
+    vh = ValgrindHelper(conf)
 
     if conf.args.memcheck == 'no':
         valgrind = False
@@ -1191,9 +1202,18 @@ lt = None
 
 def setup_log_test(conf):
     """Setup and import the log tracing code"""
+
+    # Try and pick this up from the src tree if possible.
     file_self = os.path.dirname(os.path.abspath(__file__))
     logparse_dir = os.path.join(file_self,
                                 '../src/tests/ftest/cart/util')
+    crt_mod_dir = os.path.realpath(logparse_dir)
+    if crt_mod_dir not in sys.path:
+        sys.path.append(crt_mod_dir)
+
+    # Or back off to the install dir if not.
+    logparse_dir = os.path.join(conf['PREFIX'],
+                                'lib/daos/TESTING/ftest/cart')
     crt_mod_dir = os.path.realpath(logparse_dir)
     if crt_mod_dir not in sys.path:
         sys.path.append(crt_mod_dir)
@@ -1205,6 +1225,25 @@ def setup_log_test(conf):
     lt = __import__('cart_logtest')
 
     lt.wf = conf.wf
+
+def compress_file(filename):
+    """Compress a file using bz2 for space reasons"""
+    small = bz2.BZ2Compressor()
+
+    fd = open(filename, 'rb')
+
+    nfd = open('{}.bz2'.format(filename), 'wb')
+    lines = fd.read(64*1024)
+    while lines:
+        new_data = bz2.compress(lines)
+        if new_data:
+            nfd.write(new_data)
+        lines = fd.read(64*1024)
+    new_data = small.flush()
+    if new_data:
+        nfd.write(new_data)
+
+    os.unlink(filename)
 
 def log_test(conf,
              filename,
@@ -1238,6 +1277,7 @@ def log_test(conf,
                             os.path.basename(filename),
                             fi_signal)
         if not lto.fi_triggered:
+            compress_file(filename)
             raise NLTestNoFi
 
     functions = set()
@@ -1251,6 +1291,8 @@ def log_test(conf,
 
     if check_write and 'dfuse_write' not in functions:
         raise NLTestNoFunction('dfuse_write')
+
+    compress_file(filename)
 
     return lto.fi_location
 
@@ -1725,7 +1767,6 @@ def main():
 
     parser = argparse.ArgumentParser(
         description='Run DAOS client on local node')
-    parser.add_argument('--output-file', default='nlt-errors.json')
     parser.add_argument('--server-debug', default=None)
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
@@ -1748,7 +1789,7 @@ def main():
 
     conf = load_conf()
 
-    wf = WarningsFactory(args.output_file)
+    wf = WarningsFactory('nlt-errors.json')
 
     conf.set_wf(wf)
     conf.set_args(args)
