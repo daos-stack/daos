@@ -41,6 +41,11 @@
  * - 64-char string identifier raised as part of the event
  *   The identifier just be prefixed by component_
  *   Carried over with the RAS event.
+ *
+ * NB: Any events that should be acted upon by the control plane
+ * will need complementary constants defined in src/control/events/ras.go.
+ * Events that are informational-only (i.e. just logged) don't need to be
+ * mirrored in the control plane.
  */
 #define RAS_EVENT_LIST							\
 	X(RAS_RANK_UP,		"engine_status_up")			\
