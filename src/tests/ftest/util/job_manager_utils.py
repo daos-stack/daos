@@ -752,6 +752,39 @@ class Systemctl(JobManager):
         """
         return self._report_unit_command("status")
 
+    def service_running(self):
+        """Determine if the job's service is active via the systemctl command.
+
+        The 'systemctl is-active <service>' command will return a string
+        indicating one of the following states:
+            active, inactive, activating, deactivating, failed, unknown
+        If the <service> is "active" or "activating" return True.
+
+        Returns:
+            bool: True id the service is running, False otherwise
+
+        """
+        status = True
+        states = {}
+        valid_states = ["active", "activating"]
+        self._systemctl.unit_command.value = "is-active"
+        task = run_task(self._hosts, self.__str__(), self.timeout)
+        for output, nodelist in task.iter_buffers():
+            output = str(output)
+            nodeset = NodeSet.fromlist(nodelist)
+            status &= output in valid_states
+            if output not in states:
+                states[output] = NodeSet()
+            states[output].add(nodeset)
+        if self.timeout and task.num_timeout() > 0:
+            nodeset = NodeSet.fromlist(task.iter_keys_timeout())
+            states["timeout"] = nodeset
+        data = ["=".join([key, str(states[key])]) for key in sorted(states)]
+        self.log.info(
+            "  Detected %s states: %s",
+            self._systemctl.service.value, ", ".join(data))
+        return status
+
     def get_log_data(self, hosts, since, until=None, timeout=60):
         """Gather log output for the command running on each host.
 
@@ -901,6 +934,7 @@ class Systemctl(JobManager):
             pattern, self._systemctl, self._hosts)
 
         log_data = None
+        detected = 0
         complete = False
         timed_out = False
         start = time.time()
@@ -908,7 +942,8 @@ class Systemctl(JobManager):
         # Search for patterns in the subprocess output until:
         #   - the expected number of pattern matches are detected (success)
         #   - the time out is reached (failure)
-        while not complete and not timed_out:
+        #   - the service is no longer running (failure)
+        while not complete and not timed_out and self.service_running():
             detected = 0
             log_data = self.get_log_data(self._hosts, since, until, timeout)
             for node_set in sorted(log_data):

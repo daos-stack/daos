@@ -1607,14 +1607,12 @@ def stop_daos_server_service(test_file, args):
     return status
 
 
-def get_daos_server_service_status(host_list, verbose=True):
+def get_daos_server_service_status(host_list):
     """Get the status of the daos_server.service.
 
     Args:
         host_list (list): list of hosts on which to determine the state of the
             daos_server.service.
-        verbose (bool, optional): whether or not the command output should be
-            displayed. Defaults to True.
 
     Returns:
         tuple: a tuple containing:
@@ -1624,29 +1622,28 @@ def get_daos_server_service_status(host_list, verbose=True):
 
     """
     status = 0
-    disable_hosts = NodeSet()
-    stop_hosts = NodeSet()
-    command = "sudo systemctl --lines=0 status daos_server.service"
+    hosts = {"stop": NodeSet(), "disable": NodeSet()}
+    # Possible states:
+    #   active, inactive, activating, deactivating, failed, unknown
+    states_requiring_stop = ["active", "activating", "deactivating"]
+    states_requiring_disable = states_requiring_stop + ["inactive", "failed"]
+    command = "systemctl is-active daos_server.service"
     task = get_remote_output(host_list, command)
     for output, nodelist in task.iter_buffers():
+        output = str(output)
         nodeset = NodeSet.fromlist(nodelist)
-        match = re.findall(r"(Loaded|Active):\s+\w+\s\((.*)\)", str(output))
-        if match:
-            data = {key: value for key, value in match}
-            if "enabled;" in data["Loaded"]:
-                disable_hosts.add(nodeset)
-            if "running" in data["Active"]:
-                stop_hosts.add(nodeset)
-            if verbose:
-                indented_output = indent_text(2, str(output).splitlines())
-                print("  {}:\n{}".format(nodeset, indented_output))
-        else:
-            indented_output = indent_text(2, str(output).splitlines())
-            print(
-                "Error detecting daos_server.service status on {}: regex "
-                "failed:\n{}".format(nodeset, indented_output))
-            status = 512
-    return status, stop_hosts, disable_hosts
+        if output in states_requiring_stop:
+            hosts["stop"].add(nodeset)
+        if output in states_requiring_disable:
+            hosts["disable"].add(nodeset)
+        print("  {}: {}".format(nodeset, output))
+    if task.num_timeout() > 0:
+        status = 512
+        hosts["stop"].add(nodeset)
+        hosts["disable"].add(nodeset)
+        nodeset = NodeSet.fromlist(task.iter_keys_timeout())
+        print("  {}: TIMEOUT".format(nodeset))
+    return status, hosts["stop"], hosts["disable"]
 
 
 def indent_text(indent, text):
