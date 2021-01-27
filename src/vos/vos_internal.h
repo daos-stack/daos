@@ -225,7 +225,8 @@ struct vos_dtx_act_ent {
 	unsigned int			 dae_committable:1,
 					 dae_committed:1,
 					 dae_aborted:1,
-					 dae_maybe_shared:1;
+					 dae_maybe_shared:1,
+					 dae_prepared:1;
 };
 
 extern struct vos_tls	*standalone_tls;
