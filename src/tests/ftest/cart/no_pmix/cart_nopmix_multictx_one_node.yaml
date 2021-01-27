@@ -8,6 +8,10 @@ defaultENV:
   OFI_INTERFACE: "eth0"
   CRT_CTX_NUM: "8"
   CRT_CTX_SHARE_ADDR: "0"
+  other_env_vars: "
+    ARBITRARY_ENV_VAR1=apple
+    ARBITRARY_ENV_VAR2=orange
+    ARBITRARY_ENV_VAR3=\"banana pear\""
 tests: !mux
   no_pmix_multi_ctx:
     name: no_pmix_multi_ctx

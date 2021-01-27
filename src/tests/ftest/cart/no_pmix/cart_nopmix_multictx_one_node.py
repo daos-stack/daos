@@ -46,6 +46,7 @@ class CartNoPmixOneNodeTest(TestWithoutServers):
         print("Running setup\n")
         self.utils = CartUtils()
         self.env = self.utils.get_env(self)
+        self.utils.set_other_env_vars(self)
         crt_phy_addr = self.params.get("CRT_PHY_ADDR_STR", '/run/defaultENV/')
         ofi_interface = self.params.get("OFI_INTERFACE", '/run/defaultENV/')
         ofi_ctx_num = self.params.get("CRT_CTX_NUM", '/run/defaultENV/')
@@ -61,6 +62,7 @@ class CartNoPmixOneNodeTest(TestWithoutServers):
 
         super(CartNoPmixOneNodeTest, self).tearDown()
         self.utils.cleanup_processes()
+        self.utils.unset_other_env_vars(self)
 
     def test_cart_no_pmix(self):
         """

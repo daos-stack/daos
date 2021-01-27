@@ -36,6 +36,7 @@ import subprocess
 import logging
 import cart_logparse
 import cart_logtest
+import shlex
 
 from general_utils import stop_processes
 
@@ -104,6 +105,33 @@ class CartUtils():
                 proc.kill()
 
         return procrtn
+
+    def set_other_env_vars(self, cartobj):
+        """ import env vars from other_env_var param """
+        other_env_vars = cartobj.params.get("other_env_vars", "/run/defaultENV/")
+        if other_env_vars is None:
+          self.print("other_env_vars was not set in yaml file.\n")
+          return
+          
+        other_env_vars_split = shlex.split(other_env_vars)
+        for kv_pair in other_env_vars_split:
+          key, value = kv_pair.split('=', 2)
+          self.print("Adding {}={} to environment.\n".format(key, value))
+          print("Adding {}={} to environment.\n".format(key, value))
+          os.environ[key] = value
+
+    def unset_other_env_vars(self, cartobj):
+        """ import env vars from other_env_var param """
+        other_env_vars = cartobj.params.get("other_env_vars", "/run/defaultENV/")
+        if other_env_vars is None:
+          print("other_env_vars was not set in yaml file.\n")
+          return
+          
+        for kv_pair in shlex.split(other_env_vars):
+          key, value = kv_pair.split('=', 2)
+          print("Removing key {} from environment.\n".format(key))
+          del os.environ[key]
+
 
     # What is special about pylint's 15 variable limit?
     # pylint: disable=too-many-locals
