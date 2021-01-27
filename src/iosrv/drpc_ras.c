@@ -328,20 +328,3 @@ ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl)
 
 	return rc;
 }
-
-#define DF_MAX_BUF 128
-void
-ds_notify_df_incompat(const char *type, int version, int min_version,
-		      int max_version, uuid_t *uuid)
-{
-	char buf[DF_MAX_BUF];
-
-	snprintf(buf, DF_MAX_BUF, "Incompatible %s may not be opened. Version"
-		 " %d is outside acceptable range %d-%d", type, version,
-		 min_version, max_version);
-	buf[DF_MAX_BUF - 1] = 0; /* Shut up any static analyzers */
-
-	ds_notify_ras_event(RAS_POOL_DF_INCOMPAT, buf, RAS_TYPE_INFO,
-			    RAS_SEV_ERROR, NULL, NULL, NULL, uuid, NULL,
-			    NULL, NULL, NULL);
-}

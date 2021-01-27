@@ -654,12 +654,10 @@ vos_pool_open(const char *path, uuid_t uuid, bool small, daos_handle_t *poh)
 	if (pool_df->pd_version > POOL_DF_VERSION ||
 	    pool_df->pd_version < POOL_DF_VER_1) {
 		D_ERROR("Unsupported DF version %x\n", pool_df->pd_version);
-		if (ds_notify_df_incompat != NULL) {
-			/** Send a RAS notification */
-			ds_notify_df_incompat("VOS pool", pool_df->pd_version,
-					      POOL_DF_VER_1, POOL_DF_VERSION,
-					      &ukey.uuid);
-		}
+		/** Send a RAS notification */
+		vos_report_layout_incompat("VOS pool", pool_df->pd_version,
+					   POOL_DF_VER_1, POOL_DF_VERSION,
+					   &ukey.uuid);
 		D_GOTO(failed, rc = -DER_DF_INCOMPT);
 	}
 
