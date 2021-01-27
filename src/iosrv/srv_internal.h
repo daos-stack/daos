@@ -140,7 +140,7 @@ struct dss_xstream *dss_get_xstream(int stream_id);
 int dss_xstream_cnt(void);
 
 /* sched.c */
-#define SCHED_RELAX_INTVL_DEFAULT	50 /* msec */
+#define SCHED_RELAX_INTVL_DEFAULT	1 /* msec */
 
 extern bool sched_prio_disabled;
 extern bool sched_relax_disabled;
