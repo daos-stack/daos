@@ -1,24 +1,7 @@
 //
 // (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package system
@@ -37,10 +20,12 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 const (
+	// CurrentSchemaVersion indicates the current db schema version.
 	CurrentSchemaVersion = 0
 )
 
@@ -383,7 +368,7 @@ func (db *Database) Start(parent context.Context) error {
 // tasks and release any resources.
 func (db *Database) Stop() error {
 	if db.shutdownCb == nil {
-		return errors.New("no shutdown callback set?!")
+		return errors.New("no shutdown callback set")
 	}
 
 	db.shutdownCb()
@@ -854,4 +839,43 @@ func (db *Database) UpdatePoolService(ps *PoolService) error {
 	}
 
 	return nil
+}
+
+func (db *Database) handlePoolRepsUpdate(evt *events.RASEvent) {
+	ei := evt.GetPoolSvcInfo()
+	if ei == nil {
+		db.log.Error("no extended info in PoolSvcReplicasUpdate event received")
+		return
+	}
+	db.log.Debugf("processing RAS event %q for pool %s with info %+v on host %q",
+		evt.Msg, evt.PoolUUID, ei, evt.Hostname)
+
+	uuid, err := uuid.Parse(evt.PoolUUID)
+	if err != nil {
+		db.log.Errorf("failed to parse pool UUID %q: %s", evt.PoolUUID, err)
+		return
+	}
+
+	ps, err := db.FindPoolServiceByUUID(uuid)
+	if err != nil {
+		db.log.Errorf("failed to find pool with UUID %q: %s", evt.PoolUUID, err)
+		return
+	}
+
+	db.log.Debugf("update pool %s (state=%s) svc ranks %v->%v",
+		ps.PoolUUID, ps.State, ps.Replicas, ei.SvcReplicas)
+
+	ps.Replicas = RanksFromUint32(ei.SvcReplicas)
+
+	if err := db.UpdatePoolService(ps); err != nil {
+		db.log.Errorf("failed to apply pool service update: %s", err)
+	}
+}
+
+// OnEvent handles events and updates system database accordingly.
+func (db *Database) OnEvent(_ context.Context, evt *events.RASEvent) {
+	switch evt.ID {
+	case events.RASPoolRepsUpdate:
+		db.handlePoolRepsUpdate(evt)
+	}
 }

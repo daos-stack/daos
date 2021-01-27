@@ -42,7 +42,6 @@
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/security.h>
 #include <daos/checksum.h>
-#include <gurt/mem.h>
 #include "daos_srv/srv_csum.h"
 #include "obj_rpc.h"
 #include "obj_internal.h"
@@ -125,7 +124,9 @@ obj_rw_complete(crt_rpc_t *rpc, unsigned int map_version,
 		}
 
 		if (rc != 0) {
-			D_CDEBUG(rc == -DER_REC2BIG, DLOG_DBG, DLOG_ERR,
+			D_CDEBUG(rc == -DER_REC2BIG || rc == -DER_INPROGRESS ||
+				 rc == -DER_TX_RESTART,
+				 DLOG_DBG, DLOG_ERR,
 				 DF_UOID " %s end failed: %d\n",
 				 DP_UOID(orwi->orw_oid),
 				 update ? "Update" : "Fetch", rc);
@@ -1082,8 +1083,8 @@ obj_dedup_verify(daos_handle_t ioh, struct bio_sglist *bsgls_dup, int sgl_nr)
 			D_ASSERT(biov_dup->bi_addr.ba_dedup);
 
 			D_ASSERT(bio_iov2len(biov) == bio_iov2len(biov_dup));
-			rc = d_memcmp(bio_iov2buf(biov), bio_iov2buf(biov_dup),
-				      bio_iov2len(biov));
+			rc = memcmp(bio_iov2buf(biov), bio_iov2buf(biov_dup),
+				    bio_iov2len(biov));
 
 			if (rc == 0) {	/* verify succeeded */
 				D_DEBUG(DB_IO, "Verify dedup succeeded\n");
@@ -1406,8 +1407,8 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				     dth);
 		daos_recx_ep_list_free(shadows, orw->orw_nr);
 		if (rc) {
-			D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_NONEXIST,
-				 DB_IO, DLOG_ERR,
+			D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_NONEXIST ||
+				 rc == -DER_TX_RESTART, DB_IO, DLOG_ERR,
 				 "Fetch begin for "DF_UOID" failed: "DF_RC"\n",
 				 DP_UOID(orw->orw_oid), DP_RC(rc));
 			goto out;
@@ -2167,7 +2168,6 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	struct dtx_memberships		*mbs = NULL;
 	struct daos_shard_tgt		*tgts = NULL;
 	struct dtx_id			*dti_cos = NULL;
-	struct dss_sleep_ult		*sleep_ult = NULL;
 	int				dti_cos_cnt;
 	uint32_t			tgt_cnt;
 	uint32_t			version;
@@ -2228,25 +2228,19 @@ re_fetch:
 		rc = dtx_end(&dth, ioc.ioc_coc, rc);
 
 		if (rc == -DER_INPROGRESS && dth.dth_local_retry) {
-			if (++retry > 3)
+			if (++retry > 5)
 				D_GOTO(out, rc = -DER_TX_BUSY);
 
 			/* XXX: Currently, we commit the distributed transaction
-			 *	sychronously. Normally, it will be very quickly.
-			 *	So let's wait on the server for a while (30 ms),
-			 *	then retry. If related distributed transaction
-			 *	is still not committed after several cycles try,
-			 *	then replies '-DER_TX_BUSY' to the client.
+			 *	synchronously. Normally it will be very quickly.
+			 *	So let's yield then retry. If related
+			 *	distributed transaction is still not committed
+			 *	after several cycles, replies '-DER_TX_BUSY' to
+			 *	the client.
 			 */
-			if (sleep_ult == NULL) {
-				sleep_ult = dss_sleep_ult_create();
-				if (sleep_ult == NULL)
-					D_GOTO(out, rc = -DER_TX_BUSY);
-			}
-
 			D_DEBUG(DB_IO, "Hit non-commit DTX when fetch "
 				DF_UOID" (%d)\n", DP_UOID(orw->orw_oid), retry);
-			dss_ult_sleep(sleep_ult, 30000);
+			ABT_thread_yield();
 
 			goto re_fetch;
 		}
@@ -2402,8 +2396,6 @@ again:
 out:
 	obj_rw_reply(rpc, rc, epoch.oe_value, &ioc);
 	D_TIME_END(time_start, OBJ_PF_UPDATE);
-	if (sleep_ult != NULL)
-		dss_sleep_ult_destroy(sleep_ult);
 
 	obj_ec_split_req_fini(split_req);
 	if (mbs)
@@ -2505,7 +2497,6 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	struct vos_iter_anchors	saved_anchors;
 	struct dss_enum_arg	saved_arg;
 	struct obj_key_enum_in	*oei = crt_req_get(rpc);
-	struct dss_sleep_ult	*sleep_ult = NULL;
 	uint32_t		flags = 0;
 	int			retry = 0;
 	int			opc = opc_get(rpc->cr_opc);
@@ -2638,25 +2629,18 @@ re_pack:
 		rc = rc_tmp;
 
 	if (rc == -DER_INPROGRESS && dth.dth_local_retry) {
-		if (++retry > 3)
+		if (++retry > 5)
 			D_GOTO(out, rc = -DER_TX_BUSY);
 
 		/* XXX: Currently, we commit the distributed transaction
-		 *	sychronously. Normally, it will be very quickly.
-		 *	So let's wait on the server for a while (30 ms),
-		 *	then retry. If related distributed transaction
-		 *	is still not committed after several cycles try,
-		 *	then replies '-DER_TX_BUSY' to the client.
+		 *	synchronously. Normally it will be very quickly.
+		 *	So let's yield then retry. If related distributed
+		 *	transaction is still not committed after several
+		 *	cycles, replies '-DER_TX_BUSY' to the client.
 		 */
-		if (sleep_ult == NULL) {
-			sleep_ult = dss_sleep_ult_create();
-			if (sleep_ult == NULL)
-				D_GOTO(out, rc = -DER_TX_BUSY);
-		}
-
 		D_DEBUG(DB_IO, "Hit non-commit DTX when enum "
 			DF_UOID" (%d)\n", DP_UOID(oei->oei_oid), retry);
-		dss_ult_sleep(sleep_ult, 30000);
+		ABT_thread_yield();
 
 		*anchors = saved_anchors;
 		obj_restore_enum_args(rpc, enum_arg, &saved_arg);
@@ -2673,9 +2657,6 @@ out:
 		param.ip_epr.epr_hi, type, dss_get_module_info()->dmi_tgt_id,
 		rc);
 failed:
-	if (sleep_ult != NULL)
-		dss_sleep_ult_destroy(sleep_ult);
-
 	*e_out = epoch.oe_value;
 	return rc;
 }
@@ -2994,7 +2975,8 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	/* local RPC handler */
 	rc = obj_local_punch(opi, opc_get(rpc->cr_opc), &ioc, &dth);
 	if (rc != 0) {
-		D_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR,
+		D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART,
+			 DB_IO, DLOG_ERR,
 			 DF_UOID": error="DF_RC".\n", DP_UOID(opi->opi_oid),
 			 DP_RC(rc));
 		D_GOTO(out, rc);
@@ -3270,7 +3252,6 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	struct obj_io_context		 ioc;
 	struct dtx_handle		 dth = {0};
 	struct dtx_epoch		 epoch = {0};
-	struct dss_sleep_ult		*sleep_ult = NULL;
 	uint32_t			 query_flags;
 	daos_recx_t			 ec_recx[2] = {0};
 	daos_recx_t			*query_recx;
@@ -3340,33 +3321,23 @@ re_query:
 
 out:
 	if (rc == -DER_INPROGRESS && dth.dth_local_retry) {
-		if (++retry > 3)
+		if (++retry > 5)
 			D_GOTO(failed, rc = -DER_TX_BUSY);
 
 		/* XXX: Currently, we commit the distributed transaction
-		 *	sychronously. Normally, it will be very quickly.
-		 *	So let's wait on the server for a while (30 ms),
-		 *	then retry. If related distributed transaction
-		 *	is still not committed after several cycles try,
-		 *	then replies '-DER_TX_BUSY' to the client.
+		 *	synchronously. Normally it will be very quickly.
+		 *	So let's yield then retry. If related distributed
+		 *	transaction is still not committed after several
+		 *	cycles, then replies '-DER_TX_BUSY' to the client.
 		 */
-		if (sleep_ult == NULL) {
-			sleep_ult = dss_sleep_ult_create();
-			if (sleep_ult == NULL)
-				D_GOTO(failed, rc = -DER_TX_BUSY);
-		}
-
 		D_DEBUG(DB_IO, "Hit non-commit DTX when query "
 			DF_UOID" (%d)\n", DP_UOID(okqi->okqi_oid), retry);
-		dss_ult_sleep(sleep_ult, 30000);
+		ABT_thread_yield();
 
 		goto again;
 	}
 
 failed:
-	if (sleep_ult != NULL)
-		dss_sleep_ult_destroy(sleep_ult);
-
 	obj_reply_set_status(rpc, rc);
 	obj_reply_map_version_set(rpc, ioc.ioc_map_ver);
 	okqo->okqo_epoch = epoch.oe_value;
@@ -3991,7 +3962,8 @@ again:
 	rc = dtx_end(&dth, ioc->ioc_coc, rc);
 
 out:
-	D_CDEBUG(rc != 0, DLOG_ERR, DB_IO,
+	D_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART,
+		 DLOG_ERR, DB_IO,
 		 "Handled DTX "DF_DTI" on non-leader: "DF_RC"\n",
 		 DP_DTI(&dcsh->dcsh_xid), DP_RC(rc));
 
@@ -4234,7 +4206,8 @@ ds_obj_dtx_leader_ult(void *arg)
 	rc = dtx_leader_end(&dlh, dca->dca_ioc->ioc_coc, rc);
 
 out:
-	D_CDEBUG(rc != 0, DLOG_ERR, DB_IO,
+	D_CDEBUG(rc != 0 && rc != DER_INPROGRESS && rc != -DER_TX_RESTART,
+		 DLOG_ERR, DB_IO,
 		 "Handled DTX "DF_DTI" on leader, idx %u: "DF_RC"\n",
 		 DP_DTI(&dcsh->dcsh_xid), dca->dca_idx, DP_RC(rc));
 

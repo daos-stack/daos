@@ -29,6 +29,24 @@
 #include <stdarg.h>
 #include <gurt/common.h>
 
+void
+d_free(void *ptr)
+{
+	free(ptr);
+}
+
+void *
+d_calloc(size_t count, size_t eltsize)
+{
+	return calloc(count, eltsize);
+}
+
+void *
+d_realloc(void *ptr, size_t size)
+{
+	return realloc(ptr, size);
+}
+
 int
 d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src)
 {

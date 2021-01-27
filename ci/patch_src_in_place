@@ -3,7 +3,7 @@
 set -x
 
 # shellcheck disable=SC2046,SC2035
-codespell -w --ignore-words-list dedup,nd,uint,ths,ba,creat,te,cas,mapp,pres,crashers,dout,tre,reord,mimick,cloneable,keypair,bject,tread,cancelled,controllerd --builtin clear,rare,informal,names,en-GB_to_en-US --skip *.png,*.PNG,*.pyc,src/rdb/raft/*,src/control/vendor/*,RSA.golden,utils/rpms/* $(git diff --name-only origin/"$CHANGE_TARGET"...)
+codespell -w --ignore-words ci/codespell.ignores --builtin clear,rare,informal,names,en-GB_to_en-US --skip *.png,*.PNG,*.pyc,src/rdb/raft/*,src/control/vendor/*,RSA.golden,utils/rpms/* $(git diff --name-only origin/"$CHANGE_TARGET"...)
 
 # The return code of codespell is the number of words it could not correct
 # because of multiple options.  We could report on these but they're rare

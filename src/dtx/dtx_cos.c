@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -373,6 +373,9 @@ dtx_add_cos(struct ds_cont_child *cont, struct dtx_entry *dte,
 	d_iov_t				riov;
 	int				rc;
 
+	if (cont->sc_cos_shutdown)
+		return -DER_SHUTDOWN;
+
 	D_ASSERT(dte->dte_mbs != NULL);
 	D_ASSERT(epoch != DAOS_EPOCH_MAX);
 
@@ -470,7 +473,11 @@ out:
 		rc = dbtree_delete(cont->sc_dtx_cos_hdl, BTR_PROBE_EQ,
 				   &kiov, NULL);
 
-	D_CDEBUG(rc != 0, DLOG_ERR, DB_IO, "Remove DTX "DF_DTI" from CoS "
+	if (rc == 0 && found == 0)
+		rc = -DER_NONEXIST;
+
+	D_CDEBUG(rc != 0 && rc != -DER_NONEXIST, DLOG_ERR, DB_IO,
+		 "Remove DTX "DF_DTI" from CoS "
 		 "cache, "DF_UOID", key %lu, %s shared entry: rc = "DF_RC"\n",
 		 DP_DTI(xid), DP_UOID(*oid), (unsigned long)dkey_hash,
 		 found == 1 ? "has" : "has not", DP_RC(rc));

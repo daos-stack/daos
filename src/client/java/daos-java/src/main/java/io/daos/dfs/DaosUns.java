@@ -102,7 +102,7 @@ public class DaosUns {
     ByteBuffer buffer = BufferAllocator.directBuffer(bytes.length);
     buffer.put(bytes);
     poolHandle = DaosClient.daosOpenPool(builder.poolUuid, builder.serverGroup,
-        builder.ranks, builder.poolFlags);
+        builder.poolFlags);
     try {
       String cuuid = DaosFsClient.dunsCreatePath(poolHandle, builder.path,
           ((DirectBuffer) buffer).address(), bytes.length);
@@ -198,7 +198,7 @@ public class DaosUns {
     long poolHandle = 0;
 
     poolHandle = DaosClient.daosOpenPool(builder.poolUuid, builder.serverGroup,
-        builder.ranks, builder.poolFlags);
+        builder.poolFlags);
     try {
       DaosFsClient.dunsDestroyPath(poolHandle, builder.path);
       log.info("UNS path {} destroyed");

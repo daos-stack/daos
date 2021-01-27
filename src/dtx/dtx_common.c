@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -163,6 +163,7 @@ dtx_batched_commit(void *arg)
 {
 	struct dss_module_info		*dmi = dss_get_module_info();
 	struct dtx_batched_commit_args	*dbca;
+	struct dtx_batched_commit_args	*tmp;
 
 	while (1) {
 		struct dtx_entry		**dtes = NULL;
@@ -236,10 +237,12 @@ check:
 		ABT_thread_yield();
 	}
 
-	while (!d_list_empty(&dmi->dmi_dtx_batched_list)) {
-		dbca = d_list_entry(dmi->dmi_dtx_batched_list.next,
-				    struct dtx_batched_commit_args, dbca_link);
-		dtx_free_dbca(dbca);
+	d_list_for_each_entry_safe(dbca, tmp, &dmi->dmi_dtx_batched_list,
+				   dbca_link) {
+		if (dbca->dbca_cont->sc_cos_shutdown)
+			dtx_free_dbca(dbca);
+		else
+			dbca->dbca_cont->sc_cos_shutdown = 1;
 	}
 }
 
@@ -692,7 +695,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 	if (result < 0 || rc < 0 || dth->dth_solo)
 		D_GOTO(abort, result = result < 0 ? result : rc);
 
-	if (!dth->dth_active && !dth->dth_resent) {
+	if (!dth->dth_active || dth->dth_resent) {
 		/* We do not know whether some other participants have
 		 * some active entry for this DTX, consider distributed
 		 * transaction case, the other participants may execute
@@ -835,7 +838,7 @@ again:
 
 	if (rc != 0 && epoch < dth->dth_epoch) {
 		D_WARN(DF_UUID": Fail to add DTX "DF_DTI" to CoS cache: "
-		       DF_RC". Try to commit it sychronously.\n",
+		       DF_RC". Try to commit it synchronously.\n",
 		       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid),
 		       DP_RC(rc));
 		dth->dth_sync = 1;
@@ -998,6 +1001,7 @@ dtx_batched_commit_register(struct ds_cont_child *cont)
 
 	D_ASSERT(cont != NULL);
 	cont->sc_closing = 0;
+	cont->sc_cos_shutdown = 0;
 
 	head = &dss_get_module_info()->dmi_dtx_batched_list;
 	d_list_for_each_entry(dbca, head, dbca_link) {
@@ -1069,6 +1073,10 @@ dtx_batched_commit_deregister(struct ds_cont_child *cont)
 		if (rc != ABT_SUCCESS) {
 			D_ERROR("ABT_future_create failed for DTX flush on "
 				DF_UUID" %d\n", DP_UUID(cont->sc_uuid), rc);
+			/* Set sc_cos_shutdown, then dtx_free_dbca() will be
+			 * called when the DTX batched commit ULT exits.
+			 */
+			cont->sc_cos_shutdown = 1;
 			return;
 		}
 

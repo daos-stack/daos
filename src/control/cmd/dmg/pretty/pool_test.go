@@ -1,24 +1,7 @@
 //
 // (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package pretty
@@ -169,9 +152,9 @@ Pool created with 6.00%%%% SCM/NVMe ratio
   UUID          : %s
   Service Ranks : [0-2]                               
   Storage Ranks : [0-3]                               
-  Total Size    : 11 GB                               
-  SCM           : 600 MB (150 MB / rank)              
-  NVMe          : 10 GB (2.5 GB / rank)               
+  Total Size    : 42 GB                               
+  SCM           : 2.4 GB (600 MB / rank)              
+  NVMe          : 40 GB (10 GB / rank)                
 
 `, common.MockUUID()),
 		},
@@ -188,8 +171,8 @@ Pool created with 100.00%%%% SCM/NVMe ratio
   UUID          : %s
   Service Ranks : [0-2]                               
   Storage Ranks : [0-3]                               
-  Total Size    : 600 MB                              
-  SCM           : 600 MB (150 MB / rank)              
+  Total Size    : 2.4 GB                              
+  SCM           : 2.4 GB (600 MB / rank)              
   NVMe          : 0 B (0 B / rank)                    
 
 `, common.MockUUID()),

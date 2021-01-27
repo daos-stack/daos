@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,31 +24,37 @@
 package events
 
 import (
-	"testing"
-
-	"github.com/google/go-cmp/cmp"
-
-	"github.com/daos-stack/daos/src/control/common"
+	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 )
 
-func TestEvents_ConvertRankExit(t *testing.T) {
-	event := NewRankExitEvent("foo", 1, 1, common.ExitStatus("test"))
+// StrInfo contains opaque blob of type string to hold custom details for a
+// generic RAS event to be forwarded through the control-plane from the
+// data-plane to an external consumer e.g. syslog.
+type StrInfo string
 
-	pbEvent, err := event.ToProto()
-	if err != nil {
-		t.Fatal(err)
+func (si *StrInfo) isExtendedInfo() {}
+
+// GetStrInfo returns extended info if of type StrInfo.
+func (evt *RASEvent) GetStrInfo() *StrInfo {
+	if ei, ok := evt.ExtendedInfo.(*StrInfo); ok {
+		return ei
 	}
 
-	t.Logf("proto event: %+v (%T)", pbEvent, pbEvent)
+	return nil
+}
 
-	returnedEvent := new(RankExit)
-	if err := returnedEvent.FromProto(pbEvent); err != nil {
-		t.Fatal(err)
+// StrInfoFromProto converts event info from proto to native format.
+func StrInfoFromProto(pbInfo *sharedpb.RASEvent_StrInfo) (*StrInfo, error) {
+	si := StrInfo(pbInfo.StrInfo)
+
+	return &si, nil
+}
+
+// StrInfoToProto converts event info from native to proto format.
+func StrInfoToProto(si *StrInfo) (*sharedpb.RASEvent_StrInfo, error) {
+	pbInfo := &sharedpb.RASEvent_StrInfo{
+		StrInfo: string(*si),
 	}
 
-	t.Logf("native event: %v", returnedEvent)
-
-	if diff := cmp.Diff(event, returnedEvent); diff != "" {
-		t.Fatalf("unexpected event (-want, +got):\n%s\n", diff)
-	}
+	return pbInfo, nil
 }

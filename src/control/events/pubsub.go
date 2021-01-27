@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package events
@@ -33,8 +16,8 @@ import (
 // Handler defines an interface to be implemented by event receivers.
 type Handler interface {
 	// OnEvent takes an event to be processed and a context,
-	// implementation must return on context.Done().
-	OnEvent(context.Context, Event)
+	// implementation must return on context.Done() and be thread safe.
+	OnEvent(context.Context, *RASEvent)
 }
 
 type subscriber struct {
@@ -46,7 +29,7 @@ type subscriber struct {
 // receipt of events pertaining to a particular topic.
 type PubSub struct {
 	log         logging.Logger
-	events      chan Event
+	events      chan *RASEvent
 	subscribers chan *subscriber
 	handlers    map[RASTypeID][]Handler
 	disabledIDs map[RASID]struct{}
@@ -58,7 +41,7 @@ type PubSub struct {
 func NewPubSub(parent context.Context, log logging.Logger) *PubSub {
 	ps := &PubSub{
 		log:         log,
-		events:      make(chan Event),
+		events:      make(chan *RASEvent),
 		subscribers: make(chan *subscriber),
 		handlers:    make(map[RASTypeID][]Handler),
 		disabledIDs: make(map[RASID]struct{}),
@@ -92,18 +75,18 @@ func (ps *PubSub) EnableEventIDs(ids ...RASID) {
 
 // Publish passes an event to the event channel to be processed by subscribers.
 // Ignore disabled events.
-func (ps *PubSub) Publish(event Event) {
+func (ps *PubSub) Publish(event *RASEvent) {
 	if common.InterfaceIsNil(event) {
 		ps.log.Error("nil event")
 		return
 	}
 
-	if _, exists := ps.disabledIDs[event.GetID()]; exists {
-		ps.log.Debugf("event %s ignored by filter", event.GetID())
+	if _, exists := ps.disabledIDs[event.ID]; exists {
+		ps.log.Debugf("event %s ignored by filter", event.ID)
 		return
 	}
 
-	ps.log.Debugf("publishing @%s: %+v", event.GetType(), event)
+	ps.log.Debugf("publishing @%s: %s", event.Type, event.ID)
 
 	ps.events <- event
 }
@@ -137,7 +120,7 @@ func (ps *PubSub) eventLoop(ctx context.Context) {
 			for _, hdlr := range ps.handlers[RASTypeAny] {
 				go hdlr.OnEvent(ctx, event)
 			}
-			for _, hdlr := range ps.handlers[event.GetType()] {
+			for _, hdlr := range ps.handlers[event.Type] {
 				go hdlr.OnEvent(ctx, event)
 			}
 		}

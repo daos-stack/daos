@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2020 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -642,7 +642,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
  * arrays of the given object. The caller can directly use these buffers
  * for RMA read.
  *
- * The upper layer must explicitly call \a vos_fetch_end to finalise the
+ * The upper layer must explicitly call \a vos_fetch_end to finalize the
  * I/O and release resources.
  *
  * TODO: add more detail descriptions for punched or missing records.
@@ -689,7 +689,7 @@ vos_fetch_end(daos_handle_t ioh, int err);
  * Prepare IO sink buffers for the specified arrays of the given
  * object. The caller can directly use thse buffers for RMA write.
  *
- * The upper layer must explicitly call \a vos_update_end to finalise the
+ * The upper layer must explicitly call \a vos_update_end to finalize the
  * ZC I/O and release resources.
  *
  * \param coh	[IN]	Container open handle
@@ -1084,5 +1084,19 @@ vos_dedup_dup_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl,
 		   struct bio_sglist *bsgl_dup);
 void
 vos_dedup_free_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl);
+
+/** Raise a RAS event on incompatible durable format
+ *
+ * \param[in] type		Type of object with layout format
+ *				incompatibility (e.g. VOS pool)
+ * \param[in] version		Version of the object
+ * \param[in] min_version	Minimum supported version
+ * \param[in] max_version	Maximum supported version
+ * \param[in] pool		(Optional) associated pool uuid
+ */
+void
+vos_report_layout_incompat(const char *type, int version, int min_version,
+			   int max_version, uuid_t *uuid);
+
 
 #endif /* __VOS_API_H */
