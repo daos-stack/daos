@@ -1121,7 +1121,6 @@ ds_cont_tgt_destroy_this_xstream(uuid_t pool_uuid, uuid_t cont_uuid)
 	uuid_copy(in.tdi_pool_uuid, pool_uuid);
 	uuid_copy(in.tdi_uuid, cont_uuid);
 
-	cont_delete_ec_agg(pool_uuid, cont_uuid);
 	return cont_child_destroy_one(&in);
 }
 
