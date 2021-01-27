@@ -23,11 +23,18 @@ class GlobalHandle(TestWithServers):
         turned into a local handle in another process.
 
         Args:
-            buf_len ([type]): [description]
-            iov_len ([type]): [description]
-            buf ([type]): [description]
-            uuidstr ([type]): [description]
-            rank ([type]): [description]
+            buf_len (object): buffer length; 1st return value from
+                DaosPool.local2global()
+            iov_len (object): iov length; 2nd return value from
+                DaosPool.local2global()
+            buf (object): buffer; 3rd return value from DaosPool.local2global()
+            uuidstr (str): pool UUID
+            rank (int): pool svc rank
+
+        Raises:
+            DaosApiError: if there was an error converting the pool handle or
+                using the local pool handle to create a container.
+
         """
         pool = DaosPool(self.context)
         pool.set_uuid_str(uuidstr)

@@ -109,7 +109,7 @@ daos_tx_commit(daos_handle_t th, daos_event_t *ev);
  * snapshot, but only a read transaction to be able to read from a snapshot
  * created with daos_cont_create_snap. If the user passes an epoch that is not
  * snapshoted, or the snapshot was deleted, reads using that transaction may
- * fail if the epoch was aggregated.
+ * get undefined results.
  *
  * \param[in]	coh	Container handle.
  * \param[in]	epoch	Epoch of snapshot to read from.

@@ -31,6 +31,11 @@ class GlobalHandle(TestWithServers):
             uuidstr (sharedctypes.RawArray): pool uuid
             cont_glob_handle (sharedctypes.RawValue): container handle
             rank (int): pool svc rank
+
+        Raises:
+            DaosApiError: if there was an error converting the pool handle or
+                using the local pool handle to create a container.
+
         """
         # setup the pool and connect using global handle
         pool = DaosPool(self.context)
