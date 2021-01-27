@@ -25,7 +25,6 @@ Gopkg.lock
 *.os
 *.o
 /src/control/vendor/**/*.os
-*.xml
 utils/certs/daosCA/**
 vos_size.yaml
 site/

@@ -61,16 +61,23 @@ RUN mkdir /var/run/daos_agent && chown daos.daos /var/run/daos_agent
 
 # Set maven repo mirror
 RUN mkdir -p /root/.m2
-RUN echo -e "<settings>\n\
-	<mirrors>\n\
-		<mirror>\n\
-			<id>google-maven-central</id>\n\
-			<name>GCS Maven Central mirror</name>\n\
-			<url>https://maven-central.storage-download.googleapis.com/maven2/</url>\n\
-			<mirrorOf>central</mirrorOf>\n\
-		</mirror>\n\
-	</mirrors>\n\
-</settings>" > /root/.m2/settings.xml
+COPY utils/mavern_settings.xml /root/.m2/settings.xml
+
+WORKDIR /home/daos
+COPY src/client/java/ .
+RUN mvn --batch-mode --quiet dependency:go-offline
+
+WORKDIR /home/daos/pre
+COPY SConstruct .
+COPY utils/sl utils/sl
+COPY utils/daos_build.py utils/daos_build.py
+COPY utils/build.config utils/build.config
+RUN ln -s utils/sl site_scons
+RUN scons --build-deps=yes install PREFIX=/opt/daos --deps-only
+
+# copy DAOS tree
+WORKDIR /home/daos
+COPY ./ .
 
 # set NOBUILD to disable build
 ARG NOBUILD
@@ -78,13 +85,9 @@ ARG NOBUILD
 # select compiler to use
 ARG COMPILER=gcc
 
-# copy DAOS tree
-WORKDIR /home/daos
-COPY ./ .
-
 # Build DAOS & dependencies
 RUN if [ "x$NOBUILD" = "x" ] ; then \
-    scons --build-deps=yes -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER; fi
+    scons --build-deps=yes -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER --deps-only; fi
 
 # Set environment variables
 ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:$LD_LIBRARY_PATH
@@ -98,7 +101,7 @@ RUN if [ "x$NOBUILD" = "x" ] ; then \
 # Build java and hadoop bindings
 RUN if [ "x$NOBUILD" = "x" ] ; then \
     pushd src/client/java && \
-    mvn clean install -T 1C -DskipITs -Ddaos.install.path=/opt/daos && \
+    mvn clean install --offline -T 1C -DskipITs -Ddaos.install.path=/opt/daos && \
     popd; fi
 
 # Remove local copy

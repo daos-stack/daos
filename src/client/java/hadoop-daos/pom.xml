@@ -34,11 +34,6 @@
       <artifactId>log4j-core</artifactId>
     </dependency>
     <dependency>
-      <groupId>io.daos</groupId>
-      <artifactId>daos-java</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-common</artifactId>
       <version>${hadoop.version}</version>
