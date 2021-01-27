@@ -248,7 +248,7 @@ install -m 644 utils/systemd/%{server_svc_name} %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
 mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
 mv %{?buildroot}/%{_prefix}/etc/bash_completion.d %{?buildroot}/%{_sysconfdir}
-install -m 755 src/client/java %{_prefix}/lib/daos/TESTING/
+cp -r src/client/java %{?buildroot}/%{_prefix}/lib/daos/TESTING/
 
 %pre server
 getent group daos_metrics >/dev/null || groupadd -r daos_metrics
@@ -417,7 +417,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_prefix}/lib/daos/.build_vars.sh
 
 %files tests-java
-%{_prefix}/lib/daos/TESTING/java/
+%{_prefix}/lib/daos/TESTING/java
 
 %files devel
 %{_includedir}/*
