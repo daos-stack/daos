@@ -23,7 +23,6 @@ import signal
 import stat
 import errno
 import argparse
-import tabulate
 import functools
 import subprocess
 import tempfile
@@ -274,7 +273,6 @@ def get_base_env():
     env['DD_MASK'] = 'all'
     env['DD_SUBSYS'] = 'all'
     env['D_LOG_MASK'] = 'DEBUG'
-    env['D_LOG_SIZE'] = '5g'
     env['FI_UNIVERSE_SIZE'] = '128'
     return env
 
@@ -364,7 +362,6 @@ class DaosServer():
         scyaml = yaml.safe_load(scfd)
         scyaml['servers'][0]['log_file'] = self.server_log.name
         if self.conf.args.server_debug:
-            scyaml['control_log_mask'] = 'ERROR'
             scyaml['servers'][0]['log_mask'] = self.conf.args.server_debug
         scyaml['control_log_file'] = self.control_log.name
 
@@ -969,7 +966,7 @@ def create_cont(conf, pool, posix=False):
         cmd = ['container', 'create', '--pool', pool]
     rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
-    assert rc.returncode == 0 # nosec
+    assert rc.returncode == 0
     return rc.stdout.decode().split(' ')[-1].rstrip()
 
 def destroy_container(conf, pool, container):
@@ -977,7 +974,7 @@ def destroy_container(conf, pool, container):
     cmd = ['container', 'destroy', '--pool', pool, '--cont', container]
     rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
-    assert rc.returncode == 0
+    assert rc.returncode == 0 #nosec
 
 def make_pool(daos):
     """Create a DAOS pool"""
@@ -1001,30 +998,6 @@ def make_pool(daos):
 
     return get_pool_list()
 
-def xattr_test(dfuse):
-    """Perform basic tests with extended attributes"""
-
-    new_file = os.path.join(dfuse.dir, 'attr_file')
-    fd = open(new_file, 'w')
-
-    xattr.set(fd, 'user.mine', 'init_value')
-    # This should fail as a security test.
-    try:
-        xattr.set(fd, 'user.dfuse.ids', b'other_value')
-        assert False
-    except OSError as e:
-        assert e.errno == errno.ENOTSUP
-
-    try:
-        xattr.set(fd, 'user.dfuse', b'other_value')
-        assert False
-    except OSError as e:
-        assert e.errno == errno.ENOTSUP
-
-    xattr.set(fd, 'user.Xfuse.ids', b'other_value')
-    for (key, value) in xattr.get_all(fd):
-        print('xattr is {}:{}'.format(key, value))
-
 def needs_dfuse(method):
     """Decorator function for starting dfuse under posix_tests class"""
     @functools.wraps(method)
@@ -1039,7 +1012,6 @@ def needs_dfuse(method):
             self.fatal_errors = True
         return rc
     return _helper
-
 
 class posix_tests():
     """Class for adding standalone unit tests"""
@@ -1110,6 +1082,31 @@ class posix_tests():
         except FileNotFoundError:
             print('Failed to fstat() unlinked file')
         ofd.close()
+
+    @needs_dfuse
+    def test_xattr(self):
+        """Perform basic tests with extended attributes"""
+
+        new_file = os.path.join(self.dfuse.dir, 'attr_file')
+        fd = open(new_file, 'w')
+
+        xattr.set(fd, 'user.mine', 'init_value')
+        # This should fail as a security test.
+        try:
+            xattr.set(fd, 'user.dfuse.ids', b'other_value')
+            assert False
+        except OSError as e:
+            assert e.errno == errno.ENOTSUP
+
+        try:
+            xattr.set(fd, 'user.dfuse', b'other_value')
+            assert False
+        except OSError as e:
+            assert e.errno == errno.ENOTSUP
+
+        xattr.set(fd, 'user.Xfuse.ids', b'other_value')
+        for (key, value) in xattr.get_all(fd):
+            print('xattr is {}:{}'.format(key, value))
 
     @needs_dfuse
     def test_chmod(self):
@@ -1241,55 +1238,6 @@ def run_tests(dfuse):
     assert_file_size_fd(ofd, 0)
     os.close(ofd)
     os.chmod(fname, stat.S_IRUSR)
-
-    readdir_test(dfuse, 10)
-
-def dfuse_wrapper(server, conf):
-    """Start a dfuse instance, do something then tear it down"""
-
-    pools = get_pool_list()
-    while len(pools) < 1:
-        pools = make_pool(server)
-
-    pool = pools[0]
-
-    container = create_cont(conf, pool, posix=True)
-    dfuse = DFuse(server, conf, pool=pool, container=container)
-    dfuse.start()
-    readdir_test(dfuse, 0)
-    readdir_test(dfuse, 25)
-    readdir_test(dfuse, 30)
-    readdir_test(dfuse, 100)
-    readdir_test(dfuse, 300, test_all=False)
-    ret = dfuse.stop()
-    destroy_container(conf, pool, container)
-    return ret
-
-def readdir_test(dfuse, count, test_all=False):
-    """Run a rudimentary readdir test"""
-
-    wide_dir = tempfile.mkdtemp(dir=dfuse.dir)
-    if count == 0:
-        files = os.listdir(wide_dir)
-        assert len(files) == 0
-        return
-    start = time.time()
-    for idx in range(count):
-        fd = open(os.path.join(wide_dir, str(idx)), 'w')
-        fd.close()
-        if test_all:
-            files = os.listdir(wide_dir)
-            assert len(files) == idx + 1
-    duration = time.time() - start
-    rate = count / duration
-    print('Created {} files in {:.1f} seconds rate {:.1f}'.format(count,
-                                                                  duration,
-                                                                  rate))
-    print('Listing dir contents')
-    files = os.listdir(wide_dir)
-    print(files)
-    print(len(files))
-    assert len(files) == count
 
 def stat_and_check(dfuse, pre_stat):
     """Check that dfuse started"""
@@ -1725,189 +1673,6 @@ def run_in_fg(server, conf):
         pass
     dfuse = None
 
-def check_readdir_perf(server, conf):
-    """ Check and report on readdir performance
-
-    Loop over number of files, measuring the time taken to
-    populate a directory, and to read the directory contents,
-    measure both files and directories as contents, and
-    readdir both with and without stat, restarting dfuse
-    between each test to avoid cache effects.
-
-    Continue testing until five minutes have passed, and print
-    a table of results.
-    """
-
-    headers = ['count', 'create\ndirs', 'create\nfiles']
-    headers.extend(['dirs', 'files', 'dirs\nwith stat', 'files\nwith stat'])
-    headers.extend(['caching\n1st', 'caching\n2nd'])
-
-    results = []
-
-    def make_dirs(parent, count):
-        """Populate the test directory"""
-        print('Populating to {}'.format(count))
-        dir_dir = os.path.join(parent,
-                               'dirs.{}.in'.format(count))
-        t_dir = os.path.join(parent,
-                             'dirs.{}'.format(count))
-        file_dir = os.path.join(parent,
-                                'files.{}.in'.format(count))
-        t_file = os.path.join(parent,
-                              'files.{}'.format(count))
-
-        start_all = time.time()
-        if not os.path.exists(t_dir):
-            try:
-                os.mkdir(dir_dir)
-            except FileExistsError:
-                pass
-            for i in range(count):
-                try:
-                    os.mkdir(os.path.join(dir_dir, str(i)))
-                except FileExistsError:
-                    pass
-            dir_time = time.time() - start_all
-            print('Creating {} dirs took {:.2f}'.format(count,
-                                                        dir_time))
-            os.rename(dir_dir, t_dir)
-
-        if not os.path.exists(t_file):
-            try:
-                os.mkdir(file_dir)
-            except FileExistsError:
-                pass
-            start = time.time()
-            for i in range(count):
-                f = open(os.path.join(file_dir, str(i)), 'w')
-                f.close()
-            file_time = time.time() - start
-            print('Creating {} files took {:.2f}'.format(count,
-                                                         file_time))
-            os.rename(file_dir, t_file)
-
-        return [dir_time, file_time]
-
-    def print_results():
-        """Display the results"""
-
-        print(tabulate.tabulate(results,
-                                headers=headers,
-                                floatfmt=".2f"))
-
-    pools = get_pool_list()
-
-    while len(pools) < 1:
-        pools = make_pool(server)
-
-    pool = pools[0]
-
-    container = str(uuid.uuid4())
-
-    dfuse = DFuse(server, conf, pool=pool)
-
-    print('Creating container and populating')
-    count = 4
-    dfuse.start()
-    parent = os.path.join(dfuse.dir, container)
-    try:
-        os.mkdir(parent)
-    except FileExistsError:
-        pass
-    create_times = make_dirs(parent, count)
-    dfuse.stop()
-
-    all_start = time.time()
-
-    while True:
-
-        row = [count]
-        row.extend(create_times)
-        dfuse = DFuse(server, conf, pool=pool, container=container)
-        dir_dir = os.path.join(dfuse.dir,
-                               'dirs.{}'.format(count))
-        file_dir = os.path.join(dfuse.dir,
-                                'files.{}'.format(count))
-        dfuse.start()
-        start = time.time()
-        subprocess.run(['/bin/ls', dir_dir], stdout=subprocess.PIPE)
-        elapsed = time.time() - start
-        print('processed {} dirs in {:.2f} seconds'.format(count,
-                                                           elapsed))
-        row.append(elapsed)
-        dfuse.stop()
-        dfuse = DFuse(server, conf, pool=pool, container=container)
-        dfuse.start()
-        start = time.time()
-        subprocess.run(['/bin/ls', file_dir], stdout=subprocess.PIPE)
-        elapsed = time.time() - start
-        print('processed {} files in {:.2f} seconds'.format(count,
-                                                            elapsed))
-        row.append(elapsed)
-        dfuse.stop()
-
-        dfuse = DFuse(server, conf, pool=pool, container=container)
-        dfuse.start()
-        start = time.time()
-        subprocess.run(['/bin/ls', '-t', dir_dir], stdout=subprocess.PIPE)
-        elapsed = time.time() - start
-        print('processed {} dirs in {:.2f} seconds'.format(count,
-                                                           elapsed))
-        row.append(elapsed)
-        dfuse.stop()
-        dfuse = DFuse(server, conf, pool=pool, container=container)
-        dfuse.start()
-        start = time.time()
-        # Use sort by time here so ls calls stat, if you run ls -l then it will
-        # also call getxattr twice which skews the figures.
-        subprocess.run(['/bin/ls', '-t', file_dir], stdout=subprocess.PIPE)
-        elapsed = time.time() - start
-        print('processed {} files in {:.2f} seconds'.format(count,
-                                                            elapsed))
-        row.append(elapsed)
-        dfuse.stop()
-
-        # Test with caching enabled.  Check the file directory, and do it twice
-        # without restarting, to see the effect of populating the cache, and
-        # reading from the cache.
-        dfuse = DFuse(server,
-                      conf,
-                      pool=pool,
-                      container=container,
-                      caching=True)
-        dfuse.start()
-        start = time.time()
-        subprocess.run(['/bin/ls', '-t', file_dir], stdout=subprocess.PIPE)
-        elapsed = time.time() - start
-        print('processed {} files in {:.2f} seconds'.format(count,
-                                                            elapsed))
-        row.append(elapsed)
-        start = time.time()
-        subprocess.run(['/bin/ls', '-t', file_dir], stdout=subprocess.PIPE)
-        elapsed = time.time() - start
-        print('processed {} files in {:.2f} seconds'.format(count,
-                                                            elapsed))
-        row.append(elapsed)
-        results.append(row)
-
-        elapsed = time.time() - all_start
-        if elapsed > 5 * 60:
-            dfuse.stop()
-            break
-
-        print_results()
-        count *= 2
-        create_times = make_dirs(dfuse.dir, count)
-        dfuse.stop()
-
-    run_daos_cmd(conf, ['container',
-                        'destroy',
-                        '--pool',
-                        pool,
-                        '--cont',
-                        container])
-    print_results()
-
 def test_pydaos_kv(server, conf):
     """Test the KV interface"""
 
@@ -2072,7 +1837,6 @@ def main():
     parser.add_argument('--pool', default=None)
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
-    parser.add_argument('--perf-check', action='store_true')
     parser.add_argument('--dtx', action='store_true')
     parser.add_argument('--test', help="Use '--test list' for list")
     parser.add_argument('mode', nargs='?')
@@ -2109,12 +1873,8 @@ def main():
         fatal_errors.add_result(run_il_test(server, conf))
     elif args.mode == 'kv':
         test_pydaos_kv(server, conf)
-    elif args.mode == 'readdir_perf':
-        check_readdir_perf(server, conf)
     elif args.mode == 'overlay':
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
-    elif args.mode == 'readdir':
-        fatal_errors.add_result(dfuse_wrapper(server, conf))
     elif args.mode == 'fi':
         fatal_errors.add_result(test_alloc_fail(server, wf, conf))
     elif args.mode == 'all':
@@ -2129,7 +1889,7 @@ def main():
             fatal_errors.add_result(run_posix_tests(server, conf))
         else:
             fatal_errors.add_result(run_posix_tests(server, conf, args.test))
-    elif not args.perf_check:
+    else:
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
         fatal_errors.add_result(run_posix_tests(server, conf))
@@ -2149,19 +1909,6 @@ def main():
             run_daos_cmd(conf, cmd, valgrind=False)
         if server.stop() != 0:
             fatal_errors.add_result(True)
-
-    # If the perf-check option is given then re-start everything without much
-    # debugging enabled and run some microbenchmarks to give numbers for use
-    # as a comparison against other builds.
-    if args.perf_check:
-        args.server_debug = 'INFO'
-        args.memcheck = 'no'
-        args.dfuse_debug = 'ERR'
-        server = DaosServer(conf)
-        server.start()
-        check_readdir_perf(server, conf)
-        if server.stop() != 0:
-            fatal_errors.fail()
 
     wf.close()
     if fatal_errors.errors:
