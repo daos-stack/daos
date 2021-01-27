@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos two-phase commit transaction.
@@ -311,11 +294,14 @@ dtx_act_ent_update(struct btr_instance *tins, struct btr_record *rec,
 	struct vos_dtx_act_ent	*dae_old;
 
 	dae_old = umem_off2ptr(&tins->ti_umm, rec->rec_off);
-	if (DAE_EPOCH(dae_old) != DAE_EPOCH(dae_new))
-		D_ASSERTF(0, "NOT allow to update act DTX entry for "DF_DTI
+	if (DAE_EPOCH(dae_old) != DAE_EPOCH(dae_new)) {
+		D_ASSERTF(!dae_old->dae_prepared,
+			  "NOT allow to update act DTX entry for "DF_DTI
 			  " from epoch "DF_X64" to "DF_X64"\n",
 			  DP_DTI(&DAE_XID(dae_old)),
 			  DAE_EPOCH(dae_old), DAE_EPOCH(dae_new));
+		return -DER_INPROGRESS;
+	}
 
 	return 0;
 }
@@ -1698,6 +1684,8 @@ vos_dtx_prepared(struct dtx_handle *dth)
 	dbd->dbd_count++;
 	dbd->dbd_index++;
 
+	dae->dae_prepared = 1;
+
 	return 0;
 }
 
@@ -1779,7 +1767,10 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 				return -DER_MISMATCH;
 		}
 
-		return DTX_ST_PREPARED;
+		if (dae->dae_prepared || !for_resent)
+			return DTX_ST_PREPARED;
+
+		return -DER_NONEXIST;
 	}
 
 	if (rc == -DER_NONEXIST) {
