@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-(C) Copyright 2019 Intel Corporation.
+(C) Copyright 2021 Intel Corporation.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -26,12 +26,14 @@ import os
 import time
 import random
 import threading
+import re
 from ior_utils import IorCommand
 from fio_utils import FioCommand
 from dfuse_utils import Dfuse
 from job_manager_utils import Srun
 from command_utils_base import BasicParameter
-from general_utils import get_random_string, run_command, DaosTestError
+from general_utils import get_host_data, get_random_string, \
+    run_command, DaosTestError, pcmd
 import slurm_utils
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
@@ -143,6 +145,57 @@ def get_remote_logs(self):
         raise SoakTestError(
             "<<FAILED: Soak remote logfiles not copied "
             "from clients>>: {}".format(self.hostlist_clients))
+
+
+def run_event_check(self, since, until):
+    """Run a check on specific events in journalctl.
+
+    Args:
+        self (obj): soak obj
+
+    Returns list of any matched events found in system log
+
+    """
+    events_found = []
+    detected = 0
+    # to do: currently all events are from - t kernel;
+    # when systemctl is enabled add daos events
+    events = self.params.get("events", "/run/*")
+    # check events on all nodes
+    hosts = list(set(self.hostlist_clients + self.hostlist_servers))
+    if events:
+        command = "sudo /usr/bin/journalctl --system -t kernel -t daos_server "
+        "--since='{}' --until='{}'".format(since, until)
+        err = "Error gathering system log events"
+        for event in events:
+            for output in get_host_data(
+                    hosts, command, "journalctl", err).values():
+                lines = str(output).splitlines()
+                for line in lines:
+                    match = re.search(r"{}".format(event), str(line))
+                    if match:
+                        events_found.append(line)
+                        detected += 1
+                self.log.info(
+                    "Found %s instances of %s in system log from %s through %s",
+                    detected, event, since, until)
+    return events_found
+
+
+def run_monitor_check(self):
+    """Monitor server cpu, memory usage periodically.
+
+    Args:
+        self (obj): soak obj
+
+    """
+    monitor_cmds = self.params.get("monitor", "/run/*")
+    hosts = self.hostlist_servers
+    if monitor_cmds:
+        for cmd in monitor_cmds:
+            command = "sudo {}".format(cmd)
+            pcmd(hosts, command, timeout=30)
+    return
 
 
 def get_harassers(harassers):
@@ -284,9 +337,8 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
     rank = None
     if name == "EXCLUDE":
         exclude_servers = len(self.hostlist_servers) - 1
-        # Exclude target : random two targets  (target idx : 0-7)
-        n = random.randint(0, 6)
-        target_list = [n, n+1]
+        # Exclude target : random 4 targets  (target idx : 0-7)
+        target_list = random.sample(range(0, 7), 4)
         tgt_idx = "{}".format(','.join(str(tgt) for tgt in target_list))
         # Exclude one rank : other than rank 0 and 1.
         rank = random.randint(2, exclude_servers)
@@ -312,9 +364,8 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
             tgt_idx = self.harasser_args["EXCLUDE"]["tgt_idx"]
             self.log.info("<<<PASS %s: %s started on rank %s at %s>>>\n",
                           self.loop, name, rank, time.ctime())
-            status = pool.reintegrate(rank, tgt_idx)
             try:
-                pool.reintegrate(rank, tgt_idx)
+                pool.reintegrate(rank, tgt_idx=tgt_idx)
                 status = True
             except TestFail as error:
                 self.log.error(
