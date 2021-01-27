@@ -163,7 +163,7 @@ pool_tls_fini(const struct dss_thread_local_storage *dtls,
 	}
 
 	if (!d_list_empty(&tls->dt_pool_list))
-		D_ERROR("TLS pool list not empty\n");
+		D_ERROR("pool list not empty\n");
 	D_FREE(tls);
 }
 
