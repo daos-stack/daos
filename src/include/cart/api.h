@@ -544,13 +544,12 @@ crt_hlc2unixnsec(uint64_t hlc);
  * Return the HLC timestamp of unixnsec in hlc.
  *
  * \param[in] unixnsec         Unix nanosecond timestamp
- * \param[out] hlc             HLC timestamp
  *
- * \return                     DER_SUCCESS on success, or -DER_INVAL when it is
+ * \return                     HLC timestamp on success, or 0 when it is
  *                             impossible to convert unixnsec to hlc
  */
-int
-crt_unixnsec2hlc(uint64_t unixnsec, uint64_t *hlc);
+uint64_t
+crt_unixnsec2hlc(uint64_t unixnsec);
 
 /**
  * Set the maximum system clock offset.

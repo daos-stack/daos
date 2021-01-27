@@ -107,20 +107,19 @@ uint64_t crt_hlc2unixnsec(uint64_t hlc)
 	return hlc / CRT_HLC_NSEC + CRT_HLC_START_SEC * NSEC_PER_SEC;
 }
 
-int crt_unixnsec2hlc(uint64_t unixnsec, uint64_t *hlc)
+uint64_t crt_unixnsec2hlc(uint64_t unixnsec)
 {
 	uint64_t start = CRT_HLC_START_SEC * NSEC_PER_SEC;
 
 	/*
-	 * If the time represented by unixnsec is before the time represented by
-	 * CRT_HLC_START_SEC, then the conversion is impossible.
+	 * If the time represented by unixnsec is before the time represented
+	 * by CRT_HLC_START_SEC, or after the maximum time representable, then
+	 * the conversion is impossible.
 	 */
-	if (unixnsec < start)
-		return -DER_INVAL;
+	if (unixnsec < start || unixnsec - start > (uint64_t)-1 / CRT_HLC_NSEC)
+		return 0;
 
-	*hlc = (unixnsec - start) * CRT_HLC_NSEC;
-
-	return 0;
+	return (unixnsec - start) * CRT_HLC_NSEC;
 }
 
 void crt_hlc_epsilon_set(uint64_t epsilon)
