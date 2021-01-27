@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * Implementation for pool specific functions in VOS
@@ -31,6 +14,7 @@
 
 #include <daos/common.h>
 #include <daos_srv/vos.h>
+#include <daos_srv/ras.h>
 #include <daos_errno.h>
 #include <gurt/hash.h>
 #include <sys/stat.h>
@@ -670,6 +654,10 @@ vos_pool_open(const char *path, uuid_t uuid, bool small, daos_handle_t *poh)
 	if (pool_df->pd_version > POOL_DF_VERSION ||
 	    pool_df->pd_version < POOL_DF_VER_1) {
 		D_ERROR("Unsupported DF version %x\n", pool_df->pd_version);
+		/** Send a RAS notification */
+		vos_report_layout_incompat("VOS pool", pool_df->pd_version,
+					   POOL_DF_VER_1, POOL_DF_VERSION,
+					   &ukey.uuid);
 		D_GOTO(failed, rc = -DER_DF_INCOMPT);
 	}
 

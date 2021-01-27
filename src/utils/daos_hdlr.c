@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /* daos_hdlr.c - resource and operation-specific handler functions
@@ -91,7 +74,6 @@ parse_acl_file(const char *path, struct daos_acl **acl);
 static int
 pool_decode_props(daos_prop_t *props)
 {
-
 	struct daos_prop_entry		*entry;
 	int				rc = 0;
 
@@ -284,7 +266,6 @@ out_disconnect:
 		rc = rc2;
 out:
 	return rc;
-
 }
 
 int
@@ -331,7 +312,6 @@ out_disconnect:
 		rc = rc2;
 out:
 	return rc;
-
 }
 
 int
@@ -398,8 +378,7 @@ pool_get_attr_hdlr(struct cmd_args_s *ap)
 	D_PRINT("%s\n", buf);
 
 out_disconnect:
-	if (buf != NULL)
-		D_FREE(buf);
+	D_FREE(buf);
 
 	/* Pool disconnect  in normal and error flows: preserve rc */
 	rc2 = daos_pool_disconnect(ap->pool, NULL);
@@ -412,7 +391,6 @@ out_disconnect:
 		rc = rc2;
 out:
 	return rc;
-
 }
 
 int
@@ -476,8 +454,7 @@ pool_list_attrs_hdlr(struct cmd_args_s *ap)
 	}
 
 out_disconnect:
-	if (buf != NULL)
-		D_FREE(buf);
+	D_FREE(buf);
 
 	/* Pool disconnect  in normal and error flows: preserve rc */
 	rc2 = daos_pool_disconnect(ap->pool, NULL);
@@ -490,7 +467,6 @@ out_disconnect:
 		rc = rc2;
 out:
 	return rc;
-
 }
 
 int
@@ -931,7 +907,6 @@ cont_set_attr_hdlr(struct cmd_args_s *ap)
 
 out:
 	return rc;
-
 }
 
 int
@@ -955,14 +930,13 @@ cont_del_attr_hdlr(struct cmd_args_s *ap)
 
 out:
 	return rc;
-
 }
 
 int
 cont_get_attr_hdlr(struct cmd_args_s *ap)
 {
 	size_t	attr_size, expected_size;
-	char	*buf= NULL;
+	char	*buf = NULL;
 	int	rc = 0;
 
 	if (ap->attrname_str == NULL) {
@@ -1008,11 +982,9 @@ cont_get_attr_hdlr(struct cmd_args_s *ap)
 	D_PRINT("%s\n", buf);
 
 out:
-	if (buf != NULL)
-		D_FREE(buf);
+	D_FREE(buf);
 
 	return rc;
-
 }
 
 int
@@ -1070,17 +1042,14 @@ cont_list_attrs_hdlr(struct cmd_args_s *ap)
 	}
 
 out:
-	if (buf != NULL)
-		D_FREE(buf);
+	D_FREE(buf);
 
 	return rc;
-
 }
 
 static int
 cont_decode_props(daos_prop_t *props, daos_prop_t *prop_acl)
 {
-
 	struct daos_prop_entry		*entry;
 	char				type[10];
 	int				rc = 0;
@@ -1371,7 +1340,7 @@ cont_set_prop_hdlr(struct cmd_args_s *ap)
 
 	/* Validate the properties are supported for set */
 	for (i = 0; i < ap->props->dpp_nr; i++) {
-		entry = &(ap->props->dpp_entries[i]);
+		entry = &ap->props->dpp_entries[i];
 		if (entry->dpe_type != DAOS_PROP_CO_LABEL) {
 			fprintf(stderr, "property not supported for set\n");
 			D_GOTO(err_out, rc = -DER_INVAL);
@@ -1435,9 +1404,9 @@ get_first_empty_prop_entry(struct cmd_args_s *ap,
 				"access control parameters\n");
 			return -DER_NOMEM;
 		}
-		*entry = &(ap->props->dpp_entries[0]);
+		*entry = &ap->props->dpp_entries[0];
 	} else {
-		*entry = &(ap->props->dpp_entries[ap->props->dpp_nr]);
+		*entry = &ap->props->dpp_entries[ap->props->dpp_nr];
 		ap->props->dpp_nr += nr;
 	}
 
@@ -1575,6 +1544,10 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 	 */
 	ARGS_VERIFY_PATH_CREATE(ap, err_rc, rc = RC_PRINT_HELP);
 
+	rc = update_props_for_access_control(ap);
+	if (rc != 0)
+		return rc;
+
 	uuid_copy(dattr.da_puuid, ap->p_uuid);
 	uuid_copy(dattr.da_cuuid, ap->c_uuid);
 	dattr.da_type = ap->type;
@@ -1646,8 +1619,8 @@ cont_query_hdlr(struct cmd_args_s *ap)
 			if (rc) {
 				fprintf(stderr, "failed to mount container "
 					DF_UUIDF": %s (%d)\n",
-					DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
-				D_GOTO(err_out, rc);
+					DP_UUID(ap->c_uuid), strerror(rc), rc);
+				D_GOTO(err_out, rc = daos_errno2der(rc));
 			}
 
 			dfs_query(dfs, &attr);
@@ -1659,8 +1632,8 @@ cont_query_hdlr(struct cmd_args_s *ap)
 			if (rc) {
 				fprintf(stderr, "failed to unmount container "
 					DF_UUIDF": %s (%d)\n",
-					DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
-				D_GOTO(err_out, rc);
+					DP_UUID(ap->c_uuid), strerror(rc), rc);
+				D_GOTO(err_out, rc = daos_errno2der(rc));
 			}
 		}
 	}
@@ -1834,7 +1807,6 @@ file_write(struct file_dfs *file_dfs, char *file,
 static int
 open_dfs(struct file_dfs *file_dfs, char *file, int flags, mode_t mode)
 {
-
 	int		rc = 0;
 	int		tmp_rc = 0;
 	dfs_obj_t	*parent = NULL;
@@ -2455,8 +2427,7 @@ fs_copy(struct file_dfs *src_file_dfs,
 
 				total_bytes += bytes_read;
 			}
-			if (buf != NULL)
-				D_FREE(buf);
+			D_FREE(buf);
 
 			/* reset offsets if there is another file to copy */
 			src_file_dfs->offset = 0;
@@ -3053,7 +3024,6 @@ cont_overwrite_acl_hdlr(struct cmd_args_s *ap)
 	}
 
 	rc = print_acl(stdout, prop_out, false);
-
 
 	daos_prop_free(prop_out);
 	return rc;
