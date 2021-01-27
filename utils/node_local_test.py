@@ -516,10 +516,7 @@ class DaosServer():
         compress_file(self.agent_log.name)
         compress_file(self.control_log.name)
 
-        # TODO:                              # pylint: disable=W0511
-        # Enable memleak checking of server.  This could work, but we
-        # need to resolve a number of the issues first.
-        log_test(self.conf, self.server_log.name, show_memleaks=False)
+        log_test(self.conf, self.server_log.name)
         self.running = False
         return ret
 
