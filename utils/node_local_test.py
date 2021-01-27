@@ -475,7 +475,6 @@ class DaosServer():
             if not os.path.exists(status_file):
                 continue
             fd = open(status_file, 'r')
-            this_proc = False
             for line in fd.readlines():
                 try:
                     key, v = line.split(':', maxsplit=2)
@@ -490,7 +489,7 @@ class DaosServer():
                     procs.append(proc_id)
                     break
 
-        if (len(procs) != 1):
+        if len(procs) != 1:
             entry = {}
             fname = __file__.lstrip('./')
             entry['fileName'] = os.path.basename(fname)
