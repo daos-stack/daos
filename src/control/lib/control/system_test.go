@@ -1158,23 +1158,34 @@ func TestControl_EventForwarder_OnEvent(t *testing.T) {
 		"successful forward": {
 			event:          rasEventRankDown,
 			aps:            []string{"192.168.1.1"},
-			expInvokeCount: 1,
+			expInvokeCount: 2,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
+			expNextSeq := uint64(tc.expInvokeCount + 1)
+
 			mi := NewMockInvoker(log, &MockInvokerConfig{})
 			if tc.nilClient {
 				mi = nil
 			}
 
+			callCount := tc.expInvokeCount
+			if callCount == 0 {
+				callCount++ // call at least once
+			}
+
 			ef := NewEventForwarder(mi, tc.aps)
-			ef.OnEvent(context.TODO(), tc.event)
+			for i := 0; i < callCount; i++ {
+				ef.OnEvent(context.TODO(), tc.event)
+			}
 
 			common.AssertEqual(t, tc.expInvokeCount, mi.invokeCount,
 				"unexpected number of rpc calls")
+			common.AssertEqual(t, expNextSeq, <-ef.seq,
+				"unexpected next forwarding sequence")
 		})
 	}
 }
