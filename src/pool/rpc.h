@@ -20,6 +20,7 @@
 #include <daos/rpc.h>
 #include <daos/rsvc.h>
 #include <daos/pool_map.h>
+#include <daos/pool.h>
 
 /*
  * RPC operation codes

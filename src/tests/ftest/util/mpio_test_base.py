@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-    (C) Copyright 2020 Intel Corporation.
+    (C) Copyright 2020-2021 Intel Corporation.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -105,8 +105,8 @@ class MpiioTests(TestWithServers):
         try:
             # running tests
             self.mpio.run_mpiio_tests(
-                self.hostfile_clients, self.pool.uuid, self.pool.svc_ranks,
-                test_repo, test_name, client_processes, self.cont_uuid)
+                self.hostfile_clients, self.pool.uuid, test_repo, test_name,
+                client_processes, self.cont_uuid)
         except MpioFailed as excep:
             self.fail("<{0} Test Failed> \n{1}".format(test_name, excep))
 

@@ -92,7 +92,7 @@ daos_tests:
     test_i:
       daos_test: i
       test_name: IO test
-      test_timeout: 280
+      test_timeout: 290
     test_A:
       daos_test: A
       test_name: DAOS Object Array tests

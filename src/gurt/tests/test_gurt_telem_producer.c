@@ -11,17 +11,16 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include "wrap_cmocka.h"
-#include "gurt/common.h"
 #include "gurt/telemetry_common.h"
 #include "gurt/telemetry_producer.h"
 
 static int
 init_tests(void **state)
 {
-	int		simulated_rank = 99;
+	int		simulated_srv_idx = 99;
 	int		rc;
 
-	rc = d_tm_init(simulated_rank, D_TM_SHARED_MEMORY_SIZE);
+	rc = d_tm_init(simulated_srv_idx, D_TM_SHARED_MEMORY_SIZE);
 	assert_true(rc == D_TM_SUCCESS);
 
 	return d_log_init();
@@ -74,7 +73,6 @@ test_gauge(void **state)
 					  "gauge", NULL);
 		assert(rc == D_TM_SUCCESS);
 	}
-
 }
 
 static void

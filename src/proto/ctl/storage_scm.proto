@@ -68,7 +68,9 @@ message PrepareScmResp {
 	bool rebootrequired = 3;
 }
 
-message ScanScmReq {}
+message ScanScmReq {
+	bool usage = 1;			// Populate usage statistics in scan
+}
 
 message ScanScmResp {
 	repeated ScmModule modules = 1;

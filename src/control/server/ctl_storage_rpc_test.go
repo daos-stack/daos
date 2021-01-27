@@ -1,24 +1,7 @@
 //
 // (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
@@ -179,6 +162,7 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 		},
 		"scan bdev health with single io server down": {
 			req: &StorageScanReq{
+				Scm: &ScanScmReq{},
 				Nvme: &ScanNvmeReq{
 					Health: true,
 				},
@@ -201,6 +185,7 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 		"scan bdev health with multiple io servers down": {
 			multiIO: true,
 			req: &StorageScanReq{
+				Scm: &ScanScmReq{},
 				Nvme: &ScanNvmeReq{
 					Health: true,
 				},
@@ -223,6 +208,7 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 		},
 		"scan bdev meta with io servers down": {
 			req: &StorageScanReq{
+				Scm: &ScanScmReq{},
 				Nvme: &ScanNvmeReq{
 					Meta: true,
 				},
@@ -275,6 +261,7 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 
 				if tc.req == nil {
 					tc.req = &StorageScanReq{
+						Scm:  new(ScanScmReq),
 						Nvme: new(ScanNvmeReq),
 					}
 				}
@@ -413,7 +400,10 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 		expResp   StorageScanResp
 	}{
 		"scan bdev health with io servers up": {
-			req: &StorageScanReq{Nvme: &ScanNvmeReq{Health: true}},
+			req: &StorageScanReq{
+				Scm:  new(ScanScmReq),
+				Nvme: &ScanNvmeReq{Health: true},
+			},
 			bmbc: &bdev.MockBackendConfig{
 				ScanRes: &bdev.ScanResponse{
 					Controllers: storage.NvmeControllers{newCtrlr(1)},
@@ -434,7 +424,10 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 			},
 		},
 		"scan bdev meta with io servers up": {
-			req: &StorageScanReq{Nvme: &ScanNvmeReq{Meta: true}},
+			req: &StorageScanReq{
+				Scm:  new(ScanScmReq),
+				Nvme: &ScanNvmeReq{Meta: true},
+			},
 			bmbc: &bdev.MockBackendConfig{
 				ScanRes: &bdev.ScanResponse{
 					Controllers: storage.NvmeControllers{newCtrlr(1)},
@@ -455,7 +448,10 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 			},
 		},
 		"scan bdev health with multiple io servers up": {
-			req: &StorageScanReq{Nvme: &ScanNvmeReq{Health: true}},
+			req: &StorageScanReq{
+				Scm:  new(ScanScmReq),
+				Nvme: &ScanNvmeReq{Health: true},
+			},
 			bmbc: &bdev.MockBackendConfig{
 				ScanRes: &bdev.ScanResponse{
 					Controllers: storage.NvmeControllers{
@@ -493,7 +489,10 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 			},
 		},
 		"scan bdev meta with multiple io servers up": {
-			req: &StorageScanReq{Nvme: &ScanNvmeReq{Meta: true}},
+			req: &StorageScanReq{
+				Scm:  new(ScanScmReq),
+				Nvme: &ScanNvmeReq{Meta: true},
+			},
 			bmbc: &bdev.MockBackendConfig{
 				ScanRes: &bdev.ScanResponse{
 					Controllers: storage.NvmeControllers{
@@ -532,7 +531,10 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 		},
 		// make sure information is not duplicated in cache
 		"verify cache integrity over multiple storage scan calls": {
-			req: &StorageScanReq{Nvme: &ScanNvmeReq{Meta: true}},
+			req: &StorageScanReq{
+				Scm:  new(ScanScmReq),
+				Nvme: &ScanNvmeReq{Meta: true},
+			},
 			bmbc: &bdev.MockBackendConfig{
 				ScanRes: &bdev.ScanResponse{
 					Controllers: storage.NvmeControllers{
@@ -575,7 +577,10 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 			},
 		},
 		"scan bdev meta with multiple io servers up with multiple nvme namespaces": {
-			req: &StorageScanReq{Nvme: &ScanNvmeReq{Meta: true}},
+			req: &StorageScanReq{
+				Scm:  new(ScanScmReq),
+				Nvme: &ScanNvmeReq{Meta: true},
+			},
 			bmbc: &bdev.MockBackendConfig{
 				ScanRes: &bdev.ScanResponse{
 					Controllers: storage.NvmeControllers{
@@ -614,7 +619,11 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 				Scm: &ScanScmResp{State: new(ResponseState)},
 			},
 		},
-		"scan scm with space utilization": {
+		"scan scm usage": {
+			req: &StorageScanReq{
+				Scm:  &ScanScmReq{Usage: true},
+				Nvme: new(ScanNvmeReq),
+			},
 			smbc: &scm.MockBackendConfig{
 				DiscoverRes:         storage.ScmModules{storage.MockScmModule()},
 				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
@@ -641,7 +650,11 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 				},
 			},
 		},
-		"scan scm with pmem not in instance device list": {
+		"scan scm usage with pmem not in instance device list": {
+			req: &StorageScanReq{
+				Scm:  &ScanScmReq{Usage: true},
+				Nvme: new(ScanNvmeReq),
+			},
 			smbc: &scm.MockBackendConfig{
 				DiscoverRes:         storage.ScmModules{storage.MockScmModule()},
 				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
@@ -663,8 +676,51 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 					State: new(ResponseState),
 				},
 				Scm: &ScanScmResp{
-					Namespaces: proto.ScmNamespaces{proto.MockScmNamespace()},
-					State:      new(ResponseState),
+					State: &ResponseState{
+						Status: ResponseStatus_CTL_ERR_SCM,
+						Error:  "instance 0: no pmem namespace for mount /mnt/daos1",
+					},
+				},
+			},
+		},
+		"scan scm usage with class ram": {
+			req: &StorageScanReq{
+				Scm:  &ScanScmReq{Usage: true},
+				Nvme: new(ScanNvmeReq),
+			},
+			smbc: &scm.MockBackendConfig{
+				DiscoverRes:         storage.ScmModules{storage.MockScmModule()},
+				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
+			},
+			smsc: &scm.MockSysConfig{
+				GetfsUsageTotal: mockPbScmMount.TotalBytes,
+				GetfsUsageAvail: mockPbScmMount.AvailBytes,
+			},
+			cfg: config.DefaultServer().WithServers(
+				ioserver.NewConfig().
+					WithScmMountPoint(mockPbScmMount.Path).
+					WithScmClass(storage.ScmClassRAM.String()).
+					WithScmRamdiskSize(16)),
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {},
+			},
+			expResp: StorageScanResp{
+				Nvme: &ScanNvmeResp{
+					State: new(ResponseState),
+				},
+				Scm: &ScanScmResp{
+					Namespaces: proto.ScmNamespaces{
+						&ctlpb.ScmNamespace{
+							Blockdev: "ramdisk",
+							Size:     uint64(humanize.GiByte * 16),
+							Mount: &ctlpb.ScmNamespace_Mount{
+								Path:       mockPbScmMount.Path,
+								TotalBytes: mockPbScmMount.TotalBytes,
+								AvailBytes: mockPbScmMount.AvailBytes,
+							},
+						},
+					},
+					State: new(ResponseState),
 				},
 			},
 		},
@@ -714,6 +770,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 
 			if tc.req == nil {
 				tc.req = &StorageScanReq{
+					Scm:  new(ScanScmReq),
 					Nvme: new(ScanNvmeReq),
 				}
 			}

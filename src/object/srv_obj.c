@@ -25,7 +25,6 @@
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/security.h>
 #include <daos/checksum.h>
-#include <gurt/mem.h>
 #include "daos_srv/srv_csum.h"
 #include "obj_rpc.h"
 #include "obj_internal.h"
@@ -1067,8 +1066,8 @@ obj_dedup_verify(daos_handle_t ioh, struct bio_sglist *bsgls_dup, int sgl_nr)
 			D_ASSERT(biov_dup->bi_addr.ba_dedup);
 
 			D_ASSERT(bio_iov2len(biov) == bio_iov2len(biov_dup));
-			rc = d_memcmp(bio_iov2buf(biov), bio_iov2buf(biov_dup),
-				      bio_iov2len(biov));
+			rc = memcmp(bio_iov2buf(biov), bio_iov2buf(biov_dup),
+				    bio_iov2len(biov));
 
 			if (rc == 0) {	/* verify succeeded */
 				D_DEBUG(DB_IO, "Verify dedup succeeded\n");
@@ -2216,7 +2215,7 @@ re_fetch:
 				D_GOTO(out, rc = -DER_TX_BUSY);
 
 			/* XXX: Currently, we commit the distributed transaction
-			 *	sychronously. Normally, it will be very quickly.
+			 *	synchronously. Normally it will be very quickly.
 			 *	So let's yield then retry. If related
 			 *	distributed transaction is still not committed
 			 *	after several cycles, replies '-DER_TX_BUSY' to
@@ -2614,7 +2613,7 @@ re_pack:
 			D_GOTO(out, rc = -DER_TX_BUSY);
 
 		/* XXX: Currently, we commit the distributed transaction
-		 *	sychronously. Normally, it will be very quickly.
+		 *	synchronously. Normally it will be very quickly.
 		 *	So let's yield then retry. If related distributed
 		 *	transaction is still not committed after several
 		 *	cycles, replies '-DER_TX_BUSY' to the client.
@@ -3306,7 +3305,7 @@ out:
 			D_GOTO(failed, rc = -DER_TX_BUSY);
 
 		/* XXX: Currently, we commit the distributed transaction
-		 *	sychronously. Normally, it will be very quickly.
+		 *	synchronously. Normally it will be very quickly.
 		 *	So let's yield then retry. If related distributed
 		 *	transaction is still not committed after several
 		 *	cycles, then replies '-DER_TX_BUSY' to the client.

@@ -22,7 +22,7 @@ int d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
 			 char *item, ...);
 
 /* Other server functions */
-int d_tm_init(int rank, uint64_t mem_size);
+int d_tm_init(int srv_idx, uint64_t mem_size);
 int d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
 		    char *sh_desc, char *lng_desc);
 void d_tm_fini(void);
