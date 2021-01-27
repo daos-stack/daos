@@ -84,7 +84,8 @@ struct ds_cont_child {
 				 sc_vos_aggregating:1,
 				 sc_abort_vos_aggregating:1,
 				 sc_props_fetched:1,
-				 sc_stopping:1;
+				 sc_stopping:1,
+				 sc_cos_shutdown:1;
 	/* Tracks the schedule request for aggregation ULT */
 	struct sched_request	*sc_agg_req;
 

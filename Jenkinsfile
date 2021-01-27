@@ -56,7 +56,8 @@ def skip_stage(String stage, boolean def_val = false) {
 }
 
 boolean quickbuild() {
-    return cachedCommitPragma(pragma: 'Quick-build') == 'true'
+    return cachedCommitPragma(pragma: 'Quick-build') == 'true' ||
+           quick_functional()
 }
 
 def functional_post_always() {
@@ -148,12 +149,12 @@ String unit_packages() {
                            'boost-devel ' +
                            'libisa-l-devel libpmem ' +
                            'libpmemobj protobuf-c ' +
-                           'spdk-devel libfabric-devel '+
+                           'spdk-devel libfabric-devel ' +
                            'pmix numactl-devel ' +
                            'libipmctl-devel ' +
                            'python36-tabulate numactl ' +
                            'libyaml-devel ' +
-                           'valgrind-devel'
+                           'valgrind-devel patchelf'
         if (need_qb) {
             // TODO: these should be gotten from the Requires: of RPM
             packages += " spdk-tools mercury-2.0.0~rc1" +
@@ -251,14 +252,8 @@ String functional_packages(String distro) {
                   "MACSio-openmpi3 " +
                   "mpifileutils-mpich-daos-1 "
     if (distro == "leap15") {
-        if (quickbuild()) {
-            pkgs += " spdk-tools"
-        }
         return daos_pkgs + pkgs
     } else if (distro == "centos7") {
-        if (quickbuild()) {
-            pkgs += " spdk_tools"
-        }
         // need to exclude openmpi until we remove it from the repo
         return  "--exclude openmpi " + daos_pkgs + pkgs
     } else if (distro.startsWith('ubuntu20')) {
@@ -321,7 +316,8 @@ boolean skip_prebuild() {
 
 boolean skip_checkpatch() {
     return skip_stage('checkpatch') ||
-           doc_only_change()
+           doc_only_change() ||
+           quick_functional()
 }
 
 boolean skip_build() {
@@ -333,31 +329,63 @@ boolean skip_build() {
            rpm_test_version() != ''
 }
 
+boolean quick_functional() {
+    return cachedCommitPragma(pragma: 'Quick-Functional') == 'true'
+}
+
 boolean skip_build_rpm(String distro) {
     return target_branch == 'weekly-testing' ||
-           skip_stage('build-' + distro + '-rpm')
+           skip_stage('build-' + distro + '-rpm') ||
+           distro == 'ubuntu20' && quick_functional()
 }
 
 boolean skip_build_on_centos7_gcc() {
-    return skip_stage('build-centos7-gcc')
+    return skip_stage('build-centos7-gcc') ||
+           quick_functional()
 }
 
 boolean skip_ftest(String distro) {
     return distro == 'ubuntu20' ||
            skip_stage('func-test') ||
            skip_stage('func-test-vm') ||
+           ! tests_in_stage('vm') ||
            skip_stage('func-test-' + distro)
 }
 
 boolean skip_test_rpms_centos7() {
     return target_branch == 'weekly-testing' ||
            skip_stage('test') ||
-           skip_stage('test-centos-rpms')
+           skip_stage('test-centos-rpms') ||
+           quick_functional()
 }
 
 boolean skip_scan_rpms_centos7() {
     return target_branch == 'weekly-testing' ||
-           skip_stage('scan-centos-rpms')
+           skip_stage('scan-centos-rpms') ||
+           quick_functional()
+}
+
+boolean tests_in_stage(String size) {
+    String tags = cachedCommitPragma(pragma: 'Test-tag', def_val: 'pr')
+    def newtags = []
+    if (size == "vm") {
+        for (String tag in tags.split(" ")) {
+            newtags.add(tag + ",-hw")
+        }
+        tags += ",-hw"
+    } else {
+        if (size == "medium") {
+            size += ",ib2"
+        }
+        for (String tag in tags.split(" ")) {
+            newtags.add(tag + ",hw," + size)
+        }
+    }
+    tags = newtags.join(" ")
+    return sh(label: "Get test list for ${size}",
+              script: """cd src/tests/ftest
+                         ./launch.py --list ${tags}""",
+              returnStatus: true) == 0
 }
 
 boolean skip_ftest_hw(String size) {
@@ -365,17 +393,20 @@ boolean skip_ftest_hw(String size) {
            skip_stage('func-test') ||
            skip_stage('func-hw-test') ||
            skip_stage('func-hw-test-' + size) ||
+           ! tests_in_stage(size) ||
            (env.BRANCH_NAME == 'master' && ! startedByTimer())
 }
 
 boolean skip_bandit_check() {
     return cachedCommitPragma(pragma: 'Skip-python-bandit',
-                              def_val: 'true') == 'true'
+                              def_val: 'true') == 'true' ||
+           quick_functional()
 }
 
 boolean skip_build_on_centos7_bullseye() {
     return  env.NO_CI_TESTING == 'true' ||
-            skip_stage('bullseye', true)
+            skip_stage('bullseye', true) ||
+            quick_functional()
 }
 
 boolean skip_build_on_centos7_gcc_debug() {
@@ -401,7 +432,8 @@ boolean skip_build_on_ubuntu_clang() {
 }
 
 boolean skip_build_on_leap15_gcc() {
-    return skip_stage('build-leap15-gcc')
+    return skip_stage('build-leap15-gcc') ||
+            quickbuild()
 }
 
 boolean skip_build_on_leap15_icc() {
@@ -417,6 +449,11 @@ boolean skip_unit_testing_stage() {
             doc_only_change() ||
             skip_build_on_centos7_gcc() ||
             skip_stage('unit-tests')
+}
+
+boolean skip_coverity() {
+    return skip_stage('coverity-test') ||
+           quick_functional()
 }
 
 boolean skip_testing_stage() {
@@ -1151,8 +1188,7 @@ pipeline {
                     }
                     post {
                       always {
-                            unitTestPost artifacts: ['unit_test_logs/*'],
-                                         record_issues: false
+                            unitTestPost artifacts: ['unit_test_logs/*']
                         }
                     }
                 }
@@ -1162,17 +1198,19 @@ pipeline {
                       expression { ! skip_stage('nlt') }
                     }
                     agent {
-                        label 'ci_hdwr1'
+                        label 'ci_nlt_1'
                     }
                     steps {
                         unitTest timeout_time: 20,
                                  inst_repos: pr_repos(),
+                                 test_script: 'ci/unit/test_nlt.sh',
                                  inst_rpms: unit_packages()
                     }
                     post {
                       always {
                             unitTestPost artifacts: ['nlt_logs/*'],
                                          testResults: 'None',
+                                         always_script: 'ci/unit/test_nlt_post.sh',
                                          valgrind_stash: 'centos7-gcc-nlt-memcheck'
                         }
                     }
@@ -1236,7 +1274,7 @@ pipeline {
                 stage('Coverity on CentOS 7') {
                     when {
                         beforeAgent true
-                        expression { ! skip_stage('coverity-test') }
+                        expression { ! skip_coverity() }
                     }
                     agent {
                         dockerfile {
