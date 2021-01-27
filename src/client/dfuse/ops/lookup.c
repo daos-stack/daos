@@ -179,8 +179,6 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 
 	d_list_for_each_entry(dfpi, &fs_handle->dpi_info->di_dfp_list,
 			      dfp_list) {
-		DFUSE_TRA_DEBUG(ie, "Checking dfp %p", dfpi);
-
 		if (uuid_compare(dattr.da_puuid, dfpi->dfp_pool) != 0)
 			continue;
 
@@ -242,10 +240,6 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		DFUSE_TRA_UP(dfs, dfp, "dfs");
 		uuid_copy(dfs->dfs_cont, dattr.da_cuuid);
 		d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
-		new_cont = true;
-
-		d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
-
 		new_cont = true;
 
 		dfuse_dfs_init(dfs, ie->ie_dfs);

@@ -101,7 +101,5 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 		D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 	}
 
-	DFUSE_TRA_DOWN(ie);
-
 	D_FREE(ie);
 }
