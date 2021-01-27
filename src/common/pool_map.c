@@ -2070,7 +2070,7 @@ update_failed_cnt_helper(struct pool_domain *dom,
 
 	if (dom->do_children == NULL) {
 		for (i = 0; i < dom->do_target_nr; ++i) {
-			if (pool_target_unavail(&dom->do_targets[i], false))
+			if (pool_target_down(&dom->do_targets[i]))
 				num_failed++;
 		}
 	} else {
