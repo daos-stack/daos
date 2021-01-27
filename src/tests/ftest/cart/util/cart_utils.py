@@ -80,7 +80,8 @@ class CartUtils():
     @staticmethod
     def cleanup_processes():
         """ Clean up cart processes, in case avocado/apricot does not. """
-        stop_processes(["localhost"], "'(crt_launch|orterun)'")
+        localhost = socket.gethostname().split(".")[0] 
+        stop_processes([localhost], "'(crt_launch|orterun)'")
 
     @staticmethod
     def stop_process(proc):
