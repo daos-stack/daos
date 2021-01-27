@@ -297,7 +297,7 @@ dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
 		if (epoch < dcrc->dcrc_epoch)
 			continue;
 
-		dte_buf[i] = dcrc->dcrc_dte;
+		dte_buf[i] = dtx_entry_get(dcrc->dcrc_dte);
 		if (++i >= count)
 			break;
 	}

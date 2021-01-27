@@ -86,8 +86,12 @@ dtx_aggregate(void *arg)
 }
 
 static inline void
-dtx_free_committable(struct dtx_entry **dtes)
+dtx_free_committable(struct dtx_entry **dtes, int count)
 {
+	int	i;
+
+	for (i = 0; i < count; i++)
+		dtx_entry_put(dtes[i]);
 	D_FREE(dtes);
 }
 
@@ -115,7 +119,8 @@ dtx_flush_on_deregister(struct dss_module_info *dmi,
 {
 	struct ds_cont_child	*cont = dbca->dbca_cont;
 	struct dtx_stat		 stat = { 0 };
-	uint64_t		 count = 0;
+	uint64_t		 total = 0;
+	int			 cnt;
 	int			 rc;
 
 	D_ASSERT(dbca->dbca_deregistering != NULL);
@@ -124,24 +129,26 @@ dtx_flush_on_deregister(struct dss_module_info *dmi,
 	do {
 		struct dtx_entry	**dtes = NULL;
 
-		rc = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT,
-					   NULL, DAOS_EPOCH_MAX, &dtes);
-		if (rc <= 0)
+		cnt = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT,
+					    NULL, DAOS_EPOCH_MAX, &dtes);
+		if (cnt <= 0) {
+			rc = cnt;
 			break;
+		}
 
-		count += rc;
+		total += cnt;
 		/* When flush_on_deregister, nobody will add more DTX
 		 * into the CoS cache. So if accumulated commit count
 		 * is more than the total committable ones, then some
 		 * DTX entries cannot be removed from the CoS cache.
 		 */
-		D_ASSERTF(count <= stat.dtx_committable_count,
+		D_ASSERTF(total <= stat.dtx_committable_count,
 			  "Some DTX in CoS may cannot be removed: %lu/%lu\n",
-			  (unsigned long)count,
+			  (unsigned long)total,
 			  (unsigned long)stat.dtx_committable_count);
 
-		rc = dtx_commit(cont, dtes, rc, true);
-		dtx_free_committable(dtes);
+		rc = dtx_commit(cont, dtes, cnt, true);
+		dtx_free_committable(dtes, cnt);
 	} while (rc >= 0);
 
 	if (rc < 0)
@@ -169,6 +176,7 @@ dtx_batched_commit(void *arg)
 		struct dtx_entry		**dtes = NULL;
 		struct ds_cont_child		 *cont;
 		struct dtx_stat			  stat = { 0 };
+		int				  cnt;
 		int				  rc;
 
 		if (d_list_empty(&dmi->dmi_dtx_batched_list))
@@ -193,11 +201,12 @@ dtx_batched_commit(void *arg)
 		    (stat.dtx_oldest_committable_time != 0 &&
 		     dtx_hlc_age2sec(stat.dtx_oldest_committable_time) >
 		     DTX_COMMIT_THRESHOLD_AGE)) {
-			rc = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT,
-						   NULL, DAOS_EPOCH_MAX, &dtes);
-			if (rc > 0) {
-				rc = dtx_commit(cont, dtes, rc, true);
-				dtx_free_committable(dtes);
+			cnt = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT,
+						    NULL, DAOS_EPOCH_MAX,
+						    &dtes);
+			if (cnt > 0) {
+				rc = dtx_commit(cont, dtes, cnt, true);
+				dtx_free_committable(dtes, cnt);
 				if (rc != 0)
 					/* Not fatal, continue other batched
 					 * DTX commit, DTX aggregation.
@@ -1293,23 +1302,24 @@ int
 dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 	     daos_epoch_t epoch)
 {
+	int	cnt;
 	int	rc = 0;
 
 	while (!cont->sc_closing) {
 		struct dtx_entry	**dtes = NULL;
 
-		rc = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT, oid,
-					   epoch, &dtes);
-		if (rc < 0) {
-			D_ERROR("Failed to fetch dtx: "DF_RC"\n", DP_RC(rc));
+		cnt = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT, oid,
+					    epoch, &dtes);
+		if (cnt <= 0) {
+			rc = cnt;
+			if (rc < 0)
+				D_ERROR("Failed to fetch dtx: "DF_RC"\n",
+					DP_RC(rc));
 			break;
 		}
 
-		if (rc == 0)
-			break;
-
-		rc = dtx_commit(cont, dtes, rc, true);
-		dtx_free_committable(dtes);
+		rc = dtx_commit(cont, dtes, cnt, true);
+		dtx_free_committable(dtes, cnt);
 		if (rc < 0) {
 			D_ERROR("Fail to commit dtx: "DF_RC"\n", DP_RC(rc));
 			break;
