@@ -46,7 +46,7 @@ rpc_cb_common(const struct crt_cb_info *cb_info)
 		sem_post(&test.tg_token_to_proceed);
 		break;
 	case OPC_SHUTDOWN:
-		g_shutdown = 1;
+		tc_progress_stop();
 		sem_post(&test.tg_token_to_proceed);
 		break;
 	default:
@@ -185,7 +185,7 @@ test_run()
 		D_ASSERTF(rc == 0, "crt_group_detach failed, rc: %d\n", rc);
 	}
 
-	g_shutdown = 1;
+	tc_progress_stop();
 
 	rc = pthread_join(test.tg_tid, NULL);
 	D_ASSERTF(rc == 0, "pthread_join failed. rc: %d\n", rc);

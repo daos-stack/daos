@@ -107,7 +107,7 @@ shutdown_handler(crt_rpc_t *rpc_req)
 
 	crt_reply_send(rpc_req);
 
-	g_shutdown = 1;
+	tc_progress_stop();
 	DBG_PRINT("server set shutdown flag.\n");
 }
 
