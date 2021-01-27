@@ -360,8 +360,8 @@ pool_create_and_destroy_retry(void **state)
 	uuid_t		 uuid;
 	int		 rc;
 
-        /* Skip for DAOS-6544 */
-        skip();
+	/* Skip for DAOS-6544 */
+	skip();
 
 	FAULT_INJECTION_REQUIRED();
 
