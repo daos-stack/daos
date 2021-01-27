@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It implements CaRT init and finalize related
@@ -71,13 +54,12 @@ mem_pin_workaround(void)
 	rc = mallopt(M_MXFAST, 0);
 	if (rc != 1)
 		D_WARN("Failed to disable malloc fastbins: %d (%s)\n",
-			errno, strerror(errno));
+		       errno, strerror(errno));
 
 	D_DEBUG(DB_ALL, "Memory pinning workaround enabled\n");
 exit:
 	return crt_rc;
 }
-
 
 /* first step init - for initializing crt_gdata */
 static int data_init(int server, crt_init_options_t *opt)
@@ -354,7 +336,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 		D_DEBUG(DB_ALL, "Server bit set to %d\n", server);
 		D_DEBUG(DB_ALL, "Swim auto disable set to %d\n",
-				crt_gdata.cg_auto_swim_disable);
+			crt_gdata.cg_auto_swim_disable);
 
 		path = getenv("CRT_ATTACH_INFO_PATH");
 		if (path != NULL && strlen(path) > 0) {
@@ -382,7 +364,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		for (plugin_idx = 0; crt_na_dict[plugin_idx].nad_str != NULL;
 		     plugin_idx++) {
 			if (!strncmp(addr_env, crt_na_dict[plugin_idx].nad_str,
-				strlen(crt_na_dict[plugin_idx].nad_str) + 1)) {
+				     strlen(crt_na_dict[plugin_idx].nad_str) + 1)) {
 				crt_gdata.cg_na_plugin =
 					crt_na_dict[plugin_idx].nad_type;
 				provider_found = true;
@@ -684,12 +666,13 @@ crt_port_range_verify(int port)
 	if (start_port == -1)
 		return;
 
-	if (port >= start_port && port <= end_port)
-		D_WARN("\nRequested port %d is inside of the local port range "
-		       "as specified by file\n'%s'\nIn order to avoid port "
-		       "conflicts pick a different value outside of the "
-		       "%d-%d range\n",
-		       port, proc, start_port, end_port);
+	if (port >= start_port && port <= end_port) {
+		D_WARN("Requested port %d is inside of the local port range "
+		       "as specified by file '%s'\n", port, proc);
+		D_WARN("In order to avoid port conflicts pick a different "
+		       "value outside of the %d-%d range\n",
+		       start_port, end_port);
+	}
 }
 
 int crt_na_ofi_config_init(void)
@@ -730,7 +713,7 @@ int crt_na_ofi_config_init(void)
 	rc = getifaddrs(&if_addrs);
 	if (rc != 0) {
 		D_ERROR("cannot getifaddrs, errno: %d(%s).\n",
-			     errno, strerror(errno));
+			errno, strerror(errno));
 		D_GOTO(out, rc = -DER_PROTO);
 	}
 
@@ -788,7 +771,7 @@ int crt_na_ofi_config_init(void)
 			crt_port_range_verify(port);
 
 			if (crt_gdata.cg_na_plugin == CRT_NA_OFI_PSM2)
-				port = (uint16_t) port << 8;
+				port = (uint16_t)port << 8;
 			D_DEBUG(DB_ALL, "OFI_PORT %d, using it as service "
 					"port.\n", port);
 		}
