@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [centos.7, leap.15, ubuntu.20.04]
+        distro: [centos.7, centos.8, leap.15, ubuntu.20.04]
         compiler: [gcc, clang]
     steps:
     - name: Checkout code
@@ -26,3 +26,14 @@ jobs:
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg COMPILER=${{ matrix.compiler }}
                           -t ${{ matrix.distro }}/${{ matrix.compiler }}/daos:${{ github.sha }}
+  Spelling:
+    runs-on: ubuntu-20.04
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+    - name: Run check
+      uses: codespell-project/actions-codespell@master
+      with:
+        skip: ./src/control/vendor
+        ignore_words_file: ci/codespell.ignores
+        builtin: clear,rare,informal,names,en-GB_to_en-US
