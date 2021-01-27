@@ -146,12 +146,11 @@ public class DaosClient implements ForceCloseable {
    *
    * @param poolId      pool id
    * @param serverGroup DAOS server group
-   * @param ranks       pool ranks
    * @param flags       see {@link DaosFsClient.DaosFsClientBuilder#poolFlags(int)}
    * @return pool pointer or pool handle
    * @throws IOException {@link DaosIOException}
    */
-  public static native long daosOpenPool(String poolId, String serverGroup, String ranks, int flags) throws IOException;
+  public static native long daosOpenPool(String poolId, String serverGroup, int flags) throws IOException;
 
   /**
    * open container.
@@ -221,7 +220,6 @@ public class DaosClient implements ForceCloseable {
     }
 
     pool = DaosPool.getInstance(builder.poolId, builder.serverGroup,
-        builder.ranks,
         builder.poolFlags);
 
     if (builder.contId != null) {
