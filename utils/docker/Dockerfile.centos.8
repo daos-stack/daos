@@ -1,0 +1,184 @@
+# Copyright (C) 2018-2021 Intel Corporation
+# All rights reserved.
+#
+# 'recipe' for Docker to build an image of centOS 8
+# environment for building the DAOS project.
+
+# Pull base image
+FROM centos:8.3.2011
+LABEL maintainer="daos@daos.groups.io"
+
+# Build arguments can be set via --build-arg
+# use same UID as host and default value of 1000 if not specified
+ARG UID=1000
+
+# for good measure, clean the metadata
+RUN yum clean metadata
+
+# Install basic tools to build DAOS
+RUN yum -y install epel-release dnf-plugins-core; \
+    dnf config-manager --set-enabled powertools; \
+    yum -y install \
+        boost-devel clang-analyzer cmake CUnit-devel doxygen file flex	\
+	gcc gcc-c++ git golang graphviz libaio-devel			\
+	libcmocka-devel libevent-devel libiscsi-devel libtool		\
+	libtool-ltdl-devel libuuid-devel libyaml-devel make meson nasm	\
+	ninja-build numactl-devel openssl-devel pandoc patch		\
+	readline-devel python3-scons sg3_utils yasm			\
+	pciutils valgrind-devel man fuse3-devel hwloc-devel patchelf	\
+	json-c-devel lz4-devel libipmctl-devel ndctl ipmctl e2fsprogs
+# XXX lcov ShellCheck are missing
+
+# Install python packages for testing
+RUN dnf config-manager --set-enabled epel-modular; \
+    yum -y install \
+        python2 python2-devel python36-devel python3-magic	\
+	python3-pygit2 python3-pygithub				\
+	python2-requests python3-requests			\
+	python2-Cython python3-pylint				\
+	python3-clustershell python3-paramiko			\
+	python3-numpy python3-jira python3-pip Lmod		\
+	python3-tabulate python2-distro python3-distro
+# XXX python2-avocado python2-avocado-plugins-output-html
+# python2-avocado-plugins-varianter-yaml-to-mux
+# python-pathlib are missing, although should be in epel-modular
+
+# Install Java environment for Java/HDFS DAOS wrapper
+RUN yum -y install java-1.8.0-openjdk maven
+
+# Install OMPI to build the tests relying on MPI
+RUN yum -y install openmpi-devel
+
+# DAOS python 3 packages required for pylint
+#  - excluding mpi4py as it depends on CORCI-635
+RUN pip3 install avocado-framework; \
+    pip3 install avocado-framework-plugin-result-html; \
+    pip3 install avocado-framework-plugin-varianter-yaml-to-mux
+
+RUN pip3 install codespell
+RUN pip3 install pygithub
+
+# Add DAOS user
+ENV USER daos
+ENV PASSWD daos
+RUN useradd -u $UID -ms /bin/bash $USER
+RUN echo "$USER:$PASSWD" | chpasswd
+
+# Create directory for DAOS backend storage
+RUN mkdir -p /opt/daos && chown -R daos.daos /opt/daos
+RUN mkdir /mnt/daos && chown daos.daos /mnt/daos
+RUN mkdir /var/run/daos_server && chown daos.daos /var/run/daos_server
+RUN mkdir /var/run/daos_agent && chown daos.daos /var/run/daos_agent
+
+# Set maven repo mirror
+RUN mkdir -p /root/.m2
+RUN echo -e "<settings>\n\
+        <mirrors>\n\
+                <mirror>\n\
+                        <id>google-maven-central</id>\n\
+                        <name>GCS Maven Central mirror</name>\n\
+                        <url>https://maven-central.storage-download.googleapis.com/maven2/</url>\n\
+                        <mirrorOf>central</mirrorOf>\n\
+                </mirror>\n\
+        </mirrors>\n\
+</settings>" > /root/.m2/settings.xml
+
+# Dependencies
+# Packages for NVML exist in CentOS, but are
+# unfortunately outdated. The DAOS build system will rebuild those packages.
+ARG JENKINS_URL=""
+ARG QUICKBUILD=false
+ARG QUICKBUILD_DEPS=""
+ARG REPOS=""
+ARG REPO_URL=""
+ARG REPO_EL8=""
+# Need to clean this up later
+RUN if [ -n "$REPO_URL" ]; then                                               \
+      cversion=$(cut -d ' ' -f4 /etc/centos-release);                         \
+      version=${cversion%.*} ;                                                \
+      MY_REPO="${REPO_URL}repository/centos-${version}-x86_64-group/";        \
+      MY_NAME="${MY_REPO#*//}";                                               \
+      MY_NAME="${MY_NAME//\//_}";                                             \
+      echo -e "[${MY_NAME}]\n\
+name=created from ${MY_REPO}\n\
+baseurl=${MY_REPO}\n\
+enabled=1\n\
+gpgcheck=False\n" >> /etc/yum.repos.d/local-centos-group.repo;                \
+      yum --assumeyes install yum-utils;                                      \
+      yum-config-manager --assumeyes --quiet                                  \
+                         --disable base epel extra updates;                   \
+    fi
+RUN if $QUICKBUILD; then                                                      \
+        MY_REPO="${REPO_URL}${REPO_EL8}";                                     \
+        MY_NAME="${MY_REPO#*//}";                                             \
+        MY_NAME="${MY_NAME//\//_}";                                           \
+        echo -e "[${MY_NAME}]\n\
+name=created from ${MY_REPO}\n\
+baseurl=${MY_REPO}\n\
+enabled=1\n\
+gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;       \
+        for repo in $REPOS; do                                                \
+            branch="master";                                                  \
+            build_number="lastSuccessfulBuild";                               \
+            if [[ $repo = *@* ]]; then                                        \
+                branch="${repo#*@}";                                          \
+                repo="${repo%@*}";                                            \
+                if [[ $branch = *:* ]]; then                                  \
+                    build_number="${branch#*:}";                              \
+                    branch="${branch%:*}";                                    \
+                fi;                                                           \
+            fi;                                                               \
+            echo -e "[$repo:$branch:$build_number]\n\
+name=$repo:$branch:$build_number\n\
+baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/centos7/\n\
+enabled=1\n\
+gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;       \
+        done;                                                                 \
+        echo "Installing: $QUICKBUILD_DEPS";                                  \
+        echo "$QUICKBUILD_DEPS" | tr '\n' '\0' | xargs -0 yum -y install;     \
+    fi
+
+ARG BULLSEYE=""
+RUN if [ "x$BULLSEYE" != "x" ]; then \
+      curl ${JENKINS_URL}job/daos-stack/job/tools/job/master/lastSuccessfulBuild/artifact/bullseyecoverage-linux.tar \
+        --retry 10 --retry-max-time 60 --silent --show-error -o bullseye.tar; \
+      mkdir -p bullseye; \
+      tar -C bullseye --strip-components=1 -xf bullseye.tar; \
+      pushd bullseye; \
+        ./install --quiet --key "${BULLSEYE}" --prefix /opt/BullseyeCoverage; \
+      popd; \
+      rm -f bullseye.tar; \
+      rm -rf bullseye; \
+    fi
+
+# set NOBUILD to disable build
+ARG NOBUILD
+
+# select compiler to use
+ARG COMPILER=gcc
+
+# copy DAOS tree
+WORKDIR /home/daos
+COPY ./ .
+
+# Build DAOS & dependencies
+RUN if [ "x$NOBUILD" = "x" ] ; then \
+    echo -e "Import('env')\nenv.AppendUnique(CPPDEFINES=['FUSE_IOCTL_USE_INT'])" > ~/.scons_localrc; \
+    scons-3 --build-deps=yes -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER; fi
+
+# Set environment variables
+ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:$LD_LIBRARY_PATH
+ENV PATH=/opt/daos/bin:$PATH
+
+# Copy example config files to /opt/daos
+RUN if [ "x$NOBUILD" = "x" ] ; then \
+    cp -r utils/config/examples /opt/daos; fi
+
+# Build java and hadoop bindings
+RUN if [ "x$NOBUILD" = "x" ] ; then \
+    pushd src/client/java && \
+    mvn clean install -T 1C -DskipITs -Ddaos.install.path=/opt/daos && \
+    popd; fi
+
+# Remove local copy
+RUN rm -rf /home/daos/*
