@@ -76,16 +76,6 @@ class IorSmall(IorTestBase):
                     # update transfer and block size
                     self.ior_cmd.transfer_size.update(test[0])
                     self.ior_cmd.block_size.update(test[1])
-                    # Skip test issue seen while advancing hdf5 vol-daos code
-                    # That is still needed due to support for new libdaos v1 API
-                    if (api == "HDF5-VOL" and test[0] == "1M" and
-                            test[1] == "32M"):
-                        self.log.info(
-                            "** SKIP test case: api=%s (transfer=%s, block=%s) "
-                            "for DAOS-6427", api, test[0], test[1])
-                        cncl_tickets.append("DAOS-6427")
-                        results.append(["CANCEL", str(self.ior_cmd)])
-                        continue
                     # run ior
                     try:
                         self.run_ior_with_pool(
