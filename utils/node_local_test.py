@@ -795,7 +795,7 @@ class DFuse():
             self._close_files()
             umount(self.dir)
 
-        run_log_test = True
+        run_leak_test = True
         try:
             ret = self._sp.wait(timeout=20)
             print('rc from dfuse {}'.format(ret))
@@ -805,10 +805,9 @@ class DFuse():
             print('Timeout stopping dfuse')
             self._sp.send_signal(signal.SIGTERM)
             fatal_errors = True
-            run_log_test = False
+            run_leak_test = False
         self._sp = None
-        if run_log_test:
-            log_test(self.conf, self.log_file)
+        log_test(self.conf, self.log_file, show_memleaks=run_leak_test)
 
         # Finally, modify the valgrind xml file to remove the
         # prefix to the src dir.
