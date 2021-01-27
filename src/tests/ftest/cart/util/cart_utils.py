@@ -36,6 +36,7 @@ import subprocess
 import logging
 import cart_logparse
 import cart_logtest
+import socket
 
 from general_utils import stop_processes
 
