@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include "dfuse_common.h"
@@ -50,7 +33,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	 * so check that the lookup is relative to the root of the sub-tree, and
 	 * abort if not.
 	 */
-	D_ASSERT(parent->ie_stat.st_ino == parent->ie_dfs->dfs_root);
+	D_ASSERT(parent->ie_stat.st_ino == parent->ie_dfs->dfs_ino);
 
 	D_ALLOC_PTR(dfp);
 	if (!dfp)
@@ -123,7 +106,14 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 			       &dfp->dfp_poh, &dfp->dfp_pool_info,
 			       NULL);
 	if (rc) {
-		DFUSE_TRA_ERROR(dfp, "daos_pool_connect() failed: (%d)", rc);
+		if (rc == -DER_NO_PERM)
+			DFUSE_TRA_INFO(dfp,
+				       "daos_pool_connect() failed, "DF_RC,
+				       DP_RC(rc));
+		else
+			DFUSE_TRA_ERROR(dfp,
+					"daos_pool_connect() failed, "DF_RC,
+					DP_RC(rc));
 
 		/* This is the error you get when the agent isn't started
 		 * and EHOSTUNREACH seems to better reflect this than ENOTDIR
@@ -195,7 +185,6 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	dfs->dfs_ino = atomic_fetch_add_relaxed(&fs_handle->dpi_ino_next, 1);
 
-	dfs->dfs_root = dfs->dfs_ino;
 	ie->ie_stat.st_ino = dfs->dfs_ino;
 	dfs->dfs_ops = &dfuse_cont_ops;
 
