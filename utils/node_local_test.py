@@ -109,10 +109,7 @@ class WarningsFactory():
     https://github.com/jenkinsci/warnings-ng-plugin/blob/master/doc/Documentation.md
     """
 
-    # Error levels supported by the reporint are LOW, NORMAL, HIGH, ERROR.
-    # Errors from this list of functions are known to happen during shutdown
-    # for the time being, so are downgraded to LOW.
-    FLAKY_FUNCTIONS = ('ds_pool_child_purge')
+    # Error levels supported by the reporting are LOW, NORMAL, HIGH, ERROR.
 
     def __init__(self, filename):
         self._fd = open(filename, 'w')
@@ -198,9 +195,6 @@ class WarningsFactory():
         entry['description'] = message
         entry['message'] = line.get_anon_msg()
         entry['severity'] = sev
-        if line.function in self.FLAKY_FUNCTIONS and \
-           entry['severity'] != 'ERROR':
-            entry['severity'] = 'LOW'
         self.issues.append(entry)
         if self.pending and self.pending[0][0].pid != line.pid:
             self.reset_pending()
