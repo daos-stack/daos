@@ -210,7 +210,7 @@ Requires: %{name}-devel = %{version}-%{release}
 Requires: maven
 
 %description tests-java
-This is the package needed to run the DAOS java test suite
+This is the package needed to run the DAOS java test suite.
 
 %prep
 %autosetup
