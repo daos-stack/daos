@@ -29,7 +29,6 @@
 
 #include <daos/common.h>
 #include <daos/btree_class.h>
-#include <daos_srv/ras.h>
 #include "smd_internal.h"
 
 struct smd_store	smd_store;
@@ -270,13 +269,8 @@ smd_store_open(char *fname)
 
 	if (smd_df->smd_version > SMD_DF_VERSION ||
 	    smd_df->smd_version < SMD_DF_VER_1) {
-		D_ERROR("Unsupported DF version %d\n", smd_df->smd_version);
-		if (ds_notify_df_incompat != NULL) {
-			/** Send a RAS notification */
-			ds_notify_df_incompat("SMD pool", smd_df->smd_version,
-					      SMD_DF_VER_1, SMD_DF_VERSION,
-					      NULL);
-		}
+		D_CRIT("Unsupported DF version %d.  Supported range: %d-%d\n",
+		       smd_df->smd_version, SMD_DF_VER_1, SMD_DF_VERSION);
 		rc = -DER_DF_INCOMPT;
 		goto error;
 	}
