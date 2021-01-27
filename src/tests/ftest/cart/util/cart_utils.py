@@ -1,25 +1,8 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from __future__ import print_function
 # pylint: disable=broad-except
@@ -36,6 +19,8 @@ import subprocess
 import logging
 import cart_logparse
 import cart_logtest
+
+from general_utils import stop_processes
 
 from write_host_file import write_host_file
 
@@ -74,6 +59,11 @@ class CartUtils():
                 i = i - 1
 
         return procrtn
+
+    @staticmethod
+    def cleanup_processes():
+        """ Clean up cart processes, in case avocado/apricot does not. """
+        stop_processes(["localhost"], "'(crt_launch|orterun)'")
 
     @staticmethod
     def stop_process(proc):

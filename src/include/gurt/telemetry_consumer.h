@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
  * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
  * The Government's rights to use, modify, reproduce, release, perform, display,
  * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
+ * provided in Contract No. 8F-30005.
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
@@ -38,15 +38,14 @@ int d_tm_get_metadata(char **sh_desc, char **lng_desc, uint64_t *shmem_root,
 		      struct d_tm_node_t *node, char *metric);
 
 /* Developer facing client API to discover topology and manage results */
-uint64_t *d_tm_get_shared_memory(int rank);
+uint64_t *d_tm_get_shared_memory(int srv_idx);
 void *d_tm_conv_ptr(uint64_t *shmem_root, void *ptr);
 struct d_tm_node_t *d_tm_get_root(uint64_t *shmem);
 struct d_tm_node_t *d_tm_find_metric(uint64_t *shmem_root, char *path);
-uint64_t d_tm_get_num_objects(uint64_t *shmem_root, char *path,
-			      int dtn_type);
-uint64_t d_tm_count_metrics(uint64_t *shmem_root, struct d_tm_node_t *node);
-int d_tm_list(struct d_tm_nodeList_t **nodelist, uint64_t *shmem_root,
-	      char *path, int dtn_type);
+uint64_t d_tm_count_metrics(uint64_t *shmem_root, struct d_tm_node_t *node,
+			    int d_tm_type);
+int d_tm_list(struct d_tm_nodeList_t **head, uint64_t *shmem_root,
+	      struct d_tm_node_t *node, int d_tm_type);
 void d_tm_print_my_children(uint64_t *shmem_root, struct d_tm_node_t *node,
 			    int level, FILE *stream);
 void d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
