@@ -1024,6 +1024,14 @@ class DaosServerManager(SubprocessManager):
                     current_states[rank]["uuid"], "not detected",
                     current_states[rank]["state"].lower(), "RESTART")
 
+        elif not self._expected_states:
+            # Expected states are populated as part of detect_io_server_start(),
+            # so if it it's empty there was an error starting the servers.
+            self.log.info(
+                "  Unable to obtain current server state.  Undefined expected "
+                "server states due to a failure starting the servers.")
+            status["restart"] = True
+
         else:
             # Any failure to obtain the current rank information is an error
             self.log.info(
