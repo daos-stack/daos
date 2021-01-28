@@ -1351,7 +1351,8 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 	uint32_t		num_comps;
 	uint8_t			new_status;
 	bool			updated;
-	int i, rc;
+	int			i, rc;
+	const int		TUPLE_SIZE = 3;
 
 	updated = false;
 
@@ -1375,17 +1376,34 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 		new_status = PO_COMP_ST_UPIN;
 		num_comps = 0;
 	}
-	/* fill user-defined fault domains */
-	/* TODO KJ: parse incoming tree correctly with ranks */
-	for (i = 0; i < ndomains; i++) {
+
+	/*
+	 * Fault domains are structured as an array of tuples:
+	 * (layer, ID, number of children)
+	 * The leaves are simply the rank IDs, and may be ignored for now.
+	 */
+	uint32_t domain_count = 1 + domains[TUPLE_SIZE - 1];
+	for (i = TUPLE_SIZE;
+	     (i < ndomains - TUPLE_SIZE) &&
+	     (i < domain_count * TUPLE_SIZE); ) {
+		uint32_t layer = domains[i++];
+		uint32_t id = domains[i++];
+		uint32_t num_children = domains[i++];
+
+		// TODO DAOS-6353: Use the layer number as type
 		map_comp.co_type = PO_COMP_TP_RACK;
 		map_comp.co_status = new_status;
 		map_comp.co_index = i + num_comps;
-		map_comp.co_id = domains[i++];
+		map_comp.co_id = id;
 		map_comp.co_rank = 0;
 		map_comp.co_ver = map_version;
 		map_comp.co_fseq = 1;
-		map_comp.co_nr = domains[i];
+		map_comp.co_nr = num_children;
+
+		/* layer 1 is the bottom user-defined layer, above ranks */
+		if (layer > 1) {
+			domain_count += num_children;
+		}
 
 		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
 		if (rc != 0)
