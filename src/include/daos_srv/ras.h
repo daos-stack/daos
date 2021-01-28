@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /*
@@ -42,11 +25,12 @@
  *   The identifier just be prefixed by component_
  *   Carried over with the RAS event.
  */
-#define RAS_EVENT_LIST						\
-	X(RAS_RANK_UP,		"engine_status_up")		\
-	X(RAS_RANK_DOWN,	"engine_status_down")		\
-	X(RAS_RANK_NO_RESPONSE,	"engine_status_no_response")	\
-	X(RAS_POOL_REPS_UPDATE,	"pool_replicas_updated")
+#define RAS_EVENT_LIST							\
+	X(RAS_RANK_UP,		"engine_status_up")			\
+	X(RAS_RANK_DOWN,	"engine_status_down")			\
+	X(RAS_RANK_NO_RESPONSE,	"engine_status_no_response")		\
+	X(RAS_POOL_REPS_UPDATE,	"pool_replicas_updated")		\
+	X(RAS_POOL_DF_INCOMPAT,	"pool_durable_format_incompatible")
 
 /** Define RAS event enum */
 typedef enum {
@@ -126,7 +110,7 @@ ras_sev2str(ras_sev_t severity)
  *
  * \retval		N/A
  */
-void
+void __attribute__((weak))
 ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 		    char *hwid, d_rank_t *rank, char *jobid, uuid_t *pool,
 		    uuid_t *cont, daos_obj_id_t *objid, char *ctlop,
