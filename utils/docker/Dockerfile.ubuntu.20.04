@@ -65,7 +65,7 @@ COPY utils/mavern_settings.xml /root/.m2/settings.xml
 
 WORKDIR /home/daos
 COPY src/client/java/ .
-RUN mvn --batch-mode --quiet dependency:go-offline
+RUN mvn --batch-mode dependency:go-offline
 
 WORKDIR /home/daos/pre
 COPY SConstruct .
@@ -101,7 +101,7 @@ RUN if [ "x$NOBUILD" = "x" ] ; then \
 # Build java and hadoop bindings
 RUN if [ "x$NOBUILD" = "x" ] ; then \
     pushd src/client/java && \
-    mvn clean install --offline -T 1C -DskipITs -Ddaos.install.path=/opt/daos && \
+    mvn clean install -T 1C -DskipITs -Ddaos.install.path=/opt/daos && \
     popd; fi
 
 # Remove local copy
