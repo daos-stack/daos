@@ -285,14 +285,20 @@ to storage format). See the orterun(1) man page for additional options.
 
 #### Systemd Integration
 
-DAOS Server can be started as a systemd service. The DAOS Server
+The DAOS Server can be started as a systemd service. The DAOS Server
 unit file is installed in the correct location when installing from RPMs.
 The DAOS Server will be run as `daos-server` user which will be created
 during RPM install.
 
 If you wish to use systemd with a development build, you must copy the service
-file from utils/systemd to `/usr/lib/systemd/system`. Once the file is copied
-modify the ExecStart line to point to your in tree `daos_server` binary.
+file from utils/systemd to `/usr/lib/systemd/system`. Once the file is copied,
+modify the ExecStart line to point to your `daos_server` binary.
+
+After modifying ExecStart, run the following command:
+
+```bash
+$ sudo systemctl daemon-reload
+```
 
 Once the service file is installed you can start `daos_server`
 with the following commands:

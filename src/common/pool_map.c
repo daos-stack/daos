@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -320,7 +303,7 @@ static void
 comp_sorter_fini(struct pool_comp_sorter *sorter)
 {
 	if (sorter->cs_comps != NULL) {
-		D_DEBUG(DB_TRACE, "Finalise sorter for %s\n",
+		D_DEBUG(DB_TRACE, "Finalize sorter for %s\n",
 			pool_comp_type2str(sorter->cs_type));
 
 		D_FREE(sorter->cs_comps);
@@ -2087,7 +2070,7 @@ update_failed_cnt_helper(struct pool_domain *dom,
 
 	if (dom->do_children == NULL) {
 		for (i = 0; i < dom->do_target_nr; ++i) {
-			if (pool_target_unavail(&dom->do_targets[i], false))
+			if (pool_target_down(&dom->do_targets[i]))
 				num_failed++;
 		}
 	} else {
@@ -2252,7 +2235,7 @@ pool_domain_print(struct pool_domain *domain, int dep)
 {
 	int		i;
 
-	D_PRINT("%*s%s[%d] %d %s\n", dep * 8, "", pool_domain_name(domain),
+	D_PRINT("%*s%s[%d] v%d %s\n", dep * 8, "", pool_domain_name(domain),
 		domain->do_comp.co_id, domain->do_comp.co_ver,
 		pool_comp_state2str(domain->do_comp.co_status));
 
@@ -2270,10 +2253,11 @@ pool_domain_print(struct pool_domain *domain, int dep)
 		D_ASSERTF(comp->co_type == PO_COMP_TP_TARGET,
 			  "%s\n", pool_comp_type2str(comp->co_type));
 
-		D_PRINT("%*s%s[%d] %d %s\n", (dep + 1) * 8, "",
+		D_PRINT("%*s%s[%d] v%d %s (fseq=%d)\n", (dep + 1) * 8, "",
 			pool_comp_type2str(comp->co_type),
 			comp->co_id, comp->co_ver,
-			pool_comp_state2str(comp->co_status));
+			pool_comp_state2str(comp->co_status),
+			comp->co_fseq);
 	}
 }
 
