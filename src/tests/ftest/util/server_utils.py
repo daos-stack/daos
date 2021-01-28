@@ -281,7 +281,7 @@ class DaosServerManager(SubprocessManager):
     }
 
     # Defined in telemetry_common.h
-    D_TM_SHARED_MEMORY_KEY=0x10242048
+    D_TM_SHARED_MEMORY_KEY = 0x10242048
 
     def __init__(self, server_command, manager="Orterun", dmg_cfg=None):
         """Initialize a DaosServerManager object.
