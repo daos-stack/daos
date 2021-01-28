@@ -30,8 +30,10 @@ struct iterate_data {
 static int
 filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *arg)
 {
-	struct iterate_data *idata = arg;
-	struct dfuse_readdir_entry *dre = &idata->id_oh->doh_dre[idata->id_index];
+	struct iterate_data		*idata = arg;
+	struct dfuse_readdir_entry	*dre;
+
+	dre = &idata->id_oh->doh_dre[idata->id_index];
 
 	DFUSE_TRA_DEBUG(idata->id_oh, "Adding at index %d offset %ld '%s'",
 			idata->id_index,
@@ -138,10 +140,10 @@ create_entry(struct dfuse_projection_info *fs_handle,
 		/* Update the existing object with the new name/parent */
 
 		DFUSE_TRA_DEBUG(inode,
-				"Maybe updating parent inode %lu dfs_root %lu",
-				entry->ino, ie->ie_dfs->dfs_root);
+				"Maybe updating parent inode %#lx dfs_ino %lu",
+				entry->ino, ie->ie_dfs->dfs_ino);
 
-		if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_root) {
+		if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino) {
 			DFUSE_TRA_DEBUG(inode, "Not updating parent");
 		} else {
 			rc = dfs_update_parent(inode->ie_obj, ie->ie_obj,
@@ -270,7 +272,8 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 			uint32_t to_fetch;
 			bool eod = false;
 
-			D_ASSERT(offset != oh->doh_dre[oh->doh_dre_index].dre_offset);
+			D_ASSERT(offset !=
+				 oh->doh_dre[oh->doh_dre_index].dre_offset);
 
 			if (large_fetch)
 				to_fetch = READDIR_MAX_COUNT;
@@ -288,7 +291,8 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 
 			fetched = true;
 		} else {
-			D_ASSERT(offset == oh->doh_dre[oh->doh_dre_index].dre_offset);
+			D_ASSERT(offset ==
+				 oh->doh_dre[oh->doh_dre_index].dre_offset);
 		}
 
 		DFUSE_TRA_DEBUG(oh, "processing offset %ld", offset);
