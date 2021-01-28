@@ -67,7 +67,7 @@ class CartUtils():
         error_list = []
         localhost = socket.gethostname().split(".")[0]
         result = stop_processes(localhost, "'(crt_launch|orterun)'")
-        if 0 in result and len(result) == 1:
+        if 0 not in result or len(result) > 1:
             error_list.append("Error cleaning up cart processes!")
         return error_list
 
