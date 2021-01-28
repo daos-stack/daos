@@ -71,6 +71,14 @@ mgmt_svc_delete_uuid_cb(d_iov_t *id)
 static int
 mgmt_svc_locate_cb(d_iov_t *id, char **path)
 {
+	char *s = NULL;
+
+	/* Just create a dummy path that won't fail stat(). */
+	D_ASPRINTF(s, "/dev/null");
+	if (s == NULL)
+		return -DER_NOMEM;
+	*path = s;
+
 	return 0;
 }
 
