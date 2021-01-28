@@ -1,51 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
- *
- * Portions of this file are based on The Self-* Storage System Project
- * Copyright (c) 2004-2011, Carnegie Mellon University.
- * All rights reserved.
- * http://www.pdl.cmu.edu/  (Parallel Data Lab at Carnegie Mellon)
- *
- * This software is being provided by the copyright holders under the
- * following license. By obtaining, using and/or copying this software,
- * you agree that you have read, understood, and will comply with the
- * following terms and conditions:
- *
- * Permission to reproduce, use, and prepare derivative works of this
- * software is granted provided the copyright and "No Warranty" statements
- * are included with all reproductions and derivative works and associated
- * documentation. This software may also be redistributed without charge
- * provided that the copyright and "No Warranty" statements are included
- * in all redistributions.
- *
- * NO WARRANTY. THIS SOFTWARE IS FURNISHED ON AN "AS IS" BASIS.
- * CARNEGIE MELLON UNIVERSITY MAKES NO WARRANTIES OF ANY KIND, EITHER
- * EXPRESSED OR IMPLIED AS TO THE MATTER INCLUDING, BUT NOT LIMITED
- * TO: WARRANTY OF FITNESS FOR PURPOSE OR MERCHANTABILITY, EXCLUSIVITY
- * OF RESULTS OR RESULTS OBTAINED FROM USE OF THIS SOFTWARE. CARNEGIE
- * MELLON UNIVERSITY DOES NOT MAKE ANY WARRANTY OF ANY KIND WITH RESPECT
- * TO FREEDOM FROM PATENT, TRADEMARK, OR COPYRIGHT INFRINGEMENT.
- * COPYRIGHT HOLDERS WILL BEAR NO LIABILITY FOR ANY USE OF THIS SOFTWARE
- * OR DOCUMENTATION.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It implements message logging system.
@@ -142,7 +98,6 @@ struct d_log_xstate d_log_xst;
 static struct d_log_state mst;
 static d_list_t	d_log_caches;
 
-
 /* default name for facility 0 */
 static const char *default_fac0name = "CLOG";
 
@@ -160,7 +115,7 @@ static int clog_setnfac(int);
 
 /* static arrays for converting between pri's and strings */
 static const char * const norm[] = { "DBUG", "INFO", "NOTE", "WARN", "ERR ",
-				     "CRIT", "ALRT", "EMRG"};
+				     "CRIT", "ALRT", "EMRG", "EMIT"};
 /**
  * clog_pristr: convert priority to 4 byte symbolic name.
  *
@@ -172,8 +127,11 @@ static const char *clog_pristr(int pri)
 {
 	int s;
 
-	pri = pri & DLOG_PRIMASK;
-	s = (pri >> DLOG_PRISHIFT) & 7;
+	s = DLOG_PRI(pri);
+	if (s > (sizeof(norm) / sizeof(char *))) {
+		/* prevent checksum warning */
+		s = 0;
+	}
 	return norm[s];
 }
 
@@ -221,7 +179,7 @@ static int clog_setnfac(int n)
 	for (/*null */ ; lcv < try; lcv++) {	/* init the new */
 		nfacs[lcv].fac_mask = mst.def_mask;
 		nfacs[lcv].fac_aname =
-		    (lcv == 0) ? (char *) default_fac0name : NULL;
+		    (lcv == 0) ? (char *)default_fac0name : NULL;
 		nfacs[lcv].fac_lname = NULL;
 		nfacs[lcv].is_enabled = true; /* enable all facs by default */
 	}
@@ -302,7 +260,6 @@ d_log_add_cache(int *cache, int nr)
 	clog_unlock();
 }
 
-
 /**
  * dlog_cleanout: release previously allocated resources (e.g. from a
  * close or during a failed open).  this function assumes the clogmux
@@ -358,7 +315,8 @@ static void dlog_cleanout(void)
 		}
 		free(d_log_xst.dlog_facs);
 		d_log_xst.dlog_facs = NULL;
-		d_log_xst.fac_cnt = mst.fac_alloc = 0;
+		d_log_xst.fac_cnt = 0;
+		mst.fac_alloc = 0;
 	}
 
 	reset_caches(true); /* Log is going away, reset cached masks */
@@ -541,7 +499,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	static __thread char b[DLOG_TBSIZ];
 	static uint64_t	last_flush;
 
-	int fac, lvl;
+	int fac, lvl, pri;
 	bool flush;
 	char *b_nopt1hdr;
 	char facstore[16], *facstr;
@@ -560,6 +518,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 
 	fac = flags & DLOG_FACMASK;
 	lvl = flags & DLOG_PRIMASK;
+	pri = flags & DLOG_PRINDMASK;
 
 	/* Check the facility so we don't crash.   We will just log the message
 	 * in this case but it really is indicative of a usage error as user
@@ -582,7 +541,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 		snprintf(facstore, sizeof(facstore), "%d", fac);
 		facstr = facstore;
 	}
-	(void) gettimeofday(&tv, 0);
+	(void)gettimeofday(&tv, 0);
 	tm = localtime(&tv.tv_sec);
 	if (tm == NULL) {
 		dlog_print_err(errno, "localtime returned NULL\n");
@@ -601,7 +560,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 			 "%02d/%02d-%02d:%02d:%02d.%02ld %s ",
 			 tm->tm_mon + 1, tm->tm_mday,
 			 tm->tm_hour, tm->tm_min, tm->tm_sec,
-			 (long int) tv.tv_usec / 10000, mst.uts.nodename);
+			 (long int)tv.tv_usec / 10000, mst.uts.nodename);
 
 	if (mst.oflags & DLOG_FLV_TAG) {
 		if (mst.oflags & DLOG_FLV_LOGPID) {
@@ -661,7 +620,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	} else {
 		/* it fit, make sure it ends in newline */
 		if (b[tlen - 1] != '\n') {
-			D_ASSERT(tlen < DLOG_TBSIZ-1);
+			D_ASSERT(tlen < DLOG_TBSIZ - 1);
 			b[tlen++] = '\n';
 			b[tlen] = 0;
 		}
@@ -690,13 +649,13 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	 * log it to stderr and/or stdout.  skip part one of the header
 	 * if the output channel is a tty
 	 */
-	if (flags & DLOG_STDERR) {
+	if ((flags & DLOG_STDERR) && (pri != DLOG_EMIT)) {
 		if (mst.stderr_isatty)
 			fprintf(stderr, "%s", b_nopt1hdr);
 		else
 			fprintf(stderr, "%s", b);
 	}
-	if (flags & DLOG_STDOUT) {
+	if ((flags & DLOG_STDOUT) &&  (pri != DLOG_EMIT)) {
 		if (mst.stderr_isatty)
 			printf("%s", b_nopt1hdr);
 		else
@@ -718,9 +677,11 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 static int d_log_str2pri(const char *pstr, size_t len)
 {
 	int lcv;
+	int size;
 
 	/* make sure we have a valid input */
 	if (len == 0 || len > 7) {
+		/* prevent checksum warning */
 		return -1;
 	}
 
@@ -731,8 +692,8 @@ static int d_log_str2pri(const char *pstr, size_t len)
 	if (strncasecmp(pstr, "ERR", len) == 0)
 		/* has trailing space in the array */
 		return DLOG_ERR;
-	if (strncasecmp(pstr, "DEBUG", len) == 0 || \
-		strncasecmp(pstr, "DBUG", len) == 0) {
+	if (((strncasecmp(pstr, "DEBUG", len) == 0) ||
+	     (strncasecmp(pstr, "DBUG", len) == 0))) {
 		/* check to see is debug mask bits are set */
 		return d_dbglog_data.dd_mask != 0 ?
 		       d_dbglog_data.dd_mask : DLOG_DBG;
@@ -741,7 +702,8 @@ static int d_log_str2pri(const char *pstr, size_t len)
 	/*
 	 * handle non-debug case
 	 */
-	for (lcv = 1; lcv <= 7; lcv++)
+	size = sizeof(norm) / sizeof(char *);
+	for (lcv = 1; lcv < size; lcv++)
 		if (strncasecmp(pstr, norm[lcv], len) == 0)
 			return lcv << DLOG_PRISHIFT;
 	/* bogus! */
@@ -798,7 +760,7 @@ d_getenv_size(char *env)
  */
 int
 d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
-	      char *logfile, int flags)
+	   char *logfile, int flags)
 {
 	int	tagblen;
 	char	*newtag = NULL, *cp;
@@ -826,7 +788,9 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 			if (buffer != NULL && rc != -1)
 				logfile = buffer;
 			else
-				D_PRINT_ERR("Failed to append pid to DAOS debug log name, continuing.\n");
+				D_PRINT_ERR("Failed to append pid to "
+					    "DAOS debug log name, "
+					    "continuing.\n");
 		}
 	}
 
@@ -891,7 +855,8 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 		if (merge) {
 			if (freopen(mst.log_file, truncate ? "w" : "a",
 				    stderr) == NULL) {
-				fprintf(stderr, "d_log_open: cannot open %s: %s\n",
+				fprintf(stderr, "d_log_open: cannot "
+					"open %s: %s\n",
 					mst.log_file, strerror(errno));
 				goto error;
 			}
@@ -923,7 +888,7 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 		fprintf(stderr, "clog_setnfac failed.\n");
 		goto error;
 	}
-	(void) uname(&mst.uts);
+	(void)uname(&mst.uts);
 	d_log_xst.nodename = mst.uts.nodename;	/* expose this */
 	/* chop off the domainname */
 	if ((flags & DLOG_FLV_FQDN) == 0) {
@@ -942,7 +907,9 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	 */
 	rc = atexit(d_log_sync);
 	if (rc != 0)
-		fprintf(stderr, "unable to register flush of log, potential risk to miss last lines if fini method not invoked upon exit\n");
+		fprintf(stderr, "unable to register flush of log,\n"
+			"potential risk to miss last lines if fini method "
+			"not invoked upon exit\n");
 
 	if (buffer)
 		free(buffer);
@@ -1050,7 +1017,6 @@ int d_log_namefacility(int facility, const char *aname, const char *lname)
 		d_log_xst.dlog_facs[facility].is_enabled = false;
 	else
 		d_log_xst.dlog_facs[facility].is_enabled = true;
-
 
 	rv = 0;		/* now we have success */
 done:
@@ -1185,21 +1151,22 @@ int d_log_setmasks(char *mstr, int mlen0)
 		/* process facility */
 		if (fac) {
 			clog_lock();
+			/* Search structure to see if it already exists */
 			for (facno = 0; facno < d_log_xst.fac_cnt; facno++) {
 				if (d_log_xst.dlog_facs[facno].fac_aname &&
 				    strlen(d_log_xst.dlog_facs[facno].
-					   fac_aname) == faclen
-				    && strncasecmp(d_log_xst.dlog_facs[facno].
-						   fac_aname, fac,
-						   faclen) == 0) {
+					   fac_aname) == faclen &&
+				    strncasecmp(d_log_xst.dlog_facs[facno].
+						fac_aname, fac,
+						faclen) == 0) {
 					break;
 				}
 				if (d_log_xst.dlog_facs[facno].fac_lname &&
 				    strlen(d_log_xst.dlog_facs[facno].
-					   fac_lname) == faclen
-				    && strncasecmp(d_log_xst.dlog_facs[facno].
-						   fac_lname, fac,
-						   faclen) == 0) {
+					   fac_lname) == faclen &&
+				    strncasecmp(d_log_xst.dlog_facs[facno].
+						fac_lname, fac,
+						faclen) == 0) {
 					break;
 				}
 			}
@@ -1233,7 +1200,6 @@ int d_log_setmasks(char *mstr, int mlen0)
 				tmp = d_log_setlogmask(facno, prino);
 				if (rv != -1)
 					rv = tmp;
-
 			}
 		}
 	}

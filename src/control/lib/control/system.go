@@ -1,24 +1,7 @@
 //
 // (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package control
@@ -42,6 +25,7 @@ import (
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -229,7 +213,7 @@ func SystemNotify(ctx context.Context, rpcClient UnaryInvoker, req *SystemNotify
 // EventForwarder implements the events.Handler interface, increments sequence
 // number for each event forwarded and distributes requests to MS access points.
 type EventForwarder struct {
-	seq       uint64
+	seq       <-chan uint64
 	client    UnaryInvoker
 	accessPts []string
 }
@@ -244,14 +228,14 @@ func (fwdr *EventForwarder) OnEvent(ctx context.Context, evt *events.RASEvent) {
 		fwdr.client.Debug("skip event forwarding, missing access points")
 		return
 	}
-	fwdr.seq++
-	fwdr.client.Debugf("forwarding %s event to MS (seq: %d)", evt.ID, fwdr.seq)
 
 	req := &SystemNotifyReq{
-		Sequence: fwdr.seq,
+		Sequence: <-fwdr.seq,
 		Event:    evt,
 	}
 	req.SetHostList(fwdr.accessPts)
+	fwdr.client.Debugf("forwarding %s event to MS access points %v (seq: %d)",
+		evt.ID, fwdr.accessPts, req.Sequence)
 
 	if _, err := SystemNotify(ctx, fwdr.client, req); err != nil {
 		fwdr.client.Debugf("failed to forward event to MS: %s", err)
@@ -260,10 +244,34 @@ func (fwdr *EventForwarder) OnEvent(ctx context.Context, evt *events.RASEvent) {
 
 // NewEventForwarder returns an initialized EventForwarder.
 func NewEventForwarder(rpcClient UnaryInvoker, accessPts []string) *EventForwarder {
+	seqCh := make(chan uint64)
+	go func(ch chan<- uint64) {
+		for i := uint64(1); ; i++ {
+			ch <- i
+		}
+	}(seqCh)
+
 	return &EventForwarder{
+		seq:       seqCh,
 		client:    rpcClient,
 		accessPts: accessPts,
 	}
+}
+
+// EventLogger implements the events.Handler interface and logs RAS event to
+// INFO.
+type EventLogger struct {
+	log logging.Logger
+}
+
+// OnEvent implements the events.Handler interface.
+func (el *EventLogger) OnEvent(_ context.Context, evt *events.RASEvent) {
+	el.log.Infof("RAS event received: %+v", evt)
+}
+
+// NewEventLogger returns an initialized EventLogger.
+func NewEventLogger(log logging.Logger) *EventLogger {
+	return &EventLogger{log: log}
 }
 
 // SystemQueryReq contains the inputs for the system query request.
