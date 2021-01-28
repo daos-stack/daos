@@ -475,7 +475,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
  * Inode handle.
  *
  * Describes any entry in the projection that the kernel knows about, may
- * be a directory, file,  symbolic link or anything else.
+ * be a directory, file, symbolic link or anything else.
  */
 
 struct dfuse_inode_entry {

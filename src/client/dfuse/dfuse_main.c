@@ -561,7 +561,6 @@ out_dfs:
 	D_MUTEX_DESTROY(&dfuse_info->di_lock);
 	daos_fini();
 out_debug:
-
 	D_FREE(dfuse_info);
 	DFUSE_LOG_INFO("Exiting with status %d", ret);
 	daos_debug_fini();

@@ -1029,7 +1029,7 @@ class posix_tests():
         os.stat(newfile)
         post = os.fstat(ofd.fileno())
         print(post)
-        assert pre.st_ino == post.st_ino # nosec
+        assert pre.st_ino == post.st_ino
         ofd.close()
 
     @needs_dfuse
@@ -1059,7 +1059,7 @@ class posix_tests():
         for mode in modes:
             os.chmod(fname, mode)
             attr = os.stat(fname)
-            assert stat.S_IMODE(attr.st_mode) == mode # nosec
+            assert stat.S_IMODE(attr.st_mode) == mode
 
     @needs_dfuse
     def test_fchmod_replaced(self):
@@ -1087,7 +1087,7 @@ class posix_tests():
             print('Failed to fchmod() replaced file')
         ofd.close()
         nf = os.stat(fname)
-        assert stat.S_IMODE(nf.st_mode) == e_mode # nosec
+        assert stat.S_IMODE(nf.st_mode) == e_mode
 
     @needs_dfuse
     def test_xattr(self):
@@ -1113,6 +1113,7 @@ class posix_tests():
         xattr.set(fd, 'user.Xfuse.ids', b'other_value')
         for (key, value) in xattr.get_all(fd):
             print('xattr is {}:{}'.format(key, value))
+        fd.close()
 
 def run_posix_tests(server, conf, test=None):
     """Run one or all posix tests"""
