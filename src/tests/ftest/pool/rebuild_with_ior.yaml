@@ -27,13 +27,17 @@ pool:
   createsvc:
     svcn: 1
   control_method: dmg
+container:
+    type: POSIX
+    control_method: daos
+    oclass: "RP_2G1"
 ior:
     client_processes:
         np_8:
             np: 8
     repetitions: 1
     api: MPIIO
-    dfs_oclass: "RP_2GX"
+    dfs_oclass: "RP_2G1"
     iorflags:
         write:
           F: "-w -W -k -G 1"
