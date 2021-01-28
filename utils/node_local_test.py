@@ -431,7 +431,6 @@ class DaosServer():
         while True:
             time.sleep(0.5)
             rc = self.run_dmg(cmd)
-            print(rc)
             ready = False
             if rc.returncode == 1:
                 for line in rc.stdout.decode('utf-8').splitlines():
@@ -951,7 +950,7 @@ def create_cont(conf, pool, posix=False):
         cmd = ['container', 'create', '--pool', pool]
     rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
-    assert rc.returncode == 0
+    assert rc.returncode == 0 # nosec
     return rc.stdout.decode().split(' ')[-1].rstrip()
 
 def destroy_container(conf, pool, container):
@@ -959,7 +958,7 @@ def destroy_container(conf, pool, container):
     cmd = ['container', 'destroy', '--pool', pool, '--cont', container]
     rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
-    assert rc.returncode == 0 #nosec
+    assert rc.returncode == 0 # nosec
 
 def make_pool(daos):
     """Create a DAOS pool"""
@@ -1092,6 +1091,7 @@ class posix_tests():
         xattr.set(fd, 'user.Xfuse.ids', b'other_value')
         for (key, value) in xattr.get_all(fd):
             print('xattr is {}:{}'.format(key, value))
+        fd.close()
 
     @needs_dfuse
     def test_chmod(self):
