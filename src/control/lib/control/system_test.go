@@ -8,6 +8,7 @@ package control
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -1130,7 +1131,6 @@ func TestControl_EventForwarder_OnEvent(t *testing.T) {
 		event          *events.RASEvent
 		nilClient      bool
 		expInvokeCount int
-		expErr         error
 	}{
 		"nil event": {
 			event: nil,
@@ -1169,6 +1169,40 @@ func TestControl_EventForwarder_OnEvent(t *testing.T) {
 				"unexpected number of rpc calls")
 			common.AssertEqual(t, expNextSeq, <-ef.seq,
 				"unexpected next forwarding sequence")
+		})
+	}
+}
+
+func TestControl_EventLogger_OnEvent(t *testing.T) {
+	rasEventRankDown := events.NewRankDownEvent("foo", 0, 0, common.NormalExit)
+	rasEventRankDownFwded := events.NewRankDownEvent("foo", 0, 0, common.NormalExit).
+		WithIsForwarded(true)
+
+	for name, tc := range map[string]struct {
+		event        *events.RASEvent
+		expShouldLog bool
+	}{
+		"nil event": {
+			event: nil,
+		},
+		"not forwarded event gets logged": {
+			event:        rasEventRankDown,
+			expShouldLog: true,
+		},
+		"forwarded event is not logged": {
+			event: rasEventRankDownFwded,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			el := NewEventLogger(log)
+			el.OnEvent(context.TODO(), tc.event)
+
+			common.AssertEqual(t, tc.expShouldLog,
+				strings.Contains(buf.String(), "RAS "),
+				"unexpected log output")
 		})
 	}
 }

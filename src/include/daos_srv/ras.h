@@ -30,7 +30,9 @@
 	X(RAS_RANK_DOWN,	"engine_status_down")			\
 	X(RAS_RANK_NO_RESPONSE,	"engine_status_no_response")		\
 	X(RAS_POOL_REPS_UPDATE,	"pool_replicas_updated")		\
-	X(RAS_POOL_DF_INCOMPAT,	"pool_durable_format_incompatible")
+	X(RAS_POOL_DF_INCOMPAT,	"pool_durable_format_incompatible")	\
+	X(RAS_SYSTEM_STOP,	"system_action_stop")			\
+	X(RAS_SYSTEM_START,	"system_action_start")
 
 /** Define RAS event enum */
 typedef enum {

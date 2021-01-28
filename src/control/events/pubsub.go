@@ -25,27 +25,35 @@ type subscriber struct {
 	handler Handler
 }
 
+// filterUpdate enables or disables publishing of given event ids.
+type filterUpdate struct {
+	enable bool
+	ids    []RASID
+}
+
 // PubSub stores subscriptions to event topics and handlers to be called on
 // receipt of events pertaining to a particular topic.
 type PubSub struct {
-	log         logging.Logger
-	events      chan *RASEvent
-	subscribers chan *subscriber
-	handlers    map[RASTypeID][]Handler
-	disabledIDs map[RASID]struct{}
-	reset       chan struct{}
-	shutdown    context.CancelFunc
+	log           logging.Logger
+	events        chan *RASEvent
+	subscribers   chan *subscriber
+	handlers      map[RASTypeID][]Handler
+	filterUpdates chan *filterUpdate
+	disabledIDs   map[RASID]struct{}
+	reset         chan struct{}
+	shutdown      context.CancelFunc
 }
 
 // NewPubSub returns a reference to a newly initialized PubSub struct.
 func NewPubSub(parent context.Context, log logging.Logger) *PubSub {
 	ps := &PubSub{
-		log:         log,
-		events:      make(chan *RASEvent),
-		subscribers: make(chan *subscriber),
-		handlers:    make(map[RASTypeID][]Handler),
-		disabledIDs: make(map[RASID]struct{}),
-		reset:       make(chan struct{}),
+		log:           log,
+		events:        make(chan *RASEvent),
+		subscribers:   make(chan *subscriber),
+		handlers:      make(map[RASTypeID][]Handler),
+		filterUpdates: make(chan *filterUpdate),
+		disabledIDs:   make(map[RASID]struct{}),
+		reset:         make(chan struct{}),
 	}
 
 	ctx, cancel := context.WithCancel(parent)
@@ -58,19 +66,13 @@ func NewPubSub(parent context.Context, log logging.Logger) *PubSub {
 // DisableEventIDs adds event IDs to the filter preventing those event IDs from
 // being published.
 func (ps *PubSub) DisableEventIDs(ids ...RASID) {
-	for _, id := range ids {
-		ps.disabledIDs[id] = struct{}{}
-	}
+	ps.filterUpdates <- &filterUpdate{enable: false, ids: ids}
 }
 
 // EnableEventIDs removes event IDs from the filter enabling those event IDs
 // to be published.
 func (ps *PubSub) EnableEventIDs(ids ...RASID) {
-	for _, id := range ids {
-		if _, exists := ps.disabledIDs[id]; exists {
-			delete(ps.disabledIDs, id)
-		}
-	}
+	ps.filterUpdates <- &filterUpdate{enable: true, ids: ids}
 }
 
 // Publish passes an event to the event channel to be processed by subscribers.
@@ -80,14 +82,6 @@ func (ps *PubSub) Publish(event *RASEvent) {
 		ps.log.Error("nil event")
 		return
 	}
-
-	if _, exists := ps.disabledIDs[event.ID]; exists {
-		ps.log.Debugf("event %s ignored by filter", event.ID)
-		return
-	}
-
-	ps.log.Debugf("publishing @%s: %s", event.Type, event.ID)
-
 	ps.events <- event
 }
 
@@ -99,6 +93,34 @@ func (ps *PubSub) Subscribe(topic RASTypeID, handler Handler) {
 	ps.subscribers <- &subscriber{
 		topic:   topic,
 		handler: handler,
+	}
+}
+
+func (ps *PubSub) publish(ctx context.Context, event *RASEvent) {
+	if _, exists := ps.disabledIDs[event.ID]; exists {
+		ps.log.Debugf("event %s ignored by filter", event.ID)
+		return
+	}
+
+	ps.log.Debugf("published @%s: %s", event.Type, event.ID)
+
+	for _, hdlr := range ps.handlers[RASTypeAny] {
+		go hdlr.OnEvent(ctx, event)
+	}
+	for _, hdlr := range ps.handlers[event.Type] {
+		go hdlr.OnEvent(ctx, event)
+	}
+}
+
+func (ps *PubSub) updateFilter(fu *filterUpdate) {
+	for _, id := range fu.ids {
+		_, exists := ps.disabledIDs[id]
+		switch {
+		case exists && fu.enable:
+			delete(ps.disabledIDs, id)
+		case !exists && !fu.enable:
+			ps.disabledIDs[id] = struct{}{}
+		}
 	}
 }
 
@@ -117,12 +139,9 @@ func (ps *PubSub) eventLoop(ctx context.Context) {
 			ps.handlers[newSub.topic] = append(ps.handlers[newSub.topic],
 				newSub.handler)
 		case event := <-ps.events:
-			for _, hdlr := range ps.handlers[RASTypeAny] {
-				go hdlr.OnEvent(ctx, event)
-			}
-			for _, hdlr := range ps.handlers[event.Type] {
-				go hdlr.OnEvent(ctx, event)
-			}
+			ps.publish(ctx, event)
+		case fu := <-ps.filterUpdates:
+			ps.updateFilter(fu)
 		}
 	}
 }
