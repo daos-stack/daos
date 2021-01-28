@@ -50,7 +50,7 @@ class CopyProcsTest(DataMoverTestBase):
             DAOS-5659: Verify multi-process (rank) copying.
         Use Cases:
             Create pool.
-            Crate POSIX container1 and container2 in pool.
+            Create POSIX container1 and container2 in pool.
             Create a single 100M file in container1 using ior.
         :avocado: tags=all,daily_regression
         :avocado: tags=small,hw

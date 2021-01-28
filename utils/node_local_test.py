@@ -1,6 +1,13 @@
 #!/usr/bin/python3
+"""
+Node local test (NLT).
 
-"""Test code for dfuse"""
+Test script for running DAOS on a single node over tmpfs and running initial
+smoke/unit tests.
+
+Includes support for DFuse with a number of unit tests, as well as stressing
+the client with fault injection of D_ALLOC() usage.
+"""
 
 # pylint: disable=too-many-lines
 # pylint: disable=too-few-public-methods
@@ -11,7 +18,6 @@ import bz2
 import sys
 import time
 import uuid
-import yaml
 import json
 import signal
 import stat
@@ -21,8 +27,8 @@ import functools
 import subprocess
 import tempfile
 import pickle
-
 from collections import OrderedDict
+import yaml
 
 class NLTestFail(Exception):
     """Used to indicate test failure"""
@@ -58,7 +64,7 @@ def umount(path):
     print('rc from umount {}'.format(ret.returncode))
     return ret.returncode
 
-class NLT_Conf():
+class NLTConf():
     """Helper class for configuration"""
     def __init__(self, bc):
         self.bc = bc
@@ -103,10 +109,7 @@ class WarningsFactory():
     https://github.com/jenkinsci/warnings-ng-plugin/blob/master/doc/Documentation.md
     """
 
-    # Error levels supported by the reporint are LOW, NORMAL, HIGH, ERROR.
-    # Errors from this list of functions are known to happen during shutdown
-    # for the time being, so are downgraded to LOW.
-    FLAKY_FUNCTIONS = ('ds_pool_child_purge')
+    # Error levels supported by the reporting are LOW, NORMAL, HIGH, ERROR.
 
     def __init__(self, filename):
         self._fd = open(filename, 'w')
@@ -192,9 +195,6 @@ class WarningsFactory():
         entry['description'] = message
         entry['message'] = line.get_anon_msg()
         entry['severity'] = sev
-        if line.function in self.FLAKY_FUNCTIONS and \
-           entry['severity'] != 'ERROR':
-            entry['severity'] = 'LOW'
         self.issues.append(entry)
         if self.pending and self.pending[0][0].pid != line.pid:
             self.reset_pending()
@@ -257,7 +257,7 @@ def load_conf():
     ofh = open(json_file, 'r')
     conf = json.load(ofh)
     ofh.close()
-    return NLT_Conf(conf)
+    return NLTConf(conf)
 
 def get_base_env():
     """Return the base set of env vars needed for DAOS"""
@@ -456,6 +456,44 @@ class DaosServer():
 
         if not self._sp:
             return
+
+        # Check the correct number of processes are still running at this
+        # point, in case anything has crashed.  daos_server does not
+        # propagate errors, so check this here.
+        parent_pid = self._sp.pid
+        procs = []
+        for proc_id in os.listdir('/proc/'):
+            if proc_id == 'self':
+                continue
+            status_file = '/proc/{}/status'.format(proc_id)
+            if not os.path.exists(status_file):
+                continue
+            fd = open(status_file, 'r')
+            for line in fd.readlines():
+                try:
+                    key, v = line.split(':', maxsplit=2)
+                except ValueError:
+                    continue
+                value = v.strip()
+                if key == 'Name' and value != self.__process_name:
+                    break
+                if key != 'PPid':
+                    continue
+                if int(value) == parent_pid:
+                    procs.append(proc_id)
+                    break
+
+        if len(procs) != 1:
+            entry = {}
+            fname = __file__.lstrip('./')
+            entry['fileName'] = os.path.basename(fname)
+            entry['directory'] = os.path.dirname(fname)
+            # pylint: disable=protected-access
+            entry['lineStart'] = sys._getframe().f_lineno
+            entry['severity'] = 'ERROR'
+            entry['message'] = 'daos_io_server died during testing'
+            self.conf.wf.issues.append(entry)
+
         rc = self.run_dmg(['system', 'stop'])
         assert rc.returncode == 0 # nosec
 
@@ -471,62 +509,16 @@ class DaosServer():
                 print('Failed to stop: {}'.format(e))
         print('Server stopped in {:.2f} seconds'.format(time.time() - start))
 
-        # daos_server does not correctly shutdown daos_io_server yet
-        # so find and kill daos_io_server directly.  This may cause
-        # a assert in daos_io_server, but at least we can check that.
-        # call daos_io_server, wait, and then call daos_server.
-        # When parsing the server logs do not report on memory leaks
-        # yet, as if it fails then lots of memory won't be freed and
-        # it's not helpful at this stage to report that.
-        # TODO:                              # pylint: disable=W0511
-        # Remove this block when daos_server shutdown works.
-        parent_pid = self._sp.pid
-        procs = []
-        for proc_id in os.listdir('/proc/'):
-            if proc_id == 'self':
-                continue
-            status_file = '/proc/{}/status'.format(proc_id)
-            if not os.path.exists(status_file):
-                continue
-            fd = open(status_file, 'r')
-            this_proc = False
-            for line in fd.readlines():
-                try:
-                    key, v = line.split(':', maxsplit=2)
-                except ValueError:
-                    continue
-                value = v.strip()
-                if key == 'Name' and value != self.__process_name:
-                    break
-                if key != 'PPid':
-                    continue
-                if int(value) == parent_pid:
-                    this_proc = True
-                    break
-            if not this_proc:
-                continue
-            print('Target pid is {}'.format(proc_id))
-            procs.append(proc_id)
-            os.kill(int(proc_id), signal.SIGTERM)
-            time.sleep(5)
-
         self._sp.send_signal(signal.SIGTERM)
         ret = self._sp.wait(timeout=5)
         print('rc from server is {}'.format(ret))
 
-        for proc_id in procs:
-            try:
-                os.kill(int(proc_id), signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-
         compress_file(self.agent_log.name)
         compress_file(self.control_log.name)
 
-        # Show errors from server logs bug suppress memory leaks as the server
-        # often segfaults at shutdown.
         # TODO:                              # pylint: disable=W0511
-        # Enable memleak checking when server shutdown works.
+        # Enable memleak checking of server.  This could work, but we
+        # need to resolve a number of the issues first.
         log_test(self.conf, self.server_log.name, show_memleaks=False)
         self.running = False
         return ret
@@ -587,9 +579,10 @@ class ValgrindHelper():
     Jenkins in locating the source code.
     """
 
-    def __init__(self, logid=None):
+    def __init__(self, conf, logid=None):
 
         # Set this to False to disable valgrind, which will run faster.
+        self.conf = conf
         self.use_valgrind = True
         self.full_check = True
         self._xml_file = None
@@ -616,11 +609,17 @@ class ValgrindHelper():
         else:
             cmd.extend(['--leak-check=no'])
 
-        cmd.append('--suppressions={}'.format(
-            os.path.join('src',
-                         'cart',
-                         'utils',
-                         'memcheck-cart.supp')))
+        src_suppression_file = os.path.join('src',
+                                            'cart',
+                                            'utils',
+                                            'memcheck-cart.supp')
+        if os.path.exists(src_suppression_file):
+            cmd.append('--suppressions={}'.format(src_suppression_file))
+        else:
+            cmd.append('--suppressions={}'.format(
+                os.path.join(self.conf['PREFIX'],
+                             'etc',
+                             'memcheck-cart.supp')))
 
         cmd.append('--error-exitcode=42')
 
@@ -691,7 +690,7 @@ class DFuse():
         if self.conf.args.dtx == 'yes':
             my_env['DFS_USE_DTX'] = '1'
 
-        self.valgrind = ValgrindHelper(v_hint)
+        self.valgrind = ValgrindHelper(self.conf, v_hint)
         if self.conf.args.memcheck == 'no':
             self.valgrind.use_valgrind = False
 
@@ -702,7 +701,7 @@ class DFuse():
 
         cmd.extend(self.valgrind.get_cmd_prefix())
 
-        cmd.extend([dfuse_bin, '-s', '0', '-m', self.dir, '-f'])
+        cmd.extend([dfuse_bin, '-m', self.dir, '-f'])
 
         if single_threaded:
             cmd.append('-S')
@@ -845,7 +844,7 @@ def run_daos_cmd(conf, cmd, valgrind=True, fi_file=None, fi_valgrind=False):
 
     Enable logging, and valgrind for the command.
     """
-    vh = ValgrindHelper()
+    vh = ValgrindHelper(conf)
 
     if conf.args.memcheck == 'no':
         valgrind = False
@@ -1189,9 +1188,18 @@ lt = None
 
 def setup_log_test(conf):
     """Setup and import the log tracing code"""
+
+    # Try and pick this up from the src tree if possible.
     file_self = os.path.dirname(os.path.abspath(__file__))
     logparse_dir = os.path.join(file_self,
                                 '../src/tests/ftest/cart/util')
+    crt_mod_dir = os.path.realpath(logparse_dir)
+    if crt_mod_dir not in sys.path:
+        sys.path.append(crt_mod_dir)
+
+    # Or back off to the install dir if not.
+    logparse_dir = os.path.join(conf['PREFIX'],
+                                'lib/daos/TESTING/ftest/cart')
     crt_mod_dir = os.path.realpath(logparse_dir)
     if crt_mod_dir not in sys.path:
         sys.path.append(crt_mod_dir)
@@ -1745,7 +1753,6 @@ def main():
 
     parser = argparse.ArgumentParser(
         description='Run DAOS client on local node')
-    parser.add_argument('--output-file', default='nlt-errors.json')
     parser.add_argument('--server-debug', default=None)
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
@@ -1768,7 +1775,7 @@ def main():
 
     conf = load_conf()
 
-    wf = WarningsFactory(args.output_file)
+    wf = WarningsFactory('nlt-errors.json')
 
     conf.set_wf(wf)
     conf.set_args(args)

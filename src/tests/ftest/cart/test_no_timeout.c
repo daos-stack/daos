@@ -75,7 +75,7 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		sem_post(&test_g.t_token_to_proceed);
 		break;
 	case TEST_OPC_SHUTDOWN:
-		g_shutdown = 1;
+		tc_progress_stop();
 		sem_post(&test_g.t_token_to_proceed);
 		break;
 	default:
@@ -91,7 +91,7 @@ void test_shutdown_handler(crt_rpc_t *rpc_req)
 	D_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");
 	D_ASSERTF(rpc_req->cr_output == NULL, "RPC request output is NULL\n");
 
-	g_shutdown = 1;
+	tc_progress_stop();
 	DBG_PRINT("tier1 test_srver set shutdown flag.\n");
 }
 
@@ -253,7 +253,7 @@ test_run(void)
 			  "crt_group_view_destroy() failed; rc=%d\n", rc);
 	}
 
-	g_shutdown = 1;
+	tc_progress_stop();
 
 	rc = pthread_join(test_g.t_tid[0], NULL);
 	if (rc != 0)
