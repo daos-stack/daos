@@ -16,16 +16,34 @@
 
 /**
  * pool component types
+ * target and node are pre-registered and managed by DAOS.
+ * Level 2 to 16 are allocated by control plane based on input from
+ * yaml file.
  */
 typedef enum pool_comp_type {
-	PO_COMP_TP_UNKNOWN	= 0,
-	PO_COMP_TP_ROOT		= 1,
-	PO_COMP_TP_RACK		= 10,
-	PO_COMP_TP_BLADE	= 20,
-	PO_COMP_TP_BOARD	= 30,
-	PO_COMP_TP_NODE		= 40,
-	PO_COMP_TP_TARGET	= 50,
-	/* TODO: more types */
+	PO_COMP_TP_LVL0		= 0,
+	PO_COMP_TP_TARGET	= PO_COMP_TP_LVL0, /** reserved, hard-coded */
+	PO_COMP_TP_LVL1		= 1,
+	PO_COMP_TP_NODE		= PO_COMP_TP_LVL1, /** reserved, hard-coded */
+	PO_COMP_TP_LVL2		= 2,
+	PO_COMP_TP_RACK		= PO_COMP_TP_LVL2, /** test only */
+	PO_COMP_TP_LVL3		= 3,
+	PO_COMP_TP_LVL4		= 4,
+	PO_COMP_TP_LVL5		= 5,
+	PO_COMP_TP_LVL6		= 6,
+	PO_COMP_TP_LVL7		= 7,
+	PO_COMP_TP_LVL8		= 8,
+	PO_COMP_TP_LVL9		= 9,
+	PO_COMP_TP_LVL10	= 10,
+	PO_COMP_TP_LVL11	= 11,
+	PO_COMP_TP_LVL12	= 12,
+	PO_COMP_TP_LVL13	= 13,
+	PO_COMP_TP_LVL14	= 14,
+	PO_COMP_TP_LVL15	= 15,
+	PO_COMP_TP_LVL16	= 16, /** 16 user-visible levels */
+	PO_COMP_TP_LVL_NR	= PO_COMP_TP_LVL16 + 1;
+	PO_COMP_TP_LVL255	= 255, /** keep some room, just in case */
+	PO_COMP_TP_ROOT		= PO_COMP_TP_LVL255,
 } pool_comp_type_t;
 
 /** pool component states */
@@ -48,24 +66,26 @@ typedef enum pool_comp_state {
 /** parent class of all all pool components: target, domain */
 struct pool_component {
 	/** pool_comp_type_t */
-	uint16_t		co_type;
+	uint8_t		co_type;
 	/** pool_comp_state_t */
-	uint8_t			co_status;
+	uint8_t		co_status;
 	/** target index inside the node */
-	uint8_t			co_index;
+	uint8_t		co_index;
+	/** padding for 64-bit alignment */
+	uint8_t		co_padding;
 	/** Immutable component ID. */
-	uint32_t		co_id;
+	uint32_t	co_id;
 	/**
 	 * e.g. rank in the communication group, only used by PO_COMP_TARGET
 	 * for the time being.
 	 */
-	uint32_t		co_rank;
+	uint32_t	co_rank;
 	/** version it's been added */
-	uint32_t		co_ver;
+	uint32_t	co_ver;
 	/** failure sequence */
-	uint32_t		co_fseq;
+	uint32_t	co_fseq;
 	/** number of children or storage partitions */
-	uint32_t		co_nr;
+	uint32_t	co_nr;
 };
 
 /** a leaf of pool map */
@@ -128,14 +148,17 @@ pool_target_id_list_free(struct pool_target_id_list *id_list);
  * or all components of a pool map.
  */
 struct pool_buf {
+	uint8_t		pb_version; /** pmap structure version */
+	uint8_t		pb_padding1;
+	uint16_t	pb_padding2;
 	/** checksum of components */
-	uint32_t		pb_csum;
+	uint32_t	pb_csum;
 	/** summary of domain_nr, node_nr, target_nr, buffer size */
-	uint32_t		pb_nr;
-	uint32_t		pb_domain_nr;
-	uint32_t		pb_node_nr;
-	uint32_t		pb_target_nr;
-	uint32_t		pb_padding;
+	uint32_t	pb_nr;
+	uint32_t	pb_domain_nr;
+	uint32_t	pb_node_nr;
+	uint32_t	pb_target_nr;
+
 	/** buffer body */
 	struct pool_component	pb_comps[0];
 };

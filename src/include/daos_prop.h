@@ -131,7 +131,7 @@ enum daos_cont_props {
 	DAOS_PROP_CO_REDUN_FAC,
 	/**
 	 * Redundancy level: default fault domain level for placement.
-	 * default = rack (DAOS_PROP_CO_REDUN_RACK)
+	 * default = 1 (node level)
 	 */
 	DAOS_PROP_CO_REDUN_LVL,
 	/**
@@ -258,8 +258,8 @@ enum {
 };
 
 enum {
-	DAOS_PROP_CO_REDUN_RACK,
-	DAOS_PROP_CO_REDUN_NODE,
+	DAOS_PROP_CO_REDUN_NODE	= 1,
+	DAOS_PROP_CO_REDUN_MAX	= 16,
 };
 
 struct daos_prop_entry {

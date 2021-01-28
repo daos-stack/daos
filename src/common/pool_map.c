@@ -124,17 +124,7 @@ static struct pool_comp_type_dict comp_type_dict[] = {
 		.td_name	= "node",
 	},
 	{
-		.td_type	= PO_COMP_TP_BOARD,
-		.td_abbr	= 'b',
-		.td_name	= "board",
-	},
-	{
-		.td_type	= PO_COMP_TP_BLADE,
-		.td_abbr	= 'l',
-		.td_name	= "blade",
-	},
-	{
-		.td_type	= PO_COMP_TP_RACK,
+		.td_type	= PO_COMP_TP_RACK, /** for testing */
 		.td_abbr	= 'r',
 		.td_name	= "rack",
 	},
@@ -142,11 +132,6 @@ static struct pool_comp_type_dict comp_type_dict[] = {
 		.td_type	= PO_COMP_TP_ROOT,
 		.td_abbr	= 'o',
 		.td_name	= "root",
-	},
-	{
-		.td_type	= PO_COMP_TP_UNKNOWN,
-		.td_abbr	= 'u',
-		.td_name	= "unknown",
 	},
 };
 
@@ -408,10 +393,8 @@ pool_buf_attach(struct pool_buf *buf, struct pool_component *comps,
 			buf->pb_target_nr++;
 		else if (comps[0].co_type == PO_COMP_TP_NODE)
 			buf->pb_node_nr++;
-		else if (comps[0].co_type == PO_COMP_TP_RACK)
-			buf->pb_domain_nr++;
 		else
-			D_ASSERTF(0, "invalid type %d\n", comps[0].co_type);
+			buf->pb_domain_nr++;
 
 		buf->pb_comps[nr] = comps[0];
 

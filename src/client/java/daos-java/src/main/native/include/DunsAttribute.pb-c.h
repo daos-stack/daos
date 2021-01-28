@@ -135,7 +135,7 @@ typedef enum _Uns__PropType {
   /*
    **
    * Redundancy level: default fault domain level for placement.
-   * default = rack (DAOS_PROP_CO_REDUN_RACK)
+   * default = rack (DAOS_PROP_CO_REDUN_NODE)
    */
   UNS__PROP_TYPE__DAOS_PROP_CO_REDUN_LVL = 4104,
   /*

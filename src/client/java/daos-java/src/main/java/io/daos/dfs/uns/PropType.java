@@ -211,7 +211,7 @@ public enum PropType
    * <pre>
    * *
    * Redundancy level: default fault domain level for placement.
-   * default = rack (DAOS_PROP_CO_REDUN_RACK)
+   * default = rack (DAOS_PROP_CO_REDUN_NODE)
    * </pre>
    *
    * <code>DAOS_PROP_CO_REDUN_LVL = 4104;</code>
@@ -460,7 +460,7 @@ public enum PropType
    * <pre>
    * *
    * Redundancy level: default fault domain level for placement.
-   * default = rack (DAOS_PROP_CO_REDUN_RACK)
+   * default = rack (DAOS_PROP_CO_REDUN_NODE)
    * </pre>
    *
    * <code>DAOS_PROP_CO_REDUN_LVL = 4104;</code>
