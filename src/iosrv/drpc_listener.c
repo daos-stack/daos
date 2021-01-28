@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -145,8 +145,8 @@ drpc_listener_start_ult(ABT_thread *thread)
 	}
 
 	/* Create a ULT to start the drpc listener */
-	rc = dss_ult_create(drpc_listener_run, (void *)ctx,
-			    DSS_ULT_DRPC_LISTENER, 0, 0, thread);
+	rc = dss_ult_create(drpc_listener_run, (void *)ctx, DSS_XS_DRPC,
+			    0, 0, thread);
 	if (rc != 0) {
 		D_ERROR("Failed to create drpc listener ULT: "DF_RC"\n",
 			DP_RC(rc));

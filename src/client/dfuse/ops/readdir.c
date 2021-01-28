@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include "dfuse_common.h"
@@ -54,19 +37,22 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
 	 * mode.
 	 */
 
-	rc = dfs_lookup_rel(dfs, dir, name, O_RDONLY, &obj, &stbuf.st_mode,
-			    NULL);
+	rc = dfs_lookup_rel(dfs, dir, name, O_RDONLY | O_NOFOLLOW, &obj,
+			    &stbuf.st_mode, NULL);
 	if (rc)
 		return rc;
+
+
+	if (S_ISFIFO(stbuf.st_mode)) {
+		stbuf.st_mode &= ~S_IFIFO;
+		stbuf.st_mode |= S_IFDIR;
+	}
 
 	rc = dfs_obj2id(obj, &oid);
 	if (rc)
 		D_GOTO(out, rc);
 
-	rc = dfuse_compute_inode(udata->inode->ie_dfs, &oid,
-				 &stbuf.st_ino);
-	if (rc)
-		D_GOTO(out, rc);
+	dfuse_compute_inode(udata->inode->ie_dfs, &oid, &stbuf.st_ino);
 
 	/*
 	 * If we are still within the fuse size limit (less than 4k - we have

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -140,7 +140,8 @@ spec_place_rank_get(unsigned int *pos, daos_obj_id_t oid,
 		    struct pool_map *pl_poolmap);
 
 int
-pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list);
+pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list,
+	      bool is_pool_adding);
 
 bool
 is_pool_adding(struct pool_domain *dom);

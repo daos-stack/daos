@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -75,6 +75,8 @@ struct dtx_handle {
 	daos_unit_oid_t			 dth_leader_oid;
 
 	uint32_t			 dth_sync:1, /* commit synchronously. */
+					 /* DTXs in CoS list are committed. */
+					 dth_cos_done:1,
 					 dth_resent:1, /* For resent case. */
 					 /* Only one participator in the DTX. */
 					 dth_solo:1,
@@ -172,20 +174,6 @@ struct dtx_stat {
 	uint64_t	dtx_oldest_committed_time;
 };
 
-/**
- * DAOS two-phase commit transaction status.
- */
-enum dtx_status {
-	/** Local participant has done the modification. */
-	DTX_ST_PREPARED		= 1,
-	/** The DTX has been committed. */
-	DTX_ST_COMMITTED	= 2,
-	/** The DTX is corrupted, some participant RDG(s) may be lost. */
-	DTX_ST_CORRUPTED	= 3,
-	/** The DTX is committable, but not committed, non-persistent status. */
-	DTX_ST_COMMITTABLE	= 4,
-};
-
 enum dtx_flags {
 	/** Single operand. */
 	DTX_SOLO		= (1 << 0),
@@ -197,6 +185,8 @@ enum dtx_flags {
 	DTX_FOR_MIGRATION	= (1 << 3),
 	/** Ignore other uncommitted DTXs. */
 	DTX_IGNORE_UNCOMMITTED	= (1 << 4),
+	/** Resent request. */
+	DTX_RESEND		= (1 << 5),
 };
 
 int
@@ -292,7 +282,7 @@ dtx_entry_put(struct dtx_entry *dte)
 }
 
 static inline bool
-dtx_is_valid_handle(struct dtx_handle *dth)
+dtx_is_valid_handle(const struct dtx_handle *dth)
 {
 	return dth != NULL && !daos_is_zero_dti(&dth->dth_xid);
 }

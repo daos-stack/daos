@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2019 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,7 +83,7 @@
 	ACTION(DB_SEC,	   sec,	    security,       0, arg)	\
 	/** checksum */						\
 	ACTION(DB_CSUM,	   csum,    checksum,	    0, arg)	\
-	/** daos managment */					\
+	/** daos management */					\
 	ACTION(DB_DSMS,	   dsms,    service,	    0, arg)
 
 DAOS_FOREACH_DB(D_LOG_DECLARE_DB, D_NOOP);

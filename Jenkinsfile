@@ -1,5 +1,5 @@
 #!/usr/bin/groovy
-/* Copyright (C) 2019-2020 Intel Corporation
+/* Copyright (C) 2019-2021 Intel Corporation
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -56,7 +56,8 @@ def skip_stage(String stage, boolean def_val = false) {
 }
 
 boolean quickbuild() {
-    return cachedCommitPragma(pragma: 'Quick-build') == 'true'
+    return cachedCommitPragma(pragma: 'Quick-build') == 'true' ||
+           quick_functional()
 }
 
 def functional_post_always() {
@@ -148,11 +149,12 @@ String unit_packages() {
                            'boost-devel ' +
                            'libisa-l-devel libpmem ' +
                            'libpmemobj protobuf-c ' +
-                           'spdk-devel libfabric-devel '+
+                           'spdk-devel libfabric-devel ' +
                            'pmix numactl-devel ' +
                            'libipmctl-devel ' +
                            'python36-tabulate numactl ' +
-                           'valgrind-devel'
+                           'libyaml-devel ' +
+                           'valgrind-devel patchelf'
         if (need_qb) {
             // TODO: these should be gotten from the Requires: of RPM
             packages += " spdk-tools mercury-2.0.0~rc1" +
@@ -188,10 +190,13 @@ String daos_packages_version(String distro) {
     String version = cachedCommitPragma(pragma: 'RPM-test-version')
     if (version != "") {
         String dist = ""
-        if (distro == "centos7") {
-            dist = ".el7"
-        } else if (distro == "leap15") {
-            dist = ".suse.lp152"
+        if (version.indexOf('-') > -1) {
+            // only tack on the %{dist} if the release was specified
+            if (distro == "centos7") {
+                dist = ".el7"
+            } else if (distro == "leap15") {
+                dist = ".suse.lp152"
+            }
         }
         return version + dist
     }
@@ -235,26 +240,20 @@ String functional_packages() {
 String functional_packages(String distro) {
     String daos_pkgs = get_daos_packages(distro)
     String pkgs = " openmpi3 hwloc ndctl fio " +
-                  "patchutils ior-hpc-daos-0 " +
-                  "romio-tests-cart-4-daos-0 " +
-                  "testmpio-cart-4-daos-0 " +
-                  "mpi4py-tests-cart-4-daos-0 " +
-                  "hdf5-mpich2-tests-daos-0 " +
-                  "hdf5-openmpi3-tests-daos-0 " +
-                  "hdf5-vol-daos-mpich2-tests-daos-0 " +
-                  "hdf5-vol-daos-openmpi3-tests-daos-0 " +
-                  "MACSio-mpich2-daos-0 " +
-                  "MACSio-openmpi3-daos-0 " +
-                  "mpifileutils-mpich-daos-0 "
+                  "patchutils ior-hpc-daos-1 " +
+                  "romio-tests-daos-1 " +
+                  "testmpio " +
+                  "mpi4py-tests " +
+                  "hdf5-mpich-tests " +
+                  "hdf5-openmpi3-tests " +
+                  "hdf5-vol-daos-mpich2-tests-daos-1 " +
+                  "hdf5-vol-daos-openmpi3-tests-daos-1 " +
+                  "MACSio-mpich " +
+                  "MACSio-openmpi3 " +
+                  "mpifileutils-mpich-daos-1 "
     if (distro == "leap15") {
-        if (quickbuild()) {
-            pkgs += " spdk-tools"
-        }
         return daos_pkgs + pkgs
     } else if (distro == "centos7") {
-        if (quickbuild()) {
-            pkgs += " spdk_tools"
-        }
         // need to exclude openmpi until we remove it from the repo
         return  "--exclude openmpi " + daos_pkgs + pkgs
     } else if (distro.startsWith('ubuntu20')) {
@@ -317,7 +316,8 @@ boolean skip_prebuild() {
 
 boolean skip_checkpatch() {
     return skip_stage('checkpatch') ||
-           doc_only_change()
+           doc_only_change() ||
+           quick_functional()
 }
 
 boolean skip_build() {
@@ -329,31 +329,63 @@ boolean skip_build() {
            rpm_test_version() != ''
 }
 
+boolean quick_functional() {
+    return cachedCommitPragma(pragma: 'Quick-Functional') == 'true'
+}
+
 boolean skip_build_rpm(String distro) {
     return target_branch == 'weekly-testing' ||
-           skip_stage('build-' + distro + '-rpm')
+           skip_stage('build-' + distro + '-rpm') ||
+           distro == 'ubuntu20' && quick_functional()
 }
 
 boolean skip_build_on_centos7_gcc() {
-    return skip_stage('build-centos7-gcc')
+    return skip_stage('build-centos7-gcc') ||
+           quick_functional()
 }
 
 boolean skip_ftest(String distro) {
     return distro == 'ubuntu20' ||
            skip_stage('func-test') ||
            skip_stage('func-test-vm') ||
+           ! tests_in_stage('vm') ||
            skip_stage('func-test-' + distro)
 }
 
 boolean skip_test_rpms_centos7() {
     return target_branch == 'weekly-testing' ||
            skip_stage('test') ||
-           skip_stage('test-centos-rpms')
+           skip_stage('test-centos-rpms') ||
+           quick_functional()
 }
 
 boolean skip_scan_rpms_centos7() {
     return target_branch == 'weekly-testing' ||
-           skip_stage('scan-centos-rpms')
+           skip_stage('scan-centos-rpms') ||
+           quick_functional()
+}
+
+boolean tests_in_stage(String size) {
+    String tags = cachedCommitPragma(pragma: 'Test-tag', def_val: 'pr')
+    def newtags = []
+    if (size == "vm") {
+        for (String tag in tags.split(" ")) {
+            newtags.add(tag + ",-hw")
+        }
+        tags += ",-hw"
+    } else {
+        if (size == "medium") {
+            size += ",ib2"
+        }
+        for (String tag in tags.split(" ")) {
+            newtags.add(tag + ",hw," + size)
+        }
+    }
+    tags = newtags.join(" ")
+    return sh(label: "Get test list for ${size}",
+              script: """cd src/tests/ftest
+                         ./launch.py --list ${tags}""",
+              returnStatus: true) == 0
 }
 
 boolean skip_ftest_hw(String size) {
@@ -361,17 +393,20 @@ boolean skip_ftest_hw(String size) {
            skip_stage('func-test') ||
            skip_stage('func-hw-test') ||
            skip_stage('func-hw-test-' + size) ||
+           ! tests_in_stage(size) ||
            (env.BRANCH_NAME == 'master' && ! startedByTimer())
 }
 
 boolean skip_bandit_check() {
     return cachedCommitPragma(pragma: 'Skip-python-bandit',
-                              def_val: 'true') == 'true'
+                              def_val: 'true') == 'true' ||
+           quick_functional()
 }
 
 boolean skip_build_on_centos7_bullseye() {
     return  env.NO_CI_TESTING == 'true' ||
-            skip_stage('bullseye', true)
+            skip_stage('bullseye', true) ||
+            quick_functional()
 }
 
 boolean skip_build_on_centos7_gcc_debug() {
@@ -397,7 +432,8 @@ boolean skip_build_on_ubuntu_clang() {
 }
 
 boolean skip_build_on_leap15_gcc() {
-    return skip_stage('build-leap15-gcc')
+    return skip_stage('build-leap15-gcc') ||
+            quickbuild()
 }
 
 boolean skip_build_on_leap15_icc() {
@@ -413,6 +449,11 @@ boolean skip_unit_testing_stage() {
             doc_only_change() ||
             skip_build_on_centos7_gcc() ||
             skip_stage('unit-tests')
+}
+
+boolean skip_coverity() {
+    return skip_stage('coverity-test') ||
+           quick_functional()
 }
 
 boolean skip_testing_stage() {
@@ -475,7 +516,7 @@ pipeline {
         // preserve stashes so that jobs can be started at the test stage
         preserveStashes(buildCount: 5)
         ansiColor('xterm')
-        buildDiscarder(logRotator(artifactDaysToKeepStr: '400'))
+        buildDiscarder(logRotator(artifactDaysToKeepStr: '100'))
     }
 
     parameters {
@@ -520,9 +561,11 @@ pipeline {
                                                   "src/mgmt/*.pb-c.[ch]:" +
                                                   "src/iosrv/*.pb-c.[ch]:" +
                                                   "src/security/*.pb-c.[ch]:" +
-						  "src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:" +
-						  "src/client/java/daos-java/src/main/native/*.pb-c.[ch]:" +
-						  "src/client/java/daos-java/src/main/native/include/*.pb-c.[ch]:" +
+                                                  "src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:" +
+                                                  "src/client/java/daos-java/src/main/java/io/daos/obj/attr/*:" +
+                                                  "src/client/java/daos-java/src/main/native/include/daos_jni_common.h:" +
+                                                  "src/client/java/daos-java/src/main/native/*.pb-c.[ch]:" +
+                                                  "src/client/java/daos-java/src/main/native/include/*.pb-c.[ch]:" +
                                                   "*.crt:" +
                                                   "*.pem:" +
                                                   "*_test.go:" +
@@ -756,8 +799,8 @@ pipeline {
                             filename 'Dockerfile.centos.7'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
-                                '$BUILDARGS_QB_TRUE' +
+                            additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
+                                " -t ${sanitized_JOB_NAME}-centos7 " +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                 quick_build_deps('centos7') + '"' +
@@ -1145,8 +1188,7 @@ pipeline {
                     }
                     post {
                       always {
-                            unitTestPost artifacts: ['unit_test_logs/*'],
-                                         record_issues: false
+                            unitTestPost artifacts: ['unit_test_logs/*']
                         }
                     }
                 }
@@ -1156,17 +1198,19 @@ pipeline {
                       expression { ! skip_stage('nlt') }
                     }
                     agent {
-                        label 'ci_hdwr1'
+                        label 'ci_nlt_1'
                     }
                     steps {
                         unitTest timeout_time: 20,
                                  inst_repos: pr_repos(),
+                                 test_script: 'ci/unit/test_nlt.sh',
                                  inst_rpms: unit_packages()
                     }
                     post {
                       always {
                             unitTestPost artifacts: ['nlt_logs/*'],
                                          testResults: 'None',
+                                         always_script: 'ci/unit/test_nlt_post.sh',
                                          valgrind_stash: 'centos7-gcc-nlt-memcheck'
                         }
                     }
@@ -1230,7 +1274,7 @@ pipeline {
                 stage('Coverity on CentOS 7') {
                     when {
                         beforeAgent true
-                        expression { ! skip_stage('coverity-test') }
+                        expression { ! skip_coverity() }
                     }
                     agent {
                         dockerfile {
@@ -1419,8 +1463,8 @@ pipeline {
                             filename 'Dockerfile.centos.7'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
-                                '$BUILDARGS_QB_TRUE' +
+                            additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
+                                " -t ${sanitized_JOB_NAME}-centos7 " +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                 quick_build_deps('centos7') + '"' +

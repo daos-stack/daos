@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -349,9 +332,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	}
 
-	rc = vos_ts_set_allocate(&ts_set, flags, cflags, akey_nr,
-				 dtx_is_valid_handle(dth) ?
-				 &dth->dth_xid : NULL);
+	rc = vos_ts_set_allocate(&ts_set, flags, cflags, akey_nr, dth);
 	if (rc != 0)
 		goto reset;
 
@@ -364,10 +345,11 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		goto reset;
 
 	/* Commit the CoS DTXs via the PUNCH PMDK transaction. */
-	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0) {
+	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0 &&
+	    !dth->dth_cos_done) {
 		D_ALLOC_ARRAY(daes, dth->dth_dti_cos_count);
 		if (daes == NULL)
-			D_GOTO(abort, rc = -DER_NOMEM);
+			D_GOTO(reset, rc = -DER_NOMEM);
 
 		rc = vos_dtx_commit_internal(cont, dth->dth_dti_cos,
 					     dth->dth_dti_cos_count,
@@ -385,7 +367,6 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		if (dkey) { /* key punch */
 			rc = key_punch(obj, epr.epr_hi, bound, pm_ver, dkey,
 				       akey_nr, akeys, flags, ts_set);
-
 			if (rc > 0)
 				punch_obj = true;
 		} else {
@@ -395,38 +376,40 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		if (punch_obj)
 			rc = obj_punch(coh, obj, epr.epr_hi, bound, flags,
 				       ts_set);
+		if (obj != NULL)
+			vos_obj_release(vos_obj_cache_current(), obj, rc != 0);
 	}
-abort:
-	rc = vos_tx_end(cont, dth, NULL, NULL, true, rc);
 
-	if (obj != NULL)
-		vos_obj_release(vos_obj_cache_current(), obj, rc != 0);
 reset:
 	if (rc != 0)
 		D_DEBUG(DB_IO, "Failed to punch object "DF_UOID": rc = %d\n",
 			DP_UOID(oid), rc);
-	else if (daes != NULL)
-		vos_dtx_post_handle(cont, daes, dth->dth_dti_cos_count, false);
 
-	D_FREE(daes);
+	if ((rc == -DER_NONEXIST || rc == 0) &&
+	    vos_ts_wcheck(ts_set, epr.epr_hi, bound))
+		rc = -DER_TX_RESTART;
 
-	vos_dth_set(NULL);
+	rc = vos_tx_end(cont, dth, NULL, NULL, true, rc);
 
-	if (rc == 0)
+	if (rc == 0) {
 		vos_ts_set_upgrade(ts_set);
-
-	if (rc == -DER_NONEXIST || rc == 0) {
-		if (vos_ts_wcheck(ts_set, epr.epr_hi, bound)) {
-			rc = -DER_TX_RESTART;
-		} else {
-			vos_punch_add_missing(ts_set, dkey, akey_nr, akeys);
-			vos_ts_set_update(ts_set, epr.epr_hi);
-			if (rc == 0)
-				vos_ts_set_wupdate(ts_set, epr.epr_hi);
+		if (daes != NULL) {
+			vos_dtx_post_handle(cont, daes, dth->dth_dti_cos_count,
+					    false);
+			dth->dth_cos_done = 1;
 		}
 	}
 
+	if (rc == -DER_NONEXIST || rc == 0) {
+		vos_punch_add_missing(ts_set, dkey, akey_nr, akeys);
+		vos_ts_set_update(ts_set, epr.epr_hi);
+		if (rc == 0)
+			vos_ts_set_wupdate(ts_set, epr.epr_hi);
+	}
+
+	D_FREE(daes);
 	vos_ts_set_free(ts_set);
+	vos_dth_set(NULL);
 
 	return rc;
 }
@@ -1073,6 +1056,7 @@ singv_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	it_entry->ie_ver	 = rbund.rb_ver;
 	it_entry->ie_recx.rx_idx = 0;
 	it_entry->ie_recx.rx_nr  = 1;
+	it_entry->ie_dtx_state	 = rbund.rb_dtx_state;
  out:
 	return rc;
 }
@@ -1244,6 +1228,7 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	it_entry->ie_rsize	= inob;
 	it_entry->ie_ver	= entry.en_ver;
 	it_entry->ie_csum	= entry.en_csum;
+	it_entry->ie_dtx_state	= dtx_alb2state(entry.en_avail_rc);
 	bio_iov_set(&it_entry->ie_biov, entry.en_addr,
 		    it_entry->ie_recx.rx_nr * it_entry->ie_rsize);
  out:

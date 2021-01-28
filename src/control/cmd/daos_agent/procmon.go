@@ -1,24 +1,8 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
 
 package main
 
@@ -31,6 +15,7 @@ import (
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -124,20 +109,24 @@ func (p *procInfo) monitorProcess(ctx context.Context) {
 // monitor and disconnect processes. Once created it is started by passing a
 // context into the startMonitoring call.
 type procMon struct {
-	log      logging.Logger
-	procs    map[int32]*procInfo
-	request  chan *procMonRequest
-	response chan *procMonResponse
+	log        logging.Logger
+	procs      map[int32]*procInfo
+	request    chan *procMonRequest
+	response   chan *procMonResponse
+	ctlInvoker control.Invoker
+	systemName string
 }
 
 // NewProcMon creates a new process monitor struct setting initializing the
 // internal process map and the request channel.
-func NewProcMon(logger logging.Logger) *procMon {
+func NewProcMon(logger logging.Logger, ctlInvoker control.Invoker, systemName string) *procMon {
 	return &procMon{
-		log:      logger,
-		procs:    make(map[int32]*procInfo),
-		request:  make(chan *procMonRequest),
-		response: make(chan *procMonResponse),
+		log:        logger,
+		procs:      make(map[int32]*procInfo),
+		request:    make(chan *procMonRequest),
+		response:   make(chan *procMonResponse),
+		ctlInvoker: ctlInvoker,
+		systemName: systemName,
 	}
 }
 
@@ -228,35 +217,45 @@ func (p *procMon) handleNotifyPoolDisconnect(request *procMonRequest) {
 
 }
 
+func handleMapToList(handleMap map[string]struct{}) []string {
+	list := make([]string, 0, len(handleMap))
+	for uuid := range handleMap {
+		list = append(list, uuid)
+	}
+	return list
+}
+
 // A process will leak handles when it either dies illegally or exits without
 // calling daos_pool_disconnect on the handles it has open. This will be called
 // if we detect a process terminating without disconnect, or if during
 // disconnect we still have a list of open pool handles for the process.
-func (p *procMon) cleanupLeakedHandles(info *procInfo) {
+func (p *procMon) cleanupLeakedHandles(ctx context.Context, info *procInfo) {
 	if len(info.handles) == 0 {
 		return
 	}
 
 	for poolUUID, element := range info.handles {
 		p.log.Debugf("Cleaning up %d leaked handles from Pool UUID: %s\n", len(element), poolUUID)
-		for poolHandleUUID := range element {
-			p.log.Debugf("\t%s\n", poolHandleUUID)
+
+		handles := handleMapToList(info.handles[poolUUID])
+		req := &control.PoolEvictReq{UUID: poolUUID, Sys: p.systemName, Handles: handles}
+
+		err := control.PoolEvict(ctx, p.ctlInvoker, req)
+		if err != nil {
+			p.log.Debugf("Cleaning Pool %s failed:%s", poolUUID, err)
 		}
-		// We should construct the data structure for the gRPC call here.
 	}
-	// This is where we should make a call to the control plane with the
-	// combined set of all poolUUID and their associated poolHandleUUIDs
 
 	delete(p.procs, info.pid)
 }
 
-func (p *procMon) handleNotifyExit(request *procMonRequest) {
+func (p *procMon) handleNotifyExit(ctx context.Context, request *procMonRequest) {
 	info, found := p.procs[request.pid]
 
 	p.log.Debugf("Received request to exit pid:%d\n", request.pid)
 	if found {
 		info.cancelCtx()
-		p.cleanupLeakedHandles(info)
+		p.cleanupLeakedHandles(ctx, info)
 	}
 }
 
@@ -272,7 +271,7 @@ func (p *procMon) handleRequests(ctx context.Context) {
 			case drpc.MethodNotifyPoolDisconnect:
 				p.handleNotifyPoolDisconnect(request)
 			case drpc.MethodNotifyExit:
-				p.handleNotifyExit(request)
+				p.handleNotifyExit(ctx, request)
 			default:
 				p.log.Debugf("Received request with invalid action type %s", request.action)
 			}
@@ -281,7 +280,7 @@ func (p *procMon) handleRequests(ctx context.Context) {
 			info, found := p.procs[resp.pid]
 
 			if found {
-				p.cleanupLeakedHandles(info)
+				p.cleanupLeakedHandles(ctx, info)
 			}
 		}
 	}

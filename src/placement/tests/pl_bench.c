@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,9 @@
 
 #define USE_TIME_PROFILING
 #include "benchmark_util.h"
+
+extern int  obj_class_init(void);
+extern void obj_class_fini(void);
 
 /*
  * These are only at the top of the file for reference / easy changing
@@ -586,7 +589,7 @@ main(int argc, char **argv)
 	uint32_t                 nodes_per_domain = DEFAULT_NODES_PER_DOMAIN;
 	uint32_t                 vos_per_target = DEFAULT_VOS_PER_TARGET;
 
-	int                      rc;
+	int                      rc = -1;
 	int                      i;
 
 	test_op_t operation = NULL;
@@ -658,7 +661,7 @@ main(int argc, char **argv)
 					optarg);
 				print_usage(argv[0], op_names,
 					    ARRAY_SIZE(op_names));
-				return -1;
+				goto out;
 			}
 			break;
 		case 'g':
@@ -678,7 +681,7 @@ main(int argc, char **argv)
 		case '?':
 		default:
 			print_usage(argv[0], op_names, ARRAY_SIZE(op_names));
-			return -1;
+			goto out;
 		}
 	}
 
@@ -686,22 +689,27 @@ main(int argc, char **argv)
 		D_PRINT("ERROR: operation argument is required!\n");
 
 		print_usage(argv[0], op_names, ARRAY_SIZE(op_names));
-		return -1;
+		goto out;
 	}
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
-	if (rc != 0)
-		return rc;
+	if (rc)
+		goto out;
+
+	rc = obj_class_init();
+	if (rc)
+		goto out_debug;
 
 	rc = pl_init();
-	if (rc != 0) {
-		daos_debug_fini();
-		return rc;
-	}
+	if (rc)
+		goto out_class;
 
 	operation(argc, argv, num_domains, nodes_per_domain, vos_per_target);
 
 	pl_fini();
+out_class:
+	obj_class_fini();
+out_debug:
 	daos_debug_fini();
-
-	return 0;
+out:
+	return rc;
 }

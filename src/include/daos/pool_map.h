@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -303,6 +303,16 @@ static inline bool
 pool_target_unavail(struct pool_target *tgt, bool for_reint)
 {
 	return pool_component_unavail(&tgt->ta_comp, for_reint);
+}
+
+/** Check if the target is in PO_COMP_ST_DOWN status */
+static inline bool
+pool_target_down(struct pool_target *tgt)
+{
+	struct pool_component	*comp = &tgt->ta_comp;
+	uint8_t			 status = comp->co_status;
+
+	return (status == PO_COMP_ST_DOWN);
 }
 
 pool_comp_state_t pool_comp_str2state(const char *name);

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2015-2020 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,17 +33,17 @@
 extern "C" {
 #endif
 
+/** Flags for daos_tx_open */
 enum {
 	/** The transaction is read only. */
 	DAOS_TF_RDONLY		= (1 << 0),
 	/**
-	 * Not copy application data buffer when cache modification on client
-	 * for the distributed transaction.
+	 * Do not copy caller data buffers during modifications associated with
+	 * the transaction. The buffers must remain unchanged until the
+	 * daos_tx_commit operation for the transaction completes.
 	 *
-	 * Please note that the key buffer will always be copied when caching.
-	 * Then the TX sponsor can reuse or release related key' buffer after
-	 * the operation returning to avoid more programming restriction under
-	 * DAOS transaction model.
+	 * Key buffers are always copied, regardless of this flag. They can be
+	 * released or repurposed after corresponding operations complete.
 	 */
 	DAOS_TF_ZERO_COPY	= (1 << 1),
 };
@@ -67,9 +67,9 @@ d_rank_list_t *daos_rank_list_parse(const char *str, const char *sep);
  */
 
 /**
- * Open a transaction on a container handle. This returns a transaction handle
- * that is tagged with the current epoch. The transaction handle can be used
- * for IOs that need to be committed transactionally.
+ * Open a transaction on a container handle. The resulting transaction handle
+ * can be used for IOs in this container that need to be committed
+ * transactionally.
  *
  * \param[in]	coh	Container handle.
  * \param[out]	th	Returned transaction handle.
@@ -84,10 +84,11 @@ daos_tx_open(daos_handle_t coh, daos_handle_t *th, uint64_t flags,
 	     daos_event_t *ev);
 
 /**
- * Commit the transaction on the container it was created with. The transaction
- * can't be used for future updates anymore. If -DER_RESTART was returned, the
- * operations that have been done on this transaction need to be redone with a
- * newer transaction since a conflict was detected with another transaction.
+ * Commit the transaction. If the operation succeeds, the transaction handle
+ * cannot be used for any new IO. If -DER_TX_RESTART is returned, the caller
+ * needs to restart the transaction with the same transaction handle, by
+ * calling daos_tx_restart, re-executing the caller code for this transaction,
+ * and calling daos_tx_commit again.
  *
  * \param[in]	th	Transaction handle to commit.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
@@ -97,17 +98,18 @@ daos_tx_open(daos_handle_t coh, daos_handle_t *th, uint64_t flags,
  *			Possible error values include:
  *			-DER_NO_HDL     invalid transaction handle.
  *			-DER_INVAL      Invalid parameter
- *			-DER_RESTART	transaction conflict detected.
+ *			-DER_TX_RESTART	transaction needs to restart (e.g.,
+ *					due to conflicts).
  */
 int
 daos_tx_commit(daos_handle_t th, daos_event_t *ev);
 
 /**
  * Create a read-only transaction from a snapshot. This does not create the
- * snapshot, but only a read transaction to be able to read from a persistent
- * snapshot in the container. If the user passes an epoch that is not
- * snapshoted, or the snapshot was deleted, reads using that transaction might
- * fail if the epoch was aggregated.
+ * snapshot, but only a read transaction to be able to read from a snapshot
+ * created with daos_cont_create_snap. If the user passes an epoch that is not
+ * snapshoted, or the snapshot was deleted, reads using that transaction may
+ * get undefined results.
  *
  * \param[in]	coh	Container handle.
  * \param[in]	epoch	Epoch of snapshot to read from.
@@ -122,8 +124,8 @@ daos_tx_open_snap(daos_handle_t coh, daos_epoch_t epoch, daos_handle_t *th,
 		  daos_event_t *ev);
 
 /**
- * Abort all updates on the transaction. The transaction can't be used for
- * future updates anymore.
+ * Abort all modifications on the transaction. The transaction handle cannot be
+ * used for any new IO.
  *
  * \param[in]	th	Transaction handle to abort.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
@@ -135,8 +137,7 @@ int
 daos_tx_abort(daos_handle_t th, daos_event_t *ev);
 
 /**
- * Close and free the transaction handle. This is a local operation, no RPC
- * involved.
+ * Close the transaction handle. This is a local operation, no RPC involved.
  *
  * \param[in]	th	Transaction handle to free.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
@@ -148,8 +149,8 @@ int
 daos_tx_close(daos_handle_t th, daos_event_t *ev);
 
 /**
- * Restart the transaction handle after encountering a -DER_TX_RESTART error.
- * It drops all the modifications that have been issued via the handle. Whether
+ * Restart the transaction after encountering a -DER_TX_RESTART error. This
+ * drops all the IOs that have been issued via the transaction handle. Whether
  * the restarted transaction observes any conflicting modifications committed
  * after this transaction was originally opened is undefined. If callers would
  * like to retry transactions for their own purposes, they shall open new

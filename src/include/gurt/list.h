@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,11 @@
 /** @addtogroup GURT
  * @{
  */
+#ifdef __GNUC__
+#define prefetch(a) __builtin_prefetch((a), 0, 1)
+#else
 #define prefetch(a) ((void)a)
+#endif
 
 struct d_list_head {
 	struct d_list_head *next, *prev;
@@ -233,7 +237,7 @@ d_list_splice(d_list_t *list, d_list_t *head)
 }
 
 /**
- * Join two lists and reinitialise the emptied list.
+ * Join two lists and reinitialize the emptied list.
  * The contents of \p list are added at the start of \p head.  \p list is empty
  * on return.
  *

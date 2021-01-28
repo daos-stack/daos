@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,8 +49,7 @@ typedef enum {
 	/** Management APIs */
 	/* Starting at 0 will break Application Binary Interface backward
 	 * compatibility */
-	DAOS_OPC_POOL_EVICT = 2,
-	DAOS_OPC_SET_PARAMS,
+	DAOS_OPC_SET_PARAMS = 3,
 	DAOS_OPC_MGMT_GET_BS_STATE,
 
 	/** Pool APIs */
@@ -189,24 +188,12 @@ typedef struct {
 	int			force;
 } daos_pool_destroy_t;
 
-/** pool evict args */
-typedef struct {
-	/** UUID of the pool. */
-	uuid_t			uuid;
-	/** Process set name of the DAOS servers managing the pool. */
-	const char		*grp;
-	/** list of pool service ranks. */
-	d_rank_list_t		*svc;
-} daos_pool_evict_t;
-
 /** pool connect args */
 typedef struct {
 	/** UUID of the pool. */
 	uuid_t			uuid;
 	/** Process set name of the DAOS servers managing the pool. */
 	const char		*grp;
-	/** Pool service replica ranks. */
-	const d_rank_list_t	*svc;
 	/** Connect mode represented by the DAOS_PC_ bits. */
 	unsigned int		flags;
 	/** Returned open handle. */
@@ -215,7 +202,7 @@ typedef struct {
 	daos_pool_info_t	*info;
 } daos_pool_connect_t;
 
-/** poo disconnect args */
+/** pool disconnect args */
 typedef struct {
 	/** Pool open handle. */
 	daos_handle_t		poh;
@@ -227,8 +214,6 @@ typedef struct {
 	uuid_t			uuid;
 	/** Process set name of the DAOS servers managing the pool */
 	const char		*grp;
-	/** Pool service replica ranks. */
-	d_rank_list_t		*svc;
 	/** Target array */
 	struct d_tgt_list	*tgts;
 } daos_pool_update_t;
@@ -321,8 +306,6 @@ typedef struct {
 	uuid_t			uuid;
 	/** Name of DAOS server process set managing the service. */
 	const char		*group;
-	/** List of service ranks. */
-	d_rank_list_t		*svc;
 	/** Ranks of the replicas to be added/removed. */
 	d_rank_list_t		*targets;
 	/** Optional, list of ranks which could not be added/removed. */

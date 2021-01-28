@@ -9,7 +9,7 @@ orchestrate the operation of the managed data plane processes.
 
 ## Network and Storage Management
 
-The DAOS data plane utilises two forms of non-volatile storage,
+The DAOS data plane utilizes two forms of non-volatile storage,
 storage class memory (SCM) in the form of persistent memory modules
 and NVMe in the form of high-performance SSDs.
 

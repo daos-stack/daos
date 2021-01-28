@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package system
@@ -45,10 +28,11 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func waitForLeadership(t *testing.T, ctx context.Context, db *Database, gained bool, timeout time.Duration) {
+func waitForLeadership(ctx context.Context, t *testing.T, db *Database, gained bool, timeout time.Duration) {
 	t.Helper()
 	timer := time.NewTimer(timeout)
 	for {
@@ -157,9 +141,9 @@ func TestSystem_Database_Cancel(t *testing.T) {
 		return nil
 	})
 
-	waitForLeadership(t, ctx, db, true, 10*time.Second)
+	waitForLeadership(ctx, t, db, true, 10*time.Second)
 	dbCancel()
-	waitForLeadership(t, ctx, db, false, 10*time.Second)
+	waitForLeadership(ctx, t, db, false, 10*time.Second)
 
 	if atomic.LoadUint32(&onGainedCalled) != 1 {
 		t.Fatal("OnLeadershipGained callbacks didn't execute")
@@ -211,7 +195,7 @@ func ctrlAddrGen(ctx context.Context, start net.IP, reqsPerAddr int) chan *net.T
 				}
 				tmp := cur.To4()
 				val := uint(tmp[0])<<24 + uint(tmp[1])<<16 + uint(tmp[2])<<8 + uint(tmp[3])
-				val += 1
+				val++
 				d := byte(val & 0xFF)
 				c := byte((val >> 8) & 0xFF)
 				b := byte((val >> 16) & 0xFF)
@@ -285,6 +269,12 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 			PoolLabel: fmt.Sprintf("pool%04d", i),
 			State:     PoolServiceStateReady,
 			Replicas:  <-replicas,
+			Storage: &PoolServiceStorage{
+				CreationRankStr: fmt.Sprintf("[0-%d]", maxRanks),
+				CurrentRankStr:  fmt.Sprintf("[0-%d]", maxRanks),
+				ScmPerRank:      1,
+				NVMePerRank:     2,
+			},
 		}
 		data, err := createRaftUpdate(raftOpAddPoolService, ps)
 		if err != nil {
@@ -313,8 +303,9 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 	}
 
 	cmpOpts := []cmp.Option{
-		cmpopts.IgnoreUnexported(dbData{}, Member{}),
+		cmpopts.IgnoreUnexported(dbData{}, Member{}, PoolServiceStorage{}),
 		cmpopts.IgnoreFields(dbData{}, "RWMutex"),
+		cmpopts.IgnoreFields(PoolServiceStorage{}, "Mutex"),
 	}
 	if diff := cmp.Diff(db0.data, db1.data, cmpOpts...); diff != "" {
 		t.Fatalf("db differs after restore (-want, +got):\n%s\n", diff)
@@ -467,7 +458,6 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 				},
 				testMembers[2],
 			},
-
 			expFDTree: NewFaultDomainTree(
 				testMembers[0].RankFaultDomain(),
 				testMembers[1].RankFaultDomain(),
@@ -555,7 +545,7 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 				t.Fatalf("expected %d members, got %d", len(tc.expMembers), len(db.data.Members.Uuids))
 			}
 
-			if diff := cmp.Diff(tc.expFDTree, db.data.Members.FaultDomains); diff != "" {
+			if diff := cmp.Diff(tc.expFDTree, db.data.Members.FaultDomains, ignoreFaultDomainIDOption()); diff != "" {
 				t.Fatalf("wrong FaultDomainTree in DB (-want, +got):\n%s\n", diff)
 			}
 		})
@@ -587,6 +577,102 @@ func TestSystem_Database_FaultDomainTree(t *testing.T) {
 
 			if diff := cmp.Diff(tc.fdTree, result); diff != "" {
 				t.Fatalf("(-want, +got):\n%s\n", diff)
+			}
+
+			if result != nil && result == db.data.Members.FaultDomains {
+				t.Fatal("expected fault domain tree to be a copy")
+			}
+		})
+	}
+}
+
+func TestSystem_Database_OnEvent(t *testing.T) {
+	puuid := uuid.New()
+	puuidAnother := uuid.New()
+
+	for name, tc := range map[string]struct {
+		poolSvcs    []*PoolService
+		event       *events.RASEvent
+		expPoolSvcs []*PoolService
+	}{
+		"nil event": {
+			event:       nil,
+			expPoolSvcs: []*PoolService{},
+		},
+		"pool svc replicas update miss": {
+			poolSvcs: []*PoolService{
+				{
+					PoolUUID:  puuid,
+					PoolLabel: "pool0001",
+					State:     PoolServiceStateReady,
+					Replicas:  []Rank{1, 2, 3, 4, 5},
+				},
+			},
+			event: events.NewPoolSvcReplicasUpdateEvent(
+				"foo", 1, puuidAnother.String(), []uint32{2, 3, 5, 6, 7}, 1),
+			expPoolSvcs: []*PoolService{
+				{
+					PoolUUID:  puuid,
+					PoolLabel: "pool0001",
+					State:     PoolServiceStateReady,
+					Replicas:  []Rank{1, 2, 3, 4, 5},
+				},
+			},
+		},
+		"pool svc replicas update hit": {
+			poolSvcs: []*PoolService{
+				{
+					PoolUUID:  puuid,
+					PoolLabel: "pool0001",
+					State:     PoolServiceStateReady,
+					Replicas:  []Rank{1, 2, 3, 4, 5},
+				},
+			},
+			event: events.NewPoolSvcReplicasUpdateEvent(
+				"foo", 1, puuid.String(), []uint32{2, 3, 5, 6, 7}, 1),
+			expPoolSvcs: []*PoolService{
+				{
+					PoolUUID:  puuid,
+					PoolLabel: "pool0001",
+					State:     PoolServiceStateReady,
+					Replicas:  []Rank{2, 3, 5, 6, 7},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			db := MockDatabase(t, log)
+			for _, ps := range tc.poolSvcs {
+				if err := db.AddPoolService(ps); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+			defer cancel()
+
+			ps := events.NewPubSub(ctx, log)
+			defer ps.Close()
+
+			ps.Subscribe(events.RASTypeAny, db)
+
+			ps.Publish(tc.event)
+
+			<-ctx.Done()
+
+			poolSvcs, err := db.PoolServiceList()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			cmpOpts := []cmp.Option{
+				cmpopts.IgnoreUnexported(PoolService{}),
+			}
+			if diff := cmp.Diff(tc.expPoolSvcs, poolSvcs, cmpOpts...); diff != "" {
+				t.Errorf("unexpected pool service replicas (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

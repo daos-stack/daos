@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,18 +31,12 @@
  *
  * DSS_POOL_NET_POLL	Network poll ULT
  * DSS_POOL_NVME_POLL	NVMe poll ULT
- * DSS_POOL_IO		Update/Fetch/Punch, enumeration RPC handler ULTs
- * DSS_POOL_REBUILD	Rebuild/Reint scan & pull ULTs
- * DSS_POOL_GC		Space reclaiming ULTs like GC or aggregation
- * DSS_POOL_SCRUB	Scrub checksums to discover silent data corruption
+ * DSS_POOL_GENERIC	All other ULTS
  */
 enum {
 	DSS_POOL_NET_POLL	= 0,
 	DSS_POOL_NVME_POLL,
-	DSS_POOL_IO,
-	DSS_POOL_REBUILD,
-	DSS_POOL_GC,
-	DSS_POOL_SCRUB,
+	DSS_POOL_GENERIC,
 	DSS_POOL_CNT,
 };
 
@@ -67,7 +61,6 @@ struct dss_xstream {
 	ABT_sched		dx_sched;
 	ABT_thread		dx_progress;
 	struct sched_info	dx_sched_info;
-	d_list_t		dx_sleep_ult_list;
 	tse_sched_t		dx_sched_dsc;
 	struct dss_rpc_cntr	dx_rpc_cntrs[DSS_RC_MAX];
 	/* xstream id, [0, DSS_XS_NR_TOTAL - 1] */
@@ -83,6 +76,10 @@ struct dss_xstream {
 	bool			dx_dsc_started;	/* DSC progress ULT started */
 };
 
+#define DSS_HOSTNAME_MAX_LEN	255
+
+/** Server node hostname */
+extern char		dss_hostname[];
 /** Server node topology */
 extern hwloc_topology_t	dss_topo;
 /** core depth of the topology */
@@ -105,6 +102,11 @@ extern unsigned int	dss_tgt_offload_xs_nr;
 extern unsigned int	dss_sys_xs_nr;
 /** Flag of helper XS as a pool */
 extern bool		dss_helper_pool;
+/** Shadow dss_get_module_info */
+struct dss_module_info *get_module_info(void);
+
+/* init.c */
+d_rank_t dss_self_rank(void);
 
 /* module.c */
 int dss_module_init(void);
@@ -117,9 +119,10 @@ int dss_module_setup_all(void);
 int dss_module_cleanup_all(void);
 
 /* srv.c */
+extern struct dss_module_key daos_srv_modkey;
 int dss_srv_init(void);
 int dss_srv_fini(bool force);
-void dss_dump_ABT_state(void);
+void dss_dump_ABT_state(FILE *fp);
 void dss_xstreams_open_barrier(void);
 struct dss_xstream *dss_get_xstream(int stream_id);
 int dss_xstream_cnt(void);
@@ -140,8 +143,6 @@ struct dss_thread_local_storage *dss_tls_init(int tag);
 void ds_iv_init(void);
 void ds_iv_fini(void);
 
-/** To schedule ULT on caller's self XS */
-#define DSS_XS_SELF		(-1)
 /** Total number of XS */
 #define DSS_XS_NR_TOTAL						\
 	(dss_sys_xs_nr + dss_tgt_nr + dss_tgt_offload_xs_nr)

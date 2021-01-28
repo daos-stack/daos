@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of vos/tests/
@@ -1729,6 +1712,9 @@ fill_cont(struct io_test_args *arg, daos_unit_oid_t oid, char *dkey,
 	daos_recx_t	 recx;
 	uint64_t	 idx_max, nr_max;
 
+	if (DAOS_ON_VALGRIND)
+		size_max = (1UL << 14);
+
 	D_ALLOC(buf_u, size_max);
 	assert_non_null(buf_u);
 
@@ -1783,7 +1769,10 @@ aggregate_14(void **state)
 	fill_size = NVME_FREE(vps) ? : SCM_FREE(vps);
 	assert_true(fill_size > 0);
 
-	if (slow_test) {
+	if (DAOS_ON_VALGRIND) {
+		fill_size = min(fill_size, 1ULL << 18);
+		repeat_cnt = 2;
+	} else if (slow_test) {
 		fill_size = min(fill_size, VPOOL_2G);
 		repeat_cnt = 5;
 	} else {

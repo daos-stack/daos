@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC       DD_FAC(tests)
 
@@ -219,6 +202,9 @@ stride_buf_op(int opc, char *buf, unsigned offset, int size)
 			pos = i + stride_marks[j];
 			if (pos < offset)
 				continue;
+			/* possible for the last page */
+			if (pos >= stride_buf.sb_size)
+				break;
 
 			if (pos >= offset + size) {
 				/* NB: for single value, unset marks because
@@ -962,7 +948,7 @@ exclude_server(d_rank_t rank)
 	targets.tl_nr = 1;
 	targets.tl_ranks = &rank;
 	targets.tl_tgts = &tgt;
-	rc = daos_pool_tgt_exclude(ts_ctx.tsc_pool_uuid, NULL, NULL /* svc */,
+	rc = daos_pool_tgt_exclude(ts_ctx.tsc_pool_uuid, NULL,
 				   &targets, NULL);
 
 	return rc;
@@ -979,7 +965,7 @@ reint_server(d_rank_t rank)
 	targets.tl_nr = 1;
 	targets.tl_ranks = &rank;
 	targets.tl_tgts = &tgt;
-	rc = daos_pool_reint_tgt(ts_ctx.tsc_pool_uuid, NULL, NULL /* svc */,
+	rc = daos_pool_reint_tgt(ts_ctx.tsc_pool_uuid, NULL,
 				 &targets, NULL);
 	return rc;
 }
@@ -1608,9 +1594,6 @@ The options are as follows:\n\
 	storage space.\n\
 \n\
 -B	Profile performance of both update and fetch.\n\
-\n\
--n	Only run iterate performance test but with nesting iterator\n\
-	enable.  This can only run in vos mode.\n\
 \n\
 -f pathname\n\
 	Full path name of the VOS file.\n\

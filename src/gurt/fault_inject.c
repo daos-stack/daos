@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@
 #include <gurt/common.h>
 #include <gurt/hash.h>
 #include "fi.h"
+#include <yaml.h>
 
 /**
  * global switch for fault injection. zero globally turns off fault injection,

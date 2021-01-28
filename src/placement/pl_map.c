@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -211,6 +211,29 @@ pl_obj_layout_free(struct pl_obj_layout *layout)
 	if (layout->ol_shards != NULL)
 		D_FREE(layout->ol_shards);
 	D_FREE(layout);
+}
+
+/* Returns whether or not a given layout contains the specified rank */
+bool
+pl_obj_layout_contains(struct pool_map *map, struct pl_obj_layout *layout,
+		       uint32_t rank, uint32_t target_index)
+{
+	struct pool_target *target;
+	int i;
+	int rc;
+
+	D_ASSERT(layout != NULL);
+
+	for (i = 0; i < layout->ol_nr; i++) {
+		rc = pool_map_find_target(map, layout->ol_shards[i].po_target,
+					  &target);
+		if (rc != 0 && target->ta_comp.co_rank == rank &&
+		    target->ta_comp.co_index == target_index)
+			return true; /* Found a target and rank matches */
+	}
+
+	/* No match found */
+	return false;
 }
 
 int
@@ -591,7 +614,8 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 		return -DER_INVAL;
 
 	if (replicas == 1) {
-		shard = pl_get_shard(data, grp_idx * grp_size);
+		pos = grp_idx * grp_size;
+		shard = pl_get_shard(data, pos);
 		if (shard->po_target == -1)
 			return -DER_IO;
 
@@ -604,7 +628,8 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 		if (for_tgt_id)
 			return shard->po_target;
 
-		return shard->po_shard;
+		/* return pos rather than shard->po_shard for pool extending */
+		return pos;
 	}
 
 	/* XXX: The shards within [start, start + replicas) will search from
@@ -623,24 +648,25 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 
 		shard = pl_get_shard(data, off);
 		/*
-		 * shard->po_shard != off is necessary because during
-		 * reintegration we may have an extended layout and we don't
-		 * want the extended target to be the leader.
+		 * Cannot select in-rebuilding shard as leader (including the
+		 * case that during reintegration we may have an extended
+		 * layout that with in-adding shards with po_rebuilding set).
 		 */
-		if (shard->po_target == -1 || shard->po_rebuilding
-		    || shard->po_shard != off)
+		if (shard->po_target == -1 || shard->po_rebuilding)
 			continue;
 		if (pos == -1 ||
 		    pl_get_shard(data, pos)->po_fseq > shard->po_fseq)
 			pos = off;
 	}
 	if (pos != -1) {
-		D_ASSERT(pl_get_shard(data, pos)->po_shard == pos);
-
 		if (for_tgt_id)
 			return pl_get_shard(data, pos)->po_target;
 
-		return pl_get_shard(data, pos)->po_shard;
+		/*
+		 * Here should not return "pl_get_shard(data, pos)->po_shard",
+		 * because it possibly not equal to "pos" in pool extending.
+		 */
+		return pos;
 	}
 
 	/* If all the replicas are failed or in-rebuilding, then EIO. */

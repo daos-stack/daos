@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -286,8 +286,9 @@ dc_obj_verify_parse_sv(struct dc_obj_verify_args *dova, daos_obj_id_t oid,
 
 		if (cursor->type == OBJ_ITER_RECX) {
 			/* The value is either SV or EV, cannot be both. */
-			D_ERROR(DF_OID" akey %s misc SV and EV together.\n",
-				DP_OID(oid), (char *)iod->iod_name.iov_buf);
+			D_ERROR(DF_OID" akey "DF_KEY
+				" misc SV and EV together.\n",
+				DP_OID(oid), DP_KEY(&iod->iod_name));
 			return -DER_IO;
 		}
 
@@ -296,8 +297,9 @@ dc_obj_verify_parse_sv(struct dc_obj_verify_args *dova, daos_obj_id_t oid,
 			 * so there will be at most one SV rec can be returned
 			 * for an akey.
 			 */
-			D_ERROR(DF_OID" akey %s returned multiple SV recs.\n",
-				DP_OID(oid), (char *)iod->iod_name.iov_buf);
+			D_ERROR(DF_OID" akey "DF_KEY
+				" returned multiple SV recs.\n",
+				DP_OID(oid), DP_KEY(&iod->iod_name));
 			return -DER_IO;
 		}
 	} else {
@@ -341,8 +343,9 @@ dc_obj_verify_parse_sv(struct dc_obj_verify_args *dova, daos_obj_id_t oid,
 	}
 
 	if (data != cursor->ptr + dova->kds[idx].kd_key_len) {
-		D_ERROR(DF_OID" akey %s returned invalid SV rec, size %ld.\n",
-			DP_OID(oid), (char *)iod->iod_name.iov_buf,
+		D_ERROR(DF_OID" akey "DF_KEY
+			" returned invalid SV rec, size %ld.\n",
+			DP_OID(oid), DP_KEY(&iod->iod_name),
 			dova->kds[idx].kd_key_len);
 		return -DER_IO;
 	}
@@ -372,8 +375,9 @@ dc_obj_verify_parse_ev(struct dc_obj_verify_args *dova, daos_obj_id_t oid,
 
 		if (cursor->type == OBJ_ITER_SINGLE) {
 			/* The value is either SV or EV, cannot be both. */
-			D_ERROR(DF_OID" akey %s misc EV and SV together.\n",
-				DP_OID(oid), (char *)iod->iod_name.iov_buf);
+			D_ERROR(DF_OID" akey "DF_KEY
+				" misc EV and SV together.\n",
+				DP_OID(oid), DP_KEY(&iod->iod_name));
 			return -DER_IO;
 		}
 	} else {
@@ -400,18 +404,18 @@ dc_obj_verify_parse_ev(struct dc_obj_verify_args *dova, daos_obj_id_t oid,
 				return 1;
 			}
 
-			D_ERROR(DF_OID" akey %s contains multiple EV rec "
-				"size %ld/%lu\n",
-				DP_OID(oid), (char *)iod->iod_name.iov_buf,
+			D_ERROR(DF_OID" akey "DF_KEY
+				"contains multiple EV rec size %ld/%lu\n",
+				DP_OID(oid), DP_KEY(&iod->iod_name),
 				iod->iod_size, (unsigned long)rec->rec_size);
 			return -DER_IO;
 		}
 
 		tmp = i_recx->rx_idx + i_recx->rx_nr;
 		if (r_recx->rx_idx < tmp) {
-			D_ERROR(DF_OID" akey %s contains recs "
-				"overlap %lu/%lu/%lu\n",
-				DP_OID(oid), (char *)iod->iod_name.iov_buf,
+			D_ERROR(DF_OID" akey "DF_KEY
+				" contains recs overlap %lu/%lu/%lu\n",
+				DP_OID(oid), DP_KEY(&iod->iod_name),
 				(unsigned long)r_recx->rx_idx,
 				(unsigned long)i_recx->rx_idx,
 				(unsigned long)i_recx->rx_nr);
@@ -547,9 +551,6 @@ dc_obj_verify_cmp(struct dc_obj_verify_args *dova_a,
 		return 0;
 
 	if (!daos_key_match(&cur_a->dkey, &cur_b->dkey)) {
-		/* TODO: There are many cases of %s in this file but this is the
-		 * only one that is triggered in testing
-		 */
 		D_INFO(DF_OID" (reps %u, inconsistent) "
 			"shard %u has dkey "DF_KEY", but shard %u has dkey "DF_KEY".\n",
 			DP_OID(oid), reps,
@@ -563,11 +564,11 @@ dc_obj_verify_cmp(struct dc_obj_verify_args *dova_a,
 		return 0;
 
 	if (!daos_key_match(&cur_a->iod.iod_name, &cur_b->iod.iod_name)) {
-		D_INFO(DF_OID" (reps %u, inconsistent) "
-		       "shard %u has akey %s, but shard %u has akey %s.\n",
+		D_INFO(DF_OID" (reps %u, inconsistent) shard %u has akey "
+		       DF_KEY", but shard %u has akey "DF_KEY".\n",
 		       DP_OID(oid), reps,
-		       shard_a, (char *)cur_a->iod.iod_name.iov_buf,
-		       shard_b, (char *)cur_b->iod.iod_name.iov_buf);
+		       shard_a, DP_KEY(&cur_a->iod.iod_name),
+		       shard_b, DP_KEY(&cur_b->iod.iod_name));
 		return -DER_MISMATCH;
 	}
 

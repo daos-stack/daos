@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include <fuse3/fuse_lowlevel.h>
@@ -85,7 +68,8 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	DFUSE_TRA_INFO(fs_handle, "max write %#x", conn->max_write);
 	DFUSE_TRA_INFO(fs_handle, "readahead %#x", conn->max_readahead);
 
-	DFUSE_TRA_INFO(fs_handle, "Capability supported %#x", conn->capable);
+	DFUSE_TRA_INFO(fs_handle, "Capability supported by kernel %#x",
+		       conn->capable);
 
 	dfuse_show_flags(fs_handle, conn->capable);
 
@@ -124,6 +108,35 @@ df_ll_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 
 	parent_inode->ie_dfs->dfs_ops->create(req, parent_inode, name, mode,
 					      fi);
+
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+	return;
+err:
+	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+}
+
+void
+df_ll_mknod(fuse_req_t req, fuse_ino_t parent, const char *name,
+	    mode_t mode, dev_t rdev)
+{
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*parent_inode;
+	d_list_t			*rlink;
+	int				rc;
+
+	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &parent, sizeof(parent));
+	if (!rlink) {
+		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu",
+				parent);
+		D_GOTO(err, rc = ENOENT);
+	}
+
+	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+	if (!parent_inode->ie_dfs->dfs_ops->mknod)
+		D_GOTO(err, rc = ENOTSUP);
+
+	parent_inode->ie_dfs->dfs_ops->mknod(req, parent_inode, name, mode);
 
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	return;
@@ -250,10 +263,11 @@ df_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 
 	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	if (!parent_inode->ie_dfs->dfs_ops->mkdir)
+	if (!parent_inode->ie_dfs->dfs_ops->mknod)
 		D_GOTO(decref, rc = ENOTSUP);
 
-	parent_inode->ie_dfs->dfs_ops->mkdir(req, parent_inode,	name, mode);
+	parent_inode->ie_dfs->dfs_ops->mknod(req, parent_inode, name,
+					     mode | S_IFDIR);
 
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	return;
@@ -627,7 +641,7 @@ dfuse_fuse_destroy(void *userdata)
 /* dfuse ops that are used for accessing dfs mounts */
 struct dfuse_inode_ops dfuse_dfs_ops = {
 	.lookup		= dfuse_cb_lookup,
-	.mkdir		= dfuse_cb_mkdir,
+	.mknod		= dfuse_cb_mknod,
 	.opendir	= dfuse_cb_opendir,
 	.releasedir	= dfuse_cb_releasedir,
 	.getattr	= dfuse_cb_getattr,
@@ -646,7 +660,7 @@ struct dfuse_inode_ops dfuse_dfs_ops = {
 
 struct dfuse_inode_ops dfuse_cont_ops = {
 	.lookup		= dfuse_cont_lookup,
-	.mkdir		= dfuse_cont_mkdir,
+	.mknod		= dfuse_cont_mknod,
 	.statfs		= dfuse_cb_statfs,
 };
 
@@ -675,6 +689,7 @@ struct fuse_lowlevel_ops
 	fuse_ops->rmdir		= df_ll_unlink;
 	fuse_ops->readdir	= df_ll_readdir;
 	fuse_ops->create	= df_ll_create;
+	fuse_ops->mknod		= df_ll_mknod;
 	fuse_ops->rename	= df_ll_rename;
 	fuse_ops->symlink	= df_ll_symlink;
 	fuse_ops->setxattr	= df_ll_setxattr;

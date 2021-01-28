@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -373,6 +373,9 @@ dtx_add_cos(struct ds_cont_child *cont, struct dtx_entry *dte,
 	d_iov_t				riov;
 	int				rc;
 
+	if (cont->sc_cos_shutdown)
+		return -DER_SHUTDOWN;
+
 	D_ASSERT(dte->dte_mbs != NULL);
 	D_ASSERT(epoch != DAOS_EPOCH_MAX);
 
@@ -388,9 +391,10 @@ dtx_add_cos(struct ds_cont_child *cont, struct dtx_entry *dte,
 	rc = dbtree_upsert(cont->sc_dtx_cos_hdl, BTR_PROBE_EQ,
 			   DAOS_INTENT_UPDATE, &kiov, &riov);
 
-	D_DEBUG(DB_IO, "Insert DTX "DF_DTI" to CoS cache, key %lu, "
-		"flags %x: rc = "DF_RC"\n", DP_DTI(&dte->dte_xid),
-		(unsigned long)dkey_hash, flags, DP_RC(rc));
+	D_CDEBUG(rc != 0, DLOG_ERR, DB_IO, "Insert DTX "DF_DTI" to CoS "
+		 "cache, "DF_UOID", key %lu, flags %x: rc = "DF_RC"\n",
+		 DP_DTI(&dte->dte_xid), DP_UOID(*oid), (unsigned long)dkey_hash,
+		 flags, DP_RC(rc));
 
 	return rc;
 }
@@ -413,15 +417,8 @@ dtx_del_cos(struct ds_cont_child *cont, struct dtx_id *xid,
 	d_iov_set(&riov, NULL, 0);
 
 	rc = dbtree_lookup(cont->sc_dtx_cos_hdl, &kiov, &riov);
-	if (rc != 0) {
-		if (rc == -DER_NONEXIST)
-			return 0;
-
-		D_ERROR("Fail to remove "DF_DTI" from CoS cache: %d\n",
-			DP_DTI(xid), rc);
-
-		return rc;
-	}
+	if (rc != 0)
+		goto out;
 
 	dcr = (struct dtx_cos_rec *)riov.iov_buf;
 
@@ -471,19 +468,21 @@ dtx_del_cos(struct ds_cont_child *cont, struct dtx_id *xid,
 	}
 
 out:
-	if (found > 0) {
-		if (dcr->dcr_reg_count == 0 && dcr->dcr_prio_count == 0 &&
-		    dcr->dcr_expcmt_count == 0)
-			rc = dbtree_delete(cont->sc_dtx_cos_hdl, BTR_PROBE_EQ,
-					   &kiov, NULL);
+	if (found > 0 && dcr->dcr_reg_count == 0 && dcr->dcr_prio_count == 0 &&
+	    dcr->dcr_expcmt_count == 0)
+		rc = dbtree_delete(cont->sc_dtx_cos_hdl, BTR_PROBE_EQ,
+				   &kiov, NULL);
 
-		D_CDEBUG(rc != 0, DLOG_ERR, DB_IO, "Remove DTX "DF_DTI" from "
-			 "CoS cache, key %lu, %s shared entry: rc = "DF_RC"\n",
-			 DP_DTI(xid), (unsigned long)dkey_hash,
-			 found == 1 ? "has" : "has not", DP_RC(rc));
-	}
+	if (rc == 0 && found == 0)
+		rc = -DER_NONEXIST;
 
-	return rc;
+	D_CDEBUG(rc != 0 && rc != -DER_NONEXIST, DLOG_ERR, DB_IO,
+		 "Remove DTX "DF_DTI" from CoS "
+		 "cache, "DF_UOID", key %lu, %s shared entry: rc = "DF_RC"\n",
+		 DP_DTI(xid), DP_UOID(*oid), (unsigned long)dkey_hash,
+		 found == 1 ? "has" : "has not", DP_RC(rc));
+
+	return rc == -DER_NONEXIST ? 0 : rc;
 }
 
 uint64_t

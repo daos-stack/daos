@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package control
@@ -34,6 +17,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -67,7 +51,7 @@ func TestControl_StartRanks(t *testing.T) {
 			uResps: []*HostResponse{
 				{
 					Addr:    "host1",
-					Message: &mgmtpb.RanksResp{},
+					Message: &mgmtpb.SystemStartResp{},
 				},
 			},
 			expResp: &RanksResp{},
@@ -76,8 +60,8 @@ func TestControl_StartRanks(t *testing.T) {
 			uResps: []*HostResponse{
 				{
 					Addr: "host1",
-					Message: &mgmtpb.RanksResp{
-						Results: []*mgmtpb.RanksResp_RankResult{
+					Message: &mgmtpb.SystemStartResp{
+						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Action: "start",
 								State: uint32(system.MemberStateReady),
@@ -91,8 +75,8 @@ func TestControl_StartRanks(t *testing.T) {
 				},
 				{
 					Addr: "host2",
-					Message: &mgmtpb.RanksResp{
-						Results: []*mgmtpb.RanksResp_RankResult{
+					Message: &mgmtpb.SystemStartResp{
+						Results: []*sharedpb.RankResult{
 							{
 								Rank: 2, Action: "start",
 								State: uint32(system.MemberStateReady),
@@ -169,7 +153,7 @@ func TestControl_PrepShutdownRanks(t *testing.T) {
 			uResps: []*HostResponse{
 				{
 					Addr:    "host1",
-					Message: &mgmtpb.RanksResp{},
+					Message: &mgmtpb.SystemStartResp{},
 				},
 			},
 			expResp: &RanksResp{},
@@ -178,8 +162,8 @@ func TestControl_PrepShutdownRanks(t *testing.T) {
 			uResps: []*HostResponse{
 				{
 					Addr: "host1",
-					Message: &mgmtpb.RanksResp{
-						Results: []*mgmtpb.RanksResp_RankResult{
+					Message: &mgmtpb.SystemStopResp{
+						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Action: "prep shutdown",
 								State: uint32(system.MemberStateStopping),
@@ -193,8 +177,8 @@ func TestControl_PrepShutdownRanks(t *testing.T) {
 				},
 				{
 					Addr: "host2",
-					Message: &mgmtpb.RanksResp{
-						Results: []*mgmtpb.RanksResp_RankResult{
+					Message: &mgmtpb.SystemStopResp{
+						Results: []*sharedpb.RankResult{
 							{
 								Rank: 2, Action: "prep shutdown",
 								State: uint32(system.MemberStateStopping),
@@ -271,7 +255,7 @@ func TestControl_StopRanks(t *testing.T) {
 			uResps: []*HostResponse{
 				{
 					Addr:    "host1",
-					Message: &mgmtpb.RanksResp{},
+					Message: &mgmtpb.SystemStartResp{},
 				},
 			},
 			expResp: &RanksResp{},
@@ -280,8 +264,8 @@ func TestControl_StopRanks(t *testing.T) {
 			uResps: []*HostResponse{
 				{
 					Addr: "host1",
-					Message: &mgmtpb.RanksResp{
-						Results: []*mgmtpb.RanksResp_RankResult{
+					Message: &mgmtpb.SystemStopResp{
+						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Action: "stop",
 								State: uint32(system.MemberStateStopped),
@@ -295,8 +279,8 @@ func TestControl_StopRanks(t *testing.T) {
 				},
 				{
 					Addr: "host2",
-					Message: &mgmtpb.RanksResp{
-						Results: []*mgmtpb.RanksResp_RankResult{
+					Message: &mgmtpb.SystemStopResp{
+						Results: []*sharedpb.RankResult{
 							{
 								Rank: 2, Action: "stop",
 								State: uint32(system.MemberStateStopped),
@@ -373,7 +357,7 @@ func TestControl_PingRanks(t *testing.T) {
 			uResps: []*HostResponse{
 				{
 					Addr:    "host1",
-					Message: &mgmtpb.RanksResp{},
+					Message: &ctlpb.RanksResp{},
 				},
 			},
 			expResp: &RanksResp{},
@@ -382,8 +366,8 @@ func TestControl_PingRanks(t *testing.T) {
 			uResps: []*HostResponse{
 				{
 					Addr: "host1",
-					Message: &mgmtpb.RanksResp{
-						Results: []*mgmtpb.RanksResp_RankResult{
+					Message: &ctlpb.RanksResp{
+						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Action: "ping",
 								State: uint32(system.MemberStateReady),
@@ -397,8 +381,8 @@ func TestControl_PingRanks(t *testing.T) {
 				},
 				{
 					Addr: "host2",
-					Message: &mgmtpb.RanksResp{
-						Results: []*mgmtpb.RanksResp_RankResult{
+					Message: &ctlpb.RanksResp{
+						Results: []*sharedpb.RankResult{
 							{
 								Rank: 2, Action: "ping",
 								State: uint32(system.MemberStateReady),
@@ -587,7 +571,7 @@ func TestControl_SystemQuery(t *testing.T) {
 		"request absent host set": {
 			req: testReqHS,
 			uResp: MockMSResponse("0.0.0.0", nil,
-				&ctlpb.SystemQueryResp{
+				&mgmtpb.SystemQueryResp{
 					Absenthosts: "foo-[1-23]",
 				}),
 			expResp: testRespHS,
@@ -595,7 +579,7 @@ func TestControl_SystemQuery(t *testing.T) {
 		"request absent rank set": {
 			req: testReqRS,
 			uResp: MockMSResponse("0.0.0.0", nil,
-				&ctlpb.SystemQueryResp{
+				&mgmtpb.SystemQueryResp{
 					Absentranks: "1-23",
 				}),
 			expResp: testRespRS,
@@ -603,8 +587,8 @@ func TestControl_SystemQuery(t *testing.T) {
 		"dual host dual rank": {
 			req: new(SystemQueryReq),
 			uResp: MockMSResponse("10.0.0.1:10001", nil,
-				&ctlpb.SystemQueryResp{
-					Members: []*ctlpb.SystemMember{
+				&mgmtpb.SystemQueryResp{
+					Members: []*mgmtpb.SystemMember{
 						{
 							Rank:        1,
 							Uuid:        common.MockUUID(1),
@@ -712,7 +696,7 @@ func TestControl_SystemStart(t *testing.T) {
 		"request absent host set": {
 			req: testReqHS,
 			uResp: MockMSResponse("0.0.0.0", nil,
-				&ctlpb.SystemStartResp{
+				&mgmtpb.SystemStartResp{
 					Absenthosts: "foo-[1-23]",
 				}),
 			expResp: testRespHS,
@@ -720,7 +704,7 @@ func TestControl_SystemStart(t *testing.T) {
 		"request absent rank set": {
 			req: testReqRS,
 			uResp: MockMSResponse("0.0.0.0", nil,
-				&ctlpb.SystemStartResp{
+				&mgmtpb.SystemStartResp{
 					Absentranks: "1-23",
 				}),
 			expResp: testRespRS,
@@ -728,8 +712,8 @@ func TestControl_SystemStart(t *testing.T) {
 		"dual host dual rank": {
 			req: new(SystemStartReq),
 			uResp: MockMSResponse("10.0.0.1:10001", nil,
-				&ctlpb.SystemStartResp{
-					Results: []*ctlpb.RankResult{
+				&mgmtpb.SystemStartResp{
+					Results: []*sharedpb.RankResult{
 						{
 							Rank:  1,
 							State: uint32(MemberStateReady),
@@ -825,7 +809,7 @@ func TestControl_SystemStop(t *testing.T) {
 		"request absent host set": {
 			req: testReqHS,
 			uResp: MockMSResponse("0.0.0.0", nil,
-				&ctlpb.SystemStopResp{
+				&mgmtpb.SystemStopResp{
 					Absenthosts: "foo-[1-23]",
 				}),
 			expResp: testRespHS,
@@ -833,7 +817,7 @@ func TestControl_SystemStop(t *testing.T) {
 		"request absent rank set": {
 			req: testReqRS,
 			uResp: MockMSResponse("0.0.0.0", nil,
-				&ctlpb.SystemStopResp{
+				&mgmtpb.SystemStopResp{
 					Absentranks: "1-23",
 				}),
 			expResp: testRespRS,
@@ -841,8 +825,8 @@ func TestControl_SystemStop(t *testing.T) {
 		"dual host dual rank": {
 			req: new(SystemStopReq),
 			uResp: MockMSResponse("10.0.0.1:10001", nil,
-				&ctlpb.SystemStopResp{
-					Results: []*ctlpb.RankResult{
+				&mgmtpb.SystemStopResp{
+					Results: []*sharedpb.RankResult{
 						{
 							Rank:  1,
 							State: uint32(MemberStateReady),
@@ -926,8 +910,8 @@ func TestControl_SystemReformat(t *testing.T) {
 		"no results": {
 			req: new(SystemResetFormatReq),
 			uResp: MockMSResponse("10.0.0.1:10001", nil,
-				&ctlpb.SystemResetFormatResp{
-					Results: []*ctlpb.RankResult{},
+				&mgmtpb.SystemResetFormatResp{
+					Results: []*sharedpb.RankResult{},
 				},
 			),
 			// indicates SystemReformat internally proceeded to invoke StorageFormat RPCs
@@ -937,8 +921,8 @@ func TestControl_SystemReformat(t *testing.T) {
 		"single host dual rank": {
 			req: new(SystemResetFormatReq),
 			uResp: MockMSResponse("10.0.0.1:10001", nil,
-				&ctlpb.SystemResetFormatResp{
-					Results: []*ctlpb.RankResult{
+				&mgmtpb.SystemResetFormatResp{
+					Results: []*sharedpb.RankResult{
 						{
 							Rank: 1, Action: "reset format",
 							State: uint32(MemberStateAwaitFormat),
@@ -959,8 +943,8 @@ func TestControl_SystemReformat(t *testing.T) {
 		"single host dual rank one failed": {
 			req: new(SystemResetFormatReq),
 			uResp: MockMSResponse("10.0.0.1:10001", nil,
-				&ctlpb.SystemResetFormatResp{
-					Results: []*ctlpb.RankResult{
+				&mgmtpb.SystemResetFormatResp{
+					Results: []*sharedpb.RankResult{
 						{
 							Rank: 1, Action: "reset format",
 							State:   uint32(MemberStateStopped),
@@ -986,8 +970,8 @@ func TestControl_SystemReformat(t *testing.T) {
 		"multiple hosts dual rank mixed results": {
 			req: new(SystemResetFormatReq),
 			uResp: MockMSResponse("10.0.0.1:10001", nil,
-				&ctlpb.SystemResetFormatResp{
-					Results: []*ctlpb.RankResult{
+				&mgmtpb.SystemResetFormatResp{
+					Results: []*sharedpb.RankResult{
 						{
 							Rank: 1, Action: "reset format",
 							State:   uint32(MemberStateStopped),
@@ -1070,7 +1054,7 @@ func TestControl_SystemReformat(t *testing.T) {
 }
 
 func TestControl_SystemNotify(t *testing.T) {
-	rasEventRankExit := events.NewRankExitEvent("foo", 0, 0, common.NormalExit)
+	rasEventRankDown := events.NewRankDownEvent("foo", 0, 0, common.NormalExit)
 
 	for name, tc := range map[string]struct {
 		req     *SystemNotifyReq
@@ -1088,12 +1072,12 @@ func TestControl_SystemNotify(t *testing.T) {
 			expErr: errors.New("nil event in request"),
 		},
 		"zero sequence number": {
-			req:    &SystemNotifyReq{Event: rasEventRankExit},
+			req:    &SystemNotifyReq{Event: rasEventRankDown},
 			expErr: errors.New("invalid sequence"),
 		},
 		"local failure": {
 			req: &SystemNotifyReq{
-				Event:    rasEventRankExit,
+				Event:    rasEventRankDown,
 				Sequence: 1,
 			},
 			uErr:   errors.New("local failed"),
@@ -1101,7 +1085,7 @@ func TestControl_SystemNotify(t *testing.T) {
 		},
 		"remote failure": {
 			req: &SystemNotifyReq{
-				Event:    rasEventRankExit,
+				Event:    rasEventRankDown,
 				Sequence: 1,
 			},
 			uResp:  MockMSResponse("host1", errors.New("remote failed"), nil),
@@ -1109,10 +1093,10 @@ func TestControl_SystemNotify(t *testing.T) {
 		},
 		"empty response": {
 			req: &SystemNotifyReq{
-				Event:    rasEventRankExit,
+				Event:    rasEventRankDown,
 				Sequence: 1,
 			},
-			uResp:   MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.ClusterEventResp{}),
+			uResp:   MockMSResponse("10.0.0.1:10001", nil, &sharedpb.ClusterEventResp{}),
 			expResp: &SystemNotifyResp{},
 		},
 	} {
@@ -1139,11 +1123,11 @@ func TestControl_SystemNotify(t *testing.T) {
 }
 
 func TestControl_EventForwarder_OnEvent(t *testing.T) {
-	rasEventRankExit := events.NewRankExitEvent("foo", 0, 0, common.NormalExit)
+	rasEventRankDown := events.NewRankDownEvent("foo", 0, 0, common.NormalExit)
 
 	for name, tc := range map[string]struct {
 		aps            []string
-		event          events.Event
+		event          *events.RASEvent
 		nilClient      bool
 		expInvokeCount int
 		expErr         error
@@ -1152,28 +1136,39 @@ func TestControl_EventForwarder_OnEvent(t *testing.T) {
 			event: nil,
 		},
 		"missing access points": {
-			event: rasEventRankExit,
+			event: rasEventRankDown,
 		},
 		"successful forward": {
-			event:          rasEventRankExit,
+			event:          rasEventRankDown,
 			aps:            []string{"192.168.1.1"},
-			expInvokeCount: 1,
+			expInvokeCount: 2,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
+			expNextSeq := uint64(tc.expInvokeCount + 1)
+
 			mi := NewMockInvoker(log, &MockInvokerConfig{})
 			if tc.nilClient {
 				mi = nil
 			}
 
+			callCount := tc.expInvokeCount
+			if callCount == 0 {
+				callCount++ // call at least once
+			}
+
 			ef := NewEventForwarder(mi, tc.aps)
-			ef.OnEvent(context.TODO(), tc.event)
+			for i := 0; i < callCount; i++ {
+				ef.OnEvent(context.TODO(), tc.event)
+			}
 
 			common.AssertEqual(t, tc.expInvokeCount, mi.invokeCount,
 				"unexpected number of rpc calls")
+			common.AssertEqual(t, expNextSeq, <-ef.seq,
+				"unexpected next forwarding sequence")
 		})
 	}
 }
