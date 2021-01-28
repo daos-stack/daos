@@ -280,6 +280,9 @@ class DaosServerManager(SubprocessManager):
         "OFI_PORT": "fabric_iface_port",
     }
 
+    # Defined in telemetry_common.h
+    D_TM_SHARED_MEMORY_KEY=0x10242048
+
     def __init__(self, server_command, manager="Orterun", dmg_cfg=None):
         """Initialize a DaosServerManager object.
 
@@ -373,8 +376,8 @@ class DaosServerManager(SubprocessManager):
             verbose (bool, optional): display clean commands. Defaults to True.
         """
         clean_cmds = []
-        NUM_IO_SERVERS = 2
-        for server_params in self.manager.job.yaml.server_params:
+        for index, server_params in \
+                enumerate(self.manager.job.yaml.server_params):
             scm_mount = server_params.get_value("scm_mount")
             self.log.info("Cleaning up the %s directory.", str(scm_mount))
 
@@ -383,12 +386,9 @@ class DaosServerManager(SubprocessManager):
             if cmd not in clean_cmds:
                 clean_cmds.append(cmd)
 
-            # Remove the shared memory segment associated with each io server
-            for srv_idx in range(NUM_IO_SERVERS):
-                key = 0x10242048 + srv_idx
-                cmd = "sudo ipcrm -M {}".format(key)
-                clean_cmds.append(cmd)
-                self.log.info("Cleaning up shmem segment: {}".format(cmd))
+            # Remove the shared memory segment associated with this io server
+            cmd = "sudo ipcrm -M {}".format(self.D_TM_SHARED_MEMORY_KEY + index)
+            clean_cmds.append(cmd)
 
             # Dismount the scm mount point
             cmd = "while sudo umount {}; do continue; done".format(scm_mount)
