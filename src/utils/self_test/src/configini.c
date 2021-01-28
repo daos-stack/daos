@@ -333,6 +333,49 @@ int ConfigGetKeyCount(const Config *cfg, const char *section)
 	return sect->numofkv;
 }
 
+/**
+ * \brief	      ConfigGetKeys - returns an array of character pointers
+ *		      to keys of a section
+ *
+ * \warning	      The pointers returned are pointers into the sections.
+ *		      The character strings they point to cannot be modified.
+ *		      Once the section is removed, they are no longer valid.
+ *
+ * \param cfg	      config handle
+ * \param section     section name to print
+ * \param array	      output array of char * key pointers
+ * \param max	      array size
+ *
+ * \return	      Number of pointers in array..
+ */
+int ConfigGetKeys(const Config *cfg, const char *section,
+		  char **array, int max_size)
+{
+	ConfigSection  *sect = NULL;
+	ConfigKeyValue *kv   = NULL;
+	int		number = 0;
+
+	if (max_size <= 0)
+		return 0;
+
+	TAILQ_FOREACH(sect, &cfg->sect_list, next) {
+		/* Locate the section specified */
+		if (((section == NULL) && (sect->name == NULL)) ||
+		    ((sect->name != NULL) && (section != NULL) &&
+		     strcmp(sect->name, section) == 0)) {
+
+			/* Section found, asign address */
+			TAILQ_FOREACH(kv, &sect->kv_list, next) {
+				array[number] = kv->key;
+				number++;
+				if (number == max_size)
+					return number;
+			}
+		}
+	}
+	return number;
+}
+
 /*
  * /////////////////////////////////////////////////////////////////////
  * /////////////////////////////////////////////////////////////////////
@@ -607,15 +650,15 @@ ConfigRet ConfigReadBool(const Config *cfg, const char *section,
  */
 
 /**
- * \brief	      ConfigAddSection() creates a section in the cfg
+ * \brief	  _ConfigAddSection() creates a section in the cfg
  *
  * \param cfg	  config handle
- * \param section      section to add
- * \param sect	 pointer to added ConfigSection* or NULL if not needed
+ * \param section section to add
+ * \param sect	  pointer to added ConfigSection* or NULL if not needed
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-static ConfigRet ConfigAddSection(Config *cfg, const char *section,
+static ConfigRet _ConfigAddSection(Config *cfg, const char *section,
 				  ConfigSection **sect)
 {
 	ConfigSection *_sect = NULL;
@@ -651,6 +694,21 @@ static ConfigRet ConfigAddSection(Config *cfg, const char *section,
 }
 
 /**
+ * \brief	  ConfigAddSection() creates a section in the cfg
+ *
+ * \param cfg	  config handle
+ * \param section section to add
+ *
+ * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
+ */
+ConfigRet ConfigAddSection(Config *cfg, const char *section)
+{
+	ConfigRet      ret   = CONFIG_OK;
+
+	ret = _ConfigAddSection(cfg, section, NULL);
+	return ret;
+}
+/**
  * \brief	      ConfigAddString() adds the key with string value to
  *		     the cfg
  *
@@ -673,7 +731,7 @@ ConfigRet ConfigAddString(Config *cfg, const char *section, const char *key,
 	if (!cfg || !key || !value)
 		return CONFIG_ERR_INVALID_PARAM;
 
-	ret = ConfigAddSection(cfg, section, &sect);
+	ret = _ConfigAddSection(cfg, section, &sect);
 	if (ret != CONFIG_OK)
 		return ret;
 
@@ -932,7 +990,7 @@ Config *ConfigNew()
 	TAILQ_INIT(&cfg->sect_list);
 
 	/* add default section */
-	if (ConfigAddSection(cfg, CONFIG_SECTION_FLAT, NULL) != CONFIG_OK) {
+	if (_ConfigAddSection(cfg, CONFIG_SECTION_FLAT, NULL) != CONFIG_OK) {
 		free(cfg);
 		return NULL;
 	}
@@ -1153,7 +1211,7 @@ ConfigRet ConfigRead(FILE *fp, Config **cfg)
 			if (ret != CONFIG_OK)
 				goto error;
 
-			ret = ConfigAddSection(_cfg, section, &sect);
+			ret = _ConfigAddSection(_cfg, section, &sect);
 			if (ret != CONFIG_OK)
 				goto error;
 		} else {
@@ -1258,9 +1316,12 @@ ConfigRet ConfigPrintSection(const Config *cfg, FILE *stream, char *section)
 		return CONFIG_ERR_INVALID_PARAM;
 
 	TAILQ_FOREACH(sect, &cfg->sect_list, next) {
+		/* Locate the section specified */
 		if (((section == NULL) && (sect->name == NULL)) ||
 		    ((sect->name != NULL) && (section != NULL) &&
 		     strcmp(sect->name, section) == 0)) {
+
+			/* Section found, print info */
 			if (sect->name)
 				fprintf(stream, "[%s]\n", sect->name);
 

@@ -1,0 +1,38 @@
+
+#Default scaling factor as percentage.
+[scale]
+all=10
+bw=11
+throughput=12
+min=13
+max=14
+med25=15
+med75=16
+sd=17
+av=18
+
+#Base default values
+[default_values]
+min=7000
+max=3000
+med25=1500
+med50=1600
+med75=1800 
+av=1650
+sd=4000
+bw=1000
+throughput=400
+
+#Expected test values for:
+[align_4k_inFlight_16_size_1M_B]
+min=7600
+max=3200
+med25=1500
+med50=1600
+med75=1800 
+av=1600
+sd=4500
+bw=1100
+tp=460
+
+

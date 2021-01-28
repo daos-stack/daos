@@ -33,9 +33,14 @@
 #include "configini.h"
 #include "daos_errno.h"
 
+#define MASTER_VALUE_SIZE			64
+#define DEFAULT_SCALE_NAME			"scale"
+#define DEFAULT_VALUE_NAME			"default_values"
+#define INVALID_SCALING				-1.0
+#define MAX_NUMBER_KEYS				200
+
 #define CRT_SELF_TEST_AUTO_BULK_THRESH		(1 << 20)
 #define CRT_SELF_TEST_GROUP_NAME		("crt_self_test")
-
 struct st_size_params {
 	uint32_t send_size;
 	uint32_t reply_size;
@@ -60,16 +65,56 @@ struct st_master_endpt {
 	int32_t test_completed;
 };
 
-static const char * const crt_st_msg_type_str[] = { "EMPTY",
-						     "IOV",
-						    "BULK_PUT",
-						    "BULK_GET" };
+const struct {
+	char identifier;
+	char *short_name;
+	char *long_name;
+	enum crt_st_msg_type type;
+} transfer_type_map[] = {{'e', "E", "EMPTY", CRT_SELF_TEST_MSG_TYPE_EMPTY},
+			 {'i', "I", "IOV", CRT_SELF_TEST_MSG_TYPE_IOV},
+			 {'b', "Bp", "BULK_PUT",
+			  CRT_SELF_TEST_MSG_TYPE_BULK_PUT},
+			 {'r', "Bg", "BULK_GET",
+			  CRT_SELF_TEST_MSG_TYPE_BULK_GET} };
+
+#define MSG_TYPE_STR(str, id)					\
+	{	\
+	int _i;	\
+	for (_i = 0; _i < 4; _i++) {				\
+		if (id == transfer_type_map[_i].type) {		\
+			str =  transfer_type_map[_i].long_name;	\
+			break;					\
+		}						\
+	}	\
+	}
+
+#define	TST_HIGH	0x01	/* test in higher direction */
+#define	TST_LOW		0x02	/* test in lower direction */
+#define TST_OUTPUT	0x10	/* print results */
+typedef struct {
+	char	*name;
+	int	 value;
+	float	 scale;
+	int	 flag;
+	char	*description;
+} status_feature;
+
+static status_feature status[] = {
+	{"av", 0, 0, TST_HIGH | TST_LOW | TST_OUTPUT, "Averages"},
+	{"sd", 0, 0, TST_HIGH | TST_LOW | TST_OUTPUT, "Standard Deviations"},
+	{"bw", 0, 0, TST_HIGH | TST_LOW | TST_OUTPUT, "Bandwidth"},
+	{"min", 0, 0, TST_LOW | TST_OUTPUT, "Minimum"},
+	{"med25", 0, 0, TST_HIGH | TST_LOW | TST_OUTPUT, "Medium 25"},
+	{"med50", 0, 0, TST_HIGH | TST_LOW | TST_OUTPUT, "Medium 50"},
+	{"med75", 0, 0, TST_HIGH | TST_LOW | TST_OUTPUT, "Medium 75"},
+	{"max", 0, 0, TST_HIGH | TST_OUTPUT, "Maximum"},
+};
 
 /* User input maximum values */
-#define SELF_TEST_MAX_REPETITIONS (0x40000000)
-#define SELF_TEST_MAX_INFLIGHT (0x40000000)
-#define SELF_TEST_MAX_LIST_STR_LEN (1 << 16)
-#define SELF_TEST_MAX_NUM_ENDPOINTS (UINT32_MAX)
+#define SELF_TEST_MAX_REPETITIONS	(0x40000000)
+#define SELF_TEST_MAX_INFLIGHT		(0x40000000)
+#define SELF_TEST_MAX_LIST_STR_LEN	(1 << 16)
+#define SELF_TEST_MAX_NUM_ENDPOINTS	(UINT32_MAX)
 
 /* Global shutdown flag, used to terminate the progress thread */
 static int		g_shutdown_flag;
@@ -87,14 +132,53 @@ int			 g_rep_count;
 int			 g_max_inflight;
 int16_t			 g_buf_alignment =
 				CRT_ST_BUF_ALIGN_DEFAULT;
+float			 g_scale_factor = INVALID_SCALING;
 int			 g_output_megabits;
 char			*g_attach_info_path;
+char			*g_expected_outfile;
+char			*g_expected_infile;
+char			*g_expected_results;
 
 const int		 g_default_max_inflight = 1000;
 bool			 alloc_g_dest_name = true;
 bool			 alloc_g_msg_sizes_str;
 bool			 alloc_g_attach_info_path = true;
+bool			 alloc_g_expected_outfile;
+bool			 alloc_g_expected_infile;
+bool			 alloc_g_expected_results;
 
+Config			*cfg_output = NULL;
+
+static struct option long_options[] = {
+	{"file-name", required_argument, 0, 'f'},
+	{"config", required_argument, 0, 'c'},
+	{"display", required_argument, 0, 'd'},
+
+	{"group-name", required_argument, 0, 'g'},
+	{"master-endpoint", required_argument, 0, 'm'},
+	{"endpoint", required_argument, 0, 'e'},
+	{"message-sizes", required_argument, 0, 's'},
+	{"repetitions-per-size", required_argument, 0, 'r'},
+	{"max-inflight-rpcs", required_argument, 0, 'i'},
+	{"align", required_argument, 0, 'a'},
+	{"Mbits", no_argument, 0, 'b'},
+	{"singleton", no_argument, 0, 't'},
+	{"randomize-endpoints", no_argument, 0, 'q'},
+	{"path", required_argument, 0, 'p'},
+	{"nopmix", no_argument, 0, 'n'},
+	{"help", no_argument, 0, 'h'},
+	{"expected-threshold", required_argument, 0, 'w'},
+	{"expected-results", required_argument, 0, 'x'},
+	{"expected-input", required_argument, 0, 'y'},
+	{"expected-output", required_argument, 0, 'z'},
+	{0, 0, 0, 0}
+};
+
+/* Default parameters */
+char	default_msg_sizes_str[] =
+	"b200000,b200000 0,0 b200000,b200000 i1000,i1000 b200000,"
+	"i1000,i1000 0,0 i1000,0";
+/* ********************************************* */
 static void *progress_fn(void *arg)
 {
 	int		ret;
@@ -334,9 +418,9 @@ static void print_fail_counts(struct st_latency *latencies,
 		    latencies[last_err_idx].cci_rc !=
 		    latencies[local_rep].cci_rc) {
 			printf("%s%u: -%s (%d)\n", prefix,
-			       local_rep - last_err_idx,
-			       d_errstr(-latencies[last_err_idx].cci_rc),
-			       latencies[last_err_idx].cci_rc);
+				local_rep - last_err_idx,
+				d_errstr(-latencies[last_err_idx].cci_rc),
+				latencies[last_err_idx].cci_rc);
 			last_err_idx = local_rep;
 		}
 
@@ -351,7 +435,8 @@ static void print_fail_counts(struct st_latency *latencies,
 
 static void print_results(struct st_latency *latencies,
 			  struct crt_st_start_params *test_params,
-			  int64_t test_duration_ns, int output_megabits)
+			  int64_t test_duration_ns, int output_megabits,
+			  Config *cfg, char *section_name)
 {
 	uint32_t	 local_rep;
 	uint32_t	 num_failed = 0;
@@ -382,10 +467,16 @@ static void print_results(struct st_latency *latencies,
 		printf("\tRPC Bandwidth (MB/sec): %.2f\n",
 		       bandwidth / (1024.0F * 1024.0F));
 	printf("\tRPC Throughput (RPCs/sec): %.0f\n", throughput);
+	ConfigAddInt(cfg, section_name, "bw", bandwidth / (1024.0F * 1024.0F));
 
 	/* Figure out how many repetitions were errors */
 	num_failed = 0;
-	for (local_rep = 0; local_rep < test_params->rep_count; local_rep++)
+	for (local_rep = 0; local_rep < test_params->rep_count; local_rep++) {
+#ifdef PRINT_ALL
+		printf(" New SAB: iteration %3d: latenct %10ld\n",
+		       local_rep, latencies[local_rep].val);
+#endif
+
 		if (latencies[local_rep].cci_rc < 0) {
 			num_failed++;
 
@@ -398,6 +489,7 @@ static void print_results(struct st_latency *latencies,
 			 */
 			latencies[local_rep].val = -1;
 		}
+	}
 
 	/*
 	 * Compute number successful and exit early if none worked to
@@ -420,11 +512,13 @@ static void print_results(struct st_latency *latencies,
 	      sizeof(latencies[0]), st_compare_latencies_by_vals);
 
 	/* Compute average and standard deviation of all results */
+	/* Talk to Alex, should devide by num_passed ?? */
 	latency_avg = 0;
 	for (local_rep = num_failed; local_rep < test_params->rep_count;
-	     local_rep++)
+	     local_rep++){
 		latency_avg += latencies[local_rep].val;
-	latency_avg /= test_params->rep_count;
+	}
+	latency_avg /= num_passed;
 
 	latency_std_dev = 0;
 	for (local_rep = num_failed; local_rep < test_params->rep_count;
@@ -450,6 +544,18 @@ static void print_results(struct st_latency *latencies,
 	       latencies[num_failed + num_passed * 3/4].val / 1000,
 	       latencies[test_params->rep_count - 1].val / 1000,
 	       latency_avg / 1000, latency_std_dev / 1000);
+	ConfigAddInt(cfg, section_name, "min",
+		     latencies[num_failed].val / 1000);
+	ConfigAddInt(cfg, section_name, "med25",
+		     latencies[num_failed + num_passed / 4].val / 1000);
+	ConfigAddInt(cfg, section_name, "med50",
+		     latencies[num_failed + num_passed / 2].val / 1000);
+	ConfigAddInt(cfg, section_name, "med75",
+		     latencies[num_failed + num_passed * 3/4].val / 1000);
+	ConfigAddInt(cfg, section_name, "max",
+		     latencies[test_params->rep_count - 1].val / 1000);
+	ConfigAddInt(cfg, section_name, "av", latency_avg / 1000);
+	ConfigAddInt(cfg, section_name, "sd", latency_std_dev / 1000);
 
 	/* Print error summary results */
 	printf("\tRPC Failures: %u\n", num_failed);
@@ -519,12 +625,514 @@ static void print_results(struct st_latency *latencies,
 	printf("\n");
 }
 
+static int config_create_section(Config *cfg, char *section_name, bool remove)
+{
+	int		ret = 0;
+	ConfigRet	config_ret;
+
+	if (section_name == NULL)
+		return ret;
+
+	if (remove && ConfigHasSection(cfg, section_name)) {
+		ConfigRemoveSection(cfg, section_name);
+	}
+
+	if (!ConfigHasSection(cfg, section_name)) {
+		config_ret = ConfigAddSection(cfg, section_name);
+		if (config_ret != CONFIG_OK) 
+			ret = ENOENT;
+	}
+
+	return ret;
+}
+
+static int config_create_output_config(char *section_name)
+{
+	int		ret_value = 0;
+	ConfigRet	config_ret;
+	bool		remove = true;
+
+	/*
+ 	 * Open result file if specified 
+	 * Else, open new configuration to use.
+	 */
+	if (g_expected_outfile != NULL) {
+		config_ret = ConfigReadFile(g_expected_outfile, &cfg_output);
+		if (config_ret != CONFIG_OK) {
+			D_ERROR("Cannot open output file: %s\n",
+				g_expected_outfile);
+			D_GOTO(cleanup, ret_value = ENOENT);
+		}
+	} else {
+		cfg_output = ConfigNew();
+		if (cfg_output == NULL)
+			D_GOTO(cleanup, ret_value = ENOMEM);
+	}
+
+	/*
+ 	 * Create section if name is specified.
+ 	 * If section already exist then remove it.
+ 	 */
+	ret_value = config_create_section(cfg_output, section_name, remove);
+
+cleanup:
+	return ret_value;
+}
+
+
+static int compare_print_results(char *section_name)
+{
+	Config		*cfg_expected = NULL;
+#if 0
+	Config		*cfg_output = NULL;
+#endif
+	ConfigRet	 config_ret;
+	char		*sec_name;
+	int		 ret_value = 1;
+	int		 i;
+	int		 status_size = sizeof(status) / sizeof(status_feature);
+
+	/* Read in expected file if specified */
+	if (g_expected_infile != NULL) {
+		config_ret = ConfigReadFile(g_expected_infile, &cfg_expected);
+		if (config_ret != CONFIG_OK) {
+			D_ERROR("Cannot open exptected file: %s\n",
+				g_expected_infile);
+			ret_value = ENOENT;
+			goto cleanup;
+		}
+	}
+
+#if 0
+	/* Open result file if specified */
+	if (g_expected_outfile != NULL) {
+		config_ret = ConfigReadFile(g_expected_outfile, &cfg_output);
+		if (config_ret != CONFIG_OK) {
+			D_ERROR("Cannot open output file: %s\n",
+				g_expected_outfile);
+			ret_value = ENOENT;
+			goto cleanup;
+		}
+	}
+#endif
+
+	/* Read in default sector if defined. */
+	sec_name = DEFAULT_VALUE_NAME;
+	if (ConfigHasSection(cfg_expected, DEFAULT_VALUE_NAME)) {
+		int ivalue;
+
+		for (i = 0; i < status_size; i++) {
+			config_ret = ConfigReadInt(cfg_expected, sec_name,
+					       status[i].name, &ivalue, 0.0);
+			if (config_ret == CONFIG_OK) {
+				/* avoid checkpatch warning */
+				status[i].value = ivalue;
+			}
+		}
+	}
+
+	/*
+	 * -----------------------
+	 * Read in scaling factors
+	 * -----------------------
+	 */
+	sec_name = DEFAULT_SCALE_NAME;
+	if (ConfigHasSection(cfg_expected, sec_name)) {
+		float scale = 0.0;
+
+		/* First, see if set all to one global value */
+		config_ret = ConfigReadFloat(cfg_expected, sec_name,
+				       "all", &scale, 0.0);
+		if (config_ret == CONFIG_OK) {
+			for (i = 0; i < status_size; i++) {
+				/* avoid checkpatch warning */
+				status[i].scale = scale;
+			}
+		}
+
+		/* Now see if individual saling factors are set in file*/
+		for (i = 0; i < status_size; i++) {
+			config_ret = ConfigReadFloat(cfg_expected, sec_name,
+						     status[i].name,
+						     &scale, 0.0);
+			if (config_ret == CONFIG_OK) {
+				/* avoid checkpatch warning */
+				status[i].scale = scale;
+			}
+		}
+	}
+
+	/*
+	 * Read in specified values for requested sector.
+	 * Over rides defaut settings if specified.
+	 */
+	if (ConfigHasSection(cfg_expected, section_name)) {
+		int ivalue;
+
+		for (i = 0; i < status_size; i++) {
+			config_ret = ConfigReadInt(cfg_expected, section_name,
+					       status[i].name, &ivalue, 0.0);
+			if (config_ret == CONFIG_OK) {
+				/* avoid checkpatch warning */
+				status[i].value = ivalue;
+			}
+		}
+	}
+
+	/* Use global scaling factor if specified */
+	if (g_scale_factor != INVALID_SCALING) {
+		/* avoid checkpatch warning */
+		for (i = 0; i < status_size; i++) {
+			/* avoid checkpatch warning */
+			status[i].scale = g_scale_factor;
+		}
+	}
+
+	/*
+	 * Read in specific scaling factor for specified sector.
+	 * If this is non zero, then only the keys listed here are printed.
+	 * If a "=value" is part of the string (i.e. av=12), then
+	 * that value is used as the scaling factor.
+	 * Note: g_expected_results may be pointing to an argv parameter
+	 * which are constant.  Therefor, allocate a region for string
+	 * manipulation. (strtok modifies string it is working on).
+	 */
+	if (g_expected_results != NULL) {
+		char	*str;
+		char	*save_str;
+		char	*ptr;
+		char	*tptr;
+		float	 scale;
+		int	 num;
+		int	 j;
+
+		/* alloc temporary string storage and copy to it */
+		str = (char *)malloc(strlen(g_expected_results));
+		if (str == NULL) {
+			D_ERROR(" Memory Not allocated\n");
+			ret_value = -ENOMEM;
+			goto cleanup;
+		}
+		strcpy(str, g_expected_results);
+		tptr = str;
+
+		/* first, mark status not to print */
+		for (i = 0; i < status_size; i++) {
+			/* avoid checkpatch warning */
+			status[i].flag &= ~(TST_OUTPUT);
+		}
+
+		/*
+		 * Parse string for first token.
+		 * ptr will point to something like "av" or "av=10"
+		 * Then loop around for all entries.
+		 */
+		ptr = strtok(tptr, ",");
+		while (ptr != NULL) {
+			tptr = NULL;
+
+			/*
+			 * Note: This will eliminate "=:" from prt.
+			 * Also, save_str will point to the next character
+			 *   in the string (i.e. the scale value),
+			 */
+			strtok_r(ptr, "=:", &save_str);
+
+			/* Searcd results held in status structure */
+			for (j = 0; j < status_size; j++) {
+				/* avoid checkpatch warning */
+				if (strcmp(ptr, status[j].name) == 0) {
+					/* avoid checkpatch warning */
+					break;
+				}
+			}
+
+			/* make sure we had a valid input */
+			if (j >= status_size) {
+				D_WARN("Illegal Input\n");
+				ret_value = -EINVAL;
+				goto next_arg;
+			}
+
+			status[j].flag |= TST_OUTPUT;
+
+			/* read scale factor */
+			if (save_str != NULL) {
+				num = sscanf(save_str, "%f", &scale);
+				if (num == 1) {
+					/* avoid checkpatch warning */
+					status[j].scale = scale;
+				}
+			}
+next_arg:
+			ptr = strtok(tptr, ",");
+		}
+		if (str != NULL)
+			free(str);
+	}
+
+	/* Do comparisons */
+	for (i = 0; i < status_size; i++) {
+		float	 upper = status[i].value;
+		float	 lower = status[i].value;
+		float	 value = 0.0;
+		int	 ivalue;
+
+		bool	 passed;
+		bool	 firstpass;
+		char	*key_names[MAX_NUMBER_KEYS];
+		int	 number_keys;
+		int	 max = MAX_NUMBER_KEYS;
+		char	*key;
+		char	*tkey;
+		int	 j;
+
+		if ((status[i].value != 0) && (status[i].scale != 0) &&
+		     (status[i].flag & TST_OUTPUT)) {
+
+			/* Set ranges for comparison */
+			firstpass = true;
+			if (status[i].flag & TST_LOW) {
+				/* avoid checkpatch warning */
+				lower = status[i].value *
+					(1 - status[i].scale);
+			}
+			if (status[i].flag & TST_HIGH) {
+				/* avoid checkpatch warning */
+				upper = status[i].value *
+					(1 + status[i].scale);
+			}
+
+			/* Get number of keys in section */
+			number_keys = ConfigGetKeys(cfg_output, section_name,
+						    key_names, max);
+			if (number_keys == 0) {
+				D_INFO(" NO keys found\n");
+				break;
+			}
+
+			/* Search for results with status name for comparison*/
+			for (j = 0; j < number_keys; j++) {
+				tkey = strstr(key_names[j], status[i].name);
+				if (tkey == NULL) {
+					/* avoid checkpatch warning */
+					continue;
+				}
+
+				ConfigReadInt(cfg_output, section_name,
+					      key_names[j], &ivalue, 0);
+				value = (float)ivalue;
+				key = key_names[j];
+
+				/* Test for range */
+				passed = true;
+				if ((status[i].flag | (TST_HIGH | TST_LOW)) ==
+				     (TST_HIGH | TST_LOW)) {
+					/* avoid checkpatch warning */
+					if (!((lower <= value) &&
+					     (value <= upper)))
+						passed = false;
+				} else if (status[i].flag | TST_HIGH) {
+					/* avoid checkpatch warning */
+					if (value >= upper)
+						passed = false;
+				} else if (status[i].flag | TST_LOW) {
+					/* avoid checkpatch warning */
+					if (value <= lower)
+						passed = false;
+				}
+
+				/* print results */
+				if (firstpass)
+					printf("\n Endpoint Result (%s)\n",
+					       status[i].description);
+				firstpass = false;
+				if (passed) {
+					printf("   %s : %8d  Passed\n",
+					       key, ivalue);
+					D_INFO("  PASED range check\n");
+
+				} else {
+					printf("   %s : %8d  Failed\n",
+					       key, (int)value);
+					D_WARN("  FAILED range check\n");
+					ret_value = -1;
+				}
+			}
+		} /* end of valid test loop */
+	} /* end of "for" loop */
+cleanup:
+	if (cfg_expected != NULL)
+		ConfigFree(cfg_expected);
+
+	if (cfg_output != NULL) {
+#if 0
+		ConfigPrintToFile(cfg_output, g_expected_outfile);
+#endif
+		ConfigFree(cfg_expected);
+	}
+	return ret_value;
+}
+
+static void combine_results(Config *cfg_results, char *section_name,
+			    uint32_t index)
+{
+	ConfigRet	 ret;
+	int		 temp;
+	int		 temp2;
+	int		 i;
+	int		 dfault = -1;
+	const char	*key_name;
+	size_t		 size = MASTER_VALUE_SIZE;
+	char		 new_key_name[MASTER_VALUE_SIZE];
+	char		 master[MASTER_VALUE_SIZE];
+	int		 status_size = sizeof(status) / sizeof(status_feature);
+
+#if 0
+	/* Read in result file if specified */
+	if (g_expected_outfile != NULL) {
+		ret = ConfigReadFile(g_expected_outfile, &cfg_output);
+
+		/* file does not exist, create a configuration and section */
+		if (ret != CONFIG_OK) {
+			cfg_output = ConfigNew();
+			if (cfg_output == NULL)
+				D_GOTO(cleanup, ret);
+			ret = ConfigAddSection(cfg_output,
+					       section_name);
+			if (ret != CONFIG_OK)
+				D_GOTO(cleanup, ret);
+		}
+	}
+
+	/*
+	 * If first time through and section exists, the delete it and
+	 * re-initialize it (contain no key:value pari).
+	 */
+	if ((index == 0) && (ConfigHasSection(cfg_output, section_name))) {
+		ConfigRemoveSection(cfg_output, section_name);
+		ConfigAddSection(cfg_output, section_name);
+	}
+#endif
+
+	/* Read master-endpoint string */
+	ret = ConfigReadString(cfg_results, section_name, "master_endpoint",
+			       master, size, "NE");
+
+	/*
+	 * Copy results into output.
+	 * If the output already has it, then remove it.
+	 */
+	for (i = 0; i < status_size; i++) {
+		key_name = status[i].name;
+		ret = ConfigReadInt(cfg_results, section_name, key_name,
+				    &temp, dfault);
+		/* Tag master endpoint to key name */
+		snprintf(new_key_name, size, "%s-%s", master, key_name);
+
+		/* Check to see if key occured in results */
+		if (ret == CONFIG_OK) {
+			/* Check to see if key already exist in output */
+			ret = ConfigReadInt(cfg_output, section_name,
+					    key_name, &temp2, dfault);
+			if (ret == CONFIG_OK) {
+				ConfigRemoveKey(cfg_output, section_name,
+						key_name);
+			}
+			ConfigAddInt(cfg_output, section_name,
+				     new_key_name, temp);
+		}
+	}
+
+#if 1
+	printf(" SAB: Print input results\n");
+	ConfigPrintSection(cfg_results, stdout, section_name);
+	printf(" SAB: Done output results\n");
+
+
+	printf("\nSAB: Done output results\n");
+	ConfigPrintSection(cfg_output, stdout, section_name);
+#endif
+
+	/* print out results if file specified */
+	if (g_expected_outfile != NULL) {
+		/* avoid checkpatch warning */
+		ConfigPrintToFile(cfg_output, g_expected_outfile);
+	}
+}
+
+static char *config_section_name_create(char *section_name,
+					struct crt_st_start_params
+					*test_params)
+{
+	int	len = 0;
+	char	*name_str;
+	int	ids;
+	int	idr;
+
+	/*
+	 * If section name was specified in calling sequnce, then use it.
+	 * Otherwise, create a name based on test parameters.
+	 */
+	name_str = (char *)malloc(MAX_SECTION_NAME_SIZE);
+	if (name_str == NULL)
+		return NULL;
+
+	if (section_name != NULL) {
+		len = strnlen(section_name, MAX_SECTION_NAME_SIZE);
+		memcpy(name_str, section_name, len);
+		return name_str;
+	} else {
+		/* Add alignment parameter */
+		if (test_params->buf_alignment >= 10) {
+			len = snprintf(name_str, MAX_SECTION_NAME_SIZE,
+				       "align_%dK_",
+				       1 << (test_params->buf_alignment
+					     - 10));
+		} else {
+			len = snprintf(name_str, MAX_SECTION_NAME_SIZE,
+				       "align_%dB_",
+				       1 << test_params->buf_alignment);
+		}
+
+		/* Add inflight parameter */
+		len += snprintf(&name_str[len], MAX_SECTION_NAME_SIZE - len,
+			 "inFlight_%d_", test_params->max_inflight);
+
+		/* Add size parameter */
+		if (test_params->send_size >= 0x00100000) {
+			len += snprintf(&name_str[len],
+					MAX_SECTION_NAME_SIZE - len,
+					"size_%dM_",
+					test_params->send_size >> 20);
+		} else if (test_params->send_size > 0x00000400) {
+			len += snprintf(&name_str[len],
+					MAX_SECTION_NAME_SIZE - len,
+					"size_%dK_",
+					test_params->send_size >> 12);
+		} else {
+			len += snprintf(&name_str[len],
+					MAX_SECTION_NAME_SIZE - len,
+					"size_%dB_",
+					test_params->send_size);
+		}
+		/* Add transfer send/receive type */
+		ids = test_params->send_type;
+		idr = test_params->reply_type;
+		len += snprintf(&name_str[len], MAX_SECTION_NAME_SIZE - len,
+				"%s%s_", transfer_type_map[ids].short_name,
+				 transfer_type_map[idr].short_name);
+	}
+	return name_str;
+}
+
 static int test_msg_size(crt_context_t crt_ctx,
 			 struct st_master_endpt *ms_endpts,
 			 uint32_t num_ms_endpts,
 			 struct crt_st_start_params *test_params,
 			 struct st_latency **latencies,
-			 crt_bulk_t *latencies_bulk_hdl, int output_megabits)
+			 crt_bulk_t *latencies_bulk_hdl, int output_megabits,
+			 char *input_section_name)
 {
 	int				 ret;
 	int				 done;
@@ -533,6 +1141,11 @@ static int test_msg_size(crt_context_t crt_ctx,
 	crt_rpc_t			*new_rpc;
 	struct crt_st_start_params	*start_args;
 	uint32_t			 m_idx;
+	Config				*cfg = NULL;
+	char				*section_name = NULL;
+	char				*str_send = NULL;
+	char				*str_put = NULL;
+	int				 ret_value = 0;
 
 	/*
 	 * Launch self-test 1:many sessions on each master endpoint
@@ -730,22 +1343,53 @@ static int test_msg_size(crt_context_t crt_ctx,
 	 * before they are processed for display to the user.
 	 */
 
-	/* Print the results for this size */
+	/*
+ 	 * Create section name and section in global output config 
+ 	 * Dont remove section if it already exist.
+ 	 */
+	section_name = config_section_name_create(input_section_name,
+						  test_params);
+	if (section_name == NULL) {
+		ret_value = -ENOMEM;
+		goto exit_code; 
+	}
+	config_create_section(cfg_output, section_name, false);
+
+	/* Create temporary configuration structure to store results */
+	cfg = ConfigNew();
+
+	/*
+	 * Print the results for this size.
+	 * Compare results.
+	 */
+	MSG_TYPE_STR(str_send, test_params->send_type);
+	MSG_TYPE_STR(str_put, test_params->reply_type);
 	printf("##################################################\n");
-	printf("Results for message size (%d-%s %d-%s)"
-	       " (max_inflight_rpcs = %d):\n\n",
+	printf("Results for message size (%d-%s %d-%s)\n"
+	       "     (max_inflight_rpcs = %d):\n\n",
 	       test_params->send_size,
-	       crt_st_msg_type_str[test_params->send_type],
+	       str_send,
 	       test_params->reply_size,
-	       crt_st_msg_type_str[test_params->reply_type],
+	       str_put,
 	       test_params->max_inflight);
 
 	for (m_idx = 0; m_idx < num_ms_endpts; m_idx++) {
-		int print_count;
+		int		print_count;
+		size_t		size = MASTER_VALUE_SIZE;
+		char		master_value[MASTER_VALUE_SIZE];
 
 		/* Skip endpoints that failed */
 		if (ms_endpts[m_idx].test_failed != 0)
 			continue;
+
+
+		/* Create section name and Master key */
+		ConfigAddSection(cfg, section_name);
+		snprintf(master_value, size, "%u_%u",
+			 ms_endpts[m_idx].endpt.ep_rank,
+			 ms_endpts[m_idx].endpt.ep_tag);
+		ConfigAddString(cfg, section_name, "master_endpoint",
+				master_value);
 
 		/* Print a header for this endpoint and store number of chars */
 		printf("Master Endpoint %u:%u%n\n",
@@ -758,12 +1402,31 @@ static int test_msg_size(crt_context_t crt_ctx,
 			printf("-");
 		printf("\n");
 
+		/* print results and add info to configuration section */
 		print_results(latencies[m_idx], test_params,
 			      ms_endpts[m_idx].reply.test_duration_ns,
-			      output_megabits);
+			      output_megabits,
+			      cfg, section_name);
+		combine_results(cfg, section_name, m_idx);
+
+		/* Cleanup configuration structure for next loop */
+		ConfigRemoveSection(cfg, section_name);
 	}
 
-	return 0;
+	/* compare and output results */
+	ret_value = compare_print_results(section_name);
+
+	/* Free up temporary configuration structure and others */
+	if (cfg != NULL) {
+		/* avoid checkpatch warning */
+		ConfigFree(cfg);
+	}
+	if (section_name != NULL) {
+		/* avoid checkpatch warning */
+		free(section_name);
+	}
+exit_code:
+	return ret_value;
 }
 
 static void
@@ -802,7 +1465,7 @@ static int run_self_test(struct st_size_params all_params[],
 			 uint32_t num_ms_endpts_in,
 			 struct st_endpoint *endpts, uint32_t num_endpts,
 			 int output_megabits, int16_t buf_alignment,
-			 char *attach_info_path)
+			 char *attach_info_path, char *section_name)
 {
 	crt_context_t		  crt_ctx;
 	crt_group_t		 *srv_grp;
@@ -810,9 +1473,10 @@ static int run_self_test(struct st_size_params all_params[],
 
 	int			  size_idx;
 	uint32_t		  m_idx;
-
 	int			  ret;
 	int			  cleanup_ret;
+	char			  *str_send = NULL;
+	char			  *str_put = NULL;
 
 	struct st_master_endpt	 *ms_endpts = NULL;
 	uint32_t		  num_ms_endpts = 0;
@@ -822,8 +1486,8 @@ static int run_self_test(struct st_size_params all_params[],
 	d_sg_list_t		 *latencies_sg_list = NULL;
 	crt_bulk_t		 *latencies_bulk_hdl = CRT_BULK_NULL;
 	bool			  listen = false;
-
 	crt_endpoint_t		  self_endpt;
+
 
 	/* Sanity checks that would indicate bugs */
 	D_ASSERT(endpts != NULL && num_endpts > 0);
@@ -868,7 +1532,7 @@ static int run_self_test(struct st_size_params all_params[],
 		num_ms_endpts = 1;
 		D_ALLOC_PTR(ms_endpts);
 		if (ms_endpts == NULL)
-			D_GOTO(cleanup, ret = -DER_NOMEM);
+			D_GOTO(cleanup, ret = -ENOMEM);
 		ms_endpts[0].endpt.ep_rank = self_endpt.ep_rank;
 		ms_endpts[0].endpt.ep_tag = self_endpt.ep_tag;
 		ms_endpts[0].endpt.ep_grp = self_endpt.ep_grp;
@@ -880,7 +1544,7 @@ static int run_self_test(struct st_size_params all_params[],
 		 */
 		D_ALLOC_ARRAY(ms_endpts, num_ms_endpts_in);
 		if (ms_endpts == NULL)
-			D_GOTO(cleanup, ret = -DER_NOMEM);
+			D_GOTO(cleanup, ret = -ENOMEM);
 
 		/*
 		 * Sort the supplied endpoints to make it faster to identify
@@ -931,7 +1595,7 @@ static int run_self_test(struct st_size_params all_params[],
 			D_REALLOC(realloc_ptr, ms_endpts,
 				  num_ms_endpts * sizeof(*ms_endpts));
 			if (realloc_ptr == NULL)
-				D_GOTO(cleanup, ret = -DER_NOMEM);
+				D_GOTO(cleanup, ret = -ENOMEM);
 			ms_endpts = realloc_ptr;
 		}
 	}
@@ -939,16 +1603,16 @@ static int run_self_test(struct st_size_params all_params[],
 	/* Allocate latency lists for each 1:many session */
 	D_ALLOC_ARRAY(latencies, num_ms_endpts);
 	if (latencies == NULL)
-		D_GOTO(cleanup, ret = -DER_NOMEM);
+		D_GOTO(cleanup, ret = -ENOMEM);
 	D_ALLOC_ARRAY(latencies_iov, num_ms_endpts);
 	if (latencies_iov == NULL)
-		D_GOTO(cleanup, ret = -DER_NOMEM);
+		D_GOTO(cleanup, ret = -ENOMEM);
 	D_ALLOC_ARRAY(latencies_sg_list, num_ms_endpts);
 	if (latencies_sg_list == NULL)
-		D_GOTO(cleanup, ret = -DER_NOMEM);
+		D_GOTO(cleanup, ret = -ENOMEM);
 	D_ALLOC_ARRAY(latencies_bulk_hdl, num_ms_endpts);
 	if (latencies_bulk_hdl == NULL)
-		D_GOTO(cleanup, ret = -DER_NOMEM);
+		D_GOTO(cleanup, ret = -ENOMEM);
 
 	/*
 	 * For each 1:many session, allocate an array for latency results.
@@ -998,14 +1662,17 @@ static int run_self_test(struct st_size_params all_params[],
 
 		ret = test_msg_size(crt_ctx, ms_endpts, num_ms_endpts,
 				    &test_params, latencies, latencies_bulk_hdl,
-				    output_megabits);
+				    output_megabits, section_name);
+
 		if (ret != 0) {
+			MSG_TYPE_STR(str_send, test_params.send_type);
+			MSG_TYPE_STR(str_put, test_params.reply_type);
 			D_ERROR("Testing message size (%d-%s %d-%s) failed;"
 				" ret = %d\n",
 				test_params.send_size,
-				crt_st_msg_type_str[test_params.send_type],
+				str_send,
 				test_params.reply_size,
-				crt_st_msg_type_str[test_params.reply_type],
+				str_put,
 				ret);
 			D_GOTO(cleanup, ret);
 		}
@@ -1083,10 +1750,10 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "  --display <value>\n"
 	       "      Short version: -d\n"
 	       "      Display the configuration file setup\n\n"
-	       "        '0' - no display shown\n"
-	       "        '1' - show info on specified sector/group\n"
-	       "        '2' - show all sector/group headings\n"
-	       "        '3' - show all info for all sector/group specified in file\n"
+	       "	'0' - no display shown\n"
+	       "	'1' - show info on specified sector/group\n"
+	       "	'2' - show all sector/group headings\n"
+	       "	'3' - show all info for all sector/group specified in file\n"
 	       "\n",
 	       prog_name
 	);
@@ -1105,22 +1772,22 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "	Note: Can be specified multiple times\n"
 	       "\n"
 	       "      ranks and tags are comma-separated lists to connect to\n"
-	       "        Supports both ranges and lists - for example, \"1-5,3,8\"\n"
+	       "	Supports both ranges and lists - for example, \"1-5,3,8\"\n"
 	       "\n"
 	       "      Example: --endpoint 1-3,2:0-1\n"
-	       "        This would create these endpoints:\n"
-	       "          1:0\n"
-	       "          1:1\n"
-	       "          2:0\n"
-	       "          2:1\n"
-	       "          3:0\n"
-	       "          3:1\n"
-	       "          2:0\n"
-	       "          2:1\n"
+	       "	This would create these endpoints:\n"
+	       "	  1:0\n"
+	       "	  1:1\n"
+	       "	  2:0\n"
+	       "	  2:1\n"
+	       "	  3:0\n"
+	       "	  3:1\n"
+	       "	  2:0\n"
+	       "	  2:1\n"
 	       "\n"
-	       "        By default, self-test will send test messages to these\n"
-	       "        endpoints in the order listed above.See --randomize-endpoints\n"
-	       "        for more information\n"
+	       "	By default, self-test will send test messages to these\n"
+	       "	endpoints in the order listed above.See --randomize-endpoints\n"
+	       "	for more information\n"
 	       "\n"
 	       "Optional Arguments\n"
 	       "  --help\n"
@@ -1140,74 +1807,74 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "\n"
 	       "      Each size integer can be prepended with a single character to specify\n"
 	       "      the underlying transport mechanism. Available types are:\n"
-	       "        'e' - Empty (no payload)\n"
-	       "        'i' - I/O vector (IOV)\n"
-	       "        'b' - Bulk transfer\n"
+	       "	'e' - Empty (no payload)\n"
+	       "	'i' - I/O vector (IOV)\n"
+	       "	'b' - Bulk transfer\n"
 	       "      For example, (b1000) would transfer 1000 bytes via bulk in both directions\n"
 	       "      Similarly, (i100 b1000) would use IOV to send and bulk to reply\n"
 	       "      Only reasonable combinations are permitted (i.e. e1000 is not allowed)\n"
 	       "      If no type specifier is specified, one will be chosen automatically. The simple\n"
-	       "        heuristic is that bulk will be used if a specified size is >= %u\n"
+	       "	heuristic is that bulk will be used if a specified size is >= %u\n"
 	       "      BULK_GET will be used on the service side to 'send' data from client\n"
-	       "        to service, and BULK_PUT will be used on the service side to 'reply'\n"
-	       "        (assuming bulk transfers specified)\n"
+	       "	to service, and BULK_PUT will be used on the service side to 'reply'\n"
+	       "	(assuming bulk transfers specified)\n"
 	       "\n"
 	       "      Note that different messages are sent internally via different structures.\n"
 	       "      These are enumerated as follows, with x,y > 0:\n"
-	       "        (0  0)  - Empty payload sent in both directions\n"
-	       "        (ix 0)  - 8-byte session_id + x-byte iov sent, empty reply\n"
-	       "        (0  iy) - 8-byte session_id sent, y-byte iov reply\n"
-	       "        (ix iy) - 8-byte session_id + x-byte iov sent, y-byte iov reply\n"
-	       "        (0  by) - 8-byte session_id + 8-byte bulk handle sent\n"
-	       "                  y-byte BULK_PUT, empty reply\n"
-	       "        (bx 0)  - 8-byte session_id + 8-byte bulk_handle sent\n"
-	       "                  x-byte BULK_GET, empty reply\n"
-	       "        (ix by) - 8-byte session_id + x-byte iov + 8-byte bulk_handle sent\n"
-	       "                  y-byte BULK_PUT, empty reply\n"
-	       "        (bx iy) - 8-byte session_id + 8-byte bulk_handle sent\n"
-	       "                  x-byte BULK_GET, y-byte iov reply\n"
-	       "        (bx by) - 8-byte session_id + 8-byte bulk_handle sent\n"
-	       "                  x-byte BULK_GET, y-byte BULK_PUT, empty reply\n"
+	       "	(0  0)  - Empty payload sent in both directions\n"
+	       "	(ix 0)  - 8-byte session_id + x-byte iov sent, empty reply\n"
+	       "	(0  iy) - 8-byte session_id sent, y-byte iov reply\n"
+	       "	(ix iy) - 8-byte session_id + x-byte iov sent, y-byte iov reply\n"
+	       "	(0  by) - 8-byte session_id + 8-byte bulk handle sent\n"
+	       "		  y-byte BULK_PUT, empty reply\n"
+	       "	(bx 0)  - 8-byte session_id + 8-byte bulk_handle sent\n"
+	       "		  x-byte BULK_GET, empty reply\n"
+	       "	(ix by) - 8-byte session_id + x-byte iov + 8-byte bulk_handle sent\n"
+	       "		  y-byte BULK_PUT, empty reply\n"
+	       "	(bx iy) - 8-byte session_id + 8-byte bulk_handle sent\n"
+	       "		  x-byte BULK_GET, y-byte iov reply\n"
+	       "	(bx by) - 8-byte session_id + 8-byte bulk_handle sent\n"
+	       "		  x-byte BULK_GET, y-byte BULK_PUT, empty reply\n"
 	       "\n"
 	       "      Note also that any message size other than (0 0) will use test sessions.\n"
-	       "        A self-test session will be negotiated with the service before sending\n"
-	       "        any traffic, and the session will be closed after testing this size completes.\n"
-	       "        The time to create and tear down these sessions is NOT measured.\n"
+	       "	A self-test session will be negotiated with the service before sending\n"
+	       "	any traffic, and the session will be closed after testing this size completes.\n"
+	       "	The time to create and tear down these sessions is NOT measured.\n"
 	       "\n"
 	       "      Default: \"%s\"\n"
 	       "\n"
 	       "  --master-endpoint <ranks:tags>\n"
 	       "      Short version: -m\n"
 	       "      Describes an endpoint (or range of endpoints) that will each run a\n"
-	       "        1:many self-test against the list of endpoints given via the\n"
-	       "        --endpoint argument.\n"
+	       "	1:many self-test against the list of endpoints given via the\n"
+	       "	--endpoint argument.\n"
 	       "\n"
 	       "      Specifying multiple --master-endpoint ranks/tags sets up a many:many\n"
-	       "        self-test - the first 'many' is the list of master endpoints, each\n"
-	       "        which executes a separate concurrent test against the second\n"
-	       "        'many' (the list of test endpoints)\n"
+	       "	self-test - the first 'many' is the list of master endpoints, each\n"
+	       "	which executes a separate concurrent test against the second\n"
+	       "	'many' (the list of test endpoints)\n"
 	       "\n"
 	       "      The argument syntax for this option is identical to that for\n"
-	       "        --endpoint. Also, like --endpoint, --master-endpoint can be\n"
-	       "        specified multiple times\n"
+	       "	--endpoint. Also, like --endpoint, --master-endpoint can be\n"
+	       "	specified multiple times\n"
 	       "\n"
 	       "      Unlike --endpoint, the list of master endpoints is sorted and\n"
-	       "        any duplicate entries are removed automatically. This is because\n"
-	       "        each instance of self-test can only manage one 1:many test at\n"
-	       "        a time\n"
+	       "	any duplicate entries are removed automatically. This is because\n"
+	       "	each instance of self-test can only manage one 1:many test at\n"
+	       "	a time\n"
 	       "\n"
 	       "      If not specified, the default value is to use this command-line\n"
-	       "        application itself to run a 1:many test against the test endpoints\n"
+	       "	application itself to run a 1:many test against the test endpoints\n"
 	       "\n"
 	       "      This client application sends all of the self-test parameters to\n"
-	       "        this master node and instructs it to run a self-test session against\n"
-	       "        the other endpoints specified by the --endpoint argument\n"
+	       "	this master node and instructs it to run a self-test session against\n"
+	       "	the other endpoints specified by the --endpoint argument\n"
 	       "\n"
 	       "      This allows self-test to be run between any arbitrary CART-enabled\n"
-	       "        applications without having to make them self-test aware. These\n"
-	       "        other applications can be busy doing something else entirely and\n"
-	       "        self-test will have no impact on that workload beyond consuming\n"
-	       "        additional network and compute resources\n"
+	       "	applications without having to make them self-test aware. These\n"
+	       "	other applications can be busy doing something else entirely and\n"
+	       "	self-test will have no impact on that workload beyond consuming\n"
+	       "	additional network and compute resources\n"
 	       "\n"
 	       "  --repetitions-per-size <N>\n"
 	       "      Short version: -r\n"
@@ -1220,9 +1887,9 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "      Maximum number of RPCs allowed to be executing concurrently.\n"
 	       "\n"
 	       "      Note that at the beginning of each test run, a buffer of size send_size\n"
-	       "        is allocated for each inflight RPC (total max_inflight * send_size).\n"
-	       "        This could be a lot of memory. Also, if the reply uses bulk, the\n"
-	       "        size increases to (max_inflight * max(send_size, reply_size))\n"
+	       "	is allocated for each inflight RPC (total max_inflight * send_size).\n"
+	       "	This could be a lot of memory. Also, if the reply uses bulk, the\n"
+	       "	size increases to (max_inflight * max(send_size, reply_size))\n"
 	       "\n"
 	       "      Default: %d\n"
 	       "\n"
@@ -1232,16 +1899,16 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "      Forces all test buffers to be aligned (or misaligned) as specified.\n"
 	       "\n"
 	       "      The argument specifies what the least-significant byte of all test buffer\n"
-	       "        addresses should be forced to be. For example, if --align 0 is specified,\n"
-	       "        all test buffer addresses will end in 0x00 (thus aligned to 256 bytes).\n"
-	       "        To force misalignment, use something like --align 3. For 64-bit (8-byte)\n"
-	       "        alignment, use something like --align 8 or --align 24 (0x08 and 0x18)\n"
+	       "	addresses should be forced to be. For example, if --align 0 is specified,\n"
+	       "	all test buffer addresses will end in 0x00 (thus aligned to 256 bytes).\n"
+	       "	To force misalignment, use something like --align 3. For 64-bit (8-byte)\n"
+	       "	alignment, use something like --align 8 or --align 24 (0x08 and 0x18)\n"
 	       "\n"
 	       "      Alignment should be specified as a decimal value in the range [%d:%d]\n"
 	       "\n"
 	       "      If specified, buffers will be allocated with an extra 256 bytes of\n"
-	       "        alignment padding and the buffer to transfer will start at the point which\n"
-	       "        the least - significant byte of the address matches the requested alignment.\n"
+	       "	alignment padding and the buffer to transfer will start at the point which\n"
+	       "	the least - significant byte of the address matches the requested alignment.\n"
 	       "\n"
 	       "      Default is no alignment - whatever is returned by the allocator is used\n"
 	       "\n"
@@ -1255,10 +1922,10 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "  --path  /path/to/attach_info_file/directory/n"
 	       "      Short version: -p  prefix\n"
 	       "      This option implies --singleton is set.\n"
-	       "        If specified, self_test will use the address information in:\n"
-	       "        /tmp/group_name.attach_info_tmp, if prefix is specified, self_test will use\n"
-	       "        the address information in: prefix/group_name.attach_info_tmp.\n"
-	       "        Note the = sign in the option.\n",
+	       "	If specified, self_test will use the address information in:\n"
+	       "	/tmp/group_name.attach_info_tmp, if prefix is specified, self_test will use\n"
+	       "	the address information in: prefix/group_name.attach_info_tmp.\n"
+	       "	Note the = sign in the option.\n",
 	       prog_name, UINT32_MAX,
 	       CRT_SELF_TEST_AUTO_BULK_THRESH, msg_sizes_str, rep_count,
 	       max_inflight, CRT_ST_BUF_ALIGN_MIN, CRT_ST_BUF_ALIGN_MIN);
@@ -1273,14 +1940,14 @@ static int st_validate_range_str(const char *str)
 	while (*str != '\0') {
 		if ((*str < '0' || *str > '9') &&
 		    (*str != '-') && (*str != ',')) {
-			return -DER_INVAL;
+			return -EINVAL;
 		}
 
 		str++;
 
 		/* Make sure the range string isn't ridiculously large */
 		if (str - start > SELF_TEST_MAX_LIST_STR_LEN)
-			return -DER_INVAL;
+			return -EINVAL;
 	}
 	return 0;
 }
@@ -1403,16 +2070,16 @@ int parse_endpoint_string(char *const opt_arg,
 	    *token_ptrs[ST_ENDPT_RANK_IDX] == '\0' ||
 	    *token_ptrs[ST_ENDPT_TAG_IDX] == '\0') {
 		printf("endpoint must contain non-empty rank:tag\n");
-		return -DER_INVAL;
+		return -EINVAL;
 	}
 	/* Both group and tag can only contain [0-9\-,] */
 	if (st_validate_range_str(token_ptrs[ST_ENDPT_RANK_IDX]) != 0) {
 		printf("endpoint rank contains invalid characters\n");
-		return -DER_INVAL;
+		return -EINVAL;
 	}
 	if (st_validate_range_str(token_ptrs[ST_ENDPT_TAG_IDX]) != 0) {
 		printf("endpoint tag contains invalid characters\n");
-		return -DER_INVAL;
+		return -EINVAL;
 	}
 
 	/*
@@ -1430,11 +2097,11 @@ int parse_endpoint_string(char *const opt_arg,
 	 */
 	D_ALLOC(rank_valid_str, SELF_TEST_MAX_LIST_STR_LEN);
 	if (rank_valid_str == NULL)
-		D_GOTO(cleanup, ret = -DER_NOMEM);
+		D_GOTO(cleanup, ret = -ENOMEM);
 
 	D_ALLOC(tag_valid_str, SELF_TEST_MAX_LIST_STR_LEN);
 	if (tag_valid_str == NULL)
-		D_GOTO(cleanup, ret = -DER_NOMEM);
+		D_GOTO(cleanup, ret = -ENOMEM);
 
 	st_parse_range_str(token_ptrs[ST_ENDPT_RANK_IDX], rank_valid_str,
 			   &num_ranks);
@@ -1452,7 +2119,7 @@ int parse_endpoint_string(char *const opt_arg,
 			*num_endpts,
 			(uint64_t)num_ranks * (uint64_t)num_tags,
 			SELF_TEST_MAX_NUM_ENDPOINTS);
-		D_GOTO(cleanup, ret = -DER_INVAL);
+		D_GOTO(cleanup, ret = -EINVAL);
 	}
 
 	printf("Adding endpoints:\n");
@@ -1464,7 +2131,7 @@ int parse_endpoint_string(char *const opt_arg,
 	D_REALLOC(realloced_mem, *endpts,
 		  sizeof(struct st_endpoint) * (*num_endpts));
 	if (realloced_mem == NULL)
-		D_GOTO(cleanup, ret = -DER_NOMEM);
+		D_GOTO(cleanup, ret = -ENOMEM);
 	*endpts = (struct st_endpoint *)realloced_mem;
 
 	/* Populate the newly expanded values in the endpoints array */
@@ -1578,15 +2245,8 @@ int parse_message_sizes_string(const char *pch,
 	 * If send/PUT or reply/GET are ever implemented, the map can be
 	 * easily changed to support this.
 	 */
-	const struct {
-		char identifier;
-		enum crt_st_msg_type type;
-	} type_map[] = { {'e', CRT_SELF_TEST_MSG_TYPE_EMPTY},
-			 {'i', CRT_SELF_TEST_MSG_TYPE_IOV},
-			 {'b', CRT_SELF_TEST_MSG_TYPE_BULK_GET} };
-
 	/* Number of types recognized */
-	const int num_types = ARRAY_SIZE(type_map);
+	const int num_types = ARRAY_SIZE(transfer_type_map);
 
 	int ret;
 
@@ -1601,9 +2261,10 @@ int parse_message_sizes_string(const char *pch,
 		int i;
 
 		for (i = 0; i < num_types; i++)
-			if (*pch == type_map[i].identifier) {
+			if (*pch == transfer_type_map[i].identifier) {
 				send_type_specified = 1;
-				test_params->send_type = type_map[i].type;
+				test_params->send_type =
+					transfer_type_map[i].type;
 			}
 		pch++;
 	}
@@ -1630,9 +2291,10 @@ int parse_message_sizes_string(const char *pch,
 		int i;
 
 		for (i = 0; i < num_types; i++)
-			if (*pch == type_map[i].identifier) {
+			if (*pch == transfer_type_map[i].identifier) {
 				reply_type_specified = 1;
-				test_params->reply_type = type_map[i].type;
+				test_params->reply_type =
+					transfer_type_map[i].type;
 			}
 		pch++;
 	}
@@ -1701,34 +2363,20 @@ int parse_message_sizes_string(const char *pch,
  * START: Add libconfigini macros
  *********************************
  */
-
 #define LOG_ERR(fmt, ...)	\
 	fprintf(stderr, "[ERROR] <%s:%d> : " fmt "\n",\
 		__func__, __LINE__, __VA_ARGS__)
-
-#define LOG_INFO(fmt, ...)	\
-	fprintf(stderr, "[INFO] : " fmt "\n", __VA_ARGS__)
-
-#define CONFIGREADFILE		"../etc/config.cnf"
-#define CONFIGSAVEFILE		"../etc/new-config.cnf"
-
-#define ENTER_TEST_FUNC							\
-	do {								\
-		LOG_INFO("%s", "\n-----------------------------------------");\
-		LOG_INFO("<TEST: %s>\n", __func__);			\
-	} while (0)
-
 /*
  ******************************
  * END: Add libconfigini macros
  ******************************
  */
-
 /*
  * Read Config file and interpret;
  */
 #define STRING_MAX_SIZE 256
-static int config_file_setup(char *file_name, char *section_name, int display)
+static int config_file_setup(char *file_name, char *section_name, 
+			     char *display)
 {
 	Config *cfg = NULL;
 	int ret = 0;
@@ -1742,12 +2390,12 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 	config_ret = ConfigReadFile(file_name, &cfg);
 	if (config_ret != CONFIG_OK) {
 		LOG_ERR("ConfigOpenFile failed for %s", file_name);
-		return 0;
+		return ENOENT;
 	}
 
 	if (display) {
 		printf("Configuration file %s\n", file_name);
-		sret = sscanf(&string[0], "%d", &temp);
+		sret = sscanf(display, "%d", &temp);
 		if (temp == 1) {
 			/* Avoid checkpatch warning */
 			ConfigPrintSection(cfg, stdout, section_name);
@@ -1799,7 +2447,7 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 		g_dest_name = (char *)malloc(len);
 		if (g_dest_name == NULL) {
 			/* Avoid checkpatch warning */
-			D_GOTO(cleanup, ret = -DER_NOMEM);
+			D_GOTO(cleanup, ret = -ENOMEM);
 		}
 		memcpy(g_dest_name, string, len);
 	}
@@ -1832,7 +2480,7 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 		g_msg_sizes_str = (char *)malloc(len);
 		if (g_msg_sizes_str == NULL) {
 			/* Avoid checkpatch warning */
-			D_GOTO(cleanup, ret = -DER_NOMEM);
+			D_GOTO(cleanup, ret = -ENOMEM);
 		}
 		alloc_g_msg_sizes_str = true;
 		memcpy(g_msg_sizes_str, string, len);
@@ -1922,10 +2570,69 @@ static int config_file_setup(char *file_name, char *section_name, int display)
 		g_attach_info_path = (char *)malloc(len);
 		if (g_attach_info_path == NULL) {
 			/* Avoid checkpatch warning */
-			D_GOTO(cleanup, ret = -DER_NOMEM);
+			D_GOTO(cleanup, ret = -ENOMEM);
 		}
 		memcpy(g_attach_info_path, string, len);
 	}
+
+	/**********/
+	config_ret = ConfigReadString(cfg, section_name,
+				      "expected-threshold",
+				      &string[0], STRING_MAX_SIZE,
+				      (char *)NULL);
+	if (config_ret == CONFIG_OK) {
+		/* Avoid checkpatch warning */
+		ret = sscanf(optarg, "%f", &g_scale_factor);
+	}
+
+	/********/
+	config_ret = ConfigReadString(cfg, section_name,
+				      "expected-results",
+				      &string[0], STRING_MAX_SIZE,
+				      (char *)NULL);
+	if (config_ret == CONFIG_OK) {
+		len = strlen(string) + 1;
+		g_expected_results = (char *)malloc(len);
+		if (g_expected_results == NULL) {
+			/* Avoid checkpatch warning */
+			D_GOTO(cleanup, ret = -ENOMEM);
+		}
+		memcpy(g_expected_results, string, len);
+		alloc_g_expected_results = true;
+	}
+
+	/********/
+	config_ret = ConfigReadString(cfg, section_name,
+				      "expected-output",
+				      &string[0], STRING_MAX_SIZE,
+				      (char *)NULL);
+	if (config_ret == CONFIG_OK) {
+		len = strlen(string) + 1;
+		g_expected_outfile = (char *)malloc(len);
+		if (g_expected_outfile == NULL) {
+			/* Avoid checkpatch warning */
+			D_GOTO(cleanup, ret = -ENOMEM);
+		}
+		memcpy(g_expected_outfile, string, len);
+		alloc_g_expected_outfile = true;
+	}
+
+	/********/
+	config_ret = ConfigReadString(cfg, section_name,
+				      "expected-input",
+				      &string[0], STRING_MAX_SIZE,
+				      (char *)NULL);
+	if (config_ret == CONFIG_OK) {
+		len = strlen(string) + 1;
+		g_expected_infile = (char *)malloc(len);
+		if (g_expected_infile == NULL) {
+			/* Avoid checkpatch warning */
+			D_GOTO(cleanup, ret = -ENOMEM);
+		}
+		memcpy(g_expected_infile, string, len);
+		alloc_g_expected_infile = true;
+	}
+
 
 	/********/
 	config_ret = ConfigReadString(cfg, section_name, "nopmix",
@@ -1938,109 +2645,15 @@ cleanup:
 	return ret;
 }
 
-int main(int argc, char *argv[])
+#define ARGV_PARAMETERS "hf:c:d:g:m:e:s:r:i:a:btnqp:w:x:y:z:"
+
+int parse_command_options(int argc, char *argv[])
 {
-	/* Default parameters */
-	char				default_msg_sizes_str[] =
-		"b200000,b200000 0,0 b200000,b200000 i1000,i1000 b200000,"
-		"i1000,i1000 0,0 i1000,0";
+	int	c;
+	int	ret = 0;
 
-	char				*file_name = NULL;
-	char				*section_name = NULL;
-	const char			 tuple_tokens[] = "(),";
-	struct st_size_params		*all_params = NULL;
-	char				*sizes_ptr = NULL;
-	char				*pch = NULL;
-	int				 num_msg_sizes;
-	int				 num_tokens;
-	int				 c;
-	int				 j;
-	int				 ret = 0;
-	int				 dump = 0;
-
-	static struct option long_options[] = {
-		{"file-name", required_argument, 0, 'f'},
-		{"config", required_argument, 0, 'c'},
-		{"display", required_argument, 0, 'd'},
-
-		{"group-name", required_argument, 0, 'g'},
-		{"master-endpoint", required_argument, 0, 'm'},
-		{"endpoint", required_argument, 0, 'e'},
-		{"message-sizes", required_argument, 0, 's'},
-		{"repetitions-per-size", required_argument, 0, 'r'},
-		{"max-inflight-rpcs", required_argument, 0, 'i'},
-		{"align", required_argument, 0, 'a'},
-		{"Mbits", no_argument, 0, 'b'},
-		{"singleton", no_argument, 0, 't'},
-		{"randomize-endpoints", no_argument, 0, 'q'},
-		{"path", required_argument, 0, 'p'},
-		{"nopmix", no_argument, 0, 'n'},
-		{"help", no_argument, 0, 'h'},
-		{0, 0, 0, 0}
-	};
-
-	g_msg_sizes_str = default_msg_sizes_str;
-	g_rep_count = g_default_rep_count;
-	g_max_inflight = g_default_max_inflight;
-
-	ret = d_log_init();
-	if (ret != 0) {
-		fprintf(stderr, "crt_log_init() failed. rc: %d\n", ret);
-		return ret;
-	}
-
-	/****************** First Parse user file arguments *************/
-	/* File specified via -f file argument */
 	while (1) {
-		c = getopt_long(argc, argv, "hf:c:d:g:m:e:s:r:i:a:btnqp:",
-				long_options, NULL);
-		/* break out of while loop */
-		if (c == -1)
-			break;
-
-		switch (c) {
-		case 'f':
-			printf(" file name %s\n", optarg);
-			file_name = optarg;
-			break;
-		case 'c':
-			section_name = optarg;
-			break;
-		case 'd':
-			dump = 1;
-			break;
-		case 'h':
-			print_usage(argv[0], default_msg_sizes_str,
-				    g_default_rep_count,
-				    g_default_max_inflight);
-			D_GOTO(cleanup, ret = 0);
-			break;
-		default:
-			break;
-		}
-	}
-	if (file_name != NULL) {
-		ret = config_file_setup(file_name, section_name, dump);
-		if (ret == 1) {
-			print_usage(argv[0], default_msg_sizes_str,
-				    g_default_rep_count,
-				    g_default_max_inflight);
-			D_GOTO(cleanup, ret = 0);
-		}
-		if (ret < 0) {
-			/* avoid checkpatch warning */
-			goto cleanup;
-		}
-	}
-
-	/**************** Second Parse of user arguments ***************/
-	/*
-	* Overwrite default and/or file input arguments
-	* Restart the scanning.
-	*/
-	optind = 1;
-	while (1) {
-		c = getopt_long(argc, argv, "hf:c:d:g:m:e:s:r:i:a:btnqp:",
+		c = getopt_long(argc, argv, ARGV_PARAMETERS,
 				long_options, NULL);
 		/* Break out of while loop */
 		if (c == -1)
@@ -2125,6 +2738,33 @@ int main(int argc, char *argv[])
 			break;
 		case 'n':
 			break;
+		case 'w':  /* *** */
+			ret = sscanf(optarg, "%f", &g_scale_factor);
+			break;
+		case 'x':
+			if (alloc_g_expected_results) {
+				/* Avoid checkpatch warning */
+				free(g_expected_results);
+			}
+			alloc_g_expected_results = false;
+			g_expected_results = optarg;
+			break;
+		case 'y':
+			if (alloc_g_expected_infile) {
+				/* Avoid checkpatch warning */
+				free(g_expected_infile);
+			}
+			alloc_g_expected_infile = false;
+			g_expected_infile = optarg;
+			break;
+		case 'z':
+			if (alloc_g_expected_outfile) {
+				/* Avoid checkpatch warning */
+				free(g_expected_outfile);
+			}
+			alloc_g_expected_outfile = false;
+			g_expected_outfile = optarg;
+			break;
 		case 'h':
 		case '?':
 		default:
@@ -2132,13 +2772,103 @@ int main(int argc, char *argv[])
 				    g_default_rep_count,
 				    g_default_max_inflight);
 			if (c == 'h')
-				D_GOTO(cleanup, ret = 0);
+				D_GOTO(cleanup, ret = 1);
 			else
-				D_GOTO(cleanup, ret = -DER_INVAL);
+				D_GOTO(cleanup, ret = -EINVAL);
+		}
+	}
+	return 0;
+cleanup:
+	return ret;
+
+}
+
+int main(int argc, char *argv[])
+{
+
+	char				*file_name = NULL;
+	char				*section_name = NULL;
+	const char			 tuple_tokens[] = "(),";
+	struct st_size_params		*all_params = NULL;
+	char				*sizes_ptr = NULL;
+	char				*pch = NULL;
+	int				 num_msg_sizes;
+	int				 num_tokens;
+	int				 c;
+	int				 j;
+	int				 ret = 0;
+	char				*display = NULL;
+	char				*str_send = NULL;
+	char				*str_put = NULL;
+
+	g_msg_sizes_str = default_msg_sizes_str;
+	g_rep_count = g_default_rep_count;
+	g_max_inflight = g_default_max_inflight;
+
+	ret = d_log_init();
+	if (ret != 0) {
+		fprintf(stderr, "crt_log_init() failed. rc: %d\n", ret);
+		return ret;
+	}
+
+	/****************** First Parse user file arguments *************/
+	/* File specified via -f file argument */
+	while (1) {
+		c = getopt_long(argc, argv, ARGV_PARAMETERS,
+				long_options, NULL);
+		/* break out of while loop */
+		if (c == -1)
+			break;
+
+		switch (c) {
+		case 'f':
+			printf(" file name %s\n", optarg);
+			file_name = optarg;
+			break;
+		case 'c':
+			section_name = optarg;
+			break;
+		case 'd':
+			display = optarg;
+			break;
+		case 'h':
+			print_usage(argv[0], default_msg_sizes_str,
+				    g_default_rep_count,
+				    g_default_max_inflight);
+			D_GOTO(cleanup, ret = 0);
+			break;
+		default:
+			break;
 		}
 	}
 
-	/******************** Parse message sizes argument ********************/
+	/* Configuration file specified.  Read it's context */
+	if (file_name != NULL) {
+		ret = config_file_setup(file_name, section_name, display);
+		if (ret == 1) {
+			print_usage(argv[0], default_msg_sizes_str,
+				    g_default_rep_count,
+				    g_default_max_inflight);
+			D_GOTO(cleanup, ret = 0);
+		}
+		if (ret < 0) {
+			/* avoid checkpatch warning */
+			goto cleanup;
+		}
+	}
+
+	/**************** Second Parse of user arguments ***************/
+	/*
+ 	* Command line arguments takes precedent.
+	* Overwrite default and/or file input arguments
+	* Restart the scanning.
+	*/
+	optind = 1;
+	ret = parse_command_options(argc, argv);
+	if (ret != 0)
+		goto cleanup;
+
+	/******* Parse message sizes argument ***************/
 
 	/* repeat rep_count for each endpoint */
 	/* g_rep_count = g_rep_count * g_num_endpts; */
@@ -2157,7 +2887,8 @@ int main(int argc, char *argv[])
 			break;
 
 		/*
-		 * For each valid token, check if this character is that token
+		 * For each valid token, check if this character
+		 * is that token
 		 */
 		while (1) {
 			if (*token_ptr == '\0')
@@ -2170,10 +2901,13 @@ int main(int argc, char *argv[])
 		sizes_ptr++;
 	}
 
-	/* Allocate a large enough buffer to hold the message sizes list */
+	/*
+	 * Allocate a large enough buffer to hold the message
+	 * sizes list
+	 */
 	D_ALLOC_ARRAY(all_params, num_tokens + 1);
 	if (all_params == NULL)
-		D_GOTO(cleanup, ret = -DER_NOMEM);
+		D_GOTO(cleanup, ret = ENOMEM);
 
 	/* Iterate over the user's message sizes and parse / validate them */
 	num_msg_sizes = 0;
@@ -2196,7 +2930,7 @@ int main(int argc, char *argv[])
 
 	if (num_msg_sizes <= 0) {
 		printf("No valid message sizes given\n");
-		D_GOTO(cleanup, ret = -DER_INVAL);
+		D_GOTO(cleanup, ret = -EINVAL);
 	}
 
 	/* Shrink the buffer if some of the user's tokens weren't kept */
@@ -2207,34 +2941,34 @@ int main(int argc, char *argv[])
 		D_REALLOC(realloced_mem, all_params,
 			  num_msg_sizes * sizeof(all_params[0]));
 		if (realloced_mem == NULL)
-			D_GOTO(cleanup, ret = -DER_NOMEM);
+			D_GOTO(cleanup, ret = -ENOMEM);
 		all_params = (struct st_size_params *)realloced_mem;
 	}
 
 	/******************** Validate arguments ********************/
 	if (g_dest_name == NULL || crt_validate_grpid(g_dest_name) != 0) {
 		printf("--group-name argument not specified or is invalid\n");
-		D_GOTO(cleanup, ret = -DER_INVAL);
+		D_GOTO(cleanup, ret = -EINVAL);
 	}
 	if (g_ms_endpts == NULL)
 		printf("Warning: No --master-endpoint specified; using this"
 		       " command line application as the master endpoint\n");
 	if (g_endpts == NULL || g_num_endpts == 0) {
 		printf("No endpoints specified\n");
-		D_GOTO(cleanup, ret = -DER_INVAL);
+		D_GOTO(cleanup, ret = -EINVAL);
 	}
 	if ((g_rep_count <= 0) || (g_rep_count > SELF_TEST_MAX_REPETITIONS)) {
 		printf("Invalid --repetitions-per-size argument\n"
 		       "  Expected value in range (0:%d], got %d\n",
 		       SELF_TEST_MAX_REPETITIONS, g_rep_count);
-		D_GOTO(cleanup, ret = -DER_INVAL);
+		D_GOTO(cleanup, ret = -EINVAL);
 	}
 	if ((g_max_inflight <= 0) ||
 	    (g_max_inflight > SELF_TEST_MAX_INFLIGHT)) {
 		printf("Invalid --max-inflight-rpcs argument\n"
 		       "  Expected value in range (0:%d], got %d\n",
 		       SELF_TEST_MAX_INFLIGHT, g_max_inflight);
-		D_GOTO(cleanup, ret = -DER_INVAL);
+		D_GOTO(cleanup, ret = -EINVAL);
 	}
 
 	/*
@@ -2252,10 +2986,13 @@ int main(int argc, char *argv[])
 	for (j = 0; j < num_msg_sizes; j++) {
 		if (j > 0)
 			printf(", ");
+
+		MSG_TYPE_STR(str_send, all_params[j].send_type);
+		MSG_TYPE_STR(str_put, all_params[j].reply_type);
 		printf("(%d-%s %d-%s)", all_params[j].send_size,
-		       crt_st_msg_type_str[all_params[j].send_type],
+		       str_send,
 		       all_params[j].reply_size,
-		       crt_st_msg_type_str[all_params[j].reply_type]);
+		       str_put);
 	}
 	printf("]\n");
 	if (g_buf_alignment == CRT_ST_BUF_ALIGN_DEFAULT)
@@ -2263,15 +3000,28 @@ int main(int argc, char *argv[])
 	else
 		printf("  Buffer addresses end with:  %d\n", g_buf_alignment);
 	printf("  Repetitions per size:       %d\n"
-	       "  Max inflight RPCs:          %d\n\n",
+	       "  Max inflight RPCs:	  %d\n\n",
 	       g_rep_count, g_max_inflight);
+
+	/****** Open global configuration for output results *****/
+	ret = config_create_output_config(section_name);
+	if (ret != 0) {
+		D_GOTO(cleanup, ret);
+	}
 
 	/********************* Run the self test *********************/
 	ret = run_self_test(all_params, num_msg_sizes, g_rep_count,
 			    g_max_inflight, g_dest_name, g_ms_endpts,
 			    g_num_ms_endpts, g_endpts, g_num_endpts,
 			    g_output_megabits, g_buf_alignment,
-			    g_attach_info_path);
+			    g_attach_info_path, section_name);
+
+	/* Write output results and free output configuration */
+	if (g_expected_outfile != NULL) {
+		/* avoid checkpatch warning */
+		ConfigPrintToFile(cfg_output, g_expected_outfile);
+	}
+	ConfigFree(cfg_output);
 
 	/********************* Clean up *********************/
 cleanup:
@@ -2286,6 +3036,18 @@ cleanup:
 	if (alloc_g_attach_info_path && (g_attach_info_path != NULL)) {
 		/* Avoid checkpatch warning */
 		free(g_attach_info_path);
+	}
+	if (alloc_g_expected_results && (g_expected_results != NULL)) {
+		/* Avoid checkpatch warning */
+		free(g_expected_results);
+	}
+	if (alloc_g_expected_infile && (g_expected_infile != NULL)) {
+		/* Avoid checkpatch warning */
+		free(g_expected_infile);
+	}
+	if (alloc_g_expected_outfile && (g_expected_outfile != NULL)) {
+		/* Avoid checkpatch warning */
+		free(g_expected_outfile);
 	}
 
 	if (all_params != NULL)

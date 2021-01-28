@@ -143,6 +143,7 @@
 #define CRT_ST_BUF_ALIGN_MIN (0)
 /** Maximum alignment must be one less than a power of two */
 #define CRT_ST_BUF_ALIGN_MAX (255)
+#define MAX_SECTION_NAME_SIZE 256
 
 enum crt_st_msg_type {
 	CRT_SELF_TEST_MSG_TYPE_EMPTY = 0,

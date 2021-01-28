@@ -81,8 +81,11 @@ ConfigRet ConfigPrintSettings(const Config *cfg, FILE *stream);
 
 int ConfigGetSectionCount(const Config *cfg);
 int ConfigGetKeyCount(const Config *cfg, const char *sect);
+int ConfigGetKeys(const Config *cfg, const char *sect, char **array,
+		  int max_array_size);
 ConfigRet ConfigSetCommentCharset(Config *cfg, const char *comment_ch);
 ConfigRet ConfigSetKeyValSepChar(Config *cfg, char ch);
+
 ConfigRet ConfigSetBoolString(Config *cfg, const char *true_str,
 			      const char *false_str);
 ConfigRet ConfigReadString(const Config *cfg, const char *sect,
@@ -113,6 +116,7 @@ ConfigRet ConfigAddBool(Config *cfg, const char *sect, const char *key,
 			bool val);
 
 bool ConfigHasSection(const Config *cfg, const char *sect);
+ConfigRet ConfigAddSection(Config *cfg, const char *section);
 ConfigRet ConfigRemoveSection(Config *cfg, const char *sect);
 ConfigRet ConfigRemoveKey(Config *cfg, const char *sect, const char *key);
 

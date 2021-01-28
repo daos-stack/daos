@@ -10,17 +10,22 @@ help=1
 display=1
 group-name=selftest_srv_grp
 master-endpoint=0-1:0
-endpoint=0-1:0
+#endpoint=0-1:0
+endpoint=1:0
 message-sizes=b1048576
 max-inflight-rpcs=16
 repetitions-per-size=100
-nopmix=1
 # align to 4k page
 align=12
 Mbits=0
 randomize-endpoints=0
-#singleton =1
+#nopmix=1
+#$singleton =1
 #path=.
+#expected-results=av,sd,bw,med25,med50,med75
+expected-results=av,sd=9
+expected-output=../../../../etc/selftest_results.cnf
+expected-input=../../../../etc/selftest_expected.cnf
 
 [align_1k_inFlight_1_size_1M_B]
 display=1
@@ -36,7 +41,7 @@ align=10
 Mbits=0
 randomize-endpoints=0
 #singleton =1
-#path=.
+path=.
 
 
 [align_1k_inFlight_4_size_1M_B]

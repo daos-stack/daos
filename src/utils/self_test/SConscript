@@ -28,6 +28,7 @@ import daos_build
 SELF_TEST = 'self_test.c'
 LIB_CONFIG_INI = 'src/configini.c'
 LIB_CONFIG_CNF = 'etc/selftest.cnf'
+LIB_CONFIG_ECNF = 'etc/selftest_expected.cnf'
 
 # Function to filter out gcc flags from this compilation env
 def remove_certain_gcc_flags(str):
@@ -57,6 +58,7 @@ def scons():
 
     tenv.Install(os.path.join("$PREFIX", 'bin'), self_test)
     tenv.Install(os.path.join("$PREFIX", 'etc'), LIB_CONFIG_CNF)
+    tenv.Install(os.path.join("$PREFIX", 'etc'), LIB_CONFIG_ECNF)
 
 if __name__ == "SCons.Script":
     scons()
