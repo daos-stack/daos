@@ -126,15 +126,18 @@ class JavaCIIntegration(TestWithServers):
 
 
         # run intergration-test
+        openjdk = "/usr/lib/jvm/java-{}-openjdk-{}-0.el7_9.x86_64/jre/lib/amd64/libjsig.so".format(version[:-8], version)
         jdir = "{}/../java".format(os.getcwd())
         cmd = "cd {};".format(jdir)
-        cmd += " export LD_PRELOAD=/usr/lib/jvm/"
-        cmd += "java-{}-openjdk-{}-0.el7_8.x86_64/".format(version[:-8],
-                                                           version)
-        cmd += "jre/lib/amd64/libjsig.so;"
+        cmd += " ls -l {};".format(openjdk)
+        cmd += " export LD_PRELOAD={};".format(openjdk)
+#        cmd += " export LD_PRELOAD=/usr/lib/jvm/"
+#        cmd += "java-{}-openjdk-{}-0.el7_8.x86_64/".format(version[:-8],
+#                                                           version)
+#        cmd += "jre/lib/amd64/libjsig.so;"
         cmd += " mvn -X clean integration-test -Ddaos.install.path={}".\
                 format(self.prefix)
-        cmd += " -Dpool_id={}  -Dcont_id={}".format(pool_uuid, cont_uuid)
+        cmd += " -Dpool_id={}  -Dcont_id={} ".format(pool_uuid, cont_uuid)
         cmd += " >> {}/maven_integration_test_output.log".format(self.log_dir)
         self.execute_cmd(cmd, 300)
 
