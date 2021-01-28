@@ -839,16 +839,20 @@ def run_tests(test_files, tag_filter, args):
             # this is typically an indication of a communication issue with one
             # of the hosts, do not attempt to run subsequent tests.
             if not report_skipped_test(
-                    test_file["py"], avocado_logs_dir, skip_reason):
+                    test_file["py"], avocado_logs_dir, skip_reason, args):
                 return_code |= 64
+            elif args.jenkinslog:
+                rename_logs(avocado_logs_dir, test_file["py"], args)
 
         elif not isinstance(test_file["yaml"], str):
             # The test was not run due to an error replacing host placeholders
             # in the yaml file.  Treat this like a failed avocado command.
             reason = "error replacing yaml file placeholders"
             if not report_skipped_test(
-                    test_file["py"], avocado_logs_dir, reason):
+                    test_file["py"], avocado_logs_dir, reason, args):
                 return_code |= 64
+            elif args.jenkinslog:
+                rename_logs(avocado_logs_dir, test_file["py"], args)
             return_code |= 4
 
         else:
@@ -862,8 +866,11 @@ def run_tests(test_files, tag_filter, args):
                         "leftover logs from a previous test run prior to "
                         "running this test")
                     if not report_skipped_test(
-                            test_file["py"], avocado_logs_dir, skip_reason):
+                            test_file["py"], avocado_logs_dir, skip_reason,
+                            args):
                         return_code |= 64
+                    elif args.jenkinslog:
+                        rename_logs(avocado_logs_dir, test_file["py"], args)
                     return_code |= 128
                     continue
 
@@ -1239,7 +1246,7 @@ def check_big_files(avocado_logs_dir, task, test_name, args):
     return status
 
 
-def report_skipped_test(test_file, avocado_logs_dir, reason):
+def report_skipped_test(test_file, avocado_logs_dir, reason, args):
     """Report an error for the skipped test.
 
     Args:
@@ -1255,15 +1262,33 @@ def report_skipped_test(test_file, avocado_logs_dir, reason):
     print(message)
 
     # Generate a fake avocado results.xml file to report the skipped test.
+    # This file currently requires being placed in a job-* subdirectory.
     test_name = get_test_category(test_file)
-    destination = os.path.join(avocado_logs_dir, "skipped_test")
-    destination = os.path.join(avocado_logs_dir, test_name)
+    time_stamp = datetime.now().strftime("%Y-%m-%dT%H.%M")
+    destination = os.path.join(
+        avocado_logs_dir, "job-{}-da03911-{}".format(time_stamp, test_name))
     try:
         os.makedirs(destination)
     except (OSError, FileExistsError) as error:
         print(
             "Warning: Continuing after failing to create {}: {}".format(
                 destination, error))
+
+    if args.jenkinslog:
+        test_logs_lnk = os.path.join(avocado_logs_dir, "latest")
+        try:
+            os.remove(test_logs_lnk)
+        except OSError as error:
+            print(
+                "Warning: Continuing after failing to remove {}: {}".format(
+                    destination, error))
+        try:
+            os.symlink(destination, test_logs_lnk)
+        except OSError as error:
+            print(
+                "Warning: Continuing after failing to link {}: {}".format(
+                    destination, error))
+
     return create_results_xml(
         message, test_name, "See launch.py command output for more details",
         destination)
@@ -1296,7 +1321,8 @@ def create_results_xml(message, testname, output, destination):
     testsuite = ET.Element("testsuite", testsuite_attributes)
 
     # Define the test case error
-    testcase_attributes = {"name": "framework_results", "time": "0.0"}
+    testcase_attributes = {"classname": testname, "name": "framework_results",
+                           "time": "0.0"}
     testcase = ET.SubElement(testsuite, "testcase", testcase_attributes)
     ET.SubElement(testcase, "error", {"message": message})
     system_out = ET.SubElement(testcase, "system-out")
