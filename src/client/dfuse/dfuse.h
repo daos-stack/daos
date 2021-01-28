@@ -23,6 +23,8 @@
 
 #include "dfuse_common.h"
 
+
+
 struct dfuse_info {
 	struct fuse_session		*di_session;
 	struct dfuse_projection_info	*di_handle;
