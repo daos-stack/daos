@@ -37,7 +37,9 @@
 	X(RAS_SWIM_RANK_ALIVE,	"swim_rank_alive")			\
 	X(RAS_SWIM_RANK_DEAD,	"swim_rank_dead")			\
 	X(RAS_POOL_REPS_UPDATE,	"pool_replicas_updated")		\
-	X(RAS_POOL_DF_INCOMPAT,	"pool_durable_format_incompatible")
+	X(RAS_POOL_DF_INCOMPAT,	"pool_durable_format_incompatible")	\
+	X(RAS_SYSTEM_STOP,	"system_action_stop")			\
+	X(RAS_SYSTEM_START,	"system_action_start")
 
 /** Define RAS event enum */
 typedef enum {
