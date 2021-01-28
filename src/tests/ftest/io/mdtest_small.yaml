@@ -7,9 +7,14 @@ hosts:
   test_clients:
     - client-E
     - client-F
-timeout: 605
+timeout: 2400
 server_config:
   name: daos_server
+  servers:
+    log_mask: DEBUG,MEM=ERR
+    env_vars:
+      - DD_MASK=all
+      - D_LOG_MASK=DEBUG,MEM=ERR
   transport_config:
     allow_insecure: True
 agent_config:

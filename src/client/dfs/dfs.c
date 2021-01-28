@@ -25,7 +25,7 @@
 /** D-key name of SB metadata */
 #define SB_DKEY		"DFS_SB_METADATA"
 
-#define SB_AKEYS	5
+#define SB_AKEYS	6
 /** A-key name of SB magic */
 #define MAGIC_NAME	"DFS_MAGIC"
 /** A-key name of SB version */
@@ -36,12 +36,14 @@
 #define CS_NAME		"DFS_CHUNK_SIZE"
 /** A-key name of Default Object Class */
 #define OC_NAME		"DFS_OBJ_CLASS"
+/** Consistency mode of the DFS container. */
+#define MODE_NAME	"DFS_MODE"
 
 /** Magic Value */
 #define DFS_SB_MAGIC		0xda05df50da05df50
-/** DFS Layout version value */
-#define DFS_SB_VERSION		1
-/** DFS SB Version Value */
+/** DFS SB version value */
+#define DFS_SB_VERSION		2
+/** DFS Layout Version Value */
 #define DFS_LAYOUT_VERSION	1
 /** Array object stripe size for regular files */
 #define DFS_DEFAULT_CHUNK_SIZE	1048576
@@ -72,6 +74,9 @@
 #define RESERVED_LO	0
 #define SB_HI		0
 #define ROOT_HI		1
+
+/** DFS mode mask (3rd bit) */
+#define MODE_MASK	(1 << 2)
 
 /** Max recursion depth for symlinks */
 #define DFS_MAX_RECURSION 40
@@ -939,6 +944,7 @@ set_inode_params(bool for_update, daos_iod_t *iods, daos_key_t *dkey)
 		LAYOUT_NAME, sizeof(dfs_layout_ver_t));
 	set_daos_iod(for_update, &iods[i++], CS_NAME, sizeof(daos_size_t));
 	set_daos_iod(for_update, &iods[i++], OC_NAME, sizeof(daos_oclass_id_t));
+	set_daos_iod(for_update, &iods[i++], MODE_NAME, sizeof(uint32_t));
 }
 
 static int
@@ -953,6 +959,7 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 	dfs_layout_ver_t	layout_ver;
 	daos_size_t		chunk_size = 0;
 	daos_oclass_id_t	oclass = OC_UNKNOWN;
+	uint32_t		mode;
 	daos_obj_id_t		super_oid;
 	int			i, rc;
 
@@ -973,6 +980,7 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 	d_iov_set(&sg_iovs[2], &layout_ver, sizeof(dfs_layout_ver_t));
 	d_iov_set(&sg_iovs[3], &chunk_size, sizeof(daos_size_t));
 	d_iov_set(&sg_iovs[4], &oclass, sizeof(daos_oclass_id_t));
+	d_iov_set(&sg_iovs[5], &mode, sizeof(uint32_t));
 
 	for (i = 0; i < SB_AKEYS; i++) {
 		sgls[i].sg_nr		= 1;
@@ -998,6 +1006,8 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 		else
 			oclass = DFS_DEFAULT_OBJ_CLASS;
 
+		mode = attr->da_mode;
+
 		rc = daos_obj_update(*oh, DAOS_TX_NONE, DAOS_COND_DKEY_INSERT,
 				     &dkey, SB_AKEYS, iods, sgls, NULL);
 		if (rc) {
@@ -1007,10 +1017,6 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 
 		return 0;
 	}
-
-	sb_ver = 0;
-	layout_ver = 0;
-	magic = 0;
 
 	/* otherwise fetch the values and verify SB */
 	rc = daos_obj_fetch(*oh, DAOS_TX_NONE, 0, &dkey, SB_AKEYS, iods, sgls,
@@ -1031,7 +1037,8 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 		D_GOTO(err, rc = EINVAL);
 	}
 
-	if (iods[1].iod_size != sizeof(sb_ver) || sb_ver != DFS_SB_VERSION) {
+	/** check version compatibility */
+	if (iods[1].iod_size != sizeof(sb_ver) || sb_ver > DFS_SB_VERSION) {
 		D_ERROR("Incompatible SB version.\n");
 		D_GOTO(err, rc = EINVAL);
 	}
@@ -1046,6 +1053,9 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 		DFS_DEFAULT_CHUNK_SIZE;
 	attr->da_oclass_id = (oclass != OC_UNKNOWN) ? oclass :
 		DFS_DEFAULT_OBJ_CLASS;
+
+	/** DFS_BALANCED (0) by default */
+	attr->da_mode = mode;
 
 	return 0;
 err:
@@ -1122,15 +1132,30 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 		D_GOTO(err_destroy, rc = daos_der2errno(rc));
 	}
 
-	if (attr && attr->da_chunk_size != 0)
-		dattr.da_chunk_size = attr->da_chunk_size;
-	else
+	if (attr == NULL) {
+		dattr.da_mode = DFS_BALANCED;
 		dattr.da_chunk_size = DFS_DEFAULT_CHUNK_SIZE;
-
-	if (attr && attr->da_oclass_id != OC_UNKNOWN)
-		dattr.da_oclass_id = attr->da_oclass_id;
-	else
 		dattr.da_oclass_id = DFS_DEFAULT_OBJ_CLASS;
+	} else {
+		/** check non default chunk size */
+		if (attr->da_chunk_size != 0)
+			dattr.da_chunk_size = attr->da_chunk_size;
+		else
+			dattr.da_chunk_size = DFS_DEFAULT_CHUNK_SIZE;
+
+		/** check non default object class */
+		if (attr->da_oclass_id != OC_UNKNOWN)
+			dattr.da_oclass_id = attr->da_oclass_id;
+		else
+			dattr.da_oclass_id = DFS_DEFAULT_OBJ_CLASS;
+
+		/** check non default mode */
+		if ((attr->da_mode & MODE_MASK) == DFS_RELAXED ||
+		    (attr->da_mode & MODE_MASK) == DFS_BALANCED)
+			dattr.da_mode = attr->da_mode;
+		else
+			dattr.da_mode = DFS_BALANCED;
+	}
 
 	/** Create SB */
 	rc = open_sb(coh, true, &dattr, &super_oh);
@@ -1230,11 +1255,6 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	if (dfs == NULL)
 		D_GOTO(err_prop, rc = ENOMEM);
 
-	dfs->use_dtx = false;
-	d_getenv_bool("DFS_USE_DTX", &dfs->use_dtx);
-	if (dfs->use_dtx)
-		D_DEBUG(DB_ALL, "DFS mount with distributed transactions.\n");
-
 	dfs->poh = poh;
 	dfs->coh = coh;
 	dfs->amode = amode;
@@ -1270,6 +1290,41 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	rc = open_sb(coh, false, &dfs->attr, &dfs->super_oh);
 	if (rc)
 		D_GOTO(err_dfs, rc);
+
+	/*
+	 * If container was created with balanced mode, only balanced mode
+	 * mounting should be allowed.
+	 */
+	if ((dfs->attr.da_mode & MODE_MASK) == DFS_BALANCED) {
+		if ((flags & MODE_MASK) != DFS_BALANCED) {
+			D_ERROR("Can't use non-balanced mount flag on a POSIX"
+				" container created with balanced mode.\n");
+			D_GOTO(err_super, rc = EPERM);
+		}
+		dfs->use_dtx = true;
+		D_DEBUG(DB_ALL, "DFS mount in Balanced mode.\n");
+	} else {
+		if ((dfs->attr.da_mode & MODE_MASK) != DFS_RELAXED) {
+			D_ERROR("Invalid DFS mode in Superblock\n");
+			D_GOTO(err_super, rc = EINVAL);
+		}
+
+		if ((flags & MODE_MASK) == DFS_RELAXED) {
+			dfs->use_dtx = false;
+			D_DEBUG(DB_ALL, "DFS mount in Relaxed mode.\n");
+		} else {
+			dfs->use_dtx = true;
+			D_DEBUG(DB_ALL, "DFS mount in Balanced mode.\n");
+		}
+	}
+
+	/*
+	 * For convenience, keep env variable option for now that overrides the
+	 * default input setting, only if container was created with relaxed
+	 * mode.
+	 */
+	if ((dfs->attr.da_mode & MODE_MASK) == DFS_RELAXED)
+		d_getenv_bool("DFS_USE_DTX", &dfs->use_dtx);
 
 	/** Check if super object has the root entry */
 	strcpy(dfs->root.name, "/");
@@ -2488,7 +2543,7 @@ restart:
 		rc = open_file(dfs, th, parent, flags, cid, chunk_size,
 			       &entry, stbuf ? &file_size : NULL, len, obj);
 		if (rc) {
-			D_DEBUG(DB_TRACE, "Failed to open file (%d)\n", rc);
+			D_ERROR("Failed to open file (%s)\n", strerror(rc));
 			D_GOTO(out, rc);
 		}
 		break;
