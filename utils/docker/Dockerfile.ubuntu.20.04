@@ -63,9 +63,9 @@ RUN mkdir /var/run/daos_agent && chown daos.daos /var/run/daos_agent
 RUN mkdir -p /root/.m2
 COPY utils/mavern_settings.xml /root/.m2/settings.xml
 
-WORKDIR /home/daos
-COPY src/client/java/ .
-RUN mvn --batch-mode dependency:go-offline
+#WORKDIR /home/daos
+#COPY src/client/java/ .
+#RUN mvn --batch-mode dependency:go-offline
 
 WORKDIR /home/daos/pre
 COPY SConstruct .
