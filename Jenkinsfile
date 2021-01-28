@@ -938,7 +938,8 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   scons_args: scons_faults_args()
+                                   build_deps: "no",
+                                   scons_args: "PREFIX=/opt/daos"
                     }
                     post {
                         always {
@@ -977,7 +978,8 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   scons_args: scons_faults_args()
+                                   build_deps: "no",
+                                   scons_args: "PREFIX=/opt/daos"
                     }
                     post {
                         always {
