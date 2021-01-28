@@ -409,7 +409,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
-* Wed Jan 27 2021 Phillip Henderson <phillip.henderson@intel.com> 1.1.2.1-7
+* Thu Jan 28 2021 Phillip Henderson <phillip.henderson@intel.com> 1.1.2.1-7
 - Change ownership and permissions for the /etc/daos/certs directory.
 
 * Sat Jan 23 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.1.2.1-6
