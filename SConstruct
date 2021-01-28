@@ -18,7 +18,8 @@ except NameError:
 sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils'))
 import daos_build
 
-DESIRED_FLAGS = ['-Wno-gnu-designator',
+DESIRED_FLAGS = ['-Wvla',
+                 '-Wno-gnu-designator',
                  '-Wno-missing-braces',
                  '-Wno-ignored-attributes',
                  '-Wno-gnu-zero-variadic-macro-arguments',

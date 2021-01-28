@@ -37,7 +37,7 @@ d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src)
 	int		 rc = 0;
 
 	if (dst == NULL) {
-		D_ERROR("Invalid parameter, dst: %p, src: %p.\n", dst, src);
+		D_ERROR("Invalid parameter, dst: src: %p.\n", dst, src);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -54,12 +54,12 @@ d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src)
 
 	D_ALLOC_ARRAY(rank_list->rl_ranks, rank_list->rl_nr);
 	if (rank_list->rl_ranks == NULL) {
-		D_FREE_PTR(rank_list);
+		D_FREE(rank_list);
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	memcpy(rank_list->rl_ranks, src->rl_ranks,
-		rank_list->rl_nr * sizeof(*rank_list->rl_ranks));
+	       rank_list->rl_nr * sizeof(*rank_list->rl_ranks));
 
 out:
 	if (rc == 0)
@@ -180,7 +180,7 @@ d_rank_list_alloc(uint32_t size)
 
 	D_ALLOC_ARRAY(rank_list->rl_ranks, size);
 	if (rank_list->rl_ranks == NULL) {
-		D_FREE_PTR(rank_list);
+		D_FREE(rank_list);
 		return NULL;
 	}
 
@@ -346,6 +346,7 @@ d_rank_list_append(d_rank_list_t *rank_list, d_rank_t rank)
 out:
 	return rc;
 }
+
 /*
  * Compare whether or not the two rank lists are identical.
  * This function possibly will change the order of the passed in rank list, it
@@ -646,7 +647,6 @@ d_free_string(struct d_string_buffer_t *buf)
 {
 	if (buf->str != NULL) {
 		D_FREE(buf->str);
-		buf->str = NULL;
 		buf->status = 0;
 		buf->str_size = 0;
 		buf->buf_size = 0;
