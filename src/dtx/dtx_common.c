@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * dtx: DTX common logic
@@ -163,6 +146,7 @@ dtx_batched_commit(void *arg)
 {
 	struct dss_module_info		*dmi = dss_get_module_info();
 	struct dtx_batched_commit_args	*dbca;
+	struct dtx_batched_commit_args	*tmp;
 
 	while (1) {
 		struct dtx_entry		**dtes = NULL;
@@ -236,10 +220,12 @@ check:
 		ABT_thread_yield();
 	}
 
-	while (!d_list_empty(&dmi->dmi_dtx_batched_list)) {
-		dbca = d_list_entry(dmi->dmi_dtx_batched_list.next,
-				    struct dtx_batched_commit_args, dbca_link);
-		dtx_free_dbca(dbca);
+	d_list_for_each_entry_safe(dbca, tmp, &dmi->dmi_dtx_batched_list,
+				   dbca_link) {
+		if (dbca->dbca_cont->sc_cos_shutdown)
+			dtx_free_dbca(dbca);
+		else
+			dbca->dbca_cont->sc_cos_shutdown = 1;
 	}
 }
 
@@ -835,7 +821,7 @@ again:
 
 	if (rc != 0 && epoch < dth->dth_epoch) {
 		D_WARN(DF_UUID": Fail to add DTX "DF_DTI" to CoS cache: "
-		       DF_RC". Try to commit it sychronously.\n",
+		       DF_RC". Try to commit it synchronously.\n",
 		       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid),
 		       DP_RC(rc));
 		dth->dth_sync = 1;
@@ -996,6 +982,7 @@ dtx_batched_commit_register(struct ds_cont_child *cont)
 
 	D_ASSERT(cont != NULL);
 	cont->sc_closing = 0;
+	cont->sc_cos_shutdown = 0;
 
 	head = &dss_get_module_info()->dmi_dtx_batched_list;
 	d_list_for_each_entry(dbca, head, dbca_link) {
@@ -1067,6 +1054,10 @@ dtx_batched_commit_deregister(struct ds_cont_child *cont)
 		if (rc != ABT_SUCCESS) {
 			D_ERROR("ABT_future_create failed for DTX flush on "
 				DF_UUID" %d\n", DP_UUID(cont->sc_uuid), rc);
+			/* Set sc_cos_shutdown, then dtx_free_dbca() will be
+			 * called when the DTX batched commit ULT exits.
+			 */
+			cont->sc_cos_shutdown = 1;
 			return;
 		}
 

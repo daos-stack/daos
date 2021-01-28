@@ -1,24 +1,7 @@
 //
 // (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package events
@@ -47,12 +30,7 @@ type RASExtendedInfo interface {
 func NewFromProto(pbEvt *sharedpb.RASEvent) (*RASEvent, error) {
 	evt := new(RASEvent)
 
-	switch RASID(pbEvt.Id) {
-	case RASRankDown, RASPoolRepsUpdate:
-		return evt, evt.FromProto(pbEvt)
-	default:
-		return nil, errors.Errorf("unsupported event ID: %d", pbEvt.Id)
-	}
+	return evt, evt.FromProto(pbEvt)
 }
 
 // RASID identifies a given RAS event.
@@ -186,6 +164,8 @@ func (evt *RASEvent) ToProto() (*sharedpb.RASEvent, error) {
 		pbEvt.ExtendedInfo, err = RankStateInfoToProto(ei)
 	case *PoolSvcInfo:
 		pbEvt.ExtendedInfo, err = PoolSvcInfoToProto(ei)
+	case *StrInfo:
+		pbEvt.ExtendedInfo, err = StrInfoToProto(ei)
 	}
 
 	return pbEvt, err
@@ -216,7 +196,34 @@ func (evt *RASEvent) FromProto(pbEvt *sharedpb.RASEvent) (err error) {
 		evt.ExtendedInfo, err = RankStateInfoFromProto(ei)
 	case *sharedpb.RASEvent_PoolSvcInfo:
 		evt.ExtendedInfo, err = PoolSvcInfoFromProto(ei)
+	case *sharedpb.RASEvent_StrInfo:
+		evt.ExtendedInfo, err = StrInfoFromProto(ei)
+	default:
+		err = errors.New("unknown extended info type")
 	}
 
 	return
+}
+
+// HandleClusterEvent extracts event field from protobuf request message and
+// converts to concrete event type that implements the Event interface.
+// The Event is then published to make available to locally subscribed consumers
+// to act upon.
+func (ps *PubSub) HandleClusterEvent(req *sharedpb.ClusterEventReq) (*sharedpb.ClusterEventResp, error) {
+	switch {
+	case req == nil:
+		return nil, errors.New("nil request")
+	case req.Event == nil:
+		return nil, errors.New("nil event in request")
+	case req.Sequence == 0:
+		ps.log.Debug("no sequence number in request")
+	}
+
+	event, err := NewFromProto(req.Event)
+	if err != nil {
+		return nil, err
+	}
+	ps.Publish(event)
+
+	return &sharedpb.ClusterEventResp{Sequence: req.Sequence}, nil
 }
