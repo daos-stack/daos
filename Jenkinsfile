@@ -1301,7 +1301,7 @@ pipeline {
                         }
                     }
                 } // stage('Coverity on CentOS 7')
-                stage('Functional_VM_CentOS7') {
+                stage('Functional on CentOS 7') {
                     when {
                         beforeAgent true
                         expression { ! skip_ftest('el7') }
@@ -1318,8 +1318,8 @@ pipeline {
                             functionalTestPost()
                         }
                     }
-                } // stage('Functional_VM_CentOS7')
-                stage('Functional_VM_Leap15') {
+                } // stage('Functional on CentOS 7')
+                stage('Functional on Leap 15') {
                     when {
                         beforeAgent true
                         expression { ! skip_ftest('leap15') }
@@ -1336,7 +1336,7 @@ pipeline {
                             functionalTestPost()
                         }
                     } // post
-                } // stage('Functional_VM_Leap15')
+                } // stage('Functional on Leap 15')
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
