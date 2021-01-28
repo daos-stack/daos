@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #define D_LOGFAC	DD_FAC(dfs)
@@ -360,7 +343,7 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 
 	rc = daos_obj_fetch(oh, th, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
 	if (rc) {
-		D_ERROR("Failed to fetch entry %s " DF_RC "\n", name,
+		D_ERROR("Failed to fetch entry %s "DF_RC"\n", name,
 			DP_RC(rc));
 		return daos_der2errno(rc);
 	}
@@ -384,7 +367,7 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 		rc = daos_obj_fetch(oh, th, 0, &dkey, 1, &iod, &sgl, NULL,
 				    NULL);
 		if (rc) {
-			D_ERROR("Failed to fetch entry %s " DF_RC "\n", name,
+			D_ERROR("Failed to fetch entry %s "DF_RC"\n", name,
 				DP_RC(rc));
 			D_FREE(value);
 			D_GOTO(out, rc = daos_der2errno(rc));
@@ -1237,7 +1220,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 
 	rc = daos_cont_query(coh, NULL, prop, NULL);
 	if (rc) {
-		D_ERROR("daos_cont_query() Failed (%d)\n", rc);
+		D_ERROR("daos_cont_query() failed, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_prop, rc = daos_der2errno(rc));
 	}
 
@@ -1541,7 +1524,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 
 	rc = daos_obj_open(coh, super_oid, DAOS_OO_RO, &dfs->super_oh, NULL);
 	if (rc) {
-		D_ERROR("daos_obj_open() failed, " DF_RC "\n", DP_RC(rc));
+		D_ERROR("daos_obj_open() failed, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_dfs, rc = daos_der2errno(rc));
 	}
 
@@ -1557,7 +1540,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 	obj_mode = get_daos_obj_mode(flags);
 	rc = daos_obj_open(coh, dfs->root.oid, obj_mode, &dfs->root.oh, NULL);
 	if (rc) {
-		D_ERROR("daos_obj_open() failed, " DF_RC "\n", DP_RC(rc));
+		D_ERROR("daos_obj_open() failed, "DF_RC"\n", DP_RC(rc));
 		daos_obj_close(dfs->super_oh, NULL);
 		D_GOTO(err_dfs, rc = daos_der2errno(rc));
 	}
@@ -2795,7 +2778,7 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 				       daos_mode, 1, obj_glob->chunk_size,
 				       &obj->oh, NULL);
 	if (rc) {
-		D_ERROR("daos_array_open_with_attr() failed, " DF_RC "\n",
+		D_ERROR("daos_array_open_with_attr() failed, "DF_RC"\n",
 			DP_RC(rc));
 		D_FREE(obj);
 		return daos_der2errno(rc);
@@ -2831,7 +2814,7 @@ dfs_release(dfs_obj_t *obj)
 	}
 
 	if (rc) {
-		D_ERROR("daos_obj_close() failed, " DF_RC "\n", DP_RC(rc));
+		D_ERROR("daos_obj_close() failed, "DF_RC"\n", DP_RC(rc));
 		return daos_der2errno(rc);
 	}
 
@@ -2958,7 +2941,7 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 
 		rc = daos_array_read(obj->oh, DAOS_TX_NONE, &iod, sgl, NULL);
 		if (rc) {
-			D_ERROR("daos_array_read() failed, " DF_RC "\n",
+			D_ERROR("daos_array_read() failed, "DF_RC"\n",
 				DP_RC(rc));
 			return daos_der2errno(rc);
 		}

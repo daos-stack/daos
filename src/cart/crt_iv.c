@@ -1,24 +1,7 @@
 /*
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It implements IV APIs.
@@ -1661,7 +1644,7 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 	D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	if (rc != 0) {
 		D_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR,
-			 "ivo_on_hash() failed, rc="DF_RC"\n",
+			 "Failed to get hash, rc="DF_RC"\n",
 			 DP_RC(rc));
 		D_GOTO(exit, rc);
 	}
@@ -1769,7 +1752,7 @@ exit:
 		if (put_needed)
 			iv_ops->ivo_on_put(ivns, iv_value, user_priv);
 		D_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR,
-			 "ivo_on_put() failed, rc="DF_RC"\n",
+			 "Failed to issue IV fetch, rc="DF_RC"\n",
 			 DP_RC(rc));
 
 		if (cb_info) {
@@ -3353,7 +3336,9 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 		D_GOTO(exit, rc);
 
 	} else {
-		D_ERROR("ivo_on_update failed with rc = %d\n", rc);
+		D_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR,
+			 "ivo_on_update failed with rc = "DF_RC"\n",
+			 DP_RC(rc));
 
 		update_comp_cb(ivns, class_id, iv_key, NULL,
 			       iv_value, rc, cb_arg);
