@@ -654,7 +654,6 @@ server_init(int argc, char *argv[])
 
 	return 0;
 
-	crt_unregister_event_cb(dss_crt_event_cb, NULL);
 exit_drpc_fini:
 	drpc_fini();
 exit_init_state:
@@ -687,6 +686,8 @@ static void
 server_fini(bool force)
 {
 	D_INFO("Service is shutting down\n");
+	crt_unregister_event_cb(dss_crt_event_cb, NULL);
+	D_INFO("unregister event callbacks done\n");
 	dss_module_cleanup_all();
 	D_INFO("dss_module_cleanup_all() done\n");
 	drpc_fini();
