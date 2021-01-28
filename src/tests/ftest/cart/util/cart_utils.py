@@ -113,9 +113,8 @@ class CartUtils():
           self.print("other_env_vars was not set in yaml file.\n")
           return
           
-        other_env_vars_split = shlex.split(other_env_vars)
-        for kv_pair in other_env_vars_split:
-          key, value = kv_pair.split('=', 2)
+        for kv_pair in other_env_vars:
+          key, value = kv_pair[0]
           self.print("Adding {}={} to environment.\n".format(key, value))
           print("Adding {}={} to environment.\n".format(key, value))
           os.environ[key] = value
@@ -127,11 +126,10 @@ class CartUtils():
           print("other_env_vars was not set in yaml file.\n")
           return
           
-        for kv_pair in shlex.split(other_env_vars):
-          key, value = kv_pair.split('=', 2)
+        for kv_pair in other_env_vars:
+          key, value = kv_pair[0]
           print("Removing key {} from environment.\n".format(key))
           del os.environ[key]
-
 
     # What is special about pylint's 15 variable limit?
     # pylint: disable=too-many-locals
