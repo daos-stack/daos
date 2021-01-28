@@ -35,7 +35,6 @@ class DaosCoreTestDfs(DaosCoreBase):
         """Initialize the DaosCoreBase object."""
         super(DaosCoreTestDfs, self).__init__(*args, **kwargs)
         self.hostfile_clients_slots = None
-        self.daos_test = os.path.join(self.bin, 'dfs_test')
 
     def test_daos_dfs_unit(self):
         """Jira ID: DAOS-5409
@@ -51,6 +50,7 @@ class DaosCoreTestDfs(DaosCoreBase):
         :avocado: tags=dfs_test
         :avocado: tags=daos_dfs_unit
         """
+        self.daos_test = os.path.join(self.bin, 'dfs_test')
         self.run_subtest()
 
     def test_daos_dfs_parallel(self):
@@ -67,4 +67,5 @@ class DaosCoreTestDfs(DaosCoreBase):
         :avocado: tags=dfs_test
         :avocado: tags=daos_dfs_parallel
         """
+        self.daos_test = os.path.join(self.bin, 'dfs_test')
         self.run_subtest()
