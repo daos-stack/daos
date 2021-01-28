@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include "dfuse_common.h"
@@ -55,13 +38,12 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	}
 
 	if (ie->ie_stat.st_ino == 0) {
-
 		rc = dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 		if (rc)
 			D_GOTO(out_decref, rc);
 
 		dfuse_compute_inode(ie->ie_dfs, &ie->ie_oid,
-					 &ie->ie_stat.st_ino);
+				    &ie->ie_stat.st_ino);
 	}
 
 	entry.attr = ie->ie_stat;
@@ -88,13 +70,13 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 
 		DFUSE_TRA_DEBUG(ie, "inode dfs %p %ld hi %#lx lo %#lx",
 				inode->ie_dfs,
-				inode->ie_dfs->dfs_root,
+				inode->ie_dfs->dfs_ino,
 				inode->ie_oid.hi,
 				inode->ie_oid.lo);
 
 		DFUSE_TRA_DEBUG(ie, "inode dfs %p %ld hi %#lx lo %#lx",
 				ie->ie_dfs,
-				ie->ie_dfs->dfs_root,
+				ie->ie_dfs->dfs_ino,
 				ie->ie_oid.hi,
 				ie->ie_oid.lo);
 
@@ -117,15 +99,15 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		}
 
 		DFUSE_TRA_DEBUG(inode,
-				"Maybe updating parent inode %#lx dfs_root %#lx",
-				entry.ino, ie->ie_dfs->dfs_root);
+				"Maybe updating parent inode %#lx dfs_ino %#lx",
+				entry.ino, ie->ie_dfs->dfs_ino);
 
-		if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_root) {
+		if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino) {
 			DFUSE_TRA_DEBUG(inode, "Not updating parent");
 		} else {
 			rc = dfs_update_parent(inode->ie_obj, ie->ie_obj,
 					       ie->ie_name);
-			if (rc != -DER_SUCCESS)
+			if (rc != 0)
 				DFUSE_TRA_ERROR(inode,
 						"dfs_update_parent() failed %d",
 						rc);
@@ -194,9 +176,8 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 
 	D_MUTEX_LOCK(&fs_handle->dpi_info->di_lock);
 
-	/* Search the currently connect dfp list, if one matches then use that
-	 * and drop the locally allocated one.  If there is no match then
-	 * properly initialize the local one ready for use.
+	/* Search the currently connect dfp list, if one matches then use that,
+	 * otherwise allocate a new one.
 	 */
 	d_list_for_each_entry(dfpi, &fs_handle->dpi_info->di_dfp_list,
 			      dfp_list) {
@@ -218,6 +199,8 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		DFUSE_TRA_UP(dfp, ie->ie_dfs->dfs_dfp, "dfp");
 		D_INIT_LIST_HEAD(&dfp->dfp_dfs_list);
 		d_list_add(&dfp->dfp_list, &fs_handle->dpi_info->di_dfp_list);
+		new_pool = true;
+
 		uuid_copy(dfp->dfp_pool, dattr.da_puuid);
 
 		/* Connect to DAOS pool */
@@ -227,10 +210,16 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 				       &dfp->dfp_poh, &dfp->dfp_pool_info,
 				       NULL);
 		if (rc != -DER_SUCCESS) {
-			DFUSE_LOG_ERROR("Failed to connect to pool (%d)", rc);
+			if (rc == -DER_NO_PERM)
+				DFUSE_TRA_DEBUG(ie,
+						"daos_pool_connect() failed, "
+						DF_RC"\n", DP_RC(rc));
+			else
+				DFUSE_TRA_WARNING(ie,
+						  "daos_pool_connect() failed, "
+						  DF_RC"\n", DP_RC(rc));
 			D_GOTO(out_err, ret = daos_der2errno(rc));
 		}
-		new_pool = true;
 	}
 
 	d_list_for_each_entry(dfsi, &dfp->dfp_dfs_list,	dfs_list) {
@@ -249,15 +238,15 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 
 		dfs->dfs_ops = ie->ie_dfs->dfs_ops;
 		DFUSE_TRA_UP(dfs, dfp, "dfs");
-		d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
 		uuid_copy(dfs->dfs_cont, dattr.da_cuuid);
+		d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
+		new_cont = true;
 
 		dfuse_dfs_init(dfs, ie->ie_dfs);
 
 		/* Try to open the DAOS container (the mountpoint) */
 		rc = daos_cont_open(dfp->dfp_poh, dfs->dfs_cont, DAOS_COO_RW,
-				    &dfs->dfs_coh, &dfs->dfs_co_info,
-				    NULL);
+				    &dfs->dfs_coh, NULL, NULL);
 		if (rc) {
 			DFUSE_LOG_ERROR("Failed container open (%d)",
 					rc);
@@ -267,7 +256,8 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		rc = dfs_mount(dfp->dfp_poh, dfs->dfs_coh, O_RDWR,
 			       &dfs->dfs_ns);
 		if (rc) {
-			DFUSE_LOG_ERROR("dfs_mount failed (%d)", rc);
+			DFUSE_LOG_ERROR("dfs_mount() failed: (%s)",
+					strerror(rc));
 			D_GOTO(out_cont, ret = rc);
 		}
 		new_cont = true;
@@ -275,11 +265,8 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 
 		dfs->dfs_ino = atomic_fetch_add_relaxed(&fs_handle->dpi_ino_next,
 							1);
-		dfs->dfs_root = dfs->dfs_ino;
 		dfs->dfs_dfp = dfp;
 	}
-
-	ie->ie_stat.st_ino = dfs->dfs_ino;
 
 	rc = dfs_release(ie->ie_obj);
 	if (rc) {
@@ -289,17 +276,19 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	}
 
 	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj,
-			NULL, NULL);
+			NULL, &ie->ie_stat);
 	if (rc) {
 		DFUSE_TRA_ERROR(dfs, "dfs_lookup() failed: (%s)",
 				strerror(rc));
 		D_GOTO(out_umount, ret = rc);
 	}
 
+	ie->ie_stat.st_ino = dfs->dfs_ino;
+
 	ie->ie_dfs = dfs;
 
 	DFUSE_TRA_INFO(dfs, "UNS entry point activated, root %lu",
-		       dfs->dfs_root);
+		       dfs->dfs_ino);
 
 	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 	return 0;
@@ -307,7 +296,8 @@ out_umount:
 	if (new_cont) {
 		rc = dfs_umount(dfs->dfs_ns);
 		if (rc)
-			DFUSE_TRA_ERROR(dfs, "dfs_umount() failed %d", rc);
+			DFUSE_TRA_ERROR(dfs, "dfs_umount() failed: (%s)",
+					strerror(rc));
 	}
 out_cont:
 	if (new_cont) {
