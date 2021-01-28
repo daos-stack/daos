@@ -1,27 +1,14 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import re
+
 from nvme_utils import ServerFillUp
+from daos_utils import DaosCommand
+from test_utils_container import TestContainer
 
 class ErasureCodeIor(ServerFillUp):
     # pylint: disable=too-many-ancestors
@@ -34,6 +21,7 @@ class ErasureCodeIor(ServerFillUp):
         """Initialize a ServerFillUp object."""
         super(ErasureCodeIor, self).__init__(*args, **kwargs)
         self.server_count = None
+        self.ec_container = None
         self.cont_uuid = []
 
     def setUp(self):
@@ -49,6 +37,38 @@ class ErasureCodeIor(ServerFillUp):
         self.server_count = len(self.hostlist_servers) * 2
         #Create the Pool
         self.create_pool_max_size()
+        self.update_ior_cmd_with_pool()
+
+    def ec_contaier_create(self, oclass):
+        """Create the container for EC object"""
+        # Get container params
+        self.ec_container = TestContainer(
+            self.pool, daos_command=DaosCommand(self.bin))
+        self.ec_container.get_params(self)
+        self.ec_container.oclass.update(oclass)
+        # update object class for container create, if supplied
+        # explicitly.
+        ec_object = self.get_data_parity_number(oclass)
+        self.ec_container.properties.update("rf:{}".format(ec_object['parity']))
+
+        # create container
+        self.ec_container.create()
+
+    def get_data_parity_number(self, oclass):
+        """Return EC Object Data and Parity count.
+
+        Args:
+            oclass(string): EC Object type.
+        return:
+            result[list]: Data and Parity numbers from object type
+        """
+        if 'EC' not in oclass:
+            self.log.error("Provide EC Object type only and not %s",
+                           str(oclass))
+            return 0
+
+        tmp = re.findall(r'\d+', oclass)
+        return {'data': tmp[0], 'parity': tmp[1]}
 
     def ior_param_update(self, oclass, sizes):
         """Update the IOR command parameters.
@@ -57,11 +77,11 @@ class ErasureCodeIor(ServerFillUp):
             oclass(list): list of the obj class to use with IOR
             sizes(list): Update Transfer, Chunk and Block sizes
         """
+        self.ior_cmd.block_size.update(sizes[1])
+        self.ior_cmd.transfer_size.update(sizes[2])
         self.ior_cmd.dfs_oclass.update(oclass[0])
         self.ior_cmd.dfs_dir_oclass.update(oclass[0])
         self.ior_cmd.dfs_chunk.update(sizes[0])
-        self.ior_cmd.block_size.update(sizes[1])
-        self.ior_cmd.transfer_size.update(sizes[2])
 
     def ior_write_dataset(self):
         """ Write IOR data set with different EC object and different sizes
@@ -73,8 +93,14 @@ class ErasureCodeIor(ServerFillUp):
                 if oclass[1] > self.server_count:
                     continue
                 self.ior_param_update(oclass, sizes)
-                self.update_ior_cmd_with_pool(oclass=oclass[0])
+
+                #Create the new container with correct redundancy factor
+                #for EC object type
+                self.ec_contaier_create(oclass[0])
+                self.update_ior_cmd_with_pool(oclass=oclass[0],
+                                              create_cont=False)
                 #Start IOR Write
+                self.container.uuid = self.ec_container.uuid
                 self.start_ior_load(operation="WriteRead", percent=1,
                                     create_cont=False)
                 self.cont_uuid.append(self.ior_cmd.dfs_cont.value)
