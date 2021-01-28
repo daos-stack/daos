@@ -1002,13 +1002,13 @@ class DaosServerManager(SubprocessManager):
                     current = "not detected"
 
                 # Check if the rank's expected state matches the current state
-                result = "PASS" if current in expected else "FAIL (mismatch)"
+                result = "PASS" if current in expected else "RESTART"
                 status["expected"] &= current in expected
 
                 # Restart all ranks if the expected rank is not running
                 if current not in running_states:
                     status["restart"] = True
-                    result = "FAIL (not running)"
+                    result = "RESTART"
 
                 self.log.info(
                     log_format, rank, domain[0].replace("/", ""),
@@ -1022,7 +1022,7 @@ class DaosServerManager(SubprocessManager):
                 self.log.info(
                     log_format, rank, domain[0].replace("/", ""),
                     current_states[rank]["uuid"], "not detected",
-                    current_states[rank]["state"].lower(), "FAIL")
+                    current_states[rank]["state"].lower(), "RESTART")
 
         else:
             # Any failure to obtain the current rank information is an error
@@ -1031,10 +1031,14 @@ class DaosServerManager(SubprocessManager):
                 "not running this is expected.")
 
             # Do not report an error if all servers are expected to be stopped
-            all_stopped = all(
-                [state.lower() == "stopped"
-                 for state in self._expected_states.values()]
-            )
+            all_stopped = bool(self._expected_states)
+            for rank in sorted(self._expected_states):
+                states = self._expected_states[rank]["state"]
+                if not isinstance(states, (list, tuple)):
+                    states = [states]
+                if "stopped" not in [item.lower() for item in states]:
+                    all_stopped = False
+                    break
             if all_stopped:
                 self.log.info("  All servers are expected to be stopped.")
                 status["restart"] = True

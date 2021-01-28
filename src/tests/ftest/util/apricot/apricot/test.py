@@ -1258,8 +1258,8 @@ class TestWithServers(TestWithoutServers):
             self.server_managers[index].manager.job.get_config_value("name"),
             self.server_managers[index].manager.job.yaml.filename,
             self.server_managers[index].dmg.yaml.filename,
-            self.server_managers[index].manager.job.yaml.temporary_file,
-            self.server_managers[index].dmg.yaml.temporary_file
+            self.server_managers[index].manager.job.temporary_file,
+            self.server_managers[index].dmg.temporary_file
         )
         self.configure_manager(
             "server",

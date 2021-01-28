@@ -6,7 +6,7 @@
 
 Name:          daos
 Version:       1.1.2.1
-Release:       6%{?relval}%{?dist}
+Release:       7%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -409,14 +409,14 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Wed Jan 27 2021 Phillip Henderson <phillip.henderson@intel.com> 1.1.2.1-7
+- Change ownership and permissions for the /etc/daos/certs directory.
+
 * Sat Jan 23 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.1.2.1-6
 - Update to mercury v2.0.1rc1
 
 * Fri Jan 22 2021 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.2.1-5
 - Install daos_metrics utility to %{_bindir}
-
-* Fri Jan 22 2021 Phillip Henderson <phillip.henderson@intel.com> 1.1.2.1-5
-- Change ownership and permissions for the /etc/daos/certs directory.
 
 * Wed Jan 20 2021 Kenneth Cain <kenneth.c.cain@intel.com> 1.1.2.1-4
 - Version update for API major version 1, libdaos.so.1 (1.0.0)
