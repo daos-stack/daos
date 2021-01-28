@@ -926,6 +926,7 @@ pipeline {
                 stage('Build on Ubuntu 20.04') {
                     when {
                         beforeAgent true
+                        expression { ! skip_build_on_ubuntu_clang() }
                     }
                     agent {
                         dockerfile {
