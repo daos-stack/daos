@@ -926,11 +926,10 @@ pipeline {
                 stage('Build on Ubuntu 20.04') {
                     when {
                         beforeAgent true
-                        expression { ! skip_build_on_landing_branch() }
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.ubuntu.20.04'
+                            filename 'utils/docker/Dockerfile.ubuntu.20.04'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs() +
                                                 " -t ${sanitized_JOB_NAME}-ubuntu20.04"
@@ -970,7 +969,6 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'Dockerfile.ubuntu.20.04'
-                            dir 'utils/docker'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs() +
                                                 " -t ${sanitized_JOB_NAME}-ubuntu20.04"
