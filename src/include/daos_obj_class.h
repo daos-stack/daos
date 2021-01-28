@@ -572,6 +572,8 @@ struct daos_oclass_attr {
 
 /** object class ID */
 typedef uint16_t		daos_oclass_id_t;
+/** object class hints */
+typedef uint16_t		daos_oclass_hints_t;
 /** object feature bits */
 typedef uint16_t		daos_ofeat_t;
 
