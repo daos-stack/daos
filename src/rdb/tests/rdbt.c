@@ -499,7 +499,7 @@ restore_initial_replicas(crt_group_t *grp, uint32_t nranks,
 	rc = wait_for_any_leader(grp, nranks, cur_nreplicas, term,
 				 &final_ldr_rank, &new_term);
 	if (rc != 0) {
-		fprintf(stderr, "FAIL: wait for a leader: " DF_RC"\n",
+		fprintf(stderr, "FAIL: wait for a leader: "DF_RC"\n",
 				DP_RC(rc));
 		return rc;
 	}

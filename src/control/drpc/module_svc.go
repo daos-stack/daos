@@ -111,7 +111,7 @@ func (r *ModuleService) ProcessMessage(session *Session, msgBytes []byte) ([]byt
 	}
 	respBody, err := module.HandleCall(session, method, msg.GetBody())
 	if err != nil {
-		r.log.Errorf("HandleCall for %s:%s failed: %s\n", module, method, err)
+		r.log.Errorf("HandleCall for %s:%s failed: %s\n", module.ID().String(), method.String(), err)
 		return marshalResponse(msg.GetSequence(), ErrorToStatus(err), nil)
 	}
 
