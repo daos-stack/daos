@@ -50,6 +50,7 @@ class TestPool(TestDaosApiBase):
         self.prop_name = BasicParameter(None)       # name of property to be set
         self.prop_value = BasicParameter(None)      # value of property
         self.rebuild_timeout = BasicParameter(None)
+        self.pool_query_timeout = BasicParameter(None)
 
         self.pool = None
         self.uuid = None
@@ -481,13 +482,29 @@ class TestPool(TestDaosApiBase):
                 waiting for rebuild to start or end
 
         """
+        if self.pool_query_timeout.value is not None:
+            self.log.info(
+                "Waiting for pool query to be responsive %s",
+                " with a {} second timeout".format(self.pool_query_timeout.value))
+
+            start = time()
+            while time() < (start + self.pool_query_timeout.value):
+                try:
+                    self.dmg.pool_query(self.pool.get_uuid_str())
+                    break
+                except CommandFailure as err:
+                    self.log.info("Pool Query Failed")
+            if time() > (start + self.pool_query_timeout.value):
+                raise DaosTestError("Pool Query non-responive for {} seconds".\
+                    format(self.pool_query_timeout.value))
+
+        start = time()
         self.log.info(
             "Waiting for rebuild to %s%s ...",
             "start" if to_start else "complete",
             " with a {} second timeout".format(self.rebuild_timeout.value)
             if self.rebuild_timeout.value is not None else "")
 
-        start = time()
         while self.rebuild_complete() == to_start:
             self.log.info(
                 "  Rebuild %s ...",
