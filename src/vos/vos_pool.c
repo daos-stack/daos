@@ -14,6 +14,7 @@
 
 #include <daos/common.h>
 #include <daos_srv/vos.h>
+#include <daos_srv/ras.h>
 #include <daos_errno.h>
 #include <gurt/hash.h>
 #include <sys/stat.h>
@@ -653,6 +654,10 @@ vos_pool_open(const char *path, uuid_t uuid, bool small, daos_handle_t *poh)
 	if (pool_df->pd_version > POOL_DF_VERSION ||
 	    pool_df->pd_version < POOL_DF_VER_1) {
 		D_ERROR("Unsupported DF version %x\n", pool_df->pd_version);
+		/** Send a RAS notification */
+		vos_report_layout_incompat("VOS pool", pool_df->pd_version,
+					   POOL_DF_VER_1, POOL_DF_VERSION,
+					   &ukey.uuid);
 		D_GOTO(failed, rc = -DER_DF_INCOMPT);
 	}
 
