@@ -15,7 +15,7 @@ try:
 except NameError:
     pass
 
-sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils'))
+sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils/sl'))
 import daos_build
 
 DESIRED_FLAGS = ['-Wno-gnu-designator',
@@ -366,7 +366,6 @@ def scons(): # pylint: disable=too-many-locals
 
         exit(0)
 
-    sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils/sl'))
     from prereq_tools import PreReqComponent
 
     env = Environment(TOOLS=['extra', 'default', 'textfile'])

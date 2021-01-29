@@ -27,9 +27,9 @@ jobs:
     - uses: satackey/action-docker-layer-caching@v0.0.11
       continue-on-error: true
       with:
-        key: daos-docker-cache-${{ matrix.distro }}-${{ matrix.compiler}}-{hash}
+        key: daos-docker-${{ matrix.distro }}-${{ matrix.compiler}}-{hash}
         restore-keys: |
-          daos-docker-cache-${{ matrix.distro }}-${{ matrix.compiler}}
+          daos-docker-${{ matrix.distro }}-${{ matrix.compiler}}
     - name: Build ${{ matrix.distro }} Docker image with ${{ matrix.compiler }}
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg COMPILER=${{ matrix.compiler }}
