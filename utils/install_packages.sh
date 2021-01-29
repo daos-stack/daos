@@ -14,8 +14,3 @@ apt-get -y install scons python3-distro autoconf bash clang cmake curl \
         openjdk-8-jdk maven libopenmpi-dev patchelf libjson-c-dev   \
         liblz4-dev python3-distro \
 	ndctl golang-go python-distro
-
-set +e
-add-apt-repository universe
-apt-get search fuse
-apt-get -y install fuse3 libfuse3-dev
