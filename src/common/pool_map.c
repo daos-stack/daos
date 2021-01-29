@@ -1337,6 +1337,63 @@ uuid_compare_cb(const void *a, const void *b)
 	return uuid_compare(*ua, *ub);
 }
 
+static int
+add_domains_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
+			int map_version,
+			int ndomains, const uint32_t *domains)
+{
+	int		i, rc;
+	uint32_t	num_comps;
+	uint8_t		new_status;
+	const int	TUPLE_SIZE = 3;
+	uint32_t	domains_found;
+
+	if (map != NULL) {
+		new_status = PO_COMP_ST_NEW;
+		num_comps = pool_map_find_domain(map, PO_COMP_TP_RACK,
+						 PO_COMP_ID_ALL, NULL);
+	} else {
+		new_status = PO_COMP_ST_UPIN;
+		num_comps = 0;
+	}
+
+	/*
+	 * Fault domains are structured as an array of tuples:
+	 * (layer, ID, number of children)
+	 * The leaves are simply the rank IDs, and may be ignored for now.
+	 */
+	domains_found = 1 + domains[TUPLE_SIZE - 1];
+	for (i = TUPLE_SIZE;
+	     (i < ndomains - TUPLE_SIZE) &&
+	     (i < domains_found * TUPLE_SIZE); ) {
+		struct pool_component	map_comp = {0};
+		uint32_t		layer = domains[i++];
+		uint32_t		id = domains[i++];
+		uint32_t		num_children = domains[i++];
+
+		// TODO DAOS-6353: Use the layer number as type
+		map_comp.co_type = PO_COMP_TP_RACK;
+		map_comp.co_status = new_status;
+		map_comp.co_index = i + num_comps;
+		map_comp.co_id = id;
+		map_comp.co_rank = 0;
+		map_comp.co_ver = map_version;
+		map_comp.co_fseq = 1;
+		map_comp.co_nr = num_children;
+
+		/* layer 1 is the bottom user-defined layer, above ranks */
+		if (layer > 1) {
+			domains_found += num_children;
+		}
+
+		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
+		if (rc != 0)
+			return rc;
+	}
+
+	return 0;
+}
+
 int
 gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 		int map_version, int ndomains, int nnodes, int ntargets,
@@ -1353,11 +1410,20 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 	bool			updated;
 	int			i, rc;
 	const int		TUPLE_SIZE = 3;
+	int			num_domain_comps;
 
 	updated = false;
 
+	/*
+	 * Incoming domain tree map includes the root and the ranks, which are
+	 * currently allocated separately.
+	 * Higher-level domains are formatted in tuples, ranks are a single
+	 * integer.
+	 */
+	num_domain_comps = (ndomains - nnodes - 1) / TUPLE_SIZE;
+
 	/* Prepare the pool map attribute buffers. */
-	map_buf = pool_buf_alloc(ndomains + nnodes + ntargets);
+	map_buf = pool_buf_alloc(num_domain_comps + nnodes + ntargets);
 	if (map_buf == NULL)
 		D_GOTO(out_map_buf, rc = -DER_NOMEM);
 
@@ -1368,53 +1434,19 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 	memcpy(uuids, target_uuids, sizeof(uuid_t) * nnodes);
 	qsort(uuids, nnodes, sizeof(uuid_t), uuid_compare_cb);
 
+	rc = add_domains_to_pool_buf(map, map_buf, map_version, ndomains,
+				     domains);
+	if (rc != 0)
+		D_GOTO(out_map_buf, rc);
+
 	if (map != NULL) {
 		new_status = PO_COMP_ST_NEW;
-		num_comps = pool_map_find_domain(map, PO_COMP_TP_RACK,
+		num_comps = pool_map_find_domain(map, PO_COMP_TP_NODE,
 						 PO_COMP_ID_ALL, NULL);
 	} else {
 		new_status = PO_COMP_ST_UPIN;
 		num_comps = 0;
 	}
-
-	/*
-	 * Fault domains are structured as an array of tuples:
-	 * (layer, ID, number of children)
-	 * The leaves are simply the rank IDs, and may be ignored for now.
-	 */
-	uint32_t domain_count = 1 + domains[TUPLE_SIZE - 1];
-	for (i = TUPLE_SIZE;
-	     (i < ndomains - TUPLE_SIZE) &&
-	     (i < domain_count * TUPLE_SIZE); ) {
-		uint32_t layer = domains[i++];
-		uint32_t id = domains[i++];
-		uint32_t num_children = domains[i++];
-
-		// TODO DAOS-6353: Use the layer number as type
-		map_comp.co_type = PO_COMP_TP_RACK;
-		map_comp.co_status = new_status;
-		map_comp.co_index = i + num_comps;
-		map_comp.co_id = id;
-		map_comp.co_rank = 0;
-		map_comp.co_ver = map_version;
-		map_comp.co_fseq = 1;
-		map_comp.co_nr = num_children;
-
-		/* layer 1 is the bottom user-defined layer, above ranks */
-		if (layer > 1) {
-			domain_count += num_children;
-		}
-
-		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
-		if (rc != 0)
-			D_GOTO(out_map_buf, rc);
-	}
-
-	if (map != NULL)
-		num_comps = pool_map_find_domain(map, PO_COMP_TP_NODE,
-						 PO_COMP_ID_ALL, NULL);
-	else
-		num_comps = 0;
 
 	/* fill nodes */
 	for (i = 0; i < nnodes; i++) {
