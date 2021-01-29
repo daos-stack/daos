@@ -939,7 +939,6 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallel_build(),
                                    build_deps: "no",
-                                   skip_clean: true,
                                    scons_args: "PREFIX=/opt/daos"
                     }
                     post {
@@ -971,7 +970,7 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.ubuntu.20.04'
+                            filename 'utils/docker/Dockerfile.ubuntu.20.04'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs() +
                                                 " -t ${sanitized_JOB_NAME}-ubuntu20.04"
@@ -980,7 +979,6 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallel_build(),
                                    build_deps: "no",
-                                   skip_clean: true,
                                    scons_args: "PREFIX=/opt/daos"
                     }
                     post {

@@ -16,7 +16,6 @@ except NameError:
     pass
 
 sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils'))
-#sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils/sl'))
 import daos_build
 
 DESIRED_FLAGS = ['-Wno-gnu-designator',

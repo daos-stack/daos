@@ -87,7 +87,7 @@ ARG COMPILER=gcc
 
 # Build DAOS & dependencies
 RUN if [ "x$NOBUILD" = "x" ] ; then \
-    scons --build-deps=yes -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER --deps-only; fi
+    scons --build-deps=no -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER; fi
 
 # Set environment variables
 ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:$LD_LIBRARY_PATH
