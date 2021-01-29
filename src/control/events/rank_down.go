@@ -11,6 +11,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 )
 
 // RankStateInfo describes details of a rank's state.
@@ -71,5 +72,6 @@ func NewRankDownEvent(hostname string, instanceIdx uint32, rank uint32, exitErr 
 			InstanceIdx: instanceIdx,
 			ExitErr:     exitErr,
 		},
+		forwarded: atm.NewBool(false),
 	}
 }
