@@ -23,12 +23,14 @@ class DaosCoreBase(TestWithServers):
     :avocado: recursive
     """
 
-    TEST_PATH = "/run/daos_tests/Tests/*"
+    TEST_PATH = "/run/daos_tests/Tests"
 
     def __init__(self, *args, **kwargs):
         """Initialize the DaosCoreBase object."""
         super(DaosCoreBase, self).__init__(*args, **kwargs)
         self.subtest_name = None
+
+        self.TEST_PATH = "{}/{}/*".format(self.TEST_PATH, self.get_test_name())
 
         test_timeout = self.params.get("test_timeout", self.TEST_PATH)
         if test_timeout:
@@ -137,12 +139,13 @@ class DaosCoreBase(TestWithServers):
         if "random" in stopped_ranks:
             # Set each expected rank state to be either stopped or running
             for manager in self.server_managers:
-                manager.update_expected_states(None, ["Joined", "Stopped"])
+                manager.update_expected_states(
+                    None, ["Joined", "Stopped", "Evicted"])
         else:
             # Set the specific expected rank state to stopped
             for rank in stopped_ranks:
                 for manager in self.server_managers:
-                    manager.update_expected_states(rank, "Stopped")
+                    manager.update_expected_states(rank, ["Stopped", "Evicted"])
 
         try:
             process.run(cmd, env=env)

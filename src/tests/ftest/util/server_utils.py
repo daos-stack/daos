@@ -1012,7 +1012,7 @@ class DaosServerManager(SubprocessManager):
 
                 self.log.info(
                     log_format, rank, domain[0].replace("/", ""),
-                    self._expected_states[rank]["uuid"], expected,
+                    self._expected_states[rank]["uuid"], "|".join(expected),
                     current, result)
 
             # Report any current states that were not expected as an error
