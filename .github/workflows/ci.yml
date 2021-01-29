@@ -56,7 +56,7 @@ jobs:
         key: daos-docker-${{ matrix.distro }}-clang-{hash}
         restore-keys: |
           daos-docker-${{ matrix.distro }}-clang-
-	skip-save: true
+        skip-save: true
     - name: Build deps ${{ matrix.distro }} Docker image
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg
