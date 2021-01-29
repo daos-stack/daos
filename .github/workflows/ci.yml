@@ -17,6 +17,32 @@ jobs:
       matrix:
 #        distro: [centos.7, centos.8, leap.15, ubuntu.20.04]
         distro: [ubuntu.20.04]
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+      with:
+        submodules: true
+    # https://github.com/marketplace/actions/docker-layer-caching
+    - uses: satackey/action-docker-layer-caching@v0.0.11
+      continue-on-error: true
+      with:
+        key: daos-docker-${{ matrix.distro }}-clang-{hash}
+        restore-keys: |
+          daos-docker-${{ matrix.distro }}-clang-
+    - name: Build deps ${{ matrix.distro }} Docker image
+      run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
+                          --build-arg
+                          -t ${{ matrix.distro }}/daos:${{ github.sha }}
+                          --build-arg NOBUILD=1
+  Build2:
+    name: Run the build
+    needs: Build
+    runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: false
+      matrix:
+#        distro: [centos.7, centos.8, leap.15, ubuntu.20.04]
+        distro: [ubuntu.20.04]
         compiler: [gcc, clang]
     steps:
     - name: Checkout code
@@ -27,13 +53,14 @@ jobs:
     - uses: satackey/action-docker-layer-caching@v0.0.11
       continue-on-error: true
       with:
-        key: daos-docker-${{ matrix.distro }}-${{ matrix.compiler}}-{hash}
+        key: daos-docker-${{ matrix.distro }}-clang-{hash}
         restore-keys: |
-          daos-docker-${{ matrix.distro }}-${{ matrix.compiler}}
-    - name: Build deps ${{ matrix.distro }} Docker image with ${{ matrix.compiler }}
+          daos-docker-${{ matrix.distro }}-clang-
+	skip-save: true
+    - name: Build deps ${{ matrix.distro }} Docker image
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
-                          --build-arg COMPILER=${{ matrix.compiler }}
-                          -t ${{ matrix.distro }}/${{ matrix.compiler }}/daos:${{ github.sha }}
+                          --build-arg
+                          -t ${{ matrix.distro }}/daos:${{ github.sha }}
                           --build-arg NOBUILD=1
     - name: Build daos ${{ matrix.distro }} Docker image with ${{ matrix.compiler }}
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
