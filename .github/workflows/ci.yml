@@ -30,10 +30,17 @@ jobs:
         key: daos-docker-${{ matrix.distro }}-${{ matrix.compiler}}-{hash}
         restore-keys: |
           daos-docker-${{ matrix.distro }}-${{ matrix.compiler}}
-    - name: Build ${{ matrix.distro }} Docker image with ${{ matrix.compiler }}
+    - name: Build deps ${{ matrix.distro }} Docker image with ${{ matrix.compiler }}
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg COMPILER=${{ matrix.compiler }}
                           -t ${{ matrix.distro }}/${{ matrix.compiler }}/daos:${{ github.sha }}
+			  --build-arg NOBUILD=1
+    - name: Build daos ${{ matrix.distro }} Docker image with ${{ matrix.compiler }}
+      run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
+                          --build-arg COMPILER=${{ matrix.compiler }}
+                          -t ${{ matrix.distro }}/${{ matrix.compiler }}/daos:${{ github.sha }}
+			  --no-cache=true
+
   Native_build:
     name: Build
     runs-on: ubuntu-latest
@@ -45,7 +52,7 @@ jobs:
     - name: Setup node
       run: sudo ./utils/install_packages.sh
     - name: Build deps
-      run: scons --build-config=utils/build.config.github --build-deps=yes --deps-only
+      run: scons --build-deps=yes --deps-only
     - name: Build
       run: scons
     - name: Install
