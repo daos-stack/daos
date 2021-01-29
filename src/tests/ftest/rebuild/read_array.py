@@ -4,7 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from apricot import skipForTicket
 from rebuild_test_base import RebuildTestBase
 
 
@@ -26,7 +25,6 @@ class ReadArrayTest(RebuildTestBase):
             self.pool.read_data_during_rebuild(self.container),
             "Error reading data during rebuild")
 
-    @skipForTicket("DAOS-6450")
     def test_read_array_during_rebuild(self):
         """Jira ID: DAOS-691.
 

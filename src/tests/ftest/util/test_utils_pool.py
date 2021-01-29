@@ -456,7 +456,7 @@ class TestPool(TestDaosApiBase):
             self.display_pool_rebuild_status()
             status = self.info.pi_rebuild_st.rs_done == 1
         elif self.control_method.value == self.USE_DMG and self.dmg:
-            self.set_query_data()
+            self.set_query_data(retry_timeout=60, interval=1)
             self.log.info(
                 "Pool %s query data: %s\n", self.uuid, self.query_data)
             status = self.query_data["rebuild"]["status"] == "done"
@@ -732,15 +732,37 @@ class TestPool(TestDaosApiBase):
         return status
 
     @fail_on(CommandFailure)
-    def set_query_data(self):
+    def set_query_data(self, retry_timeout=0, interval=1):
         """Execute dmg pool query and store the results.
+
+        Args:
+            retry_timeout (int): retry time in seconds for the query.
+            interval (int): number of seconds to wait between dmg pool query.
 
         Only supported with the dmg control method.
         """
-        self.query_data = []
+        self.query_data = {}
         if self.pool:
             if self.dmg:
-                self.query_data = self.dmg.pool_query(self.pool.get_uuid_str())
+                if retry_timeout > 0:
+                    self.dmg.exit_status_exception = False
+                    start = time()
+                    retry_loop = 1
+                    while self.query_data == {}:
+                        self.log.info("---set_query_data retry loop: %d",
+                                      retry_loop)
+                        if time() - start > retry_timeout:
+                            raise DaosTestError(
+                                "##TIMEOUT detected after {} seconds on "
+                                "dmg pool query.".format(retry_timeout))
+                        self.query_data = self.dmg.pool_query(
+                            self.pool.get_uuid_str())
+                        sleep(interval)
+                        retry_loop += 1
+                    self.dmg.exit_status_exception = True
+                else:
+                    self.query_data = self.dmg.pool_query(
+                        self.pool.get_uuid_str())
             else:
                 self.log.error("Error: Undefined dmg command")
 

@@ -26,7 +26,7 @@ container:
   object_qty: 10
   record_qty: 10
 rebuild:
-  object_class: OC_RP_3G2
+  object_class: OC_RP_3G1
   rank:
     - 3
     - 4

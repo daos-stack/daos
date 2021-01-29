@@ -35,4 +35,4 @@ container:
   debug: True
 rebuild:
   rank: 4
-  object_class: DAOS_OC_R3_RW
+  object_class: OC_RP_3G1

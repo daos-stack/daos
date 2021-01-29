@@ -50,13 +50,11 @@ class RebuildTestBase(TestWithServers):
 
     def setup_test_pool(self):
         """Define a TestPool object."""
-        self.pool = TestPool(self.context, self.get_dmg_command())
-        self.pool.get_params(self)
+        self.add_pool(create=False)
 
     def setup_test_container(self):
         """Define a TestContainer object."""
-        self.container = TestContainer(self.pool)
-        self.container.get_params(self)
+        self.add_container(self.pool, create=False)
 
     def setup_pool_verify(self):
         """Set up pool verification initial expected values."""

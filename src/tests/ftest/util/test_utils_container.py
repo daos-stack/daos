@@ -363,6 +363,7 @@ class TestContainer(TestDaosApiBase):
             # container created with daos container create.
             self.container.uuid = str_to_c_uuid(uuid)
             self.container.attached = 1
+            self.container.poh = self.pool.pool.handle
 
         elif self.control_method.value == self.USE_DAOS:
             self.log.error("Error: Undefined daos command")
