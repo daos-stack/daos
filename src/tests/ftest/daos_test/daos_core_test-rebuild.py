@@ -15,11 +15,6 @@ class DaosCoreTestRebuild(DaosCoreBase):
     :avocado: recursive
     """
 
-    # Test variants that should be skipped
-    CANCEL_FOR_TICKET = [
-        ["DAOS-5851", "test_name", "rebuild tests 0-10"],
-    ]
-
     def test_rebuild(self):
         """Jira ID: DAOS-2770.
 
