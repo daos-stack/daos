@@ -6,8 +6,6 @@
 """
 from apricot import TestWithServers
 from command_utils_base import ObjectWithParameters, BasicParameter
-from test_utils_pool import TestPool
-from test_utils_container import TestContainer
 
 
 class RebuildTestParams(ObjectWithParameters):
