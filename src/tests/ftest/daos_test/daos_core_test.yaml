@@ -134,6 +134,7 @@ daos_tests:
       daos_test: O
       test_name: OID Allocator tests
       test_timeout: 320
+      stopped_ranks: [6, 7]
     test_z:
       daos_test: z
       test_name: Checksum tests
