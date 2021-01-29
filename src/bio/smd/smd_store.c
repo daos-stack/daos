@@ -1,23 +1,7 @@
 /**
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(bio)
 
@@ -269,7 +253,8 @@ smd_store_open(char *fname)
 
 	if (smd_df->smd_version > SMD_DF_VERSION ||
 	    smd_df->smd_version < SMD_DF_VER_1) {
-		D_ERROR("Unsupported DF version %d\n", smd_df->smd_version);
+		D_CRIT("Unsupported DF version %d.  Supported range: %d-%d\n",
+		       smd_df->smd_version, SMD_DF_VER_1, SMD_DF_VERSION);
 		rc = -DER_DF_INCOMPT;
 		goto error;
 	}
