@@ -1,24 +1,7 @@
 //
 // (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package system
@@ -447,33 +430,38 @@ func (m *Membership) CheckHosts(hosts string, ctlPort int) (*RankSet, *hostlist.
 	return rs, missHS, nil
 }
 
+func (m *Membership) handleRankDown(evt *events.RASEvent) {
+	ei := evt.GetRankStateInfo()
+	if ei == nil {
+		m.log.Error("no extended info in RankDown event received")
+		return
+	}
+	m.log.Debugf("processing RAS event %q from rank %d on host %q",
+		evt.Msg, evt.Rank, evt.Hostname)
+
+	// TODO: sanity check that the correct member is being updated by
+	// performing lookup on provided hostname and matching returned
+	// addresses with the member address with matching rank.
+
+	mr := NewMemberResult(Rank(evt.Rank), errors.Wrap(ei.ExitErr, evt.Msg), MemberStateErrored)
+
+	if err := m.UpdateMemberStates(MemberResults{mr}, true); err != nil {
+		m.log.Errorf("updating member states: %s", err)
+		return
+	}
+
+	member, err := m.Get(Rank(evt.Rank))
+	if err != nil {
+		m.log.Errorf("member with rank %d not found", evt.Rank)
+		return
+	}
+	m.log.Debugf("update rank %d to %+v (%s)", evt.Rank, member, member.Info)
+}
+
 // OnEvent handles events on channel and updates member states accordingly.
 func (m *Membership) OnEvent(_ context.Context, evt *events.RASEvent) {
 	switch evt.ID {
 	case events.RASRankDown:
-		ei := evt.GetRankStateInfo()
-		if ei == nil {
-			m.log.Error("no extended info in RankDown event received")
-			return
-		}
-		m.log.Debugf("processing RAS event %q from rank %d on host %q",
-			evt.Msg, evt.Rank, evt.Hostname)
-
-		// TODO: sanity check that the correct member is being updated by
-		// performing lookup on provided hostname and matching returned
-		// addresses with the member address with matching rank.
-
-		if err := m.UpdateMemberStates(MemberResults{
-			NewMemberResult(Rank(evt.Rank),
-				errors.Wrap(ei.ExitErr, evt.Msg),
-				MemberStateErrored),
-		}, true); err != nil {
-			m.log.Errorf("updating member states: %s", err)
-			return
-		}
-
-		member, _ := m.Get(Rank(evt.Rank))
-		m.log.Debugf("update rank %d to %+v (%s)", evt.Rank, member,
-			member.Info)
+		m.handleRankDown(evt)
 	}
 }

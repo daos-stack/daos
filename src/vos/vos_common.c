@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * Common internal functions for VOS
@@ -35,12 +18,35 @@
 #include <daos/lru.h>
 #include <daos/btree_class.h>
 #include <daos_srv/vos.h>
+#include <daos_srv/ras.h>
 
 struct bio_xs_context	*vsa_xsctxt_inst;
 static pthread_mutex_t	mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static bool vsa_nvme_init;
 struct vos_tls	*standalone_tls;
+
+#define DF_MAX_BUF 128
+void
+vos_report_layout_incompat(const char *type, int version, int min_version,
+			   int max_version, uuid_t *uuid)
+{
+	char buf[DF_MAX_BUF];
+
+	snprintf(buf, DF_MAX_BUF, "Incompatible %s may not be opened. Version"
+		 " %d is outside acceptable range %d-%d", type, version,
+		 min_version, max_version);
+	buf[DF_MAX_BUF - 1] = 0; /* Shut up any static analyzers */
+
+	if (ds_notify_ras_event == NULL) {
+		D_CRIT("%s\n", buf);
+		return;
+	}
+
+	ds_notify_ras_event(RAS_POOL_DF_INCOMPAT, buf, RAS_TYPE_INFO,
+			    RAS_SEV_ERROR, NULL, NULL, NULL, uuid, NULL,
+			    NULL, NULL, NULL);
+}
 
 struct vos_tls *
 vos_tls_get(void)
