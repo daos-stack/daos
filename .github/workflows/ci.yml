@@ -9,13 +9,32 @@ on:
 
 jobs:
 
+  # Simple stype, a matrix building everything in docker containers in one go.
   Build:
     name: Build
     runs-on: ubuntu-20.04
     strategy:
       fail-fast: false
       matrix:
-#        distro: [centos.7, centos.8, leap.15, ubuntu.20.04]
+        distro: [centos.7, centos.8, leap.15, ubuntu.20.04]
+        compiler: [gcc, clang]
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+      with:
+        submodules: true
+    - name: Build ${{ matrix.distro }} Docker image with ${{ matrix.compiler }}
+      run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
+                          --build-arg COMPILER=${{ matrix.compiler }}
+                          -t ${{ matrix.distro }}/${{ matrix.compiler }}/daos:${{ github.sha }}
+
+  # Prepare docker images containing base software, plus deps.
+  Prepare:
+    name: Prepare images
+    runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: false
+      matrix:
         distro: [ubuntu.20.04]
     steps:
     - name: Checkout code
@@ -26,21 +45,19 @@ jobs:
     - uses: satackey/action-docker-layer-caching@v0.0.11
       continue-on-error: true
       with:
-        key: daos-docker-cache-${{ matrix.distro }}-{hash}
-        restore-keys: |
-          daos-docker-cache-${{ matrix.distro }}-
+        key: dc-${{ matrix.distro }}-{hash}
+        restore-keys: dc-${{ matrix.distro }}-
     - name: Build deps ${{ matrix.distro }} Docker image
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
                           -t ${{ matrix.distro }}/daos:${{ github.sha }}
                           --build-arg NOBUILD=1
   Build2:
     name: Run the build
-    needs: Build
+    needs: Prepare
     runs-on: ubuntu-20.04
     strategy:
       fail-fast: false
       matrix:
-#        distro: [centos.7, centos.8, leap.15, ubuntu.20.04]
         distro: [ubuntu.20.04]
         compiler: [gcc, clang]
     steps:
@@ -52,9 +69,8 @@ jobs:
     - uses: satackey/action-docker-layer-caching@v0.0.11
       continue-on-error: true
       with:
-        key: daos-docker-cache-${{ matrix.distro }}-{hash}
-        restore-keys: |
-          daos-docker-cache-${{ matrix.distro }}-
+        key: dc-${{ matrix.distro }}-{hash}
+        restore-keys: dc-${{ matrix.distro }}-
         skip-save: true
     - name: Build deps ${{ matrix.distro }} Docker image
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
