@@ -623,7 +623,10 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	orw = crt_req_get(rw_args->rpc);
 	orwo = crt_reply_get(rw_args->rpc);
 	D_ASSERT(orw != NULL && orwo != NULL);
-	if (ret != 0) {
+
+	D_ASSERTF(ret != -DER_TX_RESTART, "Invalid RW task result\n");
+
+	if (ret != 0 && ret != -DER_TX_RESTART) {
 		/*
 		 * If any failure happens inside Cart, let's reset failure to
 		 * TIMEDOUT, so the upper layer can retry.
@@ -642,15 +645,22 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		int rc_tmp;
 
 		rc_tmp = dc_tx_op_end(task, th,
-				      &rw_args->shard_args->auxi.epoch, rc,
-				      orwo->orw_epoch);
+				      &rw_args->shard_args->auxi.epoch,
+				      ret ? ret : rc, orwo->orw_epoch);
 		if (rc_tmp != 0) {
 			D_ERROR("failed to end transaction operation (rc=%d "
-				"epoch="DF_U64": "DF_RC"\n", rc,
+				"epoch="DF_U64": "DF_RC"\n", ret ? ret : rc,
 				orwo->orw_epoch, DP_RC(rc_tmp));
 			goto out;
 		}
+
+		if (ret == -DER_TX_RESTART) {
+			D_DEBUG(DB_IO, "RPC %d needs to be restarted\n", opc);
+			goto out;
+		}
 	}
+
+	D_ASSERT(ret == 0);
 
 	if (rc != 0) {
 		if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY) {
@@ -1425,7 +1435,9 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 	oei = crt_req_get(enum_args->rpc);
 	D_ASSERT(oei != NULL);
 
-	if (ret != 0) {
+	D_ASSERTF(ret != -DER_TX_RESTART, "Invalid ENUM task result\n");
+
+	if (ret != 0 && ret != -DER_TX_RESTART) {
 		/* If any failure happens inside Cart, let's reset
 		 * failure to TIMEDOUT, so the upper layer can retry
 		 **/
@@ -1442,14 +1454,21 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 		int rc_tmp;
 
 		rc_tmp = dc_tx_op_end(task, *enum_args->th, enum_args->epoch,
-				      rc, oeo->oeo_epoch);
+				      ret ? ret : rc, oeo->oeo_epoch);
 		if (rc_tmp != 0) {
 			D_ERROR("failed to end transaction operation (rc=%d "
-				"epoch="DF_U64": "DF_RC"\n", rc,
+				"epoch="DF_U64": "DF_RC"\n", ret ? ret : rc,
 				oeo->oeo_epoch, DP_RC(rc_tmp));
 			goto out;
 		}
+
+		if (ret == -DER_TX_RESTART) {
+			D_DEBUG(DB_IO, "RPC %d needs to be restarted\n", opc);
+			goto out;
+		}
 	}
+
+	D_ASSERT(ret == 0);
 
 	if (rc != 0) {
 		if (rc == -DER_KEY2BIG) {
@@ -1838,28 +1857,37 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 	flags = okqi->okqi_api_flags;
 	opc = opc_get(cb_args->rpc->cr_opc);
 
-	if (ret != 0) {
+	D_ASSERTF(ret != -DER_TX_RESTART, "Invalid QUERY task result\n");
+
+	if (ret != 0 && ret != -DER_TX_RESTART) {
 		D_ERROR("RPC %d failed: %d\n", opc, ret);
 		D_GOTO(out, ret);
 	}
 
 	okqo = crt_reply_get(cb_args->rpc);
+	rc = obj_reply_get_status(rpc);
 
 	/* See the similar dc_rw_cb. */
 	if (daos_handle_is_valid(cb_args->th)) {
 		int rc_tmp;
 
-		rc_tmp = dc_tx_op_end(task, cb_args->th, &cb_args->epoch, rc,
-				      okqo->okqo_epoch);
+		rc_tmp = dc_tx_op_end(task, cb_args->th, &cb_args->epoch,
+				      ret ? ret : rc, okqo->okqo_epoch);
 		if (rc_tmp != 0) {
 			D_ERROR("failed to end transaction operation (rc=%d "
-				"epoch="DF_U64": "DF_RC"\n", rc,
+				"epoch="DF_U64": "DF_RC"\n", ret ? ret : rc,
 				okqo->okqo_epoch, DP_RC(rc_tmp));
+			goto out;
+		}
+
+		if (ret == -DER_TX_RESTART) {
+			D_DEBUG(DB_IO, "RPC %d needs to be restarted\n", opc);
 			goto out;
 		}
 	}
 
-	rc = obj_reply_get_status(rpc);
+	D_ASSERT(ret == 0);
+
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D_GOTO(out, rc = 0);
