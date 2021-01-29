@@ -47,6 +47,7 @@ elif [ "$#" -lt 2 ]; then
 fi
 
 COMP="$1"
+
 shift || true
 
 FILES=("$@")
