@@ -76,7 +76,7 @@ RUN ln -s utils/sl site_scons
 # set PREBUILD to skip initial build.
 ARG PREBUILD=yes
 
-RUN [ "$PREBUILD" == "yes" ] && scons --build-deps=yes install PREFIX=/opt/daos --deps-only && /bin/rm -rf build *.gz
+RUN [ "$PREBUILD" != "yes" ] || (scons --build-deps=yes install PREFIX=/opt/daos --deps-only && /bin/rm -rf build *.gz)
 
 # copy DAOS tree
 WORKDIR /home/daos
@@ -94,7 +94,7 @@ ARG NOBUILD=no
 ARG COMPILER=gcc
 
 # Build DAOS & dependencies
-RUN [ "$NOBUILD" == "no" ] && scons --build-deps=no -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER && /bin/rm -rf build && cp -r utils/config/examples /opt/daos
+RUN [ "$NOBUILD" != "no" ] || (scons --build-deps=no -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER && /bin/rm -rf build && cp -r utils/config/examples /opt/daos)
 
 # Set environment variables
 ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:$LD_LIBRARY_PATH
@@ -103,7 +103,7 @@ ENV FI_SOCKETS_MAX_CONN_RETRY=1
 
 # Build java and hadoop bindings
 WORKDIR /home/daos/src/client/java
-#RUN [ "$NOBUILD" == "no" ] && mvn clean install -T 1C -DskipITs -Ddaos.install.path=/opt/daos
+#RUN [ "$NOBUILD" != "no" ] || mvn clean install -T 1C -DskipITs -Ddaos.install.path=/opt/daos
 WORKDIR /home/daos
 
 # Remove local copy
