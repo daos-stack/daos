@@ -107,9 +107,10 @@ class RebuildTests(TestWithServers):
 
         # Verify the data after rebuild
         for index in range(pool_quantity):
-            self.assertTrue(
-                containers[index].read_objects(),
-                "Data verification error after rebuild")
+            if containers[index].object_qty.value != 0:
+                self.assertTrue(
+                    containers[index].read_objects(),
+                    "Data verification error after rebuild")
         self.log.info("Test Passed")
 
     def test_simple_rebuild(self):
