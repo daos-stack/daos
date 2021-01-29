@@ -470,7 +470,7 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			rc = uuid_parse(req->handles[i], handles[i]);
 			if (rc != 0) {
 				D_ERROR("Unable to parse handle UUID %s: "
-				DF_RC "\n", req->uuid, DP_RC(rc));
+				DF_RC"\n", req->uuid, DP_RC(rc));
 				D_GOTO(out_free, rc = -DER_INVAL);
 			}
 		}
