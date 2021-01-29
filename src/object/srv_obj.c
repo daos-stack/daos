@@ -1518,9 +1518,11 @@ out:
 	if (bsgls_dup != NULL) {
 		int	i;
 
-		for (i = 0; i < orw->orw_nr; i++) {
-			vos_dedup_free_bsgl(ioh, &bsgls_dup[i]);
-			bio_sgl_fini(&bsgls_dup[i]);
+		if (daos_handle_is_valid(ioh)) {
+			for (i = 0; i < orw->orw_nr; i++) {
+				vos_dedup_free_bsgl(ioh, &bsgls_dup[i]);
+				bio_sgl_fini(&bsgls_dup[i]);
+			}
 		}
 		D_FREE(bsgls_dup);
 	}
