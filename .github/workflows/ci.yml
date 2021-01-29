@@ -26,12 +26,11 @@ jobs:
     - uses: satackey/action-docker-layer-caching@v0.0.11
       continue-on-error: true
       with:
-        key: daos-docker-${{ matrix.distro }}-clang-{hash}
+        key: daos-docker-${{ matrix.distro }}-{hash}
         restore-keys: |
-          daos-docker-${{ matrix.distro }}-clang-
+          daos-docker-${{ matrix.distro }}-
     - name: Build deps ${{ matrix.distro }} Docker image
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
-                          --build-arg
                           -t ${{ matrix.distro }}/daos:${{ github.sha }}
                           --build-arg NOBUILD=1
   Build2:
@@ -53,13 +52,12 @@ jobs:
     - uses: satackey/action-docker-layer-caching@v0.0.11
       continue-on-error: true
       with:
-        key: daos-docker-${{ matrix.distro }}-clang-{hash}
+        key: daos-docker-${{ matrix.distro }}-{hash}
         restore-keys: |
-          daos-docker-${{ matrix.distro }}-clang-
+          daos-docker-${{ matrix.distro }}-
         skip-save: true
     - name: Build deps ${{ matrix.distro }} Docker image
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
-                          --build-arg
                           -t ${{ matrix.distro }}/daos:${{ github.sha }}
                           --build-arg NOBUILD=1
     - name: Build daos ${{ matrix.distro }} Docker image with ${{ matrix.compiler }}
