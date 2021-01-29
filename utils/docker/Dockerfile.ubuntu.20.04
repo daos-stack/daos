@@ -99,10 +99,10 @@ RUN if [ "x$NOBUILD" = "x" ] ; then \
     cp -r utils/config/examples /opt/daos; fi
 
 # Build java and hadoop bindings
-RUN if [ "x$NOBUILD" = "x" ] ; then \
-    pushd src/client/java && \
-    mvn clean install -T 1C -DskipITs -Ddaos.install.path=/opt/daos && \
-    popd; fi
+#RUN if [ "x$NOBUILD" = "x" ] ; then \
+#    pushd src/client/java && \
+#    mvn clean install -T 1C -DskipITs -Ddaos.install.path=/opt/daos && \
+#    popd; fi
 
 # Remove local copy
 RUN rm -rf /home/daos/*

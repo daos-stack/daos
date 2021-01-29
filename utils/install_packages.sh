@@ -10,9 +10,8 @@ apt-get -y install scons python3-distro autoconf bash clang cmake curl \
         libssl-dev libtool-bin libyaml-dev                          \
         locales make meson nasm ninja-build pandoc patch            \
         pylint python-dev python3-dev scons sg3-utils uuid-dev      \
-        yasm valgrind libhwloc-dev man fuse3 libfuse3-dev           \
+        yasm valgrind libhwloc-dev man            \
         openjdk-8-jdk maven libopenmpi-dev patchelf libjson-c-dev   \
         liblz4-dev python3-distro \
-	libsafec-dev libipmctl-dev ndctl ipmctl golang-go
-
+	ndctl golang-go
 
