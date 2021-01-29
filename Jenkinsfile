@@ -930,7 +930,8 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.ubuntu.20.04'
+                            filename 'Dockerfile.ubuntu.20.04'
+			    dir 'utils/docker',
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs() +
                                                 " -t ${sanitized_JOB_NAME}-ubuntu20.04"

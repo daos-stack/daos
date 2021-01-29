@@ -59,14 +59,6 @@ RUN mkdir /mnt/daos && chown daos.daos /mnt/daos
 RUN mkdir /var/run/daos_server && chown daos.daos /var/run/daos_server
 RUN mkdir /var/run/daos_agent && chown daos.daos /var/run/daos_agent
 
-# Set maven repo mirror
-RUN mkdir -p /root/.m2
-COPY utils/mavern_settings.xml /root/.m2/settings.xml
-
-#WORKDIR /home/daos
-#COPY src/client/java/ .
-#RUN mvn --batch-mode dependency:go-offline
-
 WORKDIR /home/daos/pre
 COPY SConstruct .
 COPY utils/sl utils/sl
@@ -100,6 +92,10 @@ RUN [ "$NOBUILD" != "no" ] || (scons --build-deps=no -j 4 install PREFIX=/opt/da
 ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:$LD_LIBRARY_PATH
 ENV PATH=/opt/daos/bin:$PATH
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
+
+# Set maven repo mirror
+RUN mkdir -p /root/.m2
+COPY utils/mavern_settings.xml /root/.m2/settings.xml
 
 # Build java and hadoop bindings
 WORKDIR /home/daos/src/client/java

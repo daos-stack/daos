@@ -34,29 +34,12 @@ jobs:
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg COMPILER=${{ matrix.compiler }}
                           -t ${{ matrix.distro }}/${{ matrix.compiler }}/daos:${{ github.sha }}
-			  --build-arg NOBUILD=1
+                          --build-arg NOBUILD=1
     - name: Build daos ${{ matrix.distro }} Docker image with ${{ matrix.compiler }}
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg COMPILER=${{ matrix.compiler }}
                           -t ${{ matrix.distro }}/${{ matrix.compiler }}/daos:${{ github.sha }}
-			  --no-cache=true
-
-  Native_build:
-    name: Build
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
-      with:
-        submodules: true
-    - name: Setup node
-      run: sudo ./utils/install_packages.sh
-    - name: Build deps
-      run: scons --build-deps=yes --deps-only
-    - name: Build
-      run: scons
-    - name: Install
-      run: scons install
+                          --no-cache=true
 
   Spelling:
     runs-on: ubuntu-20.04
