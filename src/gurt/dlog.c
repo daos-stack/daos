@@ -128,7 +128,7 @@ static const char *clog_pristr(int pri)
 	int s;
 
 	s = DLOG_PRI(pri);
-	if (s > (sizeof(norm) / sizeof(char *))) {
+	if (s >= (sizeof(norm) / sizeof(char *))) {
 		/* prevent checksum warning */
 		s = 0;
 	}
