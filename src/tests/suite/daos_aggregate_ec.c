@@ -29,13 +29,6 @@ enum {
 	EC_SPECIFIED,
 };
 
-#define assert_success(r) do {\
-	int __rc = (r); \
-	if (__rc != 0) \
-		fail_msg("Not successful!! Error code: " DF_RC, DP_RC(__rc)); \
-	} while (0)
-
-
 /** easily setup an iov and allocate */
 static void
 iov_alloc(d_iov_t *iov, size_t len)
