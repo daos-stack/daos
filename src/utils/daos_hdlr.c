@@ -2485,7 +2485,6 @@ fs_copy(struct file_dfs *src_file_dfs,
 				}
 				next_dpath = strdup(dst_filename);
 				if (next_dpath == NULL) {
-					D_FREE(next_path);
 					D_GOTO(out, rc = -DER_NOMEM);
 				}
 
@@ -2497,8 +2496,6 @@ fs_copy(struct file_dfs *src_file_dfs,
 				 * fail otherwise
 				 */
 				if (rc != EEXIST && rc != 0) {
-					D_FREE(next_path);
-					D_FREE(next_dpath);
 					D_GOTO(out, rc);
 				}
 				/* Recursively call "fs_copy"
@@ -2510,8 +2507,6 @@ fs_copy(struct file_dfs *src_file_dfs,
 				if (rc != 0) {
 					fprintf(stderr, "filesystem copy "
 						"failed, %d.\n", rc);
-					D_FREE(next_path);
-					D_FREE(next_dpath);
 					D_GOTO(out, rc);
 				}
 
@@ -2524,8 +2519,6 @@ fs_copy(struct file_dfs *src_file_dfs,
 					fprintf(stderr, "updating destination "
 						"permissions failed on %s "
 						"(%d)\n", next_dpath, rc);
-					D_FREE(next_path);
-					D_FREE(next_dpath);
 					D_GOTO(out, rc);
 				}
 				D_FREE(next_path);
@@ -2559,6 +2552,12 @@ out:
 				dir_name, rc);
 		}
 	}
+
+	if (rc != 0) {
+		D_FREE(next_path);
+		D_FREE(next_dpath);
+	}
+
 	D_FREE(filename);
 	D_FREE(dst_filename);
 	return rc;
