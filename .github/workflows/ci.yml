@@ -45,7 +45,11 @@ jobs:
     - name: Setup node
       run: sudo ./utils/install_packages.sh
     - name: Build deps
-      run scons --build-deps=yes --deps-only
+      run: scons --build-deps=yes --deps-only
+    - name: Build
+      run: scons
+    - name: Install
+      run: scons install
 
   Spelling:
     runs-on: ubuntu-20.04
