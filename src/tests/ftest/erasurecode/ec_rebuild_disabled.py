@@ -28,7 +28,7 @@ class EcDisabledRebuild(ErasureCodeIor):
         Test Description: Test Erasure code object with IOR.
         Use Case: Create the pool, disabled rebuild, run IOR with supported
                   EC object type class for small and large transfer sizes.
-                  kill single server, verify all IOR read data and verified.
+                  kill single server,verify all IOR read data and verified.
 
         :avocado: tags=all,hw,large,ib2,full_regression
         :avocado: tags=ec,ec_disabled_rebuild
