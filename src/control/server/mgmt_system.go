@@ -1,24 +1,7 @@
 //
 // (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
@@ -40,6 +23,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/system"
@@ -591,6 +575,19 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, pbReq *mgmtpb.SystemStopReq)
 	}
 	svc.log.Debug("Received SystemStop RPC")
 
+	// Raise event on systemwide shutdown
+	if pbReq.GetHosts() == "" && pbReq.GetRanks() == "" && pbReq.GetKill() {
+		evt, err := events.NewGenericEvent(events.RASSystemStop,
+			events.RASTypeInfoOnly, events.RASSeverityInfo,
+			"System-wide shutdown requested", uint32(system.NilRank),
+			"", "", "", "", "", "", "")
+		if err != nil {
+			svc.log.Errorf("creating generic event: %s", err)
+		} else {
+			svc.events.Publish(evt)
+		}
+	}
+
 	// TODO: consider locking to prevent join attempts when shutting down
 	pbResp := new(mgmtpb.SystemStopResp)
 
@@ -650,6 +647,19 @@ func (svc *mgmtSvc) SystemStart(ctx context.Context, pbReq *mgmtpb.SystemStartRe
 		return nil, err
 	}
 	svc.log.Debug("Received SystemStart RPC")
+
+	// Raise event on systemwide start
+	if pbReq.GetHosts() == "" && pbReq.GetRanks() == "" {
+		evt, err := events.NewGenericEvent(events.RASSystemStart,
+			events.RASTypeInfoOnly, events.RASSeverityInfo,
+			"System-wide start requested", uint32(system.NilRank),
+			"", "", "", "", "", "", "")
+		if err != nil {
+			svc.log.Errorf("creating generic event: %s", err)
+		} else {
+			svc.events.Publish(evt)
+		}
+	}
 
 	fanResp, _, err := svc.rpcFanout(ctx, fanoutRequest{
 		Method: control.StartRanks,
@@ -730,7 +740,8 @@ func (svc *mgmtSvc) ClusterEvent(ctx context.Context, req *sharedpb.ClusterEvent
 		return nil, err
 	}
 
-	resp, err := svc.events.HandleClusterEvent(req)
+	// indicate to handler that event has been forwarded
+	resp, err := svc.events.HandleClusterEvent(req, true)
 	if err != nil {
 		return nil, errors.Wrapf(err, "handle cluster event %+v", req)
 	}

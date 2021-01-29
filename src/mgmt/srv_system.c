@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * \file
@@ -88,6 +71,14 @@ mgmt_svc_delete_uuid_cb(d_iov_t *id)
 static int
 mgmt_svc_locate_cb(d_iov_t *id, char **path)
 {
+	char *s = NULL;
+
+	/* Just create a dummy path that won't fail stat(). */
+	D_ASPRINTF(s, "/dev/null");
+	if (s == NULL)
+		return -DER_NOMEM;
+	*path = s;
+
 	return 0;
 }
 
@@ -354,13 +345,28 @@ ds_mgmt_svc_start(void)
 int
 ds_mgmt_svc_stop(void)
 {
+	struct ds_rsvc *rsvc;
 	int rc;
 
-	rc = ds_rsvc_stop_all(DS_RSVC_CLASS_MGMT);
+	/*
+	 * NB: As this cut-down mgmt svc is only being used
+	 * to broadcast the map and doesn't have a raft db
+	 * backing it, we just need to stop the map distribution
+	 * thread on our way out, otherwise it will block shutdown.
+	 */
+	rc = ds_rsvc_lookup(DS_RSVC_CLASS_MGMT, &mgmt_svc_id, &rsvc);
 	if (rc != 0)
-		D_ERROR("failed to stop management service: "DF_RC"\n",
-			DP_RC(rc));
-	return rc;
+		return rc;
+
+	ABT_mutex_lock(rsvc->s_mutex);
+	rsvc->s_state = DS_RSVC_DOWN;
+	rsvc->s_map_distd_stop = true;
+	ABT_mutex_unlock(rsvc->s_mutex);
+	ABT_cond_broadcast(rsvc->s_map_dist_cv);
+
+	ds_rsvc_put(rsvc);
+
+	return 0;
 }
 
 int
