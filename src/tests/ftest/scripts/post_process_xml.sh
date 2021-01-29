@@ -42,7 +42,7 @@ if [ "$#" -lt 1 ]; then
     echo "Failed to post-process XML. No component provided."
     exit
 elif [ "$#" -lt 2 ]; then
-    echo "No XML files to post-process for component $1"
+    echo "No XML files to post-process for component $1."
     exit
 fi
 
