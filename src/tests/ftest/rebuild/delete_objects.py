@@ -78,6 +78,7 @@ class RebuildDeleteObjects(RebuildTestBase):
             foo
 
         :avocado: tags=all,medium,full_regression,rebuild,rebuilddeleteobject
+        :avocado: tags=deleteobjectsrecords
         """
         self.punch_type = "object"
         self.execute_rebuild_test()
@@ -95,6 +96,7 @@ class RebuildDeleteObjects(RebuildTestBase):
             foo
 
         :avocado: tags=all,medium,full_regression,rebuild,rebuilddeleterecord
+        :avocado: tags=deleteobjectsrecords
         """
         self.punch_type = "record"
         self.execute_rebuild_test()
