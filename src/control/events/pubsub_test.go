@@ -124,6 +124,7 @@ func TestEvents_PubSub_Reset(t *testing.T) {
 
 func TestEvents_PubSub_DisableEvent(t *testing.T) {
 	evt1 := NewRankDownEvent("foo", 1, 1, common.ExitStatus("test"))
+	evt2 := NewPoolSvcReplicasUpdateEvent("foo", 1, common.MockUUID(), []uint32{0, 1}, 1)
 
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
@@ -138,15 +139,15 @@ func TestEvents_PubSub_DisableEvent(t *testing.T) {
 
 	ps.Subscribe(RASTypeStateChange, tly1)
 
-	ps.DisableEventIDs(evt1.ID)
+	ps.DisableEventIDs(evt1.ID, evt2.ID)
 
 	ps.Publish(evt1)
-	ps.Publish(evt1)
+	ps.Publish(evt2)
 
 	<-ctx.Done()
 	common.AssertEqual(t, 0, len(tly1.getRx()), "unexpected number of received events")
 
-	ps.EnableEventIDs(evt1.ID)
+	ps.EnableEventIDs(evt1.ID, evt2.ID)
 
 	ps.Publish(evt1)
 	ps.Publish(evt1)
