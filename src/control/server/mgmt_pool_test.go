@@ -457,18 +457,22 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 		}
 	}
 
+	fdTree, err := mgmtSvc.sysdb.CompressedFaultDomainTree()
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := &mgmtpb.PoolCreateReq{
 		Sys:          build.DefaultSystemName,
 		Uuid:         common.MockUUID(),
 		Scmbytes:     100 * humanize.GiByte,
 		Nvmebytes:    10 * humanize.TByte,
-		FaultDomains: mgmtSvc.sysdb.FaultDomainTree().ToProto(),
+		FaultDomains: fdTree,
 	}
 	wantReq := new(mgmtpb.PoolCreateReq)
 	*wantReq = *req
 	wantReq.Numsvcreps = DefaultPoolServiceReps
 
-	_, err := mgmtSvc.PoolCreate(ctx, req)
+	_, err = mgmtSvc.PoolCreate(ctx, req)
 	if err != nil {
 		t.Fatal(err)
 	}
