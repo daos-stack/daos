@@ -244,7 +244,7 @@ String functional_packages(String distro) {
                   "romio-tests-daos-1 " +
                   "testmpio " +
                   "mpi4py-tests " +
-                  "hdf5-mpich-tests " +
+                  "hdf5-mpich2-tests " +
                   "hdf5-openmpi3-tests " +
                   "hdf5-vol-daos-mpich2-tests " +
                   "hdf5-vol-daos-openmpi3-tests " +
