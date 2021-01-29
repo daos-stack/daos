@@ -163,7 +163,6 @@ COPY ./ .
 
 # Build DAOS & dependencies
 RUN if [ "x$NOBUILD" = "x" ] ; then \
-    echo -e "Import('env')\nenv.AppendUnique(CPPDEFINES=['FUSE_IOCTL_USE_INT'])" > ~/.scons_localrc; \
     scons-3 --build-deps=yes -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER; fi
 
 # Set environment variables
