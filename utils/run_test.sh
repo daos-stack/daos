@@ -92,10 +92,8 @@ if [ -d "/mnt/daos" ]; then
                                           --show-reachable=yes \
                                           --num-callers=20 \
                                           --error-limit=no \
-                                          --suppressions=${VALGRIND_SUPP} \
-                                          --error-exitcode=42 \
-                                          --xml=yes \
-                                          --xml-file=${VALGRIND_XML_PATH}"
+					  --suppressions=${VALGRIND_SUPP} \
+                                          --gen-suppressions=all" 
         else
             VALGRIND_SUPP=""
         fi
