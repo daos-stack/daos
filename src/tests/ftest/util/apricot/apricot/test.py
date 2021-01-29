@@ -426,9 +426,9 @@ class TestWithServers(TestWithoutServers):
         #       start_servers_once attribute will most likely also want to be
         #       set to False to ensure the servers are not running at the start
         #       of each test variant.
-        self.start_servers_once = True
-        self.server_manager_class = "Systemctl"
-        self.agent_manager_class = "Systemctl"
+        self.start_servers_once = False
+        self.server_manager_class = "Orterun"
+        self.agent_manager_class = "Orterun"
         self.setup_start_servers = True
         self.setup_start_agents = True
         self.hostlist_servers = None
