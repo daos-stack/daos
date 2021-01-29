@@ -1365,13 +1365,13 @@ add_domains_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 	domains_found = 1 + domains[TUPLE_SIZE - 1];
 	for (i = TUPLE_SIZE;
 	     (i < ndomains - TUPLE_SIZE) &&
-	     (i < domains_found * TUPLE_SIZE); ) {
+	     (i < domains_found * TUPLE_SIZE);) {
 		struct pool_component	map_comp = {0};
 		uint32_t		layer = domains[i++];
 		uint32_t		id = domains[i++];
 		uint32_t		num_children = domains[i++];
 
-		// TODO DAOS-6353: Use the layer number as type
+		/* TODO DAOS-6353: Use the layer number as type */
 		map_comp.co_type = PO_COMP_TP_RACK;
 		map_comp.co_status = new_status;
 		map_comp.co_index = i + num_comps;
