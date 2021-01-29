@@ -22,7 +22,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import os
-import subprocess
 import re
 from apricot import TestWithServers
 from general_utils import pcmd
@@ -31,7 +30,7 @@ from daos_utils import DaosCommand
 from ClusterShell.NodeSet import NodeSet
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
-
+from general_utils import run_task
 
 class JavaCIIntegration(TestWithServers):
     """Test class Description:
@@ -81,17 +80,13 @@ class JavaCIIntegration(TestWithServers):
             bool: whether java is installed or not.
 
         """
-
         # checking java install
-        try:
-            result = subprocess.check_output(['java', '-version'],
-                                             stderr=subprocess.STDOUT)
+        task = run_task(hosts=self.hostlist_clients, command="java -version")
+        for output, _ in task.iter_buffers():
+            result = str(output)
             self.log.info(result)
-        except subprocess.CalledProcessError as err:
-            self.fail("Java not installed \n {}".format(err))
         # looking for a string something like this 1.8.0_262-b10
         pattern = r"(\d+\.\d+\.\d+\_\d+\-[a-b]\d+)"
-
         # replacing '_' and '-' with '.' and returning the result
         return re.search(pattern,
                          result).groups()[0].replace("_", ".").replace("-", ".")
@@ -126,7 +121,7 @@ class JavaCIIntegration(TestWithServers):
 
 
         # run intergration-test
-        openjdk = "/usr/lib/jvm/java-{}-openjdk-{}-0.el7_9.x86_64/jre/lib/amd64/libjsig.so".format(version[:-8], version)
+        openjdk = "/usr/lib/jvm/java-{}-openjdk-{}-0.el7_8.x86_64/jre/lib/amd64/libjsig.so".format(version[:-8], version)
         jdir = "{}/../java".format(os.getcwd())
         cmd = "cd {};".format(jdir)
         cmd += " ls -l {};".format(openjdk)
@@ -139,6 +134,7 @@ class JavaCIIntegration(TestWithServers):
                 format(self.prefix)
         cmd += " -Dpool_id={}  -Dcont_id={} ".format(pool_uuid, cont_uuid)
         cmd += " >> {}/maven_integration_test_output.log".format(self.log_dir)
+        print("***{}".format(cmd))
         self.execute_cmd(cmd, 300)
 
     def execute_cmd(self, cmd, timeout):
@@ -150,7 +146,7 @@ class JavaCIIntegration(TestWithServers):
         try:
             # execute bash cmds
             ret = pcmd(
-                self.hostlist_servers, cmd, verbose=True, timeout=timeout)
+                self.hostlist_clients, cmd, verbose=True, timeout=timeout)
             if 0 not in ret:
                 error_hosts = NodeSet(
                     ",".join(
