@@ -139,6 +139,9 @@ class ManagementServiceResilience(TestWithServers):
         self.get_dmg_command().hostlist = access_list[0]
 
         self.verify_leader(access_list)
+
+        # ignore_status should be set to False at some point when issue with
+        # pool ranks is resolved on MS service.
         self.update_and_verify(ignore_status=True)
 
     def verify_lost_resiliency(self, N):
@@ -161,9 +164,10 @@ class ManagementServiceResilience(TestWithServers):
         access_list = [x for x in access_list if x not in kill_list]
         self.get_dmg_command().hostlist = access_list[0]
 
-        self.verify_leader(access_list)
-        self.update_and_verify(ignore_status=True)
+        if not self.get_dmg_command().system_leader_query():
+            self.fail("Can't read MS information after removing resiliency.")
 
+        self.update_and_verify(ignore_status=True)
         self.server_managers[-1].hosts = (
             leader, self.workdir, self.hostfile_servers_slots)
         self.start_server_managers()
