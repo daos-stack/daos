@@ -6,9 +6,14 @@ hosts:
         - boro-C
         - boro-D
         - boro-E
-timeout: 180
+timeout: 900
 server_config:
     name: daos_server
+    servers:
+        log_mask: DEBUG,MEM=ERR
+        env_vars:
+          - DD_MASK=io,trace
+          - D_LOG_MASK=DEBUG,MEM=ERR
 pool:
     mode: 146
     name: daos_server
