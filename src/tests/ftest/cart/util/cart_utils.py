@@ -66,9 +66,21 @@ class CartUtils():
         """ Clean up cart processes, in case avocado/apricot does not. """
         error_list = []
         localhost = socket.gethostname().split(".")[0:1]
-        result = stop_processes(localhost, "'(crt_launch|orterun)'")
-        if 0 not in result or len(result) > 1:
-            error_list.append("Error cleaning up cart processes!")
+        processes = "'(crt_launch|orterun)'"
+        retry_count = 0
+        while retry_count < 2:
+            result = stop_processes(localhost, processes)
+            if 1 in result:
+                self.log.info("Stopped '%s' processes on %s", processes, str(result[1]))
+                retry_count += 1
+            elif 0 in result:
+                self.log.info("All '%s' processes have been stopped", processes)
+                retry_count = 99
+            else:
+                error_list.append("Error detecting/stopping cart processes")
+                retry_count = 99
+        if retry_count == 2:
+            error_list.append("Unable to stop cart processes!")
         return error_list
 
     @staticmethod
