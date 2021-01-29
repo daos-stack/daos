@@ -200,22 +200,7 @@ fi
 dt_xml_path="${logs_prefix}/ftest/avocado/job-results/daos_test"
 FILES=(${dt_xml_path}/*/test-results/*/data/*.xml)
 COMP="FTEST_daos_test"
-for file in "${FILES[@]}"
-do
-    if [ -f "$file" ]; then
-        echo "Processing XML $file"
 
-        SUITE=$(grep "testsuite name=" "$file" | \
-               grep -Po "name=\"\K.*(?=\" time=)" || true)
-
-        CLASS=$(grep "<testcase classname" "$file" || true)
-        if [ "$CLASS" == "" ]; then
-            sed -i \
-            "s/case name/case classname=\"${COMP}.${SUITE}\" name/" "$file"
-        else
-            sed -i "s/case classname=\"/case classname=\"${COMP}./" "$file"
-        fi
-    fi
-done
+./scripts/post_process_xml.sh "${COMP}" "${FILES[@]}"
 
 exit $rc
