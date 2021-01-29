@@ -18,6 +18,43 @@
 #define D_TM_SHARED_MEMORY_KEY		0x10242048
 #define D_TM_SHARED_MEMORY_SIZE		(1024 * 1024)
 
+#define D_TM_MIN(stats, name) \
+	stats->dtm_min.min_##name
+
+#define D_TM_MAX(stats, name) \
+	stats->dtm_max.max_##name
+
+#define D_TM_PRINT_STATS(s, stats, name, fmt) \
+	fprintf(s, " min: %"#fmt " max: %"#fmt " mean: %lf size: %" PRIu64, \
+		D_TM_MIN(stats, name), D_TM_MAX(stats, name),               \
+		stats->mean, stats->sample_size);                           \
+	if (stats->sample_size > 2)                                         \
+		fprintf(s, " std dev: %lf", stats->std_dev);
+
+#define D_TM_COMPUTE_MIN(value, node, name)                                 \
+	if ((value) < node->dtn_metric->dtm_stats->dtm_min.min_##name)      \
+		node->dtn_metric->dtm_stats->dtm_min.min_##name = (value);
+
+#define D_TM_COMPUTE_MAX(value, node, name)                                 \
+	if ((value) > node->dtn_metric->dtm_stats->dtm_max.max_##name)      \
+		node->dtn_metric->dtm_stats->dtm_max.max_##name = (value);
+
+#define D_TM_COMPUTE_MEAN(node, value)                                      \
+	node->dtn_metric->dtm_stats->mean +                                 \
+		(((value) - node->dtn_metric->dtm_stats->mean) /            \
+		node->dtn_metric->dtm_stats->sample_size);
+
+#define D_TM_VALUE(node)                                                    \
+	(node->dtn_type & D_TM_DURATION) ?                                  \
+		(node->dtn_metric->dtm_data.tms[0].tv_sec +                 \
+			(node->dtn_metric->dtm_data.tms[0].tv_nsec / 1E9)) :\
+		(node->dtn_metric->dtm_data.value)
+
+#define D_TM_COMPUTE_SUM_OF_SQUARES(node, value)                            \
+	node->dtn_metric->dtm_stats->sum_of_squares +                       \
+		(((value) - node->dtn_metric->dtm_stats->mean) *            \
+		((value) - mean));
+
 enum {
 	D_TM_DIRECTORY			= 0x001,
 	D_TM_COUNTER			= 0x002,
@@ -30,6 +67,12 @@ enum {
 	D_TM_CLOCK_THREAD_CPUTIME	= 0x100,
 };
 
+/**
+ * @brief Statistics for gauge and duration metrics
+ *
+ * Stores the computed min, max, mean, standard deviation and sample size.
+ * Stores sum of squares for internal computation of variance
+ */
 struct d_tm_stats_t {
 	union minval {
 		uint64_t min_int;
@@ -41,8 +84,8 @@ struct d_tm_stats_t {
 	} dtm_max;
 	double std_dev;
 	double mean;
-	double s;
-	uint64_t k;
+	double sum_of_squares;
+	uint64_t sample_size;
 };
 
 struct d_tm_metric_t {
@@ -83,6 +126,5 @@ int d_tm_alloc_node(struct d_tm_node_t **newnode, char *name);
 int d_tm_add_child(struct d_tm_node_t **newnode, struct d_tm_node_t *parent,
 		   char *name);
 int d_tm_get_version(void);
-void d_tm_compute_duration_stats(struct d_tm_node_t *node);
-void d_tm_compute_gauge_stats(struct d_tm_node_t *node);
+void d_tm_compute_stats(struct d_tm_node_t *node);
 #endif /* __TELEMETRY_COMMON_H__ */

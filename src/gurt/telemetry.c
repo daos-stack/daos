@@ -444,7 +444,7 @@ d_tm_print_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 	if ((tms == NULL) || (name == NULL) || (stream == NULL))
 		return;
 
-	printStats = (stats != NULL) && (stats->k > 0);
+	printStats = (stats != NULL) && (stats->sample_size > 0);
 
 	switch (tm_type) {
 	case D_TM_DURATION | D_TM_CLOCK_REALTIME:
@@ -466,17 +466,8 @@ d_tm_print_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 		break;
 	}
 
-	if (printStats) {
-		fprintf(stream,
-			" min: %lf max: %lf mean: %lf size: %"
-			PRIu64,
-			stats->dtm_min.min_float,
-			stats->dtm_max.max_float,
-			stats->mean,
-			stats->k);
-		if (stats->k > 2)
-			fprintf(stream, " std dev: %lf", stats->std_dev);
-	}
+	if (printStats)
+		D_TM_PRINT_STATS(stream, stats, float, lf);
 
 	fprintf(stream, "\n");
 }
@@ -498,17 +489,8 @@ d_tm_print_gauge(uint64_t val, struct d_tm_stats_t *stats, char *name,
 
 	fprintf(stream, "Gauge: %s = %" PRIu64, name, val);
 
-	if ((stats != NULL) && (stats->k > 0)) {
-		fprintf(stream,
-			" min: %" PRIu64 " max: %" PRIu64 " mean: %lf size: %"
-			PRIu64,
-			stats->dtm_min.min_int,
-			stats->dtm_max.max_int,
-			stats->mean,
-			stats->k);
-		if (stats->k > 2)
-			fprintf(stream, " std dev: %lf", stats->std_dev);
-	}
+	if ((stats != NULL) && (stats->sample_size > 0))
+		D_TM_PRINT_STATS(stream, stats, int, lu);
 
 	fprintf(stream, "\n");
 }
@@ -726,88 +708,46 @@ failure:
 }
 
 /**
- * Compute gauge statistics, min, max, mean, and standard deviation
+ * Compute statistics: min, max, mean, and standard deviation
  * Uses B. P. Welford's algorithm for computing a running variance.
- * This implementation computes an integer min and max with floating point
- * mean and standard deviation.
  *
- * \param[in]	node		Pointer to a gauge node
+ * \param[in]	node		Pointer to a node of type D_TM_GAUGE
+ *				or type D_TM_DURATION
  */
 void
-d_tm_compute_gauge_stats(struct d_tm_node_t *node)
+d_tm_compute_stats(struct d_tm_node_t *node)
 {
-	double mean;
-	double s;
-	double variance;
-	uint64_t value;
+	double sum_of_squares = 0.0;
+	double variance = 0.0;
+	double mean = 0.0;
 
-	value = node->dtn_metric->dtm_data.value;
+	if (node->dtn_metric->dtm_stats == NULL)
+		return;
 
-	node->dtn_metric->dtm_stats->k++;
+	node->dtn_metric->dtm_stats->sample_size++;
 
-	mean = node->dtn_metric->dtm_stats->mean +
-	       ((value - node->dtn_metric->dtm_stats->mean) /
-	       node->dtn_metric->dtm_stats->k);
+	mean = D_TM_COMPUTE_MEAN(node, D_TM_VALUE(node));
 
-	s = node->dtn_metric->dtm_stats->s +
-	    ((value - node->dtn_metric->dtm_stats->mean) * (value - mean));
+	sum_of_squares = D_TM_COMPUTE_SUM_OF_SQUARES(node, D_TM_VALUE(node));
 
-	node->dtn_metric->dtm_stats->mean = mean;
-	node->dtn_metric->dtm_stats->s = s;
-
-	if (node->dtn_metric->dtm_stats->k > 2) {
-		variance = s / (node->dtn_metric->dtm_stats->k - 1);
-		node->dtn_metric->dtm_stats->std_dev = sqrtl(variance);
+	if (node->dtn_type & D_TM_DURATION) {
+		D_TM_COMPUTE_MIN(D_TM_VALUE(node), node, float);
+		D_TM_COMPUTE_MAX(D_TM_VALUE(node), node, float);
 	}
 
-	if (value > node->dtn_metric->dtm_stats->dtm_max.max_int)
-		node->dtn_metric->dtm_stats->dtm_max.max_int = value;
-
-	if (value < node->dtn_metric->dtm_stats->dtm_min.min_int)
-		node->dtn_metric->dtm_stats->dtm_min.min_int = value;
-}
-
-/**
- * Compute duration statistics, min, max, mean, and standard deviation
- * Uses B. P. Welford's algorithm for computing a running variance.
- * This implementation computes a floating point min, max, mean and standard
- * deviation.
- *
- * \param[in]	node		Pointer to a duration node
- */
-void
-d_tm_compute_duration_stats(struct d_tm_node_t *node)
-{
-	double mean;
-	double s;
-	double variance;
-	double value;
-
-	value = node->dtn_metric->dtm_data.tms[0].tv_sec +
-		(node->dtn_metric->dtm_data.tms[0].tv_nsec / 1E9);
-
-	node->dtn_metric->dtm_stats->k++;
-
-	mean = node->dtn_metric->dtm_stats->mean +
-	       ((value - node->dtn_metric->dtm_stats->mean) /
-	       node->dtn_metric->dtm_stats->k);
-
-	s = node->dtn_metric->dtm_stats->s +
-	    ((value - node->dtn_metric->dtm_stats->mean) * (value - mean));
-
-	node->dtn_metric->dtm_stats->mean = mean;
-	node->dtn_metric->dtm_stats->s = s;
-
-	if (node->dtn_metric->dtm_stats->k > 2) {
-		variance = s / (node->dtn_metric->dtm_stats->k - 1);
-		node->dtn_metric->dtm_stats->std_dev = sqrtl(variance);
+	if (node->dtn_type == D_TM_GAUGE) {
+		D_TM_COMPUTE_MIN(D_TM_VALUE(node), node, int);
+		D_TM_COMPUTE_MAX(D_TM_VALUE(node), node, int);
 	}
 
-	if (value > node->dtn_metric->dtm_stats->dtm_max.max_float)
-		node->dtn_metric->dtm_stats->dtm_max.max_float = value;
+	node->dtn_metric->dtm_stats->mean = mean;
+	node->dtn_metric->dtm_stats->sum_of_squares = sum_of_squares;
 
-	if (value < node->dtn_metric->dtm_stats->dtm_min.min_float)
-		node->dtn_metric->dtm_stats->dtm_min.min_float = value;
+	if (node->dtn_metric->dtm_stats->sample_size > 2) {
+		variance = sum_of_squares /
+			(node->dtn_metric->dtm_stats->sample_size - 1);
+		node->dtn_metric->dtm_stats->std_dev = sqrtl(variance);
+	}
 }
 
 /**
@@ -1262,7 +1202,8 @@ d_tm_mark_duration_end(struct d_tm_node_t **metric, char *item, ...)
 			      &end);
 		node->dtn_metric->dtm_data.tms[0] = d_timediff(
 					node->dtn_metric->dtm_data.tms[1], end);
-		d_tm_compute_duration_stats(node);
+		d_tm_compute_stats(node);
+		//d_tm_compute_duration_stats(node);
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
@@ -1351,7 +1292,8 @@ d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value, char *item, ...)
 	if (node->dtn_type == D_TM_GAUGE) {
 		D_MUTEX_LOCK(&node->dtn_lock);
 		node->dtn_metric->dtm_data.value = value;
-		d_tm_compute_gauge_stats(node);
+		d_tm_compute_stats(node);
+		//d_tm_compute_gauge_stats(node);
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
@@ -1441,7 +1383,8 @@ d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
 	if (node->dtn_type == D_TM_GAUGE) {
 		D_MUTEX_LOCK(&node->dtn_lock);
 		node->dtn_metric->dtm_data.value += value;
-		d_tm_compute_gauge_stats(node);
+		d_tm_compute_stats(node);
+		//d_tm_compute_gauge_stats(node);
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
@@ -1531,7 +1474,8 @@ d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
 	if (node->dtn_type == D_TM_GAUGE) {
 		D_MUTEX_LOCK(&node->dtn_lock);
 		node->dtn_metric->dtm_data.value -= value;
-		d_tm_compute_gauge_stats(node);
+		d_tm_compute_stats(node);
+		//d_tm_compute_gauge_stats(node);
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
@@ -1726,8 +1670,8 @@ d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
 		temp->dtn_metric->dtm_stats->dtm_max.max_int = 0;
 		temp->dtn_metric->dtm_stats->std_dev = 0.0;
 		temp->dtn_metric->dtm_stats->mean = 0.0;
-		temp->dtn_metric->dtm_stats->s = 0.0;
-		temp->dtn_metric->dtm_stats->k = 0;
+		temp->dtn_metric->dtm_stats->sum_of_squares = 0.0;
+		temp->dtn_metric->dtm_stats->sample_size = 0;
 	}
 
 	if (metric_type & D_TM_DURATION) {
@@ -1741,8 +1685,8 @@ d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
 		temp->dtn_metric->dtm_stats->dtm_max.max_float = 0.0;
 		temp->dtn_metric->dtm_stats->std_dev = 0.0;
 		temp->dtn_metric->dtm_stats->mean = 0.0;
-		temp->dtn_metric->dtm_stats->s = 0.0;
-		temp->dtn_metric->dtm_stats->k = 0;
+		temp->dtn_metric->dtm_stats->sum_of_squares = 0.0;
+		temp->dtn_metric->dtm_stats->sample_size = 0;
 	}
 
 	buff_len = strnlen(sh_desc, D_TM_MAX_SHORT_LEN);
@@ -2002,7 +1946,7 @@ d_tm_get_gauge(uint64_t *val, struct d_tm_stats_t *stats, uint64_t *shmem_root,
 			stats->dtm_max.max_int = dtm_stats->dtm_max.max_int;
 			stats->std_dev = dtm_stats->std_dev;
 			stats->mean = dtm_stats->mean;
-			stats->k = dtm_stats->k;
+			stats->sample_size = dtm_stats->sample_size;
 		}
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
@@ -2063,7 +2007,7 @@ d_tm_get_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 			stats->dtm_max.max_float = dtm_stats->dtm_max.max_float;
 			stats->std_dev = dtm_stats->std_dev;
 			stats->mean = dtm_stats->mean;
-			stats->k = dtm_stats->k;
+			stats->sample_size = dtm_stats->sample_size;
 		}
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {

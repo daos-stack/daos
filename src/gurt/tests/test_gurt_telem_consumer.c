@@ -55,24 +55,24 @@ test_verify_object_count(void **state)
 	assert_non_null(node);
 
 	num = d_tm_count_metrics(shmem_root, node, D_TM_COUNTER);
-	assert(num == 2);
+	assert_int_equal(num, 2);
 
 	num = d_tm_count_metrics(shmem_root, node, D_TM_GAUGE);
-	assert(num == 2);
+	assert_int_equal(num, 2);
 
 	num = d_tm_count_metrics(shmem_root, node, D_TM_DURATION);
-	assert(num == 2);
+	assert_int_equal(num, 2);
 
 	num = d_tm_count_metrics(shmem_root, node, D_TM_TIMESTAMP);
-	assert(num == 1);
+	assert_int_equal(num, 1);
 
 	num = d_tm_count_metrics(shmem_root, node, D_TM_TIMER_SNAPSHOT);
-	assert(num == 2);
+	assert_int_equal(num, 2);
 
 	num = d_tm_count_metrics(shmem_root, node,
 				 D_TM_COUNTER | D_TM_GAUGE | D_TM_DURATION |
 				 D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT);
-	assert(num == 9);
+	assert_int_equal(num, 9);
 }
 
 static void
@@ -85,7 +85,7 @@ test_verify_loop_counter(void **state)
 			      "gurt/tests/telem/loop counter");
 	assert(rc == D_TM_SUCCESS);
 
-	assert(val == 5000);
+	assert_int_equal(val, 5000);
 }
 
 static void
@@ -97,7 +97,7 @@ test_verify_test_counter(void **state)
 	rc = d_tm_get_counter(&val, shmem_root, NULL,
 			      "gurt/tests/telem/counter 1");
 	assert(rc == D_TM_SUCCESS);
-	assert(val == 3);
+	assert_int_equal(val, 3);
 }
 
 static void
@@ -109,7 +109,7 @@ test_metric_not_found(void **state)
 	rc = d_tm_get_counter(&val, shmem_root, NULL,
 			      "gurt/tests/telem/this doesn't exist");
 	assert(rc == -DER_METRIC_NOT_FOUND);
-	assert(val == 0);
+	assert_int_equal(val, 0);
 }
 
 static void
@@ -157,7 +157,7 @@ test_verify_gauge(void **state)
 			    "gurt/tests/telem/gauge");
 	assert(rc == D_TM_SUCCESS);
 
-	assert(val == 1650);
+	assert_int_equal(val, 1650);
 }
 
 static void
@@ -199,11 +199,12 @@ test_gauge_stats(void **state)
 			    "gurt/tests/telem/gauge-stats");
 	assert(rc == D_TM_SUCCESS);
 
-	assert(val == 20);
-	assert(stats.dtm_min.min_int == 2);
-	assert(stats.dtm_max.max_int == 20);
-	assert(fabs(stats.mean - 11.0) < 0.1);
-	assert(fabs(stats.std_dev - 5.89379) < 0.00001);
+	assert_int_equal(val, 20);
+	assert_int_equal(stats.dtm_min.min_int, 2);
+	assert_int_equal(stats.dtm_max.max_int, 20);
+	assert_float_equal(stats.mean, 11.0, 0.1);
+	assert_float_equal(stats.std_dev, 5.89379, 0.00001);
+
 }
 
 static void
@@ -217,10 +218,10 @@ test_duration_stats(void **state)
 			       "gurt/tests/telem/duration-stats");
 	assert(rc == D_TM_SUCCESS);
 
-	assert(fabs(stats.dtm_min.min_float - 1.125) < 0.001);
-	assert(fabs(stats.dtm_max.max_float - 5.6) < 0.1);
-	assert(fabs(stats.mean - 3.25) < 0.01);
-	assert(fabs(stats.std_dev - 1.74329) < 0.00001);
+	assert_float_equal(stats.dtm_min.min_float, 1.125, 0.001);
+	assert_float_equal(stats.dtm_max.max_float, 5.6, 0.1);
+	assert_float_equal(stats.mean, 3.25, 0.01);
+	assert_float_equal(stats.std_dev, 1.74329, 0.00001);
 }
 
 static int
