@@ -121,7 +121,7 @@ class JavaCIIntegration(TestWithServers):
 
 
         # run intergration-test
-        openjdk = "/usr/lib/jvm/java-{}-openjdk-{}-0.el7_8.x86_64/jre/lib/amd64/libjsig.so".format(version[:-8], version)
+        openjdk = "/usr/lib/jvm/java-{}-openjdk-{}-0.el7_9.x86_64/jre/lib/amd64/libjsig.so".format(version[:-8], version)
         jdir = "{}/../java".format(os.getcwd())
         cmd = "cd {};".format(jdir)
         cmd += " ls -l {};".format(openjdk)
