@@ -26,9 +26,9 @@ jobs:
     - uses: satackey/action-docker-layer-caching@v0.0.11
       continue-on-error: true
       with:
-        key: daos-docker-${{ matrix.distro }}-{hash}
+        key: daos-docker-cache-${{ matrix.distro }}-{hash}
         restore-keys: |
-          daos-docker-${{ matrix.distro }}-
+          daos-docker-cache-${{ matrix.distro }}-
     - name: Build deps ${{ matrix.distro }} Docker image
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
                           -t ${{ matrix.distro }}/daos:${{ github.sha }}
@@ -52,9 +52,9 @@ jobs:
     - uses: satackey/action-docker-layer-caching@v0.0.11
       continue-on-error: true
       with:
-        key: daos-docker-${{ matrix.distro }}-{hash}
+        key: daos-docker-cache-${{ matrix.distro }}-{hash}
         restore-keys: |
-          daos-docker-${{ matrix.distro }}-
+          daos-docker-cache-${{ matrix.distro }}-
         skip-save: true
     - name: Build deps ${{ matrix.distro }} Docker image
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
