@@ -1203,7 +1203,6 @@ d_tm_mark_duration_end(struct d_tm_node_t **metric, char *item, ...)
 		node->dtn_metric->dtm_data.tms[0] = d_timediff(
 					node->dtn_metric->dtm_data.tms[1], end);
 		d_tm_compute_stats(node);
-		//d_tm_compute_duration_stats(node);
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
@@ -1293,7 +1292,6 @@ d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value, char *item, ...)
 		D_MUTEX_LOCK(&node->dtn_lock);
 		node->dtn_metric->dtm_data.value = value;
 		d_tm_compute_stats(node);
-		//d_tm_compute_gauge_stats(node);
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
@@ -1384,7 +1382,6 @@ d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
 		D_MUTEX_LOCK(&node->dtn_lock);
 		node->dtn_metric->dtm_data.value += value;
 		d_tm_compute_stats(node);
-		//d_tm_compute_gauge_stats(node);
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
@@ -1475,7 +1472,6 @@ d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
 		D_MUTEX_LOCK(&node->dtn_lock);
 		node->dtn_metric->dtm_data.value -= value;
 		d_tm_compute_stats(node);
-		//d_tm_compute_gauge_stats(node);
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
