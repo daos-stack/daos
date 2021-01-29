@@ -9,7 +9,7 @@ hosts:
     - server-F
     - server-G
     - server-H
-timeout: 300
+timeout: 1500
 server_config:
   servers_per_host: 2
   name: daos_server
