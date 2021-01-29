@@ -46,8 +46,9 @@ server_config:
 testparams:
   ranks:
     rank_to_kill:
-#      - 5
+      - 5
       - 3,4
+#      - 2,3
 pool:
   mode: 146
   name: daos_server
@@ -73,5 +74,4 @@ mdtest:
   manager: "MPICH"
   flags: "-F -C"
   write_bytes: 4096
-#  read_bytes: 4096
   depth: 0

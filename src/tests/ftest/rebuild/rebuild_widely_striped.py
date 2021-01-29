@@ -30,12 +30,6 @@ from apricot import skipForTicket
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
 
-try:
-    # python 3.x
-    import queue as queue
-except ImportError:
-    # python 2.7
-    import Queue as queue
 
 # pylint: disable=too-few-public-methods,too-many-ancestors
 class RebuildWidelyStriped(MdtestBase):
@@ -79,13 +73,8 @@ class RebuildWidelyStriped(MdtestBase):
                                            "/run/server_config/*")
         self.dmg = self.get_dmg_command()
 
-        self.out_queue = queue.Queue()
-
         # create pool
         self.add_pool(connect=False)
-
-        # create cont
-        self.add_container(self.pool)
 
         # make sure pool looks good before we start
         checks = {
@@ -104,51 +93,36 @@ class RebuildWidelyStriped(MdtestBase):
             "Invalid pool rebuild info detected before rebuild")
 
 
-
-        # run mdtest to write 32K files of size 4K
-#        self.execute_mdtest()
-
+        # create 1st container
+        self.add_container(self.pool)
+        # start 1st mdtest job
         thread = threading.Thread(target=self.execute_mdtest)
-
-#        threads.append(thread)
-#        thread.daemon = True
         thread.start()
         time.sleep(3)
 
-#        thread.join()
-
-#        # Force close all conections
-#        self.dmg.pool_evict(self.pool.uuid)
-
-        # Kill the server and trigger rebuild
+        # Kill rank[7] and trigger rebuild
         self.pool.start_rebuild([rank[0]], self.d_log)
         
-        # Wait for rebuild to start. If True just wait for rebuild to start,
-        # if False, wait for rebuild to complete.
-#        self.pool.wait_for_rebuild(False, interval=1)
-
+        # wait for mdtest to complete
         thread.join()
 
-        self.pool.set_query_data()
+        # destroy container and pool
+        self.container.destroy()
+#        self.dmg.pool_evict(self.pool.uuid)
+#        self.pool.destroy()
+#        self.container = None
 
-        # destroy pool during rebuild
-        self.pool.destroy()
-        self.container = None
-
-        # re-create the pool of full size to verify the space was reclaimed,
-        # after re-starting the server on excluded rank
+        # re-create the pool and container
 #        self.add_pool(connect=False)
-#        self.add_container(self.pool)
-##        self.create_pool()
-##        self.pool.set_query_data()
+        self.add_container(self.pool)
 
-##        self.mdtest_cmd.dfs_oclass.update("SX")
-##        self.mdtest_cmd.dfs_dir_oclass.update("SX")
-#        thread = threading.Thread(target=self.execute_mdtest)
-#        thread.start()
-#        time.sleep(3)
+        # start 2nd mdtest job
+        thread = threading.Thread(target=self.execute_mdtest)
+        thread.start()
+        time.sleep(3)
 
-        # Kill the server and trigger rebuild
-#        self.pool.start_rebuild([rank[1]], self.d_log)
+        # Kill 2 server ranks [5,6]
+        self.pool.start_rebuild([rank[1]], self.d_log)
         
-#        thread.join()
+        # wait for mdtest to complete
+        thread.join()
