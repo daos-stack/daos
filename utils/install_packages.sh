@@ -13,5 +13,5 @@ apt-get -y install scons python3-distro autoconf bash clang cmake curl \
         yasm valgrind libhwloc-dev man            \
         openjdk-8-jdk maven libopenmpi-dev patchelf libjson-c-dev   \
         liblz4-dev python3-distro \
-	ndctl golang-go
+	ndctl golang-go python-distro
 

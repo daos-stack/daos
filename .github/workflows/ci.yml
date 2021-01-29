@@ -29,7 +29,7 @@ jobs:
       with:
         key: daos-docker-cache-${{ matrix.distro }}-${{ matrix.compiler}}-{hash}
         restore-keys: |
-          foo-docker-cache-
+          daos-docker-cache-${{ matrix.distro }}-${{ matrix.compiler}}
     - name: Build ${{ matrix.distro }} Docker image with ${{ matrix.compiler }}
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg COMPILER=${{ matrix.compiler }}
