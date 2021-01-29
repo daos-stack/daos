@@ -1886,7 +1886,7 @@ class AllocFailTest():
 
         fatal_errors = False
 
-        while not finished:
+        while not finished or active:
             if len(active) < max_child and not finished:
                 active.append(self._run_cmd(fid))
                 fid += 1
