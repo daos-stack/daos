@@ -18,20 +18,20 @@ def scons():
     Export('utest_utils')
 
     daos_build.test(tenv, 'btree', ['btree.c', utest_utils],
-                    LIBS=['daos_common', 'gurt', 'pmemobj', 'cmocka'])
+                    LIBS=['daos_common_pmem', 'gurt', 'pmemobj', 'cmocka'])
     daos_build.test(tenv, 'umem_test', ['umem_test.c', utest_utils],
-                    LIBS=['daos_common', 'gurt', 'pmemobj', 'cmocka'])
+                    LIBS=['daos_common_pmem', 'gurt', 'pmemobj', 'cmocka'])
     daos_build.test(tenv, 'btree_direct', ['btree_direct.c', utest_utils],
-                    LIBS=['daos_common', 'gurt', 'pmemobj', 'cmocka'])
+                    LIBS=['daos_common_pmem', 'gurt', 'pmemobj', 'cmocka'])
     daos_build.test(tenv, 'other', 'other.c',
-                    LIBS=['daos_common', 'gurt', 'cart'])
+                    LIBS=['daos_common_pmem', 'gurt', 'cart'])
     common_test = daos_build.test(tenv, 'common_test',
                                   ['common_test.c', 'checksum_tests.c',
                                    'compress_tests.c', 'misc_tests.c'],
                                   LIBS=['daos_common', 'daos_tests',
                                         'gurt', 'cart', 'cmocka'])
     daos_build.test(tenv, 'lru', 'lru.c',
-                    LIBS=['daos_common', 'gurt', 'cart'])
+                    LIBS=['daos_common_pmem', 'gurt', 'cart'])
     daos_build.test(tenv, 'sched', 'sched.c',
                     LIBS=['daos_common', 'gurt', 'cart', 'cmocka'])
     daos_build.test(tenv, 'abt_perf', 'abt_perf.c',

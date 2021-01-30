@@ -12,13 +12,14 @@ def scons():
 
     common = denv.SharedObject(['rpc.c'])
     # ds_cont: Container Server
-    ds_cont = daos_build.library(denv, 'cont',
+    senv = denv.Clone()
+    ds_cont = daos_build.library(senv, 'cont',
                                  ['srv.c', 'srv_container.c', 'srv_epoch.c',
                                   'srv_target.c', 'srv_layout.c', 'oid_iv.c',
                                   'container_iv.c', 'srv_csum_recalc.c',
                                   'srv_cli.c', 'srv_oi_table.c', common],
                                  install_off="../..")
-    denv.Install('$PREFIX/lib64/daos_srv', ds_cont)
+    senv.Install('$PREFIX/lib64/daos_srv', ds_cont)
 
     # dc_cont: Container Client
     dc_co_tgts = denv.SharedObject(['cli.c']) + common

@@ -13,7 +13,7 @@ def scons():
     # Isolated unit tests
     daos_build.test(denv, 'srv_drpc_tests',
                     source=[pb, mocks, 'srv_drpc_tests.c', '../srv_drpc.c'],
-                    LIBS=['cmocka', 'protobuf-c', 'daos_common', 'gurt',
+                    LIBS=['cmocka', 'protobuf-c', 'daos_common_pmem', 'gurt',
                           'uuid'])
 
 if __name__ == "SCons.Script":

@@ -2,7 +2,6 @@
 
 def scons():
     """Execute build"""
-
     SConscript('array/SConscript')
     SConscript('kv/SConscript')
     SConscript('api/SConscript')

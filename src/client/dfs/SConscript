@@ -30,6 +30,7 @@ def scons():
     Import('env', 'prereqs')
 
     denv = env.Clone()
+    denv.Append(CPPDEFINES=['-DDAOS_CLIENT_BUILD'])
 
     configure_lustre(denv)
 

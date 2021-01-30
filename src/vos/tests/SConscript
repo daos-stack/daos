@@ -5,7 +5,7 @@ def scons():
     """Execute build"""
     Import('denv', 'prereqs', 'utest_utils')
 
-    libraries = ['vos', 'bio', 'abt', 'pthread', 'daos_common', 'daos_tests',
+    libraries = ['vos', 'bio', 'abt', 'pthread', 'daos_common_pmem', 'daos_tests',
                  'gurt', 'cart', 'uuid', 'pthread', 'pmemobj', 'cmocka', 'gomp']
 
     prereqs.require(denv, 'argobots')

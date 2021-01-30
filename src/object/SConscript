@@ -26,6 +26,7 @@ def scons():
     denv.Install('$PREFIX/lib64/daos_srv', srv)
 
     # Object client library
+    denv.Append(CPPDEFINES=['-DDAOS_CLIENT_BUILD'])
     dc_obj_tgts = denv.SharedObject(['cli_obj.c', 'cli_shard.c', 'cli_mod.c',
                                      'cli_ec.c', 'obj_verify.c'])
     dc_obj_tgts += common_tgts
