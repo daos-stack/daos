@@ -2883,7 +2883,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 
 	strcpy(dst_str, ap->dst);
 	rc = dm_parse_path(&dst_file_dfs, dst_str, &ca.dst_p_uuid,
-			     &ca.dst_c_uuid, daos_no_prefix);
+			   &ca.dst_c_uuid, daos_no_prefix);
 	if (rc != 0) {
 		fprintf(stderr, "failed to parse destination path: %d\n", rc);
 		D_GOTO(out, rc);
