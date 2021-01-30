@@ -12,16 +12,12 @@ server_config:
         bdev_list: ["0000:81:00.0","0000:da:00.0"]
         scm_class: dcpm
         scm_list: ["/dev/pmem0"]
-        env_vars:
-            - CRT_SWIM_RPC_TIMEOUT=20
-            - SWIM_PING_TIMEOUT=1800
-            - SWIM_SUSPECT_TIMEOUT=16000
 pool:
     control_method: dmg
     mode: 511
     name: daos_server
-    scm_size: 100G
-    nvme_size: 200G
+    scm_size: 50G
+    nvme_size: 100G
 container:
     type: POSIX
     control_method: daos
@@ -41,17 +37,14 @@ daos_vol_tests:  !mux
         testname: h5_test_testhdf5
         client_processes: 1
     test5:
-        testname: h5_partest_t_bigio
-        client_processes: 6
-    test6:
         testname: h5_partest_testphdf5
         client_processes: 6
-    test7:
+    test6:
         testname: h5daos_test_map
         client_processes: 1
-    test8:
+    test7:
         testname: h5daos_test_map_parallel
         client_processes: 6
-    test9:
+    test8:
         testname: h5daos_test_oclass
         client_processes: 1
