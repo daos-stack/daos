@@ -3041,7 +3041,7 @@ cont_clone_recx_array(daos_key_t *dkey,
 		(*iod).iod_type  = DAOS_IOD_ARRAY;
 		(*iod).iod_nr    = number;
 		(*iod).iod_recxs = recxs;
-		(*iod).iod_size  = size;  
+		(*iod).iod_size  = size;
 
 		/* set sgl values */
 		sgl.sg_nr_out = 0;
