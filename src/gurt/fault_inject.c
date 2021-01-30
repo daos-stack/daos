@@ -305,7 +305,7 @@ one_fault_attr_parse(yaml_parser_t *parser)
 			D_DEBUG(DB_ALL, "max_faults: %lu\n", val);
 		} else if (!strcmp(key_str, err_code)) {
 			attr.fa_err_code = strtol(val_str, NULL, 0);
-			D_DEBUG(DB_ALL, "err_code: " DF_RC "\n",
+			D_DEBUG(DB_ALL, "err_code: "DF_RC"\n",
 				DP_RC(attr.fa_err_code));
 		} else if (!strcmp(key_str, argument)) {
 			D_STRNDUP(attr.fa_argument, val_str,
