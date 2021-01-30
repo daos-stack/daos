@@ -214,12 +214,13 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	// Init management RPC subsystem.
 	mgmtSvc := newMgmtSvc(harness, membership, sysdb, rpcClient, eventPubSub)
 
-	// By default, forward received RASTypeStateChange events to management
-	// service leader to be handled and log RASTypeInfoOnly to INFO.
+	// Forward published actionable events (type RASTypeStateChange) to the
+	// management service leader, behavior is updated on leadership change.
 	eventForwarder := control.NewEventForwarder(rpcClient, cfg.AccessPoints)
 	eventPubSub.Subscribe(events.RASTypeStateChange, eventForwarder)
+	// Log events on the host that they were raised (and first published) on.
 	eventLogger := control.NewEventLogger(log)
-	eventPubSub.Subscribe(events.RASTypeInfoOnly, eventLogger)
+	eventPubSub.Subscribe(events.RASTypeAny, eventLogger)
 
 	var netDevClass uint32
 
@@ -393,8 +394,26 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		// Stop forwarding events to MS and instead start handling
 		// received forwarded (and local) events.
 		eventPubSub.Reset()
+		eventPubSub.Subscribe(events.RASTypeAny, eventLogger)
 		eventPubSub.Subscribe(events.RASTypeStateChange, membership)
 		eventPubSub.Subscribe(events.RASTypeStateChange, sysdb)
+		eventPubSub.Subscribe(events.RASTypeStateChange, events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
+			switch evt.ID {
+			case events.RASSwimRankDead:
+				// Mark the rank as unavailable for membership in
+				// new pools, etc.
+				if err := membership.MarkRankDead(system.Rank(evt.Rank)); err != nil {
+					log.Errorf("failed to mark rank %d as dead: %s", evt.Rank, err)
+					return
+				}
+				// FIXME CART-944: We should be able to update the
+				// primary group in order to remove the dead rank,
+				// but for the moment this will cause problems.
+				/*if err := mgmtSvc.doGroupUpdate(ctx); err != nil {
+					log.Errorf("GroupUpdate failed: %s", err)
+				}*/
+			}
+		}))
 
 		return nil
 	})
@@ -404,6 +423,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		// Stop handling received forwarded (in addition to local)
 		// events and start forwarding events to the new MS leader.
 		eventPubSub.Reset()
+		eventPubSub.Subscribe(events.RASTypeAny, eventLogger)
 		eventPubSub.Subscribe(events.RASTypeStateChange, eventForwarder)
 
 		return nil

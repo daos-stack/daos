@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /*
@@ -41,13 +24,32 @@
  * - 64-char string identifier raised as part of the event
  *   The identifier just be prefixed by component_
  *   Carried over with the RAS event.
+ *
+ * NB: Any events that should be acted upon by the control plane
+ * will need complementary constants defined in src/control/events/ras.go.
+ * Events that are informational-only (i.e. just logged) don't need to be
+ * mirrored in the control plane.
+ *
+ * In order to minimize conflicts between patches, please:
+ *   * Don't change the first and last entries in the list
+ *   * Don't arbitrarily reorder entries
+ *   * Do limit lines to 73 columns, wrapping as necessary
  */
 #define RAS_EVENT_LIST							\
-	X(RAS_RANK_UP,		"engine_status_up")			\
-	X(RAS_RANK_DOWN,	"engine_status_down")			\
-	X(RAS_RANK_NO_RESPONSE,	"engine_status_no_response")		\
-	X(RAS_POOL_REPS_UPDATE,	"pool_replicas_updated")		\
-	X(RAS_POOL_DF_INCOMPAT,	"pool_durable_format_incompatible")
+	X(RAS_UNKNOWN_EVENT,		"unknown_ras_event")		\
+	X(RAS_RANK_UP,			"engine_status_up")		\
+	X(RAS_RANK_DOWN,		"engine_status_down")		\
+	X(RAS_RANK_NO_RESPONSE,		"engine_status_no_response")	\
+	X(RAS_POOL_REBUILD_START,	"pool_rebuild_started")		\
+	X(RAS_POOL_REBUILD_END,		"pool_rebuild_finished")	\
+	X(RAS_POOL_REBUILD_FAILED,	"pool_rebuild_failed")		\
+	X(RAS_POOL_REPS_UPDATE,		"pool_replicas_updated")	\
+	X(RAS_POOL_DF_INCOMPAT,						\
+	  "pool_durable_format_incompatible")				\
+	X(RAS_SYSTEM_STOP,		"system_action_stop")		\
+	X(RAS_SYSTEM_START,		"system_action_start")		\
+	X(RAS_SWIM_RANK_ALIVE,		"swim_rank_alive")		\
+	X(RAS_SWIM_RANK_DEAD,		"swim_rank_dead")
 
 /** Define RAS event enum */
 typedef enum {
@@ -87,7 +89,8 @@ ras_type2str(ras_type_t type)
 }
 
 typedef enum {
-	RAS_SEV_FATAL	= 1,
+	RAS_SEV_UNKNOWN = 0,
+	RAS_SEV_FATAL,
 	RAS_SEV_WARN,
 	RAS_SEV_ERROR,
 	RAS_SEV_INFO,
@@ -143,5 +146,15 @@ ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
  */
 int
 ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl);
+
+/**
+ * Notify control plane that swim has detected a dead rank.
+ *
+ * \param[in] rank	Rank that was marked dead.
+ *
+ * \retval		Zero on success, non-zero otherwise.
+ */
+int
+ds_notify_swim_rank_dead(d_rank_t rank);
 
 #endif /* __DAOS_RAS_H_ */
