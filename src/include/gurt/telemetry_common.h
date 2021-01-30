@@ -48,9 +48,11 @@
 	} while (0)
 
 #define D_TM_COMPUTE_MEAN(var, node, value)				       \
-	(var) = node->dtn_metric->dtm_stats->mean +			       \
-		(((value) - node->dtn_metric->dtm_stats->mean) /	       \
-		node->dtn_metric->dtm_stats->sample_size);		       \
+	do {								       \
+		(var) = node->dtn_metric->dtm_stats->mean +		       \
+			(((value) - node->dtn_metric->dtm_stats->mean) /       \
+			node->dtn_metric->dtm_stats->sample_size);	       \
+	} while (0)
 
 #define D_TM_VALUE(node)						       \
 	((node->dtn_type & D_TM_DURATION) ?				       \
@@ -60,9 +62,11 @@
 				node->dtn_metric->dtm_data.value : 0)
 
 #define D_TM_COMPUTE_SUM_OF_SQUARES(var, node, value)			       \
-	(var) = node->dtn_metric->dtm_stats->sum_of_squares +		       \
-		(((value) - node->dtn_metric->dtm_stats->mean) *	       \
-		((value) - mean));					       \
+	do {								       \
+		(var) = node->dtn_metric->dtm_stats->sum_of_squares +	       \
+			(((value) - node->dtn_metric->dtm_stats->mean) *       \
+			((value) - mean));				       \
+	} while (0)
 
 enum {
 	D_TM_DIRECTORY			= 0x001,
