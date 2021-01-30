@@ -84,6 +84,18 @@ class IorTestBase(DfuseTestBase):
         # create container
         self.container.create()
 
+    def destroy_container_path(self, path):
+        """Destroy a TestContainer object by using a path.
+
+        """
+
+        # destroy container
+        daos_command = DaosCommand(self.bin)
+        kwargs = {"path": path}
+        kwargs["sys_name"] = self.pool.name.value
+        kwargs["force"] = True
+        daos_command.container_destroy_path(**kwargs)
+
     def display_pool_space(self, pool=None):
         """Display the current pool space.
 
@@ -156,6 +168,8 @@ class IorTestBase(DfuseTestBase):
                            intercept, plugin_path=plugin_path,
                            fail_on_warning=fail_on_warning)
 
+        if plugin_path:
+            self.destroy_container_path(test_file)
         if stop_dfuse:
             self.stop_dfuse()
 

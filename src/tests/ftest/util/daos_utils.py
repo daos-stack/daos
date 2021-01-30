@@ -131,6 +131,27 @@ class DaosCommand(DaosCommandBase):
             ("container", "destroy"), pool=pool, sys_name=sys_name,
             cont=cont, force=force)
 
+    def container_destroy_path(self, path, force=None, sys_name=None):
+        """Destroy a container by path.
+
+        Args:
+            path (str): container path.
+            force (bool, optional): Force the container destroy. Defaults to
+                None.
+            sys_name (str, optional):  DAOS system name context for servers.
+                Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos container destroy command fails.
+
+        """
+        return self._get_result(
+            ("container", "destroy"), path=path, sys_name=sys_name, force=force)
+
     def container_get_acl(self, pool, cont,
                           verbose=False, outfile=None):
         """Get the ACL for a given container.
