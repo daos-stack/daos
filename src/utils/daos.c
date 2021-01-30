@@ -1433,8 +1433,8 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		} else if (strcmp(argv[3], "clone") == 0) {
 			fprintf(stream,
 			"container options (clone):\n"
-			"	--src=<pool/cont | path>\n"
-			"	--=<pool/cont | path>\n");
+			"	--src=</pool/cont | path>\n"
+			"	--=</pool/cont | /pool | path>\n");
 		} else if (strcmp(argv[3], "get-attr") == 0 ||
 			   strcmp(argv[3], "set-attr") == 0 ||
 			   strcmp(argv[3], "del-attr") == 0) {
