@@ -7,10 +7,9 @@
 package events
 
 import (
-	"time"
-
 	"github.com/daos-stack/daos/src/control/common"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 )
 
 // RankStateInfo describes details of a rank's state.
@@ -59,17 +58,17 @@ func RankStateInfoToProto(rsi *RankStateInfo) (*sharedpb.RASEvent_RankStateInfo,
 
 // NewRankDownEvent creates a specific RankDown event from given inputs.
 func NewRankDownEvent(hostname string, instanceIdx uint32, rank uint32, exitErr common.ExitStatus) *RASEvent {
-	return &RASEvent{
-		Timestamp: common.FormatTime(time.Now()),
-		Msg:       "DAOS rank exited unexpectedly",
-		ID:        RASRankDown,
-		Hostname:  hostname,
-		Rank:      rank,
-		Type:      RASTypeStateChange,
-		Severity:  RASSeverityError,
+	return New(&RASEvent{
+		Msg:      "DAOS rank exited unexpectedly",
+		ID:       RASRankDown,
+		Hostname: hostname,
+		Rank:     rank,
+		Type:     RASTypeStateChange,
+		Severity: RASSeverityError,
 		ExtendedInfo: &RankStateInfo{
 			InstanceIdx: instanceIdx,
 			ExitErr:     exitErr,
 		},
-	}
+		forwarded: atm.NewBool(false),
+	})
 }

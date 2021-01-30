@@ -155,7 +155,7 @@ func (mod *srvModule) handleClusterEvent(reqb []byte) ([]byte, error) {
 		return nil, drpc.UnmarshalingPayloadFailure()
 	}
 
-	resp, err := mod.events.HandleClusterEvent(req)
+	resp, err := mod.events.HandleClusterEvent(req, false)
 	if err != nil {
 		return nil, errors.Wrapf(err, "handle cluster event %+v", req)
 	}

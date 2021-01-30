@@ -124,7 +124,7 @@ vos_propagate_check(struct vos_object *obj, daos_handle_t toh,
 		return 1;
 	}
 
-	VOS_TX_LOG_FAIL(rc, "Could not check emptiness on punch: " DF_RC"\n",
+	VOS_TX_LOG_FAIL(rc, "Could not check emptiness on punch: "DF_RC"\n",
 			DP_RC(rc));
 
 	return rc;
