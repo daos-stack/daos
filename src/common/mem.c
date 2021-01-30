@@ -20,6 +20,14 @@
 #define TXD_CB_NUM		(1 << 5)	/* 32 callbacks */
 #define TXD_CB_MAX		(1 << 20)	/* 1 million callbacks */
 
+
+struct umem_tx_stage_item {
+	int		 txi_magic;
+	umem_tx_cb_t	 txi_fn;
+	void		*txi_data;
+};
+
+#ifndef DAOS_CLIENT_BUILD
 /** Convert an offset to an id.   No invalid flags will be maintained
  *  in the conversion.
  *
@@ -57,12 +65,6 @@ umem_id2off(const struct umem_instance *umm, PMEMoid oid)
 
 	return oid.off;
 }
-
-struct umem_tx_stage_item {
-	int		 txi_magic;
-	umem_tx_cb_t	 txi_fn;
-	void		*txi_data;
-};
 
 /** persistent memory operations (depends on pmdk) */
 
@@ -380,53 +382,6 @@ umem_tx_errno(int err)
 	return daos_errno2der(err);
 }
 
-/* volatile memory operations */
-
-static int
-vmem_free(struct umem_instance *umm, umem_off_t umoff)
-{
-	free(umem_off2ptr(umm, umoff));
-
-	return 0;
-}
-
-umem_off_t
-vmem_alloc(struct umem_instance *umm, size_t size, uint64_t flags,
-	   unsigned int type_num)
-{
-	return (uint64_t)((flags & POBJ_FLAG_ZERO) ?
-			  calloc(1, size) : malloc(size));
-}
-
-static int
-vmem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
-		     int stage, umem_tx_cb_t cb, void *data)
-{
-	if (cb == NULL)
-		return -DER_INVAL;
-
-	/*
-	 * vmem doesn't support transaction, so we just execute the commit
-	 * callback & end callback instantly and drop the abort callback.
-	 */
-	if (stage == TX_STAGE_ONCOMMIT || stage == TX_STAGE_NONE)
-		cb(data, false);
-	else if (stage == TX_STAGE_ONABORT)
-		cb(data, true);
-	else
-		return -DER_INVAL;
-
-	return 0;
-}
-
-static umem_ops_t	vmem_ops = {
-	.mo_tx_free	= vmem_free,
-	.mo_tx_alloc	= vmem_alloc,
-	.mo_tx_add	= NULL,
-	.mo_tx_abort	= NULL,
-	.mo_tx_add_callback = vmem_tx_add_callback,
-};
-
 static int
 pmem_no_tx_add(struct umem_instance *umm, umem_off_t umoff,
 	       uint64_t offset, size_t size)
@@ -453,6 +408,53 @@ static umem_ops_t	pmem_no_snap_ops = {
 	.mo_tx_publish		= pmem_tx_publish,
 	.mo_tx_add_callback	= pmem_tx_add_callback,
 };
+#endif
+
+/* volatile memory operations */
+static int
+vmem_free(struct umem_instance *umm, umem_off_t umoff)
+{
+	free(umem_off2ptr(umm, umoff));
+
+	return 0;
+}
+
+umem_off_t
+vmem_alloc(struct umem_instance *umm, size_t size, uint64_t flags,
+	   unsigned int type_num)
+{
+	return (uint64_t)((flags & VMEM_FLAG_ZERO) ?
+			  calloc(1, size) : malloc(size));
+}
+
+static int
+vmem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
+		     int stage, umem_tx_cb_t cb, void *data)
+{
+	if (cb == NULL)
+		return -DER_INVAL;
+
+	/*
+	 * vmem doesn't support transaction, so we just execute the commit
+	 * callback & end callback instantly and drop the abort callback.
+	 */
+	if (stage == VT_STAGE_ONCOMMIT || stage == VT_STAGE_NONE)
+		cb(data, false);
+	else if (stage == VT_STAGE_ONABORT)
+		cb(data, true);
+	else
+		return -DER_INVAL;
+
+	return 0;
+}
+
+static umem_ops_t	vmem_ops = {
+	.mo_tx_free	= vmem_free,
+	.mo_tx_alloc	= vmem_alloc,
+	.mo_tx_add	= NULL,
+	.mo_tx_abort	= NULL,
+	.mo_tx_add_callback = vmem_tx_add_callback,
+};
 
 /** Unified memory class definition */
 struct umem_class {
@@ -468,6 +470,7 @@ static struct umem_class umem_class_defined[] = {
 		.umc_ops	= &vmem_ops,
 		.umc_name	= "vmem",
 	},
+#ifndef DAOS_CLIENT_BUILD
 	{
 		.umc_id		= UMEM_CLASS_PMEM,
 		.umc_ops	= &pmem_ops,
@@ -478,6 +481,7 @@ static struct umem_class umem_class_defined[] = {
 		.umc_ops	= &pmem_no_snap_ops,
 		.umc_name	= "pmem_no_snap",
 	},
+#endif
 	{
 		.umc_id		= UMEM_CLASS_UNKNOWN,
 		.umc_ops	= NULL,
@@ -489,15 +493,17 @@ static struct umem_class umem_class_defined[] = {
 static void
 set_offsets(struct umem_instance *umm)
 {
+#ifndef DAOS_CLIENT_BUILD
 	char		*root;
 	PMEMoid		 root_oid;
-
+#endif
 	if (umm->umm_id == UMEM_CLASS_VMEM) {
 		umm->umm_base = 0;
 		umm->umm_pool_uuid_lo = 0;
 		return;
 	}
 
+#ifndef DAOS_CLIENT_BUILD
 	root_oid = pmemobj_root(umm->umm_pool, 0);
 	D_ASSERTF(!OID_IS_NULL(root_oid),
 		  "You must call pmemobj_root before umem_class_init\n");
@@ -506,6 +512,7 @@ set_offsets(struct umem_instance *umm)
 
 	umm->umm_pool_uuid_lo = root_oid.pool_uuid_lo;
 	umm->umm_base = (uint64_t)root - root_oid.off;
+#endif
 }
 
 /**
@@ -541,8 +548,10 @@ umem_class_init(struct umem_attr *uma, struct umem_instance *umm)
 	umm->umm_pool		= uma->uma_pool;
 	umm->umm_nospc_rc	= umc->umc_id == UMEM_CLASS_VMEM ?
 		-DER_NOMEM : -DER_NOSPACE;
+#ifndef DAOS_CLIENT_BUILD
 	memcpy(umm->umm_slabs, uma->uma_slabs,
 	       sizeof(struct pobj_alloc_class_desc) * UMM_SLABS_CNT);
+#endif
 
 	set_offsets(umm);
 	return 0;
