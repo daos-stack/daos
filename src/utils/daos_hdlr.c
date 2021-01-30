@@ -3172,7 +3172,7 @@ cont_clone_list_akeys(daos_handle_t *src_oh,
 			if (akey == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 			len = snprintf(akey, akey_kds[j].kd_key_len + 1,
-					   "%s", ptr);
+				       "%s", ptr);
 			if (len > key_buf_len) {
 				fprintf(stderr, "akey buffer is too small\n");
 				D_GOTO(out, rc = 1);
