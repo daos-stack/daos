@@ -2549,8 +2549,8 @@ set_dm_args_default(struct dm_args *dm)
 
 static int
 dm_get_cont_type(struct dm_args *ca,
-	 	 char *sysname,
-	   	 daos_cont_info_t *cont_info,
+		 char *sysname,
+		 daos_cont_info_t *cont_info,
 		 daos_cont_layout_t *type)
 {
 	int                     rc = 0;
