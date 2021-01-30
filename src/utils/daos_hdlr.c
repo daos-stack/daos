@@ -2875,7 +2875,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	file_set_defaults_dfs(&dst_file_dfs);
 	strcpy(src_str, ap->src);
 	rc = dm_parse_path(&src_file_dfs, src_str, &ca.src_p_uuid,
-			     &ca.src_c_uuid, daos_no_prefix);
+			   &ca.src_c_uuid, daos_no_prefix);
 	if (rc != 0) {
 		fprintf(stderr, "failed to parse source path: %d\n", rc);
 		D_GOTO(out, rc);
