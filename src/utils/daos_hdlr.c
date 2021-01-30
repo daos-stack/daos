@@ -3364,7 +3364,7 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 	file_set_defaults_dfs(&dst_cp_type);
 
 	rc = dm_parse_path(&src_cp_type, ap->src, &ca.src_p_uuid,
-		           &ca.src_c_uuid, daos_no_prefix);
+			   &ca.src_c_uuid, daos_no_prefix);
 	if (rc != 0) {
 		fprintf(stderr, "failed to parse source argument: %d\n", rc);
 		D_GOTO(out, rc);
