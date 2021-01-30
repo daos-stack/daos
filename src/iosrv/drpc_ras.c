@@ -311,3 +311,16 @@ ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl)
 
 	return rc;
 }
+
+int
+ds_notify_swim_rank_dead(d_rank_t rank)
+{
+	Shared__RASEvent			evt = SHARED__RASEVENT__INIT;
+
+	return raise_ras(RAS_SWIM_RANK_DEAD,
+			 "SWIM marked rank as dead.",
+			 RAS_TYPE_STATE_CHANGE, RAS_SEV_INFO, NULL /* hwid */,
+			 &rank /* rank */, NULL /* jobid */, NULL /* pool */,
+			 NULL /* cont */, NULL /* objid */, NULL /* ctlop */,
+			 &evt);
+}
