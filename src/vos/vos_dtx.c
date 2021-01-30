@@ -2438,7 +2438,7 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 		rc = dbtree_delete(cont->vc_dtx_active_hdl, BTR_PROBE_EQ, &kiov,
 				   &dae);
 		if (rc != 0) {
-			D_ERROR("Fail to remove DTX entry "DF_DTI":" DF_RC"\n",
+			D_ERROR("Fail to remove DTX entry "DF_DTI":"DF_RC"\n",
 				DP_DTI(&dth->dth_xid), DP_RC(rc));
 		} else {
 			dtx_act_ent_cleanup(cont, dae, true);
