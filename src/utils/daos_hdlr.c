@@ -2554,7 +2554,7 @@ dm_get_cont_type(struct dm_args *ca,
 		 daos_cont_layout_t *type)
 {
 	int                     rc = 0;
-	daos_prop_t*            prop = daos_prop_alloc(1);
+	daos_prop_t		*prop = daos_prop_alloc(1);
 
 	if (prop == NULL) {
 		fprintf(stderr, "Failed to allocate prop (%d)", rc);
@@ -2578,7 +2578,7 @@ out:
 
 static int
 dm_connect(bool is_posix_copy,
-     	   struct file_dfs *src_file_dfs,
+	   struct file_dfs *src_file_dfs,
 	   struct file_dfs *dst_file_dfs,
 	   struct dm_args *ca,
 	   char *sysname,
@@ -2590,7 +2590,7 @@ dm_connect(bool is_posix_copy,
 	/* check source pool/conts */
 	int			rc = 0;
 	struct duns_attr_t	dattr = {0};
-	
+
 	/* open src pool, src cont, and mount dfs */
 	if (src_file_dfs->type == DAOS) {
 		rc = daos_pool_connect(ca->src_p_uuid, sysname,
@@ -2812,7 +2812,7 @@ out:
 */
 static int
 dm_parse_path(struct file_dfs *file, char *path,
-              uuid_t *p_uuid, uuid_t *c_uuid,
+	      uuid_t *p_uuid, uuid_t *c_uuid,
 	      bool daos_no_prefix)
 {
 	struct duns_attr_t	dattr = {0};
@@ -2998,10 +2998,10 @@ out:
 
 static int
 cont_clone_recx_array(daos_key_t *dkey,
-		     daos_key_t *akey,
-		     daos_handle_t *src_oh,
-		     daos_handle_t *dst_oh,
-		     daos_iod_t *iod)
+		      daos_key_t *akey,
+		      daos_handle_t *src_oh,
+		      daos_handle_t *dst_oh,
+		      daos_iod_t *iod)
 {
 	int			rc = 0;
 	int			i = 0;
@@ -3385,7 +3385,8 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 		ap->dst -= 1;
 		/* not considered an error yet since this could
 		 * be a UNS path, dm_connect will check this
-		 * when it attempts to do a uns_path_create */
+		 * when it attempts to do a uns_path_create
+		 */
 		rc = 0;
 	} else {
 		rc = daos_pool_connect(ca.dst_p_uuid, ap->sysname,
