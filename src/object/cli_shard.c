@@ -623,6 +623,9 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	orw = crt_req_get(rw_args->rpc);
 	orwo = crt_reply_get(rw_args->rpc);
 	D_ASSERT(orw != NULL && orwo != NULL);
+
+	D_ASSERTF(ret != -DER_TX_RESTART, "Invalid TX restart for fetch\n");
+
 	if (ret != 0) {
 		/*
 		 * If any failure happens inside Cart, let's reset failure to
@@ -1425,6 +1428,8 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 	oei = crt_req_get(enum_args->rpc);
 	D_ASSERT(oei != NULL);
 
+	D_ASSERTF(ret != -DER_TX_RESTART, "Invalid TX restart for enum\n");
+
 	if (ret != 0) {
 		/* If any failure happens inside Cart, let's reset
 		 * failure to TIMEDOUT, so the upper layer can retry
@@ -1837,6 +1842,8 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 
 	flags = okqi->okqi_api_flags;
 	opc = opc_get(cb_args->rpc->cr_opc);
+
+	D_ASSERTF(ret != -DER_TX_RESTART, "Invalid TX restart for query\n");
 
 	if (ret != 0) {
 		D_ERROR("RPC %d failed: %d\n", opc, ret);
