@@ -3094,7 +3094,7 @@ out:
 
 static int
 cont_clone_list_akeys(daos_handle_t *src_oh,
-		     daos_handle_t *dst_oh,
+		      daos_handle_t *dst_oh,
 		     daos_key_t diov)
 {
 	int		rc = 0;
