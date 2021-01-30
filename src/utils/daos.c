@@ -1432,7 +1432,7 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			ALL_BUT_CONT_CREATE_OPTS_HELP();
 		} else if (strcmp(argv[3], "clone") == 0) {
 			fprintf(stream,
-			"container options (clone):\n"
+				"container options (clone):\n"
 			"	--src=</pool/cont | path>\n"
 			"	--=</pool/cont | /pool | path>\n");
 		} else if (strcmp(argv[3], "get-attr") == 0 ||
