@@ -25,35 +25,48 @@
 	stats->dtm_max.max_##name
 
 #define D_TM_PRINT_STATS(s, stats, name, fmt) \
-	fprintf(s, " min: %"#fmt " max: %"#fmt " mean: %lf size: %" PRIu64, \
-		D_TM_MIN(stats, name), D_TM_MAX(stats, name),               \
-		stats->mean, stats->sample_size);                           \
-	if (stats->sample_size > 2)                                         \
-		fprintf(s, " std dev: %lf", stats->std_dev);
+	do {								       \
+		fprintf(s, " min: %"#fmt " max: %"#fmt " mean: %lf size: %"    \
+			PRIu64, D_TM_MIN(stats, name), D_TM_MAX(stats, name),  \
+			stats->mean, stats->sample_size);		       \
+		if (stats->sample_size > 2)				       \
+			fprintf(s, " std dev: %lf", stats->std_dev);	       \
+	} while (0)
 
-#define D_TM_COMPUTE_MIN(value, node, name)                                 \
-	if ((value) < node->dtn_metric->dtm_stats->dtm_min.min_##name)      \
-		node->dtn_metric->dtm_stats->dtm_min.min_##name = (value);
+#define D_TM_COMPUTE_MIN(value, node, name)				       \
+	do {								       \
+		if ((value) < node->dtn_metric->dtm_stats->dtm_min.min_##name) \
+			node->dtn_metric->dtm_stats->dtm_min.min_##name =      \
+			(value);					       \
+	} while (0)
 
-#define D_TM_COMPUTE_MAX(value, node, name)                                 \
-	if ((value) > node->dtn_metric->dtm_stats->dtm_max.max_##name)      \
-		node->dtn_metric->dtm_stats->dtm_max.max_##name = (value);
+#define D_TM_COMPUTE_MAX(value, node, name)				       \
+	do {								       \
+		if ((value) > node->dtn_metric->dtm_stats->dtm_max.max_##name) \
+			node->dtn_metric->dtm_stats->dtm_max.max_##name =      \
+			(value);					       \
+	} while (0)
 
-#define D_TM_COMPUTE_MEAN(node, value)                                      \
-	node->dtn_metric->dtm_stats->mean +                                 \
-		(((value) - node->dtn_metric->dtm_stats->mean) /            \
-		node->dtn_metric->dtm_stats->sample_size);
+#define D_TM_COMPUTE_MEAN(var, node, value)				       \
+	do {								       \
+		(var) = node->dtn_metric->dtm_stats->mean +		       \
+			(((value) - node->dtn_metric->dtm_stats->mean) /       \
+			node->dtn_metric->dtm_stats->sample_size);	       \
+	} while (0)
 
-#define D_TM_VALUE(node)                                                    \
-	(node->dtn_type & D_TM_DURATION) ?                                  \
-		(node->dtn_metric->dtm_data.tms[0].tv_sec +                 \
-			(node->dtn_metric->dtm_data.tms[0].tv_nsec / 1E9)) :\
-		(node->dtn_metric->dtm_data.value)
+#define D_TM_VALUE(node)						       \
+	((node->dtn_type & D_TM_DURATION) ?				       \
+		(node->dtn_metric->dtm_data.tms[0].tv_sec +		       \
+		(node->dtn_metric->dtm_data.tms[0].tv_nsec / 1E9)) :	       \
+			(node->dtn_type == D_TM_GAUGE) ? 		       \
+				node->dtn_metric->dtm_data.value : 0)
 
-#define D_TM_COMPUTE_SUM_OF_SQUARES(node, value)                            \
-	node->dtn_metric->dtm_stats->sum_of_squares +                       \
-		(((value) - node->dtn_metric->dtm_stats->mean) *            \
-		((value) - mean));
+#define D_TM_COMPUTE_SUM_OF_SQUARES(var, node, value)			       \
+	do {								       \
+		(var) = node->dtn_metric->dtm_stats->sum_of_squares +	       \
+			(((value) - node->dtn_metric->dtm_stats->mean) *       \
+			((value) - mean));				       \
+	} while (0)
 
 enum {
 	D_TM_DIRECTORY			= 0x001,

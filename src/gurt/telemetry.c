@@ -726,9 +726,9 @@ d_tm_compute_stats(struct d_tm_node_t *node)
 
 	node->dtn_metric->dtm_stats->sample_size++;
 
-	mean = D_TM_COMPUTE_MEAN(node, D_TM_VALUE(node));
+	D_TM_COMPUTE_MEAN(mean, node, D_TM_VALUE(node));
 
-	sum_of_squares = D_TM_COMPUTE_SUM_OF_SQUARES(node, D_TM_VALUE(node));
+	D_TM_COMPUTE_SUM_OF_SQUARES(sum_of_squares, node, D_TM_VALUE(node));
 
 	if (node->dtn_type & D_TM_DURATION) {
 		D_TM_COMPUTE_MIN(D_TM_VALUE(node), node, float);
