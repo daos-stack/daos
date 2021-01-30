@@ -162,14 +162,41 @@ iv_key_unpack(struct ds_iv_key *key_iv, crt_iv_key_t *key_iov)
 	return rc;
 }
 
+void
+ds_iv_ns_get(struct ds_iv_ns *ns)
+{
+	ns->iv_refcount++;
+	D_DEBUG(DB_MGMT, DF_UUID" ns ref %u\n",
+		DP_UUID(ns->iv_pool_uuid), ns->iv_refcount);
+}
+
+void
+ds_iv_ns_put(struct ds_iv_ns *ns)
+{
+	ns->iv_refcount--;
+	D_DEBUG(DB_MGMT, DF_UUID" ns ref %u\n",
+		DP_UUID(ns->iv_pool_uuid), ns->iv_refcount);
+	if (ns->iv_refcount == 1)
+		ABT_eventual_set(ns->iv_done_eventual, NULL, 0);
+	else if (ns->iv_refcount == 0)
+		ds_iv_ns_destroy(ns);
+}
+
 static struct ds_iv_ns *
 iv_ns_lookup_by_ivns(crt_iv_namespace_t ivns)
 {
 	struct ds_iv_ns *ns;
 
 	d_list_for_each_entry(ns, &ds_iv_ns_list, iv_ns_link) {
-		if (ns->iv_ns == ivns)
-			return ns;
+		if (ns->iv_ns == ivns) {
+			if (!ns->iv_stop) {
+				ds_iv_ns_get(ns);
+				return ns;
+			}
+			D_DEBUG(DB_MD, DF_UUID" stopping\n",
+				DP_UUID(ns->iv_pool_uuid));
+			return NULL;
+		}
 	}
 	return NULL;
 }
@@ -194,10 +221,11 @@ key_equal(struct ds_iv_entry *entry, struct ds_iv_key *key1,
 static struct ds_iv_entry *
 iv_class_entry_lookup(struct ds_iv_ns *ns, struct ds_iv_key *key)
 {
+	struct dss_module_info *dmi = dss_get_module_info();
 	struct ds_iv_entry *found = NULL;
 	struct ds_iv_entry *entry;
 
-	ABT_mutex_lock(ns->iv_lock);
+	D_ASSERT(dmi->dmi_xs_id == 0);
 	d_list_for_each_entry(entry, &ns->iv_entry_list, iv_link) {
 		if (key_equal(entry, key, &entry->iv_key)) {
 			/* resolve the permission issue later and also
@@ -207,7 +235,6 @@ iv_class_entry_lookup(struct ds_iv_ns *ns, struct ds_iv_key *key)
 			break;
 		}
 	}
-	ABT_mutex_unlock(ns->iv_lock);
 
 	return found;
 }
@@ -333,9 +360,7 @@ iv_entry_lookup_or_create(struct ds_iv_ns *ns, struct ds_iv_key *key,
 		return rc;
 
 	entry->iv_ref++;
-	ABT_mutex_lock(ns->iv_lock);
 	d_list_add(&entry->iv_link, &ns->iv_entry_list);
-	ABT_mutex_unlock(ns->iv_lock);
 	*got = entry;
 
 	return 1;
@@ -372,14 +397,15 @@ ivc_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 	D_ASSERT(iv_value != NULL);
 	ns = iv_ns_lookup_by_ivns(ivns);
-	D_ASSERT(ns != NULL);
+	if (!ns)
+		return -DER_NONEXIST;
 
 	iv_key_unpack(&key, iv_key);
 	if (priv_entry == NULL) {
 		/* find and prepare entry */
 		rc = iv_entry_lookup_or_create(ns, &key, &entry);
 		if (rc < 0)
-			return rc;
+			D_GOTO(output, rc);
 	} else {
 		D_ASSERT(priv_entry->entry != NULL);
 		entry = priv_entry->entry;
@@ -401,15 +427,16 @@ ivc_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 		 */
 		if ((key.rank == dss_self_rank() &&
 		     key.rank != ns->iv_master_rank))
-			return -DER_NOTLEADER;
+			D_GOTO(output, rc = -DER_NOTLEADER);
 		else if (ns->iv_master_rank != dss_self_rank())
-			return -DER_IVCB_FORWARD;
+			D_GOTO(output, rc = -DER_IVCB_FORWARD);
 	}
 
 	rc = fetch_iv_value(entry, &key, iv_value, &entry->iv_value, priv);
 	if (rc == 0)
 		entry->iv_valid = true;
-
+output:
+	ds_iv_ns_put(ns);
 	return rc;
 }
 
@@ -425,14 +452,15 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	int			rc = 0;
 
 	ns = iv_ns_lookup_by_ivns(ivns);
-	D_ASSERT(ns != NULL);
+	if (!ns)
+		return -DER_NONEXIST;
 
 	iv_key_unpack(&key, iv_key);
 	if (priv_entry == NULL || priv_entry->entry == NULL) {
 		/* find and prepare entry */
 		rc = iv_entry_lookup_or_create(ns, &key, &entry);
 		if (rc < 0)
-			return rc;
+			D_GOTO(output, rc);
 	} else {
 		entry = priv_entry->entry;
 	}
@@ -449,7 +477,7 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 		D_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR,
 			 "key id %d update failed: rc = "DF_RC"\n",
 			 key.class_id, DP_RC(rc));
-		return rc;
+		D_GOTO(output, rc);
 	}
 
 	if (invalidate)
@@ -460,7 +488,8 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	D_DEBUG(DB_TRACE, "key id %d rank %d myrank %d valid %s\n",
 		key.class_id, key.rank, dss_self_rank(),
 		invalidate ? "no" : "yes");
-
+output:
+	ds_iv_ns_put(ns);
 	return rc;
 }
 
@@ -521,13 +550,14 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	int			rc;
 
 	ns = iv_ns_lookup_by_ivns(ivns);
-	D_ASSERT(ns != NULL);
+	if (!ns)
+		return -DER_NONEXIST;
 
 	iv_key_unpack(&key, iv_key);
 	/* find and prepare entry */
 	rc = iv_entry_lookup_or_create(ns, &key, &entry);
 	if (rc < 0)
-		return rc;
+		D_GOTO(out, rc);
 
 	if (rc > 0)
 		alloc_entry = true;
@@ -559,6 +589,7 @@ out:
 		iv_entry_free(entry);
 	}
 
+	ds_iv_ns_put(ns);
 	return 0;
 }
 
@@ -605,14 +636,15 @@ ivc_pre_sync(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
 	int			rc = 0;
 
 	ns = iv_ns_lookup_by_ivns(ivns);
-	D_ASSERT(ns != NULL);
+	if (!ns)
+		return -DER_NONEXIST;
 
 	iv_key_unpack(&key, iv_key);
 	if (priv_entry == NULL || priv_entry->entry == NULL) {
 		/* find and prepare entry */
 		rc = iv_entry_lookup_or_create(ns, &key, &entry);
 		if (rc < 0)
-			return rc;
+			D_GOTO(output, rc);
 	} else {
 		entry = priv_entry->entry;
 	}
@@ -620,7 +652,8 @@ ivc_pre_sync(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
 	class = entry->iv_class;
 	if (class->iv_class_ops && class->iv_class_ops->ivc_pre_sync)
 		rc = class->iv_class_ops->ivc_pre_sync(entry, &key, iv_value);
-
+output:
+	ds_iv_ns_put(ns);
 	return rc;
 }
 
@@ -650,7 +683,7 @@ iv_ns_destroy_cb(crt_iv_namespace_t iv_ns, void *arg)
 		iv_entry_free(entry);
 	}
 
-	ABT_mutex_free(&ns->iv_lock);
+	ABT_eventual_free(&ns->iv_done_eventual);
 	D_FREE(ns);
 }
 
@@ -693,12 +726,14 @@ iv_ns_create_internal(unsigned int ns_id, uuid_t pool_uuid,
 	D_INIT_LIST_HEAD(&ns->iv_entry_list);
 	ns->iv_ns_id = ns_id;
 	ns->iv_master_rank = master_rank;
-	rc = ABT_mutex_create(&ns->iv_lock);
+	rc = ABT_eventual_create(0, &ns->iv_done_eventual);
 	if (rc != ABT_SUCCESS) {
 		D_FREE(ns);
 		return dss_abterr2der(rc);
 	}
+
 	d_list_add(&ns->iv_ns_link, &ds_iv_ns_list);
+	ns->iv_refcount = 1;
 	*pns = ns;
 
 	return 0;
@@ -753,6 +788,26 @@ ds_iv_ns_update(struct ds_iv_ns *ns, unsigned int master_rank)
 		"myrank %u ns %p\n", ns->iv_ns_id, ns->iv_master_rank,
 		master_rank, dss_self_rank(), ns);
 	ns->iv_master_rank = master_rank;
+}
+
+void
+ds_iv_ns_start(struct ds_iv_ns *ns)
+{
+	ds_iv_ns_get(ns);
+}
+
+void
+ds_iv_ns_stop(struct ds_iv_ns *ns)
+{
+	ns->iv_stop = 1;
+	ds_iv_ns_put(ns);
+	if (ns->iv_refcount > 1) {
+		D_DEBUG(DB_MGMT, DF_UUID" ns stop wait ref %u\n",
+			DP_UUID(ns->iv_pool_uuid), ns->iv_refcount);
+		ABT_eventual_wait(ns->iv_done_eventual, NULL);
+		D_DEBUG(DB_MGMT, DF_UUID" ns stopped\n",
+			DP_UUID(ns->iv_pool_uuid));
+	}
 }
 
 unsigned int
@@ -864,6 +919,7 @@ iv_op_internal(struct ds_iv_ns *ns, struct ds_iv_key *key_iv,
 	cb_info.value = value;
 	cb_info.opc = opc;
 	cb_info.ns = ns;
+	ds_iv_ns_get(ns);
 	switch (opc) {
 	case IV_FETCH:
 		rc = crt_iv_fetch(ns->iv_ns, class->iv_cart_class_id,
@@ -892,6 +948,7 @@ iv_op_internal(struct ds_iv_ns *ns, struct ds_iv_key *key_iv,
 	rc = cb_info.result;
 	D_DEBUG(DB_MD, "class_id %d opc %d rc %d\n", key_iv->class_id, opc, rc);
 out:
+	ds_iv_ns_put(ns);
 	ABT_future_free(&future);
 	return rc;
 }
@@ -919,7 +976,7 @@ sync_comp_cb(void *arg, int rc)
 		return rc;
 
 	/* Let's retry asynchronous IV only for GRPVER for the moment */
-	if (cb_arg->retry && rc == -DER_GRPVER) {
+	if (cb_arg->retry && rc == -DER_GRPVER && !cb_arg->ns->iv_stop) {
 		int rc1;
 
 		/* If the IV ns leader has been changed, then it will retry
@@ -937,6 +994,7 @@ sync_comp_cb(void *arg, int rc)
 		}
 	}
 
+	ds_iv_ns_put(cb_arg->ns);
 	d_sgl_fini(&cb_arg->iv_value, true);
 	D_FREE(cb_arg);
 	return rc;
@@ -950,6 +1008,8 @@ iv_op(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 	d_sg_list_t	 *_value = value;
 	int rc;
 
+	if (ns->iv_stop)
+		return -DER_SHUTDOWN;
 retry:
 	if (sync && sync->ivs_mode == CRT_IV_SYNC_LAZY) {
 		struct sync_comp_cb_arg *arg = NULL;
@@ -974,6 +1034,7 @@ retry:
 		arg->shortcut = shortcut;
 		arg->iv_sync = *sync;
 		arg->retry = retry;
+		ds_iv_ns_get(ns);
 		arg->ns = ns;
 		arg->opc = opc;
 
@@ -985,7 +1046,8 @@ retry:
 	}
 
 	rc = iv_op_internal(ns, _key, _value, sync, shortcut, opc);
-	if (retry && (daos_rpc_retryable_rc(rc) || rc == -DER_NOTLEADER)) {
+	if (retry && !ns->iv_stop &&
+	    (daos_rpc_retryable_rc(rc) || rc == -DER_NOTLEADER)) {
 		/* If the IV ns leader has been changed, then it will retry
 		 * in the mean time, it will rely on others to update the
 		 * ns for it.
