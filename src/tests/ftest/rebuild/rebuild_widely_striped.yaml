@@ -47,7 +47,7 @@ testparams:
   ranks:
     rank_to_kill:
       - 5
-      - 3,4
+      - 4
 #      - 2,3
 pool:
   mode: 146
@@ -57,6 +57,7 @@ pool:
 #  nvme_size: 25000000000
   svcn: 1
   control_method: dmg
+  pool_query_timeout: 60
 container:
   type: POSIX
   control_method: daos

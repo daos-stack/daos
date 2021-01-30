@@ -95,34 +95,46 @@ class RebuildWidelyStriped(MdtestBase):
 
         # create 1st container
         self.add_container(self.pool)
+        # start 1st mdtest run and let it complete
+        self.execute_mdtest()
+        # Kill rank[7] and wait for rebuild to complete
+        self.pool.start_rebuild([rank[0]], self.d_log)
+        self.pool.wait_for_rebuild(False, interval=1)
+        # destroy container
+        self.container.destroy()
+
+
+        # create 2nd container
+        self.add_container(self.pool)
         # start 1st mdtest job
         thread = threading.Thread(target=self.execute_mdtest)
         thread.start()
         time.sleep(3)
 
-        # Kill rank[7] and trigger rebuild
-        self.pool.start_rebuild([rank[0]], self.d_log)
-        
+        # Kill rank[6] in the middle of mdtest run and
+        # wait for rebuild to complete
+        self.pool.start_rebuild([rank[1]], self.d_log)
+        self.pool.wait_for_rebuild(False, interval=1)
         # wait for mdtest to complete
         thread.join()
 
         # destroy container and pool
         self.container.destroy()
-#        self.dmg.pool_evict(self.pool.uuid)
-#        self.pool.destroy()
-#        self.container = None
+##        self.dmg.pool_evict(self.pool.uuid)
+##        self.pool.destroy()
+##        self.container = None
 
-        # re-create the pool and container
-#        self.add_pool(connect=False)
-        self.add_container(self.pool)
+#        # re-create the pool and container
+##        self.add_pool(connect=False)
+#        self.add_container(self.pool)
+#
+#        # start 2nd mdtest job
+#        thread = threading.Thread(target=self.execute_mdtest)
+#        thread.start()
+#        time.sleep(3)
 
-        # start 2nd mdtest job
-        thread = threading.Thread(target=self.execute_mdtest)
-        thread.start()
-        time.sleep(3)
-
-        # Kill 2 server ranks [5,6]
-        self.pool.start_rebuild([rank[1]], self.d_log)
+#        # Kill 2 server ranks [5,6]
+#        self.pool.start_rebuild([rank[1]], self.d_log)
         
-        # wait for mdtest to complete
-        thread.join()
+#        # wait for mdtest to complete
+#        thread.join()
