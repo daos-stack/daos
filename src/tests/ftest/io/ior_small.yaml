@@ -46,7 +46,7 @@ ior:
     dfs_destroy: False
     iorflags:
           ior_flags:
-            - "-v -W -w -r -R"
+            - "-v -W -w -r -R -k"
             - "-v -W -w -r -R -F"
           ior_api:
             - DFS
