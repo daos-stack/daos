@@ -1173,6 +1173,8 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 	prop->dpp_entries[prop->dpp_nr - 1].dpe_val = DAOS_PROP_CO_LAYOUT_POSIX;
 
 	rc = daos_cont_create(poh, co_uuid, prop, NULL);
+	/* should not be freed by daos_prop_free */
+	prop->dpp_entries[prop->dpp_nr - 2].dpe_val_ptr = NULL;
 	if (rc) {
 		D_ERROR("daos_cont_create() failed (%d)\n", rc);
 		D_GOTO(err_prop, rc = daos_der2errno(rc));
