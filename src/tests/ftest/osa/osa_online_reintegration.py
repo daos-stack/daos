@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
 import random
@@ -27,10 +10,10 @@ import threading
 
 from itertools import product
 from test_utils_pool import TestPool
-from apricot import skipForTicket
 from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
+from apricot import skipForTicket
 
 try:
     # python 3.x
@@ -150,7 +133,9 @@ class OSAOnlineReintegration(OSAUtils):
                                                        rank, t_string)
             else:
                 output = self.dmg_command.system_stop(ranks=rank)
-                time.sleep(15)
+                time.sleep(45)
+                output = self.dmg_command.system_start(ranks=rank)
+                time.sleep(45)
 
             self.log.info(output)
             self.is_rebuild_done(3)
@@ -189,9 +174,8 @@ class OSAOnlineReintegration(OSAUtils):
             display_string = "Pool{} space at the End".format(val)
             self.pool = pool[val]
             self.pool.display_pool_daos_space(display_string)
-            pool[val].destroy()
 
-    @skipForTicket("DAOS-5807")
+    @skipForTicket("DAOS-6543")
     def test_osa_online_reintegration(self):
         """Test ID: DAOS-5075.
 
@@ -206,11 +190,9 @@ class OSAOnlineReintegration(OSAUtils):
 
     def test_osa_online_reintegration_server_stop(self):
         """Test ID: DAOS-5920.
-
         Test Description: Validate Online Reintegration with server stop
-
         :avocado: tags=all,pr,daily_regression,hw,medium,ib2,osa
-        :avocado: tags=online_reintegration,DAOS_5610
+        :avocado: tags=online_reintegration_srv_stop,DAOS_5610
         """
         # Perform reintegration testing with 1 pool.
         self.run_online_reintegration_test(1, server_boot=True)
