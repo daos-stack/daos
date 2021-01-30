@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /*
  * ds_mgmt: Storage Query Methods
@@ -297,7 +280,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		 */
 		resp->devices[i]->uuid = NULL;
 		resp->devices[i]->state = NULL;
-		resp->devices[i]->traddr = NULL;
+		resp->devices[i]->tr_addr = NULL;
 
 		D_ALLOC(resp->devices[i]->uuid, DAOS_UUID_STR_SIZE);
 		if (resp->devices[i]->uuid == NULL) {
@@ -329,14 +312,14 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 
 		if (dev_info->bdi_traddr != NULL) {
 			buflen = strlen(dev_info->bdi_traddr) + 1;
-			D_ALLOC(resp->devices[i]->traddr, buflen);
-			if (resp->devices[i]->traddr == NULL) {
-				D_ERROR("Failed to allocate device traddr");
+			D_ALLOC(resp->devices[i]->tr_addr, buflen);
+			if (resp->devices[i]->tr_addr == NULL) {
+				D_ERROR("Failed to allocate device tr_addr");
 				rc = -DER_NOMEM;
 				break;
 			}
 			/* Transport Addr -> Blobstore UUID mapping */
-			strncpy(resp->devices[i]->traddr, dev_info->bdi_traddr,
+			strncpy(resp->devices[i]->tr_addr, dev_info->bdi_traddr,
 				buflen);
 		}
 
@@ -374,8 +357,8 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 					D_FREE(resp->devices[i]->tgt_ids);
 				if (resp->devices[i]->state != NULL)
 					D_FREE(resp->devices[i]->state);
-				if (resp->devices[i]->traddr != NULL)
-					D_FREE(resp->devices[i]->traddr);
+				if (resp->devices[i]->tr_addr != NULL)
+					D_FREE(resp->devices[i]->tr_addr);
 				D_FREE(resp->devices[i]);
 			}
 		}

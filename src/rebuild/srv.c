@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * rebuild: rebuild service
@@ -39,7 +22,7 @@
 #include "rpc.h"
 #include "rebuild_internal.h"
 
-#define RBLD_CHECK_INTV	 (2 * NSEC_PER_SEC)	/* seconds interval to check*/
+#define RBLD_CHECK_INTV	 2000	/* milliseconds interval to check*/
 struct rebuild_global	rebuild_gst;
 
 struct pool_map *
@@ -538,12 +521,14 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 	double		last_print = 0;
 	unsigned int	total;
 	int		rc;
+	struct sched_req_attr	attr = { 0 };
 
 	rc = crt_group_size(pool->sp_group, &total);
 	if (rc)
 		return;
 
-	rgt->rgt_ult = dss_sleep_ult_create();
+	sched_req_attr_init(&attr, SCHED_REQ_MIGRATE, &rgt->rgt_pool_uuid);
+	rgt->rgt_ult = sched_req_get(&attr, ABT_THREAD_NULL);
 	if (rgt->rgt_ult == NULL)
 		return;
 
@@ -656,10 +641,10 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 			D_PRINT("%s", sbuf);
 		}
 
-		dss_ult_sleep(rgt->rgt_ult, RBLD_CHECK_INTV);
+		sched_req_sleep(rgt->rgt_ult, RBLD_CHECK_INTV);
 	}
 
-	dss_sleep_ult_destroy(rgt->rgt_ult);
+	sched_req_put(rgt->rgt_ult);
 	rgt->rgt_ult = NULL;
 }
 
@@ -1149,6 +1134,12 @@ rebuild_task_ult(void *arg)
 		return;
 	}
 
+	rc = rebuild_notify_ras_start(&task->dst_pool_uuid, task->dst_map_ver,
+				      RB_OP_STR(task->dst_rebuild_op));
+	if (rc)
+		D_ERROR(DF_UUID": failed to send RAS event\n",
+			DP_UUID(task->dst_pool_uuid));
+
 	D_PRINT("Rebuild [started] (pool "DF_UUID" ver=%u, op=%s)\n",
 		DP_UUID(task->dst_pool_uuid), task->dst_map_ver,
 		RB_OP_STR(task->dst_rebuild_op));
@@ -1275,6 +1266,13 @@ try_reschedule:
 				DP_UUID(pool->sp_uuid));
 	}
 output:
+	rc = rebuild_notify_ras_end(&task->dst_pool_uuid, task->dst_map_ver,
+				    RB_OP_STR(task->dst_rebuild_op),
+				    rc);
+	if (rc)
+		D_ERROR(DF_UUID": failed to send RAS event\n",
+			DP_UUID(task->dst_pool_uuid));
+
 	ds_pool_put(pool);
 	if (rgt)
 		rebuild_global_pool_tracker_destroy(rgt);
@@ -1710,7 +1708,7 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	/* close the rebuild pool/container on all main XS */
 	rc = dss_task_collective(rebuild_fini_one, rpt, 0);
 
-	/* destory the migrate_tls of 0-xstream */
+	/* destroy the migrate_tls of 0-xstream */
 	ds_migrate_fini_one(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	rpt_put(rpt);
 	/* No one should access rpt after rebuild_fini_one.
@@ -1731,9 +1729,11 @@ void
 rebuild_tgt_status_check_ult(void *arg)
 {
 	struct rebuild_tgt_pool_tracker	*rpt = arg;
+	struct sched_req_attr	attr = { 0 };
 
 	D_ASSERT(rpt != NULL);
-	rpt->rt_ult = dss_sleep_ult_create();
+	sched_req_attr_init(&attr, SCHED_REQ_MIGRATE, &rpt->rt_pool_uuid);
+	rpt->rt_ult = sched_req_get(&attr, ABT_THREAD_NULL);
 	if (rpt->rt_ult == NULL) {
 		D_ERROR("Can not start rebuild status check\n");
 		return;
@@ -1877,10 +1877,10 @@ rebuild_tgt_status_check_ult(void *arg)
 		if (rpt->rt_global_done || rpt->rt_abort)
 			break;
 
-		dss_ult_sleep(rpt->rt_ult, RBLD_CHECK_INTV);
+		sched_req_sleep(rpt->rt_ult, RBLD_CHECK_INTV);
 	}
 
-	dss_sleep_ult_destroy(rpt->rt_ult);
+	sched_req_put(rpt->rt_ult);
 	rpt->rt_ult = NULL;
 
 	rpt_put(rpt);

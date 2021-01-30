@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * container IV cache
@@ -722,7 +705,8 @@ cont_iv_update(void *ns, int class_id, uuid_t key_uuid,
 	civ_key->class_id = class_id;
 	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0, retry);
 	if (rc)
-		D_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR,
+		D_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_NONEXIST,
+			 DB_ANY, DLOG_ERR,
 			 DF_UUID" iv update failed "DF_RC"\n",
 			 DP_UUID(key_uuid), DP_RC(rc));
 	return rc;

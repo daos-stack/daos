@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of DAOS
@@ -376,19 +359,19 @@ int test_get_leader(test_arg_t *arg, d_rank_t *rank);
 bool test_rebuild_query(test_arg_t **args, int args_cnt);
 void test_rebuild_wait(test_arg_t **args, int args_cnt);
 void daos_exclude_target(const uuid_t pool_uuid, const char *grp,
-			 const char *dmg_config, const d_rank_list_t *svc,
+			 const char *dmg_config,
 			 d_rank_t rank, int tgt);
 void daos_reint_target(const uuid_t pool_uuid, const char *grp,
-		       const char *dmg_config, const d_rank_list_t *svc,
+		       const char *dmg_config,
 		       d_rank_t rank, int tgt);
 void daos_drain_target(const uuid_t pool_uuid, const char *grp,
-		       const char *dmg_config, const d_rank_list_t *svc,
+		       const char *dmg_config,
 		       d_rank_t rank, int tgt);
 void daos_exclude_server(const uuid_t pool_uuid, const char *grp,
-			 const char *dmg_config, const d_rank_list_t *svc,
+			 const char *dmg_config,
 			 d_rank_t rank);
 void daos_reint_server(const uuid_t pool_uuid, const char *grp,
-		       const char *dmg_config, const d_rank_list_t *svc,
+		       const char *dmg_config,
 		       d_rank_t rank);
 
 void

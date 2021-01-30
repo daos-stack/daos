@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * ds_cont: Target Operations
@@ -2146,6 +2129,7 @@ struct cont_ec_eph {
 	d_list_t	ce_list;
 	daos_epoch_t	ce_eph;
 	daos_epoch_t	ce_last_eph;
+	int		ce_destroy:1;
 };
 
 /* Argument to query ec aggregate epoch from each xstream */
@@ -2297,7 +2281,7 @@ cont_delete_ec_agg(uuid_t pool_uuid, uuid_t cont_uuid)
 
 	ec_eph = lookup_cont_ec_eph(&pool->sp_ec_ephs_list, cont_uuid);
 	if (ec_eph)
-		cont_ec_eph_destroy(ec_eph);
+		ec_eph->ce_destroy = 1;
 	ds_pool_put(pool);
 }
 
@@ -2335,11 +2319,16 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 			D_GOTO(yield, rc);
 		}
 
-		d_list_for_each_entry(ec_eph, &pool->sp_ec_ephs_list, ce_list) {
-			if (ec_eph->ce_eph == 0 ||
-			    ec_eph->ce_eph < ec_eph->ce_last_eph) {
-				ec_eph->ce_eph = 0;
+		d_list_for_each_entry_safe(ec_eph, tmp, &pool->sp_ec_ephs_list,
+					   ce_list) {
+			if (ec_eph->ce_destroy) {
+				cont_ec_eph_destroy(ec_eph);
+				continue;
 			}
+
+			if (ec_eph->ce_eph == 0 ||
+			    ec_eph->ce_eph < ec_eph->ce_last_eph)
+				ec_eph->ce_eph = 0;
 
 			D_DEBUG(DB_MD, "eph "DF_U64" "DF_UUID"\n",
 				ec_eph->ce_eph, DP_UUID(ec_eph->ce_cont_uuid));

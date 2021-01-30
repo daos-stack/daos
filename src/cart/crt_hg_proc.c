@@ -1,24 +1,7 @@
 /*
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It implements the main input/output
@@ -27,8 +10,6 @@
 #define D_LOGFAC	DD_FAC(hg)
 
 #include "crt_internal.h"
-#include <gurt/mem.h>
-
 
 #define CRT_PROC_NULL (NULL)
 #define CRT_PROC_TYPE_FUNC(type)				\
@@ -108,10 +89,10 @@ crt_proc_memcpy(crt_proc_t proc, void *data, size_t data_size)
 	buf = hg_proc_save_ptr(proc, data_size);
 	switch (proc_op) {
 	case CRT_PROC_ENCODE:
-		d_memcpy(buf, data, data_size);
+		memcpy(buf, data, data_size);
 		break;
 	case CRT_PROC_DECODE:
-		d_memcpy(data, buf, data_size);
+		memcpy(data, buf, data_size);
 		break;
 	default:
 		break;
