@@ -120,6 +120,7 @@ struct hdf5_args {
 	hid_t rx_dtype;
 	hid_t usr_attr_num;
 	hid_t usr_attr;
+	hid_t cont_attr;
 	hid_t selection_attr;
 	hid_t version_attr;
 	hid_t single_dtype;
@@ -3931,9 +3932,113 @@ out:
 }
 
 static int
+cont_serialize_prop_opaque(struct hdf5_args *hdf5,
+			   char *attr_val,
+	   		   void *prop)
+{
+	int rc = 0;
+	hid_t status = 0;
+
+	hdf5->attr_dims[0] = 1;
+	hdf5->attr_dtype = H5Tcreate(H5T_OPAQUE, 128);
+	if (hdf5->attr_dtype < 0) {
+		fprintf(stderr, "failed to create rx_dtype\n");
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->attr_dspace = H5Screate_simple(1, hdf5->attr_dims,
+				             NULL);
+	if (hdf5->attr_dspace < 0) {
+		fprintf(stderr, "failed to create version attribute "
+			"dataspace\n");
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->usr_attr = H5Acreate2(hdf5->file,
+		           	    prop,
+				    hdf5->attr_dtype,
+				    hdf5->attr_dspace,
+				    H5P_DEFAULT,
+				    H5P_DEFAULT);
+	if (hdf5->usr_attr < 0) {
+		fprintf(stderr, "failed to create attribute\n");
+		D_GOTO(out, rc = 1);
+	}	
+	status = H5Awrite(hdf5->usr_attr, hdf5->attr_dtype,
+			  attr_val);
+	if (status < 0) {
+		fprintf(stderr, "failed to write attribute\n");
+		D_GOTO(out, rc = 1);
+	}
+	status = H5Aclose(hdf5->usr_attr);
+	if (status < 0) {
+		fprintf(stderr, "failed to close attribute\n");
+		D_GOTO(out, rc = 1);
+	}
+
+out:
+	return rc;
+}
+
+static int
+cont_serialize_prop_str(struct hdf5_args *hdf5,
+			 char *attr_val,
+	   		 char *prop_str)
+{
+	int rc = 0;
+	hid_t status = 0;
+
+	hdf5->attr_dims[0] = 1;
+	hdf5->attr_dtype = H5Tcopy(H5T_C_S1);
+	if (hdf5->attr_dtype < 0) {
+		fprintf(stderr, "failed to create usr attr type\n");
+		D_GOTO(out, rc = 1);
+	}
+	status = H5Tset_size(hdf5->attr_dtype, strlen(attr_val) + 1);
+	if (status < 0) {
+		fprintf(stderr, "failed to set dtype size\n");
+		D_GOTO(out, rc = 1);
+	}
+	status = H5Tset_strpad(hdf5->attr_dtype, H5T_STR_NULLTERM);
+	if (status < 0) {
+		fprintf(stderr, "failed to set null terminator\n");
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->attr_dspace = H5Screate_simple(1, hdf5->attr_dims,
+				             NULL);
+	if (hdf5->attr_dspace < 0) {
+		fprintf(stderr, "failed to create version attribute "
+			"dataspace\n");
+		D_GOTO(out, rc = 1);
+	}
+	hdf5->usr_attr = H5Acreate2(hdf5->file,
+		           	    prop_str,
+				    hdf5->attr_dtype,
+				    hdf5->attr_dspace,
+				    H5P_DEFAULT,
+				    H5P_DEFAULT);
+	if (hdf5->usr_attr < 0) {
+		fprintf(stderr, "failed to create attribute\n");
+		D_GOTO(out, rc = 1);
+	}	
+	status = H5Awrite(hdf5->usr_attr, hdf5->attr_dtype,
+			  attr_val);
+	if (status < 0) {
+		fprintf(stderr, "failed to write attribute\n");
+		D_GOTO(out, rc = 1);
+	}
+	status = H5Aclose(hdf5->usr_attr);
+	if (status < 0) {
+		fprintf(stderr, "failed to close attribute\n");
+		D_GOTO(out, rc = 1);
+	}
+
+out:
+	return rc;
+}
+
+static int
 cont_serialize_prop_uint(struct hdf5_args *hdf5,
-	   uint64_t *attr_enum, uint64_t *attr_val,
-	   char *prop_str)
+			 uint64_t *attr_val,
+	   		 char *prop_str)
 {
 	int rc = 0;
 	hid_t status = 0;
@@ -3956,15 +4061,14 @@ cont_serialize_prop_uint(struct hdf5_args *hdf5,
 			"dataspace\n");
 		D_GOTO(out, rc = 1);
 	}
-	hdf5->usr_attr_num = H5Acreate2(hdf5->file,
-		            	       prop_str,
-				       hdf5->attr_dtype,
-				       hdf5->attr_dspace,
-				       H5P_DEFAULT,
-				       H5P_DEFAULT);
-	if (hdf5->usr_attr_num < 0) {
-		fprintf(stderr, "failed to create version "
-			"attribute\n");
+	hdf5->usr_attr = H5Acreate2(hdf5->file,
+		           	    prop_str,
+				    hdf5->attr_dtype,
+				    hdf5->attr_dspace,
+				    H5P_DEFAULT,
+				    H5P_DEFAULT);
+	if (hdf5->usr_attr < 0) {
+		fprintf(stderr, "failed to create attribute\n");
 		D_GOTO(out, rc = 1);
 	}	
 	status = H5Awrite(hdf5->usr_attr, hdf5->attr_dtype,
@@ -3995,7 +4099,6 @@ cont_serialize_props(struct hdf5_args *hdf5,
 	struct daos_prop_entry	*entry;
 	char			cont_str[64];
 	int			len = 0;
-	uint64_t		attr_enum = 0;
 
 	/*
 	 * Get all props except the ACL first.
@@ -4025,6 +4128,76 @@ cont_serialize_props(struct hdf5_args *hdf5,
 		D_GOTO(out, rc);
 	}
 
+	/* serialize cont property values that are strings */
+	/* DAOS_PROP_CO_LABEL */
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_LABEL);
+	if (entry == NULL || entry->dpe_str == NULL) {
+		fprintf(stderr, "label property not found\n");
+		rc = -DER_INVAL;
+	}
+	len = snprintf(cont_str, 64, "%s", "DAOS_PROP_CO_LABEL");
+	if (len >= 64) {
+		fprintf(stderr, "cont prop string is too long\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	printf("cont_str: %s\n", cont_str);
+	rc = cont_serialize_prop_str(hdf5, entry->dpe_str,
+				     cont_str);
+	/* DAOS_PROP_CO_OWNER */
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_OWNER);
+	if (entry == NULL || entry->dpe_str == NULL) {
+		fprintf(stderr, "owner property not found\n");
+		rc = -DER_INVAL;
+	}
+	len = snprintf(cont_str, 64, "%s", "DAOS_PROP_CO_OWNER");
+	if (len >= 64) {
+		fprintf(stderr, "cont prop string is too long\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	printf("cont_str: %s\n", cont_str);
+	rc = cont_serialize_prop_str(hdf5, entry->dpe_str,
+				     cont_str);
+	/* DAOS_PROP_CO_OWNER_GROUP */
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_OWNER_GROUP);
+	if (entry == NULL || entry->dpe_str == NULL) {
+		fprintf(stderr, "owner-group property not found\n");
+		rc = -DER_INVAL;
+	}
+	len = snprintf(cont_str, 64, "%s", "DAOS_PROP_CO_OWNER_GROUP");
+	if (len >= 64) {
+		fprintf(stderr, "cont prop string is too long\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	printf("cont_str: %s\n", cont_str);
+	rc = cont_serialize_prop_str(hdf5, entry->dpe_str,
+				     cont_str);
+
+	/* serialize ACL with opaque dtype */
+	/* DAOS_PROP_CO_ACL */
+	if (prop_acl != NULL) {
+		entry = daos_prop_entry_get(prop_acl, DAOS_PROP_CO_ACL);
+		if (entry != NULL && entry->dpe_val_ptr != NULL) {
+			len = snprintf(cont_str, 64, "%s", "DAOS_PROP_CO_ACL");
+			if (len >= 64) {
+				fprintf(stderr, "cont prop string is too "
+					"long\n");
+				D_GOTO(out, rc = -DER_INVAL);
+			}
+			printf("cont_str: %s\n", cont_str);
+			rc = cont_serialize_prop_opaque(hdf5,
+							entry->dpe_val_ptr,
+						     	cont_str);
+			struct daos_acl *acl;
+			acl = (struct daos_acl *)entry->dpe_val_ptr;
+			D_PRINT("acl:\n");
+			rc = daos_acl_to_stream(stdout, acl, false);
+			if (rc)
+				fprintf(stderr,
+					"unable to decode ACL: %s (%d)\n",
+					d_errdesc(rc), rc);
+		}
+	}
+
 	/* serialize cont property values that are integers */
 	/* DAOS_PROP_CO_LAYOUT_TYPE */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_LAYOUT_TYPE);
@@ -4039,9 +4212,8 @@ cont_serialize_props(struct hdf5_args *hdf5,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	printf("cont_str: %s\n", cont_str);
-	attr_enum = DAOS_PROP_CO_LAYOUT_TYPE;
-	rc = cont_serialize_prop_uint(hdf5, &attr_enum, &entry->dpe_val,
-				      "DAOS_PROP_CO_LAYOUT_TYPE");
+	rc = cont_serialize_prop_uint(hdf5, &entry->dpe_val,
+				      cont_str);
 	/* DAOS_PROP_CO_LAYOUT_VER */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_LAYOUT_VER);
 	if (entry == NULL) {
@@ -4054,8 +4226,7 @@ cont_serialize_props(struct hdf5_args *hdf5,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	printf("cont prop str: %s\n", cont_str);
-	attr_enum = DAOS_PROP_CO_LAYOUT_VER;
-	rc = cont_serialize_prop_uint(hdf5, &attr_enum, &entry->dpe_val,
+	rc = cont_serialize_prop_uint(hdf5, &entry->dpe_val,
 	      			      "DAOS_PROP_CO_LAYOUT_VER");
 	/* DAOS_PROP_CO_CSUM */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_CSUM);
@@ -4069,8 +4240,7 @@ cont_serialize_props(struct hdf5_args *hdf5,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	printf("cont prop str: %s\n", cont_str);
-	attr_enum = DAOS_PROP_CO_CSUM;
-	rc = cont_serialize_prop_uint(hdf5, &attr_enum, &entry->dpe_val,
+	rc = cont_serialize_prop_uint(hdf5, &entry->dpe_val,
 	      			      "DAOS_PROP_CO_CSUM");
 	/* DAOS_PROP_CO_CSUM_CHUNK_SIZE */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_CSUM_CHUNK_SIZE);
@@ -4084,8 +4254,7 @@ cont_serialize_props(struct hdf5_args *hdf5,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	printf("cont prop str: %s\n", cont_str);
-	attr_enum = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
-	rc = cont_serialize_prop_uint(hdf5, &attr_enum, &entry->dpe_val,
+	rc = cont_serialize_prop_uint(hdf5, &entry->dpe_val,
 	      			      "DAOS_PROP_CO_CSUM_CHUNK_SIZE");
 	/* DAOS_PROP_CO_CSUM_SERVER_VERIFY */
 	entry = daos_prop_entry_get(prop_query,
@@ -4100,8 +4269,7 @@ cont_serialize_props(struct hdf5_args *hdf5,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	printf("cont prop str: %s\n", cont_str);
-	attr_enum = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
-	rc = cont_serialize_prop_uint(hdf5, &attr_enum, &entry->dpe_val,
+	rc = cont_serialize_prop_uint(hdf5, &entry->dpe_val,
 	      			      "DAOS_PROP_CO_CSUM_SERVER_VERIFY");
 	/* DAOS_PROP_CO_REDUN_FAC */
 	entry = daos_prop_entry_get(prop_query,
@@ -4116,8 +4284,7 @@ cont_serialize_props(struct hdf5_args *hdf5,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	printf("cont prop str: %s\n", cont_str);
-	attr_enum = DAOS_PROP_CO_REDUN_FAC;
-	rc = cont_serialize_prop_uint(hdf5, &attr_enum, &entry->dpe_val,
+	rc = cont_serialize_prop_uint(hdf5, &entry->dpe_val,
 	      			      "DAOS_PROP_CO_REDUN_FAC");
 	/* DAOS_PROP_CO_REDUN_LVL */
 	entry = daos_prop_entry_get(prop_query,
@@ -4132,8 +4299,7 @@ cont_serialize_props(struct hdf5_args *hdf5,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	printf("cont prop str: %s\n", cont_str);
-	attr_enum = DAOS_PROP_CO_REDUN_LVL;
-	rc = cont_serialize_prop_uint(hdf5, &attr_enum, &entry->dpe_val,
+	rc = cont_serialize_prop_uint(hdf5, &entry->dpe_val,
 	      			      "DAOS_PROP_CO_REDUN_LVL");
 	/* DAOS_PROP_CO_SNAPSHOT_MAX */
 	entry = daos_prop_entry_get(prop_query,
@@ -4148,8 +4314,7 @@ cont_serialize_props(struct hdf5_args *hdf5,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	printf("cont prop str: %s\n", cont_str);
-	attr_enum = DAOS_PROP_CO_SNAPSHOT_MAX;
-	rc = cont_serialize_prop_uint(hdf5, &attr_enum, &entry->dpe_val,
+	rc = cont_serialize_prop_uint(hdf5, &entry->dpe_val,
 	      			      "DAOS_PROP_CO_SNAPSHOT_MAX");
 	/* DAOS_PROP_CO_COMPRESS */
 	entry = daos_prop_entry_get(prop_query,
@@ -4164,8 +4329,7 @@ cont_serialize_props(struct hdf5_args *hdf5,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	printf("cont prop str: %s\n", cont_str);
-	attr_enum = DAOS_PROP_CO_COMPRESS;
-	rc = cont_serialize_prop_uint(hdf5, &attr_enum, &entry->dpe_val,
+	rc = cont_serialize_prop_uint(hdf5, &entry->dpe_val,
 	      			      "DAOS_PROP_CO_COMPRESS");
 	/* DAOS_PROP_CO_ENCRYPT */
 	entry = daos_prop_entry_get(prop_query,
@@ -4180,8 +4344,7 @@ cont_serialize_props(struct hdf5_args *hdf5,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	printf("cont prop str: %s\n", cont_str);
-	attr_enum = DAOS_PROP_CO_ENCRYPT;
-	rc = cont_serialize_prop_uint(hdf5, &attr_enum, &entry->dpe_val,
+	rc = cont_serialize_prop_uint(hdf5, &entry->dpe_val,
 	      			      "DAOS_PROP_CO_ENCRYPT");
 	/* DAOS_PROP_CO_DEDUP */
 	entry = daos_prop_entry_get(prop_query,
@@ -4196,8 +4359,7 @@ cont_serialize_props(struct hdf5_args *hdf5,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	printf("cont prop str: %s\n", cont_str);
-	attr_enum = DAOS_PROP_CO_DEDUP;
-	rc = cont_serialize_prop_uint(hdf5, &attr_enum, &entry->dpe_val,
+	rc = cont_serialize_prop_uint(hdf5, &entry->dpe_val,
 	      			      "DAOS_PROP_CO_DEDUP");
 	/* DAOS_PROP_CO_DEDUP_THRESHOLD */
 	entry = daos_prop_entry_get(prop_query,
@@ -4212,8 +4374,7 @@ cont_serialize_props(struct hdf5_args *hdf5,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	printf("cont prop str: %s\n", cont_str);
-	attr_enum = DAOS_PROP_CO_DEDUP_THRESHOLD;
-	rc = cont_serialize_prop_uint(hdf5, &attr_enum, &entry->dpe_val,
+	rc = cont_serialize_prop_uint(hdf5, &entry->dpe_val,
 	      			      "DAOS_PROP_CO_DEDUP_THRESHOLD");
 out:
 	daos_prop_free(prop_query);
@@ -4893,7 +5054,8 @@ cont_deserialize_keys(struct hdf5_args *hdf5,
 						    H5S_ALL, hdf5->rx_dspace,
 						    H5P_DEFAULT, single_data);
 				if (status < 0) {
-					fprintf(stderr, "failed to read record\n");
+					fprintf(stderr, "failed to read "
+					"record\n");
 					D_GOTO(out, rc = 1);
 				}
 				d_iov_set(&iod.iod_name,
@@ -4912,10 +5074,12 @@ cont_deserialize_keys(struct hdf5_args *hdf5,
 
 				d_iov_set(&iov, single_data, single_tsize);	
 				/* update fetched recx values and place in destination object */
-                    		rc = daos_obj_update(*oh, DAOS_TX_NONE, 0, &diov, 1, &iod,
-					&sgl, NULL);
+                    		rc = daos_obj_update(*oh, DAOS_TX_NONE, 0,
+						     &diov, 1, &iod, &sgl,
+						     NULL);
 				if (rc != 0) {
-					fprintf(stderr, "failed to update object: %d\n", rc);
+					fprintf(stderr, "failed to update "
+					"object: %d\n", rc);
 					D_GOTO(out, rc);
 				}
 
@@ -4943,6 +5107,10 @@ cont_deserialize_hdlr(struct cmd_args_s *ap)
 	uint64_t		dk_off = 0;
 	uint64_t		dk_next = 0;
 	uint64_t		total_dkeys_this_oid = 0;
+	hid_t			status = 0;
+	float			version;
+	daos_cont_layout_t	cont_type;
+	daos_prop_t		*prop;
 
 	/* init HDF5 args */
 	init_hdf5_args(&hdf5);
@@ -4951,22 +5119,76 @@ cont_deserialize_hdlr(struct cmd_args_s *ap)
 	printf("\tcont UUID: "DF_UUIDF"\n", DP_UUID(ap->c_uuid));
 	printf("\th5filename: %s\n", ap->h5filename);
 
- 	/* check if this is a POSIX container,
-	 * if it is, then the new container will
-	 * need to be created with DFS
-	 */	
-	/* TODO: remove requiring of --type=POSIX for
-	 * POSIX containers, and instead write all 
-	 * container attributes to HDF5 file. That way,
-	 * I can read the cont type when it was serialized
-	 * instead.
+	/* open passed in HDF5 file */
+	hdf5.file = H5Fopen(ap->h5filename, H5F_ACC_RDONLY, H5P_DEFAULT);
+	if (hdf5.file < 0) {
+		fprintf(stderr, "failed to open HDF5 file\n");
+		D_GOTO(out, rc = 1);
+	}
+
+	/* deserialize version -- serialization version/format should
+	 * be compatible with deserialization version
 	 */
-	if (ap->type == DAOS_PROP_CO_LAYOUT_POSIX) {
+	hdf5.version_attr = H5Aopen(hdf5.file, "Version", H5P_DEFAULT);
+	if (hdf5.version_attr < 0) {
+		fprintf(stderr, "failed to open version attr\n");
+		D_GOTO(out, rc = 1);
+	}
+	hdf5.attr_dtype = H5Aget_type(hdf5.version_attr);
+	if (hdf5.attr_dtype < 0) {
+		fprintf(stderr, "failed to get attr type\n");
+		D_GOTO(out, rc = 1);
+	}
+	status = H5Aread(hdf5.version_attr, hdf5.attr_dtype, &version); 
+	if (status < 0) {
+		fprintf(stderr, "failed to read version\n");
+		D_GOTO(out, rc = 1);
+	}
+	if (version > 0.0) {
+		fprintf(stderr, "serialization format is not compatible with "
+			"deserialization version\n");
+		D_GOTO(out, rc = 1);
+	}
+
+	/* TODO: read all container and user attributes */
+	/* check cont type by deserializing LAYOUT cont property,
+	 * a serialized POSIX type container needs to be deserialized into
+	 * a POSIX type container, and created with dfs_create vs. just
+	 * daos_cont_create, also need to set prop on container  */
+	hdf5.cont_attr = H5Aopen(hdf5.file, "DAOS_PROP_CO_LAYOUT_TYPE",
+				 H5P_DEFAULT);
+	if (hdf5.cont_attr < 0) {
+		fprintf(stderr, "failed to open layout attribute\n");
+		D_GOTO(out, rc = 1);
+	}
+	hdf5.attr_dtype = H5Aget_type(hdf5.cont_attr);
+	if (hdf5.attr_dtype < 0) {
+		fprintf(stderr, "failed to get layout attr type\n");
+		D_GOTO(out, rc = 1);
+	}
+	status = H5Aread(hdf5.cont_attr, hdf5.attr_dtype, &cont_type); 
+	if (status < 0) {
+		fprintf(stderr, "failed to read layout type\n");
+		D_GOTO(out, rc = 1);
+	}
+	printf("LAYOUT TYPE READ: %d\n", (int)cont_type);
+
+	/* TODO: set all cont properties */
+	prop = daos_prop_alloc(1);                                            
+	if (prop == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;                   
+	prop->dpp_entries[0].dpe_val = cont_type;
+
+	/* TODO: deserialize and set cont props before
+	 * container creation to pass props to it
+	 */
+	if (cont_type == DAOS_PROP_CO_LAYOUT_POSIX) {
 		dfs_attr_t attr;
 		attr.da_id = 0;
 		attr.da_oclass_id = ap->oclass;
 		attr.da_chunk_size = ap->chunk_size;
-		attr.da_props = ap->props;
+		attr.da_props = prop;
 		rc = dfs_cont_create(ap->pool, ap->c_uuid, &attr, NULL, NULL);
 		if (rc != 0) {
 			fprintf(stderr, "failed to create posix "
@@ -4974,12 +5196,13 @@ cont_deserialize_hdlr(struct cmd_args_s *ap)
 			D_GOTO(out, rc);
 		}
 	} else {
-		rc = daos_cont_create(ap->pool, ap->c_uuid, ap->props, NULL);
+		rc = daos_cont_create(ap->pool, ap->c_uuid, prop, NULL);
 		if (rc != 0) {
 			fprintf(stderr, "failed to create container: %d\n", rc);
 			D_GOTO(out, rc);
 		}
 	}
+	daos_prop_free(prop);
 
 	/* print out created cont uuid */
 	fprintf(stdout, "Successfully created container "DF_UUIDF"\n",
@@ -4989,13 +5212,6 @@ cont_deserialize_hdlr(struct cmd_args_s *ap)
 	if (rc != 0) {
 		fprintf(stderr, "failed to open container: %d\n", rc);
 		D_GOTO(out, rc);
-	}
-
-	/* open passed in HDF5 file */
-	hdf5.file = H5Fopen(ap->h5filename, H5F_ACC_RDONLY, H5P_DEFAULT);
-	if (hdf5.file < 0) {
-		fprintf(stderr, "failed to open HDF5 file\n");
-		D_GOTO(out, rc = 1);
 	}
 
 	rc = hdf5_read_key_data(&hdf5);
@@ -5036,6 +5252,7 @@ cont_deserialize_hdlr(struct cmd_args_s *ap)
 			D_GOTO(out, rc);
 		}
 	}
+
 out:
 	H5Dclose(hdf5.oid_dset);
 	H5Dclose(hdf5.dkey_dset);
@@ -5046,6 +5263,7 @@ out:
 	H5Tclose(hdf5.oid_dtype);
 	H5Tclose(hdf5.dkey_vtype);
 	H5Tclose(hdf5.akey_vtype);
+	H5Fclose(hdf5.file);
 	return rc;
 }
 
