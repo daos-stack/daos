@@ -14,7 +14,7 @@ from dfuse_test_base import DfuseTestBase
 from ior_utils import IorCommand
 from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun
-from general_utils import pcmd
+from general_utils import pcmd, get_random_string
 from daos_utils import DaosCommand
 from mpio_utils import MpioUtils
 from test_utils_pool import TestPool
@@ -84,18 +84,6 @@ class IorTestBase(DfuseTestBase):
         # create container
         self.container.create()
 
-    def destroy_container_path(self, path):
-        """Destroy a TestContainer object by using a path.
-
-        """
-
-        # destroy container
-        daos_command = DaosCommand(self.bin)
-        kwargs = {"path": path}
-        kwargs["sys_name"] = self.pool.name.value
-        kwargs["force"] = True
-        daos_command.container_destroy_path(**kwargs)
-
     def display_pool_space(self, pool=None):
         """Display the current pool space.
 
@@ -150,14 +138,13 @@ class IorTestBase(DfuseTestBase):
 
         # start dfuse if api is POSIX or HDF5 with vol connector
         if self.ior_cmd.api.value == "POSIX" or plugin_path:
-            # Connect to the pool, create container and then start dfuse
-            if not self.dfuse:
-                self.start_dfuse(
-                    self.hostlist_clients, self.pool, self.container)
-
-        # setup test file for POSIX or HDF5 with vol connector
-        if self.ior_cmd.api.value == "POSIX" or plugin_path:
+            # Create a unique sub dir
+            sub_dir = get_random_string(5)
+            self.start_dfuse(
+                self.hostlist_clients, self.pool, self.container,
+                sub_dir=sub_dir)
             test_file = os.path.join(self.dfuse.mount_dir.value, "testfile")
+
         elif self.ior_cmd.api.value == "DFS":
             test_file = os.path.join("/", "testfile")
 
@@ -168,9 +155,7 @@ class IorTestBase(DfuseTestBase):
                            intercept, plugin_path=plugin_path,
                            fail_on_warning=fail_on_warning)
 
-        if plugin_path:
-            self.destroy_container_path(test_file)
-        if stop_dfuse:
+        if stop_dfuse and (self.ior_cmd.api.value == "POSIX" or plugin_path):
             self.stop_dfuse()
 
         return out

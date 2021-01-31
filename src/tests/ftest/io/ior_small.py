@@ -65,6 +65,9 @@ class IorSmall(IorTestBase):
                             plugin_path=hdf5_plugin_path, timeout=ior_timeout)
                         results.append(["PASS", str(self.ior_cmd)])
                     except TestFail:
+                        # stop dfuse if running
+                        if api in ["POSIX", "HDF5-VOL"] and self.dfuse:
+                            self.stop_dfuse()
                         results.append(["FAIL", str(self.ior_cmd)])
 
         # Running a variant for ior fpp

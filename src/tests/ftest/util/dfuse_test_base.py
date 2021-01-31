@@ -36,7 +36,9 @@ class DfuseTestBase(TestWithServers):
             error_list.append("Error stopping dfuse: {}".format(error))
         return error_list
 
-    def start_dfuse(self, hosts, pool=None, container=None, mount_dir=None):
+    def start_dfuse(
+            self, hosts, pool=None, container=None, mount_dir=None,
+            sub_dir=None):
         """Create a DfuseCommand object and use it to start Dfuse.
 
         Args:
@@ -44,12 +46,16 @@ class DfuseTestBase(TestWithServers):
             pool (TestPool, optional): pool to use with Dfuse
             container (TestContainer, optional): container to use with Dfuse
             mount_dir (str, optional): updated mount dir name. Defaults to None.
+            sub_dir (str, optional): sub directory dir name. Defaults to None.
         """
         self.dfuse = Dfuse(hosts, self.tmp)
         self.dfuse.get_params(self)
 
         # Update dfuse params
         if mount_dir:
+            self.dfuse.mount_dir.update(mount_dir)
+        if sub_dir and self.dfuse.mount_dir.value is not None:
+            mount_dir = "/".join([self.dfuse.mount_dir.value, sub_dir])
             self.dfuse.mount_dir.update(mount_dir)
         if pool:
             self.dfuse.set_dfuse_params(pool)
