@@ -44,6 +44,12 @@ daos_obj_id2ver(daos_obj_id_t oid)
 	return version;
 }
 
+static inline bool
+daos_obj_id_is_nil(daos_obj_id_t oid)
+{
+	return oid.hi == 0 && oid.lo == 0;
+}
+
 /**
  * XXX old class IDs
  *

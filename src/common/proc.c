@@ -108,9 +108,13 @@ crt_proc_prop_entries(crt_proc_t proc, crt_proc_op_t opc, daos_prop_t *prop)
 		} else if (entry->dpe_type == DAOS_PROP_CO_ROOTS) {
 			struct daos_prop_co_roots *roots;
 
-			if (opc == CRT_PROC_DECODE)
+			if (opc == CRT_PROC_DECODE) {
 				D_ALLOC(entry->dpe_val_ptr, sizeof(*roots));
-
+				if (!entry->dpe_val_ptr) {
+					rc = -DER_NOMEM;
+					break;
+				}
+			}
 			roots = entry->dpe_val_ptr;
 			rc = crt_proc_memcpy(proc, roots, sizeof(*roots));
 

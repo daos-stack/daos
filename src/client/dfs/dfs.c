@@ -118,12 +118,10 @@ struct dfs {
 	daos_handle_t		poh;
 	/** Open container handle of the DFS */
 	daos_handle_t		coh;
-	/** superblock object OID */
-	daos_obj_id_t		sb_oid;
-	/** root object OID */
-	daos_obj_id_t		root_oid;
 	/** Object ID reserved for this DFS (see oid_gen below) */
 	daos_obj_id_t		oid;
+	/** superblock object OID */
+	daos_obj_id_t		super_oid;
 	/** Open object handle of SB */
 	daos_handle_t		super_oh;
 	/** Root object info */
@@ -1329,12 +1327,18 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_ROOTS);
 	D_ASSERT(entry != NULL);
 	roots = (struct daos_prop_co_roots *)entry->dpe_val_ptr;
-	dfs->sb_oid = roots->cr_oids[0];
+	if (daos_obj_id_is_nil(roots->cr_oids[0]) ||
+	    daos_obj_id_is_nil(roots->cr_oids[1])) {
+		D_ERROR("Invalid superblock or root object ID\n");
+		D_GOTO(err_dfs, rc = EIO);
+	}
+
+	dfs->super_oid = roots->cr_oids[0];
 	dfs->root.oid = roots->cr_oids[1];
-	dfs->root.parent_oid = dfs->sb_oid;
+	dfs->root.parent_oid = dfs->super_oid;
 
 	/** Verify SB */
-	rc = open_sb(coh, false, dfs->sb_oid, &dfs->attr, &dfs->super_oh);
+	rc = open_sb(coh, false, dfs->super_oid, &dfs->attr, &dfs->super_oh);
 	if (rc)
 		D_GOTO(err_dfs, rc);
 
@@ -1421,7 +1425,7 @@ struct dfs_glob {
 	daos_oclass_id_t	oclass;
 	uuid_t			cont_uuid;
 	uuid_t			coh_uuid;
-	daos_obj_id_t		sb_oid;
+	daos_obj_id_t		super_oid;
 	daos_obj_id_t		root_oid;
 };
 
@@ -1498,8 +1502,8 @@ dfs_local2global(dfs_t *dfs, d_iov_t *glob)
 	dfs_params->magic	= DFS_GLOB_MAGIC;
 	dfs_params->use_dtx	= dfs->use_dtx;
 	dfs_params->amode	= dfs->amode;
-	dfs_params->sb_oid	= dfs->sb_oid;
-	dfs_params->root_oid	= dfs->root_oid;
+	dfs_params->super_oid	= dfs->super_oid;
+	dfs_params->root_oid	= dfs->root.oid;
 	dfs_params->uid		= dfs->uid;
 	dfs_params->gid		= dfs->gid;
 	dfs_params->id		= dfs->attr.da_id;
@@ -1571,9 +1575,16 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 	dfs->attr.da_chunk_size = dfs_params->chunk_size;
 	dfs->attr.da_oclass_id = dfs_params->oclass;
 
-	dfs->sb_oid = dfs_params->sb_oid;
+	dfs->super_oid = dfs_params->super_oid;
 	dfs->root.oid = dfs_params->root_oid;
-	dfs->root.parent_oid = dfs->sb_oid;
+	dfs->root.parent_oid = dfs->super_oid;
+	if (daos_obj_id_is_nil(dfs->super_oid) ||
+	    daos_obj_id_is_nil(dfs->root.oid)) {
+		D_ERROR("Invalid superblock or root object ID\n");
+		D_FREE(dfs);
+		return EIO;
+	}
+
 	/** allocate a new oid on the next file or dir creation */
 	dfs->oid.lo = 0;
 	dfs->oid.hi = MAX_OID_HI;
@@ -1585,7 +1596,8 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 	}
 
 	/** Open SB object */
-	rc = daos_obj_open(coh, dfs->sb_oid, DAOS_OO_RO, &dfs->super_oh, NULL);
+	rc = daos_obj_open(coh, dfs->super_oid, DAOS_OO_RO,
+			   &dfs->super_oh, NULL);
 	if (rc) {
 		D_ERROR("daos_obj_open() failed, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_dfs, rc = daos_der2errno(rc));
