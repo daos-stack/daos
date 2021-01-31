@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * Layout definition for VOS root object
@@ -105,7 +88,7 @@ enum vos_gc_type {
 #define POOL_DF_MAGIC				0x5ca1ab1e
 
 /** Lowest supported durable format version */
-#define POOL_DF_VER_1				12
+#define POOL_DF_VER_1				13
 /** Current durable format version */
 #define POOL_DF_VERSION				POOL_DF_VER_1
 
@@ -172,12 +155,6 @@ struct vos_dtx_cmt_ent_df {
 	 * objects' OIDs are stored via 'dce_oid_off'.
 	 */
 	struct vos_dtx_ent_common	dce_common;
-	/**
-	 * The offset for the objects' OID if more than one are modified.
-	 * Under such case, 'dce_common.dec_dkey_hash' is used as the count
-	 * of objects' IDs.
-	 */
-	umem_off_t			dce_oid_off;
 };
 
 #define dce_xid		dce_common.dec_xid
@@ -208,18 +185,8 @@ struct vos_dtx_act_ent_df {
 	uint32_t			dae_grp_cnt;
 	/** Size of the area for dae_mbs_off. */
 	uint32_t			dae_mbs_dsize;
-	/**
-	 * The count of objects that are modified by this DTX.
-	 *
-	 * If single object is modified and if it is the same as the
-	 * 'dae_oid', then 'dae_oid_cnt' is zero.
-	 *
-	 * If the single object is differet from 'dae_oid', then the
-	 * 'dae_oid_cnt' is 1, its OID is stored in 'dae_oid_inline'.
-	 */
-	uint16_t			dae_oid_cnt;
 	/** The index in the current vos_dtx_blob_df. */
-	int16_t				dae_index;
+	int32_t				dae_index;
 	/**
 	 * The inline DTX targets, can hold 3-way replicas for single
 	 * RDG that does not contains the original leader information.
@@ -227,12 +194,6 @@ struct vos_dtx_act_ent_df {
 	struct dtx_daos_target		dae_mbs_inline[2];
 	/** The offset for the dtx mbs if out of inline. */
 	umem_off_t			dae_mbs_off;
-	union {
-		/** Hold the object'x OID if different from dae_oid. */
-		daos_unit_oid_t		dae_oid_inline;
-		/** The offset for objects' OIDs if out of inline case. */
-		umem_off_t		dae_oid_off;
-	};
 };
 
 #define dae_xid		dae_common.dec_xid
