@@ -71,10 +71,10 @@ class CartUtils():
         while retry_count < 2:
             result = stop_processes(localhost, processes)
             if 1 in result:
-                self.log.info("Stopped '%s' processes on %s", processes, str(result[1]))
+                self.stdout.info("Stopped '%s' processes on %s", processes, str(result[1]))
                 retry_count += 1
             elif 0 in result:
-                self.log.info("All '%s' processes have been stopped", processes)
+                self.stdout.info("All '%s' processes have been stopped", processes)
                 retry_count = 99
             else:
                 error_list.append("Error detecting/stopping cart processes")
