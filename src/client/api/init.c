@@ -257,10 +257,9 @@ daos_fini(void)
 	dc_mgmt_fini();
 
 	rc = dc_mgmt_notify_exit();
-	if (rc != 0) {
-		D_ERROR("failed to disconnect some resources may leak, " DF_RC "\n",
-			DP_RC(rc));
-	}
+	if (rc != 0)
+		D_ERROR("failed to disconnect some resources may leak, "
+			DF_RC"\n", DP_RC(rc));
 
 	dc_agent_fini();
 	dc_job_fini();
