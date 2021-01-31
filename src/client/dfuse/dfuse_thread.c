@@ -131,7 +131,9 @@ dfuse_loop(struct dfuse_info *dfuse_info)
 	rc = sem_init(&dtm->tm_finish, 0, 0);
 	if (rc != 0)
 		D_GOTO(out, rc);
-	D_MUTEX_INIT(&dtm->tm_lock, NULL);
+	rc = D_MUTEX_INIT(&dtm->tm_lock, NULL);
+	if (rc != 0)
+		D_GOTO(out_sem, rc);
 
 	D_MUTEX_LOCK(&dtm->tm_lock);
 	for (i = 0 ; i < dfuse_info->di_thread_count ; i++) {
@@ -164,11 +166,12 @@ dfuse_loop(struct dfuse_info *dfuse_info)
 
 	rc = dtm->tm_error;
 
-	pthread_mutex_destroy(&dtm->tm_lock);
-	sem_destroy(&dtm->tm_finish);
+	D_MUTEX_DESTROY(&dtm->tm_lock);
 	fuse_session_reset(se);
-	D_FREE(dtm);
+out_sem:
+	sem_destroy(&dtm->tm_finish);
 out:
+	D_FREE(dtm);
 	return rc;
 }
 
