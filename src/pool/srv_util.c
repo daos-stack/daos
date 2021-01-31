@@ -190,7 +190,6 @@ ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 	return rc;
 }
 
-
 #define SWAP_RANKS(ranks, i, j)					\
 	do {							\
 		d_rank_t r = ranks->rl_ranks[i];		\
@@ -516,7 +515,7 @@ update_targets_ult(void *arg)
 		rc = dsc_pool_tgt_exclude(uta->uta_pool_id, NULL /* grp */,
 					  &tgt_list);
 	if (rc)
-		D_ERROR(DF_UUID": %s targets failed. " DF_RC "\n",
+		D_ERROR(DF_UUID": %s targets failed. "DF_RC"\n",
 			DP_UUID(uta->uta_pool_id),
 			uta->uta_reint ? "Reint" : "Exclude",
 			DP_RC(rc));

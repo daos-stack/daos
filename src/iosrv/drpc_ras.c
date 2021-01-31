@@ -316,14 +316,11 @@ int
 ds_notify_swim_rank_dead(d_rank_t rank)
 {
 	Shared__RASEvent			evt = SHARED__RASEVENT__INIT;
-	int					rc;
 
-	rc = raise_ras(RAS_SWIM_RANK_DEAD,
-		       "SWIM marked rank as dead.",
-		       RAS_TYPE_STATE_CHANGE, RAS_SEV_INFO, NULL /* hwid */,
-		       &rank /* rank */, NULL /* jobid */, NULL /* pool */,
-		       NULL /* cont */, NULL /* objid */, NULL /* ctlop */,
-		       &evt);
-
-	return rc;
+	return raise_ras(RAS_SWIM_RANK_DEAD,
+			 "SWIM marked rank as dead.",
+			 RAS_TYPE_STATE_CHANGE, RAS_SEV_INFO, NULL /* hwid */,
+			 &rank /* rank */, NULL /* jobid */, NULL /* pool */,
+			 NULL /* cont */, NULL /* objid */, NULL /* ctlop */,
+			 &evt);
 }
