@@ -8,6 +8,8 @@ from __future__ import print_function
 
 from ior_test_base import IorTestBase
 
+import time
+
 # pylint: disable=too-few-public-methods,too-many-ancestors
 class PoolDestroyWithIO(IorTestBase):
     """Rebuild test cases featuring IOR.
@@ -60,24 +62,31 @@ class PoolDestroyWithIO(IorTestBase):
             "Invalid pool rebuild info detected before rebuild")
 
         # perform first set of io using IOR
-        for _ in range(4):
+        for run in range(4):
+            self.log.info("Starting ior run number {}".format(run))
             self.run_ior_with_pool()
 
+        self.log.info("Starting rebuild by killing rank {}".format(rank))
         # Kill the server and trigger rebuild
-        self.pool.start_rebuild([rank], self.d_log)
+        self.pool.start_rebuild([rank], self.d_log, force=True)
 
         # Wait for rebuild to start. If True just wait for rebuild to start,
         # if False, wait for rebuild to complete.
+        self.log.info("Wait for rebuild to start")
         self.pool.wait_for_rebuild(True, interval=1)
+
+        #self.log.info("Wait for rebuild to finish")
+        #self.pool.wait_for_rebuild(False, interval=1)
+
         self.pool.set_query_data()
         rebuild_status = self.pool.query_data["rebuild"]["status"]
-        self.log.info("Pool %s rebuild status:%s\n", self.pool.uuid,
+        self.log.info("Pool %s rebuild status:%s", self.pool.uuid,
                       rebuild_status)
 
-        if rebuild_status == 'busy':
-            # destroy pool during rebuild
-            self.pool.destroy()
-            self.container = None
+        self.log.info("Destroy pool %s while rebuild is %s", self.pool.uuid,
+                      rebuild_status)
+        self.pool.destroy()
+        self.container = None
 
         # re-create the pool of full size to verify the space was reclaimed,
         # after re-starting the server on excluded rank
