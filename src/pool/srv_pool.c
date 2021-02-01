@@ -25,7 +25,7 @@
 #include <daos/rsvc.h>
 #include <daos_srv/container.h>
 #include <daos_srv/daos_mgmt_srv.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/rdb.h>
 #include <daos_srv/rebuild.h>
 #include <daos_srv/security.h>

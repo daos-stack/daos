@@ -61,9 +61,9 @@ class DaosServerCommand(YamlCommand):
         # Used to override the sub_command.value parameter value
         self.sub_command_override = None
 
-        # Include the daos_io_server command launched by the daos_server
+        # Include the daos_engine command launched by the daos_server
         # command.
-        self._exe_names.append("daos_io_server")
+        self._exe_names.append("daos_engine")
 
     def get_sub_command_class(self):
         # pylint: disable=redefined-variable-type
@@ -201,7 +201,7 @@ class DaosServerCommand(YamlCommand):
             #                           (default: 0)
             #   --group=                Server group name
             #   --socket_dir=           Location for all daos_server and
-            #                           daos_io_server sockets
+            #                           daos_engine sockets
             #   --insecure              allow for insecure connections
             #   --recreate-superblocks  recreate missing superblocks rather than
             #                           failing
@@ -472,8 +472,8 @@ class DaosServerManager(SubprocessManager):
             raise ServerFailed(
                 "Failed to start servers before format: {}".format(error))
 
-    def detect_io_server_start(self, host_qty=None):
-        """Detect when all the daos_io_servers have started.
+    def detect_engine_start(self, host_qty=None):
+        """Detect when all the engines have started.
 
         Args:
             host_qty (int): number of servers expected to have been started.
@@ -485,7 +485,7 @@ class DaosServerManager(SubprocessManager):
         """
         if host_qty is None:
             hosts_qty = len(self._hosts)
-        self.log.info("<SERVER> Waiting for the daos_io_servers to start")
+        self.log.info("<SERVER> Waiting for the daos_engine to start")
         self.manager.job.update_pattern("normal", hosts_qty)
         if not self.manager.job.check_subprocess_status(self.manager.process):
             self.kill()
@@ -555,8 +555,8 @@ class DaosServerManager(SubprocessManager):
         # be further investigated.
         self.dmg.storage_format(timeout=40)
 
-        # Wait for all the daos_io_servers to start
-        self.detect_io_server_start()
+        # Wait for all the engines to start
+        self.detect_engine_start()
 
         return True
 

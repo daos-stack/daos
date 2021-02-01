@@ -29,7 +29,7 @@
 
 #include <abt.h>
 #include <raft.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/vos.h>
 #include "rdb_internal.h"
 #include "rdb_layout.h"

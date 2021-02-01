@@ -15,7 +15,7 @@
 #include <stdlib.h>
 #include <poll.h>
 #include <errno.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include "drpc_internal.h"
 
 /**

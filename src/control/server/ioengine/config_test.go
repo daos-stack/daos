@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
-package ioserver
+package ioengine
 
 import (
 	"flag"
@@ -175,7 +175,7 @@ func TestConstructedConfig(t *testing.T) {
 	}
 }
 
-func TestIOServer_SCMConfigValidation(t *testing.T) {
+func TestIOEngine_SCMConfigValidation(t *testing.T) {
 	baseValidConfig := func() *Config {
 		return NewConfig().
 			WithFabricProvider("test"). // valid enough to pass "not-blank" test
@@ -257,7 +257,7 @@ func TestIOServer_SCMConfigValidation(t *testing.T) {
 	}
 }
 
-func TestIOServer_ConfigValidation(t *testing.T) {
+func TestIOEngine_ConfigValidation(t *testing.T) {
 	bad := NewConfig()
 
 	if err := bad.Validate(); err == nil {
@@ -277,7 +277,7 @@ func TestIOServer_ConfigValidation(t *testing.T) {
 	}
 }
 
-func TestIOServer_FabricConfigValidation(t *testing.T) {
+func TestIOEngine_FabricConfigValidation(t *testing.T) {
 	for name, tc := range map[string]struct {
 		cfg    FabricConfig
 		expErr error

@@ -128,10 +128,10 @@ func mapCtrlrs(ctrlrs storage.NvmeControllers) (map[string]*storage.NvmeControll
 }
 
 // scanInstanceBdevs retrieves up-to-date NVMe controller info including
-// health statistics and stored server meta-data. If I/O servers are running
+// health statistics and stored server meta-data. If I/O engines are running
 // then query is issued over dRPC as go-spdk bindings cannot be used to access
 // controller claimed by another process. Only update info for controllers
-// assigned to I/O servers.
+// assigned to I/O engines.
 func (c *ControlService) scanInstanceBdevs(ctx context.Context) (*bdev.ScanResponse, error) {
 	var ctrlrs storage.NvmeControllers
 	instances := c.harness.Instances()
@@ -403,7 +403,7 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	formatting := 0
 	for _, srv := range instances {
 		formatting++
-		go func(s *IOServerInstance) {
+		go func(s *IOEngineInstance) {
 			scmChan <- s.StorageFormatSCM(req.Reformat)
 		}(srv)
 	}

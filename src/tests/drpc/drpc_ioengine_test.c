@@ -9,7 +9,7 @@
  *
  * A test utility for human eyes, to sanity check the dRPC listener in the IO
  * server. Sends a bare message to the dRPC module and reports the response.
- * Requires a daos_io_server to be standing up.
+ * Requires an engine to be standing up.
  */
 
 #include <stdio.h>

@@ -24,7 +24,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/ioengine"
 )
 
 const (
@@ -53,7 +53,8 @@ type Server struct {
 	// control-specific
 	ControlPort         int                       `yaml:"port"`
 	TransportConfig     *security.TransportConfig `yaml:"transport_config"`
-	Servers             []*ioserver.Config        `yaml:"servers"`
+	// support both "engines:" and "servers:" for backward compatibility
+	Engines             []*ioengine.Config        `yaml:"servers" yaml:"engines"`
 	BdevInclude         []string                  `yaml:"bdev_include,omitempty"`
 	BdevExclude         []string                  `yaml:"bdev_exclude,omitempty"`
 	DisableVFIO         bool                      `yaml:"disable_vfio"`
@@ -68,10 +69,10 @@ type Server struct {
 	RecreateSuperblocks bool                      `yaml:"recreate_superblocks"`
 	FaultPath           string                    `yaml:"fault_path"`
 
-	// duplicated in ioserver.Config
+	// duplicated in ioengine.Config
 	SystemName string                `yaml:"name"`
 	SocketDir  string                `yaml:"socket_dir"`
-	Fabric     ioserver.FabricConfig `yaml:",inline"`
+	Fabric     ioengine.FabricConfig `yaml:",inline"`
 	Modules    string
 
 	AccessPoints []string `yaml:"access_points"`
@@ -120,7 +121,7 @@ func (c *Server) WithGetNetworkDeviceClass(fn networkDeviceClass) *Server {
 // WithSystemName sets the system name.
 func (c *Server) WithSystemName(name string) *Server {
 	c.SystemName = name
-	for _, srv := range c.Servers {
+	for _, srv := range c.Engines {
 		srv.WithSystemName(name)
 	}
 	return c
@@ -129,7 +130,7 @@ func (c *Server) WithSystemName(name string) *Server {
 // WithSocketDir sets the default socket directory.
 func (c *Server) WithSocketDir(sockDir string) *Server {
 	c.SocketDir = sockDir
-	for _, srv := range c.Servers {
+	for _, srv := range c.Engines {
 		srv.WithSocketDir(sockDir)
 	}
 	return c
@@ -138,7 +139,7 @@ func (c *Server) WithSocketDir(sockDir string) *Server {
 // WithModules sets a list of server modules to load.
 func (c *Server) WithModules(mList string) *Server {
 	c.Modules = mList
-	for _, srv := range c.Servers {
+	for _, srv := range c.Engines {
 		srv.WithModules(mList)
 	}
 	return c
@@ -147,7 +148,7 @@ func (c *Server) WithModules(mList string) *Server {
 // WithFabricProvider sets the top-level fabric provider.
 func (c *Server) WithFabricProvider(provider string) *Server {
 	c.Fabric.Provider = provider
-	for _, srv := range c.Servers {
+	for _, srv := range c.Engines {
 		srv.Fabric.Update(c.Fabric)
 	}
 	return c
@@ -156,7 +157,7 @@ func (c *Server) WithFabricProvider(provider string) *Server {
 // WithCrtCtxShareAddr sets the top-level CrtCtxShareAddr.
 func (c *Server) WithCrtCtxShareAddr(addr uint32) *Server {
 	c.Fabric.CrtCtxShareAddr = addr
-	for _, srv := range c.Servers {
+	for _, srv := range c.Engines {
 		srv.Fabric.Update(c.Fabric)
 	}
 	return c
@@ -165,23 +166,23 @@ func (c *Server) WithCrtCtxShareAddr(addr uint32) *Server {
 // WithCrtTimeout sets the top-level CrtTimeout.
 func (c *Server) WithCrtTimeout(timeout uint32) *Server {
 	c.Fabric.CrtTimeout = timeout
-	for _, srv := range c.Servers {
+	for _, srv := range c.Engines {
 		srv.Fabric.Update(c.Fabric)
 	}
 	return c
 }
 
 // NB: In order to ease maintenance, the set of chained config functions
-// which modify nested ioserver configurations should be kept above this
+// which modify nested ioengine configurations should be kept above this
 // one as a reference for which things should be set/updated in the next
 // function.
-func (c *Server) updateServerConfig(cfgPtr **ioserver.Config) {
+func (c *Server) updateServerConfig(cfgPtr **ioengine.Config) {
 	// If we somehow get a nil config, we can't return an error, and
 	// we don't want to cause a segfault. Instead, just create an
 	// empty config and return early, so that it eventually fails
 	// validation.
 	if *cfgPtr == nil {
-		*cfgPtr = &ioserver.Config{}
+		*cfgPtr = &ioengine.Config{}
 		return
 	}
 
@@ -192,11 +193,11 @@ func (c *Server) updateServerConfig(cfgPtr **ioserver.Config) {
 	srvCfg.Modules = c.Modules
 }
 
-// WithServers sets the list of IOServer configurations.
-func (c *Server) WithServers(srvList ...*ioserver.Config) *Server {
-	c.Servers = srvList
-	for i := range c.Servers {
-		c.updateServerConfig(&c.Servers[i])
+// WithEngines sets the list of IOEngine configurations.
+func (c *Server) WithEngines(srvList ...*ioengine.Config) *Server {
+	c.Engines = srvList
+	for i := range c.Engines {
+		c.updateServerConfig(&c.Engines[i])
 	}
 	return c
 }
@@ -207,8 +208,8 @@ func (c *Server) WithServers(srvList ...*ioserver.Config) *Server {
 // specifying the SCM mountpoint via daos_server CLI flag. Future
 // versions will require the mountpoint to be set via configuration.
 func (c *Server) WithScmMountPoint(mp string) *Server {
-	if len(c.Servers) > 0 {
-		c.Servers[0].WithScmMountPoint(mp)
+	if len(c.Engines) > 0 {
+		c.Engines[0].WithScmMountPoint(mp)
 	}
 	return c
 }
@@ -348,8 +349,8 @@ func (c *Server) Load() error {
 	}
 
 	// propagate top-level settings to server configs
-	for i := range c.Servers {
-		c.updateServerConfig(&c.Servers[i])
+	for i := range c.Engines {
+		c.updateServerConfig(&c.Engines[i])
 	}
 
 	return nil
@@ -402,11 +403,11 @@ func SaveActiveConfig(log logging.Logger, config *Server) {
 
 // Validate asserts that config meets minimum requirements.
 func (c *Server) Validate(log logging.Logger) (err error) {
-	// config without servers is valid when initially discovering hardware
+	// config without engines is valid when initially discovering hardware
 	// prior to adding per-server sections with device allocations
-	if len(c.Servers) == 0 {
+	if len(c.Engines) == 0 {
 		log.Infof("No %ss in configuration, %s starting in discovery mode", build.DataPlaneName, build.ControlPlaneName)
-		c.Servers = nil
+		c.Engines = nil
 		return nil
 	}
 
@@ -455,7 +456,7 @@ func (c *Server) Validate(log logging.Logger) (err error) {
 		return err
 	}
 
-	for i, srv := range c.Servers {
+	for i, srv := range c.Engines {
 		srv.Fabric.Update(c.Fabric)
 		if err := srv.Validate(); err != nil {
 			return errors.Wrapf(err, "I/O server %d failed config validation", i)
@@ -481,7 +482,7 @@ func (c *Server) Validate(log logging.Logger) (err error) {
 		}
 	}
 
-	if len(c.Servers) > 1 {
+	if len(c.Engines) > 1 {
 		if err := validateMultiServerConfig(log, c); err != nil {
 			return err
 		}
@@ -495,7 +496,7 @@ func (c *Server) Validate(log logging.Logger) (err error) {
 // has unique values for resources which cannot be shared (e.g. log files,
 // fabric configurations, PCI devices, etc.)
 func validateMultiServerConfig(log logging.Logger, c *Server) error {
-	if len(c.Servers) < 2 {
+	if len(c.Engines) < 2 {
 		return nil
 	}
 
@@ -504,7 +505,7 @@ func validateMultiServerConfig(log logging.Logger, c *Server) error {
 	seenBdevSet := make(map[string]int)
 
 	var netDevClass uint32
-	for idx, srv := range c.Servers {
+	for idx, srv := range c.Engines {
 		fabricConfig := fmt.Sprintf("fabric:%s-%s-%d",
 			srv.Fabric.Provider,
 			srv.Fabric.Interface,

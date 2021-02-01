@@ -13,7 +13,7 @@
 #define D_LOGFAC	DD_FAC(security)
 
 #include <daos/rpc.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include "srv_internal.h"
 
 /** Fully qualified path to daos_server socket */

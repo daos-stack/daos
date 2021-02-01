@@ -21,7 +21,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/ioengine"
 )
 
 const (
@@ -224,8 +224,8 @@ func TestServer_ConstructedConfig(t *testing.T) {
 		WithProviderValidator(netdetect.ValidateProviderStub).
 		WithNUMAValidator(netdetect.ValidateNUMAStub).
 		WithGetNetworkDeviceClass(getDeviceClassStub).
-		WithServers(
-			ioserver.NewConfig().
+		WithEngines(
+			ioengine.NewConfig().
 				WithRank(0).
 				WithTargetCount(20).
 				WithHelperStreamCount(20).
@@ -241,7 +241,7 @@ func TestServer_ConstructedConfig(t *testing.T) {
 				WithEnvVars("CRT_TIMEOUT=30").
 				WithLogFile("/tmp/daos_server1.log").
 				WithLogMask("WARN"),
-			ioserver.NewConfig().
+			ioengine.NewConfig().
 				WithRank(1).
 				WithTargetCount(20).
 				WithHelperStreamCount(20).
@@ -287,8 +287,8 @@ func TestServer_ConfigValidation(t *testing.T) {
 		},
 		"nil server entry": {
 			func(c *Server) *Server {
-				var nilIOServerConfig *ioserver.Config
-				return c.WithServers(nilIOServerConfig)
+				var nilIOEngineConfig *ioengine.Config
+				return c.WithEngines(nilIOEngineConfig)
 			},
 			errors.New("validation"),
 		},
@@ -415,13 +415,13 @@ func TestServer_ConfigRelativeWorkingPath(t *testing.T) {
 	}
 }
 
-func TestServer_WithServersInheritsMainConfig(t *testing.T) {
+func TestServer_WithEnginesInheritsMainConfig(t *testing.T) {
 	testFabric := "test-fabric"
 	testModules := "a,b,c"
 	testSystemName := "test-system"
 	testSocketDir := "test-sockets"
 
-	wantCfg := ioserver.NewConfig().
+	wantCfg := ioengine.NewConfig().
 		WithFabricProvider(testFabric).
 		WithModules(testModules).
 		WithSocketDir(testSocketDir).
@@ -432,16 +432,16 @@ func TestServer_WithServersInheritsMainConfig(t *testing.T) {
 		WithModules(testModules).
 		WithSocketDir(testSocketDir).
 		WithSystemName(testSystemName).
-		WithServers(ioserver.NewConfig())
+		WithEngines(ioengine.NewConfig())
 
-	if diff := cmp.Diff(wantCfg, config.Servers[0]); diff != "" {
+	if diff := cmp.Diff(wantCfg, config.Engines[0]); diff != "" {
 		t.Fatalf("unexpected server config (-want, +got):\n%s\n", diff)
 	}
 }
 
 func TestServer_ConfigDuplicateValues(t *testing.T) {
-	configA := func() *ioserver.Config {
-		return ioserver.NewConfig().
+	configA := func() *ioengine.Config {
+		return ioengine.NewConfig().
 			WithLogFile("a").
 			WithFabricInterface("a").
 			WithFabricInterfacePort(42).
@@ -449,8 +449,8 @@ func TestServer_ConfigDuplicateValues(t *testing.T) {
 			WithScmRamdiskSize(1).
 			WithScmMountPoint("a")
 	}
-	configB := func() *ioserver.Config {
-		return ioserver.NewConfig().
+	configB := func() *ioengine.Config {
+		return ioengine.NewConfig().
 			WithLogFile("b").
 			WithFabricInterface("b").
 			WithFabricInterfacePort(42).
@@ -460,8 +460,8 @@ func TestServer_ConfigDuplicateValues(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		configA *ioserver.Config
-		configB *ioserver.Config
+		configA *ioengine.Config
+		configB *ioengine.Config
 		expErr  error
 	}{
 		"successful validation": {
@@ -512,7 +512,7 @@ func TestServer_ConfigDuplicateValues(t *testing.T) {
 			conf := DefaultServer().
 				WithFabricProvider("test").
 				WithGetNetworkDeviceClass(getDeviceClassStub).
-				WithServers(tc.configA, tc.configB)
+				WithEngines(tc.configA, tc.configB)
 
 			gotErr := conf.Validate(log)
 			CmpErr(t, tc.expErr, gotErr)
@@ -521,16 +521,16 @@ func TestServer_ConfigDuplicateValues(t *testing.T) {
 }
 
 func TestServer_ConfigNetworkDeviceClass(t *testing.T) {
-	configA := func() *ioserver.Config {
-		return ioserver.NewConfig().
+	configA := func() *ioengine.Config {
+		return ioengine.NewConfig().
 			WithLogFile("a").
 			WithScmClass("ram").
 			WithScmRamdiskSize(1).
 			WithFabricInterfacePort(42).
 			WithScmMountPoint("a")
 	}
-	configB := func() *ioserver.Config {
-		return ioserver.NewConfig().
+	configB := func() *ioengine.Config {
+		return ioengine.NewConfig().
 			WithLogFile("b").
 			WithScmClass("ram").
 			WithScmRamdiskSize(1).
@@ -539,8 +539,8 @@ func TestServer_ConfigNetworkDeviceClass(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		configA *ioserver.Config
-		configB *ioserver.Config
+		configA *ioengine.Config
+		configB *ioengine.Config
 		expErr  error
 	}{
 		"successful validation with matching Infiniband": {
@@ -591,7 +591,7 @@ func TestServer_ConfigNetworkDeviceClass(t *testing.T) {
 			conf := DefaultServer().
 				WithFabricProvider("test").
 				WithGetNetworkDeviceClass(getDeviceClassStub).
-				WithServers(tc.configA, tc.configB)
+				WithEngines(tc.configA, tc.configB)
 
 			gotErr := conf.Validate(log)
 			CmpErr(t, tc.expErr, gotErr)

@@ -82,7 +82,7 @@ def scons():
     SConscript('rdb/SConscript')
 
     # Then the DAOS I/O server executable
-    SConscript('iosrv/SConscript')
+    SConscript('engine/SConscript')
 
     # Build utilities
     SConscript('utils/SConscript')

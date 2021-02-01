@@ -82,15 +82,15 @@ type CtlSvcClient interface {
 	FirmwareUpdate(ctx context.Context, in *FirmwareUpdateReq, opts ...grpc.CallOption) (*FirmwareUpdateResp, error)
 	// Query the per-server metadata
 	SmdQuery(ctx context.Context, in *SmdQueryReq, opts ...grpc.CallOption) (*SmdQueryResp, error)
-	// Prepare DAOS IO servers on a host for controlled shutdown. (gRPC fanout)
+	// Prepare DAOS IO engines on a host for controlled shutdown. (gRPC fanout)
 	PrepShutdownRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error)
-	// Stop DAOS IO servers on a host. (gRPC fanout)
+	// Stop DAOS IO engines on a host. (gRPC fanout)
 	StopRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error)
-	// Ping DAOS IO servers on a host. (gRPC fanout)
+	// Ping DAOS IO engines on a host. (gRPC fanout)
 	PingRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error)
-	// ResetFormat DAOS IO servers on a host. (gRPC fanout)
+	// ResetFormat DAOS IO engines on a host. (gRPC fanout)
 	ResetFormatRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error)
-	// Start DAOS IO servers on a host. (gRPC fanout)
+	// Start DAOS IO engines on a host. (gRPC fanout)
 	StartRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error)
 }
 
@@ -226,15 +226,15 @@ type CtlSvcServer interface {
 	FirmwareUpdate(context.Context, *FirmwareUpdateReq) (*FirmwareUpdateResp, error)
 	// Query the per-server metadata
 	SmdQuery(context.Context, *SmdQueryReq) (*SmdQueryResp, error)
-	// Prepare DAOS IO servers on a host for controlled shutdown. (gRPC fanout)
+	// Prepare DAOS IO engines on a host for controlled shutdown. (gRPC fanout)
 	PrepShutdownRanks(context.Context, *RanksReq) (*RanksResp, error)
-	// Stop DAOS IO servers on a host. (gRPC fanout)
+	// Stop DAOS IO engines on a host. (gRPC fanout)
 	StopRanks(context.Context, *RanksReq) (*RanksResp, error)
-	// Ping DAOS IO servers on a host. (gRPC fanout)
+	// Ping DAOS IO engines on a host. (gRPC fanout)
 	PingRanks(context.Context, *RanksReq) (*RanksResp, error)
-	// ResetFormat DAOS IO servers on a host. (gRPC fanout)
+	// ResetFormat DAOS IO engines on a host. (gRPC fanout)
 	ResetFormatRanks(context.Context, *RanksReq) (*RanksResp, error)
-	// Start DAOS IO servers on a host. (gRPC fanout)
+	// Start DAOS IO engines on a host. (gRPC fanout)
 	StartRanks(context.Context, *RanksReq) (*RanksResp, error)
 }
 

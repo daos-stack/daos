@@ -52,23 +52,18 @@ for running DAOS servers in the
 [server config file](/utils/config/daos_server.yml).
 
 NOTES:
-* some environment variables can only be supplied to `daos_io_server`
+* some environment variables can only be supplied to `daos_engine`
 instances through the server config file:
 	* `CRT_PHY_ADDR_STR`, `OFI_INTERFACE`, `OFI_PORT`, `D_LOG_MASK`,
 `D_LOG_FILE`
-* other environment variables can be specified in config file as
-"key=value" strings in the per-server `env_vars` list:
-	* these environment variables will be applied to the `daos_io_server`
-environment overriding any specified in the environment
-used to launch  `daos_io_server` (e.g. using "-x" orterun option)
 * while it is very highly recommended to use the server config file
 as a means to supply parameters, environment variables not applied
 through the config file but specified in the calling environment will
-still be present in the environment used to launch `daos_io_server`.
+still be present in the environment used to launch `daos_engine`.
 
 ### Logging
 
-Log file and level mask for both data (`daos_io_server`) and control
+Log file and level mask for both data (`daos_engine`) and control
 (`daos_server`) planes can be set in the server config file.
 
 ### NVMe/block-device storage

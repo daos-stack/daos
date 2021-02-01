@@ -21,10 +21,10 @@ class CPUUsage(TestWithServers):
         # pylint: disable=pylint-bad-continuation
         """
         JIRA ID: DAOS-4826
-        Test Description: Test CPU usage of formatted and idle daos_io_server.
+        Test Description: Test CPU usage of formatted and idle engine.
         :avocado: tags=all,hw,server,small,full_regression,cpu_usage
         """
-        ps_get_cpu = r"ps -C daos_io_server -o %\cpu"
+        ps_get_cpu = r"ps -C daos_engine -o %\cpu"
 
         prev_usage = 1
         usage = 1
@@ -38,7 +38,7 @@ class CPUUsage(TestWithServers):
             for output, _ in task.iter_buffers():
                 usage = str(output).splitlines()[-1]
                 self.log.info("CPU usage = %s", usage)
-            # Check if daos_io_server has started.
+            # Check if daos_engine has started.
             if usage == "%CPU":
                 continue
 
@@ -54,6 +54,6 @@ class CPUUsage(TestWithServers):
             prev_usage = usage
 
         self.assertTrue(
-            usage != "%CPU", "daos_io_server CPU usage couldn't be obtained!")
+            usage != "%CPU", "daos_engine CPU usage couldn't be obtained!")
         self.assertTrue(
             usage < 100, "CPU usage is above 100%: {}%".format(usage))

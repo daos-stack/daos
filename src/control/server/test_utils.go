@@ -20,7 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/ioengine"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -156,16 +156,16 @@ func setupMockDrpcClient(svc *mgmtSvc, resp proto.Message, err error) {
 	setupMockDrpcClientBytes(svc, respBytes, err)
 }
 
-// newTestIOServer returns an IOServerInstance configured for testing.
-func newTestIOServer(log logging.Logger, isAP bool, ioCfg ...*ioserver.Config) *IOServerInstance {
+// newTestIOEngine returns an IOEngineInstance configured for testing.
+func newTestIOEngine(log logging.Logger, isAP bool, ioCfg ...*ioengine.Config) *IOEngineInstance {
 	if len(ioCfg) == 0 {
-		ioCfg = append(ioCfg, ioserver.NewConfig().WithTargetCount(1))
+		ioCfg = append(ioCfg, ioengine.NewConfig().WithTargetCount(1))
 	}
-	r := ioserver.NewTestRunner(&ioserver.TestRunnerConfig{
+	r := ioengine.NewTestRunner(&ioengine.TestRunnerConfig{
 		Running: atm.NewBool(true),
 	}, ioCfg[0])
 
-	srv := NewIOServerInstance(log, nil, nil, nil, r)
+	srv := NewIOEngineInstance(log, nil, nil, nil, r)
 	srv.setSuperblock(&Superblock{
 		Rank: system.NewRankPtr(0),
 	})
@@ -184,12 +184,12 @@ func mockTCPResolver(netString string, address string) (*net.TCPAddr, error) {
 	return &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 10001}, nil
 }
 
-// newTestMgmtSvc creates a mgmtSvc that contains an IOServerInstance
+// newTestMgmtSvc creates a mgmtSvc that contains an IOEngineInstance
 // properly set up as an MS.
 func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
-	srv := newTestIOServer(log, true)
+	srv := newTestIOEngine(log, true)
 
-	harness := NewIOServerHarness(log)
+	harness := NewIOEngineHarness(log)
 	if err := harness.AddInstance(srv); err != nil {
 		t.Fatal(err)
 	}
@@ -200,13 +200,13 @@ func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
 }
 
 // newTestMgmtSvcMulti creates a mgmtSvc that contains the requested
-// number of IOServerInstances. If requested, the first instance is
+// number of IOEngineInstances. If requested, the first instance is
 // configured as an access point.
 func newTestMgmtSvcMulti(t *testing.T, log logging.Logger, count int, isAP bool) *mgmtSvc {
-	harness := NewIOServerHarness(log)
+	harness := NewIOEngineHarness(log)
 
 	for i := 0; i < count; i++ {
-		srv := newTestIOServer(log, i == 0 && isAP)
+		srv := newTestIOEngine(log, i == 0 && isAP)
 		srv._superblock.Rank = system.NewRankPtr(uint32(i))
 
 		if err := harness.AddInstance(srv); err != nil {

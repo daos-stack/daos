@@ -13,7 +13,7 @@
 
 #include <daos/common.h>
 #include <daos/rpc.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <vos_internal.h>
 #include <daos/lru.h>
 #include <daos/btree_class.h>

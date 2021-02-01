@@ -17,7 +17,7 @@
 #include <daos/common.h>
 #include <daos/rpc.h>
 #include <daos/rsvc.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/rdb.h>
 #include <daos_srv/rsvc.h>
 #include <daos_srv/smd.h>

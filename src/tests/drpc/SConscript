@@ -18,9 +18,9 @@ def scons():
     drpc_test = daos_build.program(denv, 'drpc_test', sources, LIBS=libs)
     env.Install('$PREFIX/bin/', drpc_test)
 
-    drpc_iosrv_test = daos_build.program(denv, 'drpc_iosrv_test',
-                                         ['drpc_iosrv_test.c'], LIBS=libs)
-    env.Install('$PREFIX/bin/', drpc_iosrv_test)
+    drpc_ioengine_test = daos_build.program(denv, 'drpc_ioengine_test',
+                                            ['drpc_ioengine_test.c'], LIBS=libs)
+    env.Install('$PREFIX/bin/', drpc_ioengine_test)
 
 if __name__ == "SCons.Script":
     scons()

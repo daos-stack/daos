@@ -9,7 +9,7 @@ control_log_file: /tmp/daos_control.log
 transport_config:
    allow_insecure: true
 
-servers:
+engines:
 -
   targets: 1
   first_core: 0

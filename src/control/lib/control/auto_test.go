@@ -22,19 +22,19 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/ioengine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 var (
-	ioCfg = func(t *testing.T, numa int) *ioserver.Config {
-		return ioserver.NewConfig().
+	ioCfg = func(t *testing.T, numa int) *ioengine.Config {
+		return ioengine.NewConfig().
 			WithScmClass(storage.ScmClassDCPM.String()).
 			WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", numa)).
 			WithScmDeviceList(fmt.Sprintf("/dev/pmem%d", numa)).
 			WithBdevClass(storage.BdevClassNvme.String())
 	}
-	ioCfgWithSSDs = func(t *testing.T, numa int) *ioserver.Config {
+	ioCfgWithSSDs = func(t *testing.T, numa int) *ioengine.Config {
 		var pciAddrs []string
 		for _, c := range MockServerScanResp(t, "withSpaceUsage").Nvme.Ctrlrs {
 			if int(c.Socketid) == numa {
@@ -601,7 +601,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			bdevLists:    [][]string{nil},
 			tgtCounts:    []int{16},
 			hlprCounts:   []int{7},
-			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX").WithServers(
+			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX").WithEngines(
 				defaultIOSrvCfg(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
@@ -617,7 +617,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			bdevLists:  [][]string{common.MockPCIAddrs(1)},
 			tgtCounts:  []int{16},
 			hlprCounts: []int{7},
-			expCfg: baseConfig("ofi+psm2").WithServers(
+			expCfg: baseConfig("ofi+psm2").WithEngines(
 				defaultIOSrvCfg(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
@@ -634,7 +634,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			bdevLists:  [][]string{common.MockPCIAddrs(4), common.MockPCIAddrs(3)},
 			tgtCounts:  []int{16, 15},
 			hlprCounts: []int{7, 6},
-			expCfg: baseConfig("ofi+psm2").WithServers(
+			expCfg: baseConfig("ofi+psm2").WithEngines(
 				defaultIOSrvCfg(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).

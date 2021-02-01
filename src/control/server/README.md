@@ -4,17 +4,17 @@ The server package implements the internals of the DAOS control server,
 and the `daos_server` user-facing application is implemented by the
 [`daos_server`](/src/control/cmd/daos_server/README.md) package.
 
-## I/O Server Instances
+## I/O Engine Instances
 
-DAOS I/O Server processes (`daos_io_server` binary) are forked
+DAOS I/O Server processes (`daos_engine` binary) are forked
 by the DAOS Control Server (`daos_server` binary) and perform the
 main userspace I/O operations of DAOS.
 [`instance.go`](/src/control/server/instance.go) provides the
-`IOServerInstance` abstraction and relevant methods.
+`IOEngineInstance` abstraction and relevant methods.
 
 Underlying abstractions for the control and configuration of
 the I/O Server processes are encapsulated in the
-[`ioserver`](/src/control/server/ioserver) package.
+[`ioengine`](/src/control/server/ioengine) package.
 
 ## I/O Server Harness
 
@@ -22,13 +22,13 @@ DAOS I/O Server processes are managed and monitored by the DAOS
 Control Server and logically reside as members of the I/O server
 harness.
 [`harness.go`](/src/control/server/harness.go) provides the
-`IOServerHarness` abstraction and relevant methods.
+`IOEngineHarness` abstraction and relevant methods.
 
 ## Communications
 
 The DAOS Server implements the [gRPC protocol](https://grpc.io/) to
 communicate with client gRPC applications and interacts with DAOS I/O
-Servers through Unix domain sockets.
+Engines through Unix domain sockets.
 
 Multiple gRPC server modules are loaded by the control server.
 Currently included modules are security and management.
@@ -74,7 +74,7 @@ access point host) will usually be issued by the
 
 MS commands will be triggered from the management tool and handled
 on a storage node running as an access point.
-Requests will be forwarded to the data plane ([iosrv](/src/iosrv))
+Requests will be forwarded to the data plane ([engine](/src/engine))
 over dRPC channel and handled by the [mgmt](/src/mgmt/srv.c) module.
 
 Management service RPC handler code is contained in

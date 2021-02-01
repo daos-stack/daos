@@ -20,7 +20,7 @@ import (
 )
 
 // mgmtModule represents the daos_server mgmt dRPC module. It sends dRPCs to
-// the daos_io_server iosrv module (src/iosrv) but doesn't receive.
+// the daos_engine (src/engine) but doesn't receive.
 type mgmtModule struct{}
 
 // newMgmtModule creates a new management module and returns its reference.
@@ -39,22 +39,22 @@ func (mod *mgmtModule) ID() drpc.ModuleID {
 }
 
 // srvModule represents the daos_server dRPC module. It handles dRPCs sent by
-// the daos_io_server iosrv module (src/iosrv).
+// the daos_engine (src/engine).
 type srvModule struct {
-	log    logging.Logger
-	sysdb  *system.Database
-	iosrvs []*IOServerInstance
-	events *events.PubSub
+	log     logging.Logger
+	sysdb   *system.Database
+	engines []*IOEngineInstance
+	events  *events.PubSub
 }
 
 // newSrvModule creates a new srv module references to the system database,
-// resident IOServerInstances and event publish subscribe reference.
-func newSrvModule(log logging.Logger, sysdb *system.Database, iosrvs []*IOServerInstance, events *events.PubSub) *srvModule {
+// resident IOEngineInstances and event publish subscribe reference.
+func newSrvModule(log logging.Logger, sysdb *system.Database, engines []*IOEngineInstance, events *events.PubSub) *srvModule {
 	return &srvModule{
-		log:    log,
-		sysdb:  sysdb,
-		iosrvs: iosrvs,
-		events: events,
+		log:     log,
+		sysdb:   sysdb,
+		engines: engines,
+		events:  events,
 	}
 }
 
@@ -115,16 +115,16 @@ func (mod *srvModule) handleNotifyReady(reqb []byte) error {
 		return drpc.UnmarshalingPayloadFailure()
 	}
 
-	if req.InstanceIdx >= uint32(len(mod.iosrvs)) {
+	if req.InstanceIdx >= uint32(len(mod.engines)) {
 		return errors.Errorf("instance index %v is out of range (%v instances)",
-			req.InstanceIdx, len(mod.iosrvs))
+			req.InstanceIdx, len(mod.engines))
 	}
 
 	if err := checkDrpcClientSocketPath(req.DrpcListenerSock); err != nil {
 		return errors.Wrap(err, "check NotifyReady request socket path")
 	}
 
-	mod.iosrvs[req.InstanceIdx].NotifyDrpcReady(req)
+	mod.engines[req.InstanceIdx].NotifyDrpcReady(req)
 
 	return nil
 }
@@ -135,16 +135,16 @@ func (mod *srvModule) handleBioErr(reqb []byte) error {
 		return errors.Wrap(err, "unmarshal BioError request")
 	}
 
-	if req.InstanceIdx >= uint32(len(mod.iosrvs)) {
+	if req.InstanceIdx >= uint32(len(mod.engines)) {
 		return errors.Errorf("instance index %v is out of range (%v instances)",
-			req.InstanceIdx, len(mod.iosrvs))
+			req.InstanceIdx, len(mod.engines))
 	}
 
 	if err := checkDrpcClientSocketPath(req.DrpcListenerSock); err != nil {
 		return errors.Wrap(err, "check BioErr request socket path")
 	}
 
-	mod.iosrvs[req.InstanceIdx].BioErrorNotify(req)
+	mod.engines[req.InstanceIdx].BioErrorNotify(req)
 
 	return nil
 }

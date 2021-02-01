@@ -12,8 +12,8 @@ var (
 	DaosVersion string = "unset"
 	// ControlPlaneName defines a consistent name for the control plane server.
 	ControlPlaneName = "DAOS Control Server"
-	// DataPlaneName defines a consistent name for the ioserver.
-	DataPlaneName = "DAOS I/O Server"
+	// DataPlaneName defines a consistent name for the ioengine.
+	DataPlaneName = "DAOS I/O Engine"
 	// ManagementServiceName defines a consistent name for the Management Service.
 	ManagementServiceName = "DAOS Management Service"
 	// AgentName defines a consistent name for the compute node agent.

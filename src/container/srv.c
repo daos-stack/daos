@@ -11,7 +11,7 @@
  */
 #define D_LOGFAC	DD_FAC(container)
 
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos/rpc.h>
 #include "rpc.h"
 #include "srv_internal.h"

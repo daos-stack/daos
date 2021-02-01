@@ -21,7 +21,7 @@
 #include <daos_srv/container.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/bio.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/security.h>
 #include <daos/checksum.h>

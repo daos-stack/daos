@@ -94,9 +94,9 @@ class DaosAdminPrivTest(TestWithServers):
         if result is None:
             self.fail("Failed to format storage")
 
-        # Verify format success when all the doas_io_servers start
+        # Verify format success when all the daos_engine start
         try:
-            self.server_managers[0].detect_io_server_start()
+            self.server_managers[0].detect_engine_start()
         except ServerFailed as error:
             self.fail(
                 "Failed starting server after format as non-root user: "

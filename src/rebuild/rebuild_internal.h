@@ -17,7 +17,7 @@
 #include <daos/rpc.h>
 #include <daos/btree.h>
 #include <daos/pool_map.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/rebuild.h>
 
 /* Track the pool rebuild status on each target, which exists on

@@ -12,7 +12,7 @@
 #define __SECURITY_SRV_INTERNAL_H__
 
 #include <daos_types.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include "auth.pb-c.h"
 
 #define DAOS_SEC_VERSION 1

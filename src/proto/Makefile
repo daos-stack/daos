@@ -23,8 +23,8 @@
 DAOS_ROOT ?= $(shell git rev-parse --show-toplevel)
 
 C_HEADER_FILES = include/daos/drpc.pb-c.h\
-		 iosrv/srv.pb-c.h\
-		 iosrv/event.pb-c.h\
+		 engine/srv.pb-c.h\
+		 engine/event.pb-c.h\
 		 mgmt/acl.pb-c.h\
 		 mgmt/cont.pb-c.h\
 		 mgmt/pool.pb-c.h\
@@ -33,8 +33,8 @@ C_HEADER_FILES = include/daos/drpc.pb-c.h\
 		 security/auth.pb-c.h\
 		 tests/drpc/drpc_test.pb-c.h
 C_SOURCE_FILES = common/drpc.pb-c.c\
-		 iosrv/srv.pb-c.c\
-		 iosrv/event.pb-c.c\
+		 engine/srv.pb-c.c\
+		 engine/event.pb-c.c\
 		 mgmt/acl.pb-c.c\
 		 mgmt/cont.pb-c.c\
 		 mgmt/pool.pb-c.c\
@@ -139,16 +139,16 @@ $(DAOS_ROOT)/src/%.pb-c.h: $(PROTO_SOURCE_DIR)/%.proto
 $(DAOS_ROOT)/src/%.pb-c.c: $(PROTO_SOURCE_DIR)/%.proto
 	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
 
-$(DAOS_ROOT)/src/iosrv/event.pb-c.h: $(PROTO_SOURCE_DIR)/shared/event.proto
+$(DAOS_ROOT)/src/engine/event.pb-c.h: $(PROTO_SOURCE_DIR)/shared/event.proto
 	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
 
-$(DAOS_ROOT)/src/iosrv/event.pb-c.c: $(PROTO_SOURCE_DIR)/shared/event.proto
+$(DAOS_ROOT)/src/engine/event.pb-c.c: $(PROTO_SOURCE_DIR)/shared/event.proto
 	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
 
-$(DAOS_ROOT)/src/iosrv/%.pb-c.h: $(PROTO_SOURCE_DIR)/srv/%.proto
+$(DAOS_ROOT)/src/engine/%.pb-c.h: $(PROTO_SOURCE_DIR)/srv/%.proto
 	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
 
-$(DAOS_ROOT)/src/iosrv/%.pb-c.c: $(PROTO_SOURCE_DIR)/srv/%.proto
+$(DAOS_ROOT)/src/engine/%.pb-c.c: $(PROTO_SOURCE_DIR)/srv/%.proto
 	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
 
 $(DAOS_ROOT)/src/mgmt/smd.pb-c.h: $(PROTO_SOURCE_DIR)/ctl/smd.proto

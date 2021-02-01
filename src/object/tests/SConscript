@@ -1,4 +1,4 @@
-"""Build daos iosrv tests"""
+"""Build daos engine tests"""
 import daos_build
 
 def scons():

@@ -184,7 +184,7 @@ test_drpc_listener_init_success(void **state)
 	/* Initialized unique socket path based on PID */
 	assert_non_null(drpc_listener_socket_path);
 	snprintf(expected_socket_path, sizeof(expected_socket_path),
-		 "%s/daos_io_server_%d.sock", dss_socket_dir, getpid());
+		 "%s/daos_engine_%d.sock", dss_socket_dir, getpid());
 	assert_string_equal(drpc_listener_socket_path, expected_socket_path);
 
 	/* called unlink on socket */

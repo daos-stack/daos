@@ -32,7 +32,7 @@ import (
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/ioengine"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 	"github.com/daos-stack/daos/src/control/system"
@@ -44,7 +44,7 @@ const (
 )
 
 func cfgHasBdev(cfg *config.Server) bool {
-	for _, srvCfg := range cfg.Servers {
+	for _, srvCfg := range cfg.Engines {
 		if len(srvCfg.Storage.Bdev.DeviceList) > 0 {
 			return true
 		}
@@ -65,10 +65,10 @@ func iommuDetected() bool {
 }
 
 func raftDir(cfg *config.Server) string {
-	if len(cfg.Servers) == 0 {
+	if len(cfg.Engines) == 0 {
 		return "" // can't save to SCM
 	}
-	return filepath.Join(cfg.Servers[0].Storage.SCM.MountPoint, "control_raft")
+	return filepath.Join(cfg.Engines[0].Storage.SCM.MountPoint, "control_raft")
 }
 
 func hostname() string {
@@ -143,9 +143,9 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	}
 
 	if cfgHasBdev(cfg) {
-		// The config value is intended to be per-ioserver, so we need to adjust
-		// based on the number of ioservers.
-		prepReq.HugePageCount = cfg.NrHugepages * len(cfg.Servers)
+		// The config value is intended to be per-ioengine, so we need to adjust
+		// based on the number of ioengines.
+		prepReq.HugePageCount = cfg.NrHugepages * len(cfg.Engines)
 
 		// Perform these checks to avoid even trying a prepare if the system
 		// isn't configured properly.
@@ -198,7 +198,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	}
 	membership := system.NewMembership(log, sysdb)
 	scmProvider := scm.DefaultProvider(log)
-	harness := NewIOServerHarness(log).WithFaultDomain(faultDomain)
+	harness := NewIOEngineHarness(log).WithFaultDomain(faultDomain)
 
 	// Create rpcClient for inter-server communication.
 	cliCfg := control.DefaultConfig()
@@ -233,11 +233,11 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	// On a NUMA-aware system, emit a message when the configuration
 	// may be sub-optimal.
 	numaCount := netdetect.NumNumaNodes(netCtx)
-	if numaCount > 0 && len(cfg.Servers) > numaCount {
-		log.Infof("NOTICE: Detected %d NUMA node(s); %d-server config may not perform as expected", numaCount, len(cfg.Servers))
+	if numaCount > 0 && len(cfg.Engines) > numaCount {
+		log.Infof("NOTICE: Detected %d NUMA node(s); %d-server config may not perform as expected", numaCount, len(cfg.Engines))
 	}
 
-	// Create a closure to be used for joining ioserver instances.
+	// Create a closure to be used for joining ioengine instances.
 	joinInstance := func(ctx context.Context, req *control.SystemJoinReq) (*control.SystemJoinResp, error) {
 		req.SetHostList(cfg.AccessPoints)
 		req.SetSystem(cfg.SystemName)
@@ -245,7 +245,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		return control.SystemJoin(ctx, rpcClient, req)
 	}
 
-	for idx, srvCfg := range cfg.Servers {
+	for idx, srvCfg := range cfg.Engines {
 		// Provide special handling for the ofi+verbs provider.
 		// Mercury uses the interface name such as ib0, while OFI uses the device name such as hfi1_0
 		// CaRT and Mercury will now support the new OFI_DOMAIN environment variable so that we can
@@ -264,7 +264,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		if cfg.SetHugepages {
 			// If we have multiple I/O instances with block devices, then we need to apportion
 			// the hugepage memory among the instances.
-			srvCfg.Storage.Bdev.MemSize = hugePages.FreeMB() / len(cfg.Servers)
+			srvCfg.Storage.Bdev.MemSize = hugePages.FreeMB() / len(cfg.Engines)
 			// reserve a little for daos_admin
 			srvCfg.Storage.Bdev.MemSize -= srvCfg.Storage.Bdev.MemSize / 16
 		}
@@ -277,7 +277,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 			return err
 		}
 
-		srv := NewIOServerInstance(log, bp, scmProvider, joinInstance, ioserver.NewRunner(log, srvCfg)).
+		srv := NewIOEngineInstance(log, bp, scmProvider, joinInstance, ioengine.NewRunner(log, srvCfg)).
 			WithHostFaultDomain(faultDomain)
 		if err := harness.AddInstance(srv); err != nil {
 			return err
@@ -439,8 +439,8 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	go func() {
-		// SIGKILL I/O servers immediately on exit.
-		// TODO: Re-enable attempted graceful shutdown of I/O servers.
+		// SIGKILL I/O engine immediately on exit.
+		// TODO: Re-enable attempted graceful shutdown of I/O engines.
 		sig := <-sigChan
 		log.Debugf("Caught signal: %s", sig)
 

@@ -19,7 +19,7 @@ import (
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/ioengine"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -129,12 +129,12 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 	if targetCount == 0 {
 		return errors.New("zero target count")
 	}
-	minNvmeRequired := ioserver.NvmeMinBytesPerTarget * uint64(targetCount)
+	minNvmeRequired := ioengine.NvmeMinBytesPerTarget * uint64(targetCount)
 
 	if req.Nvmebytes != 0 && req.Nvmebytes < minNvmeRequired {
 		return FaultPoolNvmeTooSmall(req.Nvmebytes, targetCount)
 	}
-	if req.Scmbytes < ioserver.ScmMinBytesPerTarget*uint64(targetCount) {
+	if req.Scmbytes < ioengine.ScmMinBytesPerTarget*uint64(targetCount) {
 		return FaultPoolScmTooSmall(req.Scmbytes, targetCount)
 	}
 
@@ -144,7 +144,7 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 // PoolCreate implements the method defined for the Management Service.
 //
 // Validate minimum SCM/NVMe pool size per VOS target, pool size request params
-// are per-ioserver so need to be larger than (minimum_target_allocation *
+// are per-ioengine so need to be larger than (minimum_target_allocation *
 // target_count).
 func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (resp *mgmtpb.PoolCreateResp, err error) {
 	if err := svc.checkLeaderRequest(req); err != nil {

@@ -269,7 +269,7 @@ const (
 	MethodBIOError srvMethod = C.DRPC_METHOD_SRV_BIO_ERR
 	// MethodGetPoolServiceRanks requests the service ranks for a pool
 	MethodGetPoolServiceRanks srvMethod = C.DRPC_METHOD_SRV_GET_POOL_SVC
-	// MethodClusterEvent notifies of a cluster event in the iosrv.
+	// MethodClusterEvent notifies of a cluster event in the I/O engine.
 	MethodClusterEvent srvMethod = C.DRPC_METHOD_SRV_CLUSTER_EVENT
 )
 

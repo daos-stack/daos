@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
-package ioserver
+package ioengine
 
 import (
 	"context"
@@ -20,7 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-const ioServerBin = "daos_io_server"
+const ioengineBin = "daos_engine"
 
 // Runner starts and manages an instance of a DAOS I/O Server
 type Runner struct {
@@ -30,7 +30,7 @@ type Runner struct {
 	cmd     *exec.Cmd
 }
 
-// NewRunner returns a configured ioserver.Runner
+// NewRunner returns a configured ioengine.Runner
 func NewRunner(log logging.Logger, config *Config) *Runner {
 	return &Runner{
 		Config: config,
@@ -39,19 +39,19 @@ func NewRunner(log logging.Logger, config *Config) *Runner {
 }
 
 func (r *Runner) run(ctx context.Context, args, env []string) error {
-	binPath, err := common.FindBinary(ioServerBin)
+	binPath, err := common.FindBinary(ioengineBin)
 	if err != nil {
-		return errors.Wrapf(err, "can't start %s", ioServerBin)
+		return errors.Wrapf(err, "can't start %s", ioengineBin)
 	}
 
 	cmd := exec.CommandContext(ctx, binPath, args...)
 	cmd.Stdout = &cmdLogger{
 		logFn:  r.log.Info,
-		prefix: fmt.Sprintf("%s:%d", ioServerBin, r.Config.Index),
+		prefix: fmt.Sprintf("%s:%d", ioengineBin, r.Config.Index),
 	}
 	cmd.Stderr = &cmdLogger{
 		logFn:  r.log.Error,
-		prefix: fmt.Sprintf("%s:%d", ioServerBin, r.Config.Index),
+		prefix: fmt.Sprintf("%s:%d", ioengineBin, r.Config.Index),
 	}
 	// FIXME(DAOS-3105): This shouldn't be the default. The command environment
 	// should be constructed from values in the configuration. This probably
@@ -69,8 +69,8 @@ func (r *Runner) run(ctx context.Context, args, env []string) error {
 		},
 	}
 
-	r.log.Debugf("%s:%d args: %s", ioServerBin, r.Config.Index, args)
-	r.log.Debugf("%s:%d env: %s", ioServerBin, r.Config.Index, env)
+	r.log.Debugf("%s:%d args: %s", ioengineBin, r.Config.Index, args)
+	r.log.Debugf("%s:%d env: %s", ioengineBin, r.Config.Index, env)
 	r.log.Infof("Starting I/O server instance %d: %s", r.Config.Index, binPath)
 
 	if err := cmd.Start(); err != nil {
@@ -86,7 +86,7 @@ func (r *Runner) run(ctx context.Context, args, env []string) error {
 		"%s (instance %d) exited", binPath, r.Config.Index)
 }
 
-// Start asynchronously starts the IOServer instance.
+// Start asynchronously starts the IOEngine instance.
 func (r *Runner) Start(ctx context.Context, errOut chan<- error) error {
 	args, err := r.Config.CmdLineArgs()
 	if err != nil {

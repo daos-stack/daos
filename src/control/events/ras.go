@@ -42,7 +42,7 @@ func NewFromProto(pbEvt *sharedpb.RASEvent) (*RASEvent, error) {
 type RASID uint32
 
 // RASID constant definitions matching those used when creating events either in
-// the control or data (iosrv) planes.
+// the control or data (engine) planes.
 const (
 	RASUnknownEvent   RASID = C.RAS_UNKNOWN_EVENT
 	RASRankUp         RASID = C.RAS_RANK_UP

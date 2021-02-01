@@ -533,7 +533,7 @@ server_init(int argc, char *argv[])
 	ds_iv_init();
 
 	/* load modules. Split load and init so first call to dlopen()
-	 * is from the ioserver to avoid DAOS-4557
+	 * is from the ioengine to avoid DAOS-4557
 	 */
 	rc = modules_load();
 	if (rc)
@@ -1050,7 +1050,7 @@ main(int argc, char **argv)
 			fprintf(abt_infos, ")\n");
 		}
 
-		/* use this iosrv main thread's context to dump Argobots
+		/* use this engine main thread's context to dump Argobots
 		 * internal infos and ULTs stacks without internal synchro
 		 */
 		if (sig == SIGUSR1) {

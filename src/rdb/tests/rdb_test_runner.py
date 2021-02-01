@@ -179,7 +179,7 @@ def daos_server_pid():
     """
     Find the pid for the daos_server. Start drilling down from the parent
     (current) process until we get output where one line contains
-    "daos_io_server" or "daos_server".
+    "daos_engine" or "daos_server".
     """
     parent_pid = os.getpid()
     return find_child(parent_pid, "daos_")
@@ -187,7 +187,7 @@ def daos_server_pid():
 def cleanup(daos_server):
     """ Perform cleanup operations. Shut down the DAOS server by killing the
     child processes that have been created. If the daos_server process is
-    killed, so are the processes for daos_io_server and orterun (theoretically).
+    killed, so are the processes for daos_engine and orterun (theoretically).
     It has been observed on occasion to go zombie until orterun itself is
     killed.
     """
@@ -236,7 +236,7 @@ if __name__ == "__main__":
             time.sleep(1)
             daos_server = daos_server_pid()
 
-        # Give daos_io_server some time to get ready.
+        # Give daos_engine some time to get ready.
         time.sleep(10)
 
         print("DAOS server started")

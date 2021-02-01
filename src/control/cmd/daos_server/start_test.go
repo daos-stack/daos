@@ -23,7 +23,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/ioengine"
 )
 
 func testExpectedError(t *testing.T, expected, actual error) {
@@ -41,8 +41,8 @@ func genMinimalConfig() *config.Server {
 		WithProviderValidator(netdetect.ValidateProviderStub).
 		WithNUMAValidator(netdetect.ValidateNUMAStub).
 		WithGetNetworkDeviceClass(getDeviceClassStub).
-		WithServers(
-			ioserver.NewConfig().
+		WithEngines(
+			ioengine.NewConfig().
 				WithScmClass("ram").
 				WithScmRamdiskSize(1).
 				WithScmMountPoint("/mnt/daos").
@@ -56,8 +56,8 @@ func genMinimalConfig() *config.Server {
 func genDefaultExpected() *config.Server {
 	hostname, _ := os.Hostname()
 	return genMinimalConfig().
-		WithServers(
-			ioserver.NewConfig().
+		WithEngines(
+			ioengine.NewConfig().
 				WithHostname(hostname).
 				WithScmClass("ram").
 				WithScmRamdiskSize(1).
@@ -67,7 +67,7 @@ func genDefaultExpected() *config.Server {
 		)
 }
 
-func cmpArgs(t *testing.T, wantConfig, gotConfig *ioserver.Config) {
+func cmpArgs(t *testing.T, wantConfig, gotConfig *ioengine.Config) {
 	t.Helper()
 
 	wantArgs, err := wantConfig.CmdLineArgs()
@@ -84,7 +84,7 @@ func cmpArgs(t *testing.T, wantConfig, gotConfig *ioserver.Config) {
 	}
 }
 
-func cmpEnv(t *testing.T, wantConfig, gotConfig *ioserver.Config) {
+func cmpEnv(t *testing.T, wantConfig, gotConfig *ioengine.Config) {
 	t.Helper()
 
 	wantEnv, err := wantConfig.CmdLineEnv()
@@ -136,14 +136,14 @@ func TestStartOptions(t *testing.T) {
 		"Storage Path (short)": {
 			argList: []string{"-s", "/foo/bar"},
 			expCfgFn: func(cfg *config.Server) *config.Server {
-				cfg.Servers[0].WithScmMountPoint("/foo/bar")
+				cfg.Engines[0].WithScmMountPoint("/foo/bar")
 				return cfg
 			},
 		},
 		"Storage Path (long)": {
 			argList: []string{"--storage=/foo/bar"},
 			expCfgFn: func(cfg *config.Server) *config.Server {
-				cfg.Servers[0].WithScmMountPoint("/foo/bar")
+				cfg.Engines[0].WithScmMountPoint("/foo/bar")
 				return cfg
 			},
 		},
@@ -162,42 +162,42 @@ func TestStartOptions(t *testing.T) {
 		"Targets (short)": {
 			argList: []string{"-t", "42"},
 			expCfgFn: func(cfg *config.Server) *config.Server {
-				cfg.Servers[0].WithTargetCount(42)
+				cfg.Engines[0].WithTargetCount(42)
 				return cfg
 			},
 		},
 		"Targets (long)": {
 			argList: []string{"--targets=42"},
 			expCfgFn: func(cfg *config.Server) *config.Server {
-				cfg.Servers[0].WithTargetCount(42)
+				cfg.Engines[0].WithTargetCount(42)
 				return cfg
 			},
 		},
 		"XS Helpers (short)": {
 			argList: []string{"-x", "0"},
 			expCfgFn: func(cfg *config.Server) *config.Server {
-				cfg.Servers[0].WithHelperStreamCount(0)
+				cfg.Engines[0].WithHelperStreamCount(0)
 				return cfg
 			},
 		},
 		"XS Helpers (long)": {
 			argList: []string{"--xshelpernr=1"},
 			expCfgFn: func(cfg *config.Server) *config.Server {
-				cfg.Servers[0].WithHelperStreamCount(1)
+				cfg.Engines[0].WithHelperStreamCount(1)
 				return cfg
 			},
 		},
 		"First Core (short)": {
 			argList: []string{"-f", "42"},
 			expCfgFn: func(cfg *config.Server) *config.Server {
-				cfg.Servers[0].WithServiceThreadCore(42)
+				cfg.Engines[0].WithServiceThreadCore(42)
 				return cfg
 			},
 		},
 		"First Core (long)": {
 			argList: []string{"--firstcore=42"},
 			expCfgFn: func(cfg *config.Server) *config.Server {
-				cfg.Servers[0].WithServiceThreadCore(42)
+				cfg.Engines[0].WithServiceThreadCore(42)
 				return cfg
 			},
 		},
@@ -278,8 +278,8 @@ func TestStartOptions(t *testing.T) {
 				t.Fatalf("(-want +got):\n%s", diff)
 			}
 
-			cmpArgs(t, wantConfig.Servers[0], gotConfig.Servers[0])
-			cmpEnv(t, wantConfig.Servers[0], gotConfig.Servers[0])
+			cmpArgs(t, wantConfig.Engines[0], gotConfig.Engines[0])
+			cmpEnv(t, wantConfig.Engines[0], gotConfig.Engines[0])
 		})
 	}
 }

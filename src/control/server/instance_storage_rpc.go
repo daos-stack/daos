@@ -21,7 +21,7 @@ import (
 
 // newMntRet creates and populates SCM mount result.
 // Currently only used for format operations.
-func (srv *IOServerInstance) newMntRet(inErr error) *ctlpb.ScmMountResult {
+func (srv *IOEngineInstance) newMntRet(inErr error) *ctlpb.ScmMountResult {
 	var info string
 	if fault.HasResolution(inErr) {
 		info = fault.ShowResolutionFor(inErr)
@@ -34,7 +34,7 @@ func (srv *IOServerInstance) newMntRet(inErr error) *ctlpb.ScmMountResult {
 }
 
 // newCret creates and populates NVMe controller result and logs error
-func (srv *IOServerInstance) newCret(pciAddr string, inErr error) *ctlpb.NvmeControllerResult {
+func (srv *IOEngineInstance) newCret(pciAddr string, inErr error) *ctlpb.NvmeControllerResult {
 	var info string
 	if pciAddr == "" {
 		pciAddr = "<nil>"
@@ -49,7 +49,7 @@ func (srv *IOServerInstance) newCret(pciAddr string, inErr error) *ctlpb.NvmeCon
 }
 
 // scmFormat will return either successful result or error.
-func (srv *IOServerInstance) scmFormat(reformat bool) (*ctlpb.ScmMountResult, error) {
+func (srv *IOEngineInstance) scmFormat(reformat bool) (*ctlpb.ScmMountResult, error) {
 	srvIdx := srv.Index()
 	cfg := srv.scmConfig()
 
@@ -74,7 +74,7 @@ func (srv *IOServerInstance) scmFormat(reformat bool) (*ctlpb.ScmMountResult, er
 	return srv.newMntRet(nil), nil
 }
 
-func (srv *IOServerInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeControllerResults) {
+func (srv *IOEngineInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeControllerResults) {
 	srvIdx := srv.Index()
 	cfg := srv.bdevConfig()
 	results = make(proto.NvmeControllerResults, 0, len(cfg.DeviceList))
@@ -114,7 +114,7 @@ func (srv *IOServerInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeCon
 
 // StorageFormatSCM performs format on SCM and identifies if superblock needs
 // writing.
-func (srv *IOServerInstance) StorageFormatSCM(reformat bool) (mResult *ctlpb.ScmMountResult) {
+func (srv *IOEngineInstance) StorageFormatSCM(reformat bool) (mResult *ctlpb.ScmMountResult) {
 	srvIdx := srv.Index()
 	needsScmFormat := reformat
 
@@ -154,7 +154,7 @@ func (srv *IOServerInstance) StorageFormatSCM(reformat bool) (mResult *ctlpb.Scm
 }
 
 // StorageFormatNVMe performs format on NVMe if superblock needs writing.
-func (srv *IOServerInstance) StorageFormatNVMe(bdevProvider *bdev.Provider) (cResults proto.NvmeControllerResults) {
+func (srv *IOEngineInstance) StorageFormatNVMe(bdevProvider *bdev.Provider) (cResults proto.NvmeControllerResults) {
 	srv.log.Infof("Formatting nvme storage for %s instance %d", build.DataPlaneName, srv.Index())
 
 	// If no superblock exists, format NVMe and populate response with results.

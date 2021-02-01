@@ -14,7 +14,7 @@
 #include <daos_srv/rdb.h>
 
 #include <raft.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include "rdb_internal.h"
 
 static int

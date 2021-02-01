@@ -271,7 +271,7 @@ class DaosServerYamlParameters(YamlParameters):
             for index, server_params in enumerate(self.server_params):
                 log_name = list(os.path.splitext(server_log))
                 if len(self.server_params) > 1:
-                    # Create unique log file names for each daos_io_server
+                    # Create unique log file names for each I/O engine
                     log_name.insert(1, "_{}".format(index))
                 server_params.log_file.update(
                     "".join(log_name),

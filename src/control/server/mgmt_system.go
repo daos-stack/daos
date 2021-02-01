@@ -272,7 +272,7 @@ func (svc *mgmtSvc) join(ctx context.Context, req *batchJoinRequest) *batchJoinR
 			}
 		}
 
-		// mark the ioserver as ready to handle dRPC requests
+		// mark the ioengine as ready to handle dRPC requests
 		srv.ready.SetTrue()
 	}
 
@@ -328,7 +328,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
 // On receipt of the join request, add to a queue of requests to be processed
 // periodically in a dedicated goroutine. This architecture provides for thread
 // safety and improved performance while updating the system membership and CaRT
-// primary group in the local ioserver.
+// primary group in the local ioengine.
 //
 // The state of the newly joined/evicted rank along with the reply address used
 // to contact the new rank in future will be registered in the system membership.

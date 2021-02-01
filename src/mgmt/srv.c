@@ -17,7 +17,7 @@
 #define D_LOGFAC	DD_FAC(mgmt)
 
 #include <signal.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/rsvc.h>
 #include <daos/drpc_modules.h>
 #include <daos_mgmt.h>

@@ -87,7 +87,7 @@ func (m *DaosResp) GetStatus() int32 {
 
 type GroupUpdateReq struct {
 	MapVersion           uint32                   `protobuf:"varint,1,opt,name=map_version,json=mapVersion,proto3" json:"map_version,omitempty"`
-	Servers              []*GroupUpdateReq_Server `protobuf:"bytes,2,rep,name=servers,proto3" json:"servers,omitempty"`
+	Engines              []*GroupUpdateReq_Server `protobuf:"bytes,2,rep,name=servers,proto3" json:"servers,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                 `json:"-"`
 	XXX_unrecognized     []byte                   `json:"-"`
 	XXX_sizecache        int32                    `json:"-"`
@@ -125,9 +125,9 @@ func (m *GroupUpdateReq) GetMapVersion() uint32 {
 	return 0
 }
 
-func (m *GroupUpdateReq) GetServers() []*GroupUpdateReq_Server {
+func (m *GroupUpdateReq) GetEngines() []*GroupUpdateReq_Server {
 	if m != nil {
-		return m.Servers
+		return m.Engines
 	}
 	return nil
 }

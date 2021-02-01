@@ -14,7 +14,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/ioengine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 )
@@ -128,9 +128,9 @@ func TestServer_CtlSvc_checkCfgBdevs(t *testing.T) {
 
 			// set config device lists
 			testCfg := config.DefaultServer()
-			testCfg.Servers = make([]*ioserver.Config, tc.numIOSrvs)
+			testCfg.Engines = make([]*ioengine.Config, tc.numIOSrvs)
 			for idx := 0; idx < tc.numIOSrvs; idx++ {
-				testCfg.Servers[idx] = ioserver.NewConfig().
+				testCfg.Engines[idx] = ioengine.NewConfig().
 					WithBdevClass("nvme").
 					WithBdevDeviceList(tc.inCfgBdevLists[idx]...)
 			}

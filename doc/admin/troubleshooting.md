@@ -84,7 +84,7 @@ levels may be set using the `control_log_mask` config parameter:
 
 ### Data Plane Log
 
-Data Plane (`daos_io_server`) logging is configured on a per-instance
+Data Plane (`daos_engine`) logging is configured on a per-instance
 basis. In other words, each section under the `servers:` section must
 have its own logging configuration. The `log_file` config parameter
 is converted to a D_LOG_FILE environment variable value. For more

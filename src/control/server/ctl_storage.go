@@ -13,7 +13,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/ioengine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
@@ -24,12 +24,12 @@ type StorageControlService struct {
 	log             logging.Logger
 	bdev            *bdev.Provider
 	scm             *scm.Provider
-	instanceStorage []*ioserver.StorageConfig
+	instanceStorage []*ioengine.StorageConfig
 }
 
 // NewStorageControlService returns an initialized *StorageControlService
-func NewStorageControlService(log logging.Logger, bdev *bdev.Provider, scm *scm.Provider, srvCfgs []*ioserver.Config) *StorageControlService {
-	instanceStorage := []*ioserver.StorageConfig{}
+func NewStorageControlService(log logging.Logger, bdev *bdev.Provider, scm *scm.Provider, srvCfgs []*ioengine.Config) *StorageControlService {
+	instanceStorage := []*ioengine.StorageConfig{}
 	for _, srvCfg := range srvCfgs {
 		instanceStorage = append(instanceStorage, &srvCfg.Storage)
 	}

@@ -17,7 +17,7 @@ import (
 	nd "github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/ioengine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -27,7 +27,7 @@ const (
 	defaultFiPort         = 31416
 	defaultFiPortInterval = 1000
 	defaultTargetCount    = 16
-	defaultIOSrvLogFile   = "/tmp/daos_io_server"
+	defaultIOSrvLogFile   = "/tmp/daos_engine"
 	defaultControlLogFile = "/tmp/daos_server.log"
 	// NetDevAny matches any netdetect network device class
 	NetDevAny = math.MaxUint32
@@ -480,10 +480,10 @@ func calcHelpers(log logging.Logger, targets, cores int) int {
 // recommended values
 //
 // The target count should be a multiplier of the number of SSDs and typically
-// daos gets the best performance with 16x targets per I/O Server so target
+// daos gets the best performance with 16x targets per I/O engine so target
 // count will be between 12 and 20.
 //
-// Validate number of targets + 1 cores are available per IO servers, not
+// Validate number of targets + 1 cores are available per IO engine, not
 // usually a problem as sockets normally have at least 18 cores.
 //
 // Create helper threads for the remaining available cores, e.g. with 24 cores,
@@ -516,8 +516,8 @@ func checkCPUs(log logging.Logger, numSSDs, coresPerNUMA int) (int, int, error) 
 	return numTargets, calcHelpers(log, numTargets, coresPerNUMA), nil
 }
 
-func defaultIOSrvCfg(idx int) *ioserver.Config {
-	return ioserver.NewConfig().
+func defaultIOSrvCfg(idx int) *ioengine.Config {
+	return ioengine.NewConfig().
 		WithTargetCount(defaultTargetCount).
 		WithLogFile(fmt.Sprintf("%s.%d.log", defaultIOSrvLogFile, idx)).
 		WithScmClass(storage.ScmClassDCPM.String()).
@@ -551,24 +551,24 @@ func genConfig(accessPoints, pmemPaths []string, ifaces []*HostFabricInterface, 
 			WithTargetCount(nTgts[idx]).
 			WithHelperStreamCount(nHlprs[idx])
 
-		iocfg.Fabric = ioserver.FabricConfig{
+		iocfg.Fabric = ioengine.FabricConfig{
 			Provider:       iface.Provider,
 			Interface:      iface.Device,
 			InterfacePort:  int(defaultFiPort + (nn * defaultFiPortInterval)),
 			PinnedNumaNode: &nn,
 		}
 
-		cfg.Servers = append(cfg.Servers, iocfg)
+		cfg.Engines = append(cfg.Engines, iocfg)
 	}
 
 	if len(accessPoints) != 0 {
 		cfg = cfg.WithAccessPoints(accessPoints...)
 	}
 
-	// apply global config parameters across iosrvs
+	// apply global config parameters across engines
 	return cfg.WithSystemName(cfg.SystemName).
 		WithSocketDir(cfg.SocketDir).
-		WithFabricProvider(cfg.Servers[0].Fabric.Provider).
+		WithFabricProvider(cfg.Engines[0].Fabric.Provider).
 		WithSystemName(cfg.SystemName).
 		WithSocketDir(cfg.SocketDir).
 		WithControlLogFile(defaultControlLogFile), nil

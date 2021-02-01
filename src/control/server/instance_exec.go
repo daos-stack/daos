@@ -16,20 +16,20 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/events"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/ioengine"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-// IOServerRunner defines an interface for starting and stopping the
-// daos_io_server.
-type IOServerRunner interface {
+// IOEngineRunner defines an interface for starting and stopping the
+// daos_engine.
+type IOEngineRunner interface {
 	Start(context.Context, chan<- error) error
 	IsRunning() bool
 	Signal(os.Signal) error
-	GetConfig() *ioserver.Config
+	GetConfig() *ioengine.Config
 }
 
-func (srv *IOServerInstance) format(ctx context.Context, recreateSBs bool) error {
+func (srv *IOEngineInstance) format(ctx context.Context, recreateSBs bool) error {
 	idx := srv.Index()
 
 	srv.log.Debugf("instance %d: checking if storage is formatted", idx)
@@ -57,8 +57,8 @@ func (srv *IOServerInstance) format(ctx context.Context, recreateSBs bool) error
 
 // start checks to make sure that the instance has a valid superblock before
 // performing any required NVMe preparation steps and launching a managed
-// daos_io_server instance.
-func (srv *IOServerInstance) start(ctx context.Context, errChan chan<- error) error {
+// daos_engine instance.
+func (srv *IOEngineInstance) start(ctx context.Context, errChan chan<- error) error {
 	srv.log.Debug("instance start()")
 	if err := srv.bdevClassProvider.GenConfigFile(); err != nil {
 		return errors.Wrap(err, "start failed; unable to generate NVMe configuration for SPDK")
@@ -75,7 +75,7 @@ func (srv *IOServerInstance) start(ctx context.Context, errChan chan<- error) er
 // waitReady awaits ready signal from I/O server before starting
 // management service on MS replicas immediately so other instances can join.
 // I/O server modules are then loaded.
-func (srv *IOServerInstance) waitReady(ctx context.Context, errChan chan error) error {
+func (srv *IOEngineInstance) waitReady(ctx context.Context, errChan chan error) error {
 	srv.log.Debugf("instance %d: awaiting %s init", srv.Index(), build.DataPlaneName)
 
 	select {
@@ -97,11 +97,11 @@ func (srv *IOServerInstance) waitReady(ctx context.Context, errChan chan error) 
 // modules.
 //
 // Instance ready state is set to indicate that all setup is complete.
-func (srv *IOServerInstance) finishStartup(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
+func (srv *IOEngineInstance) finishStartup(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
 	if err := srv.handleReady(ctx, ready); err != nil {
 		return err
 	}
-	// update ioserver target count to reflect allocated
+	// update ioengine target count to reflect allocated
 	// number of targets, not number requested when starting
 	srv.setTargetCount(int(ready.GetNtgts()))
 
@@ -130,7 +130,7 @@ func publishInstanceExitFn(publishFn func(*events.RASEvent), hostname string, sr
 	}
 }
 
-func (srv *IOServerInstance) exit(ctx context.Context, exitErr error) {
+func (srv *IOEngineInstance) exit(ctx context.Context, exitErr error) {
 	srvIdx := srv.Index()
 
 	srv.log.Infof("instance %d exited: %s", srvIdx, common.GetExitStatus(exitErr))
@@ -158,7 +158,7 @@ func (srv *IOServerInstance) exit(ctx context.Context, exitErr error) {
 // will only return (if no errors are returned during setup) on IO server
 // process exit (triggered by harness shutdown through context cancellation
 // or abnormal IO server process termination).
-func (srv *IOServerInstance) run(ctx context.Context, recreateSBs bool) (err error) {
+func (srv *IOEngineInstance) run(ctx context.Context, recreateSBs bool) (err error) {
 	errChan := make(chan error)
 
 	if err = srv.format(ctx, recreateSBs); err != nil {
@@ -177,9 +177,9 @@ func (srv *IOServerInstance) run(ctx context.Context, recreateSBs bool) (err err
 	return <-errChan // receive on runner exit
 }
 
-// Run is the processing loop for an IOServerInstance. Starts are triggered by
+// Run is the processing loop for an IOEngineInstance. Starts are triggered by
 // receiving true on instance start channel.
-func (srv *IOServerInstance) Run(ctx context.Context, recreateSBs bool) {
+func (srv *IOEngineInstance) Run(ctx context.Context, recreateSBs bool) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -193,8 +193,8 @@ func (srv *IOServerInstance) Run(ctx context.Context, recreateSBs bool) {
 	}
 }
 
-// Stop sends signal to stop IOServerInstance runner (nonblocking).
-func (srv *IOServerInstance) Stop(signal os.Signal) error {
+// Stop sends signal to stop IOEngineInstance runner (nonblocking).
+func (srv *IOEngineInstance) Stop(signal os.Signal) error {
 	if err := srv.runner.Signal(signal); err != nil {
 		return err
 	}

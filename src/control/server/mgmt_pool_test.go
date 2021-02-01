@@ -25,7 +25,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/ioengine"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -105,7 +105,7 @@ func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 			req := &mgmtpb.PoolCreateReq{
 				Sys:      build.DefaultSystemName,
 				Uuid:     common.MockUUID(0),
-				Scmbytes: ioserver.ScmMinBytesPerTarget,
+				Scmbytes: ioengine.ScmMinBytesPerTarget,
 			}
 
 			gotResp, err := svc.PoolCreate(ctx, req)
@@ -126,7 +126,7 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 	defaultNvmeBytes := defaultTotal
 	testTargetCount := 8
 	scmTooSmallRatio := 0.01
-	scmTooSmallTotal := uint64(testTargetCount * ioserver.NvmeMinBytesPerTarget)
+	scmTooSmallTotal := uint64(testTargetCount * ioengine.NvmeMinBytesPerTarget)
 	scmTooSmallReq := uint64(float64(scmTooSmallTotal) * scmTooSmallRatio)
 	nvmeTooSmallTotal := uint64(3 * humanize.GByte)
 	nvmeTooSmallReq := nvmeTooSmallTotal
@@ -209,14 +209,14 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			srvCfg := ioserver.NewConfig().WithTargetCount(testTargetCount)
+			srvCfg := ioengine.NewConfig().WithTargetCount(testTargetCount)
 			if !tc.disableNVMe {
 				srvCfg = srvCfg.
 					WithBdevClass("nvme").
 					WithBdevDeviceList("foo", "bar")
 			}
 			svc := newTestMgmtSvc(t, log)
-			svc.harness.instances[0] = newTestIOServer(log, false, srvCfg)
+			svc.harness.instances[0] = newTestIOEngine(log, false, srvCfg)
 
 			gotErr := svc.calculateCreateStorage(tc.in)
 			common.CmpErr(t, tc.expErr, gotErr)
@@ -322,12 +322,12 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			targetCount: 8,
 			req: &mgmtpb.PoolCreateReq{
 				Uuid:      common.MockUUID(0),
-				Scmbytes:  ioserver.ScmMinBytesPerTarget * 8,
-				Nvmebytes: ioserver.NvmeMinBytesPerTarget * 8,
+				Scmbytes:  ioengine.ScmMinBytesPerTarget * 8,
+				Nvmebytes: ioengine.NvmeMinBytesPerTarget * 8,
 			},
 			expResp: &mgmtpb.PoolCreateResp{
-				ScmBytes:  (ioserver.ScmMinBytesPerTarget * 8),
-				NvmeBytes: (ioserver.NvmeMinBytesPerTarget * 8),
+				ScmBytes:  (ioengine.ScmMinBytesPerTarget * 8),
+				NvmeBytes: (ioengine.NvmeMinBytesPerTarget * 8),
 				TgtRanks:  []uint32{0, 1},
 			},
 		},
@@ -372,19 +372,19 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			defer cancel()
 
 			if tc.mgmtSvc == nil {
-				ioCfg := ioserver.NewConfig().
+				ioCfg := ioengine.NewConfig().
 					WithTargetCount(tc.targetCount).
 					WithBdevClass("nvme").
 					WithBdevDeviceList("foo", "bar")
-				r := ioserver.NewTestRunner(nil, ioCfg)
+				r := ioengine.NewTestRunner(nil, ioCfg)
 				if err := r.Start(ctx, make(chan<- error)); err != nil {
 					t.Fatal(err)
 				}
 
-				srv := NewIOServerInstance(log, nil, nil, nil, r)
+				srv := NewIOEngineInstance(log, nil, nil, nil, r)
 				srv.ready.SetTrue()
 
-				harness := NewIOServerHarness(log)
+				harness := NewIOEngineHarness(log)
 				if err := harness.AddInstance(srv); err != nil {
 					panic(err)
 				}
@@ -435,8 +435,8 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 	defer cancel()
 
 	mgmtSvc := newTestMgmtSvc(t, log)
-	mgmtSvc.harness.instances[0] = newTestIOServer(log, false,
-		ioserver.NewConfig().
+	mgmtSvc.harness.instances[0] = newTestIOEngine(log, false,
+		ioengine.NewConfig().
 			WithTargetCount(1).
 			WithBdevClass("nvme").
 			WithBdevDeviceList("foo", "bar"),
@@ -777,7 +777,7 @@ func TestListPools_NoMS(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	h := NewIOServerHarness(log)
+	h := NewIOEngineHarness(log)
 	h.started.SetTrue()
 	svc := newTestMgmtSvcNonReplica(t, log)
 

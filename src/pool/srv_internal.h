@@ -11,7 +11,7 @@
 #define __POOL_SRV_INTERNAL_H__
 
 #include <gurt/list.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_security.h>
 
 /**

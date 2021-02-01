@@ -22,7 +22,7 @@ import (
 // mgmtpb.MgmtSvcServer.
 type mgmtSvc struct {
 	log              logging.Logger
-	harness          *IOServerHarness
+	harness          *IOEngineHarness
 	membership       *system.Membership // if MS leader, system membership list
 	sysdb            *system.Database
 	rpcClient        control.UnaryInvoker
@@ -31,7 +31,7 @@ type mgmtSvc struct {
 	joinReqs         joinReqChan
 }
 
-func newMgmtSvc(h *IOServerHarness, m *system.Membership, s *system.Database, c control.UnaryInvoker, p *events.PubSub) *mgmtSvc {
+func newMgmtSvc(h *IOEngineHarness, m *system.Membership, s *system.Database, c control.UnaryInvoker, p *events.PubSub) *mgmtSvc {
 	return &mgmtSvc{
 		log:              h.log,
 		harness:          h,

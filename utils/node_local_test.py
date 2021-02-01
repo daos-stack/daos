@@ -288,7 +288,7 @@ class DaosServer():
         self.server_log = tempfile.NamedTemporaryFile(prefix='dnt_server_',
                                                       suffix='.log',
                                                       delete=False)
-        self.__process_name = 'daos_io_server'
+        self.__process_name = 'daos_engine'
         if self.valgrind:
             self.__process_name = 'valgrind'
 
@@ -349,9 +349,9 @@ class DaosServer():
         scfd = open(os.path.join(self_dir, 'nlt_server.yaml'), 'r')
 
         scyaml = yaml.safe_load(scfd)
-        scyaml['servers'][0]['log_file'] = self.server_log.name
+        scyaml['engines'][0]['log_file'] = self.server_log.name
         if self.conf.args.server_debug:
-            scyaml['servers'][0]['log_mask'] = self.conf.args.server_debug
+            scyaml['engines'][0]['log_mask'] = self.conf.args.server_debug
         scyaml['control_log_file'] = self.control_log.name
 
         self._yaml_file = tempfile.NamedTemporaryFile(
@@ -374,14 +374,14 @@ class DaosServer():
             self._io_server_dir = tempfile.TemporaryDirectory(prefix='dnt_io_')
 
             fd = open(os.path.join(self._io_server_dir.name,
-                                   'daos_io_server'), 'w')
+                                   'daos_engine'), 'w')
             fd.write('#!/bin/sh\n')
             fd.write('export PATH=$REAL_PATH\n')
-            fd.write('exec valgrind {} daos_io_server "$@"\n'.format(
+            fd.write('exec valgrind {} daos_engine "$@"\n'.format(
                 ' '.join(valgrind_args)))
             fd.close()
 
-            os.chmod(os.path.join(self._io_server_dir.name, 'daos_io_server'),
+            os.chmod(os.path.join(self._io_server_dir.name, 'daos_engine'),
                      stat.S_IXUSR | stat.S_IRUSR)
 
             server_env['REAL_PATH'] = '{}:{}'.format(
@@ -491,7 +491,7 @@ class DaosServer():
             # pylint: disable=protected-access
             entry['lineStart'] = sys._getframe().f_lineno
             entry['severity'] = 'ERROR'
-            entry['message'] = 'daos_io_server died during testing'
+            entry['message'] = 'daos_engine died during testing'
             self.conf.wf.issues.append(entry)
 
         rc = self.run_dmg(['system', 'stop'])

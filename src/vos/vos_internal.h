@@ -18,7 +18,7 @@
 #include <daos/btree.h>
 #include <daos/common.h>
 #include <daos/lru.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
 #include "vos_tls.h"
 #include "vos_layout.h"

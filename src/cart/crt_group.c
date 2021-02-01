@@ -3025,7 +3025,7 @@ crt_group_secondary_rank_add_internal(struct crt_grp_priv *grp_priv,
 	/*
 	 * Set the self rank based on my primary group rank. For simplicity,
 	 * assert that my primary group rank must have been set already, since
-	 * this is always the case with daos_io_server today.
+	 * this is always the case with daos_engine today.
 	 */
 	D_ASSERT(grp_priv->gp_priv_prim->gp_self != CRT_NO_RANK);
 	if (prim_rank == grp_priv->gp_priv_prim->gp_self) {

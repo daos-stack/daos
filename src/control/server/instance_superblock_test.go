@@ -13,7 +13,7 @@ import (
 
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/ioengine"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
@@ -24,23 +24,23 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 	testDir, cleanup := CreateTestDir(t)
 	defer cleanup()
 
-	h := NewIOServerHarness(log)
+	h := NewIOEngineHarness(log)
 	for idx, mnt := range []string{"one", "two"} {
 		if err := os.MkdirAll(filepath.Join(testDir, mnt), 0777); err != nil {
 			t.Fatal(err)
 		}
-		cfg := ioserver.NewConfig().
+		cfg := ioengine.NewConfig().
 			WithRank(uint32(idx)).
 			WithSystemName(t.Name()).
 			WithScmClass("ram").
 			WithScmRamdiskSize(1).
 			WithScmMountPoint(mnt)
-		r := ioserver.NewRunner(log, cfg)
+		r := ioengine.NewRunner(log, cfg)
 		msc := &scm.MockSysConfig{
 			IsMountedBool: true,
 		}
 		mp := scm.NewMockProvider(log, nil, msc)
-		srv := NewIOServerInstance(log, nil, mp, nil, r)
+		srv := NewIOEngineInstance(log, nil, mp, nil, r)
 		srv.fsRoot = testDir
 		if err := h.AddInstance(srv); err != nil {
 			t.Fatal(err)
