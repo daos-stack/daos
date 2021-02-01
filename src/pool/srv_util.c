@@ -160,7 +160,7 @@ free:
 int
 ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 		     enum daos_module_id module, crt_opcode_t opcode,
-		     crt_rpc_t **rpc, crt_bulk_t bulk_hdl,
+		     uint32_t version, crt_rpc_t **rpc, crt_bulk_t bulk_hdl,
 		     d_rank_list_t *excluded_list)
 {
 	d_rank_list_t	excluded;
@@ -179,7 +179,7 @@ ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 	if (excluded_list != NULL)
 		map_ranks_merge(&excluded, excluded_list);
 
-	opc = DAOS_RPC_OPCODE(opcode, module, 1);
+	opc = DAOS_RPC_OPCODE(opcode, module, version);
 	rc = crt_corpc_req_create(ctx, pool->sp_group,
 			  excluded.rl_nr == 0 ? NULL : &excluded,
 			  opc, bulk_hdl/* co_bulk_hdl */, NULL /* priv */,
@@ -189,7 +189,6 @@ ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 	map_ranks_fini(&excluded);
 	return rc;
 }
-
 
 #define SWAP_RANKS(ranks, i, j)					\
 	do {							\
@@ -516,7 +515,7 @@ update_targets_ult(void *arg)
 		rc = dsc_pool_tgt_exclude(uta->uta_pool_id, NULL /* grp */,
 					  &tgt_list);
 	if (rc)
-		D_ERROR(DF_UUID": %s targets failed. " DF_RC "\n",
+		D_ERROR(DF_UUID": %s targets failed. "DF_RC"\n",
 			DP_UUID(uta->uta_pool_id),
 			uta->uta_reint ? "Reint" : "Exclude",
 			DP_RC(rc));

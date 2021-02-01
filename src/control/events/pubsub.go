@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	// set a timeout to avoid allowing a deadlock on channel write
+	// set a timeout to prevent a deadlock on channel write
 	submitTimeout = 1 * time.Second
 )
 
@@ -116,19 +116,20 @@ func (ps *PubSub) Publish(event *RASEvent) {
 //
 // The special case "RASTypeAny" topic will handle all received events.
 func (ps *PubSub) Subscribe(topic RASTypeID, handler Handler) {
-	ps.subscribers <- &subscriber{
+	select {
+	case <-time.After(submitTimeout):
+		ps.log.Errorf("failed to submit subscription within %s", submitTimeout)
+	case ps.subscribers <- &subscriber{
 		topic:   topic,
 		handler: handler,
+	}:
 	}
 }
 
 func (ps *PubSub) publish(ctx context.Context, event *RASEvent) {
 	if _, exists := ps.disabledIDs[event.ID]; exists {
-		ps.log.Debugf("event %s ignored by filter", event.ID)
 		return
 	}
-
-	ps.log.Debugf("published @%s: %s", event.Type, event.ID)
 
 	for _, hdlr := range ps.handlers[RASTypeAny] {
 		go hdlr.OnEvent(ctx, event)
@@ -174,12 +175,10 @@ func (ps *PubSub) eventLoop(ctx context.Context) {
 
 // Close terminates event loop by calling shutdown to cancel context.
 func (ps *PubSub) Close() {
-	ps.log.Debug("called Close()")
 	ps.shutdown()
 }
 
 // Reset clears registered handlers by sending reset.
 func (ps *PubSub) Reset() {
-	ps.log.Debug("called Reset()")
 	ps.reset <- struct{}{}
 }
