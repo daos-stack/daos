@@ -1844,6 +1844,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 	}
 
 	okqo = crt_reply_get(cb_args->rpc);
+	rc = obj_reply_get_status(rpc);
 
 	/* See the similar dc_rw_cb. */
 	if (daos_handle_is_valid(cb_args->th)) {
@@ -1859,7 +1860,6 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 		}
 	}
 
-	rc = obj_reply_get_status(rpc);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D_GOTO(out, rc = 0);
