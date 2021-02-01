@@ -62,7 +62,7 @@ class CartUtils():
         return procrtn
 
     @staticmethod
-    def cleanup_processes():
+    def cleanup_processes(self):
         """ Clean up cart processes, in case avocado/apricot does not. """
         error_list = []
         localhost = socket.gethostname().split(".")[0:1]

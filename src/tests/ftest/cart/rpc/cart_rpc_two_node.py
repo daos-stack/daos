@@ -32,7 +32,7 @@ class CartRpcTwoNodeTest(TestWithoutServers):
     def tearDown(self):
         """ Tear down """
         self.report_timeout()
-        self._teardown_errors.extend(self.utils.cleanup_processes())
+        self._teardown_errors.extend(self.utils.cleanup_processes(self))
         super(CartRpcTwoNodeTest, self).tearDown()
 
     def test_cart_rpc(self):
