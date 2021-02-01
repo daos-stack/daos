@@ -9,7 +9,6 @@ on:
 
 jobs:
 
-  # Simple stype, a matrix building everything in docker containers in one go.
   Build:
     name: Build
     runs-on: ubuntu-20.04
@@ -79,7 +78,9 @@ jobs:
     - name: Build daos ${{ matrix.distro }} Docker image with ${{ matrix.compiler }}
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg COMPILER=${{ matrix.compiler }}
-                          -t ${{ matrix.distro }}/${{ matrix.compiler }}/daos:${{ github.sha }}
+                          -t ${{ matrix.distro }}/${{ matrix.compiler }}
+    - name: Test daos ${{ matrix.distro }} Docker image with ${{ matrix.compiler }}
+      run: docker run -ti ${{ matrix.distro }}/${{ matrix.compiler }} ls
 
   Spelling:
     runs-on: ubuntu-20.04

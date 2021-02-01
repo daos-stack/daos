@@ -30,12 +30,9 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
             pylint python-dev python3-dev scons sg3-utils uuid-dev      \
             yasm valgrind libhwloc-dev man fuse3 libfuse3-dev           \
             openjdk-8-jdk maven libopenmpi-dev patchelf libjson-c-dev   \
-            liblz4-dev python3-distro
-
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
-                       software-properties-common &&                    \
-    apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
-                       libsafec-dev libipmctl-dev ndctl ipmctl golang-go
+            liblz4-dev python3-distro software-properties-common        \
+            libsafec-dev libipmctl-dev ndctl ipmctl golang-go           \
+            && apt-get clean all
 
 # hack the default shell to bash instead of dash
 RUN rm /bin/sh && ln -s bash /bin/sh
