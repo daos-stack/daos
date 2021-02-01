@@ -113,7 +113,9 @@ struct rdb_cbs {
 	 * If not NULL, called after this replica becomes the leader of \a
 	 * term. A replicated service over rdb may want to take the chance to
 	 * start itself on this replica. If an error is returned, rdb steps
-	 * down, but without calling dc_step_down.
+	 * down, but without calling dc_step_down. If the error is
+	 * -DER_SHUTDOWN, rdb will also call the dc_stop callback to trigger a
+	 * replica stop.
 	 */
 	int (*dc_step_up)(struct rdb *db, uint64_t term, void *arg);
 

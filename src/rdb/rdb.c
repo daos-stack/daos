@@ -337,7 +337,7 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 				     NULL /* pool */, NULL /* cont */,
 				     NULL /* objid */, NULL /* ctlop */,
 				     NULL /* data */,
-				     DF_DB": %s: incompatible layout version\n",
+				     DF_DB": %s: incompatible layout version",
 				     DP_DB(db), path);
 		rc = -DER_DF_INCOMPT;
 		goto err_mc;
@@ -354,7 +354,7 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 				     NULL /* objid */, NULL /* ctlop */,
 				     NULL /* data */,
 				     DF_DB": %s: incompatible layout version: "
-				     "%u not in " "[%u, %u]\n", DP_DB(db), path,
+				     "%u not in [%u, %u]", DP_DB(db), path,
 				     version, RDB_LAYOUT_VERSION_LOW,
 				     RDB_LAYOUT_VERSION);
 		rc = -DER_DF_INCOMPT;

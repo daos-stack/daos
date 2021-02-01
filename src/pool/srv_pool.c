@@ -1046,9 +1046,16 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
 	}
 	version_exists = true;
 	if (version < DS_POOL_MD_VERSION_LOW || version > DS_POOL_MD_VERSION) {
-		D_ERROR(DF_UUID": incompatible layout version: %u not in "
-			"[%u, %u]\n", DP_UUID(svc->ps_uuid), version,
-			DS_POOL_MD_VERSION_LOW, DS_POOL_MD_VERSION);
+		ds_notify_ras_eventf(RAS_POOL_DF_INCOMPAT, RAS_TYPE_INFO,
+				     RAS_SEV_ERROR, NULL /* hwid */,
+				     NULL /* rank */, NULL /* jobid */,
+				     &svc->ps_uuid, NULL /* cont */,
+				     NULL /* objid */, NULL /* ctlop */,
+				     NULL /* data */,
+				     "incompatible layout version: %u not in "
+				     "[%u, %u]", version,
+				     DS_POOL_MD_VERSION_LOW,
+				     DS_POOL_MD_VERSION);
 		rc = -DER_DF_INCOMPT;
 		goto out_lock;
 	}
@@ -1073,8 +1080,13 @@ check_map:
 	}
 	if (!version_exists) {
 		/* This DB is not new and uses a layout that lacks a version. */
-		D_ERROR(DF_UUID": incompatible layout version\n",
-			DP_UUID(svc->ps_uuid));
+		ds_notify_ras_eventf(RAS_POOL_DF_INCOMPAT, RAS_TYPE_INFO,
+				     RAS_SEV_ERROR, NULL /* hwid */,
+				     NULL /* rank */, NULL /* jobid */,
+				     &svc->ps_uuid, NULL /* cont */,
+				     NULL /* objid */, NULL /* ctlop */,
+				     NULL /* data */,
+				     "incompatible layout version");
 		rc = -DER_DF_INCOMPT;
 		goto out_lock;
 	}

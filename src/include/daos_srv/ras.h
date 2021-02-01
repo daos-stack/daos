@@ -140,6 +140,12 @@ ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 		    uuid_t *cont, daos_obj_id_t *objid, char *ctlop,
 		    char *data);
 
+/**
+ * A printf-style message-formatting wrapper for ds_notify_ras_event. If the
+ * resulting message is too long for DAOS_RAS_STR_FIELD_SIZE, it will be ended
+ * with a '$' to indicate so. See ds_notify_ras_event for parameter
+ * documentation.
+ */
 void
 ds_notify_ras_eventf(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hwid,
 		     d_rank_t *rank, char *jobid, uuid_t *pool, uuid_t *cont,

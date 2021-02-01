@@ -199,8 +199,13 @@ ds_cont_svc_step_up(struct cont_svc *svc)
 	d_iov_set(&value, &version, sizeof(version));
 	rc = rdb_tx_lookup(&tx, &svc->cs_root, &ds_cont_prop_version, &value);
 	if (rc == -DER_NONEXIST) {
-		D_ERROR(DF_UUID": incompatible layout version\n",
-			DP_UUID(svc->cs_pool_uuid));
+		ds_notify_ras_eventf(RAS_CONT_DF_INCOMPAT, RAS_TYPE_INFO,
+				     RAS_SEV_ERROR, NULL /* hwid */,
+				     NULL /* rank */, NULL /* jobid */,
+				     &svc->cs_pool_uuid, NULL /* cont */,
+				     NULL /* objid */, NULL /* ctlop */,
+				     NULL /* data */,
+				     "incompatible layout version");
 		rc = -DER_DF_INCOMPT;
 		goto out_lock;
 	} else if (rc != 0) {
@@ -209,9 +214,16 @@ ds_cont_svc_step_up(struct cont_svc *svc)
 		goto out_lock;
 	}
 	if (version < DS_CONT_MD_VERSION_LOW || version > DS_CONT_MD_VERSION) {
-		D_ERROR(DF_UUID": incompatible layout version: %u not in "
-			"[%u, %u]\n", DP_UUID(svc->cs_pool_uuid), version,
-			DS_CONT_MD_VERSION_LOW, DS_CONT_MD_VERSION);
+		ds_notify_ras_eventf(RAS_CONT_DF_INCOMPAT, RAS_TYPE_INFO,
+				     RAS_SEV_ERROR, NULL /* hwid */,
+				     NULL /* rank */, NULL /* jobid */,
+				     &svc->cs_pool_uuid, NULL /* cont */,
+				     NULL /* objid */, NULL /* ctlop */,
+				     NULL /* data */,
+				     "incompatible layout version: %u not in "
+				     "[%u, %u]", version,
+				     DS_CONT_MD_VERSION_LOW,
+				     DS_CONT_MD_VERSION);
 		rc = -DER_DF_INCOMPT;
 	}
 
