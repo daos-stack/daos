@@ -198,6 +198,12 @@ dtx_act_ent_cleanup(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 			vos_obj_evict_by_oid(vos_obj_cache_current(), cont,
 					     dae->dae_oids[i]);
 	}
+
+	if (dae->dae_oids != NULL && dae->dae_oids != &dae->dae_oid_inline &&
+	    dae->dae_oids != &DAE_OID(dae)) {
+		D_FREE(dae->dae_oids);
+		dae->dae_oid_cnt = 0;
+	}
 }
 
 static int
@@ -614,10 +620,6 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 
 	if (dae->dae_dbd == NULL)
 		return 0;
-
-	if (dae->dae_oids != NULL && dae->dae_oids != &dae->dae_oid_inline &&
-	    dae->dae_oids != &DAE_OID(dae))
-		D_FREE(dae->dae_oids);
 
 	dbd = dae->dae_dbd;
 	D_ASSERT(dbd->dbd_magic == DTX_ACT_BLOB_MAGIC);
