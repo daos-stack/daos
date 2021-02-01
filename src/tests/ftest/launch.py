@@ -841,8 +841,6 @@ def run_tests(test_files, tag_filter, args):
             if not report_skipped_test(
                     test_file["py"], avocado_logs_dir, skip_reason, args):
                 return_code |= 64
-            elif args.jenkinslog:
-                rename_logs(avocado_logs_dir, test_file["py"], args)
 
         elif not isinstance(test_file["yaml"], str):
             # The test was not run due to an error replacing host placeholders
@@ -851,8 +849,6 @@ def run_tests(test_files, tag_filter, args):
             if not report_skipped_test(
                     test_file["py"], avocado_logs_dir, reason, args):
                 return_code |= 64
-            elif args.jenkinslog:
-                rename_logs(avocado_logs_dir, test_file["py"], args)
             return_code |= 4
 
         else:
@@ -869,8 +865,6 @@ def run_tests(test_files, tag_filter, args):
                             test_file["py"], avocado_logs_dir, skip_reason,
                             args):
                         return_code |= 64
-                    elif args.jenkinslog:
-                        rename_logs(avocado_logs_dir, test_file["py"], args)
                     return_code |= 128
                     continue
 
@@ -894,7 +888,8 @@ def run_tests(test_files, tag_filter, args):
 
             # Optionally rename the test results directory for this test
             if args.rename:
-                rename_logs(avocado_logs_dir, test_file["py"], args)
+                return_code |= rename_logs(avocado_logs_dir, test_file["py"],
+                                           args)
 
             # Optionally process core files
             if args.process_cores:
@@ -1165,6 +1160,7 @@ def rename_logs(avocado_logs_dir, test_file, args):
         avocado_logs_dir (str): avocado job-results directory
         test_file (str): the test python file
     """
+    status = 0
     test_name = get_test_category(test_file)
     test_logs_lnk = os.path.join(avocado_logs_dir, "latest")
     test_logs_dir = os.path.realpath(test_logs_lnk)
@@ -1175,6 +1171,7 @@ def rename_logs(avocado_logs_dir, test_file, args):
             os.makedirs(new_test_logs_dir)
         except OSError as error:
             print("Error mkdir {}: {}".format(new_test_logs_dir, error))
+            status |= 512
     else:
         new_test_logs_dir = "{}-{}".format(test_logs_dir, test_name)
 
@@ -1195,7 +1192,8 @@ def rename_logs(avocado_logs_dir, test_file, args):
                 xml_data = xml_buffer.read()
         except OSError as error:
             print("Error reading {} : {}".format(xml_file, str(error)))
-            return
+            status |= 512
+            return status
 
         test_dir = os.path.split(os.path.dirname(test_file))[-1]
         org_class = "classname=\""
@@ -1207,6 +1205,9 @@ def rename_logs(avocado_logs_dir, test_file, args):
                 xml_buffer.write(xml_data)
         except OSError as error:
             print("Error writing {}: {}".format(xml_file, str(error)))
+            status |= 512
+
+    return status
 
 def check_big_files(avocado_logs_dir, task, test_name, args):
     """Check the contents of the task object, tag big files, create junit xml.
@@ -1273,21 +1274,6 @@ def report_skipped_test(test_file, avocado_logs_dir, reason, args):
         print(
             "Warning: Continuing after failing to create {}: {}".format(
                 destination, error))
-
-    if args.jenkinslog:
-        test_logs_lnk = os.path.join(avocado_logs_dir, "latest")
-        try:
-            os.remove(test_logs_lnk)
-        except OSError as error:
-            print(
-                "Warning: Continuing after failing to remove {}: {}".format(
-                    destination, error))
-        try:
-            os.symlink(destination, test_logs_lnk)
-        except OSError as error:
-            print(
-                "Warning: Continuing after failing to link {}: {}".format(
-                    destination, error))
 
     return create_results_xml(
         message, test_name, "See launch.py command output for more details",
@@ -1801,6 +1787,10 @@ def main():
         if status & 256 == 256:
             print("ERROR: Detected one or more tests with failure to create "
                   "stack traces from core files!")
+            ret_code = 1
+        if status & 512 == 512:
+            print("ERROR: Detected one or more failures in renaming logs and "
+                  "results for Jenkins!")
             ret_code = 1
     exit(ret_code)
 
