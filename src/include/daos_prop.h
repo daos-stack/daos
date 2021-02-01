@@ -257,9 +257,13 @@ enum {
 	DAOS_PROP_CO_REDUN_RF4,
 };
 
+/**
+ * Level of fault-domain to use for object allocation
+ * node is hardcoded to 1, [2-254] are defined by the admin
+ */
 enum {
-	DAOS_PROP_CO_REDUN_NODE	= 1,
-	DAOS_PROP_CO_REDUN_MAX	= 16,
+	DAOS_PROP_CO_REDUN_NODE	= 1, /** hard-coded */
+	DAOS_PROP_CO_REDUN_MAX	= 254,
 };
 
 struct daos_prop_entry {

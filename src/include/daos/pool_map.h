@@ -17,33 +17,16 @@
 /**
  * pool component types
  * target and node are pre-registered and managed by DAOS.
- * Level 2 to 16 are allocated by control plane based on input from
+ * Level 2 to 254 are allocated by control plane based on input from
  * yaml file.
  */
 typedef enum pool_comp_type {
-	PO_COMP_TP_LVL0		= 0,
-	PO_COMP_TP_TARGET	= PO_COMP_TP_LVL0, /** reserved, hard-coded */
-	PO_COMP_TP_LVL1		= 1,
-	PO_COMP_TP_NODE		= PO_COMP_TP_LVL1, /** reserved, hard-coded */
-	PO_COMP_TP_LVL2		= 2,
-	PO_COMP_TP_RACK		= PO_COMP_TP_LVL2, /** test only */
-	PO_COMP_TP_LVL3		= 3,
-	PO_COMP_TP_LVL4		= 4,
-	PO_COMP_TP_LVL5		= 5,
-	PO_COMP_TP_LVL6		= 6,
-	PO_COMP_TP_LVL7		= 7,
-	PO_COMP_TP_LVL8		= 8,
-	PO_COMP_TP_LVL9		= 9,
-	PO_COMP_TP_LVL10	= 10,
-	PO_COMP_TP_LVL11	= 11,
-	PO_COMP_TP_LVL12	= 12,
-	PO_COMP_TP_LVL13	= 13,
-	PO_COMP_TP_LVL14	= 14,
-	PO_COMP_TP_LVL15	= 15,
-	PO_COMP_TP_LVL16	= 16, /** 16 user-visible levels */
-	PO_COMP_TP_LVL_NR	= PO_COMP_TP_LVL16 + 1;
-	PO_COMP_TP_LVL255	= 255, /** keep some room, just in case */
-	PO_COMP_TP_ROOT		= PO_COMP_TP_LVL255,
+	PO_COMP_TP_TARGET	= 0, /** reserved, hard-coded */
+	PO_COMP_TP_NODE		= 1, /** reserved, hard-coded */
+	PO_COMP_TP_MIN		= 2, /** first user-defined domain */
+	PO_COMP_TP_RACK		= 2, /** for test only */
+	PO_COMP_TP_MAX		= 254, /** last user-defined domain */
+	PO_COMP_TP_ROOT		= 255,
 } pool_comp_type_t;
 
 /** pool component states */
@@ -148,9 +131,6 @@ pool_target_id_list_free(struct pool_target_id_list *id_list);
  * or all components of a pool map.
  */
 struct pool_buf {
-	uint8_t		pb_version; /** pmap structure version */
-	uint8_t		pb_padding1;
-	uint16_t	pb_padding2;
 	/** checksum of components */
 	uint32_t	pb_csum;
 	/** summary of domain_nr, node_nr, target_nr, buffer size */
