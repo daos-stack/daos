@@ -14,8 +14,7 @@
 #include <daos_srv/pool.h>
 #include <daos_srv/container.h>
 
-#define DTX_REFRESH_MAX		4
-#define DTX_DETECT_SCAN_MAX	(1 << 10)
+#define DTX_REFRESH_MAX 4
 
 struct dtx_share_peer {
 	d_list_t		dsp_link;
@@ -117,7 +116,6 @@ struct dtx_handle {
 	d_list_t			 dth_share_act_list;
 	d_list_t			 dth_share_tbd_list;
 	int				 dth_share_tbd_count;
-	int				 dth_share_tbd_scanned;
 };
 
 /* Each sub transaction handle to manage each sub thandle */
