@@ -17,10 +17,10 @@ rm -rf install/lib/daos/TESTING/ftest/avocado/job-results/job-*/html/
 
 # Remove the latest avocado symlink directory to avoid inclusion in the
 # jenkins build artifacts
-for results_dir in $(ls -d \
-   install/lib/daos/TESTING/ftest/avocado/job-results/* 2>/dev/null); do
-    if [[ -L ${results_dir}/latest && -d ${results_dir}/latest ]]; then
-      unlink ${results_dir}/latest
+DIRS=(install/lib/daos/TESTING/ftest/avocado/job-results/*)
+for results_dir in "${DIRS[@]}"; do
+    if [[ -L "${results_dir}" && -d "${results_dir}" ]]; then
+      unlink "${results_dir}"
     fi
 done
 
