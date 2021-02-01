@@ -57,7 +57,8 @@ run_test()
 
     FILES=(${DAOS_BASE}/test_results/*.xml)
 
-    "${SL_BUILD_DIR}"/src/tests/ftest/scripts/post_process_xml.sh "${COMP}" \
+    "${SL_PREFIX}"/lib/daos/TESTING/ftest/scripts/post_process_xml.sh \
+                                                                  "${COMP}" \
                                                                   "${FILES[@]}"
 
     mv "${DAOS_BASE}"/test_results/*.xml "${DAOS_BASE}"/test_results/xml
