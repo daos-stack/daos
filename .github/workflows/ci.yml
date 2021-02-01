@@ -82,8 +82,7 @@ jobs:
                           --build-arg COMPILER=${{ matrix.compiler }}
                           -t build-image
     - name: Run NLT Test
-      run: docker run --tmpfs /mnt/daos build-image \
-           ./utils/node_local_test.py --no-root kv
+      run: docker run --tmpfs /mnt/daos build-image ./utils/node_local_test.py --no-root kv
 
   Spelling:
     runs-on: ubuntu-20.04
