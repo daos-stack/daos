@@ -9,7 +9,7 @@ Version:       1.1.2.1
 Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
-License:       Apache
+License:       BSD-2-Clause-Patent
 URL:           https//github.com/daos-stack/daos
 Source0:       %{name}-%{version}.tar.gz
 
