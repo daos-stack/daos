@@ -26,8 +26,6 @@ from __future__ import print_function
 import threading
 import time
 
-from apricot import skipForTicket
-from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
 
 
@@ -41,7 +39,6 @@ class RebuildWidelyStriped(MdtestBase):
     :avocado: recursive
     """
 
-#    @skipForTicket("DAOS-5868")
     def test_rebuild_widely_striped(self):
         """Jira ID: DAOS-3795/DAOS-3796.
 
@@ -50,27 +47,27 @@ class RebuildWidelyStriped(MdtestBase):
 
         Use Cases:
           Create pool and container.
-          Use mdtest to create 32K files of size 4K with 3-way
+          Use mdtest to create 120K files of size 32K with 3-way
           replication.
           Stop one server, let rebuild start and complete.
           Destroy container and create a new one.
-          Use mdtest to create 32K files of size 4K with 3-way
+          Use mdtest to create 120K files of size 32K with 3-way
           replication.
           Stop one more server in the middle of mdtest. Let rebuild to complete.
           Allow mdtest to complete.
           Destroy container and create a new one.
-          Use mdtest to create 32K files of size 4K with 3-way
+          Use mdtest to create 120K files of size 32K with 3-way
           replication.
           Stop 2 servers in the middle of mdtest. Let rebuild to complete.
           Allow mdtest to complete.
 
-        :avocado: tags=all,pr,small,pool,rebuild,widelystriped
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=rebuild,widelystriped
         """
         # set params
-        targets = self.params.get("targets", "/run/server_config/*/0/*")
+        targets = self.params.get("targets", "/run/server_config/*")
         rank = self.params.get("rank_to_kill", "/run/testparams/*")
-        servers_per_host = self.params.get("servers_per_host",
-                                           "/run/server_config/*")
         self.dmg = self.get_dmg_command()
 
         # create pool
@@ -78,9 +75,8 @@ class RebuildWidelyStriped(MdtestBase):
 
         # make sure pool looks good before we start
         checks = {
-            "pi_nnodes": len(self.hostlist_servers) * servers_per_host,
-            "pi_ntargets": len(self.hostlist_servers) * targets * \
-                servers_per_host,
+            "pi_nnodes": len(self.hostlist_servers),
+            "pi_ntargets": len(self.hostlist_servers) * targets,
             "pi_ndisabled": 0,
         }
         self.assertTrue(
@@ -120,21 +116,17 @@ class RebuildWidelyStriped(MdtestBase):
 
         # destroy container and pool
         self.container.destroy()
-##        self.dmg.pool_evict(self.pool.uuid)
-##        self.pool.destroy()
-##        self.container = None
 
-#        # re-create the pool and container
-##        self.add_pool(connect=False)
-#        self.add_container(self.pool)
-#
-#        # start 2nd mdtest job
-#        thread = threading.Thread(target=self.execute_mdtest)
-#        thread.start()
-#        time.sleep(3)
+        # re-create the pool and container
+        self.add_container(self.pool)
 
-#        # Kill 2 server ranks [5,6]
-#        self.pool.start_rebuild([rank[1]], self.d_log)
-        
-#        # wait for mdtest to complete
-#        thread.join()
+        # start 2nd mdtest job
+        thread = threading.Thread(target=self.execute_mdtest)
+        thread.start()
+        time.sleep(3)
+
+        # Kill 2 server ranks [5,6]
+        self.pool.start_rebuild([rank[2]], self.d_log)
+        self.pool.wait_for_rebuild(False, interval=1)
+        # wait for mdtest to complete
+        thread.join()
