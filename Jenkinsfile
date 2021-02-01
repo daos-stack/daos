@@ -151,7 +151,7 @@ String unit_packages() {
                            'libpmemobj protobuf-c ' +
                            'spdk-devel libfabric-devel ' +
                            'pmix numactl-devel ' +
-                           'libipmctl-devel ' +
+                           'libipmctl-devel python36-pyxattr ' +
                            'python36-tabulate numactl ' +
                            'libyaml-devel ' +
                            'valgrind-devel patchelf'
