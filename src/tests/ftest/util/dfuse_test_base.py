@@ -44,7 +44,6 @@ class DfuseTestBase(TestWithServers):
             pool (TestPool, optional): pool to use with Dfuse
             container (TestContainer, optional): container to use with Dfuse
             mount_dir (str, optional): updated mount dir name. Defaults to None.
-            sub_dir (str, optional): sub directory dir name. Defaults to None.
         """
         self.dfuse = Dfuse(hosts, self.tmp)
         self.dfuse.get_params(self)

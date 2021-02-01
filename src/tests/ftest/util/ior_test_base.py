@@ -129,7 +129,7 @@ class IorTestBase(DfuseTestBase):
             timeout (int, optional): command timeout. Defaults to None.
             fail_on_warning (bool, optional): Controls whether the test
                 should fail if a 'WARNING' is found. Default is False.
-            mount_dir (str, optional): Create specific mount pount
+            mount_dir (str, optional): Create specific mount point
 
         Returns:
             CmdResult: result of the ior command execution
@@ -140,6 +140,7 @@ class IorTestBase(DfuseTestBase):
 
         # start dfuse if api is POSIX or HDF5 with vol connector
         if self.ior_cmd.api.value == "POSIX" or plugin_path:
+            # Connect to the pool, create container and then start dfuse
             if not self.dfuse:
                 self.start_dfuse(
                     self.hostlist_clients, self.pool, self.container, mount_dir)
@@ -147,7 +148,6 @@ class IorTestBase(DfuseTestBase):
         # setup test file for POSIX or HDF5 with vol connector
         if self.ior_cmd.api.value == "POSIX" or plugin_path:
             test_file = os.path.join(self.dfuse.mount_dir.value, "testfile")
-
         elif self.ior_cmd.api.value == "DFS":
             test_file = os.path.join("/", "testfile")
 

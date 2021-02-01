@@ -83,8 +83,7 @@ class IorSmall(IorTestBase):
         self.ior_cmd.dfs_oclass.update(obj_class[0])
         # run ior
         try:
-            self.run_ior_with_pool(
-                plugin_path=None, timeout=ior_timeout)
+            self.run_ior_with_pool(plugin_path=None, timeout=ior_timeout)
             results.append(["PASS", str(self.ior_cmd)])
         except TestFail:
             results.append(["FAIL", str(self.ior_cmd)])
