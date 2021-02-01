@@ -17,7 +17,7 @@
 #include <stddef.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include "drpc_handler.h"
 #include "drpc_internal.h"
 
@@ -143,7 +143,7 @@ drpc_listener_start_ult(ABT_thread *thread)
 static int
 generate_socket_path(void)
 {
-	D_ASPRINTF(drpc_listener_socket_path, "%s/daos_io_server_%d.sock",
+	D_ASPRINTF(drpc_listener_socket_path, "%s/daos_engine_%d.sock",
 		   dss_socket_dir, getpid());
 	if (drpc_listener_socket_path == NULL) {
 		D_ERROR("Failed to allocate socket path\n");

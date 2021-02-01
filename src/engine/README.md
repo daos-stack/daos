@@ -1,4 +1,4 @@
-# DAOS Data Plane (aka daos_io_server)
+# DAOS Data Plane (aka daos_engine)
 
 ## Module Interface
 
@@ -20,7 +20,7 @@ In addition, a module can optionally configure:
 
 The I/O server is a multi-threaded process using Argobots for non-blocking processing.
 
-By default, one main xstream and no offload xstreams are created per target. The actual number of offload xstream can be configured through daos_io_server command line parameters. Moreover, an extra xstream is created to handle incoming metadata requests. Each xstream is bound to a specific CPU core. The main xstream is the one receiving incoming target requests from both client and the other servers. A specific ULT is started to make progress on network and NVMe I/O operations.
+By default, one main xstream and no offload xstreams are created per target. The actual number of offload xstream can be configured through daos_engine command line parameters. Moreover, an extra xstream is created to handle incoming metadata requests. Each xstream is bound to a specific CPU core. The main xstream is the one receiving incoming target requests from both client and the other servers. A specific ULT is started to make progress on network and NVMe I/O operations.
 
 ## Thread-local Storage (TLS)
 
