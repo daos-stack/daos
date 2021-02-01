@@ -17,7 +17,7 @@ class DaosVol(VolTestBase):
 
     # Test variants that should be skipped
     CANCEL_FOR_TICKET = [
-        ["DAOS-5496", "testname", "h5_partest_t_bigio"],
+        ["DAOS-6654", "testname", "h5_partest_t_bigio"],
     ]
 
     def test_daos_vol_bigio(self):
@@ -25,11 +25,11 @@ class DaosVol(VolTestBase):
 
         Test Description:
             Run HDF5 h5_partest_t_bigio provided in HDF5 package with
-            daos vol connector and mpich. Testing various I/O functions 
+            daos vol connector and mpich. Testing various I/O functions
             provided in HDF5 test suite such as:
 
               h5_partest_t_bigio
-    
+
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,small

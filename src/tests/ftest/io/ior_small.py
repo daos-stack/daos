@@ -62,7 +62,8 @@ class IorSmall(IorTestBase):
                     # run ior
                     try:
                         self.run_ior_with_pool(
-                            plugin_path=hdf5_plugin_path, timeout=ior_timeout)
+                            plugin_path=hdf5_plugin_path, timeout=ior_timeout,
+                            dfuse_sub_dir=True)
                         results.append(["PASS", str(self.ior_cmd)])
                     except TestFail:
                         # stop dfuse if running
@@ -78,7 +79,8 @@ class IorSmall(IorTestBase):
         self.ior_cmd.dfs_oclass.update(obj_class[0])
         # run ior
         try:
-            self.run_ior_with_pool(plugin_path=None, timeout=ior_timeout)
+            self.run_ior_with_pool(
+                plugin_path=None, timeout=ior_timeout, dfuse_sub_dir=True)
             results.append(["PASS", str(self.ior_cmd)])
         except TestFail:
             results.append(["FAIL", str(self.ior_cmd)])
