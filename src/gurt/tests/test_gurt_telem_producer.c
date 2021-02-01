@@ -284,23 +284,23 @@ test_duration_stats(void **state)
 
 	timer->dtn_metric->dtm_data.tms[0].tv_sec = 1;
 	timer->dtn_metric->dtm_data.tms[0].tv_nsec = 125000000;
-	d_tm_compute_stats(timer);
+	d_tm_compute_duration_stats(timer);
 
 	timer->dtn_metric->dtm_data.tms[0].tv_sec = 2;
 	timer->dtn_metric->dtm_data.tms[0].tv_nsec = 150000000;
-	d_tm_compute_stats(timer);
+	d_tm_compute_duration_stats(timer);
 
 	timer->dtn_metric->dtm_data.tms[0].tv_sec = 3;
 	timer->dtn_metric->dtm_data.tms[0].tv_nsec = 175000000;
-	d_tm_compute_stats(timer);
+	d_tm_compute_duration_stats(timer);
 
 	timer->dtn_metric->dtm_data.tms[0].tv_sec = 4;
 	timer->dtn_metric->dtm_data.tms[0].tv_nsec = 200000000;
-	d_tm_compute_stats(timer);
+	d_tm_compute_duration_stats(timer);
 
 	timer->dtn_metric->dtm_data.tms[0].tv_sec = 5;
 	timer->dtn_metric->dtm_data.tms[0].tv_nsec = 600000000;
-	d_tm_compute_stats(timer);
+	d_tm_compute_duration_stats(timer);
 }
 
 static int

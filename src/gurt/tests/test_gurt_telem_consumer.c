@@ -18,6 +18,8 @@
 #include "gurt/telemetry_common.h"
 #include "gurt/telemetry_consumer.h"
 
+#define STATS_EPSILON	0.00001
+
 struct d_tm_node_t	*root;
 uint64_t		*shmem_root;
 
@@ -202,8 +204,8 @@ test_gauge_stats(void **state)
 	assert_int_equal(val, 20);
 	assert_int_equal(stats.dtm_min.min_int, 2);
 	assert_int_equal(stats.dtm_max.max_int, 20);
-	assert_float_equal(stats.mean, 11.0, 0.1);
-	assert_float_equal(stats.std_dev, 5.89379, 0.00001);
+	assert(stats.mean - 11.0 < STATS_EPSILON);
+	assert(stats.std_dev - 5.89379 < STATS_EPSILON);
 
 }
 
@@ -218,10 +220,10 @@ test_duration_stats(void **state)
 			       "gurt/tests/telem/duration-stats");
 	assert(rc == D_TM_SUCCESS);
 
-	assert_float_equal(stats.dtm_min.min_float, 1.125, 0.001);
-	assert_float_equal(stats.dtm_max.max_float, 5.6, 0.1);
-	assert_float_equal(stats.mean, 3.25, 0.01);
-	assert_float_equal(stats.std_dev, 1.74329, 0.00001);
+	assert(stats.dtm_min.min_float - 1.125 < STATS_EPSILON);
+	assert(stats.dtm_max.max_float - 5.6 < STATS_EPSILON);
+	assert(stats.mean - 3.25 < STATS_EPSILON);
+	assert(stats.std_dev - 1.74329 < STATS_EPSILON);
 }
 
 static int

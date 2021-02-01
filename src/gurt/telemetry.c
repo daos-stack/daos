@@ -708,46 +708,98 @@ failure:
 }
 
 /**
- * Compute statistics: min, max, mean, and standard deviation
+ * Compute gauge statistics, min, max, mean, and standard deviation
  * Uses B. P. Welford's algorithm for computing a running variance.
+ * This implementation computes an integer min and max with floating point
+ * mean and standard deviation.
  *
- * \param[in]	node		Pointer to a node of type D_TM_GAUGE
- *				or type D_TM_DURATION
+ * \param[in]	node		Pointer to a gauge node
  */
 void
-d_tm_compute_stats(struct d_tm_node_t *node)
+d_tm_compute_gauge_stats(struct d_tm_node_t *node)
 {
-	double sum_of_squares = 0.0;
-	double variance = 0.0;
-	double mean = 0.0;
+	uint64_t	value = 0;
+	double		sum_of_squares = 0.0;
+	double		variance = 0.0;
+	double		mean = 0.0;
 
 	if (node->dtn_metric->dtm_stats == NULL)
 		return;
 
+	value = node->dtn_metric->dtm_data.value;
 	node->dtn_metric->dtm_stats->sample_size++;
 
-	D_TM_COMPUTE_MEAN(mean, node, D_TM_VALUE(node));
+	mean = node->dtn_metric->dtm_stats->mean +
+	       ((value - node->dtn_metric->dtm_stats->mean) /
+	       node->dtn_metric->dtm_stats->sample_size);
 
-	D_TM_COMPUTE_SUM_OF_SQUARES(sum_of_squares, node, D_TM_VALUE(node));
-
-	if (node->dtn_type & D_TM_DURATION) {
-		D_TM_COMPUTE_MIN(D_TM_VALUE(node), node, float);
-		D_TM_COMPUTE_MAX(D_TM_VALUE(node), node, float);
-	}
-
-	if (node->dtn_type == D_TM_GAUGE) {
-		D_TM_COMPUTE_MIN(D_TM_VALUE(node), node, int);
-		D_TM_COMPUTE_MAX(D_TM_VALUE(node), node, int);
-	}
+	sum_of_squares = node->dtn_metric->dtm_stats->sum_of_squares +
+			 ((value - node->dtn_metric->dtm_stats->mean) *
+			 (value - mean));
 
 	node->dtn_metric->dtm_stats->mean = mean;
 	node->dtn_metric->dtm_stats->sum_of_squares = sum_of_squares;
 
 	if (node->dtn_metric->dtm_stats->sample_size > 2) {
 		variance = sum_of_squares /
-			(node->dtn_metric->dtm_stats->sample_size - 1);
+			   (node->dtn_metric->dtm_stats->sample_size - 1);
 		node->dtn_metric->dtm_stats->std_dev = sqrtl(variance);
 	}
+
+	if (value > node->dtn_metric->dtm_stats->dtm_max.max_int)
+		node->dtn_metric->dtm_stats->dtm_max.max_int = value;
+
+	if (value < node->dtn_metric->dtm_stats->dtm_min.min_int)
+		node->dtn_metric->dtm_stats->dtm_min.min_int = value;
+}
+
+/**
+ * Compute duration statistics, min, max, mean, and standard deviation
+ * Uses B. P. Welford's algorithm for computing a running variance.
+ * This implementation computes a floating point min, max, mean and standard
+ * deviation.
+ *
+ * \param[in]	node		Pointer to a duration node
+ */
+void
+d_tm_compute_duration_stats(struct d_tm_node_t *node)
+{
+	double	value = 0;
+	double	sum_of_squares = 0.0;
+	double	variance = 0.0;
+	double	mean = 0.0;
+
+	if (node->dtn_metric->dtm_stats == NULL)
+		return;
+
+	value = node->dtn_metric->dtm_data.tms[0].tv_sec +
+		(node->dtn_metric->dtm_data.tms[0].tv_nsec / 1E9);
+
+	node->dtn_metric->dtm_stats->sample_size++;
+
+	mean = node->dtn_metric->dtm_stats->mean +
+	       ((value - node->dtn_metric->dtm_stats->mean) /
+	       node->dtn_metric->dtm_stats->sample_size);
+
+	sum_of_squares = node->dtn_metric->dtm_stats->sum_of_squares +
+			 ((value - node->dtn_metric->dtm_stats->mean) *
+			 (value - mean));
+
+	node->dtn_metric->dtm_stats->mean = mean;
+	node->dtn_metric->dtm_stats->sum_of_squares = sum_of_squares;
+
+	if (node->dtn_metric->dtm_stats->sample_size > 2) {
+		variance = sum_of_squares /
+			   (node->dtn_metric->dtm_stats->sample_size - 1);
+		node->dtn_metric->dtm_stats->std_dev = sqrtl(variance);
+	}
+
+	if (value > node->dtn_metric->dtm_stats->dtm_max.max_float)
+		node->dtn_metric->dtm_stats->dtm_max.max_float = value;
+
+	if (value < node->dtn_metric->dtm_stats->dtm_min.min_float)
+		node->dtn_metric->dtm_stats->dtm_min.min_float = value;
+
 }
 
 /**
@@ -1202,7 +1254,7 @@ d_tm_mark_duration_end(struct d_tm_node_t **metric, char *item, ...)
 			      &end);
 		node->dtn_metric->dtm_data.tms[0] = d_timediff(
 					node->dtn_metric->dtm_data.tms[1], end);
-		d_tm_compute_stats(node);
+		d_tm_compute_duration_stats(node);
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
@@ -1291,7 +1343,7 @@ d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value, char *item, ...)
 	if (node->dtn_type == D_TM_GAUGE) {
 		D_MUTEX_LOCK(&node->dtn_lock);
 		node->dtn_metric->dtm_data.value = value;
-		d_tm_compute_stats(node);
+		d_tm_compute_gauge_stats(node);
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
@@ -1381,7 +1433,7 @@ d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
 	if (node->dtn_type == D_TM_GAUGE) {
 		D_MUTEX_LOCK(&node->dtn_lock);
 		node->dtn_metric->dtm_data.value += value;
-		d_tm_compute_stats(node);
+		d_tm_compute_gauge_stats(node);
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
@@ -1471,7 +1523,7 @@ d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
 	if (node->dtn_type == D_TM_GAUGE) {
 		D_MUTEX_LOCK(&node->dtn_lock);
 		node->dtn_metric->dtm_data.value -= value;
-		d_tm_compute_stats(node);
+		d_tm_compute_gauge_stats(node);
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;

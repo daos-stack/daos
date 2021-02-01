@@ -33,41 +33,6 @@
 			fprintf(s, " std dev: %lf", stats->std_dev);	       \
 	} while (0)
 
-#define D_TM_COMPUTE_MIN(value, node, name)				       \
-	do {								       \
-		if ((value) < node->dtn_metric->dtm_stats->dtm_min.min_##name) \
-			node->dtn_metric->dtm_stats->dtm_min.min_##name =      \
-			(value);					       \
-	} while (0)
-
-#define D_TM_COMPUTE_MAX(value, node, name)				       \
-	do {								       \
-		if ((value) > node->dtn_metric->dtm_stats->dtm_max.max_##name) \
-			node->dtn_metric->dtm_stats->dtm_max.max_##name =      \
-			(value);					       \
-	} while (0)
-
-#define D_TM_COMPUTE_MEAN(var, node, value)				       \
-	do {								       \
-		(var) = node->dtn_metric->dtm_stats->mean +		       \
-			(((value) - node->dtn_metric->dtm_stats->mean) /       \
-			node->dtn_metric->dtm_stats->sample_size);	       \
-	} while (0)
-
-#define D_TM_VALUE(node)						       \
-	((node->dtn_type & D_TM_DURATION) ?				       \
-		(node->dtn_metric->dtm_data.tms[0].tv_sec +		       \
-		(node->dtn_metric->dtm_data.tms[0].tv_nsec / 1E9)) :	       \
-			(node->dtn_type == D_TM_GAUGE) ?		       \
-				node->dtn_metric->dtm_data.value : 0)
-
-#define D_TM_COMPUTE_SUM_OF_SQUARES(var, node, value)			       \
-	do {								       \
-		(var) = node->dtn_metric->dtm_stats->sum_of_squares +	       \
-			(((value) - node->dtn_metric->dtm_stats->mean) *       \
-			((value) - mean));				       \
-	} while (0)
-
 enum {
 	D_TM_DIRECTORY			= 0x001,
 	D_TM_COUNTER			= 0x002,
@@ -139,5 +104,6 @@ int d_tm_alloc_node(struct d_tm_node_t **newnode, char *name);
 int d_tm_add_child(struct d_tm_node_t **newnode, struct d_tm_node_t *parent,
 		   char *name);
 int d_tm_get_version(void);
-void d_tm_compute_stats(struct d_tm_node_t *node);
+void d_tm_compute_duration_stats(struct d_tm_node_t *node);
+void d_tm_compute_gauge_stats(struct d_tm_node_t *node);
 #endif /* __TELEMETRY_COMMON_H__ */
