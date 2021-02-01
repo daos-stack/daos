@@ -392,7 +392,7 @@ class DaosServer():
         cmd = [daos_server, '--config={}'.format(self._yaml_file.name),
                'start', '-t' '4', '--insecure', '-d', self.agent_dir]
 
-        if self.conf.no_root:
+        if self.conf.args.no_root:
                cmd.append('--recreate-superblocks')
 
         server_env['DAOS_DISABLE_REQ_FWD'] = '1'
