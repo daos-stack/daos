@@ -1813,7 +1813,7 @@ def main():
         fatal_errors.add_result(run_dfuse(server, conf))
         fatal_errors.add_result(run_posix_tests(server, conf))
 
-    if server.stop(wf=wf_server) != 0:
+    if server.stop(wf_server) != 0:
         fatal_errors.fail()
 
     # If running all tests then restart the server under valgrind.
@@ -1826,7 +1826,7 @@ def main():
         for pool in pools:
             cmd = ['pool', 'list-containers', '--pool', pool]
             run_daos_cmd(conf, cmd, valgrind=False)
-        if server.stop() != 0:
+        if server.stop(wf_server) != 0:
             fatal_errors.add_result(True)
 
     wf.close()
