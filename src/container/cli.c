@@ -927,7 +927,7 @@ cont_query_bits(daos_prop_t *prop)
 		case DAOS_PROP_CO_DEDUP_THRESHOLD:
 			bits |= DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD;
 			break;
-		case DAOS_PROP_CO_MAX_OID:
+		case DAOS_PROP_CO_ALLOCED_OID:
 			bits |= DAOS_CO_QUERY_PROP_MAX_OID;
 			break;
 		case DAOS_PROP_CO_REDUN_FAC:
@@ -1105,7 +1105,7 @@ dc_cont_set_prop(tse_task_t *task)
 
 	for (i = 0; i < args->prop->dpp_nr; i++) {
 		if (args->prop->dpp_entries[i].dpe_type ==
-		    DAOS_PROP_CO_MAX_OID) {
+		    DAOS_PROP_CO_ALLOCED_OID) {
 			D_ERROR("Can't change MAX OID property after container "
 				"is already created.\n");
 			D_GOTO(err, rc = -DER_NO_PERM);

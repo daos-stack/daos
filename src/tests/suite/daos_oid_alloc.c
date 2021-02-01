@@ -284,7 +284,7 @@ cont_oid_prop(void **state)
 	/** set max oid to 2 x 1024 x 1024 */
 	max_oid = 2 * 1024 * 1024;
 	prop = daos_prop_alloc(1);
-	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_MAX_OID;
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_ALLOCED_OID;
 	prop->dpp_entries[0].dpe_val = max_oid;
 
 	print_message("Create a container with max_oid "DF_U64"\n", max_oid);

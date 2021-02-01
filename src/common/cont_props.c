@@ -123,7 +123,7 @@ uint64_t
 daos_cont_prop2maxoid(daos_prop_t *props)
 {
 	struct daos_prop_entry *prop =
-		daos_prop_entry_get(props, DAOS_PROP_CO_MAX_OID);
+		daos_prop_entry_get(props, DAOS_PROP_CO_ALLOCED_OID);
 
 	return prop == NULL ? 0 : prop->dpe_val;
 }

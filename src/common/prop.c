@@ -361,7 +361,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				return false;
 			}
 			break;
-		case DAOS_PROP_CO_MAX_OID:
+		case DAOS_PROP_CO_ALLOCED_OID:
 			break;
 		case DAOS_PROP_CO_REDUN_FAC:
 			val = prop->dpp_entries[i].dpe_val;
