@@ -81,6 +81,8 @@ jobs:
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg COMPILER=${{ matrix.compiler }}
                           -t build-image
+    - name: check server
+      run: docker run build-image ldd /opt/daos/bin/daos_io_server
     - name: Run NLT Test
       run: docker run --tmpfs /mnt/daos build-image ./utils/node_local_test.py --no-root kv
 

@@ -425,6 +425,7 @@ class DaosServer():
         while True:
             time.sleep(0.5)
             rc = self.run_dmg(cmd)
+            print(rc)
             ready = False
             if rc.returncode == 1:
                 for line in rc.stdout.decode('utf-8').splitlines():
