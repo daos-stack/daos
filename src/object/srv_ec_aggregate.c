@@ -507,7 +507,7 @@ agg_fetch_odata_cells(struct ec_agg_entry *entry, uint8_t *bit_map,
 	daos_recx_t		*recxs = NULL;
 	struct ec_agg_stripe	*stripe = &entry->ae_cur_stripe;
 	unsigned int		 len = ec_age2cs(entry);
-	unsigned int		 k = ec_age2cs(entry);
+	unsigned int		 k = ec_age2k(entry);
 	unsigned int		 i, j;
 	int			 rc = 0;
 
