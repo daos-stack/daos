@@ -10,7 +10,6 @@ import threading
 import copy
 
 from itertools import product
-from apricot import skipForTicket
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
 from command_utils import CommandFailure
@@ -181,7 +180,7 @@ class OSAOnlineParallelTest(OSAUtils):
 
                 # Wait to finish the threads
                 for thrd in threads:
-                    thrd.join(timeout=20)
+                    thrd.join(timeout=100)
 
             # Check data consistency for IOR in future
             # Presently, we are running daos_racer in parallel
@@ -201,9 +200,7 @@ class OSAOnlineParallelTest(OSAUtils):
                 self.log.info("Pool Version at the End %s", pver_end)
                 self.assertTrue(pver_end == 25,
                                 "Pool Version Error:  at the end")
-                pool[val].destroy()
 
-    @skipForTicket("DAOS-6107")
     def test_osa_online_parallel_test(self):
         """
         JIRA ID: DAOS-4752
