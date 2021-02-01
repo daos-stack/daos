@@ -24,6 +24,8 @@ from xml.dom import minidom
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
+import random
+
 try:
     # For python versions >= 3.2
     from tempfile import TemporaryDirectory
@@ -834,6 +836,8 @@ def run_tests(test_files, tag_filter, args):
     # Run each test
     skip_reason = None
     for test_file in test_files:
+        skip_reason = random.choice(
+            [None, None, "Test skipped to verify new code"])
         if skip_reason is not None:
             # An error was detected running clean_logs for a previous test.  As
             # this is typically an indication of a communication issue with one
