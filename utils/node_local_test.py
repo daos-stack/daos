@@ -274,7 +274,7 @@ class DaosServer():
 
     def __init__(self, conf, valgrind=False):
         self.running = False
-
+        self._file = __file__.lstrip('./')
         self._sp = None
         self.conf = conf
         self.valgrind = valgrind
@@ -485,9 +485,8 @@ class DaosServer():
 
         if len(procs) != 1:
             entry = {}
-            fname = __file__.lstrip('./')
-            entry['fileName'] = os.path.basename(fname)
-            entry['directory'] = os.path.dirname(fname)
+            entry['fileName'] = os.path.basename(self._file)
+            entry['directory'] = os.path.dirname(self._file)
             # pylint: disable=protected-access
             entry['lineStart'] = sys._getframe().f_lineno
             entry['severity'] = 'ERROR'

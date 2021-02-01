@@ -1216,13 +1216,8 @@ pipeline {
                                          failOnError: false,
                                          ignoreFailedBuilds: false,
                                          ignoreQualityGate: true,
-                                         qualityGates: [
-                                           [threshold: 1, type: 'TOTAL_ERROR'],
-                                           [threshold: 1, type: 'TOTAL_HIGH'],
-                                           [threshold: 1, type: 'NEW_NORMAL', unstable: true],
-                                           [threshold: 1, type: 'NEW_LOW', unstable: true]],
                                          name: "NLT server leaks",
-                                         tool: issues(pattern: 'vm_test/nlt-server-leaks.json',
+                                         tool: issues(pattern: 'nlt-server-leaks.json',
                                            name: 'NLT server results',
                                            id: 'NLT_server')
 

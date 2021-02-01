@@ -609,7 +609,8 @@ class LogTest():
                     show_line(line, 'NORMAL', 'descriptor not freed')
                     del active_desc[pointer]
                 else:
-                    show_line(line, 'NORMAL', 'memory not freed', custom=leak_wf)
+                    show_line(line, 'NORMAL', 'memory not freed',
+                              custom=leak_wf)
                 lost_memory = True
 
         if active_desc:
