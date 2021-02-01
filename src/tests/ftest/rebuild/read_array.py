@@ -43,6 +43,6 @@ class ReadArrayTest(RebuildTestBase):
             Basic rebuild of container objects of array values with sufficient
             numbers of rebuild targets and no available rebuild targets.
 
-        :avocado: tags=all,medium,full_regression,rebuild,rebuildreadarray
+        :avocado: tags=all,large,full_regression,rebuild,rebuildreadarray
         """
         self.execute_rebuild_test()

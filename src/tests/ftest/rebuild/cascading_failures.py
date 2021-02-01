@@ -88,7 +88,7 @@ class CascadingFailures(RebuildTestBase):
         Use Cases:
             Verify rebuild with multiple server failures.
 
-        :avocado: tags=all,medium,full_regression,rebuild
+        :avocado: tags=all,large,full_regression,rebuild
         :avocado: tags=multitarget,simultaneous
         """
         self.mode = "simultaneous"
@@ -108,7 +108,7 @@ class CascadingFailures(RebuildTestBase):
         Use Cases:
             Verify rebuild with multiple server failures.
 
-        :avocado: tags=all,medium,full_regression,rebuild
+        :avocado: tags=all,large,full_regression,rebuild
         :avocado: tags=multitarget,sequential
         """
         self.mode = "sequential"
@@ -128,7 +128,7 @@ class CascadingFailures(RebuildTestBase):
         Use Cases:
             Verify rebuild with multiple server failures.
 
-        :avocado: tags=all,medium,full_regression,rebuild
+        :avocado: tags=all,large,full_regression,rebuild
         :avocado: tags=multitarget,cascading
         """
         self.mode = "cascading"
