@@ -16,6 +16,7 @@ class RebuildDeleteObjects(RebuildTestBase):
 
     :avocado: recursive
     """
+    # pylint: disable=too-many-ancestors
 
     def __init__(self, *args, **kwargs):
         """Initialize a RebuildDeleteObjects object."""
