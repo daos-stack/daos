@@ -107,9 +107,8 @@ class CartUtils():
 
     def set_other_env_vars(self, cartobj):
         """ import env vars from other_env_var param """
-        other_env_vars = cartobj.params.get("other_env_vars", 
+        other_env_vars = cartobj.params.get("other_env_vars",
                                             "/run/defaultENV/")
-        print('DEBUG log: line 111, other_env_vars  = ', other_env_vars )
         if other_env_vars is None:
             self.print("other_env_vars was not set in yaml file.\n")
             return
@@ -129,7 +128,7 @@ class CartUtils():
             return
 
         for kv_pair in other_env_vars:
-            key, value = kv_pair[0]
+            key = kv_pair[0][0]
             print("Removing key {} from environment.\n".format(key))
             del os.environ[key]
 
