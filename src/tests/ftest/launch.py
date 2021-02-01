@@ -1635,7 +1635,7 @@ def get_daos_server_service_status(host_list):
     # Possible states:
     #   active, inactive, activating, deactivating, failed, unknown
     states_requiring_stop = ["active", "activating", "deactivating"]
-    states_requiring_disable = states_requiring_stop + ["inactive", "failed"]
+    states_requiring_disable = states_requiring_stop + ["failed"]
     command = "systemctl is-active daos_server.service"
     task = get_remote_output(host_list, command)
     for output, nodelist in task.iter_buffers():
@@ -1876,6 +1876,10 @@ def main():
         if status & 256 == 256:
             print("ERROR: Detected one or more tests with failure to create "
                   "stack traces from core files!")
+            ret_code = 1
+        if status & 512 == 512:
+            print("ERROR: Detected stopping daos_server.service after one or "
+                  "more tests!")
             ret_code = 1
     exit(ret_code)
 
