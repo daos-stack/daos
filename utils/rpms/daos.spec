@@ -283,6 +283,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %dir %{_sysconfdir}/bash_completion.d
 %{_sysconfdir}/bash_completion.d/daos.bash
 %{_libdir}/libdaos_common.so
+%{_libdir}/libdaos_common_pmem.so
 # TODO: this should move from daos_srv to daos
 %{_libdir}/daos_srv/libplacement.so
 # Certificate generation files
@@ -409,6 +410,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Mon Feb 1 2021 Vish Venkatesan<vishwanath.venkatesan@intel.com>1.1.2.1-7
+- Add new pmem specific version of DAOS common library
+
 * Sat Jan 23 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.1.2.1-6
 - Update to mercury v2.0.1rc1
 
