@@ -123,10 +123,45 @@ struct dss_xstream *dss_get_xstream(int stream_id);
 int dss_xstream_cnt(void);
 
 /* sched.c */
+#define SCHED_RELAX_INTVL_MAX		100 /* msec */
 #define SCHED_RELAX_INTVL_DEFAULT	1 /* msec */
 
+enum sched_cpu_relax_mode {
+	SCHED_RELAX_MODE_SLEEP		= 0,
+	SCHED_RELAX_MODE_NET,
+	SCHED_RELAX_MODE_DISABLED,
+	SCHED_RELAX_MODE_INVALID,
+};
+
+static inline char *
+sched_relax_mode2str(enum sched_cpu_relax_mode mode)
+{
+	switch (mode) {
+	case SCHED_RELAX_MODE_SLEEP:
+		return "sleep";
+	case SCHED_RELAX_MODE_NET:
+		return "net";
+	case SCHED_RELAX_MODE_DISABLED:
+		return "disabled";
+	default:
+		return "invalid";
+	}
+}
+
+static inline enum sched_cpu_relax_mode
+sched_relax_str2mode(char *str)
+{
+	if (strcasecmp(str, "sleep") == 0)
+		return SCHED_RELAX_MODE_SLEEP;
+	else if (strcasecmp(str, "net") == 0)
+		return SCHED_RELAX_MODE_NET;
+	else if (strcasecmp(str, "disabled") == 0)
+		return SCHED_RELAX_MODE_DISABLED;
+	else
+		return SCHED_RELAX_MODE_INVALID;
+}
+
 extern bool sched_prio_disabled;
-extern bool sched_relax_disabled;
 extern unsigned int sched_stats_intvl;
 extern unsigned int sched_relax_intvl;
 extern unsigned int sched_relax_mode;

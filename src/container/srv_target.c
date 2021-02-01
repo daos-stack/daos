@@ -404,16 +404,6 @@ cont_aggregate_ult(void *arg)
 		sched_req_sleep(cont->sc_agg_req, msecs);
 	}
 
-	if (daos_handle_is_valid(cont->sc_remote_coh)) {
-		D_ASSERT(daos_handle_is_valid(cont->sc_remote_poh));
-		dsc_cont_close(cont->sc_remote_poh, cont->sc_remote_coh);
-		cont->sc_remote_coh = DAOS_HDL_INVAL;
-	}
-	if (daos_handle_is_valid(cont->sc_remote_poh)) {
-		dsc_pool_close(cont->sc_remote_poh);
-		cont->sc_remote_poh = DAOS_HDL_INVAL;
-	}
-
 	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregation ULT stopped\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 		dmi->dmi_tgt_id);
@@ -596,8 +586,6 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 	cont->sc_snapshots_nr = 0;
 	cont->sc_snapshots = NULL;
 	D_INIT_LIST_HEAD(&cont->sc_link);
-	cont->sc_remote_poh = DAOS_HDL_INVAL;
-	cont->sc_remote_coh = DAOS_HDL_INVAL;
 
 	*link = &cont->sc_list;
 	return 0;

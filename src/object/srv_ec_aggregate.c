@@ -2141,15 +2141,11 @@ ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	agg_param.ap_yield_arg		= yield_arg;
 	agg_param.ap_credits_max	= EC_AGG_ITERATION_MAX;
 
-	if (daos_handle_is_valid(cont->sc_remote_coh))
-		goto cont_opened;
-
 	rc = ABT_eventual_create(sizeof(*status),
 				 &agg_param.ap_pool_info.api_eventual);
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
-	rc = dss_ult_create(agg_iv_ult, &agg_param, DSS_XS_SYS, 0, 0,
-			    NULL);
+	rc = dss_ult_periodic(agg_iv_ult, &agg_param, DSS_XS_SYS, 0, 0, NULL);
 	if (rc)
 		goto out;
 	rc = ABT_eventual_wait(agg_param.ap_pool_info.api_eventual,
@@ -2180,18 +2176,6 @@ ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		goto out;
 	}
 
-	/* Cache the open handles to avoid periodic open */
-	uuid_copy(cont->sc_poh_uuid, agg_param.ap_pool_info.api_poh_uuid);
-	uuid_copy(cont->sc_coh_uuid, agg_param.ap_pool_info.api_coh_uuid);
-	cont->sc_remote_poh = ph;
-	ph = DAOS_HDL_INVAL;
-	cont->sc_remote_coh = agg_param.ap_pool_info.api_cont_hdl;
-
-cont_opened:
-	uuid_copy(agg_param.ap_pool_info.api_poh_uuid, cont->sc_poh_uuid);
-	uuid_copy(agg_param.ap_pool_info.api_coh_uuid, cont->sc_coh_uuid);
-	agg_param.ap_pool_info.api_cont_hdl = cont->sc_remote_coh;
-
 	D_INIT_LIST_HEAD(&agg_param.ap_agg_entry.ae_cur_stripe.as_dextents);
 	D_INIT_LIST_HEAD(&agg_param.ap_agg_entry.ae_cur_stripe.as_hoextents);
 
@@ -2212,6 +2196,7 @@ cont_opened:
 	if (rc == 0 && is_current)
 		cont->sc_ec_agg_eph = epr->epr_hi;
 
+	dsc_cont_close(ph, agg_param.ap_pool_info.api_cont_hdl);
 out:
 	daos_prop_free(agg_param.ap_prop);
 	ABT_eventual_free(&agg_param.ap_pool_info.api_eventual);

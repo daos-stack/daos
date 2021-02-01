@@ -58,10 +58,8 @@ struct sched_request {
 };
 
 bool		sched_prio_disabled;
-bool		sched_relax_disabled;
 unsigned int	sched_stats_intvl;
 unsigned int	sched_relax_intvl = SCHED_RELAX_INTVL_DEFAULT;
-/* CPU relax mode: 0 - sleep; 1 - block cart progress; */
 unsigned int	sched_relax_mode;
 
 enum {
@@ -1456,16 +1454,18 @@ sched_try_relax(struct dss_xstream *dx, ABT_pool *pools, uint32_t running)
 		req = d_list_entry(info->si_sleep_list.next,
 				   struct sched_request, sr_link);
 
+		/* wakeup_all() has already been called for info->si_cur_ts */
 		D_ASSERT(req->sr_wakeup_time > info->si_cur_ts);
 		if (sleep_time > req->sr_wakeup_time - info->si_cur_ts)
 			sleep_time = req->sr_wakeup_time - info->si_cur_ts;
 	}
+	D_ASSERT(sleep_time > 0 && sleep_time <= SCHED_RELAX_INTVL_MAX);
 
 	/*
 	 * Wait on external network request if the xstream has Cart context,
 	 * otherwise, sleep for a while.
 	 */
-	if (sched_relax_mode != 0 && dx->dx_comm) {
+	if (sched_relax_mode != SCHED_RELAX_MODE_SLEEP && dx->dx_comm) {
 		/* convert to micro-seconds */
 		dx->dx_timeout = sleep_time * 1000;
 	} else {
@@ -1509,7 +1509,7 @@ sched_start_cycle(struct sched_data *data, ABT_pool *pools)
 	cycle->sc_ults_cnt[DSS_POOL_GENERIC] = cnt;
 	cycle->sc_ults_tot += cycle->sc_ults_cnt[DSS_POOL_GENERIC];
 
-	if (!sched_relax_disabled)
+	if (sched_relax_mode != SCHED_RELAX_MODE_DISABLED)
 		sched_try_relax(dx, pools, cycle->sc_ults_tot);
 
 	if (sched_stats_intvl != 0 &&
