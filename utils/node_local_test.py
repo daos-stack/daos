@@ -390,7 +390,8 @@ class DaosServer():
                                                 server_env['PATH'])
 
         cmd = [daos_server, '--config={}'.format(self._yaml_file.name),
-               'start', '-t' '4', '--insecure', '-d', self.agent_dir]
+               'start', '-t' '4', '--insecure', '-d', self.agent_dir,
+               '--recreate-superblocks']
 
         server_env['DAOS_DISABLE_REQ_FWD'] = '1'
         self._sp = subprocess.Popen(cmd, env=server_env)

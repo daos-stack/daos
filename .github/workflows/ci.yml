@@ -84,7 +84,7 @@ jobs:
                           --build-arg COMPILER=${{ matrix.compiler }}
                           -t ${{ matrix.distro }}/${{ matrix.compiler }}
     - name: Test daos ${{ matrix.distro }} Docker image with ${{ matrix.compiler }}
-      run: docker run ${{ matrix.distro }}/${{ matrix.compiler }} ls
+      run: docker run --tmpfs /mnt/daos ${{ matrix.distro }}/${{ matrix.compiler }} ./utils/node_local_test.py kv
 
   Spelling:
     runs-on: ubuntu-20.04
