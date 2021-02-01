@@ -1,25 +1,8 @@
 #!/usr/bin/python2 -u
 """
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
 from __future__ import print_function
@@ -96,7 +79,7 @@ def display_disk_space(path):
     print(get_output(["df", "-h", path]))
 
 
-def get_build_environment():
+def get_build_environment(args):
     """Obtain DAOS build environment variables from the .build_vars.json file.
 
     Returns:
@@ -106,11 +89,21 @@ def get_build_environment():
     build_vars_file = os.path.join(
         os.path.dirname(os.path.realpath(__file__)),
         "../../.build_vars.json")
-    with open(build_vars_file) as vars_file:
-        return json.load(vars_file)
+    try:
+        with open(build_vars_file) as vars_file:
+            return json.load(vars_file)
+    except ValueError:
+        if not args.list:
+            raise
+        return json.loads('{{"PREFIX": "{}"}}'.format(os.getcwd()))
+    except IOError as error:
+        if error.errno == errno.ENOENT:
+            if not args.list:
+                raise
+            return json.loads('{{"PREFIX": "{}"}}'.format(os.getcwd()))
 
 
-def get_temporary_directory(base_dir=None):
+def get_temporary_directory(args, base_dir=None):
     """Get the temporary directory used by functional tests.
 
     Args:
@@ -121,7 +114,7 @@ def get_temporary_directory(base_dir=None):
 
     """
     if base_dir is None:
-        base_dir = get_build_environment()["PREFIX"]
+        base_dir = get_build_environment(args)["PREFIX"]
     if base_dir == "/usr":
         tmp_dir = os.getenv(
             "DAOS_TEST_SHARED_DIR", os.path.expanduser("~/daos_test"))
@@ -145,7 +138,7 @@ def set_test_environment(args):
         None
 
     """
-    base_dir = get_build_environment()["PREFIX"]
+    base_dir = get_build_environment(args)["PREFIX"]
     bin_dir = os.path.join(base_dir, "bin")
     sbin_dir = os.path.join(base_dir, "sbin")
     # /usr/sbin is not setup on non-root user for CI nodes.
@@ -154,70 +147,81 @@ def set_test_environment(args):
     usr_sbin = os.path.sep + os.path.join("usr", "sbin")
     path = os.environ.get("PATH")
 
-    # Get the default interface to use if OFI_INTERFACE is not set
-    interface = os.environ.get("OFI_INTERFACE")
-    if interface is None:
-        # Find all the /sys/class/net interfaces on the launch node
-        # (excluding lo)
-        print("Detecting network devices - OFI_INTERFACE not set")
-        available_interfaces = {}
-        net_path = os.path.join(os.path.sep, "sys", "class", "net")
-        net_list = [dev for dev in os.listdir(net_path) if dev != "lo"]
-        for device in sorted(net_list):
-            # Get the interface state - only include active (up) interfaces
-            with open(os.path.join(net_path, device, "operstate"), "r") as \
-                 fileh:
-                state = fileh.read().strip()
-            # Only include interfaces that are up
-            if state.lower() == "up":
-                # Get the interface speed - used to select the fastest available
-                with open(os.path.join(net_path, device, "speed"), "r") as \
+    if not args.list:
+        # Get the default interface to use if OFI_INTERFACE is not set
+        interface = os.environ.get("OFI_INTERFACE")
+        if interface is None:
+            # Find all the /sys/class/net interfaces on the launch node
+            # (excluding lo)
+            print("Detecting network devices - OFI_INTERFACE not set")
+            available_interfaces = {}
+            net_path = os.path.join(os.path.sep, "sys", "class", "net")
+            net_list = [dev for dev in os.listdir(net_path) if dev != "lo"]
+            for device in sorted(net_list):
+                if device == "bonding_masters":
+                    continue
+                # Get the interface state - only include active (up) interfaces
+                with open(os.path.join(net_path, device, "operstate"), "r") as \
                      fileh:
-                    try:
-                        speed = int(fileh.read().strip())
-                        # KVM/Qemu/libvirt returns an EINVAL
-                    except IOError as ioerror:
-                        if ioerror.errno == errno.EINVAL:
-                            speed = 1000
-                        else:
-                            raise
+                    state = fileh.read().strip()
+                # Only include interfaces that are up
+                if state.lower() == "up":
+                    # Get the interface speed - used to select the fastest
+                    # available
+                    with open(os.path.join(net_path, device, "speed"), "r") as \
+                         fileh:
+                        try:
+                            speed = int(fileh.read().strip())
+                            # KVM/Qemu/libvirt returns an EINVAL
+                        except IOError as ioerror:
+                            if ioerror.errno == errno.EINVAL:
+                                speed = 1000
+                            else:
+                                raise
+                    print(
+                        "  - {0:<5} (speed: {1:>6} state: {2})".format(
+                            device, speed, state))
+                    # Only include the first active interface for each speed -
+                    # first is determined by an alphabetic sort: ib0 will be
+                    # checked before ib1
+                    if speed not in available_interfaces:
+                        available_interfaces[speed] = device
+            print("Available interfaces: {}".format(available_interfaces))
+            try:
+                # Select the fastest active interface available by sorting
+                # the speed
+                interface = \
+                    available_interfaces[sorted(available_interfaces)[-1]]
+            except IndexError:
                 print(
-                    "  - {0:<5} (speed: {1:>6} state: {2})".format(
-                        device, speed, state))
-                # Only include the first active interface for each speed - first
-                # is determined by an alphabetic sort: ib0 will be checked
-                # before ib1
-                if speed not in available_interfaces:
-                    available_interfaces[speed] = device
-        print("Available interfaces: {}".format(available_interfaces))
-        try:
-            # Select the fastest active interface available by sorting the speed
-            interface = available_interfaces[sorted(available_interfaces)[-1]]
-        except IndexError:
-            print(
-                "Error obtaining a default interface from: {}".format(
-                    os.listdir(net_path)))
-            exit(1)
-    print("Using {} as the default interface".format(interface))
+                    "Error obtaining a default interface from: {}".format(
+                        os.listdir(net_path)))
+                exit(1)
+        print("Using {} as the default interface".format(interface))
 
-    # Update env definitions
+        # Update env definitions
+        os.environ["CRT_CTX_SHARE_ADDR"] = "0"
+        os.environ["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", interface)
+
+        # Set the default location for daos log files written during testing
+        # if not already defined.
+        if "DAOS_TEST_LOG_DIR" not in os.environ:
+            os.environ["DAOS_TEST_LOG_DIR"] = DEFAULT_DAOS_TEST_LOG_DIR
+        os.environ["D_LOG_FILE"] = os.path.join(
+            os.environ["DAOS_TEST_LOG_DIR"], "daos.log")
+
+        # Ensure the daos log files directory exists on each possible test node
+        test_hosts = NodeSet(socket.gethostname().split(".")[0])
+        test_hosts.update(args.test_clients)
+        test_hosts.update(args.test_servers)
+        spawn_commands(
+            test_hosts, "mkdir -p {}".format(os.environ["DAOS_TEST_LOG_DIR"]))
+
+        # Assign the default value for transport configuration insecure mode
+        os.environ["DAOS_INSECURE_MODE"] = str(args.insecure_mode)
+
+    # Update PATH
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
-    os.environ["CRT_CTX_SHARE_ADDR"] = "0"
-    os.environ["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", interface)
-
-    # Set the default location for daos log files written during testing if not
-    # already defined.
-    if "DAOS_TEST_LOG_DIR" not in os.environ:
-        os.environ["DAOS_TEST_LOG_DIR"] = DEFAULT_DAOS_TEST_LOG_DIR
-    os.environ["D_LOG_FILE"] = os.path.join(
-        os.environ["DAOS_TEST_LOG_DIR"], "daos.log")
-
-    # Ensure the daos log files directory exists on each possible test node
-    test_hosts = NodeSet(socket.gethostname().split(".")[0])
-    test_hosts.update(args.test_clients)
-    test_hosts.update(args.test_servers)
-    spawn_commands(
-        test_hosts, "mkdir -p {}".format(os.environ["DAOS_TEST_LOG_DIR"]))
 
     # Python paths required for functional testing
     python_version = "python{}{}".format(
@@ -229,9 +233,6 @@ def set_test_environment(args):
         os.path.abspath("cart/util"),
         os.path.join(base_dir, "lib64", python_version, "site-packages"),
     ]
-
-    # Assign the default value for transport configuration insecure mode
-    os.environ["DAOS_INSECURE_MODE"] = str(args.insecure_mode)
 
     # Check the PYTHONPATH env definition
     python_path = os.environ.get("PYTHONPATH")
@@ -497,7 +498,15 @@ def get_test_list(tags):
     test_tags = []
     test_list = []
     # Check if fault injection is enabled ( 0 return status)
-    faults_disabled = time_command(["fault_status"])
+    faults_disabled = False
+    try:
+        faults_disabled = time_command(["fault_status"])
+    except OSError as error:
+        if error.errno == errno.ENOENT:
+            # Not built yet.  Must be trying to figure out which tests are
+            # run for the given tag(s).  Assume this is not a release run
+            # then and faults are enabled
+            pass
     for tag in tags:
         if ".py" in tag:
             # Assume '.py' indicates a test and just add it to the list
@@ -1089,8 +1098,8 @@ def archive_config_files(avocado_logs_dir, args):
     print("Archiving config files from {} in {}".format(host_list, destination))
 
     # Copy any config files
-    base_dir = get_build_environment()["PREFIX"]
-    configs_dir = get_temporary_directory(base_dir)
+    base_dir = get_build_environment(args)["PREFIX"]
+    configs_dir = get_temporary_directory(args, base_dir)
     task = archive_files(
         destination, host_list, "{}/*_*_*.yaml".format(configs_dir), False,
         args)

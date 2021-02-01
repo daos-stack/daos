@@ -1,24 +1,7 @@
 //
 // (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package events
@@ -30,12 +13,17 @@ import "C"
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
+	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 )
 
 // RASExtendedInfo provides extended information for an event.
@@ -47,12 +35,7 @@ type RASExtendedInfo interface {
 func NewFromProto(pbEvt *sharedpb.RASEvent) (*RASEvent, error) {
 	evt := new(RASEvent)
 
-	switch RASID(pbEvt.Id) {
-	case RASRankDown, RASPoolRepsUpdate:
-		return evt, evt.FromProto(pbEvt)
-	default:
-		return nil, errors.Errorf("unsupported event ID: %d", pbEvt.Id)
-	}
+	return evt, evt.FromProto(pbEvt)
 }
 
 // RASID identifies a given RAS event.
@@ -61,9 +44,15 @@ type RASID uint32
 // RASID constant definitions matching those used when creating events either in
 // the control or data (iosrv) planes.
 const (
+	RASUnknownEvent   RASID = C.RAS_UNKNOWN_EVENT
+	RASRankUp         RASID = C.RAS_RANK_UP
 	RASRankDown       RASID = C.RAS_RANK_DOWN
 	RASRankNoResponse RASID = C.RAS_RANK_NO_RESPONSE
 	RASPoolRepsUpdate RASID = C.RAS_POOL_REPS_UPDATE
+	RASSwimRankAlive  RASID = C.RAS_SWIM_RANK_ALIVE
+	RASSwimRankDead   RASID = C.RAS_SWIM_RANK_DEAD
+	RASSystemStop     RASID = C.RAS_SYSTEM_STOP
+	RASSystemStart    RASID = C.RAS_SYSTEM_START
 )
 
 func (id RASID) String() string {
@@ -99,10 +88,11 @@ type RASSeverityID uint32
 
 // RASSeverityID constant definitions.
 const (
-	RASSeverityFatal RASSeverityID = C.RAS_SEV_FATAL
-	RASSeverityWarn  RASSeverityID = C.RAS_SEV_WARN
-	RASSeverityError RASSeverityID = C.RAS_SEV_ERROR
-	RASSeverityInfo  RASSeverityID = C.RAS_SEV_INFO
+	RASSeverityUnknown RASSeverityID = C.RAS_SEV_UNKNOWN
+	RASSeverityFatal   RASSeverityID = C.RAS_SEV_FATAL
+	RASSeverityWarn    RASSeverityID = C.RAS_SEV_WARN
+	RASSeverityError   RASSeverityID = C.RAS_SEV_ERROR
+	RASSeverityInfo    RASSeverityID = C.RAS_SEV_INFO
 )
 
 func (sev RASSeverityID) String() string {
@@ -124,14 +114,59 @@ type RASEvent struct {
 	Hostname     string          `json:"hostname"`
 	Rank         uint32          `json:"rank"`
 	HWID         string          `json:"hw_id"`
-	ProcID       string          `json:"proc_id"`
-	ThreadID     string          `json:"thread_id"`
+	ProcID       uint64          `json:"proc_id"`
+	ThreadID     uint64          `json:"thread_id"`
 	JobID        string          `json:"job_id"`
 	PoolUUID     string          `json:"pool_uuid"`
 	ContUUID     string          `json:"cont_uuid"`
 	ObjID        string          `json:"obj_id"`
 	CtlOp        string          `json:"ctl_op"`
 	ExtendedInfo RASExtendedInfo `json:"extended_info"`
+
+	forwarded atm.Bool
+}
+
+// IsForwarded returns true if event has been forwarded between hosts.
+func (evt *RASEvent) IsForwarded() bool {
+	return evt.forwarded.Load()
+}
+
+// WithIsForwarded sets the forwarded state of this event.
+func (evt *RASEvent) WithIsForwarded(isForwarded bool) *RASEvent {
+	evt.forwarded = atm.NewBool(isForwarded)
+
+	return evt
+}
+
+// New accepts a pointer to a RASEvent and fills in any
+// missing fields before returning the event.
+func New(evt *RASEvent) *RASEvent {
+	if evt == nil {
+		evt = &RASEvent{}
+	}
+
+	// Set defaults as necessary.
+	if evt.Timestamp == "" {
+		evt.Timestamp = common.FormatTime(time.Now())
+	}
+	if evt.Hostname == "" {
+		getHostName := func() string {
+			hn, err := os.Hostname()
+			if err != nil {
+				return "failed to get hostname"
+			}
+			return hn
+		}
+		evt.Hostname = getHostName()
+	}
+	if evt.ProcID == 0 {
+		evt.ProcID = uint64(os.Getpid())
+	}
+	if evt.Severity == RASSeverityUnknown {
+		evt.Severity = RASSeverityInfo
+	}
+
+	return evt
 }
 
 // MarshalJSON marshals RASEvent to JSON.
@@ -186,6 +221,8 @@ func (evt *RASEvent) ToProto() (*sharedpb.RASEvent, error) {
 		pbEvt.ExtendedInfo, err = RankStateInfoToProto(ei)
 	case *PoolSvcInfo:
 		pbEvt.ExtendedInfo, err = PoolSvcInfoToProto(ei)
+	case *StrInfo:
+		pbEvt.ExtendedInfo, err = StrInfoToProto(ei)
 	}
 
 	return pbEvt, err
@@ -209,6 +246,7 @@ func (evt *RASEvent) FromProto(pbEvt *sharedpb.RASEvent) (err error) {
 		ContUUID:  pbEvt.ContUuid,
 		ObjID:     pbEvt.ObjId,
 		CtlOp:     pbEvt.CtlOp,
+		forwarded: atm.NewBool(false),
 	}
 
 	switch ei := pbEvt.GetExtendedInfo().(type) {
@@ -216,7 +254,89 @@ func (evt *RASEvent) FromProto(pbEvt *sharedpb.RASEvent) (err error) {
 		evt.ExtendedInfo, err = RankStateInfoFromProto(ei)
 	case *sharedpb.RASEvent_PoolSvcInfo:
 		evt.ExtendedInfo, err = PoolSvcInfoFromProto(ei)
+	case *sharedpb.RASEvent_StrInfo:
+		evt.ExtendedInfo, err = StrInfoFromProto(ei)
+	case nil:
+		// no extended info
+	default:
+		err = errors.New("unknown extended info type")
 	}
 
 	return
+}
+
+// PrintRAS generates a string representation of the event consistent with
+// what is logged in the data plane.
+func (evt *RASEvent) PrintRAS() string {
+	var b strings.Builder
+
+	/* Log mandatory RAS fields. */
+	fmt.Fprintf(&b, "&&& RAS EVENT id: [%s]", evt.ID)
+	if evt.Timestamp != "" {
+		fmt.Fprintf(&b, " ts: [%s]", evt.Timestamp)
+	}
+	if evt.Hostname != "" {
+		fmt.Fprintf(&b, " host: [%s]", evt.Hostname)
+	}
+	fmt.Fprintf(&b, " type: [%s] sev: [%s]", evt.Type, evt.Severity)
+	if evt.Msg != "" {
+		fmt.Fprintf(&b, " msg: [%s]", evt.Msg)
+	}
+	if evt.ProcID != 0 {
+		fmt.Fprintf(&b, " pid: [%d]", evt.ProcID)
+	}
+	if evt.ThreadID != 0 {
+		fmt.Fprintf(&b, " tid: [%d]", evt.ThreadID)
+	}
+
+	/* Log optional RAS fields. */
+	if evt.HWID != "" {
+		fmt.Fprintf(&b, " hwid: [%s]", evt.HWID)
+	}
+	if evt.Rank != C.CRT_NO_RANK {
+		fmt.Fprintf(&b, " rank: [%d]", evt.Rank)
+	}
+	if evt.JobID != "" {
+		fmt.Fprintf(&b, " jobid: [%s]", evt.JobID)
+	}
+	if evt.PoolUUID != "" {
+		fmt.Fprintf(&b, " pool: [%s]", evt.PoolUUID)
+	}
+	if evt.ContUUID != "" {
+		fmt.Fprintf(&b, " container: [%s]", evt.ContUUID)
+	}
+	if evt.ObjID != "" {
+		fmt.Fprintf(&b, " objid: [%s]", evt.ObjID)
+	}
+	if evt.CtlOp != "" {
+		fmt.Fprintf(&b, " ctlop: [%s]", evt.CtlOp)
+	}
+
+	/* Log data blob if event info is non-specific */
+	if ei := evt.GetStrInfo(); ei != nil && *ei != "" {
+		fmt.Fprintf(&b, " data: [%s]", *ei)
+	}
+
+	return b.String()
+}
+
+// HandleClusterEvent extracts event field from protobuf request message and
+// converts to native event type.
+// The Event is then published to make available to locally subscribed consumers
+// to act upon.
+func (ps *PubSub) HandleClusterEvent(req *sharedpb.ClusterEventReq, forwarded bool) (*sharedpb.ClusterEventResp, error) {
+	switch {
+	case req == nil:
+		return nil, errors.New("nil request")
+	case req.Event == nil:
+		return nil, errors.New("nil event in request")
+	}
+
+	event, err := NewFromProto(req.Event)
+	if err != nil {
+		return nil, err
+	}
+	ps.Publish(event.WithIsForwarded(forwarded))
+
+	return &sharedpb.ClusterEventResp{Sequence: req.Sequence}, nil
 }
