@@ -62,4 +62,7 @@ crt_bulk_desc_dup(struct crt_bulk_desc *bulk_desc_new,
 void
 crt_hdlr_proto_query(crt_rpc_t *rpc_req);
 
+int
+crt_register_proto_fi(crt_endpoint_t *ep);
+
 #endif /* __CRT_INTERNAL_FNS_H__ */

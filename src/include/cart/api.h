@@ -83,6 +83,7 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 int
 crt_context_create(crt_context_t *crt_ctx);
 
+
 /**
  * Set the timeout value for all RPC requests created on the specified context.
  * Setting the timeout after crt_req_create() call will not affect already
@@ -1176,6 +1177,7 @@ crt_group_config_remove(crt_group_t *grp);
 int
 crt_group_detach(crt_group_t *attached_grp);
 
+
 /**
  * Convert a primary group rank to a local subgroup rank. Given a primary group
  * rank \p rank_in, find its rank number \p rank_out within a sub-group \p
@@ -1595,6 +1597,7 @@ crt_register_event_cb(crt_event_cb event_handler, void *arg);
 int
 crt_unregister_event_cb(crt_event_cb event_handler, void *arg);
 
+
 /**
  * A protocol is a set of RPCs. A protocol has a base opcode and a version,
  * member RPCs have opcodes that are contiguous numbers starting from
@@ -1631,6 +1634,7 @@ crt_unregister_event_cb(crt_event_cb event_handler, void *arg);
  * 3) The client registers MY_BASE_OPC with version number MY_VER, then starts
  *    sending RPCs using it's member opcodes.
  */
+
 
 /**
  * 1) define crf for each member RPC. my_rpc_crf_1, my_rpc_crf_2
@@ -1704,8 +1708,6 @@ int
 crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
 		uint32_t *ver, int count, crt_proto_query_cb_t cb, void *arg);
 
-int
-crt_register_proto_fi(crt_endpoint_t *ep);
 
 /**
  * Set self rank.
@@ -1775,6 +1777,7 @@ crt_group_rank_remove(crt_group_t *group, d_rank_t rank);
  *                              on failure.
  */
 int crt_self_uri_get(int tag, char **uri);
+
 
 /**
  * Retrieve group information containing ranks and associated uris
@@ -1879,7 +1882,7 @@ int crt_group_psrs_set(crt_group_t *grp, d_rank_list_t *rank_list);
  *                              on failure.
  */
 int crt_group_primary_rank_add(crt_context_t ctx, crt_group_t *grp,
-			       d_rank_t primary_rank, char *uri);
+			d_rank_t primary_rank, char *uri);
 
 /**
  * Add rank to the specified secondary group.
@@ -1892,7 +1895,7 @@ int crt_group_primary_rank_add(crt_context_t ctx, crt_group_t *grp,
  *                              on failure.
  */
 int crt_group_secondary_rank_add(crt_group_t *grp, d_rank_t secondary_rank,
-				 d_rank_t primary_rank);
+				d_rank_t primary_rank);
 /**
  * Create a secondary group.
  *
@@ -1906,8 +1909,8 @@ int crt_group_secondary_rank_add(crt_group_t *grp, d_rank_t secondary_rank,
  *                               failure.
  */
 int crt_group_secondary_create(crt_group_id_t grp_name,
-			       crt_group_t *primary_grp, d_rank_list_t *ranks,
-			       crt_group_t **ret_grp);
+			crt_group_t *primary_grp, d_rank_list_t *ranks,
+			crt_group_t **ret_grp);
 
 /**
  * Destroy a secondary group.
@@ -1918,6 +1921,7 @@ int crt_group_secondary_create(crt_group_id_t grp_name,
  *                               failure.
  */
 int crt_group_secondary_destroy(crt_group_t *grp);
+
 
 /**
  * Perform a primary group modification in an atomic fashion based on the
@@ -1961,8 +1965,8 @@ int crt_group_secondary_destroy(crt_group_t *grp);
  * etc...
  */
 int crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs,
-			     int num_ctxs, d_rank_list_t *ranks, char **uris,
-			     crt_group_mod_op_t op, uint32_t version);
+			int num_ctxs, d_rank_list_t *ranks, char **uris,
+			crt_group_mod_op_t op, uint32_t version);
 
 /**
  * Perform a secondary group modification in an atomic fashion based on the
@@ -1979,8 +1983,8 @@ int crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs,
  *                               failure.
  */
 int crt_group_secondary_modify(crt_group_t *grp, d_rank_list_t *sec_ranks,
-			       d_rank_list_t *prim_ranks, crt_group_mod_op_t op,
-			       uint32_t version);
+			d_rank_list_t *prim_ranks, crt_group_mod_op_t op,
+			uint32_t version);
 
 /**
  * Initialize swim on the specified context index.

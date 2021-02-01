@@ -14,6 +14,9 @@
 #include <getopt.h>
 #include <semaphore.h>
 
+/* for crt_register_proto_fi() */
+#include "crt_internal.h"
+
 #include "tests_common.h"
 
 /* max number of ranks that can be queried at once */
