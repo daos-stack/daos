@@ -262,6 +262,7 @@ enum {
  * node is hardcoded to 1, [2-254] are defined by the admin
  */
 enum {
+	DAOS_PROP_CO_REDUN_MIN	= 1,
 	DAOS_PROP_CO_REDUN_NODE	= 1, /** hard-coded */
 	DAOS_PROP_CO_REDUN_MAX	= 254,
 };
