@@ -2002,12 +2002,15 @@ rdb_timerd(void *arg)
 		if (db->d_stop)
 			break;
 
+		t_prev = t;
 		/* Wait for d in [d_min, d_max] before the next beat. */
 		d = d_min + (d_max - d_min) * rdb_raft_rand();
-		sched_req_sleep(sched_req, (uint32_t)(d * 1000));
-
-		t_prev = t;
 		t = ABT_get_wtime();
+		if (t < t_prev + d) {
+			d_prev = t_prev + d - t;
+			sched_req_sleep(sched_req, (uint32_t)(d_prev * 1000));
+			t = ABT_get_wtime();
+		}
 	} while (!db->d_stop);
 
 	sched_req_put(sched_req);
