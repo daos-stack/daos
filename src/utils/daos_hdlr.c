@@ -3005,6 +3005,7 @@ serialize_recx_array(struct hdf5_args *hdf5,
 	d_iov_t			iov;
 	hid_t			status = 0;
 
+	hdf5->rx_dims[0] = 0;	
 	while (!daos_anchor_is_eof(&recx_anchor)) {
 		memset(recxs, 0, sizeof(recxs));
 		memset(eprs, 0, sizeof(eprs));
