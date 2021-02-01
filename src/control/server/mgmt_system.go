@@ -577,15 +577,12 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, pbReq *mgmtpb.SystemStopReq)
 
 	// Raise event on systemwide shutdown
 	if pbReq.GetHosts() == "" && pbReq.GetRanks() == "" && pbReq.GetKill() {
-		evt, err := events.NewGenericEvent(events.RASSystemStop,
-			events.RASTypeInfoOnly, events.RASSeverityInfo,
-			"System-wide shutdown requested", uint32(system.NilRank),
-			"", "", "", "", "", "", "")
-		if err != nil {
-			svc.log.Errorf("creating generic event: %s", err)
-		} else {
-			svc.events.Publish(evt)
-		}
+		svc.events.Publish(events.New(&events.RASEvent{
+			ID:   events.RASSystemStop,
+			Type: events.RASTypeInfoOnly,
+			Msg:  "System-wide shutdown requested",
+			Rank: uint32(system.NilRank),
+		}))
 	}
 
 	// TODO: consider locking to prevent join attempts when shutting down
@@ -650,15 +647,12 @@ func (svc *mgmtSvc) SystemStart(ctx context.Context, pbReq *mgmtpb.SystemStartRe
 
 	// Raise event on systemwide start
 	if pbReq.GetHosts() == "" && pbReq.GetRanks() == "" {
-		evt, err := events.NewGenericEvent(events.RASSystemStart,
-			events.RASTypeInfoOnly, events.RASSeverityInfo,
-			"System-wide start requested", uint32(system.NilRank),
-			"", "", "", "", "", "", "")
-		if err != nil {
-			svc.log.Errorf("creating generic event: %s", err)
-		} else {
-			svc.events.Publish(evt)
-		}
+		svc.events.Publish(events.New(&events.RASEvent{
+			ID:   events.RASSystemStart,
+			Type: events.RASTypeInfoOnly,
+			Msg:  "System-wide start requested",
+			Rank: uint32(system.NilRank),
+		}))
 	}
 
 	fanResp, _, err := svc.rpcFanout(ctx, fanoutRequest{

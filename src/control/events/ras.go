@@ -14,7 +14,9 @@ import "C"
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -42,9 +44,13 @@ type RASID uint32
 // RASID constant definitions matching those used when creating events either in
 // the control or data (iosrv) planes.
 const (
+	RASUnknownEvent   RASID = C.RAS_UNKNOWN_EVENT
+	RASRankUp         RASID = C.RAS_RANK_UP
 	RASRankDown       RASID = C.RAS_RANK_DOWN
 	RASRankNoResponse RASID = C.RAS_RANK_NO_RESPONSE
 	RASPoolRepsUpdate RASID = C.RAS_POOL_REPS_UPDATE
+	RASSwimRankAlive  RASID = C.RAS_SWIM_RANK_ALIVE
+	RASSwimRankDead   RASID = C.RAS_SWIM_RANK_DEAD
 	RASSystemStop     RASID = C.RAS_SYSTEM_STOP
 	RASSystemStart    RASID = C.RAS_SYSTEM_START
 )
@@ -82,10 +88,11 @@ type RASSeverityID uint32
 
 // RASSeverityID constant definitions.
 const (
-	RASSeverityFatal RASSeverityID = C.RAS_SEV_FATAL
-	RASSeverityWarn  RASSeverityID = C.RAS_SEV_WARN
-	RASSeverityError RASSeverityID = C.RAS_SEV_ERROR
-	RASSeverityInfo  RASSeverityID = C.RAS_SEV_INFO
+	RASSeverityUnknown RASSeverityID = C.RAS_SEV_UNKNOWN
+	RASSeverityFatal   RASSeverityID = C.RAS_SEV_FATAL
+	RASSeverityWarn    RASSeverityID = C.RAS_SEV_WARN
+	RASSeverityError   RASSeverityID = C.RAS_SEV_ERROR
+	RASSeverityInfo    RASSeverityID = C.RAS_SEV_INFO
 )
 
 func (sev RASSeverityID) String() string {
@@ -127,6 +134,37 @@ func (evt *RASEvent) IsForwarded() bool {
 // WithIsForwarded sets the forwarded state of this event.
 func (evt *RASEvent) WithIsForwarded(isForwarded bool) *RASEvent {
 	evt.forwarded = atm.NewBool(isForwarded)
+
+	return evt
+}
+
+// New accepts a pointer to a RASEvent and fills in any
+// missing fields before returning the event.
+func New(evt *RASEvent) *RASEvent {
+	if evt == nil {
+		evt = &RASEvent{}
+	}
+
+	// Set defaults as necessary.
+	if evt.Timestamp == "" {
+		evt.Timestamp = common.FormatTime(time.Now())
+	}
+	if evt.Hostname == "" {
+		getHostName := func() string {
+			hn, err := os.Hostname()
+			if err != nil {
+				return "failed to get hostname"
+			}
+			return hn
+		}
+		evt.Hostname = getHostName()
+	}
+	if evt.ProcID == 0 {
+		evt.ProcID = uint64(os.Getpid())
+	}
+	if evt.Severity == RASSeverityUnknown {
+		evt.Severity = RASSeverityInfo
+	}
 
 	return evt
 }
@@ -218,6 +256,8 @@ func (evt *RASEvent) FromProto(pbEvt *sharedpb.RASEvent) (err error) {
 		evt.ExtendedInfo, err = PoolSvcInfoFromProto(ei)
 	case *sharedpb.RASEvent_StrInfo:
 		evt.ExtendedInfo, err = StrInfoFromProto(ei)
+	case nil:
+		// no extended info
 	default:
 		err = errors.New("unknown extended info type")
 	}
