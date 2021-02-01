@@ -1097,19 +1097,14 @@ dc_cont_set_prop(tse_task_t *task)
 	crt_endpoint_t			 ep;
 	crt_rpc_t			*rpc;
 	struct cont_set_prop_args	 arg;
-	int				 i;
 	int				 rc;
 
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
-	for (i = 0; i < args->prop->dpp_nr; i++) {
-		if (args->prop->dpp_entries[i].dpe_type ==
-		    DAOS_PROP_CO_ALLOCED_OID) {
-			D_ERROR("Can't change MAX OID property after container "
-				"is already created.\n");
-			D_GOTO(err, rc = -DER_NO_PERM);
-		}
+	if (daos_prop_entry_get(args->prop, DAOS_PROP_CO_ALLOCED_OID)) {
+		D_ERROR("Can't set OID property if container is created.\n");
+		D_GOTO(err, rc = -DER_NO_PERM);
 	}
 
 	cont = dc_hdl2cont(args->coh);
