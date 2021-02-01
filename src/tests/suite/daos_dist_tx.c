@@ -2579,9 +2579,6 @@ dtx_37(void **state)
 	d_rank_t	 kill_rank = CRT_NO_RANK;
 	int		 i;
 
-	/* Skip for DAOS-6615 */
-	skip();
-
 	FAULT_INJECTION_REQUIRED();
 
 	print_message("DTX37: resync - leader failed during prepare\n");

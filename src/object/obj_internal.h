@@ -761,6 +761,12 @@ daos_iom_dump(daos_iom_t *iom)
 	D_PRINT("\n");
 }
 
+static inline bool
+obj_dtx_need_refresh(struct dtx_handle *dth, int rc)
+{
+	return rc == -DER_INPROGRESS && dth->dth_share_tbd_count > 0;
+}
+
 int  obj_class_init(void);
 void obj_class_fini(void);
 int  obj_utils_init(void);
