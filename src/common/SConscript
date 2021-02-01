@@ -16,10 +16,10 @@ def build_daos_common(env, client, prereqs):
     denv = env.Clone()
 
     if client:
-        denv.Append(CPPDEFINES=['-DDAOS_CLIENT_BUILD'])
-        denv.Append(OBJPREFIX="v_")
         libname = 'libdaos_common';
     else:
+        denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
+        denv.Append(OBJPREFIX="v_")
         libname = 'libdaos_common_pmem'
         prereqs.require(denv, 'pmdk')
 

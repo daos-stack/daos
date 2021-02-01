@@ -27,7 +27,7 @@ struct umem_tx_stage_item {
 	void		*txi_data;
 };
 
-#ifndef DAOS_CLIENT_BUILD
+#ifdef DAOS_PMEM_BUILD
 /** Convert an offset to an id.   No invalid flags will be maintained
  *  in the conversion.
  *
@@ -470,7 +470,7 @@ static struct umem_class umem_class_defined[] = {
 		.umc_ops	= &vmem_ops,
 		.umc_name	= "vmem",
 	},
-#ifndef DAOS_CLIENT_BUILD
+#ifdef DAOS_PMEM_BUILD
 	{
 		.umc_id		= UMEM_CLASS_PMEM,
 		.umc_ops	= &pmem_ops,
@@ -493,7 +493,7 @@ static struct umem_class umem_class_defined[] = {
 static void
 set_offsets(struct umem_instance *umm)
 {
-#ifndef DAOS_CLIENT_BUILD
+#ifdef DAOS_PMEM_BUILD
 	char		*root;
 	PMEMoid		 root_oid;
 #endif
@@ -503,7 +503,7 @@ set_offsets(struct umem_instance *umm)
 		return;
 	}
 
-#ifndef DAOS_CLIENT_BUILD
+#ifdef DAOS_PMEM_BUILD
 	root_oid = pmemobj_root(umm->umm_pool, 0);
 	D_ASSERTF(!OID_IS_NULL(root_oid),
 		  "You must call pmemobj_root before umem_class_init\n");
@@ -548,7 +548,7 @@ umem_class_init(struct umem_attr *uma, struct umem_instance *umm)
 	umm->umm_pool		= uma->uma_pool;
 	umm->umm_nospc_rc	= umc->umc_id == UMEM_CLASS_VMEM ?
 		-DER_NOMEM : -DER_NOSPACE;
-#ifndef DAOS_CLIENT_BUILD
+#ifdef DAOS_PMEM_BUILD
 	memcpy(umm->umm_slabs, uma->uma_slabs,
 	       sizeof(struct pobj_alloc_class_desc) * UMM_SLABS_CNT);
 #endif

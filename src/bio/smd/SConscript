@@ -6,7 +6,7 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
 
     denv = env.Clone()
-
+    denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     prereqs.require(denv, 'argobots')
 
     denv.Library('smd', Glob('*.c'),

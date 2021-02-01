@@ -12,8 +12,6 @@ def scons():
     denv = env.Clone()
     denv.AppendUnique(CFLAGS=['-std=gnu99'])
     denv.AppendUnique(CPPDEFINES=['TEST'])
-    denv.Append(CPPDEFINES=['-DDAOS_CLIENT_BUILD'])
-
 
     prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
 

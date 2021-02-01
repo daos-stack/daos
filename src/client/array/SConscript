@@ -7,7 +7,6 @@ def scons():
     denv = env.Clone()
 
     denv.AppendUnique(LIBPATH=[Dir('.')])
-    denv.Append(CPPDEFINES=['-DDAOS_CLIENT_BUILD'])
 
     dc_array_tgts = denv.SharedObject(['dc_array.c'])
 

@@ -13,6 +13,7 @@ def scons():
 
     common_test_utils = tenv.SharedObject(['test_mocks.c', 'test_utils.c'])
     Export('common_test_utils')
+    tenv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
 
     utest_utils = tenv.SharedObject('utest_common.c')
     Export('utest_utils')

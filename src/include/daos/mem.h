@@ -24,7 +24,7 @@
  * umem		Unified memory abstraction
  * umoff	Unified Memory offset
  */
-#ifndef DAOS_CLIENT_BUILD
+#ifdef DAOS_PMEM_BUILD
 #include <libpmemobj.h>
 #endif
 
@@ -218,7 +218,7 @@ typedef struct {
 	/** commit memory transaction */
 	int		 (*mo_tx_commit)(struct umem_instance *umm);
 
-#ifndef DAOS_CLIENT_BUILD
+#ifdef DAOS_PMEM_BUILD
 	/**
 	 * Reserve space with specified size.
 	 *
@@ -288,7 +288,7 @@ typedef struct {
 /** attributes to initialize an unified memory class */
 struct umem_attr {
 	umem_class_id_t			 uma_id;
-#ifndef DAOS_CLIENT_BUILD
+#ifdef DAOS_PMEM_BUILD
 	PMEMobjpool			*uma_pool;
 	/** Slabs of the umem pool */
 	struct pobj_alloc_class_desc	 uma_slabs[UMM_SLABS_CNT];
@@ -302,7 +302,7 @@ struct umem_instance {
 	umem_class_id_t		 umm_id;
 	int			 umm_nospc_rc;
 	const char		*umm_name;
-#ifndef DAOS_CLIENT_BUILD
+#ifdef DAOS_PMEM_BUILD
 	PMEMobjpool		*umm_pool;
 #else
 	void			*umm_pool;
@@ -313,13 +313,13 @@ struct umem_instance {
 	uint64_t		 umm_base;
 	/** class member functions */
 	umem_ops_t		*umm_ops;
-#ifndef DAOS_CLIENT_BUILD
+#ifdef DAOS_PMEM_BUILD
 	/** Slabs of the umem pool */
 	struct pobj_alloc_class_desc	 umm_slabs[UMM_SLABS_CNT];
 #endif
 };
 
-#ifndef DAOS_CLIENT_BUILD
+#ifdef DAOS_PMEM_BUILD
 static inline bool
 umem_slab_registered(struct umem_instance *umm, unsigned int slab_id)
 {
@@ -414,7 +414,7 @@ umem_has_tx(struct umem_instance *umm)
 #define umem_alloc(umm, size)						\
 	umem_alloc_verb(umm, 0, size)
 
-#ifndef DAOS_CLIENT_BUILD
+#ifdef DAOS_PMEM_BUILD
 #define umem_zalloc(umm, size)						\
 	umem_alloc_verb(umm, POBJ_FLAG_ZERO, size)
 #else
@@ -422,7 +422,7 @@ umem_has_tx(struct umem_instance *umm)
 	umem_alloc_verb(umm, VMEM_FLAG_ZERO, size)
 #endif
 
-#ifndef DAOS_CLIENT_BUILD
+#ifdef DAOS_PMEM_BUILD
 #define umem_alloc_noflush(umm, size)					\
 	umem_alloc_verb(umm, POBJ_FLAG_NO_FLUSH, size)
 #else
@@ -519,7 +519,7 @@ umem_tx_end(struct umem_instance *umm, int err)
 		return umem_tx_commit(umm);
 }
 
-#ifndef DAOS_CLIENT_BUILD
+#ifdef DAOS_PMEM_BUILD
 static inline umem_off_t
 umem_reserve(struct umem_instance *umm, struct pobj_action *act, size_t size)
 {

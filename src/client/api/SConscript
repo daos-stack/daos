@@ -7,8 +7,6 @@ def scons():
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
-    denv.Append(CPPDEFINES=['-DDAOS_CLIENT_BUILD'])
-
     prereqs.require(denv, 'protobufc')
     dc_tgts = denv.SharedObject(Glob('*.c'))
 

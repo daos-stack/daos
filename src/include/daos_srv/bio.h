@@ -622,7 +622,7 @@ struct bio_sglist *bio_iod_sgl(struct bio_desc *biod, unsigned int idx);
 static inline void
 bio_yield(void)
 {
-#ifndef DAOS_CLIENT_BUILD
+#ifdef DAOS_PMEM_BUILD
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
 #endif
 	ABT_thread_yield();
