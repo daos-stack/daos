@@ -308,7 +308,7 @@ class DaosServer():
 
     def __del__(self):
         if self.running:
-            self.stop()
+            self.stop(None)
 
     # pylint: disable=no-self-use
     def _check_timing(self, op, start, max_time):
@@ -447,7 +447,7 @@ class DaosServer():
             self._check_timing("start", start, max_start_time)
         print('Server started in {:.2f} seconds'.format(time.time() - start))
 
-    def stop(self):
+    def stop(self, wf):
         """Stop a previously started DAOS server"""
         if self._agent:
             self._agent.send_signal(signal.SIGINT)
@@ -516,7 +516,7 @@ class DaosServer():
         compress_file(self.agent_log.name)
         compress_file(self.control_log.name)
 
-        log_test(self.conf, self.server_log.name)
+        log_test(self.conf, self.server_log.name, leak_wf=wf)
         self.running = False
         return ret
 
@@ -1233,6 +1233,7 @@ def log_test(conf,
              show_memleaks=True,
              skip_fi=False,
              fi_signal=None,
+             leak_wf=None,
              check_read=False,
              check_write=False):
     """Run the log checker on filename, logging to stdout"""
@@ -1247,7 +1248,8 @@ def log_test(conf,
 
     try:
         lto.check_log_file(abort_on_warning=True,
-                           show_memleaks=show_memleaks)
+                           show_memleaks=show_memleaks,
+                           leak_wf=leak_wf)
     except lt.LogCheckError:
         if lto.fi_location:
             conf.wf.explain(lto.fi_location,
@@ -1774,6 +1776,8 @@ def main():
 
     wf = WarningsFactory('nlt-errors.json')
 
+    wf_server = WarningsFactory('nlt-server-leaks.json')
+
     conf.set_wf(wf)
     conf.set_args(args)
     setup_log_test(conf)
@@ -1810,7 +1814,7 @@ def main():
         fatal_errors.add_result(run_dfuse(server, conf))
         fatal_errors.add_result(run_posix_tests(server, conf))
 
-    if server.stop() != 0:
+    if server.stop(wf=wf_server) != 0:
         fatal_errors.fail()
 
     # If running all tests then restart the server under valgrind.
@@ -1827,6 +1831,7 @@ def main():
             fatal_errors.add_result(True)
 
     wf.close()
+    wf_server.close()
     if fatal_errors.errors:
         print("Significant errors encountered")
         sys.exit(1)

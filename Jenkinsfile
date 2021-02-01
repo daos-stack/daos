@@ -1212,6 +1212,20 @@ pipeline {
                                          testResults: 'None',
                                          always_script: 'ci/unit/test_nlt_post.sh',
                                          valgrind_stash: 'centos7-gcc-nlt-memcheck'
+                            recordIssues enabledForFailure: true,
+                                         failOnError: false,
+                                         ignoreFailedBuilds: false,
+                                         ignoreQualityGate: true,
+                                         qualityGates: [
+                                           [threshold: 1, type: 'TOTAL_ERROR'],
+                                           [threshold: 1, type: 'TOTAL_HIGH'],
+                                           [threshold: 1, type: 'NEW_NORMAL', unstable: true],
+                                           [threshold: 1, type: 'NEW_LOW', unstable: true]],
+                                         name: "NLT server leaks",
+                                         tool: issues(pattern: 'vm_test/nlt-server-leaks.json',
+                                           name: 'NLT server results',
+                                           id: 'NLT_server')
+
                         }
                     }
                 }
