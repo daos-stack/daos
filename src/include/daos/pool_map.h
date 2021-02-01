@@ -139,6 +139,7 @@ struct pool_buf {
 	uint32_t	pb_domain_nr;
 	uint32_t	pb_node_nr;
 	uint32_t	pb_target_nr;
+	uint32_t	pb_padding;
 
 	/** buffer body */
 	struct pool_component	pb_comps[0];

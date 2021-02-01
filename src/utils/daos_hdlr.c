@@ -1190,7 +1190,7 @@ cont_decode_props(daos_prop_t *props, daos_prop_t *prop_acl)
 	} else {
 		D_PRINT("redundancy level:\t");
 		if (entry->dpe_val == DAOS_PROP_CO_REDUN_NODE)
-			D_PRINT("node ("DF_U64")\n", DAOS_PROP_CO_REDUN_NODE);
+			D_PRINT("node (%d)\n", DAOS_PROP_CO_REDUN_NODE);
 		else
 			/* XXX: should be resolved to string */
 			D_PRINT("node+"DF_U64" ("DF_U64")\n",
