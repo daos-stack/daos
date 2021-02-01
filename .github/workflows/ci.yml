@@ -48,9 +48,8 @@ jobs:
       with:
         key: daos-${{ env.CACHE_KEY }}-${{ matrix.distro }}-{hash}
         restore-keys: daos-${{ env.CACHE_KEY }}-${{ matrix.distro }}-
-    - name: Build deps ${{ matrix.distro }} Docker image
+    - name: Build deps Docker image
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
-                          -t ${{ matrix.distro }}/daos:${{ github.sha }}
                           --build-arg NOBUILD=1
   Build2:
     name: Run the build
@@ -75,16 +74,16 @@ jobs:
         key: daos-${{ env.CACHE_KEY }}-${{ matrix.distro }}-{hash}
         restore-keys: daos-${{ env.CACHE_KEY }}-${{ matrix.distro }}-
         skip-save: true
-    - name: Build deps ${{ matrix.distro }} Docker image
+    - name: re-build deps image
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
-                          -t ${{ matrix.distro }}/daos:${{ github.sha }}
                           --build-arg NOBUILD=1
-    - name: Build daos ${{ matrix.distro }} Docker image with ${{ matrix.compiler }}
+    - name: Build daos
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg COMPILER=${{ matrix.compiler }}
-                          -t ${{ matrix.distro }}/${{ matrix.compiler }}
-    - name: Test daos ${{ matrix.distro }} Docker image with ${{ matrix.compiler }}
-      run: docker run --tmpfs /mnt/daos ${{ matrix.distro }}/${{ matrix.compiler }} ./utils/node_local_test.py kv
+                          -t build-image
+    - name: Run NLT Test
+      run: docker run --tmpfs /mnt/daos build-image \
+           ./utils/node_local_test.py --no-root kv
 
   Spelling:
     runs-on: ubuntu-20.04
