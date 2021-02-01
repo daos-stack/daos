@@ -12,6 +12,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
+
 //@Library(value="pipeline-lib@your_branch") _
 
 boolean doc_only_change() {
@@ -157,7 +158,7 @@ String unit_packages() {
                            'valgrind-devel patchelf'
         if (need_qb) {
             // TODO: these should be gotten from the Requires: of RPM
-            packages += " spdk-tools mercury-2.0.0~rc1" +
+            packages += " spdk-tools mercury-2.0.1~rc1" +
                         " boost-devel libisa-l_crypto libfabric-debuginfo"
         }
         return packages
