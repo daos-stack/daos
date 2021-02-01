@@ -1759,7 +1759,7 @@ def main():
     parser.add_argument('--server-debug', default=None)
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
-    parser.add_argument('--no-root', across='store_true')
+    parser.add_argument('--no-root', action='store_true')
     parser.add_argument('--dtx', action='store_true')
     parser.add_argument('--test', help="Use '--test list' for list")
     parser.add_argument('mode', nargs='?')
