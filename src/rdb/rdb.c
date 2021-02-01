@@ -224,7 +224,7 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 	uint64_t		rdb_extra_sys[DAOS_MEDIA_MAX];
 
 	D_ASSERT(cbs->dc_stop != NULL);
-	D_DEBUG(DB_MD, DF_UUID": starting db %s\n", DP_UUID(uuid), path);
+	D_INFO(DF_UUID": starting RDB %s\n", DP_UUID(uuid), path);
 
 	D_ALLOC_PTR(db);
 	if (db == NULL) {
@@ -331,7 +331,14 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 	d_iov_set(&value, &version, sizeof(version));
 	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_version, &value);
 	if (rc == -DER_NONEXIST) {
-		D_ERROR(DF_DB": incompatible layout version\n", DP_DB(db));
+		ds_notify_ras_eventf(RAS_RDB_DF_INCOMPAT, RAS_TYPE_INFO,
+				     RAS_SEV_ERROR, NULL /* hwid */,
+				     NULL /* rank */, NULL /* jobid */,
+				     NULL /* pool */, NULL /* cont */,
+				     NULL /* objid */, NULL /* ctlop */,
+				     NULL /* data */,
+				     DF_DB": %s: incompatible layout version\n",
+				     DP_DB(db), path);
 		rc = -DER_DF_INCOMPT;
 		goto err_mc;
 	} else if (rc != 0) {
@@ -340,9 +347,16 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 		goto err_mc;
 	}
 	if (version < RDB_LAYOUT_VERSION_LOW || version > RDB_LAYOUT_VERSION) {
-		D_ERROR(DF_DB": incompatible layout version: %u not in [%u, %u]"
-			"\n", DP_DB(db), version, RDB_LAYOUT_VERSION_LOW,
-			RDB_LAYOUT_VERSION);
+		ds_notify_ras_eventf(RAS_RDB_DF_INCOMPAT, RAS_TYPE_INFO,
+				     RAS_SEV_ERROR, NULL /* hwid */,
+				     NULL /* rank */, NULL /* jobid */,
+				     NULL /* pool */, NULL /* cont */,
+				     NULL /* objid */, NULL /* ctlop */,
+				     NULL /* data */,
+				     DF_DB": %s: incompatible layout version: "
+				     "%u not in " "[%u, %u]\n", DP_DB(db), path,
+				     version, RDB_LAYOUT_VERSION_LOW,
+				     RDB_LAYOUT_VERSION);
 		rc = -DER_DF_INCOMPT;
 		goto err_mc;
 	}

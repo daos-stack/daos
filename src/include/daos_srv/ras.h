@@ -32,7 +32,9 @@
 	X(RAS_POOL_REPS_UPDATE,	"pool_replicas_updated")		\
 	X(RAS_POOL_DF_INCOMPAT,	"pool_durable_format_incompatible")	\
 	X(RAS_SYSTEM_STOP,	"system_action_stop")			\
-	X(RAS_SYSTEM_START,	"system_action_start")
+	X(RAS_SYSTEM_START,	"system_action_start")			\
+	X(RAS_CONT_DF_INCOMPAT,	"container_durable_format_incompatible")\
+	X(RAS_RDB_DF_INCOMPAT,	"rdb_durable_format_incompatible")
 
 /** Define RAS event enum */
 typedef enum {
@@ -117,6 +119,12 @@ ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 		    char *hwid, d_rank_t *rank, char *jobid, uuid_t *pool,
 		    uuid_t *cont, daos_obj_id_t *objid, char *ctlop,
 		    char *data);
+
+void
+ds_notify_ras_eventf(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hwid,
+		     d_rank_t *rank, char *jobid, uuid_t *pool, uuid_t *cont,
+		     daos_obj_id_t *objid, char *ctlop, char *data,
+		     const char *fmt, ...);
 
 /**
  * Notify control-plane of an update to a pool's service replicas.
