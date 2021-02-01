@@ -6,7 +6,7 @@
 
 Name:          daos
 Version:       1.1.2.1
-Release:       6%{?relval}%{?dist}
+Release:       7%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -409,6 +409,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Mon Feb 1 2021 Hua Kuang <hua.kuang@intel.com> 1.1.2.1-7
+- Changed License from Apache to BSD-2-Clause-Patent in this file
+
 * Sat Jan 23 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.1.2.1-6
 - Update to mercury v2.0.1rc1
 
