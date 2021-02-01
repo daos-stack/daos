@@ -274,7 +274,6 @@ dtx_shares_init(struct dtx_handle *dth)
 	D_INIT_LIST_HEAD(&dth->dth_share_act_list);
 	D_INIT_LIST_HEAD(&dth->dth_share_tbd_list);
 	dth->dth_share_tbd_count = 0;
-	dth->dth_share_tbd_scanned = 0;
 	dth->dth_shares_inited = 1;
 }
 
@@ -302,7 +301,6 @@ dtx_shares_fini(struct dtx_handle *dth)
 		D_FREE(dsp);
 
 	dth->dth_share_tbd_count = 0;
-	dth->dth_share_tbd_scanned = 0;
 }
 
 int
