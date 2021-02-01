@@ -660,7 +660,7 @@ class TestWithServers(TestWithoutServers):
             DaosAgentManager(agent_cmd, self.manager_class))
 
     def add_server_manager(self, config_file=None, dmg_config_file=None,
-                           common_cfg=None, timeout=20):
+                           common_cfg=None):
         """Add a new daos server manager object to the server manager list.
 
         When adding multiple server managers unique yaml config file names
@@ -674,8 +674,6 @@ class TestWithServers(TestWithoutServers):
             common_cfg (CommonConfig, optional): daos server config file
                 settings shared between the agent and server. Defaults to None,
                 which uses the class CommonConfig.
-            timeout (int, optional): number of seconds to wait for the daos
-                server to start before reporting an error. Defaults to 60.
         """
         self.log.info("--- ADDING SERVER MANAGER ---")
 
@@ -693,7 +691,7 @@ class TestWithServers(TestWithoutServers):
             dmg_config_file, self.server_group, transport_dmg)
         # Create a ServerCommand to manage with a new ServerManager object
         server_cfg = DaosServerYamlParameters(config_file, common_cfg)
-        server_cmd = DaosServerCommand(self.bin, server_cfg, timeout)
+        server_cmd = DaosServerCommand(self.bin, server_cfg)
         self.server_managers.append(
             DaosServerManager(server_cmd, self.manager_class, dmg_cfg))
 
