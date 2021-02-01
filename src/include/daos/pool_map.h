@@ -27,6 +27,7 @@ typedef enum pool_comp_type {
 	PO_COMP_TP_RACK		= 2, /** for test only */
 	PO_COMP_TP_MAX		= 254, /** last user-defined domain */
 	PO_COMP_TP_ROOT		= 255,
+	PO_COMP_TP_END		= 256,
 } pool_comp_type_t;
 
 /** pool component states */

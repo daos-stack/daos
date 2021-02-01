@@ -133,10 +133,15 @@ static struct pool_comp_type_dict comp_type_dict[] = {
 		.td_abbr	= 'o',
 		.td_name	= "root",
 	},
+	{
+		.td_type	= PO_COMP_TP_END,
+		.td_abbr	= 'e',
+		.td_name	= "",
+	}
 };
 
 #define comp_type_for_each(d)		\
-	for (d = &comp_type_dict[0]; d->td_type != PO_COMP_TP_UNKNOWN; d++)
+	for (d = &comp_type_dict[0]; d->td_type != PO_COMP_TP_END; d++)
 
 /**
  * struct used to keep track of failed domain count
