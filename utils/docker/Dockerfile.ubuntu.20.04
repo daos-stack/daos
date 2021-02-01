@@ -99,7 +99,7 @@ WORKDIR /home/daos/src/client/java
 RUN [ "$NOBUILD" != "no" ] || mvn clean install -T 1C -DskipITs -Ddaos.install.path=/opt/daos
 WORKDIR /home/daos
 
-RUN ./utils/setup_daos_admin.sh
+#RUN ./utils/setup_daos_admin.sh
 
 # Remove local copy
 # RUN rm -rf /home/daos/*
