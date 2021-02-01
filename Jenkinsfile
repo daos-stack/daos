@@ -157,7 +157,7 @@ String unit_packages() {
                            'valgrind-devel patchelf'
         if (need_qb) {
             // TODO: these should be gotten from the Requires: of RPM
-            packages += " spdk-tools mercury-2.0.0~rc1" +
+            packages += " spdk-tools mercury-2.0.1~rc1" +
                         " boost-devel libisa-l_crypto libfabric-debuginfo"
         }
         return packages
