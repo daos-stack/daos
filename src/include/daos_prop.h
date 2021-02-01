@@ -366,6 +366,20 @@ int
 daos_prop_entry_cmp_acl(struct daos_prop_entry *entry1,
 			struct daos_prop_entry *entry2);
 
+/**
+ * Duplicate container roots from one DAOS prop entry to another.
+ * Convenience function.
+ *
+ * \param[in][out]	dst		Destination entry
+ * \param[in]		src		Entry to be copied
+ *
+ * \return		0		Success
+ *			-DER_NOMEM	Out of memory
+ */
+int
+daos_prop_entry_dup_co_roots(struct daos_prop_entry *dst,
+			     struct daos_prop_entry *src);
+
 #if defined(__cplusplus)
 }
 #endif

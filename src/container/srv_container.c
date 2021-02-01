@@ -293,7 +293,8 @@ ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 static int
 cont_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 {
-	int			 i;
+	int	i;
+	int	rc;
 
 	if (prop == NULL || prop->dpp_nr == 0 || prop->dpp_entries == NULL)
 		return 0;
@@ -347,19 +348,13 @@ cont_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 				return -DER_NOMEM;
 			break;
 		case DAOS_PROP_CO_ROOTS:
-			if (entry->dpe_val_ptr == NULL)
-				break;
-
-			if (!entry_def->dpe_val_ptr) {
-				D_ALLOC(entry_def->dpe_val_ptr,
-					sizeof(struct daos_prop_co_roots));
-				if (entry_def->dpe_val_ptr == NULL)
-					return -DER_NOMEM;
+			if (entry->dpe_val_ptr) {
+				rc = daos_prop_entry_dup_co_roots(entry_def,
+								  entry);
+				if (rc)
+					return rc;
 			}
-			memcpy(entry_def->dpe_val_ptr, entry->dpe_val_ptr,
-			       sizeof(struct daos_prop_co_roots));
 			break;
-
 		default:
 			D_ASSERTF(0, "bad dpt_type %d.\n", entry->dpe_type);
 			break;

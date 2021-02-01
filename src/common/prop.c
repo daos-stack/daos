@@ -428,7 +428,6 @@ int
 daos_prop_entry_copy(struct daos_prop_entry *entry,
 		     struct daos_prop_entry *entry_dup)
 {
-	struct daos_prop_co_roots *roots;
 	struct daos_acl		*acl_ptr;
 	const d_rank_list_t	*svc_list;
 	d_rank_list_t		*dst_list;
@@ -482,13 +481,11 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 		entry_dup->dpe_val_ptr = dst_list;
 		break;
 	case DAOS_PROP_CO_ROOTS:
-		roots = entry->dpe_val_ptr;
-		D_ALLOC(entry_dup->dpe_val_ptr, sizeof(*roots));
-		if (entry_dup->dpe_val_ptr == NULL) {
+		rc = daos_prop_entry_dup_co_roots(entry_dup, entry);
+		if (rc) {
 			D_ERROR("failed to dup roots\n");
-			return -DER_NOMEM;
+			return rc;
 		}
-		memcpy(entry_dup->dpe_val_ptr, roots, sizeof(*roots));
 		break;
 	default:
 		entry_dup->dpe_val = entry->dpe_val;
@@ -657,16 +654,12 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 			svc_list_alloc = true;
 			entry_req->dpe_val_ptr = dst_list;
 		} else if (type == DAOS_PROP_CO_ROOTS) {
-			struct daos_prop_co_roots *roots;
+			rc = daos_prop_entry_dup_co_roots(entry_req,
+							  entry_reply);
+			if (rc)
+				D_GOTO(out, rc);
 
-			roots = entry_reply->dpe_val_ptr;
-			D_ALLOC(entry_req->dpe_val_ptr, sizeof(*roots));
-			if (entry_req->dpe_val_ptr == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
-
-			memcpy(entry_req->dpe_val_ptr, roots, sizeof(*roots));
 			roots_alloc = true;
-
 		} else {
 			entry_req->dpe_val = entry_reply->dpe_val;
 		}
@@ -704,6 +697,23 @@ out:
 	return rc;
 }
 
+int
+daos_prop_entry_dup_co_roots(struct daos_prop_entry *dst,
+			     struct daos_prop_entry *src)
+{
+	struct daos_prop_co_roots *roots;
+
+	roots = src->dpe_val_ptr;
+	if (!dst->dpe_val_ptr)
+		D_ALLOC(dst->dpe_val_ptr, sizeof(*roots));
+
+	if (dst->dpe_val_ptr == NULL) {
+		D_ERROR("failed to dup roots\n");
+		return -DER_NOMEM;
+	}
+	memcpy(dst->dpe_val_ptr, roots, sizeof(*roots));
+	return 0;
+}
 
 int
 daos_prop_entry_dup_ptr(struct daos_prop_entry *entry_dst,
