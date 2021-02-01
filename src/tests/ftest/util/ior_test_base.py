@@ -14,7 +14,7 @@ from dfuse_test_base import DfuseTestBase
 from ior_utils import IorCommand
 from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun
-from general_utils import pcmd, get_random_string
+from general_utils import pcmd
 from daos_utils import DaosCommand
 from mpio_utils import MpioUtils
 from test_utils_pool import TestPool
@@ -105,7 +105,7 @@ class IorTestBase(DfuseTestBase):
                           test_file="daos:testFile", create_pool=True,
                           create_cont=True, stop_dfuse=True, plugin_path=None,
                           timeout=None, fail_on_warning=False,
-                          dfuse_sub_dir=False):
+                          mount_dir=None):
         """Execute ior with optional overrides for ior flags and object_class.
 
         If specified the ior flags and ior daos object class parameters will
@@ -129,27 +129,23 @@ class IorTestBase(DfuseTestBase):
             timeout (int, optional): command timeout. Defaults to None.
             fail_on_warning (bool, optional): Controls whether the test
                 should fail if a 'WARNING' is found. Default is False.
-            dfuse_sub_dir (bool, optional): Controls whether the test
-                should create a sub dir under the dfuse mountpoint.
-                Default is False.
+            mount_dir (str, optional): Create specific mount pount
 
         Returns:
             CmdResult: result of the ior command execution
 
         """
-
         if create_pool:
             self.update_ior_cmd_with_pool(create_cont)
 
         # start dfuse if api is POSIX or HDF5 with vol connector
         if self.ior_cmd.api.value == "POSIX" or plugin_path:
-            sub_dir = None
-            if dfuse_sub_dir:
-                # Create a unique sub dir
-                sub_dir = get_random_string(5)
-            self.start_dfuse(
-                self.hostlist_clients, self.pool, self.container,
-                sub_dir=sub_dir)
+            if not self.dfuse:
+                self.start_dfuse(
+                    self.hostlist_clients, self.pool, self.container, mount_dir)
+
+        # setup test file for POSIX or HDF5 with vol connector
+        if self.ior_cmd.api.value == "POSIX" or plugin_path:
             test_file = os.path.join(self.dfuse.mount_dir.value, "testfile")
 
         elif self.ior_cmd.api.value == "DFS":
@@ -158,12 +154,13 @@ class IorTestBase(DfuseTestBase):
         self.ior_cmd.test_file.update("".join([test_file, test_file_suffix]))
         job_manager = self.get_ior_job_manager_command()
         job_manager.timeout = timeout
-        out = self.run_ior(job_manager, self.processes,
-                           intercept, plugin_path=plugin_path,
-                           fail_on_warning=fail_on_warning)
-
-        if stop_dfuse and (self.ior_cmd.api.value == "POSIX" or plugin_path):
-            self.stop_dfuse()
+        try:
+            out = self.run_ior(job_manager, self.processes,
+                               intercept, plugin_path=plugin_path,
+                               fail_on_warning=fail_on_warning)
+        finally:
+            if stop_dfuse:
+                self.stop_dfuse()
 
         return out
 
