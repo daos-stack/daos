@@ -850,7 +850,7 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 {
 	struct pl_jump_map	*jmap;
 	struct pl_obj_layout	*layout;
-	struct pl_obj_layout	*add_layout;
+	struct pl_obj_layout	*add_layout = NULL;
 	struct jm_obj_placement	jmop;
 	struct pool_domain	*root;
 	d_list_t		remap_list;
@@ -870,7 +870,7 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	/* Allocate space to hold the layout */
 	rc = pl_obj_layout_alloc(jmop.jmop_grp_size, jmop.jmop_grp_nr,
 				 &layout);
-	if (rc != 0) {
+	if (rc) {
 		D_ERROR("pl_obj_layout_alloc failed, rc "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
@@ -888,6 +888,11 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 		/* Allocate space to hold the layout */
 		rc = pl_obj_layout_alloc(jmop.jmop_grp_size, jmop.jmop_grp_nr,
 					 &add_layout);
+		if (rc) {
+			D_ERROR("pl_obj_layout_alloc failed, rc "DF_RC"\n",
+				DP_RC(rc));
+			goto out;
+		}
 
 		remap_list_free_all(&remap_list);
 		D_INIT_LIST_HEAD(&remap_list);
@@ -898,26 +903,24 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 		D_INIT_LIST_HEAD(&add_list);
 		layout_find_diff(jmap, layout, add_layout, &add_list);
 
-		if (!d_list_empty(&add_list)) {
-
+		if (!d_list_empty(&add_list))
 			rc = pl_map_extend(layout, &add_list, true);
-			if (rc != 0)
-				return rc;
-		}
 	}
+out:
+	remap_list_free_all(&remap_list);
+
+	if (add_layout != NULL)
+		pl_obj_layout_free(add_layout);
 
 	if (rc < 0) {
 		D_ERROR("Could not generate placement layout, rc "DF_RC"\n",
 			DP_RC(rc));
 		pl_obj_layout_free(layout);
-		remap_list_free_all(&remap_list);
 		return rc;
 	}
 
 	*layout_pp = layout;
 	obj_layout_dump(oid, layout);
-
-	remap_list_free_all(&remap_list);
 
 	return DER_SUCCESS;
 }
