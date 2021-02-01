@@ -41,7 +41,7 @@ jobs:
       with:
         submodules: true
     - name: Set cache key
-      run: echo ""CACHE_KEY=$(date +%j)" >> $GITHUB_ENV
+      run: echo "CACHE_KEY=$(date +%j)" >> $GITHUB_ENV
     # https://github.com/marketplace/actions/docker-layer-caching
     - uses: satackey/action-docker-layer-caching@v0.0.11
       continue-on-error: true
