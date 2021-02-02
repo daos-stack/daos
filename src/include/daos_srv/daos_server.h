@@ -192,6 +192,7 @@ struct dss_module_info {
 	d_list_t		dmi_dtx_batched_list;
 	/* the profile information */
 	struct daos_profile	*dmi_dp;
+	struct sched_request	*dmi_dtx_req;
 };
 
 extern struct dss_module_key	daos_srv_modkey;

@@ -166,6 +166,7 @@ dtx_batched_commit(void *arg)
 		return;
 	}
 
+	dmi->dmi_dtx_req = sched_req;
 	while (1) {
 		struct dtx_entry	**dtes = NULL;
 		struct ds_cont_child	 *cont;
@@ -240,6 +241,7 @@ check:
 			break;
 		sched_req_sleep(sched_req, sleep_time);
 	}
+	dmi->dmi_dtx_req = NULL;
 	sched_req_put(sched_req);
 
 	d_list_for_each_entry_safe(dbca, tmp, &dmi->dmi_dtx_batched_list,
@@ -801,8 +803,16 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 			 dth->dth_dkey_hash, dth->dth_epoch, flags);
 	dtx_entry_put(dte);
 	if (rc == 0) {
-		if (!DAOS_FAIL_CHECK(DAOS_DTX_NO_COMMITTABLE))
+		if (!DAOS_FAIL_CHECK(DAOS_DTX_NO_COMMITTABLE)) {
 			vos_dtx_mark_committable(dth);
+			if (cont->sc_dtx_committable_count >
+			    DTX_THRESHOLD_COUNT) {
+				struct dss_module_info	*dmi;
+
+				dmi = dss_get_module_info();
+				sched_req_wakeup(dmi->dmi_dtx_req);
+			}
+		}
 	} else {
 		dth->dth_sync = 1;
 	}
