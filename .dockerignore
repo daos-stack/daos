@@ -1,0 +1,8 @@
+.git/
+build/
+install/
+daos.conf
+.build_vars.sh
+.build_vars.json
+.sconsign.dblite
+.sconf_temp
