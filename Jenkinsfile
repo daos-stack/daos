@@ -156,9 +156,13 @@ String unit_packages() {
                            'libyaml-devel ' +
                            'valgrind-devel patchelf'
         if (need_qb) {
-            // TODO: these should be gotten from the Requires: of RPM
-            packages += " spdk-tools mercury-2.0.0~rc1" +
-                        " boost-devel libisa-l_crypto libfabric-debuginfo"
+            unstash stage_info['target'] + '-required-mercury-rpm-version'
+            packages += " spdk-tools mercury-" +
+                        readFile(stage_info['target'] +
+                                 '-required-mercury-rpm-version').trim() +
+                        " boost-devel libisa-l_crypto libfabric-debuginfo" +
+                        " argobots-debuginfo cmocka-debuginfo" +
+                        " protobuf-c-debuginfo "
         }
         return packages
     } else {
@@ -659,6 +663,11 @@ pipeline {
                     post {
                         success {
                             buildRpmPost condition: 'success'
+                            script {
+                                Map stage_info = parseStageInfo()
+                                    stash name: stage_info['target'] + '-required-mercury-rpm-version',
+                                          includes: stage_info['target'] + '-required-mercury-rpm-version'
+                            }
                         }
                         unstable {
                             buildRpmPost condition: 'unstable'
