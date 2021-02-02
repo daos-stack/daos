@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include <jni.h>
@@ -40,6 +23,44 @@
 
 #ifndef _INCLUDED_DAOS_JNI_COMMON
 #define _INCLUDED_DAOS_JNI_COMMON
+
+typedef struct {
+    int nbrOfEvents;
+    daos_handle_t eqhdl;
+    daos_event_t **events;
+} event_queue_wrapper_t;
+
+typedef struct {
+    int reusable;
+    int nbrOfAkeys;
+    uint16_t maxKeyLen;
+    daos_iod_t *iods;
+    d_sg_list_t *sgls;
+    daos_recx_t *recxs;
+    d_iov_t *iovs;
+    daos_iod_type_t iod_type;
+    uint16_t record_size;
+    uint64_t ret_buf_address;
+} data_desc_t;
+
+typedef struct {
+    daos_key_t dkey;
+    uint16_t maxKeyLen;
+    uint16_t nbrOfEntries;
+    uint16_t nbrOfRequests;
+    event_queue_wrapper_t *eq;
+    daos_event_t *event;
+    daos_iod_t *iods;
+    d_sg_list_t *sgls;
+    daos_recx_t *recxs;
+    d_iov_t *iovs;
+    uint64_t ret_buf_address;
+} data_desc_simple_t;
+
+typedef struct {
+    int nbrOfDescs;
+    data_desc_simple_t **descs;
+} data_desc_simple_grp_t;
 
 static jint JNI_VERSION = JNI_VERSION_1_8;
 

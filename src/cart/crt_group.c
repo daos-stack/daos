@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It implements the main group APIs.
@@ -2317,7 +2300,6 @@ grp_regen_linear_list(struct crt_grp_priv *grp_priv)
 	int		index;
 	int		i;
 	d_rank_list_t	*linear_list;
-	d_rank_t	*tmp_ptr;
 
 	membs = grp_priv->gp_membs.cgm_list;
 	linear_list = grp_priv->gp_membs.cgm_linear_list;
@@ -2325,14 +2307,10 @@ grp_regen_linear_list(struct crt_grp_priv *grp_priv)
 	/* If group size changed - reallocate the list */
 	if (!linear_list->rl_ranks ||
 	    linear_list->rl_nr != grp_priv->gp_size) {
-		D_REALLOC_ARRAY(tmp_ptr, linear_list->rl_ranks,
-			grp_priv->gp_size);
-
-		if (!tmp_ptr)
+		linear_list = d_rank_list_realloc(linear_list,
+						  grp_priv->gp_size);
+		if (linear_list == NULL)
 			return -DER_NOMEM;
-
-		linear_list->rl_ranks = tmp_ptr;
-		linear_list->rl_nr = grp_priv->gp_size;
 	}
 
 	index = 0;
@@ -2364,7 +2342,6 @@ grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank)
 	int		first;
 	int		i;
 	uint32_t	new_amount;
-	d_rank_t	*tmp;
 	int		rc = 0;
 	int		ret;
 
@@ -2386,13 +2363,11 @@ grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank)
 		first = membs->rl_nr;
 		new_amount = first + RANK_LIST_REALLOC_SIZE;
 
-		D_REALLOC_ARRAY(tmp, membs->rl_ranks, new_amount);
-		if (!tmp)
+
+		membs = d_rank_list_realloc(membs, new_amount);
+		if (membs == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 
-		membs->rl_ranks = tmp;
-
-		membs->rl_nr = new_amount;
 		for (i = first; i < first + RANK_LIST_REALLOC_SIZE; i++) {
 			membs->rl_ranks[i] = CRT_NO_RANK;
 			rc = grp_add_free_index(

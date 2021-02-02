@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * dtx: DTX rpc service
@@ -96,11 +79,13 @@ dtx_handler(crt_rpc_t *rpc)
 	case DTX_CHECK:
 		/* Currently, only support to check single DTX state. */
 		if (din->di_dtx_array.ca_count != 1)
-			rc = -DER_PROTO;
-		else
-			rc = vos_dtx_check(cont->sc_hdl,
-					   din->di_dtx_array.ca_arrays,
-					   NULL, NULL, NULL, false);
+			D_GOTO(out, rc = -DER_PROTO);
+
+		rc = vos_dtx_check(cont->sc_hdl, din->di_dtx_array.ca_arrays,
+				   NULL, NULL, NULL, false);
+		if (rc == -DER_NONEXIST && cont->sc_dtx_reindex)
+			rc = -DER_INPROGRESS;
+
 		break;
 	case DTX_REFRESH:
 		count = din->di_dtx_array.ca_count;
@@ -123,8 +108,9 @@ dtx_handler(crt_rpc_t *rpc)
 			*ptr = vos_dtx_check(cont->sc_hdl, dtis, NULL, &vers[i],
 					     &mbs[i], false);
 			/* The DTX status may be changes by DTX resync soon. */
-			if (*ptr == DTX_ST_PREPARED &&
-			    vers[i] < cont->sc_dtx_resync_ver)
+			if ((*ptr == DTX_ST_PREPARED &&
+			     cont->sc_dtx_resyncing) ||
+			    (*ptr == -DER_NONEXIST && cont->sc_dtx_reindex))
 				*ptr = -DER_INPROGRESS;
 			if (mbs[i] != NULL)
 				rc1++;

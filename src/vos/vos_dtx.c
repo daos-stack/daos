@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos two-phase commit transaction.
@@ -311,11 +294,14 @@ dtx_act_ent_update(struct btr_instance *tins, struct btr_record *rec,
 	struct vos_dtx_act_ent	*dae_old;
 
 	dae_old = umem_off2ptr(&tins->ti_umm, rec->rec_off);
-	if (DAE_EPOCH(dae_old) != DAE_EPOCH(dae_new))
-		D_ASSERTF(0, "NOT allow to update act DTX entry for "DF_DTI
+	if (DAE_EPOCH(dae_old) != DAE_EPOCH(dae_new)) {
+		D_ASSERTF(!dae_old->dae_prepared,
+			  "NOT allow to update act DTX entry for "DF_DTI
 			  " from epoch "DF_X64" to "DF_X64"\n",
 			  DP_DTI(&DAE_XID(dae_old)),
 			  DAE_EPOCH(dae_old), DAE_EPOCH(dae_new));
+		return -DER_INPROGRESS;
+	}
 
 	return 0;
 }
@@ -652,8 +638,6 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 	int				 i;
 	int				 rc = 0;
 
-	D_ASSERT(DAE_INDEX(dae) >= 0);
-
 	if (dae->dae_dbd == NULL)
 		return 0;
 
@@ -847,14 +831,18 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 		if (DAE_OID_CNT(dae) == 1) {
 			/* Overwrite DCE_OID if modify single object. */
 			DCE_OID(dce) = DAE_OID_INLINE(dae);
-			DCE_OID_CNT(dce) = 1;
+			/* The dec_dkey_hash is the real dkey hash. */
+			DCE_DKEY_HASH(dce) = DAE_DKEY_HASH(dae);
 		} else if (DAE_OID_CNT(dae) > 1) {
 			/* Take over the OID_OFF from active entry. */
 			DCE_OID_OFF(dce) = DAE_OID_OFF(dae);
+			/* Reuse dec_dkey_hash as the OID count. */
 			DCE_OID_CNT(dce) = DAE_OID_CNT(dae);
 		} else {
-			/* Only the leader_oid is modified by the DTX.*/
-			DCE_OID_CNT(dce) = 1;
+			/* Only the leader_oid is modified by the DTX.
+			 * The dec_dkey_hash is the real dkey hash.
+			 */
+			DCE_DKEY_HASH(dce) = DAE_DKEY_HASH(dae);
 		}
 	} else {
 		struct dtx_handle	*dth = vos_dth_get();
@@ -866,7 +854,8 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 		if (dth->dth_oid_array != NULL) {
 			if (dth->dth_oid_cnt == 1) {
 				DCE_OID(dce) = dth->dth_oid_array[0];
-				DCE_OID_CNT(dce) = 1;
+				/* The dec_dkey_hash is the real dkey hash. */
+				DCE_DKEY_HASH(dce) = dth->dth_dkey_hash;
 			} else {
 				struct umem_instance	*umm;
 				size_t			 size;
@@ -887,13 +876,15 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 				memcpy(umem_off2ptr(umm, rec_off),
 				       dth->dth_oid_array, size);
 				DCE_OID_OFF(dce) = rec_off;
+				/* Reuse dec_dkey_hash as the OID count. */
 				DCE_OID_CNT(dce) = dth->dth_oid_cnt;
 			}
 		} else {
 			D_ASSERT(dth->dth_oid_cnt == 0);
 
 			DCE_OID(dce) = dth->dth_leader_oid;
-			DCE_OID_CNT(dce) = 1;
+			/* The dec_dkey_hash is the real dkey hash. */
+			DCE_DKEY_HASH(dce) = dth->dth_dkey_hash;
 		}
 	}
 
@@ -1185,6 +1176,11 @@ vos_dtx_append(struct dtx_handle *dth, umem_off_t record, uint32_t type)
 	return 0;
 }
 
+/*
+ * Since no entries should be hidden from 'purge' (aggregation, discard,
+ * remove) operations, ALB_UNAVAILABLE should never be returned for the
+ * DAOS_INTENT_PURGE.
+ */
 int
 vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 			   daos_epoch_t epoch, uint32_t intent, uint32_t type)
@@ -1227,7 +1223,7 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	/* Aborted */
 	if (dtx_is_aborted(entry))
 		return intent == DAOS_INTENT_PURGE ?
-			ALB_AVAILABLE_DIRTY : ALB_UNAVAILABLE;
+			ALB_AVAILABLE_ABORTED : ALB_UNAVAILABLE;
 
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
@@ -1239,16 +1235,8 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	if (found && dtx_is_valid_handle(dth) && dae == dth->dth_ent)
 		return ALB_AVAILABLE_CLEAN;
 
-	if (intent == DAOS_INTENT_PURGE) {
-		/* XXX: For the corrupted DTX entry, we need some special
-		 *	tools (TBD) to recover or handle it. So NOT purge
-		 *	it via general VOS aggregation.
-		 */
-		if (found && DAE_FLAGS(dae) & DTE_CORRUPTED)
-			return ALB_UNAVAILABLE;
-
+	if (intent == DAOS_INTENT_PURGE)
 		return ALB_AVAILABLE_DIRTY;
-	}
 
 	if (!found) {
 		/** If we move to not marking entries explicitly, this
@@ -1323,12 +1311,22 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		 * modification to guarantee the transaction semantics.
 		 */
 		if (dtx_is_valid_handle(dth))
-			return dtx_inprogress(dae, dth, false, 2);
+			return dtx_inprogress(dae, dth, false, 5);
 
 		return ALB_UNAVAILABLE;
 	}
 
-	if (intent == DAOS_INTENT_DEFAULT || intent == DAOS_INTENT_MIGRATION) {
+	/* For rebuild fetch, if hit non-committed DTX, has to ask the
+	 * sponsor to wait and retry, otherwise, the new in-rebuilding
+	 * target may miss some data.
+	 * Under such case, DTX resync on related leader server is not
+	 * finished yet. It is unnecessary to DTX refresh with leader.
+	 * So use "UNLL" as the DTX handle for dtx_inprogress().
+	 */
+	if (intent == DAOS_INTENT_MIGRATION)
+		return dtx_inprogress(dae, NULL, false, 6);
+
+	if (intent == DAOS_INTENT_DEFAULT) {
 		if (!(DAE_FLAGS(dae) & DTE_LEADER) ||
 		    DAOS_FAIL_CHECK(DAOS_VOS_NON_LEADER))
 			/* Non-leader or rebuild case, return -DER_INPROGRESS,
@@ -1686,6 +1684,8 @@ vos_dtx_prepared(struct dtx_handle *dth)
 	dbd->dbd_count++;
 	dbd->dbd_index++;
 
+	dae->dae_prepared = 1;
+
 	return 0;
 }
 
@@ -1767,7 +1767,10 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 				return -DER_MISMATCH;
 		}
 
-		return DTX_ST_PREPARED;
+		if (dae->dae_prepared || !for_resent)
+			return DTX_ST_PREPARED;
+
+		return -DER_NONEXIST;
 	}
 
 	if (rc == -DER_NONEXIST) {
@@ -2002,6 +2005,9 @@ vos_dtx_post_handle(struct vos_container *cont, struct vos_dtx_act_ent **daes,
 			 * as 'committed' or 'aborted'. That will consume some
 			 * DRAM until server restart.
 			 */
+			D_WARN("Cannot remove DTX "DF_DTI" from active table: "
+			       DF_RC"\n", DP_DTI(&DAE_XID(daes[i])), DP_RC(rc));
+
 			if (abort)
 				daes[i]->dae_aborted = 1;
 			else

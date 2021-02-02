@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package main
@@ -32,6 +15,7 @@ import (
 	"github.com/dustin/go-humanize/english"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
@@ -405,18 +389,6 @@ type systemListPoolsCmd struct {
 	jsonOutputCmd
 }
 
-func formatPoolSvcReps(svcReps []uint32) string {
-	var b strings.Builder
-	for i, rep := range svcReps {
-		if i != 0 {
-			b.WriteString(",")
-		}
-		fmt.Fprintf(&b, "%d", rep)
-	}
-
-	return b.String()
-}
-
 // Execute is run when systemListPoolsCmd activates
 func (cmd *systemListPoolsCmd) Execute(_ []string) error {
 	if cmd.config == nil {
@@ -451,7 +423,7 @@ func (cmd *systemListPoolsCmd) Execute(_ []string) error {
 		row := txtfmt.TableRow{uuidTitle: pool.UUID}
 
 		if len(pool.SvcReplicas) != 0 {
-			row[svcRepTitle] = formatPoolSvcReps(pool.SvcReplicas)
+			row[svcRepTitle] = pretty.FormatRanks(pool.SvcReplicas)
 		}
 
 		table = append(table, row)

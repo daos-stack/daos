@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * Layout definition for VOS root object
@@ -242,7 +225,8 @@ struct vos_dtx_act_ent {
 	unsigned int			 dae_committable:1,
 					 dae_committed:1,
 					 dae_aborted:1,
-					 dae_maybe_shared:1;
+					 dae_maybe_shared:1,
+					 dae_prepared:1;
 };
 
 extern struct vos_tls	*standalone_tls;
@@ -307,6 +291,11 @@ struct vos_dtx_cmt_ent {
 #define DCE_OID(dce)		((dce)->dce_base.dce_oid)
 #define DCE_DKEY_HASH(dce)	((dce)->dce_base.dce_dkey_hash)
 #define DCE_OID_OFF(dce)	((dce)->dce_base.dce_oid_off)
+/*
+ * If there are multiple objects (indicated via DCE_OID_OFF()) are modified
+ * via current DTX, then the dkey hash in the committed DTX entry is useless.
+ * Under such case, re-use it as the count of modified objects.
+ */
 #define DCE_OID_CNT(dce)	DCE_DKEY_HASH(dce)
 
 /* in-memory structures standalone instance */
@@ -426,6 +415,27 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth);
 int
 vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 			   daos_epoch_t epoch, uint32_t intent, uint32_t type);
+
+/**
+ * Get local entry DTX state. Only used by VOS aggregation.
+ *
+ * \param entry		[IN]	DTX local id
+ *
+ * \return		DTX_ST_COMMITTED, DTX_ST_PREPARED or
+ *			DTX_ST_ABORTED.
+ */
+static inline unsigned int
+vos_dtx_ent_state(uint32_t entry)
+{
+	switch (entry) {
+	case DTX_LID_COMMITTED:
+		return DTX_ST_COMMITTED;
+	case DTX_LID_ABORTED:
+		return DTX_ST_ABORTED;
+	default:
+		return DTX_ST_PREPARED;
+	}
+}
 
 /**
  * Register the record (to be modified) to the DTX entry.
@@ -557,6 +567,8 @@ struct vos_rec_bundle {
 	uint32_t		 rb_ver;
 	/** tree class */
 	enum vos_tree_class	 rb_tclass;
+	/** DTX state */
+	unsigned int		 rb_dtx_state;
 };
 
 #define VOS_SIZE_ROUND		8
@@ -837,7 +849,7 @@ struct vos_iter_ops {
 	int	(*iop_nested_prepare)(vos_iter_type_t type,
 				      struct vos_iter_info *info,
 				      struct vos_iterator **iter_pp);
-	/** finalise a iterator */
+	/** finalize a iterator */
 	int	(*iop_finish)(struct vos_iterator *iter);
 	/** Set the iterating cursor to the provided @anchor */
 	int	(*iop_probe)(struct vos_iterator *iter,

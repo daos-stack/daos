@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #ifndef __DAOS_DTX_H__
@@ -203,14 +186,49 @@ enum daos_ops_intent {
 	DAOS_INTENT_IGNORE_NONCOMMITTED	= 8, /* ignore non-committed DTX. */
 };
 
+/**
+ * DAOS two-phase commit transaction status.
+ */
+enum dtx_status {
+	/** Local participant has done the modification. */
+	DTX_ST_PREPARED		= 1,
+	/** The DTX has been committed. */
+	DTX_ST_COMMITTED	= 2,
+	/** The DTX is corrupted, some participant RDG(s) may be lost. */
+	DTX_ST_CORRUPTED	= 3,
+	/** The DTX is committable, but not committed, non-persistent status. */
+	DTX_ST_COMMITTABLE	= 4,
+	/** The DTX is aborted. */
+	DTX_ST_ABORTED		= 5,
+};
+
 enum daos_dtx_alb {
 	/* unavailable case */
 	ALB_UNAVAILABLE		= 0,
 	/* available, no (or not care) pending modification */
 	ALB_AVAILABLE_CLEAN	= 1,
-	/* available but with dirty modification or garbage */
+	/* available but with dirty modification */
 	ALB_AVAILABLE_DIRTY	= 2,
+	/* available, aborted or garbage */
+	ALB_AVAILABLE_ABORTED	= 3,
 };
+
+static inline unsigned int
+dtx_alb2state(int alb)
+{
+	switch (alb) {
+	case ALB_UNAVAILABLE:
+	case ALB_AVAILABLE_DIRTY:
+		return DTX_ST_PREPARED;
+	case ALB_AVAILABLE_CLEAN:
+		return DTX_ST_COMMITTED;
+	case ALB_AVAILABLE_ABORTED:
+		return DTX_ST_ABORTED;
+	default:
+		D_ASSERTF(0, "Invalid alb:%d\n", alb);
+		return DTX_ST_PREPARED;
+	}
+}
 
 enum daos_tx_flags {
 	DTF_RETRY_COMMIT	= 1, /* TX commit will be retry. */

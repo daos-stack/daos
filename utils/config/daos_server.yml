@@ -222,6 +222,10 @@
 #
 #  fabric_iface: qib0
 #  fabric_iface_port: 20000
+#
+#  # The server instance binds itself to cores and memory that are related
+#  # to the specified NUMA node.  For best performance, it is necessary to
+#  # select a NUMA node that matches that of the fabric_iface.
 #  pinned_numa_node: 0
 #
 #  # Force specific debug mask (D_LOG_MASK) at start up time.
@@ -249,15 +253,14 @@
 #
 #  scm_mount: /mnt/daos/1
 #
-#  # Backend SCM device type. Either use DCPM (datacentre persistent memory)
-#  # modules configured in interleaved mode (AppDirect regions) or emulated
-#  # tmpfs in RAM.
+#  # Backend SCM device type. Either use PMem (Intel(R) Optane(TM) persistent
+#  # memory) modules configured in interleaved mode or emulate SCM with a
+#  # tmpfs running in RAM.
 #  # Options are:
 #  # - "dcpm" for real SCM (preferred option), scm_size ignored
 #  # - "ram" to emulate SCM with memory, scm_list ignored
 #  # Immutable after reformat.
 #
-#  # default: dcpm
 #  scm_class: ram
 #
 #  # When scm_class is set to ram, tmpfs will be used to emulate SCM.
@@ -273,7 +276,6 @@
 #  # - "kdev" to use a kernel block device, bdev_{size,number} ignored
 #  # Immutable after reformat.
 #
-#  # default: nvme
 #  bdev_class: nvme
 #
 #  # Backend block device configuration to be used by this server instance.
@@ -315,6 +317,10 @@
 #
 #  fabric_iface: qib1
 #  fabric_iface_port: 20000
+#
+#  # The server instance binds itself to cores and memory that are related
+#  # to the specified NUMA node.  For best performance, it is necessary to
+#  # select a NUMA node that matches that of the fabric_iface.
 #  pinned_numa_node: 1
 #
 #  # Force specific debug mask (D_LOG_MASK) at start up time.
@@ -341,19 +347,18 @@
 #
 #  scm_mount: /mnt/daos/2
 #
-#  # Backend SCM device type. Either use DCPM (datacentre persistent memory)
-#  # modules configured in interleaved mode (AppDirect regions) or emulated
-#  # tmpfs in RAM.
+#  # Backend SCM device type. Either use PMem (Intel(R) Optane(TM) persistent
+#  # memory) modules configured in interleaved mode or emulate SCM with a
+#  # tmpfs running in RAM.
 #  # Options are:
 #  # - "dcpm" for real SCM (preferred option), scm_size is ignored
 #  # - "ram" to emulate SCM with memory, scm_list is ignored
 #  # Immutable after reformat.
 #
-#  # default: dcpm
 #  scm_class: dcpm
 #
 #  # When scm_class is set to dcpm, scm_list is the list of device paths for
-#  # AppDirect pmem namespaces (currently only one per server supported).
+#  # PMem namespaces (currently only one per server supported).
 #  scm_list: [/dev/pmem0]
 #
 #  # Backend block device type. Force a SPDK driver to be used by this server
@@ -371,9 +376,9 @@
 #  bdev_number: 1
 #  bdev_size: 4
 #
-#  # When bdev_class is set to file, bdev_list is the list of file paths that
-#  # will be used to emulate NVMe SSDs. The size of each file is specified by
-#  # bdev_size in GB unit.
+#  # When bdev_class is set to file, Linux AIO will be used to emulate NVMe.
+#  # The size of file that will be created is specified by bdev_size in GB units.
+#  # The location of the files that will be created is specified in bdev_list.
 #  bdev_class: file
 #  bdev_list: [/tmp/daos-bdev1,/tmp/daos-bdev2]
 #  bdev_size: 16

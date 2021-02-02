@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #ifndef __DAOS_DTX_SRV_H__
@@ -75,6 +58,8 @@ struct dtx_handle {
 	daos_unit_oid_t			 dth_leader_oid;
 
 	uint32_t			 dth_sync:1, /* commit synchronously. */
+					 /* DTXs in CoS list are committed. */
+					 dth_cos_done:1,
 					 dth_resent:1, /* For resent case. */
 					 /* Only one participator in the DTX. */
 					 dth_solo:1,
@@ -172,20 +157,6 @@ struct dtx_stat {
 	uint64_t	dtx_oldest_committed_time;
 };
 
-/**
- * DAOS two-phase commit transaction status.
- */
-enum dtx_status {
-	/** Local participant has done the modification. */
-	DTX_ST_PREPARED		= 1,
-	/** The DTX has been committed. */
-	DTX_ST_COMMITTED	= 2,
-	/** The DTX is corrupted, some participant RDG(s) may be lost. */
-	DTX_ST_CORRUPTED	= 3,
-	/** The DTX is committable, but not committed, non-persistent status. */
-	DTX_ST_COMMITTABLE	= 4,
-};
-
 enum dtx_flags {
 	/** Single operand. */
 	DTX_SOLO		= (1 << 0),
@@ -197,6 +168,8 @@ enum dtx_flags {
 	DTX_FOR_MIGRATION	= (1 << 3),
 	/** Ignore other uncommitted DTXs. */
 	DTX_IGNORE_UNCOMMITTED	= (1 << 4),
+	/** Resent request. */
+	DTX_RESEND		= (1 << 5),
 };
 
 int

@@ -1,24 +1,7 @@
 //
 // (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
@@ -27,6 +10,7 @@ import (
 	"context"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -104,40 +88,36 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 }
 
 type eventsDispatched struct {
-	rx     []events.Event
+	rx     []*events.RASEvent
 	cancel context.CancelFunc
 }
 
-func (d *eventsDispatched) OnEvent(ctx context.Context, e events.Event) {
+func (d *eventsDispatched) OnEvent(ctx context.Context, e *events.RASEvent) {
 	d.rx = append(d.rx, e)
 	d.cancel()
 }
 
 func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
-	eventRankExit := events.NewRankExitEvent("foo", 0, 0, common.NormalExit)
+	eventRankDown := events.NewRankDownEvent("foo", 0, 0, common.NormalExit)
 
 	for name, tc := range map[string]struct {
 		nilReq        bool
 		zeroSeq       bool
-		event         events.Event
-		expResp       *mgmtpb.ClusterEventResp
-		expDispatched []events.Event
+		event         *events.RASEvent
+		expResp       *sharedpb.ClusterEventResp
+		expDispatched []*events.RASEvent
 		expErr        error
 	}{
 		"nil request": {
 			nilReq: true,
 			expErr: errors.New("nil request"),
 		},
-		"invalid sequence number": {
-			zeroSeq: true,
-			expErr:  errors.New("invalid sequence"),
-		},
 		"successful notification": {
-			event: eventRankExit,
-			expResp: &mgmtpb.ClusterEventResp{
+			event: eventRankDown,
+			expResp: &sharedpb.ClusterEventResp{
 				Sequence: 1,
 			},
-			expDispatched: []events.Event{eventRankExit},
+			expDispatched: []*events.RASEvent{eventRankDown},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -153,24 +133,22 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			mgmtSvc.events = ps
 
 			dispatched := &eventsDispatched{cancel: cancel}
-			mgmtSvc.events.Subscribe(events.RASTypeRankStateChange, dispatched)
+			mgmtSvc.events.Subscribe(events.RASTypeStateChange, dispatched)
 
-			var pbReq *mgmtpb.ClusterEventReq
+			var pbReq *sharedpb.ClusterEventReq
 			switch {
 			case tc.nilReq:
 			case tc.zeroSeq:
-				pbReq = &mgmtpb.ClusterEventReq{Sequence: 0}
+				pbReq = &sharedpb.ClusterEventReq{Sequence: 0}
 			default:
 				eventPB, err := tc.event.ToProto()
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				pbReq = &mgmtpb.ClusterEventReq{
+				pbReq = &sharedpb.ClusterEventReq{
 					Sequence: 1,
-					Event: &mgmtpb.ClusterEventReq_Ras{
-						Ras: eventPB,
-					},
+					Event:    eventPB,
 				}
 			}
 
@@ -792,7 +770,16 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 
 			svc := newTestMgmtSvc(t, log)
 			svc.membership = svc.membership.WithTCPResolver(mockResolver)
-			//cs.srvCfg = config.DefaultServer().WithControlPort(10001)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+			defer cancel()
+
+			ps := events.NewPubSub(ctx, log)
+			defer ps.Close()
+			svc.events = ps
+
+			dispatched := &eventsDispatched{cancel: cancel}
+			svc.events.Subscribe(events.RASTypeStateChange, dispatched)
 
 			for _, m := range defaultMembers {
 				if _, err := svc.membership.Add(m); err != nil {

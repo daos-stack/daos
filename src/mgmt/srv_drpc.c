@@ -1,24 +1,7 @@
 /*
  * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of the DAOS server. It implements the handlers to
@@ -200,10 +183,11 @@ out:
 
 static int
 create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
-		  const char **ace_list, size_t ace_nr)
+		  char *label, const char **ace_list, size_t ace_nr)
 {
 	char		*out_owner = NULL;
 	char		*out_owner_grp = NULL;
+	char		*out_label = NULL;
 	struct daos_acl	*out_acl = NULL;
 	daos_prop_t	*new_prop = NULL;
 	uint32_t	entries = 0;
@@ -234,6 +218,14 @@ create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
 		entries++;
 	}
 
+	if (label != NULL && *label != '\0') {
+		D_ASPRINTF(out_label, "%s", label);
+		if (out_label == NULL)
+			D_GOTO(err_out, rc = -DER_NOMEM);
+
+		entries++;
+	}
+
 	if (entries == 0) {
 		D_ERROR("No prop entries provided, aborting!\n");
 		D_GOTO(err_out, rc = -DER_INVAL);
@@ -255,6 +247,12 @@ create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
 		idx++;
 	}
 
+	if (out_label != NULL) {
+		new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_LABEL;
+		new_prop->dpp_entries[idx].dpe_val_ptr = out_label;
+		idx++;
+	}
+
 	if (out_acl != NULL) {
 		new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_ACL;
 		new_prop->dpp_entries[idx].dpe_val_ptr = out_acl;
@@ -268,6 +266,7 @@ create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
 err_out:
 	daos_prop_free(new_prop);
 	daos_acl_free(out_acl);
+	D_FREE(out_label);
 	D_FREE(out_owner_grp);
 	D_FREE(out_owner);
 	return rc;
@@ -312,7 +311,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(pool_uuid));
 
-	rc = create_pool_props(&prop, req->user, req->usergroup,
+	rc = create_pool_props(&prop, req->user, req->usergroup, req->name,
 			       (const char **)req->acl, req->n_acl);
 	if (rc != 0)
 		goto out;
@@ -330,7 +329,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_ASSERT(svc->rl_nr > 0);
 
-	rc = rank_list_to_uint32_array(svc, &resp.svcreps, &resp.n_svcreps);
+	rc = rank_list_to_uint32_array(svc, &resp.svc_reps, &resp.n_svc_reps);
 	if (rc != 0)
 		D_GOTO(out_svc, rc);
 
@@ -356,8 +355,7 @@ out:
 	daos_prop_free(prop);
 
 	/** check for '\0' which is a static allocation from protobuf */
-	if (resp.svcreps)
-		D_FREE(resp.svcreps);
+	D_FREE(resp.svc_reps);
 }
 
 void
@@ -1490,8 +1488,8 @@ ds_mgmt_drpc_smd_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 				D_FREE(resp->devices[i]->tgt_ids);
 			if (resp->devices[i]->state != NULL)
 				D_FREE(resp->devices[i]->state);
-			if (resp->devices[i]->traddr != NULL)
-				D_FREE(resp->devices[i]->traddr);
+			if (resp->devices[i]->tr_addr != NULL)
+				D_FREE(resp->devices[i]->tr_addr);
 			D_FREE(resp->devices[i]);
 		}
 	}
@@ -1659,19 +1657,6 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp->read_only_warn = stats.read_only_warn;
 	resp->dev_reliability_warn = stats.dev_reliability_warn;
 	resp->volatile_mem_warn = stats.volatile_mem_warn;
-
-	D_STRNDUP(resp->model, stats.model, HEALTH_STAT_STR_LEN);
-	if (resp->model == NULL) {
-		D_ERROR("failed to allocate model ID buffer");
-		D_GOTO(out, rc = -DER_NOMEM);
-	}
-
-	D_STRNDUP(resp->serial, stats.serial, HEALTH_STAT_STR_LEN);
-	if (resp->serial == NULL) {
-		D_ERROR("failed to allocate serial ID buffer");
-		D_GOTO(out, rc = -DER_NOMEM);
-	}
-
 	resp->total_bytes = stats.total_bytes;
 	resp->avail_bytes = stats.avail_bytes;
 out:
