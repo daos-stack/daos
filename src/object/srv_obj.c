@@ -4149,6 +4149,10 @@ ds_obj_dtx_leader_ult(void *arg)
 	req_cnt = ds_obj_cpd_get_dcsr_cnt(dca->dca_rpc, dca->dca_idx);
 	tgt_cnt = ds_obj_cpd_get_tgt_cnt(dca->dca_rpc, dca->dca_idx);
 
+	if (dcde == NULL || dcsrs == NULL || tgts == NULL ||
+	    req_cnt < 0 || tgt_cnt < 0)
+		D_GOTO(out, rc = -DER_INVAL);
+
 	/* Refuse any modification with old epoch. */
 	if (dcde->dcde_write_cnt != 0 &&
 	    dcsh->dcsh_epoch.oe_value < dss_get_start_epoch())
