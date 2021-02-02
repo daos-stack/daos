@@ -176,6 +176,7 @@ shown_logs = set()
 # Both the alloc and free function need to be whitelisted.
 
 mismatch_table = {'container': ('common'),
+                  'client': ('array'),
                   'common': ('container', 'pool'),
                   'daos': ('common'),
                   'mgmt': ('common', 'daos', 'pool'),

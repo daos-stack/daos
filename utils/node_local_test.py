@@ -113,6 +113,7 @@ class WarningsFactory():
 
     def __init__(self, filename):
         self._fd = open(filename, 'w')
+        self.filename = filename
         self.issues = []
         self.pending = []
         self._running = True
@@ -240,7 +241,8 @@ class WarningsFactory():
         self._flush()
         self._fd.close()
         self._fd = None
-        print('Closed JSON file with {} errors'.format(len(self.issues)))
+        print('Closed JSON file {} with {} errors'.format(self.filename,
+                                                          len(self.issues)))
 
 def load_conf():
     """Load the build config file"""
@@ -680,6 +682,9 @@ class DFuse():
         pre_inode = os.stat(self.dir).st_ino
 
         my_env = get_base_env()
+
+        if self.conf.args.dfuse_debug:
+            my_env['D_LOG_MASK'] = self.conf.args.dfuse_debug
 
         if v_hint is None:
             v_hint = get_inc_id()
@@ -1245,21 +1250,27 @@ def log_test(conf,
 
     lto.hide_fi_calls = skip_fi
 
+    wf_list = [conf.wf]
+    if leak_wf:
+        wf_list.append(leak_wf)
+
     try:
         lto.check_log_file(abort_on_warning=True,
                            show_memleaks=show_memleaks,
                            leak_wf=leak_wf)
     except lt.LogCheckError:
         if lto.fi_location:
-            conf.wf.explain(lto.fi_location,
-                            os.path.basename(filename),
-                            fi_signal)
+            for wf in wf_list:
+                wf.explain(lto.fi_location,
+                           os.path.basename(filename),
+                           fi_signal)
 
     if skip_fi:
         if not show_memleaks:
-            conf.wf.explain(lto.fi_location,
-                            os.path.basename(filename),
-                            fi_signal)
+            for wf in wf_list:
+                wf.explain(lto.fi_location,
+                           os.path.basename(filename),
+                           fi_signal)
         if not lto.fi_triggered:
             compress_file(filename)
             raise NLTestNoFi
@@ -1797,6 +1808,7 @@ class AllocFailTestRun():
                                    show_memleaks=show_memleaks,
                                    quiet=True,
                                    skip_fi=True,
+                                   leak_wf=self.aft.wf,
                                    fi_signal=fi_signal)
             self.fault_injected = True
         except NLTestNoFi:
@@ -1817,12 +1829,11 @@ class AllocFailTestRun():
 
         if self.returncode == 0:
             if self.stdout != self.aft.expected_stdout:
-                self.aft.conf.wf.add(self.fi_loc,
-                                     'NORMAL',
-                                     "Incorrect stdout '{}'".format(
-                                         self.stdout),
-                                     mtype='Out of memory caused zero exit '
-                                     'code with incorrect output')
+                self.aft.wf.add(self.fi_loc,
+                                'NORMAL',
+                                "Incorrect stdout '{}'".format(self.stdout),
+                                mtype='Out of memory caused zero exit '
+                                'code with incorrect output')
 
         stderr = self.stderr.decode('utf-8').rstrip()
         if not stderr.endswith("Out of memory (-1009)") and \
@@ -1833,12 +1844,11 @@ class AllocFailTestRun():
                 print()
                 print(self.stdout)
                 print()
-            self.aft.conf.wf.add(self.fi_loc,
-                                 'NORMAL',
-                                 "Incorrect stderr '{}'".format(
-                                     stderr),
-                                 mtype='Out of memory not reported '
-                                 'correctly via stderr')
+            self.aft.wf.add(self.fi_loc,
+                            'NORMAL',
+                            "Incorrect stderr '{}'".format(stderr),
+                            mtype='Out of memory not reported '
+                            'correctly via stderr')
 
 class AllocFailTest():
     """Class to describe fault injection command"""
@@ -1850,6 +1860,7 @@ class AllocFailTest():
         self.check_stderr = False
         self.expected_stdout = None
         self.use_il = False
+        self.wf = conf.wf
 
     def launch(self):
         """Run all tests for this command"""
@@ -1939,7 +1950,7 @@ class AllocFailTest():
 
         return aftf
 
-def test_alloc_fail_cat(server, conf):
+def test_alloc_fail_cat(server, conf, wf):
     """Run the Interception library with fault injection
 
     Start dfuse for this test, and do not do output checking on the command
@@ -1970,6 +1981,7 @@ def test_alloc_fail_cat(server, conf):
 
     test_cmd = AllocFailTest(conf, cmd)
     test_cmd.use_il = True
+    test_cmd.wf = wf
 
     rc = test_cmd.launch()
     dfuse.stop()
@@ -2007,6 +2019,7 @@ def main():
     parser = argparse.ArgumentParser(
         description='Run DAOS client on local node')
     parser.add_argument('--server-debug', default=None)
+    parser.add_argument('--dfuse-debug', default=None)
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
     parser.add_argument('--dtx', action='store_true')
@@ -2031,6 +2044,7 @@ def main():
     wf = WarningsFactory('nlt-errors.json')
 
     wf_server = WarningsFactory('nlt-server-leaks.json')
+    wf_client = WarningsFactory('nlt-client-leaks.json')
 
     conf.set_wf(wf)
     conf.set_args(args)
@@ -2040,6 +2054,7 @@ def main():
     server.start()
 
     fatal_errors = BoolRatchet()
+    fi_test = False
 
     if args.mode == 'launch':
         run_in_fg(server, conf)
@@ -2050,17 +2065,14 @@ def main():
     elif args.mode == 'overlay':
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
     elif args.mode == 'fi':
-        fatal_errors.add_result(test_alloc_fail_cat(server, conf))
-        fatal_errors.add_result(test_alloc_fail(server, conf))
+        fi_test = True
     elif args.mode == 'all':
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
         fatal_errors.add_result(run_posix_tests(server, conf))
         test_pydaos_kv(server, conf)
-        # Add this in once leaks are resolved.
-        # fatal_errors.add_result(test_alloc_fail_cat(server, conf))
-        fatal_errors.add_result(test_alloc_fail(server, conf))
+        fi_test = True
     elif args.test:
         if args.test == 'all':
             fatal_errors.add_result(run_posix_tests(server, conf))
@@ -2087,8 +2099,22 @@ def main():
         if server.stop(wf_server) != 0:
             fatal_errors.add_result(True)
 
+    # These checks perform much more I/O and generate huge server logs, so
+    # restart the server for these without debugging enabled.
+    if fi_test:
+        args.server_debug = 'INFO'
+        args.memcheck = 'no'
+        args.dfuse_debug = 'WARN'
+        server = DaosServer(conf)
+        server.start()
+        fatal_errors.add_result(test_alloc_fail_cat(server, conf, wf_client))
+        fatal_errors.add_result(test_alloc_fail(server, conf))
+        if server.stop(wf_server) != 0:
+            fatal_errors.fail()
+
     wf.close()
     wf_server.close()
+    wf_client.close()
     if fatal_errors.errors:
         print("Significant errors encountered")
         sys.exit(1)

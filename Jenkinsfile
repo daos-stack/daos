@@ -1220,7 +1220,14 @@ pipeline {
                                          tool: issues(pattern: 'nlt-server-leaks.json',
                                            name: 'NLT server results',
                                            id: 'NLT_server')
-
+                            recordIssues enabledForFailure: true,
+                                         failOnError: false,
+                                         ignoreFailedBuilds: false,
+                                         ignoreQualityGate: true,
+                                         name: "NLT client leaks",
+                                         tool: issues(pattern: 'nlt-client-leaks.json',
+                                           name: 'NLT client results',
+                                           id: 'NLT_client')
                         }
                     }
                 }
