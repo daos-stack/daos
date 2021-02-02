@@ -799,7 +799,7 @@ ConfigRet ConfigAddInt(Config *cfg, const char *section, const char *key,
 {
 	char buf[64];
 
-	snprintf(buf, sizeof(buf), "%d", value);
+	snprintf(buf, sizeof(buf), "%6d", value);
 
 	return ConfigAddString(cfg, section, key, buf);
 }

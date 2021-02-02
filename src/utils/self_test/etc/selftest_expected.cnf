@@ -3,7 +3,7 @@
 [scale]
 all=10
 bw=11
-throughput=12
+tp=12
 min=13
 max=14
 med25=15
@@ -17,11 +17,11 @@ min=7000
 max=3000
 med25=1500
 med50=1600
-med75=1800 
+med75=1800
 av=1650
 sd=4000
 bw=1000
-throughput=400
+tp=350
 
 #Expected test values for:
 [align_4k_inFlight_16_size_1M_B]
@@ -29,10 +29,10 @@ min=7600
 max=3200
 med25=1500
 med50=1600
-med75=1800 
+med75=1800
 av=1600
 sd=4500
 bw=1100
-tp=460
+tp=400
 
 

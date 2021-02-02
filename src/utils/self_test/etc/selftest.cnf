@@ -1,8 +1,3 @@
-# Warning.
-# "path" When executing from CI, then path should not be defined.
-#        However, when executing not in CI, they user may not have access
-#        to directory to store temporary file so it should be defined.
-
 [help]
 help=1
 
@@ -20,10 +15,10 @@ align=12
 Mbits=0
 randomize-endpoints=0
 #nopmix=1
-#$singleton =1
+#singleton =1
 #path=.
-#expected-results=av,sd,bw,med25,med50,med75
-expected-results=av,sd=9
+#expected-results=av,sd,bw,tp,med25,med50,med75
+expected-results=av,sd=9,bw,tp
 expected-output=../../../../etc/selftest_results.cnf
 expected-input=../../../../etc/selftest_expected.cnf
 
@@ -35,13 +30,16 @@ endpoint=0-1:0
 message-sizes=b1048576
 max-inflight-rpcs=1
 repetitions-per-size=100
-nopmix=1
+#nopmix=1
 # align to 1k page
 align=10
 Mbits=0
 randomize-endpoints=0
 #singleton =1
-path=.
+#path=.
+expected-results=av,sd,bw,tp,med25,med50,med75
+expected-output=../../../../etc/selftest_results.cnf
+expected-input=../../../../etc/selftest_expected.cnf
 
 
 [align_1k_inFlight_4_size_1M_B]
@@ -52,13 +50,16 @@ endpoint=0-1:0
 message-sizes=b1048576
 max-inflight-rpcs=4
 repetitions-per-size=100
-nopmix=1
+#nopmix=1
 # align to 1k page
 align=10
 Mbits=0
 randomize-endpoints=0
 #singleton =1
 #path=.
+expected-results=av,sd,bw,tp,med25,med50,med75
+expected-output=../../../../etc/selftest_results.cnf
+expected-input=../../../../etc/selftest_expected.cnf
 
 
 [align_1k_inFlight_16_size_1M_B]
@@ -76,6 +77,7 @@ Mbits=0
 randomize-endpoints=0
 #singleton =1
 #path=.
-
-
+expected-results=av,sd,bw,tp,med25,med50,med75
+expected-output=../../../../etc/selftest_results.cnf
+expected-input=../../../../etc/selftest_expected.cnf
 
