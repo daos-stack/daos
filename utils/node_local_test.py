@@ -1266,9 +1266,6 @@ def log_test(conf,
     if os.path.exists('{}.old'.format(filename)):
         raise Exception('Log file exceeded max size')
     fstat = os.stat(filename)
-    if conf.max_log_size and fstat.st_size > conf.max_log_size:
-        raise Exception('Max log size exceeded, {}'\
-                        .format(sizeof_fmt(fstat.st_size)))
     print('Running log_test on {} {}'.format(filename,
                                              sizeof_fmt(fstat.st_size)))
     print(conf.max_log_size)
@@ -1310,6 +1307,10 @@ def log_test(conf,
         raise NLTestNoFunction('dfuse_write')
 
     compress_file(filename)
+
+    if conf.max_log_size and fstat.st_size > conf.max_log_size:
+        raise Exception('Max log size exceeded, {}'\
+                        .format(sizeof_fmt(fstat.st_size)))
 
     return lto.fi_location
 
