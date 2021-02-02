@@ -23,7 +23,7 @@ class DcpCommand(ExecutableCommand):
 
         # IO buffer size in bytes (default 64MB)
         self.blocksize = FormattedParameter("--blocksize {}")
-        # New verions use bufsize instead of blocksize
+        # New versions use bufsize instead of blocksize
         self.bufsize = FormattedParameter("--bufsize {}")
         # work size per task in bytes (default 64MB)
         self.chunksize = FormattedParameter("--chunksize {}")
