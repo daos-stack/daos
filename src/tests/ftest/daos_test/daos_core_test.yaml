@@ -63,6 +63,7 @@ daos_tests:
       test_name: DAOS_Degraded_Mode
       test_timeout: 450
       scalable_endpoint: True
+      stopped_ranks: [5, 6, 7]
     test_daos_management:
       daos_test: m
       test_name: DAOS_Management
@@ -133,6 +134,7 @@ daos_tests:
       daos_test: O
       test_name: DAOS_OID_Allocator
       test_timeout: 320
+      stopped_ranks: [6, 7]
     test_daos_checksum:
       daos_test: z
       test_name: DAOS_Checksum
