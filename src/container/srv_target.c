@@ -1265,7 +1265,8 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		   struct ds_cont_hdl **cont_hdl)
 {
 	struct dsm_tls		*tls = dsm_tls_get();
-	struct ds_cont_hdl	*hdl;
+	struct ds_cont_child	*cont = NULL;
+	struct ds_cont_hdl	*hdl = NULL;
 	daos_handle_t		poh = DAOS_HDL_INVAL;
 	bool			added = false;
 	int			rc = 0;
@@ -1303,8 +1304,6 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 
 	/* cont_uuid is NULL when open rebuild global cont handle */
 	if (cont_uuid != NULL && !uuid_is_null(cont_uuid)) {
-		struct ds_cont_child *cont;
-
 		rc = cont_child_create_start(pool_uuid, cont_uuid, &cont);
 		if (rc < 0)
 			D_GOTO(err_hdl, rc);
@@ -1421,16 +1420,23 @@ err_cont:
 	if (daos_handle_is_valid(poh)) {
 		D_DEBUG(DF_DSMS, DF_CONT": destroying new vos container\n",
 			DP_CONT(pool_uuid, cont_uuid));
-		D_ASSERT(hdl->sch_cont != NULL);
-		cont_child_stop(hdl->sch_cont);
+
+		D_ASSERT(hdl != NULL);
+		cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
+		hdl = NULL;
+
+		D_ASSERT(cont != NULL);
+		cont_child_stop(cont);
+
 		vos_cont_destroy(poh, cont_uuid);
 	}
 err_hdl:
-	if (added)
-		/* Open failed, remove hdl from hash. */
-		cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
-	else
-		D_FREE(hdl);
+	if (hdl != NULL) {
+		if (added)
+			cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
+		else
+			D_FREE(hdl);
+	}
 
 	return rc;
 }
