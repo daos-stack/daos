@@ -314,8 +314,8 @@ static pthread_rwlock_t		pl_rwlock = PTHREAD_RWLOCK_INITIALIZER;
 /** hash table for placement maps */
 static struct d_hash_table	pl_htable;
 
-#define DSR_RING_DOMAIN         PO_COMP_TP_RACK
-#define DSR_JUMP_MAP_DOMAIN      PO_COMP_TP_RACK
+/** XXX should be fetched from property */
+#define PL_DEFAULT_DOMAIN	PO_COMP_TP_NODE
 
 static void
 pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
@@ -323,17 +323,17 @@ pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
 {
 	switch (type) {
 	default:
-		D_ASSERTF(0, "Unknown placemet map type: %d.\n", type);
+		D_ASSERTF(0, "Unknown placement map type: %d.\n", type);
 		break;
 
 	case PL_TYPE_RING:
 		mia->ia_type         = PL_TYPE_RING;
-		mia->ia_ring.domain  = DSR_RING_DOMAIN;
+		mia->ia_ring.domain  = PL_DEFAULT_DOMAIN;
 		mia->ia_ring.ring_nr = 1;
 		break;
 	case PL_TYPE_JUMP_MAP:
 		mia->ia_type            = PL_TYPE_JUMP_MAP;
-		mia->ia_jump_map.domain = DSR_JUMP_MAP_DOMAIN;
+		mia->ia_jump_map.domain = PL_DEFAULT_DOMAIN;
 	}
 }
 

@@ -124,17 +124,7 @@ static struct pool_comp_type_dict comp_type_dict[] = {
 		.td_name	= "node",
 	},
 	{
-		.td_type	= PO_COMP_TP_BOARD,
-		.td_abbr	= 'b',
-		.td_name	= "board",
-	},
-	{
-		.td_type	= PO_COMP_TP_BLADE,
-		.td_abbr	= 'l',
-		.td_name	= "blade",
-	},
-	{
-		.td_type	= PO_COMP_TP_RACK,
+		.td_type	= PO_COMP_TP_RACK, /** for testing */
 		.td_abbr	= 'r',
 		.td_name	= "rack",
 	},
@@ -144,14 +134,14 @@ static struct pool_comp_type_dict comp_type_dict[] = {
 		.td_name	= "root",
 	},
 	{
-		.td_type	= PO_COMP_TP_UNKNOWN,
-		.td_abbr	= 'u',
-		.td_name	= "unknown",
-	},
+		.td_type	= PO_COMP_TP_END,
+		.td_abbr	= 'e',
+		.td_name	= "",
+	}
 };
 
 #define comp_type_for_each(d)		\
-	for (d = &comp_type_dict[0]; d->td_type != PO_COMP_TP_UNKNOWN; d++)
+	for (d = &comp_type_dict[0]; d->td_type != PO_COMP_TP_END; d++)
 
 /**
  * struct used to keep track of failed domain count
@@ -408,10 +398,8 @@ pool_buf_attach(struct pool_buf *buf, struct pool_component *comps,
 			buf->pb_target_nr++;
 		else if (comps[0].co_type == PO_COMP_TP_NODE)
 			buf->pb_node_nr++;
-		else if (comps[0].co_type == PO_COMP_TP_RACK)
-			buf->pb_domain_nr++;
 		else
-			D_ASSERTF(0, "invalid type %d\n", comps[0].co_type);
+			buf->pb_domain_nr++;
 
 		buf->pb_comps[nr] = comps[0];
 
@@ -2306,13 +2294,13 @@ pool_map_set_version(struct pool_map *map, uint32_t version)
 }
 
 int
-pool_map_get_failed_cnt(struct pool_map *map, pool_comp_type_t type)
+pool_map_get_failed_cnt(struct pool_map *map, uint32_t domain)
 {
 	int i;
 	int fail_cnt = -1;
 
 	for (i = 0; i < map->po_domain_layers; ++i) {
-		if (map->po_comp_fail_cnts[i].comp_type == type) {
+		if (map->po_comp_fail_cnts[i].comp_type == domain) {
 			fail_cnt = map->po_comp_fail_cnts[i].fail_cnt;
 			break;
 		}
