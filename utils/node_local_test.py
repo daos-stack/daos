@@ -71,6 +71,7 @@ class NLTConf():
         self.agent_dir = None
         self.wf = None
         self.args = None
+        self.max_log_size = None
 
     def set_wf(self, wf):
         """Set the WarningsFactory object"""
@@ -79,6 +80,17 @@ class NLTConf():
     def set_args(self, args):
         """Set command line args"""
         self.args = args
+
+        # Parse the max log size.
+        if args.max_log_size:
+            size = args.max_log_size
+            if size.endswith('MiB'):
+                size = int(size[:-3])
+                size *= (1024 * 1024)
+            elif size.endswith('GiB'):
+                size = (size[:-3])
+                size *= (1024 * 1024 * 1024)
+            self.max_log_size = size
 
     def __getitem__(self, key):
         return self.bc[key]
@@ -1231,6 +1243,14 @@ def compress_file(filename):
 
     os.unlink(filename)
 
+# https://stackoverflow.com/questions/1094841/get-human-readable-version-of-file-size
+def sizeof_fmt(num, suffix='B'):
+    for unit in ['','Ki','Mi','Gi','Ti','Pi','Ei','Zi']:
+        if abs(num) < 1024.0:
+            return "%3.1f%s%s" % (num, unit, suffix)
+        num /= 1024.0
+    return "%.1f%s%s" % (num, 'Yi', suffix)
+
 def log_test(conf,
              filename,
              show_memleaks=True,
@@ -1240,7 +1260,17 @@ def log_test(conf,
              check_write=False):
     """Run the log checker on filename, logging to stdout"""
 
-    print('Running log_test on {}'.format(filename))
+    # Check if the log file has wrapped, if it has then log parsing checks do
+    # not work correctly.
+    if os.path.exists('{}.old'.format(filename)):
+        raise Exception('Log file exceeded max size')
+    stat = os.stat(filename)
+    if conf.max_log_size and stat.st_size > conf.max_log_size:
+        raise Exception('Max log size exceeded, {}'\
+                        .format(sizeof_fmt(stat.st_size)))
+    print('Running log_test on {} {}'.format(filename,
+                                             sizeof_fmt(stat.st_size)))
+    print(conf.max_log_size)
 
     log_iter = lp.LogIter(filename)
 
@@ -1756,6 +1786,7 @@ def main():
     parser.add_argument('--server-debug', default=None)
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
+    parser.add_argument('--max-log-size', default=None)
     parser.add_argument('--dtx', action='store_true')
     parser.add_argument('--test', help="Use '--test list' for list")
     parser.add_argument('mode', nargs='?')
