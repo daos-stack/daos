@@ -265,7 +265,8 @@ class hwm_counter():
 class LogTest():
     """Log testing"""
 
-    def __init__(self, log_iter):
+    def __init__(self, log_iter, quiet=False):
+        self.quiet = quiet
         self._li = log_iter
         self.hide_fi_calls = False
         self.fi_triggered = False
@@ -278,10 +279,13 @@ class LogTest():
         self.log_count = 0
 
     def __del__(self):
-        self.show_common_logs()
+        if not self.quiet:
+            self.show_common_logs()
 
     def save_log_line(self, line):
         """Record a single line of logging"""
+        if self.quiet:
+            return
         self.log_count += 1
         function = getattr(line, 'filename', None)
         if function:
@@ -326,9 +330,10 @@ class LogTest():
         for pid in self._li.get_pids():
             if wf:
                 wf.reset_pending()
-            self.rpc_reporting(pid)
-            if wf:
-                wf.reset_pending()
+            if not self.quiet:
+                self.rpc_reporting(pid)
+                if wf:
+                    wf.reset_pending()
             self._check_pid_from_log_file(pid, abort_on_warning,
                                           show_memleaks=show_memleaks)
 
@@ -428,6 +433,11 @@ class LogTest():
                             # errors for lines that print -DER_NOMEM, as
                             # this highlights other errors and lines which
                             # report an error, but not a fault code.
+                            show = False
+                        elif line.get_msg().endswith(' 12'):
+                            # dfs and dfuse use system error numbers, rather
+                            # than daos, so allow ENOMEM as well as
+                            # -DER_NOMEM
                             show = False
                     elif line.rpc:
                         # Ignore the SWIM RPC opcode, as this often sends RPCs
@@ -579,10 +589,9 @@ class LogTest():
         total_lines = trace_lines + non_trace_lines
         p_trace = trace_lines * 1.0 / total_lines * 100
 
-        print("Pid {}, {} lines total, {} trace ({:.2f}%)".format(pid,
-                                                                  total_lines,
-                                                                  trace_lines,
-                                                                  p_trace))
+        if not self.quiet:
+            print("Pid {}, {} lines total, {} trace ({:.2f}%)".format(
+                pid, total_lines, trace_lines, p_trace))
 
         if memsize.has_data():
             print("Memsize: {}".format(memsize))
