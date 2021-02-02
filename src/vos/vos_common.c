@@ -337,6 +337,7 @@ vos_tls_fini(const struct dss_thread_local_storage *dtls,
 		d_uhash_destroy(tls->vtl_cont_hhash);
 
 	umem_fini_txd(&tls->vtl_txd);
+	vos_ts_table_free(&tls->vtl_ts_table);
 	D_FREE(tls);
 }
 
