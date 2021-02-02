@@ -2471,7 +2471,7 @@ pmap_fail_stat_check(struct pmap_fail_stat *fstat)
 	if (rc)
 		goto fail;
 
-	/* Bad cornel case, need to check #max-concurrent-failures by checking
+	/* Bad corner case, need to check #max-concurrent-failures by checking
 	 * overlapped fail version ranges between different nodes.
 	 */
 	for (i = 0; i < fstat->pf_node_nr; i++) {

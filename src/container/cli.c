@@ -213,6 +213,7 @@ dc_cont_create(tse_task_t *task)
 {
 	daos_cont_create_t     *args;
 	struct cont_create_in  *in;
+	struct daos_prop_entry *entry;
 	struct dc_pool	       *pool;
 	crt_endpoint_t		ep;
 	crt_rpc_t	       *rpc;
@@ -223,6 +224,14 @@ dc_cont_create(tse_task_t *task)
 	args = dc_task_get_args(task);
 	if (uuid_is_null(args->uuid))
 		D_GOTO(err_task, rc = -DER_INVAL);
+
+	entry = daos_prop_entry_get(args->prop, DAOS_PROP_CO_STATUS);
+	if (entry != NULL) {
+		rc = -DER_INVAL;
+		D_ERROR("cannot set DAOS_PROP_CO_STATUS prop for cont_create "
+			DF_RC"\n", DP_RC(rc));
+		goto err_task;
+	}
 
 	pool = dc_hdl2pool(args->poh);
 	if (pool == NULL)
@@ -1113,8 +1122,8 @@ dc_cont_set_prop(tse_task_t *task)
 		if (co_stat.dcs_status != DAOS_PROP_CO_HEALTHY) {
 			rc = -DER_INVAL;
 			D_ERROR("To set DAOS_PROP_CO_STATUS property can-only "
-				"set dcs_status DAOS_PROP_CO_HEALTHY to clear "
-				"UNCLEAN status, "DF_RC"\n", DP_RC(rc));
+				"set dcs_status as DAOS_PROP_CO_HEALTHY to "
+				"clear UNCLEAN status, "DF_RC"\n", DP_RC(rc));
 			goto err;
 		}
 	}
