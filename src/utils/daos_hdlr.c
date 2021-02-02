@@ -1243,10 +1243,10 @@ cont_decode_props(daos_prop_t *props, daos_prop_t *prop_acl)
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_CO_ALLOCED_OID);
 	if (entry == NULL) {
-		fprintf(stderr, "max oid property not found\n");
+		fprintf(stderr, "Container allocated oid property not found\n");
 		rc = -DER_INVAL;
 	} else {
-		D_PRINT("max oid:\t\t"DF_U64"\n", entry->dpe_val);
+		D_PRINT("Allocated OID:\t\t"DF_U64"\n", entry->dpe_val);
 	}
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_CO_OWNER);

@@ -527,7 +527,7 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 					   &value);
 			if (rc)
 				return rc;
-			break
+			break;
 		default:
 			D_ERROR("bad dpe_type %d.\n", entry->dpe_type);
 			return -DER_INVAL;
