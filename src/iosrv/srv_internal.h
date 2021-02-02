@@ -127,8 +127,8 @@ int dss_xstream_cnt(void);
 #define SCHED_RELAX_INTVL_DEFAULT	1 /* msec */
 
 enum sched_cpu_relax_mode {
-	SCHED_RELAX_MODE_SLEEP		= 0,
-	SCHED_RELAX_MODE_NET,
+	SCHED_RELAX_MODE_NET		= 0,
+	SCHED_RELAX_MODE_SLEEP,
 	SCHED_RELAX_MODE_DISABLED,
 	SCHED_RELAX_MODE_INVALID,
 };
@@ -137,10 +137,10 @@ static inline char *
 sched_relax_mode2str(enum sched_cpu_relax_mode mode)
 {
 	switch (mode) {
-	case SCHED_RELAX_MODE_SLEEP:
-		return "sleep";
 	case SCHED_RELAX_MODE_NET:
 		return "net";
+	case SCHED_RELAX_MODE_SLEEP:
+		return "sleep";
 	case SCHED_RELAX_MODE_DISABLED:
 		return "disabled";
 	default:
