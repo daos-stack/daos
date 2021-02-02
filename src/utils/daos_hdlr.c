@@ -1265,6 +1265,12 @@ cont_decode_props(daos_prop_t *props, daos_prop_t *prop_acl)
 		D_PRINT("owner-group:\t\t%s\n", entry->dpe_str);
 	}
 
+	entry = daos_prop_entry_get(props, DAOS_PROP_CO_ROOTS);
+	if (entry == NULL || entry->dpe_val_ptr == NULL) {
+		fprintf(stderr, "roots property not found\n");
+		rc = -DER_INVAL;
+	}
+
 	/* Only mention ACL if there's something to print */
 	if (prop_acl != NULL) {
 		entry = daos_prop_entry_get(prop_acl, DAOS_PROP_CO_ACL);

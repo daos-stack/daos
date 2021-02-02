@@ -183,9 +183,16 @@ enum daos_cont_props {
 	 * Default: 4K
 	 */
 	DAOS_PROP_CO_DEDUP_THRESHOLD,
+	/** First citizen objects of container, see \a daos_cont_root_oids */
+	DAOS_PROP_CO_ROOTS,
 	/** OID value to start allocation from */
 	DAOS_PROP_CO_ALLOCED_OID,
 	DAOS_PROP_CO_MAX,
+};
+
+/* first citizen objects of a container, stored as container property */
+struct daos_prop_co_roots {
+	daos_obj_id_t	cr_oids[4];
 };
 
 /**
@@ -360,6 +367,20 @@ daos_prop_entry_dup_ptr(struct daos_prop_entry *entry_dst,
 int
 daos_prop_entry_cmp_acl(struct daos_prop_entry *entry1,
 			struct daos_prop_entry *entry2);
+
+/**
+ * Duplicate container roots from one DAOS prop entry to another.
+ * Convenience function.
+ *
+ * \param[in][out]	dst		Destination entry
+ * \param[in]		src		Entry to be copied
+ *
+ * \return		0		Success
+ *			-DER_NOMEM	Out of memory
+ */
+int
+daos_prop_entry_dup_co_roots(struct daos_prop_entry *dst,
+			     struct daos_prop_entry *src);
 
 #if defined(__cplusplus)
 }

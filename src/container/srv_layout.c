@@ -41,6 +41,10 @@ RDB_STRING_KEY(ds_cont_prop_, lhes);
 RDB_STRING_KEY(ds_cont_prop_, snapshots);
 RDB_STRING_KEY(ds_cont_attr_, user);
 RDB_STRING_KEY(ds_cont_prop_, handles);
+RDB_STRING_KEY(ds_cont_prop_, roots);
+
+/* dummy value for container roots, avoid malloc on demand */
+static struct daos_prop_co_roots dummy_roots;
 
 /** default properties, should cover all optional container properties */
 struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
@@ -92,6 +96,9 @@ struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
 	}, {
 		.dpe_type	= DAOS_PROP_CO_DEDUP_THRESHOLD,
 		.dpe_val	= 4096,
+	}, {
+		.dpe_type	= DAOS_PROP_CO_ROOTS,
+		.dpe_val_ptr	= &dummy_roots, /* overwritten by middlewares */
 	}, {
 		.dpe_type	= DAOS_PROP_CO_ALLOCED_OID,
 		.dpe_val	= 0,
