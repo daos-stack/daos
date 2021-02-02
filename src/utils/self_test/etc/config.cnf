@@ -15,7 +15,7 @@ e = 5
 # comment
 [ SECT2 ]
 aa = 11
-bb =	22		# commment
+bb =	22		# comment
 # comment
 cc=33
 

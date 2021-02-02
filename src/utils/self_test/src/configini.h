@@ -58,7 +58,7 @@ typedef enum {
 	CONFIG_ERR_MEMALLOC,		/* memory allocation failed */
 	CONFIG_ERR_INVALID_PARAM,	/* invalid parametrs (as NULL) */
 	CONFIG_ERR_INVALID_VALUE,	/* value of key is invalid */
-					/*  (inconsistant data, empty data) */
+					/*  (inconsistent data, empty data) */
 	CONFIG_ERR_PARSING,		/* parsing error of data */
 					/*  (does not fit to config format) */
 } ConfigRet;

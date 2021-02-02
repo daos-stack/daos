@@ -38,9 +38,9 @@
 #include "queue.h"
 
 #define COMMENT_CHARS	"#"    /* default comment chars */
-#define KEYVAL_SEP	'='    /* default key-val seperator character */
-#define STR_TRUE	"1"    /* default string valu of true */
-#define STR_FALSE	"0"    /* default string valu of false */
+#define KEYVAL_SEP	'='    /* default key-val separator character */
+#define STR_TRUE	"1"    /* default string value of true */
+#define STR_FALSE	"0"    /* default string value of false */
 
 #define CONFIG_INIT_MAGIC    0x12F0ED1
 
@@ -140,8 +140,8 @@ const char *ConfigRetToString(ConfigRet ret)
 /**
  * \brief	      ConfigSetCommentCharset() sets comment characters
  *
- * \param cfg	  config handle
- * \param comment_ch   charaters to consider as comments
+ * \param cfg         config handle
+ * \param comment_ch   characters to consider as comments
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
@@ -167,7 +167,7 @@ ConfigRet ConfigSetCommentCharset(Config *cfg, const char *comment_ch)
  * \brief	      ConfigSetCommentCharset() sets comment characters
  *
  * \param cfg	  config handle
- * \param ch	   charater to consider as key-value seperator
+ * \param ch	   character to consider as key-value separator
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
@@ -363,8 +363,7 @@ int ConfigGetKeys(const Config *cfg, const char *section,
 		if (((section == NULL) && (sect->name == NULL)) ||
 		    ((sect->name != NULL) && (section != NULL) &&
 		     strcmp(sect->name, section) == 0)) {
-
-			/* Section found, asign address */
+			/* Section found, assign address */
 			TAILQ_FOREACH(kv, &sect->kv_list, next) {
 				array[number] = kv->key;
 				number++;
@@ -659,7 +658,7 @@ ConfigRet ConfigReadBool(const Config *cfg, const char *section,
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
 static ConfigRet _ConfigAddSection(Config *cfg, const char *section,
-				  ConfigSection **sect)
+				   ConfigSection **sect)
 {
 	ConfigSection *_sect = NULL;
 	ConfigRet      ret   = CONFIG_OK;
@@ -708,6 +707,7 @@ ConfigRet ConfigAddSection(Config *cfg, const char *section)
 	ret = _ConfigAddSection(cfg, section, NULL);
 	return ret;
 }
+
 /**
  * \brief	      ConfigAddString() adds the key with string value to
  *		     the cfg
@@ -907,7 +907,7 @@ static void _ConfigRemoveKey(ConfigSection *sect, ConfigKeyValue *kv)
  *		     section from the cfg
  *
  * \param cfg	  config handle
- * \param section      section to seach in
+ * \param section      section to search in
  * \param key	  key to remove
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
@@ -1320,7 +1320,6 @@ ConfigRet ConfigPrintSection(const Config *cfg, FILE *stream, char *section)
 		if (((section == NULL) && (sect->name == NULL)) ||
 		    ((sect->name != NULL) && (section != NULL) &&
 		     strcmp(sect->name, section) == 0)) {
-
 			/* Section found, print info */
 			if (sect->name)
 				fprintf(stream, "[%s]\n", sect->name);
@@ -1404,7 +1403,7 @@ ConfigRet ConfigPrintSettings(const Config *cfg, FILE *stream)
 	fprintf(stream, "\n");
 	fprintf(stream, "Configuration settings:\n");
 	fprintf(stream, "   Comment characters : %s\n", cfg->comment_chars);
-	fprintf(stream, "   Key-Value seperator: %c\n", cfg->keyval_sep);
+	fprintf(stream, "   Key-Value separator: %c\n", cfg->keyval_sep);
 	fprintf(stream, "   True-False strings : %s-%s\n",
 		cfg->true_str, cfg->false_str);
 	fprintf(stream, "\n");

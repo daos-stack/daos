@@ -402,9 +402,9 @@ static void print_fail_counts(struct st_latency *latencies,
 		    latencies[last_err_idx].cci_rc !=
 		    latencies[local_rep].cci_rc) {
 			printf("%s%u: -%s (%d)\n", prefix,
-				local_rep - last_err_idx,
-				d_errstr(-latencies[last_err_idx].cci_rc),
-				latencies[last_err_idx].cci_rc);
+			       local_rep - last_err_idx,
+			       d_errstr(-latencies[last_err_idx].cci_rc),
+			       latencies[last_err_idx].cci_rc);
 			last_err_idx = local_rep;
 		}
 
@@ -458,7 +458,7 @@ static void print_results(struct st_latency *latencies,
 	num_failed = 0;
 	for (local_rep = 0; local_rep < test_params->rep_count; local_rep++) {
 #ifdef PRINT_ALL
-		printf(" New SAB: iteration %3d: latenct %10ld\n",
+		printf(" iteration %3d: latenct %10ld\n",
 		       local_rep, latencies[local_rep].val);
 #endif
 
@@ -497,7 +497,7 @@ static void print_results(struct st_latency *latencies,
 	      sizeof(latencies[0]), st_compare_latencies_by_vals);
 
 	/* Compute average and standard deviation of all results */
-	/* Talk to Alex, should devide by num_passed ?? */
+	/* Talk to Alex, should divide by num_passed ?? */
 	latency_avg = 0;
 	for (local_rep = num_failed; local_rep < test_params->rep_count;
 	     local_rep++){
@@ -526,7 +526,7 @@ static void print_results(struct st_latency *latencies,
 	       latencies[num_failed].val / 1000,
 	       latencies[num_failed + num_passed / 4].val / 1000,
 	       latencies[num_failed + num_passed / 2].val / 1000,
-	       latencies[num_failed + num_passed * 3/4].val / 1000,
+	       latencies[num_failed + num_passed * 3 / 4].val / 1000,
 	       latencies[test_params->rep_count - 1].val / 1000,
 	       latency_avg / 1000, latency_std_dev / 1000);
 
@@ -537,7 +537,7 @@ static void print_results(struct st_latency *latencies,
 	ConfigAddInt(cfg, section_name, "med50",
 		     latencies[num_failed + num_passed / 2].val / 1000);
 	ConfigAddInt(cfg, section_name, "med75",
-		     latencies[num_failed + num_passed * 3/4].val / 1000);
+		     latencies[num_failed + num_passed * 3 / 4].val / 1000);
 	ConfigAddInt(cfg, section_name, "max",
 		     latencies[test_params->rep_count - 1].val / 1000);
 	ConfigAddInt(cfg, section_name, "av", latency_avg / 1000);
@@ -647,7 +647,7 @@ static int config_create_output_config(char *section_name)
 		config_ret = ConfigReadFile(g_expected_outfile, &cfg_output);
 		if (config_ret != CONFIG_OK) {
 			D_NOTE("Output file does not exist: %s\n",
-				g_expected_outfile);
+			       g_expected_outfile);
 		}
 	}
 	if (cfg_output == NULL) {
@@ -666,7 +666,6 @@ cleanup:
 	return ret_value;
 }
 
-
 static int compare_print_results(char *section_name)
 {
 	Config		*cfg_expected = NULL;
@@ -680,7 +679,7 @@ static int compare_print_results(char *section_name)
 	if (g_expected_infile != NULL) {
 		config_ret = ConfigReadFile(g_expected_infile, &cfg_expected);
 		if (config_ret != CONFIG_OK) {
-			D_ERROR("Cannot open exptected file: %s\n",
+			D_ERROR("Cannot open expected file: %s\n",
 				g_expected_infile);
 			ret_value = ENOENT;
 			goto cleanup;
@@ -694,7 +693,8 @@ static int compare_print_results(char *section_name)
 
 		for (i = 0; i < status_size; i++) {
 			config_ret = ConfigReadInt(cfg_expected, sec_name,
-					       status[i].name, &ivalue, 0.0);
+						   status[i].name,
+						   &ivalue, 0.0);
 			if (config_ret == CONFIG_OK) {
 				/* avoid checkpatch warning */
 				status[i].value = ivalue;
@@ -713,7 +713,7 @@ static int compare_print_results(char *section_name)
 
 		/* First, see if set all to one global value */
 		config_ret = ConfigReadFloat(cfg_expected, sec_name,
-				       "all", &scale, 0.0);
+					     "all", &scale, 0.0);
 		if (config_ret == CONFIG_OK) {
 			for (i = 0; i < status_size; i++) {
 				/* avoid checkpatch warning */
@@ -735,14 +735,15 @@ static int compare_print_results(char *section_name)
 
 	/*
 	 * Read in specified values for requested sector.
-	 * Over rides defaut settings if specified.
+	 * Over rides default settings if specified.
 	 */
 	if (ConfigHasSection(cfg_expected, section_name)) {
 		int ivalue;
 
 		for (i = 0; i < status_size; i++) {
 			config_ret = ConfigReadInt(cfg_expected, section_name,
-					       status[i].name, &ivalue, 0.0);
+						   status[i].name,
+						   &ivalue, 0.0);
 			if (config_ret == CONFIG_OK) {
 				/* avoid checkpatch warning */
 				status[i].value = ivalue;
@@ -765,7 +766,7 @@ static int compare_print_results(char *section_name)
 	 * If a "=value" is part of the string (i.e. av=12), then
 	 * that value is used as the scaling factor.
 	 * Note: g_expected_results may be pointing to an argv parameter
-	 * which are constant.  Therefor, allocate a region for string
+	 * which are constant.  Therefore, allocate a region for string
 	 * manipulation. (strtok modifies string it is working on).
 	 */
 	if (g_expected_results != NULL) {
@@ -861,8 +862,7 @@ next_arg:
 		char	 range[RANGE_SIZE];
 
 		if ((status[i].value != 0) && (status[i].scale != 0) &&
-		     (status[i].flag & TST_OUTPUT)) {
-
+		    (status[i].flag & TST_OUTPUT)) {
 			/* Set ranges for comparison */
 			firstpass = true;
 			if (status[i].flag & TST_LOW) {
@@ -906,7 +906,7 @@ next_arg:
 						 (int)lower, (int)upper,
 						 (int)status[i].scale);
 					if (!((lower <= value) &&
-					     (value <= upper)))
+					    (value <= upper)))
 						passed = false;
 				} else if (status[i].flag & TST_HIGH) {
 					snprintf(range, RANGE_SIZE,
@@ -934,7 +934,7 @@ next_arg:
 				if (passed) {
 					printf("   %s : %8d  Passed:  %s\n",
 					       key, ivalue, range);
-					D_INFO("  PASED range check\n");
+					D_INFO("  PASSED range check\n");
 
 				} else {
 					printf("   %s : %8d  Failed:  %s\n",
@@ -952,7 +952,7 @@ cleanup:
 }
 
 static int combine_results(Config *cfg_results, char *section_name,
-			    uint32_t index)
+			   uint32_t index)
 {
 	ConfigRet	 ret;
 	int		 ret_value = 0;
@@ -980,11 +980,8 @@ static int combine_results(Config *cfg_results, char *section_name,
 				    &temp, dfault);
 		/* Tag master endpoint to key name */
 		snprintf(new_key_name, size, "%s-%s", master, key_name);
-#if 0
-printf(" New_key_name: %s\n", new_key_name);
-#endif
 
-		/* Check to see if key occured in results */
+		/* Check to see if key occurred in results */
 		if (ret == CONFIG_OK) {
 			/* Check to see if key already exist in output */
 			ret = ConfigReadInt(cfg_output, section_name,
@@ -998,10 +995,9 @@ printf(" New_key_name: %s\n", new_key_name);
 		}
 	}
 
-#if 0
+#ifdef PRINT_IMMEDIATE_RESULTS
 	printf(" Print input results\n");
 	ConfigPrintSection(cfg_results, stdout, section_name);
-
 
 	printf("\n Done output results\n");
 	ConfigPrintSection(cfg_output, stdout, section_name);
@@ -1012,7 +1008,7 @@ printf(" New_key_name: %s\n", new_key_name);
 		/* avoid checkpatch warning */
 		ret = ConfigPrintToFile(cfg_output, g_expected_outfile);
 		if (ret != CONFIG_OK) {
-			D_ERROR("Fail to write to output fle: %s\n",
+			D_ERROR("Fail to write to output file: %s\n",
 				g_expected_outfile);
 		ret_value = -ENOENT;
 		}
@@ -1040,7 +1036,7 @@ static char *config_section_name_create(char *section_name,
 	if (section_name != NULL) {
 		len = strnlen(section_name, MAX_SECTION_NAME_SIZE);
 		memcpy(name_str, section_name, len);
-		return name_str;
+		goto exit_code;
 	} else {
 		/* Add alignment parameter */
 		if (test_params->buf_alignment >= 10) {
@@ -1082,6 +1078,7 @@ static char *config_section_name_create(char *section_name,
 				"%s%s_", transfer_type_map[ids].short_name,
 				 transfer_type_map[idr].short_name);
 	}
+exit_code:
 	return name_str;
 }
 
@@ -1342,18 +1339,11 @@ static int test_msg_size(crt_context_t crt_ctx,
 		if (ms_endpts[m_idx].test_failed != 0)
 			continue;
 
-
 		/* Create section name and Master key */
 		ConfigAddSection(cfg, section_name);
-#if 0
-		snprintf(master_value, size, "%u_%u",
-			 ms_endpts[m_idx].endpt.ep_rank,
-			 ms_endpts[m_idx].endpt.ep_tag);
-#else
 		snprintf(master_value, size, "%u:%u",
 			 ms_endpts[m_idx].endpt.ep_rank,
 			 ms_endpts[m_idx].endpt.ep_tag);
-#endif
 		ConfigAddString(cfg, section_name, "master_endpoint",
 				master_value);
 
@@ -1453,7 +1443,6 @@ static int run_self_test(struct st_size_params all_params[],
 	crt_bulk_t		 *latencies_bulk_hdl = CRT_BULK_NULL;
 	bool			  listen = false;
 	crt_endpoint_t		  self_endpt;
-
 
 	/* Sanity checks that would indicate bugs */
 	D_ASSERT(endpts != NULL && num_endpts > 0);
@@ -2599,7 +2588,6 @@ static int config_file_setup(char *file_name, char *section_name,
 		alloc_g_expected_infile = true;
 	}
 
-
 	/********/
 	config_ret = ConfigReadString(cfg, section_name, "nopmix",
 				      &string[0], STRING_MAX_SIZE,
@@ -2746,12 +2734,10 @@ int parse_command_options(int argc, char *argv[])
 	return 0;
 cleanup:
 	return ret;
-
 }
 
 int main(int argc, char *argv[])
 {
-
 	char				*file_name = NULL;
 	char				*section_name = NULL;
 	const char			 tuple_tokens[] = "(),";
@@ -2990,7 +2976,7 @@ int main(int argc, char *argv[])
 
 		config_ret = ConfigPrintToFile(cfg_output, g_expected_outfile);
 		if (config_ret != CONFIG_OK) {
-			D_ERROR("Fail to write to output fle: %s\n",
+			D_ERROR("Fail to write to output file: %s\n",
 				g_expected_outfile);
 		ret = -ENOENT;
 		}

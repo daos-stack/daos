@@ -7,8 +7,6 @@
 #ifndef __CRT_SELF_TEST_H__
 #define __CRT_SELF_TEST_H__
 
-
-
 /*
  * List of supported self-test strategies:
  *

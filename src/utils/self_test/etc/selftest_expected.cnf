@@ -1,5 +1,7 @@
 
 #Default scaling factor as percentage.
+# "all" is assigned to all statistics and then can be over riddend
+#  by key specific values
 [scale]
 all=10
 bw=11
@@ -13,26 +15,77 @@ av=18
 
 #Base default values
 [default_values]
-min=7000
-max=3000
-med25=1500
-med50=1600
-med75=1800
-av=1650
-sd=4000
-bw=1000
-tp=350
+min=    2500
+med25= 80000
+med50=100000
+med75=180000
+max=  300000
+av=   165000
+sd=    40000
+bw=      200
+tp=      100
+
 
 #Expected test values for:
 [align_4k_inFlight_16_size_1M_B]
-min=7600
-max=3200
-med25=1500
-med50=1600
-med75=1800
-av=1600
-sd=4500
-bw=1100
-tp=400
+min=    2500
+med25= 80000
+med50=100000
+med75=190000
+max=  300000
+av=   165000
+sd=    40000
+bw=      200
+tp=      100
 
+#Expected test values for:
+[align_1k_inFlight_1_size_1M_B]
+min=    2500
+med25= 80000
+med50=100000
+med75=190000
+max=  300000
+av=   165000
+sd=    40000
+bw=      200
+tp=      100
+
+
+#Expected test values for:
+[align_1k_inFlight_4_size_1M_B]
+min=    2500
+med25= 80000
+med50=100000
+med75=190000
+max=  300000
+av=   165000
+sd=    40000
+bw=      200
+tp=      100
+
+
+#Expected test values for:
+[align_1k_inFlight_8_size_1M_B]
+min=    2500
+med25= 80000
+med50=100000
+med75=190000
+max=  300000
+av=   165000
+sd=    40000
+bw=      200
+tp=      100
+
+
+#Expected test values for:
+[align_1k_inFlight_16_size_1M_B]
+min=    2500
+med25= 80000
+med50=100000
+med75=190000
+max=  300000
+av=   165000
+sd=    40000
+bw=      200
+tp=      100
 
