@@ -23,6 +23,8 @@ class DcpCommand(ExecutableCommand):
 
         # IO buffer size in bytes (default 64MB)
         self.blocksize = FormattedParameter("--blocksize {}")
+        # New verions use bufsize instead of blocksize
+        self.bufsize = FormattedParameter("--bufsize {}")
         # work size per task in bytes (default 64MB)
         self.chunksize = FormattedParameter("--chunksize {}")
         # DAOS source pool
@@ -125,20 +127,27 @@ class Dcp(DcpCommand):
 
         # Compatibility option
         self.has_src_pool = False
+        self.has_bufsize = True
 
-    def set_compatibility(self, has_src_pool):
+    def set_compatibility(self, has_src_pool, has_bufsize):
         """Set compatibility options.
 
         Args:
             has_src_pool (bool): Whether dcp has the --daos-src-pool option
+            has_bufsize (bool): Whether dcp has the --bufsize option
 
         """
         self.has_src_pool = has_src_pool
         self.log.info("set_compatibility: has_src_pool=%s\n",
                       str(self.has_src_pool))
+        self.has_bufsize = has_bufsize
+        self.log.info("set_compatibility: has_bufsize=%s\n",
+                      str(self.has_bufsize))
 
     def query_compatibility(self):
         """Query for compatibility options and set class variables."""
+        self.blocksize.update(None)
+        self.bufsize.update(None)
         self.print_usage.update(True)
         self.exit_status_exception = False
         result = self.run(self.tmp, 1)
@@ -146,6 +155,9 @@ class Dcp(DcpCommand):
         self.has_src_pool = ("--daos-src-pool" in result.stdout)
         self.log.info("query_compatibility: has_src_pool=%s\n",
                       str(self.has_src_pool))
+        self.has_bufsize = ("--bufsize" in result.stdout)
+        self.log.info("query_compatibility: has_bufsize=%s\n",
+                      str(self.has_bufsize))
 
     def run(self, tmp, processes):
         # pylint: disable=arguments-differ
@@ -189,6 +201,13 @@ class Dcp(DcpCommand):
                 self.dst_path.update(dst_path)
                 self.daos_dst_pool.update(None)
                 self.daos_dst_cont.update(None)
+        if self.has_bufsize:
+            blocksize = self.blocksize.value
+            if blocksize:
+                self.log.info(
+                    "Converting --blocksize to --bufsize")
+                self.blocksize.update(None)
+                self.bufsize.update(blocksize)
 
         # Get job manager cmd
         mpirun = Mpirun(self, mpitype="mpich")

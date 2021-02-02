@@ -64,7 +64,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.daos_test_paths = []
 
         # Keep track of dcp compatibility options
+        # Defaulting to the newer options
         self.dcp_has_src_pool = False
+        self.dcp_has_bufsize = True
 
     def setUp(self):
         """Set up each test case."""
@@ -94,6 +96,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.dcp_cmd.get_params(self)
         self.dcp_cmd.query_compatibility()
         self.dcp_has_src_pool = self.dcp_cmd.has_src_pool
+        self.dcp_has_bufsize = self.dcp_cmd.has_bufsize
 
     def pre_tear_down(self):
         """Tear down steps to run before tearDown().
@@ -362,7 +365,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.dcp_cmd.get_params(self)
 
         # Set the compatibility options
-        self.dcp_cmd.set_compatibility(self.dcp_has_src_pool)
+        self.dcp_cmd.set_compatibility(self.dcp_has_src_pool, self.dcp_has_bufsize)
 
         # Set the source params
         if src_type == "POSIX":
