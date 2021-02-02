@@ -30,7 +30,7 @@ pool:
         scm_size: 30000000000
         nvme_size: 200000000000
     createsvc:
-        svcn: 1
+        svcn: 2
 container:
     type: POSIX
     control_method: daos
