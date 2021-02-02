@@ -8,6 +8,7 @@
 from mdtest_test_base import MdtestBase
 
 class MdtestLarge(MdtestBase):
+    # pylint: disable=too-many-ancestors
     """
     Class for mdtest with large configurations
     :avocado: recursive

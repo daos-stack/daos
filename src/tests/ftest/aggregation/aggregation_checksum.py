@@ -11,6 +11,7 @@ from ior_test_base import IorTestBase
 
 
 class AggregationChecksum(IorTestBase):
+    # pylint: disable=too-many-ancestors
     """Test class Description: Verify Aggregated extends have valid checksum.
 
     :avocado: recursive
