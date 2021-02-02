@@ -1,24 +1,7 @@
 /*
  * (C) Copyright 2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of the DAOS server. It implements dRPC client RAS event
@@ -274,15 +257,17 @@ ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 		    uuid_t *cont, daos_obj_id_t *objid, char *ctlop, char *data)
 {
 	Shared__RASEvent	evt = SHARED__RASEVENT__INIT;
-	d_rank_t		this_rank = dss_self_rank();
+	d_rank_t		this_rank;
 
 	/* use opaque blob oneof case for extended info for passthrough event */
 	evt.extended_info_case = SHARED__RASEVENT__EXTENDED_INFO_STR_INFO;
 	evt.str_info = (data == NULL) ? "" : data;
 
 	/* populate rank param if empty */
-	if (rank == NULL)
+	if (rank == NULL) {
+		this_rank = dss_self_rank();
 		rank = &this_rank;
+	}
 
 	raise_ras(id, msg, type, sev, hwid, rank, jobid, pool, cont, objid,
 		  ctlop, &evt);
@@ -325,4 +310,17 @@ ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl)
 	D_FREE(info.svc_reps);
 
 	return rc;
+}
+
+int
+ds_notify_swim_rank_dead(d_rank_t rank)
+{
+	Shared__RASEvent			evt = SHARED__RASEVENT__INIT;
+
+	return raise_ras(RAS_SWIM_RANK_DEAD,
+			 "SWIM marked rank as dead.",
+			 RAS_TYPE_STATE_CHANGE, RAS_SEV_INFO, NULL /* hwid */,
+			 &rank /* rank */, NULL /* jobid */, NULL /* pool */,
+			 NULL /* cont */, NULL /* objid */, NULL /* ctlop */,
+			 &evt);
 }
