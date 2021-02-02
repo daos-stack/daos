@@ -1762,6 +1762,9 @@ agg_data_extent(struct dtx_handle *dth, vos_iter_entry_t *entry,
 		if (agg_entry->ae_cur_stripe.as_extent_cnt) {
 			cur_stripenum = agg_entry->ae_cur_stripe.as_stripenum;
 			rc = agg_process_stripe(dth, agg_entry);
+			if (obj_dtx_need_refresh(dth, rc))
+				goto out;
+
 			if (rc)
 				D_ERROR("Process stripe returned "DF_RC"\n",
 					DP_RC(rc));
@@ -1775,6 +1778,9 @@ agg_data_extent(struct dtx_handle *dth, vos_iter_entry_t *entry,
 			this_stripenum) {
 				/* Handle holdover stripe */
 				rc = agg_process_stripe(dth, agg_entry);
+				if (obj_dtx_need_refresh(dth, rc))
+					goto out;
+
 				if (rc)
 					D_ERROR("Holdover returned "DF_RC"\n",
 						DP_RC(rc));
@@ -1838,6 +1844,9 @@ agg_akey_post(daos_handle_t ih, struct dtx_handle *dth, vos_iter_entry_t *entry,
 	if (agg_entry->ae_cur_stripe.as_extent_cnt) {
 		cur_stripenum = agg_entry->ae_cur_stripe.as_stripenum;
 		rc = agg_process_stripe(dth, agg_entry);
+		if (obj_dtx_need_refresh(dth, rc))
+			return rc;
+
 		if (rc)
 			D_ERROR("Process stripe returned "DF_RC"\n",
 				DP_RC(rc));
@@ -1845,6 +1854,9 @@ agg_akey_post(daos_handle_t ih, struct dtx_handle *dth, vos_iter_entry_t *entry,
 		if (cur_stripenum < agg_entry->ae_cur_stripe.as_stripenum) {
 			/* Handle holdover stripe */
 			rc = agg_process_stripe(dth, agg_entry);
+			if (obj_dtx_need_refresh(dth, rc))
+				return rc;
+
 			if (rc)
 				D_ERROR("Holdover returned "DF_RC"\n",
 					DP_RC(rc));
