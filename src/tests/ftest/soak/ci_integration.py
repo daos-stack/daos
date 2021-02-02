@@ -46,6 +46,7 @@ class JavaCIIntegration(TestWithServers):
         super(JavaCIIntegration, self).__init__(*args, **kwargs)
         self.pool = None
         self.container = None
+        self.jdir = None
 
     def _create_pool(self):
         """Create a TestPool object to use with ior.
@@ -80,16 +81,24 @@ class JavaCIIntegration(TestWithServers):
             bool: whether java is installed or not.
 
         """
-        # checking java install
-        task = run_task(hosts=self.hostlist_clients, command="java -version")
+        # look for java home
+        command = "cd {}/daos-java; chmod 755 find_java_home.sh; ./find_java_home.sh".format(self.jdir)
+        task = run_task(hosts=self.hostlist_clients, command=command)
         for output, _ in task.iter_buffers():
             result = str(output)
             self.log.info(result)
+        return result
+
+        # checking java install
+#        task = run_task(hosts=self.hostlist_clients, command="java -version")
+#        for output, _ in task.iter_buffers():
+#            result = str(output)
+#            self.log.info(result)
         # looking for a string something like this 1.8.0_262-b10
-        pattern = r"(\d+\.\d+\.\d+\_\d+\-[a-b]\d+)"
+#        pattern = r"(\d+\.\d+\.\d+\_\d+\-[a-b]\d+)"
         # replacing '_' and '-' with '.' and returning the result
-        return re.search(pattern,
-                         result).groups()[0].replace("_", ".").replace("-", ".")
+#        return re.search(pattern,
+#                         result).groups()[0].replace("_", ".").replace("-", ".")
 
     def test_java_hadoop_it(self):
         """Jira ID: DAOS-4093
@@ -101,6 +110,9 @@ class JavaCIIntegration(TestWithServers):
 
         :avocado: tags=all,pr,hw,small,javaciintegration
         """
+        # get current working dir
+        self.jdir = "{}/../java".format(os.getcwd())
+
         # create pool and container
         self.pool = self._create_pool()
         self.container = self._create_cont(self.pool)
@@ -121,11 +133,8 @@ class JavaCIIntegration(TestWithServers):
 
 
         # run intergration-test
-        openjdk = "/usr/lib/jvm/java-{}-openjdk-{}-0.el7_9.x86_64/jre/lib/amd64/libjsig.so".format(version[:-8], version)
-        jdir = "{}/../java".format(os.getcwd())
-        cmd = "cd {};".format(jdir)
-        cmd += " ls -l {};".format(openjdk)
-        cmd += " export LD_PRELOAD={};".format(openjdk)
+        cmd = "cd {};".format(self.jdir)
+        cmd += " export LD_PRELOAD={}/jre/lib/amd64/libjsig.so;".format(version)
 #        cmd += " export LD_PRELOAD=/usr/lib/jvm/"
 #        cmd += "java-{}-openjdk-{}-0.el7_8.x86_64/".format(version[:-8],
 #                                                           version)
