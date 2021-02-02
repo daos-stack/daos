@@ -124,8 +124,6 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	else
 		DFUSE_REPLY_ENTRY(ie, req, entry);
 	return;
-out_decref:
-	d_hash_rec_decref(&fs_handle->dpi_iet, &ie->ie_htl);
 out_err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	dfs_release(ie->ie_obj);
