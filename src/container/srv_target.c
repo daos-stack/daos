@@ -154,16 +154,15 @@ ds_cont_csummer_init(struct ds_cont_child *cont)
 	/** If enabled, initialize the csummer for the container */
 	if (daos_cont_csum_prop_is_enabled(csum_val)) {
 		rc = daos_csummer_init_with_type(&cont->sc_csummer,
-					    daos_contprop2hashtype(csum_val),
-					    cont_props->dcp_chunksize,
-					    cont_props->dcp_srv_verify);
+						 daos_contprop2hashtype(csum_val),
+						 cont_props->dcp_chunksize,
+						 cont_props->dcp_srv_verify);
 		if (dedup_only)
 			dedup_configure_csummer(cont->sc_csummer, cont_props);
 	}
 done:
 	return rc;
 }
-
 
 static bool
 cont_aggregate_runnable(struct ds_cont_child *cont)
@@ -295,7 +294,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 				snapshots[j] = cont->sc_snapshots[j];
 				insert_idx++;
 			} else {
-				snapshots[j+1] = cont->sc_snapshots[j];
+				snapshots[j + 1] = cont->sc_snapshots[j];
 			}
 		}
 		snapshots[insert_idx] = rebuild_fence;
@@ -311,7 +310,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 				return -DER_NOMEM;
 
 			memcpy(snapshots, cont->sc_snapshots,
-					snapshots_nr * sizeof(daos_epoch_t));
+			       snapshots_nr * sizeof(daos_epoch_t));
 		}
 	}
 
@@ -361,8 +360,7 @@ out:
 	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating finished\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), tgt_id);
 free:
-	if (snapshots != NULL)
-		D_FREE(snapshots);
+	D_FREE(snapshots);
 
 	return rc;
 }
@@ -869,7 +867,7 @@ cont_hdl_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 	if (hdl->sch_cont != NULL) {
 		D_DEBUG(DF_DSMS, DF_CONT": freeing\n",
 			DP_CONT(hdl->sch_cont->sc_pool->spc_uuid,
-			hdl->sch_cont->sc_uuid));
+				hdl->sch_cont->sc_uuid));
 		cont_child_put(tls->dt_cont_cache, hdl->sch_cont);
 	}
 	D_FREE(hdl);
@@ -1481,8 +1479,7 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 	}
 
 	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
-	if (coll_args.ca_exclude_tgts)
-		D_FREE(coll_args.ca_exclude_tgts);
+	D_FREE(coll_args.ca_exclude_tgts);
 
 	if (rc != 0) {
 		/* Once it exclude the target from the pool, since the target
@@ -1729,7 +1726,6 @@ ds_cont_tgt_query_handler(crt_rpc_t *rpc)
 	coll_args.ca_aggregator		= &pack_args;
 	coll_args.ca_func_args		= &coll_args.ca_stream_args;
 
-
 	rc = dss_task_collective_reduce(&coll_ops, &coll_args, 0);
 
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
@@ -1776,7 +1772,6 @@ cont_snap_update_one(void *vin)
 		if (cont->sc_snapshots != NULL) {
 			D_ASSERT(cont->sc_snapshots_nr > 0);
 			D_FREE(cont->sc_snapshots);
-			cont->sc_snapshots = NULL;
 		}
 	} else {
 		void	*buf;
@@ -1836,8 +1831,8 @@ cont_snapshots_refresh_ult(void *data)
 	ds_pool_put(pool);
 out:
 	if (rc != 0)
-		D_WARN(DF_UUID": failed to refresh snapshots IV: rc "DF_RC";"
-			" Aggregation may not work correctly\n",
+		D_WARN(DF_UUID": failed to refresh snapshots IV: "
+			"Aggregation may not work correctly "DF_RC"\n",
 			DP_UUID(args->cont_uuid), DP_RC(rc));
 	D_FREE(args);
 }
@@ -2060,8 +2055,8 @@ cont_oid_alloc(struct ds_pool_hdl *pool_hdl, crt_rpc_t *rpc)
 	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": oid alloc: num_oids="DF_U64"\n",
-		 DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid),
-		 in->num_oids);
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid),
+		in->num_oids);
 
 	out = crt_reply_get(rpc);
 	D_ASSERT(out != NULL);
@@ -2083,8 +2078,8 @@ cont_oid_alloc(struct ds_pool_hdl *pool_hdl, crt_rpc_t *rpc)
 out:
 	out->coao_op.co_rc = rc;
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: "DF_RC"\n",
-		 DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid),
-		 rpc, DP_RC(rc));
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid),
+		rpc, DP_RC(rc));
 
 	return rc;
 }
@@ -2164,9 +2159,8 @@ cont_ec_xs_reduce_free(struct dss_stream_arg_type *xs)
 {
 	struct cont_ec_xs_query_arg *xs_arg = xs->st_arg;
 
-	if (xs_arg->ephs)
-		D_FREE_PTR(xs_arg->ephs);
-	D_FREE_PTR(xs_arg);
+	D_FREE(xs_arg->ephs);
+	D_FREE(xs_arg);
 }
 
 static struct cont_ec_eph *
@@ -2266,7 +2260,7 @@ static void
 cont_ec_eph_destroy(struct cont_ec_eph *ec_eph)
 {
 	d_list_del(&ec_eph->ce_list);
-	D_FREE_PTR(ec_eph);
+	D_FREE(ec_eph);
 }
 
 static void
