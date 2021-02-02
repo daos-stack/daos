@@ -361,6 +361,8 @@ void ds_mgmt_pool_get_svcranks_hdlr(crt_rpc_t *rpc)
 {
 	struct mgmt_pool_get_svcranks_in	*in;
 	struct mgmt_pool_get_svcranks_out	*out;
+	double					 tstart;
+	double					 tend;
 	int					 rc;
 
 	in = crt_req_get(rpc);
@@ -371,10 +373,16 @@ void ds_mgmt_pool_get_svcranks_hdlr(crt_rpc_t *rpc)
 
 	out = crt_reply_get(rpc);
 
+	tstart = ABT_get_wtime();
 	rc =  ds_get_pool_svc_ranks(in->gsr_puuid, &out->gsr_ranks);
+	tend = ABT_get_wtime();
 	if (rc != 0)
 		D_ERROR(DF_UUID": get_pool_svc_ranks() upcall failed, "
 			DF_RC"\n", DP_UUID(in->gsr_puuid), DP_RC(rc));
+	else
+		D_INFO(DF_UUID": control plane upcall time = %f msec\n",
+		       DP_UUID(in->gsr_puuid), ((tend - tstart) * 1000.0));
+
 	out->gsr_rc = rc;
 
 	rc = crt_reply_send(rpc);
