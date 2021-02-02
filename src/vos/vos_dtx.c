@@ -2110,8 +2110,11 @@ vos_dtx_aggregate(daos_handle_t coh)
 		dce = d_list_entry(cont->vc_dtx_committed_list.next,
 				   struct vos_dtx_cmt_ent, dce_committed_link);
 		d_iov_set(&kiov, &DCE_XID(dce), sizeof(DCE_XID(dce)));
-		dbtree_delete(cont->vc_dtx_committed_hdl, BTR_PROBE_EQ,
-			      &kiov, NULL);
+		rc = dbtree_delete(cont->vc_dtx_committed_hdl, BTR_PROBE_EQ,
+				   &kiov, NULL);
+		if (rc != 0)
+			D_WARN("Failed to remove cmt DTX entry: "DF_RC"\n",
+			       DP_RC(rc));
 	}
 
 	tmp = umem_off2ptr(umm, dbd->dbd_next);
@@ -2565,10 +2568,19 @@ vos_dtx_cache_reset(daos_handle_t coh)
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
 
-	if (daos_handle_is_valid(cont->vc_dtx_active_hdl))
-		dbtree_destroy(cont->vc_dtx_active_hdl, NULL);
-	if (daos_handle_is_valid(cont->vc_dtx_committed_hdl))
-		dbtree_destroy(cont->vc_dtx_committed_hdl, NULL);
+	if (daos_handle_is_valid(cont->vc_dtx_active_hdl)) {
+		rc = dbtree_destroy(cont->vc_dtx_active_hdl, NULL);
+		if (rc != 0)
+			D_WARN("Failed to destroy act DTX tree: "DF_RC"\n",
+			       DP_RC(rc));
+	}
+
+	if (daos_handle_is_valid(cont->vc_dtx_committed_hdl)) {
+		rc = dbtree_destroy(cont->vc_dtx_committed_hdl, NULL);
+		if (rc != 0)
+			D_WARN("Failed to destroy cmt DTX tree: "DF_RC"\n",
+			       DP_RC(rc));
+	}
 
 	if (cont->vc_dtx_array)
 		lrua_array_free(cont->vc_dtx_array);
