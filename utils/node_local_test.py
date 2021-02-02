@@ -983,6 +983,7 @@ class posix_tests():
 
     @needs_dfuse
     def test_readdir_25(self):
+        """Test reading a directory with 25 entries"""
         self.readdir_test(25, test_all=True)
 
     # Works, but is very slow so needs to be run without debugging.

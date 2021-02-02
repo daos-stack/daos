@@ -16,7 +16,7 @@
 #define READDIR_BASE_COUNT 128
 
 /* Marker offset used to signify end-of-directory */
-#define DFUSE_READDIR_EOD (1LL << 63)
+#define READDIR_EOD (1LL << 63)
 
 /* Offset of the first file, allow two entries for . and .. */
 #define OFFSET_BASE 2
@@ -73,7 +73,7 @@ fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, int to_fetch,
 
 	if (count) {
 		if (daos_anchor_is_eof(&oh->doh_anchor))
-			oh->doh_dre[count - 1].dre_next_offset = DFUSE_READDIR_EOD;
+			oh->doh_dre[count - 1].dre_next_offset = READDIR_EOD;
 	} else {
 		*eod = true;
 	}
@@ -168,6 +168,9 @@ out:
 	return rc;
 }
 
+#define FADP	fuse_add_direntry_plus
+#define FAD	fuse_add_direntry
+
 static inline void
 dfuse_readdir_reset(struct dfuse_obj_hdl *oh)
 {
@@ -182,14 +185,16 @@ void
 dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 		 size_t size, off_t offset, bool plus)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	char			*reply_buff;
-	off_t			buff_offset = 0;
-	int			added = 0;
-	int			rc = 0;
-	int			large_fetch = true;
+	struct dfuse_projection_info	*fs_handle;
+	char				*reply_buff;
+	off_t				buff_offset = 0;
+	int				added = 0;
+	int				rc = 0;
+	int				large_fetch = true;
 
-	if (offset == DFUSE_READDIR_EOD) {
+	fs_handle = fuse_req_userdata(req);
+
+	if (offset == READDIR_EOD) {
 		DFUSE_TRA_DEBUG(oh, "End of directory %lx", offset);
 		DFUSE_REPLY_BUF(oh, req, NULL, (size_t)0);
 		return;
@@ -352,26 +357,25 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 				if (rc != 0)
 					D_GOTO(reply, rc);
 
-				written = fuse_add_direntry_plus(req,
-								 &reply_buff[buff_offset],
-								 size - buff_offset,
-								 dre->dre_name,
-								 &entry,
-								 dre->dre_next_offset);
-				if (written > size - buff_offset) {
+				written = FADP(req,
+					       &reply_buff[buff_offset],
+					       size - buff_offset,
+					       dre->dre_name,
+					       &entry,
+					       dre->dre_next_offset);
+				if (written > size - buff_offset)
 					d_hash_rec_decref(&fs_handle->dpi_iet,
 							  rlink);
-				}
 
 			} else {
 				dfs_release(obj);
 
-				written = fuse_add_direntry(req,
-							    &reply_buff[buff_offset],
-							    size - buff_offset,
-							    dre->dre_name,
-							    &stbuf,
-							    dre->dre_next_offset);
+				written = FAD(req,
+					      &reply_buff[buff_offset],
+					      size - buff_offset,
+					      dre->dre_name,
+					      &stbuf,
+					      dre->dre_next_offset);
 			}
 			if (written > size - buff_offset) {
 				DFUSE_TRA_DEBUG(oh, "Buffer is full");
@@ -387,7 +391,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 			added++;
 			offset++;
 
-			if (dre->dre_next_offset == DFUSE_READDIR_EOD) {
+			if (dre->dre_next_offset == READDIR_EOD) {
 				DFUSE_TRA_DEBUG(oh, "Reached end of directory");
 				dfuse_readdir_reset(oh);
 				D_GOTO(reply, 0);
