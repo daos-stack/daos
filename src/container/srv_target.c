@@ -378,7 +378,9 @@ cont_aggregate_ult(void *arg)
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 		dmi->dmi_tgt_id);
 
-	D_ASSERT(cont->sc_agg_req != NULL);
+	if (cont->sc_agg_req == NULL)
+		goto out;
+
 	while (!dss_ult_exiting(cont->sc_agg_req)) {
 		uint64_t msecs;	/* milli seconds */
 
@@ -404,6 +406,7 @@ cont_aggregate_ult(void *arg)
 		sched_req_sleep(cont->sc_agg_req, msecs);
 	}
 
+out:
 	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregation ULT stopped\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 		dmi->dmi_tgt_id);
@@ -525,7 +528,7 @@ cont_start_dtx_reindex_ult(struct ds_cont_child *cont)
 static void
 cont_stop_dtx_reindex_ult(struct ds_cont_child *cont)
 {
-	if (!cont->sc_dtx_reindex)
+	if (!cont->sc_dtx_reindex || cont->sc_open != 0)
 		return;
 
 	cont->sc_dtx_reindex_abort = 1;
@@ -1264,6 +1267,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	struct dsm_tls		*tls = dsm_tls_get();
 	struct ds_cont_hdl	*hdl;
 	daos_handle_t		poh = DAOS_HDL_INVAL;
+	bool			added = false;
 	int			rc = 0;
 
 	hdl = cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash, cont_hdl_uuid);
@@ -1320,6 +1324,8 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	if (rc != 0)
 		D_GOTO(err_cont, rc);
 
+	added = true;
+
 	/* It is possible to sync DTX status before destroy the CoS for close
 	 * the container. But that may be not enough. Because the server may
 	 * crashed before closing the container. Then the DTXs' status in the
@@ -1371,7 +1377,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 				"rc = "DF_RC"\n", DP_UUID(cont_uuid),
 				DP_RC(rc));
 			hdl->sch_cont->sc_open--;
-			D_GOTO(err_cont, rc);
+			D_GOTO(err_reindex, rc);
 		}
 
 		D_ALLOC_PTR(ddra);
@@ -1408,12 +1414,10 @@ err_register:
 	hdl->sch_cont->sc_open--;
 	if (hdl->sch_cont->sc_open == 0)
 		dtx_batched_commit_deregister(hdl->sch_cont);
-err_cont:
-	if (hdl->sch_cont) {
+err_reindex:
+	if (hdl->sch_cont)
 		cont_stop_dtx_reindex_ult(hdl->sch_cont);
-		cont_child_put(tls->dt_cont_cache, hdl->sch_cont);
-	}
-
+err_cont:
 	if (daos_handle_is_valid(poh)) {
 		D_DEBUG(DF_DSMS, DF_CONT": destroying new vos container\n",
 			DP_CONT(pool_uuid, cont_uuid));
@@ -1422,7 +1426,12 @@ err_cont:
 		vos_cont_destroy(poh, cont_uuid);
 	}
 err_hdl:
-	D_FREE(hdl);
+	if (added)
+		/* Open failed, remove hdl from hash. */
+		cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
+	else
+		D_FREE(hdl);
+
 	return rc;
 }
 
@@ -1528,8 +1537,10 @@ cont_close_hdl(uuid_t cont_hdl_uuid)
 
 		D_ASSERT(cont_child->sc_open > 0);
 		cont_child->sc_open--;
-		if (cont_child->sc_open == 0)
+		if (cont_child->sc_open == 0) {
 			dtx_batched_commit_deregister(cont_child);
+			cont_stop_dtx_reindex_ult(cont_child);
+		}
 	}
 
 	cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
