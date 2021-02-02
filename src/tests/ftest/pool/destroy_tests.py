@@ -19,11 +19,36 @@ class DestroyTests(TestWithServers):
     :avocado: recursive
     """
 
-    def setUp(self):
-        """Set up for destroy."""
+    def get_group(self, name, hosts):
+        """Get the server group dictionary.
 
-        self.setup_start_servers = False
-        super(DestroyTests, self).setUp()
+        This provides the 'server_groups' argument for the self.start_servers()
+        method.
+
+        Args:
+            name (str): the server group name
+            hosts (list): list of hosts to include in the server group
+
+        Returns:
+            dict: the the server group argument for the start_servers()
+                method
+
+        """
+        return {name: self.get_group_info(hosts)}
+
+    @staticmethod
+    def get_group_info(hosts):
+        """Get the server group information.
+
+        Args:
+            hosts (list): list of hosts
+
+        Returns:
+            dict: a dictionary identifying the hosts and access points for the
+                server group dictionary
+
+        """
+        return {"hosts": hosts, "access_points": hosts[:1]}
 
     def execute_test(self, hosts, group_name, case, exception_expected=False):
         """Execute the pool destroy test.
@@ -36,7 +61,7 @@ class DestroyTests(TestWithServers):
                 raised when destroying the pool. Defaults to False.
         """
         # Start servers with the server group
-        self.start_servers({group_name: hosts})
+        self.start_servers(self.get_group(group_name, hosts))
 
         # Validate the creation of a pool
         self.validate_pool_creation(hosts, group_name)
@@ -154,7 +179,7 @@ class DestroyTests(TestWithServers):
         hostlist_servers = self.hostlist_servers[:1]
 
         # Start servers
-        self.start_servers({self.server_group: hostlist_servers})
+        self.start_servers(self.get_group(self.server_group, hostlist_servers))
 
         counter = 0
         while counter < 10:
@@ -177,7 +202,7 @@ class DestroyTests(TestWithServers):
         hostlist_servers = self.hostlist_servers[:6]
 
         # Start servers
-        self.start_servers({self.server_group: hostlist_servers})
+        self.start_servers(self.get_group(self.server_group, hostlist_servers))
 
         counter = 0
         while counter < 10:
@@ -202,7 +227,7 @@ class DestroyTests(TestWithServers):
         setid = self.params.get("setname", '/run/setnames/validsetname/')
 
         # Start servers
-        self.start_servers({setid: hostlist_servers})
+        self.start_servers(self.get_group(setid, hostlist_servers))
 
         # Create a pool
         self.validate_pool_creation(hostlist_servers, setid)
@@ -234,7 +259,7 @@ class DestroyTests(TestWithServers):
         badsetid = self.params.get("setname", '/run/setnames/badsetname/')
 
         # Start servers
-        self.start_servers({setid: hostlist_servers})
+        self.start_servers(self.get_group(setid, hostlist_servers))
 
         # Create a pool
         self.validate_pool_creation(hostlist_servers, setid)
@@ -267,8 +292,8 @@ class DestroyTests(TestWithServers):
         """
         group_names = [self.server_group + "_a", self.server_group + "_b"]
         group_hosts = {
-            group_names[0]: self.hostlist_servers[:1],
-            group_names[1]: self.hostlist_servers[1:2],
+            group_names[0]: self.get_group_info(self.hostlist_servers[:1]),
+            group_names[1]: self.get_group_info(self.hostlist_servers[1:2]),
         }
         self.start_servers(group_hosts)
 
@@ -316,7 +341,7 @@ class DestroyTests(TestWithServers):
         hostlist_servers = self.hostlist_servers[:1]
 
         # Start servers
-        self.start_servers({self.server_group: hostlist_servers})
+        self.start_servers(self.get_group(self.server_group, hostlist_servers))
 
         # Create the pool
         self.validate_pool_creation(hostlist_servers, self.server_group)
@@ -366,7 +391,7 @@ class DestroyTests(TestWithServers):
         hostlist_servers = self.hostlist_servers[:1]
 
         # Start servers
-        self.start_servers({self.server_group: hostlist_servers})
+        self.start_servers(self.get_group(self.server_group, hostlist_servers))
 
         # Create the pool
         self.validate_pool_creation(hostlist_servers, self.server_group)
@@ -405,7 +430,7 @@ class DestroyTests(TestWithServers):
         hostlist_servers = self.hostlist_servers[:1]
 
         # Start servers
-        self.start_servers({self.server_group: hostlist_servers})
+        self.start_servers(self.get_group(self.server_group, hostlist_servers))
 
         # Attempt to destroy the pool with an invalid server group name
         self.validate_pool_creation(hostlist_servers, self.server_group)
@@ -465,8 +490,8 @@ class DestroyTests(TestWithServers):
         # Start two server groups
         group_names = [self.server_group + "_a", self.server_group + "_b"]
         group_hosts = {
-            group_names[0]: self.hostlist_servers[:1],
-            group_names[1]: self.hostlist_servers[1:2]
+            group_names[0]: self.get_group_info(self.hostlist_servers[:1]),
+            group_names[1]: self.get_group_info(self.hostlist_servers[1:2])
         }
         self.start_servers(group_hosts)
 
