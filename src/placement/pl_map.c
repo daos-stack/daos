@@ -538,6 +538,26 @@ pl_map_version(struct pl_map *map)
 	return map->pl_poolmap ? pool_map_get_version(map->pl_poolmap) : 0;
 }
 
+int
+pl_map_query(uuid_t po_uuid, struct pl_map_attr *attr)
+{
+	struct pl_map   *map;
+	int		 rc;
+
+	map = pl_map_find(po_uuid, DAOS_OBJ_NIL);
+	if (!map)
+		return -DER_ENOENT;
+
+	memset(attr, 0, sizeof(*attr));
+	if (map->pl_ops->o_query != NULL)
+		rc = map->pl_ops->o_query(map, attr);
+	else
+		rc = -DER_NOSYS;
+
+	pl_map_decref(map); /* hash table has held the refcount */
+	return rc;
+}
+
 /**
  * Select leader replica for the given object's shard.
  *

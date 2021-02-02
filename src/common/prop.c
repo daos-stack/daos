@@ -55,6 +55,7 @@ daos_prop_entry_free_value(struct daos_prop_entry *entry)
 		break;
 	case DAOS_PROP_PO_ACL:
 	case DAOS_PROP_CO_ACL:
+	case DAOS_PROP_CO_ROOTS:
 		if (entry->dpe_val_ptr)
 			D_FREE(entry->dpe_val_ptr);
 		break;
@@ -415,6 +416,8 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			break;
 		case DAOS_PROP_CO_SNAPSHOT_MAX:
 			break;
+		case DAOS_PROP_CO_ROOTS:
+			break;
 		default:
 			D_ERROR("invalid dpe_type %d.\n", type);
 			return false;
@@ -478,6 +481,13 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 			return rc;
 		}
 		entry_dup->dpe_val_ptr = dst_list;
+		break;
+	case DAOS_PROP_CO_ROOTS:
+		rc = daos_prop_entry_dup_co_roots(entry_dup, entry);
+		if (rc) {
+			D_ERROR("failed to dup roots\n");
+			return rc;
+		}
 		break;
 	default:
 		entry_dup->dpe_val = entry->dpe_val;
@@ -575,6 +585,7 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 	bool			 owner_alloc = false;
 	bool			 group_alloc = false;
 	bool			 svc_list_alloc = false;
+	bool			 roots_alloc = false;
 	struct daos_acl		*acl;
 	d_rank_list_t		*dst_list;
 	uint32_t		 type;
@@ -644,6 +655,13 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 				D_GOTO(out, rc);
 			svc_list_alloc = true;
 			entry_req->dpe_val_ptr = dst_list;
+		} else if (type == DAOS_PROP_CO_ROOTS) {
+			rc = daos_prop_entry_dup_co_roots(entry_req,
+							  entry_reply);
+			if (rc)
+				D_GOTO(out, rc);
+
+			roots_alloc = true;
 		} else {
 			entry_req->dpe_val = entry_reply->dpe_val;
 		}
@@ -672,6 +690,8 @@ out:
 						DAOS_PROP_PO_SVC_LIST);
 			d_rank_list_free(entry_req->dpe_val_ptr);
 		}
+		if (roots_alloc)
+			free_ptr_prop_entry(prop_req, DAOS_PROP_CO_ROOTS);
 
 		if (entries_alloc)
 			D_FREE(prop_req->dpp_entries);
@@ -679,6 +699,23 @@ out:
 	return rc;
 }
 
+int
+daos_prop_entry_dup_co_roots(struct daos_prop_entry *dst,
+			     struct daos_prop_entry *src)
+{
+	struct daos_prop_co_roots *roots;
+
+	roots = src->dpe_val_ptr;
+	if (!dst->dpe_val_ptr)
+		D_ALLOC(dst->dpe_val_ptr, sizeof(*roots));
+
+	if (dst->dpe_val_ptr == NULL) {
+		D_ERROR("failed to dup roots\n");
+		return -DER_NOMEM;
+	}
+	memcpy(dst->dpe_val_ptr, roots, sizeof(*roots));
+	return 0;
+}
 
 int
 daos_prop_entry_dup_ptr(struct daos_prop_entry *entry_dst,
