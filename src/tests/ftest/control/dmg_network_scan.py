@@ -117,6 +117,7 @@ class DmgNetworkScanTest(TestWithServers):
     def __init__(self, *args, **kwargs):
         """Initialize a DmgNetworkScanTest object."""
         super(DmgNetworkScanTest, self).__init__(*args, **kwargs)
+        self.start_servers_once = False
         self.setup_start_agents = False
         self.setup_start_servers = False
 
@@ -126,6 +127,7 @@ class DmgNetworkScanTest(TestWithServers):
 
         # Run the dmg command locally, unset config to run locally
         self.hostlist_servers = socket.gethostname().split(".")[0].split(",")
+        self.access_points = self.hostlist_servers[:1]
         self.start_servers()
         self.dmg = self.get_dmg_command()
 

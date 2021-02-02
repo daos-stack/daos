@@ -6,7 +6,7 @@ hosts:
   test_clients:
     - client-D
 timeout: 1110
-job_manager_timeout: 400
+job_manager_timeout: 300
 server_config:
   name: daos_server
   servers_per_host: 2
@@ -52,11 +52,11 @@ container:
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
   oclass: RP_2G1
 ior:
-  no_parallel_job: 2
+  no_parallel_job: 10
   client_processes:
     np: 2
   test_file: /testFile
-  repetitions: 10
+  repetitions: 1
   dfs_destroy: False
   iorflags:
     ior_flags:
