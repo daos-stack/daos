@@ -805,6 +805,7 @@ struct vos_iter_ops;
 
 /** the common part of vos iterators */
 struct vos_iterator {
+	struct dtx_handle	*it_dth;
 	struct vos_iter_ops	*it_ops;
 	struct vos_iterator	*it_parent; /* parent iterator */
 	struct vos_ts_set	*it_ts_set;
@@ -1222,8 +1223,7 @@ vos_dtx_continue_detect(int rc)
 	/* Continue to detect other potential in-prepared DTX. */
 	return rc == -DER_INPROGRESS && dth != NULL &&
 		dth->dth_share_tbd_count > 0 &&
-		dth->dth_share_tbd_count < DTX_REFRESH_MAX &&
-		dth->dth_share_tbd_scanned < DTX_DETECT_SCAN_MAX;
+		dth->dth_share_tbd_count < DTX_REFRESH_MAX;
 }
 
 static inline bool
