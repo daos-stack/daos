@@ -40,6 +40,9 @@
 	X(RAS_RANK_UP,			"engine_status_up")		\
 	X(RAS_RANK_DOWN,		"engine_status_down")		\
 	X(RAS_RANK_NO_RESPONSE,		"engine_status_no_response")	\
+	X(RAS_POOL_REBUILD_START,	"pool_rebuild_started")		\
+	X(RAS_POOL_REBUILD_END,		"pool_rebuild_finished")	\
+	X(RAS_POOL_REBUILD_FAILED,	"pool_rebuild_failed")		\
 	X(RAS_POOL_REPS_UPDATE,		"pool_replicas_updated")	\
 	X(RAS_POOL_DF_INCOMPAT,						\
 	  "pool_durable_format_incompatible")				\
@@ -86,7 +89,8 @@ ras_type2str(ras_type_t type)
 }
 
 typedef enum {
-	RAS_SEV_FATAL	= 1,
+	RAS_SEV_UNKNOWN = 0,
+	RAS_SEV_FATAL,
 	RAS_SEV_WARN,
 	RAS_SEV_ERROR,
 	RAS_SEV_INFO,
