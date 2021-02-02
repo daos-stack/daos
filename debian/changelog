@@ -1,3 +1,9 @@
+daos (1.1.2.1-8) unstable; urgency=medium
+  [ Vishwanath Venkatesan ]
+  * Fix debian packages to update to mercury v2.0.1rc1
+
+ -- Vishwanath Venkatesan <vishwanath.venkatesan@intel.com>  Fri, 01 Feb 2021 13:40:00 -0500
+
 daos (1.1.2.1-7) unstable; urgency=medium
   [ Alexander Oganezov ]
   * Fix debian packages to update to mercury v2.0.1rc1

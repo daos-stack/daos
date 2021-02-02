@@ -1,14 +1,14 @@
 """Build common libraries"""
 import daos_build
 
-COMMONSRC_FILES = ['debug.c', 'mem.c', 'fail_loc.c', 'lru.c',
-                  'misc.c', 'pool_map.c', 'sort.c', 'btree.c', 'prop.c',
-                  'btree_class.c', 'tse.c', 'rsvc.c', 'checksum.c',
-                  'drpc.c', 'drpc.pb-c.c', 'proc.c',
-                  'acl_api.c', 'acl_util.c', 'acl_principal.c', 'cont_props.c',
-                  'dedup.c', 'profile.c', 'compression.c', 'compression_isal.c',
-                  'compression_qat.c', 'multihash.c', 'multihash_isal.c',
-                  'cipher.c', 'cipher_isal.c', 'qat.c']
+COMMON_FILES = ['debug.c', 'mem.c', 'fail_loc.c', 'lru.c',
+                'misc.c', 'pool_map.c', 'sort.c', 'btree.c', 'prop.c',
+                'btree_class.c', 'tse.c', 'rsvc.c', 'checksum.c',
+                'drpc.c', 'drpc.pb-c.c', 'proc.c',
+                'acl_api.c', 'acl_util.c', 'acl_principal.c', 'cont_props.c',
+                'dedup.c', 'profile.c', 'compression.c', 'compression_isal.c',
+                'compression_qat.c', 'multihash.c', 'multihash_isal.c',
+                'cipher.c', 'cipher_isal.c', 'qat.c']
 
 
 def build_daos_common(env, client, prereqs):
@@ -16,14 +16,14 @@ def build_daos_common(env, client, prereqs):
     denv = env.Clone()
 
     if client:
-        libname = 'libdaos_common';
+        libname = 'libdaos_common'
     else:
         denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
         denv.Append(OBJPREFIX="v_")
         libname = 'libdaos_common_pmem'
         prereqs.require(denv, 'pmdk')
 
-    common = daos_build.library(denv, libname, COMMONSRC_FILES)
+    common = daos_build.library(denv, libname, COMMON_FILES)
     denv.Install('$PREFIX/lib64/', common)
 
 def build_dts_library(env):
