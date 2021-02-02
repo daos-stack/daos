@@ -15,7 +15,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/common/proto/shared"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -328,7 +327,7 @@ func TestSrvModule_HandleBioErr_IdxOutOfRange(t *testing.T) {
 }
 
 func getTestClusterEventReqBytes(t *testing.T, event *sharedpb.RASEvent, seq uint64) []byte {
-	req := &shared.ClusterEventReq{Event: event, Sequence: seq}
+	req := &sharedpb.ClusterEventReq{Event: event, Sequence: seq}
 	reqBytes, err := proto.Marshal(req)
 
 	if err != nil {
