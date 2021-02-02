@@ -328,4 +328,10 @@ rebuild_global_status_update(struct rebuild_global_pool_tracker *master_rpt,
 			     struct rebuild_iv *iv);
 void
 rebuild_hang(void);
+
+int
+rebuild_notify_ras_start(uuid_t *pool, uint32_t map_ver, char *op_str);
+
+int
+rebuild_notify_ras_end(uuid_t *pool, uint32_t map_ver, char *op_str, int op_rc);
 #endif /* __REBUILD_INTERNAL_H_ */
