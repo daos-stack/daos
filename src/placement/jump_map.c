@@ -2,24 +2,7 @@
  *
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * src/placement/jump_map.c
@@ -867,7 +850,7 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 {
 	struct pl_jump_map	*jmap;
 	struct pl_obj_layout	*layout;
-	struct pl_obj_layout	*add_layout;
+	struct pl_obj_layout	*add_layout = NULL;
 	struct jm_obj_placement	jmop;
 	struct pool_domain	*root;
 	d_list_t		remap_list;
@@ -887,7 +870,7 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	/* Allocate space to hold the layout */
 	rc = pl_obj_layout_alloc(jmop.jmop_grp_size, jmop.jmop_grp_nr,
 				 &layout);
-	if (rc != 0) {
+	if (rc) {
 		D_ERROR("pl_obj_layout_alloc failed, rc "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
@@ -905,10 +888,10 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 		/* Allocate space to hold the layout */
 		rc = pl_obj_layout_alloc(jmop.jmop_grp_size, jmop.jmop_grp_nr,
 					 &add_layout);
-		if (rc != 0) {
+		if (rc) {
 			D_ERROR("pl_obj_layout_alloc failed, rc "DF_RC"\n",
 				DP_RC(rc));
-			return rc;
+			goto out;
 		}
 
 		remap_list_free_all(&remap_list);
@@ -919,27 +902,25 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 		assert(rc == 0);
 		D_INIT_LIST_HEAD(&add_list);
 		layout_find_diff(jmap, layout, add_layout, &add_list);
-		/* done with add_layout so free */
-		pl_obj_layout_free(add_layout);
-		if (!d_list_empty(&add_list)) {
+
+		if (!d_list_empty(&add_list))
 			rc = pl_map_extend(layout, &add_list, true);
-			if (rc != 0)
-				return rc;
-		}
 	}
+out:
+	remap_list_free_all(&remap_list);
+
+	if (add_layout != NULL)
+		pl_obj_layout_free(add_layout);
 
 	if (rc < 0) {
 		D_ERROR("Could not generate placement layout, rc "DF_RC"\n",
 			DP_RC(rc));
 		pl_obj_layout_free(layout);
-		remap_list_free_all(&remap_list);
 		return rc;
 	}
 
 	*layout_pp = layout;
 	obj_layout_dump(oid, layout);
-
-	remap_list_free_all(&remap_list);
 
 	return DER_SUCCESS;
 }

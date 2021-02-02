@@ -1,24 +1,7 @@
 /*
- *  (C) Copyright 2016-2020 Intel Corporation.
+ *  (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * object shard operations.
@@ -555,7 +538,7 @@ csum_report_cb(const struct crt_cb_info *cb_info)
 	crt_rpc_t	*rpc = cb_info->cci_arg;
 	int		 rc = cb_info->cci_rc;
 
-	D_DEBUG(DB_IO, "rpc %p, csum report " DF_RC "\n", rpc, DP_RC(rc));
+	D_DEBUG(DB_IO, "rpc %p, csum report "DF_RC"\n", rpc, DP_RC(rc));
 	crt_req_decref(rpc);
 	crt_req_decref(cb_info->cci_rpc);
 }
@@ -591,7 +574,7 @@ dc_shard_csum_report(tse_task_t *task, crt_rpc_t *rpc)
 	crt_req_addref(rpc);
 	rc = crt_req_send(csum_rpc, csum_report_cb, rpc);
 	if (rc != 0)
-		D_ERROR("Fail to send csum report, rpc %p, " DF_RC "\n",
+		D_ERROR("Fail to send csum report, rpc %p, "DF_RC"\n",
 			rpc, DP_RC(rc));
 
 	return rc;
@@ -1639,6 +1622,9 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 		if (daos_anchor_get_flags(args->la_dkey_anchor) &
 		    DIOF_FOR_MIGRATION)
 			oei->oei_flags |= ORF_FOR_MIGRATION;
+		if (daos_anchor_get_flags(args->la_dkey_anchor) &
+		    DIOF_TO_SPEC_SHARD)
+			oei->oei_flags |= ORF_DTX_REFRESH;
 	}
 	if (args->la_akey_anchor != NULL)
 		enum_anchor_copy(&oei->oei_akey_anchor, args->la_akey_anchor);
