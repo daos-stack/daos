@@ -179,7 +179,6 @@ cont_iv_ent_destroy(d_sg_list_t *sgl)
 
 	if (sgl->sg_iovs && sgl->sg_iovs[0].iov_buf) {
 		daos_handle_t *root_hdl = sgl->sg_iovs[0].iov_buf;
-
 		dbtree_destroy(*root_hdl, NULL);
 	}
 
@@ -253,7 +252,7 @@ cont_iv_snap_ent_create(struct ds_iv_entry *entry, struct ds_iv_key *key)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	memcpy(&root_hdl, entry->iv_value.sg_iovs[0].iov_buf,
-	       sizeof(root_hdl));
+		sizeof(root_hdl));
 	uuid_copy(iv_entry->cont_uuid, civ_key->cont_uuid);
 	iv_entry->iv_snap.snap_cnt = snap_cnt;
 	memcpy(iv_entry->iv_snap.snaps, snaps, snap_cnt * sizeof(*snaps));
@@ -264,8 +263,10 @@ cont_iv_snap_ent_create(struct ds_iv_entry *entry, struct ds_iv_key *key)
 	if (rc)
 		D_GOTO(out, rc);
 out:
-	D_FREE(iv_entry);
-	D_FREE(snaps);
+	if (iv_entry != NULL)
+		D_FREE(iv_entry);
+	if (snaps)
+		D_FREE(snaps);
 	return rc;
 }
 
@@ -375,7 +376,7 @@ cont_iv_prop_ent_create(struct ds_iv_entry *entry, struct ds_iv_key *key)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	memcpy(&root_hdl, entry->iv_value.sg_iovs[0].iov_buf,
-	       sizeof(root_hdl));
+		sizeof(root_hdl));
 
 	uuid_copy(iv_entry->cont_uuid, civ_key->cont_uuid);
 	cont_iv_prop_l2g(prop, &iv_entry->iv_prop);
@@ -388,7 +389,8 @@ cont_iv_prop_ent_create(struct ds_iv_entry *entry, struct ds_iv_key *key)
 out:
 	if (prop != NULL)
 		daos_prop_free(prop);
-	D_FREE(iv_entry);
+	if (iv_entry != NULL)
+		D_FREE(iv_entry);
 	return rc;
 }
 
@@ -561,7 +563,7 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	} else {
 		/* Put it to IV tree */
 		d_iov_set(&val_iov, src->sg_iovs[0].iov_buf,
-			  src->sg_iovs[0].iov_len);
+			     src->sg_iovs[0].iov_len);
 		rc = dbtree_update(root_hdl, &key_iov, &val_iov);
 	}
 
@@ -711,8 +713,8 @@ cont_iv_update(void *ns, int class_id, uuid_t key_uuid,
 	civ_key->class_id = class_id;
 	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0, retry);
 	if (rc)
-		D_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_NONEXIST ||
-			 rc == -DER_GRPVER, DB_ANY, DLOG_ERR,
+		D_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_NONEXIST,
+			 DB_ANY, DLOG_ERR,
 			 DF_UUID" iv update failed "DF_RC"\n",
 			 DP_UUID(key_uuid), DP_RC(rc));
 	return rc;
@@ -761,7 +763,7 @@ cont_iv_snapshots_fetch(void *ns, uuid_t cont_uuid, uint64_t **snapshots,
 	}
 
 	D_ALLOC(*snapshots,
-		sizeof(iv_entry->iv_snap.snaps[0]) * iv_entry->iv_snap.snap_cnt);
+	      sizeof(iv_entry->iv_snap.snaps[0]) * iv_entry->iv_snap.snap_cnt);
 	if (*snapshots == NULL)
 		D_GOTO(free, rc = -DER_NOMEM);
 
@@ -1127,9 +1129,12 @@ out:
 	if (rc) {
 		if (acl_alloc)
 			daos_acl_free(acl_alloc);
-		D_FREE(label_alloc);
-		D_FREE(owner_alloc);
-		D_FREE(owner_grp_alloc);
+		if (label_alloc)
+			D_FREE(label_alloc);
+		if (owner_alloc)
+			D_FREE(owner_alloc);
+		if (owner_grp_alloc)
+			D_FREE(owner_grp_alloc);
 	}
 	return rc;
 }
