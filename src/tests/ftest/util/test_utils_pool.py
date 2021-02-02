@@ -723,11 +723,7 @@ class TestPool(TestDaosApiBase):
             read_incomplete = index < len(container.written_data)
 
         # Verify that all of the container data was read successfully
-        if read_incomplete:
-            self.log.error(
-                "Rebuild completed before all the written data could be read")
-            status = False
-        elif not status:
+        if not status:
             self.log.error("Errors detected reading data during rebuild")
         return status
 
