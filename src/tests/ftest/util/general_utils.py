@@ -604,6 +604,8 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60):
     if hosts is not None:
         commands = [
             "rc=0",
+            "set -x",
+            "ps aux | grep -E {}".format(pattern),
             "if pgrep --list-full {}".format(pattern),
             "then rc=1",
             "sudo pkill {}".format(pattern),
