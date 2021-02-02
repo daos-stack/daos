@@ -169,7 +169,7 @@ class ManagementServiceResilience(TestWithServers):
 
         self.update_and_verify(ignore_status=True)
         self.server_managers[-1].hosts = (
-            leader, self.workdir, self.hostfile_servers_slots)
+            [leader], self.workdir, self.hostfile_servers_slots)
         self.start_server_managers()
         self.update_and_verify(ignore_status=False)
 
