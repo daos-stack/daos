@@ -69,6 +69,7 @@ extern d_iov_t ds_cont_prop_owner_group;	/* string */
 extern d_iov_t ds_cont_prop_snapshots;		/* snapshot KVS */
 extern d_iov_t ds_cont_attr_user;		/* user attribute KVS */
 extern d_iov_t ds_cont_prop_handles;		/* handle index KVS */
+extern d_iov_t ds_cont_prop_roots;		/* container first citizens */
 
 /*
  * Snapshot KVS (RDB_KVS_INTEGER)
