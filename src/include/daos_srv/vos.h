@@ -136,22 +136,6 @@ void
 vos_dtx_mark_committable(struct dtx_handle *dth);
 
 /**
- * Check the latest sync epoch against the specified object.
- *
- * \param coh	[IN]	Container open handle.
- * \param oid	[IN]	The object ID.
- * \param epoch	[IN,OUT] IN: the epoch to be compared with sync epoch.
- *			OUT: the latest sync epoch against the object.
- *
- * \return		Zero on success.
- * \return		-DER_AGAIN	object may be in-dying, retry locally.
- * \return		-DER_TX_RESTART	restart related DTX with newer epoch.
- * \return		Other negative value if error.
- */
-int
-vos_dtx_check_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t *epoch);
-
-/**
  * Mark the object has been synced at the specified epoch.
  *
  * \param coh	[IN]	Container open handle.

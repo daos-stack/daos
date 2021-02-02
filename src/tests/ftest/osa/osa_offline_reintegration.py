@@ -4,9 +4,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import time
 import random
 from osa_utils import OSAUtils
 from test_utils_pool import TestPool
+from apricot import skipForTicket
 
 class OSAOfflineReintegration(OSAUtils):
     # pylint: disable=too-many-ancestors
@@ -67,10 +69,15 @@ class OSAOfflineReintegration(OSAUtils):
             output = self.dmg_command.pool_exclude(self.pool.uuid,
                                                    rank, t_string)
             self.log.info(output)
-            self.is_rebuild_done(3)
-            self.assert_on_rebuild_failure()
 
-            pver_exclude = self.get_pool_version()
+            fail_count = 0
+            while fail_count <= 20:
+                pver_exclude = self.get_pool_version()
+                time.sleep(10)
+                fail_count += 1
+                if pver_exclude > (pver_begin + len(target_list)):
+                    break
+
             self.log.info("Pool Version after exclude %s", pver_exclude)
             # Check pool version incremented after pool exclude
             self.assertTrue(pver_exclude > (pver_begin + len(target_list)),
@@ -79,7 +86,15 @@ class OSAOfflineReintegration(OSAUtils):
                                                        rank,
                                                        t_string)
             self.log.info(output)
-            self.is_rebuild_done(3)
+
+            fail_count = 0
+            while fail_count <= 20:
+                pver_reint = self.get_pool_version()
+                time.sleep(10)
+                fail_count += 1
+                if pver_reint > (pver_exclude + 1):
+                    break
+
             self.assert_on_rebuild_failure()
 
             pver_reint = self.get_pool_version()
@@ -96,6 +111,7 @@ class OSAOfflineReintegration(OSAUtils):
         if data:
             self.verify_single_object()
 
+    @skipForTicket("DAOS-6521")
     def test_osa_offline_reintegration(self):
         """Test ID: DAOS-4749
         Test Description: Validate Offline Reintegration
