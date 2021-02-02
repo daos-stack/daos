@@ -274,6 +274,7 @@ static void
 cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
 {
 	struct daos_prop_entry	*prop_entry;
+	struct daos_prop_co_roots *roots;
 	struct daos_acl		*acl;
 	int			 i;
 
@@ -337,6 +338,13 @@ cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
 			D_ASSERT(strlen(prop_entry->dpe_str) <=
 				 DAOS_ACL_MAX_PRINCIPAL_LEN);
 			strcpy(iv_prop->cip_owner_grp, prop_entry->dpe_str);
+			break;
+		case DAOS_PROP_CO_ROOTS:
+			roots = prop_entry->dpe_val_ptr;
+			if (roots) {
+				memcpy(&iv_prop->cip_roots,
+				       roots, sizeof(*roots));
+			}
 			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
@@ -1011,6 +1019,7 @@ static int
 cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t *prop)
 {
 	struct daos_prop_entry	*prop_entry;
+	struct daos_prop_co_roots *roots;
 	struct daos_acl		*acl;
 	void			*label_alloc = NULL;
 	void			*acl_alloc = NULL;
@@ -1102,6 +1111,13 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t *prop)
 				owner_grp_alloc = prop_entry->dpe_str;
 			else
 				D_GOTO(out, rc = -DER_NOMEM);
+			break;
+		case DAOS_PROP_CO_ROOTS:
+			roots = &iv_prop->cip_roots;
+			D_ALLOC(prop_entry->dpe_val_ptr, sizeof(*roots));
+			if (!prop_entry->dpe_val_ptr)
+				D_GOTO(out, rc = -DER_NOMEM);
+			memcpy(prop_entry->dpe_val_ptr, roots, sizeof(*roots));
 			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);

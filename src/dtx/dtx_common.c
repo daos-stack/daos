@@ -274,7 +274,6 @@ dtx_shares_init(struct dtx_handle *dth)
 	D_INIT_LIST_HEAD(&dth->dth_share_act_list);
 	D_INIT_LIST_HEAD(&dth->dth_share_tbd_list);
 	dth->dth_share_tbd_count = 0;
-	dth->dth_share_tbd_scanned = 0;
 	dth->dth_shares_inited = 1;
 }
 
@@ -302,7 +301,6 @@ dtx_shares_fini(struct dtx_handle *dth)
 		D_FREE(dsp);
 
 	dth->dth_share_tbd_count = 0;
-	dth->dth_share_tbd_scanned = 0;
 }
 
 int
@@ -336,7 +334,8 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 		daos_unit_oid_t *leader_oid, struct dtx_id *dti_cos,
 		int dti_cos_cnt, struct dtx_memberships *mbs, bool leader,
 		bool solo, bool sync, bool dist, bool migration,
-		bool ignore_uncommitted, bool resent, struct dtx_handle *dth)
+		bool ignore_uncommitted, bool force_refresh, bool resent,
+		struct dtx_handle *dth)
 {
 	if (sub_modification_cnt > DTX_SUB_MOD_MAX) {
 		D_ERROR("Too many modifications in a single transaction:"
@@ -366,6 +365,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 	dth->dth_dist = dist ? 1 : 0;
 	dth->dth_for_migration = migration ? 1 : 0;
 	dth->dth_ignore_uncommitted = ignore_uncommitted ? 1 : 0;
+	dth->dth_force_refresh = force_refresh ? 1 : 0;
 
 	dth->dth_dti_cos = dti_cos;
 	dth->dth_dti_cos_count = dti_cos_cnt;
@@ -606,6 +606,7 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 			     (flags & DTX_SYNC) ? true : false,
 			     (flags & DTX_DIST) ? true : false,
 			     (flags & DTX_FOR_MIGRATION) ? true : false, false,
+			     (flags & DTX_FORCE_REFRESH) ? true : false,
 			     (flags & DTX_RESEND) ? true : false, dth);
 
 	/* XXX: For non-solo DTX, the leader and non-leader will make each own
@@ -667,7 +668,9 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 {
 	struct dtx_handle		*dth = &dlh->dlh_handle;
 	struct dtx_entry		*dte;
-	daos_epoch_t			 epoch = dth->dth_epoch;
+	struct dtx_memberships		*mbs;
+	size_t				 size;
+	uint32_t			 flags;
 	int				 rc = 0;
 
 	D_ASSERT(cont != NULL);
@@ -697,7 +700,6 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 		goto sync;
 	}
 
-again:
 	/* If the DTX is started befoe DTX resync (for rebuild), then it is
 	 * possbile that the DTX resync ULT may have aborted or committed
 	 * the DTX during current ULT waiting for other non-leaders' reply.
@@ -740,99 +742,55 @@ again:
 		}
 	}
 
-	rc = 0;
+	if (DAOS_FAIL_CHECK(DAOS_DTX_SKIP_PREPARE))
+		D_GOTO(abort, result = 0);
 
-	if (dth->dth_modification_cnt != 0)
-		rc = vos_dtx_check_sync(dth->dth_coh, dth->dth_leader_oid,
-					&epoch);
-
-	/* Only add async DTX into the CoS cache. */
-	if (rc == 0) {
-		struct dtx_memberships	*mbs;
-		size_t			 size;
-		uint32_t		 flags;
-
-		if (DAOS_FAIL_CHECK(DAOS_DTX_SKIP_PREPARE))
-			D_GOTO(abort, result = 0);
-
-		if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_ABORT))
-			D_GOTO(abort, result = -DER_IO);
-
-		if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_COMMIT))
-			dth->dth_sync = 1;
-
-		/* For synchronous DTX, do not add it into CoS cache, otherwise,
-		 * we may have no way to remove it from the cache.
-		 */
-		if (dth->dth_sync)
-			goto sync;
-
-		D_ASSERT(dth->dth_mbs != NULL);
-
-		size = sizeof(*dte) + sizeof(*mbs) + dth->dth_mbs->dm_data_size;
-		D_ALLOC(dte, size);
-		if (dte == NULL) {
-			dth->dth_sync = 1;
-			goto sync;
-		}
-
-		mbs = (struct dtx_memberships *)(dte + 1);
-		memcpy(mbs, dth->dth_mbs, size - sizeof(*dte));
-
-		dte->dte_xid = dth->dth_xid;
-		dte->dte_ver = dth->dth_ver;
-		dte->dte_refs = 1;
-		dte->dte_mbs = mbs;
-
-		/* Use the new created @dte instead of dth->dth_dte that will be
-		 * released after dtx_leader_end().
-		 */
-
-		if (!(mbs->dm_flags & DMF_SRDG_REP))
-			flags = DCF_EXP_CMT;
-		else if (dth->dth_modify_shared)
-			flags = DCF_SHARED;
-		else
-			flags = 0;
-		rc = dtx_add_cos(cont, dte, &dth->dth_leader_oid,
-				 dth->dth_dkey_hash, dth->dth_epoch, flags);
-		dtx_entry_put(dte);
-		if (rc == 0) {
-			if (!DAOS_FAIL_CHECK(DAOS_DTX_NO_COMMITTABLE))
-				vos_dtx_mark_committable(dth);
-		} else {
-			dth->dth_sync = 1;
-			goto sync;
-		}
-	}
-
-	if (rc == -DER_TX_RESTART) {
-		D_WARN(DF_UUID": Fail to add DTX "DF_DTI" to CoS "
-		       "because of using old epoch "DF_U64"\n",
-		       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid),
-		       dth->dth_epoch);
-		D_GOTO(abort, result = rc);
-	}
-
-	if (rc == -DER_NONEXIST) {
-		D_WARN(DF_UUID": Fail to add DTX "DF_DTI" to CoS "
-		       "because of target object disappeared unexpectedly.\n",
-		       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid));
-		/* Handle it as IO failure. */
+	if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_ABORT))
 		D_GOTO(abort, result = -DER_IO);
+
+	if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_COMMIT))
+		dth->dth_sync = 1;
+
+	/* For synchronous DTX, do not add it into CoS cache, otherwise,
+	 * we may have no way to remove it from the cache.
+	 */
+	if (dth->dth_sync)
+		goto sync;
+
+	D_ASSERT(dth->dth_mbs != NULL);
+
+	size = sizeof(*dte) + sizeof(*mbs) + dth->dth_mbs->dm_data_size;
+	D_ALLOC(dte, size);
+	if (dte == NULL) {
+		dth->dth_sync = 1;
+		goto sync;
 	}
 
-	if (rc == -DER_AGAIN) {
-		/* The object may be in-dying, let's yield and retry locally. */
-		ABT_thread_yield();
-		goto again;
-	}
+	mbs = (struct dtx_memberships *)(dte + 1);
+	memcpy(mbs, dth->dth_mbs, size - sizeof(*dte));
 
-	if (rc != 0 && epoch < dth->dth_epoch) {
-		D_WARN(DF_UUID": Fail to add DTX "DF_DTI" to CoS cache: "
-		       DF_RC". Try to commit it synchronously.\n",
-		       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid),
-		       DP_RC(rc));
+	dte->dte_xid = dth->dth_xid;
+	dte->dte_ver = dth->dth_ver;
+	dte->dte_refs = 1;
+	dte->dte_mbs = mbs;
+
+	/* Use the new created @dte instead of dth->dth_dte that will be
+	 * released after dtx_leader_end().
+	 */
+
+	if (!(mbs->dm_flags & DMF_SRDG_REP))
+		flags = DCF_EXP_CMT;
+	else if (dth->dth_modify_shared)
+		flags = DCF_SHARED;
+	else
+		flags = 0;
+	rc = dtx_add_cos(cont, dte, &dth->dth_leader_oid,
+			 dth->dth_dkey_hash, dth->dth_epoch, flags);
+	dtx_entry_put(dte);
+	if (rc == 0) {
+		if (!DAOS_FAIL_CHECK(DAOS_DTX_NO_COMMITTABLE))
+			vos_dtx_mark_committable(dth);
+	} else {
 		dth->dth_sync = 1;
 	}
 
@@ -922,6 +880,7 @@ dtx_begin(daos_handle_t coh, struct dtx_id *dti,
 			     (flags & DTX_DIST) ? true : false,
 			     (flags & DTX_FOR_MIGRATION) ? true : false,
 			     (flags & DTX_IGNORE_UNCOMMITTED) ? true : false,
+			     (flags & DTX_FORCE_REFRESH) ? true : false,
 			     false, dth);
 
 	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub modification %d, ver %u, "
