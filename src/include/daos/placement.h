@@ -92,6 +92,14 @@ struct pl_map {
 	struct pl_map_ops       *pl_ops;
 };
 
+/** attributes of the placement map */
+struct pl_map_attr {
+	int		pa_type;
+	int		pa_domain;
+	int		pa_domain_nr;
+	int		pa_target_nr;
+};
+
 int pl_init(void);
 void pl_fini(void);
 
@@ -104,6 +112,7 @@ struct pl_map *pl_map_find(uuid_t uuid, daos_obj_id_t oid);
 int  pl_map_update(uuid_t uuid, struct pool_map *new_map, bool connect,
 		pl_map_type_t default_type);
 void pl_map_disconnect(uuid_t uuid);
+int pl_map_query(uuid_t po_uuid, struct pl_map_attr *attr);
 void pl_map_addref(struct pl_map *map);
 void pl_map_decref(struct pl_map *map);
 uint32_t pl_map_version(struct pl_map *map);
