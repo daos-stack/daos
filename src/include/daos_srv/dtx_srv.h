@@ -78,6 +78,8 @@ struct dtx_handle {
 					 dth_dist:1,
 					 /* For data migration. */
 					 dth_for_migration:1,
+					 /* Force refresh for non-committed */
+					 dth_force_refresh:1,
 					 /* Ignore other uncommitted DTXs. */
 					 dth_ignore_uncommitted:1;
 
@@ -168,6 +170,8 @@ enum dtx_flags {
 	DTX_IGNORE_UNCOMMITTED	= (1 << 4),
 	/** Resent request. */
 	DTX_RESEND		= (1 << 5),
+	/** Force DTX refresh if hit non-committed DTX on non-leader. */
+	DTX_FORCE_REFRESH	= (1 << 6),
 };
 
 int
