@@ -262,8 +262,8 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 					DP_RC(rc));
 			} else  if (iod->iod_type == DAOS_IOD_ARRAY) {
 				D_ERROR("Data Verification failed (object: "
-					DF_OID" shard %d, extent: "DF_RECX"):"
-					" "DF_RC"\n",
+					DF_OID" shard %d, extent: "DF_RECX"): "
+					DF_RC"\n",
 					DP_OID(orw->orw_oid.id_pub),
 					shard_idx, DP_RECX(iod->iod_recxs[i]),
 					DP_RC(rc));
@@ -628,7 +628,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		 * If any failure happens inside Cart, let's reset failure to
 		 * TIMEDOUT, so the upper layer can retry.
 		 */
-		D_ERROR("RPC %d failed: %d\n", opc, ret);
+		D_ERROR("RPC %d failed, "DF_RC"\n", opc, DP_RC(ret));
 		D_GOTO(out, ret);
 	}
 
@@ -1842,7 +1842,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 	opc = opc_get(cb_args->rpc->cr_opc);
 
 	if (ret != 0) {
-		D_ERROR("RPC %d failed: %d\n", opc, ret);
+		D_ERROR("RPC %d failed, "DF_RC"\n", opc, DP_RC(ret));
 		D_GOTO(out, ret);
 	}
 
