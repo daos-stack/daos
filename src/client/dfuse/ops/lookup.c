@@ -38,10 +38,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	}
 
 	if (ie->ie_stat.st_ino == 0) {
-		rc = dfs_obj2id(ie->ie_obj, &ie->ie_oid);
-		if (rc)
-			D_GOTO(out_decref, rc);
-
+		dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 		dfuse_compute_inode(ie->ie_dfs, &ie->ie_oid,
 				    &ie->ie_stat.st_ino);
 	}
@@ -68,7 +65,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 
 		/* Update the existing object with the new name/parent */
 
-		DFUSE_TRA_DEBUG(ie, "inode dfs %p %ld hi %#lx lo %#lx",
+		DFUSE_TRA_DEBUG(inode, "inode dfs %p %ld hi %#lx lo %#lx",
 				inode->ie_dfs,
 				inode->ie_dfs->dfs_ino,
 				inode->ie_oid.hi,

@@ -102,6 +102,8 @@ create_entry(struct dfuse_projection_info *fs_handle,
 	ie->ie_obj = obj;
 	ie->ie_stat = entry->attr;
 
+	dfs_obj2id(obj, &ie->ie_oid);
+
 	entry->attr_timeout = parent->ie_dfs->dfs_attr_timeout;
 	entry->entry_timeout = parent->ie_dfs->dfs_attr_timeout;
 
@@ -332,15 +334,10 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 				D_GOTO(reply, 0);
 			}
 
-			rc = dfs_obj2id(obj, &oid);
-			if (rc) {
-				dfs_release(obj);
-				D_GOTO(reply, rc);
-			}
+			dfs_obj2id(obj, &oid);
 
 			dfuse_compute_inode(oh->doh_ie->ie_dfs,
-					    &oid,
-					    &stbuf.st_ino);
+					    &oid, &stbuf.st_ino);
 
 			if (plus) {
 				struct fuse_entry_param	entry = {0};
