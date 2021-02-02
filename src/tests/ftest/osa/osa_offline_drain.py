@@ -4,10 +4,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
 import random
 from osa_utils import OSAUtils
-from apricot import skipForTicket
 from test_utils_pool import TestPool
 
 
@@ -69,16 +67,7 @@ class OSAOfflineDrain(OSAUtils):
             output = self.dmg_command.pool_drain(self.pool.uuid,
                                                  rank, t_string)
             self.log.info(output)
-
-            pver_drain = self.get_pool_version()
-            fail_count = 0
-            while fail_count <= 20:
-                pver_drain = self.get_pool_version()
-                time.sleep(10)
-                fail_count += 1
-                if pver_drain > pver_begin + 1:
-                    break
-
+            self.is_rebuild_done(3)
             self.assert_on_rebuild_failure()
 
             pver_drain = self.get_pool_version()
@@ -94,7 +83,6 @@ class OSAOfflineDrain(OSAUtils):
         if data:
             self.verify_single_object()
 
-    @skipForTicket("DAOS-6107")
     def test_osa_offline_drain(self):
         """
         JIRA ID: DAOS-4750

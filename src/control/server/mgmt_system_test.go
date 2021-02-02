@@ -117,7 +117,7 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			expResp: &sharedpb.ClusterEventResp{
 				Sequence: 1,
 			},
-			expDispatched: []*events.RASEvent{eventRankDown},
+			expDispatched: []*events.RASEvent{eventRankDown.WithIsForwarded(true)},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -165,6 +165,7 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			}
 
 			common.AssertEqual(t, tc.expDispatched, dispatched.rx,
+
 				"unexpected events dispatched")
 		})
 	}

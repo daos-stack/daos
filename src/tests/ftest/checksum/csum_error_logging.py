@@ -71,8 +71,8 @@ class CSumErrorLog(DaosCoreBase):
                 return dev['health']['checksum_errs']
 
     def test_csum_error_logging(self):
-        """
-        Test ID: DAOS-3927
+        """Jira ID: DAOS-3927
+
         Test Description: Write Avocado Test to verify single data after
                           pool/container disconnect/reconnect.
         :avocado: tags=all,daily_regression
@@ -86,7 +86,7 @@ class CSumErrorLog(DaosCoreBase):
         self.dmg.copy_certificates(get_log_file("daosCA/certs"),
                                    self.hostlist_clients)
         self.log.info("Checksum Errors : %d", csum)
-        DaosCoreBase.run_subtest(self)
+        self.run_subtest()
         csum_latest = self.get_checksum_error_value(dev_id)
         self.log.info("Checksum Errors : %d", csum_latest)
         self.assertTrue(csum_latest > csum,

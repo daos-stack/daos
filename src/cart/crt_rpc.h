@@ -185,8 +185,8 @@ struct crt_rpc_priv {
 	struct crt_corpc_hdr	crp_coreq_hdr; /* collective request header */
 };
 
-#define CRT_PROTO_INTERNAL_VERSION 2
-#define CRT_PROTO_FI_VERSION 0
+#define CRT_PROTO_INTERNAL_VERSION 3
+#define CRT_PROTO_FI_VERSION 1
 
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,

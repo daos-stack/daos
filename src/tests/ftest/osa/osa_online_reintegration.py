@@ -9,7 +9,6 @@ import random
 import threading
 
 from itertools import product
-from apricot import skipForTicket
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
@@ -166,9 +165,7 @@ class OSAOnlineReintegration(OSAUtils):
             display_string = "Pool{} space at the End".format(val)
             self.pool = pool[val]
             self.pool.display_pool_daos_space(display_string)
-            pool[val].destroy()
 
-    @skipForTicket("DAOS-5807")
     def test_osa_online_reintegration(self):
         """Test ID: DAOS-5075.
 
