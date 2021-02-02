@@ -1245,7 +1245,8 @@ def compress_file(filename):
 
 # https://stackoverflow.com/questions/1094841/get-human-readable-version-of-file-size
 def sizeof_fmt(num, suffix='B'):
-    for unit in ['','Ki','Mi','Gi','Ti','Pi','Ei','Zi']:
+    """Return size as a human readable string"""
+    for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
         if abs(num) < 1024.0:
             return "%3.1f%s%s" % (num, unit, suffix)
         num /= 1024.0
@@ -1264,12 +1265,12 @@ def log_test(conf,
     # not work correctly.
     if os.path.exists('{}.old'.format(filename)):
         raise Exception('Log file exceeded max size')
-    stat = os.stat(filename)
-    if conf.max_log_size and stat.st_size > conf.max_log_size:
+    fstat = os.stat(filename)
+    if conf.max_log_size and fstat.st_size > conf.max_log_size:
         raise Exception('Max log size exceeded, {}'\
-                        .format(sizeof_fmt(stat.st_size)))
+                        .format(sizeof_fmt(fstat.st_size)))
     print('Running log_test on {} {}'.format(filename,
-                                             sizeof_fmt(stat.st_size)))
+                                             sizeof_fmt(fstat.st_size)))
     print(conf.max_log_size)
 
     log_iter = lp.LogIter(filename)
