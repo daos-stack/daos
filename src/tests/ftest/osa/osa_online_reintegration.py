@@ -173,7 +173,7 @@ class OSAOnlineReintegration(OSAUtils):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=osa,DAOS_5610
+        :avocado: tags=osa,checksum,DAOS_5610
         :avocado: tags=online_reintegration
         """
         # Perform reintegration testing with 1 pool.
