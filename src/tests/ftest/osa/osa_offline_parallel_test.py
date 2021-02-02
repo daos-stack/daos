@@ -9,6 +9,7 @@ import random
 import threading
 import copy
 from osa_utils import OSAUtils
+from apricot import skipForTicket
 from test_utils_pool import TestPool
 from command_utils import CommandFailure
 
@@ -140,15 +141,23 @@ class OSAOfflineParallelTest(OSAUtils):
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
             pool[val].display_pool_daos_space(display_string)
-            self.is_rebuild_done(3)
+            fail_count = 0
+            while fail_count <= 20:
+                pver_end = self.get_pool_version()
+                time.sleep(10)
+                fail_count += 1
+                if pver_end > 23:
+                    break
+
             self.assert_on_rebuild_failure()
-            pver_end = self.get_pool_version()
+
             self.log.info("Pool Version at the End %s", pver_end)
             self.assertTrue(pver_end == 25,
                             "Pool Version Error:  at the end")
         if data:
             self.verify_single_object()
 
+    @skipForTicket("DAOS-6107")
     def test_osa_offline_parallel_test(self):
         """
         JIRA ID: DAOS-4752
