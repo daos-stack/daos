@@ -1420,7 +1420,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 	 * Higher-level domains are formatted in tuples, ranks are a single
 	 * integer.
 	 */
-	num_domain_comps = (ndomains - nnodes - 1) / TUPLE_SIZE;
+	num_domain_comps = (ndomains - nnodes) / TUPLE_SIZE - 1;
 
 	/* Prepare the pool map attribute buffers. */
 	map_buf = pool_buf_alloc(num_domain_comps + nnodes + ntargets);
