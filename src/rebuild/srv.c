@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * rebuild: rebuild service
@@ -814,8 +797,8 @@ retry:
 	 */
 	rc = ds_pool_bcast_create(dss_get_module_info()->dmi_ctx,
 				  pool, DAOS_REBUILD_MODULE,
-				  REBUILD_OBJECTS_SCAN, &rpc, NULL,
-				  NULL);
+				  REBUILD_OBJECTS_SCAN, DAOS_REBUILD_VERSION,
+				  &rpc, NULL, NULL);
 	if (rc != 0) {
 		D_ERROR("pool map broad cast failed: rc "DF_RC"\n", DP_RC(rc));
 		return rc;
@@ -1151,6 +1134,12 @@ rebuild_task_ult(void *arg)
 		return;
 	}
 
+	rc = rebuild_notify_ras_start(&task->dst_pool_uuid, task->dst_map_ver,
+				      RB_OP_STR(task->dst_rebuild_op));
+	if (rc)
+		D_ERROR(DF_UUID": failed to send RAS event\n",
+			DP_UUID(task->dst_pool_uuid));
+
 	D_PRINT("Rebuild [started] (pool "DF_UUID" ver=%u, op=%s)\n",
 		DP_UUID(task->dst_pool_uuid), task->dst_map_ver,
 		RB_OP_STR(task->dst_rebuild_op));
@@ -1277,6 +1266,13 @@ try_reschedule:
 				DP_UUID(pool->sp_uuid));
 	}
 output:
+	rc = rebuild_notify_ras_end(&task->dst_pool_uuid, task->dst_map_ver,
+				    RB_OP_STR(task->dst_rebuild_op),
+				    rc);
+	if (rc)
+		D_ERROR(DF_UUID": failed to send RAS event\n",
+			DP_UUID(task->dst_pool_uuid));
+
 	ds_pool_put(pool);
 	if (rgt)
 		rebuild_global_pool_tracker_destroy(rgt);
@@ -1712,7 +1708,7 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	/* close the rebuild pool/container on all main XS */
 	rc = dss_task_collective(rebuild_fini_one, rpt, 0);
 
-	/* destory the migrate_tls of 0-xstream */
+	/* destroy the migrate_tls of 0-xstream */
 	ds_migrate_fini_one(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	rpt_put(rpt);
 	/* No one should access rpt after rebuild_fini_one.

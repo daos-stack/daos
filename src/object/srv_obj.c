@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * object server operations
@@ -42,7 +25,6 @@
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/security.h>
 #include <daos/checksum.h>
-#include <gurt/mem.h>
 #include "daos_srv/srv_csum.h"
 #include "obj_rpc.h"
 #include "obj_internal.h"
@@ -1084,8 +1066,8 @@ obj_dedup_verify(daos_handle_t ioh, struct bio_sglist *bsgls_dup, int sgl_nr)
 			D_ASSERT(biov_dup->bi_addr.ba_dedup);
 
 			D_ASSERT(bio_iov2len(biov) == bio_iov2len(biov_dup));
-			rc = d_memcmp(bio_iov2buf(biov), bio_iov2buf(biov_dup),
-				      bio_iov2len(biov));
+			rc = memcmp(bio_iov2buf(biov), bio_iov2buf(biov_dup),
+				    bio_iov2len(biov));
 
 			if (rc == 0) {	/* verify succeeded */
 				D_DEBUG(DB_IO, "Verify dedup succeeded\n");
@@ -1536,9 +1518,11 @@ out:
 	if (bsgls_dup != NULL) {
 		int	i;
 
-		for (i = 0; i < orw->orw_nr; i++) {
-			vos_dedup_free_bsgl(ioh, &bsgls_dup[i]);
-			bio_sgl_fini(&bsgls_dup[i]);
+		if (daos_handle_is_valid(ioh)) {
+			for (i = 0; i < orw->orw_nr; i++) {
+				vos_dedup_free_bsgl(ioh, &bsgls_dup[i]);
+				bio_sgl_fini(&bsgls_dup[i]);
+			}
 		}
 		D_FREE(bsgls_dup);
 	}
@@ -2217,6 +2201,8 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 		if (orw->orw_flags & ORF_FOR_MIGRATION)
 			dtx_flags = DTX_FOR_MIGRATION;
+		if (orw->orw_flags & ORF_DTX_REFRESH)
+			dtx_flags |= DTX_FORCE_REFRESH;
 
 re_fetch:
 		rc = dtx_begin(ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 0,
@@ -2233,7 +2219,7 @@ re_fetch:
 				D_GOTO(out, rc = -DER_TX_BUSY);
 
 			/* XXX: Currently, we commit the distributed transaction
-			 *	sychronously. Normally, it will be very quickly.
+			 *	synchronously. Normally it will be very quickly.
 			 *	So let's yield then retry. If related
 			 *	distributed transaction is still not committed
 			 *	after several cycles, replies '-DER_TX_BUSY' to
@@ -2600,6 +2586,8 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 
 	if (oei->oei_flags & ORF_FOR_MIGRATION)
 		flags = DTX_FOR_MIGRATION;
+	if (oei->oei_flags & ORF_DTX_REFRESH)
+		flags |= DTX_FORCE_REFRESH;
 
 again:
 	rc = dtx_begin(ioc->ioc_vos_coh, &oei->oei_dti, &epoch, 0,
@@ -2631,7 +2619,7 @@ re_pack:
 			D_GOTO(out, rc = -DER_TX_BUSY);
 
 		/* XXX: Currently, we commit the distributed transaction
-		 *	sychronously. Normally, it will be very quickly.
+		 *	synchronously. Normally it will be very quickly.
 		 *	So let's yield then retry. If related distributed
 		 *	transaction is still not committed after several
 		 *	cycles, replies '-DER_TX_BUSY' to the client.
@@ -3323,7 +3311,7 @@ out:
 			D_GOTO(failed, rc = -DER_TX_BUSY);
 
 		/* XXX: Currently, we commit the distributed transaction
-		 *	sychronously. Normally, it will be very quickly.
+		 *	synchronously. Normally it will be very quickly.
 		 *	So let's yield then retry. If related distributed
 		 *	transaction is still not committed after several
 		 *	cycles, then replies '-DER_TX_BUSY' to the client.

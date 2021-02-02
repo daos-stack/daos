@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It implements the main interfaces to mercury.
@@ -456,6 +439,7 @@ int
 crt_hg_init(void)
 {
 	int	rc = 0;
+	char	*env;
 
 	if (crt_initialized()) {
 		D_ERROR("CaRT already initialized.\n");
@@ -463,6 +447,11 @@ crt_hg_init(void)
 	}
 
 	#define EXT_FAC DD_FAC(external)
+
+	/* If mercury log level is not set, set it to warning by default */
+	env = getenv("HG_LOG_LEVEL");
+	if (!env)
+		HG_Set_log_level("warning");
 
 	/* import HG log */
 	hg_log_set_func(crt_hg_log);
@@ -530,6 +519,7 @@ crt_hg_class_init(int provider, int idx, hg_class_t **ret_hg_class)
 	else
 		init_info.na_init_info.max_contexts = 1;
 
+	init_info.request_post_incr = 0;
 	hg_class = HG_Init_opt(info_string, crt_is_service(), &init_info);
 	if (hg_class == NULL) {
 		D_ERROR("Could not initialize HG class.\n");
@@ -1078,11 +1068,6 @@ out:
 	return hg_ret;
 }
 
-static bool crt_hg_network_error(hg_return_t hg_ret)
-{
-	return (hg_ret == HG_NA_ERROR || hg_ret == HG_PROTOCOL_ERROR);
-}
-
 int
 crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 {
@@ -1110,18 +1095,8 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 			  rpc_priv->crp_tgt_uri);
 	}
 
-	/* HG_Forward can return 2 types of errors - network errors and generic
-	 * ones, such as out of memory, bad parameters passed, invalid handle
-	 * etc...
-	 *
-	 * For network errors, we do not want to return error back to the caller
-	 * of crt_req_send(), but instead we want to invoke completion callback
-	 * manually with 'node unreachable' (DER_UNREACH) error.
-	 *
-	 * HG_NA_ERROR and HG_PROTOCOL_ERROR are both network-level errors
-	 * that can be raised by mercury.
-	 */
-	if (crt_hg_network_error(hg_ret)) {
+	/* For any error to be reported via completion callback */
+	if (hg_ret != HG_SUCCESS) {
 		if (!crt_req_timedout(rpc_priv)) {
 			/* error will be reported to the completion callback in
 			 * crt_req_timeout_hdlr()
@@ -1129,8 +1104,6 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 			crt_req_force_timeout(rpc_priv);
 		}
 		rpc_priv->crp_state = RPC_STATE_FWD_UNREACH;
-	} else if (hg_ret != HG_SUCCESS) {
-		rc = -DER_HG;
 	} else {
 		rpc_priv->crp_on_wire = 1;
 	}

@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * container IV cache
@@ -291,6 +274,7 @@ static void
 cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
 {
 	struct daos_prop_entry	*prop_entry;
+	struct daos_prop_co_roots *roots;
 	struct daos_acl		*acl;
 	int			 i;
 
@@ -354,6 +338,13 @@ cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
 			D_ASSERT(strlen(prop_entry->dpe_str) <=
 				 DAOS_ACL_MAX_PRINCIPAL_LEN);
 			strcpy(iv_prop->cip_owner_grp, prop_entry->dpe_str);
+			break;
+		case DAOS_PROP_CO_ROOTS:
+			roots = prop_entry->dpe_val_ptr;
+			if (roots) {
+				memcpy(&iv_prop->cip_roots,
+				       roots, sizeof(*roots));
+			}
 			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
@@ -722,7 +713,8 @@ cont_iv_update(void *ns, int class_id, uuid_t key_uuid,
 	civ_key->class_id = class_id;
 	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0, retry);
 	if (rc)
-		D_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR,
+		D_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_NONEXIST,
+			 DB_ANY, DLOG_ERR,
 			 DF_UUID" iv update failed "DF_RC"\n",
 			 DP_UUID(key_uuid), DP_RC(rc));
 	return rc;
@@ -1027,6 +1019,7 @@ static int
 cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t *prop)
 {
 	struct daos_prop_entry	*prop_entry;
+	struct daos_prop_co_roots *roots;
 	struct daos_acl		*acl;
 	void			*label_alloc = NULL;
 	void			*acl_alloc = NULL;
@@ -1118,6 +1111,13 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t *prop)
 				owner_grp_alloc = prop_entry->dpe_str;
 			else
 				D_GOTO(out, rc = -DER_NOMEM);
+			break;
+		case DAOS_PROP_CO_ROOTS:
+			roots = &iv_prop->cip_roots;
+			D_ALLOC(prop_entry->dpe_val_ptr, sizeof(*roots));
+			if (!prop_entry->dpe_val_ptr)
+				D_GOTO(out, rc = -DER_NOMEM);
+			memcpy(prop_entry->dpe_val_ptr, roots, sizeof(*roots));
 			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);

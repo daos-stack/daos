@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is for simple tests of rebuild, which does not need to kill the
@@ -53,6 +36,7 @@ rebuild_dkeys(void **state)
 	d_rank_t		kill_rank = 0;
 	int			kill_rank_nr;
 	int			i;
+	int			rc;
 
 	if (!test_runable(arg, 4))
 		return;
@@ -85,8 +69,14 @@ rebuild_dkeys(void **state)
 	ioreq_fini(&req);
 
 	rebuild_single_pool_target(arg, kill_rank, -1, false);
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	if (rc != 0)
+		assert_rc_equal(rc, -DER_NOSYS);
 
 	reintegrate_single_pool_target(arg, kill_rank, -1);
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	if (rc != 0)
+		assert_rc_equal(rc, -DER_NOSYS);
 }
 
 static void
@@ -99,6 +89,7 @@ rebuild_akeys(void **state)
 	int			kill_rank_nr;
 	int			tgt = -1;
 	int			i;
+	int			rc;
 
 	if (!test_runable(arg, 4))
 		return;
@@ -127,12 +118,20 @@ rebuild_akeys(void **state)
 			     data, DATA_SIZE, &req);
 
 	}
+
 	get_killing_rank_by_oid(arg, oid, 1, 0, &kill_rank, &kill_rank_nr);
 	ioreq_fini(&req);
 
 	rebuild_single_pool_target(arg, kill_rank, tgt, false);
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	if (rc != 0)
+		assert_rc_equal(rc, -DER_NOSYS);
+
 
 	reintegrate_single_pool_target(arg, kill_rank, tgt);
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	if (rc != 0)
+		assert_rc_equal(rc, -DER_NOSYS);
 }
 
 static void
@@ -144,6 +143,7 @@ rebuild_indexes(void **state)
 	int			tgt = DEFAULT_FAIL_TGT;
 	int			i;
 	int			j;
+	int			rc;
 
 	if (!test_runable(arg, 4))
 		return;
@@ -168,8 +168,14 @@ rebuild_indexes(void **state)
 
 	/* Rebuild rank 1 */
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	if (rc != 0)
+		assert_rc_equal(rc, -DER_NOSYS);
 
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	if (rc != 0)
+		assert_rc_equal(rc, -DER_NOSYS);
 }
 
 static void
@@ -211,20 +217,27 @@ rebuild_snap_update_recs(void **state)
 		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1, data,
 			      strlen(data) + 1, &req);
 	}
-
-	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
-
-	for (i = 0; i < 5; i++) {
-		rc = daos_obj_verify(arg->coh, oid, snap_epoch[i]);
-		assert_true(rc == 0 || rc == -DER_NOSYS);
-	}
-
-	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
-	assert_true(rc == 0 || rc == -DER_NOSYS);
-
 	ioreq_fini(&req);
 
+	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	for (i = 0; i < 5; i++) {
+		rc = daos_obj_verify(arg->coh, oid, snap_epoch[i]);
+		if (rc != 0)
+			assert_rc_equal(rc, -DER_NOSYS);
+	}
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	if (rc != 0)
+		assert_rc_equal(rc, -DER_NOSYS);
+
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+	for (i = 0; i < 5; i++) {
+		rc = daos_obj_verify(arg->coh, oid, snap_epoch[i]);
+		if (rc != 0)
+			assert_rc_equal(rc, -DER_NOSYS);
+	}
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	if (rc != 0)
+		assert_rc_equal(rc, -DER_NOSYS);
 }
 
 static void
@@ -262,20 +275,27 @@ rebuild_snap_punch_recs(void **state)
 		recx.rx_nr = 9;
 		punch_recxs("d_key", "a_key", &recx, 1, DAOS_TX_NONE, &req);
 	}
-
-	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
-
-	for (i = 0; i < 5; i++) {
-		rc = daos_obj_verify(arg->coh, oid, snap_epoch[i]);
-		assert_true(rc == 0 || rc == -DER_NOSYS);
-	}
-
-	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
-	assert_true(rc == 0 || rc == -DER_NOSYS);
-
 	ioreq_fini(&req);
 
+	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	for (i = 0; i < 5; i++) {
+		rc = daos_obj_verify(arg->coh, oid, snap_epoch[i]);
+		if (rc != 0)
+			assert_rc_equal(rc, -DER_NOSYS);
+	}
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	if (rc != 0)
+		assert_rc_equal(rc, -DER_NOSYS);
+
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+	for (i = 0; i < 5; i++) {
+		rc = daos_obj_verify(arg->coh, oid, snap_epoch[i]);
+		if (rc != 0)
+			assert_rc_equal(rc, -DER_NOSYS);
+	}
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	if (rc != 0)
+		assert_rc_equal(rc, -DER_NOSYS);
 }
 
 static void
@@ -287,6 +307,7 @@ rebuild_snap_update_keys(void **state)
 	int		tgt = DEFAULT_FAIL_TGT;
 	daos_epoch_t	snap_epoch[5];
 	int		i;
+	int		rc;
 
 	if (!test_runable(arg, 4))
 		return;
@@ -353,8 +374,11 @@ rebuild_snap_update_keys(void **state)
 		assert_int_equal(number, 5);
 	}
 
-	ioreq_fini(&req);
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	if (rc != 0)
+		assert_rc_equal(rc, -DER_NOSYS);
+	ioreq_fini(&req);
 }
 
 static void
@@ -366,6 +390,7 @@ rebuild_snap_punch_keys(void **state)
 	int		tgt = DEFAULT_FAIL_TGT;
 	daos_epoch_t	snap_epoch[5];
 	int		i;
+	int		rc;
 
 	if (!test_runable(arg, 4))
 		return;
@@ -419,11 +444,10 @@ rebuild_snap_punch_keys(void **state)
 		daos_fail_value_set(i);
 		for (j = 0; j < 5; j++) {
 			daos_handle_t th_open;
-			int rc;
 
 			rc = daos_tx_open_snap(arg->coh, snap_epoch[j],
 					       &th_open, NULL);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			number = 10;
 			memset(&anchor, 0, sizeof(anchor));
 			enumerate_dkey(th_open, &number, kds, &anchor, buf,
@@ -452,8 +476,11 @@ rebuild_snap_punch_keys(void **state)
 		assert_int_equal(number, 5);
 	}
 
-	ioreq_fini(&req);
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	if (rc != 0)
+		assert_rc_equal(rc, -DER_NOSYS);
+	ioreq_fini(&req);
 }
 
 static void
@@ -465,6 +492,7 @@ rebuild_snap_punch_empty(void **state)
 	int		tgt = DEFAULT_FAIL_TGT;
 	daos_epoch_t	snap_epoch;
 	int		i;
+	int		rc;
 
 	skip(); /** DAOS-4698 */
 
@@ -523,8 +551,11 @@ rebuild_snap_punch_empty(void **state)
 		assert_int_equal(number, 0);
 	}
 
-	ioreq_fini(&req);
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	if (rc != 0)
+		assert_rc_equal(rc, -DER_NOSYS);
+	ioreq_fini(&req);
 }
 
 static void
@@ -537,6 +568,7 @@ rebuild_multiple(void **state)
 	int		i;
 	int		j;
 	int		k;
+	int		rc;
 
 	if (!test_runable(arg, 4))
 		return;
@@ -563,9 +595,12 @@ rebuild_multiple(void **state)
 					      DAOS_TX_NONE, &req);
 		}
 	}
-	ioreq_fini(&req);
-
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	if (rc != 0)
+		assert_rc_equal(rc, -DER_NOSYS);
+	ioreq_fini(&req);
 }
 
 #define LARGE_BUFFER_SIZE	(32 * 1024 * 4)
@@ -578,6 +613,7 @@ rebuild_large_rec(void **state)
 	int			tgt = DEFAULT_FAIL_TGT;
 	int			i;
 	char			buffer[LARGE_BUFFER_SIZE];
+	int			rc;
 
 	if (!test_runable(arg, 4))
 		return;
@@ -607,9 +643,18 @@ rebuild_large_rec(void **state)
 		insert(key, 1, &lakey, &iod_size, &rx_nr,
 		       &offset, &data, DAOS_TX_NONE, &req, 0);
 	}
+
 	ioreq_fini(&req);
 
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	if (rc != 0)
+		assert_rc_equal(rc, -DER_NOSYS);
+
+	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	if (rc != 0)
+		assert_rc_equal(rc, -DER_NOSYS);
 }
 
 static void
@@ -619,6 +664,7 @@ rebuild_objects(void **state)
 	daos_obj_id_t	oids[OBJ_NR];
 	int		tgt = DEFAULT_FAIL_TGT;
 	int		i;
+	int		rc;
 
 	if (!test_runable(arg, 4))
 		return;
@@ -633,7 +679,18 @@ rebuild_objects(void **state)
 
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
+	for (i = 0; i < OBJ_NR; i++) {
+		rc = daos_obj_verify(arg->coh, oids[i], DAOS_EPOCH_MAX);
+		if (rc != 0)
+			assert_rc_equal(rc, -DER_NOSYS);
+	}
+
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+	for (i = 0; i < OBJ_NR; i++) {
+		rc = daos_obj_verify(arg->coh, oids[i], DAOS_EPOCH_MAX);
+		if (rc != 0)
+			assert_rc_equal(rc, -DER_NOSYS);
+	}
 }
 
 static void
@@ -664,14 +721,14 @@ rebuild_sx_object(void **state)
 	get_killing_rank_by_oid(arg, oid, 1, 0, &rank, &rank_nr);
 	/** exclude the target of this obj's replicas */
 	daos_exclude_server(arg->pool.pool_uuid, arg->group,
-			    arg->dmg_config, arg->pool.svc, rank);
+			    arg->dmg_config, rank);
 
 	/* wait until rebuild done */
 	test_rebuild_wait(&arg, 1);
 
 	/* add back the excluded targets */
 	daos_reint_server(arg->pool.pool_uuid, arg->group,
-			  arg->dmg_config, arg->pool.svc, rank);
+			  arg->dmg_config, rank);
 
 	/* wait until reintegration is done */
 	test_rebuild_wait(&arg, 1);

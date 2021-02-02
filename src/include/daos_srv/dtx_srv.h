@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #ifndef __DAOS_DTX_SRV_H__
@@ -31,8 +14,7 @@
 #include <daos_srv/pool.h>
 #include <daos_srv/container.h>
 
-#define DTX_REFRESH_MAX		4
-#define DTX_DETECT_SCAN_MAX	(1 << 10)
+#define DTX_REFRESH_MAX 4
 
 struct dtx_share_peer {
 	d_list_t		dsp_link;
@@ -96,6 +78,8 @@ struct dtx_handle {
 					 dth_dist:1,
 					 /* For data migration. */
 					 dth_for_migration:1,
+					 /* Force refresh for non-committed */
+					 dth_force_refresh:1,
 					 /* Ignore other uncommitted DTXs. */
 					 dth_ignore_uncommitted:1;
 
@@ -134,7 +118,6 @@ struct dtx_handle {
 	d_list_t			 dth_share_act_list;
 	d_list_t			 dth_share_tbd_list;
 	int				 dth_share_tbd_count;
-	int				 dth_share_tbd_scanned;
 };
 
 /* Each sub transaction handle to manage each sub thandle */
@@ -187,6 +170,8 @@ enum dtx_flags {
 	DTX_IGNORE_UNCOMMITTED	= (1 << 4),
 	/** Resent request. */
 	DTX_RESEND		= (1 << 5),
+	/** Force DTX refresh if hit non-committed DTX on non-leader. */
+	DTX_FORCE_REFRESH	= (1 << 6),
 };
 
 int
