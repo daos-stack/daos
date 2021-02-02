@@ -39,6 +39,7 @@ RDB_STRING_KEY(ds_cont_prop_, owner_group);
 RDB_STRING_KEY(ds_cont_prop_, lres);
 RDB_STRING_KEY(ds_cont_prop_, lhes);
 RDB_STRING_KEY(ds_cont_prop_, snapshots);
+RDB_STRING_KEY(ds_cont_prop_, co_status);
 RDB_STRING_KEY(ds_cont_attr_, user);
 RDB_STRING_KEY(ds_cont_prop_, handles);
 RDB_STRING_KEY(ds_cont_prop_, roots);
@@ -99,6 +100,10 @@ struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
 	}, {
 		.dpe_type	= DAOS_PROP_CO_ROOTS,
 		.dpe_val_ptr	= &dummy_roots, /* overwritten by middlewares */
+	}, {
+		.dpe_type	= DAOS_PROP_CO_STATUS,
+		.dpe_val	= DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_HEALTHY,
+							  0),
 	}
 };
 

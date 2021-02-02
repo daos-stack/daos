@@ -349,8 +349,10 @@ pool_buf_alloc(unsigned int nr)
 	struct pool_buf *buf;
 
 	D_ALLOC(buf, pool_buf_size(nr));
-	if (buf != NULL)
+	if (buf != NULL) {
 		buf->pb_nr = nr;
+		buf->pb_version = POOL_MAP_VERSION;
+	}
 
 	return buf;
 }
@@ -2111,6 +2113,427 @@ pool_map_update_failed_cnt(struct pool_map *map)
 
 	update_failed_cnt_helper(root, fail_cnts, 0);
 	return 0;
+}
+
+#define PMAP_VER_MAX		((uint32_t)-1)
+#define PMAP_FAIL_INLINE_NR	(8)
+struct pmap_fail_ver {
+	uint32_t		 pf_start_ver;
+	uint32_t		 pf_end_ver;
+};
+
+struct pmap_fail_node {
+	struct pmap_fail_ver	 pf_ver_inline[PMAP_FAIL_INLINE_NR];
+	struct pmap_fail_ver	*pf_vers;
+	uint32_t		 pf_co_rank;
+	uint32_t		 pf_ver_total;	/* capacity of pf_vers array */
+	uint32_t		 pf_ver_nr;	/* #valid items */
+	uint32_t		 pf_down:1,	/* with DOWN tgt */
+				 pf_new_fail:1;	/* with new failure */
+};
+
+struct pmap_fail_stat {
+	struct pmap_fail_node	 pf_node_inline[PMAP_FAIL_INLINE_NR];
+	struct pmap_fail_node	*pf_nodes;
+	uint32_t		 pf_node_total;	/* capacity of pf_nodes array */
+	uint32_t		 pf_node_nr;	/* #valid nodes */
+	/* #nodes in PO_COMP_ST_DOWN status */
+	uint32_t		 pf_down_nr;
+	/* #newly-failed-nodes with f_seq > last_ver */
+	uint32_t		 pf_newfail_nr;
+	/* version of checking last time (when user clear the UNCLEAN */
+	uint32_t		 pf_last_ver;
+	/* RF value */
+	uint32_t		 pf_rf;
+};
+
+static void
+pmap_fail_node_init(struct pmap_fail_node *fnode)
+{
+	fnode->pf_vers = fnode->pf_ver_inline;
+	fnode->pf_ver_total = PMAP_FAIL_INLINE_NR;
+	fnode->pf_ver_nr = 0;
+	memset(fnode->pf_vers, 0,
+	       sizeof(struct pmap_fail_ver) * fnode->pf_ver_total);
+}
+
+static void
+pmap_fail_node_fini(struct pmap_fail_node *fnode)
+{
+	if (fnode->pf_vers != fnode->pf_ver_inline)
+		D_FREE(fnode->pf_vers);
+}
+
+static struct pmap_fail_node *
+pmap_fail_node_get(struct pmap_fail_stat *fstat)
+{
+	struct pmap_fail_node	*fnodes;
+	struct pmap_fail_node	*fnode;
+	uint32_t		 nr, i;
+
+	D_ASSERT(fstat->pf_node_nr <= fstat->pf_node_total);
+	if (fstat->pf_node_nr == fstat->pf_node_total) {
+		nr = fstat->pf_node_nr + PMAP_FAIL_INLINE_NR;
+		D_ALLOC_ARRAY(fnodes, nr);
+		if (fnodes == NULL)
+			return NULL;
+
+		memcpy(fnodes, fstat->pf_nodes,
+		       sizeof(*fnode) * fstat->pf_node_nr);
+		for (i = 0; i < fstat->pf_node_nr; i++) {
+			fnode = &fstat->pf_nodes[i];
+			if (fnode->pf_vers != fnode->pf_ver_inline) {
+				D_ASSERT(fnode->pf_ver_nr >
+					 PMAP_FAIL_INLINE_NR);
+				continue;
+			}
+			fnode = &fnodes[i];
+			D_ASSERT(fnode->pf_ver_nr <= PMAP_FAIL_INLINE_NR);
+			fnode->pf_vers = fnode->pf_ver_inline;
+		}
+
+		if (fstat->pf_nodes != fstat->pf_node_inline)
+			D_FREE(fstat->pf_nodes);
+		fstat->pf_nodes = fnodes;
+		fstat->pf_node_total = nr;
+		for (i = fstat->pf_node_nr; i < nr; i++)
+			pmap_fail_node_init(&fstat->pf_nodes[i]);
+	}
+
+	D_ASSERT(fstat->pf_node_nr < fstat->pf_node_total);
+	fnode = &fstat->pf_nodes[fstat->pf_node_nr++];
+	return fnode;
+}
+
+static void
+pmap_fail_stat_init(struct pmap_fail_stat *stat, uint32_t last_ver, uint32_t rf)
+{
+	int	 i;
+
+	stat->pf_nodes = stat->pf_node_inline;
+	stat->pf_node_total = PMAP_FAIL_INLINE_NR;
+	stat->pf_node_nr = 0;
+	stat->pf_down_nr = 0;
+	stat->pf_newfail_nr = 0;
+	stat->pf_last_ver = last_ver;
+	stat->pf_rf = rf;
+
+	for (i = 0; i < stat->pf_node_total; i++)
+		pmap_fail_node_init(&stat->pf_nodes[i]);
+}
+
+static void
+pmap_fail_stat_fini(struct pmap_fail_stat *stat)
+{
+	int			 i;
+
+	for (i = 0; i < stat->pf_node_nr; i++)
+		pmap_fail_node_fini(&stat->pf_nodes[i]);
+
+	if (stat->pf_nodes != stat->pf_node_inline)
+		D_FREE(stat->pf_nodes);
+}
+
+static bool
+pmap_comp_failed(struct pool_component *comp)
+{
+	return (comp->co_status == PO_COMP_ST_DOWN) ||
+	       (comp->co_status == PO_COMP_ST_DOWNOUT &&
+		comp->co_flags == PO_COMPF_DOWN2OUT);
+}
+
+static bool
+pmap_comp_execlude_out_earlier(struct pool_component *comp, uint32_t ver)
+{
+	return (comp->co_status == PO_COMP_ST_DOWNOUT &&
+		comp->co_out_ver <= ver);
+}
+
+static int
+pmap_fver_cmp(void *array, int a, int b)
+{
+	struct pmap_fail_ver	*vers = array;
+
+	if (vers[a].pf_start_ver > vers[b].pf_start_ver)
+		return 1;
+	if (vers[a].pf_start_ver < vers[b].pf_start_ver)
+		return -1;
+	if (vers[a].pf_end_ver > vers[b].pf_end_ver)
+		return 1;
+	if (vers[a].pf_end_ver < vers[b].pf_end_ver)
+		return -1;
+	return 0;
+}
+
+static void
+pmap_fver_swap(void *array, int a, int b)
+{
+	struct pmap_fail_ver	*vers = array;
+	struct pmap_fail_ver	 tmp;
+
+	tmp = vers[a];
+	vers[a] = vers[b];
+	vers[b] = tmp;
+}
+
+static daos_sort_ops_t pmap_fver_sort_ops = {
+	.so_cmp		= pmap_fver_cmp,
+	.so_swap	= pmap_fver_swap,
+};
+
+static bool
+fver_overlap(struct pmap_fail_ver *a, struct pmap_fail_ver *b)
+{
+	return (a->pf_start_ver <= b->pf_end_ver &&
+		b->pf_start_ver <= a->pf_end_ver);
+}
+
+static void
+pmap_fail_ver_merge(struct pmap_fail_node *fnode)
+{
+	struct pmap_fail_ver	*ver1, *ver2;
+	int			 i, j;
+
+	if (fnode->pf_ver_nr < 2)
+		return;
+	for (i = 0; i < fnode->pf_ver_nr - 1;) {
+		ver1 = &fnode->pf_vers[i];
+		ver2 = &fnode->pf_vers[i + 1];
+		D_ASSERTF(ver1->pf_start_ver <= ver2->pf_start_ver,
+			  "bad order of pf_start_ver %d, %d\n",
+			  ver1->pf_start_ver, ver2->pf_start_ver);
+		/* exclude earlier, rebuild (exclude out) earlier */
+		D_ASSERTF(ver1->pf_end_ver <= ver2->pf_end_ver,
+			  "bad order of pf_end_ver %d, %d\n",
+			  ver1->pf_end_ver, ver2->pf_end_ver);
+		if (!fver_overlap(ver1, ver2)) {
+			i++;
+			continue;
+		}
+		ver1->pf_start_ver = min(ver1->pf_start_ver,
+					 ver2->pf_start_ver);
+		ver1->pf_end_ver = max(ver1->pf_end_ver, ver2->pf_end_ver);
+		fnode->pf_ver_nr--;
+		if (i == fnode->pf_ver_nr - 2)
+			break;
+		for (j = i + 1; j < fnode->pf_ver_nr; j++)
+			fnode->pf_vers[j] = fnode->pf_vers[j + 1];
+	}
+}
+
+static int
+pmap_fail_node_add_tgt(struct pmap_fail_stat *fstat,
+		       struct pmap_fail_node *fnode,
+		       struct pool_component *comp)
+{
+	struct pmap_fail_ver	*tmp, *fvers;
+	struct pmap_fail_ver	 ver;
+	uint32_t		 nr;
+	int			 i;
+
+	ver.pf_start_ver = comp->co_fseq;
+	if (comp->co_status == PO_COMP_ST_DOWN) {
+		fnode->pf_down = 1;
+		ver.pf_end_ver = PMAP_VER_MAX;
+	} else {
+		ver.pf_end_ver = comp->co_out_ver;
+	}
+	if (comp->co_fseq > fstat->pf_last_ver)
+		fnode->pf_new_fail = 1;
+
+	for (i = 0; i < fnode->pf_ver_nr; i++) {
+		tmp = &fnode->pf_vers[i];
+		if (fver_overlap(tmp, &ver)) {
+			tmp->pf_start_ver = min(tmp->pf_start_ver,
+						ver.pf_start_ver);
+			tmp->pf_end_ver = max(tmp->pf_end_ver,
+					      ver.pf_end_ver);
+			return 0;
+		}
+	}
+
+	D_ASSERT(fnode->pf_ver_nr <= fnode->pf_ver_total);
+	if (fnode->pf_ver_nr == fnode->pf_ver_total) {
+		nr = fnode->pf_ver_nr + PMAP_FAIL_INLINE_NR;
+		D_ALLOC_ARRAY(fvers, nr);
+		if (fvers == NULL)
+			return -DER_NOMEM;
+
+		memcpy(fvers, fnode->pf_vers,
+		       sizeof(*fvers) * fnode->pf_ver_nr);
+		if (fnode->pf_vers != fnode->pf_ver_inline)
+			D_FREE(fnode->pf_vers);
+		fnode->pf_vers = fvers;
+		fnode->pf_ver_total = nr;
+	}
+	D_ASSERT(fnode->pf_ver_nr < fnode->pf_ver_total);
+
+	fnode->pf_vers[fnode->pf_ver_nr] = ver;
+	fnode->pf_ver_nr++;
+	return 0;
+}
+
+static int
+pmap_node_check(struct pool_domain *node_dom, struct pmap_fail_stat *fstat)
+{
+	struct pmap_fail_node	*fnode = NULL;
+	struct pool_target	*tgt;
+	struct pool_component	*comp;
+	int			 i;
+	int			 rc = 0;
+
+	for (i = 0; i < node_dom->do_target_nr; ++i) {
+		tgt = &node_dom->do_targets[i];
+		comp = &tgt->ta_comp;
+		if (!pmap_comp_failed(comp) ||
+		    pmap_comp_execlude_out_earlier(comp, fstat->pf_last_ver))
+			continue;
+		if (fnode == NULL) {
+			fnode = pmap_fail_node_get(fstat);
+			if (fnode == NULL)
+				return -DER_NOMEM;
+		}
+
+		rc = pmap_fail_node_add_tgt(fstat, fnode, comp);
+		if (rc)
+			return rc;
+	}
+
+	if (fnode == NULL || fnode->pf_ver_nr == 0)
+		return 0;
+
+	fnode->pf_co_rank = node_dom->do_comp.co_rank;
+	daos_array_sort(fnode->pf_vers, fnode->pf_ver_nr, false,
+			&pmap_fver_sort_ops);
+	pmap_fail_ver_merge(fnode);
+
+	if (fnode->pf_down)
+		fstat->pf_down_nr++;
+	if (fnode->pf_new_fail)
+		fstat->pf_newfail_nr++;
+	if ((fstat->pf_down_nr > fstat->pf_rf) && (fstat->pf_newfail_nr > 0)) {
+		rc = -DER_RF;
+		D_ERROR("RF broken, found %d DOWN node, newly fail %d, rf %d, "
+			DF_RC"\n", fstat->pf_down_nr, fstat->pf_newfail_nr,
+			fstat->pf_rf, DP_RC(rc));
+	}
+
+	return rc;
+}
+
+static int
+pmap_fail_ver_overlap(struct pmap_fail_stat *fstat, struct pmap_fail_ver *fver)
+{
+	struct pmap_fail_node	*fnode;
+	struct pmap_fail_ver	*tmp;
+	int			 i, j;
+	int			 nr;
+	bool			 ovl;
+
+	for (i = 0, nr = 0; i < fstat->pf_node_nr; i++) {
+		ovl = false;
+		fnode = &fstat->pf_nodes[i];
+		for (j = 0; j < fnode->pf_ver_nr; j++) {
+			tmp = &fnode->pf_vers[j];
+			if (fver_overlap(tmp, fver)) {
+				ovl = true;
+				break;
+			}
+		}
+		if (ovl)
+			nr++;
+	}
+
+	return nr;
+}
+
+static int
+pmap_fail_stat_check(struct pmap_fail_stat *fstat)
+{
+	struct pmap_fail_node	*fnode;
+	struct pmap_fail_ver	*fver;
+	uint32_t		 rf = fstat->pf_rf;
+	int			 max_fail_nr = 0;
+	int			 fail_nr;
+	uint32_t		 i, j;
+	int			 rc = 0;
+
+	/* First check some easier cases, it should cover most common cases */
+	if ((fstat->pf_node_nr <= rf) || (fstat->pf_newfail_nr == 0))
+		return 0;
+	if (fstat->pf_node_nr == 1) {
+		if (rf >= 1)
+			return 0;
+		rc = -DER_RF;
+	} else if (fstat->pf_down_nr > rf) {
+		rc = -DER_RF;
+	}
+	if (rc)
+		goto fail;
+
+	/* Bad cornel case, need to check #max-concurrent-failures by checking
+	 * overlapped fail version ranges between different nodes.
+	 */
+	for (i = 0; i < fstat->pf_node_nr; i++) {
+		fnode = &fstat->pf_nodes[i];
+		for (j = 0; j < fnode->pf_ver_nr; j++) {
+			fver = &fnode->pf_vers[j];
+			fail_nr = pmap_fail_ver_overlap(fstat, fver);
+			D_ASSERT(fail_nr >= 1);
+			if (fail_nr > max_fail_nr)
+				max_fail_nr = fail_nr;
+			if (max_fail_nr > rf) {
+				rc = -DER_RF;
+				break;
+			}
+		}
+	}
+
+fail:
+	if (rc == -DER_RF) {
+		D_ERROR("RF broken, found %d fail, DOWN %d, newly fail %d, "
+			"max_overlapped %d, rf %d, "DF_RC"\n",
+			fstat->pf_node_nr, fstat->pf_down_nr,
+			fstat->pf_newfail_nr, max_fail_nr,
+			fstat->pf_rf, DP_RC(rc));
+	} else if (rc) {
+		D_ERROR("pmap_fail_stat_check, "DF_RC"\n", DP_RC(rc));
+	}
+	return rc;
+}
+
+/**
+ * Check if #concurrent_failures exceeds RF since pool map version \a last_ver.
+ */
+int
+pool_map_rf_verify(struct pool_map *map, uint32_t last_ver, uint32_t rf)
+{
+	struct pool_domain	*node_doms;
+	struct pool_domain	*node_dom;
+	struct pmap_fail_stat	 fstat;
+	int			 node_nr, i;
+	int			 rc = 0;
+
+	pmap_fail_stat_init(&fstat, last_ver, rf);
+	node_nr = pool_map_find_domain(map, PO_COMP_TP_NODE, PO_COMP_ID_ALL,
+				       &node_doms);
+	D_ASSERT(node_nr >= 0);
+	if (node_nr == 0)
+		return -DER_INVAL;
+
+	for (i = 0; i < node_nr; i++) {
+		node_dom = &node_doms[i];
+		D_ASSERT(node_dom->do_children == NULL);
+		rc = pmap_node_check(node_dom, &fstat);
+		if (rc)
+			goto out;
+	}
+
+	rc = pmap_fail_stat_check(&fstat);
+
+out:
+	pmap_fail_stat_fini(&fstat);
+	return rc;
 }
 
 /**
