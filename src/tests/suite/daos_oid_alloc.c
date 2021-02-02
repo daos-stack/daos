@@ -321,10 +321,10 @@ static const struct CMUnitTest oid_alloc_tests[] = {
 	 simple_oid_allocator, async_disable, NULL},
 	{"OID_ALLOC2: Multiple Cont OID ALLOCATION (blocking)",
 	 multi_cont_oid_allocator, async_disable, NULL},
-	{"OID_ALLOC3: OID Allocator check (blocking)",
-	 oid_allocator_checker, async_disable, NULL},
-	{"OID_ALLOC4: Fetch / Set MAX OID",
+	{"OID_ALLOC3: Fetch / Set MAX OID",
 	 cont_oid_prop, async_disable, NULL},
+	{"OID_ALLOC4: OID Allocator check (blocking)",
+	 oid_allocator_checker, async_disable, NULL},
 };
 
 int
