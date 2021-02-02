@@ -183,7 +183,7 @@ void pool_map_print(struct pool_map *map);
 int  pool_map_set_version(struct pool_map *map, uint32_t version);
 uint32_t pool_map_get_version(struct pool_map *map);
 
-int pool_map_get_failed_cnt(struct pool_map *map, uint32_t level);
+int pool_map_get_failed_cnt(struct pool_map *map, uint32_t domain);
 
 #define PO_COMP_ID_ALL		(-1)
 

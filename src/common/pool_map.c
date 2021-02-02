@@ -2294,13 +2294,13 @@ pool_map_set_version(struct pool_map *map, uint32_t version)
 }
 
 int
-pool_map_get_failed_cnt(struct pool_map *map, uint32_t level)
+pool_map_get_failed_cnt(struct pool_map *map, uint32_t domain)
 {
 	int i;
 	int fail_cnt = -1;
 
 	for (i = 0; i < map->po_domain_layers; ++i) {
-		if (map->po_comp_fail_cnts[i].comp_type == level) {
+		if (map->po_comp_fail_cnts[i].comp_type == domain) {
 			fail_cnt = map->po_comp_fail_cnts[i].fail_cnt;
 			break;
 		}
