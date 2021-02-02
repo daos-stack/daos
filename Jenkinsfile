@@ -161,8 +161,7 @@ String unit_packages() {
                         readFile(stage_info['target'] +
                                  '-required-mercury-rpm-version').trim() +
                         " boost-devel libisa-l_crypto libfabric-debuginfo" +
-                        " argobots-debuginfo cmocka-debuginfo" +
-                        " protobuf-c-debuginfo "
+                        " argobots-debuginfo protobuf-c-debuginfo"
         }
         return packages
     } else {
