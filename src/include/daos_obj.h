@@ -14,15 +14,7 @@ extern "C" {
 #include <daos_event.h>
 #include <daos_obj_class.h>
 
-/**
- * ID of an object, 128 bits
- * The high 32-bit of daos_obj_id_t::hi are reserved for DAOS, the rest is
- * provided by the user and assumed to be unique inside a container.
- */
-typedef struct {
-	uint64_t	lo;
-	uint64_t	hi;
-} daos_obj_id_t;
+#define DAOS_OBJ_NIL		((daos_obj_id_t){0})
 
 /** the current OID version */
 #define OID_FMT_VER		1
