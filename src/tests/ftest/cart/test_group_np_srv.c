@@ -143,7 +143,7 @@ int main(int argc, char **argv)
 
   /* Delay shutdown to prevent context destroy errors, which are caused by
    * unresolved, in-flight RPCs. */
-  tc_set_shutdown_delay(2);
+  tc_set_shutdown_delay(4);
 
 	if (rc != 0) {
 		fprintf(stderr, "test_parse_args() failed, rc: %d.\n", rc);
