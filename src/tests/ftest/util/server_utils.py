@@ -317,6 +317,9 @@ class DaosServerManager(SubprocessManager):
         "OFI_PORT": "fabric_iface_port",
     }
 
+    # Defined in telemetry_common.h
+    D_TM_SHARED_MEMORY_KEY = 0x10242048
+
     def __init__(self, group, bin_dir,
                  svr_cert_dir, svr_config_file, dmg_cert_dir, dmg_config_file,
                  svr_config_temp=None, dmg_config_temp=None, manager="Orterun"):
@@ -465,7 +468,8 @@ class DaosServerManager(SubprocessManager):
             verbose (bool, optional): display clean commands. Defaults to True.
         """
         clean_commands = []
-        for server_params in self.manager.job.yaml.server_params:
+        for index, server_params in \
+                enumerate(self.manager.job.yaml.server_params):
             scm_mount = server_params.get_value("scm_mount")
             self.log.info("Cleaning up the %s directory.", str(scm_mount))
 
@@ -473,6 +477,10 @@ class DaosServerManager(SubprocessManager):
             cmd = "sudo rm -fr {}/*".format(scm_mount)
             if cmd not in clean_commands:
                 clean_commands.append(cmd)
+
+            # Remove the shared memory segment associated with this io server
+            cmd = "sudo ipcrm -M {}".format(self.D_TM_SHARED_MEMORY_KEY + index)
+            clean_commands.append(cmd)
 
             # Dismount the scm mount point
             cmd = "while sudo umount {}; do continue; done".format(scm_mount)
@@ -1026,7 +1034,7 @@ class DaosServerManager(SubprocessManager):
 
         elif not self._expected_states:
             # Expected states are populated as part of detect_io_server_start(),
-            # so if it it's empty there was an error starting the servers.
+            # so if it is empty there was an error starting the servers.
             self.log.info(
                 "  Unable to obtain current server state.  Undefined expected "
                 "server states due to a failure starting the servers.")
