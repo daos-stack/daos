@@ -222,6 +222,19 @@ enum {
 	/* Must enlarge D_HTYPE_BITS to add more types */
 };
 
+/**
+ * ID of an object, 128 bits
+ * The high 32-bit of daos_obj_id_t::hi are reserved for DAOS, the rest is
+ * provided by the user and assumed to be unique inside a container.
+ *
+ * See daos_obj.h for more details
+ * It is put here because it's almost used by everyone.
+ */
+typedef struct {
+	uint64_t	lo;
+	uint64_t	hi;
+} daos_obj_id_t;
+
 #if defined(__cplusplus)
 }
 #endif

@@ -124,14 +124,17 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 	 * to be blocked until such DTX has been handled by the new leader.
 	 */
 
-	if (DAE_FLAGS(dae) & DTE_BLOCK && dth->dth_modification_cnt == 0) {
-		if (dth->dth_share_tbd_count == 0)
-			dth->dth_local_retry = 1;
-		goto out;
-	}
+	if (!dth->dth_force_refresh) {
+		if (DAE_FLAGS(dae) & DTE_BLOCK &&
+		    dth->dth_modification_cnt == 0) {
+			if (dth->dth_share_tbd_count == 0)
+				dth->dth_local_retry = 1;
+			goto out;
+		}
 
-	if (DAE_MBS_FLAGS(dae) & DMF_SRDG_REP && dth->dth_dist == 0)
-		goto out;
+		if (DAE_MBS_FLAGS(dae) & DMF_SRDG_REP && dth->dth_dist == 0)
+			goto out;
+	}
 
 	if (DAOS_FAIL_CHECK(DAOS_DTX_NO_INPROGRESS))
 		return -DER_IO;
@@ -197,6 +200,12 @@ dtx_act_ent_cleanup(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 		for (i = 0; i < dae->dae_oid_cnt; i++)
 			vos_obj_evict_by_oid(vos_obj_cache_current(), cont,
 					     dae->dae_oids[i]);
+	}
+
+	if (dae->dae_oids != NULL && dae->dae_oids != &dae->dae_oid_inline &&
+	    dae->dae_oids != &DAE_OID(dae)) {
+		D_FREE(dae->dae_oids);
+		dae->dae_oid_cnt = 0;
 	}
 }
 
@@ -614,10 +623,6 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 
 	if (dae->dae_dbd == NULL)
 		return 0;
-
-	if (dae->dae_oids != NULL && dae->dae_oids != &dae->dae_oid_inline &&
-	    dae->dae_oids != &DAE_OID(dae))
-		D_FREE(dae->dae_oids);
 
 	dbd = dae->dae_dbd;
 	D_ASSERT(dbd->dbd_magic == DTX_ACT_BLOB_MAGIC);
@@ -1175,7 +1180,7 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		return -DER_INVAL;
 	}
 
-	if (intent == DAOS_INTENT_CHECK || intent == DAOS_INTENT_COS) {
+	if (intent == DAOS_INTENT_CHECK) {
 		if (dtx_is_aborted(entry))
 			return ALB_UNAVAILABLE;
 
@@ -2173,35 +2178,6 @@ vos_dtx_mark_committable(struct dtx_handle *dth)
 		dae->dae_committable = 1;
 		DAE_FLAGS(dae) &= ~DTE_CORRUPTED;
 	}
-}
-
-int
-vos_dtx_check_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t *epoch)
-{
-	struct vos_container	*cont;
-	struct daos_lru_cache	*occ;
-	struct vos_object	*obj;
-	daos_epoch_range_t	 epr = {0, *epoch};
-	int			 rc;
-
-	cont = vos_hdl2cont(coh);
-	occ = vos_obj_cache_current();
-
-	/* Sync epoch check inside vos_obj_hold(). We do not
-	 * care about whether it is for punch or update, use
-	 * DAOS_INTENT_COS to bypass DTX conflict check.
-	 */
-	rc = vos_obj_hold(occ, cont, oid, &epr, 0, VOS_OBJ_VISIBLE,
-			  DAOS_INTENT_COS, &obj, 0);
-	if (rc != 0) {
-		D_ERROR(DF_UOID" fail to check sync: rc = "DF_RC"\n",
-			DP_UOID(oid), DP_RC(rc));
-	} else {
-		*epoch = obj->obj_sync_epoch;
-		vos_obj_release(occ, obj, false);
-	}
-
-	return rc;
 }
 
 int
