@@ -124,7 +124,8 @@ struct cont_iv_prop {
 	uint64_t	cip_snap_max;
 	uint64_t	cip_compress;
 	uint64_t	cip_encrypt;
-
+	struct daos_prop_co_roots cip_roots;
+	/* MUST be the last member */
 	struct daos_acl	cip_acl;
 };
 

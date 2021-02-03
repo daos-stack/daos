@@ -28,7 +28,8 @@ class OSAOfflineExtend(OSAUtils):
 
     def run_offline_extend_test(self, num_pool, data=False):
         """Run the offline extend without data.
-            Args:
+
+        Args:
             num_pool (int) : total pools to create for testing purposes.
             data (bool) : whether pool has no data or to create
                           some data in pool. Defaults to False.
