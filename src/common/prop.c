@@ -239,6 +239,8 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		return false;
 	}
 	for (i = 0; i < prop->dpp_nr; i++) {
+		struct daos_co_status	co_status;
+
 		type = prop->dpp_entries[i].dpe_type;
 		if (pool) {
 			if (type <= DAOS_PROP_PO_MIN ||
@@ -414,6 +416,15 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				return false;
 			}
 			break;
+		case DAOS_PROP_CO_STATUS:
+			val = prop->dpp_entries[i].dpe_val;
+			daos_prop_val_2_co_status(val, &co_status);
+			if (co_status.dcs_status != DAOS_PROP_CO_HEALTHY &&
+			    co_status.dcs_status != DAOS_PROP_CO_UNCLEAN) {
+				D_ERROR("invalid container status %d\n",
+					co_status.dcs_status);
+				return false;
+			}
 		case DAOS_PROP_CO_SNAPSHOT_MAX:
 			break;
 		case DAOS_PROP_CO_ROOTS:

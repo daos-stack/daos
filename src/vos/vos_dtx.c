@@ -397,7 +397,8 @@ dtx_cmt_ent_update(struct btr_instance *tins, struct btr_record *rec,
 	 * indexed table.
 	 */
 
-	dce->dce_exist = 1;
+	if (!dce->dce_reindex)
+		dce->dce_exist = 1;
 
 	return 0;
 }
