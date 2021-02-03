@@ -246,8 +246,8 @@ String functional_packages(String distro) {
                   "mpi4py-tests " +
                   "hdf5-mpich-tests " +
                   "hdf5-openmpi3-tests " +
-                  "hdf5-vol-daos-mpich2-tests-daos-1 " +
-                  "hdf5-vol-daos-openmpi3-tests-daos-1 " +
+                  "hdf5-vol-daos-mpich-tests " +
+                  "hdf5-vol-daos-openmpi3-tests " +
                   "MACSio-mpich " +
                   "MACSio-openmpi3 " +
                   "mpifileutils-mpich-daos-1 "
@@ -1201,7 +1201,7 @@ pipeline {
                         label 'ci_nlt_1'
                     }
                     steps {
-                        unitTest timeout_time: 20,
+                        unitTest timeout_time: 30,
                                  inst_repos: pr_repos(),
                                  test_script: 'ci/unit/test_nlt.sh',
                                  inst_rpms: unit_packages()
