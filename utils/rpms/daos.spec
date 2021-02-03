@@ -409,7 +409,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
-* Mon Feb 3 2021 Hua Kuang <hua.kuang@intel.com> 1.1.2.1-8
+* Wed Feb 3 2021 Hua Kuang <hua.kuang@intel.com> 1.1.2.1-8
 - Changed License from Apache to BSD-2-Clause-Patent in this file
 
 * Thu Jan 28 2021 Phillip Henderson <phillip.henderson@intel.com> 1.1.2.1-7
