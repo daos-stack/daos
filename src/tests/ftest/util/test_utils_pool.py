@@ -13,8 +13,7 @@ from test_utils_base import TestDaosApiBase
 from avocado import fail_on
 from command_utils import BasicParameter, CommandFailure
 from pydaos.raw import (DaosApiError, DaosPool, c_uuid_to_str, daos_cref)
-from general_utils import (check_pool_files, DaosTestError, run_command,
-                           convert_list)
+from general_utils import check_pool_files, DaosTestError, run_command
 from env_modules import load_mpi
 
 
@@ -504,41 +503,6 @@ class TestPool(TestDaosApiBase):
 
         self.log.info(
             "Rebuild %s detected", "start" if to_start else "completion")
-
-    @fail_on(DaosApiError)
-    @fail_on(CommandFailure)
-    def start_rebuild(self, ranks, daos_log):
-        """Kill/Stop the specific server ranks using this pool.
-
-        Args:
-            ranks (list): a list of daos server ranks (int) to kill
-            daos_log (DaosLog): object for logging messages
-
-        Returns:
-            bool: True if the server ranks have been killed/stopped and the
-                ranks have been excluded from the pool; False otherwise.
-
-        """
-        status = False
-        msg = "Killing DAOS ranks {} from server group {}".format(
-            ranks, self.name.value)
-        self.log.info(msg)
-        daos_log.info(msg)
-
-        if self.control_method.value == self.USE_DMG and self.dmg:
-            # Stop desired ranks using dmg
-            self.dmg.system_stop(ranks=convert_list(value=ranks))
-            status = True
-
-        elif self.control_method.value == self.USE_DMG:
-            self.log.error("Error: Undefined dmg command")
-
-        else:
-            self.log.error(
-                "Error: Unsupported control_method: %s",
-                self.control_method.value)
-
-        return status
 
     @fail_on(DaosApiError)
     @fail_on(CommandFailure)

@@ -10,13 +10,15 @@ import os
 import socket
 import time
 
+from avocado import fail_on
 from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import \
     CommandFailure, FormattedParameter, YamlParameters, CommandWithParameters, \
     CommonConfig
 from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
-from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human
+from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
+    convert_list
 from dmg_utils import get_dmg_command
 from server_utils_params import \
     DaosServerTransportCredentials, DaosServerYamlParameters
@@ -1066,3 +1068,28 @@ class DaosServerManager(SubprocessManager):
             status["restart"] = True
 
         return status
+
+    @fail_on(CommandFailure)
+    def stop_ranks(self, ranks, daos_log):
+        """Kill/Stop the specific server ranks using this pool.
+
+        Args:
+            ranks (list): a list of daos server ranks (int) to kill
+            daos_log (DaosLog): object for logging messages
+
+        Raises:
+            avocado.core.exceptions.TestFail: if there is an issue stopping the
+                server ranks.
+
+        """
+        msg = "Stopping DAOS ranks {} from server group {}".format(
+            ranks, self.name.value)
+        self.log.info(msg)
+        daos_log.info(msg)
+
+        # Stop desired ranks using dmg
+        list_of_ranks = convert_list(value=ranks)
+        self.dmg.system_stop(ranks=list_of_ranks)
+
+        # Update the expected status of the stopped/evicted ranks
+        self.update_expected_states(list_of_ranks, ["stopped", "evicted"])

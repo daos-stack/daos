@@ -75,7 +75,7 @@ class PoolSvc(TestWithServers):
                     self.pool.connect()
                     self.pool.disconnect()
                     # kill another server which is not a leader and exclude it
-                    self.pool.start_rebuild([3], self.test_log)
+                    self.server_managers[0].stop_ranks([3], self.test_log)
                     self.pool.exclude([3], self.d_log)
                     # perform pool connect
                     self.pool.connect()

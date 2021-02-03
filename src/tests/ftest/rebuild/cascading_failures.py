@@ -54,14 +54,17 @@ class CascadingFailures(RebuildTestBase):
         """Start the rebuild process."""
         if self.mode == "simultaneous":
             # Exclude both ranks from the pool to initiate rebuild
-            self.pool.start_rebuild(self.inputs.rank.value, self.d_log)
+            self.server_managers[0].stop_ranks(
+                self.inputs.rank.value, self.d_log)
         else:
             # Exclude the first rank from the pool to initiate rebuild
-            self.pool.start_rebuild([self.inputs.rank.value[0]], self.d_log)
+            self.server_managers[0].stop_ranks(
+                [self.inputs.rank.value[0]], self.d_log)
 
         if self.mode == "sequential":
             # Exclude the second rank from the pool
-            self.pool.start_rebuild([self.inputs.rank.value[1]], self.d_log)
+            self.server_managers[0].stop_ranks(
+                [self.inputs.rank.value[1]], self.d_log)
 
         # Wait for rebuild to start
         self.pool.wait_for_rebuild(True, 1)
@@ -70,7 +73,8 @@ class CascadingFailures(RebuildTestBase):
         """Execute test steps during rebuild."""
         if self.mode == "cascading":
             # Exclude the second rank from the pool during rebuild
-            self.pool.start_rebuild([self.inputs.rank.value[1]], self.d_log)
+            self.server_managers[0].stop_ranks(
+                [self.inputs.rank.value[1]], self.d_log)
 
         # Populate the container with additional data during rebuild
         self.container.write_objects(obj_class=self.inputs.object_class.value)

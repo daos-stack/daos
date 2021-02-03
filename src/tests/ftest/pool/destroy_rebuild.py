@@ -50,7 +50,7 @@ class DestroyRebuild(TestWithServers):
             "Invalid pool information detected prior to rebuild")
 
         # Start rebuild
-        self.pool.start_rebuild([rank], self.d_log)
+        self.server_managers[0].stop_ranks([rank], self.d_log)
         self.pool.wait_for_rebuild(True)
 
         # Destroy the pool while rebuild is active
