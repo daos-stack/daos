@@ -90,9 +90,9 @@ jobs:
       run: docker run -v $PWD:/opt/external cp -a test_results/ nlt-* /tmp/dnt* /opt/external
     - name: Publish Unit Test Results
       uses: EnricoMi/publish-unit-test-result-action@v1.7
-          with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          files: test_results/*.xml
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        files: test_results/*.xml
     - name: Run NLT Test
       run: docker run --tmpfs /mnt/daos build-image ./utils/node_local_test.py --no-root kv
 
