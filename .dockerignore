@@ -1,8 +1,34 @@
-.git/
-build/
-install/
+# Local git data, will change often and not needed for building.
+# Include the rdb repo as well.
+**/.git
+
+# Build and test output, in case tree has been used outside docker
+dnt*.xml
 daos.conf
-.build_vars.sh
+build
+install
 .build_vars.json
-.sconsign.dblite
+.build_vars.sh
+config.log
 .sconf_temp
+.sconsign.dblite
+.daos_server.active.yml
+
+# Doc isn't required for building.
+.doc
+
+dnt*
+nlt*
+
+# Any local downloads
+**/*.tar.gz
+**/*.tgz
+**/*.bz2
+
+# Any compiled python code
+**/*.pyc
+**/__pycache__
+
+# Editor temporary save files.
+**/*~
+**/#*#
