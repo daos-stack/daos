@@ -249,7 +249,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 		epoch_min = cinfo.ci_hae;
 	}
 
-	interval = (uint64_t)DAOS_AGG_THRESHOLD * NSEC_PER_SEC;
+	interval = crt_sec2hlc(DAOS_AGG_THRESHOLD);
 	D_ASSERT(hlc > (interval * 2));
 	/*
 	 * Assume 'current hlc - interval' as the highest stable view (all
@@ -259,7 +259,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 
 	if (epoch_min > epoch_max) {
 		/* Nothing can be aggregated */
-		*msecs = max(*msecs, (epoch_min - epoch_max) / NSEC_PER_MSEC);
+		*msecs = max(*msecs, crt_hlc2msec(epoch_min - epoch_max));
 		return 0;
 	} else if (epoch_min > epoch_max - interval &&
 		   sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE) {
