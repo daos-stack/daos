@@ -32,7 +32,7 @@ test_client_init(void **state)
 	int	simulated_client_idx = 2021;
 	int	rc;
 
-	// cleanup from the previous init
+	/** cleanup from the previous init */
 	d_tm_fini();
 
 	rc = d_tm_init_client(simulated_client_idx, D_TM_SHARED_MEMORY_SIZE);
