@@ -1364,7 +1364,8 @@ def install_debuginfos():
     """Install debuginfo packages."""
     install_pkgs = [{'name': 'gdb'}]
 
-    cmds = []
+    cmd_list = []
+    timeout = ["timeout", "-k", "-v", "120"]
 
     # -debuginfo packages that don't get installed with debuginfo-install
     for pkg in ['python', 'daos', 'systemd', 'ndctl', 'mercury']:
@@ -1376,14 +1377,16 @@ def install_debuginfos():
     # installation
     path = os.path.sep + os.path.join('usr', 'share', 'spdk', 'include')
     if os.path.islink(path):
-        cmds.append(["sudo", "rm", "-f", path])
+        cmd_list.append(["sudo", "rm", "-f", path])
 
     if USE_DEBUGINFO_INSTALL:
         yum_args = [
             "--exclude", "ompi-debuginfo", "libpmemobj", "python", "openmpi3"]
-        cmds.append(["sudo", "yum", "-y", "install"] + yum_args)
-        cmds.append(["sudo", "debuginfo-install", "--enablerepo=*-debuginfo",
-                     "-y"] + yum_args + ["daos-server", "gcc"])
+        cmd_list.append(timeout + ["sudo", "yum", "-y", "install"] + yum_args)
+        cmd_list.append(
+            timeout +
+            ["sudo", "debuginfo-install", "--enablerepo=*-debuginfo", "-y"] +
+            yum_args + ["daos-server", "gcc"])
     else:
         # We're not using the yum API to install packages
         # See the comments below.
@@ -1404,7 +1407,7 @@ def install_debuginfos():
     # yum_base.processTransaction(rpmDisplay=yum.rpmtrans.NoOutputCallBack())
 
     # Now install a few pkgs that debuginfo-install wouldn't
-    cmd = ["sudo", "yum", "-y", "--enablerepo=*debug*", "install"]
+    cmd = timeout + ["sudo", "yum", "-y", "--enablerepo=*debug*", "install"]
     for pkg in install_pkgs:
         try:
             cmd.append(
@@ -1412,10 +1415,10 @@ def install_debuginfos():
         except KeyError:
             cmd.append(pkg['name'])
 
-    cmds.append(cmd)
+    cmd_list.append(cmd)
 
     retry = False
-    for cmd in cmds:
+    for cmd in cmd_list:
         try:
             print(run_command(cmd))
         except RuntimeError as error:
@@ -1426,10 +1429,10 @@ def install_debuginfos():
             break
     if retry:
         print("Going to refresh caches and try again")
-        cmd_prefix = ["sudo", "yum", "--enablerepo=*debug*"]
-        cmds.insert(0, cmd_prefix + ["clean", "all"])
-        cmds.insert(1, cmd_prefix + ["makecache"])
-        for cmd in cmds:
+        cmd_prefix = timeout + ["sudo", "yum", "--enablerepo=*debug*"]
+        cmd_list.insert(0, cmd_prefix + ["clean", "all"])
+        cmd_list.insert(1, cmd_prefix + ["makecache"])
+        for cmd in cmd_list:
             print(run_command(cmd))
 
 
