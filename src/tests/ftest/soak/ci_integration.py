@@ -87,7 +87,7 @@ class JavaCIIntegration(TestWithServers):
         for output, _ in task.iter_buffers():
             result = str(output)
             self.log.info(result)
-        return result
+        return str(result)
 
         # checking java install
 #        task = run_task(hosts=self.hostlist_clients, command="java -version")
