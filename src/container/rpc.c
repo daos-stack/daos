@@ -98,7 +98,7 @@ static struct crt_proto_rpc_format cont_proto_rpc_fmt[] = {
 #undef X
 
 struct crt_proto_format cont_proto_fmt = {
-	.cpf_name  = "cont-proto",
+	.cpf_name  = "cont",
 	.cpf_ver   = DAOS_CONT_VERSION,
 	.cpf_count = ARRAY_SIZE(cont_proto_rpc_fmt),
 	.cpf_prf   = cont_proto_rpc_fmt,
