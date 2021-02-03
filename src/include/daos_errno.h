@@ -246,7 +246,10 @@ extern "C" {
 	       Agent is incompatible with libdaos)			\
 	/** Multiple shards locate on the same target */		\
 	ACTION(DER_SHARDS_OVERLAP,	(DER_ERR_DAOS_BASE + 30),	\
-	       Shards overlap)
+	       Shards overlap)						\
+	/** #failures exceed RF(Redundancy Factor), data possibly lost */ \
+	ACTION(DER_RF,			(DER_ERR_DAOS_BASE + 31),	\
+	       Failures exceed RF)
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\
