@@ -1689,10 +1689,58 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 			int rep_count,
 			int max_inflight)
 {
-	/* TODO --randomize-endpoints */
 	/* TODO --verbose */
-	printf("File input is read first, with other command line parameters\n"
-	       "over riding that specified in the file\n\n");
+
+	printf("\n*********************************\n"
+	       " self_test does timing analysis for data transfer between\n"
+	       " multiple endpoints.\n"
+	       " Input parameters may be specified in either an input file\n"
+	       " and/or command line options.  If both are used, then file\n"
+	       " input is read first and command line options second,\n"
+	       " allowing command line options to take precedent.\n\n");
+
+	printf(" Timing results may be compared to expected results\n"
+	       " with the results stored into an optional file.\n"
+	       " The input, the expected and the result files use the\n"
+	       " configini format, where the name of a sector (test name) is\n"
+	       " enclosed in brackets follow by a series of key:value pairs.\n"
+	       " For the input file, the keys are the long format of the\n"
+	       " command line options follow by a separator and the key value\n"
+	       " The separator may be either the : or the =.\n"
+	       " There may be multiple sector/test-name in each file.\n"
+	       " Self_test will operate on sector specified with the 'config'\n"
+	       " option. The sector names MUST be consistent between all\n"
+	       " files. If the sector name already exists in the result file,\n"
+	       " then the previous results will be replaced.\n\n");
+
+	printf(" The expected and results files uses predefined keys, each \n"
+	       " representing a differ statistics.\n"
+	       "    all  - apply to all statistics (scaling only)\n"
+	       "     bw  - bandwidth\n"
+	       "     tp  - through put\n"
+	       "     av  - average\n"
+	       "     sd  - standard deviation\n"
+	       "    min  - minimum\n"
+	       "    max  - maximum\n"
+	       "  med25  - the 25 percentile from the bottom\n"
+	       "  med50  - the 50 percentile from the bottom\n"
+	       "  med75  - the 75 percentile from the bottom\n"
+	       " The expected file supports 2 pre-defined sectors: 'scale'\n"
+	       " and 'default_values'.  These 2 sectors (if specified) are\n"
+	       " applied first, allowing sector specific values to over ride\n"
+	       " these default settings.\n\n");
+
+	printf(" Comparisons is performed and reported on any statistic\n"
+	       " that has both an expected and scale factor defined.\n"
+	       " In addition, a list of statistics comparison may be listed \n"
+	       " using the 'expected_result' option.  This is a comma \n"
+	       " separated list of the desired statistics.  The scale factor\n"
+	       " for a statistics can be specified/modified in the list by\n"
+	       " setting its value after the statistics key word, separated\n"
+	       " by either a : or = sign (ie 'bw,av=12,sd=9,min,max').\n"
+	       " All scale factors represents the percentag deviation\n"
+	       " from the expected value\n\n");
+
 	printf("*** Usage using file options only ****\n"
 	       " %s --file-name <file_name> --config <test> --display\n"
 	       "\n"
@@ -1755,6 +1803,24 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "  --file-name <file_name>\n"
 	       "      Short version: -f\n"
 	       "      The name of file with list of parameters and arguments\n"
+	       "\n"
+	       "  --expected-input <file_name>\n"
+	       "      Short version: -y\n"
+	       "      The name of file with list of expected values\n"
+	       "\n"
+	       "  --expected-output <file_name>\n"
+	       "      Short version: -z\n"
+	       "      The name of file for output results\n"
+	       "\n"
+	       "  --expected-results <string>\n"
+	       "      Short version: -x\n"
+	       "      comman separarted string of statistics key word\n"
+	       "      to output with optional scaling factor.\n"
+	       "      i.e. av=23,sd,bw=50,tp,med25,med50,med75\n"
+	       "\n"
+	       "  --expected-threshold <value>\n"
+	       "      Short version: -w\n"
+	       "      Global scaling factor to apply to all statistics\n"
 	       "\n"
 	       "  --config <test_group>\n"
 	       "      Short version: -c\n"
