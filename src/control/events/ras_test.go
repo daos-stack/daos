@@ -29,12 +29,15 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/logging"
 )
+
+var defEvtCmpOpts = []cmp.Option{cmpopts.IgnoreUnexported(RASEvent{})}
 
 func TestEvents_HandleClusterEvent(t *testing.T) {
 	genericEvent := mockGenericEvent()
@@ -47,6 +50,7 @@ func TestEvents_HandleClusterEvent(t *testing.T) {
 	for name, tc := range map[string]struct {
 		req         *sharedpb.ClusterEventReq
 		subType     RASTypeID
+		fwded       bool
 		expEvtTypes []string
 		expResp     *sharedpb.ClusterEventResp
 		expErr      error
@@ -117,7 +121,7 @@ func TestEvents_HandleClusterEvent(t *testing.T) {
 
 			ps.Subscribe(tc.subType, tly1)
 
-			resp, err := ps.HandleClusterEvent(tc.req)
+			resp, err := ps.HandleClusterEvent(tc.req, tc.fwded)
 			common.CmpErr(t, tc.expErr, err)
 			if err != nil {
 				return

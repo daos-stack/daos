@@ -24,7 +24,7 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-#define DAOS_CONT_VERSION 1
+#define DAOS_CONT_VERSION 2
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
@@ -189,8 +189,9 @@ CRT_RPC_DECLARE(cont_close, DAOS_ISEQ_CONT_CLOSE, DAOS_OSEQ_CONT_CLOSE)
 #define DAOS_CO_QUERY_PROP_OWNER_GROUP	(1ULL << 13)
 #define DAOS_CO_QUERY_PROP_DEDUP	(1ULL << 14)
 #define DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD	(1ULL << 15)
+#define DAOS_CO_QUERY_PROP_ROOTS	(1ULL << 16)
 
-#define DAOS_CO_QUERY_PROP_BITS_NR	(16)
+#define DAOS_CO_QUERY_PROP_BITS_NR	(17)
 #define DAOS_CO_QUERY_PROP_ALL					\
 	((1ULL << DAOS_CO_QUERY_PROP_BITS_NR) - 1)
 
