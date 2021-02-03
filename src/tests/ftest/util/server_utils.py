@@ -310,6 +310,7 @@ class DaosServerCommand(YamlCommand):
 
 
 class DaosServerManager(SubprocessManager):
+    # pylint: disable=too-many-public-methods
     """Manages the daos_server execution on one or more hosts."""
 
     # Mapping of environment variable names to daos_server config param names
