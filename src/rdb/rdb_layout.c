@@ -16,6 +16,7 @@
 RDB_STRING_KEY(rdb_, dkey);
 
 RDB_STRING_KEY(rdb_mc_, uuid);
+RDB_STRING_KEY(rdb_mc_, version);
 RDB_STRING_KEY(rdb_mc_, term);
 RDB_STRING_KEY(rdb_mc_, vote);
 RDB_STRING_KEY(rdb_mc_, lc);

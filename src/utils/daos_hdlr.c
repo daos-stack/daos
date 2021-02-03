@@ -1263,6 +1263,23 @@ cont_decode_props(daos_prop_t *props, daos_prop_t *prop_acl)
 		rc = -DER_INVAL;
 	}
 
+	entry = daos_prop_entry_get(props, DAOS_PROP_CO_STATUS);
+	if (entry == NULL) {
+		fprintf(stderr, "status property not found\n");
+		rc = -DER_INVAL;
+	} else {
+		struct daos_co_status	co_stat = { 0 };
+
+		daos_prop_val_2_co_status(entry->dpe_val, &co_stat);
+		if (co_stat.dcs_status == DAOS_PROP_CO_HEALTHY)
+			D_PRINT("status:\t\t\tHEALTHY\n");
+		else if (co_stat.dcs_status == DAOS_PROP_CO_UNCLEAN)
+			D_PRINT("status:\t\t\tUNCLEAN\n");
+		else
+			fprintf(stderr, "bad dcs_status %d\n",
+				co_stat.dcs_status);
+	}
+
 	/* Only mention ACL if there's something to print */
 	if (prop_acl != NULL) {
 		entry = daos_prop_entry_get(prop_acl, DAOS_PROP_CO_ACL);
@@ -1347,7 +1364,8 @@ cont_set_prop_hdlr(struct cmd_args_s *ap)
 	/* Validate the properties are supported for set */
 	for (i = 0; i < ap->props->dpp_nr; i++) {
 		entry = &ap->props->dpp_entries[i];
-		if (entry->dpe_type != DAOS_PROP_CO_LABEL) {
+		if (entry->dpe_type != DAOS_PROP_CO_LABEL &&
+		    entry->dpe_type != DAOS_PROP_CO_STATUS) {
 			fprintf(stderr, "property not supported for set\n");
 			D_GOTO(err_out, rc = -DER_INVAL);
 		}
