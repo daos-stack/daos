@@ -44,12 +44,6 @@ struct test_input_value {
 
 struct test_input_value tst_fn_val;
 
-/**
- * An example for string key
- */
-
-#define SK_MAX_KEY_LEN 128
-
 /** string key record */
 struct sk_rec {
 	uint64_t	sr_key_len;
@@ -742,6 +736,12 @@ sk_btr_sort_keys(struct kv_node *kv, unsigned int key_nr)
 const char valid[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 #define INT_LEN 32
+/**
+ * An example for string key
+ */
+D_CASSERT(EMBEDDED_KEY_MAX > INT_LEN);
+#define SK_MAX_KEY_LEN (EMBEDDED_KEY_MAX - INT_LEN)
+
 /* fill in @kv with random string keys/values */
 static void
 sk_btr_gen_keys(struct kv_node *kv, unsigned int key_nr)
