@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * \file
@@ -41,6 +24,8 @@
 #include <daos/placement.h>
 #include "srv_internal.h"
 #include "drpc_internal.h"
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 #include <daos.h> /* for daos_init() */
 
@@ -470,13 +455,38 @@ abt_fini(void)
 	ABT_finalize();
 }
 
+static void
+dss_crt_event_cb(d_rank_t rank, enum crt_event_source src,
+		 enum crt_event_type type, void *arg)
+{
+	static struct d_tm_node_t	*dead_rank_ctr;
+	int				 rc = 0;
+
+	/* We only care about dead ranks for now */
+	if (src != CRT_EVS_SWIM || type != CRT_EVT_DEAD) {
+		D_DEBUG(DB_MGMT, "ignore src/type/evict %u/%u\n",
+			src, type);
+		return;
+	}
+
+	d_tm_increment_counter(&dead_rank_ctr, "cart",
+			       "swim_rank_dead_events", NULL);
+
+	rc = ds_notify_swim_rank_dead(rank);
+	if (rc)
+		D_ERROR("failed to handle %u/%u event: "DF_RC"\n",
+			src, type, DP_RC(rc));
+}
+
 static int
 server_init(int argc, char *argv[])
 {
-	uint64_t	bound;
-	int64_t		diff;
-	unsigned int	ctx_nr;
-	int		rc;
+	static struct d_tm_node_t	*startup_dur;
+	static struct d_tm_node_t	*started_ts;
+	uint64_t			 bound;
+	int64_t				 diff;
+	unsigned int			 ctx_nr;
+	int				 rc;
 
 	bound = crt_hlc_epsilon_get_bound(crt_hlc_get());
 
@@ -484,18 +494,25 @@ server_init(int argc, char *argv[])
 	if (rc != 0)
 		return rc;
 
+	rc = d_tm_init(dss_instance_idx, D_TM_SHARED_MEMORY_SIZE);
+	if (rc != 0)
+		goto exit_debug_init;
+
+	d_tm_mark_duration_start(&startup_dur, D_TM_CLOCK_REALTIME,
+				 "server", "startup_duration", NULL);
+
 	rc = register_dbtree_classes();
 	if (rc != 0)
-		D_GOTO(exit_debug_init, rc);
+		D_GOTO(exit_telemetry_init, rc);
 
 	/** initialize server topology data */
 	rc = dss_topo_init();
 	if (rc != 0)
-		D_GOTO(exit_debug_init, rc);
+		D_GOTO(exit_telemetry_init, rc);
 
 	rc = abt_init(argc, argv);
 	if (rc != 0)
-		goto exit_debug_init;
+		goto exit_telemetry_init;
 
 	/* initialize the modular interface */
 	rc = dss_module_init();
@@ -540,6 +557,9 @@ server_init(int argc, char *argv[])
 			dss_storage_path);
 		D_GOTO(exit_mod_loaded, rc);
 	}
+
+	gethostname(dss_hostname, DSS_HOSTNAME_MAX_LEN);
+
 	D_INFO("Service initialized\n");
 
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
@@ -611,10 +631,18 @@ server_init(int argc, char *argv[])
 		goto exit_drpc_fini;
 	D_INFO("Modules successfully set up\n");
 
+	rc = crt_register_event_cb(dss_crt_event_cb, NULL);
+	if (rc)
+		D_GOTO(exit_drpc_fini, rc);
+
 	dss_xstreams_open_barrier();
 	D_INFO("Service fully up\n");
 
-	gethostname(dss_hostname, DSS_HOSTNAME_MAX_LEN);
+	d_tm_mark_duration_end(&startup_dur, NULL);
+
+	d_tm_record_timestamp(&started_ts, "server", "started_at", NULL);
+
+	d_tm_set_gauge(NULL, dss_self_rank(), "server", "rank", NULL);
 
 	D_PRINT("DAOS I/O server (v%s) process %u started on rank %u "
 		"with %u target, %d helper XS, firstcore %d, host %s.\n",
@@ -647,6 +675,8 @@ exit_mod_init:
 	dss_module_fini(true);
 exit_abt_init:
 	abt_fini();
+exit_telemetry_init:
+	d_tm_fini();
 exit_debug_init:
 	daos_debug_fini();
 	return rc;
@@ -656,6 +686,8 @@ static void
 server_fini(bool force)
 {
 	D_INFO("Service is shutting down\n");
+	crt_unregister_event_cb(dss_crt_event_cb, NULL);
+	D_INFO("unregister event callbacks done\n");
 	dss_module_cleanup_all();
 	D_INFO("dss_module_cleanup_all() done\n");
 	drpc_fini();

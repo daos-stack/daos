@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * rebuild: rebuild service
@@ -532,7 +515,7 @@ enum {
  * its own rebuild status by IV.
  */
 static void
-rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
+rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver, uint32_t op,
 			    struct rebuild_global_pool_tracker *rgt)
 {
 	double		last_print = 0;
@@ -637,13 +620,13 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 		rs->rs_seconds =
 			(d_timeus_secdiff(0) - rgt->rgt_time_start) / 1e6;
 		snprintf(sbuf, RBLD_SBUF_LEN,
-			"Rebuild [%s] (pool "DF_UUID" ver=%u, toberb_obj="
-			DF_U64", rb_obj="DF_U64", rec="DF_U64", size="DF_U64
-			" done %d status %d/%d duration=%d secs)\n",
-			str, DP_UUID(pool->sp_uuid), map_ver,
-			rs->rs_toberb_obj_nr, rs->rs_obj_nr, rs->rs_rec_nr,
-			rs->rs_size, rs->rs_done, rs->rs_errno,
-			rs->rs_fail_rank, rs->rs_seconds);
+			 "%s [%s] (pool "DF_UUID" ver=%u, toberb_obj="
+			 DF_U64", rb_obj="DF_U64", rec="DF_U64", size="DF_U64
+			 " done %d status %d/%d duration=%d secs)\n",
+			 RB_OP_STR(op), str, DP_UUID(pool->sp_uuid), map_ver,
+			 rs->rs_toberb_obj_nr, rs->rs_obj_nr, rs->rs_rec_nr,
+			 rs->rs_size, rs->rs_done, rs->rs_errno,
+			 rs->rs_fail_rank, rs->rs_seconds);
 
 		D_DEBUG(DB_REBUILD, "%s", sbuf);
 		if (rs->rs_done || rebuild_gst.rg_abort || rgt->rgt_abort) {
@@ -814,8 +797,8 @@ retry:
 	 */
 	rc = ds_pool_bcast_create(dss_get_module_info()->dmi_ctx,
 				  pool, DAOS_REBUILD_MODULE,
-				  REBUILD_OBJECTS_SCAN, &rpc, NULL,
-				  NULL);
+				  REBUILD_OBJECTS_SCAN, DAOS_REBUILD_VERSION,
+				  &rpc, NULL, NULL);
 	if (rc != 0) {
 		D_ERROR("pool map broad cast failed: rc "DF_RC"\n", DP_RC(rc));
 		return rc;
@@ -1039,9 +1022,9 @@ rebuild_try_merge_tgts(const uuid_t pool_uuid, uint32_t map_ver,
 		merge_task->dst_map_ver = map_ver;
 	}
 
-	D_PRINT("Rebuild [queued] ("DF_UUID" ver=%u) id %u op=%s\n",
-		DP_UUID(pool_uuid), map_ver, tgts->pti_ids[0].pti_id,
-		RB_OP_STR(rebuild_op));
+	D_PRINT("%s [queued] ("DF_UUID" ver=%u) id %u\n",
+		RB_OP_STR(rebuild_op), DP_UUID(pool_uuid), map_ver,
+		tgts->pti_ids[0].pti_id);
 
 	/* Print out the current queue to the debug log */
 	rebuild_debug_print_queue();
@@ -1151,9 +1134,15 @@ rebuild_task_ult(void *arg)
 		return;
 	}
 
-	D_PRINT("Rebuild [started] (pool "DF_UUID" ver=%u, op=%s)\n",
-		DP_UUID(task->dst_pool_uuid), task->dst_map_ver,
-		RB_OP_STR(task->dst_rebuild_op));
+	rc = rebuild_notify_ras_start(&task->dst_pool_uuid, task->dst_map_ver,
+				      RB_OP_STR(task->dst_rebuild_op));
+	if (rc)
+		D_ERROR(DF_UUID": failed to send RAS event\n",
+			DP_UUID(task->dst_pool_uuid));
+
+	D_PRINT("%s [started] (pool "DF_UUID" ver=%u)\n",
+		RB_OP_STR(task->dst_rebuild_op), DP_UUID(task->dst_pool_uuid),
+		task->dst_map_ver);
 
 	rc = rebuild_leader_start(pool, task->dst_map_ver, &task->dst_tgts,
 				  task->dst_rebuild_op, &rgt);
@@ -1163,13 +1152,15 @@ rebuild_task_ult(void *arg)
 				" canceled.\n", DP_UUID(task->dst_pool_uuid),
 				task->dst_map_ver);
 			rc = 0;
-			D_PRINT("Rebuild [canceled] (pool "DF_UUID" ver=%u"
+			D_PRINT("%s [canceled] (pool "DF_UUID" ver=%u"
 				" status=%d)\n", DP_UUID(task->dst_pool_uuid),
+				RB_OP_STR(task->dst_rebuild_op),
 				task->dst_map_ver, rc);
 			D_GOTO(output, rc);
 		}
 
-		D_PRINT("Rebuild [failed] (pool "DF_UUID" ver=%u status=%d)\n",
+		D_PRINT("%s [failed] (pool "DF_UUID" ver=%u status=%d)\n",
+			RB_OP_STR(task->dst_rebuild_op),
 			DP_UUID(task->dst_pool_uuid), task->dst_map_ver, rc);
 
 		D_ERROR(""DF_UUID" (ver=%u) rebuild failed: rc %d\n",
@@ -1186,7 +1177,8 @@ rebuild_task_ult(void *arg)
 	}
 
 	/* Wait until rebuild finished */
-	rebuild_leader_status_check(pool, task->dst_map_ver, rgt);
+	rebuild_leader_status_check(pool, task->dst_map_ver,
+				    task->dst_rebuild_op, rgt);
 done:
 	if (!is_rebuild_global_done(rgt)) {
 		D_DEBUG(DB_REBUILD, DF_UUID" rebuild is not done: %d\n",
@@ -1277,6 +1269,13 @@ try_reschedule:
 				DP_UUID(pool->sp_uuid));
 	}
 output:
+	rc = rebuild_notify_ras_end(&task->dst_pool_uuid, task->dst_map_ver,
+				    RB_OP_STR(task->dst_rebuild_op),
+				    rc);
+	if (rc)
+		D_ERROR(DF_UUID": failed to send RAS event\n",
+			DP_UUID(task->dst_pool_uuid));
+
 	ds_pool_put(pool);
 	if (rgt)
 		rebuild_global_pool_tracker_destroy(rgt);
@@ -1460,14 +1459,13 @@ ds_rebuild_leader_stop_all()
 }
 
 static void
-rebuild_print_list_update(const char *const str, const uuid_t uuid,
-			  const uint32_t map_ver,
+rebuild_print_list_update(const uuid_t uuid, const uint32_t map_ver,
 			  daos_rebuild_opc_t rebuild_op,
 			  struct pool_target_id_list *tgts) {
 	int i;
 
-	D_PRINT("%s (pool="DF_UUID" ver=%u, op=%s) tgts=", str, DP_UUID(uuid),
-		map_ver, RB_OP_STR(rebuild_op));
+	D_PRINT("%s [queued] (pool="DF_UUID" ver=%u) tgts=",
+		RB_OP_STR(rebuild_op), DP_UUID(uuid), map_ver);
 	for (i = 0; i < tgts->pti_number; i++) {
 		if (i > 0)
 			D_PRINT(",");
@@ -1508,8 +1506,7 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 	if (rc)
 		D_GOTO(free, rc);
 
-	rebuild_print_list_update("Rebuild queued",
-				  uuid, map_ver, rebuild_op, tgts);
+	rebuild_print_list_update(uuid, map_ver, rebuild_op, tgts);
 	d_list_add_tail(&task->dst_list, &rebuild_gst.rg_queue_list);
 
 	/* Print out the current queue to the debug log */
@@ -1712,7 +1709,7 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	/* close the rebuild pool/container on all main XS */
 	rc = dss_task_collective(rebuild_fini_one, rpt, 0);
 
-	/* destory the migrate_tls of 0-xstream */
+	/* destroy the migrate_tls of 0-xstream */
 	ds_migrate_fini_one(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	rpt_put(rpt);
 	/* No one should access rpt after rebuild_fini_one.

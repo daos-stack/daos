@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -2083,6 +2066,143 @@ co_open_fail_destroy(void **state)
 	print_message("success\n");
 }
 
+static void
+co_rf_simple(void **state)
+{
+	test_arg_t		*arg0 = *state;
+	test_arg_t		*arg = NULL;
+	daos_obj_id_t		 oid;
+	daos_handle_t		 coh, oh;
+	daos_prop_t		*prop = NULL;
+	struct daos_prop_entry	*entry;
+	struct daos_co_status	 stat = { 0 };
+	daos_cont_info_t	 info = { 0 };
+	int			 rc;
+
+	/* needs 3 alive nodes after excluding 3 */
+	if (!test_runable(arg0, 6))
+		skip();
+
+	print_message("create container with properties, and query/verify.\n");
+	rc = test_setup((void **)&arg, SETUP_POOL_CONNECT, arg0->multi_rank,
+			SMALL_POOL_SIZE, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	prop = daos_prop_alloc(1);
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF2;
+
+	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
+		rc = test_setup_next_step((void **)&arg, NULL, NULL, prop);
+	assert_int_equal(rc, 0);
+
+	/* test 1 - cont rf and obj redundancy */
+	print_message("verify cont rf is set and can be queried ...\n");
+	if (arg->myrank == 0) {
+		rc = daos_cont_query(arg->coh, &info, NULL, NULL);
+		assert_int_equal(rc, 0);
+		assert_int_equal(info.ci_redun_fac, DAOS_PROP_CO_REDUN_RF2);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	print_message("verify cont rf and obj open ...\n");
+	oid = dts_oid_gen(OC_RP_2G1, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	assert_int_equal(rc, -DER_INVAL);
+
+	oid = dts_oid_gen(OC_EC_2P1G1, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	assert_int_equal(rc, -DER_INVAL);
+
+	oid = dts_oid_gen(OC_RP_3G1, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	assert_int_equal(rc, 0);
+	rc = daos_obj_close(oh, NULL);
+	assert_int_equal(rc, 0);
+
+	oid = dts_oid_gen(OC_EC_2P2G1, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	assert_int_equal(rc, 0);
+	rc = daos_obj_close(oh, NULL);
+	assert_int_equal(rc, 0);
+
+	/* test 2 - cont rf and pool map */
+	print_message("verify cont rf and pool map ...\n");
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_STATUS;
+	rc = daos_cont_query(arg->coh, NULL, prop, NULL);
+	assert_int_equal(rc, 0);
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
+	daos_prop_val_2_co_status(entry->dpe_val, &stat);
+	assert_int_equal(stat.dcs_status, DAOS_PROP_CO_HEALTHY);
+
+	if (arg->myrank == 0) {
+		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_REBUILD_DISABLE, 0, NULL);
+		daos_exclude_server(arg->pool.pool_uuid, arg->group,
+				    arg->dmg_config, 5);
+		daos_exclude_server(arg->pool.pool_uuid, arg->group,
+				    arg->dmg_config, 4);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+	rc = daos_cont_query(arg->coh, NULL, prop, NULL);
+	assert_int_equal(rc, 0);
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
+	daos_prop_val_2_co_status(entry->dpe_val, &stat);
+	assert_int_equal(stat.dcs_status, DAOS_PROP_CO_HEALTHY);
+	rc = daos_cont_open(arg->pool.poh, arg->co_uuid, arg->cont_open_flags,
+			    &coh, &arg->co_info, NULL);
+	assert_int_equal(rc, 0);
+	rc = daos_cont_close(coh, NULL);
+	assert_int_equal(rc, 0);
+
+	if (arg->myrank == 0)
+		daos_exclude_server(arg->pool.pool_uuid, arg->group,
+				    arg->dmg_config, 3);
+	MPI_Barrier(MPI_COMM_WORLD);
+	rc = daos_cont_query(arg->coh, NULL, prop, NULL);
+	assert_int_equal(rc, 0);
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
+	daos_prop_val_2_co_status(entry->dpe_val, &stat);
+	assert_int_equal(stat.dcs_status, DAOS_PROP_CO_UNCLEAN);
+	rc = daos_cont_open(arg->pool.poh, arg->co_uuid, arg->cont_open_flags,
+			    &coh, NULL, NULL);
+	assert_int_equal(rc, -DER_RF);
+
+	if (arg->myrank == 0) {
+		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+		test_rebuild_wait(&arg, 1);
+		daos_reint_server(arg->pool.pool_uuid, arg->group,
+				  arg->dmg_config, 3);
+		daos_reint_server(arg->pool.pool_uuid, arg->group,
+				  arg->dmg_config, 4);
+		daos_reint_server(arg->pool.pool_uuid, arg->group,
+				  arg->dmg_config, 5);
+		test_rebuild_wait(&arg, 1);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	/* clear the UNCLEAN status */
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_STATUS;
+	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_STATUS_VAL(
+						DAOS_PROP_CO_HEALTHY, 0);
+	rc = daos_cont_set_prop(arg->coh, prop, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = daos_cont_query(arg->coh, NULL, prop, NULL);
+	assert_int_equal(rc, 0);
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
+	daos_prop_val_2_co_status(entry->dpe_val, &stat);
+	assert_int_equal(stat.dcs_status, DAOS_PROP_CO_HEALTHY);
+	rc = daos_cont_open(arg->pool.poh, arg->co_uuid, arg->cont_open_flags,
+			    &coh, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = daos_cont_close(coh, NULL);
+	assert_int_equal(rc, 0);
+
+	daos_prop_free(prop);
+	test_teardown((void **)&arg);
+}
+
 static int
 co_setup_sync(void **state)
 {
@@ -2153,15 +2273,26 @@ static const struct CMUnitTest co_tests[] = {
 	  co_attribute_access, NULL, test_case_teardown},
 	{ "CONT23: container open failed/destroy",
 	  co_open_fail_destroy, NULL, test_case_teardown},
+	{ "CONT24: container RF simple test",
+	  co_rf_simple, NULL, test_case_teardown},
 };
 
 int
-run_daos_cont_test(int rank, int size)
+run_daos_cont_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int rc = 0;
 
-	rc = cmocka_run_group_tests_name("DAOS container tests",
-					 co_tests, setup, test_teardown);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (sub_tests_size == 0) {
+		sub_tests_size = ARRAY_SIZE(co_tests);
+		sub_tests = NULL;
+	}
+
+	rc = run_daos_sub_tests("DAOS container tests", co_tests,
+				ARRAY_SIZE(co_tests), sub_tests, sub_tests_size,
+				setup, test_teardown);
+
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }

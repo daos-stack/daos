@@ -1,26 +1,10 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+# pylint: disable=too-many-lines
 from __future__ import print_function
 
 from getpass import getuser
@@ -31,6 +15,35 @@ import json
 
 from dmg_utils_base import DmgCommandBase
 from general_utils import get_numeric_list
+from dmg_utils_params import DmgYamlParameters, DmgTransportCredentials
+
+
+def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None):
+    """Get a dmg command object.
+
+    Args:
+        group (str): daos_server group name
+        cert_dir (str): directory in which to copy certificates
+        bin_dir (str): location of the dmg executable
+        config_file (str): configuration file name and path
+        config_temp (str, optional): file name and path to use to generate the
+            configuration file locally and then copy it to all the hosts using
+            the config_file specification. Defaults to None, which creates and
+            utilizes the file specified by config_file.
+
+    Returns:
+        DmgCommand: the dmg command object
+
+    """
+    transport_config = DmgTransportCredentials(cert_dir)
+    config = DmgYamlParameters(config_file, group, transport_config)
+    command = DmgCommand(bin_dir, config)
+    if config_temp:
+        # Setup the DaosServerCommand to write the config file data to the
+        # temporary file and then copy the file to all the hosts using the
+        # assigned filename
+        command.temporary_file = config_temp
+    return command
 
 
 class DmgCommand(DmgCommandBase):
@@ -89,8 +102,10 @@ class DmgCommand(DmgCommandBase):
         """Wraps the base _get_result method to force JSON output."""
         prev_json_val = self.json.value
         self.json.update(True)
-        self._get_result(sub_command_list, **kwargs)
-        self.json.update(prev_json_val)
+        try:
+            self._get_result(sub_command_list, **kwargs)
+        finally:
+            self.json.update(prev_json_val)
         return json.loads(self.result.stdout)
 
     def network_scan(self, provider=None, all_devs=False):
@@ -652,7 +667,7 @@ class DmgCommand(DmgCommandBase):
         #    98736dfe-cb92-12cd-de45-9b09875092cd 1
         data = {}
         match = re.findall(
-            r"(?:([0-9a-fA-F][0-9a-fA-F-]+)\s+([0-9][0-9,-]*))",
+            r"(?:([0-9a-fA-F][0-9a-fA-F-]+)\W+([0-9][0-9,-]*))",
             self.result.stdout)
         for info in match:
             data[info[0]] = get_numeric_list(info[1])
@@ -799,19 +814,23 @@ class DmgCommand(DmgCommandBase):
             # Process the unique single rank system query output, e.g.
             #   Rank 1
             #   ------
-            #   address : 10.8.1.11:10001
-            #   uuid    : d7a69a41-59a2-4dec-a620-a52217851285
-            #   status  : Joined
-            #   reason  :
+            #   address      : 10.8.1.68:10001
+            #   uuid         : bcc5b010-1ffa-4525-96a9-11f1904374d6
+            #   fault domain : /wolf-68.wolf.hpdd.intel.com
+            #   status       : Joined
+            #   reason       :
             match = re.findall(
-                r"(?:Rank|address\s+:|uuid\s+:|status\s+:|reason\s+:)\s+(.*)",
+                r"(?:Rank|address\s+:|uuid\s+:|domain\s+:|status\s+:|"
+                r"reason\s+:)\s+(.*)",
                 self.result.stdout)
             if match:
+                print("--- match: {}".format(match))
                 data[int(match[0])] = {
                     "address": match[1].strip(),
                     "uuid": match[2].strip(),
-                    "state": match[3].strip(),
-                    "reason": match[4].strip(),
+                    "domain": match[3].strip(),
+                    "state": match[4].strip(),
+                    "reason": match[5].strip(),
                 }
         elif verbose:
             # Process the verbose multiple rank system query output, e.g.

@@ -57,104 +57,106 @@ dmg:
 daos_tests:
   num_clients:
     num_clients: 1
-  Tests: !mux
-    test_d:
+  Tests:
+    test_daos_degraded_mode:
       daos_test: d
-      test_name: DAOS degraded-mode tests
+      test_name: DAOS_Degraded_Mode
       test_timeout: 450
       scalable_endpoint: True
-    test_m:
+      stopped_ranks: [5, 6, 7]
+    test_daos_management:
       daos_test: m
-      test_name: Management tests
+      test_name: DAOS_Management
       test_timeout: 110
-    test_p:
+    test_daos_pool:
       daos_test: p
-      test_name: Pool tests
+      test_name: DAOS_Pool
       test_timeout: 120
-    test_c:
+    test_daos_container:
       daos_test: c
-      test_name: DAOS container tests
-      test_timeout: 135
-    test_e:
+      test_name: DAOS_Container
+      test_timeout: 220
+    test_daos_epoch:
       daos_test: e
-      test_name: DAOS epoch tests
+      test_name: DAOS_Epoch
       test_timeout: 125
-    test_t:
+    test_daos_single_rdg_tx:
       daos_test: t
-      test_name: Single RDG TX tests
-    test_T:
+      test_name: DAOS_Single_RDG_TX
+    test_daos_distributed_tx:
       daos_test: T
-      test_name: Distributed TX tests
-    test_V:
+      test_name: DAOS_Distributed_TX
+    test_daos_verify_consistency:
       daos_test: V
-      test_name: DAOS verify consistency tests
+      test_name: DAOS_Verify_Consistency
       test_timeout: 105
-    test_i:
+    test_daos_io:
       daos_test: i
-      test_name: IO test
-      test_timeout: 280
-    test_A:
+      test_name: DAOS_IO
+      test_timeout: 290
+    test_daos_object_array:
       daos_test: A
-      test_name: DAOS Object Array tests
+      test_name: DAOS_Object_Array
       test_timeout: 105
-    test_D:
+    test_daos_array:
       daos_test: D
-      test_name: DAOS Array tests
+      test_name: DAOS_Array
       test_timeout: 106
-    test_K:
+    test_daos_kv:
       daos_test: K
-      test_name: DAOS KV tests
+      test_name: DAOS_KV
       test_timeout: 105
-    test_F:
+    test_daos_file_system:
       daos_test: F
-      test_name: DAOS File System tests
+      test_name: DAOS_File_System
       test_timeout: 140
-    test_C:
+    test_daos_capability:
       daos_test: C
-      test_name: DAOS capability tests
+      test_name: DAOS_Capability
       test_timeout: 104
-    test_o:
+    test_daos_epoch_recovery:
       daos_test: o
-      test_name: Epoch recovery tests
+      test_name: DAOS_Epoch_Recovery
       test_timeout: 104
-    test_R:
+    test_daos_md_replication:
       daos_test: R
-      test_name: DAOS MD replication tests
+      test_name: DAOS_MD_Replication
       test_timeout: 104
-    test_v:
+    test_daos_rebuild_simple:
       daos_test: v
-      test_name: DAOS rebuild simple tests
+      test_name: DAOS_Rebuild_Simple
       test_timeout: 500
-    test_b:
+    test_daos_drain_simple:
       daos_test: b
-      test_name: DAOS drain simple tests
+      test_name: DAOS_Drain_Simple
       test_timeout: 500
-    test_O:
+    test_daos_oid_allocator:
       daos_test: O
-      test_name: OID Allocator tests
+      test_name: DAOS_OID_Allocator
       test_timeout: 320
-    test_z:
+      stopped_ranks: [6, 7]
+    test_daos_checksum:
       daos_test: z
-      test_name: Checksum tests
+      test_name: DAOS_Checksum
       test_timeout: 240
-    test_S:
+    test_daos_rebuild_ec:
       daos_test: S
-      test_name: DAOS rebuild ec tests
+      test_name: DAOS_Rebuild_EC
       test_timeout: 900
-    test_Z:
+    test_daos_aggregate_ec:
       daos_test: Z
-      test_name: DAOS aggregate ec tests
-    test_X_1:
+      test_name: DAOS_Aggregate_EC
+    test_daos_degraded_ec_0to6:
       daos_test: X
-      test_name: DAOS degraded ec tests 0-6
+      test_name: DAOS_Degraded_EC_0to6
       args: -u subtests="0-6"
       test_timeout: 900
-    test_X_2:
+    test_daos_degraded_ec_8to22:
       daos_test: X
-      test_name: DAOS degraded ec tests 8-22
+      test_name: DAOS_Degraded_EC_8to22
       args: -u subtests="8-22"
       test_timeout: 900
-    test_U:
+    test_daos_dedup:
       daos_test: U
-      test_name: DAOS dedup tests
+      test_name: DAOS_Dedup
       test_timeout: 220

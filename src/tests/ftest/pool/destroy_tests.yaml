@@ -8,6 +8,9 @@ hosts:
     - server-F
   test_clients:
     - client-G
+setup:
+  start_servers: False
+  start_servers_once: False
 server_config:
   name: daos_server
 timeout: 60
