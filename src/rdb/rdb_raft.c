@@ -1606,6 +1606,11 @@ rdb_raft_process_event(struct rdb *db, struct rdb_raft_event *event)
 				  "%d "DF_U64" "DF_U64"\n", next.dre_type,
 				  next.dre_term, event->dre_term);
 		}
+		if (rc == -DER_SHUTDOWN) {
+			D_DEBUG(DB_MD, DF_DB": requesting a replica stop\n",
+				DP_DB(db));
+			db->d_cbs->dc_stop(db, rc, db->d_arg);
+		}
 		ABT_mutex_unlock(db->d_raft_mutex);
 		break;
 	case RDB_RAFT_STEP_DOWN:
@@ -1768,6 +1773,7 @@ rdb_raft_check_state(struct rdb *db, const struct rdb_raft_state *state,
 		break;
 	case -DER_SHUTDOWN:
 	case -DER_IO:
+		D_DEBUG(DB_MD, DF_DB": requesting a replica stop\n", DP_DB(db));
 		db->d_cbs->dc_stop(db, rc, db->d_arg);
 		break;
 	}
