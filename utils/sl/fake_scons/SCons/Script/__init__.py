@@ -277,6 +277,10 @@ class Configure():
         """Fake CheckStructMember"""
         return True
 
+    def CheckFuseIoctl(self, *_args, **_kw):
+        """Fake CheckFuseIoctl"""
+        return True
+
     def CheckCmockaSkip(self, *_args, **_kw):
         """Fake CheckCmockaSkip"""
         return True

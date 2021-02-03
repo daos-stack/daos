@@ -9,8 +9,7 @@ import os
 from daos_core_base import DaosCoreBase
 
 class DaosCoreTestDfs(DaosCoreBase):
-    """
-    Runs DAOS file system (DFS) tests.
+    """Runs DAOS file system (DFS) tests.
 
     :avocado: recursive
     """
@@ -20,15 +19,36 @@ class DaosCoreTestDfs(DaosCoreBase):
         super(DaosCoreTestDfs, self).__init__(*args, **kwargs)
         self.hostfile_clients_slots = None
 
-    def test_subtest(self):
-        """
-        Test ID: DAOS-5409
+    def test_daos_dfs_unit(self):
+        """Jira ID: DAOS-5409
 
-        Test Description: Run DAOS file system tests 'dfs_test'
+        Test Description:
+            Run daos_test -u
 
-        Use Cases: Daos File system tests
+        Use cases:
+            Daos File system tests
 
-        :avocado: tags=all,pr,daily_regression,hw,large,dfs_test
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,large
+        :avocado: tags=dfs_test
+        :avocado: tags=daos_dfs_unit
         """
         self.daos_test = os.path.join(self.bin, 'dfs_test')
-        DaosCoreBase.run_subtest(self)
+        self.run_subtest()
+
+    def test_daos_dfs_parallel(self):
+        """Jira ID: DAOS-5409
+
+        Test Description:
+            Run daos_test -p
+
+        Use cases:
+            Daos File system tests
+
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,large
+        :avocado: tags=dfs_test
+        :avocado: tags=daos_dfs_parallel
+        """
+        self.daos_test = os.path.join(self.bin, 'dfs_test')
+        self.run_subtest()

@@ -816,6 +816,12 @@ copy_one(struct bio_desc *biod, struct bio_iov *biov,
 			return -DER_INVAL;
 		}
 
+		if (iov->iov_buf == NULL) {
+			D_ERROR("Invalid iov[%d], iov_buf is NULL\n",
+				arg->ca_iov_idx);
+			return -DER_INVAL;
+		}
+
 		nob = min(size, buf_len - arg->ca_iov_off);
 		if (addr != NULL) {
 			D_DEBUG(DB_TRACE, "bio copy %p size %zd\n",

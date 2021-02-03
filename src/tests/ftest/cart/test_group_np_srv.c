@@ -83,6 +83,9 @@ test_run(d_rank_t my_rank)
 	D_ASSERTF(rc == 0, "crt_proto_register() failed. rc: %d\n",
 			rc);
 
+	/* Do not delay shutdown for this server */
+	tc_set_shutdown_delay(0);
+
 	DBG_PRINT("Protocol registered\n");
 	for (i = 1; i < test_g.t_srv_ctx_num; i++) {
 		rc = crt_context_create(&test_g.t_crt_ctx[i]);
