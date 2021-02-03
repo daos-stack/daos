@@ -117,7 +117,7 @@ lookup_recxs(const char *dkey, const char *akey, daos_size_t iod_size,
 
 void
 io_simple_internal(void **state, daos_obj_id_t oid, unsigned int size,
-	daos_iod_type_t iod_type, const char dkey[],
+		   daos_iod_type_t iod_type, const char dkey[],
 	const char akey[]);
 
 void

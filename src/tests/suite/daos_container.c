@@ -2221,12 +2221,12 @@ delet_container_during_aggregation(void **state)
 
 	/* Aggregation will be Hold */
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-		DAOS_CONT_AGG_YIED | DAOS_FAIL_ALWAYS, 0, NULL);
+			      DAOS_CONT_AGG_YIED | DAOS_FAIL_ALWAYS, 0, NULL);
 
 	/* Write/fetch and Punch Data with 2K size */
 	for (i = 0; i <= 50; i++)
 		io_simple_internal(state, oid, IO_SIZE_SCM * 32, DAOS_IOD_ARRAY,
-			"io_simple_scm_array dkey",
+				   "io_simple_scm_array dkey",
 			"io_simple_scm_array akey");
 
 	/**
