@@ -105,21 +105,22 @@ class CartUtils():
 
         return procrtn
 
-    def set_other_env_vars(self, cartobj):
+    @staticmethod
+    def set_other_env_vars(cartobj):
         """ import env vars from other_env_var param """
         other_env_vars = cartobj.params.get("other_env_vars",
                                             "/run/defaultENV/")
         if other_env_vars is None:
-            self.print("other_env_vars was not set in yaml file.\n")
+            print("other_env_vars was not set in yaml file.\n")
             return
 
         for kv_pair in other_env_vars:
             key, value = kv_pair[0]
-            self.print("Adding {}={} to environment.\n".format(key, value))
             print("Adding {}={} to environment.\n".format(key, value))
             os.environ[key] = value
 
-    def unset_other_env_vars(self, cartobj):
+    @staticmethod
+    def unset_other_env_vars(cartobj):
         """ import env vars from other_env_var param """
         other_env_vars = cartobj.params.get("other_env_vars",
                                             "/run/defaultENV/")
