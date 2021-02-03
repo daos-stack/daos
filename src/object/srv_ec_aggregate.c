@@ -2227,8 +2227,16 @@ again:
 			 &agg_param, &dth);
 	if (obj_dtx_need_refresh(&dth, rc)) {
 		rc = dtx_refresh(&dth, cont);
-		if (rc == -DER_AGAIN)
+		if (rc == -DER_AGAIN) {
+			anchors.ia_reprobe_co = 0;
+			anchors.ia_reprobe_obj = 0;
+			anchors.ia_reprobe_dkey = 0;
+			anchors.ia_reprobe_akey = 0;
+			anchors.ia_reprobe_sv = 0;
+			anchors.ia_reprobe_ev = 0;
+
 			goto again;
+		}
 	}
 
 	dtx_end(&dth, cont, rc);
