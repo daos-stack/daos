@@ -31,6 +31,8 @@ class CSumErrorLog(DaosCoreBase):
             result = self.dmg.storage_query_list_devices()
         except process.CmdError as details:
             self.fail("dmg command failed: {}".format(details))
+        finally:
+            self.dmg.json.value = False
 
         data = json.loads(result.stdout)
         resp = data['response']
@@ -57,6 +59,8 @@ class CSumErrorLog(DaosCoreBase):
             result = self.dmg.storage_query_device_health(device_id)
         except process.CmdError as details:
             self.fail("dmg command failed: {}".format(details))
+        finally:
+            self.dmg.json.value = False
 
         data = json.loads(result.stdout)
         resp = data['response']
@@ -86,6 +90,7 @@ class CSumErrorLog(DaosCoreBase):
         csum = self.get_checksum_error_value(dev_id)
         self.dmg.copy_certificates(get_log_file("daosCA/certs"),
                                    self.hostlist_clients)
+        self.dmg.copy_configuration(self.hostlist_clients)
         self.log.info("Checksum Errors : %d", csum)
         self.run_subtest()
         csum_latest = self.get_checksum_error_value(dev_id)
