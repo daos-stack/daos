@@ -64,41 +64,7 @@ typedef struct {
 	uint8_t		da_buf[DAOS_ANCHOR_BUF_MAX];
 } daos_anchor_t;
 
-static inline void
-daos_anchor_set_flags(daos_anchor_t *anchor, uint32_t flags)
-{
-	anchor->da_flags = flags;
-}
-
-static inline uint32_t
-daos_anchor_get_flags(daos_anchor_t *anchor)
-{
-	return anchor->da_flags;
-}
-
-static inline void
-daos_anchor_set_zero(daos_anchor_t *anchor)
-{
-	anchor->da_type = DAOS_ANCHOR_TYPE_ZERO;
-}
-
-static inline void
-daos_anchor_set_eof(daos_anchor_t *anchor)
-{
-	anchor->da_type = DAOS_ANCHOR_TYPE_EOF;
-}
-
-static inline bool
-daos_anchor_is_zero(daos_anchor_t *anchor)
-{
-	return anchor->da_type == DAOS_ANCHOR_TYPE_ZERO;
-}
-
-static inline bool
-daos_anchor_is_eof(daos_anchor_t *anchor)
-{
-	return anchor->da_type == DAOS_ANCHOR_TYPE_EOF;
-}
+#define DAOS_ANCHOR_INIT	((daos_anchor_t){DAOS_ANCHOR_TYPE_ZERO})
 
 /** Generic handle for various DAOS components like container, object, etc. */
 typedef struct {
