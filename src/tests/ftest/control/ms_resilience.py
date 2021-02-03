@@ -70,6 +70,15 @@ class ManagementServiceResilience(TestWithServers):
             else:
                 self.fail("No pool found in system.")
 
+        # Remove the pool after the checks
+        try:
+            self.pool.destroy()
+        except TestFail as error:
+            if ignore_status:
+                self.log.info("Expected MS error destroying pool!: %s", error)
+            else:
+                self.fail("Pool destroy failed unexpectedly!")
+
     def verify_leader(self, access_list):
         """Verify the leader of the MS is in the access_list.
 
@@ -168,9 +177,7 @@ class ManagementServiceResilience(TestWithServers):
             self.fail("Can't read MS information after removing resiliency.")
 
         self.update_and_verify(ignore_status=True)
-        self.server_managers[-1].hosts = (
-            [leader], self.workdir, self.hostfile_servers_slots)
-        self.start_server_managers()
+        self.start_additional_servers(additional_servers=kill_list)
         self.update_and_verify(ignore_status=False)
 
     def test_ms_resilience_1(self):
