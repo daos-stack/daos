@@ -708,98 +708,84 @@ failure:
 }
 
 /**
- * Compute gauge statistics, min, max, mean, and standard deviation
- * Uses B. P. Welford's algorithm for computing a running variance.
+ * Compute gauge statistics: min, max, mean and sum of squares.
+ * Standard deviation calculation is deferred until the metric is read.
  * This implementation computes an integer min and max with floating point
- * mean and standard deviation.
+ * mean.
  *
  * \param[in]	node		Pointer to a gauge node
  */
 void
 d_tm_compute_gauge_stats(struct d_tm_node_t *node)
 {
-	uint64_t	value = 0;
-	double		sum_of_squares = 0.0;
-	double		variance = 0.0;
-	double		mean = 0.0;
+	struct d_tm_stats_t	*dtm_stats;
+	uint64_t		value = 0;
+	double			sum_of_squares = 0.0;
+	double			mean = 0.0;
 
-	if (node->dtn_metric->dtm_stats == NULL)
+	dtm_stats = node->dtn_metric->dtm_stats;
+
+	if (dtm_stats == NULL)
 		return;
 
 	value = node->dtn_metric->dtm_data.value;
-	node->dtn_metric->dtm_stats->sample_size++;
+	dtm_stats->sample_size++;
 
-	mean = node->dtn_metric->dtm_stats->mean +
-	       ((value - node->dtn_metric->dtm_stats->mean) /
-	       node->dtn_metric->dtm_stats->sample_size);
+	mean = dtm_stats->mean + ((value - dtm_stats->mean) /
+	       dtm_stats->sample_size);
 
-	sum_of_squares = node->dtn_metric->dtm_stats->sum_of_squares +
-			 ((value - node->dtn_metric->dtm_stats->mean) *
-			 (value - mean));
+	sum_of_squares = dtm_stats->sum_of_squares +
+			 ((value - dtm_stats->mean) * (value - mean));
 
-	node->dtn_metric->dtm_stats->mean = mean;
-	node->dtn_metric->dtm_stats->sum_of_squares = sum_of_squares;
+	dtm_stats->mean = mean;
+	dtm_stats->sum_of_squares = sum_of_squares;
 
-	if (node->dtn_metric->dtm_stats->sample_size > 2) {
-		variance = sum_of_squares /
-			   (node->dtn_metric->dtm_stats->sample_size - 1);
-		node->dtn_metric->dtm_stats->std_dev = sqrtl(variance);
-	}
+	if (value > dtm_stats->dtm_max.max_int)
+		dtm_stats->dtm_max.max_int = value;
 
-	if (value > node->dtn_metric->dtm_stats->dtm_max.max_int)
-		node->dtn_metric->dtm_stats->dtm_max.max_int = value;
-
-	if (value < node->dtn_metric->dtm_stats->dtm_min.min_int)
-		node->dtn_metric->dtm_stats->dtm_min.min_int = value;
+	if (value < dtm_stats->dtm_min.min_int)
+		dtm_stats->dtm_min.min_int = value;
 }
 
 /**
- * Compute duration statistics, min, max, mean, and standard deviation
- * Uses B. P. Welford's algorithm for computing a running variance.
- * This implementation computes a floating point min, max, mean and standard
- * deviation.
+ * Compute duration statistics: min, max, mean and sum of squares.
+ * Standard deviation calculation is deferred until the metric is read.
+ * This implementation computes a floating point min, max and mean.
  *
  * \param[in]	node		Pointer to a duration node
  */
 void
 d_tm_compute_duration_stats(struct d_tm_node_t *node)
 {
-	double	value = 0;
-	double	sum_of_squares = 0.0;
-	double	variance = 0.0;
-	double	mean = 0.0;
+	struct d_tm_stats_t	*dtm_stats;
+	double			value = 0;
+	double			sum_of_squares = 0.0;
+	double			mean = 0.0;
 
-	if (node->dtn_metric->dtm_stats == NULL)
+	dtm_stats = node->dtn_metric->dtm_stats;
+
+	if (dtm_stats == NULL)
 		return;
 
 	value = node->dtn_metric->dtm_data.tms[0].tv_sec +
 		(node->dtn_metric->dtm_data.tms[0].tv_nsec / 1E9);
 
-	node->dtn_metric->dtm_stats->sample_size++;
+	dtm_stats->sample_size++;
 
-	mean = node->dtn_metric->dtm_stats->mean +
-	       ((value - node->dtn_metric->dtm_stats->mean) /
-	       node->dtn_metric->dtm_stats->sample_size);
+	mean = dtm_stats->mean + ((value - dtm_stats->mean) /
+	       dtm_stats->sample_size);
 
-	sum_of_squares = node->dtn_metric->dtm_stats->sum_of_squares +
-			 ((value - node->dtn_metric->dtm_stats->mean) *
-			 (value - mean));
+	sum_of_squares = dtm_stats->sum_of_squares +
+			 ((value - dtm_stats->mean) * (value - mean));
 
-	node->dtn_metric->dtm_stats->mean = mean;
-	node->dtn_metric->dtm_stats->sum_of_squares = sum_of_squares;
+	dtm_stats->mean = mean;
+	dtm_stats->sum_of_squares = sum_of_squares;
 
-	if (node->dtn_metric->dtm_stats->sample_size > 2) {
-		variance = sum_of_squares /
-			   (node->dtn_metric->dtm_stats->sample_size - 1);
-		node->dtn_metric->dtm_stats->std_dev = sqrtl(variance);
-	}
+	if (value > dtm_stats->dtm_max.max_float)
+		dtm_stats->dtm_max.max_float = value;
 
-	if (value > node->dtn_metric->dtm_stats->dtm_max.max_float)
-		node->dtn_metric->dtm_stats->dtm_max.max_float = value;
-
-	if (value < node->dtn_metric->dtm_stats->dtm_min.min_float)
-		node->dtn_metric->dtm_stats->dtm_min.min_float = value;
-
+	if (value < dtm_stats->dtm_min.min_float)
+		dtm_stats->dtm_min.min_float = value;
 }
 
 /**
@@ -1696,16 +1682,6 @@ d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
 		goto failure;
 	}
 
-	/**
-	 * Initialize the dtm_data for this metric
-	 * Clearing dtm_data.tms[0] and dtm_data.tms[1] clears dtm_data.value
-	 * because of the union
-	 */
-	temp->dtn_metric->dtm_data.tms[0].tv_sec = 0;
-	temp->dtn_metric->dtm_data.tms[0].tv_nsec = 0;
-	temp->dtn_metric->dtm_data.tms[1].tv_sec = 0;
-	temp->dtn_metric->dtm_data.tms[1].tv_nsec = 0;
-
 	temp->dtn_metric->dtm_stats = NULL;
 	if (metric_type == D_TM_GAUGE) {
 		temp->dtn_metric->dtm_stats =
@@ -1715,11 +1691,6 @@ d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
 			goto failure;
 		}
 		temp->dtn_metric->dtm_stats->dtm_min.min_int = UINT64_MAX;
-		temp->dtn_metric->dtm_stats->dtm_max.max_int = 0;
-		temp->dtn_metric->dtm_stats->std_dev = 0.0;
-		temp->dtn_metric->dtm_stats->mean = 0.0;
-		temp->dtn_metric->dtm_stats->sum_of_squares = 0.0;
-		temp->dtn_metric->dtm_stats->sample_size = 0;
 	}
 
 	if (metric_type & D_TM_DURATION) {
@@ -1730,11 +1701,6 @@ d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
 			goto failure;
 		}
 		temp->dtn_metric->dtm_stats->dtm_min.min_float = DBL_MAX;
-		temp->dtn_metric->dtm_stats->dtm_max.max_float = 0.0;
-		temp->dtn_metric->dtm_stats->std_dev = 0.0;
-		temp->dtn_metric->dtm_stats->mean = 0.0;
-		temp->dtn_metric->dtm_stats->sum_of_squares = 0.0;
-		temp->dtn_metric->dtm_stats->sample_size = 0;
 	}
 
 	buff_len = strnlen(sh_desc, D_TM_MAX_SHORT_LEN);
@@ -1950,6 +1916,10 @@ d_tm_get_timer_snapshot(struct timespec *tms, uint64_t *shmem_root,
  * mutex for this specific node.  A pointer for the \a val is required.
  * A pointer for \a stats is optional.
  *
+ * The computation of variance and standard deviation are completed upon this
+ * read operation.  Uses B. P. Welford's algorithm for computing a running
+ * variance.
+ *
  * \param[in,out]	val		The value of the gauge is stored here
  * \param[in,out]	stats		The statistics are stored here
  * \param[in]		shmem_root	Pointer to the shared memory segment
@@ -1967,6 +1937,7 @@ d_tm_get_gauge(uint64_t *val, struct d_tm_stats_t *stats, uint64_t *shmem_root,
 {
 	struct d_tm_metric_t	*metric_data = NULL;
 	struct d_tm_stats_t	*dtm_stats = NULL;
+	double			variance = 0.0;
 
 	if (val == NULL)
 		return -DER_INVAL;
@@ -1985,14 +1956,17 @@ d_tm_get_gauge(uint64_t *val, struct d_tm_stats_t *stats, uint64_t *shmem_root,
 
 	metric_data = d_tm_conv_ptr(shmem_root, node->dtn_metric);
 	if (metric_data != NULL) {
-
 		dtm_stats = d_tm_conv_ptr(shmem_root, metric_data->dtm_stats);
 		D_MUTEX_LOCK(&node->dtn_lock);
 		*val = metric_data->dtm_data.value;
 		if (stats != NULL) {
+			if (dtm_stats->sample_size > 2) {
+				variance = dtm_stats->sum_of_squares /
+					   (dtm_stats->sample_size - 1);
+				stats->std_dev = sqrtl(variance);
+			}
 			stats->dtm_min.min_int = dtm_stats->dtm_min.min_int;
 			stats->dtm_max.max_int = dtm_stats->dtm_max.max_int;
-			stats->std_dev = dtm_stats->std_dev;
 			stats->mean = dtm_stats->mean;
 			stats->sample_size = dtm_stats->sample_size;
 		}
@@ -2009,6 +1983,10 @@ d_tm_get_gauge(uint64_t *val, struct d_tm_stats_t *stats, uint64_t *shmem_root,
  * is performed.  Access to the data is guarded by the use of the shared
  * mutex for this specific node.  A pointer for the \a tms is required.
  * A pointer for \a stats is optional.
+ *
+ * The computation of variance and standard deviation are completed upon this
+ * read operation.  Uses B. P. Welford's algorithm for computing a running
+ * variance.
  *
  * \param[in,out]	tms		The value of the duration is stored here
  * \param[in,out]	stats		The statstics are stored here
@@ -2028,6 +2006,7 @@ d_tm_get_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 {
 	struct d_tm_metric_t	*metric_data = NULL;
 	struct d_tm_stats_t	*dtm_stats = NULL;
+	double			variance = 0.0;
 
 	if (tms == NULL)
 		return -DER_INVAL;
@@ -2051,9 +2030,13 @@ d_tm_get_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 		tms->tv_sec = metric_data->dtm_data.tms[0].tv_sec;
 		tms->tv_nsec = metric_data->dtm_data.tms[0].tv_nsec;
 		if (stats != NULL) {
+			if (dtm_stats->sample_size > 2) {
+				variance = dtm_stats->sum_of_squares /
+					   (dtm_stats->sample_size - 1);
+				stats->std_dev = sqrtl(variance);
+			}
 			stats->dtm_min.min_float = dtm_stats->dtm_min.min_float;
 			stats->dtm_max.max_float = dtm_stats->dtm_max.max_float;
-			stats->std_dev = dtm_stats->std_dev;
 			stats->mean = dtm_stats->mean;
 			stats->sample_size = dtm_stats->sample_size;
 		}
@@ -2327,6 +2310,7 @@ d_tm_get_shared_memory(int srv_idx)
 
 /**
  * Allocates memory from within the shared memory pool with 16-bit alignment
+ * Clears the allocated buffer.
  *
  * param[in]	length	Size in bytes of the region within the shared memory
  *			pool to allocate
@@ -2349,6 +2333,7 @@ d_tm_shmalloc(int length)
 			D_DEBUG(DB_TRACE,
 				"Allocated %d bytes.  Now %" PRIu64 " remain\n",
 				length, d_tm_shmem_free);
+			memset((void *)(d_tm_shmem_idx - length), 0, length);
 			return d_tm_shmem_idx - length;
 		}
 	}

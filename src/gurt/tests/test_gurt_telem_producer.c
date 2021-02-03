@@ -213,50 +213,19 @@ test_input_validation(void **state)
 static void
 test_gauge_stats(void **state)
 {
-	static struct d_tm_node_t	*node;
-	int				rc;
+	int	rc;
+	int	i;
+	int	len;
+	int	test_values[] = {2, 4, 6, 8, 10, 12, 14,
+				 16, 18, 20, 2, 4, 6, 8,
+				 10, 12, 14, 16, 18, 20};
 
-	rc = d_tm_set_gauge(&node, 2, "gurt/tests/telem/gauge-stats", NULL);
-	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 4, NULL);
-	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 6, NULL);
-	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 8, NULL);
-	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 10, NULL);
-	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 12, NULL);
-	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 14, NULL);
-	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 16, NULL);
-	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 18, NULL);
-	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 20, NULL);
-	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 2, NULL);
-	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 4, NULL);
-	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 6, NULL);
-	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 8, NULL);
-	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 10, NULL);
-	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 12, NULL);
-	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 14, NULL);
-	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 16, NULL);
-	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 18, NULL);
-	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&node, 20, NULL);
-	assert(rc == D_TM_SUCCESS);
-
+	len =  (int)(sizeof(test_values) / sizeof(int));
+	for (i = 0; i < len; i++) {
+		rc = d_tm_set_gauge(NULL, test_values[i],
+				    "gurt/tests/telem/gauge-stats", NULL);
+		assert(rc == D_TM_SUCCESS);
+	}
 }
 
 static void
