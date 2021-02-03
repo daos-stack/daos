@@ -15,9 +15,6 @@
 #include <daos_types.h>
 #include <daos/checksum.h>
 
-#define IO_SIZE_NVME	(5ULL << 10) /* all records  >= 4K */
-#define	IO_SIZE_SCM	64
-
 int dts_obj_class	= OC_RP_2G1;
 int dts_obj_replica_cnt	= 2;
 
@@ -561,8 +558,7 @@ lookup_empty_single(const char *dkey, const char *akey, uint64_t idx,
 /**
  * get the Pool storage info.
  */
-static int
-pool_storage_info(void **state, daos_pool_info_t *pinfo)
+int pool_storage_info(void **state, daos_pool_info_t *pinfo)
 {
 	test_arg_t *arg = *state;
 	int rc;
@@ -1199,7 +1195,7 @@ io_var_rec_size(void **state)
  * Size is either small I/O to SCM or larger (>=4k) I/O to NVMe, and IOD
  * type is either array or single value.
  */
-static void
+void
 io_simple_internal(void **state, daos_obj_id_t oid, unsigned int size,
 		   daos_iod_type_t iod_type, const char dkey[],
 		   const char akey[])

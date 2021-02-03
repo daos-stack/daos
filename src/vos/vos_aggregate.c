@@ -1749,6 +1749,10 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 		return rc;
 	}
 
+	/* Aggregation Yield for testing purpose */
+	while (DAOS_FAIL_CHECK(DAOS_CONT_AGG_YIED))
+		ABT_thread_yield();
+
 	/* Aggregation */
 	D_DEBUG(DB_EPC, "oid:"DF_UOID", lgc_ext:"DF_EXT", "
 		"phy_ext:"DF_EXT", epoch:"DF_U64".%d, flags: %x\n",

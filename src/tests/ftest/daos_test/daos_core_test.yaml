@@ -75,7 +75,7 @@ daos_tests:
     test_daos_container:
       daos_test: c
       test_name: DAOS_Container
-      test_timeout: 220
+      test_timeout: 260
     test_daos_epoch:
       daos_test: e
       test_name: DAOS_Epoch

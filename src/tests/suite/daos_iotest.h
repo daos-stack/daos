@@ -23,6 +23,8 @@ extern int dts_ec_grp_size;
 
 #define OW_IOD_SIZE	1024ULL
 #define SEGMENT_SIZE (10 * 1048576) /* 10MB */
+#define IO_SIZE_NVME (5ULL << 10) /* all records  >= 4K */
+#define	IO_SIZE_SCM	64
 
 void
 ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
@@ -114,6 +116,11 @@ lookup_recxs(const char *dkey, const char *akey, daos_size_t iod_size,
 	     daos_size_t data_size, struct ioreq *req);
 
 void
+io_simple_internal(void **state, daos_obj_id_t oid, unsigned int size,
+	daos_iod_type_t iod_type, const char dkey[],
+	const char akey[]);
+
+void
 close_reopen_coh_oh(test_arg_t *arg, struct ioreq *req, daos_obj_id_t oid);
 
 int
@@ -123,6 +130,8 @@ int
 obj_teardown(void **state);
 
 int io_conf_run(test_arg_t *arg, const char *io_conf);
+
+int pool_storage_info(void **state, daos_pool_info_t *pinfo);
 
 /* below list the structure defined for epoch io testing */
 
