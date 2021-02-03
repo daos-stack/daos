@@ -48,7 +48,6 @@ class CartSelfTest(TestWithServers):
     def __init__(self, *args, **kwargs):
         """Initialize a CartSelfTest object."""
         super(CartSelfTest, self).__init__(*args, **kwargs)
-        self.setup_start_servers = False
         self.uri_file = None
         self.cart_env = EnvironmentVariables()
 
@@ -58,14 +57,13 @@ class CartSelfTest(TestWithServers):
         share_addr = self.params.get("share_addr", "/run/test_params/*")
 
         # Configure the daos server
-        config_file = self.get_config_file(self.server_group, "server")
-        self.add_server_manager(config_file)
+        self.add_server_manager()
         self.configure_manager(
             "server",
             self.server_managers[-1],
             self.hostlist_servers,
             self.hostfile_servers_slots,
-            self.hostlist_servers)
+            self.access_points)
         self.assertTrue(
             self.server_managers[-1].set_config_value(
                 "crt_ctx_share_addr", share_addr),

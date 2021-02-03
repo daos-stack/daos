@@ -30,8 +30,6 @@
 #include "daos_fs.h"
 #include "daos_uns.h"
 
-#define DUNS_MAX_XATTR_LEN	170
-#define DUNS_MIN_XATTR_LEN	85
 #define DUNS_XATTR_FMT		"DAOS.%s://%36s/%36s"
 
 #ifndef FUSE_SUPER_MAGIC
@@ -539,8 +537,9 @@ duns_create_lustre_path(daos_handle_t poh, const char *path,
 	/* XXX should file with foreign LOV be expected/supoorted here ? */
 
 	/** create dir and store the daos attributes in the path LMV */
-	len = sprintf(str, DUNS_XATTR_FMT, type, pool, cont);
-	if (len < DUNS_MIN_XATTR_LEN) {
+	len = snprintf(str,
+		       DUNS_MAX_XATTR_LEN, DUNS_XATTR_FMT, type, pool, cont);
+	if (len < 0) {
 		D_ERROR("Failed to create LMV value\n");
 		D_GOTO(err_cont, rc = EINVAL);
 	}
@@ -676,8 +675,13 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		}
 
 		/** store the daos attributes in the path xattr */
-		len = sprintf(str, DUNS_XATTR_FMT, type, pool, cont);
-		if (len < DUNS_MIN_XATTR_LEN) {
+		len = snprintf(str,
+			       DUNS_MAX_XATTR_LEN,
+			       DUNS_XATTR_FMT,
+			       type,
+			       pool,
+			       cont);
+		if (len < 0) {
 			D_ERROR("Failed to create xattr value\n");
 			D_GOTO(err_link, rc = EINVAL);
 		}

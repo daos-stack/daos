@@ -434,6 +434,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 		   const d_rank_list_t *target_addrs, daos_prop_t *prop,
 		   uint32_t ndomains, const int32_t *domains)
 {
+	uint32_t		version = DS_POOL_MD_VERSION;
 	struct pool_buf	       *map_buf;
 	uint32_t		map_version = 1;
 	uint32_t		connectable;
@@ -443,6 +444,12 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 	struct rdb_kvs_attr	attr;
 	int			ntargets = nnodes * dss_tgt_nr;
 	int			rc;
+
+	/* Initialize the layout version. */
+	d_iov_set(&value, &version, sizeof(version));
+	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_version, &value);
+	if (rc != 0)
+		goto out;
 
 	/* Generate the pool buffer. */
 	rc = gen_pool_buf(NULL, &map_buf, map_version, ndomains, nnodes,
@@ -492,6 +499,7 @@ out_uuids:
 	D_FREE(uuids);
 out_map_buf:
 	pool_buf_free(map_buf);
+out:
 	return rc;
 }
 
@@ -1001,6 +1009,101 @@ fini_svc_pool(struct pool_svc *svc)
 }
 
 /*
+ * Read the DB for map_buf, map_version, and prop. Callers are responsible for
+ * freeing *map_buf and *prop.
+ */
+static int
+read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
+			uint32_t *map_version, daos_prop_t **prop)
+{
+	struct rdb_tx	tx;
+	d_iov_t		value;
+	bool		version_exists = false;
+	uint32_t	version;
+	int		rc;
+
+	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
+	if (rc != 0)
+		goto out;
+	ABT_rwlock_rdlock(svc->ps_lock);
+
+	/* Check the layout version. */
+	d_iov_set(&value, &version, sizeof(version));
+	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_version, &value);
+	if (rc == -DER_NONEXIST) {
+		/*
+		 * This DB may be new or incompatible. Check the existence of
+		 * the pool map to find out which is the case. (See the
+		 * references to version_exists below.)
+		 */
+		D_DEBUG(DB_MD, DF_UUID": no layout version\n",
+			DP_UUID(svc->ps_uuid));
+		goto check_map;
+	} else if (rc != 0) {
+		D_ERROR(DF_UUID": failed to look up layout version: "DF_RC"\n",
+			DP_UUID(svc->ps_uuid), DP_RC(rc));
+		goto out_lock;
+	}
+	version_exists = true;
+	if (version < DS_POOL_MD_VERSION_LOW || version > DS_POOL_MD_VERSION) {
+		ds_notify_ras_eventf(RAS_POOL_DF_INCOMPAT, RAS_TYPE_INFO,
+				     RAS_SEV_ERROR, NULL /* hwid */,
+				     NULL /* rank */, NULL /* jobid */,
+				     &svc->ps_uuid, NULL /* cont */,
+				     NULL /* objid */, NULL /* ctlop */,
+				     NULL /* data */,
+				     "incompatible layout version: %u not in "
+				     "[%u, %u]", version,
+				     DS_POOL_MD_VERSION_LOW,
+				     DS_POOL_MD_VERSION);
+		rc = -DER_DF_INCOMPT;
+		goto out_lock;
+	}
+
+check_map:
+	rc = read_map_buf(&tx, &svc->ps_root, map_buf, map_version);
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST && !version_exists) {
+			/*
+			 * This DB is new. Note that if the layout version
+			 * exists, then the pool map must also exist;
+			 * otherwise, it is an error.
+			 */
+			D_DEBUG(DB_MD, DF_UUID": new db\n",
+				DP_UUID(svc->ps_uuid));
+			rc = +DER_UNINIT;
+		} else {
+			D_ERROR(DF_UUID": failed to read pool map buffer: "DF_RC
+				"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
+		}
+		goto out_lock;
+	}
+	if (!version_exists) {
+		/* This DB is not new and uses a layout that lacks a version. */
+		ds_notify_ras_eventf(RAS_POOL_DF_INCOMPAT, RAS_TYPE_INFO,
+				     RAS_SEV_ERROR, NULL /* hwid */,
+				     NULL /* rank */, NULL /* jobid */,
+				     &svc->ps_uuid, NULL /* cont */,
+				     NULL /* objid */, NULL /* ctlop */,
+				     NULL /* data */,
+				     "incompatible layout version");
+		rc = -DER_DF_INCOMPT;
+		goto out_lock;
+	}
+
+	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ALL, prop);
+	if (rc != 0)
+		D_ERROR(DF_UUID": cannot get access data for pool: "DF_RC"\n",
+			DP_UUID(svc->ps_uuid), DP_RC(rc));
+
+out_lock:
+	ABT_rwlock_unlock(svc->ps_lock);
+	rdb_tx_end(&tx);
+out:
+	return rc;
+}
+
+/*
  * There might be some swim status inconsistency, let's check and
  * fix it.
  */
@@ -1058,45 +1161,17 @@ static int
 pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 {
 	struct pool_svc	       *svc = pool_svc_obj(rsvc);
-	struct rdb_tx		tx;
 	struct pool_buf	       *map_buf = NULL;
 	uint32_t		map_version;
 	uuid_t			pool_hdl_uuid;
 	uuid_t			cont_hdl_uuid;
 	daos_prop_t	       *prop = NULL;
-	uint64_t		prop_bits;
 	bool			cont_svc_up = false;
 	bool			event_cb_registered = false;
 	d_rank_t		rank;
 	int			rc;
 
-	/* Read the pool map into map_buf and map_version. */
-	rc = rdb_tx_begin(rsvc->s_db, rsvc->s_term, &tx);
-	if (rc != 0)
-		goto out;
-	ABT_rwlock_rdlock(svc->ps_lock);
-	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
-	if (rc != 0) {
-		if (rc == -DER_NONEXIST) {
-			D_DEBUG(DB_MD, DF_UUID": new db\n",
-				DP_UUID(svc->ps_uuid));
-			rc = +DER_UNINIT;
-		} else {
-			D_ERROR(DF_UUID": failed to read pool map buffer: "
-				""DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
-		}
-		D_GOTO(unlock, rc);
-	}
-	prop_bits = DAOS_PO_QUERY_PROP_ALL;
-	rc = pool_prop_read(&tx, svc, prop_bits, &prop);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": cannot get access data for pool, "
-			"rc="DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
-		D_GOTO(unlock, rc);
-	}
-unlock:
-	ABT_rwlock_unlock(svc->ps_lock);
-	rdb_tx_end(&tx);
+	rc = read_db_for_stepping_up(svc, &map_buf, &map_version, &prop);
 	if (rc != 0)
 		goto out;
 
@@ -1111,7 +1186,9 @@ unlock:
 	 */
 	ds_rsvc_request_map_dist(&svc->ps_rsvc);
 
-	ds_cont_svc_step_up(svc->ps_cont_svc);
+	rc = ds_cont_svc_step_up(svc->ps_cont_svc);
+	if (rc != 0)
+		goto out;
 	cont_svc_up = true;
 
 	rc = crt_register_event_cb(ds_pool_crt_event_cb, svc);
@@ -1628,7 +1705,7 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	struct pool_create_out *out = crt_reply_get(rpc);
 	struct pool_svc	       *svc;
 	struct rdb_tx		tx;
-	d_iov_t		value;
+	d_iov_t			value;
 	struct rdb_kvs_attr	attr;
 	daos_prop_t	       *prop_dup = NULL;
 	int			rc;
@@ -1675,7 +1752,7 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 				DP_UUID(svc->ps_uuid));
 		else
 			D_ERROR(DF_UUID": failed to look up pool map: "
-				""DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
+				DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
 		D_GOTO(out_tx, rc);
 	}
 
