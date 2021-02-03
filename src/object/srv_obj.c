@@ -1663,13 +1663,8 @@ do_obj_ioc_begin(uint32_t rpc_map_ver, uuid_t pool_uuid,
 		 struct obj_io_context *ioc)
 {
 	struct ds_pool_child *poc;
-	int		      rank, rc;
-	ABT_xstream xs;
+	int		      rc;
 
-	rc = ABT_xstream_self(&xs);
-	D_ASSERT(rc == ABT_SUCCESS);
-	rc = ABT_xstream_get_rank(xs, &rank);
-	D_ASSERT(rc == ABT_SUCCESS);
 	rc = obj_ioc_init(pool_uuid, coh_uuid, cont_uuid, opc, ioc);
 	if (rc)
 		return rc;
