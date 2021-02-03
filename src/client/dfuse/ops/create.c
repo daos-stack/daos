@@ -74,7 +74,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	oh->doh_ie = ie;
 
 	if (fs_handle->dpi_info->di_direct_io) {
-		if (parent->ie_dfs->dfs_attr_timeout == 0) {
+		if (parent->ie_dfs->dfs_data_caching) {
 			fi_out.direct_io = 1;
 		} else {
 			if (fi->flags & O_DIRECT)

@@ -175,6 +175,9 @@ struct dfuse_dfs {
 	/** Inode number of the root of this container */
 	ino_t			dfs_ino;
 	double			dfs_attr_timeout;
+	double			dfs_dentry_timeout;
+	double			dfs_ndentry_timeout;
+	bool			dfs_data_caching;
 	/* List of dfuse_dfs entries in the dfuse_pool */
 	d_list_t		dfs_list;
 	pthread_mutex_t		dfs_read_mutex;
@@ -204,6 +207,10 @@ struct dfuse_dfs {
  */
 
 /* dfuse_core.c */
+
+/* Convert a string to an int, with optional suffix */
+int
+dfuse_parse_time(char *buff, unsigned int *_out);
 
 /* Init a dfs struct and copy essential data */
 void
@@ -365,30 +372,11 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#if HAVE_CACHE_READDIR
-
 #define DFUSE_REPLY_OPEN(oh, req, _fi)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(oh, "Returning open");		\
-		if ((oh)->doh_ie->ie_dfs->dfs_attr_timeout > 0) {	\
-			(_fi)->keep_cache = 1;				\
-			(_fi)->cache_readdir = 1;			\
-		}							\
-		__rc = fuse_reply_open(req, _fi);			\
-		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(oh,				\
-					"fuse_reply_open returned %d:%s", \
-					__rc, strerror(-__rc));		\
-	} while (0)
-
-#else
-
-#define DFUSE_REPLY_OPEN(oh, req, _fi)					\
-	do {								\
-		int __rc;						\
-		DFUSE_TRA_DEBUG(oh, "Returning open");		\
-		if ((oh)->doh_ie->ie_dfs->dfs_attr_timeout > 0) {	\
+		DFUSE_TRA_DEBUG(oh, "Returning open");			\
+		if ((oh)->doh_ie->ie_dfs->dfs_data_caching) {		\
 			(_fi)->keep_cache = 1;				\
 		}							\
 		__rc = fuse_reply_open(req, _fi);			\
@@ -397,8 +385,6 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					"fuse_reply_open returned %d:%s", \
 					__rc, strerror(-__rc));		\
 	} while (0)
-
-#endif
 
 #define DFUSE_REPLY_CREATE(desc, req, entry, fi)			\
 	do {								\
@@ -539,8 +525,11 @@ dfuse_compute_inode(struct dfuse_dfs *dfs,
  */
 int
 dfuse_check_for_inode(struct dfuse_projection_info *fs_handle,
-		      struct dfuse_dfs *dfs,
+		      ino_t ino,
 		      struct dfuse_inode_entry **_entry);
+
+int
+dfuse_cont_init(struct dfuse_dfs *dfs);
 
 void
 ie_close(struct dfuse_projection_info *, struct dfuse_inode_entry *);

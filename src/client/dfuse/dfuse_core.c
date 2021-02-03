@@ -55,6 +55,34 @@ dfuse_progress_thread(void *arg)
 	return NULL;
 }
 
+/* Parse a string to a time, used for reading container attributes info
+ * timeouts.
+ */
+int
+dfuse_parse_time(char *buff, unsigned int *_out)
+{
+	int		matched;
+	unsigned int	out = 0;
+	char		c = '\0';
+
+	matched = sscanf(buff, "%u%c", &out, &c);
+
+	if (matched == 0)
+		return EINVAL;
+
+	if (matched == 2) {
+		if (c == 'm' || c == 'M')
+			out *= 60;
+		if (c == 's' || c == 'S')
+			true;
+		else
+			return EINVAL;
+	}
+
+	*_out = out;
+	return 0;
+}
+
 /* Inode entry hash table operations */
 
 /* Shrink a 64 bit value into 32 bits to avoid hash collisions */
@@ -177,7 +205,7 @@ dfuse_dfs_init(struct dfuse_dfs *dfs, struct dfuse_dfs *parent)
 	if (!parent)
 		return;
 
-	dfs->dfs_attr_timeout = parent->dfs_attr_timeout;
+	/* Do not copy caching attributes across containers */
 }
 
 int

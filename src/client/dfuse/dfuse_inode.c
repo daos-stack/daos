@@ -19,14 +19,13 @@
  */
 int
 dfuse_check_for_inode(struct dfuse_projection_info *fs_handle,
-		      struct dfuse_dfs *dfs,
+		      ino_t ino,
 		      struct dfuse_inode_entry **_entry)
 {
 	d_list_t			*rlink;
 	struct dfuse_inode_entry	*entry;
 
-	rlink = d_hash_rec_find(&fs_handle->dpi_iet,
-				&dfs->dfs_ino, sizeof(dfs->dfs_ino));
+	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 	if (!rlink)
 		return -DER_NONEXIST;
 

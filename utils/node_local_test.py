@@ -58,9 +58,12 @@ def get_inc_id():
     instance_num += 1
     return '{:04d}'.format(instance_num)
 
-def umount(path):
+def umount(path, bg=False):
     """Umount dfuse from a given path"""
-    cmd = ['fusermount3', '-u', path]
+    if bg:
+        cmd = ['fusermount3', '-uz', path]
+    else:
+        cmd = ['fusermount3', '-u', path]
     ret = subprocess.run(cmd)
     print('rc from umount {}'.format(ret.returncode))
     return ret.returncode
@@ -788,7 +791,9 @@ class DFuse():
         print('Stopping fuse')
         ret = umount(self.dir)
         if ret:
+            umount(self.dir, bg=True)
             self._close_files()
+            time.sleep(2)
             umount(self.dir)
 
         run_log_test = True
@@ -871,6 +876,7 @@ def import_daos(server, conf):
 
 def run_daos_cmd(conf,
                  cmd,
+                 show_stdout=False,
                  valgrind=True):
     """Run a DAOS command
 
@@ -911,6 +917,9 @@ def run_daos_cmd(conf,
     if rc.stderr != b'':
         print('Stderr from command')
         print(rc.stderr.decode('utf-8').strip())
+
+    if show_stdout and rc.stdout != b'':
+        print(rc.stdout.decode('utf-8').strip())
 
     show_memleaks = True
 
@@ -983,7 +992,6 @@ def needs_dfuse(method):
         return rc
     return _helper
 
-
 class posix_tests():
     """Class for adding standalone unit tests"""
 
@@ -999,6 +1007,45 @@ class posix_tests():
     def fail(self):
         """Mark a test method as failed"""
         raise NLTestFail
+
+    def test_cache(self):
+        """Test with caching enabled"""
+
+        container = create_cont(self.conf, self.pool, posix=True)
+        rc = run_daos_cmd(self.conf,
+                          ['container', 'query',
+                           '--pool', self.pool, '--cont', container],
+                          show_stdout=True)
+
+        rc = run_daos_cmd(self.conf,
+                          ['container', 'set-attr',
+                           '--pool', self.pool, '--cont', container,
+                           '--attr', 'dfuse-timeout', '--value', '2'],
+                          show_stdout=True)
+
+        rc = run_daos_cmd(self.conf,
+                          ['container', 'set-attr',
+                           '--pool', self.pool, '--cont', container,
+                           '--attr', 'dfuse-dentry', '--value', '100s'],
+                          show_stdout=True)
+
+        rc = run_daos_cmd(self.conf,
+                          ['container', 'list-attrs',
+                           '--pool', self.pool, '--cont', container],
+                          show_stdout=True)
+
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool,
+                      container=container)
+        dfuse.start()
+
+        print(os.listdir(dfuse.dir))
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        destroy_container(self.conf, self.pool, container)
 
     @needs_dfuse
     def test_open_replaced(self):

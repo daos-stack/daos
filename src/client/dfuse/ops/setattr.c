@@ -43,7 +43,7 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 				attr->st_size);
 		to_set &= ~(FUSE_SET_ATTR_SIZE);
 		dfs_flags |= DFS_SET_ATTR_SIZE;
-		if (ie->ie_dfs->dfs_attr_timeout > 0 &&
+		if (ie->ie_dfs->dfs_data_caching &&
 		    ie->ie_stat.st_size == 0 && attr->st_size > 0) {
 			DFUSE_TRA_DEBUG(ie, "truncating 0-size file");
 			ie->ie_truncated = true;

@@ -403,11 +403,15 @@ main(int argc, char **argv)
 	if (!dfs)
 		D_GOTO(out_dfs, ret = -DER_NOMEM);
 
-	if (dfuse_info->di_caching)
+	if (dfuse_info->di_caching) {
+		dfs->dfs_data_caching = true;
 		dfs->dfs_attr_timeout = 5;
+		dfs->dfs_dentry_timeout = 5;
+		dfs->dfs_ndentry_timeout = 5;
+	}
 
 	d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
-
+	dfuse_dfs_init(dfs, NULL);
 	dfs->dfs_dfp = dfp;
 
 	DFUSE_TRA_UP(dfs, dfp, "dfs");
@@ -478,15 +482,25 @@ main(int argc, char **argv)
 				printf("dfs_mount failed (%d)\n", rc);
 				D_GOTO(out_dfs, ret = rc);
 			}
+
+			rc = dfuse_cont_init(dfs);
+			if (rc) {
+				printf("cont_init() failed: (%s)\n",
+				       strerror(rc));
+				D_GOTO(out_dfs, rc);
+			}
+
 			dfs->dfs_ops = &dfuse_dfs_ops;
 		} else {
+			dfs->dfs_attr_timeout = 5;
+			dfs->dfs_dentry_timeout = 5;
 			dfs->dfs_ops = &dfuse_cont_ops;
 		}
 	} else {
 		dfs->dfs_ops = &dfuse_pool_ops;
+		dfs->dfs_attr_timeout = 5;
+		dfs->dfs_dentry_timeout = 5;
 	}
-
-	dfuse_dfs_init(dfs, NULL);
 
 	rc = dfuse_start(dfuse_info, dfs);
 	if (rc != -DER_SUCCESS)

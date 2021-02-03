@@ -9,6 +9,67 @@
 #include "daos_fs.h"
 #include "daos_api.h"
 
+#define ATTR_COUNT 4
+/* Called once after container connect, after dfs_mount() */
+int
+dfuse_cont_init(struct dfuse_dfs *dfs)
+{
+	char const *const names[ATTR_COUNT] = {"dfuse-attr-timeout",
+					       "dfuse-dentry",
+					       "dfuse-ndentry",
+					       "dfuse-data-cache"};
+	size_t	size;
+	char	*buff;
+	int	rc;
+	int	i;
+	unsigned int value;
+
+	D_ALLOC(buff, 128);
+	if (buff == NULL)
+		return ENOMEM;
+
+	for (i = 0; i < ATTR_COUNT; i++) {
+		size = 128;
+
+		rc = daos_cont_get_attr(dfs->dfs_coh, 1, &names[i],
+					(void * const*)&buff,
+					&size, NULL);
+		if (rc == -DER_NONEXIST) {
+			continue;
+		} else if (rc != -DER_SUCCESS) {
+			D_GOTO(out, rc = daos_der2errno(rc));
+			DFUSE_TRA_WARNING(dfs, "Failed to load value for '%s' "
+					  DF_RC, names[i], DP_RC(rc));
+		}
+
+		if (i == 3) {
+			dfs->dfs_data_caching = true;
+			continue;
+		}
+
+		/* DAOS-6709 */
+		buff[size] = '\0';
+
+		rc = dfuse_parse_time(buff, &value);
+		if (rc != 0) {
+			DFUSE_TRA_WARNING(dfs, "Failed to parse '%s' for '%s'",
+					  buff, names[i]);
+			continue;
+		}
+		DFUSE_TRA_INFO(dfs, "setting '%s' is %u", names[i], value);
+		if (i == 0)
+			dfs->dfs_attr_timeout = value;
+		else if (i == 1)
+			dfs->dfs_dentry_timeout = value;
+		else if (i == 2)
+			dfs->dfs_ndentry_timeout = value;
+	}
+	rc = 0;
+out:
+	D_FREE(buff);
+	return rc;
+}
+
 /* Lookup a container within a pool */
 static void
 dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
@@ -62,58 +123,46 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 			D_GOTO(err_unlock, rc);
 		}
 		d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
-		D_GOTO(alloc_ie, 0);
-	} else {
-		d_list_for_each_entry(dfsi,
-				      &dfp->dfp_dfs_list,
-				      dfs_list) {
-			{
-				struct fuse_entry_param	entry = {0};
+		goto alloc_ie;
+	}
 
-				DFUSE_TRA_DEBUG(parent, "Checking %p", dfsi);
+	d_list_for_each_entry(dfsi, &dfp->dfp_dfs_list, dfs_list) {
+		struct fuse_entry_param	entry = {0};
 
-				if (uuid_compare(dfsi->dfs_cont,
-						 dfs->dfs_cont) != 0)
-					continue;
+		DFUSE_TRA_DEBUG(parent, "Checking %p", dfsi);
 
-				DFUSE_TRA_INFO(parent,
-					       "Found existing container dfs %p",
-					       dfsi);
+		if (uuid_compare(dfsi->dfs_cont, dfs->dfs_cont) != 0)
+			continue;
 
-				rc = dfuse_check_for_inode(fs_handle, dfsi,
-							   &ie);
-				if (rc == -DER_NONEXIST) {
-					D_FREE(dfs);
-					dfs = dfsi;
-					D_GOTO(alloc_ie, 0);
-				} else {
-					D_ASSERT(rc == -DER_SUCCESS);
-				}
+		DFUSE_TRA_INFO(parent,	"Found existing container dfs %p",
+			       dfsi);
 
-				DFUSE_TRA_INFO(ie,
-					       "Reusing existing container entry without reconnect");
+		rc = dfuse_check_for_inode(fs_handle, dfsi->dfs_ino, &ie);
+		D_ASSERT(rc == -DER_SUCCESS);
 
-				/* Update the stat information, but copy in the
-				 * inode value afterwards.
-				 */
-				rc = dfs_ostat(ie->ie_dfs->dfs_ns, ie->ie_obj,
-					       &entry.attr);
-				if (rc) {
-					DFUSE_TRA_ERROR(ie,
-							"dfs_ostat() failed: (%s)",
-							strerror(rc));
-					D_GOTO(err_unlock, rc);
-				}
+		DFUSE_TRA_INFO(ie, "Reusing existing container");
 
-				entry.attr.st_ino = ie->ie_stat.st_ino;
-				entry.generation = 1;
-				entry.ino = entry.attr.st_ino;
-				DFUSE_REPLY_ENTRY(ie, req, entry);
-				D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
-				D_FREE(dfs);
-				return;
-			}
+		/* Update the stat information, but copy in the
+		 * inode value afterwards.
+		 */
+		rc = dfs_ostat(ie->ie_dfs->dfs_ns, ie->ie_obj, &entry.attr);
+		if (rc) {
+			DFUSE_TRA_ERROR(ie,
+					"dfs_ostat() failed: (%s)",
+					strerror(rc));
+			D_GOTO(err_unlock, rc);
 		}
+
+		entry.attr.st_ino = ie->ie_stat.st_ino;
+		entry.generation = 1;
+		entry.ino = entry.attr.st_ino;
+		entry.attr_timeout = dfsi->dfs_attr_timeout;
+		entry.entry_timeout = dfsi->dfs_dentry_timeout;
+
+		DFUSE_REPLY_ENTRY(ie, req, entry);
+		D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
+		D_FREE(dfs);
+		return;
 	}
 
 	rc = daos_cont_open(dfp->dfp_poh, dfs->dfs_cont,
@@ -129,6 +178,12 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	rc = dfs_mount(dfp->dfp_poh, dfs->dfs_coh, O_RDWR, &dfs->dfs_ns);
 	if (rc) {
 		DFUSE_TRA_ERROR(ie, "dfs_mount() failed: (%s)", strerror(rc));
+		D_GOTO(close, rc);
+	}
+
+	rc = dfuse_cont_init(dfs);
+	if (rc) {
+		DFUSE_TRA_ERROR(ie, "cont_init() failed: (%s)", strerror(rc));
 		D_GOTO(close, rc);
 	}
 
@@ -171,7 +226,14 @@ close:
 err_unlock:
 	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 err:
-	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+	if (rc == ENOENT) {
+		struct fuse_entry_param entry = {0};
+
+		entry.entry_timeout = dfs->dfs_ndentry_timeout;
+		DFUSE_REPLY_ENTRY(parent, req, entry);
+	} else {
+		DFUSE_REPLY_ERR_RAW(parent, req, rc);
+	}
 	D_FREE(dfs);
 }
 

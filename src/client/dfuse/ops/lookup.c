@@ -34,7 +34,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		}
 	} else {
 		entry.attr_timeout = ie->ie_dfs->dfs_attr_timeout;
-		entry.entry_timeout = ie->ie_dfs->dfs_attr_timeout;
+		entry.entry_timeout = ie->ie_dfs->dfs_dentry_timeout;
 	}
 
 	if (ie->ie_stat.st_ino == 0) {
@@ -260,6 +260,14 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 					strerror(rc));
 			D_GOTO(out_cont, ret = rc);
 		}
+
+		rc = dfuse_cont_init(dfs);
+		if (rc) {
+			DFUSE_TRA_ERROR(ie, "cont_init() failed: (%s)",
+					strerror(rc));
+			D_GOTO(out_cont, ret = rc);
+		}
+
 		new_cont = true;
 		ie->ie_root = true;
 
@@ -352,16 +360,16 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		DFUSE_TRA_DEBUG(parent, "dfs_lookup() failed: (%s)",
 				strerror(rc));
 
-		if (rc == ENOENT && ie->ie_dfs->dfs_attr_timeout > 0) {
+		if (rc == ENOENT && ie->ie_dfs->dfs_ndentry_timeout > 0) {
 			struct fuse_entry_param entry = {};
 
-			entry.entry_timeout = ie->ie_dfs->dfs_attr_timeout;
+			entry.entry_timeout = ie->ie_dfs->dfs_ndentry_timeout;
 
 			DFUSE_REPLY_ENTRY(parent, req, entry);
 			D_GOTO(free, 0);
 		}
 
-		D_GOTO(err, rc);
+		D_GOTO(reply, rc);
 	}
 
 	strncpy(ie->ie_name, name, NAME_MAX);
@@ -380,8 +388,9 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	return;
 
 err:
-	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	dfs_release(ie->ie_obj);
+reply:
+	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 free:
 	D_FREE(ie);
 }

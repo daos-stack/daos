@@ -65,26 +65,26 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		d_list_for_each_entry(dfsi,
 				      &dfpi->dfp_dfs_list,
 				      dfs_list) {
-			{
-				if (uuid_is_null(dfsi->dfs_cont) != 1)
-					continue;
+			if (uuid_is_null(dfsi->dfs_cont) != 1)
+				continue;
 
-				DFUSE_TRA_INFO(dfpi, "Found existing pool");
+			DFUSE_TRA_INFO(dfpi, "Found existing pool");
 
-				rc = dfuse_check_for_inode(fs_handle, dfsi,
-							   &ie);
-				D_ASSERT(rc == -DER_SUCCESS);
+			rc = dfuse_check_for_inode(fs_handle, dfsi->dfs_ino, &ie);
+			D_ASSERT(rc == -DER_SUCCESS);
 
-				DFUSE_TRA_INFO(ie,
-					       "Reusing existing pool entry without reconnect");
-				entry.attr = ie->ie_stat;
-				entry.generation = 1;
-				entry.ino = entry.attr.st_ino;
-				DFUSE_REPLY_ENTRY(ie, req, entry);
-				D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
-				D_FREE(dfp);
-				return;
-			}
+			DFUSE_TRA_INFO(ie, "Reusing existing pool");
+			entry.attr = ie->ie_stat;
+			entry.generation = 1;
+			entry.ino = entry.attr.st_ino;
+
+			entry.attr_timeout = dfsi->dfs_attr_timeout;
+			entry.entry_timeout = dfsi->dfs_dentry_timeout;
+
+			DFUSE_REPLY_ENTRY(ie, req, entry);
+			D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
+			D_FREE(dfp);
+			return;
 		}
 	}
 
@@ -93,6 +93,12 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(err_unlock, rc = ENOMEM);
 
 	dfuse_dfs_init(dfs, parent->ie_dfs);
+
+	/* Turn on some caching of metadata, otherwise container operations will
+	 * be very frequent
+	 */
+	dfs->dfs_attr_timeout = 5;
+	dfs->dfs_ndentry_timeout = 5;
 
 	d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
 	dfs->dfs_dfp = dfp;
@@ -114,12 +120,6 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 			DFUSE_TRA_ERROR(dfp,
 					"daos_pool_connect() failed, "DF_RC,
 					DP_RC(rc));
-
-		/* This is the error you get when the agent isn't started
-		 * and EHOSTUNREACH seems to better reflect this than ENOTDIR
-		 */
-		if (rc == -DER_BADPATH)
-			D_GOTO(err_unlock, rc = EHOSTUNREACH);
 
 		D_GOTO(err_unlock, rc = daos_der2errno(rc));
 	}
@@ -199,7 +199,12 @@ close:
 err_unlock:
 	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 err:
-	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+	if (rc == ENOENT) {
+		entry.entry_timeout = dfs->dfs_ndentry_timeout;
+		DFUSE_REPLY_ENTRY(parent, req, entry);
+	} else {
+		DFUSE_REPLY_ERR_RAW(parent, req, rc);
+	}
 	D_FREE(dfs);
 	D_FREE(dfp);
 }
