@@ -214,15 +214,13 @@ failure:
  *				on the same machine
  * \param[in]	mem_size	Size in bytes of the shared memory segment that
  *				is allocated
- * \param[in]	root_node_name	String identifier for the root node.
  *
  * \return		D_TM_SUCCESS		Success
  *			-DER_NO_SHMEM		Out of shared memory
  *			-DER_EXCEEDS_PATH_LEN	Root node name exceeds path len
- *			-DER_INVAL		\a root_node_name was NULL
  */
 int
-d_tm_init(int id, uint64_t mem_size, char* root_node_name)
+d_tm_init(int id, uint64_t mem_size)
 {
 	uint64_t	*base_addr = NULL;
 	char		tmp[D_TM_MAX_NAME_LEN];
@@ -230,11 +228,6 @@ d_tm_init(int id, uint64_t mem_size, char* root_node_name)
 
 	if ((d_tm_shmem_root != NULL) && (d_tm_root != NULL)) {
 		D_INFO("d_tm_init already completed for id %d\n", id);
-		return rc;
-	}
-
-	if (root_node_name == NULL) {
-		rc = -DER_INVAL;
 		return rc;
 	}
 
@@ -263,7 +256,7 @@ d_tm_init(int id, uint64_t mem_size, char* root_node_name)
 	}
 	*base_addr = (uint64_t)d_tm_shmem_root;
 
-	snprintf(tmp, sizeof(tmp), "%s %d", root_node_name, id);
+	snprintf(tmp, sizeof(tmp), "ID: %d", id);
 	rc = d_tm_alloc_node(&d_tm_root, tmp);
 	if (rc != D_TM_SUCCESS)
 		goto failure;
@@ -274,14 +267,13 @@ d_tm_init(int id, uint64_t mem_size, char* root_node_name)
 		goto failure;
 	}
 
-	D_INFO("Telemetry and metrics initialized for %s %u\n",
-	       root_node_name, id);
+	D_INFO("Telemetry and metrics initialized for ID %u\n", id);
 
 	return rc;
 
 failure:
-	D_ERROR("Failed to initialize telemetry and metrics for %s %u: "
-		"rc = %d\n", root_node_name, id, rc);
+	D_ERROR("Failed to initialize telemetry and metrics for ID %u: "
+		"rc = %d\n", id, rc);
 	return rc;
 }
 
@@ -306,7 +298,7 @@ d_tm_init_client(int client_id, uint64_t mem_size)
 	int	rc = 0;
 
 	d_tm_serialization_enabled = true;
-	rc = d_tm_init(client_id, mem_size, "client");
+	rc = d_tm_init(client_id, mem_size);
 	return rc;
 }
 
