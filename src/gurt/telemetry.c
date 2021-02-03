@@ -33,6 +33,9 @@ uint64_t		d_tm_shmem_free;
 /** Points to the base address of the free shared memory */
 uint8_t			*d_tm_shmem_idx;
 
+/** Enables metric read/write serialization */
+bool			d_tm_serialization_enabled;
+
 /**
  * Returns a pointer to the root node for the given shared memory segment
  *
@@ -207,28 +210,29 @@ failure:
  * Initialize an instance of the telemetry and metrics API for the producer
  * process.
  *
- * \param[in]	srv_idx		Identifies the server process amongst others on
- *				the same machine
+ * \param[in]	id		Identifies the producer process amongst others
+ *				on the same machine
  * \param[in]	mem_size	Size in bytes of the shared memory segment that
  *				is allocated
+ * \param[in]	root_node_name	String identifier for the root node.
  *
  * \return		D_TM_SUCCESS		Success
  *			-DER_NO_SHMEM		Out of shared memory
  *			-DER_EXCEEDS_PATH_LEN	Root node name exceeds path len
  */
 int
-d_tm_init(int srv_idx, uint64_t mem_size)
+d_tm_init(int id, uint64_t mem_size, char* root_node_name)
 {
 	uint64_t	*base_addr = NULL;
 	char		tmp[D_TM_MAX_NAME_LEN];
 	int		rc = D_TM_SUCCESS;
 
 	if ((d_tm_shmem_root != NULL) && (d_tm_root != NULL)) {
-		D_INFO("d_tm_init already completed for srv_idx %d\n", srv_idx);
+		D_INFO("d_tm_init already completed for id %d\n", id);
 		return rc;
 	}
 
-	d_tm_shmem_root = d_tm_allocate_shared_memory(srv_idx, mem_size);
+	d_tm_shmem_root = d_tm_allocate_shared_memory(id, mem_size);
 
 	if (d_tm_shmem_root == NULL) {
 		rc = -DER_NO_SHMEM;
@@ -253,7 +257,7 @@ d_tm_init(int srv_idx, uint64_t mem_size)
 	}
 	*base_addr = (uint64_t)d_tm_shmem_root;
 
-	snprintf(tmp, sizeof(tmp), "srv_idx %d", srv_idx);
+	snprintf(tmp, sizeof(tmp), "%s %d", root_node_name, id);
 	rc = d_tm_alloc_node(&d_tm_root, tmp);
 	if (rc != D_TM_SUCCESS)
 		goto failure;
@@ -264,12 +268,39 @@ d_tm_init(int srv_idx, uint64_t mem_size)
 		goto failure;
 	}
 
-	D_INFO("Telemetry and metrics initialized for srv_idx %u\n", srv_idx);
+	D_INFO("Telemetry and metrics initialized for %s %u\n",
+	       root_node_name, id);
+
 	return rc;
 
 failure:
-	D_ERROR("Failed to initialize telemetry and metrics for srv_idx %u: "
-		"rc = %d\n", srv_idx, rc);
+	D_ERROR("Failed to initialize telemetry and metrics for %s %u: "
+		"rc = %d\n", root_node_name, id, rc);
+	return rc;
+}
+
+/**
+ * Initialize an instance of the telemetry and metrics API for a client
+ * application process.  By design, this initialization function enables
+ * read/write serialization which provides client thread safety when accessing
+ * the same metrics asynchronously.
+ *
+ * \param[in]	client_id	Identifies the client process amongst others on
+ *				the same machine
+ * \param[in]	mem_size	Size in bytes of the shared memory segment that
+ *				is allocated
+ *
+ * \return		D_TM_SUCCESS		Success
+ *			-DER_NO_SHMEM		Out of shared memory
+ *			-DER_EXCEEDS_PATH_LEN	Root node name exceeds path len
+ */
+int
+d_tm_init_client(int client_id, uint64_t mem_size)
+{
+	int	rc = 0;
+
+	d_tm_serialization_enabled = true;
+	rc = d_tm_init(client_id, mem_size, "client");
 	return rc;
 }
 
@@ -313,6 +344,9 @@ d_tm_free_node(uint64_t *shmem_root, struct d_tm_node_t *node)
 	int	rc = 0;
 
 	if (node == NULL)
+		return;
+
+	if (!d_tm_serialization_enabled)
 		return;
 
 	if (node->dtn_type != D_TM_DIRECTORY) {
@@ -754,9 +788,11 @@ d_tm_increment_counter(struct d_tm_node_t **metric, char *item, ...)
 	}
 
 	if (node->dtn_type == D_TM_COUNTER) {
-		D_MUTEX_LOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_LOCK(&node->dtn_lock);
 		node->dtn_metric->dtm_data.value++;
-		D_MUTEX_UNLOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to increment counter [%s] on item not a "
@@ -841,9 +877,11 @@ d_tm_record_timestamp(struct d_tm_node_t **metric, char *item, ...)
 	}
 
 	if (node->dtn_type == D_TM_TIMESTAMP) {
-		D_MUTEX_LOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_LOCK(&node->dtn_lock);
 		node->dtn_metric->dtm_data.value = (uint64_t)time(NULL);
-		D_MUTEX_UNLOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to record timestamp [%s] on item not a "
@@ -939,11 +977,13 @@ d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
 	}
 
 	if (node->dtn_type & D_TM_TIMER_SNAPSHOT) {
-		D_MUTEX_LOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_LOCK(&node->dtn_lock);
 		clock_gettime(d_tm_clock_id(node->dtn_type &
 					    ~D_TM_TIMER_SNAPSHOT),
 			      &node->dtn_metric->dtm_data.tms[0]);
-		D_MUTEX_UNLOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to record high resolution timer [%s] on item "
@@ -1040,10 +1080,12 @@ d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
 	}
 
 	if (node->dtn_type & D_TM_DURATION) {
-		D_MUTEX_LOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_LOCK(&node->dtn_lock);
 		clock_gettime(d_tm_clock_id(node->dtn_type & ~D_TM_DURATION),
 			      &node->dtn_metric->dtm_data.tms[1]);
-		D_MUTEX_UNLOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to mark duration start [%s] on item "
@@ -1129,12 +1171,14 @@ d_tm_mark_duration_end(struct d_tm_node_t **metric, char *item, ...)
 	}
 
 	if (node->dtn_type & D_TM_DURATION) {
-		D_MUTEX_LOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_LOCK(&node->dtn_lock);
 		clock_gettime(d_tm_clock_id(node->dtn_type & ~D_TM_DURATION),
 			      &end);
 		node->dtn_metric->dtm_data.tms[0] = d_timediff(
 					node->dtn_metric->dtm_data.tms[1], end);
-		D_MUTEX_UNLOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to mark duration end [%s] on item "
@@ -1220,9 +1264,11 @@ d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value, char *item, ...)
 	}
 
 	if (node->dtn_type == D_TM_GAUGE) {
-		D_MUTEX_LOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_LOCK(&node->dtn_lock);
 		node->dtn_metric->dtm_data.value = value;
-		D_MUTEX_UNLOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to set gauge [%s] on item "
@@ -1309,9 +1355,11 @@ d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
 	}
 
 	if (node->dtn_type == D_TM_GAUGE) {
-		D_MUTEX_LOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_LOCK(&node->dtn_lock);
 		node->dtn_metric->dtm_data.value += value;
-		D_MUTEX_UNLOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to increment gauge [%s] on item "
@@ -1398,9 +1446,11 @@ d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
 	}
 
 	if (node->dtn_type == D_TM_GAUGE) {
-		D_MUTEX_LOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_LOCK(&node->dtn_lock);
 		node->dtn_metric->dtm_data.value -= value;
-		D_MUTEX_UNLOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to decrement gauge [%s] on item "
@@ -1608,25 +1658,31 @@ d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
 	}
 	strncpy(temp->dtn_metric->dtm_lng_desc, lng_desc, buff_len);
 
-	rc = pthread_mutexattr_init(&mattr);
-	if (rc != 0) {
-		D_ERROR("pthread_mutexattr_init failed: rc = %d\n", rc);
-		goto failure;
-	}
+	temp->dtn_protect = false;
+	if (d_tm_serialization_enabled && (temp->dtn_type != D_TM_DIRECTORY)) {
+		rc = pthread_mutexattr_init(&mattr);
+		if (rc != 0) {
+			D_ERROR("pthread_mutexattr_init failed: rc = %d\n", rc);
+			goto failure;
+		}
 
-	rc = pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED);
-	if (rc != 0) {
-		D_ERROR("pthread_mutexattr_setpshared failed: rc = %d\n", rc);
-		goto failure;
-	}
+		rc = pthread_mutexattr_setpshared(&mattr,
+						  PTHREAD_PROCESS_SHARED);
+		if (rc != 0) {
+			D_ERROR("pthread_mutexattr_setpshared failed: "
+			"rc = %d\n", rc);
+			goto failure;
+		}
 
-	rc = D_MUTEX_INIT(&temp->dtn_lock, &mattr);
-	if (rc != 0) {
-		D_ERROR("Mutex init failed: rc = %d\n", rc);
-		goto failure;
-	}
+		rc = D_MUTEX_INIT(&temp->dtn_lock, &mattr);
+		if (rc != 0) {
+			D_ERROR("Mutex init failed: rc = %d\n", rc);
+			goto failure;
+		}
 
-	pthread_mutexattr_destroy(&mattr);
+		pthread_mutexattr_destroy(&mattr);
+		temp->dtn_protect = true;
+	}
 	*node = temp;
 
 	D_DEBUG(DB_TRACE, "successfully added item: [%s]\n", metric);
@@ -1680,9 +1736,11 @@ d_tm_get_counter(uint64_t *val, uint64_t *shmem_root, struct d_tm_node_t *node,
 
 	metric_data = d_tm_conv_ptr(shmem_root, node->dtn_metric);
 	if (metric_data != NULL) {
-		D_MUTEX_LOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_LOCK(&node->dtn_lock);
 		*val = metric_data->dtm_data.value;
-		D_MUTEX_UNLOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		return -DER_METRIC_NOT_FOUND;
 	}
@@ -1729,9 +1787,11 @@ d_tm_get_timestamp(time_t *val, uint64_t *shmem_root, struct d_tm_node_t *node,
 
 	metric_data = d_tm_conv_ptr(shmem_root, node->dtn_metric);
 	if (metric_data != NULL) {
-		D_MUTEX_LOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_LOCK(&node->dtn_lock);
 		*val = metric_data->dtm_data.value;
-		D_MUTEX_UNLOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		return -DER_METRIC_NOT_FOUND;
 	}
@@ -1778,10 +1838,12 @@ d_tm_get_timer_snapshot(struct timespec *tms, uint64_t *shmem_root,
 
 	metric_data = d_tm_conv_ptr(shmem_root, node->dtn_metric);
 	if (metric_data != NULL) {
-		D_MUTEX_LOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_LOCK(&node->dtn_lock);
 		tms->tv_sec = metric_data->dtm_data.tms[0].tv_sec;
 		tms->tv_nsec = metric_data->dtm_data.tms[0].tv_nsec;
-		D_MUTEX_UNLOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		return -DER_METRIC_NOT_FOUND;
 	}
@@ -1827,10 +1889,12 @@ d_tm_get_duration(struct timespec *tms, uint64_t *shmem_root,
 
 	metric_data = d_tm_conv_ptr(shmem_root, node->dtn_metric);
 	if (metric_data != NULL) {
-		D_MUTEX_LOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_LOCK(&node->dtn_lock);
 		tms->tv_sec = metric_data->dtm_data.tms[0].tv_sec;
 		tms->tv_nsec = metric_data->dtm_data.tms[0].tv_nsec;
-		D_MUTEX_UNLOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		return -DER_METRIC_NOT_FOUND;
 	}
@@ -1876,9 +1940,11 @@ d_tm_get_gauge(uint64_t *val, uint64_t *shmem_root, struct d_tm_node_t *node,
 
 	metric_data = d_tm_conv_ptr(shmem_root, node->dtn_metric);
 	if (metric_data != NULL) {
-		D_MUTEX_LOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_LOCK(&node->dtn_lock);
 		*val = metric_data->dtm_data.value;
-		D_MUTEX_UNLOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		return -DER_METRIC_NOT_FOUND;
 	}
@@ -1930,7 +1996,8 @@ int d_tm_get_metadata(char **sh_desc, char **lng_desc, uint64_t *shmem_root,
 
 	metric_data = d_tm_conv_ptr(shmem_root, node->dtn_metric);
 	if (metric_data != NULL) {
-		D_MUTEX_LOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_LOCK(&node->dtn_lock);
 		sh_desc_str = d_tm_conv_ptr(shmem_root,
 					    metric_data->dtm_sh_desc);
 		if ((sh_desc != NULL) && (sh_desc_str != NULL))
@@ -1941,7 +2008,8 @@ int d_tm_get_metadata(char **sh_desc, char **lng_desc, uint64_t *shmem_root,
 		if ((lng_desc != NULL) && (lng_desc_str != NULL))
 			D_STRNDUP(*lng_desc, lng_desc_str ? lng_desc_str :
 				  "N/A", D_TM_MAX_LONG_LEN);
-		D_MUTEX_UNLOCK(&node->dtn_lock);
+		if (node->dtn_protect)
+			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
 		return -DER_METRIC_NOT_FOUND;
 	}

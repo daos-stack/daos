@@ -17,13 +17,26 @@
 static int
 init_tests(void **state)
 {
-	int		simulated_srv_idx = 99;
-	int		rc;
+	int	simulated_srv_idx = 99;
+	int	rc;
 
-	rc = d_tm_init(simulated_srv_idx, D_TM_SHARED_MEMORY_SIZE);
+	rc = d_tm_init(simulated_srv_idx, D_TM_SHARED_MEMORY_SIZE, "test_idx");
 	assert_true(rc == D_TM_SUCCESS);
 
 	return d_log_init();
+}
+
+static void
+test_client_init(void **state)
+{
+	int	simulated_client_idx = 2021;
+	int	rc;
+
+	// cleanup from the previous init
+	d_tm_fini();
+
+	rc = d_tm_init_client(simulated_client_idx, D_TM_SHARED_MEMORY_SIZE);
+	assert_true(rc == D_TM_SUCCESS);
 }
 
 static void
@@ -230,6 +243,7 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_record_timestamp),
 		cmocka_unit_test(test_interval_timer),
 		cmocka_unit_test(test_input_validation),
+		cmocka_unit_test(test_client_init),
 	};
 
 	d_register_alt_assert(mock_assert);

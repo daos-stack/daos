@@ -494,7 +494,7 @@ server_init(int argc, char *argv[])
 	if (rc != 0)
 		return rc;
 
-	rc = d_tm_init(dss_instance_idx, D_TM_SHARED_MEMORY_SIZE);
+	rc = d_tm_init(dss_instance_idx, D_TM_SHARED_MEMORY_SIZE, "srv_idx");
 	if (rc != 0)
 		goto exit_debug_init;
 
