@@ -121,6 +121,7 @@ struct ec_agg_param {
 	struct ec_agg_entry	 ap_agg_entry;	 /* entry used for each OID   */
 	daos_epoch_range_t	 ap_epr;	 /* hi/lo extent threshold    */
 	daos_prop_t		*ap_prop;        /* property for cont open    */
+	struct dtx_handle	*ap_dth;	 /* handle for DTX refresh    */
 	daos_handle_t		 ap_cont_handle; /* VOS container handle      */
 	bool			(*ap_yield_func)(void *arg); /* yield function*/
 	void			*ap_yield_arg;   /* yield argument            */
@@ -1620,7 +1621,7 @@ out:
  * extent in the subsequent.
  */
 static int
-agg_process_stripe(struct ec_agg_entry *entry)
+agg_process_stripe(struct dtx_handle *dth, struct ec_agg_entry *entry)
 {
 	vos_iter_param_t	iter_param = { 0 };
 	struct vos_iter_anchors	anchors = { 0 };
@@ -1645,7 +1646,7 @@ agg_process_stripe(struct ec_agg_entry *entry)
 
 	/* Query the parity */
 	rc = vos_iterate(&iter_param, VOS_ITER_RECX, false, &anchors,
-			 agg_recx_iter_pre_cb, NULL, entry, NULL);
+			 agg_recx_iter_pre_cb, NULL, entry, dth);
 	/* entry->ae_par_extent.ape_epoch has been set to the parity extent's
 	 * epoch
 	 */
@@ -1745,8 +1746,8 @@ agg_in_stripe(struct ec_agg_entry *entry, daos_recx_t *recx)
 /* Iterator call back sub-function for handling data extents.
  */
 static int
-agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
-		unsigned int *acts)
+agg_data_extent(struct dtx_handle *dth, vos_iter_entry_t *entry,
+		struct ec_agg_entry *agg_entry, unsigned int *acts)
 {
 	struct ec_agg_extent	*extent = NULL;
 	daos_off_t		 cur_stripenum, this_stripenum;
@@ -1760,11 +1761,13 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 		/* Iterator has reached next stripe */
 		if (agg_entry->ae_cur_stripe.as_extent_cnt) {
 			cur_stripenum = agg_entry->ae_cur_stripe.as_stripenum;
-			rc = agg_process_stripe(agg_entry);
-			if (rc) {
+			rc = agg_process_stripe(dth, agg_entry);
+			if (obj_dtx_need_refresh(dth, rc))
+				goto out;
+
+			if (rc)
 				D_ERROR("Process stripe returned "DF_RC"\n",
 					DP_RC(rc));
-			}
 			/* Error leaves data covered by replicas vulnerable to
 			 * vos delete, so don't advance coordination epoch.
 			 */
@@ -1774,7 +1777,10 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 			agg_entry->ae_cur_stripe.as_stripenum <
 			this_stripenum) {
 				/* Handle holdover stripe */
-				rc = agg_process_stripe(agg_entry);
+				rc = agg_process_stripe(dth, agg_entry);
+				if (obj_dtx_need_refresh(dth, rc))
+					goto out;
+
 				if (rc)
 					D_ERROR("Holdover returned "DF_RC"\n",
 						DP_RC(rc));
@@ -1829,7 +1835,7 @@ out:
 /* Post iteration call back for akey.
  */
 static int
-agg_akey_post(daos_handle_t ih, vos_iter_entry_t *entry,
+agg_akey_post(daos_handle_t ih, struct dtx_handle *dth, vos_iter_entry_t *entry,
 	      struct ec_agg_entry *agg_entry, unsigned int *acts)
 {
 	daos_off_t	cur_stripenum;
@@ -1837,14 +1843,20 @@ agg_akey_post(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	if (agg_entry->ae_cur_stripe.as_extent_cnt) {
 		cur_stripenum = agg_entry->ae_cur_stripe.as_stripenum;
-		rc = agg_process_stripe(agg_entry);
+		rc = agg_process_stripe(dth, agg_entry);
+		if (obj_dtx_need_refresh(dth, rc))
+			return rc;
+
 		if (rc)
 			D_ERROR("Process stripe returned "DF_RC"\n",
 				DP_RC(rc));
 		rc = 0;
 		if (cur_stripenum < agg_entry->ae_cur_stripe.as_stripenum) {
 			/* Handle holdover stripe */
-			rc = agg_process_stripe(agg_entry);
+			rc = agg_process_stripe(dth, agg_entry);
+			if (obj_dtx_need_refresh(dth, rc))
+				return rc;
+
 			if (rc)
 				D_ERROR("Holdover returned "DF_RC"\n",
 					DP_RC(rc));
@@ -1952,7 +1964,8 @@ agg_iterate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	case VOS_ITER_DKEY:
 		break;
 	case VOS_ITER_AKEY:
-		rc = agg_akey_post(ih, entry, agg_entry, acts);
+		rc = agg_akey_post(ih, agg_param->ap_dth,
+				   entry, agg_entry, acts);
 		break;
 	case VOS_ITER_RECX:
 		break;
@@ -2067,7 +2080,7 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		rc = agg_akey(ih, entry, agg_entry, acts);
 		break;
 	case VOS_ITER_RECX:
-		rc = agg_data_extent(entry, agg_entry, acts);
+		rc = agg_data_extent(agg_param->ap_dth, entry, agg_entry, acts);
 		break;
 	default:
 		/* Verify that single values are always skipped */
@@ -2135,6 +2148,10 @@ ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	vos_iter_param_t	 iter_param = { 0 };
 	struct vos_iter_anchors  anchors = { 0 };
 	struct ec_agg_param	 agg_param = { 0 };
+	struct dtx_handle	 dth = { 0 };
+	struct dtx_id		 dti = { 0 };
+	struct dtx_epoch	 epoch = { 0 };
+	daos_unit_oid_t		 oid = { 0 };
 	daos_handle_t		 ph = DAOS_HDL_INVAL;
 	int			*status;
 	int			 rc = 0;
@@ -2194,9 +2211,36 @@ ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	iter_param.ip_recx.rx_idx	= 0ULL;
 	iter_param.ip_recx.rx_nr	= ~PARITY_INDICATOR;
 
+	rc = dtx_begin(cont->sc_hdl, &dti, &epoch, 0, 0, &oid,
+		       NULL, 0, 0, NULL, &dth);
+	if (rc != 0) {
+		D_ERROR("Fail to start DTX for EC aggregation: "DF_RC"\n",
+			DP_RC(rc));
+		goto out;
+	}
+
+	agg_param.ap_dth = &dth;
+
+again:
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
 			 agg_iterate_pre_cb, agg_iterate_post_cb,
-			 &agg_param, NULL);
+			 &agg_param, &dth);
+	if (obj_dtx_need_refresh(&dth, rc)) {
+		rc = dtx_refresh(&dth, cont);
+		if (rc == -DER_AGAIN) {
+			anchors.ia_reprobe_co = 0;
+			anchors.ia_reprobe_obj = 0;
+			anchors.ia_reprobe_dkey = 0;
+			anchors.ia_reprobe_akey = 0;
+			anchors.ia_reprobe_sv = 0;
+			anchors.ia_reprobe_ev = 0;
+
+			goto again;
+		}
+	}
+
+	dtx_end(&dth, cont, rc);
+
 	if (daos_handle_is_valid(agg_param.ap_agg_entry.ae_obj_hdl))
 		dsc_obj_close(agg_param.ap_agg_entry.ae_obj_hdl);
 
