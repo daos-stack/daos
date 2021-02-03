@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * rdb: Databases
@@ -48,7 +31,8 @@ rdb_create(const char *path, const uuid_t uuid, size_t size,
 {
 	daos_handle_t	pool;
 	daos_handle_t	mc;
-	d_iov_t	value;
+	d_iov_t		value;
+	uint32_t	version = RDB_LAYOUT_VERSION;
 	int		rc;
 
 	D_DEBUG(DB_MD, DF_UUID": creating db %s with %u replicas\n",
@@ -70,6 +54,13 @@ rdb_create(const char *path, const uuid_t uuid, size_t size,
 	rc = vos_cont_open(pool, (unsigned char *)uuid, &mc);
 	if (rc != 0)
 		goto out_pool_hdl;
+
+	/* Initialize the layout version. */
+	d_iov_set(&value, &version, sizeof(version));
+	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_version,
+			   &value);
+	if (rc != 0)
+		goto out_mc_hdl;
 
 	/* Initialize Raft. */
 	rc = rdb_raft_init(pool, mc, replicas);
@@ -227,12 +218,13 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 	struct rdb	       *db;
 	d_iov_t			value;
 	uuid_t			uuid_persist;
+	uint32_t		version;
 	int			rc;
 	struct vos_pool_space	vps;
 	uint64_t		rdb_extra_sys[DAOS_MEDIA_MAX];
 
 	D_ASSERT(cbs->dc_stop != NULL);
-	D_DEBUG(DB_MD, DF_UUID": starting db %s\n", DP_UUID(uuid), path);
+	D_INFO(DF_UUID": starting RDB %s\n", DP_UUID(uuid), path);
 
 	D_ALLOC_PTR(db);
 	if (db == NULL) {
@@ -327,10 +319,45 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_uuid, &value);
 	if (rc == -DER_NONEXIST) {
 		D_ERROR(DF_DB": not fully initialized\n", DP_DB(db));
+		rc = -DER_DF_INVAL;
 		goto err_mc;
 	} else if (rc != 0) {
 		D_ERROR(DF_DB": failed to look up UUID: "DF_RC"\n", DP_DB(db),
 			DP_RC(rc));
+		goto err_mc;
+	}
+
+	/* Check if the layout version is compatible. */
+	d_iov_set(&value, &version, sizeof(version));
+	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_version, &value);
+	if (rc == -DER_NONEXIST) {
+		ds_notify_ras_eventf(RAS_RDB_DF_INCOMPAT, RAS_TYPE_INFO,
+				     RAS_SEV_ERROR, NULL /* hwid */,
+				     NULL /* rank */, NULL /* jobid */,
+				     NULL /* pool */, NULL /* cont */,
+				     NULL /* objid */, NULL /* ctlop */,
+				     NULL /* data */,
+				     DF_DB": %s: incompatible layout version",
+				     DP_DB(db), path);
+		rc = -DER_DF_INCOMPT;
+		goto err_mc;
+	} else if (rc != 0) {
+		D_ERROR(DF_DB": failed to look up layout version: "DF_RC"\n",
+			DP_DB(db), DP_RC(rc));
+		goto err_mc;
+	}
+	if (version < RDB_LAYOUT_VERSION_LOW || version > RDB_LAYOUT_VERSION) {
+		ds_notify_ras_eventf(RAS_RDB_DF_INCOMPAT, RAS_TYPE_INFO,
+				     RAS_SEV_ERROR, NULL /* hwid */,
+				     NULL /* rank */, NULL /* jobid */,
+				     NULL /* pool */, NULL /* cont */,
+				     NULL /* objid */, NULL /* ctlop */,
+				     NULL /* data */,
+				     DF_DB": %s: incompatible layout version: "
+				     "%u not in [%u, %u]", DP_DB(db), path,
+				     version, RDB_LAYOUT_VERSION_LOW,
+				     RDB_LAYOUT_VERSION);
+		rc = -DER_DF_INCOMPT;
 		goto err_mc;
 	}
 

@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2015-2020 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * DAOS pool/container initialization properties
@@ -200,7 +183,19 @@ enum daos_cont_props {
 	 * Default: 4K
 	 */
 	DAOS_PROP_CO_DEDUP_THRESHOLD,
+	/** First citizon objects of container, see \a daos_cont_root_oids */
+	DAOS_PROP_CO_ROOTS,
+	/**
+	 * Container status
+	 * Value "struct daos_co_status".
+	 */
+	DAOS_PROP_CO_STATUS,
 	DAOS_PROP_CO_MAX,
+};
+
+/* first citizen objects of a container, stored as container property */
+struct daos_prop_co_roots {
+	daos_obj_id_t	cr_oids[4];
 };
 
 /**
@@ -274,10 +269,46 @@ enum {
 	DAOS_PROP_CO_REDUN_RF4,
 };
 
+/** container redundancy level */
 enum {
 	DAOS_PROP_CO_REDUN_RACK,
 	DAOS_PROP_CO_REDUN_NODE,
 };
+
+/** container status flag */
+enum {
+	/* in healthy status, data protection work as expected */
+	DAOS_PROP_CO_HEALTHY,
+	/* in unclean status, data protection possibly cannot work.
+	 * typical scenario - cascading failed targets exceed the container
+	 * redundancy factor, that possibly cause lost data cannot be detected
+	 * or rebuilt.
+	 */
+	DAOS_PROP_CO_UNCLEAN,
+};
+
+struct daos_co_status {
+	/* DAOS_PROP_CO_HEALTHY/DAOS_PROP_CO_UNCLEAN */
+	uint32_t	dcs_status;
+	/* pool map version when setting the dcs_status */
+	uint32_t	dcs_pm_ver;
+};
+
+#define DAOS_PROP_CO_STATUS_VAL(status, pm_ver)				\
+	((((uint64_t)(status)) << 32) | ((uint64_t)(pm_ver)))
+static inline uint64_t
+daos_prop_co_status_2_val(struct daos_co_status *co_status)
+{
+	return DAOS_PROP_CO_STATUS_VAL(co_status->dcs_status,
+				       co_status->dcs_pm_ver);
+}
+
+static inline void
+daos_prop_val_2_co_status(uint64_t val, struct daos_co_status *co_status)
+{
+	co_status->dcs_status = (uint32_t)(val >> 32);
+	co_status->dcs_pm_ver = (uint32_t)(val & 0xFFFFFFFF);
+}
 
 struct daos_prop_entry {
 	/** property type, see enum daos_pool_props/daos_cont_props */
@@ -375,6 +406,20 @@ daos_prop_entry_dup_ptr(struct daos_prop_entry *entry_dst,
 int
 daos_prop_entry_cmp_acl(struct daos_prop_entry *entry1,
 			struct daos_prop_entry *entry2);
+
+/**
+ * Duplicate container roots from one DAOS prop entry to another.
+ * Convenience function.
+ *
+ * \param[in][out]	dst		Destination entry
+ * \param[in]		src		Entry to be copied
+ *
+ * \return		0		Success
+ *			-DER_NOMEM	Out of memory
+ */
+int
+daos_prop_entry_dup_co_roots(struct daos_prop_entry *dst,
+			     struct daos_prop_entry *src);
 
 #if defined(__cplusplus)
 }

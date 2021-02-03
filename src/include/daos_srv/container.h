@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2015-2020 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * \file
@@ -47,7 +30,7 @@ int ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 int ds_cont_svc_init(struct cont_svc **svcp, const uuid_t pool_uuid,
 		     uint64_t id, struct ds_rsvc *rsvc);
 void ds_cont_svc_fini(struct cont_svc **svcp);
-void ds_cont_svc_step_up(struct cont_svc *svc);
+int ds_cont_svc_step_up(struct cont_svc *svc);
 void ds_cont_svc_step_down(struct cont_svc *svc);
 
 int ds_cont_svc_set_prop(uuid_t pool_uuid, uuid_t cont_uuid,
@@ -80,11 +63,13 @@ struct ds_cont_child {
 				 sc_dtx_aggregating:1,
 				 sc_dtx_reindex:1,
 				 sc_dtx_reindex_abort:1,
+				 sc_dtx_cos_shutdown:1,
 				 sc_closing:1,
 				 sc_vos_aggregating:1,
 				 sc_abort_vos_aggregating:1,
 				 sc_props_fetched:1,
 				 sc_stopping:1;
+	uint32_t		 sc_dtx_batched_gen;
 	/* Tracks the schedule request for aggregation ULT */
 	struct sched_request	*sc_agg_req;
 

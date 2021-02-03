@@ -1,24 +1,7 @@
 /*
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It gives out the data types internally used by
@@ -40,7 +23,7 @@
 
 extern struct d_binheap_ops crt_timeout_bh_ops;
 void crt_hdlr_rank_evict(crt_rpc_t *rpc_req);
-extern void crt_hdlr_memb_sample(crt_rpc_t *rpc_req);
+void crt_hdlr_memb_sample(crt_rpc_t *rpc_req);
 
 /* RPC flags, these are sent over the wire as part of the protocol so can
  * be set at the origin and read by the target
@@ -202,11 +185,12 @@ struct crt_rpc_priv {
 	struct crt_corpc_hdr	crp_coreq_hdr; /* collective request header */
 };
 
-#define CRT_PROTO_INTERNAL_VERSION 2
-#define CRT_PROTO_FI_VERSION 0
+#define CRT_PROTO_INTERNAL_VERSION 3
+#define CRT_PROTO_FI_VERSION 1
 
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
+ * TODO: Split this into four, internal (client/server), self_test, IV and CTL
  */
 #define CRT_INTERNAL_RPCS_LIST						\
 	X(CRT_OPC_URI_LOOKUP,						\
@@ -610,7 +594,7 @@ int crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
 void crt_rpc_priv_fini(struct crt_rpc_priv *rpc_priv);
 int crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 			    crt_opcode_t opc, bool forward, crt_rpc_t **req);
-int crt_internal_rpc_register(void);
+int crt_internal_rpc_register(bool server);
 int crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv);
 int crt_req_send_internal(struct crt_rpc_priv *rpc_priv);
 

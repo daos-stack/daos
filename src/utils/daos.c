@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * daos(8): DAOS Container and Object Management Utility
@@ -465,6 +448,17 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 			return -DER_INVAL;
 		}
 		entry->dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	} else if (!strcmp(name, "status")) {
+		if (!strcmp(value, "healthy")) {
+			entry->dpe_val =
+				DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_HEALTHY,
+							0);
+		} else {
+			fprintf(stderr, "status prop value can only be "
+				"'healthy' to clear UNCLEAN status\n");
+			return -DER_INVAL;
+		}
+		entry->dpe_type = DAOS_PROP_CO_STATUS;
 	} else {
 		fprintf(stderr, "supported prop names are label/cksum/cksum_size/srv_cksum/dedup/dedup_th/rf\n");
 		return -DER_INVAL;
@@ -1084,7 +1078,8 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		uuid_generate(ap->c_uuid);
 
 	if (op != CONT_CREATE && op != CONT_DESTROY) {
-		rc = daos_cont_open(ap->pool, ap->c_uuid, DAOS_COO_RW,
+		rc = daos_cont_open(ap->pool, ap->c_uuid,
+				    DAOS_COO_RW | DAOS_COO_FORCE,
 				    &ap->cont, &cont_info, NULL);
 		if (rc != 0) {
 			fprintf(stderr, "failed to open container "DF_UUIDF
@@ -1439,7 +1434,7 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			"			   K (KB), M (MB), G (GB), T (TB), P (PB), E (EB)\n"
 			"	--properties=<name>:<value>[,<name>:<value>,...]\n"
 			"			   supported prop names are label, cksum,\n"
-			"				cksum_size, srv_cksum, dedup\n"
+			"				cksum_size, srv_cksum, dedup, status\n"
 			"				dedup_th, compression, encryption\n"
 			"			   label value can be any string\n"
 			"			   cksum supported values are off, crc[16,32,64],\n"

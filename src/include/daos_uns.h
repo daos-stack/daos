@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2019 - 2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * \file
@@ -49,7 +32,8 @@ struct duns_attr_t {
 	daos_oclass_id_t	da_oclass_id;
 	/** Default Chunks size for all files in container */
 	daos_size_t		da_chunk_size;
-	/*
+	/** Relative component of path.
+	 *
 	 * If using direct access to a POSIX container with the prefix, return
 	 * path without the prefix.
 	 */
@@ -58,7 +42,8 @@ struct duns_attr_t {
 	daos_prop_t		*da_props;
 	/** Path is on Lustre */
 	bool			da_on_lustre;
-	/*
+	/** String does not include daos:// prefix
+	 *
 	 * Path that is passed does not have daos: prefix but is direct:
 	 * (/puuid/cuuid/xyz) and does not need to parse a path UNS attrs.
 	 */
@@ -110,7 +95,7 @@ duns_create_path(daos_handle_t poh, const char *path,
  * an HDF5 file.
  *
  * \param[in]		path	Valid path in an existing namespace.
- * \param[in,out]	attr	Struct containing the xattrs on the path.
+ * \param[in,out]	attr	Struct containing the attrs on the path.
  *
  * \return		0 on Success. errno code on failure.
  */
@@ -133,7 +118,7 @@ duns_destroy_path(daos_handle_t poh, const char *path);
  *
  * \param[in]	str	Input string
  * \param[in]	len	Length of input string
- * \param[out]	attr	Struct containing the xattrs on the path.
+ * \param[out]	attr	Struct containing the attrs on the path.
  *
  * \return		0 on Success. errno code on failure.
  */

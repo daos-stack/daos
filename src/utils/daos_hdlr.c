@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /* daos_hdlr.c - resource and operation-specific handler functions
@@ -91,7 +74,6 @@ parse_acl_file(const char *path, struct daos_acl **acl);
 static int
 pool_decode_props(daos_prop_t *props)
 {
-
 	struct daos_prop_entry		*entry;
 	int				rc = 0;
 
@@ -284,7 +266,6 @@ out_disconnect:
 		rc = rc2;
 out:
 	return rc;
-
 }
 
 int
@@ -331,7 +312,6 @@ out_disconnect:
 		rc = rc2;
 out:
 	return rc;
-
 }
 
 int
@@ -398,8 +378,7 @@ pool_get_attr_hdlr(struct cmd_args_s *ap)
 	D_PRINT("%s\n", buf);
 
 out_disconnect:
-	if (buf != NULL)
-		D_FREE(buf);
+	D_FREE(buf);
 
 	/* Pool disconnect  in normal and error flows: preserve rc */
 	rc2 = daos_pool_disconnect(ap->pool, NULL);
@@ -412,7 +391,6 @@ out_disconnect:
 		rc = rc2;
 out:
 	return rc;
-
 }
 
 int
@@ -476,8 +454,7 @@ pool_list_attrs_hdlr(struct cmd_args_s *ap)
 	}
 
 out_disconnect:
-	if (buf != NULL)
-		D_FREE(buf);
+	D_FREE(buf);
 
 	/* Pool disconnect  in normal and error flows: preserve rc */
 	rc2 = daos_pool_disconnect(ap->pool, NULL);
@@ -490,7 +467,6 @@ out_disconnect:
 		rc = rc2;
 out:
 	return rc;
-
 }
 
 int
@@ -931,7 +907,6 @@ cont_set_attr_hdlr(struct cmd_args_s *ap)
 
 out:
 	return rc;
-
 }
 
 int
@@ -955,14 +930,13 @@ cont_del_attr_hdlr(struct cmd_args_s *ap)
 
 out:
 	return rc;
-
 }
 
 int
 cont_get_attr_hdlr(struct cmd_args_s *ap)
 {
 	size_t	attr_size, expected_size;
-	char	*buf= NULL;
+	char	*buf = NULL;
 	int	rc = 0;
 
 	if (ap->attrname_str == NULL) {
@@ -1008,11 +982,9 @@ cont_get_attr_hdlr(struct cmd_args_s *ap)
 	D_PRINT("%s\n", buf);
 
 out:
-	if (buf != NULL)
-		D_FREE(buf);
+	D_FREE(buf);
 
 	return rc;
-
 }
 
 int
@@ -1070,17 +1042,14 @@ cont_list_attrs_hdlr(struct cmd_args_s *ap)
 	}
 
 out:
-	if (buf != NULL)
-		D_FREE(buf);
+	D_FREE(buf);
 
 	return rc;
-
 }
 
 static int
 cont_decode_props(daos_prop_t *props, daos_prop_t *prop_acl)
 {
-
 	struct daos_prop_entry		*entry;
 	char				type[10];
 	int				rc = 0;
@@ -1288,6 +1257,29 @@ cont_decode_props(daos_prop_t *props, daos_prop_t *prop_acl)
 		D_PRINT("owner-group:\t\t%s\n", entry->dpe_str);
 	}
 
+	entry = daos_prop_entry_get(props, DAOS_PROP_CO_ROOTS);
+	if (entry == NULL || entry->dpe_val_ptr == NULL) {
+		fprintf(stderr, "roots property not found\n");
+		rc = -DER_INVAL;
+	}
+
+	entry = daos_prop_entry_get(props, DAOS_PROP_CO_STATUS);
+	if (entry == NULL) {
+		fprintf(stderr, "status property not found\n");
+		rc = -DER_INVAL;
+	} else {
+		struct daos_co_status	co_stat = { 0 };
+
+		daos_prop_val_2_co_status(entry->dpe_val, &co_stat);
+		if (co_stat.dcs_status == DAOS_PROP_CO_HEALTHY)
+			D_PRINT("status:\t\t\tHEALTHY\n");
+		else if (co_stat.dcs_status == DAOS_PROP_CO_UNCLEAN)
+			D_PRINT("status:\t\t\tUNCLEAN\n");
+		else
+			fprintf(stderr, "bad dcs_status %d\n",
+				co_stat.dcs_status);
+	}
+
 	/* Only mention ACL if there's something to print */
 	if (prop_acl != NULL) {
 		entry = daos_prop_entry_get(prop_acl, DAOS_PROP_CO_ACL);
@@ -1371,8 +1363,9 @@ cont_set_prop_hdlr(struct cmd_args_s *ap)
 
 	/* Validate the properties are supported for set */
 	for (i = 0; i < ap->props->dpp_nr; i++) {
-		entry = &(ap->props->dpp_entries[i]);
-		if (entry->dpe_type != DAOS_PROP_CO_LABEL) {
+		entry = &ap->props->dpp_entries[i];
+		if (entry->dpe_type != DAOS_PROP_CO_LABEL &&
+		    entry->dpe_type != DAOS_PROP_CO_STATUS) {
 			fprintf(stderr, "property not supported for set\n");
 			D_GOTO(err_out, rc = -DER_INVAL);
 		}
@@ -1435,9 +1428,9 @@ get_first_empty_prop_entry(struct cmd_args_s *ap,
 				"access control parameters\n");
 			return -DER_NOMEM;
 		}
-		*entry = &(ap->props->dpp_entries[0]);
+		*entry = &ap->props->dpp_entries[0];
 	} else {
-		*entry = &(ap->props->dpp_entries[ap->props->dpp_nr]);
+		*entry = &ap->props->dpp_entries[ap->props->dpp_nr];
 		ap->props->dpp_nr += nr;
 	}
 
@@ -1576,6 +1569,10 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 	 */
 	ARGS_VERIFY_PATH_CREATE(ap, err_rc, rc = RC_PRINT_HELP);
 
+	rc = update_props_for_access_control(ap);
+	if (rc != 0)
+		return rc;
+
 	uuid_copy(dattr.da_puuid, ap->p_uuid);
 	uuid_copy(dattr.da_cuuid, ap->c_uuid);
 	dattr.da_type = ap->type;
@@ -1647,8 +1644,8 @@ cont_query_hdlr(struct cmd_args_s *ap)
 			if (rc) {
 				fprintf(stderr, "failed to mount container "
 					DF_UUIDF": %s (%d)\n",
-					DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
-				D_GOTO(err_out, rc);
+					DP_UUID(ap->c_uuid), strerror(rc), rc);
+				D_GOTO(err_out, rc = daos_errno2der(rc));
 			}
 
 			dfs_query(dfs, &attr);
@@ -1660,8 +1657,8 @@ cont_query_hdlr(struct cmd_args_s *ap)
 			if (rc) {
 				fprintf(stderr, "failed to unmount container "
 					DF_UUIDF": %s (%d)\n",
-					DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
-				D_GOTO(err_out, rc);
+					DP_UUID(ap->c_uuid), strerror(rc), rc);
+				D_GOTO(err_out, rc = daos_errno2der(rc));
 			}
 		}
 	}
@@ -1835,7 +1832,6 @@ file_write(struct file_dfs *file_dfs, char *file,
 static int
 open_dfs(struct file_dfs *file_dfs, char *file, int flags, mode_t mode)
 {
-
 	int		rc = 0;
 	int		tmp_rc = 0;
 	dfs_obj_t	*parent = NULL;
@@ -2426,7 +2422,7 @@ fs_copy(struct file_dfs *src_file_dfs,
 
 			D_ALLOC(buf, buf_size * sizeof(char));
 			if (buf == NULL)
-				return ENOMEM;
+				D_GOTO(out, rc = -DER_NOMEM);
 			while (total_bytes < file_length) {
 				size_t left_to_read = buf_size;
 				uint64_t bytes_left = file_length - total_bytes;
@@ -2456,8 +2452,7 @@ fs_copy(struct file_dfs *src_file_dfs,
 
 				total_bytes += bytes_read;
 			}
-			if (buf != NULL)
-				D_FREE(buf);
+			D_FREE(buf);
 
 			/* reset offsets if there is another file to copy */
 			src_file_dfs->offset = 0;
@@ -2546,13 +2541,19 @@ out:
 	/* don't try to closedir on something that is not a directory,
 	 * otherwise always close it before returning
 	 */
-	if (S_ISDIR(st_dir_name.st_mode)) {
+	if (S_ISDIR(st_dir_name.st_mode) && (src_dir != NULL)) {
 		rc = file_closedir(src_file_dfs, src_dir);
 		if (rc != 0) {
 			fprintf(stderr, "Could not close '%s': %d\n",
 				dir_name, rc);
 		}
 	}
+
+	if (rc != 0) {
+		D_FREE(next_path);
+		D_FREE(next_dpath);
+	}
+
 	D_FREE(filename);
 	D_FREE(dst_filename);
 	return rc;
@@ -2721,7 +2722,7 @@ out:
 * Returns 0 if a daos path was successfully parsed.
 */
 static int
-fs_copy_parse_path(struct file_dfs *file, char *path,
+fs_copy_parse_path(struct file_dfs *file, char *path, size_t path_len,
 		   uuid_t *p_uuid, uuid_t *c_uuid)
 {
 	struct duns_attr_t	dattr = {0};
@@ -2732,13 +2733,13 @@ fs_copy_parse_path(struct file_dfs *file, char *path,
 		uuid_copy(*p_uuid, dattr.da_puuid);
 		uuid_copy(*c_uuid, dattr.da_cuuid);
 		if (dattr.da_rel_path == NULL) {
-			strcpy(path, "/");
+			strncpy(path, "/", path_len);
 		} else {
-			strcpy(path, dattr.da_rel_path);
+			strncpy(path, dattr.da_rel_path, path_len);
 		}
 	} else if (strncmp(path, "daos://", 7) == 0) {
 		/* Error, since we expect a DAOS path */
-		D_GOTO(out, rc = 1);
+		D_GOTO(out, rc);
 	} else {
 		/* not a DAOS path, set type to POSIX,
 		 * POSIX dir will be checked with stat
@@ -2759,8 +2760,10 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	 * provided
 	 */
 	int			rc = 0;
-	char			src_str[1028];
-	char			dst_str[1028];
+	char			*src_str = NULL;
+	char			*dst_str = NULL;
+	size_t			src_str_len = 0;
+	size_t			dst_str_len = 0;
 	daos_cont_info_t	src_cont_info = {0};
 	daos_cont_info_t	dst_cont_info = {0};
 	struct duns_attr_t	src_dattr = {0};
@@ -2768,35 +2771,47 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	struct file_dfs		src_file_dfs = {0};
 	struct file_dfs		dst_file_dfs = {0};
 	struct fs_copy_args	fa = {0};
-	int			src_str_len = 0;
 	char			*name = NULL;
 	char			*dname = NULL;
-	char			dst_dir[MAX_FILENAME];
-	int			path_length = 0;
+	char			*dst_dir = NULL;
 	mode_t			tmp_mode_dir = S_IRWXU;
 
 	file_set_defaults_dfs(&src_file_dfs);
 	file_set_defaults_dfs(&dst_file_dfs);
-	strcpy(src_str, ap->src);
-	rc = fs_copy_parse_path(&src_file_dfs, src_str, &fa.src_p_uuid,
-				&fa.src_c_uuid);
+
+	src_str_len = strlen(ap->src);
+	D_STRNDUP(src_str, ap->src, src_str_len);
+	if (src_str == NULL) {
+		fprintf(stderr, "Unable to allocate memory for source path.");
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+	rc = fs_copy_parse_path(&src_file_dfs, src_str, src_str_len,
+				&fa.src_p_uuid, &fa.src_c_uuid);
 	if (rc != 0) {
 		fprintf(stderr, "failed to parse source path: %d\n", rc);
-		D_GOTO(out, rc);
+		D_GOTO(out, rc = daos_errno2der(rc));
 	}
-	strcpy(dst_str, ap->dst);
-	rc = fs_copy_parse_path(&dst_file_dfs, dst_str, &fa.dst_p_uuid,
-				&fa.dst_c_uuid);
+
+	dst_str_len = strlen(ap->dst);
+	D_STRNDUP(dst_str, ap->dst, dst_str_len);
+	if (dst_str == NULL) {
+		fprintf(stderr,
+			"Unable to allocate memory for destination path.");
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+	rc = fs_copy_parse_path(&dst_file_dfs, dst_str, dst_str_len,
+				&fa.dst_p_uuid, &fa.dst_c_uuid);
 	if (rc != 0) {
 		fprintf(stderr, "failed to parse destination path: %d\n", rc);
 		D_GOTO(out, rc);
 	}
+
 	rc = fs_copy_connect(&src_file_dfs, &dst_file_dfs, &fa,
 			     ap->sysname, &src_cont_info, &dst_cont_info,
 			     &src_dattr, &dst_dattr);
 	if (rc != 0) {
 		fprintf(stderr, "fs copy failed to connect: %d\n", rc);
-		D_GOTO(out, rc);
+		D_GOTO(out, rc = daos_errno2der(rc));
 	}
 
 	parse_filename_dfs(src_str, &name, &dname);
@@ -2806,12 +2821,11 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	 * specified in the dst argument
 	 */
 	src_str_len = strlen(dname);
-	path_length = snprintf(dst_dir, MAX_FILENAME, "%s/%s",
-			       dst_str, src_str + src_str_len);
-	if (path_length >= MAX_FILENAME) {
-		rc = ENAMETOOLONG;
-		fprintf(stderr, "Path length is too long.\n");
-		D_GOTO(out_disconnect, rc);
+	D_ASPRINTF(dst_dir, "%s/%s", dst_str, src_str + src_str_len);
+	if (dst_dir == NULL) {
+		fprintf(stderr,
+			"Unable to allocate memory for destination path.\n");
+		D_GOTO(out_disconnect, rc = -DER_NOMEM);
 	}
 	/* set paths based on file type for source and destination */
 	if (src_file_dfs.type == POSIX && dst_file_dfs.type == DAOS) {
@@ -2858,6 +2872,11 @@ out_disconnect:
 	if (rc != 0)
 		fprintf(stderr, "failed to disconnect (%d)\n", rc);
 out:
+	D_FREE(name);
+	D_FREE(dname);
+	D_FREE(src_str);
+	D_FREE(dst_str);
+	D_FREE(dst_dir);
 	return rc;
 }
 
@@ -3054,7 +3073,6 @@ cont_overwrite_acl_hdlr(struct cmd_args_s *ap)
 	}
 
 	rc = print_acl(stdout, prop_out, false);
-
 
 	daos_prop_free(prop_out);
 	return rc;
