@@ -105,6 +105,16 @@ RUN if [ -z "${REPO_GROUP_LEAP15}" ]; then                                      
 RUN zypper --non-interactive install -y ipmctl-devel go1.14 go1.14-race
 
 # Add DAOS user
+ENV USER daos_server
+ENV PASSWD daos_server
+RUN useradd -u $UID -ms /bin/bash $USER
+RUN echo "$USER:$PASSWD" | chpasswd
+
+ENV USER daos_agent
+ENV PASSWD daos_agent
+RUN useradd -u $UID -ms /bin/bash $USER
+RUN echo "$USER:$PASSWD" | chpasswd
+
 ENV USER daos
 ENV PASSWD daos
 RUN useradd -u $UID -ms /bin/bash $USER
@@ -112,13 +122,13 @@ RUN echo "$USER:$PASSWD" | chpasswd
 
 # Create directory for DAOS backend storage
 RUN mkdir -p /opt/daos
-RUN chown -R daos.daos /opt/daos || { cat /etc/passwd; cat /etc/group; cat /etc/shadow; chown -R daos /opt/daos; chgrp -R daos /opt/daos; ls -ld /opt/daos; }
+RUN chown -R daos_server.daos_server /opt/daos || { cat /etc/passwd; cat /etc/group; cat /etc/shadow; chown -R daos_server /opt/daos; chgrp -R daos_server /opt/daos; ls -ld /opt/daos; }
 RUN mkdir /mnt/daos
-RUN chown daos.daos /mnt/daos || { cat /etc/passwd; cat /etc/group; cat /etc/shadow; chown daos /mnt/daos; chgrp daos /mnt/daos; ls -ld /mnt/daos; }
+RUN chown daos_server.daos_server /mnt/daos || { cat /etc/passwd; cat /etc/group; cat /etc/shadow; chown daos_server /mnt/daos; chgrp daos_server /mnt/daos; ls -ld /mnt/daos; }
 RUN mkdir /var/run/daos_server
-RUN chown daos.daos /var/run/daos_server || { cat /etc/passwd; cat /etc/group; cat /etc/shadow; chown daos /var/run/daos_server; chgrp daos /var/run/daos_server; ls -ld /var/run/daos_server; }
+RUN chown daos_server.daos_server /var/run/daos_server || { cat /etc/passwd; cat /etc/group; cat /etc/shadow; chown daos_server /var/run/daos_server; chgrp daos_server /var/run/daos_server; ls -ld /var/run/daos_server; }
 RUN mkdir /var/run/daos_agent
-RUN chown daos.daos /var/run/daos_agent || { cat /etc/passwd; cat /etc/group; cat /etc/shadow; chown daos /var/run/daos_agent; chgrp daos /var/run/daos_agent; ls -ld /var/run/daos_agent; }
+RUN chown daos_agent.daos_agent /var/run/daos_agent || { cat /etc/passwd; cat /etc/group; cat /etc/shadow; chown daos_agent /var/run/daos_agent; chgrp daos_agent /var/run/daos_agent; ls -ld /var/run/daos_agent; }
 
 RUN mkdir -p /root/.m2
 RUN echo -e "<settings>\n\

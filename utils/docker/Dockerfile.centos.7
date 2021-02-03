@@ -87,17 +87,27 @@ RUN pip3 install avocado-framework; \
 RUN pip3 install codespell
 RUN pip3 install pygithub
 
-# Add DAOS user
+# Add DAOS users
+ENV USER daos_server
+ENV PASSWD daos_server
+RUN useradd -u $UID -ms /bin/bash $USER
+RUN echo "$USER:$PASSWD" | chpasswd
+
+ENV USER daos_agent
+ENV PASSWD daos_agent
+RUN useradd -u $UID -ms /bin/bash $USER
+RUN echo "$USER:$PASSWD" | chpasswd
+
 ENV USER daos
 ENV PASSWD daos
 RUN useradd -u $UID -ms /bin/bash $USER
 RUN echo "$USER:$PASSWD" | chpasswd
 
 # Create directory for DAOS backend storage
-RUN mkdir -p /opt/daos && chown -R daos.daos /opt/daos
-RUN mkdir /mnt/daos && chown daos.daos /mnt/daos
-RUN mkdir /var/run/daos_server && chown daos.daos /var/run/daos_server
-RUN mkdir /var/run/daos_agent && chown daos.daos /var/run/daos_agent
+RUN mkdir -p /opt/daos && chown -R daos_server.daos_server /opt/daos
+RUN mkdir /mnt/daos && chown daos_server.daos_server /mnt/daos
+RUN mkdir /var/run/daos_server && chown daos_server.daos_server /var/run/daos_server
+RUN mkdir /var/run/daos_agent && chown daos_agent.daos_agent /var/run/daos_agent
 
 # Set maven repo mirror
 RUN mkdir -p /root/.m2
