@@ -87,7 +87,6 @@ jobs:
       run: docker run --name build-ut --tmpfs /mnt/daos build-image ./utils/run_test.sh
     - name: Copy results
       run: docker cp build-ut:test_results test_results
-      run: docker run -v $PWD:/opt/external cp -a test_results/ nlt-* /tmp/dnt* /opt/external
     - name: Publish Unit Test Results
       uses: EnricoMi/publish-unit-test-result-action@v1.7
       with:
