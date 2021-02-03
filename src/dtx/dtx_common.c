@@ -171,7 +171,7 @@ dtx_batched_commit(void *arg)
 		struct ds_cont_child	 *cont;
 		struct dtx_stat		  stat = { 0 };
 		int			  cnt, rc;
-		int			  sleep_time = 2000; /* ms */
+		int			  sleep_time = 10; /* ms */
 
 		if (d_list_empty(&dmi->dmi_dtx_batched_list))
 			goto check;
