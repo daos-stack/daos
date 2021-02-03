@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2015-2020 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #ifndef __DAOS_OBJ_H__
 #define __DAOS_OBJ_H__
@@ -31,15 +14,7 @@ extern "C" {
 #include <daos_event.h>
 #include <daos_obj_class.h>
 
-/**
- * ID of an object, 128 bits
- * The high 32-bit of daos_obj_id_t::hi are reserved for DAOS, the rest is
- * provided by the user and assumed to be unique inside a container.
- */
-typedef struct {
-	uint64_t	lo;
-	uint64_t	hi;
-} daos_obj_id_t;
+#define DAOS_OBJ_NIL		((daos_obj_id_t){0})
 
 /** the current OID version */
 #define OID_FMT_VER		1
@@ -203,7 +178,7 @@ typedef struct {
 typedef enum {
 	/** is a dkey */
 	DAOS_IOD_NONE		= 0,
-	/** one indivisble value update atomically */
+	/** one indivisible value update atomically */
 	DAOS_IOD_SINGLE		= 1,
 	/** an array of records where each record is update atomically */
 	DAOS_IOD_ARRAY		= 2,
@@ -345,7 +320,7 @@ typedef struct {
  *			the container. [out]: Fully populated DAOS object
  *			identifier with the the low 96 bits untouched and the
  *			DAOS private bits (the high 32 bits) encoded.
- * \param[in]	ofeat	Feature bits specific to object
+ * \param[in]	ofeats	Feature bits specific to object
  * \param[in]	cid	Class Identifier
  * \param[in]	args	Reserved.
  */
@@ -882,8 +857,8 @@ daos_obj_anchor_split(daos_handle_t oh, uint32_t *nr, daos_anchor_t *anchors);
 
 /**
  * Set an anchor with an index based on split done with daos_obj_anchor_split.
- * The anchor passed will be re-intialized and set to start and finish iteration
- * based on the specified index.
+ * The anchor passed will be re-initialized and set to start and finish
+ * iteration based on the specified index.
  *
  * \param[in]   oh	Open object handle.
  * \param[in]	index	Index of set this anchor for iteration.

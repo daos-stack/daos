@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of gurt, it implements the fault injection feature.
@@ -34,6 +17,7 @@
 #include <gurt/common.h>
 #include <gurt/hash.h>
 #include "fi.h"
+#include <yaml.h>
 
 /**
  * global switch for fault injection. zero globally turns off fault injection,
@@ -41,7 +25,7 @@
  */
 unsigned int			d_fault_inject;
 unsigned int			d_fault_config_file;
-struct d_fault_attr_t *d_fault_attr_mem;
+struct d_fault_attr_t		*d_fault_attr_mem;
 
 #if FAULT_INJECTION
 
@@ -115,12 +99,9 @@ struct d_fi_gdata_t {
  * global switch for fault injection. zero globally turns off fault injection,
  * non-zero turns on fault injection
  */
-unsigned int			d_fault_inject;
-unsigned int			d_fault_config_file;
 static uint32_t			d_fault_inject_seed;
 static struct d_fi_gdata_t	d_fi_gdata;
 static pthread_once_t		d_fi_gdata_init_once = PTHREAD_ONCE_INIT;
-
 
 static inline int
 fault_attr_set(uint32_t fault_id, struct d_fault_attr_t fa_in, bool take_lock)
@@ -324,7 +305,7 @@ one_fault_attr_parse(yaml_parser_t *parser)
 			D_DEBUG(DB_ALL, "max_faults: %lu\n", val);
 		} else if (!strcmp(key_str, err_code)) {
 			attr.fa_err_code = strtol(val_str, NULL, 0);
-			D_DEBUG(DB_ALL, "err_code: " DF_RC "\n",
+			D_DEBUG(DB_ALL, "err_code: "DF_RC"\n",
 				DP_RC(attr.fa_err_code));
 		} else if (!strcmp(key_str, argument)) {
 			D_STRNDUP(attr.fa_argument, val_str,
@@ -589,6 +570,7 @@ d_fault_inject_fini()
 	D_RWLOCK_UNLOCK(&d_fi_gdata.dfg_rwlock);
 	d_fi_gdata_destroy();
 	d_fi_gdata_init_once = PTHREAD_ONCE_INIT;
+	d_fault_inject = 0;
 
 	D_DEBUG(DB_ALL, "Finalized.\n");
 

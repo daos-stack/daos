@@ -1,23 +1,6 @@
-/** * (C) Copyright 2020 Intel Corporation.
+/** * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is for simple tests of EC aggregation. These tests verify the
@@ -45,13 +28,6 @@ enum {
 	EC_FULL_CELL,
 	EC_SPECIFIED,
 };
-
-#define assert_success(r) do {\
-	int __rc = (r); \
-	if (__rc != 0) \
-		fail_msg("Not successful!! Error code: " DF_RC, DP_RC(__rc)); \
-	} while (0)
-
 
 /** easily setup an iov and allocate */
 static void
@@ -234,9 +210,9 @@ ec_cleanup_cont(struct ec_agg_test_ctx *ctx)
 
 	/* Close & Destroy Container */
 	rc = daos_cont_close(ctx->coh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	rc = daos_cont_destroy(ctx->poh, ctx->uuid, true, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 static void
@@ -273,12 +249,12 @@ test_filled_stripe(struct ec_agg_test_ctx *ctx)
 			rc = daos_obj_update(ctx->oh, DAOS_TX_NONE, 0,
 					     &ctx->dkey, 1, &ctx->update_iod,
 					     &ctx->update_sgl, NULL);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			ec_cleanup_data(ctx);
 		}
 
 	rc = daos_obj_close(ctx->oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 static void
@@ -337,9 +313,9 @@ verify_1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 						      &ctx->fetch_sgl,
 						      &ctx->fetch_iom, &shard,
 						      NULL, NULL, &task);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			/* verify no remaining replicas on parity tgt */
 			assert_int_equal(ctx->fetch_iom.iom_nr_out, 0);
 			task = NULL;
@@ -356,9 +332,9 @@ verify_1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 						      &ctx->fetch_sgl,
 						      &ctx->fetch_iom, &shard,
 						      NULL, NULL, &task);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			/* verify parity now exists on parity target */
 			assert_int_equal(ctx->fetch_iom.iom_nr_out, 1);
 			assert_int_equal(memcmp(ctx->
@@ -368,7 +344,7 @@ verify_1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 			ec_cleanup_data(ctx);
 		}
 	rc = daos_obj_close(ctx->oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 #ifdef LAYER_COORD
@@ -393,7 +369,7 @@ test_half_stripe(struct ec_agg_test_ctx *ctx)
 			rc = daos_obj_update(ctx->oh, DAOS_TX_NONE, 0,
 					     &ctx->dkey, 1, &ctx->update_iod,
 					     &ctx->update_sgl, NULL);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			ec_cleanup_data(ctx);
 		}
 
@@ -407,12 +383,12 @@ test_half_stripe(struct ec_agg_test_ctx *ctx)
 			rc = daos_obj_update(ctx->oh, DAOS_TX_NONE, 0,
 					     &ctx->dkey, 1, &ctx->update_iod,
 					     &ctx->update_sgl, NULL);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			ec_cleanup_data(ctx);
 		}
 
 	rc = daos_obj_close(ctx->oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 static void
@@ -466,9 +442,9 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 						      &ctx->fetch_sgl,
 						      &ctx->fetch_iom, &shard,
 						      NULL, NULL, &task);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			/* verify no remaining replicas on parity tgt */
 			assert_int_equal(ctx->fetch_iom.iom_nr_out, 0);
 			task = NULL;
@@ -482,9 +458,9 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 						      &ctx->fetch_sgl,
 						      &ctx->fetch_iom, &shard,
 						      NULL, NULL, &task);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			/* verify no remaining replicas on peer parity tgt */
 			assert_int_equal(ctx->fetch_iom.iom_nr_out, 0);
 			task = NULL;
@@ -502,9 +478,9 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 						      &ctx->fetch_sgl,
 						      &ctx->fetch_iom, &shard,
 						      NULL, NULL, &task);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			/* verify on parity leader */
 			assert_int_equal(ctx->fetch_iom.iom_nr_out, 1);
 			assert_int_equal(memcmp(ctx->fetch_sgl.sg_iovs[0].
@@ -522,9 +498,9 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 						      &ctx->fetch_sgl,
 						      &ctx->fetch_iom, &shard,
 						      NULL, NULL, &task);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			/* verify parity now exists on parity target */
 			assert_int_equal(ctx->fetch_iom.iom_nr_out, 1);
 			assert_int_equal(memcmp(ctx->fetch_sgl.sg_iovs[0].
@@ -534,7 +510,7 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 			ec_cleanup_data(ctx);
 		}
 	rc = daos_obj_close(ctx->oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 #endif
 
@@ -558,7 +534,7 @@ test_partial_stripe(struct ec_agg_test_ctx *ctx)
 			rc = daos_obj_update(ctx->oh, DAOS_TX_NONE, 0,
 					     &ctx->dkey, 1, &ctx->update_iod,
 					     &ctx->update_sgl, NULL);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			ec_cleanup_data(ctx);
 		}
 
@@ -572,12 +548,12 @@ test_partial_stripe(struct ec_agg_test_ctx *ctx)
 			rc = daos_obj_update(ctx->oh, DAOS_TX_NONE, 0,
 					     &ctx->dkey, 1, &ctx->update_iod,
 					     &ctx->update_sgl, NULL);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			ec_cleanup_data(ctx);
 		}
 
 	rc = daos_obj_close(ctx->oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 static void

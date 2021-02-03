@@ -1,24 +1,7 @@
 /**
-* (C) Copyright 2019-2020 Intel Corporation.
+* (C) Copyright 2019-2021 Intel Corporation.
 *
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*    http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*
-* GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-* The Government's rights to use, modify, reproduce, release, perform, display,
-* or disclose this software are subject to the terms of the Apache License as
-* provided in Contract No. 8F-30005.
-* Any reproduction of computer software, computer software documentation, or
-* portions thereof marked with this legend must also reproduce the markings.
+* SPDX-License-Identifier: BSD-2-Clause-Patent
 */
 
 #include <spdk/stdinc.h>
@@ -289,13 +272,12 @@ collect_namespaces(struct ns_entry *ns_entry, struct ctrlr_t *ctrlr)
 	return 0;
 }
 
-static int
+static void
 populate_dev_health(struct nvme_stats *dev_state,
 		    struct spdk_nvme_health_information_page *page,
 		    const struct spdk_nvme_ctrlr_data *cdata)
 {
 	union spdk_nvme_critical_warning_state	cw = page->critical_warning;
-	int					written;
 
 	dev_state->warn_temp_time = page->warning_temp_time;
 	dev_state->crit_temp_time = page->critical_temp_time;
@@ -314,20 +296,6 @@ populate_dev_health(struct nvme_stats *dev_state,
 	dev_state->read_only_warn = cw.bits.read_only ? true : false;
 	dev_state->volatile_mem_warn = cw.bits.volatile_memory_backup ?
 		true : false;
-
-	written = snprintf(dev_state->model, sizeof(dev_state->model),
-			   "%-20.20s", cdata->mn);
-	if (written >= sizeof(dev_state->model)) {
-		return -NVMEC_ERR_WRITE_TRUNC;
-	}
-
-	written = snprintf(dev_state->serial, sizeof(dev_state->serial),
-			   "%-20.20s", cdata->sn);
-	if (written >= sizeof(dev_state->serial)) {
-		return -NVMEC_ERR_WRITE_TRUNC;
-	}
-
-	return 0;
 }
 
 void
@@ -402,14 +370,8 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 			}
 
 			/* Store device health stats for export */
-			rc = populate_dev_health(cstats,
-						 &ctrlr_entry->health->page,
-						 cdata);
-			if (rc != 0) {
-				free(cstats);
-				goto fail;
-			}
-
+			populate_dev_health(cstats, &ctrlr_entry->health->page,
+					    cdata);
 			ctrlr_tmp->stats = cstats;
 		}
 

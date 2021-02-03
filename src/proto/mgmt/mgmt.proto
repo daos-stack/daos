@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 syntax = "proto3";
@@ -26,6 +9,7 @@ package mgmt;
 
 option go_package = "github.com/daos-stack/daos/src/control/common/proto/mgmt";
 
+import "shared/event.proto";
 import "mgmt/pool.proto";
 import "mgmt/cont.proto";
 import "mgmt/svc.proto";
@@ -41,8 +25,8 @@ import "mgmt/system.proto";
 service MgmtSvc {
 	// Join the server described by JoinReq to the system.
 	rpc Join(JoinReq) returns (JoinResp) {}
-	// ClusterEvent notify MS of a cluster event.
-	rpc ClusterEvent(ClusterEventReq) returns (ClusterEventResp) {}
+	// ClusterEvent notify MS of a RAS event in the cluster.
+	rpc ClusterEvent(shared.ClusterEventReq) returns (shared.ClusterEventResp) {}
 	// LeaderQuery provides a mechanism for clients to discover
 	// the system's current Management Service leader
 	rpc LeaderQuery(LeaderQueryReq) returns (LeaderQueryResp) {}
@@ -83,11 +67,11 @@ service MgmtSvc {
 	// Change the owner of a DAOS container
 	rpc ContSetOwner(ContSetOwnerReq) returns (ContSetOwnerResp) {}
 	// Query DAOS system status
-	rpc SystemQuery(SystemQueryReq) returns(SystemQueryResp) {};
+	rpc SystemQuery(SystemQueryReq) returns(SystemQueryResp) {}
 	// Stop DAOS system (shutdown data-plane instances)
-	rpc SystemStop(SystemStopReq) returns(SystemStopResp) {};
+	rpc SystemStop(SystemStopReq) returns(SystemStopResp) {}
 	// ResetFormat DAOS system (restart data-plane instances)
-	rpc SystemResetFormat(SystemResetFormatReq) returns(SystemResetFormatResp) {};
+	rpc SystemResetFormat(SystemResetFormatReq) returns(SystemResetFormatResp) {}
 	// Start DAOS system (restart data-plane instances)
-	rpc SystemStart(SystemStartReq) returns(SystemStartResp) {};
+	rpc SystemStart(SystemStartReq) returns(SystemStartResp) {}
 }

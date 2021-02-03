@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -64,7 +47,6 @@ rebuild_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 	for (i = 0; i < arg_cnt; i++) {
 		daos_exclude_target(args[i]->pool.pool_uuid,
 				    args[i]->group, args[i]->dmg_config,
-				    NULL /* svc */,
 				    rank, tgt_idx);
 	}
 }
@@ -80,7 +62,6 @@ rebuild_add_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 			daos_reint_target(args[i]->pool.pool_uuid,
 					  args[i]->group,
 					  args[i]->dmg_config,
-					  NULL /* svc */,
 					  rank, tgt_idx);
 		sleep(2);
 	}
@@ -97,7 +78,6 @@ rebuild_drain_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 			daos_drain_target(args[i]->pool.pool_uuid,
 					args[i]->group,
 					args[i]->dmg_config,
-					NULL /* svc */,
 					rank, tgt_idx);
 		sleep(2);
 	}
@@ -249,7 +229,7 @@ rebuild_pool_connect_internal(void *data)
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0) {
 		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-				       NULL /* svc */, DAOS_PC_RW,
+				       DAOS_PC_RW,
 				       &arg->pool.poh, &arg->pool.pool_info,
 				       NULL /* ev */);
 		if (rc)
@@ -370,7 +350,7 @@ rebuild_add_back_tgts(test_arg_t *arg, d_rank_t failed_rank, int *failed_tgts,
 
 		for (i = 0; i < nr; i++)
 			daos_reint_target(arg->pool.pool_uuid, arg->group,
-					  arg->dmg_config, NULL /* svc */,
+					  arg->dmg_config,
 					  failed_rank,
 					  failed_tgts ? failed_tgts[i] : -1);
 	}
@@ -548,7 +528,7 @@ rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
 			continue;
 
 		rc = daos_obj_verify(arg->coh, oids[i], DAOS_EPOCH_MAX);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 }
 
@@ -829,10 +809,10 @@ dfs_ec_rebuild_io(void **state, int *shards, int shards_nr)
 	assert_int_equal(rc, 0);
 
 	rc = daos_cont_close(co_hdl, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 #if 0
 	while (idx > 0)

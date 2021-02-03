@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * \file
@@ -41,6 +24,8 @@
 #include <daos/placement.h>
 #include "srv_internal.h"
 #include "drpc_internal.h"
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 #include <daos.h> /* for daos_init() */
 
@@ -59,11 +44,14 @@ static unsigned int	nr_threads;
 /** DAOS system name (corresponds to crt group ID) */
 static char	       *daos_sysname = DAOS_DEFAULT_SYS_NAME;
 
+/** Storage node hostname */
+char		        dss_hostname[DSS_HOSTNAME_MAX_LEN];
+
 /** Storage path (hack) */
 const char	       *dss_storage_path = "/mnt/daos";
 
 /** NVMe config file */
-const char	       *dss_nvme_conf = "/etc/daos_nvme.conf";
+const char	       *dss_nvme_conf;
 
 /** Socket Directory */
 const char	       *dss_socket_dir = "/var/run/daos_server";
@@ -95,6 +83,9 @@ int			dss_num_cores_numa_node;
 /** Module facility bitmask */
 static uint64_t		dss_mod_facs;
 
+/* stream used to dump ABT infos and ULTs stacks */
+static FILE *abt_infos;
+
 d_rank_t
 dss_self_rank(void)
 {
@@ -104,6 +95,12 @@ dss_self_rank(void)
 	rc = crt_group_rank(NULL /* grp */, &rank);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	return rank;
+}
+
+struct dss_module_info *
+get_module_info(void)
+{
+	return dss_get_module_info();
 }
 
 /*
@@ -458,14 +455,38 @@ abt_fini(void)
 	ABT_finalize();
 }
 
+static void
+dss_crt_event_cb(d_rank_t rank, enum crt_event_source src,
+		 enum crt_event_type type, void *arg)
+{
+	static struct d_tm_node_t	*dead_rank_ctr;
+	int				 rc = 0;
+
+	/* We only care about dead ranks for now */
+	if (src != CRT_EVS_SWIM || type != CRT_EVT_DEAD) {
+		D_DEBUG(DB_MGMT, "ignore src/type/evict %u/%u\n",
+			src, type);
+		return;
+	}
+
+	d_tm_increment_counter(&dead_rank_ctr, "cart",
+			       "swim_rank_dead_events", NULL);
+
+	rc = ds_notify_swim_rank_dead(rank);
+	if (rc)
+		D_ERROR("failed to handle %u/%u event: "DF_RC"\n",
+			src, type, DP_RC(rc));
+}
+
 static int
 server_init(int argc, char *argv[])
 {
-	uint64_t	bound;
-	int64_t		diff;
-	unsigned int	ctx_nr;
-	char		hostname[256] = { 0 };
-	int		rc;
+	static struct d_tm_node_t	*startup_dur;
+	static struct d_tm_node_t	*started_ts;
+	uint64_t			 bound;
+	int64_t				 diff;
+	unsigned int			 ctx_nr;
+	int				 rc;
 
 	bound = crt_hlc_epsilon_get_bound(crt_hlc_get());
 
@@ -473,18 +494,25 @@ server_init(int argc, char *argv[])
 	if (rc != 0)
 		return rc;
 
+	rc = d_tm_init(dss_instance_idx, D_TM_SHARED_MEMORY_SIZE);
+	if (rc != 0)
+		goto exit_debug_init;
+
+	d_tm_mark_duration_start(&startup_dur, D_TM_CLOCK_REALTIME,
+				 "server", "startup_duration", NULL);
+
 	rc = register_dbtree_classes();
 	if (rc != 0)
-		D_GOTO(exit_debug_init, rc);
+		D_GOTO(exit_telemetry_init, rc);
 
 	/** initialize server topology data */
 	rc = dss_topo_init();
 	if (rc != 0)
-		D_GOTO(exit_debug_init, rc);
+		D_GOTO(exit_telemetry_init, rc);
 
 	rc = abt_init(argc, argv);
 	if (rc != 0)
-		goto exit_debug_init;
+		goto exit_telemetry_init;
 
 	/* initialize the modular interface */
 	rc = dss_module_init();
@@ -529,6 +557,9 @@ server_init(int argc, char *argv[])
 			dss_storage_path);
 		D_GOTO(exit_mod_loaded, rc);
 	}
+
+	gethostname(dss_hostname, DSS_HOSTNAME_MAX_LEN);
+
 	D_INFO("Service initialized\n");
 
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
@@ -600,14 +631,23 @@ server_init(int argc, char *argv[])
 		goto exit_drpc_fini;
 	D_INFO("Modules successfully set up\n");
 
+	rc = crt_register_event_cb(dss_crt_event_cb, NULL);
+	if (rc)
+		D_GOTO(exit_drpc_fini, rc);
+
 	dss_xstreams_open_barrier();
 	D_INFO("Service fully up\n");
 
-	gethostname(hostname, 255);
+	d_tm_mark_duration_end(&startup_dur, NULL);
+
+	d_tm_record_timestamp(&started_ts, "server", "started_at", NULL);
+
+	d_tm_set_gauge(NULL, dss_self_rank(), "server", "rank", NULL);
+
 	D_PRINT("DAOS I/O server (v%s) process %u started on rank %u "
 		"with %u target, %d helper XS, firstcore %d, host %s.\n",
 		DAOS_VERSION, getpid(), dss_self_rank(), dss_tgt_nr,
-		dss_tgt_offload_xs_nr, dss_core_offset, hostname);
+		dss_tgt_offload_xs_nr, dss_core_offset, dss_hostname);
 
 	if (numa_obj)
 		D_PRINT("Using NUMA node: %d", dss_numa_node);
@@ -635,6 +675,8 @@ exit_mod_init:
 	dss_module_fini(true);
 exit_abt_init:
 	abt_fini();
+exit_telemetry_init:
+	d_tm_fini();
 exit_debug_init:
 	daos_debug_fini();
 	return rc;
@@ -644,6 +686,8 @@ static void
 server_fini(bool force)
 {
 	D_INFO("Service is shutting down\n");
+	crt_unregister_event_cb(dss_crt_event_cb, NULL);
+	D_INFO("unregister event callbacks done\n");
 	dss_module_cleanup_all();
 	D_INFO("dss_module_cleanup_all() done\n");
 	drpc_fini();
@@ -740,9 +784,6 @@ parse(int argc, char **argv)
 	sprintf(modules, "%s", MODULE_LIST);
 	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:t:s:x:I:",
 				opts, NULL)) != -1) {
-		unsigned int	 nr;
-		char		*end;
-
 		switch (c) {
 		case 'm':
 			if (strlen(optarg) > MAX_MODULE_OPTIONS) {
@@ -756,28 +797,13 @@ parse(int argc, char **argv)
 			printf("\"-c\" option is deprecated, please use \"-t\" "
 			       "instead.\n");
 		case 't':
-			nr = strtoul(optarg, &end, 10);
-			if ((end == optarg) || (nr == ULONG_MAX)) {
-				rc = -DER_INVAL;
-				break;
-			}
-			nr_threads = nr;
+			nr_threads = atoi(optarg);
 			break;
 		case 'x':
-			nr = strtoul(optarg, &end, 10);
-			if ((end == optarg) || (nr == ULONG_MAX)) {
-				rc = -DER_INVAL;
-				break;
-			}
-			dss_tgt_offload_xs_nr = nr;
+			dss_tgt_offload_xs_nr = atoi(optarg);
 			break;
 		case 'f':
-			nr = strtoul(optarg, &end, 10);
-			if ((end == optarg) || (nr == ULONG_MAX)) {
-				rc = -DER_INVAL;
-				break;
-			}
-			dss_core_offset = nr;
+			dss_core_offset = atoi(optarg);
 			break;
 		case 'g':
 			if (strnlen(optarg, DAOS_SYS_NAME_MAX + 1) >
@@ -805,12 +831,7 @@ parse(int argc, char **argv)
 			dss_nvme_shm_id = atoi(optarg);
 			break;
 		case 'r':
-			nr = strtoul(optarg, &end, 10);
-			if ((end == optarg) || (nr == ULONG_MAX)) {
-				rc = -DER_INVAL;
-				break;
-			}
-			dss_nvme_mem_size = nr;
+			dss_nvme_mem_size = atoi(optarg);
 			break;
 		case 'h':
 			usage(argv[0], stdout);
@@ -980,15 +1001,76 @@ main(int argc, char **argv)
 			break;
 		}
 
-		/* use this iosrv main thread's context to dump Argobot internal
-		 * infos upon SIGUSR1
+		/* open specific file to dump ABT infos and ULTs stacks */
+		if (sig == SIGUSR1 || sig == SIGUSR2) {
+			struct timeval tv;
+			struct tm *tm = NULL;
+
+			rc = gettimeofday(&tv, NULL);
+			if (rc == 0)
+				tm = localtime(&tv.tv_sec);
+			else
+				D_ERROR("failure to gettimeofday(): %s (%d)\n",
+					strerror(errno), errno);
+
+			 if (abt_infos == NULL) {
+				/* filename format is
+				 * "/tmp/daos_dump_YYYYMMDD_hh_mm.txt"
+				 */
+				char name[34] = "/tmp/daos_dump.txt";
+
+				if (rc != -1 && tm != NULL)
+					snprintf(name, 34,
+						 "/tmp/daos_dump_%04d%02d%02d_%02d_%02d.txt",
+						 tm->tm_year + 1900,
+						 tm->tm_mon + 1, tm->tm_mday,
+						 tm->tm_hour, tm->tm_min);
+
+				abt_infos = fopen(name, "a");
+				if (abt_infos == NULL) {
+					D_ERROR("failed to open file to dump ABT infos and ULTs stacks: %s (%d)\n",
+						strerror(errno), errno);
+					abt_infos = stderr;
+				}
+			}
+
+			/* print header msg with date */
+			fprintf(abt_infos,
+				"=== Dump of ABT infos and ULTs stacks in %s mode (",
+				sig == SIGUSR1 ? "unattended" : "attended");
+			if (rc == -1 || tm == NULL)
+				fprintf(abt_infos, "time unavailable");
+			else
+				fprintf(abt_infos,
+					"%04d/%02d/%02d-%02d:%02d:%02d.%02ld",
+					tm->tm_year + 1900, tm->tm_mon + 1,
+					tm->tm_mday, tm->tm_hour, tm->tm_min,
+					tm->tm_sec,
+					(long int)tv.tv_usec / 10000);
+			fprintf(abt_infos, ")\n");
+		}
+
+		/* use this iosrv main thread's context to dump Argobots
+		 * internal infos and ULTs stacks without internal synchro
 		 */
 		if (sig == SIGUSR1) {
-			dss_dump_ABT_state();
+			D_INFO("got SIGUSR1, dumping Argobots infos and ULTs stacks\n");
+			dss_dump_ABT_state(abt_infos);
 			continue;
 		}
 
-		/* SIGINT/SIGTERM/SIGUSR2 cause server shutdown */
+		/* trigger dump of all Argobots ULTs stacks with internal
+		 * synchro (timeout of 10s)
+		 */
+		if (sig == SIGUSR2) {
+			D_INFO("got SIGUSR2, attempting to trigger dump of all Argobots ULTs stacks\n");
+			ABT_info_trigger_print_all_thread_stacks(abt_infos,
+								 10.0, NULL,
+								 NULL);
+			continue;
+		}
+
+		/* SIGINT/SIGTERM cause server shutdown */
 		break;
 	}
 

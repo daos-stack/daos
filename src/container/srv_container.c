@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * \file
@@ -250,7 +233,7 @@ ds_cont_bcast_create(crt_context_t ctx, struct cont_svc *svc,
 		     crt_opcode_t opcode, crt_rpc_t **rpc)
 {
 	return ds_pool_bcast_create(ctx, svc->cs_pool, DAOS_CONT_MODULE, opcode,
-				    rpc, NULL, NULL);
+				    DAOS_CONT_VERSION, rpc, NULL, NULL);
 }
 
 void
@@ -310,7 +293,8 @@ ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 static int
 cont_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 {
-	int			 i;
+	int	i;
+	int	rc;
 
 	if (prop == NULL || prop->dpp_nr == 0 || prop->dpp_entries == NULL)
 		return 0;
@@ -362,6 +346,14 @@ cont_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 				  DAOS_ACL_MAX_PRINCIPAL_LEN);
 			if (entry_def->dpe_str == NULL)
 				return -DER_NOMEM;
+			break;
+		case DAOS_PROP_CO_ROOTS:
+			if (entry->dpe_val_ptr) {
+				rc = daos_prop_entry_dup_co_roots(entry_def,
+								  entry);
+				if (rc)
+					return rc;
+			}
 			break;
 		default:
 			D_ASSERTF(0, "bad dpt_type %d.\n", entry->dpe_type);
@@ -510,6 +502,18 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 
 				d_iov_set(&value, acl, daos_acl_get_size(acl));
 				rc = rdb_tx_update(tx, kvs, &ds_cont_prop_acl,
+						   &value);
+				if (rc)
+					return rc;
+			}
+			break;
+		case DAOS_PROP_CO_ROOTS:
+			if (entry->dpe_val_ptr != NULL) {
+				struct daos_prop_co_roots *roots;
+
+				roots = entry->dpe_val_ptr;
+				d_iov_set(&value, roots, sizeof(*roots));
+				rc = rdb_tx_update(tx, kvs, &ds_cont_prop_roots,
 						   &value);
 				if (rc)
 					return rc;
@@ -1149,9 +1153,12 @@ cont_agg_eph_leader_ult(void *arg)
 			rc = cont_iv_ec_agg_eph_refresh(pool->sp_iv_ns,
 						ec_agg->ea_cont_uuid, min_eph);
 			if (rc) {
-				D_ERROR(DF_CONT": refresh failed: %d\n",
-					DP_CONT(svc->cs_pool_uuid,
-						ec_agg->ea_cont_uuid), rc);
+				D_CDEBUG(rc == -DER_NONEXIST,
+					 DLOG_INFO, DLOG_ERR,
+					 DF_CONT": refresh failed: "DF_RC"\n",
+					 DP_CONT(svc->cs_pool_uuid,
+						 ec_agg->ea_cont_uuid),
+					DP_RC(rc));
 				continue;
 			}
 			ec_agg->ea_current_eph = min_eph;
@@ -1900,6 +1907,22 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 		prop->dpp_entries[idx].dpe_val = val;
 		idx++;
 	}
+	if (bits & DAOS_CO_QUERY_PROP_ROOTS) {
+		d_iov_set(&value, NULL, 0);
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_roots,
+				   &value);
+		if (rc != 0)
+			D_GOTO(out, rc);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_ROOTS;
+		D_ALLOC(prop->dpp_entries[idx].dpe_val_ptr, value.iov_len);
+		if (prop->dpp_entries[idx].dpe_val_ptr == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		memcpy(prop->dpp_entries[idx].dpe_val_ptr, value.iov_buf,
+		       value.iov_len);
+		idx++;
+	}
 out:
 	if (rc)
 		daos_prop_free(prop);
@@ -2057,6 +2080,13 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 					rc = -DER_IO;
 				}
 				break;
+			case DAOS_PROP_CO_ROOTS:
+				if (memcmp(entry->dpe_val_ptr,
+					   iv_entry->dpe_val_ptr,
+					   sizeof(struct daos_prop_co_roots)))
+					rc = -DER_IO;
+				break;
+
 			default:
 				D_ASSERTF(0, "bad dpe_type %d\n",
 					  entry->dpe_type);
@@ -2234,13 +2264,20 @@ set_acl(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	int		rc;
 
 	prop = daos_prop_alloc(1);
+	if (prop == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_ACL;
 	prop->dpp_entries[0].dpe_val_ptr = daos_acl_dup(acl);
+	if (prop->dpp_entries[0].dpe_val_ptr == NULL)
+		D_GOTO(out_prop, rc = -DER_NOMEM);
 
 	rc = set_prop(tx, pool_hdl->sph_pool, cont, hdl->ch_sec_capas,
 		      hdl_uuid, prop);
-	daos_prop_free(prop);
 
+out_prop:
+	daos_prop_free(prop);
+out:
 	return rc;
 }
 

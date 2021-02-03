@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from __future__ import print_function
 
@@ -29,7 +12,6 @@ import random
 from avocado import fail_on
 from apricot import TestWithServers
 from daos_racer_utils import DaosRacerCommand
-from agent_utils import include_local_host
 from command_utils import CommandFailure
 from general_utils import check_file_exists, get_host_data, get_log_file
 
@@ -87,7 +69,7 @@ class ZeroConfigTest(TestWithServers):
             bool: status of whether correct device was used.
 
         """
-	# anticipate log switch
+        # anticipate log switch
         cmd = "if [ -f {0}.old ]; then head -50 {0}.old; else head -50 {0};" \
               "fi".format(log_file)
         err = "Error getting log data."
@@ -190,14 +172,13 @@ class ZeroConfigTest(TestWithServers):
         exp_iface = random.choice(dev_info.keys())
 
         # Configure the daos server
-        config_file = self.get_config_file(self.server_group, "server")
-        self.add_server_manager(config_file)
+        self.add_server_manager()
         self.configure_manager(
             "server",
             self.server_managers[0],
             self.hostlist_servers,
             self.hostfile_servers_slots,
-            self.hostlist_servers)
+            self.access_points)
         self.assertTrue(
             self.server_managers[0].set_config_value(
                 "fabric_iface", exp_iface),

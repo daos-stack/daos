@@ -118,8 +118,9 @@
 #
 ## Disable VMD Usage
 #
-## In some circumstances it may be preferable to not use Volume Management
-## Devices even if available.
+## In some circumstances it may be preferable to not use Intel Volume Management
+## Devices even if available. VMD needs to be available and configured in the
+## system BIOS before use.
 #
 ## default: true
 #disable_vmd: false
@@ -253,15 +254,14 @@
 #
 #  scm_mount: /mnt/daos/1
 #
-#  # Backend SCM device type. Either use DCPM (datacentre persistent memory)
-#  # modules configured in interleaved mode (AppDirect regions) or emulated
-#  # tmpfs in RAM.
+#  # Backend SCM device type. Either use PMem (Intel(R) Optane(TM) persistent
+#  # memory) modules configured in interleaved mode or emulate SCM with a
+#  # tmpfs running in RAM.
 #  # Options are:
 #  # - "dcpm" for real SCM (preferred option), scm_size ignored
 #  # - "ram" to emulate SCM with memory, scm_list ignored
 #  # Immutable after reformat.
 #
-#  # default: dcpm
 #  scm_class: ram
 #
 #  # When scm_class is set to ram, tmpfs will be used to emulate SCM.
@@ -277,7 +277,6 @@
 #  # - "kdev" to use a kernel block device, bdev_{size,number} ignored
 #  # Immutable after reformat.
 #
-#  # default: nvme
 #  bdev_class: nvme
 #
 #  # Backend block device configuration to be used by this server instance.
@@ -285,6 +284,11 @@
 #  # that should be different across different server instance.
 #  # Immutable after reformat.
 #  bdev_list: ["0000:81:00.0"]  # generate regular nvme.conf
+#  # If VMD-enabled NVMe SSDs are used, the bdev_list should consist of the VMD
+#  # PCIe addresses, and not the BDF format transport IDs of the backing NVMe SSDs
+#  # behind the VMD address. Also, 'disable_vmd' needs to be set to false.
+#  bdev_list: ["0000:5d:05.5]
+
 #-
 #  # Rank to be assigned as identifier for server.
 #  # Immutable after reformat.
@@ -349,19 +353,18 @@
 #
 #  scm_mount: /mnt/daos/2
 #
-#  # Backend SCM device type. Either use DCPM (datacentre persistent memory)
-#  # modules configured in interleaved mode (AppDirect regions) or emulated
-#  # tmpfs in RAM.
+#  # Backend SCM device type. Either use PMem (Intel(R) Optane(TM) persistent
+#  # memory) modules configured in interleaved mode or emulate SCM with a
+#  # tmpfs running in RAM.
 #  # Options are:
 #  # - "dcpm" for real SCM (preferred option), scm_size is ignored
 #  # - "ram" to emulate SCM with memory, scm_list is ignored
 #  # Immutable after reformat.
 #
-#  # default: dcpm
 #  scm_class: dcpm
 #
 #  # When scm_class is set to dcpm, scm_list is the list of device paths for
-#  # AppDirect pmem namespaces (currently only one per server supported).
+#  # PMem namespaces (currently only one per server supported).
 #  scm_list: [/dev/pmem0]
 #
 #  # Backend block device type. Force a SPDK driver to be used by this server
@@ -379,9 +382,9 @@
 #  bdev_number: 1
 #  bdev_size: 4
 #
-#  # When bdev_class is set to file, bdev_list is the list of file paths that
-#  # will be used to emulate NVMe SSDs. The size of each file is specified by
-#  # bdev_size in GB unit.
+#  # When bdev_class is set to file, Linux AIO will be used to emulate NVMe.
+#  # The size of file that will be created is specified by bdev_size in GB units.
+#  # The location of the files that will be created is specified in bdev_list.
 #  bdev_class: file
 #  bdev_list: [/tmp/daos-bdev1,/tmp/daos-bdev2]
 #  bdev_size: 16

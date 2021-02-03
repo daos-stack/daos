@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package control
@@ -287,12 +270,12 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		}
 		ncs := make(storage.NvmeControllers, 0)
 		for _, i := range []int{1, 2, 3, 4, 5, 6, 7, 8} {
-			sd := storage.MockSmdDevice(int32(i))
+			nc := storage.MockNvmeController(int32(i))
+			nc.SocketID = int32(i % 2)
+			sd := storage.MockSmdDevice(nc.PciAddr, int32(i))
 			sd.TotalBytes = uint64(humanize.TByte) * uint64(i)
 			sd.AvailBytes = uint64((humanize.TByte/4)*3) * uint64(i) // 25% used
-			nc := storage.MockNvmeController(int32(i))
 			nc.SmdDevices = append(nc.SmdDevices, sd)
-			nc.SocketID = int32(i % 2)
 			ncs = append(ncs, nc)
 		}
 		if err := convert.Types(ncs, &ssr.Nvme.Ctrlrs); err != nil {
@@ -364,7 +347,7 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		}
 	case "standard":
 	default:
-		t.Fatalf("MockServerScanResp(): variant %s unrecognised", variant)
+		t.Fatalf("MockServerScanResp(): variant %s unrecognized", variant)
 	}
 	return ssr
 }

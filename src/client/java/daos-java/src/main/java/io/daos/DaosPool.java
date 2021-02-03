@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 package io.daos;
@@ -46,7 +29,7 @@ public class DaosPool extends Shareable implements Closeable {
     this.uuid = poolUuid;
   }
 
-  protected static DaosPool getInstance(String poolUuid, String serverGroup, String ranks, int flags)
+  protected static DaosPool getInstance(String poolUuid, String serverGroup, int flags)
       throws IOException {
     DaosPool dp = poolMap.get(poolUuid);
     if (dp == null) {
@@ -55,17 +38,17 @@ public class DaosPool extends Shareable implements Closeable {
       dp = poolMap.get(poolUuid);
     }
     synchronized (dp) {
-      dp.init(serverGroup, ranks, flags);
+      dp.init(serverGroup, flags);
       dp.incrementRef();
     }
     return dp;
   }
 
-  private void init(String serverGroup, String ranks, int flags) throws IOException {
+  private void init(String serverGroup, int flags) throws IOException {
     if (isInited()) {
       return;
     }
-    poolPtr = DaosClient.daosOpenPool(uuid, serverGroup, ranks, flags);
+    poolPtr = DaosClient.daosOpenPool(uuid, serverGroup, flags);
     setInited(true);
     if (log.isDebugEnabled()) {
       log.debug("opened pool {} with ptr {}", uuid, poolPtr);
