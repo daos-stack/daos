@@ -43,7 +43,8 @@
 #define SYS_DB_MD		"metadata"
 #define SYS_DB_MD_VER		"version"
 
-#define SYS_DB_VERSION		1
+#define SYS_DB_VERSION_1	1
+#define SYS_DB_VERSION		SYS_DB_VERSION_1
 
 #define SYS_DB_SIZE		(128UL << 20)	/* 128MB */
 #define SYS_DB_EPC		1
@@ -173,10 +174,11 @@ db_open_create(struct sys_db *db, bool try_create)
 			goto failed;
 		}
 
-		if (ver != SYS_DB_VERSION) {
-			D_CRIT("Incompatible sysdb version %d/%d\n",
-			       ver, SYS_DB_VERSION);
-			rc = -DER_DF_IMCOMPAT;
+		if (ver <SYS_DB_VERSION_1 || ver > SYS_DB_VERSION) {
+			vos_report_layout_incompat("SMD", SYS_DB_VERSION_1,
+						   SYS_DB_VERSION,
+						   vdb->db_pool);
+			rc = -DER_DF_INCOMPAT;
 			goto failed;
 		}
 	}

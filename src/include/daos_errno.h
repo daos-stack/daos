@@ -246,9 +246,7 @@ extern "C" {
 	       Agent is incompatible with libdaos)			\
 	/** Multiple shards locate on the same target */		\
 	ACTION(DER_SHARDS_OVERLAP,	(DER_ERR_DAOS_BASE + 30),	\
-	       Shards overlap)						\
-	ACTION(DER_DF_IMCOMPAT,		(DER_ERR_DAOS_BASE + 31),	\
-	       Incompatible durable format)
+	       Shards overlap)
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\
