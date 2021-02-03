@@ -450,9 +450,8 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 /**
  * Fetch values for the given keys and their indices.
- * If output buffer is not provided in \a sgl, then this function returns
- * the directly accessible addresses of record data, upper layer can directly
- * read from these addresses (rdma mode).
+ * Output buffer must be provided in \a sgl.  For zero copy, use
+ * vos_fetch_begin/end.
  *
  * TODO: add more detail descriptions for punched or missing records.
  *

@@ -169,7 +169,7 @@ daos_cont_prop2redunfac(daos_prop_t *props)
 	struct daos_prop_entry *prop =
 		daos_prop_entry_get(props, DAOS_PROP_CO_REDUN_FAC);
 
-	return prop == NULL ? DAOS_PROP_CO_REDUN_RF1 : (uint32_t)prop->dpe_val;
+	return prop == NULL ? DAOS_PROP_CO_REDUN_RF0 : (uint32_t)prop->dpe_val;
 }
 
 /** Get the redundancy level from a containers properites. */

@@ -694,7 +694,7 @@ rebuild_objects(void **state)
 }
 
 static void
-rebuild_sx_object(void **state)
+rebuild_sx_object_internal(void **state, uint16_t oclass)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
@@ -709,7 +709,7 @@ rebuild_sx_object(void **state)
 	if (!test_runable(arg, 4))
 		return;
 
-	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
+	oid = dts_oid_gen(oclass, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	print_message("insert 100 dkeys\n");
 	for (i = 0; i < 100; i++) {
@@ -733,6 +733,18 @@ rebuild_sx_object(void **state)
 	/* wait until reintegration is done */
 	test_rebuild_wait(&arg, 1);
 	ioreq_fini(&req);
+}
+
+static void
+rebuild_sx_object(void **state)
+{
+	rebuild_sx_object_internal(state, OC_SX);
+}
+
+static void
+rebuild_xsf_object(void **state)
+{
+	rebuild_sx_object_internal(state, OC_RP_XSF);
 }
 
 /** create a new pool/container for each test */
@@ -761,6 +773,8 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_snap_punch_empty, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD12: rebuild sx object",
 	 rebuild_sx_object, rebuild_small_sub_setup, test_teardown},
+	{"REBUILD13: rebuild xsf object",
+	 rebuild_xsf_object, rebuild_small_sub_setup, test_teardown},
 };
 
 int

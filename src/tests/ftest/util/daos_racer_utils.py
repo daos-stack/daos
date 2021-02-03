@@ -34,6 +34,7 @@ class DaosRacerCommand(ExecutableCommand):
         if dmg:
             self.dmg_config = FormattedParameter("-n {}", dmg.yaml.filename)
             dmg.copy_certificates(get_log_file("daosCA/certs"), [self.host])
+            dmg.copy_configuration([self.host])
 
         # Optional timeout for the clush command running the daos_racer command.
         # This should be set greater than the 'runtime' value but less than the
