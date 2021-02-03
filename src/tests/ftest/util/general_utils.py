@@ -601,19 +601,23 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60):
     result = {}
     log = getLogger()
     log.info("Killing any processes on %s that match: %s", hosts, pattern)
+
+    # Filter out zombie (defunct) processes from ps output
+    ps_with_zombie_filter = "ps x | grep -E {} | grep -vE '\<(grep|defunct)\>'"
+
     if hosts is not None:
         commands = [
             "rc=0",
             "set -x",
             "ps aux | grep -E {}".format(pattern),
-            "if pgrep --list-full {}".format(pattern),
+            "if " + ps_with_zombie_filter.format(pattern),
             "then rc=1",
             "sudo pkill {}".format(pattern),
             "sleep 5",
-            "if pgrep --list-full {}".format(pattern),
+            "if " + ps_with_zombie_filter.format(pattern),
             "then pkill --signal ABRT {}".format(pattern),
             "sleep 1",
-            "if pgrep --list-full {}".format(pattern),
+            "if " + ps_with_zombie_filter.format(pattern),
             "then pkill --signal KILL {}".format(pattern),
             "fi",
             "fi",
