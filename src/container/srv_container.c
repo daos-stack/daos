@@ -1425,25 +1425,19 @@ cont_status_set_unclean(struct rdb_tx *tx, struct ds_pool *pool,
 {
 	daos_prop_t		 tmp_prop = { 0 };
 	struct daos_prop_entry	*pentry;
-	struct daos_prop_entry	 entry;
 	int			 rc;
-
-	entry.dpe_type = DAOS_PROP_CO_STATUS;
-	entry.dpe_val = DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_UNCLEAN,
-				pool_map_get_version(pool->sp_map));
-	tmp_prop.dpp_nr = 1;
-	tmp_prop.dpp_entries = &entry;
-
-	rc = cont_prop_write(tx, &cont->c_prop, &tmp_prop);
-	if (rc) {
-		D_ERROR(DF_UUID": failed to cont_prop_write "DF_RC"\n",
-			DP_UUID(cont->c_uuid), DP_RC(rc));
-		return rc;
-	}
 
 	pentry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
 	D_ASSERT(pentry != NULL);
-	pentry->dpe_val = entry.dpe_val;
+	pentry->dpe_val = DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_UNCLEAN,
+				pool_map_get_version(pool->sp_map));
+	tmp_prop.dpp_nr = 1;
+	tmp_prop.dpp_entries = pentry;
+
+	rc = cont_prop_write(tx, &cont->c_prop, &tmp_prop);
+	if (rc)
+		D_ERROR(DF_UUID": failed to cont_prop_write "DF_RC"\n",
+			DP_UUID(cont->c_uuid), DP_RC(rc));
 
 	return rc;
 }
@@ -1453,12 +1447,12 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	  crt_rpc_t *rpc)
 {
 	struct cont_open_in    *in = crt_req_get(rpc);
+	struct cont_open_out   *out = crt_reply_get(rpc);
 	d_iov_t			key;
 	d_iov_t			value;
 	daos_prop_t	       *prop = NULL;
 	struct container_hdl	chdl;
 	struct pool_map		*pmap;
-	struct cont_open_out   *out = crt_reply_get(rpc);
 	char			zero = 0;
 	int			rc, rc1;
 	struct ownership	owner;
@@ -1521,6 +1515,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 	/* Determine pool meets container redundancy factor requirements */
 	is_healthy = cont_status_is_healthy(prop, &stat_pm_ver);
+	out->coo_op.co_map_version = stat_pm_ver;
 	if (is_healthy) {
 		int	rf;
 
@@ -1540,6 +1535,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 			is_healthy = false;
 		} else if (rc) {
+			daos_prop_free(prop);
 			goto out;
 		}
 	}
@@ -2187,7 +2183,7 @@ cont_status_check(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 		entry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
 		D_ASSERT(entry != NULL);
 		iv_entry = daos_prop_entry_get(iv_prop, DAOS_PROP_CO_STATUS);
-		D_ASSERT(entry != NULL);
+		D_ASSERT(iv_entry != NULL);
 		iv_entry->dpe_val = entry->dpe_val;
 		rc = cont_iv_prop_update(pool->sp_iv_ns, in->cqi_op.ci_uuid,
 					 iv_prop);

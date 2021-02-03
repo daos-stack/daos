@@ -2072,7 +2072,8 @@ co_rf_simple(void **state)
 	test_arg_t		*arg0 = *state;
 	test_arg_t		*arg = NULL;
 	daos_obj_id_t		 oid;
-	daos_handle_t		 coh, oh;
+	daos_handle_t		 coh, oh, coh_g2l;
+	d_iov_t			 ghdl = { NULL, 0, 0 };
 	daos_prop_t		*prop = NULL;
 	struct daos_prop_entry	*entry;
 	struct daos_co_status	 stat = { 0 };
@@ -2196,6 +2197,20 @@ co_rf_simple(void **state)
 	rc = daos_cont_open(arg->pool.poh, arg->co_uuid, arg->cont_open_flags,
 			    &coh, NULL, NULL);
 	assert_int_equal(rc, 0);
+
+	rc = daos_cont_local2global(coh, &ghdl);
+	assert_rc_equal(rc, 0);
+	ghdl.iov_buf = malloc(ghdl.iov_buf_len);
+	ghdl.iov_len = ghdl.iov_buf_len;
+	rc = daos_cont_local2global(coh, &ghdl);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_cont_global2local(arg->pool.poh, ghdl, &coh_g2l);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_close(coh_g2l, NULL);
+	assert_int_equal(rc, 0);
+	free(ghdl.iov_buf);
+
 	rc = daos_cont_close(coh, NULL);
 	assert_int_equal(rc, 0);
 
