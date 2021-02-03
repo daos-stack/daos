@@ -132,6 +132,7 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 			D_DEBUG(DF_DSMS, "change rank %u to UP\n",
 				dom->do_comp.co_rank);
 			dom->do_comp.co_status = PO_COMP_ST_UP;
+			dom->do_comp.co_flags = 0;
 			break;
 		}
 		break;
@@ -157,6 +158,8 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 			 * Need to update this target AND all of its parents
 			 * domains from NEW -> UPIN
 			 */
+
+			target->ta_comp.co_flags = 0;
 			rc = pool_map_activate_new_target(map,
 						target->ta_comp.co_id);
 			D_ASSERT(rc != 0); /* This target must be findable */
@@ -178,12 +181,13 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 			D_ERROR("Can't EXCLUDE_OUT non-down "DF_TARGET"\n",
 				DP_TARGET(target));
 			return -DER_INVAL;
-		case PO_COMP_ST_DRAIN:
 		case PO_COMP_ST_DOWN:
+			target->ta_comp.co_flags = PO_COMPF_DOWN2OUT;
+		case PO_COMP_ST_DRAIN:
 			D_DEBUG(DF_DSMS, "change "DF_TARGET" to DOWNOUT %p\n",
 				DP_TARGET(target), map);
 			target->ta_comp.co_status = PO_COMP_ST_DOWNOUT;
-			(*version)++;
+			target->ta_comp.co_out_ver = ++(*version);
 			if (print_changes)
 				D_PRINT(DF_TARGET" is excluded.\n",
 					DP_TARGET(target));
@@ -251,13 +255,17 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 						PO_COMP_ST_DOWNOUT)) &&
 		    pool_map_node_status_match(dom, PO_COMP_ST_DOWN |
 						    PO_COMP_ST_DOWNOUT)) {
-			if (opc == POOL_EXCLUDE)
+			if (opc == POOL_EXCLUDE) {
 				dom->do_comp.co_status = PO_COMP_ST_DOWN;
-			else if (opc == POOL_EXCLUDE_OUT)
+				dom->do_comp.co_fseq =
+					target->ta_comp.co_fseq;
+			} else if (opc == POOL_EXCLUDE_OUT) {
 				dom->do_comp.co_status = PO_COMP_ST_DOWNOUT;
-			else
+				dom->do_comp.co_flags = PO_COMPF_DOWN2OUT;
+				dom->do_comp.co_out_ver =
+					target->ta_comp.co_out_ver;
+			} else
 				D_ASSERTF(false, "evict rank by %d\n", opc);
-			dom->do_comp.co_fseq = target->ta_comp.co_fseq;
 			D_DEBUG(DF_DSMS, "change rank %u to DOWN\n",
 				dom->do_comp.co_rank);
 			version++;
@@ -279,5 +287,4 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 	}
 
 	return 0;
-
 }

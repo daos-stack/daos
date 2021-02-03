@@ -54,8 +54,10 @@ struct pl_jump_map {
 	struct pl_map		jmp_map;
 	/* Total size of domain type specified during map creation */
 	unsigned int		jmp_domain_nr;
+	/* # UPIN targets */
+	unsigned int		jmp_target_nr;
 	/* The dom that will contain no colocated shards */
-	pool_comp_type_t	min_redundant_dom;
+	pool_comp_type_t	jmp_redundant_dom;
 };
 
 /**
@@ -795,7 +797,7 @@ jump_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 	pool_map_addref(poolmap);
 	jmap->jmp_map.pl_poolmap = poolmap;
 
-	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_ROOT,
+	rc = pool_map_find_domain(poolmap, PO_COMP_TP_ROOT,
 				  PO_COMP_ID_ALL, &root);
 	if (rc == 0) {
 		D_ERROR("Could not find root node in pool map.");
@@ -803,19 +805,22 @@ jump_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 		goto ERR;
 	}
 
-	jmap->min_redundant_dom = mia->ia_jump_map.domain;
-	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap,
-			mia->ia_jump_map.domain, PO_COMP_ID_ALL, &doms);
+	jmap->jmp_redundant_dom = mia->ia_jump_map.domain;
+	rc = pool_map_find_domain(poolmap, mia->ia_jump_map.domain,
+				  PO_COMP_ID_ALL, &doms);
 	if (rc <= 0) {
 		rc = (rc == 0) ? -DER_INVAL : rc;
 		goto ERR;
 	}
 
 	jmap->jmp_domain_nr = rc;
+	rc = pool_map_find_upin_tgts(poolmap, NULL, &jmap->jmp_target_nr);
+	if (rc) {
+		D_ERROR("cannot find active targets: %d\n", rc);
+		goto ERR;
+	}
 	*mapp = &jmap->jmp_map;
-
 	return DER_SUCCESS;
-
 ERR:
 	jump_map_destroy(&jmap->jmp_map);
 	return rc;
@@ -825,6 +830,18 @@ static void
 jump_map_print(struct pl_map *map)
 {
 	/** Currently nothing to print */
+}
+
+static int
+jump_map_query(struct pl_map *map, struct pl_map_attr *attr)
+{
+	struct pl_jump_map   *jmap = pl_map2jmap(map);
+
+	attr->pa_type	   = PL_TYPE_JUMP_MAP;
+	attr->pa_target_nr = jmap->jmp_target_nr;
+	attr->pa_domain_nr = jmap->jmp_domain_nr;
+	attr->pa_domain    = jmap->jmp_redundant_dom;
+	return 0;
 }
 
 /**
@@ -878,7 +895,11 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	D_INIT_LIST_HEAD(&remap_list);
 	rc = get_object_layout(jmap, layout, &jmop, &remap_list,
 				PL_PLACE_EXTENDED, md);
-	assert(rc == 0);
+	if (rc != 0) {
+		D_ERROR("get_layout_alloc failed, rc "DF_RC"\n", DP_RC(rc));
+		pl_obj_layout_free(layout);
+		return rc;
+	}
 	/* Needed to check if domains are being added to pool map */
 	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_ROOT,
 				  PO_COMP_ID_ALL, &root);
@@ -1166,6 +1187,7 @@ out:
 struct pl_map_ops       jump_map_ops = {
 	.o_create               = jump_map_create,
 	.o_destroy              = jump_map_destroy,
+	.o_query		= jump_map_query,
 	.o_print                = jump_map_print,
 	.o_obj_place            = jump_map_obj_place,
 	.o_obj_find_rebuild     = jump_map_obj_find_rebuild,

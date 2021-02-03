@@ -44,6 +44,12 @@ daos_obj_id2ver(daos_obj_id_t oid)
 	return version;
 }
 
+static inline bool
+daos_obj_id_is_nil(daos_obj_id_t oid)
+{
+	return oid.hi == 0 && oid.lo == 0;
+}
+
 /**
  * XXX old class IDs
  *
@@ -135,6 +141,7 @@ enum daos_io_mode {
 
 #define DAOS_OBJ_GRP_MAX	(~0)
 #define DAOS_OBJ_REPL_MAX	(~0)
+#define DAOS_OBJ_RESIL_MAX	(~0)
 
 /**
  * 192-bit object ID, it can identify a unique bottom level object.
@@ -241,6 +248,7 @@ struct daos_oclass_attr *daos_oclass_attr_find(daos_obj_id_t oid);
 unsigned int daos_oclass_grp_size(struct daos_oclass_attr *oc_attr);
 unsigned int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
 				struct daos_obj_md *md);
+int daos_oclass_fit_max(int oc_id, int domain_nr, int target_nr, int *oc_id_p);
 
 /** bits for the specified rank */
 #define DAOS_OC_SR_SHIFT	24
