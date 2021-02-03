@@ -189,9 +189,11 @@ struct dss_module_info {
 	int			dmi_tgt_id;
 	/* the cart context id */
 	int			dmi_ctx_id;
+	uint32_t		dmi_dtx_batched_started:1;
 	d_list_t		dmi_dtx_batched_list;
 	/* the profile information */
 	struct daos_profile	*dmi_dp;
+	struct sched_request	*dmi_dtx_req;
 };
 
 extern struct dss_module_key	daos_srv_modkey;
@@ -342,6 +344,12 @@ bool sched_req_is_aborted(struct sched_request *req);
  */
 int sched_req_space_check(struct sched_request *req);
 
+/**
+ * Wrapper of ABT_cond_wait(), inform scheduler that it's going
+ * to be blocked for a relative long time.
+ */
+void sched_cond_wait(ABT_cond cond, ABT_mutex mutex);
+
 static inline bool
 dss_ult_exiting(struct sched_request *req)
 {
@@ -433,7 +441,7 @@ struct dss_module {
 enum dss_xs_type {
 	/** current xstream */
 	DSS_XS_SELF	= -1,
-	/** operations needs accessing VOS */
+	/** operations need to access VOS */
 	DSS_XS_VOS	= 0,
 	/** forward/dispatch IO request for TX coordinator */
 	DSS_XS_IOFW	= 1,
@@ -447,15 +455,23 @@ enum dss_xs_type {
 
 int dss_parameters_set(unsigned int key_id, uint64_t value);
 
-typedef ABT_pool (*dss_abt_pool_choose_cb_t)(crt_rpc_t *rpc, ABT_pool *pools);
+enum dss_ult_flags {
+	/* Periodically created ULTs */
+	DSS_ULT_FL_PERIODIC	= (1 << 0),
+};
 
-void dss_abt_pool_choose_cb_register(unsigned int mod_id,
-				     dss_abt_pool_choose_cb_t cb);
 int dss_ult_create(void (*func)(void *), void *arg, int xs_type, int tgt_id,
 		   size_t stack_size, ABT_thread *ult);
 int dss_ult_execute(int (*func)(void *), void *arg, void (*user_cb)(void *),
 		    void *cb_args, int xs_type, int tgt_id, size_t stack_size);
 int dss_ult_create_all(void (*func)(void *), void *arg, bool main);
+
+/*
+ * If server wants to create ULTs periodically, it should call this special
+ * ult create function to avoid bumping the 'xstream busy timestamp'.
+ */
+int dss_ult_periodic(void (*func)(void *), void *arg, int xs_type, int tgt_id,
+		     size_t stack_size, ABT_thread *ult);
 
 int dss_sleep(uint64_t ms);
 
@@ -533,12 +549,13 @@ struct dss_coll_args {
  */
 int
 dss_task_collective_reduce(struct dss_coll_ops *ops,
-			   struct dss_coll_args *coll_args, int flag);
+			   struct dss_coll_args *coll_args, unsigned int flags);
 int
 dss_thread_collective_reduce(struct dss_coll_ops *ops,
-			     struct dss_coll_args *coll_args, int flag);
-int dss_task_collective(int (*func)(void *), void *arg, int flag);
-int dss_thread_collective(int (*func)(void *), void *arg, int flag);
+			     struct dss_coll_args *coll_args,
+			     unsigned int flags);
+int dss_task_collective(int (*func)(void *), void *arg, unsigned int flags);
+int dss_thread_collective(int (*func)(void *), void *arg, unsigned int flags);
 
 struct dss_module *dss_module_get(int mod_id);
 /* Convert Argobots errno to DAOS ones. */
@@ -816,4 +833,37 @@ ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks);
 
 bool is_container_from_srv(uuid_t pool_uuid, uuid_t coh_uuid);
 bool is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid);
+
+struct sys_db;
+typedef int (*sys_db_trav_cb_t)(struct sys_db *db, char *table, d_iov_t *key,
+				void *args);
+
+#define SYS_DB_NAME_SZ		32
+
+/** system database is a simple local KV store */
+struct sys_db {
+	char	 sd_name[SYS_DB_NAME_SZ];
+	/** look up the provided key in \a table and return its value */
+	int	(*sd_fetch)(struct sys_db *db, char *table,
+			    d_iov_t *key, d_iov_t *val);
+	/** update or insert a KV pair to \a table */
+	int	(*sd_upsert)(struct sys_db *db, char *table,
+			     d_iov_t *key, d_iov_t *val);
+	/** reserved */
+	int	(*sd_insert)(struct sys_db *db, char *table,
+			     d_iov_t *key, d_iov_t *val);
+	/** reserved */
+	int	(*sd_update)(struct sys_db *db, char *table,
+			     d_iov_t *key, d_iov_t *val);
+	/** delete provided key and its value from the \a table */
+	int	(*sd_delete)(struct sys_db *db, char *table, d_iov_t *key);
+	/** traverse all keys in the \a table */
+	int	(*sd_traverse)(struct sys_db *db, char *table,
+			       sys_db_trav_cb_t cb, void *args);
+	int	(*sd_tx_begin)(struct sys_db *db);
+	int	(*sd_tx_end)(struct sys_db *db, int rc);
+	void	(*sd_lock)(struct sys_db *db);
+	void	(*sd_unlock)(struct sys_db *db);
+};
+
 #endif /* __DSS_API_H__ */

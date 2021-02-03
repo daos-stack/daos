@@ -397,7 +397,8 @@ dtx_cmt_ent_update(struct btr_instance *tins, struct btr_record *rec,
 	 * indexed table.
 	 */
 
-	dce->dce_exist = 1;
+	if (!dce->dce_reindex)
+		dce->dce_exist = 1;
 
 	return 0;
 }
@@ -1768,7 +1769,7 @@ vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
 	struct vos_dtx_blob_df		*dbd;
 	struct vos_dtx_blob_df		*dbd_prev;
 	umem_off_t			 dbd_off;
-	struct vos_dtx_cmt_ent_df	*dce_df;
+	struct vos_dtx_cmt_ent_df	*dce_df = NULL;
 	int				 committed = 0;
 	int				 slots = 0;
 	int				 cur = 0;
@@ -1777,6 +1778,7 @@ vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
 	int				 i;
 	int				 j;
 	bool				 fatal = false;
+	bool				 allocated = false;
 
 	dbd = umem_off2ptr(umm, cont_df->cd_dtx_committed_tail);
 	if (dbd != NULL)
@@ -1787,7 +1789,7 @@ vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
 
 	rc = umem_tx_add_ptr(umm, &dbd->dbd_count, sizeof(dbd->dbd_count));
 	if (rc != 0)
-		return rc;
+		D_GOTO(out, fatal = true);
 
 again:
 	if (slots > count)
@@ -1802,10 +1804,12 @@ again:
 				DP_DTI(&dtis[cur]));
 
 			/* non-fatal, former handled ones can be committed. */
-			return committed > 0 ? committed : -DER_NOMEM;
+			D_GOTO(out, rc1 = -DER_NOMEM);
 		}
+		allocated = true;
 	} else {
 		dce_df = &dbd->dbd_committed_data[dbd->dbd_count];
+		allocated = false;
 	}
 
 	for (i = 0, j = 0; i < slots && rc1 == 0; i++, cur++) {
@@ -1816,7 +1820,7 @@ again:
 					daes != NULL ? &daes[cur] : NULL,
 					&fatal);
 		if (fatal)
-			return rc;
+			goto out;
 
 		if (rc == 0 && (daes == NULL || daes[cur] != NULL))
 			committed++;
@@ -1850,7 +1854,7 @@ again:
 		dbd->dbd_count += j;
 
 	if (count == 0 || rc1 != 0)
-		return committed > 0 ? committed : rc1;
+		goto out;
 
 	if (j < slots) {
 		slots -= j;
@@ -1865,7 +1869,8 @@ new_blob:
 	if (umoff_is_null(dbd_off)) {
 		D_ERROR("No space to store committed DTX %d "DF_DTI"\n",
 			count, DP_DTI(&dtis[cur]));
-		return -DER_NOSPACE;
+		fatal = true;
+		D_GOTO(out, rc = -DER_NOSPACE);
 	}
 
 	dbd = umem_off2ptr(umm, dbd_off);
@@ -1883,10 +1888,12 @@ new_blob:
 		if (dce_df == NULL) {
 			D_ERROR("Not enough DRAM to commit "DF_DTI"\n",
 				DP_DTI(&dtis[cur]));
-			return committed > 0 ? committed : -DER_NOMEM;
+			D_GOTO(out, rc1 = -DER_NOMEM);
 		}
+		allocated = true;
 	} else {
 		dce_df = &dbd->dbd_committed_data[0];
+		allocated = false;
 	}
 
 	if (dbd_prev == NULL) {
@@ -1898,21 +1905,21 @@ new_blob:
 				     sizeof(cont_df->cd_dtx_committed_head) +
 				     sizeof(cont_df->cd_dtx_committed_tail));
 		if (rc != 0)
-			return rc;
+			D_GOTO(out, fatal = true);
 
 		cont_df->cd_dtx_committed_head = dbd_off;
 	} else {
 		rc = umem_tx_add_ptr(umm, &dbd_prev->dbd_next,
 				     sizeof(dbd_prev->dbd_next));
 		if (rc != 0)
-			return rc;
+			D_GOTO(out, fatal = true);
 
 		dbd_prev->dbd_next = dbd_off;
 
 		rc = umem_tx_add_ptr(umm, &cont_df->cd_dtx_committed_tail,
 				     sizeof(cont_df->cd_dtx_committed_tail));
 		if (rc != 0)
-			return rc;
+			D_GOTO(out, fatal = true);
 	}
 
 	cont_df->cd_dtx_committed_tail = dbd_off;
@@ -1925,7 +1932,7 @@ new_blob:
 					daes != NULL ? &daes[cur] : NULL,
 					&fatal);
 		if (fatal)
-			return rc;
+			goto out;
 
 		if (rc == 0 && (daes == NULL || daes[cur] != NULL))
 			committed++;
@@ -1951,7 +1958,11 @@ new_blob:
 
 	dbd->dbd_count = j;
 
-	return committed > 0 ? committed : rc1;
+out:
+	if (allocated)
+		D_FREE(dce_df);
+
+	return fatal ? rc : (committed > 0 ? committed : rc1);
 }
 
 void
@@ -2110,8 +2121,11 @@ vos_dtx_aggregate(daos_handle_t coh)
 		dce = d_list_entry(cont->vc_dtx_committed_list.next,
 				   struct vos_dtx_cmt_ent, dce_committed_link);
 		d_iov_set(&kiov, &DCE_XID(dce), sizeof(DCE_XID(dce)));
-		dbtree_delete(cont->vc_dtx_committed_hdl, BTR_PROBE_EQ,
-			      &kiov, NULL);
+		rc = dbtree_delete(cont->vc_dtx_committed_hdl, BTR_PROBE_EQ,
+				   &kiov, NULL);
+		if (rc != 0)
+			D_WARN("Failed to remove cmt DTX entry: "DF_RC"\n",
+			       DP_RC(rc));
 	}
 
 	tmp = umem_off2ptr(umm, dbd->dbd_next);
@@ -2565,10 +2579,19 @@ vos_dtx_cache_reset(daos_handle_t coh)
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
 
-	if (daos_handle_is_valid(cont->vc_dtx_active_hdl))
-		dbtree_destroy(cont->vc_dtx_active_hdl, NULL);
-	if (daos_handle_is_valid(cont->vc_dtx_committed_hdl))
-		dbtree_destroy(cont->vc_dtx_committed_hdl, NULL);
+	if (daos_handle_is_valid(cont->vc_dtx_active_hdl)) {
+		rc = dbtree_destroy(cont->vc_dtx_active_hdl, NULL);
+		if (rc != 0)
+			D_WARN("Failed to destroy act DTX tree: "DF_RC"\n",
+			       DP_RC(rc));
+	}
+
+	if (daos_handle_is_valid(cont->vc_dtx_committed_hdl)) {
+		rc = dbtree_destroy(cont->vc_dtx_committed_hdl, NULL);
+		if (rc != 0)
+			D_WARN("Failed to destroy cmt DTX tree: "DF_RC"\n",
+			       DP_RC(rc));
+	}
 
 	if (cont->vc_dtx_array)
 		lrua_array_free(cont->vc_dtx_array);

@@ -874,7 +874,7 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 			RPC_ERROR(rpc_priv,
 				  "HG_Create failed, hg_ret: %d\n",
 				  hg_ret);
-			rc = -DER_HG;
+			D_GOTO(out, rc = -DER_HG);
 		}
 	} else {
 		rpc_priv->crp_hg_hdl = rpc_priv->crp_hdl_reuse->chh_hdl;
@@ -885,7 +885,7 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 			RPC_ERROR(rpc_priv,
 				  "HG_Reset failed, hg_ret: %d\n",
 				  hg_ret);
-			rc = -DER_HG;
+			D_GOTO(out, rc = -DER_HG);
 		}
 	}
 
@@ -898,10 +898,10 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 			RPC_ERROR(rpc_priv,
 				  "HG_Set_target_id failed, hg_ret: %d\n",
 				  hg_ret);
-			rc = -DER_HG;
+			D_GOTO(out, rc = -DER_HG);
 		}
 	}
-
+out:
 	return rc;
 }
 

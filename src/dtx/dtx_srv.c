@@ -158,7 +158,11 @@ out:
 		/* Commit the DTX after replied the original refresh request to
 		 * avoid further query the same DTX.
 		 */
-		dtx_commit(cont, pdte, j, true);
+		rc = dtx_commit(cont, pdte, j, true);
+		if (rc < 0)
+			D_WARN("Failed to commit DTX "DF_DTI", count %d: "
+			       DF_RC"\n", DP_DTI(&dtes[0].dte_xid), j,
+			       DP_RC(rc));
 
 		for (i = 0; i < j; i++)
 			D_FREE(pdte[i]->dte_mbs);
