@@ -82,7 +82,7 @@ class JavaCIIntegration(TestWithServers):
 
         """
         # look for java home
-        command = "cd {}/daos-java; chmod 755 find_java_home.sh; ./find_java_home.sh".format(self.jdir)
+        command = r"cd {}/daos-java; chmod 755 find_java_home.sh; ./find_java_home.sh".format(self.jdir)
         task = run_task(hosts=self.hostlist_clients, command=command)
         for output, _ in task.iter_buffers():
             result = str(output)
@@ -111,7 +111,7 @@ class JavaCIIntegration(TestWithServers):
         :avocado: tags=all,pr,hw,small,javaciintegration
         """
         # get current working dir
-        self.jdir = "{}/../java".format(os.getcwd())
+        self.jdir = r"{}/../java".format(os.getcwd())
 
         # create pool and container
         self.pool = self._create_pool()
