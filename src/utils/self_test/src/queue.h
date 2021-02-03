@@ -268,7 +268,7 @@ struct {							\
 #define STAILQ_FIRST(head)      ((head)->stqh_first)
 
 #define STAILQ_FOREACH(var, head, field)			\
-	for((var) = STAILQ_FIRST((head));			\
+	for ((var) = STAILQ_FIRST((head));			\
 	    (var);						\
 	    (var) = STAILQ_NEXT((var), field))
 
@@ -293,15 +293,17 @@ struct {							\
 } while (0)
 
 #define STAILQ_INSERT_AFTER(head, tqelm, elm, field) do {	\
-	if ((STAILQ_NEXT((elm), field) = STAILQ_NEXT((tqelm), field)) == NULL)\
+	STAILQ_NEXT((elm), field) = STAILQ_NEXT((tqelm), field); \
+	if (STAILQ_NEXT((elm), field) == NULL)			\
 		(head)->stqh_last = &STAILQ_NEXT((elm), field);	\
 	STAILQ_NEXT((tqelm), field) = (elm);			\
 } while (0)
 
-#define STAILQ_INSERT_HEAD(head, elm, field) do {			\
-	if ((STAILQ_NEXT((elm), field) = STAILQ_FIRST((head))) == NULL) \
-		(head)->stqh_last = &STAILQ_NEXT((elm), field);		\
-	STAILQ_FIRST((head)) = (elm);					\
+#define STAILQ_INSERT_HEAD(head, elm, field) do {		\
+	STAILQ_NEXT((elm), field) = STAILQ_FIRST((head));	\
+	if (STAILQ_NEXT((elm), field) == NULL)			\
+		(head)->stqh_last = &STAILQ_NEXT((elm), field);	\
+	STAILQ_FIRST((head)) = (elm);				\
 } while (0)
 
 #define STAILQ_INSERT_TAIL(head, elm, field) do {		\
@@ -331,14 +333,16 @@ struct {							\
 } while (0)
 
 #define STAILQ_REMOVE_AFTER(head, elm, field) do {		\
-	if ((STAILQ_NEXT(elm, field) =				\
-	     STAILQ_NEXT(STAILQ_NEXT(elm, field), field)) == NULL)\
+	STAILQ_NEXT(elm, field) =				\
+		    STAILQ_NEXT(STAILQ_NEXT(elm, field), field);\
+	if (STAILQ_NEXT(elm, field) == NULL)			\
 		(head)->stqh_last = &STAILQ_NEXT((elm), field);	\
 } while (0)
 
 #define STAILQ_REMOVE_HEAD(head, field) do {			\
-	if ((STAILQ_FIRST((head)) =				\
-	     STAILQ_NEXT(STAILQ_FIRST((head)), field)) == NULL)	\
+	STAILQ_FIRST((head)) =					\
+		STAILQ_NEXT(STAILQ_FIRST((head)), field;	\
+	if (STAILQ_FIRST((head)) == NULL)			\
 		(head)->stqh_last = &STAILQ_FIRST((head));	\
 } while (0)
 
@@ -431,7 +435,8 @@ struct {							\
 
 #define LIST_INSERT_AFTER(listelm, elm, field) do {		\
 	QMD_LIST_CHECK_NEXT(listelm, field);			\
-	if ((LIST_NEXT((elm), field) = LIST_NEXT((listelm), field)) != NULL)\
+	LIST_NEXT((elm), field) = LIST_NEXT((listelm), field);	\
+	if (LIST_NEXT((elm), field) != NULL)			\
 		LIST_NEXT((listelm), field)->field.le_prev =	\
 		    &LIST_NEXT((elm), field);			\
 	LIST_NEXT((listelm), field) = (elm);			\
@@ -448,7 +453,8 @@ struct {							\
 
 #define LIST_INSERT_HEAD(head, elm, field) do {			\
 	QMD_LIST_CHECK_HEAD((head), field);			\
-	if ((LIST_NEXT((elm), field) = LIST_FIRST((head))) != NULL)\
+	LIST_NEXT((elm), field) = LIST_FIRST((head));		\
+	if (LIST_NEXT((elm), field) != NULL)			\
 		LIST_FIRST((head))->field.le_prev = &LIST_NEXT((elm), field);\
 	LIST_FIRST((head)) = (elm);				\
 	(elm)->field.le_prev = &LIST_FIRST((head));		\
@@ -477,9 +483,11 @@ struct {							\
 	struct type *swap_tmp = LIST_FIRST((head1));		\
 	LIST_FIRST((head1)) = LIST_FIRST((head2));		\
 	LIST_FIRST((head2)) = swap_tmp;				\
-	if ((swap_tmp = LIST_FIRST((head1))) != NULL)		\
+	swap_tmp = LIST_FIRST((head1));				\
+	if (swap_tmp != NULL)					\
 		swap_tmp->field.le_prev = &LIST_FIRST((head1));	\
-	if ((swap_tmp = LIST_FIRST((head2))) != NULL)		\
+	swap_tmp = LIST_FIRST((head2));				\
+	if (swap_tmp != NULL)					\
 		swap_tmp->field.le_prev = &LIST_FIRST((head2));	\
 } while (0)
 
@@ -600,7 +608,8 @@ struct {							\
 
 #define TAILQ_INSERT_AFTER(head, listelm, elm, field) do {	\
 	QMD_TAILQ_CHECK_NEXT(listelm, field);			\
-	if ((TAILQ_NEXT((elm), field) = TAILQ_NEXT((listelm), field)) != NULL)\
+	TAILQ_NEXT((elm), field) = TAILQ_NEXT((listelm), field);\
+	if (TAILQ_NEXT((elm), field) != NULL)			\
 		TAILQ_NEXT((elm), field)->field.tqe_prev =	\
 		    &TAILQ_NEXT((elm), field);			\
 	else {							\
@@ -624,7 +633,8 @@ struct {							\
 
 #define TAILQ_INSERT_HEAD(head, elm, field) do {		\
 	QMD_TAILQ_CHECK_HEAD(head, field);			\
-	if ((TAILQ_NEXT((elm), field) = TAILQ_FIRST((head))) != NULL)\
+	TAILQ_NEXT((elm), field) = TAILQ_FIRST((head));		\
+	if (TAILQ_NEXT((elm), field) != NULL)			\
 		TAILQ_FIRST((head))->field.tqe_prev =		\
 		    &TAILQ_NEXT((elm), field);			\
 	else							\
@@ -659,7 +669,7 @@ struct {							\
 	QMD_TAILQ_CHECK_NEXT(elm, field);			\
 	QMD_TAILQ_CHECK_PREV(elm, field);			\
 	if ((TAILQ_NEXT((elm), field)) != NULL)			\
-	    TAILQ_NEXT((elm), field)->field.tqe_prev =		\
+		TAILQ_NEXT((elm), field)->field.tqe_prev =	\
 		       (elm)->field.tqe_prev;			\
 	else {							\
 		(head)->tqh_last = (elm)->field.tqe_prev;	\
@@ -678,11 +688,13 @@ struct {							\
 	(head1)->tqh_last = (head2)->tqh_last;			\
 	(head2)->tqh_first = swap_first;			\
 	(head2)->tqh_last = swap_last;				\
-	if ((swap_first = (head1)->tqh_first) != NULL)		\
+	swap_first = (head1)->tqh_first;			\
+	if (swap_first != NULL)					\
 		swap_first->field.tqe_prev = &(head1)->tqh_first;\
 	else							\
 		(head1)->tqh_last = &(head1)->tqh_first;	\
-	if ((swap_first = (head2)->tqh_first) != NULL)		\
+	swap_first = (head2)->tqh_first;			\
+	if (swap_first != NULL)					\
 		swap_first->field.tqe_prev = &(head2)->tqh_first;\
 	else							\
 		(head2)->tqh_last = &(head2)->tqh_first;	\
