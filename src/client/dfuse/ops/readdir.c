@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,7 +16,7 @@
 #define READDIR_BASE_COUNT 128
 
 /* Marker offset used to signify end-of-directory */
-#define DFUSE_READDIR_EOD (1LL << 63)
+#define READDIR_EOD (1LL << 63)
 
 /* Offset of the first file, allow two entries for . and .. */
 #define OFFSET_BASE 2
@@ -30,8 +30,10 @@ struct iterate_data {
 static int
 filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *arg)
 {
-	struct iterate_data *idata = arg;
-	struct dfuse_readdir_entry *dre = &idata->id_oh->doh_dre[idata->id_index];
+	struct iterate_data		*idata = arg;
+	struct dfuse_readdir_entry	*dre;
+
+	dre = &idata->id_oh->doh_dre[idata->id_index];
 
 	DFUSE_TRA_DEBUG(idata->id_oh, "Adding at index %d offset %ld '%s'",
 			idata->id_index,
@@ -71,7 +73,7 @@ fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, int to_fetch,
 
 	if (count) {
 		if (daos_anchor_is_eof(&oh->doh_anchor))
-			oh->doh_dre[count - 1].dre_next_offset = DFUSE_READDIR_EOD;
+			oh->doh_dre[count - 1].dre_next_offset = READDIR_EOD;
 	} else {
 		*eod = true;
 	}
@@ -195,6 +197,9 @@ dfuse_readdir_reset(struct dfuse_obj_hdl *oh)
 	oh->doh_anchor_index = 0;
 }
 
+#define FADP   fuse_add_direntry_plus
+#define FAD    fuse_add_direntry
+
 void
 dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 		 size_t size, off_t offset, bool plus)
@@ -206,7 +211,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 	int			rc = 0;
 	int			large_fetch = true;
 
-	if (offset == DFUSE_READDIR_EOD) {
+	if (offset == READDIR_EOD) {
 		DFUSE_TRA_DEBUG(oh, "End of directory %lx", offset);
 		DFUSE_REPLY_BUF(oh, req, NULL, (size_t)0);
 		return;
@@ -289,7 +294,8 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 			uint32_t to_fetch;
 			bool eod = false;
 
-			D_ASSERT(offset != oh->doh_dre[oh->doh_dre_index].dre_offset);
+			D_ASSERT(offset !=
+				oh->doh_dre[oh->doh_dre_index].dre_offset);
 
 			if (large_fetch)
 				to_fetch = READDIR_MAX_COUNT;
@@ -307,7 +313,8 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 
 			fetched = true;
 		} else {
-			D_ASSERT(offset == oh->doh_dre[oh->doh_dre_index].dre_offset);
+			D_ASSERT(offset ==
+				oh->doh_dre[oh->doh_dre_index].dre_offset);
 		}
 
 		DFUSE_TRA_DEBUG(oh, "processing offset %ld", offset);
@@ -362,16 +369,13 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 				if (rc != 0)
 					D_GOTO(reply, rc);
 
-				written = fuse_add_direntry_plus(req,
-								 &reply_buff[buff_offset],
-								 size - buff_offset,
-								 dre->dre_name,
-								 &entry,
-								 dre->dre_next_offset);
-				if (written > size - buff_offset) {
+				written = FADP(req, &reply_buff[buff_offset],
+					       size - buff_offset,
+					       dre->dre_name, &entry,
+					       dre->dre_next_offset);
+				if (written > size - buff_offset)
 					d_hash_rec_decref(&fs_handle->dpi_iet,
 							  rlink);
-				}
 
 			} else {
 				dfs_release(obj);
@@ -381,12 +385,9 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 					stbuf.st_mode |= S_IFDIR;
 				}
 
-				written = fuse_add_direntry(req,
-							    &reply_buff[buff_offset],
-							    size - buff_offset,
-							    dre->dre_name,
-							    &stbuf,
-							    dre->dre_next_offset);
+				written = FAD(req, &reply_buff[buff_offset],
+					      size - buff_offset, dre->dre_name,
+					      &stbuf, dre->dre_next_offset);
 			}
 			if (written > size - buff_offset) {
 				DFUSE_TRA_DEBUG(oh, "Buffer is full");
@@ -402,7 +403,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 			added++;
 			offset++;
 
-			if (dre->dre_next_offset == DFUSE_READDIR_EOD) {
+			if (dre->dre_next_offset == READDIR_EOD) {
 				DFUSE_TRA_DEBUG(oh, "Reached end of directory");
 				dfuse_readdir_reset(oh);
 				D_GOTO(reply, 0);
