@@ -15,7 +15,7 @@ from fio_utils import FioCommand
 from daos_racer_utils import DaosRacerCommand
 from dfuse_utils import Dfuse
 from job_manager_utils import Srun
-from command_utils_base import BasicParameter, EnvironmentVariables
+from command_utils_base import BasicParameter
 from general_utils import get_host_data, get_random_string, \
     run_command, DaosTestError, pcmd
 import slurm_utils
@@ -530,13 +530,13 @@ def start_dfuse(
     dfuse.set_dfuse_cont_param(container)
     dfuse_log = os.path.join(
         self.test_log_dir,
-        self.test_name + "_" + name + "_$SLURM_JOB_NODELIST_"
-        "$SLURM_JOB_ID_" + "daos_dfuse_" + unique)
-
+        self.test_name + "_" + name + "_${SLURM_JOB_NODELIST}_"
+        "" + "${SLURM_JOB_ID}_" + "daos_dfuse_" + unique)
+    dfuse_env = "export D_LOG_MASK=ERR;export D_LOG_FILE={}".format(dfuse_log)
     dfuse_start_cmds = [
         "mkdir -p {}".format(dfuse.mount_dir.value),
-        "clush -w $SLURM_JOB_NODELIST \"cd {};export D_LOG_FILE={};{}\"".format(
-            dfuse.mount_dir.value, dfuse_log, dfuse.__str__()),
+        "clush -w $SLURM_JOB_NODELIST \"cd {};{};{}\"".format(
+            dfuse.mount_dir.value, dfuse_env, dfuse.__str__()),
         "sleep 10",
         "df -h {}".format(dfuse.mount_dir.value),
     ]
@@ -708,7 +708,6 @@ def create_racer_cmdline(self, job_spec, pool):
 
     """
     commands = []
-    env = EnvironmentVariables()
     racer_namespace = "/run/{}/*".format(job_spec)
     daos_racer = DaosRacerCommand(
         self.bin, self.hostlist_clients[0], self.dmg_command)
@@ -716,10 +715,9 @@ def create_racer_cmdline(self, job_spec, pool):
     daos_racer.get_params(self)
     racer_log = os.path.join(
         self.test_log_dir,
-        self.test_name + "_" + job_spec + "_$SLURM_JOB_NODELIST_"
-        "$SLURM_JOB_ID_")
-    env["DAOS_LOG_MASK"] = "ERR"
-    env["DAOS_LOG_FILE"] = racer_log
+        self.test_name + "_" + job_spec + "_${SLURM_JOB_NODELIST}_"
+        "${SLURM_JOB_ID}_" + "racer_log")
+    env = daos_racer.get_environment(self.server_managers[0], racer_log)
     daos_racer.set_environment(env)
     daos_racer.pool_uuid.update(pool.uuid)
     add_containers(self, pool, path=racer_namespace)
@@ -821,17 +819,15 @@ def build_job_script(self, commands, job, ppn, nodesperjob):
     self.log.info("<<Build Script>> at %s", time.ctime())
     script_list = []
     # if additional cmds are needed in the batch script
-    dmg_config = self.dmg_command.configpath.value
     prepend_cmds = [
-        "/usr/bin/dmg pool query -o {} --pool {} ".format(
-            dmg_config, self.pool[1].uuid),
-        "/usr/bin/dmg pool query -o {} --pool {} ".format(
-            dmg_config, self.pool[0].uuid)]
+        "set -e",
+        "/usr/bin/daos pool query --pool {} ".format(self.pool[1].uuid),
+        "/usr/bin/daos pool query --pool {} ".format(self.pool[0].uuid)
+        ]
     append_cmds = [
-        "/usr/bin/dmg pool query -o {} --pool {} ".format(
-            dmg_config, self.pool[1].uuid),
-        "/usr/bin/dmg pool query -o {} --pool {} ".format(
-            dmg_config, self.pool[0].uuid)]
+        "/usr/bin/daos pool query --pool {} ".format(self.pool[1].uuid),
+        "/usr/bin/daos pool query --pool {} ".format(self.pool[0].uuid)
+        ]
     exit_cmd = ["exit $status"]
     # Create the sbatch script for each list of cmdlines
     for cmd, log_name in commands:

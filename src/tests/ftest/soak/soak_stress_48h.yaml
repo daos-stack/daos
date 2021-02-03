@@ -97,9 +97,9 @@ soak_stress:
         - 16
         - 32
     joblist:
-        - ior_stress
         - fio_stress
         - daos_racer
+        - ior_stress
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO

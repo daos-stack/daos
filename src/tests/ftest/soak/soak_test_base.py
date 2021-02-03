@@ -476,6 +476,9 @@ class SoakTestBase(TestWithServers):
         self.test_name = self.params.get("name", test_param + "*")
         self.nodesperjob = self.params.get("nodesperjob", test_param + "*")
         self.taskspernode = self.params.get("taskspernode", test_param + "*")
+        self.dmg_command.copy_certificates(
+            get_log_file("daosCA/certs"), self.hostlist_clients)
+        self.dmg_command.copy_configuration(self.hostlist_clients)
         harassers = self.params.get("harasserlist", test_param + "*")
         job_list = self.params.get("joblist", test_param + "*")
         rank = self.params.get("rank", "/run/container_reserved/*")
