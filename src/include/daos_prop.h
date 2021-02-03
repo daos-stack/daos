@@ -185,6 +185,11 @@ enum daos_cont_props {
 	DAOS_PROP_CO_DEDUP_THRESHOLD,
 	/** First citizon objects of container, see \a daos_cont_root_oids */
 	DAOS_PROP_CO_ROOTS,
+	/**
+	 * Container status
+	 * Value "struct daos_co_status".
+	 */
+	DAOS_PROP_CO_STATUS,
 	DAOS_PROP_CO_MAX,
 };
 
@@ -264,10 +269,46 @@ enum {
 	DAOS_PROP_CO_REDUN_RF4,
 };
 
+/** container redundancy level */
 enum {
 	DAOS_PROP_CO_REDUN_RACK,
 	DAOS_PROP_CO_REDUN_NODE,
 };
+
+/** container status flag */
+enum {
+	/* in healthy status, data protection work as expected */
+	DAOS_PROP_CO_HEALTHY,
+	/* in unclean status, data protection possibly cannot work.
+	 * typical scenario - cascading failed targets exceed the container
+	 * redundancy factor, that possibly cause lost data cannot be detected
+	 * or rebuilt.
+	 */
+	DAOS_PROP_CO_UNCLEAN,
+};
+
+struct daos_co_status {
+	/* DAOS_PROP_CO_HEALTHY/DAOS_PROP_CO_UNCLEAN */
+	uint32_t	dcs_status;
+	/* pool map version when setting the dcs_status */
+	uint32_t	dcs_pm_ver;
+};
+
+#define DAOS_PROP_CO_STATUS_VAL(status, pm_ver)				\
+	((((uint64_t)(status)) << 32) | ((uint64_t)(pm_ver)))
+static inline uint64_t
+daos_prop_co_status_2_val(struct daos_co_status *co_status)
+{
+	return DAOS_PROP_CO_STATUS_VAL(co_status->dcs_status,
+				       co_status->dcs_pm_ver);
+}
+
+static inline void
+daos_prop_val_2_co_status(uint64_t val, struct daos_co_status *co_status)
+{
+	co_status->dcs_status = (uint32_t)(val >> 32);
+	co_status->dcs_pm_ver = (uint32_t)(val & 0xFFFFFFFF);
+}
 
 struct daos_prop_entry {
 	/** property type, see enum daos_pool_props/daos_cont_props */
