@@ -1083,7 +1083,7 @@ class DaosServerManager(SubprocessManager):
 
         """
         msg = "Stopping DAOS ranks {} from server group {}".format(
-            ranks, self.name.value)
+            ranks, self.get_config_value("name"))
         self.log.info(msg)
         daos_log.info(msg)
 

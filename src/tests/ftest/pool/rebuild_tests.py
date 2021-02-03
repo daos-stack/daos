@@ -27,7 +27,8 @@ class RebuildTests(TestWithServers):
         self.container = []
         for _ in range(pool_quantity):
             self.pool.append(self.get_pool(create=False))
-            self.container.append(self.get_container(create=False))
+            self.container.append(
+                self.get_container(self.pool[-1], create=False))
         targets = self.params.get("targets", "/run/server_config/*")
         rank = self.params.get("rank", "/run/testparams/*")
         obj_class = self.params.get("object_class", "/run/testparams/*")
@@ -36,13 +37,13 @@ class RebuildTests(TestWithServers):
         server_count = len(self.hostlist_servers)
         status = True
         for index in range(pool_quantity):
-            self.pools[index].create()
-            status &= self.pools[index].check_pool_info(
+            self.pool[index].create()
+            status &= self.pool[index].check_pool_info(
                 pi_nnodes=server_count,
                 pi_ntargets=(server_count * targets),  # DAOS-2799
                 pi_ndisabled=0
             )
-            status &= self.pools[index].check_rebuild_status(
+            status &= self.pool[index].check_rebuild_status(
                 rs_done=1, rs_obj_nr=0, rs_rec_nr=0, rs_errno=0)
         self.assertTrue(status, "Error confirming pool info before rebuild")
 
@@ -78,25 +79,25 @@ class RebuildTests(TestWithServers):
             if index == 0:
                 self.server_managers[0].stop_ranks([rank], self.d_log)
             else:
-                self.pools[index].exclude([rank], self.d_log)
+                self.pool[index].exclude([rank], self.d_log)
 
         # Wait for recovery to start
         for index in range(pool_quantity):
-            self.pools[index].wait_for_rebuild(True)
+            self.pool[index].wait_for_rebuild(True)
 
         # Wait for recovery to complete
         for index in range(pool_quantity):
-            self.pools[index].wait_for_rebuild(False)
+            self.pool[index].wait_for_rebuild(False)
 
         # Check the pool information after the rebuild
         status = True
         for index in range(pool_quantity):
-            status &= self.pools[index].check_pool_info(
+            status &= self.pool[index].check_pool_info(
                 pi_nnodes=server_count,
                 pi_ntargets=(server_count * targets),  # DAOS-2799
                 pi_ndisabled=targets                   # DAOS-2799
             )
-            status &= self.pools[index].check_rebuild_status(
+            status &= self.pool[index].check_rebuild_status(
                 rs_done=1, rs_obj_nr=rs_obj_nr[index],
                 rs_rec_nr=rs_rec_nr[index], rs_errno=0)
         self.assertTrue(status, "Error confirming pool info after rebuild")
