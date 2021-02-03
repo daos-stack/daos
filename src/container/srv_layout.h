@@ -67,6 +67,7 @@ extern d_iov_t ds_cont_prop_acl;		/* struct daos_acl */
 extern d_iov_t ds_cont_prop_owner;		/* string */
 extern d_iov_t ds_cont_prop_owner_group;	/* string */
 extern d_iov_t ds_cont_prop_snapshots;		/* snapshot KVS */
+extern d_iov_t ds_cont_prop_co_status;		/* uint64_t */
 extern d_iov_t ds_cont_attr_user;		/* user attribute KVS */
 extern d_iov_t ds_cont_prop_handles;		/* handle index KVS */
 extern d_iov_t ds_cont_prop_roots;		/* container first citizens */
