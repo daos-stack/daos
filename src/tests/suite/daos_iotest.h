@@ -24,7 +24,7 @@ extern int dts_ec_grp_size;
 #define OW_IOD_SIZE	1024ULL
 #define SEGMENT_SIZE (10 * 1048576) /* 10MB */
 #define IO_SIZE_NVME (5ULL << 10) /* all records  >= 4K */
-#define	IO_SIZE_SCM	64
+#define IO_SIZE_SCM 64
 
 void
 ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
