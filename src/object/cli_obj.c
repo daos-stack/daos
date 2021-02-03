@@ -1433,6 +1433,9 @@ dc_obj_layout_get(daos_handle_t oh, struct daos_obj_layout **p_layout)
 	if (grp_nr == DAOS_OBJ_GRP_MAX)
 		grp_nr = obj->cob_shards_nr / grp_size;
 
+	if (grp_size == DAOS_OBJ_GRP_MAX)
+		grp_size = obj->cob_shards_nr;
+
 	rc = daos_obj_layout_alloc(&layout, grp_nr, grp_size);
 	if (rc)
 		D_GOTO(out, rc);
