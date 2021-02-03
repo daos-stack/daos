@@ -5,6 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import ctypes
+import uuid
 import time
 
 from avocado import fail_on
@@ -175,6 +176,7 @@ class OSAUtils(IorTestBase):
             results (queue): queue for returning thread results
 
         """
+        container_info = {}
         mpio_util = MpioUtils()
         if mpio_util.mpich_installed(self.hostlist_clients) is False:
             self.fail("Exiting Test : Mpich not installed on :"
@@ -185,18 +187,20 @@ class OSAUtils(IorTestBase):
         ior_cmd.get_params(self)
         ior_cmd.set_daos_params(self.server_group, self.pool)
         ior_cmd.dfs_oclass.update(oclass)
-        ior_cmd.dfs_dir_oclass.update(oclass)
         ior_cmd.api.update(api)
         ior_cmd.transfer_size.update(test[2])
         ior_cmd.block_size.update(test[3])
         ior_cmd.flags.update(flags)
 
+        container_info["{}{}{}"
+                       .format(oclass,
+                               api,
+                               test[2])] = str(uuid.uuid4())
+
         # Define the job manager for the IOR command
         self.job_manager = Mpirun(ior_cmd, mpitype="mpich")
-        # Create container only
-        if self.container is None:
-            self.add_container(self.pool)
-        self.job_manager.job.dfs_cont.update(self.container.uuid)
+        key = "".join([oclass, api, str(test[2])])
+        self.job_manager.job.dfs_cont.update(container_info[key])
         env = ior_cmd.get_default_env(str(self.job_manager))
         self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
         self.job_manager.assign_processes(self.processes)

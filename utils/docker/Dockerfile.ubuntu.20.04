@@ -25,7 +25,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
             libaio-dev libboost-dev libcmocka0 libcmocka-dev            \
             libcunit1-dev libevent-dev libibverbs-dev libiscsi-dev      \
             libltdl-dev libnuma-dev librdmacm-dev libreadline6-dev      \
-            libssl-dev libtool-bin libyaml-dev                          \
+            libssl-dev libtool-bin libyaml-dev python3-tabulate         \
             locales make meson nasm ninja-build pandoc patch            \
             pylint python-dev python3-dev scons sg3-utils uuid-dev      \
             yasm valgrind libhwloc-dev man fuse3 libfuse3-dev           \

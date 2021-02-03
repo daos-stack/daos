@@ -21,6 +21,7 @@ class DaosAgentConfigTest(TestWithServers):
     def __init__(self, *args, **kwargs):
         """Initialize a DaosAgentConfigTest object."""
         super(DaosAgentConfigTest, self).__init__(*args, **kwargs)
+        self.start_servers_once = False
         self.setup_start_agents = False
         self.setup_start_servers = False
 
@@ -62,7 +63,12 @@ class DaosAgentConfigTest(TestWithServers):
         # Verify
         if c_val[2] == "FAIL" and exception is None:
             self.log.error("Agent was expected to fail")
-            self.fail("{}".format(exception))
+            self.fail(
+                "Starting agent completed successfully when it was expected to "
+                "fail with {} = {}".format(c_val[0], c_val[1]))
         elif c_val[2] == "PASS" and exception is not None:
             self.log.error("Agent was expected to start")
-            self.fail("{}".format(exception))
+            self.fail(
+                "Starting agent failed when it was expected to complete "
+                "successfully with {} = {}: {}".format(
+                    c_val[0], c_val[1], exception))
