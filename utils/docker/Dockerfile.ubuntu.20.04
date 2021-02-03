@@ -1,5 +1,5 @@
 #
-# Copyright 2018-2020, Intel Corporation
+# Copyright 2018-2021, Intel Corporation
 #
 # 'recipe' for Docker to build an image of Ubuntu-based
 # environment for building the DAOS project.
@@ -102,4 +102,4 @@ WORKDIR /home/daos
 RUN [ "$NOBUILD" != "no" ] || (. utils/sl/setup_local.sh && ./utils/setup_daos_admin.sh)
 
 # Remove local copy
-# RUN rm -rf /home/daos/*
+RUN rm -rf /home/daos/*
