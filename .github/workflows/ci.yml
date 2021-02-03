@@ -83,6 +83,16 @@ jobs:
                           -t build-image
     - name: check server
       run: docker run build-image ldd /opt/daos/bin/daos_io_server
+    - name: Run Unit Tests
+      run: docker run --name build-ut --tmpfs /mnt/daos build-image ./utils/run_test.sh
+    - name: Copy results
+      run: docker cp build-ut:test_results test_results
+      run: docker run -v $PWD:/opt/external cp -a test_results/ nlt-* /tmp/dnt* /opt/external
+    - name: Publish Unit Test Results
+      uses: EnricoMi/publish-unit-test-result-action@v1.7
+          with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          files: test_results/*.xml
     - name: Run NLT Test
       run: docker run --tmpfs /mnt/daos build-image ./utils/node_local_test.py --no-root kv
 

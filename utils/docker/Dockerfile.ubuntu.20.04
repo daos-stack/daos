@@ -83,7 +83,9 @@ ARG NOBUILD=no
 ARG COMPILER=gcc
 
 # Build DAOS & dependencies
-RUN [ "$NOBUILD" != "no" ] || (scons --build-deps=no -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER && /bin/rm -rf build && cp -r utils/config/examples /opt/daos)
+# Unit test needs the build tree to run.
+# RUN [ "$NOBUILD" != "no" ] || (scons --build-deps=no -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER && /bin/rm -rf build && cp -r utils/config/examples /opt/daos)
+RUN [ "$NOBUILD" != "no" ] || (scons --build-deps=no -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER && cp -r utils/config/examples /opt/daos)
 
 # Set environment variables
 ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:/opt/daos/prereq/release/spdk/lib/:$LD_LIBRARY_PATH
@@ -101,5 +103,10 @@ WORKDIR /home/daos
 
 RUN [ "$NOBUILD" != "no" ] || (. utils/sl/setup_local.sh && ./utils/setup_daos_admin.sh)
 
+ENV CMOCKA_XML_FILE=/home/daos/test_results/%g.xml
+ENV GO_TEST_XML=/home/daos/test_results/run_go_tests.xml
+ENV CMOCKA_MESSAGE_OUTPUT=xml
+ENV DAOS_BASE=/home/daos
+
 # Remove local copy
-RUN rm -rf /home/daos/*
+# RUN rm -rf /home/daos/*
