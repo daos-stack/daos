@@ -40,7 +40,7 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See daos_rpc.h.
  */
-#define DAOS_OBJ_VERSION 1
+#define DAOS_OBJ_VERSION 2
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
@@ -151,6 +151,8 @@ enum obj_rpc_flags {
 	ORF_CREATE_MAP_DETAIL	= (1 << 13),
 	/* For data migration. */
 	ORF_FOR_MIGRATION	= (1 << 14),
+	/* Force DTX refresh if hit non-committed DTX on non-leader. */
+	ORF_DTX_REFRESH		= (1 << 15),
 };
 
 /* common for update/fetch */

@@ -393,22 +393,27 @@ class YamlParameters(ObjectWithParameters):
 
         return yaml_data if self.title is None else {self.title: yaml_data}
 
-    def create_yaml(self):
+    def create_yaml(self, filename=None):
         """Create a yaml file from the parameter values.
+
+        Args:
+            filename (str, optional): the yaml file to generate with the
+                parameters. Defaults to None, which uses self.filename.
 
         Raises:
             CommandFailure: if there is an error creating the yaml file
 
         """
+        if filename is None:
+            filename = self.filename
         yaml_data = self.get_yaml_data()
-        self.log.info("Writing yaml configuration file %s", self.filename)
+        self.log.info("Writing yaml configuration file %s", filename)
         try:
-            with open(self.filename, 'w') as write_file:
+            with open(filename, 'w') as write_file:
                 yaml.dump(yaml_data, write_file, default_flow_style=False)
         except Exception as error:
             raise CommandFailure(
-                "Error writing the yaml file {}: {}".format(
-                    self.filename, error))
+                "Error writing the yaml file {}: {}".format(filename, error))
 
     def set_value(self, name, value):
         """Set the value for a specified attribute name.
