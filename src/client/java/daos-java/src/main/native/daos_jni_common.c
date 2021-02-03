@@ -70,7 +70,7 @@ JNI_OnLoad(JavaVM *vm, void *reserved)
 
 	if (rc) {
 		printf("daos_init() failed with rc = %d\n", rc);
-		printf("error msg: %s\n", d_errstr(rc));
+		printf("error msg: %.256s\n", d_errstr(rc));
 		return rc;
 	}
 	rc = daos_eq_lib_init();
@@ -86,7 +86,7 @@ throw_exception_base(JNIEnv *env, char *msg, int error_code,
 		     int release_msg, int posix_error)
 {
 	char *daos_msg;
-	jstring jmsg = (*env)->NewStringUTF(env, strdup(msg));
+	jstring jmsg = (*env)->NewStringUTF(env, msg);
 
 	if (error_code > CUSTOM_ERROR_CODE_BASE) {
 		const char *temp = posix_error ?
