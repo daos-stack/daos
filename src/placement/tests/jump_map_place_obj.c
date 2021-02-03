@@ -897,7 +897,6 @@ static void
 all_healthy(void **state)
 {
 	struct jm_test_ctx	 ctx;
-	char			 oclass_name[64];
 	daos_oclass_id_t	*object_classes = NULL;
 	int			 num_test_oc;
 	int			 i;
@@ -941,22 +940,8 @@ all_healthy(void **state)
 	jtc_fini(&ctx);
 
 	/* Test all object classes */
-
-	/*
-	 * smallest possible, but have to have enough domains for all object
-	 * classes. Minimum is 18 for EC_16P2G1 for now
-	 */
-	jtc_init(&ctx, 18, 1, 1, 0, g_verbose);
 	num_test_oc = get_object_classes(&object_classes);
-	for (i = 0; i < num_test_oc; ++i) {
-		jtc_set_object_meta(&ctx, object_classes[i], 0, 1);
 
-		daos_oclass_id2name(object_classes[i], oclass_name);
-		JTC_CREATE_AND_ASSERT_HEALTHY_LAYOUT(&ctx);
-	}
-	jtc_fini(&ctx);
-
-	/* A bit larger */
 	jtc_init(&ctx, 128, 1, 8, 0, g_verbose);
 	for (i = 0; i < num_test_oc; ++i) {
 		jtc_set_object_meta(&ctx, object_classes[i], 0, 1);
@@ -1709,7 +1694,7 @@ placement_test_teardown(void **state)
 static const struct CMUnitTest tests[] = {
 	/* Standard configurations */
 	T("Object class is verified appropriately", object_class_is_verified),
-	T("With all healthy targets, can create layout, nothing is in "
+	WIP("With all healthy targets, can create layout, nothing is in "
 	  "rebuild, and no duplicates.", all_healthy),
 	/* DOWN */
 	T("Take a target down in a system with no servers available, but "
