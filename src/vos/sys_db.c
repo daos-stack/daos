@@ -175,10 +175,11 @@ db_open_create(struct sys_db *db, bool try_create)
 		}
 
 		if (ver <SYS_DB_VERSION_1 || ver > SYS_DB_VERSION) {
-			vos_report_layout_incompat("SMD", SYS_DB_VERSION_1,
+			vos_report_layout_incompat("SMD", ver,
+						   SYS_DB_VERSION_1,
 						   SYS_DB_VERSION,
-						   vdb->db_pool);
-			rc = -DER_DF_INCOMPAT;
+						   &vdb->db_pool);
+			rc = -DER_DF_INCOMPT;
 			goto failed;
 		}
 	}
