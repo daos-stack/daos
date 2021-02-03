@@ -7,6 +7,7 @@
 import time
 from osa_utils import OSAUtils
 from test_utils_pool import TestPool
+from apricot import skipForTicket
 
 
 class OSAOfflineExtend(OSAUtils):
@@ -86,6 +87,7 @@ class OSAOfflineExtend(OSAUtils):
         if data:
             self.verify_single_object()
 
+    @skipForTicket("DAOS-6644")
     def test_osa_offline_extend(self):
         """
         JIRA ID: DAOS-4751

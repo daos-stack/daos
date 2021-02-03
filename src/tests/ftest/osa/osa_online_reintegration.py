@@ -13,6 +13,7 @@ from test_utils_pool import TestPool
 from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
+from apricot import skipForTicket
 
 try:
     # python 3.x
@@ -168,6 +169,7 @@ class OSAOnlineReintegration(OSAUtils):
             self.pool = pool[val]
             self.pool.display_pool_daos_space(display_string)
 
+    @skipForTicket("DAOS-6573")
     def test_osa_online_reintegration(self):
         """Test ID: DAOS-5075.
 
