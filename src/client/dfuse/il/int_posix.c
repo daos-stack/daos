@@ -76,7 +76,29 @@ static const char * const bypass_status[] = {
 /* Unwind after close or error on container.  Closes container handle
  * and also pool handle if last container is closed.
  *
+ * ioil_shrink_pool() is only used in ioil_fini() where stale pools
+ * have been left open, for example if there are problems on close.
  */
+
+static void
+ioil_shrink_pool(struct ioil_pool *pool)
+{
+
+	if (daos_handle_is_valid(pool->iop_poh)) {
+		int rc;
+
+		rc = daos_pool_disconnect(pool->iop_poh, NULL);
+		if (rc != 0) {
+			D_ERROR("daos_pool_disconnect() failed, " DF_RC "\n",
+				DP_RC(rc));
+			return;
+		}
+		pool->iop_poh = DAOS_HDL_INVAL;
+	}
+	d_list_del(&pool->iop_pools);
+	D_FREE(pool);
+}
+
 static void
 ioil_shrink(struct ioil_cont *cont)
 {
@@ -88,15 +110,21 @@ ioil_shrink(struct ioil_cont *cont)
 
 	if (cont->ioc_dfs != NULL) {
 		rc = dfs_umount(cont->ioc_dfs);
-		if (rc != 0)
+		if (rc != 0) {
 			D_ERROR("dfs_umount() failed, %d\n", rc);
+			return;
+		}
+		cont->ioc_dfs = NULL;
 	}
 
 	if (daos_handle_is_valid(cont->ioc_coh)) {
 		rc = daos_cont_close(cont->ioc_coh, NULL);
-		if (rc != 0)
+		if (rc != 0) {
 			D_ERROR("daos_cont_close() failed, " DF_RC "\n",
 				DP_RC(rc));
+			return;
+		}
+		cont->ioc_coh = DAOS_HDL_INVAL;
 	}
 
 	pool = cont->ioc_pool;
@@ -106,15 +134,7 @@ ioil_shrink(struct ioil_cont *cont)
 	if (!d_list_empty(&pool->iop_container_head))
 		return;
 
-	if (daos_handle_is_valid(pool->iop_poh)) {
-		rc = daos_pool_disconnect(pool->iop_poh, NULL);
-		if (rc != 0)
-			D_ERROR("daos_pool_disconnect() failed, " DF_RC "\n",
-				DP_RC(rc));
-	}
-
-	d_list_del(&pool->iop_pools);
-	D_FREE(pool);
+	ioil_shrink_pool(pool);
 }
 
 static void
@@ -142,7 +162,8 @@ ioil_initialize_fd_table(int max_fds)
 			 entry_array_close);
 	if (rc != 0)
 		DFUSE_LOG_ERROR("Could not allocate file descriptor table"
-				", disabling kernel bypass: rc = %d", rc);
+				", disabling kernel bypass: rc = " DF_RC,
+				DP_RC(rc));
 	return rc;
 }
 
@@ -229,7 +250,10 @@ ioil_init(void)
 
 	D_INIT_LIST_HEAD(&ioil_iog.iog_pools_head);
 
-	daos_debug_init(DAOS_LOG_DEFAULT);
+	rc = daos_debug_init(DAOS_LOG_DEFAULT);
+	if (rc) {
+		ioil_iog.iog_no_daos = true;
+	}
 
 	DFUSE_TRA_ROOT(&ioil_iog, "il");
 
@@ -238,15 +262,14 @@ ioil_init(void)
 	if (rc != 0) {
 		DFUSE_LOG_ERROR("Could not get process file descriptor limit"
 				", disabling kernel bypass");
-		printf("Failed\n");
 		return;
 	}
 
 	rc = ioil_initialize_fd_table(rlimit.rlim_max);
 	if (rc != 0) {
-		DFUSE_LOG_ERROR("Could not create fd_table, rc = %d,"
-				", disabling kernel bypass", rc);
-		printf("Failed.\n");
+		DFUSE_LOG_ERROR("Could not create fd_table, "
+				"disabling kernel bypass, rc = "DF_RC,
+				DP_RC(rc));
 		return;
 	}
 
@@ -268,6 +291,7 @@ ioil_fini(void)
 	DFUSE_TRA_DOWN(&ioil_iog);
 	vector_destroy(&fd_table);
 
+	/* Tidy up any remaining open connections */
 	d_list_for_each_entry_safe(pool, pnext,
 				   &ioil_iog.iog_pools_head, iop_pools) {
 		d_list_for_each_entry_safe(cont, cnext,
@@ -275,6 +299,12 @@ ioil_fini(void)
 					   ioc_containers) {
 			ioil_shrink(cont);
 		}
+	}
+
+	/* Tidy up any pools which do not have open containers */
+	d_list_for_each_entry_safe(pool, pnext,
+				   &ioil_iog.iog_pools_head, iop_pools) {
+		ioil_shrink_pool(pool);
 	}
 
 	if (ioil_iog.iog_daos_init)
