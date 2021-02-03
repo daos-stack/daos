@@ -71,14 +71,14 @@ RUN yum clean all && yum -y install epel-release && \
            hwloc-devel patchelf python36-tabulate              \
            java-1.8.0-openjdk python-distro python36-distro    \
 	   openmpi3-devel \
-	   && apt-get clean all
+	   && yum clean all
 
 # DAOS python 3 packages required for pylint
 #  - excluding mpi4py as it depends on CORCI-635
-RUN pip3 install avocado-framework; \
-    pip3 install avocado-framework-plugin-result-html; \
-    pip3 install avocado-framework-plugin-varianter-yaml-to-mux; \
-    pip3 install codespell; \
+RUN pip3 install avocado-framework && \
+    pip3 install avocado-framework-plugin-result-html && \
+    pip3 install avocado-framework-plugin-varianter-yaml-to-mux && \
+    pip3 install codespell && \
     pip3 install pygithub
 
 # Add DAOS user
