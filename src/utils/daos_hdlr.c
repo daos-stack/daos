@@ -2403,7 +2403,7 @@ fs_copy(struct file_dfs *src_file_dfs,
 
 			D_ALLOC(buf, buf_size * sizeof(char));
 			if (buf == NULL)
-				return ENOMEM;
+				D_GOTO(out, rc = -DER_NOMEM);
 			while (total_bytes < file_length) {
 				size_t left_to_read = buf_size;
 				uint64_t bytes_left = file_length - total_bytes;
@@ -2522,13 +2522,19 @@ out:
 	/* don't try to closedir on something that is not a directory,
 	 * otherwise always close it before returning
 	 */
-	if (S_ISDIR(st_dir_name.st_mode)) {
+	if (S_ISDIR(st_dir_name.st_mode) && (src_dir != NULL)) {
 		rc = file_closedir(src_file_dfs, src_dir);
 		if (rc != 0) {
 			fprintf(stderr, "Could not close '%s': %d\n",
 				dir_name, rc);
 		}
 	}
+
+	if (rc != 0) {
+		D_FREE(next_path);
+		D_FREE(next_dpath);
+	}
+
 	D_FREE(filename);
 	D_FREE(dst_filename);
 	return rc;
@@ -2697,7 +2703,7 @@ out:
 * Returns 0 if a daos path was successfully parsed.
 */
 static int
-fs_copy_parse_path(struct file_dfs *file, char *path,
+fs_copy_parse_path(struct file_dfs *file, char *path, size_t path_len,
 		   uuid_t *p_uuid, uuid_t *c_uuid)
 {
 	struct duns_attr_t	dattr = {0};
@@ -2708,13 +2714,13 @@ fs_copy_parse_path(struct file_dfs *file, char *path,
 		uuid_copy(*p_uuid, dattr.da_puuid);
 		uuid_copy(*c_uuid, dattr.da_cuuid);
 		if (dattr.da_rel_path == NULL) {
-			strcpy(path, "/");
+			strncpy(path, "/", path_len);
 		} else {
-			strcpy(path, dattr.da_rel_path);
+			strncpy(path, dattr.da_rel_path, path_len);
 		}
 	} else if (strncmp(path, "daos://", 7) == 0) {
 		/* Error, since we expect a DAOS path */
-		D_GOTO(out, rc = 1);
+		D_GOTO(out, rc);
 	} else {
 		/* not a DAOS path, set type to POSIX,
 		 * POSIX dir will be checked with stat
@@ -2735,8 +2741,10 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	 * provided
 	 */
 	int			rc = 0;
-	char			src_str[1028];
-	char			dst_str[1028];
+	char			*src_str = NULL;
+	char			*dst_str = NULL;
+	size_t			src_str_len = 0;
+	size_t			dst_str_len = 0;
 	daos_cont_info_t	src_cont_info = {0};
 	daos_cont_info_t	dst_cont_info = {0};
 	struct duns_attr_t	src_dattr = {0};
@@ -2744,35 +2752,47 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	struct file_dfs		src_file_dfs = {0};
 	struct file_dfs		dst_file_dfs = {0};
 	struct fs_copy_args	fa = {0};
-	int			src_str_len = 0;
 	char			*name = NULL;
 	char			*dname = NULL;
-	char			dst_dir[MAX_FILENAME];
-	int			path_length = 0;
+	char			*dst_dir = NULL;
 	mode_t			tmp_mode_dir = S_IRWXU;
 
 	file_set_defaults_dfs(&src_file_dfs);
 	file_set_defaults_dfs(&dst_file_dfs);
-	strcpy(src_str, ap->src);
-	rc = fs_copy_parse_path(&src_file_dfs, src_str, &fa.src_p_uuid,
-				&fa.src_c_uuid);
+
+	src_str_len = strlen(ap->src);
+	D_STRNDUP(src_str, ap->src, src_str_len);
+	if (src_str == NULL) {
+		fprintf(stderr, "Unable to allocate memory for source path.");
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+	rc = fs_copy_parse_path(&src_file_dfs, src_str, src_str_len,
+				&fa.src_p_uuid, &fa.src_c_uuid);
 	if (rc != 0) {
 		fprintf(stderr, "failed to parse source path: %d\n", rc);
-		D_GOTO(out, rc);
+		D_GOTO(out, rc = daos_errno2der(rc));
 	}
-	strcpy(dst_str, ap->dst);
-	rc = fs_copy_parse_path(&dst_file_dfs, dst_str, &fa.dst_p_uuid,
-				&fa.dst_c_uuid);
+
+	dst_str_len = strlen(ap->dst);
+	D_STRNDUP(dst_str, ap->dst, dst_str_len);
+	if (dst_str == NULL) {
+		fprintf(stderr,
+			"Unable to allocate memory for destination path.");
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+	rc = fs_copy_parse_path(&dst_file_dfs, dst_str, dst_str_len,
+				&fa.dst_p_uuid, &fa.dst_c_uuid);
 	if (rc != 0) {
 		fprintf(stderr, "failed to parse destination path: %d\n", rc);
 		D_GOTO(out, rc);
 	}
+
 	rc = fs_copy_connect(&src_file_dfs, &dst_file_dfs, &fa,
 			     ap->sysname, &src_cont_info, &dst_cont_info,
 			     &src_dattr, &dst_dattr);
 	if (rc != 0) {
 		fprintf(stderr, "fs copy failed to connect: %d\n", rc);
-		D_GOTO(out, rc);
+		D_GOTO(out, rc = daos_errno2der(rc));
 	}
 
 	parse_filename_dfs(src_str, &name, &dname);
@@ -2782,12 +2802,11 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	 * specified in the dst argument
 	 */
 	src_str_len = strlen(dname);
-	path_length = snprintf(dst_dir, MAX_FILENAME, "%s/%s",
-			       dst_str, src_str + src_str_len);
-	if (path_length >= MAX_FILENAME) {
-		rc = ENAMETOOLONG;
-		fprintf(stderr, "Path length is too long.\n");
-		D_GOTO(out_disconnect, rc);
+	D_ASPRINTF(dst_dir, "%s/%s", dst_str, src_str + src_str_len);
+	if (dst_dir == NULL) {
+		fprintf(stderr,
+			"Unable to allocate memory for destination path.\n");
+		D_GOTO(out_disconnect, rc = -DER_NOMEM);
 	}
 	/* set paths based on file type for source and destination */
 	if (src_file_dfs.type == POSIX && dst_file_dfs.type == DAOS) {
@@ -2834,6 +2853,11 @@ out_disconnect:
 	if (rc != 0)
 		fprintf(stderr, "failed to disconnect (%d)\n", rc);
 out:
+	D_FREE(name);
+	D_FREE(dname);
+	D_FREE(src_str);
+	D_FREE(dst_str);
+	D_FREE(dst_dir);
 	return rc;
 }
 
