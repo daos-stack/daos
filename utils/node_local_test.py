@@ -395,7 +395,7 @@ class DaosServer():
                'start', '-t' '4', '--insecure', '-d', self.agent_dir]
 
         if self.conf.args.no_root:
-               cmd.append('--recreate-superblocks')
+            cmd.append('--recreate-superblocks')
 
         server_env['DAOS_DISABLE_REQ_FWD'] = '1'
         self._sp = subprocess.Popen(cmd, env=server_env)
