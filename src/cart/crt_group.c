@@ -3366,9 +3366,6 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs,
 		rank = to_remove->rl_ranks[i];
 		crt_group_rank_remove_internal(grp_priv, rank);
 
-		/* Remove rank from associated secondary groups */
-		crt_grp_remove_from_secondaries(grp_priv, rank);
-
 		/* Remove rank from swim tracking */
 		crt_swim_rank_del(grp_priv, rank);
 	}
