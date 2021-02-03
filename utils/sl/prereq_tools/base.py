@@ -663,7 +663,8 @@ class PreReqComponent():
                         CONFIGURELOG='#/config-%s.log' % arch)
 
         # Build pre-reqs in sub-dir based on selected build type
-        build_dir_name = os.path.join(build_dir_name, self.build_type)
+        build_dir_name = os.path.join(build_dir_name,
+                                      self.__env.subst("$TTYPE_REAL"))
 
         self.add_opts(PathVariable('ENV_SCRIPT',
                                    "Location of environment script",
