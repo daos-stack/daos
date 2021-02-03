@@ -125,8 +125,8 @@ class ManagementServiceResilience(TestWithServers):
         server_groups = {
             self.server_group:
                 {
-                    "servers": self.hostlist_servers,
-                    "access_list": access_list
+                    "hosts": self.hostlist_servers,
+                    "access_points": access_list
                 },
         }
         self.start_servers(server_groups)
