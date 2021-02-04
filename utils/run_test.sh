@@ -61,10 +61,6 @@ run_test()
                                                                   "${COMP}" \
                                                                   "${FILES[@]}"
 
-    if [ -f "${DAOS_BASE}"/test_results/run_go_tests.xml ]; then
-        cat "${DAOS_BASE}"/test_results/run_go_tests.xml
-    fi
-
     mv "${DAOS_BASE}"/test_results/*.xml "${DAOS_BASE}"/test_results/xml
 }
 
@@ -96,6 +92,119 @@ if [ -d "/mnt/daos" ]; then
         fi
         COMP="UTEST_control"
         run_test src/control/run_go_tests.sh
+        COMP="UTEST_vos"
+        export DAOS_IO_BYPASS=pm
+        run_test "${SL_PREFIX}/bin/vos_tests" -A 50
+        export DAOS_IO_BYPASS=pm_snap
+        run_test "${SL_PREFIX}/bin/vos_tests" -A 50
+        unset DAOS_IO_BYPASS
+    else
+        if [ "$RUN_TEST_VALGRIND" = "memcheck" ]; then
+            [ -z "$VALGRIND_SUPP" ] &&
+                VALGRIND_SUPP="$(pwd)/utils/test_memcheck.supp"
+            VALGRIND_XML_PATH="unit-test-%q{TNAME}.memcheck.xml"
+            export VALGRIND_CMD="valgrind --leak-check=full \
+                                          --show-reachable=yes \
+                                          --num-callers=20 \
+                                          --error-limit=no \
+                                          --suppressions=${VALGRIND_SUPP} \
+                                          --error-exitcode=42 \
+                                          --xml=yes \
+                                          --xml-file=${VALGRIND_XML_PATH}"
+        else
+            VALGRIND_SUPP=""
+        fi
+    fi
+
+    # Tests
+    COMP="UTEST_cart"
+    run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/test_linkage"
+    run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/utest_hlc"
+    run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/utest_swim"
+
+    COMP="UTEST_gurt"
+    run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt"
+    run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt_telem_producer"
+    run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt_telem_consumer"
+
+    COMP="UTEST_vos"
+    run_test "${SL_PREFIX}/bin/vos_tests" -A 500
+    run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
+
+    COMP="UTEST_vea"
+    run_test "${SL_PREFIX}/bin/vea_ut"
+
+    COMP="UTEST_bio"
+    run_test "${SL_BUILD_DIR}/src/bio/smd/tests/smd_ut"
+
+    COMP="UTEST_common"
+    run_test "${SL_BUILD_DIR}/src/common/tests/umem_test"
+    run_test "${SL_BUILD_DIR}/src/common/tests/sched"
+    run_test "${SL_BUILD_DIR}/src/common/tests/drpc_tests"
+    run_test "${SL_BUILD_DIR}/src/common/tests/acl_api_tests"
+    run_test "${SL_BUILD_DIR}/src/common/tests/acl_valid_tests"
+    run_test "${SL_BUILD_DIR}/src/common/tests/acl_util_tests"
+    run_test "${SL_BUILD_DIR}/src/common/tests/acl_principal_tests"
+    run_test "${SL_BUILD_DIR}/src/common/tests/acl_real_tests"
+    run_test "${SL_BUILD_DIR}/src/common/tests/prop_tests"
+
+    COMP="UTEST_client"
+    run_test "${SL_BUILD_DIR}/src/client/api/tests/eq_tests"
+
+    COMP="UTEST_security"
+    run_test "${SL_BUILD_DIR}/src/security/tests/cli_security_tests"
+    run_test "${SL_BUILD_DIR}/src/security/tests/srv_acl_tests"
+
+    COMP="UTEST_iosrv"
+    run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_client_tests"
+    run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_progress_tests"
+    run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_handler_tests"
+    run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_listener_tests"
+
+    COMP="UTEST_mgmt"
+    run_test "${SL_BUILD_DIR}/src/mgmt/tests/srv_drpc_tests"
+    run_test "${SL_PREFIX}/bin/daos_perf" -T vos -R '"U;p F;p V"' -o 5 -d 5 \
+             -a 5 -n 10
+    run_test "${SL_PREFIX}/bin/daos_perf" -T vos -R '"U;p F;p V"' -o 5 -d 5 \
+             -a 5 -n 10 -A
+
+    # Tests launched by scripts
+    export USE_VALGRIND=${RUN_TEST_VALGRIND}
+    export VALGRIND_SUPP=${VALGRIND_SUPP}
+    unset VALGRIND_CMD
+    COMP="UTEST_common"
+    run_test src/common/tests/btree.sh ukey -s 20000
+    run_test src/common/tests/btree.sh direct -s 20000
+    run_test src/common/tests/btree.sh -s 20000
+    run_test src/common/tests/btree.sh perf -s 20000
+    run_test src/common/tests/btree.sh perf direct -s 20000
+    run_test src/common/tests/btree.sh perf ukey -s 20000
+    run_test src/common/tests/btree.sh dyn ukey -s 20000
+    run_test src/common/tests/btree.sh dyn -s 20000
+    run_test src/common/tests/btree.sh dyn perf -s 20000
+    run_test src/common/tests/btree.sh dyn perf ukey -s 20000
+
+    COMP="UTEST_vos"
+    run_test src/vos/tests/evt_ctl.sh
+    run_test src/vos/tests/evt_ctl.sh pmem
+    unset USE_VALGRIND
+    unset VALGRIND_SUPP
+
+    mv "${DAOS_BASE}"/test_results/xml/*.xml "${DAOS_BASE}"/test_results
+    rm -rf "${DAOS_BASE}"/test_results/xml
+
+    # Reporting
+    if [ $failed -eq 0 ]; then
+        # spit out the magic string that the post build script looks for
+        echo "SUCCESS! NO TEST FAILURES"
+    else
+        echo "FAILURE: $failed tests failed (listed below)"
+        for ((i = 0; i < ${#failures[@]}; i++)); do
+            echo "    ${failures[$i]}"
+        done
+        if ! ${OLD_CI:-true}; then
+            exit 1
+        fi
     fi
 else
     echo "/mnt/daos isn't present for unit tests"
