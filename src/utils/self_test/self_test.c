@@ -21,9 +21,11 @@
 #define DEFAULT_VALUE_NAME			"default_values"
 #define INVALID_SCALING				-1.0
 #define MAX_NUMBER_KEYS				200
+#define RAW_DATA_EXTENSION			"_raw"
 
 #define CRT_SELF_TEST_AUTO_BULK_THRESH		(1 << 20)
 #define CRT_SELF_TEST_GROUP_NAME		("crt_self_test")
+
 struct st_size_params {
 	uint32_t send_size;
 	uint32_t reply_size;
@@ -99,6 +101,8 @@ static status_feature status[] = {
 #define SELF_TEST_MAX_INFLIGHT		(0x40000000)
 #define SELF_TEST_MAX_LIST_STR_LEN	(1 << 16)
 #define SELF_TEST_MAX_NUM_ENDPOINTS	(UINT32_MAX)
+#define SELF_TEST_MAX_RAW_DATA_OUTPUT	(0x00000400)
+
 
 /* Global shutdown flag, used to terminate the progress thread */
 static int		g_shutdown_flag;
@@ -118,6 +122,7 @@ int16_t			 g_buf_alignment =
 				CRT_ST_BUF_ALIGN_DEFAULT;
 float			 g_scale_factor = INVALID_SCALING;
 int			 g_output_megabits;
+int			 g_raw_data;
 char			*g_attach_info_path;
 char			*g_expected_outfile;
 char			*g_expected_infile;
@@ -151,12 +156,19 @@ static struct option long_options[] = {
 	{"path", required_argument, 0, 'p'},
 	{"nopmix", no_argument, 0, 'n'},
 	{"help", no_argument, 0, 'h'},
+	{"raw_data", required_argument, 0, 'v'},
 	{"expected-threshold", required_argument, 0, 'w'},
 	{"expected-results", required_argument, 0, 'x'},
 	{"expected-input", required_argument, 0, 'y'},
 	{"expected-output", required_argument, 0, 'z'},
 	{0, 0, 0, 0}
 };
+
+#define ARGV_PARAMETERS "a:bc:d:e:f:g:hi:m:np:qr:s:tv:w:x:y:z:"
+
+#ifdef ORIG
+#define ARGV_PARAMETERS "hf:c:d:g:m:e:s:r:i:a:btnqp:v:w:x:y:z:"
+#endif
 
 /* Default parameters */
 char	default_msg_sizes_str[] =
@@ -420,8 +432,10 @@ static void print_fail_counts(struct st_latency *latencies,
 static void print_results(struct st_latency *latencies,
 			  struct crt_st_start_params *test_params,
 			  int64_t test_duration_ns, int output_megabits,
-			  Config *cfg, char *section_name)
+			  Config *cfg, char *section_name,
+			  char *section_name_raw)
 {
+	ConfigRet	 ret;
 	uint32_t	 local_rep;
 	uint32_t	 num_failed = 0;
 	uint32_t	 num_passed = 0;
@@ -429,12 +443,18 @@ static void print_results(struct st_latency *latencies,
 	int64_t		 latency_avg;
 	double		 throughput;
 	double		 bandwidth;
+	char		 new_key_name[2 * MASTER_VALUE_SIZE];
+	char		 master[MASTER_VALUE_SIZE];
 
 	/* Check for bugs */
 	D_ASSERT(latencies != NULL);
 	D_ASSERT(test_params != NULL);
 	D_ASSERT(test_params->rep_count != 0);
 	D_ASSERT(test_duration_ns > 0);
+
+	/* Read master-endpoint string */
+	ConfigReadString(cfg, section_name, "master_endpoint",
+			       master, sizeof(master), "ME");
 
 	/* Compute the throughput in RPCs/sec */
 	throughput = test_params->rep_count /
@@ -461,6 +481,20 @@ static void print_results(struct st_latency *latencies,
 		printf(" iteration %3d: latenct %10ld\n",
 		       local_rep, latencies[local_rep].val);
 #endif
+		/* Place raw data into output configuration */
+		if ((section_name_raw != NULL)  &&
+		    (local_rep <= g_raw_data) &&
+		    (latencies[local_rep].cci_rc >= 0)) {
+			snprintf(new_key_name, sizeof(new_key_name),
+				 "%s:%05d", master, local_rep);
+			ret = ConfigAddInt(cfg_output, section_name_raw,
+				     new_key_name, latencies[local_rep].val);
+			if (ret != CONFIG_OK) {
+				/* avoid checkpatch warning */
+				D_INFO(" Could not place raw data into %s\n",
+				       section_name_raw);
+			}
+		}
 
 		if (latencies[local_rep].cci_rc < 0) {
 			num_failed++;
@@ -497,7 +531,6 @@ static void print_results(struct st_latency *latencies,
 	      sizeof(latencies[0]), st_compare_latencies_by_vals);
 
 	/* Compute average and standard deviation of all results */
-	/* Talk to Alex, should divide by num_passed ?? */
 	latency_avg = 0;
 	for (local_rep = num_failed; local_rep < test_params->rep_count;
 	     local_rep++){
@@ -522,7 +555,7 @@ static void print_results(struct st_latency *latencies,
 	       "\t\t75th  %%: %6ld\n"
 	       "\t\tMax    : %6ld\n"
 	       "\t\tAverage: %6ld\n"
-	       "\t\tStd Dev: %9.2f\n",
+	       "\t\tStd Dev: %8.2f\n",
 	       latencies[num_failed].val / 1000,
 	       latencies[num_failed + num_passed / 4].val / 1000,
 	       latencies[num_failed + num_passed / 2].val / 1000,
@@ -661,6 +694,22 @@ static int config_create_output_config(char *section_name)
 	 * If section already exist then remove it.
 	 */
 	ret_value = config_create_section(cfg_output, section_name, remove);
+
+	/* Create section for raw data */
+	if (g_raw_data != 0) {
+		int	size = strlen(section_name) +
+				      strlen(RAW_DATA_EXTENSION) + 1;
+		char 	*section_name_raw;
+
+		section_name_raw = malloc(size);
+		if (section_name_raw != NULL) {
+			snprintf(section_name_raw, size, "%s%s",
+				 section_name, RAW_DATA_EXTENSION);
+			config_create_section(cfg_output, section_name_raw,
+					      remove);
+			free (section_name_raw);
+		}
+	}
 
 cleanup:
 	return ret_value;
@@ -951,6 +1000,7 @@ cleanup:
 	return ret_value;
 }
 
+/* Place output results into output file, tagging with master key */
 static int combine_results(Config *cfg_results, char *section_name)
 {
 	ConfigRet	 ret;
@@ -968,7 +1018,6 @@ static int combine_results(Config *cfg_results, char *section_name)
 	/* Read master-endpoint string */
 	ret = ConfigReadString(cfg_results, section_name, "master_endpoint",
 			       master, size, "ME");
-
 	/*
 	 * Copy results into output.
 	 * If the output already has it, then remove it.
@@ -981,7 +1030,7 @@ static int combine_results(Config *cfg_results, char *section_name)
 		snprintf(new_key_name, sizeof(new_key_name),
 			 "%s-%s", master, key_name);
 
-		/* Check to see if key occurred in results */
+		/* Check to see if key occurres in results */
 		if (ret == CONFIG_OK) {
 			/* Check to see if key already exist in output */
 			ret = ConfigReadInt(cfg_output, section_name,
@@ -999,7 +1048,7 @@ static int combine_results(Config *cfg_results, char *section_name)
 	printf(" Print input results\n");
 	ConfigPrintSection(cfg_results, stdout, section_name);
 
-	printf("\n Done output results\n");
+	printf("\n Output file results\n");
 	ConfigPrintSection(cfg_output, stdout, section_name);
 #endif
 
@@ -1099,6 +1148,7 @@ static int test_msg_size(crt_context_t crt_ctx,
 	uint32_t			 m_idx;
 	Config				*cfg = NULL;
 	char				*section_name = NULL;
+	char				*section_name_raw = NULL;
 	char				*str_send = NULL;
 	char				*str_put = NULL;
 	int				 ret_value = 0;
@@ -1312,6 +1362,16 @@ static int test_msg_size(crt_context_t crt_ctx,
 	}
 	config_create_section(cfg_output, section_name, false);
 
+	/* Create section for raw data */
+	if (g_raw_data != 0) {
+		int size = strlen(section_name) +
+			   strlen(RAW_DATA_EXTENSION) + 1;
+		section_name_raw = malloc(size);
+		snprintf(section_name_raw, size, "%s%s", input_section_name,
+			RAW_DATA_EXTENSION);
+		config_create_section(cfg_output, section_name_raw, false);
+	}
+
 	/* Create temporary configuration structure to store results */
 	cfg = ConfigNew();
 
@@ -1362,7 +1422,9 @@ static int test_msg_size(crt_context_t crt_ctx,
 		print_results(latencies[m_idx], test_params,
 			      ms_endpts[m_idx].reply.test_duration_ns,
 			      output_megabits,
-			      cfg, section_name);
+			      cfg, section_name, section_name_raw);
+
+		/* Transfer results from working config to output config */
 		combine_results(cfg, section_name);
 
 		/* Cleanup configuration structure for next loop */
@@ -1380,6 +1442,10 @@ static int test_msg_size(crt_context_t crt_ctx,
 	if (section_name != NULL) {
 		/* avoid checkpatch warning */
 		free(section_name);
+	}
+	if (section_name_raw != NULL) {
+		/* avoid checkpatch warning */
+		free(section_name_raw);
 	}
 exit_code:
 	return ret_value;
@@ -2090,7 +2156,8 @@ int parse_endpoint_string(char *const opt_arg,
 	uint32_t		 num_tags = 0;
 	void			*realloced_mem;
 	struct st_endpoint	*next_endpoint;
-	char 			*save_ptr;
+	char			*save_ptr = NULL;
+
 	/*
 	 * strtok replaces separators with \0 characters
 	 * Use this to divide up the input argument into three strings
@@ -2624,7 +2691,18 @@ static int config_file_setup(char *file_name, char *section_name,
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		/* Avoid checkpatch warning */
-		ret = sscanf(optarg, "%f", &g_scale_factor);
+		sret = sscanf(&string[0], "%f", &g_scale_factor);
+	}
+
+	/**********/
+	config_ret = ConfigReadString(cfg, section_name,
+				      "raw_data",
+				      &string[0], STRING_MAX_SIZE,
+				      (char *)NULL);
+	if (config_ret == CONFIG_OK) {
+		sret = sscanf(&string[0], "%d", &g_raw_data);
+		g_raw_data = g_raw_data < SELF_TEST_MAX_RAW_DATA_OUTPUT ?
+			g_raw_data : SELF_TEST_MAX_RAW_DATA_OUTPUT;
 	}
 
 	/********/
@@ -2685,8 +2763,6 @@ cleanup:
 	ConfigFree(cfg);
 	return ret;
 }
-
-#define ARGV_PARAMETERS "hf:c:d:g:m:e:s:r:i:a:btnqp:w:x:y:z:"
 
 int parse_command_options(int argc, char *argv[])
 {
@@ -2778,6 +2854,12 @@ int parse_command_options(int argc, char *argv[])
 			g_randomize_endpoints = true;
 			break;
 		case 'n':
+			break;
+		case 'v':  /* *** */
+			ret = sscanf(optarg, "%d", &g_raw_data);
+			g_raw_data = g_raw_data <
+				     SELF_TEST_MAX_RAW_DATA_OUTPUT ?
+				     g_raw_data : SELF_TEST_MAX_RAW_DATA_OUTPUT;
 			break;
 		case 'w':  /* *** */
 			ret = sscanf(optarg, "%f", &g_scale_factor);
