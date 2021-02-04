@@ -254,7 +254,7 @@ ds_rsvc_lookup(enum ds_rsvc_class_id class, d_iov_t *id,
 
 	entry = d_hash_rec_find(&rsvc_hash, id->iov_buf, id->iov_len);
 	if (entry == NULL) {
-		char	       *path;
+		char	       *path = NULL;
 		struct stat	buf;
 		int		rc;
 
@@ -458,6 +458,15 @@ rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 			svc->s_name, term, DP_RC(rc));
 		if (map_distd_initialized)
 			drain_map_distd(svc);
+		/*
+		 * For certain harder-to-recover errors, trigger a replica stop
+		 * to avoid reporting them too many times. (A better strategy
+		 * would be to leave the replica running without ever
+		 * campaigning again, so that it could continue serving as a
+		 * follower to other replicas.)
+		 */
+		if (rc == -DER_DF_INCOMPT)
+			rc = -DER_SHUTDOWN;
 		goto out_mutex;
 	}
 

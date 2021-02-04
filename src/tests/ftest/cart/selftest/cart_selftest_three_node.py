@@ -62,5 +62,10 @@ class CartSelfThreeNodeTest(TestWithoutServers):
                 self, self.env, "test_clients", index=index)
             self.utils.launch_test(self, clicmd, srv_rtn)
 
+        # Give few seconds for servers to fully shut down before exiting
+        # from this test.
+        if not self.utils.wait_process(srv_rtn, 5):
+            self.utils.stop_process(srv_rtn)
+
 if __name__ == "__main__":
     main()

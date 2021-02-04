@@ -273,6 +273,28 @@ ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 		  ctlop, &evt);
 }
 
+void
+ds_notify_ras_eventf(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hwid,
+		     d_rank_t *rank, char *jobid, uuid_t *pool, uuid_t *cont,
+		     daos_obj_id_t *objid, char *ctlop, char *data,
+		     const char *fmt, ...)
+{
+	char	buf[DAOS_RAS_STR_FIELD_SIZE];
+	va_list	ap;
+	int	rc;
+
+	va_start(ap, fmt);
+	rc = vsnprintf(buf, sizeof(buf), fmt, ap);
+	va_end(ap);
+	if (rc >= sizeof(buf)) {
+		/* The message is too long. End it with '$'. */
+		buf[sizeof(buf) - 2] = '$';
+	}
+
+	ds_notify_ras_event(id, buf, type, sev, hwid, rank, jobid, pool, cont,
+			    objid, ctlop, data);
+}
+
 int
 ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl)
 {
@@ -310,4 +332,17 @@ ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl)
 	D_FREE(info.svc_reps);
 
 	return rc;
+}
+
+int
+ds_notify_swim_rank_dead(d_rank_t rank)
+{
+	Shared__RASEvent			evt = SHARED__RASEVENT__INIT;
+
+	return raise_ras(RAS_SWIM_RANK_DEAD,
+			 "SWIM marked rank as dead.",
+			 RAS_TYPE_STATE_CHANGE, RAS_SEV_INFO, NULL /* hwid */,
+			 &rank /* rank */, NULL /* jobid */, NULL /* pool */,
+			 NULL /* cont */, NULL /* objid */, NULL /* ctlop */,
+			 &evt);
 }

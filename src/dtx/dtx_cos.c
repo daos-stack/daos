@@ -280,7 +280,7 @@ dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
 		if (epoch < dcrc->dcrc_epoch)
 			continue;
 
-		dte_buf[i] = dcrc->dcrc_dte;
+		dte_buf[i] = dtx_entry_get(dcrc->dcrc_dte);
 		if (++i >= count)
 			break;
 	}
@@ -356,7 +356,7 @@ dtx_add_cos(struct ds_cont_child *cont, struct dtx_entry *dte,
 	d_iov_t				riov;
 	int				rc;
 
-	if (cont->sc_cos_shutdown)
+	if (cont->sc_dtx_cos_shutdown || cont->sc_closing)
 		return -DER_SHUTDOWN;
 
 	D_ASSERT(dte->dte_mbs != NULL);
