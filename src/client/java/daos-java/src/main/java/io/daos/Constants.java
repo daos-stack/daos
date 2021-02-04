@@ -27,6 +27,10 @@ public final class Constants {
 
   public static final int KEY_LIST_LEN_DEFAULT = 64;
 
+  public static final int UUID_LENGTH = 36;
+
+  public static final int SERVER_GROUP_NAME_MAX_LEN = 1024;
+
   public static final byte KEY_LIST_CODE_NOT_STARTED = (byte)0;
   public static final byte KEY_LIST_CODE_IN_USE = (byte)1;
   public static final byte KEY_LIST_CODE_ANCHOR_END = (byte)2;
@@ -69,8 +73,10 @@ public final class Constants {
       new ErrorCode(-1000004, "value length greater than expected");
   public static final ErrorCode CUSTOM_ERR_UNS_INVALID =
       new ErrorCode(-1000005, "invalid argument in UNS");
-  public static final ErrorCode CUSTOM_ERR_OBJECT_INVALID_ARG =
-      new ErrorCode(-1000006, "invalid argument in object");
+  public static final ErrorCode CUSTOM_ERR_INVALID_ARG =
+      new ErrorCode(-1000006, "invalid argument");
+  public static final ErrorCode CUSTOM_ERR_BUF_EXCEED_CAP =
+      new ErrorCode(-1000007, "length exceeds buffer capacity");
 
   public static final int FILE_NAME_LEN_MAX = 255;
   public static final int FILE_PATH_LEN_MAX = 4096;

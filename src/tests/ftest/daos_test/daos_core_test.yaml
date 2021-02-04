@@ -106,10 +106,6 @@ daos_tests:
       daos_test: K
       test_name: DAOS_KV
       test_timeout: 105
-    test_daos_file_system:
-      daos_test: F
-      test_name: DAOS_File_System
-      test_timeout: 140
     test_daos_capability:
       daos_test: C
       test_name: DAOS_Capability
