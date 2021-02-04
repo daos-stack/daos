@@ -2227,7 +2227,7 @@ delet_container_during_aggregation(void **state)
 	for (i = 0; i <= 50; i++)
 		io_simple_internal(state, oid, IO_SIZE_SCM * 32, DAOS_IOD_ARRAY,
 				   "io_simple_scm_array dkey",
-			"io_simple_scm_array akey");
+				   "io_simple_scm_array akey");
 
 	/**
 	 * Run Pool query every 5 seconds for Total 40 seconds
