@@ -115,6 +115,7 @@ struct dss_xstream_data {
 	/** barrier for all ULTs to enter handling loop */
 	ABT_cond		  xd_ult_barrier;
 	ABT_mutex		  xd_mutex;
+	struct dss_thread_local_storage *xd_dtc;
 };
 
 static struct dss_xstream_data	xstream_data;
@@ -749,11 +750,6 @@ dss_xstreams_fini(bool force)
 	xstream_data.xd_xs_nr = 0;
 	dss_tgt_nr = 0;
 
-	/* release local storage */
-	rc = pthread_key_delete(dss_tls_key);
-	if (rc)
-		D_ERROR("failed to delete dtc: %d\n", rc);
-
 	D_DEBUG(DB_TRACE, "Execution streams stopped\n");
 }
 
@@ -845,7 +841,7 @@ static int
 dss_xstreams_init(void)
 {
 	char	*env;
-	int	rc;
+	int	rc = 0;
 	int	i, xs_id;
 
 	D_ASSERT(dss_tgt_nr >= 1);
@@ -893,8 +889,7 @@ dss_xstreams_init(void)
 
 	/* start the execution streams */
 	D_DEBUG(DB_TRACE,
-		"%d cores total detected "
-		"starting %d main xstreams\n",
+		"%d cores total detected starting %d main xstreams\n",
 		dss_core_nr, dss_tgt_nr);
 
 	if (dss_numa_node != -1) {
@@ -950,9 +945,6 @@ dss_xstreams_init(void)
 	D_DEBUG(DB_TRACE, "%d execution streams successfully started "
 		"(first core %d)\n", dss_tgt_nr, dss_core_offset);
 out:
-	if (dss_xstreams_empty()) /* started nothing */
-		pthread_key_delete(dss_tls_key);
-
 	return rc;
 }
 
@@ -1095,6 +1087,9 @@ enum {
 	XD_INIT_MUTEX,
 	XD_INIT_ULT_INIT,
 	XD_INIT_ULT_BARRIER,
+	XD_INIT_TLS_REG,
+	XD_INIT_TLS_INIT,
+	XD_INIT_SYS_DB,
 	XD_INIT_NVME,
 	XD_INIT_XSTREAMS,
 	XD_INIT_DRPC,
@@ -1118,6 +1113,15 @@ dss_srv_fini(bool force)
 	case XD_INIT_NVME:
 		bio_nvme_fini();
 		/* fall through */
+	case XD_INIT_SYS_DB:
+		vos_db_fini();
+		/* fall through */
+	case XD_INIT_TLS_INIT:
+		dss_tls_fini(xstream_data.xd_dtc);
+		/* fall through */
+	case XD_INIT_TLS_REG:
+		pthread_key_delete(dss_tls_key);
+		/* fall through */
 	case XD_INIT_ULT_BARRIER:
 		ABT_cond_free(&xstream_data.xd_ult_barrier);
 		/* fall through */
@@ -1136,10 +1140,10 @@ dss_srv_fini(bool force)
 }
 
 int
-dss_srv_init()
+dss_srv_init(void)
 {
-	int	rc;
-	bool	started = true;
+	int		 rc;
+	bool		 started = true;
 
 	xstream_data.xd_init_step  = XD_INIT_NONE;
 	xstream_data.xd_ult_signal = false;
@@ -1170,8 +1174,27 @@ dss_srv_init()
 	}
 	xstream_data.xd_init_step = XD_INIT_ULT_BARRIER;
 
-	rc = bio_nvme_init(dss_storage_path, dss_nvme_conf, dss_nvme_shm_id,
-		dss_nvme_mem_size);
+	/* register xstream-local storage key */
+	rc = pthread_key_create(&dss_tls_key, NULL);
+	if (rc) {
+		rc = dss_abterr2der(rc);
+		D_GOTO(failed, rc);
+	}
+	xstream_data.xd_init_step = XD_INIT_TLS_REG;
+
+	/* initialize xstream-local storage */
+	xstream_data.xd_dtc = dss_tls_init(DAOS_SERVER_TAG);
+	if (!xstream_data.xd_dtc)
+		D_GOTO(failed, rc);
+	xstream_data.xd_init_step = XD_INIT_TLS_INIT;
+
+	rc = vos_db_init(dss_storage_path, NULL, false);
+	if (rc != 0)
+		D_GOTO(failed, rc);
+	xstream_data.xd_init_step = XD_INIT_SYS_DB;
+
+	rc = bio_nvme_init(dss_nvme_conf, dss_nvme_shm_id,
+			   dss_nvme_mem_size, vos_db_get());
 	if (rc != 0)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_NVME;

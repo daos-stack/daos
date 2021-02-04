@@ -1853,9 +1853,9 @@ cont_snapshots_refresh_ult(void *data)
 	ds_pool_put(pool);
 out:
 	if (rc != 0)
-		D_WARN(DF_UUID": failed to refresh snapshots IV: rc "DF_RC";"
-			" Aggregation may not work correctly\n",
-			DP_UUID(args->cont_uuid), DP_RC(rc));
+		D_WARN(DF_UUID": failed to refresh snapshots IV: "
+		       "Aggregation may not work correctly "DF_RC"\n",
+		       DP_UUID(args->cont_uuid), DP_RC(rc));
 	D_FREE(args);
 }
 

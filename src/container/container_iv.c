@@ -1205,7 +1205,8 @@ cont_iv_prop_fetch_ult(void *data)
 	rc = cont_iv_fetch(arg->iv_ns, IV_CONT_PROP, arg->cont_uuid,
 			   iv_entry, iv_entry_size, false /* retry */);
 	if (rc) {
-		D_ERROR("cont_iv_fetch failed "DF_RC"\n", DP_RC(rc));
+		D_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR,
+			 "cont_iv_fetch failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
