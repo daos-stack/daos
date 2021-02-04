@@ -41,8 +41,8 @@ systems for ARM platforms.
 ## Network Requirements
 
 The DAOS network layer relies on libfabrics and supports OFI providers
-for Ethernet/sockets, InfiniBand/verbs, RoCE, and Intel
-Omni-Path Architecture (OPA). An RDMA-capable fabric is preferred for better
+for Ethernet/sockets, InfiniBand/verbs, and RoCE. 
+An RDMA-capable fabric is preferred for better
 performance. DAOS can support multiple rails by binding different
 instances of the DAOS server to individual network cards.
 
