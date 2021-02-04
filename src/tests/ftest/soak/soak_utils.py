@@ -12,6 +12,7 @@ import threading
 import re
 from ior_utils import IorCommand
 from fio_utils import FioCommand
+from daos_racer_utils import DaosRacerCommand
 from dfuse_utils import Dfuse
 from job_manager_utils import Srun
 from command_utils_base import BasicParameter
@@ -65,7 +66,7 @@ def add_pools(self, pool_names):
         self.log.info("Valid Pool UUID is %s", self.pool[-1].uuid)
 
 
-def add_containers(self, pool, oclass=None):
+def add_containers(self, pool, oclass=None, path="/run/container/*"):
     """Create a list of containers that the various jobs use for storage.
 
     Args:
@@ -74,7 +75,6 @@ def add_containers(self, pool, oclass=None):
 
     """
     # Create a container and add it to the overall list of containers
-    path = "".join(["/run/container/*"])
     self.container.append(
         TestContainer(pool, daos_command=self.get_daos_command()))
     self.container[-1].namespace = path
@@ -178,7 +178,6 @@ def run_monitor_check(self):
         for cmd in monitor_cmds:
             command = "sudo {}".format(cmd)
             pcmd(hosts, command, timeout=30)
-    return
 
 
 def get_harassers(harassers):
@@ -508,7 +507,8 @@ def get_srun_cmd(cmd, nodesperjob=1, ppn=1, srun_params=None, env=None):
     return str(srun_cmd)
 
 
-def start_dfuse(self, pool, container, nodesperjob, resource_mgr=None):
+def start_dfuse(
+        self, pool, container, nodesperjob, resource_mgr=None, name=None):
     """Create dfuse start command line for slurm.
 
     Args:
@@ -528,11 +528,15 @@ def start_dfuse(self, pool, container, nodesperjob, resource_mgr=None):
     dfuse.mount_dir.update(mount_dir)
     dfuse.set_dfuse_params(pool)
     dfuse.set_dfuse_cont_param(container)
-
+    dfuse_log = os.path.join(
+        self.test_log_dir,
+        self.test_name + "_" + name + "_${SLURM_JOB_NODELIST}_"
+        "" + "${SLURM_JOB_ID}_" + "daos_dfuse_" + unique)
+    dfuse_env = "export D_LOG_MASK=ERR;export D_LOG_FILE={}".format(dfuse_log)
     dfuse_start_cmds = [
         "mkdir -p {}".format(dfuse.mount_dir.value),
-        "clush -w $SLURM_JOB_NODELIST \"cd {};{}\"".format(
-            dfuse.mount_dir.value, dfuse.__str__()),
+        "clush -w $SLURM_JOB_NODELIST \"cd {};{};{}\"".format(
+            dfuse.mount_dir.value, dfuse_env, dfuse.__str__()),
         "sleep 10",
         "df -h {}".format(dfuse.mount_dir.value),
     ]
@@ -659,10 +663,13 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                     env = ior_cmd.get_default_env("srun")
                     sbatch_cmds = ["module load -q {}".format(mpi_module)]
                     # include dfuse cmdlines
+                    log_name = "{}_{}_{}_{}_{}_{}_{}_{}".format(
+                        job_spec, api, b_size, t_size, o_type,
+                        nodesperjob * ppn, nodesperjob, ppn)
                     if api in ["HDF5-VOL", "POSIX"]:
                         dfuse, dfuse_start_cmdlist = start_dfuse(
                             self, pool, self.container[-1],
-                            nodesperjob, "SLURM")
+                            nodesperjob, "SLURM", name=log_name)
                         sbatch_cmds.extend(dfuse_start_cmdlist)
                         ior_cmd.test_file.update(
                             os.path.join(dfuse.mount_dir.value, "testfile"))
@@ -681,13 +688,50 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                     if api in ["HDF5-VOL", "POSIX"]:
                         sbatch_cmds.extend(
                             stop_dfuse(dfuse, nodesperjob, "SLURM"))
-                    log_name = "{}_{}_{}_{}".format(
-                        api, b_size, t_size, o_type)
                     commands.append([sbatch_cmds, log_name])
                     self.log.info(
                         "<<IOR {} cmdlines>>:".format(api))
                     for cmd in sbatch_cmds:
                         self.log.info("%s", cmd)
+    return commands
+
+
+def create_racer_cmdline(self, job_spec, pool):
+    """Create the srun cmdline to run daos_racer.
+
+    Args:
+        self (obj): soak obj
+        job_spec (str): fio job in yaml to run
+        pool (obj):   TestPool obj
+    Returns:
+        cmd(list): list of cmdlines
+
+    """
+    commands = []
+    racer_namespace = "/run/{}/*".format(job_spec)
+    daos_racer = DaosRacerCommand(
+        self.bin, self.hostlist_clients[0], self.dmg_command)
+    daos_racer.namespace = racer_namespace
+    daos_racer.get_params(self)
+    racer_log = os.path.join(
+        self.test_log_dir,
+        self.test_name + "_" + job_spec + "_${SLURM_JOB_NODELIST}_"
+        "${SLURM_JOB_ID}_" + "racer_log")
+    env = daos_racer.get_environment(self.server_managers[0], racer_log)
+    daos_racer.set_environment(env)
+    daos_racer.pool_uuid.update(pool.uuid)
+    add_containers(self, pool, path=racer_namespace)
+    daos_racer.cont_uuid.update(self.container[-1].uuid)
+    log_name = job_spec
+    srun_cmds = []
+    # add fio cmline
+    srun_cmds.append(str(daos_racer.__str__()))
+    srun_cmds.append("status=$?")
+    # add exit code
+    commands.append([srun_cmds, log_name])
+    self.log.info("<<DAOS racer cmdlines>>:")
+    for cmd in srun_cmds:
+        self.log.info("%s", cmd)
     return commands
 
 
@@ -736,8 +780,11 @@ def create_fio_cmdline(self, job_spec, pool):
                         # Connect to the pool, create container
                         # and then start dfuse
                         add_containers(self, pool, o_type)
+                        log_name = "{}_{}_{}_{}_{}".format(
+                            job_spec, blocksize, size, rw, o_type)
                         dfuse, srun_cmds = start_dfuse(
-                            self, pool, self.container[-1], nodesperjob=1)
+                            self, pool, self.container[-1], nodesperjob=1,
+                            name=log_name)
                     # Update the FIO cmdline
                     fio_cmd.update(
                         "global", "directory",
@@ -749,7 +796,6 @@ def create_fio_cmdline(self, job_spec, pool):
                     # If posix, add the srun dfuse stop cmds
                     if fio_cmd.api.value == "POSIX":
                         srun_cmds.extend(stop_dfuse(dfuse, nodesperjob=1))
-                    log_name = "{}_{}_{}_{}".format(blocksize, size, rw, o_type)
                     commands.append([srun_cmds, log_name])
                     self.log.info("<<Fio cmdlines>>:")
                     for cmd in srun_cmds:
@@ -773,26 +819,22 @@ def build_job_script(self, commands, job, ppn, nodesperjob):
     self.log.info("<<Build Script>> at %s", time.ctime())
     script_list = []
     # if additional cmds are needed in the batch script
-    dmg_config = self.dmg_command.configpath.value
     prepend_cmds = [
-        "/usr/bin/dmg pool query -o {} --pool {} ".format(
-            dmg_config, self.pool[1].uuid),
-        "/usr/bin/dmg pool query -o {} --pool {} ".format(
-            dmg_config, self.pool[0].uuid)]
+        "set -e",
+        "/usr/bin/daos pool query --pool {} ".format(self.pool[1].uuid),
+        "/usr/bin/daos pool query --pool {} ".format(self.pool[0].uuid)
+        ]
     append_cmds = [
-        "/usr/bin/dmg pool query -o {} --pool {} ".format(
-            dmg_config, self.pool[1].uuid),
-        "/usr/bin/dmg pool query -o {} --pool {} ".format(
-            dmg_config, self.pool[0].uuid)]
+        "/usr/bin/daos pool query --pool {} ".format(self.pool[1].uuid),
+        "/usr/bin/daos pool query --pool {} ".format(self.pool[0].uuid)
+        ]
     exit_cmd = ["exit $status"]
     # Create the sbatch script for each list of cmdlines
     for cmd, log_name in commands:
         if isinstance(cmd, str):
             cmd = [cmd]
         output = os.path.join(
-            self.test_log_dir, self.test_name + "_" + job + "_" +
-            log_name + "_" + str(ppn * nodesperjob) + "_" + str(nodesperjob) +
-            "_" + str(ppn) + "_%N_" + "%j_")
+            self.test_log_dir, self.test_name + "_" + log_name + "_%N_" + "%j_")
         error = os.path.join(str(output) + "ERROR_")
         sbatch = {
             "time": str(self.job_timeout) + ":00",
