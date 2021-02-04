@@ -71,7 +71,9 @@ class CartUtils():
         while retry_count < 2:
             result = stop_processes(localhost, processes)
             if 1 in result:
-                print("Stopped '{}' processes on {}".format(processes, str(result[1])))
+                print(
+                    "Stopped '{}' processes on {}".format(
+                        processes, str(result[1])))
                 retry_count += 1
             elif 0 in result:
                 print("All '{}' processes have been stopped".format(processes))
