@@ -2919,7 +2919,8 @@ cont_get_acl_hdlr(struct cmd_args_s *ap)
 		int flags = O_CREAT | O_WRONLY;
 
 		/* Ensure we don't overwrite some existing file without the
-		   force option. */
+		 * force option.
+		 */
 		if (!ap->force) {
 			flags |= O_EXCL;
 		}
