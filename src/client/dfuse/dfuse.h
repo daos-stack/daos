@@ -185,6 +185,12 @@ struct dfuse_dfs {
 	bool			dfs_multi_user;
 };
 
+int
+ie_set_uid(struct dfuse_inode_entry *ie, fuse_req_t req);
+
+int
+dfuse_get_uid(struct dfuse_inode_entry *ie);
+
 /* Xattr namespace used by dfuse.
  *
  * Extended attributes with this prefix can only be set by dfuse itself
@@ -199,12 +205,6 @@ struct uid_entry {
 	uid_t uid;
 	gid_t gid;
 };
-
-int
-ie_set_uid(struct dfuse_inode_entry *ie, fuse_req_t req);
-
-int
-dfuse_get_uid(struct dfuse_inode_entry *ie);
 
 /*
  * struct dfuse_info contains list of dfuse_pool
