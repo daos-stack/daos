@@ -1758,13 +1758,13 @@ open_tmp_attach_info_file(char **filename)
 	old_mode = umask(S_IRUSR | S_IWUSR);
 
 	tmp_fd = mkstemp(*filename);
+	umask(old_mode);
+
 	if (tmp_fd == -1) {
-		D_ERROR("mktemp() failed on %s, error: %s.\n",
+		D_ERROR("mkstemp() failed on %s, error: %s.\n",
 			*filename, strerror(errno));
 		return NULL;
 	}
-
-	umask(old_mode);
 
 	tmp_file = fdopen(tmp_fd, "w");
 	if (tmp_file == NULL) {
