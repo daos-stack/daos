@@ -197,8 +197,8 @@ ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 						  dresp->body.len,
 						  dresp->body.data);
 	if (alloc.oom) {
-		D_GOTO(out_dresp(rc = -DER_NOMEM);
-	} elif (gps_resp == NULL) {
+		D_GOTO(out_dresp, rc = -DER_NOMEM);
+	} else if (gps_resp == NULL) {
 		D_ERROR("failed to unpack resp (get pool svc)\n");
 		D_GOTO(out_dresp, rc = -DER_NOMEM);
 	}
