@@ -455,6 +455,29 @@ abt_fini(void)
 	ABT_finalize();
 }
 
+static void
+dss_crt_event_cb(d_rank_t rank, enum crt_event_source src,
+		 enum crt_event_type type, void *arg)
+{
+	static struct d_tm_node_t	*dead_rank_ctr;
+	int				 rc = 0;
+
+	/* We only care about dead ranks for now */
+	if (src != CRT_EVS_SWIM || type != CRT_EVT_DEAD) {
+		D_DEBUG(DB_MGMT, "ignore src/type/evict %u/%u\n",
+			src, type);
+		return;
+	}
+
+	d_tm_increment_counter(&dead_rank_ctr, "cart",
+			       "swim_rank_dead_events", NULL);
+
+	rc = ds_notify_swim_rank_dead(rank);
+	if (rc)
+		D_ERROR("failed to handle %u/%u event: "DF_RC"\n",
+			src, type, DP_RC(rc));
+}
+
 static int
 server_init(int argc, char *argv[])
 {
@@ -583,8 +606,8 @@ server_init(int argc, char *argv[])
 	if (diff > 0) {
 		struct timespec		tv;
 
-		tv.tv_sec = diff / NSEC_PER_SEC;
-		tv.tv_nsec = diff % NSEC_PER_SEC;
+		tv.tv_sec = crt_hlc2nsec(diff) / NSEC_PER_SEC;
+		tv.tv_nsec = crt_hlc2nsec(diff) % NSEC_PER_SEC;
 
 		/* XXX: If the server restart so quickly as to all related
 		 *	things are handled within HLC epsilon, then it is
@@ -607,6 +630,10 @@ server_init(int argc, char *argv[])
 	if (rc != 0)
 		goto exit_drpc_fini;
 	D_INFO("Modules successfully set up\n");
+
+	rc = crt_register_event_cb(dss_crt_event_cb, NULL);
+	if (rc)
+		D_GOTO(exit_drpc_fini, rc);
 
 	dss_xstreams_open_barrier();
 	D_INFO("Service fully up\n");
@@ -659,6 +686,8 @@ static void
 server_fini(bool force)
 {
 	D_INFO("Service is shutting down\n");
+	crt_unregister_event_cb(dss_crt_event_cb, NULL);
+	D_INFO("unregister event callbacks done\n");
 	dss_module_cleanup_all();
 	D_INFO("dss_module_cleanup_all() done\n");
 	drpc_fini();

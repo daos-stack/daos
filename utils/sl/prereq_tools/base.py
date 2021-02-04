@@ -34,6 +34,7 @@ import traceback
 import hashlib
 import time
 import sys
+import errno
 import shutil
 from build_info import BuildInfo
 from SCons.Variables import PathVariable
@@ -557,6 +558,21 @@ class ProgramBinary():
                 return True
         return False
 
+def ensure_dir_exists(dirname, dry_run):
+    """Ensure a directory exists"""
+    if not os.path.exists(dirname):
+        if dry_run:
+            print("Would create %s" % dry_run)
+            return
+        try:
+            os.makedirs(dirname)
+        except Exception as e:
+            if not os.path.isdir(dirname):
+                raise e
+
+    if not os.path.isdir(dirname):
+        raise IOError(errno.ENOTDIR, 'Not a directory', dirname)
+
 # pylint: disable=too-many-public-methods
 class PreReqComponent():
     """A class for defining and managing external components required
@@ -629,8 +645,7 @@ class PreReqComponent():
         bdir = self._setup_build_type()
         self.build_type = self.__env.get("BUILD_TYPE")
         self.__env["BUILD_DIR"] = bdir
-        if not os.path.exists(bdir):
-            os.makedirs(bdir)
+        ensure_dir_exists(bdir, self.__dry_run)
         self.setup_path_var('BUILD_DIR')
         self.__build_info = BuildInfo()
         self.__build_info.update("BUILD_DIR", self.__env.subst("$BUILD_DIR"))
@@ -648,7 +663,8 @@ class PreReqComponent():
                         CONFIGURELOG='#/config-%s.log' % arch)
 
         # Build pre-reqs in sub-dir based on selected build type
-        build_dir_name = os.path.join(build_dir_name, self.build_type)
+        build_dir_name = os.path.join(build_dir_name,
+                                      self.__env.subst("$TTYPE_REAL"))
 
         self.add_opts(PathVariable('ENV_SCRIPT',
                                    "Location of environment script",
@@ -663,14 +679,8 @@ class PreReqComponent():
 
         self.__build_dir = os.path.realpath(os.path.join(self.__top_dir,
                                                          build_dir_name))
-        try:
-            if self.__dry_run:
-                print('Would mkdir -p %s' % self.__build_dir)
-            else:
-                os.makedirs(self.__build_dir)
+        ensure_dir_exists(self.__build_dir, self.__dry_run)
 
-        except Exception:
-            print('PreReqComponent init, Exception: if self.__dry_run')
         self.__prebuilt_path = {}
         self.__src_path = {}
 
@@ -693,13 +703,6 @@ class PreReqComponent():
         self.setup_path_var('GOPATH')
         self.__build_info.update("PREFIX", self.__env.subst("$PREFIX"))
         self.prereq_prefix = self.__env.subst("$PREFIX/prereq/$TTYPE_REAL")
-        try:
-            if self.__dry_run:
-                print('Would mkdir -p %s' % self.prereq_prefix)
-            else:
-                os.makedirs(self.prereq_prefix)
-        except:
-            print('PreReqComponent init, Exception: if self.__dry_run')
         self.setup_parallel_build()
 
         self.config_file = config_file
@@ -1483,13 +1486,8 @@ class _Component():
             self.build_path = \
                 os.path.join(self.prereqs.get_build_dir(), '%s.build'
                              % self.name)
-            try:
-                if self.__dry_run:
-                    print('Would mkdir -p %s' % self.build_path)
-                else:
-                    os.makedirs(self.build_path)
-            except:
-                print('except on configure, if self.__dry_run')
+
+            ensure_dir_exists(self.build_path, self.__dry_run)
 
     def set_environment(self, env, needed_libs):
         """Modify the specified construction environment to build with
@@ -1681,6 +1679,7 @@ class _Component():
             if self.has_missing_system_deps(self.prereqs.system_env):
                 raise MissingSystemLibs(self.name)
 
+            ensure_dir_exists(self.prereqs.prereq_prefix, self.__dry_run)
             changes = True
             if self.out_of_src_build:
                 self._rm_old_dir(self.build_path)

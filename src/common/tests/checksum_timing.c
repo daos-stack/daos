@@ -430,7 +430,7 @@ main(int argc, char *argv[])
 	}
 	rc = run_timings(csum_fts, type_count, sizes, sizes_count, 1000);
 	if (rc != 0)
-		printf("Error: " DF_RC "\n", DP_RC(rc));
+		printf("Error: "DF_RC"\n", DP_RC(rc));
 
 	return -rc;
 }

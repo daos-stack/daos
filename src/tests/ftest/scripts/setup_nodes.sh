@@ -69,7 +69,8 @@ EOF
     sudo mount /mnt/daos
 fi
 
-# make sure to set up for daos_agent
+# make sure to set up for daos_agent. The test harness will take care of
+# creating the /var/run/daos_{agent,server} directories when needed.
 sudo bash -c "set -ex
 if [ -d  /var/run/daos_agent ]; then
     rm -rf /var/run/daos_agent
@@ -77,9 +78,6 @@ fi
 if [ -d  /var/run/daos_server ]; then
     rm -rf /var/run/daos_server
 fi
-mkdir /var/run/daos_{agent,server}
-chown $(whoami) -R /var/run/daos_{agent,server}
-chmod 0755 /var/run/daos_{agent,server}
 if $TEST_RPMS || [ -f $DAOS_BASE/SConstruct ]; then
     echo \"No need to NFS mount $DAOS_BASE\"
 else
