@@ -194,9 +194,15 @@ daos_rpc_retryable_rc(int rc)
 static inline bool
 daos_rpc_from_client(crt_rpc_t *rpc)
 {
-	d_rank_t srcrank;
+	d_rank_t	srcrank;
+	int		rc;
 
-	crt_req_src_rank_get(rpc, &srcrank);
+	D_ASSERT(rpc != NULL);
+
+	rc = crt_req_src_rank_get(rpc, &srcrank);
+	/* Only possible failures here are invalid inputs */
+	D_ASSERTF(rc == 0, "error "DF_RC" should not be possible", DP_RC(rc));
+
 	return (srcrank == CRT_NO_RANK);
 }
 
