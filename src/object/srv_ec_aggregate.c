@@ -2152,8 +2152,7 @@ ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 				 &agg_param.ap_pool_info.api_eventual);
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
-	rc = dss_ult_create(agg_iv_ult, &agg_param, DSS_XS_SYS, 0, 0,
-			    NULL);
+	rc = dss_ult_periodic(agg_iv_ult, &agg_param, DSS_XS_SYS, 0, 0, NULL);
 	if (rc)
 		goto out;
 	rc = ABT_eventual_wait(agg_param.ap_pool_info.api_eventual,
@@ -2183,6 +2182,7 @@ ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		D_ERROR("dsc_cont_open failed: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
+
 	D_INIT_LIST_HEAD(&agg_param.ap_agg_entry.ae_cur_stripe.as_dextents);
 	D_INIT_LIST_HEAD(&agg_param.ap_agg_entry.ae_cur_stripe.as_hoextents);
 
@@ -2211,5 +2211,4 @@ out:
 	if (!daos_handle_is_inval(ph))
 		dsc_pool_close(ph);
 	return rc;
-
 }

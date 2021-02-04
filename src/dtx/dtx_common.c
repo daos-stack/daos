@@ -145,16 +145,28 @@ dtx_batched_commit(void *arg)
 {
 	struct dss_module_info		*dmi = dss_get_module_info();
 	struct dtx_batched_commit_args	*dbca;
+	struct sched_req_attr		 attr = { 0 };
+	uuid_t				 anonym_uuid;
+	struct sched_request		*sched_req;
 	struct dtx_batched_commit_args	*tmp;
 
+	uuid_clear(anonym_uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
+	sched_req = sched_req_get(&attr, ABT_THREAD_NULL);
+	if (sched_req == NULL) {
+		D_ERROR("Failed to get sched request.\n");
+		return;
+	}
+
+	dmi->dmi_dtx_req = sched_req;
 	dmi->dmi_dtx_batched_started = 1;
 
 	while (1) {
-		struct dtx_entry		**dtes = NULL;
-		struct ds_cont_child		 *cont;
-		struct dtx_stat			  stat = { 0 };
-		int				  cnt;
-		int				  rc;
+		struct dtx_entry	**dtes = NULL;
+		struct ds_cont_child	 *cont;
+		struct dtx_stat		  stat = { 0 };
+		int			  cnt, rc;
+		int			  sleep_time = 10; /* ms */
 
 		if (d_list_empty(&dmi->dmi_dtx_batched_list))
 			goto check;
@@ -175,6 +187,7 @@ dtx_batched_commit(void *arg)
 		    (stat.dtx_oldest_committable_time != 0 &&
 		     dtx_hlc_age2sec(stat.dtx_oldest_committable_time) >
 		     DTX_COMMIT_THRESHOLD_AGE)) {
+			sleep_time = 0;
 			cnt = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT,
 						    NULL, DAOS_EPOCH_MAX,
 						    &dtes);
@@ -199,6 +212,7 @@ dtx_batched_commit(void *arg)
 		      stat.dtx_oldest_committed_time != 0 &&
 		      dtx_hlc_age2sec(stat.dtx_oldest_committed_time) >=
 				DTX_AGG_THRESHOLD_AGE_UPPER))) {
+			sleep_time = 0;
 			ds_cont_child_get(cont);
 			cont->sc_dtx_aggregating = 1;
 			rc = dss_ult_create(dtx_aggregate, cont, DSS_XS_SELF,
@@ -210,13 +224,13 @@ dtx_batched_commit(void *arg)
 		}
 
 		ds_cont_child_put(cont);
-
 check:
 		if (dss_xstream_exiting(dmi->dmi_xstream))
 			break;
-
-		ABT_thread_yield();
+		sched_req_sleep(sched_req, sleep_time);
 	}
+	dmi->dmi_dtx_req = NULL;
+	sched_req_put(sched_req);
 
 	d_list_for_each_entry_safe(dbca, tmp, &dmi->dmi_dtx_batched_list,
 				   dbca_link)
@@ -775,8 +789,16 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 			 dth->dth_dkey_hash, dth->dth_epoch, flags);
 	dtx_entry_put(dte);
 	if (rc == 0) {
-		if (!DAOS_FAIL_CHECK(DAOS_DTX_NO_COMMITTABLE))
+		if (!DAOS_FAIL_CHECK(DAOS_DTX_NO_COMMITTABLE)) {
 			vos_dtx_mark_committable(dth);
+			if (cont->sc_dtx_committable_count >
+			    DTX_THRESHOLD_COUNT) {
+				struct dss_module_info	*dmi;
+
+				dmi = dss_get_module_info();
+				sched_req_wakeup(dmi->dmi_dtx_req);
+			}
+		}
 	} else {
 		dth->dth_sync = 1;
 	}
