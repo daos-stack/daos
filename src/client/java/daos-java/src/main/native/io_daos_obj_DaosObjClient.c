@@ -35,7 +35,7 @@ Java_io_daos_obj_DaosObjClient_encodeObjectId(JNIEnv *env, jclass clientClass,
 		char *msg = NULL;
 
 		asprintf(&msg, tmp, oclass_name);
-		throw_exception_object(env, msg, CUSTOM_ERR6);
+		throw_obj(env, msg, CUSTOM_ERR6);
 		goto out;
 	}
 	parse_object_id(buffer, &oid);
@@ -66,7 +66,7 @@ Java_io_daos_obj_DaosObjClient_openObject(JNIEnv *env, jclass clientClass,
 		char *msg = NULL;
 
 		asprintf(msg, tmp, mode);
-		throw_exception_object(env, msg, rc);
+		throw_obj(env, msg, rc);
 		return -1;
 	}
 	memcpy(&ret, &oh, sizeof(oh));
@@ -83,8 +83,11 @@ Java_io_daos_obj_DaosObjClient_closeObject(JNIEnv *env, jclass clientClass,
 	memcpy(&oh, &objectHandle, sizeof(oh));
 	rc = daos_obj_close(oh, NULL);
 	if (rc) {
-		throw_exception_const_msg_object(env,
-		"Failed to close DAOS object", rc);
+		char *msg = "Failed to close DAOS object";
+
+		throw_const_obj(env,
+						msg,
+						rc);
 	}
 }
 
@@ -98,8 +101,11 @@ Java_io_daos_obj_DaosObjClient_punchObject(JNIEnv *env, jobject clientObject,
 	memcpy(&oh, &objectHandle, sizeof(oh));
 	rc = daos_obj_punch(oh, DAOS_TX_NONE, flags, NULL);
 	if (rc) {
-		throw_exception_const_msg_object(env,
-		"Failed to punch DAOS object", rc);
+		char *msg = "Failed to punch DAOS object";
+
+		throw_const_obj(env,
+						msg,
+						rc);
 	}
 }
 
@@ -119,8 +125,7 @@ Java_io_daos_obj_DaosObjClient_punchObjectDkeys(JNIEnv *env,
 	int rc;
 
 	if (dkeys == NULL) {
-		throw_exception_const_msg_object(env,
-		"memory allocation failed", rc);
+		throw_const_obj(env, "memory allocation failed", rc);
 		return;
 	}
 	memcpy(&oh, &objectHandle, sizeof(oh));
@@ -132,8 +137,8 @@ Java_io_daos_obj_DaosObjClient_punchObjectDkeys(JNIEnv *env,
 			char *msg = NULL;
 
 			asprintf(&msg, "length %d exceeds buffer capacity %d",
-				totalLen, dataLen);
-			throw_exception_object(env, msg, CUSTOM_ERR7);
+					 totalLen, dataLen);
+			throw_obj(env, msg, CUSTOM_ERR7);
 			goto out;
 		}
 		d_iov_set(&dkeys[i], buffer, len);
@@ -143,8 +148,8 @@ Java_io_daos_obj_DaosObjClient_punchObjectDkeys(JNIEnv *env,
 			(unsigned int)nbrOfDkeys, dkeys, NULL);
 
 	if (rc) {
-		throw_exception_const_msg_object(env,
-		"Failed to punch DAOS object dkeys", rc);
+		throw_const_obj(env, "Failed to punch DAOS object dkeys",
+						rc);
 		goto out;
 	}
 
@@ -171,8 +176,7 @@ Java_io_daos_obj_DaosObjClient_punchObjectAkeys(JNIEnv *env,
 	int rc;
 
 	if (keys == NULL) {
-		throw_exception_const_msg_object(env,
-		"memory allocation failed", rc);
+		throw_const_obj(env, "memory allocation failed", rc);
 		return;
 	}
 	memcpy(&oh, &objectHandle, sizeof(oh));
@@ -184,8 +188,8 @@ Java_io_daos_obj_DaosObjClient_punchObjectAkeys(JNIEnv *env,
 			char *msg = NULL;
 
 			asprintf(&msg, "length %d exceeds buffer capacity %d",
-				totalLen, dataLen);
-			throw_exception_object(env, msg, CUSTOM_ERR7);
+					 totalLen, dataLen);
+			throw_obj(env, msg, CUSTOM_ERR7);
 			goto out;
 		}
 		d_iov_set(&keys[i], buffer, len);
@@ -195,8 +199,8 @@ Java_io_daos_obj_DaosObjClient_punchObjectAkeys(JNIEnv *env,
 			(unsigned int)nbrOfAkeys, &keys[1], NULL);
 
 	if (rc) {
-		throw_exception_const_msg_object(env,
-		"Failed to punch DAOS object akeys", rc);
+		throw_const_obj(env, "Failed to punch DAOS object akeys",
+						rc);
 		goto out;
 	}
 
@@ -219,8 +223,9 @@ Java_io_daos_obj_DaosObjClient_queryObjectAttribute(JNIEnv *env,
 	rc = daos_obj_query(oh, &attr, &ranks, NULL);
 
 	if (rc) {
-		throw_exception_const_msg_object(env,
-		"Failed to query DAOS object attribute", rc);
+		char *msg = "Failed to query DAOS object attribute";
+
+		throw_const_obj(env, msg, rc);
 	}
 	/* TODO: convert and serialize attribute */
 	return NULL;
@@ -396,8 +401,8 @@ init_desc(JNIEnv *env, data_desc_t **desc_addr, char *desc_buffer,
 	int rc;
 
 	if (desc == NULL) {
-		throw_exception_const_msg_object(env,
-		"memory allocation failed", CUSTOM_ERR3);
+		throw_const_obj(env, "memory allocation failed",
+						CUSTOM_ERR3);
 		return 1;
 	}
 	desc->maxKeyLen = maxKeyLen;
@@ -407,14 +412,13 @@ init_desc(JNIEnv *env, data_desc_t **desc_addr, char *desc_buffer,
 	desc->nbrOfAkeys = nbrOfAkeys;
 	rc = decode_initial(desc, desc_buffer);
 	if (rc) {
-		throw_exception_const_msg_object(env,
-		"failed to decode initial", rc);
+		throw_const_obj(env, "failed to decode initial", rc);
 		return 1;
 	}
 	if ((desc->ret_buf_address != endAddress) &&
 		(desc->ret_buf_address + 8 * nbrOfAkeys != endAddress)) {
-		throw_exception_const_msg_object(env,
-		"failed to decode initial", CUSTOM_ERR7);
+		throw_const_obj(env, "failed to decode initial",
+						CUSTOM_ERR7);
 		return 1;
 	}
 	return 0;
@@ -459,7 +463,7 @@ decode(JNIEnv *env, jlong objectHandle, jint nbrOfAkeys,
 
 			asprintf(&msg, tmp, *nbr_of_akeys_with_data,
 			nbrOfAkeys);
-			throw_exception_object(env, msg, 0);
+			throw_obj(env, msg, 0);
 			return 1;
 		}
 	} else if (address == -1) {/* not reusable */
@@ -485,7 +489,7 @@ decode(JNIEnv *env, jlong objectHandle, jint nbrOfAkeys,
 
 		asprintf(&msg, "length %ld exceeds buffer capacity %d",
 			desc_buffer - descBufAddress, descBufCap);
-		throw_exception_object(env, msg, CUSTOM_ERR7);
+		throw_obj(env, msg, CUSTOM_ERR7);
 		return 1;
 	}
 	if (address == 0) {/* no desc yet, reusable */
@@ -542,8 +546,8 @@ Java_io_daos_obj_DaosObjClient_fetchObject(JNIEnv *env, jobject clientObject,
 			(unsigned int)nbr_of_akeys_with_data, desc->iods,
 			desc->sgls, NULL, NULL);
 	if (rc) {
-		throw_exception_const_msg_object(env,
-		"Failed to fetch DAOS object", rc);
+		throw_const_obj(env, "Failed to fetch DAOS object",
+						rc);
 		goto cleanup;
 	}
 	/* actual data size and actual record size */
@@ -598,8 +602,8 @@ Java_io_daos_obj_DaosObjClient_updateObject(JNIEnv *env, jobject clientObject,
 			(unsigned int)nbr_of_akeys_with_data, desc->iods,
 			desc->sgls, NULL);
 	if (rc) {
-		throw_exception_const_msg_object(env,
-		"Failed to update DAOS object", rc);
+		throw_const_obj(env, "Failed to update DAOS object",
+						rc);
 		goto out;
 	}
 
@@ -694,7 +698,7 @@ decode_simple(JNIEnv *env, jlong descBufAddress,
 		char *msg = NULL;
 
 		asprintf(&msg, tmp, desc->nbrOfRequests, desc->nbrOfEntries);
-		throw_exception_object(env, msg, 0);
+		throw_obj(env, msg, 0);
 		return -2;
 	}
 	desc_buffer = decode_reused_simple(desc, desc_buffer);
@@ -784,17 +788,16 @@ Java_io_daos_obj_DaosObjClient_allocateSimDescGroup(
 	uint64_t address;
 	int i;
 	int rc;
+	char *msg = "memory allocation failed";
 
 	if (grp == NULL) {
-		throw_exception_const_msg_object(env,
-		"memory allocation failed", CUSTOM_ERR3);
+		throw_const_obj(env, msg, CUSTOM_ERR3);
 		return -1L;
 	}
 	grp->descs = (data_desc_simple_t **)malloc(
 		nbr * sizeof(data_desc_simple_t *));
 	if (grp->descs == NULL) {
-		throw_exception_const_msg_object(env,
-		"memory allocation failed", CUSTOM_ERR3);
+		throw_const_obj(env, msg, CUSTOM_ERR3);
 		return -1L;
 	}
 	grp->nbrOfDescs = nbr;
@@ -802,17 +805,16 @@ Java_io_daos_obj_DaosObjClient_allocateSimDescGroup(
 		grp->descs[i] = (data_desc_simple_t *)malloc(
 			sizeof(data_desc_simple_t));
 		if (grp->descs[i] == NULL) {
-			throw_exception_const_msg_object(env,
-			"memory allocation failed", CUSTOM_ERR3);
+			throw_const_obj(env, msg, CUSTOM_ERR3);
 			return -1L;
 		}
 		memcpy(&address, buffer, 8);
 		buffer += 8;
 		rc = allocate_simple_desc((char *)address,
-        			grp->descs[i], 1);
+					grp->descs[i], 1);
 		if (rc) {
-			throw_exception_const_msg_object(env,
-			"allocation failed", rc);
+			throw_const_obj(env, "allocation failed",
+							rc);
 			return -1L;
 		}
 	}
@@ -844,15 +846,14 @@ Java_io_daos_obj_DaosObjClient_allocateSimpleDesc(
 	int rc;
 
 	if (desc == NULL) {
-		throw_exception_const_msg_object(env,
-		"memory allocation failed", CUSTOM_ERR3);
+		throw_const_obj(env, "memory allocation failed",
+						CUSTOM_ERR3);
 		return;
 	}
 	rc = allocate_simple_desc(desc_buffer, desc, async);
 	if (rc) {
-        throw_exception_const_msg_object(env,
-        "allocation failed", rc);
-    }
+		throw_const_obj(env, "allocation failed", rc);
+	}
 }
 
 static int
@@ -882,8 +883,10 @@ Java_io_daos_obj_DaosObjClient_updateObjectSimple(
 		rc = daos_event_register_comp_cb(desc->event,
 			update_ret_code, desc);
 		if (rc) {
-			throw_exception_const_msg_object(env,
-			"Failed to register update callback", rc);
+			char *msg = "Failed to register update callback";
+			throw_const_obj(env,
+							msg,
+							rc);
 			return;
 		}
 	}
@@ -891,8 +894,7 @@ Java_io_daos_obj_DaosObjClient_updateObjectSimple(
 				desc->nbrOfRequests, desc->iods,
 				desc->sgls, async ? desc->event : NULL);
 	if (rc) {
-		throw_exception_const_msg_object(env,
-		"Failed to update DAOS object", rc);
+		throw_const_obj(env, "Failed to update DAOS object", rc);
 	}
 }
 
@@ -935,8 +937,8 @@ Java_io_daos_obj_DaosObjClient_fetchObjectSimple(
 				update_actual_size,
 				desc);
 		if (rc) {
-			throw_exception_const_msg_object(env,
-			"Failed to register fetch callback", rc);
+			char *msg = "Failed to register fetch callback";
+			throw_const_obj(env, msg, rc);
 			return;
 		}
 	}
@@ -944,8 +946,8 @@ Java_io_daos_obj_DaosObjClient_fetchObjectSimple(
 			desc->nbrOfRequests, desc->iods,
 			desc->sgls, NULL, async ? desc->event : NULL);
 	if (rc) {
-		throw_exception_const_msg_object(env,
-		"Failed to fetch DAOS object", rc);
+		throw_const_obj(env, "Failed to fetch DAOS object",
+						rc);
 		return;
 	}
 	/* actual data size */
@@ -1085,7 +1087,7 @@ Java_io_daos_obj_DaosObjClient_listObjectDkeys(JNIEnv *env,
 
 		memcpy(&idx, desc_buffer_head, 4);
 		asprintf(&msg, tmp, idx);
-		throw_exception_object(env, msg, rc);
+		throw_obj(env, msg, rc);
 	}
 }
 
@@ -1116,7 +1118,7 @@ Java_io_daos_obj_DaosObjClient_listObjectAkeys(JNIEnv *env,
 
 		memcpy(&idx, desc_buffer_head, 4);
 		asprintf(&msg, tmp, idx);
-		throw_exception_object(env, msg, rc);
+		throw_obj(env, msg, rc);
 	}
 }
 
@@ -1149,8 +1151,8 @@ Java_io_daos_obj_DaosObjClient_getRecordSize(JNIEnv *env,
 			&size, &nbr, &recx,
 			&erange, &anchor, false, NULL);
 	if (rc) {
-		throw_exception_const_msg_object(env,
-		"Failed to get record size", rc);
+		throw_const_obj(env, "Failed to get record size",
+						rc);
 	}
 	return (jint)size;
 }

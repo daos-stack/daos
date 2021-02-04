@@ -114,7 +114,7 @@ static uint8_t KEY_LIST_CODE_REACH_LIMIT = (uint8_t)4;
  * \return	return code of Throw function of \a env
  */
 int
-throw_exception_base(JNIEnv *env, char *msg, int error_code,
+throw_base(JNIEnv *env, char *msg, int error_code,
 		     int release_msg, int posix_error);
 
 /**
@@ -124,10 +124,10 @@ throw_exception_base(JNIEnv *env, char *msg, int error_code,
  * \param[in]	msg		error message provided by caller
  * \param[in]	error_code	non-zero return code of DFS function
  *
- * \return	return code of throw_exception_base
+ * \return	return code of throw_base
  */
 int
-throw_exception(JNIEnv *env, char *msg, int error_code);
+throw_exc(JNIEnv *env, char *msg, int error_code);
 
 /**
  * throw Java exception with dynamically constructed message for object error.
@@ -136,10 +136,10 @@ throw_exception(JNIEnv *env, char *msg, int error_code);
  * \param[in]	msg		error message provided by caller
  * \param[in]	error_code	non-zero return code of DFS function
  *
- * \return	return code of throw_exception_base
+ * \return	return code of throw_base
  */
 int
-throw_exception_object(JNIEnv *env, char *msg, int error_code);
+throw_obj(JNIEnv *env, char *msg, int error_code);
 
 /**
  * throw Java exception with constant message for posix error.
@@ -148,10 +148,10 @@ throw_exception_object(JNIEnv *env, char *msg, int error_code);
  * \param[in]	msg		error message provided by caller
  * \param[in]	error_code	non-zero return code of DFS function
  *
- * \return	return code of throw_exception_base
+ * \return	return code of throw_base
  */
 int
-throw_exception_const_msg(JNIEnv *env, char *msg, int error_code);
+throw_const(JNIEnv *env, char *msg, int error_code);
 
 /**
  * throw Java exception with constant message for object error.
@@ -160,9 +160,9 @@ throw_exception_const_msg(JNIEnv *env, char *msg, int error_code);
  * \param[in]	msg		error message provided by caller
  * \param[in]	error_code	non-zero return code of DFS function
  *
- * \return	return code of throw_exception_base
+ * \return	return code of throw_base
  */
 int
-throw_exception_const_msg_object(JNIEnv *env, char *msg, int error_code);
+throw_const_obj(JNIEnv *env, char *msg, int error_code);
 
 #endif
