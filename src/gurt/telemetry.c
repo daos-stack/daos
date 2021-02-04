@@ -708,10 +708,28 @@ failure:
 }
 
 /**
- * Compute gauge statistics: min, max, mean and sum of squares.
+ * Compute standard deviation
+ *
+ * \param[in]	sum_of_squares	Precomputed sum of squares
+ * \param[in]	sample_size	Number of elements in the data set
+ * \param[in]	mean		Mean of all elements
+ *
+ * \return			computed standard deviation
+ */
+double
+d_tm_compute_standard_dev(double sum_of_squares, uint64_t sample_size,
+			  double mean)
+{
+	if (sample_size == 0)
+		return 0;
+
+	return sqrtl((sum_of_squares - (sample_size * mean * mean)) /
+		     (sample_size - 1));
+}
+
+/**
+ * Compute gauge statistics: sample size, min, max, sum and sum of squares.
  * Standard deviation calculation is deferred until the metric is read.
- * This implementation computes an integer min and max with floating point
- * mean.
  *
  * \param[in]	node		Pointer to a gauge node
  */
@@ -720,8 +738,6 @@ d_tm_compute_gauge_stats(struct d_tm_node_t *node)
 {
 	struct d_tm_stats_t	*dtm_stats;
 	uint64_t		value = 0;
-	double			sum_of_squares = 0.0;
-	double			mean = 0.0;
 
 	dtm_stats = node->dtn_metric->dtm_stats;
 
@@ -730,15 +746,8 @@ d_tm_compute_gauge_stats(struct d_tm_node_t *node)
 
 	value = node->dtn_metric->dtm_data.value;
 	dtm_stats->sample_size++;
-
-	mean = dtm_stats->mean + ((value - dtm_stats->mean) /
-	       dtm_stats->sample_size);
-
-	sum_of_squares = dtm_stats->sum_of_squares +
-			 ((value - dtm_stats->mean) * (value - mean));
-
-	dtm_stats->mean = mean;
-	dtm_stats->sum_of_squares = sum_of_squares;
+	dtm_stats->dtm_sum.sum_int += value;
+	dtm_stats->sum_of_squares += value * value;
 
 	if (value > dtm_stats->dtm_max.max_int)
 		dtm_stats->dtm_max.max_int = value;
@@ -748,9 +757,8 @@ d_tm_compute_gauge_stats(struct d_tm_node_t *node)
 }
 
 /**
- * Compute duration statistics: min, max, mean and sum of squares.
+ * Compute duration statistics: sample size, min, max, sum and sum of squares.
  * Standard deviation calculation is deferred until the metric is read.
- * This implementation computes a floating point min, max and mean.
  *
  * \param[in]	node		Pointer to a duration node
  */
@@ -759,8 +767,6 @@ d_tm_compute_duration_stats(struct d_tm_node_t *node)
 {
 	struct d_tm_stats_t	*dtm_stats;
 	double			value = 0;
-	double			sum_of_squares = 0.0;
-	double			mean = 0.0;
 
 	dtm_stats = node->dtn_metric->dtm_stats;
 
@@ -771,15 +777,8 @@ d_tm_compute_duration_stats(struct d_tm_node_t *node)
 		(node->dtn_metric->dtm_data.tms[0].tv_nsec / 1E9);
 
 	dtm_stats->sample_size++;
-
-	mean = dtm_stats->mean + ((value - dtm_stats->mean) /
-	       dtm_stats->sample_size);
-
-	sum_of_squares = dtm_stats->sum_of_squares +
-			 ((value - dtm_stats->mean) * (value - mean));
-
-	dtm_stats->mean = mean;
-	dtm_stats->sum_of_squares = sum_of_squares;
+	dtm_stats->dtm_sum.sum_float += value;
+	dtm_stats->sum_of_squares += value * value;
 
 	if (value > dtm_stats->dtm_max.max_float)
 		dtm_stats->dtm_max.max_float = value;
@@ -1910,93 +1909,23 @@ d_tm_get_timer_snapshot(struct timespec *tms, uint64_t *shmem_root,
 }
 
 /**
- * Client function to read the specified gauge.  If the node is provided,
- * that pointer is used for the read.  Otherwise, a lookup by the metric name
- * is performed.  Access to the data is guarded by the use of the shared
- * mutex for this specific node.  A pointer for the \a val is required.
- * A pointer for \a stats is optional.
- *
- * The computation of variance and standard deviation are completed upon this
- * read operation.  Uses B. P. Welford's algorithm for computing a running
- * variance.
- *
- * \param[in,out]	val		The value of the gauge is stored here
- * \param[in,out]	stats		The statistics are stored here
- * \param[in]		shmem_root	Pointer to the shared memory segment
- * \param[in]		node		Pointer to the stored metric node
- * \param[in]		metric		Full path name to the stored metric
- *
- * \return		D_TM_SUCCESS		Success
- *			-DER_INVAL		Bad \a val pointer
- *			-DER_METRIC_NOT_FOUND	Metric not found
- *			-DER_OP_NOT_PERMITTED	Metric was not a gauge
- */
-int
-d_tm_get_gauge(uint64_t *val, struct d_tm_stats_t *stats, uint64_t *shmem_root,
-	       struct d_tm_node_t *node, char *metric)
-{
-	struct d_tm_metric_t	*metric_data = NULL;
-	struct d_tm_stats_t	*dtm_stats = NULL;
-	double			variance = 0.0;
-
-	if (val == NULL)
-		return -DER_INVAL;
-
-	if (node == NULL) {
-		node = d_tm_find_metric(shmem_root, metric);
-		if (node == NULL)
-			return -DER_METRIC_NOT_FOUND;
-	}
-
-	if (!d_tm_validate_shmem_ptr(shmem_root, (void *)node))
-		return -DER_METRIC_NOT_FOUND;
-
-	if (node->dtn_type != D_TM_GAUGE)
-		return -DER_OP_NOT_PERMITTED;
-
-	metric_data = d_tm_conv_ptr(shmem_root, node->dtn_metric);
-	if (metric_data != NULL) {
-		dtm_stats = d_tm_conv_ptr(shmem_root, metric_data->dtm_stats);
-		D_MUTEX_LOCK(&node->dtn_lock);
-		*val = metric_data->dtm_data.value;
-		if (stats != NULL) {
-			if (dtm_stats->sample_size > 2) {
-				variance = dtm_stats->sum_of_squares /
-					   (dtm_stats->sample_size - 1);
-				stats->std_dev = sqrtl(variance);
-			}
-			stats->dtm_min.min_int = dtm_stats->dtm_min.min_int;
-			stats->dtm_max.max_int = dtm_stats->dtm_max.max_int;
-			stats->mean = dtm_stats->mean;
-			stats->sample_size = dtm_stats->sample_size;
-		}
-		D_MUTEX_UNLOCK(&node->dtn_lock);
-	} else {
-		return -DER_METRIC_NOT_FOUND;
-	}
-	return D_TM_SUCCESS;
-}
-
-/**
  * Client function to read the specified duration.  If the node is provided,
  * that pointer is used for the read.  Otherwise, a lookup by the metric name
  * is performed.  Access to the data is guarded by the use of the shared
  * mutex for this specific node.  A pointer for the \a tms is required.
  * A pointer for \a stats is optional.
  *
- * The computation of variance and standard deviation are completed upon this
- * read operation.  Uses B. P. Welford's algorithm for computing a running
- * variance.
+ * The computation of mean and standard deviation are completed upon this
+ * read operation.
  *
  * \param[in,out]	tms		The value of the duration is stored here
- * \param[in,out]	stats		The statstics are stored here
+ * \param[in,out]	stats		The statistics are stored here
  * \param[in]		shmem_root	Pointer to the shared memory segment
  * \param[in]		node		Pointer to the stored metric node
  * \param[in]		metric		Full path name to the stored metric
  *
  * \return		D_TM_SUCCESS		Success
- *			-DER_INVAL		Bad \a min, \a max, \a avg
- *						\a std_dev pointer
+ *			-DER_INVAL		Bad \a tms pointer
  *			-DER_METRIC_NOT_FOUND	Metric not found
  *			-DER_OP_NOT_PERMITTED	Metric was not a duration
  */
@@ -2006,7 +1935,6 @@ d_tm_get_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 {
 	struct d_tm_metric_t	*metric_data = NULL;
 	struct d_tm_stats_t	*dtm_stats = NULL;
-	double			variance = 0.0;
 
 	if (tms == NULL)
 		return -DER_INVAL;
@@ -2030,14 +1958,90 @@ d_tm_get_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 		tms->tv_sec = metric_data->dtm_data.tms[0].tv_sec;
 		tms->tv_nsec = metric_data->dtm_data.tms[0].tv_nsec;
 		if (stats != NULL) {
-			if (dtm_stats->sample_size > 2) {
-				variance = dtm_stats->sum_of_squares /
-					   (dtm_stats->sample_size - 1);
-				stats->std_dev = sqrtl(variance);
-			}
 			stats->dtm_min.min_float = dtm_stats->dtm_min.min_float;
 			stats->dtm_max.max_float = dtm_stats->dtm_max.max_float;
-			stats->mean = dtm_stats->mean;
+			stats->dtm_sum.sum_float = dtm_stats->dtm_sum.sum_float;
+			if (dtm_stats->sample_size > 0)
+				stats->mean = dtm_stats->dtm_sum.sum_float /
+					      dtm_stats->sample_size;
+			stats->std_dev = d_tm_compute_standard_dev(
+						      dtm_stats->sum_of_squares,
+						      dtm_stats->sample_size,
+						      stats->mean);
+			stats->sum_of_squares = dtm_stats->sum_of_squares;
+			stats->sample_size = dtm_stats->sample_size;
+		}
+		D_MUTEX_UNLOCK(&node->dtn_lock);
+	} else {
+		return -DER_METRIC_NOT_FOUND;
+	}
+	return D_TM_SUCCESS;
+}
+
+/**
+ * Client function to read the specified gauge.  If the node is provided,
+ * that pointer is used for the read.  Otherwise, a lookup by the metric name
+ * is performed.  Access to the data is guarded by the use of the shared
+ * mutex for this specific node.  A pointer for the \a val is required.
+ * A pointer for \a stats is optional.
+ *
+ * The computation of mean and standard deviation are completed upon this
+ * read operation.
+ *
+ * \param[in,out]	val		The value of the gauge is stored here
+ * \param[in,out]	stats		The statistics are stored here
+ * \param[in]		shmem_root	Pointer to the shared memory segment
+ * \param[in]		node		Pointer to the stored metric node
+ * \param[in]		metric		Full path name to the stored metric
+ *
+ * \return		D_TM_SUCCESS		Success
+ *			-DER_INVAL		Bad \a val pointer
+ *			-DER_METRIC_NOT_FOUND	Metric not found
+ *			-DER_OP_NOT_PERMITTED	Metric was not a gauge
+ */
+
+int
+d_tm_get_gauge(uint64_t *val, struct d_tm_stats_t *stats, uint64_t *shmem_root,
+	       struct d_tm_node_t *node, char *metric)
+{
+	struct d_tm_metric_t	*metric_data = NULL;
+	struct d_tm_stats_t	*dtm_stats = NULL;
+	double			sum = 0;
+
+	if (val == NULL)
+		return -DER_INVAL;
+
+	if (node == NULL) {
+		node = d_tm_find_metric(shmem_root, metric);
+		if (node == NULL)
+			return -DER_METRIC_NOT_FOUND;
+	}
+
+	if (!d_tm_validate_shmem_ptr(shmem_root, (void *)node))
+		return -DER_METRIC_NOT_FOUND;
+
+	if (node->dtn_type != D_TM_GAUGE)
+		return -DER_OP_NOT_PERMITTED;
+
+	metric_data = d_tm_conv_ptr(shmem_root, node->dtn_metric);
+	if (metric_data != NULL) {
+		dtm_stats = d_tm_conv_ptr(shmem_root, metric_data->dtm_stats);
+		D_MUTEX_LOCK(&node->dtn_lock);
+		*val = metric_data->dtm_data.value;
+		if (stats != NULL) {
+			stats->dtm_min.min_int = dtm_stats->dtm_min.min_int;
+			stats->dtm_max.max_int = dtm_stats->dtm_max.max_int;
+			stats->dtm_sum.sum_int = dtm_stats->dtm_sum.sum_int;
+			if (dtm_stats->sample_size > 0)
+			{
+				sum = (double)dtm_stats->dtm_sum.sum_int;
+				stats->mean = sum / dtm_stats->sample_size;
+			}
+			stats->std_dev = d_tm_compute_standard_dev(
+						      dtm_stats->sum_of_squares,
+						      dtm_stats->sample_size,
+						      stats->mean);
+			stats->sum_of_squares = dtm_stats->sum_of_squares;
 			stats->sample_size = dtm_stats->sample_size;
 		}
 		D_MUTEX_UNLOCK(&node->dtn_lock);

@@ -48,8 +48,8 @@ enum {
 /**
  * @brief Statistics for gauge and duration metrics
  *
- * Stores the computed min, max, mean, standard deviation and sample size.
- * Stores sum of squares for internal computation of variance
+ * Stores the computed min, max, sum, standard deviation, mean, sum of squares
+ * and sample size.
  */
 struct d_tm_stats_t {
 	union minval {
@@ -60,6 +60,10 @@ struct d_tm_stats_t {
 		uint64_t max_int;
 		double max_float;
 	} dtm_max;
+	union sum_ {
+		uint64_t sum_int;
+		double sum_float;
+	} dtm_sum;
 	double std_dev;
 	double mean;
 	double sum_of_squares;
@@ -106,4 +110,6 @@ int d_tm_add_child(struct d_tm_node_t **newnode, struct d_tm_node_t *parent,
 int d_tm_get_version(void);
 void d_tm_compute_duration_stats(struct d_tm_node_t *node);
 void d_tm_compute_gauge_stats(struct d_tm_node_t *node);
+double d_tm_compute_standard_dev(double sum_of_squares, uint64_t sample_size,
+				 double mean);
 #endif /* __TELEMETRY_COMMON_H__ */
