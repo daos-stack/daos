@@ -1,3 +1,9 @@
+daos (1.1.2.1-8) unstable; urgency=medium
+  [ Hua Kuang ]
+  * Changed License to BSD-2-Clause-Patent
+
+ -- Hua Kuang <hua.kuang@intel.com> Wed, 3 Feb 2021 16:59:34 -0000
+
 daos (1.1.2.1-7) unstable; urgency=medium
   [ Alexander Oganezov ]
   * Fix debian packages to update to mercury v2.0.1rc1

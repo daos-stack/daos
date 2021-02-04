@@ -126,18 +126,6 @@ daos_rpc_tag(int req_type, int tgt_idx)
 	};
 }
 
-static inline struct daos_rpc_handler *
-daos_rpc_handler_find(struct daos_rpc_handler *handlers, crt_opcode_t opc)
-{
-	struct daos_rpc_handler *handler;
-
-	for (handler = handlers; handler->dr_opc != 0; handler++) {
-		if (handler->dr_opc == opc)
-			return handler;
-	}
-	return NULL;
-}
-
 /**
  * Register RPCs for both clients and servers.
  *
@@ -157,6 +145,8 @@ daos_rpc_register(struct crt_proto_format *proto_fmt, uint32_t cli_count,
 		  struct daos_rpc_handler *handlers, int mod_id)
 {
 	uint32_t i;
+
+	/* TODO: mod_in is unused */
 
 	if (proto_fmt == NULL)
 		return 0;
