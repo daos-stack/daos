@@ -182,7 +182,7 @@ vos_obj_cache_evict(struct daos_lru_cache *cache, struct vos_container *cont)
 struct daos_lru_cache *
 vos_obj_cache_current(void)
 {
-	return vos_get_obj_cache();
+	return vos_obj_cache_get();
 }
 
 void

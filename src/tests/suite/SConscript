@@ -108,6 +108,7 @@ def scons():
                                   LIBS=libraries)
 
     c_files = Split("""dfs_unit_test.c dfs_par_test.c dfs_test.c""")
+    newenv.AppendUnique(CPPPATH=["#/src/client/dfs"])
     dfstest = daos_build.program(newenv, 'dfs_test', c_files + daos_test_tgt,
                                  LIBS=libraries)
 
