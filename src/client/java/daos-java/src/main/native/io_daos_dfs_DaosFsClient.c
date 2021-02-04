@@ -922,8 +922,8 @@ Java_io_daos_dfs_DaosFsClient_dfsReadDir(JNIEnv *env, jobject client,
 		}
 		if (!nr) continue;
 		total += nr;
-
 		int i;
+
 		for (i = 0; i < nr; i++) {
 			/* exactly 1 for each file because ',' and \0 */
 			acc += strlen(entries[i].d_name) + 1;
