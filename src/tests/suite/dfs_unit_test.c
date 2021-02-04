@@ -735,6 +735,8 @@ dfs_test_rename(void **state)
 
 	rc = dfs_release(obj2);
 	assert_int_equal(rc, 0);
+	rc = dfs_release(obj1);
+	assert_int_equal(rc, 0);
 
 	rc = dfs_stat(dfs_mt, NULL, f1, &stbuf);
 	assert_int_equal(rc, 0);
@@ -755,8 +757,6 @@ dfs_test_rename(void **state)
 	assert_int_equal(rc, 0);
 
 	rc = dfs_remove(dfs_mt, NULL, f1, 0, NULL);
-	assert_int_equal(rc, 0);
-	rc = dfs_remove(dfs_mt, NULL, f2, 0, NULL);
 	assert_int_equal(rc, 0);
 }
 
