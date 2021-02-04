@@ -51,7 +51,7 @@ Java_io_daos_dfs_DaosFsClient_dfsMountFs(JNIEnv *env,
 		rc);
 		return -1;
 	}
-	return *(jlong*)&dfsPtr;
+	return *(jlong *)&dfsPtr;
 }
 
 /**
@@ -99,7 +99,7 @@ Java_io_daos_dfs_DaosFsClient_dfsMountFsOnRoot(JNIEnv *env,
 		"Failed to mount fs on root container", rc);
 		return -1;
 	}
-	return *(jlong*)&dfsPtr;
+	return *(jlong *)&dfsPtr;
 }
 
 /**
@@ -280,7 +280,7 @@ copy_msg(char *msg, const char *dir)
 		if (l == max_len) {
 			char *suffix = "...\0";
 
-			memcpy(msg+l, suffix, 4);
+			memcpy(msg + l, suffix, 4);
 		} else {
 			msg[l] = '\0';
 		}
@@ -507,8 +507,9 @@ Java_io_daos_dfs_DaosFsClient_createNewFile(JNIEnv *env,
 			if (parentError == NULL) {
 				char *msg = NULL;
 
-				asprintf(&msg, "Failed to allocate char array, len %d",
-					ERROR_PATH_LEN);
+				asprintf(&msg,
+				"Failed to allocate char array, len %d",
+				ERROR_PATH_LEN);
 				throw_exception_base(env, msg, 1, 1, 0);
 				goto out;
 			}
@@ -556,7 +557,7 @@ out:
 	(*env)->ReleaseStringUTFChars(env, objectType, object_type);
 	if (parentError) free(parentError);
 	if (parent) dfs_release(parent);
-	return *(jlong*)&file;
+	return *(jlong *)&file;
 }
 
 /**
@@ -647,7 +648,7 @@ Java_io_daos_dfs_DaosFsClient_dfsLookup__JJLjava_lang_String_2IJ(
 		file = NULL;
 	}
 	(*env)->ReleaseStringUTFChars(env, name, file_name);
-	return *(jlong*)&file;
+	return *(jlong *)&file;
 }
 
 /**
@@ -688,7 +689,7 @@ Java_io_daos_dfs_DaosFsClient_dfsLookup__JLjava_lang_String_2IJ(
 		file = NULL;
 	}
 	(*env)->ReleaseStringUTFChars(env, path, file_path);
-	return *(jlong*)&file;
+	return *(jlong *)&file;
 }
 
 /**
@@ -743,7 +744,7 @@ Java_io_daos_dfs_DaosFsClient_dfsDup(JNIEnv *env, jobject client,
 		"Failed to duplicate file", rc);
 		return -1;
 	}
-	return *(jlong*)&new_file;
+	return *(jlong *)&new_file;
 }
 
 /**
@@ -911,7 +912,7 @@ Java_io_daos_dfs_DaosFsClient_dfsReadDir(JNIEnv *env, jobject client,
 		if (!nr) continue;
 		total += nr;
 		int i;
-		for(i = 0; i < nr; i++){
+		for (i = 0; i < nr; i++) {
 			/* exactly 1 for each file because ',' and \0 */
 			acc += strlen(entries[i].d_name) + 1;
 			if (acc >= size) {
@@ -1681,7 +1682,8 @@ Java_io_daos_dfs_DaosFsClient_dunsSetAppInfo(JNIEnv *env, jclass clientClass,
 		return;
 	}
 	if (attrNameStr == NULL) {
-		throw_exception_const_msg(env, "Empty attribute name", CUSTOM_ERR6);
+		throw_exception_const_msg(env,
+		"Empty attribute name", CUSTOM_ERR6);
 		return;
 	}
 	const char *path = (*env)->GetStringUTFChars(env, pathStr, NULL);
@@ -1747,7 +1749,8 @@ Java_io_daos_dfs_DaosFsClient_dunsGetAppInfo(JNIEnv *env, jclass clientClass,
 	void *value = malloc(maxLen);
 
 	if (value == NULL) {
-		throw_exception_const_msg(env, "memory allocation failed", CUSTOM_ERR7);
+		throw_exception_const_msg(env,
+		"memory allocation failed", CUSTOM_ERR7);
 		return NULL;
 	}
 	int len = lgetxattr(path, attrName, value, maxLen);

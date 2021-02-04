@@ -40,10 +40,10 @@ Java_io_daos_DaosClient_daosOpenPool(JNIEnv *env,
 
 	uuid_parse(pool_str, pool_uuid);
 	rc = daos_pool_connect(pool_uuid, server_group,
-				   flags,
-				   &poh /* returned pool handle */,
-				   NULL /* returned pool info */,
-				   NULL /* event */);
+				flags,
+				&poh /* returned pool handle */,
+				NULL /* returned pool info */,
+				NULL /* event */);
 	if (rc) {
 		char *msg = NULL;
 
@@ -194,7 +194,7 @@ Java_io_daos_DaosClient_createEventQueue(JNIEnv *env, jclass clientClass,
 			char *msg = NULL;
 
 			asprintf(&msg, "Failed to init event %d",
-				i);
+					 i);
 			throw_exception_base(env, msg, rc, 1, 0);
 			goto fail;
 		}
@@ -239,25 +239,27 @@ Java_io_daos_DaosClient_pollCompleted(JNIEnv *env, jclass clientClass,
 		char *msg = NULL;
 
 		asprintf(&msg, "Failed to allocate event array with length: %d",
-			nbrOfEvents);
+				 nbrOfEvents);
 		throw_exception_base(env, msg, rc, 1, 0);
 		return;
 	}
 	rc = daos_eq_poll(eq->eqhdl, 1, timeoutMs * 1000, nbrOfEvents,
-				eps);
+					  eps);
 	if (rc < 0) {
 		char *msg = NULL;
 
-		asprintf(&msg, "Failed to poll completed events, max events: %d",
-			nbrOfEvents);
+		asprintf(&msg, "Failed to poll completed events,"
+				 " max events: %d",
+				 nbrOfEvents);
 		throw_exception_base(env, msg, rc, 1, 0);
 		goto fail;
 	}
 	if (rc > nbrOfEvents) {
 		char *msg = NULL;
 
-		asprintf(&msg, "More (%d) than expected (%d) events returned.",
-			rc, nbrOfEvents);
+		asprintf(&msg, "More (%d) than expected (%d) events"
+				 " returned.",
+				 rc, nbrOfEvents);
 		throw_exception_base(env, msg, rc, 1, 0);
 		goto fail;
 	}
@@ -306,8 +308,9 @@ Java_io_daos_DaosClient_destroyEventQueue(JNIEnv *env, jclass clientClass,
 			if (rc) {
 				char *msg = NULL;
 
-				asprintf(&msg, "Failed to finalize %d th event.",
-					i);
+				asprintf(&msg,
+						 "Failed to finalize %d th event.",
+						 i);
 				throw_exception_base(env, msg, rc, 1, 0);
 				goto fin;
 			}

@@ -457,7 +457,8 @@ decode(JNIEnv *env, jlong objectHandle, jint nbrOfAkeys,
 				" akeys %d";
 			char *msg = NULL;
 
-			asprintf(&msg, tmp, *nbr_of_akeys_with_data, nbrOfAkeys);
+			asprintf(&msg, tmp, *nbr_of_akeys_with_data,
+			nbrOfAkeys);
 			throw_exception_object(env, msg, 0);
 			return 1;
 		}
@@ -494,14 +495,16 @@ decode(JNIEnv *env, jlong objectHandle, jint nbrOfAkeys,
 			desc_buffer += pad;
 		}
 		if (init_desc(env, &desc, desc_buffer, maxKeyLen, iod_type,
-			record_size, 1, nbrOfAkeys, descBufAddress + descBufCap)) {
+			record_size, 1, nbrOfAkeys,
+			descBufAddress + descBufCap)) {
 			return 1;
 		}
 		/* put address to the start of desc buffer */
 		memcpy((char *)descBufAddress, &desc, 8);
 	} else if (address == -1) {/* no desc yet, not reusable */
 		if (init_desc(env, &desc, desc_buffer, -1, iod_type,
-			record_size, 0, nbrOfAkeys, descBufAddress + descBufCap)) {
+			record_size, 0, nbrOfAkeys,
+			descBufAddress + descBufCap)) {
 			return 1;
 		}
 	} else {
@@ -805,8 +808,9 @@ Java_io_daos_obj_DaosObjClient_allocateSimDescGroup(
 		}
 		memcpy(&address, buffer, 8);
 		buffer += 8;
-		if (rc = allocate_simple_desc((char *)address,
-			grp->descs[i], 1)) {
+		rc = allocate_simple_desc((char *)address,
+        			grp->descs[i], 1);
+		if (rc) {
 			throw_exception_const_msg_object(env,
 			"allocation failed", rc);
 			return -1L;
@@ -837,13 +841,18 @@ Java_io_daos_obj_DaosObjClient_allocateSimpleDesc(
 	char *desc_buffer = (char *)descBufAddress;
 	data_desc_simple_t *desc = (data_desc_simple_t *)malloc(
 		sizeof(data_desc_simple_t));
+	int rc;
 
 	if (desc == NULL) {
 		throw_exception_const_msg_object(env,
 		"memory allocation failed", CUSTOM_ERR3);
 		return;
 	}
-	allocate_simple_desc(desc_buffer, desc, async);
+	rc = allocate_simple_desc(desc_buffer, desc, async);
+	if (rc) {
+        throw_exception_const_msg_object(env,
+        "allocation failed", rc);
+    }
 }
 
 static int
