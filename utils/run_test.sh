@@ -57,6 +57,14 @@ run_test()
 
     FILES=(${DAOS_BASE}/test_results/*.xml)
 
+    for file in "${FILES[@]}"
+    do
+        if [ -f "$file" ]; then
+            echo SHOWING "$file"
+            cat "$file"
+        fi
+    done
+
     "${SL_PREFIX}"/lib/daos/TESTING/ftest/scripts/post_process_xml.sh \
                                                                   "${COMP}" \
                                                                   "${FILES[@]}"
