@@ -6,10 +6,10 @@
 
 Name:          daos
 Version:       1.1.2.1
-Release:       6%{?relval}%{?dist}
+Release:       8%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
-License:       Apache
+License:       BSD-2-Clause-Patent
 URL:           https//github.com/daos-stack/daos
 Source0:       %{name}-%{version}.tar.gz
 
@@ -295,7 +295,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files server
 %config(noreplace) %{conf_dir}/daos_server.yml
 %dir %{conf_dir}/certs
-%attr(0700,daos_server,daos_server) %{conf_dir}/certs
+%attr(0755,root,root) %{conf_dir}/certs
 %dir %{conf_dir}/certs/clients
 %attr(0700,daos_server,daos_server) %{conf_dir}/certs/clients
 %attr(0644,root,root) %{conf_dir}/daos_server.yml
@@ -410,8 +410,14 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
-* Mon Feb 1 2021 Vish Venkatesan<vishwanath.venkatesan@intel.com>1.1.2.1-7
+* Mon Feb 1 2021 Vish Venkatesan<vishwanath.venkatesan@intel.com> 1.1.2.1-9
 - Add new pmem specific version of DAOS common library
+
+* Wed Feb 3 2021 Hua Kuang <hua.kuang@intel.com> 1.1.2.1-8
+- Changed License to BSD-2-Clause-Patent
+
+* Thu Jan 28 2021 Phillip Henderson <phillip.henderson@intel.com> 1.1.2.1-7
+- Change ownership and permissions for the /etc/daos/certs directory.
 
 * Sat Jan 23 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.1.2.1-6
 - Update to mercury v2.0.1rc1

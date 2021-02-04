@@ -13,7 +13,7 @@
 #include "crt_internal.h"
 #include "swim/swim_internal.h"
 
-#define CRT_OPC_SWIM_VERSION	0
+#define CRT_OPC_SWIM_VERSION	1
 #define CRT_SWIM_FAIL_BASE	((CRT_OPC_SWIM_PROTO >> 16) | \
 				 (CRT_OPC_SWIM_VERSION << 4))
 #define CRT_SWIM_FAIL_DROP_RPC	(CRT_SWIM_FAIL_BASE | 0x1)	/* id: 65025 */
@@ -112,7 +112,7 @@ static struct crt_proto_rpc_format crt_swim_proto_rpc_fmt[] = {
 };
 
 static struct crt_proto_format crt_swim_proto_fmt = {
-	.cpf_name	= "swim-proto",
+	.cpf_name	= "swim",
 	.cpf_ver	= CRT_OPC_SWIM_VERSION,
 	.cpf_count	= ARRAY_SIZE(crt_swim_proto_rpc_fmt),
 	.cpf_prf	= crt_swim_proto_rpc_fmt,
@@ -153,8 +153,7 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc_req)
 	 * this request.
 	 */
 	if (hlc > rpc_priv->crp_req_hdr.cch_hlc)
-		rcv_delay = (hlc - rpc_priv->crp_req_hdr.cch_hlc)
-			  / NSEC_PER_MSEC;
+		rcv_delay = crt_hlc2msec(hlc - rpc_priv->crp_req_hdr.cch_hlc);
 
 	/* Update all piggybacked members with remote delays */
 	D_SPIN_LOCK(&csm->csm_lock);
@@ -181,10 +180,11 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc_req)
 
 				if (crt_swim_fail_delay &&
 				    crt_swim_fail_id == id) {
-					crt_swim_fail_hlc = hlc
-							  - l * NSEC_PER_MSEC
-							  + crt_swim_fail_delay
-							  * NSEC_PER_SEC;
+					uint64_t d = crt_swim_fail_delay;
+
+					crt_swim_fail_hlc = hlc -
+							    crt_msec2hlc(l) +
+							    crt_sec2hlc(d);
 					crt_swim_fail_delay = 0;
 				}
 				break;
@@ -282,8 +282,8 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 
 out:
 	if (crt_swim_fail_delay && crt_swim_fail_id == self_id) {
-		crt_swim_fail_hlc = crt_hlc_get()
-				  + crt_swim_fail_delay * NSEC_PER_SEC;
+		crt_swim_fail_hlc = crt_hlc_get() +
+				    crt_sec2hlc(crt_swim_fail_delay);
 		crt_swim_fail_delay = 0;
 	}
 
@@ -860,8 +860,7 @@ out_check_self:
 out_unlock:
 	D_SPIN_UNLOCK(&csm->csm_lock);
 out:
-	if (cst != NULL)
-		D_FREE(cst);
+	D_FREE(cst);
 
 	if (rc && rc != -DER_ALREADY) {
 		if (rank_in_list)

@@ -11,6 +11,7 @@ import copy
 from osa_utils import OSAUtils
 from test_utils_pool import TestPool
 from command_utils import CommandFailure
+from apricot import skipForTicket
 
 try:
     # python 3.x
@@ -149,6 +150,7 @@ class OSAOfflineParallelTest(OSAUtils):
         if data:
             self.verify_single_object()
 
+    @skipForTicket("DAOS-6668")
     def test_osa_offline_parallel_test(self):
         """
         JIRA ID: DAOS-4752

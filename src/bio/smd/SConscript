@@ -7,7 +7,7 @@ def scons():
 
     denv = env.Clone()
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
-    prereqs.require(denv, 'argobots')
+    prereqs.require(denv, 'argobots', 'protobufc')
 
     denv.Library('smd', Glob('*.c'),
                  LIBS=['daos_common_pmem', 'gurt', 'pmemobj'])
