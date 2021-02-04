@@ -70,7 +70,7 @@ JNI_OnLoad(JavaVM *vm, void *reserved)
 
 	if (rc) {
 		printf("daos_init() failed with rc = %d\n", rc);
-		printf("error msg: %s\n", d_errstr(rc));
+		printf("error msg: %.256s\n", d_errstr(rc));
 		return rc;
 	}
 	rc = daos_eq_lib_init();
@@ -82,11 +82,11 @@ JNI_OnLoad(JavaVM *vm, void *reserved)
 }
 
 int
-throw_exception_base(JNIEnv *env, char *msg, int error_code,
-		     int release_msg, int posix_error)
+throw_base(JNIEnv *env, char *msg, int error_code,
+	   int release_msg, int posix_error)
 {
 	char *daos_msg;
-	jstring jmsg = (*env)->NewStringUTF(env, strdup(msg));
+	jstring jmsg = (*env)->NewStringUTF(env, msg);
 
 	if (error_code > CUSTOM_ERROR_CODE_BASE) {
 		const char *temp = posix_error ?
@@ -108,27 +108,27 @@ throw_exception_base(JNIEnv *env, char *msg, int error_code,
 }
 
 int
-throw_exception(JNIEnv *env, char *msg, int error_code)
+throw_exc(JNIEnv *env, char *msg, int error_code)
 {
-	return throw_exception_base(env, msg, error_code, 1, 1);
+	return throw_base(env, msg, error_code, 1, 1);
 }
 
 int
-throw_exception_object(JNIEnv *env, char *msg, int error_code)
+throw_obj(JNIEnv *env, char *msg, int error_code)
 {
-	return throw_exception_base(env, msg, error_code, 1, 0);
+	return throw_base(env, msg, error_code, 1, 0);
 }
 
 int
-throw_exception_const_msg(JNIEnv *env, char *msg, int error_code)
+throw_const(JNIEnv *env, char *msg, int error_code)
 {
-	return throw_exception_base(env, msg, error_code, 0, 1);
+	return throw_base(env, msg, error_code, 0, 1);
 }
 
 int
-throw_exception_const_msg_object(JNIEnv *env, char *msg, int error_code)
+throw_const_obj(JNIEnv *env, char *msg, int error_code)
 {
-	return throw_exception_base(env, msg, error_code, 0, 0);
+	return throw_base(env, msg, error_code, 0, 0);
 }
 
 /**
