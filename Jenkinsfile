@@ -4,7 +4,7 @@
  *
  * This file is part of the DAOS Project. It is subject to the license terms
  * in the LICENSE file found in the top-level directory of this distribution
- * and at https://img.shields.io/badge/License-Apache%202.0-blue.svg.
+ * and at https://img.shields.io/badge/License-BSD--2--Clause--Patent-blue.svg.
  * No part of the DAOS Project, including this file, may be copied, modified,
  * propagated, or distributed except according to the terms contained in the
  * LICENSE file.
@@ -151,7 +151,7 @@ String unit_packages() {
                            'libpmemobj protobuf-c ' +
                            'spdk-devel libfabric-devel ' +
                            'pmix numactl-devel ' +
-                           'libipmctl-devel ' +
+                           'libipmctl-devel python36-pyxattr ' +
                            'python36-tabulate numactl ' +
                            'libyaml-devel ' +
                            'valgrind-devel patchelf'

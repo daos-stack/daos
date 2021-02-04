@@ -1482,20 +1482,22 @@ out:
 
 	if (!daos_is_zero_dti(&wtx->th_saved_xid)) {
 		if (wtx->th_skip_commit)
-			vos_dtx_commit(arg->ctx.tc_co_hdl, &wtx->th_saved_xid,
-				       1, NULL);
+			rc = vos_dtx_commit(arg->ctx.tc_co_hdl,
+					    &wtx->th_saved_xid, 1, NULL);
 		else
-			vos_dtx_abort(arg->ctx.tc_co_hdl, DAOS_EPOCH_MAX,
-				      &wtx->th_saved_xid, 1);
+			rc = vos_dtx_abort(arg->ctx.tc_co_hdl, DAOS_EPOCH_MAX,
+					   &wtx->th_saved_xid, 1);
+		assert(rc >= 0 || rc == -DER_NONEXIST);
 	}
 
 	if (!daos_is_zero_dti(&atx->th_saved_xid)) {
 		if (atx->th_skip_commit)
-			vos_dtx_commit(arg->ctx.tc_co_hdl, &atx->th_saved_xid,
-				       1, NULL);
+			rc = vos_dtx_commit(arg->ctx.tc_co_hdl,
+					    &atx->th_saved_xid, 1, NULL);
 		else
-			vos_dtx_abort(arg->ctx.tc_co_hdl, DAOS_EPOCH_MAX,
-				      &atx->th_saved_xid, 1);
+			rc = vos_dtx_abort(arg->ctx.tc_co_hdl, DAOS_EPOCH_MAX,
+					   &atx->th_saved_xid, 1);
+		assert(rc >= 0 || rc == -DER_NONEXIST);
 	}
 
 #undef DP_CASE
