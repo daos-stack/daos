@@ -1012,27 +1012,27 @@ class posix_tests():
         """Test with caching enabled"""
 
         container = create_cont(self.conf, self.pool, posix=True)
-        rc = run_daos_cmd(self.conf,
-                          ['container', 'query',
-                           '--pool', self.pool, '--cont', container],
-                          show_stdout=True)
+        run_daos_cmd(self.conf,
+                     ['container', 'query',
+                      '--pool', self.pool, '--cont', container],
+                     show_stdout=True)
 
-        rc = run_daos_cmd(self.conf,
-                          ['container', 'set-attr',
-                           '--pool', self.pool, '--cont', container,
-                           '--attr', 'dfuse-timeout', '--value', '2'],
-                          show_stdout=True)
+        run_daos_cmd(self.conf,
+                     ['container', 'set-attr',
+                      '--pool', self.pool, '--cont', container,
+                      '--attr', 'dfuse-timeout', '--value', '2'],
+                     show_stdout=True)
 
-        rc = run_daos_cmd(self.conf,
-                          ['container', 'set-attr',
-                           '--pool', self.pool, '--cont', container,
-                           '--attr', 'dfuse-dentry', '--value', '100s'],
-                          show_stdout=True)
+        run_daos_cmd(self.conf,
+                     ['container', 'set-attr',
+                      '--pool', self.pool, '--cont', container,
+                      '--attr', 'dfuse-dentry', '--value', '100s'],
+                     show_stdout=True)
 
-        rc = run_daos_cmd(self.conf,
-                          ['container', 'list-attrs',
-                           '--pool', self.pool, '--cont', container],
-                          show_stdout=True)
+        run_daos_cmd(self.conf,
+                     ['container', 'list-attrs',
+                      '--pool', self.pool, '--cont', container],
+                     show_stdout=True)
 
         dfuse = DFuse(self.server,
                       self.conf,

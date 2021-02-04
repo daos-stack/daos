@@ -70,7 +70,8 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 			DFUSE_TRA_INFO(dfpi, "Found existing pool");
 
-			rc = dfuse_check_for_inode(fs_handle, dfsi->dfs_ino, &ie);
+			rc = dfuse_check_for_inode(fs_handle, dfsi->dfs_ino,
+						   &ie);
 			D_ASSERT(rc == -DER_SUCCESS);
 
 			DFUSE_TRA_INFO(ie, "Reusing existing pool");
