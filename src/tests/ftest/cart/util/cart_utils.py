@@ -66,7 +66,7 @@ class CartUtils():
         """ Clean up cart processes, in case avocado/apricot does not. """
         error_list = []
         localhost = socket.gethostname().split(".")[0:1]
-        processes = "'\<(crt_launch|orterun)\>'"
+        processes = r"'\<(crt_launch|orterun)\>'"
         retry_count = 0
         while retry_count < 2:
             result = stop_processes(localhost, processes)

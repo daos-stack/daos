@@ -603,7 +603,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60):
     log.info("Killing any processes on %s that match: %s", hosts, pattern)
 
     # Filter out zombie (defunct) processes from ps output
-    ps_with_zombie_filter = "ps x | grep -E {} | grep -vE '\<(grep|defunct)\>'"
+    ps_with_zombie_filter = r"ps x | grep -E {} | grep -vE '\<(grep|defunct)\>'"
 
     if hosts is not None:
         commands = [
