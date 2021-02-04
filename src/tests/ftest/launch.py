@@ -1382,7 +1382,7 @@ def install_debuginfos():
     if USE_DEBUGINFO_INSTALL:
         yum_args = [
             "--exclude", "ompi-debuginfo", "libpmemobj", "python", "openmpi3"]
-        cmd_list.append(timeout + ["sudo", "yum", "-y", "install"] + yum_args)
+        cmd_list.append(timeout + ["sudo", "dnf", "-y", "install"] + yum_args)
         cmd_list.append(
             timeout +
             ["sudo", "debuginfo-install", "--enablerepo=*-debuginfo", "-y"] +
@@ -1407,7 +1407,7 @@ def install_debuginfos():
     # yum_base.processTransaction(rpmDisplay=yum.rpmtrans.NoOutputCallBack())
 
     # Now install a few pkgs that debuginfo-install wouldn't
-    cmd = timeout + ["sudo", "yum", "-y", "--enablerepo=*debug*", "install"]
+    cmd = timeout + ["sudo", "dnf", "-y", "--enablerepo=*debug*", "install"]
     for pkg in install_pkgs:
         try:
             cmd.append(
@@ -1429,7 +1429,7 @@ def install_debuginfos():
             break
     if retry:
         print("Going to refresh caches and try again")
-        cmd_prefix = timeout + ["sudo", "yum", "--enablerepo=*debug*"]
+        cmd_prefix = timeout + ["sudo", "dnf", "--enablerepo=*debug*"]
         cmd_list.insert(0, cmd_prefix + ["clean", "all"])
         cmd_list.insert(1, cmd_prefix + ["makecache"])
         for cmd in cmd_list:
