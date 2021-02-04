@@ -47,8 +47,11 @@ LABEL maintainer="daos@daos.groups.io"
 # use same UID as host and default value of 1000 if not specified
 ARG UID=1000
 
+# for good measure, clean the metadata
+RUN yum clean metadata
+
 # Install basic tools
-RUN yum clean all && yum -y install epel-release && \
+RUN yum -y install epel-release; \
     yum -y install \
         boost-devel clang-analyzer cmake CUnit-devel doxygen file flex \
         gcc gcc-c++ git golang graphviz lcov                           \
@@ -59,7 +62,10 @@ RUN yum clean all && yum -y install epel-release && \
         python-pep8 python-pygit2 python2-pygithub python-requests     \
         readline-devel scons sg3_utils ShellCheck yasm pciutils        \
         valgrind-devel python36-pylint man java-1.8.0-openjdk maven    \
-        json-c-devel python36-requests lz4-devel \
+        json-c-devel python36-requests lz4-devel
+
+# DAOS specific
+RUN yum -y install \
            python2-avocado python2-avocado-plugins-output-html \
            python2-avocado-plugins-varianter-yaml-to-mux       \
            python-pathlib                                      \
@@ -69,17 +75,17 @@ RUN yum clean all && yum -y install epel-release && \
            python36-numpy python36-jira python3-pip Lmod       \
            fuse3-devel libipmctl-devel                         \
            hwloc-devel patchelf python36-tabulate              \
-           java-1.8.0-openjdk python-distro python36-distro    \
-	   openmpi3-devel \
-	   && yum clean all
+           java-1.8.0-openjdk python-distro python36-distro
+RUN yum -y install openmpi3-devel
 
 # DAOS python 3 packages required for pylint
 #  - excluding mpi4py as it depends on CORCI-635
-RUN pip3 install avocado-framework && \
-    pip3 install avocado-framework-plugin-result-html && \
-    pip3 install avocado-framework-plugin-varianter-yaml-to-mux && \
-    pip3 install codespell && \
-    pip3 install pygithub
+RUN pip3 install avocado-framework; \
+    pip3 install avocado-framework-plugin-result-html; \
+    pip3 install avocado-framework-plugin-varianter-yaml-to-mux
+
+RUN pip3 install codespell
+RUN pip3 install pygithub
 
 # Add DAOS user
 ENV USER daos
@@ -175,19 +181,8 @@ RUN if [ "x$BULLSEYE" != "x" ]; then \
     fi
 
 # force an upgrade to get any newly built RPMs
-# ARG CACHEBUST=1
+ARG CACHEBUST=1
 RUN yum -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury
-
-WORKDIR /home/daos/pre
-COPY SConstruct .
-COPY utils/sl utils/sl
-COPY utils/build.config utils/
-RUN ln -s utils/sl site_scons
-
-# set PREBUILD to skip initial build.
-ARG PREBUILD=yes
-
-RUN [ "$PREBUILD" != "yes" ] || (scons --build-deps=yes install PREFIX=/opt/daos --deps-only && /bin/rm -rf build *.gz)
 
 # set NOBUILD to disable build
 ARG NOBUILD
@@ -201,7 +196,7 @@ COPY ./ .
 
 # Build DAOS & dependencies
 RUN if [ "x$NOBUILD" = "x" ] ; then \
-    scons -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER; fi
+    scons --build-deps=yes -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER; fi
 
 # Set environment variables
 ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:$LD_LIBRARY_PATH
