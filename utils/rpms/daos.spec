@@ -410,7 +410,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
-* Mon Feb 1 2021 Vish Venkatesan<vishwanath.venkatesan@intel.com> 1.1.2.1-9
+* Mon Feb 4 2021 Vish Venkatesan<vishwanath.venkatesan@intel.com> 1.1.2.1-9
 - Add new pmem specific version of DAOS common library
 
 * Wed Feb 3 2021 Hua Kuang <hua.kuang@intel.com> 1.1.2.1-8
