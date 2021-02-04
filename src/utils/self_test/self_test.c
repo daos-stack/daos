@@ -772,6 +772,7 @@ static int compare_print_results(char *section_name)
 	if (g_expected_results != NULL) {
 		char	*str;
 		char	*save_str;
+		char	*save_str_outer;
 		char	*ptr;
 		char	*tptr;
 		float	 scale;
@@ -799,10 +800,8 @@ static int compare_print_results(char *section_name)
 		 * ptr will point to something like "av" or "av=10"
 		 * Then loop around for all entries.
 		 */
-		ptr = strtok(tptr, ",");
+		ptr = strtok_r(tptr, ",", &save_str_outer);
 		while (ptr != NULL) {
-			tptr = NULL;
-
 			/*
 			 * Note: This will eliminate "=:" from prt.
 			 * Also, save_str will point to the next character
@@ -837,7 +836,7 @@ static int compare_print_results(char *section_name)
 				}
 			}
 next_arg:
-			ptr = strtok(tptr, ",");
+			ptr = strtok_r(NULL, ",", &save_str_outer);
 		}
 		if (str != NULL)
 			free(str);
@@ -865,6 +864,7 @@ next_arg:
 		    (status[i].flag & TST_OUTPUT)) {
 			/* Set ranges for comparison */
 			firstpass = true;
+
 			if (status[i].flag & TST_LOW) {
 				/* avoid checkpatch warning */
 				lower = status[i].value *
@@ -906,7 +906,7 @@ next_arg:
 						 (int)lower, (int)upper,
 						 (int)status[i].scale);
 					if (!((lower <= value) &&
-					    (value <= upper)))
+					      (value <= upper)))
 						passed = false;
 				} else if (status[i].flag & TST_HIGH) {
 					snprintf(range, RANGE_SIZE,
@@ -951,8 +951,7 @@ cleanup:
 	return ret_value;
 }
 
-static int combine_results(Config *cfg_results, char *section_name,
-			   uint32_t index)
+static int combine_results(Config *cfg_results, char *section_name)
 {
 	ConfigRet	 ret;
 	int		 ret_value = 0;
@@ -979,7 +978,7 @@ static int combine_results(Config *cfg_results, char *section_name,
 		ret = ConfigReadInt(cfg_results, section_name, key_name,
 				    &temp, dfault);
 		/* Tag master endpoint to key name */
-		snprintf(new_key_name, sizeof (new_key_name),
+		snprintf(new_key_name, sizeof(new_key_name),
 			 "%s-%s", master, key_name);
 
 		/* Check to see if key occurred in results */
@@ -1364,7 +1363,7 @@ static int test_msg_size(crt_context_t crt_ctx,
 			      ms_endpts[m_idx].reply.test_duration_ns,
 			      output_megabits,
 			      cfg, section_name);
-		combine_results(cfg, section_name, m_idx);
+		combine_results(cfg, section_name);
 
 		/* Cleanup configuration structure for next loop */
 		ConfigRemoveSection(cfg, section_name);
@@ -1713,7 +1712,7 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       " files. If the sector name already exists in the result file,\n"
 	       " then the previous results will be replaced.\n\n");
 
-	printf(" The expected and results files uses predefined keys, each \n"
+	printf(" The expected and results files uses predefined keys, each\n"
 	       " representing a differ statistics.\n"
 	       "    all  - apply to all statistics (scaling only)\n"
 	       "     bw  - bandwidth\n"
@@ -1732,8 +1731,8 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 
 	printf(" Comparisons is performed and reported on any statistic\n"
 	       " that has both an expected and scale factor defined.\n"
-	       " In addition, a list of statistics comparison may be listed \n"
-	       " using the 'expected_result' option.  This is a comma \n"
+	       " In addition, a list of statistics comparison may be listed\n"
+	       " using the 'expected_result' option.  This is a comma\n"
 	       " separated list of the desired statistics.  The scale factor\n"
 	       " for a statistics can be specified/modified in the list by\n"
 	       " setting its value after the statistics key word, separated\n"
@@ -2091,20 +2090,20 @@ int parse_endpoint_string(char *const opt_arg,
 	uint32_t		 num_tags = 0;
 	void			*realloced_mem;
 	struct st_endpoint	*next_endpoint;
-
+	char 			*save_ptr;
 	/*
 	 * strtok replaces separators with \0 characters
 	 * Use this to divide up the input argument into three strings
 	 *
 	 * Use the first three ; delimited strings - ignore the rest
 	 */
-	pch = strtok(opt_arg, ":");
+	pch = strtok_r(opt_arg, ":", &save_ptr);
 	while (pch != NULL && separator_count < 2) {
 		token_ptrs[separator_count] = pch;
 
 		separator_count++;
 
-		pch = strtok(NULL, ":");
+		pch = strtok_r(NULL, ":", &save_ptr);
 	}
 
 	/* Validate the input strings */
@@ -2725,7 +2724,7 @@ int parse_command_options(int argc, char *argv[])
 			parse_endpoint_string(optarg, &g_endpts, &g_num_endpts);
 			break;
 		case 's':
-			if (alloc_g_msg_sizes_str == true) {
+			if (alloc_g_msg_sizes_str) {
 				/* Avoid checkpatch warning */
 				free(g_msg_sizes_str);
 			}
@@ -2841,6 +2840,7 @@ int main(int argc, char *argv[])
 	char				*display = NULL;
 	char				*str_send = NULL;
 	char				*str_put = NULL;
+	char				*save_ptr;
 
 	g_msg_sizes_str = default_msg_sizes_str;
 	g_rep_count = g_default_rep_count;
@@ -2952,7 +2952,7 @@ int main(int argc, char *argv[])
 
 	/* Iterate over the user's message sizes and parse / validate them */
 	num_msg_sizes = 0;
-	pch = strtok(g_msg_sizes_str, tuple_tokens);
+	pch = strtok_r(g_msg_sizes_str, tuple_tokens, &save_ptr);
 	while (pch != NULL) {
 		D_ASSERTF(num_msg_sizes <= num_tokens, "Token counting err\n");
 
@@ -2966,7 +2966,7 @@ int main(int argc, char *argv[])
 			       UINT32_MAX,
 			       pch);
 
-		pch = strtok(NULL, tuple_tokens);
+		pch = strtok_r(NULL, tuple_tokens, &save_ptr);
 	}
 
 	if (num_msg_sizes <= 0) {
