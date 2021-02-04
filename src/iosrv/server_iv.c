@@ -519,9 +519,13 @@ ivc_pre_cb(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 {
 	int rc;
 
-	rc = dss_ult_create(cb_func, cb_arg, DSS_XS_SELF, 0, 0, NULL);
+	/*
+	 * Current EC aggregation periodically update IV, call
+	 * dss_ult_periodic() to avoid interfering CPU relaxing.
+	 */
+	rc = dss_ult_periodic(cb_func, cb_arg, DSS_XS_SELF, 0, 0, NULL);
 	if (rc)
-		D_ERROR("dss_ult_create failed, rc "DF_RC"\n", DP_RC(rc));
+		D_ERROR("dss_ult_periodic failed, rc "DF_RC"\n", DP_RC(rc));
 }
 
 static int

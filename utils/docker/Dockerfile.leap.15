@@ -79,7 +79,7 @@ RUN zypper --non-interactive update;                                         \
            readline-devel sg3_utils which yasm                               \
            python-devel python3-devel valgrind-devel hwloc-devel             \
            openmpi3-devel man fuse3-devel patchelf scons lua-lmod            \
-           libjson-c-devel liblz4-devel python3-distro curl                  \
+           libjson-c-devel liblz4-devel python3-distro curl python3-pyxattr  \
            java-1_8_0-openjdk-devel maven python3-PyYAML
 # Monkey-patch MODULEPATH
 RUN if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then        \
