@@ -4,6 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+# pylint: disable=too-many-lines
 from __future__ import print_function
 
 from getpass import getuser
@@ -14,6 +15,35 @@ import json
 
 from dmg_utils_base import DmgCommandBase
 from general_utils import get_numeric_list
+from dmg_utils_params import DmgYamlParameters, DmgTransportCredentials
+
+
+def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None):
+    """Get a dmg command object.
+
+    Args:
+        group (str): daos_server group name
+        cert_dir (str): directory in which to copy certificates
+        bin_dir (str): location of the dmg executable
+        config_file (str): configuration file name and path
+        config_temp (str, optional): file name and path to use to generate the
+            configuration file locally and then copy it to all the hosts using
+            the config_file specification. Defaults to None, which creates and
+            utilizes the file specified by config_file.
+
+    Returns:
+        DmgCommand: the dmg command object
+
+    """
+    transport_config = DmgTransportCredentials(cert_dir)
+    config = DmgYamlParameters(config_file, group, transport_config)
+    command = DmgCommand(bin_dir, config)
+    if config_temp:
+        # Setup the DaosServerCommand to write the config file data to the
+        # temporary file and then copy the file to all the hosts using the
+        # assigned filename
+        command.temporary_file = config_temp
+    return command
 
 
 class DmgCommand(DmgCommandBase):
@@ -72,8 +102,10 @@ class DmgCommand(DmgCommandBase):
         """Wraps the base _get_result method to force JSON output."""
         prev_json_val = self.json.value
         self.json.update(True)
-        self._get_result(sub_command_list, **kwargs)
-        self.json.update(prev_json_val)
+        try:
+            self._get_result(sub_command_list, **kwargs)
+        finally:
+            self.json.update(prev_json_val)
         return json.loads(self.result.stdout)
 
     def network_scan(self, provider=None, all_devs=False):
@@ -782,19 +814,23 @@ class DmgCommand(DmgCommandBase):
             # Process the unique single rank system query output, e.g.
             #   Rank 1
             #   ------
-            #   address : 10.8.1.11:10001
-            #   uuid    : d7a69a41-59a2-4dec-a620-a52217851285
-            #   status  : Joined
-            #   reason  :
+            #   address      : 10.8.1.68:10001
+            #   uuid         : bcc5b010-1ffa-4525-96a9-11f1904374d6
+            #   fault domain : /wolf-68.wolf.hpdd.intel.com
+            #   status       : Joined
+            #   reason       :
             match = re.findall(
-                r"(?:Rank|address\s+:|uuid\s+:|status\s+:|reason\s+:)\s+(.*)",
+                r"(?:Rank|address\s+:|uuid\s+:|domain\s+:|status\s+:|"
+                r"reason\s+:)\s+(.*)",
                 self.result.stdout)
             if match:
+                print("--- match: {}".format(match))
                 data[int(match[0])] = {
                     "address": match[1].strip(),
                     "uuid": match[2].strip(),
-                    "state": match[3].strip(),
-                    "reason": match[4].strip(),
+                    "domain": match[3].strip(),
+                    "state": match[4].strip(),
+                    "reason": match[5].strip(),
                 }
         elif verbose:
             # Process the verbose multiple rank system query output, e.g.
