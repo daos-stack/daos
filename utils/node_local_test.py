@@ -292,7 +292,7 @@ class DaosServer():
                                                       delete=False)
         self.__process_name = 'daos_io_server'
         if self.valgrind:
-            self.__process_name = 'valgrind'
+            self.__process_name = 'memcheck-amd64-'
 
         socket_dir = '/tmp/dnt_sockets'
         if not os.path.exists(socket_dir):
@@ -328,6 +328,8 @@ class DaosServer():
         }
 
         rc = self.run_dmg(['system', 'query', '--json'])
+        print(rc)
+        print(rc.stdout)
         if rc.returncode == 0:
             data = json.loads(rc.stdout.decode('utf-8'))
             members = data['response']['Members']
@@ -370,9 +372,8 @@ class DaosServer():
             valgrind_args = ['--fair-sched=yes',
                              '--xml=yes',
                              '--xml-file=dnt_server.%p.memcheck.xml',
-                             '--num-callers=2',
-                             '--leak-check=no',
-                             '--keep-stacktraces=none',
+                             '--num-callers=5',
+                             '--leak-check=full',
                              '--undef-value-errors=no']
             self._io_server_dir = tempfile.TemporaryDirectory(prefix='dnt_io_')
 
@@ -423,7 +424,7 @@ class DaosServer():
         # /mnt/daos is mounted but empty.  It will be remounted and formatted
         # /mnt/daos exists and has data in.  It will be used as is.
         start = time.time()
-        max_start_time = 30
+        max_start_time = 300
 
         cmd = ['storage', 'format']
         while True:
@@ -501,20 +502,25 @@ class DaosServer():
             entry['message'] = 'daos_io_server died during testing'
             self.conf.wf.issues.append(entry)
 
+        # Set this now, so that if there is any error the stop() method does
+        # not get called a second time.
+        self.running = False
+
         rc = self.run_dmg(['system', 'stop'])
         assert rc.returncode == 0 # nosec
 
         start = time.time()
         max_stop_time = 5
         while True:
-            time.sleep(0.5)
+            time.sleep(10)
             if self._check_system_state('stopped'):
                 break
             try:
                 self._check_timing("stop", start, max_stop_time)
             except NLTestTimeout as e:
                 print('Failed to stop: {}'.format(e))
-                if time.time() - start > 30:
+                if time.time() - start > 60:
+                    log_test(self.conf, self.server_log.name)
                     raise
         print('Server stopped in {:.2f} seconds'.format(time.time() - start))
 
@@ -525,10 +531,7 @@ class DaosServer():
         compress_file(self.agent_log.name)
         compress_file(self.control_log.name)
 
-        # TODO:                              # pylint: disable=W0511
-        # Enable memleak checking of server.  This could work, but we
-        # need to resolve a number of the issues first.
-        log_test(self.conf, self.server_log.name, show_memleaks=False)
+        log_test(self.conf, self.server_log.name)
         self.running = False
         return ret
 
@@ -2336,11 +2339,15 @@ def main():
             fatal_errors.add_result(run_posix_tests(server, conf))
         else:
             fatal_errors.add_result(run_posix_tests(server, conf, args.test))
-    else:
+    elif args.mode != 'server-valgrind':
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
         fatal_errors.add_result(run_posix_tests(server, conf))
         fatal_errors.add_result(set_server_fi(server))
+
+    pools = get_pool_list()
+    while len(pools) < 1:
+        pools = make_pool(server)
 
     if server.stop() != 0:
         fatal_errors.fail()
@@ -2353,8 +2360,11 @@ def main():
         server.start()
         pools = get_pool_list()
         for pool in pools:
+            time.sleep(5)
             cmd = ['pool', 'list-containers', '--pool', pool]
-            run_daos_cmd(conf, cmd, valgrind=False)
+            rc = run_daos_cmd(conf, cmd, valgrind=False)
+            print(rc)
+            time.sleep(5)
         if server.stop() != 0:
             fatal_errors.add_result(True)
 

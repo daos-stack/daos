@@ -385,8 +385,8 @@ prealloc_requests(struct sched_info *info, int cnt)
 	return 0;
 }
 
-#define SCHED_PREALLOC_INIT_CNT		8192
-#define SCHED_PREALLOC_BATCH_CNT	1024
+#define SCHED_PREALLOC_INIT_CNT	        16
+#define SCHED_PREALLOC_BATCH_CNT	8
 
 static int
 sched_info_init(struct dss_xstream *dx)
