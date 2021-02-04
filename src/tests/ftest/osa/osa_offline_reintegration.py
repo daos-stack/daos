@@ -4,11 +4,18 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
 import random
+import threading
 from osa_utils import OSAUtils
 from test_utils_pool import TestPool
-from apricot import skipForTicket
+from write_host_file import write_host_file
+
+try:
+    # python 3.x
+    import queue as queue
+except ImportError:
+    # python 2.7
+    import Queue as queue
 
 class OSAOfflineReintegration(OSAUtils):
     # pylint: disable=too-many-ancestors
@@ -22,6 +29,48 @@ class OSAOfflineReintegration(OSAUtils):
         """Set up for test case."""
         super(OSAOfflineReintegration, self).setUp()
         self.dmg_command = self.get_dmg_command()
+        self.ior_w_flags = self.params.get("write_flags", '/run/ior/iorflags/*')
+        self.ior_r_flags = self.params.get("read_flags", '/run/ior/iorflags/*')
+        self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
+        self.ior_test_sequence = self.params.get(
+            "ior_test_sequence", '/run/ior/iorflags/*')
+        self.ior_dfs_oclass = self.params.get(
+            "obj_class", '/run/ior/iorflags/*')
+        # Recreate the client hostfile without slots defined
+        self.hostfile_clients = write_host_file(
+            self.hostlist_clients, self.workdir, None)
+        self.out_queue = queue.Queue()
+
+    def run_ior_thread(self, action, oclass, api, test):
+        """Start the IOR thread for either writing or
+        reading data to/from a container.
+        Args:
+            action (str): Start the IOR thread with Read or
+                          Write
+            oclass (str): IOR object class
+            API (str): IOR API
+            test (list): IOR test sequence
+            flags (str): IOR flags
+        """
+        if action == "Write":
+            flags = self.ior_w_flags
+        else:
+            flags = self.ior_r_flags
+
+        # Add a thread for these IOR arguments
+        process = threading.Thread(target=self.ior_thread,
+                                   kwargs={"pool": self.pool,
+                                           "oclass": oclass,
+                                           "api": api,
+                                           "test": test,
+                                           "flags": flags,
+                                           "results":
+                                           self.out_queue})
+        # Launch the IOR thread
+        process.start()
+        # Wait for the thread to finish
+        process.join()
+
 
     def run_offline_reintegration_test(self, num_pool, data=False):
         """Run the offline reintegration without data.
@@ -58,7 +107,8 @@ class OSAOfflineReintegration(OSAUtils):
             pool_uuid.append(pool[val].uuid)
             self.pool = pool[val]
             if data:
-                self.write_single_object()
+                self.run_ior_thread("Write", self.ior_dfs_oclass[0],
+                                    self.ior_apis[0], self.ior_test_sequence[0])
 
         # Exclude and reintegrate the pool_uuid, rank and targets
         for val in range(0, num_pool):
@@ -67,17 +117,12 @@ class OSAOfflineReintegration(OSAUtils):
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
             output = self.dmg_command.pool_exclude(self.pool.uuid,
-                                                   rank, t_string)
+                                                   rank)
             self.log.info(output)
+            self.is_rebuild_done(3)
+            self.assert_on_rebuild_failure()
 
-            fail_count = 0
-            while fail_count <= 20:
-                pver_exclude = self.get_pool_version()
-                time.sleep(10)
-                fail_count += 1
-                if pver_exclude > (pver_begin + len(target_list)):
-                    break
-
+            pver_exclude = self.get_pool_version()
             self.log.info("Pool Version after exclude %s", pver_exclude)
             # Check pool version incremented after pool exclude
             self.assertTrue(pver_exclude > (pver_begin + len(target_list)),
@@ -86,15 +131,7 @@ class OSAOfflineReintegration(OSAUtils):
                                                        rank,
                                                        t_string)
             self.log.info(output)
-
-            fail_count = 0
-            while fail_count <= 20:
-                pver_reint = self.get_pool_version()
-                time.sleep(10)
-                fail_count += 1
-                if pver_reint > (pver_exclude + 1):
-                    break
-
+            self.is_rebuild_done(3)
             self.assert_on_rebuild_failure()
 
             pver_reint = self.get_pool_version()
@@ -109,9 +146,9 @@ class OSAOfflineReintegration(OSAUtils):
             self.pool.display_pool_daos_space(display_string)
 
         if data:
-            self.verify_single_object()
+            self.run_ior_thread("Read", self.ior_dfs_oclass[0],
+                                self.ior_apis[0], self.ior_test_sequence[0])
 
-    @skipForTicket("DAOS-6521")
     def test_osa_offline_reintegration(self):
         """Test ID: DAOS-4749
         Test Description: Validate Offline Reintegration
@@ -119,6 +156,5 @@ class OSAOfflineReintegration(OSAUtils):
         :avocado: tags=all,daily_regression,hw,medium,ib2
         :avocado: tags=osa,offline_reintegration
         """
-        # Perform reintegration testing with 1 to 3 pools
-        for x in range(1, 4):
-            self.run_offline_reintegration_test(x, True)
+        # Perform reintegration testing with a pool
+        self.run_offline_reintegration_test(1, True)
