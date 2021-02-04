@@ -32,7 +32,7 @@ class CartSelfThreeNodeTest(TestWithoutServers):
     def tearDown(self):
         """ Tear down """
         self.report_timeout()
-        self._teardown_errors.extend(self.utils.cleanup_processes(self))
+        self._teardown_errors.extend(self.utils.cleanup_processes())
         super(CartSelfThreeNodeTest, self).tearDown()
 
     def test_cart_selftest(self):
