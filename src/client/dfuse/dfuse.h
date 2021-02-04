@@ -319,12 +319,12 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 #define DFUSE_REPLY_ATTR(ie, req, attr)					\
 	do {								\
 		int __rc;						\
+		double __timeout = (ie)->ie_nocache ? 0 : (ie)->ie_dfs->dfs_attr_timeout; \
 		DFUSE_TRA_DEBUG(ie,					\
-				"Returning attr inode %#lx mode %#o",	\
-				(attr)->st_ino,				\
-				(attr)->st_mode);			\
-		__rc = fuse_reply_attr(req, attr,			\
-				(ie)->ie_dfs->dfs_attr_timeout);	\
+				"Returning attr inode %#lx mode %#o %lf", \
+				(attr)->st_ino, (attr)->st_mode,	\
+				__timeout);				\
+		__rc = fuse_reply_attr(req, attr, __timeout);		\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(ie,				\
 					"fuse_reply_attr returned %d:%s", \
@@ -509,6 +509,8 @@ struct dfuse_inode_entry {
 
 	/** Set to true if this is the root of the container */
 	bool			ie_root;
+
+	bool			ie_nocache;
 };
 
 /* Generate the inode to use for this dfs object.  This is generating a single

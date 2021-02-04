@@ -983,6 +983,23 @@ def needs_dfuse(method):
         return rc
     return _helper
 
+# Needs to use decorator with args.
+# https://python-3-patterns-idioms-test.readthedocs.io/en/latest/PythonDecorators.html#decorators-with-arguments
+def needs_dfuse_with_cache(method):
+    """Decorator function for starting dfuse under posix_tests class"""
+    @functools.wraps(method)
+    def _helper(self):
+        self.dfuse = DFuse(self.server,
+                           self.conf,
+                           pool=self.pool,
+                           container=self.container,
+                           caching=True)
+        self.dfuse.start(v_hint=method.__name__)
+        rc = method(self)
+        if self.dfuse.stop():
+            self.fatal_errors = True
+        return rc
+    return _helper
 
 class posix_tests():
     """Class for adding standalone unit tests"""
@@ -1105,7 +1122,24 @@ class posix_tests():
                '--pool', self.pool, '--path', path,
                '--type', 'POSIX']
         rc = run_daos_cmd(self.conf, cmd)
-        assert(rc.returncode == 0)
+        assert rc.returncode == 0
+        stbuf = os.stat(path)
+        print(stbuf)
+        assert(stbuf.st_ino < 100)
+        print(os.listdir(path))
+
+    @needs_dfuse_with_cache
+    def test_uns_create_with_cache(self):
+        """Simple test to create a container using a path in dfuse"""
+        path = os.path.join(self.dfuse.dir, 'mycont')
+        cmd = ['container', 'create',
+               '--pool', self.pool, '--path', path,
+               '--type', 'POSIX']
+        rc = run_daos_cmd(self.conf, cmd)
+        assert rc.returncode == 0
+        stbuf = os.stat(path)
+        print(stbuf)
+        assert(stbuf.st_ino < 100)
         print(os.listdir(path))
 
 def run_posix_tests(server, conf, test=None):
