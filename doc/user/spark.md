@@ -70,8 +70,9 @@ $ export LD_PRELOAD=<YOUR JDK HOME>/jre/lib/amd64/libjsig.so
 
 DAOS FileSystem binds to schema "daos".  DAOS URIs are in the format of
 "daos://\[authority\]//\[path\]". Both authority and path are optional. There
-are two types of DAOS URIs, with and without DAOS UNS path depending on where
-you want the DAOS Filesystem to get initialized and configured.
+are three types of DAOS URIs, with DAOS UNS path, without DAOS UNS path and
+Special UUID path depending on where you want the DAOS Filesystem to get initialized
+and configured.
 
 #### With DAOS UNS Path
 
@@ -137,6 +138,11 @@ After that, configure `daos-site.xml` with the pool and container created.
 ...
 </configuration>
 ```
+
+#### Special UUID Path
+DAOS supports a specialized URI with pool/container UUIDs embedded. The format is
+"daos://pool UUID/container UUID". As you can see, we don't need to find the
+UUIDs from neither UNS path nor configuration like above two types of URIs.
 
 You may want to connect to two DAOS servers or two DFS instances mounted to
 different containers in one DAOS server from same JVM. Then, you need to add
@@ -208,7 +214,7 @@ df = spark.read.json("daos://default:1/people.json")
 ### Configure Hadoop to Use DAOS
 
 Edit `$HADOOP_HOME/etc/hadoop/core-site.xml` to change fs.defaultFS to
-`daos://default:1` or "daos://uns/\<your path\>". Then append below configuration
+`daos:///` or "daos://uns/\<your path\>". Then append below configuration
 to this file and `$HADOOP_HOME/etc/hadoop/yarn-site.xml`.
 
 ```xml
@@ -220,8 +226,8 @@ to this file and `$HADOOP_HOME/etc/hadoop/yarn-site.xml`.
 ```
 
 DAOS has no data locality since it is remote storage. You need to add below
-configuration to the scheduler configuration file, like `capacity-scheduler.xml` in
-yarn.
+configuration to the scheduler configuration file, like
+`capacity-scheduler.xml` in yarn.
 
 ```xml
 <property>
@@ -232,6 +238,18 @@ yarn.
 
 Then replicate `daos-site.xml`, `core-site.xml`, `yarn-site.xml` and
 `capacity-scheduler.xml` to other nodes.
+
+There is one pitfall that YARN runs with DAOS UNS URI, "daos:///uns-path",
+configured to `fs.defaultFS`. You may get an error complaining pool/container
+UUIDs cannot be found. It's because Hadoop considers the default filesystem is
+DAOS since you configured DAOS UNS URI. YARN has some working directories
+defaulting to local path without schema, like "/tmp/yarn", which is then
+constructed as "daos:///tmp/yarn". With this URI, Hadoop cannot connect to DAOS
+since no pool/container UUIDs can be found if daos-site.xml is not provided too
+.
+
+The simplest workaround for now is not set DAOS UNS URI to `fs.defaultFS`. Or
+you can find out all local working directories and append "file:///".
 
 #### Access DAOS in Hadoop
 
@@ -244,7 +262,7 @@ $ hadoop fs -ls /
 
 You can also play around with other Hadoop commands, like -copyFromLocal and
 -copyToLocal. You can also start Yarn and run some mapreduce jobs on Yarn. Just
-make sure you have DAOS URI, `daos://default:1/`, set correctly in your job.
+make sure you have DAOS URI, like `daos:///`, set correctly in your job.
 
 #### Known Issues
 
