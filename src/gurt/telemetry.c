@@ -2032,8 +2032,7 @@ d_tm_get_gauge(uint64_t *val, struct d_tm_stats_t *stats, uint64_t *shmem_root,
 			stats->dtm_min.min_int = dtm_stats->dtm_min.min_int;
 			stats->dtm_max.max_int = dtm_stats->dtm_max.max_int;
 			stats->dtm_sum.sum_int = dtm_stats->dtm_sum.sum_int;
-			if (dtm_stats->sample_size > 0)
-			{
+			if (dtm_stats->sample_size > 0) {
 				sum = (double)dtm_stats->dtm_sum.sum_int;
 				stats->mean = sum / dtm_stats->sample_size;
 			}
