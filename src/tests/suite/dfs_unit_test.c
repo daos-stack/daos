@@ -609,6 +609,64 @@ dfs_test_read_shared_file(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
+static void
+dfs_test_rename(void **state)
+{
+	test_arg_t		*arg = *state;
+	dfs_obj_t		*obj1, *obj2;
+	char			*f1 = "f1";
+	char			*f2 = "f2";
+	d_sg_list_t		sgl;
+	d_iov_t			iov;
+	char			buf[64];
+	struct stat		stbuf;
+	int			rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	rc = dfs_open(dfs_mt, NULL, f1, S_IFREG | S_IWUSR | S_IRUSR | S_IXUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &obj1);
+	assert_int_equal(rc, 0);
+	rc = dfs_open(dfs_mt, NULL, f2, S_IFREG | S_IWUSR | S_IRUSR | S_IXUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &obj2);
+	assert_int_equal(rc, 0);
+
+	d_iov_set(&iov, buf, 64);
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs = &iov;
+	dts_buf_render(buf, 64);
+	rc = dfs_write(dfs_mt, obj2, &sgl, 64, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_release(obj2);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_stat(dfs_mt, NULL, f1, &stbuf);
+	assert_int_equal(rc, 0);
+	rc = dfs_stat(dfs_mt, NULL, f2, &stbuf);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_chmod(dfs_mt, NULL, f1, S_IFREG | S_IRUSR | S_IWUSR);
+	assert_int_equal(rc, 0);
+	rc = dfs_chmod(dfs_mt, NULL, f2, S_IFREG | S_IRUSR | S_IWUSR | S_IXUSR);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_stat(dfs_mt, NULL, f1, &stbuf);
+	assert_int_equal(rc, 0);
+	rc = dfs_stat(dfs_mt, NULL, f2, &stbuf);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_move(dfs_mt, NULL, f2, NULL, f1, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_remove(dfs_mt, NULL, f1, 0, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, f2, 0, NULL);
+	assert_int_equal(rc, 0);
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
 	{ "DFS_UNIT_TEST1: DFS mount / umount",
 	  dfs_test_mount, async_disable, test_case_teardown},
@@ -622,6 +680,8 @@ static const struct CMUnitTest dfs_unit_tests[] = {
 	  dfs_test_syml_follow, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST6: multi-threads read shared file",
 	  dfs_test_read_shared_file, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST7: Simple rename",
+	  dfs_test_rename, async_disable, test_case_teardown},
 };
 
 static int
