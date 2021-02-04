@@ -408,7 +408,8 @@ Java_io_daos_dfs_DaosFsClient_mkdir(JNIEnv *env, jobject client,
 		if (parentError == NULL) {
 			char *msg = NULL;
 
-			asprintf(&msg, "Failed to allocate char array, len %d",
+			asprintf(&msg,
+				 "Failed to allocate char array, len %d",
 				 ERROR_PATH_LEN);
 			throw_base(env, msg, 1, 1, 0);
 			goto out;
@@ -505,14 +506,16 @@ Java_io_daos_dfs_DaosFsClient_createNewFile(JNIEnv *env,
 		throw_exc(env, msg, CUSTOM_ERR6);
 		goto out;
 	}
-	int rc = dfs_lookup(dfs, parent_path, O_RDWR, &parent, &tmp_mode, NULL);
+	int rc = dfs_lookup(dfs, parent_path, O_RDWR, &parent,
+			    &tmp_mode, NULL);
 
 	if (rc) {
 		if (createParent) {
 			parentError = (char *)malloc(ERROR_PATH_LEN);
 			if (parentError == NULL) {
 				char *msg = NULL;
-				char *tmp = "Failed to allocate char array, len %d";
+				char *tmp = "Failed to allocate char array,"
+					" len %d";
 
 				asprintf(&msg,
 					 tmp,
@@ -586,8 +589,8 @@ Java_io_daos_dfs_DaosFsClient_delete(JNIEnv *env, jobject client,
 {
 	if (parentPath == NULL || name == NULL) {
 		throw_const(env,
-					"Empty parent path or empty name",
-					CUSTOM_ERR6);
+			    "Empty parent path or empty name",
+			    CUSTOM_ERR6);
 		return;
 	}
 	dfs_t *dfs = *(dfs_t **)&dfsPtr;
@@ -902,6 +905,7 @@ Java_io_daos_dfs_DaosFsClient_dfsReadDir(JNIEnv *env, jobject client,
 	int rc;
 	int total = 0;
 	int failed = 0;
+	int i;
 
 	while (!daos_anchor_is_eof(&anchor)) {
 		nr = READ_DIR_BATCH_SIZE;
@@ -919,7 +923,6 @@ Java_io_daos_dfs_DaosFsClient_dfsReadDir(JNIEnv *env, jobject client,
 		}
 		if (!nr) continue;
 		total += nr;
-		int i;
 		for (i = 0; i < nr; i++) {
 			/* exactly 1 for each file because ',' and \0 */
 			acc += strlen(entries[i].d_name) + 1;
@@ -1022,6 +1025,7 @@ Java_io_daos_dfs_DaosFsClient_dfsOpenedObjStat(JNIEnv *env,
 
 	if (rc) {
 		char *msg = "Failed to get StatAttribute of open object";
+
 		throw_const(env,
 			    msg,
 			    rc);
@@ -1033,23 +1037,23 @@ Java_io_daos_dfs_DaosFsClient_dfsOpenedObjStat(JNIEnv *env,
 
 		cpyfield(env, buffer, &objId, sizeof(objId), 8);
 		cpyfield(env, buffer + 8, &stat.st_mode,
-				sizeof(stat.st_mode), 4);
+			 sizeof(stat.st_mode), 4);
 		cpyfield(env, buffer + 12, &stat.st_uid,
-				sizeof(stat.st_uid), 4);
+			 sizeof(stat.st_uid), 4);
 		cpyfield(env, buffer + 16, &stat.st_gid,
-				sizeof(stat.st_gid), 4);
+			 sizeof(stat.st_gid), 4);
 		cpyfield(env, buffer + 20, &stat.st_blocks,
-				sizeof(stat.st_blocks), 8);
+			 sizeof(stat.st_blocks), 8);
 		cpyfield(env, buffer + 28, &stat.st_blksize,
-				sizeof(stat.st_blksize), 8);
+			 sizeof(stat.st_blksize), 8);
 		cpyfield(env, buffer + 36, &stat.st_size,
-				sizeof(stat.st_size), 8);
+			 sizeof(stat.st_size), 8);
 		cpyfield(env, buffer + 44, &stat.st_atim,
-				sizeof(stat.st_atim), 16);
+			 sizeof(stat.st_atim), 16);
 		cpyfield(env, buffer + 60, &stat.st_mtim,
-				sizeof(stat.st_mtim), 16);
+			 sizeof(stat.st_mtim), 16);
 		cpyfield(env, buffer + 76, &stat.st_ctim,
-				sizeof(stat.st_ctim), 16);
+			 sizeof(stat.st_ctim), 16);
 		buffer[92] = S_ISDIR(stat.st_mode) ? '\0':'1';
 		set_user_group_name(env, buffer + 93, &stat);
 	}
@@ -1074,8 +1078,8 @@ Java_io_daos_dfs_DaosFsClient_dfsSetExtAttr(JNIEnv *env,
 {
 	if (name == NULL || value == NULL) {
 		throw_const(env,
-					"Empty name or empty value",
-					CUSTOM_ERR6);
+			    "Empty name or empty value",
+			    CUSTOM_ERR6);
 		return;
 	}
 	dfs_t *dfs = *(dfs_t **)&dfsPtr;
@@ -1331,7 +1335,7 @@ set_co_acl(Uns__DaosAcl *a, struct daos_prop_entry *entry)
 
 		if (ace->principal_len > 0) {
 			memcpy(d_ace->dae_principal, ace->principal,
-			ace->principal_len + 1);
+			       ace->principal_len + 1);
 			if (d_ace->dae_principal_len >
 			    (ace->principal_len + 1)) {
 				memset(d_ace->dae_principal +
@@ -1467,7 +1471,7 @@ set_duns_attr(Uns__DunsAttribute *attribute, struct duns_attr_t *attr)
 			return 11;
 		}
 		rc = set_attr_properties(attribute->properties,
-		    attr->da_props);
+					 attr->da_props);
 	}
 
 out:
@@ -1776,7 +1780,7 @@ Java_io_daos_dfs_DaosFsClient_dunsGetAppInfo(JNIEnv *env, jclass clientClass,
 
 	if (value == NULL) {
 		throw_const(env,
-		"memory allocation failed", CUSTOM_ERR7);
+			    "memory allocation failed", CUSTOM_ERR7);
 		return NULL;
 	}
 	int len = lgetxattr(path, attrName, value, maxLen);

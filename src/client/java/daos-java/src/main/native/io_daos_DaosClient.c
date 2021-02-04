@@ -248,7 +248,7 @@ Java_io_daos_DaosClient_pollCompleted(JNIEnv *env, jclass clientClass,
 		return;
 	}
 	rc = daos_eq_poll(eq->eqhdl, 1, timeoutMs * 1000, nbrOfEvents,
-					  eps);
+			  eps);
 	if (rc < 0) {
 		char *msg = NULL;
 
