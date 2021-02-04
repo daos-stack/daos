@@ -1,0 +1,13 @@
+defaultENV:
+  D_LOG_MASK: "WARN"
+  CRT_PHY_ADDR_STR: "ofi+sockets"
+  OFI_INTERFACE: "eth0"
+  CRT_CTX_NUM: "8"
+  CRT_CTX_SHARE_ADDR: "0"
+  other_env_vars:
+    - ARBITRARY_ENV_VAR1: apple
+    - ARBITRARY_ENV_VAR2: orange
+    - ARBITRARY_ENV_VAR3: banana pear
+tests: !mux
+  set_other_env_vars:
+    name: set_other_env_var
