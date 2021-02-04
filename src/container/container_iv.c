@@ -1205,7 +1205,8 @@ cont_iv_prop_fetch_ult(void *data)
 	rc = cont_iv_fetch(arg->iv_ns, IV_CONT_PROP, arg->cont_uuid,
 			   iv_entry, iv_entry_size, false /* retry */);
 	if (rc) {
-		D_ERROR("cont_iv_fetch failed "DF_RC"\n", DP_RC(rc));
+		D_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR,
+			 "cont_iv_fetch failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1248,8 +1249,9 @@ cont_iv_prop_fetch(struct ds_iv_ns *ns, uuid_t cont_uuid,
 	uuid_copy(arg.cont_uuid, cont_uuid);
 	arg.prop = cont_prop;
 	arg.eventual = eventual;
-	rc = dss_ult_create(cont_iv_prop_fetch_ult, &arg, DSS_XS_SYS,
-			    0, DSS_DEEP_STACK_SZ, NULL);
+	/* XXX: EC aggregation periodically fetches cont prop */
+	rc = dss_ult_periodic(cont_iv_prop_fetch_ult, &arg, DSS_XS_SYS, 0,
+			      DSS_DEEP_STACK_SZ, NULL);
 	if (rc)
 		D_GOTO(out, rc);
 
