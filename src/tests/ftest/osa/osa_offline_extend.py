@@ -72,16 +72,7 @@ class OSAOfflineExtend(OSAUtils):
                                                   rank, scm_size,
                                                   nvme_size)
             self.log.info(output)
-
-            pver_extend = self.get_pool_version()
-            fail_count = 0
-            while fail_count <= 20:
-                pver_extend = self.get_pool_version()
-                time.sleep(15)
-                fail_count += 1
-                if pver_extend > pver_begin:
-                    break
-
+            self.is_rebuild_done(3)
             self.assert_on_rebuild_failure()
 
             pver_extend = self.get_pool_version()
