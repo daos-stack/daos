@@ -119,17 +119,12 @@ if [ -d "/mnt/daos" ]; then
     # Tests
     COMP="UTEST_cart"
     run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/test_linkage"
-    run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/utest_hlc"
-    run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/utest_swim"
 
     COMP="UTEST_gurt"
     run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt"
-    run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt_telem_producer"
-    run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt_telem_consumer"
 
     COMP="UTEST_vos"
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
-    run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
 
     COMP="UTEST_vea"
     run_test "${SL_PREFIX}/bin/vea_ut"
@@ -140,11 +135,6 @@ if [ -d "/mnt/daos" ]; then
     COMP="UTEST_common"
     run_test "${SL_BUILD_DIR}/src/common/tests/umem_test"
     run_test "${SL_BUILD_DIR}/src/common/tests/sched"
-    run_test "${SL_BUILD_DIR}/src/common/tests/drpc_tests"
-    run_test "${SL_BUILD_DIR}/src/common/tests/acl_api_tests"
-    run_test "${SL_BUILD_DIR}/src/common/tests/acl_valid_tests"
-    run_test "${SL_BUILD_DIR}/src/common/tests/acl_util_tests"
-    run_test "${SL_BUILD_DIR}/src/common/tests/acl_principal_tests"
     run_test "${SL_BUILD_DIR}/src/common/tests/acl_real_tests"
     run_test "${SL_BUILD_DIR}/src/common/tests/prop_tests"
 
@@ -153,13 +143,9 @@ if [ -d "/mnt/daos" ]; then
 
     COMP="UTEST_security"
     run_test "${SL_BUILD_DIR}/src/security/tests/cli_security_tests"
-    run_test "${SL_BUILD_DIR}/src/security/tests/srv_acl_tests"
 
     COMP="UTEST_iosrv"
     run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_client_tests"
-    run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_progress_tests"
-    run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_handler_tests"
-    run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_listener_tests"
 
     COMP="UTEST_mgmt"
     run_test "${SL_BUILD_DIR}/src/mgmt/tests/srv_drpc_tests"
@@ -173,14 +159,6 @@ if [ -d "/mnt/daos" ]; then
     export VALGRIND_SUPP=${VALGRIND_SUPP}
     unset VALGRIND_CMD
     COMP="UTEST_common"
-    run_test src/common/tests/btree.sh ukey -s 20000
-    run_test src/common/tests/btree.sh direct -s 20000
-    run_test src/common/tests/btree.sh -s 20000
-    run_test src/common/tests/btree.sh perf -s 20000
-    run_test src/common/tests/btree.sh perf direct -s 20000
-    run_test src/common/tests/btree.sh perf ukey -s 20000
-    run_test src/common/tests/btree.sh dyn ukey -s 20000
-    run_test src/common/tests/btree.sh dyn -s 20000
     run_test src/common/tests/btree.sh dyn perf -s 20000
     run_test src/common/tests/btree.sh dyn perf ukey -s 20000
 

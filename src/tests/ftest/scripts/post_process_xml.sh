@@ -58,7 +58,7 @@ do
         echo "Processing XML $file"
 
         if ! SUITE=$(grep "testsuite " "$file" | \
-                grep -Po "name=\"\K.*(?=\")"); then
+                grep -Po "name=\"\K.*(?=\"[ >])"); then
                 echo "Failed to process XML $file. Cannot determine SUITE."
         else
             if ! grep "<testcase " "$file" | \
