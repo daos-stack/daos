@@ -149,7 +149,7 @@ Java_io_daos_obj_DaosObjClient_punchObjectDkeys(JNIEnv *env,
 
 	if (rc) {
 		throw_const_obj(env, "Failed to punch DAOS object dkeys",
-						rc);
+				rc);
 		goto out;
 	}
 
@@ -416,7 +416,7 @@ init_desc(JNIEnv *env, data_desc_t **desc_addr, char *desc_buffer,
 		return 1;
 	}
 	if ((desc->ret_buf_address != endAddress) &&
-		(desc->ret_buf_address + 8 * nbrOfAkeys != endAddress)) {
+	    (desc->ret_buf_address + 8 * nbrOfAkeys != endAddress)) {
 		throw_const_obj(env, "failed to decode initial",
 				CUSTOM_ERR7);
 		return 1;
@@ -811,7 +811,7 @@ Java_io_daos_obj_DaosObjClient_allocateSimDescGroup(
 		memcpy(&address, buffer, 8);
 		buffer += 8;
 		rc = allocate_simple_desc((char *)address,
-					grp->descs[i], 1);
+					  grp->descs[i], 1);
 		if (rc) {
 			throw_const_obj(env, "allocation failed",
 					rc);
@@ -939,6 +939,7 @@ Java_io_daos_obj_DaosObjClient_fetchObjectSimple(
 						 desc);
 		if (rc) {
 			char *msg = "Failed to register fetch callback";
+
 			throw_const_obj(env, msg, rc);
 			return;
 		}

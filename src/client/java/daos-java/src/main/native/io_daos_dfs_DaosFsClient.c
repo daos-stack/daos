@@ -905,7 +905,6 @@ Java_io_daos_dfs_DaosFsClient_dfsReadDir(JNIEnv *env, jobject client,
 	int rc;
 	int total = 0;
 	int failed = 0;
-	int i;
 
 	while (!daos_anchor_is_eof(&anchor)) {
 		nr = READ_DIR_BATCH_SIZE;
@@ -923,6 +922,8 @@ Java_io_daos_dfs_DaosFsClient_dfsReadDir(JNIEnv *env, jobject client,
 		}
 		if (!nr) continue;
 		total += nr;
+
+		int i;
 		for (i = 0; i < nr; i++) {
 			/* exactly 1 for each file because ',' and \0 */
 			acc += strlen(entries[i].d_name) + 1;
@@ -1026,9 +1027,7 @@ Java_io_daos_dfs_DaosFsClient_dfsOpenedObjStat(JNIEnv *env,
 	if (rc) {
 		char *msg = "Failed to get StatAttribute of open object";
 
-		throw_const(env,
-			    msg,
-			    rc);
+		throw_const(env, msg, rc);
 	} else {
 		if (bufferAddress == -1L) {
 			return;

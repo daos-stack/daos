@@ -150,7 +150,7 @@ Java_io_daos_DaosClient_daosCloseContainer(JNIEnv *env,
 
 JNIEXPORT jlong JNICALL
 Java_io_daos_DaosClient_createEventQueue(JNIEnv *env, jclass clientClass,
-		 jint nbrOfEvents)
+					 jint nbrOfEvents)
 {
 	daos_handle_t eqhdl;
 	int rc = daos_eq_create(&eqhdl);
@@ -173,7 +173,7 @@ Java_io_daos_DaosClient_createEventQueue(JNIEnv *env, jclass clientClass,
 		char *msg = NULL;
 
 		asprintf(&msg,
-		 "Failed to allocate event array with length, %d",
+			 "Failed to allocate event array with length, %d",
 			 nbrOfEvents);
 		rc = 1;
 		throw_base(env, msg, rc, 1, 0);
@@ -242,7 +242,7 @@ Java_io_daos_DaosClient_pollCompleted(JNIEnv *env, jclass clientClass,
 		char *msg = NULL;
 
 		asprintf(&msg,
-		 "Failed to allocate event array with length: %d",
+			 "Failed to allocate event array with length: %d",
 			 nbrOfEvents);
 		throw_base(env, msg, rc, 1, 0);
 		return;
@@ -253,7 +253,7 @@ Java_io_daos_DaosClient_pollCompleted(JNIEnv *env, jclass clientClass,
 		char *msg = NULL;
 
 		asprintf(&msg,
-		 "Failed to poll completed events, max events: %d",
+			 "Failed to poll completed events, max events: %d",
 			 nbrOfEvents);
 		throw_base(env, msg, rc, 1, 0);
 		goto fail;
@@ -262,7 +262,7 @@ Java_io_daos_DaosClient_pollCompleted(JNIEnv *env, jclass clientClass,
 		char *msg = NULL;
 
 		asprintf(&msg,
-		 "More (%d) than expected (%d) events returned.",
+			 "More (%d) than expected (%d) events returned.",
 			 rc, nbrOfEvents);
 		throw_base(env, msg, rc, 1, 0);
 		goto fail;
@@ -296,7 +296,7 @@ Java_io_daos_DaosClient_destroyEventQueue(JNIEnv *env, jclass clientClass,
 
 	if (eps != NULL) {
 		while (daos_eq_poll(eq->eqhdl, 1, 1000, eq->nbrOfEvents,
-		    eps)) {
+				    eps)) {
 			count++;
 			if (count > 4) {
 				break;
