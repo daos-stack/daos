@@ -26,9 +26,9 @@
  */
 JNIEXPORT jlong JNICALL
 Java_io_daos_DaosClient_daosOpenPool(JNIEnv *env,
-					 jclass clientClass, jstring poolId,
-					 jstring serverGroup,
-					 jint flags)
+				     jclass clientClass, jstring poolId,
+				     jstring serverGroup,
+				     jint flags)
 {
 	const char *pool_str = (*env)->GetStringUTFChars(env, poolId, 0);
 	const char *server_group = (*env)->GetStringUTFChars(env, serverGroup,
@@ -39,19 +39,18 @@ Java_io_daos_DaosClient_daosOpenPool(JNIEnv *env,
 	int rc;
 
 	uuid_parse(pool_str, pool_uuid);
-
-	rc = daos_pool_connect(pool_uuid, server_group,
+	rc = daos_pool_connect(pool_uuid,
+			       server_group,
 			       flags,
 			       &poh /* returned pool handle */,
 			       NULL /* returned pool info */,
 			       NULL /* event */);
 	if (rc) {
-		char *tmp = "Failed to connect to pool (%s)";
-		char *msg = (char *)malloc(strlen(tmp) +
-				strlen(pool_str));
+		char *msg = NULL;
 
-		sprintf(msg, tmp, pool_str);
-		throw_exception_base(env, msg, rc, 1, 0);
+		asprintf(&msg, "Failed to connect to pool (%s)",
+			 pool_str);
+		throw_base(env, msg, rc, 1, 0);
 		ret = -1;
 	} else {
 		memcpy(&ret, &poh, sizeof(poh));
@@ -72,7 +71,7 @@ Java_io_daos_DaosClient_daosOpenPool(JNIEnv *env,
  */
 JNIEXPORT void JNICALL
 Java_io_daos_DaosClient_daosClosePool(JNIEnv *env,
-					  jclass clientClass, jlong poolHandle)
+				      jclass clientClass, jlong poolHandle)
 {
 	daos_handle_t poh;
 
@@ -98,8 +97,8 @@ Java_io_daos_DaosClient_daosClosePool(JNIEnv *env,
  */
 JNIEXPORT jlong JNICALL
 Java_io_daos_DaosClient_daosOpenCont(JNIEnv *env,
-					 jclass clientClass, jlong poolHandle,
-					 jstring contUuid, jint mode)
+				     jclass clientClass, jlong poolHandle,
+				     jstring contUuid, jint mode)
 {
 	daos_handle_t poh;
 	daos_cont_info_t co_info;
@@ -113,11 +112,11 @@ Java_io_daos_DaosClient_daosOpenCont(JNIEnv *env,
 	int rc = daos_cont_open(poh, cont_uuid, mode, &coh, &co_info, NULL);
 
 	if (rc) {
-		char *tmp = "Failed to open container (id: %s)";
-		char *msg = (char *)malloc(strlen(tmp) + strlen(cont_str));
+		char *msg = NULL;
 
-		sprintf(msg, tmp, cont_str);
-		throw_exception_base(env, msg, rc, 1, 0);
+		asprintf(&msg, "Failed to open container (id: %s)",
+			 cont_str);
+		throw_base(env, msg, rc, 1, 0);
 		ret = -1;
 	} else {
 		memcpy(&ret, &coh, sizeof(coh));
@@ -135,7 +134,8 @@ Java_io_daos_DaosClient_daosOpenCont(JNIEnv *env,
  */
 JNIEXPORT void JNICALL
 Java_io_daos_DaosClient_daosCloseContainer(JNIEnv *env,
-					   jclass clientClass, jlong contHandle)
+					   jclass clientClass,
+					   jlong contHandle)
 {
 	daos_handle_t coh;
 
@@ -144,13 +144,13 @@ Java_io_daos_DaosClient_daosCloseContainer(JNIEnv *env,
 
 	if (rc) {
 		printf("Failed to close container rc: %d\n", rc);
-		printf("error msg: %s\n", d_errstr(rc));
+		printf("error msg: %.256s\n", d_errstr(rc));
 	}
 }
 
 JNIEXPORT jlong JNICALL
 Java_io_daos_DaosClient_createEventQueue(JNIEnv *env, jclass clientClass,
-		jint nbrOfEvents)
+					 jint nbrOfEvents)
 {
 	daos_handle_t eqhdl;
 	int rc = daos_eq_create(&eqhdl);
@@ -158,27 +158,47 @@ Java_io_daos_DaosClient_createEventQueue(JNIEnv *env, jclass clientClass,
 	int count;
 
 	if (rc) {
-		char *msg = "Failed to create EQ";
-
-		throw_exception_const_msg(env, msg, rc);
+		throw_const(env, "Failed to create EQ", rc);
 		return -1;
 	}
 
 	event_queue_wrapper_t *eq = (event_queue_wrapper_t *)calloc(1,
 			sizeof(event_queue_wrapper_t));
+	if (eq == NULL) {
+		goto fail;
+	}
 	eq->events = (daos_event_t **)malloc(
 		nbrOfEvents * sizeof(daos_event_t *));
+	if (eq->events == NULL) {
+		char *msg = NULL;
+
+		asprintf(&msg,
+			 "Failed to allocate event array with length, %d",
+			 nbrOfEvents);
+		rc = 1;
+		throw_base(env, msg, rc, 1, 0);
+		goto fail;
+	}
 	eq->nbrOfEvents = nbrOfEvents;
 	eq->eqhdl = eqhdl;
 	for (i = 0; i < nbrOfEvents; i++) {
 		eq->events[i] = (daos_event_t *)malloc(sizeof(daos_event_t));
+		if (eq->events[i] == NULL) {
+			char *msg = NULL;
+
+			asprintf(&msg, "Failed to allocate %d th event.",
+				 i);
+			rc = 1;
+			throw_base(env, msg, rc, 1, 0);
+			goto fail;
+		}
 		rc = daos_event_init(eq->events[i], eqhdl, NULL);
 		if (rc) {
-			char *tmp = "Failed to create event %d";
-			char *msg = (char *)malloc(strlen(tmp) + 10);
+			char *msg = NULL;
 
-			sprintf(msg, tmp, i);
-			throw_exception_base(env, msg, rc, 1, 0);
+			asprintf(&msg, "Failed to init event %d",
+				 i);
+			throw_base(env, msg, rc, 1, 0);
 			goto fail;
 		}
 		eq->events[i]->ev_debug = i;
@@ -214,17 +234,37 @@ Java_io_daos_DaosClient_pollCompleted(JNIEnv *env, jclass clientClass,
 	char *buffer = (char *)memAddress;
 	uint16_t idx;
 	int i;
+	int rc;
 	struct daos_event **eps = (struct daos_event **)malloc(
 			sizeof(struct daos_event *) * nbrOfEvents);
-	int rc = daos_eq_poll(eq->eqhdl, 1, timeoutMs * 1000, nbrOfEvents,
-				eps);
 
+	if (eps == NULL) {
+		char *msg = NULL;
+
+		asprintf(&msg,
+			 "Failed to allocate event array with length: %d",
+			 nbrOfEvents);
+		throw_base(env, msg, rc, 1, 0);
+		return;
+	}
+	rc = daos_eq_poll(eq->eqhdl, 1, timeoutMs * 1000, nbrOfEvents,
+			  eps);
 	if (rc < 0) {
-		char *tmp = "Failed to poll completed events, max events: %d";
-		char *msg = (char *)malloc(strlen(tmp) + 10);
+		char *msg = NULL;
 
-		sprintf(msg, tmp, nbrOfEvents);
-		throw_exception_base(env, msg, rc, 1, 0);
+		asprintf(&msg,
+			 "Failed to poll completed events, max events: %d",
+			 nbrOfEvents);
+		throw_base(env, msg, rc, 1, 0);
+		goto fail;
+	}
+	if (rc > nbrOfEvents) {
+		char *msg = NULL;
+
+		asprintf(&msg,
+			 "More (%d) than expected (%d) events returned.",
+			 rc, nbrOfEvents);
+		throw_base(env, msg, rc, 1, 0);
 		goto fail;
 	}
 	idx = rc;
@@ -254,13 +294,15 @@ Java_io_daos_DaosClient_destroyEventQueue(JNIEnv *env, jclass clientClass,
 	struct daos_event **eps = (struct daos_event **)malloc(
 		sizeof(struct daos_event *) * eq->nbrOfEvents);
 
-	while (daos_eq_poll(eq->eqhdl, 1, 1000, eq->nbrOfEvents, eps)) {
-		count++;
-		if (count > 4) {
-			break;
+	if (eps != NULL) {
+		while (daos_eq_poll(eq->eqhdl, 1, 1000, eq->nbrOfEvents,
+				    eps)) {
+			count++;
+			if (count > 4) {
+				break;
+			}
 		}
 	}
-
 	if (eq->events) {
 		for (i = 0; i < eq->nbrOfEvents; i++) {
 			ev = eq->events[i];
@@ -269,11 +311,12 @@ Java_io_daos_DaosClient_destroyEventQueue(JNIEnv *env, jclass clientClass,
 			}
 			rc = daos_event_fini(ev);
 			if (rc) {
-				char *tmp = "Failed to finalize %d th event.";
-				char *msg = (char *)malloc(strlen(tmp) + 10);
+				char *msg = NULL;
 
-				sprintf(msg, tmp, i);
-				throw_exception_base(env, msg, rc, 1, 0);
+				asprintf(&msg,
+					 "Failed to finalize %d th event.",
+				 i);
+				throw_base(env, msg, rc, 1, 0);
 				goto fin;
 			}
 		}
@@ -281,9 +324,9 @@ Java_io_daos_DaosClient_destroyEventQueue(JNIEnv *env, jclass clientClass,
 	if (eq->eqhdl.cookie) {
 		rc = daos_eq_destroy(eq->eqhdl, 0);
 		if (rc) {
-			char *tmp = "Failed to destroy EQ.";
-
-			throw_exception_const_msg_object(env, tmp, rc);
+			throw_const_obj(env,
+					"Failed to destroy EQ.",
+					rc);
 			goto fin;
 		}
 	}
@@ -319,12 +362,12 @@ Java_io_daos_DaosClient_daosFinalize(JNIEnv *env,
 
 	if (rc) {
 		printf("Failed to finalize EQ lib rc: %d\n", rc);
-		printf("error msg: %s\n", d_errstr(rc));
+		printf("error msg: %.256s\n", d_errstr(rc));
 	}
 
 	rc = daos_fini();
 	if (rc) {
 		printf("Failed to finalize daos rc: %d\n", rc);
-		printf("error msg: %s\n", d_errstr(rc));
+		printf("error msg: %.256s\n", d_errstr(rc));
 	}
 }

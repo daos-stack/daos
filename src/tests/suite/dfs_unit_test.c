@@ -6,6 +6,7 @@
 #define D_LOGFAC	DD_FAC(tests)
 
 #include "dfs_test.h"
+#include "dfs_internal.h"
 #include <pthread.h>
 
 /** global DFS mount used for all tests */
@@ -610,6 +611,98 @@ dfs_test_read_shared_file(void **state)
 }
 
 static void
+dfs_test_lookupx(void **state)
+{
+	test_arg_t		*arg = *state;
+	dfs_obj_t		*obj;
+	char			*dir1 = "xdir1", *dir2 = "xdir2";
+	mode_t			create_mode = S_IWUSR | S_IRUSR;
+	int			create_flags = O_RDWR | O_CREAT;
+	char			*xnames[] = {"x1", "x2", "x3"};
+	int			vals_in[] = {1, 2, 3};
+	void			*vals_out[3];
+	daos_size_t		*val_sizes;
+	mode_t			mode;
+	struct stat             stbuf;
+	int			i;
+	int			rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	/** Create dir1 */
+	rc = dfs_open(dfs_mt, NULL, dir1, create_mode | S_IFDIR, create_flags,
+		      0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_setxattr(dfs_mt, obj, xnames[0], &vals_in[0], sizeof(int), 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_setxattr(dfs_mt, obj, xnames[1], &vals_in[1], sizeof(int), 0);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	/** Create dir2 */
+	rc = dfs_open(dfs_mt, NULL, dir2, create_mode | S_IFDIR, create_flags,
+		      0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	D_ALLOC_ARRAY(val_sizes, 3);
+	D_ASSERT(val_sizes != NULL);
+
+	/** MSC - this is currently not allowed by the DAOS obj API */
+#if 0
+	/** lookup with xattr first without sink buffer for vals */
+	rc = dfs_lookupx(dfs_mt, NULL, dir1, O_RDWR, &obj, &mode, &stbuf, 3,
+			 xnames, NULL, val_sizes);
+	assert_int_equal(rc, 0);
+	assert_int_equal(val_sizes[0], sizeof(int));
+	assert_int_equal(val_sizes[1], sizeof(int));
+	assert_int_equal(val_sizes[2], 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+#endif
+
+	for (i = 0; i < 3; i++) {
+		D_ALLOC(vals_out[i], sizeof(int));
+		D_ASSERT(vals_out[i] != NULL);
+		*((int *)vals_out[i]) = 5;
+		val_sizes[i] = sizeof(int);
+	}
+
+	rc = dfs_lookupx(dfs_mt, NULL, dir1, O_RDWR, &obj, &mode, &stbuf, 3,
+			 xnames, vals_out, val_sizes);
+	assert_int_equal(rc, 0);
+	assert_int_equal(val_sizes[0], sizeof(int));
+	assert_int_equal(val_sizes[1], sizeof(int));
+	assert_int_equal(val_sizes[2], 0);
+	assert_int_equal(*((int *)vals_out[0]), vals_in[0]);
+	assert_int_equal(*((int *)vals_out[1]), vals_in[1]);
+	assert_int_equal(*((int *)vals_out[2]), 5);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	for (i = 0; i < 3; i++)
+		*((int *)vals_out[i]) = 5;
+
+	val_sizes[2] = sizeof(int);
+	rc = dfs_lookupx(dfs_mt, NULL, dir2, O_RDWR, &obj, &mode, &stbuf, 3,
+			 xnames, vals_out, val_sizes);
+	assert_int_equal(rc, 0);
+	assert_int_equal(val_sizes[0], 0);
+	assert_int_equal(val_sizes[1], 0);
+	assert_int_equal(val_sizes[2], 0);
+	assert_int_equal(*((int *)vals_out[0]), 5);
+	assert_int_equal(*((int *)vals_out[1]), 5);
+	assert_int_equal(*((int *)vals_out[2]), 5);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+}
+
+static void
 dfs_test_rename(void **state)
 {
 	test_arg_t		*arg = *state;
@@ -680,7 +773,9 @@ static const struct CMUnitTest dfs_unit_tests[] = {
 	  dfs_test_syml_follow, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST6: multi-threads read shared file",
 	  dfs_test_read_shared_file, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST7: Simple rename",
+	{ "DFS_UNIT_TEST7: DFS lookupx",
+	  dfs_test_lookupx, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST8: Simple rename",
 	  dfs_test_rename, async_disable, test_case_teardown},
 };
 
