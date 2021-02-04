@@ -157,7 +157,7 @@ class ZeroConfigTest(TestWithServers):
         return status
 
     def test_env_set_unset(self):
-        """JIRA ID: DAOS-4880.
+        """JIRA ID: DAOS-4880
 
         Test Description:
             Test starting a daos_server process on 2 different numa
