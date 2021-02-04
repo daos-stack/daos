@@ -20,6 +20,7 @@ pool:
   svcn: 2
   debug: True
   control_method: dmg
+  pool_query_timeout: 15
 container:
   akey_size: 5
   dkey_size: 5

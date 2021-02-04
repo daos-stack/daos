@@ -40,7 +40,7 @@ class RebuildTests(TestWithServers):
             self.pool[index].create()
             status &= self.pool[index].check_pool_info(
                 pi_nnodes=server_count,
-                pi_ntargets=(server_count * targets),  # DAOS-2799
+                pi_ntargets=server_count,               # DAOS-2799
                 pi_ndisabled=0
             )
             status &= self.pool[index].check_rebuild_status(
@@ -94,7 +94,7 @@ class RebuildTests(TestWithServers):
         for index in range(pool_quantity):
             status &= self.pool[index].check_pool_info(
                 pi_nnodes=server_count,
-                pi_ntargets=(server_count * targets),  # DAOS-2799
+                pi_ntargets=server_count,              # DAOS-2799
                 pi_ndisabled=targets                   # DAOS-2799
             )
             status &= self.pool[index].check_rebuild_status(
