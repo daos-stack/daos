@@ -880,13 +880,6 @@ dss_xstreams_init(void)
 	D_INFO("CPU relax mode is set to [%s]\n",
 	       sched_relax_mode2str(sched_relax_mode));
 
-	/* initialize xstream-local storage */
-	rc = pthread_key_create(&dss_tls_key, NULL);
-	if (rc) {
-		D_ERROR("failed to create dtc: %d\n", rc);
-		return -DER_NOMEM;
-	}
-
 	/* start the execution streams */
 	D_DEBUG(DB_TRACE,
 		"%d cores total detected starting %d main xstreams\n",
