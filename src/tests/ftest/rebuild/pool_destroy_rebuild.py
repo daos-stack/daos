@@ -68,7 +68,7 @@ class PoolDestroyWithIO(IorTestBase):
 
         self.log.info("Starting rebuild by killing rank {}".format(rank))
         # Kill the server and trigger rebuild
-        self.pool.start_rebuild([rank], self.d_log, force=True)
+        self.server_managers[0].stop_ranks([rank], self.d_log, force=True)
 
         # Wait for rebuild to start. If True just wait for rebuild to start,
         # if False, wait for rebuild to complete.
