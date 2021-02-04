@@ -512,7 +512,7 @@ df_ll_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name)
 	 */
 	if (strncmp(name, DFUSE_XATTR_PREFIX,
 		    sizeof(DFUSE_XATTR_PREFIX) - 1) == 0) {
-		D_GOTO(err, rc = ENOTSUP);
+		D_GOTO(err, rc = EPERM);
 	}
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
