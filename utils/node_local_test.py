@@ -59,9 +59,12 @@ def get_inc_id():
     instance_num += 1
     return '{:04d}'.format(instance_num)
 
-def umount(path):
+def umount(path, bg=False):
     """Umount dfuse from a given path"""
-    cmd = ['fusermount3', '-u', path]
+    if bg:
+        cmd = ['fusermount3', '-uz', path]
+    else:
+        cmd = ['fusermount3', '-u', path]
     ret = subprocess.run(cmd)
     print('rc from umount {}'.format(ret.returncode))
     return ret.returncode
@@ -789,7 +792,9 @@ class DFuse():
         print('Stopping fuse')
         ret = umount(self.dir)
         if ret:
+            umount(self.dir, bg=True)
             self._close_files()
+            time.sleep(2)
             umount(self.dir)
 
         run_log_test = True
