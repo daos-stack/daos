@@ -457,6 +457,9 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 
 		fd = open(path, O_RDWR);
 		if (fd < 0) {
+			if (errno == ENOENT)
+				D_GOTO(exit, rc = 0);
+
 			D_ERROR("Failed to open %s: %d\n", path, errno);
 			D_GOTO(exit, rc = daos_errno2der(errno));
 		}
@@ -479,11 +482,13 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 		close(fd);
 	} else {
 		rc = remove(path);
-		if (rc)
+		if (rc) {
+			if (errno == ENOENT)
+				D_GOTO(exit, rc = 0);
 			D_ERROR("Failure deleting file from PMEM: %s\n",
 				strerror(errno));
+		}
 	}
-
 exit:
 	return rc;
 }
@@ -622,7 +627,7 @@ vos_pool_open(const char *path, uuid_t uuid, bool small, daos_handle_t *poh)
 	if (uma->uma_pool == NULL) {
 		D_ERROR("Error in opening the pool "DF_UUID": %s\n",
 			DP_UUID(uuid), pmemobj_errormsg());
-		D_GOTO(failed, rc = -DER_NO_HDL);
+		D_GOTO(failed, rc = -DER_NONEXIST);
 	}
 
 	rc = vos_register_slabs(uma);
