@@ -35,7 +35,6 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie,
 #if HAVE_CACHE_READDIR
 	if (ie > ie_dfs->dfs_data_caching)
 		fi_out.cache_readdir = 1;
-	}
 #endif
 
 	DFUSE_REPLY_OPEN(oh, req, &fi_out);
