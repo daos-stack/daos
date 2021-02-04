@@ -57,15 +57,16 @@ do
     if [ -f "$file" ]; then
         echo "Processing XML $file"
 
-        if ! SUITE=$(grep "testsuite name=" "$file" | \
-                grep -Po "name=\"\K.*(?=\" time=)"); then
+        if ! SUITE=$(grep "testsuite " "$file" | \
+                grep -Po "name=\"\K.*(?=\")"); then
                 echo "Failed to process XML $file. Cannot determine SUITE."
         else
-            if ! grep "<testcase classname" "$file"; then
+            if ! grep "<testcase " "$file" | \
+                grep -Po "classname=\"\K.*(?=\")"; then
                 sed -i \
-                "s/case name/case classname=\"${COMP}.${SUITE}\" name/" "$file"
+                "s/testcase /testcase classname=\"${COMP}.${SUITE}\"/" "$file"
             else
-                sed -i "s/case classname=\"/case classname=\"${COMP}./" "$file"
+                sed -i "s/ classname=\"/ classname=\"${COMP}./" "$file"
             fi
         fi
     fi
