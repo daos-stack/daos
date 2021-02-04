@@ -13,6 +13,7 @@ def scons():
     common = denv.SharedObject(['rpc.c'])
     # ds_cont: Container Server
     senv = denv.Clone()
+    senv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     ds_cont = daos_build.library(senv, 'cont',
                                  ['srv.c', 'srv_container.c', 'srv_epoch.c',
                                   'srv_target.c', 'srv_layout.c', 'oid_iv.c',
