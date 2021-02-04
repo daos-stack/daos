@@ -28,6 +28,7 @@ import functools
 import subprocess
 import tempfile
 import pickle
+import xattr
 from collections import OrderedDict
 import yaml
 
@@ -1100,6 +1101,32 @@ class posix_tests():
         except FileNotFoundError:
             print('Failed to fstat() unlinked file')
         ofd.close()
+
+    @needs_dfuse
+    def test_xattr(self):
+        """Perform basic tests with extended attributes"""
+
+        new_file = os.path.join(self.dfuse.dir, 'attr_file')
+        fd = open(new_file, 'w')
+
+        xattr.set(fd, 'user.mine', 'init_value')
+        # This should fail as a security test.
+        try:
+            xattr.set(fd, 'user.dfuse.ids', b'other_value')
+            assert False
+        except OSError as e:
+            assert e.errno == errno.EPERM
+
+        try:
+            xattr.set(fd, 'user.dfuse', b'other_value')
+            assert False
+        except OSError as e:
+            assert e.errno == errno.EPERM
+
+        xattr.set(fd, 'user.Xfuse.ids', b'other_value')
+        for (key, value) in xattr.get_all(fd):
+            print('xattr is {}:{}'.format(key, value))
+        fd.close()
 
     @needs_dfuse
     def test_chmod(self):
