@@ -1338,7 +1338,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 
 	rc = daos_obj_close(super_oh, NULL);
 	if (rc) {
-		D_ERROR("Failed to clsoe SB object\n");
+		D_ERROR("Failed to close SB object\n");
 		D_GOTO(err_close, rc = daos_der2errno(rc));
 	}
 
