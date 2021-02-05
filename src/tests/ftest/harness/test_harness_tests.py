@@ -27,7 +27,9 @@ class TestHarnessTests(TestWithServers):
         that it will create a core file, allowing the core file collection code
         in launch.py to be tested.
 
-        :avocado: tags=medium,test_harness,core_files
+        This test can be run in any CI stage: vm, small, medium, large
+
+        :avocado: tags=test_harness,core_files
         """
         # Choose a server find the pid of its daos_io_server process
         host = choice(self.server_managers[0].hosts)
