@@ -3023,7 +3023,7 @@ serialize_recx_array(struct hdf5_args *hdf5,
 			continue;
 		printf("\n\nNUM RECX RET: %d\n\n", (int)number);
 		for (i = 0; i < number; i++) {
-			buf_len = recxs[i].rx_nr;
+			buf_len = recxs[i].rx_nr * size;
 		        char        buf[buf_len];
 
 			memset(&sgl, 0, sizeof(sgl));
@@ -3031,7 +3031,7 @@ serialize_recx_array(struct hdf5_args *hdf5,
 
 			/* set iod values */
 			(*iod).iod_type  = DAOS_IOD_ARRAY;
-			(*iod).iod_size  = 1;
+			(*iod).iod_size  = size;
 			(*iod).iod_nr    = 1;
 			(*iod).iod_recxs = &recxs[i];
 
@@ -4408,6 +4408,7 @@ cont_serialize_hdlr(struct cmd_args_s *ap)
 	uint32_t	total = 0;
 	daos_handle_t	oh;
 	float		version = 0.0;
+	herr_t		err = 0;
 
 	/* init HDF5 args */
 	init_hdf5_args(&hdf5);
@@ -4608,6 +4609,12 @@ cont_serialize_hdlr(struct cmd_args_s *ap)
 		fprintf(stderr, "failed to destroy snap: %d\n", rc);
 		D_GOTO(out, rc);
 	}
+	
+	err = H5Fflush(hdf5.file, H5F_SCOPE_GLOBAL);
+	if (err < 0 ) {
+		fprintf(stderr, "failed to flush hdf5 file\n");
+		D_GOTO(out, rc = 1);
+	}
 out:
 	if (hdf5.oid_dset > 0)
 		H5Dclose(hdf5.oid_dset);
@@ -4633,6 +4640,8 @@ out:
 		free(hdf5.dkey_data);
 	if (hdf5.akey_data != NULL)
 		free(hdf5.akey_data);
+	if (hdf5.file < 0)
+		H5Fclose(hdf5.file);
 	return rc;
 }
 
@@ -4766,9 +4775,10 @@ cont_deserialize_recx(struct hdf5_args *hdf5,
 	hsize_t			attr_space;
 	hid_t			attr_type;
 	size_t			type_size;
+	size_t			rx_dtype_size;
 	unsigned char		*decode_buf;
 	hid_t			rx_range_id;
-	hsize_t			rx_range[64] = {0};
+	hsize_t			*rx_range = NULL;
 	uint64_t		recx_len = 0;
 	void			*recx_data = NULL;
 	hssize_t		nblocks_sel;
@@ -4808,7 +4818,13 @@ cont_deserialize_recx(struct hdf5_args *hdf5,
 			fprintf(stderr, "failed to get type size\n");
 			D_GOTO(out, rc = 1);
 		}
+		rx_dtype_size = H5Tget_size(hdf5->rx_dtype);
+		if (rx_dtype_size < 0) {
+			fprintf(stderr, "failed to get rx type size\n");
+			D_GOTO(out, rc = 1);
+		}
 		printf("\t\t\ttype size: %d\n", (int)type_size);
+		printf("\t\t\trx type size: %d\n", (int)rx_dtype_size);
 		printf("\t\t\tattr id: %lu\n", (uint64_t)aid);
 		printf("\t\t\tattr space: %d\n", (int)attr_space);
 		
@@ -4816,6 +4832,9 @@ cont_deserialize_recx(struct hdf5_args *hdf5,
 		if (decode_buf == NULL) {
 			D_GOTO(out, -DER_NOMEM);
 		}
+		rx_range = malloc(type_size * attr_space);
+		if (rx_range == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
 		status = H5Aread(aid, attr_type, decode_buf);
 		if (status < 0) {
 			fprintf(stderr, "failed to read attribute\n");
@@ -4826,7 +4845,6 @@ cont_deserialize_recx(struct hdf5_args *hdf5,
 			fprintf(stderr, "failed to decode attribute buffer\n");
 			D_GOTO(out, rc = 1);
 		}
- 		memset(rx_range, 0, sizeof(rx_range));
 		nblocks = H5Sget_select_hyper_nblocks(rx_range_id);
 		if (nblocks < 0) {
 			fprintf(stderr, "failed to get hyperslab blocks\n");
@@ -4891,7 +4909,7 @@ cont_deserialize_recx(struct hdf5_args *hdf5,
 			  hdf5->akey_data[ak_off + k].akey_val.len);
 		/* set iod values */
 		iod.iod_type  = DAOS_IOD_ARRAY;
-		iod.iod_size  = 1;
+		iod.iod_size  = rx_dtype_size;
 		iod.iod_nr    = 1;
 
 		printf("START TO WRITE: %d\n", (int)start);
@@ -4913,6 +4931,7 @@ cont_deserialize_recx(struct hdf5_args *hdf5,
 			D_GOTO(out, rc);
 		}
 		H5Aclose(aid);
+		D_FREE(rx_range);
 		D_FREE(recx_data);
 		D_FREE(decode_buf);
 	}
