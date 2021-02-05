@@ -279,7 +279,7 @@ free_pool_list(d_list_t *pool_list)
 
 	d_list_for_each_entry_safe(pool_info, tmp, pool_list, spi_link) {
 		d_list_del_init(&pool_info->spi_link);
-		smd_free_pool_info(pool_info);
+		smd_pool_free_info(pool_info);
 	}
 }
 
@@ -443,9 +443,9 @@ bio_replace_dev(struct bio_xs_context *xs_ctxt, uuid_t old_dev_id,
 	rc = replace_dev(xs_ctxt, old_info, old_dev, new_dev);
 out:
 	if (old_info)
-		smd_free_dev_info(old_info);
+		smd_dev_free_info(old_info);
 	if (new_info)
-		smd_free_dev_info(new_info);
+		smd_dev_free_info(new_info);
 	return rc;
 }
 
@@ -624,7 +624,7 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 		/* delete the found device in SMD dev list */
 		if (s_info != NULL) {
 			d_list_del_init(&s_info->sdi_link);
-			smd_free_dev_info(s_info);
+			smd_dev_free_info(s_info);
 		}
 	}
 
@@ -651,7 +651,7 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 out:
 	d_list_for_each_entry_safe(s_info, s_tmp, &s_dev_list, sdi_link) {
 		d_list_del_init(&s_info->sdi_link);
-		smd_free_dev_info(s_info);
+		smd_dev_free_info(s_info);
 	}
 
 	if (rc != 0) {

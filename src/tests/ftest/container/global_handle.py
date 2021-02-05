@@ -4,53 +4,52 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from __future__ import print_function
-
 import ctypes
 import traceback
 from multiprocessing import sharedctypes
 
 from avocado import fail_on
 from apricot import TestWithServers
-import check_for_pool
 from pydaos.raw import DaosPool, DaosContainer, DaosApiError, IOV
 
 
 class GlobalHandle(TestWithServers):
-    """
-    This class contains tests to verify the ability to share container
-    handles among processes.
+    """Test the ability to share container handles among processes.
+
     :avocado: recursive
     """
 
-    def tearDown(self):
-        try:
-            super(GlobalHandle, self).tearDown()
-        finally:
-            # really make sure everything is gone
-            check_for_pool.cleanup_pools(self.hostlist_servers)
-
     @fail_on(DaosApiError)
     def check_handle(self, pool_glob_handle, uuidstr, cont_glob_handle, rank):
-        """
-        This gets run in a child process and verifyes the global
-        handles can be turned into local handles in another process.
-        """
+        """Verify that the global handles can be turned into local handles.
 
+        This gets run in a child process and verifies the global handles can be
+        turned into local handles in another process.
+
+        Args:
+            pool_glob_handle (sharedctypes.RawValue): pool handle
+            uuidstr (sharedctypes.RawArray): pool uuid
+            cont_glob_handle (sharedctypes.RawValue): container handle
+            rank (int): pool svc rank
+
+        Raises:
+            DaosApiError: if there was an error converting the pool handle or
+                using the local pool handle to create a container.
+
+        """
         # setup the pool and connect using global handle
         pool = DaosPool(self.context)
         pool.uuid = uuidstr
         pool.set_svc(rank)
         pool.group = "daos_server"
-        buf = ctypes.cast(pool_glob_handle.iov_buf,
-                          ctypes.POINTER(ctypes.c_byte *
-                                         pool_glob_handle.iov_buf_len))
+        buf = ctypes.cast(
+            pool_glob_handle.iov_buf,
+            ctypes.POINTER(ctypes.c_byte * pool_glob_handle.iov_buf_len))
         buf2 = bytearray()
         buf2.extend(buf.contents)
-        pool_handle = pool.global2local(self.context,
-                                        pool_glob_handle.iov_len,
-                                        pool_glob_handle.iov_buf_len,
-                                        buf2)
+        pool_handle = pool.global2local(
+            self.context, pool_glob_handle.iov_len,
+            pool_glob_handle.iov_buf_len, buf2)
 
         # perform an operation that will use the new handle, if it
         # doesn't throw an exception, then all is well.
@@ -59,9 +58,9 @@ class GlobalHandle(TestWithServers):
         # setup the container and then connect using the global handle
         container = DaosContainer(self.context)
         container.poh = pool_handle
-        buf = ctypes.cast(cont_glob_handle.iov_buf,
-                          ctypes.POINTER(ctypes.c_byte *
-                                         cont_glob_handle.iov_buf_len))
+        buf = ctypes.cast(
+            cont_glob_handle.iov_buf,
+            ctypes.POINTER(ctypes.c_byte * cont_glob_handle.iov_buf_len))
         buf2 = bytearray()
         buf2.extend(buf.contents)
         dummy_cont_handle = container.global2local(
@@ -71,54 +70,52 @@ class GlobalHandle(TestWithServers):
         container.query()
 
     def test_global_handle(self):
-        """
-        Test ID: DAO
+        """Test ID: Jira-XXXX.
 
         Test Description: Use a pool handle in another process.
 
-        :avocado: tags=all,container,tiny,daily_regression,conthandle
+        :avocado: tags=all,daily_regression
+        :avocado: tags=tiny
+        :avocado: tags=container,global_handle,container_global_handle
         """
         # initialize a python pool object then create the underlying
         # daos storage and connect to it
-        self.prepare_pool()
+        self.add_pool(create=True, connect=True)
 
         # create a pool global handle
         iov_len, buf_len, buf = self.pool.pool.local2global()
         buftype = ctypes.c_byte * buf_len
         c_buf = buftype.from_buffer(buf)
         sct_pool_handle = (
-            sharedctypes.RawValue(IOV,
-                                  ctypes.cast(c_buf, ctypes.c_void_p),
-                                  buf_len, iov_len))
+            sharedctypes.RawValue(
+                IOV, ctypes.cast(c_buf, ctypes.c_void_p), buf_len, iov_len))
+
+        # create a container
+        self.add_container(self.pool)
+        self.container.open()
 
         try:
-            # create a container
-            self.container = DaosContainer(self.context)
-            self.container.create(self.pool.pool.handle)
-            self.container.open()
-
             # create a container global handle
-            iov_len, buf_len, buf = self.container.local2global()
+            iov_len, buf_len, buf = self.container.container.local2global()
             buftype = ctypes.c_byte * buf_len
             c_buf = buftype.from_buffer(buf)
             sct_cont_handle = (
-                sharedctypes.RawValue(IOV,
-                                      ctypes.cast(c_buf, ctypes.c_void_p),
-                                      buf_len, iov_len))
+                sharedctypes.RawValue(
+                    IOV, ctypes.cast(c_buf, ctypes.c_void_p), buf_len, iov_len))
 
             sct_pool_uuid = sharedctypes.RawArray(
                 ctypes.c_byte, self.pool.pool.uuid)
             # this should work in the future but need on-line server addition
-            #arg_list = (
-            #p = Process(target=check_handle, args=arg_list)
-            #p.start()
-            #p.join()
+            # arg_list = (
+            # p = Process(target=check_handle, args=arg_list)
+            # p.start()
+            # p.join()
             # for now verifying global handle in the same process which is not
             # the intended use case
             self.check_handle(
                 sct_pool_handle, sct_pool_uuid, sct_cont_handle, 0)
 
-        except DaosApiError as excep:
-            print(excep)
-            print(traceback.format_exc())
+        except DaosApiError as error:
+            self.log.error(error)
+            self.log.error(traceback.format_exc())
             self.fail("Expecting to pass but test has failed.\n")
