@@ -11,11 +11,11 @@ from general_utils import run_task, pcmd
 
 
 class TestHarnessTests(TestWithServers):
+    # pylint: disable=too-few-public-methods
     """Collection of tests to verify the behavior of the test harness.
 
     :avocado: recursive
     """
-    # pylint: disable=too-few-public-methods
 
     def test_core_files(self):
         """Test to verify core file creation.
@@ -24,7 +24,7 @@ class TestHarnessTests(TestWithServers):
         that it will create a core file, allowing the core file collection code
         in launch.py to be tested.
 
-        :avocado: tags=test_harness,core_files
+        :avocado: tags=medium,test_harness,core_files
         """
         # Choose a server find the pid of its daos_io_server process
         host = choice(self.server_managers[0].hosts)
@@ -45,3 +45,8 @@ class TestHarnessTests(TestWithServers):
         result = pcmd([host], "sudo kill -6 {}".format(pid))
         if 0 not in result:
             self.fail("Error sending a signal 6 to {} on {}".format(pid, host))
+
+        # Simplify resolving the host name to rank by marking all ranks as
+        # expected to be either running or errored (sent a signal 6)
+        self.server_managers[0].update_expected_states(
+            None, ["Joined", "Errored"])

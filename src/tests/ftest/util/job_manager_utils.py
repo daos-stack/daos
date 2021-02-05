@@ -481,6 +481,8 @@ class Systemctl(JobManager):
             "enable": None,
             "disable": None,
             "start": None,
+            "running": None,
+            "verified": None,
             "stop": None,
             "restart": None,
         }
@@ -936,6 +938,10 @@ class Systemctl(JobManager):
             complete = detected == quantity
             timed_out = time.time() - start > timeout
 
+            if complete:
+                self.timestamps["running"] = datetime.now().strftime(
+                    "%Y-%m-%d %H:%M:%S")
+
         # Summarize results
         msg = "{}/{} '{}' messages detected in".format(
             detected, quantity, pattern)
@@ -964,3 +970,21 @@ class Systemctl(JobManager):
                 self._command, msg, runtime)
 
         return complete
+
+    def dump_logs(self, hosts=None):
+        """Display the journalctl log data since detecting server start.
+
+        Args:
+            hosts (list, optional): list of hosts from whish to display the
+                journalctl log data. Defaults to None which will log the
+                journalctl log data from all of the hosts.
+        """
+        timestamp = None
+        if self.timestamps["running"]:
+            timestamp = self.timestamps["running"]
+        elif self.timestamps["verified"]:
+            timestamp = self.timestamps["verified"]
+        if timestamp:
+            if hosts is None:
+                hosts = self._hosts
+            self.display_log_data(self.get_log_data(hosts, timestamp))
