@@ -302,7 +302,7 @@ comp_sorter_init(struct pool_comp_sorter *sorter, int nr,
 static void
 comp_sorter_fini(struct pool_comp_sorter *sorter)
 {
-	if (sorter->cs_comps != NULL) {
+	if (sorter != NULL && sorter->cs_comps != NULL) {
 		D_DEBUG(DB_TRACE, "Finalize sorter for %s\n",
 			pool_comp_type2str(sorter->cs_type));
 
@@ -931,12 +931,15 @@ pool_map_initialise(struct pool_map *map, struct pool_domain *tree)
 
 	D_ASSERT(pool_map_empty(map));
 	rc = D_MUTEX_INIT(&map->po_lock, NULL);
-	if (rc != 0)
+	if (rc != 0) {
+		pool_tree_free(tree);
 		return rc;
+	}
 
 	if (tree[0].do_comp.co_type != PO_COMP_TP_ROOT) {
 		D_DEBUG(DB_TRACE, "Invalid tree format: %s/%d\n",
 			pool_domain_name(&tree[0]), tree[0].do_comp.co_type);
+		pool_tree_free(tree);
 		rc = -DER_INVAL;
 		goto failed;
 	}
@@ -959,7 +962,7 @@ pool_map_initialise(struct pool_map *map, struct pool_domain *tree)
 	D_ALLOC_ARRAY(map->po_domain_sorters, map->po_domain_layers);
 	if (map->po_domain_sorters == NULL) {
 		rc = -DER_NOMEM;
-		goto failed;
+		goto out_comp_fail_cnts;
 	}
 
 	/* pointer arrays for binary search of domains */
@@ -972,7 +975,7 @@ pool_map_initialise(struct pool_map *map, struct pool_domain *tree)
 		rc = comp_sorter_init(sorter, cntr.cc_top_doms,
 				      tree[0].do_comp.co_type);
 		if (rc != 0)
-			goto failed;
+			goto out_domain_sorters;
 
 		D_DEBUG(DB_TRACE, "domain %s, ndomains %d\n",
 			pool_domain_name(&tree[0]), sorter->cs_nr);
@@ -982,7 +985,7 @@ pool_map_initialise(struct pool_map *map, struct pool_domain *tree)
 
 		rc = comp_sorter_sort(sorter);
 		if (rc != 0)
-			goto failed;
+			goto out_domain_sorters;
 
 		tree = &tree[sorter->cs_nr];
 	}
@@ -990,7 +993,7 @@ pool_map_initialise(struct pool_map *map, struct pool_domain *tree)
 	rc = comp_sorter_init(&map->po_target_sorter, cntr.cc_targets,
 			      PO_COMP_TP_TARGET);
 	if (rc != 0)
-		goto failed;
+		goto out_domain_sorters;
 
 	for (i = 0; i < cntr.cc_targets; i++) {
 		struct pool_target *ta;
@@ -1001,10 +1004,19 @@ pool_map_initialise(struct pool_map *map, struct pool_domain *tree)
 
 	rc = comp_sorter_sort(&map->po_target_sorter);
 	if (rc != 0)
-		goto failed;
+		goto out_target_sorter;
 
 	return 0;
- failed:
+
+out_target_sorter:
+	comp_sorter_fini(&map->po_target_sorter);
+out_domain_sorters:
+	for (i = 0; i < map->po_domain_layers; i++)
+		comp_sorter_fini(&map->po_domain_sorters[i]);
+	D_FREE(map->po_domain_sorters);
+out_comp_fail_cnts:
+	D_FREE(map->po_comp_fail_cnts);
+failed:
 	D_DEBUG(DB_MGMT, "Failed to setup pool map "DF_RC"\n", DP_RC(rc));
 	D_MUTEX_DESTROY(&map->po_lock);
 	pool_map_finalise(map);
@@ -1154,12 +1166,15 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 
 	/* create scratch map for merging */
 	D_ALLOC_PTR(src_map);
-	if (src_map == NULL)
+	if (src_map == NULL) {
+		pool_tree_free(tree);
 		return -DER_NOMEM;
+	}
 
 	rc = pool_map_initialise(src_map, tree);
 	if (rc != 0) {
 		D_DEBUG(DB_MGMT, "Failed to create scratch map for buffer\n");
+		/* pool_tree_free() did in pool_map_initialise */
 		goto failed;
 	}
 
@@ -1187,8 +1202,10 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 		rc = pool_map_find_domain(map, tree[0].do_comp.co_type,
 					  PO_COMP_ID_ALL, &cur_doms);
 	}
-	if (rc == 0)
+	if (rc == 0) {
+		D_FREE(dst_tree);
 		goto failed;
+	}
 
 	dst_doms = dst_tree;
 	dst_doms += cur_doms - map->po_tree;
@@ -1332,7 +1349,9 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 
 	/* install new buffer for pool map */
 	rc = pool_map_initialise(map, dst_tree);
-	D_ASSERT(rc == 0 || rc == -DER_NOMEM);
+	if (rc != 0)
+		/* pool_tree_free() did in pool_map_initialise */
+		goto failed;
 
 	map->po_version = version;
  failed:
@@ -1395,6 +1414,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 		map_comp.co_id = i + num_comps;
 		map_comp.co_rank = 0;
 		map_comp.co_ver = map_version;
+		map_comp.co_out_ver = map_version;
 		map_comp.co_fseq = 1;
 		map_comp.co_nr = domains[i];
 
@@ -1502,8 +1522,7 @@ pool_map_extend(struct pool_map *map, uint32_t version, struct pool_buf *buf)
 
 	D_DEBUG(DB_TRACE, "Merge buffer with already existent pool map\n");
 	rc = pool_map_merge(map, version, tree);
-	if(rc != 0)
-		goto error_tree;
+	/* pool_tree_free() did in pool_map_initialise in case of error */
 
 	return rc;
 
