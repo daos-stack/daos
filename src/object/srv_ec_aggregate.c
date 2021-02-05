@@ -1414,31 +1414,30 @@ agg_process_holes_ult(void *arg)
 	unsigned int		 failed_tgts_cnt = 0;
 	int			 rc = 0;
 
-	D_ALLOC_ARRAY(stripe_ud->asu_recxs,
-		      entry->ae_cur_stripe.as_extent_cnt + 1);
-	if (stripe_ud->asu_recxs == NULL) {
-		rc = -DER_NOMEM;
-		goto out;
-	}
 	/* Process extent list to find what to re-replicate -- build recx array
 	 */
 	d_list_for_each_entry_safe(agg_extent, ext_tmp,
-				   &entry->ae_cur_stripe.as_dextents,
-				   ae_link) {
-		if (agg_extent->ae_hole ||
-		    agg_extent->ae_epoch < entry->ae_par_extent.ape_epoch)
+				   &entry->ae_cur_stripe.as_dextents, ae_link) {
+		D_PRINT("agg ext: idx: %lu, nr: %lu, orig_idx: %lu, orig_nr: %lu, is_hole: %s\n",
+			agg_extent->ae_recx.rx_idx,
+			agg_extent->ae_recx.rx_nr,
+			agg_extent->ae_orig_recx.rx_idx,
+			agg_extent->ae_orig_recx.rx_nr,
+			agg_extent->ae_hole ? "true" : "false");
+		if (agg_extent->ae_epoch < entry->ae_par_extent.ape_epoch)
 			continue;
 		if (agg_extent->ae_recx.rx_idx - ss > last_ext_end) {
 			stripe_ud->asu_recxs[ext_cnt].rx_idx =
-				ss + last_ext_end;
+				last_ext_end;
 			stripe_ud->asu_recxs[ext_cnt].rx_nr =
-				agg_extent->ae_recx.rx_idx -
-				ss - last_ext_end;
+				agg_extent->ae_recx.rx_idx - ss -
+				last_ext_end;
 			ext_tot_len +=
 			stripe_ud->asu_recxs[ext_cnt++].rx_nr;
 		}
 		last_ext_end += agg_extent->ae_recx.rx_idx +
 				agg_extent->ae_recx.rx_nr - ss;
+		continue;
 	}
 
 	if (last_ext_end < k * len) {
@@ -1448,6 +1447,7 @@ agg_process_holes_ult(void *arg)
 			last_ext_end;
 		ext_tot_len += stripe_ud->asu_recxs[ext_cnt++].rx_nr;
 	}
+
 	stripe_ud->asu_cell_cnt = ext_cnt;
 	iod.iod_name = entry->ae_akey;
 	iod.iod_type = DAOS_IOD_ARRAY;
@@ -1455,9 +1455,16 @@ agg_process_holes_ult(void *arg)
 	iod.iod_nr = ext_cnt;
 	iod.iod_recxs = stripe_ud->asu_recxs;
 	entry->ae_sgl.sg_nr = 1;
+	D_PRINT("proc holes: ent_cnt: %u, ext_tot_len: %u, ae_size: %lu\n",
+		ext_cnt, ext_tot_len, entry->ae_rsize);
 	entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_len = ext_cnt * ext_tot_len *
 								entry->ae_rsize;
-	D_ASSERT(entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_len >= k * len);
+	D_ASSERT(entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_len <= k * len);
+	int j;
+	for (j = 0; j < ext_cnt; j++)
+		D_PRINT("j: %d, idx: %lu, nr: %lu\n", j,
+			iod.iod_recxs[j].rx_idx,
+			iod.iod_recxs[j].rx_nr);
 	/* Pull data via dsc_obj_fetch */
 	rc = dsc_obj_fetch(entry->ae_obj_hdl, entry->ae_cur_stripe.as_hi_epoch,
 			   &entry->ae_dkey, 1, &iod, &entry->ae_sgl, NULL, 0,
@@ -1531,10 +1538,8 @@ agg_process_holes_ult(void *arg)
 	ec_rep_out = crt_reply_get(rpc);
 	rc = ec_rep_out->er_status;
 	if (rc)
-		D_ERROR("remote update rpc failed: "DF_RC"\n", DP_RC(rc));
-
+		D_PRINT("remote update rpc failed: "DF_RC"\n", DP_RC(rc));
 out:
-	D_FREE(stripe_ud->asu_recxs);
 	entry->ae_sgl.sg_nr = AGG_IOV_CNT;
 	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
 }
@@ -1549,6 +1554,13 @@ agg_process_holes(struct ec_agg_entry *entry)
 	struct ec_agg_param	*agg_param;
 	int			 tid, rc = 0;
 	int			*status;
+
+	D_ALLOC_ARRAY(stripe_ud.asu_recxs,
+		      entry->ae_cur_stripe.as_extent_cnt + 1);
+	if (stripe_ud.asu_recxs == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
 
 	stripe_ud.asu_agg_entry = entry;
 	rc = agg_get_obj_handle(entry);

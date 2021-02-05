@@ -433,6 +433,7 @@ obj_ec_recx_scan(daos_iod_t *iod, d_sg_list_t *sgl,
 		rc = obj_ec_pbufs_init(ec_recx_array,
 				       obj_ec_cell_bytes(iod, oca));
 
+	//obj_reasb_req_dump(reasb_req, sgl, oca, stripe_rec_nr, iod_idx);
 out:
 	return rc;
 }
@@ -1137,13 +1138,15 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 				 * iod_size as 1 to make sgl be splittable,
 				 * server will not really transfer data back.
 				 */
-				if (iod_size == 0) {
+				if (iod_size == 0 && !punch) {
 					D_ASSERT(reasb_req->orr_size_fetched);
 					iod_size = 1;
 				}
-				ec_data_seg_add(recx, iod_size, sgl, &iov_idx,
-						&iov_off, oca, iovs, iov_nr,
-						sorter, update);
+				if (!punch)
+					ec_data_seg_add(recx, iod_size, sgl,
+							&iov_idx, &iov_off, oca,
+							iovs, iov_nr, sorter,
+							update);
 			}
 			continue;
 		}
@@ -1158,14 +1161,17 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 				  "bad recx\n");
 			ec_data_recx_add(&tmp_recx, riod->iod_recxs, ridx,
 					 tgt_recx_idxs, oca, true);
-			ec_data_seg_add(&tmp_recx, iod_size, sgl, &iov_idx,
-					&iov_off, oca, iovs, iov_nr, sorter,
-					true);
+			//if (!punch)
+				ec_data_seg_add(&tmp_recx, iod_size,
+						sgl, &iov_idx, &iov_off, oca,
+						iovs, iov_nr, sorter, true);
 		}
 		ec_data_recx_add(full_recx, riod->iod_recxs, ridx,
 				 tgt_recx_idxs, oca, false);
-		ec_data_seg_add(full_recx, iod_size, sgl, &iov_idx, &iov_off,
-				oca, iovs, iov_nr, sorter, false);
+		//if (!punch)
+			ec_data_seg_add(full_recx, iod_size, sgl, &iov_idx,
+					&iov_off, oca, iovs, iov_nr, sorter,
+					false);
 		recx_end = recx->rx_idx + recx->rx_nr;
 		full_end = full_recx->rx_idx + full_recx->rx_nr;
 		D_ASSERT(recx_end >= full_end);
@@ -1174,13 +1180,14 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 			tmp_recx.rx_nr = recx_end - full_end;
 			ec_data_recx_add(&tmp_recx, riod->iod_recxs, ridx,
 					 tgt_recx_idxs, oca, true);
-			ec_data_seg_add(&tmp_recx, iod_size, sgl, &iov_idx,
-					&iov_off, oca, iovs, iov_nr, sorter,
-					true);
+			//if (!punch)
+				ec_data_seg_add(&tmp_recx, iod_size, sgl,
+						&iov_idx, &iov_off, oca, iovs,
+						iov_nr, sorter, true);
 		}
 	}
 
-	if (update) {
+	if (update && !punch) {
 		for (i = 0; i < ec_recx_array->oer_nr; i++) {
 			full_ec_recx = &ec_recx_array->oer_recxs[i];
 			full_recx = &full_ec_recx->oer_recx;
@@ -1548,6 +1555,10 @@ obj_ec_encode(struct obj_reasb_req *reasb_req)
 	}
 
 	for (i = 0; i < reasb_req->orr_iod_nr; i++) {
+		/*
+		if (!reasb_req->orr_uiods[i].iod_size)
+			continue;
+			*/
 		rc = obj_ec_recx_encode(reasb_req->orr_oid,
 					&reasb_req->orr_uiods[i],
 					&reasb_req->orr_usgls[i],
