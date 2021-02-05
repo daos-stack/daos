@@ -1381,7 +1381,7 @@ def install_debuginfos():
     if USE_DEBUGINFO_INSTALL:
         yum_args = [
             "--exclude", "ompi-debuginfo", "libpmemobj", "python", "openmpi3"]
-        cmd_list.append(["sudo", "dnf", "-y", "install"] + yum_args)
+        cmd_list.append(["sudo", "dnf", "debuginfo-install", "-y"] + yum_args)
         cmd_list.append(
             ["sudo", "dnf", "debuginfo-install", "-y"] +
             yum_args + ["daos-server", "gcc"])
@@ -1405,7 +1405,7 @@ def install_debuginfos():
     # yum_base.processTransaction(rpmDisplay=yum.rpmtrans.NoOutputCallBack())
 
     # Now install a few pkgs that debuginfo-install wouldn't
-    cmd = ["sudo", "dnf", "-y", "--enablerepo=*debug*", "install"]
+    cmd = ["sudo", "dnf", "debuginfo-install", "-y"]
     for pkg in install_pkgs:
         try:
             cmd.append(
