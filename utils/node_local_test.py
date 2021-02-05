@@ -1129,6 +1129,17 @@ class posix_tests():
         nf = os.stat(fname)
         assert stat.S_IMODE(nf.st_mode) == e_mode
 
+    @needs_dfuse
+    def test_uns_create(self):
+        """Simple test to create a container using a path in dfuse"""
+        path = os.path.join(self.dfuse.dir, 'mycont')
+        cmd = ['container', 'create',
+               '--pool', self.pool, '--path', path,
+               '--type', 'POSIX']
+        rc = run_daos_cmd(self.conf, cmd)
+        assert rc.returncode == 0
+        print(os.listdir(path))
+
 def run_posix_tests(server, conf, test=None):
     """Run one or all posix tests"""
 
