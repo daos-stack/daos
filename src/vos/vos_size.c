@@ -147,7 +147,7 @@ get_vos_structure_sizes_yaml(int alloc_overhead, struct d_string_buffer_t *buf)
 		goto exit_0;
 	}
 
-	rc = vos_init();
+	rc = vos_self_init("/mnt/daos");
 	if (rc) {
 		goto exit_1;
 	}
@@ -174,7 +174,7 @@ get_vos_structure_sizes_yaml(int alloc_overhead, struct d_string_buffer_t *buf)
 	}
 
 exit_2:
-	vos_fini();
+	vos_self_fini();
 exit_1:
 	daos_debug_fini();
 exit_0:

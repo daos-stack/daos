@@ -115,6 +115,7 @@ struct dss_xstream_data {
 	/** barrier for all ULTs to enter handling loop */
 	ABT_cond		  xd_ult_barrier;
 	ABT_mutex		  xd_mutex;
+	struct dss_thread_local_storage *xd_dtc;
 };
 
 static struct dss_xstream_data	xstream_data;
@@ -216,11 +217,14 @@ dss_iv_resp_hdlr(crt_context_t *ctx, void *hdlr_arg,
 		 void (*real_rpc_hdlr)(void *), void *arg)
 {
 	struct dss_xstream	*dx = (struct dss_xstream *)arg;
-	int			 rc;
 
-	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_GENERIC], real_rpc_hdlr,
-			       hdlr_arg, ABT_THREAD_ATTR_NULL, NULL);
-	return dss_abterr2der(rc);
+	/*
+	 * Current EC aggregation periodically update IV, use
+	 * PERIODIC flag to avoid interfering CPU relaxing.
+	 */
+	return sched_create_thread(dx, real_rpc_hdlr, hdlr_arg,
+				   ABT_THREAD_ATTR_NULL, NULL,
+				   DSS_ULT_FL_PERIODIC);
 }
 
 static int
@@ -232,7 +236,7 @@ dss_rpc_hdlr(crt_context_t *ctx, void *hdlr_arg,
 	unsigned int		 mod_id = opc_get_mod_id(rpc->cr_opc);
 	struct dss_module	*module = dss_module_get(mod_id);
 	struct sched_req_attr	 attr = { 0 };
-	int			 rc = -DER_NOSYS;
+	int			 rc;
 
 	if (DAOS_FAIL_CHECK(DAOS_FAIL_LOST_REQ))
 		return 0;
@@ -241,15 +245,15 @@ dss_rpc_hdlr(crt_context_t *ctx, void *hdlr_arg,
 	 * will be NULL for this case.
 	 */
 	if (module != NULL && module->sm_mod_ops != NULL &&
-	    module->sm_mod_ops->dms_get_req_attr != NULL)
+	    module->sm_mod_ops->dms_get_req_attr != NULL) {
 		rc = module->sm_mod_ops->dms_get_req_attr(rpc, &attr);
+		if (rc != 0)
+			attr.sra_type = SCHED_REQ_ANONYM;
+	} else {
+		attr.sra_type = SCHED_REQ_ANONYM;
+	}
 
-	if (rc == 0)
-		return sched_req_enqueue(dx, &attr, real_rpc_hdlr, rpc);
-
-	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_GENERIC], real_rpc_hdlr,
-			       rpc, ABT_THREAD_ATTR_NULL, NULL);
-	return dss_abterr2der(rc);
+	return sched_req_enqueue(dx, &attr, real_rpc_hdlr, rpc);
 }
 
 static void
@@ -463,7 +467,7 @@ dss_srv_handler(void *arg)
 	/* main service progress loop */
 	for (;;) {
 		if (dx->dx_comm) {
-			rc = crt_progress(dmi->dmi_ctx, 0 /* no wait */);
+			rc = crt_progress(dmi->dmi_ctx, dx->dx_timeout);
 			if (rc != 0 && rc != -DER_TIMEDOUT) {
 				D_ERROR("failed to progress CART context: %d\n",
 					rc);
@@ -746,11 +750,6 @@ dss_xstreams_fini(bool force)
 	xstream_data.xd_xs_nr = 0;
 	dss_tgt_nr = 0;
 
-	/* release local storage */
-	rc = pthread_key_delete(dss_tls_key);
-	if (rc)
-		D_ERROR("failed to delete dtc: %d\n", rc);
-
 	D_DEBUG(DB_TRACE, "Execution streams stopped\n");
 }
 
@@ -841,22 +840,49 @@ dss_start_xs_id(int xs_id)
 static int
 dss_xstreams_init(void)
 {
-	int	rc;
+	char	*env;
+	int	rc = 0;
 	int	i, xs_id;
 
 	D_ASSERT(dss_tgt_nr >= 1);
 
-	/* initialize xstream-local storage */
-	rc = pthread_key_create(&dss_tls_key, NULL);
-	if (rc) {
-		D_ERROR("failed to create dtc: %d\n", rc);
-		return -DER_NOMEM;
+	d_getenv_bool("DAOS_SCHED_PRIO_DISABLED", &sched_prio_disabled);
+	if (sched_prio_disabled)
+		D_INFO("ULT prioritizing is disabled.\n");
+
+	d_getenv_int("DAOS_SCHED_STATS_INTVL", &sched_stats_intvl);
+	if (sched_stats_intvl != 0) {
+		D_INFO("Print sched stats every %u seconds\n",
+		       sched_stats_intvl);
+		/* Convert seconds to milliseconds */
+		sched_stats_intvl = sched_stats_intvl * 1000;
 	}
+
+	d_getenv_int("DAOS_SCHED_RELAX_INTVL", &sched_relax_intvl);
+	if (sched_relax_intvl == 0 ||
+	    sched_relax_intvl > SCHED_RELAX_INTVL_MAX) {
+		D_WARN("Invalid relax interval %u, set to default %u msecs.\n",
+		       sched_stats_intvl, SCHED_RELAX_INTVL_DEFAULT);
+		sched_relax_intvl = SCHED_RELAX_INTVL_DEFAULT;
+	} else {
+		D_INFO("CPU relax interval is set to %u msecs\n",
+		       sched_relax_intvl);
+	}
+
+	env = getenv("DAOS_SCHED_RELAX_MODE");
+	if (env) {
+		sched_relax_mode = sched_relax_str2mode(env);
+		if (sched_relax_mode == SCHED_RELAX_MODE_INVALID) {
+			D_WARN("Invalid relax mode [%s]\n", env);
+			sched_relax_mode = SCHED_RELAX_MODE_NET;
+		}
+	}
+	D_INFO("CPU relax mode is set to [%s]\n",
+	       sched_relax_mode2str(sched_relax_mode));
 
 	/* start the execution streams */
 	D_DEBUG(DB_TRACE,
-		"%d cores total detected "
-		"starting %d main xstreams\n",
+		"%d cores total detected starting %d main xstreams\n",
 		dss_core_nr, dss_tgt_nr);
 
 	if (dss_numa_node != -1) {
@@ -912,9 +938,6 @@ dss_xstreams_init(void)
 	D_DEBUG(DB_TRACE, "%d execution streams successfully started "
 		"(first core %d)\n", dss_tgt_nr, dss_core_offset);
 out:
-	if (dss_xstreams_empty()) /* started nothing */
-		pthread_key_delete(dss_tls_key);
-
 	return rc;
 }
 
@@ -1057,6 +1080,9 @@ enum {
 	XD_INIT_MUTEX,
 	XD_INIT_ULT_INIT,
 	XD_INIT_ULT_BARRIER,
+	XD_INIT_TLS_REG,
+	XD_INIT_TLS_INIT,
+	XD_INIT_SYS_DB,
 	XD_INIT_NVME,
 	XD_INIT_XSTREAMS,
 	XD_INIT_DRPC,
@@ -1080,6 +1106,15 @@ dss_srv_fini(bool force)
 	case XD_INIT_NVME:
 		bio_nvme_fini();
 		/* fall through */
+	case XD_INIT_SYS_DB:
+		vos_db_fini();
+		/* fall through */
+	case XD_INIT_TLS_INIT:
+		dss_tls_fini(xstream_data.xd_dtc);
+		/* fall through */
+	case XD_INIT_TLS_REG:
+		pthread_key_delete(dss_tls_key);
+		/* fall through */
 	case XD_INIT_ULT_BARRIER:
 		ABT_cond_free(&xstream_data.xd_ult_barrier);
 		/* fall through */
@@ -1098,10 +1133,10 @@ dss_srv_fini(bool force)
 }
 
 int
-dss_srv_init()
+dss_srv_init(void)
 {
-	int	rc;
-	bool	started = true;
+	int		 rc;
+	bool		 started = true;
 
 	xstream_data.xd_init_step  = XD_INIT_NONE;
 	xstream_data.xd_ult_signal = false;
@@ -1132,8 +1167,27 @@ dss_srv_init()
 	}
 	xstream_data.xd_init_step = XD_INIT_ULT_BARRIER;
 
-	rc = bio_nvme_init(dss_storage_path, dss_nvme_conf, dss_nvme_shm_id,
-		dss_nvme_mem_size);
+	/* register xstream-local storage key */
+	rc = pthread_key_create(&dss_tls_key, NULL);
+	if (rc) {
+		rc = dss_abterr2der(rc);
+		D_GOTO(failed, rc);
+	}
+	xstream_data.xd_init_step = XD_INIT_TLS_REG;
+
+	/* initialize xstream-local storage */
+	xstream_data.xd_dtc = dss_tls_init(DAOS_SERVER_TAG);
+	if (!xstream_data.xd_dtc)
+		D_GOTO(failed, rc);
+	xstream_data.xd_init_step = XD_INIT_TLS_INIT;
+
+	rc = vos_db_init(dss_storage_path, NULL, false);
+	if (rc != 0)
+		D_GOTO(failed, rc);
+	xstream_data.xd_init_step = XD_INIT_SYS_DB;
+
+	rc = bio_nvme_init(dss_nvme_conf, dss_nvme_shm_id,
+			   dss_nvme_mem_size, vos_db_get());
 	if (rc != 0)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_NVME;
