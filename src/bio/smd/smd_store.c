@@ -74,6 +74,12 @@ smd_db_tx_end(int rc)
 		return rc;
 }
 
+bool
+smd_db_ready(void)
+{
+	return smd_db != NULL;
+}
+
 void
 smd_db_lock(void)
 {

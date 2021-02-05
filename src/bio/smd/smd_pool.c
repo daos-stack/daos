@@ -271,6 +271,9 @@ smd_pool_list(d_list_t *pool_list, int *pools)
 	td.td_count = 0;
 	D_INIT_LIST_HEAD(&td.td_list);
 
+	if (!smd_db_ready())
+		return 0; /* There is no NVMe, smd will not be initialized */
+
 	smd_db_lock();
 	rc = smd_db_traverse(TABLE_POOL, smd_pool_list_cb, &td);
 	smd_db_unlock();
