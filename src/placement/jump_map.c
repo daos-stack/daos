@@ -329,10 +329,10 @@ find_rth_bit(uint64_t v, uint32_t r)
 	uint32_t s = 64;
 	uint32_t t;
 
-	a =  v - ((v >> 1) & ~0UL/3);
-	b = (a & ~0UL/5) + ((a >> 2) & ~0UL/5);
-	c = (b + (b >> 4)) & ~0UL/0x11;
-	d = (c + (c >> 8)) & ~0UL/0x101;
+	a =  v - ((v >> 1) & ~0UL / 3);
+	b = (a & ~0UL / 5) + ((a >> 2) & ~0UL / 5);
+	c = (b + (b >> 4)) & ~0UL / 0x11;
+	d = (c + (c >> 8)) & ~0UL / 0x101;
 	t = (d >> 32) + (d >> 48);
 
 	s -= ((t - r) & 256) >> 3; r -= (t & ((t - r) >> 8));
@@ -371,23 +371,28 @@ find_unused(uint8_t *array, uint32_t start, uint32_t end)
 
 	do {
 		if (n <= 8) {
-			uint8_t *p8 = (uint8_t*)((char*)array + i);
+			uint8_t *p8 = (uint8_t *)((char *)array + i);
+
 			v = ~*p8 & (0xFFUL >> (8 - n));
 			n = 0;
 		} else if (n <= 16) {
-			uint16_t *p16 = (uint16_t*)((char*)array + i);
+			uint16_t *p16 = (uint16_t *)((char *)array + i);
+
 			v = ~*p16 & (0xFFFFUL >> (16 - n));
 			n = 0;
 		} else if (n <= 32) {
-			uint32_t *p32 = (uint32_t*)((char*)array + i);
+			uint32_t *p32 = (uint32_t *)((char *)array + i);
+
 			v = ~*p32 & (0xFFFFFFFFUL >> (32 - n));
 			n = 0;
 		} else if (n <= 64) {
-			uint64_t *p64 = (uint64_t*)((char*)array + i);
+			uint64_t *p64 = (uint64_t *)((char *)array + i);
+
 			v = ~*p64 & (0xFFFFFFFFFFFFFFFFUL >> (64 - n));
 			n = 0;
 		} else {
-			uint64_t *p64 = (uint64_t*)((char*)array + i);
+			uint64_t *p64 = (uint64_t *)((char *)array + i);
+
 			v = ~*p64;
 			n -= 64;
 		}
