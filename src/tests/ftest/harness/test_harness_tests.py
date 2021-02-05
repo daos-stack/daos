@@ -5,6 +5,9 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from random import choice
+from re import findall
+
+from ClusterShell.NodeSet import NodeSet
 
 from apricot import TestWithServers
 from general_utils import run_task, pcmd
@@ -29,16 +32,20 @@ class TestHarnessTests(TestWithServers):
         # Choose a server find the pid of its daos_io_server process
         host = choice(self.server_managers[0].hosts)
         self.log.info("Obtaining pid of the daos_io_server process on %s", host)
-        task = run_task([host], "pgrep daos_io_server", 20)
-        for retcode, hostlist in task.iter_retcodes():
-            for buffer, _ in task.iter_buffers(hostlist):
-                if retcode != 0:
-                    self.fail(
-                        "Error obtaining pid of the daos_io_server process on "
-                        "{}: {}".format(",".join(hostlist), buffer))
-                pid = str(buffer)
-                break
-            break
+        pid = None
+        task = run_task([host], "pgrep --list-full daos_io_server", 20)
+        for buffer, hostlist in task.iter_buffers():
+            self.log.info("%s:", str(NodeSet.fromlist(hostlist)))
+            for line in str(buffer).splitlines():
+                self.log.info("  %s", line)
+            if pid is None:
+                match = findall(r"(\d+)\s+[A-Za-z0-9/]+", str(buffer))
+                if match:
+                    pid = match[0]
+        if pid is None:
+            self.fail(
+                "Error obtaining pid of the daos_io_server process on "
+                "{}".format(host))
         self.log.info("Found pid %s", pid)
 
         # Send a signal 6 to its daos_io_server process
