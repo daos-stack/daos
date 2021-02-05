@@ -88,16 +88,16 @@ jobs:
     - name: mkdir
       run: mkdir test_results/
     - name: Copy results
-      run: docker cp build-ut:/home/daos/test_results/ test_results/
+      run: docker cp build-ut:/home/daos/test_results/ ./
     - name: find
       run: find test_results/
-    - name: Run NLT Test
-      run: docker run --tmpfs /mnt/daos build-image ./utils/node_local_test.py --no-root kv
     - name: Publish Unit Test Results
       uses: EnricoMi/publish-unit-test-result-action@v1.7
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         files: test_results/*.xml
+    - name: Run NLT Test
+      run: docker run --tmpfs /mnt/daos build-image ./utils/node_local_test.py --no-root kv
 
   Spelling:
     runs-on: ubuntu-20.04
