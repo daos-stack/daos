@@ -1755,7 +1755,7 @@ open_tmp_attach_info_file(char **filename)
 	/** Ensure the temporary file is created with proper permissions to
 	 *  limit security risk.
 	 */
-	old_mode = umask(S_IRUSR | S_IWUSR);
+	old_mode = umask(S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 
 	tmp_fd = mkstemp(*filename);
 	umask(old_mode);
