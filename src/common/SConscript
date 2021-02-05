@@ -65,31 +65,32 @@ def scons():
     # is correct, but set _libs to [] so that the library isn't
     # linked in.
 
-
     # Arm can build ISA-L
     prereqs.require(env, 'isal')
     prereqs.require(env, 'isal_crypto')
 
-    denv = env.Clone()
-    prereqs.require(denv, 'protobufc')
+    denv = env.Clone(LIBS=[])
+    prereqs.require(denv, 'isal', 'isal_crypto', 'protobufc')
     denv.AppendUnique(LIBS=['cart', 'gurt', 'lz4'])
     build_daos_common(denv, True, prereqs)
     build_daos_common(denv, False, prereqs)
+
 
     prereqs.require(env, 'pmdk')
     control_tgts = [File('control.c')]
     Export('control_tgts')
 
-    prereqs.require(denv, 'pmdk')
-    tenv = denv.Clone()
-    tenv.AppendUnique(LIBS=['json-c'])
+    tlib_env = denv.Clone()
+    tlib_env.AppendUnique(LIBS=['json-c'])
 
-    prereqs.require(tenv, 'argobots')
+    prereqs.require(tlib_env, 'argobots')
 
     tests_lib_src = ['tests_lib.c', 'tests_dmg_helpers.c']
-    tests_lib = daos_build.library(tenv, 'libdaos_tests', tests_lib_src)
-    tenv.Install('$PREFIX/lib64/', tests_lib)
+    tests_lib = daos_build.library(tlib_env, 'libdaos_tests', tests_lib_src)
+    tlib_env.Install('$PREFIX/lib64/', tests_lib)
 
+    tenv = tlib_env.Clone()
+    prereqs.require(tenv, 'pmdk')
     SConscript('tests/SConscript', exports='tenv')
 
     build_dts_library(denv)
