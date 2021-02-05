@@ -68,6 +68,31 @@
         </plugins>
       </build>
     </profile>
+    <profile>
+      <id>with-proto3-netty4-deps</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-assembly-plugin</artifactId>
+            <configuration>
+              <finalName>daos-java-${project.version}</finalName>
+              <descriptors>
+                <descriptor>src/assembly/make-assembly-with-proto3-netty4-deps.xml</descriptor>
+              </descriptors>
+            </configuration>
+            <executions>
+              <execution>
+                <phase>package</phase>
+                <goals>
+                  <goal>single</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
   </profiles>
 
 </project>
