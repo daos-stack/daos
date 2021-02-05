@@ -179,7 +179,7 @@ mismatch_table = {'client': ('array'),
                   'daos': ('common', 'container', 'pool'),
                   'common': ('container', 'pool'),
                   'container': ('common'),
-                  'mgmt': ('common', 'daos', 'pool', 'rscv'),
+                  'mgmt': ('common', 'daos', 'pool', 'rsvc'),
                   'misc': ('common', 'mgmt'),
                   'pool': ('common'),
                   'server': ('daos')}
