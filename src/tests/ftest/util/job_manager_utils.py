@@ -975,7 +975,7 @@ class Systemctl(JobManager):
         """Display the journalctl log data since detecting server start.
 
         Args:
-            hosts (list, optional): list of hosts from whish to display the
+            hosts (list, optional): list of hosts from which to display the
                 journalctl log data. Defaults to None which will log the
                 journalctl log data from all of the hosts.
         """
