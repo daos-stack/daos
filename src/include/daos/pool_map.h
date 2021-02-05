@@ -59,14 +59,16 @@ enum pool_component_flags {
 
 /** parent class of all all pool components: target, domain */
 struct pool_component {
+	/** Immutable component ID. */
+	uint32_t		co_id;
 	/** pool_comp_type_t */
 	uint16_t		co_type;
 	/** pool_comp_state_t */
 	uint8_t			co_status;
 	/** target index inside the node */
 	uint8_t			co_index;
-	/** Immutable component ID. */
-	uint32_t		co_id;
+	/** number of children or storage partitions */
+	uint32_t		co_nr;
 	/**
 	 * e.g. rank in the communication group, only used by PO_COMP_TARGET
 	 * for the time being.
@@ -83,8 +85,6 @@ struct pool_component {
 	uint32_t		co_out_ver;
 	/** flags, see enum pool_component_flags */
 	uint32_t		co_flags;
-	/** number of children or storage partitions */
-	uint32_t		co_nr;
 };
 
 /** a leaf of pool map */
@@ -102,7 +102,7 @@ struct pool_domain {
 	/** embedded component for myself */
 	struct pool_component	 do_comp;
 	/** # all targets within this domain */
-	unsigned int		 do_target_nr;
+	uint32_t		 do_target_nr;
 	/**
 	 * child domains within current domain, it is NULL for the last
 	 * level domain.

@@ -52,7 +52,7 @@ struct pl_target_grp {
 	/** pool map version to generate this layout */
 	uint32_t		 tg_ver;
 	/** number of targets */
-	unsigned int		 tg_target_nr;
+	uint32_t		 tg_target_nr;
 	/** array of targets */
 	struct pl_target	*tg_targets;
 };

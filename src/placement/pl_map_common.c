@@ -447,9 +447,9 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list,
 		grp_count[grp]--;
 		grp_idx += grp_count[grp];
 
-		new_shards[grp_idx].po_fseq = f_shard->fs_fseq;
-		new_shards[grp_idx].po_shard = f_shard->fs_shard_idx;
+		new_shards[grp_idx].po_shard  = f_shard->fs_shard_idx;
 		new_shards[grp_idx].po_target = f_shard->fs_tgt_id;
+		new_shards[grp_idx].po_fseq   = f_shard->fs_fseq;
 		if (org_shard->po_target != -1 &&
 		    (is_pool_adding ||
 		     org_shard->po_fseq > f_shard->fs_fseq))

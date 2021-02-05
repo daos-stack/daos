@@ -327,9 +327,6 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 		layout->ol_ver);
 	D_ASSERT(layout->ol_nr == layout->ol_grp_size * layout->ol_grp_nr);
 
-	if (refresh)
-		obj_layout_dump(obj->cob_md.omd_id, layout);
-
 	obj->cob_version = layout->ol_ver;
 
 	D_ASSERT(obj->cob_shards == NULL);
@@ -345,8 +342,7 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 
 	if (obj->cob_grp_size > 1 && srv_io_mode == DIM_DTX_FULL_ENABLED &&
 	    old < obj->cob_grp_nr) {
-		if (obj->cob_time_fetch_leader != NULL)
-			D_FREE(obj->cob_time_fetch_leader);
+		D_FREE(obj->cob_time_fetch_leader);
 
 		D_ALLOC_ARRAY(obj->cob_time_fetch_leader, obj->cob_grp_nr);
 		if (obj->cob_time_fetch_leader == NULL)

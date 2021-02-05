@@ -100,19 +100,22 @@ check_unique_layout(int num_domains, int nodes_per_domain, int vos_per_target,
 {
 	uint32_t i, j;
 	uint8_t *target_map;
-	int total_targets = num_domains * nodes_per_domain * vos_per_target;
+	int total_targets = (num_domains * nodes_per_domain * vos_per_target)
+			  / 8 + 1;
 
 	D_ALLOC_ARRAY(target_map, total_targets);
+	D_ASSERT(target_map != NULL);
 	for (i = first_layout; i < first_layout + num_layouts; i++) {
 		for (j = 0; j < layout_table[i]->ol_nr; ++j) {
 
 			int index = layout_table[i]->ol_shards[j].po_target;
 
-			if (target_map[index] == 1) {
+			if (isset(target_map, index)) {
 				print_err_layout(layout_table, i);
 				D_ASSERT(0);
-			} else
-				target_map[index] = 1;
+			} else {
+				setbit(target_map, index);
+			}
 		}
 		memset(target_map, 0, sizeof(*target_map) * total_targets);
 	}
@@ -146,11 +149,10 @@ benchmark_placement(int argc, char **argv, uint32_t num_domains,
 	struct pool_map *pool_map;
 	struct pl_map *pl_map;
 	struct daos_obj_md *obj_table;
-	int i;
 	struct pl_obj_layout **layout_table;
+	int i, vtune_loop = 0;
 
 	pl_map_type_t map_type = PL_TYPE_UNKNOWN;
-	int vtune_loop = 0;
 
 	while (1) {
 		static struct option long_options[] = {
@@ -209,6 +211,8 @@ benchmark_placement(int argc, char **argv, uint32_t num_domains,
 	D_ALLOC_ARRAY(layout_table, BENCHMARK_COUNT);
 	D_ASSERT(layout_table != NULL);
 
+	D_PRINT("Generate objects...");
+
 	for (i = 0; i < BENCHMARK_COUNT; i++) {
 		memset(&obj_table[i], 0, sizeof(obj_table[i]));
 		obj_table[i].omd_id.lo = rand();
@@ -217,18 +221,31 @@ benchmark_placement(int argc, char **argv, uint32_t num_domains,
 		obj_table[i].omd_ver = 1;
 	}
 
+	D_PRINT("\nGet objects layout...");
+
 	/* Warm up the cache and check that it works correctly */
 	for (i = 0; i < BENCHMARK_COUNT; i++)
 		pl_obj_place(pl_map, &obj_table[i], NULL, &layout_table[i]);
+
+	D_PRINT("\nCheck unique layout...");
+
 	check_unique_layout(num_domains, nodes_per_domain, vos_per_target,
 			    layout_table, BENCHMARK_COUNT, 0);
 
+	D_PRINT("\nFree objects layout...");
+
+	for (i = BENCHMARK_COUNT - 1; i >= 0; i--)
+		pl_obj_layout_free(layout_table[i]);
+
 	if (vtune_loop) {
-		D_PRINT("Starting vtune loop!\n");
-		while (1)
+		D_PRINT("\nStarting vtune loop!\n");
+		while (1) {
 			for (i = 0; i < BENCHMARK_COUNT; i++)
 				pl_obj_place(pl_map, &obj_table[i], NULL,
 					     &layout_table[i]);
+			for (i = BENCHMARK_COUNT - 1; i >= 0; i--)
+				pl_obj_layout_free(layout_table[i]);
+		}
 	}
 
 	/* Simple layout calculation benchmark */
@@ -237,6 +254,8 @@ benchmark_placement(int argc, char **argv, uint32_t num_domains,
 
 		bench_hdl = benchmark_alloc();
 		D_ASSERT(bench_hdl != NULL);
+
+		D_PRINT("\nPlacement benchmark start...");
 
 		benchmark_start(bench_hdl);
 		for (i = 0; i < BENCHMARK_COUNT; i++)
@@ -255,8 +274,10 @@ benchmark_placement(int argc, char **argv, uint32_t num_domains,
 			bench_hdl->wallclock_delta_ns);
 
 		benchmark_free(bench_hdl);
-	}
 
+		for (i = BENCHMARK_COUNT - 1; i >= 0; i--)
+			pl_obj_layout_free(layout_table[i]);
+	}
 	free_pool_and_placement_map(pool_map, pl_map);
 }
 
