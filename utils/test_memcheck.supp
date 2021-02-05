@@ -7,7 +7,6 @@
    fun:vos_ts_table_alloc
    fun:alloc_ts_cache
    ...
-   fun:main
 }
 {
    <insert_a_suppression_name_here>
@@ -211,33 +210,6 @@
    ...
    ...
 }
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   match-leak-kinds: reachable
-   fun:malloc
-   fun:strdup
-   fun:d_log_namefacility
-   fun:d_log_allocfacility
-   fun:d_add_log_facility
-   fun:d_init_log_facility
-   ...
-   fun:daos_debug_init
-   fun:dts_ctx_init
-   ...
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   match-leak-kinds: definite
-   fun:malloc
-   fun:strdup
-   ...
-   fun:daos_debug_init
-   fun:dts_ctx_init
-   ...
-}
-
 {
    <insert_a_suppression_name_here>
    Memcheck:Leak
@@ -630,17 +602,6 @@
    Memcheck:Free
    fun:free
    ...
-   fun:__libc_freeres
-   fun:_vgnU_freeres
-   fun:__run_exit_handlers
-   fun:exit
-   fun:(below main)
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Free
-   fun:free
-   ...
    fun:dl_open_worker
    fun:_dl_catch_error
    fun:_dl_open
@@ -663,13 +624,28 @@
    <insert_a_suppression_name_here>
    Memcheck:Free
    fun:free
-   fun:_dl_close_worker
-   fun:_dl_close
-   fun:_dl_catch_error
-   fun:_dlerror_run
-   fun:dlclose
-   obj:/usr/lib64/openmpi3/lib/libopen-pal.so.40.10.3
+   ...
    fun:mca_base_component_repository_release
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Free
+   fun:free
+   ...
+   fun:__libc_freeres
+   fun:_vgnU_freeres
+   fun:__run_exit_handlers
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   ...
+   fun:malloc
+   ...
+   fun:daos_debug_init
+   fun:dts_ctx_init
    ...
 }
 {
@@ -677,10 +653,9 @@
    Memcheck:Leak
    match-leak-kinds: definite
    fun:malloc
-   fun:strndup
-   fun:debug_mask_load
-   fun:d_log_dbg_grp_alloc
-   fun:daos_debug_init
+   ...
+   fun:vos_db_init
+   fun:vos_self_init
    fun:dts_ctx_init
-   fun:main
+   ...
 }
