@@ -8,7 +8,6 @@
 from __future__ import print_function
 
 import sys
-import time
 
 from apricot  import TestWithoutServers
 
@@ -63,7 +62,3 @@ class CartCtlFiveNodeTest(TestWithoutServers):
             self.utils.launch_test(self, clicmd, srv_rtn)
 
         self.utils.stop_process(srv_rtn)
-
-
-if __name__ == "__main__":
-    main()
