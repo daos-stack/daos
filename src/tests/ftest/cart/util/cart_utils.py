@@ -69,7 +69,9 @@ class CartUtils():
         processes = r"'\<(crt_launch|orterun)\>'"
         retry_count = 0
         while retry_count < 2:
-            result = stop_processes(localhost, processes)
+            result = stop_processes(localhost,
+                                    processes,
+                                    added_filter=r"'\<(grep|defunct)\>'")
             if 1 in result:
                 print(
                     "Stopped '{}' processes on {}".format(

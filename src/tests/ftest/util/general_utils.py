@@ -583,7 +583,7 @@ def convert_list(value, separator=","):
     return separator.join([str(item) for item in value])
 
 
-def stop_processes(hosts, pattern, verbose=True, timeout=60):
+def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None):
     """Stop the processes on each hosts that match the pattern.
 
     Args:
@@ -606,22 +606,22 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60):
     log = getLogger()
     log.info("Killing any processes on %s that match: %s", hosts, pattern)
 
-    # Filter out zombie (defunct) processes from ps output
-    ps_with_zombie_filter = r"ps x | grep -E {} | grep -vE '\<(grep|defunct)\>'"
+    if added_filter:
+        ps_cmd = "ps x | grep -E {} | grep -vE {}".format(pattern, added_filter)
+    else:
+        pc_cmd = "pgrep --list-full {}".format(pattern)
 
     if hosts is not None:
         commands = [
             "rc=0",
-            "set -x",
-            "ps aux | grep -E {}".format(pattern),
-            "if " + ps_with_zombie_filter.format(pattern),
+            "if " + ps_cmd.format(pattern),
             "then rc=1",
             "sudo pkill {}".format(pattern),
             "sleep 5",
-            "if " + ps_with_zombie_filter.format(pattern),
+            "if " + ps_cmd.format(pattern),
             "then pkill --signal ABRT {}".format(pattern),
             "sleep 1",
-            "if " + ps_with_zombie_filter.format(pattern),
+            "if " + ps_cmd.format(pattern),
             "then pkill --signal KILL {}".format(pattern),
             "fi",
             "fi",
