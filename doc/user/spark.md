@@ -2,8 +2,8 @@
 
 Here, we describe the steps required to build and deploy the DAOS Hadoop
 filesystem, and the configurations to access DAOS in Spark and Hadoop. We
-assume that the DAOS servers and agents have already been deployed in the environment.
-Otherwise, they can be deployed by following the
+assume that the DAOS servers and agents have already been deployed in the
+environment. Otherwise, they can be deployed by following the
 [DAOS Installation Guide](https://daos-stack.github.io/admin/installation/).
 
 !!! note DAOS support for Spark and Hadoop is not available in DAOS 1.0. 
@@ -12,7 +12,7 @@ Otherwise, they can be deployed by following the
 ## Build DAOS Hadoop Filesystem
 
 Below are the steps to build the Java jar files for the DAOS Java and DAOS
-Hadoop filesystem. These jar files are required when running Spark and Hadoop.
+Hadoop filesystem. Spark and Hadoop require these jars in their classpath.
 You can ignore this section if you already have the pre-built jars.
 
 ```bash
@@ -21,7 +21,9 @@ $ cd daos
 $ git checkout <desired branch or commit>
 ## assume DAOS is built and installed to <daos_install> directory
 $ cd src/client/java
-$ mvn clean package -DskipITs -Ddaos.install.path=<daos_install>
+## with-proto3-netty4-deps profile builds jars with protobuf 3 and netty-buffer 4 shaded
+## It spares you potential third-party jar compatibility issue.
+$ mvn -Pdistribute,with-proto3-netty4-deps clean package -DskipTests -Ddaos.install.path=<daos_install>
 ```
 
 After build, the package `daos-java-<version>-assemble.tgz` will be available
@@ -41,45 +43,54 @@ the nodes or copy them to every node.<br/>
 
 ### `daos-site-example.xml`
 
-You have two choices, with or without UNS path, to
-construct DAOS URI. If you choose the second choice, you have to copy the file
-to your application config directory, e.g., `$SPARK_HOME/conf` for Spark and
-`$HADOOP_HOME/etc/hadoop` for Hadoop. Then do some proper configuration and
-rename it to `daos-site.xml`. For the second choice, `daos-site.xml` is optional.
-See next section for details.
+You have three [choices](#uris), to construct DAOS URI. If you choose the
+second choice, you have to copy the file to your application config directory,
+e.g., `$SPARK_HOME/conf` for Spark and `$HADOOP_HOME/etc/hadoop` for Hadoop.
+Then do some proper configuration and rename it to `daos-site.xml`. For the
+other choices, `daos-site.xml` is optional. See next section for details.
 
 ## Configure DAOS Hadoop FileSystem
 
 ### DAOS Environment Variable
 
-Export all DAOS related env variables and the following env variable in
-your application, e.g., `spark-env.sh` for Spark and `hadoop-env.sh` for Hadoop.
-The following env enables signal chaining in JVM to better interoperate with
-DAOS native code that installs its own signal handlers. It ensures that signal
-calls are intercepted so that they do not actually replace the JVM's signal
-handlers if the handlers conflict with those already installed by the JVM.
-Instead, these calls save the new signal handlers, or "chain" them behind the
-JVM-installed handlers. Later, when any of these signals are raised and found
-not to be targeted at the JVM, the DAOS's handlers are invoked.
+Export all DAOS-specific env variables in your application, e.g.,
+`spark-env.sh` for Spark and `hadoop-env.sh` for Hadoop. Or you can simply put
+env variables in your `.bashrc`.
+
+Besides, you should have LD_LIBRARY_PATH include DAOS library path so that Java
+can link to DAOS libs, like below.
+
+```bash
+$ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:<DAOS_INSTALL>/lib64:<DAOS_INSTALL>/lib
+```
+
+For some libfabric providers, like PSM2, signal chaining should be enabled to
+better interoperate with DAOS and its dependencies which may install its own
+signal handlers. It ensures that signal calls are intercepted so that they do
+not actually replace the JVM's signal handlers if the handlers conflict with
+those already installed by the JVM. Instead, these calls save the new signal
+handlers, or "chain" them behind the JVM-installed handlers. Later, when any of
+these signals are raised and found not to be targeted at the JVM, the DAOS's
+handlers are invoked.
 
 ```bash
 $ export LD_PRELOAD=<YOUR JDK HOME>/jre/lib/amd64/libjsig.so
 ```
 
-### DAOS URIs
+### <a name="uris"></a>DAOS URIs
 
 DAOS FileSystem binds to schema "daos".  DAOS URIs are in the format of
 "daos://\[authority\]//\[path\]". Both authority and path are optional. There
 are three types of DAOS URIs, with DAOS UNS path, without DAOS UNS path and
-Special UUID path depending on where you want the DAOS Filesystem to get initialized
-and configured.
+Special UUID path depending on where you want the DAOS Filesystem to get
+initialized and configured.
 
 #### With DAOS UNS Path
 
 The simple form of URI is "daos:///\<your uns path\>\[/sub path\]".
-"\<your path\>" is your OS file path created with the `daos` command or Java DAOS UNS
-method, `DaosUns.create()`. The "\[sub path\]" is optional. You can create the UNS
-path with below command.
+"\<your path\>" is your OS file path created with the `daos` command or Java
+DAOS UNS method, `DaosUns.create()`. The "\[sub path\]" is optional. You can
+create the UNS path with below command.
 
 ```bash
 $ daos cont create --pool <pool UUID> -path <your path> --type=POSIX
@@ -140,9 +151,10 @@ After that, configure `daos-site.xml` with the pool and container created.
 ```
 
 #### Special UUID Path
-DAOS supports a specialized URI with pool/container UUIDs embedded. The format is
-"daos://pool UUID/container UUID". As you can see, we don't need to find the
+DAOS supports a specialized URI with pool/container UUIDs embedded. The format
+is "daos://pool UUID/container UUID". As you can see, we don't need to find the
 UUIDs from neither UNS path nor configuration like above two types of URIs.
+
 
 You may want to connect to two DAOS servers or two DFS instances mounted to
 different containers in one DAOS server from same JVM. Then, you need to add
@@ -153,13 +165,14 @@ URIs described above.
 ### Tune More Configurations
 
 If your DAOS URI is the mapped UUIDs, you can follow descriptions of each
-config item in [daos-site-example.xml](hadoop-daos/src/main/resources/daos-site-example.xml)
+config item in
+[daos-site-example.xml](hadoop-daos/src/main/resources/daos-site-example.xml)
 to set your own values in loadable `daos-site.xml`.
 
 If your DAOS URI is the UNS path, your configurations, except those set by DAOS
 UNS creation, in `daos-site.xml` can still be effective. To make configuration
-source consistent, an alternative to the configuration file `daos-site.xml` is to
-set all configurations to the UNS path. You put the configs to the same UNS
+source consistent, an alternative to the configuration file `daos-site.xml` is
+to set all configurations to the UNS path. You put the configs to the same UNS
 path with below command.
 
 ```bash
@@ -175,9 +188,9 @@ $ java -Dpath="your path" -Dattr=user.daos.hadoop -Dvalue="fs.daos.server.group=
 
 For the "value" property, you need to follow pattern, key1=value1:key2=value2..
 .. And key* should be from
-[daos-site-example.xml](hadoop-daos/src/main/resources/daos-site-example.xml). If value*
-contains characters of '=' or ':', you need to escape the value with below
-command.
+[daos-site-example.xml](hadoop-daos/src/main/resources/daos-site-example.xml).
+If value* contains characters of '=' or ':', you need to escape the value with
+below command.
 
 ```bash
 $ java -Dop=escape-app-value -Dinput="daos_server:1=2" -cp ./daos-java-1.1.0-shaded.jar io.daos.dfs.DaosUns util
@@ -186,8 +199,9 @@ $ java -Dop=escape-app-value -Dinput="daos_server:1=2" -cp ./daos-java-1.1.0-sha
 You'll get escaped value, "daos_server\u003a1\u003d2", for "daos_server:1=2".
 
 If you configure the same property in both `daos-site.xml` and UNS path, the
-value in `daos-sitem.xml` takes priority. If user set Hadoop configuration before
-initializing Hadoop DAOS FileSystem, the user's configuration takes priority.
+value in `daos-sitem.xml` takes priority. If user set Hadoop configuration
+before initializing Hadoop DAOS FileSystem, the user's configuration takes
+priority.
 
 ### Configure Spark to Use DAOS
 
@@ -249,7 +263,7 @@ since no pool/container UUIDs can be found if daos-site.xml is not provided too
 .
 
 The simplest workaround for now is not set DAOS UNS URI to `fs.defaultFS`. Or
-you can find out all local working directories and append "file:///".
+you can find out all local working directories and prefix them with "file:///".
 
 #### Access DAOS in Hadoop
 
