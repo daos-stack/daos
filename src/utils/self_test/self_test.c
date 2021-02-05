@@ -21,7 +21,7 @@
 #define DEFAULT_VALUE_NAME			"default_values"
 #define INVALID_SCALING				-1.0
 #define MAX_NUMBER_KEYS				200
-#define RAW_DATA_EXTENSION			"_raw"
+#define RAW_DATA_EXTENSION			"raw"
 
 #define CRT_SELF_TEST_AUTO_BULK_THRESH		(1 << 20)
 #define CRT_SELF_TEST_GROUP_NAME		("crt_self_test")
@@ -103,7 +103,6 @@ static status_feature status[] = {
 #define SELF_TEST_MAX_NUM_ENDPOINTS	(UINT32_MAX)
 #define SELF_TEST_MAX_RAW_DATA_OUTPUT	(0x00000400)
 
-
 /* Global shutdown flag, used to terminate the progress thread */
 static int		g_shutdown_flag;
 const int		g_default_rep_count = 10000;
@@ -127,6 +126,7 @@ char			*g_attach_info_path;
 char			*g_expected_outfile;
 char			*g_expected_infile;
 char			*g_expected_results;
+char			*g_config_append;
 
 const int		 g_default_max_inflight = 1000;
 bool			 alloc_g_dest_name = true;
@@ -135,12 +135,14 @@ bool			 alloc_g_attach_info_path = true;
 bool			 alloc_g_expected_outfile;
 bool			 alloc_g_expected_infile;
 bool			 alloc_g_expected_results;
+bool			 alloc_g_config_append;
 
 Config			*cfg_output;
 
 static struct option long_options[] = {
 	{"file-name", required_argument, 0, 'f'},
 	{"config", required_argument, 0, 'c'},
+	{"config-append", required_argument, 0, 'o'},
 	{"display", required_argument, 0, 'd'},
 
 	{"group-name", required_argument, 0, 'g'},
@@ -164,7 +166,7 @@ static struct option long_options[] = {
 	{0, 0, 0, 0}
 };
 
-#define ARGV_PARAMETERS "a:bc:d:e:f:g:hi:m:np:qr:s:tv:w:x:y:z:"
+#define ARGV_PARAMETERS "a:bc:d:e:f:g:hi:m:no:p:qr:s:tv:w:x:y:z:"
 
 #ifdef ORIG
 #define ARGV_PARAMETERS "hf:c:d:g:m:e:s:r:i:a:btnqp:v:w:x:y:z:"
@@ -174,6 +176,12 @@ static struct option long_options[] = {
 char	default_msg_sizes_str[] =
 	"b200000,b200000 0,0 b200000,b200000 i1000,i1000 b200000,"
 	"i1000,i1000 0,0 i1000,0";
+
+/* Forward declarations */
+static char *config_section_name_create(char *section_name,
+					struct crt_st_start_params
+					*test_params);
+
 /* ********************************************* */
 static void *progress_fn(void *arg)
 {
@@ -454,7 +462,7 @@ static void print_results(struct st_latency *latencies,
 
 	/* Read master-endpoint string */
 	ConfigReadString(cfg, section_name, "master_endpoint",
-			       master, sizeof(master), "ME");
+			 master, sizeof(master), "ME");
 
 	/* Compute the throughput in RPCs/sec */
 	throughput = test_params->rep_count /
@@ -488,7 +496,8 @@ static void print_results(struct st_latency *latencies,
 			snprintf(new_key_name, sizeof(new_key_name),
 				 "%s:%05d", master, local_rep);
 			ret = ConfigAddInt(cfg_output, section_name_raw,
-				     new_key_name, latencies[local_rep].val);
+					   new_key_name,
+					   latencies[local_rep].val);
 			if (ret != CONFIG_OK) {
 				/* avoid checkpatch warning */
 				D_INFO(" Could not place raw data into %s\n",
@@ -644,6 +653,21 @@ static void print_results(struct st_latency *latencies,
 	printf("\n");
 }
 
+static char *config_section_name_add(char *section_name, char *name_to_add)
+{
+	int	 len;
+	char	*section_name_new;
+
+	len = strlen(section_name) + strlen(name_to_add) + 2;
+	section_name_new = malloc(len);
+	if (section_name_new != NULL) {
+		/* avoid checkpatch warning */
+		snprintf(section_name_new, len, "%s_%s",
+			 section_name, name_to_add);
+	}
+	return section_name_new;
+}
+
 static int config_create_section(Config *cfg, char *section_name, bool remove)
 {
 	int		ret = 0;
@@ -666,23 +690,25 @@ static int config_create_section(Config *cfg, char *section_name, bool remove)
 	return ret;
 }
 
-static int config_create_output_config(char *section_name)
+static int config_create_output_config(char *section_name, bool remove)
 {
-	int		ret_value = 0;
-	ConfigRet	config_ret;
-	bool		remove = true;
+	int		 ret_value = 0;
+	ConfigRet	 config_ret;
+	char		*new_section_name = NULL;
 
 	/*
 	 * Read result file if specified and exists.
+	 * May be called more than once so verify that cfg_output == null
 	 * Else, open new configuration to use.
 	 */
-	if (g_expected_outfile != NULL) {
+	if ((g_expected_outfile != NULL) && (cfg_output == NULL)) {
 		config_ret = ConfigReadFile(g_expected_outfile, &cfg_output);
 		if (config_ret != CONFIG_OK) {
 			D_NOTE("Output file does not exist: %s\n",
 			       g_expected_outfile);
 		}
 	}
+	/* Out put config does not exist, create one */
 	if (cfg_output == NULL) {
 		cfg_output = ConfigNew();
 		if (cfg_output == NULL)
@@ -693,25 +719,26 @@ static int config_create_output_config(char *section_name)
 	 * Create section if name is specified.
 	 * If section already exist then remove it.
 	 */
-	ret_value = config_create_section(cfg_output, section_name, remove);
+	new_section_name = config_section_name_create(section_name, NULL);
+	if (new_section_name == NULL)
+		D_GOTO(cleanup, ret_value = ENOMEM);
+	ret_value = config_create_section(cfg_output, new_section_name,
+					  remove);
 
 	/* Create section for raw data */
 	if (g_raw_data != 0) {
-		int	size = strlen(section_name) +
-				      strlen(RAW_DATA_EXTENSION) + 1;
-		char 	*section_name_raw;
+		char	*section_name_raw;
 
-		section_name_raw = malloc(size);
-		if (section_name_raw != NULL) {
-			snprintf(section_name_raw, size, "%s%s",
-				 section_name, RAW_DATA_EXTENSION);
-			config_create_section(cfg_output, section_name_raw,
-					      remove);
-			free (section_name_raw);
-		}
+		section_name_raw = config_section_name_add(new_section_name,
+							   RAW_DATA_EXTENSION);
+		config_create_section(cfg_output, section_name_raw,
+				      remove);
+		free(section_name_raw);
 	}
 
 cleanup:
+	if (new_section_name != NULL)
+		free(new_section_name);
 	return ret_value;
 }
 
@@ -1069,24 +1096,45 @@ static char *config_section_name_create(char *section_name,
 					struct crt_st_start_params
 					*test_params)
 {
-	int	len = 0;
+	int	len = MAX_SECTION_NAME_SIZE;
 	char	*name_str;
 	int	ids;
 	int	idr;
+
+	/* Calculate length and allocate region */
+	if (section_name != NULL) {
+		/* avoid checkpatch warning */
+		len = strlen(section_name) + 2;
+	}
+	if (g_config_append != NULL) {
+		/* avoid checkpatch warning */
+		len += strlen(g_config_append);
+	}
+	name_str = (char *)malloc(len + 1);
+	if (name_str == NULL) {
+		/* avoid checkpatch warning */
+		goto exit_code;
+	}
 
 	/*
 	 * If section name was specified in calling sequnce, then use it.
 	 * Otherwise, create a name based on test parameters.
 	 */
-	name_str = (char *)malloc(MAX_SECTION_NAME_SIZE);
-	if (name_str == NULL)
-		return NULL;
-
 	if (section_name != NULL) {
-		len = strnlen(section_name, MAX_SECTION_NAME_SIZE);
-		memcpy(name_str, section_name, len);
-		goto exit_code;
+		if (g_config_append == NULL) {
+			snprintf(name_str, len, "%s", section_name);
+		} else {
+			snprintf(name_str, len, "%s_%s", section_name,
+				 g_config_append);
+		}
 	} else {
+		/* Verify we have test parameters passed. */
+		if (test_params == (struct crt_st_start_params *)NULL) {
+			free(name_str);
+			name_str = NULL;
+			goto exit_code;
+		}
+
 		/* Add alignment parameter */
 		if (test_params->buf_alignment >= 10) {
 			len = snprintf(name_str, MAX_SECTION_NAME_SIZE,
@@ -1344,12 +1392,6 @@ static int test_msg_size(crt_context_t crt_ctx,
 	} while (complete_count < num_ms_endpts);
 
 	/*
-	 * TODO:
-	 * In the future, probably want to return the latencies here
-	 * before they are processed for display to the user.
-	 */
-
-	/*
 	 * Create section name and section in global output config
 	 * Dont remove section if it already exist.
 	 */
@@ -1364,12 +1406,12 @@ static int test_msg_size(crt_context_t crt_ctx,
 
 	/* Create section for raw data */
 	if (g_raw_data != 0) {
-		int size = strlen(section_name) +
-			   strlen(RAW_DATA_EXTENSION) + 1;
-		section_name_raw = malloc(size);
-		snprintf(section_name_raw, size, "%s%s", input_section_name,
-			RAW_DATA_EXTENSION);
-		config_create_section(cfg_output, section_name_raw, false);
+		section_name_raw = config_section_name_add(section_name,
+							   RAW_DATA_EXTENSION);
+		if (section_name_raw != NULL) {
+			config_create_section(cfg_output, section_name_raw,
+					      false);
+		}
 	}
 
 	/* Create temporary configuration structure to store results */
@@ -1879,7 +1921,7 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "\n"
 	       "  --expected-results <string>\n"
 	       "      Short version: -x\n"
-	       "      comman separarted string of statistics key word\n"
+	       "      comma separarted string of statistics key word\n"
 	       "      to output with optional scaling factor.\n"
 	       "      i.e. av=23,sd,bw=50,tp,med25,med50,med75\n"
 	       "\n"
@@ -1891,13 +1933,24 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "      Short version: -c\n"
 	       "      Name of sector/group to obtain information\n"
 	       "\n"
+	       "  --config-append <test_group_append>\n"
+	       "      Short version: -o\n"
+	       "      String to append to sector name in the result file\n"
+	       "\n"
 	       "  --display <value>\n"
 	       "      Short version: -d\n"
 	       "      Display the configuration file setup\n\n"
+	       "      Negative values of these will displays only\n"
 	       "        '0' - no display shown\n"
 	       "        '1' - show info on specified sector/group\n"
 	       "        '2' - show all sector/group headings\n"
-	       "        '3' - show all info for all sector/group specified in file\n"
+	       "        '3' - show all sector/group info specified in file\n"
+	       "\n"
+	       "  --raw_data <value>\n"
+	       "      Short version: -b\n"
+	       "      For each endpoint:tag, number of raw data latencies\n"
+	       "      output into results file.\n"
+	       "      Section name is <section_name>_raw\n"
 	       "\n"
 	       "  --message-sizes <(a b),(c d),...>\n"
 	       "      Short version: -s\n"
@@ -2502,18 +2555,30 @@ static int config_file_setup(char *file_name, char *section_name,
 		return -ENOENT;
 	}
 
-	if (display) {
+	/************/
+	config_ret = ConfigReadString(cfg, section_name, "display",
+				      &string[0], STRING_MAX_SIZE,
+				      (char *)NULL);
+	if (display || (config_ret == CONFIG_OK)) {
 		printf("Configuration file %s\n", file_name);
-		sret = sscanf(display, "%d", &temp);
-		if (temp == 1) {
+		if (display)
+			sret = sscanf(display, "%d", &temp);
+		else
+			sret = sscanf(&string[0], "%d", &temp);
+		if ((temp == 1) || (temp == -1)) {
 			/* Avoid checkpatch warning */
 			ConfigPrintSection(cfg, stdout, section_name);
-		} else if (temp == 2) {
+		} else if ((temp == 2) || (temp == -2)) {
 			/* Avoid checkpatch warning */
 			ConfigPrintSectionNames(cfg, stdout);
-		} else if (temp != 0) {
+		} else if ((temp == 3) || (temp == -3)) {
 			/* Avoid checkpatch warning */
 			ConfigPrint(cfg, stdout);
+		}
+		if (temp < 0) {
+			/* Avoid checkpatch warning */
+			ret = -1;
+			goto cleanup;
 		}
 	}
 
@@ -2526,25 +2591,6 @@ static int config_file_setup(char *file_name, char *section_name,
 		/* Avoid checkpatch warning */
 		ret = 1;
 		goto cleanup;
-	}
-
-	/********/
-	config_ret = ConfigReadString(cfg, section_name, "display",
-				      &string[0], STRING_MAX_SIZE,
-				      (char *)NULL);
-	if (config_ret == CONFIG_OK) {
-		printf("Configuration file %s\n", file_name);
-		sret = sscanf(&string[0], "%d", &temp);
-		if (temp == 1) {
-			/* Avoid checkpatch warning */
-			ConfigPrintSection(cfg, stdout, section_name);
-		} else if (temp == 2) {
-			/* Avoid checkpatch warning */
-			ConfigPrintSectionNames(cfg, stdout);
-		} else if (temp != 0) {
-			/* Avoid checkpatch warning */
-			ConfigPrint(cfg, stdout);
-		}
 	}
 
 	/********/
@@ -2739,6 +2785,22 @@ static int config_file_setup(char *file_name, char *section_name,
 
 	/********/
 	config_ret = ConfigReadString(cfg, section_name,
+				      "config-append",
+				      &string[0], STRING_MAX_SIZE,
+				      (char *)NULL);
+	if (config_ret == CONFIG_OK) {
+		len = strlen(string) + 1;
+		g_config_append = (char *)malloc(len);
+		if (g_config_append == NULL) {
+			/* Avoid checkpatch warning */
+			D_GOTO(cleanup, ret = -ENOMEM);
+		}
+		memcpy(g_config_append, string, len);
+		alloc_g_config_append = true;
+	}
+
+	/********/
+	config_ret = ConfigReadString(cfg, section_name,
 				      "expected-input",
 				      &string[0], STRING_MAX_SIZE,
 				      (char *)NULL);
@@ -2888,6 +2950,16 @@ int parse_command_options(int argc, char *argv[])
 			alloc_g_expected_outfile = false;
 			g_expected_outfile = optarg;
 			break;
+		case 'o':
+			if (alloc_g_config_append) {
+				/* Avoid checkpatch warning */
+				free(g_config_append);
+			}
+			alloc_g_config_append = false;
+			g_config_append = optarg;
+			break;
+
+
 		case 'h':
 		case '?':
 		default:
@@ -3127,7 +3199,7 @@ int main(int argc, char *argv[])
 	       g_rep_count, g_max_inflight);
 
 	/****** Open global configuration for output results *****/
-	ret = config_create_output_config(section_name);
+	ret = config_create_output_config(section_name, true);
 	if (ret != 0) {
 		/* avoid checkpatch warning */
 		D_GOTO(cleanup, ret);
@@ -3178,6 +3250,10 @@ cleanup:
 	if (alloc_g_expected_outfile && (g_expected_outfile != NULL)) {
 		/* Avoid checkpatch warning */
 		free(g_expected_outfile);
+	}
+	if (alloc_g_config_append && (g_config_append != NULL)) {
+		/* Avoid checkpatch warning */
+		free(g_config_append);
 	}
 
 	if (all_params != NULL)
