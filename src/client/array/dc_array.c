@@ -215,11 +215,17 @@ create_handle_cb(tse_task_t *task, void *data)
 
 err_obj:
 	if (daos_handle_is_valid(*args->oh)) {
-		daos_obj_close_t *close_args;
-		tse_task_t *close_task;
+		daos_obj_close_t	*close_args;
+		tse_task_t		*close_task;
+		int			rc2;
 
-		daos_task_create(DAOS_OPC_OBJ_CLOSE, tse_task2sched(task),
-				 0, NULL, &close_task);
+		rc2 = daos_task_create(DAOS_OPC_OBJ_CLOSE, tse_task2sched(task),
+				       0, NULL, &close_task);
+		if (rc2) {
+			D_ERROR("Failed to create task to cleanup obj hdl\n");
+			return rc;
+		}
+
 		close_args = daos_task_get_args(close_task);
 		close_args->oh = *args->oh;
 		tse_task_schedule(close_task, true);
@@ -662,11 +668,17 @@ open_handle_cb(tse_task_t *task, void *data)
 
 err_obj:
 	if (daos_handle_is_valid(*args->oh)) {
-		daos_obj_close_t *close_args;
-		tse_task_t	 *close_task;
+		daos_obj_close_t	*close_args;
+		tse_task_t		*close_task;
+		int			rc2;
 
-		daos_task_create(DAOS_OPC_OBJ_CLOSE, tse_task2sched(task),
-				 0, NULL, &close_task);
+		rc2 = daos_task_create(DAOS_OPC_OBJ_CLOSE, tse_task2sched(task),
+				       0, NULL, &close_task);
+		if (rc2) {
+			D_ERROR("Failed to create task to cleanup obj hdl\n");
+			return rc;
+		}
+
 		close_args = daos_task_get_args(close_task);
 		close_args->oh = *args->oh;
 		tse_task_schedule(close_task, true);
