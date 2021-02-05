@@ -239,7 +239,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 	}
 
 	// IO server needs the fault domain tree for placement purposes
-	req.FaultDomains, err = svc.sysdb.CompressedFaultDomainTree()
+	req.FaultDomains, err = svc.sysdb.CompressedFaultDomainTree(req.Ranks...)
 	if err != nil {
 		return nil, err
 	}
@@ -494,7 +494,7 @@ func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (
 	svc.log.Debugf("MgmtSvc.PoolExtend dispatch, req:%+v\n", req)
 
 	// the IO server needs the domain tree for placement purposes
-	fdTree, err := svc.sysdb.CompressedFaultDomainTree()
+	fdTree, err := svc.sysdb.CompressedFaultDomainTree(req.Ranks...)
 	if err != nil {
 		return nil, err
 	}

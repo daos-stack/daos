@@ -457,7 +457,7 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 		}
 	}
 
-	fdTree, err := mgmtSvc.sysdb.CompressedFaultDomainTree()
+	fdTree, err := mgmtSvc.sysdb.CompressedFaultDomainTree(0, 2, 3)
 	if err != nil {
 		t.Fatal(err)
 	}

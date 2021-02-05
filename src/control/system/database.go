@@ -730,7 +730,7 @@ func (db *Database) FaultDomainTree() *FaultDomainTree {
 // Each domain is represented as a tuple: (level, ID, number of children)
 // Except for the rank, which is represented as: (rank)
 // The order of items is a breadth-first traversal of the tree.
-func (db *Database) CompressedFaultDomainTree(ranks ...Rank) ([]uint32, error) {
+func (db *Database) CompressedFaultDomainTree(ranks ...uint32) ([]uint32, error) {
 	tree := db.FaultDomainTree()
 	if tree == nil {
 		return nil, errors.New("uninitialized fault domain tree")
@@ -744,31 +744,31 @@ func (db *Database) CompressedFaultDomainTree(ranks ...Rank) ([]uint32, error) {
 	return compressTree(subtree), nil
 }
 
-func getFaultDomainSubtree(tree *FaultDomainTree, ranks ...Rank) (*FaultDomainTree, error) {
+func getFaultDomainSubtree(tree *FaultDomainTree, ranks ...uint32) (*FaultDomainTree, error) {
 	if len(ranks) == 0 {
 		return tree, nil
 	}
 
 	domains := tree.Domains()
-	treeDomains := make(map[Rank]*FaultDomain, len(ranks))
 
+	// Traverse the list of domains only once
+	treeDomains := make(map[uint32]*FaultDomain, len(ranks))
 	for _, d := range domains {
 		if r, isRank := getFaultDomainRank(d); isRank {
-			treeDomains[Rank(r)] = d
+			treeDomains[r] = d
 		}
 	}
 
-	domain := treeDomains[ranks[0]]
-	subtree := NewFaultDomainTree(domain)
+	rankDomains := make([]*FaultDomain, 0)
+	for _, r := range ranks {
+		d, ok := treeDomains[r]
+		if !ok {
+			return nil, fmt.Errorf("rank %d not found", r)
+		}
+		rankDomains = append(rankDomains, d)
+	}
 
-	// // Fix IDs of new tree to match the old one
-	// treeCur := tree
-	// subCur := subtree
-	// for _, lvl := range domain.Domains {
-	// 	subCur.ID = treeCur.ID
-
-	// }
-	return subtree, nil
+	return tree.Subtree(rankDomains...)
 }
 
 func getFaultDomainRank(fd *FaultDomain) (uint32, bool) {

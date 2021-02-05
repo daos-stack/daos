@@ -635,7 +635,7 @@ func TestSystem_Database_CompressedFaultDomainTree(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		tree       *FaultDomainTree
-		inputRanks []Rank
+		inputRanks []uint32
 		expResult  []uint32
 		expErr     error
 	}{
@@ -793,30 +793,81 @@ func TestSystem_Database_CompressedFaultDomainTree(t *testing.T) {
 				1, // rank
 			},
 		},
-		// "request one rank": {
-		// 	tree: NewFaultDomainTree(
-		// 		rankDomain("/rack0/pdu0", 0),
-		// 		rankDomain("/rack0/pdu1", 1),
-		// 		rankDomain("/rack1/pdu2", 2),
-		// 		rankDomain("/rack1/pdu3", 3),
-		// 		rankDomain("/rack1/pdu3", 4),
-		// 		rankDomain("/rack2/pdu4", 5),
-		// 	),
-		// 	inputRanks: []Rank{4},
-		// 	expResult: []uint32{
-		// 		3,
-		// 		expFaultDomainID(0), // root
-		// 		1,
-		// 		2,
-		// 		expFaultDomainID(6), // rack1
-		// 		1,
-		// 		1,
-		// 		expFaultDomainID(9), // pdu3
-		// 		1,
-		// 		// ranks
-		// 		4,
-		// 	},
-		// },
+		"request one rank": {
+			tree: NewFaultDomainTree(
+				rankDomain("/rack0/pdu0", 0),
+				rankDomain("/rack0/pdu1", 1),
+				rankDomain("/rack1/pdu2", 2),
+				rankDomain("/rack1/pdu3", 3),
+				rankDomain("/rack1/pdu3", 4),
+				rankDomain("/rack2/pdu4", 5),
+			),
+			inputRanks: []uint32{4},
+			expResult: []uint32{
+				3,
+				expFaultDomainID(0), // root
+				1,
+				2,
+				expFaultDomainID(6), // rack1
+				1,
+				1,
+				expFaultDomainID(9), // pdu3
+				1,
+				// ranks
+				4,
+			},
+		},
+		"request multiple ranks": {
+			tree: NewFaultDomainTree(
+				rankDomain("/rack0/pdu0", 0),
+				rankDomain("/rack0/pdu1", 1),
+				rankDomain("/rack1/pdu2", 2),
+				rankDomain("/rack1/pdu3", 3),
+				rankDomain("/rack1/pdu3", 4),
+				rankDomain("/rack2/pdu4", 5),
+			),
+			inputRanks: []uint32{4, 0, 5, 3},
+			expResult: []uint32{
+				3,
+				expFaultDomainID(0), // root
+				3,
+				2,
+				expFaultDomainID(1), // rack0
+				1,
+				2,
+				expFaultDomainID(6), // rack1
+				1,
+				2,
+				expFaultDomainID(12), // rack2
+				1,
+				1,
+				expFaultDomainID(2), // pdu0
+				1,
+				1,
+				expFaultDomainID(9), // pdu3
+				2,
+				1,
+				expFaultDomainID(13), // pdu4
+				1,
+				// ranks
+				0,
+				3,
+				4,
+				5,
+			},
+		},
+		"request nonexistent rank": {
+			tree: NewFaultDomainTree(
+				rankDomain("/rack0/pdu0", 0),
+				rankDomain("/rack0/pdu1", 1),
+				rankDomain("/rack1/pdu2", 2),
+				rankDomain("/rack1/pdu3", 3),
+				rankDomain("/rack1/pdu3", 4),
+				rankDomain("/rack2/pdu4", 5),
+			),
+			inputRanks: []uint32{4, 0, 5, 3, 100},
+			expErr:     errors.New("rank 100 not found"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
