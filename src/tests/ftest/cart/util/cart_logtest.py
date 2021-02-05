@@ -176,6 +176,7 @@ shown_logs = set()
 # Both the alloc and free function need to be whitelisted.
 
 mismatch_table = {'container': ('common'),
+                  'client': ('array'),
                   'common': ('container', 'pool'),
                   'daos': ('common', 'pool', 'container'),
                   'mgmt': ('common', 'daos', 'pool', 'rsvc'),
@@ -206,7 +207,7 @@ mismatch_free_ok = {'crt_rpc_priv_free': ('rpc_priv'),
 
 wf = None
 
-def show_line(line, sev, msg):
+def show_line(line, sev, msg, custom=None):
     """Output a log line in gcc error format"""
 
     # Only report each individual line once.
@@ -219,7 +220,9 @@ def show_line(line, sev, msg):
     if log in shown_logs:
         return
     print(log)
-    if wf:
+    if custom:
+        custom.add(line, sev, msg)
+    elif wf:
         wf.add(line, sev, msg)
     shown_logs.add(log)
 
@@ -324,7 +327,10 @@ class LogTest():
                                             count,
                                             100*count/self.log_count))
 
-    def check_log_file(self, abort_on_warning, show_memleaks=True):
+    def check_log_file(self,
+                       abort_on_warning,
+                       show_memleaks=True,
+                       leak_wf=None):
         """Check a single log file for consistency"""
 
         for pid in self._li.get_pids():
@@ -334,7 +340,9 @@ class LogTest():
                 self.rpc_reporting(pid)
                 if wf:
                     wf.reset_pending()
-            self._check_pid_from_log_file(pid, abort_on_warning,
+            self._check_pid_from_log_file(pid,
+                                          abort_on_warning,
+                                          leak_wf,
                                           show_memleaks=show_memleaks)
 
     def check_dfuse_io(self):
@@ -366,7 +374,10 @@ class LogTest():
                 print('{}:{}'.format(pid, client_pids[pid]))
 
 #pylint: disable=too-many-branches,too-many-nested-blocks
-    def _check_pid_from_log_file(self, pid, abort_on_warning,
+    def _check_pid_from_log_file(self,
+                                 pid,
+                                 abort_on_warning,
+                                 leak_wf,
                                  show_memleaks=True):
         """Check a pid from a single log file for consistency"""
 
@@ -608,7 +619,8 @@ class LogTest():
                     show_line(line, 'NORMAL', 'descriptor not freed')
                     del active_desc[pointer]
                 else:
-                    show_line(line, 'NORMAL', 'memory not freed')
+                    show_line(line, 'NORMAL', 'memory not freed',
+                              custom=leak_wf)
                 lost_memory = True
 
         if active_desc:
