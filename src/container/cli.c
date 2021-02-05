@@ -936,6 +936,9 @@ cont_query_bits(daos_prop_t *prop)
 		case DAOS_PROP_CO_DEDUP_THRESHOLD:
 			bits |= DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD;
 			break;
+		case DAOS_PROP_CO_ALLOCED_OID:
+			bits |= DAOS_CO_QUERY_PROP_MAX_OID;
+			break;
 		case DAOS_PROP_CO_REDUN_FAC:
 			bits |= DAOS_CO_QUERY_PROP_REDUN_FAC;
 			break;
@@ -1115,6 +1118,11 @@ dc_cont_set_prop(tse_task_t *task)
 
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	if (daos_prop_entry_get(args->prop, DAOS_PROP_CO_ALLOCED_OID)) {
+		D_ERROR("Can't set OID property if container is created.\n");
+		D_GOTO(err, rc = -DER_NO_PERM);
+	}
 
 	entry = daos_prop_entry_get(args->prop, DAOS_PROP_CO_STATUS);
 	if (entry != NULL) {

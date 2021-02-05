@@ -193,6 +193,7 @@ struct dss_module_info {
 	d_list_t		dmi_dtx_batched_list;
 	/* the profile information */
 	struct daos_profile	*dmi_dp;
+	struct sched_request	*dmi_dtx_req;
 };
 
 extern struct dss_module_key	daos_srv_modkey;
@@ -343,6 +344,12 @@ bool sched_req_is_aborted(struct sched_request *req);
  */
 int sched_req_space_check(struct sched_request *req);
 
+/**
+ * Wrapper of ABT_cond_wait(), inform scheduler that it's going
+ * to be blocked for a relative long time.
+ */
+void sched_cond_wait(ABT_cond cond, ABT_mutex mutex);
+
 static inline bool
 dss_ult_exiting(struct sched_request *req)
 {
@@ -434,7 +441,7 @@ struct dss_module {
 enum dss_xs_type {
 	/** current xstream */
 	DSS_XS_SELF	= -1,
-	/** operations needs accessing VOS */
+	/** operations need to access VOS */
 	DSS_XS_VOS	= 0,
 	/** forward/dispatch IO request for TX coordinator */
 	DSS_XS_IOFW	= 1,
@@ -448,15 +455,23 @@ enum dss_xs_type {
 
 int dss_parameters_set(unsigned int key_id, uint64_t value);
 
-typedef ABT_pool (*dss_abt_pool_choose_cb_t)(crt_rpc_t *rpc, ABT_pool *pools);
+enum dss_ult_flags {
+	/* Periodically created ULTs */
+	DSS_ULT_FL_PERIODIC	= (1 << 0),
+};
 
-void dss_abt_pool_choose_cb_register(unsigned int mod_id,
-				     dss_abt_pool_choose_cb_t cb);
 int dss_ult_create(void (*func)(void *), void *arg, int xs_type, int tgt_id,
 		   size_t stack_size, ABT_thread *ult);
 int dss_ult_execute(int (*func)(void *), void *arg, void (*user_cb)(void *),
 		    void *cb_args, int xs_type, int tgt_id, size_t stack_size);
 int dss_ult_create_all(void (*func)(void *), void *arg, bool main);
+
+/*
+ * If server wants to create ULTs periodically, it should call this special
+ * ult create function to avoid bumping the 'xstream busy timestamp'.
+ */
+int dss_ult_periodic(void (*func)(void *), void *arg, int xs_type, int tgt_id,
+		     size_t stack_size, ABT_thread *ult);
 
 int dss_sleep(uint64_t ms);
 
@@ -534,12 +549,13 @@ struct dss_coll_args {
  */
 int
 dss_task_collective_reduce(struct dss_coll_ops *ops,
-			   struct dss_coll_args *coll_args, int flag);
+			   struct dss_coll_args *coll_args, unsigned int flags);
 int
 dss_thread_collective_reduce(struct dss_coll_ops *ops,
-			     struct dss_coll_args *coll_args, int flag);
-int dss_task_collective(int (*func)(void *), void *arg, int flag);
-int dss_thread_collective(int (*func)(void *), void *arg, int flag);
+			     struct dss_coll_args *coll_args,
+			     unsigned int flags);
+int dss_task_collective(int (*func)(void *), void *arg, unsigned int flags);
+int dss_thread_collective(int (*func)(void *), void *arg, unsigned int flags);
 
 struct dss_module *dss_module_get(int mod_id);
 /* Convert Argobots errno to DAOS ones. */
