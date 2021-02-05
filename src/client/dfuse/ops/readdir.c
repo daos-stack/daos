@@ -7,6 +7,8 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
+#include "daos_uns.h"
+
 /* Maximum number of dentries to read at one time. */
 #define READDIR_MAX_COUNT 1024
 
@@ -119,7 +121,18 @@ create_entry(struct dfuse_projection_info *fs_handle,
 	}
 
 	if (S_ISFIFO(ie->ie_stat.st_mode)) {
-		rc = check_for_uns_ep(fs_handle, ie);
+		char		str[DUNS_MAX_XATTR_LEN];
+		daos_size_t	str_len = DUNS_MAX_XATTR_LEN;
+
+		rc = dfs_getxattr(ie->ie_dfs->dfs_ns, ie->ie_obj,
+				  DUNS_XATTR_NAME, &str, &str_len);
+
+		if (rc == ENODATA)
+			goto no_uns;
+		if (rc)
+			D_GOTO(out, rc);
+
+		rc = check_for_uns_ep(fs_handle, ie, (char *)&str, str_len);
 		DFUSE_TRA_DEBUG(ie,
 				"check_for_uns_ep() returned %d", rc);
 		if (rc != 0 && rc != EPERM)
@@ -130,6 +143,8 @@ create_entry(struct dfuse_projection_info *fs_handle,
 		entry->attr.st_mode = ie->ie_stat.st_mode;
 		entry->attr.st_ino = ie->ie_stat.st_ino;
 	}
+
+no_uns:
 
 	entry->generation = 1;
 	entry->ino = entry->attr.st_ino;
