@@ -28,6 +28,7 @@ import functools
 import subprocess
 import tempfile
 import pickle
+import xattr
 from collections import OrderedDict
 import yaml
 
@@ -58,9 +59,12 @@ def get_inc_id():
     instance_num += 1
     return '{:04d}'.format(instance_num)
 
-def umount(path):
+def umount(path, bg=False):
     """Umount dfuse from a given path"""
-    cmd = ['fusermount3', '-u', path]
+    if bg:
+        cmd = ['fusermount3', '-uz', path]
+    else:
+        cmd = ['fusermount3', '-u', path]
     ret = subprocess.run(cmd)
     print('rc from umount {}'.format(ret.returncode))
     return ret.returncode
@@ -788,7 +792,9 @@ class DFuse():
         print('Stopping fuse')
         ret = umount(self.dir)
         if ret:
+            umount(self.dir, bg=True)
             self._close_files()
+            time.sleep(2)
             umount(self.dir)
 
         run_log_test = True
@@ -1053,6 +1059,32 @@ class posix_tests():
         except FileNotFoundError:
             print('Failed to fstat() unlinked file')
         ofd.close()
+
+    @needs_dfuse
+    def test_xattr(self):
+        """Perform basic tests with extended attributes"""
+
+        new_file = os.path.join(self.dfuse.dir, 'attr_file')
+        fd = open(new_file, 'w')
+
+        xattr.set(fd, 'user.mine', 'init_value')
+        # This should fail as a security test.
+        try:
+            xattr.set(fd, 'user.dfuse.ids', b'other_value')
+            assert False
+        except OSError as e:
+            assert e.errno == errno.EPERM
+
+        try:
+            xattr.set(fd, 'user.dfuse', b'other_value')
+            assert False
+        except OSError as e:
+            assert e.errno == errno.EPERM
+
+        xattr.set(fd, 'user.Xfuse.ids', b'other_value')
+        for (key, value) in xattr.get_all(fd):
+            print('xattr is {}:{}'.format(key, value))
+        fd.close()
 
     @needs_dfuse
     def test_chmod(self):
