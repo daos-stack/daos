@@ -435,6 +435,17 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 			return -DER_INVAL;
 		}
 		entry->dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	} else if (!strcmp(name, "status")) {
+		if (!strcmp(value, "healthy")) {
+			entry->dpe_val =
+				DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_HEALTHY,
+							0);
+		} else {
+			fprintf(stderr, "status prop value can only be "
+				"'healthy' to clear UNCLEAN status\n");
+			return -DER_INVAL;
+		}
+		entry->dpe_type = DAOS_PROP_CO_STATUS;
 	} else {
 		fprintf(stderr, "supported prop names are label/cksum/cksum_size/srv_cksum/dedup/dedup_th/rf\n");
 		return -DER_INVAL;
@@ -1052,7 +1063,8 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		uuid_generate(ap->c_uuid);
 
 	if (op != CONT_CREATE && op != CONT_DESTROY) {
-		rc = daos_cont_open(ap->pool, ap->c_uuid, DAOS_COO_RW,
+		rc = daos_cont_open(ap->pool, ap->c_uuid,
+				    DAOS_COO_RW | DAOS_COO_FORCE,
 				    &ap->cont, &cont_info, NULL);
 		if (rc != 0) {
 			fprintf(stderr, "failed to open "
@@ -1404,7 +1416,7 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			"			   K (KB), M (MB), G (GB), T (TB), P (PB), E (EB)\n"
 			"	--properties=<name>:<value>[,<name>:<value>,...]\n"
 			"			   supported prop names are label, cksum,\n"
-			"				cksum_size, srv_cksum, dedup\n"
+			"				cksum_size, srv_cksum, dedup, status\n"
 			"				dedup_th, compression, encryption\n"
 			"			   label value can be any string\n"
 			"			   cksum supported values are off, crc[16,32,64],\n"

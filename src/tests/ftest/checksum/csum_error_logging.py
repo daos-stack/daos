@@ -31,6 +31,8 @@ class CSumErrorLog(DaosCoreBase):
             result = self.dmg.storage_query_list_devices()
         except process.CmdError as details:
             self.fail("dmg command failed: {}".format(details))
+        finally:
+            self.dmg.json.value = False
 
         data = json.loads(result.stdout)
         resp = data['response']
@@ -57,6 +59,8 @@ class CSumErrorLog(DaosCoreBase):
             result = self.dmg.storage_query_device_health(device_id)
         except process.CmdError as details:
             self.fail("dmg command failed: {}".format(details))
+        finally:
+            self.dmg.json.value = False
 
         data = json.loads(result.stdout)
         resp = data['response']
@@ -71,19 +75,24 @@ class CSumErrorLog(DaosCoreBase):
                 return dev['health']['checksum_errs']
 
     def test_csum_error_logging(self):
-        """
-        Test ID: DAOS-3927
+        """Jira ID: DAOS-3927
+
         Test Description: Write Avocado Test to verify single data after
                           pool/container disconnect/reconnect.
-        :avocado: tags=all,daily_regression,hw,medium,ib2,csum_error_log,faults
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=faults
+        :avocado: tags=csum_error_log
         """
         dev_id = self.get_nvme_device_id()
         self.log.info("%s", dev_id)
         csum = self.get_checksum_error_value(dev_id)
         self.dmg.copy_certificates(get_log_file("daosCA/certs"),
                                    self.hostlist_clients)
+        self.dmg.copy_configuration(self.hostlist_clients)
         self.log.info("Checksum Errors : %d", csum)
-        DaosCoreBase.run_subtest(self)
+        self.run_subtest()
         csum_latest = self.get_checksum_error_value(dev_id)
         self.log.info("Checksum Errors : %d", csum_latest)
         self.assertTrue(csum_latest > csum,
