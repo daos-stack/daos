@@ -489,19 +489,20 @@ class TestPool(TestDaosApiBase):
                     self.pool_query_timeout.value))
 
             end_time = time() + self.pool_query_timeout.value
-#            start = time()
             while time() < end_time:
                 try:
                     self.dmg.pool_query(self.pool.get_uuid_str())
                     self.log.info("Pool query still responsive")
                     break
                 except CommandFailure as err:
-                    self.log.info("Pool Query still non-responsive")
+                    self.log.info("Pool Query still non-responsive {}".\
+                        format(err))
             if time() > end_time:
                 raise DaosTestError("TIMEOUT detected after {} seconds of pool "
-                    "query. This timeout can be adjusted via the "
-                    "'pool/pool_query_timeout' test yaml parameter.".format(
-                        self.pool_query_timeout.value))
+                                    "query. This timeout can be adjusted via "
+                                    "the 'pool/pool_query_timeout' test yaml "
+                                    "parameter.".\
+                                        format(self.pool_query_timeout.value))
 
         start = time()
         self.log.info(

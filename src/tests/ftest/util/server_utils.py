@@ -459,7 +459,7 @@ class DaosServerManager(SubprocessManager):
                 self.prepare_storage("root")
                 if hasattr(self.manager, "mca"):
                     self.manager.mca.update(
-                        {"plm_rsh_args": "-l root "}, "orterun.mca", True)
+                        {"plm_rsh_args": "-l root"}, "orterun.mca", True)
 
         # Verify the socket directory exists when using a non-systemctl manager
         self.verify_socket_directory(getuser())
