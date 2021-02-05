@@ -308,6 +308,9 @@ cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
 		case DAOS_PROP_CO_DEDUP_THRESHOLD:
 			iv_prop->cip_dedup_size = prop_entry->dpe_val;
 			break;
+		case DAOS_PROP_CO_ALLOCED_OID:
+			iv_prop->cip_alloced_oid = prop_entry->dpe_val;
+			break;
 		case DAOS_PROP_CO_REDUN_FAC:
 			iv_prop->cip_redun_fac = prop_entry->dpe_val;
 			break;
@@ -1067,6 +1070,9 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_CO_DEDUP_THRESHOLD:
 			prop_entry->dpe_val = iv_prop->cip_dedup_size;
+			break;
+		case DAOS_PROP_CO_ALLOCED_OID:
+			prop_entry->dpe_val = iv_prop->cip_alloced_oid;
 			break;
 		case DAOS_PROP_CO_REDUN_FAC:
 			prop_entry->dpe_val = iv_prop->cip_redun_fac;
