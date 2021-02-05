@@ -616,6 +616,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None):
             "rc=0",
             "set -x",
             "ps aux",
+            "ps -e --forest",
             "if " + ps_cmd.format(pattern),
             "then rc=1",
             "sudo pkill {}".format(pattern),
