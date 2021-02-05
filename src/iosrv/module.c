@@ -196,8 +196,6 @@ dss_module_unload_internal(struct loaded_mod *lmod)
 	struct dss_module	*smod = lmod->lm_dss_mod;
 	int			 rc = 0;
 
-	D_ERROR("unload_internal\n");
-
 	if (lmod->lm_init == false)
 		goto close_mod;
 	/* unregister RPC handlers */

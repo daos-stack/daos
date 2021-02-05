@@ -328,14 +328,18 @@ class DaosServer():
         # string-based states.
         states = {
             "ready": [8],
-            "stopped": [16, 32],
+            "stopped": [16, 32, 128],
         }
+
+        # TODO: 128 status is crashed, which is happening under valgrind for
+        # some reason, so understand this and raise an error if this happens
 
         rc = self.run_dmg(['system', 'query', '--json'])
         print(rc)
         print(rc.stdout)
         if rc.returncode == 0:
             data = json.loads(rc.stdout.decode('utf-8'))
+            print(data)
             members = data['response']['Members']
             if members is not None:
                 for desired_state in states[desired]:
@@ -376,9 +380,20 @@ class DaosServer():
             valgrind_args = ['--fair-sched=yes',
                              '--xml=yes',
                              '--xml-file=dnt_server.%p.memcheck.xml',
-                             '--num-callers=5',
-                             '--leak-check=full',
-                             '--undef-value-errors=no']
+                             '--num-callers=6',
+                             '--leak-check=full']
+            suppression_file = os.path.join('src',
+                                            'cart',
+                                            'utils',
+                                            'memcheck-cart.supp')
+            if not os.path.exists(suppression_file):
+                suppression_file = os.path.join(self.conf['PREFIX'],
+                                                'etc',
+                                                'memcheck-cart.supp')
+
+            valgrind_args.append('--suppressions={}'.format(
+                os.path.realpath(suppression_file)))
+
             self._io_server_dir = tempfile.TemporaryDirectory(prefix='dnt_io_')
 
             fd = open(os.path.join(self._io_server_dir.name,

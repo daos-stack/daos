@@ -177,8 +177,8 @@ shown_logs = set()
 
 mismatch_table = {'container': ('common'),
                   'common': ('container', 'pool'),
-                  'daos': ('common'),
-                  'mgmt': ('common', 'daos', 'pool'),
+                  'daos': ('common', 'pool', 'container'),
+                  'mgmt': ('common', 'daos', 'pool', 'rsvc'),
                   'misc': ('common', 'mgmt'),
                   'pool': ('common'),
                   'server': ('daos')}
