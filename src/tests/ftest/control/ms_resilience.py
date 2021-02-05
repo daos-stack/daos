@@ -64,8 +64,7 @@ class ManagementServiceResilience(TestWithServers):
             self.log.info("Pool UUID %s on server group: %s",
                           self.pool.uuid, self.server_group)
             # Verify that the pool persisted.
-            pool_data = self.get_dmg_command().pool_list()
-            if pool_data and self.pool.uuid in pool_data:
+            if self.get_dmg_command().pool_list()["response"]["pools"]:
                 self.log.info("Found pool in system.")
             else:
                 self.fail("No pool found in system.")
@@ -169,7 +168,7 @@ class ManagementServiceResilience(TestWithServers):
             self.fail("Can't read MS information after removing resiliency.")
 
         self.update_and_verify(ignore_status=True)
-        self.start_additional_servers(additional_servers=kill_list)
+        self.start_additional_servers(additional_servers=list(kill_list))
         self.update_and_verify(ignore_status=False)
         self.pool = None
 
