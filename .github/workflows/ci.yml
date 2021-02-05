@@ -90,7 +90,7 @@ jobs:
     - name: Copy results
       run: docker cp build-ut:/home/daos/ output/
     - name: find
-      run find output/
+      run: find output/
     - name: Run NLT Test
       run: docker run --tmpfs /mnt/daos build-image ./utils/node_local_test.py --no-root kv
     - name: Publish Unit Test Results
