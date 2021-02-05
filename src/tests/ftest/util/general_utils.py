@@ -609,7 +609,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None):
     if added_filter:
         ps_cmd = "ps x | grep -E {} | grep -vE {}".format(pattern, added_filter)
     else:
-        pc_cmd = "pgrep --list-full {}".format(pattern)
+        ps_cmd = "pgrep --list-full {}".format(pattern)
 
     if hosts is not None:
         commands = [
