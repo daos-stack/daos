@@ -308,6 +308,9 @@ cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
 		case DAOS_PROP_CO_DEDUP_THRESHOLD:
 			iv_prop->cip_dedup_size = prop_entry->dpe_val;
 			break;
+		case DAOS_PROP_CO_ALLOCED_OID:
+			iv_prop->cip_max_oid = prop_entry->dpe_val;
+			break;
 		case DAOS_PROP_CO_REDUN_FAC:
 			iv_prop->cip_redun_fac = prop_entry->dpe_val;
 			break;
@@ -1068,6 +1071,9 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t *prop)
 		case DAOS_PROP_CO_DEDUP_THRESHOLD:
 			prop_entry->dpe_val = iv_prop->cip_dedup_size;
 			break;
+		case DAOS_PROP_CO_ALLOCED_OID:
+			prop_entry->dpe_val = iv_prop->cip_max_oid;
+			break;
 		case DAOS_PROP_CO_REDUN_FAC:
 			prop_entry->dpe_val = iv_prop->cip_redun_fac;
 			break;
@@ -1249,8 +1255,9 @@ cont_iv_prop_fetch(struct ds_iv_ns *ns, uuid_t cont_uuid,
 	uuid_copy(arg.cont_uuid, cont_uuid);
 	arg.prop = cont_prop;
 	arg.eventual = eventual;
-	rc = dss_ult_create(cont_iv_prop_fetch_ult, &arg, DSS_XS_SYS,
-			    0, DSS_DEEP_STACK_SZ, NULL);
+	/* XXX: EC aggregation periodically fetches cont prop */
+	rc = dss_ult_periodic(cont_iv_prop_fetch_ult, &arg, DSS_XS_SYS, 0,
+			      DSS_DEEP_STACK_SZ, NULL);
 	if (rc)
 		D_GOTO(out, rc);
 
