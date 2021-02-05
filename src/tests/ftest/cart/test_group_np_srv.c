@@ -84,7 +84,7 @@ test_run(d_rank_t my_rank)
 			rc);
 
 	/* Do not delay shutdown for this server */
-	tc_set_shutdown_delay(0);
+	tc_set_shutdown_delay(test_g.t_shutdown_delay);
 
 	DBG_PRINT("Protocol registered\n");
 	for (i = 1; i < test_g.t_srv_ctx_num; i++) {
@@ -143,10 +143,6 @@ int main(int argc, char **argv)
 	int		 rc;
 
 	rc = test_parse_args(argc, argv);
-
-  /* Delay shutdown to prevent context destroy errors, which are caused by
-   * unresolved, in-flight RPCs. */
-  tc_set_shutdown_delay(4);
 
 	if (rc != 0) {
 		fprintf(stderr, "test_parse_args() failed, rc: %d.\n", rc);

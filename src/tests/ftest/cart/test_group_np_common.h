@@ -39,7 +39,7 @@ struct test_t {
 	bool			 t_use_cfg;
 	bool			 t_register_swim_callback;
 	int			 t_get_swim_status;
-	int			 t_delete_rank_from_ranklist;
+	int			 t_shutdown_delay;
 	d_rank_t		 cg_ranks[MAX_NUM_RANKS];
 	int			 cg_num_ranks;
 	struct			 t_swim_status t_verify_swim_status;
@@ -589,24 +589,23 @@ test_parse_args(int argc, char **argv)
 		{"skip_init", no_argument, &test_g.t_skip_init, 1},
 		{"skip_shutdown", no_argument, &test_g.t_skip_shutdown, 1},
 		{"skip_check_in", no_argument, &test_g.t_skip_check_in, 1},
-		{"delete_rank_from_ranklist", required_argument, 0, 'd'},
 		{"rank", required_argument, 0, 'r'},
 		{"cfg_path", required_argument, 0, 's'},
 		{"use_cfg", required_argument, 0, 'u'},
 		{"register_swim_callback", required_argument, 0, 'w'},
 		{"verify_swim_status", required_argument, 0, 'v'},
 		{"get_swim_status", no_argument, 0, 'g'},
+		{"shutdown_delay", required_argument, 0, 'd'},
 		{0, 0, 0, 0}
 	};
 
 	test_g.cg_num_ranks = 0;
 	test_g.t_use_cfg = true;
-	test_g.t_register_swim_callback = false;
+	test_g.t_shutdown_delay = 0;
 
 	/* SWIM testing options */
-	/* Default to a non-existent, invalid rank */
-	test_g.t_delete_rank_from_ranklist = -1;
 	test_g.t_get_swim_status = false;
+	test_g.t_register_swim_callback = false;
 
 	/* Default value: non-existent rank with status "alive" */
 	test_g.t_verify_swim_status = (struct t_swim_status){ -1, 0 };
@@ -671,7 +670,7 @@ test_parse_args(int argc, char **argv)
 			test_g.t_get_swim_status = true;
 			break;
 		case 'd':
-			test_g.t_delete_rank_from_ranklist = atoi(optarg);
+			test_g.t_shutdown_delay = atoi(optarg);
 			break;
 		case 'r':
 			parse_rank_string(optarg, test_g.cg_ranks,
