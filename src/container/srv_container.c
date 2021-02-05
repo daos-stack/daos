@@ -386,6 +386,7 @@ cont_create_prop_prepare(daos_prop_t *prop_def, daos_prop_t *prop,
 		case DAOS_PROP_CO_COMPRESS:
 		case DAOS_PROP_CO_ENCRYPT:
 		case DAOS_PROP_CO_DEDUP:
+		case DAOS_PROP_CO_ALLOCED_OID:
 		case DAOS_PROP_CO_DEDUP_THRESHOLD:
 			entry_def->dpe_val = entry->dpe_val;
 			break;
@@ -434,9 +435,9 @@ static int
 cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 {
 	struct daos_prop_entry	*entry;
-	d_iov_t		 value;
-	int			 i;
-	int			 rc = 0;
+	d_iov_t			value;
+	int			i;
+	int			rc = 0;
 
 	if (prop == NULL || prop->dpp_nr == 0 || prop->dpp_entries == NULL)
 		return 0;
@@ -446,7 +447,7 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 		switch (entry->dpe_type) {
 		case DAOS_PROP_CO_LABEL:
 			d_iov_set(&value, entry->dpe_str,
-				     strlen(entry->dpe_str));
+				  strlen(entry->dpe_str));
 			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_label,
 					   &value);
 			if (rc)
@@ -454,7 +455,7 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_CO_LAYOUT_TYPE:
 			d_iov_set(&value, &entry->dpe_val,
-				     sizeof(entry->dpe_val));
+				  sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_layout_type,
 					   &value);
 			if (rc)
@@ -462,7 +463,7 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_CO_LAYOUT_VER:
 			d_iov_set(&value, &entry->dpe_val,
-				     sizeof(entry->dpe_val));
+				  sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_layout_ver,
 					   &value);
 			if (rc)
@@ -470,46 +471,49 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_CO_CSUM:
 			d_iov_set(&value, &entry->dpe_val,
-				     sizeof(entry->dpe_val));
+				  sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_csum, &value);
 			if (rc)
 				return rc;
 			break;
 		case DAOS_PROP_CO_CSUM_CHUNK_SIZE:
 			d_iov_set(&value, &entry->dpe_val,
-				     sizeof(entry->dpe_val));
+				  sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs,
-				&ds_cont_prop_csum_chunk_size, &value);
+					   &ds_cont_prop_csum_chunk_size,
+					   &value);
 			if (rc)
 				return rc;
 			break;
 		case DAOS_PROP_CO_CSUM_SERVER_VERIFY:
 			d_iov_set(&value, &entry->dpe_val,
-				     sizeof(entry->dpe_val));
+				  sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs,
-				&ds_cont_prop_csum_server_verify, &value);
+					   &ds_cont_prop_csum_server_verify,
+					   &value);
 			if (rc)
 				return rc;
 			break;
 		case DAOS_PROP_CO_DEDUP:
 			d_iov_set(&value, &entry->dpe_val,
-				     sizeof(entry->dpe_val));
+				  sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs,
-				&ds_cont_prop_dedup, &value);
+					   &ds_cont_prop_dedup, &value);
 			if (rc)
 				return rc;
 			break;
 		case DAOS_PROP_CO_DEDUP_THRESHOLD:
 			d_iov_set(&value, &entry->dpe_val,
-				     sizeof(entry->dpe_val));
+				  sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs,
-				&ds_cont_prop_dedup_threshold, &value);
+					   &ds_cont_prop_dedup_threshold,
+					   &value);
 			if (rc)
 				return rc;
 			break;
 		case DAOS_PROP_CO_REDUN_FAC:
 			d_iov_set(&value, &entry->dpe_val,
-				     sizeof(entry->dpe_val));
+				  sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_redun_fac,
 					   &value);
 			if (rc)
@@ -517,7 +521,7 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_CO_REDUN_LVL:
 			d_iov_set(&value, &entry->dpe_val,
-				     sizeof(entry->dpe_val));
+				  sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_redun_lvl,
 					   &value);
 			if (rc)
@@ -525,7 +529,7 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_CO_SNAPSHOT_MAX:
 			d_iov_set(&value, &entry->dpe_val,
-				     sizeof(entry->dpe_val));
+				  sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_snapshot_max,
 					   &value);
 			if (rc)
@@ -533,7 +537,7 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_CO_COMPRESS:
 			d_iov_set(&value, &entry->dpe_val,
-				     sizeof(entry->dpe_val));
+				  sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_compress,
 					   &value);
 			if (rc)
@@ -541,7 +545,7 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_CO_ENCRYPT:
 			d_iov_set(&value, &entry->dpe_val,
-				     sizeof(entry->dpe_val));
+				  sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_encrypt,
 					   &value);
 			if (rc)
@@ -549,7 +553,7 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_CO_OWNER:
 			d_iov_set(&value, entry->dpe_str,
-				     strlen(entry->dpe_str));
+				  strlen(entry->dpe_str));
 			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_owner,
 					   &value);
 			if (rc)
@@ -557,7 +561,7 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_CO_OWNER_GROUP:
 			d_iov_set(&value, entry->dpe_str,
-				     strlen(entry->dpe_str));
+				  strlen(entry->dpe_str));
 			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_owner_group,
 					   &value);
 			if (rc)
@@ -590,6 +594,14 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			d_iov_set(&value, &entry->dpe_val,
 				  sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_co_status,
+					   &value);
+			if (rc)
+				return rc;
+			break;
+		case DAOS_PROP_CO_ALLOCED_OID:
+			d_iov_set(&value, &entry->dpe_val,
+				  sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_max_oid,
 					   &value);
 			if (rc)
 				return rc;
@@ -672,7 +684,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (rc != 0)
 		D_GOTO(out_kvs, rc);
 
-	/* Create the GHCE and MaxOID properties. */
+	/* Create the GHCE property. */
 	d_iov_set(&value, &ghce, sizeof(ghce));
 	rc = rdb_tx_update(tx, &kvs, &ds_cont_prop_ghce, &value);
 	if (rc != 0) {
@@ -681,6 +693,8 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 				in->cci_op.ci_uuid), DP_RC(rc));
 		D_GOTO(out_kvs, rc);
 	}
+
+	/** Create the MAX_OID property. */
 	d_iov_set(&value, &max_oid, sizeof(max_oid));
 	rc = rdb_tx_update(tx, &kvs, &ds_cont_prop_max_oid, &value);
 	if (rc != 0) {
@@ -855,7 +869,6 @@ static void
 recs_buf_fini(struct recs_buf *buf)
 {
 	D_FREE(buf->rb_recs);
-	buf->rb_recs = NULL;
 	buf->rb_recs_size = 0;
 	buf->rb_nrecs = 0;
 }
@@ -1063,10 +1076,9 @@ cont_ec_agg_alloc(struct cont_svc *cont_svc, uuid_t cont_uuid,
 	*ec_aggp = ec_agg;
 out:
 	if (rc) {
-		if (ec_agg && ec_agg->ea_server_ephs)
-			D_FREE(ec_agg->ea_server_ephs);
 		if (ec_agg)
-			D_FREE(ec_agg);
+			D_FREE(ec_agg->ea_server_ephs);
+		D_FREE(ec_agg);
 	}
 
 	return rc;
@@ -1076,8 +1088,7 @@ static void
 cont_ec_agg_destroy(struct cont_ec_agg *ec_agg)
 {
 	d_list_del(&ec_agg->ea_list);
-	if (ec_agg->ea_server_ephs)
-		D_FREE(ec_agg->ea_server_ephs);
+	D_FREE(ec_agg->ea_server_ephs);
 	D_FREE(ec_agg);
 }
 
@@ -1174,7 +1185,8 @@ ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 	uuid_copy(arg.cont_uuid, cont_uuid);
 	arg.min_eph = eph;
 
-	rc = dss_task_collective(cont_refresh_vos_agg_eph_one, &arg, 0);
+	rc = dss_task_collective(cont_refresh_vos_agg_eph_one, &arg,
+				 DSS_ULT_FL_PERIODIC);
 	return rc;
 }
 
@@ -1228,7 +1240,8 @@ cont_agg_eph_leader_ult(void *arg)
 				DP_CONT(svc->cs_pool_uuid,
 					ec_agg->ea_cont_uuid), min_eph);
 			rc = cont_iv_ec_agg_eph_refresh(pool->sp_iv_ns,
-						ec_agg->ea_cont_uuid, min_eph);
+							ec_agg->ea_cont_uuid,
+							min_eph);
 			if (rc) {
 				D_CDEBUG(rc == -DER_NONEXIST,
 					 DLOG_INFO, DLOG_ERR,
@@ -1254,7 +1267,6 @@ yield:
 
 	d_list_for_each_entry_safe(ec_agg, tmp, &svc->cs_ec_agg_list, ea_list)
 		cont_ec_agg_destroy(ec_agg);
-
 }
 
 static int
@@ -1900,7 +1912,7 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 	if (bits & DAOS_CO_QUERY_PROP_CSUM_CHUNK) {
 		d_iov_set(&value, &val, sizeof(val));
 		rc = rdb_tx_lookup(tx, &cont->c_prop,
-			&ds_cont_prop_csum_chunk_size, &value);
+				   &ds_cont_prop_csum_chunk_size, &value);
 		if (rc != 0)
 			D_GOTO(out, rc);
 		D_ASSERT(idx < nr);
@@ -1911,7 +1923,7 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 	if (bits & DAOS_CO_QUERY_PROP_CSUM_SERVER) {
 		d_iov_set(&value, &val, sizeof(val));
 		rc = rdb_tx_lookup(tx, &cont->c_prop,
-			&ds_cont_prop_csum_server_verify, &value);
+				   &ds_cont_prop_csum_server_verify, &value);
 		if (rc != 0)
 			D_GOTO(out, rc);
 		D_ASSERT(idx < nr);
@@ -2076,6 +2088,17 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 			D_GOTO(out, rc);
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_STATUS;
+		prop->dpp_entries[idx].dpe_val = val;
+		idx++;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_MAX_OID) {
+		d_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_max_oid,
+				   &value);
+		if (rc != 0)
+			D_GOTO(out, rc);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_ALLOCED_OID;
 		prop->dpp_entries[idx].dpe_val = val;
 		idx++;
 	}
@@ -2287,6 +2310,7 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 			case DAOS_PROP_CO_DEDUP:
 			case DAOS_PROP_CO_DEDUP_THRESHOLD:
 			case DAOS_PROP_CO_STATUS:
+			case DAOS_PROP_CO_ALLOCED_OID:
 				if (entry->dpe_val != iv_entry->dpe_val) {
 					D_ERROR("type %d mismatch "DF_U64" - "
 						DF_U64".\n", entry->dpe_type,
@@ -2352,7 +2376,7 @@ has_non_access_props(daos_prop_t *prop)
 
 static bool
 capas_can_set_prop(struct cont *cont, uint64_t sec_capas,
-		 daos_prop_t *prop)
+		   daos_prop_t *prop)
 {
 	struct daos_prop_entry	*acl_entry;
 	struct daos_prop_entry	*owner_entry;
@@ -2684,7 +2708,7 @@ cont_attr_get(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 
 static int
 cont_attr_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
-	      struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc)
+	       struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc)
 {
 	struct cont_attr_list_in	*in	    = crt_req_get(rpc);
 	struct cont_attr_list_out	*out	    = crt_reply_get(rpc);
@@ -2827,7 +2851,7 @@ enum_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	struct list_cont_iter_args	*ap = varg;
 	struct daos_pool_cont_info	*cinfo;
 	uuid_t				 cont_uuid;
-	(void) val;
+	(void)val;
 
 	if (key->iov_len != sizeof(uuid_t)) {
 		D_ERROR("invalid key size: key="DF_U64"\n", key->iov_len);
@@ -2908,12 +2932,11 @@ out_svc:
 
 out:
 	D_DEBUG(DF_DSMS, "iterate rc=%d, args.conts=%p, args.ncont="DF_U64"\n",
-			rc, args.conts, args.ncont);
+		rc, args.conts, args.ncont);
 
 	if (rc != 0) {
 		/* Error in iteration */
-		if (args.conts)
-			D_FREE(args.conts);
+		D_FREE(args.conts);
 	} else {
 		*ncont = args.ncont;
 		*conts = args.conts;
@@ -3376,11 +3399,11 @@ ds_cont_get_prop(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t **prop_out)
 	rc = cont_prop_read(&tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop);
 	cont_put(cont);
 
-	D_ASSERT(prop != NULL);
-	D_ASSERT(prop->dpp_nr == CONT_PROP_NUM);
-
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
+
+	D_ASSERT(prop != NULL);
+	D_ASSERT(prop->dpp_nr == CONT_PROP_NUM);
 
 	*prop_out = prop;
 
