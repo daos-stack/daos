@@ -54,6 +54,11 @@ swim_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 	}
 
 	strcat(swim_status_by_rank[rank], type_to_a);
+
+	/* Remove rank from context, so we stop sending swim RPCs to it. */
+	if (src == CRT_EVS_SWIM && type == CRT_EVT_DEAD) {
+		crt_group_rank_remove(NULL, rank);
+	}
 }
 
 void
