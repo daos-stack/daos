@@ -10,13 +10,15 @@ import os
 import socket
 import time
 
+from avocado import fail_on
 from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import \
     CommandFailure, FormattedParameter, YamlParameters, CommandWithParameters, \
     CommonConfig
 from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
-from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human
+from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
+    convert_list
 from dmg_utils import get_dmg_command
 from server_utils_params import \
     DaosServerTransportCredentials, DaosServerYamlParameters
@@ -308,6 +310,7 @@ class DaosServerCommand(YamlCommand):
 
 
 class DaosServerManager(SubprocessManager):
+    # pylint: disable=too-many-public-methods
     """Manages the daos_server execution on one or more hosts."""
 
     # Mapping of environment variable names to daos_server config param names
@@ -456,7 +459,7 @@ class DaosServerManager(SubprocessManager):
                 self.prepare_storage("root")
                 if hasattr(self.manager, "mca"):
                     self.manager.mca.update(
-                        {"plm_rsh_args": "-l root"}, "orterun.mca", True)
+                        {"plm_rsh_args": "-l root "}, "orterun.mca", True)
 
         # Verify the socket directory exists when using a non-systemctl manager
         self.verify_socket_directory(getuser())
@@ -1066,3 +1069,28 @@ class DaosServerManager(SubprocessManager):
             status["restart"] = True
 
         return status
+
+    @fail_on(CommandFailure)
+    def stop_ranks(self, ranks, daos_log, force=False):
+        """Kill/Stop the specific server ranks using this pool.
+
+        Args:
+            ranks (list): a list of daos server ranks (int) to kill
+            daos_log (DaosLog): object for logging messages
+            force (bool): whether to use --force option to dmg system stop
+
+        Raises:
+            avocado.core.exceptions.TestFail: if there is an issue stopping the
+                server ranks.
+
+        """
+        msg = "Stopping DAOS ranks {} from server group {}".format(
+            ranks, self.get_config_value("name"))
+        self.log.info(msg)
+        daos_log.info(msg)
+
+         # Stop desired ranks using dmg
+        self.dmg.system_stop(force=force, ranks=convert_list(value=ranks))
+
+        # Update the expected status of the stopped/evicted ranks
+        self.update_expected_states(ranks, ["stopped", "evicted"])

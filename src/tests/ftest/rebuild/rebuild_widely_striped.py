@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Governments rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+    SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from __future__ import print_function
 
@@ -94,8 +77,8 @@ class RebuildWidelyStriped(MdtestBase):
         self.add_container(self.pool)
         # start 1st mdtest run and let it complete
         self.execute_mdtest()
-        # Kill rank[7] and wait for rebuild to complete
-        self.pool.start_rebuild([rank[0]], self.d_log)
+        # Kill rank[6] and wait for rebuild to complete
+        self.server_managers[0].stop_ranks([rank[0]], self.d_log, force=True)
         self.pool.wait_for_rebuild(False, interval=1)
         # destroy container
         self.container.destroy()
@@ -110,7 +93,7 @@ class RebuildWidelyStriped(MdtestBase):
 
         # Kill rank[6] in the middle of mdtest run and
         # wait for rebuild to complete
-        self.pool.start_rebuild([rank[1]], self.d_log)
+        self.server_managers[0].stop_ranks([rank[1]], self.d_log, force=True)
         self.pool.wait_for_rebuild(False, interval=1)
         # wait for mdtest to complete
         thread.join()
@@ -127,7 +110,7 @@ class RebuildWidelyStriped(MdtestBase):
         time.sleep(3)
 
         # Kill 2 server ranks [5,6]
-        self.pool.start_rebuild([rank[2]], self.d_log)
+        self.server_managers[0].stop_ranks(rank[2], self.d_log, force=True)
         self.pool.wait_for_rebuild(False, interval=1)
         # wait for mdtest to complete
         thread.join()

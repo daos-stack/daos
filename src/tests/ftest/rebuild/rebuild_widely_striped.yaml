@@ -11,7 +11,7 @@ hosts:
     - server-G
   test_clients:
     - client-H
-timeout: 600
+timeout: 500
 server_config:
   name: daos_server
   servers:
@@ -25,7 +25,7 @@ testparams:
     rank_to_kill:
       - 6
       - 5
-      - 3,4
+      - [3,4]
 pool:
   mode: 146
   name: daos_server
@@ -34,7 +34,7 @@ pool:
   svcn: 1
   control_method: dmg
   rebuild_timeout: 60
-  pool_query_timeout: 60
+  pool_query_timeout: 30
 container:
   type: POSIX
   control_method: daos
