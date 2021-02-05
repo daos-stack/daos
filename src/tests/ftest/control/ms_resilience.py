@@ -70,15 +70,6 @@ class ManagementServiceResilience(TestWithServers):
             else:
                 self.fail("No pool found in system.")
 
-        # Remove the pool after the checks
-        try:
-            self.pool.destroy()
-        except TestFail as error:
-            if ignore_status:
-                self.log.info("Expected MS error destroying pool!: %s", error)
-            else:
-                self.fail("Pool destroy failed unexpectedly!")
-
     def verify_leader(self, access_list):
         """Verify the leader of the MS is in the access_list.
 
@@ -151,7 +142,8 @@ class ManagementServiceResilience(TestWithServers):
 
         # ignore_status should be set to False at some point when issue with
         # pool ranks is resolved on MS service.
-        self.update_and_verify(ignore_status=True)
+        self.update_and_verify(ignore_status=False)
+        self.pool = None
 
     def verify_lost_resiliency(self, N):
         """Test that even with 2N+1 resiliency lost, reads still work.
@@ -166,8 +158,8 @@ class ManagementServiceResilience(TestWithServers):
         access_list = self.launch_servers((2 * N) + 1)
         leader = self.verify_leader(access_list)
 
-        kill_list = random.sample(access_list, N)
-        kill_list.append(leader)
+        kill_list = set(random.sample(access_list, N))
+        kill_list.add(leader)
         stop_processes(kill_list, "daos_server")
 
         access_list = [x for x in access_list if x not in kill_list]
@@ -179,6 +171,7 @@ class ManagementServiceResilience(TestWithServers):
         self.update_and_verify(ignore_status=True)
         self.start_additional_servers(additional_servers=kill_list)
         self.update_and_verify(ignore_status=False)
+        self.pool = None
 
     def test_ms_resilience_1(self):
         """
