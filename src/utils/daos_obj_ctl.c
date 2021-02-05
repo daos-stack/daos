@@ -34,10 +34,12 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <getopt.h>
+#include <daos.h>
 #include <daos/common.h>
+#include <daos/object.h>
 #include <daos/tests_lib.h>
-#include <daos_srv/vos.h>
-#include <daos/dts.h>
+#include "daos_hdlr.h"
+//#include "dts_obj_ctl.h"
 
 /**
  * An example for integer key evtree .
@@ -253,14 +255,14 @@ ctl_cmd_run(char opc, char *args)
 		strncpy(cred->tc_dbuf, dkey, DTS_KEY_LEN);
 		cred->tc_dbuf[DTS_KEY_LEN - 1] = '\0';
 		d_iov_set(&cred->tc_dkey, cred->tc_dbuf,
-			     strlen(cred->tc_dbuf) + 1);
+			 strlen(cred->tc_dbuf) + 1);
 	}
 
 	if ((ctl_abits & CTL_ARG_AKEY) && akey != NULL) {
 		strncpy(cred->tc_abuf, akey, DTS_KEY_LEN);
 		cred->tc_abuf[DTS_KEY_LEN - 1] = '\0';
 		d_iov_set(&cred->tc_iod.iod_name, cred->tc_abuf,
-			     strlen(cred->tc_abuf) + 1);
+			 strlen(cred->tc_abuf) + 1);
 
 		cred->tc_iod.iod_type	= DAOS_IOD_SINGLE;
 		cred->tc_iod.iod_size	= -1; /* overwrite by CTL_ARG_VAL */
@@ -274,11 +276,11 @@ ctl_cmd_run(char opc, char *args)
 		strncpy(cred->tc_vbuf, val, ctl_ctx.tsc_cred_vsize);
 		cred->tc_vbuf[ctl_ctx.tsc_cred_vsize - 1] = '\0';
 		d_iov_set(&cred->tc_val, cred->tc_vbuf,
-			     strlen(cred->tc_vbuf) + 1);
+			 strlen(cred->tc_vbuf) + 1);
 	} else {
 		memset(cred->tc_vbuf, 0, ctl_ctx.tsc_cred_vsize);
 		d_iov_set(&cred->tc_val, cred->tc_vbuf,
-			     ctl_ctx.tsc_cred_vsize);
+			 ctl_ctx.tsc_cred_vsize);
 	}
 	cred->tc_sgl.sg_nr = 1;
 	cred->tc_sgl.sg_iovs = &cred->tc_val;
@@ -373,23 +375,116 @@ static struct option ctl_ops[] = {
 	{ NULL,		0,			NULL,	0	},
 };
 
-int
-obj_ctl_shell(int argc, char *argv[])
+enum {
+	CTL_INIT_MODULE,	/* modules have been loaded */
+	CTL_INIT_POOL,		/* pool has been created */
+	CTL_INIT_CONT,		/* container has been created */
+	CTL_INIT_CREDITS,	/* I/O credits have been initialized */
+};
+
+static int
+cont_init(struct dts_context *tsc)
+{
+	daos_handle_t	coh = DAOS_HDL_INVAL;
+	int		rc;
+
+	rc = daos_cont_create(tsc->tsc_poh, tsc->tsc_cont_uuid, NULL,
+			      NULL);
+	if (rc != 0)
+		goto out;
+
+	rc = daos_cont_open(tsc->tsc_poh, tsc->tsc_cont_uuid,
+			    DAOS_COO_RW, &coh, NULL, NULL);
+
+	tsc->tsc_coh = coh;
+
+out:
+	return rc;
+}
+
+static void
+cont_fini(struct dts_context *tsc)
+{
+	daos_cont_close(tsc->tsc_coh, NULL);
+
+	/* NB: no container destroy at here, it will be destroyed by pool
+	 * destroy later. This is because container destroy could be too
+	 * expensive after performance tests.
+	 */
+}
+
+static void
+ctx_fini(struct dts_context *tsc)
+{
+	switch (tsc->tsc_init) {
+	case CTL_INIT_CREDITS:	/* finalize credits */
+		credits_fini(tsc);
+		/* fall through */
+	case CTL_INIT_CONT:	/* close and destroy container */
+		cont_fini(tsc);
+	}
+}
+
+static int
+dts_ctx_init(struct dts_context *tsc)
 {
 	int	rc;
 
-	uuid_generate(ctl_ctx.tsc_pool_uuid);
-	uuid_generate(ctl_ctx.tsc_cont_uuid);
+	tsc->tsc_init = CTL_INIT_MODULE;
 
-	ctl_ctx.tsc_scm_size	= (128 << 20); /* small one should be enough */
-	ctl_ctx.tsc_nvme_size	= (8ULL << 30);
+	rc = daos_pool_connect(tsc->tsc_pool_uuid, NULL,
+			       DAOS_PC_RW, &tsc->tsc_poh,
+			       NULL /* info */, NULL /* ev */);
+
+	if (rc != 0) {
+		fprintf(stderr, "failed to connect to pool "DF_UUIDF
+			": %s (%d)\n", DP_UUID(tsc->tsc_pool_uuid), d_errdesc(rc), rc);
+		D_GOTO(out, rc);
+	}
+
+	tsc->tsc_init = CTL_INIT_POOL;
+
+	rc = cont_init(tsc);
+	if (rc)
+		goto out;
+	tsc->tsc_init = CTL_INIT_CONT;
+
+	/* initialize I/O credits, which include EQ, event, I/O buffers... */
+	rc = credits_init(tsc);
+	if (rc)
+		goto out;
+	tsc->tsc_init = CTL_INIT_CREDITS;
+
+	return 0;
+ out:
+	fprintf(stderr, "Failed to initialize step=%d, rc=%d\n",
+		tsc->tsc_init, rc);
+	ctx_fini(tsc);
+	return rc;
+}
+
+int
+obj_ctl_shell(struct cmd_args_s *ap)
+{
+	int	rc;
+
+	assert(ap != NULL);
+// TODO: copiar lineas de daos.c y quitar lo de abajo
+	//uuid_generate(ctl_ctx.tsc_pool_uuid);
+	//uuid_generate(ctl_ctx.tsc_cont_uuid);
+
+	//ctl_ctx.tsc_scm_size	= (128 << 20); /* small one should be enough */
+	//ctl_ctx.tsc_nvme_size	= (8ULL << 30);
 	ctl_ctx.tsc_cred_vsize	= 1024;	/* long enough for console input */
 	ctl_ctx.tsc_cred_nr	= -1;	/* sync mode all the time */
 	ctl_ctx.tsc_mpi_rank	= 0;
 	ctl_ctx.tsc_mpi_size	= 1;	/* just one rank */
-	ctl_ctx.tsc_svc.rl_ranks = &ctl_svc_rank;
+	ctl_ctx.tsc_svc.rl_ranks = &ctl_svc_rank; // ??
 	ctl_ctx.tsc_svc.rl_nr = 1;
+	//ctl_ctx.sysname = ap->sysname; // Falta implentar esto, recibir y usar este dato
 
+	uuid_copy(ap->p_uuid, ctl_ctx.tsc_pool_uuid);
+	uuid_generate(ctl_ctx.tsc_cont_uuid);
 
 	rc = dts_ctx_init(&ctl_ctx);
 	if (rc != 0) {
@@ -400,6 +495,6 @@ obj_ctl_shell(int argc, char *argv[])
 
 	rc = dts_cmd_parser(ctl_ops, "$ > ", ctl_cmd_run);
 	if (rc)
-		dts_ctx_fini(&ctl_ctx);
+		ctx_fini(&ctl_ctx);
 	return rc;
 }

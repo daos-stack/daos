@@ -22,6 +22,7 @@
 #include <getopt.h>
 #include <mpi.h>
 #include <daos/common.h>
+#include <daos/credit.h>
 #include <daos/tests_lib.h>
 #include <daos_srv/vos.h>
 #include <daos_test.h>
@@ -39,19 +40,19 @@ enum {
 	DTS_INIT_CREDITS,	/* I/O credits have been initialized */
 };
 
-static void
+/*static void
 credit_return(struct dts_context *tsc, struct dts_io_credit *cred)
 {
 	tsc->tsc_credits[tsc->tsc_cred_avail] = cred;
 	tsc->tsc_cred_inuse--;
 	tsc->tsc_cred_avail++;
-}
+}*/
 
 /**
  * examines if there is available credit freed by completed I/O, it will wait
  * until all credits are freed if @drain is true.
  */
-static int
+/*static int
 credit_poll(struct dts_context *tsc, bool drain)
 {
 	daos_event_t	*evs[DTS_CRED_MAX];
@@ -59,7 +60,7 @@ credit_poll(struct dts_context *tsc, bool drain)
 	int		 rc;
 
 	if (tsc->tsc_cred_inuse == 0)
-		return 0; /* nothing inflight (sync mode never set inuse) */
+		return 0; // nothing inflight (sync mode never set inuse)
 
 	while (1) {
 		rc = daos_eq_poll(tsc->tsc_eqh, 0, DAOS_EQ_WAIT, DTS_CRED_MAX,
@@ -82,27 +83,27 @@ credit_poll(struct dts_context *tsc, bool drain)
 		}
 
 		if (tsc->tsc_cred_avail == 0)
-			continue; /* still no available event */
+			continue; // still no available event
 
-		/* if caller wants to drain, is there any event inflight? */
+		// if caller wants to drain, is there any event inflight?
 		if (tsc->tsc_cred_inuse != 0 && drain)
 			continue;
 
 		return 0;
 	}
-}
+}*/
 
 /** try to obtain a free credit */
-struct dts_io_credit *
+/*struct dts_io_credit *
 dts_credit_take(struct dts_context *tsc)
 {
 	int	 rc;
 
-	if (tsc->tsc_cred_avail < 0) /* synchronous mode */
+	if (tsc->tsc_cred_avail < 0) // synchronous mode
 		return &tsc->tsc_cred_buf[0];
 
 	while (1) {
-		if (tsc->tsc_cred_avail > 0) { /* yes there is free credit */
+		if (tsc->tsc_cred_avail > 0) { // yes there is free credit
 			tsc->tsc_cred_avail--;
 			tsc->tsc_cred_inuse++;
 			return tsc->tsc_credits[tsc->tsc_cred_avail];
@@ -112,24 +113,24 @@ dts_credit_take(struct dts_context *tsc)
 		if (rc)
 			return NULL;
 	}
-}
+}*/
 
 /** drain all the inflight credits */
-int
+/*int
 dts_credit_drain(struct dts_context *tsc)
 {
 	return credit_poll(tsc, true);
-}
+}*/
 
-void
+/*void
 dts_credit_return(struct dts_context *tsc, struct dts_io_credit *cred)
 {
 	if (tsc->tsc_cred_avail >= 0)
 		credit_return(tsc, cred);
-	/* else: nothinbg to return for sync mode */
-}
+	// else: nothinbg to return for sync mode
+}*/
 
-static int
+/*static int
 credits_init(struct dts_context *tsc)
 {
 	int	i;
@@ -144,10 +145,10 @@ credits_init(struct dts_context *tsc)
 			tsc->tsc_cred_avail = tsc->tsc_cred_nr = DTS_CRED_MAX;
 		else
 			tsc->tsc_cred_avail = tsc->tsc_cred_nr;
-	} else { /* synchronous mode */
+	} else { // synchronous mode
 		tsc->tsc_eqh		= DAOS_HDL_INVAL;
-		tsc->tsc_cred_nr	= 1;  /* take one slot in the buffer */
-		tsc->tsc_cred_avail	= -1; /* always available */
+		tsc->tsc_cred_nr	= 1;  // take one slot in the buffer
+		tsc->tsc_cred_avail	= -1; // always available
 	}
 
 	for (i = 0; i < tsc->tsc_cred_nr; i++) {
@@ -169,9 +170,9 @@ credits_init(struct dts_context *tsc)
 		tsc->tsc_credits[i] = cred;
 	}
 	return 0;
-}
+}*/
 
-static void
+/*static void
 credits_fini(struct dts_context *tsc)
 {
 	int	i;
@@ -187,7 +188,7 @@ credits_fini(struct dts_context *tsc)
 
 	if (daos_handle_is_valid(tsc->tsc_eqh))
 		daos_eq_destroy(tsc->tsc_eqh, DAOS_EQ_DESTROY_FORCE);
-}
+}*/
 
 static int
 pool_init(struct dts_context *tsc)

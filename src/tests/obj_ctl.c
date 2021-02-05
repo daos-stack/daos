@@ -374,7 +374,7 @@ main(int argc, char *argv[])
 {
 	int	rc;
 
-	if (argc ==2 )
+	if (argc == 2)
 		goto out_usage;
 
 	uuid_generate(ctl_ctx.tsc_pool_uuid);

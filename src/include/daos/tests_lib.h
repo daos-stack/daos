@@ -13,6 +13,15 @@
 #include <daos_mgmt.h>
 #include <daos/object.h>
 
+#include <daos/credit.h>
+#ifdef DAOS_HAS_VALGRIND
+#include <valgrind/valgrind.h>
+#define DAOS_ON_VALGRIND RUNNING_ON_VALGRIND
+#else
+#define DAOS_ON_VALGRIND 0
+#endif
+
+
 #define assert_success(r)						\
 	do {								\
 		int __rc = (r);						\
@@ -79,18 +88,10 @@ dts_time_now(void)
 	return (tv.tv_sec + tv.tv_usec / 1000000.0);
 }
 
-/**
- * Readline a command line from stdin, parse and execute it.
- *
- * \param [IN]	opts		valid operations
- * \param [IN]	prompt		prompt string
- * \param [IN]	cmd_func	command functions
- */
-int dts_cmd_parser(struct option *opts, const char *prompt,
-		   int (*cmd_func)(char opc, char *args));
-
 void dts_reset_key(void);
 
+<<<<<<< HEAD
+// Mover 02
 #define DTS_KEY_LEN		64
 
 /**
@@ -114,7 +115,9 @@ struct dts_io_credit {
 	/** points to \a tc_ev in async mode, otherwise it's NULL */
 	daos_event_t		*tc_evp;
 };
+// Fin Mover 02
 
+// Mover 01
 #define DTS_CRED_MAX		1024
 /**
  * I/O test context
@@ -167,6 +170,7 @@ struct dts_context {
 	int			 tsc_init;
 	/** OUTPUT END */
 };
+// Fin de Mover 01
 
 
 static inline bool
@@ -182,6 +186,8 @@ tsc_create_cont(struct dts_context *tsc)
 	return tsc_create_pool(tsc) || !tsc->tsc_skip_cont_create;
 }
 
+=======
+>>>>>>> WIP 06
 /* match BIO_XS_CNT_MAX, which is the max VOS xstreams mapped to a device */
 #define MAX_TEST_TARGETS_PER_DEVICE 48
 #define DSS_HOSTNAME_MAX_LEN	255

@@ -415,6 +415,7 @@ dmg_pool_create(const char *dmg_config_file,
 	if (prop != NULL) {
 		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
 		if (entry != NULL) {
+			/* warning: the use of `tmpnam' is dangerous, better use `mkstemp'*/
 			tmp_name = tmpnam(tmp_buf);
 			if (tmp_name == NULL) {
 				D_ERROR("failed to create tmpfile name\n");

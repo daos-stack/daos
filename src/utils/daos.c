@@ -33,6 +33,7 @@
 #include "daos_fs.h"
 #include "daos_hdlr.h"
 #include "dfuse_ioctl.h"
+#include "daos_obj_ctl.h"
 
 const char		*default_sysname = DAOS_DEFAULT_SYS_NAME;
 
@@ -571,6 +572,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	ap->c_op  = -1;
 	ap->o_op  = -1;
 	ap->fs_op = -1;
+	ap->sh_op = -1;
 	D_STRNDUP(ap->sysname, default_sysname, strlen(default_sysname));
 	if (ap->sysname == NULL)
 		return RC_NO_HELP;
@@ -606,6 +608,9 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 				argv[2]);
 			return RC_PRINT_HELP;
 		}
+	} else if ((strcmp(argv[1], "shell") == 0) ||
+		   (strcmp(argv[1], "sh") == 0)) {
+		ap->sh_op = SH_INIT;
 	} else {
 		/* main() may catch error. Keep this code just in case. */
 		fprintf(stderr, "resource (%s): must be "
@@ -1035,6 +1040,7 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
 	}
 
+// TODO: Copiar de aqui
 	rc = daos_pool_connect(ap->p_uuid, ap->sysname, DAOS_PC_RW,
 			       &ap->pool, NULL /* info */,
 			       NULL /* ev */);
@@ -1526,6 +1532,13 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		"	  <cont options>   (--cont)\n"
 		"	--oid=HI.LO        object ID\n");
 
+	} else if (strcmp(argv[2], "sh") == 0 ||
+		   strcmp(argv[2], "shell") == 0) {
+
+		fprintf(stream,
+		"shell (sh) options:\n"
+		"	  <pool options>   (--pool, --sys-name)\n");
+
 	} else {
 		FIRST_LEVEL_HELP();
 	}
@@ -1552,10 +1565,7 @@ main(int argc, char *argv[])
 		dargs.ostream = stdout;
 		help_hdlr(argc, argv, &dargs);
 		return 0;
-	}  else if (strcmp(argv[1], "shell") == 0) {
-                rc = obj_ctl_shell(argc, argv);
-                return rc;
-        } else if (argc <= 2) {
+	} else if (argc <= 2) {
 		dargs.ostream = stdout;
 		help_hdlr(argc, argv, &dargs);
 		return 2;
@@ -1570,6 +1580,9 @@ main(int argc, char *argv[])
 	} else if ((strcmp(argv[1], "object") == 0) ||
 		 (strcmp(argv[1], "obj") == 0)) {
 		hdlr = obj_op_hdlr;
+	} else if ((strcmp(argv[1], "shell") == 0) ||
+		 (strcmp(argv[1], "sh") == 0)) {
+		hdlr = obj_ctl_shell;
 	}
 
 	if (hdlr == NULL) {
