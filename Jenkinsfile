@@ -151,7 +151,7 @@ String unit_packages() {
                            'libpmemobj protobuf-c ' +
                            'spdk-devel libfabric-devel ' +
                            'pmix numactl-devel ' +
-                           'libipmctl-devel ' +
+                           'libipmctl-devel python36-pyxattr ' +
                            'python36-tabulate numactl ' +
                            'libyaml-devel ' +
                            'valgrind-devel patchelf'
@@ -1212,6 +1212,22 @@ pipeline {
                                          testResults: 'None',
                                          always_script: 'ci/unit/test_nlt_post.sh',
                                          valgrind_stash: 'centos7-gcc-nlt-memcheck'
+                            recordIssues enabledForFailure: true,
+                                         failOnError: false,
+                                         ignoreFailedBuilds: false,
+                                         ignoreQualityGate: true,
+                                         name: "NLT server leaks",
+                                         tool: issues(pattern: 'nlt-server-leaks.json',
+                                           name: 'NLT server results',
+                                           id: 'NLT_server')
+                            recordIssues enabledForFailure: true,
+                                         failOnError: false,
+                                         ignoreFailedBuilds: false,
+                                         ignoreQualityGate: true,
+                                         name: "NLT client leaks",
+                                         tool: issues(pattern: 'nlt-client-leaks.json',
+                                           name: 'NLT client results',
+                                           id: 'NLT_client')
                         }
                     }
                 }
