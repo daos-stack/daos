@@ -6,8 +6,6 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from command_utils_base import CommandFailure
 from daos_utils import DaosCommand
-from test_utils_pool import TestPool
-from test_utils_container import TestContainer
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
 from data_mover_utils import Dcp
@@ -64,7 +62,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.daos_test_paths = []
 
         # Keep track of dcp compatibility options
+        # Defaulting to the newer options
         self.dcp_has_src_pool = False
+        self.dcp_has_bufsize = True
 
     def setUp(self):
         """Set up each test case."""
@@ -94,6 +94,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.dcp_cmd.get_params(self)
         self.dcp_cmd.query_compatibility()
         self.dcp_has_src_pool = self.dcp_cmd.has_src_pool
+        self.dcp_has_bufsize = self.dcp_cmd.has_bufsize
 
     def pre_tear_down(self):
         """Tear down steps to run before tearDown().
@@ -362,7 +363,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.dcp_cmd.get_params(self)
 
         # Set the compatibility options
-        self.dcp_cmd.set_compatibility(self.dcp_has_src_pool)
+        self.dcp_cmd.set_compatibility(self.dcp_has_src_pool,
+                                       self.dcp_has_bufsize)
 
         # Set the source params
         if src_type == "POSIX":
@@ -535,6 +537,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                         self.mdtest_processes,
                         display_space=(True if pool else False), pool=pool)
 
+    # pylint: disable=too-many-arguments
     def run_datamover(self, test_desc=None,
                       src_type=None, src_path=None,
                       src_pool=None, src_cont=None,
@@ -565,7 +568,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         """
         self.num_run_datamover += 1
         self.log.info("run_datamover called %s times",
-            str(self.num_run_datamover))
+                      str(self.num_run_datamover))
 
         # Set the params if and only if any were passed in
         have_src_params = (src_type or src_path or src_pool or src_cont)
