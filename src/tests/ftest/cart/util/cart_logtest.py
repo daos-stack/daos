@@ -175,11 +175,11 @@ shown_logs = set()
 # specifically, key is function name, value is list of variables.
 # Both the alloc and free function need to be whitelisted.
 
-mismatch_table = {'container': ('common'),
-                  'client': ('array'),
+mismatch_table = {'client': ('array'),
+                  'daos': ('common', 'container', 'pool'),
                   'common': ('container', 'pool'),
-                  'daos': ('common'),
-                  'mgmt': ('common', 'daos', 'pool'),
+                  'container': ('common'),
+                  'mgmt': ('common', 'daos', 'pool', 'rscv'),
                   'misc': ('common', 'mgmt'),
                   'pool': ('common'),
                   'server': ('daos')}
