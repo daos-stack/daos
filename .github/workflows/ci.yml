@@ -91,6 +91,8 @@ jobs:
       run: docker cp build-ut:/home/daos/test_results/ ./
     - name: find
       run: find test_results/
+    - name: grep
+      run: grep . test_results/*
     - name: Publish Unit Test Results
       uses: EnricoMi/publish-unit-test-result-action@v1.7
       with:

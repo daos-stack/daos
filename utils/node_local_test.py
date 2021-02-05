@@ -317,6 +317,8 @@ class DaosServer():
     def __del__(self):
         if self.running:
             self.stop(None)
+        elif os.path.exists(self.server_log.name):
+            log_test(self.conf, self.server_log.name)
 
     # pylint: disable=no-self-use
     def _check_timing(self, op, start, max_time):
@@ -423,7 +425,6 @@ class DaosServer():
         self._agent = subprocess.Popen(agent_cmd,
                                        env=os.environ.copy())
         self.conf.agent_dir = self.agent_dir
-        self.running = True
 
         # Configure the storage.  DAOS wants to mount /mnt/daos itself if not
         # already mounted, so let it do that.
@@ -455,6 +456,7 @@ class DaosServer():
                 break
             self._check_timing("format", start, max_start_time)
         print('Format completion in {:.2f} seconds'.format(time.time() - start))
+        self.running = True
 
         # How wait until the system is up, basically the format to happen.
         while True:
