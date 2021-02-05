@@ -213,6 +213,7 @@ dc_cont_create(tse_task_t *task)
 {
 	daos_cont_create_t     *args;
 	struct cont_create_in  *in;
+	struct daos_prop_entry *entry;
 	struct dc_pool	       *pool;
 	crt_endpoint_t		ep;
 	crt_rpc_t	       *rpc;
@@ -223,6 +224,14 @@ dc_cont_create(tse_task_t *task)
 	args = dc_task_get_args(task);
 	if (uuid_is_null(args->uuid))
 		D_GOTO(err_task, rc = -DER_INVAL);
+
+	entry = daos_prop_entry_get(args->prop, DAOS_PROP_CO_STATUS);
+	if (entry != NULL) {
+		rc = -DER_INVAL;
+		D_ERROR("cannot set DAOS_PROP_CO_STATUS prop for cont_create "
+			DF_RC"\n", DP_RC(rc));
+		goto err_task;
+	}
 
 	pool = dc_hdl2pool(args->poh);
 	if (pool == NULL)
@@ -927,6 +936,9 @@ cont_query_bits(daos_prop_t *prop)
 		case DAOS_PROP_CO_DEDUP_THRESHOLD:
 			bits |= DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD;
 			break;
+		case DAOS_PROP_CO_ALLOCED_OID:
+			bits |= DAOS_CO_QUERY_PROP_MAX_OID;
+			break;
 		case DAOS_PROP_CO_REDUN_FAC:
 			bits |= DAOS_CO_QUERY_PROP_REDUN_FAC;
 			break;
@@ -950,6 +962,12 @@ cont_query_bits(daos_prop_t *prop)
 			break;
 		case DAOS_PROP_CO_OWNER_GROUP:
 			bits |= DAOS_CO_QUERY_PROP_OWNER_GROUP;
+			break;
+		case DAOS_PROP_CO_ROOTS:
+			bits |= DAOS_CO_QUERY_PROP_ROOTS;
+			break;
+		case DAOS_PROP_CO_STATUS:
+			bits |= DAOS_CO_QUERY_PROP_CO_STATUS;
 			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
@@ -1088,6 +1106,8 @@ int
 dc_cont_set_prop(tse_task_t *task)
 {
 	daos_cont_set_prop_t		*args;
+	struct daos_prop_entry		*entry;
+	struct daos_co_status		 co_stat;
 	struct cont_prop_set_in		*in;
 	struct dc_pool			*pool;
 	struct dc_cont			*cont;
@@ -1098,6 +1118,23 @@ dc_cont_set_prop(tse_task_t *task)
 
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	if (daos_prop_entry_get(args->prop, DAOS_PROP_CO_ALLOCED_OID)) {
+		D_ERROR("Can't set OID property if container is created.\n");
+		D_GOTO(err, rc = -DER_NO_PERM);
+	}
+
+	entry = daos_prop_entry_get(args->prop, DAOS_PROP_CO_STATUS);
+	if (entry != NULL) {
+		daos_prop_val_2_co_status(entry->dpe_val, &co_stat);
+		if (co_stat.dcs_status != DAOS_PROP_CO_HEALTHY) {
+			rc = -DER_INVAL;
+			D_ERROR("To set DAOS_PROP_CO_STATUS property can-only "
+				"set dcs_status as DAOS_PROP_CO_HEALTHY to "
+				"clear UNCLEAN status, "DF_RC"\n", DP_RC(rc));
+			goto err;
+		}
+	}
 
 	cont = dc_hdl2cont(args->coh);
 	if (cont == NULL)

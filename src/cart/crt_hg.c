@@ -439,6 +439,7 @@ int
 crt_hg_init(void)
 {
 	int	rc = 0;
+	char	*env;
 
 	if (crt_initialized()) {
 		D_ERROR("CaRT already initialized.\n");
@@ -446,6 +447,11 @@ crt_hg_init(void)
 	}
 
 	#define EXT_FAC DD_FAC(external)
+
+	/* If mercury log level is not set, set it to warning by default */
+	env = getenv("HG_LOG_LEVEL");
+	if (!env)
+		HG_Set_log_level("warning");
 
 	/* import HG log */
 	hg_log_set_func(crt_hg_log);
@@ -513,6 +519,7 @@ crt_hg_class_init(int provider, int idx, hg_class_t **ret_hg_class)
 	else
 		init_info.na_init_info.max_contexts = 1;
 
+	init_info.request_post_incr = 0;
 	hg_class = HG_Init_opt(info_string, crt_is_service(), &init_info);
 	if (hg_class == NULL) {
 		D_ERROR("Could not initialize HG class.\n");
@@ -867,7 +874,7 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 			RPC_ERROR(rpc_priv,
 				  "HG_Create failed, hg_ret: %d\n",
 				  hg_ret);
-			rc = -DER_HG;
+			D_GOTO(out, rc = -DER_HG);
 		}
 	} else {
 		rpc_priv->crp_hg_hdl = rpc_priv->crp_hdl_reuse->chh_hdl;
@@ -878,7 +885,7 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 			RPC_ERROR(rpc_priv,
 				  "HG_Reset failed, hg_ret: %d\n",
 				  hg_ret);
-			rc = -DER_HG;
+			D_GOTO(out, rc = -DER_HG);
 		}
 	}
 
@@ -891,10 +898,10 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 			RPC_ERROR(rpc_priv,
 				  "HG_Set_target_id failed, hg_ret: %d\n",
 				  hg_ret);
-			rc = -DER_HG;
+			D_GOTO(out, rc = -DER_HG);
 		}
 	}
-
+out:
 	return rc;
 }
 
@@ -1061,11 +1068,6 @@ out:
 	return hg_ret;
 }
 
-static bool crt_hg_network_error(hg_return_t hg_ret)
-{
-	return (hg_ret == HG_NA_ERROR || hg_ret == HG_PROTOCOL_ERROR);
-}
-
 int
 crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 {
@@ -1093,18 +1095,8 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 			  rpc_priv->crp_tgt_uri);
 	}
 
-	/* HG_Forward can return 2 types of errors - network errors and generic
-	 * ones, such as out of memory, bad parameters passed, invalid handle
-	 * etc...
-	 *
-	 * For network errors, we do not want to return error back to the caller
-	 * of crt_req_send(), but instead we want to invoke completion callback
-	 * manually with 'node unreachable' (DER_UNREACH) error.
-	 *
-	 * HG_NA_ERROR and HG_PROTOCOL_ERROR are both network-level errors
-	 * that can be raised by mercury.
-	 */
-	if (crt_hg_network_error(hg_ret)) {
+	/* For any error to be reported via completion callback */
+	if (hg_ret != HG_SUCCESS) {
 		if (!crt_req_timedout(rpc_priv)) {
 			/* error will be reported to the completion callback in
 			 * crt_req_timeout_hdlr()
@@ -1112,8 +1104,6 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 			crt_req_force_timeout(rpc_priv);
 		}
 		rpc_priv->crp_state = RPC_STATE_FWD_UNREACH;
-	} else if (hg_ret != HG_SUCCESS) {
-		rc = -DER_HG;
 	} else {
 		rpc_priv->crp_on_wire = 1;
 	}

@@ -125,6 +125,7 @@ class OSAOnlineReintegration(OSAUtils):
                     thrd.start()
                     time.sleep(1)
             self.pool = pool[val]
+            time.sleep(5)
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
@@ -140,8 +141,9 @@ class OSAOnlineReintegration(OSAUtils):
             self.log.info(output)
             self.is_rebuild_done(3)
             self.assert_on_rebuild_failure()
-
             pver_exclude = self.get_pool_version()
+            time.sleep(5)
+
             self.log.info("Pool Version after exclude %s", pver_exclude)
             # Check pool version incremented after pool exclude
             self.assertTrue(pver_exclude > (pver_begin + len(target_list)),
@@ -175,7 +177,7 @@ class OSAOnlineReintegration(OSAUtils):
             self.pool = pool[val]
             self.pool.display_pool_daos_space(display_string)
 
-    @skipForTicket("DAOS-6543")
+    @skipForTicket("DAOS-6573")
     def test_osa_online_reintegration(self):
         """Test ID: DAOS-5075.
 
@@ -195,4 +197,8 @@ class OSAOnlineReintegration(OSAUtils):
         :avocado: tags=online_reintegration_srv_stop,DAOS_5610
         """
         # Perform reintegration testing with 1 pool.
+        tmp_oclass = ["RP_2G4", "RP_2G8", "RP_2G16", "RP_3G12",
+                      "RP_3G16", "RP_4G4"]
+        self.ior_dfs_oclass = tmp_oclass.pop(random.randint(0,
+                                             (len(tmp_oclass) - 1)))
         self.run_online_reintegration_test(1, server_boot=True)

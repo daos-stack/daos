@@ -7,7 +7,7 @@ def scons():
 
     denv = env.Clone()
 
-    prereqs.require(denv, 'argobots')
+    prereqs.require(denv, 'argobots', 'protobufc')
 
     denv.Library('smd', Glob('*.c'), LIBS=['daos_common', 'gurt', 'pmemobj'])
 

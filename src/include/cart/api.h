@@ -452,14 +452,87 @@ int
 crt_hlc_get_msg(uint64_t msg, uint64_t *hlc_out, uint64_t *offset);
 
 /**
- * Return the second timestamp of hlc.
+ * Return the nanosecond timestamp of hlc.
  *
  * \param[in] hlc              HLC timestamp
  *
- * \return                     The timestamp in second
+ * \return                     Nanosecond timestamp
  */
 uint64_t
-crt_hlc2sec(uint64_t hlc);
+crt_hlc2nsec(uint64_t hlc);
+
+/** See crt_hlc2nsec. */
+static inline uint64_t
+crt_hlc2usec(uint64_t hlc)
+{
+	return crt_hlc2nsec(hlc) / 1000;
+}
+
+/** See crt_hlc2nsec. */
+static inline uint64_t
+crt_hlc2msec(uint64_t hlc)
+{
+	return crt_hlc2nsec(hlc) / (1000 * 1000);
+}
+
+/** See crt_hlc2nsec. */
+static inline uint64_t
+crt_hlc2sec(uint64_t hlc)
+{
+	return crt_hlc2nsec(hlc) / (1000 * 1000 * 1000);
+}
+
+/**
+ * Return the HLC timestamp from nsec.
+ *
+ * \param[in] nsec             Nanosecond timestamp
+ *
+ * \return                     HLC timestamp
+ */
+uint64_t
+crt_nsec2hlc(uint64_t nsec);
+
+/** See crt_nsec2hlc. */
+static inline uint64_t
+crt_usec2hlc(uint64_t usec)
+{
+	return crt_nsec2hlc(usec * 1000);
+}
+
+/** See crt_nsec2hlc. */
+static inline uint64_t
+crt_msec2hlc(uint64_t msec)
+{
+	return crt_nsec2hlc(msec * 1000 * 1000);
+}
+
+/** See crt_nsec2hlc. */
+static inline uint64_t
+crt_sec2hlc(uint64_t sec)
+{
+	return crt_nsec2hlc(sec * 1000 * 1000 * 1000);
+}
+
+/**
+ * Return the Unix nanosecond timestamp of hlc.
+ *
+ * \param[in] hlc              HLC timestamp
+ *
+ * \return                     Unix nanosecond timestamp
+ */
+uint64_t
+crt_hlc2unixnsec(uint64_t hlc);
+
+/**
+ * Return the HLC timestamp of unixnsec in hlc.
+ *
+ * \param[in] unixnsec         Unix nanosecond timestamp
+ *
+ * \return                     HLC timestamp on success, or 0 when it is
+ *                             impossible to convert unixnsec to hlc
+ */
+uint64_t
+crt_unixnsec2hlc(uint64_t unixnsec);
 
 /**
  * Set the maximum system clock offset.

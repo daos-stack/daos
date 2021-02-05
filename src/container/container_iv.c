@@ -274,6 +274,7 @@ static void
 cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
 {
 	struct daos_prop_entry	*prop_entry;
+	struct daos_prop_co_roots *roots;
 	struct daos_acl		*acl;
 	int			 i;
 
@@ -307,6 +308,9 @@ cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
 		case DAOS_PROP_CO_DEDUP_THRESHOLD:
 			iv_prop->cip_dedup_size = prop_entry->dpe_val;
 			break;
+		case DAOS_PROP_CO_ALLOCED_OID:
+			iv_prop->cip_max_oid = prop_entry->dpe_val;
+			break;
 		case DAOS_PROP_CO_REDUN_FAC:
 			iv_prop->cip_redun_fac = prop_entry->dpe_val;
 			break;
@@ -337,6 +341,17 @@ cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
 			D_ASSERT(strlen(prop_entry->dpe_str) <=
 				 DAOS_ACL_MAX_PRINCIPAL_LEN);
 			strcpy(iv_prop->cip_owner_grp, prop_entry->dpe_str);
+			break;
+		case DAOS_PROP_CO_ROOTS:
+			roots = prop_entry->dpe_val_ptr;
+			if (roots) {
+				memcpy(&iv_prop->cip_roots,
+				       roots, sizeof(*roots));
+			}
+			break;
+		case DAOS_PROP_CO_STATUS:
+			daos_prop_val_2_co_status(prop_entry->dpe_val,
+						  &iv_prop->cip_co_status);
 			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
@@ -1011,6 +1026,7 @@ static int
 cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t *prop)
 {
 	struct daos_prop_entry	*prop_entry;
+	struct daos_prop_co_roots *roots;
 	struct daos_acl		*acl;
 	void			*label_alloc = NULL;
 	void			*acl_alloc = NULL;
@@ -1054,6 +1070,9 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_CO_DEDUP_THRESHOLD:
 			prop_entry->dpe_val = iv_prop->cip_dedup_size;
+			break;
+		case DAOS_PROP_CO_ALLOCED_OID:
+			prop_entry->dpe_val = iv_prop->cip_max_oid;
 			break;
 		case DAOS_PROP_CO_REDUN_FAC:
 			prop_entry->dpe_val = iv_prop->cip_redun_fac;
@@ -1102,6 +1121,17 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t *prop)
 				owner_grp_alloc = prop_entry->dpe_str;
 			else
 				D_GOTO(out, rc = -DER_NOMEM);
+			break;
+		case DAOS_PROP_CO_ROOTS:
+			roots = &iv_prop->cip_roots;
+			D_ALLOC(prop_entry->dpe_val_ptr, sizeof(*roots));
+			if (!prop_entry->dpe_val_ptr)
+				D_GOTO(out, rc = -DER_NOMEM);
+			memcpy(prop_entry->dpe_val_ptr, roots, sizeof(*roots));
+			break;
+		case DAOS_PROP_CO_STATUS:
+			prop_entry->dpe_val = daos_prop_co_status_2_val(
+						&iv_prop->cip_co_status);
 			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
@@ -1181,7 +1211,8 @@ cont_iv_prop_fetch_ult(void *data)
 	rc = cont_iv_fetch(arg->iv_ns, IV_CONT_PROP, arg->cont_uuid,
 			   iv_entry, iv_entry_size, false /* retry */);
 	if (rc) {
-		D_ERROR("cont_iv_fetch failed "DF_RC"\n", DP_RC(rc));
+		D_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR,
+			 "cont_iv_fetch failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1224,8 +1255,9 @@ cont_iv_prop_fetch(struct ds_iv_ns *ns, uuid_t cont_uuid,
 	uuid_copy(arg.cont_uuid, cont_uuid);
 	arg.prop = cont_prop;
 	arg.eventual = eventual;
-	rc = dss_ult_create(cont_iv_prop_fetch_ult, &arg, DSS_XS_SYS,
-			    0, DSS_DEEP_STACK_SZ, NULL);
+	/* XXX: EC aggregation periodically fetches cont prop */
+	rc = dss_ult_periodic(cont_iv_prop_fetch_ult, &arg, DSS_XS_SYS, 0,
+			      DSS_DEEP_STACK_SZ, NULL);
 	if (rc)
 		D_GOTO(out, rc);
 
