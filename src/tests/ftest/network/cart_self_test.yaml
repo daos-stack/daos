@@ -4,6 +4,11 @@ hosts:
   test_servers:
     - server-A
 timeout: 110
+setup:
+  start_servers: False
+  start_servers_once: False
+  agent_manager_class: Orterun
+  server_manager_class: Orterun
 server_config:
   name: daos_server
 self_test:

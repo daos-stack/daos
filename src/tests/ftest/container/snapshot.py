@@ -8,7 +8,7 @@ from __future__ import print_function
 import traceback
 import random
 import string
-from apricot import TestWithServers
+from apricot import TestWithServers, skipForTicket
 from pydaos.raw import (DaosContainer, DaosSnapshot, DaosApiError,
                         c_uuid_to_str)
 
@@ -125,6 +125,7 @@ class Snapshot(TestWithServers):
             status = 1
         return status
 
+    @skipForTicket("DAOS-6692")
     def test_snapshot_negativecases(self):
         # pylint: disable=no-member
         """

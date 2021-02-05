@@ -23,10 +23,12 @@ import signal
 import stat
 import errno
 import argparse
+import tabulate
 import functools
 import subprocess
 import tempfile
 import pickle
+import xattr
 from collections import OrderedDict
 import yaml
 
@@ -57,9 +59,12 @@ def get_inc_id():
     instance_num += 1
     return '{:04d}'.format(instance_num)
 
-def umount(path):
+def umount(path, bg=False):
     """Umount dfuse from a given path"""
-    cmd = ['fusermount3', '-u', path]
+    if bg:
+        cmd = ['fusermount3', '-uz', path]
+    else:
+        cmd = ['fusermount3', '-u', path]
     ret = subprocess.run(cmd)
     print('rc from umount {}'.format(ret.returncode))
     return ret.returncode
@@ -113,6 +118,7 @@ class WarningsFactory():
 
     def __init__(self, filename):
         self._fd = open(filename, 'w')
+        self.filename = filename
         self.issues = []
         self.pending = []
         self._running = True
@@ -240,7 +246,8 @@ class WarningsFactory():
         self._flush()
         self._fd.close()
         self._fd = None
-        print('Closed JSON file with {} errors'.format(len(self.issues)))
+        print('Closed JSON file {} with {} errors'.format(self.filename,
+                                                          len(self.issues)))
 
 def load_conf():
     """Load the build config file"""
@@ -266,6 +273,7 @@ def get_base_env():
     env['DD_MASK'] = 'all'
     env['DD_SUBSYS'] = 'all'
     env['D_LOG_MASK'] = 'DEBUG'
+    env['D_LOG_SIZE'] = '5g'
     env['FI_UNIVERSE_SIZE'] = '128'
     return env
 
@@ -274,7 +282,7 @@ class DaosServer():
 
     def __init__(self, conf, valgrind=False):
         self.running = False
-
+        self._file = __file__.lstrip('./')
         self._sp = None
         self.conf = conf
         self.valgrind = valgrind
@@ -308,7 +316,7 @@ class DaosServer():
 
     def __del__(self):
         if self.running:
-            self.stop()
+            self.stop(None)
 
     # pylint: disable=no-self-use
     def _check_timing(self, op, start, max_time):
@@ -351,6 +359,7 @@ class DaosServer():
         scyaml = yaml.safe_load(scfd)
         scyaml['servers'][0]['log_file'] = self.server_log.name
         if self.conf.args.server_debug:
+            scyaml['control_log_mask'] = 'ERROR'
             scyaml['servers'][0]['log_mask'] = self.conf.args.server_debug
         scyaml['control_log_file'] = self.control_log.name
 
@@ -399,12 +408,16 @@ class DaosServer():
 
         agent_bin = os.path.join(self.conf['PREFIX'], 'bin', 'daos_agent')
 
-        self._agent = subprocess.Popen([agent_bin,
-                                        '--config-path', agent_config,
-                                        '--insecure',
-                                        '--debug',
-                                        '--runtime_dir', self.agent_dir,
-                                        '--logfile', self.agent_log.name],
+        agent_cmd = [agent_bin,
+                     '--config-path', agent_config,
+                     '--insecure',
+                     '--runtime_dir', self.agent_dir,
+                     '--logfile', self.agent_log.name]
+
+        if not self.conf.args.server_debug:
+            agent_cmd.append('--debug')
+
+        self._agent = subprocess.Popen(agent_cmd,
                                        env=os.environ.copy())
         self.conf.agent_dir = self.agent_dir
         self.running = True
@@ -447,7 +460,7 @@ class DaosServer():
             self._check_timing("start", start, max_start_time)
         print('Server started in {:.2f} seconds'.format(time.time() - start))
 
-    def stop(self):
+    def stop(self, wf):
         """Stop a previously started DAOS server"""
         if self._agent:
             self._agent.send_signal(signal.SIGINT)
@@ -485,9 +498,8 @@ class DaosServer():
 
         if len(procs) != 1:
             entry = {}
-            fname = __file__.lstrip('./')
-            entry['fileName'] = os.path.basename(fname)
-            entry['directory'] = os.path.dirname(fname)
+            entry['fileName'] = os.path.basename(self._file)
+            entry['directory'] = os.path.dirname(self._file)
             # pylint: disable=protected-access
             entry['lineStart'] = sys._getframe().f_lineno
             entry['severity'] = 'ERROR'
@@ -507,6 +519,8 @@ class DaosServer():
                 self._check_timing("stop", start, max_stop_time)
             except NLTestTimeout as e:
                 print('Failed to stop: {}'.format(e))
+                if time.time() - start > 30:
+                    raise
         print('Server stopped in {:.2f} seconds'.format(time.time() - start))
 
         self._sp.send_signal(signal.SIGTERM)
@@ -516,10 +530,7 @@ class DaosServer():
         compress_file(self.agent_log.name)
         compress_file(self.control_log.name)
 
-        # TODO:                              # pylint: disable=W0511
-        # Enable memleak checking of server.  This could work, but we
-        # need to resolve a number of the issues first.
-        log_test(self.conf, self.server_log.name, show_memleaks=False)
+        log_test(self.conf, self.server_log.name, leak_wf=wf)
         self.running = False
         return ret
 
@@ -607,7 +618,7 @@ class ValgrindHelper():
         if self.full_check:
             cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
         else:
-            cmd.extend(['--leak-check=no'])
+            cmd.append('--leak-check=no')
 
         src_suppression_file = os.path.join('src',
                                             'cart',
@@ -646,7 +657,13 @@ class DFuse():
 
     instance_num = 0
 
-    def __init__(self, daos, conf, pool=None, container=None, path=None):
+    def __init__(self,
+                 daos,
+                 conf,
+                 pool=None,
+                 container=None,
+                 path=None,
+                 caching=False):
         if path:
             self.dir = path
         else:
@@ -655,8 +672,16 @@ class DFuse():
         self.valgrind_file = None
         self.container = container
         self.conf = conf
-        self.cores = None
+        # Detect the number of cores and do something sensible, if there are
+        # more than 32 on the node then use 12, otherwise use the whole node.
+        num_cores = len(os.sched_getaffinity(0))
+        if num_cores > 32:
+            self.cores = 12
+        else:
+            self.cores = None
         self._daos = daos
+        self.caching = caching
+        self.use_valgrind = True
         self._sp = None
 
         self.log_file = None
@@ -670,11 +695,13 @@ class DFuse():
         dfuse_bin = os.path.join(self.conf['PREFIX'], 'bin', 'dfuse')
 
         single_threaded = False
-        caching = False
 
         pre_inode = os.stat(self.dir).st_ino
 
         my_env = get_base_env()
+
+        if self.conf.args.dfuse_debug:
+            my_env['D_LOG_MASK'] = self.conf.args.dfuse_debug
 
         if v_hint is None:
             v_hint = get_inc_id()
@@ -694,6 +721,9 @@ class DFuse():
         if self.conf.args.memcheck == 'no':
             self.valgrind.use_valgrind = False
 
+        if not self.use_valgrind:
+            self.valgrind.use_valgrind = False
+
         if self.cores:
             cmd = ['numactl', '--physcpubind', '0-{}'.format(self.cores - 1)]
         else:
@@ -706,7 +736,7 @@ class DFuse():
         if single_threaded:
             cmd.append('-S')
 
-        if caching:
+        if self.caching:
             cmd.append('--enable-caching')
 
         if self.pool:
@@ -760,19 +790,25 @@ class DFuse():
         print('Stopping fuse')
         ret = umount(self.dir)
         if ret:
+            umount(self.dir, bg=True)
             self._close_files()
+            time.sleep(2)
             umount(self.dir)
 
+        run_log_test = True
         try:
             ret = self._sp.wait(timeout=20)
             print('rc from dfuse {}'.format(ret))
             if ret != 0:
                 fatal_errors = True
         except subprocess.TimeoutExpired:
+            print('Timeout stopping dfuse')
             self._sp.send_signal(signal.SIGTERM)
             fatal_errors = True
+            run_log_test = False
         self._sp = None
-        log_test(self.conf, self.log_file)
+        if run_log_test:
+            log_test(self.conf, self.log_file)
 
         # Finally, modify the valgrind xml file to remove the
         # prefix to the src dir.
@@ -837,25 +873,22 @@ def import_daos(server, conf):
     daos = __import__('pydaos')
     return daos
 
-def run_daos_cmd(conf, cmd, valgrind=True, fi_file=None, fi_valgrind=False):
+def run_daos_cmd(conf,
+                 cmd,
+                 valgrind=True):
     """Run a DAOS command
 
     Run a command, returning what subprocess.run() would.
 
     Enable logging, and valgrind for the command.
+
+    if prefix is set to False do not run a DAOS command, but instead run what's
+    provided, however run it under the IL.
     """
     vh = ValgrindHelper(conf)
 
     if conf.args.memcheck == 'no':
         valgrind = False
-
-    if fi_file:
-        # Turn off Valgrind for the fault injection testing unless it's
-        # specifically requested (typically if a fault injection results
-        # in a SEGV/assert), and then if it is turned on then just check
-        # memory access, not memory leaks.
-        vh.use_valgrind = fi_valgrind
-        vh.full_check = False
 
     if not valgrind:
         vh.use_valgrind = False
@@ -871,40 +904,29 @@ def run_daos_cmd(conf, cmd, valgrind=True, fi_file=None, fi_valgrind=False):
                                            suffix='.log',
                                            delete=False)
 
-    if fi_file:
-        cmd_env['D_FI_CONFIG'] = fi_file
     cmd_env['D_LOG_FILE'] = log_file.name
-    if conf.agent_dir:
-        cmd_env['DAOS_AGENT_DRPC_DIR'] = conf.agent_dir
+    cmd_env['DAOS_AGENT_DRPC_DIR'] = conf.agent_dir
 
     rc = subprocess.run(exec_cmd,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
                         env=cmd_env)
 
-    if rc.stderr != '':
+    if rc.stderr != b'':
         print('Stderr from command')
         print(rc.stderr.decode('utf-8').strip())
 
     show_memleaks = True
-    skip_fi = False
 
-    if fi_file:
-        skip_fi = True
-
-    fi_signal = None
     # A negative return code means the process exited with a signal so do not
     # check for memory leaks in this case as it adds noise, right when it's
     # least wanted.
     if rc.returncode < 0:
         show_memleaks = False
-        fi_signal = -rc.returncode
 
     rc.fi_loc = log_test(conf,
                          log_file.name,
-                         show_memleaks=show_memleaks,
-                         skip_fi=skip_fi,
-                         fi_signal=fi_signal)
+                         show_memleaks=show_memleaks)
     vh.convert_xml()
     return rc
 
@@ -1037,6 +1059,32 @@ class posix_tests():
         ofd.close()
 
     @needs_dfuse
+    def test_xattr(self):
+        """Perform basic tests with extended attributes"""
+
+        new_file = os.path.join(self.dfuse.dir, 'attr_file')
+        fd = open(new_file, 'w')
+
+        xattr.set(fd, 'user.mine', 'init_value')
+        # This should fail as a security test.
+        try:
+            xattr.set(fd, 'user.dfuse.ids', b'other_value')
+            assert False
+        except OSError as e:
+            assert e.errno == errno.EPERM
+
+        try:
+            xattr.set(fd, 'user.dfuse', b'other_value')
+            assert False
+        except OSError as e:
+            assert e.errno == errno.EPERM
+
+        xattr.set(fd, 'user.Xfuse.ids', b'other_value')
+        for (key, value) in xattr.get_all(fd):
+            print('xattr is {}:{}'.format(key, value))
+        fd.close()
+
+    @needs_dfuse
     def test_chmod(self):
         """Test that chmod works on file"""
         fname = os.path.join(self.dfuse.dir, 'testfile')
@@ -1078,6 +1126,17 @@ class posix_tests():
         ofd.close()
         nf = os.stat(fname)
         assert stat.S_IMODE(nf.st_mode) == e_mode
+
+    @needs_dfuse
+    def test_uns_create(self):
+        """Simple test to create a container using a path in dfuse"""
+        path = os.path.join(self.dfuse.dir, 'mycont')
+        cmd = ['container', 'create',
+               '--pool', self.pool, '--path', path,
+               '--type', 'POSIX']
+        rc = run_daos_cmd(self.conf, cmd)
+        assert rc.returncode == 0
+        print(os.listdir(path))
 
 def run_posix_tests(server, conf, test=None):
     """Run one or all posix tests"""
@@ -1234,34 +1293,44 @@ def compress_file(filename):
 def log_test(conf,
              filename,
              show_memleaks=True,
+             quiet=False,
              skip_fi=False,
              fi_signal=None,
+             leak_wf=None,
              check_read=False,
              check_write=False):
     """Run the log checker on filename, logging to stdout"""
 
-    print('Running log_test on {}'.format(filename))
+    if not quiet:
+        print('Running log_test on {}'.format(filename))
 
     log_iter = lp.LogIter(filename)
 
-    lto = lt.LogTest(log_iter)
+    lto = lt.LogTest(log_iter, quiet=quiet)
 
     lto.hide_fi_calls = skip_fi
 
+    wf_list = [conf.wf]
+    if leak_wf:
+        wf_list.append(leak_wf)
+
     try:
         lto.check_log_file(abort_on_warning=True,
-                           show_memleaks=show_memleaks)
+                           show_memleaks=show_memleaks,
+                           leak_wf=leak_wf)
     except lt.LogCheckError:
         if lto.fi_location:
-            conf.wf.explain(lto.fi_location,
-                            os.path.basename(filename),
-                            fi_signal)
+            for wf in wf_list:
+                wf.explain(lto.fi_location,
+                           os.path.basename(filename),
+                           fi_signal)
 
     if skip_fi:
         if not show_memleaks:
-            conf.wf.explain(lto.fi_location,
-                            os.path.basename(filename),
-                            fi_signal)
+            for wf in wf_list:
+                wf.explain(lto.fi_location,
+                           os.path.basename(filename),
+                           fi_signal)
         if not lto.fi_triggered:
             compress_file(filename)
             raise NLTestNoFi
@@ -1281,6 +1350,68 @@ def log_test(conf,
     compress_file(filename)
 
     return lto.fi_location
+
+def set_server_fi(server):
+    """Run the client code to set server params"""
+
+    cmd_env = get_base_env()
+
+    cmd_env['OFI_INTERFACE'] = 'eth0'
+    cmd_env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
+    vh = ValgrindHelper(server.conf)
+
+    system_name = 'daos_server'
+
+    exec_cmd = vh.get_cmd_prefix()
+
+    agent_bin = os.path.join(server.conf['PREFIX'], 'bin', 'daos_agent')
+
+    addr_dir = tempfile.TemporaryDirectory(prefix='dnt_addr_',)
+    addr_file = os.path.join(addr_dir.name,
+                             '{}.attach_info_tmp'.format(system_name))
+
+    agent_cmd = [agent_bin,
+                 '-i',
+                 '-s',
+                 server.agent_dir,
+                 'dump-attachinfo',
+                 '-o',
+                 addr_file]
+
+    rc = subprocess.run(agent_cmd, env=cmd_env)
+    print(rc)
+    assert rc.returncode == 0
+
+    cmd = ['set_fi_attr',
+           '--cfg_path',
+           addr_dir.name,
+           '--group-name',
+           'daos_server',
+           '--rank',
+           '0',
+           '--attr',
+           '0,0,0,0,0']
+
+    exec_cmd.append(os.path.join(server.conf['PREFIX'], 'bin', 'cart_ctl'))
+    exec_cmd.extend(cmd)
+
+    prefix = 'dnt_crt_ctl_{}_'.format(get_inc_id())
+    log_file = tempfile.NamedTemporaryFile(prefix=prefix,
+                                           suffix='.log',
+                                           delete=False)
+
+    cmd_env['D_LOG_FILE'] = log_file.name
+    cmd_env['DAOS_AGENT_DRPC_DIR'] = server.agent_dir
+
+    rc = subprocess.run(exec_cmd,
+                        env=cmd_env,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE)
+    print(rc)
+    vh.convert_xml()
+    log_test(server.conf, log_file.name)
+    assert rc.returncode == 0
+    return False # fatal_errors
 
 def create_and_read_via_il(dfuse, path):
     """Create file in dir, write to and read
@@ -1583,7 +1714,7 @@ def run_in_fg(server, conf):
     t_dir = os.path.join(dfuse.dir, container)
     os.mkdir(t_dir)
     print('Running at {}'.format(t_dir))
-    print('daos container create --type POSIX' \
+    print('daos container create --type POSIX ' \
           '--pool {} --path {}/uns-link'.format(
               pools[0], t_dir))
     print('cd {}/uns-link'.format(t_dir))
@@ -1594,6 +1725,189 @@ def run_in_fg(server, conf):
     except KeyboardInterrupt:
         pass
     dfuse = None
+
+def check_readdir_perf(server, conf):
+    """ Check and report on readdir performance
+
+    Loop over number of files, measuring the time taken to
+    populate a directory, and to read the directory contents,
+    measure both files and directories as contents, and
+    readdir both with and without stat, restarting dfuse
+    between each test to avoid cache effects.
+
+    Continue testing until five minutes have passed, and print
+    a table of results.
+    """
+
+    headers = ['count', 'create\ndirs', 'create\nfiles']
+    headers.extend(['dirs', 'files', 'dirs\nwith stat', 'files\nwith stat'])
+    headers.extend(['caching\n1st', 'caching\n2nd'])
+
+    results = []
+
+    def make_dirs(parent, count):
+        """Populate the test directory"""
+        print('Populating to {}'.format(count))
+        dir_dir = os.path.join(parent,
+                               'dirs.{}.in'.format(count))
+        t_dir = os.path.join(parent,
+                             'dirs.{}'.format(count))
+        file_dir = os.path.join(parent,
+                                'files.{}.in'.format(count))
+        t_file = os.path.join(parent,
+                              'files.{}'.format(count))
+
+        start_all = time.time()
+        if not os.path.exists(t_dir):
+            try:
+                os.mkdir(dir_dir)
+            except FileExistsError:
+                pass
+            for i in range(count):
+                try:
+                    os.mkdir(os.path.join(dir_dir, str(i)))
+                except FileExistsError:
+                    pass
+            dir_time = time.time() - start_all
+            print('Creating {} dirs took {:.2f}'.format(count,
+                                                        dir_time))
+            os.rename(dir_dir, t_dir)
+
+        if not os.path.exists(t_file):
+            try:
+                os.mkdir(file_dir)
+            except FileExistsError:
+                pass
+            start = time.time()
+            for i in range(count):
+                f = open(os.path.join(file_dir, str(i)), 'w')
+                f.close()
+            file_time = time.time() - start
+            print('Creating {} files took {:.2f}'.format(count,
+                                                         file_time))
+            os.rename(file_dir, t_file)
+
+        return [dir_time, file_time]
+
+    def print_results():
+        """Display the results"""
+
+        print(tabulate.tabulate(results,
+                                headers=headers,
+                                floatfmt=".2f"))
+
+    pools = get_pool_list()
+
+    while len(pools) < 1:
+        pools = make_pool(server)
+
+    pool = pools[0]
+
+    container = str(uuid.uuid4())
+
+    dfuse = DFuse(server, conf, pool=pool)
+
+    print('Creating container and populating')
+    count = 1024
+    dfuse.start()
+    parent = os.path.join(dfuse.dir, container)
+    try:
+        os.mkdir(parent)
+    except FileExistsError:
+        pass
+    create_times = make_dirs(parent, count)
+    dfuse.stop()
+
+    all_start = time.time()
+
+    while True:
+
+        row = [count]
+        row.extend(create_times)
+        dfuse = DFuse(server, conf, pool=pool, container=container)
+        dir_dir = os.path.join(dfuse.dir,
+                               'dirs.{}'.format(count))
+        file_dir = os.path.join(dfuse.dir,
+                                'files.{}'.format(count))
+        dfuse.start()
+        start = time.time()
+        subprocess.run(['/bin/ls', dir_dir], stdout=subprocess.PIPE)
+        elapsed = time.time() - start
+        print('processed {} dirs in {:.2f} seconds'.format(count,
+                                                           elapsed))
+        row.append(elapsed)
+        dfuse.stop()
+        dfuse = DFuse(server, conf, pool=pool, container=container)
+        dfuse.start()
+        start = time.time()
+        subprocess.run(['/bin/ls', file_dir], stdout=subprocess.PIPE)
+        elapsed = time.time() - start
+        print('processed {} files in {:.2f} seconds'.format(count,
+                                                            elapsed))
+        row.append(elapsed)
+        dfuse.stop()
+
+        dfuse = DFuse(server, conf, pool=pool, container=container)
+        dfuse.start()
+        start = time.time()
+        subprocess.run(['/bin/ls', '-t', dir_dir], stdout=subprocess.PIPE)
+        elapsed = time.time() - start
+        print('processed {} dirs in {:.2f} seconds'.format(count,
+                                                           elapsed))
+        row.append(elapsed)
+        dfuse.stop()
+        dfuse = DFuse(server, conf, pool=pool, container=container)
+        dfuse.start()
+        start = time.time()
+        # Use sort by time here so ls calls stat, if you run ls -l then it will
+        # also call getxattr twice which skews the figures.
+        subprocess.run(['/bin/ls', '-t', file_dir], stdout=subprocess.PIPE)
+        elapsed = time.time() - start
+        print('processed {} files in {:.2f} seconds'.format(count,
+                                                            elapsed))
+        row.append(elapsed)
+        dfuse.stop()
+
+        # Test with caching enabled.  Check the file directory, and do it twice
+        # without restarting, to see the effect of populating the cache, and
+        # reading from the cache.
+        dfuse = DFuse(server,
+                      conf,
+                      pool=pool,
+                      container=container,
+                      caching=True)
+        dfuse.start()
+        start = time.time()
+        subprocess.run(['/bin/ls', '-t', file_dir], stdout=subprocess.PIPE)
+        elapsed = time.time() - start
+        print('processed {} files in {:.2f} seconds'.format(count,
+                                                            elapsed))
+        row.append(elapsed)
+        start = time.time()
+        subprocess.run(['/bin/ls', '-t', file_dir], stdout=subprocess.PIPE)
+        elapsed = time.time() - start
+        print('processed {} files in {:.2f} seconds'.format(count,
+                                                            elapsed))
+        row.append(elapsed)
+        results.append(row)
+
+        elapsed = time.time() - all_start
+        if elapsed > 5 * 60:
+            dfuse.stop()
+            break
+
+        print_results()
+        count *= 2
+        create_times = make_dirs(dfuse.dir, count)
+        dfuse.stop()
+
+    run_daos_cmd(conf, ['container',
+                        'destroy',
+                        '--pool',
+                        pool,
+                        '--cont',
+                        container])
+    print_results()
 
 def test_pydaos_kv(server, conf):
     """Test the KV interface"""
@@ -1662,18 +1976,290 @@ def test_pydaos_kv(server, conf):
     daos._cleanup()
     log_test(conf, pydaos_log_file.name)
 
-def test_alloc_fail(server, wf, conf):
-    """run 'daos' client binary with fault injection
+# Fault injection testing.
+#
+# This runs two different commands under fault injection, although it allows
+# for more to be added.  The command is defined, then run in a loop with
+# different locations (loc) enabled, essentially failing each call to
+# D_ALLOC() in turn.  This iterates for all memory allocations in the command
+# which is around 1300 each command so this takes a while.
+#
+# In order to improve response times the different locations are run in
+# parallel, although the results are processed in order.
+#
+# Each location is checked for memory leaks according to the log file
+# (D_ALLOC/D_FREE not matching), that it didn't crash and some checks are run
+# on stdout/stderr as well.
+#
+# If a particular loc caused the command to exit with a signal then that
+# location is re-run at the end under valgrind to get better diagnostics.
+#
 
-    Enable the fault injection for the daos binary, injecting
-    allocation failures at different locations.  Keep going until
-    the client runs with no faults injected (about 800 iterations).
+class AllocFailTestRun():
+    """Class to run a fault injection command with a single fault"""
 
-    Disable valgrind for this test as it takes a long time to run
-    with valgrind enabled, use purely the log analysis to find issues.
+    def __init__(self, aft, cmd, env, loc):
 
-    Ignore new error messages containing the numeric value of -DER_NOMEM
-    but warn on all other warnings generated.
+        # The subprocess handle
+        self._sp = None
+        # The valgrind handle
+        self.vh = None
+        # The return from subprocess.poll
+        self.ret = None
+
+        self.cmd = cmd
+        self.env = env
+        self.aft = aft
+        self._fi_file = None
+        self.returncode = None
+        self.stdout = None
+        self.stderr = None
+        self.fi_loc = None
+        self.fault_injected = None
+        self.loc = loc
+
+        prefix = 'dnt_fi_check_{}_'.format(get_inc_id())
+        self.log_file = tempfile.NamedTemporaryFile(prefix=prefix,
+                                                    suffix='.log',
+                                                    delete=False).name
+        self.env['D_LOG_FILE'] = self.log_file
+
+    def __str__(self):
+        res = "Fault injection test of '{}'\n".format(' '.join(self.cmd))
+        res += 'Fault injection location {}\n'.format(self.loc)
+        if self.vh:
+            res += 'Valgrind enabled for this test'
+        if self.returncode is None:
+            res += 'Process not completed'
+        else:
+            res += 'Returncode was {}'.format(self.returncode)
+        return res
+
+    def start(self):
+        """Start the command"""
+        fc = {}
+        if self.loc:
+            fc['fault_config'] = [{'id': 0,
+                                   'probability_x': 1,
+                                   'probability_y': 1,
+                                   'interval': self.loc,
+                                   'max_faults': 1}]
+
+            self._fi_file = tempfile.NamedTemporaryFile(prefix='fi_',
+                                                        suffix='.yaml')
+
+            self._fi_file.write(yaml.dump(fc, encoding='utf=8'))
+            self._fi_file.flush()
+
+            self.env['D_FI_CONFIG'] = self._fi_file.name
+
+        if self.vh:
+            exec_cmd = self.vh.get_cmd_prefix()
+            exec_cmd.extend(self.cmd)
+        else:
+            exec_cmd = self.cmd
+
+        self._sp = subprocess.Popen(exec_cmd,
+                                    env=self.env,
+                                    stdin=subprocess.PIPE,
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE)
+
+    def has_finished(self):
+        """Check if the command has completed"""
+        if self.returncode is not None:
+            return True
+
+        rc = self._sp.poll()
+        if rc is None:
+            return False
+        self._post(rc)
+        return True
+
+    def wait(self):
+        """Wait for the command to complete"""
+        if self.returncode is not None:
+            return
+
+        self._post(self._sp.wait())
+
+    def _post(self, rc):
+        """Helper function, called once after command is complete.
+
+        This is where all the checks are performed.
+        """
+
+        self.returncode = rc
+        self.stdout = self._sp.stdout.read()
+        self.stderr = self._sp.stderr.read()
+
+        if self.stderr != b'':
+            print('Stderr from command')
+            print(self.stderr.decode('utf-8').strip())
+
+        show_memleaks = True
+
+        fi_signal = None
+        # A negative return code means the process exited with a signal so do
+        # not check for memory leaks in this case as it adds noise, right when
+        # it's least wanted.
+        if rc < 0:
+            show_memleaks = False
+            fi_signal = -rc
+
+        try:
+            self.fi_loc = log_test(self.aft.conf,
+                                   self.log_file,
+                                   show_memleaks=show_memleaks,
+                                   quiet=True,
+                                   skip_fi=True,
+                                   leak_wf=self.aft.wf,
+                                   fi_signal=fi_signal)
+            self.fault_injected = True
+        except NLTestNoFi:
+            # If a fault wasn't injected then check output is as expected.
+            # It's not possible to log these as warnings, because there is
+            # no src line to log them against, so simply assert.
+            assert self.returncode == 0
+            assert self.stderr == b''
+            if self.aft.expected_stdout is not None:
+                assert self.stdout == self.aft.expected_stdout
+            self.fault_injected = False
+        if self.vh:
+            self.vh.convert_xml()
+        if not self.fault_injected:
+            return
+        if not self.aft.check_stderr:
+            return
+
+        if self.returncode == 0:
+            if self.stdout != self.aft.expected_stdout:
+                self.aft.wf.add(self.fi_loc,
+                                'NORMAL',
+                                "Incorrect stdout '{}'".format(self.stdout),
+                                mtype='Out of memory caused zero exit '
+                                'code with incorrect output')
+
+        stderr = self.stderr.decode('utf-8').rstrip()
+        if not stderr.endswith("Out of memory (-1009)") and \
+           'error parsing command line arguments' not in stderr and \
+           self.stdout != self.aft.expected_stdout:
+            if self.stdout != b'':
+                print(self.aft.expected_stdout)
+                print()
+                print(self.stdout)
+                print()
+            self.aft.wf.add(self.fi_loc,
+                            'NORMAL',
+                            "Incorrect stderr '{}'".format(stderr),
+                            mtype='Out of memory not reported '
+                            'correctly via stderr')
+
+class AllocFailTest():
+    """Class to describe fault injection command"""
+
+    def __init__(self, conf, cmd):
+        self.conf = conf
+        self.cmd = cmd
+        self.prefix = True
+        self.check_stderr = False
+        self.expected_stdout = None
+        self.use_il = False
+        self.wf = conf.wf
+
+    def launch(self):
+        """Run all tests for this command"""
+
+        def _prep(self):
+            rc = self._run_cmd(None)
+            rc.wait()
+            self.expected_stdout = rc.stdout
+            assert not rc.fault_injected
+
+        # Prep what the expected stdout is by running once without faults
+        # enabled.
+        _prep(self)
+
+        print('Expected stdout is')
+        print(self.expected_stdout)
+
+        num_cores = len(os.sched_getaffinity(0))
+
+        if num_cores < 20:
+            max_child = 1
+        else:
+            max_child = int(num_cores / 4 * 3)
+
+        active = []
+        fid = 1
+        max_count = 0
+        finished = False
+
+        # List of fids to re-run under valgrind.
+        to_rerun = []
+
+        fatal_errors = False
+
+        while not finished or active:
+            if len(active) < max_child and not finished:
+                active.append(self._run_cmd(fid))
+                fid += 1
+
+                if len(active) > max_count:
+                    max_count = len(active)
+
+            # Now complete as many as have finished.
+            while active and active[0].has_finished():
+                ret = active.pop(0)
+                print(ret)
+                if ret.returncode < 0:
+                    fatal_errors = True
+                    to_rerun.append(ret.loc)
+
+                if not ret.fault_injected:
+                    print('Fault injection did not trigger, stopping')
+                    finished = True
+
+        print('Completed, fid {}'.format(fid))
+        print('Max in flight {}'.format(max_count))
+
+        for fid in to_rerun:
+            rerun = self._run_cmd(fid, valgrind=True)
+            print(rerun)
+            rerun.wait()
+
+        return fatal_errors
+
+    def _run_cmd(self,
+                 loc,
+                 valgrind=False):
+        """Run the test with FI enabled
+        """
+
+        cmd_env = get_base_env()
+
+        if self.use_il:
+            cmd_env['LD_PRELOAD'] = os.path.join(self.conf['PREFIX'],
+                                                 'lib64', 'libioil.so')
+
+        cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
+
+        aftf = AllocFailTestRun(self, self.cmd, cmd_env, loc)
+        if valgrind:
+            aftf.vh = ValgrindHelper(self.conf)
+            # Turn off leak checking in this case, as we're just interested in
+            # why it crashed.
+            aftf.vh.full_check = False
+
+        aftf.start()
+
+        return aftf
+
+def test_alloc_fail_cat(server, conf, wf):
+    """Run the Interception library with fault injection
+
+    Start dfuse for this test, and do not do output checking on the command
+    itself yet.
     """
 
     pools = get_pool_list()
@@ -1683,70 +2269,54 @@ def test_alloc_fail(server, wf, conf):
 
     pool = pools[0]
 
-    cmd = ['pool', 'list-containers', '--pool', pool]
+    dfuse = DFuse(server, conf, pool=pool)
+    dfuse.use_valgrind = False
+    dfuse.start()
 
-    fid = 1
+    container = str(uuid.uuid4())
 
-    fatal_errors = False
+    os.mkdir(os.path.join(dfuse.dir, container))
+    target_file = os.path.join(dfuse.dir, container, 'test_file')
+
+    fd = open(target_file, 'w')
+    fd.write('Hello there')
+    fd.close()
+
+    cmd = ['cat', target_file]
+
+    test_cmd = AllocFailTest(conf, cmd)
+    test_cmd.use_il = True
+    test_cmd.wf = wf
+
+    rc = test_cmd.launch()
+    dfuse.stop()
+    return rc
+
+def test_alloc_fail(server, conf):
+    """run 'daos' client binary with fault injection"""
+
+    pools = get_pool_list()
+
+    while len(pools) < 1:
+        pools = make_pool(server)
+
+    pool = pools[0]
+
+    cmd = [os.path.join(conf['PREFIX'], 'bin', 'daos'),
+           'pool',
+           'list-containers',
+           '--pool',
+           pool]
+    test_cmd = AllocFailTest(conf, cmd)
 
     # Create at least one container, and record what the output should be when
     # the command works.
-    create_cont(conf, pool)
+    container = create_cont(conf, pool)
+    test_cmd.check_stderr = True
 
-    rc = run_daos_cmd(conf, cmd)
-    expected_stdout = rc.stdout.decode('utf-8').strip()
-
-    while True:
-        print()
-
-        fc = {}
-        fc['fault_config'] = [{'id': 0,
-                               'probability_x': 1,
-                               'probability_y': 1,
-                               'interval': fid,
-                               'max_faults': 1}]
-
-        fi_file = tempfile.NamedTemporaryFile(prefix='fi_',
-                                              suffix='.yaml')
-
-        fi_file.write(yaml.dump(fc, encoding='utf=8'))
-        fi_file.flush()
-
-        try:
-            rc = run_daos_cmd(conf, cmd, fi_file=fi_file.name)
-            if rc.returncode < 0:
-                print(rc)
-                print('Rerunning test under valgrind, fid={}'.format(fid))
-                rc = run_daos_cmd(conf,
-                                  cmd,
-                                  fi_file=fi_file.name,
-                                  fi_valgrind=True)
-                fatal_errors = True
-
-            stdout = rc.stdout.decode('utf-8').strip()
-            stderr = rc.stderr.decode('utf-8').strip()
-            if not stderr.endswith("Out of memory (-1009)") and \
-               'error parsing command line arguments' not in stderr and \
-               stdout != expected_stdout:
-                print(stdout)
-                print(expected_stdout)
-                wf.add(rc.fi_loc,
-                       'NORMAL', "Incorrect stderr '{}'".format(stderr),
-                       mtype='Out of memory not reported correctly via stderr')
-        except NLTestNoFi:
-
-            print('Fault injection did not trigger, returning')
-            break
-
-        print(rc)
-        fid += 1
-        # Keep going until program runs to completion.  We should add checking
-        # of exit code at some point, but it would need to be reported properly
-        # through Jenkins.
-        # if rc.returncode not in (1, 255):
-        #   break
-
-    return fatal_errors
+    rc = test_cmd.launch()
+    destroy_container(conf, pool, container)
+    return rc
 
 def main():
     """Main entry point"""
@@ -1754,8 +2324,10 @@ def main():
     parser = argparse.ArgumentParser(
         description='Run DAOS client on local node')
     parser.add_argument('--server-debug', default=None)
+    parser.add_argument('--dfuse-debug', default=None)
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
+    parser.add_argument('--perf-check', action='store_true')
     parser.add_argument('--dtx', action='store_true')
     parser.add_argument('--test', help="Use '--test list' for list")
     parser.add_argument('mode', nargs='?')
@@ -1777,6 +2349,9 @@ def main():
 
     wf = WarningsFactory('nlt-errors.json')
 
+    wf_server = WarningsFactory('nlt-server-leaks.json')
+    wf_client = WarningsFactory('nlt-client-leaks.json')
+
     conf.set_wf(wf)
     conf.set_args(args)
     setup_log_test(conf)
@@ -1785,6 +2360,7 @@ def main():
     server.start()
 
     fatal_errors = BoolRatchet()
+    fi_test = False
 
     if args.mode == 'launch':
         run_in_fg(server, conf)
@@ -1794,15 +2370,18 @@ def main():
         test_pydaos_kv(server, conf)
     elif args.mode == 'overlay':
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
+    elif args.mode == 'set-fi':
+        fatal_errors.add_result(set_server_fi(server))
     elif args.mode == 'fi':
-        fatal_errors.add_result(test_alloc_fail(server, wf, conf))
+        fi_test = True
     elif args.mode == 'all':
+        fi_test = True
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
         fatal_errors.add_result(run_posix_tests(server, conf))
         test_pydaos_kv(server, conf)
-        fatal_errors.add_result(test_alloc_fail(server, wf, conf))
+        fatal_errors.add_result(set_server_fi(server))
     elif args.test:
         if args.test == 'all':
             fatal_errors.add_result(run_posix_tests(server, conf))
@@ -1812,8 +2391,9 @@ def main():
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
         fatal_errors.add_result(run_posix_tests(server, conf))
+        fatal_errors.add_result(set_server_fi(server))
 
-    if server.stop() != 0:
+    if server.stop(wf_server) != 0:
         fatal_errors.fail()
 
     # If running all tests then restart the server under valgrind.
@@ -1826,10 +2406,30 @@ def main():
         for pool in pools:
             cmd = ['pool', 'list-containers', '--pool', pool]
             run_daos_cmd(conf, cmd, valgrind=False)
-        if server.stop() != 0:
+        if server.stop(wf_server) != 0:
             fatal_errors.add_result(True)
 
+    # If the perf-check option is given then re-start everything without much
+    # debugging enabled and run some microbenchmarks to give numbers for use
+    # as a comparison against other builds.
+    if args.perf_check or fi_test:
+        args.server_debug = 'INFO'
+        args.memcheck = 'no'
+        args.dfuse_debug = 'WARN'
+        server = DaosServer(conf)
+        server.start()
+        if fi_test:
+            fatal_errors.add_result(test_alloc_fail_cat(server,
+                                                        conf, wf_client))
+            fatal_errors.add_result(test_alloc_fail(server, conf))
+        if args.perf_check:
+            check_readdir_perf(server, conf)
+        if server.stop(wf_server) != 0:
+            fatal_errors.fail()
+
     wf.close()
+    wf_server.close()
+    wf_client.close()
     if fatal_errors.errors:
         print("Significant errors encountered")
         sys.exit(1)
