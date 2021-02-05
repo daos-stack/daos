@@ -68,6 +68,3 @@ class SetOtherEnvVars(TestWithoutServers):
         self.utils.unset_other_env_vars(self)
         print("After unset_other_env_vars\n")
         print(subprocess.check_output("env", shell=True))
-
-if __name__ == "__main__":
-    main()
