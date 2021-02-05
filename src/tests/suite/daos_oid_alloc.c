@@ -261,12 +261,69 @@ check:
 	assert_int_equal(rc, 0);
 }
 
+static void
+cont_oid_prop(void **state)
+{
+	test_arg_t		*arg = *state;
+	daos_prop_t		*prop;
+	uint64_t		oid, max_oid;
+	uuid_t			co_uuid;
+	daos_handle_t		coh;
+	daos_cont_info_t	co_info;
+	int			rc = 0;
+
+	if (arg->myrank != 0)
+		return;
+
+	uuid_clear(co_uuid);
+	uuid_generate(co_uuid);
+
+	/** set max oid to 2 x 1024 x 1024 */
+	max_oid = 2 * 1024 * 1024;
+	prop = daos_prop_alloc(1);
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_ALLOCED_OID;
+	prop->dpp_entries[0].dpe_val = max_oid;
+
+	print_message("Create a container with max_oid "DF_U64"\n", max_oid);
+	rc = daos_cont_create(arg->pool.poh, co_uuid, prop, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_cont_open(arg->pool.poh, co_uuid, DAOS_COO_RW, &coh,
+			    &co_info, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("Allocate 1 OID, should be >= "DF_U64"\n", max_oid);
+	rc = daos_cont_alloc_oids(coh, 1, &oid, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("OID allocated = "DF_U64"\n", oid);
+	assert_true(oid >= max_oid);
+
+	print_message("GET max OID from container property\n");
+	prop->dpp_entries[0].dpe_val = 0;
+	rc = daos_cont_query(coh, NULL, prop, NULL);
+	assert_int_equal(rc, 0);
+	print_message("MAX OID = "DF_U64"\n", prop->dpp_entries[0].dpe_val);
+	assert_true(prop->dpp_entries[0].dpe_val > max_oid);
+
+	print_message("Change max_oid with daos_cont_set_prop (should fail)\n");
+	rc = daos_cont_set_prop(coh, prop, NULL);
+	assert_rc_equal(rc, -DER_NO_PERM);
+
+	daos_prop_free(prop);
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
+	assert_rc_equal(rc, 0);
+}
+
 static const struct CMUnitTest oid_alloc_tests[] = {
 	{"OID_ALLOC1: Simple OID ALLOCATION (blocking)",
 	 simple_oid_allocator, async_disable, NULL},
 	{"OID_ALLOC2: Multiple Cont OID ALLOCATION (blocking)",
 	 multi_cont_oid_allocator, async_disable, NULL},
-	{"OID_ALLOC3: OID Allocator check (blocking)",
+	{"OID_ALLOC3: Fetch / Set MAX OID",
+	 cont_oid_prop, async_disable, NULL},
+	{"OID_ALLOC4: OID Allocator check (blocking)",
 	 oid_allocator_checker, async_disable, NULL},
 };
 
