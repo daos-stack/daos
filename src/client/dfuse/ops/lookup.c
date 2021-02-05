@@ -24,10 +24,10 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	D_ASSERT(ie->ie_dfs);
 
 	/* Set the caching attributes of this entry */
-	if (!is_new) {
-		entry.attr_timeout = ie->ie_dfs->dfs_attr_timeout;
+	if (!S_ISDIR(ie->ie_stat.st_mode))
 		entry.entry_timeout = ie->ie_dfs->dfs_attr_timeout;
-	}
+
+	entry.attr_timeout = ie->ie_dfs->dfs_attr_timeout;
 
 	if (ie->ie_stat.st_ino == 0) {
 		rc = dfs_obj2id(ie->ie_obj, &ie->ie_oid);
