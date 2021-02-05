@@ -38,8 +38,8 @@ daos_props_2cont_props(daos_prop_t *props, struct cont_props *cont_prop)
 	/** redundancy */
 	cont_prop->dcp_redun_fac	= daos_cont_prop2redunfac(props);
 
-	/** max oid */
-	cont_prop->dcp_max_oid		= daos_cont_prop2maxoid(props);
+	/** alloc'ed oid */
+	cont_prop->dcp_alloced_oid	= daos_cont_prop2allocedoid(props);
 }
 
 uint16_t
@@ -120,7 +120,7 @@ daos_cont_prop2dedupsize(daos_prop_t *props)
 }
 
 uint64_t
-daos_cont_prop2maxoid(daos_prop_t *props)
+daos_cont_prop2allocedoid(daos_prop_t *props)
 {
 	struct daos_prop_entry *prop =
 		daos_prop_entry_get(props, DAOS_PROP_CO_ALLOCED_OID);
