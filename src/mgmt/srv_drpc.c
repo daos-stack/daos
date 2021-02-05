@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
- * This file is part of the DAOS server. It implements the handlers to
+ * This file is part of the DAOS Engine. It implements the handlers to
  * process incoming dRPC requests for management tasks.
  */
 #define D_LOGFAC	DD_FAC(mgmt)
@@ -148,17 +148,17 @@ ds_mgmt_drpc_group_update(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_INFO("Received request to update group map\n");
 
-	D_ALLOC_ARRAY(in.gui_servers, req->n_servers);
+	D_ALLOC_ARRAY(in.gui_servers, req->n_engines);
 	if (in.gui_servers == NULL) {
 		rc = -DER_NOMEM;
 		goto out;
 	}
 
-	for (i = 0; i < req->n_servers; i++) {
-		in.gui_servers[i].se_rank = req->servers[i]->rank;
-		in.gui_servers[i].se_uri = req->servers[i]->uri;
+	for (i = 0; i < req->n_engines; i++) {
+		in.gui_servers[i].se_rank = req->engines[i]->rank;
+		in.gui_servers[i].se_uri = req->engines[i]->uri;
 	}
-	in.gui_n_servers = req->n_servers;
+	in.gui_n_servers = req->n_engines;
 	in.gui_map_version = req->map_version;
 
 	rc = ds_mgmt_group_update_handler(&in);
@@ -2002,7 +2002,7 @@ ds_mgmt_drpc_set_up(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__DaosResp	resp = MGMT__DAOS_RESP__INIT;
 
-	D_INFO("Received request to setup server\n");
+	D_INFO("Received request to setup engine\n");
 
 	dss_init_state_set(DSS_INIT_STATE_SET_UP);
 

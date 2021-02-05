@@ -52,10 +52,10 @@ void   mgmt__daos_resp__free_unpacked
   assert(message->base.descriptor == &mgmt__daos_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-void   mgmt__group_update_req__server__init
-                     (Mgmt__GroupUpdateReq__Server         *message)
+void   mgmt__group_update_req__engine__init
+                     (Mgmt__GroupUpdateReq__Engine         *message)
 {
-  static const Mgmt__GroupUpdateReq__Server init_value = MGMT__GROUP_UPDATE_REQ__SERVER__INIT;
+  static const Mgmt__GroupUpdateReq__Engine init_value = MGMT__GROUP_UPDATE_REQ__ENGINE__INIT;
   *message = init_value;
 }
 void   mgmt__group_update_req__init
@@ -642,7 +642,7 @@ const ProtobufCMessageDescriptor mgmt__daos_resp__descriptor =
   (ProtobufCMessageInit) mgmt__daos_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__group_update_req__server__field_descriptors[2] =
+static const ProtobufCFieldDescriptor mgmt__group_update_req__engine__field_descriptors[2] =
 {
   {
     "rank",
@@ -650,7 +650,7 @@ static const ProtobufCFieldDescriptor mgmt__group_update_req__server__field_desc
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__GroupUpdateReq__Server, rank),
+    offsetof(Mgmt__GroupUpdateReq__Engine, rank),
     NULL,
     NULL,
     0,             /* flags */
@@ -662,35 +662,35 @@ static const ProtobufCFieldDescriptor mgmt__group_update_req__server__field_desc
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__GroupUpdateReq__Server, uri),
+    offsetof(Mgmt__GroupUpdateReq__Engine, uri),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
-static const unsigned mgmt__group_update_req__server__field_indices_by_name[] = {
+static const unsigned mgmt__group_update_req__engine__field_indices_by_name[] = {
   0,   /* field[0] = rank */
   1,   /* field[1] = uri */
 };
-static const ProtobufCIntRange mgmt__group_update_req__server__number_ranges[1 + 1] =
+static const ProtobufCIntRange mgmt__group_update_req__engine__number_ranges[1 + 1] =
 {
   { 1, 0 },
   { 0, 2 }
 };
-const ProtobufCMessageDescriptor mgmt__group_update_req__server__descriptor =
+const ProtobufCMessageDescriptor mgmt__group_update_req__engine__descriptor =
 {
   PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "mgmt.GroupUpdateReq.Server",
-  "Server",
-  "Mgmt__GroupUpdateReq__Server",
+  "mgmt.GroupUpdateReq.Engine",
+  "Engine",
+  "Mgmt__GroupUpdateReq__Engine",
   "mgmt",
-  sizeof(Mgmt__GroupUpdateReq__Server),
+  sizeof(Mgmt__GroupUpdateReq__Engine),
   2,
-  mgmt__group_update_req__server__field_descriptors,
-  mgmt__group_update_req__server__field_indices_by_name,
-  1,  mgmt__group_update_req__server__number_ranges,
-  (ProtobufCMessageInit) mgmt__group_update_req__server__init,
+  mgmt__group_update_req__engine__field_descriptors,
+  mgmt__group_update_req__engine__field_indices_by_name,
+  1,  mgmt__group_update_req__engine__number_ranges,
+  (ProtobufCMessageInit) mgmt__group_update_req__engine__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor mgmt__group_update_req__field_descriptors[2] =
@@ -708,21 +708,21 @@ static const ProtobufCFieldDescriptor mgmt__group_update_req__field_descriptors[
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "servers",
+    "engines",
     2,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_MESSAGE,
-    offsetof(Mgmt__GroupUpdateReq, n_servers),
-    offsetof(Mgmt__GroupUpdateReq, servers),
-    &mgmt__group_update_req__server__descriptor,
+    offsetof(Mgmt__GroupUpdateReq, n_engines),
+    offsetof(Mgmt__GroupUpdateReq, engines),
+    &mgmt__group_update_req__engine__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
 static const unsigned mgmt__group_update_req__field_indices_by_name[] = {
+  1,   /* field[1] = engines */
   0,   /* field[0] = map_version */
-  1,   /* field[1] = servers */
 };
 static const ProtobufCIntRange mgmt__group_update_req__number_ranges[1 + 1] =
 {

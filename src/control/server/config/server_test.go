@@ -8,6 +8,8 @@ package config
 
 import (
 	"bufio"
+	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -110,7 +112,7 @@ func getDeviceClassStub(netdev string) (uint32, error) {
 	}
 }
 
-func TestServer_ConfigMarshalUnmarshal(t *testing.T) {
+func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 	for name, tt := range map[string]struct {
 		inPath string
 		expErr error
@@ -187,7 +189,7 @@ func TestServer_ConfigMarshalUnmarshal(t *testing.T) {
 	}
 }
 
-func TestServer_ConstructedConfig(t *testing.T) {
+func TestServerConfig_Constructed(t *testing.T) {
 	testDir, cleanup := CreateTestDir(t)
 	defer cleanup()
 
@@ -274,77 +276,139 @@ func TestServer_ConstructedConfig(t *testing.T) {
 	}
 }
 
-func TestServer_ConfigValidation(t *testing.T) {
+func replaceFile(t *testing.T, name, oldTxt, newTxt string) {
+	// open original file
+	f, err := os.Open(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	// create temp file
+	tmp, err := ioutil.TempFile("", "replace-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tmp.Close()
+
+	// replace while copying from f to tmp
+	if err := replaceText(f, tmp, oldTxt, newTxt); err != nil {
+		t.Fatal(err)
+	}
+
+	// make sure the tmp file was successfully written to
+	if err := tmp.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// close the file we're reading from
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// overwrite the original file with the temp file
+	if err := os.Rename(tmp.Name(), name); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func replaceText(r io.Reader, w io.Writer, oldTxt, newTxt string) error {
+	// use scanner to read line by line
+	sc := bufio.NewScanner(r)
+	for sc.Scan() {
+		line := sc.Text()
+		if line == oldTxt {
+			line = newTxt
+		}
+		if _, err := io.WriteString(w, line+"\n"); err != nil {
+			return err
+		}
+	}
+
+	return sc.Err()
+}
+
+func TestServerConfig_Validation(t *testing.T) {
 	noopExtra := func(c *Server) *Server { return c }
 
 	for name, tt := range map[string]struct {
 		extraConfig func(c *Server) *Server
+		setServers  bool // replace engines section with legacy servers in conf
 		expErr      error
 	}{
-		"example config": {
-			noopExtra,
-			nil,
-		},
+		"example config": {},
 		"nil server entry": {
-			func(c *Server) *Server {
+			extraConfig: func(c *Server) *Server {
 				var nilIOEngineConfig *ioengine.Config
 				return c.WithEngines(nilIOEngineConfig)
 			},
-			errors.New("validation"),
+			expErr: errors.New("validation"),
 		},
 		"single access point": {
-			func(c *Server) *Server {
+			extraConfig: func(c *Server) *Server {
 				return c.WithAccessPoints("1.2.3.4:1234")
 			},
-			nil,
 		},
 		"multiple access points (even)": {
-			func(c *Server) *Server {
+			extraConfig: func(c *Server) *Server {
 				return c.WithAccessPoints("1.2.3.4:1234", "5.6.7.8:5678")
 			},
-			FaultConfigEvenAccessPoints,
+			expErr: FaultConfigEvenAccessPoints,
 		},
 		"multiple access points (odd)": {
-			func(c *Server) *Server {
+			extraConfig: func(c *Server) *Server {
 				return c.WithAccessPoints("1.2.3.4:1234", "5.6.7.8:5678", "1.5.3.8:6247")
 			},
-			nil,
 		},
 		"multiple access points (dupes)": {
-			func(c *Server) *Server {
+			extraConfig: func(c *Server) *Server {
 				return c.WithAccessPoints("1.2.3.4:1234", "5.6.7.8:5678", "1.2.3.4:1234")
 			},
-			FaultConfigEvenAccessPoints,
+			expErr: FaultConfigEvenAccessPoints,
 		},
 		"no access points": {
-			func(c *Server) *Server {
+			extraConfig: func(c *Server) *Server {
 				return c.WithAccessPoints()
 			},
-			FaultConfigBadAccessPoints,
+			expErr: FaultConfigBadAccessPoints,
 		},
 		"single access point no port": {
-			func(c *Server) *Server {
+			extraConfig: func(c *Server) *Server {
 				return c.WithAccessPoints("1.2.3.4")
 			},
-			nil,
 		},
 		"single access point invalid port": {
-			func(c *Server) *Server {
+			extraConfig: func(c *Server) *Server {
 				return c.WithAccessPoints("1.2.3.4").
 					WithControlPort(0)
 			},
-			FaultConfigBadControlPort,
+			expErr: FaultConfigBadControlPort,
 		},
 		"single access point including invalid port": {
-			func(c *Server) *Server {
+			extraConfig: func(c *Server) *Server {
 				return c.WithAccessPoints("1.2.3.4:0")
 			},
-			FaultConfigBadControlPort,
+			expErr: FaultConfigBadControlPort,
+		},
+		"use legacy servers conf directive rather than engines": {
+			setServers: true,
+		},
+		"specify legacy servers conf directive in addition to engines": {
+			extraConfig: func(c *Server) *Server {
+				var nilIOEngineConfig *ioengine.Config
+				return c.WithEngines(nilIOEngineConfig)
+			},
+			setServers: true,
+			expErr:     errors.New("cannot specify both"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
+
+			if tt.extraConfig == nil {
+				tt.extraConfig = noopExtra
+			}
 
 			testDir, cleanup := CreateTestDir(t)
 			defer cleanup()
@@ -352,6 +416,9 @@ func TestServer_ConfigValidation(t *testing.T) {
 			// First, load a config based on the server config with all options uncommented.
 			testFile := filepath.Join(testDir, sConfigUncomment)
 			uncommentServerConfig(t, testFile)
+			if tt.setServers {
+				replaceFile(t, testFile, "engines:", "servers:")
+			}
 			config := mockConfigFromFile(t, testFile)
 
 			// Apply extra config test case
@@ -362,7 +429,7 @@ func TestServer_ConfigValidation(t *testing.T) {
 	}
 }
 
-func TestServer_ConfigRelativeWorkingPath(t *testing.T) {
+func TestServerConfig_RelativeWorkingPath(t *testing.T) {
 	for name, tt := range map[string]struct {
 		inPath    string
 		expErrMsg string
@@ -415,7 +482,7 @@ func TestServer_ConfigRelativeWorkingPath(t *testing.T) {
 	}
 }
 
-func TestServer_WithEnginesInheritsMainConfig(t *testing.T) {
+func TestServerConfig_WithEnginesInheritsMain(t *testing.T) {
 	testFabric := "test-fabric"
 	testModules := "a,b,c"
 	testSystemName := "test-system"
@@ -439,7 +506,7 @@ func TestServer_WithEnginesInheritsMainConfig(t *testing.T) {
 	}
 }
 
-func TestServer_ConfigDuplicateValues(t *testing.T) {
+func TestServerConfig_DuplicateValues(t *testing.T) {
 	configA := func() *ioengine.Config {
 		return ioengine.NewConfig().
 			WithLogFile("a").
@@ -520,7 +587,7 @@ func TestServer_ConfigDuplicateValues(t *testing.T) {
 	}
 }
 
-func TestServer_ConfigNetworkDeviceClass(t *testing.T) {
+func TestServerConfig_NetworkDeviceClass(t *testing.T) {
 	configA := func() *ioengine.Config {
 		return ioengine.NewConfig().
 			WithLogFile("a").

@@ -293,7 +293,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
 	}
 	rankSet := &system.RankSet{}
 	for rank, uri := range gm.RankURIs {
-		req.Servers = append(req.Servers, &mgmtpb.GroupUpdateReq_Server{
+		req.Engines = append(req.Engines, &mgmtpb.GroupUpdateReq_Engine{
 			Rank: rank.Uint32(),
 			Uri:  uri,
 		})

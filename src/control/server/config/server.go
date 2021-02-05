@@ -51,23 +51,24 @@ type ClientNetworkCfg struct {
 // See utils/config/daos_server.yml for parameter descriptions.
 type Server struct {
 	// control-specific
-	ControlPort         int                       `yaml:"port"`
-	TransportConfig     *security.TransportConfig `yaml:"transport_config"`
+	ControlPort     int                       `yaml:"port"`
+	TransportConfig *security.TransportConfig `yaml:"transport_config"`
 	// support both "engines:" and "servers:" for backward compatibility
-	Engines             []*ioengine.Config        `yaml:"servers" yaml:"engines"`
-	BdevInclude         []string                  `yaml:"bdev_include,omitempty"`
-	BdevExclude         []string                  `yaml:"bdev_exclude,omitempty"`
-	DisableVFIO         bool                      `yaml:"disable_vfio"`
-	DisableVMD          bool                      `yaml:"disable_vmd"`
-	NrHugepages         int                       `yaml:"nr_hugepages"`
-	SetHugepages        bool                      `yaml:"set_hugepages"`
-	ControlLogMask      ControlLogLevel           `yaml:"control_log_mask"`
-	ControlLogFile      string                    `yaml:"control_log_file"`
-	ControlLogJSON      bool                      `yaml:"control_log_json,omitempty"`
-	HelperLogFile       string                    `yaml:"helper_log_file"`
-	FWHelperLogFile     string                    `yaml:"firmware_helper_log_file"`
-	RecreateSuperblocks bool                      `yaml:"recreate_superblocks"`
-	FaultPath           string                    `yaml:"fault_path"`
+	Servers             []*ioengine.Config `yaml:"servers"`
+	Engines             []*ioengine.Config `yaml:"engines"`
+	BdevInclude         []string           `yaml:"bdev_include,omitempty"`
+	BdevExclude         []string           `yaml:"bdev_exclude,omitempty"`
+	DisableVFIO         bool               `yaml:"disable_vfio"`
+	DisableVMD          bool               `yaml:"disable_vmd"`
+	NrHugepages         int                `yaml:"nr_hugepages"`
+	SetHugepages        bool               `yaml:"set_hugepages"`
+	ControlLogMask      ControlLogLevel    `yaml:"control_log_mask"`
+	ControlLogFile      string             `yaml:"control_log_file"`
+	ControlLogJSON      bool               `yaml:"control_log_json,omitempty"`
+	HelperLogFile       string             `yaml:"helper_log_file"`
+	FWHelperLogFile     string             `yaml:"firmware_helper_log_file"`
+	RecreateSuperblocks bool               `yaml:"recreate_superblocks"`
+	FaultPath           string             `yaml:"fault_path"`
 
 	// duplicated in ioengine.Config
 	SystemName string                `yaml:"name"`
@@ -403,14 +404,6 @@ func SaveActiveConfig(log logging.Logger, config *Server) {
 
 // Validate asserts that config meets minimum requirements.
 func (c *Server) Validate(log logging.Logger) (err error) {
-	// config without engines is valid when initially discovering hardware
-	// prior to adding per-server sections with device allocations
-	if len(c.Engines) == 0 {
-		log.Infof("No %ss in configuration, %s starting in discovery mode", build.DataPlaneName, build.ControlPlaneName)
-		c.Engines = nil
-		return nil
-	}
-
 	// append the user-friendly message to any error
 	defer func() {
 		if err != nil && !fault.HasResolution(err) {
@@ -418,6 +411,24 @@ func (c *Server) Validate(log logging.Logger) (err error) {
 			err = errors.WithMessage(FaultBadConfig, err.Error()+", examples: "+examplesPath)
 		}
 	}()
+
+	// For backwards compatibility, allow specifying "servers" rather than
+	// "engines" in the server config file.
+	if len(c.Servers) > 0 {
+		if len(c.Engines) > 0 {
+			return errors.New("cannot specify both servers and engines")
+		}
+		c.Engines = c.Servers
+	}
+	c.Servers = nil
+
+	// config without engines is valid when initially discovering hardware
+	// prior to adding per-engine sections with device allocations
+	if len(c.Engines) == 0 {
+		log.Infof("No %ss in configuration, %s starting in discovery mode", build.DataPlaneName, build.ControlPlaneName)
+		c.Engines = nil
+		return nil
+	}
 
 	if c.Fabric.Provider == "" {
 		return FaultConfigNoProvider
