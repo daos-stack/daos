@@ -33,7 +33,6 @@ class CopyBasicsTest(DataMoverTestBase):
             "ior_flags", "/run/ior/*")
         self.test_file = self.ior_cmd.test_file.value
 
-    @skipForTicket("DAOS-6484")
     def test_copy_types(self):
         """
         Test Description:
