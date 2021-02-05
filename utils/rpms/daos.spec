@@ -168,6 +168,7 @@ Requires: python-pathlib
 Requires: python-distro
 Requires: python2-tabulate
 Requires: fio
+Requires: dbench
 Requires: lbzip2
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
