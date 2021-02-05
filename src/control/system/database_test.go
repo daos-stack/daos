@@ -634,11 +634,12 @@ func TestSystem_Database_CompressedFaultDomainTree(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		tree      *FaultDomainTree
-		expResult []uint32
-		expErr    error
+		tree       *FaultDomainTree
+		inputRanks []Rank
+		expResult  []uint32
+		expErr     error
 	}{
-		"nil": {
+		"nil tree": {
 			expErr: errors.New("uninitialized fault domain tree"),
 		},
 		"root only": {
@@ -649,7 +650,7 @@ func TestSystem_Database_CompressedFaultDomainTree(t *testing.T) {
 				0,
 			},
 		},
-		"single branch, no ranks": {
+		"single branch, no rank leaves": {
 			tree: NewFaultDomainTree(
 				MustCreateFaultDomain("one", "two", "three"),
 			),
@@ -668,7 +669,7 @@ func TestSystem_Database_CompressedFaultDomainTree(t *testing.T) {
 				0,
 			},
 		},
-		"multi branch, no ranks": {
+		"multi branch, no rank leaves": {
 			tree: NewFaultDomainTree(
 				MustCreateFaultDomainFromString("/rack0/pdu0"),
 				MustCreateFaultDomainFromString("/rack0/pdu1"),
@@ -706,7 +707,7 @@ func TestSystem_Database_CompressedFaultDomainTree(t *testing.T) {
 				0,
 			},
 		},
-		"single branch with rank": {
+		"single branch with rank leaves": {
 			tree: NewFaultDomainTree(
 				rankDomain("/one/two/three", 5),
 			),
@@ -726,7 +727,7 @@ func TestSystem_Database_CompressedFaultDomainTree(t *testing.T) {
 				5,
 			},
 		},
-		"multi branch with ranks": {
+		"multi branch with rank leaves": {
 			tree: NewFaultDomainTree(
 				rankDomain("/rack0/pdu0", 0),
 				rankDomain("/rack0/pdu1", 1),
@@ -772,7 +773,7 @@ func TestSystem_Database_CompressedFaultDomainTree(t *testing.T) {
 				5,
 			},
 		},
-		"parent domain has name like rank": {
+		"intermediate domain has name like rank": {
 			tree: NewFaultDomainTree(
 				rankDomain(fmt.Sprintf("/top/%s2/bottom", rankFaultDomainPrefix), 1),
 			),
@@ -792,6 +793,30 @@ func TestSystem_Database_CompressedFaultDomainTree(t *testing.T) {
 				1, // rank
 			},
 		},
+		// "request one rank": {
+		// 	tree: NewFaultDomainTree(
+		// 		rankDomain("/rack0/pdu0", 0),
+		// 		rankDomain("/rack0/pdu1", 1),
+		// 		rankDomain("/rack1/pdu2", 2),
+		// 		rankDomain("/rack1/pdu3", 3),
+		// 		rankDomain("/rack1/pdu3", 4),
+		// 		rankDomain("/rack2/pdu4", 5),
+		// 	),
+		// 	inputRanks: []Rank{4},
+		// 	expResult: []uint32{
+		// 		3,
+		// 		expFaultDomainID(0), // root
+		// 		1,
+		// 		2,
+		// 		expFaultDomainID(6), // rack1
+		// 		1,
+		// 		1,
+		// 		expFaultDomainID(9), // pdu3
+		// 		1,
+		// 		// ranks
+		// 		4,
+		// 	},
+		// },
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -800,7 +825,7 @@ func TestSystem_Database_CompressedFaultDomainTree(t *testing.T) {
 			db := MockDatabase(t, log)
 			db.data.Members.FaultDomains = tc.tree
 
-			result, err := db.CompressedFaultDomainTree()
+			result, err := db.CompressedFaultDomainTree(tc.inputRanks...)
 
 			common.CmpErr(t, tc.expErr, err)
 

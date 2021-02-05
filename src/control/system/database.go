@@ -725,6 +725,52 @@ func (db *Database) FaultDomainTree() *FaultDomainTree {
 	return db.data.Members.FaultDomains.Copy()
 }
 
+// CompressedFaultDomainTree returns the tree of fault domains of joined
+// members in a compressed format.
+// Each domain is represented as a tuple: (level, ID, number of children)
+// Except for the rank, which is represented as: (rank)
+// The order of items is a breadth-first traversal of the tree.
+func (db *Database) CompressedFaultDomainTree(ranks ...Rank) ([]uint32, error) {
+	tree := db.FaultDomainTree()
+	if tree == nil {
+		return nil, errors.New("uninitialized fault domain tree")
+	}
+
+	subtree, err := getFaultDomainSubtree(tree, ranks...)
+	if err != nil {
+		return nil, err
+	}
+
+	return compressTree(subtree), nil
+}
+
+func getFaultDomainSubtree(tree *FaultDomainTree, ranks ...Rank) (*FaultDomainTree, error) {
+	if len(ranks) == 0 {
+		return tree, nil
+	}
+
+	domains := tree.Domains()
+	treeDomains := make(map[Rank]*FaultDomain, len(ranks))
+
+	for _, d := range domains {
+		if r, isRank := getFaultDomainRank(d); isRank {
+			treeDomains[Rank(r)] = d
+		}
+	}
+
+	domain := treeDomains[ranks[0]]
+	subtree := NewFaultDomainTree(domain)
+
+	// // Fix IDs of new tree to match the old one
+	// treeCur := tree
+	// subCur := subtree
+	// for _, lvl := range domain.Domains {
+	// 	subCur.ID = treeCur.ID
+
+	// }
+	return subtree, nil
+}
+
 func getFaultDomainRank(fd *FaultDomain) (uint32, bool) {
 	fmtStr := rankFaultDomainPrefix + "%d"
 	var rank uint32
@@ -735,17 +781,7 @@ func getFaultDomainRank(fd *FaultDomain) (uint32, bool) {
 	return rank, true
 }
 
-// CompressedFaultDomainTree returns the tree of fault domains of joined
-// members in a compressed format.
-// Each domain is represented as a tuple: (level, ID, number of children)
-// Except for the rank, which is represented as: (rank)
-// The order of items is a breadth-first traversal of the tree.
-func (db *Database) CompressedFaultDomainTree() ([]uint32, error) {
-	tree := db.FaultDomainTree()
-	if tree == nil {
-		return nil, errors.New("uninitialized fault domain tree")
-	}
-
+func compressTree(tree *FaultDomainTree) []uint32 {
 	result := []uint32{}
 	queue := make([]*FaultDomainTree, 0)
 	queue = append(queue, tree)
@@ -783,7 +819,7 @@ func (db *Database) CompressedFaultDomainTree() ([]uint32, error) {
 			numNextLevel++
 		}
 	}
-	return result, nil
+	return result
 }
 
 // copyPoolService makes a copy of the supplied PoolService pointer

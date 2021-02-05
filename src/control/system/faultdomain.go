@@ -289,11 +289,10 @@ func (t *FaultDomainTree) mergeTree(toBeMerged *FaultDomainTree, nextID *uint32)
 			}
 		}
 		if !foundBranch {
-			m.updateAllIDs(nextID)
-			t.Children = append(t.Children, m)
-			sort.Slice(t.Children, func(i, j int) bool {
-				return t.Children[i].Domain.BottomLevel() < t.Children[j].Domain.BottomLevel()
-			})
+			if nextID != nil {
+				m.updateAllIDs(nextID)
+			}
+			t.addChild(m)
 		}
 	}
 
@@ -306,6 +305,13 @@ func (t *FaultDomainTree) updateAllIDs(nextID *uint32) {
 	for _, c := range t.Children {
 		c.updateAllIDs(nextID)
 	}
+}
+
+func (t *FaultDomainTree) addChild(child *FaultDomainTree) {
+	t.Children = append(t.Children, child)
+	sort.Slice(t.Children, func(i, j int) bool {
+		return t.Children[i].Domain.BottomLevel() < t.Children[j].Domain.BottomLevel()
+	})
 }
 
 // RemoveDomain removes a given fault domain from the tree.
@@ -431,6 +437,71 @@ func (t *FaultDomainTree) Copy() *FaultDomainTree {
 	}
 
 	return tCopy
+}
+
+// Domains returns the list of domains needed to reconstruct the tree.
+func (t *FaultDomainTree) Domains() []*FaultDomain {
+	if t == nil {
+		return nil
+	}
+
+	return t.getLeafDomains()
+}
+
+func (t *FaultDomainTree) getLeafDomains() []*FaultDomain {
+	if t.IsLeaf() && !t.IsRoot() {
+		return []*FaultDomain{t.Domain}
+	}
+
+	domains := make([]*FaultDomain, 0)
+	for _, child := range t.Children {
+		cDomains := child.getLeafDomains()
+		domains = append(domains, cDomains...)
+	}
+	return domains
+}
+
+// Subtree returns the subtree represented by the set of domains.
+func (t *FaultDomainTree) Subtree(domains ...*FaultDomain) (*FaultDomainTree, error) {
+	if t == nil {
+		return nil, errors.New("nil FaultDomainTree")
+	}
+	if len(domains) == 0 {
+		return t, nil
+	}
+
+	subtree := NewFaultDomainTree()
+
+	for _, d := range domains {
+		treeCur := t
+		subCur := subtree
+		for _, lvl := range d.Domains {
+			treeNext := treeCur.findChildWithDomain(lvl)
+			if treeNext == nil {
+				return nil, fmt.Errorf("domain %q not found", d)
+			}
+			subNext := subCur.findChildWithDomain(lvl)
+			if subNext == nil {
+				subNext = NewFaultDomainTree().
+					WithNodeDomain(treeNext.Domain).
+					WithID(treeNext.ID)
+				subCur.addChild(subNext)
+			}
+			treeCur = treeNext
+			subCur = subNext
+		}
+	}
+
+	return subtree, nil
+}
+
+func (t *FaultDomainTree) findChildWithDomain(domain string) *FaultDomainTree {
+	for _, c := range t.Children {
+		if c.Domain.BottomLevel() == domain {
+			return c
+		}
+	}
+	return nil
 }
 
 // NewFaultDomainTree creates a FaultDomainTree including all the
