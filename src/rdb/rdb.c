@@ -175,8 +175,8 @@ rdb_hash_init(void)
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
 	rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK, 4 /* bits */,
-					NULL /* priv */, &rdb_hash_ops,
-					&rdb_hash);
+					 NULL /* priv */, &rdb_hash_ops,
+					 &rdb_hash);
 	if (rc != 0)
 		ABT_mutex_free(&rdb_hash_lock);
 	return rc;
@@ -410,6 +410,11 @@ void
 rdb_stop(struct rdb *db)
 {
 	bool deleted;
+
+	if (db == NULL) {
+		D_ERROR("db is NULL\n");
+		return;
+	}
 
 	D_DEBUG(DB_MD, DF_DB": stopping db %p\n", DP_DB(db), db);
 	ABT_mutex_lock(rdb_hash_lock);
