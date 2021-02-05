@@ -316,7 +316,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	if (gdata_init_flag == 0) {
 		rc = data_init(server, opt);
 		if (rc != 0) {
-			D_ERROR("data_init failed " DF_RC "\n", DP_RC(rc));
+			D_ERROR("data_init failed "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out, rc = -rc);
 		}
 	}
