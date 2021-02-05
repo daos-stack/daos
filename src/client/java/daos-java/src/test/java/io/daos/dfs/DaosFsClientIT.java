@@ -1,9 +1,12 @@
 package io.daos.dfs;
 
+import io.daos.Constants;
+import io.daos.DaosIOException;
 import io.daos.DaosTestBase;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.powermock.reflect.Whitebox;
 
 import java.io.IOException;
 
@@ -124,6 +127,27 @@ public class DaosFsClientIT {
         client.close();
       }
     }
+  }
+
+  @Test
+  public void testMoveWithNullParameter() throws Exception {
+    DaosFsClient.DaosFsClientBuilder builder = new DaosFsClient.DaosFsClientBuilder();
+    builder.poolId(poolId).containerId(contId);
+    DaosFsClient client = null;
+    Exception ee = null;
+    try {
+      client = builder.build();
+      long dfsPtr = Whitebox.getInternalState(client, "dfsPtr");
+      client.move(dfsPtr, null, null);
+    } catch (Exception e) {
+      ee = e;
+    } finally {
+      if (client != null) {
+        client.close();
+      }
+    }
+    Assert.assertTrue(ee instanceof DaosIOException);
+    Assert.assertEquals(Constants.CUSTOM_ERR_INVALID_ARG.getCode(), ((DaosIOException)ee).getErrorCode());
   }
 
   @Test(expected = IllegalArgumentException.class)

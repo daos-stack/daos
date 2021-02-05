@@ -18,7 +18,7 @@ rsync -v -dpt -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":/tmp/ \
       --filter="exclude *" nlt_logs/
 
 rsync -v -dpt -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":build/ \
-      --filter="include nlt-errors.json" --filter="include dnt*.xml" \
+      --filter="include nlt*.json" --filter="include dnt*.xml" \
       --filter="exclude *" ./
 mkdir -p vm_test
 mv nlt-errors.json vm_test/
