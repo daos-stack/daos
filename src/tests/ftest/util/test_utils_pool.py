@@ -495,8 +495,7 @@ class TestPool(TestDaosApiBase):
                     self.log.info("Pool query still responsive")
                     break
                 except CommandFailure as err:
-                    self.log.info("Pool Query still non-responsive {}".\
-                        format(err))
+                    self.log.info("Pool Query still non-responsive %s", err)
             if time() > end_time:
                 raise DaosTestError("TIMEOUT detected after {} seconds of pool "
                                     "query. This timeout can be adjusted via "
@@ -504,13 +503,13 @@ class TestPool(TestDaosApiBase):
                                     "parameter.".\
                                         format(self.pool_query_timeout.value))
 
-        start = time()
         self.log.info(
             "Waiting for rebuild to %s%s ...",
             "start" if to_start else "complete",
             " with a {} second timeout".format(self.rebuild_timeout.value)
             if self.rebuild_timeout.value is not None else "")
 
+        start = time()
         while self.rebuild_complete() == to_start:
             self.log.info(
                 "  Rebuild %s ...",
