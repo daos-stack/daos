@@ -614,6 +614,8 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None):
     if hosts is not None:
         commands = [
             "rc=0",
+            "set -x",
+            "ps aux",
             "if " + ps_cmd.format(pattern),
             "then rc=1",
             "sudo pkill {}".format(pattern),
