@@ -495,7 +495,7 @@ class TestPool(TestDaosApiBase):
                     break
                 except CommandFailure as error:
                     self.log.info(
-                        "Pool query still non-responsive: {}".format(error))
+                        "Pool query still non-responsive: %s", str(error))
             if time() > end_time:
                 raise TimeoutError(
                     "TIMEOUT detected after {} seconds while waiting for pool "

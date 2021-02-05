@@ -23,7 +23,7 @@ pool:
   scm_size: 30000000000
   svcn: 1
   control_method: dmg
-  pool_query_timeout: 15
+  pool_query_timeout: 30
 ior:
     client_processes:
         np_8:

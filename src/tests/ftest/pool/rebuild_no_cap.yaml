@@ -20,7 +20,7 @@ pool:
   name: daos_server
   scm_size: 16777216
   control_method: dmg
-  pool_query_timeout: 15
+  pool_query_timeout: 30
 testparams:
   ranks:
     rank_to_kill: 0
