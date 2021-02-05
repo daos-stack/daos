@@ -972,31 +972,36 @@ def make_pool(daos):
 
     return get_pool_list()
 
-class needs_dfuse(object):
-    """Decorator class for starting dfuse under posix_tests class"""
+def needs_dfuse(method):
+    """Decorator function for starting dfuse under posix_tests class"""
+    @functools.wraps(method)
+    def _helper(self):
+        self.dfuse = DFuse(self.server,
+                           self.conf,
+                           pool=self.pool,
+                           container=self.container)
+        self.dfuse.start(v_hint=method.__name__)
+        rc = method(self)
+        if self.dfuse.stop():
+            self.fatal_errors = True
+        return rc
+    return _helper
 
-    def __init__(self, caching=False):
-        """Just save the option"""
-        self.caching = caching
-
-    def __call__(self, method):
-        """Wrap the invocation by returning a function"""
-
-        @functools.wraps(method)
-        def _helper(*args):
-            print(*args)
-            posix = args[0]
-            posix.dfuse = DFuse(posix.server,
-                                posix.conf,
-                                pool=posix.pool,
-                                container=posix.container,
-                                caching=self.caching)
-            posix.dfuse.start(v_hint=method.__name__)
-            rc = method(*args)
-            if posix.dfuse.stop():
-                posix.fatal_errors = True
-            return rc
-        return _helper
+def needs_dfuse_with_cache(method):
+    """Decorator function for starting dfuse under posix_tests class"""
+    @functools.wraps(method)
+    def _helper(self):
+        self.dfuse = DFuse(self.server,
+                           self.conf,
+                           pool=self.pool,
+                           caching=True,
+                           container=self.container)
+        self.dfuse.start(v_hint=method.__name__)
+        rc = method(self)
+        if self.dfuse.stop():
+            self.fatal_errors = True
+        return rc
+    return _helper
 
 class posix_tests():
     """Class for adding standalone unit tests"""
@@ -1151,7 +1156,7 @@ class posix_tests():
         assert(stbuf.st_ino < 100)
         print(os.listdir(path))
 
-    @needs_dfuse(caching=True)
+    @needs_dfuse_with_cache
     def test_uns_create_with_cache(self):
         """Simple test to create a container using a path in dfuse"""
         path = os.path.join(self.dfuse.dir, 'mycont2')
