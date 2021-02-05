@@ -109,5 +109,7 @@ ENV GO_TEST_XML=/home/daos/test_results/run_go_tests.xml
 ENV CMOCKA_MESSAGE_OUTPUT=xml
 ENV DAOS_BASE=/home/daos
 
+RUN mkdir /home/daos/test_results/
+
 # Remove local copy
 # RUN rm -rf /home/daos/*
