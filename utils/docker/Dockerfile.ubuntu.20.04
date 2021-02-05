@@ -48,19 +48,19 @@ RUN update-alternatives --set java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/jav
 # Dependencies
 
 # Add DAOS user
+ENV USER daos
+ENV PASSWD daos
+RUN useradd -u $UID -ms /bin/bash $USER
+RUN echo "$USER:$PASSWD" | chpasswd
+
 ENV USER daos_server
 ENV PASSWD daos_server
-RUN useradd -u $UID -ms /bin/bash $USER
+RUN useradd -ms /bin/bash $USER
 RUN echo "$USER:$PASSWD" | chpasswd
 
 ENV USER daos_agent
 ENV PASSWD daos_agent
-RUN useradd -u $UID -ms /bin/bash $USER
-RUN echo "$USER:$PASSWD" | chpasswd
-
-ENV USER daos
-ENV PASSWD daos
-RUN useradd -u $UID -ms /bin/bash $USER
+RUN useradd -ms /bin/bash $USER
 RUN echo "$USER:$PASSWD" | chpasswd
 
 # Create directory for DAOS backend storage

@@ -88,19 +88,19 @@ RUN pip3 install codespell
 RUN pip3 install pygithub
 
 # Add DAOS users
+ENV USER daos
+ENV PASSWD daos
+RUN useradd -u $UID -ms /bin/bash $USER
+RUN echo "$USER:$PASSWD" | chpasswd
+
 ENV USER daos_server
 ENV PASSWD daos_server
-RUN useradd -u $UID -ms /bin/bash $USER
+RUN useradd -ms /bin/bash $USER
 RUN echo "$USER:$PASSWD" | chpasswd
 
 ENV USER daos_agent
 ENV PASSWD daos_agent
-RUN useradd -u $UID -ms /bin/bash $USER
-RUN echo "$USER:$PASSWD" | chpasswd
-
-ENV USER daos
-ENV PASSWD daos
-RUN useradd -u $UID -ms /bin/bash $USER
+RUN useradd -ms /bin/bash $USER
 RUN echo "$USER:$PASSWD" | chpasswd
 
 # Create directory for DAOS backend storage
