@@ -1308,11 +1308,12 @@ output:
 			DP_UUID(task->dst_pool_uuid));
 
 	ds_pool_put(pool);
-	ABT_mutex_lock(rgt->rgt_lock);
-	ABT_cond_signal(rgt->rgt_done_cond);
-	ABT_mutex_unlock(rgt->rgt_lock);
-	if (rgt)
+	if (rgt) {
+		ABT_mutex_lock(rgt->rgt_lock);
+		ABT_cond_signal(rgt->rgt_done_cond);
+		ABT_mutex_unlock(rgt->rgt_lock);
 		rgt_put(rgt);
+	}
 
 	rebuild_task_destroy(task);
 	rebuild_gst.rg_inflight--;
