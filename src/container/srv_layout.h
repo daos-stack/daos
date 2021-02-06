@@ -60,7 +60,7 @@ extern d_iov_t ds_cont_prop_cont_handles;	/* container handle KVS */
  * All keys are strings. Value types are specified for each key below.
  */
 extern d_iov_t ds_cont_prop_ghce;		/* uint64_t */
-extern d_iov_t ds_cont_prop_max_oid;		/* uint64_t */
+extern d_iov_t ds_cont_prop_alloced_oid;	/* uint64_t */
 extern d_iov_t ds_cont_prop_label;		/* string */
 extern d_iov_t ds_cont_prop_layout_type;	/* uint64_t */
 extern d_iov_t ds_cont_prop_layout_ver;		/* uint64_t */
