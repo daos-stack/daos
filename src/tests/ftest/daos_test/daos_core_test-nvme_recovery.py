@@ -19,10 +19,14 @@ class DaosCoreTestNvme(DaosCoreBase):
 
         Test Description:
             Purpose of this test is to run just the daos_test NVMe recovery
-            tests.
+            tests
 
-        :avocado: tags=all,hw,medium,nvme,ib2,full_regression
-        :avocado: tags=unittest,daos_test_nvme_recovery
+        Use cases:
+            daos_test NVMe recovery test
 
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=nvme
+        :avocado: tags=daos_nvme_recovery,unittest
         """
-        DaosCoreBase.run_subtest(self)
+        self.run_subtest()
