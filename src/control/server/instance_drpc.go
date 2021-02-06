@@ -48,7 +48,7 @@ func (srv *IOEngineInstance) getDrpcClient() (drpc.DomainSocketClient, error) {
 func (srv *IOEngineInstance) NotifyDrpcReady(msg *srvpb.NotifyReadyReq) {
 	srv.log.Debugf("%s instance %d drpc ready: %v", build.DataPlaneName, srv.Index(), msg)
 
-	// Activate the dRPC client connection to this engine 
+	// activate the dRPC client connection to this engine
 	srv.setDrpcClient(drpc.NewClientConnection(msg.DrpcListenerSock))
 
 	go func() {
