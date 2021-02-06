@@ -176,6 +176,7 @@ shown_logs = set()
 # Both the alloc and free function need to be whitelisted.
 
 mismatch_table = {'container': ('common'),
+                  'client': ('array'),
                   'common': ('container', 'pool'),
                   'daos': ('common'),
                   'mgmt': ('common', 'daos', 'pool'),
@@ -206,7 +207,7 @@ mismatch_free_ok = {'crt_rpc_priv_free': ('rpc_priv'),
 
 wf = None
 
-def show_line(line, sev, msg):
+def show_line(line, sev, msg, custom=None):
     """Output a log line in gcc error format"""
 
     # Only report each individual line once.
@@ -219,7 +220,9 @@ def show_line(line, sev, msg):
     if log in shown_logs:
         return
     print(log)
-    if wf:
+    if custom:
+        custom.add(line, sev, msg)
+    elif wf:
         wf.add(line, sev, msg)
     shown_logs.add(log)
 
@@ -265,7 +268,8 @@ class hwm_counter():
 class LogTest():
     """Log testing"""
 
-    def __init__(self, log_iter):
+    def __init__(self, log_iter, quiet=False):
+        self.quiet = quiet
         self._li = log_iter
         self.hide_fi_calls = False
         self.fi_triggered = False
@@ -278,10 +282,13 @@ class LogTest():
         self.log_count = 0
 
     def __del__(self):
-        self.show_common_logs()
+        if not self.quiet:
+            self.show_common_logs()
 
     def save_log_line(self, line):
         """Record a single line of logging"""
+        if self.quiet:
+            return
         self.log_count += 1
         function = getattr(line, 'filename', None)
         if function:
@@ -320,16 +327,22 @@ class LogTest():
                                             count,
                                             100*count/self.log_count))
 
-    def check_log_file(self, abort_on_warning, show_memleaks=True):
+    def check_log_file(self,
+                       abort_on_warning,
+                       show_memleaks=True,
+                       leak_wf=None):
         """Check a single log file for consistency"""
 
         for pid in self._li.get_pids():
             if wf:
                 wf.reset_pending()
-            self.rpc_reporting(pid)
-            if wf:
-                wf.reset_pending()
-            self._check_pid_from_log_file(pid, abort_on_warning,
+            if not self.quiet:
+                self.rpc_reporting(pid)
+                if wf:
+                    wf.reset_pending()
+            self._check_pid_from_log_file(pid,
+                                          abort_on_warning,
+                                          leak_wf,
                                           show_memleaks=show_memleaks)
 
     def check_dfuse_io(self):
@@ -361,7 +374,10 @@ class LogTest():
                 print('{}:{}'.format(pid, client_pids[pid]))
 
 #pylint: disable=too-many-branches,too-many-nested-blocks
-    def _check_pid_from_log_file(self, pid, abort_on_warning,
+    def _check_pid_from_log_file(self,
+                                 pid,
+                                 abort_on_warning,
+                                 leak_wf,
                                  show_memleaks=True):
         """Check a pid from a single log file for consistency"""
 
@@ -428,6 +444,11 @@ class LogTest():
                             # errors for lines that print -DER_NOMEM, as
                             # this highlights other errors and lines which
                             # report an error, but not a fault code.
+                            show = False
+                        elif line.get_msg().endswith(' 12'):
+                            # dfs and dfuse use system error numbers, rather
+                            # than daos, so allow ENOMEM as well as
+                            # -DER_NOMEM
                             show = False
                     elif line.rpc:
                         # Ignore the SWIM RPC opcode, as this often sends RPCs
@@ -579,10 +600,9 @@ class LogTest():
         total_lines = trace_lines + non_trace_lines
         p_trace = trace_lines * 1.0 / total_lines * 100
 
-        print("Pid {}, {} lines total, {} trace ({:.2f}%)".format(pid,
-                                                                  total_lines,
-                                                                  trace_lines,
-                                                                  p_trace))
+        if not self.quiet:
+            print("Pid {}, {} lines total, {} trace ({:.2f}%)".format(
+                pid, total_lines, trace_lines, p_trace))
 
         if memsize.has_data():
             print("Memsize: {}".format(memsize))
@@ -599,7 +619,8 @@ class LogTest():
                     show_line(line, 'NORMAL', 'descriptor not freed')
                     del active_desc[pointer]
                 else:
-                    show_line(line, 'NORMAL', 'memory not freed')
+                    show_line(line, 'NORMAL', 'memory not freed',
+                              custom=leak_wf)
                 lost_memory = True
 
         if active_desc:

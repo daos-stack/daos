@@ -501,6 +501,9 @@ obj_set_reply_sizes(crt_rpc_t *rpc, daos_iod_t *iods, int iod_nr)
 	/* Re-entry case.*/
 	if (orwo->orw_iod_sizes.ca_count != 0) {
 		D_ASSERT(orwo->orw_iod_sizes.ca_count == iod_nr);
+		D_ASSERT(orwo->orw_iod_sizes.ca_arrays != NULL);
+
+		sizes = orwo->orw_iod_sizes.ca_arrays;
 	} else {
 		D_ALLOC_ARRAY(sizes, iod_nr);
 		if (sizes == NULL)
@@ -1663,13 +1666,8 @@ do_obj_ioc_begin(uint32_t rpc_map_ver, uuid_t pool_uuid,
 		 struct obj_io_context *ioc)
 {
 	struct ds_pool_child *poc;
-	int		      rank, rc;
-	ABT_xstream xs;
+	int		      rc;
 
-	rc = ABT_xstream_self(&xs);
-	D_ASSERT(rc == ABT_SUCCESS);
-	rc = ABT_xstream_get_rank(xs, &rank);
-	D_ASSERT(rc == ABT_SUCCESS);
 	rc = obj_ioc_init(pool_uuid, coh_uuid, cont_uuid, opc, ioc);
 	if (rc)
 		return rc;
@@ -2201,6 +2199,8 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 		if (orw->orw_flags & ORF_FOR_MIGRATION)
 			dtx_flags = DTX_FOR_MIGRATION;
+		if (orw->orw_flags & ORF_DTX_REFRESH)
+			dtx_flags |= DTX_FORCE_REFRESH;
 
 re_fetch:
 		rc = dtx_begin(ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 0,
@@ -2584,6 +2584,8 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 
 	if (oei->oei_flags & ORF_FOR_MIGRATION)
 		flags = DTX_FOR_MIGRATION;
+	if (oei->oei_flags & ORF_DTX_REFRESH)
+		flags |= DTX_FORCE_REFRESH;
 
 again:
 	rc = dtx_begin(ioc->ioc_vos_coh, &oei->oei_dti, &epoch, 0,
@@ -2873,7 +2875,7 @@ again:
 		D_GOTO(out, rc = -DER_NOSYS);
 	}
 
-	if (obj_dtx_need_refresh(dth, rc)) {
+	if (dth != NULL && obj_dtx_need_refresh(dth, rc)) {
 		rc = dtx_refresh(dth, ioc->ioc_coc);
 		if (rc == -DER_AGAIN)
 			goto again;
@@ -4007,8 +4009,8 @@ again:
 static int
 ds_obj_dtx_leader_prep_handle(struct daos_cpd_sub_head *dcsh,
 			      struct daos_cpd_sub_req *dcsrs,
-			      struct daos_shard_tgt *tgts, uint32_t tgt_cnt,
-			      uint32_t req_cnt, uint32_t *flags)
+			      struct daos_shard_tgt *tgts,
+			      int tgt_cnt, int req_cnt, uint32_t *flags)
 {
 	int	rc = 0;
 	int	i;
@@ -4047,20 +4049,20 @@ ds_obj_dtx_leader_prep_handle(struct daos_cpd_sub_head *dcsh,
 static void
 ds_obj_dtx_leader_ult(void *arg)
 {
-	struct daos_cpd_args		 *dca = arg;
-	struct dtx_leader_handle	  dlh;
-	struct ds_obj_exec_arg		  exec_arg;
-	struct obj_cpd_in		 *oci = crt_req_get(dca->dca_rpc);
-	struct obj_cpd_out		 *oco = crt_reply_get(dca->dca_rpc);
-	struct daos_cpd_sub_head	 *dcsh;
-	struct daos_cpd_disp_ent	 *dcde;
-	struct daos_cpd_sub_req		 *dcsrs = NULL;
-	struct daos_shard_tgt		 *tgts;
-	uint32_t			  flags = 0;
-	uint32_t			  dtx_flags = DTX_DIST;
-	uint32_t			  tgt_cnt = 0;
-	uint32_t			  req_cnt = 0;
-	int				  rc = 0;
+	struct daos_cpd_args		*dca = arg;
+	struct dtx_leader_handle	 dlh;
+	struct ds_obj_exec_arg		 exec_arg;
+	struct obj_cpd_in		*oci = crt_req_get(dca->dca_rpc);
+	struct obj_cpd_out		*oco = crt_reply_get(dca->dca_rpc);
+	struct daos_cpd_sub_head	*dcsh;
+	struct daos_cpd_disp_ent	*dcde;
+	struct daos_cpd_sub_req		*dcsrs = NULL;
+	struct daos_shard_tgt		*tgts;
+	uint32_t			 flags = 0;
+	uint32_t			 dtx_flags = DTX_DIST;
+	int				 tgt_cnt = 0;
+	int				 req_cnt = 0;
+	int				 rc = 0;
 
 	/* TODO: For the daos targets in the first redundancy (modification)
 	 *	 group, they are the DTX leader candidates when DTX recovery.
@@ -4146,6 +4148,10 @@ ds_obj_dtx_leader_ult(void *arg)
 	tgts = ds_obj_cpd_get_tgts(dca->dca_rpc, dca->dca_idx);
 	req_cnt = ds_obj_cpd_get_dcsr_cnt(dca->dca_rpc, dca->dca_idx);
 	tgt_cnt = ds_obj_cpd_get_tgt_cnt(dca->dca_rpc, dca->dca_idx);
+
+	if (dcde == NULL || dcsrs == NULL || tgts == NULL ||
+	    req_cnt < 0 || tgt_cnt < 0)
+		D_GOTO(out, rc = -DER_INVAL);
 
 	/* Refuse any modification with old epoch. */
 	if (dcde->dcde_write_cnt != 0 &&

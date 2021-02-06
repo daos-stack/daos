@@ -95,28 +95,35 @@ daos_tests:
       daos_test: r
       test_name: DAOS_Rebuild_22
       args: -s3 -u subtests="22"
+      stopped_ranks: [7]
     test_rebuild_23:
       daos_test: r
       test_name: DAOS_Rebuild_23
       args: -s3 -u subtests="23"
+      stopped_ranks: [7]
     test_rebuild_24:
       daos_test: r
       test_name: DAOS_Rebuild_24
       args: -s3 -u subtests="24"
+      stopped_ranks: [7]
     test_rebuild_25:
       daos_test: r
       test_name: DAOS_Rebuild_25
       args: -s3 -u subtests="25"
+      stopped_ranks: [5, 6, 7]
     test_rebuild_26:
       daos_test: r
       test_name: DAOS_Rebuild_26
       args: -s3 -u subtests="26"
+      stopped_ranks: ["random"]
     test_rebuild_27:
       daos_test: r
       test_name: DAOS_Rebuild_27
       args: -s6 -u subtests="27"
       test_timeout: 1500
+      stopped_ranks: ["random"]
     test_rebuild_28:
       daos_test: r
       test_name: DAOS_Rebuild_28
       args: -s3 -u subtests="28"
+      stopped_ranks: [7]

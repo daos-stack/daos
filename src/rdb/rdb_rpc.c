@@ -274,7 +274,7 @@ rdb_recvd(void *arg)
 			}
 			if (stop)
 				break;
-			ABT_cond_wait(db->d_replies_cv, db->d_mutex);
+			sched_cond_wait(db->d_replies_cv, db->d_mutex);
 		}
 		ABT_mutex_unlock(db->d_mutex);
 		if (rrpc == NULL) {

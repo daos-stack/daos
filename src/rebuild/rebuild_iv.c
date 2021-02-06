@@ -114,7 +114,10 @@ rebuild_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	/* Gathering the rebuild status here */
 	rgt = rebuild_global_pool_tracker_lookup(src_iv->riv_pool_uuid,
 						 src_iv->riv_ver);
-	if (rgt && rgt->rgt_leader_term == src_iv->riv_leader_term) {
+	if (rgt == NULL)
+		D_GOTO(out, rc);
+
+	if (rgt->rgt_leader_term == src_iv->riv_leader_term) {
 		/* update the rebuild global status */
 		if (!src_iv->riv_global_done) {
 			rgt->rgt_status.rs_toberb_obj_nr +=
@@ -139,9 +142,10 @@ rebuild_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			rgt->rgt_status.rs_done, rgt->rgt_status.rs_errno,
 			src_iv->riv_rank);
 	}
-
+	rgt_put(rgt);
+out:
 	D_DEBUG(DB_TRACE, "pool "DF_UUID" master_rank %d\n",
-		 DP_UUID(dst_iv->riv_pool_uuid), dst_iv->riv_master_rank);
+		DP_UUID(dst_iv->riv_pool_uuid), dst_iv->riv_master_rank);
 
 	return 0;
 }

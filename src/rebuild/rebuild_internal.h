@@ -123,6 +123,12 @@ struct rebuild_global_pool_tracker {
 	/* stable epoch of the rebuild */
 	uint64_t	rgt_stable_epoch;
 
+	ABT_mutex	rgt_lock;
+	/* The current rebuild is done on the leader */
+	ABT_cond	rgt_done_cond;
+
+	uint32_t	rgt_refcount;
+
 	unsigned int	rgt_abort:1,
 			rgt_notify_stable_epoch:1,
 			rgt_init_scan:1;
@@ -316,6 +322,12 @@ rebuilt_btr_destroy(daos_handle_t btr_hdl);
 
 struct rebuild_tgt_pool_tracker *
 rpt_lookup(uuid_t pool_uuid, unsigned int ver);
+
+void
+rgt_get(struct rebuild_global_pool_tracker *rgt);
+
+void
+rgt_put(struct rebuild_global_pool_tracker *rgt);
 
 struct rebuild_global_pool_tracker *
 rebuild_global_pool_tracker_lookup(const uuid_t pool_uuid, unsigned int ver);
