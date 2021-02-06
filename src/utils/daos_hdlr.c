@@ -66,6 +66,11 @@ struct dm_args {
 	daos_handle_t src_coh;
 	daos_handle_t dst_poh;
 	daos_handle_t dst_coh;
+	uint32_t cont_prop_oid;
+	uint32_t cont_prop_layout;
+	uint64_t cont_layout;
+	uint64_t cont_oid;
+
 };
 
 static int
@@ -1714,11 +1719,12 @@ parse_filename_dfs(const char *path, char **_obj_name, char **_cont_name)
 	char	*f2 = NULL;
 	char	*fname = NULL;
 	char	*cont_name = NULL;
-	int	path_len = strlen(path) + 1;
+	int	path_len = 0;
 	int	rc = 0;
 
 	if (path == NULL || _obj_name == NULL || _cont_name == NULL)
 		return -EINVAL;
+	path_len = strlen(path) + 1;
 
 	if (strcmp(path, "/") == 0) {
 		D_STRNDUP(*_cont_name, "/", 2);
@@ -2431,7 +2437,7 @@ fs_copy(struct file_dfs *src_file_dfs,
 			uint64_t buf_size = 64 * 1024 * 1024;
 			void *buf;
 
-			D_ALLOC(buf, buf_size * sizeof(char));
+			D_ALLOC(buf, buf_size);
 			if (buf == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 			while (total_bytes < file_length) {
@@ -2583,13 +2589,19 @@ set_dm_args_default(struct dm_args *dm)
 	dm->src_coh = DAOS_HDL_INVAL;
 	dm->dst_poh = DAOS_HDL_INVAL;
 	dm->dst_coh = DAOS_HDL_INVAL;
+	dm->cont_prop_oid = DAOS_PROP_CO_ALLOCED_OID;
+	dm->cont_prop_layout = DAOS_PROP_CO_LAYOUT_TYPE;
+	dm->cont_layout = DAOS_PROP_CO_LAYOUT_UNKOWN;
+	dm->cont_oid = 0;
+
 }
 
 static int
-dm_get_cont_type(struct dm_args *ca,
+dm_get_cont_prop(daos_handle_t coh,
 		 char *sysname,
 		 daos_cont_info_t *cont_info,
-		 daos_cont_layout_t *type)
+		 uint32_t dpe_type,
+		 uint64_t *dpe_val)
 {
 	int                     rc = 0;
 	daos_prop_t		*prop = daos_prop_alloc(1);
@@ -2599,16 +2611,16 @@ dm_get_cont_type(struct dm_args *ca,
 		D_GOTO(out, rc);
 	}
 
-	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
+	prop->dpp_entries[0].dpe_type = dpe_type;
 
-	rc = daos_cont_query(ca->src_coh, NULL, prop, NULL);
+	rc = daos_cont_query(coh, NULL, prop, NULL);
 	if (rc) {
 		fprintf(stderr, "daos_cont_query() failed (%d)", rc);
 		daos_prop_free(prop);
 		D_GOTO(out, rc);
 	}
 
-	*type = prop->dpp_entries[0].dpe_val;
+	*dpe_val = prop->dpp_entries[0].dpe_val;
 	daos_prop_free(prop);
 out:
 	return rc;
@@ -2622,12 +2634,12 @@ dm_connect(bool is_posix_copy,
 	   char *sysname,
 	   char *path,
 	   daos_cont_info_t *src_cont_info,
-	   daos_cont_info_t *dst_cont_info,
-	   daos_cont_layout_t *cont_type)
+	   daos_cont_info_t *dst_cont_info)
 {
 	/* check source pool/conts */
 	int			rc = 0;
 	struct duns_attr_t	dattr = {0};
+	daos_prop_t		*props = NULL;
 
 	/* open src pool, src cont, and mount dfs */
 	if (src_file_dfs->type == DAOS) {
@@ -2657,10 +2669,35 @@ dm_connect(bool is_posix_copy,
 	}
 
 	/* get source container type */
-	rc = dm_get_cont_type(ca, sysname, src_cont_info, cont_type);
+	rc = dm_get_cont_prop(ca->src_coh, sysname, src_cont_info,
+			      ca->cont_prop_layout, &ca->cont_layout);
 	if (rc != 0) {
 		fprintf(stderr, "failed to query source "
 			"container: %d\n", rc);
+	}
+
+	/* get alloced oid on source container to set on destination */
+	rc = dm_get_cont_prop(ca->src_coh, sysname, src_cont_info,
+			      ca->cont_prop_oid, &ca->cont_oid);
+	if (rc != 0) {
+		fprintf(stderr, "failed to query source "
+			"container: %d\n", rc);
+	}
+
+	props = daos_prop_alloc(2);
+	if (props == NULL) {
+		fprintf(stderr, "Failed to allocate prop (%d)", rc);
+		D_GOTO(out, rc);
+	}
+	props->dpp_entries[0].dpe_type = ca->cont_prop_layout;
+	props->dpp_entries[0].dpe_val = ca->cont_layout;
+
+	/* only set max oid on created dest containers
+	 * if this is a non-posix copy
+	 */
+	if (!is_posix_copy) {
+		props->dpp_entries[1].dpe_type = ca->cont_prop_oid;
+		props->dpp_entries[1].dpe_val = ca->cont_oid;
 	}
 
 	/* open dst pool, dst cont, and mount dfs */
@@ -2686,7 +2723,8 @@ dm_connect(bool is_posix_copy,
 			}
 			uuid_copy(dattr.da_puuid, ca->dst_p_uuid);
 			uuid_copy(dattr.da_cuuid, ca->dst_c_uuid);
-			dattr.da_type = *cont_type;
+			dattr.da_type = ca->cont_layout;
+			dattr.da_props = props;
 			rc = duns_create_path(ca->dst_poh, path,
 					      &dattr);
 			if (rc != 0) {
@@ -2701,10 +2739,12 @@ dm_connect(bool is_posix_copy,
 				    DAOS_COO_RW, &ca->dst_coh,
 				    dst_cont_info, NULL);
 		if (rc != 0) {
-			if (*cont_type == DAOS_PROP_CO_LAYOUT_POSIX) {
+			if (ca->cont_layout == DAOS_PROP_CO_LAYOUT_POSIX) {
+				dfs_attr_t attr;
+				attr.da_props = props;
 				rc = dfs_cont_create(ca->dst_poh,
 						     ca->dst_c_uuid,
-						     NULL, NULL, NULL);
+						     &attr, NULL, NULL);
 				if (rc != 0) {
 					fprintf(stderr, "failed to "
 						"create destination "
@@ -2715,7 +2755,7 @@ dm_connect(bool is_posix_copy,
 			} else {
 				rc = daos_cont_create(ca->dst_poh,
 						      ca->dst_c_uuid,
-						      NULL, NULL);
+						      props, NULL);
 				if (rc != 0) {
 					fprintf(stderr, "failed to "
 						"create destination "
@@ -2769,6 +2809,8 @@ err_src_root:
 			d_errdesc(rc), rc);
 	}
 out:
+	if (props != NULL)
+		daos_prop_free(props);
 	return rc;
 }
 
@@ -2870,7 +2912,7 @@ dm_parse_path(struct file_dfs *file, char *path, size_t path_len,
 	 */
 	} else if (strncmp(path, "daos://", 7) == 0 || daos_no_prefix) {
 		/* Error, since we expect a DAOS path */
-		D_GOTO(out, rc);
+		D_GOTO(out, rc = 1);
 	} else {
 		/* not a DAOS path, set type to POSIX,
 		 * POSIX dir will be checked with stat
@@ -2890,24 +2932,24 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	/* TODO: add check to make sure all required arguments are
 	 * provided
 	 */
-	int			        rc = 0;
-	char			    *src_str = NULL;
-	char			    *dst_str = NULL;
-	size_t			    src_str_len = 0;
-	size_t			    dst_str_len = 0;
+	int			rc = 0;
+	char			*src_str = NULL;
+	char			*dst_str = NULL;
+	size_t			src_str_len = 0;
+	size_t		 	dst_str_len = 0;
 	daos_cont_info_t	src_cont_info = {0};
 	daos_cont_info_t	dst_cont_info = {0};
 	struct file_dfs		src_file_dfs = {0};
 	struct file_dfs		dst_file_dfs = {0};
 	struct dm_args		ca = {0};
-	char			    *name = NULL;
+	char			*name = NULL;
 	char		    	*dname = NULL;
-	char			    *dst_dir = NULL;
-	mode_t			    tmp_mode_dir = S_IRWXU;
-	bool			    is_posix_copy = true;
-	bool			    daos_no_prefix = false;
-	daos_cont_layout_t	cont_type = DAOS_PROP_CO_LAYOUT_UNKOWN;
+	char			*dst_dir = NULL;
+	mode_t			tmp_mode_dir = S_IRWXU;
+	bool			is_posix_copy = true;
+	bool			daos_no_prefix = false;
 
+	set_dm_args_default(&ca);
 	file_set_defaults_dfs(&src_file_dfs);
 	file_set_defaults_dfs(&dst_file_dfs);
 
@@ -2918,7 +2960,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	rc = dm_parse_path(&src_file_dfs, src_str, src_str_len,
-				&fa.src_p_uuid, &fa.src_c_uuid, daos_no_prefix);
+				&ca.src_p_uuid, &ca.src_c_uuid, daos_no_prefix);
 	if (rc != 0) {
 		fprintf(stderr, "failed to parse source path: %d\n", rc);
 		D_GOTO(out, rc = daos_errno2der(rc));
@@ -2932,15 +2974,14 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	rc = dm_parse_path(&dst_file_dfs, dst_str, dst_str_len,
-				       &fa.dst_p_uuid, &fa.dst_c_uuid, daos_no_prefix);
+		      	   &ca.dst_p_uuid, &ca.dst_c_uuid, daos_no_prefix);
 	if (rc != 0) {
 		fprintf(stderr, "failed to parse destination path: %d\n", rc);
 		D_GOTO(out, rc);
 	}
 
 	rc = dm_connect(is_posix_copy, &src_file_dfs, &dst_file_dfs, &ca,
-			        ap->sysname, ap->dst, &src_cont_info, &dst_cont_info,
-			        &cont_type);
+			ap->sysname, ap->dst, &src_cont_info, &dst_cont_info);
 	if (rc != 0) {
 		fprintf(stderr, "fs copy failed to connect: %d\n", rc);
 		D_GOTO(out, rc = daos_errno2der(rc));
@@ -3025,7 +3066,7 @@ cont_clone_recx_single(daos_key_t *dkey,
 	char		buf[buf_len];
 	d_sg_list_t	sgl;
 	d_iov_t		iov;
-	int		rc;
+	int		    rc;
 
 	/* set sgl values */
 	sgl.sg_nr     = 1;
@@ -3058,6 +3099,7 @@ cont_clone_recx_array(daos_key_t *dkey,
 {
 	int			rc = 0;
 	int			i = 0;
+	int			k = 0;
 	uint64_t		buf_len = 0;
 	uint32_t		number = 5;
 	daos_anchor_t		recx_anchor = {0};
@@ -3105,6 +3147,13 @@ cont_clone_recx_array(daos_key_t *dkey,
 			buf_len = recxs[i].rx_nr * size;
 			D_ALLOC(buf[i], buf_len);
 			if (buf[i] == NULL) {
+				/* free any other buf[i] that
+				 * was previously allocated
+				 * on error
+				 */
+				for (k = 0; k < i; k++) {
+					D_FREE(buf[k]);
+				}
 				D_FREE(buf);
 				D_GOTO(out, rc = -DER_NOMEM);
 			}
@@ -3407,24 +3456,39 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 	daos_handle_t		dst_oh = DAOS_HDL_INVAL;
 	struct file_dfs		src_cp_type = {0};
 	struct file_dfs		dst_cp_type = {0};
+	char			*src_str = NULL;
+	char			*dst_str = NULL;
+	size_t			src_str_len = 0;
+	size_t		 	dst_str_len = 0;
 	daos_epoch_range_t	epr;
 	bool			daos_no_prefix = true;
 	int			uuid_len = 128;
-	daos_cont_layout_t	cont_type = DAOS_PROP_CO_LAYOUT_UNKOWN;
 
 	set_dm_args_default(&ca);
 	file_set_defaults_dfs(&src_cp_type);
 	file_set_defaults_dfs(&dst_cp_type);
 
-	rc = dm_parse_path(&src_cp_type, ap->src, &ca.src_p_uuid,
-			   &ca.src_c_uuid, daos_no_prefix);
+	src_str_len = strlen(ap->src);
+	D_STRNDUP(src_str, ap->src, src_str_len);
+	if (src_str == NULL) {
+		fprintf(stderr, "Unable to allocate memory for source path.");
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+	rc = dm_parse_path(&src_cp_type, src_str, src_str_len,
+			   &ca.src_p_uuid, &ca.src_c_uuid, daos_no_prefix);
 	if (rc != 0) {
-		fprintf(stderr, "failed to parse source argument: %d\n", rc);
-		D_GOTO(out, rc);
+		fprintf(stderr, "failed to parse source path: %d\n", rc);
+		D_GOTO(out, rc = daos_errno2der(rc));
 	}
 
-	rc = dm_parse_path(&dst_cp_type, ap->dst, &ca.dst_p_uuid,
-			   &ca.dst_c_uuid, daos_no_prefix);
+	dst_str_len = strlen(ap->dst);
+	D_STRNDUP(dst_str, ap->dst, dst_str_len);
+	if (dst_str == NULL) {
+		fprintf(stderr, "Unable to allocate memory for dest path.");
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+	rc = dm_parse_path(&dst_cp_type, dst_str, dst_str_len,
+			   &ca.dst_p_uuid, &ca.dst_c_uuid, daos_no_prefix);
 	/* parse pool uuid if this fails, since it is not in form that
 	 * can be parsed by duns_resolve_path (i.e. dst=/$pool)
 	 */
@@ -3482,7 +3546,7 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 
 	rc = dm_connect(is_posix_copy, &dst_cp_type, &src_cp_type,
 			&ca, ap->sysname, ap->dst, &src_cont_info,
-			&dst_cont_info, &cont_type);
+			&dst_cont_info);
 	if (rc != 0) {
 		D_GOTO(out_disconnect, rc);
 	}
