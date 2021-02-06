@@ -606,7 +606,7 @@ nvme_reaction(int *tgt_ids, int tgt_cnt, bool reint)
 		}
 
 		d_list_del(&pool_info->spi_link);
-		smd_free_pool_info(pool_info);
+		smd_pool_free_info(pool_info);
 	}
 
 	D_DEBUG(DB_MGMT, "Faulty reaction done. tgt_cnt:%d, rc:%d\n",
