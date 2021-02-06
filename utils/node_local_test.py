@@ -1153,7 +1153,7 @@ class posix_tests():
         assert rc.returncode == 0
         stbuf = os.stat(path)
         print(stbuf)
-        assert(stbuf.st_ino < 100)
+        assert stbuf.st_ino < 100
         print(os.listdir(path))
 
     @needs_dfuse_with_cache
@@ -1167,7 +1167,7 @@ class posix_tests():
         assert rc.returncode == 0
         stbuf = os.stat(path)
         print(stbuf)
-        assert(stbuf.st_ino < 100)
+        assert stbuf.st_ino < 100
         print(os.listdir(path))
 
 def run_posix_tests(server, conf, test=None):
