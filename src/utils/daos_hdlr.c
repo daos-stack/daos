@@ -2640,6 +2640,7 @@ dm_connect(bool is_posix_copy,
 	int			rc = 0;
 	struct duns_attr_t	dattr = {0};
 	daos_prop_t		*props = NULL;
+	dfs_attr_t		attr;
 
 	/* open src pool, src cont, and mount dfs */
 	if (src_file_dfs->type == DAOS) {
@@ -2676,7 +2677,7 @@ dm_connect(bool is_posix_copy,
 			"container: %d\n", rc);
 	}
 
-	/* get alloced oid on source container to set on destination */
+	/* get allocated oid on source container to set on destination */
 	rc = dm_get_cont_prop(ca->src_coh, sysname, src_cont_info,
 			      ca->cont_prop_oid, &ca->cont_oid);
 	if (rc != 0) {
@@ -2740,7 +2741,6 @@ dm_connect(bool is_posix_copy,
 				    dst_cont_info, NULL);
 		if (rc != 0) {
 			if (ca->cont_layout == DAOS_PROP_CO_LAYOUT_POSIX) {
-				dfs_attr_t attr;
 				attr.da_props = props;
 				rc = dfs_cont_create(ca->dst_poh,
 						     ca->dst_c_uuid,
@@ -2892,7 +2892,7 @@ out:
 */
 static int
 dm_parse_path(struct file_dfs *file, char *path, size_t path_len,
-		      uuid_t *p_uuid, uuid_t *c_uuid, bool daos_no_prefix)
+	      uuid_t *p_uuid, uuid_t *c_uuid, bool daos_no_prefix)
 {
 	struct duns_attr_t	dattr = {0};
 	int			rc = 0;
@@ -2936,14 +2936,14 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	char			*src_str = NULL;
 	char			*dst_str = NULL;
 	size_t			src_str_len = 0;
-	size_t		 	dst_str_len = 0;
+	size_t			dst_str_len = 0;
 	daos_cont_info_t	src_cont_info = {0};
 	daos_cont_info_t	dst_cont_info = {0};
 	struct file_dfs		src_file_dfs = {0};
 	struct file_dfs		dst_file_dfs = {0};
 	struct dm_args		ca = {0};
 	char			*name = NULL;
-	char		    	*dname = NULL;
+	char			*dname = NULL;
 	char			*dst_dir = NULL;
 	mode_t			tmp_mode_dir = S_IRWXU;
 	bool			is_posix_copy = true;
@@ -2960,7 +2960,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	rc = dm_parse_path(&src_file_dfs, src_str, src_str_len,
-				&ca.src_p_uuid, &ca.src_c_uuid, daos_no_prefix);
+			   &ca.src_p_uuid, &ca.src_c_uuid, daos_no_prefix);
 	if (rc != 0) {
 		fprintf(stderr, "failed to parse source path: %d\n", rc);
 		D_GOTO(out, rc = daos_errno2der(rc));
@@ -2974,7 +2974,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	rc = dm_parse_path(&dst_file_dfs, dst_str, dst_str_len,
-		      	   &ca.dst_p_uuid, &ca.dst_c_uuid, daos_no_prefix);
+			   &ca.dst_p_uuid, &ca.dst_c_uuid, daos_no_prefix);
 	if (rc != 0) {
 		fprintf(stderr, "failed to parse destination path: %d\n", rc);
 		D_GOTO(out, rc);
@@ -3459,7 +3459,7 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 	char			*src_str = NULL;
 	char			*dst_str = NULL;
 	size_t			src_str_len = 0;
-	size_t		 	dst_str_len = 0;
+	size_t			dst_str_len = 0;
 	daos_epoch_range_t	epr;
 	bool			daos_no_prefix = true;
 	int			uuid_len = 128;
