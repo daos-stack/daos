@@ -56,7 +56,7 @@ daos_tests:
     num_clients: 1
   num_replicas:
     num_replicas: 1
-  Tests:
+  Tests: !mux
     test_rebuild_0to10:
       daos_test: r
       test_name: DAOS_Rebuild_0to10

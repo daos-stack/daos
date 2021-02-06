@@ -49,7 +49,7 @@ dmg:
   transport_config:
     allow_insecure: True
 daos_tests:
-  Tests:
+  Tests: !mux
     test_daos_dfs_unit:
       daos_test: u
       num_clients: 1

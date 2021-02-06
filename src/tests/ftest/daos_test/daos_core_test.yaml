@@ -57,7 +57,7 @@ dmg:
 daos_tests:
   num_clients:
     num_clients: 1
-  Tests:
+  Tests: !mux
     test_daos_degraded_mode:
       daos_test: d
       test_name: DAOS_Degraded_Mode
