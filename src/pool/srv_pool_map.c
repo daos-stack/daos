@@ -182,10 +182,11 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 				DP_TARGET(target));
 			return -DER_INVAL;
 		case PO_COMP_ST_DOWN:
-			target->ta_comp.co_flags = PO_COMPF_DOWN2OUT;
 		case PO_COMP_ST_DRAIN:
 			D_DEBUG(DF_DSMS, "change "DF_TARGET" to DOWNOUT %p\n",
 				DP_TARGET(target), map);
+			if (target->ta_comp.co_status == PO_COMP_ST_DOWN)
+				target->ta_comp.co_flags = PO_COMPF_DOWN2OUT;
 			target->ta_comp.co_status = PO_COMP_ST_DOWNOUT;
 			target->ta_comp.co_out_ver = ++(*version);
 			if (print_changes)
