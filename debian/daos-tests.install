@@ -6,7 +6,7 @@ usr/bin/common_test
 usr/bin/daos_metrics
 usr/bin/daos_test
 usr/bin/dfs_test
-usr/bin/drpc_iosrv_test
+usr/bin/drpc_engine_test
 usr/bin/drpc_test
 usr/bin/job_tests
 usr/bin/jobtest

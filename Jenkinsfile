@@ -559,7 +559,7 @@ pipeline {
                                                   "src/include/daos/*.pb-c.h:" +
                                                   "src/common/*.pb-c.[ch]:" +
                                                   "src/mgmt/*.pb-c.[ch]:" +
-                                                  "src/iosrv/*.pb-c.[ch]:" +
+                                                  "src/engine/*.pb-c.[ch]:" +
                                                   "src/security/*.pb-c.[ch]:" +
                                                   "src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:" +
                                                   "src/client/java/daos-java/src/main/java/io/daos/obj/attr/*:" +

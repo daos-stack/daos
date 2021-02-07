@@ -124,10 +124,10 @@ if [ -d "/mnt/daos" ]; then
     run_test "${SL_BUILD_DIR}/src/common/tests/acl_principal_tests"
     run_test "${SL_BUILD_DIR}/src/common/tests/acl_real_tests"
     run_test "${SL_BUILD_DIR}/src/common/tests/prop_tests"
-    run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_client_tests"
-    run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_progress_tests"
-    run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_handler_tests"
-    run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_listener_tests"
+    run_test "${SL_BUILD_DIR}/src/engine/tests/drpc_client_tests"
+    run_test "${SL_BUILD_DIR}/src/engine/tests/drpc_progress_tests"
+    run_test "${SL_BUILD_DIR}/src/engine/tests/drpc_handler_tests"
+    run_test "${SL_BUILD_DIR}/src/engine/tests/drpc_listener_tests"
     run_test "${SL_BUILD_DIR}/src/mgmt/tests/srv_drpc_tests"
     run_test "${SL_PREFIX}/bin/daos_perf" -T vos -R '"U;p F;p V"' -o 5 -d 5 \
              -a 5 -n 10
