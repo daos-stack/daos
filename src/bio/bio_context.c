@@ -168,12 +168,16 @@ blob_cb(void *arg, int rc)
 static void
 blob_wait_completion(struct bio_xs_context *xs_ctxt, struct blob_cp_arg *ba)
 {
+	int	rc;
+
 	D_ASSERT(xs_ctxt != NULL);
 	if (xs_ctxt->bxc_tgt_id == -1) {
 		D_DEBUG(DB_IO, "Self poll xs_ctxt:%p\n", xs_ctxt);
 		xs_poll_completion(xs_ctxt, &ba->bca_inflights);
 	} else {
-		ABT_eventual_wait(ba->bca_eventual, NULL);
+		rc = ABT_eventual_wait(ba->bca_eventual, NULL);
+		if (rc != ABT_SUCCESS)
+			D_ERROR("ABT eventual wait failed. %d", rc);
 	}
 }
 

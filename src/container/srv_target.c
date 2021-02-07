@@ -1358,6 +1358,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		 * NB: When cont_uuid == NULL, it's not a real container open
 		 *     but for creating rebuild global container handle.
 		 */
+		D_ASSERT(hdl->sch_cont != NULL);
 		hdl->sch_cont->sc_open++;
 
 		if (hdl->sch_cont->sc_open > 1)
@@ -1414,8 +1415,7 @@ err_register:
 	if (hdl->sch_cont->sc_open == 0)
 		dtx_batched_commit_deregister(hdl->sch_cont);
 err_reindex:
-	if (hdl->sch_cont)
-		cont_stop_dtx_reindex_ult(hdl->sch_cont);
+	cont_stop_dtx_reindex_ult(hdl->sch_cont);
 err_cont:
 	if (daos_handle_is_valid(poh)) {
 		D_DEBUG(DF_DSMS, DF_CONT": destroying new vos container\n",
