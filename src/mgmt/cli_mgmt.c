@@ -754,9 +754,9 @@ dc_mgmt_get_pool_svc_ranks(struct dc_mgmt_sys *sys, const uuid_t puuid,
 	int					rc = 0;
 
 	/* NB: ms_ranks may have multiple entries even for single MS replica,
-	 * since there may be multiple ioengines there. Some of which may have
-	 * been stopped or faulted. May need to contact multiple ioengines.
-	 * Assumed: any MS replica ioengine can be contacted, even non-leaders.
+	 * since there may be multiple engines there. Some of which may have
+	 * been stopped or faulted. May need to contact multiple engines.
+	 * Assumed: any MS replica engine can be contacted, even non-leaders.
 	 */
 	ms_ranks = sys->sy_info.ms_ranks;
 	D_ASSERT(ms_ranks->rl_nr > 0);
