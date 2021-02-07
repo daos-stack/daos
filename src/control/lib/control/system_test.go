@@ -23,7 +23,6 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
-	. "github.com/daos-stack/daos/src/control/system"
 )
 
 func TestControl_StartRanks(t *testing.T) {
@@ -65,11 +64,11 @@ func TestControl_StartRanks(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Action: "start",
-								State: uint32(system.MemberStateReady),
+								State: system.MemberStateReady.String(),
 							},
 							{
 								Rank: 1, Action: "start",
-								State: uint32(system.MemberStateReady),
+								State: system.MemberStateReady.String(),
 							},
 						},
 					},
@@ -80,12 +79,12 @@ func TestControl_StartRanks(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 2, Action: "start",
-								State: uint32(system.MemberStateReady),
+								State: system.MemberStateReady.String(),
 							},
 							{
 								Rank: 3, Action: "start",
 								Errored: true, Msg: "uh oh",
-								State: uint32(system.MemberStateStopped),
+								State: system.MemberStateStopped.String(),
 							},
 						},
 					},
@@ -167,11 +166,11 @@ func TestControl_PrepShutdownRanks(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Action: "prep shutdown",
-								State: uint32(system.MemberStateStopping),
+								State: system.MemberStateStopping.String(),
 							},
 							{
 								Rank: 1, Action: "prep shutdown",
-								State: uint32(system.MemberStateStopping),
+								State: system.MemberStateStopping.String(),
 							},
 						},
 					},
@@ -182,12 +181,12 @@ func TestControl_PrepShutdownRanks(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 2, Action: "prep shutdown",
-								State: uint32(system.MemberStateStopping),
+								State: system.MemberStateStopping.String(),
 							},
 							{
 								Rank: 3, Action: "prep shutdown",
 								Errored: true, Msg: "uh oh",
-								State: uint32(system.MemberStateStopped),
+								State: system.MemberStateStopped.String(),
 							},
 						},
 					},
@@ -269,11 +268,11 @@ func TestControl_StopRanks(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Action: "stop",
-								State: uint32(system.MemberStateStopped),
+								State: system.MemberStateStopped.String(),
 							},
 							{
 								Rank: 1, Action: "stop",
-								State: uint32(system.MemberStateStopped),
+								State: system.MemberStateStopped.String(),
 							},
 						},
 					},
@@ -284,12 +283,12 @@ func TestControl_StopRanks(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 2, Action: "stop",
-								State: uint32(system.MemberStateStopped),
+								State: system.MemberStateStopped.String(),
 							},
 							{
 								Rank: 3, Action: "stop",
 								Errored: true, Msg: "uh oh",
-								State: uint32(system.MemberStateErrored),
+								State: system.MemberStateErrored.String(),
 							},
 						},
 					},
@@ -371,11 +370,11 @@ func TestControl_PingRanks(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Action: "ping",
-								State: uint32(system.MemberStateReady),
+								State: system.MemberStateReady.String(),
 							},
 							{
 								Rank: 1, Action: "ping",
-								State: uint32(system.MemberStateReady),
+								State: system.MemberStateReady.String(),
 							},
 						},
 					},
@@ -386,12 +385,12 @@ func TestControl_PingRanks(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 2, Action: "ping",
-								State: uint32(system.MemberStateReady),
+								State: system.MemberStateReady.String(),
 							},
 							{
 								Rank: 3, Action: "ping",
 								Errored: true, Msg: "uh oh",
-								State: uint32(system.MemberStateUnresponsive),
+								State: system.MemberStateUnresponsive.String(),
 							},
 						},
 					},
@@ -436,33 +435,33 @@ func TestControl_PingRanks(t *testing.T) {
 
 func TestControl_getResetRankErrors(t *testing.T) {
 	for name, tc := range map[string]struct {
-		results     MemberResults
+		results     system.MemberResults
 		expRankErrs map[string][]string
 		expHosts    []string
 		expErrMsg   string
 	}{
 		"no results": {
-			results:     MemberResults{},
+			results:     system.MemberResults{},
 			expRankErrs: make(map[string][]string),
 			expHosts:    make([]string, 0),
 		},
 		"successful result": {
-			results: MemberResults{
-				{Addr: "10.0.0.1:10001", Rank: Rank(0)},
+			results: system.MemberResults{
+				{Addr: "10.0.0.1:10001", Rank: system.Rank(0)},
 			},
 			expRankErrs: make(map[string][]string),
 			expHosts:    []string{"10.0.0.1:10001"},
 		},
 		"successful result missing address": {
-			results: MemberResults{
-				{Addr: "", Rank: Rank(0)},
+			results: system.MemberResults{
+				{Addr: "", Rank: system.Rank(0)},
 			},
 			expErrMsg: "host address missing for rank 0 result",
 		},
 		"failed result": {
-			results: MemberResults{
+			results: system.MemberResults{
 				{
-					Addr: "10.0.0.1:10001", Rank: Rank(0),
+					Addr: "10.0.0.1:10001", Rank: system.Rank(0),
 					Errored: true, Msg: "didn't start",
 				},
 			},
@@ -470,9 +469,9 @@ func TestControl_getResetRankErrors(t *testing.T) {
 			expHosts:    []string{},
 		},
 		"failed result missing error message": {
-			results: MemberResults{
+			results: system.MemberResults{
 				{
-					Addr: "10.0.0.1:10001", Rank: Rank(0),
+					Addr: "10.0.0.1:10001", Rank: system.Rank(0),
 					Errored: true, Msg: "",
 				},
 			},
@@ -482,30 +481,30 @@ func TestControl_getResetRankErrors(t *testing.T) {
 			expHosts: []string{},
 		},
 		"mixed results": {
-			results: MemberResults{
-				{Addr: "10.0.0.1:10001", Rank: Rank(0)},
-				{Addr: "10.0.0.1:10001", Rank: Rank(1)},
+			results: system.MemberResults{
+				{Addr: "10.0.0.1:10001", Rank: system.Rank(0)},
+				{Addr: "10.0.0.1:10001", Rank: system.Rank(1)},
 				{
-					Addr: "10.0.0.2:10001", Rank: Rank(2),
+					Addr: "10.0.0.2:10001", Rank: system.Rank(2),
 					Errored: true, Msg: "didn't start",
 				},
 				{
-					Addr: "10.0.0.2:10001", Rank: Rank(3),
+					Addr: "10.0.0.2:10001", Rank: system.Rank(3),
 					Errored: true, Msg: "didn't start",
 				},
 				{
-					Addr: "10.0.0.3:10001", Rank: Rank(4),
+					Addr: "10.0.0.3:10001", Rank: system.Rank(4),
 					Errored: true, Msg: "something bad",
 				},
 				{
-					Addr: "10.0.0.3:10001", Rank: Rank(5),
+					Addr: "10.0.0.3:10001", Rank: system.Rank(5),
 					Errored: true, Msg: "didn't start",
 				},
 				{
-					Addr: "10.0.0.4:10001", Rank: Rank(6),
+					Addr: "10.0.0.4:10001", Rank: system.Rank(6),
 					Errored: true, Msg: "something bad",
 				},
-				{Addr: "10.0.0.4:10001", Rank: Rank(7)},
+				{Addr: "10.0.0.4:10001", Rank: system.Rank(7)},
 			},
 			expRankErrs: map[string][]string{
 				"didn't start": {
@@ -593,28 +592,28 @@ func TestControl_SystemQuery(t *testing.T) {
 						{
 							Rank:        1,
 							Uuid:        common.MockUUID(1),
-							State:       uint32(MemberStateReady),
+							State:       system.MemberStateReady.String(),
 							Addr:        "10.0.0.1:10001",
 							FaultDomain: fdStrs[1],
 						},
 						{
 							Rank:        2,
 							Uuid:        common.MockUUID(2),
-							State:       uint32(MemberStateReady),
+							State:       system.MemberStateReady.String(),
 							Addr:        "10.0.0.1:10001",
 							FaultDomain: fdStrs[2],
 						},
 						{
 							Rank:        0,
 							Uuid:        common.MockUUID(0),
-							State:       uint32(MemberStateStopped),
+							State:       system.MemberStateStopped.String(),
 							Addr:        "10.0.0.2:10001",
 							FaultDomain: fdStrs[0],
 						},
 						{
 							Rank:        3,
 							Uuid:        common.MockUUID(3),
-							State:       uint32(MemberStateStopped),
+							State:       system.MemberStateStopped.String(),
 							Addr:        "10.0.0.2:10001",
 							FaultDomain: fdStrs[3],
 						},
@@ -717,19 +716,19 @@ func TestControl_SystemStart(t *testing.T) {
 					Results: []*sharedpb.RankResult{
 						{
 							Rank:  1,
-							State: uint32(MemberStateReady),
+							State: system.MemberStateReady.String(),
 						},
 						{
 							Rank:  2,
-							State: uint32(MemberStateReady),
+							State: system.MemberStateReady.String(),
 						},
 						{
 							Rank:  0,
-							State: uint32(MemberStateStopped),
+							State: system.MemberStateStopped.String(),
 						},
 						{
 							Rank:  3,
-							State: uint32(MemberStateStopped),
+							State: system.MemberStateStopped.String(),
 						},
 					},
 				},
@@ -830,19 +829,19 @@ func TestControl_SystemStop(t *testing.T) {
 					Results: []*sharedpb.RankResult{
 						{
 							Rank:  1,
-							State: uint32(MemberStateReady),
+							State: system.MemberStateReady.String(),
 						},
 						{
 							Rank:  2,
-							State: uint32(MemberStateReady),
+							State: system.MemberStateReady.String(),
 						},
 						{
 							Rank:  0,
-							State: uint32(MemberStateStopped),
+							State: system.MemberStateStopped.String(),
 						},
 						{
 							Rank:  3,
-							State: uint32(MemberStateStopped),
+							State: system.MemberStateStopped.String(),
 						},
 					},
 				},
@@ -926,12 +925,12 @@ func TestControl_SystemReformat(t *testing.T) {
 					Results: []*sharedpb.RankResult{
 						{
 							Rank: 1, Action: "reset format",
-							State: uint32(MemberStateAwaitFormat),
+							State: system.MemberStateAwaitFormat.String(),
 							Addr:  "10.0.0.1:10001",
 						},
 						{
 							Rank: 2, Action: "reset format",
-							State: uint32(MemberStateAwaitFormat),
+							State: system.MemberStateAwaitFormat.String(),
 							Addr:  "10.0.0.1:10001",
 						},
 					},
@@ -948,13 +947,13 @@ func TestControl_SystemReformat(t *testing.T) {
 					Results: []*sharedpb.RankResult{
 						{
 							Rank: 1, Action: "reset format",
-							State:   uint32(MemberStateStopped),
+							State:   system.MemberStateStopped.String(),
 							Addr:    "10.0.0.1:10001",
 							Errored: true, Msg: "didn't start",
 						},
 						{
 							Rank: 2, Action: "reset format",
-							State: uint32(MemberStateAwaitFormat),
+							State: system.MemberStateAwaitFormat.String(),
 							Addr:  "10.0.0.1:10001",
 						},
 					},
@@ -975,46 +974,46 @@ func TestControl_SystemReformat(t *testing.T) {
 					Results: []*sharedpb.RankResult{
 						{
 							Rank: 1, Action: "reset format",
-							State:   uint32(MemberStateStopped),
+							State:   system.MemberStateStopped.String(),
 							Addr:    "10.0.0.1:10001",
 							Errored: true, Msg: "didn't start",
 						},
 						{
 							Rank: 2, Action: "reset format",
-							State: uint32(MemberStateAwaitFormat),
+							State: system.MemberStateAwaitFormat.String(),
 							Addr:  "10.0.0.1:10001",
 						},
 						{
 							Rank: 3, Action: "reset format",
-							State: uint32(MemberStateAwaitFormat),
+							State: system.MemberStateAwaitFormat.String(),
 							Addr:  "10.0.0.2:10001",
 						},
 						{
 							Rank: 4, Action: "reset format",
-							State: uint32(MemberStateAwaitFormat),
+							State: system.MemberStateAwaitFormat.String(),
 							Addr:  "10.0.0.2:10001",
 						},
 						{
 							Rank: 5, Action: "reset format",
-							State:   uint32(MemberStateStopped),
+							State:   system.MemberStateStopped.String(),
 							Addr:    "10.0.0.3:10001",
 							Errored: true, Msg: "didn't start",
 						},
 						{
 							Rank: 6, Action: "reset format",
-							State:   uint32(MemberStateErrored),
+							State:   system.MemberStateErrored.String(),
 							Addr:    "10.0.0.3:10001",
 							Errored: true, Msg: "something bad",
 						},
 						{
 							Rank: 7, Action: "reset format",
-							State:   uint32(MemberStateStopped),
+							State:   system.MemberStateStopped.String(),
 							Addr:    "10.0.0.4:10001",
 							Errored: true, Msg: "didn't start",
 						},
 						{
 							Rank: 8, Action: "reset format",
-							State:   uint32(MemberStateErrored),
+							State:   system.MemberStateErrored.String(),
 							Addr:    "10.0.0.4:10001",
 							Errored: true, Msg: "didn't start",
 						},

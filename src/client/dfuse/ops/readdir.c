@@ -42,12 +42,6 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
 	if (rc)
 		return rc;
 
-
-	if (S_ISFIFO(stbuf.st_mode)) {
-		stbuf.st_mode &= ~S_IFIFO;
-		stbuf.st_mode |= S_IFDIR;
-	}
-
 	rc = dfs_obj2id(obj, &oid);
 	if (rc)
 		D_GOTO(out, rc);
