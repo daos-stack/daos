@@ -528,7 +528,7 @@ class DaosServer():
         max_stop_time = 5
         while True:
             time.sleep(10)
-            if self._check_system_state('stopped'):
+            if self._check_system_state(['stopped', 'errored']):
                 break
             try:
                 self._check_timing("stop", start, max_stop_time)
