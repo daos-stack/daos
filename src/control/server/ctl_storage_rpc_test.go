@@ -1392,13 +1392,13 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 					t.Logf("sDevs[%d]= %v, value= %v", idx, tc.sDevs[idx], scmMount)
 				}
 				engine := ioengine.NewConfig().
-					  WithScmMountPoint(scmMount).
-					  WithScmClass(tc.sClass.String()).
-					  WithBdevClass(tc.bClass.String()).
-					  WithBdevFileSize(tc.bSize).
-					  WithScmRamdiskSize(tc.sSize).
-					  WithBdevDeviceList(tc.bDevs[idx]...).
-					  WithScmDeviceList(tc.sDevs[idx])
+					WithScmMountPoint(scmMount).
+					WithScmClass(tc.sClass.String()).
+					WithBdevClass(tc.bClass.String()).
+					WithBdevFileSize(tc.bSize).
+					WithScmRamdiskSize(tc.sSize).
+					WithBdevDeviceList(tc.bDevs[idx]...).
+					WithScmDeviceList(tc.sDevs[idx])
 				config.Engines = append(config.Engines, engine)
 			}
 

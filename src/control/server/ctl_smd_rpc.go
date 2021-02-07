@@ -71,15 +71,15 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 		}
 
 		if req.Target != "" {
-			reqTgtId, err := strconv.ParseInt(req.Target, 10, 32)
+			reqTgtID, err := strconv.ParseInt(req.Target, 10, 32)
 			if err != nil {
 				return errors.Errorf("invalid target idx %q", req.Target)
 			}
 
 			found := false
 			for _, dev := range rResp.Devices {
-				for _, tgtId := range dev.TgtIds {
-					if int32(reqTgtId) == tgtId {
+				for _, tgtID := range dev.TgtIds {
+					if int32(reqTgtID) == tgtID {
 						rResp.Devices = []*ctlpb.SmdQueryResp_Device{dev}
 						found = true
 						break
@@ -344,6 +344,9 @@ func (svc *ControlService) smdIdentify(ctx context.Context, req *ctlpb.SmdQueryR
 	}, nil
 }
 
+// SmdQuery implements the method defined for the Management Service.
+//
+// Query SMD info for pools or devices.
 func (svc *ControlService) SmdQuery(ctx context.Context, req *ctlpb.SmdQueryReq) (*ctlpb.SmdQueryResp, error) {
 	svc.log.Debugf("MgmtSvc.SmdQuery dispatch, req:%+v\n", *req)
 

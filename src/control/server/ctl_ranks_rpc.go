@@ -97,7 +97,7 @@ func (svc *ControlService) drpcOnLocalRanks(parent context.Context, req *ctlpb.R
 	return results, nil
 }
 
-// PrepShutdown implements the method defined for the Management Service.
+// PrepShutdownRanks implements the method defined for the Management Service.
 //
 // Prepare data-plane instance(s) managed by control-plane for a controlled shutdown,
 // identified by unique rank(s).

@@ -154,7 +154,7 @@ func (h *IOEngineHarness) Start(ctx context.Context, db *system.Database, ps *ev
 		drpcSetupReq := &drpcServerSetupReq{
 			log:     h.log,
 			sockDir: cfg.SocketDir,
-			engines:  instances,
+			engines: instances,
 			tc:      cfg.TransportConfig,
 			sysdb:   db,
 			events:  ps,
