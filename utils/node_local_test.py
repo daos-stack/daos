@@ -93,9 +93,9 @@ class NLTConf():
                 size = int(size[:-3])
                 size *= (1024 * 1024)
             elif size.endswith('GiB'):
-                size = (size[:-3])
+                size = int(size[:-3])
                 size *= (1024 * 1024 * 1024)
-            self.max_log_size = size
+            self.max_log_size = int(size)
 
     def __getitem__(self, key):
         return self.bc[key]
@@ -1373,8 +1373,9 @@ def log_test(conf,
     compress_file(filename)
 
     if conf.max_log_size and fstat.st_size > conf.max_log_size:
-        raise Exception('Max log size exceeded, {}'\
-                        .format(sizeof_fmt(fstat.st_size)))
+        raise Exception('Max log size exceeded, {} > {}'\
+                        .format(sizeof_fmt(fstat.st_size),
+                                sizeof_fmt(conf.max_log_size)))
 
     return lto.fi_location
 
