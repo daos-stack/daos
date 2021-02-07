@@ -28,7 +28,7 @@ class CPUUsage(TestWithServers):
         prev_usage = 1
         usage = 1
         time.sleep(5)
-        for _ in range(10):
+        for _ in range(30):
             time.sleep(5)
             task = run_task(hosts=self.hostlist_servers, command=ps_get_cpu)
             # Sample output.
