@@ -16,7 +16,6 @@ class CPUUsage(TestWithServers):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-5504")
     def test_cpu_usage(self):
         # pylint: disable=pylint-bad-continuation
         """
