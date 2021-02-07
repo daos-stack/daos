@@ -6,7 +6,7 @@
 
 Name:          daos
 Version:       1.1.2.1
-Release:       8%{?relval}%{?dist}
+Release:       9%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -42,7 +42,7 @@ BuildRequires: liblz4-devel
 BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
 %endif
-BuildRequires: spdk-devel >= 20, spdk-devel < 21
+BuildRequires: spdk-devel >= 21.01
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
 BuildRequires: libisa-l_crypto-devel
@@ -409,6 +409,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Sun Feb 7 2021 Brian J. Murrell <brian.murrell@intel.com> - 1.1.2.1-9
+- Update to use spdk >= 21.01
+
 * Wed Feb 3 2021 Hua Kuang <hua.kuang@intel.com> 1.1.2.1-8
 - Changed License to BSD-2-Clause-Patent
 
