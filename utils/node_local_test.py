@@ -325,13 +325,9 @@ class DaosServer():
             raise NLTestTimeout("{} failed after {:.2f}s (max {:.2f}s)".format(
                 op, elapsed, max_time))
 
-    def _check_system_state(self, desired):
-        # The json returned from the control plane should have
-        # string-based states.
-        states = {
-            "ready": [8],
-            "stopped": [16, 32, 128],
-        }
+    def _check_system_state(self, desired_states):
+        if not isinstance(desired_states, list):
+            desired_states = [desired_states]
 
         # TODO: 128 status is crashed, which is happening under valgrind for
         # some reason, so understand this and raise an error if this happens
@@ -341,11 +337,10 @@ class DaosServer():
         print(rc.stdout)
         if rc.returncode == 0:
             data = json.loads(rc.stdout.decode('utf-8'))
-            print(data)
-            members = data['response']['Members']
+            members = data['response']['members']
             if members is not None:
-                for desired_state in states[desired]:
-                    if members[0]['State'] == desired_state:
+                for desired_state in desired_states:
+                    if members[0]['state'] == desired_state:
                         return True
         return False
 
@@ -471,7 +466,7 @@ class DaosServer():
         # How wait until the system is up, basically the format to happen.
         while True:
             time.sleep(0.5)
-            if self._check_system_state('ready'):
+            if self._check_system_state(['ready', 'joined']):
                 break
             self._check_timing("start", start, max_start_time)
         print('Server started in {:.2f} seconds'.format(time.time() - start))
