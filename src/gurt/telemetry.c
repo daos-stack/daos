@@ -321,10 +321,9 @@ void d_tm_fini(void)
 	shmdt(d_tm_shmem_root);
 	if (!d_tm_retain_shmem) {
 		rc = shmctl(d_tm_shmid, IPC_RMID, NULL);
-		if (rc < 0) {
-			D_ERROR("Unable to remove shared memory segment. " \
+		if (rc < 0)
+			D_ERROR("Unable to remove shared memory segment. "
 				"rc = %d\n", rc);
-		}
 		d_tm_shmid = 0;
 	}
 
