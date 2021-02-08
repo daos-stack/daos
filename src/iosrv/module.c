@@ -214,7 +214,6 @@ dss_module_unload_internal(struct loaded_mod *lmod)
 
 	dss_modules[smod->sm_mod_id] = NULL;
 	/* finalize the module */
-	D_ASSERT(smod->sm_fini);
 	rc = smod->sm_fini();
 	if (rc) {
 		D_ERROR("module finalization failed for: "DF_RC"\n", DP_RC(rc));
@@ -360,7 +359,6 @@ dss_module_unload_all(void)
 	D_INIT_LIST_HEAD(&destroy_list);
 	D_MUTEX_LOCK(&loaded_mod_list_lock);
 	d_list_for_each_entry_safe(mod, tmp, &loaded_mod_list, lm_lk) {
-		/* XXX: I have no idea if this is right */
 		dss_module_unload_internal(mod);
 		d_list_del_init(&mod->lm_lk);
 		d_list_add(&mod->lm_lk, &destroy_list);

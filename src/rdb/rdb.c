@@ -176,7 +176,7 @@ rdb_hash_init(void)
 		return dss_abterr2der(rc);
 	rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK, 4 /* bits */,
 					 NULL /* priv */, &rdb_hash_ops,
-					&rdb_hash);
+					 &rdb_hash);
 	if (rc != 0)
 		ABT_mutex_free(&rdb_hash_lock);
 	return rc;

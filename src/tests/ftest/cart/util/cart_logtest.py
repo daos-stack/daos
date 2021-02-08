@@ -175,10 +175,10 @@ shown_logs = set()
 # specifically, key is function name, value is list of variables.
 # Both the alloc and free function need to be whitelisted.
 
-mismatch_table = {'container': ('common'),
-                  'client': ('array'),
+mismatch_table = {'client': ('array'),
+                  'daos': ('common', 'container', 'pool'),
                   'common': ('container', 'pool'),
-                  'daos': ('common', 'pool', 'container'),
+                  'container': ('common'),
                   'mgmt': ('common', 'daos', 'pool', 'rsvc'),
                   'misc': ('common', 'mgmt'),
                   'pool': ('common'),
@@ -241,11 +241,11 @@ class hwm_counter():
         return self.__hwm != 0
 
     def __str__(self):
-        return "Total:{:,} HWM:{:,} {} allocations, {} frees".\
-            format(self.__val,
-                   self.__hwm,
-                   self.__acount,
-                   self.__fcount)
+        return 'Total:{:,} HWM:{:,} {} allocations, '.format(self.__val,
+                                                             self.__hwm,
+                                                             self.__acount) + \
+            '{} frees {} possible leaks'.format(self.__fcount,
+                                                self.__acount - self.__fcount)
 
     def add(self, val):
         """Add a value"""
