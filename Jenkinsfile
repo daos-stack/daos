@@ -476,8 +476,13 @@ boolean skip_bullseye_report() {
            skip_stage('bullseye', true)
 }
 
-String quick_build_deps(String distro) {
+// Reply with an empty string if quickbuild disabled to avoid discarding
+// docker caches.
+String quick_build_deps(String distro, always=false) {
     String rpmspec_args = ""
+    if (!always && !quickbuild()) {
+        return ""
+    }
     if (distro == "leap15") {
         rpmspec_args = "--define dist\\ .suse.lp152 " +
                        "--undefine rhel " +
@@ -1243,7 +1248,7 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(qb: true) +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                                quick_build_deps('centos7') + '"' +
+                                                quick_build_deps('centos7', always=true) + '"' +
                                                 ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
