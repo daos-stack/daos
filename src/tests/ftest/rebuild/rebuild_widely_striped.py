@@ -50,7 +50,7 @@ class RebuildWidelyStriped(MdtestBase):
         :avocado: tags=rebuild,widelystriped
         """
         # set params
-        targets = self.params.get("targets", "/run/server_config/*/0/*")
+        targets = self.params.get("targets", "/run/server_config/*")
         rank = self.params.get("rank_to_kill", "/run/testparams/*")
         self.dmg = self.get_dmg_command()
 
