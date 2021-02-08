@@ -13,6 +13,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
+@Library(value="pipeline-lib@groovy-container") _
 
 boolean doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
@@ -548,7 +549,8 @@ pipeline {
                             filename 'Dockerfile.centos.7'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(add_repo: false, cachebust: false) +
+                            additionalBuildArgs dockerBuildArgs(add_repo: false,
+			                                        cachebust: false) +
                                            " -t ${sanitized_JOB_NAME}-centos7 "
                         }
                     }
