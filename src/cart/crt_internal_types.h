@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It gives out the data types internally used by
@@ -192,9 +175,6 @@ struct crt_ep_inflight {
 #define CRT_UNLOCK			(0)
 #define CRT_LOCKED			(1)
 
-#define CRT_OPC_MAP_BITS	8
-#define CRT_OPC_MAP_BITS_LEGACY	12
-
 /* highest protocol version allowed */
 #define CRT_PROTO_MAX_VER	(0xFFUL)
 /* max member RPC count allowed in one protocol  */
@@ -239,12 +219,16 @@ struct crt_opc_map_L2 {
 	struct crt_opc_map_L3	*L2_map;
 };
 
+struct crt_opc_queried {
+	uint32_t		coq_version;
+	crt_opcode_t		coq_base;
+	d_list_t		coq_list;
+};
+
 struct crt_opc_map {
-	pthread_rwlock_t	 com_rwlock;
-	unsigned int		 com_lock_init:1;
-	unsigned int		 com_pid;
-	unsigned int		 com_bits;
-	unsigned int		 com_num_slots_total;
+	pthread_rwlock_t	com_rwlock;
+	unsigned int		com_num_slots_total;
+	d_list_t		com_coq_list;
 	struct crt_opc_map_L2	*com_map;
 };
 

@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * \file
@@ -207,8 +190,8 @@ choose:
 			D_MUTEX_UNLOCK(cli_lock);
 		rc = dc_mgmt_get_pool_svc_ranks(sys, puuid, &new_ranklist);
 		if (rc) {
-			D_ERROR(DF_UUID ": dc_mgmt_get_pool_svc_ranks() "
-				"failed, " DF_RC "\n", DP_UUID(puuid),
+			D_ERROR(DF_UUID": dc_mgmt_get_pool_svc_ranks() "
+				"failed, "DF_RC"\n", DP_UUID(puuid),
 				DP_RC(rc));
 			return rc;
 		}
@@ -508,7 +491,7 @@ dc_pool_connect(tse_task_t *task)
 		/** sy_info.crt_ctx_share_addr */
 		/** sy_info.crt_timeout */
 
-		rc = rsvc_client_init(&pool->dp_client, args->svc);
+		rc = rsvc_client_init(&pool->dp_client, NULL);
 		if (rc != 0)
 			D_GOTO(out_pool, rc);
 
@@ -1113,7 +1096,7 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 				DP_UUID(args->uuid), rc);
 			D_GOTO(out_state, rc);
 		}
-		rc = rsvc_client_init(&state->client, args->svc);
+		rc = rsvc_client_init(&state->client, NULL);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": failed to rsvc_client_init, rc %d.\n",
 				DP_UUID(args->uuid), rc);
@@ -1473,7 +1456,7 @@ dc_pool_list_cont(tse_task_t *task)
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_LIST_CONT, &rpc);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create pool list cont rpc: "
-			DF_RC "\n",
+			DF_RC"\n",
 			DP_UUID(pool->dp_pool), DP_RC(rc));
 		D_GOTO(out_pool, rc);
 	}

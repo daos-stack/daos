@@ -49,18 +49,18 @@ pool:
 container:
     type: POSIX
     control_method: daos
-    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rf:1
     oclass: RP_2G1
 ior:
-  no_parallel_job: 10
+  no_parallel_job: 2
   client_processes:
     np: 2
   test_file: /testFile
-  repetitions: 1
+  repetitions: 10
   dfs_destroy: False
   iorflags:
     ior_flags:
-      - "-w -r -R -k -G 1"
+      - "-F -w -r -R -k -G 1"
     ior_api:
       - DFS
     obj_class:
@@ -69,7 +69,7 @@ ior:
     #   - [scmsize, nvmesize, transfersize, blocksize, PASS/FAIL(Expected) ]
     #    The values are set to be in the multiples of 10.
     #    Values are appx GB.
-    - [4000000000, 18000000000, 4000, 50000000, PASS]          #[4G, 18G, 4K, 51M, PASS]
+    - [4000000000, 18000000000, 40000, 500000000, PASS]          #[4G, 18G, 40K, 510M, PASS]
 daos_racer:
   runtime: 480
   clush_timeout: 1000

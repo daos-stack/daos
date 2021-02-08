@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos. It implements daos specific RPC input/output proc
@@ -30,6 +13,7 @@
 #include <daos_api.h>
 #include <daos_security.h>
 #include <cart/api.h>
+#include <daos_prop.h>
 
 int
 crt_proc_struct_dtx_id(crt_proc_t proc, struct dtx_id *dti)
@@ -89,7 +73,7 @@ crt_proc_struct_daos_acl(crt_proc_t proc, struct daos_acl **data)
 }
 
 static int
-crt_proc_prop_entries(crt_proc_t proc, daos_prop_t *prop)
+crt_proc_prop_entries(crt_proc_t proc, crt_proc_op_t opc, daos_prop_t *prop)
 {
 	struct daos_prop_entry	*entry;
 	int			 i;
@@ -103,23 +87,42 @@ crt_proc_prop_entries(crt_proc_t proc, daos_prop_t *prop)
 		rc = crt_proc_uint32_t(proc, &entry->dpe_reserv);
 		if (rc)
 			break;
+
 		if (entry->dpe_type == DAOS_PROP_PO_LABEL ||
 		    entry->dpe_type == DAOS_PROP_CO_LABEL ||
 		    entry->dpe_type == DAOS_PROP_PO_OWNER ||
 		    entry->dpe_type == DAOS_PROP_CO_OWNER ||
 		    entry->dpe_type == DAOS_PROP_PO_OWNER_GROUP ||
-		    entry->dpe_type == DAOS_PROP_CO_OWNER_GROUP)
+		    entry->dpe_type == DAOS_PROP_CO_OWNER_GROUP) {
 			rc = crt_proc_d_string_t(proc, &entry->dpe_str);
-		else if (entry->dpe_type == DAOS_PROP_PO_ACL ||
-			 entry->dpe_type == DAOS_PROP_CO_ACL)
+
+		} else if (entry->dpe_type == DAOS_PROP_PO_ACL ||
+			 entry->dpe_type == DAOS_PROP_CO_ACL) {
 			rc = crt_proc_struct_daos_acl(proc,
 						      (struct daos_acl **)
 						      &entry->dpe_val_ptr);
-		else if (entry->dpe_type == DAOS_PROP_PO_SVC_LIST)
+
+		} else if (entry->dpe_type == DAOS_PROP_PO_SVC_LIST) {
 			rc = crt_proc_d_rank_list_t(proc,
 					(d_rank_list_t **)&entry->dpe_val_ptr);
-		else
+		} else if (entry->dpe_type == DAOS_PROP_CO_ROOTS) {
+			struct daos_prop_co_roots *roots;
+
+			if (opc == CRT_PROC_DECODE) {
+				D_ALLOC(entry->dpe_val_ptr, sizeof(*roots));
+				if (!entry->dpe_val_ptr) {
+					rc = -DER_NOMEM;
+					break;
+				}
+			}
+			roots = entry->dpe_val_ptr;
+			rc = crt_proc_memcpy(proc, roots, sizeof(*roots));
+
+			if (opc == CRT_PROC_FREE)
+				D_FREE(entry->dpe_val_ptr);
+		} else {
 			rc = crt_proc_uint64_t(proc, &entry->dpe_val);
+		}
 		if (rc)
 			break;
 	}
@@ -155,7 +158,7 @@ crt_proc_daos_prop_t(crt_proc_t proc, daos_prop_t **data)
 		rc = crt_proc_uint32_t(proc, &prop->dpp_reserv);
 		if (rc != 0)
 			return rc;
-		rc = crt_proc_prop_entries(proc, prop);
+		rc = crt_proc_prop_entries(proc, proc_op, prop);
 		return rc;
 	case CRT_PROC_DECODE:
 		rc = crt_proc_uint32_t(proc, &nr);
@@ -177,7 +180,7 @@ crt_proc_daos_prop_t(crt_proc_t proc, daos_prop_t **data)
 		if (prop == NULL)
 			return -DER_NOMEM;
 		prop->dpp_reserv = tmp;
-		rc = crt_proc_prop_entries(proc, prop);
+		rc = crt_proc_prop_entries(proc, proc_op, prop);
 		if (rc) {
 			daos_prop_free(prop);
 			return rc;
@@ -192,7 +195,7 @@ crt_proc_daos_prop_t(crt_proc_t proc, daos_prop_t **data)
 			D_FREE_PTR(prop);
 			return 0;
 		}
-		crt_proc_prop_entries(proc, prop);
+		crt_proc_prop_entries(proc, proc_op, prop);
 		D_FREE(prop->dpp_entries);
 		D_FREE_PTR(prop);
 		return 0;

@@ -15,7 +15,7 @@ try:
 except NameError:
     pass
 
-sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils'))
+sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils/sl'))
 import daos_build
 
 DESIRED_FLAGS = ['-Wno-gnu-designator',
@@ -57,8 +57,11 @@ def get_version():
     with open("VERSION", "r") as version_file:
         return version_file.read().rstrip()
 
-DAOS_VERSION = get_version()
-API_VERSION = "0.9.0"
+API_VERSION_MAJOR = "1"
+API_VERSION_MINOR = "1"
+API_VERSION_FIX = "0"
+API_VERSION = "{}.{}.{}".format(API_VERSION_MAJOR, API_VERSION_MINOR,
+                                API_VERSION_FIX)
 
 def update_rpm_version(version, tag):
     """ Update the version (and release) in the RPM specfile """
@@ -84,10 +87,10 @@ def update_rpm_version(version, tag):
             spec[line_num] = "Release:       {}%{{?relval}}%{{?dist}}\n".\
                              format(release)
         if line == "%changelog\n":
+            cmd = 'rpmdev-packager'
             try:
-                packager = subprocess.Popen(
-                    'rpmdev-packager', stdout=subprocess.PIPE).communicate(
-                    )[0].strip().decode('UTF-8')
+                pkg_st = subprocess.Popen(cmd, stdout=subprocess.PIPE) # nosec
+                packager = pkg_st.communicate()[0].strip().decode('UTF-8')
             except OSError:
                 print("You need to have the rpmdev-packager tool (from the "
                       "rpmdevtools RPM on EL7) in order to make releases.\n\n"
@@ -118,7 +121,7 @@ def is_platform_arm():
         return True
     return False
 
-def set_defaults(env):
+def set_defaults(env, daos_version):
     """set compiler defaults"""
     AddOption('--preprocess',
               dest='preprocess',
@@ -131,9 +134,13 @@ def set_defaults(env):
               default=False,
               help='Disable rpath')
 
+    env.Append(API_VERSION_MAJOR=API_VERSION_MAJOR)
+    env.Append(API_VERSION_MINOR=API_VERSION_MINOR)
+    env.Append(API_VERSION_FIX=API_VERSION_FIX)
+
     env.Append(CCFLAGS=['-g', '-Wshadow', '-Wall', '-Wno-missing-braces',
                         '-fpic', '-D_GNU_SOURCE', '-DD_LOG_V2'])
-    env.Append(CCFLAGS=['-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
+    env.Append(CCFLAGS=['-DDAOS_VERSION=\\"' + daos_version + '\\"'])
     env.Append(CCFLAGS=['-DAPI_VERSION=\\"' + API_VERSION + '\\"'])
     env.Append(CCFLAGS=['-DCMOCKA_FILTER_SUPPORTED=0'])
     if env.get('BUILD_TYPE') == 'debug':
@@ -359,10 +366,9 @@ def scons(): # pylint: disable=too-many-locals
 
         exit(0)
 
-    sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils/sl'))
     from prereq_tools import PreReqComponent
 
-    env = Environment(TOOLS=['extra', 'default'])
+    env = Environment(TOOLS=['extra', 'default', 'textfile'])
 
     if os.path.exists("daos_m.conf"):
         os.rename("daos_m.conf", "daos.conf")
@@ -381,24 +387,36 @@ def scons(): # pylint: disable=too-many-locals
     if prereqs.check_component('valgrind_devel'):
         env.AppendUnique(CPPDEFINES=["DAOS_HAS_VALGRIND"])
 
+    AddOption('--deps-only',
+              dest='deps_only',
+              action='store_true',
+              default=False,
+              help='Download and build dependencies only, do not build daos')
+
     run_checks(env)
+
+    res = GetOption('deps_only')
+    if res:
+        print('Exiting because deps-only was set')
+        Exit(0)
 
     prereqs.add_opts(('GO_BIN', 'Full path to go binary', None))
     opts.Save(opts_file, env)
 
-    CONF_DIR = ARGUMENTS.get('CONF_DIR', '$PREFIX/etc')
+    conf_dir = ARGUMENTS.get('CONF_DIR', '$PREFIX/etc')
 
     env.Alias('install', '$PREFIX')
     platform_arm = is_platform_arm()
+    daos_version = get_version()
     # Export() is handled specially by pylint so do not merge these two lines.
-    Export('DAOS_VERSION', 'API_VERSION', 'env', 'prereqs')
-    Export('platform_arm', 'CONF_DIR')
+    Export('daos_version', 'API_VERSION', 'env', 'prereqs')
+    Export('platform_arm', 'conf_dir')
 
     if env['PLATFORM'] == 'darwin':
         # generate .so on OSX instead of .dylib
         env.Replace(SHLIBSUFFIX='.so')
 
-    set_defaults(env)
+    set_defaults(env, daos_version)
 
     build_prefix = prereqs.get_src_build_dir()
 

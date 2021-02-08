@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * rebuild: rebuild initator
@@ -131,7 +114,10 @@ rebuild_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	/* Gathering the rebuild status here */
 	rgt = rebuild_global_pool_tracker_lookup(src_iv->riv_pool_uuid,
 						 src_iv->riv_ver);
-	if (rgt && rgt->rgt_leader_term == src_iv->riv_leader_term) {
+	if (rgt == NULL)
+		D_GOTO(out, rc);
+
+	if (rgt->rgt_leader_term == src_iv->riv_leader_term) {
 		/* update the rebuild global status */
 		if (!src_iv->riv_global_done) {
 			rgt->rgt_status.rs_toberb_obj_nr +=
@@ -156,9 +142,10 @@ rebuild_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			rgt->rgt_status.rs_done, rgt->rgt_status.rs_errno,
 			src_iv->riv_rank);
 	}
-
+	rgt_put(rgt);
+out:
 	D_DEBUG(DB_TRACE, "pool "DF_UUID" master_rank %d\n",
-		 DP_UUID(dst_iv->riv_pool_uuid), dst_iv->riv_master_rank);
+		DP_UUID(dst_iv->riv_pool_uuid), dst_iv->riv_master_rank);
 
 	return 0;
 }

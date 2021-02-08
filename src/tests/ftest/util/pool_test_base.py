@@ -1,26 +1,10 @@
 #!/usr/bin/python
 """
-(C) Copyright 2020 Intel Corporation.
+(C) Copyright 2020-2021 Intel Corporation.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
-GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-The Government's rights to use, modify, reproduce, release, perform, display,
-or disclose this software are subject to the terms of the Apache License as
-provided in Contract No. B609815.
-Any reproduction of computer software, computer software documentation, or
-portions thereof marked with this legend must also reproduce the markings.
+SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import time
 
 from apricot import TestWithServers
 from general_utils import bytes_to_human, human_to_bytes
@@ -124,3 +108,28 @@ class PoolTestBase(TestWithServers):
                     bytes_to_human(nvme_multiple), "nvme_size")
 
         return pool_list
+
+    def check_pool_creation(self, max_duration):
+        """Check the duration of each pool creation meets the requirement.
+
+        Args:
+            max_duration (int): max pool creation duration allowed in seconds
+
+        """
+        durations = []
+        for index, pool in enumerate(self.pool):
+            start = float(time.time())
+            pool.create()
+            durations.append(float(time.time()) - start)
+            self.log.info(
+                "Pool %s creation: %s seconds", index + 1, durations[-1])
+
+        exceeding_duration = 0
+        for index, duration in enumerate(durations):
+            if duration > max_duration:
+                exceeding_duration += 1
+
+        self.assertEqual(
+            exceeding_duration, 0,
+            "Pool creation took longer than {} seconds on {} pool(s)".format(
+                max_duration, exceeding_duration))

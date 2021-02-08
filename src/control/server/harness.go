@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
@@ -32,6 +15,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -133,13 +117,13 @@ func (h *IOServerHarness) CallDrpc(ctx context.Context, method drpc.Method, body
 	// If the request fails, that error will be returned.
 	for _, i := range h.Instances() {
 		if !i.isReady() {
-			err = instanceNotReady
+			err = errInstanceNotReady
 			continue
 		}
 		resp, err = i.CallDrpc(ctx, method, body)
 
 		switch errors.Cause(err) {
-		case dRPCNotReady, FaultDataPlaneNotStarted:
+		case errDRPCNotReady, FaultDataPlaneNotStarted:
 			continue
 		default:
 			return
@@ -153,7 +137,7 @@ func (h *IOServerHarness) CallDrpc(ctx context.Context, method drpc.Method, body
 // configured instances' processing loops.
 //
 // Run until harness is shutdown.
-func (h *IOServerHarness) Start(ctx context.Context, db *system.Database, cfg *config.Server) error {
+func (h *IOServerHarness) Start(ctx context.Context, db *system.Database, ps *events.PubSub, cfg *config.Server) error {
 	if h.isStarted() {
 		return errors.New("can't start: harness already started")
 	}
@@ -164,11 +148,19 @@ func (h *IOServerHarness) Start(ctx context.Context, db *system.Database, cfg *c
 	h.started.SetTrue()
 	defer h.started.SetFalse()
 
-	if cfg != nil {
-		// Single daos_server dRPC server to handle all iosrv requests
-		if err := drpcServerSetup(ctx, h.log, cfg.SocketDir, h.Instances(),
-			cfg.TransportConfig, db); err != nil {
+	instances := h.Instances()
 
+	if cfg != nil {
+		drpcSetupReq := &drpcServerSetupReq{
+			log:     h.log,
+			sockDir: cfg.SocketDir,
+			iosrvs:  instances,
+			tc:      cfg.TransportConfig,
+			sysdb:   db,
+			events:  ps,
+		}
+		// Single daos_server dRPC server to handle all iosrv requests
+		if err := drpcServerSetup(ctx, drpcSetupReq); err != nil {
 			return errors.WithMessage(err, "dRPC server setup")
 		}
 		defer func() {
@@ -178,7 +170,7 @@ func (h *IOServerHarness) Start(ctx context.Context, db *system.Database, cfg *c
 		}()
 	}
 
-	for _, srv := range h.Instances() {
+	for _, srv := range instances {
 		// start first time then relinquish control to instance
 		go srv.Run(ctx, cfg.RecreateSuperblocks)
 		srv.startLoop <- true

@@ -55,14 +55,16 @@ class InvalidLogFile(Exception):
     """Exception to be raised when log file cannot be parsed"""
     pass
 
-LOG_LEVELS = {'FATAL' :1,
-              'EMRG'  :2,
-              'CRIT'  :3,
-              'ERR'   :4,
-              'WARN'  :5,
-              'NOTE'  :6,
-              'INFO'  :7,
-              'DBUG'  :8}
+LOG_LEVELS = {
+    'EMIT'  :1,
+    'FATAL' :2,
+    'EMRG'  :3,
+    'CRIT'  :4,
+    'ERR'   :5,
+    'WARN'  :6,
+    'NOTE'  :7,
+    'INFO'  :8,
+    'DBUG'  :9}
 
 # Make a reverse lookup from log level to name.
 LOG_NAMES = {}
@@ -638,7 +640,7 @@ class LogIter():
             self._iter_index += 1
 
             if self._pid and self._iter_index > self._iter_last_index:
-                assert self._iter_count == self._iter_pid['line_count']
+                assert self._iter_count == self._iter_pid['line_count'] # nosec
                 raise StopIteration
 
             line = self.__lnext()

@@ -1,24 +1,7 @@
 //
 // (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
@@ -158,16 +141,19 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 			in: &mgmtpb.PoolCreateReq{
 				Totalbytes: defaultTotal,
 				Scmratio:   defaultRatio,
+				Ranks:      []uint32{0, 1},
 			},
 			expOut: &mgmtpb.PoolCreateReq{
-				Scmbytes:  defaultScmBytes,
-				Nvmebytes: defaultNvmeBytes,
+				Scmbytes:  defaultScmBytes / 2,
+				Nvmebytes: defaultNvmeBytes / 2,
+				Ranks:     []uint32{0, 1},
 			},
 		},
 		"auto sizing (not enough SCM)": {
 			in: &mgmtpb.PoolCreateReq{
 				Totalbytes: scmTooSmallTotal,
 				Scmratio:   scmTooSmallRatio,
+				Ranks:      []uint32{0},
 			},
 			expErr: FaultPoolScmTooSmall(scmTooSmallReq, testTargetCount),
 		},
@@ -175,6 +161,7 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 			in: &mgmtpb.PoolCreateReq{
 				Totalbytes: nvmeTooSmallTotal,
 				Scmratio:   defaultRatio,
+				Ranks:      []uint32{0},
 			},
 			expErr: FaultPoolNvmeTooSmall(nvmeTooSmallReq, testTargetCount),
 		},
@@ -183,24 +170,29 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 			in: &mgmtpb.PoolCreateReq{
 				Totalbytes: defaultTotal,
 				Scmratio:   defaultRatio,
+				Ranks:      []uint32{0},
 			},
 			expOut: &mgmtpb.PoolCreateReq{
 				Scmbytes: defaultTotal,
+				Ranks:    []uint32{0},
 			},
 		},
 		"manual sizing": {
 			in: &mgmtpb.PoolCreateReq{
 				Scmbytes:  defaultScmBytes - 1,
 				Nvmebytes: defaultNvmeBytes - 1,
+				Ranks:     []uint32{0, 1},
 			},
 			expOut: &mgmtpb.PoolCreateReq{
 				Scmbytes:  defaultScmBytes - 1,
 				Nvmebytes: defaultNvmeBytes - 1,
+				Ranks:     []uint32{0, 1},
 			},
 		},
 		"manual sizing (not enough SCM)": {
 			in: &mgmtpb.PoolCreateReq{
 				Scmbytes: scmTooSmallReq,
+				Ranks:    []uint32{0},
 			},
 			expErr: FaultPoolScmTooSmall(scmTooSmallReq, testTargetCount),
 		},
@@ -208,6 +200,7 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 			in: &mgmtpb.PoolCreateReq{
 				Scmbytes:  defaultScmBytes,
 				Nvmebytes: nvmeTooSmallReq,
+				Ranks:     []uint32{0},
 			},
 			expErr: FaultPoolNvmeTooSmall(nvmeTooSmallReq, testTargetCount),
 		},
@@ -320,9 +313,9 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				Nvmebytes: 10 * humanize.TByte,
 			},
 			expResp: &mgmtpb.PoolCreateResp{
-				ScmBytes:  100 * humanize.GiByte,
-				NvmeBytes: 10 * humanize.TByte,
-				TgtRanks:  []uint32{},
+				ScmBytes:  (100 * humanize.GiByte),
+				NvmeBytes: (10 * humanize.TByte),
+				TgtRanks:  []uint32{0, 1},
 			},
 		},
 		"successful creation minimum size": {
@@ -333,9 +326,21 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				Nvmebytes: ioserver.NvmeMinBytesPerTarget * 8,
 			},
 			expResp: &mgmtpb.PoolCreateResp{
-				ScmBytes:  ioserver.ScmMinBytesPerTarget * 8,
-				NvmeBytes: ioserver.NvmeMinBytesPerTarget * 8,
-				TgtRanks:  []uint32{},
+				ScmBytes:  (ioserver.ScmMinBytesPerTarget * 8),
+				NvmeBytes: (ioserver.NvmeMinBytesPerTarget * 8),
+				TgtRanks:  []uint32{0, 1},
+			},
+		},
+		"successful creation auto size": {
+			targetCount: 8,
+			req: &mgmtpb.PoolCreateReq{
+				Uuid:       common.MockUUID(0),
+				Totalbytes: 100 * humanize.GiByte,
+			},
+			expResp: &mgmtpb.PoolCreateResp{
+				ScmBytes:  ((100 * humanize.GiByte) * DefaultPoolScmRatio) / 2,
+				NvmeBytes: (100 * humanize.GiByte) / 2,
+				TgtRanks:  []uint32{0, 1},
 			},
 		},
 		"failed creation invalid ranks": {
@@ -390,6 +395,11 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 					events.NewPubSub(context.Background(), log))
 			}
 			tc.mgmtSvc.log = log
+			for i := 0; i < 2; i++ {
+				if _, err := tc.mgmtSvc.membership.Add(system.MockMember(t, uint32(i), system.MemberStateJoined)); err != nil {
+					t.Fatal(err)
+				}
+			}
 
 			if tc.setupMockDrpc == nil {
 				tc.setupMockDrpc = func(svc *mgmtSvc, err error) {

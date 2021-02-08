@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include "dfuse_common.h"
@@ -76,20 +59,16 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	DFUSE_TRA_DEBUG(ie, "file '%s' flags 0%o mode 0%o", name, fi->flags,
 			mode);
 
-	rc = dfs_open(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
-		      mode, fi->flags, 0, 0, NULL, &oh->doh_obj);
-	if (rc) {
-		DFUSE_TRA_DEBUG(parent, "dfs_open() failed %d", rc);
+	rc = dfs_open_stat(parent->ie_dfs->dfs_ns, parent->ie_obj, name, mode,
+			   fi->flags, 0, 0, NULL, &oh->doh_obj, &ie->ie_stat);
+	if (rc)
 		D_GOTO(err, rc);
-	}
 
 	/** duplicate the file handle for the fuse handle */
 	rc = dfs_dup(parent->ie_dfs->dfs_ns, oh->doh_obj, O_RDWR,
 		     &ie->ie_obj);
-	if (rc) {
-		DFUSE_TRA_DEBUG(parent, "dfs_dup() failed %d", rc);
-		D_GOTO(release1, rc);
-	}
+	if (rc)
+		D_GOTO(release, rc);
 
 	oh->doh_dfs = parent->ie_dfs->dfs_ns;
 	oh->doh_ie = ie;
@@ -112,12 +91,6 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_truncated = false;
 	atomic_store_relaxed(&ie->ie_ref, 1);
 
-	rc = dfs_ostat(oh->doh_dfs, oh->doh_obj, &ie->ie_stat);
-	if (rc) {
-		DFUSE_TRA_DEBUG(parent, "dfs_ostat() failed %d", rc);
-		D_GOTO(release2, rc);
-	}
-
 	LOG_FLAGS(ie, fi->flags);
 	LOG_MODES(ie, mode);
 
@@ -125,10 +98,8 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	dfuse_reply_entry(fs_handle, ie, &fi_out, true, req);
 
 	return;
-release2:
+release:
 	dfs_release(ie->ie_obj);
-release1:
-	dfs_release(oh->doh_obj);
 err:
 	DFUSE_REPLY_ERR_RAW(parent, req, rc);
 	D_FREE(oh);

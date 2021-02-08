@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /*
  * This file tests telemetry consumption in GURT.
@@ -31,7 +14,6 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include "wrap_cmocka.h"
-#include "gurt/common.h"
 #include "gurt/telemetry_common.h"
 #include "gurt/telemetry_consumer.h"
 
@@ -41,9 +23,9 @@ uint64_t		*shmem_root;
 static int
 init_tests(void **state)
 {
-	int		simulated_rank = 99;
+	int	simulated_srv_idx = 99;
 
-	shmem_root = d_tm_get_shared_memory(simulated_rank);
+	shmem_root = d_tm_get_shared_memory(simulated_srv_idx);
 	assert_non_null(shmem_root);
 
 	root = d_tm_get_root(shmem_root);
@@ -65,31 +47,30 @@ test_print_metrics(void **state)
 static void
 test_verify_object_count(void **state)
 {
-	int	num;
+	struct d_tm_node_t	*node;
+	int			num;
 
-	num = d_tm_get_num_objects(shmem_root, "gurt/tests/telem",
-				   D_TM_COUNTER);
+	node = d_tm_find_metric(shmem_root, "gurt/tests/telem");
+	assert_non_null(node);
+
+	num = d_tm_count_metrics(shmem_root, node, D_TM_COUNTER);
 	assert(num == 2);
 
-	num = d_tm_get_num_objects(shmem_root, "gurt/tests/telem",
-				   D_TM_GAUGE);
+	num = d_tm_count_metrics(shmem_root, node, D_TM_GAUGE);
 	assert(num == 1);
 
-	num = d_tm_get_num_objects(shmem_root, "gurt/tests/telem",
-				   D_TM_DURATION);
+	num = d_tm_count_metrics(shmem_root, node, D_TM_DURATION);
 	assert(num == 1);
 
-	num = d_tm_get_num_objects(shmem_root, "gurt/tests/telem",
-				   D_TM_TIMESTAMP);
+	num = d_tm_count_metrics(shmem_root, node, D_TM_TIMESTAMP);
 	assert(num == 1);
 
-	num = d_tm_get_num_objects(shmem_root, "gurt/tests/telem",
-				   D_TM_TIMER_SNAPSHOT);
+	num = d_tm_count_metrics(shmem_root, node, D_TM_TIMER_SNAPSHOT);
 	assert(num == 2);
 
-	num = d_tm_get_num_objects(shmem_root, "gurt/tests/telem",
-				   D_TM_COUNTER | D_TM_GAUGE | D_TM_DURATION |
-				   D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT);
+	num = d_tm_count_metrics(shmem_root, node,
+				 D_TM_COUNTER | D_TM_GAUGE | D_TM_DURATION |
+				 D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT);
 	assert(num == 7);
 }
 
@@ -159,7 +140,6 @@ test_find_metric(void **state)
 	node = d_tm_find_metric(NULL, NULL);
 	assert_null(node);
 }
-
 
 static void
 test_verify_gauge(void **state)

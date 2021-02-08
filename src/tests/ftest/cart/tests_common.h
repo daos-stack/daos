@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * Common functions to be shared among tests
@@ -51,11 +34,12 @@ struct test_options {
 	int		num_attach_retries;
 	bool		is_server;
 	bool		assert_on_error;
+	volatile int	shutdown;
+	int		delay_shutdown_sec;
 };
 
 static struct test_options opts = { .is_initialized = false };
 
-int g_shutdown;
 
 void
 tc_test_init(d_rank_t rank, int num_attach_retries, bool is_server,
@@ -66,7 +50,11 @@ tc_test_init(d_rank_t rank, int num_attach_retries, bool is_server,
 	opts.mypid		= getpid();
 	opts.is_server		= is_server;
 	opts.num_attach_retries	= num_attach_retries;
-	opts.assert_on_error		= assert_on_error;
+	opts.assert_on_error	= assert_on_error;
+	opts.shutdown		= 0;
+
+	/* Use 2 second delay as a default for all tests for now */
+	opts.delay_shutdown_sec	= 2;
 }
 
 static inline int
@@ -98,9 +86,15 @@ tc_drain_queue(crt_context_t ctx)
 }
 
 void
+tc_set_shutdown_delay(int delay_sec)
+{
+	opts.delay_shutdown_sec = delay_sec;
+}
+
+void
 tc_progress_stop(void)
 {
-	g_shutdown = 1;
+	opts.shutdown = 1;
 }
 
 void *
@@ -118,11 +112,14 @@ tc_progress_fn(void *data)
 		assert(0);
 	}
 
-	while (g_shutdown == 0)
+	while (opts.shutdown == 0)
 		crt_progress(*p_ctx, 1000);
 
 	if (idx == 0)
 		crt_swim_fini();
+
+	if (opts.delay_shutdown_sec > 0)
+		sleep(opts.delay_shutdown_sec);
 
 	rc = tc_drain_queue(*p_ctx);
 	D_ASSERTF(rc == 0, "tc_drain_queue() failed with rc=%d\n", rc);
@@ -189,8 +186,8 @@ ctl_client_cb(const struct crt_cb_info *info)
 
 int
 tc_wait_for_ranks(crt_context_t ctx, crt_group_t *grp, d_rank_list_t *rank_list,
-		int tag, int total_ctx, double ping_timeout,
-		double total_timeout)
+		  int tag, int total_ctx, double ping_timeout,
+		  double total_timeout)
 {
 	struct wfr_status		ws;
 	struct timespec			t1, t2;
@@ -285,9 +282,8 @@ tc_wait_for_ranks(crt_context_t ctx, crt_group_t *grp, d_rank_list_t *rank_list,
 }
 
 int
-tc_load_group_from_file(const char *grp_cfg_file,
-		crt_context_t ctx, crt_group_t *grp,
-		d_rank_t my_rank, bool delete_file)
+tc_load_group_from_file(const char *grp_cfg_file, crt_context_t ctx,
+			crt_group_t *grp, d_rank_t my_rank, bool delete_file)
 {
 	FILE		*f;
 	int		parsed_rank;
@@ -313,7 +309,7 @@ tc_load_group_from_file(const char *grp_cfg_file,
 			continue;
 
 		rc = crt_group_primary_rank_add(ctx, grp,
-					parsed_rank, parsed_addr);
+						parsed_rank, parsed_addr);
 
 		if (rc != 0) {
 			D_ERROR("Failed to add %d %s; rc=%d\n",
@@ -439,7 +435,7 @@ tc_cli_start_basic(char *local_group_name, char *srv_group_name,
 
 void
 tc_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
-		pthread_t *progress_thread, crt_group_t **grp,
+		   pthread_t *progress_thread, crt_group_t **grp,
 		   uint32_t *grp_size, crt_init_options_t *init_opt)
 {
 	char		*env_self_rank;
@@ -458,10 +454,10 @@ tc_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 
 	if (init_opt) {
 		rc = crt_init_opt(srv_group_name, CRT_FLAG_BIT_SERVER |
-				CRT_FLAG_BIT_AUTO_SWIM_DISABLE, init_opt);
+				  CRT_FLAG_BIT_AUTO_SWIM_DISABLE, init_opt);
 	} else {
 		rc = crt_init(srv_group_name, CRT_FLAG_BIT_SERVER |
-				CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
+			      CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	}
 	D_ASSERTF(rc == 0, "crt_init() failed, rc: %d\n", rc);
 
@@ -488,7 +484,7 @@ tc_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 
 	/* load group info from a config file and delete file upon return */
 	rc = tc_load_group_from_file(grp_cfg_file, crt_ctx[0], *grp, my_rank,
-					true);
+				     true);
 	D_ASSERTF(rc == 0, "tc_load_group_from_file() failed; rc=%d\n", rc);
 
 	D_FREE(my_uri);

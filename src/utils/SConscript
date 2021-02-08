@@ -18,6 +18,9 @@ def scons():
     # Build cart_ctl
     SConscript('ctl/SConscript')
 
+    # Build daos_metrics
+    SConscript('daos_metrics/SConscript')
+
     # Can remove this when pmdk is not needed on client
     denv.AppendUnique(LIBPATH=["../client/dfs"])
 

@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * ds_pool: Pool IV cache
@@ -1156,6 +1139,63 @@ ds_pool_iv_srv_hdl_fetch(struct ds_pool *pool, uuid_t *pool_hdl_uuid,
 	if (cont_hdl_uuid)
 		uuid_copy(*cont_hdl_uuid, iv_entry.piv_hdl.pih_cont_hdl);
 out:
+	return rc;
+}
+
+struct srv_hdl_ult_arg {
+	struct ds_pool	*pool;
+	ABT_eventual	eventual;
+};
+
+static void
+pool_iv_srv_hdl_fetch_ult(void *data)
+{
+	struct srv_hdl_ult_arg *arg = data;
+	int rc;
+
+	rc = ds_pool_iv_srv_hdl_fetch(arg->pool, NULL, NULL);
+
+	ABT_eventual_set(arg->eventual, (void *)&rc, sizeof(rc));
+}
+
+int
+ds_pool_iv_srv_hdl_fetch_non_sys(struct ds_pool *pool, uuid_t *srv_cont_hdl,
+				 uuid_t *srv_pool_hdl)
+{
+	struct srv_hdl_ult_arg	arg;
+	ABT_eventual		eventual;
+	int			*status;
+	int			rc;
+
+	/* Fetch the capability from the leader. To avoid extra locks,
+	 * all metadatas are maintained by xstream 0, so let's create
+	 * an ULT on xstream 0 to let xstream 0 to handle capa fetch
+	 * and update.
+	 */
+	rc = ABT_eventual_create(sizeof(*status), &eventual);
+	if (rc != ABT_SUCCESS)
+		return dss_abterr2der(rc);
+
+	arg.pool = pool;
+	arg.eventual = eventual;
+	rc = dss_ult_create(pool_iv_srv_hdl_fetch_ult, &arg, DSS_XS_SYS,
+			    0, 0, NULL);
+	if (rc)
+		D_GOTO(out_eventual, rc);
+
+	rc = ABT_eventual_wait(eventual, (void **)&status);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
+	if (*status != 0)
+		D_GOTO(out_eventual, rc = *status);
+
+	if (srv_cont_hdl)
+		uuid_copy(*srv_cont_hdl, pool->sp_srv_cont_hdl);
+	if (srv_pool_hdl)
+		uuid_copy(*srv_pool_hdl, pool->sp_srv_pool_hdl);
+
+out_eventual:
+	ABT_eventual_free(&eventual);
 	return rc;
 }
 

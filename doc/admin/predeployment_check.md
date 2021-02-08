@@ -71,7 +71,7 @@ to be used by DAOS. This can be done using the following command (<ifaces> must
 be replaced with the interface names):
 
 ```
-$ sysctl -w net.ipv4.conf.<ifaces>.accept_local=1
+$ sudo sysctl -w net.ipv4.conf.all.accept_local=1
 ```
 
 Secondly, Linux must be configured to only send ARP replies on the interface
@@ -153,7 +153,7 @@ $ chown user:user /var/run/daos_agent (where user is the user you
 
 ### Default Directory (persistent)
 
-If the server hosting daos_server or daos_agent will be rebooted often,
+If the server hosting `daos_server` or `daos_agent` will be rebooted often,
 systemd provides a persistent mechanism for creating the required
 directories called tmpfiles.d. This mechanism will be required every
 time the system is provisioned and requires a reboot to take effect.
@@ -177,33 +177,33 @@ that require elevated privileges on behalf of `daos_server`.
 ### Privileged Helper Configuration
 
 When DAOS is installed from RPM, the `daos_admin` helper is automatically installed
-to the correct location with the correct permissions. The RPM creates a "daos_admins"
+to the correct location with the correct permissions. The RPM creates a "daos_server"
 system group and configures permissions such that `daos_admin` may only be invoked
 from `daos_server`.
 
 For non-RPM installations, there are two supported scenarios:
 
 1. `daos_server` is run as root, which means that `daos_admin` is also invoked as root,
-and therefore no additional setup is necessary
+and therefore no additional setup is necessary.
 2. `daos_server` is run as a non-root user, which means that `daos_admin` must be
-manually installed and configured
+manually installed and configured.
 
 The steps to enable the second scenario are as follows (steps are assumed to be
 running out of a DAOS source tree which may be on a NFS share):
 
 ```bash
-$ chmod -x $SL_PREFIX/bin/daos_admin # prevent this copy from being executed
-$ sudo cp $SL_PREFIX/bin/daos_admin /usr/bin/daos_admin
+$ chmod -x $daospath/bin/daos_admin # prevent this copy from being executed
+$ sudo cp $daospath/bin/daos_admin /usr/bin/daos_admin
 $ sudo chmod 4755 /usr/bin/daos_admin # make this copy setuid root
 $ sudo mkdir -p /usr/share/daos/control # create symlinks to SPDK scripts
-$ sudo ln -sf $SL_PREFIX/share/daos/control/setup_spdk.sh \
+$ sudo ln -sf $daospath/share/daos/control/setup_spdk.sh \
            /usr/share/daos/control
 $ sudo mkdir -p /usr/share/spdk/scripts
-$ sudo ln -sf $SL_PREFIX/share/spdk/scripts/setup.sh \
+$ sudo ln -sf $daospath/share/spdk/scripts/setup.sh \
            /usr/share/spdk/scripts
-$ sudo ln -sf $SL_PREFIX/share/spdk/scripts/common.sh \
+$ sudo ln -sf $daospath/share/spdk/scripts/common.sh \
            /usr/share/spdk/scripts
-$ sudo ln -s $SL_PREFIX/include \
+$ sudo ln -s $daospath/include \
            /usr/share/spdk/include
 ```
 

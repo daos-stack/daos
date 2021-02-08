@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -2061,7 +2044,8 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	vos_dth_set(dth);
 
 	/* Commit the CoS DTXs via the IO PMDK transaction. */
-	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0) {
+	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0 &&
+	    !dth->dth_cos_done) {
 		D_ALLOC_ARRAY(daes, dth->dth_dti_cos_count);
 		if (daes == NULL)
 			D_GOTO(abort, err = -DER_NOMEM);
@@ -2105,23 +2089,19 @@ abort:
 			err = -DER_TX_RESTART;
 		}
 	}
+
 	err = vos_tx_end(ioc->ic_cont, dth, &ioc->ic_rsrvd_scm,
 			 &ioc->ic_blk_exts, tx_started, err);
-
 	if (err == 0) {
-		if (daes != NULL)
+		vos_ts_set_upgrade(ioc->ic_ts_set);
+		if (daes != NULL) {
 			vos_dtx_post_handle(ioc->ic_cont, daes,
 					    dth->dth_dti_cos_count, false);
+			dth->dth_cos_done = 1;
+		}
 		vos_dedup_process(vos_cont2pool(ioc->ic_cont),
 				  &ioc->ic_dedup_entries, false);
-	} else {
-		update_cancel(ioc);
 	}
-
-	D_FREE(daes);
-
-	if (err == 0)
-		vos_ts_set_upgrade(ioc->ic_ts_set);
 
 	if (err == -DER_NONEXIST || err == -DER_EXIST || err == 0) {
 		vos_ts_set_update(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
@@ -2129,9 +2109,13 @@ abort:
 			vos_ts_set_wupdate(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
 	}
 
+	if (err != 0)
+		update_cancel(ioc);
+
 	VOS_TIME_END(time, VOS_UPDATE_END);
 	vos_space_unhold(vos_cont2pool(ioc->ic_cont), &ioc->ic_space_held[0]);
 
+	D_FREE(daes);
 	vos_ioc_destroy(ioc, err != 0);
 	vos_dth_set(NULL);
 
