@@ -937,7 +937,7 @@ cont_query_bits(daos_prop_t *prop)
 			bits |= DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD;
 			break;
 		case DAOS_PROP_CO_ALLOCED_OID:
-			bits |= DAOS_CO_QUERY_PROP_MAX_OID;
+			bits |= DAOS_CO_QUERY_PROP_ALLOCED_OID;
 			break;
 		case DAOS_PROP_CO_REDUN_FAC:
 			bits |= DAOS_CO_QUERY_PROP_REDUN_FAC;

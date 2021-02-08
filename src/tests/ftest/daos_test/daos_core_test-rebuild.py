@@ -6,7 +6,6 @@
 '''
 
 from daos_core_base import DaosCoreBase
-from apricot import skipForTicket
 
 class DaosCoreTestRebuild(DaosCoreBase):
     # pylint: disable=too-many-ancestors
@@ -15,7 +14,6 @@ class DaosCoreTestRebuild(DaosCoreBase):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-5851")
     def test_rebuild_0to10(self):
         """Jira ID: DAOS-2770
 

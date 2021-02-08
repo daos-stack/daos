@@ -14,6 +14,6 @@ message RankResult {
 	string action = 2;
 	bool errored = 3;
 	string msg = 4;
-	uint32 state = 5;
+	string state = 5;
 	string addr = 6;
 }

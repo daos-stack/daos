@@ -39,6 +39,7 @@ int smd_db_tx_begin(void);
 int smd_db_tx_end(int rc);
 void smd_db_lock(void);
 void smd_db_unlock(void);
+bool smd_db_ready(void);
 
 /* smd_pool.c */
 int
