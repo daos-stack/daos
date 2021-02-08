@@ -29,12 +29,6 @@
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
-static inline bool
-obj_dtx_need_refresh(struct dtx_handle *dth, int rc)
-{
-	return rc == -DER_INPROGRESS && dth->dth_share_tbd_count > 0;
-}
-
 static int
 obj_verify_bio_csum(daos_obj_id_t oid, daos_iod_t *iods,
 		    struct dcs_iod_csums *iod_csums, struct bio_desc *biod,
