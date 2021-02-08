@@ -78,8 +78,6 @@ ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 # Legacy, NOBUILD should be set to any string to disable all three.
 ARG NOBUILD=no
 
-RUN echo $DAOS_BUILD
-RUN false
 # select compiler to use
 ARG COMPILER=gcc
 
