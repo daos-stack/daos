@@ -302,7 +302,7 @@ def define_components(reqs):
                 retriever=retriever,
                 commands=['./configure --prefix="$SPDK_PREFIX"' \
                           ' --disable-tests --without-vhost --without-crypto' \
-                          ' --without-pmdk --without-vpp --without-rbd' \
+                          ' --without-pmdk --without-rbd' \
                           ' --with-rdma --with-shared' \
                           ' --without-iscsi-initiator --without-isal' \
                           ' --without-vtune', 'make $JOBS_OPT', 'make install',
