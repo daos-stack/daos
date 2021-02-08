@@ -12,51 +12,41 @@ LABEL maintainer="daos@daos.groups.io"
 # use same UID as host and default value of 1000 if not specified
 ARG UID=1000
 
-# for good measure, clean the metadata
-RUN yum clean metadata
-
 # Install basic tools to build DAOS
-RUN yum -y install epel-release dnf-plugins-core; \
-    dnf config-manager --set-enabled powertools; \
-    yum -y install \
-        boost-devel clang-analyzer cmake CUnit-devel doxygen file flex	\
+RUN yum clean all && yum -y install epel-release dnf-plugins-core &&	\
+    dnf config-manager --set-enabled powertools &&			\
+    yum -y install							\
+	boost-devel clang-analyzer cmake CUnit-devel doxygen file flex	\
 	gcc gcc-c++ git golang graphviz libaio-devel			\
 	libcmocka-devel libevent-devel libiscsi-devel libtool		\
 	libtool-ltdl-devel libuuid-devel libyaml-devel make meson nasm	\
 	ninja-build numactl-devel openssl-devel pandoc patch		\
-	readline-devel python3-scons sg3_utils yasm			\
+	readline-devel python3-scons sg3_utils yasm diffutils		\
 	pciutils valgrind-devel man fuse3-devel hwloc-devel patchelf	\
-	json-c-devel lz4-devel libipmctl-devel ndctl ipmctl e2fsprogs
-# XXX lcov ShellCheck are missing
+	json-c-devel lz4-devel libipmctl-devel ndctl ipmctl 		\
+	e2fsprogs &&							\
+    dnf config-manager --set-enabled epel-modular && 			\
+    yum -y install 							\
+	python2 python2-devel python36-devel python3-magic		\
+	python3-pygit2 python3-pygithub					\
+	python2-requests python3-requests				\
+	python2-Cython python3-pylint python3-pyxattr			\
+	python3-clustershell python3-paramiko				\
+	python3-numpy python3-jira python3-pip Lmod			\
+	python3-tabulate python2-distro python3-distro			\
+	java-1.8.0-openjdk maven openmpi-devel && yum clean all
 
-# Install python packages for testing
-RUN dnf config-manager --set-enabled epel-modular; \
-    yum -y install \
-        python2 python2-devel python36-devel python3-magic	\
-	python3-pygit2 python3-pygithub				\
-	python2-requests python3-requests			\
-	python2-Cython python3-pylint python3-pyxattr		\
-	python3-clustershell python3-paramiko			\
-	python3-numpy python3-jira python3-pip Lmod		\
-	python3-tabulate python2-distro python3-distro
 # XXX python2-avocado python2-avocado-plugins-output-html
 # python2-avocado-plugins-varianter-yaml-to-mux
 # python-pathlib are missing, although should be in epel-modular
 
-# Install Java environment for Java/HDFS DAOS wrapper
-RUN yum -y install java-1.8.0-openjdk maven
-
-# Install OMPI to build the tests relying on MPI
-RUN yum -y install openmpi-devel
-
 # DAOS python 3 packages required for pylint
 #  - excluding mpi4py as it depends on CORCI-635
-RUN pip3 install avocado-framework; \
-    pip3 install avocado-framework-plugin-result-html; \
-    pip3 install avocado-framework-plugin-varianter-yaml-to-mux
-
-RUN pip3 install codespell
-RUN pip3 install pygithub
+RUN pip3 install avocado-framework && \
+    pip3 install avocado-framework-plugin-result-html && \
+    pip3 install avocado-framework-plugin-varianter-yaml-to-mux && \
+    pip3 install codespell && \
+    pip3 install pygithub
 
 # Add DAOS user
 ENV USER daos
@@ -152,7 +142,7 @@ RUN if [ "x$BULLSEYE" != "x" ]; then \
     fi
 
 # set NOBUILD to disable build
-ARG NOBUILD
+ARG NOBUILD=no
 
 # select compiler to use
 ARG COMPILER=gcc
@@ -162,22 +152,21 @@ WORKDIR /home/daos
 COPY ./ .
 
 # Build DAOS & dependencies
-RUN if [ "x$NOBUILD" = "x" ] ; then \
-    scons-3 --build-deps=yes -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER; fi
+RUN [ "$NOBUILD" != "no" ] || \
+    scons-3 --build-deps=yes -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER
 
 # Set environment variables
 ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:$LD_LIBRARY_PATH
 ENV PATH=/opt/daos/bin:$PATH
 
 # Copy example config files to /opt/daos
-RUN if [ "x$NOBUILD" = "x" ] ; then \
-    cp -r utils/config/examples /opt/daos; fi
+RUN [ "$NOBUILD" != "no" ] || cp -r utils/config/examples /opt/daos
 
 # Build java and hadoop bindings
-RUN if [ "x$NOBUILD" = "x" ] ; then \
-    pushd src/client/java && \
-    mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos && \
-    popd; fi
+WORKDIR /home/daos/src/client/java
+RUN [ "$NOBUILD" != "no" ] || \
+    mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
+WORKDIR /home/daos
 
 # Remove local copy
 RUN rm -rf /home/daos/*

@@ -1,4 +1,4 @@
-# Copyright (C) 2018-2020 Intel Corporation
+# Copyright (C) 2018-2021 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -47,45 +47,40 @@ LABEL maintainer="daos@daos.groups.io"
 # use same UID as host and default value of 1000 if not specified
 ARG UID=1000
 
-# for good measure, clean the metadata
-RUN yum clean metadata
-
-# Install basic tools
-RUN yum -y install epel-release; \
-    yum -y install \
-        boost-devel clang-analyzer cmake CUnit-devel doxygen file flex \
-        gcc gcc-c++ git golang graphviz lcov                           \
-        libaio-devel libcmocka-devel libevent-devel libiscsi-devel     \
-        libtool libtool-ltdl-devel libuuid-devel libyaml-devel         \
-        make meson nasm ninja-build numactl-devel openssl-devel        \
-        pandoc patch python python-devel python36-devel python-magic   \
-        python-pep8 python-pygit2 python2-pygithub python-requests     \
-        readline-devel scons sg3_utils ShellCheck yasm pciutils        \
-        valgrind-devel python36-pylint man java-1.8.0-openjdk maven    \
-        json-c-devel python36-requests lz4-devel
-
-# DAOS specific
-RUN yum -y install \
-           python2-avocado python2-avocado-plugins-output-html \
-           python2-avocado-plugins-varianter-yaml-to-mux       \
-           python-pathlib                                      \
-           ndctl ipmctl e2fsprogs                              \
-           python2-clustershell python2-Cython                 \
-           python36-clustershell python36-paramiko             \
-           python36-numpy python36-jira python3-pip Lmod       \
-           fuse3-devel libipmctl-devel python36-pyxattr        \
-           hwloc-devel patchelf python36-tabulate              \
-           java-1.8.0-openjdk python-distro python36-distro
-RUN yum -y install openmpi3-devel
+# Install OS updates and package.  Include basic tools and daos dependencies
+# that come from the core repo.
+# Clean up any repos afterwards to save space.
+RUN yum clean all && yum -y install epel-release &&			\
+    yum -y install							\
+	boost-devel clang-analyzer cmake CUnit-devel doxygen file flex	\
+	gcc gcc-c++ git golang graphviz lcov				\
+	libaio-devel libcmocka-devel libevent-devel libiscsi-devel	\
+	libtool libtool-ltdl-devel libuuid-devel libyaml-devel		\
+	make meson nasm ninja-build numactl-devel openssl-devel		\
+	pandoc patch python python-devel python36-devel python-magic	\
+	python-pep8 python-pygit2 python2-pygithub python-requests	\
+	readline-devel scons sg3_utils ShellCheck yasm pciutils		\
+	valgrind-devel python36-pylint man java-1.8.0-openjdk maven	\
+	json-c-devel python36-requests lz4-devel			\
+	python2-avocado python2-avocado-plugins-output-html		\
+	python2-avocado-plugins-varianter-yaml-to-mux			\
+	python-pathlib							\
+	ndctl ipmctl e2fsprogs						\
+	python2-clustershell python2-Cython				\
+	python36-clustershell python36-paramiko				\
+	python36-numpy python36-jira python3-pip Lmod			\
+	fuse3-devel libipmctl-devel python36-pyxattr			\
+	hwloc-devel patchelf python36-tabulate				\
+	java-1.8.0-openjdk python-distro python36-distro install	\
+	openmpi3-devel && yum clean all
 
 # DAOS python 3 packages required for pylint
 #  - excluding mpi4py as it depends on CORCI-635
-RUN pip3 install avocado-framework; \
-    pip3 install avocado-framework-plugin-result-html; \
-    pip3 install avocado-framework-plugin-varianter-yaml-to-mux
-
-RUN pip3 install codespell
-RUN pip3 install pygithub
+RUN pip3 install avocado-framework &&					\
+    pip3 install avocado-framework-plugin-result-html &&		\
+    pip3 install avocado-framework-plugin-varianter-yaml-to-mux &&	\
+    pip3 install codespell &&						\
+    pip3 install pygithub
 
 # Add DAOS user
 ENV USER daos
@@ -185,7 +180,7 @@ ARG CACHEBUST=1
 RUN yum -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury
 
 # set NOBUILD to disable build
-ARG NOBUILD
+ARG NOBUILD=no
 
 # select compiler to use
 ARG COMPILER=gcc
@@ -195,8 +190,8 @@ WORKDIR /home/daos
 COPY ./ .
 
 # Build DAOS & dependencies
-RUN if [ "x$NOBUILD" = "x" ] ; then \
-    scons --build-deps=yes -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER; fi
+RUN [ "$NOBUILD" != "no" ] || \
+    scons --build-deps=yes -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER
 
 # Set environment variables
 ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:$LD_LIBRARY_PATH
@@ -204,14 +199,13 @@ ENV PATH=/opt/daos/bin:$PATH
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
 
 # Copy example config files to /opt/daos
-RUN if [ "x$NOBUILD" = "x" ] ; then \
-    cp -r utils/config/examples /opt/daos; fi
+RUN [ "$NOBUILD" != "no" ] || cp -r utils/config/examples /opt/daos
 
 # Build java and hadoop bindings
-RUN if [ "x$NOBUILD" = "x" ] ; then \
-    pushd src/client/java && \
-    mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos && \
-    popd; fi
+WORKDIR /home/daos/src/client/java
+RUN [ "$NOBUILD" != "no" ] || \
+    mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
+WORKDIR /home/daos
 
 # Remove local copy
 RUN rm -rf /home/daos/*

@@ -1,4 +1,4 @@
-# Copyright (C) 2018-2020 Intel Corporation
+# Copyright (C) 2018-2021 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -68,26 +68,27 @@ RUN echo "solver.allowVendorChange = true" >> /etc/zypp/zypp.conf
 # It's better to put the zypper update in the same "cache layer" as the
 # zypper install command so that the database is updated if/when the
 # installed packages list below is updated
-RUN zypper --non-interactive update;                                         \
-    zypper --non-interactive install                                         \
-           boost-devel clang cmake cunit-devel curl doxygen flex             \
-           gcc gcc-c++ git graphviz gzip                                     \
-           libaio-devel libcmocka-devel libevent-devel libiscsi-devel        \
-           libltdl7 libnuma-devel libopenssl-devel libtool                   \
-           libuuid-devel libyaml-devel python3-tabulate                      \
-           make man meson nasm ninja pandoc patch python2-pip                \
-           readline-devel sg3_utils which yasm                               \
-           python-devel python3-devel valgrind-devel hwloc-devel             \
-           openmpi3-devel man fuse3-devel patchelf scons lua-lmod            \
-           libjson-c-devel liblz4-devel python3-distro curl python3-pyxattr  \
-           java-1_8_0-openjdk-devel maven python3-PyYAML
+# TODO: Do not clean as part of this cache layer as Zypper is used later
+# on.
+RUN zypper --non-interactive update &&					\
+    zypper --non-interactive install					\
+	boost-devel clang cmake cunit-devel curl doxygen flex		\
+	gcc gcc-c++ git graphviz gzip					\
+	libaio-devel libcmocka-devel libevent-devel libiscsi-devel	\
+	libltdl7 libnuma-devel libopenssl-devel libtool			\
+	libuuid-devel libyaml-devel python3-tabulate			\
+	make man meson nasm ninja pandoc patch python2-pip		\
+	readline-devel sg3_utils which yasm				\
+	python-devel python3-devel valgrind-devel hwloc-devel		\
+	openmpi3-devel man fuse3-devel patchelf scons lua-lmod		\
+	libjson-c-devel liblz4-devel python3-distro curl		\
+	python3-pyxattr							\
+	java-1_8_0-openjdk-devel maven python3-PyYAML
+
 # Monkey-patch MODULEPATH
 RUN if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then        \
         sed -e '/MODULEPATH=/s/$/:\/usr\/share\/modules/' /etc/profile.d/lmod.sh; \
     fi
-
-RUN which java
-RUN java -version
 
 RUN update-ca-certificates
 RUN zypper --non-interactive install --allow-unsigned-rpm lua-lmod
@@ -167,10 +168,9 @@ RUN if $QUICKBUILD; then                                                        
 # force an upgrade to get any newly built RPMs
 RUN zypper addlock fuse fuse-libs fuse-devel libraft0 raft-devel mercury mercury-devel
 ARG CACHEBUST=1
-RUN zypper --non-interactive update
 
 # set NOBUILD to disable build
-ARG NOBUILD
+ARG NOBUILD=no
 
 # select compiler to use
 ARG COMPILER=gcc
@@ -180,8 +180,8 @@ WORKDIR /home/daos
 COPY ./ .
 
 # Build DAOS & dependencies
-RUN if [ "x$NOBUILD" = "x" ] ; then \
-    scons --build-deps=yes -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER; fi
+RUN [ "$NOBUILD" != "no" ] || \
+    scons --build-deps=yes -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER
 
 # Set environment variables
 ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:$LD_LIBRARY_PATH
@@ -189,14 +189,12 @@ ENV PATH=/opt/daos/bin:$PATH
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
 
 # Copy example config files to /opt/daos
-RUN if [ "x$NOBUILD" = "x" ] ; then \
-    cp -r utils/config/examples /opt/daos; fi
+RUN [ "$NOBUILD" != "no" ] || cp -r utils/config/examples /opt/daos
 
-# Build java and hadoop bindings
-RUN if [ "x$NOBUILD" = "x" ] ; then \
-    pushd src/client/java && \
-    mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos && \
-    popd; fi
+WORKDIR /home/daos/src/client/java
+RUN [ "$NOBUILD" != "no" ] || \
+    mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
+WORKDIR /home/daos
 
 # Remove local copy
 RUN rm -rf /home/daos/*
