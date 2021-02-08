@@ -533,7 +533,7 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 	}
 
 	if (op_type == PL_PLACE_EXTENDED) {
-		rc = pl_map_extend(layout, extend_list, false);
+		rc = pl_map_extend(layout, extend_list);
 		if (rc != 0)
 			return rc;
 	}
@@ -925,7 +925,7 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 		layout_find_diff(jmap, layout, add_layout, &add_list);
 
 		if (!d_list_empty(&add_list))
-			rc = pl_map_extend(layout, &add_list, true);
+			rc = pl_map_extend(layout, &add_list);
 	}
 out:
 	remap_list_free_all(&remap_list);

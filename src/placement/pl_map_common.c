@@ -365,8 +365,7 @@ grp_map_extend(uint32_t *grp_map, uint32_t *grp_map_size)
 }
 
 int
-pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list,
-	      bool is_pool_adding)
+pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 {
 	struct pl_obj_shard	*new_shards;
 	struct failed_shard	*f_shard;
