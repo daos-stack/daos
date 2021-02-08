@@ -15,7 +15,6 @@
 #include <spdk/vmd.h>
 #include <spdk/thread.h>
 #include <spdk/bdev.h>
-#include <spdk/io_channel.h>
 #include <spdk/blob_bdev.h>
 #include <spdk/blob.h>
 #include <spdk/conf.h>
@@ -263,8 +262,7 @@ populate_whitelist(struct spdk_env_opts *opts)
 			}
 		}
 
-		rc = opts_add_pci_addr(opts, &opts->pci_whitelist,
-				       trid->traddr);
+		rc = opts_add_pci_addr(opts, &opts->pci_allowed, trid->traddr);
 		if (rc < 0) {
 			D_ERROR("Invalid traddr=%s\n", trid->traddr);
 			rc = -DER_INVAL;
@@ -276,9 +274,9 @@ populate_whitelist(struct spdk_env_opts *opts)
 	}
 
 	D_FREE(trid);
-	if (rc && opts->pci_whitelist != NULL) {
-		D_FREE(opts->pci_whitelist);
-		opts->pci_whitelist = NULL;
+	if (rc && opts->pci_allowed != NULL) {
+		D_FREE(opts->pci_allowed);
+		opts->pci_allowed = NULL;
 	}
 
 	return rc;
@@ -314,8 +312,8 @@ bio_spdk_env_init(void)
 	opts.env_context = "--log-level=lib.eal:4";
 
 	rc = spdk_env_init(&opts);
-	if (opts.pci_whitelist != NULL)
-		D_FREE(opts.pci_whitelist);
+	if (opts.pci_allowed != NULL)
+		D_FREE(opts.pci_allowed);
 	if (rc != 0) {
 		rc = -DER_INVAL; /* spdk_env_init() returns -1 */
 		D_ERROR("Failed to initialize SPDK env, "DF_RC"\n", DP_RC(rc));
@@ -394,7 +392,7 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 		goto free_conf;
 	}
 
-	spdk_bs_opts_init(&nvme_glb.bd_bs_opts);
+	spdk_bs_opts_init(&nvme_glb.bd_bs_opts, sizeof(nvme_glb.bd_bs_opts));
 	nvme_glb.bd_bs_opts.cluster_sz = DAOS_BS_CLUSTER_SZ;
 	nvme_glb.bd_bs_opts.num_md_pages = DAOS_BS_MD_PAGES;
 	nvme_glb.bd_bs_opts.max_channel_ops = BIO_BS_MAX_CHANNEL_OPS;

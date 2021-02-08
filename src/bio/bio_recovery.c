@@ -5,7 +5,7 @@
  */
 #define D_LOGFAC	DD_FAC(bio)
 
-#include <spdk/io_channel.h>
+#include <spdk/thread.h>
 #include <spdk/blob.h>
 #include "bio_internal.h"
 #include <daos_srv/smd.h>
