@@ -774,8 +774,8 @@ pipeline {
                         always {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
-                                         id: "analysis-gcc-centos7",
-                                         tools: [ gcc4(pattern: 'centos7-gcc-build.log')]
+                                         tool: gcc4(pattern: 'centos7-gcc-build.log',
+                                                    id: "analysis-gcc-centos7")
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -813,8 +813,8 @@ pipeline {
                         always {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
-                                         id: "analysis-covc-centos7",
-                                         tools: [ gcc4(pattern: 'centos7-covc-build.log')]
+                                         tool: gcc4(pattern: 'centos7-covc-build.log',
+                                                    id: "analysis-covc-centos7")
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -849,8 +849,8 @@ pipeline {
                         always {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
-                                         id: "analysis-gcc-centos7-debug",
-                                         tools: [ gcc4(pattern: 'centos7-gcc-debug-build.log')]
+                                         tool: gcc4(pattern: 'centos7-gcc-debug-build.log',
+                                                    id: "analysis-gcc-centos7-debug")
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -885,8 +885,8 @@ pipeline {
                         always {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
-                                         id: "analysis-gcc-centos7-release",
-                                         tools: [ gcc4(pattern: 'centos7-gcc-release-build.log')]
+                                         tool: gcc4(pattern: 'centos7-gcc-release-build.log',
+                                                    id: "analysis-gcc-centos7-release")
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -921,8 +921,8 @@ pipeline {
                         always {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
-                                         id: "analysis-centos7-clang",
-                                         tools: [ clang(pattern: 'centos7-clang-build.log')]
+                                         tool: clang(pattern: 'centos7-clang-build.log',
+                                                     id: "analysis-centos7-clang")
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -955,8 +955,8 @@ pipeline {
                         always {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
-                                         id: "analysis-ubuntu20",
-                                         tools: [ gcc4(pattern: 'ubuntu20.04-gcc-build.log')]
+                                         tool: gcc4(pattern: 'ubuntu20.04-gcc-build.log',
+                                                    id: "analysis-ubuntu20")
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -989,8 +989,8 @@ pipeline {
                         always {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
-                                         id: "analysis-ubuntu20-clang",
-                                         tools: [ clang(pattern: 'ubuntu20.04-clang-build.log')]
+                                         tool: clang(pattern: 'ubuntu20.04-clang-build.log',
+                                                     id: "analysis-ubuntu20-clang")
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -1026,8 +1026,8 @@ pipeline {
                         always {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
-                                         id: "analysis-gcc-leap15",
-                                         tools: [ gcc4(pattern: 'leap15-gcc-build.log')]
+                                         tool: gcc4(pattern: 'leap15-gcc-build.log',
+                                                    id: "analysis-gcc-leap15")
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -1060,8 +1060,8 @@ pipeline {
                         always {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
-                                         id: "analysis-leap15-clang",
-                                         tools: [ clang(pattern: 'leap15-clang-build.log')]
+                                         tool: clang(pattern: 'leap15-clang-build.log',
+                                                     id: "analysis-leap15-clang")
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -1095,8 +1095,8 @@ pipeline {
                         always {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
-                                         id: "analysis-leap15-intelc",
-                                         tools: [ intel(pattern: 'leap15-icc-build.log')]
+                                         tool: intel(pattern: 'leap15-icc-build.log',
+                                                     id: "analysis-leap15-intelc")
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
