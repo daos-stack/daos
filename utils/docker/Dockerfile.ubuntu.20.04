@@ -71,13 +71,15 @@ RUN echo -e "<settings>\n\
 
 # Control what to build.  By default Dockerfiles build everything to allow for
 # ease-of-use for users, however in CI everything is turned off and then
-# selectively enable.d
+# selectively enabled.  Turning off any step disables all future steps.
 ARG DAOS_DEPS_BUILD=yes
-ARG DAOS_BUILD=yes
-ARG DAOS_JAVA_BUILD=yes
+ARG DAOS_BUILD=$DAOS_DEPS_BUILD
+ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 # Legacy, NOBUILD should be set to any string to disable all three.
 ARG NOBUILD=no
 
+RUN echo $DAOS_BUILD
+RUN false
 # select compiler to use
 ARG COMPILER=gcc
 
@@ -99,7 +101,7 @@ COPY src src
 RUN ln -s utils/sl site_scons
 
 # Build DAOS & dependencies
-RUN [ "$DAOS_DEPS_BUILD" == "yes" ] && [ "$DAOS_BUILD" == "yes" ] && \
+RUN [ "$DAOS_BUILD" == "yes" ] && \
     scons -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER && \
     /bin/rm -rf build && \
     cp -r utils/config/examples /opt/daos
@@ -111,7 +113,7 @@ ENV FI_SOCKETS_MAX_CONN_RETRY=1
 
 # Build java and hadoop bindings
 WORKDIR /home/daos/src/client/java
-RUN [ "$DAOS_DEPS_BUILD" == "yes" ] && [ "$DAOS_BUILD" == "yes" ] && [ "$DAOS_JAVA_BUILD" == "yes" ] && \
+RUN [ "$DAOS_JAVA_BUILD" == "yes" ] && \
     mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
 WORKDIR /home/daos
 
