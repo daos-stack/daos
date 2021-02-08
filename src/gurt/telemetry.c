@@ -324,7 +324,6 @@ void d_tm_fini(void)
 		if (rc < 0)
 			D_ERROR("Unable to remove shared memory segment. "
 				"rc = %d\n", rc);
-		d_tm_shmid = 0;
 	}
 
 	d_tm_serialization = false;
