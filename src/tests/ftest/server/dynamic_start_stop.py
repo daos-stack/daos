@@ -33,21 +33,20 @@ class DynamicStartStop(TestWithServers):
         """
         output = self.dmg_cmd.system_query().stdout
         data = json.loads(output)
-        members = data["response"]["Members"]
+        members = data["response"]["members"]
         for member in members:
-            if member["Rank"] in self.stopped_ranks:
+            if member["rank"] in self.stopped_ranks:
                 self.assertEqual(
-                    member["State"],
-                    self.dmg_cmd.SYSTEM_QUERY_STATES["STOPPED"],
-                    "State isn't Stopped! Actual: {}".format(member["State"]))
+                    member["state"], "stopped",
+                    "State isn't stopped! Actual: {}".format(member["state"]))
                 self.assertEqual(
-                    member["Info"], "system stop",
+                    member["info"], "system stop",
                     "Info (Reason) isn't system stop! Actual: {}".format(
-                        member["Info"]))
+                        member["info"]))
             else:
                 self.assertEqual(
-                    member["State"], self.dmg_cmd.SYSTEM_QUERY_STATES["JOINED"],
-                    "State isn't Joined! Actual: {}".format(member["State"]))
+                    member["state"], "joined",
+                    "State isn't joined! Actual: {}".format(member["state"]))
 
     def test_dynamic_server_addition(self):
         """JIRA ID: DAOS-3598
