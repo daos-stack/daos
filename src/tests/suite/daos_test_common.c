@@ -1234,32 +1234,44 @@ int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
 	int			retry_cnt;
 	int			rc;
 
+	if (expected_state == NULL) {
+		print_message("Expected target state is NULL!\n");
+		return -DER_INVAL;
+	}
+
 	retry_cnt = 0;
 	while (retry_cnt <= MAX_POOL_TGT_STATE_RETRY) {
 		char *expected_state_dup = strdup(expected_state);
 		char *state = strtok(expected_state_dup, "|");
 
 		rc = daos_pool_query_target(poh, tgtidx, rank, &tgt_info, NULL);
-			if (rc)
-				return rc;
+		if (rc) {
+			D_FREE(expected_state_dup);
+			return rc;
+		}
 
 		/* multiple states not present in expected_state str */
 		if (state == NULL) {
 			if (strcmp(daos_target_state_enum_to_str(tgt_info.ta_state),
-				   expected_state) == 0)
+				   expected_state) == 0) {
+				D_FREE(expected_state_dup);
 				return 0;
+			}
 		/* multiple states separated by a '|' in expected_state str */
 		} else {
 			while (state != NULL) {
 				if (strcmp(daos_target_state_enum_to_str(tgt_info.ta_state),
-					   state) == 0)
+					   state) == 0) {
+					D_FREE(expected_state_dup);
 					return 0;
+				}
 				state = strtok(NULL, "|");
 			};
 		}
 
 		sleep(MAX_POOL_TGT_STATE_WAIT);
 		retry_cnt++;
+		D_FREE(expected_state_dup);
 	};
 
 	return -DER_TIMEDOUT;

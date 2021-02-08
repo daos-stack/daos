@@ -50,21 +50,6 @@ class DmgCommand(DmgCommandBase):
     # pylint: disable=too-many-ancestors,too-many-public-methods
     """Defines a object representing a dmg command with helper methods."""
 
-    # Member state defined in control/system/member.go. Used for dmg system
-    # query.
-    SYSTEM_QUERY_STATES = {
-        "UNKNOWN": 0,
-        "AWAIT_FORMAT": 1,
-        "STARTING": 2,
-        "READY": 3,
-        "JOINED": 4,
-        "STOPPING": 5,
-        "STOPPED": 6,
-        "EVICTED": 7,
-        "ERRORED": 8,
-        "UNRESPONSIVE": 9
-    }
-
     # As the handling of these regular expressions are moved inside their
     # respective methods, they should be removed from this definition.
     METHOD_REGEX = {
