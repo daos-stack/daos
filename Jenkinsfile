@@ -548,7 +548,7 @@ pipeline {
                             filename 'Dockerfile.centos.7'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs() +
+                            additionalBuildArgs dockerBuildArgs(add_repo: false, cachebust: false) +
                                            " -t ${sanitized_JOB_NAME}-centos7 "
                         }
                     }
