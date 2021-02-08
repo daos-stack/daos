@@ -59,7 +59,7 @@ do
 
         if ! grep "<testcase classname" "$file" >/dev/null; then
             if ! SUITE=$(grep "testsuite " "$file" | \
-                grep -Po "name=\"\K.*(?=\" time=)" >/dev/null); then
+                grep -Po "name=\"\K.*(?=\" time=)"); then
                 echo "Failed to process XML $file. Cannot determine SUITE."
             else
                 sed -i \
