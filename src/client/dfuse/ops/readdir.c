@@ -7,6 +7,8 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
+#include "daos_uns.h"
+
 /* Maximum number of dentries to read at one time. */
 #define READDIR_MAX_COUNT 1024
 
@@ -87,6 +89,8 @@ create_entry(struct dfuse_projection_info *fs_handle,
 	     struct fuse_entry_param *entry,
 	     dfs_obj_t *obj,
 	     char *name,
+	     char *attr,
+	     daos_size_t attr_len,
 	     d_list_t **rlinkp)
 {
 	struct dfuse_inode_entry	*ie;
@@ -102,23 +106,29 @@ create_entry(struct dfuse_projection_info *fs_handle,
 	ie->ie_obj = obj;
 	ie->ie_stat = entry->attr;
 
-	dfs_obj2id(obj, &ie->ie_oid);
+	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 
 	entry->attr_timeout = parent->ie_dfs->dfs_attr_timeout;
 	entry->entry_timeout = parent->ie_dfs->dfs_attr_timeout;
+
+	if (S_ISDIR(ie->ie_stat.st_mode) && attr_len) {
+		rc = check_for_uns_ep(fs_handle, ie, attr, attr_len);
+		DFUSE_TRA_DEBUG(ie,
+				"check_for_uns_ep() returned %d", rc);
+		if (rc != 0)
+			D_GOTO(out, rc);
+		rc = 0;
+		ie->ie_stat.st_mode &= ~S_IFIFO;
+		ie->ie_stat.st_mode |= S_IFDIR;
+		entry->attr.st_mode = ie->ie_stat.st_mode;
+		entry->attr.st_ino = ie->ie_stat.st_ino;
+	}
 
 	entry->generation = 1;
 	entry->ino = entry->attr.st_ino;
 
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
-
-	/* TODO:
-	 * See if we need to check for UNS entry point here.  It may be that
-	 * we can just return the inode here and if it gets looked up again
-	 * that the UNS code will work at that point, potentially giving it
-	 * a new inode number but it may be that we need to handle it here.
-	 */
 
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
@@ -170,9 +180,6 @@ out:
 	return rc;
 }
 
-#define FADP	fuse_add_direntry_plus
-#define FAD	fuse_add_direntry
-
 static inline void
 dfuse_readdir_reset(struct dfuse_obj_hdl *oh)
 {
@@ -182,6 +189,9 @@ dfuse_readdir_reset(struct dfuse_obj_hdl *oh)
 	oh->doh_dre_last_index = 0;
 	oh->doh_anchor_index = 0;
 }
+
+#define FADP	fuse_add_direntry_plus
+#define FAD	fuse_add_direntry
 
 void
 dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
@@ -312,6 +322,11 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 			dfs_obj_t			*obj;
 			size_t				written;
 
+			char				*attr_name = DUNS_XATTR_NAME;
+			char				out[DUNS_MAX_XATTR_LEN];
+			char				*outp = &out[0];
+			daos_size_t			attr_len = DUNS_MAX_XATTR_LEN;
+
 			D_ASSERT(dre->dre_offset != 0);
 
 			oh->doh_dre_index += 1;
@@ -321,10 +336,16 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 					dre->dre_next_offset,
 					dre->dre_name);
 
-			rc = dfs_lookup_rel(oh->doh_dfs, oh->doh_obj,
-					    dre->dre_name, O_RDONLY, &obj,
-					    &stbuf.st_mode,
-					    plus ? &stbuf : NULL);
+			if (plus)
+				rc = dfs_lookupx(oh->doh_dfs, oh->doh_obj,
+						 dre->dre_name, O_RDONLY, &obj,
+						 &stbuf.st_mode, &stbuf,
+						 1, &attr_name, (void **)&outp,
+						 &attr_len);
+			else
+				rc = dfs_lookup_rel(oh->doh_dfs, oh->doh_obj,
+						    dre->dre_name, O_RDONLY, &obj,
+						&stbuf.st_mode, NULL);
 			if (rc == ENOENT) {
 				DFUSE_TRA_DEBUG(oh, "File does not exist");
 				continue;
@@ -350,6 +371,8 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 						  &entry,
 						  obj,
 						  dre->dre_name,
+						  attr_name,
+						  attr_len,
 						  &rlink);
 				if (rc != 0)
 					D_GOTO(reply, rc);

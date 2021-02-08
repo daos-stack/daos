@@ -535,6 +535,10 @@ dfuse_compute_inode(struct dfuse_dfs *dfs,
 	*_ino = hi ^ (oid->lo << 32);
 };
 
+int
+check_for_uns_ep(struct dfuse_projection_info *fs_handle,
+		 struct dfuse_inode_entry *ie, char *attr, daos_size_t len);
+
 /* dfuse_inode.c */
 
 /* This should probably be replaced with a entry pointer in the dfs which

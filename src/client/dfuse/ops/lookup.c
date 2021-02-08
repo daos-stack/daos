@@ -131,7 +131,7 @@ out_err:
  * On failure it will return error.
  *
  */
-static int
+int
 check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		 struct dfuse_inode_entry *ie, char *attr, daos_size_t len)
 {
