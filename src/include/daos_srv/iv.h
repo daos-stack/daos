@@ -30,8 +30,8 @@ struct ds_iv_ns {
 	/* pool uuid */
 	uuid_t		iv_pool_uuid;
 
-	int		iv_refcount;
 	ABT_eventual	iv_done_eventual;
+	int		iv_refcount;
 	/**
 	 * iv_fini: the IV namespace will be stopped, usually happens
 	 * the pool will be destroyed.
