@@ -218,7 +218,6 @@ dss_module_unload_internal(struct loaded_mod *lmod)
 	if (rc) {
 		D_ERROR("module finalization failed for: "DF_RC"\n", DP_RC(rc));
 		return rc;
-
 	}
 
 close_mod:
@@ -259,7 +258,6 @@ dss_module_init_all(uint64_t *mod_facs)
 
 	return rc;
 }
-
 
 int
 dss_module_unload(const char *modname)
@@ -361,6 +359,7 @@ dss_module_unload_all(void)
 	D_INIT_LIST_HEAD(&destroy_list);
 	D_MUTEX_LOCK(&loaded_mod_list_lock);
 	d_list_for_each_entry_safe(mod, tmp, &loaded_mod_list, lm_lk) {
+		dss_module_unload_internal(mod);
 		d_list_del_init(&mod->lm_lk);
 		d_list_add(&mod->lm_lk, &destroy_list);
 	}
