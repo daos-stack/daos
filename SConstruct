@@ -408,8 +408,6 @@ def scons(): # pylint: disable=too-many-locals
     # Export() is handled specially by pylint so do not merge these two lines.
     Export('daos_version', 'API_VERSION', 'env', 'prereqs')
     Export('platform_arm', 'conf_dir')
-    env.Command("$PREFIX/lib64/daos/API_VERSION", "SConstruct",
-                "echo %s > $TARGET" % (API_VERSION))
 
     if env['PLATFORM'] == 'darwin':
         # generate .so on OSX instead of .dylib
@@ -435,6 +433,10 @@ def scons(): # pylint: disable=too-many-locals
                 ['utils/sl/env_modules.py'])
     env.Install('$PREFIX/lib/daos/TESTING/ftest/',
                 ['ftest.sh'])
+    api_version = env.Command("%s/API_VERSION" % build_prefix,
+                              "%s/SConstruct" % build_prefix,
+                              "echo %s > $TARGET" % (API_VERSION))
+    env.Install("$PREFIX/lib64/daos", api_version);
 
     # install the configuration files
     SConscript('utils/config/SConscript')
