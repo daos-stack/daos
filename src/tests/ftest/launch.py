@@ -1415,23 +1415,33 @@ def install_debuginfos():
 
     cmd_list.append(cmd)
 
-    retry = False
-    for cmd in cmd_list:
-        try:
-            print(run_command(cmd))
-        except RuntimeError as error:
-            # got an error, so abort this list of commands and re-run
-            # it with a yum clean, makecache first
-            print(error)
-            retry = True
-            break
-    if retry:
-        print("Going to refresh caches and try again")
-        cmd_prefix = ["sudo", "dnf", "--enablerepo=*debug*"]
-        cmd_list.insert(0, cmd_prefix + ["clean", "all"])
-        cmd_list.insert(1, cmd_prefix + ["makecache"])
+    retry_count = 3
+    while retry_count > 0:
+        retry_cmd = False
         for cmd in cmd_list:
-            print(run_command(cmd))
+            try:
+                print(run_command(cmd))
+            except RuntimeError as error:
+                # got an error, so abort this list of commands and re-run
+                # it with a yum clean, makecache first
+                print(error)
+                retry_cmd = True
+                break
+        if retry_cmd:
+            retry_count -= 1
+            if retry_count == 2:
+                print("Going to refresh caches and try again")
+                cmd_prefix = ["sudo", "dnf", r"--enablerepo=\*debug\*"]
+                cmd_list.insert(0, cmd_prefix + ["clean", "all"])
+                cmd_list.insert(1, cmd_prefix + ["makecache"])
+            elif retry_count == 1:
+                print("Adding debug information for triage:")
+                cmd_list = []
+                cmd_list.append(["dnf", r"--enablerepo=\*", "repolist"])
+                cmd_list.append(
+                    ["timeout", "yum", r"--enablerepo=\*", "repolist"])
+        else:
+            retry_count = 0
 
 
 def process_the_cores(avocado_logs_dir, test_yaml, args):
