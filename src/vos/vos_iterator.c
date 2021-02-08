@@ -12,6 +12,7 @@
 
 #include <daos/btree.h>
 #include <daos_srv/vos.h>
+#include <daos_api.h>
 #include <vos_internal.h>
 
 /** Dictionary for all known vos iterators */
