@@ -167,32 +167,50 @@ RUN if $QUICKBUILD; then                                                        
 
 # force an upgrade to get any newly built RPMs
 RUN zypper addlock fuse fuse-libs fuse-devel libraft0 raft-devel mercury mercury-devel
-ARG CACHEBUST=1
 
-# set NOBUILD to disable build
+# Control what to build.  By default Dockerfiles build everything to allow for
+# ease-of-use for users, however in CI everything is turned off and then
+# selectively enabled.  Turning off any step disables all future steps.
+ARG DAOS_DEPS_BUILD=yes
+ARG DAOS_BUILD=$DAOS_DEPS_BUILD
+ARG DAOS_JAVA_BUILD=$DAOS_BUILD
+# Legacy, NOBUILD should be set to any string to disable all three.
 ARG NOBUILD=no
 
 # select compiler to use
 ARG COMPILER=gcc
 
+WORKDIR /home/daos/pre
+COPY SConstruct .
+COPY utils/sl utils/sl
+COPY utils/build.config utils/
+RUN ln -s utils/sl site_scons
+
+RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
+    (scons --build-deps=yes install PREFIX=/opt/daos --deps-only && \
+    /bin/rm -rf build *.gz)
+
 # copy DAOS tree
 WORKDIR /home/daos
-COPY ./ .
+COPY VERSION LICENSE ftest.sh SConstruct API_VERSION ./
+COPY utils utils
+COPY src src
+RUN ln -s utils/sl site_scons
 
 # Build DAOS & dependencies
-RUN [ "$NOBUILD" != "no" ] || \
-    scons --build-deps=yes -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER
+RUN [ "$DAOS_BUILD" != "yes" ] || \
+    (scons -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER && \
+    /bin/rm -rf build && \
+    cp -r utils/config/examples /opt/daos)
 
 # Set environment variables
 ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:$LD_LIBRARY_PATH
 ENV PATH=/opt/daos/bin:$PATH
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
 
-# Copy example config files to /opt/daos
-RUN [ "$NOBUILD" != "no" ] || cp -r utils/config/examples /opt/daos
-
+# Build java and hadoop bindings
 WORKDIR /home/daos/src/client/java
-RUN [ "$NOBUILD" != "no" ] || \
+RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
     mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
 WORKDIR /home/daos
 

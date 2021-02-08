@@ -1048,7 +1048,6 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'Dockerfile.leap.15'
-                            dir 'utils/docker'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
                                                 " -t ${sanitized_JOB_NAME}-leap15 " +
@@ -1092,9 +1091,8 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'Dockerfile.leap.15'
-                            dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs() +
+                            additionalBuildArgs dockerBuildArgs(deps_build:true) +
                                                 " -t ${sanitized_JOB_NAME}-leap15"
                         }
                     }
@@ -1132,9 +1130,8 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'Dockerfile.leap.15'
-                            dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs() +
+                            additionalBuildArgs dockerBuildArgs(deps_build:true) +
                                                 " -t ${sanitized_JOB_NAME}-leap15"
                             args '-v /opt/intel:/opt/intel'
                         }
