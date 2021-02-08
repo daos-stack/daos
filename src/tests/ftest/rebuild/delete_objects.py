@@ -8,6 +8,7 @@ from rebuild_test_base import RebuildTestBase
 
 
 class RebuildDeleteObjects(RebuildTestBase):
+    # pylint: disable=too-many-ancestors
     """Test class for deleting objects during pool rebuild.
 
     Test Class Description:
@@ -16,7 +17,14 @@ class RebuildDeleteObjects(RebuildTestBase):
 
     :avocado: recursive
     """
-    # pylint: disable=too-many-ancestors
+
+    CANCEL_FOR_TICKET = [
+        [
+            "DAOS-6751",
+            "test_method_name", "test_rebuild_delete_records",
+            "record_qty", 1
+        ]
+    ]
 
     def __init__(self, *args, **kwargs):
         """Initialize a RebuildDeleteObjects object."""

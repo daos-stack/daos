@@ -95,7 +95,7 @@ class RebuildTests(TestWithServers):
             status &= self.pool[index].check_pool_info(
                 pi_nnodes=server_count,
                 pi_ntargets=server_count,              # DAOS-2799
-                pi_ndisabled=targets                   # DAOS-2799
+                pi_ndisabled=1
             )
             status &= self.pool[index].check_rebuild_status(
                 rs_done=1, rs_obj_nr=rs_obj_nr[index],
