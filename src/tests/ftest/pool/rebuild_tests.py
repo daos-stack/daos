@@ -29,7 +29,6 @@ class RebuildTests(TestWithServers):
             self.pool.append(self.get_pool(create=False))
             self.container.append(
                 self.get_container(self.pool[-1], create=False))
-        targets = self.params.get("targets", "/run/server_config/*")
         rank = self.params.get("rank", "/run/testparams/*")
         obj_class = self.params.get("object_class", "/run/testparams/*")
 
