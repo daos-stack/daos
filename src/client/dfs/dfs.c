@@ -528,8 +528,10 @@ remove_entry(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh,
 
 punch_entry:
 	d_iov_set(&dkey, (void *)name, len);
-	rc = daos_obj_punch_dkeys(parent_oh, th, DAOS_COND_PUNCH, 1, &dkey,
-				  NULL);
+	/** we only need a conditional dkey punch if we are not using a DTX */
+	rc = daos_obj_punch_dkeys(parent_oh, th,
+				  dfs->use_dtx ? DAOS_COND_PUNCH : 0,
+				  1, &dkey, NULL);
 	return daos_der2errno(rc);
 }
 
@@ -903,7 +905,6 @@ fopen:
 
 	oid_cp(&file->oid, entry->oid);
 
-out:
 	if (daos_handle_is_valid(th) && dfs->use_dtx) {
 		rc = daos_tx_commit(th, NULL);
 		if (rc) {
@@ -913,6 +914,7 @@ out:
 		}
 	}
 
+out:
 	rc = check_tx(th, rc);
 	if (rc == ERESTART)
 		goto restart;
