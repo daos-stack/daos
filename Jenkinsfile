@@ -421,8 +421,9 @@ boolean skip_build_on_centos7_gcc_release() {
 }
 
 boolean skip_build_on_landing_branch() {
-    return env.BRANCH_NAME != target_branch ||
-           quickbuild()
+     return false
+//    return env.BRANCH_NAME != target_branch ||
+//           quickbuild()
 }
 
 boolean skip_build_on_ubuntu_clang() {
@@ -774,12 +775,7 @@ pipeline {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
                                          id: "analysis-gcc-centos7",
-                                         tools: [ gcc4(pattern: 'centos7-gcc-build.log')],
-                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
-                                                    excludeFile('_build\\.external\\/.*') ]
-                        }
-                        success {
-                            sh "rm -rf _build.external"
+                                         tools: [ gcc4(pattern: 'centos7-gcc-build.log')]
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -818,12 +814,7 @@ pipeline {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
                                          id: "analysis-covc-centos7",
-                                         tools: [ gcc4(pattern: 'centos7-covc-build.log')],
-                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
-                                                    excludeFile('_build\\.external\\/.*') ]
-                        }
-                        success {
-                            sh "rm -rf _build.external"
+                                         tools: [ gcc4(pattern: 'centos7-covc-build.log')]
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -859,12 +850,7 @@ pipeline {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
                                          id: "analysis-gcc-centos7-debug",
-                                         tools: [ gcc4(pattern: 'centos7-gcc-debug-build.log')],
-                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
-                                                   excludeFile('_build\\.external\\/.*') ]
-                        }
-                        success {
-                            sh "rm -rf _build.external"
+                                         tools: [ gcc4(pattern: 'centos7-gcc-debug-build.log')]
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -900,12 +886,7 @@ pipeline {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
                                          id: "analysis-gcc-centos7-release",
-                                         tools: [ gcc4(pattern: 'centos7-gcc-release-build.log')],
-                                         filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                   excludeFile('_build\\.external\\/.*')]
-                        }
-                        success {
-                            sh "rm -rf _build.external"
+                                         tools: [ gcc4(pattern: 'centos7-gcc-release-build.log')]
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -941,12 +922,7 @@ pipeline {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
                                          id: "analysis-centos7-clang",
-                                         tools: [ clang(pattern: 'centos7-clang-build.log')],
-                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
-                                                    excludeFile('_build\\.external\\/.*') ]
-                        }
-                        success {
-                            sh "rm -rf _build.external"
+                                         tools: [ clang(pattern: 'centos7-clang-build.log')]
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -980,12 +956,7 @@ pipeline {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
                                          id: "analysis-ubuntu20",
-                                         tools: [ gcc4(pattern: 'ubuntu20.04-gcc-build.log')],
-                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
-                                                    excludeFile('_build\\.external\\/.*') ]
-                        }
-                        success {
-                            sh "rm -rf _build.external"
+                                         tools: [ gcc4(pattern: 'ubuntu20.04-gcc-build.log')]
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -1019,12 +990,7 @@ pipeline {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
                                          id: "analysis-ubuntu20-clang",
-                                         tools: [ clang(pattern: 'ubuntu20.04-clang-build.log')],
-                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
-                                                    excludeFile('_build\\.external\\/.*') ]
-                        }
-                        success {
-                            sh "rm -rf _build.external"
+                                         tools: [ clang(pattern: 'ubuntu20.04-clang-build.log')]
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -1061,12 +1027,7 @@ pipeline {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
                                          id: "analysis-gcc-leap15",
-                                         tools: [ gcc4(pattern: 'leap15-gcc-build.log')],
-                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
-                                                    excludeFile('_build\\.external\\/.*') ]
-                        }
-                        success {
-                            sh "rm -rf _build.external"
+                                         tools: [ gcc4(pattern: 'leap15-gcc-build.log')]
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -1100,12 +1061,7 @@ pipeline {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
                                          id: "analysis-leap15-clang",
-                                         tools: [ clang(pattern: 'leap15-clang-build.log')],
-                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
-                                                    excludeFile('_build\\.external\\/.*') ]
-                        }
-                        success {
-                            sh "rm -rf _build.external"
+                                         tools: [ clang(pattern: 'leap15-clang-build.log')]
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -1140,12 +1096,7 @@ pipeline {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
                                          id: "analysis-leap15-intelc",
-                                         tools: [ intel(pattern: 'leap15-icc-build.log')],
-                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
-                                                    excludeFile('_build\\.external\\/.*') ]
-                        }
-                        success {
-                            sh "rm -rf _build.external"
+                                         tools: [ intel(pattern: 'leap15-icc-build.log')]
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then

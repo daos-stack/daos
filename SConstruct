@@ -370,9 +370,6 @@ def scons(): # pylint: disable=too-many-locals
 
     env = Environment(TOOLS=['extra', 'default', 'textfile'])
 
-    if os.path.exists("daos_m.conf"):
-        os.rename("daos_m.conf", "daos.conf")
-
     opts_file = os.path.join(Dir('#').abspath, 'daos.conf')
     opts = Variables(opts_file)
 
