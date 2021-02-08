@@ -27,7 +27,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/server/ioengine"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 	"github.com/daos-stack/daos/src/control/system"
@@ -37,12 +37,12 @@ const (
 	testShortTimeout   = 50 * time.Millisecond
 	testLongTimeout    = 1 * time.Minute
 	delayedFailTimeout = 20 * testShortTimeout
-	maxIOEngines       = 2
+	maxEngines         = 2
 )
 
 func TestServer_Harness_Start(t *testing.T) {
 	for name, tc := range map[string]struct {
-		trc              *ioengine.TestRunnerConfig
+		trc              *engine.TestRunnerConfig
 		isAP             bool                     // is first instance an AP/MS replica/bootstrap
 		rankInSuperblock bool                     // rank already set in superblock when starting
 		instanceUuids    map[int]string           // UUIDs for each instance.Index()
@@ -57,7 +57,7 @@ func TestServer_Harness_Start(t *testing.T) {
 		expIoErrs        map[uint32]error         // errors expected from instances
 	}{
 		"normal startup/shutdown": {
-			trc: &ioengine.TestRunnerConfig{
+			trc: &engine.TestRunnerConfig{
 				ErrChanCb: func() error {
 					time.Sleep(testLongTimeout)
 					return errors.New("ending")
@@ -67,7 +67,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				0: MockUUID(0),
 				1: MockUUID(1),
 			},
-			expStartCount: maxIOEngines,
+			expStartCount: maxEngines,
 			expDrpcCalls: map[uint32][]drpc.Method{
 				0: {
 					drpc.MethodSetRank,
@@ -88,14 +88,14 @@ func TestServer_Harness_Start(t *testing.T) {
 			},
 		},
 		"startup/shutdown with preset ranks": {
-			trc: &ioengine.TestRunnerConfig{
+			trc: &engine.TestRunnerConfig{
 				ErrChanCb: func() error {
 					time.Sleep(testLongTimeout)
 					return errors.New("ending")
 				},
 			},
 			rankInSuperblock: true,
-			expStartCount:    maxIOEngines,
+			expStartCount:    maxEngines,
 			expDrpcCalls: map[uint32][]drpc.Method{
 				0: {
 					drpc.MethodSetRank,
@@ -116,7 +116,7 @@ func TestServer_Harness_Start(t *testing.T) {
 			},
 		},
 		"fails to start": {
-			trc:           &ioengine.TestRunnerConfig{StartErr: errors.New("no")},
+			trc:           &engine.TestRunnerConfig{StartErr: errors.New("no")},
 			waitTimeout:   10 * testShortTimeout,
 			expStartErr:   context.DeadlineExceeded,
 			expStartCount: 2, // both start but don't proceed so context times out
@@ -125,13 +125,13 @@ func TestServer_Harness_Start(t *testing.T) {
 			dontNotifyReady: true,
 			waitTimeout:     30 * testShortTimeout,
 			expStartErr:     context.DeadlineExceeded,
-			trc: &ioengine.TestRunnerConfig{
+			trc: &engine.TestRunnerConfig{
 				ErrChanCb: func() error {
 					time.Sleep(delayedFailTimeout)
 					return errors.New("oops")
 				},
 			},
-			expStartCount: maxIOEngines,
+			expStartCount: maxEngines,
 			expRanks: map[uint32]system.Rank{
 				0: system.NilRank,
 				1: system.NilRank,
@@ -144,7 +144,7 @@ func TestServer_Harness_Start(t *testing.T) {
 		"delayed failure occurs after ready": {
 			waitTimeout: 100 * testShortTimeout,
 			expStartErr: context.DeadlineExceeded,
-			trc: &ioengine.TestRunnerConfig{
+			trc: &engine.TestRunnerConfig{
 				ErrChanCb: func() error {
 					time.Sleep(delayedFailTimeout)
 					return errors.New("oops")
@@ -154,7 +154,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				0: MockUUID(0),
 				1: MockUUID(1),
 			},
-			expStartCount: maxIOEngines,
+			expStartCount: maxEngines,
 			expDrpcCalls: map[uint32][]drpc.Method{
 				0: {
 					drpc.MethodSetRank,
@@ -186,9 +186,9 @@ func TestServer_Harness_Start(t *testing.T) {
 			testDir, cleanup := CreateTestDir(t)
 			defer cleanup()
 
-			srvCfgs := make([]*ioengine.Config, maxIOEngines)
-			for i := 0; i < maxIOEngines; i++ {
-				srvCfgs[i] = ioengine.NewConfig().
+			srvCfgs := make([]*engine.Config, maxEngines)
+			for i := 0; i < maxEngines; i++ {
+				srvCfgs[i] = engine.NewConfig().
 					WithScmClass("ram").
 					WithScmRamdiskSize(1).
 					WithScmMountPoint(filepath.Join(testDir, strconv.Itoa(i)))
@@ -201,14 +201,14 @@ func TestServer_Harness_Start(t *testing.T) {
 			joinMu := sync.Mutex{}
 			joinRequests := make(map[uint32][]string)
 			var instanceStarts uint32
-			harness := NewIOEngineHarness(log)
+			harness := NewEngineHarness(log)
 			for i, srvCfg := range config.Engines {
 				if err := os.MkdirAll(srvCfg.Storage.SCM.MountPoint, 0777); err != nil {
 					t.Fatal(err)
 				}
 
 				if tc.trc == nil {
-					tc.trc = &ioengine.TestRunnerConfig{}
+					tc.trc = &engine.TestRunnerConfig{}
 				}
 				if tc.trc.StartCb == nil {
 					tc.trc.StartCb = func() {
@@ -216,7 +216,7 @@ func TestServer_Harness_Start(t *testing.T) {
 							atomic.AddUint32(&instanceStarts, 1))
 					}
 				}
-				runner := ioengine.NewTestRunner(tc.trc, srvCfg)
+				runner := engine.NewTestRunner(tc.trc, srvCfg)
 				bdevProvider, err := bdev.NewClassProvider(log,
 					srvCfg.Storage.SCM.MountPoint, &srvCfg.Storage.Bdev)
 				if err != nil {
@@ -235,7 +235,7 @@ func TestServer_Harness_Start(t *testing.T) {
 					}, nil
 				}
 
-				srv := NewIOEngineInstance(log, bdevProvider, scmProvider, joinFn, runner)
+				srv := NewEngineInstance(log, bdevProvider, scmProvider, joinFn, runner)
 				var isAP bool
 				if tc.isAP && i == 0 { // first instance will be AP & bootstrap MS
 					isAP = true
@@ -332,7 +332,7 @@ func TestServer_Harness_Start(t *testing.T) {
 					continue
 				}
 				req := getTestNotifyReadyReq(t, "/tmp/instance_test.sock", 0)
-				go func(ctxIn context.Context, i *IOEngineInstance) {
+				go func(ctxIn context.Context, i *EngineInstance) {
 					select {
 					case i.drpcReady <- req:
 					case <-ctxIn.Done():
@@ -417,7 +417,7 @@ func TestServer_Harness_Start(t *testing.T) {
 }
 
 func TestServer_Harness_WithFaultDomain(t *testing.T) {
-	harness := &IOEngineHarness{}
+	harness := &EngineHarness{}
 	fd, err := system.NewFaultDomainFromString("/one/two")
 	if err != nil {
 		t.Fatalf("couldn't create fault domain: %s", err)

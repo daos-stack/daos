@@ -17,7 +17,7 @@ import (
 	nd "github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/server/ioengine"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -516,8 +516,8 @@ func checkCPUs(log logging.Logger, numSSDs, coresPerNUMA int) (int, int, error) 
 	return numTargets, calcHelpers(log, numTargets, coresPerNUMA), nil
 }
 
-func defaultIOSrvCfg(idx int) *ioengine.Config {
-	return ioengine.NewConfig().
+func defaultIOSrvCfg(idx int) *engine.Config {
+	return engine.NewConfig().
 		WithTargetCount(defaultTargetCount).
 		WithLogFile(fmt.Sprintf("%s.%d.log", defaultIOSrvLogFile, idx)).
 		WithScmClass(storage.ScmClassDCPM.String()).
@@ -551,7 +551,7 @@ func genConfig(accessPoints, pmemPaths []string, ifaces []*HostFabricInterface, 
 			WithTargetCount(nTgts[idx]).
 			WithHelperStreamCount(nHlprs[idx])
 
-		iocfg.Fabric = ioengine.FabricConfig{
+		iocfg.Fabric = engine.FabricConfig{
 			Provider:       iface.Provider,
 			Interface:      iface.Device,
 			InterfacePort:  int(defaultFiPort + (nn * defaultFiPortInterval)),

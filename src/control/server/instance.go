@@ -33,16 +33,16 @@ type (
 	onInstanceExitFn func(context.Context, system.Rank, error) error
 )
 
-// IOEngineInstance encapsulates control-plane specific configuration
+// EngineInstance encapsulates control-plane specific configuration
 // and functionality for managed I/O server instances. The distinction
-// between this structure and what's in the ioengine package is that the
-// ioengine package is only concerned with configuring and executing
-// a single daos_engine instance. IOEngineInstance is intended to
-// be used with IOEngineHarness to manage and monitor multiple instances
+// between this structure and what's in the engine package is that the
+// engine package is only concerned with configuring and executing
+// a single daos_engine instance. EngineInstance is intended to
+// be used with EngineHarness to manage and monitor multiple instances
 // per node.
-type IOEngineInstance struct {
+type EngineInstance struct {
 	log               logging.Logger
-	runner            IOEngineRunner
+	runner            EngineRunner
 	bdevClassProvider *bdev.ClassProvider
 	scmProvider       *scm.Provider
 	waitFormat        atm.Bool
@@ -66,13 +66,13 @@ type IOEngineInstance struct {
 	_lastErr    error // populated when harness receives signal
 }
 
-// NewIOEngineInstance returns an *IOEngineInstance initialized with
+// NewEngineInstance returns an *EngineInstance initialized with
 // its dependencies.
-func NewIOEngineInstance(log logging.Logger,
+func NewEngineInstance(log logging.Logger,
 	bcp *bdev.ClassProvider, sp *scm.Provider,
-	joinFn systemJoinFn, r IOEngineRunner) *IOEngineInstance {
+	joinFn systemJoinFn, r EngineRunner) *EngineInstance {
 
-	return &IOEngineInstance{
+	return &EngineInstance{
 		log:               log,
 		runner:            r,
 		bdevClassProvider: bcp,
@@ -86,51 +86,51 @@ func NewIOEngineInstance(log logging.Logger,
 
 // WithHostFaultDomain adds a fault domain for the host this instance is running
 // on.
-func (srv *IOEngineInstance) WithHostFaultDomain(fd *system.FaultDomain) *IOEngineInstance {
+func (srv *EngineInstance) WithHostFaultDomain(fd *system.FaultDomain) *EngineInstance {
 	srv.hostFaultDomain = fd
 	return srv
 }
 
-// isAwaitingFormat indicates whether IOEngineInstance is waiting
+// isAwaitingFormat indicates whether EngineInstance is waiting
 // for an administrator action to trigger a format.
-func (srv *IOEngineInstance) isAwaitingFormat() bool {
+func (srv *EngineInstance) isAwaitingFormat() bool {
 	return srv.waitFormat.Load()
 }
 
-// isStarted indicates whether IOEngineInstance is in a running state.
-func (srv *IOEngineInstance) isStarted() bool {
+// isStarted indicates whether EngineInstance is in a running state.
+func (srv *EngineInstance) isStarted() bool {
 	return srv.runner.IsRunning()
 }
 
-// isReady indicates whether the IOEngineInstance is in a ready state.
+// isReady indicates whether the EngineInstance is in a ready state.
 //
 // If true indicates that the instance is fully setup, distinct from
 // drpc and storage ready states, and currently active.
-func (srv *IOEngineInstance) isReady() bool {
+func (srv *EngineInstance) isReady() bool {
 	return srv.ready.Load() && srv.isStarted()
 }
 
 // OnStorageReady adds a list of callbacks to invoke when the instance
 // storage becomes ready.
-func (srv *IOEngineInstance) OnStorageReady(fns ...onStorageReadyFn) {
+func (srv *EngineInstance) OnStorageReady(fns ...onStorageReadyFn) {
 	srv.onStorageReady = append(srv.onStorageReady, fns...)
 }
 
 // OnReady adds a list of callbacks to invoke when the instance
 // becomes ready.
-func (srv *IOEngineInstance) OnReady(fns ...onReadyFn) {
+func (srv *EngineInstance) OnReady(fns ...onReadyFn) {
 	srv.onReady = append(srv.onReady, fns...)
 }
 
 // OnInstanceExit adds a list of callbacks to invoke when the instance
 // runner (process) terminates.
-func (srv *IOEngineInstance) OnInstanceExit(fns ...onInstanceExitFn) {
+func (srv *EngineInstance) OnInstanceExit(fns ...onInstanceExitFn) {
 	srv.onInstanceExit = append(srv.onInstanceExit, fns...)
 }
 
 // LocalState returns local perspective of the current instance state
 // (doesn't consider state info held by the global system membership).
-func (srv *IOEngineInstance) LocalState() system.MemberState {
+func (srv *EngineInstance) LocalState() system.MemberState {
 	switch {
 	case srv.isReady():
 		return system.MemberStateReady
@@ -144,18 +144,18 @@ func (srv *IOEngineInstance) LocalState() system.MemberState {
 }
 
 // setIndex sets the server index assigned by the harness.
-func (srv *IOEngineInstance) setIndex(idx uint32) {
+func (srv *EngineInstance) setIndex(idx uint32) {
 	srv.runner.GetConfig().Index = idx
 }
 
 // Index returns the server index assigned by the harness.
-func (srv *IOEngineInstance) Index() uint32 {
+func (srv *EngineInstance) Index() uint32 {
 	return srv.runner.GetConfig().Index
 }
 
 // removeSocket removes the socket file used for dRPC communication with
 // harness and updates relevant ready states.
-func (srv *IOEngineInstance) removeSocket() error {
+func (srv *EngineInstance) removeSocket() error {
 	fMsg := fmt.Sprintf("removing instance %d socket file", srv.Index())
 
 	dc, err := srv.getDrpcClient()
@@ -174,7 +174,7 @@ func (srv *IOEngineInstance) removeSocket() error {
 	return nil
 }
 
-func (srv *IOEngineInstance) determineRank(ctx context.Context, ready *srvpb.NotifyReadyReq) (system.Rank, bool, error) {
+func (srv *EngineInstance) determineRank(ctx context.Context, ready *srvpb.NotifyReadyReq) (system.Rank, bool, error) {
 	superblock := srv.getSuperblock()
 	if superblock == nil {
 		return system.NilRank, false, errors.New("nil superblock while determining rank")
@@ -218,8 +218,8 @@ func (srv *IOEngineInstance) determineRank(ctx context.Context, ready *srvpb.Not
 }
 
 // handleReady determines the instance rank and sends a SetRank dRPC request
-// to the IOEngine.
-func (srv *IOEngineInstance) handleReady(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
+// to the Engine.
+func (srv *EngineInstance) handleReady(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
 	r, localJoin, err := srv.determineRank(ctx, ready)
 	if err != nil {
 		return err
@@ -242,7 +242,7 @@ func (srv *IOEngineInstance) handleReady(ctx context.Context, ready *srvpb.Notif
 	return nil
 }
 
-func (srv *IOEngineInstance) callSetRank(ctx context.Context, rank system.Rank) error {
+func (srv *EngineInstance) callSetRank(ctx context.Context, rank system.Rank) error {
 	dresp, err := srv.CallDrpc(ctx, drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32()})
 	if err != nil {
 		return err
@@ -260,7 +260,7 @@ func (srv *IOEngineInstance) callSetRank(ctx context.Context, rank system.Rank) 
 }
 
 // GetRank returns a valid instance rank or error.
-func (srv *IOEngineInstance) GetRank() (system.Rank, error) {
+func (srv *EngineInstance) GetRank() (system.Rank, error) {
 	var err error
 	sb := srv.getSuperblock()
 
@@ -278,8 +278,8 @@ func (srv *IOEngineInstance) GetRank() (system.Rank, error) {
 	return *sb.Rank, nil
 }
 
-// setTargetCount updates target count in ioengine config.
-func (srv *IOEngineInstance) setTargetCount(numTargets int) {
+// setTargetCount updates target count in engine config.
+func (srv *EngineInstance) setTargetCount(numTargets int) {
 	srv.Lock()
 	defer srv.Unlock()
 
@@ -287,14 +287,14 @@ func (srv *IOEngineInstance) setTargetCount(numTargets int) {
 }
 
 // GetTargetCount returns the target count set for this instance.
-func (srv *IOEngineInstance) GetTargetCount() int {
+func (srv *EngineInstance) GetTargetCount() int {
 	srv.RLock()
 	defer srv.RUnlock()
 
 	return srv.runner.GetConfig().TargetCount
 }
 
-func (srv *IOEngineInstance) callSetUp(ctx context.Context) error {
+func (srv *EngineInstance) callSetUp(ctx context.Context) error {
 	dresp, err := srv.CallDrpc(ctx, drpc.MethodSetUp, nil)
 	if err != nil {
 		return err
@@ -312,7 +312,7 @@ func (srv *IOEngineInstance) callSetUp(ctx context.Context) error {
 }
 
 // BioErrorNotify logs a blob I/O error.
-func (srv *IOEngineInstance) BioErrorNotify(bio *srvpb.BioErrorReq) {
+func (srv *EngineInstance) BioErrorNotify(bio *srvpb.BioErrorReq) {
 
 	srv.log.Errorf("I/O server instance %d (target %d) has detected blob I/O error! %v",
 		srv.Index(), bio.TgtId, bio)

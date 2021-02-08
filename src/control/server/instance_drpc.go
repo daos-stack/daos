@@ -28,13 +28,13 @@ var (
 	errInstanceNotReady = errors.New("instance not ready yet")
 )
 
-func (srv *IOEngineInstance) setDrpcClient(c drpc.DomainSocketClient) {
+func (srv *EngineInstance) setDrpcClient(c drpc.DomainSocketClient) {
 	srv.Lock()
 	defer srv.Unlock()
 	srv._drpcClient = c
 }
 
-func (srv *IOEngineInstance) getDrpcClient() (drpc.DomainSocketClient, error) {
+func (srv *EngineInstance) getDrpcClient() (drpc.DomainSocketClient, error) {
 	srv.RLock()
 	defer srv.RUnlock()
 	if srv._drpcClient == nil {
@@ -43,9 +43,9 @@ func (srv *IOEngineInstance) getDrpcClient() (drpc.DomainSocketClient, error) {
 	return srv._drpcClient, nil
 }
 
-// NotifyDrpcReady receives a ready message from the running IOEngine
+// NotifyDrpcReady receives a ready message from the running Engine
 // instance.
-func (srv *IOEngineInstance) NotifyDrpcReady(msg *srvpb.NotifyReadyReq) {
+func (srv *EngineInstance) NotifyDrpcReady(msg *srvpb.NotifyReadyReq) {
 	srv.log.Debugf("%s instance %d drpc ready: %v", build.DataPlaneName, srv.Index(), msg)
 
 	// activate the dRPC client connection to this engine
@@ -57,14 +57,14 @@ func (srv *IOEngineInstance) NotifyDrpcReady(msg *srvpb.NotifyReadyReq) {
 }
 
 // awaitDrpcReady returns a channel which receives a ready message
-// when the started IOEngine instance indicates that it is
+// when the started Engine instance indicates that it is
 // ready to receive dRPC messages.
-func (srv *IOEngineInstance) awaitDrpcReady() chan *srvpb.NotifyReadyReq {
+func (srv *EngineInstance) awaitDrpcReady() chan *srvpb.NotifyReadyReq {
 	return srv.drpcReady
 }
 
 // CallDrpc makes the supplied dRPC call via this instance's dRPC client.
-func (srv *IOEngineInstance) CallDrpc(ctx context.Context, method drpc.Method, body proto.Message) (*drpc.Response, error) {
+func (srv *EngineInstance) CallDrpc(ctx context.Context, method drpc.Method, body proto.Message) (*drpc.Response, error) {
 	dc, err := srv.getDrpcClient()
 	if err != nil {
 		return nil, err
@@ -107,7 +107,7 @@ func drespToMemberResult(rank system.Rank, dresp *drpc.Response, err error, tSta
 
 // TryDrpc attempts dRPC request to given rank managed by instance and return
 // success or error from call result or timeout encapsulated in result.
-func (srv *IOEngineInstance) TryDrpc(ctx context.Context, method drpc.Method) *system.MemberResult {
+func (srv *EngineInstance) TryDrpc(ctx context.Context, method drpc.Method) *system.MemberResult {
 	rank, err := srv.GetRank()
 	if err != nil {
 		return nil // no rank to return result for
@@ -157,7 +157,7 @@ func (srv *IOEngineInstance) TryDrpc(ctx context.Context, method drpc.Method) *s
 	}
 }
 
-func (srv *IOEngineInstance) getBioHealth(ctx context.Context, req *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
+func (srv *EngineInstance) getBioHealth(ctx context.Context, req *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
 	dresp, err := srv.CallDrpc(ctx, drpc.MethodBioHealth, req)
 	if err != nil {
 		return nil, err
@@ -175,7 +175,7 @@ func (srv *IOEngineInstance) getBioHealth(ctx context.Context, req *ctlpb.BioHea
 	return resp, nil
 }
 
-func (srv *IOEngineInstance) listSmdDevices(ctx context.Context, req *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error) {
+func (srv *EngineInstance) listSmdDevices(ctx context.Context, req *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error) {
 	dresp, err := srv.CallDrpc(ctx, drpc.MethodSmdDevs, req)
 	if err != nil {
 		return nil, err
@@ -200,7 +200,7 @@ func (srv *IOEngineInstance) listSmdDevices(ctx context.Context, req *ctlpb.SmdD
 // map input controllers to their concatenated model+serial keys then
 // retrieve metadata and health stats for each SMD device (blobstore) on
 // a given I/O server instance. Update input map with new stats/smd info.
-func (srv *IOEngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[string]*storage.NvmeController) error {
+func (srv *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[string]*storage.NvmeController) error {
 	smdDevs, err := srv.listSmdDevices(ctx, new(ctlpb.SmdDevReq))
 	if err != nil {
 		return errors.Wrapf(err, "instance %d listSmdDevices()", srv.Index())

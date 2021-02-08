@@ -20,19 +20,19 @@ import (
 )
 
 // scmConfig returns the scm configuration assigned to this instance.
-func (srv *IOEngineInstance) scmConfig() storage.ScmConfig {
+func (srv *EngineInstance) scmConfig() storage.ScmConfig {
 	return srv.runner.GetConfig().Storage.SCM
 }
 
 // bdevConfig returns the block device configuration assigned to this instance.
-func (srv *IOEngineInstance) bdevConfig() storage.BdevConfig {
+func (srv *EngineInstance) bdevConfig() storage.BdevConfig {
 	return srv.runner.GetConfig().Storage.Bdev
 }
 
 // MountScmDevice mounts the configured SCM device (DCPM or ramdisk emulation)
 // at the mountpoint specified in the configuration. If the device is already
 // mounted, the function returns nil, indicating success.
-func (srv *IOEngineInstance) MountScmDevice() error {
+func (srv *EngineInstance) MountScmDevice() error {
 	scmCfg := srv.scmConfig()
 
 	isMount, err := srv.scmProvider.IsMounted(scmCfg.MountPoint)
@@ -68,7 +68,7 @@ func (srv *IOEngineInstance) MountScmDevice() error {
 
 // NeedsScmFormat probes the configured instance storage and determines whether
 // or not it requires a format operation before it can be used.
-func (srv *IOEngineInstance) NeedsScmFormat() (bool, error) {
+func (srv *EngineInstance) NeedsScmFormat() (bool, error) {
 	scmCfg := srv.scmConfig()
 
 	srv.log.Debugf("%s: checking formatting", scmCfg.MountPoint)
@@ -92,14 +92,14 @@ func (srv *IOEngineInstance) NeedsScmFormat() (bool, error) {
 }
 
 // NotifyStorageReady releases any blocks on awaitStorageReady().
-func (srv *IOEngineInstance) NotifyStorageReady() {
+func (srv *EngineInstance) NotifyStorageReady() {
 	go func() {
 		srv.storageReady <- true
 	}()
 }
 
 // awaitStorageReady blocks until instance has storage available and ready to be used.
-func (srv *IOEngineInstance) awaitStorageReady(ctx context.Context, skipMissingSuperblock bool) error {
+func (srv *EngineInstance) awaitStorageReady(ctx context.Context, skipMissingSuperblock bool) error {
 	idx := srv.Index()
 
 	if srv.isStarted() {
@@ -154,7 +154,7 @@ func (srv *IOEngineInstance) awaitStorageReady(ctx context.Context, skipMissingS
 	return ctx.Err()
 }
 
-func (srv *IOEngineInstance) logScmStorage() error {
+func (srv *EngineInstance) logScmStorage() error {
 	scmMount := path.Dir(srv.superblockPath())
 
 	if scmMount != srv.scmConfig().MountPoint {

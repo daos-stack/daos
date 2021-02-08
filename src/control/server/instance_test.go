@@ -15,13 +15,13 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/ioengine"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-func getTestIOEngineInstance(logger logging.Logger) *IOEngineInstance {
-	runner := ioengine.NewRunner(logger, &ioengine.Config{})
-	return NewIOEngineInstance(logger, nil, nil, nil, runner)
+func getTestEngineInstance(logger logging.Logger) *EngineInstance {
+	runner := engine.NewRunner(logger, &engine.Config{})
+	return NewEngineInstance(logger, nil, nil, nil, runner)
 }
 
 func getTestBioErrorReq(t *testing.T, sockPath string, idx uint32, tgt int32, unmap bool, read bool, write bool) *srvpb.BioErrorReq {
@@ -39,7 +39,7 @@ func TestServer_Instance_BioError(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	instance := getTestIOEngineInstance(log)
+	instance := getTestEngineInstance(log)
 
 	req := getTestBioErrorReq(t, "/tmp/instance_test.sock", 0, 0, false, false, true)
 
@@ -52,7 +52,7 @@ func TestServer_Instance_BioError(t *testing.T) {
 }
 
 func TestServer_Instance_WithHostFaultDomain(t *testing.T) {
-	instance := &IOEngineInstance{}
+	instance := &EngineInstance{}
 	fd, err := system.NewFaultDomainFromString("/one/two")
 	if err != nil {
 		t.Fatalf("couldn't create fault domain: %s", err)

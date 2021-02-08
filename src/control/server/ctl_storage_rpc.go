@@ -403,7 +403,7 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	formatting := 0
 	for _, srv := range instances {
 		formatting++
-		go func(s *IOEngineInstance) {
+		go func(s *EngineInstance) {
 			scmChan <- s.StorageFormatSCM(req.Reformat)
 		}(srv)
 	}

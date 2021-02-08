@@ -14,7 +14,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/server/ioengine"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 	"github.com/daos-stack/daos/src/control/system"
@@ -27,7 +27,7 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 
 	if cfg == nil {
 		cfg = config.DefaultServer().WithEngines(
-			ioengine.NewConfig().WithTargetCount(1),
+			engine.NewConfig().WithTargetCount(1),
 		)
 	}
 
@@ -37,7 +37,7 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 			scm.NewMockProvider(log, smbc, smsc),
 			cfg.Engines,
 		),
-		harness: &IOEngineHarness{
+		harness: &EngineHarness{
 			log: log,
 		},
 		events: events.NewPubSub(context.TODO(), log),
@@ -48,10 +48,10 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 		if err != nil {
 			t.Fatal(err)
 		}
-		runner := ioengine.NewTestRunner(&ioengine.TestRunnerConfig{
+		runner := engine.NewTestRunner(&engine.TestRunnerConfig{
 			Running: atm.NewBool(true),
 		}, srvCfg)
-		instance := NewIOEngineInstance(log, bp, cs.scm, nil, runner)
+		instance := NewEngineInstance(log, bp, cs.scm, nil, runner)
 		instance.setSuperblock(&Superblock{
 			Rank: system.NewRankPtr(srvCfg.Rank.Uint32()),
 		})
@@ -69,7 +69,7 @@ func mockControlServiceNoSB(t *testing.T, log logging.Logger, cfg *config.Server
 	// don't set a superblock and init with a stopped test runner
 	for i, srv := range cs.harness.instances {
 		srv.setSuperblock(nil)
-		srv.runner = ioengine.NewTestRunner(nil, cfg.Engines[i])
+		srv.runner = engine.NewTestRunner(nil, cfg.Engines[i])
 	}
 
 	return cs

@@ -23,7 +23,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/server/ioengine"
+	"github.com/daos-stack/daos/src/control/server/engine"
 )
 
 func testExpectedError(t *testing.T, expected, actual error) {
@@ -42,7 +42,7 @@ func genMinimalConfig() *config.Server {
 		WithNUMAValidator(netdetect.ValidateNUMAStub).
 		WithGetNetworkDeviceClass(getDeviceClassStub).
 		WithEngines(
-			ioengine.NewConfig().
+			engine.NewConfig().
 				WithScmClass("ram").
 				WithScmRamdiskSize(1).
 				WithScmMountPoint("/mnt/daos").
@@ -57,7 +57,7 @@ func genDefaultExpected() *config.Server {
 	hostname, _ := os.Hostname()
 	return genMinimalConfig().
 		WithEngines(
-			ioengine.NewConfig().
+			engine.NewConfig().
 				WithHostname(hostname).
 				WithScmClass("ram").
 				WithScmRamdiskSize(1).
@@ -67,7 +67,7 @@ func genDefaultExpected() *config.Server {
 		)
 }
 
-func cmpArgs(t *testing.T, wantConfig, gotConfig *ioengine.Config) {
+func cmpArgs(t *testing.T, wantConfig, gotConfig *engine.Config) {
 	t.Helper()
 
 	wantArgs, err := wantConfig.CmdLineArgs()
@@ -84,7 +84,7 @@ func cmpArgs(t *testing.T, wantConfig, gotConfig *ioengine.Config) {
 	}
 }
 
-func cmpEnv(t *testing.T, wantConfig, gotConfig *ioengine.Config) {
+func cmpEnv(t *testing.T, wantConfig, gotConfig *engine.Config) {
 	t.Helper()
 
 	wantEnv, err := wantConfig.CmdLineEnv()

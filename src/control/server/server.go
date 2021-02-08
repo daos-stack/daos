@@ -32,7 +32,7 @@ import (
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/server/ioengine"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 	"github.com/daos-stack/daos/src/control/system"
@@ -143,8 +143,8 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	}
 
 	if cfgHasBdev(cfg) {
-		// The config value is intended to be per-ioengine, so we need to adjust
-		// based on the number of ioengines.
+		// The config value is intended to be per-engine, so we need to adjust
+		// based on the number of engines.
 		prepReq.HugePageCount = cfg.NrHugepages * len(cfg.Engines)
 
 		// Perform these checks to avoid even trying a prepare if the system
@@ -198,7 +198,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	}
 	membership := system.NewMembership(log, sysdb)
 	scmProvider := scm.DefaultProvider(log)
-	harness := NewIOEngineHarness(log).WithFaultDomain(faultDomain)
+	harness := NewEngineHarness(log).WithFaultDomain(faultDomain)
 
 	// Create rpcClient for inter-server communication.
 	cliCfg := control.DefaultConfig()
@@ -237,7 +237,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		log.Infof("NOTICE: Detected %d NUMA node(s); %d-server config may not perform as expected", numaCount, len(cfg.Engines))
 	}
 
-	// Create a closure to be used for joining ioengine instances.
+	// Create a closure to be used for joining engine instances.
 	joinInstance := func(ctx context.Context, req *control.SystemJoinReq) (*control.SystemJoinResp, error) {
 		req.SetHostList(cfg.AccessPoints)
 		req.SetSystem(cfg.SystemName)
@@ -277,7 +277,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 			return err
 		}
 
-		srv := NewIOEngineInstance(log, bp, scmProvider, joinInstance, ioengine.NewRunner(log, srvCfg)).
+		srv := NewEngineInstance(log, bp, scmProvider, joinInstance, engine.NewRunner(log, srvCfg)).
 			WithHostFaultDomain(faultDomain)
 		if err := harness.AddInstance(srv); err != nil {
 			return err

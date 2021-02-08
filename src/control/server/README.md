@@ -10,11 +10,11 @@ DAOS I/O Server processes (`daos_engine` binary) are forked
 by the DAOS Control Server (`daos_server` binary) and perform the
 main userspace I/O operations of DAOS.
 [`instance.go`](/src/control/server/instance.go) provides the
-`IOEngineInstance` abstraction and relevant methods.
+`EngineInstance` abstraction and relevant methods.
 
 Underlying abstractions for the control and configuration of
 the I/O Server processes are encapsulated in the
-[`ioengine`](/src/control/server/ioengine) package.
+[`engine`](/src/control/server/engine) package.
 
 ## I/O Server Harness
 
@@ -22,7 +22,7 @@ DAOS I/O Server processes are managed and monitored by the DAOS
 Control Server and logically reside as members of the I/O server
 harness.
 [`harness.go`](/src/control/server/harness.go) provides the
-`IOEngineHarness` abstraction and relevant methods.
+`EngineHarness` abstraction and relevant methods.
 
 ## Communications
 

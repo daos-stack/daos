@@ -93,8 +93,8 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
-			harness := NewIOEngineHarness(log)
-			srv := newTestIOEngine(log, true)
+			harness := NewEngineHarness(log)
+			srv := newTestEngine(log, true)
 
 			if err := harness.AddInstance(srv); err != nil {
 				t.Fatal(err)

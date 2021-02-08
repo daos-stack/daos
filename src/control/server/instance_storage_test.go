@@ -15,7 +15,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/ioengine"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
@@ -26,8 +26,8 @@ func TestIOEngineInstance_MountScmDevice(t *testing.T) {
 
 	var (
 		goodMountPoint = testDir + "/mnt/daos"
-		ramCfg         = &ioengine.Config{
-			Storage: ioengine.StorageConfig{
+		ramCfg         = &engine.Config{
+			Storage: engine.StorageConfig{
 				SCM: storage.ScmConfig{
 					MountPoint:  goodMountPoint,
 					Class:       storage.ScmClassRAM,
@@ -35,8 +35,8 @@ func TestIOEngineInstance_MountScmDevice(t *testing.T) {
 				},
 			},
 		}
-		dcpmCfg = &ioengine.Config{
-			Storage: ioengine.StorageConfig{
+		dcpmCfg = &engine.Config{
+			Storage: engine.StorageConfig{
 				SCM: storage.ScmConfig{
 					MountPoint: goodMountPoint,
 					Class:      storage.ScmClassDCPM,
@@ -47,7 +47,7 @@ func TestIOEngineInstance_MountScmDevice(t *testing.T) {
 	)
 
 	for name, tc := range map[string]struct {
-		ioCfg  *ioengine.Config
+		ioCfg  *engine.Config
 		msCfg  *scm.MockSysConfig
 		expErr error
 	}{
@@ -86,8 +86,8 @@ func TestIOEngineInstance_MountScmDevice(t *testing.T) {
 			expErr: errors.New("mount failed"),
 		},
 		"mount dcpm fails (missing device)": {
-			ioCfg: &ioengine.Config{
-				Storage: ioengine.StorageConfig{
+			ioCfg: &engine.Config{
+				Storage: engine.StorageConfig{
 					SCM: storage.ScmConfig{
 						MountPoint: goodMountPoint,
 						Class:      storage.ScmClassDCPM,
@@ -102,12 +102,12 @@ func TestIOEngineInstance_MountScmDevice(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			if tc.ioCfg == nil {
-				tc.ioCfg = &ioengine.Config{}
+				tc.ioCfg = &engine.Config{}
 			}
 
-			runner := ioengine.NewRunner(log, tc.ioCfg)
+			runner := engine.NewRunner(log, tc.ioCfg)
 			mp := scm.NewMockProvider(log, nil, tc.msCfg)
-			instance := NewIOEngineInstance(log, nil, mp, nil, runner)
+			instance := NewEngineInstance(log, nil, mp, nil, runner)
 
 			gotErr := instance.MountScmDevice()
 			common.CmpErr(t, tc.expErr, gotErr)
@@ -115,13 +115,13 @@ func TestIOEngineInstance_MountScmDevice(t *testing.T) {
 	}
 }
 
-func TestIOEngineInstance_NeedsScmFormat(t *testing.T) {
+func TestEngineInstance_NeedsScmFormat(t *testing.T) {
 	const (
 		goodMountPoint = "/mnt/daos"
 	)
 	var (
-		ramCfg = &ioengine.Config{
-			Storage: ioengine.StorageConfig{
+		ramCfg = &engine.Config{
+			Storage: engine.StorageConfig{
 				SCM: storage.ScmConfig{
 					MountPoint:  goodMountPoint,
 					Class:       storage.ScmClassRAM,
@@ -129,8 +129,8 @@ func TestIOEngineInstance_NeedsScmFormat(t *testing.T) {
 				},
 			},
 		}
-		dcpmCfg = &ioengine.Config{
-			Storage: ioengine.StorageConfig{
+		dcpmCfg = &engine.Config{
+			Storage: engine.StorageConfig{
 				SCM: storage.ScmConfig{
 					MountPoint: goodMountPoint,
 					Class:      storage.ScmClassDCPM,
@@ -141,7 +141,7 @@ func TestIOEngineInstance_NeedsScmFormat(t *testing.T) {
 	)
 
 	for name, tc := range map[string]struct {
-		ioCfg          *ioengine.Config
+		ioCfg          *engine.Config
 		mbCfg          *scm.MockBackendConfig
 		msCfg          *scm.MockSysConfig
 		expNeedsFormat bool
@@ -212,8 +212,8 @@ func TestIOEngineInstance_NeedsScmFormat(t *testing.T) {
 			expErr: errors.New("failed to check mount"),
 		},
 		"check dcpm fails (missing device)": {
-			ioCfg: &ioengine.Config{
-				Storage: ioengine.StorageConfig{
+			ioCfg: &engine.Config{
+				Storage: engine.StorageConfig{
 					SCM: storage.ScmConfig{
 						MountPoint: goodMountPoint,
 						Class:      storage.ScmClassDCPM,
@@ -228,12 +228,12 @@ func TestIOEngineInstance_NeedsScmFormat(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			if tc.ioCfg == nil {
-				tc.ioCfg = &ioengine.Config{}
+				tc.ioCfg = &engine.Config{}
 			}
 
-			runner := ioengine.NewRunner(log, tc.ioCfg)
+			runner := engine.NewRunner(log, tc.ioCfg)
 			mp := scm.NewMockProvider(log, tc.mbCfg, tc.msCfg)
-			instance := NewIOEngineInstance(log, nil, mp, nil, runner)
+			instance := NewEngineInstance(log, nil, mp, nil, runner)
 
 			gotNeedsFormat, gotErr := instance.NeedsScmFormat()
 			common.CmpErr(t, tc.expErr, gotErr)

@@ -18,14 +18,14 @@ import (
 // ctlpb.CtlSvcServer, and is the data container for the service.
 type ControlService struct {
 	StorageControlService
-	harness *IOEngineHarness
+	harness *EngineHarness
 	srvCfg  *config.Server
 	events  *events.PubSub
 }
 
 // NewControlService returns ControlService to be used as gRPC control service
 // datastore. Initialized with sensible defaults and provided components.
-func NewControlService(log logging.Logger, h *IOEngineHarness,
+func NewControlService(log logging.Logger, h *EngineHarness,
 	bp *bdev.Provider, sp *scm.Provider,
 	cfg *config.Server, e *events.PubSub) *ControlService {
 

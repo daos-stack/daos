@@ -27,49 +27,49 @@ const (
 	defaultStartTimeout   = 10 * defaultRequestTimeout
 )
 
-// IOEngineHarness is responsible for managing IOEngine instances.
-type IOEngineHarness struct {
+// EngineHarness is responsible for managing Engine instances.
+type EngineHarness struct {
 	sync.RWMutex
 	log              logging.Logger
-	instances        []*IOEngineInstance
+	instances        []*EngineInstance
 	started          atm.Bool
 	rankReqTimeout   time.Duration
 	rankStartTimeout time.Duration
 	faultDomain      *system.FaultDomain
 }
 
-// NewIOEngineHarness returns an initialized *IOEngineHarness.
-func NewIOEngineHarness(log logging.Logger) *IOEngineHarness {
-	return &IOEngineHarness{
+// NewEngineHarness returns an initialized *EngineHarness.
+func NewEngineHarness(log logging.Logger) *EngineHarness {
+	return &EngineHarness{
 		log:              log,
-		instances:        make([]*IOEngineInstance, 0),
+		instances:        make([]*EngineInstance, 0),
 		started:          atm.NewBool(false),
 		rankReqTimeout:   defaultRequestTimeout,
 		rankStartTimeout: defaultStartTimeout,
 	}
 }
 
-// WithFaultDomain adds a fault domain to the IOEngineHarness.
-func (h *IOEngineHarness) WithFaultDomain(fd *system.FaultDomain) *IOEngineHarness {
+// WithFaultDomain adds a fault domain to the EngineHarness.
+func (h *EngineHarness) WithFaultDomain(fd *system.FaultDomain) *EngineHarness {
 	h.faultDomain = fd
 	return h
 }
 
-// isStarted indicates whether the IOEngineHarness is in a running state.
-func (h *IOEngineHarness) isStarted() bool {
+// isStarted indicates whether the EngineHarness is in a running state.
+func (h *EngineHarness) isStarted() bool {
 	return h.started.Load()
 }
 
-// Instances safely returns harness' IOEngineInstances.
-func (h *IOEngineHarness) Instances() []*IOEngineInstance {
+// Instances safely returns harness' EngineInstances.
+func (h *EngineHarness) Instances() []*EngineInstance {
 	h.RLock()
 	defer h.RUnlock()
 	return h.instances
 }
 
-// FilterInstancesByRankSet returns harness' IOEngineInstances that match any
+// FilterInstancesByRankSet returns harness' EngineInstances that match any
 // of a list of ranks derived from provided rank set string.
-func (h *IOEngineHarness) FilterInstancesByRankSet(ranks string) ([]*IOEngineInstance, error) {
+func (h *EngineHarness) FilterInstancesByRankSet(ranks string) ([]*EngineInstance, error) {
 	h.RLock()
 	defer h.RUnlock()
 
@@ -77,7 +77,7 @@ func (h *IOEngineHarness) FilterInstancesByRankSet(ranks string) ([]*IOEngineIns
 	if err != nil {
 		return nil, err
 	}
-	out := make([]*IOEngineInstance, 0)
+	out := make([]*EngineInstance, 0)
 
 	for _, i := range h.instances {
 		r, err := i.GetRank()
@@ -92,8 +92,8 @@ func (h *IOEngineHarness) FilterInstancesByRankSet(ranks string) ([]*IOEngineIns
 	return out, nil
 }
 
-// AddInstance adds a new IOEngine instance to be managed.
-func (h *IOEngineHarness) AddInstance(srv *IOEngineInstance) error {
+// AddInstance adds a new Engine instance to be managed.
+func (h *EngineHarness) AddInstance(srv *EngineInstance) error {
 	if h.isStarted() {
 		return errors.New("can't add instance to already-started harness")
 	}
@@ -107,7 +107,7 @@ func (h *IOEngineHarness) AddInstance(srv *IOEngineInstance) error {
 }
 
 // CallDrpc calls the supplied dRPC method on a managed I/O server instance.
-func (h *IOEngineHarness) CallDrpc(ctx context.Context, method drpc.Method, body proto.Message) (resp *drpc.Response, err error) {
+func (h *EngineHarness) CallDrpc(ctx context.Context, method drpc.Method, body proto.Message) (resp *drpc.Response, err error) {
 	if !h.isStarted() {
 		return nil, FaultHarnessNotStarted
 	}
@@ -137,7 +137,7 @@ func (h *IOEngineHarness) CallDrpc(ctx context.Context, method drpc.Method, body
 // configured instances' processing loops.
 //
 // Run until harness is shutdown.
-func (h *IOEngineHarness) Start(ctx context.Context, db *system.Database, ps *events.PubSub, cfg *config.Server) error {
+func (h *EngineHarness) Start(ctx context.Context, db *system.Database, ps *events.PubSub, cfg *config.Server) error {
 	if h.isStarted() {
 		return errors.New("can't start: harness already started")
 	}
@@ -184,7 +184,7 @@ func (h *IOEngineHarness) Start(ctx context.Context, db *system.Database, ps *ev
 
 // readyRanks returns rank assignment of configured harness instances that are
 // in a ready state. Rank assignments can be nil.
-func (h *IOEngineHarness) readyRanks() []system.Rank {
+func (h *EngineHarness) readyRanks() []system.Rank {
 	h.RLock()
 	defer h.RUnlock()
 

@@ -22,19 +22,19 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/server/ioengine"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 var (
-	ioCfg = func(t *testing.T, numa int) *ioengine.Config {
-		return ioengine.NewConfig().
+	ioCfg = func(t *testing.T, numa int) *engine.Config {
+		return engine.NewConfig().
 			WithScmClass(storage.ScmClassDCPM.String()).
 			WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", numa)).
 			WithScmDeviceList(fmt.Sprintf("/dev/pmem%d", numa)).
 			WithBdevClass(storage.BdevClassNvme.String())
 	}
-	ioCfgWithSSDs = func(t *testing.T, numa int) *ioengine.Config {
+	ioCfgWithSSDs = func(t *testing.T, numa int) *engine.Config {
 		var pciAddrs []string
 		for _, c := range MockServerScanResp(t, "withSpaceUsage").Nvme.Ctrlrs {
 			if int(c.Socketid) == numa {

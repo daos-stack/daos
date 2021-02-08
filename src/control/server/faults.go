@@ -16,7 +16,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
-	"github.com/daos-stack/daos/src/control/server/ioengine"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -66,9 +66,9 @@ func FaultPoolNvmeTooSmall(reqBytes uint64, targetCount int) *fault.Fault {
 		code.ServerPoolNvmeTooSmall,
 		fmt.Sprintf("requested NVMe capacity (%s / %d) is too small (min %s per target)",
 			humanize.Bytes(reqBytes), targetCount,
-			humanize.IBytes(ioengine.NvmeMinBytesPerTarget)),
+			humanize.IBytes(engine.NvmeMinBytesPerTarget)),
 		fmt.Sprintf("NVMe capacity should be larger than %s",
-			humanize.Bytes(ioengine.NvmeMinBytesPerTarget*uint64(targetCount))),
+			humanize.Bytes(engine.NvmeMinBytesPerTarget*uint64(targetCount))),
 	)
 }
 
@@ -77,9 +77,9 @@ func FaultPoolScmTooSmall(reqBytes uint64, targetCount int) *fault.Fault {
 		code.ServerPoolScmTooSmall,
 		fmt.Sprintf("requested SCM capacity (%s / %d) is too small (min %s per target)",
 			humanize.Bytes(reqBytes), targetCount,
-			humanize.IBytes(ioengine.ScmMinBytesPerTarget)),
+			humanize.IBytes(engine.ScmMinBytesPerTarget)),
 		fmt.Sprintf("SCM capacity should be larger than %s",
-			humanize.Bytes(ioengine.ScmMinBytesPerTarget*uint64(targetCount))),
+			humanize.Bytes(engine.ScmMinBytesPerTarget*uint64(targetCount))),
 	)
 }
 

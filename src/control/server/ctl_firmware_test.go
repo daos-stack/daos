@@ -19,7 +19,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/server/ioengine"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
@@ -805,10 +805,10 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 			cfg := config.DefaultServer()
 			cs := mockControlService(t, log, cfg, tc.bmbc, tc.smbc, nil)
 			for i := 0; i < 2; i++ {
-				runner := ioengine.NewTestRunner(&ioengine.TestRunnerConfig{
+				runner := engine.NewTestRunner(&engine.TestRunnerConfig{
 					Running: atm.NewBool(tc.serversRunning),
-				}, ioengine.NewConfig())
-				instance := NewIOEngineInstance(log, nil, nil, nil, runner)
+				}, engine.NewConfig())
+				instance := NewEngineInstance(log, nil, nil, nil, runner)
 				if !tc.noRankEngines {
 					instance._superblock = &Superblock{}
 					instance._superblock.ValidRank = true
