@@ -16,6 +16,7 @@ class RebuildDeleteObjects(RebuildTestBase):
 
     :avocado: recursive
     """
+    # pylint: disable=too-many-ancestors
 
     def __init__(self, *args, **kwargs):
         """Initialize a RebuildDeleteObjects object."""
@@ -77,7 +78,7 @@ class RebuildDeleteObjects(RebuildTestBase):
         Use Cases:
             foo
 
-        :avocado: tags=all,medium,full_regression,rebuild,rebuilddeleteobject
+        :avocado: tags=all,large,full_regression,rebuild,rebuilddeleteobject
         """
         self.punch_type = "object"
         self.execute_rebuild_test()
@@ -94,7 +95,7 @@ class RebuildDeleteObjects(RebuildTestBase):
         Use Cases:
             foo
 
-        :avocado: tags=all,medium,full_regression,rebuild,rebuilddeleterecord
+        :avocado: tags=all,large,full_regression,rebuild,rebuilddeleterecord
         """
         self.punch_type = "record"
         self.execute_rebuild_test()

@@ -54,6 +54,7 @@ pool:
     nvme_size: 500G
     svcn: 1
     control_method: dmg
+    pool_query_timeout: 30
 container:
     type: POSIX
     control_method: daos

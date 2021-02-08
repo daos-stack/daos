@@ -18,15 +18,12 @@ testparams:
   ranks:
     rank_to_kill: 3
 pool:
-  createmode:
-    mode: 146
-  createset:
-    group: daos_server
-  createsize:
-    scm_size: 30000000000
-  createsvc:
-    svcn: 1
+  mode: 146
+  name: daos_server
+  scm_size: 30000000000
+  svcn: 1
   control_method: dmg
+  pool_query_timeout: 30
 ior:
     client_processes:
         np_8:
