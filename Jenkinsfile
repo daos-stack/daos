@@ -936,7 +936,7 @@ pipeline {
                 stage('Build on Ubuntu 20.04') {
                     when {
                         beforeAgent true
-                        expression { ! skip_build_on_landing_branch() }
+                        expression { ! skip_build_on_ubuntu_clang() }
                     }
                     agent {
                         dockerfile {
@@ -970,7 +970,7 @@ pipeline {
                 stage('Build on Ubuntu 20.04 with Clang') {
                     when {
                         beforeAgent true
-                        expression { ! skip_build_on_ubuntu_clang() }
+
                     }
                     agent {
                         dockerfile {
