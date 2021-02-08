@@ -1060,8 +1060,10 @@ get_server_config(char *host, char *server_config_file)
 	FILE *fp = popen(command, "r");
 
 	print_message("Command %s", command);
-	if (fp == NULL)
+	if (fp == NULL) {
+		D_FREE(dpid);
 		return -DER_INVAL;
+	}
 
 	while ((read = getline(&line, &len, fp)) != -1) {
 		print_message("line %s", line);
