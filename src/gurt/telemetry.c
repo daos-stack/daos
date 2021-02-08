@@ -33,8 +33,14 @@ uint64_t		d_tm_shmem_free;
 /** Points to the base address of the free shared memory */
 uint8_t			*d_tm_shmem_idx;
 
+/** Shared memory ID for the segment of shared memory created by the producer */
+int			d_tm_shmid;
+
 /** Enables metric read/write serialization */
-bool			d_tm_serialization_enabled;
+bool			d_tm_serialization;
+
+/** Enables shared memory retention on process exit */
+bool			d_tm_retain_shmem;
 
 /**
  * Returns a pointer to the root node for the given shared memory segment
@@ -214,13 +220,20 @@ failure:
  *				on the same machine
  * \param[in]	mem_size	Size in bytes of the shared memory segment that
  *				is allocated
+ * \param[in]	flags		Optional flags to control initialization.
+ *				Use D_TM_SERIALIZATION to enable read/write
+ *				synchronization of individual nodes
+ *				Use D_TM_RETAIN_SHMEM to retain the shared
+ *				memory segment created for these metrics after
+ *				this process exits.
  *
  * \return		D_TM_SUCCESS		Success
  *			-DER_NO_SHMEM		Out of shared memory
  *			-DER_EXCEEDS_PATH_LEN	Root node name exceeds path len
+ *			-DER_INVAL		Invalid \a flag(s)
  */
 int
-d_tm_init(int id, uint64_t mem_size)
+d_tm_init(int id, uint64_t mem_size, int flags)
 {
 	uint64_t	*base_addr = NULL;
 	char		tmp[D_TM_MAX_NAME_LEN];
@@ -229,6 +242,21 @@ d_tm_init(int id, uint64_t mem_size)
 	if ((d_tm_shmem_root != NULL) && (d_tm_root != NULL)) {
 		D_INFO("d_tm_init already completed for id %d\n", id);
 		return rc;
+	}
+
+	if ((flags & ~(D_TM_SERIALIZATION | D_TM_RETAIN_SHMEM)) != 0) {
+		rc = -DER_INVAL;
+		goto failure;
+	}
+
+	if (flags & D_TM_SERIALIZATION) {
+		d_tm_serialization = true;
+		D_INFO("Serialization enabled for id %d\n", id);
+	}
+
+	if (flags & D_TM_RETAIN_SHMEM) {
+		d_tm_retain_shmem = true;
+		D_INFO("Retaining shared memory for id %d\n", id);
 	}
 
 	d_tm_shmem_root = d_tm_allocate_shared_memory(id, mem_size);
@@ -278,54 +306,31 @@ failure:
 }
 
 /**
- * Initialize an instance of the telemetry and metrics API for a client
- * application process.  By design, this initialization function enables
- * read/write serialization which provides client thread safety when accessing
- * the same metrics asynchronously.
- *
- * \param[in]	client_id	Identifies the client process amongst others on
- *				the same machine
- * \param[in]	mem_size	Size in bytes of the shared memory segment that
- *				is allocated
- *
- * \return		D_TM_SUCCESS		Success
- *			-DER_NO_SHMEM		Out of shared memory
- *			-DER_EXCEEDS_PATH_LEN	Root node name exceeds path len
- */
-int
-d_tm_init_client(int client_id, uint64_t mem_size)
-{
-	int	rc = 0;
-
-	d_tm_serialization_enabled = true;
-	rc = d_tm_init(client_id, mem_size);
-	return rc;
-}
-
-/**
  * Releases resources claimed by init
- * Currently, only detaches from the shared memory to keep the memory and the
- * shared mutex objects available for the client to read data even when the
- * producer has gone offline.
  */
 void d_tm_fini(void)
 {
-	if (d_tm_shmem_root != NULL) {
-		/**
-		 * If we decide to free the mutex objects on shutdown for the
-		 * nodes that have them, call:
-		 * d_tm_free_node(d_tm_shmem_root, d_tm_root);
-		 *
-		 * Destroying the mutex objects on shutdown makes them
-		 * unavailable to a client process that may want to read the
-		 * data.  To remedy that, can implement a reference count that
-		 * monitors the number of users of the shared memory segment
-		 * and only frees the resources if it's the last one using it.
-		 */
-		shmdt(d_tm_shmem_root);
-		d_tm_shmem_root = NULL;
-		d_tm_root = NULL;
+	int	rc = 0;
+
+	if (d_tm_shmem_root == NULL)
+		return;
+
+	shmdt(d_tm_shmem_root);
+	if (!d_tm_retain_shmem) {
+		rc = shmctl(d_tm_shmid, IPC_RMID, NULL);
+		if (rc < 0) {
+			D_ERROR("Unable to remove shared memory segment. " \
+				"rc = %d\n", rc);
+		}
+		d_tm_shmid = 0;
 	}
+
+	d_tm_serialization = false;
+	d_tm_retain_shmem = false;
+	d_tm_shmem_root = NULL;
+	d_tm_root = NULL;
+	d_tm_shmem_idx = NULL;
+	d_tm_shmid = 0;
 }
 
 /**
@@ -344,7 +349,7 @@ d_tm_free_node(uint64_t *shmem_root, struct d_tm_node_t *node)
 	if (node == NULL)
 		return;
 
-	if (!d_tm_serialization_enabled)
+	if (!d_tm_serialization)
 		return;
 
 	if (node->dtn_type != D_TM_DIRECTORY) {
@@ -1657,7 +1662,7 @@ d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
 	strncpy(temp->dtn_metric->dtm_lng_desc, lng_desc, buff_len);
 
 	temp->dtn_protect = false;
-	if (d_tm_serialization_enabled && (temp->dtn_type != D_TM_DIRECTORY)) {
+	if (d_tm_serialization && (temp->dtn_type != D_TM_DIRECTORY)) {
 		rc = pthread_mutexattr_init(&mattr);
 		if (rc != 0) {
 			D_ERROR("pthread_mutexattr_init failed: rc = %d\n", rc);
@@ -2177,15 +2182,14 @@ uint64_t *
 d_tm_allocate_shared_memory(int srv_idx, size_t mem_size)
 {
 	key_t	key;
-	int	shmid;
 
 	/** create a unique key for this instance */
 	key = D_TM_SHARED_MEMORY_KEY + srv_idx;
-	shmid = shmget(key, mem_size, IPC_CREAT | 0660);
-	if (shmid < 0)
+	d_tm_shmid = shmget(key, mem_size, IPC_CREAT | 0660);
+	if (d_tm_shmid < 0)
 		return NULL;
 
-	return (uint64_t *)shmat(shmid, NULL, 0);
+	return (uint64_t *)shmat(d_tm_shmid, NULL, 0);
 }
 
 /**
@@ -2201,15 +2205,14 @@ uint64_t *
 d_tm_get_shared_memory(int srv_idx)
 {
 	key_t	key;
-	int	shmid;
 
 	/** create a unique key for this instance */
 	key = D_TM_SHARED_MEMORY_KEY + srv_idx;
-	shmid = shmget(key, 0, 0);
-	if (shmid < 0)
+	d_tm_shmid = shmget(key, 0, 0);
+	if (d_tm_shmid < 0)
 		return NULL;
 
-	return (uint64_t *)shmat(shmid, NULL, 0);
+	return (uint64_t *)shmat(d_tm_shmid, NULL, 0);
 }
 
 /**

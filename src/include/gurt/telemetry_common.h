@@ -30,6 +30,12 @@ enum {
 	D_TM_CLOCK_THREAD_CPUTIME	= 0x100,
 };
 
+enum {
+	D_TM_SERVER_PROCESS		= 0x000,
+	D_TM_SERIALIZATION		= 0x001,
+	D_TM_RETAIN_SHMEM		= 0x002,
+};
+
 struct d_tm_metric_t {
 	union data {
 		uint64_t value;

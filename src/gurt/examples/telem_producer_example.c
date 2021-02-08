@@ -311,7 +311,8 @@ main(int argc, char **argv)
 	 * Call d_tm_init() only once per process,
 	 * i.e. in iosrv/init.c/server_init()
 	 */
-	rc = d_tm_init(simulated_srv_idx, D_TM_SHARED_MEMORY_SIZE);
+	rc = d_tm_init(simulated_srv_idx, D_TM_SHARED_MEMORY_SIZE,
+		       D_TM_RETAIN_SHMEM);
 	if (rc != 0)
 		goto failure;
 
