@@ -80,13 +80,11 @@ class RebuildWidelyStriped(MdtestBase):
         # Kill rank[6] and wait for rebuild to complete
         self.server_managers[0].stop_ranks([rank[0]], self.d_log, force=True)
         self.pool.wait_for_rebuild(False, interval=1)
-        # destroy container
-        self.container.destroy()
 
 
         # create 2nd container
         self.add_container(self.pool)
-        # start 1st mdtest job
+        # start 2nd mdtest job
         thread = threading.Thread(target=self.execute_mdtest)
         thread.start()
         time.sleep(3)
@@ -98,13 +96,10 @@ class RebuildWidelyStriped(MdtestBase):
         # wait for mdtest to complete
         thread.join()
 
-        # destroy container and pool
-        self.container.destroy()
-
-        # re-create the pool and container
+        # create 3rd container
         self.add_container(self.pool)
 
-        # start 2nd mdtest job
+        # start 3rd mdtest job
         thread = threading.Thread(target=self.execute_mdtest)
         thread.start()
         time.sleep(3)
@@ -114,3 +109,6 @@ class RebuildWidelyStriped(MdtestBase):
         self.pool.wait_for_rebuild(False, interval=1)
         # wait for mdtest to complete
         thread.join()
+
+        # try to re-create container and see if it can be created
+        self.add_container(self.pool)
