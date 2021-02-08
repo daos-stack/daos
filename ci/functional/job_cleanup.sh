@@ -26,7 +26,7 @@ done
 
 arts="$arts$(ls ./*daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
 arts="$arts$(ls -d \
-   install/lib/daos/TESTING/ftest/avocado/job-results/* 2>/dev/null)" && \
+   install/lib/daos/TESTING/ftest/avocado/job-results/* | grep -v 'latest' 2>/dev/null)" && \
   arts="$arts"$'\n'
 if [ -n "$arts" ]; then
   # shellcheck disable=SC2046,SC2086
