@@ -23,19 +23,12 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	D_ASSERT(ie->ie_parent);
 	D_ASSERT(ie->ie_dfs);
 
-	/* Set the caching attributes of this entry, but do not allow
-	 * any caching on fifos.
-	 */
-
-	if (S_ISFIFO(ie->ie_stat.st_mode)) {
-		if (!is_new) {
-			ie->ie_stat.st_mode &= ~S_IFIFO;
-			ie->ie_stat.st_mode |= S_IFDIR;
-		}
-	} else {
-		entry.attr_timeout = ie->ie_dfs->dfs_attr_timeout;
+	/* Do not cache directly attributes as this does not work with uns */
+	if (!S_ISDIR(ie->ie_stat.st_mode))
 		entry.entry_timeout = ie->ie_dfs->dfs_attr_timeout;
-	}
+
+	/* Set the caching attributes of this entry */
+	entry.attr_timeout = ie->ie_dfs->dfs_attr_timeout;
 
 	if (ie->ie_stat.st_ino == 0) {
 		rc = dfs_obj2id(ie->ie_obj, &ie->ie_oid);
@@ -364,7 +357,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_name[NAME_MAX] = '\0';
 	atomic_store_relaxed(&ie->ie_ref, 1);
 
-	if (S_ISFIFO(ie->ie_stat.st_mode) && attr_len) {
+	if (S_ISDIR(ie->ie_stat.st_mode) && attr_len) {
 		rc = check_for_uns_ep(fs_handle, ie, out, attr_len);
 		DFUSE_TRA_DEBUG(ie,
 				"check_for_uns_ep() returned %d", rc);

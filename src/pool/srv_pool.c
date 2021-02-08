@@ -681,7 +681,6 @@ ds_pool_svc_destroy(const uuid_t pool_uuid)
 	d_rank_list_t	excluded = { 0 };
 	int		rc;
 
-	ds_rebuild_leader_stop(pool_uuid, -1);
 	rc = ds_pool_get_ranks(pool_uuid, MAP_RANKS_DOWN, &excluded);
 	if (rc)
 		return rc;
@@ -1271,9 +1270,6 @@ pool_svc_step_down_cb(struct ds_rsvc *rsvc)
 static void
 pool_svc_drain_cb(struct ds_rsvc *rsvc)
 {
-	struct pool_svc *svc = pool_svc_obj(rsvc);
-
-	ds_rebuild_leader_stop(svc->ps_uuid, -1);
 }
 
 static int
@@ -3963,7 +3959,7 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 		 * operation to garbage collect any unreachable data moved
 		 * during reintegration/addition
 		 */
-		rc = ds_rebuild_schedule(pool_uuid, map_version, tgts,
+		rc = ds_rebuild_schedule(svc->ps_pool, map_version, tgts,
 					 RB_OP_RECLAIM);
 		if (rc != 0) {
 			D_ERROR("failed to schedule reclaim rc: "DF_RC"\n",
@@ -4344,8 +4340,7 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 	D_DEBUG(DF_DSMS, "map ver %u/%u\n", map_version ? *map_version : -1,
 		tgt_map_ver);
 	if (tgt_map_ver != 0) {
-		rc = ds_rebuild_schedule(pool_uuid, tgt_map_ver, &target_list,
-					 op);
+		rc = ds_rebuild_schedule(pool, tgt_map_ver, &target_list, op);
 		if (rc != 0) {
 			D_ERROR("rebuild fails rc: "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out, rc);
@@ -4489,7 +4484,7 @@ pool_extend_internal(uuid_t pool_uuid, struct rsvc_hint *hint,
 	}
 
 	/* Schedule an extension rebuild for those targets */
-	rc = ds_rebuild_schedule(pool_uuid, *map_version_p, &tgts,
+	rc = ds_rebuild_schedule(svc->ps_pool, *map_version_p, &tgts,
 				 RB_OP_EXTEND);
 	if (rc != 0) {
 		D_ERROR("failed to schedule extend rc: "DF_RC"\n", DP_RC(rc));
@@ -5342,6 +5337,7 @@ is_container_from_srv(uuid_t pool_uuid, uuid_t coh_uuid)
 	struct ds_pool	*pool;
 	uuid_t		hdl_uuid;
 	int		rc;
+	bool		result = false;
 
 	pool = ds_pool_lookup(pool_uuid);
 	if (pool == NULL) {
@@ -5350,14 +5346,22 @@ is_container_from_srv(uuid_t pool_uuid, uuid_t coh_uuid)
 		return false;
 	}
 
-	rc = ds_pool_iv_srv_hdl_fetch(pool, NULL, &hdl_uuid);
-	ds_pool_put(pool);
-	if (rc) {
-		D_ERROR(DF_UUID" fetch srv hdl: %d\n", DP_UUID(pool_uuid), rc);
-		return false;
+	if (uuid_compare(coh_uuid, pool->sp_srv_cont_hdl) == 0) {
+		/* Compare if the handle uuid is from another server */
+		result = true;
+		D_GOTO(output, result);
 	}
 
-	return !uuid_compare(coh_uuid, hdl_uuid);
+	rc = ds_pool_iv_srv_hdl_fetch_non_sys(pool, &hdl_uuid, NULL);
+	if (rc) {
+		D_ERROR(DF_UUID" fetch srv hdl: %d\n", DP_UUID(pool_uuid), rc);
+		D_GOTO(output, result);
+	}
+
+	result = !uuid_compare(coh_uuid, hdl_uuid);
+output:
+	ds_pool_put(pool);
+	return result;
 }
 
 bool
