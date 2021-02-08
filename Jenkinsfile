@@ -1044,8 +1044,7 @@ pipeline {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.leap.15'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(qb: quickbuild(),
-                                                                deps_build:true) +
+                            additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
                                                 " -t ${sanitized_JOB_NAME}-leap15 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quick_build_deps('leap15') + '"' +
@@ -1055,8 +1054,7 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallel_build(),
                                    stash_files: 'ci/test_files_to_stash.txt',
-                                   scons_args: scons_faults_args() + " PREFIX=/opt/daos",
-                                   build_deps: "no"
+                                   scons_args: scons_faults_args()
                     }
                     post {
                         always {
