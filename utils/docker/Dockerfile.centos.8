@@ -176,7 +176,7 @@ RUN if [ "x$NOBUILD" = "x" ] ; then \
 # Build java and hadoop bindings
 RUN if [ "x$NOBUILD" = "x" ] ; then \
     pushd src/client/java && \
-    mvn clean install -T 1C -DskipITs -Ddaos.install.path=/opt/daos && \
+    mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos && \
     popd; fi
 
 # Remove local copy
