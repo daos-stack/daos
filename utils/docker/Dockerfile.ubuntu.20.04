@@ -87,9 +87,9 @@ COPY utils/sl utils/sl
 COPY utils/build.config utils/
 RUN ln -s utils/sl site_scons
 
-RUN [ "$DAOS_DEPS_BUILD" == "yes" ] && \
-    scons --build-deps=yes install PREFIX=/opt/daos --deps-only && \
-    /bin/rm -rf build *.gz
+RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
+    (scons --build-deps=yes install PREFIX=/opt/daos --deps-only && \
+    /bin/rm -rf build *.gz)
 
 # copy DAOS tree
 WORKDIR /home/daos
@@ -99,10 +99,10 @@ COPY src src
 RUN ln -s utils/sl site_scons
 
 # Build DAOS & dependencies
-RUN [ "$DAOS_BUILD" == "yes" ] && \
-    scons -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER && \
+RUN [ "$DAOS_BUILD" != "yes" ] || \
+    (scons -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER && \
     /bin/rm -rf build && \
-    cp -r utils/config/examples /opt/daos
+    cp -r utils/config/examples /opt/daos)
 
 # Set environment variables
 ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:$LD_LIBRARY_PATH
@@ -111,7 +111,7 @@ ENV FI_SOCKETS_MAX_CONN_RETRY=1
 
 # Build java and hadoop bindings
 WORKDIR /home/daos/src/client/java
-RUN [ "$DAOS_JAVA_BUILD" == "yes" ] && \
+RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
     mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
 WORKDIR /home/daos
 
