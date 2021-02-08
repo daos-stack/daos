@@ -89,6 +89,8 @@ create_entry(struct dfuse_projection_info *fs_handle,
 	     struct fuse_entry_param *entry,
 	     dfs_obj_t *obj,
 	     char *name,
+	     char *attr,
+	     daos_size_t attr_len,
 	     d_list_t **rlinkp)
 {
 	struct dfuse_inode_entry	*ie;
@@ -120,22 +122,11 @@ create_entry(struct dfuse_projection_info *fs_handle,
 		entry->attr.st_uid = ie->ie_stat.st_uid;
 	}
 
-	if (S_ISFIFO(ie->ie_stat.st_mode)) {
-		char		str[DUNS_MAX_XATTR_LEN];
-		daos_size_t	str_len = DUNS_MAX_XATTR_LEN;
-
-		rc = dfs_getxattr(ie->ie_dfs->dfs_ns, ie->ie_obj,
-				  DUNS_XATTR_NAME, &str, &str_len);
-
-		if (rc == ENODATA)
-			goto no_uns;
-		if (rc)
-			D_GOTO(out, rc);
-
-		rc = check_for_uns_ep(fs_handle, ie, (char *)&str, str_len);
+	if (S_ISDIR(ie->ie_stat.st_mode) && attr_len) {
+		rc = check_for_uns_ep(fs_handle, ie, attr, attr_len);
 		DFUSE_TRA_DEBUG(ie,
 				"check_for_uns_ep() returned %d", rc);
-		if (rc != 0 && rc != EPERM)
+		if (rc != 0)
 			D_GOTO(out, rc);
 		rc = 0;
 		ie->ie_stat.st_mode &= ~S_IFIFO;
@@ -143,8 +134,6 @@ create_entry(struct dfuse_projection_info *fs_handle,
 		entry->attr.st_mode = ie->ie_stat.st_mode;
 		entry->attr.st_ino = ie->ie_stat.st_ino;
 	}
-
-no_uns:
 
 	entry->generation = 1;
 	entry->ino = entry->attr.st_ino;
@@ -342,6 +331,11 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 			dfs_obj_t			*obj;
 			size_t				written;
 
+			char				*attr_name = DUNS_XATTR_NAME;
+			char				out[DUNS_MAX_XATTR_LEN];
+			char				*outp = &out[0];
+			daos_size_t			attr_len = DUNS_MAX_XATTR_LEN;
+
 			D_ASSERT(dre->dre_offset != 0);
 
 			oh->doh_dre_index += 1;
@@ -351,10 +345,16 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 					dre->dre_next_offset,
 					dre->dre_name);
 
-			rc = dfs_lookup_rel(oh->doh_dfs, oh->doh_obj,
-					    dre->dre_name, O_RDONLY, &obj,
-					    &stbuf.st_mode,
-					    plus ? &stbuf : NULL);
+			if (plus)
+				rc = dfs_lookupx(oh->doh_dfs, oh->doh_obj,
+						 dre->dre_name, O_RDONLY, &obj,
+						 &stbuf.st_mode, &stbuf,
+						 1, &attr_name, (void **)&outp,
+						 &attr_len);
+			else
+				rc = dfs_lookup_rel(oh->doh_dfs, oh->doh_obj,
+						    dre->dre_name, O_RDONLY, &obj,
+						&stbuf.st_mode, NULL);
 			if (rc == ENOENT) {
 				DFUSE_TRA_DEBUG(oh, "File does not exist");
 				continue;
@@ -380,6 +380,8 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 						  &entry,
 						  obj,
 						  dre->dre_name,
+						  attr_name,
+						  attr_len,
 						  &rlink);
 				if (rc != 0)
 					D_GOTO(reply, rc);
