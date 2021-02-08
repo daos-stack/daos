@@ -15,6 +15,7 @@ ARG UID=1000
 # Install basic tools to build DAOS
 RUN yum clean all && yum -y install epel-release dnf-plugins-core &&	\
     dnf config-manager --set-enabled powertools &&			\
+    yum -y upgrade &&							\
     yum -y install							\
 	boost-devel clang-analyzer cmake CUnit-devel doxygen file flex	\
 	gcc gcc-c++ git golang graphviz libaio-devel			\

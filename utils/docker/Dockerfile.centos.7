@@ -51,6 +51,7 @@ ARG UID=1000
 # that come from the core repo.
 # Clean up any repos afterwards to save space.
 RUN yum clean all && yum -y install epel-release &&			\
+    yum -y upgrade &&							\
     yum -y install							\
 	boost-devel clang-analyzer cmake CUnit-devel doxygen file flex	\
 	gcc gcc-c++ git golang graphviz lcov				\
@@ -177,7 +178,8 @@ RUN if [ "x$BULLSEYE" != "x" ]; then \
 
 # force an upgrade to get any newly built RPMs
 ARG CACHEBUST=1
-RUN yum -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury
+RUN yum -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
+	yum clean all
 
 # set NOBUILD to disable build
 ARG NOBUILD=no
