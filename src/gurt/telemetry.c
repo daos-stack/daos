@@ -1703,8 +1703,7 @@ failure:
 /**
  * Client function to read the specified counter.  If the node is provided,
  * that pointer is used for the read.  Otherwise, a lookup by the metric name
- * is performed.  Access to the data is guarded by the use of the shared
- * mutex for this specific node.
+ * is performed.
  *
  * \param[in,out]	val		The value of the counter is stored here
  * \param[in]		shmem_root	Pointer to the shared memory segment
@@ -1753,8 +1752,7 @@ d_tm_get_counter(uint64_t *val, uint64_t *shmem_root, struct d_tm_node_t *node,
 /**
  * Client function to read the specified timestamp.  If the node is provided,
  * that pointer is used for the read.  Otherwise, a lookup by the metric name
- * is performed.  Access to the data is guarded by the use of the shared
- * mutex for this specific node.
+ * is performed.
  *
  * \param[in,out]	val		The value of the timestamp is stored
  *					here
@@ -1804,8 +1802,7 @@ d_tm_get_timestamp(time_t *val, uint64_t *shmem_root, struct d_tm_node_t *node,
 /**
  * Client function to read the specified high resolution timer.  If the node is
  * provided, that pointer is used for the read.  Otherwise, a lookup by the
- * metric name is performed.  Access to the data is guarded by the use of the
- * mutex semaphore for this specific node.
+ * metric name is performed.
  *
  * \param[in,out]	tms		The value of the timer is stored here
  * \param[in]		shmem_root	Pointer to the shared memory segment
@@ -1856,8 +1853,7 @@ d_tm_get_timer_snapshot(struct timespec *tms, uint64_t *shmem_root,
 /**
  * Client function to read the specified duration.  If the node is provided,
  * that pointer is used for the read.  Otherwise, a lookup by the metric name
- * is performed.  Access to the data is guarded by the use of the shared
- * mutex for this specific node.
+ * is performed.
  *
  * \param[in,out]	val		The value of the duration is stored here
  * \param[in]		shmem_root	Pointer to the shared memory segment
@@ -1907,8 +1903,7 @@ d_tm_get_duration(struct timespec *tms, uint64_t *shmem_root,
 /**
  * Client function to read the specified gauge.  If the node is provided,
  * that pointer is used for the read.  Otherwise, a lookup by the metric name
- * is performed.  Access to the data is guarded by the use of the shared
- * mutex for this specific node.
+ * is performed.
  *
  * \param[in,out]	val		The value of the gauge is stored here
  * \param[in]		shmem_root	Pointer to the shared memory segment
@@ -1957,9 +1952,8 @@ d_tm_get_gauge(uint64_t *val, uint64_t *shmem_root, struct d_tm_node_t *node,
 /**
  * Client function to read the metadata for the specified metric.  If the node
  * is provided, that pointer is used for the read.  Otherwise, a lookup by the
- * metric name is performed.  Access to the data is guarded by the use of the
- * shared mutex for this specific node.  Memory is allocated for the
- * \a sh_desc and \a lng_desc and should be freed by the caller.
+ * metric name is performed.  Memory is allocated for the \a sh_desc and
+ * \a lng_desc and should be freed by the caller.
  *
  * \param[in,out]	sh_desc		Memory is allocated and the short
  *					description is copied here
