@@ -31,4 +31,6 @@ nlt*
 
 # Editor temporary save files.
 **/*~
+**/*.orig
+**/*.rej
 **/#*#
