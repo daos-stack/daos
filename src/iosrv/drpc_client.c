@@ -143,6 +143,7 @@ out_uri:
 int
 ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 {
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Srv__GetPoolSvcReq	gps_req = SRV__GET_POOL_SVC_REQ__INIT;
 	Srv__GetPoolSvcResp	*gps_resp = NULL;
 	Drpc__Call		*dreq;
@@ -192,9 +193,12 @@ ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 		D_GOTO(out_dresp, rc = -DER_IO);
 	}
 
-	gps_resp = srv__get_pool_svc_resp__unpack(
-			NULL, dresp->body.len, dresp->body.data);
-	if (gps_resp == NULL) {
+	gps_resp = srv__get_pool_svc_resp__unpack(&alloc.alloc,
+						  dresp->body.len,
+						  dresp->body.data);
+	if (alloc.oom) {
+		D_GOTO(out_dresp, rc = -DER_NOMEM);
+	} else if (gps_resp == NULL) {
 		D_ERROR("failed to unpack resp (get pool svc)\n");
 		D_GOTO(out_dresp, rc = -DER_NOMEM);
 	}

@@ -2191,6 +2191,7 @@ cont_status_check(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 		iv_entry->dpe_val = entry->dpe_val;
 		rc = cont_iv_prop_update(pool->sp_iv_ns, in->cqi_op.ci_uuid,
 					 iv_prop);
+		daos_prop_free(iv_prop);
 		if (rc)
 			D_ERROR(DF_CONT": iv_prop_update failed, "DF_RC"\n",
 				DP_CONT(cont->c_svc->cs_pool_uuid,
