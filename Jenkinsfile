@@ -774,8 +774,7 @@ pipeline {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
                                          id: "analysis-gcc-centos7",
-                                         tools: [ gcc4(pattern: 'centos7-gcc-build.log'),
-                                                  cppCheck(pattern: 'centos7-gcc-build.log') ],
+                                         tools: [ gcc4(pattern: 'centos7-gcc-build.log')],
                                          filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
                                                     excludeFile('_build\\.external\\/.*') ]
                         }
@@ -819,8 +818,7 @@ pipeline {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
                                          id: "analysis-covc-centos7",
-                                         tools: [ gcc4(pattern: 'centos7-covc-build.log'),
-                                                  cppCheck(pattern: 'centos7-covc-build.log') ],
+                                         tools: [ gcc4(pattern: 'centos7-covc-build.log')],
                                          filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
                                                     excludeFile('_build\\.external\\/.*') ]
                         }
@@ -861,8 +859,7 @@ pipeline {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
                                          id: "analysis-gcc-centos7-debug",
-                                         tools: [ gcc4(pattern: 'centos7-gcc-debug-build.log'),
-                                                  cppCheck(pattern: 'centos7-gcc-debug-build.log') ],
+                                         tools: [ gcc4(pattern: 'centos7-gcc-debug-build.log')],
                                          filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
                                                    excludeFile('_build\\.external\\/.*') ]
                         }
@@ -903,8 +900,7 @@ pipeline {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
                                          id: "analysis-gcc-centos7-release",
-                                         tools: [ gcc4(pattern: 'centos7-gcc-release-build.log'),
-                                                  cppCheck(pattern: 'centos7-gcc-release-build.log') ],
+                                         tools: [ gcc4(pattern: 'centos7-gcc-release-build.log')],
                                          filters: [excludeFile('.*\\/_build\\.external\\/.*'),
                                                    excludeFile('_build\\.external\\/.*')]
                         }
@@ -945,8 +941,7 @@ pipeline {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
                                          id: "analysis-centos7-clang",
-                                         tools: [ clang(pattern: 'centos7-clang-build.log'),
-                                                  cppCheck(pattern: 'centos7-clang-build.log') ],
+                                         tools: [ clang(pattern: 'centos7-clang-build.log')],
                                          filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
                                                     excludeFile('_build\\.external\\/.*') ]
                         }
@@ -984,8 +979,7 @@ pipeline {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
                                          id: "analysis-ubuntu20",
-                                         tools: [ gcc4(pattern: 'ubuntu20.04-gcc-build.log'),
-                                                  cppCheck(pattern: 'ubuntu20.04-gcc-build.log') ],
+                                         tools: [ gcc4(pattern: 'ubuntu20.04-gcc-build.log')],
                                          filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
                                                     excludeFile('_build\\.external\\/.*') ]
                         }
@@ -1023,8 +1017,7 @@ pipeline {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
                                          id: "analysis-ubuntu20-clang",
-                                         tools: [ clang(pattern: 'ubuntu20.04-clang-build.log'),
-                                                  cppCheck(pattern: 'ubuntu20.04-clang-build.log') ],
+                                         tools: [ clang(pattern: 'ubuntu20.04-clang-build.log')],
                                          filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
                                                     excludeFile('_build\\.external\\/.*') ]
                         }
@@ -1049,7 +1042,8 @@ pipeline {
                         dockerfile {
                             filename 'Dockerfile.leap.15'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
+                            additionalBuildArgs dockerBuildArgs(qb: quickbuild(),
+			                                        deps_build:true) +
                                                 " -t ${sanitized_JOB_NAME}-leap15 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quick_build_deps('leap15') + '"' +
@@ -1066,8 +1060,7 @@ pipeline {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
                                          id: "analysis-gcc-leap15",
-                                         tools: [ gcc4(pattern: 'leap15-gcc-build.log'),
-                                                  cppCheck(pattern: 'leap15-gcc-build.log') ],
+                                         tools: [ gcc4(pattern: 'leap15-gcc-build.log')],
                                          filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
                                                     excludeFile('_build\\.external\\/.*') ]
                         }
@@ -1105,8 +1098,7 @@ pipeline {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
                                          id: "analysis-leap15-clang",
-                                         tools: [ clang(pattern: 'leap15-clang-build.log'),
-                                                  cppCheck(pattern: 'leap15-clang-build.log') ],
+                                         tools: [ clang(pattern: 'leap15-clang-build.log')],
                                          filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
                                                     excludeFile('_build\\.external\\/.*') ]
                         }
@@ -1145,8 +1137,7 @@ pipeline {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
                                          id: "analysis-leap15-intelc",
-                                         tools: [ intel(pattern: 'leap15-icc-build.log'),
-                                                  cppCheck(pattern: 'leap15-icc-build.log') ],
+                                         tools: [ intel(pattern: 'leap15-icc-build.log')],
                                          filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
                                                     excludeFile('_build\\.external\\/.*') ]
                         }
