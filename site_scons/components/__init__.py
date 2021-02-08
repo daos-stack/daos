@@ -305,7 +305,7 @@ def define_components(reqs):
                           ' --with-rdma --with-shared'                         \
                           ' --without-iscsi-initiator --without-isal'          \
                           ' --without-vtune', 'make $JOBS_OPT', 'make install',
-                          'cp dpdk/build/lib/* "$SPDK_PREFIX/lib"',
+                          'cp -r -P dpdk/build/lib/* "$SPDK_PREFIX/lib"',
                           'mkdir -p "$SPDK_PREFIX/share/spdk"',
                           'cp -r include scripts "$SPDK_PREFIX/share/spdk"'],
                 libs=['rte_bus_pci'], patch_rpath=['lib'])

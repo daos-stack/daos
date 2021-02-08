@@ -359,7 +359,7 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz)
 		return -DER_INVAL;
 	}
 
-	spdk_blob_opts_init(&bma.bma_opts);
+	spdk_blob_opts_init(&bma.bma_opts, sizeof(bma.bma_opts));
 	bma.bma_opts.num_clusters = (blob_sz + cluster_sz - 1) / cluster_sz;
 
 	/**
