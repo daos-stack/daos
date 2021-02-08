@@ -972,7 +972,7 @@ pipeline {
                             filename 'Dockerfile.ubuntu.20.04'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs() +
+                            additionalBuildArgs dockerBuildArgs(deps_build:true) +
                                                 " -t ${sanitized_JOB_NAME}-ubuntu20.04"
                         }
                     }
@@ -1012,7 +1012,7 @@ pipeline {
                             filename 'Dockerfile.ubuntu.20.04'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs() +
+                            additionalBuildArgs dockerBuildArgs(deps_build:true) +
                                                 " -t ${sanitized_JOB_NAME}-ubuntu20.04"
                         }
                     }
