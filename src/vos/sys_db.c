@@ -174,7 +174,7 @@ db_open_create(struct sys_db *db, bool try_create)
 			goto failed;
 		}
 
-		if (ver <SYS_DB_VERSION_1 || ver > SYS_DB_VERSION) {
+		if (ver < SYS_DB_VERSION_1 || ver > SYS_DB_VERSION) {
 			vos_report_layout_incompat("SMD", ver,
 						   SYS_DB_VERSION_1,
 						   SYS_DB_VERSION,
