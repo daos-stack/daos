@@ -1117,13 +1117,15 @@ class SubprocessManager():
                     self._expected_states[rank]["state"], state)
                 self._expected_states[rank]["state"] = state
 
-    def verify_expected_states(self, set_expected=False):
+    def verify_expected_states(self, set_expected=False, show_logs=True):
         """Verify that the expected job process states match the current states.
 
         Args:
             set_expected (bool, optional): option to update the expected job
                 process states to the current states prior to verification.
                 Defaults to False.
+            show_logs (bool, optional): Show log entries for hosts not in
+                expected states.
 
         Returns:
             dict: a dictionary of whether or not any of the job process states
@@ -1235,7 +1237,7 @@ class SubprocessManager():
                 "%Y-%m-%d %H:%M:%S")
 
         # Dump the server logs for any identified server
-        if show_log_hosts:
+        if show_logs and show_log_hosts:
             self.log.info(
                 "<SERVER> logs for ranks in the errored state since start "
                 "detection or detected in an unexpected state")
