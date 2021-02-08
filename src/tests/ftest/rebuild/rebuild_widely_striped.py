@@ -50,7 +50,7 @@ class RebuildWidelyStriped(MdtestBase):
         :avocado: tags=rebuild,widelystriped
         """
         # set params
-        targets = self.params.get("targets", "/run/server_config/*")
+        targets = self.params.get("targets", "/run/server_config/*/0/*")
         rank = self.params.get("rank_to_kill", "/run/testparams/*")
         self.dmg = self.get_dmg_command()
 
@@ -81,7 +81,6 @@ class RebuildWidelyStriped(MdtestBase):
         self.server_managers[0].stop_ranks([rank[0]], self.d_log, force=True)
         self.pool.wait_for_rebuild(False, interval=1)
 
-
         # create 2nd container
         self.add_container(self.pool)
         # start 2nd mdtest job
@@ -109,6 +108,3 @@ class RebuildWidelyStriped(MdtestBase):
         self.pool.wait_for_rebuild(False, interval=1)
         # wait for mdtest to complete
         thread.join()
-
-        # try to re-create container and see if it can be created
-        self.add_container(self.pool)
