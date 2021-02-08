@@ -720,7 +720,7 @@ double
 d_tm_compute_standard_dev(double sum_of_squares, uint64_t sample_size,
 			  double mean)
 {
-	if (sample_size == 0)
+	if (sample_size < 2)
 		return 0;
 
 	return sqrtl((sum_of_squares - (sample_size * mean * mean)) /
