@@ -765,10 +765,11 @@ obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr)
 	daos_iod_t			*iod;
 	int				 i;
 
+	if (reasb_req->orr_iods == NULL)
+		return;
+
 	for (i = 0; i < iod_nr; i++) {
 		iod = reasb_req->orr_iods + i;
-		if (iod == NULL)
-			return;
 		if (iod->iod_recxs != NULL)
 			D_FREE(iod->iod_recxs);
 		d_sgl_fini(reasb_req->orr_sgls + i, false);
