@@ -28,7 +28,7 @@ class CPUUsage(TestWithServers):
         prev_usage = 1
         usage = 1
         time.sleep(5)
-        for _ in range(30):
+        for _ in range(20):
             time.sleep(5)
             task = run_task(hosts=self.hostlist_servers, command=ps_get_cpu)
             # Sample output.
@@ -47,8 +47,9 @@ class CPUUsage(TestWithServers):
             diff = usage - prev_usage
             diff_p = (float(abs(diff)) / prev_usage) * 100
 
-            # Check if the CPU usage is stable; the change was less than 10%.
-            if diff_p <= float(10):
+            # Check if the CPU usage is stable; the change was less than 1%.
+            if diff_p <= float(1):
+                self.log.info("CPU usage is stable. Change was less than 1%.")
                 break
             prev_usage = usage
 
