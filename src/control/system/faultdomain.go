@@ -114,8 +114,7 @@ func (f *FaultDomain) NewChild(childLevel string) (*FaultDomain, error) {
 	if f == nil {
 		return NewFaultDomain(childLevel)
 	}
-	// childDomains := append(f.Domains, childLevel)
-	// return NewFaultDomain(childDomains...)
+
 	childDomains := make([]string, len(f.Domains))
 	copy(childDomains, f.Domains)
 	return NewFaultDomain(append(childDomains, childLevel)...)

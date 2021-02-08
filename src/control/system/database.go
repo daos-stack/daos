@@ -763,7 +763,7 @@ func getFaultDomainSubtree(tree *FaultDomainTree, ranks ...uint32) (*FaultDomain
 	for _, r := range ranks {
 		d, ok := treeDomains[r]
 		if !ok {
-			return nil, fmt.Errorf("rank %d not found", r)
+			return nil, fmt.Errorf("rank %d not found in fault domain tree", r)
 		}
 		rankDomains = append(rankDomains, d)
 	}
