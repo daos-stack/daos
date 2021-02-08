@@ -197,7 +197,7 @@ COPY utils utils
 COPY src src
 RUN ln -s utils/sl site_scons
 
-# Build DAOS & dependencies
+# Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
     (scons -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER && \
     /bin/rm -rf build && \
