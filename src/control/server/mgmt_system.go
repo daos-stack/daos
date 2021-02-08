@@ -200,19 +200,26 @@ func (svc *mgmtSvc) joinLoop(parent context.Context) {
 				joinResps[i] = svc.join(parent, req)
 			}
 
-			for {
-				err := svc.doGroupUpdate(parent)
-				if err == nil || errors.Cause(err) == errInstanceNotReady {
-					break
-				}
-
-				err = errors.Wrap(err, "failed to perform CaRT group update")
-				for i, jr := range joinResps {
-					if jr.joinErr == nil {
-						joinResps[i] = &batchJoinResponse{joinErr: err}
+			// Reset groupUpdateNeeded here to avoid triggering it
+			// again by timer. Any requests that were made between
+			// the last timer and these join requests will be handled
+			// here.
+			groupUpdateNeeded = false
+			if err := svc.doGroupUpdate(parent); err != nil {
+				// If the call failed, however, make sure that
+				// it gets called again by the timer. We have to
+				// deal with the situation where a local MS service
+				// rank is joining but isn't ready to handle dRPC
+				// requests yet.
+				groupUpdateNeeded = true
+				if errors.Cause(err) != errInstanceNotReady {
+					err = errors.Wrap(err, "failed to perform CaRT group update")
+					for i, jr := range joinResps {
+						if jr.joinErr == nil {
+							joinResps[i] = &batchJoinResponse{joinErr: err}
+						}
 					}
 				}
-				break
 			}
 
 			svc.log.Debugf("sending %d join responses", len(joinReqs))
