@@ -29,7 +29,7 @@ def generate_daos_version_header(env):
 def scons():
     """Execute build"""
 
-    Import('env')
+    Import('env', "API_VERSION")
 
     # For Common library (tse.h)
     env.AppendUnique(CPPPATH=[Dir('include/daos').srcnode()])
@@ -42,10 +42,8 @@ def scons():
     env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
     env.AppendUnique(CPPPATH=[Dir('include')])
     generate_daos_version_header(env)
-    env.Command("$PREFIX/lib64/daos/API_VERSION", "",
-                "echo %s.%s.%s > $TARGET" % (env["API_VERSION_MAJOR"],
-                                             env["API_VERSION_MINOR"],
-                                             env["API_VERSION_FIX"]))
+    env.Command("$PREFIX/lib64/daos/API_VERSION", "../SConstruct",
+                "echo %s > $TARGET" % (API_VERSION))
     for header in HEADERS:
         env.Install(os.path.join('$PREFIX', 'include'), 'include/%s' % header)
     for header in HEADERS_SRV:
