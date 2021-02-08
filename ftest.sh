@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (C) Copyright 2019-2021 Intel Corporation
+# Copyright (C) Copyright 2019-2020 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -67,9 +67,6 @@ LOGS_THRESHOLD="1G"
 # For nodes that are only rebooted between CI nodes left over mounts
 # need to be cleaned up.
 pre_clean () {
-    if [ ${#nodes} -lt 1 ]; then
-        return
-    fi
     i=5
     while [ $i -gt 0 ]; do
         if clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh \
@@ -82,9 +79,6 @@ pre_clean () {
 }
 
 cleanup() {
-    if [ ${#nodes} -lt 1 ]; then
-        return
-    fi
     i=5
     while [ $i -gt 0 ]; do
         if clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh \
@@ -123,20 +117,18 @@ trap 'set +e; cleanup' EXIT
 CLUSH_ARGS=($CLUSH_ARGS)
 
 DAOS_BASE=${SL_PREFIX%/install}
-if [ ${#nodes} -gt 0 ]; then
-    if ! clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
-        -w "$(IFS=','; echo "${nodes[*]}")"                                 \
-        "FIRST_NODE=${nodes[0]}
-         TEST_RPMS=$TEST_RPMS
-         DAOS_BASE=$DAOS_BASE
-         SL_PREFIX=$SL_PREFIX
-         TEST_TAG_DIR=$TEST_TAG_DIR
-         JENKINS_URL=$JENKINS_URL
-         NFS_SERVER=$NFS_SERVER
-         $(sed -e '1,/^$/d' "$SCRIPT_LOC"/setup_nodes.sh)"; then
-        echo "Cluster setup (i.e. provisioning) failed"
-        exit 1
-    fi
+if ! clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
+    -w "$(IFS=','; echo "${nodes[*]}")"                                 \
+    "FIRST_NODE=${nodes[0]}
+     TEST_RPMS=$TEST_RPMS
+     DAOS_BASE=$DAOS_BASE
+     SL_PREFIX=$SL_PREFIX
+     TEST_TAG_DIR=$TEST_TAG_DIR
+     JENKINS_URL=$JENKINS_URL
+     NFS_SERVER=$NFS_SERVER
+     $(sed -e '1,/^$/d' "$SCRIPT_LOC"/setup_nodes.sh)"; then
+    echo "Cluster setup (i.e. provisioning) failed"
+    exit 1
 fi
 
 args="${1:-quick}"
@@ -145,31 +137,29 @@ args+=" $*"
 
 # shellcheck disable=SC2029
 # shellcheck disable=SC2086
-if [ ${#nodes} -gt 0 ]; then
-    if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" \
-        "FIRST_NODE=\"${nodes[0]}\"
-         TEST_RPMS=\"$TEST_RPMS\"
-         DAOS_TEST_SHARED_DIR=\"${DAOS_TEST_SHARED_DIR:-$PWD/install/tmp}\"
-         DAOS_BASE=\"$DAOS_BASE\"
-         TEST_TAG_DIR=\"$TEST_TAG_DIR\"
-         PREFIX=\"$PREFIX\"
-         SETUP_ONLY=\"${SETUP_ONLY:-false}\"
-         TEST_TAG_ARG=\"$TEST_TAG_ARG\"
-         TEST_NODES=\"$TEST_NODES\"
-         NVME_ARG=\"$NVME_ARG\"
-         LOGS_THRESHOLD=\"$LOGS_THRESHOLD\"
-         $(sed -e '1,/^$/d' "$SCRIPT_LOC"/main.sh)"; then
-        rc=${PIPESTATUS[0]}
-        if ${SETUP_ONLY:-false}; then
-            exit "$rc"
-        fi
-    else
-        if ${SETUP_ONLY:-false}; then
-            trap '' EXIT
-            exit 0
-        fi
-        rc=0
+if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" \
+    "FIRST_NODE=\"${nodes[0]}\"
+     TEST_RPMS=\"$TEST_RPMS\"
+     DAOS_TEST_SHARED_DIR=\"${DAOS_TEST_SHARED_DIR:-$PWD/install/tmp}\"
+     DAOS_BASE=\"$DAOS_BASE\"
+     TEST_TAG_DIR=\"$TEST_TAG_DIR\"
+     PREFIX=\"$PREFIX\"
+     SETUP_ONLY=\"${SETUP_ONLY:-false}\"
+     TEST_TAG_ARG=\"$TEST_TAG_ARG\"
+     TEST_NODES=\"$TEST_NODES\"
+     NVME_ARG=\"$NVME_ARG\"
+     LOGS_THRESHOLD=\"$LOGS_THRESHOLD\"
+     $(sed -e '1,/^$/d' "$SCRIPT_LOC"/main.sh)"; then
+    rc=${PIPESTATUS[0]}
+    if ${SETUP_ONLY:-false}; then
+        exit "$rc"
     fi
+else
+    if ${SETUP_ONLY:-false}; then
+        trap '' EXIT
+        exit 0
+    fi
+    rc=0
 fi
 
 exit "$rc"
