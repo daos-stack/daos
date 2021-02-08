@@ -1095,7 +1095,7 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallel_build(),
                                    scons_args: scons_faults_args() + " PREFIX=/opt/daos",
-                                   build_deps: "no",
+                                   build_deps: "no"
                     }
                     post {
                         always {
