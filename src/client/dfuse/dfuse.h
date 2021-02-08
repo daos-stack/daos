@@ -177,6 +177,13 @@ struct dfuse_dfs {
 	pthread_mutex_t		dfs_read_mutex;
 };
 
+/* Xattr namespace used by dfuse.
+ *
+ * Extended attributes with this prefix can only be set by dfuse itself
+ * or directly though dfs/daos but not through dfuse.
+ */
+#define DFUSE_XATTR_PREFIX "user.dfuse"
+
 /*
  * struct dfuse_info contains list of dfuse_pool
  *  One of these per process.

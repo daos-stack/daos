@@ -35,7 +35,7 @@ typedef enum {
 			  (rb_op) == RB_OP_RECLAIM ? "Reclaim" : \
 			  "Unknown")
 
-int ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
+int ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver,
 			struct pool_target_id_list *tgts,
 			daos_rebuild_opc_t rebuild_op);
 int ds_rebuild_query(uuid_t pool_uuid,

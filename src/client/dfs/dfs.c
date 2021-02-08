@@ -330,16 +330,33 @@ oid_gen(dfs_t *dfs, int oclass, bool file, daos_obj_id_t *oid)
 	return 0;
 }
 
+static char *
+concat(const char *s1, const char *s2)
+{
+	char *result = NULL;
+
+	D_ASPRINTF(result, "%s%s", s1, s2);
+	if (result == NULL)
+		return NULL;
+
+	return result;
+}
+
 static int
 fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
-	    bool fetch_sym, bool *exists, struct dfs_entry *entry)
+	    bool fetch_sym, bool *exists, struct dfs_entry *entry, int xnr,
+	    char *xnames[], void *xvals[], daos_size_t *xsizes)
 {
-	d_sg_list_t	sgl;
+	d_sg_list_t	l_sgl, *sgl;
 	d_iov_t		sg_iovs[INODE_AKEYS];
-	daos_iod_t	iod;
+	daos_iod_t	l_iod, *iod;
 	daos_recx_t	recx;
 	daos_key_t	dkey;
 	unsigned int	i;
+	char		**pxnames = NULL;
+	d_iov_t		*sg_iovx = NULL;
+	d_sg_list_t	*sgls = NULL;
+	daos_iod_t	*iods = NULL;
 	int		rc;
 
 	D_ASSERT(name);
@@ -348,15 +365,57 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 	if (strcmp(name, ".") == 0)
 		D_ASSERT(0);
 
+	if (xnr) {
+		D_ALLOC_ARRAY(pxnames, xnr);
+		if (pxnames == NULL)
+			D_GOTO(out, rc = ENOMEM);
+
+		D_ALLOC_ARRAY(sg_iovx, xnr);
+		if (sg_iovx == NULL)
+			D_GOTO(out, rc = ENOMEM);
+
+		D_ALLOC_ARRAY(sgls, xnr + 1);
+		if (sgls == NULL)
+			D_GOTO(out, rc = ENOMEM);
+
+		D_ALLOC_ARRAY(iods, xnr + 1);
+		if (iods == NULL)
+			D_GOTO(out, rc = ENOMEM);
+
+		for (i = 0; i < xnr; i++) {
+			pxnames[i] = concat("x:", xnames[i]);
+			if (pxnames[i] == NULL)
+				D_GOTO(out, rc = ENOMEM);
+
+			d_iov_set(&iods[i].iod_name, pxnames[i],
+				  strlen(pxnames[i]));
+			iods[i].iod_nr		= 1;
+			iods[i].iod_recxs	= NULL;
+			iods[i].iod_type	= DAOS_IOD_SINGLE;
+			iods[i].iod_size	= xsizes[i];
+
+			d_iov_set(&sg_iovx[i], xvals[i], xsizes[i]);
+			sgls[i].sg_nr		= 1;
+			sgls[i].sg_nr_out	= 0;
+			sgls[i].sg_iovs		= &sg_iovx[i];
+		}
+
+		sgl = &sgls[xnr];
+		iod = &iods[xnr];
+	} else {
+		sgl = &l_sgl;
+		iod = &l_iod;
+	}
+
 	d_iov_set(&dkey, (void *)name, len);
-	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
-	iod.iod_nr	= 1;
+	d_iov_set(&iod->iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
+	iod->iod_nr	= 1;
 	recx.rx_idx	= 0;
 	recx.rx_nr	= sizeof(mode_t) + sizeof(time_t) * 3 +
 			    sizeof(daos_obj_id_t) + sizeof(daos_size_t);
-	iod.iod_recxs	= &recx;
-	iod.iod_type	= DAOS_IOD_ARRAY;
-	iod.iod_size	= 1;
+	iod->iod_recxs	= &recx;
+	iod->iod_type	= DAOS_IOD_ARRAY;
+	iod->iod_size	= 1;
 	i = 0;
 
 	d_iov_set(&sg_iovs[i++], &entry->mode, sizeof(mode_t));
@@ -366,16 +425,20 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 	d_iov_set(&sg_iovs[i++], &entry->ctime, sizeof(time_t));
 	d_iov_set(&sg_iovs[i++], &entry->chunk_size, sizeof(daos_size_t));
 
-	sgl.sg_nr	= i;
-	sgl.sg_nr_out	= 0;
-	sgl.sg_iovs	= sg_iovs;
+	sgl->sg_nr	= i;
+	sgl->sg_nr_out	= 0;
+	sgl->sg_iovs	= sg_iovs;
 
-	rc = daos_obj_fetch(oh, th, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
+	rc = daos_obj_fetch(oh, th, 0, &dkey, xnr + 1, iods ? iods : iod,
+			    sgls ? sgls : sgl, NULL, NULL);
 	if (rc) {
 		D_ERROR("Failed to fetch entry %s "DF_RC"\n", name,
 			DP_RC(rc));
 		return daos_der2errno(rc);
 	}
+
+	for (i = 0; i < xnr; i++)
+		xsizes[i] = iods[i].iod_size;
 
 	if (fetch_sym && S_ISLNK(entry->mode)) {
 		char *value;
@@ -389,11 +452,11 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 		recx.rx_nr = PATH_MAX;
 
 		d_iov_set(&sg_iovs[0], value, PATH_MAX);
-		sgl.sg_nr	= 1;
-		sgl.sg_nr_out	= 0;
-		sgl.sg_iovs	= sg_iovs;
+		sgl->sg_nr	= 1;
+		sgl->sg_nr_out	= 0;
+		sgl->sg_iovs	= sg_iovs;
 
-		rc = daos_obj_fetch(oh, th, 0, &dkey, 1, &iod, &sgl, NULL,
+		rc = daos_obj_fetch(oh, th, 0, &dkey, 1, iod, sgl, NULL,
 				    NULL);
 		if (rc) {
 			D_ERROR("Failed to fetch entry %s "DF_RC"\n", name,
@@ -416,12 +479,20 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 		}
 	}
 
-	if (sgl.sg_nr_out == 0)
+	if (sgl->sg_nr_out == 0)
 		*exists = false;
 	else
 		*exists = true;
 
 out:
+	if (xnr) {
+		for (i = 0; i < xnr; i++)
+			D_FREE(pxnames[i]);
+		D_FREE(pxnames);
+		D_FREE(sg_iovx);
+		D_FREE(sgls);
+		D_FREE(iods);
+	}
 	return rc;
 }
 
@@ -561,7 +632,8 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 	memset(stbuf, 0, sizeof(struct stat));
 
 	/* Check if parent has the entry */
-	rc = fetch_entry(oh, th, name, len, true, &exists, &entry);
+	rc = fetch_entry(oh, th, name, len, true, &exists, &entry,
+			 0, NULL, NULL, NULL);
 	if (rc)
 		return rc;
 
@@ -712,7 +784,7 @@ open_file(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 		 */
 		if (!oexcl) {
 			rc = fetch_entry(parent->oh, th, file->name, len, false,
-					 &exists, entry);
+					 &exists, entry, 0, NULL, NULL, NULL);
 			if (rc)
 				return rc;
 
@@ -762,7 +834,7 @@ open_file(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 
 	/* Check if parent has the filename entry */
 	rc = fetch_entry(parent->oh, th, file->name, len,
-			 false, &exists, entry);
+			 false, &exists, entry, 0, NULL, NULL, NULL);
 	if (rc) {
 		D_ERROR("fetch_entry %s failed %d.\n", file->name, rc);
 		return rc;
@@ -874,7 +946,8 @@ open_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, int flags,
 		return EINVAL;
 
 	/* Check if parent has the dirname entry */
-	rc = fetch_entry(parent_oh, th, dir->name, len, false, &exists, entry);
+	rc = fetch_entry(parent_oh, th, dir->name, len, false, &exists, entry,
+			 0, NULL, NULL, NULL);
 	if (rc)
 		return rc;
 
@@ -1770,7 +1843,8 @@ remove_dir_contents(dfs_t *dfs, daos_handle_t th, struct dfs_entry entry)
 			ptr += kds[i].kd_key_len;
 
 			rc = fetch_entry(oh, th, ptr, kds[i].kd_key_len, false,
-					 &exists, &child_entry);
+					 &exists, &child_entry,
+					 0, NULL, NULL, NULL);
 			if (rc)
 				D_GOTO(out, rc);
 
@@ -1828,7 +1902,8 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force,
 
 restart:
 	/** Even with cond punch, need to fetch the entry to check the type */
-	rc = fetch_entry(parent->oh, th, name, len, false, &exists, &entry);
+	rc = fetch_entry(parent->oh, th, name, len, false, &exists, &entry,
+			 0, NULL, NULL, NULL);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -1995,7 +2070,7 @@ lookup_rel_path_loop:
 
 		entry.chunk_size = 0;
 		rc = fetch_entry(parent.oh, DAOS_TX_NONE, token, len, true,
-				 &exists, &entry);
+				 &exists, &entry, 0, NULL, NULL, NULL);
 		if (rc)
 			D_GOTO(err_obj, rc);
 
@@ -2356,9 +2431,10 @@ out:
 	return rc;
 }
 
-int
-dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
-	       dfs_obj_t **_obj, mode_t *mode, struct stat *stbuf)
+static int
+dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
+		   dfs_obj_t **_obj, mode_t *mode, struct stat *stbuf, int xnr,
+		   char *xnames[], void *xvals[], daos_size_t *xsizes)
 {
 	dfs_obj_t		*obj;
 	struct dfs_entry	entry = {0};
@@ -2385,7 +2461,7 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		return EINVAL;
 
 	rc = fetch_entry(parent->oh, DAOS_TX_NONE, name, len, true, &exists,
-			 &entry);
+			 &entry, xnr, xnames, xvals, xsizes);
 	if (rc)
 		return rc;
 
@@ -2500,6 +2576,23 @@ out:
 err_obj:
 	D_FREE(obj);
 	return rc;
+}
+
+int
+dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
+	       dfs_obj_t **obj, mode_t *mode, struct stat *stbuf)
+{
+	return dfs_lookup_rel_int(dfs, parent, name, flags, obj, mode, stbuf,
+				  0, NULL, NULL, NULL);
+}
+
+int
+dfs_lookupx(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
+	    dfs_obj_t **obj, mode_t *mode, struct stat *stbuf, int xnr,
+	    char *xnames[], void *xvals[], daos_size_t *xsizes)
+{
+	return dfs_lookup_rel_int(dfs, parent, name, flags, obj, mode, stbuf,
+				  xnr, xnames, xvals, xsizes);
 }
 
 int
@@ -3253,7 +3346,8 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 	}
 
 	/* Check if parent has the entry */
-	rc = fetch_entry(oh, DAOS_TX_NONE, name, len, true, &exists, &entry);
+	rc = fetch_entry(oh, DAOS_TX_NONE, name, len, true, &exists, &entry,
+			 0, NULL, NULL, NULL);
 	if (rc)
 		return rc;
 
@@ -3334,7 +3428,8 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	}
 
 	/* Check if parent has the entry */
-	rc = fetch_entry(oh, DAOS_TX_NONE, name, len, true, &exists, &entry);
+	rc = fetch_entry(oh, DAOS_TX_NONE, name, len, true, &exists, &entry,
+			 0, NULL, NULL, NULL);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -3768,7 +3863,8 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 	}
 
 restart:
-	rc = fetch_entry(parent->oh, th, name, len, true, &exists, &entry);
+	rc = fetch_entry(parent->oh, th, name, len, true, &exists, &entry,
+			 0, NULL, NULL, NULL);
 	if (rc) {
 		D_ERROR("Failed to fetch entry %s (%d)\n", name, rc);
 		D_GOTO(out, rc);
@@ -3777,7 +3873,7 @@ restart:
 		D_GOTO(out, rc = ENOENT);
 
 	rc = fetch_entry(new_parent->oh, th, new_name, new_len, true, &exists,
-			 &new_entry);
+			 &new_entry, 0, NULL, NULL, NULL);
 	if (rc) {
 		D_ERROR("Failed to fetch entry %s (%d)\n", new_name, rc);
 		D_GOTO(out, rc);
@@ -3940,7 +4036,8 @@ dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1, dfs_obj_t *parent2,
 	}
 
 restart:
-	rc = fetch_entry(parent1->oh, th, name1, len1, true, &exists, &entry1);
+	rc = fetch_entry(parent1->oh, th, name1, len1, true, &exists, &entry1,
+			 0, NULL, NULL, NULL);
 	if (rc) {
 		D_ERROR("Failed to fetch entry %s (%d)\n", name1, rc);
 		D_GOTO(out, rc);
@@ -3948,7 +4045,8 @@ restart:
 	if (exists == false)
 		D_GOTO(out, rc = EINVAL);
 
-	rc = fetch_entry(parent2->oh, th, name2, len2, true, &exists, &entry2);
+	rc = fetch_entry(parent2->oh, th, name2, len2, true, &exists, &entry2,
+			 0, NULL, NULL, NULL);
 	if (rc) {
 		D_ERROR("Failed to fetch entry %s (%d)\n", name2, rc);
 		D_GOTO(out, rc);
@@ -4025,18 +4123,6 @@ dfs_sync(dfs_t *dfs)
 	/** Take a snapshot here and allow rollover to that when supported. */
 
 	return 0;
-}
-
-static char *
-concat(const char *s1, const char *s2)
-{
-	char *result = NULL;
-
-	D_ASPRINTF(result, "%s%s", s1, s2);
-	if (result == NULL)
-		return NULL;
-
-	return result;
 }
 
 int

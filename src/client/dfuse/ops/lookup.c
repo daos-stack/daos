@@ -23,19 +23,12 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	D_ASSERT(ie->ie_parent);
 	D_ASSERT(ie->ie_dfs);
 
-	/* Set the caching attributes of this entry, but do not allow
-	 * any caching on fifos.
-	 */
-
-	if (S_ISFIFO(ie->ie_stat.st_mode)) {
-		if (!is_new) {
-			ie->ie_stat.st_mode &= ~S_IFIFO;
-			ie->ie_stat.st_mode |= S_IFDIR;
-		}
-	} else {
-		entry.attr_timeout = ie->ie_dfs->dfs_attr_timeout;
+	/* Do not cache directly attributes as this does not work with uns */
+	if (!S_ISDIR(ie->ie_stat.st_mode))
 		entry.entry_timeout = ie->ie_dfs->dfs_attr_timeout;
-	}
+
+	/* Set the caching attributes of this entry */
+	entry.attr_timeout = ie->ie_dfs->dfs_attr_timeout;
 
 	if (ie->ie_stat.st_ino == 0) {
 		dfs_obj2id(ie->ie_obj, &ie->ie_oid);
@@ -140,11 +133,9 @@ out_err:
  */
 static int
 check_for_uns_ep(struct dfuse_projection_info *fs_handle,
-		 struct dfuse_inode_entry *ie)
+		 struct dfuse_inode_entry *ie, char *attr, daos_size_t len)
 {
 	int			rc;
-	char			str[DUNS_MAX_XATTR_LEN];
-	daos_size_t		str_len = DUNS_MAX_XATTR_LEN;
 	struct duns_attr_t	dattr = {};
 	struct dfuse_dfs	*dfs = NULL;
 	struct dfuse_dfs	*dfsi;
@@ -154,15 +145,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	int			new_cont = false;
 	int ret;
 
-	rc = dfs_getxattr(ie->ie_dfs->dfs_ns, ie->ie_obj, DUNS_XATTR_NAME,
-			  &str, &str_len);
-
-	if (rc == ENODATA)
-		return 0;
-	if (rc)
-		return rc;
-
-	rc = duns_parse_attr(&str[0], str_len, &dattr);
+	rc = duns_parse_attr(attr, len, &dattr);
 	if (rc)
 		return rc;
 
@@ -327,6 +310,10 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*ie = NULL;
 	int				rc;
+	char				*attr_name = DUNS_XATTR_NAME;
+	char				out[DUNS_MAX_XATTR_LEN];
+	char				*outp = &out[0];
+	daos_size_t			attr_len = DUNS_MAX_XATTR_LEN;
 
 	DFUSE_TRA_DEBUG(fs_handle,
 			"Parent:%lu '%s'", parent->ie_stat.st_ino, name);
@@ -340,9 +327,9 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
 
-	rc = dfs_lookup_rel(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
-			    O_RDWR | O_NOFOLLOW, &ie->ie_obj,
-			    NULL, &ie->ie_stat);
+	rc = dfs_lookupx(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
+			 O_RDWR | O_NOFOLLOW, &ie->ie_obj, NULL, &ie->ie_stat,
+			 1, &attr_name, (void **)&outp, &attr_len);
 	if (rc) {
 		DFUSE_TRA_DEBUG(parent, "dfs_lookup() failed: (%s)",
 				strerror(rc));
@@ -359,12 +346,14 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(err, rc);
 	}
 
+	DFUSE_TRA_DEBUG(ie, "Attr len is %zi", attr_len);
+
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
 	atomic_store_relaxed(&ie->ie_ref, 1);
 
-	if (S_ISFIFO(ie->ie_stat.st_mode)) {
-		rc = check_for_uns_ep(fs_handle, ie);
+	if (S_ISDIR(ie->ie_stat.st_mode) && attr_len) {
+		rc = check_for_uns_ep(fs_handle, ie, out, attr_len);
 		DFUSE_TRA_DEBUG(ie,
 				"check_for_uns_ep() returned %d", rc);
 		if (rc != 0 && rc != EPERM)
