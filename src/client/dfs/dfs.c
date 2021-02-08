@@ -836,7 +836,7 @@ restart:
 			entry->chunk_size = chunk_size;
 
 		rc = insert_entry(parent->oh, th, file->name, len,
-				  DAOS_COND_DKEY_INSERT, entry);
+				  oexcl ? DAOS_COND_DKEY_INSERT : 0, entry);
 		if (rc == EEXIST && !oexcl) {
 			/** just try refetching entry to open the file */
 			daos_array_close(file->oh, NULL);
