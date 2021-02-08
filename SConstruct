@@ -408,6 +408,8 @@ def scons(): # pylint: disable=too-many-locals
     # Export() is handled specially by pylint so do not merge these two lines.
     Export('daos_version', 'API_VERSION', 'env', 'prereqs')
     Export('platform_arm', 'conf_dir')
+    env.Command("$PREFIX/lib64/daos/API_VERSION", "SConstruct",
+                "echo %s > $TARGET" % (API_VERSION))
 
     if env['PLATFORM'] == 'darwin':
         # generate .so on OSX instead of .dylib
