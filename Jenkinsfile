@@ -783,7 +783,8 @@ pipeline {
                         unsuccessful {
                             sh """if [ -f config.log ]; then
                                       mv config.log config.log-centos7-gcc
-                                  fi"""
+                                  fi
+                                  rpm -q CUnit-devel"""
                             archiveArtifacts artifacts: 'config.log-centos7-gcc',
                                              allowEmptyArchive: true
                         }
