@@ -436,7 +436,7 @@ def scons(): # pylint: disable=too-many-locals
     api_version = env.Command("%s/API_VERSION" % build_prefix,
                               "%s/SConstruct" % build_prefix,
                               "echo %s > $TARGET" % (API_VERSION))
-    env.Install("$PREFIX/lib64/daos", api_version);
+    env.Install("$PREFIX/lib64/daos", api_version)
 
     # install the configuration files
     SConscript('utils/config/SConscript')
