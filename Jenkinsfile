@@ -547,8 +547,7 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.centos.7'
-                            dir 'utils/docker'
+                            filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(add_repo: false,
                                                                 cachebust: false) +
@@ -755,8 +754,7 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.centos.7'
-                            dir 'utils/docker'
+                            filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
@@ -793,8 +791,7 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.centos.7'
-                            dir 'utils/docker'
+                            filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
                                 " -t ${sanitized_JOB_NAME}-centos7 " +
@@ -832,10 +829,10 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.centos.7'
-                            dir 'utils/docker'
+                            filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
+                            additionalBuildArgs dockerBuildArgs(qb: quickbuild(),
+                                                                deps_build:true) +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quick_build_deps('centos7') + '"' +
@@ -843,7 +840,9 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallel_build()
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
+                                   build_deps: "no"
                     }
                     post {
                         always {
@@ -868,10 +867,10 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.centos.7'
-                            dir 'utils/docker'
+                            filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
+                            additionalBuildArgs dockerBuildArgs(qb: quickbuild(),
+                                                                deps_build:true) +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quick_build_deps('centos7') + '"' +
@@ -879,7 +878,9 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallel_build()
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
+                                   build_deps: "no"
                     }
                     post {
                         always {
@@ -904,10 +905,10 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.centos.7'
-                            dir 'utils/docker'
+                            filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
+                            additionalBuildArgs dockerBuildArgs(qb: quickbuild(),
+                                                                deps_build:true) +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quick_build_deps('centos7') + '"'
@@ -915,7 +916,8 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   scons_args: scons_faults_args()
+                                   scons_args: scons_faults_args() + " PREFIX=/opt/daos TARGET_TYPE=release",
+                                   build_deps: "no"
                     }
                     post {
                         always {
@@ -1236,8 +1238,7 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.centos.7'
-                            dir 'utils/docker'
+                            filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(qb: true) +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
@@ -1418,8 +1419,7 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.centos.7'
-                            dir 'utils/docker'
+                            filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
                                 " -t ${sanitized_JOB_NAME}-centos7 " +
