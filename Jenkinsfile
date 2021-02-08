@@ -550,7 +550,7 @@ pipeline {
                             dir 'utils/docker'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(add_repo: false,
-			                                        cachebust: false) +
+                                                                cachebust: false) +
                                            " -t ${sanitized_JOB_NAME}-centos7 "
                         }
                     }
@@ -972,7 +972,8 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   scons_args: scons_faults_args()
+                                   scons_args: scons_faults_args() + " PREFIX=/opt/daos",
+                                   build_deps: no
                     }
                     post {
                         always {
@@ -1010,7 +1011,8 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   scons_args: scons_faults_args()
+                                   scons_args: scons_faults_args() + " PREFIX=/opt/daps",
+                                   build_deps: "no"
                     }
                     post {
                         always {
@@ -1043,7 +1045,7 @@ pipeline {
                             filename 'utils/docker/Dockerfile.leap.15'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(qb: quickbuild(),
-			                                        deps_build:true) +
+                                                                deps_build:true) +
                                                 " -t ${sanitized_JOB_NAME}-leap15 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quick_build_deps('leap15') + '"' +
@@ -1053,7 +1055,8 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallel_build(),
                                    stash_files: 'ci/test_files_to_stash.txt',
-                                   scons_args: scons_faults_args()
+                                   scons_args: scons_faults_args() + " PREFIX=/opt/daos",
+                                   build_deps: "no"
                     }
                     post {
                         always {
@@ -1091,7 +1094,8 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   scons_args: scons_faults_args()
+                                   scons_args: scons_faults_args() + " PREFIX=/opt/daos",
+                                   build_deps: "no",
                     }
                     post {
                         always {
@@ -1130,7 +1134,8 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   scons_args: scons_faults_args()
+                                   scons_args: scons_faults_args() + " PREFIX=/opt/daos",
+                                   build_deps: "no"
                     }
                     post {
                         always {
