@@ -82,14 +82,7 @@ class OSAOfflineReintegration(OSAUtils):
         # Create a pool
         pool = {}
         pool_uuid = []
-        target_list = []
         exclude_servers = (len(self.hostlist_servers) * 2) - 1
-
-        # Exclude target : random two targets (target idx : 0-7)
-        n = random.randint(0, 6)
-        target_list.append(n)
-        target_list.append(n+1)
-        t_string = "{},{}".format(target_list[0], target_list[1])
 
         # Exclude rank : two ranks other than rank 0.
         rank = random.randint(1, exclude_servers)
@@ -125,11 +118,12 @@ class OSAOfflineReintegration(OSAUtils):
             pver_exclude = self.get_pool_version()
             self.log.info("Pool Version after exclude %s", pver_exclude)
             # Check pool version incremented after pool exclude
-            self.assertTrue(pver_exclude > (pver_begin + len(target_list)),
+            # pver_exclude should be greater than
+            # pver_begin + 8 targets.
+            self.assertTrue(pver_exclude > (pver_begin + 8),
                             "Pool Version Error:  After exclude")
             output = self.dmg_command.pool_reintegrate(self.pool.uuid,
-                                                       rank,
-                                                       t_string)
+                                                       rank)
             self.log.info(output)
             self.is_rebuild_done(3)
             self.assert_on_rebuild_failure()
