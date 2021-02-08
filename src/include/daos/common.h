@@ -799,6 +799,36 @@ daos_unparse_ctype(daos_cont_layout_t ctype, char *string)
 	}
 }
 
+static inline void
+daos_anchor_set_flags(daos_anchor_t *anchor, uint32_t flags)
+{
+	anchor->da_flags = flags;
+}
+
+static inline uint32_t
+daos_anchor_get_flags(daos_anchor_t *anchor)
+{
+	return anchor->da_flags;
+}
+
+static inline void
+daos_anchor_set_eof(daos_anchor_t *anchor)
+{
+	anchor->da_type = DAOS_ANCHOR_TYPE_EOF;
+}
+
+static inline void
+daos_anchor_set_zero(daos_anchor_t *anchor)
+{
+	anchor->da_type = DAOS_ANCHOR_TYPE_ZERO;
+}
+
+static inline bool
+daos_anchor_is_zero(daos_anchor_t *anchor)
+{
+	return anchor->da_type == DAOS_ANCHOR_TYPE_ZERO;
+}
+
 /* default debug log file */
 #define DAOS_LOG_DEFAULT	"/tmp/daos.log"
 
