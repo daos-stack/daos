@@ -334,6 +334,8 @@ anchor_destructor(PyObject *obj)
 	anchor = capsule2anchor(obj);
 	if (anchor == NULL)
 		return;
+
+	daos_anchor_fini(anchor);
 	D_FREE(anchor);
 }
 
@@ -818,7 +820,7 @@ __shim_handle__kv_iter(PyObject *self, PyObject *args)
 			rc = -DER_NOMEM;
 			goto out;
 		}
-		daos_anchor_set_zero(anchor);
+		daos_anchor_init(anchor, 0);
 		anchor_cap = anchor2capsule(anchor);
 		if (anchor_cap == NULL) {
 			D_FREE(anchor);
