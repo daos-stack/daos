@@ -11,14 +11,21 @@ This driver has been merged in the upstream MPICH repository, see
 https://github.com/pmodels/mpich/tree/main/src/mpi/romio/adio/ad_daos
 for details.
 
+!!! note
+    Starting with DAOS 1.1.3, the `--svc` parameter (number of service replicas) 
+    is no longer needed, and the DAOS API has been changed accordingly.
+    Patches have been contributed to MPICH that detect the DAOS API version
+    to gracefully handle this change, but those patches have not yet been
+    picked up in the MPI releases below. For details check the latest commits 
+    [here](https://github.com/pmodels/mpich/commits/main?author=mchaarawi).
+
 
 ## MPI Implementations that support DAOS
 
 ### MPICH
 
 The DAOS ROMIO ADIO driver has been accepted into [MPICH](https://www.mpich.org/).
-It is included in [mpich-3.4b1 (alpha release)](https://www.mpich.org/downloads/),
-but not in mpich-3.3.2 (stable release).
+It is included in [mpich-3.4.1 (released Jan 2021)](https://www.mpich.org/downloads/).
 
 ### Building MPICH with DAOS Support
 
