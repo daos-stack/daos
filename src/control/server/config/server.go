@@ -486,9 +486,6 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		return FaultConfigBadAccessPoints
 	case len(cfg.AccessPoints)%2 == 0:
 		return FaultConfigEvenAccessPoints
-	case len(cfg.AccessPoints) > 1:
-		// temporary notification while the feature is still being polished.
-		log.Info("\n*******\nNOTICE: Support for multiple access points is an alpha feature and is not well-tested!\n*******\n\n")
 	}
 
 	for i, engine := range cfg.Engines {

@@ -265,6 +265,7 @@ func createRaftUpdate(op raftOp, inner interface{}) ([]byte, error) {
 // submitMemberUpdate submits the given member update operation to
 // the raft service.
 func (db *Database) submitMemberUpdate(op raftOp, m *memberUpdate) error {
+	m.Member.LastUpdate = time.Now()
 	data, err := createRaftUpdate(op, m)
 	if err != nil {
 		return err
@@ -275,6 +276,7 @@ func (db *Database) submitMemberUpdate(op raftOp, m *memberUpdate) error {
 // submitPoolUpdate submits the given pool service update operation to
 // the raft service.
 func (db *Database) submitPoolUpdate(op raftOp, ps *PoolService) error {
+	ps.LastUpdate = time.Now()
 	data, err := createRaftUpdate(op, ps)
 	if err != nil {
 		return err
