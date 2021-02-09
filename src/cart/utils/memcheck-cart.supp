@@ -134,11 +134,11 @@
    ...
 }
 {
-   tcp memcheck
+   Tcp provider with ofi rxm
    Memcheck:Param
    sendmsg(msg.msg_iov[1])
+   obj:/usr/lib64/libpthread-2.17.so
    fun:tcpx_send_msg
-   fun:process_tx_entry
    ...
    fun:HG_Core_progress
 }
