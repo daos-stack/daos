@@ -38,7 +38,6 @@
 {
    server-verbs-0
    Memcheck:Leak
-   match-leak-kinds: possible
    fun:calloc
    ...
    fun:_verbs_init_and_alloc_context

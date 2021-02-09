@@ -387,7 +387,7 @@ class DaosServer():
                              '--gen-suppressions=all',
                              '--xml=yes',
                              '--xml-file=dnt_server.%p.memcheck.xml',
-                             '--num-callers=6',
+                             '--num-callers=10',
                              '--leak-check=full']
             suppression_file = os.path.join('src',
                                             'cart',
