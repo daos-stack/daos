@@ -31,20 +31,20 @@ func getTestNotifyReadyReq(t *testing.T, sockPath string, idx uint32) *srvpb.Not
 	}
 }
 
-func waitForIosrvReady(t *testing.T, instance *IOServerInstance) {
+func waitForEngineReady(t *testing.T, instance *EngineInstance) {
 	select {
 	case <-time.After(100 * time.Millisecond):
-		t.Fatal("IO server never became ready!")
+		t.Fatal("IO engine never became ready!")
 	case <-instance.awaitDrpcReady():
 		return
 	}
 }
 
-func TestIOServerInstance_NotifyDrpcReady(t *testing.T) {
+func TestEngineInstance_NotifyDrpcReady(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	instance := getTestIOServerInstance(log)
+	instance := getTestEngineInstance(log)
 
 	req := getTestNotifyReadyReq(t, "/tmp/instance_test.sock", 0)
 
@@ -55,10 +55,10 @@ func TestIOServerInstance_NotifyDrpcReady(t *testing.T) {
 		t.Fatal("Expected a dRPC client connection")
 	}
 
-	waitForIosrvReady(t, instance)
+	waitForEngineReady(t, instance)
 }
 
-func TestIOServerInstance_CallDrpc(t *testing.T) {
+func TestEngineInstance_CallDrpc(t *testing.T) {
 	for name, tc := range map[string]struct {
 		notReady bool
 		resp     *drpc.Response
@@ -75,7 +75,7 @@ func TestIOServerInstance_CallDrpc(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
-			instance := getTestIOServerInstance(log)
+			instance := getTestEngineInstance(log)
 			if !tc.notReady {
 				cfg := &mockDrpcClientConfig{
 					SendMsgResponse: tc.resp,
@@ -90,7 +90,7 @@ func TestIOServerInstance_CallDrpc(t *testing.T) {
 	}
 }
 
-func TestIOServerInstance_DrespToRankResult(t *testing.T) {
+func TestEngineInstance_DrespToRankResult(t *testing.T) {
 	dRank := Rank(1)
 
 	for name, tc := range map[string]struct {
