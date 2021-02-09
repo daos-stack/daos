@@ -109,17 +109,17 @@ RUN zypper --non-interactive install -y ipmctl-devel go1.14 go1.14-race
 # Add DAOS user
 ENV USER daos
 ENV PASSWD daos
-RUN useradd -u $UID -ms /bin/bash $USER
+RUN useradd --uid $UID --user-group --create-home --shell /bin/bash $USER
 RUN echo "$USER:$PASSWD" | chpasswd
 
 ENV USER daos_server
 ENV PASSWD daos_server
-RUN useradd -ms /bin/bash $USER
+RUN useradd --user-group --create-home --shell /bin/bash $USER
 RUN echo "$USER:$PASSWD" | chpasswd
 
 ENV USER daos_agent
 ENV PASSWD daos_agent
-RUN useradd -ms /bin/bash $USER
+RUN useradd --user-group --create-home --shell /bin/bash $USER
 RUN echo "$USER:$PASSWD" | chpasswd
 
 # Create directory for DAOS backend storage

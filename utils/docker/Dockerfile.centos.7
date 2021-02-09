@@ -90,17 +90,17 @@ RUN pip3 install avocado-framework &&					\
 # Add DAOS users
 ENV USER daos
 ENV PASSWD daos
-RUN useradd -u $UID -ms /bin/bash $USER
+RUN useradd --uid $UID --user-group --create-home --shell /bin/bash $USER
 RUN echo "$USER:$PASSWD" | chpasswd
 
 ENV USER daos_server
 ENV PASSWD daos_server
-RUN useradd -ms /bin/bash $USER
+RUN useradd --user-group --create-home --shell /bin/bash $USER
 RUN echo "$USER:$PASSWD" | chpasswd
 
 ENV USER daos_agent
 ENV PASSWD daos_agent
-RUN useradd -ms /bin/bash $USER
+RUN useradd --user-group --create-home --shell /bin/bash $USER
 RUN echo "$USER:$PASSWD" | chpasswd
 
 # Create directory for DAOS backend storage
@@ -212,8 +212,6 @@ COPY utils/sl utils/sl
 COPY utils/build.config utils/
 RUN ln -s utils/sl site_scons
 
-RUN find
-
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
     (scons --build-deps=yes install PREFIX=/opt/daos --deps-only && \
     /bin/rm -rf build *.gz)
@@ -224,8 +222,6 @@ COPY VERSION LICENSE ftest.sh SConstruct ./
 COPY utils utils
 COPY src src
 RUN ln -s utils/sl site_scons
-
-RUN find
 
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
