@@ -112,11 +112,27 @@ class CartUtils():
         log_file = os.path.join(log_path, log_dir,
                                 test_name + "_" + env_CCSA + "_cart.log")
 
-        log_mask       = os.environ["D_LOG_MASK"]
-        self.provider  = os.environ["CRT_PHY_ADDR_STR"]
-        ofi_interface  = os.environ["OFI_INTERFACE"]
-        ofi_domain     = os.environ["OFI_DOMAIN"]
-        ofi_share_addr = os.environ["CRT_CTX_SHARE_ADDR"]
+        # Default env vars for orterun
+        log_mask       = "WARN"
+        self.provider  = "ofi+sockets"
+        ofi_interface  = "eth0"
+        ofi_domain     = "mlx5_0"
+        ofi_share_addr = "0"
+
+        if "D_LOG_MASK" in os.environ:
+            log_mask = os.environ["D_LOG_MASK"]
+
+        if "CRT_PHY_ADDR_STR" in os.environ:
+            self.provider = os.environ["CRT_PHY_ADDR_STR"]
+
+        if "OFI_INTERFACE" in os.environ:
+            ofi_interface = os.environ["OFI_INTERFACE"]
+
+        if "OFI_DOMAIN" in os.environ:
+            ofi_domain = os.environ["OFI_DOMAIN"]
+
+        if "CRT_CTX_SHARE_ADDR" in os.environ:
+            ofi_share_addr = os.environ["CRT_CTX_SHARE_ADDR"]
 
         # Do not use the standard .log file extension, otherwise it'll get
         # removed (cleaned up for disk space savings) before we can archive it.
@@ -221,7 +237,10 @@ class CartUtils():
                                       "/run/tests/*/")
         _tst_slt = cartobj.params.get("{}_slt".format(host),
                                       "/run/tests/*/")
-        _tst_ctx = os.environ["{}_CRT_CTX_NUM".format(host)]
+
+        _tst_ctx = "16"
+        if "{}_CRT_CTX_NUM".format(host) in os.environ:
+            _tst_ctx = os.environ["{}_CRT_CTX_NUM".format(host)]
 
         # If the yaml parameter is a list, return the n-th element
         tst_bin = self.get_yaml_list_elem(_tst_bin, index)
