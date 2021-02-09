@@ -50,6 +50,7 @@ class TestPool(TestDaosApiBase):
         self.prop_name = BasicParameter(None)       # name of property to be set
         self.prop_value = BasicParameter(None)      # value of property
         self.rebuild_timeout = BasicParameter(None)
+        self.pool_query_timeout = BasicParameter(None)
 
         self.pool = None
         self.uuid = None
@@ -481,6 +482,23 @@ class TestPool(TestDaosApiBase):
                 waiting for rebuild to start or end
 
         """
+        if self.pool_query_timeout.value is not None:
+            self.log.info(
+                "Waiting for pool query to be responsive %s",
+                " with a {} second timeout".format(self.pool_query_timeout.value))
+
+            start = time()
+            while time() < (start + self.pool_query_timeout.value):
+                try:
+                    self.dmg.pool_query(self.pool.get_uuid_str())
+                    break
+                except CommandFailure as err:
+                    self.log.info("Pool Query Failed")
+            if time() > (start + self.pool_query_timeout.value):
+                raise DaosTestError("Pool Query non-responive for {} seconds".\
+                    format(self.pool_query_timeout.value))
+
+        start = time()
         self.log.info(
             "Waiting for rebuild to %s%s ...",
             "start" if to_start else "complete",
@@ -507,12 +525,13 @@ class TestPool(TestDaosApiBase):
 
     @fail_on(DaosApiError)
     @fail_on(CommandFailure)
-    def start_rebuild(self, ranks, daos_log):
+    def start_rebuild(self, ranks, daos_log, force=False):
         """Kill/Stop the specific server ranks using this pool.
 
         Args:
             ranks (list): a list of daos server ranks (int) to kill
             daos_log (DaosLog): object for logging messages
+            force (bool): whether to use --force option to dmg system stop
 
         Returns:
             bool: True if the server ranks have been killed/stopped and the
@@ -527,7 +546,7 @@ class TestPool(TestDaosApiBase):
 
         if self.control_method.value == self.USE_DMG and self.dmg:
             # Stop desired ranks using dmg
-            self.dmg.system_stop(ranks=convert_list(value=ranks))
+            self.dmg.system_stop(force=force, ranks=convert_list(value=ranks))
             status = True
 
         elif self.control_method.value == self.USE_DMG:

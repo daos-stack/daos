@@ -875,7 +875,7 @@ main(void)
 		cmocka_unit_test(test_drpc_add_ref_success),
 		cmocka_unit_test(test_drpc_add_ref_doesnt_update_max_count)
 	};
-	return cmocka_run_group_tests(tests, NULL, NULL);
+	return cmocka_run_group_tests_name("common_drpc", tests, NULL, NULL);
 }
 
 #undef DRPC_UTEST

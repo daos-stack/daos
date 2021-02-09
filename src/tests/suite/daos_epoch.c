@@ -334,7 +334,7 @@ run_daos_epoch_test(int rank, int size)
 	int	rc;
 
 	if (rank == 0)
-		rc = cmocka_run_group_tests_name("DAOS epoch tests",
+		rc = cmocka_run_group_tests_name("DAOS_Epoch",
 						 epoch_tests, setup,
 						 test_teardown);
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);

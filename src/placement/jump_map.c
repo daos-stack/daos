@@ -519,12 +519,6 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 			get_target(root, &spare_tgt, crc(key, rebuild_key),
 				   dom_used, tgts_used, shard_id, op_type);
 			spares_left--;
-			if (can_extend(op_type, spare_tgt->ta_comp.co_status)) {
-				rc = remap_alloc_one(extend_list, shard_id,
-						spare_tgt, true);
-				if (rc)
-					return rc;
-			}
 		}
 
 		determine_valid_spares(spare_tgt, md, spare_avail,

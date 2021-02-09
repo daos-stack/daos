@@ -2153,5 +2153,5 @@ main(void)
 		CONT_SET_OWNER_TEST(test_drpc_cont_set_owner_success),
 	};
 
-	return cmocka_run_group_tests(tests, NULL, NULL);
+	return cmocka_run_group_tests_name("mgmt_srv_drpc", tests, NULL, NULL);
 }

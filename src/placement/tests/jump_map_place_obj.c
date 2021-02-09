@@ -1367,6 +1367,8 @@ down_up_sequences1(void **state)
 
 	jtc_set_status_on_target(&ctx, UP, shard_target_2);
 	jtc_assert_scan_and_layout(&ctx);
+	jtc_fini(&ctx);
+	skip_msg("DAOS-6520: shard_target 2 is not included in placement");
 	is_true(jtc_has_shard_moving_to_target(&ctx, 0, shard_target_2));
 
 	jtc_set_status_on_target(&ctx, UP, shard_target_1);
@@ -1694,7 +1696,7 @@ placement_test_teardown(void **state)
 static const struct CMUnitTest tests[] = {
 	/* Standard configurations */
 	T("Object class is verified appropriately", object_class_is_verified),
-	WIP("With all healthy targets, can create layout, nothing is in "
+	T("With all healthy targets, can create layout, nothing is in "
 	  "rebuild, and no duplicates.", all_healthy),
 	/* DOWN */
 	T("Take a target down in a system with no servers available, but "
@@ -1715,7 +1717,7 @@ static const struct CMUnitTest tests[] = {
 	T("Take a single shard's target down, downout, then again with the "
 	  "new target. Then reintegrate the first downed target, "
 	  "then the second.", down_up_sequences),
-	T("Take a single shard's target down, downout, then again with the "
+	WIP("Take a single shard's target down, downout, then again with the "
 	  "new target. Then reintegrate the second downed target, "
 	  "then the first (Reverse of previous test).", down_up_sequences1),
 	T("multiple shard targets go down, then are reintegrated in the "
