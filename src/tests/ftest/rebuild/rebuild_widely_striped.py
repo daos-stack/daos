@@ -88,7 +88,7 @@ class RebuildWidelyStriped(MdtestBase):
         thread.start()
         time.sleep(3)
 
-        # Kill rank[6] in the middle of mdtest run and
+        # Kill rank[5] in the middle of mdtest run and
         # wait for rebuild to complete
         self.server_managers[0].stop_ranks([rank[1]], self.d_log, force=True)
         self.pool.wait_for_rebuild(False, interval=1)
@@ -103,7 +103,7 @@ class RebuildWidelyStriped(MdtestBase):
         thread.start()
         time.sleep(3)
 
-        # Kill 2 server ranks [5,6]
+        # Kill 2 server ranks [3,4]
         self.server_managers[0].stop_ranks(rank[2], self.d_log, force=True)
         self.pool.wait_for_rebuild(False, interval=1)
         # wait for mdtest to complete

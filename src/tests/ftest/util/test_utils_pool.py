@@ -492,7 +492,7 @@ class TestPool(TestDaosApiBase):
             while time() < end_time:
                 try:
                     self.dmg.pool_query(self.pool.get_uuid_str())
-                    self.log.info("Pool query still responsive")
+                    self.log.info("Pool query is responsive")
                     break
                 except CommandFailure as err:
                     self.log.info("Pool Query still non-responsive %s", err)
@@ -529,12 +529,13 @@ class TestPool(TestDaosApiBase):
 
     @fail_on(DaosApiError)
     @fail_on(CommandFailure)
-    def start_rebuild(self, ranks, daos_log):
+    def start_rebuild(self, ranks, daos_log, force=False):
         """Kill/Stop the specific server ranks using this pool.
 
         Args:
             ranks (list): a list of daos server ranks (int) to kill
             daos_log (DaosLog): object for logging messages
+            force (bool): whether to use --force option to dmg system stop
 
         Returns:
             bool: True if the server ranks have been killed/stopped and the
@@ -549,7 +550,7 @@ class TestPool(TestDaosApiBase):
 
         if self.control_method.value == self.USE_DMG and self.dmg:
             # Stop desired ranks using dmg
-            self.dmg.system_stop(ranks=convert_list(value=ranks))
+            self.dmg.system_stop(force=force, ranks=convert_list(value=ranks))
             status = True
 
         elif self.control_method.value == self.USE_DMG:

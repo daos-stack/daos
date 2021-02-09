@@ -2111,7 +2111,8 @@ main(void)
 		cmocka_unit_test(test_get_admin_cont_capas),
 	};
 
-	return cmocka_run_group_tests(tests, NULL, NULL);
+	return cmocka_run_group_tests_name("security_srv_acl",
+					   tests, NULL, NULL);
 }
 
 #undef ACL_UTEST

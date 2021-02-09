@@ -8,8 +8,9 @@
  */
 #define D_LOGFAC	DD_FAC(grp)
 
-#include "crt_internal.h"
+#include <sys/types.h>
 #include <sys/stat.h>
+#include "crt_internal.h"
 
 static int crt_group_primary_add_internal(struct crt_grp_priv *grp_priv,
 					d_rank_t rank, int tag,
@@ -1739,6 +1740,7 @@ open_tmp_attach_info_file(char **filename)
 	char		 template[] = "attach-info-XXXXXX";
 	int		 tmp_fd;
 	FILE		*tmp_file;
+	mode_t		 old_mode;
 
 	if (filename == NULL) {
 		D_ERROR("filename can't be NULL.\n");
@@ -1750,9 +1752,16 @@ open_tmp_attach_info_file(char **filename)
 		return NULL;
 	D_ASSERT(*filename != NULL);
 
+	/** Ensure the temporary file is created with proper permissions to
+	 *  limit security risk.
+	 */
+	old_mode = umask(S_IWGRP | S_IWOTH);
+
 	tmp_fd = mkstemp(*filename);
+	umask(old_mode);
+
 	if (tmp_fd == -1) {
-		D_ERROR("mktemp() failed on %s, error: %s.\n",
+		D_ERROR("mkstemp() failed on %s, error: %s.\n",
 			*filename, strerror(errno));
 		return NULL;
 	}

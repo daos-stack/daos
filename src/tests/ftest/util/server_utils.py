@@ -1089,7 +1089,7 @@ class DaosServerManager(SubprocessManager):
         self.log.info(msg)
         daos_log.info(msg)
 
-         # Stop desired ranks using dmg
+        # Stop desired ranks using dmg
         self.dmg.system_stop(force=force, ranks=convert_list(value=ranks))
 
         # Update the expected status of the stopped/evicted ranks
