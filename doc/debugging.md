@@ -1,8 +1,9 @@
 # DAOS Debugging
 
 DAOS uses the debug system defined in [CaRT](https://github.com/daos-stack/cart)
-but more specifically the GURT library. The default server log is `/tmp/daos.log`
-and the default client log is `stdout`, unless otherwise set by `D_LOG_FILE`.
+but more specifically the GURT library. Both server and client default log is
+stdout, unless otherwise set by `D_LOG_FILE` environment variable (client) or
+`log_file` config parameter (server).
 
 ## Registered Subsystems/Facilities
 
