@@ -387,6 +387,7 @@ class DaosServer():
 
         if self.valgrind:
             valgrind_args = ['--fair-sched=yes',
+                             '--gen-suppressions=all',
                              '--xml=yes',
                              '--xml-file=dnt_server.%p.memcheck.xml',
                              '--num-callers=6',
