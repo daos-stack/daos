@@ -166,6 +166,40 @@ daos_tx_restart(daos_handle_t th, daos_event_t *ev);
 int
 daos_tx_hdl2epoch(daos_handle_t th, daos_epoch_t *epoch);
 
+/**
+ * Initialize an iteratror anchor.
+ *
+ * \param[in]	anchor	Anchor to be initialized
+ * \param[in]	opts	(reserved) Initialization options
+ */
+static inline int
+daos_anchor_init(daos_anchor_t *anchor, unsigned int opts)
+{
+	*anchor = DAOS_ANCHOR_INIT;
+	return 0;
+}
+
+/**
+ * Finalizie an iteratror anchor, free resources allocated
+ * during the iteration.
+ *
+ * \param[in]	anchor	Anchor to be finialized
+ */
+static inline void
+daos_anchor_fini(daos_anchor_t *anchor)
+{
+	/* NOOP for now, might need to free memory */
+}
+
+/**
+ * End of the iteration
+ */
+static inline bool
+daos_anchor_is_eof(daos_anchor_t *anchor)
+{
+	return anchor->da_type == DAOS_ANCHOR_TYPE_EOF;
+}
+
 #if defined(__cplusplus)
 }
 #endif

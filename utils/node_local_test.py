@@ -76,6 +76,7 @@ class NLTConf():
         self.agent_dir = None
         self.wf = None
         self.args = None
+        self.max_log_size = None
 
     def set_wf(self, wf):
         """Set the WarningsFactory object"""
@@ -84,6 +85,17 @@ class NLTConf():
     def set_args(self, args):
         """Set command line args"""
         self.args = args
+
+        # Parse the max log size.
+        if args.max_log_size:
+            size = args.max_log_size
+            if size.endswith('MiB'):
+                size = int(size[:-3])
+                size *= (1024 * 1024)
+            elif size.endswith('GiB'):
+                size = int(size[:-3])
+                size *= (1024 * 1024 * 1024)
+            self.max_log_size = int(size)
 
     def __getitem__(self, key):
         return self.bc[key]
@@ -325,21 +337,17 @@ class DaosServer():
             raise NLTestTimeout("{} failed after {:.2f}s (max {:.2f}s)".format(
                 op, elapsed, max_time))
 
-    def _check_system_state(self, desired):
-        # The json returned from the control plane should have
-        # string-based states.
-        states = {
-            "ready": [8],
-            "stopped": [16, 32],
-        }
+    def _check_system_state(self, desired_states):
+        if not isinstance(desired_states, list):
+            desired_states = [desired_states]
 
         rc = self.run_dmg(['system', 'query', '--json'])
         if rc.returncode == 0:
             data = json.loads(rc.stdout.decode('utf-8'))
-            members = data['response']['Members']
+            members = data['response']['members']
             if members is not None:
-                for desired_state in states[desired]:
-                    if members[0]['State'] == desired_state:
+                for desired_state in desired_states:
+                    if members[0]['state'] == desired_state:
                         return True
         return False
 
@@ -455,7 +463,7 @@ class DaosServer():
         # How wait until the system is up, basically the format to happen.
         while True:
             time.sleep(0.5)
-            if self._check_system_state('ready'):
+            if self._check_system_state(['ready', 'joined']):
                 break
             self._check_timing("start", start, max_start_time)
         print('Server started in {:.2f} seconds'.format(time.time() - start))
@@ -987,6 +995,21 @@ def needs_dfuse(method):
         return rc
     return _helper
 
+def needs_dfuse_with_cache(method):
+    """Decorator function for starting dfuse under posix_tests class"""
+    @functools.wraps(method)
+    def _helper(self):
+        self.dfuse = DFuse(self.server,
+                           self.conf,
+                           pool=self.pool,
+                           caching=True,
+                           container=self.container)
+        self.dfuse.start(v_hint=method.__name__)
+        rc = method(self)
+        if self.dfuse.stop():
+            self.fatal_errors = True
+        return rc
+    return _helper
 
 class posix_tests():
     """Class for adding standalone unit tests"""
@@ -1136,6 +1159,23 @@ class posix_tests():
                '--type', 'POSIX']
         rc = run_daos_cmd(self.conf, cmd)
         assert rc.returncode == 0
+        stbuf = os.stat(path)
+        print(stbuf)
+        assert stbuf.st_ino < 100
+        print(os.listdir(path))
+
+    @needs_dfuse_with_cache
+    def test_uns_create_with_cache(self):
+        """Simple test to create a container using a path in dfuse"""
+        path = os.path.join(self.dfuse.dir, 'mycont2')
+        cmd = ['container', 'create',
+               '--pool', self.pool, '--path', path,
+               '--type', 'POSIX']
+        rc = run_daos_cmd(self.conf, cmd)
+        assert rc.returncode == 0
+        stbuf = os.stat(path)
+        print(stbuf)
+        assert stbuf.st_ino < 100
         print(os.listdir(path))
 
 def run_posix_tests(server, conf, test=None):
@@ -1290,6 +1330,15 @@ def compress_file(filename):
 
     os.unlink(filename)
 
+# https://stackoverflow.com/questions/1094841/get-human-readable-version-of-file-size
+def sizeof_fmt(num, suffix='B'):
+    """Return size as a human readable string"""
+    for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
+        if abs(num) < 1024.0:
+            return "%3.1f%s%s" % (num, unit, suffix)
+        num /= 1024.0
+    return "%.1f%s%s" % (num, 'Yi', suffix)
+
 def log_test(conf,
              filename,
              show_memleaks=True,
@@ -1301,8 +1350,14 @@ def log_test(conf,
              check_write=False):
     """Run the log checker on filename, logging to stdout"""
 
+    # Check if the log file has wrapped, if it has then log parsing checks do
+    # not work correctly.
+    if os.path.exists('{}.old'.format(filename)):
+        raise Exception('Log file exceeded max size')
+    fstat = os.stat(filename)
     if not quiet:
-        print('Running log_test on {}'.format(filename))
+        print('Running log_test on {} {}'.format(filename,
+                                                 sizeof_fmt(fstat.st_size)))
 
     log_iter = lp.LogIter(filename)
 
@@ -1348,6 +1403,11 @@ def log_test(conf,
         raise NLTestNoFunction('dfuse_write')
 
     compress_file(filename)
+
+    if conf.max_log_size and fstat.st_size > conf.max_log_size:
+        raise Exception('Max log size exceeded, {} > {}'\
+                        .format(sizeof_fmt(fstat.st_size),
+                                sizeof_fmt(conf.max_log_size)))
 
     return lto.fi_location
 
@@ -2327,6 +2387,7 @@ def main():
     parser.add_argument('--dfuse-debug', default=None)
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
+    parser.add_argument('--max-log-size', default=None)
     parser.add_argument('--perf-check', action='store_true')
     parser.add_argument('--dtx', action='store_true')
     parser.add_argument('--test', help="Use '--test list' for list")
