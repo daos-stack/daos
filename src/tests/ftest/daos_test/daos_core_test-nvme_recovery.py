@@ -25,8 +25,8 @@ class DaosCoreTestNvme(DaosCoreBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=nvme
-        :avocado: tags=daos_nvme_recovery_1,unittest
+        :avocado: tags=unittest,nvme
+        :avocado: tags=daos_test,daos_core_test_nvme,test_daos_nvme_recovery_1
         """
         self.run_subtest()
 
@@ -41,8 +41,8 @@ class DaosCoreTestNvme(DaosCoreBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=nvme
-        :avocado: tags=daos_nvme_recovery_2,unittest
+        :avocado: tags=unittest,nvme
+        :avocado: tags=daos_test,daos_core_test_nvme,test_daos_nvme_recovery_2
         """
         self.run_subtest()
 
@@ -57,8 +57,8 @@ class DaosCoreTestNvme(DaosCoreBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=nvme
-        :avocado: tags=daos_nvme_recovery_3,unittest
+        :avocado: tags=unittest,nvme
+        :avocado: tags=daos_test,daos_core_test_nvme,test_daos_nvme_recovery_3
         """
         self.run_subtest()
 
@@ -73,7 +73,7 @@ class DaosCoreTestNvme(DaosCoreBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=nvme
-        :avocado: tags=daos_nvme_recovery_4,unittest
+        :avocado: tags=unittest,nvme
+        :avocado: tags=daos_test,daos_core_test_nvme,test_daos_nvme_recovery_4
         """
         self.run_subtest()
