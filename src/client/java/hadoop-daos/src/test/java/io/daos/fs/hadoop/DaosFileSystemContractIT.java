@@ -11,24 +11,23 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystemContractBaseTest;
 import org.apache.hadoop.fs.Path;
 import org.junit.Test;
+import org.junit.Before;
 
 import java.io.IOException;
 
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assume.assumeTrue;
 
 public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
 
   private static final Log LOG = LogFactory.getLog(DaosFileSystemContractIT.class);
 
-  @Override
+  @Before
   protected void setUp() throws Exception {
     fs = DaosFSFactory.getFS();
     fs.mkdirs(new Path("/test"));
-  }
-
-  @Override
-  protected void tearDown() throws Exception {
-    super.tearDown();
   }
 
   @Override
