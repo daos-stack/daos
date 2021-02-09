@@ -23,6 +23,21 @@ package spdk
 #include "spdk/vmd.h"
 #include "include/nvme_control.h"
 #include "include/nvme_control_common.h"
+
+static char **makeCharArray(int size) {
+        return calloc(sizeof(char*), size);
+}
+
+static void setArrayString(char **a, char *s, int n) {
+        a[n] = s;
+}
+
+static void freeCharArray(char **a, int size) {
+        int i;
+        for (i = 0; i < size; i++)
+                free(a[i]);
+        free(a);
+}
 */
 import "C"
 
@@ -53,50 +68,50 @@ func Rc2err(label string, rc C.int) error {
 // EnvOptions describe parameters to be used when initializing a processes
 // SPDK environment.
 type EnvOptions struct {
-	MemSize        int      // size in MiB to be allocated to SPDK proc
-	PciIncludeList []string // restrict SPDK device access
-	DisableVMD     bool     // flag if VMD devices should not be included
+	MemSize      int      // size in MiB to be allocated to SPDK proc
+	PciAllowList []string // restrict SPDK device access
+	DisableVMD   bool     // flag if VMD devices should not be included
 }
 
-func (o *EnvOptions) sanitizeIncludeList(log logging.Logger) error {
+func (o *EnvOptions) sanitizeAllowList(log logging.Logger) error {
 	if !o.DisableVMD {
 		// DPDK will not accept VMD backing device addresses
 		// so convert to VMD address
-		newIncludeList, err := revertBackingToVmd(log, o.PciIncludeList)
+		newAllowList, err := revertBackingToVmd(log, o.PciAllowList)
 		if err != nil {
 			return err
 		}
-		o.PciIncludeList = newIncludeList
+		o.PciAllowList = newAllowList
 	}
 
 	return nil
 }
 
 // pciListToC allocates memory and populate array of C SPDK PCI addresses.
-func pciListToC(log logging.Logger, inAddrs []string) (*unsafe.Pointer, error) {
-	var tmpAddr *C.struct_spdk_pci_addr
-
-	structSize := unsafe.Sizeof(*tmpAddr)
-	outAddrs := C.calloc(C.ulong(len(inAddrs)), C.ulong(structSize))
-
-	for i, inAddr := range inAddrs {
-		log.Debugf("adding %s to spdk_env_opts include list", inAddr)
-
-		offset := uintptr(i) * structSize
-		tmpAddr = (*C.struct_spdk_pci_addr)(unsafe.Pointer(uintptr(outAddrs) + offset))
-		cs := C.CString(inAddr)
-
-		if rc := C.spdk_pci_addr_parse(tmpAddr, C.CString(inAddr)); rc != 0 {
-			C.free(unsafe.Pointer(outAddrs))
-
-			return nil, Rc2err("spdk_pci_addr_parse()", rc)
-		}
-
-		C.free(unsafe.Pointer(cs))
-	}
-
-	return &outAddrs, nil
-}
+//func pciListToC(log logging.Logger, inAddrs []string) (*unsafe.Pointer, error) {
+//	var tmpAddr *C.struct_spdk_pci_addr
+//
+//	structSize := unsafe.Sizeof(*tmpAddr)
+//	outAddrs := C.calloc(C.ulong(len(inAddrs)), C.ulong(structSize))
+//
+//	for i, inAddr := range inAddrs {
+//		log.Debugf("adding %s to spdk_env_opts include list", inAddr)
+//
+//		offset := uintptr(i) * structSize
+//		tmpAddr = (*C.struct_spdk_pci_addr)(unsafe.Pointer(uintptr(outAddrs) + offset))
+//		cs := C.CString(inAddr)
+//
+//		if rc := C.spdk_pci_addr_parse(tmpAddr, C.CString(inAddr)); rc != 0 {
+//			C.free(unsafe.Pointer(outAddrs))
+//
+//			return nil, Rc2err("spdk_pci_addr_parse()", rc)
+//		}
+//
+//		C.free(unsafe.Pointer(cs))
+//	}
+//
+//	return &outAddrs, nil
+//}
 
 // revertBackingToVmd converts VMD backing device PCI addresses (with the VMD
 // address encoded in the domain component of the PCI address) back to the PCI
@@ -141,26 +156,33 @@ func revertBackingToVmd(log logging.Logger, pciAddrs []string) ([]string, error)
 func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 	log.Debugf("spdk init go opts: %+v", opts)
 
-	if err := opts.sanitizeIncludeList(log); err != nil {
+	if err := opts.sanitizeAllowList(log); err != nil {
 		return errors.Wrap(err, "sanitizing PCI include list")
 	}
 
-	listPtr, err := pciListToC(log, opts.PciIncludeList)
-	if err != nil {
-		return err
+	// Build C array in Go from opts.PciAllowList []string
+	cAllowList := C.makeCharArray(C.int(len(opts.PciAllowList)))
+	defer C.freeCharArray(cAllowList, C.int(len(opts.PciAllowList)))
+
+	for i, s := range opts.PciAllowList {
+		C.setArrayString(cAllowList, C.CString(s), C.int(i))
 	}
-	defer func() {
-		if listPtr != nil {
-			C.free(*listPtr)
-		}
-	}()
+
+	//	listPtr, err := pciListToC(log, opts.PciAllowList)
+	//	if err != nil {
+	//		return err
+	//	}
+	//	defer func() {
+	//		if listPtr != nil {
+	//			C.free(*listPtr)
+	//		}
+	//	}()
 
 	envCtx := C.CString("--log-level=lib.eal:4")
 	defer C.free(unsafe.Pointer(envCtx))
 
 	retPtr := C.daos_spdk_init(C.int(opts.MemSize), envCtx,
-		C.ulong(len(opts.PciIncludeList)),
-		(*C.struct_spdk_pci_addr)(*listPtr))
+		C.ulong(len(opts.PciAllowList)), cAllowList)
 	if err := checkRet(retPtr, "daos_spdk_init()"); err != nil {
 		return err
 	}

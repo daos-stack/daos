@@ -61,7 +61,6 @@ nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot);
  * \return a pointer to a return struct (ret_t).
  */
 struct ret_t *
-daos_spdk_init(int mem_sz, char *env_ctx, size_t nr_pcil,
-		struct spdk_pci_addr *pcil);
+daos_spdk_init(int mem_sz, char *env_ctx, size_t nr_pcil, char **pcil);
 
 #endif
