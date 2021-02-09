@@ -527,9 +527,16 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		still_needed = pl_obj_layout_contains(rpt->rt_pool->sp_map,
 						      layout, myrank, mytarget);
 		if (!still_needed) {
+			struct rebuild_pool_tls *tls;
+
+			tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
+						      rpt->rt_rebuild_ver);
+			D_ASSERT(tls != NULL);
+			tls->rebuild_pool_reclaim_obj_count++;
 			D_DEBUG(DB_REBUILD, "deleting object "DF_UOID
 				" which is not reachable on rank %u tgt %u",
 				DP_UOID(oid), myrank, mytarget);
+
 			/*
 			 * It's possible this object might still be being
 			 * accessed elsewhere - retry until until it is possible
