@@ -22,6 +22,8 @@ if [ -e install/lib/daos/TESTING/ftest/avocado/job-results/latest ]; then
 else
     pwd
     ls -l install/lib/daos/TESTING/ftest/avocado/job-results
+    stat install/lib/daos/TESTING/ftest/avocado/job-results/latest
+    rm -f install/lib/daos/TESTING/ftest/avocado/job-results/latest
 fi
 
 arts="$arts$(ls ./*daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
