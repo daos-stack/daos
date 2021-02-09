@@ -13,7 +13,7 @@
 #include <daos_srv/vos.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/dtx_srv.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/container.h>
 #include <abt.h>
 #include "dtx_internal.h"

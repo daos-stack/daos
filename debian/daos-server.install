@@ -5,7 +5,7 @@ etc/ld.so.conf.d/daos.conf
 usr/bin/daos_admin
 # set daos_server to be setgid daos_server in order to invoke daos_admin
 usr/bin/daos_server
-usr/bin/daos_io_server
+usr/bin/daos_engine
 usr/lib64/daos_srv/libcont.so
 usr/lib64/daos_srv/libdtx.so
 usr/lib64/daos_srv/libmgmt.so

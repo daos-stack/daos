@@ -839,7 +839,7 @@ main(void)
 		DRPC_UTEST(test_drpc_progress_context_close_with_multi_session)
 	};
 
-	return cmocka_run_group_tests_name("iosrv_drpc_progress",
+	return cmocka_run_group_tests_name("engine_drpc_progress",
 					   tests, NULL, NULL);
 }
 
