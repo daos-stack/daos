@@ -359,6 +359,21 @@ class TestWithoutServers(Test):
         self.d_log = DaosLog(self.context)
         self.test_log.daos_log = self.d_log
 
+        # import and set env vars from yaml file
+        defaultENV = self.params.get("default", "/run/ENV/")
+        if defaultENV is None:
+            print("defaultENV was not set in yaml file.\n")
+            return
+
+        for kv_pair in defaultENV:
+            key, value = kv_pair[0]
+            print("Adding {}={} to environment.\n".format(key, value))
+            os.environ[key] = value
+
+        # For compatibility with cart tests, whch set env vars in oretrun
+        # command via -x options
+        self.env = os.environ
+
     def tearDown(self):
         """Tear down after each test case."""
         self.report_timeout()
@@ -371,6 +386,19 @@ class TestWithoutServers(Test):
                     "Error running inherited teardown(): {}".format(error))
 
         super(TestWithoutServers, self).tearDown()
+
+
+    def unset_other_env_vars(self):
+        """ import env vars from other_env_var param """
+        defaultENV = self.params.get("default", "/run/ENV/")
+        if defaultENV is None:
+            print("defaultENV was not set in yaml file.\n")
+            return
+
+        for kv_pair in defaultENV:
+            key = kv_pair[0][0]
+            print("Removing key {} from environment.\n".format(key))
+            del os.environ[key]
 
 
 class TestWithServers(TestWithoutServers):

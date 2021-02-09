@@ -26,8 +26,9 @@ from __future__ import print_function
 
 import sys
 import subprocess
+import os
 
-from apricot       import TestWithoutServers
+from apricot import TestWithoutServers
 
 sys.path.append('./util')
 
@@ -45,16 +46,7 @@ class CartNoPmixOneNodeTest(TestWithoutServers):
         """ Test setup """
         print("Running setup\n")
         self.utils = CartUtils()
-        self.env = self.utils.get_env(self)
-        crt_phy_addr = self.params.get("CRT_PHY_ADDR_STR", '/run/defaultENV/')
-        ofi_interface = self.params.get("OFI_INTERFACE", '/run/defaultENV/')
-        ofi_ctx_num = self.params.get("CRT_CTX_NUM", '/run/defaultENV/')
-        ofi_share_addr = self.params.get("CRT_CTX_SHARE_ADDR",
-                                         '/run/defaultENV/')
-        self.pass_env = {"CRT_PHY_ADDR_STR": crt_phy_addr,
-                         "OFI_INTERFACE": ofi_interface,
-                         "CRT_CTX_SHARE_ADDR": ofi_share_addr,
-                         "CRT_CTX_NUM": ofi_ctx_num}
+        super(CartNoPmixOneNodeTest, self).setUp()
 
     def tearDown(self):
         """ Tear down """
@@ -68,6 +60,16 @@ class CartNoPmixOneNodeTest(TestWithoutServers):
 
         :avocado: tags=all,cart,pr,daily_regression,no_pmix,one_node
         """
+
+        crt_phy_addr   = os.environ["CRT_PHY_ADDR_STR"]
+        ofi_interface  = os.environ["OFI_INTERFACE"]
+        ofi_ctx_num    = os.environ["CRT_CTX_NUM"]
+        ofi_share_addr = os.environ["CRT_CTX_SHARE_ADDR"]
+
+        self.pass_env = {"CRT_PHY_ADDR_STR": crt_phy_addr,
+                         "OFI_INTERFACE": ofi_interface,
+                         "CRT_CTX_SHARE_ADDR": ofi_share_addr,
+                         "CRT_CTX_NUM": ofi_ctx_num}
 
         cmd = self.params.get("tst_bin", '/run/tests/*/')
 
@@ -83,7 +85,3 @@ class CartNoPmixOneNodeTest(TestWithoutServers):
             self.fail("Test failed.\n")
 
         self.utils.print("Finished waiting for {}".format(p))
-
-
-if __name__ == "__main__":
-    main()

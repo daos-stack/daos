@@ -105,34 +105,6 @@ class CartUtils():
 
         return procrtn
 
-    @staticmethod
-    def set_other_env_vars(cartobj):
-        """ import env vars from other_env_var param """
-        other_env_vars = cartobj.params.get("other_env_vars",
-                                            "/run/defaultENV/")
-        if other_env_vars is None:
-            print("other_env_vars was not set in yaml file.\n")
-            return
-
-        for kv_pair in other_env_vars:
-            key, value = kv_pair[0]
-            print("Adding {}={} to environment.\n".format(key, value))
-            os.environ[key] = value
-
-    @staticmethod
-    def unset_other_env_vars(cartobj):
-        """ import env vars from other_env_var param """
-        other_env_vars = cartobj.params.get("other_env_vars",
-                                            "/run/defaultENV/")
-        if other_env_vars is None:
-            print("other_env_vars was not set in yaml file.\n")
-            return
-
-        for kv_pair in other_env_vars:
-            key = kv_pair[0][0]
-            print("Removing key {} from environment.\n".format(key))
-            del os.environ[key]
-
     # What is special about pylint's 15 variable limit?
     # pylint: disable=too-many-locals
     def get_env(self, cartobj):
@@ -157,13 +129,11 @@ class CartUtils():
         log_file = os.path.join(log_path, log_dir,
                                 test_name + "_" + env_CCSA + "_cart.log")
 
-        log_mask = cartobj.params.get("D_LOG_MASK", "/run/defaultENV/")
-        self.provider = cartobj.params.get("CRT_PHY_ADDR_STR",
-                                           "/run/defaultENV/")
-        ofi_interface = cartobj.params.get("OFI_INTERFACE", "/run/defaultENV/")
-        ofi_domain = cartobj.params.get("OFI_DOMAIN", "/run/defaultENV/")
-        ofi_share_addr = cartobj.params.get("CRT_CTX_SHARE_ADDR",
-                                            "/run/env_CRT_CTX_SHARE_ADDR/*/")
+        log_mask       = os.environ["D_LOG_MASK"]
+        self.provider  = os.environ["CRT_PHY_ADDR_STR"]
+        ofi_interface  = os.environ["OFI_INTERFACE"]
+        ofi_domain     = os.environ["OFI_DOMAIN"]
+        ofi_share_addr = os.environ["CRT_CTX_SHARE_ADDR"]
 
         # Do not use the standard .log file extension, otherwise it'll get
         # removed (cleaned up for disk space savings) before we can archive it.
@@ -268,8 +238,7 @@ class CartUtils():
                                       "/run/tests/*/")
         _tst_slt = cartobj.params.get("{}_slt".format(host),
                                       "/run/tests/*/")
-        _tst_ctx = cartobj.params.get("{}_CRT_CTX_NUM".format(host),
-                                      "/run/defaultENV/")
+        _tst_ctx = os.environ["{}_CRT_CTX_NUM".format(host)]
 
         # If the yaml parameter is a list, return the n-th element
         tst_bin = self.get_yaml_list_elem(_tst_bin, index)
