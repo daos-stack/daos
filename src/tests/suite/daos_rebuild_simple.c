@@ -789,7 +789,7 @@ run_daos_rebuild_simple_test(int rank, int size, int *sub_tests,
 		sub_tests = NULL;
 	}
 
-	rc = run_daos_sub_tests_only("DAOS rebuild simple tests", rebuild_tests,
+	rc = run_daos_sub_tests_only("DAOS_Rebuild_Simple", rebuild_tests,
 				     ARRAY_SIZE(rebuild_tests), sub_tests,
 				     sub_tests_size);
 
