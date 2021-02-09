@@ -27,6 +27,7 @@ config.log
 .sconsign.dblite
 .daos_server.active.yml
 autodocs
+utils/rpms/_topdir
 
 # Doc isn't required for building.
 doc

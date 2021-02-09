@@ -212,6 +212,8 @@ COPY utils/sl utils/sl
 COPY utils/build.config utils/
 RUN ln -s utils/sl site_scons
 
+RUN find
+
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
     (scons --build-deps=yes install PREFIX=/opt/daos --deps-only && \
     /bin/rm -rf build *.gz)
@@ -222,6 +224,8 @@ COPY VERSION LICENSE ftest.sh SConstruct ./
 COPY utils utils
 COPY src src
 RUN ln -s utils/sl site_scons
+
+RUN find
 
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
