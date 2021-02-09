@@ -309,7 +309,7 @@ main(void)
 		UTEST(test_drpc_listener_fini_cant_free_mutex),
 	};
 
-	return cmocka_run_group_tests_name("iosrv_drpc_listener",
+	return cmocka_run_group_tests_name("engine_drpc_listener",
 					   tests, NULL, NULL);
 }
 
