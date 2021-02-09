@@ -2535,9 +2535,10 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 		if (cb_info->cci_rc != 0)
 			child_output->rc = cb_info->cci_rc;
 
-		/* Fatal if reply send fails */
-		rc = crt_reply_send(iv_info->uci_child_rpc);
-		D_ASSERT(rc == 0);
+		/* Respond back to child; might fail if child is not alive */
+		if (crt_reply_send(iv_info->uci_child_rpc) != DER_SUCCESS)
+			D_ERROR("Failed to respond on rpc: %p",
+				iv_info->uci_child_rpc);
 
 		/* ADDREF done in crt_hdlr_iv_update */
 		RPC_PUB_DECREF(iv_info->uci_child_rpc);
