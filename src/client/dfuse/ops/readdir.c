@@ -94,12 +94,14 @@ create_entry(struct dfuse_projection_info *fs_handle,
 	     d_list_t **rlinkp)
 {
 	struct dfuse_inode_entry	*ie;
-	d_list_t *rlink;
-	int rc = 0;
+	d_list_t			 *rlink;
+	int				 rc = 0;
 
 	D_ALLOC_PTR(ie);
-	if (!ie)
+	if (!ie) {
+		dfs_release(obj);
 		D_GOTO(out, rc = ENOMEM);
+	}
 
 	DFUSE_TRA_UP(ie, parent, "inode");
 
@@ -113,13 +115,11 @@ create_entry(struct dfuse_projection_info *fs_handle,
 
 	if (S_ISDIR(ie->ie_stat.st_mode) && attr_len) {
 		rc = check_for_uns_ep(fs_handle, ie, attr, attr_len);
-		DFUSE_TRA_DEBUG(ie,
-				"check_for_uns_ep() returned %d", rc);
-		if (rc != 0)
-			D_GOTO(out, rc);
-		rc = 0;
-		ie->ie_stat.st_mode &= ~S_IFIFO;
-		ie->ie_stat.st_mode |= S_IFDIR;
+		if (rc != 0) {
+			DFUSE_TRA_WARNING(ie, "check_for_uns_ep() returned %d,"
+					" ignoring", rc);
+			rc = 0;
+		}
 		entry->attr.st_mode = ie->ie_stat.st_mode;
 		entry->attr.st_ino = ie->ie_stat.st_ino;
 	}
@@ -177,6 +177,9 @@ create_entry(struct dfuse_projection_info *fs_handle,
 
 	*rlinkp = rlink;
 out:
+	if (rc != 0)
+		ie_close(fs_handle, ie);
+
 	return rc;
 }
 
@@ -345,7 +348,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 			else
 				rc = dfs_lookup_rel(oh->doh_dfs, oh->doh_obj,
 						    dre->dre_name, O_RDONLY, &obj,
-						&stbuf.st_mode, NULL);
+						    &stbuf.st_mode, NULL);
 			if (rc == ENOENT) {
 				DFUSE_TRA_DEBUG(oh, "File does not exist");
 				continue;
@@ -371,7 +374,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 						  &entry,
 						  obj,
 						  dre->dre_name,
-						  attr_name,
+						  out,
 						  attr_len,
 						  &rlink);
 				if (rc != 0)
@@ -427,10 +430,8 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 
 reply:
 
-	if (rc)
-		DFUSE_TRA_WARNING(oh, "Replying %d %d", added, rc);
-	else
-		DFUSE_TRA_DEBUG(oh, "Replying %d %d", added, rc);
+	if (rc != 0)
+		DFUSE_TRA_DEBUG(oh, "Replying with %d entries", added);
 
 	if (added == 0 && rc != 0)
 		D_GOTO(err, 0);
