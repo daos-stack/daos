@@ -384,7 +384,8 @@ main(void)
 			test_request_credentials_returns_raw_bytes),
 	};
 
-	return cmocka_run_group_tests(tests, NULL, NULL);
+	return cmocka_run_group_tests_name("security_cli_security",
+					   tests, NULL, NULL);
 }
 
 #undef SECURITY_UTEST

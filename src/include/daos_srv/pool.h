@@ -150,7 +150,7 @@ int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets,
 		       const d_rank_list_t *target_addrs, int ndomains,
 		       const int *domains, daos_prop_t *prop,
 		       d_rank_list_t *svc_addrs);
-int ds_pool_svc_destroy(const uuid_t pool_uuid);
+int ds_pool_svc_destroy(const uuid_t pool_uuid, d_rank_list_t *svc_ranks);
 
 int ds_pool_svc_get_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
 			 daos_prop_t *prop);
@@ -237,6 +237,9 @@ void
 ds_pool_disable_evict(void);
 void
 ds_pool_enable_evict(void);
+
+int ds_pool_svc_ranks_get(uuid_t uuid, d_rank_list_t *svc_ranks,
+			  d_rank_list_t **ranks);
 
 int dsc_pool_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		       unsigned int flags, const char *grp,
