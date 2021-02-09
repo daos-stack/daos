@@ -68,6 +68,7 @@ struct bio_nvme_data {
 
 static struct bio_nvme_data nvme_glb;
 uint64_t io_stat_period;
+uint64_t vmd_led_period;
 
 static int
 is_addr_in_whitelist(char *pci_addr, const struct spdk_pci_addr *whitelist,
@@ -420,6 +421,10 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 	env = getenv("IO_STAT_PERIOD");
 	io_stat_period = env ? atoi(env) : 0;
 	io_stat_period *= (NSEC_PER_SEC / NSEC_PER_USEC);
+
+	env = getenv("VMD_LED_PERIOD");
+	vmd_led_period = env ? atoi(env) : 0;
+	vmd_led_period *= (NSEC_PER_SEC / NSEC_PER_USEC);
 
 	nvme_glb.bd_shm_id = shm_id;
 	nvme_glb.bd_mem_size = mem_size;
@@ -1683,16 +1688,18 @@ void
 bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 {
 	struct bio_bdev         *d_bdev;
-	static uint64_t          led_event_period = NVME_MONITOR_PERIOD;
+
+	/*
+	 * Check VMD_LED_PERIOD environment variable, if not set use default
+	 * NVME_MONITOR_PERIOD of 60 seconds.
+	 */
+	if (vmd_led_period == 0)
+		vmd_led_period = NVME_MONITOR_PERIOD;
 
 	/* Scan all devices present in bio_bdev list */
 	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
 		if (d_bdev->bb_led_start_time != 0) {
-			/*
-			 * TODO: Make NVME_LED_EVENT_PERIOD configurable from
-			 * command line
-			 */
-			if (d_bdev->bb_led_start_time + led_event_period >= now)
+			if (d_bdev->bb_led_start_time + vmd_led_period >= now)
 				continue;
 
 			if (bio_set_led_state(ctxt, d_bdev->bb_uuid, NULL,

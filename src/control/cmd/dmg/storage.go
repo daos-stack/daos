@@ -359,7 +359,7 @@ func (cmd *nvmeReplaceCmd) Execute(_ []string) error {
 
 // storageIdentifyCmd is the struct representing the identify storage subcommand.
 type storageIdentifyCmd struct {
-	VMD vmdIdentifyCmd `command:"vmd" alias:"n" description:"Quickly blink the status LED on a VMD NVMe SSD for device identification."`
+	VMD vmdIdentifyCmd `command:"vmd" alias:"n" description:"Quickly blink the status LED on a VMD NVMe SSD for device identification. Duration of LED event can be configured by setting the VMD_LED_PERIOD environment variable, otherwise default is 60 seconds."`
 }
 
 // vmdIdentifyCmd is the struct representing the identify vmd storage subcommand.
