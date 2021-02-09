@@ -158,7 +158,7 @@ class Snapshot(TestWithServers):
             self.display_snapshot(snapshot)
         except Exception as error:
             self.fail("##(0)Error on a snapshot on a new container"
-                " {}".format(str(error)))
+                      " {}".format(str(error)))
 
         #(1)Create an object, write some data into it, and take a snapshot
         obj_cls = self.params.get("obj_class", '/run/object_class/*')
