@@ -182,7 +182,7 @@ static void
 agg_clear_extents(struct ec_agg_entry *entry)
 {
 	struct ec_agg_extent	*extent, *ext_tmp;
-	unsigned int		 tail, ptail = 0U;
+	unsigned long		 tail, ptail = 0U;
 	bool			 carry_is_hole = false;
 
 	if (entry->ae_cur_stripe.as_ho_ext_cnt) {
@@ -204,9 +204,9 @@ agg_clear_extents(struct ec_agg_entry *entry)
 
 		/* Check for carry-over extent. */
 		tail = agg_carry_over(entry, extent);
-		/* At most one extent should carry over. */
+		/* At most one visible extent should carry over. */
 
-		if (extent->ae_hole)
+		if (extent->ae_hole && tail)
 			carry_is_hole = true;
 
 		if (tail) {
@@ -221,13 +221,13 @@ agg_clear_extents(struct ec_agg_entry *entry)
 		}
 
 		if (extent->ae_orig_recx.rx_idx + extent->ae_orig_recx.rx_nr >
-		    next_stripe_st) {
+		    next_stripe_st && !tail) {
 			entry->ae_cur_stripe.as_extent_cnt--;
 			d_list_del(&extent->ae_link);
 			d_list_add_tail(&extent->ae_link,
 					&entry->ae_cur_stripe.as_hoextents);
 			entry->ae_cur_stripe.as_ho_ext_cnt++;
-		} else {
+		} else if (!tail) {
 			entry->ae_cur_stripe.as_extent_cnt--;
 			d_list_del(&extent->ae_link);
 			D_FREE_PTR(extent);
@@ -1408,7 +1408,7 @@ agg_process_holes_ult(void *arg)
 	unsigned int		 k = entry->ae_oca->u.ec.e_k;
 	unsigned long		 ss = entry->ae_cur_stripe.as_stripenum *
 					k * len;
-	unsigned int		 last_ext_end = 0;
+	unsigned long		 last_ext_end = 0;
 	unsigned int		 ext_cnt = 0;
 	unsigned int		 ext_tot_len = 0;
 	unsigned int		 failed_tgts_cnt = 0;
@@ -1418,32 +1418,27 @@ agg_process_holes_ult(void *arg)
 	 */
 	d_list_for_each_entry_safe(agg_extent, ext_tmp,
 				   &entry->ae_cur_stripe.as_dextents, ae_link) {
-		D_PRINT("agg ext: idx: %lu, nr: %lu, orig_idx: %lu, orig_nr: %lu, is_hole: %s\n",
-			agg_extent->ae_recx.rx_idx,
-			agg_extent->ae_recx.rx_nr,
-			agg_extent->ae_orig_recx.rx_idx,
-			agg_extent->ae_orig_recx.rx_nr,
-			agg_extent->ae_hole ? "true" : "false");
 		if (agg_extent->ae_epoch < entry->ae_par_extent.ape_epoch)
 			continue;
 		if (agg_extent->ae_recx.rx_idx - ss > last_ext_end) {
 			stripe_ud->asu_recxs[ext_cnt].rx_idx =
-				last_ext_end;
+				ss + last_ext_end;
 			stripe_ud->asu_recxs[ext_cnt].rx_nr =
 				agg_extent->ae_recx.rx_idx - ss -
 				last_ext_end;
 			ext_tot_len +=
 			stripe_ud->asu_recxs[ext_cnt++].rx_nr;
 		}
-		last_ext_end += agg_extent->ae_recx.rx_idx +
-				agg_extent->ae_recx.rx_nr - ss;
-		continue;
+		last_ext_end = agg_extent->ae_recx.rx_idx +
+			agg_extent->ae_recx.rx_nr - ss;
+		if (last_ext_end >= ss + k *len)
+			break;
 	}
 
 	if (last_ext_end < k * len) {
 		stripe_ud->asu_recxs[ext_cnt].rx_idx =
 			ss + last_ext_end;
-		stripe_ud->asu_recxs[ext_cnt].rx_nr = ss + k * len -
+		stripe_ud->asu_recxs[ext_cnt].rx_nr = k * len -
 			last_ext_end;
 		ext_tot_len += stripe_ud->asu_recxs[ext_cnt++].rx_nr;
 	}
@@ -1455,23 +1450,19 @@ agg_process_holes_ult(void *arg)
 	iod.iod_nr = ext_cnt;
 	iod.iod_recxs = stripe_ud->asu_recxs;
 	entry->ae_sgl.sg_nr = 1;
-	D_PRINT("proc holes: ent_cnt: %u, ext_tot_len: %u, ae_size: %lu\n",
-		ext_cnt, ext_tot_len, entry->ae_rsize);
 	entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_len = ext_cnt * ext_tot_len *
 								entry->ae_rsize;
 	D_ASSERT(entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_len <= k * len);
-	int j;
-	for (j = 0; j < ext_cnt; j++)
-		D_PRINT("j: %d, idx: %lu, nr: %lu\n", j,
-			iod.iod_recxs[j].rx_idx,
-			iod.iod_recxs[j].rx_nr);
 	/* Pull data via dsc_obj_fetch */
-	rc = dsc_obj_fetch(entry->ae_obj_hdl, entry->ae_cur_stripe.as_hi_epoch,
-			   &entry->ae_dkey, 1, &iod, &entry->ae_sgl, NULL, 0,
-			   NULL);
-	if (rc) {
-		D_ERROR("dsc_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
-		goto out;
+	if (ext_cnt) {
+		rc = dsc_obj_fetch(entry->ae_obj_hdl,
+				   entry->ae_cur_stripe.as_hi_epoch,
+				   &entry->ae_dkey, 1, &iod, &entry->ae_sgl,
+				   NULL, 0, NULL);
+		if (rc) {
+			D_ERROR("dsc_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
+			goto out;
+		}
 	}
 
 	/* Invoke peer re-replicate */
@@ -1524,11 +1515,15 @@ agg_process_holes_ult(void *arg)
 	ec_rep_in->er_map_ver =
 		agg_param->ap_pool_info.api_pool->sp_map_version;
 	entry->ae_sgl.sg_nr_out = 1;
-	rc = crt_bulk_create(dss_get_module_info()->dmi_ctx, &entry->ae_sgl,
-			     CRT_BULK_RW, &ec_rep_in->er_bulk);
-	if (rc) {
-		D_ERROR("crt_bulk_create returned: "DF_RC"\n", DP_RC(rc));
-		goto out;
+	if (ext_cnt) {
+		rc = crt_bulk_create(dss_get_module_info()->dmi_ctx,
+				     &entry->ae_sgl, CRT_BULK_RW,
+				     &ec_rep_in->er_bulk);
+		if (rc) {
+			D_ERROR("crt_bulk_create returned: "DF_RC"\n",
+				DP_RC(rc));
+			goto out;
+		}
 	}
 	rc = dss_rpc_send(rpc);
 	if (rc) {
@@ -1538,7 +1533,7 @@ agg_process_holes_ult(void *arg)
 	ec_rep_out = crt_reply_get(rpc);
 	rc = ec_rep_out->er_status;
 	if (rc)
-		D_PRINT("remote update rpc failed: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("remote update rpc failed: "DF_RC"\n", DP_RC(rc));
 out:
 	entry->ae_sgl.sg_nr = AGG_IOV_CNT;
 	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
@@ -1595,15 +1590,19 @@ agg_process_holes(struct ec_agg_entry *entry)
 	iod.iod_nr = stripe_ud.asu_cell_cnt;
 	iod.iod_recxs = stripe_ud.asu_recxs;
 	entry->ae_sgl.sg_nr = 1;
-	/* write the reps to vos */
-	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
-	rc = vos_obj_update(agg_param->ap_cont_handle, entry->ae_oid,
-			    entry->ae_cur_stripe.as_hi_epoch, 0, 0,
-			    &entry->ae_dkey, 1, &iod, NULL,
-			    &entry->ae_sgl);
-	if (rc) {
-		D_ERROR("vos_update_begin failed: "DF_RC"\n", DP_RC(rc));
-		goto ev_out;
+	agg_param = container_of(entry, struct ec_agg_param,
+				 ap_agg_entry);
+	if (iod.iod_nr) {
+		/* write the reps to vos */
+		rc = vos_obj_update(agg_param->ap_cont_handle, entry->ae_oid,
+				    entry->ae_cur_stripe.as_hi_epoch, 0, 0,
+				    &entry->ae_dkey, 1, &iod, NULL,
+				    &entry->ae_sgl);
+		if (rc) {
+			D_ERROR("vos_update_begin failed: "DF_RC"\n",
+				DP_RC(rc));
+			goto ev_out;
+		}
 	}
 	/* Delete parity */
 	epoch_range.epr_lo = agg_param->ap_epr.epr_lo;

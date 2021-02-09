@@ -1118,7 +1118,7 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 		recx = &iod->iod_recxs[i];
 		with_full_stripe = recx_with_full_stripe(i, ec_recx_array,
 							 &full_ec_recx);
-		if (!with_full_stripe || !update) {
+		if (punch || !with_full_stripe || !update) {
 			if (reasb_req->orr_recov) {
 				D_ASSERT(!update);
 				D_ASSERT(iod->iod_nr == 1);
@@ -1168,10 +1168,9 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 		}
 		ec_data_recx_add(full_recx, riod->iod_recxs, ridx,
 				 tgt_recx_idxs, oca, false);
-		//if (!punch)
-			ec_data_seg_add(full_recx, iod_size, sgl, &iov_idx,
-					&iov_off, oca, iovs, iov_nr, sorter,
-					false);
+		ec_data_seg_add(full_recx, iod_size, sgl, &iov_idx,
+				&iov_off, oca, iovs, iov_nr, sorter,
+				false);
 		recx_end = recx->rx_idx + recx->rx_nr;
 		full_end = full_recx->rx_idx + full_recx->rx_nr;
 		D_ASSERT(recx_end >= full_end);
@@ -1180,10 +1179,9 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 			tmp_recx.rx_nr = recx_end - full_end;
 			ec_data_recx_add(&tmp_recx, riod->iod_recxs, ridx,
 					 tgt_recx_idxs, oca, true);
-			//if (!punch)
-				ec_data_seg_add(&tmp_recx, iod_size, sgl,
-						&iov_idx, &iov_off, oca, iovs,
-						iov_nr, sorter, true);
+			ec_data_seg_add(&tmp_recx, iod_size, sgl,
+					&iov_idx, &iov_off, oca, iovs,
+					iov_nr, sorter, true);
 		}
 	}
 
@@ -1197,11 +1195,11 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 		ec_parity_seg_add(ec_recx_array, iod, oca, sorter);
 	}
 
-	if (!punch && !reasb_req->orr_size_fetch)
+	if (!reasb_req->orr_size_fetch)
 		obj_ec_seg_pack(sorter, rsgl);
 
 	/* generate the oiod/siod */
-	tgt_nr = (update || reasb_req->orr_recov == 1) ?
+	tgt_nr = (update  || reasb_req->orr_recov == 1) ?
 		 obj_ec_tgt_nr(oca) : obj_ec_data_tgt_nr(oca);
 	for (i = 0, idx = 0, last = 0; i < tgt_nr; i++) {
 		/* get each tgt's idx in the compact oiod_siods array */
@@ -1555,10 +1553,8 @@ obj_ec_encode(struct obj_reasb_req *reasb_req)
 	}
 
 	for (i = 0; i < reasb_req->orr_iod_nr; i++) {
-		/*
 		if (!reasb_req->orr_uiods[i].iod_size)
 			continue;
-			*/
 		rc = obj_ec_recx_encode(reasb_req->orr_oid,
 					&reasb_req->orr_uiods[i],
 					&reasb_req->orr_usgls[i],

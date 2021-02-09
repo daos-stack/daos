@@ -65,6 +65,7 @@ struct ec_agg_test_ctx {
 	daos_key_t		dkey;
 	daos_iod_t		update_iod;
 	d_sg_list_t		update_sgl;
+	d_sg_list_t		punch_sgl;
 	daos_iom_t		fetch_iom;
 	daos_iod_t		fetch_iod;
 	d_sg_list_t             fetch_sgl;
@@ -140,6 +141,55 @@ ec_setup_obj(struct ec_agg_test_ctx *ctx, daos_oclass_id_t oclass, int low)
 	ctx->oh = DAOS_HDL_INVAL;
 	rc = daos_obj_open(ctx->coh, ctx->oid, 0, &ctx->oh, NULL);
 	assert_success(rc);
+}
+
+static void
+ec_setup_punch_recx_data(struct ec_agg_test_ctx *ctx, unsigned int mode,
+			  daos_size_t offset, daos_size_t data_bytes,
+			  unsigned char switch_akey, unsigned int cell)
+{
+	struct daos_oclass_attr	*oca;
+	unsigned int		len;
+
+	if (mode != EC_SPECIFIED)
+		return;
+	/* else set databytes based on oclass */
+
+	assert_int_equal(daos_oclass_is_ec(ctx->oid, &oca), true);
+	len = oca->u.ec.e_len;
+	iov_alloc_str(&ctx->dkey, "dkey");
+	if (switch_akey == 1)
+		iov_alloc_str(&ctx->update_iod.iod_name, "bkey");
+	else if (switch_akey == 2)
+		iov_alloc_str(&ctx->update_iod.iod_name, "ckey");
+	else
+		iov_alloc_str(&ctx->update_iod.iod_name, "akey");
+
+	d_sgl_init(&ctx->update_sgl, 1);
+
+	d_sgl_init(&ctx->fetch_sgl, 1);
+	iov_alloc(&ctx->fetch_sgl.sg_iovs[0], data_bytes);
+
+	ctx->recx[0].rx_idx = offset;
+	ctx->recx[0].rx_nr = data_bytes;
+	ctx->update_iod.iod_size = 0;
+	ctx->update_iod.iod_nr	= 1;
+	ctx->update_iod.iod_recxs = &ctx->recx[0];
+	ctx->update_iod.iod_type  = DAOS_IOD_ARRAY;
+
+	ctx->iom_recx.rx_idx = offset;
+	ctx->iom_recx.rx_nr = len;
+
+	ctx->fetch_iom.iom_recxs = &ctx->iom_recx;
+	ctx->fetch_iom.iom_nr = 1;
+	ctx->fetch_iom.iom_nr_out = 0;
+
+	/** Setup Fetch IOD*/
+	ctx->fetch_iod.iod_name = ctx->update_iod.iod_name;
+	ctx->fetch_iod.iod_size = 1;
+	ctx->fetch_iod.iod_recxs = ctx->update_iod.iod_recxs;
+	ctx->fetch_iod.iod_nr = ctx->update_iod.iod_nr;
+	ctx->fetch_iod.iod_type = ctx->update_iod.iod_type;
 }
 
 static void
@@ -354,7 +404,6 @@ verify_1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 	assert_int_equal(rc, 0);
 }
 
-#ifdef LAYER_COORD
 static void
 test_half_stripe(struct ec_agg_test_ctx *ctx)
 {
@@ -519,7 +568,6 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 	rc = daos_obj_close(ctx->oh, NULL);
 	assert_int_equal(rc, 0);
 }
-#endif
 
 static void
 test_partial_stripe(struct ec_agg_test_ctx *ctx)
@@ -562,6 +610,57 @@ test_partial_stripe(struct ec_agg_test_ctx *ctx)
 	rc = daos_obj_close(ctx->oh, NULL);
 	assert_int_equal(rc, 0);
 }
+static void
+test_range_punch(struct ec_agg_test_ctx *ctx)
+{
+	struct daos_oclass_attr	*oca;
+	unsigned int		 len;
+	int			 i, j, rc;
+
+	dts_ec_agg_oc = DAOS_OC_EC_K4P1_L32K;
+	ec_setup_obj(ctx, dts_ec_agg_oc, 4);
+	assert_int_equal(daos_oclass_is_ec(ctx->oid, &oca), true);
+	len = oca->u.ec.e_len;
+	for (j = 0; j < NUM_KEYS; j++)
+		for (i = 0; i < NUM_STRIPES; i++) {
+			ec_setup_single_recx_data(ctx, EC_SPECIFIED,
+						  i * (len * 4), len * 4, j,
+						  false, false, 0);
+			rc = daos_obj_update(ctx->oh, DAOS_TX_NONE, 0,
+					     &ctx->dkey, 1, &ctx->update_iod,
+					     &ctx->update_sgl, NULL);
+			assert_int_equal(rc, 0);
+			ec_cleanup_data(ctx);
+		}
+
+	sleep(1);
+
+	for (j = 0; j < NUM_KEYS; j++)
+		for (i = 0; i < NUM_STRIPES; i++) {
+			ec_setup_punch_recx_data(ctx, EC_SPECIFIED,
+						  i * (len * 4), len, j, 0);
+			rc = daos_obj_update(ctx->oh, DAOS_TX_NONE, 0,
+					     &ctx->dkey, 1, &ctx->update_iod,
+					     &ctx->update_sgl, NULL);
+			assert_int_equal(rc, 0);
+			ec_cleanup_data(ctx);
+		}
+
+	for (j = 0; j < NUM_KEYS; j++)
+		for (i = 0; i < NUM_STRIPES; i++) {
+			ec_setup_single_recx_data(ctx, EC_SPECIFIED,
+						  i * (len * 4) + 2 * len, len, j,
+						  false, true, 0);
+			rc = daos_obj_update(ctx->oh, DAOS_TX_NONE, 0,
+					     &ctx->dkey, 1, &ctx->update_iod,
+					     &ctx->update_sgl, NULL);
+			assert_int_equal(rc, 0);
+			ec_cleanup_data(ctx);
+		}
+
+	rc = daos_obj_close(ctx->oh, NULL);
+	assert_int_equal(rc, 0);
+}
 
 static void
 setup_ec_agg_tests(void **statep, struct ec_agg_test_ctx *ctx)
@@ -582,16 +681,14 @@ test_all_ec_agg(void **statep)
 
 	setup_ec_agg_tests(statep, &ctx);
 	test_filled_stripe(&ctx);
-#ifdef LAYER_COORD
 	test_half_stripe(&ctx);
-#endif
 	test_partial_stripe(&ctx);
+	test_range_punch(&ctx);
 	sleep(60);
 	verify_1p(&ctx, DAOS_OC_EC_K2P1_L32K, 2);
-#ifdef LAYER_COORD
 	verify_2p(&ctx, DAOS_OC_EC_K2P2_L32K);
-#endif
 	verify_1p(&ctx, DAOS_OC_EC_K4P1_L32K, 4);
+//	verify_range_punch(&ctx);
 	cleanup_ec_agg_tests(&ctx);
 }
 
