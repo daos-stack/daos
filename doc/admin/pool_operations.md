@@ -107,12 +107,26 @@ API (not supported by the tool yet):
 | `DAOS_PROP_PO_ACL`       | Access control list (ACL) associated with the pool|
 | `DAOS_PROP_PO_SPACE_RB`  | Space reserved on each target for rebuild purpose|
 | `DAOS_PROP_PO_SELF_HEAL` | Define whether the pool wants automatically-trigger or manually-triggered self-healing|
-| `DAOS_PROP_PO_RECLAIM`   | Tune space reclaim strategy based on time interval, batched commits or snapshot creation|
+| `DAOS_PROP_PO_RECLAIM`   | Tune space reclaim strategy based on time interval, io activities|
 
 While those pool properties are currently stored persistently with pool
 metadata, many of them are still under development. Moreover, the
 ability to modify some of those properties on an existing pool will
 be provided in a future release.
+
+### Modifying DAOS_PROP_PO_RECLAIM property
+
+To modify a pool's DAOS_PO_RECLAIM property:
+
+```bash
+$ dmg pool set-prop --pool=<UUID> --name=reclaim --value=${strategy}
+```
+
+Three reclaim strategies are supported:
+
+* "disabled" : Never trigger aggregation.
+* "lazy"     : Trigger aggregation only when there is no IO activities or SCM free space is under pressure (default strategy)
+* "time"     : Trigger aggregation regularly despite of IO activities.
 
 ## Access Control Lists
 

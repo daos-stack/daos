@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos two-phase commit transaction.
@@ -297,7 +280,7 @@ dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
 		if (epoch < dcrc->dcrc_epoch)
 			continue;
 
-		dte_buf[i] = dcrc->dcrc_dte;
+		dte_buf[i] = dtx_entry_get(dcrc->dcrc_dte);
 		if (++i >= count)
 			break;
 	}
@@ -372,6 +355,9 @@ dtx_add_cos(struct ds_cont_child *cont, struct dtx_entry *dte,
 	d_iov_t				kiov;
 	d_iov_t				riov;
 	int				rc;
+
+	if (cont->sc_dtx_cos_shutdown || cont->sc_closing)
+		return -DER_SHUTDOWN;
 
 	D_ASSERT(dte->dte_mbs != NULL);
 	D_ASSERT(epoch != DAOS_EPOCH_MAX);

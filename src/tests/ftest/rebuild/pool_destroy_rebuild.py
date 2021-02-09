@@ -1,30 +1,14 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Governments rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from __future__ import print_function
 
-from apricot import skipForTicket
 from ior_test_base import IorTestBase
+
+import time
 
 # pylint: disable=too-few-public-methods,too-many-ancestors
 class PoolDestroyWithIO(IorTestBase):
@@ -36,7 +20,6 @@ class PoolDestroyWithIO(IorTestBase):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-5868")
     def test_pool_destroy_with_io(self):
         """Jira ID: DAOS-3794.
 
@@ -79,24 +62,31 @@ class PoolDestroyWithIO(IorTestBase):
             "Invalid pool rebuild info detected before rebuild")
 
         # perform first set of io using IOR
-        for _ in range(4):
+        for run in range(4):
+            self.log.info("Starting ior run number {}".format(run))
             self.run_ior_with_pool()
 
+        self.log.info("Starting rebuild by killing rank {}".format(rank))
         # Kill the server and trigger rebuild
-        self.pool.start_rebuild([rank], self.d_log)
+        self.server_managers[0].stop_ranks([rank], self.d_log, force=True)
 
         # Wait for rebuild to start. If True just wait for rebuild to start,
         # if False, wait for rebuild to complete.
+        self.log.info("Wait for rebuild to start")
         self.pool.wait_for_rebuild(True, interval=1)
+
+        #self.log.info("Wait for rebuild to finish")
+        #self.pool.wait_for_rebuild(False, interval=1)
+
         self.pool.set_query_data()
         rebuild_status = self.pool.query_data["rebuild"]["status"]
-        self.log.info("Pool %s rebuild status:%s\n", self.pool.uuid,
+        self.log.info("Pool %s rebuild status:%s", self.pool.uuid,
                       rebuild_status)
 
-        if rebuild_status == 'busy':
-            # destroy pool during rebuild
-            self.pool.destroy()
-            self.container = None
+        self.log.info("Destroy pool %s while rebuild is %s", self.pool.uuid,
+                      rebuild_status)
+        self.pool.destroy()
+        self.container = None
 
         # re-create the pool of full size to verify the space was reclaimed,
         # after re-starting the server on excluded rank

@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -1009,7 +992,7 @@ get_daos_prop_with_user_acl_perms(uint64_t perms)
 	struct daos_ace	*ace;
 	char		*user = NULL;
 
-	assert_int_equal(daos_acl_uid_to_principal(geteuid(), &user), 0);
+	assert_rc_equal(daos_acl_uid_to_principal(geteuid(), &user), 0);
 
 	acl = get_daos_acl_with_owner_perms(0);
 
@@ -1019,7 +1002,7 @@ get_daos_prop_with_user_acl_perms(uint64_t perms)
 	ace->dae_allow_perms = perms;
 	assert_true(daos_ace_is_valid(ace));
 
-	assert_int_equal(daos_acl_add_ace(&acl, ace), 0);
+	assert_rc_equal(daos_acl_add_ace(&acl, ace), 0);
 
 	/* Set effective user up as non-owner */
 	prop = get_daos_prop_with_owner_and_acl("nobody@", DAOS_PROP_CO_OWNER,
@@ -1070,7 +1053,7 @@ get_server_config(char *host, char *server_config_file)
 
 	D_ALLOC(dpid, 16);
 	rc = get_pid_of_process(host, dpid, daos_proc);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	snprintf(command, sizeof(command),
 		 "ssh %s ps ux -A | grep %s", host, dpid);
@@ -1251,32 +1234,44 @@ int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
 	int			retry_cnt;
 	int			rc;
 
+	if (expected_state == NULL) {
+		print_message("Expected target state is NULL!\n");
+		return -DER_INVAL;
+	}
+
 	retry_cnt = 0;
 	while (retry_cnt <= MAX_POOL_TGT_STATE_RETRY) {
 		char *expected_state_dup = strdup(expected_state);
 		char *state = strtok(expected_state_dup, "|");
 
 		rc = daos_pool_query_target(poh, tgtidx, rank, &tgt_info, NULL);
-			if (rc)
-				return rc;
+		if (rc) {
+			D_FREE(expected_state_dup);
+			return rc;
+		}
 
 		/* multiple states not present in expected_state str */
 		if (state == NULL) {
 			if (strcmp(daos_target_state_enum_to_str(tgt_info.ta_state),
-				   expected_state) == 0)
+				   expected_state) == 0) {
+				D_FREE(expected_state_dup);
 				return 0;
+			}
 		/* multiple states separated by a '|' in expected_state str */
 		} else {
 			while (state != NULL) {
 				if (strcmp(daos_target_state_enum_to_str(tgt_info.ta_state),
-					   state) == 0)
+					   state) == 0) {
+					D_FREE(expected_state_dup);
 					return 0;
+				}
 				state = strtok(NULL, "|");
 			};
 		}
 
 		sleep(MAX_POOL_TGT_STATE_WAIT);
 		retry_cnt++;
+		D_FREE(expected_state_dup);
 	};
 
 	return -DER_TIMEDOUT;

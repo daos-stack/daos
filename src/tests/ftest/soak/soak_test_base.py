@@ -1,29 +1,13 @@
 #!/usr/bin/python
 """
-(C) Copyright 2019-2020 Intel Corporation.
+(C) Copyright 2019-2021 Intel Corporation.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
-GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-The Government's rights to use, modify, reproduce, release, perform, display,
-or disclose this software are subject to the terms of the Apache License as
-provided in Contract No. 8F-30005.
-Any reproduction of computer software, computer software documentation, or
-portions thereof marked with this legend must also reproduce the markings.
+SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 import os
 import time
+from datetime import datetime
 import multiprocessing
 import threading
 from apricot import TestWithServers
@@ -36,7 +20,8 @@ from agent_utils import include_local_host
 from soak_utils import DDHHMMSS_format, add_pools, get_remote_logs, \
     launch_snapshot, launch_exclude_reintegrate, \
     create_ior_cmdline, cleanup_dfuse, create_fio_cmdline, \
-    build_job_script, SoakTestError, launch_server_stop_start, get_harassers
+    build_job_script, SoakTestError, launch_server_stop_start, get_harassers, \
+    create_racer_cmdline, run_event_check, run_monitor_check
 
 
 class SoakTestBase(TestWithServers):
@@ -290,7 +275,11 @@ class SoakTestBase(TestWithServers):
             # scripts are single cmdline
             scripts = build_job_script(self, commands, job, 1, 1)
             job_cmdlist.extend(scripts)
-
+        elif "daos_racer" in job:
+            commands = create_racer_cmdline(self, job, pool)
+            # scripts are single cmdline
+            scripts = build_job_script(self, commands, job, 1, 1)
+            job_cmdlist.extend(scripts)
         else:
             raise SoakTestError(
                 "<<FAILED: Job {} is not supported. ".format(
@@ -352,10 +341,12 @@ class SoakTestBase(TestWithServers):
         harasser_interval = 0
         failed_harasser_msg = None
         harasser_timer = time.time()
+        event_check_messages = []
+        since = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         # loop time exists after the first pass; no harassers in the first pass
         if self.harasser_loop_time and self.harassers:
             harasser_interval = self.harasser_loop_time / (
-                len(self.harassers) + 3)
+                len(self.harassers) + 1)
         # If there is nothing to do; exit
         if job_id_list:
             # wait for all the jobs to finish
@@ -368,17 +359,23 @@ class SoakTestBase(TestWithServers):
                         time.ctime())
                     for job in job_id_list:
                         _ = slurm_utils.cancel_jobs(int(job))
-
                 # launch harassers if enabled;
                 # one harasser at a time starting on pass2
                 if self.harassers:
                     if self.loop >= 2 and (
-                            time.time() > harasser_timer + harasser_interval):
+                            time.time() > (harasser_timer + harasser_interval)):
                         harasser = self.harassers.pop(0)
                         harasser_timer += harasser_interval
                         failed_harasser_msg = self.launch_harasser(
                             harasser, self.pool)
                 time.sleep(5)
+            # check journalctl for events;
+            until = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            event_check_messages = run_event_check(self, since, until)
+            self.soak_errors.extend(event_check_messages)
+            run_monitor_check(self)
+            # init harasser list when all jobs are done
+            self.harassers = []
             if failed_harasser_msg is not None:
                 self.all_failed_harassers.append(failed_harasser_msg)
             # check for JobStatus = COMPLETED or CANCELLED (i.e. TEST TO)
@@ -479,6 +476,9 @@ class SoakTestBase(TestWithServers):
         self.test_name = self.params.get("name", test_param + "*")
         self.nodesperjob = self.params.get("nodesperjob", test_param + "*")
         self.taskspernode = self.params.get("taskspernode", test_param + "*")
+        self.dmg_command.copy_certificates(
+            get_log_file("daosCA/certs"), self.hostlist_clients)
+        self.dmg_command.copy_configuration(self.hostlist_clients)
         harassers = self.params.get("harasserlist", test_param + "*")
         job_list = self.params.get("joblist", test_param + "*")
         rank = self.params.get("rank", "/run/container_reserved/*")
@@ -566,13 +566,13 @@ class SoakTestBase(TestWithServers):
                 "<<LOOP %s completed in %s at %s>>", self.loop, DDHHMMSS_format(
                     loop_time), time.ctime())
             # Initialize harasser loop time from first pass loop time
-            if self.loop == 1 and self.harassers:
+            if self.loop == 1 and run_harasser:
                 self.harasser_loop_time = loop_time
             self.loop += 1
         # TO-DO: use IOR
         if not resv_cont.read_objects():
             self.soak_errors.append("Data verification error on reserved pool"
-                                    "after SOAK completed")
+                                    " after SOAK completed")
         self.container.append(resv_cont)
         # gather the daos logs from the client nodes
         self.log.info(

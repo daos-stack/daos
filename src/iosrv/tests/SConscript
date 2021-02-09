@@ -32,7 +32,7 @@ def scons():
                      '../drpc_client.c', '../drpc_ras.c', '../srv.pb-c.c',
                      '../event.pb-c.c'],
                     LIBS=['daos_common', 'protobuf-c', 'gurt', 'cmocka',
-                          'uuid', 'pthread'])
+                          'uuid'])
 
 if __name__ == "SCons.Script":
     scons()

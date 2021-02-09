@@ -9,7 +9,7 @@ hosts:
     - client-F
     - client-G
     - client-H
-timeout: 3600
+timeout: 200
 server_config:
   name: daos_server
   servers:
@@ -28,22 +28,6 @@ pool:
 container:
   type: POSIX
   control_method: daos
-ior:
-  client_processes:
-    np: 30
-  api: DFS
-  flags: "-w -k"
-  dfs_destroy: False
-  test_file: /testFile
-  repetitions: 1
-  signature: 5
-  transfersize_blocksize:
-    1M:
-      transfer_size: '1M'
-      block_size: '5G'         # creating aggregate file of size 150G
-  objectclass:
-    SX:
-      dfs_oclass: "SX"
 mdtest:
   client_processes:
     np: 30
@@ -69,6 +53,11 @@ mdtest:
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"
 datamover:
+  mux_tool: !mux
+  tool_dcp:
+    tool: "DCP"
+dcp:
   src_path: "/"
-  dest_path: "/"
-  processes: 16
+  dst_path: "/"
+  client_processes:
+    np: 16

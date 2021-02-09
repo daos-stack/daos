@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include <errno.h>
@@ -161,7 +144,8 @@ dfuse_bg(struct dfuse_info *dfuse_info)
 			exit(2);
 		}
 		if (child_ret) {
-			printf("Exiting " DF_RC "\n", DP_RC(child_ret));
+			printf("Exiting %d %s\n", child_ret,
+			       d_errstr(child_ret));
 			exit(-(child_ret + DER_ERR_GURT_BASE));
 		} else {
 			exit(0);
@@ -178,11 +162,10 @@ ll_loop_fn(struct dfuse_info *dfuse_info)
 	int			ret;
 
 	/* Blocking */
-	if (dfuse_info->di_threaded) {
+	if (dfuse_info->di_threaded)
 		ret = dfuse_loop(dfuse_info);
-	} else {
+	else
 		ret = fuse_session_loop(dfuse_info->di_session);
-	}
 	if (ret != 0)
 		DFUSE_TRA_ERROR(dfuse_info,
 				"Fuse loop exited with return code: %d", ret);
@@ -265,11 +248,6 @@ main(int argc, char **argv)
 	int			rc;
 	bool			have_thread_count = false;
 
-	/* The 'daos' command uses -m as an alias for --scv however
-	 * dfuse uses -m for --mountpoint so this is inconsistent
-	 * but probably better than changing the meaning of the -m
-	 * option here.h
-	 */
 	struct option long_options[] = {
 		{"pool",		required_argument, 0, 'p'},
 		{"container",		required_argument, 0, 'c'},
@@ -301,7 +279,7 @@ main(int argc, char **argv)
 	dfuse_info->di_direct_io = true;
 
 	while (1) {
-		c = getopt_long(argc, argv, "s:m:Sfh",
+		c = getopt_long(argc, argv, "m:Sfh",
 				long_options, NULL);
 
 		if (c == -1)
@@ -374,19 +352,15 @@ main(int argc, char **argv)
 		}
 
 		dfuse_info->di_thread_count = CPU_COUNT(&cpuset);
-
-		/* Reserve one CPU thread for the daos event queue */
-		dfuse_info->di_thread_count -= 1;
-
-		if (dfuse_info->di_thread_count < 1) {
-			printf("Dfuse needs more threads\n");
-			exit(1);
-		}
 	}
 
-	/* svcl is optional. If unspecified libdaos will query
-	 * management service to get list of pool service replicas.
-	 */
+	if (dfuse_info->di_thread_count < 2) {
+		printf("Dfuse needs at least two threads.\n");
+		exit(1);
+	}
+
+	/* Reserve one CPU thread for the daos event queue */
+	dfuse_info->di_thread_count -= 1;
 
 	if (dfuse_info->di_pool) {
 		if (uuid_parse(dfuse_info->di_pool, tmp_uuid) < 0) {
@@ -418,7 +392,7 @@ main(int argc, char **argv)
 
 	D_ALLOC_PTR(dfp);
 	if (!dfp)
-		D_GOTO(out_dfuse, ret = -DER_NOMEM);
+		D_GOTO(out_debug, ret = -DER_NOMEM);
 
 	DFUSE_TRA_UP(dfp, dfuse_info, "dfp");
 	D_INIT_LIST_HEAD(&dfp->dfp_dfs_list);
@@ -438,35 +412,40 @@ main(int argc, char **argv)
 
 	DFUSE_TRA_UP(dfs, dfp, "dfs");
 
+	if (dfuse_info->di_pool) {
+		if (uuid_parse(dfuse_info->di_pool, dfp->dfp_pool) < 0) {
+			printf("Invalid pool uuid\n");
+			D_GOTO(out_dfs, ret = -DER_INVAL);
+		}
+		if ((dfuse_info->di_cont) &&
+		    (uuid_parse(dfuse_info->di_cont, dfs->dfs_cont) < 0)) {
+			printf("Invalid container uuid\n");
+			D_GOTO(out_dfs, ret = -DER_INVAL);
+		}
+	}
+
 	rc = duns_resolve_path(dfuse_info->di_mountpoint, &duns_attr);
 	DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() returned %d %s",
 		       rc, strerror(rc));
 	if (rc == 0) {
-		if (dfuse_info->di_pool) {
-			printf("UNS configured on mount point but pool provided\n");
-			D_GOTO(out_dfs, ret = -DER_INVAL);
+		if (dfuse_info->di_pool &&
+		    (uuid_compare(duns_attr.da_puuid, dfp->dfp_pool))) {
+			printf("Pools uuids do not match\n");
+			D_GOTO(out_dfs, rc = -DER_INVAL);
 		}
+
+		if (dfuse_info->di_cont &&
+		    (uuid_compare(duns_attr.da_cuuid, dfs->dfs_cont))) {
+			printf("Container uuids do not match\n");
+			D_GOTO(out_dfs, rc = -DER_INVAL);
+		}
+
 		uuid_copy(dfp->dfp_pool, duns_attr.da_puuid);
 		uuid_copy(dfs->dfs_cont, duns_attr.da_cuuid);
-	} else if (rc == ENODATA || rc == ENOTSUP) {
-		if (dfuse_info->di_pool) {
-			if (uuid_parse(dfuse_info->di_pool,
-				       dfp->dfp_pool) < 0) {
-				printf("Invalid pool uuid\n");
-				D_GOTO(out_dfs, ret = -DER_INVAL);
-			}
-			if (dfuse_info->di_cont) {
-				if (uuid_parse(dfuse_info->di_cont,
-					       dfs->dfs_cont) < 0) {
-					printf("Invalid container uuid\n");
-					D_GOTO(out_dfs, ret = -DER_INVAL);
-				}
-			}
-		}
 	} else if (rc == ENOENT) {
 		printf("Mount point does not exist\n");
 		D_GOTO(out_dfs, ret = daos_errno2der(rc));
-	} else {
+	} else if (rc != ENODATA && rc != ENOTSUP) {
 		/* Other errors from DUNS, it should have logged them already */
 		D_GOTO(out_dfs, ret = daos_errno2der(rc));
 	}
@@ -486,7 +465,7 @@ main(int argc, char **argv)
 			/** Try to open the DAOS container (the mountpoint) */
 			rc = daos_cont_open(dfp->dfp_poh, dfs->dfs_cont,
 					    DAOS_COO_RW, &dfs->dfs_coh,
-					    &dfs->dfs_co_info, NULL);
+					    NULL, NULL);
 			if (rc) {
 				printf("Failed container open (%d)\n", rc);
 				D_GOTO(out_dfs, ret = rc);
@@ -556,7 +535,7 @@ out_dfs:
 		DFUSE_TRA_DOWN(dfp);
 		D_FREE(dfp);
 	}
-out_dfuse:
+
 	DFUSE_TRA_DOWN(dfuse_info);
 	D_MUTEX_DESTROY(&dfuse_info->di_lock);
 	daos_fini();

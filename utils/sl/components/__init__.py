@@ -178,7 +178,7 @@ def define_mercury(reqs):
                           '-DMERCURY_USE_SELF_FORWARD=ON '
                           '-DMERCURY_ENABLE_VERBOSE_ERROR=ON '
                           + MERCURY_DEBUG +
-                          '-DBUILD_TESTING=ON '
+                          '-DBUILD_TESTING=OFF '
                           '-DNA_USE_OFI=ON '
                           '-DBUILD_DOCUMENTATION=OFF '
                           '-DBUILD_SHARED_LIBS=ON ../mercury '

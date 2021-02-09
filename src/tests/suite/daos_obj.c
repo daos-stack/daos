@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -292,7 +275,7 @@ insert_wait(struct ioreq *req)
 void
 insert(const char *dkey, int nr, const char **akey, daos_size_t *iod_size,
        int *rx_nr, uint64_t *idx, void **val, daos_handle_t th,
-       struct ioreq *req, uint64_t flags)
+	struct ioreq *req, uint64_t flags)
 {
 	insert_nowait(dkey, nr, akey, iod_size, rx_nr, idx, val, th, req,
 		      flags);
@@ -910,6 +893,8 @@ io_rewritten_array_with_mixed_size(void **state)
 	int			rx_nr; /* number of record extents */
 	int			record_set;
 	int			rc;
+	int			test_run_time = 0;
+	int			total_run_time = 20;
 	daos_size_t		nvme_initial_size;
 	daos_size_t		nvme_current_size;
 	void const *const aggr_disabled[] = {"disabled"};
@@ -931,13 +916,6 @@ io_rewritten_array_with_mixed_size(void **state)
 	/* Disabled Pool Aggregation */
 	rc = set_pool_reclaim_strategy(state, aggr_disabled);
 	assert_int_equal(rc, 0);
-	/**
-	 * set_pool_reclaim_strategy() to disable aggregation
-	 * assumes all aggregation ULTs on all servers taking
-	 * effect immediately, this may not be the case.
-	 * So adding delay so that ULTs finish the round of aggregation.
-	 */
-	sleep(10);
 
 	/* Get the pool info at the beginning */
 	rc = pool_storage_info(state, &pinfo);
@@ -993,18 +971,38 @@ io_rewritten_array_with_mixed_size(void **state)
 		rc = pool_storage_info(state, &pinfo);
 		assert_int_equal(rc, 0);
 		nvme_current_size = pinfo.pi_space.ps_space.s_free[1];
+
 		/**
-		*Data written on SCM so NVMe free size should not change.
+		* Data written on SCM so NVMe free size should not change.
+		* However VEA free (called from aggregation) usually put the
+		* freed extent in an aging buffer for 10 seconds
+		* so sleep two seconds before next record update.
 		*/
+
 		if (nvme_current_size != nvme_initial_size) {
-			fail_msg("NVMe_current_size =%"
-				PRIu64" != NVMe_initial_size %" PRIu64"",
-				nvme_current_size, nvme_initial_size);
-		}
+			print_message("Size verification: Partial FAIL "
+				"record set=%d Sleep for 2 seconds",
+				record_set);
+			sleep(2);
+			test_run_time = test_run_time + 2;
+		} else
+			print_message("Size verification: PASS for "
+				"record set=%d\n", record_set);
+
+		/**
+		* Fail the test if the test run time is higher than
+		* total timeout (20 seconds) while writing all 10 records.
+		*/
+
+		if (test_run_time >= total_run_time)
+			fail_msg("NVMe Free size should not be changed "
+				"after writing all %d records to SCM",
+				record_set);
+
 		nvme_initial_size = pinfo.pi_space.ps_space.s_free[1];
 	}
 
-	/* Enabled Pool Aggrgation */
+	/* Enabled Pool Aggregation */
 	rc = set_pool_reclaim_strategy(state, aggr_set_time);
 	assert_int_equal(rc, 0);
 
@@ -1924,9 +1922,9 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 
 	D_FREE(buf);
 	D_FREE(data_buf);
-	for (i = 0; i < PUNCH_NUM_KEYS; i++) {
+	for (i = 0; i < PUNCH_NUM_KEYS; i++)
 		D_FREE(dkeys[i]);
-	}
+
 	ioreq_fini(&req);
 	MPI_Barrier(MPI_COMM_WORLD);
 }

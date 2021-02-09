@@ -1,24 +1,7 @@
 /*
  * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of the DAOS server. It implements the dRPC client for
@@ -160,6 +143,7 @@ out_uri:
 int
 ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 {
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Srv__GetPoolSvcReq	gps_req = SRV__GET_POOL_SVC_REQ__INIT;
 	Srv__GetPoolSvcResp	*gps_resp = NULL;
 	Drpc__Call		*dreq;
@@ -209,9 +193,12 @@ ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 		D_GOTO(out_dresp, rc = -DER_IO);
 	}
 
-	gps_resp = srv__get_pool_svc_resp__unpack(
-			NULL, dresp->body.len, dresp->body.data);
-	if (gps_resp == NULL) {
+	gps_resp = srv__get_pool_svc_resp__unpack(&alloc.alloc,
+						  dresp->body.len,
+						  dresp->body.data);
+	if (alloc.oom) {
+		D_GOTO(out_dresp, rc = -DER_NOMEM);
+	} else if (gps_resp == NULL) {
 		D_ERROR("failed to unpack resp (get pool svc)\n");
 		D_GOTO(out_dresp, rc = -DER_NOMEM);
 	}

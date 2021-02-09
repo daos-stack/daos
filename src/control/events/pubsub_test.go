@@ -1,24 +1,7 @@
 //
 // (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package events
@@ -141,6 +124,7 @@ func TestEvents_PubSub_Reset(t *testing.T) {
 
 func TestEvents_PubSub_DisableEvent(t *testing.T) {
 	evt1 := NewRankDownEvent("foo", 1, 1, common.ExitStatus("test"))
+	evt2 := NewPoolSvcReplicasUpdateEvent("foo", 1, common.MockUUID(), []uint32{0, 1}, 1)
 
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
@@ -155,15 +139,15 @@ func TestEvents_PubSub_DisableEvent(t *testing.T) {
 
 	ps.Subscribe(RASTypeStateChange, tly1)
 
-	ps.DisableEventIDs(evt1.ID)
+	ps.DisableEventIDs(evt1.ID, evt2.ID)
 
 	ps.Publish(evt1)
-	ps.Publish(evt1)
+	ps.Publish(evt2)
 
 	<-ctx.Done()
 	common.AssertEqual(t, 0, len(tly1.getRx()), "unexpected number of received events")
 
-	ps.EnableEventIDs(evt1.ID)
+	ps.EnableEventIDs(evt1.ID, evt2.ID)
 
 	ps.Publish(evt1)
 	ps.Publish(evt1)
@@ -172,8 +156,6 @@ func TestEvents_PubSub_DisableEvent(t *testing.T) {
 	common.AssertEqual(t, 2, len(tly1.getRx()), "unexpected number of received events")
 }
 
-// TODO: update subscribe any topic test to use events of different types when
-// more events exist.
 func TestEvents_PubSub_SubscribeAnyTopic(t *testing.T) {
 	evt1 := NewRankDownEvent("foo", 1, 1, common.ExitStatus("test"))
 
@@ -185,7 +167,7 @@ func TestEvents_PubSub_SubscribeAnyTopic(t *testing.T) {
 	ps := NewPubSub(ctx, log)
 	defer ps.Close()
 
-	tly1 := newTally(2)
+	tly1 := newTally(3)
 	tly2 := newTally(2)
 
 	ps.Subscribe(RASTypeAny, tly1)
@@ -193,14 +175,19 @@ func TestEvents_PubSub_SubscribeAnyTopic(t *testing.T) {
 
 	ps.Publish(evt1)
 	ps.Publish(evt1)
+	ps.Publish(mockGenericEvent()) // of type InfoOnly will only match Any
 
 	<-tly1.finished
 	<-tly2.finished
 
 	common.AssertStringsEqual(t, []string{
-		RASTypeStateChange.String(), RASTypeStateChange.String(),
+		RASTypeInfoOnly.String(),
+		RASTypeStateChange.String(),
+		RASTypeStateChange.String(),
 	}, tly1.getRx(), "tly1 unexpected slice of received events")
+
 	common.AssertStringsEqual(t, []string{
-		RASTypeStateChange.String(), RASTypeStateChange.String(),
+		RASTypeStateChange.String(),
+		RASTypeStateChange.String(),
 	}, tly2.getRx(), "tly2 unexpected slice of received events")
 }

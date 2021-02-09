@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * \file
@@ -369,7 +352,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	return 0;
 
 err_iv_ns:
-	ds_iv_ns_destroy(pool->sp_iv_ns);
+	ds_iv_ns_put(pool->sp_iv_ns);
 err_group:
 	rc_tmp = crt_group_secondary_destroy(pool->sp_group);
 	if (rc_tmp != 0)
@@ -397,7 +380,7 @@ pool_free_ref(struct daos_llink *llink)
 
 	D_DEBUG(DF_DSMS, DF_UUID": freeing\n", DP_UUID(pool->sp_uuid));
 
-	ds_iv_ns_destroy(pool->sp_iv_ns);
+	ds_iv_ns_put(pool->sp_iv_ns);
 
 	rc = crt_group_secondary_destroy(pool->sp_group);
 	if (rc != 0)
@@ -672,6 +655,7 @@ ds_pool_start(uuid_t uuid)
 		ds_pool_put(pool);
 		D_GOTO(out_lock, rc);
 	}
+	ds_iv_ns_start(pool->sp_iv_ns);
 out_lock:
 	ABT_mutex_unlock(pool_cache_lock);
 	return rc;
@@ -711,6 +695,7 @@ ds_pool_stop(uuid_t uuid)
 	ds_pool_tgt_ec_eph_query_abort(pool);
 	pool_fetch_hdls_ult_abort(pool);
 
+	ds_iv_ns_stop(pool->sp_iv_ns);
 	ds_rebuild_abort(pool->sp_uuid, -1);
 	ds_migrate_abort(pool->sp_uuid, -1);
 	ds_pool_put(pool); /* held by ds_pool_start */
@@ -943,8 +928,19 @@ pool_query_one(void *vin)
 	x_ps->ps_ntargets = 1;
 	x_ps->ps_space.s_total[DAOS_MEDIA_SCM] = SCM_TOTAL(vps);
 	x_ps->ps_space.s_total[DAOS_MEDIA_NVME] = NVME_TOTAL(vps);
-	x_ps->ps_space.s_free[DAOS_MEDIA_SCM] = SCM_FREE(vps);
-	x_ps->ps_space.s_free[DAOS_MEDIA_NVME] = NVME_FREE(vps);
+
+	/* Exclude the sys reserved space before reporting to user */
+	if (SCM_FREE(vps) > SCM_SYS(vps))
+		x_ps->ps_space.s_free[DAOS_MEDIA_SCM] =
+				SCM_FREE(vps) - SCM_SYS(vps);
+	else
+		x_ps->ps_space.s_free[DAOS_MEDIA_SCM] = 0;
+
+	if (NVME_FREE(vps) > NVME_SYS(vps))
+		x_ps->ps_space.s_free[DAOS_MEDIA_NVME] =
+				NVME_FREE(vps) - NVME_SYS(vps);
+	else
+		x_ps->ps_space.s_free[DAOS_MEDIA_NVME] = 0;
 
 	for (i = DAOS_MEDIA_SCM; i < DAOS_MEDIA_MAX; i++) {
 		x_ps->ps_free_max[i] = x_ps->ps_space.s_free[i];

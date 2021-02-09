@@ -1,24 +1,7 @@
 //
 // (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
@@ -47,12 +30,12 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-const (
+var (
 	// test aliases for member states
-	msReady      = uint32(system.MemberStateReady)
-	msWaitFormat = uint32(system.MemberStateAwaitFormat)
-	msStopped    = uint32(system.MemberStateStopped)
-	msErrored    = uint32(system.MemberStateErrored)
+	msReady      = stateString(system.MemberStateReady)
+	msWaitFormat = stateString(system.MemberStateAwaitFormat)
+	msStopped    = stateString(system.MemberStateStopped)
+	msErrored    = stateString(system.MemberStateErrored)
 )
 
 // checkUnorderedRankResults fails if results slices contain any differing results,
@@ -145,8 +128,8 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 			},
 			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: uint32(system.MemberStateUnresponsive)},
-				{Rank: 2, State: uint32(system.MemberStateUnresponsive)},
+				{Rank: 1, State: stateString(system.MemberStateUnresponsive)},
+				{Rank: 2, State: stateString(system.MemberStateUnresponsive)},
 			},
 		},
 		"context timeout": { // dRPC req-resp duration > parent context timeout
@@ -158,8 +141,8 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 			},
 			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: uint32(system.MemberStateUnresponsive)},
-				{Rank: 2, State: uint32(system.MemberStateUnresponsive)},
+				{Rank: 1, State: stateString(system.MemberStateUnresponsive)},
+				{Rank: 2, State: stateString(system.MemberStateUnresponsive)},
 			},
 		},
 		"context cancel": { // dRPC req-resp duration > when parent context is canceled
@@ -190,8 +173,8 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 			},
 			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: uint32(system.MemberStateStopping)},
-				{Rank: 2, State: uint32(system.MemberStateStopping)},
+				{Rank: 1, State: stateString(system.MemberStateStopping)},
+				{Rank: 2, State: stateString(system.MemberStateStopping)},
 			},
 		},
 	} {
@@ -525,8 +508,8 @@ func TestServer_CtlSvc_PingRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 			},
 			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: uint32(system.MemberStateUnresponsive)},
-				{Rank: 2, State: uint32(system.MemberStateUnresponsive)},
+				{Rank: 1, State: stateString(system.MemberStateUnresponsive)},
+				{Rank: 2, State: stateString(system.MemberStateUnresponsive)},
 			},
 		},
 		"dRPC context timeout": { // dRPC req-resp duration > parent context Timeout
@@ -539,8 +522,8 @@ func TestServer_CtlSvc_PingRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 			},
 			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: uint32(system.MemberStateUnresponsive)},
-				{Rank: 2, State: uint32(system.MemberStateUnresponsive)},
+				{Rank: 1, State: stateString(system.MemberStateUnresponsive)},
+				{Rank: 2, State: stateString(system.MemberStateUnresponsive)},
 			},
 		},
 		"dRPC context cancel": { // dRPC req-resp duration > when parent context is canceled

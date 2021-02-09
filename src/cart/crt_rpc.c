@@ -1,29 +1,14 @@
 /*
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It implements the main RPC routines.
  */
 #define D_LOGFAC	DD_FAC(rpc)
+
+#include <semaphore.h>
 
 #include "crt_internal.h"
 
@@ -216,18 +201,17 @@ char
 		return "SWIM";
 
 	switch (opc) {
-	CRT_INTERNAL_RPCS_LIST
-	CRT_FI_RPCS_LIST
-	default:
-		return "DAOS";
+		CRT_INTERNAL_RPCS_LIST
+		CRT_FI_RPCS_LIST
 	}
+	return "DAOS";
 }
 
 #undef X
 
 /* CRT RPC related APIs or internal functions */
 int
-crt_internal_rpc_register(void)
+crt_internal_rpc_register(bool server)
 {
 	struct crt_proto_format	cpf;
 	int			rc;
@@ -245,6 +229,9 @@ crt_internal_rpc_register(void)
 		return rc;
 	}
 
+	if (!server)
+		return rc;
+
 	cpf.cpf_name  = "fault-injection";
 	cpf.cpf_ver   = CRT_PROTO_FI_VERSION;
 	cpf.cpf_count = ARRAY_SIZE(crt_fi_rpcs);
@@ -254,6 +241,67 @@ crt_internal_rpc_register(void)
 	rc = crt_proto_register(&cpf);
 	if (rc != 0)
 		D_ERROR("crt_proto_register() failed, " DF_RC "\n", DP_RC(rc));
+
+	return rc;
+}
+
+struct crt_pfi {
+	int	pfi_ver;
+	int	pfi_rc;
+	sem_t	pfi_sem;
+};
+
+static void
+crt_pfi_cb(struct crt_proto_query_cb_info *cb_info)
+{
+	struct crt_pfi *pfi = cb_info->pq_arg;
+
+	pfi->pfi_rc = cb_info->pq_rc;
+	pfi->pfi_ver = cb_info->pq_ver;
+	sem_post(&pfi->pfi_sem);
+}
+
+/* Register the FI protocol against an endpoint.
+ * This is from client code, so pass in an endpoint, and query the target for
+ * what version it supports.  The client only supports one version so abort
+ * if there is any error.
+ */
+int
+crt_register_proto_fi(crt_endpoint_t *ep)
+{
+	struct crt_proto_format cpf;
+	struct crt_pfi	pfi = {};
+	int		rc;
+
+	cpf.cpf_name  = "fault-injection";
+	cpf.cpf_ver   = CRT_PROTO_FI_VERSION;
+	cpf.cpf_count = ARRAY_SIZE(crt_fi_rpcs);
+	cpf.cpf_prf   = crt_fi_rpcs;
+	cpf.cpf_base  = CRT_OPC_FI_BASE;
+
+	rc = sem_init(&pfi.pfi_sem, 0, 0);
+	if (rc != 0)
+		return -DER_MISC;
+
+	rc = crt_proto_query(ep, CRT_OPC_FI_BASE, &cpf.cpf_ver,
+			     1, crt_pfi_cb, &pfi);
+	if (rc != -DER_SUCCESS)
+		D_GOTO(out, rc);
+
+	sem_wait(&pfi.pfi_sem);
+
+	if (pfi.pfi_rc != -DER_SUCCESS)
+		D_GOTO(out, rc = pfi.pfi_rc);
+
+	if (pfi.pfi_ver != CRT_PROTO_FI_VERSION)
+		D_GOTO(out, rc = -DER_MISMATCH);
+
+	rc = crt_proto_register(&cpf);
+	if (rc != 0)
+		D_ERROR("crt_proto_register() failed, " DF_RC "\n", DP_RC(rc));
+
+out:
+	sem_destroy(&pfi.pfi_sem);
 
 	return rc;
 }

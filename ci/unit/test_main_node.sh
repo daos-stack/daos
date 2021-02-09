@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This is a script to be run by the unit/test_main.sh to run a test
+# This is a script to be run by the ci/unit/test_main.sh to run a test
 # on a CI node.
 
 set -uex
@@ -43,11 +43,5 @@ else
 fi
 
 cd "$DAOS_BASE"
-if ${NLT:-false}; then
-    mkdir -p vm_test
-    # NLT will mount /mnt/daos itself.
-    ./utils/node_local_test.py --output-file=vm_test/nlt-errors.json all
-else
-    sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
-    IS_CI=true OLD_CI=false RUN_TEST_VALGRIND="$WITH_VALGRIND" utils/run_test.sh
-fi
+sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
+IS_CI=true OLD_CI=false RUN_TEST_VALGRIND="$WITH_VALGRIND" utils/run_test.sh
