@@ -113,7 +113,7 @@ class OSAOfflineReintegration(OSAUtils):
             self.log.info("Pool Version at the beginning %s", pver_begin)
             if server_boot is False:
                 output = self.dmg_command.pool_exclude(self.pool.uuid,
-                                                       rank, t_string)
+                                                       rank)
             else:
                 output = self.dmg_command.system_stop(ranks=rank)
                 time.sleep(10)
