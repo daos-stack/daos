@@ -564,8 +564,6 @@ pipeline {
                         }
                     }
                     steps {
-		        sh(label: "Test",
-			   script: "find .")
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
                                    ignored_files: "src/control/vendor/*:" +

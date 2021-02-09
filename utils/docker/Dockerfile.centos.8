@@ -162,6 +162,7 @@ ARG COMPILER=gcc
 # copy DAOS tree
 WORKDIR /home/daos
 COPY ./ .
+RUN ln -s utils/sl site_scons
 
 # Build DAOS & dependencies
 RUN [ "$NOBUILD" != "no" ] || \

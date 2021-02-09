@@ -1,4 +1,17 @@
-# Local git data, will change often and not needed for building.
+# .dockerignore file for DAOS.
+
+# Firsly deny everything and then allow only directories and files that we're
+# interested in.  Other files will not be required for the build and they
+# just generate noise and extra work for the docker deamon.
+*
+!src
+!utils
+!SConstruct
+!VERSION
+!LICENSE
+!ftest.sh
+
+# Now disallow extra files which may be present but are not required.
 # Include the rdb repo as well.
 **/.git
 
@@ -16,7 +29,7 @@ config.log
 autodocs
 
 # Doc isn't required for building.
-.doc
+doc
 
 dnt*
 nlt*
