@@ -24,7 +24,7 @@ RUN yum clean all && yum -y install epel-release dnf-plugins-core &&	\
 	ninja-build numactl-devel openssl-devel pandoc patch		\
 	readline-devel python3-scons sg3_utils yasm diffutils		\
 	pciutils valgrind-devel man fuse3-devel hwloc-devel patchelf	\
-	json-c-devel lz4-devel libipmctl-devel ndctl ipmctl 		\
+	json-c-devel lz4-devel libipmctl-devel ndctl ipmctl		\
 	e2fsprogs &&							\
     dnf config-manager --set-enabled epel-modular && 			\
     yum -y install 							\
@@ -35,7 +35,8 @@ RUN yum clean all && yum -y install epel-release dnf-plugins-core &&	\
 	python3-clustershell python3-paramiko				\
 	python3-numpy python3-jira python3-pip Lmod			\
 	python3-tabulate python2-distro python3-distro			\
-	java-1.8.0-openjdk maven openmpi-devel && yum clean all
+	java-1.8.0-openjdk maven openmpi-devel &&			\
+    yum clean all
 
 # XXX python2-avocado python2-avocado-plugins-output-html
 # python2-avocado-plugins-varianter-yaml-to-mux
