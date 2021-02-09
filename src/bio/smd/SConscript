@@ -10,7 +10,7 @@ def scons():
     prereqs.require(denv, 'argobots', 'protobufc')
 
     denv.Library('smd', Glob('*.c'),
-                 LIBS=['daos_common_pmem', 'gurt', 'pmemobj'])
+                 LIBS=[])
 
     SConscript('tests/SConscript', exports='denv')
 
