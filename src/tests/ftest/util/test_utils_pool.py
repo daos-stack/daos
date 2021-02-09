@@ -475,34 +475,7 @@ class TestPool(TestDaosApiBase):
             to_start (bool): whether to wait for rebuild to start or end
             interval (int): number of seconds to wait in between rebuild
                 completion checks
-
-        Raises:
-            TimeoutError:  if rebuild time is specified and exceeded while
-                waiting for rebuild to start or end
-
         """
-        if self.pool_query_timeout.value is not None:
-            self.log.info(
-                "Waiting for pool query to be responsive %s",
-                " with a {} second timeout".format(
-                    self.pool_query_timeout.value))
-
-            end_time = time() + self.pool_query_timeout.value
-            while time() < end_time:
-                try:
-                    self.dmg.pool_query(self.pool.get_uuid_str())
-                    self.log.info("Pool query still responsive")
-                    break
-                except CommandFailure as error:
-                    self.log.info(
-                        "Pool query still non-responsive: %s", str(error))
-            if time() > end_time:
-                raise TimeoutError(
-                    "TIMEOUT detected after {} seconds while waiting for pool "
-                    "query response. This timeout can be adjusted via the "
-                    "'pool/pool_query_timeout' test yaml parameter.".format(
-                        self.pool_query_timeout.value))
-
         start = time()
         self.log.info(
             "Waiting for rebuild to %s%s ...",
@@ -515,7 +488,6 @@ class TestPool(TestDaosApiBase):
             self.log.info(
                 "  Rebuild %s ...",
                 "has not yet started" if to_start else "in progress")
-            self.set_query_data()
             if self.rebuild_timeout.value is not None:
                 if time() - start > self.rebuild_timeout.value:
                     raise DaosTestError(
@@ -731,7 +703,32 @@ class TestPool(TestDaosApiBase):
         self.query_data = {}
         if self.pool:
             if self.dmg:
-                self.query_data = self.dmg.pool_query(self.pool.get_uuid_str())
+                uuid = self.pool.get_uuid_str()
+                end_time = None
+                if self.pool_query_timeout.value is not None:
+                    self.log.info(
+                        "Waiting for pool %s query to be responsive with a %s "
+                        "second timeout", uuid, self.pool_query_timeout.value)
+                    end_time = time() + self.pool_query_timeout.value
+                while True:
+                    try:
+                        self.query_data = self.dmg.pool_query(uuid)
+                        break
+                    except CommandFailure as error:
+                        if end_time is not None:
+                            self.log.info(
+                                "Pool %s query still non-responsive: %s",
+                                uuid, str(error))
+                            if time() > end_time:
+                                raise TimeoutError(
+                                    "TIMEOUT detected after {} seconds while "
+                                    "waiting for pool %s query response. This "
+                                    "timeout can be adjusted via the "
+                                    "'pool/pool_query_timeout' test yaml "
+                                    "parameter.".format(
+                                        uuid, self.pool_query_timeout.value))
+                        else:
+                            raise CommandFailure(error)
             else:
                 self.log.error("Error: Undefined dmg command")
 

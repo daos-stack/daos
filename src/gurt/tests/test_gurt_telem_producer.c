@@ -223,6 +223,68 @@ test_input_validation(void **state)
 	D_FREE_PTR(path);
 }
 
+static void
+test_gauge_stats(void **state)
+{
+	int	rc;
+	int	i;
+	int	len;
+	int	test_values[] = {2, 4, 6, 8, 10, 12, 14,
+				 16, 18, 20, 2, 4, 6, 8,
+				 10, 12, 14, 16, 18, 20};
+
+	len =  (int)(sizeof(test_values) / sizeof(int));
+	for (i = 0; i < len; i++) {
+		rc = d_tm_set_gauge(NULL, test_values[i],
+				    "gurt/tests/telem/gauge-stats", NULL);
+		assert(rc == D_TM_SUCCESS);
+	}
+}
+
+static void
+test_duration_stats(void **state)
+{
+	static struct d_tm_node_t	*timer;
+	int				rc;
+
+	/*
+	 * Manually add this duration metric so that it allocates the resources
+	 * for this node.  Then manually store timer values into the metric,
+	 * to avoid actually timing something for this test.  This will produce
+	 * a set of known values each run.  Simulate what happens when running
+	 * the timer by calling the d_tm_compute_stats() each time a
+	 * new duration value is created.  This allows the statistics to be
+	 * updated at each step, as they would be when the duration API is
+	 * used normally.  The consumer test component will read the duration
+	 * stats and compare that to the expected values to determine success
+	 * or failure.
+	 */
+
+	rc = d_tm_add_metric(&timer, "gurt/tests/telem/duration-stats",
+			     D_TM_DURATION | D_TM_CLOCK_REALTIME, "N/A", "N/A");
+	assert(rc == D_TM_SUCCESS);
+
+	timer->dtn_metric->dtm_data.tms[0].tv_sec = 1;
+	timer->dtn_metric->dtm_data.tms[0].tv_nsec = 125000000;
+	d_tm_compute_duration_stats(timer);
+
+	timer->dtn_metric->dtm_data.tms[0].tv_sec = 2;
+	timer->dtn_metric->dtm_data.tms[0].tv_nsec = 150000000;
+	d_tm_compute_duration_stats(timer);
+
+	timer->dtn_metric->dtm_data.tms[0].tv_sec = 3;
+	timer->dtn_metric->dtm_data.tms[0].tv_nsec = 175000000;
+	d_tm_compute_duration_stats(timer);
+
+	timer->dtn_metric->dtm_data.tms[0].tv_sec = 4;
+	timer->dtn_metric->dtm_data.tms[0].tv_nsec = 200000000;
+	d_tm_compute_duration_stats(timer);
+
+	timer->dtn_metric->dtm_data.tms[0].tv_sec = 5;
+	timer->dtn_metric->dtm_data.tms[0].tv_nsec = 600000000;
+	d_tm_compute_duration_stats(timer);
+}
+
 static int
 fini_tests(void **state)
 {
@@ -243,6 +305,8 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_record_timestamp),
 		cmocka_unit_test(test_interval_timer),
 		cmocka_unit_test(test_input_validation),
+		cmocka_unit_test(test_gauge_stats),
+		cmocka_unit_test(test_duration_stats),
 		cmocka_unit_test(test_client_init),
 	};
 

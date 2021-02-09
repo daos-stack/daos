@@ -120,5 +120,6 @@ main(void)
 		cmocka_unit_test(test_acl_name_not_found),
 	};
 
-	return cmocka_run_group_tests(tests, NULL, NULL);
+	return cmocka_run_group_tests_name("common_acl_util_real",
+					   tests, NULL, NULL);
 }
