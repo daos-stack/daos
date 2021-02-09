@@ -394,8 +394,8 @@ crt_ivf_finalize(struct iv_fetch_cb_info *iv_info, crt_iv_key_t *iv_key,
 			output = crt_reply_get(rpc);
 			output->ifo_rc = output_rc;
 
-			rc = crt_reply_send(rpc);
-			D_ASSERT(rc == 0);
+			/* Reply can fail */
+			crt_reply_send(rpc);
 		}
 
 		/* addref done in crt_hdlr_iv_fetch */
@@ -1019,8 +1019,8 @@ cleanup:
 		D_ERROR("Bulk transfer failed; rc=%d\n", rc);
 
 		output->ifo_rc = rc;
-		rc = crt_reply_send(rpc);
-		D_ASSERT(rc == 0);
+		/* Reply can fail */
+		crt_reply_send(rpc);
 
 		RPC_PUB_DECREF(rpc);
 
