@@ -37,6 +37,9 @@ daos_props_2cont_props(daos_prop_t *props, struct cont_props *cont_prop)
 
 	/** redundancy */
 	cont_prop->dcp_redun_fac	= daos_cont_prop2redunfac(props);
+
+	/** alloc'ed oid */
+	cont_prop->dcp_alloced_oid	= daos_cont_prop2allocedoid(props);
 }
 
 uint16_t
@@ -116,6 +119,15 @@ daos_cont_prop2dedupsize(daos_prop_t *props)
 	return prop == NULL ? 0 : prop->dpe_val;
 }
 
+uint64_t
+daos_cont_prop2allocedoid(daos_prop_t *props)
+{
+	struct daos_prop_entry *prop =
+		daos_prop_entry_get(props, DAOS_PROP_CO_ALLOCED_OID);
+
+	return prop == NULL ? 0 : prop->dpe_val;
+}
+
 bool
 daos_cont_compress_prop_is_enabled(uint16_t val)
 {
@@ -169,7 +181,7 @@ daos_cont_prop2redunfac(daos_prop_t *props)
 	struct daos_prop_entry *prop =
 		daos_prop_entry_get(props, DAOS_PROP_CO_REDUN_FAC);
 
-	return prop == NULL ? DAOS_PROP_CO_REDUN_RF1 : (uint32_t)prop->dpe_val;
+	return prop == NULL ? DAOS_PROP_CO_REDUN_RF0 : (uint32_t)prop->dpe_val;
 }
 
 /** Get the redundancy level from a containers properites. */

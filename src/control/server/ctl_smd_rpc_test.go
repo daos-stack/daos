@@ -18,7 +18,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -573,7 +573,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			harnessStopped: true,
 			expErr:         FaultHarnessNotStarted,
 		},
-		"i/o servers not started": {
+		"i/o engine not started": {
 			req:       &ctlpb.SmdQueryReq{},
 			ioStopped: true,
 			expErr:    FaultDataPlaneNotStarted,
@@ -583,14 +583,14 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			ioserverCount := len(tc.drpcResps)
-			if ioserverCount == 0 {
-				ioserverCount = 1
+			engineCount := len(tc.drpcResps)
+			if engineCount == 0 {
+				engineCount = 1
 			}
 
 			cfg := config.DefaultServer()
-			for i := 0; i < ioserverCount; i++ {
-				cfg.Servers = append(cfg.Servers, ioserver.NewConfig().WithTargetCount(1).WithRank(uint32(i)))
+			for i := 0; i < engineCount; i++ {
+				cfg.Engines = append(cfg.Engines, engine.NewConfig().WithTargetCount(1).WithRank(uint32(i)))
 			}
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 			svc.harness.started.SetTrue()

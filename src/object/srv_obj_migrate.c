@@ -17,7 +17,7 @@
 #include <daos/container.h>
 #include <daos/pool.h>
 #include <daos_srv/container.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/dtx_srv.h>
 #include "obj_rpc.h"
@@ -1897,6 +1897,13 @@ retry:
 			/* DER_DATA_LOSS means it can not find any replicas
 			 * to rebuild the data, see obj_list_common.
 			 */
+			if (rc == -DER_DATA_LOSS) {
+				D_DEBUG(DB_REBUILD, "No replicas for "DF_UOID
+					"\n", DP_UOID(arg->oid));
+				num = 0;
+				rc = 0;
+			}
+
 			D_DEBUG(DB_REBUILD, "Can not rebuild "
 				DF_UOID"\n", DP_UOID(arg->oid));
 			break;
@@ -2635,8 +2642,13 @@ migrate_check_one(void *data)
 	arg->executed_ult += tls->mpt_executed_ult;
 	if (arg->dms.dm_status == 0)
 		arg->dms.dm_status = tls->mpt_status;
-
 	ABT_mutex_unlock(arg->status_lock);
+
+	D_DEBUG(DB_REBUILD, "status %d/%d  rec/obj/size "
+		DF_U64"/"DF_U64"/"DF_U64"\n", tls->mpt_status,
+		arg->dms.dm_status, tls->mpt_rec_count,
+		tls->mpt_obj_count, tls->mpt_size);
+
 	migrate_pool_tls_put(tls);
 	return 0;
 }

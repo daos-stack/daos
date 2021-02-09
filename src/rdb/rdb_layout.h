@@ -16,6 +16,7 @@
  *       Object RDB_MC_ATTRS		// attribute object
  *         D-key rdb_dkey
  *           A-key rdb_mc_uuid		// <db_uuid> (see rdb_create())
+ *           A-key rdb_mc_version	// layout version
  *           A-key rdb_mc_term		// term
  *           A-key rdb_mc_vote		// vote for term
  *           A-key rdb_mc_lc		// log container record
@@ -36,6 +37,8 @@
  *         D-key rdb_dkey
  *           ...
  *       ...
+ *
+ * The version of the whole layout is stored in rdb_mc_version.
  *
  * D-keys are insignificant in the layout. Every object has only one d-key
  * equal to rdb_dkey. A-keys are all DAOS_IOD_SINGLE.
@@ -67,6 +70,12 @@
 
 #ifndef RDB_LAYOUT_H
 #define RDB_LAYOUT_H
+
+/* Default layout version */
+#define RDB_LAYOUT_VERSION 1
+
+/* Lowest compatible layout version */
+#define RDB_LAYOUT_VERSION_LOW 1
 
 /*
  * Object ID
@@ -111,6 +120,7 @@ struct rdb_anchor {
  * rdb_layout.c using RDB_STRING_KEY().
  */
 extern d_iov_t rdb_mc_uuid;		/* uuid_t */
+extern d_iov_t rdb_mc_version;		/* uint32_t */
 extern d_iov_t rdb_mc_term;		/* uint64_t */
 extern d_iov_t rdb_mc_vote;		/* int */
 extern d_iov_t rdb_mc_lc;		/* rdb_lc_record */

@@ -49,7 +49,11 @@
 	X(RAS_SYSTEM_STOP,		"system_action_stop")		\
 	X(RAS_SYSTEM_START,		"system_action_start")		\
 	X(RAS_SWIM_RANK_ALIVE,		"swim_rank_alive")		\
-	X(RAS_SWIM_RANK_DEAD,		"swim_rank_dead")
+	X(RAS_SWIM_RANK_DEAD,		"swim_rank_dead")		\
+	X(RAS_CONT_DF_INCOMPAT,						\
+	  "container_durable_format_incompatible")			\
+	X(RAS_RDB_DF_INCOMPAT,						\
+	  "rdb_durable_format_incompatible")
 
 /** Define RAS event enum */
 typedef enum {
@@ -135,6 +139,18 @@ ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 		    char *hwid, d_rank_t *rank, char *jobid, uuid_t *pool,
 		    uuid_t *cont, daos_obj_id_t *objid, char *ctlop,
 		    char *data);
+
+/**
+ * A printf-style message-formatting wrapper for ds_notify_ras_event. If the
+ * resulting message is too long for DAOS_RAS_STR_FIELD_SIZE, it will be ended
+ * with a '$' to indicate so. See ds_notify_ras_event for parameter
+ * documentation.
+ */
+void
+ds_notify_ras_eventf(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hwid,
+		     d_rank_t *rank, char *jobid, uuid_t *pool, uuid_t *cont,
+		     daos_obj_id_t *objid, char *ctlop, char *data,
+		     const char *fmt, ...);
 
 /**
  * Notify control-plane of an update to a pool's service replicas.
