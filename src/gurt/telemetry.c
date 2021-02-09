@@ -9,6 +9,9 @@
  */
 #define D_LOGFAC	DD_FAC(telem)
 
+#include <math.h>
+#include <float.h>
+#include <gurt/common.h>
 #include <sys/shm.h>
 #include "gurt/telemetry_common.h"
 #include "gurt/telemetry_producer.h"
@@ -455,53 +458,73 @@ d_tm_print_timer_snapshot(struct timespec *tms, char *name, int tm_type,
 }
 
 /**
- * Prints the duration \a tms with \a name to the \a stream provided
+ * Prints the duration \a tms with \a stats and \a name to the \a stream
+ * provided
  *
  * \param[in]	tms	Duration timer value
+ * \param[in]	stats	Optional stats
  * \param[in]	name	Duration timer name
  * \param[in]	tm_type	Duration timer type
  * \param[in]	stream	Output stream (stdout, stderr)
  */
 void
-d_tm_print_duration(struct timespec *tms, char *name, int tm_type, FILE *stream)
+d_tm_print_duration(struct timespec *tms, struct d_tm_stats_t *stats,
+		    char *name, int tm_type, FILE *stream)
 {
+	bool printStats;
+
 	if ((tms == NULL) || (name == NULL) || (stream == NULL))
 		return;
 
+	printStats = (stats != NULL) && (stats->sample_size > 0);
+
 	switch (tm_type) {
 	case D_TM_DURATION | D_TM_CLOCK_REALTIME:
-		fprintf(stream, "Duration (realtime): %s = %.9fs\n",
+		fprintf(stream, "Duration (realtime): %s = %.9fs",
 			name, tms->tv_sec + tms->tv_nsec / 1e9);
 		break;
 	case D_TM_DURATION | D_TM_CLOCK_PROCESS_CPUTIME:
-		fprintf(stream, "Duration (process): %s = %.9fs\n",
+		fprintf(stream, "Duration (process): %s = %.9fs",
 			name, tms->tv_sec + tms->tv_nsec / 1e9);
 		break;
 	case D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME:
-		fprintf(stream, "Duration (thread): %s = %.9fs\n",
+		fprintf(stream, "Duration (thread): %s = %.9fs",
 			name, tms->tv_sec + tms->tv_nsec / 1e9);
 		break;
 	default:
-		fprintf(stream, "Invalid timer duration type: 0x%x\n",
+		fprintf(stream, "Invalid timer duration type: 0x%x",
 			tm_type & ~D_TM_DURATION);
+		printStats = false;
 		break;
 	}
+
+	if (printStats)
+		D_TM_PRINT_STATS(stream, stats, float, lf);
+
+	fprintf(stream, "\n");
 }
 
 /**
- * Prints the gauge \a val with \a name to the \a stream provided
+ * Prints the gauge \a val and \a stats with \a name to the \a stream provided
  *
  * \param[in]	tms	Timer value
+ * \param[in]	stats	Optional statistics
  * \param[in]	name	Timer name
  * \param[in]	stream	Output stream (stdout, stderr)
  */
 void
-d_tm_print_gauge(uint64_t val, char *name, FILE *stream)
+d_tm_print_gauge(uint64_t val, struct d_tm_stats_t *stats, char *name,
+		 FILE *stream)
 {
 	if ((name == NULL) || (stream == NULL))
 		return;
 
-	fprintf(stream, "Gauge: %s = %" PRIu64 "\n", name, val);
+	fprintf(stream, "Gauge: %s = %" PRIu64, name, val);
+
+	if ((stats != NULL) && (stats->sample_size > 0))
+		D_TM_PRINT_STATS(stream, stats, int, lu);
+
+	fprintf(stream, "\n");
 }
 
 /**
@@ -518,12 +541,13 @@ void
 d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 		FILE *stream)
 {
-	struct timespec	tms;
-	uint64_t	val;
-	time_t		clk;
-	char		*name = NULL;
-	int		i = 0;
-	int		rc;
+	struct d_tm_stats_t	stats = {0};
+	struct timespec		tms;
+	uint64_t		val;
+	time_t			clk;
+	char			*name = NULL;
+	int			i = 0;
+	int			rc;
 
 	name = d_tm_conv_ptr(shmem_root, node->dtn_name);
 	if (name == NULL)
@@ -566,20 +590,21 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 	case (D_TM_DURATION | D_TM_CLOCK_REALTIME):
 	case (D_TM_DURATION | D_TM_CLOCK_PROCESS_CPUTIME):
 	case (D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME):
-		rc = d_tm_get_duration(&tms, shmem_root, node, NULL);
+		rc = d_tm_get_duration(&tms, &stats, shmem_root, node, NULL);
 		if (rc != D_TM_SUCCESS) {
 			fprintf(stream, "Error on duration read: %d\n", rc);
 			break;
 		}
-		d_tm_print_duration(&tms, name, node->dtn_type, stream);
+		d_tm_print_duration(&tms, &stats, name, node->dtn_type,
+				    stream);
 		break;
 	case D_TM_GAUGE:
-		rc = d_tm_get_gauge(&val, shmem_root, node, NULL);
+		rc = d_tm_get_gauge(&val, &stats, shmem_root, node, NULL);
 		if (rc != D_TM_SUCCESS) {
 			fprintf(stream, "Error on gauge read: %d\n", rc);
 			break;
 		}
-		d_tm_print_gauge(val, name, stream);
+		d_tm_print_gauge(val, &stats, name, stream);
 		break;
 	default:
 		fprintf(stream, "Item: %s has unknown type: 0x%x\n", name,
@@ -712,6 +737,86 @@ d_tm_build_path(char **path, char *item, va_list args)
 
 failure:
 	return rc;
+}
+
+/**
+ * Compute standard deviation
+ *
+ * \param[in]	sum_of_squares	Precomputed sum of squares
+ * \param[in]	sample_size	Number of elements in the data set
+ * \param[in]	mean		Mean of all elements
+ *
+ * \return			computed standard deviation
+ */
+double
+d_tm_compute_standard_dev(double sum_of_squares, uint64_t sample_size,
+			  double mean)
+{
+	if (sample_size < 2)
+		return 0;
+
+	return sqrtl((sum_of_squares - (sample_size * mean * mean)) /
+		     (sample_size - 1));
+}
+
+/**
+ * Compute gauge statistics: sample size, min, max, sum and sum of squares.
+ * Standard deviation calculation is deferred until the metric is read.
+ *
+ * \param[in]	node		Pointer to a gauge node
+ */
+void
+d_tm_compute_gauge_stats(struct d_tm_node_t *node)
+{
+	struct d_tm_stats_t	*dtm_stats;
+	uint64_t		value = 0;
+
+	dtm_stats = node->dtn_metric->dtm_stats;
+
+	if (dtm_stats == NULL)
+		return;
+
+	value = node->dtn_metric->dtm_data.value;
+	dtm_stats->sample_size++;
+	dtm_stats->dtm_sum.sum_int += value;
+	dtm_stats->sum_of_squares += value * value;
+
+	if (value > dtm_stats->dtm_max.max_int)
+		dtm_stats->dtm_max.max_int = value;
+
+	if (value < dtm_stats->dtm_min.min_int)
+		dtm_stats->dtm_min.min_int = value;
+}
+
+/**
+ * Compute duration statistics: sample size, min, max, sum and sum of squares.
+ * Standard deviation calculation is deferred until the metric is read.
+ *
+ * \param[in]	node		Pointer to a duration node
+ */
+void
+d_tm_compute_duration_stats(struct d_tm_node_t *node)
+{
+	struct d_tm_stats_t	*dtm_stats;
+	double			value = 0;
+
+	dtm_stats = node->dtn_metric->dtm_stats;
+
+	if (dtm_stats == NULL)
+		return;
+
+	value = node->dtn_metric->dtm_data.tms[0].tv_sec +
+		(node->dtn_metric->dtm_data.tms[0].tv_nsec / 1E9);
+
+	dtm_stats->sample_size++;
+	dtm_stats->dtm_sum.sum_float += value;
+	dtm_stats->sum_of_squares += value * value;
+
+	if (value > dtm_stats->dtm_max.max_float)
+		dtm_stats->dtm_max.max_float = value;
+
+	if (value < dtm_stats->dtm_min.min_float)
+		dtm_stats->dtm_min.min_float = value;
 }
 
 /**
@@ -1175,6 +1280,7 @@ d_tm_mark_duration_end(struct d_tm_node_t **metric, char *item, ...)
 			      &end);
 		node->dtn_metric->dtm_data.tms[0] = d_timediff(
 					node->dtn_metric->dtm_data.tms[1], end);
+		d_tm_compute_duration_stats(node);
 		if (node->dtn_protect)
 			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
@@ -1265,6 +1371,7 @@ d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value, char *item, ...)
 		if (node->dtn_protect)
 			D_MUTEX_LOCK(&node->dtn_lock);
 		node->dtn_metric->dtm_data.value = value;
+		d_tm_compute_gauge_stats(node);
 		if (node->dtn_protect)
 			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
@@ -1356,6 +1463,7 @@ d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
 		if (node->dtn_protect)
 			D_MUTEX_LOCK(&node->dtn_lock);
 		node->dtn_metric->dtm_data.value += value;
+		d_tm_compute_gauge_stats(node);
 		if (node->dtn_protect)
 			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
@@ -1447,6 +1555,7 @@ d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
 		if (node->dtn_protect)
 			D_MUTEX_LOCK(&node->dtn_lock);
 		node->dtn_metric->dtm_data.value -= value;
+		d_tm_compute_gauge_stats(node);
 		if (node->dtn_protect)
 			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
@@ -1620,15 +1729,26 @@ d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
 		goto failure;
 	}
 
-	/**
-	 * Initialize the dtm_data for this metric
-	 * Clearing dtm_data.tms[0] and dtm_data.tms[1] clears dtm_data.value
-	 * because of the union
-	 */
-	temp->dtn_metric->dtm_data.tms[0].tv_sec = 0;
-	temp->dtn_metric->dtm_data.tms[0].tv_nsec = 0;
-	temp->dtn_metric->dtm_data.tms[1].tv_sec = 0;
-	temp->dtn_metric->dtm_data.tms[1].tv_nsec = 0;
+	temp->dtn_metric->dtm_stats = NULL;
+	if (metric_type == D_TM_GAUGE) {
+		temp->dtn_metric->dtm_stats =
+				     d_tm_shmalloc(sizeof(struct d_tm_stats_t));
+		if (temp->dtn_metric->dtm_stats == NULL) {
+			rc = -DER_NO_SHMEM;
+			goto failure;
+		}
+		temp->dtn_metric->dtm_stats->dtm_min.min_int = UINT64_MAX;
+	}
+
+	if (metric_type & D_TM_DURATION) {
+		temp->dtn_metric->dtm_stats =
+				     d_tm_shmalloc(sizeof(struct d_tm_stats_t));
+		if (temp->dtn_metric->dtm_stats == NULL) {
+			rc = -DER_NO_SHMEM;
+			goto failure;
+		}
+		temp->dtn_metric->dtm_stats->dtm_min.min_float = DBL_MAX;
+	}
 
 	buff_len = strnlen(sh_desc, D_TM_MAX_SHORT_LEN);
 	if (buff_len == D_TM_MAX_SHORT_LEN) {
@@ -1852,9 +1972,14 @@ d_tm_get_timer_snapshot(struct timespec *tms, uint64_t *shmem_root,
  * Client function to read the specified duration.  If the node is provided,
  * that pointer is used for the read.  Otherwise, a lookup by the metric name
  * is performed.  Access to the data is guarded by the use of the shared
- * mutex for this specific node.
+ * mutex for this specific node.  A pointer for the \a tms is required.
+ * A pointer for \a stats is optional.
  *
- * \param[in,out]	val		The value of the duration is stored here
+ * The computation of mean and standard deviation are completed upon this
+ * read operation.
+ *
+ * \param[in,out]	tms		The value of the duration is stored here
+ * \param[in,out]	stats		The statistics are stored here
  * \param[in]		shmem_root	Pointer to the shared memory segment
  * \param[in]		node		Pointer to the stored metric node
  * \param[in]		metric		Full path name to the stored metric
@@ -1865,10 +1990,11 @@ d_tm_get_timer_snapshot(struct timespec *tms, uint64_t *shmem_root,
  *			-DER_OP_NOT_PERMITTED	Metric was not a duration
  */
 int
-d_tm_get_duration(struct timespec *tms, uint64_t *shmem_root,
-		  struct d_tm_node_t *node, char *metric)
+d_tm_get_duration(struct timespec *tms, struct d_tm_stats_t *stats,
+		  uint64_t *shmem_root, struct d_tm_node_t *node, char *metric)
 {
 	struct d_tm_metric_t	*metric_data = NULL;
+	struct d_tm_stats_t	*dtm_stats = NULL;
 
 	if (tms == NULL)
 		return -DER_INVAL;
@@ -1887,10 +2013,25 @@ d_tm_get_duration(struct timespec *tms, uint64_t *shmem_root,
 
 	metric_data = d_tm_conv_ptr(shmem_root, node->dtn_metric);
 	if (metric_data != NULL) {
+		dtm_stats = d_tm_conv_ptr(shmem_root, metric_data->dtm_stats);
 		if (node->dtn_protect)
 			D_MUTEX_LOCK(&node->dtn_lock);
 		tms->tv_sec = metric_data->dtm_data.tms[0].tv_sec;
 		tms->tv_nsec = metric_data->dtm_data.tms[0].tv_nsec;
+		if (stats != NULL) {
+			stats->dtm_min.min_float = dtm_stats->dtm_min.min_float;
+			stats->dtm_max.max_float = dtm_stats->dtm_max.max_float;
+			stats->dtm_sum.sum_float = dtm_stats->dtm_sum.sum_float;
+			if (dtm_stats->sample_size > 0)
+				stats->mean = dtm_stats->dtm_sum.sum_float /
+					      dtm_stats->sample_size;
+			stats->std_dev = d_tm_compute_standard_dev(
+						      dtm_stats->sum_of_squares,
+						      dtm_stats->sample_size,
+						      stats->mean);
+			stats->sum_of_squares = dtm_stats->sum_of_squares;
+			stats->sample_size = dtm_stats->sample_size;
+		}
 		if (node->dtn_protect)
 			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
@@ -1903,9 +2044,14 @@ d_tm_get_duration(struct timespec *tms, uint64_t *shmem_root,
  * Client function to read the specified gauge.  If the node is provided,
  * that pointer is used for the read.  Otherwise, a lookup by the metric name
  * is performed.  Access to the data is guarded by the use of the shared
- * mutex for this specific node.
+ * mutex for this specific node.  A pointer for the \a val is required.
+ * A pointer for \a stats is optional.
+ *
+ * The computation of mean and standard deviation are completed upon this
+ * read operation.
  *
  * \param[in,out]	val		The value of the gauge is stored here
+ * \param[in,out]	stats		The statistics are stored here
  * \param[in]		shmem_root	Pointer to the shared memory segment
  * \param[in]		node		Pointer to the stored metric node
  * \param[in]		metric		Full path name to the stored metric
@@ -1915,11 +2061,14 @@ d_tm_get_duration(struct timespec *tms, uint64_t *shmem_root,
  *			-DER_METRIC_NOT_FOUND	Metric not found
  *			-DER_OP_NOT_PERMITTED	Metric was not a gauge
  */
+
 int
-d_tm_get_gauge(uint64_t *val, uint64_t *shmem_root, struct d_tm_node_t *node,
-	       char *metric)
+d_tm_get_gauge(uint64_t *val, struct d_tm_stats_t *stats, uint64_t *shmem_root,
+	       struct d_tm_node_t *node, char *metric)
 {
 	struct d_tm_metric_t	*metric_data = NULL;
+	struct d_tm_stats_t	*dtm_stats = NULL;
+	double			sum = 0;
 
 	if (val == NULL)
 		return -DER_INVAL;
@@ -1938,9 +2087,25 @@ d_tm_get_gauge(uint64_t *val, uint64_t *shmem_root, struct d_tm_node_t *node,
 
 	metric_data = d_tm_conv_ptr(shmem_root, node->dtn_metric);
 	if (metric_data != NULL) {
+		dtm_stats = d_tm_conv_ptr(shmem_root, metric_data->dtm_stats);
 		if (node->dtn_protect)
 			D_MUTEX_LOCK(&node->dtn_lock);
 		*val = metric_data->dtm_data.value;
+		if (stats != NULL) {
+			stats->dtm_min.min_int = dtm_stats->dtm_min.min_int;
+			stats->dtm_max.max_int = dtm_stats->dtm_max.max_int;
+			stats->dtm_sum.sum_int = dtm_stats->dtm_sum.sum_int;
+			if (dtm_stats->sample_size > 0) {
+				sum = (double)dtm_stats->dtm_sum.sum_int;
+				stats->mean = sum / dtm_stats->sample_size;
+			}
+			stats->std_dev = d_tm_compute_standard_dev(
+						      dtm_stats->sum_of_squares,
+						      dtm_stats->sample_size,
+						      stats->mean);
+			stats->sum_of_squares = dtm_stats->sum_of_squares;
+			stats->sample_size = dtm_stats->sample_size;
+		}
 		if (node->dtn_protect)
 			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
@@ -2214,6 +2379,7 @@ d_tm_get_shared_memory(int srv_idx)
 
 /**
  * Allocates memory from within the shared memory pool with 16-bit alignment
+ * Clears the allocated buffer.
  *
  * param[in]	length	Size in bytes of the region within the shared memory
  *			pool to allocate
@@ -2236,6 +2402,7 @@ d_tm_shmalloc(int length)
 			D_DEBUG(DB_TRACE,
 				"Allocated %d bytes.  Now %" PRIu64 " remain\n",
 				length, d_tm_shmem_free);
+			memset((void *)(d_tm_shmem_idx - length), 0, length);
 			return d_tm_shmem_idx - length;
 		}
 	}
