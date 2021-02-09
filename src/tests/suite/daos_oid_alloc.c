@@ -342,7 +342,7 @@ run_daos_oid_alloc_test(int rank, int size)
 	int rc = 0;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	rc = cmocka_run_group_tests_name("OID Allocator tests", oid_alloc_tests,
+	rc = cmocka_run_group_tests_name("DAOS_OID_Allocator", oid_alloc_tests,
 					 oid_alloc_setup, test_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;

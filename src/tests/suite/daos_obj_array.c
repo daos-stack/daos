@@ -1454,7 +1454,7 @@ run_daos_obj_array_test(int rank, int size)
 	int rc = 0;
 
 	if (rank == 0)
-		rc = cmocka_run_group_tests_name("DAOS OBJ Array tests",
+		rc = cmocka_run_group_tests_name("DAOS_Obj_Array",
 						 array_tests, obj_array_setup,
 						 test_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
