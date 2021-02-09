@@ -610,7 +610,7 @@ int run_daos_aggregation_ec_test(int rank, int size, int *sub_tests,
 		MPI_Barrier(MPI_COMM_WORLD);
 		return rc;
 	}
-	rc = cmocka_run_group_tests_name("DAOS EC AGGREGATION TESTS",
+	rc = cmocka_run_group_tests_name("DAOS_EC_Aggregation",
 					 ec_agg_tests, ec_setup, test_teardown);
 
 	MPI_Barrier(MPI_COMM_WORLD);
