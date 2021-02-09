@@ -1251,7 +1251,7 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(qb: true) +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                                quick_build_deps('centos7', always=true) + '"' +
+                                                quick_build_deps('centos7', true) + '"' +
                                                 ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
