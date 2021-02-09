@@ -644,7 +644,6 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 		return ENOENT;
 
 	switch (entry.mode & S_IFMT) {
-	case S_IFIFO:
 	case S_IFDIR:
 		size = sizeof(entry);
 		break;
@@ -958,11 +957,8 @@ open_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, int flags,
 	 * happen for example if dfs_open() is called with S_IFDIR but without
 	 * O_CREATE and a entry of a different type exists already.
 	 */
-	if ((S_ISDIR(dir->mode) && !S_ISDIR(entry->mode)))
+	if (!S_ISDIR(entry->mode))
 		return ENOTDIR;
-
-	if ((S_ISFIFO(dir->mode) && !S_ISFIFO(entry->mode)))
-		return EINVAL;
 
 	rc = daos_obj_open(dfs->coh, entry->oid, daos_mode, &dir->oh, NULL);
 	if (rc) {
@@ -2207,12 +2203,12 @@ lookup_rel_path_loop:
 			break;
 		}
 
-		if (!S_ISDIR(entry.mode) && (!S_ISFIFO(entry.mode))) {
+		if (!S_ISDIR(entry.mode)) {
 			D_ERROR("Invalid entry type in path.\n");
 			D_GOTO(err_obj, rc = EINVAL);
 		}
 
-		/* open the directory/fifo object */
+		/* open the directory object */
 		rc = daos_obj_open(dfs->coh, entry.oid, daos_mode, &obj->oh,
 				   NULL);
 		if (rc) {
@@ -2539,7 +2535,6 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 			D_GOTO(out, rc);
 		}
 		break;
-	case S_IFIFO:
 	case S_IFDIR:
 		rc = daos_obj_open(dfs->coh, entry.oid, daos_mode, &obj->oh,
 				   NULL);
@@ -2663,7 +2658,6 @@ restart:
 			D_GOTO(out, rc);
 		}
 		break;
-	case S_IFIFO:
 	case S_IFDIR:
 		rc = open_dir(dfs, th, parent->oh, flags, cid, &entry, len,
 			      obj);
@@ -2739,7 +2733,6 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 		return ENOMEM;
 
 	switch (obj->mode & S_IFMT) {
-	case S_IFIFO:
 	case S_IFDIR:
 		rc = daos_obj_open(dfs->coh, obj->oid, daos_mode,
 				   &new_obj->oh, NULL);
@@ -2961,7 +2954,6 @@ dfs_release(dfs_obj_t *obj)
 		return EINVAL;
 
 	switch (obj->mode & S_IFMT) {
-	case S_IFIFO:
 	case S_IFDIR:
 		rc = daos_obj_close(obj->oh, NULL);
 		break;
