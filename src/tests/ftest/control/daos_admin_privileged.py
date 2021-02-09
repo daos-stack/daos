@@ -24,12 +24,6 @@ class DaosAdminPrivTest(TestWithServers):
     :avocado: recursive
     """
 
-    def __init__(self, *args, **kwargs):
-        """Initialize a DaosAdminPrivTest object."""
-        super(DaosAdminPrivTest, self).__init__(*args, **kwargs)
-        self.setup_start_agents = False
-        self.setup_start_servers = False
-
     def test_daos_admin_format(self):
         """JIRA ID: DAOS-2895.
 
@@ -94,7 +88,7 @@ class DaosAdminPrivTest(TestWithServers):
         if result is None:
             self.fail("Failed to format storage")
 
-        # Verify format success when all the doas_io_servers start
+        # Verify format success when all the daos_io_servers start
         try:
             self.server_managers[0].detect_io_server_start()
         except ServerFailed as error:

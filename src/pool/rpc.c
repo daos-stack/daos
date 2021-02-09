@@ -115,7 +115,7 @@ static struct crt_proto_rpc_format pool_proto_rpc_fmt[] = {
 #undef X
 
 struct crt_proto_format pool_proto_fmt = {
-	.cpf_name  = "pool-proto",
+	.cpf_name  = "pool",
 	.cpf_ver   = DAOS_POOL_VERSION,
 	.cpf_count = ARRAY_SIZE(pool_proto_rpc_fmt),
 	.cpf_prf   = pool_proto_rpc_fmt,
@@ -182,8 +182,7 @@ pool_target_addr_list_free(struct pool_target_addr_list *addr_list)
 	if (addr_list == NULL)
 		return;
 
-	if (addr_list->pta_addrs)
-		D_FREE(addr_list->pta_addrs);
+	D_FREE(addr_list->pta_addrs);
 }
 
 uint64_t

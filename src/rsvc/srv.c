@@ -458,6 +458,15 @@ rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 			svc->s_name, term, DP_RC(rc));
 		if (map_distd_initialized)
 			drain_map_distd(svc);
+		/*
+		 * For certain harder-to-recover errors, trigger a replica stop
+		 * to avoid reporting them too many times. (A better strategy
+		 * would be to leave the replica running without ever
+		 * campaigning again, so that it could continue serving as a
+		 * follower to other replicas.)
+		 */
+		if (rc == -DER_DF_INCOMPT)
+			rc = -DER_SHUTDOWN;
 		goto out_mutex;
 	}
 
@@ -600,7 +609,7 @@ map_distd(void *arg)
 				svc->s_map_dist = false;
 				break;
 			}
-			ABT_cond_wait(svc->s_map_dist_cv, svc->s_mutex);
+			sched_cond_wait(svc->s_map_dist_cv, svc->s_mutex);
 		}
 		ABT_mutex_unlock(svc->s_mutex);
 		if (stop)

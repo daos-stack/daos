@@ -224,7 +224,7 @@ dtx_check_replicas_v2(const char *dkey, const char *akey, const char *msg,
 			assert_true(req->iod[0].iod_size == punch ? 0 : size);
 			assert_memory_equal(update_buf, fetch_buf, size);
 		} else {
-			assert_int_equal(req->result, -DER_INPROGRESS);
+			assert_rc_equal(req->result, -DER_INPROGRESS);
 		}
 	}
 

@@ -14,8 +14,7 @@
 #include <daos_srv/pool.h>
 #include <daos_srv/container.h>
 
-#define DTX_REFRESH_MAX		4
-#define DTX_DETECT_SCAN_MAX	(1 << 10)
+#define DTX_REFRESH_MAX 4
 
 struct dtx_share_peer {
 	d_list_t		dsp_link;
@@ -79,6 +78,8 @@ struct dtx_handle {
 					 dth_dist:1,
 					 /* For data migration. */
 					 dth_for_migration:1,
+					 /* Force refresh for non-committed */
+					 dth_force_refresh:1,
 					 /* Ignore other uncommitted DTXs. */
 					 dth_ignore_uncommitted:1;
 
@@ -117,7 +118,6 @@ struct dtx_handle {
 	d_list_t			 dth_share_act_list;
 	d_list_t			 dth_share_tbd_list;
 	int				 dth_share_tbd_count;
-	int				 dth_share_tbd_scanned;
 };
 
 /* Each sub transaction handle to manage each sub thandle */
@@ -170,6 +170,8 @@ enum dtx_flags {
 	DTX_IGNORE_UNCOMMITTED	= (1 << 4),
 	/** Resent request. */
 	DTX_RESEND		= (1 << 5),
+	/** Force DTX refresh if hit non-committed DTX on non-leader. */
+	DTX_FORCE_REFRESH	= (1 << 6),
 };
 
 int

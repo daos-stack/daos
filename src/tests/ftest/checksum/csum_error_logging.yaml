@@ -22,7 +22,7 @@ daos_tests:
   num_replicas:
     num_replicas: 1
   Tests:
-    test_z:
+    test_csum_error_logging:
       daos_test: z
-      test_name: Checksum tests
+      test_name: DAOS_Checksum_tests
       test_timeout: 400

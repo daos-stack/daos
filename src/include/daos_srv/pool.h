@@ -115,7 +115,7 @@ void ds_pool_child_put(struct ds_pool_child *child);
 
 int ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 			 enum daos_module_id module, crt_opcode_t opcode,
-			 crt_rpc_t **rpc, crt_bulk_t bulk_hdl,
+			 uint32_t version, crt_rpc_t **rpc, crt_bulk_t bulk_hdl,
 			 d_rank_list_t *excluded_list);
 
 int ds_pool_map_buf_get(uuid_t uuid, d_iov_t *iov, uint32_t *map_ver);

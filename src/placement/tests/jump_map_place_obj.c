@@ -71,13 +71,16 @@ gen_oid(daos_obj_id_t *oid, uint64_t lo, uint64_t hi, daos_oclass_id_t cid)
 				false)); \
 		pl_obj_layout_free(__layout); \
 	} while (0)
-#define assert_invalid_param(pl_map, cid) \
-	do {\
-		daos_obj_id_t __oid; \
-		struct pl_obj_layout *__layout = NULL; \
-		gen_oid(&__oid, 1, UINT64_MAX, cid); \
-		assert_err(plt_obj_place(__oid, &__layout, pl_map, \
-				false), -DER_INVAL); \
+
+#define assert_invalid_param(pl_map, cid)		\
+	do {						\
+		daos_obj_id_t __oid;			\
+		struct pl_obj_layout *__layout = NULL;	\
+		int rc;					\
+		gen_oid(&__oid, 1, UINT64_MAX, cid);	\
+		rc = plt_obj_place(__oid, &__layout,	\
+				   pl_map, false);	\
+		assert_rc_equal(rc, -DER_INVAL);	\
 	} while (0)
 
 static void

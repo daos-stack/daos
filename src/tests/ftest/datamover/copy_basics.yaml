@@ -2,8 +2,10 @@ hosts:
     test_servers:
         - server-A
     test_clients:
-        - server-A
-timeout: 600
+        - server-B
+timeouts:
+    test_copy_types: 300
+    test_copy_subsets: 120
 server_config:
     name: daos_server
 pool:
@@ -18,15 +20,18 @@ ior:
     client_processes:
         np: 1
     test_file: testFile
-    copy_basics:
-        flags_write:
-            - "-v -w -k"
-        flags_read:
-            - "-v -r -R"
+    ior_flags:
+        - "-v -w -k" # write
+        - "-v -r -R" # read-verify
     block_size: '1K'
     transfer_size: '1K'
     signature: 5
+dcp:
+    client_processes:
+        np: 1
 datamover:
-    processes: 1
+    mux_tool: !mux
+        tool_dcp:
+            tool: "DCP"
 dfuse:
     mount_dir: "/tmp/daos_dfuse"

@@ -442,6 +442,12 @@ df_ll_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 	d_list_t			*rlink;
 	int				rc;
 
+	/* Don't allow setting of uid/gid extended attribute */
+	if (strncmp(name, DFUSE_XATTR_PREFIX,
+		    sizeof(DFUSE_XATTR_PREFIX) - 1) == 0) {
+		D_GOTO(err, rc = EPERM);
+	}
+
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
 		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %#lx", ino);
@@ -499,6 +505,15 @@ df_ll_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name)
 	struct dfuse_inode_entry	*inode;
 	d_list_t			*rlink;
 	int				rc;
+
+	/* Don't allow removing of dfuse extended attribute.  This will return
+	 * regardless of it the attribute exists or not, but the alternative
+	 * is a round-trip to check, so this seems like the best option here.
+	 */
+	if (strncmp(name, DFUSE_XATTR_PREFIX,
+		    sizeof(DFUSE_XATTR_PREFIX) - 1) == 0) {
+		D_GOTO(err, rc = EPERM);
+	}
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {

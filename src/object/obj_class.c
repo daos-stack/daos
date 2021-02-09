@@ -16,12 +16,22 @@ struct daos_obj_class {
 	/** unique class ID */
 	daos_oclass_id_t		 oc_id;
 	struct daos_oclass_attr		 oc_attr;
+	/** for internal usage, unit/functional test etc. */
+	bool				 oc_private;
 };
 
 #define ca_rp_nr	u.rp.r_num
 #define ca_ec_k		u.ec.e_k
 #define ca_ec_p		u.ec.e_p
 #define ca_ec_cell	u.ec.e_len
+
+#define oc_rp_nr	oc_attr.ca_rp_nr
+#define oc_ec_k		oc_attr.ca_ec_k
+#define oc_ec_p		oc_attr.ca_ec_p
+#define oc_ec_cell	oc_attr.ca_ec_cell
+#define oc_grp_nr	oc_attr.ca_grp_nr
+#define oc_resil	oc_attr.ca_resil
+#define oc_resil_degree	oc_attr.ca_resil_degree
 
 /** predefined object classes */
 static struct daos_obj_class daos_obj_classes[] = {
@@ -58,7 +68,176 @@ static struct daos_obj_class daos_obj_classes[] = {
 			.ca_rp_nr		= 1,
 		},
 	},
-	/* TODO: add more */
+	{
+		.oc_name	= "S8",
+		.oc_id		= OC_S8,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 8,
+			.ca_rp_nr		= 1,
+		},
+	},
+	{
+		.oc_name	= "S16",
+		.oc_id		= OC_S16,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 16,
+			.ca_rp_nr		= 1,
+		},
+	},
+	{
+		.oc_name	= "S32",
+		.oc_id		= OC_S32,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 32,
+			.ca_rp_nr		= 1,
+		},
+	},
+	{
+		.oc_name	= "S48",
+		.oc_id		= OC_S48,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 48,
+			.ca_rp_nr		= 1,
+		},
+	},
+	{
+		.oc_name	= "S64",
+		.oc_id		= OC_S64,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 64,
+			.ca_rp_nr		= 1,
+		},
+	},
+	{
+		.oc_name	= "S96",
+		.oc_id		= OC_S96,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 96,
+			.ca_rp_nr		= 1,
+		},
+	},
+	{
+		.oc_name	= "S128",
+		.oc_id		= OC_S128,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 128,
+			.ca_rp_nr		= 1,
+		},
+	},
+	{
+		.oc_name	= "S192",
+		.oc_id		= OC_S192,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 192,
+			.ca_rp_nr		= 1,
+		},
+	},
+	{
+		.oc_name	= "S256",
+		.oc_id		= OC_S256,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 256,
+			.ca_rp_nr		= 1,
+		},
+	},
+	{
+		.oc_name	= "S384",
+		.oc_id		= OC_S384,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 384,
+			.ca_rp_nr		= 1,
+		},
+	},
+	{
+		.oc_name	= "S512",
+		.oc_id		= OC_S512,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 512,
+			.ca_rp_nr		= 1,
+		},
+	},
+	{
+		.oc_name	= "S768",
+		.oc_id		= OC_S768,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 768,
+			.ca_rp_nr		= 1,
+		},
+	},
+	{
+		.oc_name	= "S1K",
+		.oc_id		= OC_S1K,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= (1 << 10),
+			.ca_rp_nr		= 1,
+		},
+	},
+	{
+		.oc_name	= "S2K",
+		.oc_id		= OC_S2K,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= (2 << 10),
+			.ca_rp_nr		= 1,
+		},
+	},
+	{
+		.oc_name	= "S4K",
+		.oc_id		= OC_S4K,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= (4 << 10),
+			.ca_rp_nr		= 1,
+		},
+	},
+	{
+		.oc_name	= "S6K",
+		.oc_id		= OC_S6K,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= (6 << 10),
+			.ca_rp_nr		= 1,
+		},
+	},
+	{
+		.oc_name	= "S8K",
+		.oc_id		= OC_S8K,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= (8 << 10),
+			.ca_rp_nr		= 1,
+		},
+	},
 	{
 		.oc_name	= "SX",
 		.oc_id		= OC_SX,
@@ -102,6 +281,46 @@ static struct daos_obj_class daos_obj_classes[] = {
 			.ca_rp_nr		= 2,
 		},
 	},
+	{
+		.oc_name	= "RP_2G6",
+		.oc_id		= OC_RP_2G6,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 6,
+			.ca_rp_nr		= 2,
+		},
+	},
+	{
+		.oc_name	= "RP_2G8",
+		.oc_id		= OC_RP_2G8,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 8,
+			.ca_rp_nr		= 2,
+		},
+	},
+	{
+		.oc_name	= "RP_2G12",
+		.oc_id		= OC_RP_2G12,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 12,
+			.ca_rp_nr		= 2,
+		},
+	},
+	{
+		.oc_name	= "RP_2G16",
+		.oc_id		= OC_RP_2G16,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 16,
+			.ca_rp_nr		= 2,
+		},
+	},
 	/* TODO: add more */
 	{
 		.oc_name	= "RP_2GX",
@@ -133,6 +352,56 @@ static struct daos_obj_class daos_obj_classes[] = {
 			.ca_schema		= DAOS_OS_STRIPED,
 			.ca_resil		= DAOS_RES_REPL,
 			.ca_grp_nr		= 2,
+			.ca_rp_nr		= 3,
+		},
+	},
+	{
+		.oc_name	= "RP_3G4",
+		.oc_id		= OC_RP_3G4,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 4,
+			.ca_rp_nr		= 3,
+		},
+	},
+	{
+		.oc_name	= "RP_3G6",
+		.oc_id		= OC_RP_3G6,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 6,
+			.ca_rp_nr		= 3,
+		},
+	},
+	{
+		.oc_name	= "RP_3G8",
+		.oc_id		= OC_RP_3G8,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 8,
+			.ca_rp_nr		= 3,
+		},
+	},
+	{
+		.oc_name	= "RP_3G12",
+		.oc_id		= OC_RP_3G12,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 12,
+			.ca_rp_nr		= 3,
+		},
+	},
+	{
+		.oc_name	= "RP_3G16",
+		.oc_id		= OC_RP_3G16,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 16,
 			.ca_rp_nr		= 3,
 		},
 	},
@@ -186,6 +455,86 @@ static struct daos_obj_class daos_obj_classes[] = {
 	 * It is replicated to everywhere
 	 */
 	{
+		.oc_name	= "RP_6G1",
+		.oc_id		= OC_RP_6G1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 1,
+			.ca_rp_nr		= 6,
+		},
+	},
+	{
+		.oc_name	= "RP_8G1",
+		.oc_id		= OC_RP_8G1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 1,
+			.ca_rp_nr		= 8,
+		},
+	},
+	{
+		.oc_name	= "RP_12G1",
+		.oc_id		= OC_RP_12G1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 1,
+			.ca_rp_nr		= 12,
+		},
+	},
+	{
+		.oc_name	= "RP_16G1",
+		.oc_id		= OC_RP_16G1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 1,
+			.ca_rp_nr		= 16,
+		},
+	},
+	{
+		.oc_name	= "RP_24G1",
+		.oc_id		= OC_RP_24G1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 1,
+			.ca_rp_nr		= 24,
+		},
+	},
+	{
+		.oc_name	= "RP_32G1",
+		.oc_id		= OC_RP_32G1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 1,
+			.ca_rp_nr		= 32,
+		},
+	},
+	{
+		.oc_name	= "RP_48G1",
+		.oc_id		= OC_RP_48G1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 1,
+			.ca_rp_nr		= 48,
+		},
+	},
+	{
+		.oc_name	= "RP_64G1",
+		.oc_id		= OC_RP_64G1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 1,
+			.ca_rp_nr		= 64,
+		},
+	},
+	{
 		.oc_name	= "RP_XSF",
 		.oc_id		= OC_RP_XSF,
 		{
@@ -208,6 +557,7 @@ static struct daos_obj_class daos_obj_classes[] = {
 			.ca_grp_nr		= 1,
 			.ca_rp_nr		= 1,
 		},
+		.oc_private	= true,
 	},
 	{
 		.oc_name	= "RP_2G1_ECHO",
@@ -218,6 +568,7 @@ static struct daos_obj_class daos_obj_classes[] = {
 			.ca_grp_nr		= 1,
 			.ca_rp_nr		= 2,
 		},
+		.oc_private	= true,
 	},
 	{
 		.oc_name	= "RP_3G1_ECHO",
@@ -228,6 +579,7 @@ static struct daos_obj_class daos_obj_classes[] = {
 			.ca_grp_nr		= 1,
 			.ca_rp_nr		= 3,
 		},
+		.oc_private	= true,
 	},
 	{
 		.oc_name	= "RP_4G1_ECHO",
@@ -238,6 +590,7 @@ static struct daos_obj_class daos_obj_classes[] = {
 			.ca_grp_nr		= 1,
 			.ca_rp_nr		= 4,
 		},
+		.oc_private	= true,
 	},
 	{
 		.oc_name	= "RP_3G1_SR",
@@ -248,6 +601,7 @@ static struct daos_obj_class daos_obj_classes[] = {
 			.ca_grp_nr		= 1,
 			.ca_rp_nr		= 3,
 		},
+		.oc_private	= true,
 	},
 	{
 		.oc_name	= "RP_2G1_SR",
@@ -258,6 +612,7 @@ static struct daos_obj_class daos_obj_classes[] = {
 			.ca_grp_nr		= 1,
 			.ca_rp_nr		= 2,
 		},
+		.oc_private	= true,
 	},
 	{
 		.oc_name	= "S1_SR",
@@ -268,6 +623,7 @@ static struct daos_obj_class daos_obj_classes[] = {
 			.ca_grp_nr		= 1,
 			.ca_rp_nr		= 1,
 		},
+		.oc_private	= true,
 	},
 	{
 		.oc_name	= "OBJ_ID_TABLE",
@@ -281,6 +637,7 @@ static struct daos_obj_class daos_obj_classes[] = {
 			.ca_grp_nr		= 1,
 			.ca_rp_nr		= 1,
 		},
+		.oc_private	= true,
 	},
 	{
 		.oc_name	= "EC_2P1G1",
@@ -413,6 +770,7 @@ static struct daos_obj_class daos_obj_classes[] = {
 			.ca_ec_p		= 1,
 			.ca_ec_cell		= 1 << 15,
 		},
+		.oc_private	= true,
 	},
 	{
 		.oc_name	= "EC_4P1G1_SPEC",
@@ -425,15 +783,29 @@ static struct daos_obj_class daos_obj_classes[] = {
 			.ca_ec_p		= 1,
 			.ca_ec_cell		= 1 << 15,
 		},
+		.oc_private	= true,
 	},
 	{
 		.oc_name	= NULL,
 		.oc_id		= OC_UNKNOWN,
+		.oc_private	= true,
 	},
 };
 
-static struct daos_obj_class **obj_classes;
-static struct daos_obj_class  *obj_class_id2cl(int oc_id);
+/** indirect indices for binary search by ID */
+static struct daos_obj_class **oc_ident_array;
+/** indirect indices for binary search by number of groups */
+static struct daos_obj_class **oc_scale_array;
+/** indirect indices for binary search by number of replicas */
+static struct daos_obj_class **oc_resil_array;
+
+static int oc_ident_array_sz;
+static int oc_scale_array_sz;
+static int oc_resil_array_sz;
+
+static struct daos_obj_class  *oclass_ident2cl(int oc_id);
+static struct daos_obj_class  *oclass_scale2cl(struct daos_oclass_attr *ca);
+static struct daos_obj_class  *oclass_resil2cl(struct daos_oclass_attr *ca);
 
 /** find the object class attributes for the provided @oid */
 struct daos_oclass_attr *
@@ -442,7 +814,7 @@ daos_oclass_attr_find(daos_obj_id_t oid)
 	struct daos_obj_class	*oc;
 
 	/* see daos_objid_generate */
-	oc = obj_class_id2cl(daos_obj_id2class(oid));
+	oc = oclass_ident2cl(daos_obj_id2class(oid));
 	if (!oc) {
 		D_DEBUG(DB_PL, "Unknown object class %d for "DF_OID"\n",
 			daos_obj_id2class(oid), DP_OID(oid));
@@ -458,7 +830,7 @@ daos_oclass_id2name(daos_oclass_id_t oc_id, char *str)
 {
 	struct daos_obj_class   *oc;
 
-	oc = obj_class_id2cl(oc_id);
+	oc = oclass_ident2cl(oc_id);
 	if (!oc) {
 		strcpy(str, "UNKNOWN");
 		return -1;
@@ -539,6 +911,7 @@ dc_oclass_list(daos_handle_t coh, struct daos_oclass_list *clist,
 {
 	return -DER_NOSYS;
 }
+
 /**
  * Return the number of redundancy groups for the object class @oc_attr with
  * the provided metadata @md
@@ -548,6 +921,58 @@ daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr, struct daos_obj_md *md)
 {
 	/* NB: @md is unsupported for now */
 	return oc_attr->ca_grp_nr;
+}
+
+static struct daos_obj_class *
+oclass_fit_max(int oc_id, int domain_nr, int target_nr)
+{
+	struct daos_obj_class	*oc;
+	struct daos_oclass_attr	 ca;
+	int grp_size;
+
+	oc = oclass_ident2cl(oc_id);
+	if (!oc)
+		return NULL;
+
+	memcpy(&ca, &oc->oc_attr, sizeof(ca));
+	if (oc_id == OC_RP_XSF) {
+		D_ASSERT(ca.ca_resil_degree == DAOS_OBJ_RESIL_MAX);
+		D_ASSERT(ca.ca_rp_nr == DAOS_OBJ_REPL_MAX);
+
+		/* search for the highest possible resilience level */
+		ca.ca_resil_degree = domain_nr - 1;
+		ca.ca_rp_nr = domain_nr;
+		oc = oclass_resil2cl(&ca);
+		goto out;
+	}
+
+	grp_size = daos_oclass_grp_size(&ca);
+	if (ca.ca_grp_nr == DAOS_OBJ_GRP_MAX ||
+	    ca.ca_grp_nr * grp_size > target_nr) {
+		/* search for the highest scalability in the allowed range */
+		ca.ca_grp_nr = max(1, (target_nr / grp_size));
+		oc = oclass_scale2cl(&ca);
+		goto out;
+	}
+out:
+	D_DEBUG(DB_PL, "matched object class: %s, group: %d, group_nr: %d\n",
+		oc->oc_name, daos_oclass_grp_size(&ca), ca.ca_grp_nr);
+	return oc;
+}
+
+int
+daos_oclass_fit_max(int oc_id, int domain_nr, int target_nr, int *oc_id_p)
+{
+	struct daos_obj_class	*oc;
+
+	D_ASSERT(target_nr > 0);
+	D_ASSERT(domain_nr > 0);
+
+	oc = oclass_fit_max(oc_id, domain_nr, target_nr);
+	if (oc)
+		*oc_id_p = oc->oc_id;
+
+	return oc ? 0 : -DER_NONEXIST;
 }
 
 /** a structure to map EC object class to EC codec structure */
@@ -779,7 +1204,7 @@ oc_sop_swap(void *array, int a, int b)
 }
 
 static int
-oc_sop_cmp(void *array, int a, int b)
+oc_sop_ident_cmp(void *array, int a, int b)
 {
 	struct daos_obj_class **ocs = (struct daos_obj_class **)array;
 
@@ -791,7 +1216,7 @@ oc_sop_cmp(void *array, int a, int b)
 }
 
 static int
-oc_sop_cmp_key(void *array, int i, uint64_t key)
+oc_sop_ident_cmp_key(void *array, int i, uint64_t key)
 {
 	struct daos_obj_class **ocs = (struct daos_obj_class **)array;
 	unsigned int		id  = (unsigned int)key;
@@ -803,28 +1228,203 @@ oc_sop_cmp_key(void *array, int i, uint64_t key)
 	return 0;
 }
 
-static daos_sort_ops_t	oc_sort_ops = {
+static daos_sort_ops_t	oc_ident_sort_ops = {
 	.so_swap	= oc_sop_swap,
-	.so_cmp		= oc_sop_cmp,
-	.so_cmp_key	= oc_sop_cmp_key,
+	.so_cmp		= oc_sop_ident_cmp,
+	.so_cmp_key	= oc_sop_ident_cmp_key,
+};
+
+static int
+oc_resil_cmp(struct daos_oclass_attr *ca1, struct daos_oclass_attr *ca2)
+{
+	D_ASSERT(ca1->ca_grp_nr == ca2->ca_grp_nr && ca1->ca_grp_nr == 1);
+	D_ASSERT(ca1->ca_resil == ca2->ca_resil &&
+		 ca1->ca_resil == DAOS_RES_REPL);
+
+	if (ca1->ca_resil_degree > ca2->ca_resil_degree)
+		return 1;
+	if (ca1->ca_resil_degree < ca2->ca_resil_degree)
+		return -1;
+
+	return 0;
+}
+
+static int
+oc_sop_resil_cmp(void *array, int a, int b)
+{
+	struct daos_obj_class **ocs = (struct daos_obj_class **)array;
+
+	return oc_resil_cmp(&ocs[a]->oc_attr, &ocs[b]->oc_attr);
+}
+
+static int
+oc_sop_resil_cmp_key(void *array, int i, uint64_t key)
+{
+	struct daos_obj_class   **ocs = (struct daos_obj_class **)array;
+	struct daos_oclass_attr	 *ca;
+
+	ca = (struct daos_oclass_attr *)(unsigned long)key;
+	return oc_resil_cmp(&ocs[i]->oc_attr, ca);
+}
+
+static daos_sort_ops_t	oc_resil_sort_ops = {
+	.so_swap	= oc_sop_swap,
+	.so_cmp		= oc_sop_resil_cmp,
+	.so_cmp_key	= oc_sop_resil_cmp_key,
+};
+
+static int
+oc_scale_cmp(struct daos_oclass_attr *ca1, struct daos_oclass_attr *ca2)
+{
+	if (ca1->ca_resil > ca2->ca_resil)
+		return 1;
+	if (ca1->ca_resil < ca2->ca_resil)
+		return -1;
+
+	if (ca1->ca_resil == DAOS_RES_EC) {
+		if (ca1->ca_ec_cell > ca2->ca_ec_cell)
+			return 1;
+		if (ca1->ca_ec_cell < ca2->ca_ec_cell)
+			return -1;
+
+		if (ca1->ca_ec_k + ca1->ca_ec_p > ca2->ca_ec_k + ca2->ca_ec_p)
+			return 1;
+		if (ca1->ca_ec_k + ca1->ca_ec_p < ca2->ca_ec_k + ca2->ca_ec_p)
+			return -1;
+	} else {
+		if (ca1->ca_rp_nr > ca2->ca_rp_nr)
+			return 1;
+		if (ca1->ca_rp_nr < ca2->ca_rp_nr)
+			return -1;
+	}
+
+	if (ca1->ca_resil_degree > ca2->ca_resil_degree)
+		return 1;
+	if (ca1->ca_resil_degree < ca2->ca_resil_degree)
+		return -1;
+
+	/* all the same, real comparison is here */
+	if (ca1->ca_grp_nr > ca2->ca_grp_nr)
+		return 1;
+	if (ca1->ca_grp_nr < ca2->ca_grp_nr)
+		return -1;
+
+	return 0;
+}
+
+static int
+oc_sop_scale_cmp(void *array, int a, int b)
+{
+	struct daos_obj_class **ocs = (struct daos_obj_class **)array;
+
+	return oc_scale_cmp(&ocs[a]->oc_attr, &ocs[b]->oc_attr);
+}
+
+static int
+oc_sop_scale_cmp_key(void *array, int i, uint64_t key)
+{
+	struct daos_obj_class   **ocs = (struct daos_obj_class **)array;
+	struct daos_oclass_attr	 *ca;
+
+	ca = (struct daos_oclass_attr *)(unsigned long)key;
+	return oc_scale_cmp(&ocs[i]->oc_attr, ca);
+}
+
+static daos_sort_ops_t	oc_scale_sort_ops = {
+	.so_swap	= oc_sop_swap,
+	.so_cmp		= oc_sop_scale_cmp,
+	.so_cmp_key	= oc_sop_scale_cmp_key,
 };
 
 /* NB: ignore the last one which is UNKNOWN */
 #define OC_NR	ARRAY_SIZE(daos_obj_classes)
 
+/* find object class by ID */
 static struct daos_obj_class *
-obj_class_id2cl(int oc_id)
+oclass_ident2cl(int oc_id)
 {
 	int	idx;
 
 	if (oc_id == OC_UNKNOWN)
 		return NULL;
 
-	idx = daos_array_find(obj_classes, OC_NR, oc_id, &oc_sort_ops);
+	idx = daos_array_find(oc_ident_array, oc_ident_array_sz, oc_id,
+			      &oc_ident_sort_ops);
 	if (idx < 0)
 		return NULL;
 
-	return obj_classes[idx];
+	return oc_ident_array[idx];
+}
+
+/* find object class by number of replicas (single group), the returned
+ * class should have the same of less number of replicas than ca::ca_rp_nr
+ */
+static struct daos_obj_class *
+oclass_resil2cl(struct daos_oclass_attr *ca)
+{
+	int	idx;
+
+	idx = daos_array_find_le(oc_resil_array, oc_resil_array_sz,
+				 (uint64_t)(unsigned long)ca,
+				 &oc_resil_sort_ops);
+	if (idx < 0)
+		return NULL;
+
+	return oc_resil_array[idx];
+}
+
+/* find object class by number of redundancy groups
+ * the returned class should have the same protection method (EC/replication),
+ * the same group size, the same redundancy level, equal to or less than
+ * redundancy groups than ca::ca_grp_nr.
+ */
+static struct daos_obj_class *
+oclass_scale2cl(struct daos_oclass_attr *ca)
+{
+	struct daos_obj_class *oc;
+	int		       idx;
+
+	idx = daos_array_find_le(oc_scale_array, oc_scale_array_sz,
+				 (uint64_t)(unsigned long)ca,
+				 &oc_scale_sort_ops);
+	if (idx < 0)
+		return NULL;
+
+	oc = oc_scale_array[idx];
+	if (ca->ca_resil != oc->oc_resil ||
+	    ca->ca_resil_degree != oc->oc_resil_degree ||
+	    daos_oclass_grp_size(ca) != daos_oclass_grp_size(&oc->oc_attr))
+		return NULL;
+
+	return oc;
+}
+
+static char *
+oclass_resil_str(struct daos_obj_class *oc)
+{
+	return oc->oc_resil == DAOS_RES_REPL ? "RP" : "EC";
+}
+
+static inline void
+oclass_debug(struct daos_obj_class *oc)
+{
+	D_DEBUG(DB_PL,
+		"ID: %d, name: %s, resil: %s, resil_degree: %d, "
+		"grp_size: %d, grp_nr: %d\n",
+		oc->oc_id, oc->oc_name, oclass_resil_str(oc),
+		oc->oc_resil_degree, daos_oclass_grp_size(&oc->oc_attr),
+		oc->oc_grp_nr);
+}
+
+static void
+oclass_array_debug(char *array_name, struct daos_obj_class **oc_array,
+		   int array_size)
+{
+	int	i;
+
+	D_DEBUG(DB_PL, "Object class %s array[%d]:\n", array_name, array_size);
+	for (i = 0; i < array_size; i++)
+		oclass_debug(oc_array[i]);
 }
 
 int
@@ -833,21 +1433,71 @@ obj_class_init(void)
 	int	i;
 	int	rc;
 
-	if (obj_classes)
+	if (oc_ident_array)
 		return 0;
 
-	D_ALLOC_ARRAY(obj_classes, OC_NR);
-	if (!obj_classes)
+	D_ALLOC_ARRAY(oc_ident_array, OC_NR);
+	if (!oc_ident_array)
 		return -DER_NOMEM;
 
-	for (i = 0; i < OC_NR; i++)
-		obj_classes[i] = &daos_obj_classes[i];
+	D_ALLOC_ARRAY(oc_scale_array, OC_NR);
+	if (!oc_scale_array) {
+		rc = -DER_NOMEM;
+		goto failed;
+	}
 
-	rc = daos_array_sort(obj_classes, OC_NR, true, &oc_sort_ops);
+	D_ALLOC_ARRAY(oc_resil_array, OC_NR);
+	if (!oc_resil_array) {
+		rc = -DER_NOMEM;
+		goto failed;
+	}
+
+	for (i = 0; i < OC_NR; i++) {
+		struct daos_obj_class *oc = &daos_obj_classes[i];
+
+		if (oc->oc_resil == DAOS_RES_REPL) {
+			D_ASSERT(oc->oc_rp_nr >= 1);
+			if (oc->oc_rp_nr == DAOS_OBJ_REPL_MAX)
+				oc->oc_resil_degree = DAOS_OBJ_RESIL_MAX;
+			else
+				oc->oc_resil_degree = oc->oc_rp_nr - 1;
+
+			if (!oc->oc_private && /* ignore private classes */
+			    oc->oc_grp_nr == 1)
+				oc_resil_array[oc_resil_array_sz++] = oc;
+		} else {
+			D_ASSERT(oc->oc_resil == DAOS_RES_EC);
+			oc->oc_resil_degree = oc->oc_ec_p;
+		}
+		oc_ident_array[oc_ident_array_sz++] = oc;
+
+		if (!oc->oc_private) /* ignore private classes */
+			oc_scale_array[oc_scale_array_sz++] = oc;
+	}
+
+	rc = daos_array_sort(oc_ident_array, oc_ident_array_sz, true,
+			     &oc_ident_sort_ops);
 	if (rc) {
 		D_ERROR("object class ID should be unique\n");
 		goto failed;
 	}
+	oclass_array_debug("ident", oc_ident_array, oc_ident_array_sz);
+
+	rc = daos_array_sort(oc_scale_array, oc_scale_array_sz, true,
+			     &oc_scale_sort_ops);
+	if (rc) {
+		D_ERROR("object class scale attribute should be unique\n");
+		goto failed;
+	}
+	oclass_array_debug("scale", oc_scale_array, oc_scale_array_sz);
+
+	rc = daos_array_sort(oc_resil_array, oc_resil_array_sz, true,
+			     &oc_resil_sort_ops);
+	if (rc) {
+		D_ERROR("object class resilience attribute should be unique\n");
+		goto failed;
+	}
+	oclass_array_debug("resilience", oc_resil_array, oc_resil_array_sz);
 	return 0;
 failed:
 	obj_class_fini();
@@ -857,8 +1507,21 @@ failed:
 void
 obj_class_fini(void)
 {
-	if (obj_classes) {
-		D_FREE(obj_classes);
-		obj_classes = NULL;
+	if (oc_resil_array) {
+		D_FREE(oc_resil_array);
+		oc_resil_array = NULL;
+		oc_resil_array_sz = 0;
+	}
+
+	if (oc_scale_array) {
+		D_FREE(oc_scale_array);
+		oc_scale_array = NULL;
+		oc_scale_array_sz = 0;
+	}
+
+	if (oc_ident_array) {
+		D_FREE(oc_ident_array);
+		oc_ident_array = NULL;
+		oc_ident_array_sz = 0;
 	}
 }

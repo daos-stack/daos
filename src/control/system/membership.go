@@ -430,6 +430,18 @@ func (m *Membership) CheckHosts(hosts string, ctlPort int) (*RankSet, *hostlist.
 	return rs, missHS, nil
 }
 
+// MarkRankDead is a helper method to mark a rank as dead in
+// response to a swim_rank_dead event.
+func (m *Membership) MarkRankDead(rank Rank) error {
+	member, err := m.db.FindMemberByRank(rank)
+	if err != nil {
+		return err
+	}
+
+	member.state = MemberStateEvicted
+	return m.db.UpdateMember(member)
+}
+
 func (m *Membership) handleRankDown(evt *events.RASEvent) {
 	ei := evt.GetRankStateInfo()
 	if ei == nil {

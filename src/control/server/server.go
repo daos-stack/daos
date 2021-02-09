@@ -397,6 +397,23 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		eventPubSub.Subscribe(events.RASTypeAny, eventLogger)
 		eventPubSub.Subscribe(events.RASTypeStateChange, membership)
 		eventPubSub.Subscribe(events.RASTypeStateChange, sysdb)
+		eventPubSub.Subscribe(events.RASTypeStateChange, events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
+			switch evt.ID {
+			case events.RASSwimRankDead:
+				// Mark the rank as unavailable for membership in
+				// new pools, etc.
+				if err := membership.MarkRankDead(system.Rank(evt.Rank)); err != nil {
+					log.Errorf("failed to mark rank %d as dead: %s", evt.Rank, err)
+					return
+				}
+				// FIXME CART-944: We should be able to update the
+				// primary group in order to remove the dead rank,
+				// but for the moment this will cause problems.
+				/*if err := mgmtSvc.doGroupUpdate(ctx); err != nil {
+					log.Errorf("GroupUpdate failed: %s", err)
+				}*/
+			}
+		}))
 
 		return nil
 	})

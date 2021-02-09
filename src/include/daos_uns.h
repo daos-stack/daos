@@ -32,7 +32,8 @@ struct duns_attr_t {
 	daos_oclass_id_t	da_oclass_id;
 	/** Default Chunks size for all files in container */
 	daos_size_t		da_chunk_size;
-	/*
+	/** Relative component of path.
+	 *
 	 * If using direct access to a POSIX container with the prefix, return
 	 * path without the prefix.
 	 */
@@ -41,7 +42,8 @@ struct duns_attr_t {
 	daos_prop_t		*da_props;
 	/** Path is on Lustre */
 	bool			da_on_lustre;
-	/*
+	/** String does not include daos:// prefix
+	 *
 	 * Path that is passed does not have daos: prefix but is direct:
 	 * (/puuid/cuuid/xyz) and does not need to parse a path UNS attrs.
 	 */
@@ -93,7 +95,7 @@ duns_create_path(daos_handle_t poh, const char *path,
  * an HDF5 file.
  *
  * \param[in]		path	Valid path in an existing namespace.
- * \param[in,out]	attr	Struct containing the xattrs on the path.
+ * \param[in,out]	attr	Struct containing the attrs on the path.
  *
  * \return		0 on Success. errno code on failure.
  */
@@ -116,7 +118,7 @@ duns_destroy_path(daos_handle_t poh, const char *path);
  *
  * \param[in]	str	Input string
  * \param[in]	len	Length of input string
- * \param[out]	attr	Struct containing the xattrs on the path.
+ * \param[out]	attr	Struct containing the attrs on the path.
  *
  * \return		0 on Success. errno code on failure.
  */

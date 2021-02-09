@@ -5,11 +5,15 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import socket
+from getpass import getuser
 
 from command_utils_base import \
-    CommandFailure, FormattedParameter, YamlParameters, EnvironmentVariables
+    CommandFailure, FormattedParameter, YamlParameters, EnvironmentVariables, \
+    CommonConfig
 from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
 from general_utils import get_log_file
+from agent_utils_params import \
+    DaosAgentTransportCredentials, DaosAgentYamlParameters
 
 
 def include_local_host(hosts):
@@ -30,6 +34,35 @@ def include_local_host(hosts):
         hosts = list(hosts)
         hosts.append(local_host)
     return hosts
+
+
+def get_agent_command(group, cert_dir, bin_dir, config_file, config_temp=None):
+    """Get the daos_agent command object to manage.
+
+    Args:
+        group (str): daos_server group name
+        cert_dir (str): directory in which to copy certificates
+        bin_dir (str): location of the daos_server executable
+        config_file (str): configuration file name and path
+        config_temp (str, optional): file name and path to use to generate the
+            configuration file locally and then copy it to all the hosts using
+            the config_file specification. Defaults to None, which creates and
+            utilizes the file specified by config_file.
+
+    Returns:
+        DaosServerCommand: the daos_server command object
+
+    """
+    transport_config = DaosAgentTransportCredentials(cert_dir)
+    common_config = CommonConfig(group, transport_config)
+    config = DaosAgentYamlParameters(config_file, common_config)
+    command = DaosAgentCommand(bin_dir, config)
+    if config_temp:
+        # Setup the DaosAgentCommand to write the config file data to the
+        # temporary file and then copy the file to all the hosts using the
+        # assigned filename
+        command.temporary_file = config_temp
+    return command
 
 
 class DaosAgentCommand(YamlCommand):
@@ -99,7 +132,7 @@ class DaosAgentCommand(YamlCommand):
             self.output = FormattedParameter("--output {}", None)
 
     def dump_attachinfo(self, output="uri.txt"):
-        """Write CaRT attachinfo file
+        """Write CaRT attachinfo file.
 
         Args:
             output (str): File to which attachinfo dump should be written.
@@ -116,20 +149,42 @@ class DaosAgentCommand(YamlCommand):
         self.sub_command_class.output.value = output
         return self._get_result()
 
+    def get_user_file(self):
+        """Get the file defined in the yaml file that must be owned by the user.
+
+        Returns:
+            str: file defined in the yaml file that must be owned by the user
+
+        """
+        return self.get_config_value("runtime_dir")
+
 
 class DaosAgentManager(SubprocessManager):
     """Manages the daos_agent execution on one or more hosts."""
 
-    def __init__(self, agent_command, manager="Orterun"):
-        """Create a DaosAgentManager object.
+    def __init__(self, group, bin_dir, cert_dir, config_file, config_temp=None,
+                 manager="Orterun"):
+        """Initialize a DaosAgentManager object.
 
         Args:
-            agent_command (DaosAgentCommand): daos_agent command class
+            group (str): daos_server group name
+            bin_dir (str): directory from which to run daos_agent
+            cert_dir (str): directory in which to copy certificates
+            config_file (str): daos_agent configuration file name and path
+            config_temp (str, optional): file name and path used to generate
+                the daos_agent configuration file locally and copy it to all
+                the hosts using the config_file specification. Defaults to None.
             manager (str, optional): the name of the JobManager class used to
                 manage the YamlCommand defined through the "job" attribute.
-                Defaults to "OpenMpi"
+                Defaults to "Orterun".
         """
+        agent_command = get_agent_command(
+            group, cert_dir, bin_dir, config_file, config_temp)
         super(DaosAgentManager, self).__init__(agent_command, manager)
+
+        # Set the correct certificate file ownership
+        if manager == "Systemctl":
+            self.manager.job.certificate_owner = "daos_agent"
 
         # Set default agent debug levels
         env_vars = {
@@ -159,9 +214,14 @@ class DaosAgentManager(SubprocessManager):
         self.log.info(
             "<AGENT> Starting daos_agent on %s with %s",
             self._hosts, self.manager.command)
+
         # Copy certificates
         self.manager.job.copy_certificates(
             get_log_file("daosCA/certs"), self._hosts)
+
+        # Verify the socket directory exists when using a non-systemctl manager
+        self.verify_socket_directory(getuser())
+
         super(DaosAgentManager, self).start()
 
     def stop(self):

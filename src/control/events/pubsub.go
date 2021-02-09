@@ -8,9 +8,15 @@ package events
 
 import (
 	"context"
+	"time"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
+)
+
+const (
+	// set a timeout to prevent a deadlock on channel write
+	submitTimeout = 1 * time.Second
 )
 
 // Handler defines an interface to be implemented by event receivers.
@@ -18,6 +24,14 @@ type Handler interface {
 	// OnEvent takes an event to be processed and a context,
 	// implementation must return on context.Done() and be thread safe.
 	OnEvent(context.Context, *RASEvent)
+}
+
+// HandlerFunc is an adapter to allow an ordinary function to be
+// used as a Handler.
+type HandlerFunc func(context.Context, *RASEvent)
+
+func (f HandlerFunc) OnEvent(ctx context.Context, evt *RASEvent) {
+	f(ctx, evt)
 }
 
 type subscriber struct {
@@ -66,13 +80,21 @@ func NewPubSub(parent context.Context, log logging.Logger) *PubSub {
 // DisableEventIDs adds event IDs to the filter preventing those event IDs from
 // being published.
 func (ps *PubSub) DisableEventIDs(ids ...RASID) {
-	ps.filterUpdates <- &filterUpdate{enable: false, ids: ids}
+	select {
+	case <-time.After(submitTimeout):
+		ps.log.Errorf("failed to submit filter update within %s", submitTimeout)
+	case ps.filterUpdates <- &filterUpdate{enable: false, ids: ids}:
+	}
 }
 
 // EnableEventIDs removes event IDs from the filter enabling those event IDs
 // to be published.
 func (ps *PubSub) EnableEventIDs(ids ...RASID) {
-	ps.filterUpdates <- &filterUpdate{enable: true, ids: ids}
+	select {
+	case <-time.After(submitTimeout):
+		ps.log.Errorf("failed to submit filter update within %s", submitTimeout)
+	case ps.filterUpdates <- &filterUpdate{enable: true, ids: ids}:
+	}
 }
 
 // Publish passes an event to the event channel to be processed by subscribers.
@@ -82,7 +104,11 @@ func (ps *PubSub) Publish(event *RASEvent) {
 		ps.log.Error("nil event")
 		return
 	}
-	ps.events <- event
+	select {
+	case <-time.After(submitTimeout):
+		ps.log.Errorf("failed to submit event within %s", submitTimeout)
+	case ps.events <- event:
+	}
 }
 
 // Subscribe adds a handler to the list of handlers subscribed to a given topic
@@ -90,19 +116,20 @@ func (ps *PubSub) Publish(event *RASEvent) {
 //
 // The special case "RASTypeAny" topic will handle all received events.
 func (ps *PubSub) Subscribe(topic RASTypeID, handler Handler) {
-	ps.subscribers <- &subscriber{
+	select {
+	case <-time.After(submitTimeout):
+		ps.log.Errorf("failed to submit subscription within %s", submitTimeout)
+	case ps.subscribers <- &subscriber{
 		topic:   topic,
 		handler: handler,
+	}:
 	}
 }
 
 func (ps *PubSub) publish(ctx context.Context, event *RASEvent) {
 	if _, exists := ps.disabledIDs[event.ID]; exists {
-		ps.log.Debugf("event %s ignored by filter", event.ID)
 		return
 	}
-
-	ps.log.Debugf("published @%s: %s", event.Type, event.ID)
 
 	for _, hdlr := range ps.handlers[RASTypeAny] {
 		go hdlr.OnEvent(ctx, event)
@@ -148,12 +175,10 @@ func (ps *PubSub) eventLoop(ctx context.Context) {
 
 // Close terminates event loop by calling shutdown to cancel context.
 func (ps *PubSub) Close() {
-	ps.log.Debug("called Close()")
 	ps.shutdown()
 }
 
 // Reset clears registered handlers by sending reset.
 func (ps *PubSub) Reset() {
-	ps.log.Debug("called Reset()")
 	ps.reset <- struct{}{}
 }

@@ -118,18 +118,48 @@ def check_struct_member(env, text, struct, member):
     env.Result(rc)
     return rc
 
+def check_ioctl_def(env, ctype):
+    """scons check for a struct member existing"""
+
+    env.Message('Checking if fuse ioctl is type {} '.format(ctype))
+
+    src = """#include <fuse3/fuse_lowlevel.h>
+
+extern void
+my_ioctl (fuse_req_t req, fuse_ino_t ino, %s cmd,
+    void *arg, struct fuse_file_info *fi, unsigned flags,
+    const void *in_buf, size_t in_bufsz, size_t out_bufsz);
+
+struct fuse_lowlevel_ops ops = {.ioctl = my_ioctl};
+
+""" % ctype
+
+    rc = env.TryCompile(src, '.c')
+    env.Result(rc)
+    return rc
+
 def configure_fuse(cenv):
     """Configure for specific version of fuse"""
     if GetOption('help') or GetOption('clean'):
         return
 
     check = Configure(cenv,
-                      custom_tests={'CheckStructMember': check_struct_member})
+                      custom_tests={'CheckStructMember': check_struct_member,
+                                    'CheckFuseIoctl': check_ioctl_def})
 
     if check.CheckStructMember('#include <fuse3/fuse.h>',
                                'struct fuse_file_info',
                                'cache_readdir'):
         cenv.AppendUnique(CPPDEFINES=['-DHAVE_CACHE_READDIR=1'])
+
+    if check.CheckFuseIoctl('unsigned int'):
+        pass
+    elif check.CheckFuseIoctl('int'):
+        cenv.AppendUnique(CPPDEFINES=['-DFUSE_IOCTL_USE_INT=1'])
+    else:
+        print('Could not determine type of fuse ioctl type')
+        Exit(2)
+
     check.Finish()
 
 def scons():

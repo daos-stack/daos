@@ -5,6 +5,7 @@ import io.daos.Constants;
 import io.netty.buffer.ByteBuf;
 import org.junit.Assert;
 import org.junit.Test;
+import org.powermock.reflect.Whitebox;
 
 import java.util.Arrays;
 
@@ -346,5 +347,32 @@ public class IODataDescTest {
         desc.release();
       }
     }
+  }
+
+  @Test
+  public void testDescDuplicate() throws Exception {
+    IODataDesc desc = new IODataDesc("dkey", IODataDesc.IodType.ARRAY, 10, false);
+    IODataDesc.Entry entry1 = desc.addEntryForFetch("akey", 0, 30);
+    IODataDesc.Entry entry2 = desc.addEntryForFetch("akey", 30, 30);
+    IODataDesc desc2 = desc.duplicate();
+    IODataDesc.Entry entry21 = desc2.getAkeyEntries().get(0);
+    IODataDesc.Entry entry22 = desc2.getAkeyEntries().get(1);
+    Assert.assertEquals(desc.getNbrOfEntries(), desc2.getNbrOfEntries());
+    assertEntries(entry1, entry21);
+    assertEntries(entry2, entry22);
+    Assert.assertEquals((Boolean)Whitebox.getInternalState(desc, "updateOrFetch"),
+        (Boolean)Whitebox.getInternalState(desc2, "updateOrFetch"));
+  }
+
+  private void assertEntries(IODataDesc.Entry entry1, IODataDesc.Entry entry2) {
+    Assert.assertEquals(entry1.getKey(), entry2.getKey());
+    Assert.assertEquals(entry1.getOffset(), entry2.getOffset());
+    Assert.assertEquals(entry1.getRequestSize(), entry2.getRequestSize());
+  }
+
+  @Test(expected = UnsupportedOperationException.class)
+  public void testDescDuplicateUnsupported() throws Exception {
+    IODataDesc desc = new IODataDesc(IODataDesc.IodType.ARRAY, 1, true);
+    desc.duplicate();
   }
 }

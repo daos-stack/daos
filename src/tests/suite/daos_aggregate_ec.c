@@ -29,13 +29,6 @@ enum {
 	EC_SPECIFIED,
 };
 
-#define assert_success(r) do {\
-	int __rc = (r); \
-	if (__rc != 0) \
-		fail_msg("Not successful!! Error code: " DF_RC, DP_RC(__rc)); \
-	} while (0)
-
-
 /** easily setup an iov and allocate */
 static void
 iov_alloc(d_iov_t *iov, size_t len)
@@ -267,9 +260,9 @@ ec_cleanup_cont(struct ec_agg_test_ctx *ctx)
 
 	/* Close & Destroy Container */
 	rc = daos_cont_close(ctx->coh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	rc = daos_cont_destroy(ctx->poh, ctx->uuid, true, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 static void
@@ -306,12 +299,12 @@ test_filled_stripe(struct ec_agg_test_ctx *ctx)
 			rc = daos_obj_update(ctx->oh, DAOS_TX_NONE, 0,
 					     &ctx->dkey, 1, &ctx->update_iod,
 					     &ctx->update_sgl, NULL);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			ec_cleanup_data(ctx);
 		}
 
 	rc = daos_obj_close(ctx->oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 static void
@@ -370,9 +363,9 @@ verify_1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 						      &ctx->fetch_sgl,
 						      &ctx->fetch_iom, &shard,
 						      NULL, NULL, &task);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			/* verify no remaining replicas on parity tgt */
 			assert_int_equal(ctx->fetch_iom.iom_nr_out, 0);
 			task = NULL;
@@ -389,9 +382,9 @@ verify_1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 						      &ctx->fetch_sgl,
 						      &ctx->fetch_iom, &shard,
 						      NULL, NULL, &task);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			/* verify parity now exists on parity target */
 			assert_int_equal(ctx->fetch_iom.iom_nr_out, 1);
 			assert_int_equal(memcmp(ctx->
@@ -401,7 +394,7 @@ verify_1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 			ec_cleanup_data(ctx);
 		}
 	rc = daos_obj_close(ctx->oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 static void
@@ -425,7 +418,7 @@ test_half_stripe(struct ec_agg_test_ctx *ctx)
 			rc = daos_obj_update(ctx->oh, DAOS_TX_NONE, 0,
 					     &ctx->dkey, 1, &ctx->update_iod,
 					     &ctx->update_sgl, NULL);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			ec_cleanup_data(ctx);
 		}
 
@@ -439,12 +432,12 @@ test_half_stripe(struct ec_agg_test_ctx *ctx)
 			rc = daos_obj_update(ctx->oh, DAOS_TX_NONE, 0,
 					     &ctx->dkey, 1, &ctx->update_iod,
 					     &ctx->update_sgl, NULL);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			ec_cleanup_data(ctx);
 		}
 
 	rc = daos_obj_close(ctx->oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 static void
@@ -498,9 +491,9 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 						      &ctx->fetch_sgl,
 						      &ctx->fetch_iom, &shard,
 						      NULL, NULL, &task);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			/* verify no remaining replicas on parity tgt */
 			assert_int_equal(ctx->fetch_iom.iom_nr_out, 0);
 			task = NULL;
@@ -514,9 +507,9 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 						      &ctx->fetch_sgl,
 						      &ctx->fetch_iom, &shard,
 						      NULL, NULL, &task);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			/* verify no remaining replicas on peer parity tgt */
 			assert_int_equal(ctx->fetch_iom.iom_nr_out, 0);
 			task = NULL;
@@ -534,9 +527,9 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 						      &ctx->fetch_sgl,
 						      &ctx->fetch_iom, &shard,
 						      NULL, NULL, &task);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			/* verify on parity leader */
 			assert_int_equal(ctx->fetch_iom.iom_nr_out, 1);
 			assert_int_equal(memcmp(ctx->fetch_sgl.sg_iovs[0].
@@ -554,9 +547,9 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 						      &ctx->fetch_sgl,
 						      &ctx->fetch_iom, &shard,
 						      NULL, NULL, &task);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			/* verify parity now exists on parity target */
 			assert_int_equal(ctx->fetch_iom.iom_nr_out, 1);
 			assert_int_equal(memcmp(ctx->fetch_sgl.sg_iovs[0].
@@ -566,7 +559,7 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 			ec_cleanup_data(ctx);
 		}
 	rc = daos_obj_close(ctx->oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 static void
@@ -589,7 +582,7 @@ test_partial_stripe(struct ec_agg_test_ctx *ctx)
 			rc = daos_obj_update(ctx->oh, DAOS_TX_NONE, 0,
 					     &ctx->dkey, 1, &ctx->update_iod,
 					     &ctx->update_sgl, NULL);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			ec_cleanup_data(ctx);
 		}
 
@@ -603,12 +596,12 @@ test_partial_stripe(struct ec_agg_test_ctx *ctx)
 			rc = daos_obj_update(ctx->oh, DAOS_TX_NONE, 0,
 					     &ctx->dkey, 1, &ctx->update_iod,
 					     &ctx->update_sgl, NULL);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			ec_cleanup_data(ctx);
 		}
 
 	rc = daos_obj_close(ctx->oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 static void
 test_range_punch(struct ec_agg_test_ctx *ctx)

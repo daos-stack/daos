@@ -2579,9 +2579,6 @@ dtx_37(void **state)
 	d_rank_t	 kill_rank = CRT_NO_RANK;
 	int		 i;
 
-	/* Skip for DAOS-6615 */
-	skip();
-
 	FAULT_INJECTION_REQUIRED();
 
 	print_message("DTX37: resync - leader failed during prepare\n");
@@ -2876,11 +2873,8 @@ dtx_sub_setup(void **state)
 {
 	int	rc;
 
-	if (state != NULL) {
-		saved_dtx_arg = *state;
-		*state = NULL;
-	}
-
+	saved_dtx_arg = *state;
+	*state = NULL;
 	rc = test_setup(state, SETUP_CONT_CONNECT, true, SMALL_POOL_SIZE,
 			0, NULL);
 	return rc;
@@ -2892,10 +2886,8 @@ dtx_sub_teardown(void **state)
 	int	rc;
 
 	rc = test_teardown(state);
-	if (state != NULL && saved_dtx_arg != NULL) {
-		*state = saved_dtx_arg;
-		saved_dtx_arg = NULL;
-	}
+	*state = saved_dtx_arg;
+	saved_dtx_arg = NULL;
 
 	return rc;
 }
