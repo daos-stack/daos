@@ -480,7 +480,7 @@ boolean skip_bullseye_report() {
 // docker caches.
 String quick_build_deps(String distro, always=false) {
     String rpmspec_args = ""
-    if (!always || !quickbuild()) {
+    if (!(always || quickbuild())) {
         return ""
     }
     if (distro == "leap15") {
