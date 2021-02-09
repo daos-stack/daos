@@ -480,8 +480,11 @@ boolean skip_bullseye_report() {
 // docker caches.
 String quick_build_deps(String distro, always=false) {
     String rpmspec_args = ""
-    if (!always && !quickbuild()) {
-        return ""
+
+    if (!always) {
+        if (!quickbuild() ) {
+	    return ""
+	}
     }
     if (distro == "leap15") {
         rpmspec_args = "--define dist\\ .suse.lp152 " +
