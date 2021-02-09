@@ -124,7 +124,7 @@ RUN echo "$USER:$PASSWD" | chpasswd
 
 # Create directory for DAOS backend storage
 RUN mkdir -p /opt/daos
-RUN chown -R daos_server.daos_server /opt/daos || { cat /etc/passwd; cat /etc/group; cat /etc/shadow; chown -R daos_server /opt/daos; chgrp -R daos_server /opt/daos; ls -ld /opt/daos; }
+RUN chown -R daos.daos /opt/daos || { cat /etc/passwd; cat /etc/group; cat /etc/shadow; chown -R daos_server /opt/daos; chgrp -R daos_server /opt/daos; ls -ld /opt/daos; }
 RUN mkdir /mnt/daos
 RUN chown daos_server.daos_server /mnt/daos || { cat /etc/passwd; cat /etc/group; cat /etc/shadow; chown daos_server /mnt/daos; chgrp daos_server /mnt/daos; ls -ld /mnt/daos; }
 RUN mkdir /var/run/daos_server

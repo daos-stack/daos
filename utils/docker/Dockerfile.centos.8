@@ -67,7 +67,7 @@ RUN useradd -ms /bin/bash $USER
 RUN echo "$USER:$PASSWD" | chpasswd
 
 # Create directory for DAOS backend storage
-RUN mkdir -p /opt/daos && chown -R daos_server.daos_server /opt/daos
+RUN mkdir -p /opt/daos && chown -R daos.daos /opt/daos
 RUN mkdir /mnt/daos && chown daos_server.daos_server /mnt/daos
 RUN mkdir /var/run/daos_server && chown daos_server.daos_server /var/run/daos_server
 RUN mkdir /var/run/daos_agent && chown daos_agent.daos_agent /var/run/daos_agent
