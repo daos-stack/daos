@@ -394,3 +394,34 @@ nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot)
 	ret->rc = rc;
 	return ret;
 }
+
+struct ret_t *
+daos_spdk_init(int mem_sz, char *env_ctx, size_t nr_pcil,
+	       struct spdk_pci_addr *pcil)
+{
+	struct ret_t		*ret = init_ret();
+	struct spdk_env_opts	 opts = {};
+	int			 rc;
+
+	spdk_env_opts_init(&opts);
+
+	if (mem_sz > 0)
+		opts.mem_size = mem_sz;
+	if (env_ctx != NULL)
+		opts.env_context = env_ctx;
+	if (nr_pcil > 0) {
+		opts.num_pci_addr = nr_pcil;
+		opts.pci_allowed = pcil;
+	}
+	opts.name = "daos_admin";
+
+	rc = spdk_env_init(&opts);
+	if (rc < 0) {
+		fprintf(stderr, "spdk env init: %d\n", rc);
+		sprintf(ret->info, "DAOS SPDK init failed");
+	}
+	ret->rc = rc;
+
+	return ret;
+}
+

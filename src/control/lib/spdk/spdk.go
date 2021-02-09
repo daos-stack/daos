@@ -11,14 +11,18 @@ package spdk
 // to specify additional dirs.
 
 /*
-#cgo LDFLAGS: -lspdk_env_dpdk -lspdk_vmd  -lrte_mempool -lrte_mempool_ring -lrte_bus_pci
-#cgo LDFLAGS: -lrte_pci -lrte_ring -lrte_mbuf -lrte_eal -lrte_kvargs -ldl -lnuma
+#cgo CFLAGS: -I .
+#cgo LDFLAGS: -L . -lnvme_control -lspdk
 
-#include <stdlib.h>
-#include <spdk/stdinc.h>
-#include <spdk/string.h>
-#include <spdk/env.h>
-#include <spdk/vmd.h>
+#include "stdlib.h"
+#include "daos_srv/control.h"
+#include "spdk/stdinc.h"
+#include "spdk/string.h"
+#include "spdk/env.h"
+#include "spdk/nvme.h"
+#include "spdk/vmd.h"
+#include "include/nvme_control.h"
+#include "include/nvme_control_common.h"
 */
 import "C"
 
@@ -54,39 +58,6 @@ type EnvOptions struct {
 	DisableVMD     bool     // flag if VMD devices should not be included
 }
 
-func (o *EnvOptions) toC(log logging.Logger) (*C.struct_spdk_env_opts, func(), error) {
-	opts := new(C.struct_spdk_env_opts)
-
-	C.spdk_env_opts_init(opts)
-
-	if o.MemSize > 0 {
-		opts.mem_size = C.int(o.MemSize)
-	}
-
-	// quiet DPDK EAL logging by setting log level to ERROR
-	opts.env_context = unsafe.Pointer(C.CString("--log-level=lib.eal:4"))
-
-	if len(o.PciIncludeList) > 0 {
-		cPtr, err := pciListToC(log, o.PciIncludeList)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		opts.pci_whitelist = (*C.struct_spdk_pci_addr)(*cPtr)
-		opts.num_pci_addr = C.ulong(len(o.PciIncludeList))
-
-		closure := func() {
-			if cPtr != nil {
-				C.free(unsafe.Pointer(*cPtr))
-			}
-		}
-
-		return opts, closure, nil
-	}
-
-	return opts, func() {}, nil
-}
-
 func (o *EnvOptions) sanitizeIncludeList(log logging.Logger) error {
 	if !o.DisableVMD {
 		// DPDK will not accept VMD backing device addresses
@@ -113,12 +84,15 @@ func pciListToC(log logging.Logger, inAddrs []string) (*unsafe.Pointer, error) {
 
 		offset := uintptr(i) * structSize
 		tmpAddr = (*C.struct_spdk_pci_addr)(unsafe.Pointer(uintptr(outAddrs) + offset))
+		cs := C.CString(inAddr)
 
 		if rc := C.spdk_pci_addr_parse(tmpAddr, C.CString(inAddr)); rc != 0 {
 			C.free(unsafe.Pointer(outAddrs))
 
 			return nil, Rc2err("spdk_pci_addr_parse()", rc)
 		}
+
+		C.free(unsafe.Pointer(cs))
 	}
 
 	return &outAddrs, nil
@@ -171,16 +145,26 @@ func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 		return errors.Wrap(err, "sanitizing PCI include list")
 	}
 
-	cOpts, freeMem, err := opts.toC(log)
+	listPtr, err := pciListToC(log, opts.PciIncludeList)
 	if err != nil {
-		return errors.Wrap(err, "convert spdk env opts to C")
+		return err
 	}
-	defer freeMem()
-	log.Debugf("spdk init c opts: %+v", cOpts)
+	defer func() {
+		if listPtr != nil {
+			C.free(*listPtr)
+		}
+	}()
 
-	if rc := C.spdk_env_init(cOpts); rc != 0 {
-		return Rc2err("spdk_env_init()", rc)
+	envCtx := C.CString("--log-level=lib.eal:4")
+	defer C.free(unsafe.Pointer(envCtx))
+
+	retPtr := C.daos_spdk_init(C.int(opts.MemSize), envCtx,
+		C.ulong(len(opts.PciIncludeList)),
+		(*C.struct_spdk_pci_addr)(*listPtr))
+	if err := checkRet(retPtr, "daos_spdk_init()"); err != nil {
+		return err
 	}
+	clean(retPtr)
 
 	if opts.DisableVMD {
 		return nil
