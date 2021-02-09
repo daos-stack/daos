@@ -5,6 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import random
+import time
 import threading
 from osa_utils import OSAUtils
 from test_utils_pool import TestPool
@@ -72,7 +73,8 @@ class OSAOfflineReintegration(OSAUtils):
         process.join()
 
 
-    def run_offline_reintegration_test(self, num_pool, data=False):
+    def run_offline_reintegration_test(self, num_pool, data=False,
+                                       server_boot=False):
         """Run the offline reintegration without data.
             Args:
             num_pool (int) : total pools to create for testing purposes.
@@ -82,14 +84,7 @@ class OSAOfflineReintegration(OSAUtils):
         # Create a pool
         pool = {}
         pool_uuid = []
-        target_list = []
         exclude_servers = (len(self.hostlist_servers) * 2) - 1
-
-        # Exclude target : random two targets (target idx : 0-7)
-        n = random.randint(0, 6)
-        target_list.append(n)
-        target_list.append(n+1)
-        t_string = "{},{}".format(target_list[0], target_list[1])
 
         # Exclude rank : two ranks other than rank 0.
         rank = random.randint(1, exclude_servers)
@@ -116,8 +111,19 @@ class OSAOfflineReintegration(OSAUtils):
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
-            output = self.dmg_command.pool_exclude(self.pool.uuid,
-                                                   rank)
+            if server_boot is False:
+                output = self.dmg_command.pool_exclude(self.pool.uuid,
+                                                       rank, t_string)
+            else:
+                output = self.dmg_command.system_stop(ranks=rank)
+                time.sleep(10)
+                self.log.info(output)
+                self.is_rebuild_done(3)
+                self.assert_on_rebuild_failure()
+                time.sleep(35)
+                output = self.dmg_command.system_start(ranks=rank)
+                time.sleep(70)
+
             self.log.info(output)
             self.is_rebuild_done(3)
             self.assert_on_rebuild_failure()
@@ -125,11 +131,12 @@ class OSAOfflineReintegration(OSAUtils):
             pver_exclude = self.get_pool_version()
             self.log.info("Pool Version after exclude %s", pver_exclude)
             # Check pool version incremented after pool exclude
-            self.assertTrue(pver_exclude > (pver_begin + len(target_list)),
+            # pver_exclude should be greater than
+            # pver_begin + 8 targets.
+            self.assertTrue(pver_exclude > (pver_begin + 8),
                             "Pool Version Error:  After exclude")
             output = self.dmg_command.pool_reintegrate(self.pool.uuid,
-                                                       rank,
-                                                       t_string)
+                                                       rank)
             self.log.info(output)
             self.is_rebuild_done(3)
             self.assert_on_rebuild_failure()
@@ -158,3 +165,16 @@ class OSAOfflineReintegration(OSAUtils):
         """
         # Perform reintegration testing with a pool
         self.run_offline_reintegration_test(1, True)
+
+    def test_osa_offline_reintegration_server_stop(self):
+        """Test ID: DAOS-6748.
+        Test Description: Validate Online Reintegration with server stop
+        :avocado: tags=all,pr,daily_regression,hw,medium,ib2,osa
+        :avocado: tags=offline_reintegration_srv_stop,DAOS_5610
+        """
+        # Perform reintegration testing with 1 pool.
+        # tmp_oclass = ["RP_2G4", "RP_2G8", "RP_2G16", "RP_3G12",
+        #              "RP_3G16", "RP_4G4"]
+        # self.ior_dfs_oclass = tmp_oclass.pop(random.randint(0,
+        #                                     (len(tmp_oclass) - 1)))
+        self.run_offline_reintegration_test(1, data=True, server_boot=True)

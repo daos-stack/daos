@@ -134,9 +134,13 @@ class OSAOnlineReintegration(OSAUtils):
                                                        rank, t_string)
             else:
                 output = self.dmg_command.system_stop(ranks=rank)
-                time.sleep(45)
+                time.sleep(10)
+                self.log.info(output)
+                self.is_rebuild_done(3)
+                self.assert_on_rebuild_failure()
+                time.sleep(35)
                 output = self.dmg_command.system_start(ranks=rank)
-                time.sleep(45)
+                time.sleep(70)
 
             self.log.info(output)
             self.is_rebuild_done(3)
@@ -149,8 +153,7 @@ class OSAOnlineReintegration(OSAUtils):
             self.assertTrue(pver_exclude > (pver_begin + len(target_list)),
                             "Pool Version Error:  After exclude")
             output = self.dmg_command.pool_reintegrate(self.pool.uuid,
-                                                       rank,
-                                                       t_string)
+                                                       rank)
             self.log.info(output)
             self.is_rebuild_done(3)
             self.assert_on_rebuild_failure()
@@ -197,8 +200,8 @@ class OSAOnlineReintegration(OSAUtils):
         :avocado: tags=online_reintegration_srv_stop,DAOS_5610
         """
         # Perform reintegration testing with 1 pool.
-        tmp_oclass = ["RP_2G4", "RP_2G8", "RP_2G16", "RP_3G12",
-                      "RP_3G16", "RP_4G4"]
-        self.ior_dfs_oclass = tmp_oclass.pop(random.randint(0,
-                                             (len(tmp_oclass) - 1)))
+        # tmp_oclass = ["RP_2G4", "RP_2G8", "RP_2G16", "RP_3G12",
+        #              "RP_3G16", "RP_4G4"]
+        # self.ior_dfs_oclass = tmp_oclass.pop(random.randint(0,
+        #                                     (len(tmp_oclass) - 1)))
         self.run_online_reintegration_test(1, server_boot=True)
