@@ -83,7 +83,8 @@ RUN zypper --non-interactive update &&					\
 	openmpi3-devel man fuse3-devel patchelf scons lua-lmod		\
 	libjson-c-devel liblz4-devel python3-distro curl		\
 	python3-pyxattr							\
-	java-1_8_0-openjdk-devel maven python3-PyYAML
+	java-1_8_0-openjdk-devel maven python3-PyYAML &&
+    zypper clean all
 
 # Monkey-patch MODULEPATH
 RUN if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then        \
@@ -175,7 +176,6 @@ RUN if $QUICKBUILD; then                                                        
         echo "$QUICKBUILD_DEPS" | tr '\n' '\0' | xargs -0 zypper --non-interactive install;                      \
     fi
 
-ARG CACHEBUST=1
 # force an upgrade to get any newly built RPMs
 RUN zypper addlock fuse fuse-libs fuse-devel libraft0 raft-devel mercury mercury-devel
 

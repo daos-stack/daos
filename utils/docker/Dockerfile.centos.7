@@ -50,7 +50,8 @@ ARG UID=1000
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
 # Clean up any repos afterwards to save space.
-RUN yum clean all && yum -y install epel-release &&			\
+RUN yum clean all &&							\
+    yum -y install epel-release &&					\
     yum -y upgrade &&							\
     yum -y install							\
 	boost-devel clang-analyzer cmake CUnit-devel doxygen file flex	\
@@ -72,8 +73,11 @@ RUN yum clean all && yum -y install epel-release &&			\
 	python36-numpy python36-jira python3-pip Lmod			\
 	fuse3-devel libipmctl-devel python36-pyxattr			\
 	hwloc-devel patchelf python36-tabulate				\
-	java-1.8.0-openjdk python-distro python36-distro install	\
-	openmpi3-devel && yum clean all
+	java-1.8.0-openjdk python-distro python36-distro &&		\
+    yum clean all
+
+# Install this individually because of potential conflicts
+RUN yum -y install openmpi3-devel && yum clean all
 
 # DAOS python 3 packages required for pylint
 #  - excluding mpi4py as it depends on CORCI-635
@@ -186,7 +190,6 @@ RUN if [ "x$BULLSEYE" != "x" ]; then \
       rm -rf bullseye; \
     fi
 
-ARG CACHEBUST=1
 # force an upgrade to get any newly built RPMs
 RUN yum -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
 	yum clean all
