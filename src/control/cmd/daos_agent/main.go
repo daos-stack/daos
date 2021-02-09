@@ -16,9 +16,9 @@ import (
 	flags "github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -157,6 +157,10 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			log.WithLogLevel(logging.LogLevelDebug)
 			log.Debug("basic debug output enabled")
 		}
+
+		log.WithLogLevel(logging.LogLevelDebug)
+		log.Debug("Forcing net debug output - special debug build")
+		netdetect.SetLogger(log)
 
 		if opts.JSONLogs {
 			log.WithJSONOutput()

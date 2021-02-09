@@ -3,12 +3,12 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
-
 package main
 
 import (
 	"net"
 	"sync"
+	"strings"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -18,6 +18,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -147,10 +148,38 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 	}
 
 	// Scan the local fabric to determine what devices are available that match our provider
+	mod.log.Debugf("Running fabric scan with given provider: %s", resp.Provider)
 	scanResults, err := netdetect.ScanFabric(mod.netCtx, resp.Provider)
 	if err != nil {
 		return nil, err
 	}
+
+	mod.log.Debugf("Running fabric scan for all providers")
+	results, err := netdetect.ScanFabric(mod.netCtx, "")
+	if err != nil {
+		return nil, err
+	}
+
+	hf := &control.HostFabric{}
+	for _, fi := range results {
+		hf.AddInterface(&control.HostFabricInterface{
+			Provider: fi.Provider,
+			Device:   fi.DeviceName,
+			NumaNode: uint32(fi.NUMANode),
+		})
+	}
+
+	hfm := make(control.HostFabricMap)
+	if err := hfm.Add("localhost", hf); err != nil {
+		return nil, err
+	}
+
+	mod.log.Debugf("******************** Final results from all providers ***************************")
+	var bld strings.Builder
+	if err := pretty.PrintHostFabricMap(hfm, &bld); err != nil {
+		return nil, err
+	}
+	mod.log.Info(bld.String())
 
 	mod.log.Debugf("GetAttachInfo resp from MS: %+v", resp)
 

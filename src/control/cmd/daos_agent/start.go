@@ -13,7 +13,10 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+	"strings"
 
+	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
@@ -61,6 +64,36 @@ func (cmd *startCmd) Execute(_ []string) error {
 	if !numaAware {
 		cmd.log.Debugf("This system is not NUMA aware.  Any devices found are reported as NUMA node 0.")
 	}
+
+
+	cmd.log.Debugf("Running fabric scan for all providers")
+	results, err := netdetect.ScanFabric(netCtx, "")
+	if err != nil {
+		return err
+	}
+
+	hf := &control.HostFabric{}
+	for _, fi := range results {
+		hf.AddInterface(&control.HostFabricInterface{
+			Provider: fi.Provider,
+			Device:   fi.DeviceName,
+			NumaNode: uint32(fi.NUMANode),
+		})
+	}
+
+	hfm := make(control.HostFabricMap)
+	if err := hfm.Add("localhost", hf); err != nil {
+		return err
+	}
+
+	var bld strings.Builder
+	if err := pretty.PrintHostFabricMap(hfm, &bld); err != nil {
+		return err
+	}
+	cmd.log.Info(bld.String())
+
+
+
 
 	procmon := NewProcMon(cmd.log, cmd.ctlInvoker, cmd.cfg.SystemName)
 	procmon.startMonitoring(ctx)
