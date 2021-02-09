@@ -157,9 +157,8 @@ class Snapshot(TestWithServers):
             snapshot.create(self.container.coh)
             self.display_snapshot(snapshot)
         except Exception as error:
-            self.fail(
-                "##(0)Error on a snapshot on a new container %s"
-                , str(error))
+            self.fail("##(0)Error on a snapshot on a new container"
+                " {}".format(str(error)))
 
         #(1)Create an object, write some data into it, and take a snapshot
         obj_cls = self.params.get("obj_class", '/run/object_class/*')
@@ -179,8 +178,8 @@ class Snapshot(TestWithServers):
                                               obj_cls=obj_cls)
         except DaosApiError as error:
             self.fail(
-                "##(1)Test failed during the initial object write: %s"
-                , str(error))
+                "##(1)Test failed during the initial object write:"
+                " {}".format(str(error)))
         obj.close()
         ##Take a snapshot of the container
         snapshot = self.take_snapshot(self.container)
@@ -195,8 +194,8 @@ class Snapshot(TestWithServers):
                 len(thedata)+1, dkey, akey, obj, txn=snap_handle.value)
         except Exception as error:
             self.fail(
-                "##(2)Error when retrieving the snapshot data: %s"
-                , str(error))
+                "##(2)Error when retrieving the snapshot data:"
+                " {}".format(str(error)))
         self.log.info("==(2)snapshot_list[ind]=%s", snapshot)
         self.log.info("==snapshot.epoch=  %s", snapshot.epoch)
         self.log.info("==written thedata=%s", thedata)
@@ -216,8 +215,8 @@ class Snapshot(TestWithServers):
         else:
             self.fail(
                 "##(3)Negative test 1 passing, expecting failed on"
-                " taking snapshot with an invalid container.coh: %s"
-                , self.container)
+                " taking snapshot with an invalid container.coh: "
+                " {}".format(self.container))
 
         #(4)Test snapshot with a NULL container handle
         self.log.info("==(4)Snapshot with a NULL container handle.")
