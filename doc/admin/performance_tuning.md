@@ -140,7 +140,7 @@ IOR (<https://github.com/hpc/ior>) with the following backends:
     (MPICH 3.4.1 or higher).
 
 -   An HDF5 VOL connector for DAOS is under development. This maps the HDF5 data model 
-    directly to the DAOS data model, and works in conjuntion with DAOS containers of
+    directly to the DAOS data model, and works in conjunction with DAOS containers of
     `--type=HDF5` (in contrast to DAOS container of `--type=POSIX` that are used for
     the other IOR APIs).
 
