@@ -14,16 +14,13 @@ from pydaos.raw import DaosApiError
 
 
 class BadExcludeTest(TestWithServers):
-    """
-    Tests target exclude calls passing NULL and otherwise inappropriate
-    parameters.  This use the python API.
+    """Test pool exclude commands with bad parameters.
 
     :avocado: recursive
     """
 
     def test_exclude(self):
-        """
-        Pass bad parameters to pool connect
+        """Pass bad parameters to the dmg pool exclude command.
 
         :avocado: tags=all,pool,full_regression,tiny,badexclude
         """
@@ -61,7 +58,7 @@ class BadExcludeTest(TestWithServers):
 
         saved_grp = None
         saved_uuid = None
-        self.prepare_pool()
+        self.add_pool(create=True, connect=True)
 
         saved_grp = self.pool.pool.group
         if connectset == 'NULLPTR':
@@ -81,7 +78,7 @@ class BadExcludeTest(TestWithServers):
             self.pool.pool.uuid[4] = 244
 
         try:
-            self.pool.pool.exclude(targets)
+            self.pool.exclude(targets)
 
             if expected_result == 'FAIL':
                 self.fail("Test was expected to fail but it passed.\n")
