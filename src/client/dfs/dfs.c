@@ -434,7 +434,7 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 	if (rc) {
 		D_ERROR("Failed to fetch entry %s "DF_RC"\n", name,
 			DP_RC(rc));
-		return daos_der2errno(rc);
+		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
 	for (i = 0; i < xnr; i++)
@@ -445,7 +445,7 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 
 		D_ALLOC(value, PATH_MAX);
 		if (value == NULL)
-			return ENOMEM;
+			D_GOTO(out, rc = ENOMEM);
 
 		recx.rx_idx = sizeof(mode_t) + sizeof(time_t) * 3 +
 			sizeof(daos_obj_id_t) + sizeof(daos_size_t);
@@ -486,9 +486,11 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 
 out:
 	if (xnr) {
-		for (i = 0; i < xnr; i++)
-			D_FREE(pxnames[i]);
-		D_FREE(pxnames);
+		if (pxnames) {
+			for (i = 0; i < xnr; i++)
+				D_FREE(pxnames[i]);
+			D_FREE(pxnames);
+		}
 		D_FREE(sg_iovx);
 		D_FREE(sgls);
 		D_FREE(iods);

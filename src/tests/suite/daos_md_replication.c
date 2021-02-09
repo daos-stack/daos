@@ -190,7 +190,7 @@ run_daos_md_replication_test(int rank, int size)
 {
 	int rc;
 
-	rc = cmocka_run_group_tests_name("DAOS MD repliation tests", mdr_tests,
+	rc = cmocka_run_group_tests_name("DAOS_MD_Replication", mdr_tests,
 					 setup, test_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;

@@ -272,5 +272,5 @@ main(void)
 		cmocka_unit_test(test_daos_prop_merge_add_and_update),
 	};
 
-	return cmocka_run_group_tests(tests, NULL, NULL);
+	return cmocka_run_group_tests_name("common_prop", tests, NULL, NULL);
 }

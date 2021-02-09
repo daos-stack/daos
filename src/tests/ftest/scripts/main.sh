@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (C) Copyright 2020 Intel Corporation
+# Copyright (C) Copyright 2020-2021 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -179,13 +179,28 @@ if [ "$(lsb_release -s -i)" = "CentOS" ]; then
 else
     process_cores=""
 fi
+
+# Clean stale job results
+if [ -d "${logs_prefix}/ftest/avocado/job-results" ]; then
+    rm -rf "${logs_prefix}/ftest/avocado/job-results"
+fi
+
 # now run it!
 # shellcheck disable=SC2086
-if ! ./launch.py -cris"${process_cores}"a -th "${LOGS_THRESHOLD}" \
+if ! ./launch.py -jcris"${process_cores}"a -th "${LOGS_THRESHOLD}" \
                  -ts "${TEST_NODES}" ${NVME_ARG} ${TEST_TAG_ARR[*]}; then
     rc=${PIPESTATUS[0]}
 else
     rc=0
 fi
+
+# daos_test uses cmocka framework which generates a set of xml of its own.
+# Post-processing the xml files here to put them in proper categories
+# for publishing in Jenkins
+dt_xml_path="${logs_prefix}/ftest/avocado/job-results/daos_test"
+FILES=(${dt_xml_path}/*/test-results/*/data/*.xml)
+COMP="FTEST_daos_test"
+
+./scripts/post_process_xml.sh "${COMP}" "${FILES[@]}"
 
 exit $rc
