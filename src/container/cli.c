@@ -507,7 +507,7 @@ pmap_refresh_cb(tse_task_t *task, void *data)
 	if (rc)
 		goto out;
 
-	pm_ver = pool_map_get_version(pool->dp_map);
+	pm_ver = dc_pool_get_version(pool);
 	if (pm_ver < cb_arg->pra_pm_ver) {
 		if (cb_arg->pra_retry_nr > 10) {
 			/* basically this is impossible, or there is system
@@ -638,7 +638,7 @@ cont_open_complete(tse_task_t *task, void *data)
 	}
 
 	cont->dc_min_ver = out->coo_op.co_map_version;
-	cli_pm_ver = pool_map_get_version(pool->dp_map);
+	cli_pm_ver = dc_pool_get_version(pool);
 	if (cli_pm_ver < cont->dc_min_ver) {
 		rc = pmap_refresh(task, arg->hdl, cont->dc_min_ver);
 		if (rc) {
@@ -1948,7 +1948,7 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	if (rc != 0)
 		D_GOTO(out_cont, rc);
 
-	pm_ver = pool_map_get_version(pool->dp_map);
+	pm_ver = dc_pool_get_version(pool);
 	if (pm_ver < cont->dc_min_ver) {
 		rc = pmap_refresh(NULL, poh, cont->dc_min_ver);
 		if (rc) {
