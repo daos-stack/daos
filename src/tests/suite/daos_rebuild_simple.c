@@ -747,6 +747,69 @@ rebuild_xsf_object(void **state)
 	rebuild_sx_object_internal(state, OC_RP_XSF);
 }
 
+static void
+rebuild_large_object(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	char		dkey[32];
+	const char	akey[] = "test_update akey";
+	const char	rec[]  = "test_update record";
+	d_rank_t	rank = 2;
+	int		i;
+	int		j;
+
+	if (!test_runable(arg, 4))
+		return;
+
+	for (i = 0; i < 5; i++) {
+		oid = dts_oid_gen(OC_RP_2G8, 0, arg->myrank);
+		ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+		for (j = 0; j < 10; j++) {
+			sprintf(dkey, "dkey_%d\n", j);
+			insert_single(dkey, akey, 0, (void *)rec, strlen(rec),
+				      DAOS_TX_NONE, &req);
+		}
+		ioreq_fini(&req);
+	}
+
+	/** exclude the target of this obj's replicas */
+	daos_exclude_server(arg->pool.pool_uuid, arg->group,
+			    arg->dmg_config, rank);
+
+	/* wait until rebuild done */
+	test_rebuild_wait(&arg, 1);
+
+	/* add back the excluded targets */
+	daos_reint_server(arg->pool.pool_uuid, arg->group,
+			  arg->dmg_config, rank);
+
+	/* wait until reintegration is done */
+	test_rebuild_wait(&arg, 1);
+}
+
+int
+rebuild_small_pool_n4_setup(void **state)
+{
+	test_arg_t	*arg;
+	int rc;
+
+	save_group_state(state);
+	rc = test_setup(state, SETUP_CONT_CONNECT, true,
+			REBUILD_SMALL_POOL_SIZE, 4, NULL);
+	if (rc)
+		return rc;
+
+	arg = *state;
+	if (dt_obj_class != DAOS_OC_UNKNOWN)
+		arg->obj_class = dt_obj_class;
+	else
+		arg->obj_class = DAOS_OC_R3S_SPEC_RANK;
+
+	return 0;
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD1: rebuild small rec multiple dkeys",
@@ -775,6 +838,8 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_sx_object, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD13: rebuild xsf object",
 	 rebuild_xsf_object, rebuild_small_sub_setup, test_teardown},
+	{"REBUILD14: rebuild large stripe object",
+	 rebuild_large_object, rebuild_small_pool_n4_setup, test_teardown},
 };
 
 int

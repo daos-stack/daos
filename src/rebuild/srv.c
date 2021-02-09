@@ -1179,7 +1179,11 @@ rebuild_task_ult(void *arg)
 	rc = rebuild_leader_start(pool, task->dst_map_ver, &task->dst_tgts,
 				  task->dst_rebuild_op, &rgt);
 	if (rc != 0) {
-		if (rc == -DER_CANCELED) {
+		if (rc == -DER_CANCELED || rc == -DER_NOTLEADER) {
+			/* If it is not leader, the new leader will step up
+			 * restart rebuild anyway, so do not need reschedule
+			 * rebuild on this node anymore.
+			 */
 			D_DEBUG(DB_REBUILD, "pool "DF_UUID" ver %u rebuild is"
 				" canceled.\n", DP_UUID(task->dst_pool_uuid),
 				task->dst_map_ver);
@@ -1292,7 +1296,8 @@ try_reschedule:
 		 * sequence order.
 		 */
 		ret = ds_rebuild_schedule(pool, task->dst_map_ver,
-					  &task->dst_tgts, RB_OP_FAIL);
+					  &task->dst_tgts,
+					  task->dst_rebuild_op);
 		if (ret != 0)
 			D_ERROR("reschedule "DF_RC"\n", DP_RC(ret));
 		else

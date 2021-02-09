@@ -206,7 +206,7 @@ oid_allocator_checker(void **state)
 	test_arg_t	*arg = *state;
 	uint64_t	oids[NUM_RGS];
 	int		num_oids[NUM_RGS];
-	int		i;
+	int		i = 0;
 	int		rc, rc_reduce;
 
 	srand(time(NULL));
@@ -215,11 +215,16 @@ oid_allocator_checker(void **state)
 	if (arg->myrank == 0)
 		print_message("Allocating %d OID ranges per rank\n", NUM_RGS);
 
-	for (i = 0; i < NUM_RGS; i++) {
+	while (i < NUM_RGS) {
 		num_oids[i] = rand() % 256 + 1;
 		rc = daos_cont_alloc_oids(arg->coh, num_oids[i], &oids[i],
 					  NULL);
 		if (rc) {
+			if (rc == -DER_UNREACH) {
+				rc = 0;
+				continue;
+			}
+
 			fprintf(stderr, "%d: %d oids alloc failed (%d)\n",
 				i, num_oids[i], rc);
 			goto check;
@@ -245,6 +250,7 @@ oid_allocator_checker(void **state)
 			}
 			MPI_Barrier(MPI_COMM_WORLD);
 		}
+		i++;
 	}
 
 check:
