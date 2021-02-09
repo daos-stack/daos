@@ -35,7 +35,7 @@ int
 crt_proc_struct_daos_acl(crt_proc_t proc, struct daos_acl **data)
 {
 	int		rc;
-	d_iov_t		iov;
+	d_iov_t		iov = {0};
 	crt_proc_op_t	proc_op;
 
 	if (proc == NULL || data == NULL)
