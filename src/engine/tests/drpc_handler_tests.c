@@ -486,7 +486,7 @@ main(void)
 		UTEST_NO_INIT(drpc_hdlr_unregister_all_uninitialized)
 	};
 
-	return cmocka_run_group_tests_name("iosrv_drpc_handler",
+	return cmocka_run_group_tests_name("engine_drpc_handler",
 					   tests, NULL, NULL);
 }
 

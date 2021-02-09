@@ -491,7 +491,7 @@ main(void)
 		UTEST(test_drpc_verify_cluster_event_nomsg),
 	};
 
-	return cmocka_run_group_tests_name("iosrv_drpc_client",
+	return cmocka_run_group_tests_name("engine_drpc_client",
 					   tests, NULL, NULL);
 }
 
