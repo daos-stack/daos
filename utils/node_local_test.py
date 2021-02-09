@@ -341,9 +341,6 @@ class DaosServer():
         if not isinstance(desired_states, list):
             desired_states = [desired_states]
 
-        # TODO: 128 status is crashed, which is happening under valgrind for
-        # some reason, so understand this and raise an error if this happens
-
         rc = self.run_dmg(['system', 'query', '--json'])
         print(rc)
         print(rc.stdout)
