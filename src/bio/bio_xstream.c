@@ -298,6 +298,8 @@ bio_spdk_env_init(void)
 
 	spdk_env_opts_init(&opts);
 	opts.name = "daos";
+	opts.shm_id = getpid();
+
 	if (nvme_glb.bd_mem_size != DAOS_NVME_MEM_PRIMARY)
 		opts.mem_size = nvme_glb.bd_mem_size;
 
@@ -305,8 +307,8 @@ bio_spdk_env_init(void)
 	if (rc != 0)
 		return rc;
 
-	if (nvme_glb.bd_shm_id != DAOS_NVME_SHMID_NONE)
-		opts.shm_id = nvme_glb.bd_shm_id;
+//	if (nvme_glb.bd_shm_id != DAOS_NVME_SHMID_NONE)
+//		opts.shm_id = nvme_glb.bd_shm_id;
 
 	/* quiet DPDK logging by setting level to ERROR */
 	opts.env_context = "--log-level=lib.eal:4";

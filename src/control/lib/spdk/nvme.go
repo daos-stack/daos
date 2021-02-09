@@ -34,7 +34,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-const lockfilePathPrefix = "/tmp/spdk_pci_lock_"
+const lockfilePathPrefix = "/var/tmp/spdk_pci_lock_"
 
 // Nvme is the interface that provides SPDK NVMe functionality.
 type Nvme interface {
