@@ -6,7 +6,7 @@ def scons():
     """Execute build"""
     Import('env', 'prereqs')
 
-    libs = ['daos', 'daos_common', 'gurt', 'cart', 'uuid', 'cmocka',
+    libs = ['daos', 'daos_common', 'gurt', 'm', 'cart', 'uuid', 'cmocka',
             'daos_tests']
 
     denv = env.Clone()
