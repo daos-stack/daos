@@ -606,8 +606,8 @@ server_init(int argc, char *argv[])
 	if (diff > 0) {
 		struct timespec		tv;
 
-		tv.tv_sec = diff / NSEC_PER_SEC;
-		tv.tv_nsec = diff % NSEC_PER_SEC;
+		tv.tv_sec = crt_hlc2nsec(diff) / NSEC_PER_SEC;
+		tv.tv_nsec = crt_hlc2nsec(diff) % NSEC_PER_SEC;
 
 		/* XXX: If the server restart so quickly as to all related
 		 *	things are handled within HLC epsilon, then it is
@@ -694,6 +694,12 @@ server_fini(bool force)
 	D_INFO("drpc_fini() done\n");
 	server_init_state_fini();
 	D_INFO("server_init_state_fini() done\n");
+	dss_srv_fini(force);
+	D_INFO("dss_srv_fini() done\n");
+	/*
+	 * Client stuff finalization needs be done after all ULTs drained
+	 * in dss_srv_fini().
+	 */
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		daos_fini();
 	} else {
@@ -701,8 +707,6 @@ server_fini(bool force)
 		daos_hhash_fini();
 	}
 	D_INFO("daos_fini() or pl_fini() done\n");
-	dss_srv_fini(force);
-	D_INFO("dss_srv_fini() done\n");
 	dss_module_unload_all();
 	D_INFO("dss_module_unload_all() done\n");
 	ds_iv_fini();

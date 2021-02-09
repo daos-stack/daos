@@ -15,7 +15,7 @@
 bool crt_initialized(void);
 
 /** crt_register.c */
-int crt_opc_map_create(unsigned int bits);
+int crt_opc_map_create(void);
 void crt_opc_map_destroy(struct crt_opc_map *map);
 struct crt_opc_info *crt_opc_lookup(struct crt_opc_map *map, crt_opcode_t opc,
 				    int locked);
@@ -61,5 +61,8 @@ crt_bulk_desc_dup(struct crt_bulk_desc *bulk_desc_new,
 
 void
 crt_hdlr_proto_query(crt_rpc_t *rpc_req);
+
+int
+crt_register_proto_fi(crt_endpoint_t *ep);
 
 #endif /* __CRT_INTERNAL_FNS_H__ */

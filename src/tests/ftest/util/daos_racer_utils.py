@@ -28,6 +28,8 @@ class DaosRacerCommand(ExecutableCommand):
 
         # Number of seconds to run
         self.runtime = FormattedParameter("-t {}", 60)
+        self.pool_uuid = FormattedParameter("-p {}")
+        self.cont_uuid = FormattedParameter("-c {}")
 
         if dmg:
             self.dmg_config = FormattedParameter("-n {}", dmg.yaml.filename)

@@ -13,19 +13,18 @@ if $TEST_RPMS; then
         tar -C install/lib/daos/TESTING/ -xzf -
 fi
 
-rm -rf install/lib/daos/TESTING/ftest/avocado/job-results/job-*/html/
-
-# Remove the latest avocado symlink directory to avoid inclusion in the
-# jenkins build artifacts
-if [ -e install/lib/daos/TESTING/ftest/avocado/job-results/latest ]; then
-  unlink install/lib/daos/TESTING/ftest/avocado/job-results/latest
-fi
+rm -rf install/lib/daos/TESTING/ftest/avocado/job-results/*/*/html/
 
 arts="$arts$(ls ./*daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
-arts="$arts$(ls -d \
-   install/lib/daos/TESTING/ftest/avocado/job-results/job-* 2>/dev/null)" && \
-  arts="$arts"$'\n'
 if [ -n "$arts" ]; then
-  # shellcheck disable=SC2046,SC2086
-  mv $(echo $arts | tr '\n' ' ') "Functional/"
+    # shellcheck disable=SC2046,SC2086
+    mv $(echo $arts | tr '\n' ' ') "${STAGE_NAME}/"
 fi
+
+TESTS=(install/lib/daos/TESTING/ftest/avocado/job-results/*)
+for art in "${TESTS[@]}"
+do
+    if ! [[ "$art" =~ latest ]]; then
+        mv "$art" "${STAGE_NAME}/"
+    fi
+done
