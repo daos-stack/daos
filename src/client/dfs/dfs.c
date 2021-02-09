@@ -849,7 +849,7 @@ restart:
 			D_GOTO(out, rc);
 		} else {
 			/** Success, commit */
-			D_GOTO(out, rc);
+			D_GOTO(commit, rc);
 		}
 	}
 
@@ -897,14 +897,15 @@ fopen:
 	} else if (size) {
 		rc = daos_array_get_size(file->oh, th, size, NULL);
 		if (rc != 0) {
-			daos_array_close(file->oh, NULL);
 			D_ERROR("daos_array_get_size() failed (%d)\n", rc);
-			return daos_der2errno(rc);
+			daos_array_close(file->oh, NULL);
+			D_GOTO(out, rc = daos_der2errno(rc));
 		}
 	}
 
 	oid_cp(&file->oid, entry->oid);
 
+commit:
 	if (daos_handle_is_valid(th) && dfs->use_dtx) {
 		rc = daos_tx_commit(th, NULL);
 		if (rc) {
