@@ -1043,7 +1043,7 @@ class posix_tests():
         run_daos_cmd(self.conf,
                      ['container', 'set-attr',
                       '--pool', self.pool, '--cont', container,
-                      '--attr', 'dfuse-timeout', '--value', '2'],
+                      '--attr', 'dfuse-attr-timeout', '--value', '2'],
                      show_stdout=True)
 
         run_daos_cmd(self.conf,

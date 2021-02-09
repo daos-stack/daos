@@ -59,15 +59,23 @@ dfuse_progress_thread(void *arg)
  * timeouts.
  */
 int
-dfuse_parse_time(char *buff, unsigned int *_out)
+dfuse_parse_time(char *buff, size_t len, unsigned int *_out)
 {
 	int		matched;
 	unsigned int	out = 0;
+	int		count0 = 0;
+	int		count1 = 0;
 	char		c = '\0';
 
-	matched = sscanf(buff, "%u%c", &out, &c);
+	matched = sscanf(buff, "%u%n%c%n", &out, &count0, &c, &count1);
 
 	if (matched == 0)
+		return EINVAL;
+
+	if (matched == 1 && len != count0)
+		return EINVAL;
+
+	if (matched == 2 && len != count1)
 		return EINVAL;
 
 	if (matched == 2) {

@@ -217,7 +217,7 @@ struct dfuse_dfs {
 
 /* Convert a string to an int, with optional suffix */
 int
-dfuse_parse_time(char *buff, unsigned int *_out);
+dfuse_parse_time(char *buff, size_t len, unsigned int *_out);
 
 /* Init a dfs struct and copy essential data */
 void

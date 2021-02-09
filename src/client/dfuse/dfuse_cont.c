@@ -50,7 +50,7 @@ dfuse_cont_init(struct dfuse_dfs *dfs)
 		/* DAOS-6709 */
 		buff[size] = '\0';
 
-		rc = dfuse_parse_time(buff, &value);
+		rc = dfuse_parse_time(buff, size, &value);
 		if (rc != 0) {
 			DFUSE_TRA_WARNING(dfs, "Failed to parse '%s' for '%s'",
 					  buff, names[i]);
