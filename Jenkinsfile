@@ -421,9 +421,8 @@ boolean skip_build_on_centos7_gcc_release() {
 }
 
 boolean skip_build_on_landing_branch() {
-     return false
-//    return env.BRANCH_NAME != target_branch ||
-//           quickbuild()
+    return env.BRANCH_NAME != target_branch ||
+           quickbuild()
 }
 
 boolean skip_build_on_ubuntu_clang() {

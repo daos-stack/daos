@@ -192,7 +192,7 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
 
 # copy DAOS tree
 WORKDIR /home/daos
-COPY VERSION LICENSE ftest.sh SConstruct API_VERSION ./
+COPY VERSION LICENSE ftest.sh SConstruct ./
 COPY utils utils
 COPY src src
 RUN ln -s utils/sl site_scons

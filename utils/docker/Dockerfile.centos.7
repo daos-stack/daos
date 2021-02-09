@@ -176,6 +176,7 @@ RUN if [ "x$BULLSEYE" != "x" ]; then \
       rm -rf bullseye; \
     fi
 
+ARG CACHEBUST=1
 # force an upgrade to get any newly built RPMs
 RUN yum -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
 	yum clean all
@@ -204,7 +205,7 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
 
 # copy DAOS tree
 WORKDIR /home/daos
-COPY VERSION LICENSE ftest.sh SConstruct API_VERSION ./
+COPY VERSION LICENSE ftest.sh SConstruct ./
 COPY utils utils
 COPY src src
 RUN ln -s utils/sl site_scons
