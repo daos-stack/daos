@@ -298,6 +298,8 @@ bio_spdk_env_init(void)
 
 	spdk_env_opts_init(&opts);
 	opts.name = "daos";
+	opts.shm_id = getpid();
+
 	if (nvme_glb.bd_mem_size != DAOS_NVME_MEM_PRIMARY)
 		opts.mem_size = nvme_glb.bd_mem_size;
 
