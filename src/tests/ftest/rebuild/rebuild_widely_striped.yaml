@@ -29,8 +29,8 @@ testparams:
 pool:
   mode: 146
   name: daos_server
-  scm_size: 3G
-  nvme_size: 30G
+  scm_size: 10G
+  nvme_size: 60G
   svcn: 1
   control_method: dmg
   rebuild_timeout: 60
