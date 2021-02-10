@@ -1719,7 +1719,7 @@ parse_filename_dfs(const char *path, char **_obj_name, char **_cont_name)
 	char	*f2 = NULL;
 	char	*fname = NULL;
 	char	*cont_name = NULL;
-	int	path_len = 0;
+	int	path_len;
 	int	rc = 0;
 
 	if (path == NULL || _obj_name == NULL || _cont_name == NULL)
@@ -2600,18 +2600,24 @@ static int
 dm_get_cont_prop(daos_handle_t coh,
 		 char *sysname,
 		 daos_cont_info_t *cont_info,
-		 uint32_t dpe_type,
-		 uint64_t *dpe_val)
+		 int size,
+		 uint32_t *dpe_types,
+		 uint64_t *dpe_vals)
 {
 	int                     rc = 0;
-	daos_prop_t		*prop = daos_prop_alloc(1);
+	int                     i = 0;
+	daos_prop_t		*prop = NULL;
 
+	prop = daos_prop_alloc(2);
 	if (prop == NULL) {
 		fprintf(stderr, "Failed to allocate prop (%d)", rc);
-		D_GOTO(out, rc);
+		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
-	prop->dpp_entries[0].dpe_type = dpe_type;
+	for (i = 0; i < size; i++) {
+		prop->dpp_entries[i].dpe_type = dpe_types[i];
+	}
+	//prop->dpp_entries[0].dpe_type = dpe_type;
 
 	rc = daos_cont_query(coh, NULL, prop, NULL);
 	if (rc) {
@@ -2620,7 +2626,10 @@ dm_get_cont_prop(daos_handle_t coh,
 		D_GOTO(out, rc);
 	}
 
-	*dpe_val = prop->dpp_entries[0].dpe_val;
+	for (i = 0; i < size; i++) {
+		dpe_vals[i] = prop->dpp_entries[i].dpe_val;
+	}
+	//*dpe_val = prop->dpp_entries[0].dpe_val;
 	daos_prop_free(prop);
 out:
 	return rc;
@@ -2641,6 +2650,9 @@ dm_connect(bool is_posix_copy,
 	struct duns_attr_t	dattr = {0};
 	daos_prop_t		*props = NULL;
 	dfs_attr_t		attr;
+	int			size = 2;
+	uint32_t		dpe_types[size];
+	uint64_t		dpe_vals[size];
 
 	/* open src pool, src cont, and mount dfs */
 	if (src_file_dfs->type == DAOS) {
@@ -2669,36 +2681,40 @@ dm_connect(bool is_posix_copy,
 		}
 	}
 
-	/* get source container type */
-	rc = dm_get_cont_prop(ca->src_coh, sysname, src_cont_info,
-			      ca->cont_prop_layout, &ca->cont_layout);
-	if (rc != 0) {
-		fprintf(stderr, "failed to query source "
-			"container: %d\n", rc);
-	}
-
-	/* get allocated oid on source container to set on destination */
-	rc = dm_get_cont_prop(ca->src_coh, sysname, src_cont_info,
-			      ca->cont_prop_oid, &ca->cont_oid);
-	if (rc != 0) {
-		fprintf(stderr, "failed to query source "
-			"container: %d\n", rc);
-	}
-
-	props = daos_prop_alloc(2);
-	if (props == NULL) {
-		fprintf(stderr, "Failed to allocate prop (%d)", rc);
-		D_GOTO(out, rc);
-	}
-	props->dpp_entries[0].dpe_type = ca->cont_prop_layout;
-	props->dpp_entries[0].dpe_val = ca->cont_layout;
-
-	/* only set max oid on created dest containers
-	 * if this is a non-posix copy
+	/* only need to query if source is not POSIX, since
+	 * this connect call is used by the filesystem and clone
+	 * tools
 	 */
-	if (!is_posix_copy) {
-		props->dpp_entries[1].dpe_type = ca->cont_prop_oid;
-		props->dpp_entries[1].dpe_val = ca->cont_oid;
+	if (src_file_dfs->type != POSIX) {
+		dpe_types[0] = ca->cont_prop_layout;
+		dpe_types[1] = ca->cont_prop_oid;
+
+		rc = dm_get_cont_prop(ca->src_coh, sysname, src_cont_info, size,
+				      dpe_types, dpe_vals);
+		if (rc != 0) {
+			fprintf(stderr, "failed to query source "
+				"container: %d\n", rc);
+			D_GOTO(err_src, rc);
+		}
+
+		ca->cont_layout = dpe_vals[0];
+		ca->cont_oid = dpe_vals[1];
+
+		props = daos_prop_alloc(2);
+		if (props == NULL) {
+			fprintf(stderr, "Failed to allocate prop (%d)", rc);
+			D_GOTO(out, rc);
+		}
+		props->dpp_entries[0].dpe_type = ca->cont_prop_layout;
+		props->dpp_entries[0].dpe_val = ca->cont_layout;
+
+		/* only set max oid on created dest containers
+		 * if this is a non-posix copy
+		 */
+		if (!is_posix_copy) {
+			props->dpp_entries[1].dpe_type = ca->cont_prop_oid;
+			props->dpp_entries[1].dpe_val = ca->cont_oid;
+		}
 	}
 
 	/* open dst pool, dst cont, and mount dfs */
@@ -2712,6 +2728,11 @@ dm_connect(bool is_posix_copy,
 					"destination pool: %d\n", rc);
 				D_GOTO(out, rc);
 			}
+		/* if the dst pool uuid is null that means that this
+		 * is a UNS destination path, so we copy the source
+		 * pool uuid into the destination and try to connect
+		 * again
+		 */
 		} else {
 			uuid_copy(ca->dst_p_uuid, ca->src_p_uuid);
 			rc = daos_pool_connect(ca->dst_p_uuid, sysname,
@@ -2729,13 +2750,17 @@ dm_connect(bool is_posix_copy,
 			rc = duns_create_path(ca->dst_poh, path,
 					      &dattr);
 			if (rc != 0) {
-				fprintf(stderr, "please provide a destination "
+				fprintf(stderr, "provide a destination "
 					"pool or UNS path of the form:\n\t"
 					"--dst </$pool> | </path/to/uns>\n");
 					D_GOTO(err_dst_root, rc);
 			}
 			uuid_copy(ca->dst_c_uuid, dattr.da_cuuid);
 		}
+		/* try to open container if this is a filesystem copy,
+		 * and if it fails try to create a destination,
+		 * then attempt to open again
+		 */
 		rc = daos_cont_open(ca->dst_poh, ca->dst_c_uuid,
 				    DAOS_COO_RW, &ca->dst_coh,
 				    dst_cont_info, NULL);
@@ -2769,7 +2794,8 @@ dm_connect(bool is_posix_copy,
 					    dst_cont_info, NULL);
 			if (rc != 0) {
 				fprintf(stderr, "failed to open container: "
-					"%d\n", rc); D_GOTO(err_dst_root, rc);
+					"%d\n", rc);
+				D_GOTO(err_dst_root, rc);
 			}
 		}
 		if (is_posix_copy) {
@@ -3416,6 +3442,7 @@ cont_clone_list_dkeys(daos_handle_t *src_oh,
 				       "%s", ptr);
 			if (len > key_buf_len) {
 				fprintf(stderr, "dkey buffer is too small\n");
+				D_FREE(dkey);
 				D_GOTO(out, rc = 1);
 			}
 			d_iov_set(&diov, (void *)dkey, dkey_kds[j].kd_key_len);
@@ -3448,12 +3475,12 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 	daos_obj_id_t		oids[OID_ARR_SIZE];
 	daos_anchor_t		anchor;
 	uint32_t		oids_nr;
-	daos_handle_t		toh = DAOS_HDL_INVAL;
+	daos_handle_t		toh;
 	daos_epoch_t		epoch;
 	struct			dm_args ca = {0};
 	bool			is_posix_copy = false;
-	daos_handle_t		oh = DAOS_HDL_INVAL;
-	daos_handle_t		dst_oh = DAOS_HDL_INVAL;
+	daos_handle_t		oh;
+	daos_handle_t		dst_oh;
 	struct file_dfs		src_cp_type = {0};
 	struct file_dfs		dst_cp_type = {0};
 	char			*src_str = NULL;
