@@ -109,7 +109,6 @@ class MpioUtils():
         # Setup the commands to run for this test name
         commands = []
         if test_name == "romio":
-            env = None
             commands.append(
                 "{} -fname=daos:test1 -subset".format(
                     executables[test_name][0]))

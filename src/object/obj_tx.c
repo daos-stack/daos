@@ -1468,6 +1468,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 {
 	daos_unit_oid_t			 leader_oid = { 0 };
 	struct daos_csummer		*csummer;
+	struct daos_csummer		*csummer_cop = NULL;
 	struct dc_tx_req_group		*dtrgs = NULL;
 	struct daos_cpd_sub_head	*dcsh = NULL;
 	struct daos_cpd_disp_ent	*dcdes = NULL;
@@ -1494,6 +1495,12 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 
 	D_INIT_LIST_HEAD(&dtr_list);
 	csummer = dc_cont_hdl2csummer(tx->tx_coh);
+	if (daos_csummer_initialized(csummer)) {
+		csummer_cop = daos_csummer_copy(csummer);
+		if (csummer_cop == NULL)
+			return -DER_NOMEM;
+	}
+
 	req_cnt = tx->tx_read_cnt + tx->tx_write_cnt;
 	tgt_cnt = pool_map_target_nr(tx->tx_pool->dp_map);
 	D_ASSERT(tgt_cnt != 0);
@@ -1508,7 +1515,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		obj = dcsr->dcsr_obj;
 
 		if (dcsr->dcsr_opc == DCSO_UPDATE) {
-			rc = dc_tx_classify_update(tx, dcsr, csummer);
+			rc = dc_tx_classify_update(tx, dcsr, csummer_cop);
 			if (rc < 0)
 				goto out;
 
@@ -1735,6 +1742,7 @@ out:
 		D_FREE(dtr);
 
 	D_FREE(dtrgs);
+	daos_csummer_destroy(&csummer_cop);
 
 	return rc < 0 ? rc : 0;
 }

@@ -26,6 +26,8 @@ struct pl_map_ops {
 			struct pl_map **mapp);
 	/** destroy a placement map */
 	void (*o_destroy)(struct pl_map *map);
+	/** query placement map attributes */
+	int (*o_query)(struct pl_map *map, struct pl_map_attr *attr);
 	/** print debug information of a placement map */
 	void (*o_print)(struct pl_map *map);
 
@@ -57,7 +59,6 @@ struct pl_map_ops {
 				  uint32_t *tgt_rank,
 				  uint32_t *shard_id,
 				  unsigned int array_size);
-
 };
 
 unsigned int pl_obj_shard2grp_head(struct daos_obj_shard_md *shard_md,
@@ -123,8 +124,7 @@ spec_place_rank_get(unsigned int *pos, daos_obj_id_t oid,
 		    struct pool_map *pl_poolmap);
 
 int
-pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list,
-	      bool is_pool_adding);
+pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list);
 
 bool
 is_pool_adding(struct pool_domain *dom);

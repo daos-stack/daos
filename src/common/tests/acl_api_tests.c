@@ -1417,5 +1417,5 @@ main(void)
 		cmocka_unit_test(test_acl_remove_ace_not_found),
 	};
 
-	return cmocka_run_group_tests(tests, NULL, NULL);
+	return cmocka_run_group_tests_name("common_acl_api", tests, NULL, NULL);
 }

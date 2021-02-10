@@ -16,7 +16,7 @@
 #include <daos_srv/vos.h>
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/container.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include "dtx_internal.h"
 
 CRT_RPC_DEFINE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
@@ -628,7 +628,7 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 out:
 	D_CDEBUG(rc < 0 || rc1 < 0 || rc2 < 0, DLOG_ERR, DB_IO,
 		 "Commit DTXs "DF_DTI", count %d: rc %d %d %d\n",
-		 DP_DTI(&dti[0]), count, rc, rc1, rc2);
+		 DP_DTI(&dtes[0]->dte_xid), count, rc, rc1, rc2);
 
 	D_FREE(dti);
 

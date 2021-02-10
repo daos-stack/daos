@@ -24,13 +24,36 @@
  * - 64-char string identifier raised as part of the event
  *   The identifier just be prefixed by component_
  *   Carried over with the RAS event.
+ *
+ * NB: Any events that should be acted upon by the control plane
+ * will need complementary constants defined in src/control/events/ras.go.
+ * Events that are informational-only (i.e. just logged) don't need to be
+ * mirrored in the control plane.
+ *
+ * In order to minimize conflicts between patches, please:
+ *   * Don't change the first and last entries in the list
+ *   * Don't arbitrarily reorder entries
+ *   * Do limit lines to 73 columns, wrapping as necessary
  */
 #define RAS_EVENT_LIST							\
-	X(RAS_RANK_UP,		"engine_status_up")			\
-	X(RAS_RANK_DOWN,	"engine_status_down")			\
-	X(RAS_RANK_NO_RESPONSE,	"engine_status_no_response")		\
-	X(RAS_POOL_REPS_UPDATE,	"pool_replicas_updated")		\
-	X(RAS_POOL_DF_INCOMPAT,	"pool_durable_format_incompatible")
+	X(RAS_UNKNOWN_EVENT,		"unknown_ras_event")		\
+	X(RAS_RANK_UP,			"engine_status_up")		\
+	X(RAS_RANK_DOWN,		"engine_status_down")		\
+	X(RAS_RANK_NO_RESPONSE,		"engine_status_no_response")	\
+	X(RAS_POOL_REBUILD_START,	"pool_rebuild_started")		\
+	X(RAS_POOL_REBUILD_END,		"pool_rebuild_finished")	\
+	X(RAS_POOL_REBUILD_FAILED,	"pool_rebuild_failed")		\
+	X(RAS_POOL_REPS_UPDATE,		"pool_replicas_updated")	\
+	X(RAS_POOL_DF_INCOMPAT,						\
+	  "pool_durable_format_incompatible")				\
+	X(RAS_SYSTEM_STOP,		"system_action_stop")		\
+	X(RAS_SYSTEM_START,		"system_action_start")		\
+	X(RAS_SWIM_RANK_ALIVE,		"swim_rank_alive")		\
+	X(RAS_SWIM_RANK_DEAD,		"swim_rank_dead")		\
+	X(RAS_CONT_DF_INCOMPAT,						\
+	  "container_durable_format_incompatible")			\
+	X(RAS_RDB_DF_INCOMPAT,						\
+	  "rdb_durable_format_incompatible")
 
 /** Define RAS event enum */
 typedef enum {
@@ -70,7 +93,8 @@ ras_type2str(ras_type_t type)
 }
 
 typedef enum {
-	RAS_SEV_FATAL	= 1,
+	RAS_SEV_UNKNOWN = 0,
+	RAS_SEV_FATAL,
 	RAS_SEV_WARN,
 	RAS_SEV_ERROR,
 	RAS_SEV_INFO,
@@ -117,6 +141,18 @@ ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 		    char *data);
 
 /**
+ * A printf-style message-formatting wrapper for ds_notify_ras_event. If the
+ * resulting message is too long for DAOS_RAS_STR_FIELD_SIZE, it will be ended
+ * with a '$' to indicate so. See ds_notify_ras_event for parameter
+ * documentation.
+ */
+void
+ds_notify_ras_eventf(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hwid,
+		     d_rank_t *rank, char *jobid, uuid_t *pool, uuid_t *cont,
+		     daos_obj_id_t *objid, char *ctlop, char *data,
+		     const char *fmt, ...);
+
+/**
  * Notify control-plane of an update to a pool's service replicas.
  *
  * \param[in] pool	UUID of DAOS pool with updated service replicas.
@@ -126,5 +162,15 @@ ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
  */
 int
 ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl);
+
+/**
+ * Notify control plane that swim has detected a dead rank.
+ *
+ * \param[in] rank	Rank that was marked dead.
+ *
+ * \retval		Zero on success, non-zero otherwise.
+ */
+int
+ds_notify_swim_rank_dead(d_rank_t rank);
 
 #endif /* __DAOS_RAS_H_ */

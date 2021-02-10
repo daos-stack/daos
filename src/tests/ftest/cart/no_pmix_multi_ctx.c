@@ -90,7 +90,7 @@ int main(int argc, char **argv)
 	}
 
 	D_FREE(my_uri);
-	sleep(1);
+	tc_set_shutdown_delay(0);
 	tc_progress_stop();
 
 	for (i = 0; i < NUM_CTX; i++)

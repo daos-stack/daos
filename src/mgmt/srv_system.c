@@ -71,6 +71,14 @@ mgmt_svc_delete_uuid_cb(d_iov_t *id)
 static int
 mgmt_svc_locate_cb(d_iov_t *id, char **path)
 {
+	char *s = NULL;
+
+	/* Just create a dummy path that won't fail stat(). */
+	D_ASPRINTF(s, "/dev/null");
+	if (s == NULL)
+		return -DER_NOMEM;
+	*path = s;
+
 	return 0;
 }
 
@@ -240,7 +248,8 @@ map_update_bcast(crt_context_t ctx, struct mgmt_svc *svc, uint32_t map_version,
 	D_DEBUG(DB_MGMT, "enter: version=%u nservers=%d\n", map_version,
 		nservers);
 
-	opc = DAOS_RPC_OPCODE(MGMT_TGT_MAP_UPDATE, DAOS_MGMT_MODULE, 1);
+	opc = DAOS_RPC_OPCODE(MGMT_TGT_MAP_UPDATE, DAOS_MGMT_MODULE,
+			      DAOS_MGMT_VERSION);
 	rc = crt_corpc_req_create(ctx, NULL /* grp */,
 				  NULL /* excluded_ranks */, opc,
 				  NULL /* co_bulk_hdl */, NULL /* priv */,

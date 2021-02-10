@@ -765,10 +765,11 @@ obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr)
 	daos_iod_t			*iod;
 	int				 i;
 
+	if (reasb_req->orr_iods == NULL)
+		return;
+
 	for (i = 0; i < iod_nr; i++) {
 		iod = reasb_req->orr_iods + i;
-		if (iod == NULL)
-			return;
 		if (iod->iod_recxs != NULL)
 			D_FREE(iod->iod_recxs);
 		d_sgl_fini(reasb_req->orr_sgls + i, false);
@@ -912,7 +913,7 @@ ec_deg_get:
 				rc = -DER_CSUM;
 			}
 			D_ERROR(DF_OID" obj_ec_get_degrade failed, rc "
-				DF_RC".\n", DP_OID(obj->cob_md.omd_id),
+				DF_RC"\n", DP_OID(obj->cob_md.omd_id),
 				DP_RC(rc));
 			D_GOTO(out, rc);
 		}
@@ -939,11 +940,10 @@ ec_deg_get:
 		D_GOTO(out, rc);
 
 	shard_tgt->st_rank	= obj_shard->do_target_rank;
-	shard_tgt->st_shard	= obj_shard->do_shard,
+	shard_tgt->st_shard	= shard;
 	shard_tgt->st_tgt_idx	= obj_shard->do_target_idx;
 	rc = obj_shard2tgtid(obj, shard, map_ver, &shard_tgt->st_tgt_id);
 	obj_shard_close(obj_shard);
-
 out:
 	return rc;
 }
@@ -1042,7 +1042,7 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 		if (req_tgts->ort_srv_disp) {
 			rc = obj_grp_leader_get(obj, shard_idx, map_ver);
 			if (rc < 0) {
-				D_ERROR(DF_OID" no valid shard, rc "DF_RC".\n",
+				D_ERROR(DF_OID" no valid shard, rc "DF_RC"\n",
 					DP_OID(obj->cob_md.omd_id),
 					DP_RC(rc));
 				return rc;
@@ -1235,7 +1235,7 @@ dc_obj_redun_check(struct dc_object *obj, daos_handle_t coh)
 
 	cont_rf = dc_cont_hdl2redunfac(coh);
 	if (cont_rf < 0) {
-		D_ERROR(DF_OID" dc_cont_hdl2redunfac failed, "DF_RC".\n",
+		D_ERROR(DF_OID" dc_cont_hdl2redunfac failed, "DF_RC"\n",
 			DP_OID(obj->cob_md.omd_id), DP_RC(cont_rf));
 		return cont_rf;
 	}
@@ -1275,7 +1275,7 @@ dc_obj_open(tse_task_t *task)
 
 	obj = obj_alloc();
 	if (obj == NULL)
-		return -DER_NOMEM;
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	obj->cob_coh  = args->coh;
 	obj->cob_mode = args->mode;
@@ -1308,6 +1308,7 @@ dc_obj_open(tse_task_t *task)
 	obj_hdl_link(obj);
 	*args->oh = obj_ptr2hdl(obj);
 	obj_decref(obj);
+out:
 	tse_task_complete(task, rc);
 	return rc;
 
@@ -1432,6 +1433,9 @@ dc_obj_layout_get(daos_handle_t oh, struct daos_obj_layout **p_layout)
 	if (grp_nr == DAOS_OBJ_GRP_MAX)
 		grp_nr = obj->cob_shards_nr / grp_size;
 
+	if (grp_size == DAOS_OBJ_GRP_MAX)
+		grp_size = obj->cob_shards_nr;
+
 	rc = daos_obj_layout_alloc(&layout, grp_nr, grp_size);
 	if (rc)
 		D_GOTO(out, rc);
@@ -1551,7 +1555,7 @@ err:
 
 	task->dt_result = result; /* restore the original error */
 	obj_auxi->io_retry = 0;
-	D_ERROR("Failed to retry task=%p(err=%d), io_retry=%d, rc "DF_RC".\n",
+	D_ERROR("Failed to retry task=%p(err=%d), io_retry=%d, rc "DF_RC"\n",
 		task, result, obj_auxi->io_retry, DP_RC(rc));
 	return rc;
 }
@@ -1584,7 +1588,7 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 	rc = obj_ec_recov_prep(&obj_auxi->reasb_req, obj->cob_md.omd_id,
 			       args->iods, args->nr);
 	if (rc) {
-		D_ERROR("task %p "DF_OID" obj_ec_recov_prep failed "DF_RC".\n",
+		D_ERROR("task %p "DF_OID" obj_ec_recov_prep failed "DF_RC"\n",
 			task, DP_OID(obj->cob_md.omd_id), DP_RC(rc));
 		goto out;
 	}
@@ -1597,7 +1601,7 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 		rc = dc_tx_local_open(coh, recov_task->ert_epoch, 0, &th);
 		if (rc) {
 			D_ERROR("task %p "DF_OID" dc_tx_local_open failed "
-				DF_RC".\n", task, DP_OID(obj->cob_md.omd_id),
+				DF_RC"\n", task, DP_OID(obj->cob_md.omd_id),
 				DP_RC(rc));
 			goto out;
 		}
@@ -1609,7 +1613,7 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 					NULL, sched, &sub_task);
 		if (rc) {
 			D_ERROR("task %p "DF_OID" dc_obj_fetch_task_create "
-				"failed "DF_RC".\n", task,
+				"failed "DF_RC"\n", task,
 				DP_OID(obj->cob_md.omd_id), DP_RC(rc));
 			goto out;
 		}
@@ -1619,7 +1623,7 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 		rc = dc_task_depend(task, 1, &sub_task);
 		if (rc != 0) {
 			D_ERROR("task %p "DF_OID" dc_task_depend failed "DF_RC
-				".\n", task, DP_OID(obj->cob_md.omd_id),
+				"\n", task, DP_OID(obj->cob_md.omd_id),
 				DP_RC(rc));
 			goto out;
 		}
@@ -1627,7 +1631,7 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 
 	rc = dc_task_resched(task);
 	if (rc != 0) {
-		D_ERROR("task %p "DF_OID" dc_task_resched failed "DF_RC".\n",
+		D_ERROR("task %p "DF_OID" dc_task_resched failed "DF_RC"\n",
 			task, DP_OID(obj->cob_md.omd_id), DP_RC(rc));
 		goto out;
 	}
@@ -1641,7 +1645,7 @@ out:
 	} else {
 		task->dt_result = rc;
 		tse_task_list_traverse(&task_list, recov_task_abort, &rc);
-		D_ERROR("task %p "DF_OID" EC recovery failed "DF_RC".\n",
+		D_ERROR("task %p "DF_OID" EC recovery failed "DF_RC"\n",
 			task, DP_OID(obj->cob_md.omd_id), DP_RC(rc));
 	}
 }
@@ -1688,7 +1692,7 @@ out:
 
 		D_FREE(bulks);
 
-		D_ERROR("%s obj_bulk_prep failed "DF_RC".\n",
+		D_ERROR("%s failed "DF_RC"\n",
 			bulk_perm == CRT_BULK_RO ? "update" : "fetch",
 			DP_RC(rc));
 	}
@@ -2281,7 +2285,7 @@ obj_req_get_tgts(struct dc_object *obj, int *shard, daos_key_t *dkey,
 				 shard_cnt, grp_nr, flags, obj_auxi);
 	if (rc != 0 && rc != -DER_SHARDS_OVERLAP)
 		D_ERROR("opc %d "DF_OID", obj_shards_2_fwtgts failed "
-			""DF_RC".\n", opc, DP_OID(obj->cob_md.omd_id),
+			""DF_RC"\n", opc, DP_OID(obj->cob_md.omd_id),
 			DP_RC(rc));
 out:
 	return rc;
@@ -2417,6 +2421,12 @@ obj_embedded_shard_arg(struct obj_auxi_args *obj_auxi)
 		return &obj_auxi->l_args.la_auxi;
 	case DAOS_OBJ_RPC_SYNC:
 		return &obj_auxi->s_args.sa_auxi;
+	case DAOS_OBJ_RPC_QUERY_KEY:
+		/*
+		 * called from obj_comp_cb_internal() and
+		 * checked in obj_shard_comp_cb() correctly
+		 */
+		return NULL;
 	default:
 		D_ERROR("bad opc %d.\n", obj_auxi->opc);
 		return NULL;
@@ -4084,6 +4094,7 @@ dc_obj_fetch_task(tse_task_t *task)
 	if (obj_auxi->spec_shard) {
 		D_ASSERT(!obj_auxi->to_leader);
 
+		obj_auxi->flags |= ORF_DTX_REFRESH;
 		if (args->extra_arg != NULL) {
 			shard = *(int *)args->extra_arg;
 		} else if (obj_auxi->io_retry) {
@@ -5131,7 +5142,7 @@ dc_obj_query_key(tse_task_t *api_task)
 				if (!is_ec_obj) {
 					rc = shard;
 					D_ERROR(DF_OID" no valid shard, rc "
-						DF_RC".\n",
+						DF_RC"\n",
 						DP_OID(obj->cob_md.omd_id),
 						DP_RC(rc));
 					D_GOTO(out_task, rc);

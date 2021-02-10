@@ -17,7 +17,7 @@
 #include <daos/rpc.h>
 #include <daos/btree.h>
 #include <daos/pool_map.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/rebuild.h>
 
 /* Track the pool rebuild status on each target, which exists on
@@ -123,6 +123,12 @@ struct rebuild_global_pool_tracker {
 	/* stable epoch of the rebuild */
 	uint64_t	rgt_stable_epoch;
 
+	ABT_mutex	rgt_lock;
+	/* The current rebuild is done on the leader */
+	ABT_cond	rgt_done_cond;
+
+	uint32_t	rgt_refcount;
+
 	unsigned int	rgt_abort:1,
 			rgt_notify_stable_epoch:1,
 			rgt_init_scan:1;
@@ -198,6 +204,7 @@ struct rebuild_pool_tls {
 	daos_handle_t	rebuild_tree_hdl; /*hold objects being rebuilt */
 	d_list_t	rebuild_pool_list;
 	uint64_t	rebuild_pool_obj_count;
+	uint64_t	rebuild_pool_reclaim_obj_count;
 	unsigned int	rebuild_pool_ver;
 	int		rebuild_pool_status;
 	unsigned int	rebuild_pool_scanning:1,
@@ -317,6 +324,12 @@ rebuilt_btr_destroy(daos_handle_t btr_hdl);
 struct rebuild_tgt_pool_tracker *
 rpt_lookup(uuid_t pool_uuid, unsigned int ver);
 
+void
+rgt_get(struct rebuild_global_pool_tracker *rgt);
+
+void
+rgt_put(struct rebuild_global_pool_tracker *rgt);
+
 struct rebuild_global_pool_tracker *
 rebuild_global_pool_tracker_lookup(const uuid_t pool_uuid, unsigned int ver);
 
@@ -328,4 +341,10 @@ rebuild_global_status_update(struct rebuild_global_pool_tracker *master_rpt,
 			     struct rebuild_iv *iv);
 void
 rebuild_hang(void);
+
+int
+rebuild_notify_ras_start(uuid_t *pool, uint32_t map_ver, char *op_str);
+
+int
+rebuild_notify_ras_end(uuid_t *pool, uint32_t map_ver, char *op_str, int op_rc);
 #endif /* __REBUILD_INTERNAL_H_ */

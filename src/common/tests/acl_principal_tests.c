@@ -888,5 +888,6 @@ main(void)
 		cmocka_unit_test(test_acl_principal_from_str_invalid_name),
 	};
 
-	return cmocka_run_group_tests(tests, NULL, NULL);
+	return cmocka_run_group_tests_name("common_acl_principal",
+					   tests, NULL, NULL);
 }

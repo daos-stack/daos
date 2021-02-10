@@ -22,7 +22,7 @@
 #include <daos/btree_class.h>
 #include <daos/dtx.h>
 #include <daos/object.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/dtx_srv.h>
 
 #include "obj_rpc.h"
@@ -759,6 +759,12 @@ daos_iom_dump(daos_iom_t *iom)
 			D_PRINT("\n");
 	}
 	D_PRINT("\n");
+}
+
+static inline bool
+obj_dtx_need_refresh(struct dtx_handle *dth, int rc)
+{
+	return rc == -DER_INPROGRESS && dth->dth_share_tbd_count > 0;
 }
 
 int  obj_class_init(void);

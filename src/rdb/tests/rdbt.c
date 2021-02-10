@@ -259,7 +259,7 @@ resp_valid_check:
 		if (!resp_isvalid) {
 			printf("ERR: rank %u invalid reply: rc="DF_RC", "
 			       "hint is %s valid (rank=%u, term="DF_U64")\n",
-			       rank, DP_RC(rc_svc), resp_isvalid ? "" : "NOT",
+			       rank, DP_RC(rc_svc), hint_isvalid ? "" : "NOT",
 			       h.sh_rank, h.sh_term);
 			rc = -1;
 			break;
@@ -499,7 +499,7 @@ restore_initial_replicas(crt_group_t *grp, uint32_t nranks,
 	rc = wait_for_any_leader(grp, nranks, cur_nreplicas, term,
 				 &final_ldr_rank, &new_term);
 	if (rc != 0) {
-		fprintf(stderr, "FAIL: wait for a leader: " DF_RC"\n",
+		fprintf(stderr, "FAIL: wait for a leader: "DF_RC"\n",
 				DP_RC(rc));
 		return rc;
 	}

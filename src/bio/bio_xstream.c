@@ -336,8 +336,8 @@ bio_spdk_env_init(void)
 }
 
 int
-bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
-	      int mem_size)
+bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
+	      struct sys_db *db)
 {
 	char		*env;
 	int		rc, fd;
@@ -374,7 +374,7 @@ bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
 	}
 	close(fd);
 
-	rc = smd_init(storage_path);
+	rc = smd_init(db);
 	if (rc != 0) {
 		D_ERROR("Initialize SMD store failed. "DF_RC"\n", DP_RC(rc));
 		return rc;
@@ -975,7 +975,7 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 	if (rc == 0) {
 		D_ASSERT(dev_info->sdi_tgt_cnt != 0);
 		d_bdev->bb_tgt_cnt = dev_info->sdi_tgt_cnt;
-		smd_free_dev_info(dev_info);
+		smd_dev_free_info(dev_info);
 		/*
 		 * Something went wrong in hotplug case: device ID is in SMD
 		 * but bio_bdev wasn't created on server start.
@@ -1180,7 +1180,7 @@ assign_device(int tgt_id)
 	}
 
 	/* Update mapping for this target in NVMe device table */
-	rc = smd_dev_assign(chosen_bdev->bb_uuid, tgt_id);
+	rc = smd_dev_add_tgt(chosen_bdev->bb_uuid, tgt_id);
 	if (rc) {
 		D_ERROR("Failed to map dev "DF_UUID" to tgt %d. "DF_RC"\n",
 			DP_UUID(chosen_bdev->bb_uuid), tgt_id, DP_RC(rc));
@@ -1341,7 +1341,7 @@ retry:
 
 out:
 	D_ASSERT(dev_info != NULL);
-	smd_free_dev_info(dev_info);
+	smd_dev_free_info(dev_info);
 	return rc;
 }
 
@@ -1580,7 +1580,7 @@ setup_bio_bdev(void *arg)
 	rc = bio_bs_state_set(bbs, BIO_BS_STATE_SETUP);
 	D_ASSERT(rc == 0);
 out:
-	smd_free_dev_info(dev_info);
+	smd_dev_free_info(dev_info);
 }
 
 /*

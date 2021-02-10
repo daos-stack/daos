@@ -14,15 +14,66 @@ class DaosCoreTestNvme(DaosCoreBase):
     :avocado: recursive
     """
 
-    def test_nvme(self):
+    def test_daos_nvme_recovery_1(self):
         """Jira ID: DAOS-3846.
 
         Test Description:
-            Purpose of this test is to run just the daos_test NVMe recovery
-            tests.
+            Run daos_test -N subtest 1
 
-        :avocado: tags=all,hw,medium,nvme,ib2,full_regression
-        :avocado: tags=unittest,daos_test_nvme_recovery
+        Use cases:
+            daos_test NVMe recovery test
 
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=nvme
+        :avocado: tags=daos_nvme_recovery_1,unittest
         """
-        DaosCoreBase.run_subtest(self)
+        self.run_subtest()
+
+    def test_daos_nvme_recovery_2(self):
+        """Jira ID: DAOS-3846.
+
+        Test Description:
+            Run daos_test -N subtest 2
+
+        Use cases:
+            daos_test NVMe recovery test
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=nvme
+        :avocado: tags=daos_nvme_recovery_2,unittest
+        """
+        self.run_subtest()
+
+    def test_daos_nvme_recovery_3(self):
+        """Jira ID: DAOS-3846.
+
+        Test Description:
+            Run daos_test -N subtest 3
+
+        Use cases:
+            daos_test NVMe recovery test
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=nvme
+        :avocado: tags=daos_nvme_recovery_3,unittest
+        """
+        self.run_subtest()
+
+    def test_daos_nvme_recovery_4(self):
+        """Jira ID: DAOS-3846.
+
+        Test Description:
+            Run daos_test -N subtest 4
+
+        Use cases:
+            daos_test NVMe recovery test
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=nvme
+        :avocado: tags=daos_nvme_recovery_4,unittest
+        """
+        self.run_subtest()

@@ -149,7 +149,7 @@ main(int argc, char **argv)
 		return rc;
 	}
 
-	rc = vos_init();
+	rc = vos_self_init("/mnt/daos");
 	if (rc) {
 		print_error("Error initializing VOS instance\n");
 		goto exit_0;
@@ -278,7 +278,7 @@ main(int argc, char **argv)
 		print_message("\nSUCCESS! NO TEST FAILURES\n");
 
 exit_1:
-	vos_fini();
+	vos_self_fini();
 exit_0:
 	daos_debug_fini();
 	return nr_failed;

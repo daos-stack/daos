@@ -12,6 +12,7 @@
 struct cont_props {
 	uint32_t	 dcp_chunksize;
 	uint32_t	 dcp_dedup_size;
+	uint64_t	 dcp_alloced_oid;
 	/**
 	 * Use more bits for compression type since compression level is
 	 * encoded in there.
@@ -92,5 +93,11 @@ daos_cont_prop2redunlvl(daos_prop_t *props);
 
 int
 daos_cont_rf2allowedfailures(int rf);
+
+/*
+ * alloc'ed oid property
+ */
+uint64_t
+daos_cont_prop2allocedoid(daos_prop_t *props);
 
 #endif /** __DAOS_CONT_PROPS_H__ */
