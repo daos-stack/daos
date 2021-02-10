@@ -862,7 +862,7 @@ io_overwrite(void **state)
 	test_arg_t	*arg = *state;
 
 	/** choose random object */
-	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 
 	/* Full overwrite of a SCM record */
 	io_overwrite_full(state, oid, IO_SIZE_SCM);
@@ -901,7 +901,7 @@ io_rewritten_array_with_mixed_size(void **state)
 	void const *const aggr_set_time[] = {"time"};
 
 	/* choose random object */
-	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	/* Alloc and set buffer to be a string*/
@@ -1020,7 +1020,7 @@ io_var_idx_offset(void **state)
 	struct ioreq	 req;
 	daos_off_t	 offset;
 
-	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	for (offset = (UINT64_MAX >> 1); offset > 0; offset >>= 8) {
@@ -1059,7 +1059,7 @@ io_var_akey_size(void **state)
 	char		*key;
 
 	/** akey not supported yet */
-	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	D_ALLOC(key, max_size + 1);
@@ -1102,7 +1102,7 @@ io_var_dkey_size(void **state)
 	const int	 max_size = 1 << 20;
 	char		*key;
 
-	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	D_ALLOC(key, max_size + 1);
@@ -1150,7 +1150,7 @@ io_var_rec_size(void **state)
 	char		*fetch_buf;
 	char		*update_buf;
 
-	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 	dkey_num = rand();
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -1246,7 +1246,7 @@ io_simple(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 
-	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 	print_message("Insert(e=0)/lookup(e=0)/verify simple kv record\n");
 
 	/** Test first for SCM, then on NVMe with record size > 4k */
@@ -1453,7 +1453,7 @@ enumerate_simple(void **state)
 	int		 i;
 	int		 rc;
 
-	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	D_ALLOC(small_buf, ENUM_DESC_BUF);
@@ -1939,11 +1939,11 @@ punch_simple(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 
-	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 	punch_simple_internal(state, oid);
 
 	/* OC_SX with some special handling for obj punch */
-	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
 	punch_simple_internal(state, oid);
 }
 
@@ -2015,7 +2015,7 @@ io_manyrec(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
 
-	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 	print_message("Insert(e=0)/lookup(e=0)/verify complex kv records:\n");
 
 	print_message("DAOS_IOD_ARRAY:SCM\n");
@@ -2060,7 +2060,7 @@ io_complex(void **state)
 	unsigned int	 size;
 	int		 i;
 
-	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
 
 	for (i = 0; i < 4; i++) {
@@ -2146,9 +2146,11 @@ basic_byte_array(void **state)
 test_ec_obj:
 	/** open object */
 	if (test_ec)
-		oid = dts_oid_gen(dts_ec_obj_class, 0, arg->myrank);
+		oid = daos_test_oid_gen(arg->coh, dts_ec_obj_class, 0, 0,
+					arg->myrank);
 	else
-		oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+		oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0,
+					arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
@@ -2288,7 +2290,7 @@ read_empty_records_internal(void **state, unsigned int size)
 	int rc, i;
 
 	/** open object */
-	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
@@ -2387,7 +2389,7 @@ fetch_size(void **state)
 	daos_size_t	 size = 131071;
 
 	/** open object */
-	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
@@ -2461,7 +2463,7 @@ io_simple_update_timeout(void **state)
 	arg->fail_loc = DAOS_SHARD_OBJ_UPDATE_TIMEOUT | DAOS_FAIL_SOME;
 	arg->fail_num = 5;
 
-	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 	io_simple_internal(state, oid, 64, DAOS_IOD_ARRAY, "test_update dkey",
 			   "test_update akey");
 
@@ -2476,7 +2478,7 @@ io_simple_fetch_timeout(void **state)
 	arg->fail_loc = DAOS_SHARD_OBJ_FETCH_TIMEOUT | DAOS_FAIL_SOME;
 	arg->fail_num = 5;
 
-	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 	io_simple_internal(state, oid, 64, DAOS_IOD_ARRAY, "test_fetch dkey",
 			   "test_fetch akey");
 }
@@ -2490,7 +2492,7 @@ io_simple_update_timeout_single(void **state)
 	arg->fail_loc = DAOS_SHARD_OBJ_UPDATE_TIMEOUT_SINGLE | DAOS_FAIL_ONCE;
 	arg->fail_value = rand() % dts_obj_replica_cnt;
 
-	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 	io_simple_internal(state, oid, 64, DAOS_IOD_ARRAY,
 			   "test_update_to dkey", "test_update_to akey");
 }
@@ -2503,7 +2505,7 @@ io_simple_update_crt_error(void **state)
 
 	arg->fail_loc = DAOS_SHARD_OBJ_RW_CRT_ERROR | DAOS_FAIL_ONCE;
 
-	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
 	io_simple_internal(state, oid, 64, DAOS_IOD_ARRAY,
 			   "test_update_err dkey", "test_update_err akey");
 }
@@ -2516,7 +2518,7 @@ io_simple_update_crt_req_error(void **state)
 
 	arg->fail_loc = DAOS_OBJ_REQ_CREATE_TIMEOUT | DAOS_FAIL_ONCE;
 
-	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
 	io_simple_internal(state, oid, 64, DAOS_IOD_ARRAY,
 			   "test_update_err_req dkey",
 			   "test_update_err_req akey");
@@ -2594,7 +2596,7 @@ tx_discard(void **state)
 	assert_non_null(rec_scm);
 	dts_buf_render(rec_scm, IO_SIZE_SCM);
 
-	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
 
 	/** Prepare buffers for a fixed set of d-keys and a-keys. */
@@ -2773,7 +2775,7 @@ tx_commit(void **state)
 	assert_non_null(rec_scm);
 	dts_buf_render(rec_scm, IO_SIZE_SCM);
 
-	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
 
 	/** Prepare buffers for a fixed set of d-keys and a-keys. */
@@ -2934,7 +2936,7 @@ io_nospace(void **state)
 	FAULT_INJECTION_REQUIRED();
 
 	/** choose random object */
-	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 
 	D_ALLOC(large_buf, buf_size);
 	assert_non_null(large_buf);
@@ -2963,7 +2965,7 @@ write_record_multiple_times(void **state)
 	char		 large_update_buf[4096];
 	char		 large_fetch_buf[4096];
 
-	oid = dts_oid_gen(0, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, 0, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	/** write twice */
@@ -3001,11 +3003,13 @@ echo_fetch_update(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 
-	oid = dts_oid_gen(DAOS_OC_ECHO_TINY_RW, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, DAOS_OC_ECHO_TINY_RW, 0, 0,
+				arg->myrank);
 	io_simple_internal(state, oid, 64, DAOS_IOD_ARRAY, "echo_test dkey",
 			   "echo_test akey");
 
-	oid = dts_oid_gen(DAOS_OC_ECHO_TINY_RW, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, DAOS_OC_ECHO_TINY_RW, 0, 0,
+				arg->myrank);
 	io_simple_internal(state, oid, 8192, DAOS_IOD_ARRAY,
 			   "echo_test_large dkey", "echo_test_large akey");
 }
@@ -3054,7 +3058,8 @@ tgt_idx_change_retry(void **state)
 		skip();
 	}
 
-	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0,
+				arg->myrank);
 	oid = dts_oid_set_rank(oid, 2);
 	replica = rand() % 3;
 	arg->fail_loc = DAOS_OBJ_TGT_IDX_CHANGE;
@@ -3186,7 +3191,8 @@ fetch_replica_unavail(void **state)
 	if (!test_runable(arg, 4))
 		skip();
 
-	oid = dts_oid_gen(DAOS_OC_R1S_SPEC_RANK, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
+				arg->myrank);
 	oid = dts_oid_set_rank(oid, rank);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -3245,7 +3251,7 @@ update_overlapped_recxs(void **state)
 	int		 rc;
 
 	/** open object */
-	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
@@ -3316,7 +3322,7 @@ io_obj_key_query(void **state)
 	int		rc;
 
 	/** open object */
-	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
@@ -3364,9 +3370,9 @@ io_obj_key_query(void **state)
 	rc = daos_obj_close(oh, NULL);
 	assert_int_equal(rc, 0);
 
-	oid = dts_oid_gen(OC_SX,
-			  DAOS_OF_DKEY_UINT64 | DAOS_OF_AKEY_UINT64,
-			  arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX,
+				DAOS_OF_DKEY_UINT64 | DAOS_OF_AKEY_UINT64,
+				0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
@@ -3452,7 +3458,7 @@ blob_unmap_trigger(void **state)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 	/* Tx discard only currently supports DAOS_IOD_SINGLE type */
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
 
@@ -3543,7 +3549,7 @@ punch_then_lookup(void **state)
 	int		rc;
 	int		i;
 
-	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	print_message("Insert 10 records\n");
@@ -3601,7 +3607,7 @@ punch_enum_then_verify_record_count(void **state)
 	int		total_rec = 0;
 	uint32_t	number;
 
-	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	memset(data_buf, 'a', 100);
@@ -3666,7 +3672,7 @@ split_sgl_internal(void **state, int size)
 	int rc;
 
 	/** open object */
-	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
@@ -3763,7 +3769,8 @@ io_pool_map_refresh_trigger(void **state)
 		rank = (rank + 1) % arg->srv_nnodes;
 
 	print_message("leader %u rank %u\n", leader, rank);
-	oid = dts_oid_gen(DAOS_OC_R1S_SPEC_RANK, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
+				arg->myrank);
 	oid = dts_oid_set_rank(oid, rank);
 
 	if (arg->myrank == 0)
@@ -3914,7 +3921,7 @@ static void fetch_mixed_keys(void **state)
 	test_arg_t    *arg = *state;
 	daos_obj_id_t oid;
 
-	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 
 	/** Test non nonexistent oid */
 	print_message("Fetch nonexistent OID\n");
@@ -3963,7 +3970,8 @@ io_capa_iv_fetch(void **state)
 
 	test_get_leader(arg, &leader);
 	D_ASSERT(leader > 0);
-	oid = dts_oid_gen(DAOS_OC_R1S_SPEC_RANK, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
+				arg->myrank);
 	oid = dts_oid_set_rank(oid, leader - 1);
 
 	if (arg->myrank == 0)
@@ -4002,7 +4010,7 @@ io_invalid(void **state)
 	int		 rc;
 
 	/** open object */
-	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
@@ -4086,7 +4094,8 @@ io_fetch_retry_another_replica(void **state)
 	if (!test_runable(arg, 2))
 		skip();
 
-	oid = dts_oid_gen(DAOS_OC_R2S_SPEC_RANK, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R2S_SPEC_RANK, 0, 0,
+				arg->myrank);
 	oid = dts_oid_set_rank(oid, 0);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);

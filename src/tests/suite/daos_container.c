@@ -2106,21 +2106,21 @@ co_rf_simple(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	print_message("verify cont rf and obj open ...\n");
-	oid = dts_oid_gen(OC_RP_2G1, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_2G1, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, -DER_INVAL);
 
-	oid = dts_oid_gen(OC_EC_2P1G1, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_EC_2P1G1, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, -DER_INVAL);
 
-	oid = dts_oid_gen(OC_RP_3G1, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_3G1, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 	rc = daos_obj_close(oh, NULL);
 	assert_int_equal(rc, 0);
 
-	oid = dts_oid_gen(OC_EC_2P2G1, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_EC_2P2G1, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 	rc = daos_obj_close(oh, NULL);

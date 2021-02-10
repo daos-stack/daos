@@ -324,7 +324,7 @@ typedef struct {
  * \param[in]	cid	Class Identifier
  * \param[in]	args	Reserved.
  */
-static inline void
+static inline void  __attribute__ ((deprecated))
 daos_obj_generate_id(daos_obj_id_t *oid, daos_ofeat_t ofeats,
 		     daos_oclass_id_t cid, uint32_t args)
 {
@@ -376,16 +376,17 @@ enum {
  *			the low 96 bits untouched and the DAOS private bits
  *			(the high 32 bits) encoded.
  * \param[in]	ofeats	Feature bits specific to object
- * \param[in]	cid	Class Identifier.
- *			If set to 0 (unknown), and no hints flags are specified,
- *			we use the container RF property to select the
- *			redundancy level, and assume a tiny object for now.
- *			If one of the MAX GRP oclass is set (SX, RP_2/3GX, etc.)
- *			the oclass chosen will be modified to have X represent
- *			the closest GRP available in the predefined oclass list.
+ * \param[in]	cid	Class Identifier. This setting is for advanced users who
+ *			are knowledgeable on the specific oclass being set and
+ *			what that means for the object in the current system and
+ *			the container it's in.
+ *			Setting this to 0 (unknown) will check if there are any
+ *			hints specified and use an oclass accordingly. If there
+ *			are no hints specified we use the container properties
+ *			to select the object class.
  * \param[in]   hints	Optional hints to select oclass with redundancy type
  *			and sharding. This will be ignored if cid is not
- *			OC_UNKNOWN.
+ *			OC_UNKNOWN (0).
  * \param[in]	args	Reserved.
  */
 int

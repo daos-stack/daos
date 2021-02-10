@@ -602,8 +602,8 @@ objects_open(void)
 
 	for (i = 0; i < ts_obj_p_cont; i++) {
 		if (!ts_oid_init) {
-			ts_oids[i] = dts_oid_gen(ts_class, 0,
-						 ts_ctx.tsc_mpi_rank);
+			ts_oids[i] = daos_test_oid_gen(ts_ctx.tsc_coh, ts_class,
+					       0, 0, ts_ctx.tsc_mpi_rank);
 			if (ts_class == DAOS_OC_R2S_SPEC_RANK)
 				ts_oids[i] = dts_oid_set_rank(ts_oids[i],
 							      RANK_ZERO);
