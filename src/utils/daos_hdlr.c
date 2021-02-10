@@ -2617,7 +2617,6 @@ dm_get_cont_prop(daos_handle_t coh,
 	for (i = 0; i < size; i++) {
 		prop->dpp_entries[i].dpe_type = dpe_types[i];
 	}
-	//prop->dpp_entries[0].dpe_type = dpe_type;
 
 	rc = daos_cont_query(coh, NULL, prop, NULL);
 	if (rc) {
@@ -2629,7 +2628,7 @@ dm_get_cont_prop(daos_handle_t coh,
 	for (i = 0; i < size; i++) {
 		dpe_vals[i] = prop->dpp_entries[i].dpe_val;
 	}
-	//*dpe_val = prop->dpp_entries[0].dpe_val;
+
 	daos_prop_free(prop);
 out:
 	return rc;
