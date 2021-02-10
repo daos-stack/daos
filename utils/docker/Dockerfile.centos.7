@@ -1,46 +1,12 @@
 # Copyright (C) 2018-2021 Intel Corporation
 # All rights reserved.
 #
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted for any purpose (including commercial purposes)
-# provided that the following conditions are met:
-#
-# 1. Redistributions of source code must retain the above copyright notice,
-#    this list of conditions, and the following disclaimer.
-#
-# 2. Redistributions in binary form must reproduce the above copyright notice,
-#    this list of conditions, and the following disclaimer in the
-#    documentation and/or materials provided with the distribution.
-#
-# 3. In addition, redistributions of modified forms of the source or binary
-#    code must carry prominent notices stating that the original code was
-#    changed and the date of the change.
-#
-#  4. All publications or advertising materials mentioning features or use of
-#     this software are asked, but not required, to acknowledge that it was
-#     developed by Intel Corporation and credit the contributors.
-#
-# 5. Neither the name of Intel Corporation, nor the name of any Contributor
-#    may be used to endorse or promote products derived from this software
-#    without specific prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
-# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
-# THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
 # 'recipe' for Docker to build an image of centOS-based
 # environment for building the DAOS project.
 #
 
 # Pull base image
-FROM centos:7.8.2003
+FROM centos:centos7.9.2009
 LABEL maintainer="daos@daos.groups.io"
 
 # Install OS updates and package.  Include basic tools and daos dependencies
@@ -54,7 +20,7 @@ RUN yum clean all &&							\
 	gcc gcc-c++ git golang graphviz lcov				\
 	libaio-devel libcmocka-devel libevent-devel libiscsi-devel	\
 	libtool libtool-ltdl-devel libuuid-devel libyaml-devel		\
-	make meson nasm ninja-build numactl-devel openssl-devel		\
+	make nasm numactl-devel openssl-devel				\
 	pandoc patch python-devel python36-devel python-magic		\
 	python-pep8 python-pygit2 python2-pygithub python-requests	\
 	readline-devel scons sg3_utils ShellCheck yasm pciutils		\
@@ -169,6 +135,7 @@ RUN if [ "x$BULLSEYE" != "x" ]; then \
     fi
 
 # force an upgrade to get any newly built RPMs
+ARG CACHEBUST=1
 RUN yum -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
 	yum clean all
 

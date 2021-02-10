@@ -558,8 +558,7 @@ pipeline {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(add_repo: false,
-                                                                cachebust: false) +
+                            additionalBuildArgs dockerBuildArgs() +
                                            " -t ${sanitized_JOB_NAME}-centos7 "
                         }
                     }
@@ -675,7 +674,6 @@ pipeline {
                                     stash name: stage_info['target'] + '-required-mercury-rpm-version',
                                           includes: stage_info['target'] + '-required-mercury-rpm-version'
                             }
-
                         }
                         unstable {
                             buildRpmPost condition: 'unstable'
@@ -1089,7 +1087,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Leap 15 with Intel-C') {
+                stage('Build on Leap 15 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
                         expression { ! skip_build_on_leap15_icc() }
