@@ -2763,7 +2763,7 @@ dm_connect(bool is_posix_copy,
 		rc = daos_cont_open(ca->dst_poh, ca->dst_c_uuid,
 				    DAOS_COO_RW, &ca->dst_coh,
 				    dst_cont_info, NULL);
-		if (rc != 0) {
+		if (rc == -DER_NONEXIST) {
 			if (ca->cont_layout == DAOS_PROP_CO_LAYOUT_POSIX) {
 				attr.da_props = props;
 				rc = dfs_cont_create(ca->dst_poh,
