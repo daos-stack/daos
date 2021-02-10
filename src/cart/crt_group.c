@@ -3075,20 +3075,18 @@ crt_group_secondary_rank_add_internal(struct crt_grp_priv *grp_priv,
 				&rm_p2s->rm_link, true);
 	if (rc != 0) {
 		D_ERROR("Failed to add entry: "DF_RC"\n", DP_RC(rc));
-		d_hash_rec_delete_at(&grp_priv->gp_s2p_table, &rm_s2p->rm_link);
 		crt_rm_destroy(rm_p2s);
+		d_hash_rec_delete_at(&grp_priv->gp_s2p_table, &rm_s2p->rm_link);
 		D_GOTO(out, rc);
 	}
 
 	/* Add secondary rank to membership list  */
 	rc = grp_add_to_membs_list(grp_priv, sec_rank);
 	if (rc != 0) {
-		d_hash_rec_delete_at(&grp_priv->gp_s2p_table, &rm_p2s->rm_link);
+		d_hash_rec_delete_at(&grp_priv->gp_p2s_table, &rm_p2s->rm_link);
 		d_hash_rec_delete_at(&grp_priv->gp_s2p_table, &rm_s2p->rm_link);
 		D_GOTO(out, rc);
 	}
-
-	rc = 0;
 
 out:
 	return rc;
