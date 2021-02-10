@@ -278,7 +278,13 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 		// send the request to a server that can handle the request directly.
 		rnd := rand.New(msCandidateRandSource)
 		msCandidates := hostlist.MustCreateSet("")
-		for i := 0; i < len(defaultHosts) && msCandidates.Count() < maxMSCandidates; i++ {
+
+		numCandidates := maxMSCandidates
+		if len(defaultHosts) < numCandidates {
+			numCandidates = len(defaultHosts)
+		}
+
+		for msCandidates.Count() < numCandidates {
 			if _, err := msCandidates.Insert(defaultHosts[rnd.Intn(len(defaultHosts))]); err != nil {
 				return nil, errors.Wrap(err, "failed to build MS candidates set")
 			}

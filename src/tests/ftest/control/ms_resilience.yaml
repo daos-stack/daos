@@ -5,15 +5,27 @@ hosts:
     - server-A
     - server-B
     - server-C
-    - server-D
-    - server-E
-    - server-F
-    - server-G
-    - server-H
-timeout: 150
+#    - server-D
+#    - server-E
+#    - server-F
+#    - server-G
+#    - server-H
+timeout: 600
+daos_server:
+  pattern_timeout: 60
 pool:
   mode: 146
-  scm_size: 1073741824
+  #scm_size: 1073741824
+  scm_size: 128MB
   control_method: dmg
 dmg:
   json: True
+server_config:
+  servers_per_host: 1
+  name: daos_server
+  servers:
+    0:
+      fabric_iface: eth0
+      fabric_iface_port: 31317
+      scm_mount: /mnt/daos
+      scm_size: 2
