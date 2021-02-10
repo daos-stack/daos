@@ -17,6 +17,7 @@
 #include <spdk/bdev.h>
 #include <spdk/blob_bdev.h>
 #include <spdk/blob.h>
+#include <spdk/accel_engine.h>
 #include <spdk/conf.h>
 #include "bio_internal.h"
 #include <daos_srv/smd.h>
@@ -322,6 +323,26 @@ bio_spdk_env_init(void)
 		return rc;
 	}
 
+	if (spdk_conf_find_section(NULL, "Vmd") != NULL) {
+		/**
+		 * Enumerate VMD devices and hook them into the SPDK PCI
+		 * subsystem.
+		 */
+		rc = spdk_vmd_init();
+		if (rc != 0) {
+			rc = -DER_INVAL; /* spdk_vmd_init() returns -1 */
+			D_ERROR("Failed to initialize VMD env, "DF_RC"\n",
+				DP_RC(rc));
+			return rc;
+		}
+
+		/**
+		 * TODO spdk_vmd_hotplug_monitor() will need to be called
+		 * periodically on 'init' xstream to monitor VMD hotremove/
+		 * hotplug events.
+		 */
+	}
+
 	spdk_unaffinitize_thread();
 
 	rc = spdk_thread_lib_init(NULL, 0);
@@ -528,12 +549,6 @@ common_init_cb(void *arg, int rc)
 	D_ASSERT(cp_arg->cca_rc == 0);
 	cp_arg->cca_inflights--;
 	cp_arg->cca_rc = daos_errno2der(-rc);
-}
-
-static void
-subsys_init_cb(int rc, void *arg)
-{
-	common_init_cb(arg, rc);
 }
 
 static void
@@ -1396,7 +1411,11 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 			fini_bio_bdevs(ctxt);
 
 			common_prep_arg(&cp_arg);
-			spdk_subsystem_fini(common_fini_cb, &cp_arg);
+			spdk_accel_engine_finish(common_fini_cb, &cp_arg);
+			xs_poll_completion(ctxt, &cp_arg.cca_inflights);
+
+			common_prep_arg(&cp_arg);
+			spdk_bdev_finish(common_fini_cb, &cp_arg);
 			xs_poll_completion(ctxt, &cp_arg.cca_inflights);
 
 			nvme_glb.bd_init_thread = NULL;
@@ -1460,7 +1479,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 	/*
 	 * Register SPDK thread beforehand, it could be used for poll device
 	 * admin commands completions and hotplugged events in following
-	 * spdk_subsystem_init() call, it also could be used for blobstore
+	 * spdk_bdev_initialize() call, it also could be used for blobstore
 	 * metadata io channel in following init_bio_bdevs() call.
 	 */
 	snprintf(th_name, sizeof(th_name), "daos_spdk_%d", tgt_id);
@@ -1482,14 +1501,24 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 		D_ASSERTF(nvme_glb.bd_xstream_cnt == 1, "%d",
 			  nvme_glb.bd_xstream_cnt);
 
-		/* Initialize all registered subsystems: bdev, vmd, copy. */
+		/* The SPDK 'Malloc' device relies on copy engine. */
+		rc = spdk_accel_engine_initialize();
+		if (rc != 0) {
+			D_ERROR("failed to init SPDK copy engine, rc:%d\n", rc);
+			goto out;
+		}
+
+		/* Initialize all types of devices */
 		common_prep_arg(&cp_arg);
-		spdk_subsystem_init(subsys_init_cb, &cp_arg);
+		spdk_bdev_initialize(common_init_cb, &cp_arg);
 		xs_poll_completion(ctxt, &cp_arg.cca_inflights);
 
 		if (cp_arg.cca_rc != 0) {
 			rc = cp_arg.cca_rc;
 			D_ERROR("failed to init bdevs, rc:%d\n", rc);
+			common_prep_arg(&cp_arg);
+			spdk_accel_engine_finish(common_fini_cb, &cp_arg);
+			xs_poll_completion(ctxt, &cp_arg.cca_inflights);
 			goto out;
 		}
 
