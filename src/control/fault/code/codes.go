@@ -118,7 +118,7 @@ const (
 	ServerConfigBadAccessPoints
 	ServerConfigEvenAccessPoints
 	ServerConfigBadProvider
-	ServerConfigNoServers
+	ServerConfigNoEngines
 	ServerConfigDuplicateFabric
 	ServerConfigDuplicateLogFile
 	ServerConfigDuplicateScmMount

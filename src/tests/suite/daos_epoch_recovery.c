@@ -192,7 +192,7 @@ run_daos_epoch_recovery_test(int rank, int size)
 {
 	int rc = 0;
 
-	rc = cmocka_run_group_tests_name("Epoch recovery tests",
+	rc = cmocka_run_group_tests_name("DAOS_Epoch_Recovery",
 					 epoch_recovery_tests, setup,
 					 test_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
