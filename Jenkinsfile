@@ -1089,7 +1089,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Leap 15 with Intel-C and TARGET_PREFIX') {
+                stage('Build on Leap 15 with Intel-C') {
                     when {
                         beforeAgent true
                         expression { ! skip_build_on_leap15_icc() }
