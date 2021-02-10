@@ -32,7 +32,7 @@ while [[ "$line" != *started\ on\ rank\ 0* ]]; do
   echo "Server stdout: $line"
 done
 echo "Server started!"
-daos_agent &
+daos_agent --debug &
 AGENT_PID=$!
 trap 'set -x; kill -INT $AGENT_PID $COPROC_PID' EXIT
 OFI_INTERFACE=eth0 daos_test -m

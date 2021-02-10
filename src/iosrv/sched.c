@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #define D_LOGFAC       DD_FAC(server)
@@ -74,7 +57,10 @@ struct sched_request {
 	unsigned int		 sr_abort:1;
 };
 
-static bool	sched_prio_disabled;
+bool		sched_prio_disabled;
+unsigned int	sched_stats_intvl;
+unsigned int	sched_relax_intvl = SCHED_RELAX_INTVL_DEFAULT;
+unsigned int	sched_relax_mode;
 
 enum {
 	/* All requests for various pools are processed in FIFO */
@@ -409,11 +395,17 @@ sched_info_init(struct dss_xstream *dx)
 	int			 rc;
 
 	info->si_cur_ts = daos_getntime_coarse() / NSEC_PER_MSEC;
+	info->si_stats.ss_tot_time = 0;
+	info->si_stats.ss_relax_time = 0;
+	info->si_stats.ss_busy_ts = info->si_cur_ts;
+	info->si_stats.ss_print_ts = 0;
 	D_INIT_LIST_HEAD(&info->si_idle_list);
 	D_INIT_LIST_HEAD(&info->si_sleep_list);
 	D_INIT_LIST_HEAD(&info->si_fifo_list);
 	D_INIT_LIST_HEAD(&info->si_purge_list);
 	info->si_req_cnt = 0;
+	info->si_sleep_cnt = 0;
+	info->si_wait_cnt = 0;
 	info->si_stop = 0;
 
 	rc = d_hash_table_create(D_HASH_FT_NOLOCK, 4,
@@ -482,11 +474,15 @@ req_get(struct dss_xstream *dx, struct sched_req_attr *attr,
 	struct sched_request	*req;
 	int			 rc;
 
-	spi = cur_pool_info(info, attr->sra_pool_id);
-	if (spi == NULL) {
-		D_ERROR("XS(%d): get pool info "DF_UUID" failed.\n",
-			dx->dx_xs_id, DP_UUID(attr->sra_pool_id));
-		return NULL;
+	if (attr->sra_type == SCHED_REQ_ANONYM) {
+		spi = NULL;
+	} else {
+		spi = cur_pool_info(info, attr->sra_pool_id);
+		if (spi == NULL) {
+			D_ERROR("XS(%d): get pool info "DF_UUID" failed.\n",
+				dx->dx_xs_id, DP_UUID(attr->sra_pool_id));
+			return NULL;
+		}
 	}
 
 	if (d_list_empty(&info->si_idle_list)) {
@@ -520,36 +516,15 @@ req_put(struct dss_xstream *dx, struct sched_request *req)
 		d_list_add_tail(&req->sr_link, &info->si_idle_list);
 }
 
-static int
+static inline int
 req_kickoff_internal(struct dss_xstream *dx, struct sched_req_attr *attr,
 		     void (*func)(void *), void *arg)
 {
-	ABT_pool	abt_pool;
-	int		rc;
-
 	D_ASSERT(attr && func && arg);
-	switch (attr->sra_type) {
-	case SCHED_REQ_UPDATE:
-	case SCHED_REQ_FETCH:
-		abt_pool = dx->dx_pools[DSS_POOL_IO];
-		break;
-	case SCHED_REQ_GC:
-		abt_pool = dx->dx_pools[DSS_POOL_GC];
-		break;
-	case SCHED_REQ_SCRUB:
-		abt_pool = dx->dx_pools[DSS_POOL_SCRUB];
-		break;
-	case SCHED_REQ_MIGRATE:
-		abt_pool = dx->dx_pools[DSS_POOL_REBUILD];
-		break;
-	default:
-		D_ASSERTF(0, "Invalid req type: %u\n", attr->sra_type);
-		break;
-	}
+	D_ASSERT(attr->sra_type < SCHED_REQ_MAX);
 
-	rc = ABT_thread_create(abt_pool, func, arg, ABT_THREAD_ATTR_NULL, NULL);
-
-	return dss_abterr2der(rc);
+	return sched_create_thread(dx, func, arg, ABT_THREAD_ATTR_NULL, NULL,
+				   0);
 }
 
 static int
@@ -597,6 +572,10 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 	int			 orig_pressure, rc;
 
 	D_ASSERT(spi->spi_space_ts <= info->si_cur_ts);
+	/* TLS is destroyed on dss_srv_handler ULT exiting */
+	if (info->si_stop)
+		goto out;
+
 	/* Use cached space presure info */
 	if ((spi->spi_space_ts + SCHED_SPACE_AGE_MAX) > info->si_cur_ts)
 		goto out;
@@ -901,11 +880,9 @@ should_enqueue_req(struct dss_xstream *dx, struct sched_req_attr *attr)
 	if (sched_prio_disabled || info->si_stop)
 		return false;
 
-	D_ASSERT(attr->sra_type == SCHED_REQ_GC ||
-		 attr->sra_type == SCHED_REQ_UPDATE ||
-		 attr->sra_type == SCHED_REQ_FETCH ||
-		 attr->sra_type == SCHED_REQ_SCRUB ||
-		 attr->sra_type == SCHED_REQ_MIGRATE);
+	D_ASSERT(attr->sra_type < SCHED_REQ_MAX);
+	if (attr->sra_type == SCHED_REQ_ANONYM)
+		return false;
 
 	/* For VOS xstream only */
 	return dx->dx_main_xs;
@@ -975,9 +952,16 @@ sched_req_yield(struct sched_request *req)
 }
 
 static inline void
-gc_sleep_counting(struct sched_request *req, int sleep)
+sleep_counting(struct dss_xstream *dx, struct sched_request *req, int sleep)
 {
+	struct sched_info	*info = &dx->dx_sched_info;
 	struct sched_pool_info	*spi = req->sr_pool_info;
+
+	info->si_sleep_cnt += sleep;
+	D_ASSERT(info->si_sleep_cnt >= 0);
+
+	if (req->sr_attr.sra_type == SCHED_REQ_ANONYM)
+		return;
 
 	D_ASSERT(spi != NULL);
 	if (req->sr_attr.sra_type != SCHED_REQ_GC)
@@ -1018,13 +1002,13 @@ sched_req_sleep(struct sched_request *req, uint32_t msecs)
 	if (d_list_empty(&req->sr_link))
 		d_list_add(&req->sr_link, &info->si_sleep_list);
 
-	gc_sleep_counting(req, 1);
+	sleep_counting(dx, req, 1);
 
 	ABT_self_suspend();
 }
 
-void
-sched_req_wakeup(struct sched_request *req)
+static void
+req_wakeup_internal(struct dss_xstream *dx, struct sched_request *req)
 {
 	D_ASSERT(req != NULL);
 	/* The request is not in sleep */
@@ -1035,10 +1019,18 @@ sched_req_wakeup(struct sched_request *req)
 	d_list_del_init(&req->sr_link);
 	req->sr_wakeup_time = 0;
 
-	gc_sleep_counting(req, -1);
+	sleep_counting(dx, req, -1);
 
 	D_ASSERT(req->sr_ult != ABT_THREAD_NULL);
 	ABT_thread_resume(req->sr_ult);
+}
+
+void
+sched_req_wakeup(struct sched_request *req)
+{
+	struct dss_xstream *dx = dss_current_xstream();
+
+	return req_wakeup_internal(dx, req);
 }
 
 void
@@ -1074,9 +1066,13 @@ wakeup_all(struct dss_xstream *dx)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct sched_request	*req, *tmp;
+	uint64_t		 cur_ts;
 
 	/* Update current ts stored in sched_info */
-	info->si_cur_ts = daos_getntime_coarse() / NSEC_PER_MSEC;
+	cur_ts = daos_getntime_coarse() / NSEC_PER_MSEC;
+	D_ASSERT(cur_ts >= info->si_cur_ts);
+	info->si_stats.ss_tot_time += (cur_ts - info->si_cur_ts);
+	info->si_cur_ts = cur_ts;
 
 	d_list_for_each_entry_safe(req, tmp, &info->si_sleep_list, sr_link) {
 		D_ASSERT(req->sr_wakeup_time > 0);
@@ -1084,11 +1080,11 @@ wakeup_all(struct dss_xstream *dx)
 			break;
 
 		if (!should_enqueue_req(dx, &req->sr_attr)) {
-			sched_req_wakeup(req);
+			req_wakeup_internal(dx, req);
 		} else {
 			d_list_del_init(&req->sr_link);
 			req->sr_wakeup_time = 0;
-			gc_sleep_counting(req, -1);
+			sleep_counting(dx, req, -1);
 			D_ASSERT(req->sr_ult != ABT_THREAD_NULL);
 			req_enqueue(dx, req);
 		}
@@ -1102,11 +1098,7 @@ sched_req_get(struct sched_req_attr *attr, ABT_thread ult)
 	struct sched_request	*req;
 	int			 rc;
 
-	D_ASSERT(attr->sra_type == SCHED_REQ_GC ||
-		 attr->sra_type == SCHED_REQ_UPDATE ||
-		 attr->sra_type == SCHED_REQ_FETCH ||
-		 attr->sra_type == SCHED_REQ_SCRUB ||
-		 attr->sra_type == SCHED_REQ_MIGRATE);
+	D_ASSERT(attr->sra_type < SCHED_REQ_MAX);
 
 	if (ult == ABT_THREAD_NULL) {
 		ABT_thread	self;
@@ -1153,6 +1145,18 @@ sched_stop(struct dss_xstream *dx)
 	process_all(dx);
 }
 
+void
+sched_cond_wait(ABT_cond cond, ABT_mutex mutex)
+{
+	struct dss_xstream	*dx = dss_current_xstream();
+	struct sched_info	*info = &dx->dx_sched_info;
+
+	info->si_wait_cnt += 1;
+	ABT_cond_wait(cond, mutex);
+	D_ASSERT(info->si_wait_cnt > 0);
+	info->si_wait_cnt -= 1;
+}
+
 /*
  * A schedule cycle consists of three stages:
  * 1. Starting with a network poll ULT, number of ULTs to be executed in this
@@ -1187,13 +1191,10 @@ sched_dump_data(struct sched_data *data)
 	struct sched_cycle	*cycle = &data->sd_cycle;
 
 	D_PRINT("XS(%d): comm:%d main:%d. age_net:%u, age_nvme:%u, "
-		"new_cycle:%d cycle_started:%d total_ults:%u [%u, %u, %u]\n",
+		"new_cycle:%d cycle_started:%d total_ults:%u\n",
 		dx->dx_xs_id, dx->dx_comm, dx->dx_main_xs, cycle->sc_age_net,
 		cycle->sc_age_nvme, cycle->sc_new_cycle,
-		cycle->sc_cycle_started, cycle->sc_ults_tot,
-		cycle->sc_ults_cnt[DSS_POOL_IO],
-		cycle->sc_ults_cnt[DSS_POOL_REBUILD],
-		cycle->sc_ults_cnt[DSS_POOL_GC]);
+		cycle->sc_cycle_started, cycle->sc_ults_tot);
 #endif
 }
 
@@ -1279,8 +1280,9 @@ sched_pop_net_poll(struct sched_data *data, ABT_pool pool)
 }
 
 static bool
-need_nvme_poll(struct sched_cycle *cycle)
+need_nvme_poll(struct dss_xstream *dx, struct sched_cycle *cycle)
 {
+	struct sched_info	*info = &dx->dx_sched_info;
 	struct dss_module_info	*dmi;
 
 	/* Need net poll to start new cycle */
@@ -1300,6 +1302,10 @@ need_nvme_poll(struct sched_cycle *cycle)
 	if (cycle->sc_age_nvme > SCHED_AGE_NVME_MAX)
 		return true;
 
+	/* TLS is destroyed on dss_srv_handler ULT exiting */
+	if (info->si_stop)
+		return false;
+
 	dmi = dss_get_module_info();
 	D_ASSERT(dmi != NULL);
 	return bio_need_nvme_poll(dmi->dmi_nvme_ctxt);
@@ -1313,7 +1319,7 @@ sched_pop_nvme_poll(struct sched_data *data, ABT_pool pool)
 	ABT_unit		 unit;
 	int			 ret;
 
-	if (!need_nvme_poll(cycle))
+	if (!need_nvme_poll(dx, cycle))
 		return ABT_UNIT_NULL;
 
 	D_ASSERT(cycle->sc_cycle_started);
@@ -1376,13 +1382,111 @@ sched_pop_one(struct sched_data *data, ABT_pool pool, int pool_idx)
 	return unit;
 }
 
+#define SCHED_IDLE_THRESH	8000UL	/* msecs */
+
+/*
+ * Try to relax CPU for a short period when the xstream is idle. The relaxing
+ * period can't be too long, otherwise, potential external events like:
+ * incoming network requests, new ULTs created by other xstream (from the
+ * collective call or offloading call) could be delayed too much.
+ *
+ * There are also some periodical internal events from BIO, like hotplug
+ * poller, health/io stats collecting, blobstore state transition, etc. It's
+ * not easy to accurately predict the next occurrence of those events.
+ */
+static void
+sched_try_relax(struct dss_xstream *dx, ABT_pool *pools, uint32_t running)
+{
+	struct sched_info	*info = &dx->dx_sched_info;
+	unsigned int		 sleep_time = sched_relax_intvl;
+	size_t			 blocked;
+	int			 ret;
+
+	dx->dx_timeout = 0;
+
+	if (info->si_stop)
+		return;
+
+	/*
+	 * There are running ULTs in current schedule cycle.
+	 *
+	 * NB. DRPC listener ULT is currently always running (it waits on
+	 * drpc_progress(), so the DRPC listener xstream will never sleep
+	 * in this function.
+	 */
+	if (running != 0)
+		return;
+
+	/* There are queued requests to be processed */
+	if (info->si_req_cnt != 0)
+		return;
+
+	ret = ABT_pool_get_total_size(pools[DSS_POOL_GENERIC], &blocked);
+	if (ret != ABT_SUCCESS) {
+		D_ERROR("XS(%d) get ABT pool(%d) total size error: %d\n",
+			dx->dx_xs_id, DSS_POOL_GENERIC, ret);
+		return;
+	}
+	D_ASSERTF(info->si_sleep_cnt + info->si_wait_cnt <= blocked,
+		  "sleep:%d + wait:%d > blocked:%zd\n",
+		  info->si_sleep_cnt, info->si_wait_cnt, blocked);
+
+	/*
+	 * Only start relaxing when all blocked ULTs are either sleeping
+	 * ULT or long wait ULT.
+	 */
+	if (blocked > info->si_sleep_cnt + info->si_wait_cnt)
+		return;
+
+	/*
+	 * System is currently idle, but we only start relaxing when there is
+	 * no external events for a short period of SCHED_IDLE_THRESH.
+	 */
+	D_ASSERT(info->si_cur_ts >= info->si_stats.ss_busy_ts);
+	if (info->si_cur_ts - info->si_stats.ss_busy_ts < SCHED_IDLE_THRESH)
+		return;
+
+	/* Adjust sleep time according to the first sleeping ULT */
+	if (info->si_sleep_cnt > 0) {
+		struct sched_request	*req;
+
+		D_ASSERT(!d_list_empty(&info->si_sleep_list));
+		req = d_list_entry(info->si_sleep_list.next,
+				   struct sched_request, sr_link);
+
+		/* wakeup_all() has already been called for info->si_cur_ts */
+		D_ASSERT(req->sr_wakeup_time > info->si_cur_ts);
+		if (sleep_time > req->sr_wakeup_time - info->si_cur_ts)
+			sleep_time = req->sr_wakeup_time - info->si_cur_ts;
+	}
+	D_ASSERT(sleep_time > 0 && sleep_time <= SCHED_RELAX_INTVL_MAX);
+
+	/*
+	 * Wait on external network request if the xstream has Cart context,
+	 * otherwise, sleep for a while.
+	 */
+	if (sched_relax_mode != SCHED_RELAX_MODE_SLEEP && dx->dx_comm) {
+		/* convert to micro-seconds */
+		dx->dx_timeout = sleep_time * 1000;
+	} else {
+		ret = usleep(sleep_time * 1000);
+		if (ret)
+			D_ERROR("XS(%d) sleep error: %s\n", dx->dx_xs_id,
+				strerror(errno));
+	}
+
+	/* Rough stats, interruption isn't taken into account */
+	info->si_stats.ss_relax_time += sleep_time;
+}
+
 static void
 sched_start_cycle(struct sched_data *data, ABT_pool *pools)
 {
 	struct dss_xstream	*dx = data->sd_dx;
+	struct sched_info	*info = &dx->dx_sched_info;
 	struct sched_cycle	*cycle = &data->sd_cycle;
 	size_t			 cnt;
-	int			 i, ret;
+	int			 ret;
 
 	D_ASSERT(cycle->sc_new_cycle == 1);
 	D_ASSERT(cycle->sc_cycle_started == 0);
@@ -1394,19 +1498,27 @@ sched_start_cycle(struct sched_data *data, ABT_pool *pools)
 	wakeup_all(dx);
 	process_all(dx);
 
-	/* Get number of ULTS for each ABT pool */
-	for (i = DSS_POOL_IO; i < DSS_POOL_CNT; i++) {
-		D_ASSERT(cycle->sc_ults_cnt[i] == 0);
+	/* Get number of ULTS in generic ABT pool */
+	D_ASSERT(cycle->sc_ults_cnt[DSS_POOL_GENERIC] == 0);
+	ret = ABT_pool_get_size(pools[DSS_POOL_GENERIC], &cnt);
+	if (ret != ABT_SUCCESS) {
+		D_ERROR("XS(%d) get ABT pool(%d) size error: %d\n",
+			dx->dx_xs_id, DSS_POOL_GENERIC, ret);
+		cnt = 0;
+	}
+	cycle->sc_ults_cnt[DSS_POOL_GENERIC] = cnt;
+	cycle->sc_ults_tot += cycle->sc_ults_cnt[DSS_POOL_GENERIC];
 
-		ret = ABT_pool_get_size(pools[i], &cnt);
-		if (ret != ABT_SUCCESS) {
-			D_ERROR("XS(%d) get ABT pool(%d) size error: %d\n",
-				dx->dx_xs_id, i, ret);
-			cnt = 0;
-		}
+	if (sched_relax_mode != SCHED_RELAX_MODE_DISABLED)
+		sched_try_relax(dx, pools, cycle->sc_ults_tot);
 
-		cycle->sc_ults_cnt[i] = cnt;
-		cycle->sc_ults_tot += cycle->sc_ults_cnt[i];
+	if (sched_stats_intvl != 0 &&
+	    (info->si_stats.ss_print_ts + sched_stats_intvl) <
+	    info->si_cur_ts) {
+		D_PRINT("XS(%d) CPU time(ms): Total:"DF_U64", Relax:"DF_U64"\n",
+			dx->dx_xs_id, info->si_stats.ss_tot_time,
+			info->si_stats.ss_relax_time);
+		info->si_stats.ss_print_ts = info->si_cur_ts;
 	}
 }
 
@@ -1420,7 +1532,7 @@ sched_run(ABT_sched sched)
 	ABT_pool		 pool;
 	ABT_unit		 unit;
 	uint32_t		 work_count = 0;
-	int			 i, ret;
+	int			 ret;
 
 	ABT_sched_get_data(sched, (void **)&data);
 	cycle = &data->sd_cycle;
@@ -1449,13 +1561,11 @@ sched_run(ABT_sched sched)
 		if (cycle->sc_ults_tot == 0)
 			goto start_cycle;
 
-		/* Try to pick a ULT from other ABT pools */
-		for (i = DSS_POOL_IO; i < DSS_POOL_CNT; i++) {
-			pool = pools[i];
-			unit = sched_pop_one(data, pool, i);
-			if (unit != ABT_UNIT_NULL)
-				goto execute;
-		}
+		/* Try to pick a ULT from generic ABT pool */
+		pool = pools[DSS_POOL_GENERIC];
+		unit = sched_pop_one(data, pool, DSS_POOL_GENERIC);
+		if (unit != ABT_UNIT_NULL)
+			goto execute;
 
 		/*
 		 * Nothing to be executed? Could be idle helper XS or poll ULT

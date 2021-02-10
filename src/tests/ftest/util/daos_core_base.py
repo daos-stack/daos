@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 import os
@@ -40,12 +23,14 @@ class DaosCoreBase(TestWithServers):
     :avocado: recursive
     """
 
-    TEST_PATH = "/run/daos_tests/Tests/*"
+    TEST_PATH = "/run/daos_tests/Tests"
 
     def __init__(self, *args, **kwargs):
         """Initialize the DaosCoreBase object."""
         super(DaosCoreBase, self).__init__(*args, **kwargs)
         self.subtest_name = None
+
+        self.TEST_PATH = "{}/{}/*".format(self.TEST_PATH, self.get_test_name())
 
         test_timeout = self.params.get("test_timeout", self.TEST_PATH)
         if test_timeout:
@@ -113,8 +98,13 @@ class DaosCoreBase(TestWithServers):
         scm_size = self.params.get("scm_size", '/run/pool/*')
         nvme_size = self.params.get("nvme_size", '/run/pool/*')
         args = self.params.get("args", self.TEST_PATH, "")
+        stopped_ranks = self.params.get("stopped_ranks", self.TEST_PATH, [])
         dmg = self.get_dmg_command()
         dmg_config_file = dmg.yaml.filename
+        if self.hostlist_clients:
+            dmg.copy_certificates(
+                get_log_file("daosCA/certs"), self.hostlist_clients)
+            dmg.copy_configuration(self.hostlist_clients)
         self.client_mca += " --mca btl_tcp_if_include eth0"
 
         cmd = " ".join(
@@ -143,6 +133,19 @@ class DaosCoreBase(TestWithServers):
 
         if not load_mpi("openmpi"):
             self.fail("Failed to load openmpi")
+
+        # Update the expected status for each ranks that will be stopped by this
+        # test to avoid a false failure during tearDown().
+        if "random" in stopped_ranks:
+            # Set each expected rank state to be either stopped or running
+            for manager in self.server_managers:
+                manager.update_expected_states(
+                    None, ["Joined", "Stopped", "Evicted"])
+        else:
+            # Set the specific expected rank state to stopped
+            for rank in stopped_ranks:
+                for manager in self.server_managers:
+                    manager.update_expected_states(rank, ["Stopped", "Evicted"])
 
         try:
             process.run(cmd, env=env)

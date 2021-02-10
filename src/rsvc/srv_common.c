@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * Replicated Service Common Functions
@@ -107,8 +90,9 @@ ds_rsvc_set_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 
 		rc = rdb_tx_update(tx, path, &key, &value);
 		if (rc != 0) {
-			D_ERROR("%s: failed to update attribute '%s': %d\n",
-				 svc->s_name, (char *) key.iov_buf, rc);
+			D_ERROR("%s: failed to update attribute '"DF_KEY
+				"': %d\n",
+				svc->s_name, DP_KEY(&key), rc);
 			goto out_bulk;
 		}
 	}
@@ -169,8 +153,9 @@ ds_rsvc_del_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 
 		rc = rdb_tx_delete(tx, path, &key);
 		if (rc != 0) {
-			D_ERROR("%s: failed to delete attribute '%s': %d\n",
-				svc->s_name, (char *) key.iov_buf, rc);
+			D_ERROR("%s: failed to delete attribute '"DF_KEY
+				"': %d\n",
+				svc->s_name, DP_KEY(&key), rc);
 			goto out_bulk;
 		}
 	}
@@ -253,8 +238,9 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 		rc = rdb_tx_lookup(tx, path, &key, &iovs[j]);
 
 		if (rc != 0) {
-			D_ERROR("%s: failed to lookup attribute '%s': %d\n",
-				 svc->s_name, (char *) key.iov_buf, rc);
+			D_ERROR("%s: failed to lookup attribute '"DF_KEY
+				"': %d\n",
+				svc->s_name, DP_KEY(&key), rc);
 			goto out_iovs;
 		}
 		iovs[j].iov_buf_len = sizes[i];

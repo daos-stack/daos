@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-(C) Copyright 2018-2020 Intel Corporation.
+(C) Copyright 2018-2021 Intel Corporation.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
-GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-The Government's rights to use, modify, reproduce, release, perform, display,
-or disclose this software are subject to the terms of the Apache License as
-provided in Contract No. B609815.
-Any reproduction of computer software, computer software documentation, or
-portions thereof marked with this legend must also reproduce the markings.
+SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 import threading
@@ -121,7 +104,8 @@ class IorTestBase(DfuseTestBase):
     def run_ior_with_pool(self, intercept=None, test_file_suffix="",
                           test_file="daos:testFile", create_pool=True,
                           create_cont=True, stop_dfuse=True, plugin_path=None,
-                          timeout=None, fail_on_warning=False):
+                          timeout=None, fail_on_warning=False,
+                          mount_dir=None):
         """Execute ior with optional overrides for ior flags and object_class.
 
         If specified the ior flags and ior daos object class parameters will
@@ -145,6 +129,7 @@ class IorTestBase(DfuseTestBase):
             timeout (int, optional): command timeout. Defaults to None.
             fail_on_warning (bool, optional): Controls whether the test
                 should fail if a 'WARNING' is found. Default is False.
+            mount_dir (str, optional): Create specific mount point
 
         Returns:
             CmdResult: result of the ior command execution
@@ -158,7 +143,7 @@ class IorTestBase(DfuseTestBase):
             # Connect to the pool, create container and then start dfuse
             if not self.dfuse:
                 self.start_dfuse(
-                    self.hostlist_clients, self.pool, self.container)
+                    self.hostlist_clients, self.pool, self.container, mount_dir)
 
         # setup test file for POSIX or HDF5 with vol connector
         if self.ior_cmd.api.value == "POSIX" or plugin_path:
@@ -169,12 +154,13 @@ class IorTestBase(DfuseTestBase):
         self.ior_cmd.test_file.update("".join([test_file, test_file_suffix]))
         job_manager = self.get_ior_job_manager_command()
         job_manager.timeout = timeout
-        out = self.run_ior(job_manager, self.processes,
-                           intercept, plugin_path=plugin_path,
-                           fail_on_warning=fail_on_warning)
-
-        if stop_dfuse:
-            self.stop_dfuse()
+        try:
+            out = self.run_ior(job_manager, self.processes,
+                               intercept, plugin_path=plugin_path,
+                               fail_on_warning=fail_on_warning)
+        finally:
+            if stop_dfuse:
+                self.stop_dfuse()
 
         return out
 

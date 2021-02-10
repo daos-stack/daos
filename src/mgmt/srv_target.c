@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /*
  * Target Methods
@@ -286,7 +269,7 @@ cleanup_newborn_pool(uuid_t uuid, void *arg)
 	D_DEBUG(DB_MGMT, "Clear SPDK blobs for NEWBORN pool "DF_UUID"\n",
 		DP_UUID(uuid));
 	uuid_copy(id.uuid, uuid);
-	rc = dss_thread_collective(tgt_kill_pool, &id, 0, DSS_ULT_IO);
+	rc = dss_thread_collective(tgt_kill_pool, &id, 0);
 	if (rc != 0) {
 		if (rc > 0)
 			D_ERROR("%d xstreams failed tgt_kill_pool()\n", rc);
@@ -636,8 +619,7 @@ tgt_vos_create(struct ds_pooltgts_rec *ptrec, uuid_t uuid,
 		vpa.vpa_scm_size = 0;
 		vpa.vpa_nvme_size = nvme_size;
 
-		rc = dss_thread_collective(tgt_vos_create_one, &vpa, 0,
-					   DSS_ULT_IO);
+		rc = dss_thread_collective(tgt_vos_create_one, &vpa, 0);
 	}
 
 	/** brute force cleanup to be done by the caller */
@@ -895,7 +877,7 @@ tgt_destroy(uuid_t pool_uuid, char *path)
 
 	/* destroy blobIDs first */
 	uuid_copy(id.uuid, pool_uuid);
-	rc = dss_thread_collective(tgt_kill_pool, &id, 0, DSS_ULT_IO);
+	rc = dss_thread_collective(tgt_kill_pool, &id, 0);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -1058,7 +1040,7 @@ ds_mgmt_tgt_profile_hdlr(crt_rpc_t *rpc)
 	in = crt_req_get(rpc);
 	D_ASSERT(in != NULL);
 
-	rc = dss_task_collective(tgt_profile_task, in, 0, DSS_ULT_IO);
+	rc = dss_task_collective(tgt_profile_task, in, 0);
 
 	out = crt_reply_get(rpc);
 	out->p_rc = rc;

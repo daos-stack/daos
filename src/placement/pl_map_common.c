@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * src/placement/pl_map_common.c
@@ -382,7 +365,8 @@ grp_map_extend(uint32_t *grp_map, uint32_t *grp_map_size)
 }
 
 int
-pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
+pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list,
+	      bool is_pool_adding)
 {
 	struct pl_obj_shard	*new_shards;
 	struct pl_obj_shard     *org_shard;
@@ -466,8 +450,9 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 		new_shards[grp_idx].po_fseq = f_shard->fs_fseq;
 		new_shards[grp_idx].po_shard = f_shard->fs_shard_idx;
 		new_shards[grp_idx].po_target = f_shard->fs_tgt_id;
-		if (org_shard->po_fseq > f_shard->fs_shard_idx &&
-				org_shard->po_target != -1)
+		if (org_shard->po_target != -1 &&
+		    (is_pool_adding ||
+		     org_shard->po_fseq > f_shard->fs_fseq))
 			new_shards[grp_idx].po_rebuilding = 1;
 		else
 			new_shards[grp_idx].po_rebuilding = 0;

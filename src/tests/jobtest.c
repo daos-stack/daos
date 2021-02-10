@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /*
@@ -200,9 +183,8 @@ main(int argc, char **argv)
 		int j;
 
 		for (j = 0; j < handles_per_pool; j++) {
-			rc = daos_pool_connect(pool_uuids[i], NULL, NULL,
-					       DAOS_PC_RW, &pool_handles[i][j],
-					       NULL, NULL);
+			rc = daos_pool_connect(pool_uuids[i], NULL, DAOS_PC_RW,
+					       &pool_handles[i][j], NULL, NULL);
 			if (rc != 0) {
 				char		uuid_str[64];
 
@@ -220,6 +202,26 @@ main(int argc, char **argv)
 
 	/** Give a sleep grace period then exit based on -x switch */
 	sleep(sleep_seconds);
+
+	/* User our handles */
+	for (i = 0; i < num_pools; i++) {
+		int j;
+
+		for (j = 0; j < handles_per_pool; j++) {
+			uuid_t c_uuid;
+
+			uuid_generate(c_uuid);
+			printf("Creating container using handle %" PRIu64 "\n",
+			       pool_handles[i][j].cookie);
+			rc = daos_cont_create(pool_handles[i][j], c_uuid, NULL,
+					      NULL);
+			if (rc != 0) {
+				printf("Unable to create container using handle"
+				       " %" PRIu64 " rc: %d\n",
+				       pool_handles[i][j].cookie, rc);
+			}
+		}
+	}
 
 	if (abnormal_exit)
 		exit(-1);

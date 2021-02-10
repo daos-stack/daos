@@ -11,7 +11,7 @@
    obj:/usr/lib64/libcmocka.so.*
    fun:_cmocka_run_group_tests
    fun:run_ts_tests
-   fun:run_all_tests
+   ...
    fun:main
 }
 {
@@ -31,7 +31,6 @@
    ...
    fun:dl_open_worker
    ...
-   obj:/usr/lib64/libibverbs.so.*
 }
 {
    <insert_a_suppression_name_here>
@@ -71,34 +70,13 @@
    ...
 }
 {
-   <insert_a_suppression_name_here>
+   libfabric leaks
    Memcheck:Leak
-   match-leak-kinds:reachable
-   fun:calloc
-   obj:/usr/lib64/librdmacm.so.*
+   match-leak-kinds:all
+   fun:?alloc
    ...
-   fun:rdma_create_id
-   fun:vrb_init_info
-   fun:fi_verbs_ini
-   fun:fi_ini
    fun:fi_getinfo@@FABRIC_*
-   fun:na_ofi_getinfo
-   fun:na_ofi_check_protocol
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   match-leak-kinds:reachable
-   fun:malloc
-   obj:/usr/lib64/librdmacm.so.*
    ...
-   fun:rdma_bind_addr
-   fun:vrb_init_info
-   fun:fi_verbs_ini
-   fun:fi_ini
-   fun:fi_getinfo@@FABRIC_*
-   fun:na_ofi_getinfo
-   fun:na_ofi_check_protocol
 }
 {
    <insert_a_suppression_name_here>
@@ -109,19 +87,6 @@
    fun:request_credentials_via_drpc
    ...
    fun:_cmocka_run_group_tests
-   fun:main
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   match-leak-kinds:definite
-   fun:malloc
-   fun:vts_alloc_gen_fname
-   fun:io_obj_cache_test
-   obj:/usr/lib64/libcmocka.so.*
-   fun:_cmocka_run_group_tests
-   fun:run_io_test
-   fun:run_all_tests
    fun:main
 }
 {
@@ -198,7 +163,7 @@
    obj:/usr/lib64/libcmocka.so.*
    fun:_cmocka_run_group_tests
    fun:run_ts_tests
-   fun:run_all_tests
+   ...
    fun:main
 }
 {
@@ -239,7 +204,7 @@
    obj:/usr/lib64/libcmocka.so.*
    fun:_cmocka_run_group_tests
    fun:run_gc_tests
-   fun:run_all_tests
+   ...
    fun:main
 }
 {
@@ -263,7 +228,7 @@
    fun:dts_ctx_init
    fun:gc_setup
    ...
-   fun:run_all_tests
+   ...
    ...
 }
 {
@@ -372,7 +337,7 @@
    obj:/usr/lib64/libcmocka.so.*
    fun:_cmocka_run_group_tests
    fun:run_pool_test
-   fun:run_all_tests
+   ...
    fun:main
 }
 {
@@ -386,7 +351,7 @@
    obj:/usr/lib64/libcmocka.so.*
    fun:_cmocka_run_group_tests
    fun:run_aggregate_tests
-   fun:run_all_tests
+   ...
    fun:main
 }
 {
@@ -430,7 +395,7 @@
    obj:/usr/lib64/libcmocka.so.*
    fun:_cmocka_run_group_tests
    fun:run_ts_tests
-   fun:run_all_tests
+   ...
    fun:main
 }
 {
@@ -584,4 +549,94 @@
    fun:fi_getinfo@@FABRIC_*
    fun:na_ofi_getinfo
    fun:na_ofi_check_protocol
+}
+{
+   OpenMPI initialize leaks
+   Memcheck:Leak
+   match-leak-kinds: all
+   ...
+   fun:?alloc
+   ...
+   fun:ompi_mpi_init
+   ...
+}
+{
+   OpenMPI initialize leaks realloc
+   Memcheck:Leak
+   match-leak-kinds: all
+   ...
+   fun:realloc
+   ...
+   fun:ompi_mpi_init
+   ...
+}
+{
+   ORTE initialize leaks realloc
+   Memcheck:Leak
+   match-leak-kinds: all
+   ...
+   fun:?alloc
+   ...
+   fun:orte_init
+   ...
+}
+{
+   OpenMPI initialize leaks memalign
+   Memcheck:Leak
+   match-leak-kinds: all
+   ...
+   fun:posix_memalign
+   ...
+   fun:ompi_mpi_init
+   ...
+}
+{
+   OpenMPI finalize leaks
+   Memcheck:Leak
+   match-leak-kinds: all
+   ...
+   fun:?alloc
+   ...
+   fun:ompi_mpi_finalize
+   ...
+}
+{
+   libopen-pal leaks
+   Memcheck:Leak
+   match-leak-kinds: all
+   ...
+   fun:?alloc
+   ...
+   fun:mca_btl_base_select
+   ...
+}
+{
+   libopen-pal opal libevent
+   Memcheck:Leak
+   match-leak-kinds: all
+   ...
+   fun:?alloc
+   ...
+   fun:opal_libevent2022_event_base_loop
+   ...
+}
+{
+   libopen-rte leak
+   Memcheck:Leak
+   match-leak-kinds: all
+   ...
+   fun:?alloc
+   ...
+   fun:orte_oob_base_select
+   ...
+}
+{
+   dl_init leaks
+   Memcheck:Leak
+   match-leak-kinds: all
+   ...
+   fun:?alloc
+   ...
+   fun:_dl_init
+   ...
 }

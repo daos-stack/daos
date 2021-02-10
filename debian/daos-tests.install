@@ -3,6 +3,7 @@ usr/bin/hello_drpc
 usr/bin/acl_dump_test
 usr/bin/agent_tests
 usr/bin/common_test
+usr/bin/daos_metrics
 usr/bin/daos_test
 usr/bin/dfs_test
 usr/bin/drpc_iosrv_test

@@ -99,43 +99,57 @@ subset of the nodes called storage nodes, have direct access to NVM
 storage. A DAOS installation involves several components that can be
 either collocated or distributed.
 
-### DAOS Target, Server and System
+### DAOS System, Storage Node, Server, I/O Server, and Target
 
-The DAOS server is a multi-tenant daemon running on a Linux instance
-(i.e. natively on the physical node or in a VM or container) of each
-storage node and exporting through the network the locally-attached NVM
-storage. It listens to a management port, addressed by an IP address and
-a TCP port number, plus one or more fabric endpoints, addressed by
-network URIs. The DAOS server is configured through a YAML file and can
-be integrated with different daemon management or orchestration
-frameworks (e.g., a systemd script, a Kubernetes service or even via a
-parallel launcher like pdsh or srun).
+A DAOS *system* is identified by a system name, and consists of a set of
+DAOS *storage nodes* connected to the same fabric. The DAOS storage nodes
+run one DAOS *server* instance per node, which in turn starts one
+DAOS *I/O server* process per physical socket. Membership of the DAOS
+servers is recorded into the system map, that assigns a unique integer
+*rank* to each *I/O server* process. Two different DAOS systems comprise
+two disjoint sets of DAOS servers, and do not coordinate with each other.
 
-A DAOS system is identified by a system name and consists of a set of
-DAOS servers connected to the same fabric. Membership of the DAOS
-servers is recorded into the system map that assigns a unique integer
-rank to each server. Two different systems comprise two disjoint sets of
-servers and do not coordinate with each other.
+The DAOS *server* is a multi-tenant daemon running on a Linux instance
+(either natively on the physical node or in a VM or container) of each
+*storage node*. Its *I/O server* sub-processes export the locally-attached
+SCM and NVM storage through the network. It listens to a management port
+(addressed by an IP address and a TCP port number), plus one or more fabric
+endpoints (addressed by network URIs).
+The DAOS server is configured through a YAML file in /etc/daos,
+including the configuration of its I/O server sub-processes.
+The DAOS server startup can be integrated with different daemon management or
+orchestration frameworks (for example a systemd script, a Kubernetes service,
+or even via a parallel launcher like pdsh or srun).
 
-Inside a DAOS server, the storage is statically partitioned across
-multiple targets to optimize concurrency. To avoid contention, each
-target has its private storage, own pool of service threads and
+Inside a DAOS I/O server, the storage is statically partitioned across
+multiple *targets* to optimize concurrency. To avoid contention, each
+target has its private storage, its own pool of service threads, and its
 dedicated network context that can be directly addressed over the fabric
-independently of the other targets hosted on the same storage node. A
-target is typically associated with a single-ported SCM module and NVMe
-SSD attached to a single storage node. Moreover, a target does not
-implement any internal data protection mechanism against storage media
-failure. As a result, a target is a single point of failure. A dynamic
-state is associated with each target and is set to either up and
-running, or down and not available.
+independently of the other targets hosted on the same storage node.
+The SCM modules are typically configured in *AppDirect interleaved* mode.
+They are thus presented to the operating system as a single PMEM namespace
+per socket (in `fsdax` mode). When *N* targets per I/O server are configured,
+each target is using *1/N* of the capacity of the `fsdax` SCM capacity
+of that socket, independently of the other targets.
+Each target is also using a fraction of the NVMe capacity of the NVMe
+drives that are attached to this socket.
+
+A target does not implement any internal data protection mechanism
+against storage media failure. As a result, a target is a single point
+of failure and the unit of fault.
+A dynamic state is associated with each target: Its state can be either
+"up and running", or "down and not available".
 
 A target is the unit of performance. Hardware components associated with
-the target, such as the backend storage medium, the server, and the
+the target, such as the backend storage medium, the CPU core(s), and the
 network, have limited capability and capacity.
 
-The number of targets exported by a DAOS server instance is configurable
-and depends on the underlying hardware (i.e., the number of SCM modules,
-CPUs, NVMe SSDs ...). A target is the unit of fault.
+The number of targets exported by a DAOS I/O server instance is
+configurable, and depends on the underlying hardware (in particular,
+the number of SCM modules and the number of NVMe SSDs that are served
+by this I/O server instance). As a best practice, the number of targets
+of an I/O server should be an integer multiple of the number of NVMe drives
+that are served by this I/O servers.
 
 ### Storage API, Application Interface and Tools
 

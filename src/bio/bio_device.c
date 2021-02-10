@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B620873.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(bio)
 
@@ -30,7 +13,7 @@
 #include <spdk/vmd.h>
 
 static int
-revive_dev(struct bio_bdev *d_bdev)
+revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 {
 	struct bio_blobstore	*bbs;
 	int			 rc;
@@ -54,6 +37,12 @@ revive_dev(struct bio_bdev *d_bdev)
 	D_ASSERT(owner_thread(bbs) != NULL);
 
 	spdk_thread_send_msg(owner_thread(bbs), setup_bio_bdev, d_bdev);
+
+	/* Set the LED of the VMD device to OFF state */
+	rc = bio_set_led_state(xs_ctxt, d_bdev->bb_uuid, "off", false/*reset*/);
+	if (rc != 0)
+		D_ERROR("Error managing LED on device:"DF_UUID"\n",
+			DP_UUID(d_bdev->bb_uuid));
 
 	return 0;
 }
@@ -290,7 +279,7 @@ free_pool_list(d_list_t *pool_list)
 
 	d_list_for_each_entry_safe(pool_info, tmp, pool_list, spi_link) {
 		d_list_del_init(&pool_info->spi_link);
-		smd_free_pool_info(pool_info);
+		smd_pool_free_info(pool_info);
 	}
 }
 
@@ -424,7 +413,7 @@ bio_replace_dev(struct bio_xs_context *xs_ctxt, uuid_t old_dev_id,
 
 	/* Change a faulty device back to normal, it's usually for testing */
 	if (uuid_compare(old_dev_id, new_dev_id) == 0) {
-		rc = revive_dev(old_dev);
+		rc = revive_dev(xs_ctxt, old_dev);
 		goto out;
 	}
 
@@ -454,9 +443,9 @@ bio_replace_dev(struct bio_xs_context *xs_ctxt, uuid_t old_dev_id,
 	rc = replace_dev(xs_ctxt, old_info, old_dev, new_dev);
 out:
 	if (old_info)
-		smd_free_dev_info(old_info);
+		smd_dev_free_info(old_info);
 	if (new_info)
-		smd_free_dev_info(new_info);
+		smd_dev_free_info(new_info);
 	return rc;
 }
 
@@ -635,7 +624,7 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 		/* delete the found device in SMD dev list */
 		if (s_info != NULL) {
 			d_list_del_init(&s_info->sdi_link);
-			smd_free_dev_info(s_info);
+			smd_dev_free_info(s_info);
 		}
 	}
 
@@ -662,7 +651,7 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 out:
 	d_list_for_each_entry_safe(s_info, s_tmp, &s_dev_list, sdi_link) {
 		d_list_del_init(&s_info->sdi_link);
-		smd_free_dev_info(s_info);
+		smd_dev_free_info(s_info);
 	}
 
 	if (rc != 0) {
@@ -761,7 +750,7 @@ skip_led_str:
 	}
 
 	/* If the current state of a device is FAULTY we do not want to reset */
-	if (current_led_state == SPDK_VMD_LED_STATE_FAULT)
+	if ((current_led_state == SPDK_VMD_LED_STATE_FAULT) && reset)
 		D_GOTO(state_set, rc);
 
 	if (!reset)
@@ -796,17 +785,17 @@ skip_led_str:
 	}
 
 state_set:
-	if (reset) {
+	if (!reset && (current_led_state != SPDK_VMD_LED_STATE_OFF)) {
+		/*
+		 * Init the start time for the LED for a new event.
+		 */
+		bio_dev->bb_led_start_time = d_timeus_secdiff(0);
+	} else {
 		/*
 		 * Reset the LED start time to indicate a LED event has
 		 * completed.
 		 */
 		bio_dev->bb_led_start_time = 0;
-	} else {
-		/*
-		 * Init the start time for the LED for a new event.
-		 */
-		bio_dev->bb_led_start_time = d_timeus_secdiff(0);
 	}
 
 free_traddr:

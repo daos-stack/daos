@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /*
@@ -720,7 +703,7 @@ main(int argc, char **argv)
 
 	/** Call connect on rank 0 only and broadcast handle to others */
 	if (rank == 0) {
-		rc = daos_pool_connect(pool_uuid, NULL, NULL, DAOS_PC_RW, &poh,
+		rc = daos_pool_connect(pool_uuid, NULL, DAOS_PC_RW, &poh,
 				       NULL, NULL);
 		ASSERT(rc == 0, "pool connect failed with %d", rc);
 	}

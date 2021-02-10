@@ -1,30 +1,12 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package control
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -56,10 +38,6 @@ func mockHostList(hosts ...string) []string {
 
 func TestControl_getRequestHosts(t *testing.T) {
 	defaultCfg := DefaultConfig()
-	defaultCfg.HostList = mockHostList("a", "b", "c")
-	for i, host := range defaultCfg.HostList {
-		defaultCfg.HostList[i] = fmt.Sprintf("%s:%d", host, defaultCfg.ControlPort)
-	}
 
 	for name, tc := range map[string]struct {
 		cfg    *Config
@@ -98,21 +76,6 @@ func TestControl_getRequestHosts(t *testing.T) {
 			cfg:    defaultCfg,
 			req:    &testTgtChooser{},
 			expOut: mockHostList(defaultCfg.HostList...),
-		},
-		"default config; MS request; empty req list": {
-			cfg: defaultCfg,
-			req: &testTgtChooser{
-				toMS: true,
-			},
-			expOut: mockHostList(defaultCfg.HostList[0]),
-		},
-		"default config; MS request; use req list": {
-			cfg: defaultCfg,
-			req: &testTgtChooser{
-				hostList: defaultCfg.HostList[1:],
-				toMS:     true,
-			},
-			expOut: mockHostList(defaultCfg.HostList[1]),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

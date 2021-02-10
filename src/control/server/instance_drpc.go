@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
@@ -32,6 +15,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
@@ -40,8 +24,8 @@ import (
 )
 
 var (
-	dRPCNotReady     = errors.New("no dRPC client set (data plane not started?)")
-	instanceNotReady = errors.New("instance not ready yet")
+	errDRPCNotReady     = errors.New("no dRPC client set (data plane not started?)")
+	errInstanceNotReady = errors.New("instance not ready yet")
 )
 
 func (srv *IOServerInstance) setDrpcClient(c drpc.DomainSocketClient) {
@@ -54,7 +38,7 @@ func (srv *IOServerInstance) getDrpcClient() (drpc.DomainSocketClient, error) {
 	srv.RLock()
 	defer srv.RUnlock()
 	if srv._drpcClient == nil {
-		return nil, dRPCNotReady
+		return nil, errDRPCNotReady
 	}
 	return srv._drpcClient, nil
 }
@@ -173,13 +157,13 @@ func (srv *IOServerInstance) TryDrpc(ctx context.Context, method drpc.Method) *s
 	}
 }
 
-func (srv *IOServerInstance) getBioHealth(ctx context.Context, req *mgmtpb.BioHealthReq) (*mgmtpb.BioHealthResp, error) {
+func (srv *IOServerInstance) getBioHealth(ctx context.Context, req *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
 	dresp, err := srv.CallDrpc(ctx, drpc.MethodBioHealth, req)
 	if err != nil {
 		return nil, err
 	}
 
-	resp := &mgmtpb.BioHealthResp{}
+	resp := &ctlpb.BioHealthResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal BioHealthQuery response")
 	}
@@ -191,13 +175,13 @@ func (srv *IOServerInstance) getBioHealth(ctx context.Context, req *mgmtpb.BioHe
 	return resp, nil
 }
 
-func (srv *IOServerInstance) listSmdDevices(ctx context.Context, req *mgmtpb.SmdDevReq) (*mgmtpb.SmdDevResp, error) {
+func (srv *IOServerInstance) listSmdDevices(ctx context.Context, req *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error) {
 	dresp, err := srv.CallDrpc(ctx, drpc.MethodSmdDevs, req)
 	if err != nil {
 		return nil, err
 	}
 
-	resp := new(mgmtpb.SmdDevResp)
+	resp := new(ctlpb.SmdDevResp)
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal SmdListDevs response")
 	}
@@ -217,49 +201,40 @@ func (srv *IOServerInstance) listSmdDevices(ctx context.Context, req *mgmtpb.Smd
 // retrieve metadata and health stats for each SMD device (blobstore) on
 // a given I/O server instance. Update input map with new stats/smd info.
 func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[string]*storage.NvmeController) error {
-	smdDevs, err := srv.listSmdDevices(ctx, new(mgmtpb.SmdDevReq))
+	smdDevs, err := srv.listSmdDevices(ctx, new(ctlpb.SmdDevReq))
 	if err != nil {
 		return errors.Wrapf(err, "instance %d listSmdDevices()", srv.Index())
 	}
 
 	hasUpdatedHealth := make(map[string]bool)
 	for _, dev := range smdDevs.Devices {
-		pbStats, err := srv.getBioHealth(ctx, &mgmtpb.BioHealthReq{
-			DevUuid: dev.Uuid,
+		msg := fmt.Sprintf("instance %d: smd %s with transport address %s",
+			srv.Index(), dev.GetUuid(), dev.GetTrAddr())
+
+		ctrlr, exists := ctrlrMap[dev.GetTrAddr()]
+		if !exists {
+			return errors.Errorf("%s: didn't match any known controllers", msg)
+		}
+
+		pbStats, err := srv.getBioHealth(ctx, &ctlpb.BioHealthReq{
+			DevUuid: dev.GetUuid(),
 		})
 		if err != nil {
 			return errors.Wrapf(err, "instance %d getBioHealth()", srv.Index())
 		}
-
-		msg := fmt.Sprintf("instance %d: health stats from smd uuid %s", srv.Index(),
-			dev.GetUuid())
 
 		health := new(storage.NvmeHealth)
 		if err := convert.Types(pbStats, health); err != nil {
 			return errors.Wrapf(err, msg)
 		}
 
-		key, err := health.GenAltKey()
-		if err != nil {
-			return errors.Wrapf(err, msg)
-		}
-
-		msg += fmt.Sprintf(" with key %s", key)
-
-		ctrlr, exists := ctrlrMap[key]
-		if !exists {
-			srv.log.Debugf("%s didn't match any known controllers", msg)
-			continue
-		}
-
-		srv.log.Debugf("%s->%s", msg, ctrlr.PciAddr)
-
 		// multiple updates for the same key expected when
 		// more than one controller namespaces (and resident
 		// blobstores) exist, stats will be the same for each
-		if _, already := hasUpdatedHealth[key]; !already {
+		if _, already := hasUpdatedHealth[ctrlr.PciAddr]; !already {
 			ctrlr.HealthStats = health
-			hasUpdatedHealth[key] = true
+			msg = fmt.Sprintf("%s: health stats updated", msg)
+			hasUpdatedHealth[ctrlr.PciAddr] = true
 		}
 
 		smdDev := new(storage.SmdDevice)
@@ -271,14 +246,13 @@ func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[
 			return errors.Wrapf(err, "get rank")
 		}
 		smdDev.Rank = srvRank
-		// space utilisation stats for each smd device
+		smdDev.TrAddr = dev.GetTrAddr()
+		// space utilization stats for each smd device
 		smdDev.TotalBytes = pbStats.TotalBytes
 		smdDev.AvailBytes = pbStats.AvailBytes
 
-		srv.log.Debugf("update smd/bs %s usage on ctrlr %s: %+v",
-			dev.GetUuid(), ctrlr.PciAddr, smdDev)
-
 		ctrlr.UpdateSmd(smdDev)
+		srv.log.Debugf("%s: smd usage updated", msg)
 	}
 
 	return nil

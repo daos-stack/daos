@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It implements the SWIM integration APIs.
@@ -30,7 +13,7 @@
 #include "crt_internal.h"
 #include "swim/swim_internal.h"
 
-#define CRT_OPC_SWIM_VERSION	0
+#define CRT_OPC_SWIM_VERSION	1
 #define CRT_SWIM_FAIL_BASE	((CRT_OPC_SWIM_PROTO >> 16) | \
 				 (CRT_OPC_SWIM_VERSION << 4))
 #define CRT_SWIM_FAIL_DROP_RPC	(CRT_SWIM_FAIL_BASE | 0x1)	/* id: 65025 */
@@ -90,11 +73,11 @@ crt_swim_fault_init(const char *args)
 			s++; /* skip space */
 		if (!strncasecmp(s, "delay=", 6)) {
 			crt_swim_fail_delay = strtoul(s + 6, &end, 0);
-			D_ERROR("*** CRT_SWIM_FAIL_DELAY=%lu\n",
-				crt_swim_fail_delay);
+			D_EMIT("CRT_SWIM_FAIL_DELAY=%lu\n",
+			       crt_swim_fail_delay);
 		} else if (!strncasecmp(s, "rank=", 5)) {
 			crt_swim_fail_id = strtoul(s + 5, &end, 0);
-			D_ERROR("*** CRT_SWIM_FAIL_ID=%lu\n", crt_swim_fail_id);
+			D_EMIT("CRT_SWIM_FAIL_ID=%lu\n", crt_swim_fail_id);
 		}
 		s = NULL;
 	}
@@ -129,7 +112,7 @@ static struct crt_proto_rpc_format crt_swim_proto_rpc_fmt[] = {
 };
 
 static struct crt_proto_format crt_swim_proto_fmt = {
-	.cpf_name	= "swim-proto",
+	.cpf_name	= "swim",
 	.cpf_ver	= CRT_OPC_SWIM_VERSION,
 	.cpf_count	= ARRAY_SIZE(crt_swim_proto_rpc_fmt),
 	.cpf_prf	= crt_swim_proto_rpc_fmt,
@@ -157,9 +140,9 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc_req)
 	D_ASSERT(crt_is_service());
 
 	D_TRACE_DEBUG(DB_TRACE, rpc_req,
-		"incoming opc %#x with %zu updates %lu <= %lu\n",
-		rpc_req->cr_opc, rpc_swim_input->upds.ca_count,
-		self_id, from_id);
+		      "incoming opc %#x with %zu updates %lu <= %lu\n",
+		      rpc_req->cr_opc, rpc_swim_input->upds.ca_count,
+		      self_id, from_id);
 
 	rpc_priv = container_of(rpc_req, struct crt_rpc_priv, crp_pub);
 
@@ -170,8 +153,7 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc_req)
 	 * this request.
 	 */
 	if (hlc > rpc_priv->crp_req_hdr.cch_hlc)
-		rcv_delay = (hlc - rpc_priv->crp_req_hdr.cch_hlc)
-			  / NSEC_PER_MSEC;
+		rcv_delay = crt_hlc2msec(hlc - rpc_priv->crp_req_hdr.cch_hlc);
 
 	/* Update all piggybacked members with remote delays */
 	D_SPIN_LOCK(&csm->csm_lock);
@@ -198,10 +180,11 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc_req)
 
 				if (crt_swim_fail_delay &&
 				    crt_swim_fail_id == id) {
-					crt_swim_fail_hlc = hlc
-							  - l * NSEC_PER_MSEC
-							  + crt_swim_fail_delay
-							  * NSEC_PER_SEC;
+					uint64_t d = crt_swim_fail_delay;
+
+					crt_swim_fail_hlc = hlc -
+							    crt_msec2hlc(l) +
+							    crt_sec2hlc(d);
 					crt_swim_fail_delay = 0;
 				}
 				break;
@@ -217,7 +200,7 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc_req)
 
 	if (CRT_SWIM_SHOULD_FAIL(d_fa_swim_drop_rpc, self_id)) {
 		rc = d_fa_swim_drop_rpc->fa_err_code;
-		D_ERROR("*** DROP incoming opc %#x with %zu updates "
+		D_EMIT("DROP incoming opc %#x with %zu updates "
 			"%lu <= %lu error: "DF_RC"\n", rpc_req->cr_opc,
 			rpc_swim_input->upds.ca_count, self_id, from_id,
 			DP_RC(rc));
@@ -268,7 +251,8 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 	int			 rc = 0;
 
 	D_TRACE_DEBUG(DB_TRACE, rpc_req,
-		      "complete opc %#x with %zu updates %lu => %lu "DF_RC"\n",
+		      "complete opc %#x with %zu updates %lu => %lu "
+		      DF_RC"\n",
 		      rpc_req->cr_opc, rpc_swim_input->upds.ca_count,
 		      rpc_swim_input->src, id, DP_RC(cb_info->cci_rc));
 
@@ -298,8 +282,8 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 
 out:
 	if (crt_swim_fail_delay && crt_swim_fail_id == self_id) {
-		crt_swim_fail_hlc = crt_hlc_get()
-				  + crt_swim_fail_delay * NSEC_PER_SEC;
+		crt_swim_fail_hlc = crt_hlc_get() +
+				    crt_sec2hlc(crt_swim_fail_delay);
 		crt_swim_fail_delay = 0;
 	}
 
@@ -328,7 +312,7 @@ static int crt_swim_send_message(struct swim_context *ctx, swim_id_t to,
 
 	if (CRT_SWIM_SHOULD_FAIL(d_fa_swim_drop_rpc, self_id)) {
 		rc = d_fa_swim_drop_rpc->fa_err_code;
-		D_ERROR("*** DROP outgoing opc %#x with %zu updates "
+		D_EMIT("DROP outgoing opc %#x with %zu updates "
 			"%lu => %lu error: "DF_RC"\n", opc, nupds,
 			self_id, to, DP_RC(rc));
 		if (!rc)
@@ -356,8 +340,8 @@ static int crt_swim_send_message(struct swim_context *ctx, swim_id_t to,
 		rc = crt_req_set_timeout(rpc_req, crt_swim_rpc_timeout);
 		if (rc) {
 			D_TRACE_ERROR(rpc_req,
-				      "crt_req_set_timeout() failed "DF_RC"\n",
-				      DP_RC(rc));
+				      "crt_req_set_timeout() failed "
+				      DF_RC"\n", DP_RC(rc));
 			crt_req_decref(rpc_req);
 			D_GOTO(out, rc);
 		}
@@ -369,8 +353,8 @@ static int crt_swim_send_message(struct swim_context *ctx, swim_id_t to,
 	rpc_swim_input->upds.ca_count  = nupds;
 
 	D_TRACE_DEBUG(DB_TRACE, rpc_req,
-		"sending opc %#x with %zu updates %lu => %lu\n",
-		opc, nupds, self_id, to);
+		      "sending opc %#x with %zu updates %lu => %lu\n",
+		      opc, nupds, self_id, to);
 
 	rc = crt_req_send(rpc_req, crt_swim_cli_cb, ctx);
 	if (rc) {
@@ -550,7 +534,7 @@ static void crt_swim_progress_cb(crt_context_t crt_ctx, void *arg)
 	if (crt_swim_fail_hlc && crt_hlc_get() >= crt_swim_fail_hlc) {
 		crt_swim_should_fail = true;
 		crt_swim_fail_hlc = 0;
-		D_ERROR("*** SWIM id=%lu should fail\n", crt_swim_fail_id);
+		D_EMIT("SWIM id=%lu should fail\n", crt_swim_fail_id);
 	}
 
 	rc = swim_progress(ctx, CRT_SWIM_PROGRESS_TIMEOUT);
@@ -625,10 +609,10 @@ int crt_swim_init(int crt_ctx_idx)
 
 		for (i = 0; i < grp_priv->gp_size; i++) {
 			rc = crt_swim_rank_add(grp_priv,
-					grp_membs->rl_ranks[i]);
+					       grp_membs->rl_ranks[i]);
 			if (rc && rc != -DER_ALREADY) {
-				D_ERROR("crt_swim_rank_add() failed "DF_RC"\n",
-					DP_RC(rc));
+				D_ERROR("crt_swim_rank_add() failed "
+					DF_RC"\n", DP_RC(rc));
 				D_GOTO(cleanup, rc);
 			}
 		}
@@ -660,8 +644,8 @@ int crt_swim_init(int crt_ctx_idx)
 	/* Search the attr in inject yml first */
 	d_fa_swim_drop_rpc = d_fault_attr_lookup(CRT_SWIM_FAIL_DROP_RPC);
 	if (d_fa_swim_drop_rpc != NULL) {
-		D_ERROR("*** fa_swim_drop_rpc: id=%u/0x%x, "
-			"interval=%u, max="DF_U64", x=%u, y=%u, args='%s'\n",
+		D_EMIT("fa_swim_drop_rpc: id=%u/0x%x, "
+			"interval=%u, max=" DF_U64 ", x=%u, y=%u, args='%s'\n",
 			d_fa_swim_drop_rpc->fa_id,
 			d_fa_swim_drop_rpc->fa_id,
 			d_fa_swim_drop_rpc->fa_interval,
@@ -725,15 +709,15 @@ int crt_swim_enable(struct crt_grp_priv *grp_priv, int crt_ctx_idx)
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 		if (rc)
-			D_ERROR("crt_unregister_progress_cb() failed "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR("crt_unregister_progress_cb() failed "
+				DF_RC"\n", DP_RC(rc));
 	}
 	if (old_ctx_idx != crt_ctx_idx) {
 		rc = crt_register_progress_cb(crt_swim_progress_cb,
 					      crt_ctx_idx, NULL);
 		if (rc)
-			D_ERROR("crt_register_progress_cb() failed "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR("crt_register_progress_cb() failed "
+				DF_RC"\n", DP_RC(rc));
 	}
 
 out:
@@ -769,8 +753,8 @@ int crt_swim_disable(struct crt_grp_priv *grp_priv, int crt_ctx_idx)
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 		if (rc)
-			D_ERROR("crt_unregister_progress_cb() failed "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR("crt_unregister_progress_cb() failed "
+				DF_RC"\n", DP_RC(rc));
 	}
 
 out:
@@ -854,7 +838,7 @@ int crt_swim_rank_add(struct crt_grp_priv *grp_priv, d_rank_t rank)
 		cst->cst_state.sms_incarnation = 0;
 		cst->cst_state.sms_status = SWIM_MEMBER_INACTIVE;
 		D_CIRCLEQ_INSERT_AFTER(&csm->csm_head, csm->csm_target, cst,
-					cst_link);
+				       cst_link);
 		rank_in_list = true;
 
 		for (n = 1 + rand() % (grp_priv->gp_size + 1); n > 0; n--)
@@ -876,8 +860,7 @@ out_check_self:
 out_unlock:
 	D_SPIN_UNLOCK(&csm->csm_lock);
 out:
-	if (cst != NULL)
-		D_FREE(cst);
+	D_FREE(cst);
 
 	if (rc && rc != -DER_ALREADY) {
 		if (rank_in_list)

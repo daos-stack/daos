@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * dsr: RPC Protocol Definitions
@@ -57,7 +40,7 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See daos_rpc.h.
  */
-#define DAOS_OBJ_VERSION 1
+#define DAOS_OBJ_VERSION 2
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
@@ -110,6 +93,12 @@
 	X(DAOS_OBJ_RPC_MIGRATE,						\
 		0, &CQF_obj_migrate,					\
 		ds_obj_migrate_handler, NULL),				\
+	X(DAOS_OBJ_RPC_EC_AGGREGATE,					\
+		0, &CQF_obj_ec_agg,					\
+		ds_obj_ec_agg_handler, NULL),				\
+	X(DAOS_OBJ_RPC_EC_REPLICATE,					\
+		0, &CQF_obj_ec_agg,					\
+		ds_obj_ec_rep_handler, NULL),				\
 	X(DAOS_OBJ_RPC_CPD,						\
 		0, &CQF_obj_cpd,					\
 		ds_obj_cpd_handler, NULL)
@@ -162,6 +151,8 @@ enum obj_rpc_flags {
 	ORF_CREATE_MAP_DETAIL	= (1 << 13),
 	/* For data migration. */
 	ORF_FOR_MIGRATION	= (1 << 14),
+	/* Force DTX refresh if hit non-committed DTX on non-leader. */
+	ORF_DTX_REFRESH		= (1 << 15),
 };
 
 /* common for update/fetch */
@@ -327,6 +318,49 @@ CRT_RPC_DECLARE(obj_sync, DAOS_ISEQ_OBJ_SYNC, DAOS_OSEQ_OBJ_SYNC)
 	((int32_t)		(om_status)		CRT_VAR)
 
 CRT_RPC_DECLARE(obj_migrate, DAOS_ISEQ_OBJ_MIGRATE, DAOS_OSEQ_OBJ_MIGRATE)
+
+#define DAOS_ISEQ_OBJ_EC_AGG	/* input fields */			\
+	((uuid_t)		(ea_pool_uuid)		CRT_VAR)	\
+	((uuid_t)		(ea_cont_uuid)		CRT_VAR)	\
+	((uuid_t)		(ea_poh_uuid)		CRT_VAR)	\
+	((uuid_t)		(ea_coh_uuid)		CRT_VAR)	\
+	((daos_unit_oid_t)	(ea_oid)		CRT_VAR)	\
+	((daos_key_t)		(ea_dkey)		CRT_VAR)	\
+	((daos_key_t)		(ea_akey)		CRT_VAR)	\
+	((daos_epoch_range_t)	(ea_epoch_range)	CRT_VAR)	\
+	((uint64_t)		(ea_stripenum)		CRT_VAR)	\
+	((uint64_t)		(ea_rsize)		CRT_VAR)	\
+	((crt_bulk_t)		(ea_bulk)		CRT_VAR)	\
+	((uint32_t)		(ea_map_ver)		CRT_VAR)	\
+	((uint32_t)		(ea_remove_nr)		CRT_VAR)	\
+	((daos_recx_t)		(ea_remove_recxs)	CRT_ARRAY)	\
+	((daos_epoch_t)		(ea_remove_eps)		CRT_ARRAY)
+
+
+#define DAOS_OSEQ_OBJ_EC_AGG	/* output fields */		 \
+	((int32_t)		(ea_status)		CRT_VAR) \
+	((uint32_t)		(ea_map_ver)		CRT_VAR)
+
+CRT_RPC_DECLARE(obj_ec_agg, DAOS_ISEQ_OBJ_EC_AGG, DAOS_OSEQ_OBJ_EC_AGG)
+
+#define DAOS_ISEQ_OBJ_EC_REP	/* input fields */			\
+	((uuid_t)		(er_pool_uuid)		CRT_VAR)	\
+	((uuid_t)		(er_cont_uuid)		CRT_VAR)	\
+	((uuid_t)		(er_poh_uuid)		CRT_VAR)	\
+	((uuid_t)		(er_coh_uuid)		CRT_VAR)	\
+	((daos_unit_oid_t)	(er_oid)		CRT_VAR)	\
+	((daos_key_t)		(er_dkey)		CRT_VAR)	\
+	((daos_iod_t)		(er_iod)		CRT_VAR)	\
+	((uint64_t)		(er_epoch)		CRT_VAR)	\
+	((uint64_t)		(er_stripenum)		CRT_VAR)	\
+	((crt_bulk_t)		(er_bulk)		CRT_VAR)	\
+	((uint32_t)		(er_map_ver)		CRT_VAR)
+
+#define DAOS_OSEQ_OBJ_EC_REP	/* output fields */		 \
+	((int32_t)		(er_status)		CRT_VAR) \
+	((uint32_t)		(er_map_ver)		CRT_VAR)
+
+CRT_RPC_DECLARE(obj_ec_rep, DAOS_ISEQ_OBJ_EC_REP, DAOS_OSEQ_OBJ_EC_REP)
 
 void daos_dc_obj2id(void *ptr, daos_obj_id_t *id);
 
@@ -533,7 +567,9 @@ obj_is_modification_opc(uint32_t opc)
 		opc == DAOS_OBJ_RPC_PUNCH_DKEYS ||
 		opc == DAOS_OBJ_RPC_TGT_PUNCH_DKEYS ||
 		opc == DAOS_OBJ_RPC_PUNCH_AKEYS ||
-		opc == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS;
+		opc == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS ||
+		opc == DAOS_OBJ_RPC_EC_AGGREGATE ||
+		opc == DAOS_OBJ_RPC_EC_REPLICATE;
 }
 
 static inline bool

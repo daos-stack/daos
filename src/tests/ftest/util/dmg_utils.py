@@ -1,26 +1,10 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+# pylint: disable=too-many-lines
 from __future__ import print_function
 
 from getpass import getuser
@@ -31,26 +15,40 @@ import json
 
 from dmg_utils_base import DmgCommandBase
 from general_utils import get_numeric_list
+from dmg_utils_params import DmgYamlParameters, DmgTransportCredentials
+
+
+def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None):
+    """Get a dmg command object.
+
+    Args:
+        group (str): daos_server group name
+        cert_dir (str): directory in which to copy certificates
+        bin_dir (str): location of the dmg executable
+        config_file (str): configuration file name and path
+        config_temp (str, optional): file name and path to use to generate the
+            configuration file locally and then copy it to all the hosts using
+            the config_file specification. Defaults to None, which creates and
+            utilizes the file specified by config_file.
+
+    Returns:
+        DmgCommand: the dmg command object
+
+    """
+    transport_config = DmgTransportCredentials(cert_dir)
+    config = DmgYamlParameters(config_file, group, transport_config)
+    command = DmgCommand(bin_dir, config)
+    if config_temp:
+        # Setup the DaosServerCommand to write the config file data to the
+        # temporary file and then copy the file to all the hosts using the
+        # assigned filename
+        command.temporary_file = config_temp
+    return command
 
 
 class DmgCommand(DmgCommandBase):
     # pylint: disable=too-many-ancestors,too-many-public-methods
     """Defines a object representing a dmg command with helper methods."""
-
-    # Member state defined in control/system/member.go. Used for dmg system
-    # query.
-    SYSTEM_QUERY_STATES = {
-        "UNKNOWN": 0,
-        "AWAIT_FORMAT": 1,
-        "STARTING": 2,
-        "READY": 3,
-        "JOINED": 4,
-        "STOPPING": 5,
-        "STOPPED": 6,
-        "EVICTED": 7,
-        "ERRORED": 8,
-        "UNRESPONSIVE": 9
-    }
 
     # As the handling of these regular expressions are moved inside their
     # respective methods, they should be removed from this definition.
@@ -84,6 +82,16 @@ class DmgCommand(DmgCommandBase):
             r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+|Devices\s+|(?:UUID:[a-z0-9-]+\s+"
             r"Targets:\[[0-9 ]+\]\s+Rank:\d+\s+State:(\w+))",
     }
+
+    def _get_json_result(self, sub_command_list=None, **kwargs):
+        """Wraps the base _get_result method to force JSON output."""
+        prev_json_val = self.json.value
+        self.json.update(True)
+        try:
+            self._get_result(sub_command_list, **kwargs)
+        finally:
+            self.json.update(prev_json_val)
+        return json.loads(self.result.stdout)
 
     def network_scan(self, provider=None, all_devs=False):
         """Get the result of the dmg network scan command.
@@ -358,7 +366,7 @@ class DmgCommand(DmgCommandBase):
             target_list (list, optional): a list of storage server unique
                 identifiers (ranks) for the DAOS pool
             svcn (str, optional): Number of pool service replicas. Defaults to
-                None, in which case 1 is used by the dmg binary in default.
+                None, in which case the default value is set by the server.
             group (str, optional): DAOS system group name in which to create the
                 pool. Defaults to None, in which case "daos_server" is used by
                 default.
@@ -384,33 +392,35 @@ class DmgCommand(DmgCommandBase):
         }
         if target_list is not None:
             kwargs["ranks"] = ",".join([str(target) for target in target_list])
-        self._get_result(("pool", "create"), **kwargs)
 
         # Extract the new pool UUID and SVC list from the command output
         data = {}
-        if self.json.value:
-            # Sample json output.
-            # "response": {
-            #     "UUID": "ebac9285-61ec-4d2e-aa2d-4d0f7dd6b7d6",
-            #     "Svcreps": [
-            #     0
-            #     ]
-            # },
-            # "error": null,
-            # "status": 0
-            output = json.loads(self.result.stdout)
-            data["uuid"] = output["response"]["UUID"]
-            data["svc"] = ",".join(
-                [str(svc) for svc in output["response"]["Svcreps"]])
+        # Sample json output.
+        # "response": {
+        #   "uuid": "ebac9285-61ec-4d2e-aa2d-4d0f7dd6b7d6",
+        #   "svc_reps": [
+        #     0
+        #   ],
+        #   "tgt_ranks": [
+        #     0,
+        #     1
+        #   ],
+        #   "scm_bytes": 256000000,
+        #   "nvme_bytes": 0
+        # },
+        # "error": null,
+        # "status": 0
+        output = self._get_json_result(("pool", "create"), **kwargs)
+        if output["response"] is None:
+            return data
 
-        else:
-            match = re.findall(
-                r"UUID:\s+([A-Za-z0-9-]+),\s+"
-                r"Service replicas:\s+([0-9]+(,[0-9]+)*)",
-                self.result.stdout)
-            if match:
-                data["uuid"] = match[0][0]
-                data["svc"] = match[0][1]
+        data["uuid"] = output["response"]["uuid"]
+        data["svc"] = ",".join(
+            [str(svc) for svc in output["response"]["svc_reps"]])
+        data["ranks"] = ",".join(
+            [str(r) for r in output["response"]["tgt_ranks"]])
+        data["scm_per_rank"] = output["response"]["scm_bytes"]
+        data["nvme_per_rank"] = output["response"]["nvme_bytes"]
 
         return data
 
@@ -441,7 +451,7 @@ class DmgCommand(DmgCommandBase):
         #   - NVMe:
         #     Total size: <L>
         #     Free: <M>, min:<N>, max:<O>, mean:<P>
-        #   Rebuild <Q>, <R> objs, <S> recs
+        #   Rebuild <Q>, <R>, <S>
         #
         # This yields the following tuple of tuples when run through the regex:
         #   0: (<A>, <B>, <C>, <D>, <E>, '', '', '', '', '', '', '', '', '')
@@ -474,8 +484,8 @@ class DmgCommand(DmgCommandBase):
         #       },
         #       "rebuild": {
         #           "status": <Q>,
-        #           "objects": <R>,
-        #           "records": <S>
+        #           "status2": <R>,
+        #           "status3": <S>
         #       }
         #   }
         #
@@ -512,7 +522,7 @@ class DmgCommand(DmgCommandBase):
                 1: {"target_count": 5},
                 2: space_map,
                 3: space_map,
-                4: {"status": 11, "objects": 12, "records": 13}
+                4: {"status": 11, "status2": 12, "status3": 13}
             }
             for index_1, match_list in enumerate(match):
                 if index_1 not in map_values:
@@ -642,7 +652,7 @@ class DmgCommand(DmgCommandBase):
         #    98736dfe-cb92-12cd-de45-9b09875092cd 1
         data = {}
         match = re.findall(
-            r"(?:([0-9a-fA-F][0-9a-fA-F-]+)\s+([0-9][0-9,-]*))",
+            r"(?:([0-9a-fA-F][0-9a-fA-F-]+)\W+([0-9][0-9,-]*))",
             self.result.stdout)
         for info in match:
             data[info[0]] = get_numeric_list(info[1])
@@ -789,19 +799,23 @@ class DmgCommand(DmgCommandBase):
             # Process the unique single rank system query output, e.g.
             #   Rank 1
             #   ------
-            #   address : 10.8.1.11:10001
-            #   uuid    : d7a69a41-59a2-4dec-a620-a52217851285
-            #   status  : Joined
-            #   reason  :
+            #   address      : 10.8.1.68:10001
+            #   uuid         : bcc5b010-1ffa-4525-96a9-11f1904374d6
+            #   fault domain : /wolf-68.wolf.hpdd.intel.com
+            #   status       : Joined
+            #   reason       :
             match = re.findall(
-                r"(?:Rank|address\s+:|uuid\s+:|status\s+:|reason\s+:)\s+(.*)",
+                r"(?:Rank|address\s+:|uuid\s+:|domain\s+:|status\s+:|"
+                r"reason\s+:)\s+(.*)",
                 self.result.stdout)
             if match:
+                print("--- match: {}".format(match))
                 data[int(match[0])] = {
                     "address": match[1].strip(),
                     "uuid": match[2].strip(),
-                    "state": match[3].strip(),
-                    "reason": match[4].strip(),
+                    "domain": match[3].strip(),
+                    "state": match[4].strip(),
+                    "reason": match[5].strip(),
                 }
         elif verbose:
             # Process the verbose multiple rank system query output, e.g.
@@ -845,8 +859,35 @@ class DmgCommand(DmgCommandBase):
         self.log.info("system_query data: %s", str(data))
         return data
 
-    def system_start(self):
+    def system_leader_query(self):
+        """Query system to obtain the MS leader and replica information.
+
+        Raises:
+            CommandFailure: if the dmg system query command fails.
+
+        Returns:
+            dictionary of output in JSON format
+
+        """
+        # Example JSON output:
+        # {
+        #   "response": {
+        #     "CurrentLeader": "127.0.0.1:10001",
+        #     "Replicas": [
+        #       "127.0.0.1:10001"
+        #     ]
+        #   },
+        #   "error": null,
+        #   "status": 0
+        # }
+        return self._get_json_result(("system", "leader-query"))
+
+    def system_start(self, ranks=None):
         """Start the system.
+
+        Args:
+            ranks (str, optional): comma separated ranks to stop. Defaults to
+                None.
 
         Raises:
             CommandFailure: if the dmg system start command fails.
@@ -855,7 +896,7 @@ class DmgCommand(DmgCommandBase):
             dict: a dictionary of host ranks and their unique states.
 
         """
-        self._get_result(("system", "start"))
+        self._get_result(("system", "start"), ranks=ranks)
 
         # Populate a dictionary with host set keys for each unique state
         data = {}

@@ -16,12 +16,13 @@ control_log_file: /tmp/daos_control.log
 #  allow_insecure: false
 #  # Location where daos_server will look for Client certificates
 #  client_cert_dir: .daos/clients
+#  client_cert_dir: /etc/daos/certs/clients
 #  # Custom CA Root certificate for generated certs
-#  ca_cert: /etc/daos/daosCA.crt
+#  ca_cert: /etc/daos/certs/daosCA.crt
 #  # Server certificate for use in TLS handshakes
-#  cert: /etc/daos/daos_server.crt
+#  cert: /etc/daos/certs/server.crt
 #  # Key portion of Server Certificate
-#  key: /etc/daos/daos_server.key
+#  key: /etc/daos/certs/server.key
 
 # single server instance per config file for now
 servers:
@@ -30,7 +31,7 @@ servers:
   first_core: 1             # offset of the first core for service xstreams
   nr_xs_helpers: 0          # count of offload/helper xstreams per server
   fabric_iface: eth0        # map to OFI_INTERFACE=eth0
-  fabric_iface_port: 31416  # map to OFI_PORT=31416
+  fabric_iface_port: 31316  # map to OFI_PORT=31316
   log_mask: ERR             # map to D_LOG_MASK=ERR
   log_file: /tmp/server0.log # map to D_LOG_FILE=/tmp/server.log
 
@@ -57,33 +58,35 @@ servers:
   # scm_size: 6
 
   # When scm_class is set to dcpm, scm_list is the list of device paths for
-  # AppDirect pmem namespaces (currently only one per server supported).
+  # PMem namespaces (currently only one per server supported).
   scm_class: dcpm
   scm_list: [/dev/pmem0]
 
   # If using NVMe SSD (will write /mnt/daos/daos_nvme.conf and start I/O
-  # server with -n <path>)
+  # server with -n <path>).
   bdev_class: nvme
   bdev_list: ["0000:81:00.0"]  # generate regular nvme.conf
 
-  # If emulating NVMe SSD with malloc devices
-  # bdev_class: malloc	# map to VOS_BDEV_CLASS=MALLOC
-  # bdev_size: 4		# malloc size of each device in GB.
-  # bdev_number: 1		# generate nvme.conf as follows:
+  # If emulating NVMe SSD with malloc devices.
+  # bdev_class: malloc          # map to VOS_BDEV_CLASS=MALLOC
+  # bdev_size: 4                # malloc size of each device in GB.
+  # bdev_number: 1              # generate nvme.conf as follows:
               # [Malloc]
               #   NumberOfLuns 1
               #   LunSizeInMB 4000
 
-  # If emulating NVMe SSD over kernel block device
-  # bdev_class: kdev		# map to VOS_BDEV_CLASS=AIO
-  # bdev_list: [/dev/sdc]	# generate nvme.conf as follows:
+  # If emulating NVMe SSD over kernel block device.
+  # bdev_class: kdev            # map to VOS_BDEV_CLASS=AIO
+  # bdev_list: [/dev/sdc]       # generate nvme.conf as follows:
               # [AIO]
               #   AIO /dev/sdc AIO2
 
-  # If emulating NVMe SSD with backend file
-  # bdev_class: file		# map to VOS_BDEV_CLASS=AIO
-  # bdev_size: 16           # file size in GB. Create file if does not exist.
-  # bdev_list: [/tmp/daos-bdev]	# generate nvme.conf as follows:
+  # When bdev_class is set to file, Linux AIO will be used to emulate NVMe.
+  # The size of file that will be created is specified by bdev_size in GB units.
+  # The location of the files that will be created is specified in bdev_list.
+  # bdev_class: file            # map to VOS_BDEV_CLASS=AIO
+  # bdev_size: 16               # file size in GB. Create file if does not exist.
+  # bdev_list: [/tmp/daos-bdev] # generate nvme.conf as follows:
               # [AIO]
               #   AIO /tmp/aiofile AIO1 4096
 -

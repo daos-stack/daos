@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * obj_tx: DAOS Transaction
@@ -1399,8 +1382,7 @@ dc_tx_reduce_rdgs(d_list_t *dtr_list, uint32_t *grp_cnt, uint32_t *mod_cnt)
 	size_t			 size = 0;
 
 	*grp_cnt = 0;
-	leader = d_list_entry(dtr_list->next, struct dc_tx_rdg, dtr_link);
-	d_list_del(&leader->dtr_link);
+	leader = d_list_pop_entry(dtr_list, struct dc_tx_rdg, dtr_link);
 
 	/* Filter the dtrs that are the same as @leader. */
 	d_list_for_each_entry_safe(dtr, next, dtr_list, dtr_link) {
@@ -1413,8 +1395,7 @@ dc_tx_reduce_rdgs(d_list_t *dtr_list, uint32_t *grp_cnt, uint32_t *mod_cnt)
 	if (d_list_empty(dtr_list))
 		goto out;
 
-	tmp = d_list_entry(dtr_list->next, struct dc_tx_rdg, dtr_link);
-	d_list_del(&tmp->dtr_link);
+	tmp = d_list_pop_entry(dtr_list, struct dc_tx_rdg, dtr_link);
 
 	/* XXX: Try to merge the other non-leaders if possible.
 	 *	Consider efficiency, just one cycle scan. We do
@@ -1487,6 +1468,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 {
 	daos_unit_oid_t			 leader_oid = { 0 };
 	struct daos_csummer		*csummer;
+	struct daos_csummer		*csummer_cop = NULL;
 	struct dc_tx_req_group		*dtrgs = NULL;
 	struct daos_cpd_sub_head	*dcsh = NULL;
 	struct daos_cpd_disp_ent	*dcdes = NULL;
@@ -1513,21 +1495,27 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 
 	D_INIT_LIST_HEAD(&dtr_list);
 	csummer = dc_cont_hdl2csummer(tx->tx_coh);
+	if (daos_csummer_initialized(csummer)) {
+		csummer_cop = daos_csummer_copy(csummer);
+		if (csummer_cop == NULL)
+			return -DER_NOMEM;
+	}
+
 	req_cnt = tx->tx_read_cnt + tx->tx_write_cnt;
 	tgt_cnt = pool_map_target_nr(tx->tx_pool->dp_map);
 	D_ASSERT(tgt_cnt != 0);
 
-	start = dc_tx_leftmost_req(tx, false);
 	D_ALLOC_ARRAY(dtrgs, tgt_cnt);
 	if (dtrgs == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	start = dc_tx_leftmost_req(tx, false);
 	for (i = 0; i < req_cnt; i++) {
 		dcsr = &tx->tx_req_cache[i + start];
 		obj = dcsr->dcsr_obj;
 
 		if (dcsr->dcsr_opc == DCSO_UPDATE) {
-			rc = dc_tx_classify_update(tx, dcsr, csummer);
+			rc = dc_tx_classify_update(tx, dcsr, csummer_cop);
 			if (rc < 0)
 				goto out;
 
@@ -1754,6 +1742,7 @@ out:
 		D_FREE(dtr);
 
 	D_FREE(dtrgs);
+	daos_csummer_destroy(&csummer_cop);
 
 	return rc < 0 ? rc : 0;
 }
@@ -2192,7 +2181,7 @@ dc_tx_add_update(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 	dcsr->dcsr_opc = DCSO_UPDATE;
 	dcsr->dcsr_nr = nr;
 	dcsr->dcsr_dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, dkey);
-	dcsr->dcsr_api_flags = flags;
+	dcsr->dcsr_api_flags = flags & ~DAOS_COND_MASK;
 
 	dcu = &dcsr->dcsr_update;
 	iod_array = &dcu->dcu_iod_array;
@@ -2286,7 +2275,7 @@ dc_tx_add_punch_obj(struct dc_tx *tx, daos_handle_t oh, uint64_t flags)
 		return -DER_NO_HDL;
 
 	dcsr->dcsr_opc = DCSO_PUNCH_OBJ;
-	dcsr->dcsr_api_flags = flags;
+	dcsr->dcsr_api_flags = flags & ~DAOS_COND_MASK;
 
 	tx->tx_write_cnt++;
 
@@ -2322,7 +2311,7 @@ dc_tx_add_punch_dkey(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 
 	dcsr->dcsr_opc = DCSO_PUNCH_DKEY;
 	dcsr->dcsr_dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, dkey);
-	dcsr->dcsr_api_flags = flags;
+	dcsr->dcsr_api_flags = flags & ~DAOS_COND_MASK;
 
 	tx->tx_write_cnt++;
 
@@ -2371,9 +2360,8 @@ dc_tx_add_punch_akeys(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 
 	dcsr->dcsr_opc = DCSO_PUNCH_AKEY;
 	dcsr->dcsr_nr = nr;
-	dcsr->dcsr_dkey_hash = obj_dkey2hash(obj->cob_md.omd_id,
-					     dkey);
-	dcsr->dcsr_api_flags = flags;
+	dcsr->dcsr_dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, dkey);
+	dcsr->dcsr_api_flags = flags & ~DAOS_COND_MASK;
 
 	tx->tx_write_cnt++;
 
@@ -2462,7 +2450,7 @@ done:
 	dcsr->dcsr_opc = DCSO_READ;
 	dcsr->dcsr_nr = nr;
 	dcsr->dcsr_dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, dkey);
-	dcsr->dcsr_api_flags = flags;
+	dcsr->dcsr_api_flags = flags & ~DAOS_COND_MASK;
 
 	tx->tx_read_cnt++;
 
@@ -2622,7 +2610,8 @@ dc_tx_check_existence_task(enum obj_rpc_opc opc, daos_handle_t oh,
 		} else if (flags & (DAOS_COND_AKEY_INSERT |
 				    DAOS_COND_AKEY_UPDATE)) {
 			iods = iods_or_akeys;
-			api_flags = DAOS_COND_AKEY_FETCH;
+			api_flags = DAOS_COND_AKEY_FETCH |
+				    (flags & DAOS_COND_PER_AKEY);
 		} else {
 			/* Only check dkey existence. */
 			api_flags = DAOS_COND_DKEY_FETCH;
@@ -2923,7 +2912,7 @@ dc_tx_convert(enum obj_rpc_opc opc, tse_task_t *task)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = dc_tx_alloc(coh, 0, 0, false, &tx);
+	rc = dc_tx_alloc(coh, 0, DAOS_TF_ZERO_COPY, false, &tx);
 	if (rc != 0) {
 		D_ERROR("Fail to open TX for opc %u: "DF_RC"\n",
 			opc, DP_RC(rc));

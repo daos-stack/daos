@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
@@ -45,11 +28,10 @@ type SecurityModule struct {
 
 // NewSecurityModule creates a new security module with a transport config
 func NewSecurityModule(log logging.Logger, tc *security.TransportConfig) *SecurityModule {
-	mod := &SecurityModule{
+	return &SecurityModule{
 		log:    log,
 		config: tc,
 	}
-	return mod
 }
 
 func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error) {
@@ -95,8 +77,7 @@ func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error)
 }
 
 func (m *SecurityModule) validateRespWithStatus(status drpc.DaosStatus) ([]byte, error) {
-	resp := &auth.ValidateCredResp{Status: int32(status)}
-	return drpc.Marshal(resp)
+	return drpc.Marshal(&auth.ValidateCredResp{Status: int32(status)})
 }
 
 // HandleCall is the handler for calls to the SecurityModule

@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * \file
@@ -271,7 +254,7 @@ ds_rsvc_lookup(enum ds_rsvc_class_id class, d_iov_t *id,
 
 	entry = d_hash_rec_find(&rsvc_hash, id->iov_buf, id->iov_len);
 	if (entry == NULL) {
-		char	       *path;
+		char	       *path = NULL;
 		struct stat	buf;
 		int		rc;
 
@@ -410,7 +393,7 @@ init_map_distd(struct ds_rsvc *svc)
 
 	ds_rsvc_get(svc);
 	get_leader(svc);
-	rc = dss_ult_create(map_distd, svc, DSS_ULT_MISC, DSS_TGT_SELF, 0,
+	rc = dss_ult_create(map_distd, svc, DSS_XS_SELF, 0, 0,
 			    &svc->s_map_distd);
 	if (rc != 0) {
 		D_ERROR("%s: failed to start map_distd: "DF_RC"\n", svc->s_name,
@@ -475,6 +458,15 @@ rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 			svc->s_name, term, DP_RC(rc));
 		if (map_distd_initialized)
 			drain_map_distd(svc);
+		/*
+		 * For certain harder-to-recover errors, trigger a replica stop
+		 * to avoid reporting them too many times. (A better strategy
+		 * would be to leave the replica running without ever
+		 * campaigning again, so that it could continue serving as a
+		 * follower to other replicas.)
+		 */
+		if (rc == -DER_DF_INCOMPT)
+			rc = -DER_SHUTDOWN;
 		goto out_mutex;
 	}
 
@@ -584,8 +576,7 @@ rsvc_stop_cb(struct rdb *db, int err, void *arg)
 	int		rc;
 
 	ds_rsvc_get(svc);
-	rc = dss_ult_create(rsvc_stopper, svc, DSS_ULT_MISC, DSS_TGT_SELF,
-			    0, NULL);
+	rc = dss_ult_create(rsvc_stopper, svc, DSS_XS_SELF, 0, 0, NULL);
 	if (rc != 0) {
 		D_ERROR("%s: failed to create service stopper: "DF_RC"\n",
 			svc->s_name, DP_RC(rc));
@@ -618,7 +609,7 @@ map_distd(void *arg)
 				svc->s_map_dist = false;
 				break;
 			}
-			ABT_cond_wait(svc->s_map_dist_cv, svc->s_mutex);
+			sched_cond_wait(svc->s_map_dist_cv, svc->s_mutex);
 		}
 		ABT_mutex_unlock(svc->s_mutex);
 		if (stop)
@@ -927,7 +918,7 @@ stop_all_cb(d_list_t *entry, void *varg)
 		return -DER_NOMEM;
 
 	d_hash_rec_addref(&rsvc_hash, &svc->s_entry);
-	rc = dss_ult_create(rsvc_stopper, svc, DSS_ULT_POOL_SRV, 0, 0,
+	rc = dss_ult_create(rsvc_stopper, svc, DSS_XS_SYS, 0, 0,
 			    &ult->su_thread);
 	if (rc != 0) {
 		d_hash_rec_decref(&rsvc_hash, &svc->s_entry);
@@ -1220,7 +1211,7 @@ ds_rsvc_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
  * XXX excluded and ranks are a bit duplicate here, since this function only
  * suppose to send RPC to @ranks list, but cart does not have such interface
  * for collective RPC, so we have to use both ranks and exclued for the moment,
- * and it should be simplied once cart can provide rank list collective RPC.
+ * and it should be simplified once cart can provide rank list collective RPC.
  *
  * \param[in]	class		replicated service class
  * \param[in]	id		replicated service ID

@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #ifndef __DAOS_SRV_INTERNAL__
 #define __DAOS_SRV_INTERNAL__
@@ -31,29 +14,33 @@
  *
  * DSS_POOL_NET_POLL	Network poll ULT
  * DSS_POOL_NVME_POLL	NVMe poll ULT
- * DSS_POOL_IO		Update/Fetch/Punch, enumeration RPC handler ULTs
- * DSS_POOL_REBUILD	Rebuild/Reint scan & pull ULTs
- * DSS_POOL_GC		Space reclaiming ULTs like GC or aggregation
- * DSS_POOL_SCRUB	Scrub checksums to discover silent data corruption
+ * DSS_POOL_GENERIC	All other ULTS
  */
 enum {
 	DSS_POOL_NET_POLL	= 0,
 	DSS_POOL_NVME_POLL,
-	DSS_POOL_IO,
-	DSS_POOL_REBUILD,
-	DSS_POOL_GC,
-	DSS_POOL_SCRUB,
+	DSS_POOL_GENERIC,
 	DSS_POOL_CNT,
 };
 
+struct sched_stats {
+	uint64_t	ss_tot_time;	/* Total CPU time (ms) */
+	uint64_t	ss_relax_time;	/* CPU relax time (ms) */
+	uint64_t	ss_busy_ts;	/* Last busy timestamp (ms) */
+	uint64_t	ss_print_ts;	/* Last stats print timestamp (ms) */
+};
+
 struct sched_info {
-	uint64_t		 si_cur_ts;	/* Current timestamp */
+	uint64_t		 si_cur_ts;	/* Current timestamp (ms) */
+	struct sched_stats	 si_stats;	/* Sched stats */
 	d_list_t		 si_idle_list;	/* All unused requests */
 	d_list_t		 si_sleep_list;	/* All sleeping requests */
 	d_list_t		 si_fifo_list;	/* All IO requests in FIFO */
 	d_list_t		 si_purge_list;	/* Stale sched_pool_info */
 	struct d_hash_table	*si_pool_hash;	/* All sched_pool_info */
 	uint32_t		 si_req_cnt;	/* Total inuse request count */
+	int			 si_sleep_cnt;	/* Sleeping request count */
+	int			 si_wait_cnt;	/* Long wait request count */
 	unsigned int		 si_stop:1;
 };
 
@@ -67,7 +54,6 @@ struct dss_xstream {
 	ABT_sched		dx_sched;
 	ABT_thread		dx_progress;
 	struct sched_info	dx_sched_info;
-	d_list_t		dx_sleep_ult_list;
 	tse_sched_t		dx_sched_dsc;
 	struct dss_rpc_cntr	dx_rpc_cntrs[DSS_RC_MAX];
 	/* xstream id, [0, DSS_XS_NR_TOTAL - 1] */
@@ -78,11 +64,17 @@ struct dss_xstream {
 	int			dx_tgt_id;
 	/* CART context id, invalid (-1) for the offload XS w/o CART context */
 	int			dx_ctx_id;
+	/* Cart progress timeout in micro-seconds */
+	unsigned int		dx_timeout;
 	bool			dx_main_xs;	/* true for main XS */
 	bool			dx_comm;	/* true with cart context */
 	bool			dx_dsc_started;	/* DSC progress ULT started */
 };
 
+#define DSS_HOSTNAME_MAX_LEN	255
+
+/** Server node hostname */
+extern char		dss_hostname[];
 /** Server node topology */
 extern hwloc_topology_t	dss_topo;
 /** core depth of the topology */
@@ -105,6 +97,11 @@ extern unsigned int	dss_tgt_offload_xs_nr;
 extern unsigned int	dss_sys_xs_nr;
 /** Flag of helper XS as a pool */
 extern bool		dss_helper_pool;
+/** Shadow dss_get_module_info */
+struct dss_module_info *get_module_info(void);
+
+/* init.c */
+d_rank_t dss_self_rank(void);
 
 /* module.c */
 int dss_module_init(void);
@@ -117,20 +114,99 @@ int dss_module_setup_all(void);
 int dss_module_cleanup_all(void);
 
 /* srv.c */
+extern struct dss_module_key daos_srv_modkey;
 int dss_srv_init(void);
 int dss_srv_fini(bool force);
-void dss_dump_ABT_state(void);
+void dss_dump_ABT_state(FILE *fp);
 void dss_xstreams_open_barrier(void);
 struct dss_xstream *dss_get_xstream(int stream_id);
 int dss_xstream_cnt(void);
 
 /* sched.c */
+#define SCHED_RELAX_INTVL_MAX		100 /* msec */
+#define SCHED_RELAX_INTVL_DEFAULT	1 /* msec */
+
+enum sched_cpu_relax_mode {
+	SCHED_RELAX_MODE_NET		= 0,
+	SCHED_RELAX_MODE_SLEEP,
+	SCHED_RELAX_MODE_DISABLED,
+	SCHED_RELAX_MODE_INVALID,
+};
+
+static inline char *
+sched_relax_mode2str(enum sched_cpu_relax_mode mode)
+{
+	switch (mode) {
+	case SCHED_RELAX_MODE_NET:
+		return "net";
+	case SCHED_RELAX_MODE_SLEEP:
+		return "sleep";
+	case SCHED_RELAX_MODE_DISABLED:
+		return "disabled";
+	default:
+		return "invalid";
+	}
+}
+
+static inline enum sched_cpu_relax_mode
+sched_relax_str2mode(char *str)
+{
+	if (strcasecmp(str, "sleep") == 0)
+		return SCHED_RELAX_MODE_SLEEP;
+	else if (strcasecmp(str, "net") == 0)
+		return SCHED_RELAX_MODE_NET;
+	else if (strcasecmp(str, "disabled") == 0)
+		return SCHED_RELAX_MODE_DISABLED;
+	else
+		return SCHED_RELAX_MODE_INVALID;
+}
+
+extern bool sched_prio_disabled;
+extern unsigned int sched_stats_intvl;
+extern unsigned int sched_relax_intvl;
+extern unsigned int sched_relax_mode;
+
 void dss_sched_fini(struct dss_xstream *dx);
 int dss_sched_init(struct dss_xstream *dx);
 int sched_set_throttle(unsigned int type, unsigned int percent);
 int sched_req_enqueue(struct dss_xstream *dx, struct sched_req_attr *attr,
 		      void (*func)(void *), void *arg);
 void sched_stop(struct dss_xstream *dx);
+
+static inline int
+sched_create_task(struct dss_xstream *dx, void (*func)(void *), void *arg,
+		  ABT_task *task, unsigned int flags)
+{
+	ABT_pool		 abt_pool = dx->dx_pools[DSS_POOL_GENERIC];
+	struct sched_info	*info = &dx->dx_sched_info;
+	int			 rc;
+
+	/* Avoid bumping busy ts for internal periodically created tasks */
+	if (!(flags & DSS_ULT_FL_PERIODIC))
+		/* Atomic integer assignment from different xstream */
+		info->si_stats.ss_busy_ts = info->si_cur_ts;
+
+	rc = ABT_task_create(abt_pool, func, arg, task);
+	return dss_abterr2der(rc);
+}
+
+static inline int
+sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
+		    ABT_thread_attr t_attr, ABT_thread *thread,
+		    unsigned int flags)
+{
+	ABT_pool		 abt_pool = dx->dx_pools[DSS_POOL_GENERIC];
+	struct sched_info	*info = &dx->dx_sched_info;
+	int			 rc;
+
+	/* Avoid bumping busy ts for internal periodically created ULTs */
+	if (!(flags & DSS_ULT_FL_PERIODIC))
+		/* Atomic integer assignment from different xstream */
+		info->si_stats.ss_busy_ts = info->si_cur_ts;
+
+	rc = ABT_thread_create(abt_pool, func, arg, t_attr, thread);
+	return dss_abterr2der(rc);
+}
 
 /* tls.c */
 void dss_tls_fini(struct dss_thread_local_storage *dtls);
@@ -140,8 +216,6 @@ struct dss_thread_local_storage *dss_tls_init(int tag);
 void ds_iv_init(void);
 void ds_iv_fini(void);
 
-/** To schedule ULT on caller's self XS */
-#define DSS_XS_SELF		(-1)
 /** Total number of XS */
 #define DSS_XS_NR_TOTAL						\
 	(dss_sys_xs_nr + dss_tgt_nr + dss_tgt_offload_xs_nr)

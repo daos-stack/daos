@@ -81,7 +81,7 @@ method, `DaosUns.create()`. The "\[sub path\]" is optional. You can create the U
 path with below command.
 
 ```bash
-$ daos cont create --pool <pool UUID> --svc <svc list> -path <your path> --type=POSIX
+$ daos cont create --pool <pool UUID> -path <your path> --type=POSIX
 ```
 Or
 
@@ -111,7 +111,7 @@ replicas.
 
 ```bash
 $ dmg pool create --scm-size=<scm size> --nvme-size=<nvme size>
-$ daos cont create --pool <pool UUID> --svc <service replicas> --type POSIX
+$ daos cont create --pool <pool UUID> --type POSIX
 ```
 
 After that, configure `daos-site.xml` with the pool and container created.

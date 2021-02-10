@@ -1,4 +1,4 @@
-.TH dmg 1 "4 December 2020"
+.TH dmg 1 "15 December 2020"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -113,20 +113,32 @@ DAOS pool to be owned by given group, format name@domain
 \fB\fB\-u\fR, \fB\-\-user\fR\fP
 DAOS pool to be owned by given user, format name@domain
 .TP
+\fB\fB\-p\fR, \fB\-\-name\fR\fP
+Unique name for pool (set as label)
+.TP
 \fB\fB\-a\fR, \fB\-\-acl-file\fR\fP
 Access Control List file path for DAOS pool
 .TP
-\fB\fB\-s\fR, \fB\-\-scm-size\fR (\fIrequired\fR)\fP
-Size of SCM component of DAOS pool
+\fB\fB\-z\fR, \fB\-\-size\fR\fP
+Total size of DAOS pool (auto)
+.TP
+\fB\fB\-t\fR, \fB\-\-scm-ratio\fR <default: \fI"6"\fR>\fP
+Percentage of SCM:NVMe for pool storage (auto)
+.TP
+\fB\fB\-k\fR, \fB\-\-nranks\fR\fP
+Number of ranks to use (auto)
+.TP
+\fB\fB\-v\fR, \fB\-\-nsvc\fR\fP
+Number of pool service replicas
+.TP
+\fB\fB\-s\fR, \fB\-\-scm-size\fR\fP
+Per-server SCM allocation for DAOS pool (manual)
 .TP
 \fB\fB\-n\fR, \fB\-\-nvme-size\fR\fP
-Size of NVMe component of DAOS pool
+Per-server NVMe allocation for DAOS pool (manual)
 .TP
 \fB\fB\-r\fR, \fB\-\-ranks\fR\fP
 Storage server unique identifiers (ranks) for DAOS pool
-.TP
-\fB\fB\-v\fR, \fB\-\-nsvc\fR <default: \fI"1"\fR>\fP
-Number of pool service replicas
 .TP
 \fB\fB\-S\fR, \fB\-\-sys\fR <default: \fI"daos_server"\fR>\fP
 DAOS system that pool is to be a part of
