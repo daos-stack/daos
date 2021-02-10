@@ -1,4 +1,4 @@
-.TH dmg 1 "15 February 2021"
+.TH dmg 1 "22 February 2021"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -364,7 +364,7 @@ Blink the status LED on a given VMD device for visual SSD identification.
 \fBAliases\fP: i
 
 .SS storage identify vmd
-Quickly blink the status LED on a VMD NVMe SSD for device identification.
+Quickly blink the status LED on a VMD NVMe SSD for device identification. Duration of LED event can be configured by setting the VMD_LED_PERIOD environment variable, otherwise default is 60 seconds.
 
 \fBUsage\fP: identify vmd [vmd-OPTIONS]
 .TP
