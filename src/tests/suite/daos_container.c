@@ -2214,26 +2214,26 @@ delet_container_during_aggregation(void **state)
 	int		rc;
 
 	/* Prepare records */
-	oid = dts_oid_gen(OC_RP_2G1, 0, arg->myrank);
+	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
 
 	print_message("Initial Pool Query\n");
 	pool_storage_info(state, &pinfo);
 
 	/* Aggregation will be Hold */
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-			      DAOS_CONT_AGG_YIED | DAOS_FAIL_ALWAYS, 0, NULL);
+			      DAOS_VOS_AGG_BLOCKED | DAOS_FAIL_ALWAYS, 0, NULL);
 
 	/* Write/fetch and Punch Data with 2K size */
-	for (i = 0; i <= 50; i++)
+	for (i = 0; i <= 5000; i++)
 		io_simple_internal(state, oid, IO_SIZE_SCM * 32, DAOS_IOD_ARRAY,
 				   "io_simple_scm_array dkey",
 				   "io_simple_scm_array akey");
 
 	/**
-	 * Run Pool query every 5 seconds for Total 40 seconds
+	 * Run Pool query every 5 seconds for Total 30 seconds
 	 * Aggregation will be ready to run by this time
 	 */
-	for (i = 0; i <= 7; i++) {
+	for (i = 0; i <= 5; i++) {
 		pool_storage_info(state, &pinfo);
 		sleep(5);
 	}
