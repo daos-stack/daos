@@ -21,7 +21,7 @@ RUN yum clean all && yum -y install epel-release dnf-plugins-core &&	\
 	gcc gcc-c++ git golang graphviz libaio-devel			\
 	libcmocka-devel libevent-devel libiscsi-devel libtool		\
 	libtool-ltdl-devel libuuid-devel libyaml-devel make nasm	\
-	numactl-devel openssl-devel pandoc patch			\
+	numactl-devel openssl-devel pandoc patch glibc-langpack-en	\
 	readline-devel python3-scons sg3_utils yasm diffutils		\
 	pciutils valgrind-devel man fuse3-devel hwloc-devel patchelf	\
 	json-c-devel lz4-devel libipmctl-devel ndctl ipmctl		\
@@ -37,8 +37,6 @@ RUN yum clean all && yum -y install epel-release dnf-plugins-core &&	\
 	python3-tabulate python2-distro python3-distro			\
 	java-1.8.0-openjdk maven openmpi-devel &&			\
     yum clean all
-
-RUN dnf install -y glibc-langpack-en
 
 ARG UID=1000
 
