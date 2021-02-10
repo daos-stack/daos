@@ -365,11 +365,9 @@ grp_map_extend(uint32_t *grp_map, uint32_t *grp_map_size)
 }
 
 int
-pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list,
-	      bool is_pool_adding)
+pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 {
 	struct pl_obj_shard	*new_shards;
-	struct pl_obj_shard     *org_shard;
 	struct failed_shard	*f_shard;
 	struct failed_shard	*tmp;
 	uint32_t                *grp_map = NULL;
@@ -440,8 +438,6 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list,
 	}
 
 	d_list_for_each_entry(f_shard, extended_list, fs_list) {
-		org_shard = &new_shards[f_shard->fs_shard_idx];
-
 		grp = f_shard->fs_shard_idx / layout->ol_grp_size;
 		grp_idx = ((grp + 1) * layout->ol_grp_size) + grp;
 		grp_count[grp]--;
@@ -450,12 +446,7 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list,
 		new_shards[grp_idx].po_fseq = f_shard->fs_fseq;
 		new_shards[grp_idx].po_shard = f_shard->fs_shard_idx;
 		new_shards[grp_idx].po_target = f_shard->fs_tgt_id;
-		if (org_shard->po_target != -1 &&
-		    (is_pool_adding ||
-		     org_shard->po_fseq > f_shard->fs_fseq))
-			new_shards[grp_idx].po_rebuilding = 1;
-		else
-			new_shards[grp_idx].po_rebuilding = 0;
+		new_shards[grp_idx].po_rebuilding = 1;
 	}
 
 	layout->ol_grp_size += max_fail_grp;

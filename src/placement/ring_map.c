@@ -709,6 +709,18 @@ ring_map_print(struct pl_map *map)
 		ring_print(rimap, i);
 }
 
+static int
+ring_map_query(struct pl_map *map, struct pl_map_attr *attr)
+{
+	struct pl_ring_map *rimap = pl_map2rimap(map);
+
+	attr->pa_type	   = PL_TYPE_RING;
+	attr->pa_domain	   = rimap->rmp_domain;
+	attr->pa_domain_nr = rimap->rmp_domain_nr;
+	attr->pa_target_nr = rimap->rmp_target_nr;
+	return 0;
+}
+
 /** hash object ID, find a ring by consistent hash */
 static struct pl_ring *
 ring_oid2ring(struct pl_ring_map *rimap, daos_obj_id_t id)
@@ -1310,6 +1322,7 @@ struct pl_map_ops	ring_map_ops = {
 	.o_create		= ring_map_create,
 	.o_destroy		= ring_map_destroy,
 	.o_print		= ring_map_print,
+	.o_query		= ring_map_query,
 	.o_obj_place		= ring_obj_place,
 	.o_obj_find_rebuild	= ring_obj_find_rebuild,
 	.o_obj_find_reint	= ring_obj_find_reint,

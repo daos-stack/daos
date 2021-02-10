@@ -1,4 +1,4 @@
-/**
+/*
  * (C) Copyright 2017-2021 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -6,13 +6,15 @@
 /**
  * ds_pool: Pool Server Storage Layout Definitions
  */
-#define D_LOGFAC	DD_FAC(pool)
+
+#define D_LOGFAC DD_FAC(pool)
 
 #include <daos_srv/rdb.h>
 #include <daos_srv/security.h>
 #include "srv_layout.h"
 
 /** Root KVS */
+RDB_STRING_KEY(ds_pool_prop_, version);
 RDB_STRING_KEY(ds_pool_prop_, map_version);
 RDB_STRING_KEY(ds_pool_prop_, map_buffer);
 RDB_STRING_KEY(ds_pool_prop_, map_uuids);

@@ -4,7 +4,7 @@
  *
  * This file is part of the DAOS Project. It is subject to the license terms
  * in the LICENSE file found in the top-level directory of this distribution
- * and at https://img.shields.io/badge/License-Apache%202.0-blue.svg.
+ * and at https://img.shields.io/badge/License-BSD--2--Clause--Patent-blue.svg.
  * No part of the DAOS Project, including this file, may be copied, modified,
  * propagated, or distributed except according to the terms contained in the
  * LICENSE file.
@@ -151,7 +151,7 @@ String unit_packages() {
                            'libpmemobj protobuf-c ' +
                            'spdk-devel libfabric-devel ' +
                            'pmix numactl-devel ' +
-                           'libipmctl-devel ' +
+                           'libipmctl-devel python36-pyxattr ' +
                            'python36-tabulate numactl ' +
                            'libyaml-devel ' +
                            'valgrind-devel patchelf'
@@ -246,8 +246,8 @@ String functional_packages(String distro) {
                   "mpi4py-tests " +
                   "hdf5-mpich-tests " +
                   "hdf5-openmpi3-tests " +
-                  "hdf5-vol-daos-mpich2-tests-daos-1 " +
-                  "hdf5-vol-daos-openmpi3-tests-daos-1 " +
+                  "hdf5-vol-daos-mpich-tests " +
+                  "hdf5-vol-daos-openmpi3-tests " +
                   "MACSio-mpich " +
                   "MACSio-openmpi3 " +
                   "mpifileutils-mpich-daos-1 "
@@ -1201,7 +1201,7 @@ pipeline {
                         label 'ci_nlt_1'
                     }
                     steps {
-                        unitTest timeout_time: 20,
+                        unitTest timeout_time: 30,
                                  inst_repos: pr_repos(),
                                  test_script: 'ci/unit/test_nlt.sh',
                                  inst_rpms: unit_packages()
@@ -1212,6 +1212,22 @@ pipeline {
                                          testResults: 'None',
                                          always_script: 'ci/unit/test_nlt_post.sh',
                                          valgrind_stash: 'centos7-gcc-nlt-memcheck'
+                            recordIssues enabledForFailure: true,
+                                         failOnError: false,
+                                         ignoreFailedBuilds: false,
+                                         ignoreQualityGate: true,
+                                         name: "NLT server leaks",
+                                         tool: issues(pattern: 'nlt-server-leaks.json',
+                                           name: 'NLT server results',
+                                           id: 'NLT_server')
+                            recordIssues enabledForFailure: true,
+                                         failOnError: false,
+                                         ignoreFailedBuilds: false,
+                                         ignoreQualityGate: true,
+                                         name: "NLT client leaks",
+                                         tool: issues(pattern: 'nlt-client-leaks.json',
+                                           name: 'NLT client results',
+                                           id: 'NLT_client')
                         }
                     }
                 }

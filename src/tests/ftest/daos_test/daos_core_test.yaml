@@ -63,6 +63,7 @@ daos_tests:
       test_name: DAOS_Degraded_Mode
       test_timeout: 450
       scalable_endpoint: True
+      stopped_ranks: [5, 6, 7]
     test_daos_management:
       daos_test: m
       test_name: DAOS_Management
@@ -74,7 +75,7 @@ daos_tests:
     test_daos_container:
       daos_test: c
       test_name: DAOS_Container
-      test_timeout: 135
+      test_timeout: 220
     test_daos_epoch:
       daos_test: e
       test_name: DAOS_Epoch
@@ -105,10 +106,6 @@ daos_tests:
       daos_test: K
       test_name: DAOS_KV
       test_timeout: 105
-    test_daos_file_system:
-      daos_test: F
-      test_name: DAOS_File_System
-      test_timeout: 140
     test_daos_capability:
       daos_test: C
       test_name: DAOS_Capability
@@ -133,6 +130,7 @@ daos_tests:
       daos_test: O
       test_name: DAOS_OID_Allocator
       test_timeout: 320
+      stopped_ranks: [6, 7]
     test_daos_checksum:
       daos_test: z
       test_name: DAOS_Checksum

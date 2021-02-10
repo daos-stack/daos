@@ -33,17 +33,15 @@ Environment variables in this section only apply to the server side.
 
 |Variable              |Description|
 |----------------------|-----------|
-|VOS\_CHECKSUM         |Checksum algorithm used by VOS. STRING. Default to disabling checksums. The following checksum algorithms are supported: crc64 and crc32.|
-|VOS\_MEM\_CLASS       |Memory class used by VOS. STRING. Default to persistent memory. If the value is set to DRAM, all data is stored in volatile memory. Otherwise, all data is stored in persistent memory.|
 |RDB\_ELECTION\_TIMEOUT|Raft election timeout used by RDBs in milliseconds. INTEGER. Default to 7000 ms.|
 |RDB\_REQUEST\_TIMEOUT |Raft request timeout used by RDBs in milliseconds. INTEGER. Default to 3000 ms.|
 |DAOS\_REBUILD         |Determines whether to start rebuilds when excluding targets. BOOL2. Default to true.|
 |DAOS\_MD\_CAP         |Size of a metadata pmem pool/file in MBs. INTEGER. Default to 128 MB.|
 |DAOS\_START\_POOL\_SVC|Determines whether to start existing pool services when starting a daos\_server. BOOL. Default to true.|
-|DAOS\_IMPLICIT\_PURGE |Whether to aggregate unreferenced epochs. BOOL. Default to false.|
-|DAOS\_PURGE\_CREDITS  |The number of credits for probing object trees when aggregating unreferenced epochs. INTEGER. Default to 1000.|
 |CRT\_DISABLE\_MEM\_PIN|Disable memory pinning workaround on a server side. BOOL. Default to 0.|
-
+|DAOS\_SCHED\_PRIO\_DISABLED|Disable server ULT prioritizing. BOOL. Default to 0.|
+|DAOS\_SCHED\_RELAX\_MODE|The mode of CPU relaxing on idle. "disabled":disable relaxing; "net":wait on network request for INTVL; "sleep":sleep for INTVL. STRING. Default to "net"|
+|DAOS\_SCHED\_RELAX\_INTVL|CPU relax interval in milliseconds. INTEGER. Default to 1 ms.|
 
 ## Server and Client environment variables
 

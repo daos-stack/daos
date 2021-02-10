@@ -12,6 +12,7 @@ from itertools import product
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
 from osa_utils import OSAUtils
+from apricot import skipForTicket
 
 try:
     # python 3.x
@@ -123,6 +124,7 @@ class OSAOnlineDrain(OSAUtils):
             self.pool = pool[val]
             self.pool.display_pool_daos_space(display_string)
 
+    @skipForTicket("DAOS-6664")
     def test_osa_online_drain(self):
         """Test ID: DAOS-4750
         Test Description: Validate Online drain

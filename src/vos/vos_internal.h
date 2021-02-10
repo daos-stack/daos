@@ -250,11 +250,10 @@ struct vos_dtx_act_ent {
 					 dae_prepared:1;
 };
 
-extern struct vos_tls	*standalone_tls;
 #ifdef VOS_STANDALONE
 #define VOS_TIME_START(start, op)		\
 do {						\
-	if (standalone_tls->vtl_dp == NULL)	\
+	if (vos_tls_get()->vtl_dp == NULL)	\
 		break;				\
 	start = daos_get_ntime();		\
 } while (0)
@@ -264,7 +263,7 @@ do {						\
 	struct daos_profile *dp;		\
 	int time_msec;				\
 						\
-	dp = standalone_tls->vtl_dp;		\
+	dp = vos_tls_get()->vtl_dp;		\
 	if ((dp) == NULL || start == 0)		\
 		break;				\
 	time_msec = (daos_get_ntime() - start)/1000; \
@@ -321,19 +320,7 @@ struct vos_dtx_cmt_ent {
 #define DCE_OID(dce)		((dce)->dce_base.dce_oid)
 #define DCE_DKEY_HASH(dce)	((dce)->dce_base.dce_dkey_hash)
 
-/* in-memory structures standalone instance */
-extern struct bio_xs_context		*vsa_xsctxt_inst;
 extern int vos_evt_feats;
-
-static inline struct bio_xs_context *
-vos_xsctxt_get(void)
-{
-#ifdef VOS_STANDALONE
-	return vsa_xsctxt_inst;
-#else
-	return dss_get_module_info()->dmi_nvme_ctxt;
-#endif
-}
 
 #define VOS_KEY_CMP_LEXICAL	(1ULL << 63)
 
@@ -371,7 +358,11 @@ vos_pool_hash_del(struct vos_pool *pool)
  * Getting object cache
  * Wrapper for TLS and standalone mode
  */
-struct daos_lru_cache *vos_get_obj_cache(void);
+static inline struct daos_lru_cache *
+vos_get_obj_cache(void)
+{
+	return vos_tls_get()->vtl_ocache;
+}
 
 /**
  * Register btree class for container table, it is called within vos_init()
@@ -805,6 +796,7 @@ struct vos_iter_ops;
 
 /** the common part of vos iterators */
 struct vos_iterator {
+	struct dtx_handle	*it_dth;
 	struct vos_iter_ops	*it_ops;
 	struct vos_iterator	*it_parent; /* parent iterator */
 	struct vos_ts_set	*it_ts_set;
@@ -1010,6 +1002,8 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	       daos_epoch_t bound, d_iov_t *key_iov, d_iov_t *val_iov,
 	       uint64_t flags, struct vos_ts_set *ts_set,
 	       struct vos_ilog_info *parent, struct vos_ilog_info *info);
+int
+key_tree_delete(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov);
 
 /* vos_io.c */
 daos_size_t
@@ -1222,8 +1216,7 @@ vos_dtx_continue_detect(int rc)
 	/* Continue to detect other potential in-prepared DTX. */
 	return rc == -DER_INPROGRESS && dth != NULL &&
 		dth->dth_share_tbd_count > 0 &&
-		dth->dth_share_tbd_count < DTX_REFRESH_MAX &&
-		dth->dth_share_tbd_scanned < DTX_DETECT_SCAN_MAX;
+		dth->dth_share_tbd_count < DTX_REFRESH_MAX;
 }
 
 static inline bool

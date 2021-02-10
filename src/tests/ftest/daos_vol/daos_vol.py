@@ -15,15 +15,6 @@ class DaosVol(VolTestBase):
     :avocado: recursive
     """
 
-    # Test variants that should be skipped
-    CANCEL_FOR_TICKET = [
-        ["DAOS-5831", "testname", "h5_partest_t_shapesame"],
-        ["DAOS-5469", "testname", "h5_test_testhdf5"],
-        ["DAOS-6076", "testname", "h5_partest_testphdf5"],
-        ["DAOS-5496", "testname", "h5_partest_t_bigio"],
-        ["DAOS-5647", "testname", "h5vl_test_parallel"],
-    ]
-
     def test_daos_vol_mpich(self):
         """Jira ID: DAOS-3656.
 
@@ -43,7 +34,7 @@ class DaosVol(VolTestBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,small
-        :avocado: tags=hdf5,vol
+        :avocado: tags=hdf5,vol,volunit,volmpich
         :avocado: tags=DAOS_5610
         """
         self.job_manager = get_job_manager_class("Mpirun", None, False, "mpich")
@@ -70,7 +61,7 @@ class DaosVol(VolTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,small
-        :avocado: tags=hdf5,vol
+        :avocado: tags=hdf5,vol,volunit,volopenmpi
         :avocado: tags=DAOS_5610
         """
         self.job_manager = get_job_manager_class(

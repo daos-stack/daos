@@ -13,6 +13,7 @@ from test_utils_pool import TestPool
 from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
+from apricot import skipForTicket
 
 try:
     # python 3.x
@@ -123,6 +124,7 @@ class OSAOnlineReintegration(OSAUtils):
                     thrd.start()
                     time.sleep(1)
             self.pool = pool[val]
+            time.sleep(5)
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
@@ -131,8 +133,9 @@ class OSAOnlineReintegration(OSAUtils):
             self.log.info(output)
             self.is_rebuild_done(3)
             self.assert_on_rebuild_failure()
-
             pver_exclude = self.get_pool_version()
+            time.sleep(5)
+
             self.log.info("Pool Version after exclude %s", pver_exclude)
             # Check pool version incremented after pool exclude
             self.assertTrue(pver_exclude > (pver_begin + len(target_list)),
@@ -166,6 +169,7 @@ class OSAOnlineReintegration(OSAUtils):
             self.pool = pool[val]
             self.pool.display_pool_daos_space(display_string)
 
+    @skipForTicket("DAOS-6573")
     def test_osa_online_reintegration(self):
         """Test ID: DAOS-5075.
 

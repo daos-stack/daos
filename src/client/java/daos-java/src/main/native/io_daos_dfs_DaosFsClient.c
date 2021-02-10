@@ -47,12 +47,11 @@ Java_io_daos_dfs_DaosFsClient_dfsMountFs(JNIEnv *env,
 	int rc = dfs_mount(poh, coh, flags, &dfsPtr);
 
 	if (rc) {
-		char *msg = "Failed to mount fs ";
-
-		throw_exception_const_msg(env, msg, rc);
+		throw_const(env, "Failed to mount fs",
+			    rc);
 		return -1;
 	}
-	return *(jlong*)&dfsPtr;
+	return *(jlong *)&dfsPtr;
 }
 
 /**
@@ -71,7 +70,7 @@ Java_io_daos_dfs_DaosFsClient_dfsUnmountFs(JNIEnv *env,
 
 	if (rc) {
 		printf("Failed to unmount fs rc: %d\n", rc);
-		printf("error msg: %s\n", strerror(rc));
+		printf("error msg: %.256s\n", strerror(rc));
 	}
 }
 
@@ -98,10 +97,10 @@ Java_io_daos_dfs_DaosFsClient_dfsMountFsOnRoot(JNIEnv *env,
 	if (rc) {
 		char *msg = "Failed to mount fs on root container";
 
-		throw_exception_const_msg(env, msg, rc);
+		throw_const(env, msg, rc);
 		return -1;
 	}
-	return *(jlong*)&dfsPtr;
+	return *(jlong *)&dfsPtr;
 }
 
 /**
@@ -116,12 +115,11 @@ Java_io_daos_dfs_DaosFsClient_dfsUnmountFsOnRoot(JNIEnv *env,
 		jclass clientClass, jlong dfsPtr)
 {
 	dfs_t *dfs = *(dfs_t **)&dfsPtr;
-
 	int rc = dfs_umount_root_cont(dfs);
 
 	if (rc) {
 		printf("Failed to unmount fs on root container rc: %d\n", rc);
-		printf("error msg: %s\n", strerror(rc));
+		printf("error msg: %.256s\n", strerror(rc));
 	}
 }
 
@@ -139,6 +137,12 @@ Java_io_daos_dfs_DaosFsClient_move__JLjava_lang_String_2Ljava_lang_String_2(
 		JNIEnv *env, jobject obj, jlong dfsPtr, jstring srcPath,
 		jstring destPath)
 {
+	if (srcPath == NULL || destPath == NULL) {
+		char *msg = "Empty source path or empty dest path";
+
+		throw_const(env, msg, CUSTOM_ERR6);
+		return;
+	}
 	const char *src_path = (*env)->GetStringUTFChars(env, srcPath, NULL);
 	const char *dest_path = (*env)->GetStringUTFChars(env, destPath, NULL);
 	char *src_dir_path = NULL;
@@ -148,8 +152,24 @@ Java_io_daos_dfs_DaosFsClient_move__JLjava_lang_String_2Ljava_lang_String_2(
 
 	src_dir_path = strdup(src_path);
 	src_base_path = strdup(src_path);
+	if (src_dir_path == NULL || src_base_path == NULL) {
+		char *msg = NULL;
+
+		asprintf(&msg, "Failed to duplicate source path, len: %d",
+			 len(src_path));
+		throw_base(env, msg, CUSTOM_ERR3, 1, 0);
+		goto out;
+	}
 	dest_dir_path = strdup(dest_path);
 	dest_base_path = strdup(dest_path);
+	if (dest_dir_path == NULL || dest_base_path == NULL) {
+		char *msg = NULL;
+
+		asprintf(&msg, "Failed to duplicate dest path, len: %d",
+			 len(dest_path));
+		throw_base(env, msg, CUSTOM_ERR3, 1, 0);
+		goto out;
+	}
 	char *src_dir = dirname(src_dir_path);
 	char *src_base = basename(src_base_path);
 	char *dest_dir = dirname(dest_dir_path);
@@ -162,11 +182,10 @@ Java_io_daos_dfs_DaosFsClient_move__JLjava_lang_String_2Ljava_lang_String_2(
 			NULL);
 
 	if (rc) {
-		char *tmp = "Cannot open source directory (%s)";
-		char *msg = (char *)malloc(strlen(tmp) + strlen(src_dir));
+		char *msg = NULL;
 
-		sprintf(msg, tmp, src_dir);
-		throw_exception(env, msg, rc);
+		asprintf(&msg, "Cannot open source directory (%s)", src_dir);
+		throw_exc(env, msg, rc);
 		goto out;
 	}
 	if (strcmp(src_dir, dest_dir) == 0) {
@@ -175,25 +194,24 @@ Java_io_daos_dfs_DaosFsClient_move__JLjava_lang_String_2Ljava_lang_String_2(
 		rc = dfs_lookup(dfs, dest_dir, O_RDWR, &dest_dir_handle,
 				&tmp_mode, NULL);
 		if (rc) {
-			char *tmp = "Cannot open destination directory (%s)";
-			char *msg = (char *)malloc(strlen(tmp) +
-					strlen(dest_dir));
+			char *msg = NULL;
 
-			sprintf(msg, tmp, dest_dir);
-			throw_exception(env, msg, rc);
+			asprintf(&msg,
+				 "Cannot open destination directory (%s)",
+				 dest_dir);
+			throw_exc(env, msg, rc);
 			goto out;
 		}
 	}
 	rc = dfs_move(dfs, src_dir_handle, src_base, dest_dir_handle, dest_base,
 			NULL);
 	if (rc) {
-		char *tmp = "Failed to move source path (%s) to destination " \
-				"path (%s)";
-		char *msg = (char *)malloc(strlen(tmp) + strlen(src_path) +
-				strlen(dest_path));
+		char *msg = NULL;
 
-		sprintf(msg, tmp, src_path, dest_path);
-		throw_exception(env, msg, rc);
+		asprintf(&msg,
+			 "Failed to move source path (%s) to destination "
+			 "path (%s)", src_path, dest_path);
+		throw_exc(env, msg, rc);
 	}
 out:
 	if (src_dir_path) free(src_dir_path);
@@ -226,6 +244,12 @@ Java_io_daos_dfs_DaosFsClient_move__JJLjava_lang_String_2JLjava_lang_String_2(
 		JNIEnv *env, jobject obj, jlong dfsPtr, jlong srcPrtObjId,
 		jstring srcName, jlong destPrtObjId, jstring destName)
 {
+	if (srcName == NULL || destName == NULL) {
+		throw_const(env,
+			    "Empty source name or empty dest name",
+			    CUSTOM_ERR6);
+		return;
+	}
 	const char *src_base = (*env)->GetStringUTFChars(env, srcName, NULL);
 	const char *dest_base = (*env)->GetStringUTFChars(env, destName, NULL);
 	dfs_obj_t *src_dir_handle = *(dfs_obj_t **)&srcPrtObjId;
@@ -236,18 +260,36 @@ Java_io_daos_dfs_DaosFsClient_move__JJLjava_lang_String_2JLjava_lang_String_2(
 			(char *)dest_base, NULL);
 
 	if (rc) {
-		char *tmp = "Failed to move source file (%s) under dir (%ld)" \
-			" to destination file (%s) under dir (%ld)";
-		char *msg = (char *)malloc(strlen(tmp) + strlen(src_base) +
-			20 + strlen(dest_base) + 20);
+		char *msg = NULL;
 
-		sprintf(msg, tmp, src_base, srcPrtObjId, dest_base,
-				destPrtObjId);
-		throw_exception(env, msg, rc);
+		asprintf(&msg,
+			 "Failed to move source file (%s) under dir (%ld)"
+			 " to destination file (%s) under dir (%ld)", src_base,
+			 srcPrtObjId, dest_base, destPrtObjId);
+		throw_exc(env, msg, rc);
 	}
 out:
 	(*env)->ReleaseStringUTFChars(env, srcName, src_base);
 	(*env)->ReleaseStringUTFChars(env, destName, dest_base);
+}
+
+static inline void
+copy_msg(char *msg, const char *dir)
+{
+	if (msg[0] == '\0') {
+		int dir_len = strlen(dir);
+		int max_len = ERROR_PATH_LEN - 4;
+		int l = dir_len > max_len ? max_len : dir_len;
+
+		memcpy(msg, dir, l);
+		if (l == max_len) {
+			char *suffix = "...\0";
+
+			memcpy(msg + l, suffix, 4);
+		} else {
+			msg[l] = '\0';
+		}
+	}
 }
 
 /**
@@ -281,26 +323,17 @@ mkdirs(dfs_t *dfs, const char *path, int mode,
 		}
 		/* recursively create it */
 		dirs = strdup(path);
-		dir = dirname(dirs);
 		bases = strdup(path);
+		if (dirs == NULL || bases == NULL) {
+			copy_msg(msg, path);
+			goto out;
+		}
+		dir = dirname(dirs);
 		base = basename(bases);
 		rc = mkdirs(dfs, dir, mode, recursive, &parent_handle,
 				msg);
 		if (rc)	{
-			if (msg[0] == '\0') {
-				int dir_len = strlen(dir);
-				int max_len = ERROR_PATH_LEN - 4;
-				int l = dir_len > max_len ? max_len : dir_len;
-
-				memcpy(msg, dir, l);
-				if (l == max_len) {
-					char *suffix = "...\0";
-
-					memcpy(msg+l, suffix, 4);
-				} else {
-					msg[l] = '\0';
-				}
-			}
+			copy_msg(msg, dir);
 			goto out;
 		}
 		rc = dfs_mkdir(dfs, parent_handle, base, mode, 0);
@@ -309,7 +342,7 @@ mkdirs(dfs_t *dfs, const char *path, int mode,
 		if (rc == ERROR_NOT_EXIST) {
 			int count = 0;
 
-			while (rc && (count<ERROR_LOOKUP_MAX_RETRIES)) {
+			while (rc && (count < ERROR_LOOKUP_MAX_RETRIES)) {
 				rc = dfs_lookup(dfs, path, O_RDWR, handle,
 						&parent_mode, NULL);
 				count++;
@@ -341,6 +374,10 @@ JNIEXPORT void JNICALL
 Java_io_daos_dfs_DaosFsClient_mkdir(JNIEnv *env, jobject client,
 		jlong dfsPtr, jstring path, jint mode, jboolean recursive)
 {
+	if (path == NULL) {
+		throw_const(env, "Empty path", CUSTOM_ERR6);
+		return;
+	}
 	const char* path_str = (*env)->GetStringUTFChars(env, path, NULL);
 	dfs_t *dfs = *(dfs_t **)&dfsPtr;
 	char *dirs;
@@ -353,13 +390,30 @@ Java_io_daos_dfs_DaosFsClient_mkdir(JNIEnv *env, jobject client,
 	int rc = 0;
 
 	dirs = strdup(path_str);
-	parent_dir = dirname(dirs);
 	bases = strdup(path_str);
+	if (dirs == NULL || bases == NULL) {
+		char *msg = NULL;
+
+		asprintf(&msg, "Failed to duplicate path %s",
+			 path_str);
+		throw_base(env, msg, 1, 1, 0);
+		goto out;
+	}
+	parent_dir = dirname(dirs);
 	base = basename(bases);
 
 	if ((strlen(parent_dir) > 0) &&
 			(strcmp(parent_dir, "/") != 0)) {
-		parentError = (char*)malloc(ERROR_PATH_LEN);
+		parentError = (char *)malloc(ERROR_PATH_LEN);
+		if (parentError == NULL) {
+			char *msg = NULL;
+
+			asprintf(&msg,
+				 "Failed to allocate char array, len %d",
+				 ERROR_PATH_LEN);
+			throw_base(env, msg, 1, 1, 0);
+			goto out;
+		}
 		parentError[0] = '\0';
 		rc = mkdirs(dfs, parent_dir, mode, recursive, &parent_handle,
 				parentError);
@@ -369,7 +423,7 @@ Java_io_daos_dfs_DaosFsClient_mkdir(JNIEnv *env, jobject client,
 		char *tmp;
 
 		if (recursive) {
-			tmp = "Failed to create parent or ancestor " \
+			tmp = "Failed to create parent or ancestor "
 					"directories (%s)";
 			if (parentError[0] != '\0') {
 				dir_msg = parentError;
@@ -377,22 +431,22 @@ Java_io_daos_dfs_DaosFsClient_mkdir(JNIEnv *env, jobject client,
 		} else {
 			tmp = "Parent directory doesn't exist (%s)";
 		}
-		char *msg = (char *)malloc(strlen(tmp) + strlen(dir_msg));
+		char *msg = NULL;
 
-		sprintf(msg, tmp, dir_msg);
-		throw_exception(env, msg, rc);
+		asprintf(&msg, tmp, dir_msg);
+		throw_exc(env, msg, rc);
 	} else {
 		rc = dfs_mkdir(dfs, parent_handle, base, mode, 0);
 		if (rc) {
-			char *tmp = "Failed to create directory (%s) " \
+			char *tmp = "Failed to create directory (%s) "
 					"under parent directory (%s)";
-			char *msg = (char *)malloc(strlen(tmp) + strlen(base) +
-					strlen(parent_dir));
+			char *msg = NULL;
 
-			sprintf(msg, tmp, base, parent_dir);
-			throw_exception(env, msg, rc);
+			asprintf(&msg, tmp, base, parent_dir);
+			throw_exc(env, msg, rc);
 		}
 	}
+out:
 	if (dirs) free(dirs);
 	if (bases) free(bases);
 	if (parentError) free(parentError);
@@ -426,6 +480,13 @@ Java_io_daos_dfs_DaosFsClient_createNewFile(JNIEnv *env,
 		jint mode, jint accessFlags, jstring objectType, jint chunkSize,
 		jboolean createParent)
 {
+	if (parentPath == NULL || name == NULL) {
+		throw_const(env,
+			    "Empty parent path or empty name",
+			    CUSTOM_ERR6);
+		return;
+	}
+
 	dfs_t *dfs = *(dfs_t **)&dfsPtr;
 	const char *parent_path = (*env)->GetStringUTFChars(env, parentPath,
 			NULL);
@@ -439,18 +500,29 @@ Java_io_daos_dfs_DaosFsClient_createNewFile(JNIEnv *env,
 	mode_t tmp_mode;
 
 	if (!type_id) {
-		char *tmp = "unsupported object class, %s";
-		char *msg = (char *)malloc(strlen(tmp) + strlen(object_type));
+		char *msg = NULL;
 
-		sprintf(msg, tmp, object_type);
-		throw_exception(env, msg, CUSTOM_ERR6);
+		asprintf(&msg, "unsupported object class, %s", object_type);
+		throw_exc(env, msg, CUSTOM_ERR6);
 		goto out;
 	}
-	int rc = dfs_lookup(dfs, parent_path, O_RDWR, &parent, &tmp_mode, NULL);
+	int rc = dfs_lookup(dfs, parent_path, O_RDWR, &parent,
+			    &tmp_mode, NULL);
 
 	if (rc) {
 		if (createParent) {
-			parentError = (char*)malloc(ERROR_PATH_LEN);
+			parentError = (char *)malloc(ERROR_PATH_LEN);
+			if (parentError == NULL) {
+				char *msg = NULL;
+				char *tmp = "Failed to allocate char array,"
+					" len %d";
+
+				asprintf(&msg,
+					 tmp,
+					 ERROR_PATH_LEN);
+				throw_base(env, msg, 1, 1, 0);
+				goto out;
+			}
 			parentError[0] = '\0';
 			rc = mkdirs(dfs, parent_path, mode, 1, &parent,
 					parentError);
@@ -460,22 +532,20 @@ Java_io_daos_dfs_DaosFsClient_createNewFile(JNIEnv *env,
 				if (parentError[0] != '\0') {
 					dir_msg = parentError;
 				}
-				char *tmp = "Failed to create parent/ancestor "\
+				char *tmp = "Failed to create parent/ancestor "
 						"directories (%s)";
-				char *msg = (char *)malloc(strlen(tmp) +
-						strlen(dir_msg));
+				char *msg = NULL;
 
-				sprintf(msg, tmp, dir_msg);
-				throw_exception(env, msg, rc);
+				asprintf(&msg, tmp, dir_msg);
+				throw_exc(env, msg, rc);
 				goto out;
 			}
 		} else {
 			char *tmp = "Failed to find parent directory (%s)";
-			char *msg = (char *)malloc(strlen(tmp) +
-					strlen(parent_path));
+			char *msg = NULL;
 
-			sprintf(msg, tmp, parent_path);
-			throw_exception(env, msg, rc);
+			asprintf(&msg, tmp, parent_path);
+			throw_exc(env, msg, rc);
 			goto out;
 		}
 	}
@@ -484,13 +554,12 @@ Java_io_daos_dfs_DaosFsClient_createNewFile(JNIEnv *env,
 			O_CREAT | accessFlags, type_id, chunkSize, NULL,
 			&file);
 	if (rc) {
-		char *tmp = "Failed to create new file (%s) under " \
+		char *tmp = "Failed to create new file (%s) under "
 				"directory (%s)";
-		char *msg = (char *)malloc(strlen(tmp) + strlen(file_name) +
-				strlen(parent_path));
+		char *msg = NULL;
 
-		sprintf(msg, tmp, file_name, parent_path);
-		throw_exception(env, msg, rc);
+		asprintf(&msg, tmp, file_name, parent_path);
+		throw_exc(env, msg, rc);
 	}
 out:
 	(*env)->ReleaseStringUTFChars(env, parentPath, parent_path);
@@ -498,7 +567,7 @@ out:
 	(*env)->ReleaseStringUTFChars(env, objectType, object_type);
 	if (parentError) free(parentError);
 	if (parent) dfs_release(parent);
-	return *(jlong*)&file;
+	return *(jlong *)&file;
 }
 
 /**
@@ -518,6 +587,12 @@ Java_io_daos_dfs_DaosFsClient_delete(JNIEnv *env, jobject client,
 		jlong dfsPtr, jstring parentPath, jstring name,
 		jboolean force)
 {
+	if (parentPath == NULL || name == NULL) {
+		throw_const(env,
+			    "Empty parent path or empty name",
+			    CUSTOM_ERR6);
+		return;
+	}
 	dfs_t *dfs = *(dfs_t **)&dfsPtr;
 	const char *parent_path = (*env)->GetStringUTFChars(env, parentPath,
 					NULL);
@@ -562,6 +637,10 @@ Java_io_daos_dfs_DaosFsClient_dfsLookup__JJLjava_lang_String_2IJ(
 		JNIEnv *env, jobject client, jlong dfsPtr, jlong parentObjId,
 		jstring name, jint flags, jlong bufferAddress)
 {
+	if (name == NULL) {
+		throw_const(env, "Empty name", CUSTOM_ERR6);
+		return;
+	}
 	dfs_t *dfs = *(dfs_t **)&dfsPtr;
 	dfs_obj_t *parent = *(dfs_obj_t **)&parentObjId;
 	dfs_obj_t *file;
@@ -571,16 +650,16 @@ Java_io_daos_dfs_DaosFsClient_dfsLookup__JJLjava_lang_String_2IJ(
 			NULL);
 
 	if (rc) {
-		char *tmp = "Failed to open file (%s) under parent with " \
+		char *tmp = "Failed to open file (%s) under parent with "
 				"flags (%d)";
-		char *msg = (char *)malloc(strlen(tmp) + strlen(file_name) + 4);
+		char *msg = NULL;
 
-		sprintf(msg, tmp, file_name, flags);
-		throw_exception(env, msg, rc);
+		asprintf(&msg, tmp, file_name, flags);
+		throw_exc(env, msg, rc);
 		file = NULL;
 	}
 	(*env)->ReleaseStringUTFChars(env, name, file_name);
-	return *(jlong*)&file;
+	return *(jlong *)&file;
 }
 
 /**
@@ -602,6 +681,10 @@ Java_io_daos_dfs_DaosFsClient_dfsLookup__JLjava_lang_String_2IJ(
 		JNIEnv *env, jobject client, jlong dfsPtr, jstring path,
 		jint flags, jlong bufferAddress)
 {
+	if (path == NULL) {
+		throw_const(env, "Empty path", CUSTOM_ERR6);
+		return;
+	}
 	dfs_t *dfs = *(dfs_t **)&dfsPtr;
 	dfs_obj_t *file;
 	mode_t tmp_mode;
@@ -610,14 +693,14 @@ Java_io_daos_dfs_DaosFsClient_dfsLookup__JLjava_lang_String_2IJ(
 
 	if (rc) {
 		char *tmp = "Failed to open file (%s) with flags (%d)";
-		char *msg = (char *)malloc(strlen(tmp) + strlen(file_path) + 4);
+		char *msg = NULL;
 
-		sprintf(msg, tmp, file_path, flags);
-		throw_exception(env, msg, rc);
+		asprintf(&msg, tmp, file_path, flags);
+		throw_exc(env, msg, rc);
 		file = NULL;
 	}
 	(*env)->ReleaseStringUTFChars(env, path, file_path);
-	return *(jlong*)&file;
+	return *(jlong *)&file;
 }
 
 /**
@@ -640,9 +723,8 @@ Java_io_daos_dfs_DaosFsClient_dfsGetSize(JNIEnv *env, jobject client,
 	int rc = dfs_get_size(dfs, file, &size);
 
 	if (rc) {
-		char *tmp = "Failed to get file size";
-
-		throw_exception_const_msg(env, tmp, rc);
+		throw_const(env,
+			    "Failed to get file size", rc);
 		return -1;
 	}
 	return size;
@@ -669,12 +751,11 @@ Java_io_daos_dfs_DaosFsClient_dfsDup(JNIEnv *env, jobject client,
 	int rc = dfs_dup(dfs, file, flags, &new_file);
 
 	if (rc) {
-		char *tmp = "Failed to duplicate file";
-
-		throw_exception_const_msg(env, tmp, rc);
+		throw_const(env,
+			    "Failed to duplicate file", rc);
 		return -1;
 	}
-	return *(jlong*)&new_file;
+	return *(jlong *)&new_file;
 }
 
 /**
@@ -692,9 +773,8 @@ Java_io_daos_dfs_DaosFsClient_dfsRelease(JNIEnv *env,
 	int rc = dfs_release(file);
 
 	if (rc) {
-		char *tmp = "Failed to release file";
-
-		throw_exception_const_msg(env, tmp, rc);
+		throw_const(env,
+			    "Failed to release file", rc);
 	}
 }
 
@@ -720,7 +800,7 @@ Java_io_daos_dfs_DaosFsClient_dfsRead(JNIEnv *env, jobject client,
 {
 	dfs_t *dfs = *(dfs_t **)&dfsPtr;
 	dfs_obj_t *file = *(dfs_obj_t **)&objId;
-	char *buf = (char*)bufferAddress;
+	char *buf = (char *)bufferAddress;
 	d_iov_t sg_iov = {0};
 	d_sg_list_t sgl = {
 		.sg_nr = 1,
@@ -733,12 +813,12 @@ Java_io_daos_dfs_DaosFsClient_dfsRead(JNIEnv *env, jobject client,
 	int rc = dfs_read(dfs, file, &sgl, fileOffset, &size, NULL);
 
 	if (rc) {
-		char *tmp = "Failed to read %ld bytes from file starting " \
+		char *tmp = "Failed to read %ld bytes from file starting "
 				"at %ld";
-		char *msg = (char *)malloc(strlen(tmp) + 20 + 20);
+		char *msg = NULL;
 
-		sprintf(msg, tmp, len, fileOffset);
-		throw_exception(env, msg, rc);
+		asprintf(&msg, tmp, len, fileOffset);
+		throw_exc(env, msg, rc);
 		return 0;
 	}
 	return size;
@@ -766,7 +846,7 @@ Java_io_daos_dfs_DaosFsClient_dfsWrite(JNIEnv *env, jobject client,
 {
 	dfs_t *dfs = *(dfs_t **)&dfsPtr;
 	dfs_obj_t *file = *(dfs_obj_t **)&objId;
-	char *buf = (char*)bufferAddress;
+	char *buf = (char *)bufferAddress;
 	d_iov_t sg_iov = {0};
 	d_sg_list_t sgl = {
 		.sg_nr = 1,
@@ -779,10 +859,10 @@ Java_io_daos_dfs_DaosFsClient_dfsWrite(JNIEnv *env, jobject client,
 
 	if (rc) {
 		char *tmp = "Failed to write %ld bytes to file starting at %ld";
-		char *msg = (char *)malloc(strlen(tmp) + 20 + 20);
+		char *msg = NULL;
 
-		sprintf(msg, tmp, len, fileOffset);
-		throw_exception(env, msg, rc);
+		asprintf(&msg, tmp, len, fileOffset);
+		throw_exc(env, msg, rc);
 		return 0;
 	}
 	return len;
@@ -808,16 +888,17 @@ Java_io_daos_dfs_DaosFsClient_dfsReadDir(JNIEnv *env, jobject client,
 	daos_anchor_t anchor = {0};
 	uint32_t nr = READ_DIR_BATCH_SIZE;
 	struct dirent entries[nr];
-	uint32_t size = READ_DIR_INITIAL_BUFFER_SIZE, acc = 0;
+	uint32_t size = READ_DIR_INITIAL_BUFFER_SIZE;
+	uint32_t acc = 0;
 	char *buffer = malloc(size);
 
 	if (!buffer) {
-		char *tmp = "Failed to allocate %d bytes for reading " \
+		char *tmp = "Failed to allocate %d bytes for reading "
 				"directory content";
-		char *msg = (char *)malloc(strlen(tmp) + 4);
+		char *msg = NULL;
 
-		sprintf(msg, tmp, size);
-		throw_exception(env, msg, CUSTOM_ERR3);
+		asprintf(&msg, tmp, size);
+		throw_exc(env, msg, CUSTOM_ERR3);
 		return NULL;
 	}
 	buffer[0] = '\0';
@@ -829,33 +910,33 @@ Java_io_daos_dfs_DaosFsClient_dfsReadDir(JNIEnv *env, jobject client,
 		nr = READ_DIR_BATCH_SIZE;
 		rc = dfs_readdir(dfs, dir, &anchor, &nr, entries);
 		if (rc) {
-			char *tmp = "Failed to read %d more entries from " \
-					"directory after reading %d " \
+			char *tmp = "Failed to read %d more entries from "
+					"directory after reading %d "
 					"entries.\n buffer length: %d";
-			char *msg = (char *)malloc(strlen(tmp) + 4 + 4 + 4);
+			char *msg = NULL;
 
-			sprintf(msg, tmp, READ_DIR_BATCH_SIZE, total, size);
-			throw_exception(env, msg, rc);
+			asprintf(&msg, tmp, READ_DIR_BATCH_SIZE, total, size);
+			throw_exc(env, msg, rc);
 			failed = 1;
 			break;
 		}
 		if (!nr) continue;
 		total += nr;
 		int i;
-		for(i=0; i<nr; i++){
+
+		for (i = 0; i < nr; i++) {
 			/* exactly 1 for each file because ',' and \0 */
 			acc += strlen(entries[i].d_name) + 1;
 			if (acc >= size) {
 				size += READ_DIR_INITIAL_BUFFER_SIZE;
 				buffer = realloc(buffer, size);
 				if (!buffer) {
-					char *tmp = "Failed to re-allocate %d "\
+					char *tmp = "Failed to re-allocate %d "
 					"bytes for reading directory content.";
-					char *msg = (char *)malloc(strlen(tmp)
-							+ 4);
+					char *msg = NULL;
 
-					sprintf(msg, tmp, size);
-					throw_exception(env, msg, CUSTOM_ERR3);
+					asprintf(&msg, tmp, size);
+					throw_exc(env, msg, CUSTOM_ERR3);
 					failed = 1;
 					break;
 				}
@@ -881,10 +962,10 @@ cpyfield(JNIEnv *env, char *buffer, void *value,
 {
 	if (valueLen != expLen) {
 		char *tmp = "value length (%d) not equal to expected (%d)";
-		char *msg = (char *)malloc(strlen(tmp) + 4 + 4);
+		char *msg = NULL;
 
-		sprintf(msg, tmp, valueLen, expLen);
-		throw_exception(env, msg, CUSTOM_ERR4);
+		asprintf(&msg, tmp, valueLen, expLen);
+		throw_exc(env, msg, CUSTOM_ERR4);
 		return;
 	}
 	memcpy(buffer, value, valueLen);
@@ -944,9 +1025,9 @@ Java_io_daos_dfs_DaosFsClient_dfsOpenedObjStat(JNIEnv *env,
 	int rc = dfs_ostat(dfs, file, &stat);
 
 	if (rc) {
-		char *tmp = "Failed to get StatAttribute of open object";
+		char *msg = "Failed to get StatAttribute of open object";
 
-		throw_exception_const_msg(env, tmp, rc);
+		throw_const(env, msg, rc);
 	} else {
 		if (bufferAddress == -1L) {
 			return;
@@ -954,26 +1035,26 @@ Java_io_daos_dfs_DaosFsClient_dfsOpenedObjStat(JNIEnv *env,
 		char *buffer = (char *)bufferAddress;
 
 		cpyfield(env, buffer, &objId, sizeof(objId), 8);
-		cpyfield(env, buffer+8, &stat.st_mode,
-				sizeof(stat.st_mode), 4);
-		cpyfield(env, buffer+12, &stat.st_uid,
-				sizeof(stat.st_uid), 4);
-		cpyfield(env, buffer+16, &stat.st_gid,
-				sizeof(stat.st_gid), 4);
-		cpyfield(env, buffer+20, &stat.st_blocks,
-				sizeof(stat.st_blocks), 8);
-		cpyfield(env, buffer+28, &stat.st_blksize,
-				sizeof(stat.st_blksize), 8);
-		cpyfield(env, buffer+36, &stat.st_size,
-				sizeof(stat.st_size), 8);
-		cpyfield(env, buffer+44, &stat.st_atim,
-				sizeof(stat.st_atim), 16);
-		cpyfield(env, buffer+60, &stat.st_mtim,
-				sizeof(stat.st_mtim), 16);
-		cpyfield(env, buffer+76, &stat.st_ctim,
-				sizeof(stat.st_ctim), 16);
+		cpyfield(env, buffer + 8, &stat.st_mode,
+			 sizeof(stat.st_mode), 4);
+		cpyfield(env, buffer + 12, &stat.st_uid,
+			 sizeof(stat.st_uid), 4);
+		cpyfield(env, buffer + 16, &stat.st_gid,
+			 sizeof(stat.st_gid), 4);
+		cpyfield(env, buffer + 20, &stat.st_blocks,
+			 sizeof(stat.st_blocks), 8);
+		cpyfield(env, buffer + 28, &stat.st_blksize,
+			 sizeof(stat.st_blksize), 8);
+		cpyfield(env, buffer + 36, &stat.st_size,
+			 sizeof(stat.st_size), 8);
+		cpyfield(env, buffer + 44, &stat.st_atim,
+			 sizeof(stat.st_atim), 16);
+		cpyfield(env, buffer + 60, &stat.st_mtim,
+			 sizeof(stat.st_mtim), 16);
+		cpyfield(env, buffer + 76, &stat.st_ctim,
+			 sizeof(stat.st_ctim), 16);
 		buffer[92] = S_ISDIR(stat.st_mode) ? '\0':'1';
-		set_user_group_name(env, buffer+93, &stat);
+		set_user_group_name(env, buffer + 93, &stat);
 	}
 }
 
@@ -994,6 +1075,12 @@ Java_io_daos_dfs_DaosFsClient_dfsSetExtAttr(JNIEnv *env,
 		jobject client, jlong dfsPtr, jlong objId, jstring name,
 		jstring value, jint flags)
 {
+	if (name == NULL || value == NULL) {
+		throw_const(env,
+			    "Empty name or empty value",
+			    CUSTOM_ERR6);
+		return;
+	}
 	dfs_t *dfs = *(dfs_t **)&dfsPtr;
 	dfs_obj_t *file = *(dfs_obj_t **)&objId;
 	const char *attr_name = (*env)->GetStringUTFChars(env, name, NULL);
@@ -1002,13 +1089,12 @@ Java_io_daos_dfs_DaosFsClient_dfsSetExtAttr(JNIEnv *env,
 			(uint64_t)strlen(attr_value), flags);
 
 	if (rc) {
-		char *tmp = "Failed to set ext attribute name: %s, " \
+		char *tmp = "Failed to set ext attribute name: %s, "
 				"value %s with flags %d.";
-		char *msg = (char *)malloc(strlen(tmp) + strlen(attr_name)
-				+ strlen(attr_value) + 4);
+		char *msg = NULL;
 
-		sprintf(msg, tmp, attr_name, attr_value, flags);
-		throw_exception(env, msg, rc);
+		asprintf(&msg, tmp, attr_name, attr_value, flags);
+		throw_exc(env, msg, rc);
 	}
 	(*env)->ReleaseStringUTFChars(env, name, attr_name);
 	(*env)->ReleaseStringUTFChars(env, value, attr_value);
@@ -1029,33 +1115,38 @@ Java_io_daos_dfs_DaosFsClient_dfsSetExtAttr(JNIEnv *env,
  */
 JNIEXPORT jstring JNICALL
 Java_io_daos_dfs_DaosFsClient_dfsGetExtAttr(JNIEnv *env,
-		jobject client, jlong dfsPtr, jlong objId, jstring name,
-		jint expectedValueLen)
+					    jobject client, jlong dfsPtr,
+					    jlong objId, jstring name,
+					    jint expectedValueLen)
 {
+	if (name == NULL) {
+		throw_const(env, "Empty name", CUSTOM_ERR6);
+		return;
+	}
 	dfs_t *dfs = *(dfs_t **)&dfsPtr;
 	dfs_obj_t *file = *(dfs_obj_t **)&objId;
 	const char *attr_name = (*env)->GetStringUTFChars(env, name, NULL);
 	long value_len = expectedValueLen;
-	char *value = (char *)malloc(value_len+1); /* 1 for \0 */
+	char *value = (char *)malloc(value_len + 1); /* 1 for \0 */
 	jstring ret = NULL;
 
 	if (value == NULL) {
-		char *tmp = "Failed to allocate %d bytes for reading " \
+		char *tmp = "Failed to allocate %d bytes for reading "
 				"extended attribute value";
-		char *msg = (char *)malloc(strlen(tmp) + 4);
+		char *msg = NULL;
 
-		sprintf(msg, tmp, value_len);
-		throw_exception(env, msg, CUSTOM_ERR3);
+		asprintf(&msg, tmp, value_len);
+		throw_exc(env, msg, CUSTOM_ERR3);
 		goto out;
 	}
 	int rc = dfs_getxattr(dfs, file, attr_name, value, &value_len);
 
 	if (rc) {
 		char *tmp = "Failed to get ext attribute name: %s";
-		char *msg = (char *)malloc(strlen(tmp) + strlen(attr_name));
+		char *msg = NULL;
 
-		sprintf(msg, tmp, attr_name);
-		throw_exception(env, msg, rc);
+		asprintf(&msg, tmp, attr_name);
+		throw_exc(env, msg, rc);
 		goto out;
 	}
 	value[value_len] = '\0';
@@ -1079,8 +1170,13 @@ out:
  */
 JNIEXPORT void JNICALL
 Java_io_daos_dfs_DaosFsClient_dfsRemoveExtAttr(JNIEnv *env,
-		jobject client, jlong dfsPtr, jlong objId, jstring name)
+					       jobject client, jlong dfsPtr,
+					       jlong objId, jstring name)
 {
+	if (name == NULL) {
+		throw_const(env, "Empty name", CUSTOM_ERR6);
+		return;
+	}
 	dfs_t *dfs = *(dfs_t **)&dfsPtr;
 	dfs_obj_t *file = *(dfs_obj_t **)&objId;
 	const char *attr_name = (*env)->GetStringUTFChars(env, name, NULL);
@@ -1088,10 +1184,10 @@ Java_io_daos_dfs_DaosFsClient_dfsRemoveExtAttr(JNIEnv *env,
 
 	if (rc) {
 		char *tmp = "Failed to remove ext attribute name: %s";
-		char *msg = (char *)malloc(strlen(tmp) + strlen(attr_name));
+		char *msg = NULL;
 
-		sprintf(msg, tmp, attr_name);
-		throw_exception(env, msg, rc);
+		asprintf(&msg, tmp, attr_name);
+		throw_exc(env, msg, rc);
 	}
 	(*env)->ReleaseStringUTFChars(env, name, attr_name);
 }
@@ -1107,17 +1203,17 @@ Java_io_daos_dfs_DaosFsClient_dfsRemoveExtAttr(JNIEnv *env,
  */
 JNIEXPORT jlong JNICALL
 Java_io_daos_dfs_DaosFsClient_dfsGetChunkSize(JNIEnv *env,
-		jclass clientClass, jlong objId)
+					      jclass clientClass, jlong objId)
 {
 	dfs_obj_t *file = *(dfs_obj_t **)&objId;
 	daos_size_t size;
 	int rc = dfs_get_chunk_size(file, &size);
 
 	if (rc) {
-		char *msg = "Failed to get chunk size of object. " \
-				"It's a directory, not a file? ";
+		char *msg = "Failed to get chunk size of object. "
+			"It's a directory, not a file? ";
 
-		throw_exception_const_msg(env, msg, rc);
+		throw_const(env, msg, rc);
 	}
 	return size;
 }
@@ -1133,16 +1229,16 @@ Java_io_daos_dfs_DaosFsClient_dfsGetChunkSize(JNIEnv *env,
  */
 JNIEXPORT jint JNICALL
 Java_io_daos_dfs_DaosFsClient_dfsGetMode(JNIEnv *env,
-		jclass clientClass, jlong objId)
+					 jclass clientClass, jlong objId)
 {
 	dfs_obj_t *file = *(dfs_obj_t **)&objId;
 	mode_t mode;
 	int rc = dfs_get_mode(file, &mode);
 
 	if (rc) {
-		char *msg = "Failed to get mode object";
-
-		throw_exception_const_msg(env, msg, rc);
+		throw_const(env,
+			    "Failed to get mode object",
+			    rc);
 	}
 	return mode;
 }
@@ -1158,7 +1254,7 @@ Java_io_daos_dfs_DaosFsClient_dfsGetMode(JNIEnv *env,
  */
 JNIEXPORT jboolean JNICALL
 Java_io_daos_dfs_DaosFsClient_dfsIsDirectory(JNIEnv *env,
-		jclass clientClass, jint mode)
+					     jclass clientClass, jint mode)
 {
 	return S_ISDIR(mode) ? 1 : 0;
 }
@@ -1182,7 +1278,7 @@ make_8_multiples(uint16_t plen)
 }
 
 static int
-set_entry_value(Uns__Entry *e, struct daos_prop_entry *entry)
+set_co_acl(Uns__DaosAcl *a, struct daos_prop_entry *entry)
 {
 	int i;
 	int rc = 0;
@@ -1192,76 +1288,95 @@ set_entry_value(Uns__Entry *e, struct daos_prop_entry *entry)
 	int ace_size;
 	int last_type = -1;
 
+	for (i = 0; i < a->n_aces; i++) {
+		total_ace_size += (ace_struct_size +
+				(make_8_multiples(a->aces[i]->principal_len)));
+	}
+	struct daos_acl *acl = (struct daos_acl *)calloc(1,
+			sizeof(struct daos_acl) + total_ace_size);
+
+	if (acl == NULL) {
+		return 11;
+	}
+	acl->dal_ver = a->ver;
+	acl->dal_reserv = a->reserv;
+	acl->dal_len = total_ace_size;
+	if (a->n_aces <= 0) {
+		free(acl);
+		return 0;
+	}
+	for (i = 0; i < a->n_aces; i++) {
+		Uns__DaosAce *ace = a->aces[i];
+
+		ace_size = sizeof(struct daos_ace) +
+		make_8_multiples(ace->principal_len);
+		struct daos_ace *d_ace =
+		(struct daos_ace *)calloc(1, ace_size);
+
+		if (d_ace == NULL) {
+			rc = 11;
+			goto out;
+		}
+		d_ace->dae_access_types = ace->access_types;
+		if ((int)ace->principal_type <= last_type) {
+			rc = 10;
+			goto out;
+		}
+		last_type = ace->principal_type;
+		d_ace->dae_principal_type = ace->principal_type;
+		d_ace->dae_principal_len =
+		make_8_multiples(ace->principal_len);
+		d_ace->dae_access_flags = ace->access_flags;
+		d_ace->dae_reserv = ace->reserved;
+		d_ace->dae_allow_perms = ace->allow_perms;
+		d_ace->dae_audit_perms = ace->audit_perms;
+		d_ace->dae_alarm_perms = ace->alarm_perms;
+
+		if (ace->principal_len > 0) {
+			memcpy(d_ace->dae_principal, ace->principal,
+			       ace->principal_len + 1);
+			if (d_ace->dae_principal_len >
+			    (ace->principal_len + 1)) {
+				memset(d_ace->dae_principal +
+				       ace->principal_len + 1,
+				       0,
+				       d_ace->dae_principal_len -
+				       ace->principal_len - 1
+				);
+			}
+		}
+
+		memcpy(acl->dal_ace + index, d_ace, ace_size);
+		index += ace_size;
+		if (!daos_ace_is_valid(d_ace)) {
+			rc = 9;
+			goto out;
+		}
+out:
+		if (d_ace != NULL) {
+			free(d_ace);
+		}
+		if (rc) {
+			break;
+		}
+	}
+	entry->dpe_val_ptr = acl;
+	if (rc == 0 && daos_acl_validate(acl)) {
+		return 8;
+	}
+	return rc;
+}
+
+static int
+set_entry_value(Uns__Entry *e, struct daos_prop_entry *entry)
+{
 	switch (e->type) {
 	case UNS__PROP_TYPE__DAOS_PROP_PO_ACL:
 	case UNS__PROP_TYPE__DAOS_PROP_CO_ACL:
 		;
 		Uns__DaosAcl *a = e->pval;
 
-		for (i = 0; i < a->n_aces; i++) {
-			total_ace_size += (ace_struct_size +
-					(make_8_multiples(a->aces[i]->principal_len)));
-		}
-		struct daos_acl *acl = (struct daos_acl *)calloc(1,
-				sizeof(struct daos_acl) + total_ace_size);
-
-		acl->dal_ver = a->ver;
-		acl->dal_reserv = a->reserv;
-		acl->dal_len = total_ace_size;
-		if (a->n_aces <= 0) {
-			return 0;
-		}
-		for (i = 0; i < a->n_aces; i++) {
-			Uns__DaosAce *ace = a->aces[i];
-
-			ace_size = sizeof(struct daos_ace) +
-			make_8_multiples(ace->principal_len);
-			struct daos_ace *d_ace =
-			(struct daos_ace *)calloc(1, ace_size);
-
-			d_ace->dae_access_types = ace->access_types;
-			if ((int)ace->principal_type <= last_type) {
-				rc = 10;
-				goto out;
-			}
-			last_type = ace->principal_type;
-			d_ace->dae_principal_type = ace->principal_type;
-			d_ace->dae_principal_len =
-			make_8_multiples(ace->principal_len);
-			d_ace->dae_access_flags = ace->access_flags;
-			d_ace->dae_reserv = ace->reserved;
-			d_ace->dae_allow_perms = ace->allow_perms;
-			d_ace->dae_audit_perms = ace->audit_perms;
-			d_ace->dae_alarm_perms = ace->alarm_perms;
-
-			if (ace->principal_len > 0) {
-				memcpy(d_ace->dae_principal, ace->principal,
-				ace->principal_len + 1);
-				if (d_ace->dae_principal_len > (ace->principal_len + 1)) {
-					memset(d_ace->dae_principal + ace->principal_len + 1,
-					0,
-					d_ace->dae_principal_len - ace->principal_len - 1
-					);
-				}
-			}
-
-			memcpy(acl->dal_ace + index, d_ace, ace_size);
-			index += ace_size;
-			if (!daos_ace_is_valid(d_ace)) {
-				rc = 9;
-				goto out;
-			}
-out:
-			free(d_ace);
-			if (rc) {
-				return rc;
-			}
-		}
-		entry->dpe_val_ptr = acl;
-		if (daos_acl_validate(acl)) {
-			return 8;
-		}
-		return 0;
+		return set_co_acl(a, entry);
 	default: return 7;
 	}
 }
@@ -1281,6 +1396,9 @@ set_attr_properties(Uns__Properties *properties, daos_prop_t *da_props)
 		da_props->dpp_nr,
 		sizeof(struct daos_prop_entry)
 		);
+		if (da_props->dpp_entries == NULL) {
+			return 11;
+		}
 		for (i = 0; i < da_props->dpp_nr; i++) {
 			entry = properties->entries[i];
 			da_entry = &da_props->dpp_entries[i];
@@ -1348,7 +1466,11 @@ set_duns_attr(Uns__DunsAttribute *attribute, struct duns_attr_t *attr)
 	if (attribute->properties != NULL) {
 		/* will be released outside of this function */
 		attr->da_props = (daos_prop_t *)calloc(1, sizeof(daos_prop_t));
-		rc = set_attr_properties(attribute->properties, attr->da_props);
+		if (attr->da_props == NULL) {
+			return 11;
+		}
+		rc = set_attr_properties(attribute->properties,
+					 attr->da_props);
 	}
 
 out:
@@ -1375,6 +1497,10 @@ Java_io_daos_dfs_DaosFsClient_dunsCreatePath(JNIEnv *env,
 		jclass clientClass, jlong poolHandle, jstring pathStr,
 		jlong bufferAddress, jint bufferLen)
 {
+	if (pathStr == NULL) {
+		throw_const(env, "Empty path", CUSTOM_ERR6);
+		return;
+	}
 	daos_handle_t poh;
 	const char *path = (*env)->GetStringUTFChars(env, pathStr, NULL);
 	uint8_t *buffer = (uint8_t *)bufferAddress;
@@ -1420,19 +1546,22 @@ Java_io_daos_dfs_DaosFsClient_dunsCreatePath(JNIEnv *env,
 		case 10:
 			msg = "duplicate ACEs or ACEs out of order";
 			break;
+		case 11:
+			msg = "memory allocation failed";
+			break;
 		default:
 			msg = "unknown error";
 		}
-		throw_exception_const_msg(env, msg, CUSTOM_ERR5);
+		throw_const(env, msg, CUSTOM_ERR5);
 		goto out;
 	}
 	rc = duns_create_path(poh, path, &attr);
 	if (rc) {
-		char *tmp =
-		"Failed to create UNS path, %s, in container %s and pool %s";
+		char *tmp = "Failed to create UNS path, %s, "
+			"in container %s and pool %s";
 		char pool_str[37] = "";
 		char cont_str[37] = "";
-		char *msg;
+		char *msg = NULL;
 
 		if (strlen(attr.da_puuid) > 0) {
 			uuid_unparse(attr.da_puuid, pool_str);
@@ -1440,10 +1569,8 @@ Java_io_daos_dfs_DaosFsClient_dunsCreatePath(JNIEnv *env,
 		if (strlen(attr.da_cuuid) > 0) {
 			uuid_unparse(attr.da_cuuid, cont_str);
 		}
-		msg = (char *)malloc(strlen(tmp) + strlen(path)
-			+ strlen(cont_str) + strlen(pool_str));
-		sprintf(msg, tmp, path, cont_str, pool_str);
-		throw_exception_base(env, msg, rc, 1, 0);
+		asprintf(&msg, tmp, path, cont_str, pool_str);
+		throw_base(env, msg, rc, 1, 0);
 		goto out;
 	}
 	char cont_str[37] = "";
@@ -1457,7 +1584,8 @@ out:
 			switch (((attr.da_props)->dpp_entries[i]).dpe_type) {
 			case UNS__PROP_TYPE__DAOS_PROP_PO_ACL:
 			case UNS__PROP_TYPE__DAOS_PROP_CO_ACL:
-				free(((attr.da_props)->dpp_entries[i]).dpe_val_ptr);
+				free(((attr.da_props)->dpp_entries[i])
+				    .dpe_val_ptr);
 				break;
 			}
 		}
@@ -1485,6 +1613,10 @@ JNIEXPORT jbyteArray JNICALL
 Java_io_daos_dfs_DaosFsClient_dunsResolvePath(JNIEnv *env, jclass clientClass,
 		jstring pathStr)
 {
+	if (pathStr == NULL) {
+		throw_const(env, "Empty path", CUSTOM_ERR6);
+		return;
+	}
 	const char *path = (*env)->GetStringUTFChars(env, pathStr, NULL);
 	struct duns_attr_t attr = {0};
 	Uns__DunsAttribute attribute = UNS__DUNS_ATTRIBUTE__INIT;
@@ -1503,11 +1635,10 @@ Java_io_daos_dfs_DaosFsClient_dunsResolvePath(JNIEnv *env, jclass clientClass,
 	rc = duns_resolve_path(path, &attr);
 	if (rc) {
 		char *tmp = "Failed to resolve UNS path, %s";
-		char *msg;
+		char *msg = NULL;
 
-		msg = (char *)malloc(strlen(tmp) + strlen(path));
-		sprintf(msg, tmp, path);
-		throw_exception_base(env, msg, rc, 1, 0);
+		asprintf(&msg, tmp, path);
+		throw_base(env, msg, rc, 1, 0);
 		goto out;
 	}
 
@@ -1537,6 +1668,10 @@ Java_io_daos_dfs_DaosFsClient_dunsResolvePath(JNIEnv *env, jclass clientClass,
 	/* copy back in binary */
 	len = uns__duns_attribute__get_packed_size(&attribute);
 	buf = malloc(len);
+	if (buf == NULL) {
+		throw_const(env, "memory allocation failed", 1);
+		goto out;
+	}
 	uns__duns_attribute__pack(&attribute, buf);
 	barray = (*env)->NewByteArray(env, len);
 	bytes = (*env)->GetByteArrayElements(env, barray, 0);
@@ -1571,6 +1706,14 @@ JNIEXPORT void JNICALL
 Java_io_daos_dfs_DaosFsClient_dunsSetAppInfo(JNIEnv *env, jclass clientClass,
 		jstring pathStr, jstring attrNameStr, jstring valueStr)
 {
+	if (pathStr == NULL) {
+		throw_const(env, "Empty path", CUSTOM_ERR6);
+		return;
+	}
+	if (attrNameStr == NULL) {
+		throw_const(env, "Empty attribute name", CUSTOM_ERR6);
+		return;
+	}
 	const char *path = (*env)->GetStringUTFChars(env, pathStr, NULL);
 	const char *attrName = (*env)->GetStringUTFChars(env, attrNameStr,
 							NULL);
@@ -1581,26 +1724,24 @@ Java_io_daos_dfs_DaosFsClient_dunsSetAppInfo(JNIEnv *env, jclass clientClass,
 	if (!(value == NULL || strlen(value) == 0)) {
 		rc = lsetxattr(path, attrName, value, strlen(value) + 1, 0);
 		if (rc) {
-			char *tmp =
-			"failed to set app attribute (%s) = (%s) on path (%s)";
-			char *msg = (char *)malloc(strlen(tmp) +
-			strlen(attrName) + strlen(value) + strlen(path));
+			char *tmp = "failed to set app attribute"
+				" (%s) = (%s) on path (%s)";
+			char *msg = NULL;
 
-			sprintf(msg, tmp, attrName, value, path);
+			asprintf(&msg, tmp, attrName, value, path);
 			rc = errno;
-			throw_exception(env, msg, rc);
+			throw_exc(env, msg, rc);
 		}
 	} else { /* remove attribute */
 		rc = lremovexattr(path, attrName);
 		if (rc) {
 			char *tmp =
 			"failed to remove app attribute (%s) from path (%s)";
-			char *msg = (char *)malloc(strlen(tmp) +
-			strlen(attrName) + strlen(path));
+			char *msg = NULL;
 
-			sprintf(msg, tmp, attrName, path);
+			asprintf(&msg, tmp, attrName, path);
 			rc = errno;
-			throw_exception(env, msg, rc);
+			throw_exc(env, msg, rc);
 		}
 	}
 out:
@@ -1625,21 +1766,32 @@ JNIEXPORT jstring JNICALL
 Java_io_daos_dfs_DaosFsClient_dunsGetAppInfo(JNIEnv *env, jclass clientClass,
 		jstring pathStr, jstring attrNameStr, jint maxLen)
 {
+	if (pathStr == NULL || attrNameStr == NULL) {
+		char *msg = "Empty path or empty attribute name";
+
+		throw_const(env, msg, CUSTOM_ERR6);
+		return;
+	}
 	const char *path = (*env)->GetStringUTFChars(env, pathStr, NULL);
 	const char *attrName = (*env)->GetStringUTFChars(env, attrNameStr,
 		NULL);
 	void *value = malloc(maxLen);
+
+	if (value == NULL) {
+		throw_const(env,
+			    "memory allocation failed", CUSTOM_ERR7);
+		return NULL;
+	}
 	int len = lgetxattr(path, attrName, value, maxLen);
 	jstring ret = NULL;
 
 	if (len < 0 || len > maxLen) {
 		char *tmp =
 		"failed to get app attribute (%s) from path (%s)";
-		char *msg = (char *)malloc(strlen(tmp) + strlen(attrName) +
-							strlen(path));
+		char *msg = NULL;
 
-		sprintf(msg, tmp, attrName, path);
-		throw_exception(env, msg, errno);
+		asprintf(&msg, tmp, attrName, path);
+		throw_exc(env, msg, errno);
 		goto out;
 	}
 
@@ -1664,6 +1816,10 @@ JNIEXPORT void JNICALL
 Java_io_daos_dfs_DaosFsClient_dunsDestroyPath(JNIEnv *env, jclass clientClass,
 		jlong poolHandle, jstring pathStr)
 {
+	if (pathStr == NULL) {
+		throw_const(env, "Empty path", CUSTOM_ERR6);
+		return;
+	}
 	daos_handle_t poh;
 	const char *path = (*env)->GetStringUTFChars(env, pathStr, NULL);
 	int rc;
@@ -1672,11 +1828,10 @@ Java_io_daos_dfs_DaosFsClient_dunsDestroyPath(JNIEnv *env, jclass clientClass,
 	rc = duns_destroy_path(poh, path);
 	if (rc) {
 		char *tmp = "Failed to destroy UNS path, %s";
-		char *msg;
+		char *msg = NULL;
 
-		msg = (char *)malloc(strlen(tmp) + strlen(path));
-		sprintf(msg, tmp, path);
-		throw_exception_base(env, msg, rc, 1, 0);
+		asprintf(&msg, tmp, path);
+		throw_base(env, msg, rc, 1, 0);
 	}
 
 out:
@@ -1696,6 +1851,10 @@ JNIEXPORT jbyteArray JNICALL
 Java_io_daos_dfs_DaosFsClient_dunsParseAttribute(JNIEnv *env,
 		jclass clientClass, jstring inputStr)
 {
+	if (inputStr == NULL) {
+		throw_const(env, "Empty input", CUSTOM_ERR6);
+		return;
+	}
 	const char *input = (*env)->GetStringUTFChars(env, inputStr, NULL);
 	int len = strlen(input);
 	struct duns_attr_t attr = {0};
@@ -1711,11 +1870,10 @@ Java_io_daos_dfs_DaosFsClient_dunsParseAttribute(JNIEnv *env,
 
 	if (rc) {
 		char *tmp = "Failed to parse UNS string, %s";
-		char *msg;
+		char *msg = NULL;
 
-		msg = (char *)malloc(strlen(tmp) + len);
-		sprintf(msg, tmp, input);
-		throw_exception_base(env, msg, rc, 1, 0);
+		asprintf(&msg, tmp, input);
+		throw_base(env, msg, rc, 1, 0);
 		goto out;
 	}
 
@@ -1744,6 +1902,12 @@ Java_io_daos_dfs_DaosFsClient_dunsParseAttribute(JNIEnv *env,
 	/* copy back in binary */
 	len = uns__duns_attribute__get_packed_size(&attribute);
 	buf = malloc(len);
+	if (buf == NULL) {
+		throw_const(env,
+			    "memory allocation failed",
+			    1);
+		goto out;
+	}
 	uns__duns_attribute__pack(&attribute, buf);
 	barray = (*env)->NewByteArray(env, len);
 	bytes = (*env)->GetByteArrayElements(env, barray, 0);

@@ -46,8 +46,8 @@ type sysRequest struct {
 }
 
 type sysResponse struct {
-	AbsentRanks system.RankSet
-	AbsentHosts hostlist.HostSet
+	AbsentRanks system.RankSet   `json:"-"`
+	AbsentHosts hostlist.HostSet `json:"-"`
 }
 
 func (resp *sysResponse) getAbsentHostsRanks(inHosts, inRanks string) error {
@@ -292,7 +292,7 @@ type SystemQueryReq struct {
 // SystemQueryResp contains the request response.
 type SystemQueryResp struct {
 	sysResponse
-	Members system.Members
+	Members system.Members `json:"members"`
 }
 
 // UnmarshalJSON unpacks JSON message into SystemQueryResp struct.

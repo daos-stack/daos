@@ -98,8 +98,13 @@ class DaosCoreBase(TestWithServers):
         scm_size = self.params.get("scm_size", '/run/pool/*')
         nvme_size = self.params.get("nvme_size", '/run/pool/*')
         args = self.params.get("args", self.TEST_PATH, "")
+        stopped_ranks = self.params.get("stopped_ranks", self.TEST_PATH, [])
         dmg = self.get_dmg_command()
         dmg_config_file = dmg.yaml.filename
+        if self.hostlist_clients:
+            dmg.copy_certificates(
+                get_log_file("daosCA/certs"), self.hostlist_clients)
+            dmg.copy_configuration(self.hostlist_clients)
         self.client_mca += " --mca btl_tcp_if_include eth0"
 
         cmd = " ".join(
@@ -128,6 +133,19 @@ class DaosCoreBase(TestWithServers):
 
         if not load_mpi("openmpi"):
             self.fail("Failed to load openmpi")
+
+        # Update the expected status for each ranks that will be stopped by this
+        # test to avoid a false failure during tearDown().
+        if "random" in stopped_ranks:
+            # Set each expected rank state to be either stopped or running
+            for manager in self.server_managers:
+                manager.update_expected_states(
+                    None, ["Joined", "Stopped", "Evicted"])
+        else:
+            # Set the specific expected rank state to stopped
+            for rank in stopped_ranks:
+                for manager in self.server_managers:
+                    manager.update_expected_states(rank, ["Stopped", "Evicted"])
 
         try:
             process.run(cmd, env=env)
