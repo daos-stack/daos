@@ -41,9 +41,9 @@ class CartNoPmixOneNodeTest(TestWithoutServers):
 
     def tearDown(self):
         """ Tear down """
-
+        self.report_timeout()
+        self._teardown_errors.extend(self.utils.cleanup_processes())
         super(CartNoPmixOneNodeTest, self).tearDown()
-        self.utils.cleanup_processes()
 
     def test_cart_no_pmix(self):
         """
@@ -59,7 +59,7 @@ class CartNoPmixOneNodeTest(TestWithoutServers):
         test_env = self.pass_env
         p = subprocess.Popen([cmd], env=test_env, stdout=subprocess.PIPE)
 
-        rc = self.utils.wait_process(p, 10)
+        rc = self.utils.wait_process(p, 30)
         if rc != 0:
             self.utils.print("Error waiting for process.")
             self.utils.print("returning {}".format(rc))

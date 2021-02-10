@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * migrate: migrate objects between servers.
@@ -34,7 +17,7 @@
 #include <daos/container.h>
 #include <daos/pool.h>
 #include <daos_srv/container.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/dtx_srv.h>
 #include "obj_rpc.h"
@@ -2123,6 +2106,13 @@ retry:
 			/* DER_DATA_LOSS means it can not find any replicas
 			 * to rebuild the data, see obj_list_common.
 			 */
+			if (rc == -DER_DATA_LOSS) {
+				D_DEBUG(DB_REBUILD, "No replicas for "DF_UOID
+					"\n", DP_UOID(arg->oid));
+				num = 0;
+				rc = 0;
+			}
+
 			D_DEBUG(DB_REBUILD, "Can not rebuild "
 				DF_UOID"\n", DP_UOID(arg->oid));
 			break;
@@ -2861,8 +2851,13 @@ migrate_check_one(void *data)
 	arg->executed_ult += tls->mpt_executed_ult;
 	if (arg->dms.dm_status == 0)
 		arg->dms.dm_status = tls->mpt_status;
-
 	ABT_mutex_unlock(arg->status_lock);
+
+	D_DEBUG(DB_REBUILD, "status %d/%d  rec/obj/size "
+		DF_U64"/"DF_U64"/"DF_U64"\n", tls->mpt_status,
+		arg->dms.dm_status, tls->mpt_rec_count,
+		tls->mpt_obj_count, tls->mpt_size);
+
 	migrate_pool_tls_put(tls);
 	return 0;
 }

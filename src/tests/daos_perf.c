@@ -548,6 +548,8 @@ akey_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 		fprintf(stderr, "%s failed. rc=%d, epoch=%"PRIu64"\n",
 			op_type == TS_DO_FETCH ? "Fetch" : "Update",
 			rc, *epoch);
+		if (param->pa_rw.verify)
+			dts_credit_return(&ts_ctx, cred);
 		return rc;
 	}
 

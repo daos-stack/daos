@@ -23,20 +23,14 @@ class DaosCoreBase(TestWithServers):
     :avocado: recursive
     """
 
-    TEST_PATH = "/run/daos_tests/Tests/*"
-
     def __init__(self, *args, **kwargs):
         """Initialize the DaosCoreBase object."""
         super(DaosCoreBase, self).__init__(*args, **kwargs)
         self.subtest_name = None
 
-        test_timeout = self.params.get("test_timeout", self.TEST_PATH)
-        if test_timeout:
-            self.timeout = test_timeout
-
     def setUp(self):
         """Set up before each test."""
-        self.subtest_name = self.params.get("test_name", self.TEST_PATH)
+        self.subtest_name = self.get_test_param("test_name")
         self.subtest_name = self.subtest_name.replace(" ", "_")
 
         # obtain separate logs
@@ -51,6 +45,20 @@ class DaosCoreBase(TestWithServers):
             self.hostfile_clients = write_host_file.write_host_file(
                 self.hostlist_clients, self.workdir, None)
 
+    def get_test_param(self, name, default=None):
+        """Get the test-specific test yaml parameter value.
+
+        Args:
+            name (str): name of the test yaml parameter to get
+            default (object): value to return if a value is not found
+
+        Returns:
+            object: the test-specific test yaml parameter value
+
+        """
+        path = "/".join(["/run/daos_tests", name, "*"])
+        return self.params.get(self.get_test_name(), path, default)
+
     @fail_on(CommandFailure)
     def start_server_managers(self):
         """Start the daos_server processes on each specified list of hosts.
@@ -59,7 +67,7 @@ class DaosCoreBase(TestWithServers):
         'scalable_endpoint' yaml parameter.
         """
         # Enable scalable endpoint (if requested) prior to starting the servers
-        scalable_endpoint = self.params.get("scalable_endpoint", self.TEST_PATH)
+        scalable_endpoint = self.get_test_param("scalable_endpoint")
         if scalable_endpoint:
             for server_mgr in self.server_managers:
                 for server_params in server_mgr.manager.job.yaml.server_params:
@@ -88,16 +96,20 @@ class DaosCoreBase(TestWithServers):
 
     def run_subtest(self):
         """Run daos_test with a subtest argument."""
-        subtest = self.params.get("daos_test", self.TEST_PATH)
-        num_clients = self.params.get("num_clients", self.TEST_PATH)
+        subtest = self.get_test_param("daos_test")
+        num_clients = self.get_test_param("num_clients")
         if num_clients is None:
-            num_clients = self.params.get("num_clients",
-                                          '/run/daos_tests/num_clients/*')
+            num_clients = self.params.get("num_clients", '/run/daos_tests/*')
         scm_size = self.params.get("scm_size", '/run/pool/*')
         nvme_size = self.params.get("nvme_size", '/run/pool/*')
-        args = self.params.get("args", self.TEST_PATH, "")
+        args = self.get_test_param("args", "")
+        stopped_ranks = self.get_test_param("stopped_ranks", [])
         dmg = self.get_dmg_command()
         dmg_config_file = dmg.yaml.filename
+        if self.hostlist_clients:
+            dmg.copy_certificates(
+                get_log_file("daosCA/certs"), self.hostlist_clients)
+            dmg.copy_configuration(self.hostlist_clients)
         self.client_mca += " --mca btl_tcp_if_include eth0"
 
         cmd = " ".join(
@@ -126,6 +138,19 @@ class DaosCoreBase(TestWithServers):
 
         if not load_mpi("openmpi"):
             self.fail("Failed to load openmpi")
+
+        # Update the expected status for each ranks that will be stopped by this
+        # test to avoid a false failure during tearDown().
+        if "random" in stopped_ranks:
+            # Set each expected rank state to be either stopped or running
+            for manager in self.server_managers:
+                manager.update_expected_states(
+                    None, ["Joined", "Stopped", "Evicted"])
+        else:
+            # Set the specific expected rank state to stopped
+            for rank in stopped_ranks:
+                for manager in self.server_managers:
+                    manager.update_expected_states(rank, ["Stopped", "Evicted"])
 
         try:
             process.run(cmd, env=env)

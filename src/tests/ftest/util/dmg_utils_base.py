@@ -5,6 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from __future__ import print_function
+from socket import gethostname
 
 from command_utils_base import \
     FormattedParameter, CommandWithParameters, YamlParameters
@@ -25,6 +26,9 @@ class DmgCommandBase(YamlCommand):
         """
         super(DmgCommandBase, self).__init__(
             "/run/dmg/*", "dmg", path, yaml_cfg)
+
+        # If running dmg on remote hosts, this list needs to include those hosts
+        self.temporary_file_hosts = gethostname().split(".")[0:1]
 
         # If specified use the configuration file from the YamlParameters object
         default_yaml_file = None
@@ -84,6 +88,7 @@ class DmgCommandBase(YamlCommand):
 
     class ContSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg cont sub command."""
+
         def __init__(self):
             """Create a dmg cont subcommand object."""
             super(DmgCommandBase.ContSubCommand, self).__init__(

@@ -37,7 +37,7 @@ class SuperBlockVersioning(TestWithServers):
             self.fail("{}: {} not found".format(check_result[1], fname))
 
         # Make sure that 'version' is in the file, run task to check
-        cmd = "cat {} | grep -F \"version\"".format(fname)
+        cmd = "sudo cat {} | grep -F \"version\"".format(fname)
         result = pcmd(self.hostlist_servers, cmd, timeout=20)
 
         # Determine if the command completed successfully across all the hosts

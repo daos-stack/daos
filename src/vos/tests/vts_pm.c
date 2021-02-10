@@ -989,6 +989,20 @@ sgl_test(void **state)
 			assert_int_equal((int)rbuf[i], (int)'a');
 	}
 
+	/** Add a couple of negative tests for invalid sgl */
+	d_iov_set(&sg_iov[0], NULL, 0);
+	sgl.sg_nr = 1;
+	iod.iod_size = 0;
+	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, epoch++, 0, &dkey, 1,
+			   &iod, &sgl);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	d_iov_set(&sg_iov[0], NULL, 500);
+	sgl.sg_nr = 1;
+	iod.iod_size = 0;
+	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, epoch++, 0, &dkey, 1,
+			   &iod, &sgl);
+	assert_rc_equal(rc, -DER_INVAL);
 }
 
 enum {

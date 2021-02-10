@@ -432,11 +432,11 @@ run_daos_mgmt_test(int rank, int size, int *sub_tests, int sub_tests_size)
 	if (rank == 0) {
 		if (sub_tests_size == 0) {
 			rc = cmocka_run_group_tests_name(
-				"Management tests", tests, setup,
+				"DAOS_Management", tests, setup,
 				test_teardown);
 		} else {
 			rc = run_daos_sub_tests(
-				"Management tests", tests,
+				"DAOS_Management", tests,
 				ARRAY_SIZE(tests),
 				sub_tests, sub_tests_size, setup,
 				test_teardown);

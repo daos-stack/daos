@@ -45,22 +45,19 @@ dmg:
   transport_config:
     allow_insecure: True
 daos_tests:
-  num_clients:
-    num_clients: 1
-  Tests: !mux
-    test_n_1:
-      daos_test: N
-      test_name: nvme_recovery tests 1
-      args: -u subtests="1"
-    test_n_2:
-      daos_test: N
-      test_name: nvme_recovery tests 2
-      args: -u subtests="2"
-    test_n_3:
-      daos_test: N
-      test_name: nvme_recovery tests 3
-      args: -u subtests="3"
-    test_n_4:
-      daos_test: N
-      test_name: nvme_recovery tests 4
-      args: -u subtests="4"
+  num_clients: 1
+  test_name:
+    test_daos_nvme_recovery_1: DAOS_Nvme_Recovery_1
+    test_daos_nvme_recovery_2: DAOS_Nvme_Recovery_2
+    test_daos_nvme_recovery_3: DAOS_Nvme_Recovery_3
+    test_daos_nvme_recovery_4: DAOS_Nvme_Recovery_4
+  daos_test:
+    test_daos_nvme_recovery_1: N
+    test_daos_nvme_recovery_2: N
+    test_daos_nvme_recovery_3: N
+    test_daos_nvme_recovery_4: N
+  args:
+    test_daos_nvme_recovery_1: -u subtests="1"
+    test_daos_nvme_recovery_2: -u subtests="2"
+    test_daos_nvme_recovery_3: -u subtests="3"
+    test_daos_nvme_recovery_4: -u subtests="4"
