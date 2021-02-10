@@ -15,8 +15,8 @@ def scons():
     senv.AppendUnique(OBJPREFIX='s_')
 
     # SPDK related libs
-    libs = ['spdk_env_dpdk', 'spdk_thread', 'spdk_bdev', 'spdk_copy']
-    libs += ['rte_mempool', 'rte_mempool_ring', 'rte_bus_pci']
+    libs = ['spdk_env_dpdk', 'spdk_thread', 'spdk_bdev', 'spdk_accel']
+    libs += ['rte_mempool', 'rte_mempool_ring', 'rte_bus_pci', 'rte_power']
     libs += ['rte_pci', 'rte_ring', 'rte_mbuf', 'rte_eal', 'rte_kvargs']
     libs += ['spdk_bdev_aio', 'spdk_bdev_nvme', 'spdk_bdev_malloc']
     libs += ['spdk_conf', 'spdk_blob', 'spdk_nvme', 'spdk_util']
