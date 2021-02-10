@@ -133,8 +133,8 @@ test_checkin_handler(crt_rpc_t *rpc_req)
 
 /* Track number of dead-alive swim status changes */
 struct rank_status {
-  int num_alive;
-  int num_dead;
+	int num_alive;
+	int num_dead;
 };
 
 /* Keep a table of whether each rank is alive (0) or dead (1) */
@@ -428,12 +428,12 @@ check_in(crt_group_t *remote_group, int rank, int tag)
 	rc = crt_req_send(rpc_req, client_cb_common, &global_client_cb_arg);
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 
-  // If we're testing crt_ep_abort(), abort the previous RPC
-  if (test_g.t_issue_crt_ep_abort == rank) {
-    rc = crt_ep_abort(&server_ep);
-    D_ASSERTF(rc == 0, "crt_ep_abort() failed. rc: %d\n", rc);
-    DBG_PRINT("crt_ep_abort called, rc = %d.\n", rc);
-  }
+	// If we're testing crt_ep_abort(), abort the previous RPC
+	if (test_g.t_issue_crt_ep_abort == rank) {
+		rc = crt_ep_abort(&server_ep);
+		D_ASSERTF(rc == 0, "crt_ep_abort() failed. rc: %d\n", rc);
+		DBG_PRINT("crt_ep_abort called, rc = %d.\n", rc);
+	}
 }
 
 static struct t_swim_status

@@ -134,9 +134,9 @@ test_run(void)
 			for (tag = 0; tag < test_g.t_srv_ctx_num; tag++) {
 				DBG_PRINT("Sending rpc to %d:%d\n", rank, tag);
 
-        for (j = 0; j < test_g.t_num_checkins_to_send; j++) {
-          check_in(grp, rank, tag);
-        }
+				for (j = 0; j < test_g.t_num_checkins_to_send; j++) {
+					check_in(grp, rank, tag);
+				}
 			}
 		}
 
