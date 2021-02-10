@@ -75,8 +75,10 @@ RUN yum clean all &&							\
 # Install this individually because of potential conflicts
 RUN yum -y install openmpi3-devel && yum clean all
 
+ARG UID=1000
+
 # Add DAOS users
-RUN useradd --user-group --create-home --shell /bin/bash --home /home/daos daos_server
+RUN useradd --uid $UID --user-group --create-home --shell /bin/bash --home /home/daos daos_server
 RUN echo "daos_server:daos_server" | chpasswd
 RUN useradd --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
@@ -84,11 +86,12 @@ RUN echo "daos_agent:daos_agent" | chpasswd
 # DAOS python 3 packages required for pylint
 #  - excluding mpi4py as it depends on CORCI-635
 USER daos_server:daos_server
-RUN pip3 install --user avocado-framework &&					\
-    pip3 install --user avocado-framework-plugin-result-html &&			\
-    pip3 install --user avocado-framework-plugin-varianter-yaml-to-mux &&	\
-    pip3 install --user codespell &&						\
-    pip3 install --user pygithub
+RUN pip3 --no-cache-dir --disable-pip-version-check install --user	\
+	avocado-framework			 	\
+	avocado-framework-plugin-result-html		\
+	avocado-framework-plugin-varianter-yaml-to-mux	\
+	codespell					\
+	pygithub
 USER root:root
 
 # Create directory for DAOS backend storage
