@@ -540,7 +540,7 @@ run_daos_capa_test(int rank, int size)
 {
 	int rc = 0;
 
-	rc = cmocka_run_group_tests_name("DAOS capability tests", capa_tests,
+	rc = cmocka_run_group_tests_name("DAOS_Capability", capa_tests,
 					 setup, test_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;

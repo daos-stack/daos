@@ -2282,14 +2282,13 @@ run_daos_cont_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int rc = 0;
 
-
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (sub_tests_size == 0) {
 		sub_tests_size = ARRAY_SIZE(co_tests);
 		sub_tests = NULL;
 	}
 
-	rc = run_daos_sub_tests("DAOS container tests", co_tests,
+	rc = run_daos_sub_tests("DAOS_Container", co_tests,
 				ARRAY_SIZE(co_tests), sub_tests, sub_tests_size,
 				setup, test_teardown);
 

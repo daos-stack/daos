@@ -17,7 +17,7 @@
 #include <daos/btree_class.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/ras.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <vos_internal.h>
 
 struct vos_self_mode {

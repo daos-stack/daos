@@ -28,7 +28,7 @@ except ImportError:
 
 
 class NvmePoolCapacity(TestWithServers):
-    # pylfloat: disable=too-many-ancestors
+    # pylint: disable=too-many-ancestors
     """Test class Description: Verify NOSPC
     condition is reported when accessing data beyond
     pool size.

@@ -339,11 +339,11 @@ run_daos_dedup_test(int rank, int size, int *sub_tests, int sub_tests_size)
 
 	if (rank == 0) {
 		if (sub_tests_size == 0) {
-			rc = cmocka_run_group_tests_name("DAOS Checksum Tests",
+			rc = cmocka_run_group_tests_name("DAOS_Checksum",
 							 dedup_tests, setup,
 							 test_teardown);
 		} else {
-			rc = run_daos_sub_tests("DAOS Checksum Tests",
+			rc = run_daos_sub_tests("DAOS_Checksum",
 						dedup_tests,
 						ARRAY_SIZE(dedup_tests),
 						sub_tests,

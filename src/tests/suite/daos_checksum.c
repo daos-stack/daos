@@ -2349,7 +2349,7 @@ static const struct CMUnitTest csum_tests[] = {
 static int
 run_csum_tests(int rc)
 {
-	rc += cmocka_run_group_tests_name("DAOS Checksum Tests",
+	rc += cmocka_run_group_tests_name("DAOS_Checksum",
 		  csum_tests, setup,
 		  test_teardown);
 	return rc;
@@ -2380,7 +2380,7 @@ run_daos_checksum_test(int rank, int size, int *sub_tests, int sub_tests_size)
 		}
 
 	} else {
-		rc = run_daos_sub_tests("DAOS Checksum Tests",
+		rc = run_daos_sub_tests("DAOS_Checksum",
 					csum_tests,
 					ARRAY_SIZE(csum_tests),
 					sub_tests,

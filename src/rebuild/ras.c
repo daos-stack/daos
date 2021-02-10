@@ -10,7 +10,7 @@
  */
 #define D_LOGFAC       DD_FAC(rebuild)
 
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 
 static int
 raise_ras(ras_event_t id, ras_sev_t sev,
