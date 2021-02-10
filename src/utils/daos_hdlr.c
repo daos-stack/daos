@@ -1241,6 +1241,14 @@ cont_decode_props(daos_prop_t *props, daos_prop_t *prop_acl)
 			D_PRINT("<unknown value> ("DF_X64")\n", entry->dpe_val);
 	}
 
+	entry = daos_prop_entry_get(props, DAOS_PROP_CO_ALLOCED_OID);
+	if (entry == NULL) {
+		fprintf(stderr, "Container allocated oid property not found\n");
+		rc = -DER_INVAL;
+	} else {
+		D_PRINT("Allocated OID:\t\t"DF_U64"\n", entry->dpe_val);
+	}
+
 	entry = daos_prop_entry_get(props, DAOS_PROP_CO_OWNER);
 	if (entry == NULL || entry->dpe_str == NULL) {
 		fprintf(stderr, "owner property not found\n");
@@ -2912,20 +2920,30 @@ cont_get_acl_hdlr(struct cmd_args_s *ap)
 {
 	int		rc;
 	daos_prop_t	*prop = NULL;
-	struct stat	sb;
 	FILE		*outstream = stdout;
 
 	if (ap->outfile) {
-		if (!ap->force && (stat(ap->outfile, &sb) == 0)) {
-			fprintf(stderr,
-				"Unable to create output file: File already "
-				"exists\n");
-			return -DER_EXIST;
+		int fd;
+		int flags = O_CREAT | O_WRONLY;
+
+		/* Ensure we don't overwrite some existing file without the
+		 * force option.
+		 */
+		if (!ap->force) {
+			flags |= O_EXCL;
 		}
 
-		outstream = fopen(ap->outfile, "w");
+		fd = open(ap->outfile, flags, 0644);
+		if (fd < 0) {
+			fprintf(stderr,
+				"Unable to create output file: %s\n",
+				strerror(errno));
+			return daos_errno2der(errno);
+		}
+
+		outstream = fdopen(fd, "w");
 		if (outstream == NULL) {
-			fprintf(stderr, "Unable to create output file: %s\n",
+			fprintf(stderr, "Unable to stream to output file: %s\n",
 				strerror(errno));
 			return daos_errno2der(errno);
 		}

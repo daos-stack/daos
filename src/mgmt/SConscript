@@ -15,6 +15,7 @@ def scons():
                             'smd.pb-c.c', 'cont.pb-c.c'])
     common = denv.SharedObject(['rpc.c']) + pb
     # Management server module
+    denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     mgmt_srv = daos_build.library(denv, 'mgmt',
                                   [common, 'srv.c', 'srv_layout.c',
                                    'srv_pool.c', 'srv_system.c',

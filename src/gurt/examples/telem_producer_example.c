@@ -241,6 +241,7 @@ struct d_tm_nodeList_t *add_metrics_manually(void)
 	if (rc != D_TM_SUCCESS) {
 		d_tm_list_free(node_list);
 		printf("d_tm_add_metric failed, rc = %d\n", rc);
+		return NULL;
 	}
 
 	return node_list;
@@ -308,7 +309,7 @@ main(int argc, char **argv)
 
 	/**
 	 * Call d_tm_init() only once per process,
-	 * i.e. in iosrv/init.c/server_init()
+	 * i.e. in engine/init.c::server_init()
 	 */
 	rc = d_tm_init(simulated_srv_idx, D_TM_SHARED_MEMORY_SIZE);
 	if (rc != 0)

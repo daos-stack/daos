@@ -183,13 +183,15 @@ enum daos_cont_props {
 	 * Default: 4K
 	 */
 	DAOS_PROP_CO_DEDUP_THRESHOLD,
-	/** First citizon objects of container, see \a daos_cont_root_oids */
+	/** First citizen objects of container, see \a daos_cont_root_oids */
 	DAOS_PROP_CO_ROOTS,
 	/**
 	 * Container status
 	 * Value "struct daos_co_status".
 	 */
 	DAOS_PROP_CO_STATUS,
+	/** OID value to start allocation from */
+	DAOS_PROP_CO_ALLOCED_OID,
 	DAOS_PROP_CO_MAX,
 };
 

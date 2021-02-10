@@ -11,7 +11,7 @@
 #define __POOL_SRV_INTERNAL_H__
 
 #include <gurt/list.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_security.h>
 
 /**
@@ -121,6 +121,7 @@ void ds_pool_attr_del_handler(crt_rpc_t *rpc);
 void ds_pool_list_cont_handler(crt_rpc_t *rpc);
 int ds_pool_evict_rank(uuid_t pool_uuid, d_rank_t rank);
 void ds_pool_query_info_handler(crt_rpc_t *rpc);
+void ds_pool_ranks_get_handler(crt_rpc_t *rpc);
 
 /*
  * srv_target.c
@@ -166,6 +167,9 @@ int ds_pool_iv_conn_hdl_fetch(struct ds_pool *pool, uuid_t key_uuid,
 			      d_iov_t *conn_iov);
 int ds_pool_iv_conn_hdl_invalidate(struct ds_pool *pool, uuid_t hdl_uuid);
 
+int ds_pool_iv_srv_hdl_fetch_non_sys(struct ds_pool *pool,
+				     uuid_t *srv_cont_hdl,
+				     uuid_t *srv_pool_hdl);
 /*
  * srv_pool_scrub.c
  */

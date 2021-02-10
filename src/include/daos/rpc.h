@@ -126,18 +126,6 @@ daos_rpc_tag(int req_type, int tgt_idx)
 	};
 }
 
-static inline struct daos_rpc_handler *
-daos_rpc_handler_find(struct daos_rpc_handler *handlers, crt_opcode_t opc)
-{
-	struct daos_rpc_handler *handler;
-
-	for (handler = handlers; handler->dr_opc != 0; handler++) {
-		if (handler->dr_opc == opc)
-			return handler;
-	}
-	return NULL;
-}
-
 /**
  * Register RPCs for both clients and servers.
  *
@@ -157,6 +145,8 @@ daos_rpc_register(struct crt_proto_format *proto_fmt, uint32_t cli_count,
 		  struct daos_rpc_handler *handlers, int mod_id)
 {
 	uint32_t i;
+
+	/* TODO: mod_in is unused */
 
 	if (proto_fmt == NULL)
 		return 0;
@@ -204,9 +194,15 @@ daos_rpc_retryable_rc(int rc)
 static inline bool
 daos_rpc_from_client(crt_rpc_t *rpc)
 {
-	d_rank_t srcrank;
+	d_rank_t	srcrank;
+	int		rc;
 
-	crt_req_src_rank_get(rpc, &srcrank);
+	D_ASSERT(rpc != NULL);
+
+	rc = crt_req_src_rank_get(rpc, &srcrank);
+	/* Only possible failures here are invalid inputs */
+	D_ASSERTF(rc == 0, "error "DF_RC" should not be possible", DP_RC(rc));
+
 	return (srcrank == CRT_NO_RANK);
 }
 

@@ -281,7 +281,8 @@ public class DaosObject {
     }
     ByteBuf descBuffer = desc.getDescBuffer();
     try {
-      client.fetchObject(objectPtr, 0, desc.getNbrOfEntries(), descBuffer.memoryAddress());
+      client.fetchObject(objectPtr, 0, desc.getNbrOfEntries(), descBuffer.memoryAddress(),
+          descBuffer.capacity());
       desc.parseResult();
     } catch (DaosIOException e) {
       DaosObjectException de = new DaosObjectException(oid, "failed to fetch object with description " +
@@ -335,7 +336,8 @@ public class DaosObject {
       log.debug(oid + " update object with description: " + desc.toString(MAX_DEBUG_SIZE));
     }
     try {
-      client.updateObject(objectPtr, 0, desc.getNbrOfEntries(), desc.getDescBuffer().memoryAddress());
+      client.updateObject(objectPtr, 0, desc.getNbrOfEntries(), desc.getDescBuffer().memoryAddress(),
+          desc.getDescBuffer().capacity());
       desc.succeed();
     } catch (DaosIOException e) {
       DaosObjectException de = new DaosObjectException(oid, "failed to update object with description " +
@@ -538,7 +540,7 @@ public class DaosObject {
    * @return {@link IODataDesc}
    * @throws IOException
    */
-  public static IODataDesc createDataDescForUpdate(String dkey, IODataDesc.IodType iodType, int recordSize)
+  public IODataDesc createDataDescForUpdate(String dkey, IODataDesc.IodType iodType, int recordSize)
       throws IOException {
     IODataDesc desc = new IODataDesc(dkey, iodType, recordSize, true);
     return desc;
@@ -557,7 +559,7 @@ public class DaosObject {
    * @return {@link IODataDesc}
    * @throws IOException
    */
-  public static IODataDesc createDataDescForFetch(String dkey, IODataDesc.IodType iodType, int recordSize)
+  public IODataDesc createDataDescForFetch(String dkey, IODataDesc.IodType iodType, int recordSize)
       throws IOException {
     IODataDesc desc = new IODataDesc(dkey, iodType, recordSize, false);
     return desc;
