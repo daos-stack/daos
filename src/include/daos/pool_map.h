@@ -174,6 +174,15 @@ static inline unsigned int pool_buf_nr(size_t size)
 
 struct pool_map;
 
+/**
+ * When domains are passed into gen_pool_buf as an array of integers, the data
+ * should be interpreted as a set of tuples in the form:
+ *   (level number, ID, number of children)
+ * The bottom layer representing ranks is compressed further, in the form:
+ *   (rank)
+ */
+#define POOL_BUF_DOMAIN_TUPLE_LEN	3
+
 struct pool_buf *pool_buf_alloc(unsigned int nr);
 struct pool_buf *pool_buf_dup(struct pool_buf *buf);
 void pool_buf_free(struct pool_buf *buf);

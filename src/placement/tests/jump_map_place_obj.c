@@ -377,14 +377,19 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 	uint32_t	map_version;
 	int		ntargets;
 	int		rc, i;
-	d_rank_list_t		rank_list;
-	uint32_t domains[] = {1, 1, 1, 1, 1};
-	uuid_t target_uuids[] = {"12345678", "23456789",
-				 "34567890", "4567890a" };
+	d_rank_list_t	rank_list;
+	uint32_t	domains[] = {1, 1, 1,
+				     1, 2, 1,
+				     1, 3, 1,
+				     1, 4, 1,
+				     1, 5, 1};
+	const size_t	domains_len = ARRAY_SIZE(domains) /
+				      POOL_BUF_DOMAIN_TUPLE_LEN;
+	uuid_t		target_uuids[] = {"12345678", "23456789",
+					  "34567890", "4567890a" };
 
-	if (domain_count > ARRAY_SIZE(domains))
-		fail_msg("Only %lu domains can be added",
-			 ARRAY_SIZE(domains));
+	if (domain_count > domains_len)
+		fail_msg("Only %lu domains can be added", domains_len);
 
 	rank_list.rl_nr = node_count;
 	D_ALLOC_ARRAY(rank_list.rl_ranks, node_count);
@@ -399,7 +404,8 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 
 	map_version = pool_map_get_version(ctx->po_map) + 1;
 
-	rc = gen_pool_buf(ctx->po_map, &map_buf, map_version, domain_count,
+	rc = gen_pool_buf(ctx->po_map, &map_buf, map_version,
+			  domain_count * POOL_BUF_DOMAIN_TUPLE_LEN,
 			  node_count, ntargets, domains, target_uuids,
 			  &rank_list, NULL, target_count);
 	assert_success(rc);

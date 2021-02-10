@@ -1347,7 +1347,7 @@ add_domains_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 	int		i, rc;
 	uint32_t	num_comps;
 	uint8_t		new_status;
-	const int	TUPLE_SIZE = 3;
+	const int	TUPLE_SIZE = POOL_BUF_DOMAIN_TUPLE_LEN;
 	uint32_t	domains_found;
 
 	if (map != NULL) {
@@ -1411,7 +1411,6 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 	uint8_t			new_status;
 	bool			updated;
 	int			i, rc;
-	const int		TUPLE_SIZE = 3;
 	int			num_domain_comps;
 
 	updated = false;
@@ -1422,7 +1421,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 	 * Higher-level domains are formatted in tuples, ranks are a single
 	 * integer.
 	 */
-	num_domain_comps = (ndomains - nnodes) / TUPLE_SIZE - 1;
+	num_domain_comps = (ndomains - nnodes) / POOL_BUF_DOMAIN_TUPLE_LEN - 1;
 
 	/* Prepare the pool map attribute buffers. */
 	map_buf = pool_buf_alloc(num_domain_comps + nnodes + ntargets);
