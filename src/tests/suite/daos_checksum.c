@@ -6,6 +6,7 @@
 
 #define D_LOGFAC	DD_FAC(tests)
 #include "daos_test.h"
+#include "daos_iotest.h"
 
 #include <daos/checksum.h>
 #include <gurt/types.h>
@@ -13,6 +14,7 @@
 #include <daos/task.h>
 #include <daos/event.h>
 #include <daos/container.h>
+#include <daos_srv/daos_engine.h>
 
 static void
 iov_update_fill(d_iov_t *iov, char *data, uint64_t len_to_fill);
@@ -29,7 +31,7 @@ daos_checksum_test_arg2type(char *str)
 }
 
 /** by default for replica object test */
-static daos_oclass_id_t dts_csum_oc = OC_SX;
+static daos_oclass_id_t dts_csum_oc = OC_S1;
 static uint32_t dts_csum_prop_type = DAOS_PROP_CO_CSUM_SHA512;
 
 /** enable EC obj csum test or replica obj csum test */
@@ -353,7 +355,7 @@ checksum_disabled(void **state)
 	 */
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
-	assert_rc_equal(rc, 0);
+	assert_success(rc);
 
 	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
@@ -628,6 +630,27 @@ struct partial_unaligned_fetch_testcase_args {
 	daos_recx_t		 fetch_recxs[FETCH_RECX_NR];
 	daos_oclass_id_t	 oclass;
 };
+
+static void
+insert_data(const char *akey_format, const char *dkey, struct ioreq *req,
+	    const uint32_t akey_loop, const uint32_t rec_loop, char *data_str,
+	    daos_iod_type_t iod_type)
+{
+	char akey[32];
+	int a, r;
+
+	req->iod_type = iod_type;
+	for (a = 0; a < akey_loop; a++) {
+		sprintf(akey, akey_format, a);
+
+		for (r = 0; r < rec_loop; r++) {
+			insert_single(dkey, akey, r,
+				      data_str,
+				      strlen(data_str) + 1,
+				      DAOS_TX_NONE, req);
+		}
+	}
+}
 
 static int
 disabled_targets(test_arg_t *arg)
@@ -1280,6 +1303,8 @@ dtx_with_csum(void **state)
 	daos_oclass_id_t	 oc = dts_csum_oc;
 	int			 rc;
 
+	/* Skipping test because of DAOS-6381 */
+	skip();
 
 	if (csum_ec_enabled() && !test_runable(arg, csum_ec_grp_size()))
 		skip();
@@ -1841,7 +1866,7 @@ tst_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 				      iods, sgls, maps, extra_arg, csum, NULL,
 				      NULL, &task);
 
-	assert_int_equal(0, rc);
+	assert_rc_equal(0, rc);
 
 	return dc_task_schedule(task, true);
 }
@@ -2133,64 +2158,151 @@ tst_obj_list_obj(daos_handle_t oh, daos_epoch_range_t *epr, daos_key_t *dkey,
 					 size, nr, kds, sgl,
 					 anchor, dkey_anchor, akey_anchor,
 					 true, NULL, NULL, csum_iov, &task);
-	assert_int_equal(0, rc);
+	assert_rc_equal(0, rc);
 	return dc_task_schedule(task, true);
+}
+
+static int
+test_enum_unpack_cb(struct dss_enum_unpack_io *io, void *arg)
+{
+	struct daos_csummer	*csummer = NULL;
+	int			 rc;
+	int			 i;
+	d_iov_t			 tmp_iov;
+
+	rc = daos_csummer_csum_init_with_packed(&csummer, &io->ui_csum_iov);
+	assert_success(rc);
+
+	tmp_iov = io->ui_csum_iov;
+	/* +1 to convert from idx to nr */
+	for (i = 0; i < io->ui_iods_top + 1; i++) {
+		struct dcs_iod_csums *iod_csums = NULL;
+
+		if (io->ui_sgls[i].sg_nr_out == 0 ||
+		    io->ui_sgls[i].sg_iovs == NULL ||
+		    io->ui_iods[i].iod_nr == 0) {
+			/* Not inlined */
+			continue;
+		}
+
+		daos_csummer_alloc_iods_csums_with_packed(
+			csummer,
+			&io->ui_iods[i], 1,
+			&tmp_iov, &iod_csums);
+
+		rc = daos_csummer_verify_iod(csummer, &io->ui_iods[i],
+					     &io->ui_sgls[i], iod_csums,
+					     NULL, 0, NULL);
+
+		assert_success(rc);
+
+		daos_csummer_free_ic(csummer, &iod_csums);
+	}
+
+	daos_csummer_destroy(&csummer);
+
+	return 0;
 }
 
 static void
 test_enumerate_object(void **state)
 {
+	test_arg_t		*arg = *state;
 	struct csum_test_ctx	 ctx = {0};
-	daos_oclass_id_t	 oc = dts_csum_oc;
 	daos_anchor_t		 anchor = {0};
 	daos_anchor_t		 dkey_anchor = {0};
 	daos_anchor_t		 akey_anchor = {0};
 	d_iov_t			 csum_iov = {0};
+	d_iov_t			 tmp_csum_iov = {0};
 	d_sg_list_t		 sgl = {0};
 	struct dcs_csum_info	*csum_info = NULL;
 	void			*end_byte;
-	const uint32_t		 akey_nr = 5;
-	/** will enum for each akey, value of each akey, 1 dkey, and 1 oid */
-	const uint32_t		 enum_nr = akey_nr * 2 + 1 + 1;
-	daos_key_desc_t		 kds[enum_nr];
-	uint8_t			 csum_buf[1024];
+	daos_key_desc_t		*kds = NULL;
 	uint32_t		 csum_count = 0;
-	uint32_t		 i;
 	uint32_t		 nr;
 	int			 rc;
+	char			 dkey[32];
+	int			 d;
+	daos_size_t		 size = 0;
+	struct ioreq		 req;
+	const uint32_t		 dkey_loop = 3;
+	const uint32_t		 akey_loop = 3;
+	const uint32_t		 rec_loop = 3;
+	daos_unit_oid_t		 unit_oid = {0};
+	daos_epoch_range_t	 epr;
+
+	/*
+	 * data less than 32 bytes should be inlined. see ds_obj_enum_handler()
+	 * for inline_thres set on enum args
+	 */
+	char *data_small = "Lorem ipsum dolor sit amet, co";
+	char *data_medium = "Lorem ipsum dolor sit amet, consectetur adipiscing"
+			    " elit, sed do eiusmod tempor incididunt ut labore"
+			    " et dolore magna aliqua. Ut enim ad minim veniam,"
+			    " quis nostrud exercitation ullamco laboris nisi ut"
+			    " aliquip ex ea commodo consequat. Duis aute irure"
+			    " dolor in reprehenderit in voluptate velit esse"
+			    " cillum dolore eu fugiat nulla pariatur. Excepteur"
+			    " sint occaecat cupidatat non proident, sunt in"
+			    " culpa qui officia deserunt mollit anim id est"
+			    " laborum.";
+	char *data_large = NULL;
+
+
+	D_ALLOC(data_large, 1024 * 3);
+	assert_non_null(data_large);
+	memset(data_large, 'L', 1024 * 3 - 1); /* -1: keep \0 */
 
 	FAULT_INJECTION_REQUIRED();
 
-	memset(kds, 0, enum_nr * sizeof(*kds));
+	assert_true(strlen(data_small) + 1 <= 32);
+	assert_true(strlen(data_medium) + 1 > 32);
+	assert_true(strlen(data_large) + 1 > 2048);
 
-	d_iov_set(&csum_iov, csum_buf, 1024);
+	d_sgl_init(&sgl, 1);
+	iov_alloc(&sgl.sg_iovs[0], 2048);
+
+	D_ALLOC_ARRAY(kds, 1024);
+	nr = 1024;
+
+	iov_alloc(&csum_iov, 2048);
+	/* iov_len is used for how much of the buffer is used */
 	csum_iov.iov_len = 0;
 
 	setup_from_test_args(&ctx, *state);
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 10, oc);
-	setup_simple_data(&ctx);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 10, OC_S1);
 
-	/** insert multiple a keys.*/
-	for (i = 0; i < akey_nr; i++) {
-		rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
-				     &ctx.update_iod, &ctx.update_sgl,
-				     NULL);
-		assert_rc_equal(0, rc);
-		((uint8_t *)ctx.update_iod.iod_name.iov_buf)[1] += 1;
-		((uint8_t *)ctx.update_sgl.sg_iovs->iov_buf)[0] += 1;
+	ioreq_init(&req, ctx.coh, ctx.oid, DAOS_IOD_ARRAY, arg);
+
+	/* insert data to be enumerated */
+	for (d = 0; d < dkey_loop; d++) {
+		sprintf(dkey, "dkey-%d", d);
+
+		insert_data("akey-%d-array-small", dkey,
+			    &req, akey_loop, rec_loop, data_small,
+			    DAOS_IOD_ARRAY);
+		insert_data("akey-%d-array-medium", dkey,
+			    &req, akey_loop, rec_loop, data_medium,
+			    DAOS_IOD_ARRAY);
+		insert_data("akey-%d-array-large", dkey,
+			    &req, akey_loop, rec_loop, data_large,
+			    DAOS_IOD_ARRAY);
+		insert_data("akey-%d-single-small", dkey,
+			    &req, akey_loop, rec_loop, data_small,
+			    DAOS_IOD_SINGLE);
+		insert_data("akey-%d-single-medium", dkey,
+			    &req, akey_loop, rec_loop, data_medium,
+			    DAOS_IOD_SINGLE);
+		insert_data("akey-%d-single-large", dkey,
+			    &req, akey_loop, rec_loop, data_large,
+			    DAOS_IOD_SINGLE);
 	}
-
-	/** Make sure can handle data over multiple iovs */
-	d_sgl_init(&sgl, 2);
-	iov_alloc(&sgl.sg_iovs[0], 100);
-	iov_alloc(&sgl.sg_iovs[1], 1024);
-
-
 
 	/** inject failure ... should return CSUM error */
 	client_corrupt_akey_on_fetch();
-	nr = enum_nr;
-	rc = tst_obj_list_obj(ctx.oh, NULL, &ctx.dkey, NULL, NULL, &nr, kds,
+	epr.epr_lo = 0;
+	epr.epr_hi = DAOS_EPOCH_MAX;
+	rc = tst_obj_list_obj(ctx.oh, &epr, NULL, NULL, NULL, &nr, kds,
 		&sgl, &anchor, &dkey_anchor, &akey_anchor, &csum_iov);
 
 	assert_rc_equal(-DER_CSUM, rc);
@@ -2201,34 +2313,44 @@ test_enumerate_object(void **state)
 	 * what's returned. If there is a bug an tst_obj_list_obj could return
 	 * more than expected, want to catch it.
 	 */
-	nr = enum_nr + 10;
 	memset(&anchor, 0, sizeof(anchor));
 	memset(&dkey_anchor, 0, sizeof(dkey_anchor));
 	memset(&akey_anchor, 0, sizeof(akey_anchor));
 	sgl.sg_nr_out = 0;
-	rc = tst_obj_list_obj(ctx.oh, NULL, &ctx.dkey, NULL, NULL, &nr, kds,
+	csum_iov.iov_len = 0;
+	rc = tst_obj_list_obj(ctx.oh, NULL, NULL, NULL, &size, &nr, kds,
 			      &sgl, &anchor, &dkey_anchor, &akey_anchor,
 			      &csum_iov);
-	assert_rc_equal(0, rc);
-	assert_int_equal(enum_nr, nr);
+
+	assert_success(rc);
+
+	if (csum_iov.iov_len == 0)
+		fail_msg("Should have had something in csum_iov");
+	ioreq_fini(&req);
 
 	/** Make sure csum iov is correct */
-	end_byte = csum_iov.iov_buf + csum_iov.iov_len;
-	while (csum_iov.iov_buf < end_byte) {
-		ci_cast(&csum_info, &csum_iov);
-		csum_iov.iov_buf += ci_size(*csum_info);
-		csum_iov.iov_buf_len -= ci_size(*csum_info);
-		csum_iov.iov_len -= ci_size(*csum_info);
+	tmp_csum_iov = csum_iov;
+	end_byte = tmp_csum_iov.iov_buf + tmp_csum_iov.iov_len;
+	while (tmp_csum_iov.iov_buf < end_byte) {
+		ci_cast(&csum_info, &tmp_csum_iov);
+		tmp_csum_iov.iov_buf += ci_size(*csum_info);
+		tmp_csum_iov.iov_buf_len -= ci_size(*csum_info);
+		tmp_csum_iov.iov_len -= ci_size(*csum_info);
 		csum_count++;
 	}
 
-	/** -1 because oid doesn't have checksum */
-	assert_int_equal(enum_nr - 1, csum_count);
+
+	unit_oid.id_pub = ctx.oid;
+	rc = dss_enum_unpack(unit_oid, kds, nr, &sgl, &csum_iov,
+			     test_enum_unpack_cb, NULL);
+	assert_success(rc);
 
 	/** Clean up */
 	d_sgl_fini(&sgl, true);
+	daos_iov_free(&csum_iov);
 	cleanup_data(&ctx);
 	cleanup_cont_obj(&ctx);
+	D_FREE(kds);
 }
 
 static uint32_t
@@ -2280,12 +2402,12 @@ test_enumerate_object2(void **state)
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl,
 			     NULL);
-	assert_int_equal(0, rc);
+	assert_rc_equal(0, rc);
 	ctx.update_iod.iod_recxs->rx_idx += 5;
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl,
 			     NULL);
-	assert_int_equal(0, rc);
+	assert_rc_equal(0, rc);
 
 	d_sgl_init(&list_sgl, 1);
 	iov_alloc(&list_sgl.sg_iovs[0], 1024 * 10);
@@ -2431,10 +2553,12 @@ setup(void **state)
 			  0, NULL);
 }
 
-#define CSUM_TEST(dsc, test) { dsc, test, csum_replia_enable, \
-				test_case_teardown }
-#define EC_CSUM_TEST(dsc, test) { dsc, test, csum_ec_enable, \
-				test_case_teardown }
+#define STR_HELPER(x) #x
+#define STR(x) STR_HELPER(x)
+#define CSUM_TEST(dsc, test) { STR(__COUNTER__)". " dsc, test, \
+			  csum_replia_enable, test_case_teardown }
+#define EC_CSUM_TEST(dsc, test) { STR(__COUNTER__)". " dsc, test, \
+			  csum_ec_enable, test_case_teardown }
 
 static const struct CMUnitTest csum_tests[] = {
 	CSUM_TEST("DAOS_CSUM00: csum disabled", checksum_disabled),
@@ -2482,7 +2606,7 @@ static const struct CMUnitTest csum_tests[] = {
 	CSUM_TEST("DAOS_CSUM10: Enumerate A Keys", test_enumerate_a_key),
 	CSUM_TEST("DAOS_CSUM11: Enumerate D Keys", test_enumerate_d_key),
 	CSUM_TEST("DAOS_CSUM12: Enumerate objects", test_enumerate_object),
-	CSUM_TEST("WIP DAOS_CSUM12.1: Enumerate objects with overlapping "
+	CSUM_TEST("DAOS_CSUM12.1: Enumerate objects with overlapping "
 		  "extents", test_enumerate_object2),
 	CSUM_TEST("DAOS_CSUM13: Enumerate objects with too small csum buffer",
 		  test_enumerate_object_csum_buf_too_small),

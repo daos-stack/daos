@@ -74,6 +74,42 @@ struct daos_sgl_idx {
 };
 
 /*
+ * add bytes to the sgl index offset. If the new offset is greater than or
+ * equal to the indexed iov len, move the index to the next iov in the sgl.
+ */
+static inline void
+sgl_move_forward(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx, uint64_t bytes)
+{
+	sgl_idx->iov_offset += bytes;
+
+	/** move to next iov if necessary */
+	if (sgl_idx->iov_offset >= sgl->sg_iovs[sgl_idx->iov_idx].iov_len) {
+		sgl_idx->iov_idx++;
+		sgl_idx->iov_offset = 0;
+	}
+}
+
+static inline void *
+sgl_indexed_byte(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx)
+{
+	return sgl->sg_iovs[sgl_idx->iov_idx].iov_buf + sgl_idx->iov_offset;
+}
+
+/*
+ * If the byte count will exceed the current indexed iov, then move to
+ * the next.
+ */
+static inline void
+sgl_test_forward(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx, uint64_t bytes)
+{
+	if (sgl_idx->iov_offset + bytes >
+	    sgl->sg_iovs[sgl_idx->iov_idx].iov_len) {
+		sgl_idx->iov_idx++;
+		sgl_idx->iov_offset = 0;
+	}
+}
+
+/*
  * Each thread has DF_UUID_MAX number of thread-local buffers for UUID strings.
  * Each debug message can have at most this many DP_UUIDs.
  *

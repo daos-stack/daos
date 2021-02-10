@@ -20,6 +20,7 @@
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/dtx_srv.h>
+#include <daos_srv/srv_csum.h>
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
@@ -601,65 +602,7 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
  * Note: the csum_iov is modified so a shallow copy should be sent instead of
  * the original.
  */
-static int
-alloc_iods_csums(struct dcs_iod_csums **iods_csums, daos_iod_t *iods,
-		 int iod_cnt, d_iov_t *csum_iov,
-		 struct daos_csummer *csummer)
-{
-	int rc = 0;
-	int i;
 
-	if (!daos_csummer_initialized(csummer) || csum_iov == NULL ||
-	    csum_iov->iov_len == 0)
-		return 0;
-
-	D_ASSERT(iods_csums != NULL);
-	D_ASSERT(iods != NULL);
-	rc = daos_csummer_alloc_iods_csums(csummer, iods, iod_cnt, false, NULL,
-					   iods_csums);
-	if (rc < 0)
-		return rc;
-
-	for (i = 0; i < iod_cnt; i++) {
-		int c;
-
-		for (c = 0; c < (*iods_csums)[i].ic_nr; c++) {
-			struct dcs_csum_info *ci;
-
-			ci_cast(&ci, csum_iov);
-			if (ci == NULL) {
-				D_ERROR("Error casting csum");
-				return -DER_CSUM;
-			}
-			ci_set_from_ci(&(*iods_csums)[i].ic_data[c], ci);
-			ci_move_next_iov(ci, csum_iov);
-		}
-	}
-
-	return 0;
-}
-
-/**
- * If checksums are enabled, then csums_iov should have at least 1
- * checksum info structure, use the first checksum info  (all will have
- * the same configuration) to get the container checksum configuration and
- * initialize a csummer.
- */
-static int
-csum_init_csummer(const d_iov_t *csums_iov, struct daos_csummer **csummer)
-{
-	int rc;
-	struct dcs_csum_info *ci;
-
-	*csummer = NULL;
-
-	ci_cast(&ci, csums_iov);
-	if (ci == NULL)
-		return 0;
-	rc = daos_csummer_init_with_type(csummer, ci->cs_type,
-					 ci->cs_chunksize, false);
-	return rc;
-}
 
 static int
 migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
@@ -736,7 +679,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 	    !obj_shard_is_ec_parity(mrone->mo_oid, &oca))
 		mrone_recx_daos2_vos(mrone, oca);
 
-	rc = csum_init_csummer(csums_iov, &csummer);
+	rc = daos_csummer_csum_init_with_packed(&csummer, csums_iov);
 	if (rc != 0)
 		return rc;
 
@@ -754,10 +697,11 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 			D_DEBUG(DB_TRACE, "update start %d cnt %d\n",
 				start, iod_cnt);
 
-			rc = alloc_iods_csums(&iod_csums,
-					      &mrone->mo_iods[start],
-					      iod_cnt, &tmp_csum_iov,
-					      csummer);
+			rc = daos_csummer_alloc_iods_csums_with_packed(
+				csummer,
+				&mrone->mo_iods[start],
+				iod_cnt, &tmp_csum_iov,
+				&iod_csums);
 			if (rc != 0) {
 				D_ERROR("setting up iods csums failed: "
 						DF_RC"\n", DP_RC(rc));
@@ -782,13 +726,15 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 	}
 
 	if (iod_cnt > 0) {
-		rc = alloc_iods_csums(&iod_csums,
-				      &mrone->mo_iods[start],
-				      iod_cnt, &tmp_csum_iov,
-				      csummer);
+		rc = daos_csummer_alloc_iods_csums_with_packed(
+			csummer,
+			&mrone->mo_iods[start],
+			iod_cnt,
+			&tmp_csum_iov, &iod_csums);
 		if (rc != 0) {
-			D_ERROR("failed to alloc iod csums: rc "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR("failed to alloc iod csums: rc "DF_RC". "
+				"csum_iov was '%s'\n",
+				DP_RC(rc), fetch ? "FETCHED" : "INLINE");
 			D_GOTO(out, rc);
 		}
 		rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
@@ -898,16 +844,16 @@ migrate_update_parity(struct migrate_one *mrone, struct ds_cont_child *ds_cont,
 		tmp_sgl.sg_iovs = &tmp_iov;
 		iod->iod_recxs = &tmp_recx;
 
-		rc = csum_init_csummer(csum_iov, &csummer);
+		rc = daos_csummer_csum_init_with_packed(&csummer, csum_iov);
 		if (rc != 0) {
 			D_ERROR("Error initializing csummer");
 			D_GOTO(out, rc);
 		}
 
-		rc = alloc_iods_csums(&iod_csums,
-				      iod,
-				      1, csum_iov,
-				      csummer);
+		rc = daos_csummer_alloc_iods_csums_with_packed(
+			csummer,
+			iod,
+			1, csum_iov, &iod_csums);
 		if (rc != 0) {
 			D_ERROR("Error allocating iods");
 			D_GOTO(out, rc);
@@ -1109,15 +1055,16 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 				       true, false, NULL);
 	}
 
-	rc = csum_init_csummer(&csum_iov_fetch, &csummer);
+	rc = daos_csummer_csum_init_with_packed(&csummer, &csum_iov_fetch);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
 	tmp_csum_iov = csum_iov_fetch;
-	rc = alloc_iods_csums(&iod_csums,
-			      &mrone->mo_iods[0],
-			      mrone->mo_iod_num, &tmp_csum_iov,
-			      csummer);
+	rc = daos_csummer_alloc_iods_csums_with_packed(
+		csummer,
+		&mrone->mo_iods[0],
+		mrone->mo_iod_num,
+		&tmp_csum_iov, &iod_csums);
 	if (rc != 0) {
 		D_ERROR("unable to allocate iod csums.");
 		goto out;
@@ -1211,13 +1158,16 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 		D_ERROR("migrate dkey "DF_KEY" failed rc %d\n",
 			DP_KEY(&mrone->mo_dkey), rc);
 
-	rc = csum_init_csummer(&csum_iov_fetch, &csummer);
+	rc = daos_csummer_csum_init_with_packed(&csummer, &csum_iov_fetch);
 	if (rc != 0)
 		D_GOTO(post, rc);
 
 	tmp_csum_iov = csum_iov_fetch;
-	rc = alloc_iods_csums(&iod_csums, &mrone->mo_iods[0],
-			      mrone->mo_iod_num, &tmp_csum_iov, csummer);
+	rc = daos_csummer_alloc_iods_csums_with_packed(csummer,
+						       mrone->mo_iods,
+						       mrone->mo_iod_num,
+						       &tmp_csum_iov,
+						       &iod_csums);
 	if (rc != 0) {
 		D_ERROR("Failed to alloc iod csums");
 		D_GOTO(post, rc);
@@ -1368,7 +1318,7 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone)
 	data_size = daos_iods_len(mrone->mo_iods, mrone->mo_iod_num);
 	D_DEBUG(DB_TRACE, "data size is "DF_U64"\n", data_size);
 	if (data_size == 0) {
-		D_DEBUG(DB_REBUILD, "skipe empty iod\n");
+		D_DEBUG(DB_REBUILD, "skip empty iod\n");
 		D_GOTO(obj_close, rc);
 	}
 

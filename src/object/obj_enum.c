@@ -446,8 +446,14 @@ csum_copy_inline(int type, vos_iter_entry_t *ent, struct dss_enum_arg *arg,
 		orig_data_len = ent->ie_orig_recx.rx_nr * ent->ie_rsize;
 		ent_to_verify.ie_recx = ent->ie_orig_recx;
 		ent_to_verify.ie_biov.bi_data_len = orig_data_len;
+		ent_to_verify.ie_biov.bi_addr.ba_off -=
+			ent->ie_recx.rx_idx -
+			ent->ie_orig_recx.rx_idx;
 
 		D_ALLOC(data_to_verify.iov_buf, orig_data_len);
+		if (data_to_verify.iov_buf == NULL)
+			return -DER_NOMEM;
+
 		data_to_verify.iov_buf_len = orig_data_len;
 
 		rc = arg->copy_data_cb(ih, &ent_to_verify, &data_to_verify);
@@ -827,7 +833,6 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_epoch_t *eph,
 				D_GOTO(out, rc);
 		} else {
 			d_iov_set(iov, NULL, 0);
-			unpack_recx_csum(csum_iov_in, NULL);
 		}
 
 		sgl->sg_nr++;
@@ -946,6 +951,7 @@ static void
 dss_enum_unpack_io_fini(struct dss_enum_unpack_io *io)
 {
 	D_ASSERTF(io->ui_iods_top == -1, "%d\n", io->ui_iods_top);
+	daos_iov_free(&io->ui_csum_iov);
 	daos_iov_free(&io->ui_dkey);
 }
 
@@ -962,7 +968,6 @@ clear_top_iod(struct dss_enum_unpack_io *io)
 
 		if (io->ui_sgls != NULL)
 			d_sgl_fini(&io->ui_sgls[idx], false);
-		daos_iov_free(io_csums_iov(io));
 
 		daos_iov_free(&io->ui_iods[idx].iod_name);
 		D_FREE(io->ui_iods[idx].iod_recxs);
@@ -1321,22 +1326,26 @@ obj_enum_iterate(daos_key_desc_t *kdss, d_sg_list_t *sgl, int nr,
 		 unsigned int type, obj_enum_process_cb_t cb,
 		 void *cb_arg)
 {
-	char		*ptr;
-	unsigned int	i;
-	int		rc = 0;
+	struct daos_sgl_idx	 sgl_idx = {0};
+	char			*ptr;
+	unsigned int		 i;
+	int			 rc = 0;
 
 	D_ASSERTF(sgl->sg_nr > 0, "%u\n", sgl->sg_nr);
 	D_ASSERT(sgl->sg_iovs != NULL);
-	ptr = sgl->sg_iovs[0].iov_buf;
+
 	for (i = 0; i < nr; i++) {
 		daos_key_desc_t *kds = &kdss[i];
+
+		sgl_test_forward(sgl, &sgl_idx, kds->kd_key_len);
+		ptr = sgl_indexed_byte(sgl, &sgl_idx);
 
 		D_DEBUG(DB_REBUILD, "process %d type %d ptr %p len "DF_U64
 			" total %zd\n", i, kds->kd_val_type, ptr,
 			kds->kd_key_len, sgl->sg_iovs[0].iov_len);
 		if (kds->kd_val_type == 0 ||
 		    (kds->kd_val_type != type && type != -1)) {
-			ptr += kds->kd_key_len;
+			sgl_move_forward(sgl, &sgl_idx, kds->kd_key_len);
 			D_DEBUG(DB_REBUILD, "skip type/size %d/%zd\n",
 				kds->kd_val_type, kds->kd_key_len);
 			continue;
@@ -1365,9 +1374,10 @@ obj_enum_iterate(daos_key_desc_t *kdss, d_sg_list_t *sgl, int nr,
 		} else {
 			rc = cb(kds, ptr, kds->kd_key_len, cb_arg);
 		}
-		ptr += kds->kd_key_len;
+		sgl_move_forward(sgl, &sgl_idx, kds->kd_key_len);
+
 		if (rc) {
-			D_ERROR("iterate %dth failed: rc"DF_RC"\n", i,
+			D_ERROR("iterate %dth failed: rc "DF_RC"\n", i,
 				DP_RC(rc));
 			break;
 		}

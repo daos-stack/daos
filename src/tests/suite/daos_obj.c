@@ -115,7 +115,7 @@ insert_internal_nowait(daos_key_t *dkey, int nr, d_sg_list_t *sgls,
 	rc = daos_obj_update(req->oh, th, flags, dkey, nr, iods, sgls,
 			     req->arg->async ? &req->ev : NULL);
 	if (!req->arg->async)
-		assert_int_equal(rc, req->arg->expect_result);
+		assert_rc_equal(rc, req->arg->expect_result);
 }
 
 static void
@@ -335,7 +335,7 @@ punch_obj(daos_handle_t th, struct ioreq *req)
 	int rc;
 
 	rc = daos_obj_punch(req->oh, th, 0, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 void
