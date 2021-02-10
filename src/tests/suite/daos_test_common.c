@@ -1050,6 +1050,7 @@ get_server_config(char *host, char *server_config_file)
 	char    *dpid;
 	int	rc;
 	char    daos_proc[16] = "daos_server";
+	bool	conf = true;
 
 	D_ALLOC(dpid, 16);
 	rc = get_pid_of_process(host, dpid, daos_proc);
@@ -1060,8 +1061,10 @@ get_server_config(char *host, char *server_config_file)
 	FILE *fp = popen(command, "r");
 
 	print_message("Command %s", command);
-	if (fp == NULL)
+	if (fp == NULL) {
+		D_FREE(dpid);
 		return -DER_INVAL;
+	}
 
 	while ((read = getline(&line, &len, fp)) != -1) {
 		print_message("line %s", line);
@@ -1070,25 +1073,29 @@ get_server_config(char *host, char *server_config_file)
 			break;
 	}
 
-	pch = strtok(line, " ");
-	while (pch != NULL) {
-		if (strstr(pch, "--config") != NULL) {
-			if (strchr(pch, '=') != NULL)
-				strcpy(server_config_file,
-				       strchr(pch, '=') + 1);
-			else {
+	if (conf)
+		strcpy(server_config_file, DAOS_SERVRE_CONF);
+	else {
+		pch = strtok(line, " ");
+		while (pch != NULL) {
+			if (strstr(pch, "--config") != NULL) {
+				if (strchr(pch, '=') != NULL)
+					strcpy(server_config_file,
+				       	strchr(pch, '=') + 1);
+				else {
+					pch = strtok(NULL, " ");
+					strcpy(server_config_file, pch);
+				}
+				break;
+			}
+
+			if (strstr(pch, "-o") != NULL) {
 				pch = strtok(NULL, " ");
 				strcpy(server_config_file, pch);
+				break;
 			}
-			break;
-		}
-
-		if (strstr(pch, "-o") != NULL) {
 			pch = strtok(NULL, " ");
-			strcpy(server_config_file, pch);
-			break;
 		}
-		pch = strtok(NULL, " ");
 	}
 
 	pclose(fp);

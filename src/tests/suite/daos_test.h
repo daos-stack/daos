@@ -82,6 +82,7 @@ extern const char *test_io_conf;
 
 extern int daos_event_priv_reset(void);
 #define TEST_RANKS_MAX_NUM	(13)
+#define DAOS_SERVRE_CONF          "/etc/daos/daos_server.yml"
 
 /* the pool used for daos test suite */
 struct test_pool {
