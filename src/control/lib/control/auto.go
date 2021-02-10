@@ -27,7 +27,7 @@ const (
 	defaultFiPort         = 31416
 	defaultFiPortInterval = 1000
 	defaultTargetCount    = 16
-	defaultIOSrvLogFile   = "/tmp/daos_engine"
+	defaultEngineLogFile   = "/tmp/daos_engine"
 	defaultControlLogFile = "/tmp/daos_server.log"
 	// NetDevAny matches any netdetect network device class
 	NetDevAny = math.MaxUint32
@@ -480,7 +480,7 @@ func calcHelpers(log logging.Logger, targets, cores int) int {
 // recommended values
 //
 // The target count should be a multiplier of the number of SSDs and typically
-// daos gets the best performance with 16x targets per I/O engine so target
+// daos gets the best performance with 16x targets per I/O Engine so target
 // count will be between 12 and 20.
 //
 // Validate number of targets + 1 cores are available per IO engine, not
@@ -516,10 +516,10 @@ func checkCPUs(log logging.Logger, numSSDs, coresPerNUMA int) (int, int, error) 
 	return numTargets, calcHelpers(log, numTargets, coresPerNUMA), nil
 }
 
-func defaultIOSrvCfg(idx int) *engine.Config {
+func defaultEngineCfg(idx int) *engine.Config {
 	return engine.NewConfig().
 		WithTargetCount(defaultTargetCount).
-		WithLogFile(fmt.Sprintf("%s.%d.log", defaultIOSrvLogFile, idx)).
+		WithLogFile(fmt.Sprintf("%s.%d.log", defaultEngineLogFile, idx)).
 		WithScmClass(storage.ScmClassDCPM.String()).
 		WithBdevClass(storage.BdevClassNvme.String())
 }
@@ -544,7 +544,7 @@ func genConfig(accessPoints, pmemPaths []string, ifaces []*HostFabricInterface, 
 	cfg := config.DefaultServer()
 	for idx, iface := range ifaces {
 		nn := uint(iface.NumaNode)
-		iocfg := defaultIOSrvCfg(idx).
+		iocfg := defaultEngineCfg(idx).
 			WithScmMountPoint(fmt.Sprintf("%s%d", scmMountPrefix, idx)).
 			WithScmDeviceList(pmemPaths[idx]).
 			WithBdevDeviceList(bdevLists[idx]...).

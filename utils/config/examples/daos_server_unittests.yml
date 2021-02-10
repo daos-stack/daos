@@ -27,13 +27,13 @@ engines:
 -
   targets: 1                # count of storage targets per each server
   first_core: 0             # offset of the first core for service xstreams
-  nr_xs_helpers: 0          # count of offload/helper xstreams per server
+  nr_xs_helpers: 0          # count of I/O service threads per engine
   fabric_iface: lo          # map to OFI_INTERFACE=lo
   log_mask: DEBUG,RPC=ERR,MEM=ERR
   log_file: /tmp/server0.log # map to D_LOG_FILE=/tmp/server0.log
 
   # Environment variable values should be supplied without encapsulating quotes.
-  env_vars:                 # influence DAOS IO Server behavior by setting env variables
+  env_vars:                 # influence DAOS I/O Engine behavior by setting env variables
   - DAOS_MD_CAP=1024
   - CRT_CTX_SHARE_ADDR=0
   - CRT_TIMEOUT=30
@@ -56,7 +56,7 @@ engines:
   scm_size: 1
 
   # When scm_class is set to dcpm, scm_list is the list of device paths for
-  # PMem namespaces (currently only one per server supported).
+  # PMem namespaces (currently only one per engine supported).
   # scm_class: dcpm
   # scm_list: [/dev/pmem0]
 

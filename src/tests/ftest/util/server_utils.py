@@ -60,7 +60,7 @@ class ServerFailed(Exception):
 class DaosServerCommand(YamlCommand):
     """Defines an object representing the daos_server command."""
 
-    NORMAL_PATTERN = "DAOS I/O server.*started"
+    NORMAL_PATTERN = "DAOS I/O Engine.*started"
     FORMAT_PATTERN = "(SCM format required)(?!;)"
     REFORMAT_PATTERN = "Metadata format required"
 
@@ -139,7 +139,7 @@ class DaosServerCommand(YamlCommand):
         self.yaml.update_log_files(
             getattr(test, "control_log"),
             getattr(test, "helper_log"),
-            getattr(test, "server_log")
+            getattr(test, "engine_log")
         )
 
     def update_pattern(self, mode, host_qty):
@@ -155,7 +155,7 @@ class DaosServerCommand(YamlCommand):
             self.pattern = self.REFORMAT_PATTERN
         else:
             self.pattern = self.NORMAL_PATTERN
-        self.pattern_count = host_qty * len(self.yaml.server_params)
+        self.pattern_count = host_qty * len(self.yaml.engine_params)
 
     @property
     def using_nvme(self):
@@ -471,9 +471,9 @@ class DaosServerManager(SubprocessManager):
             verbose (bool, optional): display clean commands. Defaults to True.
         """
         clean_commands = []
-        for index, server_params in \
-                enumerate(self.manager.job.yaml.server_params):
-            scm_mount = server_params.get_value("scm_mount")
+        for index, engine_params in \
+                enumerate(self.manager.job.yaml.engine_params):
+            scm_mount = engine_params.get_value("scm_mount")
             self.log.info("Cleaning up the %s directory.", str(scm_mount))
 
             # Remove the superblocks
@@ -491,7 +491,7 @@ class DaosServerManager(SubprocessManager):
                 clean_commands.append(cmd)
 
             if self.manager.job.using_dcpm:
-                scm_list = server_params.get_value("scm_list")
+                scm_list = engine_params.get_value("scm_list")
                 if isinstance(scm_list, list):
                     self.log.info(
                         "Cleaning up the following device(s): %s.",
@@ -641,8 +641,8 @@ class DaosServerManager(SubprocessManager):
         user = getuser() if user is None else user
 
         cmd_list = set()
-        for server_params in self.manager.job.yaml.server_params:
-            scm_mount = server_params.scm_mount.value
+        for engine_params in self.manager.job.yaml.engine_params:
+            scm_mount = engine_params.scm_mount.value
 
             # Support single or multiple scm_mount points
             if not isinstance(scm_mount, list):
@@ -803,13 +803,13 @@ class DaosServerManager(SubprocessManager):
         return daos_state
 
     def system_start(self):
-        """Start the DAOS IO servers.
+        """Start the DAOS I/O Engines.
 
         Raises:
             ServerFailed: if there was an error starting the servers
 
         """
-        self.log.info("Starting DAOS IO servers")
+        self.log.info("Starting DAOS I/O Engines")
         self.check_system_state(("stopped"))
         self.dmg.system_start()
         if self.dmg.result.exit_status != 0:
@@ -817,7 +817,7 @@ class DaosServerManager(SubprocessManager):
                 "Error starting DAOS:\n{}".format(self.dmg.result))
 
     def system_stop(self, extra_states=None):
-        """Stop the DAOS IO servers.
+        """Stop the DAOS I/O Engines.
 
         Args:
             extra_states (list, optional): a list of DAOS system states in
@@ -831,7 +831,7 @@ class DaosServerManager(SubprocessManager):
         valid_states = ["started", "joined"]
         if extra_states:
             valid_states.extend(extra_states)
-        self.log.info("Stopping DAOS IO servers")
+        self.log.info("Stopping DAOS I/O Engines")
         self.check_system_state(valid_states)
         self.dmg.system_stop(force=True)
         if self.dmg.result.exit_status != 0:
@@ -877,7 +877,7 @@ class DaosServerManager(SubprocessManager):
         using_nvme = self.manager.job.using_nvme
 
         if using_dcpm or using_nvme:
-            # Stop the DAOS IO servers in order to be able to scan the storage
+            # Stop the DAOS I/O Engines in order to be able to scan the storage
             self.system_stop()
 
             # Scan all of the hosts for their SCM and NVMe storage
@@ -888,7 +888,7 @@ class DaosServerManager(SubprocessManager):
                 raise ServerFailed(
                     "Error obtaining DAOS storage:\n{}".format(self.dmg.result))
 
-            # Restart the DAOS IO servers
+            # Restart the DAOS I/O Engines
             self.system_start()
 
         if using_dcpm:

@@ -62,7 +62,7 @@ int			dss_nvme_shm_id = DAOS_NVME_SHMID_NONE;
 /** NVMe mem_size for SPDK memory allocation when using primary mode */
 int			dss_nvme_mem_size = DAOS_NVME_MEM_PRIMARY;
 
-/** IO server instance index */
+/** I/O Engine instance index */
 unsigned int		dss_instance_idx;
 
 /** HW topology */
@@ -645,7 +645,7 @@ server_init(int argc, char *argv[])
 
 	d_tm_set_gauge(NULL, dss_self_rank(), "server", "rank", NULL);
 
-	D_PRINT("DAOS I/O server (v%s) process %u started on rank %u "
+	D_PRINT("DAOS I/O Engine (v%s) process %u started on rank %u "
 		"with %u target, %d helper XS, firstcore %d, host %s.\n",
 		DAOS_VERSION, getpid(), dss_self_rank(), dss_tgt_nr,
 		dss_tgt_offload_xs_nr, dss_core_offset, dss_hostname);

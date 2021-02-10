@@ -27,14 +27,14 @@ import (
 )
 
 var (
-	ioCfg = func(t *testing.T, numa int) *engine.Config {
+	engineCfg = func(t *testing.T, numa int) *engine.Config {
 		return engine.NewConfig().
 			WithScmClass(storage.ScmClassDCPM.String()).
 			WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", numa)).
 			WithScmDeviceList(fmt.Sprintf("/dev/pmem%d", numa)).
 			WithBdevClass(storage.BdevClassNvme.String())
 	}
-	ioCfgWithSSDs = func(t *testing.T, numa int) *engine.Config {
+	engineCfgWithSSDs = func(t *testing.T, numa int) *engine.Config {
 		var pciAddrs []string
 		for _, c := range MockServerScanResp(t, "withSpaceUsage").Nvme.Ctrlrs {
 			if int(c.Socketid) == numa {
@@ -42,7 +42,7 @@ var (
 			}
 		}
 
-		return ioCfg(t, numa).WithBdevDeviceList(pciAddrs...)
+		return engineCfg(t, numa).WithBdevDeviceList(pciAddrs...)
 	}
 	ib0 = &HostFabricInterface{
 		Provider: "ofi+psm2", Device: "ib0", NumaNode: 0, NetDevClass: 32, Priority: 0,
@@ -408,12 +408,12 @@ func TestControl_AutoConfig_getStorageParams(t *testing.T) {
 			numPmem:       2,
 			hostResponses: hostRespWithSSDs,
 			expPmems: []string{
-				ioCfgWithSSDs(t, 0).Storage.SCM.DeviceList[0],
-				ioCfgWithSSDs(t, 1).Storage.SCM.DeviceList[0],
+				engineCfgWithSSDs(t, 0).Storage.SCM.DeviceList[0],
+				engineCfgWithSSDs(t, 1).Storage.SCM.DeviceList[0],
 			},
 			expBdevLists: [][]string{
-				ioCfgWithSSDs(t, 0).Storage.Bdev.DeviceList,
-				ioCfgWithSSDs(t, 1).Storage.Bdev.DeviceList,
+				engineCfgWithSSDs(t, 0).Storage.Bdev.DeviceList,
+				engineCfgWithSSDs(t, 1).Storage.Bdev.DeviceList,
 			},
 		},
 		"dual min nvme and multiple ctrlrs present on dual numa nodes": {
@@ -421,12 +421,12 @@ func TestControl_AutoConfig_getStorageParams(t *testing.T) {
 			minNvme:       2,
 			hostResponses: hostRespWithSSDs,
 			expPmems: []string{
-				ioCfgWithSSDs(t, 0).Storage.SCM.DeviceList[0],
-				ioCfgWithSSDs(t, 1).Storage.SCM.DeviceList[0],
+				engineCfgWithSSDs(t, 0).Storage.SCM.DeviceList[0],
+				engineCfgWithSSDs(t, 1).Storage.SCM.DeviceList[0],
 			},
 			expBdevLists: [][]string{
-				ioCfgWithSSDs(t, 0).Storage.Bdev.DeviceList,
-				ioCfgWithSSDs(t, 1).Storage.Bdev.DeviceList,
+				engineCfgWithSSDs(t, 0).Storage.Bdev.DeviceList,
+				engineCfgWithSSDs(t, 1).Storage.Bdev.DeviceList,
 			},
 		},
 		"zero nvme and multiple ctrlrs present on dual numa nodes": {
@@ -434,8 +434,8 @@ func TestControl_AutoConfig_getStorageParams(t *testing.T) {
 			reqNoNvme:     true,
 			hostResponses: hostRespWithSSDs,
 			expPmems: []string{
-				ioCfgWithSSDs(t, 0).Storage.SCM.DeviceList[0],
-				ioCfgWithSSDs(t, 1).Storage.SCM.DeviceList[0],
+				engineCfgWithSSDs(t, 0).Storage.SCM.DeviceList[0],
+				engineCfgWithSSDs(t, 1).Storage.SCM.DeviceList[0],
 			},
 			expBdevLists: [][]string{nil, nil},
 		},
@@ -489,9 +489,9 @@ func TestControl_AutoConfig_getStorageParams(t *testing.T) {
 func TestControl_AutoConfig_getCPUParams(t *testing.T) {
 	for name, tc := range map[string]struct {
 		coresPerNuma  int   // physical cores per NUMA node
-		bdevListSizes []int // size of pci-address lists, one for each I/O Server
-		expTgtCounts  []int // one recommended target count per I/O Server
-		expHlprCounts []int // one recommended helper xstream count per I/O Server
+		bdevListSizes []int // size of pci-address lists, one for each I/O Engine
+		expTgtCounts  []int // one recommended target count per I/O Engine
+		expHlprCounts []int // one recommended helper xstream count per I/O Engine
 		expErr        error
 	}{
 		"no cores":           {expErr: errors.Errorf(errInvalNumCores, 0)},
@@ -567,11 +567,11 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		accessPoints []string               // list of access point host/ip addresses
-		pmemPaths    []string               // one pmem block device per I/O Server
-		ifaces       []*HostFabricInterface // one hfi per I/O Server
-		bdevLists    [][]string             // one list of pci addresses per I/O Server
-		tgtCounts    []int                  // one target count per I/O Server
-		hlprCounts   []int                  // one helper xstream count per I/O Server
+		pmemPaths    []string               // one pmem block device per I/O Engine
+		ifaces       []*HostFabricInterface // one hfi per I/O Engine
+		bdevLists    [][]string             // one list of pci addresses per I/O Engine
+		tgtCounts    []int                  // one target count per I/O Engine
+		hlprCounts   []int                  // one helper xstream count per I/O Engine
 		expCfg       *config.Server         // expected config generated
 		expErr       error
 	}{
@@ -602,7 +602,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			tgtCounts:    []int{16},
 			hlprCounts:   []int{7},
 			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX").WithEngines(
-				defaultIOSrvCfg(0).
+				defaultEngineCfg(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+psm2").
@@ -618,7 +618,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			tgtCounts:  []int{16},
 			hlprCounts: []int{7},
 			expCfg: baseConfig("ofi+psm2").WithEngines(
-				defaultIOSrvCfg(0).
+				defaultEngineCfg(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+psm2").
@@ -635,7 +635,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			tgtCounts:  []int{16, 15},
 			hlprCounts: []int{7, 6},
 			expCfg: baseConfig("ofi+psm2").WithEngines(
-				defaultIOSrvCfg(0).
+				defaultEngineCfg(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+psm2").
@@ -644,7 +644,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithScmMountPoint("/mnt/daos0").
 					WithBdevDeviceList(common.MockPCIAddrs(4)...).
 					WithHelperStreamCount(7),
-				defaultIOSrvCfg(1).
+				defaultEngineCfg(1).
 					WithFabricInterface("ib1").
 					WithFabricInterfacePort(
 						int(defaultFiPort+defaultFiPortInterval)).
