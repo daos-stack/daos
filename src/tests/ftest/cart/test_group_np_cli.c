@@ -71,7 +71,7 @@ test_run(void)
 	int			 tag;
 	crt_endpoint_t		 server_ep = {0};
 	crt_rpc_t		*rpc_req = NULL;
-	int			 i, j;
+	int			 i, j, k;
 	int			 rc = 0;
 	uint32_t		*_cg_ranks;
 	int			 _cg_num_ranks;
@@ -134,7 +134,8 @@ test_run(void)
 			for (tag = 0; tag < test_g.t_srv_ctx_num; tag++) {
 				DBG_PRINT("Sending rpc to %d:%d\n", rank, tag);
 
-				for (j = 0; j < test_g.t_num_checkins_to_send; j++) {
+				k = test_g.t_num_checkins_to_send;
+				for (j = 0; j < k; j++) {
 					check_in(grp, rank, tag);
 				}
 			}

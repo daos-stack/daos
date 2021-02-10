@@ -424,7 +424,7 @@ check_in(crt_group_t *remote_group, int rank, int tag)
 	rc = crt_req_send(rpc_req, client_cb_common, &global_client_cb_arg);
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 
-	// If we're testing crt_ep_abort(), abort the previous RPC
+	/* If we're testing crt_ep_abort(), abort the previous RPC */
 	if (test_g.t_issue_crt_ep_abort == rank) {
 		rc = crt_ep_abort(&server_ep);
 		D_ASSERTF(rc == 0, "crt_ep_abort() failed. rc: %d\n", rc);

@@ -224,7 +224,7 @@ class CartUtils():
         _tst_slt = cartobj.params.get("{}_slt".format(host),
                                       "/run/tests/*/")
         _tst_ppn = cartobj.params.get("{}_ppn".format(host),
-                                     "/run/tests/*")
+                                      "/run/tests/*")
         _tst_ctx = cartobj.params.get("{}_CRT_CTX_NUM".format(host),
                                       "/run/defaultENV/")
 
