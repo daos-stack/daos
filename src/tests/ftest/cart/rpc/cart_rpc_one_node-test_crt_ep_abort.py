@@ -26,8 +26,7 @@ from __future__ import print_function
 
 import sys
 
-from avocado       import Test
-from avocado       import main
+from avocado import Test
 
 sys.path.append('./util')
 
@@ -62,6 +61,3 @@ class CartRpcOneNodeCrtEpAbortTest(Test):
 
         self.utils.launch_srv_cli_test(self, srvcmd, clicmd)
         self.utils.log_check(self)
-
-if __name__ == "__main__":
-    main()
