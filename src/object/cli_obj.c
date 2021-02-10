@@ -307,7 +307,7 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 
 	pool = dc_hdl2pool(dc_cont_hdl2pool_hdl(obj->cob_coh));
 	if (pool == NULL) {
-		D_DEBUG(DB_PL, "Cannot find valid pool\n");
+		D_WARN("Cannot find valid pool\n");
 		D_GOTO(out, rc = -DER_NO_HDL);
 	}
 
