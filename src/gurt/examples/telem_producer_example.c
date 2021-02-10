@@ -32,7 +32,8 @@ void test_function1(int count)
 		rc = d_tm_increment_counter(&loop, __FILE__, __func__,
 					    "loop counter", NULL);
 		if (rc != D_TM_SUCCESS) {
-			printf("d_tm_increment_counter failed, rc = %d\n", rc);
+			printf("d_tm_increment_counter failed: " DF_RC "\n",
+			       DP_RC(rc));
 			return;
 		}
 	}
@@ -45,7 +46,7 @@ void test_function1(int count)
 	 */
 	rc = d_tm_increment_counter(&loop, NULL);
 	if (rc != D_TM_SUCCESS)
-		printf("d_tm_increment_counter failed, rc = %d\n", rc);
+		printf("d_tm_increment_counter failed: " DF_RC "\n", DP_RC(rc));
 
 }
 
@@ -61,7 +62,7 @@ void test_function2(void)
 	rc = d_tm_record_timestamp(&ts, __FILE__, __func__, "last executed",
 				   NULL);
 	if (rc != D_TM_SUCCESS)
-		printf("d_tm_record_timestamp failed, rc = %d\n", rc);
+		printf("d_tm_record_timestamp failed: " DF_RC "\n", DP_RC(rc));
 }
 
 /**
@@ -85,7 +86,7 @@ void test_open_handle(void)
 	rc = d_tm_increment_gauge(&num_open_handles, 1, __FILE__,
 				  "open handles", NULL);
 	if (rc != D_TM_SUCCESS)
-		printf("d_tm_increment_gauge failed, rc = %d\n", rc);
+		printf("d_tm_increment_gauge failed: " DF_RC "\n", DP_RC(rc));
 }
 
 /**
@@ -107,7 +108,7 @@ void test_close_handle(void)
 	rc = d_tm_decrement_gauge(&num_open_handles, 1, __FILE__,
 				  "open handles", NULL);
 	if (rc != D_TM_SUCCESS)
-		printf("d_tm_decrement_gauge failed, rc = %d\n", rc);
+		printf("d_tm_decrement_gauge failed: " DF_RC "\n", DP_RC(rc));
 }
 
 /**
@@ -134,7 +135,8 @@ void timer_snapshot(void)
 	rc = d_tm_take_timer_snapshot(&t1, D_TM_CLOCK_REALTIME, __FILE__,
 				      __func__, "snapshot 1", NULL);
 	if (rc != D_TM_SUCCESS)
-		printf("d_tm_take_timer_snapshot failed, rc = %d\n", rc);
+		printf("d_tm_take_timer_snapshot failed: " DF_RC "\n",
+		       DP_RC(rc));
 
 	/** Do some stuff */
 	sleep(1);
@@ -142,7 +144,8 @@ void timer_snapshot(void)
 	rc = d_tm_take_timer_snapshot(&t2, D_TM_CLOCK_REALTIME, __FILE__,
 				      __func__, "snapshot 2", NULL);
 	if (rc != D_TM_SUCCESS)
-		printf("d_tm_take_timer_snapshot failed, rc = %d\n", rc);
+		printf("d_tm_take_timer_snapshot failed: " DF_RC "\n",
+		       DP_RC(rc));
 
 	/** Do some stuff */
 	ts.tv_sec = 0;
@@ -152,7 +155,8 @@ void timer_snapshot(void)
 	rc = d_tm_take_timer_snapshot(&t3, D_TM_CLOCK_REALTIME, __FILE__,
 				      __func__, "snapshot 3", NULL);
 	if (rc != D_TM_SUCCESS)
-		printf("d_tm_take_timer_snapshot failed, rc = %d\n", rc);
+		printf("d_tm_take_timer_snapshot failed: " DF_RC "\n",
+		       DP_RC(rc));
 
 	/** Do some stuff (10x longer) */
 	ts.tv_sec = 0;
@@ -162,7 +166,8 @@ void timer_snapshot(void)
 	rc = d_tm_take_timer_snapshot(&t4, D_TM_CLOCK_REALTIME, __FILE__,
 				      __func__, "snapshot 4", NULL);
 	if (rc != D_TM_SUCCESS)
-		printf("d_tm_take_timer_snapshot failed, rc = %d\n", rc);
+		printf("d_tm_take_timer_snapshot failed: " DF_RC "\n",
+		       DP_RC(rc));
 
 	/**
 	 * How long did the sleep(1) take?  That's t2 - t1
@@ -178,13 +183,15 @@ void timer_snapshot(void)
 	rc = d_tm_take_timer_snapshot(&t5, D_TM_CLOCK_PROCESS_CPUTIME,
 				      __FILE__, __func__, "snapshot 5", NULL);
 	if (rc != D_TM_SUCCESS)
-		printf("d_tm_take_timer_snapshot failed, rc = %d\n", rc);
+		printf("d_tm_take_timer_snapshot failed: " DF_RC "\n",
+		       DP_RC(rc));
 
 	/** This is how to specify a high resolution thread CPU timer */
 	rc = d_tm_take_timer_snapshot(&t6, D_TM_CLOCK_THREAD_CPUTIME,
 				      __FILE__, __func__, "snapshot 6", NULL);
 	if (rc != D_TM_SUCCESS)
-		printf("d_tm_take_timer_snapshot failed, rc = %d\n", rc);
+		printf("d_tm_take_timer_snapshot failed: " DF_RC "\n",
+		       DP_RC(rc));
 }
 
 /**
@@ -217,13 +224,13 @@ struct d_tm_nodeList_t *add_metrics_manually(void)
 			     "here.  I have D_TM_MAX_LONG_LEN characters "
 			     "to use.");
 	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_add_metric failed, rc = %d\n", rc);
+		printf("d_tm_add_metric failed: " DF_RC "\n", DP_RC(rc));
 		return NULL;
 	}
 
 	rc = d_tm_add_node(counter1, &node_list);
 	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_add_metric failed, rc = %d\n", rc);
+		printf("d_tm_add_metric failed: " DF_RC "\n", DP_RC(rc));
 		return NULL;
 	}
 
@@ -233,14 +240,14 @@ struct d_tm_nodeList_t *add_metrics_manually(void)
 			     "Much less metadata to report this time.");
 	if (rc != D_TM_SUCCESS) {
 		d_tm_list_free(node_list);
-		printf("d_tm_add_metric failed, rc = %d\n", rc);
+		printf("d_tm_add_metric failed: " DF_RC "\n", DP_RC(rc));
 		return NULL;
 	}
 
 	rc = d_tm_add_node(counter2, &node_list);
 	if (rc != D_TM_SUCCESS) {
 		d_tm_list_free(node_list);
-		printf("d_tm_add_metric failed, rc = %d\n", rc);
+		printf("d_tm_add_metric failed: " DF_RC "\n", DP_RC(rc));
 		return NULL;
 	}
 
@@ -270,8 +277,8 @@ void use_manually_added_metrics(struct d_tm_nodeList_t *node_list)
 			rc = d_tm_increment_counter(&node_list->dtnl_node,
 						    NULL);
 			if (rc != D_TM_SUCCESS) {
-				printf("d_tm_increment_counter failed, "
-				       "rc = %d\n", rc);
+				printf("d_tm_increment_counter failed: "
+				       DF_RC "\n", DP_RC(rc));
 			}
 			break;
 		default:
@@ -330,7 +337,7 @@ main(int argc, char **argv)
 	rc = d_tm_increment_counter(&entry, __FILE__, __func__,
 				    "sample counter", NULL);
 	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_increment_counter failed, rc = %d\n", rc);
+		printf("d_tm_increment_counter failed: " DF_RC "\n", DP_RC(rc));
 		goto failure;
 	}
 
@@ -344,7 +351,8 @@ main(int argc, char **argv)
 		rc = d_tm_increment_counter(&loop, __FILE__, __func__,
 					    "loop counter", NULL);
 		if (rc != D_TM_SUCCESS) {
-			printf("d_tm_increment_counter failed, rc = %d\n", rc);
+			printf("d_tm_increment_counter failed: " DF_RC "\n",
+			       DP_RC(rc));
 			goto failure;
 		}
 	}
@@ -363,14 +371,15 @@ main(int argc, char **argv)
 				      "10000 iterations with rt clock",
 				      NULL);
 	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_mark_duration_start failed, rc = %d\n", rc);
+		printf("d_tm_mark_duration_start failed: " DF_RC "\n",
+		       DP_RC(rc));
 		goto failure;
 	}
 
 	test_function1(10000);
 	rc = d_tm_mark_duration_end(&timer1, NULL);
 	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_mark_duration_end failed, rc = %d\n", rc);
+		printf("d_tm_mark_duration_end failed: " DF_RC "\n", DP_RC(rc));
 		goto failure;
 	}
 
@@ -380,14 +389,15 @@ main(int argc, char **argv)
 				      "10000 iterations with process clock",
 				      NULL);
 	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_mark_duration_start failed, rc = %d\n", rc);
+		printf("d_tm_mark_duration_start failed: " DF_RC "\n",
+		       DP_RC(rc));
 		goto failure;
 	}
 
 	test_function1(10000);
 	rc = d_tm_mark_duration_end(&timer2, NULL);
 	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_mark_duration_end failed, rc = %d\n", rc);
+		printf("d_tm_mark_duration_end failed: " DF_RC "\n", DP_RC(rc));
 		goto failure;
 	}
 
