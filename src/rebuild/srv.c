@@ -12,7 +12,7 @@
 
 #include <daos/rpc.h>
 #include <daos/pool.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/container.h>
 #include <daos_srv/iv.h>
@@ -88,6 +88,7 @@ rebuild_pool_tls_create(uuid_t pool_uuid, uuid_t poh_uuid, uuid_t coh_uuid,
 	rebuild_pool_tls->rebuild_pool_scanning = 1;
 	rebuild_pool_tls->rebuild_pool_scan_done = 0;
 	rebuild_pool_tls->rebuild_pool_obj_count = 0;
+	rebuild_pool_tls->rebuild_pool_reclaim_obj_count = 0;
 	rebuild_pool_tls->rebuild_tree_hdl = DAOS_HDL_INVAL;
 	/* Only 1 thread will access the list, no need lock */
 	d_list_add(&rebuild_pool_tls->rebuild_pool_list,
@@ -377,6 +378,7 @@ dss_rebuild_check_one(void *data)
 	if (pool_tls->rebuild_pool_status != 0 && status->status == 0)
 		status->status = pool_tls->rebuild_pool_status;
 
+	status->obj_count += pool_tls->rebuild_pool_reclaim_obj_count;
 	status->tobe_obj_count += pool_tls->rebuild_pool_obj_count;
 	ABT_mutex_unlock(status->lock);
 
@@ -412,7 +414,7 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 		D_GOTO(out, rc);
 	}
 
-	status->obj_count = dms.dm_obj_count;
+	status->obj_count += dms.dm_obj_count;
 	status->rec_count = dms.dm_rec_count;
 	status->size = dms.dm_total_size;
 	if (status->scanning || dms.dm_migrating)
@@ -1179,7 +1181,11 @@ rebuild_task_ult(void *arg)
 	rc = rebuild_leader_start(pool, task->dst_map_ver, &task->dst_tgts,
 				  task->dst_rebuild_op, &rgt);
 	if (rc != 0) {
-		if (rc == -DER_CANCELED) {
+		if (rc == -DER_CANCELED || rc == -DER_NOTLEADER) {
+			/* If it is not leader, the new leader will step up
+			 * restart rebuild anyway, so do not need reschedule
+			 * rebuild on this node anymore.
+			 */
 			D_DEBUG(DB_REBUILD, "pool "DF_UUID" ver %u rebuild is"
 				" canceled.\n", DP_UUID(task->dst_pool_uuid),
 				task->dst_map_ver);
@@ -1292,7 +1298,8 @@ try_reschedule:
 		 * sequence order.
 		 */
 		ret = ds_rebuild_schedule(pool, task->dst_map_ver,
-					  &task->dst_tgts, RB_OP_FAIL);
+					  &task->dst_tgts,
+					  task->dst_rebuild_op);
 		if (ret != 0)
 			D_ERROR("reschedule "DF_RC"\n", DP_RC(ret));
 		else

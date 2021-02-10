@@ -16,7 +16,7 @@
 #include <daos_errno.h>
 #include <daos_event.h>
 #include <daos_task.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include "cli_internal.h"
 
 int
