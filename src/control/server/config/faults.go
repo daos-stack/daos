@@ -50,10 +50,10 @@ var (
 		"provider not specified in configuration",
 		"specify a valid network provider in configuration ('provider' parameter) and restart the control server",
 	)
-	FaultConfigNoServers = serverConfigFault(
-		code.ServerConfigNoServers,
-		"no DAOS IO Servers specified in configuration",
-		"specify at least one IO Server configuration ('servers' list parameter) and restart the control server",
+	FaultConfigNoEngines = serverConfigFault(
+		code.ServerConfigNoEngines,
+		"no DAOS IO Engines specified in configuration",
+		"specify at least one IO Engine configuration ('engines' list parameter) and restart the control server",
 	)
 	FaultConfigFaultDomainInvalid = serverConfigFault(
 		code.ServerConfigFaultDomainInvalid,

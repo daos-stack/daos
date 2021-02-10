@@ -17,7 +17,7 @@
 #include <daos_errno.h>
 #include <daos_event.h>
 #include <daos_task.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 
 static int
 dsc_obj_retry_cb(tse_task_t *task, void *arg)

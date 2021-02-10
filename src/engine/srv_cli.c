@@ -19,7 +19,7 @@
 #include <daos_event.h>
 #include <daos_task.h>
 
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include "srv_internal.h"
 
 /*
