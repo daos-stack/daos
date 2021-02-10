@@ -17,7 +17,7 @@ PROTOBUF_C__BEGIN_DECLS
 
 typedef struct _Mgmt__DaosResp Mgmt__DaosResp;
 typedef struct _Mgmt__GroupUpdateReq Mgmt__GroupUpdateReq;
-typedef struct _Mgmt__GroupUpdateReq__Server Mgmt__GroupUpdateReq__Server;
+typedef struct _Mgmt__GroupUpdateReq__Engine Mgmt__GroupUpdateReq__Engine;
 typedef struct _Mgmt__GroupUpdateResp Mgmt__GroupUpdateResp;
 typedef struct _Mgmt__JoinReq Mgmt__JoinReq;
 typedef struct _Mgmt__JoinResp Mgmt__JoinResp;
@@ -64,14 +64,14 @@ struct  _Mgmt__DaosResp
     , 0 }
 
 
-struct  _Mgmt__GroupUpdateReq__Server
+struct  _Mgmt__GroupUpdateReq__Engine
 {
   ProtobufCMessage base;
   uint32_t rank;
   char *uri;
 };
-#define MGMT__GROUP_UPDATE_REQ__SERVER__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__group_update_req__server__descriptor) \
+#define MGMT__GROUP_UPDATE_REQ__ENGINE__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__group_update_req__engine__descriptor) \
     , 0, (char *)protobuf_c_empty_string }
 
 
@@ -79,8 +79,8 @@ struct  _Mgmt__GroupUpdateReq
 {
   ProtobufCMessage base;
   uint32_t map_version;
-  size_t n_servers;
-  Mgmt__GroupUpdateReq__Server **servers;
+  size_t n_engines;
+  Mgmt__GroupUpdateReq__Engine **engines;
 };
 #define MGMT__GROUP_UPDATE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__group_update_req__descriptor) \
@@ -357,9 +357,9 @@ Mgmt__DaosResp *
 void   mgmt__daos_resp__free_unpacked
                      (Mgmt__DaosResp *message,
                       ProtobufCAllocator *allocator);
-/* Mgmt__GroupUpdateReq__Server methods */
-void   mgmt__group_update_req__server__init
-                     (Mgmt__GroupUpdateReq__Server         *message);
+/* Mgmt__GroupUpdateReq__Engine methods */
+void   mgmt__group_update_req__engine__init
+                     (Mgmt__GroupUpdateReq__Engine         *message);
 /* Mgmt__GroupUpdateReq methods */
 void   mgmt__group_update_req__init
                      (Mgmt__GroupUpdateReq         *message);
@@ -596,8 +596,8 @@ void   mgmt__pool_monitor_req__free_unpacked
 typedef void (*Mgmt__DaosResp_Closure)
                  (const Mgmt__DaosResp *message,
                   void *closure_data);
-typedef void (*Mgmt__GroupUpdateReq__Server_Closure)
-                 (const Mgmt__GroupUpdateReq__Server *message,
+typedef void (*Mgmt__GroupUpdateReq__Engine_Closure)
+                 (const Mgmt__GroupUpdateReq__Engine *message,
                   void *closure_data);
 typedef void (*Mgmt__GroupUpdateReq_Closure)
                  (const Mgmt__GroupUpdateReq *message,
@@ -646,7 +646,7 @@ typedef void (*Mgmt__PoolMonitorReq_Closure)
 
 extern const ProtobufCMessageDescriptor mgmt__daos_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__group_update_req__descriptor;
-extern const ProtobufCMessageDescriptor mgmt__group_update_req__server__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__group_update_req__engine__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__group_update_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__join_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__join_resp__descriptor;

@@ -867,7 +867,7 @@ def run_tests(test_files, tag_filter, args):
             # this is typically an indication of a communication issue with one
             # of the hosts, do not attempt to run subsequent tests.
             if not report_skipped_test(
-                    test_file["py"], avocado_logs_dir, skip_reason):
+                    test_file["py"], avocado_logs_dir, skip_reason, args):
                 return_code |= 64
 
         elif not isinstance(test_file["yaml"], str):
@@ -875,7 +875,7 @@ def run_tests(test_files, tag_filter, args):
             # in the yaml file.  Treat this like a failed avocado command.
             reason = "error replacing yaml file placeholders"
             if not report_skipped_test(
-                    test_file["py"], avocado_logs_dir, reason):
+                    test_file["py"], avocado_logs_dir, reason, args):
                 return_code |= 64
             return_code |= 4
 
@@ -890,7 +890,8 @@ def run_tests(test_files, tag_filter, args):
                         "leftover logs from a previous test run prior to "
                         "running this test")
                     if not report_skipped_test(
-                            test_file["py"], avocado_logs_dir, skip_reason):
+                            test_file["py"], avocado_logs_dir, skip_reason,
+                            args):
                         return_code |= 64
                     return_code |= 128
                     continue
@@ -916,7 +917,8 @@ def run_tests(test_files, tag_filter, args):
 
             # Optionally rename the test results directory for this test
             if args.rename:
-                rename_logs(avocado_logs_dir, test_file["py"])
+                return_code |= rename_logs(avocado_logs_dir, test_file["py"],
+                                           args)
 
             # Optionally process core files
             if args.process_cores:
@@ -1180,17 +1182,28 @@ def archive_files(destination, hosts, source_files, cart, args):
     return get_remote_output(hosts, " ".join(command), 900)
 
 
-def rename_logs(avocado_logs_dir, test_file):
+def rename_logs(avocado_logs_dir, test_file, args):
     """Append the test name to its avocado job-results directory name.
 
     Args:
         avocado_logs_dir (str): avocado job-results directory
         test_file (str): the test python file
     """
+    status = 0
     test_name = get_test_category(test_file)
     test_logs_lnk = os.path.join(avocado_logs_dir, "latest")
     test_logs_dir = os.path.realpath(test_logs_lnk)
-    new_test_logs_dir = "{}-{}".format(test_logs_dir, test_name)
+
+    if args.jenkinslog:
+        new_test_logs_dir = os.path.join(avocado_logs_dir, test_file)
+        try:
+            os.makedirs(new_test_logs_dir)
+        except OSError as error:
+            print("Error mkdir {}: {}".format(new_test_logs_dir, error))
+            status |= 1024
+    else:
+        new_test_logs_dir = "{}-{}".format(test_logs_dir, test_name)
+
     try:
         os.rename(test_logs_dir, new_test_logs_dir)
         os.remove(test_logs_lnk)
@@ -1201,6 +1214,29 @@ def rename_logs(avocado_logs_dir, test_file):
             "Error renaming {} to {}: {}".format(
                 test_logs_dir, new_test_logs_dir, error))
 
+    if args.jenkinslog:
+        xml_file = os.path.join(new_test_logs_dir, "results.xml")
+        try:
+            with open(xml_file) as xml_buffer:
+                xml_data = xml_buffer.read()
+        except OSError as error:
+            print("Error reading {} : {}".format(xml_file, str(error)))
+            status |= 1024
+            return status
+
+        test_dir = os.path.split(os.path.dirname(test_file))[-1]
+        org_class = "classname=\""
+        new_class = "{}FTEST_{}.".format(org_class, test_dir)
+        xml_data = re.sub(org_class, new_class, xml_data)
+
+        try:
+            with open(xml_file, "w") as xml_buffer:
+                xml_buffer.write(xml_data)
+        except OSError as error:
+            print("Error writing {}: {}".format(xml_file, str(error)))
+            status |= 1024
+
+    return status
 
 def check_big_files(avocado_logs_dir, task, test_name, args):
     """Check the contents of the task object, tag big files, create junit xml.
@@ -1240,7 +1276,7 @@ def check_big_files(avocado_logs_dir, task, test_name, args):
     return status
 
 
-def report_skipped_test(test_file, avocado_logs_dir, reason):
+def report_skipped_test(test_file, avocado_logs_dir, reason, args):
     """Report an error for the skipped test.
 
     Args:
@@ -1267,6 +1303,7 @@ def report_skipped_test(test_file, avocado_logs_dir, reason):
         print(
             "Warning: Continuing after failing to create {}: {}".format(
                 destination, error))
+
     return create_results_xml(
         message, test_name, "See launch.py command output for more details",
         destination)
@@ -1299,7 +1336,8 @@ def create_results_xml(message, testname, output, destination):
     testsuite = ET.Element("testsuite", testsuite_attributes)
 
     # Define the test case error
-    testcase_attributes = {"name": "framework_results", "time": "0.0"}
+    testcase_attributes = {"classname": testname, "name": "framework_results",
+                           "time": "0.0"}
     testcase = ET.SubElement(testsuite, "testcase", testcase_attributes)
     ET.SubElement(testcase, "error", {"message": message})
     system_out = ET.SubElement(testcase, "system-out")
@@ -1802,6 +1840,10 @@ def main():
         "-v", "--verbose",
         action="store_true",
         help="verbose output")
+    parser.add_argument(
+        "-j", "--jenkinslog",
+        action="store_true",
+        help="rename the avocado test logs directory for publishing in Jenkins")
     args = parser.parse_args()
     print("Arguments: {}".format(args))
 
@@ -1880,6 +1922,10 @@ def main():
         if status & 512 == 512:
             print("ERROR: Detected stopping daos_server.service after one or "
                   "more tests!")
+            ret_code = 1
+        if status & 1024 == 1024:
+            print("ERROR: Detected one or more failures in renaming logs and "
+                  "results for Jenkins!")
             ret_code = 1
     exit(ret_code)
 

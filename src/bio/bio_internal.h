@@ -7,7 +7,7 @@
 #ifndef __BIO_INTERNAL_H__
 #define __BIO_INTERNAL_H__
 
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
 #include <spdk/bdev.h>
 

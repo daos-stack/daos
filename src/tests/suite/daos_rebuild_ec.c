@@ -493,7 +493,7 @@ run_daos_rebuild_simple_ec_test(int rank, int size, int *sub_tests,
 		sub_tests = NULL;
 	}
 
-	run_daos_sub_tests_only("DAOS rebuild ec tests", rebuild_tests,
+	run_daos_sub_tests_only("DAOS_Rebuild_EC", rebuild_tests,
 				ARRAY_SIZE(rebuild_tests), sub_tests,
 				sub_tests_size);
 
