@@ -248,13 +248,9 @@ client_cb_common(const struct crt_cb_info *cb_info)
 	struct test_swim_status_in	*swim_status_rpc_req_input;
 	struct test_swim_status_out	*swim_status_rpc_req_output;
 
-	/* The server rank has been passed to the client callback */
-	int aborted_rank = -1;
-
 	rpc_req = cb_info->cci_rpc;
 
 	if (cb_info->cci_arg != NULL) {
-		aborted_rank = *(int *) cb_info->cci_arg;
 		*(int *) cb_info->cci_arg = 1;
 	}
 
