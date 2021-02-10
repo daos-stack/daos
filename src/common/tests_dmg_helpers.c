@@ -791,7 +791,7 @@ dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 	if (!json_object_object_get_ex(dmg_out, "host_storage_map",
 				       &storage_map)) {
 		D_ERROR("unable to extract host_storage_map from JSON\n");
-		return -DER_INVAL;
+		D_GOTO(out_json, rc = -DER_INVAL);
 	}
 
 	json_object_object_foreach(storage_map, key, val) {
