@@ -12,7 +12,7 @@
 #define D_LOGFAC DD_FAC(rsvc)
 
 #include <sys/stat.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/rsvc.h>
 #include "rpc.h"
 

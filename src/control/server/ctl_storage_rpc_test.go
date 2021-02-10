@@ -29,7 +29,7 @@ import (
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
@@ -234,14 +234,14 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			emptyCfg := config.DefaultServer()
-			ioCfg := ioserver.NewConfig().
+			ioCfg := engine.NewConfig().
 				WithBdevClass("nvme").
 				WithBdevDeviceList(storage.MockNvmeController().PciAddr)
-			ioCfgs := []*ioserver.Config{ioCfg}
+			ioCfgs := []*engine.Config{ioCfg}
 			if tc.multiIO {
 				ioCfgs = append(ioCfgs, ioCfg)
 			}
-			defaultWithNvme := config.DefaultServer().WithServers(ioCfgs...)
+			defaultWithNvme := config.DefaultServer().WithEngines(ioCfgs...)
 
 			// test for both empty and default config cases
 			for _, config := range []*config.Server{defaultWithNvme, emptyCfg} {
@@ -459,11 +459,11 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 					},
 				},
 			},
-			cfg: config.DefaultServer().WithServers(
-				ioserver.NewConfig().
+			cfg: config.DefaultServer().WithEngines(
+				engine.NewConfig().
 					WithBdevClass("nvme").
 					WithBdevDeviceList(storage.MockNvmeController(1).PciAddr),
-				ioserver.NewConfig().
+				engine.NewConfig().
 					WithBdevClass("nvme").
 					WithBdevDeviceList(storage.MockNvmeController(2).PciAddr),
 			),
@@ -500,11 +500,11 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 					},
 				},
 			},
-			cfg: config.DefaultServer().WithServers(
-				ioserver.NewConfig().
+			cfg: config.DefaultServer().WithEngines(
+				engine.NewConfig().
 					WithBdevClass("nvme").
 					WithBdevDeviceList(storage.MockNvmeController(1).PciAddr),
-				ioserver.NewConfig().
+				engine.NewConfig().
 					WithBdevClass("nvme").
 					WithBdevDeviceList(storage.MockNvmeController(2).PciAddr),
 			),
@@ -542,11 +542,11 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 					},
 				},
 			},
-			cfg: config.DefaultServer().WithServers(
-				ioserver.NewConfig().
+			cfg: config.DefaultServer().WithEngines(
+				engine.NewConfig().
 					WithBdevClass("nvme").
 					WithBdevDeviceList(storage.MockNvmeController(1).PciAddr),
-				ioserver.NewConfig().
+				engine.NewConfig().
 					WithBdevClass("nvme").
 					WithBdevDeviceList(storage.MockNvmeController(2).PciAddr),
 			),
@@ -588,11 +588,11 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 					},
 				},
 			},
-			cfg: config.DefaultServer().WithServers(
-				ioserver.NewConfig().
+			cfg: config.DefaultServer().WithEngines(
+				engine.NewConfig().
 					WithBdevClass("nvme").
 					WithBdevDeviceList(storage.MockNvmeController(1).PciAddr),
-				ioserver.NewConfig().
+				engine.NewConfig().
 					WithBdevClass("nvme").
 					WithBdevDeviceList(storage.MockNvmeController(2).PciAddr),
 			),
@@ -632,8 +632,8 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 				GetfsUsageTotal: mockPbScmMount.TotalBytes,
 				GetfsUsageAvail: mockPbScmMount.AvailBytes,
 			},
-			cfg: config.DefaultServer().WithServers(
-				ioserver.NewConfig().
+			cfg: config.DefaultServer().WithEngines(
+				engine.NewConfig().
 					WithScmMountPoint(mockPbScmMount.Path).
 					WithScmClass(storage.ScmClassDCPM.String()).
 					WithScmDeviceList(mockPbScmNamespace.Blockdev)),
@@ -663,8 +663,8 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 				GetfsUsageTotal: mockPbScmMount.TotalBytes,
 				GetfsUsageAvail: mockPbScmMount.AvailBytes,
 			},
-			cfg: config.DefaultServer().WithServers(
-				ioserver.NewConfig().
+			cfg: config.DefaultServer().WithEngines(
+				engine.NewConfig().
 					WithScmMountPoint(mockPbScmMount.Path).
 					WithScmClass(storage.ScmClassDCPM.String()).
 					WithScmDeviceList("/dev/foo", "/dev/bar")),
@@ -696,8 +696,8 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 				GetfsUsageTotal: mockPbScmMount.TotalBytes,
 				GetfsUsageAvail: mockPbScmMount.AvailBytes,
 			},
-			cfg: config.DefaultServer().WithServers(
-				ioserver.NewConfig().
+			cfg: config.DefaultServer().WithEngines(
+				engine.NewConfig().
 					WithScmMountPoint(mockPbScmMount.Path).
 					WithScmClass(storage.ScmClassRAM.String()).
 					WithScmRamdiskSize(16)),
@@ -730,13 +730,13 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			if tc.cfg == nil {
-				tc.cfg = config.DefaultServer().WithServers(
-					ioserver.NewConfig().
+				tc.cfg = config.DefaultServer().WithEngines(
+					engine.NewConfig().
 						WithBdevClass("nvme").
 						WithBdevDeviceList(storage.MockNvmeController().PciAddr),
 				)
 			}
-			if len(tc.cfg.Servers) != len(tc.drpcResps) {
+			if len(tc.cfg.Engines) != len(tc.drpcResps) {
 				t.Fatalf("num servers in tc.cfg doesn't match num drpc msgs")
 			}
 
@@ -745,7 +745,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 			for i := range cs.harness.instances {
 				// replace harness instance with mock IO server
 				// to enable mocking of harness instance drpc channel
-				newSrv := newTestIOServer(log, false, tc.cfg.Servers[i])
+				newSrv := newTestEngine(log, false, tc.cfg.Engines[i])
 				newSrv.scmProvider = cs.scm
 				cs.harness.instances[i] = newSrv
 
@@ -939,7 +939,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 	for name, tc := range map[string]struct {
 		scmMounted       bool // if scmMounted we emulate ext4 fs is mounted
 		superblockExists bool
-		instancesStarted bool // io_server already started
+		instancesStarted bool // engine already started
 		recreateSBs      bool
 		mountRet         error
 		unmountRet       error
@@ -1391,7 +1391,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 					devToMount[tc.sDevs[idx]] = scmMount
 					t.Logf("sDevs[%d]= %v, value= %v", idx, tc.sDevs[idx], scmMount)
 				}
-				iosrv := ioserver.NewConfig().
+				engine := engine.NewConfig().
 					WithScmMountPoint(scmMount).
 					WithScmClass(tc.sClass.String()).
 					WithBdevClass(tc.bClass.String()).
@@ -1399,7 +1399,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 					WithScmRamdiskSize(tc.sSize).
 					WithBdevDeviceList(tc.bDevs[idx]...).
 					WithScmDeviceList(tc.sDevs[idx])
-				config.Servers = append(config.Servers, iosrv)
+				config.Engines = append(config.Engines, engine)
 			}
 
 			getFsRetStr := "none"
@@ -1441,12 +1441,12 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 					}
 				}
 
-				trc := &ioserver.TestRunnerConfig{}
+				trc := &engine.TestRunnerConfig{}
 				if tc.instancesStarted {
 					trc.Running.SetTrue()
 					srv.ready.SetTrue()
 				}
-				srv.runner = ioserver.NewTestRunner(trc, config.Servers[i])
+				srv.runner = engine.NewTestRunner(trc, config.Engines[i])
 			}
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -1459,7 +1459,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			inflight := 0
 			for _, srv := range instances {
 				inflight++
-				go func(s *IOServerInstance) {
+				go func(s *EngineInstance) {
 					awaitCh <- s.awaitStorageReady(ctx, tc.recreateSBs)
 				}(srv)
 			}

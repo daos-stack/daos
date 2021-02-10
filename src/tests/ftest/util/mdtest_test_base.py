@@ -50,7 +50,8 @@ class MdtestBase(DfuseTestBase):
         if self.container is None:
             self.add_container(self.pool)
         # set Mdtest params
-        self.mdtest_cmd.set_daos_params(self.server_group, self.pool)
+        self.mdtest_cmd.set_daos_params(self.server_group, self.pool,
+                                        self.container.uuid)
 
         # start dfuse if api is POSIX
         if self.mdtest_cmd.api.value == "POSIX":
@@ -60,6 +61,10 @@ class MdtestBase(DfuseTestBase):
         # Run Mdtest
         self.run_mdtest(self.get_mdtest_job_manager_command(self.manager),
                         self.processes)
+        # reset self.container if dfs_destroy is True
+        if self.mdtest_cmd.dfs_destroy:
+            self.container = None
+
         self.stop_dfuse()
 
     def get_mdtest_job_manager_command(self, manager):

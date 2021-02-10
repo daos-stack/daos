@@ -24,8 +24,7 @@ control_log_file: /tmp/daos_control.log
 #  # Key portion of Server Certificate
 #  key: /etc/daos/certs/server.key
 
-# single server instance per config file for now
-servers:
+engines:
 -
   targets: 8                # count of storage targets per each server
   first_core: 1             # offset of the first core for service xstreams
