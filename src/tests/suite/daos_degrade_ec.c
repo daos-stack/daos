@@ -379,7 +379,7 @@ run_daos_degrade_simple_ec_test(int rank, int size, int *sub_tests,
 		sub_tests_size = ARRAY_SIZE(degrade_tests);
 		sub_tests = NULL;
 	}
-	run_daos_sub_tests_only("DAOS degrade ec tests", degrade_tests,
+	run_daos_sub_tests_only("DAOS_Degrade_EC", degrade_tests,
 				ARRAY_SIZE(degrade_tests), sub_tests,
 				sub_tests_size);
 
