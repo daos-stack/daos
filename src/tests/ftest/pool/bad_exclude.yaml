@@ -5,49 +5,30 @@ hosts:
       - server-A
       - server-B
       - server-C
-timeout: 200
-testparams:
-   tgtlist: !mux
-      goodlist:
-         ranklist:
-            - 2
-            - PASS
-      badlist:
-         ranklist:
-            - 44
-            - FAIL
-      nulllist:
-         ranklist:
-            - NULLPTR
-            - FAIL
-   connectsetnames: !mux
-      goodname:
-         setname:
-            - daos_server
-            - PASS
-      badname:
-         setname:
-            - bad_name_server
-            - FAIL
-      defaultname:
-         setname:
-            - NULLPTR
-            - PASS
-   UUID: !mux
-      gooduuid:
-         uuid:
-            - VALID
-            - PASS
-      nulluuid:
-         uuid:
-            - NULLPTR
-            - FAIL
-      baduuid:
-         uuid:
-            - CRAP
-            - FAIL
+timeout: 100
 pool:
-   mode: 511
    name: daos_server
    scm_size: 1073741824
    control_method: dmg
+test_params:
+   uuid_mux: !mux
+      good_uuid:
+         uuid: [VALID, True]
+      null_uuid:
+         uuid: [NULLPTR, False]
+      bad_uuid:
+         uuid: [123456, False]
+   rank_mux: !mux
+      good_rank:
+         rank: [1, True]
+      null_rank:
+         rank: [NULLPTR, False]
+      bad_rank:
+         rank: [99, False]
+   target_mux: !mux
+      good_target:
+         target: [2, True]
+      null_target:
+         target: [NULLPTR, True]
+      bad_target:
+         target: [44, False]
