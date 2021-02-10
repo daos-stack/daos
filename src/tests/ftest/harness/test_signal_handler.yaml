@@ -1,0 +1,14 @@
+hosts:
+  test_servers:
+    - server-A
+timeout: 10
+test_sleep_mux: !mux
+  complete_test:
+    test_sleep: 5
+  timeout_test:
+    test_sleep: 15
+sigterm_sleep_mux: !mux
+  sigterm_no_delay:
+    sigterm_sleep: 0
+  sigterm_delay:
+    sigterm_sleep: 15

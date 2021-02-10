@@ -29,7 +29,7 @@ class TestHarnessTests(TestWithServers):
 
         This test can be run in any CI stage: vm, small, medium, large
 
-        :avocado: tags=test_harness,core_files
+        :avocado: tags=test_harness,test_harness_tests,test_core_files
         """
         # Choose a server find the pid of its daos_engine process
         host = choice(self.server_managers[0].hosts)
