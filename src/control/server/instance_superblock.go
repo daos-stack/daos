@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
@@ -38,7 +21,7 @@ import (
 
 const (
 	defaultStoragePath = "/mnt/daos"
-	defaultGroupName   = "daos_io_server"
+	defaultGroupName   = "daos_engine"
 	superblockVersion  = 1
 )
 
@@ -68,7 +51,7 @@ func (sb *Superblock) Unmarshal(raw []byte) error {
 	return yaml.Unmarshal(raw, sb)
 }
 
-func (srv *IOServerInstance) superblockPath() string {
+func (srv *EngineInstance) superblockPath() string {
 	scmConfig := srv.scmConfig()
 	storagePath := scmConfig.MountPoint
 	if storagePath == "" {
@@ -77,19 +60,19 @@ func (srv *IOServerInstance) superblockPath() string {
 	return filepath.Join(srv.fsRoot, storagePath, "superblock")
 }
 
-func (srv *IOServerInstance) setSuperblock(sb *Superblock) {
+func (srv *EngineInstance) setSuperblock(sb *Superblock) {
 	srv.Lock()
 	defer srv.Unlock()
 	srv._superblock = sb
 }
 
-func (srv *IOServerInstance) getSuperblock() *Superblock {
+func (srv *EngineInstance) getSuperblock() *Superblock {
 	srv.RLock()
 	defer srv.RUnlock()
 	return srv._superblock
 }
 
-func (srv *IOServerInstance) hasSuperblock() bool {
+func (srv *EngineInstance) hasSuperblock() bool {
 	return srv.getSuperblock() != nil
 }
 
@@ -97,7 +80,7 @@ func (srv *IOServerInstance) hasSuperblock() bool {
 // to need a superblock to be created in order to start.
 //
 // Should not be called if SCM format is required.
-func (srv *IOServerInstance) NeedsSuperblock() (bool, error) {
+func (srv *EngineInstance) NeedsSuperblock() (bool, error) {
 	if srv.hasSuperblock() {
 		return false, nil
 	}
@@ -120,7 +103,7 @@ func (srv *IOServerInstance) NeedsSuperblock() (bool, error) {
 }
 
 // createSuperblock creates instance superblock if needed.
-func (srv *IOServerInstance) createSuperblock(recreate bool) error {
+func (srv *EngineInstance) createSuperblock(recreate bool) error {
 	if srv.isStarted() {
 		return errors.Errorf("can't create superblock: instance %d already started", srv.Index())
 	}
@@ -171,13 +154,13 @@ func (srv *IOServerInstance) createSuperblock(recreate bool) error {
 
 // WriteSuperblock writes the instance's superblock
 // to storage.
-func (srv *IOServerInstance) WriteSuperblock() error {
+func (srv *EngineInstance) WriteSuperblock() error {
 	return WriteSuperblock(srv.superblockPath(), srv.getSuperblock())
 }
 
 // ReadSuperblock reads the instance's superblock
 // from storage.
-func (srv *IOServerInstance) ReadSuperblock() error {
+func (srv *EngineInstance) ReadSuperblock() error {
 	if err := srv.MountScmDevice(); err != nil {
 		return errors.Wrap(err, "failed to mount SCM device")
 	}
@@ -192,7 +175,7 @@ func (srv *IOServerInstance) ReadSuperblock() error {
 }
 
 // RemoveSuperblock removes a superblock from storage.
-func (srv *IOServerInstance) RemoveSuperblock() error {
+func (srv *EngineInstance) RemoveSuperblock() error {
 	srv.setSuperblock(nil)
 
 	return os.Remove(srv.superblockPath())

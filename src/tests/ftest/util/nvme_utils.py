@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import threading
 import re
@@ -60,7 +43,8 @@ def get_device_ids(dmg, servers):
         try:
             result = dmg.run()
         except CommandFailure as _error:
-            raise "dmg command failed for list-devices"
+            raise CommandFailure(
+                "dmg list-devices failed with error {}".format(_error))
         drive_list = []
         for line in result.stdout.split('\n'):
             if 'UUID' in line:
@@ -88,9 +72,12 @@ class ServerFillUp(IorTestBase):
         self.pool = None
         self.dmg = None
         self.set_faulty_device = False
+        self.set_online_rebuild = False
+        self.rank_to_kill = None
         self.scm_fill = False
         self.nvme_fill = False
         self.ior_matrix = None
+        self.fail_on_warning = False
 
     def setUp(self):
         """Set up each test case."""
@@ -107,9 +94,8 @@ class ServerFillUp(IorTestBase):
         self.ior_nvme_xfersize = self.params.get(
             "nvme_transfer_size", '/run/ior/transfersize_blocksize/*',
             '16777216')
-        #Get the number of daos_io_servers
-        self.daos_io_servers = (self.server_managers[0].manager
-                                .job.yaml.server_params)
+        #Get the number of daos_engine
+        self.engines = (self.server_managers[0].manager.job.yaml.server_params)
         self.out_queue = queue.Queue()
 
     def get_max_capacity(self, mem_size_info):
@@ -125,8 +111,8 @@ class ServerFillUp(IorTestBase):
         # Get the Maximum storage space among all the servers.
         drive_capa = []
         for server in self.hostlist_servers:
-            for daos_io_server in range(len(self.daos_io_servers)):
-                drive_capa.append(sum(mem_size_info[server][daos_io_server]))
+            for engine in range(len(self.engines)):
+                drive_capa.append(sum(mem_size_info[server][engine]))
         print('Maximum Storage space from the servers is {}'
               .format(int(min(drive_capa) * 0.96)))
 
@@ -148,7 +134,7 @@ class ServerFillUp(IorTestBase):
             if _rc_code == 1:
                 print("Failed to lsblk on {}".format(_node))
                 raise ValueError
-        #Get the drive size from each daos_io_servers
+        #Get the drive size from each engine
         for buf, nodelist in task.iter_buffers():
             for node in nodelist:
                 pcmem_data = {}
@@ -173,7 +159,7 @@ class ServerFillUp(IorTestBase):
             if _rc_code == 1:
                 print("Failed to lsblk on {}".format(_node))
                 raise ValueError
-        #Get the drive size from each daos_io_servers
+        #Get the drive size from each engine
         for buf, nodelist in task.iter_buffers():
             for node in nodelist:
                 disk_data = {}
@@ -208,7 +194,7 @@ class ServerFillUp(IorTestBase):
                     if _rc_code == 1:
                         print("Failed to readlink on {}".format(_node))
                         raise ValueError
-                #Get the drive size from each daos_io_servers
+                #Get the drive size from each engine
                 for buf, _node in task.iter_buffers():
                     output = str(buf).split('\n')
                 tmp_dict[output[0].split('/')[-1]] = drive.split()[0]
@@ -231,17 +217,17 @@ class ServerFillUp(IorTestBase):
         #Create the dictionary for Max SCM size for all the servers.
         for server in scm_lsblk:
             tmp_dict = {}
-            for daos_io_server in range(len(self.daos_io_servers)):
+            for engine in range(len(self.engines)):
                 tmp_disk_list = []
                 for pcmem in (self.server_managers[0].manager.job.yaml.
-                              server_params[daos_io_server].scm_list.value):
+                              server_params[engine].scm_list.value):
                     pcmem_num = pcmem.split('/')[-1]
                     if pcmem_num in scm_lsblk[server].keys():
                         tmp_disk_list.append(int(scm_lsblk[server][pcmem_num]))
                     else:
                         self.fail("PCMEM {} can not found on server {}"
                                   .format(pcmem, server))
-                tmp_dict[daos_io_server] = tmp_disk_list
+                tmp_dict[engine] = tmp_disk_list
             scm_size[server] = tmp_dict
 
         return self.get_max_capacity(scm_size)
@@ -263,10 +249,10 @@ class ServerFillUp(IorTestBase):
         #Create the dictionary for NVMe size for all the servers and drives.
         for server in nvme_lsblk:
             tmp_dict = {}
-            for daos_io_server in range(len(self.daos_io_servers)):
+            for engine in range(len(self.engines)):
                 tmp_disk_list = []
                 for disk in (self.server_managers[0].manager.job.yaml.
-                             server_params[daos_io_server].bdev_list.value):
+                             server_params[engine].bdev_list.value):
                     if disk in nvme_readlink[server].keys():
                         size = int(nvme_lsblk[server]
                                    [nvme_readlink[server][disk]])
@@ -274,12 +260,12 @@ class ServerFillUp(IorTestBase):
                     else:
                         self.fail("Disk {} can not found on server {}"
                                   .format(disk, server))
-                tmp_dict[daos_io_server] = tmp_disk_list
+                tmp_dict[engine] = tmp_disk_list
             drive_info[server] = tmp_dict
 
         return self.get_max_capacity(drive_info)
 
-    def start_ior_thread(self, results, operation='WriteRead'):
+    def start_ior_thread(self, results, create_cont, operation='WriteRead'):
         """Start IOR write/read threads and wait until all threads are finished.
 
         Args:
@@ -288,21 +274,22 @@ class ServerFillUp(IorTestBase):
                              Default it will do whatever mention in ior_flags
                              set.
         """
-        _create_cont = True
         self.ior_cmd.flags.value = self.ior_default_flags
-        #For IOR Read only operation, retrieve the stored container UUID
-        if 'Read' in operation:
-            _create_cont = False
-            self.ior_cmd.flags.value = self.ior_read_flags
 
         #For IOR Other operation, calculate the block size based on server %
         #to fill up. Store the container UUID for future reading operation.
-        block_size = self.calculate_ior_block_size()
-        self.ior_cmd.block_size.update('{}'.format(block_size))
+        if operation == 'Write':
+            block_size = self.calculate_ior_block_size()
+            self.ior_cmd.block_size.update('{}'.format(block_size))
+        #For IOR Read only operation, retrieve the stored container UUID
+        elif operation == 'Read':
+            create_cont = False
+            self.ior_cmd.flags.value = self.ior_read_flags
 
         # run IOR Command
         try:
-            out = self.run_ior_with_pool(create_cont=_create_cont)
+            out = self.run_ior_with_pool(create_cont=create_cont,
+                                         fail_on_warning=self.fail_on_warning)
             self.ior_matrix = IorCommand.get_ior_metrics(out)
             results.put("PASS")
         except (CommandFailure, TestFail) as _error:
@@ -362,9 +349,9 @@ class ServerFillUp(IorTestBase):
         self.dmg.hostlist = server
         self.dmg.storage_set_faulty(disk_id)
         result = self.dmg.storage_query_device_health(disk_id)
-        #Check if device state changed to FAULTY.
-        if 'State:FAULTY' not in result.stdout:
-            self.fail("device State {} on host {} suppose to be FAULTY"
+        #Check if device state changed to EVICTED.
+        if 'State:EVICTED' not in result.stdout:
+            self.fail("device State {} on host {} suppose to be EVICTED"
                       .format(disk_id, server))
         # Wait for rebuild to start
         self.pool.wait_for_rebuild(True)
@@ -431,7 +418,8 @@ class ServerFillUp(IorTestBase):
         #Create the Pool
         self.pool.create()
 
-    def start_ior_load(self, storage='NVMe', operation="Write", percent=1):
+    def start_ior_load(self, storage='NVMe', operation="Write", percent=1,
+                       create_cont=True):
         """
         Method to Fill up the server either SCM or NVMe.
         Fill up based on percent amount given using IOR.
@@ -440,7 +428,7 @@ class ServerFillUp(IorTestBase):
             storage(string): SCM or NVMe, by default it will fill NVMe.
             operation(string): Write/Read operation
             percent(int): % of storage to be filled
-
+            create_cont(bool): To create the new container for IOR
         Returns:
             None
         """
@@ -449,13 +437,10 @@ class ServerFillUp(IorTestBase):
         self.nvme_fill = True if 'NVMe' in storage else False
         self.scm_fill = True if 'SCM' in storage else False
 
-        if operation not in ['Read', 'Write']:
-            self.fail('Please provide the valid IO operation instead {}'
-                      .format(operation))
-
         # Create the IOR threads
         job = threading.Thread(target=self.start_ior_thread,
                                kwargs={"results":self.out_queue,
+                                       "create_cont": create_cont,
                                        "operation": operation})
         # Launch the IOR thread
         job.start()
@@ -465,6 +450,13 @@ class ServerFillUp(IorTestBase):
             time.sleep(60)
             #Set the device faulty
             self.set_device_faulty_loop()
+
+        #Kill the server rank while IOR in progress
+        if self.set_online_rebuild:
+            time.sleep(30)
+            # Kill the server rank
+            if self.rank_to_kill is not None:
+                self.get_dmg_command().system_stop(True, self.rank_to_kill)
 
         # Wait to finish the thread
         job.join()

@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(tests)
 
@@ -56,6 +39,14 @@ enum {
 	DTS_INIT_CREDITS,	/* I/O credits have been initialized */
 };
 
+static void
+credit_return(struct dts_context *tsc, struct dts_io_credit *cred)
+{
+	tsc->tsc_credits[tsc->tsc_cred_avail] = cred;
+	tsc->tsc_cred_inuse--;
+	tsc->tsc_cred_avail++;
+}
+
 /**
  * examines if there is available credit freed by completed I/O, it will wait
  * until all credits are freed if @drain is true.
@@ -86,11 +77,8 @@ credit_poll(struct dts_context *tsc, bool drain)
 				fprintf(stderr, "failed op: %d\n", err);
 				return err;
 			}
-			tsc->tsc_credits[tsc->tsc_cred_avail] =
-			   container_of(evs[i], struct dts_io_credit, tc_ev);
-
-			tsc->tsc_cred_inuse--;
-			tsc->tsc_cred_avail++;
+			credit_return(tsc, container_of(evs[i],
+				      struct dts_io_credit, tc_ev));
 		}
 
 		if (tsc->tsc_cred_avail == 0)
@@ -133,6 +121,14 @@ dts_credit_drain(struct dts_context *tsc)
 	return credit_poll(tsc, true);
 }
 
+void
+dts_credit_return(struct dts_context *tsc, struct dts_io_credit *cred)
+{
+	if (tsc->tsc_cred_avail >= 0)
+		credit_return(tsc, cred);
+	/* else: nothinbg to return for sync mode */
+}
+
 static int
 credits_init(struct dts_context *tsc)
 {
@@ -165,7 +161,7 @@ credits_init(struct dts_context *tsc)
 			return -1;
 		}
 
-		if (!daos_handle_is_inval(tsc->tsc_eqh)) {
+		if (daos_handle_is_valid(tsc->tsc_eqh)) {
 			rc = daos_event_init(&cred->tc_ev, tsc->tsc_eqh, NULL);
 			D_ASSERTF(!rc, "rc="DF_RC"\n", DP_RC(rc));
 			cred->tc_evp = &cred->tc_ev;
@@ -183,13 +179,13 @@ credits_fini(struct dts_context *tsc)
 	D_ASSERT(!tsc->tsc_cred_inuse);
 
 	for (i = 0; i < tsc->tsc_cred_nr; i++) {
-		if (!daos_handle_is_inval(tsc->tsc_eqh))
+		if (daos_handle_is_valid(tsc->tsc_eqh))
 			daos_event_fini(&tsc->tsc_cred_buf[i].tc_ev);
 
 		D_FREE(tsc->tsc_cred_buf[i].tc_vbuf);
 	}
 
-	if (!daos_handle_is_inval(tsc->tsc_eqh))
+	if (daos_handle_is_valid(tsc->tsc_eqh))
 		daos_eq_destroy(tsc->tsc_eqh, DAOS_EQ_DESTROY_FORCE);
 }
 
@@ -240,7 +236,7 @@ pool_init(struct dts_context *tsc)
 		if (rc)
 			goto bcast;
 
-		rc = daos_pool_connect(tsc->tsc_pool_uuid, NULL, NULL /* svc */,
+		rc = daos_pool_connect(tsc->tsc_pool_uuid, NULL,
 				       DAOS_PC_EX, &poh, NULL, NULL);
 		if (rc)
 			goto bcast;
@@ -345,7 +341,7 @@ cont_fini(struct dts_context *tsc)
 bool
 dts_is_async(struct dts_context *tsc)
 {
-	return !daos_handle_is_inval(tsc->tsc_eqh);
+	return daos_handle_is_valid(tsc->tsc_eqh);
 }
 
 /* see comments in daos/dts.h */
@@ -361,7 +357,7 @@ dts_ctx_init(struct dts_context *tsc)
 	tsc->tsc_init = DTS_INIT_DEBUG;
 
 	if (tsc->tsc_pmem_file) /* VOS mode */
-		rc = vos_init();
+		rc = vos_self_init("/mnt/daos");
 	else
 		rc = daos_init();
 	if (rc)
@@ -408,7 +404,7 @@ dts_ctx_fini(struct dts_context *tsc)
 		/* fall through */
 	case DTS_INIT_MODULE:	/* finalize module */
 		if (tsc->tsc_pmem_file)
-			vos_fini();
+			vos_self_fini();
 		else
 			daos_fini();
 		/* fall through */

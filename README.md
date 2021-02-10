@@ -1,7 +1,6 @@
 # DAOS
 
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE)
-[![Build Status](https://travis-ci.org/daos-stack/daos.svg?branch=master)](https://travis-ci.org/daos-stack/daos)
+[![License](https://img.shields.io/badge/License-BSD--2--Clause--Patent-blue.svg)](./LICENSE)
 [![Coverity Scan Build Status](https://img.shields.io/coverity/scan/3015.svg)](https://scan.coverity.com/projects/daos-stack-daos)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/4163f52ec65e4ba8991208288a9a15a6)](https://www.codacy.com/app/johann.lombardi/daos?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=daos-stack/daos&amp;utm_campaign=Badge_Grade)
 
@@ -20,7 +19,7 @@ and elastic storage to optimize performance and cost.
 
 ## License
 
-DAOS is licensed under the Apache License Version 2.0.
+DAOS is licensed under the BSD-2-Clause Plus Patent License.
 Please see the [LICENSE](./LICENSE) & [NOTICE](./NOTICE) files for more
 information.
 

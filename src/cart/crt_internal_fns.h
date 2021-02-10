@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It gives out the main CaRT internal function
@@ -32,7 +15,7 @@
 bool crt_initialized(void);
 
 /** crt_register.c */
-int crt_opc_map_create(unsigned int bits);
+int crt_opc_map_create(void);
 void crt_opc_map_destroy(struct crt_opc_map *map);
 struct crt_opc_info *crt_opc_lookup(struct crt_opc_map *map, crt_opcode_t opc,
 				    int locked);
@@ -78,5 +61,8 @@ crt_bulk_desc_dup(struct crt_bulk_desc *bulk_desc_new,
 
 void
 crt_hdlr_proto_query(crt_rpc_t *rpc_req);
+
+int
+crt_register_proto_fi(crt_endpoint_t *ep);
 
 #endif /* __CRT_INTERNAL_FNS_H__ */

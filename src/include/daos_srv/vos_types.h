@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2015-2020 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #ifndef __VOS_TYPES_H__
@@ -382,7 +365,7 @@ typedef struct {
 				daos_unit_oid_t	ie_oid;
 			};
 		};
-		/** Array entry */
+		/** Array or SV entry */
 		struct {
 			/** record size */
 			daos_size_t		ie_rsize;
@@ -400,6 +383,8 @@ typedef struct {
 			uint32_t		ie_ver;
 			/** Minor epoch of extent */
 			uint16_t		ie_minor_epc;
+			/** entry dtx state */
+			unsigned int		ie_dtx_state;
 		};
 		/** Active DTX entry. */
 		struct {
@@ -439,9 +424,14 @@ typedef int (*vos_iter_cb_t)(daos_handle_t ih, vos_iter_entry_t *entry,
  * Actions performed in iteration callback
  */
 enum {
-	VOS_ITER_CB_YIELD	= (1UL << 0),	/* Yield */
-	VOS_ITER_CB_DELETE	= (1UL << 1),	/* Delete entry */
-	VOS_ITER_CB_SKIP	= (1UL << 2),	/* Skip entry */
+	/** Yield */
+	VOS_ITER_CB_YIELD	= (1UL << 0),
+	/** Delete entry */
+	VOS_ITER_CB_DELETE	= (1UL << 1),
+	/** Skip entry, don't iterate into next level for current entry */
+	VOS_ITER_CB_SKIP	= (1UL << 2),
+	/** Abort current level iteration */
+	VOS_ITER_CB_ABORT	= (1UL << 3),
 };
 
 /**

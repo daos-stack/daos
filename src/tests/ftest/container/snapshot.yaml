@@ -1,10 +1,10 @@
-# change host names to your reserved nodes, the
+# change host names to your reserved nodes,  the
 # required quantity is indicated by the placeholders
 hosts:
   test_servers:
     - server-A
     - server-B
-timeout: 60
+timeout: 600
 faults:
     no_faults:
       fault_list: []

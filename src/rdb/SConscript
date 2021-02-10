@@ -6,7 +6,9 @@ def scons():
     Import('env', 'prereqs')
 
     # raft
-    SConscript('raft/SConscript')
+    denv = env.Clone()
+    denv.SetOption('warn', 'no-missing-sconscript')
+    denv.SConscript('raft/SConscript')
 
     # rdb-specific env
     denv = env.Clone()

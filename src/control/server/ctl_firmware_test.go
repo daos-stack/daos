@@ -1,25 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
-//
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 // +build firmware
 
 package server
@@ -37,7 +19,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
@@ -537,12 +519,12 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 		bmbc           *bdev.MockBackendConfig
 		smbc           *scm.MockBackendConfig
 		serversRunning bool
-		noRankServers  bool
+		noRankEngines  bool
 		req            ctlpb.FirmwareUpdateReq
 		expErr         error
 		expResp        *ctlpb.FirmwareUpdateResp
 	}{
-		"IO servers running": {
+		"IO engines running": {
 			req: ctlpb.FirmwareUpdateReq{
 				Type:         ctlpb.FirmwareUpdateReq_SCM,
 				FirmwarePath: "/some/path",
@@ -550,13 +532,13 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 			serversRunning: true,
 			expErr:         FaultInstancesNotStopped("firmware update", 0),
 		},
-		"IO servers running with no rank": {
+		"IO engines running with no rank": {
 			req: ctlpb.FirmwareUpdateReq{
 				Type:         ctlpb.FirmwareUpdateReq_SCM,
 				FirmwarePath: "/some/path",
 			},
 			serversRunning: true,
-			noRankServers:  true,
+			noRankEngines:  true,
 			expErr:         errors.New("unidentified server rank is running"),
 		},
 		"no path": {
@@ -823,11 +805,11 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 			cfg := config.DefaultServer()
 			cs := mockControlService(t, log, cfg, tc.bmbc, tc.smbc, nil)
 			for i := 0; i < 2; i++ {
-				runner := ioserver.NewTestRunner(&ioserver.TestRunnerConfig{
+				runner := engine.NewTestRunner(&engine.TestRunnerConfig{
 					Running: atm.NewBool(tc.serversRunning),
-				}, ioserver.NewConfig())
-				instance := NewIOServerInstance(log, nil, nil, nil, runner)
-				if !tc.noRankServers {
+				}, engine.NewConfig())
+				instance := NewEngineInstance(log, nil, nil, nil, runner)
+				if !tc.noRankEngines {
 					instance._superblock = &Superblock{}
 					instance._superblock.ValidRank = true
 					instance._superblock.Rank = system.NewRankPtr(uint32(i))

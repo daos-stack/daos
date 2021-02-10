@@ -1,24 +1,21 @@
 %define daoshome %{_exec_prefix}/lib/%{name}
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
-%if (0%{?suse_version} >= 1500)
-# until we get an updated mercury build on 15.2
-%global mercury_version 2.0.0~rc1-1.suse.lp151
-%else
-%global mercury_version 2.0.0~rc1-1%{?dist}
-%endif
+
+%global mercury_version 2.0.1~rc1-1%{?dist}
+%global libfabric_version 1.11.1
 
 Name:          daos
 Version:       1.1.2.1
-Release:       1%{?relval}%{?dist}
+Release:       11%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
-License:       Apache
+License:       BSD-2-Clause-Patent
 URL:           https//github.com/daos-stack/daos
 Source0:       %{name}-%{version}.tar.gz
 
 BuildRequires: scons >= 2.4
-BuildRequires: libfabric-devel >= 1.11.0
+BuildRequires: libfabric-devel >= %{libfabric_version}
 BuildRequires: boost-devel
 BuildRequires: mercury-devel = %{mercury_version}
 BuildRequires: openpa-devel
@@ -139,7 +136,7 @@ Requires: hwloc
 Requires: mercury = %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
-Requires: libfabric >= 1.11.0
+Requires: libfabric >= %{libfabric_version}
 %{?systemd_requires}
 Obsoletes: cart
 
@@ -150,7 +147,7 @@ This is the package needed to run a DAOS server
 Summary: The DAOS client
 Requires: %{name} = %{version}-%{release}
 Requires: mercury = %{mercury_version}
-Requires: libfabric >= 1.11.0
+Requires: libfabric >= %{libfabric_version}
 Requires: fuse3 >= 3.4.2
 Obsoletes: cart
 %if (0%{?suse_version} >= 1500)
@@ -172,6 +169,7 @@ Requires: python-pathlib
 Requires: python-distro
 Requires: python2-tabulate
 Requires: fio
+Requires: dbench
 Requires: lbzip2
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
@@ -242,8 +240,9 @@ mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
 mv %{?buildroot}/%{_prefix}/etc/bash_completion.d %{?buildroot}/%{_sysconfdir}
 
 %pre server
-getent group daos_admins >/dev/null || groupadd -r daos_admins
-getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r daos_server
+getent group daos_metrics >/dev/null || groupadd -r daos_metrics
+getent group daos_server >/dev/null || groupadd -r daos_server
+getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_server -G daos_metrics daos_server
 %post server
 /sbin/ldconfig
 %systemd_post %{server_svc_name}
@@ -254,7 +253,8 @@ getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r daos_server
 %systemd_postun %{server_svc_name}
 
 %pre client
-getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
+getent group daos_agent >/dev/null || groupadd -r daos_agent
+getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent daos_agent
 %post client
 %systemd_post %{agent_svc_name}
 %preun client
@@ -285,6 +285,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %dir %{_sysconfdir}/bash_completion.d
 %{_sysconfdir}/bash_completion.d/daos.bash
 %{_libdir}/libdaos_common.so
+%{_libdir}/libdaos_common_pmem.so
 # TODO: this should move from daos_srv to daos
 %{_libdir}/daos_srv/libplacement.so
 # Certificate generation files
@@ -296,15 +297,15 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %files server
 %config(noreplace) %{conf_dir}/daos_server.yml
 %dir %{conf_dir}/certs
-%attr(0700,daos_server,daos_server) %{conf_dir}/certs
+%attr(0755,root,root) %{conf_dir}/certs
 %dir %{conf_dir}/certs/clients
 %attr(0700,daos_server,daos_server) %{conf_dir}/certs/clients
 %attr(0644,root,root) %{conf_dir}/daos_server.yml
 # set daos_admin to be setuid root in order to perform privileged tasks
-%attr(4750,root,daos_admins) %{_bindir}/daos_admin
-# set daos_server to be setgid daos_admins in order to invoke daos_admin
-%attr(2755,root,daos_admins) %{_bindir}/daos_server
-%{_bindir}/daos_io_server
+%attr(4750,root,daos_server) %{_bindir}/daos_admin
+# set daos_server to be setgid daos_server in order to invoke daos_admin
+%attr(2755,root,daos_server) %{_bindir}/daos_server
+%{_bindir}/daos_engine
 %dir %{_libdir}/daos_srv
 %{_libdir}/daos_srv/libcont.so
 %{_libdir}/daos_srv/libdtx.so
@@ -322,7 +323,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_unitdir}/%{server_svc_name}
 
 %files client
-%{_prefix}/etc/memcheck-daos-client.supp
 %{_bindir}/cart_ctl
 %{_bindir}/self_test
 %{_bindir}/dmg
@@ -399,6 +399,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
 %{_bindir}/crt_launch
+%{_bindir}/daos_metrics
 %{_prefix}/etc/fault-inject-cart.yaml
 %{_bindir}/fault_status
 # For avocado tests
@@ -411,6 +412,36 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Tue Feb 9 2021 Vish Venkatesan<vishwanath.venkatesan@intel.com> 1.1.2.1-11
+- Add new pmem specific version of DAOS common library
+
+* Fri Feb 6 2021 Saurabh Tandan <saurabh.tandan@intel.com> 1.1.2.1-10
+- Added dbench as requirement for test package.
+
+* Wed Feb 3 2021 Hua Kuang <hua.kuang@intel.com> 1.1.2.1-9
+- Changed License to BSD-2-Clause-Patent
+
+* Wed Feb 03 2021 Brian J. Murrell <brian.murrell@intel.com> - 1.1.2-8
+- Update minimum required libfabric to 1.11.1
+
+* Thu Jan 28 2021 Phillip Henderson <phillip.henderson@intel.com> 1.1.2.1-7
+- Change ownership and permissions for the /etc/daos/certs directory.
+
+* Sat Jan 23 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.1.2.1-6
+- Update to mercury v2.0.1rc1
+
+* Fri Jan 22 2021 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.2.1-5
+- Install daos_metrics utility to %{_bindir}
+
+* Wed Jan 20 2021 Kenneth Cain <kenneth.c.cain@intel.com> 1.1.2.1-4
+- Version update for API major version 1, libdaos.so.1 (1.0.0)
+
+* Fri Jan 15 2021 Michael Hennecke <mhennecke@lenovo.com> 1.1.2.1-3
+- Harmonize daos_server and daos_agent groups.
+
+* Tue Dec 15 2020 Ashley Pittman <ashley.m.pittman@intel.com> 1.1.2.1-2
+- Combine the two memcheck suppressions files.
+
 * Wed Dec 09 2020 Johann Lombardi <johann.lombardi@intel.com> 1.1.2.1-1
 - Version bump up to 1.1.2.1
 

@@ -40,9 +40,7 @@ largefilecount:
     - POSIX
   object_class:
     - SX
-# Uncomment when DAOS-5841 is resolved.
-# Ticket for re-enabling this is DAOS-5911
-#    - RP_3GX
+    - RP_3GX
 ior:
   np: 30
   dfs_destroy: False

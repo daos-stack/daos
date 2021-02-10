@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from __future__ import print_function
 
@@ -66,7 +49,8 @@ class DmgStorageQuery(ControlTestBase):
 
         Test Description: Test 'dmg storage query list-devices' command.
 
-        :avocado: tags=all,pr,hw,small,storage_query_devs,basic,dmg
+        :avocado: tags=all,daily_regression,hw,small,storage_query_devs,basic
+        :avocado: tags=dmg
         """
         # Get the storage device information, parse and check devices info
         devs_info = self.get_device_info()
@@ -89,7 +73,8 @@ class DmgStorageQuery(ControlTestBase):
 
         Test Description: Test 'dmg storage query list-pools' command.
 
-        :avocado: tags=all,pr,hw,small,storage_query_pools,basic,dmg
+        :avocado: tags=all,daily_regression,hw,small,storage_query_pools,basic
+        :avocado: tags=dmg
         """
         # Create pool and get the storage smd information, then verfify info
         self.prepare_pool()
@@ -125,7 +110,7 @@ class DmgStorageQuery(ControlTestBase):
 
         Test Description: Test 'dmg storage query list-devices --health' cmd.
 
-        :avocado: tags=all,pr,hw,small,storage_query_health,basic
+        :avocado: tags=all,daily_regression,hw,small,storage_query_health,basic
         """
         dmg_info = self.get_device_info(health=True)
 
@@ -162,7 +147,7 @@ class DmgStorageQuery(ControlTestBase):
         In addition this test also does a basic test of nvme-faulty cmd:
         'dmg storage set nvme-faulty'
 
-        :avocado: tags=all,pr,hw,small,storage_query_faulty,basic
+        :avocado: tags=all,daily_regression,hw,small,storage_query_faulty,basic
         """
         # Get device info and check state is NORMAL
         devs_info = self.get_device_info()

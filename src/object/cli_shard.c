@@ -1,24 +1,7 @@
 /*
- *  (C) Copyright 2016-2020 Intel Corporation.
+ *  (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * object shard operations.
@@ -279,8 +262,8 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 					DP_RC(rc));
 			} else  if (iod->iod_type == DAOS_IOD_ARRAY) {
 				D_ERROR("Data Verification failed (object: "
-					DF_OID" shard %d, extent: "DF_RECX"):"
-					" "DF_RC"\n",
+					DF_OID" shard %d, extent: "DF_RECX"): "
+					DF_RC"\n",
 					DP_OID(orw->orw_oid.id_pub),
 					shard_idx, DP_RECX(iod->iod_recxs[i]),
 					DP_RC(rc));
@@ -549,6 +532,54 @@ daos_iom_copy(const daos_iom_t *src, daos_iom_t *dst)
 	return 0;
 }
 
+static void
+csum_report_cb(const struct crt_cb_info *cb_info)
+{
+	crt_rpc_t	*rpc = cb_info->cci_arg;
+	int		 rc = cb_info->cci_rc;
+
+	D_DEBUG(DB_IO, "rpc %p, csum report "DF_RC"\n", rpc, DP_RC(rc));
+	crt_req_decref(rpc);
+	crt_req_decref(cb_info->cci_rpc);
+}
+
+/* send CSUM_REPORT to original target */
+static int
+dc_shard_csum_report(tse_task_t *task, crt_rpc_t *rpc)
+{
+	crt_rpc_t		*csum_rpc;
+	struct obj_rw_in	*orw, *csum_orw;
+	int			 opc;
+	int			 rc;
+
+	opc = opc_get(rpc->cr_opc);
+	D_ASSERT(opc == DAOS_OBJ_RPC_FETCH);
+	rc = obj_req_create(daos_task2ctx(task), &rpc->cr_ep, opc, &csum_rpc);
+	if (rc) {
+		D_ERROR("Failed to create csum report request, task %p.\n",
+			task);
+		return rc;
+	}
+
+	orw = crt_req_get(rpc);
+	csum_orw = crt_req_get(csum_rpc);
+	memcpy(csum_orw, orw, rpc->cr_input_size);
+	csum_orw->orw_flags |= ORF_CSUM_REPORT;
+	csum_orw->orw_iod_array.oia_iod_csums = NULL;
+	csum_orw->orw_sgls.ca_count = 0;
+	csum_orw->orw_sgls.ca_arrays = NULL;
+	csum_orw->orw_bulks.ca_count = 0;
+	csum_orw->orw_bulks.ca_arrays = NULL;
+	crt_req_addref(csum_rpc);
+	crt_req_addref(rpc);
+	rc = crt_req_send(csum_rpc, csum_report_cb, rpc);
+	if (rc != 0)
+		D_ERROR("Fail to send csum report, rpc %p, "DF_RC"\n",
+			rpc, DP_RC(rc));
+
+	return rc;
+}
+
 static int
 dc_rw_cb(tse_task_t *task, void *arg)
 {
@@ -597,7 +628,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		 * If any failure happens inside Cart, let's reset failure to
 		 * TIMEDOUT, so the upper layer can retry.
 		 */
-		D_ERROR("RPC %d failed: %d\n", opc, ret);
+		D_ERROR("RPC %d failed, "DF_RC"\n", opc, DP_RC(ret));
 		D_GOTO(out, ret);
 	}
 
@@ -654,8 +685,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 			reasb_req = rw_args->shard_args->reasb_req;
 			is_ec_obj = (reasb_req != NULL) &&
 				    DAOS_OC_IS_EC(reasb_req->orr_oca);
-			if (rc == -DER_CSUM && is_ec_obj &&
-			    (orw->orw_flags & ORF_CSUM_REPORT) == 0) {
+			if (rc == -DER_CSUM && is_ec_obj) {
 				struct shard_auxi_args	*sa;
 				uint32_t		 tgt_idx;
 
@@ -747,17 +777,34 @@ dc_rw_cb(tse_task_t *task, void *arg)
 
 		/* update the sizes in iods */
 		for (i = 0; i < orw->orw_nr; i++) {
+			daos_iod_t	*iod;
+			daos_iod_t	*orig_iod = NULL;
+
 			D_DEBUG(DB_IO, DF_UOID" size "DF_U64
 				" eph "DF_U64"\n", DP_UOID(orw->orw_oid),
 				sizes[i], orw->orw_epoch);
-			if (!is_ec_obj || reasb_req->orr_fail == NULL ||
-			    iods[i].iod_size == 0 || sizes[i] != 0)
+
+			if (!is_ec_obj) {
 				iods[i].iod_size = sizes[i];
-			if ((is_ec_obj && reasb_req->orr_recov) &&
-			    (reasb_req->orr_fail->efi_uiods[i].iod_size == 0 ||
-			     sizes[i] != 0))
-				reasb_req->orr_fail->efi_uiods[i].iod_size =
-					sizes[i];
+				continue;
+			}
+
+			iod = &reasb_req->orr_iods[i];
+			if (reasb_req->orr_recov) {
+				/* For recover tasks, let's update the iod in
+				 * original task.
+				 */
+				D_ASSERT(reasb_req->orr_fail != NULL);
+				orig_iod = &reasb_req->orr_fail->efi_uiods[i];
+			}
+
+			if (!reasb_req->orr_size_set || iod->iod_size == 0 ||
+			   (orig_iod != NULL && orig_iod->iod_size == 0)) {
+				iod->iod_size = sizes[i];
+				if (orig_iod)
+					orig_iod->iod_size = sizes[i];
+				reasb_req->orr_size_set = 1;
+			}
 		}
 
 		if (is_ec_obj && reasb_req->orr_size_fetch)
@@ -833,6 +880,8 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	}
 
 out:
+	if (rc == -DER_CSUM && opc == DAOS_OBJ_RPC_FETCH)
+		dc_shard_csum_report(task, rw_args->rpc);
 	crt_req_decref(rw_args->rpc);
 	dc_pool_put((struct dc_pool *)rw_args->hdlp);
 
@@ -1573,6 +1622,9 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 		if (daos_anchor_get_flags(args->la_dkey_anchor) &
 		    DIOF_FOR_MIGRATION)
 			oei->oei_flags |= ORF_FOR_MIGRATION;
+		if (daos_anchor_get_flags(args->la_dkey_anchor) &
+		    DIOF_TO_SPEC_SHARD)
+			oei->oei_flags |= ORF_DTX_REFRESH;
 	}
 	if (args->la_akey_anchor != NULL)
 		enum_anchor_copy(&oei->oei_akey_anchor, args->la_akey_anchor);
@@ -1680,7 +1732,7 @@ obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args, uint32_t shard,
 	struct daos_oclass_attr	*oca;
 	uint64_t		 stripe_rec_nr, cell_rec_nr, rx_idx;
 
-	oca = obj_get_oca(cb_args->obj, false);
+	oca = obj_get_oca(cb_args->obj);
 	if (oca == NULL || !DAOS_OC_IS_EC(oca)) {
 		*result_recx = *reply_recx;
 		return;
@@ -1790,11 +1842,12 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 	opc = opc_get(cb_args->rpc->cr_opc);
 
 	if (ret != 0) {
-		D_ERROR("RPC %d failed: %d\n", opc, ret);
+		D_ERROR("RPC %d failed, "DF_RC"\n", opc, DP_RC(ret));
 		D_GOTO(out, ret);
 	}
 
 	okqo = crt_reply_get(cb_args->rpc);
+	rc = obj_reply_get_status(rpc);
 
 	/* See the similar dc_rw_cb. */
 	if (daos_handle_is_valid(cb_args->th)) {
@@ -1810,7 +1863,6 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 		}
 	}
 
-	rc = obj_reply_get_status(rpc);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D_GOTO(out, rc = 0);

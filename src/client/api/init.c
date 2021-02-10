@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * DAOS Client initialization/shutdown routines
@@ -51,9 +34,9 @@ static int		module_initialized;
 
 const struct daos_task_api dc_funcs[] = {
 	/** Management */
-	{dc_mgmt_svc_rip, sizeof(daos_svc_rip_t)},
-	{dc_pool_extend, sizeof(daos_pool_extend_t)},
-	{dc_pool_evict, sizeof(daos_pool_evict_t)},
+	{dc_deprecated, 0},
+	{dc_deprecated, 0},
+	{dc_deprecated, 0},
 	{dc_debug_set_params, sizeof(daos_set_params_t)},
 	{dc_mgmt_get_bs_state, sizeof(daos_mgmt_get_bs_state_t)},
 
@@ -175,7 +158,10 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_agent, rc);
 
-	/** get CaRT configuration */
+	/**
+	 * get CaRT configuration (see mgmtModule.handleGetAttachInfo for the
+	 * handling of NULL system names)
+	 */
 	rc = dc_mgmt_net_cfg(NULL);
 	if (rc != 0)
 		D_GOTO(out_job, rc);
@@ -270,11 +256,10 @@ daos_fini(void)
 	dc_pool_fini();
 	dc_mgmt_fini();
 
-	rc = dc_mgmt_disconnect();
-	if (rc != 0) {
-		D_ERROR("failed to disconnect some resources may leak, " DF_RC "\n",
-			DP_RC(rc));
-	}
+	rc = dc_mgmt_notify_exit();
+	if (rc != 0)
+		D_ERROR("failed to disconnect some resources may leak, "
+			DF_RC"\n", DP_RC(rc));
 
 	dc_agent_fini();
 	dc_job_fini();

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This is a script to be run by the unit/test_main.sh to run a test
+# This is a script to be run by the ci/unit/test_main.sh to run a test
 # on a CI node.
 
 set -uex
@@ -11,7 +11,6 @@ if grep /mnt/daos\  /proc/mounts; then
 fi
 sudo mkdir -p /mnt/daos
 
-sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
 sudo mkdir -p "$DAOS_BASE"
 sudo mount -t nfs "$HOSTNAME":"$HOSTPWD" "$DAOS_BASE"
 sudo cp "$DAOS_BASE/install/bin/daos_admin" /usr/bin/daos_admin
@@ -44,13 +43,6 @@ else
 fi
 
 cd "$DAOS_BASE"
-if ${NLT:-false}; then
-    mkdir -p vm_test
-    ./utils/node_local_test.py --output-file=vm_test/nlt-errors.json all
-else
-    IS_CI=true OLD_CI=false RUN_TEST_VALGRIND="$WITH_VALGRIND" utils/run_test.sh
-
-    if [ "$WITH_VALGRIND" == 'memcheck' ]; then
-	mv test_results/unit-test-*.memcheck.xml .
-    fi
-fi
+sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
+IS_CI=true OLD_CI=false RUN_TEST_VALGRIND="$WITH_VALGRIND" \
+    DAOS_BASE="$DAOS_BASE" utils/run_test.sh

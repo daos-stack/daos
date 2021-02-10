@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-(C) Copyright 2018-2020 Intel Corporation.
+(C) Copyright 2018-2021 Intel Corporation.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
-GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-The Government's rights to use, modify, reproduce, release, perform, display,
-or disclose this software are subject to the terms of the Apache License as
-provided in Contract No. B609815.
-Any reproduction of computer software, computer software documentation, or
-portions thereof marked with this legend must also reproduce the markings.
+SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from __future__ import print_function
 
@@ -98,7 +81,6 @@ class IorCommand(ExecutableCommand):
         # Module DFS
         #   Required arguments
         #       --dfs.pool=STRING            pool uuid
-        #       --dfs.svcl=STRING            pool SVCL
         #       --dfs.cont=STRING            container uuid
         #   Flags
         #       --dfs.destroy               Destroy Container
@@ -108,7 +90,6 @@ class IorCommand(ExecutableCommand):
         #       --dfs.oclass=STRING          object class
         #       --dfs.prefix=STRING          mount prefix
         self.dfs_pool = FormattedParameter("--dfs.pool {}")
-        self.dfs_svcl = FormattedParameter("--dfs.svcl {}")
         self.dfs_cont = FormattedParameter("--dfs.cont {}")
         self.dfs_destroy = FormattedParameter("--dfs.destroy", False)
         self.dfs_group = FormattedParameter("--dfs.group {}")
@@ -168,21 +149,6 @@ class IorCommand(ExecutableCommand):
         if self.api.value in ["DFS", "MPIIO", "POSIX", "HDF5"]:
             self.dfs_pool.update(
                 pool.pool.get_uuid_str(), "dfs_pool" if display else None)
-        self.set_daos_svcl_param(pool, display)
-
-    def set_daos_svcl_param(self, pool, display=True):
-        """Set the IOR dfs_svcl param from the ranks of a DAOS pool object.
-
-        Args:
-            pool (TestPool): DAOS test pool object
-            display (bool, optional): print updated params. Defaults to True.
-        """
-        svcl = ":".join(
-            [str(item) for item in [
-                int(pool.pool.svc.rl_ranks[index])
-                for index in range(pool.pool.svc.rl_nr)]])
-        if self.api.value in ["DFS", "MPIIO", "POSIX", "HDF5"]:
-            self.dfs_svcl.update(svcl, "dfs_svcl" if display else None)
 
     def get_aggregate_total(self, processes):
         """Get the total bytes expected to be written by ior.
@@ -257,7 +223,6 @@ class IorCommand(ExecutableCommand):
         if "mpirun" in manager_cmd or "srun" in manager_cmd:
             if self.dfs_pool.value is not None:
                 env["DAOS_POOL"] = self.dfs_pool.value
-                env["DAOS_SVCL"] = self.dfs_svcl.value
                 env["DAOS_CONT"] = self.dfs_cont.value
                 env["DAOS_BYPASS_DUNS"] = "1"
                 env["IOR_HINT__MPI__romio_daos_obj_class"] = \

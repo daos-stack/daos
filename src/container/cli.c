@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * dc_cont: Container Client
@@ -230,6 +213,7 @@ dc_cont_create(tse_task_t *task)
 {
 	daos_cont_create_t     *args;
 	struct cont_create_in  *in;
+	struct daos_prop_entry *entry;
 	struct dc_pool	       *pool;
 	crt_endpoint_t		ep;
 	crt_rpc_t	       *rpc;
@@ -240,6 +224,14 @@ dc_cont_create(tse_task_t *task)
 	args = dc_task_get_args(task);
 	if (uuid_is_null(args->uuid))
 		D_GOTO(err_task, rc = -DER_INVAL);
+
+	entry = daos_prop_entry_get(args->prop, DAOS_PROP_CO_STATUS);
+	if (entry != NULL) {
+		rc = -DER_INVAL;
+		D_ERROR("cannot set DAOS_PROP_CO_STATUS prop for cont_create "
+			DF_RC"\n", DP_RC(rc));
+		goto err_task;
+	}
 
 	pool = dc_hdl2pool(args->poh);
 	if (pool == NULL)
@@ -560,6 +552,7 @@ cont_open_complete(tse_task_t *task, void *data)
 		D_GOTO(out, rc = 0);
 
 	uuid_copy(arg->coa_info->ci_uuid, cont->dc_uuid);
+	arg->coa_info->ci_redun_fac = cont->dc_props.dcp_redun_fac;
 
 	/* TODO */
 	arg->coa_info->ci_nsnapshots = 0;
@@ -634,7 +627,8 @@ dc_cont_open(tse_task_t *task)
 	in->coi_prop_bits	= DAOS_CO_QUERY_PROP_CSUM |
 				  DAOS_CO_QUERY_PROP_CSUM_CHUNK |
 				  DAOS_CO_QUERY_PROP_DEDUP |
-				  DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD;
+				  DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD |
+				  DAOS_CO_QUERY_PROP_REDUN_FAC;
 	arg.coa_pool		= pool;
 	arg.coa_info		= args->info;
 	arg.rpc			= rpc;
@@ -888,6 +882,8 @@ cont_query_complete(tse_task_t *task, void *data)
 	uuid_copy(arg->cqa_info->ci_uuid, cont->dc_uuid);
 
 	arg->cqa_info->ci_hae = out->cqo_hae;
+	arg->cqa_info->ci_redun_fac = cont->dc_props.dcp_redun_fac;
+
 	/* TODO */
 	arg->cqa_info->ci_nsnapshots = 0;
 	arg->cqa_info->ci_snapshots = NULL;
@@ -940,6 +936,9 @@ cont_query_bits(daos_prop_t *prop)
 		case DAOS_PROP_CO_DEDUP_THRESHOLD:
 			bits |= DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD;
 			break;
+		case DAOS_PROP_CO_ALLOCED_OID:
+			bits |= DAOS_CO_QUERY_PROP_ALLOCED_OID;
+			break;
 		case DAOS_PROP_CO_REDUN_FAC:
 			bits |= DAOS_CO_QUERY_PROP_REDUN_FAC;
 			break;
@@ -963,6 +962,12 @@ cont_query_bits(daos_prop_t *prop)
 			break;
 		case DAOS_PROP_CO_OWNER_GROUP:
 			bits |= DAOS_CO_QUERY_PROP_OWNER_GROUP;
+			break;
+		case DAOS_PROP_CO_ROOTS:
+			bits |= DAOS_CO_QUERY_PROP_ROOTS;
+			break;
+		case DAOS_PROP_CO_STATUS:
+			bits |= DAOS_CO_QUERY_PROP_CO_STATUS;
 			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
@@ -1101,6 +1106,8 @@ int
 dc_cont_set_prop(tse_task_t *task)
 {
 	daos_cont_set_prop_t		*args;
+	struct daos_prop_entry		*entry;
+	struct daos_co_status		 co_stat;
 	struct cont_prop_set_in		*in;
 	struct dc_pool			*pool;
 	struct dc_cont			*cont;
@@ -1111,6 +1118,23 @@ dc_cont_set_prop(tse_task_t *task)
 
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	if (daos_prop_entry_get(args->prop, DAOS_PROP_CO_ALLOCED_OID)) {
+		D_ERROR("Can't set OID property if container is created.\n");
+		D_GOTO(err, rc = -DER_NO_PERM);
+	}
+
+	entry = daos_prop_entry_get(args->prop, DAOS_PROP_CO_STATUS);
+	if (entry != NULL) {
+		daos_prop_val_2_co_status(entry->dpe_val, &co_stat);
+		if (co_stat.dcs_status != DAOS_PROP_CO_HEALTHY) {
+			rc = -DER_INVAL;
+			D_ERROR("To set DAOS_PROP_CO_STATUS property can-only "
+				"set dcs_status as DAOS_PROP_CO_HEALTHY to "
+				"clear UNCLEAN status, "DF_RC"\n", DP_RC(rc));
+			goto err;
+		}
+	}
 
 	cont = dc_hdl2cont(args->coh);
 	if (cont == NULL)
@@ -1625,6 +1649,7 @@ struct dc_cont_glob {
 	uint32_t	dcg_compress_type;
 	uint32_t	dcg_csum_chunksize;
 	uint32_t        dcg_dedup_th;
+	uint32_t	dcg_redun_fac;
 	uint32_t	dcg_csum_srv_verify:1,
 			dcg_dedup_enabled:1,
 			dcg_dedup_verify:1;
@@ -1699,6 +1724,7 @@ dc_cont_l2g(daos_handle_t coh, d_iov_t *glob)
 	cont_glob->dcg_dedup_th		= cont->dc_props.dcp_dedup_size;
 	cont_glob->dcg_compress_type	= cont->dc_props.dcp_compress_type;
 	cont_glob->dcg_encrypt_type	= cont->dc_props.dcp_encrypt_type;
+	cont_glob->dcg_redun_fac	= cont->dc_props.dcp_redun_fac;
 
 	dc_pool_put(pool);
 out_cont:
@@ -1782,6 +1808,7 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	cont->dc_props.dcp_dedup_verify  = cont_glob->dcg_dedup_verify;
 	cont->dc_props.dcp_compress_type = cont_glob->dcg_compress_type;
 	cont->dc_props.dcp_encrypt_type	 = cont_glob->dcg_encrypt_type;
+	cont->dc_props.dcp_redun_fac	 = cont_glob->dcg_redun_fac;
 	rc = dc_cont_props_init(cont);
 	if (rc != 0)
 		D_GOTO(out_cont, rc);
@@ -2669,6 +2696,23 @@ dc_cont_hdl2pool_hdl(daos_handle_t coh)
 	dc_cont_put(dc);
 	return ph;
 }
+
+int
+dc_cont_hdl2redunfac(daos_handle_t coh)
+{
+	struct dc_cont	*dc;
+	int		 rc;
+
+	dc = dc_hdl2cont(coh);
+	if (dc == NULL)
+		return -DER_NO_HDL;
+
+	rc = dc->dc_props.dcp_redun_fac;
+	dc_cont_put(dc);
+
+	return rc;
+}
+
 struct daos_csummer *
 dc_cont_hdl2csummer(daos_handle_t coh)
 {

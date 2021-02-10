@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * dtx: DTX rpc service
@@ -27,7 +10,7 @@
 
 #include <daos/rpc.h>
 #include <daos/btree_class.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/container.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/dtx_srv.h>
@@ -42,8 +25,8 @@ dtx_handler(crt_rpc_t *rpc)
 	struct dtx_out		*dout = crt_reply_get(rpc);
 	struct ds_cont_child	*cont = NULL;
 	struct dtx_id		*dtis;
-	struct dtx_memberships	*mbs[DTX_DETECT_MAX] = { 0 };
-	uint32_t		 vers[DTX_DETECT_MAX] = { 0 };
+	struct dtx_memberships	*mbs[DTX_REFRESH_MAX] = { 0 };
+	uint32_t		 vers[DTX_REFRESH_MAX] = { 0 };
 	uint32_t		 opc = opc_get(rpc->cr_opc);
 	int			 count = DTX_YIELD_CYCLE;
 	int			 i = 0;
@@ -61,6 +44,9 @@ dtx_handler(crt_rpc_t *rpc)
 
 	switch (opc) {
 	case DTX_COMMIT:
+		if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_COMMIT))
+			break;
+
 		while (i < din->di_dtx_array.ca_count) {
 			if (i + count > din->di_dtx_array.ca_count)
 				count = din->di_dtx_array.ca_count - i;
@@ -74,6 +60,9 @@ dtx_handler(crt_rpc_t *rpc)
 		}
 		break;
 	case DTX_ABORT:
+		if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_ABORT))
+			break;
+
 		while (i < din->di_dtx_array.ca_count) {
 			if (i + count > din->di_dtx_array.ca_count)
 				count = din->di_dtx_array.ca_count - i;
@@ -90,18 +79,20 @@ dtx_handler(crt_rpc_t *rpc)
 	case DTX_CHECK:
 		/* Currently, only support to check single DTX state. */
 		if (din->di_dtx_array.ca_count != 1)
-			rc = -DER_PROTO;
-		else
-			rc = vos_dtx_check(cont->sc_hdl,
-					   din->di_dtx_array.ca_arrays,
-					   NULL, NULL, NULL, false);
+			D_GOTO(out, rc = -DER_PROTO);
+
+		rc = vos_dtx_check(cont->sc_hdl, din->di_dtx_array.ca_arrays,
+				   NULL, NULL, NULL, false);
+		if (rc == -DER_NONEXIST && cont->sc_dtx_reindex)
+			rc = -DER_INPROGRESS;
+
 		break;
 	case DTX_REFRESH:
 		count = din->di_dtx_array.ca_count;
 		if (count == 0)
 			D_GOTO(out, rc = 0);
 
-		if (count > DTX_DETECT_MAX)
+		if (count > DTX_REFRESH_MAX)
 			D_GOTO(out, rc = -DER_PROTO);
 
 		D_ALLOC(dout->do_sub_rets.ca_arrays, sizeof(int32_t) * count);
@@ -117,9 +108,10 @@ dtx_handler(crt_rpc_t *rpc)
 			*ptr = vos_dtx_check(cont->sc_hdl, dtis, NULL, &vers[i],
 					     &mbs[i], false);
 			/* The DTX status may be changes by DTX resync soon. */
-			if (*ptr == DTX_ST_PREPARED &&
-			    vers[i] < cont->sc_dtx_resync_ver)
-				*ptr = DTX_ST_UNCERTAIN;
+			if ((*ptr == DTX_ST_PREPARED &&
+			     cont->sc_dtx_resyncing) ||
+			    (*ptr == -DER_NONEXIST && cont->sc_dtx_reindex))
+				*ptr = -DER_INPROGRESS;
 			if (mbs[i] != NULL)
 				rc1++;
 		}
@@ -142,8 +134,8 @@ out:
 			DP_RC(rc));
 
 	if (opc == DTX_REFRESH && rc1 > 0) {
-		struct dtx_entry	 dtes[DTX_DETECT_MAX] = { 0 };
-		struct dtx_entry	*pdte[DTX_DETECT_MAX] = { 0 };
+		struct dtx_entry	 dtes[DTX_REFRESH_MAX] = { 0 };
+		struct dtx_entry	*pdte[DTX_REFRESH_MAX] = { 0 };
 		int			 j;
 
 		for (i = 0, j = 0; i < count; i++) {
@@ -166,7 +158,11 @@ out:
 		/* Commit the DTX after replied the original refresh request to
 		 * avoid further query the same DTX.
 		 */
-		dtx_commit(cont, pdte, j, true);
+		rc = dtx_commit(cont, pdte, j, true);
+		if (rc < 0)
+			D_WARN("Failed to commit DTX "DF_DTI", count %d: "
+			       DF_RC"\n", DP_DTI(&dtes[0].dte_xid), j,
+			       DP_RC(rc));
 
 		for (i = 0; i < j; i++)
 			D_FREE(pdte[i]->dte_mbs);
@@ -205,7 +201,7 @@ dtx_setup(void)
 {
 	int	rc;
 
-	rc = dss_ult_create_all(dtx_batched_commit, NULL, DSS_ULT_GC, true);
+	rc = dss_ult_create_all(dtx_batched_commit, NULL, true);
 	if (rc != 0)
 		D_ERROR("Failed to create DTX batched commit ULT: "DF_RC"\n",
 			DP_RC(rc));

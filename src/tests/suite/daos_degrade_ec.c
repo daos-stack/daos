@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is for simple tests of degraded EC object.
@@ -162,113 +145,11 @@ degrade_full_fail_data_parity(void **state)
 }
 
 static void
-degrade_dfs_internal(void **state, int *shards, int shards_nr)
-{
-	dfs_t		*dfs_mt;
-	daos_handle_t	co_hdl;
-	test_arg_t	*arg = *state;
-	d_sg_list_t	sgl;
-	d_iov_t		iov;
-	dfs_obj_t	*obj;
-	daos_size_t	buf_size = 32 * 1024 * 32;
-	daos_size_t	partial_size = 32 * 1024 * 2;
-	daos_size_t	chunk_size = 32 * 1024 * 4;
-	daos_size_t	fetch_size = 0;
-	uuid_t		co_uuid;
-	char		filename[32];
-	d_rank_t	ranks[4] = { -1 };
-	int		idx = 0;
-	daos_obj_id_t	oid;
-	char		*buf;
-	char		*vbuf;
-	int		i;
-	int		rc;
-
-	uuid_generate(co_uuid);
-	rc = dfs_cont_create(arg->pool.poh, co_uuid, NULL, &co_hdl,
-			     &dfs_mt);
-	assert_int_equal(rc, 0);
-	printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
-
-	D_ALLOC(buf, buf_size);
-	assert_true(buf != NULL);
-	D_ALLOC(vbuf, buf_size);
-	assert_true(vbuf != NULL);
-
-	d_iov_set(&iov, buf, buf_size);
-	sgl.sg_nr = 1;
-	sgl.sg_nr_out = 1;
-	sgl.sg_iovs = &iov;
-
-	dts_buf_render(buf, buf_size);
-	memcpy(vbuf, buf, buf_size);
-
-	/* Full stripe update */
-	sprintf(filename, "degrade_file");
-	rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR,
-		      O_RDWR | O_CREAT, DAOS_OC_EC_K4P2_L32K, chunk_size,
-		      NULL, &obj);
-	assert_int_equal(rc, 0);
-	rc = dfs_write(dfs_mt, obj, &sgl, 0, NULL);
-	assert_int_equal(rc, 0);
-
-	/* Partial update after that */
-	d_iov_set(&iov, buf, partial_size);
-	for (i = 0; i < 10; i++) {
-		dfs_write(dfs_mt, obj, &sgl, buf_size + i * 100 * 1024, NULL);
-		assert_int_equal(rc, 0);
-	}
-
-	dfs_obj2id(obj, &oid);
-	while (shards_nr-- > 0) {
-		ranks[idx] = get_rank_by_oid_shard(arg, oid, shards[idx]);
-		idx++;
-	}
-	rebuild_pools_ranks(&arg, 1, ranks, idx, false);
-
-	/* Verify full stripe */
-	d_iov_set(&iov, buf, buf_size);
-	fetch_size = 0;
-	rc = dfs_read(dfs_mt, obj, &sgl, 0, &fetch_size, NULL);
-	assert_int_equal(rc, 0);
-	assert_int_equal(fetch_size, buf_size);
-	assert_memory_equal(buf, vbuf, buf_size);
-
-	/* Verify partial stripe */
-	d_iov_set(&iov, buf, partial_size);
-	for (i = 0; i < 10; i++) {
-		memset(buf, 0, buf_size);
-		fetch_size = 0;
-		dfs_read(dfs_mt, obj, &sgl, buf_size + i * 100 * 1024,
-			 &fetch_size, NULL);
-		assert_int_equal(rc, 0);
-		assert_int_equal(fetch_size, partial_size);
-		assert_memory_equal(buf, vbuf, partial_size);
-	}
-
-	rc = dfs_release(obj);
-	assert_int_equal(rc, 0);
-
-	D_FREE(buf);
-	rc = dfs_umount(dfs_mt);
-	assert_int_equal(rc, 0);
-
-	rc = daos_cont_close(co_hdl, NULL);
-	assert_int_equal(rc, 0);
-
-	rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
-	assert_int_equal(rc, 0);
-
-	while (idx > 0)
-		rebuild_add_back_tgts(arg, ranks[--idx], NULL, 1);
-}
-
-static void
 degrade_dfs_fail_data_s0(void **state)
 {
 	int shard = 0;
 
-	degrade_dfs_internal(state, &shard, 1);
+	dfs_ec_rebuild_io(state, &shard, 1);
 }
 
 static void
@@ -276,7 +157,7 @@ degrade_dfs_fail_data_s1(void **state)
 {
 	int shard = 1;
 
-	degrade_dfs_internal(state, &shard, 1);
+	dfs_ec_rebuild_io(state, &shard, 1);
 }
 
 static void
@@ -284,7 +165,7 @@ degrade_dfs_fail_data_s3(void **state)
 {
 	int shard = 3;
 
-	degrade_dfs_internal(state, &shard, 1);
+	dfs_ec_rebuild_io(state, &shard, 1);
 }
 
 static void
@@ -294,7 +175,7 @@ degrade_dfs_fail_2data_s0s1(void **state)
 
 	shards[0] = 0;
 	shards[1] = 1;
-	degrade_dfs_internal(state, shards, 2);
+	dfs_ec_rebuild_io(state, shards, 2);
 }
 
 static void
@@ -304,7 +185,7 @@ degrade_dfs_fail_2data_s0s2(void **state)
 
 	shards[0] = 0;
 	shards[1] = 2;
-	degrade_dfs_internal(state, shards, 2);
+	dfs_ec_rebuild_io(state, shards, 2);
 }
 
 static void
@@ -314,7 +195,7 @@ degrade_dfs_fail_2data_s0s3(void **state)
 
 	shards[0] = 0;
 	shards[1] = 3;
-	degrade_dfs_internal(state, shards, 2);
+	dfs_ec_rebuild_io(state, shards, 2);
 }
 
 static void
@@ -324,7 +205,7 @@ degrade_dfs_fail_2data_s1s2(void **state)
 
 	shards[0] = 1;
 	shards[1] = 2;
-	degrade_dfs_internal(state, shards, 2);
+	dfs_ec_rebuild_io(state, shards, 2);
 }
 
 static void
@@ -334,7 +215,7 @@ degrade_dfs_fail_2data_s1s3(void **state)
 
 	shards[0] = 1;
 	shards[1] = 3;
-	degrade_dfs_internal(state, shards, 2);
+	dfs_ec_rebuild_io(state, shards, 2);
 }
 
 static void
@@ -344,7 +225,7 @@ degrade_dfs_fail_2data_s2s3(void **state)
 
 	shards[0] = 2;
 	shards[1] = 3;
-	degrade_dfs_internal(state, shards, 2);
+	dfs_ec_rebuild_io(state, shards, 2);
 }
 
 static void
@@ -354,7 +235,7 @@ degrade_dfs_fail_data_parity_s0p1(void **state)
 
 	shards[0] = 0;
 	shards[1] = 5;
-	degrade_dfs_internal(state, shards, 2);
+	dfs_ec_rebuild_io(state, shards, 2);
 }
 
 static void
@@ -364,7 +245,7 @@ degrade_dfs_fail_data_parity_s3p1(void **state)
 
 	shards[0] = 3;
 	shards[1] = 5;
-	degrade_dfs_internal(state, shards, 2);
+	dfs_ec_rebuild_io(state, shards, 2);
 }
 
 static void
@@ -374,7 +255,7 @@ degrade_dfs_fail_data_parity_s2p1(void **state)
 
 	shards[0] = 2;
 	shards[1] = 5;
-	degrade_dfs_internal(state, shards, 2);
+	dfs_ec_rebuild_io(state, shards, 2);
 }
 
 static void
@@ -384,7 +265,7 @@ degrade_dfs_fail_data_parity_s0p0(void **state)
 
 	shards[0] = 0;
 	shards[1] = 4;
-	degrade_dfs_internal(state, shards, 2);
+	dfs_ec_rebuild_io(state, shards, 2);
 }
 
 static void
@@ -394,7 +275,7 @@ degrade_dfs_fail_data_parity_s2p0(void **state)
 
 	shards[0] = 2;
 	shards[1] = 4;
-	degrade_dfs_internal(state, shards, 2);
+	dfs_ec_rebuild_io(state, shards, 2);
 }
 
 static void
@@ -404,7 +285,7 @@ degrade_dfs_fail_data_parity_s3p0(void **state)
 
 	shards[0] = 3;
 	shards[1] = 4;
-	degrade_dfs_internal(state, shards, 2);
+	dfs_ec_rebuild_io(state, shards, 2);
 }
 
 #define DEGRADE_SMALL_POOL_SIZE (1ULL << 28)
@@ -498,7 +379,7 @@ run_daos_degrade_simple_ec_test(int rank, int size, int *sub_tests,
 		sub_tests_size = ARRAY_SIZE(degrade_tests);
 		sub_tests = NULL;
 	}
-	run_daos_sub_tests_only("DAOS degrade ec tests", degrade_tests,
+	run_daos_sub_tests_only("DAOS_Degrade_EC", degrade_tests,
 				ARRAY_SIZE(degrade_tests), sub_tests,
 				sub_tests_size);
 

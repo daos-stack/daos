@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package control
@@ -34,7 +17,7 @@ import (
 	nd "github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -44,7 +27,7 @@ const (
 	defaultFiPort         = 31416
 	defaultFiPortInterval = 1000
 	defaultTargetCount    = 16
-	defaultIOSrvLogFile   = "/tmp/daos_io_server"
+	defaultIOSrvLogFile   = "/tmp/daos_engine"
 	defaultControlLogFile = "/tmp/daos_server.log"
 	// NetDevAny matches any netdetect network device class
 	NetDevAny = math.MaxUint32
@@ -145,7 +128,7 @@ func getCPUParams(log logging.Logger, bdevLists [][]string, coresPerNuma int) ([
 }
 
 // ConfigGenerate attempts to automatically detect hardware and generate a DAOS
-// server config file for a set of hosts with homogenous hardware setup.
+// server config file for a set of hosts with homogeneous hardware setup.
 //
 // Returns API response and error.
 func ConfigGenerate(ctx context.Context, req ConfigGenerateReq) (*ConfigGenerateResp, error) {
@@ -497,10 +480,10 @@ func calcHelpers(log logging.Logger, targets, cores int) int {
 // recommended values
 //
 // The target count should be a multiplier of the number of SSDs and typically
-// daos gets the best performance with 16x targets per I/O Server so target
+// daos gets the best performance with 16x targets per I/O engine so target
 // count will be between 12 and 20.
 //
-// Validate number of targets + 1 cores are available per IO servers, not
+// Validate number of targets + 1 cores are available per IO engine, not
 // usually a problem as sockets normally have at least 18 cores.
 //
 // Create helper threads for the remaining available cores, e.g. with 24 cores,
@@ -533,8 +516,8 @@ func checkCPUs(log logging.Logger, numSSDs, coresPerNUMA int) (int, int, error) 
 	return numTargets, calcHelpers(log, numTargets, coresPerNUMA), nil
 }
 
-func defaultIOSrvCfg(idx int) *ioserver.Config {
-	return ioserver.NewConfig().
+func defaultIOSrvCfg(idx int) *engine.Config {
+	return engine.NewConfig().
 		WithTargetCount(defaultTargetCount).
 		WithLogFile(fmt.Sprintf("%s.%d.log", defaultIOSrvLogFile, idx)).
 		WithScmClass(storage.ScmClassDCPM.String()).
@@ -568,24 +551,24 @@ func genConfig(accessPoints, pmemPaths []string, ifaces []*HostFabricInterface, 
 			WithTargetCount(nTgts[idx]).
 			WithHelperStreamCount(nHlprs[idx])
 
-		iocfg.Fabric = ioserver.FabricConfig{
+		iocfg.Fabric = engine.FabricConfig{
 			Provider:       iface.Provider,
 			Interface:      iface.Device,
 			InterfacePort:  int(defaultFiPort + (nn * defaultFiPortInterval)),
 			PinnedNumaNode: &nn,
 		}
 
-		cfg.Servers = append(cfg.Servers, iocfg)
+		cfg.Engines = append(cfg.Engines, iocfg)
 	}
 
 	if len(accessPoints) != 0 {
 		cfg = cfg.WithAccessPoints(accessPoints...)
 	}
 
-	// apply global config parameters across iosrvs
+	// apply global config parameters across engines
 	return cfg.WithSystemName(cfg.SystemName).
 		WithSocketDir(cfg.SocketDir).
-		WithFabricProvider(cfg.Servers[0].Fabric.Provider).
+		WithFabricProvider(cfg.Engines[0].Fabric.Provider).
 		WithSystemName(cfg.SystemName).
 		WithSocketDir(cfg.SocketDir).
 		WithControlLogFile(defaultControlLogFile), nil

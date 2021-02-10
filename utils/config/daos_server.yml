@@ -71,7 +71,7 @@
 #
 ## Use specific OFI provider
 #
-## Force a specific provider to be used by all the servers.
+## Force a specific provider to be used by all the engines.
 ## The default provider depends on the interfaces that will be auto-detected:
 ## ofi+psm2 for Omni-Path, ofi+verbs;ofi_rxm for Infiniband/RoCE and finally
 ## ofi+socket for non-RDMA-capable Ethernet.
@@ -118,8 +118,9 @@
 #
 ## Disable VMD Usage
 #
-## In some circumstances it may be preferable to not use Volume Management
-## Devices even if available.
+## In some circumstances it may be preferable to not use Intel Volume Management
+## Devices even if available. VMD needs to be available and configured in the
+## system BIOS before use.
 #
 ## default: true
 #disable_vmd: false
@@ -149,7 +150,7 @@
 #
 ## Specifies the number (not size) of hugepages to allocate for use by NVMe
 ## through SPDK. This indicates the number to be used for each spawned
-## I/O server, so the total will be this number * number of I/O servers.
+## I/O engines, so the total will be this number * number of I/O engines.
 ## Default system hugepage size will be used.
 #
 ## default: 4096
@@ -185,10 +186,10 @@
 #
 ## When per-server definitions exist, auto-allocation of resources is not
 ## performed. Without per-server definitions, node resources will
-## automatically be assigned to servers based on NUMA ratings, there will
-## be a one-to-one relationship between servers and sockets.
+## automatically be assigned to engines based on NUMA ratings, there will
+## be a one-to-one relationship between engines and sockets.
 #
-#servers:
+#engines:
 #-
 #  # Rank to be assigned as identifier for server.
 #  # Immutable after reformat.
@@ -222,6 +223,10 @@
 #
 #  fabric_iface: qib0
 #  fabric_iface_port: 20000
+#
+#  # The server instance binds itself to cores and memory that are related
+#  # to the specified NUMA node.  For best performance, it is necessary to
+#  # select a NUMA node that matches that of the fabric_iface.
 #  pinned_numa_node: 0
 #
 #  # Force specific debug mask (D_LOG_MASK) at start up time.
@@ -249,15 +254,14 @@
 #
 #  scm_mount: /mnt/daos/1
 #
-#  # Backend SCM device type. Either use DCPM (datacentre persistent memory)
-#  # modules configured in interleaved mode (AppDirect regions) or emulated
-#  # tmpfs in RAM.
+#  # Backend SCM device type. Either use PMem (Intel(R) Optane(TM) persistent
+#  # memory) modules configured in interleaved mode or emulate SCM with a
+#  # tmpfs running in RAM.
 #  # Options are:
 #  # - "dcpm" for real SCM (preferred option), scm_size ignored
 #  # - "ram" to emulate SCM with memory, scm_list ignored
 #  # Immutable after reformat.
 #
-#  # default: dcpm
 #  scm_class: ram
 #
 #  # When scm_class is set to ram, tmpfs will be used to emulate SCM.
@@ -273,7 +277,6 @@
 #  # - "kdev" to use a kernel block device, bdev_{size,number} ignored
 #  # Immutable after reformat.
 #
-#  # default: nvme
 #  bdev_class: nvme
 #
 #  # Backend block device configuration to be used by this server instance.
@@ -281,6 +284,11 @@
 #  # that should be different across different server instance.
 #  # Immutable after reformat.
 #  bdev_list: ["0000:81:00.0"]  # generate regular nvme.conf
+#  # If VMD-enabled NVMe SSDs are used, the bdev_list should consist of the VMD
+#  # PCIe addresses, and not the BDF format transport IDs of the backing NVMe SSDs
+#  # behind the VMD address. Also, 'disable_vmd' needs to be set to false.
+#  bdev_list: ["0000:5d:05.5]
+
 #-
 #  # Rank to be assigned as identifier for server.
 #  # Immutable after reformat.
@@ -315,6 +323,10 @@
 #
 #  fabric_iface: qib1
 #  fabric_iface_port: 20000
+#
+#  # The server instance binds itself to cores and memory that are related
+#  # to the specified NUMA node.  For best performance, it is necessary to
+#  # select a NUMA node that matches that of the fabric_iface.
 #  pinned_numa_node: 1
 #
 #  # Force specific debug mask (D_LOG_MASK) at start up time.
@@ -341,19 +353,18 @@
 #
 #  scm_mount: /mnt/daos/2
 #
-#  # Backend SCM device type. Either use DCPM (datacentre persistent memory)
-#  # modules configured in interleaved mode (AppDirect regions) or emulated
-#  # tmpfs in RAM.
+#  # Backend SCM device type. Either use PMem (Intel(R) Optane(TM) persistent
+#  # memory) modules configured in interleaved mode or emulate SCM with a
+#  # tmpfs running in RAM.
 #  # Options are:
 #  # - "dcpm" for real SCM (preferred option), scm_size is ignored
 #  # - "ram" to emulate SCM with memory, scm_list is ignored
 #  # Immutable after reformat.
 #
-#  # default: dcpm
 #  scm_class: dcpm
 #
 #  # When scm_class is set to dcpm, scm_list is the list of device paths for
-#  # AppDirect pmem namespaces (currently only one per server supported).
+#  # PMem namespaces (currently only one per server supported).
 #  scm_list: [/dev/pmem0]
 #
 #  # Backend block device type. Force a SPDK driver to be used by this server
@@ -371,9 +382,9 @@
 #  bdev_number: 1
 #  bdev_size: 4
 #
-#  # When bdev_class is set to file, bdev_list is the list of file paths that
-#  # will be used to emulate NVMe SSDs. The size of each file is specified by
-#  # bdev_size in GB unit.
+#  # When bdev_class is set to file, Linux AIO will be used to emulate NVMe.
+#  # The size of file that will be created is specified by bdev_size in GB units.
+#  # The location of the files that will be created is specified in bdev_list.
 #  bdev_class: file
 #  bdev_list: [/tmp/daos-bdev1,/tmp/daos-bdev2]
 #  bdev_size: 16

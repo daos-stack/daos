@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * DAOS client erasure-coded object IO handling.
@@ -945,8 +928,8 @@ obj_reasb_req_dump(struct obj_reasb_req *reasb_req, d_sg_list_t *usgl,
 	tgt_recx_nrs = ec_recx_array->oer_tgt_recx_nrs;
 	tgt_recx_idxs = ec_recx_array->oer_tgt_recx_idxs;
 	D_PRINT("================ reasb req %d ================\n", i);
-	D_PRINT("iod, akey %s, iod_size "DF_U64", iod_nr %d\n",
-		(char *)iod->iod_name.iov_buf, iod->iod_size,
+	D_PRINT("iod, akey "DF_KEY", iod_size "DF_U64", iod_nr %d\n",
+		DP_KEY(&iod->iod_name), iod->iod_size,
 		iod->iod_nr);
 	D_PRINT("recxs per target [daos_idx, nr]:\n");
 	for (tgt = 0; tgt < obj_ec_tgt_nr(oca); tgt++) {
@@ -2157,7 +2140,7 @@ obj_ec_recov_task_fini(struct obj_reasb_req *reasb_req)
 
 	for (i = 0; i < fail_info->efi_recov_ntasks; i++) {
 		d_sgl_fini(&fail_info->efi_recov_tasks[i].ert_sgl, false);
-		if (!daos_handle_is_inval(fail_info->efi_recov_tasks[i].ert_th))
+		if (daos_handle_is_valid(fail_info->efi_recov_tasks[i].ert_th))
 			dc_tx_local_close(fail_info->efi_recov_tasks[i].ert_th);
 	}
 	D_FREE(fail_info->efi_recov_tasks);
@@ -2194,7 +2177,16 @@ obj_ec_recov_task_init(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
 		stripe_list = &stripe_lists[i];
 		if (!reasb_req->orr_singv_only && stripe_list->re_nr == 0)
 			continue;
+
 		iod = &iods[i];
+		if (iod->iod_size == 0) {
+			/* If IOD size has be reset to 0 in the initial try,
+			 * let's reset it to the original iod_size to
+			 * satisfy the iod/sgl valid check in recover task.
+			 */
+			iod->iod_size = reasb_req->orr_uiods[i].iod_size;
+		}
+
 		if (iod->iod_type == DAOS_IOD_SINGLE) {
 			buf_sz = daos_sgl_buf_size(&reasb_req->orr_usgls[i]);
 			buf_sz = max(iod->iod_size, buf_sz);
@@ -2795,8 +2787,11 @@ obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, int shard,
 		}
 	}
 
-	if (total == 0)
+	if (total == 0) {
+		D_FREE(*recxs_p);
+		*iod_nr = 0;
 		return 0;
+	}
 
 	D_ALLOC_ARRAY(tgt_recxs, total);
 	if (tgt_recxs == NULL)

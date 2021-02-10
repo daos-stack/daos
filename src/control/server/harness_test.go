@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
@@ -44,7 +27,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 	"github.com/daos-stack/daos/src/control/system"
@@ -54,12 +37,12 @@ const (
 	testShortTimeout   = 50 * time.Millisecond
 	testLongTimeout    = 1 * time.Minute
 	delayedFailTimeout = 20 * testShortTimeout
-	maxIOServers       = 2
+	maxEngines         = 2
 )
 
 func TestServer_Harness_Start(t *testing.T) {
 	for name, tc := range map[string]struct {
-		trc              *ioserver.TestRunnerConfig
+		trc              *engine.TestRunnerConfig
 		isAP             bool                     // is first instance an AP/MS replica/bootstrap
 		rankInSuperblock bool                     // rank already set in superblock when starting
 		instanceUuids    map[int]string           // UUIDs for each instance.Index()
@@ -74,7 +57,7 @@ func TestServer_Harness_Start(t *testing.T) {
 		expIoErrs        map[uint32]error         // errors expected from instances
 	}{
 		"normal startup/shutdown": {
-			trc: &ioserver.TestRunnerConfig{
+			trc: &engine.TestRunnerConfig{
 				ErrChanCb: func() error {
 					time.Sleep(testLongTimeout)
 					return errors.New("ending")
@@ -84,7 +67,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				0: MockUUID(0),
 				1: MockUUID(1),
 			},
-			expStartCount: maxIOServers,
+			expStartCount: maxEngines,
 			expDrpcCalls: map[uint32][]drpc.Method{
 				0: {
 					drpc.MethodSetRank,
@@ -105,14 +88,14 @@ func TestServer_Harness_Start(t *testing.T) {
 			},
 		},
 		"startup/shutdown with preset ranks": {
-			trc: &ioserver.TestRunnerConfig{
+			trc: &engine.TestRunnerConfig{
 				ErrChanCb: func() error {
 					time.Sleep(testLongTimeout)
 					return errors.New("ending")
 				},
 			},
 			rankInSuperblock: true,
-			expStartCount:    maxIOServers,
+			expStartCount:    maxEngines,
 			expDrpcCalls: map[uint32][]drpc.Method{
 				0: {
 					drpc.MethodSetRank,
@@ -133,7 +116,7 @@ func TestServer_Harness_Start(t *testing.T) {
 			},
 		},
 		"fails to start": {
-			trc:           &ioserver.TestRunnerConfig{StartErr: errors.New("no")},
+			trc:           &engine.TestRunnerConfig{StartErr: errors.New("no")},
 			waitTimeout:   10 * testShortTimeout,
 			expStartErr:   context.DeadlineExceeded,
 			expStartCount: 2, // both start but don't proceed so context times out
@@ -142,13 +125,13 @@ func TestServer_Harness_Start(t *testing.T) {
 			dontNotifyReady: true,
 			waitTimeout:     30 * testShortTimeout,
 			expStartErr:     context.DeadlineExceeded,
-			trc: &ioserver.TestRunnerConfig{
+			trc: &engine.TestRunnerConfig{
 				ErrChanCb: func() error {
 					time.Sleep(delayedFailTimeout)
 					return errors.New("oops")
 				},
 			},
-			expStartCount: maxIOServers,
+			expStartCount: maxEngines,
 			expRanks: map[uint32]system.Rank{
 				0: system.NilRank,
 				1: system.NilRank,
@@ -161,7 +144,7 @@ func TestServer_Harness_Start(t *testing.T) {
 		"delayed failure occurs after ready": {
 			waitTimeout: 100 * testShortTimeout,
 			expStartErr: context.DeadlineExceeded,
-			trc: &ioserver.TestRunnerConfig{
+			trc: &engine.TestRunnerConfig{
 				ErrChanCb: func() error {
 					time.Sleep(delayedFailTimeout)
 					return errors.New("oops")
@@ -171,7 +154,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				0: MockUUID(0),
 				1: MockUUID(1),
 			},
-			expStartCount: maxIOServers,
+			expStartCount: maxEngines,
 			expDrpcCalls: map[uint32][]drpc.Method{
 				0: {
 					drpc.MethodSetRank,
@@ -203,29 +186,29 @@ func TestServer_Harness_Start(t *testing.T) {
 			testDir, cleanup := CreateTestDir(t)
 			defer cleanup()
 
-			srvCfgs := make([]*ioserver.Config, maxIOServers)
-			for i := 0; i < maxIOServers; i++ {
-				srvCfgs[i] = ioserver.NewConfig().
+			srvCfgs := make([]*engine.Config, maxEngines)
+			for i := 0; i < maxEngines; i++ {
+				srvCfgs[i] = engine.NewConfig().
 					WithScmClass("ram").
 					WithScmRamdiskSize(1).
 					WithScmMountPoint(filepath.Join(testDir, strconv.Itoa(i)))
 			}
 			config := config.DefaultServer().
-				WithServers(srvCfgs...).
+				WithEngines(srvCfgs...).
 				WithSocketDir(testDir).
 				WithTransportConfig(&security.TransportConfig{AllowInsecure: true})
 
 			joinMu := sync.Mutex{}
 			joinRequests := make(map[uint32][]string)
 			var instanceStarts uint32
-			harness := NewIOServerHarness(log)
-			for i, srvCfg := range config.Servers {
+			harness := NewEngineHarness(log)
+			for i, srvCfg := range config.Engines {
 				if err := os.MkdirAll(srvCfg.Storage.SCM.MountPoint, 0777); err != nil {
 					t.Fatal(err)
 				}
 
 				if tc.trc == nil {
-					tc.trc = &ioserver.TestRunnerConfig{}
+					tc.trc = &engine.TestRunnerConfig{}
 				}
 				if tc.trc.StartCb == nil {
 					tc.trc.StartCb = func() {
@@ -233,7 +216,7 @@ func TestServer_Harness_Start(t *testing.T) {
 							atomic.AddUint32(&instanceStarts, 1))
 					}
 				}
-				runner := ioserver.NewTestRunner(tc.trc, srvCfg)
+				runner := engine.NewTestRunner(tc.trc, srvCfg)
 				bdevProvider, err := bdev.NewClassProvider(log,
 					srvCfg.Storage.SCM.MountPoint, &srvCfg.Storage.Bdev)
 				if err != nil {
@@ -252,7 +235,7 @@ func TestServer_Harness_Start(t *testing.T) {
 					}, nil
 				}
 
-				srv := NewIOServerInstance(log, bdevProvider, scmProvider, joinFn, runner)
+				srv := NewEngineInstance(log, bdevProvider, scmProvider, joinFn, runner)
 				var isAP bool
 				if tc.isAP && i == 0 { // first instance will be AP & bootstrap MS
 					isAP = true
@@ -295,11 +278,10 @@ func TestServer_Harness_Start(t *testing.T) {
 
 			// start harness async and signal completion
 			var gotErr error
-			membership := system.MockMembership(t, log)
-			sysdb := system.MockDatabase(t, log)
+			membership, sysdb := system.MockMembership(t, log, mockTCPResolver)
 			done := make(chan struct{})
 			go func(ctxIn context.Context) {
-				gotErr = harness.Start(ctxIn, sysdb, config)
+				gotErr = harness.Start(ctxIn, sysdb, nil, config)
 				close(done)
 			}(ctx)
 
@@ -350,7 +332,7 @@ func TestServer_Harness_Start(t *testing.T) {
 					continue
 				}
 				req := getTestNotifyReadyReq(t, "/tmp/instance_test.sock", 0)
-				go func(ctxIn context.Context, i *IOServerInstance) {
+				go func(ctxIn context.Context, i *EngineInstance) {
 					select {
 					case i.drpcReady <- req:
 					case <-ctxIn.Done():
@@ -435,7 +417,7 @@ func TestServer_Harness_Start(t *testing.T) {
 }
 
 func TestServer_Harness_WithFaultDomain(t *testing.T) {
-	harness := &IOServerHarness{}
+	harness := &EngineHarness{}
 	fd, err := system.NewFaultDomainFromString("/one/two")
 	if err != nil {
 		t.Fatalf("couldn't create fault domain: %s", err)

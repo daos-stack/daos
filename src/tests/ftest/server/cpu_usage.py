@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers, skipForTicket
 from general_utils import run_task
@@ -38,10 +21,10 @@ class CPUUsage(TestWithServers):
         # pylint: disable=pylint-bad-continuation
         """
         JIRA ID: DAOS-4826
-        Test Description: Test CPU usage of formatted and idle daos_io_server.
+        Test Description: Test CPU usage of formatted and idle engine.
         :avocado: tags=all,hw,server,small,full_regression,cpu_usage
         """
-        ps_get_cpu = r"ps -C daos_io_server -o %\cpu"
+        ps_get_cpu = r"ps -C daos_engine -o %\cpu"
 
         prev_usage = 1
         usage = 1
@@ -55,7 +38,7 @@ class CPUUsage(TestWithServers):
             for output, _ in task.iter_buffers():
                 usage = str(output).splitlines()[-1]
                 self.log.info("CPU usage = %s", usage)
-            # Check if daos_io_server has started.
+            # Check if daos_engine has started.
             if usage == "%CPU":
                 continue
 
@@ -71,6 +54,6 @@ class CPUUsage(TestWithServers):
             prev_usage = usage
 
         self.assertTrue(
-            usage != "%CPU", "daos_io_server CPU usage couldn't be obtained!")
+            usage != "%CPU", "daos_engine CPU usage couldn't be obtained!")
         self.assertTrue(
             usage < 100, "CPU usage is above 100%: {}%".format(usage))

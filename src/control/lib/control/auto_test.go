@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package control
@@ -39,19 +22,19 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 var (
-	ioCfg = func(t *testing.T, numa int) *ioserver.Config {
-		return ioserver.NewConfig().
+	ioCfg = func(t *testing.T, numa int) *engine.Config {
+		return engine.NewConfig().
 			WithScmClass(storage.ScmClassDCPM.String()).
 			WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", numa)).
 			WithScmDeviceList(fmt.Sprintf("/dev/pmem%d", numa)).
 			WithBdevClass(storage.BdevClassNvme.String())
 	}
-	ioCfgWithSSDs = func(t *testing.T, numa int) *ioserver.Config {
+	ioCfgWithSSDs = func(t *testing.T, numa int) *engine.Config {
 		var pciAddrs []string
 		for _, c := range MockServerScanResp(t, "withSpaceUsage").Nvme.Ctrlrs {
 			if int(c.Socketid) == numa {
@@ -618,7 +601,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			bdevLists:    [][]string{nil},
 			tgtCounts:    []int{16},
 			hlprCounts:   []int{7},
-			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX").WithServers(
+			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX").WithEngines(
 				defaultIOSrvCfg(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
@@ -634,7 +617,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			bdevLists:  [][]string{common.MockPCIAddrs(1)},
 			tgtCounts:  []int{16},
 			hlprCounts: []int{7},
-			expCfg: baseConfig("ofi+psm2").WithServers(
+			expCfg: baseConfig("ofi+psm2").WithEngines(
 				defaultIOSrvCfg(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
@@ -651,7 +634,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			bdevLists:  [][]string{common.MockPCIAddrs(4), common.MockPCIAddrs(3)},
 			tgtCounts:  []int{16, 15},
 			hlprCounts: []int{7, 6},
-			expCfg: baseConfig("ofi+psm2").WithServers(
+			expCfg: baseConfig("ofi+psm2").WithEngines(
 				defaultIOSrvCfg(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).

@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(tests)
 
@@ -141,6 +124,29 @@ dfs_test_cond(void **state)
 		print_error("Failed concurrent rename\n");
 	assert_int_equal(rc, 0);
 	MPI_Barrier(MPI_COMM_WORLD);
+
+	/* Verify TX consistency semantics. */
+	if (op_rc == 0 && arg->myrank == 0) {
+		/* New name entry should have been removed. */
+		rc = dfs_open(dfs_mt, NULL, filename,
+			      S_IFREG | S_IWUSR | S_IRUSR, O_RDONLY,
+			      0, 0, NULL, &file);
+		if (rc != ENOENT)
+			print_error("Open old name %s after rename got %d\n",
+				    filename, rc);
+		assert_int_equal(rc, ENOENT);
+		dfs_release(file);
+
+		/* New name entry should have been created. */
+		rc = dfs_open(dfs_mt, NULL, newfilename,
+			      S_IFREG | S_IWUSR | S_IRUSR, O_RDONLY,
+			      0, 0, NULL, &file);
+		if (rc != 0)
+			print_error("Open new name %s after rename got %d\n",
+				    newfilename, rc);
+		assert_int_equal(rc, 0);
+		dfs_release(file);
+	}
 }
 
 #define NUM_SEGS 10
@@ -644,7 +650,7 @@ run_dfs_par_test(int rank, int size)
 	int rc = 0;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	rc = cmocka_run_group_tests_name("DAOS FileSystem (DFS) parallel tests",
+	rc = cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Parallel",
 					 dfs_par_tests, dfs_setup,
 					 dfs_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);

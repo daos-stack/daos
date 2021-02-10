@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. 8F-30005.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 from cont_security_test_base import ContSecurityTestBase
@@ -58,7 +41,8 @@ class DeleteContainerACLTest(ContSecurityTestBase):
         Test Description: Test that container delete command performs as
             expected with invalid inputs.
 
-        :avocado: tags=all,pr,security,container_acl,cont_delete_acl_inputs
+        :avocado: tags=all,daily_regression,security,container_acl
+        :avocado: tags=cont_delete_acl_inputs
         """
         # Get list of invalid ACL principal values
         invalid_principals = self.params.get("invalid_principals", "/run/*")
@@ -86,7 +70,8 @@ class DeleteContainerACLTest(ContSecurityTestBase):
         Test Description: Test that container delete command successfully
             removes principal in ACL.
 
-        :avocado: tags=all,pr,security,container_acl,cont_delete_acl
+        :avocado: tags=all,daily_regression,security,container_acl
+        :avocado: tags=cont_delete_acl
         """
         for principal in self.principals_table:
             self.daos_cmd.container_delete_acl(
@@ -105,7 +90,8 @@ class DeleteContainerACLTest(ContSecurityTestBase):
         Test Description: Test that container delete command doesn't
             remove principal in ACL without permission.
 
-        :avocado: tags=all,pr,security,container_acl,cont_delete_acl_noperms
+        :avocado: tags=all,daily_regression,security,container_acl
+        :avocado: tags=cont_delete_acl_noperms
         """
         # Let's give access to the pool to the root user
         self.get_dmg_command().pool_update_acl(

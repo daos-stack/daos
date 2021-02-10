@@ -1,17 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * DAOS Management API.
@@ -48,24 +38,10 @@ typedef struct {
  */
 
 /**
- * Kill a remote server.
- *
- * \param grp	[IN]	Process set name of the DAOS servers managing the pool
- * \param rank	[IN]	Rank to kill
- * \param force	[IN]	Abrupt shutdown, no cleanup
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- */
-int
-daos_mgmt_svc_rip(const char *grp, d_rank_t rank, bool force,
-		  daos_event_t *ev);
-
-/**
  * Exclude a set of storage targets from a pool.
  *
  * \param uuid	[IN]	UUID of the pool
  * \param grp	[IN]	process set name of the DAOS servers managing the pool
- * \param svc	[IN]	list of pool service ranks
  * \param tgts	[IN]	Target to be excluded from the pool.
  *			Now can-only exclude one target per API calling. If
  *			tl_tgts = -1, it means it will exclude all targets
@@ -82,43 +58,14 @@ daos_mgmt_svc_rip(const char *grp, d_rank_t rank, bool force,
  */
 int
 daos_pool_tgt_exclude(const uuid_t uuid, const char *grp,
-		      const d_rank_list_t *svc, struct d_tgt_list *tgts,
+		      struct d_tgt_list *tgts,
 		      daos_event_t *ev);
-
-/**
- * Extend the pool to more targets. If \a tgts is NULL, this function
- * will extend the pool to all the targets in the group, otherwise it will
- * only extend the pool to the included targets.
- *
- * NB: Doubling storage targets in the pool can have better performance than
- * arbitrary targets adding.
- *
- * \param uuid	[IN]	UUID of the pool to extend
- * \param grp	[IN]	Process set name of the DAOS servers managing the pool
- * \param tgts	[IN]	Optional, only extend the pool to included targets.
- * \param failed
- *		[OUT]	Optional, buffer to store faulty targets on failure.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_INVAL	Invalid parameter
- *			-DER_UNREACH	Network is unreachable
- *			-DER_NO_PERM	Permission denied
- *			-DER_NONEXIST	Storage target is nonexistent
- */
-int
-daos_pool_extend(const uuid_t uuid, const char *grp, d_rank_list_t *tgts,
-		 d_rank_list_t *failed, daos_event_t *ev);
 
 /**
  * reintegrate a set of storage targets from a pool.
  *
  * \param uuid	[IN]	UUID of the pool
  * \param grp	[IN]	process set name of the DAOS servers managing the pool
- * \param svc	[IN]	list of pool service ranks
  * \param tgts	[IN]	Target array to be reintegrated from the pool.  If
  *			tl_tgts = -1, it means it will reintegrate all targets
  *			on the rank.
@@ -134,7 +81,7 @@ daos_pool_extend(const uuid_t uuid, const char *grp, d_rank_list_t *tgts,
  */
 int
 daos_pool_reint_tgt(const uuid_t uuid, const char *grp,
-		    const d_rank_list_t *svc, struct d_tgt_list *tgts,
+		    struct d_tgt_list *tgts,
 		    daos_event_t *ev);
 
 /**
@@ -142,7 +89,6 @@ daos_pool_reint_tgt(const uuid_t uuid, const char *grp,
  *
  * \param uuid	[IN]	UUID of the pool
  * \param grp	[IN]	process set name of the DAOS servers managing the pool
- * \param svc	[IN]	list of pool service ranks
  * \param tgts	[IN]	Target array to be added from the pool.  If
  *			tl_tgts = -1, it means it will add all targets
  *			on the rank.
@@ -158,7 +104,7 @@ daos_pool_reint_tgt(const uuid_t uuid, const char *grp,
  */
 int
 daos_pool_drain_tgt(const uuid_t uuid, const char *grp,
-		    const d_rank_list_t *svc, struct d_tgt_list *tgts,
+		    struct d_tgt_list *tgts,
 		    daos_event_t *ev);
 
 
@@ -170,7 +116,6 @@ daos_pool_drain_tgt(const uuid_t uuid, const char *grp,
  *
  * \param uuid	[IN]	UUID of the pool
  * \param grp	[IN]	process set name of the DAOS servers managing the pool
- * \param svc	[IN]	list of pool service ranks
  * \param tgts	[IN]	Target array to be excluded from the pool.
  *			Now can-only exclude out one target per API calling. If
  *			tl_tgts = -1, it means it will exclude out all targets
@@ -187,7 +132,7 @@ daos_pool_drain_tgt(const uuid_t uuid, const char *grp,
  */
 int
 daos_pool_tgt_exclude_out(const uuid_t uuid, const char *grp,
-			  const d_rank_list_t *svc, struct d_tgt_list *tgts,
+			  struct d_tgt_list *tgts,
 			  daos_event_t *ev);
 
 /**

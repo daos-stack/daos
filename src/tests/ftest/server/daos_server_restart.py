@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from __future__ import print_function
 
@@ -34,8 +17,7 @@ class DaosServerTest(TestWithServers):
     """Daos server tests.
 
     Test Class Description:
-        Test to verify that the daos_io_server, daos_server starts/stops
-        and reformat.
+        Test to verify that daos_server starts/stops and reformat.
 
     :avocado: recursive
     """
@@ -60,15 +42,15 @@ class DaosServerTest(TestWithServers):
         self.server_managers[0].detect_format_ready()
         self.log.info("=Restart daos_server, dmg storage_format.")
         self.server_managers[0].dmg.storage_format(reformat)
-        self.log.info("=Restart daos_server, detect_io_server_start().")
-        self.server_managers[0].detect_io_server_start()
+        self.log.info("=Restart daos_server, detect_engine_start().")
+        self.server_managers[0].detect_engine_start()
 
     @fail_on(ServerFailed)
     @fail_on(CommandFailure)
-    def restart_daos_io_server(self, force=True):
-        """method to perform io_server stop and start by dmg.
+    def restart_engine(self, force=True):
+        """method to perform engine stop and start by dmg.
         Args:
-            force (bool): Force to stop the daos io_server.
+            force (bool): Force to stop the daos engine.
             Defaults to True.
 
         """
@@ -121,7 +103,8 @@ class DaosServerTest(TestWithServers):
         (5)Verify after DAOS server restarted, it should appear as an empty
            fresh installation.
 
-        :avocado: tags=all,pr,hw,large,server_test,server_reformat,DAOS_5610
+        :avocado: tags=all,daily_regression,hw,large,server_test
+        :avocado: tags=server_reformat,DAOS_5610
         """
 
         self.log.info("(1)Verify daos server pool list after started.")
@@ -136,11 +119,11 @@ class DaosServerTest(TestWithServers):
         self.log.info("(5)Verify after server restarted.")
         self.verify_pool_list()
 
-    def test_daos_io_server_restart(self):
+    def test_engine_restart(self):
         """
         JIRA ID: DAOS-3593.
 
-        Test Description: Test cmd to perform daos io_server restart.
+        Test Description: Test cmd to perform daos engine restart.
         Steps:
         (1)Use the cmd line to perform a controlled shutdown from a
            quiescent state (i.e. clients disconnected).
@@ -153,7 +136,8 @@ class DaosServerTest(TestWithServers):
         (5)Use the cmd line to perform a controlled shutdown when the
            daos cluster is incomplete (i.e. 1 of the 2 servers is down).
 
-        :avocado: tags=all,pr,hw,large,server_test,server_restart,DAOS_5610
+        :avocado: tags=all,daily_regression,hw,large,server_test
+        :avocado: tags=server_restart,DAOS_5610
         """
 
         self.log.info(
@@ -161,17 +145,17 @@ class DaosServerTest(TestWithServers):
             "from a quiescent state.")
         self.agent_managers[0].stop()
         self.verify_pool_list()
-        self.restart_daos_io_server()
+        self.restart_engine()
         self.agent_managers[0].start()
         self.log.info(
             "(2)Shutdown and restart the daos io-server with pools "
             "and containers created.")
         self.create_pool_and_container()
         pool_list = self.get_pool_list()
-        self.restart_daos_io_server()
+        self.restart_engine()
         self.log.info(
             "(3)Force shutdown and restart the daos io-server.")
-        self.restart_daos_io_server()
+        self.restart_engine()
         self.log.info(
             "(4)Verify pool list after forced shutdown and restart "
             "the daos io-server.")
@@ -181,9 +165,9 @@ class DaosServerTest(TestWithServers):
         self.log.info(
             "(5)Restart daos io server for the last server on the cluster."
             "   self.hostlist_servers= %s", self.hostlist_servers)
-        self.restart_daos_io_server()
+        self.restart_engine()
         self.verify_pool_list(pool_list)
         # Blocked by DAOS-3883 causing intermittent failures on CI
-        #self.restart_daos_io_server(force=False)
+        #self.restart_engine(force=False)
         #self.verify_pool_list(pool_list)
         self.hostlist_servers = hosts

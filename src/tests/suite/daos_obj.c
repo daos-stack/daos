@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -187,7 +170,8 @@ ioreq_iod_simple_set(struct ioreq *req, daos_size_t *iod_size, bool lookup,
 		iod[i].iod_type = req->iod_type;
 		iod[i].iod_size = iod_size[i];
 		if (req->iod_type == DAOS_IOD_ARRAY) {
-			iod[i].iod_recxs[0].rx_idx = idx[i] + i * SEGMENT_SIZE;
+			iod[i].iod_recxs[0].rx_idx = idx[i] +
+				(req->arg->idx_no_jump ? 0 : i * SEGMENT_SIZE);
 			iod[i].iod_recxs[0].rx_nr = rx_nr[i];
 		}
 		iod[i].iod_nr = 1;
@@ -291,7 +275,7 @@ insert_wait(struct ioreq *req)
 void
 insert(const char *dkey, int nr, const char **akey, daos_size_t *iod_size,
        int *rx_nr, uint64_t *idx, void **val, daos_handle_t th,
-       struct ioreq *req, uint64_t flags)
+	struct ioreq *req, uint64_t flags)
 {
 	insert_nowait(dkey, nr, akey, iod_size, rx_nr, idx, val, th, req,
 		      flags);
@@ -443,15 +427,21 @@ lookup_internal(daos_key_t *dkey, int nr, d_sg_list_t *sgls,
 		daos_iod_t *iods, daos_handle_t th, struct ioreq *req,
 		bool empty)
 {
+	uint64_t api_flags;
 	bool ev_flag;
 	int rc;
 
+	if (empty)
+		api_flags = DAOS_COND_DKEY_FETCH | DAOS_COND_AKEY_FETCH;
+	else
+		api_flags = 0;
+
 	/** execute fetch operation */
-	rc = daos_obj_fetch(req->oh, th, 0, dkey, nr, iods, sgls,
+	rc = daos_obj_fetch(req->oh, th, api_flags, dkey, nr, iods, sgls,
 			    NULL, req->arg->async ? &req->ev : NULL);
 	if (!req->arg->async) {
 		req->result = rc;
-		if (rc != -DER_INPROGRESS)
+		if (rc != -DER_INPROGRESS && !req->arg->not_check_result)
 			assert_int_equal(rc, req->arg->expect_result);
 		return;
 	}
@@ -461,7 +451,7 @@ lookup_internal(daos_key_t *dkey, int nr, d_sg_list_t *sgls,
 	assert_int_equal(rc, 0);
 	assert_int_equal(ev_flag, true);
 	req->result = req->ev.ev_error;
-	if (req->ev.ev_error != -DER_INPROGRESS)
+	if (req->ev.ev_error != -DER_INPROGRESS && !req->arg->not_check_result)
 		assert_int_equal(req->ev.ev_error, req->arg->expect_result);
 }
 
@@ -699,6 +689,13 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 	/* Disabled Pool Aggrgation */
 	rc = set_pool_reclaim_strategy(state, aggr_disabled);
 	assert_int_equal(rc, 0);
+	/**
+	 * set_pool_reclaim_strategy() to disable aggregation
+	 * assumes all aggregation ULTs on all servers taking
+	 * effect immediately, this may not be the case.
+	 * Adding delay so that ULTs finish the round of aggregation.
+	 */
+	sleep(10);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
@@ -896,6 +893,8 @@ io_rewritten_array_with_mixed_size(void **state)
 	int			rx_nr; /* number of record extents */
 	int			record_set;
 	int			rc;
+	int			test_run_time = 0;
+	int			total_run_time = 20;
 	daos_size_t		nvme_initial_size;
 	daos_size_t		nvme_current_size;
 	void const *const aggr_disabled[] = {"disabled"};
@@ -914,7 +913,7 @@ io_rewritten_array_with_mixed_size(void **state)
 	assert_non_null(fbuf);
 	memset(fbuf, 0, size);
 
-	/* Disabled Pool Aggrgation */
+	/* Disabled Pool Aggregation */
 	rc = set_pool_reclaim_strategy(state, aggr_disabled);
 	assert_int_equal(rc, 0);
 
@@ -972,18 +971,38 @@ io_rewritten_array_with_mixed_size(void **state)
 		rc = pool_storage_info(state, &pinfo);
 		assert_int_equal(rc, 0);
 		nvme_current_size = pinfo.pi_space.ps_space.s_free[1];
+
 		/**
-		*Data written on SCM so NVMe free size should not change.
+		* Data written on SCM so NVMe free size should not change.
+		* However VEA free (called from aggregation) usually put the
+		* freed extent in an aging buffer for 10 seconds
+		* so sleep two seconds before next record update.
 		*/
+
 		if (nvme_current_size != nvme_initial_size) {
-			fail_msg("NVMe_current_size =%"
-				PRIu64" != NVMe_initial_size %" PRIu64"",
-				nvme_current_size, nvme_initial_size);
-		}
+			print_message("Size verification: Partial FAIL "
+				"record set=%d Sleep for 2 seconds",
+				record_set);
+			sleep(2);
+			test_run_time = test_run_time + 2;
+		} else
+			print_message("Size verification: PASS for "
+				"record set=%d\n", record_set);
+
+		/**
+		* Fail the test if the test run time is higher than
+		* total timeout (20 seconds) while writing all 10 records.
+		*/
+
+		if (test_run_time >= total_run_time)
+			fail_msg("NVMe Free size should not be changed "
+				"after writing all %d records to SCM",
+				record_set);
+
 		nvme_initial_size = pinfo.pi_space.ps_space.s_free[1];
 	}
 
-	/* Enabled Pool Aggrgation */
+	/* Enabled Pool Aggregation */
 	rc = set_pool_reclaim_strategy(state, aggr_set_time);
 	assert_int_equal(rc, 0);
 
@@ -1903,9 +1922,9 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 
 	D_FREE(buf);
 	D_FREE(data_buf);
-	for (i = 0; i < PUNCH_NUM_KEYS; i++) {
+	for (i = 0; i < PUNCH_NUM_KEYS; i++)
 		D_FREE(dkeys[i]);
-	}
+
 	ioreq_fini(&req);
 	MPI_Barrier(MPI_COMM_WORLD);
 }
@@ -3078,14 +3097,14 @@ tgt_idx_change_retry(void **state)
 		assert_int_equal(layout->ol_shards[0]->os_replica_nr, 3);
 		/* FIXME disable rank compare until we fix the layout_get */
 		/* assert_int_equal(layout->ol_shards[0]->os_ranks[0], 2); */
-		rank = layout->ol_shards[0]->os_ranks[replica];
+		rank = layout->ol_shards[0]->os_shard_loc[replica].sd_rank;
 		rc = daos_obj_layout_free(layout);
 		assert_int_equal(rc, 0);
 
 		/** exclude target of the replica */
 		print_message("rank 0 excluding target rank %u ...\n", rank);
 		daos_exclude_server(arg->pool.pool_uuid, arg->group,
-				    arg->dmg_config, NULL /* svc */, rank);
+				    arg->dmg_config, rank);
 		assert_int_equal(rc, 0);
 
 		/** progress the async IO (not must) */
@@ -3104,7 +3123,8 @@ tgt_idx_change_retry(void **state)
 		 *		     rank);
 		*/
 		print_message("target of shard %d changed from %d to %d\n",
-			      replica, rank, layout->ol_shards[0]->os_ranks[0]);
+			      replica, rank,
+			      layout->ol_shards[0]->os_shard_loc[0].sd_rank);
 		rc = daos_obj_layout_free(layout);
 		assert_int_equal(rc, 0);
 	}
@@ -3142,8 +3162,7 @@ tgt_idx_change_retry(void **state)
 	if (arg->myrank == 0) {
 		print_message("rank 0 adding target rank %u ...\n", rank);
 		daos_reint_server(arg->pool.pool_uuid, arg->group,
-				  arg->dmg_config, NULL /* svc */,
-				  rank);
+				  arg->dmg_config, rank);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 	ioreq_fini(&req);
@@ -3180,7 +3199,7 @@ fetch_replica_unavail(void **state)
 	if (arg->myrank == 0) {
 		/** exclude the target of this obj's replicas */
 		daos_exclude_server(arg->pool.pool_uuid, arg->group,
-				    arg->dmg_config, arg->pool.svc, rank);
+				    arg->dmg_config, rank);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -3198,8 +3217,7 @@ fetch_replica_unavail(void **state)
 
 		/* add back the excluded targets */
 		daos_reint_server(arg->pool.pool_uuid, arg->group,
-				  arg->dmg_config, NULL /* svc */,
-				  rank);
+				  arg->dmg_config, rank);
 
 		/* wait until reintegration is done */
 		test_rebuild_wait(&arg, 1);
@@ -3733,15 +3751,20 @@ io_pool_map_refresh_trigger(void **state)
 	daos_obj_id_t	oid;
 	struct ioreq	req;
 	d_rank_t	leader;
+	d_rank_t	rank = 1;
 
 	/* needs at lest 2 targets */
 	if (!test_runable(arg, 2))
 		skip();
 
+	/* Choose an rank other than leader */
 	test_get_leader(arg, &leader);
-	D_ASSERT(leader > 0);
+	while (rank == leader)
+		rank = (rank + 1) % arg->srv_nnodes;
+
+	print_message("leader %u rank %u\n", leader, rank);
 	oid = dts_oid_gen(DAOS_OC_R1S_SPEC_RANK, 0, arg->myrank);
-	oid = dts_oid_set_rank(oid, leader - 1);
+	oid = dts_oid_set_rank(oid, rank);
 
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
@@ -4220,7 +4243,7 @@ run_daos_io_test(int rank, int size, int *sub_tests, int sub_tests_size)
 		sub_tests = NULL;
 	}
 
-	rc = run_daos_sub_tests("DAOS IO tests", io_tests,
+	rc = run_daos_sub_tests("DAOS_IO", io_tests,
 				ARRAY_SIZE(io_tests), sub_tests, sub_tests_size,
 				obj_setup, test_teardown);
 

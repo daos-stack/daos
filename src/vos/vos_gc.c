@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -911,7 +894,7 @@ vos_gc_pool_run(daos_handle_t poh, int credits,
 	struct vos_pool	*pool = vos_hdl2pool(poh);
 	int		 rc, total = 0;
 
-	D_ASSERT(!daos_handle_is_inval(poh));
+	D_ASSERT(daos_handle_is_valid(poh));
 	if (!gc_have_pool(pool))
 		return 0; /* nothing to reclaim for this pool */
 
@@ -958,7 +941,7 @@ vos_gc_pool_run(daos_handle_t poh, int credits,
 inline bool
 vos_gc_pool_idle(daos_handle_t poh)
 {
-	D_ASSERT(!daos_handle_is_inval(poh));
+	D_ASSERT(daos_handle_is_valid(poh));
 	return !gc_have_pool(vos_hdl2pool(poh));
 }
 

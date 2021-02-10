@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * daos iv tree definition.
@@ -40,14 +23,20 @@ struct ds_iv_ns {
 	unsigned int	iv_ns_id;
 	/* Link to global ns list (ds_iv_list) */
 	d_list_t	iv_ns_link;
-	/* Protect to the key list */
-	ABT_mutex	iv_lock;
 	/* all of entries under the ns links here */
 	d_list_t	iv_entry_list;
 	/* Cart IV namespace */
 	crt_iv_namespace_t	iv_ns;
 	/* pool uuid */
 	uuid_t		iv_pool_uuid;
+
+	ABT_eventual	iv_done_eventual;
+	int		iv_refcount;
+	/**
+	 * iv_fini: the IV namespace will be stopped, usually happens
+	 * the pool will be destroyed.
+	 */
+	uint32_t	iv_stop:1;
 };
 
 struct ds_iv_class_ops;
@@ -314,7 +303,10 @@ int ds_iv_ns_create(crt_context_t ctx, uuid_t pool_uuid, crt_group_t *grp,
 		    unsigned int *ns_id, struct ds_iv_ns **p_iv_ns);
 
 void ds_iv_ns_update(struct ds_iv_ns *ns, unsigned int master_rank);
-
+void ds_iv_ns_stop(struct ds_iv_ns *ns);
+void ds_iv_ns_start(struct ds_iv_ns *ns);
+void ds_iv_ns_put(struct ds_iv_ns *ns);
+void ds_iv_ns_get(struct ds_iv_ns *ns);
 void ds_iv_ns_destroy(void *ns);
 
 unsigned int ds_iv_ns_id_get(void *ns);

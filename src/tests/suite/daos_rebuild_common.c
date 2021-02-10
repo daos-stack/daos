@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -30,19 +13,18 @@
 #define D_LOGFAC	DD_FAC(tests)
 
 #include "daos_iotest.h"
+#include "dfs_test.h"
 #include <daos/pool.h>
 #include <daos/mgmt.h>
 #include <daos/container.h>
 
 static test_arg_t *save_arg;
 
-#define REBUILD_SUBTEST_POOL_SIZE (1ULL << 30)
-#define REBUILD_SMALL_POOL_SIZE (1ULL << 29)
-
 enum REBUILD_TEST_OP_TYPE {
 	RB_OP_TYPE_FAIL,
 	RB_OP_TYPE_DRAIN,
 	RB_OP_TYPE_ADD,
+	RB_OP_TYPE_RECLAIM,
 };
 
 static void
@@ -65,7 +47,6 @@ rebuild_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 	for (i = 0; i < arg_cnt; i++) {
 		daos_exclude_target(args[i]->pool.pool_uuid,
 				    args[i]->group, args[i]->dmg_config,
-				    NULL /* svc */,
 				    rank, tgt_idx);
 	}
 }
@@ -81,7 +62,6 @@ rebuild_add_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 			daos_reint_target(args[i]->pool.pool_uuid,
 					  args[i]->group,
 					  args[i]->dmg_config,
-					  NULL /* svc */,
 					  rank, tgt_idx);
 		sleep(2);
 	}
@@ -98,7 +78,6 @@ rebuild_drain_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 			daos_drain_target(args[i]->pool.pool_uuid,
 					args[i]->group,
 					args[i]->dmg_config,
-					NULL /* svc */,
 					rank, tgt_idx);
 		sleep(2);
 	}
@@ -132,6 +111,14 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 			case RB_OP_TYPE_DRAIN:
 				rebuild_drain_tgt(args, args_cnt, ranks[i],
 						tgts ? tgts[i] : -1);
+				break;
+			case RB_OP_TYPE_RECLAIM:
+				/*
+				 * There is no externally accessible operation
+				 * that triggers reclaim. It is automatically
+				 * scheduled after reintegration or addition
+				 */
+				D_ASSERT(op_type != RB_OP_TYPE_RECLAIM);
 				break;
 			}
 		}
@@ -242,7 +229,7 @@ rebuild_pool_connect_internal(void *data)
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0) {
 		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-				       NULL /* svc */, DAOS_PC_RW,
+				       DAOS_PC_RW,
 				       &arg->pool.poh, &arg->pool.pool_info,
 				       NULL /* ev */);
 		if (rc)
@@ -268,8 +255,9 @@ rebuild_pool_connect_internal(void *data)
 	/** open container */
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0) {
-		rc = daos_cont_open(arg->pool.poh, arg->co_uuid, DAOS_COO_RW,
-		&arg->coh, &arg->co_info, NULL);
+		rc = daos_cont_open(arg->pool.poh, arg->co_uuid,
+				    DAOS_COO_RW | DAOS_COO_FORCE,
+				    &arg->coh, &arg->co_info, NULL);
 		if (rc)
 			print_message("daos_cont_open failed, rc: %d\n", rc);
 
@@ -362,7 +350,7 @@ rebuild_add_back_tgts(test_arg_t *arg, d_rank_t failed_rank, int *failed_tgts,
 
 		for (i = 0; i < nr; i++)
 			daos_reint_target(arg->pool.pool_uuid, arg->group,
-					  arg->dmg_config, NULL /* svc */,
+					  arg->dmg_config,
 					  failed_rank,
 					  failed_tgts ? failed_tgts[i] : -1);
 	}
@@ -540,7 +528,7 @@ rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
 			continue;
 
 		rc = daos_obj_verify(arg->coh, oids[i], DAOS_EPOCH_MAX);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 }
 
@@ -728,6 +716,110 @@ verify_ec_full_partial(struct ioreq *req, int test_idx, daos_off_t off)
 	verify_ec(req, test_idx, buffer, off, DATA_SIZE);
 }
 
+void
+dfs_ec_rebuild_io(void **state, int *shards, int shards_nr)
+{
+	dfs_t		*dfs_mt;
+	daos_handle_t	co_hdl;
+	test_arg_t	*arg = *state;
+	d_sg_list_t	sgl;
+	d_iov_t		iov;
+	dfs_obj_t	*obj;
+	daos_size_t	buf_size = 32 * 1024 * 32;
+	daos_size_t	partial_size = 32 * 1024 * 2;
+	daos_size_t	chunk_size = 32 * 1024 * 4;
+	daos_size_t	fetch_size = 0;
+	uuid_t		co_uuid;
+	char		filename[32];
+	d_rank_t	ranks[4] = { -1 };
+	int		idx = 0;
+	daos_obj_id_t	oid;
+	char		*buf;
+	char		*vbuf;
+	int		i;
+	int		rc;
+
+	uuid_generate(co_uuid);
+	rc = dfs_cont_create(arg->pool.poh, co_uuid, NULL, &co_hdl,
+			     &dfs_mt);
+	assert_int_equal(rc, 0);
+	printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
+
+	D_ALLOC(buf, buf_size);
+	assert_true(buf != NULL);
+	D_ALLOC(vbuf, buf_size);
+	assert_true(vbuf != NULL);
+
+	d_iov_set(&iov, buf, buf_size);
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs = &iov;
+
+	dts_buf_render(buf, buf_size);
+	memcpy(vbuf, buf, buf_size);
+
+	/* Full stripe update */
+	sprintf(filename, "degrade_file");
+	rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT, DAOS_OC_EC_K4P2_L32K, chunk_size,
+		      NULL, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_write(dfs_mt, obj, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	/* Partial update after that */
+	d_iov_set(&iov, buf, partial_size);
+	for (i = 0; i < 10; i++) {
+		dfs_write(dfs_mt, obj, &sgl, buf_size + i * 100 * 1024, NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	dfs_obj2id(obj, &oid);
+	while (shards_nr-- > 0) {
+		ranks[idx] = get_rank_by_oid_shard(arg, oid, shards[idx]);
+		idx++;
+	}
+	rebuild_pools_ranks(&arg, 1, ranks, idx, false);
+
+	/* Verify full stripe */
+	d_iov_set(&iov, buf, buf_size);
+	fetch_size = 0;
+	rc = dfs_read(dfs_mt, obj, &sgl, 0, &fetch_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(fetch_size, buf_size);
+	assert_memory_equal(buf, vbuf, buf_size);
+
+	/* Verify partial stripe */
+	d_iov_set(&iov, buf, partial_size);
+	for (i = 0; i < 10; i++) {
+		memset(buf, 0, buf_size);
+		fetch_size = 0;
+		dfs_read(dfs_mt, obj, &sgl, buf_size + i * 100 * 1024,
+			 &fetch_size, NULL);
+		assert_int_equal(rc, 0);
+		assert_int_equal(fetch_size, partial_size);
+		assert_memory_equal(buf, vbuf, partial_size);
+	}
+
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	D_FREE(buf);
+	rc = dfs_umount(dfs_mt);
+	assert_int_equal(rc, 0);
+
+	rc = daos_cont_close(co_hdl, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
+	assert_rc_equal(rc, 0);
+
+#if 0
+	while (idx > 0)
+		rebuild_add_back_tgts(arg, ranks[--idx], NULL, 1);
+#endif
+}
+
 /* Create a new pool for the sub_test */
 int
 rebuild_pool_create(test_arg_t **new_arg, test_arg_t *old_arg, int flag,
@@ -770,7 +862,7 @@ get_rank_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid,
 	daos_obj_layout_get(arg->coh, oid, &layout);
 	grp_idx = shard / layout->ol_shards[0]->os_replica_nr;
 	idx = shard % layout->ol_shards[0]->os_replica_nr;
-	rank = layout->ol_shards[grp_idx]->os_ranks[idx];
+	rank = layout->ol_shards[grp_idx]->os_shard_loc[idx].sd_rank;
 
 	print_message("idx %u grp %u rank %d\n", idx, grp_idx, rank);
 	daos_obj_layout_free(layout);
@@ -788,7 +880,8 @@ get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data_nr,
 	oca = daos_oclass_attr_find(oid);
 	if (oca->ca_resil == DAOS_RES_REPL) {
 		ranks[0] = get_rank_by_oid_shard(arg, oid, 0);
-		*ranks_num = 1;
+		if (ranks_num)
+			*ranks_num = 1;
 		return;
 	}
 
@@ -807,10 +900,11 @@ get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data_nr,
 			break;
 	}
 
-	*ranks_num = idx;
+	if (ranks_num)
+		*ranks_num = idx;
 }
 
-static void
+void
 save_group_state(void **state)
 {
 	if (state != NULL && *state != NULL) {

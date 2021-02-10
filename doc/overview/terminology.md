@@ -5,6 +5,7 @@
 |[ABT](https://github.com/pmodels/argobots/wiki/Introduction-to-Argobots)|Argobots|
 |ACL|Access Control List|
 |ACE|Access Control Entry|
+|ACID|Atomicity, consistency, isolation, durability|
 |BIO|Blob I/O|
 |CART|Collective and RPC Transport|
 |CGO|Go tools that enable creation of Go packages that call C code|

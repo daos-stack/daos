@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2018-2020 Intel Corporation.
+// (C) Copyright 2018-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
@@ -42,13 +25,14 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 	"github.com/daos-stack/daos/src/control/system"
@@ -60,7 +44,7 @@ const (
 )
 
 func cfgHasBdev(cfg *config.Server) bool {
-	for _, srvCfg := range cfg.Servers {
+	for _, srvCfg := range cfg.Engines {
 		if len(srvCfg.Storage.Bdev.DeviceList) > 0 {
 			return true
 		}
@@ -81,10 +65,10 @@ func iommuDetected() bool {
 }
 
 func raftDir(cfg *config.Server) string {
-	if len(cfg.Servers) == 0 {
+	if len(cfg.Engines) == 0 {
 		return "" // can't save to SCM
 	}
-	return filepath.Join(cfg.Servers[0].Storage.SCM.MountPoint, "control_raft")
+	return filepath.Join(cfg.Engines[0].Storage.SCM.MountPoint, "control_raft")
 }
 
 func hostname() string {
@@ -159,9 +143,9 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	}
 
 	if cfgHasBdev(cfg) {
-		// The config value is intended to be per-ioserver, so we need to adjust
-		// based on the number of ioservers.
-		prepReq.HugePageCount = cfg.NrHugepages * len(cfg.Servers)
+		// The config value is intended to be per-engine, so we need to adjust
+		// based on the number of engines.
+		prepReq.HugePageCount = cfg.NrHugepages * len(cfg.Engines)
 
 		// Perform these checks to avoid even trying a prepare if the system
 		// isn't configured properly.
@@ -214,9 +198,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	}
 	membership := system.NewMembership(log, sysdb)
 	scmProvider := scm.DefaultProvider(log)
-	harness := NewIOServerHarness(log).WithFaultDomain(faultDomain)
-	mgmtSvc := newMgmtSvc(harness, membership, sysdb)
-	var netDevClass uint32
+	harness := NewEngineHarness(log).WithFaultDomain(faultDomain)
 
 	// Create rpcClient for inter-server communication.
 	cliCfg := control.DefaultConfig()
@@ -224,6 +206,23 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	rpcClient := control.NewClient(
 		control.WithConfig(cliCfg),
 		control.WithClientLogger(log))
+
+	// Create event distributor.
+	eventPubSub := events.NewPubSub(ctx, log)
+	defer eventPubSub.Close()
+
+	// Init management RPC subsystem.
+	mgmtSvc := newMgmtSvc(harness, membership, sysdb, rpcClient, eventPubSub)
+
+	// Forward published actionable events (type RASTypeStateChange) to the
+	// management service leader, behavior is updated on leadership change.
+	eventForwarder := control.NewEventForwarder(rpcClient, cfg.AccessPoints)
+	eventPubSub.Subscribe(events.RASTypeStateChange, eventForwarder)
+	// Log events on the host that they were raised (and first published) on.
+	eventLogger := control.NewEventLogger(log)
+	eventPubSub.Subscribe(events.RASTypeAny, eventLogger)
+
+	var netDevClass uint32
 
 	netCtx, err := netdetect.Init(context.Background())
 	if err != nil {
@@ -234,18 +233,19 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	// On a NUMA-aware system, emit a message when the configuration
 	// may be sub-optimal.
 	numaCount := netdetect.NumNumaNodes(netCtx)
-	if numaCount > 0 && len(cfg.Servers) > numaCount {
-		log.Infof("NOTICE: Detected %d NUMA node(s); %d-server config may not perform as expected", numaCount, len(cfg.Servers))
+	if numaCount > 0 && len(cfg.Engines) > numaCount {
+		log.Infof("NOTICE: Detected %d NUMA node(s); %d-server config may not perform as expected", numaCount, len(cfg.Engines))
 	}
 
-	// Create a closure to be used for joining ioserver instances.
+	// Create a closure to be used for joining engine instances.
 	joinInstance := func(ctx context.Context, req *control.SystemJoinReq) (*control.SystemJoinResp, error) {
 		req.SetHostList(cfg.AccessPoints)
+		req.SetSystem(cfg.SystemName)
 		req.ControlAddr = controlAddr
 		return control.SystemJoin(ctx, rpcClient, req)
 	}
 
-	for idx, srvCfg := range cfg.Servers {
+	for idx, srvCfg := range cfg.Engines {
 		// Provide special handling for the ofi+verbs provider.
 		// Mercury uses the interface name such as ib0, while OFI uses the device name such as hfi1_0
 		// CaRT and Mercury will now support the new OFI_DOMAIN environment variable so that we can
@@ -264,7 +264,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		if cfg.SetHugepages {
 			// If we have multiple I/O instances with block devices, then we need to apportion
 			// the hugepage memory among the instances.
-			srvCfg.Storage.Bdev.MemSize = hugePages.FreeMB() / len(cfg.Servers)
+			srvCfg.Storage.Bdev.MemSize = hugePages.FreeMB() / len(cfg.Engines)
 			// reserve a little for daos_admin
 			srvCfg.Storage.Bdev.MemSize -= srvCfg.Storage.Bdev.MemSize / 16
 		}
@@ -277,11 +277,13 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 			return err
 		}
 
-		srv := NewIOServerInstance(log, bp, scmProvider, joinInstance, ioserver.NewRunner(log, srvCfg)).
+		srv := NewEngineInstance(log, bp, scmProvider, joinInstance, engine.NewRunner(log, srvCfg)).
 			WithHostFaultDomain(faultDomain)
 		if err := harness.AddInstance(srv); err != nil {
 			return err
 		}
+		// Register callback to publish I/O Server process exit events.
+		srv.OnInstanceExit(publishInstanceExitFn(eventPubSub.Publish, hostname(), srv.Index()))
 
 		if idx == 0 {
 			netDevClass, err = cfg.GetDeviceClassFn(srvCfg.Fabric.Interface)
@@ -325,7 +327,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	}
 
 	// Create and setup control service.
-	controlService := NewControlService(log, harness, bdevProvider, scmProvider, cfg, membership, sysdb, rpcClient)
+	controlService := NewControlService(log, harness, bdevProvider, scmProvider, cfg, eventPubSub)
 	if err := controlService.Setup(); err != nil {
 		return errors.Wrap(err, "setup control service")
 	}
@@ -370,7 +372,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	}...)
 
 	grpcServer := grpc.NewServer(srvOpts...)
-	ctlpb.RegisterMgmtCtlServer(grpcServer, controlService)
+	ctlpb.RegisterCtlSvcServer(grpcServer, controlService)
 
 	mgmtSvc.clientNetworkCfg = &config.ClientNetworkCfg{
 		Provider:        cfg.Fabric.Provider,
@@ -388,10 +390,42 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	sysdb.OnLeadershipGained(func(ctx context.Context) error {
 		log.Infof("MS leader running on %s", hostname())
 		mgmtSvc.startJoinLoop(ctx)
+
+		// Stop forwarding events to MS and instead start handling
+		// received forwarded (and local) events.
+		eventPubSub.Reset()
+		eventPubSub.Subscribe(events.RASTypeAny, eventLogger)
+		eventPubSub.Subscribe(events.RASTypeStateChange, membership)
+		eventPubSub.Subscribe(events.RASTypeStateChange, sysdb)
+		eventPubSub.Subscribe(events.RASTypeStateChange, events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
+			switch evt.ID {
+			case events.RASSwimRankDead:
+				// Mark the rank as unavailable for membership in
+				// new pools, etc.
+				if err := membership.MarkRankDead(system.Rank(evt.Rank)); err != nil {
+					log.Errorf("failed to mark rank %d as dead: %s", evt.Rank, err)
+					return
+				}
+				// FIXME CART-944: We should be able to update the
+				// primary group in order to remove the dead rank,
+				// but for the moment this will cause problems.
+				/*if err := mgmtSvc.doGroupUpdate(ctx); err != nil {
+					log.Errorf("GroupUpdate failed: %s", err)
+				}*/
+			}
+		}))
+
 		return nil
 	})
 	sysdb.OnLeadershipLost(func() error {
 		log.Infof("MS leader no longer running on %s", hostname())
+
+		// Stop handling received forwarded (in addition to local)
+		// events and start forwarding events to the new MS leader.
+		eventPubSub.Reset()
+		eventPubSub.Subscribe(events.RASTypeAny, eventLogger)
+		eventPubSub.Subscribe(events.RASTypeStateChange, eventForwarder)
+
 		return nil
 	})
 
@@ -405,13 +439,13 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	go func() {
-		// SIGKILL I/O servers immediately on exit.
-		// TODO: Re-enable attempted graceful shutdown of I/O servers.
+		// SIGKILL I/O engine immediately on exit.
+		// TODO: Re-enable attempted graceful shutdown of I/O engines.
 		sig := <-sigChan
 		log.Debugf("Caught signal: %s", sig)
 
 		shutdown()
 	}()
 
-	return errors.Wrapf(harness.Start(ctx, sysdb, cfg), "%s exited with error", build.DataPlaneName)
+	return errors.Wrapf(harness.Start(ctx, sysdb, eventPubSub, cfg), "%s exited with error", build.DataPlaneName)
 }
