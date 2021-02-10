@@ -1,3 +1,9 @@
+daos (1.1.2.1-9) unstable; urgency=medium
+  [ Vishwanath Venkatesan ]
+  * Add new pmem specific version of DAOS common library
+
+ -- Vishwanath Venkatesan <vishwanath.venkatesan@intel.com> Thu, 4 Feb 2021 12:48:18 -0000
+
 daos (1.1.2.1-8) unstable; urgency=medium
   [ Hua Kuang ]
   * Changed License to BSD-2-Clause-Patent
