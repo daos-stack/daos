@@ -46,8 +46,8 @@
 enum {
 	/** minimum log file size is 1MB */
 	LOG_SIZE_MIN	= (1ULL << 20),
-	/** default log file size is 1GB */
-	LOG_SIZE_DEF	= (1ULL << 30),
+	/** default log file size is 2GB */
+	LOG_SIZE_DEF	= (1ULL << 31),
 };
 
 /**
