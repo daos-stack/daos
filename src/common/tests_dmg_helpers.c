@@ -799,12 +799,12 @@ dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 			json_object_to_json_string(val));
 		if (!json_object_object_get_ex(val, "storage", &storage_info)) {
 			D_ERROR("unable to extract hosts from JSON\n");
-			D_GOTO(out, rc = -DER_INVAL);
+			D_GOTO(out_json, rc = -DER_INVAL);
 		}
 		if (!json_object_object_get_ex(storage_info, "smd_info",
 					       &smd_info)) {
 			D_ERROR("unable to extract hosts from JSON\n");
-			D_GOTO(out, rc = -DER_INVAL);
+			D_GOTO(out_json, rc = -DER_INVAL);
 		}
 		json_object_object_foreach(smd_info, key1, val1) {
 			D_DEBUG(DB_TEST, "key1:\"%s\",val1=%s\n", key1,
