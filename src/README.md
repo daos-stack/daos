@@ -59,8 +59,8 @@ Internally, a DAOS server is composed of multiple daemon processes. The first
 one to be started is the <a href="control/README.md">control plane</a>
 (binary named `daos_server`) which is responsible for parsing
 the configuration file, provisionning storage and eventually starting and
-monitoring one or multiple instances of the <a href="iosrv/README.md">data plane</a>
-(binary named `daos_io_server`).
+monitoring one or multiple instances of the <a href="engine/README.md">data plane</a>
+(binary named `daos_engine`).
 The control plane is written in Go and implements the DAOS management API
 over the gRPC framework that provides a secured out-of-band channel to
 administrate a DAOS system. The number of data plane instances to be started
@@ -80,7 +80,7 @@ Domain Sockets and a custom lightweight protocol called dRPC.
 
 For further reading:
 - <a href="control/README.md">DAOS control plane (daos_server)</a>
-- <a href="iosrv/README.md">DAOS data plane (daos_io_server)</a>
+- <a href="engine/README.md">DAOS data plane (daos_engine)</a>
 
 <a id="12"></a>
 ### Client APIs, Tools and I/O Middleware
@@ -157,7 +157,7 @@ for inter-process communications.
 It provides both a [C](common/README.md#dRPC-C-API) and [Go](control/drpc/README.md)
 interface to support interactions between:
 - the `daos_agent` and `libdaos` for application process authentication
-- the `daos_server` (control plane) and the `daos_io_server` (data plane) daemons
+- the `daos_server` (control plane) and the `daos_engine` (data plane) daemons
 Like gRPC, RPC are serialized via protocol buffers.
 
 <a id="23"></a>
@@ -169,7 +169,7 @@ data plane. It supports RDMA capabilities and scalable collective operations.
 CART is built over [Mercury](https://github.com/mercury-hpc/mercury) and
 [libfabric](https://ofiwg.github.io/libfabric/).
 The CART library is used for all communications between
-`libdaos` and `daos_io_server` instances.
+`libdaos` and `daos_engine` instances.
 
 <a id="3"></a>
 ## DAOS Layering and Services

@@ -52,7 +52,7 @@
 #include <stdio.h>
 #include <daos/common.h>
 #include <daos_srv/vos.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/srv_obj_ec.h>
 #include "obj_ec.h"
 #include "obj_internal.h"

@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
-package ioserver
+package engine
 
 import (
 	"bufio"
@@ -26,10 +26,10 @@ import (
 )
 
 const (
-	testModeVar = "IOSERVER_TEST_MODE"
+	testModeVar = "engine_TEST_MODE"
 	testSep     = "==="
-	testArgsStr = "IOSERVER_TEST_ARGS"
-	testEnvStr  = "IOSERVER_TEST_ENV"
+	testArgsStr = "engine_TEST_ARGS"
+	testEnvStr  = "engine_TEST_ENV"
 )
 
 func TestMain(m *testing.M) {
@@ -66,7 +66,7 @@ func createFakeBinary(t *testing.T) {
 	}
 	defer testSource.Close()
 
-	testBin, err := os.OpenFile(path.Join(testDir, ioServerBin), os.O_RDWR|os.O_CREATE, 0755)
+	testBin, err := os.OpenFile(path.Join(testDir, engineBin), os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
 		t.Fatal(err)
 	}

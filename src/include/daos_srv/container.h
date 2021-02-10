@@ -14,7 +14,7 @@
 
 #include <daos/common.h>
 #include <daos_types.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/rsvc.h>
 #include <daos_srv/vos_types.h>
