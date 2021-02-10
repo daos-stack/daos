@@ -43,10 +43,6 @@
 FROM centos:7.8.2003
 LABEL maintainer="daos@daos.groups.io"
 
-# Build arguments can be set via --build-arg
-# use same UID as host and default value of 1000 if not specified
-ARG UID=1000
-
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
 # Clean up any repos afterwards to save space.
@@ -79,48 +75,27 @@ RUN yum clean all &&							\
 # Install this individually because of potential conflicts
 RUN yum -y install openmpi3-devel && yum clean all
 
+# Add DAOS users
+RUN useradd --user-group --create-home --shell /bin/bash --home /home/daos daos_server
+RUN echo "daos_server:daos_server" | chpasswd
+RUN useradd --user-group --create-home --shell /bin/bash daos_agent
+RUN echo "daos_agent:daos_agent" | chpasswd
+
 # DAOS python 3 packages required for pylint
 #  - excluding mpi4py as it depends on CORCI-635
-RUN pip3 install avocado-framework &&					\
-    pip3 install avocado-framework-plugin-result-html &&		\
-    pip3 install avocado-framework-plugin-varianter-yaml-to-mux &&	\
-    pip3 install codespell &&						\
-    pip3 install pygithub
-
-# Add DAOS users
-ENV USER daos
-ENV PASSWD daos
-RUN useradd --uid $UID --user-group --create-home --shell /bin/bash $USER
-RUN echo "$USER:$PASSWD" | chpasswd
-
-ENV USER daos_server
-ENV PASSWD daos_server
-RUN useradd --user-group --create-home --shell /bin/bash $USER
-RUN echo "$USER:$PASSWD" | chpasswd
-
-ENV USER daos_agent
-ENV PASSWD daos_agent
-RUN useradd --user-group --create-home --shell /bin/bash $USER
-RUN echo "$USER:$PASSWD" | chpasswd
+USER daos_server:daos_server
+RUN pip3 install --user avocado-framework &&					\
+    pip3 install --user avocado-framework-plugin-result-html &&			\
+    pip3 install --user avocado-framework-plugin-varianter-yaml-to-mux &&	\
+    pip3 install --user codespell &&						\
+    pip3 install --user pygithub
+USER root:root
 
 # Create directory for DAOS backend storage
 RUN mkdir -p /opt/daos && chown -R daos_server.daos_server /opt/daos
 RUN mkdir /mnt/daos && chown daos_server.daos_server /mnt/daos
 RUN mkdir /var/run/daos_server && chown daos_server.daos_server /var/run/daos_server
 RUN mkdir /var/run/daos_agent && chown daos_agent.daos_agent /var/run/daos_agent
-
-# Set maven repo mirror
-RUN mkdir -p /root/.m2
-RUN echo -e "<settings>\n\
-        <mirrors>\n\
-                <mirror>\n\
-                        <id>google-maven-central</id>\n\
-                        <name>GCS Maven Central mirror</name>\n\
-                        <url>https://maven-central.storage-download.googleapis.com/maven2/</url>\n\
-                        <mirrorOf>central</mirrorOf>\n\
-                </mirror>\n\
-        </mirrors>\n\
-</settings>" > /root/.m2/settings.xml
 
 # Dependencies
 # Packages for NVML exist in CentOS, but are
@@ -206,21 +181,28 @@ ARG NOBUILD=no
 # select compiler to use
 ARG COMPILER=gcc
 
+# The COPY command has a --chown option but it's not well supported so copy as
+# root then run a chown command which is frustrating as the copy can take a few
+# seconds.
 WORKDIR /home/daos/pre
 COPY SConstruct .
 COPY utils/sl utils/sl
 COPY utils/build.config utils/
+RUN chown -R daos_server.daos_server /home/daos
+USER daos_server:daos_server
 RUN ln -s utils/sl site_scons
 
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
     (scons --build-deps=yes install PREFIX=/opt/daos --deps-only && \
     /bin/rm -rf build *.gz)
 
-# copy DAOS tree
-WORKDIR /home/daos
+WORKDIR /home/daos/daos/
 COPY VERSION LICENSE ftest.sh SConstruct ./
 COPY utils utils
 COPY src src
+USER root:root
+RUN chown -R daos_server.daos_server /home/daos
+USER daos_server:daos_server
 RUN ln -s utils/sl site_scons
 
 # Build DAOS
@@ -235,7 +217,20 @@ ENV PATH=/opt/daos/bin:$PATH
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
 
 # Build java and hadoop bindings
-WORKDIR /home/daos/src/client/java
+WORKDIR /home/daos/daos/src/client/java
+# Set maven repo mirror
+RUN mkdir -p /home/daos/.m2
+RUN echo -e "<settings>\n\
+        <mirrors>\n\
+                <mirror>\n\
+                        <id>google-maven-central</id>\n\
+                        <name>GCS Maven Central mirror</name>\n\
+                        <url>https://maven-central.storage-download.googleapis.com/maven2/</url>\n\
+                        <mirrorOf>central</mirrorOf>\n\
+                </mirror>\n\
+        </mirrors>\n\
+</settings>" > /home/daos/.m2/settings.xml
+
 RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
     mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
 WORKDIR /home/daos
