@@ -46,7 +46,7 @@ class DmgSystemReformatTest(PoolTestBase):
                 self.fail("Pool create did not fail due to DER_NOSPACE!")
         self.get_dmg_command().exit_status_exception = True
 
-        self.log.info("Stop running io_server instances: 'dmg system stop'")
+        self.log.info("Stop running engine instances: 'dmg system stop'")
         self.get_dmg_command().system_stop(force=True)
         if self.get_dmg_command().result.exit_status != 0:
             self.fail("Detected issues performing a system stop: {}".format(
@@ -66,9 +66,9 @@ class DmgSystemReformatTest(PoolTestBase):
             self.fail("Issues performing storage format --reformat: {}".format(
                 self.get_dmg_command().result.stderr))
 
-        # Check that io_servers starts up again
-        self.log.info("<SERVER> Waiting for the daos_io_servers to start")
-        self.server_managers[-1].detect_io_server_start(host_qty=2)
+        # Check that engine starts up again
+        self.log.info("<SERVER> Waiting for the engines to start")
+        self.server_managers[-1].detect_engine_start(host_qty=2)
 
         # Check that we have cleared storage by checking pool list
         if self.get_dmg_command().pool_list():

@@ -21,7 +21,7 @@
 #define __DAOS_DRPC_HANDLER_H__
 
 #include <daos/drpc.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 
 /**
  * Initialize the dRPC registry.

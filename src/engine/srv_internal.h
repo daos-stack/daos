@@ -6,7 +6,7 @@
 #ifndef __DAOS_SRV_INTERNAL__
 #define __DAOS_SRV_INTERNAL__
 
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 
 /**
  * Argobots ULT pools for different tasks, NET_POLL & NVME_POLL
