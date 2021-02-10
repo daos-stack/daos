@@ -61,3 +61,8 @@ daos_tests:
     test_daos_nvme_recovery_2: -u subtests="2"
     test_daos_nvme_recovery_3: -u subtests="3"
     test_daos_nvme_recovery_4: -u subtests="4"
+  stopped_ranks:
+    test_daos_nvme_recovery_1: ["random"]
+    test_daos_nvme_recovery_2: ["random"]
+    test_daos_nvme_recovery_3: ["random"]
+
