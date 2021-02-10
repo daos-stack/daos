@@ -23,7 +23,7 @@ class TestHarnessTests(TestWithServers):
     def test_core_files(self):
         """Test to verify core file creation.
 
-        This test will send a signal 6 to a random daos_io_server process so
+        This test will send a signal 6 to a random daos_engine process so
         that it will create a core file, allowing the core file collection code
         in launch.py to be tested.
 
@@ -31,11 +31,11 @@ class TestHarnessTests(TestWithServers):
 
         :avocado: tags=test_harness,core_files
         """
-        # Choose a server find the pid of its daos_io_server process
+        # Choose a server find the pid of its daos_engine process
         host = choice(self.server_managers[0].hosts)
-        self.log.info("Obtaining pid of the daos_io_server process on %s", host)
+        self.log.info("Obtaining pid of the daos_engine process on %s", host)
         pid = None
-        task = run_task([host], "pgrep --list-full daos_io_server", 20)
+        task = run_task([host], "pgrep --list-full daos_engine", 20)
         for buffer, hostlist in task.iter_buffers():
             self.log.info("%s:", str(NodeSet.fromlist(hostlist)))
             for line in str(buffer).splitlines():
@@ -46,11 +46,11 @@ class TestHarnessTests(TestWithServers):
                     pid = match[0]
         if pid is None:
             self.fail(
-                "Error obtaining pid of the daos_io_server process on "
+                "Error obtaining pid of the daos_engine process on "
                 "{}".format(host))
         self.log.info("Found pid %s", pid)
 
-        # Send a signal 6 to its daos_io_server process
+        # Send a signal 6 to its daos_engine process
         result = pcmd([host], "sudo kill -6 {}".format(pid))
         if 0 not in result:
             self.fail("Error sending a signal 6 to {} on {}".format(pid, host))
