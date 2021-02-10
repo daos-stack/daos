@@ -1395,6 +1395,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 		map_comp.co_id = i + num_comps;
 		map_comp.co_rank = 0;
 		map_comp.co_ver = map_version;
+		map_comp.co_out_ver = map_version;
 		map_comp.co_fseq = 1;
 		map_comp.co_nr = domains[i];
 

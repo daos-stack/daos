@@ -17,8 +17,7 @@ class DaosServerTest(TestWithServers):
     """Daos server tests.
 
     Test Class Description:
-        Test to verify that the daos_io_server, daos_server starts/stops
-        and reformat.
+        Test to verify that daos_server starts/stops and reformat.
 
     :avocado: recursive
     """
@@ -43,15 +42,15 @@ class DaosServerTest(TestWithServers):
         self.server_managers[0].detect_format_ready()
         self.log.info("=Restart daos_server, dmg storage_format.")
         self.server_managers[0].dmg.storage_format(reformat)
-        self.log.info("=Restart daos_server, detect_io_server_start().")
-        self.server_managers[0].detect_io_server_start()
+        self.log.info("=Restart daos_server, detect_engine_start().")
+        self.server_managers[0].detect_engine_start()
 
     @fail_on(ServerFailed)
     @fail_on(CommandFailure)
-    def restart_daos_io_server(self, force=True):
-        """method to perform io_server stop and start by dmg.
+    def restart_engine(self, force=True):
+        """method to perform engine stop and start by dmg.
         Args:
-            force (bool): Force to stop the daos io_server.
+            force (bool): Force to stop the daos engine.
             Defaults to True.
 
         """
@@ -120,11 +119,11 @@ class DaosServerTest(TestWithServers):
         self.log.info("(5)Verify after server restarted.")
         self.verify_pool_list()
 
-    def test_daos_io_server_restart(self):
+    def test_engine_restart(self):
         """
         JIRA ID: DAOS-3593.
 
-        Test Description: Test cmd to perform daos io_server restart.
+        Test Description: Test cmd to perform daos engine restart.
         Steps:
         (1)Use the cmd line to perform a controlled shutdown from a
            quiescent state (i.e. clients disconnected).
@@ -146,17 +145,17 @@ class DaosServerTest(TestWithServers):
             "from a quiescent state.")
         self.agent_managers[0].stop()
         self.verify_pool_list()
-        self.restart_daos_io_server()
+        self.restart_engine()
         self.agent_managers[0].start()
         self.log.info(
             "(2)Shutdown and restart the daos io-server with pools "
             "and containers created.")
         self.create_pool_and_container()
         pool_list = self.get_pool_list()
-        self.restart_daos_io_server()
+        self.restart_engine()
         self.log.info(
             "(3)Force shutdown and restart the daos io-server.")
-        self.restart_daos_io_server()
+        self.restart_engine()
         self.log.info(
             "(4)Verify pool list after forced shutdown and restart "
             "the daos io-server.")
@@ -166,9 +165,9 @@ class DaosServerTest(TestWithServers):
         self.log.info(
             "(5)Restart daos io server for the last server on the cluster."
             "   self.hostlist_servers= %s", self.hostlist_servers)
-        self.restart_daos_io_server()
+        self.restart_engine()
         self.verify_pool_list(pool_list)
         # Blocked by DAOS-3883 causing intermittent failures on CI
-        #self.restart_daos_io_server(force=False)
+        #self.restart_engine(force=False)
         #self.verify_pool_list(pool_list)
         self.hostlist_servers = hosts

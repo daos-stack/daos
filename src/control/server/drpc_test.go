@@ -145,9 +145,9 @@ func TestDrpcCleanup_Single(t *testing.T) {
 
 	for _, sockName := range []string{
 		"daos_server.sock",
-		"daos_io_server.sock",
-		"daos_io_server0.sock",
-		"daos_io_server_2345.sock",
+		"daos_engine.sock",
+		"daos_engine0.sock",
+		"daos_engine_2345.sock",
 	} {
 		sockPath := filepath.Join(tmpDir, sockName)
 		_, cleanup := common.CreateTestSocket(t, sockPath)
@@ -172,7 +172,7 @@ func TestDrpcCleanup_DoesNotDeleteNonDaosSocketFiles(t *testing.T) {
 		"12345.sock",
 		"myfile",
 		"daos_server",
-		"daos_io_server",
+		"daos_engine",
 	} {
 		sockPath := filepath.Join(tmpDir, sockName)
 		_, cleanup := common.CreateTestSocket(t, sockPath)
@@ -197,12 +197,12 @@ func TestDrpcCleanup_Multiple(t *testing.T) {
 
 	sockNames := []string{
 		"daos_server.sock",
-		"daos_io_server.sock",
-		"daos_io_server12.sock",
-		"daos_io_serverF.sock",
-		"daos_io_server_5678.sock",
-		"daos_io_server_256.sock",
-		"daos_io_server_abc.sock",
+		"daos_engine.sock",
+		"daos_engine12.sock",
+		"daos_engineF.sock",
+		"daos_engine_5678.sock",
+		"daos_engine_256.sock",
+		"daos_engine_abc.sock",
 	}
 
 	var sockPaths []string
