@@ -920,9 +920,8 @@ def run_tests(test_files, tag_filter, args):
 
             # Optionally process core files
             if args.process_cores:
-                if not process_the_cores(avocado_logs_dir, test_file["yaml"],
-                                         args):
-                    return_code |= 256
+                return_code |= process_the_cores(
+                    avocado_logs_dir, test_file["yaml"], args)
 
     return return_code
 
@@ -1361,7 +1360,13 @@ def resolve_debuginfo(pkg):
 
 
 def install_debuginfos():
-    """Install debuginfo packages."""
+    """Install debuginfo packages.
+
+    Returns:
+        bool: True if debuginfo packages were installed; False otherwise.
+
+    """
+    return_status = True
     install_pkgs = [{'name': 'gdb'}]
 
     cmd_list = []
@@ -1416,7 +1421,8 @@ def install_debuginfos():
     cmd_list.append(cmd)
 
     retry_count = 3
-    while retry_count > 0:
+    retry_cmd = True
+    while retry_count > 0 and retry_cmd:
         retry_cmd = False
         for cmd in cmd_list:
             try:
@@ -1431,17 +1437,19 @@ def install_debuginfos():
             retry_count -= 1
             if retry_count == 2:
                 print("Going to refresh caches and try again")
-                cmd_prefix = ["sudo", "dnf", r"--enablerepo=\*debug\*"]
+                cmd_prefix = ["sudo", "dnf", "--enablerepo=*debug*"]
                 cmd_list.insert(0, cmd_prefix + ["clean", "all"])
                 cmd_list.insert(1, cmd_prefix + ["makecache"])
             elif retry_count == 1:
-                print("Adding debug information for triage:")
+                print("Adding debug information for triage")
                 cmd_list = []
-                cmd_list.append(["dnf", r"--enablerepo=\*", "repolist"])
+                cmd_list.append(["dnf", "--enablerepo=*", "repolist"])
                 cmd_list.append(
-                    ["timeout", "yum", r"--enablerepo=\*", "repolist"])
-        else:
-            retry_count = 0
+                    ["timeout", "yum", "--enablerepo=*", "repolist"])
+                # Report a failure
+                return_status = False
+
+    return return_status
 
 
 def process_the_cores(avocado_logs_dir, test_yaml, args):
@@ -1453,13 +1461,13 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
         args (argparse.Namespace): command line arguments for this program
 
     Returns:
-        bool: True if everything was done as expected, False if there were
-              any issues processing core files
+        int: status code - 0 if everything was done as expected, 256 if there
+            were any issues processing the core files
 
     """
     import fnmatch  # pylint: disable=import-outside-toplevel
 
-    return_status = True
+    return_code = 0
     this_host = socket.gethostname().split(".")[0]
     host_list = get_hosts_from_yaml(test_yaml, args)
     daos_cores_dir = os.path.join(avocado_logs_dir, "latest", "stacktraces")
@@ -1501,21 +1509,16 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
     if not spawn_commands(host_list, "; ".join(commands), timeout=1800):
         # we might have still gotten some core files, so don't return here
         # but save a False return status for later
-        return_status = False
+        return_code |= 256
 
     cores = os.listdir(daos_cores_dir)
-
-    if not cores:
-        return True
-
-    try:
-        install_debuginfos()
-    except RuntimeError as error:
-        print(error)
+    if cores and not install_debuginfos():
+        print("Error installing debuginfo packages.")
         print("Removing core files to avoid archiving them")
         for corefile in cores:
             os.remove(os.path.join(daos_cores_dir, corefile))
-        return False
+        return_code |= 256
+        cores = []
 
     for corefile in cores:
         if not fnmatch.fnmatch(corefile, 'core.*[0-9]'):
@@ -1558,16 +1561,16 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
                     stack_trace.writelines(get_output(cmd))
             except IOError as error:
                 print("Error writing {}: {}".format(stack_trace_file, error))
-                return_status = False
+                return_code |= 256
         else:
             print(
                 "Unable to determine executable name from gdb output: '{}'\n"
                 "Not creating stacktrace".format(gdb_output))
-            return_status = False
+            return_code |= 256
         print("Removing {}".format(corefile_fqpn))
         os.unlink(corefile_fqpn)
 
-    return return_status
+    return return_code
 
 
 def get_test_category(test_file):

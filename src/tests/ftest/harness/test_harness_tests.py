@@ -55,6 +55,9 @@ class TestHarnessTests(TestWithServers):
         if 0 not in result:
             self.fail("Error sending a signal 6 to {} on {}".format(pid, host))
 
+        # Display the journalctl log for the process that was sent the signal
+        self.server_managers[0].manager.dump_logs([host])
+
         # Simplify resolving the host name to rank by marking all ranks as
         # expected to be either running or errored (sent a signal 6)
         self.server_managers[0].update_expected_states(
