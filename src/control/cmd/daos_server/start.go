@@ -30,7 +30,7 @@ type startCmd struct {
 	NrXsHelpers         *uint16 `short:"x" long:"xshelpernr" description:"number of helper XS per VOS target"`
 	FirstCore           uint16  `short:"f" long:"firstcore" default:"0" description:"index of first core for service thread"`
 	Group               string  `short:"g" long:"group" description:"Server group name"`
-	SocketDir           string  `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_io_server sockets"`
+	SocketDir           string  `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_engine sockets"`
 	Insecure            bool    `short:"i" long:"insecure" description:"allow for insecure connections"`
 	RecreateSuperblocks bool    `long:"recreate-superblocks" description:"recreate missing superblocks rather than failing"`
 }
@@ -62,7 +62,7 @@ func (cmd *startCmd) setCLIOverrides() error {
 		return err
 	}
 
-	for _, srv := range cmd.config.Servers {
+	for _, srv := range cmd.config.Engines {
 		srv.WithHostname(host)
 
 		if cmd.Targets > 0 {
@@ -102,7 +102,7 @@ func (cmd *startCmd) configureLogging() error {
 		return err
 	}
 
-	for i, srv := range cmd.config.Servers {
+	for i, srv := range cmd.config.Engines {
 		if srv.LogFile == "" {
 			cmd.log.Errorf("no daos log file specified for server %d", i)
 		}

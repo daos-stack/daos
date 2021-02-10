@@ -8,7 +8,7 @@
  */
 #define D_LOGFAC       DD_FAC(server)
 
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 
 static void
 rpc_cb(const struct crt_cb_info *cb_info)

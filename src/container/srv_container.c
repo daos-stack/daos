@@ -1236,7 +1236,7 @@ cont_agg_eph_leader_ult(void *arg)
 
 			/**
 			 * NB: during extending or reintegration, the new
-			 * server might cause the minum epoch is less than
+			 * server might cause the minimum epoch is less than
 			 * ea_current_eph.
 			 */
 			D_DEBUG(DB_MD, DF_CONT" minimum "DF_U64" current "
@@ -3145,6 +3145,10 @@ out:
 		struct cont_query_out  *cqo = crt_reply_get(rpc);
 
 		prop = cqo->cqo_prop;
+	} else if (opc == CONT_OPEN) {
+		struct cont_open_out *coo = crt_reply_get(rpc);
+
+		prop = coo->coo_prop;
 	}
 	out->co_rc = rc;
 	crt_reply_send(rpc);
