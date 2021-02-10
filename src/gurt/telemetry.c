@@ -211,7 +211,7 @@ d_tm_add_child(struct d_tm_node_t **newnode, struct d_tm_node_t *parent,
 	return rc;
 
 failure:
-	D_ERROR("Failed to add metric [%s]: rc = %d\n", name, rc);
+	D_ERROR("Failed to add metric [%s]: " DF_RC "\n", name, DP_RC(rc));
 	return rc;
 }
 
@@ -220,12 +220,12 @@ failure:
  * process.
  *
  * \param[in]	id		Identifies the producer process amongst others
- *				on the same machine
+ *				on the same machine.
  * \param[in]	mem_size	Size in bytes of the shared memory segment that
- *				is allocated
+ *				is allocated.
  * \param[in]	flags		Optional flags to control initialization.
  *				Use D_TM_SERIALIZATION to enable read/write
- *				synchronization of individual nodes
+ *				synchronization of individual nodes.
  *				Use D_TM_RETAIN_SHMEM to retain the shared
  *				memory segment created for these metrics after
  *				this process exits.
@@ -294,7 +294,7 @@ d_tm_init(int id, uint64_t mem_size, int flags)
 
 	rc = D_MUTEX_INIT(&d_tm_add_lock, NULL);
 	if (rc != 0) {
-		D_ERROR("Mutex init failure: rc = %d\n", rc);
+		D_ERROR("Mutex init failure: " DF_RC "\n", DP_RC(rc));
 		goto failure;
 	}
 
@@ -304,7 +304,7 @@ d_tm_init(int id, uint64_t mem_size, int flags)
 
 failure:
 	D_ERROR("Failed to initialize telemetry and metrics for ID %u: "
-		"rc = %d\n", id, rc);
+		DF_RC "\n", id, DP_RC(rc));
 	return rc;
 }
 
@@ -323,7 +323,7 @@ void d_tm_fini(void)
 		rc = shmctl(d_tm_shmid, IPC_RMID, NULL);
 		if (rc < 0)
 			D_ERROR("Unable to remove shared memory segment. "
-				"rc = %d\n", rc);
+				DF_RC "\n", DP_RC(rc));
 	}
 
 	d_tm_serialization = false;
@@ -358,7 +358,7 @@ d_tm_free_node(uint64_t *shmem_root, struct d_tm_node_t *node)
 		if (rc != 0) {
 			name = d_tm_conv_ptr(shmem_root, node->dtn_name);
 			D_ERROR("Failed to destroy mutex for node [%s]: "
-				"rc = %d\n", name, rc);
+				DF_RC "\n", name, DP_RC(rc));
 			return;
 		}
 	}
@@ -886,7 +886,7 @@ d_tm_increment_counter(struct d_tm_node_t **metric, char *item, ...)
 		rc = d_tm_add_metric(&node, path, D_TM_COUNTER, "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to add and incremement counter [%s]: "
-				"rc = %d\n", path, rc);
+				DF_RC "\n", path, DP_RC(rc));
 			goto failure;
 		}
 		if (metric != NULL)
@@ -902,8 +902,8 @@ d_tm_increment_counter(struct d_tm_node_t **metric, char *item, ...)
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to increment counter [%s] on item not a "
-			"counter.  Operation mismatch: rc = %d\n",
-			node->dtn_name, rc);
+			"counter.  Operation mismatch: " DF_RC "\n",
+			node->dtn_name, DP_RC(rc));
 		goto failure;
 	}
 	return rc;
@@ -975,7 +975,7 @@ d_tm_record_timestamp(struct d_tm_node_t **metric, char *item, ...)
 		rc = d_tm_add_metric(&node, path, D_TM_TIMESTAMP, "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to add and record timestamp [%s]: "
-				"rc = %d\n", path, rc);
+				DF_RC "\n", path, DP_RC(rc));
 			goto failure;
 		}
 		if (metric != NULL)
@@ -991,7 +991,8 @@ d_tm_record_timestamp(struct d_tm_node_t **metric, char *item, ...)
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to record timestamp [%s] on item not a "
-			"timestamp.  Operation mismatch: rc = %d\n", path, rc);
+			"timestamp.  Operation mismatch: " DF_RC "\n", path,
+			DP_RC(rc));
 	}
 	return rc;
 
@@ -1068,14 +1069,15 @@ d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
 		      (clk_id == D_TM_CLOCK_THREAD_CPUTIME))) {
 			rc = -DER_INVAL;
 			D_ERROR("Invalid clk_id for [%s] "
-				"Failed to add metric: rc = %d\n", path, rc);
+				"Failed to add metric: " DF_RC "\n", path,
+				DP_RC(rc));
 			goto failure;
 		}
 		rc = d_tm_add_metric(&node, path, D_TM_TIMER_SNAPSHOT | clk_id,
 				     "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to add and record high resolution timer"
-				" [%s]: rc = %d\n", path, rc);
+				" [%s]: " DF_RC "\n", path, DP_RC(rc));
 			goto failure;
 		}
 		if (metric != NULL)
@@ -1094,7 +1096,7 @@ d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to record high resolution timer [%s] on item "
 			"not a high resolution timer.  Operation mismatch: "
-			"rc = %d\n", path, rc);
+			DF_RC "\n", path, DP_RC(rc));
 		goto failure;
 	}
 	return rc;
@@ -1171,14 +1173,15 @@ d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
 		      (clk_id == D_TM_CLOCK_THREAD_CPUTIME))) {
 			rc = -DER_INVAL;
 			D_ERROR("Invalid clk_id for [%s] "
-				"Failed to add metric: rc = %d\n", path, rc);
+				"Failed to add metric: " DF_RC "\n", path,
+				DP_RC(rc));
 			goto failure;
 		}
 		rc = d_tm_add_metric(&node, path, D_TM_DURATION | clk_id,
 				     "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to add and mark duration start [%s]: "
-				"rc = %d\n", path, rc);
+				DF_RC "\n", path, DP_RC(rc));
 			goto failure;
 		}
 		if (metric != NULL)
@@ -1195,8 +1198,8 @@ d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to mark duration start [%s] on item "
-			"not a duration.  Operation mismatch: rc = %d\n",
-			path, rc);
+			"not a duration.  Operation mismatch: " DF_RC "\n",
+			path, DP_RC(rc));
 		goto failure;
 	}
 	return rc;
@@ -1272,7 +1275,8 @@ d_tm_mark_duration_end(struct d_tm_node_t **metric, char *item, ...)
 	if (node == NULL) {
 		rc = -DER_DURATION_MISMATCH;
 		D_ERROR("Failed to mark duration end [%s].  "
-			"No existing metric found: rc = %d\n", path, rc);
+			"No existing metric found: " DF_RC "\n", path,
+			DP_RC(rc));
 		goto failure;
 	}
 
@@ -1289,8 +1293,8 @@ d_tm_mark_duration_end(struct d_tm_node_t **metric, char *item, ...)
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to mark duration end [%s] on item "
-			"not a duration.  Operation mismatch: rc = %d\n",
-			path, rc);
+			"not a duration.  Operation mismatch: " DF_RC "\n",
+			path, DP_RC(rc));
 		goto failure;
 	}
 	return rc;
@@ -1363,7 +1367,7 @@ d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value, char *item, ...)
 		rc = d_tm_add_metric(&node, path, D_TM_GAUGE, "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to add and set gauge [%s]: "
-				"rc = %d\n", path, rc);
+				DF_RC "\n", path, DP_RC(rc));
 			goto failure;
 		}
 		if (metric != NULL)
@@ -1380,8 +1384,8 @@ d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value, char *item, ...)
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to set gauge [%s] on item "
-			"not a gauge.  Operation mismatch: rc = %d\n",
-			path, rc);
+			"not a gauge.  Operation mismatch: " DF_RC "\n",
+			path, DP_RC(rc));
 		goto failure;
 	}
 	return rc;
@@ -1455,7 +1459,7 @@ d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
 		rc = d_tm_add_metric(&node, path, D_TM_GAUGE, "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to add and incremement gauge [%s]: "
-				"rc = %d\n", path, rc);
+				DF_RC "\n", path, DP_RC(rc));
 			goto failure;
 		}
 		if (metric != NULL)
@@ -1472,8 +1476,8 @@ d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to increment gauge [%s] on item "
-			"not a gauge.  Operation mismatch: rc = %d\n",
-			path, rc);
+			"not a gauge.  Operation mismatch: " DF_RC "\n",
+			path, DP_RC(rc));
 		goto failure;
 	}
 	return rc;
@@ -1547,7 +1551,7 @@ d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
 		rc = d_tm_add_metric(&node, path, D_TM_GAUGE, "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to add and decrement gauge [%s]: "
-				"rc = %d\n", path, rc);
+				DF_RC "\n", path, DP_RC(rc));
 			goto failure;
 		}
 		if (metric != NULL)
@@ -1564,8 +1568,8 @@ d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to decrement gauge [%s] on item "
-			"not a gauge.  Operation mismatch: rc = %d\n",
-			path, rc);
+			"not a gauge.  Operation mismatch: " DF_RC "\n",
+			path, DP_RC(rc));
 		goto failure;
 	}
 	return rc;
@@ -1678,7 +1682,7 @@ d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
 
 	rc = D_MUTEX_LOCK(&d_tm_add_lock);
 	if (rc != 0) {
-		D_ERROR("Failed to get mutex: rc = %d\n", rc);
+		D_ERROR("Failed to get mutex: " DF_RC "\n", DP_RC(rc));
 		goto failure;
 	}
 
@@ -1783,7 +1787,8 @@ d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
 	if (d_tm_serialization && (temp->dtn_type != D_TM_DIRECTORY)) {
 		rc = pthread_mutexattr_init(&mattr);
 		if (rc != 0) {
-			D_ERROR("pthread_mutexattr_init failed: rc = %d\n", rc);
+			D_ERROR("pthread_mutexattr_init failed: " DF_RC "\n",
+				DP_RC(rc));
 			goto failure;
 		}
 
@@ -1791,13 +1796,13 @@ d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
 						  PTHREAD_PROCESS_SHARED);
 		if (rc != 0) {
 			D_ERROR("pthread_mutexattr_setpshared failed: "
-			"rc = %d\n", rc);
+				DF_RC "\n", DP_RC(rc));
 			goto failure;
 		}
 
 		rc = D_MUTEX_INIT(&temp->dtn_lock, &mattr);
 		if (rc != 0) {
-			D_ERROR("Mutex init failed: rc = %d\n", rc);
+			D_ERROR("Mutex init failed: " DF_RC "\n", DP_RC(rc));
 			goto failure;
 		}
 
@@ -1814,7 +1819,8 @@ d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
 failure:
 	D_FREE_PTR(str);
 	D_MUTEX_UNLOCK(&d_tm_add_lock);
-	D_ERROR("Failed to add child node for [%s]: rc = %d\n", metric, rc);
+	D_ERROR("Failed to add child node for [%s]: " DF_RC "\n", metric,
+		DP_RC(rc));
 	return rc;
 }
 
@@ -2362,14 +2368,15 @@ uint64_t *
 d_tm_get_shared_memory(int srv_idx)
 {
 	key_t	key;
+	int	shmid;
 
 	/** create a unique key for this instance */
 	key = D_TM_SHARED_MEMORY_KEY + srv_idx;
-	d_tm_shmid = shmget(key, 0, 0);
-	if (d_tm_shmid < 0)
+	shmid = shmget(key, 0, 0);
+	if (shmid < 0)
 		return NULL;
 
-	return (uint64_t *)shmat(d_tm_shmid, NULL, 0);
+	return (uint64_t *)shmat(shmid, NULL, 0);
 }
 
 /**
