@@ -172,8 +172,8 @@ simple_array_mgmt(void **state)
 	assert_rc_equal(rc, -DER_INVAL);
 
 	oid = daos_test_oid_gen(arg->coh, OC_SX,
-			  DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT,
-			  0, arg->myrank);
+				DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT,
+				0, arg->myrank);
 	rc = daos_array_open_with_attr(arg->coh, oid, DAOS_TX_NONE, DAOS_OO_RW,
 				       4, chunk_size, &oh, NULL);
 	assert_rc_equal(rc, 0);
@@ -356,7 +356,7 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 	/** create the array on rank 0 and share the oh. */
 	if (arg->myrank == 0) {
 		oid = daos_test_oid_gen(arg->coh, OC_SX,
-				  (cell_size == 1) ? featb : feat, 0, 0);
+					(cell_size == 1) ? featb : feat, 0, 0);
 		rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, cell_size,
 				       chunk_size, &oh, NULL);
 		assert_rc_equal(rc, 0);
@@ -514,7 +514,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	/** create the array on rank 0 and share the oh. */
 	if (arg->myrank == 0) {
 		oid = daos_test_oid_gen(arg->coh, OC_SX,
-				  (cell_size == 1) ? featb : feat, 0, 0);
+					(cell_size == 1) ? featb : feat, 0, 0);
 		rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, cell_size,
 				       chunk_size, &oh, NULL);
 		assert_rc_equal(rc, 0);
@@ -671,7 +671,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	/** create the array on rank 0 and share the oh. */
 	if (arg->myrank == 0) {
 		oid = daos_test_oid_gen(arg->coh, OC_SX,
-				  (cell_size == 1) ? featb : feat, 0, 0);
+					(cell_size == 1) ? featb : feat, 0, 0);
 		rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, cell_size,
 				       chunk_size, &oh, NULL);
 		assert_rc_equal(rc, 0);
