@@ -60,6 +60,10 @@ RUN pip3 --no-cache-dir --disable-pip-version-check install --user	\
 	pygithub
 USER root:root
 
+# Add codespell to path.
+ENV PATH=$PATH:/home/daos/.local/bin
+
+
 # Create directory for DAOS backend storage
 RUN mkdir -p /opt/daos && chown -R daos_server.daos_server /opt/daos
 RUN mkdir /mnt/daos && chown daos_server.daos_server /mnt/daos
