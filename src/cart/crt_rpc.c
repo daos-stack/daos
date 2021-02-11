@@ -256,8 +256,7 @@ crt_internal_rpc_register(bool server)
 
 	rc = crt_proto_register(&cpf);
 	if (rc != 0) {
-		D_ERROR("crt_proto_register_internal() failed, "DF_RC"\n",
-			DP_RC(rc));
+		D_ERROR("crt_proto_register() failed, "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -284,8 +283,7 @@ crt_internal_rpc_register(bool server)
 
 	rc = crt_proto_register(&cpf);
 	if (rc != 0) {
-		D_ERROR("crt_proto_register_internal() failed, "DF_RC"\n",
-			DP_RC(rc));
+		D_ERROR("crt_proto_register() failed, "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
