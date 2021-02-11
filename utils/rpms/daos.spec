@@ -6,8 +6,8 @@
 %global libfabric_version 1.11.1
 
 Name:          daos
-Version:       1.1.2.1
-Release:       12%{?relval}%{?dist}
+Version:       1.1.3
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -424,10 +424,13 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
-* Tue Jan 26 2021 Saurabh Tandan <saurabh.tandan@intel.com> 1.1.2.1-12
+* Tue Jan 26 2021 Saurabh Tandan <saurabh.tandan@intel.com> 1.1.3-2
 - Add daos-tests-java package
 
-* Tue Feb 9 2021 Vish Venkatesan<vishwanath.venkatesan@intel.com> 1.1.2.1-11
+* Wed Feb 10 2021 Johann Lombardi <johann.lombardi@intel.com> 1.1.3-1
+- Version bump up to 1.1.3
+
+* Tue Feb 9 2021 Vish Venkatesan <vishwanath.venkatesan@intel.com> 1.1.2.1-11
 - Add new pmem specific version of DAOS common library
 
 * Fri Feb 6 2021 Saurabh Tandan <saurabh.tandan@intel.com> 1.1.2.1-10
