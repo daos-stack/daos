@@ -73,6 +73,8 @@ RUN yum -y install \
            java-1.8.0-openjdk python36-distro
 RUN yum -y install openmpi3-devel
 
+# Removing PyYAML 3.10 to allow pip install to upgrade 
+RUN yum -y remove python36-PyYAML
 RUN pip3 install --upgrade pip
 
 # DAOS python 3 packages required for pylint
