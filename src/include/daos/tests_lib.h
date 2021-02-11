@@ -36,6 +36,8 @@
 		assert_string_equal(d_errstr(rc), d_errstr(expected_rc)); \
 	} while (0)
 
+#define DTS_OCLASS_DEF OC_RP_XSF
+
 /** Read a command line from stdin. */
 char *dts_readline(const char *prompt);
 

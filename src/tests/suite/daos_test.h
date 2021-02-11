@@ -261,6 +261,9 @@ daos_test_oid_gen(daos_handle_t coh, daos_oclass_id_t oclass, uint8_t ofeats,
 {
 	daos_obj_id_t	oid;
 
+	if (oclass == 0)
+		oclass = DTS_OCLASS_DEF;
+
 	oid = dts_oid_gen(seed);
 	if (daos_handle_is_valid(coh))
 		daos_obj_generate_oid(coh, &oid, ofeats, oclass, hints, 0);

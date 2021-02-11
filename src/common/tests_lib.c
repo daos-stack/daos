@@ -14,8 +14,6 @@
 #include <daos.h>
 #include <gurt/debug.h>
 
-#define DTS_OCLASS_DEF		OC_RP_XSF
-
 static uint32_t obj_id_gen	= 1;
 static uint64_t int_key_gen	= 1;
 
