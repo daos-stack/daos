@@ -4,6 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
+from apricot import skipForTicket
 from daos_core_base import DaosCoreBase
 
 class DaosCoreTestNvme(DaosCoreBase):
@@ -12,7 +13,6 @@ class DaosCoreTestNvme(DaosCoreBase):
 
     :avocado: recursive
     """
-
     def test_daos_nvme_recovery_1(self):
         """Jira ID: DAOS-3846.
 
@@ -29,6 +29,7 @@ class DaosCoreTestNvme(DaosCoreBase):
         """
         self.run_subtest()
 
+    @skipForTicket("DAOS-5621")
     def test_daos_nvme_recovery_2(self):
         """Jira ID: DAOS-3846.
 
@@ -45,6 +46,7 @@ class DaosCoreTestNvme(DaosCoreBase):
         """
         self.run_subtest()
 
+    @skipForTicket("DAOS-5621")
     def test_daos_nvme_recovery_3(self):
         """Jira ID: DAOS-3846.
 
@@ -61,6 +63,7 @@ class DaosCoreTestNvme(DaosCoreBase):
         """
         self.run_subtest()
 
+    @skipForTicket("DAOS-5621")
     def test_daos_nvme_recovery_4(self):
         """Jira ID: DAOS-3846.
 
