@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from general_utils import run_task
 import time
 
@@ -23,37 +23,41 @@ class CPUUsage(TestWithServers):
         Test Description: Test CPU usage of formatted and idle engine.
         :avocado: tags=all,hw,server,small,full_regression,cpu_usage
         """
-        ps_get_cpu = r"ps -C daos_engine -o %\cpu"
-
-        prev_usage = 1
-        usage = 1
-        time.sleep(5)
-        for _ in range(40):
-            time.sleep(5)
-            task = run_task(hosts=self.hostlist_servers, command=ps_get_cpu)
-            # Sample output.
-            # %CPU
-            # 1798
+        # Get PID of daos_engine with ps.
+        ps_engine = r"ps -C daos_engine -o %\p"
+        pid_found = False
+        # At this point, daos_engine should be started, but do the repetetive
+        # calls just in case.
+        for _ in range(5):
+            task = run_task(hosts=self.hostlist_servers, command=ps_engine)
             for output, _ in task.iter_buffers():
-                usage = str(output).splitlines()[-1]
-                self.log.info("CPU usage = %s", usage)
-            # Check if daos_engine has started.
-            if usage == "%CPU":
-                continue
-
-            usage = int(usage)
-            if usage == 0:
+                self.log.info("ps output = %s", output)
+                pid = str(output).splitlines()[-1]
+                self.log.info("PID = %s", pid)
+                if "PID" not in pid:
+                    pid_found = True
+            if pid_found:
                 break
-            diff = usage - prev_usage
-            diff_p = (float(abs(diff)) / prev_usage) * 100
+            time.sleep(5)
+        if not pid_found:
+            self.fail("daos_engine PID couldn't be obtained!")
 
-            # Check if the CPU usage is stable; the change was less than 1%.
-            if diff_p <= float(1):
-                self.log.info("CPU usage is stable. Change was less than 1%.")
-                break
-            prev_usage = usage
+        # Wait for CPU usage to stabilize. It usually takes a few sec.
+        time.sleep(10)
+
+        # Get (instantenious) CPU usage of the PID with top.
+        top_pid = "top -p {} -b -n 1".format(pid)
+        usage = -1
+        task = run_task(hosts=self.hostlist_servers, command=top_pid)
+        for output, _ in task.iter_buffers():
+            process_row = str(output).splitlines()[-1]
+            self.log.info("Process row = %s", process_row)
+            values = process_row.split()
+            self.log.info("Values = {}".format(values))
+            usage = float(values[8])
+            self.log.info("CPU Usage = %f", usage)
 
         self.assertTrue(
-            usage != "%CPU", "daos_engine CPU usage couldn't be obtained!")
+            usage != -1, "daos_engine CPU usage couldn't be obtained!")
         self.assertTrue(
             usage < 100, "CPU usage is above 100%: {}%".format(usage))
