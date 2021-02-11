@@ -122,7 +122,8 @@ class OSAOfflineReintegration(OSAUtils):
                 self.assert_on_rebuild_failure()
                 time.sleep(35)
                 output = self.dmg_command.system_start(ranks=rank)
-                time.sleep(70)
+                # Provide timeout so we know the rank is online.
+                time.sleep(45)
 
             self.log.info(output)
             self.is_rebuild_done(3)

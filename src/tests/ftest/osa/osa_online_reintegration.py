@@ -140,7 +140,8 @@ class OSAOnlineReintegration(OSAUtils):
                 self.assert_on_rebuild_failure()
                 time.sleep(35)
                 output = self.dmg_command.system_start(ranks=rank)
-                time.sleep(70)
+                # Provide timeout so we know the rank is online.
+                time.sleep(45)
 
             self.log.info(output)
             self.is_rebuild_done(3)
@@ -193,6 +194,7 @@ class OSAOnlineReintegration(OSAUtils):
         for pool_num in range(1, 2):
             self.run_online_reintegration_test(pool_num)
 
+    @skipForTicket("DAOS-6766, DAOS-6783")
     def test_osa_online_reintegration_server_stop(self):
         """Test ID: DAOS-5920.
         Test Description: Validate Online Reintegration with server stop
