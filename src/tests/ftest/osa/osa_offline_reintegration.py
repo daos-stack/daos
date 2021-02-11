@@ -166,15 +166,11 @@ class OSAOfflineReintegration(OSAUtils):
         # Perform reintegration testing with a pool
         self.run_offline_reintegration_test(1, True)
 
+    @skipForTicket("DAOS-6766, DAOS-6783")
     def test_osa_offline_reintegration_server_stop(self):
         """Test ID: DAOS-6748.
         Test Description: Validate Online Reintegration with server stop
         :avocado: tags=all,pr,daily_regression,hw,medium,ib2,osa
         :avocado: tags=offline_reintegration_srv_stop,DAOS_5610
         """
-        # Perform reintegration testing with 1 pool.
-        # tmp_oclass = ["RP_2G4", "RP_2G8", "RP_2G16", "RP_3G12",
-        #              "RP_3G16", "RP_4G4"]
-        # self.ior_dfs_oclass = tmp_oclass.pop(random.randint(0,
-        #                                     (len(tmp_oclass) - 1)))
         self.run_offline_reintegration_test(1, data=True, server_boot=True)

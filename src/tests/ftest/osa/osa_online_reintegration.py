@@ -199,9 +199,4 @@ class OSAOnlineReintegration(OSAUtils):
         :avocado: tags=all,pr,daily_regression,hw,medium,ib2,osa
         :avocado: tags=online_reintegration_srv_stop,DAOS_5610
         """
-        # Perform reintegration testing with 1 pool.
-        # tmp_oclass = ["RP_2G4", "RP_2G8", "RP_2G16", "RP_3G12",
-        #              "RP_3G16", "RP_4G4"]
-        # self.ior_dfs_oclass = tmp_oclass.pop(random.randint(0,
-        #                                     (len(tmp_oclass) - 1)))
         self.run_online_reintegration_test(1, server_boot=True)
