@@ -2579,6 +2579,9 @@ dtx_37(void **state)
 	d_rank_t	 kill_rank = CRT_NO_RANK;
 	int		 i;
 
+	/* Skip it because of DAOS-6771 */
+	skip();
+
 	FAULT_INJECTION_REQUIRED();
 
 	print_message("DTX37: resync - leader failed during prepare\n");
@@ -2997,7 +3000,7 @@ run_daos_dist_tx_test(int rank, int size, int *sub_tests, int sub_tests_size)
 		sub_tests = NULL;
 	}
 
-	rc = run_daos_sub_tests("Distributed TX tests", dtx_tests,
+	rc = run_daos_sub_tests("DAOS_Distributed_TX", dtx_tests,
 				ARRAY_SIZE(dtx_tests), sub_tests,
 				sub_tests_size, dtx_test_setup, test_teardown);
 
