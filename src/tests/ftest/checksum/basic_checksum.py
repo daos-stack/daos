@@ -5,11 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-import ctypes
-from pydaos.raw import (DaosContainer, IORequest,
-                        DaosObj)
 from apricot import TestWithServers
-
 
 class ChecksumContainerValidation(TestWithServers):
     """
@@ -22,38 +18,16 @@ class ChecksumContainerValidation(TestWithServers):
     """
     # pylint: disable=too-many-instance-attributes
     def setUp(self):
+        """Test Setup."""
         super(ChecksumContainerValidation, self).setUp()
         self.agent_sessions = None
         self.pool = None
         self.container = None
-        self.obj = None
-        self.ioreq = None
-        self.no_of_dkeys = None
-        self.no_of_akeys = None
-        self.array_size = None
-        self.record_length = None
-
-        self.no_of_dkeys = self.params.get("no_of_dkeys", '/run/dkeys/*')[0]
-        self.no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')[0]
-        self.record_length = self.params.get("length", '/run/record/*')
+        self.records = None
 
         self.add_pool(connect=False)
         self.pool.connect(2)
-
-        self.csum = self.params.get("enable_checksum", '/run/container/*')
-        self.container = DaosContainer(self.context)
-        input_param = self.container.cont_input_values
-        input_param.enable_chksum = self.csum
-        self.container.create(poh=self.pool.pool.handle,
-                              con_prop=input_param)
-        self.container.open()
-
-        self.obj = DaosObj(self.context, self.container)
-        self.obj.create(objcls=1)
-        self.obj.open()
-        self.ioreq = IORequest(self.context,
-                               self.container,
-                               self.obj, objtype=4)
+        self.add_container(self.pool)
 
     def test_single_object_with_checksum(self):
         """
@@ -63,43 +37,18 @@ class ChecksumContainerValidation(TestWithServers):
         :avocado: tags=all,full_regression,daily_regression
         :avocado: tags=basic_checksum_object
         """
-        self.d_log.info("Writing the Single Dataset")
-        record_index = 0
-        for dkey in range(self.no_of_dkeys):
-            for akey in range(self.no_of_akeys):
-                indata = ("{0}".format(str(akey)[0])
-                          * self.record_length[record_index])
-                c_dkey = ctypes.create_string_buffer("dkey {0}".format(dkey))
-                c_akey = ctypes.create_string_buffer("akey {0}".format(akey))
-                c_value = ctypes.create_string_buffer(indata)
-                c_size = ctypes.c_size_t(ctypes.sizeof(c_value))
 
-                self.ioreq.single_insert(c_dkey, c_akey, c_value, c_size)
-                record_index = record_index + 1
-                if record_index == len(self.record_length):
-                    record_index = 0
-
-        self.d_log.info("Single Dataset Verification -- Started")
-        record_index = 0
-        for dkey in range(self.no_of_dkeys):
-            for akey in range(self.no_of_akeys):
-                indata = ("{0}".format(str(akey)[0]) *
-                          self.record_length[record_index])
-                c_dkey = ctypes.create_string_buffer("dkey {0}".format(dkey))
-                c_akey = ctypes.create_string_buffer("akey {0}".format(akey))
-                val = self.ioreq.single_fetch(c_dkey,
-                                              c_akey,
-                                              len(indata)+1)
-                if indata != (repr(val.value)[1:-1]):
-                    self.d_log.error("ERROR:Data mismatch for "
-                                     "dkey = {0}, "
-                                     "akey = {1}".format(
-                                         "dkey {0}".format(dkey),
-                                         "akey {0}".format(akey)))
-                    self.fail("ERROR: Data mismatch for dkey = {0}, akey={1}"
-                              .format("dkey {0}".format(dkey),
-                                      "akey {0}".format(akey)))
-
-                record_index = record_index + 1
-                if record_index == len(self.record_length):
-                    record_index = 0
+        self.records = self.params.get("records_qty", "/run/container/records/*", None)
+        self.log.info("Writing the Single Dataset")
+        self.pool.get_info()
+        if isinstance(self.records, list):
+            for rec in self.records:
+                self.container.record_qty.update(rec, "record_qty")
+                self.log.info(
+                    "Wrote %s bytes to container %s",
+                    self.container.execute_io(10), self.container.uuid)
+        else:
+            self.container.record_qty.update(self.records, "record_qty")
+            self.log.info(
+                "Wrote %s bytes to container %s",
+                self.container.execute_io(10), self.container.uuid)

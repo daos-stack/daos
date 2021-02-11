@@ -2,10 +2,10 @@
 # required quantity is indicated by the placeholders
 hosts:
  test_servers:
-  - server-A
+   - server-A
  test_clients:
-  - client-B
-timeout: 60
+   - client-B
+timeout: 240
 server_config:
  name: daos_server
 pool:
@@ -19,28 +19,24 @@ pool:
     createsvc:
         svcn: 1
     control_method: dmg
-container: !mux
-   properties:
-       enable_checksum: True
-dkeys: !mux
-  single:
-    no_of_dkeys:
-    - 50
-akeys: !mux
-  single:
-    no_of_akeys:
-    - 10
-record: !mux
-  1Byte:
-    length:
-      - 1
-  1KB:
-    length:
-      - 1024
-  Mixed:
-    length:
-      - 1
-      - 8
-      - 32
-      - 512
-      - 1024
+container:
+    type: POSIX
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    control_method: daos
+    oclass: SX
+    object_qty: 1
+    dkey_size: 50
+    akey_size: 10
+    data_size: 256
+    records: !mux
+      1Byte:
+        records_qty: 1
+      1KB:
+        records_qty: 1024
+      Mixed:
+        records_qty:
+          - 1
+          - 8
+          - 32
+          - 512
+          - 1024
