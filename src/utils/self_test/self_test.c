@@ -890,6 +890,11 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 	char		 id[MASTER_VALUE_SIZE];
 	int		 ini_value;
 
+	/* Make sure config is valid */
+	if (cfg == NULL) {
+		goto exit_code_ret;
+	}
+
 	/* See if there is an exact match, if so,then return value */
 	config_ret = ConfigReadInt(cfg, sec_name, key, &ivalue, -1);
 	if ((config_ret == CONFIG_OK) && (ivalue != -1)) {
@@ -1305,6 +1310,7 @@ next_arg:
 	for (i = 0; i < status_size; i++) {
 		float	 upper = status[i].value;
 		float	 lower = status[i].value;
+		float	 percent_diff;
 		float	 value = 0.0;
 		float	 scale;
 		int	 ivalue;
@@ -1319,6 +1325,7 @@ next_arg:
 		char	*tkey;
 		int	 j;
 		char	 range[RANGE_SIZE];
+		char	*results;
 		Config	*Ecfg = cfg_expected;
 
 		/* See if we are to out put this stats */
@@ -1382,8 +1389,14 @@ next_arg:
 					}
 
 					/* Find range for testing */
+					percent_diff = 0.;
+					if (ivalue != 0) 
+						percent_diff = (value - ivalue)/
+							ivalue;
+					percent_diff *= 100.0;
 					upper = ivalue;
 					lower = ivalue;
+
 					if (status[i].flag & TST_LOW) {
 						/* avoid checkpatch warning */
 						lower = ivalue *
@@ -1397,33 +1410,51 @@ next_arg:
 
 					/* Test for range */
 					passed = true;
-					if ((status[i].flag &
+					results = "Passed:";
+					if (Ecfg == NULL) {
+						snprintf(range, RANGE_SIZE,
+						         " ");
+						results = " ";
+					} else if ((status[i].flag &
 					     (TST_HIGH | TST_LOW)) ==
 					    (TST_HIGH | TST_LOW)) {
 						snprintf(range, RANGE_SIZE,
 							 " Range (%6d -- %6d)"
-							 " %3d%%",
+							 " %3d%% %5.1f%%",
 							 (int)lower, (int)upper,
-							 (int)scale);
+							 (int)scale,
+							 percent_diff);
 						if (!((lower <= value) &&
-							(value <= upper)))
+							(value <= upper))) {
 							passed = false;
+							results = "Failed:";
+							ret_value = -1;
+						}
 					} else if (status[i].flag & TST_HIGH) {
 						snprintf(range, RANGE_SIZE,
 							 " Range (..    -- %6d)"
-							 "  %3d%%",
+							 "  %3d%% %5.1f%%",
 							 (int)upper,
-							 (int)scale);
-						if (value >= upper)
+							 (int)scale,
+							 percent_diff);
+						if (value >= upper) {
 							passed = false;
+							results = "Failed:";
+							ret_value = -1;
+						}
 					} else if (status[i].flag & TST_LOW) {
 						snprintf(range, RANGE_SIZE,
-							 " Range (6%d --   "
-							 "  ..)   %3d%%",
+							 " Range (%6d --   "
+							 "  ..)   %3d%%"
+							 " %5.1f%%",
 							 (int)lower,
-							 (int)scale);
-						if (value <= lower)
+							 (int)scale,
+							 percent_diff);
+						if (value <= lower) {
 							passed = false;
+							results = "Failed:";
+							ret_value = -1;
+						}
 					}
 
 					/* print results */
@@ -1432,19 +1463,13 @@ next_arg:
 						       " (%s)\n",
 							status[i].description);
 					firstpass = false;
-					if (passed) {
-						printf("   %s : %8d  "
-						       "Passed: %s\n",
-						key, ivalue, range);
-						D_INFO(" PASSED range check\n");
-
-					} else {
-						printf("   %s : %8d  "
-						       "Failed: %s\n",
-						key, (int)value, range);
-						D_WARN(" FAILED range check\n");
-						ret_value = -1;
-					}
+					printf("   %s : %8d  "
+					       "%s %s\n",
+					       key, (int)value,
+					       results, range);
+					if (!passed)
+						D_INFO("%s %s range check\n",
+						       key, results);
 				}
 				number_keys = ConfigGetKeys(cfg_output,
 							    section_name,

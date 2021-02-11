@@ -355,6 +355,9 @@ int ConfigGetKeys(const Config *cfg, const char *section,
 	ConfigKeyValue *kv   = NULL;
 	int		number = 0;
 
+	if (!cfg)
+		return -1;
+
 	if (max_size <= 0)
 		return 0;
 
