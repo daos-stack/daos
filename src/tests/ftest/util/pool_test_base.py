@@ -6,9 +6,9 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
 
-from .apricot import TestWithServers
-from .general_utils import bytes_to_human, human_to_bytes
-from .server_utils import ServerFailed
+from apricot import TestWithServers
+from general_utils import bytes_to_human, human_to_bytes
+from server_utils import ServerFailed
 
 
 class PoolTestBase(TestWithServers):

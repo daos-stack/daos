@@ -68,7 +68,7 @@ class OpenClose(TestWithServers):
         except DaosApiError as excep:
             if expected_result == 'PASS':
                 print(excep)
-                print((traceback.format_exc()))
+                print(traceback.format_exc())
                 self.fail("Test was expected to pass but it failed.\n")
 
             # close above failed so close for real with the right coh

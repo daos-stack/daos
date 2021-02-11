@@ -12,7 +12,7 @@ import time
 import threading
 import re
 
-from .general_utils import run_command, DaosTestError
+from general_utils import run_command, DaosTestError
 from ClusterShell.NodeSet import NodeSet
 
 W_LOCK = threading.Lock()

@@ -135,12 +135,12 @@ class NvmeEnospace(ServerFillUp):
         #start filling
         print('Starting main IOR load')
         self.start_ior_load(storage='SCM', percent=75)
-        print((self.pool.pool_percentage_used()))
+        print(self.pool.pool_percentage_used())
 
         #Fill 50% more of SCM pool,Aggregation is Enabled so NVMe space will be
         #filled
         self.start_ior_load(storage='SCM', percent=50)
-        print((self.pool.pool_percentage_used()))
+        print(self.pool.pool_percentage_used())
 
         #Fill 60% more of SCM pool, now NVMe will be Full so data will not be
         #moved to NVMe but it will start filling SCM. SCM size will be going to
@@ -153,7 +153,7 @@ class NvmeEnospace(ServerFillUp):
             self.log.info('Test expected to fail because of DER_NOSPACE')
 
         #Display the pool%
-        print((self.pool.pool_percentage_used()))
+        print(self.pool.pool_percentage_used())
 
         #verify the DER_NO_SAPCE error count is expected and no other Error in
         #client log
@@ -211,7 +211,7 @@ class NvmeEnospace(ServerFillUp):
         :avocado: tags=all,hw,medium,nvme,ib2,full_regression
         :avocado: tags=der_enospace,enospc_lazy,enospc_lazy_bg
         """
-        print((self.pool.pool_percentage_used()))
+        print(self.pool.pool_percentage_used())
 
         #Run IOR to fill the pool.
         self.run_enospace_with_bg_job()
@@ -234,11 +234,11 @@ class NvmeEnospace(ServerFillUp):
         :avocado: tags=all,hw,medium,nvme,ib2,full_regression
         :avocado: tags=der_enospace,enospc_lazy,enospc_lazy_fg
         """
-        print((self.pool.pool_percentage_used()))
+        print(self.pool.pool_percentage_used())
 
         #Repeat the test in loop.
         for _loop in range(10):
-            print(("-------enospc_lazy_fg Loop--------- {}".format(_loop)))
+            print("-------enospc_lazy_fg Loop--------- {}".format(_loop))
             #Run IOR to fill the pool.
             self.run_enospace_foreground()
             #Delete all the containers
@@ -267,7 +267,7 @@ class NvmeEnospace(ServerFillUp):
         :avocado: tags=all,hw,medium,nvme,ib2,full_regression
         :avocado: tags=der_enospace,enospc_time,enospc_time_bg
         """
-        print((self.pool.pool_percentage_used()))
+        print(self.pool.pool_percentage_used())
 
         # Enabled TIme mode for Aggregation.
         self.pool.set_property("reclaim", "time")
@@ -293,14 +293,14 @@ class NvmeEnospace(ServerFillUp):
         :avocado: tags=all,hw,medium,nvme,ib2,full_regression
         :avocado: tags=der_enospace,enospc_time,enospc_time_fg
         """
-        print((self.pool.pool_percentage_used()))
+        print(self.pool.pool_percentage_used())
 
         # Enabled TIme mode for Aggregation.
         self.pool.set_property("reclaim", "time")
 
         #Repeat the test in loop.
         for _loop in range(10):
-            print(("-------enospc_time_fg Loop--------- {}".format(_loop)))
+            print("-------enospc_time_fg Loop--------- {}".format(_loop))
             #Run IOR to fill the pool.
             self.run_enospace_with_bg_job()
             #Delete all the containers
@@ -327,14 +327,14 @@ class NvmeEnospace(ServerFillUp):
         :avocado: tags=der_enospace,enospc_performance
         """
         #Write the IOR Baseline and get the Read BW for later comparison.
-        print((self.pool.pool_percentage_used()))
+        print(self.pool.pool_percentage_used())
         #Write First
         self.start_ior_load(storage='SCM', percent=1)
         #Read the baseline data set
         self.start_ior_load(storage='SCM', operation='Read', percent=1)
         max_mib_baseline = float(self.ior_matrix[0][int(IorMetrics.Max_MiB)])
         baseline_cont_uuid = self.ior_cmd.dfs_cont.value
-        print(("IOR Baseline Read MiB {}".format(max_mib_baseline)))
+        print("IOR Baseline Read MiB {}".format(max_mib_baseline))
 
         #Run IOR to fill the pool.
         self.run_enospace_with_bg_job()
@@ -343,7 +343,7 @@ class NvmeEnospace(ServerFillUp):
         self.container.uuid = baseline_cont_uuid
         self.start_ior_load(storage='SCM', operation='Read', percent=1)
         max_mib_latest = float(self.ior_matrix[0][int(IorMetrics.Max_MiB)])
-        print(("IOR Latest Read MiB {}".format(max_mib_latest)))
+        print("IOR Latest Read MiB {}".format(max_mib_latest))
 
         #Check if latest IOR read performance is in Tolerance of 5%, when
         #Storage space is full.
@@ -371,7 +371,7 @@ class NvmeEnospace(ServerFillUp):
         """
         # pylint: disable=attribute-defined-outside-init
         # pylint: disable=too-many-branches
-        print((self.pool.pool_percentage_used()))
+        print(self.pool.pool_percentage_used())
 
         # Disable the aggregation
         self.pool.set_property("reclaim", "disabled")
@@ -382,11 +382,11 @@ class NvmeEnospace(ServerFillUp):
 
         #Repeat the test in loop.
         for _loop in range(10):
-            print(("-------enospc_no_aggregation Loop--------- {}".format(_loop)))
+            print("-------enospc_no_aggregation Loop--------- {}".format(_loop))
             #Fill 75% of SCM pool
             self.start_ior_load(storage='SCM', percent=40)
 
-            print((self.pool.pool_percentage_used()))
+            print(self.pool.pool_percentage_used())
 
             try:
                 #Fill 10% more to SCM ,which should Fail because no SCM space

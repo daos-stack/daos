@@ -7,10 +7,10 @@
 
 import time
 
-from .command_utils_base import CommandFailure, FormattedParameter
-from .command_utils import ExecutableCommand
+from command_utils_base import CommandFailure, FormattedParameter
+from command_utils import ExecutableCommand
 from ClusterShell.NodeSet import NodeSet
-from .general_utils import check_file_exists, pcmd
+from general_utils import check_file_exists, pcmd
 
 
 class DfuseCommand(ExecutableCommand):

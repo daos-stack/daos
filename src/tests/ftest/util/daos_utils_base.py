@@ -4,8 +4,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from .command_utils_base import FormattedParameter, CommandWithParameters
-from .command_utils import CommandWithSubCommand
+from command_utils_base import FormattedParameter, CommandWithParameters
+from command_utils import CommandWithSubCommand
 
 
 class DaosCommandBase(CommandWithSubCommand):

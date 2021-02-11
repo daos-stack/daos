@@ -303,29 +303,29 @@ class LogTest():
         """Report to stdout the most common logging locations"""
         if self.log_count == 0:
             return
-        print(('Parsed {} lines of logs'.format(self.log_count)))
+        print('Parsed {} lines of logs'.format(self.log_count))
         print('Most common logging locations')
         for (loc, count) in self.log_locs.most_common(10):
             if count < 10:
                 break
             percent = 100 * count / self.log_count
-            print(('Logging used {} times at {} ({:.1f}%)'.format(count,
+            print('Logging used {} times at {} ({:.1f}%)'.format(count,
                                                                  loc,
-                                                                 percent)))
+                                                                 percent))
         print('Most common facilities')
         for (fac, count) in self.log_fac.most_common(10):
             if count < 10:
                 break
-            print(('{}: {} ({:.1f}%)'.format(fac, count,
-                                            100*count/self.log_count)))
+            print('{}: {} ({:.1f}%)'.format(fac, count,
+                                            100*count/self.log_count))
 
         print('Most common levels')
         for (level, count) in self.log_levels.most_common(10):
             if count < 10:
                 break
-            print(('{}: {} ({:.1f}%)'.format(cart_logparse.LOG_NAMES[level],
+            print('{}: {} ({:.1f}%)'.format(cart_logparse.LOG_NAMES[level],
                                             count,
-                                            100*count/self.log_count)))
+                                            100*count/self.log_count))
 
     def check_log_file(self,
                        abort_on_warning,
@@ -371,7 +371,7 @@ class LogTest():
                     client_pids[pid].add(start, end, line.ts)
 
             for pid in client_pids:
-                print(('{}:{}'.format(pid, client_pids[pid])))
+                print('{}:{}'.format(pid, client_pids[pid]))
 
 #pylint: disable=too-many-branches,too-many-nested-blocks
     def _check_pid_from_log_file(self,
@@ -601,11 +601,11 @@ class LogTest():
         p_trace = trace_lines * 1.0 / total_lines * 100
 
         if not self.quiet:
-            print(("Pid {}, {} lines total, {} trace ({:.2f}%)".format(
-                pid, total_lines, trace_lines, p_trace)))
+            print("Pid {}, {} lines total, {} trace ({:.2f}%)".format(
+                pid, total_lines, trace_lines, p_trace))
 
         if memsize.has_data():
-            print(("Memsize: {}".format(memsize)))
+            print("Memsize: {}".format(memsize))
 
         # Special case the fuse arg values as these are allocated by IOF
         # but freed by fuse itself.
@@ -745,9 +745,9 @@ class LogTest():
 
         if HAVE_TABULATE:
             print('Opcode State Transition Tally')
-            print((tabulate.tabulate(table,
+            print(tabulate.tabulate(table,
                                     headers=headers,
-                                    stralign='right')))
+                                    stralign='right'))
 
         if errors:
             for error in errors:

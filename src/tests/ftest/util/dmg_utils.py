@@ -13,9 +13,9 @@ from pwd import getpwuid
 import re
 import json
 
-from .dmg_utils_base import DmgCommandBase
-from .general_utils import get_numeric_list
-from .dmg_utils_params import DmgYamlParameters, DmgTransportCredentials
+from dmg_utils_base import DmgCommandBase
+from general_utils import get_numeric_list
+from dmg_utils_params import DmgYamlParameters, DmgTransportCredentials
 
 
 def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None):

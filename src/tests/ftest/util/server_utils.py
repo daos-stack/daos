@@ -13,14 +13,14 @@ import time
 from avocado import fail_on
 from ClusterShell.NodeSet import NodeSet
 
-from .command_utils_base import \
+from command_utils_base import \
     CommandFailure, FormattedParameter, YamlParameters, CommandWithParameters, \
     CommonConfig
-from .command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
-from .general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
+from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
+from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
     convert_list
-from .dmg_utils import get_dmg_command
-from .server_utils_params import \
+from dmg_utils import get_dmg_command
+from server_utils_params import \
     DaosServerTransportCredentials, DaosServerYamlParameters
 
 

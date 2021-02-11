@@ -111,7 +111,7 @@ class OpenContainerTest(TestWithServers):
                 expected_result, RESULT_PASS, result_messages[test_case][0])
         except TestFail as excep:
             print(excep)
-            print((traceback.format_exc()))
+            print(traceback.format_exc())
             self.assertEqual(
                 expected_result, RESULT_FAIL, result_messages[test_case][1])
 
@@ -126,6 +126,6 @@ class OpenContainerTest(TestWithServers):
                 expected_result, RESULT_PASS, result_messages[test_case][2])
         except TestFail as excep:
             print(excep)
-            print((traceback.format_exc()))
+            print(traceback.format_exc())
             self.assertEqual(
                 expected_result, RESULT_FAIL, result_messages[test_case][3])

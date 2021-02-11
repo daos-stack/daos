@@ -307,7 +307,7 @@ def _populate_dir_tree():
     needles = int(sys.argv[5])
     prefix = sys.argv[6]
 
-    print(("Populating: {0}".format(path)))
+    print("Populating: {0}".format(path))
 
     dir_tree = DirTree(
         path,
@@ -317,7 +317,7 @@ def _populate_dir_tree():
     dir_tree.set_needles_prefix(prefix)
     dir_tree.set_number_of_needles(needles)
     tree_path = dir_tree.create()
-    print(("Dir tree created at: {0}".format(tree_path)))
+    print("Dir tree created at: {0}".format(tree_path))
 
 
 if __name__ == '__main__':

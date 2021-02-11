@@ -21,7 +21,7 @@ class FileGenerator():
         return self._mock_root
 
     def crete_mock_fs(self, files):
-        print(("Temp directory: {0}".format(self._mock_root)))
+        print("Temp directory: {0}".format(self._mock_root))
         self._create_files(files)
 
     def _create_files(self, files):

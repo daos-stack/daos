@@ -7,9 +7,9 @@
 
 from socket import gethostname
 
-from .command_utils_base import \
+from command_utils_base import \
     FormattedParameter, CommandWithParameters, YamlParameters
-from .command_utils import CommandWithSubCommand, YamlCommand
+from command_utils import CommandWithSubCommand, YamlCommand
 
 
 class DmgCommandBase(YamlCommand):

@@ -102,8 +102,8 @@ def doMain(args):
     elif len(args) == 2 and args[0] == "rpc-client-go-service":
         doRpcClientToGoSvc(int(args[1]))
     else:
-        print(("Usage: msgpack_test.py " + 
-              "[testdata|rpc-server|rpc-client-python-service|rpc-client-go-service] ..."))
+        print("Usage: msgpack_test.py " +
+              "[testdata|rpc-server|rpc-client-python-service|rpc-client-go-service] ...")
     
 if __name__ == "__main__":
     doMain(sys.argv[1:])

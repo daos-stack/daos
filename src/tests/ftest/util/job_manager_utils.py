@@ -12,12 +12,12 @@ import time
 
 from ClusterShell.NodeSet import NodeSet
 
-from .command_utils import ExecutableCommand, SystemctlCommand
-from .command_utils_base import FormattedParameter, EnvironmentVariables
-from .command_utils_base import CommandFailure
+from command_utils import ExecutableCommand, SystemctlCommand
+from command_utils_base import FormattedParameter, EnvironmentVariables
+from command_utils_base import CommandFailure
 from env_modules import load_mpi
-from .general_utils import pcmd, run_task
-from .write_host_file import write_host_file
+from general_utils import pcmd, run_task
+from write_host_file import write_host_file
 
 
 class JobManager(ExecutableCommand):

@@ -4,10 +4,10 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from .apricot import TestWithServers
-from .command_utils_base import ObjectWithParameters, BasicParameter
-from .test_utils_pool import TestPool
-from .test_utils_container import TestContainer
+from apricot import TestWithServers
+from command_utils_base import ObjectWithParameters, BasicParameter
+from test_utils_pool import TestPool
+from test_utils_container import TestContainer
 
 
 class RebuildTestParams(ObjectWithParameters):

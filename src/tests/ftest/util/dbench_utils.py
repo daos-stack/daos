@@ -6,10 +6,10 @@
 """
 
 
-from .command_utils_base import FormattedParameter
-from .command_utils_base import BasicParameter
-from .command_utils import ExecutableCommand
-from .job_manager_utils import Mpirun
+from command_utils_base import FormattedParameter
+from command_utils_base import BasicParameter
+from command_utils import ExecutableCommand
+from job_manager_utils import Mpirun
 
 # pylint: disable=too-few-public-methods,too-many-instance-attributes
 class DbenchCommand(ExecutableCommand):

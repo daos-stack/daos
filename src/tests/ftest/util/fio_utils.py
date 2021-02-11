@@ -4,11 +4,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from .general_utils import pcmd
+from general_utils import pcmd
 
-from .command_utils_base import \
+from command_utils_base import \
     CommandFailure, BasicParameter, FormattedParameter, CommandWithParameters
-from .command_utils import ExecutableCommand
+from command_utils import ExecutableCommand
 
 
 class FioCommand(ExecutableCommand):

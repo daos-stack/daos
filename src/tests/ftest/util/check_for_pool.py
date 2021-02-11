@@ -6,7 +6,7 @@
 """
 
 
-from .general_utils import run_command
+from general_utils import run_command
 
 
 def check_for_pool(host, uuid):

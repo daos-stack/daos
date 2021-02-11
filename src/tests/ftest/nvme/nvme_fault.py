@@ -50,8 +50,9 @@ class NvmeFault(ServerFillUp):
         #Start the IOR Command and generate the NVMe fault.
         self.start_ior_load(percent=self.capacity)
 
-        print(("pool_percentage_used -- After -- {}"
-              .format(self.pool.pool_percentage_used())))
+        print(
+            "pool_percentage_used -- After -- {}".format(
+                self.pool.pool_percentage_used()))
 
         #Check nvme-health command works
         try:

@@ -7,13 +7,13 @@
 import os
 import random
 
-from .apricot import TestWithServers
-from .command_utils import ExecutableCommand
-from .command_utils_base import \
+from apricot import TestWithServers
+from command_utils import ExecutableCommand
+from command_utils_base import \
     CommandFailure, BasicParameter, FormattedParameter
 
-from .test_utils_pool import TestPool
-from .job_manager_utils import Orterun
+from test_utils_pool import TestPool
+from job_manager_utils import Orterun
 
 class IoConfGen(ExecutableCommand):
     """Defines an object for the daos_gen_io_conf and daos_run_io_conf commands.
@@ -151,7 +151,7 @@ class IoConfTestBase(TestWithServers):
                             env=pool_env)
         io_conf.get_params(self)
         for record_size in total_sizes:
-            print(("Start test for record size = {}".format(record_size)))
+            print("Start test for record size = {}".format(record_size))
             # Create unaligned test data set
             gen_unaligned_io_conf(record_size, self.testfile)
             # Run test file using daos_run_io_conf

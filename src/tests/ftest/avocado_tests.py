@@ -46,7 +46,7 @@ class ApricotTests(Test):
         :avocado: tags=avocado_tests,avocado_junit_stdout
         """
         with open('large_stdout.txt', 'r') as inp:
-            print((inp.read()))
+            print(inp.read())
         self.fail()
 
 

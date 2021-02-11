@@ -7,8 +7,8 @@
 from logging import getLogger
 import re
 
-from .command_utils_base import BasicParameter, ObjectWithParameters
-from .general_utils import get_host_data
+from command_utils_base import BasicParameter, ObjectWithParameters
+from general_utils import get_host_data
 
 
 DATA_ERROR = "[ERROR]"

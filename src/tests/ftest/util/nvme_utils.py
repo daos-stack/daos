@@ -9,12 +9,12 @@ import re
 import time
 import os
 
-from .general_utils import run_task
-from .command_utils_base import CommandFailure
+from general_utils import run_task
+from command_utils_base import CommandFailure
 from avocado.core.exceptions import TestFail
-from .ior_test_base import IorTestBase
-from .test_utils_pool import TestPool
-from .ior_utils import IorCommand
+from ior_test_base import IorTestBase
+from test_utils_pool import TestPool
+from ior_utils import IorCommand
 
 try:
     # python 3.x
@@ -113,8 +113,8 @@ class ServerFillUp(IorTestBase):
         for server in self.hostlist_servers:
             for engine in range(len(self.engines)):
                 drive_capa.append(sum(mem_size_info[server][engine]))
-        print(('Maximum Storage space from the servers is {}'
-              .format(int(min(drive_capa) * 0.96))))
+        print('Maximum Storage space from the servers is {}'
+              .format(int(min(drive_capa) * 0.96)))
 
         #Return the 99% of storage space as it won't be used 100% for
         #pool creation.
@@ -132,7 +132,7 @@ class ServerFillUp(IorTestBase):
         task = run_task(self.hostlist_servers, "lsblk -b | grep pmem")
         for _rc_code, _node in task.iter_retcodes():
             if _rc_code == 1:
-                print(("Failed to lsblk on {}".format(_node)))
+                print("Failed to lsblk on {}".format(_node))
                 raise ValueError
         #Get the drive size from each engine
         for buf, nodelist in task.iter_buffers():
@@ -157,7 +157,7 @@ class ServerFillUp(IorTestBase):
         task = run_task(self.hostlist_servers, "lsblk -b /dev/nvme*n*")
         for _rc_code, _node in task.iter_retcodes():
             if _rc_code == 1:
-                print(("Failed to lsblk on {}".format(_node)))
+                print("Failed to lsblk on {}".format(_node))
                 raise ValueError
         #Get the drive size from each engine
         for buf, nodelist in task.iter_buffers():
@@ -192,7 +192,7 @@ class ServerFillUp(IorTestBase):
                 task = run_task([server], cmd)
                 for _rc_code, _node in task.iter_retcodes():
                     if _rc_code == 1:
-                        print(("Failed to readlink on {}".format(_node)))
+                        print("Failed to readlink on {}".format(_node))
                         raise ValueError
                 #Get the drive size from each engine
                 for buf, _node in task.iter_buffers():
@@ -312,7 +312,7 @@ class ServerFillUp(IorTestBase):
         else:
             replica_server = _replica[0]
 
-        print(('Replica Server = {}'.format(replica_server)))
+        print('Replica Server = {}'.format(replica_server))
         if self.scm_fill:
             free_space = self.pool.get_pool_daos_space()["s_total"][0]
             self.ior_cmd.transfer_size.value = self.ior_scm_xfersize
@@ -404,15 +404,17 @@ class ServerFillUp(IorTestBase):
             else:
                 total_nvme_capacity = open(capacity_file).readline().rstrip()
 
-            print(("Server NVMe Max Storage capacity = {}"
-                  .format(total_nvme_capacity)))
+            print(
+                "Server NVMe Max Storage capacity = {}".format(
+                    total_nvme_capacity))
             self.pool.nvme_size.update('{}'.format(total_nvme_capacity))
 
         #If SCM is True get the max SCM size from servers
         if scm:
             total_scm_capacity = self.get_scm_max_capacity()
-            print(("Server SCM Max Storage capacity = {}"
-                  .format(total_scm_capacity)))
+            print(
+                "Server SCM Max Storage capacity = {}".format(
+                    total_scm_capacity))
             self.pool.scm_size.update('{}'.format(total_scm_capacity))
 
         #Create the Pool

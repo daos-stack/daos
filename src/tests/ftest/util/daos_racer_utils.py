@@ -4,10 +4,10 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from .command_utils_base import \
+from command_utils_base import \
     CommandFailure, BasicParameter, FormattedParameter
-from .command_utils import ExecutableCommand
-from .general_utils import pcmd, get_log_file
+from command_utils import ExecutableCommand
+from general_utils import pcmd, get_log_file
 
 
 class DaosRacerCommand(ExecutableCommand):

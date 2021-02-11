@@ -6,7 +6,7 @@
 '''
 
 
-from .general_utils import get_random_string, DaosTestError
+from general_utils import get_random_string, DaosTestError
 from pydaos.raw import DaosApiError
 
 import time

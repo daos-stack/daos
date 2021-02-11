@@ -4,11 +4,11 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from .command_utils_base import CommandFailure
-from .daos_utils import DaosCommand
-from .ior_test_base import IorTestBase
-from .mdtest_test_base import MdtestBase
-from .data_mover_utils import Dcp
+from command_utils_base import CommandFailure
+from daos_utils import DaosCommand
+from ior_test_base import IorTestBase
+from mdtest_test_base import MdtestBase
+from data_mover_utils import Dcp
 from os.path import join
 import uuid
 

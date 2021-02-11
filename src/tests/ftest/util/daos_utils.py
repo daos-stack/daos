@@ -7,7 +7,7 @@
 import re
 import traceback
 
-from .daos_utils_base import DaosCommandBase
+from daos_utils_base import DaosCommandBase
 
 
 class DaosCommand(DaosCommandBase):

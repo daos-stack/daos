@@ -477,7 +477,7 @@ class LogIter():
                     self._fd.read(err.start - 200)
                     data = self._fd.read(199)
                     lines = data.splitlines()
-                    print((lines[-1]))
+                    print(lines[-1])
                     self.file_corrupt = True
 
                     # This will now work, as the file has been opened in

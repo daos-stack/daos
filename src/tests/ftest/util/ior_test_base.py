@@ -10,15 +10,15 @@ import time
 
 from ClusterShell.NodeSet import NodeSet
 
-from .dfuse_test_base import DfuseTestBase
-from .ior_utils import IorCommand
-from .command_utils_base import CommandFailure
-from .job_manager_utils import Mpirun
-from .general_utils import pcmd
-from .daos_utils import DaosCommand
-from .mpio_utils import MpioUtils
-from .test_utils_pool import TestPool
-from .test_utils_container import TestContainer
+from dfuse_test_base import DfuseTestBase
+from ior_utils import IorCommand
+from command_utils_base import CommandFailure
+from job_manager_utils import Mpirun
+from general_utils import pcmd
+from daos_utils import DaosCommand
+from mpio_utils import MpioUtils
+from test_utils_pool import TestPool
+from test_utils_container import TestContainer
 
 
 class IorTestBase(DfuseTestBase):
