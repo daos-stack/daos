@@ -26,6 +26,9 @@ public class DaosContainer extends Shareable implements Closeable {
   private static final Logger log = LoggerFactory.getLogger(DaosContainer.class);
 
   private DaosContainer(String contUuid) {
+    if (contUuid.length() != Constants.UUID_LENGTH) {
+      throw new IllegalArgumentException("container UUID length should be " + Constants.UUID_LENGTH);
+    }
     this.uuid = contUuid;
   }
 

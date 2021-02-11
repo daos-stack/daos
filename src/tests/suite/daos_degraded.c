@@ -269,7 +269,7 @@ run_daos_degraded_test(int rank, int size)
 	int rc = 0;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	rc = cmocka_run_group_tests_name("DAOS degraded-mode tests",
+	rc = cmocka_run_group_tests_name("DAOS_Degraded-mode",
 					 degraded_tests, degraded_setup,
 					 degraded_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);

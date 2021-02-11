@@ -54,7 +54,7 @@ static struct crt_proto_rpc_format mgmt_proto_rpc_fmt[] = {
 #undef X
 
 struct crt_proto_format mgmt_proto_fmt = {
-	.cpf_name  = "mgmt-proto",
+	.cpf_name  = "management",
 	.cpf_ver   = DAOS_MGMT_VERSION,
 	.cpf_count = ARRAY_SIZE(mgmt_proto_rpc_fmt),
 	.cpf_prf   = mgmt_proto_rpc_fmt,

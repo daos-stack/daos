@@ -618,6 +618,12 @@ int obj_ec_codec_init(void);
 void obj_ec_codec_fini(void);
 struct obj_ec_codec *obj_ec_codec_get(daos_oclass_id_t oc_id);
 
+static inline struct obj_ec_codec *
+obj_id2ec_codec(daos_obj_id_t id)
+{
+	return obj_ec_codec_get(daos_obj_id2class(id));
+}
+
 /* cli_ec.c */
 int obj_ec_req_reasb(daos_iod_t *iods, d_sg_list_t *sgls, daos_obj_id_t oid,
 		     struct daos_oclass_attr *oca,

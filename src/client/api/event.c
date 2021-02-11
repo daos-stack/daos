@@ -1091,7 +1091,7 @@ daos_event_fini(struct daos_event *ev)
 		if (rc < 0) {
 			D_ERROR("Failed to finalize child event "DF_RC"\n",
 				DP_RC(rc));
-			goto out;
+			goto out_unlocked;
 		}
 
 		if (eqx != NULL)
@@ -1137,6 +1137,7 @@ daos_event_fini(struct daos_event *ev)
 out:
 	if (eqx != NULL)
 		D_MUTEX_UNLOCK(&eqx->eqx_lock);
+out_unlocked:
 	if (eq != NULL)
 		daos_eq_putref(eqx);
 	return rc;

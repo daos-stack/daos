@@ -7,7 +7,7 @@ provider: ofi+sockets       # map to CRT_PHY_ADDR_STR=ofi+sockets
 socket_dir: /tmp/daos_sockets
 nr_hugepages: 4096
 control_log_mask: DEBUG
-control_log_file: /tmp/daos_control.log
+control_log_file: /tmp/daos_server.log
 
 ## Transport Credentials Specifying certificates to secure communications
 ##
@@ -24,16 +24,15 @@ control_log_file: /tmp/daos_control.log
 #  # Key portion of Server Certificate
 #  key: /etc/daos/certs/server.key
 
-# single server instance per config file for now
-servers:
+engines:
 -
-  targets: 8                # count of storage targets per each server
+  targets: 8                # count of storage targets per each engine
   first_core: 1             # offset of the first core for service xstreams
-  nr_xs_helpers: 0          # count of offload/helper xstreams per server
+  nr_xs_helpers: 0          # count of offload/helper xstreams per engine
   fabric_iface: eth0        # map to OFI_INTERFACE=eth0
   fabric_iface_port: 31316  # map to OFI_PORT=31316
   log_mask: ERR             # map to D_LOG_MASK=ERR
-  log_file: /tmp/server0.log # map to D_LOG_FILE=/tmp/server.log
+  log_file: /tmp/daos_engine.0.log # map to D_LOG_FILE=/tmp/daos_engine.0.log
 
   # Environment variable values should be supplied without encapsulating quotes.
   env_vars:                 # influence DAOS IO Server behavior by setting env variables
@@ -58,12 +57,12 @@ servers:
   # scm_size: 6
 
   # When scm_class is set to dcpm, scm_list is the list of device paths for
-  # PMem namespaces (currently only one per server supported).
+  # PMem namespaces (currently only one per engine supported).
   scm_class: dcpm
   scm_list: [/dev/pmem0]
 
   # If using NVMe SSD (will write /mnt/daos/daos_nvme.conf and start I/O
-  # server with -n <path>).
+  # engine with -n <path>).
   bdev_class: nvme
   bdev_list: ["0000:81:00.0"]  # generate regular nvme.conf
 
@@ -90,13 +89,13 @@ servers:
               # [AIO]
               #   AIO /tmp/aiofile AIO1 4096
 -
-  targets: 8                # count of storage targets per each server
+  targets: 8                # count of storage targets per each engine
   first_core: 25            # offset of the first core for service xstreams
-  nr_xs_helpers: 0          # count of offload/helper xstreams per server
+  nr_xs_helpers: 0          # count of offload/helper xstreams per engine
   fabric_iface: eth1        # map to OFI_INTERFACE=eth1
-  fabric_iface_port: 31416  # OFI_PORT same as server0, different iface
+  fabric_iface_port: 31416  # OFI_PORT same as engine 0, different iface
   log_mask: ERR             # map to D_LOG_MASK=ERR
-  log_file: /tmp/server1.log # map to D_LOG_FILE=/tmp/server1.log
+  log_file: /tmp/daos_engine.1.log # map to D_LOG_FILE=/tmp/daos_engine.1.log
 
   env_vars:                 # influence DAOS IO Server behavior by setting env variables
   - DAOS_MD_CAP=1024

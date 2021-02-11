@@ -189,7 +189,35 @@ enum {
 struct dts_io_credit *
 dts_credit_take(struct dts_context *tsc)
 {
-	return &tsc->tsc_cred_buf[0];
+	int	i;
+
+	for (i = 0; i < tsc->tsc_cred_nr; i++) {
+		if (tsc->tsc_credits[i] == NULL) {
+			D_ASSERT(tsc->tsc_cred_avail > 0);
+			tsc->tsc_cred_avail--;
+			tsc->tsc_credits[i] = &tsc->tsc_cred_buf[i];
+			return tsc->tsc_credits[i];
+		}
+	}
+	D_ASSERT(tsc->tsc_cred_avail == 0);
+	return NULL;
+}
+
+void
+dts_credit_return(struct dts_context *tsc, struct dts_io_credit *cred)
+{
+	int	i;
+
+	D_ASSERT(tsc->tsc_cred_avail < tsc->tsc_cred_nr);
+
+	for (i = 0; i < tsc->tsc_cred_nr; i++) {
+		if (tsc->tsc_credits[i] == cred) {
+			tsc->tsc_credits[i] = NULL;
+			tsc->tsc_cred_avail++;
+			return;
+		}
+	}
+	D_ASSERT(0);
 }
 
 static int
@@ -198,8 +226,7 @@ credits_init(struct dts_context *tsc)
 	int	i;
 
 	tsc->tsc_eqh		= DAOS_HDL_INVAL;
-	tsc->tsc_cred_nr	= 1;  /* take one slot in the buffer */
-	tsc->tsc_cred_avail	= -1; /* always available */
+	tsc->tsc_cred_avail	= tsc->tsc_cred_nr;
 
 	for (i = 0; i < tsc->tsc_cred_nr; i++) {
 		struct dts_io_credit *cred = &tsc->tsc_cred_buf[i];
@@ -211,7 +238,6 @@ credits_init(struct dts_context *tsc)
 				tsc->tsc_cred_vsize);
 			return -1;
 		}
-		tsc->tsc_credits[i] = cred;
 	}
 	return 0;
 }
@@ -312,7 +338,7 @@ dts_ctx_init(struct dts_context *tsc)
 		goto out;
 	tsc->tsc_init = DTS_INIT_DEBUG;
 
-	rc = vos_init();
+	rc = vos_self_init("/mnt/daos");
 	if (rc)
 		goto out;
 	tsc->tsc_init = DTS_INIT_MODULE;
@@ -356,7 +382,7 @@ dts_ctx_fini(struct dts_context *tsc)
 		pool_fini(tsc);
 		/* fall through */
 	case DTS_INIT_MODULE:	/* finalize module */
-		vos_fini();
+		vos_self_fini();
 		/* fall through */
 	case DTS_INIT_DEBUG:	/* finalize debug system */
 		daos_debug_fini();

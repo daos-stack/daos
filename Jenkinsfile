@@ -4,7 +4,7 @@
  *
  * This file is part of the DAOS Project. It is subject to the license terms
  * in the LICENSE file found in the top-level directory of this distribution
- * and at https://img.shields.io/badge/License-Apache%202.0-blue.svg.
+ * and at https://img.shields.io/badge/License-BSD--2--Clause--Patent-blue.svg.
  * No part of the DAOS Project, including this file, may be copied, modified,
  * propagated, or distributed except according to the terms contained in the
  * LICENSE file.
@@ -151,7 +151,7 @@ String unit_packages() {
                            'libpmemobj protobuf-c ' +
                            'spdk-devel libfabric-devel ' +
                            'pmix numactl-devel ' +
-                           'libipmctl-devel ' +
+                           'libipmctl-devel python36-pyxattr ' +
                            'python36-tabulate numactl ' +
                            'libyaml-devel ' +
                            'valgrind-devel patchelf'
@@ -559,7 +559,7 @@ pipeline {
                                                   "src/include/daos/*.pb-c.h:" +
                                                   "src/common/*.pb-c.[ch]:" +
                                                   "src/mgmt/*.pb-c.[ch]:" +
-                                                  "src/iosrv/*.pb-c.[ch]:" +
+                                                  "src/engine/*.pb-c.[ch]:" +
                                                   "src/security/*.pb-c.[ch]:" +
                                                   "src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:" +
                                                   "src/client/java/daos-java/src/main/java/io/daos/obj/attr/*:" +
@@ -1213,10 +1213,21 @@ pipeline {
                                          always_script: 'ci/unit/test_nlt_post.sh',
                                          valgrind_stash: 'centos7-gcc-nlt-memcheck'
                             recordIssues enabledForFailure: true,
-                                  name: "daos_test logging",
-                                  tool: issues(pattern: 'vm_test/daos_test-errors.json',
-                                                name: 'daos_test results',
-                                                id: 'NLT_daos_test')
+                                         failOnError: false,
+                                         ignoreFailedBuilds: false,
+                                         ignoreQualityGate: true,
+                                         name: "NLT server leaks",
+                                         tool: issues(pattern: 'nlt-server-leaks.json',
+                                           name: 'NLT server results',
+                                           id: 'NLT_server')
+                            recordIssues enabledForFailure: true,
+                                         failOnError: false,
+                                         ignoreFailedBuilds: false,
+                                         ignoreQualityGate: true,
+                                         name: "NLT client leaks",
+                                         tool: issues(pattern: 'nlt-client-leaks.json',
+                                           name: 'NLT client results',
+                                           id: 'NLT_client')
                         }
                     }
                 }
@@ -1316,11 +1327,12 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daos_repos(),
-                                       inst_rpms: functional_packages()
+                                       inst_rpms: functional_packages(),
+                                       test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
-                            functionalTestPost()
+                            functionalTestPostV2()
                         }
                     }
                 } // stage('Functional on CentOS 7')
@@ -1334,11 +1346,12 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daos_repos(),
-                                       inst_rpms: functional_packages()
+                                       inst_rpms: functional_packages(),
+                                       test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
-                            functionalTestPost()
+                            functionalTestPostV2()
                         }
                     } // post
                 } // stage('Functional on Leap 15')
@@ -1352,11 +1365,12 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daos_repos(),
-                                       inst_rpms: functional_packages()
+                                       inst_rpms: functional_packages(),
+                                       test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
-                            functionalTestPost()
+                            functionalTestPostV2()
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
@@ -1372,11 +1386,12 @@ pipeline {
                     steps {
                         functionalTest target: hw_distro_target(),
                                        inst_repos: daos_repos(),
-                                       inst_rpms: functional_packages()
+                                       inst_rpms: functional_packages(),
+                                       test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
-                            functionalTestPost()
+                            functionalTestPostV2()
                         }
                     }
                 } // stage('Functional_Hardware_Small')
@@ -1392,11 +1407,12 @@ pipeline {
                     steps {
                         functionalTest target: hw_distro_target(),
                                        inst_repos: daos_repos(),
-                                       inst_rpms: functional_packages()
+                                       inst_rpms: functional_packages(),
+                                       test_function: 'runTestFunctionalV2'
                    }
                     post {
                         always {
-                            functionalTestPost()
+                            functionalTestPostV2()
                         }
                     }
                 } // stage('Functional_Hardware_Medium')
@@ -1412,11 +1428,12 @@ pipeline {
                     steps {
                         functionalTest target: hw_distro_target(),
                                        inst_repos: daos_repos(),
-                                       inst_rpms: functional_packages()
+                                       inst_rpms: functional_packages(),
+                                       test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
-                            functionalTestPost()
+                            functionalTestPostV2()
                         }
                     }
                 } // stage('Functional_Hardware_Large')

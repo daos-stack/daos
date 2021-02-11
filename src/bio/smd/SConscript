@@ -6,10 +6,11 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
 
     denv = env.Clone()
+    denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
+    prereqs.require(denv, 'argobots', 'protobufc')
 
-    prereqs.require(denv, 'argobots')
-
-    denv.Library('smd', Glob('*.c'), LIBS=['daos_common', 'gurt', 'pmemobj'])
+    denv.Library('smd', Glob('*.c'),
+                 LIBS=[])
 
     SConscript('tests/SConscript', exports='denv')
 

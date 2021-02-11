@@ -921,5 +921,5 @@ main(void)
 		cmocka_unit_test(test_acl_is_valid_for_cont_good_perms),
 	};
 
-	return cmocka_run_group_tests(tests, NULL, NULL);
+	return cmocka_run_group_tests_name("acl_valid", tests, NULL, NULL);
 }
