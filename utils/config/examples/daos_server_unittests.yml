@@ -6,7 +6,7 @@ access_points: ['example']  # management service leader (bootstrap)
 provider: ofi+sockets       # map to CRT_PHY_ADDR_STR=ofi+sockets
 socket_dir: /tmp/daos_sockets
 control_log_mask: DEBUG
-control_log_file: /tmp/daos_server.log
+control_log_file: /tmp/daos_control.log
 
 ## Transport Credentials Specifying certificates to secure communications
 ##
@@ -30,7 +30,7 @@ engines:
   nr_xs_helpers: 0          # count of offload/helper xstreams per engine
   fabric_iface: lo          # map to OFI_INTERFACE=lo
   log_mask: DEBUG,RPC=ERR,MEM=ERR
-  log_file: /tmp/daos_engine.0.log # map to D_LOG_FILE=/tmp/daos_engine.0.log
+  log_file: /tmp/server0.log # map to D_LOG_FILE=/tmp/server0.log
 
   # Environment variable values should be supplied without encapsulating quotes.
   env_vars:                 # influence DAOS IO Server behavior by setting env variables
