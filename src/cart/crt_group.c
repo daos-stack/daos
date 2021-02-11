@@ -3289,7 +3289,7 @@ crt_group_auto_rank_remove(crt_group_t *grp, bool enable)
 	if (!grp_priv->gp_primary)
 		D_GOTO(out, 0);
 
-	grp_priv->gp_auto_remove = (enable) ? 1:0;
+	grp_priv->gp_auto_remove = (enable) ? 1 : 0;
 
 out:
 	return rc;
