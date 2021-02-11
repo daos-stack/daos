@@ -9,13 +9,8 @@ import threading
 from osa_utils import OSAUtils
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
+import queue as queue
 
-try:
-    # python 3.x
-    import queue as queue
-except ImportError:
-    # python 2.7
-    import queue as queue
 
 class OSAOfflineReintegration(OSAUtils):
     # pylint: disable=too-many-ancestors

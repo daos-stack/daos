@@ -138,7 +138,8 @@ class ZeroConfigTest(TestWithServers):
             self.hostlist_clients, hfi_map[exp_iface], "port_rcv_data")
 
         diff = 0
-        for cnt_b, cnt_a in zip(list(cnt_before.values()), list(cnt_after.values())):
+        for cnt_b, cnt_a in zip(
+                list(cnt_before.values()), list(cnt_after.values())):
             diff = int(cnt_a) - int(cnt_b)
             self.log.info("Port [%s] count difference: %s", exp_iface, diff)
 

@@ -17,13 +17,7 @@ from job_manager_utils import Mpirun
 from write_host_file import write_host_file
 from command_utils import CommandFailure
 from mpio_utils import MpioUtils
-
-try:
-    # python 3.x
-    import queue as queue
-except ImportError:
-    # python 2.7
-    import queue as queue
+import queue as queue
 
 
 class NvmePoolExtend(TestWithServers):

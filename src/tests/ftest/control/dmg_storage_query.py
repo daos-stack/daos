@@ -57,7 +57,8 @@ class DmgStorageQuery(ControlTestBase):
 
         # Check if the number of devices match the config
         msg = "Number of devs do not match cfg: {}".format(len(self.bdev_list))
-        self.assertEqual(len(self.bdev_list), len(list(devs_info.values())[0]), msg)
+        self.assertEqual(
+            len(self.bdev_list), len(list(devs_info.values())[0]), msg)
 
         # Check that number of targets match the config
         targets = 0

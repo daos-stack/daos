@@ -12,8 +12,8 @@ import grp
 import re
 from apricot import TestWithServers
 from daos_utils import DaosCommand
-from  import agent_utils as agu
-from  import security_test_base as secTestBase
+import agent_utils as agu
+import security_test_base as secTestBase
 
 PERMISSIONS = ["", "r", "w", "rw"]
 DENY_ACCESS = "-1001"

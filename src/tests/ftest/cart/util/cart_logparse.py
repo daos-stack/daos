@@ -423,7 +423,7 @@ class StateIter():
 
         return line
 
-    def __next__(self):
+    def next(self):
         """Python2/3 compat function"""
         return self.__next__()
 
@@ -661,7 +661,7 @@ class LogIter():
             self._iter_count += 1
             return line
 
-    def __next__(self):
+    def next(self):
         """Python2/3 compat function"""
         return self.__next__()
 

@@ -14,9 +14,9 @@ from avocado import fail_on
 from avocado.core.exceptions import TestFail
 from daos_utils import DaosCommand
 from command_utils import CommandFailure
-from  import general_utils
+import general_utils
 from general_utils import DaosTestError
-from  import security_test_base as secTestBase
+import security_test_base as secTestBase
 from test_utils_container import TestContainer
 
 

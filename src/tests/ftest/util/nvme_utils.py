@@ -15,13 +15,7 @@ from avocado.core.exceptions import TestFail
 from ior_test_base import IorTestBase
 from test_utils_pool import TestPool
 from ior_utils import IorCommand
-
-try:
-    # python 3.x
-    import queue
-except ImportError:
-    # python 2.7
-    import queue as queue
+import queue as queue
 
 def get_device_ids(dmg, servers):
     """Get the NVMe Device ID from servers

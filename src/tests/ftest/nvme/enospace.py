@@ -16,13 +16,8 @@ from job_manager_utils import Mpirun
 from ior_utils import IorCommand, IorMetrics
 from command_utils_base import CommandFailure
 from general_utils import error_count
+import queue
 
-try:
-    # python 3.x
-    import queue
-except ImportError:
-    # python 2.7
-    import queue as queue
 
 class NvmeEnospace(ServerFillUp):
     # pylint: disable=too-many-ancestors

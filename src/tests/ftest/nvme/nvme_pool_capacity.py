@@ -18,13 +18,7 @@ from ior_utils import IorCommand
 from job_manager_utils import Mpirun
 from command_utils_base import CommandFailure
 from mpio_utils import MpioUtils
-
-try:
-    # python 3.x
-    import queue as queue
-except ImportError:
-    # python 2.7
-    import queue as queue
+import queue as queue
 
 
 class NvmePoolCapacity(TestWithServers):

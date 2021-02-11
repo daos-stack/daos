@@ -19,13 +19,7 @@ from daos_utils import DaosCommand
 from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun
 from mpio_utils import MpioUtils
-
-try:
-    # python 3.x
-    import queue
-except ImportError:
-    # python 2.7
-    import queue as queue
+import queue
 
 
 class NvmeFragmentation(TestWithServers):

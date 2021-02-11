@@ -12,13 +12,8 @@ from osa_utils import OSAUtils
 from test_utils_pool import TestPool
 from command_utils import CommandFailure
 from apricot import skipForTicket
+import queue as queue
 
-try:
-    # python 3.x
-    import queue as queue
-except ImportError:
-    # python 2.7
-    import queue as queue
 
 class OSAOfflineParallelTest(OSAUtils):
     # pylint: disable=too-many-ancestors

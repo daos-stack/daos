@@ -16,13 +16,7 @@ from command_utils import CommandFailure
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
 from apricot import skipForTicket
-
-try:
-    # python 3.x
-    import queue as queue
-except ImportError:
-    # python 2.7
-    import queue as queue
+import queue as queue
 
 
 class OSAOnlineParallelTest(OSAUtils):
