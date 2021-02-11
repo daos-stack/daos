@@ -775,7 +775,7 @@ def get_remote_file_size(host, file_name):
     return int(result.stdout)
 
 
-def error_count(error, hostlist, log_file):
+def error_count(error, hostlist, log_file, pattern="ERR"):
     """Count the number of specific ERRORs found in the log file.
 
     This function also returns a count of the other ERRORs from same log file.
@@ -784,6 +784,7 @@ def error_count(error, hostlist, log_file):
         error (str): DAOS error to look for in .log file. for example -1007
         hostlist (list): System list to looks for an error.
         log_file (str): Log file name (server/client log).
+        pattern (str): Pattern to look for in each line. Defaults to ERR
 
     Returns:
         tuple: a tuple of the count of errors matching the specified error type
@@ -794,13 +795,16 @@ def error_count(error, hostlist, log_file):
     output = []
     requested_error_count = 0
     other_error_count = 0
-    cmd = 'cat {} | grep ERR'.format(get_log_file(log_file))
+    cmd = "cat {} | grep '{}'".format(get_log_file(log_file), pattern)
     task = run_task(hostlist, cmd)
     for buf, _nodes in task.iter_buffers():
         output = str(buf).split('\n')
 
     for line in output:
-        if 'ERR' in line:
+        if pattern is not "ERR":
+             if re.findall(error, line):
+                 requested_error_count += 1
+        elif pattern in line:
             if error in line:
                 requested_error_count += 1
             else:

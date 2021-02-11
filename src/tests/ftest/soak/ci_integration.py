@@ -30,7 +30,7 @@ from daos_utils import DaosCommand
 from ClusterShell.NodeSet import NodeSet
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
-from general_utils import run_task
+from general_utils import run_task, error_count
 
 class JavaCIIntegration(TestWithServers):
     """Test class Description:
@@ -82,11 +82,16 @@ class JavaCIIntegration(TestWithServers):
 
         """
         # look for java home
-        command = str("cd {}/daos-java; chmod 755 find_java_home.sh; ./find_java_home.sh".format(self.jdir))
-        task = run_task(hosts=self.hostlist_clients, command=command)
-        for output, _ in task.iter_buffers():
-            result = str(output)
-            self.log.info(result)
+        commands = [u"chmod 755 {}/daos-java/find_java_home.sh".format(self.jdir),
+                    u"source {}/daos-java/find_java_home.sh".format(self.jdir)]
+        for cmd in commands:
+            task = run_task(hosts=self.hostlist_clients, command=cmd)
+            for _rc_code, _node in task.iter_retcodes():
+                if _rc_code == 1:
+                    self.fail("Failed to run cmd {} on {}".format(cmd, _node))
+            for output, _ in task.iter_buffers():
+                result = str(output)
+                self.log.info(result)
         return str(result)
 
         # checking java install
@@ -99,6 +104,7 @@ class JavaCIIntegration(TestWithServers):
         # replacing '_' and '-' with '.' and returning the result
 #        return re.search(pattern,
 #                         result).groups()[0].replace("_", ".").replace("-", ".")
+
 
     def test_java_hadoop_it(self):
         """Jira ID: DAOS-4093
@@ -123,6 +129,8 @@ class JavaCIIntegration(TestWithServers):
         # obtain java version
         version = self.java_version()
 
+        # output file
+        output_file = "{}/maven_integration_test_output.log".format(self.log_dir)
         # generate jar files
 #        jdir = "{}/lib64/java".format(self.prefix)
 #        cmd = "cd {};".format(jdir)
@@ -142,10 +150,17 @@ class JavaCIIntegration(TestWithServers):
         cmd += " mvn -X clean integration-test -Ddaos.install.path={}".\
                 format(self.prefix)
         cmd += " -Dpool_id={}  -Dcont_id={} ".format(pool_uuid, cont_uuid)
-        cmd += " >> {}/maven_integration_test_output.log".format(self.log_dir)
+        cmd += " >> {}".format(output_file)
         print("***{}".format(cmd))
         self.execute_cmd(cmd, 300)
+        # look for errors
+        found_errors = error_count("Errors: [1-9]+", self.hostlist_clients,
+                                   output_file, 'Errors: [0-9]')
+        self.log.info("Matched error lines: %s", found_errors[0])
 
+        if found_errors[0] > 0:
+            self.fail("Java Integration test failed. Check"
+                      " maven_integration_test_output.log for more details.")
     def execute_cmd(self, cmd, timeout):
         """Execute command on the host clients
            Args:
