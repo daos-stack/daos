@@ -38,7 +38,8 @@ class ChecksumContainerValidation(TestWithServers):
         :avocado: tags=basic_checksum_object
         """
 
-        self.records = self.params.get("records_qty", "/run/container/records/*", None)
+        self.records = self.params.get("records_qty",
+                                       "/run/container/records/*", None)
         self.log.info("Writing the Single Dataset")
         self.pool.get_info()
         if isinstance(self.records, list):
