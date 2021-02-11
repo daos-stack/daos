@@ -215,6 +215,9 @@ char
 	switch (opc) {
 		CRT_INTERNAL_RPCS_LIST
 		CRT_FI_RPCS_LIST
+		CRT_IV_RPCS_LIST
+		CRT_ST_RPCS_LIST
+		CRT_CTL_RPCS_LIST
 	}
 	return "DAOS";
 }
