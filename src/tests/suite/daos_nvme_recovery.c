@@ -684,7 +684,7 @@ run_daos_nvme_recov_test(int rank, int size, int *sub_tests,
 		sub_tests = NULL;
 	}
 
-	rc = run_daos_sub_tests("DAOS nvme recov tests", nvme_recov_tests,
+	rc = run_daos_sub_tests("DAOS_Nvme_Recov", nvme_recov_tests,
 				ARRAY_SIZE(nvme_recov_tests), sub_tests,
 				sub_tests_size, nvme_recov_test_setup,
 				test_teardown);

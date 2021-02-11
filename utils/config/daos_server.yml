@@ -71,7 +71,7 @@
 #
 ## Use specific OFI provider
 #
-## Force a specific provider to be used by all the servers.
+## Force a specific provider to be used by all the engines.
 ## The default provider depends on the interfaces that will be auto-detected:
 ## ofi+psm2 for Omni-Path, ofi+verbs;ofi_rxm for Infiniband/RoCE and finally
 ## ofi+socket for non-RDMA-capable Ethernet.
@@ -150,7 +150,7 @@
 #
 ## Specifies the number (not size) of hugepages to allocate for use by NVMe
 ## through SPDK. This indicates the number to be used for each spawned
-## I/O server, so the total will be this number * number of I/O servers.
+## I/O engines, so the total will be this number * number of I/O engines.
 ## Default system hugepage size will be used.
 #
 ## default: 4096
@@ -186,10 +186,10 @@
 #
 ## When per-server definitions exist, auto-allocation of resources is not
 ## performed. Without per-server definitions, node resources will
-## automatically be assigned to servers based on NUMA ratings, there will
-## be a one-to-one relationship between servers and sockets.
+## automatically be assigned to engines based on NUMA ratings, there will
+## be a one-to-one relationship between engines and sockets.
 #
-#servers:
+#engines:
 #-
 #  # Rank to be assigned as identifier for server.
 #  # Immutable after reformat.

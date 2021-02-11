@@ -19,6 +19,7 @@ import subprocess
 import logging
 import cart_logparse
 import cart_logtest
+import socket
 
 from general_utils import stop_processes
 
@@ -63,7 +64,28 @@ class CartUtils():
     @staticmethod
     def cleanup_processes():
         """ Clean up cart processes, in case avocado/apricot does not. """
-        stop_processes(["localhost"], "'(crt_launch|orterun)'")
+        error_list = []
+        localhost = socket.gethostname().split(".")[0:1]
+        processes = r"'\<(crt_launch|orterun)\>'"
+        retry_count = 0
+        while retry_count < 2:
+            result = stop_processes(localhost,
+                                    processes,
+                                    added_filter=r"'\<(grep|defunct)\>'")
+            if 1 in result:
+                print(
+                    "Stopped '{}' processes on {}".format(
+                        processes, str(result[1])))
+                retry_count += 1
+            elif 0 in result:
+                print("All '{}' processes have been stopped".format(processes))
+                retry_count = 99
+            else:
+                error_list.append("Error detecting/stopping cart processes")
+                retry_count = 99
+        if retry_count == 2:
+            error_list.append("Unable to stop cart processes!")
+        return error_list
 
     @staticmethod
     def stop_process(proc):

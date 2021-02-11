@@ -5,7 +5,7 @@ set -uex
 # servers can sometimes take a while to stop when the test is done
 x=0
 while [ "$x" -lt 10 ] &&
-  pgrep '(orterun|daos_server|daos_io_server)'; do
+  pgrep '(orterun|daos_server|daos_engine)'; do
   sleep 1
   (( x=x+1 ))
 done
