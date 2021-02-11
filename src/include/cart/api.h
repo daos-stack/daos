@@ -1986,6 +1986,19 @@ int crt_group_secondary_create(crt_group_id_t grp_name,
 			crt_group_t **ret_grp);
 
 /**
+ * Enable auto-rank removal on secondary group. Only applicable for primary
+ * groups.
+ *
+ * \param[in] grp               Group handle
+ *
+ * \param[in] enable		Flag to enable or disable the option
+ *
+ * \return                       DER_SUCCESS on success, negative value on
+ *                               failure.
+ */
+int crt_group_auto_rank_remove(crt_group_t *grp, bool enable);
+
+/**
  * Destroy a secondary group.
  *
  * \param[in] grp                Group handle.

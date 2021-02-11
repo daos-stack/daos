@@ -2686,7 +2686,8 @@ crt_group_rank_remove(crt_group_t *group, d_rank_t rank)
 
 	/* Go through associated secondary groups and remove rank from them */
 	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
-	crt_grp_remove_from_secondaries(grp_priv, rank);
+	if (grp_priv->gp_auto_remove)
+		crt_grp_remove_from_secondaries(grp_priv, rank);
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
 out:
@@ -3272,6 +3273,28 @@ cleanup:
 	return rc;
 }
 
+int
+crt_group_auto_rank_remove(crt_group_t *grp, bool enable)
+{
+	struct crt_grp_priv	*grp_priv;
+	int			rc = 0;
+
+	grp_priv = crt_grp_pub2priv(grp);
+	if (grp_priv == NULL) {
+		D_ERROR("Failed to get grp_priv\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	/* Noop for secondary groups */
+	if (!grp_priv->gp_primary)
+		D_GOTO(out, 0);
+
+	grp_priv->gp_auto_remove = (enable) ? 1:0;
+
+out:
+	return rc;
+}
+
 /*
  * 'uris' is an array of uris; expected to be of size ranks->rl_nr * num_ctxs
  * In the case of single provider num_ctxs=1,
@@ -3365,6 +3388,11 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs,
 	for (i = 0; i < to_remove->rl_nr; i++) {
 		rank = to_remove->rl_ranks[i];
 		crt_group_rank_remove_internal(grp_priv, rank);
+
+		if (grp_priv->gp_auto_remove) {
+			/* Remove rank from associated secondary groups */
+			crt_grp_remove_from_secondaries(grp_priv, rank);
+		}
 
 		/* Remove rank from swim tracking */
 		crt_swim_rank_del(grp_priv, rank);
