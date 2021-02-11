@@ -349,7 +349,7 @@ int ConfigGetKeyCount(const Config *cfg, const char *section)
  * \return	      Number of pointers in array..
  */
 int ConfigGetKeys(const Config *cfg, const char *section,
-		  char **array, int max_size)
+		  char **array, int max_size, int begin_index)
 {
 	ConfigSection  *sect = NULL;
 	ConfigKeyValue *kv   = NULL;
@@ -365,14 +365,16 @@ int ConfigGetKeys(const Config *cfg, const char *section,
 		     strcmp(sect->name, section) == 0)) {
 			/* Section found, assign address */
 			TAILQ_FOREACH(kv, &sect->kv_list, next) {
-				array[number] = kv->key;
+				if (number >= begin_index) {
+					array[number - begin_index] = kv->key;
+				}
 				number++;
-				if (number == max_size)
-					return number;
+				if ((number - begin_index) == max_size)
+					return number - begin_index;
 			}
 		}
 	}
-	return number;
+	return number - begin_index;
 }
 
 /*

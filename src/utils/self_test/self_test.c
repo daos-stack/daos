@@ -11,6 +11,7 @@
 #include <getopt.h>
 #include <string.h>
 #include <math.h>
+#include <ctype.h>
 
 #include "tests_common.h"
 #include "configini.h"
@@ -153,24 +154,28 @@ static struct option long_options[] = {
 	{"max-inflight-rpcs", required_argument, 0, 'i'},
 	{"align", required_argument, 0, 'a'},
 	{"Mbits", no_argument, 0, 'b'},
-	{"singleton", no_argument, 0, 't'},
 	{"randomize-endpoints", no_argument, 0, 'q'},
 	{"path", required_argument, 0, 'p'},
-	{"nopmix", no_argument, 0, 'n'},
 	{"help", no_argument, 0, 'h'},
 	{"raw_data", required_argument, 0, 'v'},
 	{"expected-threshold", required_argument, 0, 'w'},
 	{"expected-results", required_argument, 0, 'x'},
 	{"expected-input", required_argument, 0, 'y'},
 	{"expected-output", required_argument, 0, 'z'},
+#define INCLUDE_OBSOLETE
+#ifdef INCLUDE_OBSOLETE
+	{"nopmix", no_argument, 0, 'n'},
+	{"singleton", no_argument, 0, 't'},
+#endif
 	{0, 0, 0, 0}
 };
 
+#ifdef INCLUDE_OBSOLETE
 #define ARGV_PARAMETERS "a:bc:d:e:f:g:hi:m:no:p:qr:s:tv:w:x:y:z:"
-
-#ifdef ORIG
-#define ARGV_PARAMETERS "hf:c:d:g:m:e:s:r:i:a:btnqp:v:w:x:y:z:"
+#else
+#define ARGV_PARAMETERS "a:bc:d:e:f:g:hi:m:o:p:qr:s:v:w:x:y:z:"
 #endif
+
 
 /* Default parameters */
 char	default_msg_sizes_str[] =
@@ -437,6 +442,74 @@ static void print_fail_counts(struct st_latency *latencies,
 	}
 }
 
+/*Returns the number of valid points */
+static int calculate_stats(struct st_latency *latencies, int count,
+			    int64_t *av, double *sd, int64_t *min,
+			    int64_t *max, int64_t *med25, int64_t *med50,
+			    int64_t *med75, int64_t *total)
+{
+	uint32_t	i;
+	uint32_t	num_failed = 0;
+	uint32_t	num_passed = 0;
+	double		latency_std_dev = 0;
+	int64_t		latency_avg = 0;
+	int64_t		value;
+	int64_t		lmin = 0;
+	int64_t		lmax = 0;
+	int		idx;
+
+	/* Find initial value for max and min */
+	for (i = 0; i < count; i++) {
+		if (latencies[i].cci_rc == 0) {
+			lmax = latencies[i].val;
+			lmin = latencies[i].val;
+			break;
+		}
+	}
+
+	/* Sum total for average.  Find max/min */
+	for (i = 0; i < count; i++) {
+		if (latencies[i].cci_rc < 0) {
+			num_failed++;
+			continue;
+		}
+		num_passed += 1;
+		value = latencies[i].val;
+		latency_avg += value;
+		lmin = ((lmin < value) ? lmin : value);
+		lmax = ((lmax > value) ? lmax : value);
+	}
+	*total = latency_avg;
+	latency_avg /= num_passed;
+	*av = latency_avg;
+	*min = lmin;
+	*max = lmax;
+
+	/* Find sum square from average (variance) and standard deviation */
+	for (i = 0; i < count; i++) {
+		if (latencies[i].cci_rc < 0) {
+			/* avoid checkpatch warning */
+			continue;
+		}
+		value = latencies[i].val - latency_avg;
+		latency_std_dev += value * value;
+	}
+	latency_std_dev /= num_passed;
+	latency_std_dev =  sqrt(latency_std_dev);
+	*sd = latency_std_dev;
+
+	/* Find medium values.  Works for sorted input only. */
+	idx = (count - num_failed - 1) / 4;
+	*med25 = latencies[idx].val;
+	idx = (count - num_failed - 1) / 2;
+	*med50 = latencies[idx].val;
+	idx = ((count - num_failed - 1) * 3) / 4;
+	*med75 = latencies[idx].val;
+
+	/* return number of points evaluated */
+	return num_passed;
+}
+
 static void print_results(struct st_latency *latencies,
 			  struct crt_st_start_params *test_params,
 			  int64_t test_duration_ns, int output_megabits,
@@ -444,13 +517,21 @@ static void print_results(struct st_latency *latencies,
 			  char *section_name_raw)
 {
 	ConfigRet	 ret;
+	Config		*Ocfg = cfg_output;
 	uint32_t	 local_rep;
 	uint32_t	 num_failed = 0;
 	uint32_t	 num_passed = 0;
 	double		 latency_std_dev;
 	int64_t		 latency_avg;
+	int64_t		 latency_min;
+	int64_t		 latency_max;
+	int64_t		 latency_med25;
+	int64_t		 latency_med50;
+	int64_t		 latency_med75;
+	int64_t		 latency_total;
 	double		 throughput;
 	double		 bandwidth;
+	char		 kname[2 * MASTER_VALUE_SIZE];
 	char		 new_key_name[2 * MASTER_VALUE_SIZE];
 	char		 master[MASTER_VALUE_SIZE];
 
@@ -478,15 +559,27 @@ static void print_results(struct st_latency *latencies,
 	else
 		printf("\tRPC Bandwidth (MB/sec): %.2f\n",
 		       bandwidth / (1024.0F * 1024.0F));
-	printf("\tRPC Throughput (RPCs/sec): %.0f\n", throughput);
-	ConfigAddInt(cfg, section_name, "bw", bandwidth / (1024.0F * 1024.0F));
-	ConfigAddInt(cfg, section_name, "tp", throughput);
 
+	printf("\tRPC Throughput (RPCs/sec): %.0f\n", throughput);
+
+	snprintf(new_key_name, sizeof(new_key_name), "%s-*:*-bw", master);
+	ConfigAddInt(Ocfg, section_name, new_key_name,
+		     bandwidth / (1024.0F * 1024.0F));
+	snprintf(new_key_name, sizeof(new_key_name), "%s-*:*-tp", master);
+	ConfigAddInt(Ocfg, section_name, new_key_name, throughput);
+
+#undef PRINT_ALL
+#ifdef PRINT_ALL
+	printf(" Grp: %s, rep %d, sendS %d, replyS %d\n",
+		test_params->srv_grp, test_params->rep_count,
+		test_params->send_size, test_params->reply_size);
+#endif
 	/* Figure out how many repetitions were errors */
 	num_failed = 0;
 	for (local_rep = 0; local_rep < test_params->rep_count; local_rep++) {
 #ifdef PRINT_ALL
-		printf(" iteration %3d: latenct %10ld\n",
+		printf("    rank:tag %d:%d  iteration %3d: latenct %10ld\n",
+		       latencies[local_rep].rank, latencies[local_rep].tag,
 		       local_rep, latencies[local_rep].val);
 #endif
 		/* Place raw data into output configuration */
@@ -494,8 +587,11 @@ static void print_results(struct st_latency *latencies,
 		    (local_rep <= g_raw_data) &&
 		    (latencies[local_rep].cci_rc >= 0)) {
 			snprintf(new_key_name, sizeof(new_key_name),
-				 "%s:%05d", master, local_rep);
-			ret = ConfigAddInt(cfg_output, section_name_raw,
+				 "%s-%d:%d-:%05d", master,
+				 latencies[local_rep].rank,
+				 latencies[local_rep].tag,
+				 local_rep);
+			ret = ConfigAddInt(Ocfg, section_name_raw,
 					   new_key_name,
 					   latencies[local_rep].val);
 			if (ret != CONFIG_OK) {
@@ -539,25 +635,14 @@ static void print_results(struct st_latency *latencies,
 	qsort(latencies, test_params->rep_count,
 	      sizeof(latencies[0]), st_compare_latencies_by_vals);
 
-	/* Compute average and standard deviation of all results */
-	latency_avg = 0;
-	for (local_rep = num_failed; local_rep < test_params->rep_count;
-	     local_rep++){
-		latency_avg += latencies[local_rep].val;
-	}
-	latency_avg /= num_passed;
-
-	latency_std_dev = 0;
-	for (local_rep = num_failed; local_rep < test_params->rep_count;
-	     local_rep++)
-		latency_std_dev +=
-			pow(latencies[local_rep].val - latency_avg,
-			    2);
-	latency_std_dev /= num_passed;
-	latency_std_dev = sqrt(latency_std_dev);
+	calculate_stats(latencies, test_params->rep_count,
+			&latency_avg, &latency_std_dev,
+			&latency_min, &latency_max,
+			&latency_med25, &latency_med50, &latency_med75,
+			&latency_total);
 
 	/* Print latency summary results */
-	printf("\tRPC Latencies (us):\n"
+	printf("\tRPC Latencies from master to all endpoints (us):\n"
 	       "\t\tMin    : %6ld\n"
 	       "\t\t25th  %%: %6ld\n"
 	       "\t\tMedian : %6ld\n"
@@ -565,31 +650,35 @@ static void print_results(struct st_latency *latencies,
 	       "\t\tMax    : %6ld\n"
 	       "\t\tAverage: %6ld\n"
 	       "\t\tStd Dev: %8.2f\n",
-	       latencies[num_failed].val / 1000,
-	       latencies[num_failed + num_passed / 4].val / 1000,
-	       latencies[num_failed + num_passed / 2].val / 1000,
-	       latencies[(num_failed + num_passed * 3) / 4].val / 1000,
-	       latencies[test_params->rep_count - 1].val / 1000,
+	       latency_min / 1000,
+	       latency_med25 / 1000,
+	       latency_med50 / 1000,
+	       latency_med75 / 1000,
+	       latency_max / 1000,
 	       latency_avg / 1000, latency_std_dev / 1000);
 
-	ConfigAddInt(cfg, section_name, "min",
-		     latencies[num_failed].val / 1000);
-	ConfigAddInt(cfg, section_name, "med25",
-		     latencies[num_failed + num_passed / 4].val / 1000);
-	ConfigAddInt(cfg, section_name, "med50",
-		     latencies[num_failed + num_passed / 2].val / 1000);
-	ConfigAddInt(cfg, section_name, "med75",
-		     latencies[num_failed + num_passed * 3 / 4].val / 1000);
-	ConfigAddInt(cfg, section_name, "max",
-		     latencies[test_params->rep_count - 1].val / 1000);
-	ConfigAddInt(cfg, section_name, "av", latency_avg / 1000);
-	ConfigAddInt(cfg, section_name, "sd", latency_std_dev / 1000);
+	snprintf(new_key_name, sizeof(new_key_name), "%s-*:*-min", master);
+	ConfigAddInt(Ocfg, section_name, new_key_name, latency_min / 1000);
+	snprintf(new_key_name, sizeof(new_key_name), "%s-*:*-med25", master);
+	ConfigAddInt(Ocfg, section_name, new_key_name, latency_med25 / 1000);
+
+	snprintf(new_key_name, sizeof(new_key_name), "%s-*:*-med50", master);
+	ConfigAddInt(Ocfg, section_name, new_key_name, latency_med50 / 1000);
+	snprintf(new_key_name, sizeof(new_key_name), "%s-*:*-med75", master);
+	ConfigAddInt(Ocfg, section_name, new_key_name, latency_med75 / 1000);
+
+	snprintf(new_key_name, sizeof(new_key_name), "%s-*:*-max", master);
+	ConfigAddInt(Ocfg, section_name, new_key_name, latency_max / 1000);
+	snprintf(new_key_name, sizeof(new_key_name), "%s-*:*-av", master);
+	ConfigAddInt(Ocfg, section_name, new_key_name, latency_avg / 1000);
+
+	snprintf(new_key_name, sizeof(new_key_name), "%s-*:*-sd", master);
+	ConfigAddInt(Ocfg, section_name, new_key_name, latency_std_dev / 1000);
 
 	/* Print error summary results */
 	printf("\tRPC Failures: %u\n", num_failed);
-	/* print_fail_counts(&latencies[0], num_failed, "\t\t"); */
-
-	printf("\n");
+	if (num_failed >= 0)
+		print_fail_counts(&latencies[0], num_failed, "\t\t");
 
 	/*
 	 * Sort the latencies by: (in descending order of precedence)
@@ -603,54 +692,80 @@ static void print_results(struct st_latency *latencies,
 	qsort(latencies, test_params->rep_count,
 	      sizeof(latencies[0]), st_compare_latencies_by_ranks);
 
-	printf("\tEndpoint results (rank:tag - Median Latency (us)):\n");
+#ifdef PRINT_ALL
+	printf("\n NEW Sorted value\n");
+	for (local_rep = num_failed; local_rep < test_params->rep_count;
+	     local_rep++){
+		printf("   Interation: %d, EP %d, latencies %ld\n",
+		       local_rep,  latencies[local_rep].rank,
+		       latencies[local_rep].val);
+	}
+	printf("\n");
+#endif
 
 	/* Iterate over each rank / tag pair */
 	local_rep = 0;
 	do {
 		uint32_t rank = latencies[local_rep].rank;
 		uint32_t tag = latencies[local_rep].tag;
-		uint32_t start_idx = local_rep;
-		uint32_t last_idx;
-		uint32_t median_idx;
+		uint32_t num_used;
+		uint32_t count;
+		uint32_t begin;
 
 		/* Compute start, last, and num_failed for this rank/tag */
 		num_failed = 0;
+		count = 0;
+		begin = local_rep;
 		while (1) {
 			if (latencies[local_rep].rank != rank ||
 			    latencies[local_rep].tag != tag)
 				break;
 
-			if (latencies[local_rep].cci_rc < 0)
-				num_failed++;
-
+			count++;
 			local_rep++;
 			if (local_rep >= test_params->rep_count)
 				break;
 		}
-		last_idx = local_rep - 1;
-		D_ASSERT(start_idx + num_failed <= last_idx);
+		D_ASSERT(count > 0);
+		/* Find stats for this endpoint */
+		num_used = calculate_stats(&latencies[begin],
+					   count,
+					   &latency_avg, &latency_std_dev,
+					   &latency_min, &latency_max,
+					   &latency_med25, &latency_med50,
+					   &latency_med75, &latency_total);
+		D_ASSERT(num_used > 0);
 
-		/* Compute median index */
-		median_idx = start_idx + num_failed +
-			(last_idx - start_idx - num_failed) / 2;
-		D_ASSERT(median_idx <= last_idx);
-		D_ASSERT(median_idx >= start_idx + num_failed);
-
-		printf("\t\t%u:%u - ", rank, tag);
-
-		/* At least some messages to this endpoint succeeded */
-		if (start_idx + num_failed <= last_idx)
-			printf("%ld", latencies[median_idx].val / 1000);
-
-		printf("\n");
-		if (num_failed > 0)
+		num_failed = count - num_used;
+		if (num_failed > 0) {
+			printf("\n");
 			printf("\t\t\tFailures: %u\n", num_failed);
-		print_fail_counts(&latencies[start_idx], num_failed, "\t\t\t");
+			print_fail_counts(&latencies[begin], num_failed,
+			"\t\t\t");
+		}
 
+		snprintf(new_key_name, sizeof(new_key_name),
+			 "%s-%d:%d-", master,
+			 latencies[begin].rank,
+			 latencies[begin].tag);
+
+		snprintf(kname, sizeof(kname), "%s%s", new_key_name, "min");
+		ConfigAddInt(Ocfg, section_name, kname, latency_min / 1000);
+		snprintf(kname, sizeof(kname), "%s%s", new_key_name, "med25");
+		ConfigAddInt(Ocfg, section_name, kname, latency_med25 / 1000);
+		snprintf(kname, sizeof(kname), "%s%s", new_key_name, "med50");
+		ConfigAddInt(Ocfg, section_name, kname, latency_med50 / 1000);
+		snprintf(kname, sizeof(kname), "%s%s", new_key_name, "med75");
+		ConfigAddInt(Ocfg, section_name, kname, latency_med75 / 1000);
+
+		snprintf(kname, sizeof(kname), "%s%s", new_key_name, "max");
+		ConfigAddInt(Ocfg, section_name, kname, latency_max / 1000);
+		snprintf(kname, sizeof(kname), "%s%s", new_key_name, "av");
+		ConfigAddInt(Ocfg, section_name, kname, latency_avg / 1000);
+
+		snprintf(kname, sizeof(kname), "%s%s", new_key_name, "sd");
+		ConfigAddInt(Ocfg, section_name, kname, latency_std_dev / 1000);
 	} while (local_rep < test_params->rep_count);
-
-	printf("\n");
 }
 
 static char *config_section_name_add(char *section_name, char *name_to_add)
@@ -742,7 +857,274 @@ cleanup:
 	return ret_value;
 }
 
-static int compare_print_results(char *section_name)
+/*
+ * From section in configuration, find closest value that matches the key.
+ * If nothing matches, then return the default value.
+ */
+static int get_config_value(Config *cfg, char *sec_name, char *key,
+			    int *ret_value, int default_value)
+{
+	ConfigRet	 config_ret;
+	int		 value = default_value;
+	int		 ret = 0;
+	int		 ivalue;
+	char		*working;
+	char		*tkey;
+	char		*key_names[MAX_NUMBER_KEYS];
+	char		*key_name;
+	int		 number_keys;
+	int		 max_keys = MAX_NUMBER_KEYS;
+	char		*c_master;
+	char		*c_endpoint;
+	char		*c_remaining;
+	char		*c_temp;
+	int		 i;
+	int		 size;
+	int		 status_size = sizeof(status) / sizeof(status_feature);
+	int		 master = -1;
+	int		 endpoint = -1;
+	int		 endpoint_tag = -1;
+	int		 master_tag = -1;
+	int		 itemp;
+	int		 itemp2;
+	char		 id[MASTER_VALUE_SIZE];
+	int		 ini_value;
+
+	/* See if there is an exact match, if so,then return value */
+	config_ret = ConfigReadInt(cfg, sec_name, key, &ivalue, -1);
+	if ((config_ret == CONFIG_OK) && (ivalue != -1)) {
+		value = ivalue;
+		goto exit_code_ret;
+	}
+
+	/* Determine which stats we are looking at */
+	for (i = 0; i < status_size; i++) {
+		tkey = strstr(key, status[i].name);
+		if (tkey != NULL) {
+			/* avoid checkpatch warning */
+			break;
+		}
+	}
+	if (i >= status_size) {
+		ret = -DER_NONEXIST;
+		goto exit_code;
+	}
+	key_name = status[i].name;
+
+	/* Allocate working area for key.  strtok modifies working string */
+	size = strlen(key) + 1;
+	working = (char *)malloc(size);
+	if (working == NULL) {
+		ret = -ENOMEM;
+		goto exit_code;
+	}
+	strncpy(working, key, size);
+
+	/*
+	 * Parse string to find master and its tag.
+	 * Strip off master M:T and then the Master
+	 * Tag not necessary specified, or as *
+	 */
+	c_temp = NULL;
+	c_master = strtok_r(working, "-", &c_endpoint);
+	c_master = strtok_r(c_master, ":", &c_temp);
+
+	if ((c_master != NULL) && isdigit(*c_master)) {
+		/* avoid checkpatch warning */
+		sscanf(c_master, "%d", &master);
+	}
+	if ((c_temp != NULL) && isdigit(*c_temp)) {
+		/* avoid checkpatch warning */
+		sscanf(c_temp, "%d", &master_tag);
+	}
+
+	/*
+	 * Parse string to find endpoint and its tag.
+	 * Not necessary top specify endpoint.
+	 * Strip off endpoit EP:T and then the tag.
+	 * Not neccsary to specified endpoint/
+	 * Tag not necessary specified, or as *
+	 */
+	c_endpoint = strtok_r(c_endpoint, "-", &c_remaining);
+	c_endpoint = strtok_r(c_endpoint, ":", &c_temp);
+	if ((c_endpoint != NULL) && isdigit(*c_endpoint)) {
+		/* avoid check patch warning */
+		sscanf(c_endpoint, "%d", &endpoint);
+	}
+	if ((c_temp != NULL) && isdigit(*c_temp)) {
+		/* avoid check patch warning */
+		sscanf(c_temp, "%d", &endpoint_tag);
+	}
+
+	/*
+	 * Search through all keys searching for a match with
+	 * master and endpoint.  First make sure this is a valid
+	 * search
+	 */
+	if ((master == -1) || (endpoint == -1))
+		goto code_search_master;
+	number_keys = 0;
+	number_keys = ConfigGetKeys(cfg, sec_name,
+				    key_names, max_keys, number_keys);
+	/* Loop through all keys */
+	while (number_keys != 0) {
+		for (i = 0; i < number_keys; i++) {
+			/* Make sure key is for this stats.*/
+			if (strstr(key_names[i], key_name) == NULL) {
+				/* avoid check patch warning */
+				continue;
+			}
+
+			strncpy(id, key_names[i], sizeof(id));
+			config_ret = ConfigReadInt(cfg, sec_name,
+						   key_names[i],
+						   &ini_value, 0.0);
+
+			/* search master key and compare */
+			itemp = -1;
+			c_master = strtok_r(id, "-", &c_endpoint);
+			c_master = strtok_r(c_master, ":", &c_temp);
+			if ((c_master != NULL) && isdigit(*c_master)) {
+				/* avoid check patch warning */
+				sscanf(c_master, "%d", &itemp);
+			}
+
+			/* Match with master, check endpoint */
+			if (itemp == master) {
+				/* search endpoint key and compare */
+				itemp2 = -1;
+				c_endpoint = strtok_r(c_endpoint, "-",
+						      &c_remaining);
+				c_endpoint = strtok_r(c_endpoint, ":", &c_temp);
+				if ((c_endpoint != NULL) &&
+				    isdigit(*c_endpoint)) {
+					/* avoid check patch warning */
+					sscanf(c_endpoint, "%d", &itemp2);
+				}
+				if (itemp2 == endpoint) {
+					/* Have a match */
+					value = ini_value;
+					goto exit_code_free;
+				} /* End of endpoint match */
+			} /* end of master match */
+		} /* End of for loop */
+
+		/* setup array of keys for next loop */
+		number_keys = ConfigGetKeys(cfg, sec_name,
+					    key_names, max_keys, number_keys);
+	}
+
+code_search_master:
+	/*
+	 * Search through all keys searching for a match with master.
+	 * Assumes that the endpoint not specified.
+	 */
+	if (master == -1)
+		goto code_search_endpoint;
+	number_keys = 0;
+	number_keys = ConfigGetKeys(cfg, sec_name,
+				    key_names, max_keys, number_keys);
+	/* Loop through all keys */
+	while (number_keys != 0) {
+		for (i = 0; i < number_keys; i++) {
+			/* Make sure key is for this stats.*/
+			if (strstr(key_names[i], key_name) == NULL) {
+				/* avoid checkpatch warning */
+				continue;
+			}
+
+			config_ret = ConfigReadInt(cfg, sec_name,
+						   key_names[i],
+						   &ini_value, 0.0);
+			strncpy(id, key_names[i], sizeof(id));
+
+			/* search master key and compare */
+			c_master = strtok_r(id, "-", &c_endpoint);
+			c_master = strtok_r(c_master, ":", &c_temp);
+			if ((c_master != NULL) && isdigit(*c_master)) {
+				/* avoid checkpatch warning */
+				sscanf(c_master, "%d", &itemp);
+			}
+			if (itemp == master) {
+				/* endpoint must be a '*' */
+				c_endpoint = strtok_r(c_endpoint, "-",
+						      &c_remaining);
+				c_endpoint = strtok_r(c_endpoint, ":", &c_temp);
+				if ((c_endpoint != NULL) &&
+				    strcmp(c_endpoint, "*") == 0) {
+					/* Have a match, read value and exit */
+					value = ini_value;
+					goto exit_code_free;
+				}
+			} /* End of master compare */
+		} /* End of for loop */
+
+		/* setup array of keys for next loop */
+		number_keys = ConfigGetKeys(cfg, sec_name,
+					    key_names, max_keys, number_keys);
+	}
+
+code_search_endpoint:
+	/*
+	 * Search through all keys searching for a match with endpoint.
+	 * Assumes that the master specified with '*'.
+	 */
+	if (endpoint == -1)
+		goto exit_code_free;
+	number_keys = 0;
+	number_keys = ConfigGetKeys(cfg, sec_name,
+				    key_names, max_keys, number_keys);
+	/* Loop through all keys */
+	while (number_keys != 0) {
+		for (i = 0; i < number_keys; i++) {
+			/* Make sure key is for this stats.*/
+			if (strstr(key_names[i], key_name) == NULL) {
+				/* avoid checkpatch warning */
+				continue;
+			}
+
+			config_ret = ConfigReadInt(cfg, sec_name,
+						   key_names[i],
+						   &ini_value, 0.0);
+			strncpy(id, key_names[i], sizeof(id));
+
+			/* search master key and compare */
+			c_master = strtok_r(id, "-", &c_endpoint);
+			c_master = strtok_r(c_master, ":", &c_temp);
+			if ((c_master != NULL) && strcmp(c_master, "*") == 0) {
+				/* endpoint must be a value */
+				c_endpoint = strtok_r(c_endpoint, "-",
+						      &c_remaining);
+				c_endpoint = strtok_r(c_endpoint, ":", &c_temp);
+
+				if ((c_endpoint != NULL) &&
+				    isdigit(*c_endpoint)) {
+					/* avoid checkpatch warning */
+					sscanf(c_endpoint, "%d", &itemp);
+				}
+
+				/* Have a match, read value and exit */
+				if (endpoint == itemp) {
+					value = ini_value;
+					goto exit_code_free;
+				}
+			} /* End of master compare */
+		} /* End of for loop */
+
+		/* setup array of keys for next loop */
+		number_keys = ConfigGetKeys(cfg, sec_name,
+					    key_names, max_keys, number_keys);
+	}
+
+exit_code_free:
+	free(working);
+exit_code_ret:
+	*ret_value = value;
+exit_code:
+	return ret;
+}
+
+static int compare_print_results(char *section_name, char *input_section_name)
 {
 	Config		*cfg_expected = NULL;
 	ConfigRet	 config_ret;
@@ -783,6 +1165,15 @@ static int compare_print_results(char *section_name)
 	 * Read in scaling factors
 	 * -----------------------
 	 */
+	/* Use global scaling factor if specified */
+	if (g_scale_factor != INVALID_SCALING) {
+		/* avoid checkpatch warning */
+		for (i = 0; i < status_size; i++) {
+			/* avoid checkpatch warning */
+			status[i].scale = g_scale_factor;
+		}
+	}
+
 	sec_name = DEFAULT_SCALE_NAME;
 	if (ConfigHasSection(cfg_expected, sec_name)) {
 		float scale = 0.0;
@@ -813,7 +1204,7 @@ static int compare_print_results(char *section_name)
 	 * Read in specified values for requested sector.
 	 * Over rides default settings if specified.
 	 */
-	if (ConfigHasSection(cfg_expected, section_name)) {
+	if (ConfigHasSection(cfg_expected, input_section_name)) {
 		int ivalue;
 
 		for (i = 0; i < status_size; i++) {
@@ -824,15 +1215,6 @@ static int compare_print_results(char *section_name)
 				/* avoid checkpatch warning */
 				status[i].value = ivalue;
 			}
-		}
-	}
-
-	/* Use global scaling factor if specified */
-	if (g_scale_factor != INVALID_SCALING) {
-		/* avoid checkpatch warning */
-		for (i = 0; i < status_size; i++) {
-			/* avoid checkpatch warning */
-			status[i].scale = g_scale_factor;
 		}
 	}
 
@@ -924,7 +1306,9 @@ next_arg:
 		float	 upper = status[i].value;
 		float	 lower = status[i].value;
 		float	 value = 0.0;
+		float	 scale;
 		int	 ivalue;
+		int	 ret;
 
 		bool	 passed;
 		bool	 firstpass;
@@ -935,89 +1319,137 @@ next_arg:
 		char	*tkey;
 		int	 j;
 		char	 range[RANGE_SIZE];
+		Config	*Ecfg = cfg_expected;
 
-		if ((status[i].value != 0) && (status[i].scale != 0) &&
-		    (status[i].flag & TST_OUTPUT)) {
+		/* See if we are to out put this stats */
+		if (status[i].flag & TST_OUTPUT) {
 			/* Set ranges for comparison */
 			firstpass = true;
 
-			if (status[i].flag & TST_LOW) {
-				/* avoid checkpatch warning */
-				lower = status[i].value *
-					(1 - status[i].scale / 100.);
-			}
-			if (status[i].flag & TST_HIGH) {
-				/* avoid checkpatch warning */
-				upper = status[i].value *
-					(1 + status[i].scale / 100.);
-			}
-
 			/* Get number of keys in section */
+			number_keys = 0;
 			number_keys = ConfigGetKeys(cfg_output, section_name,
-						    key_names, max);
+						    key_names, max,
+						    number_keys);
 			if (number_keys == 0) {
 				D_INFO(" NO keys found\n");
 				break;
 			}
 
-			/* Search for results with status name for comparison*/
-			for (j = 0; j < number_keys; j++) {
-				tkey = strstr(key_names[j], status[i].name);
-				if (tkey == NULL) {
-					/* avoid checkpatch warning */
-					continue;
+			/* Loop through all keys */
+			while (number_keys != 0) {
+				/*
+				 * Search for results with status name for
+				 * comparison
+				 */
+				for (j = 0; j < number_keys; j++) {
+					tkey = strstr(key_names[j],
+						      status[i].name);
+					if (tkey == NULL) {
+						/* avoid checkpatch warning */
+						continue;
+					}
+
+					ConfigReadInt(cfg_output, section_name,
+						key_names[j], &ivalue, 0);
+					value = (float)ivalue;
+					key = key_names[j];
+
+					/* Find scale and value for key */
+					sec_name = DEFAULT_SCALE_NAME;
+					ivalue = (int) status[i].scale;
+					ret = get_config_value(Ecfg,
+							       sec_name,
+							       key,
+							       &ivalue,
+							       ivalue);
+					if (ret < 0) {
+						ret_value = ret;
+						goto cleanup;
+					}
+					scale = (float) ivalue;
+
+					sec_name = input_section_name;
+					ivalue = (int)status[i].value;
+					ret = get_config_value(Ecfg,
+							       sec_name,
+							       key,
+							       &ivalue,
+							       ivalue);
+					if (ret < 0) {
+						ret_value = ret;
+						goto cleanup;
+					}
+
+					/* Find range for testing */
+					upper = ivalue;
+					lower = ivalue;
+					if (status[i].flag & TST_LOW) {
+						/* avoid checkpatch warning */
+						lower = ivalue *
+							(1.0 - scale / 100.);
+					}
+					if (status[i].flag & TST_HIGH) {
+						/* avoid checkpatch warning */
+						upper = ivalue *
+							(1.0 + scale / 100.);
+					}
+
+					/* Test for range */
+					passed = true;
+					if ((status[i].flag &
+					     (TST_HIGH | TST_LOW)) ==
+					    (TST_HIGH | TST_LOW)) {
+						snprintf(range, RANGE_SIZE,
+							 " Range (%6d -- %6d)"
+							 " %3d%%",
+							 (int)lower, (int)upper,
+							 (int)scale);
+						if (!((lower <= value) &&
+							(value <= upper)))
+							passed = false;
+					} else if (status[i].flag & TST_HIGH) {
+						snprintf(range, RANGE_SIZE,
+							 " Range (..    -- %6d)"
+							 "  %3d%%",
+							 (int)upper,
+							 (int)scale);
+						if (value >= upper)
+							passed = false;
+					} else if (status[i].flag & TST_LOW) {
+						snprintf(range, RANGE_SIZE,
+							 " Range (6%d --   "
+							 "  ..)   %3d%%",
+							 (int)lower,
+							 (int)scale);
+						if (value <= lower)
+							passed = false;
+					}
+
+					/* print results */
+					if (firstpass)
+						printf("\n Endpoint Result"
+						       " (%s)\n",
+							status[i].description);
+					firstpass = false;
+					if (passed) {
+						printf("   %s : %8d  "
+						       "Passed: %s\n",
+						key, ivalue, range);
+						D_INFO(" PASSED range check\n");
+
+					} else {
+						printf("   %s : %8d  "
+						       "Failed: %s\n",
+						key, (int)value, range);
+						D_WARN(" FAILED range check\n");
+						ret_value = -1;
+					}
 				}
-
-				ConfigReadInt(cfg_output, section_name,
-					      key_names[j], &ivalue, 0);
-				value = (float)ivalue;
-				key = key_names[j];
-
-				/* Test for range */
-				passed = true;
-				if ((status[i].flag & (TST_HIGH | TST_LOW)) ==
-				     (TST_HIGH | TST_LOW)) {
-					snprintf(range, RANGE_SIZE,
-						 "  Range (%6d -- %6d)  %3d%%",
-						 (int)lower, (int)upper,
-						 (int)status[i].scale);
-					if (!((lower <= value) &&
-					      (value <= upper)))
-						passed = false;
-				} else if (status[i].flag & TST_HIGH) {
-					snprintf(range, RANGE_SIZE,
-						 "  Range (..    -- %6d)"
-						 "  %3d%%",
-						 (int)upper,
-						 (int)status[i].scale);
-					if (value >= upper)
-						passed = false;
-				} else if (status[i].flag & TST_LOW) {
-					snprintf(range, RANGE_SIZE,
-						 "  Range (6%d --     ..)"
-						 "  %3d%%",
-						 (int)lower,
-						 (int)status[i].scale);
-					if (value <= lower)
-						passed = false;
-				}
-
-				/* print results */
-				if (firstpass)
-					printf("\n Endpoint Result (%s)\n",
-					       status[i].description);
-				firstpass = false;
-				if (passed) {
-					printf("   %s : %8d  Passed:  %s\n",
-					       key, ivalue, range);
-					D_INFO("  PASSED range check\n");
-
-				} else {
-					printf("   %s : %8d  Failed:  %s\n",
-					       key, (int)value, range);
-					D_WARN("  FAILED range check\n");
-					ret_value = -1;
-				}
+				number_keys = ConfigGetKeys(cfg_output,
+							    section_name,
+							    key_names, max,
+							    number_keys);
 			}
 		} /* end of valid test loop */
 	} /* end of "for" loop */
@@ -1072,6 +1504,7 @@ static int combine_results(Config *cfg_results, char *section_name)
 	}
 
 #ifdef PRINT_IMMEDIATE_RESULTS
+#define PRINT_IMMEDIATE_RESULTS
 	printf(" Print input results\n");
 	ConfigPrintSection(cfg_results, stdout, section_name);
 
@@ -1474,7 +1907,7 @@ static int test_msg_size(crt_context_t crt_ctx,
 	}
 
 	/* compare and output results */
-	ret_value = compare_print_results(section_name);
+	ret_value = compare_print_results(section_name, input_section_name);
 
 	/* Free up temporary configuration structure and others */
 	if (cfg != NULL) {
@@ -1849,7 +2282,7 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       " from the expected value\n\n");
 
 	printf("*** Usage using file options only ****\n"
-	       " %s --file-name <file_name> --config <test> --display\n"
+	       " %s --file-name <file_name> --config <test> --display <value>\n"
 	       "\n"
 	       "  --file-name <file_name>\n"
 	       "      Short version: -f\n"
@@ -1861,11 +2294,12 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "\n"
 	       "  --display <value>\n"
 	       "      Short version: -d\n"
-	       "      Display the configuration file setup\n\n"
+	       "      Display the configuration file setup\n"
+	       "      Negative values of these will displays only\n"
 	       "        '0' - no display shown\n"
 	       "        '1' - show info on specified sector/group\n"
 	       "        '2' - show all sector/group headings\n"
-	       "        '3' - show all info for all sector/group specified in file\n"
+	       "        '3' - show all sector/group info specified in file\n"
 	       "\n",
 	       prog_name
 	);
@@ -1939,7 +2373,7 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "\n"
 	       "  --display <value>\n"
 	       "      Short version: -d\n"
-	       "      Display the configuration file setup\n\n"
+	       "      Display the configuration file setup\n"
 	       "      Negative values of these will displays only\n"
 	       "        '0' - no display shown\n"
 	       "        '1' - show info on specified sector/group\n"
@@ -2699,10 +3133,12 @@ static int config_file_setup(char *file_name, char *section_name,
 			g_output_megabits = 1;
 	}
 
+#ifdef INCLUDE_OBSOLETE
 	/********/
 	config_ret = ConfigReadString(cfg, section_name, "singleton",
 				      &string[0], STRING_MAX_SIZE,
 				      (char *)NULL);
+#endif
 
 	/********/
 	config_ret = ConfigReadString(cfg, section_name, "randomize-endpoints",
@@ -2816,9 +3252,11 @@ static int config_file_setup(char *file_name, char *section_name,
 	}
 
 	/********/
+#ifdef INCLUDE_OBSOLETE
 	config_ret = ConfigReadString(cfg, section_name, "nopmix",
 				      &string[0], STRING_MAX_SIZE,
 				      (char *)NULL);
+#endif
 
 	/* Free up structure and return */
 cleanup:
@@ -2902,8 +3340,6 @@ int parse_command_options(int argc, char *argv[])
 		case 'b':
 			g_output_megabits = 1;
 			break;
-		case 't':
-			break;
 		case 'p':
 			if (g_attach_info_path != NULL) {
 				/* Avoid checkpatch warning */
@@ -2914,8 +3350,6 @@ int parse_command_options(int argc, char *argv[])
 			break;
 		case 'q':
 			g_randomize_endpoints = true;
-			break;
-		case 'n':
 			break;
 		case 'v':  /* *** */
 			ret = sscanf(optarg, "%d", &g_raw_data);
@@ -2962,6 +3396,11 @@ int parse_command_options(int argc, char *argv[])
 
 		case 'h':
 		case '?':
+#ifdef INCLUDE_OBSOLETE
+		case 'n':
+		case 't':
+#endif
+
 		default:
 			print_usage(argv[0], default_msg_sizes_str,
 				    g_default_rep_count,

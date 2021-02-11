@@ -82,7 +82,7 @@ ConfigRet ConfigPrintSettings(const Config *cfg, FILE *stream);
 int ConfigGetSectionCount(const Config *cfg);
 int ConfigGetKeyCount(const Config *cfg, const char *sect);
 int ConfigGetKeys(const Config *cfg, const char *sect, char **array,
-		  int max_array_size);
+		  int max_array_size, int begin_index);
 ConfigRet ConfigSetCommentCharset(Config *cfg, const char *comment_ch);
 ConfigRet ConfigSetKeyValSepChar(Config *cfg, char ch);
 
