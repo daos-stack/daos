@@ -70,6 +70,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	uint32_t	ctx_num = 1;
 	uint32_t	fi_univ_size = 0;
 	uint32_t	mem_pin_disable = 0;
+	uint32_t	mrc_enable = 0;
 	uint64_t	start_rpcid;
 	int		rc = 0;
 
@@ -143,6 +144,12 @@ static int data_init(int server, crt_init_options_t *opt)
 	if (fi_univ_size == 0) {
 		D_WARN("FI_UNIVERSE_SIZE was not set; setting to 2048\n");
 		setenv("FI_UNIVERSE_SIZE", "2048", 1);
+	}
+
+	d_getenv_int("CRT_MRC_ENABLE", &mrc_enable);
+	if (mrc_enable == 0) {
+		D_INFO("Disabling MR CACHE (FI_MR_CACHE_COUNT=0)\n");
+		setenv("FI_MR_CACHE_COUNT", "0", 1);
 	}
 
 	if (credits == 0) {
@@ -316,9 +323,8 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	if (gdata_init_flag == 0) {
 		rc = data_init(server, opt);
 		if (rc != 0) {
-			D_ERROR("data_init failed, rc(%d) - %s.\n",
-				rc, strerror(rc));
-			D_GOTO(out, rc = -rc);
+			D_ERROR("data_init failed "DF_RC"\n", DP_RC(rc));
+			D_GOTO(out, rc);
 		}
 	}
 	D_ASSERT(gdata_init_flag == 1);

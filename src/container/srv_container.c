@@ -1231,14 +1231,19 @@ cont_agg_eph_leader_ult(void *arg)
 					min_eph = ec_agg->ea_server_ephs[i].eph;
 			}
 
-			D_ASSERTF(min_eph >= ec_agg->ea_current_eph, DF_U64" < "
-				  DF_U64"\n", min_eph, ec_agg->ea_current_eph);
 			if (min_eph == ec_agg->ea_current_eph)
 				continue;
 
-			D_DEBUG(DB_MD, DF_CONT" sync "DF_U64"\n",
+			/**
+			 * NB: during extending or reintegration, the new
+			 * server might cause the minimum epoch is less than
+			 * ea_current_eph.
+			 */
+			D_DEBUG(DB_MD, DF_CONT" minimum "DF_U64" current "
+				DF_U64"\n",
 				DP_CONT(svc->cs_pool_uuid,
-					ec_agg->ea_cont_uuid), min_eph);
+					ec_agg->ea_cont_uuid),
+				min_eph, ec_agg->ea_current_eph);
 			rc = cont_iv_ec_agg_eph_refresh(pool->sp_iv_ns,
 							ec_agg->ea_cont_uuid,
 							min_eph);
@@ -2191,6 +2196,7 @@ cont_status_check(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 		iv_entry->dpe_val = entry->dpe_val;
 		rc = cont_iv_prop_update(pool->sp_iv_ns, in->cqi_op.ci_uuid,
 					 iv_prop);
+		daos_prop_free(iv_prop);
 		if (rc)
 			D_ERROR(DF_CONT": iv_prop_update failed, "DF_RC"\n",
 				DP_CONT(cont->c_svc->cs_pool_uuid,
@@ -3139,6 +3145,10 @@ out:
 		struct cont_query_out  *cqo = crt_reply_get(rpc);
 
 		prop = cqo->cqo_prop;
+	} else if (opc == CONT_OPEN) {
+		struct cont_open_out *coo = crt_reply_get(rpc);
+
+		prop = coo->coo_prop;
 	}
 	out->co_rc = rc;
 	crt_reply_send(rpc);

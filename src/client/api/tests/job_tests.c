@@ -213,7 +213,7 @@ main(void)
 
 	d_register_alt_assert(mock_assert);
 
-	return cmocka_run_group_tests(tests, NULL, NULL);
+	return cmocka_run_group_tests_name("client_job", tests, NULL, NULL);
 }
 
 #undef JOB_UTEST
