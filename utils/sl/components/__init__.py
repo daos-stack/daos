@@ -219,7 +219,7 @@ def define_common(reqs):
     reqs.define('jemalloc', libs=['jemalloc'], package='jemalloc-devel')
 
     reqs.define('boost', headers=['boost/preprocessor.hpp'],
-                package='boost-devel')
+                package='boost-python36')
 
     reqs.define('yaml', headers=['yaml.h'], package='libyaml-devel')
 
