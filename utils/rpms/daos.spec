@@ -66,7 +66,7 @@ BuildRequires: golang-bin >= 1.12
 # needed to retrieve PMM region info through control-plane
 BuildRequires: libipmctl-devel
 BuildRequires: python36-devel
-BuildRequires: python36-disto
+BuildRequires: python36-distro
 BuildRequires: Lmod
 %else
 %if (0%{?suse_version} >= 1315)
@@ -344,23 +344,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdfs_internal.so
 %{_libdir}/libvos_size.so
 %{_libdir}/libdts.so
-%dir  %{_libdir}/python2.7/site-packages/pydaos
-%dir  %{_libdir}/python2.7/site-packages/storage_estimator
-%{_libdir}/python2.7/site-packages/pydaos/*.py
-%{_libdir}/python2.7/site-packages/storage_estimator/*.py
-%if (0%{?rhel} >= 7)
-%{_libdir}/python2.7/site-packages/pydaos/*.pyc
-%{_libdir}/python2.7/site-packages/pydaos/*.pyo
-%{_libdir}/python2.7/site-packages/storage_estimator/*.pyc
-%{_libdir}/python2.7/site-packages/storage_estimator/*.pyo
-%endif
-%{_libdir}/python2.7/site-packages/pydaos/pydaos_shim_27.so
-%dir  %{_libdir}/python2.7/site-packages/pydaos/raw
-%{_libdir}/python2.7/site-packages/pydaos/raw/*.py
-%if (0%{?rhel} >= 7)
-%{_libdir}/python2.7/site-packages/pydaos/raw/*.pyc
-%{_libdir}/python2.7/site-packages/pydaos/raw/*.pyo
-%endif
 %dir %{_libdir}/python3
 %dir %{_libdir}/python3/site-packages
 %dir %{_libdir}/python3/site-packages/pydaos
@@ -422,7 +405,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 * Tue Feb 9 2021 Vish Venkatesan<vishwanath.venkatesan@intel.com> 1.1.2.1-11
 - Add new pmem specific version of DAOS common library
 
-* Fri Feb 6 2021 Saurabh Tandan <saurabh.tandan@intel.com> 1.1.2.1-10
+* Fri Feb 5 2021 Saurabh Tandan <saurabh.tandan@intel.com> 1.1.2.1-10
 - Added dbench as requirement for test package.
 
 * Wed Feb 3 2021 Hua Kuang <hua.kuang@intel.com> 1.1.2.1-9
