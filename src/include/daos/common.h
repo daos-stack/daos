@@ -92,6 +92,8 @@ sgl_move_forward(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx, uint64_t bytes)
 static inline void *
 sgl_indexed_byte(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx)
 {
+	if (sgl_idx->iov_idx > sgl->sg_nr_out - 1)
+		return NULL;
 	return sgl->sg_iovs[sgl_idx->iov_idx].iov_buf + sgl_idx->iov_offset;
 }
 
