@@ -19,7 +19,6 @@ BuildRequires: python36-scons >= 2.4
 BuildRequires: scons >= 2.4
 %endif
 BuildRequires: libfabric-devel >= %{libfabric_version}
-BuildRequires: boost-devel
 BuildRequires: mercury-devel = %{mercury_version}
 BuildRequires: openpa-devel
 BuildRequires: libpsm2-devel
@@ -33,6 +32,7 @@ BuildRequires: boost-python36
 %else
 BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libjson-c-devel
+BuildRequires: boost-devel
 %endif
 BuildRequires: libpmem-devel >= 1.8, libpmemobj-devel >= 1.8
 BuildRequires: fuse3-devel >= 3.4.2
@@ -197,9 +197,6 @@ Requires: %{name} = %{version}-%{release}
 Requires: libuuid-devel
 Requires: libyaml-devel
 Requires: boost-devel
-%if (0%{?rhel} >= 7)
-BuildRequires: boost-python36
-%endif
 # Pin mercury to exact version during development
 #Requires: mercury-devel < 2.0.0a1
 # we ideally want to set this minimum version however it seems to confuse yum:

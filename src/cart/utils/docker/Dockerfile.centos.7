@@ -53,7 +53,7 @@ RUN yum clean metadata
 # Install basic tools
 RUN yum -y install epel-release; \
     yum -y install                                                        \
-           boost-devel clang-analyzer cmake CUnit-devel doxygen file flex \
+           clang-analyzer cmake CUnit-devel doxygen file flex             \
            gcc gcc-c++ git golang graphviz lcov boost-python36            \
            libaio-devel libcmocka-devel libevent-devel libiscsi-devel     \
            libtool libtool-ltdl-devel libuuid-devel libyaml-devel         \
