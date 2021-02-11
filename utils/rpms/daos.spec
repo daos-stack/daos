@@ -216,7 +216,7 @@ This is the package needed to build software with the DAOS library.
 
 %define conf_dir %{_sysconfdir}/daos
 
-scons %{?_smp_mflags}      \
+scons-3 %{?_smp_mflags}    \
       --config=force       \
       --no-rpath           \
       USE_INSTALLED=all    \
@@ -225,7 +225,7 @@ scons %{?_smp_mflags}      \
      %{?scons_args}
 
 %install
-scons %{?_smp_mflags}                 \
+scons-3 %{?_smp_mflags}                 \
       --config=force                  \
       --no-rpath                      \
       --install-sandbox=%{?buildroot} \

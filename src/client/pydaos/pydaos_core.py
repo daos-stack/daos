@@ -227,9 +227,9 @@ class KVIter():
         self._done = False
         self._kv = kv
 
-    def __next__(self):
-        """for python 2 compatibility"""
-        return self.__next__()
+    # def __next__(self):
+    #     """for python 2 compatibility"""
+    #     return self.__next__()
 
     def __next__(self):
         if len(self._entries) != 0:

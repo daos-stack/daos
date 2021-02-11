@@ -53,27 +53,28 @@ RUN yum clean metadata
 # Install basic tools
 RUN yum -y install epel-release; \
     yum -y install \
-        boost-devel clang-analyzer cmake CUnit-devel doxygen file flex \
-        gcc gcc-c++ git golang graphviz lcov                           \
-        libaio-devel libcmocka-devel libevent-devel libiscsi-devel     \
-        libtool libtool-ltdl-devel libuuid-devel libyaml-devel         \
-        make meson nasm ninja-build numactl-devel openssl-devel        \
-        pandoc patch python36-devel                                    \
-        readline-devel python36-scons sg3_utils ShellCheck yasm pciutils        \
-        valgrind-devel python36-pylint man java-1.8.0-openjdk maven    \
+        boost-devel clang-analyzer cmake CUnit-devel doxygen file flex   \
+        gcc gcc-c++ git golang graphviz lcov                             \
+        libaio-devel libcmocka-devel libevent-devel libiscsi-devel       \
+        libtool libtool-ltdl-devel libuuid-devel libyaml-devel           \
+        make meson nasm ninja-build numactl-devel openssl-devel          \
+        pandoc patch python36-devel python36-requests                    \
+        readline-devel python36-scons sg3_utils ShellCheck yasm pciutils \
+        valgrind-devel python36-pylint man java-1.8.0-openjdk maven      \
         json-c-devel python36-requests lz4-devel
 
 # DAOS specific
 RUN yum -y install \
-           ndctl ipmctl e2fsprogs                                      \
-           python36-Cython python36-clustershell python36-paramiko     \
-           python36-numpy python36-jira python3-pip Lmod               \
-           fuse3-devel libipmctl-devel python36-pyxattr                \
-           hwloc-devel patchelf python36-tabulate                      \
+           ndctl ipmctl e2fsprogs                                        \
+           python36-Cython python36-clustershell python36-paramiko       \
+           python36-numpy python36-jira python3-pip Lmod                 \
+           fuse3-devel libipmctl-devel python36-pyxattr                  \
+           hwloc-devel patchelf python36-tabulate                        \
            java-1.8.0-openjdk python36-distro
+
 RUN yum -y install openmpi3-devel
 
-# Removing PyYAML 3.10 to allow pip install to upgrade 
+# Removing PyYAML 3.10 to allow pip install to upgrade
 RUN yum -y remove python36-PyYAML
 
 RUN pip3 install --upgrade pip
