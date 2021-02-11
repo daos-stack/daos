@@ -193,8 +193,8 @@ class _Obj(object):
         # keep container around until all objects are gone
         self.cont = cont
         # Open to the object
-        (ret, oh) = pydaos_shim.kv_open(DAOS_MAGIC, coh, self.oid.hi,
-                                         self.oid.lo, 0)
+        (ret, oh) = pydaos_shim.kv_open(
+            DAOS_MAGIC, coh, self.oid.hi, self.oid.lo, 0)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to open object", ret)
         self.oh = oh
@@ -351,7 +351,7 @@ class KVObj(_Obj):
             raise PyDError("failed to store KV value", ret)
 
     def dump(self):
-        """Fetch all the key-value pairs and return them in a python dictionary."""
+        """Fetch all the key-value pairs, return them in a python dictionary."""
         # leverage python iterator, see __iter__/__next__ below
         # could be optimized over the C library in the future
         d = {}

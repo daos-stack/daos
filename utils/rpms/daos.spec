@@ -219,7 +219,7 @@ This is the package needed to build software with the DAOS library.
 %define scons_exe scons-3
 %else
 %define scons_exe scons
-
+%endif
 %{scons_exe} %{?_smp_mflags} \
       --config=force         \
       --no-rpath             \
