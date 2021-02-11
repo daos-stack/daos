@@ -13,8 +13,11 @@ Summary:       DAOS Storage Engine
 License:       BSD-2-Clause-Patent
 URL:           https//github.com/daos-stack/daos
 Source0:       %{name}-%{version}.tar.gz
-
+%if (0%{?rhel} >= 7)
+BuildRequires: python36-scons >= 2.4
+%else
 BuildRequires: scons >= 2.4
+%endif
 BuildRequires: libfabric-devel >= %{libfabric_version}
 BuildRequires: boost-devel
 BuildRequires: mercury-devel = %{mercury_version}
