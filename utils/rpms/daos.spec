@@ -7,7 +7,7 @@
 
 Name:          daos
 Version:       1.1.2.1
-Release:       11%{?relval}%{?dist}
+Release:       12%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -59,8 +59,6 @@ BuildRequires: libcmocka-devel
 BuildRequires: readline-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
-BuildRequires: python-devel
-BuildRequires: python-distro
 %if (0%{?rhel} >= 7)
 BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
@@ -68,6 +66,7 @@ BuildRequires: golang-bin >= 1.12
 # needed to retrieve PMM region info through control-plane
 BuildRequires: libipmctl-devel
 BuildRequires: python36-devel
+BuildRequires: python36-disto
 BuildRequires: Lmod
 %else
 %if (0%{?suse_version} >= 1315)
@@ -165,9 +164,14 @@ This is the package needed to run a DAOS client
 %package tests
 Summary: The DAOS test suite
 Requires: %{name}-client = %{version}-%{release}
-Requires: python-pathlib
-Requires: python-distro
-Requires: python2-tabulate
+%if (0%{?rhel} >= 7)
+Requires: python36-distro
+Requires: python36-tabulate
+%endif
+%if (0%{?suse_version} >= 1500)
+Requires: python3-distro
+Requires: python3-tabulate
+%endif
 Requires: fio
 Requires: dbench
 Requires: lbzip2
@@ -412,6 +416,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Wed Feb 10 2021 Maureen Jean <maureen.jean@intel.com> 1.1.2.1-12
+- Update to python3
+
 * Tue Feb 9 2021 Vish Venkatesan<vishwanath.venkatesan@intel.com> 1.1.2.1-11
 - Add new pmem specific version of DAOS common library
 
