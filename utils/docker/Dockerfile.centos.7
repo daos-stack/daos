@@ -59,7 +59,7 @@ RUN yum -y install epel-release; \
         libtool libtool-ltdl-devel libuuid-devel libyaml-devel         \
         make meson nasm ninja-build numactl-devel openssl-devel        \
         pandoc patch python36-devel                                    \
-        readline-devel scons sg3_utils ShellCheck yasm pciutils        \
+        readline-devel python36-scons sg3_utils ShellCheck yasm pciutils        \
         valgrind-devel python36-pylint man java-1.8.0-openjdk maven    \
         json-c-devel python36-requests lz4-devel
 
@@ -75,6 +75,7 @@ RUN yum -y install openmpi3-devel
 
 # Removing PyYAML 3.10 to allow pip install to upgrade 
 RUN yum -y remove python36-PyYAML
+
 RUN pip3 install --upgrade pip
 
 # DAOS python 3 packages required for pylint
