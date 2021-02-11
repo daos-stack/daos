@@ -29,6 +29,7 @@ BuildRequires: hwloc-devel
 %if (0%{?rhel} >= 7)
 BuildRequires: argobots-devel >= 1.0rc1
 BuildRequires: json-c-devel
+BuildRequires: boost-python36
 %else
 BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libjson-c-devel
@@ -196,6 +197,9 @@ Requires: %{name} = %{version}-%{release}
 Requires: libuuid-devel
 Requires: libyaml-devel
 Requires: boost-devel
+%if (0%{?rhel} >= 7)
+BuildRequires: boost-python36
+%endif
 # Pin mercury to exact version during development
 #Requires: mercury-devel < 2.0.0a1
 # we ideally want to set this minimum version however it seems to confuse yum:
