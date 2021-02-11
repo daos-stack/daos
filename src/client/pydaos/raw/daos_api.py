@@ -637,8 +637,9 @@ class DaosObj(object):
         else:
             obj_cls_int = get_object_class(objcls).value
 
-        ret = func(self.container.coh, ctypes.byref(self.c_oid),
-                   0, obj_cls_int, 0, 0)
+        self.c_oid = daos_cref.DaosObjId()
+        ret = func(self.container.coh, ctypes.byref(self.c_oid), 0, obj_cls_int,
+                   0, 0)
         if ret != 0:
             raise DaosApiError("Object generate oid returned non-zero. RC: {0} "
                                .format(ret))
