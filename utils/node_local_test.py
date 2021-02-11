@@ -538,14 +538,10 @@ class DaosServer():
         compress_file(self.agent_log.name)
         compress_file(self.control_log.name)
 
-<<<<<<< HEAD
         log_test(self.conf,
                  self.server_log.name,
                  abort_on_warning=abort_on_warning,
-                 show_memleaks=False)
-=======
-        log_test(self.conf, self.server_log.name, leak_wf=wf)
->>>>>>> master
+                 leak_wf=wf)
         self.running = False
         return ret
 
@@ -1378,14 +1374,9 @@ def log_test(conf,
         wf_list.append(leak_wf)
 
     try:
-<<<<<<< HEAD
         lto.check_log_file(abort_on_warning=abort_on_warning,
-                           show_memleaks=show_memleaks)
-=======
-        lto.check_log_file(abort_on_warning=True,
                            show_memleaks=show_memleaks,
                            leak_wf=leak_wf)
->>>>>>> master
     except lt.LogCheckError:
         if lto.fi_location:
             for wf in wf_list:
@@ -2495,11 +2486,8 @@ def main():
     server.start()
 
     fatal_errors = BoolRatchet()
-<<<<<<< HEAD
     server_log_strict = True
-=======
     fi_test = False
->>>>>>> master
 
     if args.mode == 'launch':
         run_in_fg(server, conf)
@@ -2533,17 +2521,12 @@ def main():
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
         fatal_errors.add_result(run_posix_tests(server, conf))
-<<<<<<< HEAD
+        fatal_errors.add_result(set_server_fi(server))
     else:
         print("Unknown mode")
         fatal_errors.add_result(True)
 
-    if server.stop(abort_on_warning = server_log_strict) != 0:
-=======
-        fatal_errors.add_result(set_server_fi(server))
-
-    if server.stop(wf_server) != 0:
->>>>>>> master
+    if server.stop(wf_server, abort_on_warning = server_log_strict) != 0:
         fatal_errors.fail()
 
     # If running all tests then restart the server under valgrind.
