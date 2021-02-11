@@ -1390,7 +1390,7 @@ run_daos_rebuild_test(int rank, int size, int *sub_tests, int sub_tests_size)
 		sub_tests = NULL;
 	}
 
-	rc = run_daos_sub_tests_only("DAOS rebuild tests", rebuild_tests,
+	rc = run_daos_sub_tests_only("DAOS_Rebuild", rebuild_tests,
 				     ARRAY_SIZE(rebuild_tests), sub_tests,
 				     sub_tests_size);
 
