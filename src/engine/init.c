@@ -494,7 +494,8 @@ server_init(int argc, char *argv[])
 	if (rc != 0)
 		return rc;
 
-	rc = d_tm_init(dss_instance_idx, D_TM_SHARED_MEMORY_SIZE);
+	rc = d_tm_init(dss_instance_idx, D_TM_SHARED_MEMORY_SIZE,
+		       D_TM_SERVER_PROCESS);
 	if (rc != 0)
 		goto exit_debug_init;
 
@@ -533,7 +534,7 @@ server_init(int argc, char *argv[])
 	ds_iv_init();
 
 	/* load modules. Split load and init so first call to dlopen()
-	 * is from the ioserver to avoid DAOS-4557
+	 * is from the engine to avoid DAOS-4557
 	 */
 	rc = modules_load();
 	if (rc)
@@ -717,6 +718,8 @@ server_fini(bool force)
 	D_INFO("dss_module_fini() done\n");
 	abt_fini();
 	D_INFO("abt_fini() done\n");
+	d_tm_fini();
+	D_INFO("d_tm_fini() done\n");
 	daos_debug_fini();
 	D_INFO("daos_debug_fini() done\n");
 }
@@ -1054,7 +1057,7 @@ main(int argc, char **argv)
 			fprintf(abt_infos, ")\n");
 		}
 
-		/* use this iosrv main thread's context to dump Argobots
+		/* use this engine main thread's context to dump Argobots
 		 * internal infos and ULTs stacks without internal synchro
 		 */
 		if (sig == SIGUSR1) {
