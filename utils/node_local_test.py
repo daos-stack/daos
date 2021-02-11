@@ -330,6 +330,9 @@ class DaosServer():
         if self.running:
             self.stop(None)
 
+        if os.path.exists(self.server_log.name):
+            log_test(self.conf, self.server_log.name)
+
     # pylint: disable=no-self-use
     def _check_timing(self, op, start, max_time):
         elapsed = time.time() - start
@@ -342,6 +345,7 @@ class DaosServer():
             desired_states = [desired_states]
 
         rc = self.run_dmg(['system', 'query', '--json'])
+        print(rc)
         if rc.returncode == 0:
             data = json.loads(rc.stdout.decode('utf-8'))
             members = data['response']['members']
@@ -409,6 +413,9 @@ class DaosServer():
         cmd = [daos_server, '--config={}'.format(self._yaml_file.name),
                'start', '-t' '4', '--insecure', '-d', self.agent_dir]
 
+        if self.conf.args.no_root:
+            cmd.append('--recreate-superblocks')
+
         server_env['DAOS_DISABLE_REQ_FWD'] = '1'
         self._sp = subprocess.Popen(cmd, env=server_env)
 
@@ -428,7 +435,6 @@ class DaosServer():
         self._agent = subprocess.Popen(agent_cmd,
                                        env=os.environ.copy())
         self.conf.agent_dir = self.agent_dir
-        self.running = True
 
         # Configure the storage.  DAOS wants to mount /mnt/daos itself if not
         # already mounted, so let it do that.
@@ -467,6 +473,7 @@ class DaosServer():
                 break
             self._check_timing("start", start, max_start_time)
         print('Server started in {:.2f} seconds'.format(time.time() - start))
+        self.running = True
 
     def stop(self, wf):
         """Stop a previously started DAOS server"""
@@ -515,7 +522,16 @@ class DaosServer():
             self.conf.wf.issues.append(entry)
 
         rc = self.run_dmg(['system', 'stop'])
-        assert rc.returncode == 0 # nosec
+        if (rc.returncode != 0):
+            print(rc)
+            entry = {}
+            entry['fileName'] = os.path.basename(self._file)
+            entry['directory'] = os.path.dirname(self._file)
+            # pylint: disable=protected-access
+            entry['lineStart'] = sys._getframe().f_lineno
+            entry['severity'] = 'ERROR'
+            entry['message'] = 'dmg system stop failed with {}'.format(rc.returncode)
+            self.conf.wf.issues.append(entry)
 
         start = time.time()
         max_stop_time = 5
@@ -2388,6 +2404,7 @@ def main():
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
     parser.add_argument('--max-log-size', default=None)
+    parser.add_argument('--no-root', action='store_true')
     parser.add_argument('--perf-check', action='store_true')
     parser.add_argument('--dtx', action='store_true')
     parser.add_argument('--test', help="Use '--test list' for list")

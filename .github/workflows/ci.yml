@@ -25,7 +25,30 @@ jobs:
     - name: Build ${{ matrix.distro }} Docker image with ${{ matrix.compiler }}
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg COMPILER=${{ matrix.compiler }}
-                          -t ${{ matrix.distro }}/${{ matrix.compiler }}/daos:${{ github.sha }}
+                          -t build-image
+    - name: check server
+      run: docker run build-image ldd /opt/daos/bin/daos_io_server
+    - name: Run Unit Tests
+      run: docker run --name build-ut --tmpfs /mnt/daos build-image ./utils/run_test.sh
+    - name: mkdir
+      run: mkdir test_results/
+    - name: Copy results
+      run: docker cp build-ut:/home/daos/test_results/ ./
+    - name: find
+      run: find test_results/
+    - name: grep
+      run: grep . test_results/*
+    - name: Publish Unit Test Results
+      uses: EnricoMi/publish-unit-test-result-action@v1.7
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        files: test_results/*.xml
+    - name: Run NLT Test
+      run: docker run --tmpfs /mnt/daos build-image ./utils/node_local_test.py --no-root kv
+    - name: grep
+      if: always()
+      run: grep . *.json
+
   Spelling:
     runs-on: ubuntu-20.04
     steps:
