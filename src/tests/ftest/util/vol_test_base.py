@@ -7,8 +7,8 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 
 import os
 
-from dfuse_test_base import DfuseTestBase
-from command_utils_base import EnvironmentVariables, CommandFailure
+from .dfuse_test_base import DfuseTestBase
+from .command_utils_base import EnvironmentVariables, CommandFailure
 
 
 class VolTestBase(DfuseTestBase):

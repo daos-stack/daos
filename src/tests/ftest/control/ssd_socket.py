@@ -67,7 +67,7 @@ class SSDSocketTest(TestWithServers):
         """
         # Call dmg storage scan --verbose and get the PCI addresses.
         data = self.get_dmg_command().storage_scan(verbose=True)
-        pci_addrs = data[self.hostlist_servers[0]]["nvme"].keys()
+        pci_addrs = list(data[self.hostlist_servers[0]]["nvme"].keys())
         self.log.info("Testing PCI addresses: %s", pci_addrs)
 
         pci_addr_heads = []

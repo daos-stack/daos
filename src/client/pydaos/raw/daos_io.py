@@ -74,6 +74,6 @@ if __name__ == "__main__":
 
     # double check a couple values
     if not rdata == (89000000 % 256):
-        print("expecting {0} but value is {1}".format((89000000 % 256), rdata))
+        print(("expecting {0} but value is {1}".format((89000000 % 256), rdata)))
 
     fh.close()

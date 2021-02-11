@@ -5,7 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 
-from __future__ import print_function
+
 
 import sys
 import time
@@ -502,7 +502,7 @@ class CartIvOneNodeTest(TestWithoutServers):
 
         # Note: due to CART-408 issue, rank 0 needs to shutdown last
         # Request each server shut down gracefully
-        for rank in reversed(range(1, int(srv_ppn) * num_servers)):
+        for rank in reversed(list(range(1, int(srv_ppn) * num_servers))):
             clicmd += " -o shutdown -r " + str(rank)
             self.utils.print("\nClient cmd : %s\n" % clicmd)
             try:

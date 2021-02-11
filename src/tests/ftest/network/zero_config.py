@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 import os
 import re
@@ -76,7 +76,7 @@ class ZeroConfigTest(TestWithServers):
         pattern = r"Using\s+client\s+provided\s+OFI_INTERFACE:\s+{}".format(dev)
 
         detected = 0
-        for output in get_host_data(hosts, cmd, log_file, err).values():
+        for output in list(get_host_data(hosts, cmd, log_file, err).values()):
             detected = len(re.findall(pattern, output))
         self.log.info(
             "Found %s instances of client setting up OFI_INTERFACE=%s",
@@ -138,7 +138,7 @@ class ZeroConfigTest(TestWithServers):
             self.hostlist_clients, hfi_map[exp_iface], "port_rcv_data")
 
         diff = 0
-        for cnt_b, cnt_a in zip(cnt_before.values(), cnt_after.values()):
+        for cnt_b, cnt_a in zip(list(cnt_before.values()), list(cnt_after.values())):
             diff = int(cnt_a) - int(cnt_b)
             self.log.info("Port [%s] count difference: %s", exp_iface, diff)
 
@@ -169,7 +169,7 @@ class ZeroConfigTest(TestWithServers):
         """
         env_state = self.params.get("env_state", '/run/zero_config/*')
         dev_info = {"ib0": 0, "ib1": 1}
-        exp_iface = random.choice(dev_info.keys())
+        exp_iface = random.choice(list(dev_info.keys()))
 
         # Configure the daos server
         self.add_server_manager()

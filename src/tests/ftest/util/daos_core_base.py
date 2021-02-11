@@ -6,15 +6,15 @@
 """
 
 import os
-import write_host_file
+from . import write_host_file
 
 from avocado import fail_on
 from avocado.utils import process
-from apricot import TestWithServers
+from .apricot import TestWithServers
 from env_modules import load_mpi
-from general_utils import get_log_file
-from command_utils import CommandFailure
-from agent_utils import include_local_host
+from .general_utils import get_log_file
+from .command_utils import CommandFailure
+from .agent_utils import include_local_host
 
 
 class DaosCoreBase(TestWithServers):
@@ -88,7 +88,7 @@ class DaosCoreBase(TestWithServers):
                     server_params.set_value("crt_ctx_share_addr", 1)
                     server_params.set_value(
                         "env_vars",
-                        ["=".join(items) for items in env_dict.items()]
+                        ["=".join(items) for items in list(env_dict.items())]
                     )
 
         # Start the servers

@@ -6,9 +6,9 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from ClusterShell.NodeSet import NodeSet
 
-from apricot import TestWithServers
-from command_utils_base import CommandFailure
-from dfuse_utils import Dfuse
+from .apricot import TestWithServers
+from .command_utils_base import CommandFailure
+from .dfuse_utils import Dfuse
 
 
 class DfuseTestBase(TestWithServers):

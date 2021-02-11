@@ -7,8 +7,8 @@
 from logging import getLogger
 import re
 
-from command_utils_base import BasicParameter, ObjectWithParameters
-from general_utils import get_host_data
+from .command_utils_base import BasicParameter, ObjectWithParameters
+from .general_utils import get_host_data
 
 
 DATA_ERROR = "[ERROR]"
@@ -158,7 +158,7 @@ class ConfigurationParameters(ObjectWithParameters):
                 # Retrieve the data for all of the hosts which is grouped by
                 # hosts with the same values
                 requirement_data = self._config_data.get_data(requirement)
-                for group, data in requirement_data.items():
+                for group, data in list(requirement_data.items()):
                     status = data != DATA_ERROR and data >= value
                     self.log.debug(
                         "  %s: Verifying the maximum %s meets the requirememt: "
@@ -264,7 +264,7 @@ class Configuration(object):
         self._all_names = []
         self._all_params.clear()
 
-        for path, key, value in test_params.iteritems():
+        for path, key, value in test_params.items():
             # Store all the non-configuration-definition parameters
             if path in self._all_params:
                 self._all_params[path].append((key, value))
@@ -284,7 +284,7 @@ class Configuration(object):
         """
         self._available_params = {
             path: data
-            for path, data in self._all_params.items()
+            for path, data in list(self._all_params.items())
             if self._valid_path(path)
         }
 
@@ -359,7 +359,7 @@ class Configuration(object):
             "ALL_PARAMS:\n - %s",
             "\n - ".join(
                 ["{}: {}".format(path, data)
-                 for path, data in self._all_params.items()])
+                 for path, data in list(self._all_params.items())])
         )
 
         # Reset the available, active, and inactive configuration names
@@ -379,7 +379,7 @@ class Configuration(object):
             "AVAILABLE_PARAMS:\n - %s",
             "\n - ".join(
                 ["{}: {}".format(key, paths)
-                 for key, paths in self._available_params.items()])
+                 for key, paths in list(self._available_params.items())])
         )
 
         return status
@@ -415,7 +415,7 @@ class Configuration(object):
         # Find each available path that matches the specified path and includes
         # the requested key
         matches = {}
-        for apath, adata in self._available_params.items():
+        for apath, adata in list(self._available_params.items()):
             if search_path.search(apath) is not None:
                 self._log_debug(
                     " - Available path match:                  %s", apath)
@@ -441,7 +441,7 @@ class Configuration(object):
             # Multiple matching paths with an active configuration
             # Search for a single configuration-specific path to use
             specific_paths = [
-                path for path in matches.keys()
+                path for path in list(matches.keys())
                 if path.endswith(self.active_name)]
             if len(specific_paths) == 1:
                 # A single configuration-specific matching path for the key
@@ -462,7 +462,7 @@ class Configuration(object):
                 "Multiple {} leaves contain the key '{}'; {}".format(
                     search_path.pattern, key,
                     ["{}=>{}".format(path, value)
-                     for path, value in matches.items()]))
+                     for path, value in list(matches.items())]))
 
         # Display a AvocadoParams-style logging message for the returned value
         self.log.debug(

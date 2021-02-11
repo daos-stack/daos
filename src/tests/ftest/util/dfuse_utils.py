@@ -4,13 +4,13 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 import time
 
-from command_utils_base import CommandFailure, FormattedParameter
-from command_utils import ExecutableCommand
+from .command_utils_base import CommandFailure, FormattedParameter
+from .command_utils import ExecutableCommand
 from ClusterShell.NodeSet import NodeSet
-from general_utils import check_file_exists, pcmd
+from .general_utils import check_file_exists, pcmd
 
 
 class DfuseCommand(ExecutableCommand):
@@ -115,7 +115,7 @@ class Dfuse(DfuseCommand):
         # Detect which hosts have mount point directories defined
         command = "test -d {0} -a ! -L {0}".format(self.mount_dir.value)
         retcodes = pcmd(nodes, command, expect_rc=None)
-        for retcode, hosts in retcodes.items():
+        for retcode, hosts in list(retcodes.items()):
             for host in hosts:
                 if retcode == 0:
                     check_mounted.add(host)
@@ -128,7 +128,7 @@ class Dfuse(DfuseCommand):
             command = "stat -c %T -f {0} | grep -v fuseblk".format(
                 self.mount_dir.value)
             retcodes = pcmd(check_mounted, command, expect_rc=None)
-            for retcode, hosts in retcodes.items():
+            for retcode, hosts in list(retcodes.items()):
                 for host in hosts:
                     if retcode == 1:
                         state["mounted"].add(host)
@@ -176,7 +176,7 @@ class Dfuse(DfuseCommand):
             ret_code = pcmd(state["nodirectory"], command, timeout=30)
             if len(ret_code) > 1 or 0 not in ret_code:
                 failed_nodes = [
-                    str(node_set) for code, node_set in ret_code.items()
+                    str(node_set) for code, node_set in list(ret_code.items())
                     if code != 0
                 ]
                 error_hosts = NodeSet(",".join(failed_nodes))
@@ -217,7 +217,7 @@ class Dfuse(DfuseCommand):
                 return
 
             failed_nodes = NodeSet(",".join(
-                [str(node_set) for code, node_set in ret_code.items()
+                [str(node_set) for code, node_set in list(ret_code.items())
                  if code != 0]))
 
             cmd = "rm -rf {}".format(self.mount_dir.value)
@@ -225,7 +225,7 @@ class Dfuse(DfuseCommand):
             if len(ret_code) > 1 or 0 not in ret_code:
                 error_hosts = NodeSet(
                     ",".join(
-                        [str(node_set) for code, node_set in ret_code.items()
+                        [str(node_set) for code, node_set in list(ret_code.items())
                          if code != 0]))
                 if fail:
                     raise CommandFailure(
@@ -274,7 +274,7 @@ class Dfuse(DfuseCommand):
         if len(ret_code):
             error_hosts = NodeSet(
                 ",".join(
-                    [str(node_set) for code, node_set in ret_code.items()
+                    [str(node_set) for code, node_set in list(ret_code.items())
                      if code != 0]))
             raise CommandFailure(
                 "Error starting dfuse on the following hosts: {}".format(

@@ -58,34 +58,32 @@ RUN yum -y install epel-release; \
         libaio-devel libcmocka-devel libevent-devel libiscsi-devel     \
         libtool libtool-ltdl-devel libuuid-devel libyaml-devel         \
         make meson nasm ninja-build numactl-devel openssl-devel        \
-        pandoc patch python python-devel python36-devel python-magic   \
-        python-pep8 python-pygit2 python2-pygithub python-requests     \
+        pandoc patch python36-devel                                    \
         readline-devel scons sg3_utils ShellCheck yasm pciutils        \
         valgrind-devel python36-pylint man java-1.8.0-openjdk maven    \
         json-c-devel python36-requests lz4-devel
 
 # DAOS specific
 RUN yum -y install \
-           python2-avocado python2-avocado-plugins-output-html \
-           python2-avocado-plugins-varianter-yaml-to-mux       \
-           python-pathlib                                      \
-           ndctl ipmctl e2fsprogs                              \
-           python2-clustershell python2-Cython                 \
-           python36-clustershell python36-paramiko             \
-           python36-numpy python36-jira python3-pip Lmod       \
-           fuse3-devel libipmctl-devel python36-pyxattr        \
-           hwloc-devel patchelf python36-tabulate              \
-           java-1.8.0-openjdk python-distro python36-distro
+           ndctl ipmctl e2fsprogs                                      \
+           python36-Cython python36-clustershell python36-paramiko     \
+           python36-numpy python36-jira python3-pip Lmod               \
+           fuse3-devel libipmctl-devel python36-pyxattr                \
+           hwloc-devel patchelf python36-tabulate                      \
+           java-1.8.0-openjdk python36-distro
 RUN yum -y install openmpi3-devel
 
 # DAOS python 3 packages required for pylint
 #  - excluding mpi4py as it depends on CORCI-635
-RUN pip3 install avocado-framework; \
-    pip3 install avocado-framework-plugin-result-html; \
-    pip3 install avocado-framework-plugin-varianter-yaml-to-mux
+RUN pip3 install avocado-framework<83.0; \
+    pip3 install avocado-framework-plugin-result-html<83.0; \
+    pip3 install avocado-framework-plugin-varianter-yaml-to-mux<83.0
 
 RUN pip3 install codespell
 RUN pip3 install pygithub
+RUN pip3 install python-magic
+RUN pip3 install pep8
+RUN pip3 install pygit2
 
 # Add DAOS users
 ENV USER daos

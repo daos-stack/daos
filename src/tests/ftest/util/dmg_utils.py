@@ -5,7 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
-from __future__ import print_function
+
 
 from getpass import getuser
 from grp import getgrgid
@@ -13,9 +13,9 @@ from pwd import getpwuid
 import re
 import json
 
-from dmg_utils_base import DmgCommandBase
-from general_utils import get_numeric_list
-from dmg_utils_params import DmgYamlParameters, DmgTransportCredentials
+from .dmg_utils_base import DmgCommandBase
+from .general_utils import get_numeric_list
+from .dmg_utils_params import DmgYamlParameters, DmgTransportCredentials
 
 
 def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None):
@@ -527,7 +527,7 @@ class DmgCommand(DmgCommandBase):
             for index_1, match_list in enumerate(match):
                 if index_1 not in map_values:
                     continue
-                for key, index_2 in map_values[index_1].items():
+                for key, index_2 in list(map_values[index_1].items()):
                     if index_1 == 2:
                         if "scm" not in data:
                             data["scm"] = {}

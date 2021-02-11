@@ -5,14 +5,14 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from __future__ import print_function
+
 import os
 import random
 import time
 import threading
 import re
 
-from general_utils import run_command, DaosTestError
+from .general_utils import run_command, DaosTestError
 from ClusterShell.NodeSet import NodeSet
 
 W_LOCK = threading.Lock()
@@ -150,7 +150,7 @@ def write_slurm_script(path, name, output, nodecount, cmds, uniq, sbatch=None):
             output = output + str(uniq)
             script_file.write("#SBATCH --output={}\n".format(output))
         if sbatch:
-            for key, value in sbatch.items():
+            for key, value in list(sbatch.items()):
                 if key == "error":
                     value = value + str(uniq)
                 script_file.write("#SBATCH --{}={}\n".format(key, value))
@@ -281,7 +281,7 @@ def srun_str(hosts, cmd, srun_params=None):
     if hosts is not None:
         params_list.append("--nodelist {}".format(hosts))
     if srun_params is not None:
-        for key, value in srun_params.items():
+        for key, value in list(srun_params.items()):
             params_list.extend(["--{}={}".format(key, value)])
             params = " ".join(params_list)
     cmd = "srun {} {}".format(params, cmd)

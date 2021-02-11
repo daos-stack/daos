@@ -19,7 +19,7 @@ try:
     import queue as queue
 except ImportError:
     # python 2.7
-    import Queue as queue
+    import queue as queue
 
 
 class OSAOnlineExtend(OSAUtils):

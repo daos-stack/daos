@@ -7,12 +7,12 @@
 import socket
 from getpass import getuser
 
-from command_utils_base import \
+from .command_utils_base import \
     CommandFailure, FormattedParameter, YamlParameters, EnvironmentVariables, \
     CommonConfig
-from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
-from general_utils import get_log_file
-from agent_utils_params import \
+from .command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
+from .general_utils import get_log_file
+from .agent_utils_params import \
     DaosAgentTransportCredentials, DaosAgentYamlParameters
 
 

@@ -4,9 +4,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from __future__ import print_function
 
-from general_utils import get_random_string, DaosTestError
+
+from .general_utils import get_random_string, DaosTestError
 from pydaos.raw import DaosApiError
 
 import time

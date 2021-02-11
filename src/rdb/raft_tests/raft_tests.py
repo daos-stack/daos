@@ -39,7 +39,7 @@ def number_of_failures():
         try:
             res = subprocess.check_output(['/usr/bin/make', '-C', DIR, 'tests'])
         except Exception as e:
-            print("Building Raft Tests failed due to\n{}".format(e))
+            print(("Building Raft Tests failed due to\n{}".format(e)))
             return TEST_NOT_RUN
     else:
         os.chdir(path)
@@ -68,7 +68,7 @@ def main():
     elif failures == TEST_NOT_RUN:
         print("Raft Tests did not run")
     else:
-        print("Raft Tests had {} failures".format(failures))
+        print(("Raft Tests had {} failures".format(failures)))
     sys.exit(failures)
 
 if __name__ == "__main__":

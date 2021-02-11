@@ -8,11 +8,11 @@ import ctypes
 import time
 
 from avocado import fail_on
-from ior_test_base import IorTestBase
-from command_utils import CommandFailure
-from ior_utils import IorCommand
-from job_manager_utils import Mpirun
-from mpio_utils import MpioUtils
+from .ior_test_base import IorTestBase
+from .command_utils import CommandFailure
+from .ior_utils import IorCommand
+from .job_manager_utils import Mpirun
+from .mpio_utils import MpioUtils
 from pydaos.raw import (DaosContainer, IORequest,
                         DaosObj, DaosApiError)
 

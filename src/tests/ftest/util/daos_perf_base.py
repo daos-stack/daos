@@ -6,9 +6,9 @@
 """
 import re
 
-from apricot import TestWithServers
-from daos_perf_utils import DaosPerfCommand
-from job_manager_utils import Orterun
+from .apricot import TestWithServers
+from .daos_perf_utils import DaosPerfCommand
+from .job_manager_utils import Orterun
 
 
 class DaosPerfBase(TestWithServers):

@@ -379,7 +379,7 @@ class SoakTestBase(TestWithServers):
             if failed_harasser_msg is not None:
                 self.all_failed_harassers.append(failed_harasser_msg)
             # check for JobStatus = COMPLETED or CANCELLED (i.e. TEST TO)
-            for job, result in self.soak_results.items():
+            for job, result in list(self.soak_results.items()):
                 if result in ["COMPLETED", "CANCELLED"]:
                     job_id_list.remove(int(job))
                 else:

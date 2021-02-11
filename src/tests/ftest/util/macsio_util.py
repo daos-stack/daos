@@ -4,9 +4,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from command_utils_base import FormattedParameter
-from command_utils import ExecutableCommand
-from general_utils import get_log_file, pcmd
+from .command_utils_base import FormattedParameter
+from .command_utils import ExecutableCommand
+from .general_utils import get_log_file, pcmd
 
 
 class MacsioCommand(ExecutableCommand):

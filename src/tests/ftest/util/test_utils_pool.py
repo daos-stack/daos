@@ -8,12 +8,12 @@ import os
 from time import sleep, time
 import ctypes
 
-from test_utils_base import TestDaosApiBase
+from .test_utils_base import TestDaosApiBase
 
 from avocado import fail_on
-from command_utils import BasicParameter, CommandFailure
+from .command_utils import BasicParameter, CommandFailure
 from pydaos.raw import (DaosApiError, DaosPool, c_uuid_to_str, daos_cref)
-from general_utils import (check_pool_files, DaosTestError, run_command,
+from .general_utils import (check_pool_files, DaosTestError, run_command,
                            convert_list)
 from env_modules import load_mpi
 
@@ -317,7 +317,7 @@ class TestPool(TestDaosApiBase):
              c_uuid_to_str(getattr(self.info, key))
              if key == "pi_uuid" else getattr(self.info, key),
              val)
-            for key, val in locals().items()
+            for key, val in list(locals().items())
             if key != "self" and val is not None]
         return self._check_info(checks)
 
@@ -395,7 +395,7 @@ class TestPool(TestDaosApiBase):
             ("{}_{}".format(key, index),
              getattr(self.info.pi_space.ps_space, key)[index],
              item)
-            for key, val in locals().items()
+            for key, val in list(locals().items())
             if key != "self" and val is not None
             for index, item in enumerate(val)]
         return self._check_info(checks)
@@ -441,7 +441,7 @@ class TestPool(TestDaosApiBase):
         self.get_info()
         checks = [
             (key, getattr(self.info.pi_rebuild_st, key), val)
-            for key, val in locals().items()
+            for key, val in list(locals().items())
             if key != "self" and val is not None]
         return self._check_info(checks)
 

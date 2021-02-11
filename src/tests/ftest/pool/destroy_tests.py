@@ -4,7 +4,7 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 from server_utils import ServerFailed
 from apricot import TestWithServers, skipForTicket

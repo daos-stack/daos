@@ -5,7 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=pylint-too-many-lines
-from __future__ import print_function
+
 
 import ctypes
 import threading
@@ -28,12 +28,12 @@ else:
 
 DaosObjClass = enum.Enum(
     "DaosObjClass",
-    {key: value for key, value in pydaos_shim.__dict__.items()
+    {key: value for key, value in list(pydaos_shim.__dict__.items())
      if key.startswith("OC_")})
 
 DaosContPropEnum = enum.Enum(
     "DaosContPropEnum",
-    {key: value for key, value in pydaos_shim.__dict__.items()
+    {key: value for key, value in list(pydaos_shim.__dict__.items())
      if key.startswith("DAOS_PROP_")})
 
 class DaosPool(object):
@@ -419,7 +419,7 @@ class DaosPool(object):
         values = ctypes.cast(att_values, ctypes.POINTER(ctypes.c_char_p))
 
         size_of_att_val = []
-        for key in data.keys():
+        for key in list(data.keys()):
             if data[key] is not None:
                 size_of_att_val.append(len(data[key]))
             else:
@@ -1922,7 +1922,7 @@ class DaosContainer(object):
         values = ctypes.cast(att_values, ctypes.POINTER(ctypes.c_char_p))
 
         size_of_att_val = []
-        for key in data.keys():
+        for key in list(data.keys()):
             if data[key] is not None:
                 size_of_att_val.append(len(data[key]))
             else:

@@ -10,15 +10,15 @@ import time
 
 from ClusterShell.NodeSet import NodeSet
 
-from dfuse_test_base import DfuseTestBase
-from ior_utils import IorCommand
-from command_utils_base import CommandFailure
-from job_manager_utils import Mpirun
-from general_utils import pcmd
-from daos_utils import DaosCommand
-from mpio_utils import MpioUtils
-from test_utils_pool import TestPool
-from test_utils_container import TestContainer
+from .dfuse_test_base import DfuseTestBase
+from .ior_utils import IorCommand
+from .command_utils_base import CommandFailure
+from .job_manager_utils import Mpirun
+from .general_utils import pcmd
+from .daos_utils import DaosCommand
+from .mpio_utils import MpioUtils
+from .test_utils_pool import TestPool
+from .test_utils_container import TestContainer
 
 
 class IorTestBase(DfuseTestBase):
@@ -463,7 +463,7 @@ class IorTestBase(DfuseTestBase):
         result = pcmd(
             self.hostlist_clients, command, verbose=display_output, timeout=300)
         if 0 not in result and fail_on_err:
-            hosts = [str(nodes) for code, nodes in result.items() if code != 0]
+            hosts = [str(nodes) for code, nodes in list(result.items()) if code != 0]
             raise CommandFailure(
                 "Error running '{}' on the following hosts: {}".format(
                     command, NodeSet(",".join(hosts))))

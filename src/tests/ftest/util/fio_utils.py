@@ -4,11 +4,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from general_utils import pcmd
+from .general_utils import pcmd
 
-from command_utils_base import \
+from .command_utils_base import \
     CommandFailure, BasicParameter, FormattedParameter, CommandWithParameters
-from command_utils import ExecutableCommand
+from .command_utils import ExecutableCommand
 
 
 class FioCommand(ExecutableCommand):
@@ -172,7 +172,7 @@ class FioCommand(ExecutableCommand):
             if len(ret_codes) > 1 or 0 not in ret_codes:
                 failed = [
                     "{}: rc={}".format(val, key)
-                    for key, val in ret_codes.items() if key != 0
+                    for key, val in list(ret_codes.items()) if key != 0
                 ]
                 raise CommandFailure(
                     "Error running fio on the following hosts: {}".format(

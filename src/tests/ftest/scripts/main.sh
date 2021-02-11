@@ -90,69 +90,69 @@ cat <<EOF > ~/.config/avocado/sysinfo/files
 /proc/mounts
 EOF
 
-# apply patches to Avocado
-for loc in /usr/lib/python2*/site-packages/ \
-           /usr/lib/python3*/dist-packages/; do
-    if [ -f "$loc"/avocado/core/runner.py ]; then
-        pydir=$loc
-        break
-    fi
-    if [ -z "$loc" ]; then
-        echo "Could not determine avocado installation location"
-        exit 1
-    fi
-done
-PATCH_DIR="$PREFIX"/lib/daos/TESTING/ftest
-# https://github.com/avocado-framework/avocado/pull/4345
-if ! grep "self.job.result_proxy.notify_progress(False)" \
-          "$pydir"/avocado/core/test.py; then
-    if ! cat < "$PATCH_DIR"/avocado-job-result_proxy-reference-fix.patch | \
-      sudo patch -p1 -d "$pydir"; then
-        echo "Failed to apply avocado PR-4345 patch"
-        exit 1
-    fi
-fi
-# https://github.com/avocado-framework/avocado/pull/2908 fixed in
-# https://github.com/avocado-framework/avocado/pull/3076/
-if ! grep TIMEOUT_TEARDOWN "$pydir"/avocado/core/runner.py; then
-    if ! cat < "$PATCH_DIR"/avocado-teardown-timeout.patch | \
-      sudo patch -p1 -d "$pydir"; then
-        echo "Failed to apply avocado PR-3076 patch"
-        exit 1
-    fi
-fi
-# https://github.com/avocado-framework/avocado/pull/3154
-if ! grep "def phase(self)" \
-    "$pydir"/avocado/core/test.py; then
-    if ! filterdiff -p1 -x selftests/* <                \
-        "$PATCH_DIR"/avocado-report-test-phases.patch | \
-      sed -e '/selftests\/.*/d' |                       \
-      sudo patch -p1 -d "$pydir"; then
-        echo "Failed to apply avocado PR-3154 patch"
-        exit 1
-    fi
-fi
-# apply fix for https://github.com/avocado-framework/avocado/issues/2908
-sudo ed <<EOF "$pydir"/avocado/core/runner.py
-/TIMEOUT_TEST_INTERRUPTED/s/[0-9]*$/60/
-wq
-EOF
-# apply fix for https://github.com/avocado-framework/avocado/pull/2922
-if grep "testsuite.setAttribute('name', 'avocado')" \
-    "$pydir"/avocado/plugins/xunit.py; then
-    sudo ed <<EOF "$pydir"/avocado/plugins/xunit.py
-/testsuite.setAttribute('name', 'avocado')/s/'avocado'/os.path.basename(os.path.dirname(result.logfile))/
-wq
-EOF
-fi
-# Fix for bug to be filed upstream
-if grep "self\.job\.result_proxy\.notify_progress(False)" \
-    "$pydir"/avocado/core/runner.py; then
-    sudo ed <<EOF "$pydir"/avocado/core/runner.py
-/self\.job\.result_proxy\.notify_progress(False)/d
-wq
-EOF
-fi
+# # apply patches to Avocado
+# for loc in /usr/lib/python2*/site-packages/ \
+#            /usr/lib/python3*/dist-packages/; do
+#     if [ -f "$loc"/avocado/core/runner.py ]; then
+#         pydir=$loc
+#         break
+#     fi
+#     if [ -z "$loc" ]; then
+#         echo "Could not determine avocado installation location"
+#         exit 1
+#     fi
+# done
+# PATCH_DIR="$PREFIX"/lib/daos/TESTING/ftest
+# # https://github.com/avocado-framework/avocado/pull/4345
+# if ! grep "self.job.result_proxy.notify_progress(False)" \
+#           "$pydir"/avocado/core/test.py; then
+#     if ! cat < "$PATCH_DIR"/avocado-job-result_proxy-reference-fix.patch | \
+#       sudo patch -p1 -d "$pydir"; then
+#         echo "Failed to apply avocado PR-4345 patch"
+#         exit 1
+#     fi
+# fi
+# # https://github.com/avocado-framework/avocado/pull/2908 fixed in
+# # https://github.com/avocado-framework/avocado/pull/3076/
+# if ! grep TIMEOUT_TEARDOWN "$pydir"/avocado/core/runner.py; then
+#     if ! cat < "$PATCH_DIR"/avocado-teardown-timeout.patch | \
+#       sudo patch -p1 -d "$pydir"; then
+#         echo "Failed to apply avocado PR-3076 patch"
+#         exit 1
+#     fi
+# fi
+# # https://github.com/avocado-framework/avocado/pull/3154
+# if ! grep "def phase(self)" \
+#     "$pydir"/avocado/core/test.py; then
+#     if ! filterdiff -p1 -x selftests/* <                \
+#         "$PATCH_DIR"/avocado-report-test-phases.patch | \
+#       sed -e '/selftests\/.*/d' |                       \
+#       sudo patch -p1 -d "$pydir"; then
+#         echo "Failed to apply avocado PR-3154 patch"
+#         exit 1
+#     fi
+# fi
+# # apply fix for https://github.com/avocado-framework/avocado/issues/2908
+# sudo ed <<EOF "$pydir"/avocado/core/runner.py
+# /TIMEOUT_TEST_INTERRUPTED/s/[0-9]*$/60/
+# wq
+# EOF
+# # apply fix for https://github.com/avocado-framework/avocado/pull/2922
+# if grep "testsuite.setAttribute('name', 'avocado')" \
+#     "$pydir"/avocado/plugins/xunit.py; then
+#     sudo ed <<EOF "$pydir"/avocado/plugins/xunit.py
+# /testsuite.setAttribute('name', 'avocado')/s/'avocado'/os.path.basename(os.path.dirname(result.logfile))/
+# wq
+# EOF
+# fi
+# # Fix for bug to be filed upstream
+# if grep "self\.job\.result_proxy\.notify_progress(False)" \
+#     "$pydir"/avocado/core/runner.py; then
+#     sudo ed <<EOF "$pydir"/avocado/core/runner.py
+# /self\.job\.result_proxy\.notify_progress(False)/d
+# wq
+# EOF
+# fi
 
 pushd "$PREFIX"/lib/daos/TESTING/ftest
 

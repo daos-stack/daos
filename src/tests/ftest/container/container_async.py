@@ -72,7 +72,7 @@ class ContainerAsync(TestWithServers):
                 "Async create of non-existing container succeeded!")
         except DaosApiError as excep:
             print(excep)
-            print(traceback.format_exc())
+            print((traceback.format_exc()))
 
     def test_destroyasync(self):
         """Test container destroy for asynchronous mode.
@@ -100,7 +100,7 @@ class ContainerAsync(TestWithServers):
                 "Async destroy failed! RC = {}".format(cbh.ret_code))
         except DaosApiError as excep:
             print(excep)
-            print(traceback.format_exc())
+            print((traceback.format_exc()))
 
     def test_openasync(self):
         """Test container open for asynchronous mode.
@@ -128,7 +128,7 @@ class ContainerAsync(TestWithServers):
                 "Async open failed! RC = {}".format(cbh.ret_code))
         except DaosApiError as excep:
             print(excep)
-            print(traceback.format_exc())
+            print((traceback.format_exc()))
 
     def test_closeasync(self):
         """Test container close for asynchronous mode.
@@ -172,7 +172,7 @@ class ContainerAsync(TestWithServers):
                 "RC = {}".format(cbh2.ret_code))
         except DaosApiError as excep:
             print(excep)
-            print(traceback.format_exc())
+            print((traceback.format_exc()))
 
     def test_queryasync(self):
         """Test container query for asynchronous mode.
@@ -210,4 +210,4 @@ class ContainerAsync(TestWithServers):
                 "RC = {}".format(cbh2.ret_code))
         except DaosApiError as excep:
             print(excep)
-            print(traceback.format_exc())
+            print((traceback.format_exc()))

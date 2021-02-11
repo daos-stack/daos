@@ -41,7 +41,7 @@ class CSumErrorLog(DaosCoreBase):
                 self.fail("dmg command failed: {}".format(data['error']))
             else:
                 self.fail("dmg command failed: {}".format(resp['host_errors']))
-        for v in resp['host_storage_map'].values():
+        for v in list(resp['host_storage_map'].values()):
             if v['storage']['smd_info']['devices']:
                 return v['storage']['smd_info']['devices'][0]['uuid']
 
@@ -69,7 +69,7 @@ class CSumErrorLog(DaosCoreBase):
                 self.fail("dmg command failed: {}".format(data['error']))
             else:
                 self.fail("dmg command failed: {}".format(resp['host_errors']))
-        for v in resp['host_storage_map'].values():
+        for v in list(resp['host_storage_map'].values()):
             if v['storage']['smd_info']['devices']:
                 dev = v['storage']['smd_info']['devices'][0]
                 return dev['health']['checksum_errs']

@@ -4,11 +4,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from dfuse_test_base import DfuseTestBase
-from mpio_utils import MpioUtils
-from mdtest_utils import MdtestCommand
-from command_utils_base import CommandFailure
-from job_manager_utils import Mpirun, Orterun
+from .dfuse_test_base import DfuseTestBase
+from .mpio_utils import MpioUtils
+from .mdtest_utils import MdtestCommand
+from .command_utils_base import CommandFailure
+from .job_manager_utils import Mpirun, Orterun
 
 
 class MdtestBase(DfuseTestBase):

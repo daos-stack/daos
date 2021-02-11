@@ -7,7 +7,7 @@
 from logging import getLogger
 from time import sleep
 
-from command_utils_base import ObjectWithParameters, BasicParameter
+from .command_utils_base import ObjectWithParameters, BasicParameter
 from pydaos.raw import DaosApiError
 
 
@@ -108,7 +108,7 @@ class TestDaosApiBase(ObjectWithParameters):
 
         # Optionally log the method call with its arguments if debug is set
         self._log_method(
-            "{}.{}".format(method.im_class.__name__, method.__name__), kwargs)
+            "{}.{}".format(method.__self__.__class__.__name__, method.__name__), kwargs)
 
         try:
             method(**kwargs)
@@ -118,7 +118,7 @@ class TestDaosApiBase(ObjectWithParameters):
                 "Exception raised by %s.%s(%s)",
                 method.__module__, method.__name__,
                 ", ".join(
-                    ["{}={}".format(key, val) for key, val in kwargs.items()]),
+                    ["{}={}".format(key, val) for key, val in list(kwargs.items())]),
                 exc_info=error)
             # Raise the exception so it can be handled by the caller
             raise error
@@ -156,7 +156,7 @@ class TestDaosApiBase(ObjectWithParameters):
                     ">=": (
                         lambda x, y: x >= y, "is too small or does not match"),
                 }
-                for key, val in comparisons.items():
+                for key, val in list(comparisons.items()):
                     # If the expected value is preceded by one of the known
                     # comparison keys, use the comparison and remove the key
                     # from the expected value

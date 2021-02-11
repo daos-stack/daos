@@ -4,16 +4,16 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 import os
 import random
 import grp
 import re
-from apricot import TestWithServers
-from daos_utils import DaosCommand
-import agent_utils as agu
-import security_test_base as secTestBase
+from .apricot import TestWithServers
+from .daos_utils import DaosCommand
+from . import agent_utils as agu
+from . import security_test_base as secTestBase
 
 PERMISSIONS = ["", "r", "w", "rw"]
 DENY_ACCESS = "-1001"

@@ -4,15 +4,15 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 import re
 import uuid
 import time
 from enum import IntEnum
 
-from command_utils_base import CommandFailure, FormattedParameter
-from command_utils import ExecutableCommand
+from .command_utils_base import CommandFailure, FormattedParameter
+from .command_utils import ExecutableCommand
 
 
 class IorCommand(ExecutableCommand):

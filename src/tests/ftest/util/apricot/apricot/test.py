@@ -8,7 +8,7 @@
 
 # Some useful test classes inherited from avocado.Test
 
-from __future__ import print_function
+
 
 import os
 import json
@@ -637,7 +637,7 @@ class TestWithServers(TestWithoutServers):
         self.log.debug("--- STARTING AGENT GROUPS: %s ---", agent_groups)
 
         if isinstance(agent_groups, dict):
-            for group, info in agent_groups.items():
+            for group, info in list(agent_groups.items()):
                 self.add_agent_manager(group)
                 self.configure_manager(
                     "agent",
@@ -674,7 +674,7 @@ class TestWithServers(TestWithoutServers):
         self.log.debug("--- STARTING SERVER GROUPS: %s ---", server_groups)
 
         if isinstance(server_groups, dict):
-            for group, info in server_groups.items():
+            for group, info in list(server_groups.items()):
                 self.add_server_manager(group)
                 self.configure_manager(
                     "server",

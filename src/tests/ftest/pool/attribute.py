@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from __future__ import print_function
+
 
 import traceback
 import threading
@@ -35,16 +35,16 @@ def verify_list_attr(indata, size, buff):
     verify the length of the Attribute names
     """
     # length of all the attribute names
-    aggregate_len = sum(len(attr_name) for attr_name in indata.keys()) + 1
+    aggregate_len = sum(len(attr_name) for attr_name in list(indata.keys())) + 1
     # there is a space between each name, so account for that
-    aggregate_len += len(indata.keys())-1
+    aggregate_len += len(list(indata.keys()))-1
 
     if aggregate_len != size:
         raise DaosTestError("FAIL: Size is not matching for Names in list"
                             "attr, Expected len={0} and received len = {1}"
                             .format(aggregate_len, size))
     # verify the Attributes names in list_attr retrieve
-    for key in indata.keys():
+    for key in list(indata.keys()):
         if key not in buff:
             raise DaosTestError("FAIL: Name does not match after list attr,"
                                 " Expected buf={0} and received buf = {1}"
@@ -55,7 +55,7 @@ def verify_get_attr(indata, outdata):
     """
     verify the Attributes value after get_attr
     """
-    for attr, value in indata.iteritems():
+    for attr, value in indata.items():
         if value != outdata[attr]:
             raise DaosTestError("FAIL: Value does not match after get attr,"
                                 " Expected val={0} and received val = {1}"
@@ -106,7 +106,7 @@ class PoolAttributeTest(TestWithServers):
             verify_list_attr(attr_dict, size.value, buf)
 
             results = {}
-            results = self.pool.pool.get_attr(attr_dict.keys())
+            results = self.pool.pool.get_attr(list(attr_dict.keys()))
             verify_get_attr(attr_dict, results)
         except DaosApiError as excep:
             print(excep)

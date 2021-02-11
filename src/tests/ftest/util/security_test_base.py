@@ -7,7 +7,7 @@
 
 import os
 import random
-from general_utils import pcmd
+from .general_utils import pcmd
 
 class DaosTestError(Exception):
     """DAOS API exception class."""
@@ -82,7 +82,7 @@ def add_del_user(hosts, bash_cmd, user):
     if "usermod" not in bash_cmd and "user" in bash_cmd:
         homedir = "-r"
     cmd = " ".join(("sudo", bash_cmd, homedir, user))
-    print("     =Clients/hosts {0}, exec cmd: {1}".format(hosts, cmd))
+    print(("     =Clients/hosts {0}, exec cmd: {1}".format(hosts, cmd)))
     pcmd(hosts, cmd, False)
 
 

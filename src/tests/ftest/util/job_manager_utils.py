@@ -12,12 +12,12 @@ import time
 
 from ClusterShell.NodeSet import NodeSet
 
-from command_utils import ExecutableCommand, SystemctlCommand
-from command_utils_base import FormattedParameter, EnvironmentVariables
-from command_utils_base import CommandFailure
+from .command_utils import ExecutableCommand, SystemctlCommand
+from .command_utils_base import FormattedParameter, EnvironmentVariables
+from .command_utils_base import CommandFailure
 from env_modules import load_mpi
-from general_utils import pcmd, run_task
-from write_host_file import write_host_file
+from .general_utils import pcmd, run_task
+from .write_host_file import write_host_file
 
 
 class JobManager(ExecutableCommand):
@@ -641,7 +641,7 @@ class Systemctl(JobManager):
                 )
         if 0 not in result or len(result) > 1:
             failed = []
-            for item, value in result.items():
+            for item, value in list(result.items()):
                 if item != 0:
                     failed.extend(value)
             raise CommandFailure("Error occurred running '{}' on {}".format(

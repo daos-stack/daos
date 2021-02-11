@@ -14,10 +14,10 @@ import os
 
 from avocado.utils import process
 
-from command_utils_base import \
+from .command_utils_base import \
     CommandFailure, BasicParameter, ObjectWithParameters, \
     CommandWithParameters, YamlParameters, EnvironmentVariables, LogParameter
-from general_utils import check_file_exists, stop_processes, get_log_file, \
+from .general_utils import check_file_exists, stop_processes, get_log_file, \
     run_command, DaosTestError, get_job_manager_class, create_directory, \
     distribute_files, change_file_owner, get_file_listing
 
@@ -534,7 +534,7 @@ class CommandWithSubCommand(ExecutableCommand):
                 this_command = this_command.sub_command_class
 
         # Set the sub-command arguments
-        for name, value in kwargs.items():
+        for name, value in list(kwargs.items()):
             getattr(this_command, name).value = value
 
         # Issue the command and store the command result
@@ -993,13 +993,13 @@ class SubprocessManager(object):
         regex = self.manager.job.command_regex
         result = stop_processes(self._hosts, regex)
         if 0 in result and len(result) == 1:
-            print(
+            print((
                 "No remote {} processes killed (none found), done.".format(
-                    regex))
+                    regex)))
         else:
-            print(
+            print((
                 "***At least one remote {} process needed to be killed! Please "
-                "investigate/report.***".format(regex))
+                "investigate/report.***".format(regex)))
 
     def verify_socket_directory(self, user):
         """Verify the domain socket directory is present and owned by this user.

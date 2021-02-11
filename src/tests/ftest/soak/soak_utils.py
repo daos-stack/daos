@@ -151,8 +151,8 @@ def run_event_check(self, since, until):
         "--since='{}' --until='{}'".format(since, until)
         err = "Error gathering system log events"
         for event in events:
-            for output in get_host_data(
-                    hosts, command, "journalctl", err).values():
+            for output in list(get_host_data(
+                    hosts, command, "journalctl", err).values()):
                 lines = str(output).splitlines()
                 for line in lines:
                     match = re.search(r"{}".format(event), str(line))
@@ -320,7 +320,7 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
     if name == "EXCLUDE":
         exclude_servers = len(self.hostlist_servers) - 1
         # Exclude target : random 4 targets  (target idx : 0-7)
-        target_list = random.sample(range(0, 7), 4)
+        target_list = random.sample(list(range(0, 7)), 4)
         tgt_idx = "{}".format(','.join(str(tgt) for tgt in target_list))
         # Exclude one rank : other than rank 0 and 1.
         rank = random.randint(2, exclude_servers)
@@ -495,7 +495,7 @@ def get_srun_cmd(cmd, nodesperjob=1, ppn=1, srun_params=None, env=None):
     srun_cmd.nodes.update(nodesperjob)
     srun_cmd.ntasks_per_node.update(ppn)
     if srun_params:
-        for key, value in srun_params.items():
+        for key, value in list(srun_params.items()):
             key_obj = getattr(srun_cmd, key)
             if isinstance(key_obj, BasicParameter):
                 key_obj.update(value, key)

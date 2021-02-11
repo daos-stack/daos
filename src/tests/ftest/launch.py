@@ -5,7 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
-from __future__ import print_function
+
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from datetime import datetime
@@ -472,7 +472,7 @@ def find_values(obj, keys, key=None, val_type=list):
         matches[key] = obj
     elif isinstance(obj, dict):
         # Recursively look for matches in each dictionary entry
-        for obj_key, obj_val in obj.items():
+        for obj_key, obj_val in list(obj.items()):
             add_matches(find_values(obj_val, keys, obj_key, val_type))
     elif isinstance(obj, list):
         # Recursively look for matches in each list entry
@@ -679,7 +679,7 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
 
         # Generate a list of values that can be used as replacements
         new_values = {}
-        for key, value in YAML_KEYS.items():
+        for key, value in list(YAML_KEYS.items()):
             args_value = getattr(args, value)
             if isinstance(args_value, NodeSet):
                 new_values[key] = list(args_value)
@@ -987,7 +987,7 @@ def get_hosts_from_yaml(test_yaml, args):
     if args.include_localhost:
         host_set.add(socket.gethostname().split(".")[0])
     found_client_key = False
-    for key, value in find_yaml_hosts(test_yaml).items():
+    for key, value in list(find_yaml_hosts(test_yaml).items()):
         host_set.update(value)
         if key in YAML_KEYS["test_clients"]:
             found_client_key = True

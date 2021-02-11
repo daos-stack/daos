@@ -25,7 +25,7 @@ from . import DaosClient
 # Import Object class as an enumeration
 ObjClassID = enum.Enum(
     "Enumeration of the DAOS object classes (OC).",
-    {key: value for key, value in pydaos_shim.__dict__.items()
+    {key: value for key, value in list(pydaos_shim.__dict__.items())
      if key.startswith("OC_")})
 
 class KvNotFound(Exception):
@@ -227,7 +227,7 @@ class KVIter():
         self._done = False
         self._kv = kv
 
-    def next(self):
+    def __next__(self):
         """for python 2 compatibility"""
         return self.__next__()
 

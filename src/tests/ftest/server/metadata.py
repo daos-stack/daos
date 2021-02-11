@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 import traceback
 import uuid
@@ -16,7 +16,7 @@ try:
     import queue
 except ImportError:
     # python 2.7
-    import Queue as queue
+    import queue as queue
 
 from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError

@@ -5,7 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
-from __future__ import print_function
+
 from logging import getLogger
 import os
 import re
@@ -104,7 +104,7 @@ class SimpleProfiler(object):
         self._pmsg("{0:20} {1:5} {2:10} {3:10} {4:10}".format(
             "Function Tag", "Hits", "Max", "Min", "Average"))
 
-        for fname, data in self._stats.items():
+        for fname, data in list(self._stats.items()):
             max_time, min_time, avg_time = self._calculate_metrics(data[1])
             self._pmsg(
                 "{0:20} {1:5} {2:10} {3:10} {4:10}".format(
@@ -351,7 +351,7 @@ def get_host_data(hosts, command, text, error, timeout=None):
     if len(data) > 1 or 0 not in data:
         # Report the errors
         messages = []
-        for code, host_list in data.items():
+        for code, host_list in list(data.items()):
             if code != 0:
                 output_data = list(task.iter_buffers(host_list))
                 if not output_data:

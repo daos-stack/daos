@@ -423,7 +423,7 @@ class StateIter():
 
         return line
 
-    def next(self):
+    def __next__(self):
         """Python2/3 compat function"""
         return self.__next__()
 
@@ -477,7 +477,7 @@ class LogIter():
                     self._fd.read(err.start - 200)
                     data = self._fd.read(199)
                     lines = data.splitlines()
-                    print(lines[-1])
+                    print((lines[-1]))
                     self.file_corrupt = True
 
                     # This will now work, as the file has been opened in
@@ -661,11 +661,11 @@ class LogIter():
             self._iter_count += 1
             return line
 
-    def next(self):
+    def __next__(self):
         """Python2/3 compat function"""
         return self.__next__()
 
     def get_pids(self):
         """Return an array of pids appearing in the file"""
-        return self._pids.keys()
+        return list(self._pids.keys())
 # pylint: enable=too-many-instance-attributes

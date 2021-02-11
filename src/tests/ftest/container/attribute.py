@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from __future__ import print_function
+
 
 import traceback
 import threading
@@ -32,7 +32,7 @@ def verify_list_attr(indata, size, buff, mode="sync"):
     """
     verify the length of the Attribute names
     """
-    length = sum(len(i) for i in indata.keys()) + len(indata.keys())
+    length = sum(len(i) for i in list(indata.keys())) + len(list(indata.keys()))
     if mode == "async":
         length = length + 1
     if length != size:
@@ -40,7 +40,7 @@ def verify_list_attr(indata, size, buff, mode="sync"):
                             "attr, Expected len={0} and received len = {1}"
                             .format(length, size))
     # verify the Attributes names in list_attr retrieve
-    for key in indata.keys():
+    for key in list(indata.keys()):
         if key not in buff:
             raise DaosTestError("FAIL: Name does not match after list attr,"
                                 " Expected buf={0} and received buf = {1}"
@@ -51,7 +51,7 @@ def verify_get_attr(indata, outdata):
     """
     verify the Attributes value after get_attr
     """
-    for attr, value in indata.iteritems():
+    for attr, value in indata.items():
         if value != outdata[attr]:
             raise DaosTestError("FAIL: Value does not match after get attr,"
                                 " Expected val={0} and received val = {1}"
@@ -103,7 +103,7 @@ class ContainerAttributeTest(TestWithServers):
             verify_list_attr(attr_dict, size, buf)
 
             results = {}
-            results = self.container.get_attr(attr_dict.keys())
+            results = self.container.get_attr(list(attr_dict.keys()))
             verify_get_attr(attr_dict, results)
         except DaosApiError as excep:
             print(excep)

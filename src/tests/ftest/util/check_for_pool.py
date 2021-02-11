@@ -4,9 +4,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
 
-from general_utils import run_command
+
+from .general_utils import run_command
 
 
 def check_for_pool(host, uuid):

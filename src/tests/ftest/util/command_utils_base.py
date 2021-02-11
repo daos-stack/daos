@@ -579,7 +579,7 @@ class EnvironmentVariables(dict):
         """
         return [
             key if value is None else "{}={}".format(key, value)
-            for key, value in self.items()
+            for key, value in list(self.items())
         ]
 
     def get_export_str(self, separator=";"):

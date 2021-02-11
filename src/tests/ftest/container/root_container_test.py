@@ -212,7 +212,7 @@ class RootContainerTest(DfuseTestBase):
                 error_hosts = NodeSet(
                     ",".join(
                         [str(node_set) for code, node_set in
-                         ret.items() if code != 0]))
+                         list(ret.items()) if code != 0]))
                 raise CommandFailure(
                     "Error running '{}' on the following "
                     "hosts: {}".format(cmd, error_hosts))

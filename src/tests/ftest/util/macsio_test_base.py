@@ -4,9 +4,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from apricot import TestWithServers
-from command_utils_base import CommandFailure
-from macsio_util import MacsioCommand
+from .apricot import TestWithServers
+from .command_utils_base import CommandFailure
+from .macsio_util import MacsioCommand
 
 
 class MacsioTestBase(TestWithServers):

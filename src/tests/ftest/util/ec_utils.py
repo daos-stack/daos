@@ -6,9 +6,9 @@
 """
 import re
 
-from nvme_utils import ServerFillUp
-from daos_utils import DaosCommand
-from test_utils_container import TestContainer
+from .nvme_utils import ServerFillUp
+from .daos_utils import DaosCommand
+from .test_utils_container import TestContainer
 
 class ErasureCodeIor(ServerFillUp):
     # pylint: disable=too-many-ancestors
@@ -121,8 +121,8 @@ class ErasureCodeIor(ServerFillUp):
                 parity_set = "P{}".format(parity)
                 #Read the requested data+parity data set only
                 if parity != 1 and parity_set not in oclass[0]:
-                    print("Skipping Read as object type is {}"
-                          .format(oclass[0]))
+                    print(("Skipping Read as object type is {}"
+                          .format(oclass[0])))
                     con_count += 1
                     continue
                 self.ior_param_update(oclass, sizes)
