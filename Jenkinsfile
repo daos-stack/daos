@@ -765,6 +765,7 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallel_build(),
                                    stash_files: 'ci/test_files_to_stash.txt',
+                                   scons_exe: 'scons-3',
                                    scons_args: scons_faults_args()
                     }
                     post {
@@ -810,6 +811,7 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallel_build(),
                                    stash_files: 'ci/test_files_to_stash.txt',
+                                   scons_exe: 'scons-3',
                                    scons_args: scons_faults_args()
                     }
                     post {
@@ -852,7 +854,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallel_build()
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_exe: 'scons-3'
                     }
                     post {
                         always {
@@ -894,7 +897,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallel_build()
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_exe: 'scons-3'
                     }
                     post {
                         always {
@@ -936,6 +940,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
+                                   scons_exe: 'scons-3',
                                    scons_args: scons_faults_args()
                     }
                     post {
@@ -1306,7 +1311,8 @@ pipeline {
                     }
                     steps {
                         sconsBuild coverity: "daos-stack/daos",
-                                   parallel_build: parallel_build()
+                                   parallel_build: parallel_build(),
+                                   scons_exe: 'scons-3'
                     }
                     post {
                         success {
