@@ -424,7 +424,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
-* Tue Jan 26 2021 Saurabh Tandan <saurabh.tandan@intel.com> 1.1.3-2
+* Tue Feb 11 2021 Saurabh Tandan <saurabh.tandan@intel.com> 1.1.3-2
 - Add daos-tests-java package
 
 * Wed Feb 10 2021 Johann Lombardi <johann.lombardi@intel.com> 1.1.3-1
