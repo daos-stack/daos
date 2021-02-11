@@ -38,6 +38,16 @@ init_tests(void **state)
 }
 
 static void
+test_shmem_removed(void **state)
+{
+	uint64_t	*shmem;
+	int		simulated_srv_idx = 100;
+
+	shmem = d_tm_get_shared_memory(simulated_srv_idx);
+	assert_null(shmem);
+}
+
+static void
 test_print_metrics(void **state)
 {
 	struct d_tm_node_t	*node;
@@ -248,6 +258,7 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_timer_snapshot),
 		cmocka_unit_test(test_gauge_stats),
 		cmocka_unit_test(test_duration_stats),
+		cmocka_unit_test(test_shmem_removed),
 	};
 
 	d_register_alt_assert(mock_assert);

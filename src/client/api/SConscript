@@ -7,9 +7,7 @@ def scons():
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
-
     prereqs.require(denv, 'protobufc')
-
     dc_tgts = denv.SharedObject(Glob('*.c'))
 
     Import('dc_pool_tgts', 'dc_co_tgts', 'dc_obj_tgts', 'dc_placement_tgts')
