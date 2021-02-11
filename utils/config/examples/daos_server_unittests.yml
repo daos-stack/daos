@@ -25,7 +25,7 @@ control_log_file: /tmp/daos_server.log
 
 engines:
 -
-  targets: 1                # count of storage targets per each server
+  targets: 1                # count of storage targets per each engine
   first_core: 0             # offset of the first core for service xstreams
   nr_xs_helpers: 0          # count of I/O service threads per engine
   fabric_iface: lo          # map to OFI_INTERFACE=lo
@@ -61,6 +61,6 @@ engines:
   # scm_list: [/dev/pmem0]
 
   # If using NVMe SSD (will write /mnt/daos/daos_nvme.conf and start I/O
-  # server with -n <path>)
+  # engine with -n <path>)
   bdev_class: nvme
   bdev_list: []
