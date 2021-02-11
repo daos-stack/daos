@@ -44,6 +44,21 @@ class ManagementServiceResilience(TestWithServers):
         self.start_servers_once = False
         self.L_QUERY_TIMER = 300 # adjust down as we learn more
 
+    def find_pool(self, uuid):
+        """Find a pool in the output of `dmg pool list`.
+
+        Args:
+            uuid (str): Pool UUID to find.
+
+        Returns:
+            Pool entry, if found, or None.
+        """
+        pools = self.get_dmg_command().pool_list()["response"]["pools"]
+        for pool in pools:
+            if pool["uuid"].lower() == uuid.lower():
+                return pool
+        return None
+
     def create_pool(self, failure_expected=False):
         """Create a pool on the server group
 
@@ -66,7 +81,7 @@ class ManagementServiceResilience(TestWithServers):
             self.log.info("Pool UUID %s on server group: %s",
                           self.pool.uuid, self.server_group)
             # Verify that the pool persisted.
-            if self.get_dmg_command().pool_list()["response"]["pools"]:
+            if self.find_pool(self.pool.uuid):
                 self.log.info("Found pool in system.")
             else:
                 self.fail("No pool found in system.")
@@ -104,24 +119,6 @@ class ManagementServiceResilience(TestWithServers):
                       " provided to servers".format(l_hostname))
         return l_hostname
 
-    def restart_servers(self, hosts, replicas):
-        """Restart previously-stopped servers.
-
-        Args:
-            hosts (list):       List of hostnames to restart.
-            replicas (list):    List of MS replicas for access_points.
-        """
-        self.log.info("*** restarting %d servers", len(hosts))
-
-        server_groups = {
-            self.server_group:
-                {
-                    "hosts": hosts,
-                    "access_points": replicas
-                },
-        }
-        self.start_servers(server_groups)
-
     def launch_servers(self, resilience_num):
         """Setup and start the daos_servers.
 
@@ -155,6 +152,9 @@ class ManagementServiceResilience(TestWithServers):
         """
         replicas = self.launch_servers((2 * N) + 1)
         leader = self.verify_leader(replicas)
+
+        # First, kill the leader plus just enough other replicas to
+        # push up to the edge of quorum loss.
         kill_list = set(random.sample(replicas, N))
         if leader not in kill_list:
             kill_list.pop()
@@ -162,17 +162,14 @@ class ManagementServiceResilience(TestWithServers):
         self.log.info("*** stopping leader (%s) + %d others", leader, N-1)
         stop_processes(kill_list, "daos_server")
 
+        # Next, verify that one of the replicas has stepped up as
+        # the new leader.
         survivors = [x for x in replicas if x not in kill_list]
         self.verify_leader(survivors)
         self.get_dmg_command().hostlist = self.hostlist_servers
 
-        # Now, wait until the downed server ranks are evicted by SWIM before
-        # trying to create a pool, otherwise we'll get a -DER_UNREACH.
-        # NB: Figure out system query from here so that we can check for the
-        # expected states. For now, just add a longish timeout to see if that
-        # works.
-        time.sleep(15)
-
+        # Finally, verify that quorum has been retained by performing
+        # write operations.
         self.create_pool()
         self.pool = None
 
@@ -189,6 +186,11 @@ class ManagementServiceResilience(TestWithServers):
         replicas = self.launch_servers((2 * N) + 1)
         leader = self.verify_leader(replicas)
 
+        # First, create a pool.
+        self.create_pool(failure_expected=False)
+
+        # Next, kill the leader plus enough other replicas to
+        # lose quorum.
         kill_list = set(random.sample(replicas, N+1))
         if leader not in kill_list:
             kill_list.pop()
@@ -197,59 +199,69 @@ class ManagementServiceResilience(TestWithServers):
         stop_processes(kill_list, "daos_server")
         self.get_dmg_command().hostlist = self.hostlist_servers
 
+        # Now, try to perform some read-only operations to verify
+        # that they work on a MS without quorum.
         if not self.get_dmg_command().system_leader_query():
-            self.fail("Can't read MS information after removing resiliency.")
+            self.fail("Can't query system after quorum loss.")
+        if not self.find_pool(self.pool.uuid):
+            self.fail("Can't list pools after quorum loss.")
+        self.pool = None
 
+        # A write operation should fail, however.
         self.create_pool(failure_expected=True)
-        self.restart_servers(kill_list, replicas)
+
+        # Finally, restart the dead servers and verify that quorum is
+        # regained, which should allow for write operations to succeed again.
+        self.restart_servers(self.server_group, list(kill_list))
+        self.verify_leader(replicas)
         self.create_pool(failure_expected=False)
         self.pool = None
 
-#--    def test_ms_resilience_1(self):
-#--        """
-#--        JIRA ID: DAOS-3798
-#--
-#--        Test Description:
-#--            Test management service is accessible after instances are removed.
-#--
-#--        The raft protocol guarantees 2N+1 resiliency, where N is the number of
-#--        nodes that can fail while leaving the cluster in a state where it can
-#--        continue to make progress. i.e. N=1, a minimum of 3 nodes is needed in
-#--        the cluster and it will tolerate 1 node failure.
-#--
-#--        N = 1 servers as access_points where, N = failure tolerance,
-#--        resilience_num = minimum amount of MS replicas to achieve resiliency.
-#--        This test case will shutdown 1 server and verify we still have MS
-#--        resiliency.
-#--
-#--        :avocado: tags=all,hw,large,full_regression,control,ms_resilience
-#--        :avocado: tags=ms_resilience_N_1
-#--        """
-#--        # Run test cases
-#--        self.verify_resiliency(1)
-#--
-#--    def test_ms_resilience_2(self):
-#--        """
-#--        JIRA ID: DAOS-3798
-#--
-#--        Test Description:
-#--            Test management service is accessible after instances are removed.
-#--
-#--        The raft protocol guarantees 2N+1 resiliency, where N is the number of
-#--        nodes that can fail while leaving the cluster in a state where it can
-#--        continue to make progress. i.e. N=1, a minimum of 3 nodes is needed in
-#--        the cluster and it will tolerate 1 node failure.
-#--
-#--        N = 2 servers as access_points where, N = failure tolerance,
-#--        resilience_num = minimum amount of MS replicas to achieve resiliency.
-#--        This test case will shutdown 1 server and verify we still have MS
-#--        resiliency.
-#--
-#--        :avocado: tags=all,hw,large,full_regression,control,ms_resilience
-#--        :avocado: tags=ms_resilience_N_2
-#--        """
-#--        # Run test cases
-#--        self.verify_resiliency(2)
+    def test_ms_resilience_1(self):
+        """
+        JIRA ID: DAOS-3798
+
+        Test Description:
+            Test management service is accessible after instances are removed.
+
+        The raft protocol guarantees 2N+1 resiliency, where N is the number of
+        nodes that can fail while leaving the cluster in a state where it can
+        continue to make progress. i.e. N=1, a minimum of 3 nodes is needed in
+        the cluster and it will tolerate 1 node failure.
+
+        N = 1 servers as access_points where, N = failure tolerance,
+        resilience_num = minimum amount of MS replicas to achieve resiliency.
+        This test case will shutdown 1 server and verify we still have MS
+        resiliency.
+
+        :avocado: tags=all,pr,daily_regression,control,ms_resilience
+        :avocado: tags=ms_resilience_N_1
+        """
+        # Run test cases
+        self.verify_resiliency(1)
+
+    def test_ms_resilience_2(self):
+        """
+        JIRA ID: DAOS-3798
+
+        Test Description:
+            Test management service is accessible after instances are removed.
+
+        The raft protocol guarantees 2N+1 resiliency, where N is the number of
+        nodes that can fail while leaving the cluster in a state where it can
+        continue to make progress. i.e. N=1, a minimum of 3 nodes is needed in
+        the cluster and it will tolerate 1 node failure.
+
+        N = 2 servers as access_points where, N = failure tolerance,
+        resilience_num = minimum amount of MS replicas to achieve resiliency.
+        This test case will shutdown 1 server and verify we still have MS
+        resiliency.
+
+        :avocado: tags=all,pr,daily_regression,control,ms_resilience
+        :avocado: tags=ms_resilience_N_2
+        """
+        # Run test cases
+        self.verify_resiliency(2)
 
     def test_ms_resilience_3(self):
         """
@@ -269,7 +281,7 @@ class ManagementServiceResilience(TestWithServers):
         This test case will shutdown 1 + 1 replicas hosts and check we've
         lost resiliency.
 
-        :avocado: tags=all,hw,large,full_regression,control,ms_resilience
+        :avocado: tags=all,pr,daily_regression,control,ms_resilience
         :avocado: tags=ms_lost_resilience_N_1
         """
         # Run test case
@@ -293,7 +305,7 @@ class ManagementServiceResilience(TestWithServers):
         This test case will shutdown 2 + 1 replicas hosts and check we've
         lost resiliency.
 
-        :avocado: tags=all,hw,large,full_regression,control,ms_resilience
+        :avocado: tags=all,pr,daily_regression,control,ms_resilience
         :avocado: tags=ms_lost_resilience_N_2
         """
         # Run test case

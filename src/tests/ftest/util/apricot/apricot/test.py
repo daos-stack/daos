@@ -647,6 +647,23 @@ class TestWithServers(TestWithoutServers):
                     info["access_points"])
             self.start_agent_managers()
 
+    def restart_servers(self, server_group, hosts):
+        """Restart the daos_server processes after a stop. The servers must
+           have been previously formatted and started.
+
+        Args:
+            server_group (str): Managed server group name.
+            hosts (list): List of hosts to be restarted.
+        """
+        if server_group is None:
+            raise Exception("server_group can't be None")
+
+        mgr = self.get_server_manager(server_group)
+        if mgr is None:
+            raise Exception("no manager found for {}".format(server_group))
+
+        mgr.restart(hosts)
+
     def start_servers(self, server_groups=None):
         """Start the daos_server processes.
 
@@ -744,6 +761,25 @@ class TestWithServers(TestWithoutServers):
                 group, self.bin, cert_dir, config_file, config_temp,
                 self.agent_manager_class)
         )
+
+    def get_server_manager(self, group=None):
+        """Returns the manager for the named server group.
+
+        Args:
+            group (str, optional): Name of the server group. Defaults
+                to the group set on this object.
+
+        Returns:
+            The server manager, if found, or None.
+        """
+        if group is None:
+            group = self.server_group
+
+        for mgr in self.server_managers:
+            if mgr.group == group:
+                return mgr
+
+        return None
 
     def add_server_manager(self, group=None, svr_config_file=None,
                            dmg_config_file=None, svr_config_temp=None,

@@ -346,6 +346,7 @@ class DaosServerManager(SubprocessManager):
                 manage the YamlCommand defined through the "job" attribute.
                 Defaults to "Orterun".
         """
+        self.group = group
         server_command = get_server_command(
             group, svr_cert_dir, bin_dir, svr_config_file, svr_config_temp)
         super(DaosServerManager, self).__init__(server_command, manager)
@@ -655,6 +656,24 @@ class DaosServerManager(SubprocessManager):
 
         if cmd_list:
             pcmd(self._hosts, "; ".join(cmd_list), verbose)
+
+    def restart(self, hosts):
+        """Restart the specified servers after a stop. The servers must
+           have been previously formatted and started.
+
+        Args:
+            hosts (list): List of servers to restart.
+        """
+        orig_hosts = self.manager.hosts
+        self.manager.assign_hosts(hosts)
+        orig_pattern = self.manager.job.pattern
+        orig_count = self.manager.job.pattern_count
+        self.manager.job.update_pattern("normal", len(hosts))
+        try:
+            self.manager.run()
+        finally:
+            self.manager.assign_hosts(orig_hosts)
+            self.manager.job.update_pattern(orig_pattern, orig_count)
 
     def start(self):
         """Start the server through the job manager."""
