@@ -73,14 +73,10 @@ class OSAOnlineReintegration(OSAUtils):
         # Create a pool
         pool = {}
         pool_uuid = []
-        target_list = []
         exclude_servers = (len(self.hostlist_servers) * 2) - 1
 
         # Exclude target : random two targets  (target idx : 0-7)
         n = random.randint(0, 6)
-        target_list.append(n)
-        target_list.append(n+1)
-        t_string = "{},{}".format(target_list[0], target_list[1])
 
         # Exclude one rank : other than rank 0.
         rank = random.randint(1, exclude_servers)
@@ -131,7 +127,7 @@ class OSAOnlineReintegration(OSAUtils):
             self.log.info("Pool Version at the beginning %s", pver_begin)
             if server_boot is False:
                 output = self.dmg_command.pool_exclude(self.pool.uuid,
-                                                       rank, t_string)
+                                                       rank)
             else:
                 output = self.dmg_command.system_stop(ranks=rank)
                 time.sleep(10)
