@@ -1159,7 +1159,8 @@ main(void)
 		cmocka_unit_test(test_acl_to_stream_success),
 	};
 
-	return cmocka_run_group_tests(tests, NULL, NULL);
+	return cmocka_run_group_tests_name("common_acl_util",
+					   tests, NULL, NULL);
 }
 
 #undef TEST_EXPECTED_BUF_SIZE

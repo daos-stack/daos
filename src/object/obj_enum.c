@@ -10,7 +10,7 @@
  */
 #define D_LOGFAC DD_FAC(object)
 
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/vos.h>
 #include <daos/object.h>
 
