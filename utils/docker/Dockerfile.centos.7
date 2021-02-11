@@ -73,6 +73,8 @@ RUN yum -y install \
            java-1.8.0-openjdk python36-distro
 RUN yum -y install openmpi3-devel
 
+RUN pip3 install --upgrade pip
+
 # DAOS python 3 packages required for pylint
 #  - excluding mpi4py as it depends on CORCI-635
 RUN pip3 install "avocado-framework<83.0"
