@@ -28,7 +28,7 @@ BuildRequires: hwloc-devel
 %if (0%{?rhel} >= 7)
 BuildRequires: argobots-devel >= 1.0rc1
 BuildRequires: json-c-devel
-BuildRequires: boost-python36
+BuildRequires: boost-python36-devel
 %else
 BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libjson-c-devel
@@ -193,6 +193,9 @@ This is the package needed to run the DAOS test suite
 %if (0%{?suse_version} >= 1500)
 Requires: %{name}-client = %{version}-%{release}
 Requires: %{name} = %{version}-%{release}
+%endif
+%if (0%{?rhel} >= 7)
+Requires: boost-python36-devel
 %endif
 Requires: libuuid-devel
 Requires: libyaml-devel

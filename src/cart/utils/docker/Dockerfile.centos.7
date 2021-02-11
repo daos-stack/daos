@@ -54,7 +54,7 @@ RUN yum clean metadata
 RUN yum -y install epel-release; \
     yum -y install                                                        \
            clang-analyzer cmake CUnit-devel doxygen file flex             \
-           gcc gcc-c++ git golang graphviz lcov boost-python36            \
+           gcc gcc-c++ git golang graphviz lcov boost-python36-devel      \
            libaio-devel libcmocka-devel libevent-devel libiscsi-devel     \
            libtool libtool-ltdl-devel libuuid-devel libyaml-devel         \
            make meson nasm ninja-build numactl-devel openssl-devel        \
