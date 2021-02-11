@@ -134,12 +134,12 @@ class CartUtils():
         log_file = os.path.join(log_path, log_dir,
                                 test_name + "_" + env_CCSA + "_cart.log")
 
-        # Default env vars for orterun
-        log_mask       = "WARN"
-        self.provider  = "ofi+sockets"
-        ofi_interface  = "eth0"
-        ofi_domain     = "mlx5_0"
-        ofi_share_addr = "0"
+        # Default env vars for orterun to None
+        log_mask       = None
+        self.provider  = None
+        ofi_interface  = None
+        ofi_domain     = None
+        ofi_share_addr = None
 
         if "D_LOG_MASK" in os.environ:
             log_mask = os.environ["D_LOG_MASK"]
