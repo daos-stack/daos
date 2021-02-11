@@ -29,8 +29,8 @@ type configGenCmd struct {
 	hostListCmd
 	jsonOutputCmd
 	AccessPoints string `short:"a" long:"access-points" description:"Comma separated list of access point addresses <ipv4addr/hostname>"`
-	NumPmem      int    `short:"p" long:"num-pmem" description:"Minimum number of SCM (pmem) devices required per storage host in DAOS system"`
-	NumNvme      int    `default:"1" short:"n" long:"num-nvme" description:"Minimum number of NVMe devices required per storage host in DAOS system, set to 0 to generate pmem-only config"`
+	NrEngines    int    `short:"e" long:"num-engines" description:"Specific number of DAOS Engine sections to be populated in generated configuration file, if unset the value we will be equal to the number of NUMA nodes on storage hosts in the DAOS system"`
+	MinNrSSDs    int    `default:"1" short:"s" long:"min-ssds" description:"Minimum number of NVMe SSDs required per DAOS Engine (SSDs must reside on the host that is managing the engine), set to 0 to generate a config with no NVMe"`
 	NetClass     string `default:"best-available" short:"c" long:"net-class" description:"Network class preferred" choice:"best-available" choice:"ethernet" choice:"infiniband"`
 }
 
@@ -43,11 +43,11 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 	ctx := context.Background()
 
 	req := control.ConfigGenerateReq{
-		NumPmem:  cmd.NumPmem,
-		NumNvme:  cmd.NumNvme,
-		HostList: cmd.hostlist,
-		Client:   cmd.ctlInvoker,
-		Log:      cmd.log,
+		NrEngines: cmd.NrEngines,
+		MinNrSSDs: cmd.MinNrSSDs,
+		HostList:  cmd.hostlist,
+		Client:    cmd.ctlInvoker,
+		Log:       cmd.log,
 	}
 	switch cmd.NetClass {
 	case "ethernet":

@@ -1,4 +1,4 @@
-.TH dmg 1 "15 December 2020"
+.TH dmg 1 "15 February 2021"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -50,11 +50,11 @@ Generate DAOS server configuration file based on discoverable hardware devices
 \fB\fB\-a\fR, \fB\-\-access-points\fR\fP
 Comma separated list of access point addresses <ipv4addr/hostname>
 .TP
-\fB\fB\-p\fR, \fB\-\-num-pmem\fR\fP
-Minimum number of SCM (pmem) devices required per storage host in DAOS system
+\fB\fB\-e\fR, \fB\-\-num-engines\fR\fP
+Specific number of DAOS Engine sections to be populated in generated configuration file, if unset the value we will be equal to the number of NUMA nodes on storage hosts in the DAOS system
 .TP
-\fB\fB\-n\fR, \fB\-\-num-nvme\fR <default: \fI"1"\fR>\fP
-Minimum number of NVMe devices required per storage host in DAOS system, set to 0 to generate pmem-only config
+\fB\fB\-s\fR, \fB\-\-min-ssds\fR <default: \fI"1"\fR>\fP
+Minimum number of NVMe SSDs required per DAOS Engine (SSDs must reside on the host that is managing the engine), set to 0 to generate a config with no NVMe
 .TP
 \fB\fB\-c\fR, \fB\-\-net-class\fR <default: \fI"best-available"\fR>\fP
 Network class preferred
