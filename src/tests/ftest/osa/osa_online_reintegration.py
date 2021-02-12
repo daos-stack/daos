@@ -77,9 +77,6 @@ class OSAOnlineReintegration(OSAUtils):
         pool_uuid = []
         exclude_servers = (len(self.hostlist_servers) * 2) - 1
 
-        # Exclude target : random two targets  (target idx : 0-7)
-        n = random.randint(0, 6)
-
         # Exclude one rank : other than rank 0.
         rank = random.randint(1, exclude_servers)
 
