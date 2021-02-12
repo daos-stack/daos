@@ -741,11 +741,11 @@ test_acl_principal_from_str_null_params(void **state)
 	char				*name;
 
 	assert_rc_equal(daos_acl_principal_from_str(NULL, &type, &name),
-			 -DER_INVAL);
+			-DER_INVAL);
 	assert_rc_equal(daos_acl_principal_from_str("OWNER@", NULL, &name),
-			 -DER_INVAL);
+			-DER_INVAL);
 	assert_rc_equal(daos_acl_principal_from_str("OWNER@", &type, NULL),
-			 -DER_INVAL);
+			-DER_INVAL);
 }
 
 static void
@@ -809,21 +809,21 @@ test_acl_principal_from_str_bad_format(void **state)
 	char				*name;
 
 	assert_rc_equal(daos_acl_principal_from_str("", &type, &name),
-			 -DER_INVAL);
+			-DER_INVAL);
 	assert_rc_equal(daos_acl_principal_from_str("USER@", &type, &name),
-			 -DER_INVAL);
+			-DER_INVAL);
 	assert_rc_equal(daos_acl_principal_from_str("U:name@", &type, &name),
-			 -DER_INVAL);
+			-DER_INVAL);
 	assert_rc_equal(daos_acl_principal_from_str("G:name@", &type, &name),
-			 -DER_INVAL);
+			-DER_INVAL);
 	assert_rc_equal(daos_acl_principal_from_str("user:name@", &type,
-			 &name), -DER_INVAL);
+						    &name), -DER_INVAL);
 	assert_rc_equal(daos_acl_principal_from_str("group:name@", &type,
-			 &name), -DER_INVAL);
+						    &name), -DER_INVAL);
 	assert_rc_equal(daos_acl_principal_from_str("x:name@", &type, &name),
-			 -DER_INVAL);
+			-DER_INVAL);
 	assert_rc_equal(daos_acl_principal_from_str("name@", &type, &name),
-			 -DER_INVAL);
+			-DER_INVAL);
 }
 
 static void
@@ -833,13 +833,13 @@ test_acl_principal_from_str_invalid_name(void **state)
 	char				*name;
 
 	assert_rc_equal(daos_acl_principal_from_str("u:", &type, &name),
-			 -DER_INVAL);
+			-DER_INVAL);
 	assert_rc_equal(daos_acl_principal_from_str("g:", &type, &name),
-			 -DER_INVAL);
+			-DER_INVAL);
 	assert_rc_equal(daos_acl_principal_from_str("u:name@name@", &type,
-			 &name), -DER_INVAL);
+						    &name), -DER_INVAL);
 	assert_rc_equal(daos_acl_principal_from_str("u:name", &type,
-			 &name), -DER_INVAL);
+						    &name), -DER_INVAL);
 }
 
 int

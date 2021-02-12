@@ -1199,10 +1199,10 @@ test_acl_remove_ace_name_len_zero(void **state)
 	acl = daos_acl_create(ace, num_aces);
 
 	assert_rc_equal(daos_acl_remove_ace(&acl,
-			DAOS_ACL_USER, ""), -DER_INVAL);
+					    DAOS_ACL_USER, ""), -DER_INVAL);
 
 	assert_rc_equal(daos_acl_remove_ace(&acl,
-			DAOS_ACL_GROUP, ""), -DER_INVAL);
+					    DAOS_ACL_GROUP, ""), -DER_INVAL);
 
 	/* cleanup */
 	daos_acl_free(acl);
@@ -1296,9 +1296,10 @@ expect_acl_remove_ace_removes_principal(enum daos_acl_principal_type type,
 	/* Result should have the specific ACE removed */
 	assert_non_null(acl);
 	assert_int_equal(acl->dal_len,
-			orig_acl->dal_len - daos_ace_get_size(ace[type]));
+			 orig_acl->dal_len - daos_ace_get_size(ace[type]));
 	assert_rc_equal(daos_acl_get_ace_for_principal(acl, type, principal,
-			&ace_to_find), -DER_NONEXIST);
+						       &ace_to_find),
+			-DER_NONEXIST);
 
 	/* cleanup */
 	daos_acl_free(acl);
