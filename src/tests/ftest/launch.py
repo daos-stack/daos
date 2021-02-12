@@ -1,4 +1,4 @@
-#!/usr/bin/python2 -u
+#!/usr/bin/python3 -u
 """
   (C) Copyright 2018-2021 Intel Corporation.
 
@@ -18,36 +18,12 @@ from sys import version_info
 import time
 import yaml
 import errno
+from tempfile import TemporaryDirectory
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
-
-try:
-    # For python versions >= 3.2
-    from tempfile import TemporaryDirectory
-
-except ImportError:
-    # Basic implementation of TemporaryDirectory for python versions < 3.2
-    from tempfile import mkdtemp
-    from shutil import rmtree
-
-    class TemporaryDirectory(object):
-        # pylint: disable=too-few-public-methods
-        """Create a temporary directory.
-
-        When the last reference of this object goes out of scope the directory
-        and its contents are removed.
-        """
-
-        def __init__(self):
-            """Initialize a TemporaryDirectory object."""
-            self.name = mkdtemp()
-
-        def __del__(self):
-            """Destroy a TemporaryDirectory object."""
-            rmtree(self.name)
 
 DEFAULT_DAOS_TEST_LOG_DIR = "/var/tmp/daos_testing"
 YAML_KEYS = {
@@ -867,7 +843,7 @@ def run_tests(test_files, tag_filter, args):
             # this is typically an indication of a communication issue with one
             # of the hosts, do not attempt to run subsequent tests.
             if not report_skipped_test(
-                    test_file["py"], avocado_logs_dir, skip_reason, args):
+                    test_file["py"], avocado_logs_dir, skip_reason):
                 return_code |= 64
 
         elif not isinstance(test_file["yaml"], str):
@@ -875,7 +851,7 @@ def run_tests(test_files, tag_filter, args):
             # in the yaml file.  Treat this like a failed avocado command.
             reason = "error replacing yaml file placeholders"
             if not report_skipped_test(
-                    test_file["py"], avocado_logs_dir, reason, args):
+                    test_file["py"], avocado_logs_dir, reason):
                 return_code |= 64
             return_code |= 4
 
@@ -890,8 +866,7 @@ def run_tests(test_files, tag_filter, args):
                         "leftover logs from a previous test run prior to "
                         "running this test")
                     if not report_skipped_test(
-                            test_file["py"], avocado_logs_dir, skip_reason,
-                            args):
+                            test_file["py"], avocado_logs_dir, skip_reason):
                         return_code |= 64
                     return_code |= 128
                     continue
@@ -1238,6 +1213,7 @@ def rename_logs(avocado_logs_dir, test_file, args):
 
     return status
 
+
 def check_big_files(avocado_logs_dir, task, test_name, args):
     """Check the contents of the task object, tag big files, create junit xml.
 
@@ -1276,7 +1252,7 @@ def check_big_files(avocado_logs_dir, task, test_name, args):
     return status
 
 
-def report_skipped_test(test_file, avocado_logs_dir, reason, args):
+def report_skipped_test(test_file, avocado_logs_dir, reason):
     """Report an error for the skipped test.
 
     Args:
