@@ -108,7 +108,8 @@ class TestDaosApiBase(ObjectWithParameters):
 
         # Optionally log the method call with its arguments if debug is set
         self._log_method(
-            "{}.{}".format(method.__self__.__class__.__name__, method.__name__), kwargs)
+            "{}.{}".format(
+                method.__self__.__class__.__name__, method.__name__), kwargs)
 
         try:
             method(**kwargs)
@@ -118,7 +119,8 @@ class TestDaosApiBase(ObjectWithParameters):
                 "Exception raised by %s.%s(%s)",
                 method.__module__, method.__name__,
                 ", ".join(
-                    ["{}={}".format(key, val) for key, val in list(kwargs.items())]),
+                    ["{}={}".format(key, val) for key, val in list(
+                        kwargs.items())]),
                 exc_info=error)
             # Raise the exception so it can be handled by the caller
             raise error

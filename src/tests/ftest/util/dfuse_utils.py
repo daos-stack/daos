@@ -225,8 +225,8 @@ class Dfuse(DfuseCommand):
             if len(ret_code) > 1 or 0 not in ret_code:
                 error_hosts = NodeSet(
                     ",".join(
-                        [str(node_set) for code, node_set in list(ret_code.items())
-                         if code != 0]))
+                        [str(node_set) for code, node_set in list(
+                            ret_code.items()) if code != 0]))
                 if fail:
                     raise CommandFailure(
                         "Error removing the {} dfuse mount point with rm on "
