@@ -16,7 +16,7 @@ StandardOutput=journal
 StandardError=journal
 Restart=always
 RestartSec=10
-#LimitMEMLOCK=infinity
+LimitMEMLOCK=infinity
 LimitCORE=infinity
 
 [Install]
