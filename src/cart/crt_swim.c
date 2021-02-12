@@ -14,7 +14,7 @@
 #include "swim/swim_internal.h"
 
 #define CRT_OPC_SWIM_VERSION	1
-#define CRT_SWIM_FAIL_BASE	((CRT_OPC_SWIM_PROTO >> 16) | \
+#define CRT_SWIM_FAIL_BASE	((CRT_OPC_SWIM_BASE >> 16) | \
 				 (CRT_OPC_SWIM_VERSION << 4))
 #define CRT_SWIM_FAIL_DROP_RPC	(CRT_SWIM_FAIL_BASE | 0x1)	/* id: 65025 */
 
@@ -116,7 +116,7 @@ static struct crt_proto_format crt_swim_proto_fmt = {
 	.cpf_ver	= CRT_OPC_SWIM_VERSION,
 	.cpf_count	= ARRAY_SIZE(crt_swim_proto_rpc_fmt),
 	.cpf_prf	= crt_swim_proto_rpc_fmt,
-	.cpf_base	= CRT_OPC_SWIM_PROTO,
+	.cpf_base	= CRT_OPC_SWIM_BASE,
 };
 
 static void crt_swim_srv_cb(crt_rpc_t *rpc_req)
@@ -308,7 +308,7 @@ static int crt_swim_send_message(struct swim_context *ctx, swim_id_t to,
 	if (nupds > 0 && upds[0].smu_state.sms_status == SWIM_MEMBER_INACTIVE)
 		opc_idx = 1;
 
-	opc = CRT_PROTO_OPC(CRT_OPC_SWIM_PROTO, CRT_OPC_SWIM_VERSION, opc_idx);
+	opc = CRT_PROTO_OPC(CRT_OPC_SWIM_BASE, CRT_OPC_SWIM_VERSION, opc_idx);
 
 	if (CRT_SWIM_SHOULD_FAIL(d_fa_swim_drop_rpc, self_id)) {
 		rc = d_fa_swim_drop_rpc->fa_err_code;
