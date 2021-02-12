@@ -173,7 +173,7 @@ dup_server_list(struct server_entry *in, int in_len)
 		out[i].se_rank = in[i].se_rank;
 		D_STRNDUP(out[i].se_uri, in[i].se_uri, ADDR_STR_MAX_LEN - 1);
 		if (out[i].se_uri == NULL) {
-			free_server_list(out, in_len);
+			free_server_list(out, i);
 			return NULL;
 		}
 	}

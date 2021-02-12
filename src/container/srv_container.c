@@ -601,7 +601,7 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 		case DAOS_PROP_CO_ALLOCED_OID:
 			d_iov_set(&value, &entry->dpe_val,
 				  sizeof(entry->dpe_val));
-			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_max_oid,
+			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_alloced_oid,
 					   &value);
 			if (rc)
 				return rc;
@@ -626,7 +626,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	struct rdb_kvs_attr	attr;
 	rdb_path_t		kvs;
 	uint64_t		ghce = 0;
-	uint64_t		max_oid = 0;
+	uint64_t		alloced_oid = 0;
 	uint32_t		pm_ver;
 	int			rc;
 
@@ -694,11 +694,11 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		D_GOTO(out_kvs, rc);
 	}
 
-	/** Create the MAX_OID property. */
-	d_iov_set(&value, &max_oid, sizeof(max_oid));
-	rc = rdb_tx_update(tx, &kvs, &ds_cont_prop_max_oid, &value);
+	/** Create the ALLOCED_OID property. */
+	d_iov_set(&value, &alloced_oid, sizeof(alloced_oid));
+	rc = rdb_tx_update(tx, &kvs, &ds_cont_prop_alloced_oid, &value);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": create max_oid property failed: "DF_RC"\n",
+		D_ERROR(DF_CONT": create alloced_oid prop failed: "DF_RC"\n",
 			DP_CONT(pool_hdl->sph_pool->sp_uuid,
 				in->cci_op.ci_uuid), DP_RC(rc));
 		D_GOTO(out_kvs, rc);
@@ -1231,14 +1231,19 @@ cont_agg_eph_leader_ult(void *arg)
 					min_eph = ec_agg->ea_server_ephs[i].eph;
 			}
 
-			D_ASSERTF(min_eph >= ec_agg->ea_current_eph, DF_U64" < "
-				  DF_U64"\n", min_eph, ec_agg->ea_current_eph);
 			if (min_eph == ec_agg->ea_current_eph)
 				continue;
 
-			D_DEBUG(DB_MD, DF_CONT" sync "DF_U64"\n",
+			/**
+			 * NB: during extending or reintegration, the new
+			 * server might cause the minimum epoch is less than
+			 * ea_current_eph.
+			 */
+			D_DEBUG(DB_MD, DF_CONT" minimum "DF_U64" current "
+				DF_U64"\n",
 				DP_CONT(svc->cs_pool_uuid,
-					ec_agg->ea_cont_uuid), min_eph);
+					ec_agg->ea_cont_uuid),
+				min_eph, ec_agg->ea_current_eph);
 			rc = cont_iv_ec_agg_eph_refresh(pool->sp_iv_ns,
 							ec_agg->ea_cont_uuid,
 							min_eph);
@@ -2091,9 +2096,9 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 		prop->dpp_entries[idx].dpe_val = val;
 		idx++;
 	}
-	if (bits & DAOS_CO_QUERY_PROP_MAX_OID) {
+	if (bits & DAOS_CO_QUERY_PROP_ALLOCED_OID) {
 		d_iov_set(&value, &val, sizeof(val));
-		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_max_oid,
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_alloced_oid,
 				   &value);
 		if (rc != 0)
 			D_GOTO(out, rc);
@@ -2191,6 +2196,7 @@ cont_status_check(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 		iv_entry->dpe_val = entry->dpe_val;
 		rc = cont_iv_prop_update(pool->sp_iv_ns, in->cqi_op.ci_uuid,
 					 iv_prop);
+		daos_prop_free(iv_prop);
 		if (rc)
 			D_ERROR(DF_CONT": iv_prop_update failed, "DF_RC"\n",
 				DP_CONT(cont->c_svc->cs_pool_uuid,
@@ -3139,6 +3145,10 @@ out:
 		struct cont_query_out  *cqo = crt_reply_get(rpc);
 
 		prop = cqo->cqo_prop;
+	} else if (opc == CONT_OPEN) {
+		struct cont_open_out *coo = crt_reply_get(rpc);
+
+		prop = coo->coo_prop;
 	}
 	out->co_rc = rc;
 	crt_reply_send(rpc);
@@ -3158,7 +3168,7 @@ ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
 	d_iov_t		key;
 	d_iov_t		value;
 	struct container_hdl	hdl;
-	uint64_t		max_oid;
+	uint64_t		alloced_oid;
 	int			rc;
 
 	pool_hdl = ds_pool_hdl_lookup(poh_uuid);
@@ -3195,23 +3205,25 @@ ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
 	}
 
 	/* Read the max OID from the container metadata */
-	d_iov_set(&value, &max_oid, sizeof(max_oid));
-	rc = rdb_tx_lookup(&tx, &cont->c_prop, &ds_cont_prop_max_oid, &value);
+	d_iov_set(&value, &alloced_oid, sizeof(alloced_oid));
+	rc = rdb_tx_lookup(&tx, &cont->c_prop, &ds_cont_prop_alloced_oid,
+			   &value);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to lookup max_oid: %d\n",
+		D_ERROR(DF_CONT": failed to lookup alloced_oid: %d\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
 		D_GOTO(out_cont, rc);
 	}
 
 	/** Set the oid for the caller */
-	*oid = max_oid;
-	/** Increment the max_oid by how many oids user requested */
-	max_oid += num_oids;
+	*oid = alloced_oid;
+	/** Increment the alloced_oid by how many oids user requested */
+	alloced_oid += num_oids;
 
 	/* Update the max OID */
-	rc = rdb_tx_update(&tx, &cont->c_prop, &ds_cont_prop_max_oid, &value);
+	rc = rdb_tx_update(&tx, &cont->c_prop, &ds_cont_prop_alloced_oid,
+			   &value);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to update max_oid: %d\n",
+		D_ERROR(DF_CONT": failed to update alloced_oid: %d\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
 		D_GOTO(out_cont, rc);
 	}

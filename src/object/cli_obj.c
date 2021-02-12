@@ -306,7 +306,10 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 	int			rc;
 
 	pool = dc_hdl2pool(dc_cont_hdl2pool_hdl(obj->cob_coh));
-	D_ASSERT(pool != NULL);
+	if (pool == NULL) {
+		D_WARN("Cannot find valid pool\n");
+		D_GOTO(out, rc = -DER_NO_HDL);
+	}
 
 	map = pl_map_find(pool->dp_pool, obj->cob_md.omd_id);
 	dc_pool_put(pool);
@@ -765,14 +768,14 @@ obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr)
 	daos_iod_t			*iod;
 	int				 i;
 
+	if (reasb_req->orr_iods == NULL)
+		return;
+
 	for (i = 0; i < iod_nr; i++) {
-		iod = reasb_req->orr_iods + i;
-		if (iod == NULL)
-			return;
-		if (iod->iod_recxs != NULL)
-			D_FREE(iod->iod_recxs);
-		d_sgl_fini(reasb_req->orr_sgls + i, false);
-		obj_io_desc_fini(reasb_req->orr_oiods + i);
+		iod = &reasb_req->orr_iods[i];
+		D_FREE(iod->iod_recxs);
+		d_sgl_fini(&reasb_req->orr_sgls[i], false);
+		obj_io_desc_fini(&reasb_req->orr_oiods[i]);
 		obj_ec_recxs_fini(&reasb_req->orr_recxs[i]);
 		obj_ec_seg_sorter_fini(&reasb_req->orr_sorters[i]);
 		obj_ec_tgt_oiod_fini(reasb_req->tgt_oiods);
@@ -939,11 +942,10 @@ ec_deg_get:
 		D_GOTO(out, rc);
 
 	shard_tgt->st_rank	= obj_shard->do_target_rank;
-	shard_tgt->st_shard	= obj_shard->do_shard,
+	shard_tgt->st_shard	= shard;
 	shard_tgt->st_tgt_idx	= obj_shard->do_target_idx;
 	rc = obj_shard2tgtid(obj, shard, map_ver, &shard_tgt->st_tgt_id);
 	obj_shard_close(obj_shard);
-
 out:
 	return rc;
 }
@@ -2421,6 +2423,12 @@ obj_embedded_shard_arg(struct obj_auxi_args *obj_auxi)
 		return &obj_auxi->l_args.la_auxi;
 	case DAOS_OBJ_RPC_SYNC:
 		return &obj_auxi->s_args.sa_auxi;
+	case DAOS_OBJ_RPC_QUERY_KEY:
+		/*
+		 * called from obj_comp_cb_internal() and
+		 * checked in obj_shard_comp_cb() correctly
+		 */
+		return NULL;
 	default:
 		D_ERROR("bad opc %d.\n", obj_auxi->opc);
 		return NULL;

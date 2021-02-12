@@ -8,8 +8,9 @@
  */
 #define D_LOGFAC	DD_FAC(grp)
 
-#include "crt_internal.h"
+#include <sys/types.h>
 #include <sys/stat.h>
+#include "crt_internal.h"
 
 static int crt_group_primary_add_internal(struct crt_grp_priv *grp_priv,
 					d_rank_t rank, int tag,
@@ -1111,8 +1112,7 @@ crt_grp_priv_destroy(struct crt_grp_priv *grp_priv)
 		d_hash_table_destroy_inplace(&grp_priv->gp_s2p_table, true);
 	}
 
-	if (grp_priv->gp_psr_phy_addr != NULL)
-		D_FREE(grp_priv->gp_psr_phy_addr);
+	D_FREE(grp_priv->gp_psr_phy_addr);
 	D_FREE(grp_priv->gp_pub.cg_grpid);
 
 	D_RWLOCK_DESTROY(&grp_priv->gp_rwlock);
@@ -1739,6 +1739,7 @@ open_tmp_attach_info_file(char **filename)
 	char		 template[] = "attach-info-XXXXXX";
 	int		 tmp_fd;
 	FILE		*tmp_file;
+	mode_t		 old_mode;
 
 	if (filename == NULL) {
 		D_ERROR("filename can't be NULL.\n");
@@ -1750,9 +1751,16 @@ open_tmp_attach_info_file(char **filename)
 		return NULL;
 	D_ASSERT(*filename != NULL);
 
+	/** Ensure the temporary file is created with proper permissions to
+	 *  limit security risk.
+	 */
+	old_mode = umask(S_IWGRP | S_IWOTH);
+
 	tmp_fd = mkstemp(*filename);
+	umask(old_mode);
+
 	if (tmp_fd == -1) {
-		D_ERROR("mktemp() failed on %s, error: %s.\n",
+		D_ERROR("mkstemp() failed on %s, error: %s.\n",
 			*filename, strerror(errno));
 		return NULL;
 	}
@@ -2279,7 +2287,7 @@ grp_add_free_index(d_list_t *list, int index, bool tail)
 	struct free_index *free_index;
 
 	D_ALLOC_PTR(free_index);
-	if (!free_index)
+	if (free_index == NULL)
 		return -DER_NOMEM;
 
 	free_index->fi_index = index;
@@ -2887,9 +2895,8 @@ crt_group_secondary_create(crt_group_id_t grp_name, crt_group_t *primary_grp,
 
 	/* Record secondary group in the primary group */
 	D_ALLOC_PTR(entry);
-	if (entry == NULL) {
+	if (entry == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	}
 
 	entry->gps_priv = grp_priv;
 
@@ -2989,10 +2996,8 @@ crt_rank_mapping_init(d_rank_t key, d_rank_t value)
 	struct crt_rank_mapping *rm;
 
 	D_ALLOC_PTR(rm);
-	if (!rm) {
-		D_ERROR("Failed to allocate rm item\n");
-		D_GOTO(out, rm);
-	}
+	if (rm == NULL)
+		goto out;
 
 	D_INIT_LIST_HEAD(&rm->rm_link);
 	rm->rm_key = key;
@@ -3025,7 +3030,7 @@ crt_group_secondary_rank_add_internal(struct crt_grp_priv *grp_priv,
 	/*
 	 * Set the self rank based on my primary group rank. For simplicity,
 	 * assert that my primary group rank must have been set already, since
-	 * this is always the case with daos_io_server today.
+	 * this is always the case with daos_engine today.
 	 */
 	D_ASSERT(grp_priv->gp_priv_prim->gp_self != CRT_NO_RANK);
 	if (prim_rank == grp_priv->gp_priv_prim->gp_self) {
@@ -3046,14 +3051,11 @@ crt_group_secondary_rank_add_internal(struct crt_grp_priv *grp_priv,
 
 	/* Add entry to lookup table. Secondary group table contains ranks */
 	rm_s2p = crt_rank_mapping_init(sec_rank, prim_rank);
-	if (!rm_s2p) {
-		D_ERROR("Failed to allocate entry\n");
+	if (rm_s2p == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	}
 
 	rm_p2s = crt_rank_mapping_init(prim_rank, sec_rank);
-	if (!rm_p2s) {
-		D_ERROR("Failed to allocate entry\n");
+	if (rm_p2s == NULL) {
 		crt_rm_destroy(rm_s2p);
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
@@ -3062,9 +3064,9 @@ crt_group_secondary_rank_add_internal(struct crt_grp_priv *grp_priv,
 				&sec_rank, sizeof(sec_rank),
 				&rm_s2p->rm_link, true);
 	if (rc != 0) {
-		D_ERROR("Failed to add entry; rc=%d\n", rc);
-		crt_rm_destroy(rm_s2p);
+		D_ERROR("Failed to add entry: "DF_RC"\n", DP_RC(rc));
 		crt_rm_destroy(rm_p2s);
+		crt_rm_destroy(rm_s2p);
 		D_GOTO(out, rc);
 	}
 
@@ -3072,21 +3074,17 @@ crt_group_secondary_rank_add_internal(struct crt_grp_priv *grp_priv,
 				&prim_rank, sizeof(prim_rank),
 				&rm_p2s->rm_link, true);
 	if (rc != 0) {
-		D_ERROR("Failed to add entry; rc=%d\n", rc);
-		d_hash_rec_delete(&grp_priv->gp_s2p_table,
-				&sec_rank, sizeof(sec_rank));
+		D_ERROR("Failed to add entry: "DF_RC"\n", DP_RC(rc));
 		crt_rm_destroy(rm_p2s);
+		d_hash_rec_delete_at(&grp_priv->gp_s2p_table, &rm_s2p->rm_link);
 		D_GOTO(out, rc);
 	}
 
 	/* Add secondary rank to membership list  */
 	rc = grp_add_to_membs_list(grp_priv, sec_rank);
 	if (rc != 0) {
-		d_hash_rec_delete(&grp_priv->gp_s2p_table,
-				&sec_rank, sizeof(sec_rank));
-
-		d_hash_rec_delete(&grp_priv->gp_s2p_table,
-				&prim_rank, sizeof(prim_rank));
+		d_hash_rec_delete_at(&grp_priv->gp_p2s_table, &rm_p2s->rm_link);
+		d_hash_rec_delete_at(&grp_priv->gp_s2p_table, &rm_s2p->rm_link);
 		D_GOTO(out, rc);
 	}
 
