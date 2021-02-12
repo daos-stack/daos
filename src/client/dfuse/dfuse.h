@@ -185,6 +185,8 @@ struct dfuse_dfs {
 	bool			dfs_multi_user;
 };
 
+extern char *duns_xattr_name;
+
 int
 ie_set_uid(struct dfuse_inode_entry *ie, fuse_req_t req);
 

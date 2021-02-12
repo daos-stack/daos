@@ -9,6 +9,8 @@
 
 #include "daos_uns.h"
 
+char *duns_xattr_name = DUNS_XATTR_NAME;
+
 void
 dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  struct dfuse_inode_entry *ie,
@@ -318,7 +320,6 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*ie = NULL;
 	int				rc;
-	char				*attr_name = DUNS_XATTR_NAME;
 	char				out[DUNS_MAX_XATTR_LEN];
 	char				*outp = &out[0];
 	daos_size_t			attr_len = DUNS_MAX_XATTR_LEN;
@@ -337,7 +338,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	rc = dfs_lookupx(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
 			 O_RDWR | O_NOFOLLOW, &ie->ie_obj, NULL, &ie->ie_stat,
-			 1, &attr_name, (void **)&outp, &attr_len);
+			 1, &duns_xattr_name, (void **)&outp, &attr_len);
 	if (rc) {
 		DFUSE_TRA_DEBUG(parent, "dfs_lookup() failed: (%s)",
 				strerror(rc));
