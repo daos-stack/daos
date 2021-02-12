@@ -11,7 +11,6 @@ import socket
 import time
 
 from avocado import fail_on
-from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import \
     CommandFailure, FormattedParameter, YamlParameters, CommandWithParameters, \
