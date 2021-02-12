@@ -527,8 +527,15 @@ class TestWithServers(TestWithoutServers):
                 self.hostfile_clients_slots)
 
         # Access points to use by default when starting servers and agents
-        self.access_points = self.params.get(
-            "access_points", "/run/setup/*", self.hostlist_servers[:1])
+        self.log.debug("## Server count = {}".format(len(self.hostlist_servers)))
+        if len(self.hostlist_servers) <= 4:
+            self.log.debug("## Use all servers as AP")
+            self.access_points = self.params.get(
+                "access_points", "/run/setup/*", self.hostlist_servers)
+        else:
+            self.log.debug("## Use 4 servers as AP")
+            self.access_points = self.params.get(
+                "access_points", "/run/setup/*", self.hostlist_servers[:4])
 
         # Display host information
         self.log.info("--- HOST INFORMATION ---")
