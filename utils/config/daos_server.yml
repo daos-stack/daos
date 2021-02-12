@@ -196,23 +196,31 @@
 #
 #  rank: 0
 #
-#  # Targets (VOS) represent the count of storage targets per data plane
-#  # engine starting at core offset specified by first_core.
-#
+#  # Targets represent the number of I/O service threads (and network endpoints)
+#  # to be allocated per engine.
 #  # Immutable after reformat.
 #
-#  targets: 20
+#  targets: 16
 #
-#  # Number of I/O service threads (and network endpoints) per engine.
+#  # Pin this engine instance to cores and memory that are related to the
+#  # NUMA node ID specified with this value. For best performance, it is
+#  # necessary to select a NUMA node that matches that of the fabric_iface.
+#  # Optional parameter, set either this option or first_core but not both.
+#
+#  pinned_numa_node: 0
+#
+#  # Offset of the first core to be used for I/O service threads.
+#  # Immutable after reformat.
+#  # Optional parameter, set either this option or pinned_numa_node but
+#  # not both.
+#
+#  first_core: 0
+#
+#  # Number of additional offload service threads to accelerate checksum
+#  # and server-side RPC dispatch per engine.
 #  # Immutable after reformat.
 #
-#  nr_xs_helpers: 20
-#
-#  # Offset of the first core for service xstreams.
-#  # Immutable after reformat.
-#
-#  # default: 0
-#  first_core: 1
+#  nr_xs_helpers: 6
 #
 #  # Use specific OFI interfaces.
 #  # Specify the fabric network interface that will be used by this engine.
@@ -222,11 +230,6 @@
 #
 #  fabric_iface: qib0
 #  fabric_iface_port: 20000
-#
-#  # The engine instance binds itself to cores and memory that are related
-#  # to the specified NUMA node.  For best performance, it is necessary to
-#  # select a NUMA node that matches that of the fabric_iface.
-#  pinned_numa_node: 0
 #
 #  # Force specific debug mask (D_LOG_MASK) at start up time.
 #  # By default, just use the default debug mask used by DAOS.
@@ -295,24 +298,31 @@
 #
 #  rank: 1
 #
-#  # Targets (VOS) represent the number of logical CPUs to be used starting at
-#  # index specified by first_core.
-#
-#  # Targets will be used to run XStreams can be thought of as service threads.
+#  # Targets represent the number of I/O service threads (and network endpoints)
+#  # to be allocated per engine.
 #  # Immutable after reformat.
 #
-#  targets: 20
+#  targets: 16
 #
-#  # Number of I/O service threads (and network endpoints) per engine.
+#  # Pin this engine instance to cores and memory that are related to the
+#  # NUMA node ID specified with this value. For best performance, it is
+#  # necessary to select a NUMA node that matches that of the fabric_iface.
+#  # Optional parameter, set either this option or first_core but not both.
+#
+#  pinned_numa_node: 1
+#
+#  # Offset of the first core to be used for I/O service threads.
 #  # Immutable after reformat.
+#  # Optional parameter, set either this option or pinned_numa_node but
+#  # not both.
 #
-#  nr_xs_helpers: 20
-#
-#  # Index of first core for service thread.
-#  # Immutable after reformat.
-#
-#  # default: 0
 #  first_core: 22
+#
+#  # Number of additional offload service threads to accelerate checksum
+#  # and server-side RPC dispatch per engine.
+#  # Immutable after reformat.
+#
+#  nr_xs_helpers: 6
 #
 #  # Use specific OFI interfaces.
 #  # Specify the fabric network interface that will be used by this engine.
@@ -322,11 +332,6 @@
 #
 #  fabric_iface: qib1
 #  fabric_iface_port: 20000
-#
-#  # The engine instance binds itself to cores and memory that are related
-#  # to the specified NUMA node.  For best performance, it is necessary to
-#  # select a NUMA node that matches that of the fabric_iface.
-#  pinned_numa_node: 1
 #
 #  # Force specific debug mask (D_LOG_MASK) at start up time.
 #  # By default, just use the default debug mask used by DAOS.

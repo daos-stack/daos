@@ -653,9 +653,9 @@ access_points: ["wolf-71"] # <----- updated
 <snip>
 servers:
 -
-  targets: 8                # count of storage targets per each server
-  first_core: 0             # offset of the first core for service xstreams
-  nr_xs_helpers: 2          # count of I/O service threads per target
+  targets: 8                # number of I/O service threads per-engine
+  first_core: 0             # offset of the first core for service threads
+  nr_xs_helpers: 2          # count of I/O offload threads per target
   fabric_iface: eth0        # map to OFI_INTERFACE=eth0
   fabric_iface_port: 31416  # map to OFI_PORT=31416
   log_mask: ERR             # map to D_LOG_MASK=ERR
@@ -672,9 +672,9 @@ servers:
   bdev_class: nvme
   bdev_list: ["0000:87:00.0", "0000:81:00.0"]  # <----- updated
 -
-  targets: 8                # count of storage targets per each server
-  first_core: 0             # offset of the first core for service xstreams
-  nr_xs_helpers: 2          # count of I/O service threads per target
+  targets: 8                # number of I/O service threads per-engine
+  first_core: 0             # offset of the first core for service threads
+  nr_xs_helpers: 2          # count of I/O offload threads per target
   fabric_iface: eth0        # map to OFI_INTERFACE=eth0
   fabric_iface_port: 31416  # map to OFI_PORT=31416
   log_mask: ERR             # map to D_LOG_MASK=ERR

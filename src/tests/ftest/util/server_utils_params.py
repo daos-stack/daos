@@ -305,9 +305,9 @@ class DaosServerYamlParameters(YamlParameters):
             log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
 
             # Parameters
-            #   targets:                count of VOS targets
+            #   targets:                I/O service threads per engine
             #   first_core:             starting index for targets
-            #   nr_xs_helpers:          I/O service threads per engine
+            #   nr_xs_helpers:          I/O offload threads per engine
             #   fabric_iface:           map to OFI_INTERFACE=eth0
             #   fabric_iface_port:      map to OFI_PORT=31416
             #   log_mask:               map to D_LOG_MASK env

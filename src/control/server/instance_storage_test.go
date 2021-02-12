@@ -47,9 +47,9 @@ func TestIOEngineInstance_MountScmDevice(t *testing.T) {
 	)
 
 	for name, tc := range map[string]struct {
-		engineCfg  *engine.Config
-		msCfg  *scm.MockSysConfig
-		expErr error
+		engineCfg *engine.Config
+		msCfg     *scm.MockSysConfig
+		expErr    error
 	}{
 		"empty config": {
 			expErr: errors.New("operation unsupported on SCM class"),
@@ -141,7 +141,7 @@ func TestEngineInstance_NeedsScmFormat(t *testing.T) {
 	)
 
 	for name, tc := range map[string]struct {
-		engineCfg          *engine.Config
+		engineCfg      *engine.Config
 		mbCfg          *scm.MockBackendConfig
 		msCfg          *scm.MockSysConfig
 		expNeedsFormat bool
@@ -165,7 +165,7 @@ func TestEngineInstance_NeedsScmFormat(t *testing.T) {
 			expNeedsFormat: false,
 		},
 		"check ramdisk (unmounted)": {
-			engineCfg:          ramCfg,
+			engineCfg:      ramCfg,
 			expNeedsFormat: true,
 		},
 		"check ramdisk (unmounted, mountpoint doesn't exist)": {

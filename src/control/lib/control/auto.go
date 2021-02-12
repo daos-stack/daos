@@ -27,7 +27,7 @@ const (
 	defaultFiPort         = 31416
 	defaultFiPortInterval = 1000
 	defaultTargetCount    = 16
-	defaultEngineLogFile   = "/tmp/daos_engine"
+	defaultEngineLogFile  = "/tmp/daos_engine"
 	defaultControlLogFile = "/tmp/daos_server.log"
 	// NetDevAny matches any netdetect network device class
 	NetDevAny = math.MaxUint32

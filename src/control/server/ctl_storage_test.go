@@ -31,7 +31,7 @@ func TestServer_CtlSvc_checkCfgBdevs(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		numEngines       int
+		numEngines      int
 		vmdEnabled      bool
 		inScanResp      *bdev.ScanResponse
 		inCfgBdevLists  [][]string
@@ -69,7 +69,7 @@ func TestServer_CtlSvc_checkCfgBdevs(t *testing.T) {
 			},
 		},
 		"vmd and non vmd in scan with addr in cfg bdev list on multiple io servers": {
-			numEngines:  2,
+			numEngines: 2,
 			vmdEnabled: true,
 			inScanResp: &bdev.ScanResponse{
 				Controllers: append(scanCtrlrs,
@@ -86,7 +86,7 @@ func TestServer_CtlSvc_checkCfgBdevs(t *testing.T) {
 			},
 		},
 		"missing ssd in cfg bdev list": {
-			numEngines:      2,
+			numEngines:     2,
 			inCfgBdevLists: [][]string{{"0000:90:00.0"}, {"0000:80:00.0"}},
 			expErr:         FaultBdevNotFound([]string{"0000:80:00.0"}),
 		},
