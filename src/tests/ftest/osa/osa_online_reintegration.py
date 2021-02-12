@@ -131,8 +131,6 @@ class OSAOnlineReintegration(OSAUtils):
                 output = self.dmg_command.system_stop(ranks=rank)
                 self.pool.wait_for_rebuild(True)
                 self.log.info(output)
-                self.is_rebuild_done(3)
-                self.assert_on_rebuild_failure()
                 output = self.dmg_command.system_start(ranks=rank)
 
             self.log.info(output)
