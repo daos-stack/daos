@@ -187,7 +187,7 @@ test_dc_job_init_with_uname_fail(void **state)
 
 	ret = dc_job_init();
 	/* Make sure we checked the right environment variable */
-	assert_int_equal(ret, -DER_MISC);
+	assert_rc_equal(ret, -DER_MISC);
 }
 
 /* Convenience macro for declaring unit tests in this suite */
