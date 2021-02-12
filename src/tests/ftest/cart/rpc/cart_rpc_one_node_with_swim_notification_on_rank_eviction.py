@@ -58,7 +58,7 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(TestWithoutServers):
             srv_rtn = self.utils.launch_cmd_bg(self, srvcmd)
         # pylint: disable=broad-except
         except Exception as e:
-            self.utils.print("Exception in launching server : {}".format(e))
+            self.utils.print_f("Exception in launching server : {}".format(e))
             self.fail("Test failed.\n")
 
         # Verify the server is still running.
