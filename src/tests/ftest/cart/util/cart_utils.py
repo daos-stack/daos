@@ -428,12 +428,6 @@ class CartUtils():
 
         return rtn
 
-    def print(self, cmd):
-        """ prints the given cmd at runtime and stdout """
-
-        self.stdout.info(cmd)
-        self.progress_log.info(cmd)
-
     def print_f(self, cmd):
         """ prints the given cmd at runtime and stdout """
 
