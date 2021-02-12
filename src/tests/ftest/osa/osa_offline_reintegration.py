@@ -81,6 +81,8 @@ class OSAOfflineReintegration(OSAUtils):
             num_pool (int) : total pools to create for testing purposes.
             data (bool) : whether pool has no data or to create
                           some data in pool. Defaults to False.
+            server_boot (bool) : Perform system stop/start on a rank.
+                                 Defults to False.
         """
         # Create a pool
         pool = {}
@@ -121,10 +123,7 @@ class OSAOfflineReintegration(OSAUtils):
                 self.log.info(output)
                 self.is_rebuild_done(3)
                 self.assert_on_rebuild_failure()
-                time.sleep(35)
                 output = self.dmg_command.system_start(ranks=rank)
-                # Provide timeout so we know the rank is online.
-                time.sleep(45)
 
             self.log.info(output)
             self.is_rebuild_done(3)
@@ -171,8 +170,8 @@ class OSAOfflineReintegration(OSAUtils):
     @skipForTicket("DAOS-6766, DAOS-6783")
     def test_osa_offline_reintegration_server_stop(self):
         """Test ID: DAOS-6748.
-        Test Description: Validate Online Reintegration with server stop
+        Test Description: Validate Offline Reintegration with server stop
         :avocado: tags=all,pr,daily_regression,hw,medium,ib2,osa
-        :avocado: tags=offline_reintegration_srv_stop,DAOS_5610
+        :avocado: tags=offline_reintegration_srv_stop
         """
         self.run_offline_reintegration_test(1, data=True, server_boot=True)

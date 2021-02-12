@@ -67,7 +67,9 @@ class OSAOnlineReintegration(OSAUtils):
         Args:
             num_pool (int) : total pools to create for testing purposes.
             data (bool) : whether pool has no data or to create
-                some data in pool. Defaults to False.
+                          some data in pool. Defaults to False.
+            server_boot (bool) : Perform system stop/start on a rank.
+                                 Defults to False.
         """
         num_jobs = self.params.get("no_parallel_job", '/run/ior/*')
         # Create a pool
@@ -134,10 +136,7 @@ class OSAOnlineReintegration(OSAUtils):
                 self.log.info(output)
                 self.is_rebuild_done(3)
                 self.assert_on_rebuild_failure()
-                time.sleep(35)
                 output = self.dmg_command.system_start(ranks=rank)
-                # Provide timeout so we know the rank is online.
-                time.sleep(45)
 
             self.log.info(output)
             self.is_rebuild_done(3)
@@ -147,7 +146,9 @@ class OSAOnlineReintegration(OSAUtils):
 
             self.log.info("Pool Version after exclude %s", pver_exclude)
             # Check pool version incremented after pool exclude
-            self.assertTrue(pver_exclude > (pver_begin + len(target_list)),
+            # pver_exclude should be greater than
+            # pver_begin + 8 targets.
+            self.assertTrue(pver_exclude > (pver_begin + 8),
                             "Pool Version Error:  After exclude")
             output = self.dmg_command.pool_reintegrate(self.pool.uuid,
                                                        rank)
@@ -184,7 +185,7 @@ class OSAOnlineReintegration(OSAUtils):
         Test Description: Validate Online Reintegration
 
         :avocado: tags=all,pr,daily_regression,hw,medium,ib2,osa
-        :avocado: tags=online_reintegration,DAOS_5610
+        :avocado: tags=online_reintegration
         """
         # Perform reintegration testing with 1 pool.
         for pool_num in range(1, 2):
@@ -195,6 +196,6 @@ class OSAOnlineReintegration(OSAUtils):
         """Test ID: DAOS-5920.
         Test Description: Validate Online Reintegration with server stop
         :avocado: tags=all,pr,daily_regression,hw,medium,ib2,osa
-        :avocado: tags=online_reintegration_srv_stop,DAOS_5610
+        :avocado: tags=online_reintegration_srv_stop
         """
         self.run_online_reintegration_test(1, server_boot=True)
