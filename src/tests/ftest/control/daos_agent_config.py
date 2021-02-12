@@ -21,6 +21,7 @@ class DaosAgentConfigTest(TestWithServers):
     def __init__(self, *args, **kwargs):
         """Initialize a DaosAgentConfigTest object."""
         super(DaosAgentConfigTest, self).__init__(*args, **kwargs)
+        self.start_agents_once = False
         self.start_servers_once = False
         self.setup_start_agents = False
         self.setup_start_servers = False

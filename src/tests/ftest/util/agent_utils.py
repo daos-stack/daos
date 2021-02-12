@@ -224,6 +224,9 @@ class DaosAgentManager(SubprocessManager):
 
         super(DaosAgentManager, self).start()
 
+        # Define the expected states for each rank
+        self._expected_states = self.get_current_state()
+
     def stop(self):
         """Stop the agent through the job manager.
 

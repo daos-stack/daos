@@ -13,13 +13,14 @@ import signal
 import os
 
 from avocado.utils import process
+from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import \
     CommandFailure, BasicParameter, ObjectWithParameters, \
     CommandWithParameters, YamlParameters, EnvironmentVariables, LogParameter
 from general_utils import check_file_exists, stop_processes, get_log_file, \
     run_command, DaosTestError, get_job_manager_class, create_directory, \
-    distribute_files, change_file_owner, get_file_listing
+    distribute_files, change_file_owner, get_file_listing, run_task
 
 
 class ExecutableCommand(CommandWithParameters):
@@ -903,12 +904,24 @@ class SubprocessManager(object):
 
         # Define the JobManager class used to manage the command as a subprocess
         self.manager = get_job_manager_class(manager, command, True)
+        self._id = self.manager.job.command.replace("daos_", "")
 
         # Define the list of hosts that will execute the daos command
         self._hosts = []
 
         # The socket directory verification is not required with systemctl
         self._verify_socket_dir = manager != "Systemctl"
+
+        # An internal dictionary used to define the expected states of each
+        # job process. It will be populated when any of the following methods
+        # are called:
+        #   - start()
+        #   - verify_expected_states(set_expected=True)
+        # Individual states may also be updated by calling the
+        # update_expected_states() method. This is required to avoid any errors
+        # being raised during tearDown() if a test variant intentional affects
+        # the state of a job process.
+        self._expected_states = {}
 
     def __str__(self):
         """Get the complete manager command string.
@@ -1046,6 +1059,169 @@ class SubprocessManager(object):
         if self.manager.job and hasattr(self.manager.job, "get_config_value"):
             value = self.manager.job.get_config_value(name)
         return value
+
+    def get_current_state(self):
+        """Get the current state of the daos_server ranks.
+
+        Returns:
+            dict: dictionary of server rank keys, each referencing a dictionary
+                of information containing at least the following information:
+                    {"domain": <>, "uuid": <>, "state": <>}
+                This will be empty if there was error obtaining the dmg system
+                query output.
+
+        """
+        data = {}
+        ranks = {host: rank for rank, host in enumerate(self._hosts)}
+        if not self._verify_socket_dir:
+            command = "systemctl is-active {}".format(
+                self.manager.job.service_name)
+        else:
+            command = "prep {}".format(self.manager.job.command)
+        task = run_task(self._hosts, command, 30)
+        for output, nodelist in task.iter_buffers():
+            for node in nodelist:
+                data[ranks[node]] = {
+                    "domain": node, "uuid": "-", "state": str(output)}
+        return data
+
+    def update_expected_states(self, ranks, state):
+        """Update the expected state of the specified job rank.
+
+        Args:
+            ranks (object): job ranks to update. Can be a single rank (int),
+                multiple ranks (list), or all the ranks (None).
+            state (object): new state to assign as the expected state of this
+                rank. Can be a str or a list of str.
+        """
+        if ranks is None:
+            ranks = [key for key in self._expected_states]
+        elif not isinstance(ranks, (list, tuple)):
+            ranks = [ranks]
+
+        for rank in ranks:
+            if rank in self._expected_states:
+                self.log.info(
+                    "Updating the expected state for rank %s on %s: %s -> %s",
+                    rank, self._expected_states[rank]["domain"],
+                    self._expected_states[rank]["state"], state)
+                self._expected_states[rank]["state"] = state
+
+    def verify_expected_states(self, set_expected=False):
+        """Verify that the expected job process states match the current states.
+
+        Args:
+            set_expected (bool, optional): option to update the expected job
+                process states to the current states prior to verification.
+                Defaults to False.
+
+        Returns:
+            dict: a dictionary of whether or not any of the job process states
+                were not 'expected' (which should warrant an error) and whether
+                or not the job process require a 'restart' (either due to any
+                unexpected states or because at least one job process was no
+                longer found to be running)
+
+        """
+        status = {"expected": True, "restart": False}
+        running_states = ["started", "joined", "active", "activating"]
+
+        # Get the current state of each job process
+        current_states = self.get_current_state()
+        if set_expected:
+            # Assign the expected states to the current job process states
+            self.log.info(
+                "<%s> Assigning expected %s states.",
+                self._id.upper(), self._id)
+            self._expected_states = current_states.copy()
+
+        # Verify the expected states match the current states
+        self.log.info(
+            "<%s> Verifying %s states: group=%s, hosts=%s",
+            self._id.upper(), self._id, self.get_config_value("name"),
+            NodeSet.fromlist(self._hosts))
+        if current_states:
+            log_format = "  %-4s  %-15s  %-36s  %-22s  %-14s  %s"
+            self.log.info(
+                log_format,
+                "Rank", "Host", "UUID", "Expected State", "Current State",
+                "Result")
+            self.log.info(
+                log_format,
+                "-" * 4, "-" * 15, "-" * 36, "-" * 22, "-" * 14, "-" * 6)
+
+            # Verify that each expected rank appears in the current states
+            for rank in sorted(self._expected_states):
+                domain = self._expected_states[rank]["domain"].split(".")
+                expected = self._expected_states[rank]["state"]
+                if isinstance(expected, (list, tuple)):
+                    expected = [item.lower() for item in expected]
+                else:
+                    expected = [expected.lower()]
+                try:
+                    current_rank = current_states.pop(rank)
+                    current = current_rank["state"].lower()
+                except KeyError:
+                    current = "not detected"
+
+                # Check if the job's expected state matches the current state
+                result = "PASS" if current in expected else "RESTART"
+                status["expected"] &= current in expected
+
+                # Restart all job processes if the expected rank is not running
+                if current not in running_states:
+                    status["restart"] = True
+                    result = "RESTART"
+
+                self.log.info(
+                    log_format, rank, domain[0].replace("/", ""),
+                    self._expected_states[rank]["uuid"], "|".join(expected),
+                    current, result)
+
+            # Report any current states that were not expected as an error
+            for rank in sorted(current_states):
+                status["expected"] = False
+                domain = current_states[rank]["domain"].split(".")
+                self.log.info(
+                    log_format, rank, domain[0].replace("/", ""),
+                    current_states[rank]["uuid"], "not detected",
+                    current_states[rank]["state"].lower(), "RESTART")
+
+        elif not self._expected_states:
+            # Expected states are populated as part of start() procedure,
+            # so if it is empty there was an error starting the job processes.
+            self.log.info(
+                "  Unable to obtain current %s state.  Undefined expected %s "
+                "states due to a failure starting the %s.",
+                self._id, self._id, self._id,)
+            status["restart"] = True
+
+        else:
+            # Any failure to obtain the current rank information is an error
+            self.log.info(
+                "  Unable to obtain current %s state.  If the %ss are "
+                "not running this is expected.", self._id, self._id)
+
+            # Do not report an error if all servers are expected to be stopped
+            all_stopped = bool(self._expected_states)
+            for rank in sorted(self._expected_states):
+                states = self._expected_states[rank]["state"]
+                if not isinstance(states, (list, tuple)):
+                    states = [states]
+                if "stopped" not in [item.lower() for item in states]:
+                    all_stopped = False
+                    break
+            if all_stopped:
+                self.log.info("  All %s are expected to be stopped.", self._id)
+                status["restart"] = True
+            else:
+                status["expected"] = False
+
+        # Any unexpected state detected warrants a restart of all job processes
+        if not status["expected"]:
+            status["restart"] = True
+
+        return status
 
 
 class SystemctlCommand(ExecutableCommand):
