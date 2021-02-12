@@ -40,7 +40,7 @@ class CommonBase(object):
 
     def _debug_append(self, msg):
         if self._verbose:
-            print('{}'.format(msg), end='')
+            print('{}'.format(msg), end=' ')
 
     def _get_power_labels(self):
         return {
