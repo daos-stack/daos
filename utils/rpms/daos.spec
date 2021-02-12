@@ -5,6 +5,7 @@
 %global mercury_version 2.0.1~rc1-1%{?dist}
 %global libfabric_version 1.11.1
 %global __python %{__python3}
+%global _python_bytecompile_extra 1
 
 Name:          daos
 Version:       1.1.2.1
