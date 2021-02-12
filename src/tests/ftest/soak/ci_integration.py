@@ -82,8 +82,7 @@ class JavaCIIntegration(TestWithServers):
 
         """
         # look for java home
-        commands = [u"chmod 755 {}/daos-java/find_java_home.sh".format(self.jdir),
-                    u"source {}/daos-java/find_java_home.sh".format(self.jdir)]
+        commands = [u"source {}/daos-java/find_java_home.sh".format(self.jdir)]
         for cmd in commands:
             task = run_task(hosts=self.hostlist_clients, command=cmd)
             for _rc_code, _node in task.iter_retcodes():
