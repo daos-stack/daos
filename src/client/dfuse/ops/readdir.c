@@ -324,12 +324,11 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 			daos_obj_id_t			oid;
 			dfs_obj_t			*obj;
 			size_t				written;
-
-			char				*attr_name = DUNS_XATTR_NAME;
 			char				out[DUNS_MAX_XATTR_LEN];
 			char				*outp = &out[0];
-			daos_size_t			attr_len = DUNS_MAX_XATTR_LEN;
+			daos_size_t			attr_len;
 
+			attr_len = DUNS_MAX_XATTR_LEN;
 			D_ASSERT(dre->dre_offset != 0);
 
 			oh->doh_dre_index += 1;
@@ -343,12 +342,12 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 				rc = dfs_lookupx(oh->doh_dfs, oh->doh_obj,
 						 dre->dre_name, O_RDONLY, &obj,
 						 &stbuf.st_mode, &stbuf,
-						 1, &attr_name, (void **)&outp,
-						 &attr_len);
+						 1, &duns_xattr_name,
+						 (void **)&outp, &attr_len);
 			else
 				rc = dfs_lookup_rel(oh->doh_dfs, oh->doh_obj,
-						    dre->dre_name, O_RDONLY, &obj,
-						    &stbuf.st_mode, NULL);
+						    dre->dre_name, O_RDONLY,
+						    &obj, &stbuf.st_mode, NULL);
 			if (rc == ENOENT) {
 				DFUSE_TRA_DEBUG(oh, "File does not exist");
 				continue;
