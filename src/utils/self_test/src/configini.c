@@ -369,6 +369,7 @@ int ConfigGetKeys(const Config *cfg, const char *section,
 			/* Section found, assign address */
 			TAILQ_FOREACH(kv, &sect->kv_list, next) {
 				if (number >= begin_index) {
+					/* avoid checkpatch warning */
 					array[number - begin_index] = kv->key;
 				}
 				number++;

@@ -176,7 +176,6 @@ static struct option long_options[] = {
 #define ARGV_PARAMETERS "a:bc:d:e:f:g:hi:m:o:p:qr:s:v:w:x:y:z:"
 #endif
 
-
 /* Default parameters */
 char	default_msg_sizes_str[] =
 	"b200000,b200000 0,0 b200000,b200000 i1000,i1000 b200000,"
@@ -444,9 +443,9 @@ static void print_fail_counts(struct st_latency *latencies,
 
 /*Returns the number of valid points */
 static int calculate_stats(struct st_latency *latencies, int count,
-			    int64_t *av, double *sd, int64_t *min,
-			    int64_t *max, int64_t *med25, int64_t *med50,
-			    int64_t *med75, int64_t *total)
+			   int64_t *av, double *sd, int64_t *min,
+			   int64_t *max, int64_t *med25, int64_t *med50,
+			   int64_t *med75, int64_t *total)
 {
 	uint32_t	i;
 	uint32_t	num_failed = 0;
@@ -531,7 +530,7 @@ static void print_results(struct st_latency *latencies,
 	int64_t		 latency_total;
 	double		 throughput;
 	double		 bandwidth;
-	char		 kname[2 * MASTER_VALUE_SIZE];
+	char		 kname[3 * MASTER_VALUE_SIZE];
 	char		 new_key_name[2 * MASTER_VALUE_SIZE];
 	char		 master[MASTER_VALUE_SIZE];
 
@@ -570,9 +569,9 @@ static void print_results(struct st_latency *latencies,
 
 #undef PRINT_ALL
 #ifdef PRINT_ALL
-	printf(" Grp: %s, rep %d, sendS %d, replyS %d\n",
-		test_params->srv_grp, test_params->rep_count,
-		test_params->send_size, test_params->reply_size);
+	printf(" Grp: %s, rep %d, sendSize %d, replySize %d\n",
+	       test_params->srv_grp, test_params->rep_count,
+	       test_params->send_size, test_params->reply_size);
 #endif
 	/* Figure out how many repetitions were errors */
 	num_failed = 0;
@@ -677,7 +676,7 @@ static void print_results(struct st_latency *latencies,
 
 	/* Print error summary results */
 	printf("\tRPC Failures: %u\n", num_failed);
-	if (num_failed >= 0)
+	if (num_failed > 0)
 		print_fail_counts(&latencies[0], num_failed, "\t\t");
 
 	/*
@@ -696,7 +695,7 @@ static void print_results(struct st_latency *latencies,
 	printf("\n NEW Sorted value\n");
 	for (local_rep = num_failed; local_rep < test_params->rep_count;
 	     local_rep++){
-		printf("   Interation: %d, EP %d, latencies %ld\n",
+		printf("   Iteration: %d, EP %d, latencies %ld\n",
 		       local_rep,  latencies[local_rep].rank,
 		       latencies[local_rep].val);
 	}
@@ -740,14 +739,11 @@ static void print_results(struct st_latency *latencies,
 		if (num_failed > 0) {
 			printf("\n");
 			printf("\t\t\tFailures: %u\n", num_failed);
-			print_fail_counts(&latencies[begin], num_failed,
-			"\t\t\t");
+			print_fail_counts(&latencies[begin], num_failed, "\t\t\t");
 		}
 
-		snprintf(new_key_name, sizeof(new_key_name),
-			 "%s-%d:%d-", master,
-			 latencies[begin].rank,
-			 latencies[begin].tag);
+		snprintf(new_key_name, sizeof(new_key_name), "%s-%d:%d-", master,
+			 latencies[begin].rank, latencies[begin].tag);
 
 		snprintf(kname, sizeof(kname), "%s%s", new_key_name, "min");
 		ConfigAddInt(Ocfg, section_name, kname, latency_min / 1000);
@@ -875,10 +871,10 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 	int		 number_keys;
 	int		 total_number_keys;
 	int		 max_keys = MAX_NUMBER_KEYS;
-	char		*c_master;
-	char		*c_endpoint;
-	char		*c_remaining;
-	char		*c_temp;
+	char		*c_master = NULL;
+	char		*c_endpoint = NULL;
+	char		*c_remaining = NULL;
+	char		*c_tag = NULL;
 	int		 i;
 	int		 size;
 	int		 status_size = sizeof(status) / sizeof(status_feature);
@@ -893,6 +889,7 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 
 	/* Make sure config is valid */
 	if (cfg == NULL) {
+		/* avoid checkpatch warning */
 		goto exit_code_ret;
 	}
 
@@ -931,17 +928,17 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 	 * Strip off master M:T and then the Master
 	 * Tag not necessary specified, or as *
 	 */
-	c_temp = NULL;
+	c_tag = NULL;
 	c_master = strtok_r(working, "-", &c_endpoint);
-	c_master = strtok_r(c_master, ":", &c_temp);
+	c_master = strtok_r(c_master, ":", &c_tag);
 
 	if ((c_master != NULL) && isdigit(*c_master)) {
 		/* avoid checkpatch warning */
 		sscanf(c_master, "%d", &master);
 	}
-	if ((c_temp != NULL) && isdigit(*c_temp)) {
+	if ((c_tag != NULL) && isdigit(*c_tag)) {
 		/* avoid checkpatch warning */
-		sscanf(c_temp, "%d", &master_tag);
+		sscanf(c_tag, "%d", &master_tag);
 	}
 
 	/*
@@ -952,14 +949,14 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 	 * Tag not necessary specified, or as *
 	 */
 	c_endpoint = strtok_r(c_endpoint, "-", &c_remaining);
-	c_endpoint = strtok_r(c_endpoint, ":", &c_temp);
+	c_endpoint = strtok_r(c_endpoint, ":", &c_tag);
 	if ((c_endpoint != NULL) && isdigit(*c_endpoint)) {
 		/* avoid check patch warning */
 		sscanf(c_endpoint, "%d", &endpoint);
 	}
-	if ((c_temp != NULL) && isdigit(*c_temp)) {
+	if ((c_tag != NULL) && isdigit(*c_tag)) {
 		/* avoid check patch warning */
-		sscanf(c_temp, "%d", &endpoint_tag);
+		sscanf(c_tag, "%d", &endpoint_tag);
 	}
 
 	/*
@@ -990,7 +987,7 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 			/* search master key and compare */
 			itemp = -1;
 			c_master = strtok_r(id, "-", &c_endpoint);
-			c_master = strtok_r(c_master, ":", &c_temp);
+			c_master = strtok_r(c_master, ":", &c_tag);
 			if ((c_master != NULL) && isdigit(*c_master)) {
 				/* avoid check patch warning */
 				sscanf(c_master, "%d", &itemp);
@@ -1002,7 +999,7 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 				itemp2 = -1;
 				c_endpoint = strtok_r(c_endpoint, "-",
 						      &c_remaining);
-				c_endpoint = strtok_r(c_endpoint, ":", &c_temp);
+				c_endpoint = strtok_r(c_endpoint, ":", &c_tag);
 				if ((c_endpoint != NULL) &&
 				    isdigit(*c_endpoint)) {
 					/* avoid check patch warning */
@@ -1050,7 +1047,7 @@ code_search_master:
 
 			/* search master key and compare */
 			c_master = strtok_r(id, "-", &c_endpoint);
-			c_master = strtok_r(c_master, ":", &c_temp);
+			c_master = strtok_r(c_master, ":", &c_tag);
 			if ((c_master != NULL) && isdigit(*c_master)) {
 				/* avoid checkpatch warning */
 				sscanf(c_master, "%d", &itemp);
@@ -1059,7 +1056,7 @@ code_search_master:
 				/* endpoint must be a '*' */
 				c_endpoint = strtok_r(c_endpoint, "-",
 						      &c_remaining);
-				c_endpoint = strtok_r(c_endpoint, ":", &c_temp);
+				c_endpoint = strtok_r(c_endpoint, ":", &c_tag);
 				if ((c_endpoint != NULL) &&
 				    strcmp(c_endpoint, "*") == 0) {
 					/* Have a match, read value and exit */
@@ -1103,12 +1100,12 @@ code_search_endpoint:
 
 			/* search master key and compare */
 			c_master = strtok_r(id, "-", &c_endpoint);
-			c_master = strtok_r(c_master, ":", &c_temp);
+			c_master = strtok_r(c_master, ":", &c_tag);
 			if ((c_master != NULL) && strcmp(c_master, "*") == 0) {
 				/* endpoint must be a value */
 				c_endpoint = strtok_r(c_endpoint, "-",
 						      &c_remaining);
-				c_endpoint = strtok_r(c_endpoint, ":", &c_temp);
+				c_endpoint = strtok_r(c_endpoint, ":", &c_tag);
 
 				if ((c_endpoint != NULL) &&
 				    isdigit(*c_endpoint)) {
@@ -1320,7 +1317,7 @@ next_arg:
 	 * Everything above this was setting the default expected
 	 * and scaling factors.  If specific factors are
 	 * specified (i.e. M:t-EP:t=...) then they must be handle
-	 * during the comparision.  They are specific to that one/group
+	 * during the comparison.  They are specific to that one/group
 	 * of comparison(s) and cannot be applied as a general default
 	 * value.
 	 */
@@ -1383,14 +1380,14 @@ next_arg:
 
 				/* Find scale and value for key */
 				sec_name = DEFAULT_SCALE_NAME;
-				ivalue = (int) status[i].scale;
+				ivalue = (int)status[i].scale;
 				ret = get_config_value(Ecfg, sec_name, key,
 						       &ivalue, ivalue);
 				if (ret < 0) {
 					ret_value = ret;
 					goto cleanup;
 				}
-				scale = (float) ivalue;
+				scale = (float)ivalue;
 
 				sec_name = input_section_name;
 				ivalue = (int)status[i].value;
@@ -1434,7 +1431,7 @@ next_arg:
 						 (int)lower, (int)upper,
 						 (int)scale, percent_diff);
 					if (!((lower <= value) &&
-						(value <= upper))) {
+					      (value <= upper))) {
 						passed = false;
 						results = "Failed:";
 						ret_value = -1;
@@ -3427,8 +3424,6 @@ int parse_command_options(int argc, char *argv[])
 			alloc_g_config_append = false;
 			g_config_append = optarg;
 			break;
-
-
 		case 'h':
 		case '?':
 #ifdef INCLUDE_OBSOLETE
