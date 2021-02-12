@@ -148,8 +148,8 @@ static int data_init(int server, crt_init_options_t *opt)
 
 	d_getenv_int("CRT_MRC_ENABLE", &mrc_enable);
 	if (mrc_enable == 0) {
-		D_INFO("Disabling MR CACHE (FI_MR_CACHE_COUNT=0)\n");
-		setenv("FI_MR_CACHE_COUNT", "0", 1);
+		D_INFO("Disabling MR CACHE (FI_MR_CACHE_MAX_COUNT=0)\n");
+		setenv("FI_MR_CACHE_MAX_COUNT", "0", 1);
 	}
 
 	if (credits == 0) {
