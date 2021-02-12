@@ -921,7 +921,8 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 		ret = -ENOMEM;
 		goto exit_code;
 	}
-	strncpy(working, key, size);
+	working[size - 1] = '\0';
+	strncpy(working, key, size - 1);
 
 	/*
 	 * Parse string to find master and its tag.
@@ -979,7 +980,8 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 				continue;
 			}
 
-			strncpy(id, key_names[i], sizeof(id));
+			strncpy(id, key_names[i], sizeof(id)-1);
+			id[sizeof(id) - 1] = '\0';
 			config_ret = ConfigReadInt(cfg, sec_name,
 						   key_names[i],
 						   &ini_value, 0.0);
@@ -1043,7 +1045,8 @@ code_search_master:
 			config_ret = ConfigReadInt(cfg, sec_name,
 						   key_names[i],
 						   &ini_value, 0.0);
-			strncpy(id, key_names[i], sizeof(id));
+			strncpy(id, key_names[i], sizeof(id) - 1);
+			id[sizeof(id) - 1] = '\0';
 
 			/* search master key and compare */
 			c_master = strtok_r(id, "-", &c_endpoint);
@@ -1096,7 +1099,8 @@ code_search_endpoint:
 			config_ret = ConfigReadInt(cfg, sec_name,
 						   key_names[i],
 						   &ini_value, 0.0);
-			strncpy(id, key_names[i], sizeof(id));
+			strncpy(id, key_names[i], sizeof(id) - 1);
+			id[sizeof(id) - 1] = '\0';
 
 			/* search master key and compare */
 			c_master = strtok_r(id, "-", &c_endpoint);
