@@ -53,11 +53,11 @@ class CPUUsage(TestWithServers):
             process_row = str(output).splitlines()[-1]
             self.log.info("Process row = %s", process_row)
             values = process_row.split()
-            self.log.info("Values = {}".format(values))
-            usage = float(values[8])
+            self.log.info("Values = %s", values)
+            usage = values[8]
             self.log.info("CPU Usage = %f", usage)
 
         self.assertTrue(
             usage != -1, "daos_engine CPU usage couldn't be obtained!")
         self.assertTrue(
-            usage < 100, "CPU usage is above 100%: {}%".format(usage))
+            float(usage) < 100, "CPU usage is above 100%: {}%".format(usage))
