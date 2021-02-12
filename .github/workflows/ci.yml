@@ -22,11 +22,15 @@ jobs:
       uses: actions/checkout@v2
       with:
         submodules: true
-    - name: Build ${{ matrix.distro }} Docker image with ${{ matrix.compiler }}
+    - name: Build ${{ matrix.distro }} Docker image with cland
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
-                          --build-arg COMPILER=${{ matrix.compiler }}
+                          --build-arg COMPILER=clang
                           --build-arg JOBS=20
-                          -t ${{ matrix.distro }}/${{ matrix.compiler }}/daos:${{ github.sha }}
+    - name: Build ${{ matrix.distro }} Docker image with gcc
+      run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
+                          --build-arg COMPILER=gcc
+                          --build-arg JOBS=20
+
   Spelling:
     runs-on: ubuntu-20.04
     steps:
