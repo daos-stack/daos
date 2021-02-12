@@ -18,7 +18,7 @@ from ClusterShell.NodeSet import NodeSet
 from command_utils_base import \
     CommandFailure, BasicParameter, ObjectWithParameters, \
     CommandWithParameters, YamlParameters, EnvironmentVariables, LogParameter
-from general_utils import check_file_exists, stop_processes, get_log_file, \
+from general_utils import check_file_exists, get_log_file, \
     run_command, DaosTestError, get_job_manager_class, create_directory, \
     distribute_files, change_file_owner, get_file_listing, run_task
 
@@ -923,6 +923,15 @@ class SubprocessManager(object):
         # the state of a job process.
         self._expected_states = {}
 
+        # States for verify_expected_states()
+        self._states = {
+            "all": [
+                "active", "inactive", "activating", "deactivating", "failed",
+                "unknown"],
+            "running": ["active"],
+            "stopped": ["inactive", "deactivating", "failed", "unknown"],
+        }
+
     def __str__(self):
         """Get the complete manager command string.
 
@@ -993,26 +1002,16 @@ class SubprocessManager(object):
             self.manager.run()
         except CommandFailure:
             # Kill the subprocess, anything that might have started
-            self.kill()
+            self.manager.kill()
             raise CommandFailure(
                 "Failed to start {}.".format(str(self.manager.job)))
+        finally:
+            # Define the expected states for each rank
+            self._expected_states = self.get_current_state()
 
     def stop(self):
         """Stop the daos command."""
         self.manager.stop()
-
-    def kill(self):
-        """Forcibly terminate any sub process running on hosts."""
-        regex = self.manager.job.command_regex
-        result = stop_processes(self._hosts, regex)
-        if 0 in result and len(result) == 1:
-            print(
-                "No remote {} processes killed (none found), done.".format(
-                    regex))
-        else:
-            print(
-                "***At least one remote {} process needed to be killed! Please "
-                "investigate/report.***".format(regex))
 
     def verify_socket_directory(self, user):
         """Verify the domain socket directory is present and owned by this user.
@@ -1124,7 +1123,6 @@ class SubprocessManager(object):
 
         """
         status = {"expected": True, "restart": False}
-        running_states = ["started", "joined", "active", "activating"]
 
         # Get the current state of each job process
         current_states = self.get_current_state()
@@ -1169,7 +1167,7 @@ class SubprocessManager(object):
                 status["expected"] &= current in expected
 
                 # Restart all job processes if the expected rank is not running
-                if current not in running_states:
+                if current not in self._states["running"]:
                     status["restart"] = True
                     result = "RESTART"
 

@@ -359,6 +359,17 @@ class DaosServerManager(SubprocessManager):
             self.manager.job.certificate_owner = "daos_server"
             self.dmg.certificate_owner = getuser()
 
+        # Server states
+        self._states = {
+            "all": [
+                "awaitformat", "starting", "ready", "joined", "stopping",
+                "stopped", "evicted", "errored", "unresponsive", "unknown"],
+            "running": ["ready", "joined"],
+            "stopped": [
+                "stopping", "stopped", "evicted", "errored", "unresponsive",
+                "unknown"],
+        }
+
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
 
@@ -434,7 +445,7 @@ class DaosServerManager(SubprocessManager):
                 self.get_config_value("allow_insecure"), "dmg.insecure")
 
         # Kill any daos servers running on the hosts
-        self.kill()
+        self.manager.kill()
 
         # Clean up any files that exist on the hosts
         self.clean_files()
@@ -567,7 +578,7 @@ class DaosServerManager(SubprocessManager):
         try:
             self.manager.run()
         except CommandFailure as error:
-            self.kill()
+            self.manager.kill()
             raise ServerFailed(
                 "Failed to start servers before format: {}".format(error))
 
@@ -587,7 +598,7 @@ class DaosServerManager(SubprocessManager):
         self.log.info("<SERVER> Waiting for the daos_engine to start")
         self.manager.job.update_pattern("normal", hosts_qty)
         if not self.manager.check_subprocess_status(self.manager.process):
-            self.kill()
+            self.manager.kill()
             raise ServerFailed("Failed to start servers after format")
 
         # Update the dmg command host list to work with pool create/destroy
@@ -679,7 +690,7 @@ class DaosServerManager(SubprocessManager):
                     self.manager.command, error))
 
         # Kill any leftover processes that may not have been stopped correctly
-        self.kill()
+        self.manager.kill()
 
         if self.manager.job.using_nvme:
             # Reset the storage

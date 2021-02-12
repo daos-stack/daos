@@ -224,9 +224,6 @@ class DaosAgentManager(SubprocessManager):
 
         super(DaosAgentManager, self).start()
 
-        # Define the expected states for each rank
-        self._expected_states = self.get_current_state()
-
     def stop(self):
         """Stop the agent through the job manager.
 
@@ -248,7 +245,7 @@ class DaosAgentManager(SubprocessManager):
                     self.manager.command, error))
 
         # Kill any leftover processes that may not have been stopped correctly
-        self.kill()
+        self.manager.kill()
 
         # Report any errors after all stop actions have been attempted
         if messages:
