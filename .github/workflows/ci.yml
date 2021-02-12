@@ -16,13 +16,12 @@ jobs:
       fail-fast: false
       matrix:
         distro: [centos.7, centos.8, leap.15, ubuntu.20.04]
-        compiler: [gcc, clang]
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
       with:
         submodules: true
-    - name: Build ${{ matrix.distro }} Docker image with cland
+    - name: Build ${{ matrix.distro }} Docker image with clang
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg COMPILER=clang
                           --build-arg JOBS=20

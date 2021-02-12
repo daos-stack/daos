@@ -56,9 +56,6 @@ ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 # Legacy, NOBUILD should be set to any string to disable all three.
 ARG NOBUILD=no
 
-# select compiler to use
-ARG COMPILER=gcc
-
 # The COPY command has a --chown option but it's not well supported so copy as
 # root then run a chown command which is frustrating as the copy can take a few
 # seconds.
@@ -84,6 +81,9 @@ USER root:root
 RUN chown -R daos_server.daos_server /home/daos
 USER daos_server:daos_server
 RUN ln -s utils/sl site_scons
+
+# select compiler to use
+ARG COMPILER=gcc
 
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
