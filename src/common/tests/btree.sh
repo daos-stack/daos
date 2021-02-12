@@ -7,8 +7,7 @@ BTR=${SL_BUILD_DIR}/src/common/tests/btree
 VCMD=()
 if [ "$USE_VALGRIND" = "memcheck" ]; then
     VCMD="valgrind --leak-check=full --show-reachable=yes --error-limit=no \
-          --suppressions=${VALGRIND_SUPP} --error-exitcode=42 --xml=yes \
-          --xml-file=unit-test-btree-%p.memcheck.xml"
+          --suppressions=${VALGRIND_SUPP} --gen-suppressions=all"
 elif [ "$USE_VALGRIND" = "pmemcheck" ]; then
     VCMD="valgrind --tool=pmemcheck"
 fi
