@@ -29,11 +29,11 @@ jobs:
     - name: check server
       run: docker run build-image ldd /opt/daos/bin/daos_io_server
     - name: Run Unit Tests
-      run: docker run --name build-ut --tmpfs /mnt/daos build-image ./utils/run_test.sh
+      run: docker run --name build-ut --tmpfs /mnt/daos build-image ./daos/utils/run_test.sh
     - name: mkdir
       run: mkdir test_results/
     - name: Copy results
-      run: docker cp build-ut:/home/daos/test_results/ ./
+      run: docker cp build-ut:/home/daos/daos/test_results/ ./
     - name: find
       run: find test_results/
     - name: grep
@@ -44,7 +44,7 @@ jobs:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         files: test_results/*.xml
     - name: Run NLT Test
-      run: docker run --tmpfs /mnt/daos build-image ./utils/node_local_test.py --no-root kv
+      run: docker run --tmpfs /mnt/daos build-image ./daos/utils/node_local_test.py --no-root kv
     - name: grep
       if: always()
       run: grep . *.json
