@@ -129,7 +129,7 @@ class OSAOnlineReintegration(OSAUtils):
                                                        rank)
             else:
                 output = self.dmg_command.system_stop(ranks=rank)
-                time.sleep(10)
+                self.pool.wait_for_rebuild(True)
                 self.log.info(output)
                 self.is_rebuild_done(3)
                 self.assert_on_rebuild_failure()
