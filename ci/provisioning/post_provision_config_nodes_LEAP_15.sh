@@ -98,7 +98,6 @@ post_provision_config_nodes() {
 
     # force install of avocado 52.1
     dnf -y erase avocado{,-common} python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}}
-    #dnf -y install {avocado-common,python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}}}-52.1
     pip3 install "avocado-framework<83.0"
     pip3 install "avocado-framework-plugin-result-html<83.0"
     pip3 install "avocado-framework-plugin-varianter-yaml-to-mux<83.0"

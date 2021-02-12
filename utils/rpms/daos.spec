@@ -5,7 +5,6 @@
 %global mercury_version 2.0.1~rc1-1%{?dist}
 %global libfabric_version 1.11.1
 %global __python %{__python3}
-%global _python_bytecompile_extra 1
 
 Name:          daos
 Version:       1.1.2.1
@@ -363,19 +362,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %dir %{_libdir}/python3/site-packages/storage_estimator
 %{_libdir}/python3/site-packages/pydaos/*.py
 %{_libdir}/python3/site-packages/storage_estimator/*.py
-%if (0%{?rhel} >= 7)
-%{_libdir}/python3/site-packages/pydaos/*.pyc
-%{_libdir}/python3/site-packages/pydaos/*.pyo
-%{_libdir}/python3/site-packages/storage_estimator/*.pyc
-%{_libdir}/python3/site-packages/storage_estimator/*.pyo
-%endif
 %{_libdir}/python3/site-packages/pydaos/pydaos_shim_3.so
 %dir %{_libdir}/python3/site-packages/pydaos/raw
 %{_libdir}/python3/site-packages/pydaos/raw/*.py
-%if (0%{?rhel} >= 7)
-%{_libdir}/python3/site-packages/pydaos/raw/*.pyc
-%{_libdir}/python3/site-packages/pydaos/raw/*.pyo
-%endif
 %{_datadir}/%{name}/ioil-ld-opts
 %config(noreplace) %{conf_dir}/daos_agent.yml
 %config(noreplace) %{conf_dir}/daos_control.yml

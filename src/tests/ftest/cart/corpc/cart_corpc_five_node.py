@@ -5,10 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 
-
-
-import sys
-
 from apricot import TestWithoutServers
 
 # Can't all this import before setting sys.path

@@ -1,11 +1,9 @@
-#!/usr/bin/python3
+#!/usr/bin/python
 '''
   (C) Copyright 2018-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-
-
 
 import sys
 import time
