@@ -532,7 +532,7 @@ punch_entry:
 	d_iov_set(&dkey, (void *)name, len);
 	/** we only need a conditional dkey punch if we are not using a DTX */
 	rc = daos_obj_punch_dkeys(parent_oh, th,
-				  dfs->use_dtx ? DAOS_COND_PUNCH : 0,
+				  dfs->use_dtx ? 0 : DAOS_COND_PUNCH,
 				  1, &dkey, NULL);
 	return daos_der2errno(rc);
 }
@@ -4031,7 +4031,8 @@ restart:
 
 	/** remove the old entry from the old parent (just the dkey) */
 	d_iov_set(&dkey, (void *)name, len);
-	rc = daos_obj_punch_dkeys(parent->oh, th, DAOS_COND_PUNCH, 1, &dkey,
+	rc = daos_obj_punch_dkeys(parent->oh, th,
+				  dfs->use_dtx ? 0 : DAOS_COND_PUNCH, 1, &dkey,
 				  NULL);
 	if (rc) {
 		D_ERROR("Punch entry %s failed (%d)\n", name, rc);
