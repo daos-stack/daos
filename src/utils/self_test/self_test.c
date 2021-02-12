@@ -873,6 +873,7 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 	char		*key_names[MAX_NUMBER_KEYS];
 	char		*key_name;
 	int		 number_keys;
+	int		 total_number_keys;
 	int		 max_keys = MAX_NUMBER_KEYS;
 	char		*c_master;
 	char		*c_endpoint;
@@ -971,6 +972,7 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 	number_keys = 0;
 	number_keys = ConfigGetKeys(cfg, sec_name,
 				    key_names, max_keys, number_keys);
+	total_number_keys = number_keys;
 	/* Loop through all keys */
 	while (number_keys != 0) {
 		for (i = 0; i < number_keys; i++) {
@@ -1016,7 +1018,9 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 
 		/* setup array of keys for next loop */
 		number_keys = ConfigGetKeys(cfg, sec_name,
-					    key_names, max_keys, number_keys);
+					    key_names, max_keys,
+					    total_number_keys);
+		total_number_keys += number_keys;
 	}
 
 code_search_master:
@@ -1029,6 +1033,7 @@ code_search_master:
 	number_keys = 0;
 	number_keys = ConfigGetKeys(cfg, sec_name,
 				    key_names, max_keys, number_keys);
+	total_number_keys = number_keys;
 	/* Loop through all keys */
 	while (number_keys != 0) {
 		for (i = 0; i < number_keys; i++) {
@@ -1066,7 +1071,9 @@ code_search_master:
 
 		/* setup array of keys for next loop */
 		number_keys = ConfigGetKeys(cfg, sec_name,
-					    key_names, max_keys, number_keys);
+					    key_names, max_keys,
+					    total_number_keys);
+		total_number_keys += number_keys;
 	}
 
 code_search_endpoint:
@@ -1079,6 +1086,7 @@ code_search_endpoint:
 	number_keys = 0;
 	number_keys = ConfigGetKeys(cfg, sec_name,
 				    key_names, max_keys, number_keys);
+	total_number_keys = number_keys;
 	/* Loop through all keys */
 	while (number_keys != 0) {
 		for (i = 0; i < number_keys; i++) {
@@ -1118,7 +1126,9 @@ code_search_endpoint:
 
 		/* setup array of keys for next loop */
 		number_keys = ConfigGetKeys(cfg, sec_name,
-					    key_names, max_keys, number_keys);
+					    key_names, max_keys,
+					    total_number_keys);
+		total_number_keys += number_keys;
 	}
 
 exit_code_free:
@@ -1305,7 +1315,15 @@ next_arg:
 			free(str);
 	}
 
-	/* Do comparisons */
+	/*
+	 * Do comparisons
+	 * Everything above this was setting the default expected
+	 * and scaling factors.  If specific factors are
+	 * specified (i.e. M:t-EP:t=...) then they must be handle
+	 * during the comparision.  They are specific to that one/group
+	 * of comparison(s) and cannot be applied as a general default
+	 * value.
+	 */
 #define	RANGE_SIZE	128
 	for (i = 0; i < status_size; i++) {
 		float	 upper = status[i].value;
@@ -1320,6 +1338,7 @@ next_arg:
 		bool	 firstpass;
 		char	*key_names[MAX_NUMBER_KEYS];
 		int	 number_keys;
+		int	 total_number_keys;
 		int	 max = MAX_NUMBER_KEYS;
 		char	*key;
 		char	*tkey;
@@ -1338,143 +1357,134 @@ next_arg:
 			number_keys = ConfigGetKeys(cfg_output, section_name,
 						    key_names, max,
 						    number_keys);
+			total_number_keys = number_keys;
 			if (number_keys == 0) {
 				D_INFO(" NO keys found\n");
 				break;
 			}
 
-			/* Loop through all keys */
+			/*
+			 * Results were store in the output file.
+			 * Loop through all results/keys to compare.
+			 */
+			j = 0;
 			while (number_keys != 0) {
-				/*
-				 * Search for results with status name for
-				 * comparison
-				 */
-				for (j = 0; j < number_keys; j++) {
-					tkey = strstr(key_names[j],
-						      status[i].name);
-					if (tkey == NULL) {
-						/* avoid checkpatch warning */
-						continue;
-					}
-
-					ConfigReadInt(cfg_output, section_name,
-						key_names[j], &ivalue, 0);
-					value = (float)ivalue;
-					key = key_names[j];
-
-					/* Find scale and value for key */
-					sec_name = DEFAULT_SCALE_NAME;
-					ivalue = (int) status[i].scale;
-					ret = get_config_value(Ecfg,
-							       sec_name,
-							       key,
-							       &ivalue,
-							       ivalue);
-					if (ret < 0) {
-						ret_value = ret;
-						goto cleanup;
-					}
-					scale = (float) ivalue;
-
-					sec_name = input_section_name;
-					ivalue = (int)status[i].value;
-					ret = get_config_value(Ecfg,
-							       sec_name,
-							       key,
-							       &ivalue,
-							       ivalue);
-					if (ret < 0) {
-						ret_value = ret;
-						goto cleanup;
-					}
-
-					/* Find range for testing */
-					percent_diff = 0.;
-					if (ivalue != 0) 
-						percent_diff = (value - ivalue)/
-							ivalue;
-					percent_diff *= 100.0;
-					upper = ivalue;
-					lower = ivalue;
-
-					if (status[i].flag & TST_LOW) {
-						/* avoid checkpatch warning */
-						lower = ivalue *
-							(1.0 - scale / 100.);
-					}
-					if (status[i].flag & TST_HIGH) {
-						/* avoid checkpatch warning */
-						upper = ivalue *
-							(1.0 + scale / 100.);
-					}
-
-					/* Test for range */
-					passed = true;
-					results = "Passed:";
-					if (Ecfg == NULL) {
-						snprintf(range, RANGE_SIZE,
-						         " ");
-						results = " ";
-					} else if ((status[i].flag &
-					     (TST_HIGH | TST_LOW)) ==
-					    (TST_HIGH | TST_LOW)) {
-						snprintf(range, RANGE_SIZE,
-							 " Range (%6d -- %6d)"
-							 " %3d%% %5.1f%%",
-							 (int)lower, (int)upper,
-							 (int)scale,
-							 percent_diff);
-						if (!((lower <= value) &&
-							(value <= upper))) {
-							passed = false;
-							results = "Failed:";
-							ret_value = -1;
-						}
-					} else if (status[i].flag & TST_HIGH) {
-						snprintf(range, RANGE_SIZE,
-							 " Range (..    -- %6d)"
-							 "  %3d%% %5.1f%%",
-							 (int)upper,
-							 (int)scale,
-							 percent_diff);
-						if (value >= upper) {
-							passed = false;
-							results = "Failed:";
-							ret_value = -1;
-						}
-					} else if (status[i].flag & TST_LOW) {
-						snprintf(range, RANGE_SIZE,
-							 " Range (%6d --   "
-							 "  ..)   %3d%%"
-							 " %5.1f%%",
-							 (int)lower,
-							 (int)scale,
-							 percent_diff);
-						if (value <= lower) {
-							passed = false;
-							results = "Failed:";
-							ret_value = -1;
-						}
-					}
-
-					/* print results */
-					if (firstpass)
-						printf("\n Endpoint Result"
-						       " (%s)\n",
-							status[i].description);
-					firstpass = false;
-					printf("   %s : %8d  "
-					       "%s %s\n",
-					       key, (int)value,
-					       results, range);
-					if (!passed)
-						D_INFO("%s %s range check\n",
-						       key, results);
+				tkey = strstr(key_names[j],
+					      status[i].name);
+				if (tkey == NULL) {
+					/* avoid checkpatch warning */
+					goto increment_code;
 				}
-				number_keys = ConfigGetKeys(cfg_output,
+
+				ConfigReadInt(cfg_output, section_name,
+					      key_names[j], &ivalue, 0);
+				value = (float)ivalue;
+				key = key_names[j];
+
+				/* Find scale and value for key */
+				sec_name = DEFAULT_SCALE_NAME;
+				ivalue = (int) status[i].scale;
+				ret = get_config_value(Ecfg, sec_name, key,
+						       &ivalue, ivalue);
+				if (ret < 0) {
+					ret_value = ret;
+					goto cleanup;
+				}
+				scale = (float) ivalue;
+
+				sec_name = input_section_name;
+				ivalue = (int)status[i].value;
+				ret = get_config_value(Ecfg, sec_name, key,
+						       &ivalue, ivalue);
+				if (ret < 0) {
+					ret_value = ret;
+					goto cleanup;
+				}
+
+				/* Find range for testing */
+				percent_diff = 0.;
+				if (ivalue != 0)
+					percent_diff = (value - ivalue) /
+							ivalue;
+				percent_diff *= 100.0;
+				upper = ivalue;
+				lower = ivalue;
+
+				if (status[i].flag & TST_LOW) {
+					/* avoid checkpatch warning */
+					lower = ivalue * (1.0 - scale / 100.);
+				}
+				if (status[i].flag & TST_HIGH) {
+					/* avoid checkpatch warning */
+					upper = ivalue * (1.0 + scale / 100.);
+				}
+
+				/* Test for range */
+				passed = true;
+				results = "Passed:";
+				if (Ecfg == NULL) {
+					snprintf(range, RANGE_SIZE, " ");
+					results = " ";
+				} else if ((status[i].flag &
+					    (TST_HIGH | TST_LOW)) ==
+					    (TST_HIGH | TST_LOW)) {
+					snprintf(range, RANGE_SIZE,
+						 " Range (%6d -- %6d)"
+						 " %3d%% %5.1f%%",
+						 (int)lower, (int)upper,
+						 (int)scale, percent_diff);
+					if (!((lower <= value) &&
+						(value <= upper))) {
+						passed = false;
+						results = "Failed:";
+						ret_value = -1;
+					}
+				} else if (status[i].flag & TST_HIGH) {
+					snprintf(range, RANGE_SIZE,
+						 " Range (..    -- %6d)"
+						 "  %3d%% %5.1f%%",
+						 (int)upper, (int)scale,
+						 percent_diff);
+					if (value >= upper) {
+						passed = false;
+						results = "Failed:";
+						ret_value = -1;
+					}
+				} else if (status[i].flag & TST_LOW) {
+					snprintf(range, RANGE_SIZE,
+						 " Range (%6d --   "
+						 "  ..)   %3d%%"
+						 " %5.1f%%",
+						 (int)lower, (int)scale,
+						 percent_diff);
+					if (value <= lower) {
+						passed = false;
+						results = "Failed:";
+						ret_value = -1;
+					}
+				}
+
+				/* print results */
+				if (firstpass)
+					printf("\n Endpoint Result"
+					       " (%s)\n",
+					       status[i].description);
+				firstpass = false;
+				printf("   %s : %8d  %s %s\n",
+				       key, (int)value, results, range);
+				if (!passed)
+					D_INFO("%s %s range check\n",
+					       key, results);
+increment_code:
+				j++;
+				if (j == number_keys) {
+					j = 0;
+					number_keys = ConfigGetKeys(cfg_output,
 							    section_name,
 							    key_names, max,
-							    number_keys);
+							    total_number_keys);
+					total_number_keys += number_keys;
+				}
 			}
 		} /* end of valid test loop */
 	} /* end of "for" loop */
@@ -3610,7 +3620,7 @@ int main(int argc, char *argv[])
 		D_GOTO(cleanup, ret = -EINVAL);
 	}
 	if (g_ms_endpts == NULL)
-		printf("Warning: No --master-endpoint specified; using this"
+		printf("Warning: No --master-endpoint specified; using this\n"
 		       " command line application as the master endpoint\n");
 	if (g_endpts == NULL || g_num_endpts == 0) {
 		printf("No endpoints specified\n");

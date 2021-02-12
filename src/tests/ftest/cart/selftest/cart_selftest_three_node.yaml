@@ -42,8 +42,8 @@ tests: !mux
       - ../../../../bin/self_test
       - ../tests/test_group_np_cli
     test_clients_arg:
-      - " -f ../../../../etc/selftest.cnf -c align_4k_inFlight_16_size_1M_B"
-      - " -f ../../../../etc/selftest.cnf -c align_4k_inFlight_16_size_1M_B"
+      - " -f ../../../../etc/selftest.cnf -c align_4k_inFlight_16_size_1M_B -o client_1"
+      - " -f ../../../../etc/selftest.cnf -c align_4k_inFlight_16_size_1M_B -o client_2"
       - "--name client-group --attach_to selftest_srv_grp --shut_only"
 
 ###### 1KB aligned, 1MB Bulk transfer, 1 RPC in flight #####
@@ -61,8 +61,8 @@ tests: !mux
       - ../../../../bin/self_test
       - ../tests/test_group_np_cli
     test_clients_arg:
-      - " -f ../../../../etc/selftest.cnf -c align_1k_inFlight_1_size_1M_B"
-      - " -f ../../../../etc/selftest.cnf -c align_1k_inFlight_1_size_1M_B"
+      - " -f ../../../../etc/selftest.cnf -c align_1k_inFlight_1_size_1M_B -o client_1"
+      - " -f ../../../../etc/selftest.cnf -c align_1k_inFlight_1_size_1M_B -o client_2"
       - "--name client-group --attach_to selftest_srv_grp --shut_only"
 
 
@@ -81,8 +81,8 @@ tests: !mux
       - ../../../../bin/self_test
       - ../tests/test_group_np_cli
     test_clients_arg:
-      - " -f ../../../../etc/selftest.cnf -c align_1k_inFlight_4_size_1M_B"
-      - " -f ../../../../etc/selftest.cnf -c align_1k_inFlight_4_size_1M_B"
+      - " -f ../../../../etc/selftest.cnf -c align_1k_inFlight_4_size_1M_B -o client_1"
+      - " -f ../../../../etc/selftest.cnf -c align_1k_inFlight_4_size_1M_B -o client_2"
       - "--name client-group --attach_to selftest_srv_grp --shut_only"
 
 ###### 1KB aligned, 1MB Bulk transfer, 16 RPC in flight #####
@@ -100,8 +100,8 @@ tests: !mux
       - ../../../../bin/self_test
       - ../tests/test_group_np_cli
     test_clients_arg:
-      - " -f ../../../../etc/selftest.cnf -c align_1k_inFlight_16_size_1M_B"
-      - " -f ../../../../etc/selftest.cnf -c align_1k_inFlight_16_size_1M_B"
+      - " -f ../../../../etc/selftest.cnf -c align_1k_inFlight_16_size_1M_B -o client_1"
+      - " -f ../../../../etc/selftest.cnf -c align_1k_inFlight_16_size_1M_B -o client_2"
       - "--name client-group --attach_to selftest_srv_grp --shut_only"
 
 ###### Command line input, Multiple sizes with bulk and IVO  #####
