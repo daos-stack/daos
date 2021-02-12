@@ -4,8 +4,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-
+from apricot import skipForTicket
 from daos_core_base import DaosCoreBase
+
 
 class DaosCoreTestNvme(DaosCoreBase):
     # pylint: disable=too-many-ancestors
@@ -14,6 +15,7 @@ class DaosCoreTestNvme(DaosCoreBase):
     :avocado: recursive
     """
 
+    @skipForTicket("DAOS-6764")
     def test_daos_nvme_recovery_1(self):
         """Jira ID: DAOS-3846.
 
@@ -25,11 +27,12 @@ class DaosCoreTestNvme(DaosCoreBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=nvme
-        :avocado: tags=daos_nvme_recovery_1,unittest
+        :avocado: tags=unittest,nvme
+        :avocado: tags=daos_test,daos_core_test_nvme,test_daos_nvme_recovery_1
         """
         self.run_subtest()
 
+    @skipForTicket("DAOS-6767")
     def test_daos_nvme_recovery_2(self):
         """Jira ID: DAOS-3846.
 
@@ -41,11 +44,12 @@ class DaosCoreTestNvme(DaosCoreBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=nvme
-        :avocado: tags=daos_nvme_recovery_2,unittest
+        :avocado: tags=unittest,nvme
+        :avocado: tags=daos_test,daos_core_test_nvme,test_daos_nvme_recovery_2
         """
         self.run_subtest()
 
+    @skipForTicket("DAOS-6767")
     def test_daos_nvme_recovery_3(self):
         """Jira ID: DAOS-3846.
 
@@ -57,11 +61,12 @@ class DaosCoreTestNvme(DaosCoreBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=nvme
-        :avocado: tags=daos_nvme_recovery_3,unittest
+        :avocado: tags=unittest,nvme
+        :avocado: tags=daos_test,daos_core_test_nvme,test_daos_nvme_recovery_3
         """
         self.run_subtest()
 
+    @skipForTicket("DAOS-6767")
     def test_daos_nvme_recovery_4(self):
         """Jira ID: DAOS-3846.
 
@@ -73,7 +78,7 @@ class DaosCoreTestNvme(DaosCoreBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=nvme
-        :avocado: tags=daos_nvme_recovery_4,unittest
+        :avocado: tags=unittest,nvme
+        :avocado: tags=daos_test,daos_core_test_nvme,test_daos_nvme_recovery_4
         """
         self.run_subtest()
