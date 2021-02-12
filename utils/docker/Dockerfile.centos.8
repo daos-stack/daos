@@ -75,8 +75,10 @@ RUN chown -R daos_server.daos_server /home/daos
 USER daos_server:daos_server
 RUN ln -s utils/sl site_scons
 
+ARG JOBS=1
+
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    (scons-3 --build-deps=yes install PREFIX=/opt/daos --deps-only && \
+    (scons-3 --build-deps=yes --jobs $JOBS PREFIX=/opt/daos --deps-only && \
     /bin/rm -rf build *.gz)
 
 WORKDIR /home/daos/daos/
@@ -90,7 +92,7 @@ RUN ln -s utils/sl site_scons
 
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
-    (scons-3 -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER && \
+    (scons-3 --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER && \
     /bin/rm -rf build && \
     cp -r utils/config/examples /opt/daos)
 

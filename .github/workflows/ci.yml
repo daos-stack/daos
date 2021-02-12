@@ -25,6 +25,7 @@ jobs:
     - name: Build ${{ matrix.distro }} Docker image with ${{ matrix.compiler }}
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg COMPILER=${{ matrix.compiler }}
+                          --build-arg JOBS=20
                           -t ${{ matrix.distro }}/${{ matrix.compiler }}/daos:${{ github.sha }}
   Spelling:
     runs-on: ubuntu-20.04
