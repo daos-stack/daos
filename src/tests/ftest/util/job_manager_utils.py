@@ -171,12 +171,11 @@ class JobManager(ExecutableCommand):
         result = stop_processes(self._hosts, regex)
         if 0 in result and len(result) == 1:
             self.log.info(
-                "No remote {} processes killed (none found), done.".format(
-                    regex))
+                "No remote %s processes killed (none found), done.", regex)
         else:
             self.log.info(
-                "***At least one remote {} process needed to be killed! Please "
-                "investigate/report.***".format(regex))
+                "***At least one remote %s process needed to be killed! Please "
+                "investigate/report.***", regex)
 
 
 class Orterun(JobManager):
@@ -569,8 +568,7 @@ class Systemctl(JobManager):
             self.stop()
         except CommandFailure as error:
             self.log.info(
-                "Error stopping/disabling {}: {}".format(
-                    self.job.service_name, error))
+                "Error stopping/disabling %s: %s", self.job.service_name, error)
         super(Systemctl, self).kill()
 
     def check_subprocess_status(self, sub_process):
