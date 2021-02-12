@@ -692,10 +692,10 @@ ds_pool_stop(uuid_t uuid)
 		return;
 	pool->sp_stopping = 1;
 
+	ds_iv_ns_stop(pool->sp_iv_ns);
 	ds_pool_tgt_ec_eph_query_abort(pool);
 	pool_fetch_hdls_ult_abort(pool);
 
-	ds_iv_ns_stop(pool->sp_iv_ns);
 	ds_rebuild_abort(pool->sp_uuid, -1);
 	ds_migrate_abort(pool->sp_uuid, -1);
 	ds_pool_put(pool); /* held by ds_pool_start */

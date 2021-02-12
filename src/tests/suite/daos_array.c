@@ -1113,7 +1113,7 @@ run_daos_array_test(int rank, int size)
 {
 	int rc = 0;
 
-	rc = cmocka_run_group_tests_name("DAOS Array API tests",
+	rc = cmocka_run_group_tests_name("DAOS_Array_API",
 					 array_api_tests, daos_array_setup,
 					 test_teardown);
 

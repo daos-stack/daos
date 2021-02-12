@@ -434,7 +434,7 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 	if (rc) {
 		D_ERROR("Failed to fetch entry %s "DF_RC"\n", name,
 			DP_RC(rc));
-		return daos_der2errno(rc);
+		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
 	for (i = 0; i < xnr; i++)
@@ -445,7 +445,7 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 
 		D_ALLOC(value, PATH_MAX);
 		if (value == NULL)
-			return ENOMEM;
+			D_GOTO(out, rc = ENOMEM);
 
 		recx.rx_idx = sizeof(mode_t) + sizeof(time_t) * 3 +
 			sizeof(daos_obj_id_t) + sizeof(daos_size_t);
@@ -486,9 +486,11 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 
 out:
 	if (xnr) {
-		for (i = 0; i < xnr; i++)
-			D_FREE(pxnames[i]);
-		D_FREE(pxnames);
+		if (pxnames) {
+			for (i = 0; i < xnr; i++)
+				D_FREE(pxnames[i]);
+			D_FREE(pxnames);
+		}
 		D_FREE(sg_iovx);
 		D_FREE(sgls);
 		D_FREE(iods);
@@ -644,7 +646,6 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 		return ENOENT;
 
 	switch (entry.mode & S_IFMT) {
-	case S_IFIFO:
 	case S_IFDIR:
 		size = sizeof(entry);
 		break;
@@ -958,11 +959,8 @@ open_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, int flags,
 	 * happen for example if dfs_open() is called with S_IFDIR but without
 	 * O_CREATE and a entry of a different type exists already.
 	 */
-	if ((S_ISDIR(dir->mode) && !S_ISDIR(entry->mode)))
+	if (!S_ISDIR(entry->mode))
 		return ENOTDIR;
-
-	if ((S_ISFIFO(dir->mode) && !S_ISFIFO(entry->mode)))
-		return EINVAL;
 
 	rc = daos_obj_open(dfs->coh, entry->oid, daos_mode, &dir->oh, NULL);
 	if (rc) {
@@ -2207,12 +2205,12 @@ lookup_rel_path_loop:
 			break;
 		}
 
-		if (!S_ISDIR(entry.mode) && (!S_ISFIFO(entry.mode))) {
+		if (!S_ISDIR(entry.mode)) {
 			D_ERROR("Invalid entry type in path.\n");
 			D_GOTO(err_obj, rc = EINVAL);
 		}
 
-		/* open the directory/fifo object */
+		/* open the directory object */
 		rc = daos_obj_open(dfs->coh, entry.oid, daos_mode, &obj->oh,
 				   NULL);
 		if (rc) {
@@ -2539,7 +2537,6 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 			D_GOTO(out, rc);
 		}
 		break;
-	case S_IFIFO:
 	case S_IFDIR:
 		rc = daos_obj_open(dfs->coh, entry.oid, daos_mode, &obj->oh,
 				   NULL);
@@ -2663,7 +2660,6 @@ restart:
 			D_GOTO(out, rc);
 		}
 		break;
-	case S_IFIFO:
 	case S_IFDIR:
 		rc = open_dir(dfs, th, parent->oh, flags, cid, &entry, len,
 			      obj);
@@ -2739,7 +2735,6 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 		return ENOMEM;
 
 	switch (obj->mode & S_IFMT) {
-	case S_IFIFO:
 	case S_IFDIR:
 		rc = daos_obj_open(dfs->coh, obj->oid, daos_mode,
 				   &new_obj->oh, NULL);
@@ -2961,7 +2956,6 @@ dfs_release(dfs_obj_t *obj)
 		return EINVAL;
 
 	switch (obj->mode & S_IFMT) {
-	case S_IFIFO:
 	case S_IFDIR:
 		rc = daos_obj_close(obj->oh, NULL);
 		break;

@@ -6,7 +6,7 @@ nr_hugepages: 4096
 control_log_mask: DEBUG
 control_log_file: /tmp/dnt_control.log
 access_points: ['localhost:10001']
-servers:
+engines:
 -
   targets: 2
   first_core: 0

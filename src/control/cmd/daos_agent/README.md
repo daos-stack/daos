@@ -65,9 +65,9 @@ These functions are accessed by the client via the
 
 ### Get Attach Info
 
-Client communications are sent over the high-speed fabric to data plane servers.
+Client communications are sent over the high-speed fabric to data plane engine.
 Initially the client has no knowledge of the URIs of these server ranks.
-The Primary Service Ranks (PSRs) are servers that the client may query
+The Primary Service Ranks (PSRs) are engines that the client may query
 to get the URI for a particular rank in the cluster. Once the PSRs are known to
 the client library and an appropriate network device has been selected, client
 communications over CaRT are initialized and will automatically query a PSR to

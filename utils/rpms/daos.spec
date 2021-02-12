@@ -6,8 +6,8 @@
 %global libfabric_version 1.11.1
 
 Name:          daos
-Version:       1.1.2.1
-Release:       9%{?relval}%{?dist}
+Version:       1.1.3
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -169,6 +169,7 @@ Requires: python-pathlib
 Requires: python-distro
 Requires: python2-tabulate
 Requires: fio
+Requires: dbench
 Requires: lbzip2
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
@@ -284,6 +285,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %dir %{_sysconfdir}/bash_completion.d
 %{_sysconfdir}/bash_completion.d/daos.bash
 %{_libdir}/libdaos_common.so
+%{_libdir}/libdaos_common_pmem.so
 # TODO: this should move from daos_srv to daos
 %{_libdir}/daos_srv/libplacement.so
 # Certificate generation files
@@ -303,7 +305,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(4750,root,daos_server) %{_bindir}/daos_admin
 # set daos_server to be setgid daos_server in order to invoke daos_admin
 %attr(2755,root,daos_server) %{_bindir}/daos_server
-%{_bindir}/daos_io_server
+%{_bindir}/daos_engine
 %dir %{_libdir}/daos_srv
 %{_libdir}/daos_srv/libcont.so
 %{_libdir}/daos_srv/libdtx.so
@@ -410,6 +412,15 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Wed Feb 10 2021 Johann Lombardi <johann.lombardi@intel.com> 1.1.3-1
+- Version bump up to 1.1.3
+
+* Tue Feb 9 2021 Vish Venkatesan <vishwanath.venkatesan@intel.com> 1.1.2.1-11
+- Add new pmem specific version of DAOS common library
+
+* Fri Feb 6 2021 Saurabh Tandan <saurabh.tandan@intel.com> 1.1.2.1-10
+- Added dbench as requirement for test package.
+
 * Wed Feb 3 2021 Hua Kuang <hua.kuang@intel.com> 1.1.2.1-9
 - Changed License to BSD-2-Clause-Patent
 

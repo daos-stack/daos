@@ -28,8 +28,8 @@ trap 'clush -B -S -o "-i ci_key" -l root -w "${tnodes}" '\
 
 # Setup the Jenkins build artifacts directory before running the tests to ensure
 # there is enough disk space to report the results.
-rm -rf "Functional/"
-mkdir "Functional/"
+rm -rf "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
+mkdir "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
 
 # set DAOS_TARGET_OVERSUBSCRIBE env here
 export DAOS_TARGET_OVERSUBSCRIBE=1
