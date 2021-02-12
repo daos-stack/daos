@@ -27,7 +27,7 @@ jobs:
                           --build-arg COMPILER=${{ matrix.compiler }}
                           -t build-image
     - name: check server
-      run: docker run build-image ldd /opt/daos/bin/daos_io_server
+      run: docker run build-image ldd /opt/daos/bin/daos_engine
     - name: Run Unit Tests
       run: docker run --name build-ut --tmpfs /mnt/daos build-image ./daos/utils/run_test.sh
     - name: mkdir
