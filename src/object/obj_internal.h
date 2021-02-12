@@ -22,7 +22,7 @@
 #include <daos/btree_class.h>
 #include <daos/dtx.h>
 #include <daos/object.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/dtx_srv.h>
 
 #include "obj_rpc.h"

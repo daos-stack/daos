@@ -15,7 +15,7 @@
 #include <gurt/list.h>
 #include <daos/common.h>
 #include <daos_types.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 
 enum smd_dev_state {
 	SMD_DEV_NORMAL	= 0,

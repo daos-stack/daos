@@ -1,39 +1,5 @@
-# Copyright (C) 2018-2020 Intel Corporation
+# Copyright (C) 2018-2021 Intel Corporation
 # All rights reserved.
-#
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted for any purpose (including commercial purposes)
-# provided that the following conditions are met:
-#
-# 1. Redistributions of source code must retain the above copyright notice,
-#    this list of conditions, and the following disclaimer.
-#
-# 2. Redistributions in binary form must reproduce the above copyright notice,
-#    this list of conditions, and the following disclaimer in the
-#    documentation and/or materials provided with the distribution.
-#
-# 3. In addition, redistributions of modified forms of the source or binary
-#    code must carry prominent notices stating that the original code was
-#    changed and the date of the change.
-#
-#  4. All publications or advertising materials mentioning features or use of
-#     this software are asked, but not required, to acknowledge that it was
-#     developed by Intel Corporation and credit the contributors.
-#
-# 5. Neither the name of Intel Corporation, nor the name of any Contributor
-#    may be used to endorse or promote products derived from this software
-#    without specific prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
-# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
-# THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 # 'recipe' for Docker to build an image of centOS-based
 # environment for building the DAOS project.
@@ -42,10 +8,6 @@
 # Pull base image
 FROM opensuse/leap:15.2
 LABEL maintainer="daos@daos.groups.io"
-
-# Build arguments can be set via --build-arg
-# use same UID as host and default value of 1000 if not specified
-ARG UID=1000
 
 # Use our own repo cache
 ARG REPO_URL=""
@@ -68,26 +30,28 @@ RUN echo "solver.allowVendorChange = true" >> /etc/zypp/zypp.conf
 # It's better to put the zypper update in the same "cache layer" as the
 # zypper install command so that the database is updated if/when the
 # installed packages list below is updated
-RUN zypper --non-interactive update;                                         \
-    zypper --non-interactive install                                         \
-           boost-devel clang cmake cunit-devel curl doxygen flex             \
-           gcc gcc-c++ git graphviz gzip                                     \
-           libaio-devel libcmocka-devel libevent-devel libiscsi-devel        \
-           libltdl7 libnuma-devel libopenssl-devel libtool                   \
-           libuuid-devel libyaml-devel python3-tabulate                      \
-           make man meson nasm ninja pandoc patch python2-pip                \
-           readline-devel sg3_utils which yasm                               \
-           python-devel python3-devel valgrind-devel hwloc-devel             \
-           openmpi3-devel man fuse3-devel patchelf scons lua-lmod            \
-           libjson-c-devel liblz4-devel python3-distro curl python3-pyxattr  \
-           java-1_8_0-openjdk-devel maven python3-PyYAML
+# TODO: Do not clean as part of this cache layer as Zypper is used later
+# on.
+RUN zypper --non-interactive update &&					\
+    zypper --non-interactive install					\
+	boost-devel clang cmake cunit-devel curl doxygen flex		\
+	gcc gcc-c++ git graphviz gzip					\
+	libaio-devel libcmocka-devel libevent-devel libiscsi-devel	\
+	libltdl7 libnuma-devel libopenssl-devel libtool			\
+	libuuid-devel libyaml-devel python3-tabulate			\
+	make man nasm pandoc patch python2-pip				\
+	readline-devel sg3_utils which yasm				\
+	python-devel python3-devel valgrind-devel hwloc-devel		\
+	openmpi3-devel man fuse3-devel patchelf scons lua-lmod		\
+	libjson-c-devel liblz4-devel python3-distro curl		\
+	python3-pyxattr							\
+	java-1_8_0-openjdk-devel maven python3-PyYAML &&		\
+    zypper clean all
+
 # Monkey-patch MODULEPATH
 RUN if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then        \
         sed -e '/MODULEPATH=/s/$/:\/usr\/share\/modules/' /etc/profile.d/lmod.sh; \
     fi
-
-RUN which java
-RUN java -version
 
 RUN update-ca-certificates
 RUN zypper --non-interactive install --allow-unsigned-rpm lua-lmod
@@ -104,33 +68,19 @@ RUN if [ -z "${REPO_GROUP_LEAP15}" ]; then                                      
 # https://bugzilla.opensuse.org/show_bug.cgi?id=1178985
 RUN zypper --non-interactive install -y ipmctl-devel go1.14 go1.14-race
 
-# Add DAOS user
-ENV USER daos
-ENV PASSWD daos
-RUN useradd -u $UID -ms /bin/bash $USER
-RUN echo "$USER:$PASSWD" | chpasswd
+ARG UID=1000
+
+# Add DAOS users
+RUN useradd --uid $UID --user-group --create-home --shell /bin/bash --home /home/daos daos_server
+RUN echo "daos_server:daos_server" | chpasswd
+RUN useradd --user-group --create-home --shell /bin/bash daos_agent
+RUN echo "daos_agent:daos_agent" | chpasswd
 
 # Create directory for DAOS backend storage
-RUN mkdir -p /opt/daos
-RUN chown -R daos.daos /opt/daos || { cat /etc/passwd; cat /etc/group; cat /etc/shadow; chown -R daos /opt/daos; chgrp -R daos /opt/daos; ls -ld /opt/daos; }
-RUN mkdir /mnt/daos
-RUN chown daos.daos /mnt/daos || { cat /etc/passwd; cat /etc/group; cat /etc/shadow; chown daos /mnt/daos; chgrp daos /mnt/daos; ls -ld /mnt/daos; }
-RUN mkdir /var/run/daos_server
-RUN chown daos.daos /var/run/daos_server || { cat /etc/passwd; cat /etc/group; cat /etc/shadow; chown daos /var/run/daos_server; chgrp daos /var/run/daos_server; ls -ld /var/run/daos_server; }
-RUN mkdir /var/run/daos_agent
-RUN chown daos.daos /var/run/daos_agent || { cat /etc/passwd; cat /etc/group; cat /etc/shadow; chown daos /var/run/daos_agent; chgrp daos /var/run/daos_agent; ls -ld /var/run/daos_agent; }
-
-RUN mkdir -p /root/.m2
-RUN echo -e "<settings>\n\
-        <mirrors>\n\
-                <mirror>\n\
-                        <id>google-maven-central</id>\n\
-                        <name>GCS Maven Central mirror</name>\n\
-                        <url>https://maven-central.storage-download.googleapis.com/maven2/</url>\n\
-                        <mirrorOf>central</mirrorOf>\n\
-                </mirror>\n\
-        </mirrors>\n\
-</settings>" > /root/.m2/settings.xml
+RUN mkdir -p /opt/daos && chown -R daos_server.daos_server /opt/daos
+RUN mkdir /mnt/daos && chown daos_server.daos_server /mnt/daos
+RUN mkdir /var/run/daos_server && chown daos_server.daos_server /var/run/daos_server
+RUN mkdir /var/run/daos_agent && chown daos_agent.daos_agent /var/run/daos_agent
 
 ARG JENKINS_URL=""
 ARG QUICKBUILD=false
@@ -167,36 +117,73 @@ RUN if $QUICKBUILD; then                                                        
 # force an upgrade to get any newly built RPMs
 RUN zypper addlock fuse fuse-libs fuse-devel libraft0 raft-devel mercury mercury-devel
 ARG CACHEBUST=1
-RUN zypper --non-interactive update
+RUN zypper --non-interactive update && zypper clean all
 
-# set NOBUILD to disable build
-ARG NOBUILD
+# Control what to build.  By default Dockerfiles build everything to allow for
+# ease-of-use for users, however in CI everything is turned off and then
+# selectively enabled.  Turning off any step disables all future steps.
+ARG DAOS_DEPS_BUILD=yes
+ARG DAOS_BUILD=$DAOS_DEPS_BUILD
+ARG DAOS_JAVA_BUILD=$DAOS_BUILD
+# Legacy, NOBUILD should be set to any string to disable all three.
+ARG NOBUILD=no
 
 # select compiler to use
 ARG COMPILER=gcc
 
-# copy DAOS tree
-WORKDIR /home/daos
-COPY ./ .
+# The COPY command has a --chown option but it's not well supported so copy as
+# root then run a chown command which is frustrating as the copy can take a few
+# seconds.
+WORKDIR /home/daos/pre
+COPY SConstruct .
+COPY utils/sl utils/sl
+COPY utils/build.config utils/
+RUN chown -R daos_server.daos_server /home/daos
+USER daos_server:daos_server
+RUN ln -s utils/sl site_scons
 
-# Build DAOS & dependencies
-RUN if [ "x$NOBUILD" = "x" ] ; then \
-    scons --build-deps=yes -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER; fi
+RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
+    (scons --build-deps=yes install PREFIX=/opt/daos --deps-only && \
+    /bin/rm -rf build *.gz)
+
+WORKDIR /home/daos/daos/
+COPY VERSION LICENSE ftest.sh SConstruct ./
+COPY utils utils
+COPY src src
+USER root:root
+RUN chown -R daos_server.daos_server /home/daos
+USER daos_server:daos_server
+RUN ln -s utils/sl site_scons
+
+# Build DAOS
+RUN [ "$DAOS_BUILD" != "yes" ] || \
+    (scons -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER && \
+    /bin/rm -rf build && \
+    cp -r utils/config/examples /opt/daos)
 
 # Set environment variables
 ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:$LD_LIBRARY_PATH
 ENV PATH=/opt/daos/bin:$PATH
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
 
-# Copy example config files to /opt/daos
-RUN if [ "x$NOBUILD" = "x" ] ; then \
-    cp -r utils/config/examples /opt/daos; fi
-
 # Build java and hadoop bindings
-RUN if [ "x$NOBUILD" = "x" ] ; then \
-    pushd src/client/java && \
-    mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos && \
-    popd; fi
+WORKDIR /home/daos/daos/src/client/java
+# Set maven repo mirror
+RUN mkdir -p /home/daos/.m2
+RUN echo -e "<settings>\n\
+        <mirrors>\n\
+                <mirror>\n\
+                        <id>google-maven-central</id>\n\
+                        <name>GCS Maven Central mirror</name>\n\
+                        <url>https://maven-central.storage-download.googleapis.com/maven2/</url>\n\
+                        <mirrorOf>central</mirrorOf>\n\
+                </mirror>\n\
+        </mirrors>\n\
+</settings>" > /home/daos/.m2/settings.xml
+
+RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
+    mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
+WORKDIR /home/daos
 
 # Remove local copy
 RUN rm -rf /home/daos/*
