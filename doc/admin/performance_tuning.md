@@ -125,19 +125,24 @@ benchmarks.
 
 IOR (<https://github.com/hpc/ior>) with the following backends:
 
--   POSIX, MPIIO & HDF5 drivers over dfuse and the interception library.
+-   The IOR APIs POSIX, MPIIO and HDF5 can be used with DAOS POSIX containers that
+    are accessed over dfuse. This works without or with the I/O interception library
+    (`libioil`). Performance is significantly better when using `libioil`.
 
--   MPI-IO plugin with the ROMIO DAOS ADIO driver to bypass POSIX and dfuse. The
-    MPIIO driver is available in the upstream MPICH repository.
+-   A custom DFS (DAOS File System) plugin for DAOS can be used by building IOR
+    with DAOS support, and selecting API=DFS. This integrates IOR directly with the
+    DAOS File System (`libdfs`), without requiring FUSE or an interception library.
 
--   HDF5 plugin with the HDF5 DAOS connector (under development). This maps the
-    HDF5 data model directly to the DAOS model bypassing POSIX.
+-   When using the IOR API=MPIIO, the ROMIO ADIO driver for DAOS can be used by
+    providing the `daos://` prefix to the filename. This ADIO driver bypasses `dfuse`
+    and directly invkes the `libdfs` calls to perform I/O to a DAOS POSIX container.
+    The DAOS-enabled MPIIO driver is available in the upstream MPICH repository 
+    (MPICH 3.4.1 or higher).
 
--   A custom DFS (DAOS File System) plugin, integrating IOR directly with libfs
-    without requiring FUSE or an interception library
-
--   A custom DAOS plugin, integrating IOR directly with the native DAOS
-    array API.
+-   An HDF5 VOL connector for DAOS is under development. This maps the HDF5 data model 
+    directly to the DAOS data model, and works in conjunction with DAOS containers of
+    `--type=HDF5` (in contrast to DAOS container of `--type=POSIX` that are used for
+    the other IOR APIs).
 
 ### mdtest
 
