@@ -524,7 +524,7 @@ def get_test_list(tags):
     if test_tags or not test_list:
         if not test_list:
             test_list = ["./"]
-        command = ["avocado", "list", "--paginator=off"]
+        command = ["avocado", "--paginator=off", "list"]
         for test_tag in test_tags:
             command.append(str(test_tag))
         command.extend(test_list if test_list else ["./"])
@@ -850,7 +850,7 @@ def run_tests(test_files, tag_filter, args):
     command_list = [
         "avocado",
         "run",
-        "--ignore-missing-references", "on",
+        "--ignore-missing-references",
         "--html-job-result", "on",
         "--tap-job-result", "off",
     ]
