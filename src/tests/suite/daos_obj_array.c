@@ -861,7 +861,7 @@ array_recx_read_incomplete(void **state)
 		recx[i].rx_nr	= 1;
 	}
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
-	NULL, NULL);
+			    NULL, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("DONE record fetch --------\n");
 	for (i = 0; i < SM_BUF_LEN/2; i++) {
