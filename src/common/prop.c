@@ -32,7 +32,7 @@ daos_prop_alloc(uint32_t entries_nr)
 	if (entries_nr > 0) {
 		D_ALLOC_ARRAY(prop->dpp_entries, entries_nr);
 		if (prop->dpp_entries == NULL) {
-			D_FREE_PTR(prop);
+			D_FREE(prop);
 			return NULL;
 		}
 	}
@@ -93,10 +93,11 @@ out:
 void
 daos_prop_free(daos_prop_t *prop)
 {
-	if (prop) {
-		daos_prop_fini(prop);
-		D_FREE_PTR(prop);
-	}
+	if (prop == NULL)
+		return;
+
+	daos_prop_fini(prop);
+	D_FREE(prop);
 }
 
 daos_prop_t *
