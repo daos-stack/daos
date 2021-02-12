@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2018-2021 Intel Corporation.
 
@@ -98,19 +98,19 @@ class CartIvOneNodeTest(TestWithoutServers):
         if (('operation' not in action) or
                 ('rank' not in action) or
                 ('key' not in action)):
-            self.utils.print_f("Error happened during action check")
+            self.utils.print("Error happened during action check")
             raise ValueError("Each action must contain an operation," \
                              " rank, and key")
 
         if len(action['key']) != 2:
-            self.utils.print_f("Error key should be tuple of (rank, idx)")
+            self.utils.print("Error key should be tuple of (rank, idx)")
             raise ValueError("key should be a tuple of (rank, idx)")
 
     def _verify_fetch_operation(self, action):
         """verify fetch operation"""
         if (('return_code' not in action) or
                 ('expected_value' not in action)):
-            self.utils.print_f("Error: fetch operation was malformed")
+            self.utils.print("Error: fetch operation was malformed")
             raise ValueError("Fetch operation malformed")
 
     def _iv_test_actions(self, cmd, actions):
@@ -147,7 +147,7 @@ class CartIvOneNodeTest(TestWithoutServers):
                             log_path)
                 clicmd += command
 
-                self.utils.print_f("\nClient cmd : %s\n" % clicmd)
+                self.utils.print("\nClient cmd : %s\n" % clicmd)
                 cli_rtn = subprocess.call(shlex.split(clicmd))
 
                 if cli_rtn != 0:
@@ -210,7 +210,7 @@ class CartIvOneNodeTest(TestWithoutServers):
 
                 clicmd += command
 
-                self.utils.print_f("\nClient cmd : %s\n" % clicmd)
+                self.utils.print("\nClient cmd : %s\n" % clicmd)
                 cli_rtn = subprocess.call(shlex.split(clicmd))
 
                 if cli_rtn != 0:
@@ -227,7 +227,7 @@ class CartIvOneNodeTest(TestWithoutServers):
                     command = "{!s} -s '{!s}'".format(command, "none")
                 clicmd += command
 
-                self.utils.print_f("\nClient cmd : %s\n" % clicmd)
+                self.utils.print("\nClient cmd : %s\n" % clicmd)
                 cli_rtn = subprocess.call(shlex.split(clicmd))
 
                 if cli_rtn != 0:
@@ -247,7 +247,7 @@ class CartIvOneNodeTest(TestWithoutServers):
                         .format(command, 0)
                 clicmd += command
 
-                self.utils.print_f("\nClient cmd : %s\n" % clicmd)
+                self.utils.print("\nClient cmd : %s\n" % clicmd)
                 cli_rtn = subprocess.call(shlex.split(clicmd))
 
                 if cli_rtn != 0:
@@ -259,7 +259,7 @@ class CartIvOneNodeTest(TestWithoutServers):
                         .format(command, operation, rank)
                 clicmd += command
 
-                self.utils.print_f("\nClient cmd : %s\n" % clicmd)
+                self.utils.print("\nClient cmd : %s\n" % clicmd)
                 cli_rtn = subprocess.call(shlex.split(clicmd))
 
                 if cli_rtn != 0:
@@ -279,7 +279,7 @@ class CartIvOneNodeTest(TestWithoutServers):
             srv_rtn = self.utils.launch_cmd_bg(self, srvcmd)
         # pylint: disable=broad-except
         except Exception as e:
-            self.utils.print_f("Exception in launching server : {}".format(e))
+            self.utils.print("Exception in launching server : {}".format(e))
             self.fail("Test failed.\n")
 
         # Verify the server is still running.
@@ -487,7 +487,7 @@ class CartIvOneNodeTest(TestWithoutServers):
         except ValueError as exception:
             failed = True
             traceback.print_stack()
-            self.utils.print_f("TEST FAILED: %s" % str(exception))
+            self.utils.print("TEST FAILED: %s" % str(exception))
 
         ########## Shutdown Servers ##########
 
@@ -499,25 +499,25 @@ class CartIvOneNodeTest(TestWithoutServers):
         # Request each server shut down gracefully
         for rank in reversed(list(range(1, int(srv_ppn) * num_servers))):
             clicmd += " -o shutdown -r " + str(rank)
-            self.utils.print_f("\nClient cmd : %s\n" % clicmd)
+            self.utils.print("\nClient cmd : %s\n" % clicmd)
             try:
                 subprocess.call(shlex.split(clicmd))
             # pylint: disable=broad-except
             except Exception as e:
                 failed = True
-                self.utils.print_f("Exception in launching client : {}".format(e))
+                self.utils.print("Exception in launching client : {}".format(e))
 
         time.sleep(1)
 
         # Shutdown rank 0 separately
         clicmd += " -o shutdown -r 0"
-        self.utils.print_f("\nClient cmd : %s\n" % clicmd)
+        self.utils.print("\nClient cmd : %s\n" % clicmd)
         try:
             subprocess.call(shlex.split(clicmd))
         # pylint: disable=broad-except
         except Exception as e:
             failed = True
-            self.utils.print_f("Exception in launching client : {}".format(e))
+            self.utils.print("Exception in launching client : {}".format(e))
 
         time.sleep(2)
 

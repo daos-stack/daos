@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2018-2021 Intel Corporation.
 
@@ -329,7 +329,7 @@ class CartUtils():
 
     def init_mpi_old(self, mpi):
         """load mpi with older environment-modules"""
-        self.print_f("Loading old %s" % mpi)
+        self.print("Loading old %s" % mpi)
         self.module('purge')
         self.module('load', mpi)
         return True
@@ -352,7 +352,7 @@ class CartUtils():
         #initialize Modules
         if not os.path.exists(init_file):
             if not self.module_init:
-                self.print_f("Modules (environment-modules) is not installed")
+                self.print("Modules (environment-modules) is not installed")
             self.module_init = True
             return False
 
@@ -374,31 +374,31 @@ class CartUtils():
             # older version of module return -1
             return self.init_mpi_old(load[0])
 
-        self.print_f("Checking for loaded modules")
+        self.print("Checking for loaded modules")
         for to_load in load:
             if self.module('is-loaded', to_load):
-                self.print_f("%s is already loaded" % to_load)
+                self.print("%s is already loaded" % to_load)
                 return True
 
         for to_unload in unload:
             if self.module('is-loaded', to_unload):
                 self.module('unload', to_unload)
-                self.print_f("Unloading %s" % to_unload)
+                self.print("Unloading %s" % to_unload)
 
         for to_load in load:
             if self.module('load', to_load):
-                self.print_f("Loaded %s" % to_load)
+                self.print("Loaded %s" % to_load)
                 return True
 
-        self.print_f("No MPI found on system")
+        self.print("No MPI found on system")
         return False
 
     def launch_test(self, cartobj, cmd, srv1=None, srv2=None):
         """ launches test """
 
-        self.print_f("\nCMD : %s\n" % cmd)
+        self.print("\nCMD : %s\n" % cmd)
 
-        self.print_f("\nENV : %s\n" % os.environ)
+        self.print("\nENV : %s\n" % os.environ)
 
         cmd = shlex.split(cmd)
         rtn = subprocess.call(cmd)
@@ -417,7 +417,7 @@ class CartUtils():
     def launch_cmd_bg(self, cartobj, cmd):
         """ launches the given cmd in background """
 
-        self.print_f("\nCMD : %s\n" % cmd)
+        self.print("\nCMD : %s\n" % cmd)
 
         cmd = shlex.split(cmd)
         rtn = subprocess.Popen(cmd)
@@ -428,7 +428,7 @@ class CartUtils():
 
         return rtn
 
-    def print_f(self, cmd):
+    def print(self, cmd):
         """ prints the given cmd at runtime and stdout """
 
         self.stdout.info(cmd)

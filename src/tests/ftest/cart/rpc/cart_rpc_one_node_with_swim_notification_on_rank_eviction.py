@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2018-2021 Intel Corporation.
 
@@ -21,10 +21,6 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
-
-
-
-import sys
 
 from apricot import TestWithoutServers
 from cart_utils import CartUtils
@@ -58,7 +54,7 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(TestWithoutServers):
             srv_rtn = self.utils.launch_cmd_bg(self, srvcmd)
         # pylint: disable=broad-except
         except Exception as e:
-            self.utils.print_f("Exception in launching server : {}".format(e))
+            self.utils.print("Exception in launching server : {}".format(e))
             self.fail("Test failed.\n")
 
         # Verify the server is still running.

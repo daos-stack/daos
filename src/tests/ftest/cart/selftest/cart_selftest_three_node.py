@@ -1,13 +1,9 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2018-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-
-
-
-import sys
 
 from apricot  import TestWithoutServers
 from cart_utils import CartUtils
@@ -43,7 +39,7 @@ class CartSelfThreeNodeTest(TestWithoutServers):
             srv_rtn = self.utils.launch_cmd_bg(self, srvcmd)
         # pylint: disable=broad-except
         except Exception as e:
-            self.utils.print_f("Exception in launching server : {}".format(e))
+            self.utils.print("Exception in launching server : {}".format(e))
             self.fail("Test failed.\n")
 
         # Verify the server is still running.

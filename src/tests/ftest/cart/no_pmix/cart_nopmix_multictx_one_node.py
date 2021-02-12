@@ -1,13 +1,10 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2018-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 
-
-
-import sys
 import subprocess
 
 from apricot       import TestWithoutServers
@@ -49,18 +46,18 @@ class CartNoPmixOneNodeTest(TestWithoutServers):
 
         cmd = self.params.get("tst_bin", '/run/tests/*/')
 
-        self.utils.print_f("\nTest cmd : %s\n" % cmd)
+        self.utils.print("\nTest cmd : %s\n" % cmd)
 
         test_env = self.pass_env
         p = subprocess.Popen([cmd], env=test_env, stdout=subprocess.PIPE)
 
         rc = self.utils.wait_process(p, 30)
         if rc != 0:
-            self.utils.print_f("Error waiting for process.")
-            self.utils.print_f("returning {}".format(rc))
+            self.utils.print("Error waiting for process.")
+            self.utils.print("returning {}".format(rc))
             self.fail("Test failed.\n")
 
-        self.utils.print_f("Finished waiting for {}".format(p))
+        self.utils.print("Finished waiting for {}".format(p))
 
 
 if __name__ == "__main__":
