@@ -88,6 +88,9 @@ class JavaCIIntegration(TestWithServers):
             task = run_task(hosts=self.hostlist_clients, command=cmd)
             for _rc_code, _node in task.iter_retcodes():
                 if _rc_code == 1:
+                    for output, _ in task.iter_buffers():
+                        result = str(output)
+                        self.log.info(result)
                     self.fail("Failed to run cmd {} on {}".format(cmd, _node))
             for output, _ in task.iter_buffers():
                 result = str(output)
