@@ -27,11 +27,6 @@
 import sys
 
 from apricot import TestWithoutServers
-
-sys.path.append('./util')
-
-# Can't call this import before setting sys.path
-# pylint: disable=wrong-import-position
 from cart_utils import CartUtils
 
 class CartRpcOneNodeSwimNotificationOnRankEvictionTest(TestWithoutServers):

@@ -9,12 +9,7 @@
 
 import sys
 
-from apricot       import TestWithoutServers
-
-sys.path.append('./util')
-
-# Can't all this import before setting sys.path
-# pylint: disable=wrong-import-position
+from apricot import TestWithoutServers
 from cart_utils import CartUtils
 
 class CartCoRpcOneNodeTest(TestWithoutServers):

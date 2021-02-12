@@ -4,18 +4,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-
-
-
 import sys
 
-from apricot  import TestWithoutServers
-
-sys.path.append('./util')
-
-# Can't all this import before setting sys.path
-# pylint: disable=wrong-import-position
+from apricot import TestWithoutServers
 from cart_utils import CartUtils
+
 
 class CartCtlFiveNodeTest(TestWithoutServers):
     """
@@ -48,14 +41,13 @@ class CartCtlFiveNodeTest(TestWithoutServers):
             srv_rtn = self.utils.launch_cmd_bg(self, srvcmd)
         # pylint: disable=broad-except
         except Exception as e:
-            self.utils.print("Exception in launching server : {}".format(e))
+            self.utils.print(("Exception in launching server : {}".format(e)))
             self.fail("Test failed.\n")
 
         # Verify the server is still running.
         if not self.utils.check_process(srv_rtn):
             procrtn = self.utils.stop_process(srv_rtn)
-            self.fail("Server did not launch, return code %s" \
-                       % procrtn)
+            self.fail("Server did not launch, return code %s" % procrtn)
 
         for index in range(3):
             clicmd = self.utils.build_cmd(

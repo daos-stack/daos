@@ -19,11 +19,6 @@ import shlex
 import traceback
 
 from apricot       import TestWithoutServers
-
-sys.path.append('./util')
-
-# Can't all this import before setting sys.path
-# pylint: disable=wrong-import-position
 from cart_utils import CartUtils
 
 def _check_value(expected_value, received_value):
