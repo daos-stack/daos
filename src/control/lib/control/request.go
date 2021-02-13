@@ -98,10 +98,15 @@ func (r *request) getHostList() []string {
 	return r.HostList
 }
 
-// SetHostList sets the request's hostlist, which may override
-// the configured hostlist.
+// SetHostList sets the request's hostlist to a copy of the
+// supplied hostlist, and will override the configured hostlist.
 func (r *request) SetHostList(hl []string) {
-	r.HostList = hl
+	if len(hl) == 0 {
+		return
+	}
+
+	r.HostList = make([]string, len(hl))
+	copy(r.HostList, hl)
 }
 
 // AddHost appends the given host to the request's hostlist,

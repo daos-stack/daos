@@ -295,6 +295,10 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 		}
 	}
 
+	// Copy the starting hostlist to use for reset on retry later.
+	startHostList := make([]string, len(req.getHostList()))
+	copy(startHostList, req.getHostList())
+
 	isHardFailure := func(err error, reqCtx context.Context) bool {
 		if err == nil {
 			return false
@@ -368,6 +372,10 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 				if err := req.onRetry(tryCtx, try); err != nil {
 					return ur, nil
 				}
+
+				// Reset the hostlist to the starting hostlist, in order
+				// to restart the search for the current MS leader.
+				req.SetHostList(startHostList)
 				break
 			}
 

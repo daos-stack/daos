@@ -157,6 +157,7 @@ func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq)
 type SystemNotifyReq struct {
 	unaryRequest
 	msRequest
+	retryableRequest
 	Event    *events.RASEvent
 	Sequence uint64
 }
@@ -190,6 +191,15 @@ func SystemNotify(ctx context.Context, rpcClient UnaryInvoker, req *SystemNotify
 		return nil, errors.New("invalid sequence number in request")
 	case rpcClient == nil:
 		return nil, errors.New("nil rpc client")
+	}
+
+	req.retryTestFn = func(err error, _ uint) bool {
+		switch {
+		case IsConnectionError(err), system.IsUnavailable(err):
+			return true
+		}
+
+		return false
 	}
 
 	pbReq, err := req.toClusterEventReq()

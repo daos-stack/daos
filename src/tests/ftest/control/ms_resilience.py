@@ -59,32 +59,20 @@ class ManagementServiceResilience(TestWithServers):
                 return pool
         return None
 
-    def create_pool(self, failure_expected=False):
-        """Create a pool on the server group
-
-        Args:
-            failure_expected (bool): If False, raise an exception when pool
-            create fails, otherwise don't raise an exception. Defaults to False.
-        """
+    def create_pool(self):
+        """Create a pool on the server group."""
         self.add_pool(create=False)
         self.pool.name.value = self.server_group
-        self.log.info("*** creating pool (should fail? %s)", failure_expected)
-        try:
-            self.pool.create()
-        except TestFail as error:
-            if failure_expected:
-                self.log.info("Expected MS error creating pool!: %s", error)
-            else:
-                self.fail("Pool create failed unexpectedly!")
+        self.log.info("*** creating pool")
+        self.pool.create()
 
-        if not failure_expected:
-            self.log.info("Pool UUID %s on server group: %s",
-                          self.pool.uuid, self.server_group)
-            # Verify that the pool persisted.
-            if self.find_pool(self.pool.uuid):
-                self.log.info("Found pool in system.")
-            else:
-                self.fail("No pool found in system.")
+        self.log.info("Pool UUID %s on server group: %s",
+                        self.pool.uuid, self.server_group)
+        # Verify that the pool persisted.
+        if self.find_pool(self.pool.uuid):
+            self.log.info("Found pool in system.")
+        else:
+            self.fail("No pool found in system.")
 
     def verify_leader(self, replicas):
         """Verify the leader of the MS is in the replicas.
@@ -187,7 +175,7 @@ class ManagementServiceResilience(TestWithServers):
         leader = self.verify_leader(replicas)
 
         # First, create a pool.
-        self.create_pool(failure_expected=False)
+        self.create_pool()
 
         # Next, kill the leader plus enough other replicas to
         # lose quorum.
@@ -207,14 +195,11 @@ class ManagementServiceResilience(TestWithServers):
             self.fail("Can't list pools after quorum loss.")
         self.pool = None
 
-        # A write operation should fail, however.
-        self.create_pool(failure_expected=True)
-
         # Finally, restart the dead servers and verify that quorum is
         # regained, which should allow for write operations to succeed again.
         self.restart_servers(self.server_group, list(kill_list))
         self.verify_leader(replicas)
-        self.create_pool(failure_expected=False)
+        self.create_pool()
         self.pool = None
 
     def test_ms_resilience_1(self):
