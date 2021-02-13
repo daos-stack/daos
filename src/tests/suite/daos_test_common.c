@@ -1074,7 +1074,7 @@ get_server_config(char *host, char *server_config_file)
 	}
 
 	if (conf)
-		strcpy(server_config_file, DAOS_SERVRE_CONF);
+		strcpy(server_config_file, DAOS_SERVER_CONF);
 	else {
 		pch = strtok(line, " ");
 		while (pch != NULL) {
