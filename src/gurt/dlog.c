@@ -637,7 +637,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	 * or the last flush was 1+ second ago.
 	 */
 	flush = (lvl >= DLOG_WARN) || (tv.tv_sec > last_flush);
-	if (flush || true)
+	if (flush)
 		last_flush = tv.tv_sec;
 
 	rc = d_log_write(b, tlen, flush);
