@@ -172,10 +172,6 @@ grp_priv_fini_membs(struct crt_grp_priv *priv)
 	if (priv->gp_membs.cgm_linear_list != NULL)
 		d_rank_list_free(priv->gp_membs.cgm_linear_list);
 
-	/* Secondary groups have no free indices list */
-	if (!priv->gp_primary)
-		return;
-
 	/* With PMIX disabled free index list needs to be freed */
 	while ((index = d_list_pop_entry(&priv->gp_membs.cgm_free_indices,
 				struct free_index, fi_link)) != NULL) {
