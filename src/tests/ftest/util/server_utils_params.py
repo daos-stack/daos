@@ -247,10 +247,10 @@ class DaosServerYamlParameters(YamlParameters):
                 return True
         return False
 
-    def update_log_files(self, control_log, helper_log, engine_log):
+    def update_log_files(self, control_log, helper_log, server_log):
         """Update the logfile parameter for the daos server.
 
-        If there are multiple engine configurations defined the engine_log value
+        If there are multiple engine configurations defined the server_log value
         will be made unique for each engine's log_file parameter.
 
         Any log file name set to None will result in no update to the respective
@@ -259,7 +259,7 @@ class DaosServerYamlParameters(YamlParameters):
         Args:
             control_log (str): control log file name
             helper_log (str): helper (admin) log file name
-            engine_log (str): per engine log file name
+            server_log (str): per engine log file name
         """
         if control_log is not None:
             self.control_log_file.update(
@@ -267,9 +267,9 @@ class DaosServerYamlParameters(YamlParameters):
         if helper_log is not None:
             self.helper_log_file.update(
                 helper_log, "server_config.helper_log_file")
-        if engine_log is not None:
+        if server_log is not None:
             for index, engine_params in enumerate(self.engine_params):
-                log_name = list(os.path.splitext(engine_log))
+                log_name = list(os.path.splitext(server_log))
                 if len(self.engine_params) > 1:
                     # Create unique log file names for each I/O Engine
                     log_name.insert(1, "_{}".format(index))
@@ -407,8 +407,8 @@ class DaosServerYamlParameters(YamlParameters):
                 self).get_params(test)
 
             # Override the log file file name with the test log file name
-            if hasattr(test, "engine_log") and test.engine_log is not None:
-                self.log_file.value = test.engine_log
+            if hasattr(test, "server_log") and test.server_log is not None:
+                self.log_file.value = test.server_log
 
             # Ignore the scm_size param when using dcpm
             if self.using_dcpm:

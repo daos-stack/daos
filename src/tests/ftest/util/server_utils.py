@@ -139,7 +139,7 @@ class DaosServerCommand(YamlCommand):
         self.yaml.update_log_files(
             getattr(test, "control_log"),
             getattr(test, "helper_log"),
-            getattr(test, "engine_log")
+            getattr(test, "server_log")
         )
 
     def update_pattern(self, mode, host_qty):
