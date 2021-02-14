@@ -25,9 +25,9 @@ control_log_file: /tmp/daos_control.log
 
 engines:
 -
-  targets: 1                # count of storage targets per each server
+  targets: 1                # count of storage targets per each engine
   first_core: 0             # offset of the first core for service xstreams
-  nr_xs_helpers: 0          # count of offload/helper xstreams per server
+  nr_xs_helpers: 0          # count of offload/helper xstreams per engine
   fabric_iface: lo          # map to OFI_INTERFACE=lo
   log_mask: DEBUG,RPC=ERR,MEM=ERR
   log_file: /tmp/server0.log # map to D_LOG_FILE=/tmp/server0.log
@@ -56,11 +56,11 @@ engines:
   scm_size: 1
 
   # When scm_class is set to dcpm, scm_list is the list of device paths for
-  # PMem namespaces (currently only one per server supported).
+  # PMem namespaces (currently only one per engine supported).
   # scm_class: dcpm
   # scm_list: [/dev/pmem0]
 
   # If using NVMe SSD (will write /mnt/daos/daos_nvme.conf and start I/O
-  # server with -n <path>)
+  # engine with -n <path>)
   bdev_class: nvme
   bdev_list: []
