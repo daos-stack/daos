@@ -494,7 +494,8 @@ server_init(int argc, char *argv[])
 	if (rc != 0)
 		return rc;
 
-	rc = d_tm_init(dss_instance_idx, D_TM_SHARED_MEMORY_SIZE);
+	rc = d_tm_init(dss_instance_idx, D_TM_SHARED_MEMORY_SIZE,
+		       D_TM_SERVER_PROCESS);
 	if (rc != 0)
 		goto exit_debug_init;
 
@@ -530,6 +531,31 @@ server_init(int argc, char *argv[])
 		D_GOTO(exit_mod_init, rc);
 	D_INFO("Network successfully initialized\n");
 
+	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
+		rc = daos_init();
+		if (rc) {
+			D_ERROR("daos_init (client) failed, rc: "DF_RC"\n",
+				DP_RC(rc));
+			D_GOTO(exit_crt, rc);
+		}
+		D_INFO("Client stack enabled\n");
+	} else {
+		rc = daos_hhash_init();
+		if (rc) {
+			D_ERROR("daos_hhash_init failed, rc: "DF_RC"\n",
+				DP_RC(rc));
+			D_GOTO(exit_crt, rc);
+		}
+		rc = pl_init();
+		if (rc != 0) {
+			daos_hhash_fini();
+			goto exit_crt;
+		}
+		D_INFO("handle hash table and placement initialized\n");
+	}
+	/* server-side uses D_HTYPE_PTR handle */
+	d_hhash_set_ptrtype(daos_ht.dht_hhash);
+
 	ds_iv_init();
 
 	/* load modules. Split load and init so first call to dlopen()
@@ -562,36 +588,11 @@ server_init(int argc, char *argv[])
 
 	D_INFO("Service initialized\n");
 
-	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
-		rc = daos_init();
-		if (rc) {
-			D_ERROR("daos_init (client) failed, rc: "DF_RC"\n",
-				DP_RC(rc));
-			D_GOTO(exit_srv_init, rc);
-		}
-		D_INFO("Client stack enabled\n");
-	} else {
-		rc = daos_hhash_init();
-		if (rc) {
-			D_ERROR("daos_hhash_init failed, rc: "DF_RC"\n",
-				DP_RC(rc));
-			D_GOTO(exit_srv_init, rc);
-		}
-		rc = pl_init();
-		if (rc != 0) {
-			daos_hhash_fini();
-			goto exit_srv_init;
-		}
-		D_INFO("handle hash table and placement initialized\n");
-	}
-	/* server-side uses D_HTYPE_PTR handle */
-	d_hhash_set_ptrtype(daos_ht.dht_hhash);
-
 	rc = server_init_state_init();
 	if (rc != 0) {
 		D_ERROR("failed to init server init state: "DF_RC"\n",
 			DP_RC(rc));
-		goto exit_daos_fini;
+		goto exit_srv_init;
 	}
 
 	rc = drpc_init();
@@ -658,18 +659,18 @@ exit_drpc_fini:
 	drpc_fini();
 exit_init_state:
 	server_init_state_fini();
-exit_daos_fini:
+exit_srv_init:
+	dss_srv_fini(true);
+exit_mod_loaded:
+	dss_module_unload_all();
+	ds_iv_fini();
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		daos_fini();
 	} else {
 		pl_fini();
 		daos_hhash_fini();
 	}
-exit_srv_init:
-	dss_srv_fini(true);
-exit_mod_loaded:
-	dss_module_unload_all();
-	ds_iv_fini();
+exit_crt:
 	crt_finalize();
 exit_mod_init:
 	dss_module_fini(true);
@@ -696,6 +697,11 @@ server_fini(bool force)
 	D_INFO("server_init_state_fini() done\n");
 	dss_srv_fini(force);
 	D_INFO("dss_srv_fini() done\n");
+	D_INFO("daos_fini() or pl_fini() done\n");
+	dss_module_unload_all();
+	D_INFO("dss_module_unload_all() done\n");
+	ds_iv_fini();
+	D_INFO("ds_iv_fini() done\n");
 	/*
 	 * Client stuff finalization needs be done after all ULTs drained
 	 * in dss_srv_fini().
@@ -706,17 +712,14 @@ server_fini(bool force)
 		pl_fini();
 		daos_hhash_fini();
 	}
-	D_INFO("daos_fini() or pl_fini() done\n");
-	dss_module_unload_all();
-	D_INFO("dss_module_unload_all() done\n");
-	ds_iv_fini();
-	D_INFO("ds_iv_fini() done\n");
 	crt_finalize();
 	D_INFO("crt_finalize() done\n");
 	dss_module_fini(force);
 	D_INFO("dss_module_fini() done\n");
 	abt_fini();
 	D_INFO("abt_fini() done\n");
+	d_tm_fini();
+	D_INFO("d_tm_fini() done\n");
 	daos_debug_fini();
 	D_INFO("daos_debug_fini() done\n");
 }

@@ -20,23 +20,11 @@ init_tests(void **state)
 	int	simulated_srv_idx = 99;
 	int	rc;
 
-	rc = d_tm_init(simulated_srv_idx, D_TM_SHARED_MEMORY_SIZE);
+	rc = d_tm_init(simulated_srv_idx, D_TM_SHARED_MEMORY_SIZE,
+		       D_TM_RETAIN_SHMEM);
 	assert_true(rc == D_TM_SUCCESS);
 
 	return d_log_init();
-}
-
-static void
-test_client_init(void **state)
-{
-	int	simulated_client_idx = 2021;
-	int	rc;
-
-	/** cleanup from the previous init */
-	d_tm_fini();
-
-	rc = d_tm_init_client(simulated_client_idx, D_TM_SHARED_MEMORY_SIZE);
-	assert_true(rc == D_TM_SUCCESS);
 }
 
 static void
@@ -224,6 +212,29 @@ test_input_validation(void **state)
 }
 
 static void
+test_shared_memory_cleanup(void **state)
+{
+	int	simulated_srv_idx = 100;
+	int	rc;
+
+	/**
+	 * Cleanup from all other tests
+	 */
+	d_tm_fini();
+
+	/**
+	 * Initialize the library as the server process would, which instructs
+	 * the library to remove the shared memory segment upon process detach.
+	 * The corresponding consumer test will fail to attach to the segment
+	 * created here, because it was removed before the consumer executed.
+	 */
+
+	rc = d_tm_init(simulated_srv_idx, D_TM_SHARED_MEMORY_SIZE,
+		       D_TM_SERVER_PROCESS);
+	assert_true(rc == D_TM_SUCCESS);
+}
+
+static void
 test_gauge_stats(void **state)
 {
 	int	rc;
@@ -307,7 +318,7 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_input_validation),
 		cmocka_unit_test(test_gauge_stats),
 		cmocka_unit_test(test_duration_stats),
-		cmocka_unit_test(test_client_init),
+		cmocka_unit_test(test_shared_memory_cleanup),
 	};
 
 	d_register_alt_assert(mock_assert);
