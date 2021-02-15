@@ -11,9 +11,11 @@ MAINTAINER daos-stack <daos@daos.groups.io>
 # use same UID as host and default value of 1000 if not specified
 ARG UID=1000
 
+ARG CACHEBUST=1
+
 # Install basic tools
 RUN dnf -y install mock make \
-                   rpm-build curl createrepo rpmlint redhat-lsb-core git \
+                   rpm-build createrepo rpmlint redhat-lsb-core git \
                    python-srpm-macros rpmdevtools
 
 # Add build user (to keep rpmbuild happy)
