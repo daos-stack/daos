@@ -739,11 +739,13 @@ static void print_results(struct st_latency *latencies,
 		if (num_failed > 0) {
 			printf("\n");
 			printf("\t\t\tFailures: %u\n", num_failed);
-			print_fail_counts(&latencies[begin], num_failed, "\t\t\t");
+			print_fail_counts(&latencies[begin], num_failed,
+					  "\t\t\t");
 		}
 
-		snprintf(new_key_name, sizeof(new_key_name), "%s-%d:%d-", master,
-			 latencies[begin].rank, latencies[begin].tag);
+		snprintf(new_key_name, sizeof(new_key_name), "%s-%d:%d-",
+			 master, latencies[begin].rank,
+			 latencies[begin].tag);
 
 		snprintf(kname, sizeof(kname), "%s%s", new_key_name, "min");
 		ConfigAddInt(Ocfg, section_name, kname, latency_min / 1000);
@@ -980,7 +982,7 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 				continue;
 			}
 
-			strncpy(id, key_names[i], sizeof(id)-1);
+			strncpy(id, key_names[i], sizeof(id) - 1);
 			id[sizeof(id) - 1] = '\0';
 			config_ret = ConfigReadInt(cfg, sec_name,
 						   key_names[i],
@@ -3434,7 +3436,6 @@ int parse_command_options(int argc, char *argv[])
 		case 'n':
 		case 't':
 #endif
-
 		default:
 			print_usage(argv[0], default_msg_sizes_str,
 				    g_default_rep_count,
