@@ -29,8 +29,8 @@ type configGenCmd struct {
 	hostListCmd
 	jsonOutputCmd
 	AccessPoints string `short:"a" long:"access-points" description:"Comma separated list of access point addresses <ipv4addr/hostname>"`
-	NrEngines    int    `short:"e" long:"num-engines" description:"Specific number of DAOS Engine sections to be populated in generated configuration file, if unset the value we will be equal to the number of NUMA nodes on storage hosts in the DAOS system"`
-	MinNrSSDs    int    `default:"1" short:"s" long:"min-ssds" description:"Minimum number of NVMe SSDs required per DAOS Engine (SSDs must reside on the host that is managing the engine), set to 0 to generate a config with no NVMe"`
+	NrEngines    int    `short:"e" long:"num-engines" description:"Set the number of DAOS Engine sections to be populated in the config file output. If unset then the value will be set to the number of NUMA nodes on storage hosts in the DAOS system."`
+	MinNrSSDs    int    `default:"1" short:"s" long:"min-ssds" description:"Minimum number of NVMe SSDs required per DAOS Engine (SSDs must reside on the host that is managing the engine). Set to 0 to generate a config with no NVMe."`
 	NetClass     string `default:"best-available" short:"c" long:"net-class" description:"Network class preferred" choice:"best-available" choice:"ethernet" choice:"infiniband"`
 }
 
