@@ -953,13 +953,13 @@ rebuild_debug_print_queue()
 	char tgts_buf[200];
 	int i;
 	/* Position in stack buffer where str data should be written next */
-	size_t tgts_pos = 0;
+	size_t tgts_pos;
 
 	D_DEBUG(DB_REBUILD, "Current rebuild queue:\n");
 
 	d_list_for_each_entry_safe(task, task_tmp,
 				   &rebuild_gst.rg_queue_list, dst_list) {
-
+		tgts_pos = 0;
 		for (i = 0; i < task->dst_tgts.pti_number; i++) {
 			if (tgts_pos > sizeof(tgts_buf) - 10) {
 				/* Stop a bit before we get to the end of the
