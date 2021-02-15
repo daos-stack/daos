@@ -230,13 +230,11 @@ raise_ras(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev, char *hwid,
 	  d_rank_t *rank, char *jobid, uuid_t *pool, uuid_t *cont,
 	  daos_obj_id_t *objid, char *ctlop, Shared__RASEvent *evt)
 {
-	int	rc;
-
-	rc = init_event(id, msg, type, sev, hwid, rank, jobid, pool, cont,
-			objid, ctlop, evt);
+	int rc = init_event(id, msg, type, sev, hwid, rank, jobid, pool, cont,
+			    objid, ctlop, evt);
 	if (rc != 0) {
 		D_ERROR("failed to init RAS event %s: "DF_RC"\n",
-			ras_event2str(RAS_POOL_REPS_UPDATE), DP_RC(rc));
+			ras_event2str(id), DP_RC(rc));
 		return rc;
 	}
 
@@ -244,7 +242,7 @@ raise_ras(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev, char *hwid,
 	rc = send_event(evt);
 	if (rc != 0)
 		D_ERROR("failed to send RAS event %s over dRPC: "DF_RC"\n",
-			ras_event2str(RAS_POOL_REPS_UPDATE), DP_RC(rc));
+			ras_event2str(id), DP_RC(rc));
 
 	free_event(evt);
 
@@ -337,7 +335,7 @@ ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl)
 int
 ds_notify_swim_rank_dead(d_rank_t rank)
 {
-	Shared__RASEvent			evt = SHARED__RASEVENT__INIT;
+	Shared__RASEvent	evt = SHARED__RASEVENT__INIT;
 
 	return raise_ras(RAS_SWIM_RANK_DEAD,
 			 "SWIM marked rank as dead.",

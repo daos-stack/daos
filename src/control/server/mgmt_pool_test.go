@@ -372,11 +372,11 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			defer cancel()
 
 			if tc.mgmtSvc == nil {
-				ioCfg := engine.NewConfig().
+				engineCfg := engine.NewConfig().
 					WithTargetCount(tc.targetCount).
 					WithBdevClass("nvme").
 					WithBdevDeviceList("foo", "bar")
-				r := engine.NewTestRunner(nil, ioCfg)
+				r := engine.NewTestRunner(nil, engineCfg)
 				if err := r.Start(ctx, make(chan<- error)); err != nil {
 					t.Fatal(err)
 				}
