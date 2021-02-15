@@ -3430,12 +3430,13 @@ int parse_command_options(int argc, char *argv[])
 			alloc_g_config_append = false;
 			g_config_append = optarg;
 			break;
-		case 'h':
-		case '?':
 #ifdef INCLUDE_OBSOLETE
 		case 'n':
 		case 't':
+			break;
 #endif
+		case 'h':
+		case '?':
 		default:
 			print_usage(argv[0], default_msg_sizes_str,
 				    g_default_rep_count,
