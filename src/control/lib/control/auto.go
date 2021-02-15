@@ -129,9 +129,8 @@ func getNetworkSet(ctx context.Context, log logging.Logger, hostList []string, c
 	switch len(scanResp.HostFabrics) {
 	case 0:
 		return nil, nil, errors.New("no host responses")
-	case 1:
-	default:
-		// more than one means non-homogeneous hardware
+	case 1: // success
+	default: // more than one means non-homogeneous hardware
 		log.Info("Heterogeneous network hardware configurations detected, " +
 			"cannot proceed. The following sets of hosts have different " +
 			"network hardware:")
@@ -150,16 +149,19 @@ func getNetworkSet(ctx context.Context, log logging.Logger, hostList []string, c
 	return networkSet, nil, nil
 }
 
-// numaNetIfaceMap is an alias for a map of NUMA node ID to optimal
-// fabric network interface.
-type numaNetIfaceMap map[int]*HostFabricInterface
+type (
+	// numaNetIfaceMap is an alias for a map of NUMA node ID to optimal
+	// fabric network interface.
+	numaNetIfaceMap map[int]*HostFabricInterface
 
-// classInterfaces is an alias for a map of netdev class ID to slice of
-// fabric network interfaces.
-type classInterfaces map[uint32]numaNetIfaceMap
+	// classInterfaces is an alias for a map of netdev class ID to slice of
+	// fabric network interfaces.
+	classInterfaces map[uint32]numaNetIfaceMap
+)
 
-// add interface to bucket corresponding to provider and network class type,
-// verify NUMA node binding doesn't match existing entry in bucket.
+// add network device to bucket corresponding to provider, network class type and
+// NUMA node binding. Ignore add if there is an existing entry as the interfaces
+// are processed in descending order of performance (best first).
 func (cis classInterfaces) add(log logging.Logger, iface *HostFabricInterface) {
 	nn := int(iface.NumaNode)
 	if _, exists := cis[iface.NetDevClass]; !exists {
@@ -173,11 +175,12 @@ func (cis classInterfaces) add(log logging.Logger, iface *HostFabricInterface) {
 	cis[iface.NetDevClass][nn] = iface
 }
 
-// parseInterfaces adds interface in scan result, added on following condition:
+// parseInterfaces processes network devices in scan result, adding to a match
+// list given the following conditions:
 // IF class == (ether OR infiniband) AND requested_class == (ANY OR <class>).
 //
-// Returns when interfaces matching criteria have been found for each required
-// NUMA node.
+// Returns when network devices matching criteria have been found for each
+// required NUMA node.
 func parseInterfaces(log logging.Logger, reqClass uint32, numEngines int, interfaces []*HostFabricInterface) (numaNetIfaceMap, bool) {
 	// sort network interfaces by priority to get best available
 	sort.Slice(interfaces, func(i, j int) bool {
@@ -198,7 +201,7 @@ func parseInterfaces(log logging.Logger, reqClass uint32, numEngines int, interf
 			continue // iface class unsupported
 		}
 
-		// add slice of interfaces for new provider6
+		// init network device slice for a new provider
 		if _, exists := buckets[iface.Provider]; !exists {
 			buckets[iface.Provider] = make(classInterfaces)
 		}
@@ -214,9 +217,8 @@ func parseInterfaces(log logging.Logger, reqClass uint32, numEngines int, interf
 	return matches, false
 }
 
-// getNetIfaces scans fabric network interfaces and returns a slice of
-// interfaces matching the number and NUMA affinity of assigned pmem
-// devices.
+// getNetIfaces scans fabric network devices and returns a NUMA keyed map for a
+// provider/class combination.
 func getNetIfaces(log logging.Logger, reqClass uint32, numEngines int, hfs *HostFabricSet) (numaNetIfaceMap, error) {
 	switch reqClass {
 	case NetDevAny, nd.Ether, nd.Infiniband:
@@ -245,11 +247,10 @@ type networkDetails struct {
 	numaCoreCount int
 }
 
-// getNetworkDetails retrieves recommended network interfaces for each NUMA node
-// and the number of cores per NUMA node.
+// getNetworkDetails retrieves recommended network interfaces.
 //
-// Returns map of NUMA node ID to chosen fabric interfaces, per-NUMA core count and any
-// host errors.
+// Returns map of NUMA node ID to chosen fabric interfaces, number of engines to
+// provide mappings for, per-NUMA core count and any host errors.
 func getNetworkDetails(ctx context.Context, req ConfigGenerateReq) (*networkDetails, *HostErrorsResp, error) {
 	netSet, hostErrs, err := getNetworkSet(ctx, req.Log, req.HostList, req.Client)
 	if err != nil {
@@ -285,7 +286,7 @@ func getNetworkDetails(ctx context.Context, req ConfigGenerateReq) (*networkDeta
 //
 // Filter NVMe storage scan so only NUMA affinity and PCI address is taking into
 // account by supplying NvmeBasic flag in scan request. This enables
-// configuration to work with different models of SSDs.
+// configuration to work with different combinations of SSD models.
 //
 // Return host errors, storage scan results for the host set or error.
 func getStorageSet(ctx context.Context, log logging.Logger, hostList []string, client UnaryInvoker) (*HostErrorsResp, *HostStorageSet, error) {
@@ -304,9 +305,8 @@ func getStorageSet(ctx context.Context, log logging.Logger, hostList []string, c
 	switch len(scanResp.HostStorage) {
 	case 0:
 		return nil, nil, errors.New("no host responses")
-	case 1:
-	default:
-		// more than one means non-homogeneous hardware
+	case 1: // success
+	default: // more than one means non-homogeneous hardware
 		log.Info("Heterogeneous storage hardware configurations detected, " +
 			"cannot proceed. The following sets of hosts have different " +
 			"storage hardware:")
@@ -326,15 +326,13 @@ func getStorageSet(ctx context.Context, log logging.Logger, hostList []string, c
 	return nil, storageSet, nil
 }
 
-// numaPMemsMap is an alias for a map of NUMA node ID to slice of PMem block
-// device paths.
+// numaPMemsMap is an alias for a map of NUMA node ID to slice of string sorted
+// PMem block device paths.
 type numaPMemsMap map[int]sort.StringSlice
 
-// validatePMems verifies adequate number of pmem namespaces.
-//
-// Return map of NUMA node ID to pmem block device paths, sort paths in order to
-// attempt selection of desire divisive named appropriately in the case that
-// multiple devices exist for a given NUMA node.
+// mapPMems maps NUMA node ID to pmem block device paths, sort paths to attempt
+// selection of desired devices if named appropriately in the case that multiple
+// devices exist for a given NUMA node.
 func mapPMems(nss storage.ScmNamespaces) numaPMemsMap {
 	npms := make(numaPMemsMap)
 	for _, ns := range nss {
@@ -352,6 +350,7 @@ func mapPMems(nss storage.ScmNamespaces) numaPMemsMap {
 // addresses.
 type numaSSDsMap map[int]sort.StringSlice
 
+// mapSSDs maps NUMA node ID to NVMe SSD PCI addresses, sort addresses.
 func mapSSDs(ssds storage.NvmeControllers) numaSSDsMap {
 	nssds := make(numaSSDsMap)
 	for _, ssd := range ssds {
@@ -370,6 +369,9 @@ type storageDetails struct {
 	numaSSDs  numaSSDsMap
 }
 
+// validate checks sufficient PMem devices and SSD NUMA groups exist for the
+// required number of engines. Minimum thresholds for SSD group size is also
+// checked.
 func (sd *storageDetails) validate(log logging.Logger, engineCount int, minNrSSDs int) error {
 	log.Debugf("numa to pmem mappings: %v", sd.numaPMems)
 	if len(sd.numaPMems) < engineCount {
@@ -402,10 +404,10 @@ func (sd *storageDetails) validate(log logging.Logger, engineCount int, minNrSSD
 	return nil
 }
 
-// getStorageDetails retrieves mappings of NUMA node to PMem and NVMe SSD devices.
+// getStorageDetails retrieves mappings of NUMA node to PMem and NVMe SSD
+// devices.
 //
-// Returns pmem block device paths, SSD PCI address lists or host error response
-// and outer error.
+// Returns storage details struct or host error response and outer error.
 func getStorageDetails(ctx context.Context, req ConfigGenerateReq, engineCount int) (*storageDetails, *HostErrorsResp, error) {
 	if engineCount < 1 {
 		return nil, nil, errors.Errorf(errInvalNrEngines, 1, engineCount)
@@ -452,12 +454,12 @@ type coreCounts struct {
 // and helper core counts.
 type numaCoreCountsMap map[int]*coreCounts
 
-// checkCPUs validates and returns VOS target count and I/O service thread count
-// recommended values
+// checkCPUs validates and returns recommended values for I/O service and
+// offload thread counts.
 //
 // The target count should be a multiplier of the number of SSDs and typically
 // daos gets the best performance with 16x targets per I/O Engine so target
-// count will be between 12 and 20.
+// count will typically be between 12 and 20.
 //
 // Validate number of targets + 1 cores are available per IO engine, not
 // usually a problem as sockets normally have at least 18 cores.
@@ -499,10 +501,10 @@ func checkCPUs(log logging.Logger, numSSDs, numaCoreCount int) (*coreCounts, err
 	}, nil
 }
 
-// getCPUDetails retrieves recommended VOS target count and I/O service thread
-// count parameters for server config.
+// getCPUDetails retrieves recommended values for I/O service and offload
+// threads suitable for the server config file.
 //
-// Returns target and helper thread counts and error.
+// Returns core counts struct or error.
 func getCPUDetails(log logging.Logger, numaSSDs numaSSDsMap, coresPerNuma int) (numaCoreCountsMap, error) {
 	if coresPerNuma < 1 {
 		return nil, errors.Errorf(errInvalNrCores, coresPerNuma)
