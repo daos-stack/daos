@@ -32,13 +32,13 @@ const (
 	// NetDevAny matches any netdetect network device class
 	NetDevAny = math.MaxUint32
 
-	errNoNuma           = "zero numa nodes reported on hosts %s"
-	errUnsupNetDevClass = "unsupported net dev class in request: %s"
-	errInsufNrIfaces    = "insufficient matching %s network interfaces, want %d got %d %+v"
-	errInsufNrPMems     = "insufficient number of pmem devices %v, want %d got %d"
-	errInvalNrEngines   = "unexpected number of engines requested, want %d got %d"
-	errInsufNrSSDs      = "insufficient number of nvme devices for numa %d, want %d got %d"
-	errInvalNrCores     = "invalid number of cores for numa %d"
+	errNoNuma            = "zero numa nodes reported on hosts %s"
+	errUnsupNetDevClass  = "unsupported net dev class in request: %s"
+	errInsufNrIfaces     = "insufficient matching %s network interfaces, want %d got %d %v"
+	errInsufNrPMemGroups = "insufficient number of pmem device numa groups %v, want %d got %d"
+	errInvalNrEngines    = "unexpected number of engines requested, want %d got %d"
+	errInsufNrSSDs       = "insufficient number of nvme devices for numa %d, want %d got %d"
+	errInvalNrCores      = "invalid number of cores for numa %d"
 )
 
 type (
@@ -373,7 +373,7 @@ type storageDetails struct {
 func (sd *storageDetails) validate(log logging.Logger, engineCount int, minNrSSDs int) error {
 	log.Debugf("numa to pmem mappings: %v", sd.numaPMems)
 	if len(sd.numaPMems) < engineCount {
-		return errors.Errorf(errInsufNrPMems, sd.numaPMems, engineCount, len(sd.numaPMems))
+		return errors.Errorf(errInsufNrPMemGroups, sd.numaPMems, engineCount, len(sd.numaPMems))
 	}
 
 	if minNrSSDs == 0 {
@@ -541,7 +541,7 @@ func genConfig(accessPoints []string, nd *networkDetails, sd *storageDetails, cc
 			len(nd.numaIfaces), nd.numaIfaces)
 	}
 	if len(sd.numaPMems) < nd.engineCount {
-		return nil, errors.Errorf(errInsufNrPMems, sd.numaPMems, nd.engineCount,
+		return nil, errors.Errorf(errInsufNrPMemGroups, sd.numaPMems, nd.engineCount,
 			len(sd.numaPMems))
 	}
 	if len(sd.numaSSDs) < nd.engineCount {

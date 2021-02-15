@@ -394,12 +394,12 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 		"single engine zero pmems": {
 			engineCount:   1,
 			hostResponses: hostRespNoScmNs,
-			expErr:        errors.Errorf(errInsufNrPMems, make(numaPMemsMap), 1, 0),
+			expErr:        errors.Errorf(errInsufNrPMemGroups, make(numaPMemsMap), 1, 0),
 		},
 		"dual engine single pmem": {
 			engineCount:   2,
 			hostResponses: hostRespWithScmNs,
-			expErr: errors.Errorf(errInsufNrPMems,
+			expErr: errors.Errorf(errInsufNrPMemGroups,
 				numaPMemsMap{0: []string{
 					engineCfgWithSSDs(t, 0).Storage.SCM.DeviceList[0],
 				}}, 2, 1),
@@ -417,7 +417,7 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 		"dual engine dual pmems both numa zero": {
 			engineCount:   2,
 			hostResponses: hostRespWithScmNssNumaZero,
-			expErr: errors.Errorf(errInsufNrPMems,
+			expErr: errors.Errorf(errInsufNrPMemGroups,
 				numaPMemsMap{0: []string{
 					engineCfgWithSSDs(t, 0).Storage.SCM.DeviceList[0],
 					engineCfgWithSSDs(t, 1).Storage.SCM.DeviceList[0],
