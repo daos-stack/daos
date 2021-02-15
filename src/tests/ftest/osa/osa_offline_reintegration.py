@@ -170,7 +170,9 @@ class OSAOfflineReintegration(OSAUtils):
     def test_osa_offline_reintegration_server_stop(self):
         """Test ID: DAOS-6748.
         Test Description: Validate Offline Reintegration with server stop
-        :avocado: tags=all,pr,daily_regression,hw,medium,ib2,osa
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,checksum
         :avocado: tags=offline_reintegration_srv_stop
         """
         self.run_offline_reintegration_test(1, data=True, server_boot=True)
