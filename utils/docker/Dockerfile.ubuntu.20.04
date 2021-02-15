@@ -39,25 +39,12 @@ RUN useradd --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
 
 # Create directory for DAOS backend storage
-RUN mkdir -p /opt/daos && chown -R daos_server.daos_server /opt/daos
-RUN mkdir /mnt/daos && chown daos_server.daos_server /mnt/daos
-RUN mkdir /var/run/daos_server && chown daos_server.daos_server /var/run/daos_server
-RUN mkdir /var/run/daos_agent && chown daos_agent.daos_agent /var/run/daos_agent
+RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&	\
+    chown daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server &&	\
+    chown daos_agent.daos_agent /var/run/daos_agent
 
 ARG CACHEBUST=1
 RUN apt-get -y upgrade && apt-get clean all
-
-# Control what to build.  By default Dockerfiles build everything to allow for
-# ease-of-use for users, however in CI everything is turned off and then
-# selectively enabled.  Turning off any step disables all future steps.
-ARG DAOS_DEPS_BUILD=yes
-ARG DAOS_BUILD=$DAOS_DEPS_BUILD
-ARG DAOS_JAVA_BUILD=$DAOS_BUILD
-# Legacy, NOBUILD should be set to any string to disable all three.
-ARG NOBUILD=no
-
-# select compiler to use
-ARG COMPILER=gcc
 
 # The COPY command has a --chown option but it's not well supported so copy as
 # root then run a chown command which is frustrating as the copy can take a few
@@ -68,10 +55,15 @@ COPY utils/sl utils/sl
 COPY utils/build.config utils/
 RUN chown -R daos_server.daos_server /home/daos
 USER daos_server:daos_server
-RUN ln -s utils/sl site_scons
 
-RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    (scons --build-deps=yes install PREFIX=/opt/daos --deps-only && \
+# Control what to build.  By default Dockerfiles build everything to allow for
+# ease-of-use for users, however in CI everything is turned off and then
+# selectively enabled.  Turning off any step disables all future steps.
+ARG DAOS_DEPS_BUILD=yes
+ARG DEPS_JOBS=1
+
+RUN ln -s utils/sl site_scons && [ "$DAOS_DEPS_BUILD" != "yes" ] || \
+    (scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos --deps-only && \
     /bin/rm -rf build *.gz)
 
 WORKDIR /home/daos/daos/
@@ -81,11 +73,15 @@ COPY src src
 USER root:root
 RUN chown -R daos_server.daos_server /home/daos
 USER daos_server:daos_server
-RUN ln -s utils/sl site_scons
+
+# select compiler to use
+ARG COMPILER=gcc
+ARG JOBS=$DEPS_JOBS
+ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
 # Build DAOS
-RUN [ "$DAOS_BUILD" != "yes" ] || \
-    (scons -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER && \
+RUN ln -s utils/sl site_scons && [ "$DAOS_BUILD" != "yes" ] || \
+    (scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER && \
     /bin/rm -rf build && \
     cp -r utils/config/examples /opt/daos)
 
@@ -108,6 +104,8 @@ RUN echo -e "<settings>\n\
                 </mirror>\n\
         </mirrors>\n\
 </settings>" > /home/daos/.m2/settings.xml
+
+ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 
 RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
     mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
