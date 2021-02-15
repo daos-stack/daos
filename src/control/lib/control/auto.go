@@ -456,7 +456,7 @@ type numaCoreCountsMap map[int]*coreCounts
 // recommended values
 //
 // The target count should be a multiplier of the number of SSDs and typically
-// daos gets the best performance with 16x targets per I/O engine so target
+// daos gets the best performance with 16x targets per I/O Engine so target
 // count will be between 12 and 20.
 //
 // Validate number of targets + 1 cores are available per IO engine, not

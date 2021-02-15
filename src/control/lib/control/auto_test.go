@@ -600,13 +600,13 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 	numa1 := uint(1)
 
 	for name, tc := range map[string]struct {
-		engineCount    int      // number of engines to provide in config
-		accessPoints   []string // list of access point host/ip addresses
-		numaPMems      numaPMemsMap
-		numaSSDs       numaSSDsMap
-		numaIfaces     numaNetIfaceMap
-		numaCoreCounts numaCoreCountsMap
-		expCfg         *config.Server // expected config generated
+		engineCount    int               // number of engines to provide in config
+		accessPoints   []string          // list of access point host/ip addresses
+		numaPMems      numaPMemsMap      // numa to pmem mappings
+		numaSSDs       numaSSDsMap       // numa to ssds mappings
+		numaIfaces     numaNetIfaceMap   // numa to network interface mappings
+		numaCoreCounts numaCoreCountsMap // numa to cpu mappings
+		expCfg         *config.Server    // expected config generated
 		expErr         error
 	}{
 		"no engines": {

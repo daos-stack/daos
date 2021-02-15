@@ -38,15 +38,15 @@ struct  _Srv__NotifyReadyReq
    */
   uint32_t nctxs;
   /*
-   * Path to IO server's dRPC listener socket
+   * Path to I/O Engine's dRPC listener socket
    */
   char *drpclistenersock;
   /*
-   * IO server instance index
+   * I/O Engine instance index
    */
   uint32_t instanceidx;
   /*
-   * number of VOS targets allocated in IO server
+   * number of VOS targets allocated in I/O Engine
    */
   uint32_t ntgts;
 };
@@ -75,11 +75,11 @@ struct  _Srv__BioErrorReq
    */
   int32_t tgtid;
   /*
-   * IO server instance index
+   * I/O Engine instance index
    */
   uint32_t instanceidx;
   /*
-   * Path to IO server's dRPC listener socket
+   * Path to I/O Engine's dRPC listener socket
    */
   char *drpclistenersock;
   /*

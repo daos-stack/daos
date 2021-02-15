@@ -111,10 +111,12 @@ met. Requirements will be derived based on the number of NUMA nodes present on
 the hosts if '--num-engines' is not specified on the commandline.
 
 - '--num-engines' specifies the number of engine sections to populate in the
-config file output. Each section will specify a persistent memory (PMem) block
-devices that must be present on the host in addition to a fabric network
-interface and SSDs all bound to the same NUMA node. If not set explicitly on
-the commandline, default is the number of NUMA nodes detected on the host.
+config file output.
+Each section will specify a persistent memory (PMem) block devices that must be
+present on the host in addition to a fabric network interface and SSDs all
+bound to the same NUMA node.
+If not set explicitly on the commandline, default is the number of NUMA nodes
+detected on the host.
 - '--min-ssds' specifies the minimum number of NVMe SSDs per-engine that need
 to be present on each host.
 For each engine entry in the generated config, at least this number of SSDs
@@ -336,9 +338,9 @@ After RPM install, `daos_server` service starts automatically running as user
 certificates are read from `/etc/daos/certs`.
 With no other admin intervention other than the loading of certificates,
 `daos_server` will enter a listening state enabling discovery of storage and
-network hardware through the `dmg` tool without any I/O Servers specified in the
+network hardware through the `dmg` tool without any I/O Engines specified in the
 configuration file. After device discovery and provisioning, an updated
-configuration file with a populated per-server section can be stored in
+configuration file with a populated per-engine section can be stored in
 `/etc/daos/daos_server.yml`, and after reestarting the `daos_server` service
 it is then ready for the storage to be formatted.
 
@@ -515,7 +517,7 @@ NVMe PCI     Model                FW Revision Socket ID Capacity
 The NVMe PCI field above is what should be used in the server
 configuration file to identified NVMe SSDs.
 
-Devices with the same NUMA node/socket should be used in the same per-server
+Devices with the same NUMA node/socket should be used in the same per-engine
 section of the server configuration file for best performance.
 
 For further info on command usage run `dmg storage --help`.
@@ -664,14 +666,14 @@ access_points: ["wolf-71"] # <----- updated
 <snip>
 servers:
 -
-  targets: 8                # count of storage targets per each server
-  first_core: 0             # offset of the first core for service xstreams
-  nr_xs_helpers: 2          # count of offload/helper xstreams per target
+  targets: 8                # number of I/O service threads per-engine
+  first_core: 0             # offset of the first core for service threads
+  nr_xs_helpers: 2          # count of I/O offload threads per target
   fabric_iface: eth0        # map to OFI_INTERFACE=eth0
   fabric_iface_port: 31416  # map to OFI_PORT=31416
   log_mask: ERR             # map to D_LOG_MASK=ERR
   log_file: /tmp/server.log # map to D_LOG_FILE=/tmp/server.log
-  env_vars:                 # influence DAOS IO Server behavior by setting env variables
+  env_vars:                 # influence DAOS I/O Engine behavior by setting env variables
   - DAOS_MD_CAP=1024
   - CRT_CTX_SHARE_ADDR=0
   - CRT_TIMEOUT=30
@@ -683,14 +685,14 @@ servers:
   bdev_class: nvme
   bdev_list: ["0000:87:00.0", "0000:81:00.0"]  # <----- updated
 -
-  targets: 8                # count of storage targets per each server
-  first_core: 0             # offset of the first core for service xstreams
-  nr_xs_helpers: 2          # count of offload/helper xstreams per target
+  targets: 8                # number of I/O service threads per-engine
+  first_core: 0             # offset of the first core for service threads
+  nr_xs_helpers: 2          # count of I/O offload threads per target
   fabric_iface: eth0        # map to OFI_INTERFACE=eth0
   fabric_iface_port: 31416  # map to OFI_PORT=31416
   log_mask: ERR             # map to D_LOG_MASK=ERR
   log_file: /tmp/server.log # map to D_LOG_FILE=/tmp/server.log
-  env_vars:                 # influence DAOS IO Server behavior by setting env variables
+  env_vars:                 # influence DAOS I/O Engine behavior by setting env variables
   - DAOS_MD_CAP=1024
   - CRT_CTX_SHARE_ADDR=0
   - CRT_TIMEOUT=30
@@ -705,7 +707,7 @@ servers:
 ```
 
 ### Network Scan and Configuration
-The daos_server supports the `network scan` function to display the network interfaces, related OFI fabric providers and associated NUMA node for each device.  This information is used to configure the global fabric provider and the unique local network interface for each I/O Server instance on this node.  This section will help you determine what to provide for the `provider`, `fabric_iface` and `pinned_numa_node` entries in the daos_server.yml file.
+The daos_server supports the `network scan` function to display the network interfaces, related OFI fabric providers and associated NUMA node for each device.  This information is used to configure the global fabric provider and the unique local network interface for each I/O Engine instance on this node.  This section will help you determine what to provide for the `provider`, `fabric_iface` and `pinned_numa_node` entries in the daos_server.yml file.
 
 The following commands are typical examples:
 ```
@@ -760,13 +762,13 @@ After the daos_server.yml file has been edited and contains a provider, subseque
 
 Regardless of the provider in the daos_server.yml file, the results may be filtered to the specified provider with the command `daos_server network scan -p ofi_provider` where `ofi_provider` is one of the available providers from the list.
 
-The results of the network scan may be used to help configure the I/O Server
+The results of the network scan may be used to help configure the I/O Engine
 instances for this daos_server node.
 
-Each I/O Server instance is configured with a unique `fabric_iface` and
+Each I/O Engine instance is configured with a unique `fabric_iface` and
 optional `pinned_numa_node`. The interfaces and NUMA Sockets listed in the scan
 results map to the daos_server.yml `fabric_iface` and `pinned_numa_node`
-respectively. The use of `pinned_numa_node` is optional, but recommended for best performance. When specified with the value that matches the network interface, the I/O Server will bind itself to that NUMA node and to cores purely within that NUMA node. This configuration yields the fastest access to that network device.
+respectively. The use of `pinned_numa_node` is optional, but recommended for best performance. When specified with the value that matches the network interface, the I/O Engine will bind itself to that NUMA node and to cores purely within that NUMA node. This configuration yields the fastest access to that network device.
 
 ### Changing Network Providers
 
@@ -856,7 +858,7 @@ Upon successful format, DAOS Control Servers will start DAOS IO
 instances that have been specified in the server config file.
 
 Successful start-up is indicated by the following on stdout:
-`DAOS I/O server (v0.8.0) process 433456 started on rank 1 with 8 target, 2 helper XS per target, firstcore 0, host wolf-72.wolf.hpdd.intel.com.`
+`DAOS I/O Engine (v0.8.0) process 433456 started on rank 1 with 8 target, 2 helper XS per target, firstcore 0, host wolf-72.wolf.hpdd.intel.com.`
 
 ### SCM Format
 
@@ -901,7 +903,7 @@ configuration file `scm_mount` parameter should be mounted and should contain
 the necessary DAOS metadata indicating that the server has been formatted.
 
 When starting, `daos_server` will skip `maintenance mode` and attempt to start
-I/O Servers if valid DAOS metadata is found in `scm_mount`.
+I/O Engines if valid DAOS metadata is found in `scm_mount`.
 
 ## Agent Setup
 
