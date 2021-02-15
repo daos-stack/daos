@@ -177,9 +177,6 @@ Requires: python36-tabulate
 Requires: python3-distro
 Requires: python3-tabulate
 %endif
-Requires: fio
-Requires: dbench
-Requires: lbzip2
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
 %endif
