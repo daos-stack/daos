@@ -19,7 +19,7 @@ const (
 	maxHelperStreamCount = 2
 )
 
-// StorageConfig encapsulates an I/O server's storage configuration.
+// StorageConfig encapsulates an I/O Engine's storage configuration.
 type StorageConfig struct {
 	SCM  storage.ScmConfig  `yaml:",inline"`
 	Bdev storage.BdevConfig `yaml:",inline"`
@@ -125,7 +125,7 @@ func mergeEnvVars(curVars []string, newVars []string) (merged []string) {
 	return
 }
 
-// Config encapsulates an I/O server's configuration.
+// Config encapsulates an I/O Engine's configuration.
 type Config struct {
 	Rank              *system.Rank  `yaml:"rank,omitempty"`
 	Modules           string        `yaml:"modules,omitempty" cmdLongFlag:"--modules" cmdShortFlag:"-m"`
@@ -142,7 +142,7 @@ type Config struct {
 	Index             uint32        `yaml:"-" cmdLongFlag:"--instance_idx" cmdShortFlag:"-I"`
 }
 
-// NewConfig returns an I/O server config.
+// NewConfig returns an I/O Engine config.
 func NewConfig() *Config {
 	return &Config{
 		HelperStreamCount: maxHelperStreamCount,
@@ -163,13 +163,13 @@ func (c *Config) Validate() error {
 }
 
 // CmdLineArgs returns a slice of command line arguments to be
-// supplied when starting an I/O server instance.
+// supplied when starting an I/O Engine instance.
 func (c *Config) CmdLineArgs() ([]string, error) {
 	return parseCmdTags(c, shortFlagTag, joinShortArgs, nil)
 }
 
 // CmdLineEnv returns a slice of environment variables to be
-// supplied when starting an I/O server instance.
+// supplied when starting an I/O Engine instance.
 func (c *Config) CmdLineEnv() ([]string, error) {
 	tagEnv, err := parseCmdTags(c, envTag, joinEnvVars, nil)
 	if err != nil {
@@ -278,7 +278,7 @@ func (c *Config) WithBdevConfigPath(cfgPath string) *Config {
 	return c
 }
 
-// WithModules sets the list of I/O server modules to be loaded.
+// WithModules sets the list of I/O Engine modules to be loaded.
 func (c *Config) WithModules(mList string) *Config {
 	c.Modules = mList
 	return c
@@ -302,7 +302,7 @@ func (c *Config) WithFabricInterfacePort(ifacePort int) *Config {
 	return c
 }
 
-// WithPinnedNumaNode sets the NUMA node affinity for the I/O server instance
+// WithPinnedNumaNode sets the NUMA node affinity for the I/O Engine instance
 func (c *Config) WithPinnedNumaNode(numa *uint) *Config {
 	c.Fabric.PinnedNumaNode = numa
 	return c

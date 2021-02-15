@@ -1,21 +1,23 @@
 # DAOS Server
 
-The DAOS Server can be run either as a foreground process to issue hardware
-provisioning commands or as a background process (binary name followed by the
-"start" subcommand) when it will listen for instructions from the [management
-tool](/src/control/cmd/dmg/README.md) and manage bring-up of the DAOS system.
-A DAOS Server instance will typically be run on every storage node to
-orchestrate the operation of the managed data plane processes.
+The DAOS Server (control-plane) can be run either as a foreground
+process to issue hardware provisioning commands or as a background
+process (binary name followed by the "start" subcommand) when it will
+listen for instructions from the
+[management tool](/src/control/cmd/dmg/README.md) and manage bring-up
+of the DAOS system.  A DAOS Server instance will typically be run on
+every storage node to orchestrate the operation of the managed DAOS
+Engine processes.
 
 ## Network and Storage Management
 
-The DAOS data plane utilizes two forms of non-volatile storage,
-storage class memory (SCM) in the form of persistent memory modules
-and NVMe in the form of high-performance SSDs.
+The DAOS Engine (data-plane) utilizes two forms of non-volatile
+storage; storage class memory (SCM) in the form of persistent memory
+modules and NVMe in the form of high-performance SSDs.
 
 The DAOS Server provides capability to provision and manage network
 devices and non-volatile storage including the allocation of
-resources to data plane instances.
+resources to engine instances.
 
 See
 [admin guide](https://daos-stack.github.io/admin/deployment/#hardware-provisioning)
@@ -24,7 +26,7 @@ for details on hardware provisioning.
 ## Configuration
 
 A server configuration file which is passed on invocation contains details of
-global and per-io-server parameters related to hardware devices and
+global and per-engine parameters related to hardware devices and
 environments.
 
 ### Configuration File
@@ -68,7 +70,7 @@ Log file and level mask for both data (`daos_engine`) and control
 
 ### NVMe/block-device storage
 
-Parameters prefixed with `nvme_` in the per-server section of the
+Parameters prefixed with `nvme_` in the per-engine section of the
 config file determine how NVMe storage will be assigned for use by
 DAOS on the storage node.
 Examples for NVMe and AIO (emulation) classes including config file
@@ -77,7 +79,7 @@ syntax can be found in the
 
 ### SCM/pmem storage
 
-Parameters prefixed with `scm_` in the per-server section of the
+Parameters prefixed with `scm_` in the per-engine section of the
 config file determine how SCM storage will be assigned for use by
 DAOS on the storage node.
 Examples for both DCPM and RAM (emulation) SCM classes including
@@ -98,7 +100,7 @@ For details on how gRPC communications are secured and authenticated, see the
 
 ## Data-Plane Communication
 
-I/O Server processes communicate with the DAOS Server using UNIX Domain Sockets
+I/O Engine processes communicate with the DAOS Server using UNIX Domain Sockets
 set up on the storage node.
 
 ### UNIX Domain Socket
@@ -108,19 +110,18 @@ The default directory used for the UNIX Domain Sockets is
 configuration file. The directory must exist, and the user starting the server
 process must have write access to it in order for the server to start up
 successfully. The server opens the socket and proceeds to listen for
-communications from local I/O server processes.
+communications from local I/O Engine processes.
 
 ### dRPC
 
-The protocol used to communicate between the DAOS server and I/O server processes
-is [dRPC](/src/control/drpc/README.md). Control and I/O servers are both capable
+The protocol used to communicate between the DAOS server and I/O Engine processes
+is [dRPC](/src/control/drpc/README.md). DAOS Servers and Engines are both capable
 of acting as dRPC server or client.
 
 ## Management Tool Communication
 
 Communications between the [management tool](/src/control/cmd/dmg/README.md)
-and the DAOS Control Plane Server occur over the management network, via the
-gRPC protocol.
+and the DAOS Server occur over the management network, via the gRPC protocol.
 Management requests can be made to operate over resources local to specific
 storage nodes or to operate over the distributed DAOS system, in the latter case
 the requests are directed at access point servers defined in the server's config
@@ -131,17 +132,17 @@ file.
 The functions provided by the server include:
 
 - Storage and Network hardware provisioning and formatting.
-- Hardware resource allocation between data plane instances.
-- Formatting and monitoring of data plane instances.
-- Controlled start and stop of managed data plane instances.
+- Hardware resource allocation between engine instances.
+- Formatting and monitoring of engine instances.
+- Controlled start and stop of managed engine instances.
 - Storage pool management including creation, property handling and destruction.
 
 ## Subcommands
 
 `daos_server` supports various subcommands (see `daos_server --help`
 for available subcommands) which will perform stand-alone tasks (e.g.
-`storage prepare|scan`) or attempt to bring-up the data plane
-(`start` subcommand).
+`storage prepare|scan`) or attempt to bring-up the engine (`start`
+subcommand).
 
 ### Storage Prepare
 
