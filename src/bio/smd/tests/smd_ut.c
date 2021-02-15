@@ -16,6 +16,7 @@
 #include <daos/common.h>
 #include <daos_srv/smd.h>
 #include "../smd_internal.h"
+#include <daos/tests_lib.h>
 
 #define SMD_STORAGE_PATH	"/mnt/daos"
 #define DB_LIST_NR	3

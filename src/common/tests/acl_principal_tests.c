@@ -13,6 +13,7 @@
 #include <setjmp.h>
 #include <cmocka.h>
 
+#include <daos/tests_lib.h>
 #include <daos_security.h>
 #include <daos_errno.h>
 #include <gurt/common.h>

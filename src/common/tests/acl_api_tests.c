@@ -13,6 +13,7 @@
 #include <setjmp.h>
 #include <cmocka.h>
 
+#include <daos/tests_lib.h>
 #include <time.h>
 #include <daos_types.h>
 #include <daos_security.h>
@@ -179,7 +180,7 @@ test_ace_alloc_principal_invalid(void **state)
 static void
 test_ace_get_size_null(void **state)
 {
-	assert_rc_equal(daos_ace_get_size(NULL), -DER_INVAL);
+	assert_int_equal(daos_ace_get_size(NULL), -DER_INVAL);
 }
 
 static void
@@ -189,7 +190,7 @@ test_ace_get_size_without_name(void **state)
 
 	ace = daos_ace_create(DAOS_ACL_EVERYONE, NULL);
 
-	assert_rc_equal(daos_ace_get_size(ace), sizeof(struct daos_ace));
+	assert_int_equal(daos_ace_get_size(ace), sizeof(struct daos_ace));
 
 	daos_ace_free(ace);
 }
@@ -203,7 +204,7 @@ test_ace_get_size_with_name(void **state)
 	ace = daos_ace_create(DAOS_ACL_GROUP, name);
 
 	/* name string rounded up to 64 bits */
-	assert_rc_equal(daos_ace_get_size(ace), sizeof(struct daos_ace) +
+	assert_int_equal(daos_ace_get_size(ace), sizeof(struct daos_ace) +
 			aligned_strlen(name));
 
 	daos_ace_free(ace);
@@ -405,7 +406,7 @@ test_acl_copy_with_aces(void **state)
 static void
 test_acl_get_size_null(void **state)
 {
-	assert_rc_equal(daos_acl_get_size(NULL), -DER_INVAL);
+	assert_int_equal(daos_acl_get_size(NULL), -DER_INVAL);
 }
 
 static void
@@ -415,7 +416,7 @@ test_acl_get_size_empty(void **state)
 
 	acl = daos_acl_create(NULL, 0);
 
-	assert_rc_equal(daos_acl_get_size(acl), sizeof(struct daos_acl));
+	assert_int_equal(daos_acl_get_size(acl), sizeof(struct daos_acl));
 
 	daos_acl_free(acl);
 }
@@ -432,7 +433,7 @@ test_acl_get_size_with_aces(void **state)
 	expected_ace_len = get_total_ace_list_size(ace, num_aces);
 	acl = daos_acl_create(ace, num_aces);
 
-	assert_rc_equal(daos_acl_get_size(acl),
+	assert_int_equal(daos_acl_get_size(acl),
 			sizeof(struct daos_acl) + expected_ace_len);
 
 	daos_acl_free(acl);
