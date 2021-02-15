@@ -113,6 +113,9 @@ create_entry(struct dfuse_projection_info *fs_handle,
 	entry->attr_timeout = parent->ie_dfs->dfs_attr_timeout;
 	entry->entry_timeout = parent->ie_dfs->dfs_attr_timeout;
 
+	ie->ie_parent = parent->ie_stat.st_ino;
+	ie->ie_dfs = parent->ie_dfs;
+
 	if (S_ISDIR(ie->ie_stat.st_mode) && attr_len) {
 		rc = check_for_uns_ep(fs_handle, ie, attr, attr_len);
 		if (rc != 0) {
@@ -127,12 +130,12 @@ create_entry(struct dfuse_projection_info *fs_handle,
 	entry->generation = 1;
 	entry->ino = entry->attr.st_ino;
 
-	ie->ie_parent = parent->ie_stat.st_ino;
-	ie->ie_dfs = parent->ie_dfs;
-
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
 	atomic_store_relaxed(&ie->ie_ref, 1);
+
+	DFUSE_TRA_DEBUG(ie, "Inserting inode %#lx mode 0%o",
+			entry->ino, ie->ie_stat.st_mode);
 
 	rlink = d_hash_rec_find_insert(&fs_handle->dpi_iet,
 				       &ie->ie_stat.st_ino,
@@ -193,21 +196,19 @@ dfuse_readdir_reset(struct dfuse_obj_hdl *oh)
 	oh->doh_anchor_index = 0;
 }
 
-#define FADP	fuse_add_direntry_plus
-#define FAD	fuse_add_direntry
+#define FADP   fuse_add_direntry_plus
+#define FAD    fuse_add_direntry
 
 void
 dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 		 size_t size, off_t offset, bool plus)
 {
-	struct dfuse_projection_info	*fs_handle;
-	char				*reply_buff;
-	off_t				buff_offset = 0;
-	int				added = 0;
-	int				rc = 0;
-	int				large_fetch = true;
-
-	fs_handle = fuse_req_userdata(req);
+	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+	char			*reply_buff;
+	off_t			buff_offset = 0;
+	int			added = 0;
+	int			rc = 0;
+	int			large_fetch = true;
 
 	if (offset == READDIR_EOD) {
 		DFUSE_TRA_DEBUG(oh, "End of directory %lx", offset);
@@ -293,7 +294,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 			bool eod = false;
 
 			D_ASSERT(offset !=
-				 oh->doh_dre[oh->doh_dre_index].dre_offset);
+				oh->doh_dre[oh->doh_dre_index].dre_offset);
 
 			if (large_fetch)
 				to_fetch = READDIR_MAX_COUNT;
@@ -312,7 +313,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 			fetched = true;
 		} else {
 			D_ASSERT(offset ==
-				 oh->doh_dre[oh->doh_dre_index].dre_offset);
+				oh->doh_dre[oh->doh_dre_index].dre_offset);
 		}
 
 		DFUSE_TRA_DEBUG(oh, "processing offset %ld", offset);
@@ -354,7 +355,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 			} else if (rc != 0) {
 				DFUSE_TRA_DEBUG(oh, "Problem finding file %d",
 						rc);
-				D_GOTO(reply, 0);
+				D_GOTO(reply, rc);
 			}
 
 			dfs_obj2id(obj, &oid);
@@ -379,11 +380,9 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 				if (rc != 0)
 					D_GOTO(reply, rc);
 
-				written = FADP(req,
-					       &reply_buff[buff_offset],
+				written = FADP(req, &reply_buff[buff_offset],
 					       size - buff_offset,
-					       dre->dre_name,
-					       &entry,
+					       dre->dre_name, &entry,
 					       dre->dre_next_offset);
 				if (written > size - buff_offset)
 					d_hash_rec_decref(&fs_handle->dpi_iet,
@@ -392,12 +391,9 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 			} else {
 				dfs_release(obj);
 
-				written = FAD(req,
-					      &reply_buff[buff_offset],
-					      size - buff_offset,
-					      dre->dre_name,
-					      &stbuf,
-					      dre->dre_next_offset);
+				written = FAD(req, &reply_buff[buff_offset],
+					      size - buff_offset, dre->dre_name,
+					      &stbuf, dre->dre_next_offset);
 			}
 			if (written > size - buff_offset) {
 				DFUSE_TRA_DEBUG(oh, "Buffer is full");
