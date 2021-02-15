@@ -1092,7 +1092,7 @@ class posix_tests():
         # This should fail as a security test.
         try:
             xattr.set(fd, 'user.dfuse.ids', b'other_value')
-            assert False
+            assert(False)
         except OSError as e:
             assert e.errno == errno.EPERM
 
