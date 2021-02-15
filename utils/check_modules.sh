@@ -65,7 +65,9 @@ fi
 ./utils/sl/check_script.py -w "${sfiles[@]}"
 
 # Set PYTHONPATH for source files not installed files
-PYTHONPATH=$PWD/utils:$PWD/src/tests/ftest/util/
+PYTHONPATH=$PWD/utils:$PWD/src/tests/ftest/
+PYTHONPATH=$PYTHONPATH:$PWD/src/tests/ftest/util
+PYTHONPATH=$PYTHONPATH:$PWD/src/tests/ftest/soak
 PYTHONPATH=$PYTHONPATH:$PWD/src/tests/ftest/cart/util/
 PYTHONPATH=$PYTHONPATH:$PWD/src/tests/ftest/util/apricot/
 PYTHONPATH=$PYTHONPATH:$PWD/src/client/

@@ -14,6 +14,8 @@
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
 
+Calendar current_time = Calendar.getInstance()
+
 boolean doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
         return true
@@ -555,10 +557,12 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
+                            filename 'Dockerfile.checkpatch'
+                            dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs() +
-                                           " -t ${sanitized_JOB_NAME}-centos7 "
+                            additionalBuildArgs dockerBuildArgs(cachebust:false,
+                                                                add_repos:false) +
+                                                " --build-arg CACHEBUST=" + current_time.get(Calendar.WEEK_OF_YEAR)
                         }
                     }
                     steps {
