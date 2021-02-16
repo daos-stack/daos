@@ -345,6 +345,8 @@ class DaosServer():
             desired_states = [desired_states]
 
         rc = self.run_dmg(['system', 'query', '--json'])
+        print(rc)
+        print(rc.stdout)
         if rc.returncode == 0:
             data = json.loads(rc.stdout.decode('utf-8'))
             members = data['response']['members']
@@ -420,7 +422,7 @@ class DaosServer():
             server_env['PATH'] = '{}:{}'.format(self._io_server_dir.name,
                                                 server_env['PATH'])
             self.max_start_time = 300
-            self.max_stop_time = 60
+            self.max_stop_time = 300
             self.stop_sleep_time = 10
 
         cmd = [daos_server, '--config={}'.format(self._yaml_file.name),
