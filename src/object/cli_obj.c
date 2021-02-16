@@ -306,7 +306,10 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 	int			rc;
 
 	pool = dc_hdl2pool(dc_cont_hdl2pool_hdl(obj->cob_coh));
-	D_ASSERT(pool != NULL);
+	if (pool == NULL) {
+		D_WARN("Cannot find valid pool\n");
+		D_GOTO(out, rc = -DER_NO_HDL);
+	}
 
 	map = pl_map_find(pool->dp_pool, obj->cob_md.omd_id);
 	dc_pool_put(pool);
@@ -769,11 +772,10 @@ obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr)
 		return;
 
 	for (i = 0; i < iod_nr; i++) {
-		iod = reasb_req->orr_iods + i;
-		if (iod->iod_recxs != NULL)
-			D_FREE(iod->iod_recxs);
-		d_sgl_fini(reasb_req->orr_sgls + i, false);
-		obj_io_desc_fini(reasb_req->orr_oiods + i);
+		iod = &reasb_req->orr_iods[i];
+		D_FREE(iod->iod_recxs);
+		d_sgl_fini(&reasb_req->orr_sgls[i], false);
+		obj_io_desc_fini(&reasb_req->orr_oiods[i]);
 		obj_ec_recxs_fini(&reasb_req->orr_recxs[i]);
 		obj_ec_seg_sorter_fini(&reasb_req->orr_sorters[i]);
 		obj_ec_tgt_oiod_fini(reasb_req->tgt_oiods);
@@ -2992,7 +2994,8 @@ obj_shard_list_obj_cb(struct shard_auxi_args *shard_auxi,
 	}
 	iter_arg->merge_nr += shard_arg->la_nr;
 
-	D_DEBUG(DB_TRACE, "merge_nr %d\n", iter_arg->merge_nr);
+	D_DEBUG(DB_TRACE, "merge_nr %d/"DF_U64"\n", iter_arg->merge_nr,
+		obj_arg->sgl->sg_iovs[0].iov_len);
 	return rc;
 }
 

@@ -53,7 +53,7 @@ func TestMain(m *testing.M) {
 
 // createFakeBinary writes out a copy of this test file to
 // an executable file in the test directory. This fake binary
-// is named the same as a DAOS I/O server binary so that it's
+// is named the same as a DAOS I/O Engine binary so that it's
 // located via findBinary(). When it is invoked by Runner.run(),
 // the TestMain() function is used to do some simple simulation
 // of the real binary's behavior.

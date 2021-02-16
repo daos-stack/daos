@@ -1962,7 +1962,6 @@ migrate_one_epoch_object(daos_handle_t oh, daos_epoch_range_t *epr,
 	d_iov_t			 iov = { 0 };
 	d_sg_list_t		 sgl = { 0 };
 	uint32_t		 num;
-	daos_size_t		 size;
 	int			 rc = 0;
 
 	D_DEBUG(DB_REBUILD, "migrate obj "DF_UOID" for shard %u eph "
@@ -1998,7 +1997,7 @@ migrate_one_epoch_object(daos_handle_t oh, daos_epoch_range_t *epr,
 				      DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
 				      DIOF_TO_SPEC_GROUP | DIOF_FOR_MIGRATION);
 retry:
-		rc = dsc_obj_list_obj(oh, epr, NULL, NULL, &size,
+		rc = dsc_obj_list_obj(oh, epr, NULL, NULL, NULL,
 				     &num, kds, &sgl, &anchor,
 				     &dkey_anchor, &akey_anchor, &csum);
 
@@ -2071,7 +2070,6 @@ retry:
 		if (num == 0)
 			break;
 
-		sgl.sg_iovs[0].iov_len = size;
 		rc = dss_enum_unpack(arg->oid, kds, num, &sgl, &csum,
 				     migrate_enum_unpack_cb, &unpack_arg);
 		if (rc) {
