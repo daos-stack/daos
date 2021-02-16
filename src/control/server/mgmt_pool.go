@@ -90,7 +90,7 @@ func (svc *mgmtSvc) getPoolServiceRanks(uuidStr string) ([]uint32, error) {
 }
 
 // calculateCreateStorage determines the amount of SCM/NVMe storage to
-// allocate per server in order to fulfill the create request, if those
+// allocate per engine in order to fulfill the create request, if those
 // values are not already supplied as part of the request.
 func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 	instances := svc.harness.Instances()
@@ -238,7 +238,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return nil, FaultPoolInvalidServiceReps
 	}
 
-	// IO server needs the fault domain tree for placement purposes
+	// IO engine needs the fault domain tree for placement purposes
 	req.FaultDomains, err = svc.sysdb.CompressedFaultDomainTree(req.Ranks...)
 	if err != nil {
 		return nil, err
@@ -493,7 +493,7 @@ func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (
 
 	svc.log.Debugf("MgmtSvc.PoolExtend dispatch, req:%+v\n", req)
 
-	// the IO server needs the domain tree for placement purposes
+	// the IO engine needs the domain tree for placement purposes
 	fdTree, err := svc.sysdb.CompressedFaultDomainTree(req.Ranks...)
 	if err != nil {
 		return nil, err
@@ -539,7 +539,7 @@ func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReinteg
 	return resp, nil
 }
 
-// PoolQuery forwards a pool query request to the I/O server.
+// PoolQuery forwards a pool query request to the I/O Engine.
 func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*mgmtpb.PoolQueryResp, error) {
 	if err := svc.checkReplicaRequest(req); err != nil {
 		return nil, err
@@ -617,7 +617,7 @@ func resolvePoolPropVal(req *mgmtpb.PoolSetPropReq) (*mgmtpb.PoolSetPropReq, err
 	return newReq, nil
 }
 
-// PoolSetProp forwards a request to the I/O server to set a pool property.
+// PoolSetProp forwards a request to the I/O Engine to set a pool property.
 func (svc *mgmtSvc) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq) (*mgmtpb.PoolSetPropResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
@@ -714,7 +714,7 @@ func (svc *mgmtSvc) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq)
 	return resp, nil
 }
 
-// PoolGetACL forwards a request to the IO server to fetch a pool's Access Control List
+// PoolGetACL forwards a request to the I/O Engine to fetch a pool's Access Control List
 func (svc *mgmtSvc) PoolGetACL(ctx context.Context, req *mgmtpb.GetACLReq) (*mgmtpb.ACLResp, error) {
 	if err := svc.checkReplicaRequest(req); err != nil {
 		return nil, err
@@ -736,7 +736,7 @@ func (svc *mgmtSvc) PoolGetACL(ctx context.Context, req *mgmtpb.GetACLReq) (*mgm
 	return resp, nil
 }
 
-// PoolOverwriteACL forwards a request to the IO server to overwrite a pool's Access Control List
+// PoolOverwriteACL forwards a request to the I/O Engine to overwrite a pool's Access Control List
 func (svc *mgmtSvc) PoolOverwriteACL(ctx context.Context, req *mgmtpb.ModifyACLReq) (*mgmtpb.ACLResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
@@ -758,7 +758,7 @@ func (svc *mgmtSvc) PoolOverwriteACL(ctx context.Context, req *mgmtpb.ModifyACLR
 	return resp, nil
 }
 
-// PoolUpdateACL forwards a request to the IO server to add or update entries in
+// PoolUpdateACL forwards a request to the I/O Engine to add or update entries in
 // a pool's Access Control List
 func (svc *mgmtSvc) PoolUpdateACL(ctx context.Context, req *mgmtpb.ModifyACLReq) (*mgmtpb.ACLResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
@@ -781,7 +781,7 @@ func (svc *mgmtSvc) PoolUpdateACL(ctx context.Context, req *mgmtpb.ModifyACLReq)
 	return resp, nil
 }
 
-// PoolDeleteACL forwards a request to the IO server to delete an entry from a
+// PoolDeleteACL forwards a request to the I/O Engine to delete an entry from a
 // pool's Access Control List.
 func (svc *mgmtSvc) PoolDeleteACL(ctx context.Context, req *mgmtpb.DeleteACLReq) (*mgmtpb.ACLResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
