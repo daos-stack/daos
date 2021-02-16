@@ -2,15 +2,15 @@
 #Default scaling factor as percentage.
 [scale]
 all=15
-bw=25
-tp=25
-min=25
-max=25
-med25=25
-med50=25
-med75=25
-sd=30
-av=20
+bw=45
+tp=45
+min=45
+max=45
+med25=45
+med50=45
+med75=45
+sd=40
+av=40
 
 0:0-*:*-av=20
 0:0-0:0-av=20
