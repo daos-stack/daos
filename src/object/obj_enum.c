@@ -1339,6 +1339,11 @@ obj_enum_iterate(daos_key_desc_t *kdss, d_sg_list_t *sgl, int nr,
 
 		sgl_test_forward(sgl, &sgl_idx, kds->kd_key_len);
 		ptr = sgl_indexed_byte(sgl, &sgl_idx);
+		D_ASSERTF(ptr != NULL, "sgl.iovs: %d/%d, sgl_idx: %d, "
+				       "kds->kd_key_len: %lu, "
+				       "kds->kd_val_type: %d",
+			  sgl->sg_nr_out, sgl->sg_nr, sgl_idx.iov_idx,
+			  kds->kd_key_len, kds->kd_val_type);
 
 		D_DEBUG(DB_REBUILD, "process %d type %d ptr %p len "DF_U64
 			" total %zd\n", i, kds->kd_val_type, ptr,
