@@ -505,6 +505,85 @@ String quick_build_deps(String distro, always=false) {
               returnStdout: true)
 }
 
+
+Map build_axes = [
+  COMPILER: ['gcc', 'clang'],
+  DISTRO: ['centos.7', 'centos.8']
+]
+
+@NonCPS
+List getBuildAxes(Map build_axes) {
+  List axes = []
+  build_axes.each { axis, values ->
+    List axisList = []
+    values.each { value ->
+      axisList << [(axis): value]
+    }
+    axes << axisList
+  }
+  axes.combinations()*.sum()
+}
+
+List axes = getBuildAxes(matrix_axes).findAll { axis ->
+    response.every { key, choice ->
+      choice == axis[key]
+    }
+}
+
+Map build_tasks[failFast: false]
+
+build_tasks['one'] = {
+    stage {
+      when {
+         beforeAgent true
+      }
+      agent {
+         dockerfile {
+           filename 'utils/docker/Dockerfile.${DISTRO}'
+           label 'docker_runner'
+           additionalBuildArgs dockerBuildArgs(cachebust: false) +
+                               " -t ${sanitized_JOB_NAME}-${DISTRO} "
+         }
+       }
+         sconsBuild parallel_build: true,
+                    scons_args: scons_faults_args() + " PREFIX=/opt/daos TARGET_TYPE=release",
+                    build_deps: "no"
+      }
+  }
+
+
+for (int i = 0 ; i < axes.size(); i++) {
+
+  Map axis = axes[i]
+  List axisEnv = asix.collect { k, v ->
+    "${k}=${v}"
+  }
+  tasks[axisEnv.join(', ')] = { ->
+    node {
+       withEnv(axisEnv) {
+    stage {
+      when {
+         beforeAgent true
+      }
+      agent {
+         dockerfile {
+           filename 'utils/docker/Dockerfile.${DISTRO}'
+           label 'docker_runner'
+           additionalBuildArgs dockerBuildArgs(cachebust: false) +
+                               " -t ${sanitized_JOB_NAME}-${DISTRO} "
+         }
+       }
+       steps {
+         sconsBuild parallel_build: true,
+                    scons_args: scons_faults_args() + " PREFIX=/opt/daos TARGET_TYPE=release",
+                    build_deps: "no"
+         }
+      }
+      }
+  }
+  }
+}
+
 pipeline {
     agent { label 'lightweight' }
 
@@ -641,6 +720,9 @@ pipeline {
                 } // stage('Python Bandit check')
             }
         }
+	stage('Matrix builds') {
+	    parallel(build_tasks)
+	}
         stage('Build') {
             /* Don't use failFast here as whilst it avoids using extra resources
              * and gives faster results for PRs it's also on for master where we
