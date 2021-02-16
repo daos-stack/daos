@@ -942,6 +942,7 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 	/* Allocate working area for key.  strtok modifies working string */
 #ifdef ORIG_CODE
 	int		 size;
+
 	size = strlen(key) + 1;
 	working = (char *)malloc(size);
 	if (working == NULL) {
@@ -951,7 +952,7 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 	working[size - 1] = '\0';
 
 #else
-	D_STRNDUP(working, key, sizeof(key));
+	D_STRNDUP(working, key, (size_t)strlen(key));
 #endif
 
 	/*
