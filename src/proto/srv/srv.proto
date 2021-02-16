@@ -14,9 +14,9 @@ option go_package = "github.com/daos-stack/daos/src/control/common/proto/srv";
 message NotifyReadyReq {
 	string uri = 1; // CaRT URI
 	uint32 nctxs = 2; // Number of CaRT contexts
-	string drpcListenerSock = 3; // Path to IO server's dRPC listener socket
-	uint32 instanceIdx = 4; // IO server instance index
-	uint32 ntgts = 5; // number of VOS targets allocated in IO server
+	string drpcListenerSock = 3; // Path to I/O Engine's dRPC listener socket
+	uint32 instanceIdx = 4; // I/O Engine instance index
+	uint32 ntgts = 5; // number of VOS targets allocated in I/O Engine
 }
 
 // NotifyReadyResp is nil.
@@ -26,8 +26,8 @@ message BioErrorReq {
 	bool readErr = 2; // read I/O error
 	bool writeErr = 3; // write I/O error
 	int32 tgtId = 4;  // VOS target ID
-	uint32 instanceIdx = 5; // IO server instance index
-	string drpcListenerSock = 6; // Path to IO server's dRPC listener socket
+	uint32 instanceIdx = 5; // I/O Engine instance index
+	string drpcListenerSock = 6; // Path to I/O Engine's dRPC listener socket
 	string uri = 7; // CaRT URI
 }
 
