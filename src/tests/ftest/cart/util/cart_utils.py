@@ -142,19 +142,19 @@ class CartUtils():
         ofi_share_addr = None
 
         if "D_LOG_MASK" in os.environ:
-            log_mask = os.environ["D_LOG_MASK"]
+            log_mask = os.environ.get("D_LOG_MASK")
 
         if "CRT_PHY_ADDR_STR" in os.environ:
-            self.provider = os.environ["CRT_PHY_ADDR_STR"]
+            self.provider = os.environ.get("CRT_PHY_ADDR_STR")
 
         if "OFI_INTERFACE" in os.environ:
-            ofi_interface = os.environ["OFI_INTERFACE"]
+            ofi_interface = os.environ.get("OFI_INTERFACE")
 
         if "OFI_DOMAIN" in os.environ:
-            ofi_domain = os.environ["OFI_DOMAIN"]
+            ofi_domain = os.environ.get("OFI_DOMAIN")
 
         if "CRT_CTX_SHARE_ADDR" in os.environ:
-            ofi_share_addr = os.environ["CRT_CTX_SHARE_ADDR"]
+            ofi_share_addr = os.environ.get("CRT_CTX_SHARE_ADDR")
 
         # Do not use the standard .log file extension, otherwise it'll get
         # removed (cleaned up for disk space savings) before we can archive it.

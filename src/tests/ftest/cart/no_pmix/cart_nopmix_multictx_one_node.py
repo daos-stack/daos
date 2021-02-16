@@ -44,10 +44,10 @@ class CartNoPmixOneNodeTest(TestWithoutServers):
         :avocado: tags=all,cart,pr,daily_regression,no_pmix,one_node
         """
 
-        crt_phy_addr = os.environ["CRT_PHY_ADDR_STR"]
-        ofi_interface = os.environ["OFI_INTERFACE"]
-        ofi_ctx_num = os.environ["CRT_CTX_NUM"]
-        ofi_share_addr = os.environ["CRT_CTX_SHARE_ADDR"]
+        crt_phy_addr = os.environ.get("CRT_PHY_ADDR_STR")
+        ofi_interface = os.environ.get("OFI_INTERFACE")
+        ofi_ctx_num = os.environ.get("CRT_CTX_NUM")
+        ofi_share_addr = os.environ.get("CRT_CTX_SHARE_ADDR")
 
         self.pass_env = {"CRT_PHY_ADDR_STR": crt_phy_addr,
                          "OFI_INTERFACE": ofi_interface,

@@ -47,9 +47,9 @@ class CartNoPmixLauncherOneNodeTest(TestWithoutServers):
         cli_arg = self.params.get("test_clients_arg", '/run/tests/*/')
         cli_ppn = self.params.get("test_clients_ppn", '/run/tests/*/')
 
-        log_mask = os.environ["D_LOG_MASK"]
-        crt_phy_addr = os.environ["CRT_PHY_ADDR_STR"]
-        ofi_interface = os.environ["OFI_INTERFACE"]
+        log_mask = os.environ.get("D_LOG_MASK")
+        crt_phy_addr = os.environ.get("CRT_PHY_ADDR_STR")
+        ofi_interface = os.environ.get("OFI_INTERFACE")
 
         srv_cmd = self.utils.build_cmd(self, self.env, "test_servers")
 
