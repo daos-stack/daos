@@ -1,4 +1,4 @@
-#!/usr/bin/python2 -u
+#!/usr/bin/python -u
 """
   (C) Copyright 2018-2021 Intel Corporation.
 
