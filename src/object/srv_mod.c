@@ -91,7 +91,8 @@ obj_tls_init(int xs_id, int tgt_id)
 		snprintf(path, sizeof(path), "io/%u/ops/%s/latency_us", tgt_id,
 			 obj_opc_to_str(opc));
 		rc = d_tm_add_metric(&tls->ot_op_lat[opc], path,
-				     D_TM_DURATION|D_TM_CLOCK_REALTIME, "", "");
+				     D_TM_DURATION | D_TM_CLOCK_REALTIME, "",
+				     "");
 		if (rc)
 			D_WARN("Failed to create latency sensor: "DF_RC"\n",
 			       DP_RC(rc));

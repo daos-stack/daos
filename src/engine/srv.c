@@ -341,10 +341,10 @@ dss_srv_handler(void *arg)
 	/* initialize xstream-local storage */
 	if (dx->dx_xs_id < dss_sys_xs_nr) {
 		/** system xstream, only need MD and NET */
-		rc = DAOS_MD_TAG|DAOS_NET_TAG;
+		rc = DAOS_MD_TAG | DAOS_NET_TAG;
 	} else if (dx->dx_main_xs) {
 		/** target xstream, only need IO and NET */
-		rc = DAOS_IO_TAG|DAOS_MD_TAG|DAOS_NET_TAG;
+		rc = DAOS_IO_TAG | DAOS_MD_TAG | DAOS_NET_TAG;
 	} else {
 		/** offload xstream, only need NET */
 		rc = DAOS_NET_TAG;
@@ -974,7 +974,7 @@ dss_srv_tls_fini(void *data)
 }
 
 struct dss_module_key daos_srv_modkey = {
-	.dmk_tags = DAOS_MD_TAG|DAOS_IO_TAG|DAOS_NET_TAG,
+	.dmk_tags = DAOS_MD_TAG | DAOS_IO_TAG | DAOS_NET_TAG,
 	.dmk_index = -1,
 	.dmk_init = dss_srv_tls_init,
 	.dmk_fini = dss_srv_tls_fini,

@@ -2174,7 +2174,7 @@ static struct daos_rpc_handler rebuild_handlers[] = {
 #undef X
 
 struct dss_module_key rebuild_module_key = {
-	.dmk_tags = DAOS_MD_TAG|DAOS_IO_TAG,
+	.dmk_tags = DAOS_MD_TAG | DAOS_IO_TAG,
 	.dmk_index = -1,
 	.dmk_init = rebuild_tls_init,
 	.dmk_fini = rebuild_tls_fini,

@@ -483,13 +483,10 @@ dss_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 static int
 server_init(int argc, char *argv[])
 {
-	static struct d_tm_node_t	*started_ts;
-	static struct d_tm_node_t	*servicing_ts;
-	static struct d_tm_node_t	*rank;
-	uint64_t			 bound;
-	int64_t				 diff;
-	unsigned int			 ctx_nr;
-	int				 rc;
+	uint64_t	bound;
+	int64_t		diff;
+	unsigned int	ctx_nr;
+	int		rc;
 
 	bound = crt_hlc_epsilon_get_bound(crt_hlc_get());
 
@@ -503,7 +500,7 @@ server_init(int argc, char *argv[])
 		goto exit_debug_init;
 
 	/** Report timestamp when engine was started */
-	d_tm_record_timestamp(&started_ts, "started_at", NULL);
+	d_tm_record_timestamp(NULL, "started_at", NULL);
 
 	rc = register_dbtree_classes();
 	if (rc != 0)
@@ -643,15 +640,10 @@ server_init(int argc, char *argv[])
 	D_INFO("Service fully up\n");
 
 	/** Report timestamp when engine was open for business */
-	d_tm_record_timestamp(&servicing_ts, "servicing_at", NULL);
+	d_tm_record_timestamp(NULL, "servicing_at", NULL);
 
-	/** XXX: need a function to set initial counter value */
-	{
-		int i;
-
-		for (i = 0; i < dss_self_rank(); i++)
-			d_tm_increment_counter(&rank, "rank", NULL);
-	}
+	/** Report rank */
+	d_tm_set_gauge(NULL, dss_self_rank(), "rank", NULL);
 
 	D_PRINT("DAOS I/O Engine (v%s) process %u started on rank %u "
 		"with %u target, %d helper XS, firstcore %d, host %s.\n",

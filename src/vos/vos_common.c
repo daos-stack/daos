@@ -392,7 +392,7 @@ failed:
 }
 
 struct dss_module_key vos_module_key = {
-	.dmk_tags = DAOS_MD_TAG|DAOS_IO_TAG,
+	.dmk_tags = DAOS_MD_TAG | DAOS_IO_TAG,
 	.dmk_index = -1,
 	.dmk_init = vos_tls_init,
 	.dmk_fini = vos_tls_fini,

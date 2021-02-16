@@ -53,13 +53,13 @@
 		ds_obj_rw_handler, NULL, "fetch")			\
 	X(DAOS_OBJ_DKEY_RPC_ENUMERATE,					\
 		0, &CQF_obj_key_enum,					\
-		ds_obj_enum_handler, NULL, "dkey_enum") 		\
+		ds_obj_enum_handler, NULL, "dkey_enum")			\
 	X(DAOS_OBJ_AKEY_RPC_ENUMERATE,					\
 		0, &CQF_obj_key_enum,					\
-		ds_obj_enum_handler, NULL, "akey_enum") 		\
+		ds_obj_enum_handler, NULL, "akey_enum")			\
 	X(DAOS_OBJ_RECX_RPC_ENUMERATE,					\
 		0, &CQF_obj_key_enum,					\
-		ds_obj_enum_handler, NULL, "recx_enum") 		\
+		ds_obj_enum_handler, NULL, "recx_enum")			\
 	X(DAOS_OBJ_RPC_ENUMERATE,					\
 		0, &CQF_obj_key_enum,					\
 		ds_obj_enum_handler, NULL, "obj_enum")			\
