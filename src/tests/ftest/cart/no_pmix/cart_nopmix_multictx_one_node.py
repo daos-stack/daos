@@ -38,6 +38,7 @@ class CartNoPmixOneNodeTest(TestWithoutServers):
                          "OFI_INTERFACE": ofi_interface,
                          "CRT_CTX_SHARE_ADDR": ofi_share_addr,
                          "CRT_CTX_NUM": ofi_ctx_num}
+        super(CartNoPmixOneNodeTest, self).setUp()
 
     def tearDown(self):
         """ Tear down """
