@@ -37,7 +37,7 @@ const (
 	errInsufNrIfaces     = "insufficient matching %s network interfaces, want %d got %d %v"
 	errInsufNrPMemGroups = "insufficient number of pmem device numa groups %v, want %d got %d"
 	errInvalNrEngines    = "unexpected number of engines requested, want %d got %d"
-	errInsufNrSSDs       = "insufficient number of nvme devices for numa %d, want %d got %d"
+	errInsufNrSSDs       = "insufficient number of ssds for numa %d, want %d got %d"
 	errInvalNrCores      = "invalid number of cores for numa %d"
 )
 
