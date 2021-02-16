@@ -128,6 +128,8 @@ post_provision_config_nodes() {
         dump_repos
         exit "$rc"
     fi
+    dnf -y $dnf_repo_args install python3
+
     if [ ! -e /usr/bin/pip3 ] &&
        [ -e /usr/bin/pip3.6 ]; then
         ln -s pip3.6 /usr/bin/pip3

@@ -1,4 +1,4 @@
-#!/usr/bin/python -u
+#!/usr/bin/python3 -u
 """
   (C) Copyright 2018-2021 Intel Corporation.
 
@@ -262,7 +262,8 @@ def run_command(cmd):
     """
     print("Running {}".format(" ".join(cmd)))
     process = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        universal_newlines=True)
     stdout, _ = process.communicate()
     retcode = process.poll()
     if retcode:
@@ -366,13 +367,14 @@ def check_remote_output(task, command):
         output_data = list(task.iter_buffers(results[code]))
         if not output_data:
             output_data = [["<NONE>", results[code]]]
-
         for output, o_hosts in output_data:
             n_set = NodeSet.fromlist(o_hosts)
-            lines = str(output).splitlines()
+            lines = list(output.splitlines())
             if len(lines) > 1:
                 print("    {}: rc={}, output:".format(n_set, code))
                 for number, line in enumerate(lines):
+                    if isinstance(line, bytes):
+                        line = line.decode("utf-8")
                     try:
                         print("      {}".format(line))
                     except IOError:
