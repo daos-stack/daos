@@ -130,9 +130,9 @@ class DaosServerTest(TestWithServers):
         (2)Use the cmd line to perform a controlled shutdown from a
            partially quiescent state (i.e. clients attached but no
            transactions in progress).
-        (3)Force shutdown and restart the daos io-server.
+        (3)Force shutdown and restart the daos engine.
         (4)Verify pool list after forced shutdown and restart the
-           daos io-server.
+           daos engine.
         (5)Use the cmd line to perform a controlled shutdown when the
            daos cluster is incomplete (i.e. 1 of the 2 servers is down).
 
@@ -141,24 +141,24 @@ class DaosServerTest(TestWithServers):
         """
 
         self.log.info(
-            "(1)Shutdown and restart the daos io-server "
+            "(1)Shutdown and restart the daos engine "
             "from a quiescent state.")
         self.agent_managers[0].stop()
         self.verify_pool_list()
         self.restart_engine()
         self.agent_managers[0].start()
         self.log.info(
-            "(2)Shutdown and restart the daos io-server with pools "
+            "(2)Shutdown and restart the daos engine with pools "
             "and containers created.")
         self.create_pool_and_container()
         pool_list = self.get_pool_list()
         self.restart_engine()
         self.log.info(
-            "(3)Force shutdown and restart the daos io-server.")
+            "(3)Force shutdown and restart the daos engine.")
         self.restart_engine()
         self.log.info(
             "(4)Verify pool list after forced shutdown and restart "
-            "the daos io-server.")
+            "the daos engine.")
         self.verify_pool_list(pool_list)
         hosts = self.hostlist_servers
         self.hostlist_servers = hosts[-1]
