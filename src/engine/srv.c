@@ -29,7 +29,7 @@
 
 /**
  * DAOS server threading model:
- * 1) a set of "target XS (xstream) set" per server (dss_tgt_nr)
+ * 1) a set of "target XS (xstream) set" per engine (dss_tgt_nr)
  * There is a "-c" option of daos_server to set the number.
  * For DAOS pool, one target XS set per VOS target to avoid extra lock when
  * accessing VOS file.
@@ -51,7 +51,7 @@
  *		Acceleration of EC/checksum/compress (on 2nd offload XS if
  *		dss_tgt_offload_xs_nr is 2, or on 1st offload XS).
  *
- * 2) one "system XS set" per server (dss_sys_xs_nr)
+ * 2) one "system XS set" per engine (dss_sys_xs_nr)
  * The system XS set (now only one - the XS 0) is for some system level tasks:
  *	RPC server for:
  *		drpc listener,
@@ -72,7 +72,7 @@
 #define DRPC_XS_NR	(1)
 /** Number of offload XS */
 unsigned int	dss_tgt_offload_xs_nr;
-/** Number of target (XS set) per server */
+/** Number of target (XS set) per engine */
 unsigned int	dss_tgt_nr;
 /** Number of system XS */
 unsigned int	dss_sys_xs_nr = DAOS_TGT0_OFFSET + DRPC_XS_NR;
