@@ -94,6 +94,7 @@ dss_self_rank(void)
 
 	rc = crt_group_rank(NULL /* grp */, &rank);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
+
 	return rank;
 }
 
@@ -459,7 +460,8 @@ static void
 dss_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		 enum crt_event_type type, void *arg)
 {
-	static struct d_tm_node_t	*dead_rank_ctr;
+	static struct d_tm_node_t	*dead_rank_cnt;
+	static struct d_tm_node_t	*last_ts;
 	int				 rc = 0;
 
 	/* We only care about dead ranks for now */
@@ -469,8 +471,8 @@ dss_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		return;
 	}
 
-	d_tm_increment_counter(&dead_rank_ctr, "cart",
-			       "swim_rank_dead_events", NULL);
+	d_tm_increment_counter(&dead_rank_cnt, "events/dead_rank_cnt", NULL);
+	d_tm_record_timestamp(&last_ts, "events/last_event_ts", NULL);
 
 	rc = ds_notify_swim_rank_dead(rank);
 	if (rc)
@@ -481,8 +483,9 @@ dss_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 static int
 server_init(int argc, char *argv[])
 {
-	static struct d_tm_node_t	*startup_dur;
 	static struct d_tm_node_t	*started_ts;
+	static struct d_tm_node_t	*servicing_ts;
+	static struct d_tm_node_t	*rank;
 	uint64_t			 bound;
 	int64_t				 diff;
 	unsigned int			 ctx_nr;
@@ -499,8 +502,8 @@ server_init(int argc, char *argv[])
 	if (rc != 0)
 		goto exit_debug_init;
 
-	d_tm_mark_duration_start(&startup_dur, D_TM_CLOCK_REALTIME,
-				 "server", "startup_duration", NULL);
+	/** Report timestamp when engine was started */
+	d_tm_record_timestamp(&started_ts, "started_at", NULL);
 
 	rc = register_dbtree_classes();
 	if (rc != 0)
@@ -639,11 +642,16 @@ server_init(int argc, char *argv[])
 	dss_xstreams_open_barrier();
 	D_INFO("Service fully up\n");
 
-	d_tm_mark_duration_end(&startup_dur, NULL);
+	/** Report timestamp when engine was open for business */
+	d_tm_record_timestamp(&servicing_ts, "servicing_at", NULL);
 
-	d_tm_record_timestamp(&started_ts, "server", "started_at", NULL);
+	/** XXX: need a function to set initial counter value */
+	{
+		int i;
 
-	d_tm_set_gauge(NULL, dss_self_rank(), "server", "rank", NULL);
+		for (i = 0; i < dss_self_rank(); i++)
+			d_tm_increment_counter(&rank, "rank", NULL);
+	}
 
 	D_PRINT("DAOS I/O Engine (v%s) process %u started on rank %u "
 		"with %u target, %d helper XS, firstcore %d, host %s.\n",

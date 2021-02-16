@@ -321,8 +321,7 @@ cancel:
  */
 
 static void
-vos_tls_fini(const struct dss_thread_local_storage *dtls,
-	     struct dss_module_key *key, void *data)
+vos_tls_fini(void *data)
 {
 	struct vos_tls *tls = data;
 
@@ -342,8 +341,7 @@ vos_tls_fini(const struct dss_thread_local_storage *dtls,
 }
 
 static void *
-vos_tls_init(const struct dss_thread_local_storage *dtls,
-	     struct dss_module_key *key)
+vos_tls_init(int xs_id, int tgt_id)
 {
 	struct vos_tls *tls;
 	int rc;
@@ -389,12 +387,12 @@ vos_tls_init(const struct dss_thread_local_storage *dtls,
 
 	return tls;
 failed:
-	vos_tls_fini(dtls, key, tls);
+	vos_tls_fini(tls);
 	return NULL;
 }
 
 struct dss_module_key vos_module_key = {
-	.dmk_tags = DAOS_SERVER_TAG,
+	.dmk_tags = DAOS_MD_TAG|DAOS_IO_TAG,
 	.dmk_index = -1,
 	.dmk_init = vos_tls_init,
 	.dmk_fini = vos_tls_fini,
@@ -508,7 +506,7 @@ vos_self_fini_locked(void)
 	vos_db_fini();
 
 	if (self_mode.self_tls) {
-		vos_tls_fini(NULL, NULL, self_mode.self_tls);
+		vos_tls_fini(self_mode.self_tls);
 		self_mode.self_tls = NULL;
 	}
 	ABT_finalize();
@@ -553,7 +551,7 @@ vos_self_init(const char *db_path)
 	vos_start_epoch = 0;
 
 #if VOS_STANDALONE
-	self_mode.self_tls = vos_tls_init(NULL, NULL);
+	self_mode.self_tls = vos_tls_init(0, 0);
 	if (!self_mode.self_tls) {
 		ABT_finalize();
 		D_MUTEX_UNLOCK(&self_mode.self_lock);

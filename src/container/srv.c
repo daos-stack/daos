@@ -87,8 +87,7 @@ static struct daos_rpc_handler cont_handlers[] = {
 #undef X
 
 static void *
-dsm_tls_init(const struct dss_thread_local_storage *dtls,
-	     struct dss_module_key *key)
+dsm_tls_init(int xs_id, int tgt_id)
 {
 	struct dsm_tls *tls;
 	int		rc;
@@ -118,8 +117,7 @@ dsm_tls_init(const struct dss_thread_local_storage *dtls,
 }
 
 static void
-dsm_tls_fini(const struct dss_thread_local_storage *dtls,
-	     struct dss_module_key *key, void *data)
+dsm_tls_fini(void *data)
 {
 	struct dsm_tls *tls = data;
 
@@ -129,7 +127,7 @@ dsm_tls_fini(const struct dss_thread_local_storage *dtls,
 }
 
 struct dss_module_key cont_module_key = {
-	.dmk_tags = DAOS_SERVER_TAG,
+	.dmk_tags = DAOS_MD_TAG,
 	.dmk_index = -1,
 	.dmk_init = dsm_tls_init,
 	.dmk_fini = dsm_tls_fini,

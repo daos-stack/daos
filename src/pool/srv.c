@@ -117,8 +117,7 @@ static struct daos_rpc_handler pool_handlers[] = {
 #undef X
 
 static void *
-pool_tls_init(const struct dss_thread_local_storage *dtls,
-	      struct dss_module_key *key)
+pool_tls_init(int xs_id, int tgt_id)
 {
 	struct pool_tls *tls;
 
@@ -131,8 +130,7 @@ pool_tls_init(const struct dss_thread_local_storage *dtls,
 }
 
 static void
-pool_tls_fini(const struct dss_thread_local_storage *dtls,
-	      struct dss_module_key *key, void *data)
+pool_tls_fini(void *data)
 {
 	struct pool_tls		*tls = data;
 	struct ds_pool_child	*child;
@@ -151,7 +149,7 @@ pool_tls_fini(const struct dss_thread_local_storage *dtls,
 }
 
 struct dss_module_key pool_module_key = {
-	.dmk_tags = DAOS_SERVER_TAG,
+	.dmk_tags = DAOS_MD_TAG,
 	.dmk_index = -1,
 	.dmk_init = pool_tls_init,
 	.dmk_fini = pool_tls_fini,

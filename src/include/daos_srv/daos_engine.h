@@ -67,11 +67,15 @@ struct dss_thread_local_storage {
 };
 
 enum dss_module_tag {
-	/* Server tag */
-	DAOS_SERVER_TAG	= 1 << 0,
+	/** metadata-related */
+	DAOS_MD_TAG	= 1 << 0,
+	/** I/O-related */
+	DAOS_IO_TAG	= 1 << 1,
+	/** Network-related */
+	DAOS_NET_TAG	= 1 << 2,
 };
 
-/* The module key descriptor for each server thread */
+/* The module key descriptor for each xstream */
 struct dss_module_key {
 	/* Indicate where the keys should be instantiated */
 	enum dss_module_tag dmk_tags;
@@ -79,12 +83,10 @@ struct dss_module_key {
 	/* The position inside the dss_module_keys */
 	int dmk_index;
 	/* init keys for context */
-	void  *(*dmk_init)(const struct dss_thread_local_storage *dtls,
-			   struct dss_module_key *key);
+	void  *(*dmk_init)(int xs_id, int tgt_id);
 
 	/* fini keys for context */
-	void  (*dmk_fini)(const struct dss_thread_local_storage *dtls,
-			  struct dss_module_key *key, void *data);
+	void  (*dmk_fini)(void *data);
 };
 
 extern pthread_key_t dss_tls_key;
