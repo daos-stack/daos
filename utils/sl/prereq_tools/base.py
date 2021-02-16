@@ -817,7 +817,7 @@ class PreReqComponent():
             self.__env.Replace(**args)
 
         if compiler == 'covc':
-            covfile = self.__top_dir + "/test.cov"
+            covfile = self.__top_dir + "/install/lib/daos/TESTING/test.cov"
             if os.path.isfile(covfile):
                 os.remove(covfile)
             commands = ['$COV01 -1', '$COV01 -s']
