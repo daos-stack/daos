@@ -145,6 +145,13 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 		{Provider: "ofi+sockets", Device: "eth0", Numanode: 0, Priority: 15, Netdevclass: 1},
 	}
 	typicalFabIfs := &ctlpb.NetworkScanResp{Interfaces: typIfs, Numacount: 2, Corespernuma: 24}
+	sinIbIfs := []*ctlpb.FabricInterface{
+		{Provider: "ofi+psm2", Device: "ib0", Numanode: 0, Priority: 0, Netdevclass: 32},
+		{Provider: "ofi+sockets", Device: "ib0", Numanode: 0, Priority: 1, Netdevclass: 32},
+		{Provider: "ofi+sockets", Device: "eth0", Numanode: 0, Priority: 2, Netdevclass: 1},
+		{Provider: "ofi+sockets", Device: "eth1", Numanode: 1, Priority: 3, Netdevclass: 1},
+	}
+	sinIbFabIfs := &ctlpb.NetworkScanResp{Interfaces: sinIbIfs, Numacount: 2, Corespernuma: 24}
 	dualHostResp := func(r1, r2 *ctlpb.NetworkScanResp) []*HostResponse {
 		return []*HostResponse{
 			{
@@ -279,6 +286,11 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 			accessPoints:    []string{"hostX"},
 			hostResponses:   dualHostRespSame(typicalFabIfs),
 			expIfs:          []*HostFabricInterface{ib0r, ib1r},
+			expCoresPerNuma: 24,
+		},
+		"dual engine single ib dual eth": {
+			hostResponses:   dualHostRespSame(sinIbFabIfs),
+			expIfs:          []*HostFabricInterface{eth0, eth1},
 			expCoresPerNuma: 24,
 		},
 	} {
