@@ -27,15 +27,15 @@ jobs:
                           --build-arg DAOS_DEPS_BUILD=no
     - name: Build dependencies in Docker
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
-                          --build-arg DEPS_JOBS=10 --build-arg DAOS_BUILD=no
-    - name: Build Docker image with ${{ matrix.compiler }}
+                          --build-arg DEPS_JOBS=8 --build-arg DAOS_BUILD=no
+    - name: Build DAOS in Docker image with ${{ matrix.compiler }}
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg COMPILER=${{ matrix.compiler }}
-                          --build-arg DEPS_JOBS=10 --build-arg DAOS_JAVA_BUILD=no
-    - name: Build Java in Docker image with ${{ matrix.compiler }}
+                          --build-arg DEPS_JOBS=8 --build-arg DAOS_JAVA_BUILD=no
+    - name: Build DAOS Java client in Docker image with ${{ matrix.compiler }}
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg COMPILER=${{ matrix.compiler }}
-                          --build-arg DEPS_JOBS=10
+                          --build-arg DEPS_JOBS=8
 
   Spelling:
     runs-on: ubuntu-20.04
