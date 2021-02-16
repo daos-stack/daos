@@ -299,6 +299,9 @@ class DaosServer():
         self.conf = conf
         self.valgrind = valgrind
         self._agent = None
+        self.max_start_time = 30
+        self.max_stop_time = 5
+        self.stop_sleep_time = 0.5
         self.control_log = tempfile.NamedTemporaryFile(prefix='dnt_control_',
                                                        suffix='.log',
                                                        delete=False)
@@ -342,8 +345,6 @@ class DaosServer():
             desired_states = [desired_states]
 
         rc = self.run_dmg(['system', 'query', '--json'])
-        print(rc)
-        print(rc.stdout)
         if rc.returncode == 0:
             data = json.loads(rc.stdout.decode('utf-8'))
             members = data['response']['members']
@@ -418,6 +419,9 @@ class DaosServer():
                 os.path.join(self.conf['PREFIX'], 'bin'), server_env['PATH'])
             server_env['PATH'] = '{}:{}'.format(self._io_server_dir.name,
                                                 server_env['PATH'])
+            self.max_start_time = 300
+            self.max_stop_time = 60
+            self.stop_sleep_time = 10
 
         cmd = [daos_server, '--config={}'.format(self._yaml_file.name),
                'start', '-t' '4', '--insecure', '-d', self.agent_dir]
@@ -450,7 +454,6 @@ class DaosServer():
         # /mnt/daos is mounted but empty.  It will be remounted and formatted
         # /mnt/daos exists and has data in.  It will be used as is.
         start = time.time()
-        max_start_time = 300
 
         cmd = ['storage', 'format']
         while True:
@@ -470,7 +473,7 @@ class DaosServer():
                         ready = True
             if ready:
                 break
-            self._check_timing("format", start, max_start_time)
+            self._check_timing("format", start, self.max_start_time)
         print('Format completion in {:.2f} seconds'.format(time.time() - start))
 
         # How wait until the system is up, basically the format to happen.
@@ -478,7 +481,7 @@ class DaosServer():
             time.sleep(0.5)
             if self._check_system_state(['ready', 'joined']):
                 break
-            self._check_timing("start", start, max_start_time)
+            self._check_timing("start", start, self.max_start_time)
         print('Server started in {:.2f} seconds'.format(time.time() - start))
 
     def stop(self, wf):
@@ -535,18 +538,16 @@ class DaosServer():
         assert rc.returncode == 0 # nosec
 
         start = time.time()
-        max_stop_time = 5
         while True:
-            time.sleep(10)
+            time.sleep(self.stop_sleep_time)
             if self._check_system_state(['stopped', 'errored']):
                 break
             try:
-                self._check_timing("stop", start, max_stop_time)
+                self._check_timing("stop", start, self.max_stop_time)
             except NLTestTimeout as e:
                 print('Failed to stop: {}'.format(e))
-                if time.time() - start > 60:
-                    log_test(self.conf, self.server_log.name)
-                    raise
+                log_test(self.conf, self.server_log.name)
+                raise
         print('Server stopped in {:.2f} seconds'.format(time.time() - start))
 
         self._sp.send_signal(signal.SIGTERM)
@@ -2403,6 +2404,7 @@ def main():
         description='Run DAOS client on local node')
     parser.add_argument('--server-debug', default=None)
     parser.add_argument('--dfuse-debug', default=None)
+    parser.add_argument('--server-valgrind', action='store_true')
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
     parser.add_argument('--max-log-size', default=None)
@@ -2466,15 +2468,11 @@ def main():
             fatal_errors.add_result(run_posix_tests(server, conf))
         else:
             fatal_errors.add_result(run_posix_tests(server, conf, args.test))
-    elif args.mode != 'server-valgrind':
+    else:
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
         fatal_errors.add_result(run_posix_tests(server, conf))
         fatal_errors.add_result(set_server_fi(server))
-
-    pools = get_pool_list()
-    while len(pools) < 1:
-        pools = make_pool(server)
 
     if server.stop(wf_server) != 0:
         fatal_errors.fail()
@@ -2482,7 +2480,7 @@ def main():
     # If running all tests then restart the server under valgrind.
     # This is really, really slow so just do list-containers, then
     # exit again.
-    if args.mode == 'server-valgrind':
+    if args.server_valgrind:
         server = DaosServer(conf, valgrind=True)
         server.start()
         pools = get_pool_list()
