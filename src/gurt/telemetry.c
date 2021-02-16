@@ -2378,7 +2378,7 @@ d_tm_get_shared_memory(int srv_idx)
 		return NULL;
 
 	addr = shmat(shmid, NULL, 0);
-	if (addr == (void *) -1)
+	if (addr == (void *)-1)
 		return NULL;
 	return addr;
 }
