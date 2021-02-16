@@ -9,7 +9,7 @@ storage hardware provisioning and would typically be run from a login
 node.
 
 After `daos_server` instances have been started on each storage node
-for the first time, `dmg storage prepare` will set DCPM storage into the
+for the first time, `dmg storage prepare` will set PMem storage into the
 necessary state for use with DAOS.
 Then `dmg storage format` formats persistent storage devices
 (specified in the server configuration file) on the storage nodes
@@ -67,7 +67,7 @@ available at
 
 The location of this configuration file is determined by first checking
 for the path specified through the -o option of the `daos_server` command
-line. Otherwise, /etc/daos/daos_server.yml is used.
+line, if unspecified then `/etc/daos/daos_server.yml` is used.
 
 Refer to the example configuration file ([daos_server.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml))
 for latest information and examples.
@@ -361,30 +361,31 @@ storage nodes via the dmg utility.
 
 ### SCM Preparation
 
-This section addresses how to verify that Optane DC Persistent Memory
-Module (DCPMM) is correctly installed on the storage nodes, and how to configure
-it in Appdirect interleaved mode to be used by DAOS.
+This section addresses how to verify that PMem (Intel(R) Optane(TM) persistent
+memory) modules are correctly installed on the storage nodes and how to
+configure in interleaved mode to be used by DAOS.
 Instructions for other types of SCM may be covered in the future.
 
-Provisioning the SCM occurs by configuring DCPM modules in AppDirect memory regions
-(interleaved mode) in groups of modules local to a specific socket (NUMA), and
-resultant nvdimm namespaces are defined by a device identifier (e.g., /dev/pmem0).
+Provisioning the SCM occurs by configuring PMem modules in interleaved memory
+regions (interleaved mode) in groups of modules local to a specific socket
+(NUMA), and resultant nvdimm namespaces are defined by a device identifier
+(e.g., /dev/pmem0).
 
-DCPM preparation is required once per DAOS installation and
+PMem preparation is required once per DAOS installation and
 requires the DAOS Control Servers to be running as root.
 
-This step requires a reboot to enable DCPM resource allocation
+This step requires a reboot to enable PMem resource allocation
 changes to be read by BIOS.
 
-DCPM preparation can be performed from the management tool
+PMem preparation can be performed from the management tool
 `dmg storage prepare --scm-only` or using the Control Server directly
 `sudo daos_server storage prepare --scm-only`.
 
-The first time the command is run, the SCM AppDirect regions will be created as
-resource allocations on any available DCPM modules (one region per NUMA
+The first time the command is run, the SCM interleaved regions will be created
+as resource allocations on any available PMem modules (one region per NUMA
 node/socket). The regions are activated after BIOS reads the new resource
-allocations, and after initial completion the command prints a
-message to ask for a reboot (the command will not initiate reboot itself).
+allocations, and after initial completion the command prints a message to ask
+for a reboot (the command will not initiate reboot itself).
 
 After running the command a reboot will be required, then the Control
 Servers will then need to be started again and the command run for a
@@ -419,7 +420,7 @@ otherwise unused.
 A reboot is required to process new memory allocation goals.
 ```
 
-Example output from the subsequent call (SCM modules configured to AppDirect
+Example output from the subsequent call (SCM modules configured to interleaved
 mode, and host rebooted):
 
 ```bash
@@ -432,7 +433,7 @@ Persistent memory kernel devices:
 [{UUID:5d2f2517-9217-4d7d-9c32-70731c9ac11e Blockdev:pmem1 Dev:namespace1.0 NumaNode:1} {UUID:2bfe6c40-f79a-4b8e-bddf-ba81d4427b9b Blockdev:pmem0 Dev:namespace0.0 NumaNode:0}]
 ```
 
-Upon successful creation of the pmem devices, DCPMM is properly configured and
+Upon successful creation of the pmem devices, PMemM is properly configured and
 one can move on to the next step.
 
 If required, the pmem devices can be destroyed via the --reset option:
@@ -614,7 +615,7 @@ a single DAOS I/O instance where possible.
 [more details](#server-configuration)
 
 - `bdev_list` should be populated with NVMe PCI addresses
-- `scm_list` should be populated with DCPM interleaved set namespaces
+- `scm_list` should be populated with PMem interleaved set namespaces
 (e.g. `/dev/pmem1`)
 - DAOS Control Servers will need to be restarted on all hosts after
 updates to the server configuration file.
@@ -838,7 +839,7 @@ This remote call will trigger the formatting of the locally attached storage on
 the host for use with DAOS using the parameters defined in the server config file.
 
 `dmg -i -l <host>[,...] storage format` will normally be run on a login
-node specifying a hostlist (`-l <host>[,...]`) of storage nodes with SCM/DCPM
+node specifying a hostlist (`-l <host>[,...]`) of storage nodes with SCM/PMem
 modules and NVMe SSDs installed and prepared.
 
 Upon successful format, DAOS Control Servers will start DAOS IO
@@ -849,11 +850,11 @@ Successful start-up is indicated by the following on stdout:
 
 ### SCM Format
 
-When the command is run, the pmem kernel devices created on SCM/DCPM regions are
+When the command is run, the pmem kernel devices created on SCM/PMem regions are
 formatted and mounted based on the parameters provided in the server config file.
 
 - `scm_mount` specifies the location of the mountpoint to create.
-- `scm_class` can be set to `ram` to use a tmpfs in the situation that no SCM/DCPM
+- `scm_class` can be set to `ram` to use a tmpfs in the situation that no SCM/PMem
 is available (`scm_size` dictates the size of tmpfs in GB), when set to `dcpm` the device
 specified under `scm_list` will be mounted at `scm_mount` path.
 
