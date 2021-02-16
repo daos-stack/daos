@@ -286,12 +286,6 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	if (access(g_opt.app_to_exec, F_OK) == -1) {
-		fprintf(stderr, "ERROR: Unable to locate '%s'\n",
-			g_opt.app_to_exec);
-		return -1;
-	}
-
 	/*
 	 * Using MPI negotiate ranks between each process and retrieve
 	 * URI.
@@ -350,7 +344,12 @@ exit:
 
 	if (rc == 0) {
 		/* Exec passed application with rest of arguments */
-		execve(g_opt.app_to_exec, &argv[g_opt.app_args_indx], environ);
+		rc = execve(g_opt.app_to_exec, &argv[g_opt.app_args_indx], environ);
+		if (rc == -1)
+		  D_ERROR("execve('%s') failed: %s; rc=%d\n",
+			  g_opt.app_to_exec,
+			  strerror(errno),
+			  rc);
 	}
 
 	return 0;
