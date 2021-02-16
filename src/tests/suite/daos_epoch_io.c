@@ -1541,7 +1541,7 @@ epoch_io_predefined(void **state)
 				      test_io_conf, rc);
 		else
 			print_message("io_conf %s succeed.\n", test_io_conf);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		return;
 	}
 
@@ -1555,7 +1555,7 @@ epoch_io_predefined(void **state)
 		else
 			print_message("io_conf %s succeed.\n",
 				     predefined_io_confs[i]);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		test_eio_arg_oplist_free(arg);
 	}
 }

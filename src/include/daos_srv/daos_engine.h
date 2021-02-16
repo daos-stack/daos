@@ -26,7 +26,7 @@
 #include <cart/iv.h>
 #include <daos/checksum.h>
 
-/** number of target (XS set) per server */
+/** number of target (XS set) per engine */
 extern unsigned int	 dss_tgt_nr;
 
 /** Storage path (hack) */
@@ -44,7 +44,7 @@ extern int		 dss_nvme_shm_id;
 /** NVMe mem_size for SPDK memory allocation when using primary mode */
 extern int		 dss_nvme_mem_size;
 
-/** IO server instance index */
+/** I/O Engine instance index */
 extern unsigned int	 dss_instance_idx;
 
 /**
@@ -225,7 +225,7 @@ dss_current_xstream(void)
 /**
  * Any dss_module that accepts dRPC communications over the Unix Domain Socket
  * must provide one or more dRPC handler functions. The handler is used by the
- * I/O server to multiplex incoming dRPC messages for processing.
+ * I/O Engine to multiplex incoming dRPC messages for processing.
  *
  * The dRPC messaging module ID is different from the dss_module's ID. A
  * dss_module may handle more than one dRPC module ID.

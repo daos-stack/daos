@@ -486,7 +486,14 @@ out:
 void
 pl_map_disconnect(uuid_t uuid)
 {
-	d_list_t        *link;
+	d_list_t *link;
+
+	/*
+	 * FIXME: DAOS-6763 Check if pl_htable is already finalized.
+	 * It can be called from ds_pool_hdl_hash_fini() after pl_fini().
+	 */
+	if (pl_htable.ht_ops == NULL)
+		return;
 
 	D_RWLOCK_WRLOCK(&pl_rwlock);
 	link = d_hash_rec_find(&pl_htable, uuid, sizeof(uuid_t));
