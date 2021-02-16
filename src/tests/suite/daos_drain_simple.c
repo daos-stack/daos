@@ -176,11 +176,11 @@ drain_snap_update_recs(void **state)
 
 	for (i = 0; i < 5; i++) {
 		rc = daos_obj_verify(arg->coh, oid, snap_epoch[i]);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	ioreq_fini(&req);
 
@@ -227,11 +227,11 @@ drain_snap_punch_recs(void **state)
 
 	for (i = 0; i < 5; i++) {
 		rc = daos_obj_verify(arg->coh, oid, snap_epoch[i]);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	ioreq_fini(&req);
 

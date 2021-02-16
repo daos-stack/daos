@@ -229,9 +229,9 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithEngines(
 			engine.NewConfig().
 				WithRank(0).
-				WithTargetCount(20).
-				WithHelperStreamCount(20).
-				WithServiceThreadCore(1).
+				WithTargetCount(16).
+				WithHelperStreamCount(6).
+				WithServiceThreadCore(0).
 				WithScmMountPoint("/mnt/daos/1").
 				WithScmClass("ram").
 				WithScmRamdiskSize(16).
@@ -245,8 +245,8 @@ func TestServerConfig_Constructed(t *testing.T) {
 				WithLogMask("WARN"),
 			engine.NewConfig().
 				WithRank(1).
-				WithTargetCount(20).
-				WithHelperStreamCount(20).
+				WithTargetCount(16).
+				WithHelperStreamCount(6).
 				WithServiceThreadCore(22).
 				WithScmMountPoint("/mnt/daos/2").
 				WithScmClass("dcpm").

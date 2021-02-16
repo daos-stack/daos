@@ -211,7 +211,7 @@ func makeDrpcCall(ctx context.Context, log logging.Logger, client drpc.DomainSoc
 			return nil, errors.Wrap(err, "build drpc call")
 		}
 
-		// Forward the request to the I/O server via dRPC
+		// Forward the request to the I/O Engine via dRPC
 		if err = client.Connect(); err != nil {
 			if te, ok := errors.Cause(err).(interface{ Temporary() bool }); ok {
 				if !te.Temporary() {
@@ -223,7 +223,7 @@ func makeDrpcCall(ctx context.Context, log logging.Logger, client drpc.DomainSoc
 		defer client.Close()
 
 		if drpcResp, err = client.SendMsg(drpcCall); err != nil {
-			return nil, errors.Wrap(err, "send message")
+			return nil, errors.Wrapf(err, "failed to send %dB message", proto.Size(msg))
 		}
 
 		if err = checkDrpcResponse(drpcResp); err != nil {
