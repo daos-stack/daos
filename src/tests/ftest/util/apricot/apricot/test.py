@@ -353,17 +353,17 @@ class TestWithoutServers(Test):
         self.test_log.daos_log = self.d_log
 
         # import and set env vars from yaml file
-        defaultENV = self.params.get("default", "/run/ENV/")
-        if defaultENV is None:
-            print("defaultENV was not set in yaml file.\n")
+        default_env = self.params.get("default", "/run/ENV/")
+        if default_env is None:
+            print("default_env was not set in yaml file.\n")
             return
 
-        for kv_pair in defaultENV:
+        for kv_pair in default_env:
             key, value = kv_pair[0]
             print("Adding {}={} to environment.\n".format(key, value))
             os.environ[key] = value
 
-        # For compatibility with cart tests, whch set env vars in oretrun
+        # For compatibility with cart tests, which set env vars in oretrun
         # command via -x options
         self.env = os.environ
 
@@ -396,12 +396,12 @@ class TestWithoutServers(Test):
 
     def unset_other_env_vars(self):
         """ import env vars from other_env_var param """
-        defaultENV = self.params.get("default", "/run/ENV/")
-        if defaultENV is None:
-            print("defaultENV was not set in yaml file.\n")
+        default_env = self.params.get("default", "/run/ENV/")
+        if default_env is None:
+            print("default_env was not set in yaml file.\n")
             return
 
-        for kv_pair in defaultENV:
+        for kv_pair in default_env:
             key = kv_pair[0][0]
             print("Removing key {} from environment.\n".format(key))
             del os.environ[key]

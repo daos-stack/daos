@@ -135,10 +135,10 @@ class CartUtils():
                                 test_name + "_" + env_CCSA + "_cart.log")
 
         # Default env vars for orterun to None
-        log_mask       = None
-        self.provider  = None
-        ofi_interface  = None
-        ofi_domain     = None
+        log_mask = None
+        self.provider = None
+        ofi_interface = None
+        ofi_domain = None
         ofi_share_addr = None
 
         if "D_LOG_MASK" in os.environ:
