@@ -149,15 +149,24 @@ func getNetworkSet(ctx context.Context, log logging.Logger, hostList []string, c
 	return networkSet, nil, nil
 }
 
-type (
-	// numaNetIfaceMap is an alias for a map of NUMA node ID to optimal
-	// fabric network interface.
-	numaNetIfaceMap map[int]*HostFabricInterface
+// numaNetIfaceMap is an alias for a map of NUMA node ID to optimal
+// fabric network interface.
+type numaNetIfaceMap map[int]*HostFabricInterface
 
-	// classInterfaces is an alias for a map of netdev class ID to slice of
-	// fabric network interfaces.
-	classInterfaces map[uint32]numaNetIfaceMap
-)
+// hasNUMAs returns true if interfaces exist for given NUMA node range.
+func (nnim numaNetIfaceMap) hasNUMAs(numaCount int) bool {
+	for nn := 0; nn < numaCount; nn++ {
+		if _, exists := nnim[nn]; !exists {
+			return false
+		}
+	}
+
+	return true
+}
+
+// classInterfaces is an alias for a map of netdev class ID to slice of
+// fabric network interfaces.
+type classInterfaces map[uint32]numaNetIfaceMap
 
 // add network device to bucket corresponding to provider, network class type and
 // NUMA node binding. Ignore add if there is an existing entry as the interfaces
@@ -181,7 +190,7 @@ func (cis classInterfaces) add(log logging.Logger, iface *HostFabricInterface) {
 //
 // Returns when network devices matching criteria have been found for each
 // required NUMA node.
-func parseInterfaces(log logging.Logger, reqClass uint32, numEngines int, interfaces []*HostFabricInterface) (numaNetIfaceMap, bool) {
+func parseInterfaces(log logging.Logger, reqClass uint32, engineCount int, interfaces []*HostFabricInterface) (numaNetIfaceMap, bool) {
 	// sort network interfaces by priority to get best available
 	sort.Slice(interfaces, func(i, j int) bool {
 		return interfaces[i].Priority < interfaces[j].Priority
@@ -209,7 +218,7 @@ func parseInterfaces(log logging.Logger, reqClass uint32, numEngines int, interf
 		buckets[iface.Provider].add(log, iface)
 		matches = buckets[iface.Provider][iface.NetDevClass]
 
-		if len(matches) == numEngines {
+		if matches.hasNUMAs(engineCount) {
 			return matches, true
 		}
 	}
@@ -219,20 +228,20 @@ func parseInterfaces(log logging.Logger, reqClass uint32, numEngines int, interf
 
 // getNetIfaces scans fabric network devices and returns a NUMA keyed map for a
 // provider/class combination.
-func getNetIfaces(log logging.Logger, reqClass uint32, numEngines int, hfs *HostFabricSet) (numaNetIfaceMap, error) {
+func getNetIfaces(log logging.Logger, reqClass uint32, engineCount int, hfs *HostFabricSet) (numaNetIfaceMap, error) {
 	switch reqClass {
 	case NetDevAny, nd.Ether, nd.Infiniband:
 	default:
 		return nil, errors.Errorf(errUnsupNetDevClass, nd.DevClassName(reqClass))
 	}
 
-	matchIfaces, complete := parseInterfaces(log, reqClass, numEngines, hfs.HostFabric.Interfaces)
+	matchIfaces, complete := parseInterfaces(log, reqClass, engineCount, hfs.HostFabric.Interfaces)
 	if !complete {
 		class := "best-available"
 		if reqClass != NetDevAny {
 			class = nd.DevClassName(reqClass)
 		}
-		return nil, errors.Errorf(errInsufNrIfaces, class, numEngines, len(matchIfaces),
+		return nil, errors.Errorf(errInsufNrIfaces, class, engineCount, len(matchIfaces),
 			matchIfaces)
 	}
 

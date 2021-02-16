@@ -50,6 +50,12 @@ var (
 	ib1 = &HostFabricInterface{
 		Provider: "ofi+psm2", Device: "ib1", NumaNode: 1, NetDevClass: 32, Priority: 1,
 	}
+	ib0r = &HostFabricInterface{
+		Provider: "ofi+psm2", Device: "ib0", NumaNode: 0, NetDevClass: 32, Priority: 1,
+	}
+	ib1r = &HostFabricInterface{
+		Provider: "ofi+psm2", Device: "ib1", NumaNode: 1, NetDevClass: 32, Priority: 0,
+	}
 	eth0 = &HostFabricInterface{
 		Provider: "ofi+sockets", Device: "eth0", NumaNode: 0, NetDevClass: 1, Priority: 2,
 	}
@@ -121,21 +127,21 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 		{Addr: "host2", Error: errors.New("remote failed"), Message: fabIfs1},
 	}
 	typIfs := []*ctlpb.FabricInterface{
-		{Provider: "ofi+psm2", Device: "ib0", Numanode: 0, Priority: 0, Netdevclass: 32},
-		{Provider: "ofi+psm2", Device: "ib1", Numanode: 1, Priority: 1, Netdevclass: 32},
-		{Provider: "ofi+verbs;ofi_rxm", Device: "ib0", Numanode: 0, Priority: 2, Netdevclass: 32},
-		{Provider: "ofi+verbs;ofi_rxm", Device: "ib1", Numanode: 1, Priority: 3, Netdevclass: 32},
+		{Provider: "ofi+psm2", Device: "ib1", Numanode: 1, Priority: 0, Netdevclass: 32},
+		{Provider: "ofi+psm2", Device: "ib0", Numanode: 0, Priority: 1, Netdevclass: 32},
+		{Provider: "ofi+verbs;ofi_rxm", Device: "ib1", Numanode: 1, Priority: 2, Netdevclass: 32},
+		{Provider: "ofi+verbs;ofi_rxm", Device: "ib0", Numanode: 0, Priority: 3, Netdevclass: 32},
 		{Provider: "ofi+verbs;ofi_rxm", Device: "eth0", Numanode: 0, Priority: 4, Netdevclass: 1},
-		{Provider: "ofi+tcp;ofi_rxm", Device: "ib0", Numanode: 0, Priority: 5, Netdevclass: 32},
-		{Provider: "ofi+tcp;ofi_rxm", Device: "ib1", Numanode: 1, Priority: 6, Netdevclass: 32},
+		{Provider: "ofi+tcp;ofi_rxm", Device: "ib1", Numanode: 1, Priority: 5, Netdevclass: 32},
+		{Provider: "ofi+tcp;ofi_rxm", Device: "ib0", Numanode: 0, Priority: 6, Netdevclass: 32},
 		{Provider: "ofi+tcp;ofi_rxm", Device: "eth0", Numanode: 0, Priority: 7, Netdevclass: 1},
-		{Provider: "ofi+verbs", Device: "ib0", Numanode: 0, Priority: 8, Netdevclass: 32},
-		{Provider: "ofi+verbs", Device: "ib1", Numanode: 1, Priority: 9, Netdevclass: 32},
-		{Provider: "ofi+tcp", Device: "ib0", Numanode: 0, Priority: 10, Netdevclass: 32},
-		{Provider: "ofi+tcp", Device: "ib1", Numanode: 1, Priority: 11, Netdevclass: 32},
+		{Provider: "ofi+verbs", Device: "ib1", Numanode: 1, Priority: 8, Netdevclass: 32},
+		{Provider: "ofi+verbs", Device: "ib0", Numanode: 0, Priority: 9, Netdevclass: 32},
+		{Provider: "ofi+tcp", Device: "ib1", Numanode: 1, Priority: 10, Netdevclass: 32},
+		{Provider: "ofi+tcp", Device: "ib0", Numanode: 0, Priority: 11, Netdevclass: 32},
 		{Provider: "ofi+tcp", Device: "eth0", Numanode: 0, Priority: 12, Netdevclass: 1},
-		{Provider: "ofi+sockets", Device: "ib0", Numanode: 0, Priority: 13, Netdevclass: 32},
-		{Provider: "ofi+sockets", Device: "ib1", Numanode: 1, Priority: 14, Netdevclass: 32},
+		{Provider: "ofi+sockets", Device: "ib1", Numanode: 1, Priority: 13, Netdevclass: 32},
+		{Provider: "ofi+sockets", Device: "ib0", Numanode: 0, Priority: 14, Netdevclass: 32},
 		{Provider: "ofi+sockets", Device: "eth0", Numanode: 0, Priority: 15, Netdevclass: 1},
 	}
 	typicalFabIfs := &ctlpb.NetworkScanResp{Interfaces: typIfs, Numacount: 2, Corespernuma: 24}
@@ -263,10 +269,16 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 			expErr: errors.Errorf(errInsufNrIfaces, "best-available", 4, 2,
 				numaNetIfaceMap{0: ib0, 1: ib1}),
 		},
+		"single engine with typical fabric scan output": {
+			engineCount:     1,
+			hostResponses:   dualHostRespSame(typicalFabIfs),
+			expIfs:          []*HostFabricInterface{ib0r, ib1r},
+			expCoresPerNuma: 24,
+		},
 		"engine count unset and dual numa with typical fabric scan output and access points": {
 			accessPoints:    []string{"hostX"},
 			hostResponses:   dualHostRespSame(typicalFabIfs),
-			expIfs:          []*HostFabricInterface{ib0, ib1},
+			expIfs:          []*HostFabricInterface{ib0r, ib1r},
 			expCoresPerNuma: 24,
 		},
 	} {
