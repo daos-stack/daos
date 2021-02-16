@@ -85,6 +85,12 @@ obj_tls_init(int xs_id, int tgt_id)
 	if (tls == NULL)
 		return NULL;
 
+	D_INIT_LIST_HEAD(&tls->ot_pool_list);
+
+	if (tgt_id < 0)
+		/** skip sensor setup on system xstream */
+		return tls;
+
 	/** register different per-opcode sensors */
 	for (opc = 0; opc < OBJ_PROTO_CLI_COUNT; opc++) {
 		/** Start with latency, of type duration */
@@ -134,7 +140,6 @@ obj_tls_init(int xs_id, int tgt_id)
 		D_WARN("Failed to create resent cnt sensor: "DF_RC"\n",
 		       DP_RC(rc));
 
-	D_INIT_LIST_HEAD(&tls->ot_pool_list);
 	return tls;
 }
 
@@ -155,7 +160,11 @@ obj_tls_fini(void *data)
 }
 
 struct dss_module_key obj_module_key = {
-	.dmk_tags = DAOS_IO_TAG,
+	/**
+	 * XXX should only be DAOS_IO_TAG, but srv_migrate uses
+	 * object TLS on system xstream.
+	 */
+	.dmk_tags = DAOS_MD_TAG | DAOS_IO_TAG,
 	.dmk_index = -1,
 	.dmk_init = obj_tls_init,
 	.dmk_fini = obj_tls_fini,
