@@ -1851,8 +1851,8 @@ def main():
     args.test_clients = NodeSet(args.test_clients)
 
     # debug - python directory
-    ls_command = ["ls -la /usr/bin/"]
-    rpm_command = ["rpm -qa"]
+    ls_command = ["ls", "-la", "/usr/bin/"]
+    rpm_command = ["rpm", "-qa"]
     print(get_output(ls_command, check=False))
     print(get_output(rpm_command, check=False))
 
