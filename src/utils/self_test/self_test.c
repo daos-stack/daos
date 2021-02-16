@@ -533,6 +533,7 @@ static void print_results(struct st_latency *latencies,
 	char		 kname[3 * MASTER_VALUE_SIZE];
 	char		 new_key_name[2 * MASTER_VALUE_SIZE];
 	char		 master[MASTER_VALUE_SIZE];
+	int64_t		 size_per_request;
 
 	/* Check for bugs */
 	D_ASSERT(latencies != NULL);
@@ -547,9 +548,10 @@ static void print_results(struct st_latency *latencies,
 	/* Compute the throughput in RPCs/sec */
 	throughput = test_params->rep_count /
 		(test_duration_ns / 1000000000.0F);
+
 	/* Compute bandwidth in bytes */
-	bandwidth = throughput * (test_params->send_size +
-				  test_params->reply_size);
+	size_per_request = test_params->send_size + test_params->reply_size;
+	bandwidth = throughput * size_per_request;
 
 	/* Print the results for this size */
 	if (output_megabits)
@@ -561,10 +563,10 @@ static void print_results(struct st_latency *latencies,
 
 	printf("\tRPC Throughput (RPCs/sec): %.0f\n", throughput);
 
-	snprintf(new_key_name, sizeof(new_key_name), "%s-*:*-bw", master);
+	snprintf(new_key_name, sizeof(new_key_name), "%s-@:*-bw", master);
 	ConfigAddInt(Ocfg, section_name, new_key_name,
 		     bandwidth / (1024.0F * 1024.0F));
-	snprintf(new_key_name, sizeof(new_key_name), "%s-*:*-tp", master);
+	snprintf(new_key_name, sizeof(new_key_name), "%s-@:*-tp", master);
 	ConfigAddInt(Ocfg, section_name, new_key_name, throughput);
 
 #undef PRINT_ALL
@@ -656,22 +658,22 @@ static void print_results(struct st_latency *latencies,
 	       latency_max / 1000,
 	       latency_avg / 1000, latency_std_dev / 1000);
 
-	snprintf(new_key_name, sizeof(new_key_name), "%s-*:*-min", master);
+	snprintf(new_key_name, sizeof(new_key_name), "%s-@:*-min", master);
 	ConfigAddInt(Ocfg, section_name, new_key_name, latency_min / 1000);
-	snprintf(new_key_name, sizeof(new_key_name), "%s-*:*-med25", master);
+	snprintf(new_key_name, sizeof(new_key_name), "%s-@:*-med25", master);
 	ConfigAddInt(Ocfg, section_name, new_key_name, latency_med25 / 1000);
 
-	snprintf(new_key_name, sizeof(new_key_name), "%s-*:*-med50", master);
+	snprintf(new_key_name, sizeof(new_key_name), "%s-@:*-med50", master);
 	ConfigAddInt(Ocfg, section_name, new_key_name, latency_med50 / 1000);
-	snprintf(new_key_name, sizeof(new_key_name), "%s-*:*-med75", master);
+	snprintf(new_key_name, sizeof(new_key_name), "%s-@:*-med75", master);
 	ConfigAddInt(Ocfg, section_name, new_key_name, latency_med75 / 1000);
 
-	snprintf(new_key_name, sizeof(new_key_name), "%s-*:*-max", master);
+	snprintf(new_key_name, sizeof(new_key_name), "%s-@:*-max", master);
 	ConfigAddInt(Ocfg, section_name, new_key_name, latency_max / 1000);
-	snprintf(new_key_name, sizeof(new_key_name), "%s-*:*-av", master);
+	snprintf(new_key_name, sizeof(new_key_name), "%s-@:*-av", master);
 	ConfigAddInt(Ocfg, section_name, new_key_name, latency_avg / 1000);
 
-	snprintf(new_key_name, sizeof(new_key_name), "%s-*:*-sd", master);
+	snprintf(new_key_name, sizeof(new_key_name), "%s-@:*-sd", master);
 	ConfigAddInt(Ocfg, section_name, new_key_name, latency_std_dev / 1000);
 
 	/* Print error summary results */
@@ -743,14 +745,36 @@ static void print_results(struct st_latency *latencies,
 					  "\t\t\t");
 		}
 
+		/* 
+ 		 * Throughput and bandwidth calculations.
+ 		 * scale = 1000000000;
+ 		 * total_time = (num_used * average);
+ 		 * tp = (num_used / ( total_time/ scale)
+ 		 *    = (num_used / (( num_used * average) / scale))
+ 		 *    = scale / average;
+ 		 * bw = tp * size_per_request
+ 		 * WARNING: this evaluation of tp was a factor of 10
+ 		 *          to low.  It has been increased via scaling
+ 		 *          factor.  Need to understand why.
+ 		 */
+		throughput = 10000000000.0F / latency_avg;
+		bandwidth = throughput * size_per_request /
+			    (1024.0 * 1024.0); 
+
 		snprintf(new_key_name, sizeof(new_key_name), "%s-%d:%d-",
 			 master, latencies[begin].rank,
 			 latencies[begin].tag);
+
+		snprintf(kname, sizeof(kname), "%s%s", new_key_name, "tp");
+		ConfigAddInt(Ocfg, section_name, kname, throughput);
+		snprintf(kname, sizeof(kname), "%s%s", new_key_name, "bw");
+		ConfigAddInt(Ocfg, section_name, kname, bandwidth);
 
 		snprintf(kname, sizeof(kname), "%s%s", new_key_name, "min");
 		ConfigAddInt(Ocfg, section_name, kname, latency_min / 1000);
 		snprintf(kname, sizeof(kname), "%s%s", new_key_name, "med25");
 		ConfigAddInt(Ocfg, section_name, kname, latency_med25 / 1000);
+
 		snprintf(kname, sizeof(kname), "%s%s", new_key_name, "med50");
 		ConfigAddInt(Ocfg, section_name, kname, latency_med50 / 1000);
 		snprintf(kname, sizeof(kname), "%s%s", new_key_name, "med75");
@@ -963,6 +987,7 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 	}
 
 	/*
+	 * Priority search: match master and endpoint exactly.
 	 * Search through all keys searching for a match with
 	 * master and endpoint.  First make sure this is a valid
 	 * search
@@ -1026,6 +1051,7 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 
 code_search_master:
 	/*
+	 * Priority search: match master and wild card endpoint.
 	 * Search through all keys searching for a match with master.
 	 * Assumes that the endpoint not specified.
 	 */
@@ -1053,6 +1079,7 @@ code_search_master:
 			/* search master key and compare */
 			c_master = strtok_r(id, "-", &c_endpoint);
 			c_master = strtok_r(c_master, ":", &c_tag);
+			itemp = -1;
 			if ((c_master != NULL) && isdigit(*c_master)) {
 				/* avoid checkpatch warning */
 				sscanf(c_master, "%d", &itemp);
@@ -1080,6 +1107,7 @@ code_search_master:
 
 code_search_endpoint:
 	/*
+	 * Priority search: wild card master and match endpoint.
 	 * Search through all keys searching for a match with endpoint.
 	 * Assumes that the master specified with '*'.
 	 */
