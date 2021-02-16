@@ -16,7 +16,7 @@ timeouts:
   test_container_removal_after_der_nospace: 150
 server_config:
   name: daos_server
-  servers_per_host: 2
+  engines_per_host: 2
   servers:
     0:
       targets: 8

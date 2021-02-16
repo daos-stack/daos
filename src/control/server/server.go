@@ -247,9 +247,10 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 
 	for idx, srvCfg := range cfg.Engines {
 		// Provide special handling for the ofi+verbs provider.
-		// Mercury uses the interface name such as ib0, while OFI uses the device name such as hfi1_0
-		// CaRT and Mercury will now support the new OFI_DOMAIN environment variable so that we can
-		// specify the correct device for each.
+		// Mercury uses the interface name such as ib0, while OFI uses the
+		// device name such as hfi1_0 CaRT and Mercury will now support the
+		// new OFI_DOMAIN environment variable so that we can specify the
+		// correct device for each.
 		if strings.HasPrefix(srvCfg.Fabric.Provider, "ofi+verbs") && !srvCfg.HasEnvVar("OFI_DOMAIN") {
 			deviceAlias, err := netdetect.GetDeviceAlias(netCtx, srvCfg.Fabric.Interface)
 			if err != nil {
@@ -259,11 +260,12 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 			srvCfg.WithEnvVars(envVar)
 		}
 
-		// If the configuration specifies that we should explicitly set hugepage values
-		// per instance, do it. Otherwise, let SPDK/DPDK figure it out.
+		// If the configuration specifies that we should explicitly set
+		// hugepage values per engine instance, do it. Otherwise, let
+		// SPDK/DPDK figure it out.
 		if cfg.SetHugepages {
-			// If we have multiple I/O instances with block devices, then we need to apportion
-			// the hugepage memory among the instances.
+			// If we have multiple engine instances with block devices, then
+			// apportion the hugepage memory among the instances.
 			srvCfg.Storage.Bdev.MemSize = hugePages.FreeMB() / len(cfg.Engines)
 			// reserve a little for daos_admin
 			srvCfg.Storage.Bdev.MemSize -= srvCfg.Storage.Bdev.MemSize / 16
@@ -282,7 +284,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		if err := harness.AddInstance(srv); err != nil {
 			return err
 		}
-		// Register callback to publish I/O Server process exit events.
+		// Register callback to publish I/O Engine process exit events.
 		srv.OnInstanceExit(publishInstanceExitFn(eventPubSub.Publish, hostname(), srv.Index()))
 
 		if idx == 0 {
@@ -439,8 +441,8 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	go func() {
-		// SIGKILL I/O engine immediately on exit.
-		// TODO: Re-enable attempted graceful shutdown of I/O engines.
+		// SIGKILL I/O Engine immediately on exit.
+		// TODO: Re-enable attempted graceful shutdown of I/O Engines.
 		sig := <-sigChan
 		log.Debugf("Caught signal: %s", sig)
 

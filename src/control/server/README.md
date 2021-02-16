@@ -6,20 +6,20 @@ and the `daos_server` user-facing application is implemented by the
 
 ## I/O Engine Instances
 
-DAOS I/O Server processes (`daos_engine` binary) are forked
+DAOS I/O Engine processes (`daos_engine` binary) are forked
 by the DAOS Control Server (`daos_server` binary) and perform the
 main userspace I/O operations of DAOS.
 [`instance.go`](/src/control/server/instance.go) provides the
 `EngineInstance` abstraction and relevant methods.
 
 Underlying abstractions for the control and configuration of
-the I/O Server processes are encapsulated in the
+the I/O Engine processes are encapsulated in the
 [`engine`](/src/control/server/engine) package.
 
-## I/O Server Harness
+## I/O Engine Harness
 
-DAOS I/O Server processes are managed and monitored by the DAOS
-Control Server and logically reside as members of the I/O server
+DAOS I/O Engine processes are managed and monitored by the DAOS
+Control Server and logically reside as members of the I/O Engine
 harness.
 [`harness.go`](/src/control/server/harness.go) provides the
 `EngineHarness` abstraction and relevant methods.
@@ -33,9 +33,8 @@ Engines through Unix domain sockets.
 Multiple gRPC server modules are loaded by the control server.
 Currently included modules are security and management.
 
-Control plane server (`daos_server`) instances will open a gRPC
-channel to listen for requests from control plane client
-applications.
+Control Server (`daos_server`) instances will open a gRPC channel to
+listen for requests from control plane client applications.
 
 [`server.go`](/src/control/server/server.go) contains main setup
 routines, including the establishment of the gRPC server and registering
