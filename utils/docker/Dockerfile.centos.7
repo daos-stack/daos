@@ -58,7 +58,6 @@ RUN yum clean all && \
         patchelf \
         pciutils \
         python3-pip \
-        python36-clustershell \
         python36-Cython \
         python36-devel \
         python36-distro \
@@ -99,6 +98,7 @@ RUN pip3 --no-cache-dir install --user \
     "avocado-framework<83.0" \
     "avocado-framework-plugin-result-html<83.0" \
     "avocado-framework-plugin-varianter-yaml-to-mux<83.0" \
+    clustershell \
     codespell \
     pep8 \
     pygit2 \
