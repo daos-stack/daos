@@ -745,21 +745,21 @@ static void print_results(struct st_latency *latencies,
 					  "\t\t\t");
 		}
 
-		/* 
- 		 * Throughput and bandwidth calculations.
- 		 * scale = 1000000000;
- 		 * total_time = (num_used * average);
- 		 * tp = (num_used / ( total_time/ scale)
- 		 *    = (num_used / (( num_used * average) / scale))
- 		 *    = scale / average;
- 		 * bw = tp * size_per_request
- 		 * WARNING: this evaluation of tp was a factor of 10
- 		 *          to low.  It has been increased via scaling
- 		 *          factor.  Need to understand why.
- 		 */
+		/*
+		 * Throughput and bandwidth calculations.
+		 * scale = 1000000000;
+		 * total_time = (num_used * average);
+		 * tp = (num_used / ( total_time/ scale)
+		 *    = (num_used / (( num_used * average) / scale))
+		 *    = scale / average;
+		 * bw = tp * size_per_request
+		 * WARNING: this evaluation of tp was a factor of 10
+		 *          to low.  It has been increased via scaling
+		 *          factor.  Need to understand why.
+		 */
 		throughput = 10000000000.0F / latency_avg;
 		bandwidth = throughput * size_per_request /
-			    (1024.0 * 1024.0); 
+			    (1024.0 * 1024.0);
 
 		snprintf(new_key_name, sizeof(new_key_name), "%s-%d:%d-",
 			 master, latencies[begin].rank,
@@ -902,7 +902,6 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 	char		*c_remaining = NULL;
 	char		*c_tag = NULL;
 	int		 i;
-	int		 size;
 	int		 status_size = sizeof(status) / sizeof(status_feature);
 	int		 master = -1;
 	int		 endpoint = -1;
@@ -941,6 +940,8 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 	key_name = status[i].name;
 
 	/* Allocate working area for key.  strtok modifies working string */
+#ifdef ORIG_CODE
+	int		 size;
 	size = strlen(key) + 1;
 	working = (char *)malloc(size);
 	if (working == NULL) {
@@ -948,7 +949,10 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 		goto exit_code;
 	}
 	working[size - 1] = '\0';
-	strncpy(working, key, size - 1);
+
+#else
+	D_STRNDUP(working, key, sizeof(key));
+#endif
 
 	/*
 	 * Parse string to find master and its tag.
