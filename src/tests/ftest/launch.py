@@ -1,4 +1,4 @@
-#!/usr/bin/python3 -u
+#!/usr/bin/python -u
 """
   (C) Copyright 2018-2021 Intel Corporation.
 
@@ -1826,7 +1826,9 @@ def main():
     # Convert host specifications into NodeSets
     args.test_servers = NodeSet(args.test_servers)
     args.test_clients = NodeSet(args.test_clients)
-
+    # debug - python directory
+    command = ["ls -la /usr/bin/"]
+    print(get_output(command, check=False))
     # Setup the user environment
     set_test_environment(args)
 

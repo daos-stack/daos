@@ -89,7 +89,7 @@ class ServerFillUp(IorTestBase):
             "nvme_transfer_size", '/run/ior/transfersize_blocksize/*',
             '16777216')
         #Get the number of daos_engine
-        self.engines = (self.server_managers[0].manager.job.yaml.server_params)
+        self.engines = (self.server_managers[0].manager.job.yaml.engine_params)
         self.out_queue = queue.Queue()
 
     def get_max_capacity(self, mem_size_info):
@@ -214,7 +214,7 @@ class ServerFillUp(IorTestBase):
             for engine in range(len(self.engines)):
                 tmp_disk_list = []
                 for pcmem in (self.server_managers[0].manager.job.yaml.
-                              server_params[engine].scm_list.value):
+                              engine_params[engine].scm_list.value):
                     pcmem_num = pcmem.split('/')[-1]
                     if pcmem_num in list(scm_lsblk[server].keys()):
                         tmp_disk_list.append(int(scm_lsblk[server][pcmem_num]))
@@ -246,7 +246,7 @@ class ServerFillUp(IorTestBase):
             for engine in range(len(self.engines)):
                 tmp_disk_list = []
                 for disk in (self.server_managers[0].manager.job.yaml.
-                             server_params[engine].bdev_list.value):
+                             engine_params[engine].bdev_list.value):
                     if disk in list(nvme_readlink[server].keys()):
                         size = int(nvme_lsblk[server]
                                    [nvme_readlink[server][disk]])
