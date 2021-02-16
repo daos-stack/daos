@@ -859,10 +859,15 @@ migrate_update_parity(struct migrate_one *mrone, struct ds_cont_child *ds_cont,
 			D_GOTO(out, rc);
 		}
 
+		D_ASSERTF(iod_csums == NULL, "DAOS-6811 - EC Rebuild with "
+					     "checksums is currently "
+					     "unsupported.");
+
+
 		rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
 				    mrone->mo_epoch,
 				    mrone->mo_version,
-				    0, &mrone->mo_dkey, 1, iod, NULL,
+				    0, &mrone->mo_dkey, 1, iod, iod_csums,
 				    &tmp_sgl);
 		size -= write_nr;
 		offset += write_nr;
