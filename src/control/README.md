@@ -7,7 +7,7 @@ facilitating the operation of the Data plane.
 
 The DAOS Control Plane is written in Go. It is tasked with network
 and storage hardware provisioning and allocation in addition to
-instantiation and management of the DAOS I/O Server processes that
+instantiation and management of the DAOS I/O Engine processes that
 run on the same host.
 
 ## Code Organization
