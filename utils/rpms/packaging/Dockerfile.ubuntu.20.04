@@ -12,10 +12,12 @@ ARG UID=1000
 ARG REPO_URL=""
 ARG REPO_UBUNTU_20_04=""
 
-ARG CACHEBUST=1
+ENV DEBIAN_FRONTEND noninteractive
+
+RUN apt-get update && apt-get -y upgrade && apt-get clean all
 
 # Install basic tools
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+RUN apt-get update && apt-get install -y \
             autoconf bash curl debhelper dh-make dpkg-dev doxygen gcc   \
             git git-buildpackage locales make patch pbuilder rpm wget   \
             ca-certificates scons python3-distutils pkg-config          \
@@ -25,6 +27,11 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
 RUN echo "deb [trusted=yes] ${REPO_URL}${REPO_UBUNTU_20_04} focal main" > /etc/apt/sources.list.d/daos-stack-ubuntu-stable-local.list
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
             rpmdevtools
+
+ARG CACHEBUST=1
+
+RUN apt-get update && apt-get -y upgrade && apt-get clean all
+
 
 # Add build user (to keep chrootbuild happy)
 ENV USER build

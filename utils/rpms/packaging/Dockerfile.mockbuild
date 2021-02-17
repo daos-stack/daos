@@ -5,22 +5,29 @@
 #
 
 # Pull base image
-FROM fedora:latest
+FROM fedora:31
 MAINTAINER daos-stack <daos@daos.groups.io>
 
-# use same UID as host and default value of 1000 if not specified
-ARG UID=1000
+# First do a big update, this will be cached forever.
+RUN dny -y update && dnf clean all
 
-ARG CACHEBUST=1
-
-# Install basic tools
-RUN dnf -y install mock make \
+# Then install our tools
+RUN dny -y update && dnf -y install mock make \
                    rpm-build createrepo rpmlint redhat-lsb-core git \
-                   python-srpm-macros rpmdevtools
+                   python-srpm-macros rpmdevtools && dnf clean all
+
+ARG CACHEBUST
+
+# And finally update everything.
+RUN dny -y update && dnf clean all
 
 # Add build user (to keep rpmbuild happy)
 ENV USER build
 ENV PASSWD build
+
+# use same UID as host and default value of 1000 if not specified
+ARG UID=1000
+
 RUN useradd -u $UID -ms /bin/bash $USER
 RUN echo "$USER:$PASSWD" | chpasswd
 # add the user to the mock group so it can run mock
