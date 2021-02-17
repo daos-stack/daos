@@ -13,6 +13,7 @@ class DaosCoreTestNvme(DaosCoreBase):
 
     :avocado: recursive
     """
+
     def test_daos_nvme_recovery_1(self):
         """Jira ID: DAOS-3846.
 

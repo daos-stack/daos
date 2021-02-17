@@ -39,7 +39,7 @@ class PoolDestroyWithIO(IorTestBase):
         # set params
         targets = self.params.get("targets", "/run/server_config/*/0/*")
         rank = self.params.get("rank_to_kill", "/run/testparams/*")
-        servers_per_host = self.params.get("servers_per_host",
+        engines_per_host = self.params.get("engines_per_host",
                                            "/run/server_config/*")
 
         # create pool
@@ -47,9 +47,9 @@ class PoolDestroyWithIO(IorTestBase):
 
         # make sure pool looks good before we start
         checks = {
-            "pi_nnodes": len(self.hostlist_servers) * servers_per_host,
+            "pi_nnodes": len(self.hostlist_servers) * engines_per_host,
             "pi_ntargets": len(self.hostlist_servers) * targets * \
-                servers_per_host,
+                engines_per_host,
             "pi_ndisabled": 0,
         }
         self.assertTrue(

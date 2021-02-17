@@ -22,7 +22,7 @@ import (
 
 const engineBin = "daos_engine"
 
-// Runner starts and manages an instance of a DAOS I/O Server
+// Runner starts and manages an instance of a DAOS I/O Engine
 type Runner struct {
 	Config  *Config
 	log     logging.Logger
@@ -59,9 +59,9 @@ func (r *Runner) run(ctx context.Context, args, env []string) error {
 	cmd.Env = mergeEnvVars(os.Environ(), env)
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		// I/O server should get a SIGKILL if this process dies.
+		// I/O Engine should get a SIGKILL if this process dies.
 		Pdeathsig: syscall.SIGKILL,
-		// I/O server should run with real uid/gid (drop egid).
+		// I/O Engine should run with real uid/gid (drop egid).
 		Credential: &syscall.Credential{
 			Uid:         uint32(os.Getuid()),
 			Gid:         uint32(os.Getgid()),
@@ -71,7 +71,7 @@ func (r *Runner) run(ctx context.Context, args, env []string) error {
 
 	r.log.Debugf("%s:%d args: %s", engineBin, r.Config.Index, args)
 	r.log.Debugf("%s:%d env: %s", engineBin, r.Config.Index, env)
-	r.log.Infof("Starting I/O server instance %d: %s", r.Config.Index, binPath)
+	r.log.Infof("Starting I/O Engine instance %d: %s", r.Config.Index, binPath)
 
 	if err := cmd.Start(); err != nil {
 		return errors.Wrapf(common.GetExitStatus(err),
@@ -115,7 +115,7 @@ func (r *Runner) Signal(signal os.Signal) error {
 		return nil
 	}
 
-	r.log.Debugf("Signalling I/O server instance %d (%s)", r.Config.Index, signal)
+	r.log.Debugf("Signalling I/O Engine instance %d (%s)", r.Config.Index, signal)
 
 	return r.cmd.Process.Signal(signal)
 }

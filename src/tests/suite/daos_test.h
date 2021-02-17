@@ -231,7 +231,7 @@ enum {
 		_rc = daos_eq_poll(arg->eq, 1,		\
 				  DAOS_EQ_WAIT,		\
 				  1, &evp);		\
-		assert_int_equal(_rc, 1);		\
+		assert_rc_equal(_rc, 1);		\
 		assert_ptr_equal(evp, &ev);		\
 		assert_int_equal(ev.ev_error, err);	\
 	} while (0)
@@ -291,7 +291,7 @@ async_overlap(void **state)
 static inline int
 test_case_teardown(void **state)
 {
-	assert_int_equal(daos_event_priv_reset(), 0);
+	assert_rc_equal(daos_event_priv_reset(), 0);
 	return 0;
 }
 
@@ -473,7 +473,7 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 			rc = daos_pool_local2global(*hdl, &ghdl);
 		else
 			rc = daos_cont_local2global(*hdl, &ghdl);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 
 	/** broadcast size of global handle to all peers */
@@ -494,7 +494,7 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 			rc = daos_pool_local2global(*hdl, &ghdl);
 		else
 			rc = daos_cont_local2global(*hdl, &ghdl);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		if (verbose)
 			print_message("success\n");
 	}
@@ -522,7 +522,7 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 			rc = daos_cont_global2local(poh, ghdl, hdl);
 		}
 
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		if (verbose)
 			print_message("rank %d global2local success\n", rank);
 	}
