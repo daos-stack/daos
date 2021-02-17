@@ -90,7 +90,7 @@ type Server struct {
 	// pointer to a function that validates the chosen numa node
 	validateNUMAFn networkNUMAValidation
 
-	// pointer to a function that retrieves the IO server network device class
+	// pointer to a function that retrieves the I/O Engine network device class
 	GetDeviceClassFn networkDeviceClass `yaml:"-"`
 }
 
@@ -203,7 +203,7 @@ func (c *Server) WithEngines(engineList ...*engine.Config) *Server {
 	return c
 }
 
-// WithScmMountPoint sets the SCM mountpoint for the first I/O Server.
+// WithScmMountPoint sets the SCM mountpoint for the first I/O Engine.
 //
 // Deprecated: This function exists to ease transition away from
 // specifying the SCM mountpoint via daos_server CLI flag. Future
@@ -415,10 +415,11 @@ func (c *Server) Validate(log logging.Logger) (err error) {
 	// For backwards compatibility, allow specifying "servers" rather than
 	// "engines" in the server config file.
 	if len(c.Servers) > 0 {
+		log.Info("\"servers\" server config file parameter is deprecated, use \"engines\" instead")
 		if len(c.Engines) > 0 {
 			return errors.New("cannot specify both servers and engines")
 		}
-		// replace and update config engines
+		// replace and update engine configs
 		c = c.WithEngines(c.Servers...)
 	}
 	c.Servers = nil
@@ -426,7 +427,8 @@ func (c *Server) Validate(log logging.Logger) (err error) {
 	// config without engines is valid when initially discovering hardware
 	// prior to adding per-engine sections with device allocations
 	if len(c.Engines) == 0 {
-		log.Infof("No %ss in configuration, %s starting in discovery mode", build.DataPlaneName, build.ControlPlaneName)
+		log.Infof("No %ss in configuration, %s starting in discovery mode", build.DataPlaneName,
+			build.ControlPlaneName)
 		c.Engines = nil
 		return nil
 	}
@@ -471,7 +473,7 @@ func (c *Server) Validate(log logging.Logger) (err error) {
 	for i, engine := range c.Engines {
 		engine.Fabric.Update(c.Fabric)
 		if err := engine.Validate(); err != nil {
-			return errors.Wrapf(err, "I/O server %d failed config validation", i)
+			return errors.Wrapf(err, "I/O Engine %d failed config validation", i)
 		}
 
 		err := c.validateProviderFn(netCtx, engine.Fabric.Interface, engine.Fabric.Provider)

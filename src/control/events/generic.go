@@ -15,6 +15,7 @@ import (
 // data-plane to an external consumer e.g. syslog.
 type StrInfo string
 
+// NewStrInfo returns an initialized StrInfo reference.
 func NewStrInfo(in string) *StrInfo {
 	si := StrInfo(in)
 	return &si
