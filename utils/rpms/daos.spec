@@ -170,10 +170,12 @@ This is the package needed to run a DAOS client
 Summary: The DAOS test suite
 Requires: %{name}-client = %{version}-%{release}
 %if (0%{?rhel} >= 7)
+Requires: python36
 Requires: python36-distro
 Requires: python36-tabulate
 %endif
 %if (0%{?suse_version} >= 1500)
+Requires: python3
 Requires: python3-distro
 Requires: python3-tabulate
 %endif

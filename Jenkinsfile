@@ -386,10 +386,7 @@ boolean tests_in_stage(String size) {
     }
     tags = newtags.join(" ")
     return sh(label: "Get test list for ${size}",
-              script: """hostname
-                         sudo yum install -y python36
-                         ln -s python36 /usr/bin/python3
-                         cd src/tests/ftest
+              script: """cd src/tests/ftest
                          ./launch.py --list ${tags}""",
               returnStatus: true) == 0
 }
