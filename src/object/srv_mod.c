@@ -76,8 +76,9 @@ static struct daos_rpc_handler obj_handlers[] = {
 static void *
 obj_tls_init(int xs_id, int tgt_id)
 {
-	struct obj_tls *tls;
+	struct obj_tls	*tls;
 	uint32_t	opc;
+	char		*path;
 	int		rc;
 
 	D_ALLOC_PTR(tls);
