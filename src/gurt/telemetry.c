@@ -442,15 +442,15 @@ d_tm_print_timer_snapshot(struct timespec *tms, char *name, int tm_type,
 
 	switch (tm_type) {
 	case D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_REALTIME:
-		fprintf(stream, "Timer snapshot (realtime): %s = %lds, "
+		fprintf(stream, "Timer snapshot (realtime): %s = %ld s, "
 			"%ldns\n", name, tms->tv_sec, tms->tv_nsec);
 		break;
 	case D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_PROCESS_CPUTIME:
-		fprintf(stream, "Timer snapshot (process): %s = %lds, "
+		fprintf(stream, "Timer snapshot (process): %s = %ld s, "
 			"%ldns\n", name, tms->tv_sec, tms->tv_nsec);
 		break;
 	case D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_THREAD_CPUTIME:
-		fprintf(stream, "Timer snapshot (thread): %s = %lds, "
+		fprintf(stream, "Timer snapshot (thread): %s = %ld s, "
 			"%ldns\n", name, tms->tv_sec, tms->tv_nsec);
 		break;
 	default:
@@ -474,25 +474,24 @@ void
 d_tm_print_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 		    char *name, int tm_type, FILE *stream)
 {
-	bool printStats;
+	uint64_t	us;
+	bool		printStats;
 
 	if ((tms == NULL) || (name == NULL) || (stream == NULL))
 		return;
 
 	printStats = (stats != NULL) && (stats->sample_size > 0);
+	us = (tms->tv_sec * 1000000) + (tms->tv_nsec / 1000);
 
-	switch (tm_type) {
-	case D_TM_DURATION | D_TM_CLOCK_REALTIME:
-		fprintf(stream, "Duration (realtime): %s = %.9fs",
-			name, tms->tv_sec + tms->tv_nsec / 1e9);
+	switch (tm_type & ~D_TM_DURATION) {
+	case D_TM_CLOCK_REALTIME:
+		fprintf(stream, "Duration (realtime): %s = %lu us", name, us);
 		break;
-	case D_TM_DURATION | D_TM_CLOCK_PROCESS_CPUTIME:
-		fprintf(stream, "Duration (process): %s = %.9fs",
-			name, tms->tv_sec + tms->tv_nsec / 1e9);
+	case D_TM_CLOCK_PROCESS_CPUTIME:
+		fprintf(stream, "Duration (process): %s = %lu us", name, us);
 		break;
-	case D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME:
-		fprintf(stream, "Duration (thread): %s = %.9fs",
-			name, tms->tv_sec + tms->tv_nsec / 1e9);
+	case D_TM_CLOCK_THREAD_CPUTIME:
+		fprintf(stream, "Duration (thread): %s = %lu us", name, us);
 		break;
 	default:
 		fprintf(stream, "Invalid timer duration type: 0x%x",
@@ -502,7 +501,7 @@ d_tm_print_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 	}
 
 	if (printStats)
-		D_TM_PRINT_STATS(stream, stats, float, lf);
+		d_tm_print_stats(stream, stats);
 
 	fprintf(stream, "\n");
 }
@@ -525,7 +524,7 @@ d_tm_print_gauge(uint64_t val, struct d_tm_stats_t *stats, char *name,
 	fprintf(stream, "Gauge: %s = %" PRIu64, name, val);
 
 	if ((stats != NULL) && (stats->sample_size > 0))
-		D_TM_PRINT_STATS(stream, stats, int, lu);
+		d_tm_print_stats(stream, stats);
 
 	fprintf(stream, "\n");
 }
@@ -614,6 +613,22 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 			node->dtn_type);
 		break;
 	}
+}
+
+/**
+ * Prints the \a stats to the \a stream
+ *
+ * \param[in]	stream	Identifies the output stream
+ * \param[in]	stats	Pointer to the node statistics
+ */
+void
+d_tm_print_stats(FILE *stream, struct d_tm_stats_t *stats)
+{
+	fprintf(stream, ", min: %lu, max: %lu, mean: %lf, size: %" PRIu64,
+		stats->dtm_min, stats->dtm_max, stats->mean,
+		stats->sample_size);
+	if (stats->sample_size > 2)
+		fprintf(stream, ", std dev: %lf", stats->std_dev);
 }
 
 /**
@@ -763,64 +778,68 @@ d_tm_compute_standard_dev(double sum_of_squares, uint64_t sample_size,
 }
 
 /**
- * Compute gauge statistics: sample size, min, max, sum and sum of squares.
+ * Compute statistics: sample size, min, max, sum and sum of squares.
  * Standard deviation calculation is deferred until the metric is read.
  *
- * \param[in]	node		Pointer to a gauge node
+ * \param[in]	node		Pointer to a node with stats
  */
 void
-d_tm_compute_gauge_stats(struct d_tm_node_t *node)
+d_tm_compute_stats(struct d_tm_node_t *node, uint64_t value)
 {
 	struct d_tm_stats_t	*dtm_stats;
-	uint64_t		value = 0;
 
 	dtm_stats = node->dtn_metric->dtm_stats;
 
 	if (dtm_stats == NULL)
 		return;
 
-	value = node->dtn_metric->dtm_data.value;
 	dtm_stats->sample_size++;
-	dtm_stats->dtm_sum.sum_int += value;
+	dtm_stats->dtm_sum += value;
 	dtm_stats->sum_of_squares += value * value;
 
-	if (value > dtm_stats->dtm_max.max_int)
-		dtm_stats->dtm_max.max_int = value;
+	if (value > dtm_stats->dtm_max)
+		dtm_stats->dtm_max = value;
 
-	if (value < dtm_stats->dtm_min.min_int)
-		dtm_stats->dtm_min.min_int = value;
+	if (value < dtm_stats->dtm_min)
+		dtm_stats->dtm_min = value;
 }
 
 /**
- * Compute duration statistics: sample size, min, max, sum and sum of squares.
- * Standard deviation calculation is deferred until the metric is read.
+ * Computes the histogram for this metric by finding the bucket that corresponds
+ * to the \a value given, and increments the counter for that bucket.
  *
- * \param[in]	node		Pointer to a duration node
+ * \param[in]	node		Pointer to a duration or gauge node
+ * \param[in]	value		The value that is sorted into a bucket
  */
-void
-d_tm_compute_duration_stats(struct d_tm_node_t *node)
+int
+d_tm_compute_histogram(struct d_tm_node_t *node, uint64_t value)
 {
-	struct d_tm_stats_t	*dtm_stats;
-	double			value = 0;
+	struct d_tm_histogram_t	*dtm_histogram;
+	struct d_tm_node_t	*bucket;
+	int			rc = D_TM_SUCCESS;
+	int			i;
 
-	dtm_stats = node->dtn_metric->dtm_stats;
+	if (!node)
+		return rc;
 
-	if (dtm_stats == NULL)
-		return;
+	if (!node->dtn_metric)
+		return rc;
 
-	value = node->dtn_metric->dtm_data.tms[0].tv_sec +
-		(node->dtn_metric->dtm_data.tms[0].tv_nsec / 1E9);
+	if (!node->dtn_metric->dtm_histogram)
+		return rc;
 
-	dtm_stats->sample_size++;
-	dtm_stats->dtm_sum.sum_float += value;
-	dtm_stats->sum_of_squares += value * value;
+	dtm_histogram = node->dtn_metric->dtm_histogram;
 
-	if (value > dtm_stats->dtm_max.max_float)
-		dtm_stats->dtm_max.max_float = value;
-
-	if (value < dtm_stats->dtm_min.min_float)
-		dtm_stats->dtm_min.min_float = value;
+	for (i = 0; i < dtm_histogram->dth_num_buckets; i++) {
+		if (value <= dtm_histogram->dth_buckets[i].dtb_max) {
+			bucket = dtm_histogram->dth_buckets[i].dtb_bucket;
+			rc = d_tm_increment_counter(&bucket, NULL);
+			break;
+		}
+	}
+	return rc;
 }
+
 
 /**
  * Increment the given counter
@@ -1244,8 +1263,10 @@ d_tm_mark_duration_end(struct d_tm_node_t **metric, char *item, ...)
 {
 	struct d_tm_node_t	*node = NULL;
 	struct timespec		end;
+	struct timespec		*tms;
 	char			path[D_TM_MAX_NAME_LEN] = {};
 	int			rc = D_TM_SUCCESS;
+	uint64_t		microseconds;
 
 	if (d_tm_shmem_root == NULL)
 		return -DER_UNINIT;
@@ -1287,7 +1308,13 @@ d_tm_mark_duration_end(struct d_tm_node_t **metric, char *item, ...)
 			      &end);
 		node->dtn_metric->dtm_data.tms[0] = d_timediff(
 					node->dtn_metric->dtm_data.tms[1], end);
-		d_tm_compute_duration_stats(node);
+		tms = node->dtn_metric->dtm_data.tms;
+		microseconds = (tms->tv_sec * 1000000) + (tms->tv_nsec / 1000);
+		d_tm_compute_stats(node, microseconds);
+
+		if (node->dtn_metric->dtm_histogram != NULL)
+			rc = d_tm_compute_histogram(node, microseconds);
+
 		if (node->dtn_protect)
 			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
@@ -1378,7 +1405,11 @@ d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value, char *item, ...)
 		if (node->dtn_protect)
 			D_MUTEX_LOCK(&node->dtn_lock);
 		node->dtn_metric->dtm_data.value = value;
-		d_tm_compute_gauge_stats(node);
+		d_tm_compute_stats(node, node->dtn_metric->dtm_data.value);
+
+		if (node->dtn_metric->dtm_histogram != NULL)
+			rc = d_tm_compute_histogram(node, value);
+
 		if (node->dtn_protect)
 			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
@@ -1470,7 +1501,11 @@ d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
 		if (node->dtn_protect)
 			D_MUTEX_LOCK(&node->dtn_lock);
 		node->dtn_metric->dtm_data.value += value;
-		d_tm_compute_gauge_stats(node);
+		d_tm_compute_stats(node, node->dtn_metric->dtm_data.value);
+
+		if (node->dtn_metric->dtm_histogram != NULL)
+			rc = d_tm_compute_histogram(node, value);
+
 		if (node->dtn_protect)
 			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
@@ -1562,7 +1597,11 @@ d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
 		if (node->dtn_protect)
 			D_MUTEX_LOCK(&node->dtn_lock);
 		node->dtn_metric->dtm_data.value -= value;
-		d_tm_compute_gauge_stats(node);
+		d_tm_compute_stats(node, node->dtn_metric->dtm_data.value);
+
+		if (node->dtn_metric->dtm_histogram != NULL)
+			rc = d_tm_compute_histogram(node, value);
+
 		if (node->dtn_protect)
 			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
@@ -1737,24 +1776,14 @@ d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
 	}
 
 	temp->dtn_metric->dtm_stats = NULL;
-	if (metric_type == D_TM_GAUGE) {
+	if ((metric_type == D_TM_GAUGE) || (metric_type & D_TM_DURATION)) {
 		temp->dtn_metric->dtm_stats =
 				     d_tm_shmalloc(sizeof(struct d_tm_stats_t));
 		if (temp->dtn_metric->dtm_stats == NULL) {
 			rc = -DER_NO_SHMEM;
 			goto failure;
 		}
-		temp->dtn_metric->dtm_stats->dtm_min.min_int = UINT64_MAX;
-	}
-
-	if (metric_type & D_TM_DURATION) {
-		temp->dtn_metric->dtm_stats =
-				     d_tm_shmalloc(sizeof(struct d_tm_stats_t));
-		if (temp->dtn_metric->dtm_stats == NULL) {
-			rc = -DER_NO_SHMEM;
-			goto failure;
-		}
-		temp->dtn_metric->dtm_stats->dtm_min.min_float = DBL_MAX;
+		temp->dtn_metric->dtm_stats->dtm_min = UINT64_MAX;
 	}
 
 	buff_len = strnlen(sh_desc, D_TM_MAX_SHORT_LEN);
@@ -1823,6 +1852,135 @@ failure:
 		DP_RC(rc));
 	return rc;
 }
+
+/**
+ * Creates histogram counters for the given node.  It calculates the
+ * extents of each bucket and creates counters at the path specified that
+ * correspond to each bucket required.  The name of each counter created is
+ * given by the bucket number and the range of each bucket.  The same name
+ * is stored as metadata for each counter.
+ *
+ * \param[in]	node		Pointer to a node with a metric of type duration
+ * 				or gauge
+ * \param[in]	path		Path name of the metric specified
+ * 				by \a node
+ * \param[in]	num_buckets	Specifies the number of buckets the histogram
+ * 				should have
+ * \param[in]	initial_width	The number of elements in the first bucket
+ * \param[in]	multiplier	Applied to the second .. nth bucket to
+ * 				increase the width of each successive bucket
+ * 				by this factor over the previous bucket.
+ * 				A multiplier of 1 creates equal size buckets.
+ * 				A multiplier of 2 creates buckets that are
+ * 				twice the size of the previous bucket.
+ */
+int
+d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets,
+		    int initial_width, int multiplier)
+{
+	struct d_tm_metric_t	*metric;
+	struct d_tm_bucket_t	*dth_buckets;
+	uint64_t		min = 0;
+	uint64_t		max = 0;
+	int			rc = D_TM_SUCCESS;
+	char			*meta_data;
+	char			*fullpath;
+	int			i;
+
+	if (node == NULL)
+		return -DER_INVAL;
+
+	if (path == NULL)
+		return -DER_INVAL;
+
+	if (num_buckets < 2)
+		return -DER_INVAL;
+
+	if (initial_width < 1)
+		return -DER_INVAL;
+
+	if (multiplier < 1)
+		return -DER_INVAL;
+
+	if (!((node->dtn_type == D_TM_GAUGE) ||
+	    (node->dtn_type & D_TM_DURATION)))
+		return -DER_OP_NOT_PERMITTED;
+
+	rc = D_MUTEX_LOCK(&d_tm_add_lock);
+	if (rc != 0) {
+		D_ERROR("Failed to get mutex: " DF_RC "\n", DP_RC(rc));
+		goto failure;
+	}
+
+	metric = node->dtn_metric;
+
+	metric->dtm_histogram = d_tm_shmalloc(sizeof(struct d_tm_histogram_t));
+	if (metric->dtm_histogram == NULL) {
+		D_MUTEX_UNLOCK(&d_tm_add_lock);
+		rc = -DER_NO_SHMEM;
+		goto failure;
+	}
+
+	metric->dtm_histogram->dth_num_buckets = num_buckets;
+	metric->dtm_histogram->dth_value_multiplier = multiplier;
+	metric->dtm_histogram->dth_buckets = d_tm_shmalloc(num_buckets *
+						  sizeof(struct d_tm_bucket_t));
+	if (metric->dtm_histogram->dth_buckets == NULL) {
+		D_MUTEX_UNLOCK(&d_tm_add_lock);
+		rc = -DER_NO_SHMEM;
+		goto failure;
+	}
+
+	D_MUTEX_UNLOCK(&d_tm_add_lock);
+
+	dth_buckets = metric->dtm_histogram->dth_buckets;
+
+	min = 0;
+	max = initial_width - 1;
+	for (i = 0; i < num_buckets; i++) {
+		D_ASPRINTF(meta_data, "histogram bucket %d [%lu .. %lu]",
+			   i, min, max);
+		if (meta_data == NULL) {
+			rc = -DER_NOMEM;
+			goto failure;
+		}
+
+		D_ASPRINTF(fullpath, "%s/bucket %d", path, i);
+		if (fullpath == NULL) {
+			rc = -DER_NOMEM;
+			goto failure;
+		}
+
+		dth_buckets[i].dtb_min = min;
+		dth_buckets[i].dtb_max = max;
+
+		rc = d_tm_add_metric(&dth_buckets[i].dtb_bucket, fullpath,
+				     D_TM_COUNTER, meta_data, "");
+		D_FREE(fullpath);
+		D_FREE(meta_data);
+		if (rc)
+			goto failure;
+
+		min = max + 1;
+
+		if (i == (num_buckets - 2)) {
+			max = UINT64_MAX;
+		} else if (multiplier == 1) {
+			max += initial_width;
+		} else {
+			max = (min * multiplier) - 1;
+		}
+	}
+
+	D_DEBUG(DB_TRACE, "Successfully added histogram for: [%s]\n", path);
+	return D_TM_SUCCESS;
+
+failure:
+
+	D_ERROR("Failed to histogram for [%s]: " DF_RC "\n", path, DP_RC(rc));
+	return rc;
+}
+
 
 /**
  * Client function to read the specified counter.  If the node is provided,
@@ -2000,6 +2158,7 @@ d_tm_get_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 {
 	struct d_tm_metric_t	*metric_data = NULL;
 	struct d_tm_stats_t	*dtm_stats = NULL;
+	double			sum = 0;
 
 	if (tms == NULL)
 		return -DER_INVAL;
@@ -2023,13 +2182,14 @@ d_tm_get_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 			D_MUTEX_LOCK(&node->dtn_lock);
 		tms->tv_sec = metric_data->dtm_data.tms[0].tv_sec;
 		tms->tv_nsec = metric_data->dtm_data.tms[0].tv_nsec;
-		if (stats != NULL) {
-			stats->dtm_min.min_float = dtm_stats->dtm_min.min_float;
-			stats->dtm_max.max_float = dtm_stats->dtm_max.max_float;
-			stats->dtm_sum.sum_float = dtm_stats->dtm_sum.sum_float;
-			if (dtm_stats->sample_size > 0)
-				stats->mean = dtm_stats->dtm_sum.sum_float /
-					      dtm_stats->sample_size;
+		if ((stats != NULL) && (dtm_stats != NULL)) {
+			stats->dtm_min = dtm_stats->dtm_min;
+			stats->dtm_max = dtm_stats->dtm_max;
+			stats->dtm_sum = dtm_stats->dtm_sum;
+			if (dtm_stats->sample_size > 0) {
+				sum = (double)dtm_stats->dtm_sum;
+				stats->mean = sum / dtm_stats->sample_size;
+			}
 			stats->std_dev = d_tm_compute_standard_dev(
 						      dtm_stats->sum_of_squares,
 						      dtm_stats->sample_size,
@@ -2095,12 +2255,12 @@ d_tm_get_gauge(uint64_t *val, struct d_tm_stats_t *stats, uint64_t *shmem_root,
 		if (node->dtn_protect)
 			D_MUTEX_LOCK(&node->dtn_lock);
 		*val = metric_data->dtm_data.value;
-		if (stats != NULL) {
-			stats->dtm_min.min_int = dtm_stats->dtm_min.min_int;
-			stats->dtm_max.max_int = dtm_stats->dtm_max.max_int;
-			stats->dtm_sum.sum_int = dtm_stats->dtm_sum.sum_int;
+		if ((stats != NULL) && (dtm_stats != NULL)) {
+			stats->dtm_min = dtm_stats->dtm_min;
+			stats->dtm_max = dtm_stats->dtm_max;
+			stats->dtm_sum = dtm_stats->dtm_sum;
 			if (dtm_stats->sample_size > 0) {
-				sum = (double)dtm_stats->dtm_sum.sum_int;
+				sum = (double)dtm_stats->dtm_sum;
 				stats->mean = sum / dtm_stats->sample_size;
 			}
 			stats->std_dev = d_tm_compute_standard_dev(
@@ -2367,8 +2527,9 @@ d_tm_allocate_shared_memory(int srv_idx, size_t mem_size)
 uint64_t *
 d_tm_get_shared_memory(int srv_idx)
 {
-	key_t	key;
-	int	shmid;
+	uint64_t	*addr;
+	key_t		key;
+	int		shmid;
 
 	/** create a unique key for this instance */
 	key = D_TM_SHARED_MEMORY_KEY + srv_idx;
@@ -2376,7 +2537,10 @@ d_tm_get_shared_memory(int srv_idx)
 	if (shmid < 0)
 		return NULL;
 
-	return (uint64_t *)shmat(shmid, NULL, 0);
+	addr = shmat(shmid, NULL, 0);
+	if (addr == (void *)-1)
+		return NULL;
+	return addr;
 }
 
 /**
