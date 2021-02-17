@@ -319,7 +319,7 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	obj->cob_md.omd_ver = pool_map_get_version(pool->dp_map);
+	obj->cob_md.omd_ver = dc_pool_get_version(pool);
 	rc = pl_obj_place(map, &obj->cob_md, NULL, &layout);
 	pl_map_decref(map);
 	if (rc != 0) {
