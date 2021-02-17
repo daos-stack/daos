@@ -1735,7 +1735,7 @@ obj_ioc_end(struct obj_io_context *ioc, int err)
 			/** measure latency of successful I/O only */
 			d_tm_set_gauge(&tls->ot_op_lat[opc],
 				       (daos_get_ntime() -
-				        ioc->ioc_start_time) / 1000,
+					ioc->ioc_start_time) / 1000,
 				       NULL);
 		d_tm_decrement_gauge(&tls->ot_op_active[opc], 1, NULL);
 		d_tm_increment_counter(&tls->ot_op_total[opc], NULL);
