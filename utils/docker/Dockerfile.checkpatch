@@ -5,7 +5,7 @@
 #
 
 # Pull base image
-FROM fedora:33
+FROM fedora:latest
 
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
 ARG CB0
@@ -13,14 +13,13 @@ ARG CB0
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
 # Clean up any repos afterwards to save space.
-RUN yum -y upgrade && 						\
-    yum -y install codespell diffutils file findutils git	\
+RUN dnf -y upgrade && 						\
+    dnf -y install codespell diffutils file findutils git	\
 	python3-clustershell python3-pygithub python3-numpy	\
 	python3-paramiko python3-pylint python3-pyxattr		\
 	python3-tabulate ShellCheck &&				\
     dnf -y module enable avocado:latest &&			\
     dnf -y module install avocado
-
 
 ARG UID=1000
 
