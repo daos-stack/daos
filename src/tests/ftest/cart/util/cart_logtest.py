@@ -613,15 +613,24 @@ class LogTest():
         # once this is stable.
         lost_memory = False
         if show_memleaks:
+            leaks = OrderedDict()
             for (_, line) in regions.items():
                 pointer = line.get_field(-1).rstrip('.')
                 if pointer in active_desc:
                     show_line(line, 'NORMAL', 'descriptor not freed')
                     del active_desc[pointer]
                 else:
-                    show_line(line, 'NORMAL', 'memory not freed',
-                              custom=leak_wf)
+                    parsed = line.get_anon_msg()
+                    if parsed not in leaks:
+                        leaks[parsed] = {'count': 0,
+                                         'line':line}
+                    leaks[parsed]['count'] += 1
                 lost_memory = True
+            for leak in leaks:
+                line = leaks[leak]['line']
+                bytes_lost = line.calloc_size() * leaks[leak]['count']
+                show_line(line, 'NORMAL', 'memory not freed {} bytes total'.format(bytes_lost),
+                          custom=leak_wf)
 
         if active_desc:
             for (_, line) in active_desc.items():
