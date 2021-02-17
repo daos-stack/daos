@@ -10,6 +10,7 @@ def scons():
     SConscript('dfuse/SConscript')
     SConscript('pydaos/SConscript')
     SConscript('storage_estimator/SConscript')
+    SConscript('java/SConscript')
 
 if __name__ == "SCons.Script":
     scons()
