@@ -12,13 +12,13 @@ ARG CACHEBUST
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
 # Clean up any repos afterwards to save space.
-RUN yum -y upgrade && 							\
-    yum -y install codespell file findutils git python3-clustershell	\
-	python3-pygithub python3-numpy python3-paramiko			\
-	python3-pylint python3-pyxattr python3-tabulate			\
-	ShellCheck &&							\
-    dnf -y module enable avocado:latest &&				\
-    dnf -y module install avocado &&					\
+RUN yum -y upgrade && 						\
+    yum -y install codespell diff file findutils git		\
+	python3-clustershell python3-pygithub python3-numpy	\
+	python3-paramiko python3-pylint python3-pyxattr		\
+	python3-tabulate ShellCheck &&				\
+    dnf -y module enable avocado:latest &&			\
+    dnf -y module install avocado &&				\
     yum clean all
 
 ARG UID=1000
