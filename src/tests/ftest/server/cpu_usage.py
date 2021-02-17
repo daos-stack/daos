@@ -4,20 +4,23 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import time
+
 from apricot import TestWithServers
 from general_utils import run_task
-import time
 
 
 class CPUUsage(TestWithServers):
     """Test Class Description:
-    Measure CPU usage of daos_server with target = 16 and verify that it's
+    Measure CPU usage of daos_engine with target = 16 and verify that it's
     less than 100%.
+
+    This test uses "top" command. It aggregates the CPU usage of every core.
+    e.g., If engine is using 50% per core for 8 cores, top shows 400%.
     :avocado: recursive
     """
 
     def test_cpu_usage(self):
-        # pylint: disable=pylint-bad-continuation
         """
         JIRA ID: DAOS-4826
         Test Description: Test CPU usage of formatted and idle engine.
@@ -42,20 +45,24 @@ class CPUUsage(TestWithServers):
         if not pid_found:
             self.fail("daos_engine PID couldn't be obtained!")
 
-        # Wait for CPU usage to stabilize. It usually takes a few sec.
-        time.sleep(10)
-
-        # Get (instantenious) CPU usage of the PID with top.
-        top_pid = "top -p {} -b -n 1".format(pid)
-        usage = -1
-        task = run_task(hosts=self.hostlist_servers, command=top_pid)
-        for output, _ in task.iter_buffers():
-            process_row = str(output).splitlines()[-1]
-            self.log.info("Process row = %s", process_row)
-            values = process_row.split()
-            self.log.info("Values = %s", values)
-            usage = values[8]
-            self.log.info("CPU Usage = %f", usage)
+        for _ in range(10):
+            # Get (instantaneous) CPU usage of the PID with top.
+            top_pid = "top -p {} -b -n 1".format(pid)
+            usage = -1
+            task = run_task(hosts=self.hostlist_servers, command=top_pid)
+            for output, _ in task.iter_buffers():
+                process_row = str(output).splitlines()[-1]
+                self.log.info("Process row = %s", process_row)
+                values = process_row.split()
+                self.log.info("Values = %s", values)
+                if len(values) < 9:
+                    self.fail(
+                        "{} returned invalid output!".format(top_pid))
+                usage = values[8]
+                self.log.info("CPU Usage = %s", usage)
+            if usage != -1 and float(usage) < 100:
+                break
+            time.sleep(2)
 
         self.assertTrue(
             usage != -1, "daos_engine CPU usage couldn't be obtained!")
