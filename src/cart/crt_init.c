@@ -73,7 +73,6 @@ static int data_init(int server, crt_init_options_t *opt)
 	uint32_t	mrc_enable = 0;
 	uint64_t	start_rpcid;
 	int		rc = 0;
-
 	D_DEBUG(DB_ALL, "initializing crt_gdata...\n");
 
 	dump_envariables();
@@ -82,7 +81,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	 * avoid size mis-matching between client/server side
 	 * /see crt_proc_uuid_t().
 	 */
-	D_CASSERT(sizeof(uuid_t) == 16);
+       D_CASSERT(sizeof(uuid_t) == 16);
 
 	D_INIT_LIST_HEAD(&crt_gdata.cg_ctx_list);
 
