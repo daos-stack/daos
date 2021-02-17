@@ -13,11 +13,10 @@ ARG CACHEBUST
 # that come from the core repo.
 # Clean up any repos afterwards to save space.
 RUN yum -y upgrade && 						\
-    yum -y install codespell file findutils git			\
-	python3-clustershell python3-pygithub python3-numpy	\
-	python3-paramiko python3-pylint python3-pyxattr		\
-	python3-requests python3-tabulate ShellCheck &&		\
-    yum clean all &&						\
+    yum -y install file findutils git python3-clustershell	\
+	python3-pygithub python3-numpy python3-paramiko		\
+	python3-pylint python3-pyxattr python3-tabulate		\
+	ShellCheck &&						\
     dnf -y module enable avocado:latest &&			\
     dnf -y module install avocado &&				\
     yum clean all
@@ -26,6 +25,10 @@ ARG UID=1000
 
 # Add DAOS users
 RUN useradd --uid $UID --user-group --create-home --home /home/daos daos
+
+ENV PATH=$PATH:/home/daos/.local/bin
+
+RUN pip3 --no-cache-dir --disable-pip-version-check install --user codespell
 
 WORKDIR /home/daos
 USER daos:daos
