@@ -26,9 +26,11 @@ ARG UID=1000
 # Add DAOS users
 RUN useradd --uid $UID --user-group --create-home --home /home/daos daos
 
+WORKDIR /home/daos
+USER daos:daos
+
 ENV PATH=$PATH:/home/daos/.local/bin
 
 RUN pip3 --no-cache-dir --disable-pip-version-check install --user codespell
 
-WORKDIR /home/daos
-USER daos:daos
+
