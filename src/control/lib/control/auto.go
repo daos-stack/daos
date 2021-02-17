@@ -89,12 +89,9 @@ func ConfigGenerate(ctx context.Context, req ConfigGenerateReq) (*ConfigGenerate
 		return nil, err
 	}
 
-	// TODO: change Validate() to take io.Writer
-	//	if err := cfg.Validate(&req.buf); err != nil {
-	//		return &ConfigGenerateResp{
-	//			Err: errors.Wrap(err, "validation failed on auto generated config"),
-	//		}, nil
-	//	}
+	if err := cfg.Validate(req.Log); err != nil {
+		return nil, errors.Wrap(err, "validation failed on auto generated config")
+	}
 
 	return &ConfigGenerateResp{ConfigOut: cfg}, nil
 }
