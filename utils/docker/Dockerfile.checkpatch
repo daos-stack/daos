@@ -7,7 +7,8 @@
 # Pull base image
 FROM fedora:33
 
-ARG CACHEBUST
+# Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
+ARG CB0
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
@@ -27,4 +28,9 @@ ARG UID=1000
 RUN useradd --uid $UID --user-group --create-home --home /home/daos daos
 
 WORKDIR /home/daos
+
+# Actual CACHEBUST.  Do this every time so the system is up to date.
+ARG CACHEBUST
+RUN dnf update && dnf -y upgrade && dnf clean all
+
 USER daos:daos

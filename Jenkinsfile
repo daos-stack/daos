@@ -560,9 +560,8 @@ pipeline {
                             filename 'Dockerfile.checkpatch'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(cachebust:false,
-                                                                add_repos:false) +
-                                                " --build-arg CACHEBUST=" + current_time.get(Calendar.WEEK_OF_YEAR)
+                            additionalBuildArgs dockerBuildArgs(add_repos:false) +
+                                                " --pull --build-arg CB0=" + current_time.get(Calendar.WEEK_OF_YEAR)
                         }
                     }
                     steps {
