@@ -55,6 +55,7 @@ COPY utils/sl utils/sl
 COPY utils/build.config utils/
 RUN chown -R daos_server.daos_server /home/daos
 USER daos_server:daos_server
+RUN ln -s utils/sl site_scons
 
 # Control what to build.  By default Dockerfiles build everything to allow for
 # ease-of-use for users, however in CI everything is turned off and then
@@ -62,7 +63,7 @@ USER daos_server:daos_server
 ARG DAOS_DEPS_BUILD=yes
 ARG DEPS_JOBS=1
 
-RUN ln -s utils/sl site_scons && [ "$DAOS_DEPS_BUILD" != "yes" ] || \
+RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
     (scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos --deps-only && \
     /bin/rm -rf build *.gz)
 
@@ -73,6 +74,7 @@ COPY src src
 USER root:root
 RUN chown -R daos_server.daos_server /home/daos
 USER daos_server:daos_server
+RUN ln -s utils/sl site_scons
 
 # select compiler to use
 ARG COMPILER=gcc
@@ -80,7 +82,7 @@ ARG JOBS=$DEPS_JOBS
 ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
 # Build DAOS
-RUN ln -s utils/sl site_scons && [ "$DAOS_BUILD" != "yes" ] || \
+RUN [ "$DAOS_BUILD" != "yes" ] || \
     (scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER && \
     /bin/rm -rf build && \
     cp -r utils/config/examples /opt/daos)
