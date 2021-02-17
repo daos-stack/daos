@@ -398,7 +398,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, resp:%+v\n", resp)
 
 	switch drpc.DaosStatus(resp.Status) {
-	case drpc.DaosSuccess:
+	case drpc.DaosSuccess, drpc.DaosNotLeader:
 		if err := svc.sysdb.RemovePoolService(uuid); err != nil {
 			return nil, errors.Wrapf(err, "failed to remove pool %s", uuid)
 		}
