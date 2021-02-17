@@ -1174,7 +1174,7 @@ dss_srv_init(void)
 	xstream_data.xd_init_step = XD_INIT_TLS_REG;
 
 	/* initialize xstream-local storage */
-	xstream_data.xd_dtc = dss_tls_init(DAOS_SERVER_TAG, 0, 0);
+	xstream_data.xd_dtc = dss_tls_init(DAOS_SERVER_TAG, 0, -1);
 	if (!xstream_data.xd_dtc)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_TLS_INIT;

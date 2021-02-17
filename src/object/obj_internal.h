@@ -249,7 +249,7 @@ struct obj_tls {
 	d_sg_list_t		ot_echo_sgl;
 	d_list_t		ot_pool_list;
 
-	/** Measure per-operation latency (type = duration) */
+	/** Measure per-operation latency (type = gauge) */
 	struct d_tm_node_t	*ot_op_lat[OBJ_PROTO_CLI_COUNT];
 	/** Count number of per-opcode active requests (type = gauge) */
 	struct d_tm_node_t	*ot_op_active[OBJ_PROTO_CLI_COUNT];
@@ -571,6 +571,7 @@ struct obj_io_context {
 	daos_handle_t		 ioc_vos_coh;
 	uint32_t		 ioc_map_ver;
 	uint32_t		 ioc_opc;
+	uint64_t		 ioc_start_time;
 	uint32_t		 ioc_began:1,
 				 ioc_free_sgls:1,
 				 ioc_lost_reply:1;

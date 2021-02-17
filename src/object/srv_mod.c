@@ -93,11 +93,10 @@ obj_tls_init(int xs_id, int tgt_id)
 
 	/** register different per-opcode sensors */
 	for (opc = 0; opc < OBJ_PROTO_CLI_COUNT; opc++) {
-		/** Start with latency, of type duration */
+		/** Start with latency, of type gauge */
 		D_ASPRINTF(path, "io/%u/ops/%s/latency_us", tgt_id,
 			   obj_opc_to_str(opc));
-		rc = d_tm_add_metric(&tls->ot_op_lat[opc], path,
-				     D_TM_DURATION | D_TM_CLOCK_REALTIME,
+		rc = d_tm_add_metric(&tls->ot_op_lat[opc], path, D_TM_GAUGE,
 				     "object RPC processing time", "");
 		if (rc)
 			D_WARN("Failed to create latency sensor: "DF_RC"\n",
