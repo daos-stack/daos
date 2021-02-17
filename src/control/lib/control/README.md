@@ -1,6 +1,6 @@
 # DAOS Control API
 
-The control package exposes an RPC-based API for control-plane client
+The control package exposes an RPC-based API for control plane client
 applications to communicate with DAOS Server processes.
 The underlying transport mechanism is gRPC and the externally exposed API
 request and response structures are converted into protobuf messages internally
@@ -24,6 +24,6 @@ Non-replica hosts respond with ErrNotReplica and replicas which are not the
 leader respond with ErrNotLeader.
 In the worst-case scenario a MS request could require 2 RPCs to service.
 For server-to-server MS requests, the process is more efficient because each
-server has the list of access points in it's config file, it can skip the first
+server has the list of access points in its config file, it can skip the first
 RPC and instead send to the APs, one of which should be able to service the
 request.

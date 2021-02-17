@@ -1,6 +1,6 @@
 # DAOS Server
 
-The DAOS Server (control-plane) can be run either as a foreground process to
+The DAOS Server (control plane) can be run either as a foreground process to
 issue hardware provisioning commands or as a background process (binary name
 followed by the "start" subcommand) when it will listen for instructions from
 the [management tool](/src/control/cmd/dmg/README.md) and manage bring-up of
@@ -10,7 +10,7 @@ orchestrate the operation of the managed DAOS Engine processes.
 
 ## Network and Storage Management
 
-The DAOS Engine (data-plane) utilizes two forms of non-volatile storage;
+The DAOS Engine (data plane) utilizes two forms of non-volatile storage;
 storage class memory (SCM) in the form of persistent memory modules and NVMe in
 the form of high-performance SSDs.
 
@@ -88,7 +88,7 @@ For more details on how certificates are used within DAOS, see the
 For details on how gRPC communications are secured and authenticated, see the
 [Security documentation](/src/control/security/README.md#host-authentication-with-certificates).
 
-## Data-Plane Communication
+## Data Plane Communication
 
 I/O Engine processes communicate with the DAOS Server using UNIX Domain Sockets
 set up on the storage node.
