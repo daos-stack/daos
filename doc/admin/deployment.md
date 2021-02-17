@@ -769,7 +769,9 @@ $ daos_server network scan -p all
 Typical network scan results look as follows:
 ```bash
 $ daos_server network scan -p all
---------- localhost ---------
+---------
+localhost
+---------
 
     -------------
     NUMA Socket 0
@@ -896,8 +898,8 @@ To aid in provider configuration and debug, it may be helpful to run the
 `fi_pingpong` test (delivered as part of OFI/libfabric).
 To run that test, determine the name of the provider to test usually by
 removing the "ofi+" prefix from the network scan provider data.
-Do use the "ofi+" prefix in the `daos_server.yml`. Do not use the "ofi+" prefix
-with `fi_pingpong`.
+Although the "ofi+" prefix is required in `daos_server.yml`, it cannot be used
+when specifying the provider for `fi_pingpong`.
 
 Then, the `fi_pingpong` test can be used to verify that the targeted OFI
 provider works fine:

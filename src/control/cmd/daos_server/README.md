@@ -72,7 +72,7 @@ be found in the [examples folder](/utils/config/examples).
 ### SCM/pmem storage
 
 Parameters prefixed with `scm_` in the per-engine section of the config file
-determine how SCM storage will be assigned for se by DAOS on the storage node.
+determine how SCM storage will be assigned for use by DAOS on the storage node.
 Examples for both DCPM and RAM (emulation) SCM classes including config file
 syntax can be found in the [examples folder](/utils/config/examples).
 
@@ -154,7 +154,8 @@ unavailable to the OS).
 
 Preparing SCM involves configuring DCPM modules in AppDirect memory regions
 (interleaved mode) in groups of modules local to a specific socket (NUMA) and
-resultant nvdimm namespaces are defined a device identifier (e.g. /dev/pmem0).
+resultant nvdimm namespaces are defined by a device identifier (e.g.
+/dev/pmem0).
 
 See `daos_server storage prepare --help` and the
 [admin guide](https://daos-stack.github.io/admin/deployment/#hardware-provisioning) for usage.
