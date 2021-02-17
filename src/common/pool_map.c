@@ -1408,9 +1408,8 @@ add_domains_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 		map_comp.co_nr = num_children;
 
 		/* layer 1 is the bottom user-defined layer, above ranks */
-		if (layer > 1) {
+		if (layer > 1)
 			domains_found += num_children;
-		}
 
 		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
 		if (rc != 0)

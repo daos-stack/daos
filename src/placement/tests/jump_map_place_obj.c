@@ -385,18 +385,41 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 	int		ntargets;
 	int		rc, i;
 	d_rank_list_t	rank_list;
-	uint32_t	domains[] = {1, 1, 1,
+	uint32_t	domains[] = {255, 0, 5, /* root */
+				     1, 1, 1,
 				     1, 2, 1,
 				     1, 3, 1,
 				     1, 4, 1,
 				     1, 5, 1};
-	const size_t	domains_len = ARRAY_SIZE(domains) /
-				      POOL_BUF_DOMAIN_TUPLE_LEN;
+	const size_t	max_domains = ARRAY_SIZE(domains) /
+				      POOL_BUF_DOMAIN_TUPLE_LEN - 1;
+	uint32_t	domain_tree_len;
+	uint32_t	*domain_tree;
 	uuid_t		target_uuids[] = {"12345678", "23456789",
 					  "34567890", "4567890a" };
 
-	if (domain_count > domains_len)
-		fail_msg("Only %lu domains can be added", domains_len);
+	if (domain_count > max_domains)
+		fail_msg("Only %lu domains can be added", max_domains);
+
+	/* Build the incoming domain tree */
+	domain_tree_len = (domain_count + 1) * POOL_BUF_DOMAIN_TUPLE_LEN +
+			  node_count;
+	D_ALLOC_ARRAY(domain_tree, domain_tree_len);
+	assert_non_null(domain_tree);
+
+	for (i = 0; i < domain_count + 1; i++) {
+		uint32_t idx = i * POOL_BUF_DOMAIN_TUPLE_LEN;
+
+		memcpy(&domain_tree[idx], &domains[idx],
+		       sizeof(uint32_t) * POOL_BUF_DOMAIN_TUPLE_LEN);
+	}
+
+	for (i = 0; i < node_count; i++) {
+		uint32_t idx = (domain_count + 1) * POOL_BUF_DOMAIN_TUPLE_LEN
+			       + i;
+
+		domain_tree[idx] = i;
+	}
 
 	rank_list.rl_nr = node_count;
 	D_ALLOC_ARRAY(rank_list.rl_ranks, node_count);
@@ -412,9 +435,10 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 	map_version = pool_map_get_version(ctx->po_map) + 1;
 
 	rc = gen_pool_buf(ctx->po_map, &map_buf, map_version,
-			  domain_count * POOL_BUF_DOMAIN_TUPLE_LEN,
-			  node_count, ntargets, domains, target_uuids,
+			  domain_tree_len,
+			  node_count, ntargets, domain_tree, target_uuids,
 			  &rank_list, NULL, target_count);
+	D_FREE(domain_tree);
 	assert_success(rc);
 
 	/* Extend the current pool map */
