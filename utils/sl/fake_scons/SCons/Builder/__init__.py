@@ -20,4 +20,10 @@
 """Fake scons environment shutting up pylint on SCons files"""
 
 class Builder:
+    """Fake Builder"""
     pass
+
+ARGUMENTS = {}
+
+__all__ = ['Builder',
+           'ARGUMENTS']

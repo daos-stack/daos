@@ -21,7 +21,6 @@
 # -*- coding: utf-8 -*-
 
 import SCons.Builder
-import SCons.Util
 from SCons.Script import Dir
 import os
 
@@ -89,7 +88,7 @@ def _detect(env):
                                          "grpc_tools.protoc python module is not installed")
         return None
 
-def run_python(source, target, env, for_signature):
+def run_python(_source, _target, env, _for_signature):
     actions = []
     mkdir_str = "mkdir -p " + env.subst('$GTARGET_DIR')
     actions.append(mkdir_str)
@@ -103,7 +102,7 @@ _grpc_python_builder = SCons.Builder.Builder(
     single_source=1
 )
 
-def run_go(source, target, env, for_signature):
+def run_go(_source, _target, env, _for_signature):
     actions = []
     mkdir_str = "mkdir -p " + env.subst('$GTARGET_DIR')
     actions.append(mkdir_str)
@@ -112,9 +111,9 @@ def run_go(source, target, env, for_signature):
 
 _grpc_go_builder = SCons.Builder.Builder(
     generator=run_go,
-    suffix = '$GO_SUFFIX',
-    src_suffix = '$PROTO_SUFFIX',
-    single_source = 1
+    suffix='$GO_SUFFIX',
+    src_suffix='$PROTO_SUFFIX',
+    single_source=1
 )
 
 def generate(env, **kwargs):
@@ -122,14 +121,14 @@ def generate(env, **kwargs):
     _detect(env)
 
     env.SetDefault(
-        PYTHON_SUFFIX = '_pb2_grpc.py',
-        GO_SUFFIX = '.pb.go',
-        PROTO_SUFFIX = '.proto',
+        PYTHON_SUFFIX='_pb2_grpc.py',
+        GO_SUFFIX='.pb.go',
+        PROTO_SUFFIX='.proto',
 
-        PYTHON_COM = 'python -m grpc_tools.protoc -I$PROTO_INCLUDES --python_out=$GTARGET_DIR --grpc_python_out=$GTARGET_DIR $SOURCE',
-        PYTHON_COMSTR = '',
-        GO_COM = '$PROTOC -I$PROTO_INCLUDES $SOURCE --go_out=plugins=grpc:$GTARGET_DIR',
-        GO_COMSTR = ''
+        PYTHON_COM='python -m grpc_tools.protoc -I$PROTO_INCLUDES --python_out=$GTARGET_DIR --grpc_python_out=$GTARGET_DIR $SOURCE',
+        PYTHON_COMSTR='',
+        GO_COM='$PROTOC -I$PROTO_INCLUDES $SOURCE --go_out=plugins=grpc:$GTARGET_DIR',
+        GO_COMSTR=''
     )
     env['BUILDERS']['GRPCPython'] = _grpc_python_builder
     env['BUILDERS']['GRPCGo'] = _grpc_go_builder

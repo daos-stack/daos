@@ -27,6 +27,6 @@ def warningAsException(flag=1):
     """Fake warningAsException"""
     return flag
 
-def enableWarningClass(name):
+def enableWarningClass(_name):
     """Fake enableWarningClass"""
     pass

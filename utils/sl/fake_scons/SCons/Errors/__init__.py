@@ -20,4 +20,10 @@
 """Fake scons environment shutting up pylint on SCons files"""
 
 class StopError(Exception):
+    """Fake StopError"""
     pass
+
+ARGUMENTS = {}
+
+__all__ = ['StopError',
+           'ARGUMENTS']

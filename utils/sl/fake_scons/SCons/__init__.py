@@ -23,6 +23,5 @@ __all__ = ['Script',
            'Variables',
            'Builder',
            'Errors',
-           'Util',
            'Subst',
            'Warnings']

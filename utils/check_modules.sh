@@ -71,4 +71,4 @@ PYTHONPATH=$PYTHONPATH:$PWD/src/tests/ftest/util/apricot/
 PYTHONPATH=$PYTHONPATH:$PWD/src/client/
 export PYTHONPATH
 
-./utils/sl/check_script.py -w "${pfiles[@]}"
+./utils/sl/check_script.py "${pfiles[@]}"

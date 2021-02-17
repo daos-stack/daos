@@ -275,14 +275,6 @@ def main():
                      "-d", "invalid-name",
                      "-d", "unused-argument",
                      "-d", "no-self-use")
-        check_script("prereq_tools",
-                     "-d", "too-many-lines",
-                     "-d", "unused-argument")
-        check_script("components")
-        check_script("build_info")
-        check_script("check_script")
-        check_script("daos_build")
-        check_script("env_modules")
 
     if args.fname:
         for fname in args.fname:
