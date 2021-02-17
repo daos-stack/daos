@@ -83,8 +83,7 @@ responsible for handling distributed operations across the DAOS System.
 Some `dmg` commands will trigger MS requests to be issued to a `daos_server`
 process on a storage node running as the MS leader, this happens under the hood
 and the logic for the request steering is handled in the control API which is
-utilised by the [`dmg`](/src/control/cmd/dmg/README.md) tool.
-`dmg` is a RPC client.
+utilized by the [`dmg`](/src/control/cmd/dmg/README.md) tool.
 
 When necessary, requests will be forwarded to the data plane
 [engine](/src/engine/README.md) over dRPC channel and handled by the
