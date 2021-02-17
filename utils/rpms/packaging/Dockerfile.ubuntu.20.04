@@ -25,8 +25,7 @@ RUN apt-get update && apt-get install -y \
 
 # rpmdevtools
 RUN echo "deb [trusted=yes] ${REPO_URL}${REPO_UBUNTU_20_04} focal main" > /etc/apt/sources.list.d/daos-stack-ubuntu-stable-local.list
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            rpmdevtools
+RUN apt-get update && apt-get install -y rpmdevtools && apt-get clean all
 
 ARG CACHEBUST=1
 
