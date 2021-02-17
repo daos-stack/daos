@@ -246,7 +246,7 @@ install -m 644 utils/systemd/%{server_svc_name} %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
 mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
 mv %{?buildroot}/%{_prefix}/etc/bash_completion.d %{?buildroot}/%{_sysconfdir}
-cp -r src/client/java %{?buildroot}/%{_prefix}/lib/daos/TESTING/
+#cp -r src/client/java %{?buildroot}/%{_prefix}/lib/daos/TESTING/
 
 %pre server
 getent group daos_metrics >/dev/null || groupadd -r daos_metrics

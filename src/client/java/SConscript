@@ -9,6 +9,7 @@ def scons():
     """Execute build"""
     Import('env')
 
+#    ftest_dir = Dir('.').srcnode().abspath
     ftest_dir = '$PREFIX/lib/daos/TESTING/java'
     env.Install(ftest_dir, "pom.xml")
 
@@ -25,10 +26,13 @@ def scons():
             'daos-java/src/main/java/io/daos',
             'daos-java/src/main/java/io/daos/dfs',
             'daos-java/src/main/java/io/daos/dfs/uns',
+            'daos-java/src/main/java/io/daos/obj',
+            'daos-java/src/main/java/io/daos/obj/attr',
             'daos-java/src/test/java',
             'daos-java/src/test/java/io',
             'daos-java/src/test/java/io/daos',
             'daos-java/src/test/java/io/daos/dfs',
+            'daos-java/src/test/java/io/daos/obj',
             'distribution',
             'distribution/src',
             'distribution/src/assembly',
@@ -62,8 +66,16 @@ def scons():
                     Glob('%s/*.*' % sub_dir))
     run_dir = ftest_dir + '/pom.xml'
     cmd = "mvn clean install --file {} -DskipITs -Ddaos.install.path={} -Dgpg.skip".format(run_dir, env.get("PREFIX"))
+
+
+#    java_build = env.Command('java_build.out', dirs, cmd)
     java_build = env.Command([Dir('.').abspath], dirs, cmd)
-    env.AlwaysBuild(java_build)
+
+#    env.Install('$PREFIX/lib/daos/TESTING/', "".join([ftest_dir, '/']))
+
+#    env.AlwaysBuild(java_build)
+
+
 #    cmd = "mvn clean install -DskipITs -Ddaos.install.path={}".format(env.get("PREFIX"))
 #
 #    print("Building Java src...")
