@@ -97,8 +97,8 @@ obj_tls_init(int xs_id, int tgt_id)
 		D_ASPRINTF(path, "io/%u/ops/%s/latency_us", tgt_id,
 			   obj_opc_to_str(opc));
 		rc = d_tm_add_metric(&tls->ot_op_lat[opc], path,
-				     D_TM_DURATION | D_TM_CLOCK_REALTIME, "",
-				     "");
+				     D_TM_DURATION | D_TM_CLOCK_REALTIME,
+				     "object RPC processing time", "");
 		if (rc)
 			D_WARN("Failed to create latency sensor: "DF_RC"\n",
 			       DP_RC(rc));
@@ -108,7 +108,7 @@ obj_tls_init(int xs_id, int tgt_id)
 		D_ASPRINTF(path, "io/%u/ops/%s/active_cnt", tgt_id,
 			   obj_opc_to_str(opc));
 		rc = d_tm_add_metric(&tls->ot_op_active[opc], path, D_TM_GAUGE,
-				     "", "");
+				     "number of active object RPCs", "");
 		if (rc)
 			D_WARN("Failed to create active cnt sensor: "DF_RC"\n",
 			       DP_RC(rc));
@@ -118,7 +118,8 @@ obj_tls_init(int xs_id, int tgt_id)
 		D_ASPRINTF(path, "io/%u/ops/%s/total_cnt", tgt_id,
 			   obj_opc_to_str(opc));
 		rc = d_tm_add_metric(&tls->ot_op_total[opc], path, D_TM_COUNTER,
-				     "", "");
+				     "total number of processed object RPCs",
+				     "");
 		if (rc)
 			D_WARN("Failed to create total cnt sensor: "DF_RC"\n",
 			       DP_RC(rc));
@@ -128,8 +129,8 @@ obj_tls_init(int xs_id, int tgt_id)
 	/** Total number of silently restarted updates, of type counter */
 	D_ASPRINTF(path, "io/%u/ops/%s/restarted_cnt", tgt_id,
 		   obj_opc_to_str(DAOS_OBJ_RPC_UPDATE));
-	rc = d_tm_add_metric(&tls->ot_update_restart, path, D_TM_COUNTER, "",
-			     "");
+	rc = d_tm_add_metric(&tls->ot_update_restart, path, D_TM_COUNTER,
+			     "total number of restarted update ops", "");
 	if (rc)
 		D_WARN("Failed to create restarted cnt sensor: "DF_RC"\n",
 		       DP_RC(rc));
@@ -138,8 +139,8 @@ obj_tls_init(int xs_id, int tgt_id)
 	/** Total number of resent updates, of type counter */
 	D_ASPRINTF(path, "io/%u/ops/%s/resent_cnt", tgt_id,
 		   obj_opc_to_str(DAOS_OBJ_RPC_UPDATE));
-	rc = d_tm_add_metric(&tls->ot_update_resent, path, D_TM_COUNTER, "",
-			     "");
+	rc = d_tm_add_metric(&tls->ot_update_resent, path, D_TM_COUNTER,
+			     "total number of resent update RPCs", "");
 	if (rc)
 		D_WARN("Failed to create resent cnt sensor: "DF_RC"\n",
 		       DP_RC(rc));
@@ -165,11 +166,7 @@ obj_tls_fini(void *data)
 }
 
 struct dss_module_key obj_module_key = {
-	/**
-	 * XXX should only be DAOS_IO_TAG, but srv_migrate uses
-	 * object TLS on system xstream.
-	 */
-	.dmk_tags = DAOS_MD_TAG | DAOS_IO_TAG,
+	.dmk_tags = DAOS_SERVER_TAG,
 	.dmk_index = -1,
 	.dmk_init = obj_tls_init,
 	.dmk_fini = obj_tls_fini,

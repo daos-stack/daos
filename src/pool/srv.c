@@ -149,7 +149,7 @@ pool_tls_fini(void *data)
 }
 
 struct dss_module_key pool_module_key = {
-	.dmk_tags = DAOS_MD_TAG,
+	.dmk_tags = DAOS_SERVER_TAG,
 	.dmk_index = -1,
 	.dmk_init = pool_tls_init,
 	.dmk_fini = pool_tls_fini,

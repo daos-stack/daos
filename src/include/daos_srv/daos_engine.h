@@ -67,12 +67,7 @@ struct dss_thread_local_storage {
 };
 
 enum dss_module_tag {
-	/** metadata-related */
-	DAOS_MD_TAG	= 1 << 0,
-	/** I/O-related */
-	DAOS_IO_TAG	= 1 << 1,
-	/** Network-related */
-	DAOS_NET_TAG	= 1 << 2,
+	DAOS_SERVER_TAG	= 1 << 0,
 };
 
 /* The module key descriptor for each xstream */
