@@ -504,6 +504,7 @@ vos_self_nvme_init()
 static void
 vos_self_fini_locked(void)
 {
+	printf("debug>> in vos_self_fini_locked\n");
 	vos_self_nvme_fini();
 	vos_db_fini();
 
@@ -526,6 +527,7 @@ vos_self_fini(void)
 
 	D_ASSERT(self_mode.self_ref > 0);
 	self_mode.self_ref--;
+	printf("debug>> self_ref is %d\n", self_mode.self_ref);
 	if (self_mode.self_ref == 0)
 		vos_self_fini_locked();
 

@@ -403,8 +403,11 @@ dts_ctx_fini(struct dts_context *tsc)
 		pool_fini(tsc);
 		/* fall through */
 	case DTS_INIT_MODULE:	/* finalize module */
-		if (tsc->tsc_pmem_file)
+		if (tsc->tsc_pmem_file){
 			vos_self_fini();
+			printf("debug>> tsc->tsc_init is %d \n", tsc->tsc_init);
+			printf("debug>> vos_self_fini completed\n");
+		}
 		else
 			daos_fini();
 		/* fall through */
