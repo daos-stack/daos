@@ -68,7 +68,7 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 
 	resp, err := control.ConfigGenerate(ctx, req)
 
-	if resp.Errors() != nil {
+	if resp != nil && resp.Errors() != nil {
 		// host level errors e.g. unresponsive daos_server process
 		var bld strings.Builder
 		if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
