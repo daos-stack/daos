@@ -115,16 +115,16 @@ enum obj_rpc_opc {
 extern struct crt_proto_format obj_proto_fmt;
 
 /* Helper function to convert opc to name */
-#define X(a, b, c, d, e, f) case a: return f;
 static inline char *
 obj_opc_to_str(crt_opcode_t opc)
 {
 	switch (opc) {
+#define X(a, b, c, d, e, f) case a: return f;
 		OBJ_PROTO_CLI_RPC_LIST
+#undef X
 	}
 	return "unknown";
 }
-#undef X
 
 enum obj_rpc_flags {
 	ORF_BULK_BIND		= (1 << 0),
