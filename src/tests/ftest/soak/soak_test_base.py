@@ -380,7 +380,7 @@ class SoakTestBase(TestWithServers):
             # check journalctl for events;
             until = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             event_check_messages = run_event_check(self, since, until)
-            self.soak_errors.extend(event_check_messages)
+            self.check_errors.extend(event_check_messages)
             run_monitor_check(self)
             # init harasser list when all jobs are done
             self.harassers = []
