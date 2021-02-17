@@ -281,10 +281,14 @@ def main():
         check_script("components")
         check_script("build_info")
         check_script("check_script")
+        check_script("daos_build")
+        check_script("env_modules")
 
     if args.fname:
         for fname in args.fname:
             if args.exclude and fname.startswith(args.exclude):
+                continue
+            if not os.path.exists(fname):
                 continue
             check_script(fname, wrap=args.wrap)
 

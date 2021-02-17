@@ -44,11 +44,10 @@ fi
 
 /bin/rm -f pylint.log
 
-./utils/sl/check_script.py -s
-
-# Test the build code with daos_build.
-PYTHONPATH=$PWD/utils
+PYTHONPATH=$PWD/site_scons/
 export PYTHONPATH
+
+./utils/sl/check_script.py -s
 
 ./utils/sl/check_script.py -w SConstruct
 
@@ -65,10 +64,11 @@ fi
 ./utils/sl/check_script.py -w "${sfiles[@]}"
 
 # Set PYTHONPATH for source files not installed files
-PYTHONPATH=$PWD/utils:$PWD/src/tests/ftest/util/
+PYTHONPATH=$PYTHONPATH:$PWD/utils
+PYTHONPATH=$PYTHONPATH:$PWD/src/tests/ftest/util/
 PYTHONPATH=$PYTHONPATH:$PWD/src/tests/ftest/cart/util/
 PYTHONPATH=$PYTHONPATH:$PWD/src/tests/ftest/util/apricot/
 PYTHONPATH=$PYTHONPATH:$PWD/src/client/
 export PYTHONPATH
 
-./utils/sl/check_script.py -x utils/sl -w "${pfiles[@]}"
+./utils/sl/check_script.py -w "${pfiles[@]}"
