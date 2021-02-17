@@ -648,14 +648,3 @@
    fun:dts_ctx_init
    ...
 }
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   match-leak-kinds: definite
-   fun:malloc
-   ...
-   fun:vos_db_init
-   fun:vos_self_init
-   fun:dts_ctx_init
-   ...
-}
