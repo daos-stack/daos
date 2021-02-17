@@ -25,5 +25,5 @@ leader respond with ErrNotLeader.
 In the worst-case scenario a MS request could require 2 RPCs to service.
 For server-to-server MS requests, the process is more efficient because each
 server has the list of access points in it's config file, it can skip the first
-shotgun RPC and instead send to the APs, one of which should be able to service
-the request.
+RPC and instead send to the APs, one of which should be able to service the
+request.

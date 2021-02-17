@@ -32,7 +32,7 @@ by the privileged binary `daos_admin` on behalf of `daos_server`.
 The provider package contains interface shims to the external environment,
 initially just to the Linux operating system.
 
-The system package encapsulates the concept of the DAOS system, and it's
+The system package encapsulates the concept of the DAOS system, and its
 associated membership.
 
 ## Developer Documentation

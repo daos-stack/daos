@@ -399,8 +399,11 @@ PMem preparation can be performed from the management tool
 The first time the command is run, the SCM interleaved regions will be created
 as resource allocations on any available PMem modules (one region per NUMA
 node/socket). The regions are activated after BIOS reads the new resource
-allocations, and after initial completion the command prints a message to ask
-for a reboot (the command will not initiate reboot itself).
+allocations.
+Upon completion, the storage prepare command will prompt the admin to reboot
+the storage node(s) in order for the BIOS to activate the new storage
+allocations.
+The storage prepare command does not initiate the reboot itself.
 
 After running the command a reboot will be required, then the Control
 Servers will then need to be started again and the command run for a
