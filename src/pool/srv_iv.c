@@ -1230,6 +1230,8 @@ ds_pool_iv_prop_update(struct ds_pool *pool, daos_prop_t *prop)
 			    CRT_IV_SYNC_LAZY, true);
 	if (rc)
 		D_ERROR("pool_iv_update failed "DF_RC"\n", DP_RC(rc));
+
+	D_FREE(iv_entry);
 out:
 	return rc;
 }
