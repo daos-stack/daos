@@ -67,7 +67,11 @@ type (
 //
 // Returns API response and error.
 func ConfigGenerate(ctx context.Context, req ConfigGenerateReq) (*ConfigGenerateResp, error) {
-	req.Log.Debugf("ConfigGenerate called with request %v", req)
+	req.Log.Debugf("ConfigGenerate called with request %+v", req)
+
+	if len(req.HostList) == 0 {
+		return nil, errors.New("no hosts specified")
+	}
 
 	nd, hostErrs, err := getNetworkDetails(ctx, req)
 	if err != nil {
