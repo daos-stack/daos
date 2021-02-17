@@ -24,7 +24,6 @@ type configCmd struct {
 
 type configGenCmd struct {
 	logCmd
-	cfgCmd
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
