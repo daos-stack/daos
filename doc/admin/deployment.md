@@ -40,6 +40,30 @@ First of all, the DAOS server should be started to allow remote administration
 command to be executed via the dmg tool. This section describes the minimal
 DAOS server configuration and how to start it on all the storage nodes.
 
+### Example RPM Deployment Workflow
+
+A recommended workflow to get up and running is as follows:
+
+* Install DAOS Server RPMs - `daos_server` systemd services will start in
+listening mode which means DAOS Engine processes will not be started as the
+server config file (default location at `/etc/daos/daos_server.yml`) has not
+yet been populated.
+
+* Run `dmg config generate -l <hostset> -a <access_points>` across the entire
+hostset (all the storage servers that are now running the `daos_server` service
+after RPM install).
+The command will only generate a config if hardware setups on all the hosts are
+similar and have been given sensible NUMA mappings.
+Adjust the hostset until you have a set with homogenous hardware configurations.
+
+* Once a recommended config file can be generated, copy it to the server config
+file default location (`/etc/daos/daos_server.yml`) on each DAOS Server host
+and restart all `daos_server` services.
+An example command to restart the services is
+`clush -w machines-[118-121,130-133] "sudo systemctl restart daos_server"`.
+The services should prompt for format on restart and after format is triggered
+from `dmg`, the DAOS Engine processes should start.
+
 ### Server Configuration File
 
 The `daos_server` configuration file is parsed when starting the
