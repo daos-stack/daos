@@ -48,8 +48,10 @@ The `daos_server` configuration file is parsed when starting the
 on the command line (`daos_server -h` for usage) or it will be read from
 the default location (`/etc/daos/daos_server.yml`).
 
-Parameter descriptions are specified in [`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
-and example configuration files in the [examples](https://github.com/daos-stack/daos/tree/master/utils/config/examples)
+Parameter descriptions are specified in
+[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+and example configuration files in the
+[examples](https://github.com/daos-stack/daos/tree/master/utils/config/examples)
 directory.
 
 Any option supplied to `daos_server` as a command line option or flag will
@@ -69,8 +71,9 @@ The location of this configuration file is determined by first checking
 for the path specified through the -o option of the `daos_server` command
 line, if unspecified then `/etc/daos/daos_server.yml` is used.
 
-Refer to the example configuration file ([daos_server.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml))
-for latest information and examples.
+Refer to the example configuration file (
+[daos_server.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+) for latest information and examples.
 
 At this point of the process, the servers: and provider: section of the yaml
 file can be left blank and will be populated in the subsequent sections.
