@@ -562,7 +562,7 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(cachebust:false,
                                                                 add_repos:false) +
-                                                " --pull --build-arg CACHEBUST=" + current_time.get(Calendar.WEEK_OF_YEAR)
+                                                " --build-arg CACHEBUST=" + current_time.get(Calendar.WEEK_OF_YEAR)
                         }
                     }
                     steps {

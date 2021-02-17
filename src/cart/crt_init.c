@@ -81,7 +81,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	 * avoid size mis-matching between client/server side
 	 * /see crt_proc_uuid_t().
 	 */
-       D_CASSERT(sizeof(uuid_t) == 16);
+	D_CASSERT(sizeof(uuid_t) == 16);
 
 	D_INIT_LIST_HEAD(&crt_gdata.cg_ctx_list);
 
@@ -274,7 +274,9 @@ crt_plugin_fini(void)
 }
 
 int
-crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
+crt_init_opt(crt_group_id_t grpid,
+	uint32_t flags,
+	crt_init_options_t *opt)
 {
 	char		*addr_env;
 	struct timeval	now;
@@ -284,7 +286,6 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	bool		provider_found = false;
 	int		plugin_idx;
 	int		rc = 0;
-
 	server = flags & CRT_FLAG_BIT_SERVER;
 
 	/* d_log_init is reference counted */
@@ -369,7 +370,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		for (plugin_idx = 0; crt_na_dict[plugin_idx].nad_str != NULL;
 		     plugin_idx++) {
 			if (!strncmp(addr_env, crt_na_dict[plugin_idx].nad_str,
-				     strlen(crt_na_dict[plugin_idx].nad_str) + 1)) {
+				    strlen(crt_na_dict[plugin_idx].nad_str)+1)) {
 				crt_gdata.cg_na_plugin =
 					crt_na_dict[plugin_idx].nad_type;
 				provider_found = true;
