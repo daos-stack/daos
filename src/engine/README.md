@@ -2,8 +2,8 @@
 
 ## Module Interface
 
-The I/O server supports a module interface that allows to load server-side code on demand. Each module is effectively a library dynamically loaded by the I/O server via dlopen.
-The interface between the module and the I/O server is defined in the `dss_module` data structure.
+The I/O Engine supports a module interface that allows to load server-side code on demand. Each module is effectively a library dynamically loaded by the I/O Engine via dlopen.
+The interface between the module and the I/O Engine is defined in the `dss_module` data structure.
 
 Each module should specify:
 - a module name
@@ -18,7 +18,7 @@ In addition, a module can optionally configure:
 
 ## Thread Model & Argobot Integration
 
-The I/O server is a multi-threaded process using Argobots for non-blocking processing.
+The I/O Engine is a multi-threaded process using Argobots for non-blocking processing.
 
 By default, one main xstream and no offload xstreams are created per target. The actual number of offload xstream can be configured through daos_engine command line parameters. Moreover, an extra xstream is created to handle incoming metadata requests. Each xstream is bound to a specific CPU core. The main xstream is the one receiving incoming target requests from both client and the other servers. A specific ULT is started to make progress on network and NVMe I/O operations.
 
@@ -32,7 +32,7 @@ DAOS uses IV (incast variable) to share values and statuses among servers under 
 
 ## dRPC Server
 
-The I/O server includes a dRPC server that listens for activity on a given Unix Domain Socket. See the [dRPC documentation](../control/drpc/README.md) for more details on the basics of dRPC, and the low-level APIs in Go and C.
+The I/O Engine includes a dRPC server that listens for activity on a given Unix Domain Socket. See the [dRPC documentation](../control/drpc/README.md) for more details on the basics of dRPC, and the low-level APIs in Go and C.
 
 The dRPC server polls periodically for incoming client connections and requests. It can handle multiple simultaneous client connections via the `struct drpc_progress_context` object, which manages the `struct drpc` objects for the listening socket as well as any active client connections.
 
@@ -48,14 +48,14 @@ The server loop runs in its own User-Level Thread (ULT) in xstream 0. The dRPC s
     2. If the client has disconnected or the connection has been broken: Free the `struct drpc` object and remove it from the `drpc_progress_context`.
 3. If any activity is seen on the listener:
     1. If a new connection has come in: Call `drpc_accept` and add the new `struct drpc` object to the client connection list in the `drpc_progress_context`.
-    2. If there was an error: Return `-DER_MISC` to the caller. This causes an error to be logged in the I/O server, but does not interrupt the dRPC server loop. Getting an error on the listener is unexpected.
-4. If no activity was seen, return `-DER_TIMEDOUT` to the caller. This is purely for debugging purposes. In practice the I/O server ignores this error code, since lack of activity is not actually an error case.
+    2. If there was an error: Return `-DER_MISC` to the caller. This causes an error to be logged in the I/O Engine, but does not interrupt the dRPC server loop. Getting an error on the listener is unexpected.
+4. If no activity was seen, return `-DER_TIMEDOUT` to the caller. This is purely for debugging purposes. In practice the I/O Engine ignores this error code, since lack of activity is not actually an error case.
 
 ### dRPC Handler Registration
 
 Individual DAOS modules may implement handling for dRPC messages by registering a handler function for one or more dRPC module IDs.
 
-Registering handlers is simple. In the `dss_server_module` field `sm_drpc_handlers`, statically allocate an array of `struct dss_drpc_handler` with the last item in the array zeroed out to indicate the end of the list. Setting the field to NULL indicates nothing to register. When the I/O server loads the DAOS module, it will register all of the dRPC handlers automatically.
+Registering handlers is simple. In the `dss_server_module` field `sm_drpc_handlers`, statically allocate an array of `struct dss_drpc_handler` with the last item in the array zeroed out to indicate the end of the list. Setting the field to NULL indicates nothing to register. When the I/O Engine loads the DAOS module, it will register all of the dRPC handlers automatically.
 
 **Note:** The dRPC module ID is **not** the same as the DAOS module ID. This is because a given DAOS module may need to register more than one dRPC module ID, depending on the functionality it covers. The dRPC module IDs must be unique system-wide and are listed in a central header file: `src/include/daos/drpc_modules.h`
 

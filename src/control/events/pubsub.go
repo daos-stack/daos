@@ -30,6 +30,7 @@ type Handler interface {
 // used as a Handler.
 type HandlerFunc func(context.Context, *RASEvent)
 
+// OnEvent implements the Handler interface.
 func (f HandlerFunc) OnEvent(ctx context.Context, evt *RASEvent) {
 	f(ctx, evt)
 }
