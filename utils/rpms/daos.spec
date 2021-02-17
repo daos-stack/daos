@@ -413,7 +413,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 %changelog
 * Tue Feb 16 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.1.3-2
-- Update libfabric to 1.12.0rc1
+- Update libfabric to v1.12.0rc1
 
 * Wed Feb 10 2021 Johann Lombardi <johann.lombardi@intel.com> 1.1.3-1
 - Version bump up to 1.1.3
