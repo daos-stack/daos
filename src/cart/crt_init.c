@@ -73,6 +73,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	uint32_t	mrc_enable = 0;
 	uint64_t	start_rpcid;
 	int		rc = 0;
+
 	D_DEBUG(DB_ALL, "initializing crt_gdata...\n");
 
 	dump_envariables();
@@ -274,9 +275,7 @@ crt_plugin_fini(void)
 }
 
 int
-crt_init_opt(crt_group_id_t grpid,
-	uint32_t flags,
-	crt_init_options_t *opt)
+crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 {
 	char		*addr_env;
 	struct timeval	now;
@@ -286,6 +285,7 @@ crt_init_opt(crt_group_id_t grpid,
 	bool		provider_found = false;
 	int		plugin_idx;
 	int		rc = 0;
+
 	server = flags & CRT_FLAG_BIT_SERVER;
 
 	/* d_log_init is reference counted */
@@ -370,7 +370,7 @@ crt_init_opt(crt_group_id_t grpid,
 		for (plugin_idx = 0; crt_na_dict[plugin_idx].nad_str != NULL;
 		     plugin_idx++) {
 			if (!strncmp(addr_env, crt_na_dict[plugin_idx].nad_str,
-				    strlen(crt_na_dict[plugin_idx].nad_str)+1)) {
+				     strlen(crt_na_dict[plugin_idx].nad_str) + 1)) {
 				crt_gdata.cg_na_plugin =
 					crt_na_dict[plugin_idx].nad_type;
 				provider_found = true;

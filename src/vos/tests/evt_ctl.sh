@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# another change
-
 if [ "$USE_VALGRIND" = "memcheck" ]; then
     VCMD="valgrind --leak-check=full --show-reachable=yes --error-limit=no \
           --suppressions=${VALGRIND_SUPP} --error-exitcode=42 --xml=yes \

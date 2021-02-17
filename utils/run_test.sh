@@ -21,8 +21,6 @@ failed=0
 failures=()
 log_num=0
 
-# Fake change.
-
 run_test()
 {
     local in="$*"

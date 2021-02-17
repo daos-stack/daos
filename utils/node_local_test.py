@@ -2445,7 +2445,7 @@ def main():
         fatal_errors.add_result(set_server_fi(server))
     elif args.test:
         if args.test == 'all':
-           fatal_errors.add_result(run_posix_tests(server, conf))
+            fatal_errors.add_result(run_posix_tests(server, conf))
         else:
             fatal_errors.add_result(run_posix_tests(server, conf, args.test))
     else:
