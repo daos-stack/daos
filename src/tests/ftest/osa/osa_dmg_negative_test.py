@@ -7,7 +7,6 @@
 import time
 from osa_utils import OSAUtils
 from test_utils_pool import TestPool
-from apricot import skipForTicket
 
 
 class OSADmgNegativeTest(OSAUtils):
