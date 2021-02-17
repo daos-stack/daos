@@ -54,7 +54,7 @@ hostset (all the storage servers that are now running the `daos_server` service
 after RPM install).
 The command will only generate a config if hardware setups on all the hosts are
 similar and have been given sensible NUMA mappings.
-Adjust the hostset until you have a set with homogenous hardware configurations.
+Adjust the hostset until you have a set with homogeneous hardware configurations.
 
 * Once a recommended config file can be generated, copy it to the server config
 file default location (`/etc/daos/daos_server.yml`) on each DAOS Server host
