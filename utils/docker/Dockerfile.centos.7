@@ -160,11 +160,10 @@ ARG COMPILER=gcc
 # seconds.
 WORKDIR /home/daos/pre
 COPY SConstruct .
-COPY utils/sl utils/sl
+COPY site_scons site_scons
 COPY utils/build.config utils/
 RUN chown -R daos_server.daos_server /home/daos
 USER daos_server:daos_server
-RUN ln -s utils/sl site_scons
 
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
     (scons --build-deps=yes install PREFIX=/opt/daos --deps-only && \
@@ -172,12 +171,12 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
 
 WORKDIR /home/daos/daos/
 COPY VERSION LICENSE ftest.sh SConstruct ./
+COPY site_scons site_scons
 COPY utils utils
 COPY src src
 USER root:root
 RUN chown -R daos_server.daos_server /home/daos
 USER daos_server:daos_server
-RUN ln -s utils/sl site_scons
 
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
