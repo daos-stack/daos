@@ -118,6 +118,7 @@ get_cred_from_response(Drpc__Response *response, d_iov_t *cred)
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	int			rc = 0;
 	Auth__GetCredResp	*cred_resp = NULL;
+	Auth__Token		*verifier = NULL;
 
 	cred_resp = auth__get_cred_resp__unpack(&alloc.alloc,
 						response->body.len,
@@ -147,6 +148,8 @@ get_cred_from_response(Drpc__Response *response, d_iov_t *cred)
 
 	rc = auth_cred_to_iov(cred_resp->cred, cred);
 out:
+	verifier = cred_resp->cred->verifier;
+	memzero_explicit(verifier->data.data, verifier->data.len);
 	auth__get_cred_resp__free_unpacked(cred_resp, &alloc.alloc);
 	return rc;
 }
