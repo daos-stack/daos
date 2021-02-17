@@ -1,7 +1,7 @@
 # Copyright (C) 2021 Intel Corporation
 # All rights reserved.
 #
-# 'recipe' for Docker to build a image for running checkpatch.
+# 'recipe' for Docker to build a image for running static analysis checking.
 #
 
 # Pull base image
@@ -13,11 +13,10 @@ ARG CACHEBUST
 # that come from the core repo.
 # Clean up any repos afterwards to save space.
 RUN yum -y upgrade && 						\
-    yum -y install codespell file find git python3-clustershell	\
-	python3-pygithub python3-numpy python3-paramiko		\
-	python3-pylint python3-pyxattr python3-requests		\
-	python3-tabulate					\
-	ShellCheck &&						\
+    yum -y install codespell file findutils git			\
+	python3-clustershell python3-pygithub python3-numpy	\
+	python3-paramiko python3-pylint python3-pyxattr		\
+	python3-requests python3-tabulate ShellCheck &&		\
     yum clean all &&						\
     dnf -y module enable avocado:latest &&			\
     dnf -y module install avocado &&				\
