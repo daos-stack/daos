@@ -32,9 +32,9 @@ class NvmeEnospace(ServerFillUp):
     """
 
     def __init__(self, *args, **kwargs):
-        """Initialize a NvmeEnospace object."""
-        super(NvmeEnospace, self).__init__(*args, **kwargs)
-        self.daos_cmd = None
+         """Initialize a NvmeEnospace object."""
+         super(NvmeEnospace, self).__init__(*args, **kwargs)
+         self.daos_cmd = None
 
     def setUp(self):
         super(NvmeEnospace, self).setUp()
