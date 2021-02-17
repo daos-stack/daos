@@ -106,7 +106,7 @@ func (h *EngineHarness) AddInstance(srv *EngineInstance) error {
 	return nil
 }
 
-// CallDrpc calls the supplied dRPC method on a managed I/O server instance.
+// CallDrpc calls the supplied dRPC method on a managed I/O Engine instance.
 func (h *EngineHarness) CallDrpc(ctx context.Context, method drpc.Method, body proto.Message) (resp *drpc.Response, err error) {
 	if !h.isStarted() {
 		return nil, FaultHarnessNotStarted
@@ -143,7 +143,7 @@ func (h *EngineHarness) Start(ctx context.Context, db *system.Database, ps *even
 	}
 
 	// Now we want to block any RPCs that might try to mess with storage
-	// (format, firmware update, etc) before attempting to start I/O engines
+	// (format, firmware update, etc) before attempting to start I/O Engines
 	// which are using the storage.
 	h.started.SetTrue()
 	defer h.started.SetFalse()
