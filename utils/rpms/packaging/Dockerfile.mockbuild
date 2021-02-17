@@ -9,17 +9,17 @@ FROM fedora:31
 MAINTAINER daos-stack <daos@daos.groups.io>
 
 # First do a big update, this will be cached forever.
-RUN dny -y update && dnf clean all
+RUN dnf -y update && dnf clean all
 
 # Then install our tools
-RUN dny -y update && dnf -y install mock make \
+RUN dnf -y update && dnf -y install mock make \
                    rpm-build createrepo rpmlint redhat-lsb-core git \
                    python-srpm-macros rpmdevtools && dnf clean all
 
 ARG CACHEBUST
 
 # And finally update everything.
-RUN dny -y update && dnf clean all
+RUN dnf -y update && dnf clean all
 
 # Add build user (to keep rpmbuild happy)
 ENV USER build
