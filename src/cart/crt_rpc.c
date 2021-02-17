@@ -46,7 +46,7 @@ crt_hdlr_ctl_log_add_msg(crt_rpc_t *rpc_req)
 	out_args = crt_reply_get(rpc_req);
 
 	if (in_args->log_msg == NULL) {
-		D_ERROR("Empty log message\n");
+		D_ERROR("Empty log mesage\n");
 		rc = -DER_INVAL;
 	} else {
 		D_INFO("%.*s\n", CRT_CTL_MAX_LOG_MSG_SIZE,
