@@ -123,8 +123,12 @@ func publishInstanceExitFn(publishFn func(*events.RASEvent), hostname string, sr
 		if exitErr == nil {
 			return errors.New("expected non-nil exit error")
 		}
-		publishFn(events.NewRankDownEvent(hostname, srvIdx, rank.Uint32(),
-			common.ExitStatus(exitErr.Error())))
+
+		evt := events.NewRankDownEvent(hostname, srvIdx, rank.Uint32(),
+			common.ExitStatus(exitErr.Error()))
+
+		// set forwardable if there is a rank for the MS to operate on
+		publishFn(evt.WithForwardable(!rank.Equals(system.NilRank)))
 
 		return nil
 	}

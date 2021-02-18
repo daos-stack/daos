@@ -123,7 +123,8 @@ type RASEvent struct {
 	CtlOp        string          `json:"ctl_op"`
 	ExtendedInfo RASExtendedInfo `json:"extended_info"`
 
-	forwarded atm.Bool
+	forwarded   atm.Bool
+	forwardable atm.Bool
 }
 
 // IsForwarded returns true if event has been forwarded between hosts.
@@ -131,9 +132,22 @@ func (evt *RASEvent) IsForwarded() bool {
 	return evt.forwarded.Load()
 }
 
-// WithIsForwarded sets the forwarded state of this event.
-func (evt *RASEvent) WithIsForwarded(isForwarded bool) *RASEvent {
-	evt.forwarded = atm.NewBool(isForwarded)
+// WithForwarded sets the forwarded state of this event.
+func (evt *RASEvent) WithForwarded(forwarded bool) *RASEvent {
+	evt.forwarded = atm.NewBool(forwarded)
+
+	return evt
+}
+
+// ShouldForward returns true if event is forwardable and has not already
+// been forwarded.
+func (evt *RASEvent) ShouldForward() bool {
+	return !evt.forwarded.Load() && evt.forwardable.Load()
+}
+
+// WithForwardable sets the forwardable state of this event.
+func (evt *RASEvent) WithForwardable(forwardable bool) *RASEvent {
+	evt.forwardable = atm.NewBool(forwardable)
 
 	return evt
 }
@@ -165,6 +179,8 @@ func New(evt *RASEvent) *RASEvent {
 	if evt.Severity == RASSeverityUnknown {
 		evt.Severity = RASSeverityInfo
 	}
+	evt.forwarded = atm.NewBool(false)
+	evt.forwardable = atm.NewBool(true)
 
 	return evt
 }
@@ -246,7 +262,9 @@ func (evt *RASEvent) FromProto(pbEvt *sharedpb.RASEvent) (err error) {
 		ContUUID:  pbEvt.ContUuid,
 		ObjID:     pbEvt.ObjId,
 		CtlOp:     pbEvt.CtlOp,
-		forwarded: atm.NewBool(false),
+
+		forwarded:   atm.NewBool(false),
+		forwardable: atm.NewBool(true),
 	}
 
 	switch ei := pbEvt.GetExtendedInfo().(type) {
@@ -336,7 +354,7 @@ func (ps *PubSub) HandleClusterEvent(req *sharedpb.ClusterEventReq, forwarded bo
 	if err != nil {
 		return nil, err
 	}
-	ps.Publish(event.WithIsForwarded(forwarded))
+	ps.Publish(event.WithForwarded(forwarded))
 
 	return &sharedpb.ClusterEventResp{Sequence: req.Sequence}, nil
 }
