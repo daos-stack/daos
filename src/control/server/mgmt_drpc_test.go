@@ -146,7 +146,7 @@ func TestSrvModule_HandleNotifyReady_Success_Multi(t *testing.T) {
 		t.Fatalf("Expected no error, got %q", err.Error())
 	}
 
-	// IO server at idx should be marked ready
+	// I/O Engine at idx should be marked ready
 	waitForEngineReady(t, mod.engines[idx])
 	// None of the other IO engines should have gotten the message
 	for i, s := range mod.engines {

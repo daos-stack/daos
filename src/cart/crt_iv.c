@@ -394,8 +394,8 @@ crt_ivf_finalize(struct iv_fetch_cb_info *iv_info, crt_iv_key_t *iv_key,
 			output = crt_reply_get(rpc);
 			output->ifo_rc = output_rc;
 
-			rc = crt_reply_send(rpc);
-			D_ASSERT(rc == 0);
+			/* Reply can fail */
+			crt_reply_send(rpc);
 		}
 
 		/* addref done in crt_hdlr_iv_fetch */
@@ -1019,8 +1019,8 @@ cleanup:
 		D_ERROR("Bulk transfer failed; rc=%d\n", rc);
 
 		output->ifo_rc = rc;
-		rc = crt_reply_send(rpc);
-		D_ASSERT(rc == 0);
+		/* Reply can fail */
+		crt_reply_send(rpc);
 
 		RPC_PUB_DECREF(rpc);
 
@@ -2535,9 +2535,10 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 		if (cb_info->cci_rc != 0)
 			child_output->rc = cb_info->cci_rc;
 
-		/* Fatal if reply send fails */
-		rc = crt_reply_send(iv_info->uci_child_rpc);
-		D_ASSERT(rc == 0);
+		/* Respond back to child; might fail if child is not alive */
+		if (crt_reply_send(iv_info->uci_child_rpc) != DER_SUCCESS)
+			D_ERROR("Failed to respond on rpc: %p",
+				iv_info->uci_child_rpc);
 
 		/* ADDREF done in crt_hdlr_iv_update */
 		RPC_PUB_DECREF(iv_info->uci_child_rpc);

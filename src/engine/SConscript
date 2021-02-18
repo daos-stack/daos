@@ -1,4 +1,4 @@
-"""Build DAOS I/O server"""
+"""Build DAOS I/O Engine"""
 import daos_build
 
 def scons():
@@ -7,7 +7,8 @@ def scons():
 
     denv = env.Clone()
 
-    libraries = ['daos_common', 'gurt', 'cart', 'vos_srv', 'daos']
+    denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
+    libraries = ['daos_common_pmem', 'gurt', 'cart', 'vos_srv', 'daos']
     libraries += ['bio', 'dl', 'uuid', 'pthread', 'abt']
     libraries += ['hwloc', 'pmemobj', 'protobuf-c']
 
@@ -20,7 +21,7 @@ def scons():
     # Add runtime paths for daos libraries
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
 
-    # Generate I/O server program
+    # Generate I/O Engine program
     engine = daos_build.program(denv, 'daos_engine',
                                 ['drpc_client.c', 'drpc_ras.c',
                                  'drpc_handler.c', 'drpc_listener.c',
