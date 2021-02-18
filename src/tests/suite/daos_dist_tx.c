@@ -512,15 +512,15 @@ dtx_13(void **state)
 
 	print_message("Commit the committed TX1...\n");
 	rc = daos_tx_commit(th, NULL);
-	assert_int_equal(rc, -DER_ALREADY);
+	assert_rc_equal(rc, -DER_ALREADY);
 
 	print_message("Abort the committed TX1, expect DER_NO_PERM\n");
 	rc = daos_tx_abort(th, NULL);
-	assert_int_equal(rc, -DER_NO_PERM);
+	assert_rc_equal(rc, -DER_NO_PERM);
 
 	print_message("Restart the committed TX1, expect DER_NO_PERM\n");
 	rc = daos_tx_restart(th, NULL);
-	assert_int_equal(rc, -DER_NO_PERM);
+	assert_rc_equal(rc, -DER_NO_PERM);
 
 	print_message("Update against the committed TX1, expect DER_NO_PERM\n");
 	arg->expect_result = -DER_NO_PERM;
@@ -542,18 +542,18 @@ dtx_13(void **state)
 
 	print_message("Restart the TX2, expect DER_NO_PERM\n");
 	rc = daos_tx_restart(th, NULL);
-	assert_int_equal(rc, -DER_NO_PERM);
+	assert_rc_equal(rc, -DER_NO_PERM);
 
 	print_message("Abort the TX2...\n");
 	MUST(daos_tx_abort(th, NULL));
 
 	print_message("Abort the TX2 again...\n");
 	rc = daos_tx_abort(th, NULL);
-	assert_int_equal(rc, -DER_ALREADY);
+	assert_rc_equal(rc, -DER_ALREADY);
 
 	print_message("Commit the aborted TX2, expect DER_NO_PERM\n");
 	rc = daos_tx_commit(th, NULL);
-	assert_int_equal(rc, -DER_NO_PERM);
+	assert_rc_equal(rc, -DER_NO_PERM);
 
 	print_message("Update against the aborted TX2, expect DER_NO_PERM\n");
 	arg->expect_result = -DER_NO_PERM;
@@ -607,7 +607,7 @@ again:
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	rc = daos_tx_commit(th, NULL);
-	assert_int_equal(rc, -DER_TX_RESTART);
+	assert_rc_equal(rc, -DER_TX_RESTART);
 
 	/* Not allow new I/O before restart the TX. */
 	arg->expect_result = -DER_NO_PERM;
@@ -834,7 +834,7 @@ dtx_18(void **state)
 
 	/* Expect to hit conflict with the read TS on other shards. */
 	rc = daos_tx_commit(th, NULL);
-	assert_int_equal(rc, -DER_TX_RESTART);
+	assert_rc_equal(rc, -DER_TX_RESTART);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	daos_fail_value_set(0);
@@ -1038,7 +1038,7 @@ dtx_20(void **state)
 			      &reqs[i]);
 
 	rc = daos_tx_commit(th, NULL);
-	assert_int_equal(rc, -DER_IO);
+	assert_rc_equal(rc, -DER_IO);
 
 	MUST(daos_tx_close(th, NULL));
 
@@ -1118,7 +1118,7 @@ dtx_21(void **state)
 	print_message("Failed punch firstly\n");
 
 	rc = daos_obj_punch(req.oh, DAOS_TX_NONE, 0, NULL);
-	assert_int_equal(rc, -DER_IO);
+	assert_rc_equal(rc, -DER_IO);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0)
@@ -1236,7 +1236,7 @@ restart:
 				goto restart;
 			}
 
-			assert_int_equal(reqs[i].result, 0);
+			assert_rc_equal(reqs[i].result, 0);
 		}
 
 		/* If "vals[0] > vals[1]", then vals[0]'s TX internal update
@@ -1263,7 +1263,7 @@ restart:
 			goto restart;
 		}
 
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		MUST(daos_tx_close(th, NULL));
 	}
 
@@ -1318,10 +1318,10 @@ restart:
 
 	rc = daos_tx_commit(th, NULL);
 	if (once) {
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	} else {
 		once = true;
-		assert_int_equal(rc, -DER_TX_RESTART);
+		assert_rc_equal(rc, -DER_TX_RESTART);
 
 		MPI_Barrier(MPI_COMM_WORLD);
 		if (arg->myrank == 0)
@@ -1609,9 +1609,9 @@ dtx_uncertainty_miss_request(test_arg_t *arg, uint64_t loc, bool abort)
 
 		rc = daos_tx_commit(th, NULL);
 		if (abort)
-			assert_int_equal(rc, -DER_IO);
+			assert_rc_equal(rc, -DER_IO);
 		else
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 
 		MUST(daos_tx_close(th, NULL));
 	}
@@ -1733,9 +1733,9 @@ dtx_generate_layout(test_arg_t *arg, const char *dkey1, const char *dkey2,
 
 			rc = daos_tx_commit(th, NULL);
 			if (i % 2 == 1 && inject_fail)
-				assert_int_equal(rc, -DER_IO);
+				assert_rc_equal(rc, -DER_IO);
 			else
-				assert_int_equal(rc, 0);
+				assert_rc_equal(rc, 0);
 
 			MUST(daos_tx_close(th, NULL));
 		}
@@ -1938,9 +1938,9 @@ dtx_30(void **state)
 
 		rc = daos_tx_commit(th, NULL);
 		if (i % 2 == 1)
-			assert_int_equal(rc, -DER_IO);
+			assert_rc_equal(rc, -DER_IO);
 		else
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 
 		MUST(daos_tx_close(th, NULL));
 	}
@@ -2193,9 +2193,9 @@ dtx_33(void **state)
 
 			rc = daos_tx_commit(th, NULL);
 			if (i % 2 == 1)
-				assert_int_equal(rc, -DER_IO);
+				assert_rc_equal(rc, -DER_IO);
 			else
-				assert_int_equal(rc, 0);
+				assert_rc_equal(rc, 0);
 
 			MUST(daos_tx_close(th, NULL));
 		}
@@ -2306,7 +2306,7 @@ dtx_34(void **state)
 
 		rc = daos_obj_punch_akeys(reqs[0].oh, th, 0, &api_dkey2,
 					  IOREQ_SG_IOD_NR, api_akeys + i, NULL);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 
 		insert(dkey1, IOREQ_SG_IOD_NR, (const char **)(akeys + i),
 		       rec_sizes + i, rx_nr + i, offsets + i,
@@ -2314,7 +2314,7 @@ dtx_34(void **state)
 
 		rc = daos_obj_punch_akeys(reqs[1].oh, th, 0, &api_dkey2,
 					  IOREQ_SG_IOD_NR, api_akeys + i, NULL);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 
 		MUST(daos_tx_commit(th, NULL));
 		MUST(daos_tx_close(th, NULL));
@@ -2579,6 +2579,9 @@ dtx_37(void **state)
 	d_rank_t	 kill_rank = CRT_NO_RANK;
 	int		 i;
 
+	/* Skip it because of DAOS-6771 */
+	skip();
+
 	FAULT_INJECTION_REQUIRED();
 
 	print_message("DTX37: resync - leader failed during prepare\n");
@@ -2818,7 +2821,7 @@ dtx_38(void **state)
 				 */
 				assert_int_equal(val, i + 1);
 			} else {
-				assert_int_equal(reqs[0].result,
+				assert_rc_equal(reqs[0].result,
 						 -DER_DATA_LOSS);
 			}
 
@@ -2830,7 +2833,7 @@ dtx_38(void **state)
 				 */
 				assert_int_equal(val, i + 1);
 			} else {
-				assert_int_equal(reqs[0].result,
+				assert_rc_equal(reqs[0].result,
 						 -DER_DATA_LOSS);
 			}
 		}

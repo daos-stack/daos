@@ -392,6 +392,7 @@ ds_mgmt_tgt_cleanup(void)
 	}
 	ABT_cond_free(&pooltgts->dpt_cv);
 	ABT_mutex_free(&pooltgts->dpt_mutex);
+	D_FREE(pooltgts);
 	D_FREE(zombies_path);
 	D_FREE(newborns_path);
 }
@@ -755,8 +756,8 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	struct mgmt_tgt_create_in	*tc_in;
 	struct mgmt_tgt_create_out	*tc_out;
 	uuid_t				tgt_uuid;
-	d_rank_t			*rank;
-	uuid_t				*tmp_tgt_uuid;
+	d_rank_t			*rank = NULL;
+	uuid_t				*tmp_tgt_uuid = NULL;
 	char				*path = NULL;
 	struct ds_pooltgts_rec		*ptrec = NULL;
 	int				 rc = 0;
@@ -836,14 +837,15 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 		D_GOTO(free, rc = -DER_NOMEM);
 
 	rc = crt_group_rank(NULL, rank);
-	D_ASSERT(rc == 0);
+	if (rc)
+		D_GOTO(free, rc);
 	tc_out->tc_ranks.ca_arrays = rank;
 	tc_out->tc_ranks.ca_count = 1;
 
 	rc = ds_pool_start(tc_in->tc_pool_uuid);
-	if (rc != 0)
-		D_ERROR(DF_UUID": failed to start pool: %d\n",
-			DP_UUID(tc_in->tc_pool_uuid), rc);
+	if (rc)
+		D_ERROR(DF_UUID": failed to start pool: "DF_RC"\n",
+			DP_UUID(tc_in->tc_pool_uuid), DP_RC(rc));
 
 free:
 	D_FREE(path);
@@ -858,7 +860,11 @@ out_rec:
 	D_FREE(ptrec);
 out_reply:
 	tc_out->tc_rc = rc;
-	crt_reply_send(tc_req);
+	rc = crt_reply_send(tc_req);
+	if (rc) {
+		D_FREE(rank);
+		D_FREE(tmp_tgt_uuid);
+	}
 }
 
 static int

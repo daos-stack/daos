@@ -49,7 +49,7 @@ typedef enum _Mgmt__JoinResp__State {
 /* --- messages --- */
 
 /*
- * Generic response just containing DER from IO server.
+ * Generic response just containing DER from I/O Engine.
  */
 struct  _Mgmt__DaosResp
 {
@@ -261,7 +261,7 @@ struct  _Mgmt__GetAttachInfoResp
    */
   uint32_t net_dev_class;
   /*
-   * IO server network interface
+   * I/O Engine network interface
    */
   /*
    * Ranks local to MS replicas
@@ -278,7 +278,7 @@ struct  _Mgmt__PrepShutdownReq
 {
   ProtobufCMessage base;
   /*
-   * DAOS IO server unique identifier.
+   * DAOS I/O Engine unique identifier.
    */
   uint32_t rank;
 };
@@ -291,7 +291,7 @@ struct  _Mgmt__PingRankReq
 {
   ProtobufCMessage base;
   /*
-   * DAOS IO server unique identifier.
+   * DAOS I/O Engine unique identifier.
    */
   uint32_t rank;
 };
@@ -304,7 +304,7 @@ struct  _Mgmt__SetRankReq
 {
   ProtobufCMessage base;
   /*
-   * DAOS IO server unique identifier.
+   * DAOS I/O Engine unique identifier.
    */
   uint32_t rank;
 };

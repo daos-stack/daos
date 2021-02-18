@@ -11,12 +11,12 @@ usr/bin/pl_bench
 usr/bin/rdbt
 usr/lib64/libvos.so
 usr/lib64/libdaos_common.so
-usr/etc/memcheck-cart.supp
-usr/etc/vos_size_input.yaml
+etc/daos/memcheck-cart.supp
+etc/daos/vos_size_input.yaml
 # TODO: this should move from daos_srv to daos
 usr/lib64/daos_srv/libplacement.so
 # Certificate generation files
 usr/lib64/daos/certgen/*
 usr/lib64/daos/VERSION
-usr/etc/bash_completion.d/daos.bash
+etc/bash_completion.d/daos.bash
 usr/lib64/libdaos_common_pmem.so
