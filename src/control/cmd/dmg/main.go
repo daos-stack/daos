@@ -223,8 +223,8 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			}
 			ctlCfg = control.DefaultConfig()
 		}
-		if opts.ConfigPath != "" {
-			log.Debugf("control config loaded from %s", opts.ConfigPath)
+		if ctlCfg.path != "" {
+			log.Debugf("control config loaded from %s", ctlCfg.path)
 		}
 
 		if opts.Insecure {

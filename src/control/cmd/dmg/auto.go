@@ -24,6 +24,7 @@ type configCmd struct {
 
 type configGenCmd struct {
 	logCmd
+	cfgCmd
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
@@ -41,10 +42,12 @@ type configGenCmd struct {
 func (cmd *configGenCmd) Execute(_ []string) error {
 	ctx := context.Background()
 
+	cmd.log.Debugf("configGenCmd input control config: %+v", cmd.config)
+
 	req := control.ConfigGenerateReq{
 		NrEngines: cmd.NrEngines,
 		MinNrSSDs: cmd.MinNrSSDs,
-		HostList:  cmd.hostlist,
+		HostList:  cmd.config.HostList,
 		Client:    cmd.ctlInvoker,
 		Log:       cmd.log,
 	}
