@@ -478,11 +478,15 @@ main(int argc, char **argv)
 			rc = uuid_parse(optarg, ts_ctx.tsc_pool_uuid);
 			if (rc)
 				return rc;
+			/* provided a pool so don't need to create a new one */
+			ts_ctx.tsc_skip_pool_create = true;
 			break;
 		case 'c':
 			rc = uuid_parse(optarg, ts_ctx.tsc_cont_uuid);
 			if (rc)
 				return rc;
+			/* provided a cont so don't need to create a new one */
+			ts_ctx.tsc_skip_cont_create = true;
 			break;
 		case 't':
 			duration = strtoul(optarg, &endp, 0);
