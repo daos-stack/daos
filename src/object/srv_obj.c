@@ -135,7 +135,7 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint64_t epoch,
 
 	D_DEBUG(DB_IO, "rpc %p opc %d send reply, pmv %d, epoch "DF_U64
 		", status %d\n", rpc, opc_get(rpc->cr_opc),
-		ioc->ioc_map_ver, epoch, status);
+		ioc->ioc_map_ver, orwo->orw_epoch, status);
 
 	if (!ioc->ioc_lost_reply) {
 		rc = crt_reply_send(rpc);
