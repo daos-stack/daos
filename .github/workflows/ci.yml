@@ -48,9 +48,12 @@ jobs:
       with:
         key: daos-${{ env.CACHE_KEY }}-${{ matrix.distro }}-{hash}
         restore-keys: daos-${{ env.CACHE_KEY }}-${{ matrix.distro }}-
-    - name: Build deps Docker image
+    - name: Build base Docker image
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
-                          --build-arg NOBUILD=1
+                          --build-arg DAOS_DEPS_BUILD=no
+    - name: Build deps in Docker image
+      run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
+                          --build-arg DAOS_BUILD=no --build-arg DEPS_JOBS=10
   Build2:
     name: Run the build
     needs: Prepare
@@ -76,11 +79,11 @@ jobs:
         skip-save: true
     - name: re-build deps image
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
-                          --build-arg NOBUILD=1
+                          --build-arg DAOS_BUILD=no --build-arg DEPS_JOBS=10
     - name: Build daos
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg COMPILER=${{ matrix.compiler }}
-                          -t build-image
+                          -t build-arg DAOS_JAVA_BUILD=no --build-arg DEPS_JOBS=10
     - name: check server
       run: docker run build-image ldd /opt/daos/bin/daos_io_server
     - name: Run Unit Tests

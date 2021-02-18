@@ -51,15 +51,7 @@ RUN apt-get -y upgrade && apt-get clean all
 # ease-of-use for users, however in CI everything is turned off and then
 # selectively enabled.  Turning off any step disables all future steps.
 ARG DAOS_DEPS_BUILD=yes
-ARG DAOS_BUILD=$DAOS_DEPS_BUILD
-ARG DAOS_JAVA_BUILD=$DAOS_BUILD
-# Legacy, NOBUILD should be set to any string to disable all three.
-ARG NOBUILD=no
-
-# set PREBUILD to skip initial build.
-ARG PREBUILD=yes
-
-RUN [ "$PREBUILD" != "yes" ] || (scons --build-deps=yes install PREFIX=/opt/daos --deps-only && /bin/rm -rf build *.gz)
+ARG DEPS_JOBS=1
 
 # The COPY command has a --chown option but it's not well supported so copy as
 # root then run a chown command which is frustrating as the copy can take a few
@@ -73,7 +65,7 @@ USER daos_server:daos_server
 RUN ln -s utils/sl site_scons
 
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    (scons --build-deps=yes install PREFIX=/opt/daos --deps-only && \
+    (scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos --deps-only && \
     /bin/rm -rf build *.gz)
 
 WORKDIR /home/daos/daos/
@@ -85,30 +77,41 @@ RUN chown -R daos_server.daos_server /home/daos
 USER daos_server:daos_server
 RUN ln -s utils/sl site_scons
 
+ARG DAOS_BUILD=$DAOS_DEPS_BUILD
+ARG JOBS=$DEPS_JOBS
+ARG COMPILER=gcc
+
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
-    (scons -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER && \
+    (scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER && \
     /bin/rm -rf build && \
     cp -r utils/config/examples /opt/daos)
 
 # Set environment variables
-ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:/opt/daos/prereq/release/spdk/lib/:$LD_LIBRARY_PATH
+ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:$LD_LIBRARY_PATH
 ENV PATH=/opt/daos/bin:$PATH
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
 
 # Build java and hadoop bindings
-WORKDIR /home/daos/src/client/java
-RUN [ "$NOBUILD" != "no" ] || mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
+WORKDIR /home/daos/daos/src/client/java
+# Set maven repo mirror
+RUN mkdir -p /home/daos/.m2
+RUN echo -e "<settings>\n\
+        <mirrors>\n\
+                <mirror>\n\
+                        <id>google-maven-central</id>\n\
+                        <name>GCS Maven Central mirror</name>\n\
+                        <url>https://maven-central.storage-download.googleapis.com/maven2/</url>\n\
+                        <mirrorOf>central</mirrorOf>\n\
+                </mirror>\n\
+        </mirrors>\n\
+</settings>" > /home/daos/.m2/settings.xml
+
+ARG DAOS_JAVA_BUILD=$DAOS_BUILD
+
+RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
+    mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
 WORKDIR /home/daos
 
-RUN [ "$NOBUILD" != "no" ] || (. utils/sl/setup_local.sh && ./utils/setup_daos_admin.sh)
-
-ENV CMOCKA_XML_FILE=/home/daos/test_results/%g.xml
-ENV GO_TEST_XML=/home/daos/test_results/run_go_tests.xml
-ENV CMOCKA_MESSAGE_OUTPUT=xml
-ENV DAOS_BASE=/home/daos
-
-RUN mkdir /home/daos/test_results/
-
 # Remove local copy
-# RUN rm -rf /home/daos/*
+RUN rm -rf /home/daos/*
