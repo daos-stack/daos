@@ -7,6 +7,7 @@
 package control
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
@@ -21,7 +22,12 @@ import (
 	"github.com/daos-stack/daos/src/control/security"
 )
 
-var testCfg = DefaultConfig()
+var (
+	testCfg       = DefaultConfig()
+	defCfgCmpOpts = []cmp.Option{
+		cmpopts.IgnoreUnexported(security.CertificateConfig{}),
+	}
+)
 
 func saveConfig(t *testing.T, cfg *Config, cfgPath string) {
 	t.Helper()
@@ -64,16 +70,14 @@ func TestControl_LoadSystemConfig(t *testing.T) {
 	restore := setDirs(t, "NONE", tmpDir)
 	defer restore(t)
 	saveConfig(t, testCfg, SystemConfigPath())
+	testCfg.Path = fmt.Sprintf("%s/%s", tmpDir, defaultConfigFile)
 
 	gotCfg, err := LoadConfig("")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	cmpOpts := []cmp.Option{
-		cmpopts.IgnoreUnexported(security.CertificateConfig{}),
-	}
-	if diff := cmp.Diff(testCfg, gotCfg, cmpOpts...); diff != "" {
+	if diff := cmp.Diff(testCfg, gotCfg, defCfgCmpOpts...); diff != "" {
 		t.Fatalf("loaded cfg doesn't match (-want, +got):\n%s\n", diff)
 	}
 }
@@ -85,16 +89,14 @@ func TestControl_LoadUserConfig(t *testing.T) {
 	restore := setDirs(t, tmpDir, "NONE")
 	defer restore(t)
 	saveConfig(t, testCfg, UserConfigPath())
+	testCfg.Path = fmt.Sprintf("%s/.%s", tmpDir, defaultConfigFile)
 
 	gotCfg, err := LoadConfig("")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	cmpOpts := []cmp.Option{
-		cmpopts.IgnoreUnexported(security.CertificateConfig{}),
-	}
-	if diff := cmp.Diff(testCfg, gotCfg, cmpOpts...); diff != "" {
+	if diff := cmp.Diff(testCfg, gotCfg, defCfgCmpOpts...); diff != "" {
 		t.Fatalf("loaded cfg doesn't match (-want, +got):\n%s\n", diff)
 	}
 }
@@ -107,16 +109,14 @@ func TestControl_LoadSpecifiedConfig(t *testing.T) {
 	defer restore(t)
 	testPath := path.Join(tmpDir, "test.yml")
 	saveConfig(t, testCfg, testPath)
+	testCfg.Path = testPath
 
 	gotCfg, err := LoadConfig(testPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	cmpOpts := []cmp.Option{
-		cmpopts.IgnoreUnexported(security.CertificateConfig{}),
-	}
-	if diff := cmp.Diff(testCfg, gotCfg, cmpOpts...); diff != "" {
+	if diff := cmp.Diff(testCfg, gotCfg, defCfgCmpOpts...); diff != "" {
 		t.Fatalf("loaded cfg doesn't match (-want, +got):\n%s\n", diff)
 	}
 }
