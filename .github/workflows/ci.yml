@@ -86,7 +86,7 @@ jobs:
                           --build-arg DAOS_JAVA_BUILD=no --build-arg DEPS_JOBS=10
                           -t build-image
     - name: check server
-      run: docker run build-image ldd /opt/daos/bin/daos_io_server
+      run: docker run build-image ldd /opt/daos/bin/daos_engine
       #    - name: Run Unit Tests
       #run: docker run --name build-ut --tmpfs /mnt/daos build-image ./utils/run_test.sh
       #- name: mkdir
