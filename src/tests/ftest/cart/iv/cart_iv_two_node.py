@@ -296,6 +296,3 @@ class CartIvTwoNodeTest(TestWithoutServers):
         if failed:
             self.fail("Test failed.\n")
 
-
-if __name__ == "__main__":
-    main()

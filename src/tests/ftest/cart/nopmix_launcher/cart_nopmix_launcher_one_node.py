@@ -61,6 +61,3 @@ class CartNoPmixLauncherOneNodeTest(TestWithoutServers):
         cmd += " {}".format(cli_arg)
 
         self.utils.launch_test(self, cmd)
-
-if __name__ == "__main__":
-    main()

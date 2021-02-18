@@ -28,7 +28,7 @@ class CartRpcTwoNodeTest(TestWithoutServers):
         print("Running setup\n")
         self.utils = CartUtils()
         self.env = self.utils.get_env(self)
-				super(CartRpcTwoNodeTest, self).setUp()
+        super(CartRpcTwoNodeTest, self).setUp()
 
     def tearDown(self):
         """ Tear down """
@@ -47,6 +47,3 @@ class CartRpcTwoNodeTest(TestWithoutServers):
 
         self.utils.launch_srv_cli_test(self, srvcmd, clicmd)
         self.utils.log_check(self)
-
-if __name__ == "__main__":
-    main()

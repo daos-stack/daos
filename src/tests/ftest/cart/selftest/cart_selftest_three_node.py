@@ -67,6 +67,3 @@ class CartSelfThreeNodeTest(TestWithoutServers):
         # from this test.
         if not self.utils.wait_process(srv_rtn, 5):
             self.utils.stop_process(srv_rtn)
-
-if __name__ == "__main__":
-    main()

@@ -47,6 +47,3 @@ class CartRpcOneNodeTest(TestWithoutServers):
 
         self.utils.launch_srv_cli_test(self, srvcmd, clicmd)
         self.utils.log_check(self)
-
-if __name__ == "__main__":
-    main()

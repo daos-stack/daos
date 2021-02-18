@@ -68,6 +68,3 @@ class CartNoPmixOneNodeTest(TestWithoutServers):
 
         self.utils.print("Finished waiting for {}".format(p))
 
-
-if __name__ == "__main__":
-    main()

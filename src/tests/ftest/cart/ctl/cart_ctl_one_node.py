@@ -63,6 +63,3 @@ class CartCtlOneNodeTest(TestWithoutServers):
                 self, self.env, "test_clients", index=index)
             self.utils.launch_test(self, clicmd, srv_rtn)
 
-
-if __name__ == "__main__":
-    main()

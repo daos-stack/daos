@@ -47,6 +47,3 @@ class CartCoRpcOneNodeTest(TestWithoutServers):
 
         self.utils.launch_test(self, cmd)
 
-
-if __name__ == "__main__":
-    main()
