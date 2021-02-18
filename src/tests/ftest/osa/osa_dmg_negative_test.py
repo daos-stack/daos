@@ -31,7 +31,14 @@ class OSADmgNegativeTest(OSAUtils):
                                         "/run/dmg_cmds/*")
 
     def check_results(self, exp_result, dmg_output):
+        """Check the dmg_output results with expected results
+
+        Args:
+            exp_result (str) : Expected result (Pass or Fail string).
+            dmg_output (str) : dmg output string.
+        """
         if exp_result == "Pass":
+            time.sleep(15)
             if "succeeded" in dmg_output:
                 self.log.info("Test Passed")
             else:
@@ -93,6 +100,7 @@ class OSADmgNegativeTest(OSAUtils):
                 # Exclude and reintegrate commands presently
                 # don't take a list.
                 # First perform OSA dmg exclude
+                time.sleep(5)
                 output = self.dmg_command.pool_exclude(self.pool.uuid,
                                                        rank,
                                                        target)
