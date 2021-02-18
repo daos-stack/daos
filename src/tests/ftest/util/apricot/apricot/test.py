@@ -816,7 +816,7 @@ class TestWithServers(TestWithoutServers):
             name (str): manager name
             manager (SubprocessManager): the daos agent/server process manager
             hosts (list): list of hosts on which to start the daos agent/server
-            slots (int): number of slots per server to define in the hostfile
+            slots (int): number of slots per engine to define in the hostfile
             access_points (list, optional): list of access point hosts. Defaults
                 to None which uses self.access_points.
         """
@@ -1043,7 +1043,7 @@ class TestWithServers(TestWithoutServers):
         return self._stop_managers(self.agent_managers, "agents")
 
     def stop_servers(self):
-        """Stop the daos server and I/O servers.
+        """Stop the daos server and I/O Engines.
 
         Returns:
             list: a list of exceptions raised stopping the servers
