@@ -30,6 +30,20 @@ class OSADmgNegativeTest(OSAUtils):
         self.test_seq = self.params.get("dmg_cmd_test",
                                         "/run/dmg_cmds/*")
 
+    def check_results(self, exp_result, dmg_output):
+        if exp_result == "Pass":
+            if "succeeded" in dmg_output:
+                self.log.info("Test Passed")
+            else:
+                self.fail("Test Failed")
+        elif exp_result == "Fail":
+            if "failed" in dmg_output:
+                self.log.info("Test Passed")
+            else:
+                self.fail("Test Failed")
+        else:
+            self.fail("Invalid Parameter")
+
     def run_osa_dmg_test(self, num_pool):
         """Run the offline extend without data.
 
@@ -63,15 +77,19 @@ class OSADmgNegativeTest(OSAUtils):
         for val in range(0, num_pool):
             for i in range(len(self.test_seq)):
                 self.pool = pool[val]
-                scm_size = self.pool.scm_size
-                nvme_size = self.pool.nvme_size
+                # scm_size = self.pool.scm_size
+                # nvme_size = self.pool.nvme_size
                 rank = self.test_seq[i][0]
                 target = "{}".format(self.test_seq[i][1])
-                output = self.dmg_command.pool_extend(self.pool.uuid,
-                                                      rank,
-                                                      scm_size,
-                                                      nvme_size)
-                self.log.info(output)
+                expected_result = "{}".format(self.test_seq[i][2])
+                self.log.info("Expected result : %s", expected_result)
+                # output = self.dmg_command.pool_extend(self.pool.uuid,
+                #                                      rank,
+                #                                      scm_size,
+                #                                      nvme_size)
+                # self.log.info(output.stderr)
+                # if expected_result == "Pass":
+                #    time.sleep(10)
                 # Exclude and reintegrate commands presently
                 # don't take a list.
                 # First perform OSA dmg exclude
@@ -79,12 +97,25 @@ class OSADmgNegativeTest(OSAUtils):
                                                        rank,
                                                        target)
                 self.log.info(output)
-                time.sleep(10)
+                self.check_results(expected_result, output.stdout)
                 # Now reintegrate the excluded rank.
                 output = self.dmg_command.pool_reintegrate(self.pool.uuid,
                                                            rank,
                                                            target)
                 self.log.info(output)
+                self.check_results(expected_result, output.stdout)
+                # Now reintegrate the excluded rank.
+                output = self.dmg_command.pool_drain(self.pool.uuid,
+                                                     rank,
+                                                     target)
+                self.log.info(output)
+                self.check_results(expected_result, output.stdout)
+                # Now reintegrate the drained rank
+                output = self.dmg_command.pool_reintegrate(self.pool.uuid,
+                                                           rank,
+                                                           target)
+                self.log.info(output)
+                self.check_results(expected_result, output.stdout)
 
     def test_osa_dmg_cmd(self):
         """
