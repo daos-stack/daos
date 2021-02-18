@@ -13,6 +13,7 @@ from __future__ import print_function
 import os
 import json
 import re
+import requests
 
 from avocado import Test as avocadoTest
 from avocado import skip, TestFail, fail_on
@@ -36,12 +37,9 @@ from distutils.spawn import find_executable
 from write_host_file import write_host_file
 
 
-# pylint: disable=invalid-name
-def skipForTicket(ticket):
+def skipForTicket(ticket): # pylint: disable=invalid-name
     """Skip a test with a comment about a ticket."""
     return skip("Skipping until {} is fixed.".format(ticket))
-# pylint: enable=invalid-name
-
 
 def get_log_file(name):
     """Get the full log file name and path.
@@ -135,9 +133,22 @@ class Test(avocadoTest):
 
     def setUp(self):
         """Set up each test case."""
+        self.skip_from_list()
         self.check_variant_skip()
         self.log.info("*** SETUP running on %s ***", str(detect()))
         super(Test, self).setUp()
+
+    def skip_from_list(self):
+        """Check if test is in skip list"""
+        response = requests.get('https://gist.github.com/brianjmurrell/f2fb10c855aacc7a86cc3ce725e1f47f/raw/2d6cf62fec6ab4f66bc77796ad95405b550f5874/gistfile1.txt')
+        if response.status_code == 200:
+            skip_list = response.text.splitlines()
+            print(self.get_test_name())
+            if self.get_test_name() in skip_list:
+                self.cancel("Skipping due to being on the skip list")
+        else:
+            print("Unable to read skip list: ", response)
+            print("Trudging on")
 
     def check_variant_skip(self):
         """Determine if this test variant should be skipped.
