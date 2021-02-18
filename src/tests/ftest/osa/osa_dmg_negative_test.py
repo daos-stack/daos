@@ -30,15 +30,15 @@ class OSADmgNegativeTest(OSAUtils):
         self.test_seq = self.params.get("dmg_cmd_test",
                                         "/run/dmg_cmds/*")
 
-    def check_results(self, exp_result, dmg_output):
-        """Check the dmg_output results with expected results
+    def validate_results(self, exp_result, dmg_output):
+        """Validate the dmg_output results with expected results
 
         Args:
             exp_result (str) : Expected result (Pass or Fail string).
             dmg_output (str) : dmg output string.
         """
         if exp_result == "Pass":
-            time.sleep(15)
+            self.is_rebuild_done(3)
             if "succeeded" in dmg_output:
                 self.log.info("Test Passed")
             else:
@@ -81,49 +81,46 @@ class OSADmgNegativeTest(OSAUtils):
         time.sleep(5)
 
         # Get rank, target from the test_dmg_seeuence
+        # Some test_dmg_sequence data will be invalid, valid.
         for val in range(0, num_pool):
             for i in range(len(self.test_seq)):
                 self.pool = pool[val]
-                # scm_size = self.pool.scm_size
-                # nvme_size = self.pool.nvme_size
+                scm_size = self.pool.scm_size
+                nvme_size = self.pool.nvme_size
                 rank = self.test_seq[i][0]
                 target = "{}".format(self.test_seq[i][1])
                 expected_result = "{}".format(self.test_seq[i][2])
-                self.log.info("Expected result : %s", expected_result)
-                # output = self.dmg_command.pool_extend(self.pool.uuid,
-                #                                      rank,
-                #                                      scm_size,
-                #                                      nvme_size)
-                # self.log.info(output.stderr)
-                # if expected_result == "Pass":
-                #    time.sleep(10)
-                # Exclude and reintegrate commands presently
-                # don't take a list.
-                # First perform OSA dmg exclude
-                time.sleep(5)
+                # Extend a rank
+                output = self.dmg_command.pool_extend(self.pool.uuid,
+                                                      rank,
+                                                      scm_size,
+                                                      nvme_size)
+                self.log.info(output)
+                self.validate_results(expected_result, output.stdout)
+                # Exclude a rank, target
                 output = self.dmg_command.pool_exclude(self.pool.uuid,
                                                        rank,
                                                        target)
                 self.log.info(output)
-                self.check_results(expected_result, output.stdout)
+                self.validate_results(expected_result, output.stdout)
                 # Now reintegrate the excluded rank.
                 output = self.dmg_command.pool_reintegrate(self.pool.uuid,
                                                            rank,
                                                            target)
                 self.log.info(output)
-                self.check_results(expected_result, output.stdout)
+                self.validate_results(expected_result, output.stdout)
                 # Now reintegrate the excluded rank.
                 output = self.dmg_command.pool_drain(self.pool.uuid,
                                                      rank,
                                                      target)
                 self.log.info(output)
-                self.check_results(expected_result, output.stdout)
+                self.validate_results(expected_result, output.stdout)
                 # Now reintegrate the drained rank
                 output = self.dmg_command.pool_reintegrate(self.pool.uuid,
                                                            rank,
                                                            target)
                 self.log.info(output)
-                self.check_results(expected_result, output.stdout)
+                self.validate_results(expected_result, output.stdout)
 
     def test_osa_dmg_cmd(self):
         """

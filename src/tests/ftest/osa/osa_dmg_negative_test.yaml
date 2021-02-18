@@ -65,5 +65,5 @@ dmg_cmds:
     - ["5", "10", "Fail"]
     - ["6", "10", "Fail"]
   # Valid Rank and Target list
-    - ["2", "0,1", "Pass"]
-  #  - ["5", "0,1", "Pass"]
+    - ["4", "0,1", "Pass"]
+    - ["5", "0,1", "Pass"]
