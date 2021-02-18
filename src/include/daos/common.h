@@ -834,11 +834,11 @@ daos_anchor_is_zero(daos_anchor_t *anchor)
 
 /* Secure memory scrub */
 #define barrier_data(ptr) \
-	asm volatile("": :"r"(ptr) :"memory")
+	(asm volatile("" :  : "r"(ptr) : "memory"))
 
 static inline void
 memzero_explicit(void *s, size_t count) {
-	memset(s,0,count);
+	memset(s, 0, count);
 	barrier_data(s);
 }
 
