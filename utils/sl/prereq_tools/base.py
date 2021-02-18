@@ -597,7 +597,8 @@ class PreReqComponent():
         for var in ["HOME", "TERM", "SSH_AUTH_SOCK",
                     "http_proxy", "https_proxy",
                     "PKG_CONFIG_PATH", "MODULEPATH",
-                    "MODULESHOME", "MODULESLOADED"]:
+                    "MODULESHOME", "MODULESLOADED",
+                    "COVFILE"]:
             value = os.environ.get(var)
             if value:
                 real_env[var] = value
@@ -817,7 +818,7 @@ class PreReqComponent():
             self.__env.Replace(**args)
 
         if compiler == 'covc':
-            covfile = self.__top_dir + "/install/lib/daos/TESTING/test.cov"
+            covfile = self.__top_dir + "/test.cov"
             if os.path.isfile(covfile):
                 os.remove(covfile)
             commands = ['$COV01 -1', '$COV01 -s']

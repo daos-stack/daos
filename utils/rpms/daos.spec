@@ -212,6 +212,7 @@ This is the package needed to build software with the DAOS library.
 scons %{?_smp_mflags}      \
       --config=force       \
       --no-rpath           \
+      COMPILER=covc        \
       USE_INSTALLED=all    \
       CONF_DIR=%{conf_dir} \
       PREFIX=%{?buildroot} \
@@ -386,6 +387,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files tests
 %dir %{_prefix}/lib/daos
 %{_prefix}/lib/daos/TESTING
+%{_prefix}/test.cov
 %{_bindir}/hello_drpc
 %{_bindir}/*_test*
 %{_bindir}/jobtest

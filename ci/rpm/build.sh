@@ -12,6 +12,9 @@
 # has disabled fault injection or this is a Release build
 set -ex
 
+export COVFILE=$PWD/install/test.cov
+echo SCHAN15 - COVFILE=$COVFILE
+
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 ci_envs="$mydir/../parse_ci_envs.sh"
 if [ -e "${ci_envs}" ]; then
