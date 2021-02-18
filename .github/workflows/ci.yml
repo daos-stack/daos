@@ -84,6 +84,7 @@ jobs:
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg COMPILER=${{ matrix.compiler }}
                           --build-arg DAOS_JAVA_BUILD=no --build-arg DEPS_JOBS=10
+                          -t build-image
     - name: check server
       run: docker run build-image ldd /opt/daos/bin/daos_io_server
       #    - name: Run Unit Tests
@@ -103,6 +104,8 @@ jobs:
       #  files: test_results/*.xml
     - name: Run NLT Test
       run: docker run --tmpfs /mnt/daos build-image ./utils/node_local_test.py --no-root kv
+    - name: Copy results
+      run: docker cp build-ut:/home/daos/*.json ./
     - name: grep
       if: always()
       run: grep . *.json
