@@ -2913,8 +2913,6 @@ crt_group_secondary_create(crt_group_id_t grp_name, crt_group_t *primary_grp,
 
 	*ret_grp = &grp_priv->gp_pub;
 
-	crt_grp_priv_addref(grp_priv);
-
 	D_RWLOCK_WRLOCK(&crt_grp_list_rwlock);
 	crt_grp_insert_locked(grp_priv);
 	D_RWLOCK_UNLOCK(&crt_grp_list_rwlock);
