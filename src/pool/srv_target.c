@@ -380,8 +380,6 @@ pool_free_ref(struct daos_llink *llink)
 
 	D_DEBUG(DF_DSMS, DF_UUID": freeing\n", DP_UUID(pool->sp_uuid));
 
-	ds_iv_ns_put(pool->sp_iv_ns);
-
 	rc = crt_group_secondary_destroy(pool->sp_group);
 	if (rc != 0)
 		D_ERROR(DF_UUID": failed to destroy pool group: %d\n",
@@ -397,6 +395,8 @@ pool_free_ref(struct daos_llink *llink)
 	pl_map_disconnect(pool->sp_uuid);
 	if (pool->sp_map != NULL)
 		pool_map_decref(pool->sp_map);
+
+	ds_iv_ns_put(pool->sp_iv_ns);
 
 	ABT_cond_free(&pool->sp_fetch_hdls_cond);
 	ABT_cond_free(&pool->sp_fetch_hdls_done_cond);
@@ -985,8 +985,7 @@ pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
 	}
 
 	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
-	if (coll_args.ca_exclude_tgts)
-		D_FREE(coll_args.ca_exclude_tgts);
+	D_FREE(coll_args.ca_exclude_tgts);
 	if (rc) {
 		D_ERROR("Pool query on pool "DF_UUID" failed, "DF_RC"\n",
 			DP_UUID(pool->sp_uuid), DP_RC(rc));
@@ -1050,7 +1049,7 @@ ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic)
 	}
 
 out:
-	if (rc != 0 && hdl != NULL)
+	if (rc != 0)
 		D_FREE(hdl);
 
 	D_DEBUG(DF_DSMS, DF_UUID": connect "DF_RC"\n",
@@ -1257,7 +1256,7 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 				     0, 0, NULL);
 		if (ret) {
 			D_ERROR("dtx_resync_ult failure %d\n", ret);
-			D_FREE_PTR(arg);
+			D_FREE(arg);
 		}
 	} else {
 		D_WARN("Ignore update pool "DF_UUID" %d -> %d\n",
