@@ -8,13 +8,12 @@ The first type of commands run after installation include network and
 storage hardware provisioning and would typically be run from a login
 node.
 
-After `daos_server` instances have been started on each storage node
-for the first time, `dmg storage prepare` will set DCPM storage into the
-necessary state for use with DAOS.
-Then `dmg storage format` formats persistent storage devices
-(specified in the server configuration file) on the storage nodes
-and writes necessary metadata before starting DAOS I/O processes that
-will operate across the fabric.
+After `daos_server` instances have been started on each storage node for the
+first time, `dmg storage prepare` will set PMem storage into the necessary
+state for use with DAOS.
+Then `dmg storage format` formats persistent storage devices (specified in the
+server configuration file) on the storage nodes and writes necessary metadata
+before starting DAOS Engine processes that will operate across the fabric.
 
 To sum up, the typical workflow of a DAOS system deployment consists of the
 following steps:
@@ -41,6 +40,30 @@ First of all, the DAOS server should be started to allow remote administration
 command to be executed via the dmg tool. This section describes the minimal
 DAOS server configuration and how to start it on all the storage nodes.
 
+### Example RPM Deployment Workflow
+
+A recommended workflow to get up and running is as follows:
+
+* Install DAOS Server RPMs - `daos_server` systemd services will start in
+listening mode which means DAOS Engine processes will not be started as the
+server config file (default location at `/etc/daos/daos_server.yml`) has not
+yet been populated.
+
+* Run `dmg config generate -l <hostset> -a <access_points>` across the entire
+hostset (all the storage servers that are now running the `daos_server` service
+after RPM install).
+The command will only generate a config if hardware setups on all the hosts are
+similar and have been given sensible NUMA mappings.
+Adjust the hostset until you have a set with homogeneous hardware configurations.
+
+* Once a recommended config file can be generated, copy it to the server config
+file default location (`/etc/daos/daos_server.yml`) on each DAOS Server host
+and restart all `daos_server` services.
+An example command to restart the services is
+`clush -w machines-[118-121,130-133] "sudo systemctl restart daos_server"`.
+The services should prompt for format on restart and after format is triggered
+from `dmg`, the DAOS Engine processes should start.
+
 ### Server Configuration File
 
 The `daos_server` configuration file is parsed when starting the
@@ -48,8 +71,10 @@ The `daos_server` configuration file is parsed when starting the
 on the command line (`daos_server -h` for usage) or it will be read from
 the default location (`/etc/daos/daos_server.yml`).
 
-Parameter descriptions are specified in [`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
-and example configuration files in the [examples](https://github.com/daos-stack/daos/tree/master/utils/config/examples)
+Parameter descriptions are specified in
+[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+and example configuration files in the
+[examples](https://github.com/daos-stack/daos/tree/master/utils/config/examples)
 directory.
 
 Any option supplied to `daos_server` as a command line option or flag will
@@ -67,10 +92,11 @@ available at
 
 The location of this configuration file is determined by first checking
 for the path specified through the -o option of the `daos_server` command
-line. Otherwise, /etc/daos/daos_server.yml is used.
+line, if unspecified then `/etc/daos/daos_server.yml` is used.
 
-Refer to the example configuration file ([daos_server.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml))
-for latest information and examples.
+Refer to the example configuration file (
+[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+) for latest information and examples.
 
 At this point of the process, the servers: and provider: section of the yaml
 file can be left blank and will be populated in the subsequent sections.
@@ -374,30 +400,34 @@ storage nodes via the dmg utility.
 
 ### SCM Preparation
 
-This section addresses how to verify that Optane DC Persistent Memory
-Module (DCPMM) is correctly installed on the storage nodes, and how to configure
-it in Appdirect interleaved mode to be used by DAOS.
+This section addresses how to verify that PMem (Intel(R) Optane(TM) persistent
+memory) modules are correctly installed on the storage nodes and how to
+configure in interleaved mode to be used by DAOS.
 Instructions for other types of SCM may be covered in the future.
 
-Provisioning the SCM occurs by configuring DCPM modules in AppDirect memory regions
-(interleaved mode) in groups of modules local to a specific socket (NUMA), and
-resultant nvdimm namespaces are defined by a device identifier (e.g., /dev/pmem0).
+Provisioning the SCM occurs by configuring PMem modules in interleaved memory
+regions (interleaved mode) in groups of modules local to a specific socket
+(NUMA), and resultant nvdimm namespaces are defined by a device identifier
+(e.g., /dev/pmem0).
 
-DCPM preparation is required once per DAOS installation and
+PMem preparation is required once per DAOS installation and
 requires the DAOS Control Servers to be running as root.
 
-This step requires a reboot to enable DCPM resource allocation
+This step requires a reboot to enable PMem resource allocation
 changes to be read by BIOS.
 
-DCPM preparation can be performed from the management tool
+PMem preparation can be performed from the management tool
 `dmg storage prepare --scm-only` or using the Control Server directly
 `sudo daos_server storage prepare --scm-only`.
 
-The first time the command is run, the SCM AppDirect regions will be created as
-resource allocations on any available DCPM modules (one region per NUMA
+The first time the command is run, the SCM interleaved regions will be created
+as resource allocations on any available PMem modules (one region per NUMA
 node/socket). The regions are activated after BIOS reads the new resource
-allocations, and after initial completion the command prints a
-message to ask for a reboot (the command will not initiate reboot itself).
+allocations.
+Upon completion, the storage prepare command will prompt the admin to reboot
+the storage node(s) in order for the BIOS to activate the new storage
+allocations.
+The storage prepare command does not initiate the reboot itself.
 
 After running the command a reboot will be required, then the Control
 Servers will then need to be started again and the command run for a
@@ -415,7 +445,7 @@ after running, the user should be prompted for a reboot.
 - `dmg -l wolf-[118-121,130-133] -i storage prepare --scm-only`
 after running, `/dev/pmemX` devices should be available on each of the hosts.
 
-'sudo daos_server storage prepare --scm-only' should be run for a second time after
+`sudo daos_server storage prepare --scm-only` should be run for a second time after
 system reboot to create the pmem kernel devices (/dev/pmemX
 namespaces created on the new SCM regions).
 
@@ -432,7 +462,7 @@ otherwise unused.
 A reboot is required to process new memory allocation goals.
 ```
 
-Example output from the subsequent call (SCM modules configured to AppDirect
+Example output from the subsequent call (SCM modules configured to interleaved
 mode, and host rebooted):
 
 ```bash
@@ -445,8 +475,8 @@ Persistent memory kernel devices:
 [{UUID:5d2f2517-9217-4d7d-9c32-70731c9ac11e Blockdev:pmem1 Dev:namespace1.0 NumaNode:1} {UUID:2bfe6c40-f79a-4b8e-bddf-ba81d4427b9b Blockdev:pmem0 Dev:namespace0.0 NumaNode:0}]
 ```
 
-Upon successful creation of the pmem devices, DCPMM is properly configured and
-one can move on to the next step.
+Upon successful creation of the pmem devices, the Intel(R) Optane(TM)
+persistent memory is configured and one can move on to the next step.
 
 If required, the pmem devices can be destroyed via the --reset option:
 
@@ -627,7 +657,7 @@ a single DAOS I/O instance where possible.
 [more details](#server-configuration)
 
 - `bdev_list` should be populated with NVMe PCI addresses
-- `scm_list` should be populated with DCPM interleaved set namespaces
+- `scm_list` should be populated with PMem interleaved set namespaces
 (e.g. `/dev/pmem1`)
 - DAOS Control Servers will need to be restarted on all hosts after
 updates to the server configuration file.
@@ -707,22 +737,35 @@ servers:
 ```
 
 ### Network Scan and Configuration
-The daos_server supports the `network scan` function to display the network interfaces, related OFI fabric providers and associated NUMA node for each device.  This information is used to configure the global fabric provider and the unique local network interface for each I/O Engine instance on this node.  This section will help you determine what to provide for the `provider`, `fabric_iface` and `pinned_numa_node` entries in the daos_server.yml file.
+
+The `daos_server` supports the `network scan` function to display the network
+interfaces, related OFI fabric providers and associated NUMA node for each
+device.
+This information is used to configure the global fabric provider and the unique
+local network interface for each I/O Engine instance on this node.
+This section will help you determine what to provide for the `provider`,
+`fabric_iface` and `pinned_numa_node` entries in the `daos_server.yml` file.
 
 The following commands are typical examples:
+```bash
+$ daos_server network scan
+$ daos_server network scan -p all
+$ daos_server network scan -p ofi+sockets
+$ daos_server network scan --provider 'ofi+verbs;ofi_rxm'
 ```
-    daos_server network scan
-    daos_server network scan -p all
-    daos_server network scan -p ofi+sockets
-    daos_server network scan --provider 'ofi+verbs;ofi_rxm'
-```
-In the early stages when a daos_server has not yet been fully configured and lacks a declaration of the system's fabric provider, it may be helpful to view an unfiltered list of scan results.
 
-Use either of these daos_server commands in the early stages to accomplish this goal:
+In the early stages when a `daos_server` has not yet been fully configured and
+lacks a declaration of the system's fabric provider, it may be helpful to view
+an unfiltered list of scan results.
+
+Use either of these `daos_server` commands in the early stages to accomplish
+this goal:
+
+```bash
+$ daos_server network scan
+$ daos_server network scan -p all
 ```
-    daos_server network scan
-    daos_server network scan -p all
-```
+
 Typical network scan results look as follows:
 ```bash
 $ daos_server network scan -p all
@@ -756,19 +799,38 @@ localhost
         ofi+sockets       ib1
         ofi+psm2          ib1
 ```
-Use one of these providers to configure the `provider` in the daos_server.yml.  Only one provider may be specified for the entire DAOS installation. Client nodes must be capable of communicating to the daos_server nodes via the same provider. Therefore, it is helpful to choose network settings for the daos_server that are compatible with the expected client node configuration.
 
-After the daos_server.yml file has been edited and contains a provider, subsequent `daos_server network scan` commands will filter the results based on that provider. If it is desired to view an unfiltered list again, issue `daos_server network scan -p all`.
+Use one of these providers to configure the `provider` in the `daos_server.yml`.
+Only one provider may be specified for the entire DAOS installation.
+Client nodes must be capable of communicating to the `daos_server` nodes via
+the same provider.
+Therefore, it is helpful to choose network settings for the `daos_server` that
+are compatible with the expected client node configuration.
 
-Regardless of the provider in the daos_server.yml file, the results may be filtered to the specified provider with the command `daos_server network scan -p ofi_provider` where `ofi_provider` is one of the available providers from the list.
+After the `daos_server.yml` file has been edited and contains a provider,
+subsequent `daos_server network scan` commands will filter the results based on
+that provider.
+If it is desired to view an unfiltered list again, issue `daos_server network
+scan -p all`.
+
+Regardless of the provider in the `daos_server.yml` file, the results may be
+filtered to the specified provider with the command `daos_server network scan
+-p ofi_provider` where `ofi_provider` is one of the available providers from
+the list.
 
 The results of the network scan may be used to help configure the I/O Engine
-instances for this daos_server node.
+instances for this DAOS Server.
 
 Each I/O Engine instance is configured with a unique `fabric_iface` and
-optional `pinned_numa_node`. The interfaces and NUMA Sockets listed in the scan
-results map to the daos_server.yml `fabric_iface` and `pinned_numa_node`
-respectively. The use of `pinned_numa_node` is optional, but recommended for best performance. When specified with the value that matches the network interface, the I/O Engine will bind itself to that NUMA node and to cores purely within that NUMA node. This configuration yields the fastest access to that network device.
+optional `pinned_numa_node`.
+The interfaces and NUMA Sockets listed in the scan results map to the
+`daos_server.yml` `fabric_iface` and `pinned_numa_node` respectively.
+The use of `pinned_numa_node` is optional, but recommended for best
+performance.
+When specified with the value that matches the network interface, the I/O
+Engine will bind itself to that NUMA node and to cores purely within that NUMA
+node.
+This configuration yields the fastest access to that network device.
 
 ### Changing Network Providers
 
@@ -780,9 +842,20 @@ reformat the storage devices using `dmg storage format` after the configuration
 file has been updated with the new provider.
 
 ## Network Scanning All DAOS Server Nodes
-While the `daos_server network scan` is useful for scanning the localhost, it does not provide results for any other daos_server instance on the network.  The DAOS Management tool, `dmg`, is used for that purpose. The network scan operates the same way as the daos_server network scan, however, to use the dmg tool, at least one known daos_server instance must be running.
 
-The command `dmg network scan` performs a query over all daos_servers in the daos_control.yml `hostlist`. By default, the scan will return results that are filtered by the provider that is specified in the daos_server.yml. Like the `daos_server network scan`, the `dmg network scan` supports the optional `-p/--provider` where a different provider may be specified, or `all` for an unfiltered list that is unrelated to what was already configured on the daos_server installation.
+While the `daos_server network scan` is useful for scanning the localhost, it
+does not provide results for any other `daos_server` instance on the network.
+The DAOS Management tool, `dmg`, is used for that purpose. The network scan
+operates the same way as the `daos_server` network scan, however, to use the
+dmg tool, at least one known `daos_server` instance must be running.
+
+The command `dmg network scan` performs a query over all `daos_server`s in the
+`daos_control.yml` `hostlist`. By default, the scan will return results that
+are filtered by the provider that is specified in the `daos_server.yml`.
+Like the `daos_server network scan`, the `dmg network scan` supports the
+optional `-p/--provider` where a different provider may be specified, or `all`
+for an unfiltered list that is unrelated to what was already configured on the
+`daos_server` installation.
 
 ```bash
 dmg network scan
@@ -822,11 +895,15 @@ localhost
 ## Provider Configuration and Debug
 
 To aid in provider configuration and debug, it may be helpful to run the
-fi_pingpong test (delivered as part of OFI/libfabric).  To run that test,
-determine the name of the provider to test usually by removing the "ofi+" prefix from the network scan provider data. Do use the "ofi+" prefix in the
-daos_server.yml. Do not use the "ofi+" prefix with fi_pingpong.
+`fi_pingpong` test (delivered as part of OFI/libfabric).
+To run that test, determine the name of the provider to test usually by
+removing the "ofi+" prefix from the network scan provider data.
+Although the "ofi+" prefix is required in `daos_server.yml`, it cannot be used
+when specifying the provider for `fi_pingpong`.
 
-Then, the fi_pingpong test can be used to verify that the targeted OFI provider works fine:
+Then, the `fi_pingpong` test can be used to verify that the targeted OFI
+provider works fine:
+
 ```bash
 node1$ fi_pingpong -p psm2
 
@@ -851,7 +928,7 @@ This remote call will trigger the formatting of the locally attached storage on
 the host for use with DAOS using the parameters defined in the server config file.
 
 `dmg -i -l <host>[,...] storage format` will normally be run on a login
-node specifying a hostlist (`-l <host>[,...]`) of storage nodes with SCM/DCPM
+node specifying a hostlist (`-l <host>[,...]`) of storage nodes with SCM/PMem
 modules and NVMe SSDs installed and prepared.
 
 Upon successful format, DAOS Control Servers will start DAOS IO
@@ -862,11 +939,11 @@ Successful start-up is indicated by the following on stdout:
 
 ### SCM Format
 
-When the command is run, the pmem kernel devices created on SCM/DCPM regions are
+When the command is run, the pmem kernel devices created on SCM/PMem regions are
 formatted and mounted based on the parameters provided in the server config file.
 
 - `scm_mount` specifies the location of the mountpoint to create.
-- `scm_class` can be set to `ram` to use a tmpfs in the situation that no SCM/DCPM
+- `scm_class` can be set to `ram` to use a tmpfs in the situation that no SCM/PMem
 is available (`scm_size` dictates the size of tmpfs in GB), when set to `dcpm` the device
 specified under `scm_list` will be mounted at `scm_mount` path.
 
@@ -927,35 +1004,37 @@ on the command line (`daos_agent -h` for usage) or default location
 (`install/etc/daos_agent.yml`). If installed from rpms the default location is
 (`/etc/daos/daos_agent.yml`).
 
-Parameter descriptions are specified in [daos_agent.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_agent.yml).
+Parameter descriptions are specified in
+[`daos_agent.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_agent.yml).
 
-Any option supplied to `daos_agent` as a command line option or flag will
-take precedence over equivalent configuration file parameter.
+Any option supplied to `daos_agent` as a command line option or flag will take
+precedence over equivalent configuration file parameter.
 
-For convenience, active parsed config values are written to a temporary
-file for reference, and the location will be written to the log.
+For convenience, active parsed config values are written to a temporary file
+for reference, and the location will be written to the log.
 
-The following section lists the format, options, defaults, and
-descriptions available in the configuration file.
+The following section lists the format, options, defaults, and descriptions
+available in the configuration file.
 
-The example configuration file lists the default empty configuration listing all the
-options (living documentation of the config file). Live examples are
-available at
-<https://github.com/daos-stack/daos/tree/master/utils/config>
+The example configuration file lists the default empty configuration listing
+all the options (living documentation of the config file).
+Live examples are available
+[here](https://github.com/daos-stack/daos/tree/master/utils/config).
 
 The location of this configuration file is determined by first checking
-for the path specified through the -o option of the daos_agent command
-line. Otherwise, /etc/daos/daos_agent.yml is used.
+for the path specified through the `-o` option of the `daos_agent` command
+line, if not set then `/etc/daos/daos_agent.yml` is used.
 
-Refer to the example configuration file ([daos_agent.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_agent.yml))
-for latest information and examples.
+Refer to the example configuration file (
+[`daos_agent.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_agent.yml)
+) for latest information and examples.
 
 ### Agent Startup
 
 DAOS Agent is a standalone application to be run on each compute node.
 It can be configured to use secure communications (default) or can be allowed
 to communicate with the control plane over unencrypted channels. The following
-example shows daos_agent being configured to operate in insecure mode due to
+example shows `daos_agent` being configured to operate in insecure mode due to
 incomplete integration of certificate support as of the 0.6 release and
 configured to use a non-default agent configuration file.
 
@@ -1008,15 +1087,17 @@ configuration data in order to reduce the number of management RPCs required to
 start an application. When this information becomes stale, the Agent must be
 restarted in order to repopulate the cache with new information. Alternatively,
 the caching mechanism may be disabled, with the tradeoff that each application
-launch will invoke management RPCs in order to obtain system connection information.
+launch will invoke management RPCs in order to obtain system connection
+information.
 
-To disable the DAOS Agent caching mechanism, set the following environment variable before
-starting the daos_agent process:
+To disable the DAOS Agent caching mechanism, set the following environment
+variable before starting the `daos_agent` process:
 
 `DAOS_AGENT_DISABLE_CACHE=true`
 
-If running from systemd, add the following to the daos_agent service file in the `[Service]`
-section before reloading systemd and restarting the daos_agent service:
+If running from systemd, add the following to the `daos_agent` service file in
+the `[Service]` section before reloading systemd and restarting the
+`daos_agent` service:
 
 `Environment=DAOS_AGENT_DISABLE_CACHE=true`
 
@@ -1056,7 +1137,7 @@ export OFI_DOMAIN=hfi1_0
 mpirun -np <num_clients> --hostfile <hostfile> ./daos_test
 ```
 
-daos_test requires at least 8GB of SCM (or DRAM with tmpfs) storage on
+`daos_test` requires at least 8GB of SCM (or DRAM with tmpfs) storage on
 each storage node.
 
 [^1]: https://github.com/intel/ipmctl

@@ -4287,6 +4287,26 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 	if (rc)
 		D_GOTO(out, rc);
 
+	if (out_list->pta_number > 0) {
+		int i;
+
+		/*
+		 * If any invalid ranks/targets were specified here, abort the
+		 * entire request. This will mean the operator needs to resubmit
+		 * the request with corrected arguments, which will be easier
+		 * without trying to figure out which arguments were accepted &
+		 * started processing already.
+		 */
+		for (i = 0; i < out_list->pta_number; i++) {
+			D_WARN("Got request to update nonexistent rank %u "
+			       "target %u\n",
+			       out_list->pta_addrs[i].pta_rank,
+			       out_list->pta_addrs[i].pta_target);
+		}
+		D_GOTO(out, rc = -DER_NONEXIST);
+	}
+
+
 	/* Update target by target id */
 	rc = ds_pool_update_internal(pool_uuid, &target_list, opc, hint,
 				     &updated, evict_rank, map_version,
