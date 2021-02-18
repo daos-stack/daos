@@ -11,7 +11,7 @@ timeout: 1000
 job_manager_timeout: 300
 server_config:
   name: daos_server
-  servers_per_host: 2
+  engines_per_host: 2
   servers:
     0:
       pinned_numa_node: 0

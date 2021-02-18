@@ -6,8 +6,8 @@
 %global libfabric_version 1.11.1
 
 Name:          daos
-Version:       1.1.2.1
-Release:       11%{?relval}%{?dist}
+Version:       1.1.3
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -237,7 +237,7 @@ mkdir -p %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{server_svc_name} %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
 mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
-mv %{?buildroot}/%{_prefix}/etc/bash_completion.d %{?buildroot}/%{_sysconfdir}
+mv %{?buildroot}/%{_sysconfdir}/daos/bash_completion.d %{?buildroot}/%{_sysconfdir}
 
 %pre server
 getent group daos_metrics >/dev/null || groupadd -r daos_metrics
@@ -279,9 +279,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libvos.so
 %{_libdir}/libcart*
 %{_libdir}/libgurt*
-%{_prefix}/%{_sysconfdir}/memcheck-cart.supp
-%dir %{_prefix}%{_sysconfdir}
-%{_prefix}%{_sysconfdir}/vos_size_input.yaml
+%{_sysconfdir}/daos/memcheck-cart.supp
+%dir %{_sysconfdir}/daos
+%{_sysconfdir}/daos/vos_size_input.yaml
 %dir %{_sysconfdir}/bash_completion.d
 %{_sysconfdir}/bash_completion.d/daos.bash
 %{_libdir}/libdaos_common.so
@@ -400,7 +400,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_run_io_conf
 %{_bindir}/crt_launch
 %{_bindir}/daos_metrics
-%{_prefix}/etc/fault-inject-cart.yaml
+%{_sysconfdir}/daos/fault-inject-cart.yaml
 %{_bindir}/fault_status
 # For avocado tests
 %{_prefix}/lib/daos/.build_vars.json
@@ -412,10 +412,13 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
-* Tue Feb 9 2021 Vish Venkatesan<vishwanath.venkatesan@intel.com> 1.1.2.1-11
+* Wed Feb 10 2021 Johann Lombardi <johann.lombardi@intel.com> 1.1.3-1
+- Version bump up to 1.1.3
+
+* Tue Feb 9 2021 Vish Venkatesan <vishwanath.venkatesan@intel.com> 1.1.2.1-11
 - Add new pmem specific version of DAOS common library
 
-* Fri Feb 6 2021 Saurabh Tandan <saurabh.tandan@intel.com> 1.1.2.1-10
+* Fri Feb 5 2021 Saurabh Tandan <saurabh.tandan@intel.com> 1.1.2.1-10
 - Added dbench as requirement for test package.
 
 * Wed Feb 3 2021 Hua Kuang <hua.kuang@intel.com> 1.1.2.1-9

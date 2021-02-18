@@ -81,7 +81,7 @@ def scons():
     # rdb unit test rdbt depends on libdaos
     SConscript('rdb/SConscript')
 
-    # Then the DAOS I/O server executable
+    # Then the DAOS I/O Engine executable
     SConscript('engine/SConscript')
 
     # Build utilities

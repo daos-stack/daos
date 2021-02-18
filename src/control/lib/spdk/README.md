@@ -1,18 +1,33 @@
 # Go language bindings for the SPDK API
 
-This is a Go interface for [SPDK](https://github.com/spdk/spdk) which is also a work in progress.
+Go bindings for the [SPDK](https://github.com/spdk/spdk) native-C library
+to facilitate management of NVMe SSDs from an application written in Go.
 
-To clone the 18.07 SPDK branch:
+The bindings require libspdk-devel (or distro equivalent) package to be
+installed.
+To install please follow steps in the
+[SPDK github instructions](https://github.com/spdk/spdk).
 
-    git clone --single-branch --branch v18.07.x git@github.com:spdk/spdk.git
+These bindings are currently working against SPDK 20.01.2 and DPDK 19.11.6
+which are the versions pinned in the DAOS 1.2 release.
 
-## Current Status
-  * Initial support will be for NVMe driver utilities.
+This is not a general purpose set of SPDK go bindings but provides a set of
+capabilities tailored to the specific needs of DAOS, the NVMe SSD related
+features are as follows:
 
-Using these bindings assumes SPDK shared lib is installed in `${SPDK_REPO}/install/lib/libspdk.so`.
-In order to use some of the SPDK API, please also follow [Hugepages and Device Binding](https://github.com/spdk/spdk#hugepages-and-device-binding).
+* device discovery (SPDK environment initialization and device probing)
+* device firmware update
+* VMD enablement and discovery
+* format (wipe) of device namespaces
 
-### How to build binding requirements
+Functionality is exposed through the package's `Env` and `Nvme` public
+interfaces.
+
+### How to build these bindings
+
+Using these bindings assumes SPDK shared lib is installed in
+`${SPDK_REPO}/build/lib/libspdk.so`, please also follow
+[Hugepages and Device Binding](https://github.com/spdk/spdk#hugepages-and-device-binding).
 
 Setup environment:
 

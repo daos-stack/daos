@@ -722,14 +722,14 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 
 				testDir, cleanup := common.CreateTestDir(t)
 				defer cleanup()
-				ioCfg := engine.NewConfig().WithScmMountPoint(testDir)
+				engineCfg := engine.NewConfig().WithScmMountPoint(testDir)
 
 				trc := &engine.TestRunnerConfig{}
 				if tc.instancesStarted {
 					trc.Running.SetTrue()
 					srv.ready.SetTrue()
 				}
-				srv.runner = engine.NewTestRunner(trc, ioCfg)
+				srv.runner = engine.NewTestRunner(trc, engineCfg)
 				srv.setIndex(uint32(i))
 
 				t.Logf("scm dir: %s", srv.scmConfig().MountPoint)

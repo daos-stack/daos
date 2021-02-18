@@ -234,14 +234,14 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			emptyCfg := config.DefaultServer()
-			ioCfg := engine.NewConfig().
+			engineCfg := engine.NewConfig().
 				WithBdevClass("nvme").
 				WithBdevDeviceList(storage.MockNvmeController().PciAddr)
-			ioCfgs := []*engine.Config{ioCfg}
+			engineCfgs := []*engine.Config{engineCfg}
 			if tc.multiIO {
-				ioCfgs = append(ioCfgs, ioCfg)
+				engineCfgs = append(engineCfgs, engineCfg)
 			}
-			defaultWithNvme := config.DefaultServer().WithEngines(ioCfgs...)
+			defaultWithNvme := config.DefaultServer().WithEngines(engineCfgs...)
 
 			// test for both empty and default config cases
 			for _, config := range []*config.Server{defaultWithNvme, emptyCfg} {
@@ -743,7 +743,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 			cs := mockControlService(t, log, tc.cfg, tc.bmbc, tc.smbc, tc.smsc)
 			cs.harness.started.SetTrue()
 			for i := range cs.harness.instances {
-				// replace harness instance with mock IO server
+				// replace harness instance with mock I/O Engine
 				// to enable mocking of harness instance drpc channel
 				newSrv := newTestEngine(log, false, tc.cfg.Engines[i])
 				newSrv.scmProvider = cs.scm
@@ -1322,7 +1322,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 					{
 						// this should be id 1 but mock
 						// backend spits same output for
-						// both IO server instances
+						// both I/O Engine instances
 						Pciaddr: mockNvmeController0.PciAddr,
 						State:   new(ResponseState),
 					},
@@ -1385,7 +1385,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			// map SCM mount targets to source devices
 			devToMount := make(map[string]string)
 
-			// add all IO server configurations
+			// add all I/O Engine configurations
 			for idx, scmMount := range tc.sMounts {
 				if tc.sClass == storage.ScmClassDCPM {
 					devToMount[tc.sDevs[idx]] = scmMount
