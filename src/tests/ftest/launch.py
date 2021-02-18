@@ -14,7 +14,7 @@ import os
 import re
 import socket
 import subprocess
-from sys import version_info
+import site
 import time
 import yaml
 import errno
@@ -216,15 +216,22 @@ def set_test_environment(args):
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
 
     # Python paths required for functional testing
-    python_version = "python{}{}".format(
-        version_info.major,
-        "" if version_info.major > 2 else ".{}".format(version_info.minor))
+    set_python_environment()
+
+    if args.verbose:
+        print("ENVIRONMENT VARIABLES")
+        for key in sorted(os.environ):
+            print("  {}: {}".format(key, os.environ[key]))
+
+
+def set_python_environment():
+    """Set up the test python environment."""
     required_python_paths = [
         os.path.abspath("util/apricot"),
         os.path.abspath("util"),
         os.path.abspath("cart/util"),
-        os.path.join(base_dir, "lib64", python_version, "site-packages"),
     ]
+    required_python_paths.extend(site.getsitepackages())
 
     # Check the PYTHONPATH env definition
     python_path = os.environ.get("PYTHONPATH")
@@ -241,10 +248,6 @@ def set_test_environment(args):
                 python_path += ":" + required_path
         os.environ["PYTHONPATH"] = python_path
     print("Using PYTHONPATH={}".format(os.environ["PYTHONPATH"]))
-    if args.verbose:
-        print("ENVIRONMENT VARIABLES")
-        for key in sorted(os.environ):
-            print("  {}: {}".format(key, os.environ[key]))
 
 
 def run_command(cmd):
@@ -525,7 +528,11 @@ def get_test_list(tags):
     if test_tags or not test_list:
         if not test_list:
             test_list = ["./"]
-        command = ["avocado", "--paginator=off", "list"]
+        version = get_output(["avocado", "-v"])
+        if version.split()[-1].startswith("52"):
+            command = ["avocado", "list", "--paginator=off"]
+        else:
+            command = ["avocado", "--paginator=off", "list"]
         for test_tag in test_tags:
             command.append(str(test_tag))
         command.extend(test_list if test_list else ["./"])
@@ -1851,12 +1858,6 @@ def main():
     # Convert host specifications into NodeSets
     args.test_servers = NodeSet(args.test_servers)
     args.test_clients = NodeSet(args.test_clients)
-
-    # debug - python directory
-    ls_command = ["ls", "-la", "/usr/bin/"]
-    #rpm_command = ["rpm", "-qa|grep", "python"]
-    print(get_output(ls_command, check=False))
-    #print(get_output(rpm_command, check=False))
 
     # Setup the user environment
     set_test_environment(args)

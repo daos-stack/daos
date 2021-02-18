@@ -339,7 +339,7 @@ dss_srv_handler(void *arg)
 		D_DEBUG(DB_TRACE, "failed to set memory affinity: %d\n", errno);
 
 	/* initialize xstream-local storage */
-	dtc = dss_tls_init(DAOS_SERVER_TAG);
+	dtc = dss_tls_init(DAOS_SERVER_TAG, dx->dx_xs_id, dx->dx_tgt_id);
 	if (dtc == NULL) {
 		D_ERROR("failed to initialize TLS\n");
 		goto signal;
@@ -946,8 +946,7 @@ out:
  */
 
 static void *
-dss_srv_tls_init(const struct dss_thread_local_storage *dtls,
-		 struct dss_module_key *key)
+dss_srv_tls_init(int xs_id, int tgt_id)
 {
 	struct dss_module_info *info;
 
@@ -957,8 +956,7 @@ dss_srv_tls_init(const struct dss_thread_local_storage *dtls,
 }
 
 static void
-dss_srv_tls_fini(const struct dss_thread_local_storage *dtls,
-		     struct dss_module_key *key, void *data)
+dss_srv_tls_fini(void *data)
 {
 	struct dss_module_info *info = (struct dss_module_info *)data;
 
@@ -1176,7 +1174,7 @@ dss_srv_init(void)
 	xstream_data.xd_init_step = XD_INIT_TLS_REG;
 
 	/* initialize xstream-local storage */
-	xstream_data.xd_dtc = dss_tls_init(DAOS_SERVER_TAG);
+	xstream_data.xd_dtc = dss_tls_init(DAOS_SERVER_TAG, 0, -1);
 	if (!xstream_data.xd_dtc)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_TLS_INIT;
