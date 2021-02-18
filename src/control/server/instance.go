@@ -34,7 +34,7 @@ type (
 )
 
 // EngineInstance encapsulates control-plane specific configuration
-// and functionality for managed I/O server instances. The distinction
+// and functionality for managed I/O Engine instances. The distinction
 // between this structure and what's in the engine package is that the
 // engine package is only concerned with configuring and executing
 // a single daos_engine instance. EngineInstance is intended to
@@ -314,6 +314,6 @@ func (srv *EngineInstance) callSetUp(ctx context.Context) error {
 // BioErrorNotify logs a blob I/O error.
 func (srv *EngineInstance) BioErrorNotify(bio *srvpb.BioErrorReq) {
 
-	srv.log.Errorf("I/O server instance %d (target %d) has detected blob I/O error! %v",
+	srv.log.Errorf("I/O Engine instance %d (target %d) has detected blob I/O error! %v",
 		srv.Index(), bio.TgtId, bio)
 }
