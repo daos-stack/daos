@@ -561,7 +561,7 @@ pipeline {
                             dir 'utils/docker'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(add_repos:false) +
-                                                " --pull --build-arg CB0=" + current_time.get(Calendar.WEEK_OF_YEAR)
+                                                " --build-arg CB0=" + current_time.get(Calendar.WEEK_OF_YEAR)
                         }
                     }
                     steps {
