@@ -386,11 +386,11 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 	int		rc, i;
 	d_rank_list_t	rank_list;
 	uint32_t	domains[] = {255, 0, 5, /* root */
-				     1, 1, 1,
-				     1, 2, 1,
-				     1, 3, 1,
-				     1, 4, 1,
-				     1, 5, 1};
+				     1, 101, 1,
+				     1, 102, 1,
+				     1, 103, 1,
+				     1, 104, 1,
+				     1, 105, 1};
 	const size_t	max_domains = ARRAY_SIZE(domains) /
 				      POOL_BUF_DOMAIN_TUPLE_LEN - 1;
 	uint32_t	domain_tree_len;
@@ -401,18 +401,15 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 	if (domain_count > max_domains)
 		fail_msg("Only %lu domains can be added", max_domains);
 
-	/* Build the incoming domain tree */
+	/* Build the fault domain tree */
 	domain_tree_len = (domain_count + 1) * POOL_BUF_DOMAIN_TUPLE_LEN +
 			  node_count;
 	D_ALLOC_ARRAY(domain_tree, domain_tree_len);
 	assert_non_null(domain_tree);
 
-	for (i = 0; i < domain_count + 1; i++) {
-		uint32_t idx = i * POOL_BUF_DOMAIN_TUPLE_LEN;
-
-		memcpy(&domain_tree[idx], &domains[idx],
-		       sizeof(uint32_t) * POOL_BUF_DOMAIN_TUPLE_LEN);
-	}
+	memcpy(domain_tree, domains,
+	       sizeof(uint32_t) * POOL_BUF_DOMAIN_TUPLE_LEN *
+	       (domain_count + 1));
 
 	for (i = 0; i < node_count; i++) {
 		uint32_t idx = (domain_count + 1) * POOL_BUF_DOMAIN_TUPLE_LEN
