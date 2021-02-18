@@ -111,7 +111,7 @@ ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 
 RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
     mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
-WORKDIR /home/daos
+WORKDIR /home/daos/daos
 
 # Remove local copy
 #RUN rm -rf /home/daos/*
