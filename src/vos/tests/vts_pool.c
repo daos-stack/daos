@@ -63,11 +63,13 @@ static int
 pool_file_destroy(void **state)
 {
 	struct vp_test_args	*arg = *state;
-	int			ret  = 0;
+	int			ret = 0;
 
 	if (arg->fname[0]) {
 		ret = remove(arg->fname[0]);
-		assert_int_equal(ret, 0);
+		if (ret != 0)
+			D_ERROR("Removing %s failed\n",
+				arg->fname[0]);
 		D_FREE(arg->fname[0]);
 	}
 	D_FREE(arg->fname);
