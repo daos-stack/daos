@@ -519,12 +519,6 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 			get_target(root, &spare_tgt, crc(key, rebuild_key),
 				   dom_used, tgts_used, shard_id, op_type);
 			spares_left--;
-			if (can_extend(op_type, spare_tgt->ta_comp.co_status)) {
-				rc = remap_alloc_one(extend_list, shard_id,
-						spare_tgt, true);
-				if (rc)
-					return rc;
-			}
 		}
 
 		determine_valid_spares(spare_tgt, md, spare_avail,
@@ -533,7 +527,7 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 	}
 
 	if (op_type == PL_PLACE_EXTENDED) {
-		rc = pl_map_extend(layout, extend_list, false);
+		rc = pl_map_extend(layout, extend_list);
 		if (rc != 0)
 			return rc;
 	}
@@ -925,7 +919,7 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 		layout_find_diff(jmap, layout, add_layout, &add_list);
 
 		if (!d_list_empty(&add_list))
-			rc = pl_map_extend(layout, &add_list, true);
+			rc = pl_map_extend(layout, &add_list);
 	}
 out:
 	remap_list_free_all(&remap_list);

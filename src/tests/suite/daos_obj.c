@@ -38,7 +38,7 @@ ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
 	req->arg = arg;
 	if (arg->async) {
 		rc = daos_event_init(&req->ev, arg->eq, NULL);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 
 	arg->expect_result = 0;
@@ -75,11 +75,11 @@ ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
 	/** open the object */
 	rc = daos_obj_open(coh, oid, 0, &req->oh,
 			   req->arg->async ? &req->ev : NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	if (arg->async) {
 		rc = daos_event_test(&req->ev, DAOS_EQ_WAIT, &ev_flag);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		assert_int_equal(ev_flag, true);
 		assert_int_equal(req->ev.ev_error, 0);
 	}
@@ -91,7 +91,7 @@ ioreq_fini(struct ioreq *req)
 	int rc;
 
 	rc = daos_obj_close(req->oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	req->arg->fail_loc = 0;
 	req->arg->fail_value = 0;
@@ -99,7 +99,7 @@ ioreq_fini(struct ioreq *req)
 	daos_fail_loc_set(0);
 	if (req->arg->async) {
 		rc = daos_event_fini(&req->ev);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 }
 
@@ -115,7 +115,7 @@ insert_internal_nowait(daos_key_t *dkey, int nr, d_sg_list_t *sgls,
 	rc = daos_obj_update(req->oh, th, flags, dkey, nr, iods, sgls,
 			     req->arg->async ? &req->ev : NULL);
 	if (!req->arg->async)
-		assert_int_equal(rc, req->arg->expect_result);
+		assert_rc_equal(rc, req->arg->expect_result);
 }
 
 static void
@@ -258,7 +258,7 @@ insert_test(struct ioreq *req, uint64_t timeout)
 		return;
 
 	rc = daos_event_test(&req->ev, timeout, &ev_flag);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 void
@@ -335,7 +335,7 @@ punch_obj(daos_handle_t th, struct ioreq *req)
 	int rc;
 
 	rc = daos_obj_punch(req->oh, th, 0, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 void
@@ -346,7 +346,7 @@ punch_dkey(const char *dkey, daos_handle_t th, struct ioreq *req)
 	ioreq_dkey_set(req, dkey);
 
 	rc = daos_obj_punch_dkeys(req->oh, th, 0, 1, &req->dkey, NULL);
-	assert_int_equal(rc, req->arg->expect_result);
+	assert_rc_equal(rc, req->arg->expect_result);
 }
 
 void
@@ -358,7 +358,7 @@ punch_dkey_with_flags(const char *dkey, daos_handle_t th, struct ioreq *req,
 	ioreq_dkey_set(req, dkey);
 
 	rc = daos_obj_punch_dkeys(req->oh, th, flags, 1, &req->dkey, NULL);
-	assert_int_equal(rc, req->arg->expect_result);
+	assert_rc_equal(rc, req->arg->expect_result);
 }
 
 void
@@ -376,7 +376,7 @@ punch_akey(const char *dkey, const char *akey, daos_handle_t th,
 
 	rc = daos_obj_punch_akeys(req->oh, th, 0, &req->dkey, 1, &daos_akey,
 				  NULL);
-	assert_int_equal(rc, req->arg->expect_result);
+	assert_rc_equal(rc, req->arg->expect_result);
 }
 
 void
@@ -394,7 +394,7 @@ punch_akey_with_flags(const char *dkey, const char *akey, daos_handle_t th,
 
 	rc = daos_obj_punch_akeys(req->oh, th, flags, &req->dkey, 1, &daos_akey,
 				  NULL);
-	assert_int_equal(rc, req->arg->expect_result);
+	assert_rc_equal(rc, req->arg->expect_result);
 }
 
 void
@@ -442,13 +442,13 @@ lookup_internal(daos_key_t *dkey, int nr, d_sg_list_t *sgls,
 	if (!req->arg->async) {
 		req->result = rc;
 		if (rc != -DER_INPROGRESS && !req->arg->not_check_result)
-			assert_int_equal(rc, req->arg->expect_result);
+			assert_rc_equal(rc, req->arg->expect_result);
 		return;
 	}
 
 	/** wait for fetch completion */
 	rc = daos_event_test(&req->ev, DAOS_EQ_WAIT, &ev_flag);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	assert_int_equal(ev_flag, true);
 	req->result = req->ev.ev_error;
 	if (req->ev.ev_error != -DER_INPROGRESS && !req->arg->not_check_result)
@@ -688,7 +688,7 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 
 	/* Disabled Pool Aggrgation */
 	rc = set_pool_reclaim_strategy(state, aggr_disabled);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	/**
 	 * set_pool_reclaim_strategy() to disable aggregation
 	 * assumes all aggregation ULTs on all servers taking
@@ -721,7 +721,7 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 
 	/*Get the initial pool size after writing first transaction*/
 	rc = pool_storage_info(state, &pinfo);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	nvme_initial_size = pinfo.pi_space.ps_space.s_free[1];
 
 	/**
@@ -762,7 +762,7 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 
 		/*Verify the SCM/NVMe Pool Free size based on transfer size*/
 		rc = pool_storage_info(state, &pinfo);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		nvme_current_size = pinfo.pi_space.ps_space.s_free[1];
 		if (overwrite_sz < 4096) {
 		/*NVMe Size should not be changed as overwrite_sz is <4K*/
@@ -787,7 +787,7 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 
 	/* Enabled Pool Aggrgation */
 	rc = set_pool_reclaim_strategy(state, aggr_set_time);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	D_FREE(fbuf);
 	D_FREE(ow_buf);
@@ -915,11 +915,11 @@ io_rewritten_array_with_mixed_size(void **state)
 
 	/* Disabled Pool Aggregation */
 	rc = set_pool_reclaim_strategy(state, aggr_disabled);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/* Get the pool info at the beginning */
 	rc = pool_storage_info(state, &pinfo);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	nvme_initial_size = pinfo.pi_space.ps_space.s_free[1];
 
 	/* Set and verify the full initial string in first transaction */
@@ -937,7 +937,7 @@ io_rewritten_array_with_mixed_size(void **state)
 	*Get the pool storage information
 	*/
 	rc = pool_storage_info(state, &pinfo);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	nvme_current_size = pinfo.pi_space.ps_space.s_free[1];
 
 	/**
@@ -969,7 +969,7 @@ io_rewritten_array_with_mixed_size(void **state)
 
 		/*Verify the pool size*/
 		rc = pool_storage_info(state, &pinfo);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		nvme_current_size = pinfo.pi_space.ps_space.s_free[1];
 
 		/**
@@ -1004,7 +1004,7 @@ io_rewritten_array_with_mixed_size(void **state)
 
 	/* Enabled Pool Aggregation */
 	rc = set_pool_reclaim_strategy(state, aggr_set_time);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	D_FREE(fbuf);
 	D_FREE(ow_buf);
@@ -1282,15 +1282,15 @@ enumerate_dkey(daos_handle_t th, uint32_t *number, daos_key_desc_t *kds,
 	if (req->arg->async) {
 		bool ev_flag;
 
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		rc = daos_event_test(&req->ev, DAOS_EQ_WAIT, &ev_flag);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		assert_int_equal(ev_flag, true);
 		rc = req->ev.ev_error;
 	}
 
 	if (rc != -DER_KEY2BIG)
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 
 	return rc;
 }
@@ -1311,15 +1311,15 @@ enumerate_akey(daos_handle_t th, char *dkey, uint32_t *number,
 	if (req->arg->async) {
 		bool ev_flag;
 
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		rc = daos_event_test(&req->ev, DAOS_EQ_WAIT, &ev_flag);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		assert_int_equal(ev_flag, true);
 		rc = req->ev.ev_error;
 	}
 
 	if (rc != -DER_KEY2BIG)
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 
 	return rc;
 }
@@ -1337,13 +1337,13 @@ enumerate_rec(daos_handle_t th, char *dkey, char *akey,
 	rc = daos_obj_list_recx(req->oh, th, &req->dkey, &req->akey,
 				size, number, recxs, eprs, anchor, incr,
 				req->arg->async ? &req->ev : NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	if (req->arg->async) {
 		bool ev_flag;
 
 		rc = daos_event_test(&req->ev, DAOS_EQ_WAIT, &ev_flag);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		assert_int_equal(ev_flag, true);
 		assert_int_equal(req->ev.ev_error, 0);
 	}
@@ -1515,7 +1515,7 @@ enumerate_simple(void **state)
 			rc = enumerate_dkey(DAOS_TX_NONE, &number, kds,
 					    &anchor, buf, buf_len, &req);
 		}
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 
 		if (number == 0)
 			continue; /* loop should break for EOF */
@@ -1587,7 +1587,7 @@ enumerate_simple(void **state)
 			rc = enumerate_akey(DAOS_TX_NONE, "d_key", &number,
 					    kds, &anchor, buf, buf_len, &req);
 		}
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 
 		if (number == 0)
 			break; /* loop should break for EOF */
@@ -1841,7 +1841,7 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 			enum_num = PUNCH_ENUM_NUM;
 			rc = enumerate_akey(DAOS_TX_NONE, dkeys[i], &enum_num,
 					    kds, &anchor_out, buf, 512, &req);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			total_keys += enum_num;
 		}
 		print_message("\tdkey:%s, #akeys:%d\n", dkeys[i], total_keys);
@@ -1864,7 +1864,7 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 		enum_num = PUNCH_ENUM_NUM;
 		rc = enumerate_dkey(DAOS_TX_NONE, &enum_num, kds, &anchor_out,
 				    buf, 512, &req);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		total_keys += enum_num;
 	}
 	print_message("\t#dkeys:%d\n", total_keys);
@@ -1914,7 +1914,7 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 		enum_num = PUNCH_ENUM_NUM;
 		rc = enumerate_dkey(DAOS_TX_NONE, &enum_num, kds, &anchor_out,
 				    buf, 512, &req);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		total_keys += enum_num;
 	}
 	print_message("\t#dkeys:%d\n", total_keys);
@@ -2150,7 +2150,7 @@ test_ec_obj:
 	else
 		oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/** init dkey */
 	d_iov_set(&dkey, "dkey", strlen("dkey"));
@@ -2186,7 +2186,7 @@ next_step:
 	/** update record */
 	print_message("writing %d bytes in two recxs ...\n", buf_len);
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/** fetch */
 	iod.iod_size	= DAOS_REC_ANY;
@@ -2201,7 +2201,7 @@ next_step:
 			    NULL);
 	print_message("fetch with less buffer got rc %d, iod_size %d.\n",
 		      rc, (int)iod.iod_size);
-	assert_int_equal(rc, -DER_REC2BIG);
+	assert_rc_equal(rc, -DER_REC2BIG);
 	assert_int_equal(iod.iod_size, 1);
 
 	print_message("reading un-existed record ...\n");
@@ -2214,7 +2214,7 @@ next_step:
 	d_iov_set(&sg_iov[1], buf_out + tmp_len, buf_len - tmp_len);
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
 			    NULL, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	assert_int_equal(sgl.sg_nr_out, 0);
 
 	print_message("reading all data back ...\n");
@@ -2225,7 +2225,7 @@ next_step:
 	iod.iod_size	= DAOS_REC_ANY;
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
 			    NULL, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	/** Verify data consistency */
 	print_message("validating data ... sg_nr_out %d, iod_size %d.\n",
 		      sgl.sg_nr_out, (int)iod.iod_size);
@@ -2245,7 +2245,7 @@ next_step:
 	iod.iod_size	= DAOS_REC_ANY;
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
 			    NULL, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	/** Verify data consistency */
 	print_message("validating data ... sg_nr_out %d, iov_len %d.\n",
 		      sgl.sg_nr_out, (int)sgl.sg_iovs[0].iov_len);
@@ -2258,7 +2258,7 @@ next_step:
 
 	/** close object */
 	rc = daos_obj_close(oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	if (test_runable(arg, dts_ec_grp_size) && !test_ec) {
 		print_message("\nrun same test fr EC object ...\n");
@@ -2290,7 +2290,7 @@ read_empty_records_internal(void **state, unsigned int size)
 	/** open object */
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/** init dkey */
 	d_iov_set(&dkey, "dkey_empty", strlen("dkey_empty"));
@@ -2313,7 +2313,7 @@ read_empty_records_internal(void **state, unsigned int size)
 
 	/** update record */
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	D_ALLOC_ARRAY(buf_out, size);
 	assert_non_null(buf_out);
@@ -2331,7 +2331,7 @@ read_empty_records_internal(void **state, unsigned int size)
 
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL,
 			    NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	for (i = 0; i < size; i++) {
 		/**
@@ -2350,7 +2350,7 @@ read_empty_records_internal(void **state, unsigned int size)
 
 	/** close object */
 	rc = daos_obj_close(oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	D_FREE(buf_out);
 }
 
@@ -2389,7 +2389,7 @@ fetch_size(void **state)
 	/** open object */
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/** init dkey */
 	d_iov_set(&dkey, "dkey", strlen("dkey"));
@@ -2420,7 +2420,7 @@ fetch_size(void **state)
 	/** update record */
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, NUM_AKEYS, iod, sgl,
 			     NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/** fetch record size */
 	for (i = 0; i < NUM_AKEYS; i++)
@@ -2428,7 +2428,7 @@ fetch_size(void **state)
 
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, NUM_AKEYS, iod, NULL,
 			    NULL, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	for (i = 0; i < NUM_AKEYS; i++)
 		assert_int_equal(iod[i].iod_size, size * (i+1));
 
@@ -2438,13 +2438,13 @@ fetch_size(void **state)
 	}
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, NUM_AKEYS, iod, sgl,
 			    NULL, NULL);
-	assert_int_equal(rc, -DER_REC2BIG);
+	assert_rc_equal(rc, -DER_REC2BIG);
 	for (i = 0; i < NUM_AKEYS; i++)
 		assert_int_equal(iod[i].iod_size, size * (i+1));
 
 	/** close object */
 	rc = daos_obj_close(oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	for (i = 0; i < NUM_AKEYS; i++) {
 		D_FREE(akey[i]);
@@ -2529,23 +2529,23 @@ close_reopen_coh_oh(test_arg_t *arg, struct ioreq *req, daos_obj_id_t oid)
 
 	print_message("closing object\n");
 	rc = daos_obj_close(req->oh, NULL /* ev */);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	print_message("closing container\n");
 	rc = daos_cont_close(arg->coh, NULL /* ev */);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	print_message("reopening container\n");
 	if (arg->myrank == 0) {
 		rc = daos_cont_open(arg->pool.poh, arg->co_uuid, DAOS_COO_RW,
 				    &arg->coh, &arg->co_info, NULL /* ev */);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 	handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->pool.poh, 1);
 
 	print_message("reopening object\n");
 	rc = daos_obj_open(arg->coh, oid, 0, &req->oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 /**
@@ -3092,14 +3092,14 @@ tgt_idx_change_retry(void **state)
 	if (arg->myrank == 0) {
 		/** verify the object layout */
 		rc = daos_obj_layout_get(arg->coh, oid, &layout);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		assert_int_equal(layout->ol_nr, 1);
 		assert_int_equal(layout->ol_shards[0]->os_replica_nr, 3);
 		/* FIXME disable rank compare until we fix the layout_get */
 		/* assert_int_equal(layout->ol_shards[0]->os_ranks[0], 2); */
 		rank = layout->ol_shards[0]->os_shard_loc[replica].sd_rank;
 		rc = daos_obj_layout_free(layout);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 
 		/** exclude target of the replica */
 		print_message("rank 0 excluding target rank %u ...\n", rank);
@@ -3115,7 +3115,7 @@ tgt_idx_change_retry(void **state)
 
 		/** verify the target of shard 0 changed */
 		rc = daos_obj_layout_get(arg->coh, oid, &layout);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		assert_int_equal(layout->ol_nr, 1);
 		assert_int_equal(layout->ol_shards[0]->os_replica_nr, 3);
 		/* FIXME disable rank compare until we fix the layout_get */
@@ -3126,7 +3126,7 @@ tgt_idx_change_retry(void **state)
 			      replica, rank,
 			      layout->ol_shards[0]->os_shard_loc[0].sd_rank);
 		rc = daos_obj_layout_free(layout);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 
 	daos_fail_loc_set(0);
@@ -3247,7 +3247,7 @@ update_overlapped_recxs(void **state)
 	/** open object */
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/** init dkey */
 	d_iov_set(&dkey, "dkey", strlen("dkey"));
@@ -3274,7 +3274,7 @@ update_overlapped_recxs(void **state)
 	recx[2].rx_nr	= 2;
 	iod.iod_nr	= 3;
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
-	assert_int_equal(rc, -DER_INVAL);
+	assert_rc_equal(rc, -DER_INVAL);
 
 	for (i = 0; i < 128; i++) {
 		if (i != 111) {
@@ -3287,12 +3287,12 @@ update_overlapped_recxs(void **state)
 	}
 	iod.iod_nr	= 128;
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
-	assert_int_equal(rc, -DER_INVAL);
+	assert_rc_equal(rc, -DER_INVAL);
 
 
 	/** close object */
 	rc = daos_obj_close(oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	print_message("all good\n");
 }
 
@@ -3318,7 +3318,7 @@ io_obj_key_query(void **state)
 	/** open object */
 	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/** init dkey, akey */
 	dkey_val = akey_val = 0;
@@ -3328,47 +3328,47 @@ io_obj_key_query(void **state)
 	flags = DAOS_GET_DKEY;
 	rc = daos_obj_query_key(oh, DAOS_TX_NONE, flags, &dkey, NULL, NULL,
 				NULL);
-	assert_int_equal(rc, -DER_INVAL);
+	assert_rc_equal(rc, -DER_INVAL);
 
 	flags = DAOS_GET_MAX;
 	rc = daos_obj_query_key(oh, DAOS_TX_NONE, flags, &dkey, NULL, NULL,
 				NULL);
-	assert_int_equal(rc, -DER_INVAL);
+	assert_rc_equal(rc, -DER_INVAL);
 
 	flags = DAOS_GET_MAX | DAOS_GET_MIN;
 	rc = daos_obj_query_key(oh, DAOS_TX_NONE, flags, &dkey, NULL, NULL,
 				NULL);
-	assert_int_equal(rc, -DER_INVAL);
+	assert_rc_equal(rc, -DER_INVAL);
 
 	flags = DAOS_GET_DKEY | DAOS_GET_MAX | DAOS_GET_MIN;
 	rc = daos_obj_query_key(oh, DAOS_TX_NONE, flags, &dkey, NULL, NULL,
 				NULL);
-	assert_int_equal(rc, -DER_INVAL);
+	assert_rc_equal(rc, -DER_INVAL);
 
 	flags = DAOS_GET_AKEY | DAOS_GET_MIN;
 	rc = daos_obj_query_key(oh, DAOS_TX_NONE, flags, &dkey, NULL, NULL,
 				NULL);
-	assert_int_equal(rc, -DER_INVAL);
+	assert_rc_equal(rc, -DER_INVAL);
 
 	flags = DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_RECX | DAOS_GET_MAX;
 	rc = daos_obj_query_key(oh, DAOS_TX_NONE, flags, &dkey, &akey, NULL,
 				NULL);
-	assert_int_equal(rc, -DER_INVAL);
+	assert_rc_equal(rc, -DER_INVAL);
 
 	flags = DAOS_GET_DKEY | DAOS_GET_MIN;
 	rc = daos_obj_query_key(oh, DAOS_TX_NONE, flags, &dkey, NULL, NULL,
 				NULL);
-	assert_int_equal(rc, -DER_INVAL);
+	assert_rc_equal(rc, -DER_INVAL);
 
 	/** close object */
 	rc = daos_obj_close(oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	oid = dts_oid_gen(OC_SX,
 			  DAOS_OF_DKEY_UINT64 | DAOS_OF_AKEY_UINT64,
 			  arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	dkey_val = 5;
 	akey_val = 10;
@@ -3386,38 +3386,38 @@ io_obj_key_query(void **state)
 	recx.rx_nr = 1;
 
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	dkey_val = 10;
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	recx.rx_idx = 50;
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/*
 	 * Not essential to this test, opening a TX helps us exercise
 	 * dc_tx_get_epoch through the daos_obj_query_key fanout.
 	 */
 	rc = daos_tx_open(arg->coh, &th, 0, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	flags = 0;
 	flags = DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_RECX | DAOS_GET_MAX;
 	rc = daos_obj_query_key(oh, th, flags, &dkey, &akey, &recx, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	assert_int_equal(*(uint64_t *)dkey.iov_buf, 10);
 	assert_int_equal(*(uint64_t *)akey.iov_buf, 10);
 	assert_int_equal(recx.rx_idx, 50);
 	assert_int_equal(recx.rx_nr, 1);
 
 	rc = daos_tx_close(th, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/** close object */
 	rc = daos_obj_close(oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	print_message("all good\n");
 }
 
@@ -3575,7 +3575,7 @@ punch_then_lookup(void **state)
 
 	rc = daos_obj_fetch(req.oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL,
 			    NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	assert_int_equal(sgl.sg_nr_out, 10);
 	for (i = 0; i < 10; i++) {
 		if (i == 2)
@@ -3668,7 +3668,7 @@ split_sgl_internal(void **state, int size)
 	/** open object */
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	sbuf1 = calloc(size/2, 1);
 	sbuf2 = calloc(size/2, 1);
@@ -3695,7 +3695,7 @@ split_sgl_internal(void **state, int size)
 
 	/** update by split sgls */
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/** reset sg_iov */
 	memset(sbuf1, 0, size/2);
@@ -3717,7 +3717,7 @@ split_sgl_internal(void **state, int size)
 	/* fetch by split sgls */
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL,
 			    NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	assert_int_equal(iod.iod_size, size);
 	assert_int_equal(sgl.sg_nr_out, 2);
 
@@ -3729,7 +3729,7 @@ split_sgl_internal(void **state, int size)
 	}
 	/** close object */
 	rc = daos_obj_close(oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	D_FREE(sbuf1);
 	D_FREE(sbuf2);
@@ -4004,7 +4004,7 @@ io_invalid(void **state)
 	/** open object */
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/** init dkey */
 	d_iov_set(&dkey, "dkey", strlen("dkey"));
@@ -4023,7 +4023,7 @@ io_invalid(void **state)
 	iod.iod_nr	= 1;
 
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
-	assert_int_equal(rc, -DER_REC2BIG);
+	assert_rc_equal(rc, -DER_REC2BIG);
 
 	/** more buffers */
 	memset(buf, 'b', 32);
@@ -4041,12 +4041,12 @@ io_invalid(void **state)
 	iod.iod_nr	= 1;
 
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	memset(buf, 'a', 32);
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
 			    NULL, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	assert_memory_equal(buf, buf1, 32);
 
 	/* larger buffer */
@@ -4064,13 +4064,13 @@ io_invalid(void **state)
 	iod.iod_nr	= 1;
 
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	memset(large_buf, 'b', 12);
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
 			    NULL, NULL);
 	assert_memory_equal(large_buf, origin_buf, 8192);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 static void
@@ -4243,7 +4243,7 @@ run_daos_io_test(int rank, int size, int *sub_tests, int sub_tests_size)
 		sub_tests = NULL;
 	}
 
-	rc = run_daos_sub_tests("DAOS IO tests", io_tests,
+	rc = run_daos_sub_tests("DAOS_IO", io_tests,
 				ARRAY_SIZE(io_tests), sub_tests, sub_tests_size,
 				obj_setup, test_teardown);
 

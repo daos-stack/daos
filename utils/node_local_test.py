@@ -76,6 +76,7 @@ class NLTConf():
         self.agent_dir = None
         self.wf = None
         self.args = None
+        self.max_log_size = None
 
     def set_wf(self, wf):
         """Set the WarningsFactory object"""
@@ -84,6 +85,17 @@ class NLTConf():
     def set_args(self, args):
         """Set command line args"""
         self.args = args
+
+        # Parse the max log size.
+        if args.max_log_size:
+            size = args.max_log_size
+            if size.endswith('MiB'):
+                size = int(size[:-3])
+                size *= (1024 * 1024)
+            elif size.endswith('GiB'):
+                size = int(size[:-3])
+                size *= (1024 * 1024 * 1024)
+            self.max_log_size = int(size)
 
     def __getitem__(self, key):
         return self.bc[key]
@@ -296,7 +308,7 @@ class DaosServer():
         self.server_log = tempfile.NamedTemporaryFile(prefix='dnt_server_',
                                                       suffix='.log',
                                                       delete=False)
-        self.__process_name = 'daos_io_server'
+        self.__process_name = 'daos_engine'
         if self.valgrind:
             self.__process_name = 'valgrind'
 
@@ -355,10 +367,10 @@ class DaosServer():
         scfd = open(os.path.join(self_dir, 'nlt_server.yaml'), 'r')
 
         scyaml = yaml.safe_load(scfd)
-        scyaml['servers'][0]['log_file'] = self.server_log.name
+        scyaml['engines'][0]['log_file'] = self.server_log.name
         if self.conf.args.server_debug:
             scyaml['control_log_mask'] = 'ERROR'
-            scyaml['servers'][0]['log_mask'] = self.conf.args.server_debug
+            scyaml['engines'][0]['log_mask'] = self.conf.args.server_debug
         scyaml['control_log_file'] = self.control_log.name
 
         self._yaml_file = tempfile.NamedTemporaryFile(
@@ -381,14 +393,14 @@ class DaosServer():
             self._io_server_dir = tempfile.TemporaryDirectory(prefix='dnt_io_')
 
             fd = open(os.path.join(self._io_server_dir.name,
-                                   'daos_io_server'), 'w')
+                                   'daos_engine'), 'w')
             fd.write('#!/bin/sh\n')
             fd.write('export PATH=$REAL_PATH\n')
-            fd.write('exec valgrind {} daos_io_server "$@"\n'.format(
+            fd.write('exec valgrind {} daos_engine "$@"\n'.format(
                 ' '.join(valgrind_args)))
             fd.close()
 
-            os.chmod(os.path.join(self._io_server_dir.name, 'daos_io_server'),
+            os.chmod(os.path.join(self._io_server_dir.name, 'daos_engine'),
                      stat.S_IXUSR | stat.S_IRUSR)
 
             server_env['REAL_PATH'] = '{}:{}'.format(
@@ -505,7 +517,7 @@ class DaosServer():
             # pylint: disable=protected-access
             entry['lineStart'] = sys._getframe().f_lineno
             entry['severity'] = 'ERROR'
-            entry['message'] = 'daos_io_server died during testing'
+            entry['message'] = 'daos_engine died during testing'
             self.conf.wf.issues.append(entry)
 
         rc = self.run_dmg(['system', 'stop'])
@@ -1324,6 +1336,15 @@ def compress_file(filename):
 
     os.unlink(filename)
 
+# https://stackoverflow.com/questions/1094841/get-human-readable-version-of-file-size
+def sizeof_fmt(num, suffix='B'):
+    """Return size as a human readable string"""
+    for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
+        if abs(num) < 1024.0:
+            return "%3.1f%s%s" % (num, unit, suffix)
+        num /= 1024.0
+    return "%.1f%s%s" % (num, 'Yi', suffix)
+
 def log_test(conf,
              filename,
              show_memleaks=True,
@@ -1335,8 +1356,14 @@ def log_test(conf,
              check_write=False):
     """Run the log checker on filename, logging to stdout"""
 
+    # Check if the log file has wrapped, if it has then log parsing checks do
+    # not work correctly.
+    if os.path.exists('{}.old'.format(filename)):
+        raise Exception('Log file exceeded max size')
+    fstat = os.stat(filename)
     if not quiet:
-        print('Running log_test on {}'.format(filename))
+        print('Running log_test on {} {}'.format(filename,
+                                                 sizeof_fmt(fstat.st_size)))
 
     log_iter = lp.LogIter(filename)
 
@@ -1382,6 +1409,11 @@ def log_test(conf,
         raise NLTestNoFunction('dfuse_write')
 
     compress_file(filename)
+
+    if conf.max_log_size and fstat.st_size > conf.max_log_size:
+        raise Exception('Max log size exceeded, {} > {}'\
+                        .format(sizeof_fmt(fstat.st_size),
+                                sizeof_fmt(conf.max_log_size)))
 
     return lto.fi_location
 
@@ -2362,6 +2394,7 @@ def main():
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
     parser.add_argument('--no-root', action='store_true')
+    parser.add_argument('--max-log-size', default=None)
     parser.add_argument('--perf-check', action='store_true')
     parser.add_argument('--dtx', action='store_true')
     parser.add_argument('--test', help="Use '--test list' for list")

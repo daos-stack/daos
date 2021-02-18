@@ -6,9 +6,7 @@
 utils/rpms/_topdir/
 /build/
 tags
-daos_m.conf
 daos.conf
-/_build.external/
 config.log
 /install/
 utils/daos_build.pyc

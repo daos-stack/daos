@@ -30,8 +30,7 @@ class DaosCoreTestDfs(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,large
-        :avocado: tags=dfs_test
-        :avocado: tags=daos_dfs_unit
+        :avocado: tags=daos_test,daos_core_test_dfs,test_daos_dfs_unit
         """
         self.daos_test = os.path.join(self.bin, 'dfs_test')
         self.run_subtest()
@@ -47,8 +46,7 @@ class DaosCoreTestDfs(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,large
-        :avocado: tags=dfs_test
-        :avocado: tags=daos_dfs_parallel
+        :avocado: tags=daos_test,daos_core_test_dfs,test_daos_dfs_parallel
         """
         self.daos_test = os.path.join(self.bin, 'dfs_test')
         self.run_subtest()
