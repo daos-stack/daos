@@ -1193,7 +1193,9 @@ int verify_state_in_log(char *host, char *log_file, char *state)
 			}
 		}
 		pch = strtok(NULL, " ");
-		pclose(fp);
+
+		if (fp != NULL)
+			pclose(fp);
 		free(line);
 	}
 

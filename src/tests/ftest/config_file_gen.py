@@ -113,7 +113,7 @@ def main():
         "",
         "Examples:",
         "\tconfig_file_gen.py -n host-10 -g daos_server -a "
-        "/usr/etc/daos_agent.yml -s /usr/etc/daos_server.yml",
+        "/etc/daos/daos_agent.yml -s /etc/daos/daos_server.yml",
         "",
         "Return codes:",
         "\t0 - all configuration files generated successfully",
