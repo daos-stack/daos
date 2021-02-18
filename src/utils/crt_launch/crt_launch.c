@@ -344,12 +344,15 @@ exit:
 
 	if (rc == 0) {
 		/* Exec passed application with rest of arguments */
-		rc = execve(g_opt.app_to_exec, &argv[g_opt.app_args_indx], environ);
-		if (rc == -1)
+		rc = execve(g_opt.app_to_exec,
+			    &argv[g_opt.app_args_indx],
+			    environ);
+		if (rc == -1) {
 		  D_ERROR("execve('%s') failed: %s; rc=%d\n",
 			  g_opt.app_to_exec,
 			  strerror(errno),
 			  rc);
+		}
 	}
 
 	return 0;

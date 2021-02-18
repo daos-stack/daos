@@ -355,30 +355,33 @@ class TestWithoutServers(Test):
         # Add test binaries and daos binaries to PATH
         test_dirs = {"TESTING": "tests", "install": "bin"}
         found_path = False
-        d = os.path.dirname(os.path.abspath(__file__))
+        path_dirname = os.path.dirname(os.path.abspath(__file__))
 
         # Use the developer environment from which this python file was called
         if ("DAOS_ENV" in os.environ) and (os.environ["DAOS_ENV"] == "dev"):
 
             while True:
-                if os.path.basename(d) == "TESTING":
-                    added_path = os.path.join(d, test_dirs["TESTING"])
+                if os.path.basename(path_dirname) == "TESTING":
+                    added_path = os.path.join(path_dirname,
+                                              test_dirs["TESTING"])
                     os.environ["PATH"] += os.pathsep + added_path
                     found_path = True
-                elif os.path.basename(d) == "install":
-                    added_path = os.path.join(d, test_dirs["install"])
+                elif os.path.basename(path_dirname) == "install":
+                    added_path = os.path.join(path_dirname,
+                                              test_dirs["install"])
                     if os.path.isdir(added_path):
                         os.environ["PATH"] += os.pathsep + added_path
                         found_path = True
                     else:
                         print("ERROR: Directory does not exist: " + added_path)
-                elif re.match("^\s*\/+\s*$", d) != None:
+                elif re.match(r"^\s*\/+\s*$", path_dirname) != None:
                     if not found_path:
-                      print("ERROR: Couldn't find a directory named 'TESTING' " +
-                            "or 'install' to add to your PATH.\n")
+                        print("ERROR: Couldn't find a directory " +
+                              "named 'TESTING' or 'install' to add " +
+                              "to your PATH.\n")
                     break
 
-                d = os.path.dirname(d)
+                path_dirname = os.path.dirname(path_dirname)
 
         # Default to to testing RPM
         else:
@@ -387,8 +390,10 @@ class TestWithoutServers(Test):
             if os.path.isdir(tests_dir):
                 os.environ["PATH"] += os.pathsep + tests_dir
             else:
-                print("WARNING: I didn't find the daos tests directory.\n" +
-                      "         No test directories have been added to your PATH..\n")
+                print("WARNING: I didn't find the daos tests directory. " +
+                      "No test directories have been added to your PATH..\n")
+
+        print('DEBUG log: line 396, os.environ["PATH"] = ', os.environ["PATH"])
 
     def tearDown(self):
         """Tear down after each test case."""
