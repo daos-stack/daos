@@ -1,4 +1,4 @@
-# Contributing to DAOS
+# Contributing to DAOS v1
 
 Your contributions are most welcome! There are several good ways to suggest new
 features, offer to add a feature, or just begin a dialog about DAOS:
