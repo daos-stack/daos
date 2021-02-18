@@ -239,7 +239,8 @@ crt_ui_destroy(struct crt_uri_item *ui)
 	D_ASSERT(ui->ui_initialized == 1);
 
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
-		D_FREE(ui->ui_uri[i]);
+		if (ui->ui_uri[i])
+			D_FREE(ui->ui_uri[i]);
 
 	D_FREE(ui);
 }
@@ -2882,11 +2883,6 @@ crt_group_secondary_create(crt_group_id_t grp_name, crt_group_t *primary_grp,
 	grp_priv->gp_priv_prim = grp_priv_prim;
 
 	*ret_grp = &grp_priv->gp_pub;
-
-#if 0
-	/* Do not addref here as crt_grp_priv_create() already sets it */
-	crt_grp_priv_addref(grp_priv);
-#endif
 
 	D_RWLOCK_WRLOCK(&crt_grp_list_rwlock);
 	crt_grp_insert_locked(grp_priv);
