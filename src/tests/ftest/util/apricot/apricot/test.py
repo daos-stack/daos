@@ -393,8 +393,6 @@ class TestWithoutServers(Test):
                 print("WARNING: I didn't find the daos tests directory. " +
                       "No test directories have been added to your PATH..\n")
 
-        print('DEBUG log: line 396, os.environ["PATH"] = ', os.environ["PATH"])
-
     def tearDown(self):
         """Tear down after each test case."""
         self.report_timeout()
