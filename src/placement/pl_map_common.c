@@ -30,7 +30,7 @@ remap_add_one(d_list_t *remap_list, struct failed_shard *f_new)
 	d_list_for_each_prev(tmp, remap_list) {
 		f_shard = d_list_entry(tmp, struct failed_shard, fs_list);
 		/*
-		* Since we can only reuild one target at a time, the
+		* Since we can only rebuild one target at a time, the
 		* target fseq should be assigned uniquely, even if all
 		* the targets of the same domain failed at same time.
 		*/
@@ -371,17 +371,19 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 	struct failed_shard	*f_shard;
 	struct failed_shard	*tmp;
 	uint32_t                *grp_map = NULL;
-	uint32_t		grp_map_idx = 0;
-	uint32_t		grp_map_size;
-	uint32_t		grp_map_array[STACK_TGTS_SIZE] = {-1};
+	uint32_t		 grp_map_idx = 0;
+	uint32_t		 grp_map_size;
+	uint32_t		 grp_map_array[STACK_TGTS_SIZE] = {-1};
+	/* holds number of "extra" shards for the group in the new_shards */
 	uint32_t                *grp_count = NULL;
-	uint32_t		grp_cnt_array[STACK_TGTS_SIZE] = {0};
-	uint32_t                max_fail_grp;
-	uint32_t		new_group_size;
-	uint32_t		grp;
-	uint32_t		grp_idx;
-	int i, j, k = 0;
-	int rc = 0;
+	uint32_t		 grp_cnt_array[STACK_TGTS_SIZE] = {0};
+	uint32_t                 max_fail_grp;
+	uint32_t		 new_group_size;
+	uint32_t		 grp;
+	uint32_t		 grp_idx;
+	uint32_t		 new_shards_nr;
+	int			 i, j, k = 0;
+	int			 rc = 0;
 
 	/* Empty list, no extension needed */
 	if (d_list_empty(extended_list))
@@ -424,7 +426,8 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 	}
 
 	new_group_size = layout->ol_grp_size + max_fail_grp;
-	D_ALLOC_ARRAY(new_shards, new_group_size * layout->ol_grp_nr);
+	new_shards_nr = new_group_size * layout->ol_grp_nr;
+	D_ALLOC_ARRAY(new_shards, new_shards_nr);
 	if (new_shards == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -438,10 +441,15 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 	}
 
 	d_list_for_each_entry(f_shard, extended_list, fs_list) {
+		/* get the group number for this shard */
 		grp = f_shard->fs_shard_idx / layout->ol_grp_size;
-		grp_idx = ((grp + 1) * layout->ol_grp_size) + grp;
-		grp_count[grp]--;
+		/* grp_idx will be the last shard index within the group */
+		grp_idx = (grp * new_group_size) + (layout->ol_grp_size - 1);
+		/* grp_idx will be the index to one of the "new" shards in the
+		 * group array
+		 */
 		grp_idx += grp_count[grp];
+		grp_count[grp]--;
 
 		new_shards[grp_idx].po_fseq = f_shard->fs_fseq;
 		new_shards[grp_idx].po_shard = f_shard->fs_shard_idx;

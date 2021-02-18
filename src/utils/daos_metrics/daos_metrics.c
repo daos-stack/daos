@@ -5,7 +5,7 @@
  */
 
 /*
- * This utility shows metrics from the specified IO Server
+ * This utility shows metrics from the specified I/O Engine
  */
 
 #include <getopt.h>
@@ -40,7 +40,7 @@ print_usage(const char *prog_name)
 	printf("Usage: %s [optional arguments]\n"
 	       "\n"
 	       "--srv_idx, -S\n"
-	       "\tShow telemetry data from this IO Server local index "
+	       "\tShow telemetry data from this I/O Engine local index "
 	       "(default 0)\n"
 	       "--path, -p\n"
 	       "\tDisplay metrics at or below the specified path\n"
@@ -177,8 +177,10 @@ main(int argc, char **argv)
 
 failure:
 	printf("Unable to attach to the shared memory for the server index: %d"
-	       "\nMake sure to run the IO server with the same index to "
-	       "initialize the shared memory and populate it with metrics.\n",
+	       "\nMake sure to run the I/O Engine with the same index to "
+	       "initialize the shared memory and populate it with metrics.\n"
+	       "Verify user/group settings match those that started the I/O "
+	       "Engine.\n",
 	       srv_idx);
 	return -1;
 }

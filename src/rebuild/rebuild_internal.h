@@ -17,7 +17,7 @@
 #include <daos/rpc.h>
 #include <daos/btree.h>
 #include <daos/pool_map.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/rebuild.h>
 
 /* Track the pool rebuild status on each target, which exists on
@@ -204,6 +204,7 @@ struct rebuild_pool_tls {
 	daos_handle_t	rebuild_tree_hdl; /*hold objects being rebuilt */
 	d_list_t	rebuild_pool_list;
 	uint64_t	rebuild_pool_obj_count;
+	uint64_t	rebuild_pool_reclaim_obj_count;
 	unsigned int	rebuild_pool_ver;
 	int		rebuild_pool_status;
 	unsigned int	rebuild_pool_scanning:1,

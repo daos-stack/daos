@@ -722,7 +722,7 @@ class TestPool(TestDaosApiBase):
                             if time() > end_time:
                                 raise TimeoutError(
                                     "TIMEOUT detected after {} seconds while "
-                                    "waiting for pool %s query response. This "
+                                    "waiting for pool {} query response. This "
                                     "timeout can be adjusted via the "
                                     "'pool/pool_query_timeout' test yaml "
                                     "parameter.".format(

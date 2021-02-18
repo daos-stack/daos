@@ -155,11 +155,11 @@ if [ -d "/mnt/daos" ]; then
     run_test "${SL_BUILD_DIR}/src/security/tests/cli_security_tests"
     run_test "${SL_BUILD_DIR}/src/security/tests/srv_acl_tests"
 
-    COMP="UTEST_iosrv"
-    run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_client_tests"
-    run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_progress_tests"
-    run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_handler_tests"
-    run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_listener_tests"
+    COMP="UTEST_engine"
+    run_test "${SL_BUILD_DIR}/src/engine/tests/drpc_client_tests"
+    run_test "${SL_BUILD_DIR}/src/engine/tests/drpc_progress_tests"
+    run_test "${SL_BUILD_DIR}/src/engine/tests/drpc_handler_tests"
+    run_test "${SL_BUILD_DIR}/src/engine/tests/drpc_listener_tests"
 
     COMP="UTEST_mgmt"
     run_test "${SL_BUILD_DIR}/src/mgmt/tests/srv_drpc_tests"
@@ -167,6 +167,7 @@ if [ -d "/mnt/daos" ]; then
              -a 5 -n 10
     run_test "${SL_PREFIX}/bin/daos_perf" -T vos -R '"U;p F;p V"' -o 5 -d 5 \
              -a 5 -n 10 -A
+    run_test "${SL_PREFIX}/bin/jump_pl_map"
 
     # Tests launched by scripts
     export USE_VALGRIND=${RUN_TEST_VALGRIND}

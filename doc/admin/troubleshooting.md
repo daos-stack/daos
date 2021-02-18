@@ -84,7 +84,7 @@ levels may be set using the `control_log_mask` config parameter:
 
 ### Data Plane Log
 
-Data Plane (`daos_io_server`) logging is configured on a per-instance
+Data Plane (`daos_engine`) logging is configured on a per-instance
 basis. In other words, each section under the `servers:` section must
 have its own logging configuration. The `log_file` config parameter
 is converted to a D_LOG_FILE environment variable value. For more
@@ -108,8 +108,9 @@ DEBUG-level logging will be sent to the specified file.
 
 DAOS uses the debug system defined in
 [CaRT](https://github.com/daos-stack/cart) but more specifically the
-GURT library. Default server log is "/tmp/daos.log" and client default
-log is stdout, unless otherwise set by `D_LOG_FILE`.
+GURT library. Both server and client default log is stdout, unless
+otherwise set by `D_LOG_FILE` environment variable (client) or
+`log_file` config parameter (server).
 
 ### Registered Subsystems/Facilities
 

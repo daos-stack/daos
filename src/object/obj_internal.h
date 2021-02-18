@@ -22,8 +22,10 @@
 #include <daos/btree_class.h>
 #include <daos/dtx.h>
 #include <daos/object.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/dtx_srv.h>
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 #include "obj_rpc.h"
 #include "obj_ec.h"
@@ -246,6 +248,17 @@ migrate_pool_tls_destroy(struct migrate_pool_tls *tls);
 struct obj_tls {
 	d_sg_list_t		ot_echo_sgl;
 	d_list_t		ot_pool_list;
+
+	/** Measure per-operation latency (type = gauge) */
+	struct d_tm_node_t	*ot_op_lat[OBJ_PROTO_CLI_COUNT];
+	/** Count number of per-opcode active requests (type = gauge) */
+	struct d_tm_node_t	*ot_op_active[OBJ_PROTO_CLI_COUNT];
+	/** Count number of total per-opcode requests (type = counter) */
+	struct d_tm_node_t	*ot_op_total[OBJ_PROTO_CLI_COUNT];
+	/** Total number of silently restarted update operations */
+	struct d_tm_node_t	*ot_update_restart;
+	/** Total number of resent update operations */
+	struct d_tm_node_t	*ot_update_resent;
 };
 
 struct obj_ec_parity {
@@ -557,6 +570,8 @@ struct obj_io_context {
 	struct ds_cont_child	*ioc_coc;
 	daos_handle_t		 ioc_vos_coh;
 	uint32_t		 ioc_map_ver;
+	uint32_t		 ioc_opc;
+	uint64_t		 ioc_start_time;
 	uint32_t		 ioc_began:1,
 				 ioc_free_sgls:1,
 				 ioc_lost_reply:1;
