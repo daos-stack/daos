@@ -238,10 +238,9 @@ crt_ui_destroy(struct crt_uri_item *ui)
 	D_ASSERT(ui->ui_ref == 0);
 	D_ASSERT(ui->ui_initialized == 1);
 
-	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
+	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
 		if (ui->ui_uri[i])
 			D_FREE(ui->ui_uri[i]);
-	}
 
 	D_FREE(ui);
 }
@@ -548,7 +547,6 @@ crt_grp_lc_uri_remove(struct crt_grp_priv *passed_grp_priv, int ctx_idx,
 	d_hash_rec_delete_at(&grp_priv->gp_lookup_cache[ctx_idx], rlink);
 }
 
-
 static int
 grp_lc_uri_insert_internal_locked(struct crt_grp_priv *grp_priv,
 				int ctx_idx, d_rank_t rank,
@@ -676,7 +674,6 @@ unlock:
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
 	return rc;
-
 }
 
 int
@@ -694,7 +691,6 @@ crt_grp_lc_addr_invalid(d_list_t *rlink, void *arg)
 
 	D_MUTEX_LOCK(&li->li_mutex);
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-
 		if (li->li_tag_addr[i] == NULL)
 			continue;
 		rc = crt_hg_addr_free(&ctx->cc_hg_ctx, li->li_tag_addr[i]);
@@ -766,7 +762,6 @@ crt_grp_ctx_invalid(struct crt_context *ctx, bool locked)
 
 	d_list_for_each_entry(grp_priv, &crt_grp_list,
 			      gp_link) {
-
 		if (grp_priv->gp_primary == 0)
 			continue;
 
@@ -944,7 +939,6 @@ crt_grp_lookup_locked(crt_group_id_t grp_id)
 	return (found == true) ? grp_priv : NULL;
 }
 
-
 /* lookup by string subgrp id */
 struct crt_grp_priv *
 crt_grp_lookup_grpid(crt_group_id_t grp_id)
@@ -1039,7 +1033,6 @@ out_grp_priv:
 out:
 	return rc;
 }
-
 
 
 void
@@ -1146,7 +1139,6 @@ crt_validate_grpid(const crt_group_id_t grpid) {
 	return 0;
 }
 
-
 crt_group_t *
 crt_group_lookup(crt_group_id_t grp_id)
 {
@@ -1187,7 +1179,6 @@ crt_group_lookup(crt_group_id_t grp_id)
 out:
 	return (grp_priv == NULL) ? NULL : &grp_priv->gp_pub;
 }
-
 
 int
 crt_group_rank(crt_group_t *grp, d_rank_t *rank)
@@ -1452,7 +1443,7 @@ out:
 	return rc;
 }
 
-static int
+static void
 crt_primary_grp_fini(void)
 {
 	struct crt_grp_priv	*grp_priv;
@@ -1463,10 +1454,7 @@ crt_primary_grp_fini(void)
 
 	grp_priv = grp_gdata->gg_primary_grp;
 	crt_grp_priv_decref(grp_priv);
-
-	return 0;
 }
-
 
 void
 crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
@@ -1547,7 +1535,6 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 		D_GOTO(out, rc);
 	}
 
-
 	/* step 1, lookup the URI in the local cache */
 	crt_grp_lc_lookup(grp_priv_primary, crt_ctx->cc_idx, g_rank,
 			  ul_in->ul_tag, &cached_uri, NULL);
@@ -1579,8 +1566,7 @@ out:
 	if (rc != 0)
 		D_ERROR("crt_reply_send failed, rc: %d, opc: %#x.\n",
 			rc, rpc_req->cr_opc);
-	if (tmp_uri != NULL)
-		D_FREE(tmp_uri);
+	D_FREE(tmp_uri);
 }
 
 int
@@ -1628,7 +1614,6 @@ out:
 	return rc;
 }
 
-
 int
 crt_group_detach(crt_group_t *attached_grp)
 {
@@ -1646,15 +1631,10 @@ crt_group_detach(crt_group_t *attached_grp)
 
 	grp_priv = crt_grp_pub2priv(attached_grp);
 
-	rc = crt_grp_priv_decref(grp_priv);
-	if (rc < 0)
-		D_ERROR("crt_grp_priv_decref (group %s) failed, rc: %d.\n",
-			grp_priv->gp_pub.cg_grpid, rc);
-
+	crt_grp_priv_decref(grp_priv);
 out:
 	return rc;
 }
-
 
 int
 crt_grp_init(crt_group_id_t grpid)
@@ -1691,29 +1671,21 @@ out:
 	return rc;
 }
 
-int
+void
 crt_grp_fini(void)
 {
 	struct crt_grp_gdata	*grp_gdata;
-	int			 rc = 0;
 
 	D_ASSERT(crt_gdata.cg_grp_inited == 1);
 	D_ASSERT(crt_gdata.cg_grp != NULL);
 	grp_gdata = crt_gdata.cg_grp;
 
-	rc = crt_primary_grp_fini();
-	if (rc != 0)
-		D_GOTO(out, rc);
+	crt_primary_grp_fini();
 
 	D_RWLOCK_DESTROY(&grp_gdata->gg_rwlock);
 	D_FREE(grp_gdata);
 	crt_gdata.cg_grp = NULL;
 	crt_gdata.cg_grp_inited = 0;
-
-out:
-	if (rc != 0)
-		D_ERROR("crt_grp_fini failed, rc: %d.\n", rc);
-	return rc;
 }
 
 #define CRT_MAX_ATTACH_PREFIX 256
@@ -1803,7 +1775,7 @@ crt_group_config_path_set(const char *path)
 		return -DER_NOTDIR;
 	}
 
-	strncpy(crt_attach_prefix, path, CRT_MAX_ATTACH_PREFIX-1);
+	strncpy(crt_attach_prefix, path, CRT_MAX_ATTACH_PREFIX - 1);
 
 	return 0;
 }
@@ -2209,15 +2181,11 @@ crt_unregister_event_cb(crt_event_cb func, void *args)
 	}
 
 out_unlock:
-	if (crt_plugin_gdata.cpg_event_cbs_old != NULL) {
-		D_FREE(crt_plugin_gdata.cpg_event_cbs_old);
-		crt_plugin_gdata.cpg_event_cbs_old = NULL;
-	}
+	D_FREE(crt_plugin_gdata.cpg_event_cbs_old);
 
 	D_MUTEX_UNLOCK(&crt_plugin_gdata.cpg_mutex);
 	return rc;
 }
-
 
 int
 crt_grp_psr_reload(struct crt_grp_priv *grp_priv)
@@ -2300,7 +2268,6 @@ grp_add_free_index(d_list_t *list, int index, bool tail)
 	return 0;
 }
 
-
 static int
 grp_regen_linear_list(struct crt_grp_priv *grp_priv)
 {
@@ -2371,7 +2338,6 @@ grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank)
 		first = membs->rl_nr;
 		new_amount = first + RANK_LIST_REALLOC_SIZE;
 
-
 		membs = d_rank_list_realloc(membs, new_amount);
 		if (membs == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
@@ -2420,7 +2386,6 @@ out:
 	return rc;
 }
 
-
 static int
 crt_group_primary_add_internal(struct crt_grp_priv *grp_priv,
 				d_rank_t rank, int tag, char *uri)
@@ -2450,7 +2415,6 @@ crt_group_primary_add_internal(struct crt_grp_priv *grp_priv,
 out:
 	return rc;
 }
-
 
 int
 crt_rank_self_set(d_rank_t rank)
@@ -2511,7 +2475,6 @@ unlock:
 out:
 	return rc;
 }
-
 
 int
 crt_rank_uri_get(crt_group_t *group, d_rank_t rank, int tag, char **uri_str)
@@ -2607,7 +2570,6 @@ crt_group_rank_remove_internal(struct crt_grp_priv *grp_priv, d_rank_t rank)
 			rc = grp_regen_linear_list(grp_priv);
 			break;
 		}
-
 	}
 
 #if 0
@@ -2695,7 +2657,6 @@ out:
 	return rc;
 }
 
-
 int
 crt_group_info_get(crt_group_t *group, d_iov_t *grp_info)
 {
@@ -2709,7 +2670,6 @@ crt_group_info_set(d_iov_t *grp_info)
 	D_ERROR("API is currently not supported\n");
 	return -DER_NOSYS;
 }
-
 
 int
 crt_group_ranks_get(crt_group_t *group, d_rank_list_t **list)
@@ -2794,12 +2754,7 @@ crt_group_view_destroy(crt_group_t *grp)
 
 	grp_priv = container_of(grp, struct crt_grp_priv, gp_pub);
 
-	rc = crt_grp_priv_decref(grp_priv);
-	if (rc != 0) {
-		D_ERROR("crt_grp_priv_decref() failed, " DF_RC "\n", DP_RC(rc));
-		D_GOTO(out, rc);
-	}
-
+	crt_grp_priv_decref(grp_priv);
 out:
 	return rc;
 }
@@ -2828,7 +2783,6 @@ crt_group_psr_set(crt_group_t *grp, d_rank_t rank)
 out:
 	return rc;
 }
-
 
 int
 crt_group_secondary_create(crt_group_id_t grp_name, crt_group_t *primary_grp,
@@ -2957,12 +2911,7 @@ crt_group_secondary_destroy(crt_group_t *grp)
 
 	grp_priv = container_of(grp, struct crt_grp_priv, gp_pub);
 
-	rc = crt_grp_priv_decref(grp_priv);
-	if (rc != 0) {
-		D_ERROR("crt_grp_priv_decref() failed, " DF_RC "\n", DP_RC(rc));
-		D_GOTO(out, rc);
-	}
-
+	crt_grp_priv_decref(grp_priv);
 out:
 	return rc;
 }
@@ -3111,7 +3060,6 @@ crt_group_secondary_rank_add(crt_group_t *grp, d_rank_t sec_rank,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-
 	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
 	rc = crt_group_secondary_rank_add_internal(grp_priv,
 					sec_rank, prim_rank);
@@ -3120,7 +3068,6 @@ crt_group_secondary_rank_add(crt_group_t *grp, d_rank_t sec_rank,
 out:
 	return rc;
 }
-
 
 int crt_group_primary_rank_add(crt_context_t ctx, crt_group_t *grp,
 			d_rank_t prim_rank, char *uri)
@@ -3390,7 +3337,6 @@ cleanup:
 	return rc;
 }
 
-
 int
 crt_group_secondary_modify(crt_group_t *grp, d_rank_list_t *sec_ranks,
 			d_rank_list_t *prim_ranks, crt_group_mod_op_t op,
@@ -3425,7 +3371,6 @@ crt_group_secondary_modify(crt_group_t *grp, d_rank_list_t *sec_ranks,
 
 	if (sec_ranks == NULL || sec_ranks->rl_nr == 0 ||
 		sec_ranks->rl_ranks == NULL) {
-
 		D_ERROR("Modification has no members\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
