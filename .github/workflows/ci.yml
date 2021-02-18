@@ -83,7 +83,7 @@ jobs:
     - name: Build daos
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg COMPILER=${{ matrix.compiler }}
-                          -t build-arg DAOS_JAVA_BUILD=no --build-arg DEPS_JOBS=10
+                          --build-arg DAOS_JAVA_BUILD=no --build-arg DEPS_JOBS=10
     - name: check server
       run: docker run build-image ldd /opt/daos/bin/daos_io_server
     - name: Run Unit Tests
