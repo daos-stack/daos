@@ -140,10 +140,10 @@ class Test(avocadoTest):
 
     def skip_from_list(self):
         """Check if test is in skip list"""
-        response = requests.get('https://gist.github.com/brianjmurrell/f2fb10c855aacc7a86cc3ce725e1f47f/raw/2d6cf62fec6ab4f66bc77796ad95405b550f5874/gistfile1.txt')
+        response = requests.get('https://gist.github.com/brianjmurrell/f2fb10c855aacc7a86cc3ce725e1f47f/raw/ec592a86b084e23a1b2a5baf0e2ed61e0df8b543/gistfile1.txt')
         if response.status_code == 200:
             skip_list = response.text.splitlines()
-            print(self.get_test_name())
+            print(skip_list)
             if self.get_test_name() in skip_list:
                 self.cancel("Skipping due to being on the skip list")
         else:
