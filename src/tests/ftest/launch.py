@@ -1854,9 +1854,9 @@ def main():
 
     # debug - python directory
     ls_command = ["ls", "-la", "/usr/bin/"]
-    rpm_command = ["rpm", "-qa|grep", "python"]
+    #rpm_command = ["rpm", "-qa|grep", "python"]
     print(get_output(ls_command, check=False))
-    print(get_output(rpm_command, check=False))
+    #print(get_output(rpm_command, check=False))
 
     # Setup the user environment
     set_test_environment(args)
