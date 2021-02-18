@@ -317,6 +317,7 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
     status = False
     params = {}
     rank = None
+    tgt_idx = None
     if name == "EXCLUDE":
         targets = self.params.get("targets_exclude", "/run/soak_harassers/*", 8)
         exclude_servers = len(self.hostlist_servers) - 1
