@@ -2243,7 +2243,7 @@ delet_container_during_aggregation(void **state)
 
 	/* Destroy the container while Aggregation is running */
 	rc = test_teardown_cont(arg);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/* Run Pool query at the end */
 	pool_storage_info(state, &pinfo);
