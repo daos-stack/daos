@@ -23,7 +23,7 @@ RUN yum clean all &&							\
 	make nasm numactl-devel openssl-devel				\
 	pandoc patch python-devel python36-devel python-magic		\
 	python-pep8 python-pygit2 python2-pygithub python-requests	\
-	readline-devel scons sg3_utils ShellCheck yasm pciutils		\
+	readline-devel scons sg3_utils yasm pciutils			\
 	valgrind-devel python36-pylint man java-1.8.0-openjdk maven	\
 	json-c-devel python36-requests lz4-devel			\
 	python2-avocado python2-avocado-plugins-output-html		\
@@ -32,7 +32,7 @@ RUN yum clean all &&							\
 	ndctl ipmctl e2fsprogs						\
 	python2-clustershell python2-Cython				\
 	python36-clustershell python36-paramiko				\
-	python36-numpy python3-pip Lmod					\
+	python36-numpy Lmod						\
 	fuse3-devel libipmctl-devel python36-pyxattr			\
 	hwloc-devel patchelf python36-tabulate				\
 	java-1.8.0-openjdk python-distro python36-distro &&		\
@@ -48,20 +48,6 @@ RUN useradd --uid $UID --user-group --create-home --shell /bin/bash --home /home
 RUN echo "daos_server:daos_server" | chpasswd
 RUN useradd --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
-
-# DAOS python 3 packages required for pylint
-#  - excluding mpi4py as it depends on CORCI-635
-USER daos_server:daos_server
-RUN pip3 --no-cache-dir --disable-pip-version-check install --user	\
-	avocado-framework			 	\
-	avocado-framework-plugin-result-html		\
-	avocado-framework-plugin-varianter-yaml-to-mux	\
-	codespell					\
-	pygithub
-USER root:root
-
-# Add codespell to path.
-ENV PATH=$PATH:/home/daos/.local/bin
 
 # Create directory for DAOS backend storage
 RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&	\

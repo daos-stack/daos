@@ -243,13 +243,7 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 				svc->s_name, DP_KEY(&key), rc);
 			goto out_iovs;
 		}
-		/* do not xfer more than attr length */
-		if (iovs[j].iov_len < sizes[i]) {
-			iovs[j].iov_buf_len = iovs[j].iov_len;
-			bulk_size -= sizes[i] - iovs[j].iov_len;
-		} else {
-			iovs[j].iov_buf_len = sizes[i];
-		}
+		iovs[j].iov_buf_len = sizes[i];
 		sizes[i] = iovs[j].iov_len;
 
 		/* If buffer length is zero, send only size */
