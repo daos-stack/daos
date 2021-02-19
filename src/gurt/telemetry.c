@@ -2023,7 +2023,7 @@ d_tm_get_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 			D_MUTEX_LOCK(&node->dtn_lock);
 		tms->tv_sec = metric_data->dtm_data.tms[0].tv_sec;
 		tms->tv_nsec = metric_data->dtm_data.tms[0].tv_nsec;
-		if (stats != NULL) {
+		if ((stats != NULL) && (dtm_stats != NULL)) {
 			stats->dtm_min.min_float = dtm_stats->dtm_min.min_float;
 			stats->dtm_max.max_float = dtm_stats->dtm_max.max_float;
 			stats->dtm_sum.sum_float = dtm_stats->dtm_sum.sum_float;
@@ -2095,7 +2095,7 @@ d_tm_get_gauge(uint64_t *val, struct d_tm_stats_t *stats, uint64_t *shmem_root,
 		if (node->dtn_protect)
 			D_MUTEX_LOCK(&node->dtn_lock);
 		*val = metric_data->dtm_data.value;
-		if (stats != NULL) {
+		if ((stats != NULL) && (dtm_stats != NULL)) {
 			stats->dtm_min.min_int = dtm_stats->dtm_min.min_int;
 			stats->dtm_max.max_int = dtm_stats->dtm_max.max_int;
 			stats->dtm_sum.sum_int = dtm_stats->dtm_sum.sum_int;
@@ -2367,8 +2367,9 @@ d_tm_allocate_shared_memory(int srv_idx, size_t mem_size)
 uint64_t *
 d_tm_get_shared_memory(int srv_idx)
 {
-	key_t	key;
-	int	shmid;
+	uint64_t	*addr;
+	key_t		key;
+	int		shmid;
 
 	/** create a unique key for this instance */
 	key = D_TM_SHARED_MEMORY_KEY + srv_idx;
@@ -2376,7 +2377,10 @@ d_tm_get_shared_memory(int srv_idx)
 	if (shmid < 0)
 		return NULL;
 
-	return (uint64_t *)shmat(shmid, NULL, 0);
+	addr = shmat(shmid, NULL, 0);
+	if (addr == (void *)-1)
+		return NULL;
+	return addr;
 }
 
 /**
