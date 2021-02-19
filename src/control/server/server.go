@@ -44,8 +44,8 @@ const (
 )
 
 func cfgHasBdev(cfg *config.Server) bool {
-	for _, srvCfg := range cfg.Engines {
-		if len(srvCfg.Storage.Bdev.DeviceList) > 0 {
+	for _, engineCfg := range cfg.Engines {
+		if len(engineCfg.Storage.Bdev.DeviceList) > 0 {
 			return true
 		}
 	}

@@ -134,7 +134,7 @@ func (evt *RASEvent) IsForwarded() bool {
 
 // WithForwarded sets the forwarded state of this event.
 func (evt *RASEvent) WithForwarded(forwarded bool) *RASEvent {
-	evt.forwarded = atm.NewBool(forwarded)
+	evt.forwarded.Store(forwarded)
 
 	return evt
 }
@@ -147,7 +147,7 @@ func (evt *RASEvent) ShouldForward() bool {
 
 // WithForwardable sets the forwardable state of this event.
 func (evt *RASEvent) WithForwardable(forwardable bool) *RASEvent {
-	evt.forwardable = atm.NewBool(forwardable)
+	evt.forwardable.Store(forwardable)
 
 	return evt
 }
@@ -179,8 +179,8 @@ func New(evt *RASEvent) *RASEvent {
 	if evt.Severity == RASSeverityUnknown {
 		evt.Severity = RASSeverityInfo
 	}
-	evt.forwarded = atm.NewBool(false)
-	evt.forwardable = atm.NewBool(true)
+	evt.forwarded.SetFalse()
+	evt.forwardable.SetTrue()
 
 	return evt
 }
@@ -262,10 +262,10 @@ func (evt *RASEvent) FromProto(pbEvt *sharedpb.RASEvent) (err error) {
 		ContUUID:  pbEvt.ContUuid,
 		ObjID:     pbEvt.ObjId,
 		CtlOp:     pbEvt.CtlOp,
-
-		forwarded:   atm.NewBool(false),
-		forwardable: atm.NewBool(true),
 	}
+
+	evt.forwarded.SetFalse()
+	evt.forwardable.SetTrue()
 
 	switch ei := pbEvt.GetExtendedInfo().(type) {
 	case *sharedpb.RASEvent_RankStateInfo:
