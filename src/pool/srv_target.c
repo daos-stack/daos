@@ -507,7 +507,7 @@ pool_fetch_hdls_ult(void *data)
 	ABT_mutex_unlock(pool->sp_mutex);
 retry:
 	if (pool->sp_stopping) {
-		D_DEBUG(DB_MD, DF_UUID" skip fetching hdl due to stop\n",
+		D_DEBUG(DB_MD, DF_UUID": skip fetching hdl due to stop\n",
 			DP_UUID(pool->sp_uuid));
 		D_GOTO(out, rc);
 	}
@@ -570,8 +570,8 @@ ds_pool_start_ec_eph_query_ult(struct ds_pool *pool)
 	sched_req_attr_init(&attr, SCHED_REQ_GC, &pool->sp_uuid);
 	pool->sp_ec_ephs_req = sched_req_get(&attr, ec_eph_query_ult);
 	if (pool->sp_ec_ephs_req == NULL) {
-		D_ERROR(DF_UUID"Failed to get req for ec eph query ULT\n",
-		       DP_UUID(pool->sp_uuid));
+		D_ERROR(DF_UUID": Failed to get req for ec eph query ULT\n",
+			DP_UUID(pool->sp_uuid));
 		ABT_thread_join(ec_eph_query_ult);
 		return -DER_NOMEM;
 	}
@@ -585,7 +585,7 @@ ds_pool_tgt_ec_eph_query_abort(struct ds_pool *pool)
 	if (pool->sp_ec_ephs_req == NULL)
 		return;
 
-	D_DEBUG(DB_MD, DF_UUID"Stopping EC query ULT\n",
+	D_DEBUG(DB_MD, DF_UUID": Stopping EC query ULT\n",
 		DP_UUID(pool->sp_uuid));
 
 	sched_req_wait(pool->sp_ec_ephs_req, true);
@@ -979,7 +979,7 @@ pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
 					&coll_args.ca_exclude_tgts,
 					&coll_args.ca_exclude_tgts_cnt);
 	if (rc) {
-		D_ERROR(DF_UUID "failed to get index : rc "DF_RC"\n",
+		D_ERROR(DF_UUID": failed to get index : rc "DF_RC"\n",
 			DP_UUID(pool->sp_uuid), DP_RC(rc));
 		return rc;
 	}
