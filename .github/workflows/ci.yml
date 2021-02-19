@@ -113,7 +113,9 @@ jobs:
       #  files: test_results/*.xml
     - name: Build but faster
       run: docker run --tmpfs /mnt/daos build-image id
+    - name: Build but faster
       run: docker run --tmpfs /mnt/daos build-image ls -ld /mnt/daos
+    - name: Build but faster
       run: docker run --tmpfs /mnt/daos build-image scons BUILD_ROOT=/mnt/daos PREFIX=/opt/daos --jobs 10
     - name: Run NLT Test
       run: docker run --tmpfs /mnt/daos build-image ./utils/node_local_test.py --no-root kv
@@ -142,4 +144,5 @@ jobs:
       uses: actions/checkout@v2
     - name: Run Check
       run: sudo yum -y install codespell
+    - name: Run Check
       run: ./ci/patch_src_in_place
