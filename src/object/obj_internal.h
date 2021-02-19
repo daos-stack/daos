@@ -204,7 +204,7 @@ struct migrate_pool_tls {
 	/* Hash table to store the container uuids which have already been
 	 * deleted (used by reintegration)
 	 */
-	struct d_hash_table	mpt_cont_dest_tab;
+	struct d_hash_table	mpt_del_obj_tab;
 
 	/* Service rank list for migrate fetch RPC */
 	d_rank_list_t		mpt_svc_list;
@@ -235,10 +235,14 @@ struct migrate_pool_tls {
 	uint64_t		mpt_refcount;
 	/* migrate leader ULT */
 	unsigned int		mpt_ult_running:1,
-	/* Indicates whether containers should be cleared of all contents
-	 * before any data is migrated to them (via destroy & recreate)
+	/* Indicates whether objects on the migration destination should be
+	 * removed prior to migrating new data here. This is primarily useful
+	 * for reintegration to ensure that any data that has adequate replica
+	 * data to reconstruct will prefer the remote data over possibly stale
+	 * existing data. Objects that don't have remote replica data will not
+	 * be removed.
 	 */
-				mpt_clear_conts:1,
+				mpt_del_local_objs:1,
 				mpt_fini:1;
 };
 
