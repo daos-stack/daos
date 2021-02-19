@@ -169,6 +169,20 @@ struct dts_context {
 	/** OUTPUT END */
 };
 
+
+static inline bool
+tsc_create_pool(struct dts_context *tsc)
+{
+	return !tsc->tsc_skip_pool_create;
+}
+
+static inline bool
+tsc_create_cont(struct dts_context *tsc)
+{
+	/* Can't skip container if pool isn't also skipped */
+	return tsc_create_pool(tsc) && !tsc->tsc_skip_cont_create;
+}
+
 /* match BIO_XS_CNT_MAX, which is the max VOS xstreams mapped to a device */
 #define MAX_TEST_TARGETS_PER_DEVICE 48
 

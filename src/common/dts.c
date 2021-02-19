@@ -212,7 +212,7 @@ pool_init(struct dts_context *tsc)
 			if (rc)
 				goto out;
 		}
-		if (!tsc->tsc_skip_pool_create) {
+		if (tsc_create_pool(tsc)) {
 			/* Use pool size as blob size for this moment. */
 			rc = vos_pool_create(pmem_file, tsc->tsc_pool_uuid, 0,
 					     tsc->tsc_nvme_size);
@@ -230,7 +230,7 @@ pool_init(struct dts_context *tsc)
 		if (tsc->tsc_dmg_conf)
 			dmg_config_file = tsc->tsc_dmg_conf;
 
-		if (!tsc->tsc_skip_pool_create) {
+		if (tsc_create_pool(tsc)) {
 			rc = dmg_pool_create(dmg_config_file, geteuid(),
 					     getegid(), NULL, NULL,
 					     tsc->tsc_scm_size,
@@ -293,7 +293,7 @@ cont_init(struct dts_context *tsc)
 	int		rc;
 
 	if (tsc->tsc_pmem_file) { /* VOS mode */
-		if (!tsc->tsc_skip_cont_create) {
+		if (tsc_create_cont(tsc)) {
 			rc = vos_cont_create(tsc->tsc_poh, tsc->tsc_cont_uuid);
 			if (rc)
 				goto out;
@@ -304,7 +304,7 @@ cont_init(struct dts_context *tsc)
 			goto out;
 
 	} else if (tsc->tsc_mpi_rank == 0) { /* DAOS mode and rank zero */
-		if (!tsc->tsc_skip_cont_create) {
+		if (tsc_create_cont(tsc)) {
 			rc = daos_cont_create(tsc->tsc_poh, tsc->tsc_cont_uuid,
 					      NULL, NULL);
 			if (rc != 0)
