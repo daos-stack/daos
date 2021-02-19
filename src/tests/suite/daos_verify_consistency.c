@@ -147,7 +147,7 @@ vc_without_inconsistency(void **state, daos_iod_type_t iod_type)
 	vc_gen_modifications(arg, &req, oid, 7, 7, 7, 0, 0, 0);
 
 	rc = vc_obj_verify(arg, oid);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	ioreq_fini(&req);
 }
@@ -189,7 +189,7 @@ vc_3(void **state)
 	vc_gen_modifications(arg, &req, oid, 7, 7, 7, 0, 0, 0);
 
 	rc = vc_obj_verify(arg, oid);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	ioreq_fini(&req);
 }
@@ -216,7 +216,7 @@ vc_4(void **state)
 			     DAOS_VC_DIFF_REC | DAOS_FAIL_ALWAYS);
 
 	rc = vc_obj_verify(arg, oid);
-	assert_int_equal(rc, -DER_MISMATCH);
+	assert_rc_equal(rc, -DER_MISMATCH);
 
 	ioreq_fini(&req);
 }
@@ -260,7 +260,7 @@ vc_test_lost_data(void **state, int type)
 	}
 
 	rc = vc_obj_verify(arg, oid);
-	assert_int_equal(rc, -DER_MISMATCH);
+	assert_rc_equal(rc, -DER_MISMATCH);
 
 	ioreq_fini(&req);
 }
@@ -322,7 +322,7 @@ vc_8(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	rc = vc_obj_verify(arg, oid);
-	assert_int_equal(rc, -DER_MISMATCH);
+	assert_rc_equal(rc, -DER_MISMATCH);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0)
@@ -354,7 +354,7 @@ vc_9(void **state)
 			     DAOS_VC_DIFF_DKEY, 0, 0);
 
 	rc = vc_obj_verify(arg, oid);
-	assert_int_equal(rc, -DER_MISMATCH);
+	assert_rc_equal(rc, -DER_MISMATCH);
 
 	ioreq_fini(&req);
 }
