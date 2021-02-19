@@ -289,6 +289,7 @@ ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 {
 	int		 rc;
 	d_rank_list_t	*ranks = NULL;
+	d_rank_list_t	*filtered_svc = NULL;
 
 	D_DEBUG(DB_MGMT, "Destroying pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
@@ -314,22 +315,38 @@ ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		goto out;
 	}
 
-	rc = ds_pool_svc_destroy(pool_uuid, svc_ranks);
+	/* Destroy pool service. Send corpc only to svc_ranks found in ranks.
+	 * Control plane may not have been updated yet if any of svc_ranks
+	 * were recently excluded from the pool.
+	 */
+	rc = d_rank_list_dup(&filtered_svc, svc_ranks);
+	if (rc)
+		D_GOTO(free_ranks, rc = -DER_NOMEM);
+	d_rank_list_filter(ranks, filtered_svc, false /* exclude */);
+	if (!d_rank_list_identical(filtered_svc, svc_ranks)) {
+		D_DEBUG(DB_MGMT, DF_UUID": %u svc_ranks, but only %u found "
+			"in pool map\n", DP_UUID(pool_uuid),
+			svc_ranks->rl_nr, filtered_svc->rl_nr);
+	}
+
+	rc = ds_pool_svc_destroy(pool_uuid, filtered_svc);
 	if (rc != 0) {
 		D_ERROR("Failed to destroy pool service " DF_UUID ", "
 			DF_RC "\n", DP_UUID(pool_uuid), DP_RC(rc));
-		goto free_ranks;
+		goto free_filtered;
 	}
 
 	rc = ds_mgmt_tgt_pool_destroy(pool_uuid, ranks);
 	if (rc != 0) {
 		D_ERROR("Destroying pool "DF_UUID" failed, " DF_RC ".\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
-		goto free_ranks;
+		goto free_filtered;
 	}
 
 	D_DEBUG(DB_MGMT, "Destroying pool " DF_UUID " succeeded.\n",
 		DP_UUID(pool_uuid));
+free_filtered:
+	d_rank_list_free(filtered_svc);
 free_ranks:
 	d_rank_list_free(ranks);
 out:
