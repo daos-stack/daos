@@ -114,11 +114,12 @@ jobs:
     - name: Build but faster
       run: docker run --tmpfs /mnt/daos build-image id
     - name: Build but faster
-      run: docker run --tmpfs /mnt/daos build-image ls -ld /mnt/daos
+      run: docker run --mount type=tmpfs,destination=/mnt/daos,tmpfs-mode=1777 build-image ls -ld /mnt/daos
     - name: Build but faster
-      run: docker run --tmpfs /mnt/daos build-image scons BUILD_ROOT=/mnt/daos PREFIX=/opt/daos --jobs 10
+      run: docker run --mount type=tmpfs,destination=/mnt/daos,tmpfs-mode=1777 build-image scons BUILD_ROOT=/mnt/daos PREFIX=/opt/daos --jobs 10
     - name: Run NLT Test
-      run: docker run --tmpfs /mnt/daos build-image ./utils/node_local_test.py --no-root kv
+      if: always()
+      run: docker run --mount type=tmpfs,destination=/mnt/daos,tmpfs-mode=1777 build-image ./utils/node_local_test.py --no-root kv
     - name: Copy results
       run: docker cp build-ut:/home/daos/*.json ./
     - name: grep
@@ -143,6 +144,6 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v2
     - name: Run Check
-      run: sudo yum -y install codespell
+      run: sudo apt-get -y install codespell
     - name: Run Check
       run: ./ci/patch_src_in_place
