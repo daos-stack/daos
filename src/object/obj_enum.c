@@ -1326,31 +1326,22 @@ obj_enum_iterate(daos_key_desc_t *kdss, d_sg_list_t *sgl, int nr,
 		 unsigned int type, obj_enum_process_cb_t cb,
 		 void *cb_arg)
 {
-	struct daos_sgl_idx	 sgl_idx = {0};
-	char			*ptr;
-	unsigned int		 i;
-	int			 rc = 0;
+	char		*ptr;
+	unsigned int	i;
+	int		rc = 0;
 
 	D_ASSERTF(sgl->sg_nr > 0, "%u\n", sgl->sg_nr);
 	D_ASSERT(sgl->sg_iovs != NULL);
-
+	ptr = sgl->sg_iovs[0].iov_buf;
 	for (i = 0; i < nr; i++) {
 		daos_key_desc_t *kds = &kdss[i];
-
-		sgl_test_forward(sgl, &sgl_idx, kds->kd_key_len);
-		ptr = sgl_indexed_byte(sgl, &sgl_idx);
-		D_ASSERTF(ptr != NULL, "sgl.iovs: %d/%d, sgl_idx: %d, "
-				       "kds->kd_key_len: %lu, "
-				       "kds->kd_val_type: %d",
-			  sgl->sg_nr_out, sgl->sg_nr, sgl_idx.iov_idx,
-			  kds->kd_key_len, kds->kd_val_type);
 
 		D_DEBUG(DB_REBUILD, "process %d type %d ptr %p len "DF_U64
 			" total %zd\n", i, kds->kd_val_type, ptr,
 			kds->kd_key_len, sgl->sg_iovs[0].iov_len);
 		if (kds->kd_val_type == 0 ||
 		    (kds->kd_val_type != type && type != -1)) {
-			sgl_move_forward(sgl, &sgl_idx, kds->kd_key_len);
+			ptr += kds->kd_key_len;
 			D_DEBUG(DB_REBUILD, "skip type/size %d/%zd\n",
 				kds->kd_val_type, kds->kd_key_len);
 			continue;
@@ -1379,10 +1370,9 @@ obj_enum_iterate(daos_key_desc_t *kdss, d_sg_list_t *sgl, int nr,
 		} else {
 			rc = cb(kds, ptr, kds->kd_key_len, cb_arg);
 		}
-		sgl_move_forward(sgl, &sgl_idx, kds->kd_key_len);
-
+		ptr += kds->kd_key_len;
 		if (rc) {
-			D_ERROR("iterate %dth failed: rc "DF_RC"\n", i,
+			D_ERROR("iterate %dth failed: rc"DF_RC"\n", i,
 				DP_RC(rc));
 			break;
 		}

@@ -2050,10 +2050,8 @@ test_enumerate_a_key(void **state)
 		((uint8_t *)ctx.update_iod.iod_name.iov_buf)[0] += 1;
 	}
 
-	/** Make sure can handle verifying keys over multiple iovs */
-	d_sgl_init(&sgl, 2);
-	iov_alloc(&sgl.sg_iovs[0], 10);
-	iov_alloc(&sgl.sg_iovs[1], 100);
+	d_sgl_init(&sgl, 1);
+	iov_alloc(&sgl.sg_iovs[0], 100);
 
 	/** inject failure ... should return CSUM error */
 	client_corrupt_akey_on_fetch();
@@ -2105,9 +2103,8 @@ test_enumerate_d_key(void **state)
 	}
 
 	/** Make sure can handle verifying keys over multiple iovs */
-	d_sgl_init(&sgl, 2);
-	iov_alloc(&sgl.sg_iovs[0], 10);
-	iov_alloc(&sgl.sg_iovs[1], 100);
+	d_sgl_init(&sgl, 1);
+	iov_alloc(&sgl.sg_iovs[0], 100);
 
 	/** inject failure ... should return CSUM error */
 	client_corrupt_dkey_on_fetch();
