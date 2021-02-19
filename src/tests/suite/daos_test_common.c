@@ -1060,8 +1060,10 @@ get_server_config(char *host, char *server_config_file)
 	FILE *fp = popen(command, "r");
 
 	print_message("Command %s", command);
-	if (fp == NULL)
+	if (fp == NULL) {
+		D_FREE(dpid);
 		return -DER_INVAL;
+	}
 
 	while ((read = getline(&line, &len, fp)) != -1) {
 		print_message("line %s", line);
@@ -1186,7 +1188,9 @@ int verify_state_in_log(char *host, char *log_file, char *state)
 			}
 		}
 		pch = strtok(NULL, " ");
-		pclose(fp);
+
+		if (fp != NULL)
+			pclose(fp);
 		free(line);
 	}
 

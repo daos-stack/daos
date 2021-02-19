@@ -957,7 +957,7 @@ fetch_array_with_map(void **state)
 
 	/** Update */
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
-	assert_int_equal(0, rc);
+	assert_rc_equal(0, rc);
 
 	/** setup for fetch */
 	fetch_recx.rx_idx = 0;
@@ -968,12 +968,12 @@ fetch_array_with_map(void **state)
 	/** Sanity check without map it still works */
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
 			    NULL, NULL);
-	assert_int_equal(0, rc);
+	assert_rc_equal(0, rc);
 
 	/** get map */
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
 			    &map, NULL);
-	assert_int_equal(0, rc);
+	assert_rc_equal(0, rc);
 
 	assert_int_equal(3, map.iom_nr_out);
 	assert_int_equal(SM_BUF_LEN, map.iom_nr);
@@ -990,7 +990,7 @@ fetch_array_with_map(void **state)
 	map.iom_nr = 1;
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
 			    &map, NULL);
-	assert_int_equal(0, rc);
+	assert_rc_equal(0, rc);
 	assert_int_equal(3, map.iom_nr_out);
 	assert_int_equal(1, map.iom_nr);
 	assert_recx_equal(update_recxs[0], map.iom_recx_lo);
@@ -1006,7 +1006,7 @@ fetch_array_with_map(void **state)
 	map.iom_flags = 0;
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
 			    &map, NULL);
-	assert_int_equal(0, rc);
+	assert_rc_equal(0, rc);
 	assert_int_equal(0, map.iom_nr);
 	/** still get hi/lo */
 	assert_recx_equal(update_recxs[0], map.iom_recx_lo);
@@ -1068,7 +1068,7 @@ fetch_array_with_map_2(void **state)
 
 	/** Update */
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
-	assert_int_equal(0, rc);
+	assert_rc_equal(0, rc);
 
 	/** setup for fetch */
 	fetch_recx.rx_idx = 10;
@@ -1079,7 +1079,7 @@ fetch_array_with_map_2(void **state)
 	/** get map */
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
 			    &map, NULL);
-	assert_int_equal(0, rc);
+	assert_rc_equal(0, rc);
 
 	assert_int_equal(1, map.iom_nr_out);
 	assert_int_equal(SM_BUF_LEN, map.iom_nr);
@@ -1145,7 +1145,7 @@ fetch_array_with_map_3(void **state)
 
 	/** Update */
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
-	assert_int_equal(0, rc);
+	assert_rc_equal(0, rc);
 
 	/** setup for fetch */
 	fetch_recx.rx_idx = 12;
@@ -1156,7 +1156,7 @@ fetch_array_with_map_3(void **state)
 	/** get map */
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
 			    &map, NULL);
-	assert_int_equal(0, rc);
+	assert_rc_equal(0, rc);
 
 	assert_int_equal(1, map.iom_nr_out);
 	assert_int_equal(SM_BUF_LEN, map.iom_nr);
@@ -1225,7 +1225,7 @@ fetch_array_with_map_4(void **state)
 
 	/** Update */
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
-	assert_int_equal(0, rc);
+	assert_rc_equal(0, rc);
 
 	/** setup for fetch */
 	fetch_recxs[0].rx_idx = 2;
@@ -1239,7 +1239,7 @@ fetch_array_with_map_4(void **state)
 	/** get map */
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
 			    &map, NULL);
-	assert_int_equal(0, rc);
+	assert_rc_equal(0, rc);
 
 	assert_int_equal(3, map.iom_nr_out);
 	assert_recx_equal(fetch_recxs[0], map.iom_recxs[0]);
