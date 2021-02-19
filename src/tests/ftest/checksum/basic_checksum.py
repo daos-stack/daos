@@ -25,10 +25,6 @@ class ChecksumContainerValidation(TestWithServers):
         self.container = None
         self.records = None
 
-        self.add_pool(connect=False)
-        self.pool.connect(2)
-        self.add_container(self.pool)
-
     def test_single_object_with_checksum(self):
         """
         Test ID: DAOS-3927
@@ -40,6 +36,11 @@ class ChecksumContainerValidation(TestWithServers):
 
         self.records = self.params.get("records_qty",
                                        "/run/container/records/*", None)
+        # create pool and container
+        self.add_pool(connect=False)
+        self.pool.connect(2)
+        self.add_container(self.pool)
+
         self.log.info("Writing the Single Dataset")
         self.pool.get_info()
         if isinstance(self.records, list):
