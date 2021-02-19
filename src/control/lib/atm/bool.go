@@ -45,3 +45,13 @@ func (b *Bool) IsFalse() bool {
 func (b *Bool) Load() bool {
 	return atomic.LoadUint32((*uint32)(b)) != 0
 }
+
+// Store sets the Bool based on the supplied bool value.
+func (b *Bool) Store(val bool) {
+	if val {
+		b.SetTrue()
+		return
+	}
+
+	b.SetFalse()
+}
