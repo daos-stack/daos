@@ -43,7 +43,7 @@ class RebuildTestBase(TestWithServers):
         # Get the test parameters
         self.inputs.get_params(self)
 
-        # Get the number of targets per server for pool info calculations
+        # Get the number of targets per engine for pool info calculations
         self.targets = self.params.get("targets", "/run/server_config/*")
 
         self.server_count = len(self.hostlist_servers)

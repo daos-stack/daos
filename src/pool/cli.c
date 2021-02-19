@@ -168,7 +168,7 @@ failed:
 }
 
 /* Choose a pool service replica rank. If the rsvc module indicates
- * DER_NOTREPLICA, attempt to refresh the list by querying the MS.
+ * DER_NOTREPLICA, (clients only) try to refresh the list by querying the MS.
  */
 int
 dc_pool_choose_svc_rank(const uuid_t puuid, struct rsvc_client *cli,
@@ -182,7 +182,7 @@ dc_pool_choose_svc_rank(const uuid_t puuid, struct rsvc_client *cli,
 		D_MUTEX_LOCK(cli_lock);
 choose:
 	rc = rsvc_client_choose(cli, ep);
-	if (rc == -DER_NOTREPLICA) {
+	if ((rc == -DER_NOTREPLICA) && !sys->sy_server) {
 		d_rank_list_t	*new_ranklist = NULL;
 
 		/* Query MS for replica ranks. Not under client lock. */
@@ -1100,7 +1100,8 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 				DP_UUID(args->uuid), rc);
 			D_GOTO(out_state, rc);
 		}
-		rc = rsvc_client_init(&state->client, NULL);
+		rc = rsvc_client_init(&state->client,
+				      state->sys->sy_server ? args->svc : NULL);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": failed to rsvc_client_init, rc %d.\n",
 				DP_UUID(args->uuid), rc);

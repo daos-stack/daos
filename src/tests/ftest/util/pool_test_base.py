@@ -90,7 +90,7 @@ class PoolTestBase(TestWithServers):
                         "Unable to assign a max pool NVMe size; NVMe not "
                         "configured!")
 
-                # The I/O server allocates NVMe storage on targets in multiples
+                # The I/O Engine allocates NVMe storage on targets in multiples
                 # of 1GiB per target.  A server with 8 targets will have a
                 # minimum NVMe size of 8 GiB.  Specify the largest NVMe size in
                 # GiB that can be used with the configured number of targets and

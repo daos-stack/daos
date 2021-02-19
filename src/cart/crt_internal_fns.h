@@ -65,4 +65,7 @@ crt_hdlr_proto_query(crt_rpc_t *rpc_req);
 int
 crt_register_proto_fi(crt_endpoint_t *ep);
 
+int
+crt_register_proto_ctl(crt_endpoint_t *ep);
+
 #endif /* __CRT_INTERNAL_FNS_H__ */

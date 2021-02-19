@@ -40,7 +40,7 @@ pool_create_all(void **state)
 			     128 * 1024 * 1024 /* minimal size */,
 			     0 /* nvme size */, NULL /* prop */,
 			     arg->pool.svc /* svc */, uuid);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	uuid_unparse_lower(uuid, uuid_str);
 	print_message("success uuid = %s\n", uuid_str);
@@ -48,7 +48,7 @@ pool_create_all(void **state)
 	/** destroy container */
 	print_message("destroying pool synchronously ... ");
 	rc = dmg_pool_destroy(dmg_config_file, uuid, arg->group, 1);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	print_message("success\n");
 }
@@ -272,7 +272,7 @@ list_pools_test(void **state)
 	npools = npools_orig = 0xABC0; /* Junk value (e.g., uninitialized) */
 	/* test only */
 	rc = dmg_pool_list(dmg_config_file, arg->group, &npools, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	verify_pool_info(state, rc, npools_orig, NULL /* pools */, npools);
 	print_message("success t%d: output npools=%zu\n", tnum++,
 		lparg->nsyspools);
@@ -287,7 +287,7 @@ list_pools_test(void **state)
 	 *****/
 	npools = npools_alloc;
 	rc = dmg_pool_list(dmg_config_file, arg->group, &npools, pools);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	verify_pool_info(state, rc, npools_alloc, pools, npools);
 	clean_pool_info(npools_alloc, pools);
 	print_message("success t%d: pools[] over-sized\n", tnum++);
@@ -296,9 +296,9 @@ list_pools_test(void **state)
 	npools = 0;
 	rc = dmg_pool_list(dmg_config_file, arg->group, &npools, pools);
 	if (lparg->nsyspools > 0)
-		assert_int_equal(rc, -DER_TRUNC);
+		assert_rc_equal(rc, -DER_TRUNC);
 	else
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	assert_int_equal(npools, lparg->nsyspools);
 	print_message("success t%d: npools=0, non-NULL pools[] rc=%d\n",
 		      tnum++, rc);
@@ -309,7 +309,7 @@ list_pools_test(void **state)
 
 	/***** Test: invalid npools=NULL *****/
 	rc = dmg_pool_list(dmg_config_file, arg->group, NULL, NULL);
-	assert_int_equal(rc, -DER_INVAL);
+	assert_rc_equal(rc, -DER_INVAL);
 	print_message("success t%d: in &npools NULL, -DER_INVAL\n", tnum++);
 
 
@@ -324,7 +324,7 @@ list_pools_test(void **state)
 		/* Test: Exact size buffer */
 		npools = npools_alloc;
 		rc = dmg_pool_list(dmg_config_file, arg->group, &npools, pools);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		verify_pool_info(state, rc, npools_alloc, pools, npools);
 
 		/* Teardown */
@@ -341,7 +341,7 @@ list_pools_test(void **state)
 		/* Test: Under-sized buffer */
 		npools = npools_alloc;
 		rc = dmg_pool_list(dmg_config_file, arg->group, &npools, pools);
-		assert_int_equal(rc, -DER_TRUNC);
+		assert_rc_equal(rc, -DER_TRUNC);
 		verify_pool_info(state, rc, npools_alloc, pools, npools);
 		print_message("success t%d: pools[] under-sized\n", tnum++);
 
@@ -369,7 +369,7 @@ pool_create_and_destroy_retry(void **state)
 	rc = daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
 				  DAOS_POOL_CREATE_FAIL_CORPC | DAOS_FAIL_ONCE,
 				  0, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	print_message("success\n");
 
 	print_message("creating pool synchronously ... ");
@@ -379,7 +379,7 @@ pool_create_and_destroy_retry(void **state)
 			     128 * 1024 * 1024 /* minimal size */,
 			     0 /* nvme size */, NULL /* prop */,
 			     arg->pool.svc /* svc */, uuid);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	print_message("success uuid = "DF_UUIDF"\n", DP_UUID(uuid));
 
 	/* Skipping second Pool failure because of issue DAOS-5506/2407.
@@ -400,7 +400,7 @@ pool_create_and_destroy_retry(void **state)
 	*/
 	print_message("destroying pool synchronously ... ");
 	rc = dmg_pool_destroy(dmg_config_file, uuid, arg->group, 1);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	print_message("success\n");
 }

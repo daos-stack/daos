@@ -36,8 +36,14 @@ uint64_t		d_tm_shmem_free;
 /** Points to the base address of the free shared memory */
 uint8_t			*d_tm_shmem_idx;
 
+/** Shared memory ID for the segment of shared memory created by the producer */
+int			d_tm_shmid;
+
 /** Enables metric read/write serialization */
-bool			d_tm_serialization_enabled;
+bool			d_tm_serialization;
+
+/** Enables shared memory retention on process exit */
+bool			d_tm_retain_shmem;
 
 /**
  * Returns a pointer to the root node for the given shared memory segment
@@ -205,7 +211,7 @@ d_tm_add_child(struct d_tm_node_t **newnode, struct d_tm_node_t *parent,
 	return rc;
 
 failure:
-	D_ERROR("Failed to add metric [%s]: rc = %d\n", name, rc);
+	D_ERROR("Failed to add metric [%s]: " DF_RC "\n", name, DP_RC(rc));
 	return rc;
 }
 
@@ -214,16 +220,23 @@ failure:
  * process.
  *
  * \param[in]	id		Identifies the producer process amongst others
- *				on the same machine
+ *				on the same machine.
  * \param[in]	mem_size	Size in bytes of the shared memory segment that
- *				is allocated
+ *				is allocated.
+ * \param[in]	flags		Optional flags to control initialization.
+ *				Use D_TM_SERIALIZATION to enable read/write
+ *				synchronization of individual nodes.
+ *				Use D_TM_RETAIN_SHMEM to retain the shared
+ *				memory segment created for these metrics after
+ *				this process exits.
  *
  * \return		D_TM_SUCCESS		Success
  *			-DER_NO_SHMEM		Out of shared memory
  *			-DER_EXCEEDS_PATH_LEN	Root node name exceeds path len
+ *			-DER_INVAL		Invalid \a flag(s)
  */
 int
-d_tm_init(int id, uint64_t mem_size)
+d_tm_init(int id, uint64_t mem_size, int flags)
 {
 	uint64_t	*base_addr = NULL;
 	char		tmp[D_TM_MAX_NAME_LEN];
@@ -232,6 +245,21 @@ d_tm_init(int id, uint64_t mem_size)
 	if ((d_tm_shmem_root != NULL) && (d_tm_root != NULL)) {
 		D_INFO("d_tm_init already completed for id %d\n", id);
 		return rc;
+	}
+
+	if ((flags & ~(D_TM_SERIALIZATION | D_TM_RETAIN_SHMEM)) != 0) {
+		rc = -DER_INVAL;
+		goto failure;
+	}
+
+	if (flags & D_TM_SERIALIZATION) {
+		d_tm_serialization = true;
+		D_INFO("Serialization enabled for id %d\n", id);
+	}
+
+	if (flags & D_TM_RETAIN_SHMEM) {
+		d_tm_retain_shmem = true;
+		D_INFO("Retaining shared memory for id %d\n", id);
 	}
 
 	d_tm_shmem_root = d_tm_allocate_shared_memory(id, mem_size);
@@ -266,7 +294,7 @@ d_tm_init(int id, uint64_t mem_size)
 
 	rc = D_MUTEX_INIT(&d_tm_add_lock, NULL);
 	if (rc != 0) {
-		D_ERROR("Mutex init failure: rc = %d\n", rc);
+		D_ERROR("Mutex init failure: " DF_RC "\n", DP_RC(rc));
 		goto failure;
 	}
 
@@ -276,59 +304,34 @@ d_tm_init(int id, uint64_t mem_size)
 
 failure:
 	D_ERROR("Failed to initialize telemetry and metrics for ID %u: "
-		"rc = %d\n", id, rc);
-	return rc;
-}
-
-/**
- * Initialize an instance of the telemetry and metrics API for a client
- * application process.  By design, this initialization function enables
- * read/write serialization which provides client thread safety when accessing
- * the same metrics asynchronously.
- *
- * \param[in]	client_id	Identifies the client process amongst others on
- *				the same machine
- * \param[in]	mem_size	Size in bytes of the shared memory segment that
- *				is allocated
- *
- * \return		D_TM_SUCCESS		Success
- *			-DER_NO_SHMEM		Out of shared memory
- *			-DER_EXCEEDS_PATH_LEN	Root node name exceeds path len
- */
-int
-d_tm_init_client(int client_id, uint64_t mem_size)
-{
-	int	rc = 0;
-
-	d_tm_serialization_enabled = true;
-	rc = d_tm_init(client_id, mem_size);
+		DF_RC "\n", id, DP_RC(rc));
 	return rc;
 }
 
 /**
  * Releases resources claimed by init
- * Currently, only detaches from the shared memory to keep the memory and the
- * shared mutex objects available for the client to read data even when the
- * producer has gone offline.
  */
 void d_tm_fini(void)
 {
-	if (d_tm_shmem_root != NULL) {
-		/**
-		 * If we decide to free the mutex objects on shutdown for the
-		 * nodes that have them, call:
-		 * d_tm_free_node(d_tm_shmem_root, d_tm_root);
-		 *
-		 * Destroying the mutex objects on shutdown makes them
-		 * unavailable to a client process that may want to read the
-		 * data.  To remedy that, can implement a reference count that
-		 * monitors the number of users of the shared memory segment
-		 * and only frees the resources if it's the last one using it.
-		 */
-		shmdt(d_tm_shmem_root);
-		d_tm_shmem_root = NULL;
-		d_tm_root = NULL;
+	int	rc = 0;
+
+	if (d_tm_shmem_root == NULL)
+		return;
+
+	shmdt(d_tm_shmem_root);
+	if (!d_tm_retain_shmem) {
+		rc = shmctl(d_tm_shmid, IPC_RMID, NULL);
+		if (rc < 0)
+			D_ERROR("Unable to remove shared memory segment. "
+				DF_RC "\n", DP_RC(rc));
 	}
+
+	d_tm_serialization = false;
+	d_tm_retain_shmem = false;
+	d_tm_shmem_root = NULL;
+	d_tm_root = NULL;
+	d_tm_shmem_idx = NULL;
+	d_tm_shmid = 0;
 }
 
 /**
@@ -347,7 +350,7 @@ d_tm_free_node(uint64_t *shmem_root, struct d_tm_node_t *node)
 	if (node == NULL)
 		return;
 
-	if (!d_tm_serialization_enabled)
+	if (!d_tm_serialization)
 		return;
 
 	if (node->dtn_type != D_TM_DIRECTORY) {
@@ -355,7 +358,7 @@ d_tm_free_node(uint64_t *shmem_root, struct d_tm_node_t *node)
 		if (rc != 0) {
 			name = d_tm_conv_ptr(shmem_root, node->dtn_name);
 			D_ERROR("Failed to destroy mutex for node [%s]: "
-				"rc = %d\n", name, rc);
+				DF_RC "\n", name, DP_RC(rc));
 			return;
 		}
 	}
@@ -883,7 +886,7 @@ d_tm_increment_counter(struct d_tm_node_t **metric, char *item, ...)
 		rc = d_tm_add_metric(&node, path, D_TM_COUNTER, "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to add and incremement counter [%s]: "
-				"rc = %d\n", path, rc);
+				DF_RC "\n", path, DP_RC(rc));
 			goto failure;
 		}
 		if (metric != NULL)
@@ -899,8 +902,8 @@ d_tm_increment_counter(struct d_tm_node_t **metric, char *item, ...)
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to increment counter [%s] on item not a "
-			"counter.  Operation mismatch: rc = %d\n",
-			node->dtn_name, rc);
+			"counter.  Operation mismatch: " DF_RC "\n",
+			node->dtn_name, DP_RC(rc));
 		goto failure;
 	}
 	return rc;
@@ -972,7 +975,7 @@ d_tm_record_timestamp(struct d_tm_node_t **metric, char *item, ...)
 		rc = d_tm_add_metric(&node, path, D_TM_TIMESTAMP, "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to add and record timestamp [%s]: "
-				"rc = %d\n", path, rc);
+				DF_RC "\n", path, DP_RC(rc));
 			goto failure;
 		}
 		if (metric != NULL)
@@ -988,7 +991,8 @@ d_tm_record_timestamp(struct d_tm_node_t **metric, char *item, ...)
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to record timestamp [%s] on item not a "
-			"timestamp.  Operation mismatch: rc = %d\n", path, rc);
+			"timestamp.  Operation mismatch: " DF_RC "\n", path,
+			DP_RC(rc));
 	}
 	return rc;
 
@@ -1065,14 +1069,15 @@ d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
 		      (clk_id == D_TM_CLOCK_THREAD_CPUTIME))) {
 			rc = -DER_INVAL;
 			D_ERROR("Invalid clk_id for [%s] "
-				"Failed to add metric: rc = %d\n", path, rc);
+				"Failed to add metric: " DF_RC "\n", path,
+				DP_RC(rc));
 			goto failure;
 		}
 		rc = d_tm_add_metric(&node, path, D_TM_TIMER_SNAPSHOT | clk_id,
 				     "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to add and record high resolution timer"
-				" [%s]: rc = %d\n", path, rc);
+				" [%s]: " DF_RC "\n", path, DP_RC(rc));
 			goto failure;
 		}
 		if (metric != NULL)
@@ -1091,7 +1096,7 @@ d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to record high resolution timer [%s] on item "
 			"not a high resolution timer.  Operation mismatch: "
-			"rc = %d\n", path, rc);
+			DF_RC "\n", path, DP_RC(rc));
 		goto failure;
 	}
 	return rc;
@@ -1168,14 +1173,15 @@ d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
 		      (clk_id == D_TM_CLOCK_THREAD_CPUTIME))) {
 			rc = -DER_INVAL;
 			D_ERROR("Invalid clk_id for [%s] "
-				"Failed to add metric: rc = %d\n", path, rc);
+				"Failed to add metric: " DF_RC "\n", path,
+				DP_RC(rc));
 			goto failure;
 		}
 		rc = d_tm_add_metric(&node, path, D_TM_DURATION | clk_id,
 				     "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to add and mark duration start [%s]: "
-				"rc = %d\n", path, rc);
+				DF_RC "\n", path, DP_RC(rc));
 			goto failure;
 		}
 		if (metric != NULL)
@@ -1192,8 +1198,8 @@ d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to mark duration start [%s] on item "
-			"not a duration.  Operation mismatch: rc = %d\n",
-			path, rc);
+			"not a duration.  Operation mismatch: " DF_RC "\n",
+			path, DP_RC(rc));
 		goto failure;
 	}
 	return rc;
@@ -1269,7 +1275,8 @@ d_tm_mark_duration_end(struct d_tm_node_t **metric, char *item, ...)
 	if (node == NULL) {
 		rc = -DER_DURATION_MISMATCH;
 		D_ERROR("Failed to mark duration end [%s].  "
-			"No existing metric found: rc = %d\n", path, rc);
+			"No existing metric found: " DF_RC "\n", path,
+			DP_RC(rc));
 		goto failure;
 	}
 
@@ -1286,8 +1293,8 @@ d_tm_mark_duration_end(struct d_tm_node_t **metric, char *item, ...)
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to mark duration end [%s] on item "
-			"not a duration.  Operation mismatch: rc = %d\n",
-			path, rc);
+			"not a duration.  Operation mismatch: " DF_RC "\n",
+			path, DP_RC(rc));
 		goto failure;
 	}
 	return rc;
@@ -1360,7 +1367,7 @@ d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value, char *item, ...)
 		rc = d_tm_add_metric(&node, path, D_TM_GAUGE, "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to add and set gauge [%s]: "
-				"rc = %d\n", path, rc);
+				DF_RC "\n", path, DP_RC(rc));
 			goto failure;
 		}
 		if (metric != NULL)
@@ -1377,8 +1384,8 @@ d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value, char *item, ...)
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to set gauge [%s] on item "
-			"not a gauge.  Operation mismatch: rc = %d\n",
-			path, rc);
+			"not a gauge.  Operation mismatch: " DF_RC "\n",
+			path, DP_RC(rc));
 		goto failure;
 	}
 	return rc;
@@ -1452,7 +1459,7 @@ d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
 		rc = d_tm_add_metric(&node, path, D_TM_GAUGE, "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to add and incremement gauge [%s]: "
-				"rc = %d\n", path, rc);
+				DF_RC "\n", path, DP_RC(rc));
 			goto failure;
 		}
 		if (metric != NULL)
@@ -1469,8 +1476,8 @@ d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to increment gauge [%s] on item "
-			"not a gauge.  Operation mismatch: rc = %d\n",
-			path, rc);
+			"not a gauge.  Operation mismatch: " DF_RC "\n",
+			path, DP_RC(rc));
 		goto failure;
 	}
 	return rc;
@@ -1544,7 +1551,7 @@ d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
 		rc = d_tm_add_metric(&node, path, D_TM_GAUGE, "N/A", "N/A");
 		if (rc != D_TM_SUCCESS) {
 			D_ERROR("Failed to add and decrement gauge [%s]: "
-				"rc = %d\n", path, rc);
+				DF_RC "\n", path, DP_RC(rc));
 			goto failure;
 		}
 		if (metric != NULL)
@@ -1561,8 +1568,8 @@ d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
 	} else {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to decrement gauge [%s] on item "
-			"not a gauge.  Operation mismatch: rc = %d\n",
-			path, rc);
+			"not a gauge.  Operation mismatch: " DF_RC "\n",
+			path, DP_RC(rc));
 		goto failure;
 	}
 	return rc;
@@ -1675,7 +1682,7 @@ d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
 
 	rc = D_MUTEX_LOCK(&d_tm_add_lock);
 	if (rc != 0) {
-		D_ERROR("Failed to get mutex: rc = %d\n", rc);
+		D_ERROR("Failed to get mutex: " DF_RC "\n", DP_RC(rc));
 		goto failure;
 	}
 
@@ -1777,10 +1784,11 @@ d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
 	strncpy(temp->dtn_metric->dtm_lng_desc, lng_desc, buff_len);
 
 	temp->dtn_protect = false;
-	if (d_tm_serialization_enabled && (temp->dtn_type != D_TM_DIRECTORY)) {
+	if (d_tm_serialization && (temp->dtn_type != D_TM_DIRECTORY)) {
 		rc = pthread_mutexattr_init(&mattr);
 		if (rc != 0) {
-			D_ERROR("pthread_mutexattr_init failed: rc = %d\n", rc);
+			D_ERROR("pthread_mutexattr_init failed: " DF_RC "\n",
+				DP_RC(rc));
 			goto failure;
 		}
 
@@ -1788,13 +1796,13 @@ d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
 						  PTHREAD_PROCESS_SHARED);
 		if (rc != 0) {
 			D_ERROR("pthread_mutexattr_setpshared failed: "
-			"rc = %d\n", rc);
+				DF_RC "\n", DP_RC(rc));
 			goto failure;
 		}
 
 		rc = D_MUTEX_INIT(&temp->dtn_lock, &mattr);
 		if (rc != 0) {
-			D_ERROR("Mutex init failed: rc = %d\n", rc);
+			D_ERROR("Mutex init failed: " DF_RC "\n", DP_RC(rc));
 			goto failure;
 		}
 
@@ -1811,15 +1819,15 @@ d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
 failure:
 	D_FREE_PTR(str);
 	D_MUTEX_UNLOCK(&d_tm_add_lock);
-	D_ERROR("Failed to add child node for [%s]: rc = %d\n", metric, rc);
+	D_ERROR("Failed to add child node for [%s]: " DF_RC "\n", metric,
+		DP_RC(rc));
 	return rc;
 }
 
 /**
  * Client function to read the specified counter.  If the node is provided,
  * that pointer is used for the read.  Otherwise, a lookup by the metric name
- * is performed.  Access to the data is guarded by the use of the shared
- * mutex for this specific node.
+ * is performed.
  *
  * \param[in,out]	val		The value of the counter is stored here
  * \param[in]		shmem_root	Pointer to the shared memory segment
@@ -1868,8 +1876,7 @@ d_tm_get_counter(uint64_t *val, uint64_t *shmem_root, struct d_tm_node_t *node,
 /**
  * Client function to read the specified timestamp.  If the node is provided,
  * that pointer is used for the read.  Otherwise, a lookup by the metric name
- * is performed.  Access to the data is guarded by the use of the shared
- * mutex for this specific node.
+ * is performed.
  *
  * \param[in,out]	val		The value of the timestamp is stored
  *					here
@@ -1919,8 +1926,7 @@ d_tm_get_timestamp(time_t *val, uint64_t *shmem_root, struct d_tm_node_t *node,
 /**
  * Client function to read the specified high resolution timer.  If the node is
  * provided, that pointer is used for the read.  Otherwise, a lookup by the
- * metric name is performed.  Access to the data is guarded by the use of the
- * mutex semaphore for this specific node.
+ * metric name is performed.
  *
  * \param[in,out]	tms		The value of the timer is stored here
  * \param[in]		shmem_root	Pointer to the shared memory segment
@@ -1971,9 +1977,8 @@ d_tm_get_timer_snapshot(struct timespec *tms, uint64_t *shmem_root,
 /**
  * Client function to read the specified duration.  If the node is provided,
  * that pointer is used for the read.  Otherwise, a lookup by the metric name
- * is performed.  Access to the data is guarded by the use of the shared
- * mutex for this specific node.  A pointer for the \a tms is required.
- * A pointer for \a stats is optional.
+ * is performed.  A pointer for the \a tms is required.  A pointer for \a stats
+ * is optional.
  *
  * The computation of mean and standard deviation are completed upon this
  * read operation.
@@ -2018,7 +2023,7 @@ d_tm_get_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 			D_MUTEX_LOCK(&node->dtn_lock);
 		tms->tv_sec = metric_data->dtm_data.tms[0].tv_sec;
 		tms->tv_nsec = metric_data->dtm_data.tms[0].tv_nsec;
-		if (stats != NULL) {
+		if ((stats != NULL) && (dtm_stats != NULL)) {
 			stats->dtm_min.min_float = dtm_stats->dtm_min.min_float;
 			stats->dtm_max.max_float = dtm_stats->dtm_max.max_float;
 			stats->dtm_sum.sum_float = dtm_stats->dtm_sum.sum_float;
@@ -2043,9 +2048,8 @@ d_tm_get_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 /**
  * Client function to read the specified gauge.  If the node is provided,
  * that pointer is used for the read.  Otherwise, a lookup by the metric name
- * is performed.  Access to the data is guarded by the use of the shared
- * mutex for this specific node.  A pointer for the \a val is required.
- * A pointer for \a stats is optional.
+ * is performed.  A pointer for the \a val is required.  A pointer for \a stats
+ * is optional.
  *
  * The computation of mean and standard deviation are completed upon this
  * read operation.
@@ -2091,7 +2095,7 @@ d_tm_get_gauge(uint64_t *val, struct d_tm_stats_t *stats, uint64_t *shmem_root,
 		if (node->dtn_protect)
 			D_MUTEX_LOCK(&node->dtn_lock);
 		*val = metric_data->dtm_data.value;
-		if (stats != NULL) {
+		if ((stats != NULL) && (dtm_stats != NULL)) {
 			stats->dtm_min.min_int = dtm_stats->dtm_min.min_int;
 			stats->dtm_max.max_int = dtm_stats->dtm_max.max_int;
 			stats->dtm_sum.sum_int = dtm_stats->dtm_sum.sum_int;
@@ -2117,9 +2121,8 @@ d_tm_get_gauge(uint64_t *val, struct d_tm_stats_t *stats, uint64_t *shmem_root,
 /**
  * Client function to read the metadata for the specified metric.  If the node
  * is provided, that pointer is used for the read.  Otherwise, a lookup by the
- * metric name is performed.  Access to the data is guarded by the use of the
- * shared mutex for this specific node.  Memory is allocated for the
- * \a sh_desc and \a lng_desc and should be freed by the caller.
+ * metric name is performed.  Memory is allocated for the \a sh_desc and
+ * \a lng_desc and should be freed by the caller.
  *
  * \param[in,out]	sh_desc		Memory is allocated and the short
  *					description is copied here
@@ -2342,15 +2345,14 @@ uint64_t *
 d_tm_allocate_shared_memory(int srv_idx, size_t mem_size)
 {
 	key_t	key;
-	int	shmid;
 
 	/** create a unique key for this instance */
 	key = D_TM_SHARED_MEMORY_KEY + srv_idx;
-	shmid = shmget(key, mem_size, IPC_CREAT | 0660);
-	if (shmid < 0)
+	d_tm_shmid = shmget(key, mem_size, IPC_CREAT | 0660);
+	if (d_tm_shmid < 0)
 		return NULL;
 
-	return (uint64_t *)shmat(shmid, NULL, 0);
+	return (uint64_t *)shmat(d_tm_shmid, NULL, 0);
 }
 
 /**
@@ -2365,8 +2367,9 @@ d_tm_allocate_shared_memory(int srv_idx, size_t mem_size)
 uint64_t *
 d_tm_get_shared_memory(int srv_idx)
 {
-	key_t	key;
-	int	shmid;
+	uint64_t	*addr;
+	key_t		key;
+	int		shmid;
 
 	/** create a unique key for this instance */
 	key = D_TM_SHARED_MEMORY_KEY + srv_idx;
@@ -2374,7 +2377,10 @@ d_tm_get_shared_memory(int srv_idx)
 	if (shmid < 0)
 		return NULL;
 
-	return (uint64_t *)shmat(shmid, NULL, 0);
+	addr = shmat(shmid, NULL, 0);
+	if (addr == (void *)-1)
+		return NULL;
+	return addr;
 }
 
 /**
