@@ -109,7 +109,7 @@ A:G:GROUP@:rwtT
 
 Additionally, a container's properties may be retrieved using the
 libdaos API daos_cont_query() function. Refer to the file
-src/incldue/daos_cont.h Doxygen comments and the online documentation
+src/include/daos_cont.h Doxygen comments and the online documentation
 available [here](https://daos-stack.github.io/html/).
 
 ## Data Integrity
