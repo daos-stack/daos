@@ -194,9 +194,11 @@ typedef struct {
 /** pool target update (add/exclude) args */
 typedef struct {
 	/** UUID of the pool. */
-	uuid_t			uuid;
+	uuid_t			 uuid;
 	/** Process set name of the DAOS servers managing the pool */
 	const char		*grp;
+	/** Pool service replica ranks (used by server only). */
+	d_rank_list_t		*svc;
 	/** Target array */
 	struct d_tgt_list	*tgts;
 } daos_pool_update_t;
