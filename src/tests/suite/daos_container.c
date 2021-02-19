@@ -2230,7 +2230,7 @@ delet_container_during_aggregation(void **state)
 	int		rc;
 
 	/* Prepare records */
-	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
 
 	print_message("Initial Pool Query\n");
 	pool_storage_info(state, &pinfo);
