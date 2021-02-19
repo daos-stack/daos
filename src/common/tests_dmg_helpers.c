@@ -579,12 +579,19 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 	struct json_object	*targets;
 	int			tgts_len;
 	int			i, j;
+	char		*tmp_var;
 
 	for (i = 0; i < dev_length; i++) {
 		dev = json_object_array_get_idx(smd_dev, i);
 
-		strncpy(devices[*disks].host, strtok(host, ":") + 1,
-			sizeof(devices[*disks].host) - 1);
+		tmp_var =  strtok(host, ":") + 1;
+		if (!tmp_var) {
+			D_ERROR("Hostname is empty\n");
+			return -DER_INVAL;
+		}
+
+		snprintf(devices[*disks].host, sizeof(devices[*disks].host),
+			"%s", tmp_var);
 
 		if (!json_object_object_get_ex(dev, "uuid", &tmp)) {
 			D_ERROR("unable to extract uuid from JSON\n");
@@ -611,8 +618,8 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 			return -DER_INVAL;
 		}
 
-		strncpy(devices[*disks].state, json_object_to_json_string(tmp),
-			sizeof(devices[*disks].state) - 1);
+		snprintf(devices[*disks].state, sizeof(devices[*disks].state),
+			"%s", json_object_to_json_string(tmp));
 
 		if (!json_object_object_get_ex(dev, "rank", &tmp)) {
 			D_ERROR("unable to extract rank from JSON\n");
