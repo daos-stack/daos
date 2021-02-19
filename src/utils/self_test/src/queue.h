@@ -116,7 +116,7 @@ struct qm_trace {
 
 #define TRACEBUF	struct qm_trace trace
 #define TRACEBUF_INITIALIZER    { __FILE__, __LINE__, NULL, 0 }
-#define TRASHIT(x)      do {(x) = (void *)-1; } while (0)
+#define TRASHIT(x)      {(x) = (void *)-1; }
 #define QMD_SAVELINK(name, link) void **name = (void *)&(link)
 
 #define QMD_TRACE_HEAD(head) do {				       \
@@ -190,9 +190,9 @@ struct {								\
 	    ((var) = *(varp)) != NULL;				\
 	    (varp) = &SLIST_NEXT((var), field))
 
-#define SLIST_INIT(head) do {					\
+#define SLIST_INIT(head) {					\
 	SLIST_FIRST((head)) = NULL;				\
-} while (0)
+}
 
 #define SLIST_INSERT_AFTER(slistelm, elm, field) do {		 \
 	SLIST_NEXT((elm), field) = SLIST_NEXT((slistelm), field);\
@@ -220,14 +220,14 @@ struct {								\
 	TRASHIT(*oldnext);					\
 } while (0)
 
-#define SLIST_REMOVE_AFTER(elm, field) do {			\
+#define SLIST_REMOVE_AFTER(elm, field) {			\
 	SLIST_NEXT(elm, field) =				\
 	    SLIST_NEXT(SLIST_NEXT(elm, field), field);		\
-} while (0)
+}
 
-#define SLIST_REMOVE_HEAD(head, field) do {			     \
+#define SLIST_REMOVE_HEAD(head, field)  {			     \
 	SLIST_FIRST((head)) = SLIST_NEXT(SLIST_FIRST((head)), field);\
-} while (0)
+}
 
 #define SLIST_SWAP(head1, head2, type) do {			\
 	struct type *swap_first = SLIST_FIRST(head1);		\
@@ -429,9 +429,9 @@ struct {							\
 	    (var) && ((tvar) = LIST_NEXT((var), field), 1);	\
 	    (var) = (tvar))
 
-#define LIST_INIT(head) do {					\
+#define LIST_INIT(head) {					\
 	LIST_FIRST((head)) = NULL;				\
-} while (0)
+}
 
 #define LIST_INSERT_AFTER(listelm, elm, field) do {		\
 	QMD_LIST_CHECK_NEXT(listelm, field);			\

@@ -50,6 +50,7 @@
 typedef struct ConfigKeyValue {
 	char *key;
 	char *value;
+
 	TAILQ_ENTRY(ConfigKeyValue) next;
 } ConfigKeyValue;
 
@@ -59,6 +60,7 @@ typedef struct ConfigKeyValue {
 typedef struct ConfigSection {
 	char *name;
 	int numofkv;
+
 	TAILQ_HEAD(, ConfigKeyValue) kv_list;
 	TAILQ_ENTRY(ConfigSection) next;
 } ConfigSection;
@@ -73,6 +75,7 @@ struct Config {
 	char *false_str;
 	int  initnum;
 	int  numofsect;
+
 	TAILQ_HEAD(, ConfigSection) sect_list;
 };
 

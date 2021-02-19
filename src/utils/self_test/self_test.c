@@ -17,13 +17,15 @@
 #include "configini.h"
 #include "daos_errno.h"
 
-#define MASTER_VALUE_SIZE			64
+/* Section names */
 #define DEFAULT_SCALE_NAME			"scale"
 #define DEFAULT_VALUE_NAME			"default_values"
+#define RAW_DATA_EXTENSION			"raw"
+#define RESULT_EXTENSION			"results"
+
+#define MASTER_VALUE_SIZE			64
 #define INVALID_SCALING				-1.0
 #define MAX_NUMBER_KEYS				200
-#define RAW_DATA_EXTENSION			"raw"
-
 #define CRT_SELF_TEST_AUTO_BULK_THRESH		(1 << 20)
 #define CRT_SELF_TEST_GROUP_NAME		("crt_self_test")
 
@@ -911,6 +913,7 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 	int		 itemp2;
 	char		 id[MASTER_VALUE_SIZE];
 	int		 ini_value;
+	int		 temp;
 
 	/* Make sure config is valid */
 	if (cfg == NULL) {
@@ -940,20 +943,7 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 	key_name = status[i].name;
 
 	/* Allocate working area for key.  strtok modifies working string */
-#ifdef ORIG_CODE
-	int		 size;
-
-	size = strlen(key) + 1;
-	working = (char *)malloc(size);
-	if (working == NULL) {
-		ret = -ENOMEM;
-		goto exit_code;
-	}
-	working[size - 1] = '\0';
-
-#else
 	D_STRNDUP(working, key, (size_t)strlen(key));
-#endif
 
 	/*
 	 * Parse string to find master and its tag.
@@ -966,11 +956,15 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 
 	if ((c_master != NULL) && isdigit(*c_master)) {
 		/* avoid checkpatch warning */
-		sscanf(c_master, "%d", &master);
+		temp = sscanf(c_master, "%d", &master);
+		if (temp != 1)
+			goto exit_code_free;
 	}
 	if ((c_tag != NULL) && isdigit(*c_tag)) {
 		/* avoid checkpatch warning */
-		sscanf(c_tag, "%d", &master_tag);
+		temp = sscanf(c_tag, "%d", &master_tag);
+		if (temp != 1)
+			goto exit_code_free;
 	}
 
 	/*
@@ -984,11 +978,15 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 	c_endpoint = strtok_r(c_endpoint, ":", &c_tag);
 	if ((c_endpoint != NULL) && isdigit(*c_endpoint)) {
 		/* avoid check patch warning */
-		sscanf(c_endpoint, "%d", &endpoint);
+		temp = sscanf(c_endpoint, "%d", &endpoint);
+		if (temp != 1)
+			goto exit_code_free;
 	}
 	if ((c_tag != NULL) && isdigit(*c_tag)) {
 		/* avoid check patch warning */
-		sscanf(c_tag, "%d", &endpoint_tag);
+		temp = sscanf(c_tag, "%d", &endpoint_tag);
+		if (temp != 1)
+			goto exit_code_free;
 	}
 
 	/*
@@ -1024,7 +1022,9 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 			c_master = strtok_r(c_master, ":", &c_tag);
 			if ((c_master != NULL) && isdigit(*c_master)) {
 				/* avoid check patch warning */
-				sscanf(c_master, "%d", &itemp);
+				temp = sscanf(c_master, "%d", &itemp);
+				if (temp != 1)
+					goto exit_code_free;
 			}
 
 			/* Match with master, check endpoint */
@@ -1037,7 +1037,10 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 				if ((c_endpoint != NULL) &&
 				    isdigit(*c_endpoint)) {
 					/* avoid check patch warning */
-					sscanf(c_endpoint, "%d", &itemp2);
+					temp = sscanf(c_endpoint, "%d",
+						      &itemp2);
+					if (temp != 1)
+						goto exit_code_free;
 				}
 				if (itemp2 == endpoint) {
 					/* Have a match */
@@ -1087,7 +1090,9 @@ code_search_master:
 			itemp = -1;
 			if ((c_master != NULL) && isdigit(*c_master)) {
 				/* avoid checkpatch warning */
-				sscanf(c_master, "%d", &itemp);
+				temp = sscanf(c_master, "%d", &itemp);
+				if (temp != 1)
+					goto exit_code_free;
 			}
 			if (itemp == master) {
 				/* endpoint must be a '*' */
@@ -1149,7 +1154,9 @@ code_search_endpoint:
 				if ((c_endpoint != NULL) &&
 				    isdigit(*c_endpoint)) {
 					/* avoid checkpatch warning */
-					sscanf(c_endpoint, "%d", &itemp);
+					temp = sscanf(c_endpoint, "%d", &itemp);
+					if (temp != 1)
+						goto exit_code_free;
 				}
 
 				/* Have a match, read value and exit */
@@ -1502,15 +1509,18 @@ next_arg:
 
 				/* print results */
 				if (firstpass)
-					printf("\n Endpoint Result"
-					       " (%s)\n",
+					printf("\n Endpoint Result (%s)\n",
 					       status[i].description);
 				firstpass = false;
 				printf("   %s : %8d  %s %s\n",
 				       key, (int)value, results, range);
-				if (!passed)
+
+				/* Log error message */
+				if (!passed) {
+					/* avoid checkpatch warning */
 					D_INFO("%s %s range check\n",
 					       key, results);
+				}
 increment_code:
 				j++;
 				if (j == number_keys) {
