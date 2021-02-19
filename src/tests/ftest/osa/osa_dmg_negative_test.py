@@ -26,9 +26,9 @@ class OSADmgNegativeTest(OSAUtils):
         # Start an additional server.
         self.extra_servers = self.params.get("test_servers",
                                              "/run/extra_servers/*")
-        # Dmg command test seeuence
+        # Dmg command test sequence
         self.test_seq = self.params.get("dmg_cmd_test",
-                                        "/run/dmg_cmds/*")
+                                        "/run/test_sequence/*")
 
     def validate_results(self, exp_result, dmg_output):
         """Validate the dmg_output results with expected results
@@ -77,10 +77,8 @@ class OSADmgNegativeTest(OSAUtils):
         # Start the additional servers and extend the pool
         self.log.info("Extra Servers = %s", self.extra_servers)
         self.start_additional_servers(self.extra_servers)
-        # Give sometime for the additional server to come up.
-        time.sleep(5)
 
-        # Get rank, target from the test_dmg_seeuence
+        # Get rank, target from the test_dmg_sequence
         # Some test_dmg_sequence data will be invalid, valid.
         for val in range(0, num_pool):
             for i in range(len(self.test_seq)):
@@ -90,7 +88,7 @@ class OSADmgNegativeTest(OSAUtils):
                 rank = self.test_seq[i][0]
                 target = "{}".format(self.test_seq[i][1])
                 expected_result = "{}".format(self.test_seq[i][2])
-                # Extend a rank
+                # Extend the pool
                 output = self.dmg_command.pool_extend(self.pool.uuid,
                                                       rank,
                                                       scm_size,
@@ -109,7 +107,7 @@ class OSADmgNegativeTest(OSAUtils):
                                                            target)
                 self.log.info(output)
                 self.validate_results(expected_result, output.stdout)
-                # Now reintegrate the excluded rank.
+                # Drain the data from a rank
                 output = self.dmg_command.pool_drain(self.pool.uuid,
                                                      rank,
                                                      target)

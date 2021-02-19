@@ -1254,7 +1254,8 @@ class TestWithServers(TestWithoutServers):
                 daos_server.
             index (int): Determines which server_managers to use when creating
                 the new server.
-            access_point (str) : Access point node.
+            access_point (list, optional) : Access point node list.
+                                            Defaults to None.
         """
         self.add_server_manager(
             self.server_managers[index].manager.job.get_config_value("name"),

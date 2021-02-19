@@ -54,16 +54,17 @@ pool:
 container:
   properties:
     enable_checksum: True
-dmg_cmds:
+test_sequence:
   dmg_cmd_test:
   # Rank list, target_list, Pass/Fail Condition
   # Invalid Rank list
     - ["7", "0,1", "Fail"]
   # Invalid Target list
     - ["1", "0,10", "Fail"]
-    - ["4", "10", "Fail"]
-    - ["5", "10", "Fail"]
-    - ["6", "10", "Fail"]
-  # Valid Rank and Target list
+    - ["2", "10", "Fail"]
+    - ["3", "10", "Fail"]
+  # Invalid rank, target
+    - ["7", "11", "Fail"]
+  # Valid Rank and Target
     - ["4", "0,1", "Pass"]
     - ["5", "0,1", "Pass"]
