@@ -21,17 +21,19 @@
 
 CRT_RPC_DEFINE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
 
-#define X_RPC(a, b, c, d, e)	\
+#define X(a, b, c, d, e, f)	\
 {				\
 	.prf_flags   = b,	\
 	.prf_req_fmt = c,	\
 	.prf_hdlr    = NULL,	\
 	.prf_co_ops  = NULL,	\
-}
+},
 
 static struct crt_proto_rpc_format dtx_proto_rpc_fmt[] = {
-	DTX_PROTO_SRV_RPC_LIST(X_RPC)
+	DTX_PROTO_SRV_RPC_LIST
 };
+
+#undef X
 
 struct crt_proto_format dtx_proto_fmt = {
 	.cpf_name  = "dtx-proto",
