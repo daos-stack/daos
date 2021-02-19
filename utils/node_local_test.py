@@ -329,7 +329,7 @@ class DaosServer():
     def __del__(self):
         if self.running:
             self.stop(None)
-        elif os.path.exists(self.server_log.name):
+        if os.path.exists(self.server_log.name):
             log_test(self.conf, self.server_log.name)
 
     # pylint: disable=no-self-use
