@@ -156,10 +156,11 @@ class Test(avocadoTest):
         """Check if test is in skip list"""
         response = requests.get('https://pastebin.com/raw/P35b1UjW')
         if response.status_code == 200:
-            skip_list = response.text.splitlines()
-            for item in skip_list:
-                vals = item.split(" ")
-                if self.get_test_name() == vals[0]:
+            skip_list = response.text
+            for item in skip_list.splitlines():
+                vals = item.split('|')
+                skip_it, ticket = self._check_variant_skip(eval(vals[0]))
+                if skip_it:
                     # test is on the skiplist
                     if len(vals) > 1:
                         # but there is a commit that fixes it
@@ -169,14 +170,16 @@ class Test(avocadoTest):
                                           ).read().splitlines()
                             if vals[1] in commits:
                                 # fix is in this code base
-                                print("On the skip list, but is fixed in {}. "
-                                      "so not skipping".format(vals[1]))
+                                print("On the skip list for ticket {}, but is "
+                                      "fixed in {} so not "
+                                      "skipping".format(ticket, vals[1]))
                             else:
                                 # fix is not in this code base
                                 self.cancel("Skipping due to being on the "
-                                             "skip list, and the fix in {} is "
-                                             "not in the current "
-                                             "code".format(vals[1]))
+                                             "skip list for ticket {}, and "
+                                             "the fix in {} is not in the "
+                                             "current code".format(ticket,
+                                                                   vals[1]))
                         except IOError as error:
                             if error.errno == errno.ENOENT:
                                 print("Unable to read commit list: ", error)
@@ -184,7 +187,8 @@ class Test(avocadoTest):
                     else:
                         # and there is a commit that fixes it
                         self.cancel("Skipping due to being on the skip list "
-                                    "with no fix available yet")
+                                    "for ticket {} with no fix available "
+                                    "yet".format(ticket))
 
         else:
             print("Unable to read skip list: ", response)
@@ -218,12 +222,14 @@ class Test(avocadoTest):
                     self.fail(
                         "Invalid cancel_list format: {}".format(
                             cancel_list))
-            if skip_variant:
-                self.cancelForTicket(ticket)
+            return skip_variant, ticket
+        return False, ""
 
     def check_variant_skip(self):
         """Determine if this test variant should be skipped."""
-        self._check_variant_skip(self.CANCEL_FOR_TICKET)
+        skip_variant, ticket = self._check_variant_skip(self.CANCEL_FOR_TICKET)
+        if skip_variant:
+                self.cancelForTicket(ticket)
 
     # pylint: disable=invalid-name
     def cancelForTicket(self, ticket):
