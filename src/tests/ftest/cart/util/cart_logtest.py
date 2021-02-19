@@ -629,7 +629,8 @@ class LogTest():
             for leak in leaks:
                 line = leaks[leak]['line']
                 bytes_lost = line.calloc_size() * leaks[leak]['count']
-                show_line(line, 'NORMAL', 'memory not freed {} bytes total'.format(bytes_lost),
+                show_line(line, 'NORMAL',
+                          'memory not freed {} bytes total'.format(bytes_lost),
                           custom=leak_wf)
 
         if active_desc:
