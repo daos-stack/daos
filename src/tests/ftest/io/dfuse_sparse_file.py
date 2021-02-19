@@ -46,7 +46,7 @@ class DfuseSparseFile(IorTestBase):
         """
         # Create a pool, container and start dfuse.
         self.create_pool()
-        self.create_cont()
+        self.create_cont("SX")
         self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 
         # get scm space before write
