@@ -105,6 +105,17 @@ static void
 ec_setup_cont_obj(struct ec_agg_test_ctx *ctx, daos_oclass_id_t oclass)
 {
 	int		 rc;
+	daos_prop_t	*prop;
+
+	/**
+	 * For the sake of tests that may be using a minimal number of physical
+	 * servers running multiple engines, set the redundancy level to "node"
+	 * (engine) level.
+	 */
+	prop = daos_prop_alloc(1);
+	assert_non_null(prop);
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_NODE;
 
 	uuid_generate(ctx->uuid);
 
