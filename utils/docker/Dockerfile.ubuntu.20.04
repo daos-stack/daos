@@ -87,7 +87,9 @@ RUN [ "$DAOS_BUILD" != "yes" ] || \
     /bin/rm -rf build && \
     cp -r utils/config/examples /opt/daos)
 
+USER root:root
 RUN [ "$DAOS_BUILD" != "yes" ] || (. utils/sl/setup_local.sh && ./utils/setup_daos_admin.sh)
+USER daos_server:daos_server
 
 # Set environment variables
 ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:/opt/daos/bin/../lib64/daos_srv/../../prereq/release/spdk/lib/:$LD_LIBRARY_PATH

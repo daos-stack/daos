@@ -16,7 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         distro: [ubuntu.20.04]
-        compiler: [gcc, clang]
+        compiler: [gcc]
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
@@ -62,7 +62,7 @@ jobs:
       fail-fast: false
       matrix:
         distro: [ubuntu.20.04]
-        compiler: [gcc, clang]
+        compiler: [clang]
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
@@ -106,6 +106,8 @@ jobs:
       run: docker run --tmpfs /mnt/daos build-image ./utils/node_local_test.py --no-root kv
     - name: Copy results
       run: docker cp build-ut:/home/daos/*.json ./
+    - name: Build but faster
+      run: docker run --tmpfs /mnt/daos build-image scons BUILD_ROOT=/mnt/daos PREFIX=/opt/daos --jobs 10
     - name: grep
       if: always()
       run: grep . *.json
@@ -121,3 +123,11 @@ jobs:
         skip: ./src/control/vendor,./.git
         ignore_words_file: ci/codespell.ignores
         builtin: clear,rare,informal,names,en-GB_to_en-US
+
+  Checkpatch:
+    runs-on: ubuntu-20.04
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+    - name: Run Check
+      run: ./ci/patch_src_in_place
