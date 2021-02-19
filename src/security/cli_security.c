@@ -146,10 +146,17 @@ get_cred_from_response(Drpc__Response *response, d_iov_t *cred)
 		D_GOTO(out, rc = -DER_PROTO);
 	}
 
+	if (cred_resp->cred->verifier == NULL) {
+		D_ERROR("Credential did not include verifier\n");
+		D_GOTO(out, rc = -DER_PROTO);
+	}
+
 	rc = auth_cred_to_iov(cred_resp->cred, cred);
-out:
+
+	/* If present clear out the verifier (the secret part) */
 	verifier = cred_resp->cred->verifier;
 	memzero_explicit(verifier->data.data, verifier->data.len);
+out:
 	auth__get_cred_resp__free_unpacked(cred_resp, &alloc.alloc);
 	return rc;
 }

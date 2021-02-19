@@ -50,6 +50,9 @@ init_default_drpc_resp_auth_credential(void)
 
 	D_ALLOC_PTR(drpc_call_resp_return_auth_credential->token);
 	auth__token__init(drpc_call_resp_return_auth_credential->token);
+
+	D_ALLOC_PTR(drpc_call_resp_return_auth_credential->verifier);
+	auth__token__init(drpc_call_resp_return_auth_credential->verifier);
 }
 
 static void
@@ -303,6 +306,21 @@ test_request_credentials_fails_if_reply_token_missing(void **state)
 }
 
 static void
+test_request_credentials_fails_if_reply_verifier_missing(void **state)
+{
+	d_iov_t creds;
+
+	memset(&creds, 0, sizeof(d_iov_t));
+	auth__token__free_unpacked(drpc_call_resp_return_auth_credential->verifier,
+				   NULL);
+	drpc_call_resp_return_auth_credential->verifier = NULL;
+	init_drpc_resp_with_cred(drpc_call_resp_return_auth_credential);
+
+	assert_int_equal(dc_sec_request_creds(&creds), -DER_PROTO);
+
+	daos_iov_free(&creds);
+}
+static void
 test_request_credentials_fails_if_reply_cred_status(void **state)
 {
 	d_iov_t			creds;
@@ -378,6 +396,8 @@ main(void)
 			test_request_credentials_fails_if_reply_token_missing),
 		SECURITY_UTEST(
 			test_request_credentials_fails_if_reply_cred_missing),
+		SECURITY_UTEST(
+			test_request_credentials_fails_if_reply_verifier_missing),
 		SECURITY_UTEST(
 			test_request_credentials_fails_if_reply_cred_status),
 		SECURITY_UTEST(
