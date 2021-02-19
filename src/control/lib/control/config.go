@@ -28,6 +28,7 @@ type Config struct {
 	ControlPort     int                       `yaml:"port"`
 	HostList        []string                  `yaml:"hostlist"`
 	TransportConfig *security.TransportConfig `yaml:"transport_config"`
+	Path            string                    `yaml:"-"`
 }
 
 // DefaultConfig returns a Config populated with default values. Only
@@ -82,5 +83,7 @@ func LoadConfig(cfgPath string) (*Config, error) {
 	if err := yaml.UnmarshalStrict(data, cfg); err != nil {
 		return nil, err
 	}
+	cfg.Path = cfgPath
+
 	return cfg, nil
 }

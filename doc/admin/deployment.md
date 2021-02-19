@@ -176,6 +176,13 @@ host list.
 devices, taking into account any specified network device class preference
 (ethernet or infiniband).
 
+Note that there is currently a [bug](https://github.com/pmem/ndctl/issues/130)
+in `ndctl` that prevents the NUMA affinity of an nvdimm namespace from being
+correctly reported.
+This prevents generation of dual engine configs using `dmg config generate`
+command on CentOS7 operating systems, the issue has reportedly been fixed on
+CentOS8.
+
 #### Certificate Configuration
 
 The DAOS security framework relies on certificates to authenticate
@@ -1147,3 +1154,5 @@ each storage node.
 [^3]: [*https://www.open-mpi.org/faq/?category=running\#mpirun-hostfile*](https://www.open-mpi.org/faq/?category=running#mpirun-hostfile)
 
 [^4]: https://github.com/daos-stack/daos/tree/master/src/control/README.md
+
+[^5]: https://github.com/pmem/ndctl/issues/130
