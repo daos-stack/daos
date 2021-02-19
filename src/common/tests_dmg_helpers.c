@@ -591,7 +591,7 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 		}
 
 		snprintf(devices[*disks].host, sizeof(devices[*disks].host),
-			"%s", tmp_var);
+			 "%s", tmp_var);
 
 		if (!json_object_object_get_ex(dev, "uuid", &tmp)) {
 			D_ERROR("unable to extract uuid from JSON\n");
@@ -619,7 +619,7 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 		}
 
 		snprintf(devices[*disks].state, sizeof(devices[*disks].state),
-			"%s", json_object_to_json_string(tmp));
+			 "%s", json_object_to_json_string(tmp));
 
 		if (!json_object_object_get_ex(dev, "rank", &tmp)) {
 			D_ERROR("unable to extract rank from JSON\n");
