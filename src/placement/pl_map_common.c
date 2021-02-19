@@ -247,16 +247,17 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		D_ASSERTF(spare_tgt->ta_comp.co_fseq !=
 			  f_shard->fs_fseq, "same fseq %u!\n",
 			  f_shard->fs_fseq);
+		D_DEBUG(DB_PL, "Spare target is also unavailable " DF_TARGET
+			".\n", DP_TARGET(spare_tgt));
 
 		/* If the spare target fseq > the current object pool
 		 * version, the current failure shard will be handled
 		 * by the following rebuild.
 		 */
 		if (spare_tgt->ta_comp.co_fseq > md->omd_ver) {
-			D_DEBUG(DB_PL, DF_OID", fseq %d rank %d"
-				" ver %d\n", DP_OID(md->omd_id),
-				spare_tgt->ta_comp.co_fseq,
-				spare_tgt->ta_comp.co_rank,
+			D_DEBUG(DB_PL, DF_OID", "DF_TARGET", ver: %d\n",
+				DP_OID(md->omd_id),
+				DP_TARGET(spare_tgt),
 				md->omd_ver);
 			spare_avail = false;
 			goto next_fail;
@@ -265,7 +266,7 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		/*
 		 * The selected spare is down prior to current failed
 		 * one, then it can't be a valid spare, let's skip it
-		 * and try next spare on the ring.
+		 * and try next spare in the placement.
 		 */
 		if (spare_tgt->ta_comp.co_fseq < f_shard->fs_fseq) {
 			D_DEBUG(DB_PL, "spare tgt %u co fs_seq %u"
@@ -292,6 +293,8 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 
 		(*current) = (*current)->next;
 		d_list_del_init(&f_shard->fs_list);
+		D_DEBUG(DB_PL, "failed shard ("DF_FAILEDSHARD") added to "
+			       "remamp_list\n", DP_FAILEDSHARD(*f_shard));
 		remap_add_one(remap_list, f_shard);
 
 		/* Continue with the failed shard has minimal fseq */

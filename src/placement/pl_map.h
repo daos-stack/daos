@@ -80,6 +80,9 @@ struct failed_shard {
 	uint32_t        fs_tgt_id;
 	uint8_t         fs_status;
 };
+#define	DF_FAILEDSHARD "shard_idx: %d, fseq: %d, tgt_id: %d, status: %d"
+#define	DP_FAILEDSHARD(x) (x).fs_shard_idx, (x).fs_fseq, \
+			(x).fs_tgt_id, (x).fs_status
 
 void
 remap_add_one(d_list_t *remap_list, struct failed_shard *f_new);

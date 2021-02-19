@@ -1336,8 +1336,6 @@ down_up_sequences(void **state)
 	jtc_assert_scan_and_layout(&ctx);
 	is_true(jtc_has_shard_moving_to_target(&ctx, 0, shard_target_1));
 
-	jtc_fini(&ctx);
-	skip_msg("DAOS-6520: Should only be moving shard to target 1");
 	is_false(jtc_has_shard_moving_to_target(&ctx, 0, shard_target_2));
 
 	jtc_fini(&ctx);
@@ -1352,7 +1350,6 @@ down_up_sequences1(void **state)
 
 	jtc_init(&ctx, 6, 1, 2, OC_RP_2G2, g_verbose);
 	jtc_print_pool(&ctx);
-	ctx.enable_print_pool = false;
 	ctx.rebuild.skip = true; /* DAOS-6516 */
 
 	jtc_assert_scan_and_layout(&ctx);
@@ -1368,15 +1365,13 @@ down_up_sequences1(void **state)
 	jtc_set_status_on_target(&ctx, UP, shard_target_2);
 	jtc_assert_scan_and_layout(&ctx);
 	jtc_fini(&ctx);
-	skip_msg("DAOS-6520: shard_target 2 is not included in placement");
+	skip_msg("Investigation into DAOS-6519 is similar/same issue.");
 	is_true(jtc_has_shard_moving_to_target(&ctx, 0, shard_target_2));
 
 	jtc_set_status_on_target(&ctx, UP, shard_target_1);
 	jtc_assert_scan_and_layout(&ctx);
 	is_true(jtc_has_shard_moving_to_target(&ctx, 0, shard_target_1));
 
-	jtc_fini(&ctx);
-	skip_msg("DAOS-6520: Should only be moving shard to target 1");
 	is_false(jtc_has_shard_moving_to_target(&ctx, 0, shard_target_2));
 
 	jtc_fini(&ctx);
@@ -1717,7 +1712,7 @@ static const struct CMUnitTest tests[] = {
 	T("Take a single shard's target down, downout, then again with the "
 	  "new target. Then reintegrate the first downed target, "
 	  "then the second.", down_up_sequences),
-	WIP("Take a single shard's target down, downout, then again with the "
+	T("Take a single shard's target down, downout, then again with the "
 	  "new target. Then reintegrate the second downed target, "
 	  "then the first (Reverse of previous test).", down_up_sequences1),
 	T("multiple shard targets go down, then are reintegrated in the "
