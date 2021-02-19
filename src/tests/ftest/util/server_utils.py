@@ -4,8 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-# pylint: disable=too-many-lines
-from datetime import datetime
 from getpass import getuser
 import os
 import socket
@@ -933,7 +931,12 @@ class DaosServerManager(SubprocessManager):
 
         """
         try:
-            data = self.dmg.system_query()
+            all_data = self.dmg.system_query()
+            data = {}
+            for key in all_data:
+                host = all_data[key]["domain"].split(".")[0].replace("/", "")
+                if host in self._hosts:
+                    data[key] = all_data[key]
         except CommandFailure:
             data = {}
         return data

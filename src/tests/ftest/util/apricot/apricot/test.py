@@ -891,7 +891,10 @@ class TestWithServers(TestWithoutServers):
 
         """
         status = {"expected": True, "restart": False}
-        self.log.info("--- VERIFYING %s RUNNING ---", name.upper())
+        self.log.info(
+            "--- VERIFYING STATES OF %s %s GROUP%s ---",
+            len(manager_list), name.upper(),
+            "S" if len(manager_list) > 1 else "")
         for manager in manager_list:
             # Setup the dmg command
             if prepare_dmg and hasattr(manager, "prepare_dmg"):
@@ -1265,7 +1268,8 @@ class TestWithServers(TestWithoutServers):
         """
         self.container = self.get_container(pool, namespace, create)
 
-    def start_additional_servers(self, additional_servers, index=0):
+    def start_additional_servers(self, additional_servers, index=0,
+                                 access_points=None):
         """Start additional servers.
 
         This method can be used to start a new daos_server during a test.
@@ -1275,6 +1279,8 @@ class TestWithServers(TestWithoutServers):
                 daos_server.
             index (int): Determines which server_managers to use when creating
                 the new server.
+            access_points (list, optional): list of access point hosts. Defaults
+                to None which uses self.access_points.
         """
         self.add_server_manager(
             self.server_managers[index].manager.job.get_config_value("name"),
@@ -1288,6 +1294,6 @@ class TestWithServers(TestWithoutServers):
             self.server_managers[-1],
             additional_servers,
             self.hostfile_servers_slots,
-            additional_servers
+            access_points
         )
         self._start_manager_list("server", [self.server_managers[-1]])

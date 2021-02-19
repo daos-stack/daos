@@ -1125,7 +1125,7 @@ class SubprocessManager(object):
 
         """
         status = {"expected": True, "restart": False}
-        errored_hosts = []
+        show_log_hosts = []
 
         # Get the current state of each job process
         current_states = self.get_current_state()
@@ -1175,24 +1175,17 @@ class SubprocessManager(object):
                     status["restart"] = True
                     result = "RESTART"
 
-                # Keep track of any hosts with a server in the errored state
-                if current in self._states["errored"]:
-                    if current_host not in errored_hosts:
-                        errored_hosts.append(current_host)
+                # Keep track of any server in the errored state or in an
+                # unexpected state in order to display its log
+                if (current in self._states["errored"] or
+                        current not in expected):
+                    if current_host not in show_log_hosts:
+                        show_log_hosts.append(current_host)
 
                 self.log.info(
                     log_format, rank, current_host,
                     self._expected_states[rank]["uuid"], "|".join(expected),
                     current, result)
-
-            # Report any current states that were not expected as an error
-            for rank in sorted(current_states):
-                status["expected"] = False
-                domain = current_states[rank]["domain"].split(".")
-                self.log.info(
-                    log_format, rank, domain[0].replace("/", ""),
-                    current_states[rank]["uuid"], "not detected",
-                    current_states[rank]["state"].lower(), "RESTART")
 
         elif not self._expected_states:
             # Expected states are populated as part of start() procedure,
@@ -1233,13 +1226,13 @@ class SubprocessManager(object):
             self.manager.timestamps["verified"] = datetime.now().strftime(
                 "%Y-%m-%d %H:%M:%S")
 
-        # Dump the server logs for any server found in the errored state
-        if errored_hosts:
+        # Dump the server logs for any identified server
+        if show_log_hosts:
             self.log.info(
                 "<SERVER> logs for ranks in the errored state since start "
-                "detection")
+                "detection or detected in an unexpected state")
             if hasattr(self.manager, "dump_logs"):
-                self.manager.dump_logs(errored_hosts)
+                self.manager.dump_logs(show_log_hosts)
 
         return status
 

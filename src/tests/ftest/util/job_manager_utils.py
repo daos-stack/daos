@@ -4,6 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+# pylint: disable=too-many-lines
 from datetime import datetime
 from distutils.spawn import find_executable
 import os
@@ -475,6 +476,7 @@ class Srun(JobManager):
 
 
 class Systemctl(JobManager):
+    # pylint: disable=too-many-public-methods,too-many-public-methods
     """A class for the systemctl job manager command."""
 
     def __init__(self, job):
@@ -484,7 +486,7 @@ class Systemctl(JobManager):
             job (SubProcessCommand): command object to manage.
         """
         # path = os.path.dirname(find_executable("systemctl"))
-        super(Systemctl, self).__init__("/run/systemctl/*", "", job)
+        super(Systemctl, self).__init__("/run/systemctl/*", "systemd", job)
         self.job = job
         self._systemctl = SystemctlCommand()
         self._systemctl.service.value = self.job.service_name
