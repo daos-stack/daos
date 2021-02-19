@@ -74,26 +74,32 @@ class OSADmgNegativeTest(OSAUtils):
             self.pool = pool[val]
 
         # Start the additional servers and extend the pool
-        self.log.info("Extra Servers = %s", self.extra_servers)
-        self.start_additional_servers(self.extra_servers)
+        # TODO: Extend functionality test infrastructure
+        # presently broken due to DAOS-6838
+        # self.log.info("Extra Servers = %s", self.extra_servers)
+        # self.start_additional_servers(self.extra_servers)
 
         # Get rank, target from the test_dmg_sequence
         # Some test_dmg_sequence data will be invalid, valid.
         for val in range(0, num_pool):
             for i in range(len(self.test_seq)):
                 self.pool = pool[val]
-                scm_size = self.pool.scm_size
-                nvme_size = self.pool.nvme_size
+                # Will enable extend functionality after
+                # DAOS-6838 is addressed. : TODO
+                # scm_size = self.pool.scm_size
+                # nvme_size = self.pool.nvme_size
                 rank = self.test_seq[i][0]
                 target = "{}".format(self.test_seq[i][1])
                 expected_result = "{}".format(self.test_seq[i][2])
                 # Extend the pool
-                output = self.dmg_command.pool_extend(self.pool.uuid,
-                                                      rank,
-                                                      scm_size,
-                                                      nvme_size)
-                self.log.info(output)
-                self.validate_results(expected_result, output.stdout)
+                # Will enable extend functionality after
+                # DAOS-6838 is addressed. : TODO
+                # output = self.dmg_command.pool_extend(self.pool.uuid,
+                #                                      rank,
+                #                                      scm_size,
+                #                                      nvme_size)
+                # self.log.info(output)
+                # self.validate_results(expected_result, output.stdout)
                 # Exclude a rank, target
                 output = self.dmg_command.pool_exclude(self.pool.uuid,
                                                        rank,
