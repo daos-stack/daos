@@ -274,7 +274,10 @@ that has been resolved in CentOS 8. Some DAOS nodes may not report the correct
 NUMA socket ID when running a "dmg storage scan." This appears to be a
 regression in the CentOS7.7 kernel rather than an ndctl issue. This is due to
 different versions of ndctl provisioning different JSON namespace details
-(storage scan command reads the "numa_node" field).
+(storage scan command reads the "numa_node" field). The regression also affects
+the operation of the "dmg config generate" command which isn't able to detect
+correct NUMA affinity for the PMem namespaces required for the config.
+The regression has been fixed in the CentOS7.9 kernel.
 
 ### PSM over OPA is not fully functional
 If you must evaluate DAOS on an OPA fabric, we recommend using IP over
