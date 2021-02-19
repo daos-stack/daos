@@ -208,7 +208,7 @@ class ServerFillUp(IorTestBase):
         """Get the maximum pool sizes for the current server configuration.
 
         Returns:
-            list: a list of the maximum storage creation SCM size and NVMe size
+            list: a list of the maximum SCM and NVMe size
 
         """
         try:
