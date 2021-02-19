@@ -120,5 +120,6 @@ WORKDIR /home/daos/daos
 RUN id
 RUN ls -l /mnt
 
+USER root:root
 # Remove local copy
 #RUN rm -rf /home/daos/*

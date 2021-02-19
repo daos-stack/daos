@@ -2,7 +2,11 @@
 
 set -x
 
+ls -lA
+
 CHANGE_TARGET=$GITHUB_BASE_REF
+
+git diff --name-only $GITHUB_BASE_REF/...
 
 # shellcheck disable=SC2046,SC2035
 codespell -w --ignore-words ci/codespell.ignores --builtin clear,rare,informal,names,en-GB_to_en-US --skip *.png,*.PNG,*.pyc,src/rdb/raft/*,src/control/vendor/*,RSA.golden,utils/rpms/* $(git diff --name-only origin/"$CHANGE_TARGET"...)

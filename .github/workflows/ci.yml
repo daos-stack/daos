@@ -143,7 +143,13 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
+    - name: test
+      run: echo "::set-output name=action_fruit::strawberry"
+    - name: test2
+      run: echo "::warning file=utils/node_local_test.py,line=1,col=5::Missing semicolon"
     - name: Run Check
-      run: sudo apt-get -y install codespell
+      run: pip3 install --user codespell
+    - name: Adding to path.
+      echo: echo "$HOME/.local/bin" >> $GITHUB_PATH
     - name: Run Check
       run: ./ci/patch_src_in_place
