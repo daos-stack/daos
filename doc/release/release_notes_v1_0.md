@@ -277,6 +277,7 @@ different versions of ndctl provisioning different JSON namespace details
 (storage scan command reads the "numa_node" field). The regression also affects
 the operation of the "dmg config generate" command which isn't able to detect
 correct NUMA affinity for the PMem namespaces required for the config.
+The regression has been fixed in the CentOS7.9 kernel.
 
 ### PSM over OPA is not fully functional
 If you must evaluate DAOS on an OPA fabric, we recommend using IP over
