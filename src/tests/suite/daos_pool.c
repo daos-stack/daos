@@ -30,8 +30,6 @@ pool_connect_nonexist(void **state)
 	rc = daos_pool_connect(uuid, arg->group, DAOS_PC_RW,
 			       &poh, NULL /* info */, NULL /* ev */);
 	assert_rc_equal(rc, -DER_NONEXIST);
-	/* Temporary to force a failure */
-	assert_rc_equal(rc, 0);
 }
 
 /** connect/disconnect to/from a valid pool */
