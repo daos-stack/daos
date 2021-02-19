@@ -150,6 +150,6 @@ jobs:
     - name: Run Check
       run: pip3 install --user codespell
     - name: Adding to path.
-      echo: echo "$HOME/.local/bin" >> $GITHUB_PATH
+      run: echo "$HOME/.local/bin" >> $GITHUB_PATH
     - name: Run Check
       run: ./ci/patch_src_in_place
