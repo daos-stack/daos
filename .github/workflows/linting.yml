@@ -1,0 +1,34 @@
+name: Linting.
+
+on:
+   pull_request:
+
+jobs:
+
+  Spelling:
+    runs-on: ubuntu-20.04
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+    - name: Run check
+      uses: codespell-project/actions-codespell@master
+      with:
+        skip: ./src/control/vendor,./.git
+        ignore_words_file: ci/codespell.ignores
+        builtin: clear,rare,informal,names,en-GB_to_en-US
+
+  Checkpatch:
+    runs-on: ubuntu-20.04
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+    - name: test
+      run: echo "::set-output name=action_fruit::strawberry"
+    - name: test2
+      run: echo "::warning file=utils/node_local_test.py,line=1,col=5::Missing semicolon"
+    - name: Run Check
+      run: pip3 install --user codespell
+    - name: Adding to path.
+      run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+    - name: Run Check
+      run: ./ci/patch_src_in_place
