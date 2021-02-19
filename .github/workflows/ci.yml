@@ -86,6 +86,8 @@ jobs:
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg DAOS_BUILD=no --build-arg DEPS_JOBS=10
                           --build-arg UID
+    - name: Check env.
+      run: env | sort
     - name: Build daos
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg COMPILER=${{ matrix.compiler }}
