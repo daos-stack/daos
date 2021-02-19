@@ -13,7 +13,7 @@
 
 #include <daos_srv/pool.h>
 #include <daos/rpc.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
 #include "rpc.h"
 #include "srv_internal.h"
@@ -117,8 +117,7 @@ static struct daos_rpc_handler pool_handlers[] = {
 #undef X
 
 static void *
-pool_tls_init(const struct dss_thread_local_storage *dtls,
-	      struct dss_module_key *key)
+pool_tls_init(int xs_id, int tgt_id)
 {
 	struct pool_tls *tls;
 
@@ -131,8 +130,7 @@ pool_tls_init(const struct dss_thread_local_storage *dtls,
 }
 
 static void
-pool_tls_fini(const struct dss_thread_local_storage *dtls,
-	      struct dss_module_key *key, void *data)
+pool_tls_fini(void *data)
 {
 	struct pool_tls		*tls = data;
 	struct ds_pool_child	*child;

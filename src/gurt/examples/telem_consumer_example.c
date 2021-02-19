@@ -23,6 +23,7 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 {
 	struct d_tm_nodeList_t	*nodelist = NULL;
 	struct d_tm_nodeList_t	*head = NULL;
+	struct d_tm_stats_t	stats = {0};
 	struct d_tm_node_t	*node = NULL;
 	struct timespec		tms;
 	uint64_t		val;
@@ -46,7 +47,7 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 
 	rc = d_tm_list(&nodelist, shmem_root, node, filter);
 	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_list failure: rc = %d", rc);
+		printf("d_tm_list failure: " DF_RC "\n", DP_RC(rc));
 		return;
 	}
 	head = nodelist;
@@ -68,7 +69,8 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 			rc = d_tm_get_counter(&val, shmem_root,
 					      nodelist->dtnl_node, NULL);
 			if (rc != D_TM_SUCCESS) {
-				printf("Error on counter read: %d\n", rc);
+				printf("Error on counter read: " DF_RC "\n",
+				       DP_RC(rc));
 				break;
 			}
 			d_tm_print_counter(val, name, stdout);
@@ -77,7 +79,8 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 			rc = d_tm_get_timestamp(&clk, shmem_root,
 						nodelist->dtnl_node, NULL);
 			if (rc != D_TM_SUCCESS) {
-				printf("Error on timestamp read: %d\n", rc);
+				printf("Error on timestamp read: " DF_RC "\n",
+				       DP_RC(rc));
 				break;
 			}
 			d_tm_print_timestamp(&clk, name, stdout);
@@ -88,7 +91,8 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 			rc = d_tm_get_timer_snapshot(&tms, shmem_root,
 						     nodelist->dtnl_node, NULL);
 			if (rc != D_TM_SUCCESS) {
-				printf("Error on highres timer read: %d\n", rc);
+				printf("Error on highres timer read: " DF_RC
+				       "\n", DP_RC(rc));
 				break;
 			}
 			d_tm_print_timer_snapshot(&tms, name,
@@ -98,24 +102,26 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 		case D_TM_DURATION | D_TM_CLOCK_REALTIME:
 		case D_TM_DURATION | D_TM_CLOCK_PROCESS_CPUTIME:
 		case D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME:
-			rc = d_tm_get_duration(&tms, shmem_root,
+			rc = d_tm_get_duration(&tms, &stats, shmem_root,
 					       nodelist->dtnl_node, NULL);
 			if (rc != D_TM_SUCCESS) {
-				printf("Error on duration read: %d\n", rc);
+				printf("Error on duration read: " DF_RC "\n",
+				       DP_RC(rc));
 				break;
 			}
-			d_tm_print_duration(&tms, name,
+			d_tm_print_duration(&tms, &stats, name,
 					    nodelist->dtnl_node->dtn_type,
 					    stdout);
 			break;
 		case D_TM_GAUGE:
-			rc = d_tm_get_gauge(&val, shmem_root,
+			rc = d_tm_get_gauge(&val, &stats, shmem_root,
 					    nodelist->dtnl_node, NULL);
 			if (rc != D_TM_SUCCESS) {
-				printf("Error on gauge read: %d\n", rc);
+				printf("Error on gauge read: " DF_RC "\n",
+				       DP_RC(rc));
 				break;
 			}
-			d_tm_print_gauge(val, name, stdout);
+			d_tm_print_gauge(val, &stats, name, stdout);
 			break;
 		default:
 			printf("Item: %s has unknown type: 0x%x\n",

@@ -519,6 +519,9 @@ crt_proto_register_internal(struct crt_proto_format *cpf)
 	}
 
 	/* validate base_opc is in range */
+	/* TODO: This doesn't make any sense, a XOR used as a truth value is
+	 * just checking equlity so only one mask would be allowed here
+	 */
 	if (cpf->cpf_base ^ CRT_PROTO_BASEOPC_MASK) {
 		D_ERROR("Invalid base_opc: %#x.\n", cpf->cpf_base);
 		return -DER_INVAL;
@@ -580,7 +583,7 @@ crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
 	crt_context_t			 crt_ctx;
 	struct crt_proto_query_in	*rpc_req_input;
 	struct proto_query_t		*proto_query = NULL;
-	uint32_t			*tmp_array;
+	uint32_t			*tmp_array = NULL;
 	int				 rc = DER_SUCCESS;
 
 	if (ver == NULL) {
@@ -617,11 +620,11 @@ crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
 
 	D_ALLOC_PTR(proto_query);
 	if (proto_query == NULL)
-		return -DER_NOMEM;
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	D_ALLOC_PTR(proto_query->pq_coq);
 	if (proto_query->pq_coq == NULL)
-		return -DER_NOMEM;
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	proto_query->pq_user_cb = cb;
 	proto_query->pq_user_arg = arg;
@@ -632,8 +635,14 @@ crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
 		D_ERROR("crt_req_send() failed, rc: %d.\n", rc);
 
 out:
-	if (rc != DER_SUCCESS)
-		D_FREE(proto_query);
+	if (rc != DER_SUCCESS) {
+		if (proto_query) {
+			D_FREE(proto_query->pq_coq);
+			D_FREE(proto_query);
+		}
+
+		D_FREE(tmp_array);
+	}
 
 	return rc;
 }

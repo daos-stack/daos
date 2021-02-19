@@ -46,8 +46,8 @@ type sysRequest struct {
 }
 
 type sysResponse struct {
-	AbsentRanks system.RankSet
-	AbsentHosts hostlist.HostSet
+	AbsentRanks system.RankSet   `json:"-"`
+	AbsentHosts hostlist.HostSet `json:"-"`
 }
 
 func (resp *sysResponse) getAbsentHostsRanks(inHosts, inRanks string) error {
@@ -292,7 +292,7 @@ type SystemQueryReq struct {
 // SystemQueryResp contains the request response.
 type SystemQueryResp struct {
 	sysResponse
-	Members system.Members
+	Members system.Members `json:"members"`
 }
 
 // UnmarshalJSON unpacks JSON message into SystemQueryResp struct.
@@ -521,11 +521,11 @@ type SystemResetFormatResp struct {
 //
 // First phase trigger format reset on each rank in membership registry, if
 // successful, putting selected harness managed instances in "awaiting format"
-// state (but not proceeding to starting the io_server process runner).
+// state (but not proceeding to starting the engine process runner).
 //
 // Second phase is to perform storage format on each host which, if successful,
 // will reformat storage, un-block "awaiting format" state and start the
-// io_server process. SystemReformat() will only return when relevant io_server
+// engine process. SystemReformat() will only return when relevant io_server
 // processes are running and ready.
 //
 // This method handles request sent from management client app e.g. 'dmg'.

@@ -6,8 +6,9 @@
 """
 from __future__ import print_function
 
-from apricot import skipForTicket
 from ior_test_base import IorTestBase
+
+import time
 
 # pylint: disable=too-few-public-methods,too-many-ancestors
 class PoolDestroyWithIO(IorTestBase):
@@ -19,7 +20,6 @@ class PoolDestroyWithIO(IorTestBase):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-5868")
     def test_pool_destroy_with_io(self):
         """Jira ID: DAOS-3794.
 
@@ -39,7 +39,7 @@ class PoolDestroyWithIO(IorTestBase):
         # set params
         targets = self.params.get("targets", "/run/server_config/*/0/*")
         rank = self.params.get("rank_to_kill", "/run/testparams/*")
-        servers_per_host = self.params.get("servers_per_host",
+        engines_per_host = self.params.get("engines_per_host",
                                            "/run/server_config/*")
 
         # create pool
@@ -47,9 +47,9 @@ class PoolDestroyWithIO(IorTestBase):
 
         # make sure pool looks good before we start
         checks = {
-            "pi_nnodes": len(self.hostlist_servers) * servers_per_host,
+            "pi_nnodes": len(self.hostlist_servers) * engines_per_host,
             "pi_ntargets": len(self.hostlist_servers) * targets * \
-                servers_per_host,
+                engines_per_host,
             "pi_ndisabled": 0,
         }
         self.assertTrue(
@@ -62,24 +62,31 @@ class PoolDestroyWithIO(IorTestBase):
             "Invalid pool rebuild info detected before rebuild")
 
         # perform first set of io using IOR
-        for _ in range(4):
+        for run in range(4):
+            self.log.info("Starting ior run number {}".format(run))
             self.run_ior_with_pool()
 
+        self.log.info("Starting rebuild by killing rank {}".format(rank))
         # Kill the server and trigger rebuild
-        self.pool.start_rebuild([rank], self.d_log)
+        self.server_managers[0].stop_ranks([rank], self.d_log, force=True)
 
         # Wait for rebuild to start. If True just wait for rebuild to start,
         # if False, wait for rebuild to complete.
+        self.log.info("Wait for rebuild to start")
         self.pool.wait_for_rebuild(True, interval=1)
+
+        #self.log.info("Wait for rebuild to finish")
+        #self.pool.wait_for_rebuild(False, interval=1)
+
         self.pool.set_query_data()
         rebuild_status = self.pool.query_data["rebuild"]["status"]
-        self.log.info("Pool %s rebuild status:%s\n", self.pool.uuid,
+        self.log.info("Pool %s rebuild status:%s", self.pool.uuid,
                       rebuild_status)
 
-        if rebuild_status == 'busy':
-            # destroy pool during rebuild
-            self.pool.destroy()
-            self.container = None
+        self.log.info("Destroy pool %s while rebuild is %s", self.pool.uuid,
+                      rebuild_status)
+        self.pool.destroy()
+        self.container = None
 
         # re-create the pool of full size to verify the space was reclaimed,
         # after re-starting the server on excluded rank
