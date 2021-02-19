@@ -98,9 +98,9 @@ BuildRequires: libcurl4
 # have choice for libpsm_infinipath.so.1()(64bit) needed by libfabric1: libpsm2-compat libpsm_infinipath1
 # have choice for libpsm_infinipath.so.1()(64bit) needed by openmpi-libs: libpsm2-compat libpsm_infinipath1
 BuildRequires: libpsm_infinipath1
-%endif # 0%{?is_opensuse}
-%endif # (0%{?suse_version} >= 1315)
-%endif # (0%{?rhel} >= 7)
+%endif
+%endif
+%endif
 %if (0%{?suse_version} >= 1500)
 Requires: libpmem1 >= 1.8, libpmemobj1 >= 1.8
 %else
@@ -142,7 +142,7 @@ Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 Requires: libfabric >= %{libfabric_version}
 %{?systemd_requires}
-Obsoletes: cart
+Obsoletes: cart < 1000
 
 %description server
 This is the package needed to run a DAOS server
@@ -153,7 +153,7 @@ Requires: %{name} = %{version}-%{release}
 Requires: mercury = %{mercury_version}
 Requires: libfabric >= %{libfabric_version}
 Requires: fuse3 >= 3.4.2
-Obsoletes: cart
+Obsoletes: cart < 1000
 %if (0%{?suse_version} >= 1500)
 Requires: libfuse3-3 >= 3.4.2
 %else
