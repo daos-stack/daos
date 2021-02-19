@@ -214,30 +214,29 @@ scons %{?_smp_mflags}      \
       --no-rpath           \
       USE_INSTALLED=all    \
       CONF_DIR=%{conf_dir} \
-      PREFIX=%{?buildroot} \
+      PREFIX=%{buildroot} \
      %{?scons_args}
 
 %install
 scons %{?_smp_mflags}                 \
       --config=force                  \
       --no-rpath                      \
-      --install-sandbox=%{?buildroot} \
-      %{?buildroot}%{_prefix}         \
-      %{?buildroot}%{conf_dir}        \
+      --install-sandbox=%{buildroot} \
+      %{buildroot}%{_prefix}         \
+      %{buildroot}%{conf_dir}        \
       USE_INSTALLED=all               \
       CONF_DIR=%{conf_dir}            \
       PREFIX=%{_prefix}               \
       %{?scons_args}
 
-BUILDROOT="%{?buildroot}"
-PREFIX="%{?_prefix}"
-mkdir -p %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/
-echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
-mkdir -p %{?buildroot}/%{_unitdir}
-install -m 644 utils/systemd/%{server_svc_name} %{?buildroot}/%{_unitdir}
-install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
-mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
-mv %{?buildroot}/%{_sysconfdir}/daos/bash_completion.d %{?buildroot}/%{_sysconfdir}
+mkdir -p %{buildroot}/%{_sysconfdir}/ld.so.conf.d/
+echo "%{_libdir}/daos_srv" > %{buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
+mkdir -p %{buildroot}/%{_unitdir}
+install -m 644 utils/systemd/%{server_svc_name} %{buildroot}/%{_unitdir}
+install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
+mkdir -p %{buildroot}/%{conf_dir}/certs/clients
+mv %{buildroot}/%{_sysconfdir}/daos/bash_completion.d %{buildroot}/%{_sysconfdir}
+mv commit_list %{buildroot}/%{_prefix}/lib/daos/
 
 %pre server
 getent group daos_metrics >/dev/null || groupadd -r daos_metrics
@@ -386,6 +385,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files tests
 %dir %{_prefix}/lib/daos
 %{_prefix}/lib/daos/TESTING
+%{_prefix}/lib/daos/commit_list
 %{_bindir}/hello_drpc
 %{_bindir}/*_test*
 %{_bindir}/jobtest
