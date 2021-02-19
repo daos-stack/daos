@@ -18,11 +18,11 @@ reconnect(test_arg_t *arg) {
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	rc = daos_cont_close(arg->coh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	MPI_Barrier(MPI_COMM_WORLD);
 	rc = daos_pool_disconnect(arg->pool.poh, NULL /* ev */);
 	arg->pool.poh = DAOS_HDL_INVAL;
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	flags = (DAOS_COO_RW | DAOS_COO_FORCE);
@@ -40,7 +40,7 @@ bcast:
 	/** broadcast container open result */
 	if (arg->rank_size > 1)
 		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	/** l2g and g2l the container handle */
 	if (arg->rank_size > 1) {
 		handle_share(&arg->pool.poh, HANDLE_POOL, arg->myrank,
@@ -68,7 +68,7 @@ simple_oid_allocator(void **state)
 		rc = daos_cont_alloc_oids(arg->coh, num_oids, &oid, NULL);
 		if (rc)
 			print_message("OID alloc failed (%d)\n", rc);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 
 		print_message("%d: OID range %" PRId64 " - %" PRId64 "\n",
 			      arg->myrank, oid, oid+num_oids);
@@ -240,7 +240,7 @@ oid_allocator_checker(void **state)
 			MPI_Barrier(MPI_COMM_WORLD);
 			rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL,
 					     NULL);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			if (info.pi_ntargets - info.pi_ndisabled >= 2) {
 				if (arg->myrank == 0)
 					daos_kill_server(arg,
@@ -308,7 +308,7 @@ cont_oid_prop(void **state)
 	print_message("GET max OID from container property\n");
 	prop->dpp_entries[0].dpe_val = 0;
 	rc = daos_cont_query(coh, NULL, prop, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	print_message("MAX OID = "DF_U64"\n", prop->dpp_entries[0].dpe_val);
 	assert_true(prop->dpp_entries[0].dpe_val > alloced_oid);
 
