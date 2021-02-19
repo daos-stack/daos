@@ -74,8 +74,8 @@ class OSADmgNegativeTest(OSAUtils):
             self.pool = pool[val]
 
         # Start the additional servers and extend the pool
-        # TODO: Extend functionality test infrastructure
-        # presently broken due to DAOS-6838
+        # Extend functionality test infrastructure
+        # presently broken due to DAOS-6838 : TODO
         # self.log.info("Extra Servers = %s", self.extra_servers)
         # self.start_additional_servers(self.extra_servers)
 
