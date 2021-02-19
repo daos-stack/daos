@@ -23,6 +23,7 @@ BuildRequires: libpsm2-devel
 BuildRequires: gcc-c++
 BuildRequires: openmpi3-devel
 BuildRequires: hwloc-devel
+BuildRequires: bullseye
 %if (0%{?rhel} >= 7)
 BuildRequires: argobots-devel >= 1.0rc1
 BuildRequires: json-c-devel
@@ -213,6 +214,7 @@ scons %{?_smp_mflags}      \
       --config=force       \
       --no-rpath           \
       USE_INSTALLED=all    \
+      COMPILER=covc        \
       CONF_DIR=%{conf_dir} \
       PREFIX=%{?buildroot} \
      %{?scons_args}
@@ -225,6 +227,7 @@ scons %{?_smp_mflags}                 \
       %{?buildroot}%{_prefix}         \
       %{?buildroot}%{conf_dir}        \
       USE_INSTALLED=all               \
+      COMPILER=covc                   \
       CONF_DIR=%{conf_dir}            \
       PREFIX=%{_prefix}               \
       %{?scons_args}

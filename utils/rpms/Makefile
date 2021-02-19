@@ -20,6 +20,8 @@ RPM_BUILD_OPTIONS := $(BUILD_DEFINES)
 
 dist: $(SOURCES)
 
+JOB_REPO         := "https://repo.dc.hpdd.intel.com/repository/bullseye-el-7-x86_64/"
+
 include packaging/Makefile_packaging.mk
 
 PACKAGING_CHECK_DIR ?= ../../../rpm/packaging
