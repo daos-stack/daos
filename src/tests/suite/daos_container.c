@@ -2059,8 +2059,9 @@ co_open_fail_destroy(void **state)
 
 	rc = daos_cont_open(arg->pool.poh, uuid, DAOS_COO_RW, &coh, &info,
 			    NULL);
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+			      0, 0, NULL);
 	assert_rc_equal(rc, -DER_IO);
-
 	print_message("destroying container ... ");
 	rc = daos_cont_destroy(arg->pool.poh, uuid, 1 /* force */, NULL);
 	assert_rc_equal(rc, 0);
