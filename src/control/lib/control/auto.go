@@ -67,7 +67,11 @@ type (
 //
 // Returns API response and error.
 func ConfigGenerate(ctx context.Context, req ConfigGenerateReq) (*ConfigGenerateResp, error) {
-	req.Log.Debugf("ConfigGenerate called with request %v", req)
+	req.Log.Debugf("ConfigGenerate called with request %+v", req)
+
+	if len(req.HostList) == 0 {
+		return nil, errors.New("no hosts specified")
+	}
 
 	nd, hostErrs, err := getNetworkDetails(ctx, req)
 	if err != nil {
@@ -89,12 +93,9 @@ func ConfigGenerate(ctx context.Context, req ConfigGenerateReq) (*ConfigGenerate
 		return nil, err
 	}
 
-	// TODO: change Validate() to take io.Writer
-	//	if err := cfg.Validate(&req.buf); err != nil {
-	//		return &ConfigGenerateResp{
-	//			Err: errors.Wrap(err, "validation failed on auto generated config"),
-	//		}, nil
-	//	}
+	if err := cfg.Validate(req.Log); err != nil {
+		return nil, errors.Wrap(err, "validation failed on auto generated config")
+	}
 
 	return &ConfigGenerateResp{ConfigOut: cfg}, nil
 }
