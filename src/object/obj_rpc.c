@@ -1066,19 +1066,19 @@ CRT_RPC_DEFINE(obj_ec_agg, DAOS_ISEQ_OBJ_EC_AGG, DAOS_OSEQ_OBJ_EC_AGG)
 CRT_RPC_DEFINE(obj_cpd, DAOS_ISEQ_OBJ_CPD, DAOS_OSEQ_OBJ_CPD)
 CRT_RPC_DEFINE(obj_ec_rep, DAOS_ISEQ_OBJ_EC_REP, DAOS_OSEQ_OBJ_EC_REP)
 
-/* Define for cont_rpcs[] array population below.
+/* Define for obj_proto_rpc_fmt[] array population below.
  * See OBJ_PROTO_*_RPC_LIST macro definition
  */
-#define X(a, b, c, d, e)	\
+#define X(a, b, c, d, e, f)	\
 {				\
 	.prf_flags   = b,	\
 	.prf_req_fmt = c,	\
 	.prf_hdlr    = NULL,	\
 	.prf_co_ops  = NULL,	\
-}
+},
 
 static struct crt_proto_rpc_format obj_proto_rpc_fmt[] = {
-	OBJ_PROTO_CLI_RPC_LIST,
+	OBJ_PROTO_CLI_RPC_LIST
 };
 
 #undef X
