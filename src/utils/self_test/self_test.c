@@ -1182,7 +1182,8 @@ exit_code:
 	return ret;
 }
 
-static int compare_print_results(char *section_name, char *input_section_name)
+static int compare_print_results(char *section_name, char *input_section_name,
+				 char *result_section_name)
 {
 	Config		*cfg_expected = NULL;
 	ConfigRet	 config_ret;
@@ -1387,6 +1388,7 @@ next_arg:
 		char	*tkey;
 		int	 j;
 		char	 range[RANGE_SIZE];
+		char	 compar_result[2 * RANGE_SIZE];
 		char	*results;
 		Config	*Ecfg = cfg_expected;
 
@@ -1480,7 +1482,7 @@ next_arg:
 					      (value <= upper))) {
 						passed = false;
 						results = "Failed:";
-						ret_value = -1;
+						/* ret_value = -1; */
 					}
 				} else if (status[i].flag & TST_HIGH) {
 					snprintf(range, RANGE_SIZE,
@@ -1491,7 +1493,7 @@ next_arg:
 					if (value >= upper) {
 						passed = false;
 						results = "Failed:";
-						ret_value = -1;
+						/* ret_value = -1; */
 					}
 				} else if (status[i].flag & TST_LOW) {
 					snprintf(range, RANGE_SIZE,
@@ -1503,7 +1505,7 @@ next_arg:
 					if (value <= lower) {
 						passed = false;
 						results = "Failed:";
-						ret_value = -1;
+						/* ret_value = -1; */
 					}
 				}
 
@@ -1514,6 +1516,9 @@ next_arg:
 				firstpass = false;
 				printf("   %s : %8d  %s %s\n",
 				       key, (int)value, results, range);
+				snprintf(compar_result, sizeof(compar_result),
+					 "%s %8d %s",
+					 results, (int)value, range);
 
 				/* Log error message */
 				if (!passed) {
@@ -1521,7 +1526,12 @@ next_arg:
 					D_INFO("%s %s range check\n",
 					       key, results);
 				}
+
+				/* Place results into result section */
+				ConfigAddString(cfg_output, result_section_name,
+						key, compar_result);
 increment_code:
+				/* loop control:*/
 				j++;
 				if (j == number_keys) {
 					j = 0;
@@ -1711,6 +1721,7 @@ static int test_msg_size(crt_context_t crt_ctx,
 	Config				*cfg = NULL;
 	char				*section_name = NULL;
 	char				*section_name_raw = NULL;
+	char				*section_name_result = NULL;
 	char				*str_send = NULL;
 	char				*str_put = NULL;
 	int				 ret_value = 0;
@@ -1928,6 +1939,17 @@ static int test_msg_size(crt_context_t crt_ctx,
 		}
 	}
 
+	/*
+	 * Create section for storing comparison results.
+	 * Remove previous results section.
+	 */
+	section_name_result = config_section_name_add(section_name,
+						      RESULT_EXTENSION);
+	if (section_name_result != NULL) {
+		/* avoid checkpatch warning */
+		config_create_section(cfg_output, section_name_result, true);
+	}
+
 	/* Create temporary configuration structure to store results */
 	cfg = ConfigNew();
 
@@ -1988,7 +2010,8 @@ static int test_msg_size(crt_context_t crt_ctx,
 	}
 
 	/* compare and output results */
-	ret_value = compare_print_results(section_name, input_section_name);
+	ret_value = compare_print_results(section_name, input_section_name,
+					  section_name_result);
 
 	/* Free up temporary configuration structure and others */
 	if (cfg != NULL) {
@@ -2002,6 +2025,10 @@ static int test_msg_size(crt_context_t crt_ctx,
 	if (section_name_raw != NULL) {
 		/* avoid checkpatch warning */
 		free(section_name_raw);
+	}
+	if (section_name_result != NULL) {
+		/* avoid checkpatch warning */
+		free(section_name_result);
 	}
 exit_code:
 	return ret_value;
