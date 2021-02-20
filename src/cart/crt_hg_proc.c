@@ -620,6 +620,7 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 	struct crt_rpc_priv	*rpc_priv;
 	crt_proc_op_t		 proc_op;
 	int			 rc = 0;
+	int			 rc2;
 
 	if (proc == CRT_PROC_NULL)
 		D_GOTO(out, rc = -DER_INVAL);
@@ -676,18 +677,17 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 			}
 		}
 
-		if (rpc_priv->crp_reply_hdr.cch_rc != 0) {
+		rc2 = rpc->priv->crp_reply_hdr.cch_rc;
+		if (rc2 != 0) {
 
 			if (rpc_priv->crp_reply_hdr.cch_rc != -DER_GRPVER)
 				RPC_ERROR(rpc_priv,
 					  "RPC failed to execute on target. "
-					  "error code: "DF_RC"\n",
-					  DP_RC(rpc_priv->crp_reply_hdr.cch_rc));
+					  "error code: "DF_RC"\n", DP_RC(rc2));
 			else
 				RPC_TRACE(DB_NET, rpc_priv,
 					  "RPC failed to execute on target. "
-					  "error code: "DF_RC"\n",
-					  DP_RC(rpc_priv->crp_reply_hdr.cch_rc));
+					  "error code: "DF_RC"\n", DP_RC(rc2));
 
 			D_GOTO(out, rc);
 		}
