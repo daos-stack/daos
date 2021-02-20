@@ -246,7 +246,18 @@ spi_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 	struct sched_pool_info	*spi = sched_rlink2spi(rlink);
 	unsigned int		 type;
 
-	D_ASSERT(!is_spi_inuse(spi));
+	/*
+	 * If server shutdown before disconnecting pools, pool cache
+	 * isn't cleared, so spi_gc_ults could be non-zero here.
+	 *
+	 * See pool_tls_fini(), it should be fixed by local cont/pool
+	 * close/disconnect on shutdown. Once that's fixed, following
+	 * two assertions could be changed to D_ASSERT(!is_spi_inuse()).
+	 */
+	D_ASSERTF(spi->spi_req_cnt == 0, "req_cnt:%u\n", spi->spi_req_cnt);
+	D_ASSERTF(spi->spi_gc_sleeping == 0, "gc_sleeping:%d\n",
+		  spi->spi_gc_sleeping);
+
 	for (type = SCHED_REQ_UPDATE; type < SCHED_REQ_MAX; type++) {
 		D_ASSERTF(pool2req_cnt(spi, type) == 0, "type:%u cnt:%u\n",
 			  type, pool2req_cnt(spi, type));
