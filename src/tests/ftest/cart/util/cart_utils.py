@@ -22,6 +22,8 @@ import cart_logtest
 import socket
 
 from general_utils import stop_processes
+from distutils.spawn import find_executable
+
 
 from write_host_file import write_host_file
 
@@ -297,7 +299,17 @@ class CartUtils():
         if tst_mod == "memcheck":
             tst_cmd += tst_vgd
 
+        # FIXME: Remove before merging
+        os.environ["USE_VALGRIND"] = "1"
+
         if tst_bin is not None:
+            if 'USE_VALGRIND' in os.environ:
+              valgrind = os.path.dirname(find_executable("valgrind"))
+              valgrind += "/valgrind"
+              tst_cmd += valgrind + " "
+            else:
+              self.print("WARNING: 'valgrind' executable not found.")
+
             tst_cmd += " " + tst_bin
 
         if tst_arg is not None:
