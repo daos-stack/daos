@@ -26,9 +26,9 @@ class CartNoPmixLauncherOneNodeTest(TestWithoutServers):
     def setUp(self):
         """ Test setup """
         print("Running setup\n")
+        super(CartNoPmixLauncherOneNodeTest, self).setUp()
         self.utils = CartUtils()
         self.env = self.utils.get_env(self)
-        super(CartNoPmixLauncherOneNodeTest, self).setUp()
 
     def tearDown(self):
         """ Tear down """

@@ -26,9 +26,9 @@ class CartCoRpcTwoNodeTest(TestWithoutServers):
     def setUp(self):
         """ Test setup """
         print("Running setup\n")
+        super(CartCoRpcTwoNodeTest, self).setUp()
         self.utils = CartUtils()
         self.env = self.utils.get_env(self)
-        super(CartCoRpcTwoNodeTest, self).setUp()
 
     def tearDown(self):
         """ Tear down """

@@ -89,9 +89,9 @@ class CartIvOneNodeTest(TestWithoutServers):
     def setUp(self):
         """ Test setup """
         print("Running setup\n")
+        super(CartIvOneNodeTest, self).setUp()
         self.utils = CartUtils()
         self.env = self.utils.get_env(self)
-        super(CartIvOneNodeTest, self).setUp()
 
     def tearDown(self):
         """ Tear down """

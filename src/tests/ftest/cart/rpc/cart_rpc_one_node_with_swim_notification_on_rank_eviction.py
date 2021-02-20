@@ -43,9 +43,9 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(TestWithoutServers):
     def setUp(self):
         """ Test setup """
         print("Running setup\n")
+        super(CartRpcOneNodeSwimNotificationOnRankEvictionTest, self).setUp()
         self.utils = CartUtils()
         self.env = self.utils.get_env(self)
-        super(CartRpcOneNodeSwimNotificationOnRankEvictionTest, self).setUp()
 
     def tearDown(self):
         """Tear down."""
