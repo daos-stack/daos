@@ -150,6 +150,9 @@ class CartUtils():
         env += " -x D_LOG_FILE={!s}".format(log_file)
         env += " -x D_LOG_FILE_APPEND_PID=1"
 
+        if os.environ.get("PATH") is not None:
+            env += " -x PATH"
+
         if log_mask is not None:
             env += " -x D_LOG_MASK={!s}".format(log_mask)
 
