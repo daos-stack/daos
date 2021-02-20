@@ -598,8 +598,8 @@ static const struct CMUnitTest dfs_par_tests[] = {
 static int
 dfs_setup(void **state)
 {
-	test_arg_t	*arg;
-	int		rc = 0;
+	test_arg_t		*arg;
+	int			rc = 0;
 
 	rc = test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE,
 			0, NULL);
@@ -608,22 +608,9 @@ dfs_setup(void **state)
 	arg = *state;
 
 	if (arg->myrank == 0) {
-		dfs_attr_t	attr = {0};
-
-		/**
-		 * Redundancy level higher than node can cause issues with
-		 * object placement in these tests running on limited numbers
-		 * of physical servers with multiple engines.
-		 */
-		attr.da_props = daos_prop_alloc(1);
-		assert_non_null(attr.da_props);
-		attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_LVL;
-		attr.da_props->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_NODE;
-
 		uuid_generate(co_uuid);
-		rc = dfs_cont_create(arg->pool.poh, co_uuid, &attr, &co_hdl,
+		rc = dfs_cont_create(arg->pool.poh, co_uuid, NULL, &co_hdl,
 				     &dfs_mt);
-		daos_prop_free(attr.da_props);
 		assert_int_equal(rc, 0);
 		printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 	}

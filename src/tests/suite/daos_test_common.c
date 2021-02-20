@@ -274,7 +274,7 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 	unsigned int		 seed;
 	int			 rc = 0;
 	daos_prop_t		 co_props = {0};
-	struct daos_prop_entry	 co_entries[4] = {0};
+	struct daos_prop_entry	 csum_entry[3] = {0};
 	struct daos_prop_entry	*entry;
 
 	/* feed a seed for pseudo-random number generator */
@@ -322,21 +322,12 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		arg->pool.destroyed = false;
 	}
 
-	/**
-	 * By default, use the node redundancy level to avoid problems with
-	 * object placement.
-	 */
-	entry = &co_entries[co_props.dpp_nr];
-	entry->dpe_type = DAOS_PROP_CO_REDUN_LVL;
-	entry->dpe_val = DAOS_PROP_CO_REDUN_NODE;
-	co_props.dpp_nr++;
-
 	/** Look at variables set by test arguments and setup container props */
 	if (dt_csum_type) {
 		print_message("\n-------\n"
 			      "Checksum enabled in test!"
 			      "\n-------\n");
-		entry = &co_entries[co_props.dpp_nr];
+		entry = &csum_entry[co_props.dpp_nr];
 		entry->dpe_type = DAOS_PROP_CO_CSUM;
 		entry->dpe_val = dt_csum_type;
 
@@ -344,14 +335,14 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 	}
 
 	if (dt_csum_chunksize) {
-		entry = &co_entries[co_props.dpp_nr];
+		entry = &csum_entry[co_props.dpp_nr];
 		entry->dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
 		entry->dpe_val = dt_csum_chunksize;
 		co_props.dpp_nr++;
 	}
 
 	if (dt_csum_server_verify) {
-		entry = &co_entries[co_props.dpp_nr];
+		entry = &csum_entry[co_props.dpp_nr];
 		entry->dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
 		entry->dpe_val = dt_csum_server_verify ?
 			DAOS_PROP_CO_CSUM_SV_ON :
@@ -361,7 +352,7 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 	}
 
 	if (co_props.dpp_nr > 0)
-		co_props.dpp_entries = co_entries;
+		co_props.dpp_entries = csum_entry;
 
 	while (!rc && step != arg->setup_state)
 		rc = test_setup_next_step(state, pool, NULL, &co_props);
