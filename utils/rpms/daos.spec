@@ -3,11 +3,11 @@
 %define agent_svc_name daos_agent.service
 
 %global mercury_version 2.0.1~rc1-1%{?dist}
-%global libfabric_version 1.11.1
+%global libfabric_version 1.12.0~rc1-1
 
 Name:          daos
 Version:       1.1.3
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -94,9 +94,9 @@ BuildRequires: libcurl4
 # have choice for libpsm_infinipath.so.1()(64bit) needed by libfabric1: libpsm2-compat libpsm_infinipath1
 # have choice for libpsm_infinipath.so.1()(64bit) needed by openmpi-libs: libpsm2-compat libpsm_infinipath1
 BuildRequires: libpsm_infinipath1
-%endif # 0%{?is_opensuse}
-%endif # (0%{?suse_version} >= 1315)
-%endif # (0%{?rhel} >= 7)
+%endif
+%endif
+%endif
 %if (0%{?suse_version} >= 1500)
 Requires: libpmem1 >= 1.8, libpmemobj1 >= 1.8
 %else
@@ -138,7 +138,7 @@ Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 Requires: libfabric >= %{libfabric_version}
 %{?systemd_requires}
-Obsoletes: cart
+Obsoletes: cart < 1000
 
 %description server
 This is the package needed to run a DAOS server
@@ -149,7 +149,7 @@ Requires: %{name} = %{version}-%{release}
 Requires: mercury = %{mercury_version}
 Requires: libfabric >= %{libfabric_version}
 Requires: fuse3 >= 3.4.2
-Obsoletes: cart
+Obsoletes: cart < 1000
 %if (0%{?suse_version} >= 1500)
 Requires: libfuse3-3 >= 3.4.2
 %else
@@ -412,6 +412,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Tue Feb 16 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.1.3-2
+- Update libfabric to v1.12.0rc1
+
 * Wed Feb 10 2021 Johann Lombardi <johann.lombardi@intel.com> 1.1.3-1
 - Version bump up to 1.1.3
 

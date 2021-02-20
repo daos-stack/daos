@@ -111,8 +111,7 @@ rebuild_pool_tls_destroy(struct rebuild_pool_tls *tls)
 }
 
 static void *
-rebuild_tls_init(const struct dss_thread_local_storage *dtls,
-		 struct dss_module_key *key)
+rebuild_tls_init(int xs_id, int tgt_id)
 {
 	struct rebuild_tls *tls;
 
@@ -296,8 +295,7 @@ rebuild_status_completed_remove(const uuid_t pool_uuid)
 }
 
 static void
-rebuild_tls_fini(const struct dss_thread_local_storage *dtls,
-		 struct dss_module_key *key, void *data)
+rebuild_tls_fini(void *data)
 {
 	struct rebuild_tls *tls = data;
 	struct rebuild_pool_tls *pool_tls;
