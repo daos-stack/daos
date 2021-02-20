@@ -1932,6 +1932,8 @@ done:
 			tmp_name, filename, strerror(errno));
 		rc = d_errno2der(errno);
 	}
+
+	D_DEBUG(DB_ALL, "Group config saved in %s\n", filename);
 out:
 	if (grp_priv && locked)
 		D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
@@ -2440,7 +2442,7 @@ crt_rank_self_set(d_rank_t rank)
 
 	default_grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 
-	D_DEBUG(DB_ALL, "Setting default group primary rank=%d\n", rank);
+	D_EMIT("Setting self rank to %d\n", rank);
 
 	if (!crt_is_service()) {
 		D_WARN("Setting self rank is not supported on client\n");

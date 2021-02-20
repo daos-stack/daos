@@ -675,10 +675,20 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 				crt_hlct_sync(hdr->cch_hlc);
 			}
 		}
+
 		if (rpc_priv->crp_reply_hdr.cch_rc != 0) {
-			RPC_ERROR(rpc_priv,
-				  "RPC failed to execute on target. error code: %d\n",
-				  rpc_priv->crp_reply_hdr.cch_rc);
+
+			if (rpc_priv->crp_reply_hdr.cch_rc != -DER_GRPVER)
+				RPC_ERROR(rpc_priv,
+					  "RPC failed to execute on target. "
+					  "error code: "DF_RC"\n",
+					  DP_RC(rpc_priv->crp_reply_hdr.cch_rc));
+			else
+				RPC_TRACE(DB_NET, rpc_priv,
+					  "RPC failed to execute on target. "
+					  "error code: "DF_RC"\n",
+					  DP_RC(rpc_priv->crp_reply_hdr.cch_rc));
+
 			D_GOTO(out, rc);
 		}
 	}
