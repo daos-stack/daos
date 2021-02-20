@@ -23,6 +23,12 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <byteswap.h>
+#ifdef DAOS_HAS_VALGRIND
+#include <valgrind/valgrind.h>
+#define DAOS_ON_VALGRIND RUNNING_ON_VALGRIND
+#else
+#define DAOS_ON_VALGRIND 0
+#endif
 
 #include <daos_errno.h>
 #include <daos/debug.h>

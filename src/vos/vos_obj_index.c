@@ -251,6 +251,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 	}
 	obj = val_iov.iov_buf;
 
+	vos_ilog_ts_ignore(vos_cont2umm(cont), &obj->vo_ilog);
 	vos_ilog_ts_mark(ts_set, &obj->vo_ilog);
 do_log:
 	if (!log)
