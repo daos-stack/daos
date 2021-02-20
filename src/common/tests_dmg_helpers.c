@@ -584,14 +584,14 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 	for (i = 0; i < dev_length; i++) {
 		dev = json_object_array_get_idx(smd_dev, i);
 
-		tmp_var =  strtok(host, ":") + 1;
-		if (!tmp_var) {
+		tmp_var =  strtok(host, ":");
+		if (tmp_var == NULL) {
 			D_ERROR("Hostname is empty\n");
 			return -DER_INVAL;
 		}
 
 		snprintf(devices[*disks].host, sizeof(devices[*disks].host),
-			 "%s", tmp_var);
+			 "%s", tmp_var + 1);
 
 		if (!json_object_object_get_ex(dev, "uuid", &tmp)) {
 			D_ERROR("unable to extract uuid from JSON\n");
