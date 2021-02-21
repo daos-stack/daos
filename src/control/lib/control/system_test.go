@@ -1124,6 +1124,8 @@ func TestControl_SystemNotify(t *testing.T) {
 
 func TestControl_EventForwarder_OnEvent(t *testing.T) {
 	rasEventRankDown := events.NewRankDownEvent("foo", 0, 0, common.NormalExit)
+	rasEventRankDownNF := events.NewRankDownEvent("foo", 0, 0, common.NormalExit).
+		WithForwardable(false)
 
 	for name, tc := range map[string]struct {
 		aps            []string
@@ -1141,6 +1143,10 @@ func TestControl_EventForwarder_OnEvent(t *testing.T) {
 			event:          rasEventRankDown,
 			aps:            []string{"192.168.1.1"},
 			expInvokeCount: 2,
+		},
+		"skip non-forwardable event": {
+			event: rasEventRankDownNF,
+			aps:   []string{"192.168.1.1"},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1175,7 +1181,7 @@ func TestControl_EventForwarder_OnEvent(t *testing.T) {
 func TestControl_EventLogger_OnEvent(t *testing.T) {
 	rasEventRankDown := events.NewRankDownEvent("foo", 0, 0, common.NormalExit)
 	rasEventRankDownFwded := events.NewRankDownEvent("foo", 0, 0, common.NormalExit).
-		WithIsForwarded(true)
+		WithForwarded(true)
 
 	for name, tc := range map[string]struct {
 		event        *events.RASEvent

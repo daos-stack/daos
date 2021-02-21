@@ -43,7 +43,6 @@ func NewEngineHarness(log logging.Logger) *EngineHarness {
 	return &EngineHarness{
 		log:              log,
 		instances:        make([]*EngineInstance, 0),
-		started:          atm.NewBool(false),
 		rankReqTimeout:   defaultRequestTimeout,
 		rankStartTimeout: defaultStartTimeout,
 	}
