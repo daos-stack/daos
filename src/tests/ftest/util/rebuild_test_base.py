@@ -127,10 +127,10 @@ class RebuildTestBase(TestWithServers):
         # Exclude the rank from the pool to initiate rebuild
         if isinstance(self.inputs.rank.value, list):
             self.server_managers[0].stop_ranks(
-                self.inputs.rank.value, self.d_log)
+                self.inputs.rank.value, self.d_log, force=True)
         else:
             self.server_managers[0].stop_ranks(
-                [self.inputs.rank.value], self.d_log)
+                [self.inputs.rank.value], self.d_log, force=True)
 
         # Wait for rebuild to start
         self.pool.wait_for_rebuild(True, 1)
