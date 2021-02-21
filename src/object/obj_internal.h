@@ -201,10 +201,15 @@ struct migrate_pool_tls {
 	daos_handle_t		mpt_migrated_root_hdl;
 	struct btr_root		mpt_migrated_root;
 
-	/* Hash table to store the container uuids which have already been
-	 * deleted (used by reintegration)
+	/* Array of hash tables to store object IDs that have already been
+	 * deleted (used by reintegration).
+	 *
+	 * Each table is created once on the main migrate xstream prior to
+	 * moving any data, then accessed only from its respective xstream
+	 *
+	 * There will be one table per target
 	 */
-	struct d_hash_table	mpt_del_obj_tab;
+	struct d_hash_table	*mpt_del_tabs;
 
 	/* Service rank list for migrate fetch RPC */
 	d_rank_list_t		mpt_svc_list;

@@ -273,6 +273,88 @@ obj_tree_insert(daos_handle_t toh, uuid_t co_uuid, daos_unit_oid_t oid,
 	return rc;
 }
 
+/**
+ * Hash table entry containing a UUID & shard that has already been seen
+ * during migration and has already been deleted - it should not be deleted
+ * again the next time it is encountered.
+ *
+ * Note that the data fields here are the non-padding fields from daos_unit_id_t
+ */
+struct migrate_del_obj_key {
+	/** Object that has already been initialized */
+	daos_obj_id_t		id_pub;
+	uint32_t		id_shard;
+
+	/** link chain on hash */
+	d_list_t		obj_link;
+};
+
+static bool
+migrate_del_obj_key_cmp(struct d_hash_table *htab, d_list_t *link,
+			const void *key, unsigned int ksize)
+{
+	struct migrate_del_obj_key *rec =
+		container_of(link, struct migrate_del_obj_key, obj_link);
+
+	D_ASSERT(ksize == sizeof(daos_obj_id_t) + sizeof(uint32_t));
+	return memcmp(key, rec, ksize) == 0;
+}
+
+static void
+migrate_del_obj_key_free(struct d_hash_table *htab, d_list_t *link)
+{
+	struct migrate_del_obj_key *rec =
+		container_of(link, struct migrate_del_obj_key, obj_link);
+	D_FREE(rec);
+}
+
+static d_hash_table_ops_t migrate_del_obj_tab_ops = {
+	.hop_key_cmp	= migrate_del_obj_key_cmp,
+	.hop_rec_free	= migrate_del_obj_key_free
+};
+
+static void
+destroy_del_obj_tables(struct migrate_pool_tls *pool_tls) {
+	int i;
+
+	if (pool_tls->mpt_del_tabs != NULL)
+		return;
+
+	for (i = 0; i < dss_tgt_nr; i++)
+		d_hash_table_destroy_inplace(&pool_tls->mpt_del_tabs[i],
+					     true /* force */);
+
+	D_FREE(pool_tls->mpt_del_tabs);
+}
+
+static int
+create_del_obj_tables(struct migrate_pool_tls *pool_tls) {
+	int rc;
+	int i;
+
+	D_ALLOC_ARRAY(pool_tls->mpt_del_tabs, dss_tgt_nr);
+	if (pool_tls->mpt_del_tabs == NULL)
+		return -DER_NOMEM;
+
+	for (i = 0; i < dss_tgt_nr; i++) {
+		/* NOTE: This hash table should be sized to the expected
+		 * number of objects per target.
+		 */
+		rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK,
+						 20, /* bits */
+						 NULL,
+						 &migrate_del_obj_tab_ops,
+						 &pool_tls->mpt_del_tabs[i]);
+		if (rc) {
+			destroy_del_obj_tables(pool_tls);
+			return rc;
+		}
+
+	}
+
+	return DER_SUCCESS;
+}
+
 void
 migrate_pool_tls_destroy(struct migrate_pool_tls *tls)
 {
@@ -284,9 +366,8 @@ migrate_pool_tls_destroy(struct migrate_pool_tls *tls)
 	if (tls->mpt_svc_list.rl_ranks)
 		D_FREE(tls->mpt_svc_list.rl_ranks);
 
-	if (tls->mpt_del_local_objs)
-		d_hash_table_destroy_inplace(&tls->mpt_del_obj_tab,
-					     true /* force */);
+	destroy_del_obj_tables(tls);
+
 	if (tls->mpt_done_eventual)
 		ABT_eventual_free(&tls->mpt_done_eventual);
 	if (daos_handle_is_valid(tls->mpt_root_hdl))
@@ -335,46 +416,6 @@ migrate_pool_tls_lookup(uuid_t pool_uuid, unsigned int ver)
 	return found;
 }
 
-/**
- * Hash table entry containing a UUID & shard that has already been seen
- * during migration and has already been deleted - it should not be deleted
- * again the next time it is encountered.
- *
- * Note that the data fields here are the non-padding fields from daos_unit_id_t
- */
-struct migrate_del_obj_key {
-	/** Object that has already been initialized */
-	daos_obj_id_t		id_pub;
-	uint32_t		id_shard;
-
-	/** link chain on hash */
-	d_list_t		obj_link;
-};
-
-static bool
-migrate_del_obj_key_cmp(struct d_hash_table *htab, d_list_t *link,
-			const void *key, unsigned int ksize)
-{
-	struct migrate_del_obj_key *rec =
-		container_of(link, struct migrate_del_obj_key, obj_link);
-
-	D_ASSERT(ksize == sizeof(daos_obj_id_t) + sizeof(uint32_t));
-	return memcmp(key, rec, ksize) == 0;
-}
-
-static void
-migrate_del_obj_key_free(struct d_hash_table *htab, d_list_t *link)
-{
-	struct migrate_del_obj_key *rec =
-		container_of(link, struct migrate_del_obj_key, obj_link);
-	D_FREE(rec);
-}
-
-static d_hash_table_ops_t migrate_del_obj_tab_ops = {
-	.hop_key_cmp	= migrate_del_obj_key_cmp,
-	.hop_rec_free	= migrate_del_obj_key_free
-};
-
 struct migrate_pool_tls_create_arg {
 	uuid_t	pool_uuid;
 	uuid_t	pool_hdl_uuid;
@@ -385,7 +426,8 @@ struct migrate_pool_tls_create_arg {
 	int	del_local_objs;
 };
 
-int migrate_pool_tls_create_one(void *data)
+int
+migrate_pool_tls_create_one(void *data)
 {
 	struct migrate_pool_tls_create_arg *arg = data;
 	struct obj_tls			   *tls = obj_tls_get();
@@ -425,9 +467,12 @@ int migrate_pool_tls_create_one(void *data)
 	pool_tls->mpt_del_local_objs = arg->del_local_objs;
 
 	if (pool_tls->mpt_del_local_objs) {
-		rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK, 8, NULL,
-						 &migrate_del_obj_tab_ops,
-						 &pool_tls->mpt_del_obj_tab);
+		/* Local objects should be deleted prior to migration
+		 *
+		 * Create one hash table per target to track objects that
+		 * have already been seen & deleted
+		 */
+		rc = create_del_obj_tables(pool_tls);
 		if (rc)
 			D_GOTO(out, rc);
 	}
@@ -2074,6 +2119,152 @@ struct migrate_obj_val {
 	uint32_t	tgt_idx;
 };
 
+/* Destroys an object exactly one time per migration session. Uses the
+ * mpt_del_obj_tab field of the tls to store which object ids have already
+ * been deleted this session.
+ *
+ * Only used for reintegration
+ *
+ * Must be called on the appropriate VOS target xstream!
+ */
+static int
+destroy_existing_obj(struct migrate_pool_tls *tls, unsigned int tgt_idx,
+		     daos_unit_oid_t *oid, uuid_t cont_uuid)
+{
+	d_list_t *link;
+	int rc;
+
+	/* NOTE:
+	 * Note that only the object ID + shard is stored in the hash table, not
+	 * the padding that is also included in the daos_unit_oid_t struct
+	 * There will be many objects inserted in this hash table and so as
+	 * little data should be stored there as possible
+	 */
+	link = d_hash_rec_find(&tls->mpt_del_tabs[tgt_idx], oid,
+			       sizeof(daos_obj_id_t) + sizeof(uint32_t));
+	if (!link) {
+		/* Not actually storing anything in the table - just using it
+		 * to test set membership. The link stored is just the simplest
+		 * base list type
+		 */
+		struct migrate_del_obj_key *key;
+		struct ds_cont_child *cont;
+
+		rc = ds_cont_child_open_create(tls->mpt_pool_uuid,
+					       cont_uuid,
+					       &cont);
+		if (rc) {
+			D_WARN("Failed to open cont prior to migration; pool="
+			       DF_UUID" cont="DF_UUID"\n",
+			       DP_UUID(tls->mpt_pool_uuid), DP_UUID(cont_uuid));
+			/* This failure is not fatal - the object can't be
+			 * deleted, but it probably doesn't need to be if
+			 * the container can't even be opened. Proceed onwards,
+			 * marking the object as being ready to start migration
+			 */
+			D_GOTO(mark_obj_deleted, rc);
+		}
+
+		rc = vos_obj_delete(cont->sc_hdl, *oid);
+		if (rc != 0)
+			D_ERROR("Migrate failed to destroy object prior to "
+				"reintegration: pool/object "DF_UUID"/"DF_UOID
+				" rc: "DF_RC"\n",
+				DP_UUID(tls->mpt_pool_uuid), DP_UOID(*oid),
+				DP_RC(rc));
+			/*
+			 * Despite this error, continue anyway to add this key
+			 * to the table. Attempting to delete this object again
+			 * later will only make things worse
+			 */
+		else
+			D_DEBUG(DB_REBUILD,
+				"destroyed pool/object "DF_UUID"/"DF_UOID
+				" before reintegration\n",
+				DP_UUID(tls->mpt_pool_uuid), DP_UOID(*oid));
+
+		ds_cont_child_put(cont);
+
+mark_obj_deleted:
+
+		/* Insert a link into the hash table to mark this cont_uuid as
+		 * having already been initialized
+		 */
+		D_ALLOC_PTR(key);
+		if (key == NULL)
+			return -DER_NOMEM;
+
+		key->id_pub.hi = oid->id_pub.hi;
+		key->id_pub.lo = oid->id_pub.lo;
+		key->id_shard = oid->id_shard;
+
+		D_INIT_LIST_HEAD(&key->obj_link);
+		rc = d_hash_rec_insert(&tls->mpt_del_tabs[tgt_idx], key,
+				       sizeof(daos_obj_id_t) + sizeof(uint32_t),
+				       &key->obj_link, true);
+		if (rc) {
+			D_ERROR("Failed to insert uuid table entry "DF_RC"\n",
+				DP_RC(rc));
+			D_FREE(key);
+			return rc;
+		}
+	}
+
+	return DER_SUCCESS;
+}
+
+/* This ULT runs on the target where the data will ultimately be migrated
+ * to do any needed preparation work prior to actually doing object migration
+ *
+ * Reintegration uses this to delete objects prior to migrating them
+ */
+static void
+migrate_one_obj_prepare_ult(void *data)
+{
+	struct iter_obj_arg	*arg = data;
+	struct migrate_pool_tls	*tls = NULL;
+	int			rc;
+
+	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version);
+	D_ASSERT(tls != NULL);
+
+	if (tls->mpt_del_local_objs) {
+		/* Destroy this object ID locally prior to migration if this
+		 * is the first time the object ID is seen.
+		 *
+		 * Otherwise this will store the ID in the per-target hash table
+		 * so it is not destroyed again later.
+		 *
+		 * Because this function is running on the target xstream and
+		 * does not yield, this serves as an effective gate so that
+		 * any subsequent migration requests for this object will not
+		 * be able to run until the object is destroyed initially
+		 */
+		rc = destroy_existing_obj(tls, arg->tgt_idx, &arg->oid,
+					  arg->cont_uuid);
+		if (rc) {
+			/* An error will only be thrown here for an important
+			 * reason - no error will be generated if the object
+			 * simply can't be deleted. Any error returned here
+			 * should halt this object migration.
+			 */
+			D_ERROR("destroy_existing_obj failed: "DF_RC"\n",
+				DP_RC(rc));
+			/* TODO: Error handling here? This is bad */
+			return;
+		}
+	}
+
+	/* Let's iterate the object on different xstream */
+	rc = dss_ult_create(migrate_obj_ult, data, DSS_XS_VOS,
+			    arg->oid.id_pub.lo % dss_tgt_nr, MIGRATE_STACK_SIZE,
+			    NULL);
+	/* TODO: Error handling here? This is bad */
+
+	return;
+}
+
+/* This is still running on the main migration ULT */
 static int
 migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, unsigned int shard,
 		   unsigned int tgt_idx, void *data)
@@ -2105,10 +2296,9 @@ migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, unsigned int shard,
 		       sizeof(*obj_arg->snaps) * cont_arg->snap_cnt);
 	}
 
-	/* Let's iterate the object on different xstream */
-	rc = dss_ult_create(migrate_obj_ult, obj_arg, DSS_XS_VOS,
-			    oid.id_pub.lo % dss_tgt_nr, MIGRATE_STACK_SIZE,
-			    NULL);
+	/* Launch the migrate_one prepare ULT on the target xstream */
+	rc = dss_ult_create(migrate_one_obj_prepare_ult, obj_arg, DSS_XS_VOS,
+			    tgt_idx, MIGRATE_STACK_SIZE, NULL);
 	if (rc == 0) {
 		struct migrate_pool_tls *tls = cont_arg->pool_tls;
 		daos_handle_t		toh = tls->mpt_migrated_root_hdl;
@@ -2140,78 +2330,6 @@ free:
 
 #define DEFAULT_YIELD_FREQ	128
 
-/* Destroys an object exactly one time per migration session. Uses the
- * mpt_del_obj_tab field of the tls to store which object ids have already
- * been deleted this session.
- *
- * Only used for reintegration
- */
-static int
-destroy_existing_obj(struct migrate_pool_tls *tls, daos_unit_oid_t *oid,
-		     daos_handle_t coh)
-{
-	d_list_t *link;
-	int rc;
-
-	/* NOTE:
-	 * Note that only the object ID + shard is stored in the hash table, not
-	 * the padding that is also included in the daos_unit_oid_t struct
-	 * There will be many objects inserted in this hash table and so as
-	 * little data should be stored there as possible
-	 */
-	link = d_hash_rec_find(&tls->mpt_del_obj_tab, oid,
-			       sizeof(daos_obj_id_t) + sizeof(uint32_t));
-	if (!link) {
-		/* Not actually storing anything in the table - just using it
-		 * to test set membership. The link stored is just the simplest
-		 * base list type
-		 */
-		struct migrate_del_obj_key *key;
-
-		rc = vos_obj_delete(coh, *oid);
-		if (rc != 0)
-			D_ERROR("Migrate failed to destroy object prior to "
-				"reintegration: pool/object "DF_UUID"/"DF_UOID
-				" rc: "DF_RC"\n",
-				DP_UUID(tls->mpt_pool_uuid), DP_UOID(*oid),
-				DP_RC(rc));
-			/*
-			 * Despite this error, continue anyway to add this key
-			 * to the table. Attempting to delete this object again
-			 * later will only make things worse
-			 */
-		else
-			D_DEBUG(DB_REBUILD,
-				"destroyed pool/object "DF_UUID"/"DF_UOID
-				" before reintegration\n",
-				DP_UUID(tls->mpt_pool_uuid), DP_UOID(*oid));
-
-		/* Insert a link into the hash table to mark this cont_uuid as
-		 * having already been initialized
-		 */
-		D_ALLOC_PTR(key);
-		if (key == NULL)
-			return -DER_NOMEM;
-
-		key->id_pub.hi = oid->id_pub.hi;
-		key->id_pub.lo = oid->id_pub.lo;
-		key->id_shard = oid->id_shard;
-
-		D_INIT_LIST_HEAD(&key->obj_link);
-		rc = d_hash_rec_insert(&tls->mpt_del_obj_tab, key,
-				       sizeof(daos_obj_id_t) + sizeof(uint32_t),
-				       &key->obj_link, true);
-		if (rc) {
-			D_ERROR("Failed to insert uuid table entry "DF_RC"\n",
-				DP_RC(rc));
-			D_FREE(key);
-			return rc;
-		}
-	}
-
-	return DER_SUCCESS;
-}
-
 static int
 migrate_obj_iter_cb(daos_handle_t ih, d_iov_t *key_iov, d_iov_t *val_iov,
 		    void *data)
@@ -2226,30 +2344,6 @@ migrate_obj_iter_cb(daos_handle_t ih, d_iov_t *key_iov, d_iov_t *val_iov,
 
 	if (arg->pool_tls->mpt_fini)
 		return 1;
-
-	if (arg->pool_tls->mpt_del_local_objs) {
-		/* TODO:
-		 *
-		 * This code needs to move. The arg->cont_hdl here is not the
-		 * correct container handle (here it's the client container
-		 * handle, which isn't useful for local deletes).
-		 *
-		 * This will need to either open the container here... or
-		 * move this entire code down underneath somewhere where the
-		 * local server container handle is available (migrate_dkey)
-		 */
-		rc = destroy_existing_obj(arg->pool_tls, oid, arg->cont_hdl);
-		if (rc) {
-			/* An error will only be thrown here for an important
-			 * reason - no error will be generated if the object
-			 * simply can't be deleted. Any error returned here
-			 * should halt this object migration.
-			 */
-			D_ERROR("destroy_existing_obj failed: "DF_RC"\n",
-				DP_RC(rc));
-			return rc;
-		}
-	}
 
 	D_DEBUG(DB_REBUILD, "obj migrate "DF_UUID"/"DF_UOID" %"PRIx64
 		" eph "DF_U64" start\n", DP_UUID(arg->cont_uuid), DP_UOID(*oid),
