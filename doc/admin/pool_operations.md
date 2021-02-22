@@ -7,9 +7,8 @@ management interface.
 
 ## Pool Creation/Destroy
 
-A DAOS pool can be created and destroyed through the DAOS management API
-(see daos_mgmt.h). DAOS also provides a utility called dmg to manage
-storage pools from the command line.
+A DAOS pool can be created and destroyed through a utility called dmg to
+manage storage pools from the command line.
 
 **To create a pool:**
 ```bash
@@ -21,8 +20,7 @@ target size on each server that is comprised of N TB of NVMe storage
 and N * 0.06 (i.e. 6% of NVMe) of SCM storage. The default SCM:NVMe ratio
 may be adjusted at pool creation time as described below.
 The UUID allocated to the newly created pool is printed to stdout
-(referred to as ${puuid}) as well as the pool service replica ranks
-(referred to as ${svcl}).
+(referred to as ${puuid}) as well as the pool service replica ranks.
 
 NB: The --scm-size and --nvme-size options still exist, but should be
 considered deprecated and will likely be removed in a future release.
@@ -98,9 +96,6 @@ a106d667-5c5d-4d6f-ac3a-89099196c41a	0
 
 ## Pool Properties
 
-At creation time, a list of pool properties can be specified through the
-API (not supported by the tool yet):
-
 | **Pool Property**        | **Description** |
 | ------------------------ | --------------- |
 | `DAOS_PROP_PO_LABEL`<img width=80/>| A string that the administrator can associate with a pool.  e.g., project A, project B, IO500 test pool|
@@ -108,6 +103,8 @@ API (not supported by the tool yet):
 | `DAOS_PROP_PO_SPACE_RB`  | Space reserved on each target for rebuild purpose|
 | `DAOS_PROP_PO_SELF_HEAL` | Define whether the pool wants automatically-trigger or manually-triggered self-healing|
 | `DAOS_PROP_PO_RECLAIM`   | Tune space reclaim strategy based on time interval, io activities|
+
+At creation time, currently only ACL may be specified via dmg pool create.
 
 While those pool properties are currently stored persistently with pool
 metadata, many of them are still under development. Moreover, the
@@ -127,6 +124,32 @@ Three reclaim strategies are supported:
 * "disabled" : Never trigger aggregation.
 * "lazy"     : Trigger aggregation only when there is no IO activities or SCM free space is under pressure (default strategy)
 * "time"     : Trigger aggregation regularly despite of IO activities.
+
+### Querying a pool's properties
+
+The user-level administration `daos` utility may be used to query a pool's
+properties. Refer to the manual page for full `daos` usage details.
+
+```bash
+$ daos pool get-prop --pool=b1e9f5c0-ce10-42ab-b19e-081032400611
+Pool properties for b1e9f5c0-ce10-42ab-b19e-081032400611 :
+label:                  pool label not set
+rebuild space ratio:    0%
+self-healing:           auto-exclude,auto-rebuild
+reclaim strategy:       lazy
+owner:                  username@
+owner-group:            username@
+Access Control List:
+#
+# (remainder of output not shown)
+#
+```
+
+Additionally, a pool's properties may be retrieved using the libdaos API
+daos_pool_query() function. Refer to the file src/include/daos_pool.h
+Doxygen comments and the online documentation available
+[here](https://daos-stack.github.io/html/).
+
 
 ## Access Control Lists
 
@@ -163,7 +186,7 @@ be explicitly defined by an administrator in the pool ACL.
 To create a pool with a custom ACL:
 
 ```bash
-$ dmg pool create --scm-size <size> --acl-file <path>
+$ dmg pool create --size <size> --acl-file <path>
 ```
 
 The ACL file format is detailed in the [here](https://daos-stack.github.io/overview/security/#acl-file).
@@ -261,6 +284,13 @@ The total and free sizes are the sum across all the targets whereas
 min/max/mean gives information about individual targets. A min value
 close to 0 means that one target is running out of space.
 
+NB: the Versioning Object Store (VOS) may reserve a portion of the
+SCM and NVMe allocations to mitigate fragmentation and for background
+operations (e.g., aggregation, garbage collection). The amount of storage
+set aside depends on the size of the target, and may take up 2+ GB.
+Therefore, out of space conditions may occur even while pool query may not
+reveal min approaching zero.
+
 The example below shows a rebuild in progress and NVMe space allocated.
 
 ```bash
@@ -278,7 +308,7 @@ The example below shows a rebuild in progress and NVMe space allocated.
 ```
 
 Additional status and telemetry data are planned to be exported through
-the management API and tool and will be documented here once available.
+management tools and will be documented here once available.
 
 ## Pool Modifications
 
@@ -364,7 +394,7 @@ $ dmg pool reintegrate --pool=${puuid} --rank=5 --target-idx=0,1
 #### Target Addition & Space Rebalancing
 
 Full Support for online target addition and automatic space rebalancing is
-planned for DAOS v1.4 and will be documented here once available.
+planned for a future release and will be documented here once available.
 
 Until then the following command(s) are placeholders and offer limited
 functionality related to Online Server Addition/Rebalancing operations.

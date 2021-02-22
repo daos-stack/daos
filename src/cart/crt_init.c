@@ -29,10 +29,10 @@ dump_envariables(void)
 		"FI_UNIVERSE_SIZE", "CRT_DISABLE_MEM_PIN",
 		"FI_OFI_RXM_USE_SRX" };
 
-	D_DEBUG(DB_ALL, "-- ENVARS: --\n");
+	D_INFO("-- ENVARS: --\n");
 	for (i = 0; i < ARRAY_SIZE(envars); i++) {
 		val = getenv(envars[i]);
-		D_DEBUG(DB_ALL, "%s = %s\n", envars[i], val);
+		D_INFO("%s = %s\n", envars[i], val);
 	}
 }
 
@@ -183,8 +183,10 @@ static int data_init(int server, crt_init_options_t *opt)
 		d_getenv_int("CRT_CTX_NUM", &ctx_num);
 		crt_gdata.cg_ctx_max_num = ctx_num;
 	}
+
 	D_DEBUG(DB_ALL, "set cg_sep_mode %d, cg_ctx_max_num %d.\n",
 		crt_gdata.cg_sep_mode, crt_gdata.cg_ctx_max_num);
+
 	if (crt_gdata.cg_sep_mode == false && crt_gdata.cg_ctx_max_num > 1)
 		D_WARN("CRT_CTX_NUM has no effect because CRT_CTX_SHARE_ADDR "
 		       "is not set or set to 0\n");
