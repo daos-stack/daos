@@ -522,11 +522,19 @@ dss_xstream_alloc(hwloc_cpuset_t cpus)
 		D_ERROR("Can not allocate execution stream.\n");
 		return NULL;
 	}
+	dx->dx_stopping = ABT_FUTURE_NULL;
+	dx->dx_shutdown = ABT_FUTURE_NULL;
+
+	rc = ABT_future_create(1, NULL, &dx->dx_stopping);
+	if (rc != 0) {
+		D_ERROR("failed to allocate 'stopping' future\n");
+		D_GOTO(err_free, rc = dss_abterr2der(rc));
+	}
 
 	rc = ABT_future_create(1, NULL, &dx->dx_shutdown);
 	if (rc != 0) {
-		D_ERROR("failed to allocate future\n");
-		D_GOTO(err_free, rc = dss_abterr2der(rc));
+		D_ERROR("failed to allocate 'shutdown' future\n");
+		D_GOTO(err_future, rc = dss_abterr2der(rc));
 	}
 
 	dx->dx_cpuset = hwloc_bitmap_dup(cpus);
@@ -545,7 +553,10 @@ dss_xstream_alloc(hwloc_cpuset_t cpus)
 	return dx;
 
 err_future:
-	ABT_future_free(&dx->dx_shutdown);
+	if (dx->dx_shutdown != ABT_FUTURE_NULL)
+		ABT_future_free(&dx->dx_shutdown);
+	if (dx->dx_stopping != ABT_FUTURE_NULL)
+		ABT_future_free(&dx->dx_stopping);
 err_free:
 	D_FREE(dx);
 	return NULL;
@@ -711,6 +722,14 @@ dss_xstreams_fini(bool force)
 	rc = bio_nvme_ctl(BIO_CTL_NOTIFY_STARTED, &started);
 	D_ASSERT(rc == 0);
 
+	/* Notify all xstreams to reject new ULT creation first */
+	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
+		dx = xstream_data.xd_xs_ptrs[i];
+		if (dx == NULL)
+			continue;
+		ABT_future_set(dx->dx_stopping, dx);
+	}
+
 	/** Stop & free progress ULTs */
 	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
 		dx = xstream_data.xd_xs_ptrs[i];
@@ -725,6 +744,7 @@ dss_xstreams_fini(bool force)
 		ABT_thread_join(dx->dx_progress);
 		ABT_thread_free(&dx->dx_progress);
 		ABT_future_free(&dx->dx_shutdown);
+		ABT_future_free(&dx->dx_stopping);
 	}
 
 	/** Wait for each execution stream to complete */
