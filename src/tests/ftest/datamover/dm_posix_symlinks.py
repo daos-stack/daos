@@ -7,6 +7,7 @@
 from data_mover_test_base import DataMoverTestBase
 from os.path import join
 
+
 class DmPosixSymlinks(DataMoverTestBase):
     # pylint: disable=too-many-ancestors
     """Test class for POSIX DataMover symlink validation
@@ -39,6 +40,10 @@ class DmPosixSymlinks(DataMoverTestBase):
                 - Links that point backward one level
                 - Links that are transitive (link -> dir -> link)
             4. Test copying between DAOS and POSIX
+
+        Args:
+            tool (str): The DataMover tool to run the test with.
+                Must be a valid tool in self.TOOLS.
 
         NOTE:
             Different symlink structures are created with the
