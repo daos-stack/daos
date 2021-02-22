@@ -208,23 +208,21 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 			 * for rebuild, perhaps they should be unified.
 			 */
 			if (l_shard->po_shard != -1) {
-				D_ASSERT(f_shard->fs_tgt_id != -1);
 				if (*idx >= array_size)
 					/*
 					 * Not enough space for this layout in
 					 * the buffer provided by the caller
 					 */
 					return -DER_REC2BIG;
-				tgt_id[*idx] = f_shard->fs_tgt_id;
+				tgt_id[*idx] = l_shard->po_target;
 				shard_idx[*idx] = l_shard->po_shard;
 				(*idx)++;
 			}
 		} else {
-			D_DEBUG(DB_REBUILD, ""DF_OID" skip id %u idx %u"
+			D_DEBUG(DB_REBUILD, ""DF_OID" skip idx %u"
 				"fseq:%d(status:%d)? rbd_ver:%d\n",
-				DP_OID(md->omd_id), f_shard->fs_tgt_id,
-				f_shard->fs_shard_idx, f_shard->fs_fseq,
-				f_shard->fs_status, r_ver);
+				DP_OID(md->omd_id), f_shard->fs_shard_idx,
+				f_shard->fs_fseq, f_shard->fs_status, r_ver);
 		}
 	}
 
@@ -320,10 +318,8 @@ next_fail:
 		 * skip this shard.
 		 */
 		if (f_shard->fs_status == PO_COMP_ST_DOWN ||
-		    f_shard->fs_status == PO_COMP_ST_DRAIN) {
+		    f_shard->fs_status == PO_COMP_ST_DRAIN)
 			l_shard->po_rebuilding = 1;
-			f_shard->fs_tgt_id = spare_tgt->ta_comp.co_id;
-		}
 	} else {
 		l_shard->po_shard = -1;
 		l_shard->po_target = -1;
