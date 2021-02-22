@@ -72,7 +72,6 @@ RUN yum clean all && \
         python36-scons \
         readline-devel \
         sg3_utils \
-        ShellCheck \
         valgrind-devel \
         yasm && \
     yum clean all
@@ -95,17 +94,13 @@ RUN yum -y install python36-clustershell
 
 RUN pip3 install --upgrade pip
 
-USER daos_server:daos_server
-RUN pip3 --no-cache-dir install --user \
+RUN pip3 --no-cache-dir install \
     "avocado-framework<83.0" \
     "avocado-framework-plugin-result-html<83.0" \
     "avocado-framework-plugin-varianter-yaml-to-mux<83.0" \
-    codespell \
     pep8 \
     pygit2 \
-    pygithub \
     python-magic
-USER root:root
 
 # Add codespell to path.
 ENV PATH=$PATH:/home/daos/.local/bin
