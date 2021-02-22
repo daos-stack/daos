@@ -424,6 +424,11 @@ boolean skip_build_on_centos7_gcc_release() {
            quickbuild()
 }
 
+boolean skip_build_on_centos8_gcc_dev() {
+    return skip_stage('build-centos8-gcc-dev') ||
+           quickbuild()
+}
+
 boolean skip_build_on_landing_branch() {
     return env.BRANCH_NAME != target_branch ||
            quickbuild()
@@ -917,10 +922,46 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on CentOS 7 with Clang') {
+                stage('Build on CentOS 8') {
                     when {
                         beforeAgent true
-                        expression { ! skip_build_on_landing_branch() }
+                        expression { ! skip_build_on_centos8_gcc_dev() }
+                     }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.centos.8'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(qb: quickbuild(),
+                                                                deps_build:true) +
+                                                " -t ${sanitized_JOB_NAME}-centos8 " +
+                                                " --build-arg CB0=" + current_time.get(Calendar.WEEK_OF_YEAR)
+                        }
+                    }
+                    steps {
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_args: scons_faults_args() + " PREFIX=/opt/daos TARGET_TYPE=dev",
+                                   build_deps: "no"
+                    }
+                    post {
+                        always {
+                            recordIssues enabledForFailure: true,
+                                         aggregatingResults: true,
+                                         tool: clang(pattern: 'centos8-gcc-build.log',
+                                                     id: "analysis-centos8-gcc")
+                        }
+                        unsuccessful {
+                            sh """if [ -f config.log ]; then
+                                      mv config.log config.log-centos8-gcc
+                                  fi"""
+                            archiveArtifacts artifacts: 'config.log-centos8-gcc',
+                                             allowEmptyArchive: true
+                        }
+                    }
+                }
+                stage('Build on CentOS 7 release') {
+                    when {
+                        beforeAgent true
+                        expression { ! skip_build_on_centos7_gcc_release() }
                     }
                     agent {
                         dockerfile {
@@ -931,26 +972,27 @@ pipeline {
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
                                                 " --build-arg CB0=" + current_time.get(Calendar.WEEK_OF_YEAR) +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                                quick_build_deps('centos7') + '"'
+                                                quick_build_deps('centos7') + '"' +
+                                                ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   scons_args: scons_faults_args() + " PREFIX=/opt/daos TARGET_TYPE=release",
+                                   scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
                     }
                     post {
                         always {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
-                                         tool: clang(pattern: 'centos7-clang-build.log',
-                                                     id: "analysis-centos7-clang")
+                                         tool: gcc4(pattern: 'centos7-gcc-release-build.log',
+                                                    id: "analysis-gcc-centos7-release")
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
-                                      mv config.log config.log-centos7-clang
+                                      mv config.log config.log-centos7-gcc-release
                                   fi"""
-                            archiveArtifacts artifacts: 'config.log-centos7-clang',
+                            archiveArtifacts artifacts: 'config.log-centos7-gcc-release',
                                              allowEmptyArchive: true
                         }
                     }
@@ -1006,7 +1048,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   scons_args: scons_faults_args() + " PREFIX=/opt/daos TARGET_TYPE=release",
+                                   scons_args: scons_faults_args() + " PREFIX=/opt/daos TARGET_TYPE=dev",
                                    build_deps: "no"
                     }
                     post {
