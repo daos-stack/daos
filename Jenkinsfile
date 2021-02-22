@@ -922,6 +922,44 @@ pipeline {
                         }
                     }
                 }
+                stage('Build on CentOS 7 with Clang') {
+                    when {
+                        beforeAgent true
+                        expression { ! skip_build_on_landing_branch() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.centos.7'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(qb: quickbuild(),
+                                                                deps_build:true) +
+                                                " -t ${sanitized_JOB_NAME}-centos7 " +
+                                                " --build-arg CB0=" + current_time.get(Calendar.WEEK_OF_YEAR) +
+                                                ' --build-arg QUICKBUILD_DEPS="' +
+                                                quick_build_deps('centos7') + '"'
+                        }
+                    }
+                    steps {
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
+                                   build_deps: "no"
+                    }
+                    post {
+                        always {
+                            recordIssues enabledForFailure: true,
+                                         aggregatingResults: true,
+                                         tool: gcc4(pattern: 'centos7-clang-dev-build.log',
+                                                    id: "analysis-clang-centos7-dev")
+                        }
+                        unsuccessful {
+                            sh """if [ -f config.log ]; then
+                                      mv config.log config.log-centos7-clang-dev
+                                  fi"""
+                            archiveArtifacts artifacts: 'config.log-centos7-clang-dev',
+                                             allowEmptyArchive: true
+                        }
+                    }
+                }
                 stage('Build on CentOS 8') {
                     when {
                         beforeAgent true
@@ -954,45 +992,6 @@ pipeline {
                                       mv config.log config.log-centos8-gcc
                                   fi"""
                             archiveArtifacts artifacts: 'config.log-centos8-gcc',
-                                             allowEmptyArchive: true
-                        }
-                    }
-                }
-                stage('Build on CentOS 7 with clang') {
-                    when {
-                        beforeAgent true
-                        expression { ! skip_build_on_centos7_clang_dev() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(qb: quickbuild(),
-                                                                deps_build:true) +
-                                                " -t ${sanitized_JOB_NAME}-centos7 " +
-                                                " --build-arg CB0=" + current_time.get(Calendar.WEEK_OF_YEAR) +
-                                                ' --build-arg QUICKBUILD_DEPS="' +
-                                                quick_build_deps('centos7') + '"' +
-                                                ' --build-arg REPOS="' + pr_repos() + '"'
-                        }
-                    }
-                    steps {
-                        sconsBuild parallel_build: parallel_build(),
-                                   scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
-                                   build_deps: "no"
-                    }
-                    post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         tool: gcc4(pattern: 'centos7-clang-dev-build.log',
-                                                    id: "analysis-clang-centos7-dev")
-                        }
-                        unsuccessful {
-                            sh """if [ -f config.log ]; then
-                                      mv config.log config.log-centos7-clang-dev
-                                  fi"""
-                            archiveArtifacts artifacts: 'config.log-centos7-clang-dev',
                                              allowEmptyArchive: true
                         }
                     }
