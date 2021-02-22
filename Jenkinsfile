@@ -941,7 +941,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
+                                   scons_args: scons_faults_args() + " PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
                     }
                     post {
@@ -953,9 +953,9 @@ pipeline {
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
-                                      mv config.log config.log-centos7-clang-dev
+                                      mv config.log config.log-centos7-clang
                                   fi"""
-                            archiveArtifacts artifacts: 'config.log-centos7-clang-dev',
+                            archiveArtifacts artifacts: 'config.log-centos7-clang',
                                              allowEmptyArchive: true
                         }
                     }

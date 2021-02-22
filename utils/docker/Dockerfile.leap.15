@@ -15,13 +15,11 @@ ARG CB0
 # Use our own repo cache
 ARG REPO_URL=""
 ARG REPO_GROUP_LEAP15=""
-RUN if [ -n "${REPO_GROUP_LEAP15}" ]; then                             \
-        rm -f /etc/zypp/repos.d/*.repo;                                \
-        zypper --non-interactive ar                                    \
-                ${REPO_URL}${REPO_GROUP_LEAP15} daos-stack-group-repo; \
-        zypper --non-interactive mr --gpgcheck-allow-unsigned-repo     \
-               daos-stack-group-repo;                                  \
-    fi
+RUN if [ -n "${REPO_GROUP_LEAP15}" ]; then				\
+    rm -f /etc/zypp/repos.d/*.repo &&					\
+    zypper --non-interactive ar ${REPO_URL}${REPO_GROUP_LEAP15} daos-stack-group-repo && \
+    zypper --non-interactive mr --gpgcheck-allow-unsigned-repo daos-stack-group-repo; \
+  fi
 
 # Make sure repos are up to date
 RUN zypper --non-interactive --no-gpg-checks --gpg-auto-import-keys refresh
