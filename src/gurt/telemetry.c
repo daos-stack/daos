@@ -1857,22 +1857,34 @@ failure:
  * Creates histogram counters for the given node.  It calculates the
  * extents of each bucket and creates counters at the path specified that
  * correspond to each bucket required.  The name of each counter created is
- * given by the bucket number and the range of each bucket.  The same name
+ * given by the bucket number.  The bucket number and range of each bucket
  * is stored as metadata for each counter.
  *
  * \param[in]	node		Pointer to a node with a metric of type duration
  * 				or gauge
  * \param[in]	path		Path name of the metric specified
- * 				by \a node
+ *				by \a node.  Can be an arbitrary location.
+ *				However, specifying the full path allows this
+ *				function to create counters underneath the given
+ *				node.
  * \param[in]	num_buckets	Specifies the number of buckets the histogram
  * 				should have
  * \param[in]	initial_width	The number of elements in the first bucket
  * \param[in]	multiplier	Applied to the second .. nth bucket to
- * 				increase the width of each successive bucket
- * 				by this factor over the previous bucket.
- * 				A multiplier of 1 creates equal size buckets.
- * 				A multiplier of 2 creates buckets that are
- * 				twice the size of the previous bucket.
+ *				increase the width of each successive bucket
+ *				by this factor over the previous bucket.
+ *				A multiplier of 1 creates equal size buckets.
+ *				A multiplier of 2 creates buckets that are
+ *				twice the size of the previous bucket.
+ *
+ * \return			D_TM_SUCCESS		Success
+ *				-DER_INVAL		node, path, num_buckets,
+ *							initial_width or
+ *							multiplier is invalid.
+ *				-DER_OP_NOT_PERMITTED	Node was not a gauge
+ *							or duration.
+ *				-DER_NO_SHMEM		Out of shared memory
+ *				-DER_NOMEM		Out of heap
  */
 int
 d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets,
@@ -1921,8 +1933,6 @@ d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets,
 		goto failure;
 	}
 
-	metric->dtm_histogram->dth_num_buckets = num_buckets;
-	metric->dtm_histogram->dth_value_multiplier = multiplier;
 	metric->dtm_histogram->dth_buckets = d_tm_shmalloc(num_buckets *
 						  sizeof(struct d_tm_bucket_t));
 	if (metric->dtm_histogram->dth_buckets == NULL) {
@@ -1930,6 +1940,9 @@ d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets,
 		rc = -DER_NO_SHMEM;
 		goto failure;
 	}
+	metric->dtm_histogram->dth_num_buckets = num_buckets;
+	metric->dtm_histogram->dth_initial_width = initial_width;
+	metric->dtm_histogram->dth_value_multiplier = multiplier;
 
 	D_MUTEX_UNLOCK(&d_tm_add_lock);
 
@@ -1979,6 +1992,127 @@ failure:
 
 	D_ERROR("Failed to histogram for [%s]: " DF_RC "\n", path, DP_RC(rc));
 	return rc;
+}
+
+/**
+ * Retrieves the histogram creation data for the given node, which includes
+ * the number of buckets, initial width and multiplier used to create the
+ * given histogram.
+ *
+ * \param[in,out]	histogram	Pointer to a d_tm_histogram_t used to
+ *					store the results.
+ * \param[in]		shmem_root	Pointer to the shared memory segment.
+ * \param[in]		node		Pointer to the metric node with a
+ *					histogram.
+ *
+ * \return			D_TM_SUCCESS		Success
+ *				-DER_INVAL		node or histogram is
+ *							invalid.
+ *				-DER_METRIC_NOT_FOUND	The metric node, the
+ *							metric data or histogram
+ *							was not found.
+ *				-DER_OP_NOT_PERMITTED	Node was not a gauge
+ *							or duration with
+ *							an associated histogram.
+ */
+int
+d_tm_get_num_buckets(struct d_tm_histogram_t *histogram,
+		     uint64_t *shmem_root, struct d_tm_node_t *node)
+{
+	struct d_tm_histogram_t	*dtm_histogram = NULL;
+	struct d_tm_metric_t	*metric_data = NULL;
+
+	if (node == NULL)
+		return -DER_INVAL;
+
+	if (histogram == NULL)
+		return -DER_INVAL;
+
+	if (!d_tm_validate_shmem_ptr(shmem_root, (void *)node))
+		return -DER_METRIC_NOT_FOUND;
+
+	if (!((node->dtn_type == D_TM_GAUGE) ||
+	    (node->dtn_type & D_TM_DURATION)))
+		return -DER_OP_NOT_PERMITTED;
+
+	metric_data = d_tm_conv_ptr(shmem_root, node->dtn_metric);
+	if (metric_data == NULL)
+		return -DER_METRIC_NOT_FOUND;
+
+	dtm_histogram = d_tm_conv_ptr(shmem_root, metric_data->dtm_histogram);
+	if (dtm_histogram == NULL)
+		return -DER_METRIC_NOT_FOUND;
+
+	histogram->dth_num_buckets = dtm_histogram->dth_num_buckets;
+	histogram->dth_initial_width = dtm_histogram->dth_initial_width;
+	histogram->dth_value_multiplier = dtm_histogram->dth_value_multiplier;
+
+	return D_TM_SUCCESS;
+}
+
+/**
+ * Retrieves the range of the given bucket for the node with a histogram.
+ *
+ * \param[in,out]	histogram	Pointer to a d_tm_histogram_t used to
+ *					store the results.
+ * \param[in]		bucket_id	Identifies which bucket (0 .. n-1)
+ * \param[in]		shmem_root	Pointer to the shared memory segment.
+ * \param[in]		node		Pointer to the metric node with a
+ *					histogram.
+ *
+ * \return			D_TM_SUCCESS		Success
+ *				-DER_INVAL		node, bucket, or bucket
+ *							ID is invalid.
+ *				-DER_METRIC_NOT_FOUND	The metric node, the
+ *							metric data, histogram
+ *							or bucket data was
+ *							not found.
+ *				-DER_OP_NOT_PERMITTED	Node was not a gauge
+ *							or duration with
+ *							an associated histogram.
+ */
+int
+d_tm_get_bucket_range(struct d_tm_bucket_t *bucket, int bucket_id,
+		      uint64_t *shmem_root, struct d_tm_node_t *node)
+{
+	struct d_tm_histogram_t	*dtm_histogram = NULL;
+	struct d_tm_bucket_t 	*dth_bucket = NULL;
+	struct d_tm_metric_t	*metric_data = NULL;
+
+	if (node == NULL)
+		return -DER_INVAL;
+
+	if (bucket == NULL)
+		return -DER_INVAL;
+
+	if (bucket_id < 0)
+		return -DER_INVAL;
+
+	if (!d_tm_validate_shmem_ptr(shmem_root, (void *)node))
+		return -DER_METRIC_NOT_FOUND;
+
+	if (!((node->dtn_type == D_TM_GAUGE) ||
+	    (node->dtn_type & D_TM_DURATION)))
+		return -DER_OP_NOT_PERMITTED;
+
+	metric_data = d_tm_conv_ptr(shmem_root, node->dtn_metric);
+	if (metric_data == NULL)
+		return -DER_METRIC_NOT_FOUND;
+
+	dtm_histogram = d_tm_conv_ptr(shmem_root, metric_data->dtm_histogram);
+	if (dtm_histogram == NULL)
+		return -DER_METRIC_NOT_FOUND;
+
+	if (bucket_id >= dtm_histogram->dth_num_buckets)
+		return -DER_INVAL;
+
+	dth_bucket = d_tm_conv_ptr(shmem_root, dtm_histogram->dth_buckets);
+	if (dth_bucket == NULL)
+		return -DER_METRIC_NOT_FOUND;
+
+	bucket->dtb_min = dth_bucket[bucket_id].dtb_min;
+	bucket->dtb_max = dth_bucket[bucket_id].dtb_max;
+	return D_TM_SUCCESS;
 }
 
 
