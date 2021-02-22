@@ -12,12 +12,36 @@ LABEL maintainer="daos@daos.groups.io"
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
 ARG CB0
 
+ARG REPO_URL
+# Need to clean this up later
+RUN if [ -n "$REPO_URL" ]; then						\
+      yum --assumeyes install yum-utils;				\
+      cversion=$(cut -d ' ' -f4 /etc/centos-release);			\
+      version=${cversion%.*} ;						\
+      MY_REPO="${REPO_URL}repository/centos-${version}-x86_64-group/";	\
+      MY_NAME="${MY_REPO#*//}";						\
+      MY_NAME="${MY_NAME//\//_}";					\
+      echo -e "[${MY_NAME}]\n\
+name=created from ${MY_REPO}\n\
+baseurl=${MY_REPO}\n\
+enabled=1\n\
+gpgcheck=False\n" >> /etc/yum.repos.d/local-centos-group.repo;		\
+      cat /etc/yum.repos.d/local-centos-group.repo;			\
+      yum repolist;							\
+      yum-config-manager --assumeyes --quiet				\
+                         --disable baseos appstream extras;		\
+    else								\
+      yum -y install epel-release dnf-plugins-core &&			\
+      dnf config-manager --set-enabled powertools &&			\
+      dnf config-manager --set-enabled epel-modular &&			\
+      yum -y install clang-analyzer;					\
+    fi
+
 # Install basic tools to build DAOS
-RUN yum clean all && yum -y install epel-release dnf-plugins-core &&	\
-    dnf config-manager --set-enabled powertools &&			\
+RUN yum clean all &&							\
     yum -y upgrade &&							\
     yum -y install							\
-	boost-devel clang-analyzer cmake CUnit-devel doxygen file flex	\
+	boost-devel cmake CUnit-devel doxygen file flex	\
 	gcc gcc-c++ git golang graphviz libaio-devel			\
 	libcmocka-devel libevent-devel libiscsi-devel libtool		\
 	libtool-ltdl-devel libuuid-devel libyaml-devel make nasm	\
@@ -26,7 +50,6 @@ RUN yum clean all && yum -y install epel-release dnf-plugins-core &&	\
 	pciutils valgrind-devel man fuse3-devel hwloc-devel patchelf	\
 	json-c-devel lz4-devel libipmctl-devel ndctl ipmctl		\
 	e2fsprogs &&							\
-    dnf config-manager --set-enabled epel-modular && 			\
     yum -y install 							\
 	python2 python2-devel python36-devel python3-magic		\
 	python3-pygit2 python3-pygithub					\
