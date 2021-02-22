@@ -31,18 +31,16 @@ class DynamicStartStop(TestWithServers):
         rank is in self.stopped_ranks, verify that its status is Stopped.
         Otherwise, Joined.
         """
-        output = self.dmg_cmd.system_query().stdout
-        data = json.loads(output)
-        members = data["response"]["members"]
-        for member in members:
-            if member["rank"] in self.stopped_ranks:
+        members = self.dmg_cmd.system_query()
+        for rank, member in members.items():
+            if int(rank) in self.stopped_ranks:
                 self.assertEqual(
                     member["state"], "stopped",
                     "State isn't stopped! Actual: {}".format(member["state"]))
                 self.assertEqual(
-                    member["info"], "system stop",
+                    member["reason"], "system stop",
                     "Info (Reason) isn't system stop! Actual: {}".format(
-                        member["info"]))
+                        member["reason"]))
             else:
                 self.assertEqual(
                     member["state"], "joined",
@@ -59,16 +57,16 @@ class DynamicStartStop(TestWithServers):
         4. Stop two of the remaining added servers - Multiple stop.
         5. Stop one of the original servers - Stopping with pool.
 
-        :avocado: tags=all,hw,large,server,full_regression,dynamic_start_stop
+        :avocado: tags=all,full_regression
+        :avocado: tags=server
+        :avocado: tags=dynamic_start_stop
         """
+        self.dmg_cmd = self.get_dmg_command()
         self.add_pool()
-
         extra_servers = self.params.get("test_servers", "/run/extra_servers/*")
 
         # Start 3 extra servers.
         self.start_additional_servers(additional_servers=extra_servers)
-
-        self.dmg_cmd = self.get_dmg_command()
 
         # Call dmg system query and verify that the State of all ranks is
         # Joined.
@@ -98,6 +96,3 @@ class DynamicStartStop(TestWithServers):
         # system stop.
         self.stopped_ranks.add(1)
         self.verify_system_query()
-
-        # Stopping newly added server and destroy pool causes -1006. DAOS-5606
-        self.pool = None
