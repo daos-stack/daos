@@ -546,6 +546,12 @@ ctl_register_fi(crt_endpoint_t *ep)
 }
 
 static int
+ctl_register_ctl(crt_endpoint_t *ep)
+{
+	return crt_register_proto_ctl(ep);
+}
+
+static int
 ctl_init()
 {
 	int			 i;
@@ -598,14 +604,18 @@ ctl_init()
 		ranks_to_send = ctl_gdata.cg_ranks;
 	}
 
+	ep.ep_grp = grp;
+	ep.ep_rank = ranks_to_send[0];
+	ep.ep_tag = 0;
+
 	if (ctl_gdata.cg_cmd_code == CMD_SET_FI_ATTR ||
 	    ctl_gdata.cg_cmd_code == CMD_DISABLE_FI ||
 	    ctl_gdata.cg_cmd_code == CMD_ENABLE_FI) {
-		ep.ep_grp = grp;
-		ep.ep_rank = ranks_to_send[0];
-		ep.ep_tag = 0;
-
 		rc = ctl_register_fi(&ep);
+		if (rc != -DER_SUCCESS)
+			return rc;
+	} else {
+		rc = ctl_register_ctl(&ep);
 		if (rc != -DER_SUCCESS)
 			return rc;
 	}

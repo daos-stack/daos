@@ -28,13 +28,13 @@ var (
 	errInstanceNotReady = errors.New("instance not ready yet")
 )
 
-func (srv *IOServerInstance) setDrpcClient(c drpc.DomainSocketClient) {
+func (srv *EngineInstance) setDrpcClient(c drpc.DomainSocketClient) {
 	srv.Lock()
 	defer srv.Unlock()
 	srv._drpcClient = c
 }
 
-func (srv *IOServerInstance) getDrpcClient() (drpc.DomainSocketClient, error) {
+func (srv *EngineInstance) getDrpcClient() (drpc.DomainSocketClient, error) {
 	srv.RLock()
 	defer srv.RUnlock()
 	if srv._drpcClient == nil {
@@ -43,12 +43,12 @@ func (srv *IOServerInstance) getDrpcClient() (drpc.DomainSocketClient, error) {
 	return srv._drpcClient, nil
 }
 
-// NotifyDrpcReady receives a ready message from the running IOServer
+// NotifyDrpcReady receives a ready message from the running Engine
 // instance.
-func (srv *IOServerInstance) NotifyDrpcReady(msg *srvpb.NotifyReadyReq) {
+func (srv *EngineInstance) NotifyDrpcReady(msg *srvpb.NotifyReadyReq) {
 	srv.log.Debugf("%s instance %d drpc ready: %v", build.DataPlaneName, srv.Index(), msg)
 
-	// Activate the dRPC client connection to this iosrv
+	// activate the dRPC client connection to this engine
 	srv.setDrpcClient(drpc.NewClientConnection(msg.DrpcListenerSock))
 
 	go func() {
@@ -57,14 +57,14 @@ func (srv *IOServerInstance) NotifyDrpcReady(msg *srvpb.NotifyReadyReq) {
 }
 
 // awaitDrpcReady returns a channel which receives a ready message
-// when the started IOServer instance indicates that it is
+// when the started Engine instance indicates that it is
 // ready to receive dRPC messages.
-func (srv *IOServerInstance) awaitDrpcReady() chan *srvpb.NotifyReadyReq {
+func (srv *EngineInstance) awaitDrpcReady() chan *srvpb.NotifyReadyReq {
 	return srv.drpcReady
 }
 
 // CallDrpc makes the supplied dRPC call via this instance's dRPC client.
-func (srv *IOServerInstance) CallDrpc(ctx context.Context, method drpc.Method, body proto.Message) (*drpc.Response, error) {
+func (srv *EngineInstance) CallDrpc(ctx context.Context, method drpc.Method, body proto.Message) (*drpc.Response, error) {
 	dc, err := srv.getDrpcClient()
 	if err != nil {
 		return nil, err
@@ -74,7 +74,7 @@ func (srv *IOServerInstance) CallDrpc(ctx context.Context, method drpc.Method, b
 	if sb := srv.getSuperblock(); sb != nil {
 		rankMsg = fmt.Sprintf(" (rank %s)", sb.Rank)
 	}
-	srv.log.Debugf("dRPC to index %d%s: %s", srv.Index(), rankMsg, method)
+	srv.log.Debugf("%dB dRPC to index %d%s: %s", proto.Size(body), srv.Index(), rankMsg, method)
 
 	return makeDrpcCall(ctx, srv.log, dc, method, body)
 }
@@ -107,7 +107,7 @@ func drespToMemberResult(rank system.Rank, dresp *drpc.Response, err error, tSta
 
 // TryDrpc attempts dRPC request to given rank managed by instance and return
 // success or error from call result or timeout encapsulated in result.
-func (srv *IOServerInstance) TryDrpc(ctx context.Context, method drpc.Method) *system.MemberResult {
+func (srv *EngineInstance) TryDrpc(ctx context.Context, method drpc.Method) *system.MemberResult {
 	rank, err := srv.GetRank()
 	if err != nil {
 		return nil // no rank to return result for
@@ -157,7 +157,7 @@ func (srv *IOServerInstance) TryDrpc(ctx context.Context, method drpc.Method) *s
 	}
 }
 
-func (srv *IOServerInstance) getBioHealth(ctx context.Context, req *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
+func (srv *EngineInstance) getBioHealth(ctx context.Context, req *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
 	dresp, err := srv.CallDrpc(ctx, drpc.MethodBioHealth, req)
 	if err != nil {
 		return nil, err
@@ -175,7 +175,7 @@ func (srv *IOServerInstance) getBioHealth(ctx context.Context, req *ctlpb.BioHea
 	return resp, nil
 }
 
-func (srv *IOServerInstance) listSmdDevices(ctx context.Context, req *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error) {
+func (srv *EngineInstance) listSmdDevices(ctx context.Context, req *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error) {
 	dresp, err := srv.CallDrpc(ctx, drpc.MethodSmdDevs, req)
 	if err != nil {
 		return nil, err
@@ -196,11 +196,11 @@ func (srv *IOServerInstance) listSmdDevices(ctx context.Context, req *ctlpb.SmdD
 // updateInUseBdevs updates-in-place the input list of controllers with
 // new NVMe health stats and SMD metadata info.
 //
-// Query each SmdDevice on each IO server instance for health stats,
+// Query each SmdDevice on each I/O Engine instance for health stats,
 // map input controllers to their concatenated model+serial keys then
 // retrieve metadata and health stats for each SMD device (blobstore) on
-// a given I/O server instance. Update input map with new stats/smd info.
-func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[string]*storage.NvmeController) error {
+// a given I/O Engine instance. Update input map with new stats/smd info.
+func (srv *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[string]*storage.NvmeController) error {
 	smdDevs, err := srv.listSmdDevices(ctx, new(ctlpb.SmdDevReq))
 	if err != nil {
 		return errors.Wrapf(err, "instance %d listSmdDevices()", srv.Index())

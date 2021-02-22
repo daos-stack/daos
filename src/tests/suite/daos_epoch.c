@@ -51,10 +51,11 @@ io_for_aggregation(test_arg_t *arg, daos_handle_t coh, daos_handle_t ths[],
 
 			MUST(daos_tx_commit(ths[i], NULL));
 			if (snaps_in && i == snaps_in[k]) {
-				MUST(daos_cont_create_snap(coh, &snaps[k++],
+				MUST(daos_cont_create_snap(coh, &snaps[k],
 							   NULL, arg->async ?
 							   &ev : NULL));
 				WAIT_ON_ASYNC(arg, ev);
+				k++;
 			}
 		}
 
@@ -145,7 +146,7 @@ test_epoch_aggregate(void **argp)
 	MUST(cont_create(arg, cont_uuid));
 	MUST(cont_open(arg, cont_uuid, DAOS_COO_RW, &coh));
 
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	print_message("OID: "DF_OID"\n", DP_OID(oid));
 
 	D_ALLOC_ARRAY(ths, 100);
@@ -212,7 +213,7 @@ test_snapshots(void **argp)
 	MUST(cont_create(arg, co_uuid));
 	MUST(cont_open(arg, co_uuid, DAOS_COO_RW | DAOS_COO_NOSLIP, &coh));
 
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	print_message("OID: "DF_OID"\n", DP_OID(oid));
 
 	D_ALLOC_ARRAY(ths, num_records);
@@ -231,7 +232,6 @@ test_snapshots(void **argp)
 	MUST(daos_cont_list_snap(coh, &snap_count_out, NULL, NULL, &anchor,
 				 arg->async ? &ev : NULL));
 	WAIT_ON_ASYNC(arg, ev);
-	daos_anchor_is_eof(&anchor);
 	assert_int_equal(snap_count_out, snap_count);
 
 	print_message("Snapshot listing shall succeed with a small buffer\n");
@@ -241,7 +241,6 @@ test_snapshots(void **argp)
 	MUST(daos_cont_list_snap(coh, &snap_count_out, snaps_out, NULL, &anchor,
 				 arg->async ? &ev : NULL));
 	WAIT_ON_ASYNC(arg, ev);
-	daos_anchor_is_eof(&anchor);
 	assert_int_equal(snap_count_out, snap_count);
 	for (i = 0; i < snap_split_index; i++)
 		assert_int_equal(snaps_out[i], snaps[i]);
@@ -255,7 +254,6 @@ test_snapshots(void **argp)
 	MUST(daos_cont_list_snap(coh, &snap_count_out, snaps_out, NULL, &anchor,
 				 arg->async ? &ev : NULL));
 	WAIT_ON_ASYNC(arg, ev);
-	daos_anchor_is_eof(&anchor);
 	assert_int_equal(snap_count_out, snap_count);
 	for (i = 0; i < snap_count; i++)
 		assert_int_not_equal(snaps_out[i], garbage);

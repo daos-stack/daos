@@ -18,7 +18,7 @@
 #include <daos/container.h>
 #include <daos/pool.h>
 #include <daos_srv/container.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/iv.h>
 #include <cart/iv.h>
 #include "rpc.h"
@@ -81,7 +81,7 @@ rebuild_iv_ent_destroy(d_sg_list_t *sgl)
 
 static int
 rebuild_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
-		     d_sg_list_t *dst, d_sg_list_t *src, void **priv)
+		     d_sg_list_t *dst, void **priv)
 {
 	D_ASSERT(0);
 	return 0;
@@ -247,7 +247,8 @@ out:
 }
 
 static int
-rebuild_iv_alloc(struct ds_iv_entry *entry, d_sg_list_t *sgl)
+rebuild_iv_alloc(struct ds_iv_entry *entry, struct ds_iv_key *key,
+		 d_sg_list_t *sgl)
 {
 	return rebuild_iv_alloc_internal(sgl);
 }

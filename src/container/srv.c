@@ -11,7 +11,7 @@
  */
 #define D_LOGFAC	DD_FAC(container)
 
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos/rpc.h>
 #include "rpc.h"
 #include "srv_internal.h"
@@ -87,8 +87,7 @@ static struct daos_rpc_handler cont_handlers[] = {
 #undef X
 
 static void *
-dsm_tls_init(const struct dss_thread_local_storage *dtls,
-	     struct dss_module_key *key)
+dsm_tls_init(int xs_id, int tgt_id)
 {
 	struct dsm_tls *tls;
 	int		rc;
@@ -118,8 +117,7 @@ dsm_tls_init(const struct dss_thread_local_storage *dtls,
 }
 
 static void
-dsm_tls_fini(const struct dss_thread_local_storage *dtls,
-	     struct dss_module_key *key, void *data)
+dsm_tls_fini(void *data)
 {
 	struct dsm_tls *tls = data;
 

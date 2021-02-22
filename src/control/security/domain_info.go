@@ -60,6 +60,5 @@ func DomainInfoFromUnixConn(log logging.Logger, sock *net.UnixConn) (*DomainInfo
 	if err != nil {
 		ctx = ""
 	}
-	log.Debugf("client pid: %d uid: %d gid %d ctx: %s", creds.Pid, creds.Uid, creds.Gid, ctx)
 	return InitDomainInfo(creds, ctx), nil
 }

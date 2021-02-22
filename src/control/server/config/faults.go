@@ -50,10 +50,10 @@ var (
 		"provider not specified in configuration",
 		"specify a valid network provider in configuration ('provider' parameter) and restart the control server",
 	)
-	FaultConfigNoServers = serverConfigFault(
-		code.ServerConfigNoServers,
-		"no DAOS IO Servers specified in configuration",
-		"specify at least one IO Server configuration ('servers' list parameter) and restart the control server",
+	FaultConfigNoEngines = serverConfigFault(
+		code.ServerConfigNoEngines,
+		"no DAOS IO Engines specified in configuration",
+		"specify at least one IO Engine configuration ('engines' list parameter) and restart the control server",
 	)
 	FaultConfigFaultDomainInvalid = serverConfigFault(
 		code.ServerConfigFaultDomainInvalid,
@@ -85,8 +85,8 @@ var (
 func FaultConfigDuplicateFabric(curIdx, seenIdx int) *fault.Fault {
 	return serverConfigFault(
 		code.ServerConfigDuplicateFabric,
-		fmt.Sprintf("the fabric configuration in IO server %d is a duplicate of server %d", curIdx, seenIdx),
-		"ensure that each IO server has a unique combination of provider,fabric_iface,fabric_iface_port and restart",
+		fmt.Sprintf("the fabric configuration in I/O Engine %d is a duplicate of server %d", curIdx, seenIdx),
+		"ensure that each I/O Engine has a unique combination of provider,fabric_iface,fabric_iface_port and restart",
 	)
 }
 
@@ -111,24 +111,24 @@ func FaultConfigDuplicateScmDeviceList(curIdx, seenIdx int) *fault.Fault {
 func FaultConfigOverlappingBdevDeviceList(curIdx, seenIdx int) *fault.Fault {
 	return serverConfigFault(
 		code.ServerConfigOverlappingBdevDeviceList,
-		fmt.Sprintf("the bdev_list value in IO server %d overlaps with entries in server %d", curIdx, seenIdx),
-		"ensure that each IO server has a unique set of bdev_list entries and restart",
+		fmt.Sprintf("the bdev_list value in I/O Engine %d overlaps with entries in server %d", curIdx, seenIdx),
+		"ensure that each I/O Engine has a unique set of bdev_list entries and restart",
 	)
 }
 
 func FaultConfigInvalidNetDevClass(curIdx int, primaryDevClass, thisDevClass uint32, iface string) *fault.Fault {
 	return serverConfigFault(
 		code.ServerConfigInvalidNetDevClass,
-		fmt.Sprintf("IO server %d specifies fabric_iface %q of class %q that conflicts with the primary server's device class %q",
+		fmt.Sprintf("I/O Engine %d specifies fabric_iface %q of class %q that conflicts with the primary server's device class %q",
 			curIdx, iface, netdetect.DevClassName(thisDevClass), netdetect.DevClassName(primaryDevClass)),
-		"ensure that each IO server specifies a fabric_iface with a matching device class and restart",
+		"ensure that each I/O Engine specifies a fabric_iface with a matching device class and restart",
 	)
 }
 
 func dupeValue(code code.Code, name string, curIdx, seenIdx int) *fault.Fault {
 	return serverConfigFault(code,
-		fmt.Sprintf("the %s value in IO server %d is a duplicate of server %d", name, curIdx, seenIdx),
-		fmt.Sprintf("ensure that each IO server has a unique %s value and restart", name),
+		fmt.Sprintf("the %s value in I/O Engine %d is a duplicate of server %d", name, curIdx, seenIdx),
+		fmt.Sprintf("ensure that each I/O Engine has a unique %s value and restart", name),
 	)
 }
 

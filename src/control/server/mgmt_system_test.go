@@ -122,7 +122,9 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			expResp: &sharedpb.ClusterEventResp{
 				Sequence: 1,
 			},
-			expDispatched: []*events.RASEvent{eventRankDown.WithIsForwarded(true)},
+			expDispatched: []*events.RASEvent{
+				eventRankDown.WithForwarded(true),
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -265,7 +267,7 @@ func mgmtSystemTestSetup(t *testing.T, l logging.Logger, mbs system.Members, r [
 			}[addr]
 	}
 
-	mgmtSvc := newTestMgmtSvcMulti(t, l, maxIOServers, false)
+	mgmtSvc := newTestMgmtSvcMulti(t, l, maxEngines, false)
 	mgmtSvc.harness.started.SetTrue()
 	mgmtSvc.harness.instances[0]._superblock.Rank = system.NewRankPtr(0)
 	mgmtSvc.membership, _ = system.MockMembership(t, l, mockResolver)

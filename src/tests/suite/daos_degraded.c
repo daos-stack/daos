@@ -63,7 +63,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-	oid = dts_oid_gen(OC_RP_XSF, 0, rank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, rank);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	if (!rank) {
@@ -74,7 +74,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	if (info.pi_ntargets - info.pi_ndisabled < 2) {
 		if (rank == 0)
 			print_message("Not enough active targets, skipping "

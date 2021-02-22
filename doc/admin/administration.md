@@ -234,7 +234,7 @@ device would remain in this state until replaced by a new device.
 ## System Operations
 
 The DAOS Control Server acting as the access point records details of DAOS I/O
-Server instances that join the DAOS system. Once an I/O Server has joined the
+Server instances that join the DAOS system. Once an I/O Engine has joined the
 DAOS system, it is identified by a unique system "rank". Multiple ranks can
 reside on the same host machine, accessible via the same network address.
 
@@ -302,7 +302,7 @@ storagehost[0,5-10],10.8.1.[20-100]
 
 Output table will indicate action and result.
 
-DAOS I/O Servers will be started.
+DAOS I/O Engines will be started.
 
 ### Reformat
 
@@ -319,7 +319,7 @@ allocated to those ranks will be formatted
 
 Output table will indicate action and result.
 
-DAOS I/O Servers will be started and all DAOS pools will have been removed.
+DAOS I/O Engines will be started and all DAOS pools will have been removed.
 
 ### Manual Fresh Start
 

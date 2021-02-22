@@ -16,7 +16,7 @@
 #include <daos_srv/vos.h>
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/container.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include "dtx_internal.h"
 
 CRT_RPC_DEFINE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
@@ -813,7 +813,7 @@ dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont)
 
 again:
 			rc = ds_pool_elect_dtx_leader(pool, &dsp->dsp_oid,
-						      dsp->dsp_ver);
+						      dth->dth_ver);
 			if (rc < 0) {
 				D_ERROR("Failed to find DTX leader for "DF_DTI
 					": "DF_RC"\n",

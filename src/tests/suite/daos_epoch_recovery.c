@@ -104,19 +104,19 @@ epoch_recovery(test_arg_t *arg, enum epoch_recovery_op op)
 		      DP_UUID(uuid));
 	rc = daos_cont_create(arg->pool.poh, uuid, NULL /* properties */,
 			      NULL /* ev */);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	rc = daos_cont_open(arg->pool.poh, uuid, DAOS_COO_RW, &coh,
 			    NULL /* info */, NULL /* ev */);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 
 	/* Every rank updates timestep 1. */
 	io(UPDATE, arg, coh, oid, "timestamp 1");
 
 	/** Take a snapshot at this point to rollback to. */
 	rc = daos_cont_create_snap(coh, &snap, NULL, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/* Every rank updates timestep 2. */
 	io(UPDATE, arg, coh, oid, "timestamp 2");
@@ -125,21 +125,21 @@ epoch_recovery(test_arg_t *arg, enum epoch_recovery_op op)
 
 	print_message("closing container\n");
 	rc = daos_cont_close(coh, NULL /* ev */);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	if (op == POOL_DISCONNECT) {
 		print_message("disconnecting from pool\n");
 		rc = daos_pool_disconnect(arg->pool.poh, NULL /* ev */);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		print_message("reconnecting to pool\n");
 		if (arg->myrank == 0) {
 			rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
 					       DAOS_PC_RW,
 					       &arg->pool.poh, NULL /* info */,
 					       NULL /* ev */);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 		}
 		handle_share(&arg->pool.poh, HANDLE_POOL, arg->myrank,
 			     arg->pool.poh, 1);
@@ -148,7 +148,7 @@ epoch_recovery(test_arg_t *arg, enum epoch_recovery_op op)
 	print_message("reopening container\n");
 	rc = daos_cont_open(arg->pool.poh, uuid, DAOS_COO_RO, &coh,
 			    &arg->co_info, NULL /* ev */);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/** TODO - query last snapshot taken and rollback to that */
 
@@ -157,7 +157,7 @@ epoch_recovery(test_arg_t *arg, enum epoch_recovery_op op)
 	io(VERIFY, arg, coh, oid, "timestamp 2");
 
 	rc = daos_cont_close(coh, NULL /* ev */);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
