@@ -843,15 +843,18 @@ static int config_create_output_config(char *section_name, bool remove)
 	if ((g_expected_outfile != NULL) && (cfg_output == NULL)) {
 		config_ret = ConfigReadFile(g_expected_outfile, &cfg_output);
 		if (config_ret != CONFIG_OK) {
-			D_NOTE("Output file does not exist: %s\n",
+			D_ERROR("Output file does not exist: %s\n",
 			       g_expected_outfile);
+			D_GOTO(cleanup, ret_value = -ENOMEM);
 		}
 	}
 	/* Out put config does not exist, create one */
 	if (cfg_output == NULL) {
 		cfg_output = ConfigNew();
-		if (cfg_output == NULL)
-			D_GOTO(cleanup, ret_value = ENOMEM);
+		if (cfg_output == NULL) {
+			/* avoid checkpatch warning */
+			D_GOTO(cleanup, ret_value = -ENOMEM);
+		}
 	}
 
 	/*
@@ -859,8 +862,10 @@ static int config_create_output_config(char *section_name, bool remove)
 	 * If section already exist then remove it.
 	 */
 	new_section_name = config_section_name_create(section_name, NULL);
-	if (new_section_name == NULL)
-		D_GOTO(cleanup, ret_value = ENOMEM);
+	if (new_section_name == NULL) {
+		/* avoid checkpatch warning */
+		D_GOTO(cleanup, ret_value = -ENOMEM);
+	}
 	ret_value = config_create_section(cfg_output, new_section_name,
 					  remove);
 
@@ -1188,7 +1193,7 @@ static int compare_print_results(char *section_name, char *input_section_name,
 	Config		*cfg_expected = NULL;
 	ConfigRet	 config_ret;
 	char		*sec_name;
-	int		 ret_value = 1;
+	int		 ret_value = 0;
 	int		 i;
 	int		 status_size = sizeof(status) / sizeof(status_feature);
 
@@ -1198,7 +1203,7 @@ static int compare_print_results(char *section_name, char *input_section_name,
 		if (config_ret != CONFIG_OK) {
 			D_ERROR("Cannot open expected file: %s\n",
 				g_expected_infile);
-			ret_value = ENOENT;
+			ret_value = -ENOENT;
 			goto cleanup;
 		}
 	}
@@ -1654,8 +1659,12 @@ static char *config_section_name_create(char *section_name,
 	} else {
 		/* Verify we have test parameters passed. */
 		if (test_params == (struct crt_st_start_params *)NULL) {
+#if 0
+			snprintf(name_str, len, "%s", "temp");
+#else
 			free(name_str);
 			name_str = NULL;
+#endif
 			goto exit_code;
 		}
 
@@ -3744,11 +3753,10 @@ int main(int argc, char *argv[])
 	       g_rep_count, g_max_inflight);
 
 	/****** Open global configuration for output results *****/
+	/*
+	 * If no section name specified, then will be created later on.
+	 */
 	ret = config_create_output_config(section_name, true);
-	if (ret != 0) {
-		/* avoid checkpatch warning */
-		D_GOTO(cleanup, ret);
-	}
 
 	/********************* Run the self test *********************/
 	ret = run_self_test(all_params, num_msg_sizes, g_rep_count,
