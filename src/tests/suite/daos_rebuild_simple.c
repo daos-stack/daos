@@ -825,7 +825,7 @@ rebuild_large_snap(void **state)
 	daos_epoch_t	snap_epoch[100];
 	int		i;
 
-	oid = dts_oid_gen(arg->obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
 	oid = dts_oid_set_tgt(oid, tgt);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
