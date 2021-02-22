@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It implements the CaRT context related APIs.
@@ -845,7 +828,6 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	int			 rc = 0;
 	struct crt_grp_priv	*grp_priv;
 
-
 	D_ASSERT(crt_ctx != NULL);
 
 	if (rpc_priv->crp_pub.cr_opc == CRT_OPC_URI_LOOKUP) {
@@ -999,10 +981,11 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 
 	/* remove from inflight queue */
 	d_list_del_init(&rpc_priv->crp_epi_link);
-	if (rpc_priv->crp_state == RPC_STATE_COMPLETED)
+	if (rpc_priv->crp_state == RPC_STATE_COMPLETED) {
 		epi->epi_reply_num++;
-	else /* RPC_CANCELED or RPC_INITED or RPC_TIMEOUT */
+	} else {/* RPC_CANCELED or RPC_INITED or RPC_TIMEOUT */
 		epi->epi_req_num--;
+	}
 	D_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
 
 	if (!crt_req_timedout(rpc_priv)) {

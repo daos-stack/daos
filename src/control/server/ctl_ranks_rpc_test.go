@@ -1,24 +1,7 @@
 //
 // (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
@@ -43,16 +26,16 @@ import (
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-const (
+var (
 	// test aliases for member states
-	msReady      = uint32(system.MemberStateReady)
-	msWaitFormat = uint32(system.MemberStateAwaitFormat)
-	msStopped    = uint32(system.MemberStateStopped)
-	msErrored    = uint32(system.MemberStateErrored)
+	msReady      = stateString(system.MemberStateReady)
+	msWaitFormat = stateString(system.MemberStateAwaitFormat)
+	msStopped    = stateString(system.MemberStateStopped)
+	msErrored    = stateString(system.MemberStateErrored)
 )
 
 // checkUnorderedRankResults fails if results slices contain any differing results,
@@ -145,8 +128,8 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 			},
 			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: uint32(system.MemberStateUnresponsive)},
-				{Rank: 2, State: uint32(system.MemberStateUnresponsive)},
+				{Rank: 1, State: stateString(system.MemberStateUnresponsive)},
+				{Rank: 2, State: stateString(system.MemberStateUnresponsive)},
 			},
 		},
 		"context timeout": { // dRPC req-resp duration > parent context timeout
@@ -158,8 +141,8 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 			},
 			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: uint32(system.MemberStateUnresponsive)},
-				{Rank: 2, State: uint32(system.MemberStateUnresponsive)},
+				{Rank: 1, State: stateString(system.MemberStateUnresponsive)},
+				{Rank: 2, State: stateString(system.MemberStateUnresponsive)},
 			},
 		},
 		"context cancel": { // dRPC req-resp duration > when parent context is canceled
@@ -190,8 +173,8 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 			},
 			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: uint32(system.MemberStateStopping)},
-				{Rank: 2, State: uint32(system.MemberStateStopping)},
+				{Rank: 1, State: stateString(system.MemberStateStopping)},
+				{Rank: 2, State: stateString(system.MemberStateStopping)},
 			},
 		},
 	} {
@@ -199,9 +182,9 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			cfg := config.DefaultServer().WithServers(
-				ioserver.NewConfig().WithTargetCount(1),
-				ioserver.NewConfig().WithTargetCount(1),
+			cfg := config.DefaultServer().WithEngines(
+				engine.NewConfig().WithTargetCount(1),
+				engine.NewConfig().WithTargetCount(1),
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 			for i, srv := range svc.harness.instances {
@@ -210,12 +193,12 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 					continue
 				}
 
-				trc := &ioserver.TestRunnerConfig{}
+				trc := &engine.TestRunnerConfig{}
 				if !tc.instancesStopped {
 					trc.Running.SetTrue()
 					srv.ready.SetTrue()
 				}
-				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
+				srv.runner = engine.NewTestRunner(trc, engine.NewConfig())
 				srv.setIndex(uint32(i))
 
 				srv._superblock.Rank = new(system.Rank)
@@ -268,7 +251,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 	for name, tc := range map[string]struct {
 		setupAP          bool
 		missingSB        bool
-		ioserverCount    int
+		engineCount      int
 		instancesStopped bool
 		req              *ctlpb.RanksReq
 		signal           os.Signal
@@ -352,13 +335,13 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 
 			var signalsSent sync.Map
 
-			if tc.ioserverCount == 0 {
-				tc.ioserverCount = maxIOServers
+			if tc.engineCount == 0 {
+				tc.engineCount = maxEngines
 			}
 
-			cfg := config.DefaultServer().WithServers(
-				ioserver.NewConfig().WithTargetCount(1),
-				ioserver.NewConfig().WithTargetCount(1),
+			cfg := config.DefaultServer().WithEngines(
+				engine.NewConfig().WithTargetCount(1),
+				engine.NewConfig().WithTargetCount(1),
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 
@@ -375,7 +358,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 			svc.events = ps
 
 			dispatched := &eventsDispatched{cancel: cancel}
-			svc.events.Subscribe(events.RASTypeRankStateChange, dispatched)
+			svc.events.Subscribe(events.RASTypeStateChange, dispatched)
 
 			for i, srv := range svc.harness.instances {
 				if tc.missingSB {
@@ -383,7 +366,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 					continue
 				}
 
-				trc := &ioserver.TestRunnerConfig{}
+				trc := &engine.TestRunnerConfig{}
 				if !tc.instancesStopped {
 					trc.Running.SetTrue()
 					srv.ready.SetTrue()
@@ -396,7 +379,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 						common.NormalExit)
 				}
 				trc.SignalErr = tc.signalErr
-				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
+				srv.runner = engine.NewTestRunner(trc, engine.NewConfig())
 				srv.setIndex(uint32(i))
 
 				srv._superblock.Rank = new(system.Rank)
@@ -404,7 +387,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 
 				srv.OnInstanceExit(
 					func(_ context.Context, _ system.Rank, _ error) error {
-						svc.events.Publish(events.NewRankExitEvent("foo",
+						svc.events.Publish(events.NewRankDownEvent("foo",
 							0, 0, common.NormalExit))
 						return nil
 					})
@@ -525,8 +508,8 @@ func TestServer_CtlSvc_PingRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 			},
 			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: uint32(system.MemberStateUnresponsive)},
-				{Rank: 2, State: uint32(system.MemberStateUnresponsive)},
+				{Rank: 1, State: stateString(system.MemberStateUnresponsive)},
+				{Rank: 2, State: stateString(system.MemberStateUnresponsive)},
 			},
 		},
 		"dRPC context timeout": { // dRPC req-resp duration > parent context Timeout
@@ -539,8 +522,8 @@ func TestServer_CtlSvc_PingRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 			},
 			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: uint32(system.MemberStateUnresponsive)},
-				{Rank: 2, State: uint32(system.MemberStateUnresponsive)},
+				{Rank: 1, State: stateString(system.MemberStateUnresponsive)},
+				{Rank: 2, State: stateString(system.MemberStateUnresponsive)},
 			},
 		},
 		"dRPC context cancel": { // dRPC req-resp duration > when parent context is canceled
@@ -594,9 +577,9 @@ func TestServer_CtlSvc_PingRanks(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			cfg := config.DefaultServer().WithServers(
-				ioserver.NewConfig().WithTargetCount(1),
-				ioserver.NewConfig().WithTargetCount(1),
+			cfg := config.DefaultServer().WithEngines(
+				engine.NewConfig().WithTargetCount(1),
+				engine.NewConfig().WithTargetCount(1),
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 
@@ -606,12 +589,12 @@ func TestServer_CtlSvc_PingRanks(t *testing.T) {
 					continue
 				}
 
-				trc := &ioserver.TestRunnerConfig{}
+				trc := &engine.TestRunnerConfig{}
 				if !tc.instancesStopped {
 					trc.Running.SetTrue()
 					srv.ready.SetTrue()
 				}
-				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
+				srv.runner = engine.NewTestRunner(trc, engine.NewConfig())
 				srv.setIndex(uint32(i))
 
 				srv._superblock.Rank = new(system.Rank)
@@ -664,7 +647,7 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 	for name, tc := range map[string]struct {
 		setupAP          bool
 		missingSB        bool
-		ioserverCount    int
+		engineCount      int
 		instancesStarted bool
 		startFails       bool
 		req              *ctlpb.RanksReq
@@ -719,15 +702,15 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			if tc.ioserverCount == 0 {
-				tc.ioserverCount = maxIOServers
+			if tc.engineCount == 0 {
+				tc.engineCount = maxEngines
 			}
 
 			ctx := context.Background()
 
-			cfg := config.DefaultServer().WithServers(
-				ioserver.NewConfig().WithTargetCount(1),
-				ioserver.NewConfig().WithTargetCount(1),
+			cfg := config.DefaultServer().WithEngines(
+				engine.NewConfig().WithTargetCount(1),
+				engine.NewConfig().WithTargetCount(1),
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 
@@ -739,14 +722,14 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 
 				testDir, cleanup := common.CreateTestDir(t)
 				defer cleanup()
-				ioCfg := ioserver.NewConfig().WithScmMountPoint(testDir)
+				engineCfg := engine.NewConfig().WithScmMountPoint(testDir)
 
-				trc := &ioserver.TestRunnerConfig{}
+				trc := &engine.TestRunnerConfig{}
 				if tc.instancesStarted {
 					trc.Running.SetTrue()
 					srv.ready.SetTrue()
 				}
-				srv.runner = ioserver.NewTestRunner(trc, ioCfg)
+				srv.runner = engine.NewTestRunner(trc, engineCfg)
 				srv.setIndex(uint32(i))
 
 				t.Logf("scm dir: %s", srv.scmConfig().MountPoint)
@@ -763,7 +746,7 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 				}
 
 				// mimic srv.run, set "ready" on startLoop rx
-				go func(s *IOServerInstance, startFails bool) {
+				go func(s *EngineInstance, startFails bool) {
 					<-s.startLoop
 					if startFails {
 						return
@@ -805,7 +788,7 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 	for name, tc := range map[string]struct {
 		setupAP          bool
 		missingSB        bool
-		ioserverCount    int
+		engineCount      int
 		instancesStopped bool
 		startFails       bool
 		req              *ctlpb.RanksReq
@@ -864,15 +847,15 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			if tc.ioserverCount == 0 {
-				tc.ioserverCount = maxIOServers
+			if tc.engineCount == 0 {
+				tc.engineCount = maxEngines
 			}
 
 			ctx := context.Background()
 
-			cfg := config.DefaultServer().WithServers(
-				ioserver.NewConfig().WithTargetCount(1),
-				ioserver.NewConfig().WithTargetCount(1),
+			cfg := config.DefaultServer().WithEngines(
+				engine.NewConfig().WithTargetCount(1),
+				engine.NewConfig().WithTargetCount(1),
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 
@@ -882,19 +865,19 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 					continue
 				}
 
-				trc := &ioserver.TestRunnerConfig{}
+				trc := &engine.TestRunnerConfig{}
 				if !tc.instancesStopped {
 					trc.Running.SetTrue()
 					srv.ready.SetTrue()
 				}
-				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
+				srv.runner = engine.NewTestRunner(trc, engine.NewConfig())
 				srv.setIndex(uint32(i))
 
 				srv._superblock.Rank = new(system.Rank)
 				*srv._superblock.Rank = system.Rank(i + 1)
 
 				// mimic srv.run, set "ready" on startLoop rx
-				go func(s *IOServerInstance, startFails bool) {
+				go func(s *EngineInstance, startFails bool) {
 					<-s.startLoop
 					t.Logf("instance %d: start signal received", s.Index())
 					if startFails {

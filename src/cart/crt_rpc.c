@@ -1,29 +1,14 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It implements the main RPC routines.
  */
 #define D_LOGFAC	DD_FAC(rpc)
+
+#include <semaphore.h>
 
 #include "crt_internal.h"
 
@@ -65,7 +50,7 @@ crt_hdlr_ctl_log_add_msg(crt_rpc_t *rpc_req)
 		rc = -DER_INVAL;
 	} else {
 		D_INFO("%.*s\n", CRT_CTL_MAX_LOG_MSG_SIZE,
-			in_args->log_msg);
+		       in_args->log_msg);
 	}
 
 	out_args->rc = rc;
@@ -119,40 +104,38 @@ crt_hdlr_ctl_fi_attr_set(crt_rpc_t *rpc_req)
 		D_ERROR("crt_reply_send() failed. rc: %d\n", rc);
 }
 
-
-/* CRT internal RPC format definitions */
-/* uri lookup */
+/* CRT internal RPC format definitions uri lookup */
 CRT_RPC_DEFINE(crt_uri_lookup, CRT_ISEQ_URI_LOOKUP, CRT_OSEQ_URI_LOOKUP)
 
 /* for self-test service */
 CRT_RPC_DEFINE(crt_st_send_id_reply_iov,
-		CRT_ISEQ_ST_SEND_ID, CRT_OSEQ_ST_REPLY_IOV)
+	       CRT_ISEQ_ST_SEND_ID, CRT_OSEQ_ST_REPLY_IOV)
 
 CRT_RPC_DEFINE(crt_st_send_iov_reply_empty,
-		CRT_ISEQ_ST_SEND_ID_IOV, CRT_OSEQ_ST_REPLY_EMPTY)
+	       CRT_ISEQ_ST_SEND_ID_IOV, CRT_OSEQ_ST_REPLY_EMPTY)
 
 CRT_RPC_DEFINE(crt_st_both_iov,
-		CRT_ISEQ_ST_SEND_ID_IOV, CRT_OSEQ_ST_REPLY_IOV)
+	       CRT_ISEQ_ST_SEND_ID_IOV, CRT_OSEQ_ST_REPLY_IOV)
 
 CRT_RPC_DEFINE(crt_st_send_iov_reply_bulk,
-		CRT_ISEQ_ST_SEND_ID_IOV_BULK, CRT_OSEQ_ST_REPLY_EMPTY)
+	       CRT_ISEQ_ST_SEND_ID_IOV_BULK, CRT_OSEQ_ST_REPLY_EMPTY)
 
 CRT_RPC_DEFINE(crt_st_send_bulk_reply_iov,
-		CRT_ISEQ_ST_SEND_ID_BULK, CRT_OSEQ_ST_REPLY_IOV)
+	       CRT_ISEQ_ST_SEND_ID_BULK, CRT_OSEQ_ST_REPLY_IOV)
 
 CRT_RPC_DEFINE(crt_st_both_bulk,
-		CRT_ISEQ_ST_SEND_ID_BULK, CRT_OSEQ_ST_REPLY_EMPTY)
+	       CRT_ISEQ_ST_SEND_ID_BULK, CRT_OSEQ_ST_REPLY_EMPTY)
 
 CRT_RPC_DEFINE(crt_st_open_session,
-		CRT_ISEQ_ST_SEND_SESSION, CRT_OSEQ_ST_REPLY_ID)
+	       CRT_ISEQ_ST_SEND_SESSION, CRT_OSEQ_ST_REPLY_ID)
 
 CRT_RPC_DEFINE(crt_st_close_session,
-		CRT_ISEQ_ST_SEND_ID, CRT_OSEQ_ST_REPLY_EMPTY)
+	       CRT_ISEQ_ST_SEND_ID, CRT_OSEQ_ST_REPLY_EMPTY)
 
 CRT_RPC_DEFINE(crt_st_start, CRT_ISEQ_ST_START, CRT_OSEQ_ST_START)
 
 CRT_RPC_DEFINE(crt_st_status_req,
-		CRT_ISEQ_ST_STATUS_REQ, CRT_OSEQ_ST_STATUS_REQ)
+	       CRT_ISEQ_ST_STATUS_REQ, CRT_OSEQ_ST_STATUS_REQ)
 
 CRT_RPC_DEFINE(crt_iv_fetch, CRT_ISEQ_IV_FETCH, CRT_OSEQ_IV_FETCH)
 
@@ -179,13 +162,13 @@ CRT_RPC_DEFINE(crt_ctl_get_pid,       CRT_ISEQ_CTL, CRT_OSEQ_CTL_GET_PID)
 CRT_RPC_DEFINE(crt_proto_query, CRT_ISEQ_PROTO_QUERY, CRT_OSEQ_PROTO_QUERY)
 
 CRT_RPC_DEFINE(crt_ctl_fi_attr_set, CRT_ISEQ_CTL_FI_ATTR_SET,
-		CRT_OSEQ_CTL_FI_ATTR_SET)
+	       CRT_OSEQ_CTL_FI_ATTR_SET)
 CRT_RPC_DEFINE(crt_ctl_fi_toggle, CRT_ISEQ_CTL_FI_TOGGLE,
 	       CRT_OSEQ_CTL_FI_TOGGLE)
 
 CRT_RPC_DEFINE(crt_ctl_log_set, CRT_ISEQ_CTL_LOG_SET, CRT_OSEQ_CTL_LOG_SET)
 CRT_RPC_DEFINE(crt_ctl_log_add_msg, CRT_ISEQ_CTL_LOG_ADD_MSG,
-		CRT_OSEQ_CTL_LOG_ADD_MSG)
+	       CRT_OSEQ_CTL_LOG_ADD_MSG)
 
 /* Define for crt_internal_rpcs[] array population below.
  * See CRT_INTERNAL_RPCS_LIST macro definition
@@ -206,6 +189,18 @@ static struct crt_proto_rpc_format crt_fi_rpcs[] = {
 	CRT_FI_RPCS_LIST
 };
 
+static struct crt_proto_rpc_format crt_st_rpcs[] = {
+	CRT_ST_RPCS_LIST
+};
+
+static struct crt_proto_rpc_format crt_ctl_rpcs[] = {
+	CRT_CTL_RPCS_LIST
+};
+
+static struct crt_proto_rpc_format crt_iv_rpcs[] = {
+	CRT_IV_RPCS_LIST
+};
+
 #undef X
 
 #define X(a, b, c, d, e) case a: return #a;
@@ -218,18 +213,20 @@ char
 		return "SWIM";
 
 	switch (opc) {
-	CRT_INTERNAL_RPCS_LIST
-	CRT_FI_RPCS_LIST
-	default:
-		return "DAOS";
+		CRT_INTERNAL_RPCS_LIST
+		CRT_FI_RPCS_LIST
+		CRT_IV_RPCS_LIST
+		CRT_ST_RPCS_LIST
+		CRT_CTL_RPCS_LIST
 	}
+	return "DAOS";
 }
 
 #undef X
 
 /* CRT RPC related APIs or internal functions */
 int
-crt_internal_rpc_register(void)
+crt_internal_rpc_register(bool server)
 {
 	struct crt_proto_format	cpf;
 	int			rc;
@@ -242,10 +239,29 @@ crt_internal_rpc_register(void)
 
 	rc = crt_proto_register_internal(&cpf);
 	if (rc != 0) {
-		D_ERROR("crt_proto_register_internal() failed, " DF_RC "\n",
+		D_ERROR("crt_proto_register_internal() failed, "DF_RC"\n",
 			DP_RC(rc));
 		return rc;
 	}
+
+	/* TODO: The self-test protocols should not be registered on the client
+	 * by default.
+	 */
+
+	cpf.cpf_name  = "self-test";
+	cpf.cpf_ver   = CRT_PROTO_ST_VERSION;
+	cpf.cpf_count = ARRAY_SIZE(crt_st_rpcs);
+	cpf.cpf_prf   = crt_st_rpcs;
+	cpf.cpf_base  = CRT_OPC_ST_BASE;
+
+	rc = crt_proto_register(&cpf);
+	if (rc != 0) {
+		D_ERROR("crt_proto_register() failed, "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	if (!server)
+		return -DER_SUCCESS;
 
 	cpf.cpf_name  = "fault-injection";
 	cpf.cpf_ver   = CRT_PROTO_FI_VERSION;
@@ -254,8 +270,133 @@ crt_internal_rpc_register(void)
 	cpf.cpf_base  = CRT_OPC_FI_BASE;
 
 	rc = crt_proto_register(&cpf);
+	if (rc != 0) {
+		D_ERROR("crt_proto_register() failed, "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	cpf.cpf_name  = "ctl";
+	cpf.cpf_ver   = CRT_PROTO_CTL_VERSION;
+	cpf.cpf_count = ARRAY_SIZE(crt_ctl_rpcs);
+	cpf.cpf_prf   = crt_ctl_rpcs;
+	cpf.cpf_base  = CRT_OPC_CTL_BASE;
+
+	rc = crt_proto_register(&cpf);
+	if (rc != 0) {
+		D_ERROR("crt_proto_register() failed, "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	cpf.cpf_name  = "incast";
+	cpf.cpf_ver   = CRT_PROTO_IV_VERSION;
+	cpf.cpf_count = ARRAY_SIZE(crt_iv_rpcs);
+	cpf.cpf_prf   = crt_iv_rpcs;
+	cpf.cpf_base  = CRT_OPC_IV_BASE;
+
+	rc = crt_proto_register(&cpf);
 	if (rc != 0)
-		D_ERROR("crt_proto_register() failed, " DF_RC "\n", DP_RC(rc));
+		D_ERROR("crt_proto_register() failed, "DF_RC"\n", DP_RC(rc));
+
+	return rc;
+}
+
+struct crt_pfi {
+	int	pfi_ver;
+	int	pfi_rc;
+	sem_t	pfi_sem;
+};
+
+static void
+crt_pfi_cb(struct crt_proto_query_cb_info *cb_info)
+{
+	struct crt_pfi *pfi = cb_info->pq_arg;
+
+	pfi->pfi_rc = cb_info->pq_rc;
+	pfi->pfi_ver = cb_info->pq_ver;
+	sem_post(&pfi->pfi_sem);
+}
+
+/* Register the FI protocol against an endpoint.
+ * This is from client code, so pass in an endpoint, and query the target for
+ * what version it supports.  The client only supports one version so abort
+ * if there is any error.
+ */
+int
+crt_register_proto_fi(crt_endpoint_t *ep)
+{
+	struct crt_proto_format cpf;
+	struct crt_pfi	pfi = {};
+	int		rc;
+
+	cpf.cpf_name  = "fault-injection";
+	cpf.cpf_ver   = CRT_PROTO_FI_VERSION;
+	cpf.cpf_count = ARRAY_SIZE(crt_fi_rpcs);
+	cpf.cpf_prf   = crt_fi_rpcs;
+	cpf.cpf_base  = CRT_OPC_FI_BASE;
+
+	rc = sem_init(&pfi.pfi_sem, 0, 0);
+	if (rc != 0)
+		return -DER_MISC;
+
+	rc = crt_proto_query(ep, cpf.cpf_base, &cpf.cpf_ver,
+			     1, crt_pfi_cb, &pfi);
+	if (rc != -DER_SUCCESS)
+		D_GOTO(out, rc);
+
+	sem_wait(&pfi.pfi_sem);
+
+	if (pfi.pfi_rc != -DER_SUCCESS)
+		D_GOTO(out, rc = pfi.pfi_rc);
+
+	if (pfi.pfi_ver != cpf.cpf_ver)
+		D_GOTO(out, rc = -DER_MISMATCH);
+
+	rc = crt_proto_register(&cpf);
+	if (rc != 0)
+		D_ERROR("crt_proto_register() failed, "DF_RC"\n", DP_RC(rc));
+
+out:
+	sem_destroy(&pfi.pfi_sem);
+
+	return rc;
+}
+
+int
+crt_register_proto_ctl(crt_endpoint_t *ep)
+{
+	struct crt_proto_format cpf;
+	struct crt_pfi	pfi = {};
+	int		rc;
+
+	cpf.cpf_name  = "ctl";
+	cpf.cpf_ver   = CRT_PROTO_CTL_VERSION;
+	cpf.cpf_count = ARRAY_SIZE(crt_ctl_rpcs);
+	cpf.cpf_prf   = crt_ctl_rpcs;
+	cpf.cpf_base  = CRT_OPC_CTL_BASE;
+
+	rc = sem_init(&pfi.pfi_sem, 0, 0);
+	if (rc != 0)
+		return -DER_MISC;
+
+	rc = crt_proto_query(ep, cpf.cpf_base, &cpf.cpf_ver,
+			     1, crt_pfi_cb, &pfi);
+	if (rc != -DER_SUCCESS)
+		D_GOTO(out, rc);
+
+	sem_wait(&pfi.pfi_sem);
+
+	if (pfi.pfi_rc != -DER_SUCCESS)
+		D_GOTO(out, rc = pfi.pfi_rc);
+
+	if (pfi.pfi_ver != cpf.cpf_ver)
+		D_GOTO(out, rc = -DER_MISMATCH);
+
+	rc = crt_proto_register(&cpf);
+	if (rc != 0)
+		D_ERROR("crt_proto_register() failed, "DF_RC"\n", DP_RC(rc));
+
+out:
+	sem_destroy(&pfi.pfi_sem);
 
 	return rc;
 }
@@ -279,8 +420,9 @@ crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 	if (opc_info->coi_crf != NULL &&
 	    (opc_info->coi_crf->crf_size_in > CRT_MAX_INPUT_SIZE ||
 	     opc_info->coi_crf->crf_size_out > CRT_MAX_OUTPUT_SIZE)) {
-		D_ERROR("opc: %#x, input_size "DF_U64" or output_size "DF_U64" "
-			"too large.\n", opc, opc_info->coi_crf->crf_size_in,
+		D_ERROR("opc: %#x, input_size " DF_U64 " or output_size "
+			DF_U64 " too large.\n",
+			opc, opc_info->coi_crf->crf_size_in,
 			opc_info->coi_crf->crf_size_out);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
@@ -336,7 +478,6 @@ crt_rpc_priv_set_ep(struct crt_rpc_priv *rpc_priv, crt_endpoint_t *tgt_ep)
 	rpc_priv->crp_have_ep = 1;
 }
 
-
 static int check_ep(crt_endpoint_t *tgt_ep, struct crt_grp_priv **ret_grp_priv)
 {
 	struct crt_grp_priv	*grp_priv;
@@ -354,7 +495,6 @@ out:
 
 	return rc;
 }
-
 
 int
 crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
@@ -438,6 +578,7 @@ crt_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 out:
 	return rc;
 }
+
 int
 crt_req_set_endpoint(crt_rpc_t *req, crt_endpoint_t *tgt_ep)
 {
@@ -493,7 +634,6 @@ out:
 void
 crt_req_destroy(struct crt_rpc_priv *rpc_priv)
 {
-
 	if (rpc_priv->crp_reply_pending == 1) {
 		D_WARN("no reply sent for rpc_priv %p (opc: %#x).\n",
 		       rpc_priv, rpc_priv->crp_pub.cr_opc);
@@ -552,6 +692,7 @@ crt_req_fill_tgt_uri(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t base_uri)
 	D_STRNDUP(rpc_priv->crp_tgt_uri, base_uri, CRT_ADDR_STR_MAX_LEN);
 
 	if (rpc_priv->crp_tgt_uri == NULL) {
+		/* avoid checksum warning */
 		return -DER_NOMEM;
 	}
 
@@ -574,7 +715,6 @@ crt_issue_uri_lookup_retry(crt_context_t ctx,
 			   d_rank_t query_rank, uint32_t query_tag,
 			   struct crt_rpc_priv *rpc_priv)
 {
-
 	d_rank_list_t	*membs;
 	d_rank_t	contact_rank;
 	int		rc;
@@ -747,7 +887,7 @@ crt_client_get_contact_rank(crt_context_t crt_ctx, crt_group_t *grp,
 			    int *ret_idx)
 {
 	struct crt_grp_priv	*grp_priv;
-	d_rank_t		contact_rank = CRT_NO_RANK;
+	d_rank_t		 contact_rank = CRT_NO_RANK;
 	char			*cached_uri = NULL;
 	struct crt_context	*ctx;
 	d_rank_list_t		*membs;
@@ -793,11 +933,11 @@ out:
 static int
 crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 {
-	crt_endpoint_t	*tgt_ep;
-	crt_context_t	ctx;
-	crt_group_t	*grp;
-	int		ret_idx;
-	int		rc;
+	crt_endpoint_t		*tgt_ep;
+	crt_context_t		 ctx;
+	crt_group_t		*grp;
+	int			 ret_idx;
+	int			 rc;
 
 	tgt_ep = &rpc_priv->crp_pub.cr_ep;
 	ctx = rpc_priv->crp_pub.cr_ctx;
@@ -1099,7 +1239,6 @@ crt_req_send_immediately(struct crt_rpc_priv *rpc_priv)
 			  "crt_hg_req_send failed, rc: %d\n", rc);
 	}
 out:
-
 	return rc;
 }
 
@@ -1278,15 +1417,20 @@ crt_reply_send(crt_rpc_t *req)
 
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 
+	D_DEBUG(DB_ALL, "rpc_priv: %p\n", rpc_priv);
 	if (rpc_priv->crp_coll == 1) {
 		struct crt_cb_info	cb_info;
 
+		D_DEBUG(DB_ALL, "call crp_corpc_reply_hdlf: rpc_priv: %p\n",
+			rpc_priv);
 		cb_info.cci_rpc = &rpc_priv->crp_pub;
 		cb_info.cci_rc = 0;
 		cb_info.cci_arg = rpc_priv;
 
 		crt_corpc_reply_hdlr(&cb_info);
 	} else {
+		D_DEBUG(DB_ALL, "call crt_hg_reply_send: rpc_priv: %p\n",
+			rpc_priv);
 		rc = crt_hg_reply_send(rpc_priv);
 		if (rc != 0)
 			D_ERROR("crt_hg_reply_send failed, rc: %d,opc: %#x.\n",
@@ -1425,6 +1569,7 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
 	rpc_priv->crp_complete_cb = NULL;
 	rpc_priv->crp_arg = NULL;
 	if (!srv_flag) {
+		/* avoid checksum warning */
 		crt_common_hdr_init(rpc_priv, opc);
 	}
 	rpc_priv->crp_state = RPC_STATE_INITED;
@@ -1516,8 +1661,7 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 	}
 
 	if ((self_rank != rpc_priv->crp_req_hdr.cch_dst_rank) ||
-		(crt_ctx->cc_idx != rpc_priv->crp_req_hdr.cch_dst_tag)) {
-
+	    (crt_ctx->cc_idx != rpc_priv->crp_req_hdr.cch_dst_tag)) {
 		if (!skip_check) {
 			D_ERROR("Mismatch rpc: %p opc: %x rank:%d tag:%d "
 				"self:%d cc_idx:%d ep_rank:%d ep_tag:%d\n",
@@ -1666,11 +1810,8 @@ crt_req_dst_tag_get(crt_rpc_t *rpc, uint32_t *tag)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-
 	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
-
 	*tag = rpc_priv->crp_req_hdr.cch_dst_tag;
-
 out:
 	return rc;
 }

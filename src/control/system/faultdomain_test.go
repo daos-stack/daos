@@ -1,24 +1,7 @@
 //
 // (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package system
@@ -47,8 +30,16 @@ func TestSystem_NewFaultDomain(t *testing.T) {
 			input:  []string{"ok", ""},
 			expErr: errors.New("invalid fault domain"),
 		},
+		"explicit root": {
+			input:  []string{"/"},
+			expErr: errors.New("invalid fault domain"),
+		},
 		"whitespace-only strings": {
 			input:  []string{"ok", "\t    "},
+			expErr: errors.New("invalid fault domain"),
+		},
+		"name contains separator": {
+			input:  []string{"ok", "alpha/beta"},
 			expErr: errors.New("invalid fault domain"),
 		},
 		"single-level": {
@@ -565,6 +556,13 @@ func TestSystem_FaultDomain_NewChild(t *testing.T) {
 			childLevel: "   ",
 			expErr:     errors.New("invalid fault domain"),
 		},
+		"child level is root": {
+			orig: &FaultDomain{
+				Domains: []string{"parent"},
+			},
+			childLevel: "/",
+			expErr:     errors.New("invalid fault domain"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			result, err := tc.orig.NewChild(tc.childLevel)
@@ -1001,16 +999,15 @@ func TestSystem_FaultDomainTree_AddDomain(t *testing.T) {
 	}{
 		"nil tree": {
 			toAdd:  MustCreateFaultDomain(),
-			expErr: errors.New("can't add to nil FaultDomainTree"),
+			expErr: errors.New("nil FaultDomainTree"),
 		},
 		"nil input": {
 			tree:   NewFaultDomainTree(),
-			expErr: errors.New("can't add empty fault domain to tree"),
+			expErr: errors.New("nil domain"),
 		},
-		"empty input": {
-			tree:   NewFaultDomainTree(),
-			toAdd:  MustCreateFaultDomain(),
-			expErr: errors.New("can't add empty fault domain to tree"),
+		"root domain": {
+			tree:  NewFaultDomainTree(),
+			toAdd: MustCreateFaultDomain(),
 		},
 		"single level": {
 			tree:  NewFaultDomainTree(),

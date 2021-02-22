@@ -1,23 +1,6 @@
-.\" (C) Copyright 2015-2019 Intel Corporation.
+.\" (C) Copyright 2015-2021 Intel Corporation.
 .\"
-.\" Licensed under the Apache License, Version 2.0 (the "License");
-.\" you may not use this file except in compliance with the License.
-.\" You may obtain a copy of the License at
-.\"
-.\"    http://www.apache.org/licenses/LICENSE-2.0
-.\"
-.\" Unless required by applicable law or agreed to in writing, software
-.\" distributed under the License is distributed on an "AS IS" BASIS,
-.\" WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-.\" See the License for the specific language governing permissions and
-.\" limitations under the License.
-.\"
-.\" GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-.\" The Government's rights to use, modify, reproduce, release, perform, display,
-.\" or disclose this software are subject to the terms of the Apache License as
-.\" provided in Contract No. B609815.
-.\" Any reproduction of computer software, computer software documentation, or
-.\" portions thereof marked with this legend must also reproduce the markings.
+.\" SPDX-License-Identifier: BSD-2-Clause-Patent
 .\"
 .TH daos 8 2019-09-17 "0.0.1" "DAOS Utilities"
 .SH NAME
@@ -28,7 +11,8 @@ daos \- command to manage DAOS pool/container/object
 .SH DESCRIPTION
 .B daos
 can be used to manage/query a pool content, create/query/manage/destroy a
-container inside a pool or query/manage an object inside a container.
+container inside a pool, copy data to/from a POSIX container to a POSIX,
+filesystem, or query/manage an object inside a container.
 .br
 The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \fBdaos\fR are listed below.
 .SH RESOURCE\fRs/\fBCOMMAND\fRs/\fBOPTION\fRs
@@ -38,6 +22,8 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 	  \fBpool\fR             pool
 .br
 	  \fBcontainer \fR(\fBcont\fR) container in a pool
+.br
+	  \fBfilesystem \fR(\fBfs\fR) POSIX filesystem path or POSIX container
 .br
 	  \fBobject \fR(\fBobj\fR)     object in a container
 .br
@@ -74,8 +60,6 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 .br
 	  \fB--sys=\fRSTR
 .br
-	  \fB--svc=\fRRANKS        pool service replicas like 1,2,3
-.br
 	  \fB--attr=\fRNAME        pool attribute name to get
 .br
 .TP
@@ -91,6 +75,8 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 	  \fBquery\fR            query a container
 .br
 	  \fBstat\fR             get container statistics
+.br
+	  \fBcheck\fR            check objects consistency in container
 .br
 	  \fBlist-attrs\fR       list container user-defined attributes
 .br
@@ -115,12 +101,12 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 	  \fBrollback\fR         roll back container to specified snapshot
 .TP
 .I container \fBOPTION\fRs (create by UUID):
-	  <\fIpool\fR options>   (\fB--pool\fR, \fB--sys-name\fR, \fB--svc\fR)
+	  <\fIpool\fR options>   (\fB--pool\fR, \fB--sys-name\fR)
 .br
 	  \fB--cont=\fRUUID      (optional) container UUID (or generated)
 .TP
 .I container \fBOPTION\fRs (create and link to namespace path):
-	  <\fIpool\fR/\fIcont\fR opts>   (\fB--pool\fR, \fB--sys-name\fR, \fB--svc\fR, \fB--cont\fR [optional])
+	  <\fIpool\fR/\fIcont\fR opts>   (\fB--pool\fR, \fB--sys-name\fR, \fB--cont\fR [optional])
 .br
 	  \fB--path=\fRPATHSTR     container namespace path to be created and provide a direct link to new DAOS container
 .br
@@ -174,9 +160,9 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 	  \fB--force\fR            destroy container regardless of state
 .TP
 .I container \fBOPTION\fRs (query, and all commands except create):
-	  <\fIpool\fR options>   with \fB--cont\fR use: (\fB--pool\fR, \fB--sys-name\fR, \fB--svc\fR)
+	  <\fIpool\fR options>   with \fB--cont\fR use: (\fB--pool\fR, \fB--sys-name\fR)
 .br
-	  <\fIpool\fR options>   with \fB--path\fR use: (\fB--sys-name\fR, \fB--svc\fR)
+	  <\fIpool\fR options>   with \fB--path\fR use: (\fB--sys-name\fR)
 .br
 	  \fB--cont=\fRUUID        (mandatory, unless using \fB--path\fR)
 .br
@@ -196,6 +182,17 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 .br
 	  \fB--epcrange=\fRB-E     container epoch range (destroy-snap)
 .TP
+.I filesystem \fR(\fIfs\fR) \fBCOMMAND\fRs:
+	  \fBcopy\fR           	 copy data to/from a container to POSIX path
+.TP
+.I filesystem \fR(\fIfs\fR) \fBOPTION\fRs:
+.br
+	  \fB--src=\fRSTR     src=daos://<pool/cont>[/<path>] | <path>
+.br
+	  \fB--dst=\fRSTR     dst=daos://<pool/cont>[/<path>] | <path>
+.br
+		type is daos, only specified if pool/cont used
+.TP
 .I object \fR(\fIobj\fR) \fBCOMMAND\fRs:
 	  \fBquery\fR            query an object's layout
 .br
@@ -204,7 +201,7 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 	  \fBdump\fR             dump an object's contents
 .TP
 .I object \fR(\fIobj\fR) \fBOPTION\fRs:
-	  <\fIpool\fR options>   (\fB--pool\fR, \fB--sys-name\fR, \fB--svc\fR)
+	  <\fIpool\fR options>   (\fB--pool\fR, \fB--sys-name\fR)
 .br
 	  <\fIcont\fR options>   (\fB--cont\fR)
 .br

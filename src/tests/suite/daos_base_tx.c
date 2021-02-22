@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -100,7 +83,7 @@ dtx_io_test_succ(void **state, daos_iod_type_t iod_type)
 	assert_non_null(update_buf);
 	dts_buf_render(update_buf, dts_dtx_iosize);
 
-	oid = dts_oid_gen(dts_dtx_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_dtx_class, 0, 0, arg->myrank);
 
 	/* Synchronously commit the update. */
 	arg->fail_loc = DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS;
@@ -159,7 +142,7 @@ dtx_io_test_fail(void **state, uint64_t fail_loc)
 	assert_non_null(update_buf2);
 	dts_buf_render(update_buf2, dts_dtx_iosize / 2);
 
-	oid = dts_oid_gen(dts_dtx_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_dtx_class, 0, 0, arg->myrank);
 
 	/* Synchronously commit the update_1. */
 	arg->fail_loc = DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS;
@@ -241,7 +224,7 @@ dtx_check_replicas_v2(const char *dkey, const char *akey, const char *msg,
 			assert_true(req->iod[0].iod_size == punch ? 0 : size);
 			assert_memory_equal(update_buf, fetch_buf, size);
 		} else {
-			assert_int_equal(req->result, -DER_INPROGRESS);
+			assert_rc_equal(req->result, -DER_INPROGRESS);
 		}
 	}
 
@@ -280,7 +263,7 @@ dtx_fetch_committable(void **state, bool punch)
 	D_ALLOC(zero_buf, dts_dtx_iosize);
 	assert_non_null(zero_buf);
 
-	oid = dts_oid_gen(dts_dtx_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_dtx_class, 0, 0, arg->myrank);
 
 	/* Synchronously commit the 1st update. */
 	arg->fail_loc = DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS;
@@ -362,7 +345,7 @@ dtx_modify_committable(void **state, bool committable_punch, bool sync_update)
 	assert_non_null(update_buf2);
 	dts_buf_render(update_buf2, dts_dtx_iosize / 2);
 
-	oid = dts_oid_gen(dts_dtx_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_dtx_class, 0, 0, arg->myrank);
 
 	/* Synchronously commit the 1st update. */
 	arg->fail_loc = DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS;
@@ -441,7 +424,7 @@ dtx_batched_commit(void **state, int count)
 	D_ALLOC(update_buf, size);
 	assert_non_null(update_buf);
 
-	oid = dts_oid_gen(dts_dtx_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_dtx_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
 
 	for (i = 0; i < count; i++) {
@@ -503,7 +486,7 @@ dtx_handle_resend(void **state, uint64_t fail_loc, uint16_t oclass)
 	D_ALLOC(fetch_buf, dts_dtx_iosize);
 	assert_non_null(fetch_buf);
 
-	oid = dts_oid_gen(oclass, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, oclass, 0, 0, arg->myrank);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
@@ -596,7 +579,7 @@ dtx_16(void **state)
 	assert_non_null(update_buf);
 	dts_buf_render(update_buf, dts_dtx_iosize);
 
-	oid = dts_oid_gen(dts_dtx_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_dtx_class, 0, 0, arg->myrank);
 
 	/* Synchronously commit the modification. */
 	arg->fail_loc = DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS;
@@ -642,7 +625,7 @@ dtx_17(void **state)
 	D_ALLOC(fetch_buf, dts_dtx_iosize);
 	assert_non_null(fetch_buf);
 
-	oid = dts_oid_gen(dts_dtx_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_dtx_class, 0, 0, arg->myrank);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
@@ -728,7 +711,7 @@ run_daos_base_tx_test(int rank, int size, int *sub_tests, int sub_tests_size)
 		sub_tests = NULL;
 	}
 
-	rc = run_daos_sub_tests("Single RDG TX tests", dtx_tests,
+	rc = run_daos_sub_tests("DAOS_Single_RDG_TX", dtx_tests,
 				ARRAY_SIZE(dtx_tests), sub_tests,
 				sub_tests_size, dtx_test_setup, test_teardown);
 

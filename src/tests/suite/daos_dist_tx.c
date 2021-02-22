@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -58,7 +41,7 @@ dtx_1(void **state)
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 
 	arg->async = 0;
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
 
 	/* Repeatedly insert different SV for the same obj, overwrite. */
@@ -97,7 +80,7 @@ dtx_2(void **state)
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 
 	arg->async = 0;
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	/* Repeatedly insert different SV for the same obj, some overlap. */
@@ -142,7 +125,8 @@ dtx_update_multiple_objs(test_arg_t *arg, daos_iod_type_t i_type,
 	arg->async = 0;
 
 	for (i = 0; i < DTX_TEST_SUB_REQS; i++) {
-		oids[i] = dts_oid_gen(oclass, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, oclass, 0, 0,
+					    arg->myrank);
 		ioreq_init(&reqs[i], arg->coh, oids[i], i_type, arg);
 
 		D_ALLOC(write_bufs[i], size);
@@ -227,7 +211,7 @@ dtx_7(void **state)
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 
 	arg->async = 0;
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
 
 	dts_buf_render(write_buf, DTX_IO_SMALL);
@@ -261,7 +245,7 @@ dtx_8(void **state)
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 
 	arg->async = 0;
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	dts_buf_render(write_bufs[0], DTX_IO_SMALL);
@@ -301,7 +285,7 @@ dtx_9(void **state)
 	print_message("DTX9: conditional insert/update\n");
 
 	arg->async = 0;
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -360,7 +344,7 @@ dtx_10(void **state)
 	print_message("DTX10: conditional punch\n");
 
 	arg->async = 0;
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
 
 	dts_buf_render(write_buf, DTX_IO_SMALL);
@@ -416,7 +400,7 @@ dtx_11(void **state)
 	print_message("DTX11: read only transaction\n");
 
 	arg->async = 0;
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
 
 	dts_buf_render(write_buf, DTX_IO_SMALL);
@@ -467,7 +451,7 @@ dtx_12(void **state)
 	MUST(daos_tx_open(arg->coh, &th, DAOS_TF_ZERO_COPY, NULL));
 
 	arg->async = 0;
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	dts_buf_render(write_buf, DTX_IO_SMALL);
@@ -517,7 +501,7 @@ dtx_13(void **state)
 	print_message("DTX13: DTX status machnie\n");
 
 	arg->async = 0;
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	dts_buf_render(write_buf, DTX_IO_SMALL);
 
@@ -529,15 +513,15 @@ dtx_13(void **state)
 
 	print_message("Commit the committed TX1...\n");
 	rc = daos_tx_commit(th, NULL);
-	assert_int_equal(rc, -DER_ALREADY);
+	assert_rc_equal(rc, -DER_ALREADY);
 
 	print_message("Abort the committed TX1, expect DER_NO_PERM\n");
 	rc = daos_tx_abort(th, NULL);
-	assert_int_equal(rc, -DER_NO_PERM);
+	assert_rc_equal(rc, -DER_NO_PERM);
 
 	print_message("Restart the committed TX1, expect DER_NO_PERM\n");
 	rc = daos_tx_restart(th, NULL);
-	assert_int_equal(rc, -DER_NO_PERM);
+	assert_rc_equal(rc, -DER_NO_PERM);
 
 	print_message("Update against the committed TX1, expect DER_NO_PERM\n");
 	arg->expect_result = -DER_NO_PERM;
@@ -559,18 +543,18 @@ dtx_13(void **state)
 
 	print_message("Restart the TX2, expect DER_NO_PERM\n");
 	rc = daos_tx_restart(th, NULL);
-	assert_int_equal(rc, -DER_NO_PERM);
+	assert_rc_equal(rc, -DER_NO_PERM);
 
 	print_message("Abort the TX2...\n");
 	MUST(daos_tx_abort(th, NULL));
 
 	print_message("Abort the TX2 again...\n");
 	rc = daos_tx_abort(th, NULL);
-	assert_int_equal(rc, -DER_ALREADY);
+	assert_rc_equal(rc, -DER_ALREADY);
 
 	print_message("Commit the aborted TX2, expect DER_NO_PERM\n");
 	rc = daos_tx_commit(th, NULL);
-	assert_int_equal(rc, -DER_NO_PERM);
+	assert_rc_equal(rc, -DER_NO_PERM);
 
 	print_message("Update against the aborted TX2, expect DER_NO_PERM\n");
 	arg->expect_result = -DER_NO_PERM;
@@ -607,7 +591,7 @@ dtx_14(void **state)
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 
 	arg->async = 0;
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	dts_buf_render(write_buf, DTX_IO_SMALL);
@@ -624,7 +608,7 @@ again:
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	rc = daos_tx_commit(th, NULL);
-	assert_int_equal(rc, -DER_TX_RESTART);
+	assert_rc_equal(rc, -DER_TX_RESTART);
 
 	/* Not allow new I/O before restart the TX. */
 	arg->expect_result = -DER_NO_PERM;
@@ -676,7 +660,7 @@ dtx_15(void **state)
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 
 	arg->async = 0;
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -729,7 +713,7 @@ dtx_handle_resent(test_arg_t *arg, uint64_t fail_loc)
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 
 	arg->async = 0;
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	dts_buf_render(write_buf, DTX_IO_SMALL);
@@ -805,7 +789,7 @@ dtx_18(void **state)
 		skip();
 
 	arg->async = 0;
-	oid = dts_oid_gen(OC_RP_3G1, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_3G1, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
 
 	dts_buf_render(write_buf, DTX_IO_SMALL);
@@ -851,7 +835,7 @@ dtx_18(void **state)
 
 	/* Expect to hit conflict with the read TS on other shards. */
 	rc = daos_tx_commit(th, NULL);
-	assert_int_equal(rc, -DER_TX_RESTART);
+	assert_rc_equal(rc, -DER_TX_RESTART);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	daos_fail_value_set(0);
@@ -920,7 +904,8 @@ dtx_19(void **state)
 		if (max_size < size[i] * nr[i])
 			max_size = size[i] * nr[i];
 
-		oids[i] = dts_oid_gen(oclass, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, oclass, 0, 0,
+					    arg->myrank);
 		ioreq_init(&reqs[i], arg->coh, oids[i], i_type, arg);
 
 		D_ALLOC(write_bufs[i], size[i] * nr[i]);
@@ -960,7 +945,8 @@ dtx_init_oid_req_akey(test_arg_t *arg, daos_obj_id_t *oids, struct ioreq *reqs,
 	int	i;
 
 	for (i = 0; i < oid_req_cnt; i++) {
-		oids[i] = dts_oid_gen(ocs[i], ofeats, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, ocs[i], ofeats, 0,
+					    arg->myrank);
 		ioreq_init(&reqs[i], arg->coh, oids[i], types[i], arg);
 	}
 
@@ -1055,7 +1041,7 @@ dtx_20(void **state)
 			      &reqs[i]);
 
 	rc = daos_tx_commit(th, NULL);
-	assert_int_equal(rc, -DER_IO);
+	assert_rc_equal(rc, -DER_IO);
 
 	MUST(daos_tx_close(th, NULL));
 
@@ -1135,7 +1121,7 @@ dtx_21(void **state)
 	print_message("Failed punch firstly\n");
 
 	rc = daos_obj_punch(req.oh, DAOS_TX_NONE, 0, NULL);
-	assert_int_equal(rc, -DER_IO);
+	assert_rc_equal(rc, -DER_IO);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0)
@@ -1253,7 +1239,7 @@ restart:
 				goto restart;
 			}
 
-			assert_int_equal(reqs[i].result, 0);
+			assert_rc_equal(reqs[i].result, 0);
 		}
 
 		/* If "vals[0] > vals[1]", then vals[0]'s TX internal update
@@ -1280,7 +1266,7 @@ restart:
 			goto restart;
 		}
 
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		MUST(daos_tx_close(th, NULL));
 	}
 
@@ -1335,10 +1321,10 @@ restart:
 
 	rc = daos_tx_commit(th, NULL);
 	if (once) {
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	} else {
 		once = true;
-		assert_int_equal(rc, -DER_TX_RESTART);
+		assert_rc_equal(rc, -DER_TX_RESTART);
 
 		MPI_Barrier(MPI_COMM_WORLD);
 		if (arg->myrank == 0)
@@ -1381,7 +1367,8 @@ dtx_24(void **state)
 	print_message("Transactional update something\n");
 
 	for (i = 0, val = 0; i < 10; i++, val++) {
-		oids[i] = dts_oid_gen(OC_RP_2G2, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, OC_RP_2G2, 0, 0,
+					    arg->myrank);
 		ioreq_init(&reqs[i], arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
 
 		MUST(daos_tx_open(arg->coh, &th, 0, NULL));
@@ -1457,7 +1444,8 @@ dtx_25(void **state)
 	print_message("Transactional update without batched commit\n");
 
 	for (i = 0, val = 1; i < DTX_NC_CNT; i++, val++) {
-		oids[i] = dts_oid_gen(OC_RP_2G2, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, OC_RP_2G2, 0, 0,
+					    arg->myrank);
 		ioreq_init(&reqs[i], arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
 
 		MUST(daos_tx_open(arg->coh, &th, 0, NULL));
@@ -1520,7 +1508,8 @@ dtx_26(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	for (i = 0, val = 1; i < DTX_NC_CNT; i++, val++) {
-		oids[i] = dts_oid_gen(OC_RP_2G2, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, OC_RP_2G2, 0, 0,
+					    arg->myrank);
 		ioreq_init(&reqs[i], arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
 
 		/* Base value: i + 1 */
@@ -1598,7 +1587,8 @@ dtx_uncertainty_miss_request(test_arg_t *arg, uint64_t loc, bool abort)
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	for (i = 0, val = 1; i < DTX_NC_CNT; i++, val++) {
-		oids[i] = dts_oid_gen(OC_RP_2G2, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, OC_RP_2G2, 0, 0,
+					    arg->myrank);
 		ioreq_init(&reqs[i], arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
 
 		/* Base value: i + 1 */
@@ -1626,9 +1616,9 @@ dtx_uncertainty_miss_request(test_arg_t *arg, uint64_t loc, bool abort)
 
 		rc = daos_tx_commit(th, NULL);
 		if (abort)
-			assert_int_equal(rc, -DER_IO);
+			assert_rc_equal(rc, -DER_IO);
 		else
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 
 		MUST(daos_tx_close(th, NULL));
 	}
@@ -1750,9 +1740,9 @@ dtx_generate_layout(test_arg_t *arg, const char *dkey1, const char *dkey2,
 
 			rc = daos_tx_commit(th, NULL);
 			if (i % 2 == 1 && inject_fail)
-				assert_int_equal(rc, -DER_IO);
+				assert_rc_equal(rc, -DER_IO);
 			else
-				assert_int_equal(rc, 0);
+				assert_rc_equal(rc, 0);
 
 			MUST(daos_tx_close(th, NULL));
 		}
@@ -1955,9 +1945,9 @@ dtx_30(void **state)
 
 		rc = daos_tx_commit(th, NULL);
 		if (i % 2 == 1)
-			assert_int_equal(rc, -DER_IO);
+			assert_rc_equal(rc, -DER_IO);
 		else
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 
 		MUST(daos_tx_close(th, NULL));
 	}
@@ -2210,9 +2200,9 @@ dtx_33(void **state)
 
 			rc = daos_tx_commit(th, NULL);
 			if (i % 2 == 1)
-				assert_int_equal(rc, -DER_IO);
+				assert_rc_equal(rc, -DER_IO);
 			else
-				assert_int_equal(rc, 0);
+				assert_rc_equal(rc, 0);
 
 			MUST(daos_tx_close(th, NULL));
 		}
@@ -2323,7 +2313,7 @@ dtx_34(void **state)
 
 		rc = daos_obj_punch_akeys(reqs[0].oh, th, 0, &api_dkey2,
 					  IOREQ_SG_IOD_NR, api_akeys + i, NULL);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 
 		insert(dkey1, IOREQ_SG_IOD_NR, (const char **)(akeys + i),
 		       rec_sizes + i, rx_nr + i, offsets + i,
@@ -2331,7 +2321,7 @@ dtx_34(void **state)
 
 		rc = daos_obj_punch_akeys(reqs[1].oh, th, 0, &api_dkey2,
 					  IOREQ_SG_IOD_NR, api_akeys + i, NULL);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 
 		MUST(daos_tx_commit(th, NULL));
 		MUST(daos_tx_close(th, NULL));
@@ -2736,10 +2726,12 @@ dtx_38(void **state)
 		skip();
 
 	if (arg->myrank == 0) {
-		oids[0] = dts_oid_gen(ocs[0], 0, arg->myrank);
+		oids[0] = daos_test_oid_gen(arg->coh, ocs[0], 0, 0,
+					    arg->myrank);
 		kill_ranks[0] = get_rank_by_oid_shard(arg, oids[0], 0);
 		do {
-			oids[1] = dts_oid_gen(ocs[1], 0, arg->myrank);
+			oids[1] = daos_test_oid_gen(arg->coh, ocs[1], 0, 0,
+						    arg->myrank);
 			kill_ranks[1] = get_rank_by_oid_shard(arg, oids[1], 0);
 		} while (kill_ranks[0] != kill_ranks[1]);
 
@@ -2835,7 +2827,7 @@ dtx_38(void **state)
 				 */
 				assert_int_equal(val, i + 1);
 			} else {
-				assert_int_equal(reqs[0].result,
+				assert_rc_equal(reqs[0].result,
 						 -DER_DATA_LOSS);
 			}
 
@@ -2847,7 +2839,7 @@ dtx_38(void **state)
 				 */
 				assert_int_equal(val, i + 1);
 			} else {
-				assert_int_equal(reqs[0].result,
+				assert_rc_equal(reqs[0].result,
 						 -DER_DATA_LOSS);
 			}
 		}
@@ -2890,11 +2882,8 @@ dtx_sub_setup(void **state)
 {
 	int	rc;
 
-	if (state != NULL) {
-		saved_dtx_arg = *state;
-		*state = NULL;
-	}
-
+	saved_dtx_arg = *state;
+	*state = NULL;
 	rc = test_setup(state, SETUP_CONT_CONNECT, true, SMALL_POOL_SIZE,
 			0, NULL);
 	return rc;
@@ -2906,10 +2895,8 @@ dtx_sub_teardown(void **state)
 	int	rc;
 
 	rc = test_teardown(state);
-	if (state != NULL && saved_dtx_arg != NULL) {
-		*state = saved_dtx_arg;
-		saved_dtx_arg = NULL;
-	}
+	*state = saved_dtx_arg;
+	saved_dtx_arg = NULL;
 
 	return rc;
 }
@@ -3019,7 +3006,7 @@ run_daos_dist_tx_test(int rank, int size, int *sub_tests, int sub_tests_size)
 		sub_tests = NULL;
 	}
 
-	rc = run_daos_sub_tests("Distributed TX tests", dtx_tests,
+	rc = run_daos_sub_tests("DAOS_Distributed_TX", dtx_tests,
 				ARRAY_SIZE(dtx_tests), sub_tests,
 				sub_tests_size, dtx_test_setup, test_teardown);
 

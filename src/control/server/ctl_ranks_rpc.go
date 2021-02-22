@@ -1,24 +1,7 @@
 //
 // (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
@@ -47,7 +30,7 @@ const (
 // Returns true if all instances return true from the validate function within
 // the given timeout, false otherwise. Error is returned if parent context is
 // cancelled or times out.
-func pollInstanceState(ctx context.Context, instances []*IOServerInstance, validate func(*IOServerInstance) bool, timeout time.Duration) (bool, error) {
+func pollInstanceState(ctx context.Context, instances []*EngineInstance, validate func(*EngineInstance) bool, timeout time.Duration) (bool, error) {
 	ready := make(chan struct{})
 	go func() {
 		for {
@@ -96,7 +79,7 @@ func (svc *ControlService) drpcOnLocalRanks(parent context.Context, req *ctlpb.R
 	ch := make(chan *system.MemberResult)
 	for _, srv := range instances {
 		inflight++
-		go func(s *IOServerInstance) {
+		go func(s *EngineInstance) {
 			ch <- s.TryDrpc(ctx, method)
 		}(srv)
 	}
@@ -114,7 +97,7 @@ func (svc *ControlService) drpcOnLocalRanks(parent context.Context, req *ctlpb.R
 	return results, nil
 }
 
-// PrepShutdown implements the method defined for the Management Service.
+// PrepShutdownRanks implements the method defined for the Management Service.
 //
 // Prepare data-plane instance(s) managed by control-plane for a controlled shutdown,
 // identified by unique rank(s).
@@ -146,7 +129,7 @@ func (svc *ControlService) PrepShutdownRanks(ctx context.Context, req *ctlpb.Ran
 
 // memberStateResults returns system member results reflecting whether the state
 // of the given member is equivalent to the supplied desired state value.
-func (svc *ControlService) memberStateResults(instances []*IOServerInstance, desiredState system.MemberState, successMsg string) (system.MemberResults, error) {
+func (svc *ControlService) memberStateResults(instances []*EngineInstance, desiredState system.MemberState, successMsg string) (system.MemberResults, error) {
 	results := make(system.MemberResults, 0, len(instances))
 	for _, srv := range instances {
 		rank, err := srv.GetRank()
@@ -195,9 +178,9 @@ func (svc *ControlService) StopRanks(ctx context.Context, req *ctlpb.RanksReq) (
 		return nil, err
 	}
 
-	// don't publish rank exit events whilst performing controlled shutdown
-	svc.events.DisableEventIDs(events.RASRankExit)
-	defer svc.events.EnableEventIDs(events.RASRankExit)
+	// don't publish rank down events whilst performing controlled shutdown
+	svc.events.DisableEventIDs(events.RASRankDown)
+	defer svc.events.EnableEventIDs(events.RASRankDown)
 
 	for _, srv := range instances {
 		svc.log.Debugf("%d: check started", srv.Index())
@@ -212,7 +195,7 @@ func (svc *ControlService) StopRanks(ctx context.Context, req *ctlpb.RanksReq) (
 
 	// ignore poll results as we gather state immediately after
 	if _, err = pollInstanceState(ctx, instances,
-		func(s *IOServerInstance) bool { return !s.isStarted() },
+		func(s *EngineInstance) bool { return !s.isStarted() },
 		svc.harness.rankReqTimeout); err != nil {
 
 		return nil, err
@@ -336,7 +319,7 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 	}
 
 	// ignore poll results as we gather state immediately after
-	if _, err = pollInstanceState(ctx, instances, (*IOServerInstance).isAwaitingFormat,
+	if _, err = pollInstanceState(ctx, instances, (*EngineInstance).isAwaitingFormat,
 		svc.harness.rankStartTimeout); err != nil {
 
 		return nil, err
@@ -395,7 +378,7 @@ func (svc *ControlService) StartRanks(ctx context.Context, req *ctlpb.RanksReq) 
 	}
 
 	// ignore poll results as we gather state immediately after
-	if _, err = pollInstanceState(ctx, instances, (*IOServerInstance).isReady,
+	if _, err = pollInstanceState(ctx, instances, (*EngineInstance).isReady,
 		svc.harness.rankStartTimeout); err != nil {
 
 		return nil, err

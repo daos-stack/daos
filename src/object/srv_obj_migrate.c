@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * migrate: migrate objects between servers.
@@ -34,7 +17,7 @@
 #include <daos/container.h>
 #include <daos/pool.h>
 #include <daos_srv/container.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/dtx_srv.h>
 #include "obj_rpc.h"
@@ -450,8 +433,10 @@ int migrate_pool_tls_create_one(void *data)
 	if (rc)
 		D_GOTO(out, rc);
 
-	D_DEBUG(DB_REBUILD, "TLS %p create for "DF_UUID" ver %d rc %d\n",
-		pool_tls, DP_UUID(pool_tls->mpt_pool_uuid), arg->version, rc);
+	D_DEBUG(DB_REBUILD, "TLS %p create for "DF_UUID" "DF_UUID"/"DF_UUID
+		"ver %d rc %d\n", pool_tls, DP_UUID(pool_tls->mpt_pool_uuid),
+		DP_UUID(arg->pool_hdl_uuid), DP_UUID(arg->co_hdl_uuid),
+		arg->version, rc);
 	d_list_add(&pool_tls->mpt_list, &tls->ot_pool_list);
 out:
 	if (rc && pool_tls)
@@ -1820,7 +1805,6 @@ migrate_one_epoch_object(daos_handle_t oh, daos_epoch_range_t *epr,
 	d_iov_t			 iov = { 0 };
 	d_sg_list_t		 sgl = { 0 };
 	uint32_t		 num;
-	daos_size_t		 size;
 	int			 rc = 0;
 
 	D_DEBUG(DB_REBUILD, "migrate obj "DF_UOID" for shard %u eph "
@@ -1856,7 +1840,7 @@ migrate_one_epoch_object(daos_handle_t oh, daos_epoch_range_t *epr,
 				      DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
 				      DIOF_TO_SPEC_GROUP | DIOF_FOR_MIGRATION);
 retry:
-		rc = dsc_obj_list_obj(oh, epr, NULL, NULL, &size,
+		rc = dsc_obj_list_obj(oh, epr, NULL, NULL, NULL,
 				     &num, kds, &sgl, &anchor,
 				     &dkey_anchor, &akey_anchor, &csum);
 
@@ -1914,6 +1898,13 @@ retry:
 			/* DER_DATA_LOSS means it can not find any replicas
 			 * to rebuild the data, see obj_list_common.
 			 */
+			if (rc == -DER_DATA_LOSS) {
+				D_DEBUG(DB_REBUILD, "No replicas for "DF_UOID
+					"\n", DP_UOID(arg->oid));
+				num = 0;
+				rc = 0;
+			}
+
 			D_DEBUG(DB_REBUILD, "Can not rebuild "
 				DF_UOID"\n", DP_UOID(arg->oid));
 			break;
@@ -1922,7 +1913,6 @@ retry:
 		if (num == 0)
 			break;
 
-		sgl.sg_iovs[0].iov_len = size;
 		rc = dss_enum_unpack(arg->oid, kds, num, &sgl, &csum,
 				     migrate_enum_unpack_cb, &unpack_arg);
 		if (rc) {
@@ -2280,6 +2270,7 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 	uuid_t			cont_uuid;
 	uint64_t		*snapshots = NULL;
 	int			snap_cnt;
+	d_iov_t			tmp_iov;
 	int			rc;
 	int			rc1;
 
@@ -2341,23 +2332,21 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 	while (!dbtree_is_empty(root->root_hdl)) {
 		rc = dbtree_iterate(root->root_hdl, DAOS_INTENT_MIGRATION,
 				    false, migrate_obj_iter_cb, &arg);
-		if (rc || tls->mpt_fini) {
-			if (tls->mpt_status == 0)
-				tls->mpt_status = rc;
+		if (rc || tls->mpt_fini)
 			break;
-		}
 	}
 
 	rc1 = dsc_cont_close(tls->mpt_pool_hdl, coh);
 	if (rc1 != 0 || rc != 0)
 		D_GOTO(free, rc = rc ? rc : rc1);
 
-	D_DEBUG(DB_TRACE, "iter cont "DF_UUID"/%"PRIx64" finish.\n",
+	D_DEBUG(DB_REBUILD, "iter cont "DF_UUID"/%"PRIx64" finish.\n",
 		DP_UUID(cont_uuid), ih.cookie);
 
 	/* Snapshot fetch will yield the ULT, let's reprobe before delete  */
+	d_iov_set(&tmp_iov, cont_uuid, sizeof(uuid_t));
 	rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, DAOS_INTENT_MIGRATION,
-			       key_iov, NULL);
+			       &tmp_iov, NULL);
 	if (rc) {
 		D_ASSERT(rc != -DER_NONEXIST);
 		D_GOTO(free, rc);
@@ -2382,6 +2371,8 @@ free:
 		D_FREE(snapshots);
 
 out_put:
+	if (tls->mpt_status == 0 && rc < 0)
+		tls->mpt_status = rc;
 	ds_pool_put(dp);
 	return rc;
 }
@@ -2650,8 +2641,13 @@ migrate_check_one(void *data)
 	arg->executed_ult += tls->mpt_executed_ult;
 	if (arg->dms.dm_status == 0)
 		arg->dms.dm_status = tls->mpt_status;
-
 	ABT_mutex_unlock(arg->status_lock);
+
+	D_DEBUG(DB_REBUILD, "status %d/%d  rec/obj/size "
+		DF_U64"/"DF_U64"/"DF_U64"\n", tls->mpt_status,
+		arg->dms.dm_status, tls->mpt_rec_count,
+		tls->mpt_obj_count, tls->mpt_size);
+
 	migrate_pool_tls_put(tls);
 	return 0;
 }

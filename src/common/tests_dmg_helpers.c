@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include <pwd.h>
@@ -29,6 +12,7 @@
 #include <daos/common.h>
 #include <daos/tests_lib.h>
 #include <daos.h>
+#include <daos_srv/bio.h>
 
 static void
 cmd_free_args(char **args, int argcount)
@@ -598,7 +582,15 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 
 	for (i = 0; i < dev_length; i++) {
 		dev = json_object_array_get_idx(smd_dev, i);
-		strcpy(devices[*disks].host, strtok(host, ":") + 1);
+
+		if (strlen(host + 2) <= DSS_HOSTNAME_MAX_LEN)
+			strcpy(devices[*disks].host, strtok(host, ":") + 1);
+		else {
+			D_ERROR("Hostname is larger than %d\n",
+				DSS_HOSTNAME_MAX_LEN);
+			return -DER_INVAL;
+		}
+
 		if (!json_object_object_get_ex(dev, "uuid", &tmp)) {
 			D_ERROR("unable to extract uuid from JSON\n");
 			return -DER_INVAL;
@@ -645,7 +637,7 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 	struct json_object	*hosts = NULL;
 	struct json_object	*smd_info = NULL;
 	struct json_object	*smd_dev = NULL;
-	char		host[100];
+	char		*host;
 	int			dev_length = 0;
 	int			rc = 0;
 	int			*disk;
@@ -657,12 +649,14 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 	rc = daos_dmg_json_pipe("storage query list-devices", dmg_config_file,
 				NULL, 0, &dmg_out);
 	if (rc != 0) {
+		D_FREE(disk);
 		D_ERROR("dmg failed");
 		goto out_json;
 	}
 
 	if (!json_object_object_get_ex(dmg_out, "host_storage_map",
 				       &storage_map)) {
+		D_FREE(disk);
 		D_ERROR("unable to extract host_storage_map from JSON\n");
 		return -DER_INVAL;
 	}
@@ -672,10 +666,12 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 			json_object_to_json_string(val));
 
 		if (!json_object_object_get_ex(val, "hosts", &hosts)) {
+			D_FREE(disk);
 			D_ERROR("unable to extract hosts from JSON\n");
 			return -DER_INVAL;
 		}
 
+		D_ALLOC(host, strlen(json_object_to_json_string(hosts)) + 1);
 		strcpy(host, json_object_to_json_string(hosts));
 
 		json_object_object_foreach(val, key1, val1) {
@@ -687,6 +683,7 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 				if (!json_object_object_get_ex(
 					smd_info, "devices", &smd_dev)) {
 					D_ERROR("unable to extract devices\n");
+					D_FREE(host);
 					return -DER_INVAL;
 				}
 
@@ -701,11 +698,14 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 					rc = parse_device_info(smd_dev, devices,
 							       host, dev_length,
 							       disk);
-					if (rc != 0)
+					if (rc != 0) {
+						D_FREE(host);
 						goto out_json;
+					}
 				}
 			}
 		}
+		D_FREE(host);
 	}
 
 out_json:
@@ -791,7 +791,7 @@ dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 	if (!json_object_object_get_ex(dmg_out, "host_storage_map",
 				       &storage_map)) {
 		D_ERROR("unable to extract host_storage_map from JSON\n");
-		return -DER_INVAL;
+		D_GOTO(out_json, rc = -DER_INVAL);
 	}
 
 	json_object_object_foreach(storage_map, key, val) {
@@ -799,12 +799,12 @@ dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 			json_object_to_json_string(val));
 		if (!json_object_object_get_ex(val, "storage", &storage_info)) {
 			D_ERROR("unable to extract hosts from JSON\n");
-			return -DER_INVAL;
+			D_GOTO(out_json, rc = -DER_INVAL);
 		}
 		if (!json_object_object_get_ex(storage_info, "smd_info",
 					       &smd_info)) {
 			D_ERROR("unable to extract hosts from JSON\n");
-			return -DER_INVAL;
+			D_GOTO(out_json, rc = -DER_INVAL);
 		}
 		json_object_object_foreach(smd_info, key1, val1) {
 			D_DEBUG(DB_TEST, "key1:\"%s\",val1=%s\n", key1,
