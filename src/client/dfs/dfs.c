@@ -413,7 +413,7 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 	iod->iod_nr	= 1;
 	recx.rx_idx	= 0;
 	recx.rx_nr	= sizeof(mode_t) + sizeof(time_t) * 3 +
-			    sizeof(daos_obj_id_t) + sizeof(daos_size_t);
+		sizeof(daos_obj_id_t) + sizeof(daos_size_t);
 	iod->iod_recxs	= &recx;
 	iod->iod_type	= DAOS_IOD_ARRAY;
 	iod->iod_size	= 1;
@@ -625,7 +625,9 @@ get_num_entries(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
 
 static int
 entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
-	   size_t len, struct dfs_obj *obj, struct stat *stbuf)
+	   size_t len, struct dfs_obj *obj, daos_obj_id_t *eoid,
+	   struct stat *stbuf, int xnr, char *xnames[], void *xvals[],
+	   daos_size_t *xsizes)
 {
 	struct dfs_entry	entry = {0};
 	bool			exists;
@@ -636,11 +638,14 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 
 	/* Check if parent has the entry */
 	rc = fetch_entry(oh, th, name, len, true, &exists, &entry,
-			 0, NULL, NULL, NULL);
+			 xnr, xnames, xvals, xsizes);
 	if (rc)
 		return rc;
 
 	if (!exists)
+		return ENOENT;
+
+	if (eoid && (eoid->hi != entry.oid.hi || eoid->lo != entry.oid.lo))
 		return ENOENT;
 
 	if (obj && (obj->oid.hi != entry.oid.hi || obj->oid.lo != entry.oid.lo))
@@ -3277,7 +3282,8 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf)
 		oh = parent->oh;
 	}
 
-	return entry_stat(dfs, DAOS_TX_NONE, oh, name, len, NULL, stbuf);
+	return entry_stat(dfs, DAOS_TX_NONE, oh, name, len, NULL, NULL, stbuf,
+			  0, NULL, NULL, NULL);
 }
 
 int
@@ -3297,13 +3303,49 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf)
 		return daos_der2errno(rc);
 
 	rc = entry_stat(dfs, DAOS_TX_NONE, oh, obj->name, strlen(obj->name),
-			obj, stbuf);
+			obj, NULL, stbuf, 0, NULL, NULL, NULL);
 	if (rc)
 		D_GOTO(out, rc);
 
 out:
 	daos_obj_close(oh, NULL);
 	return rc;
+}
+
+int
+dfs_statx(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf,
+	  daos_obj_id_t *expected_oid, int xnr, char *xnames[], void *xvals[],
+	  daos_size_t *xsizes)
+{
+	daos_handle_t	oh;
+	size_t		len;
+	int		rc;
+
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (parent == NULL)
+		parent = &dfs->root;
+	else if (!S_ISDIR(parent->mode))
+		return ENOTDIR;
+
+	if (name == NULL) {
+		if (strcmp(parent->name, "/") != 0) {
+			D_ERROR("Invalid path %s and entry name is NULL)\n",
+				parent->name);
+			return EINVAL;
+		}
+		name = parent->name;
+		len = strlen(parent->name);
+		oh = dfs->super_oh;
+	} else {
+		rc = check_name(name, &len);
+		if (rc)
+			return rc;
+		oh = parent->oh;
+	}
+
+	return entry_stat(dfs, DAOS_TX_NONE, oh, name, len, NULL, expected_oid,
+			  stbuf, xnr, xnames, xvals, xsizes);
 }
 
 int
@@ -3521,7 +3563,8 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	/* Fetch the remote entry first so we can check the oid, then keep
 	 * a track locally of what has been updated
 	 */
-	rc = entry_stat(dfs, th, oh, obj->name, len, obj, &rstat);
+	rc = entry_stat(dfs, th, oh, obj->name, len, obj, NULL, &rstat,
+			0, NULL, NULL, NULL);
 	if (rc)
 		D_GOTO(out_obj, rc);
 

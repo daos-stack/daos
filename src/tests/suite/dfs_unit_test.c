@@ -610,6 +610,24 @@ dfs_test_lookupx(void **state)
 	assert_int_equal(*((int *)vals_out[2]), 5);
 	rc = dfs_release(obj);
 	assert_int_equal(rc, 0);
+
+	for (i = 0; i < 3; i++) {
+		*((int *)vals_out[i]) = 5;
+		val_sizes[i] = sizeof(int);
+	}
+	rc = dfs_statx(dfs_mt, NULL, dir1, &stbuf, NULL, 3, xnames, vals_out,
+		       val_sizes);
+	assert_int_equal(rc, 0);
+	assert_int_equal(val_sizes[0], sizeof(int));
+	assert_int_equal(val_sizes[1], sizeof(int));
+	assert_int_equal(val_sizes[2], 0);
+	assert_int_equal(*((int *)vals_out[0]), vals_in[0]);
+	assert_int_equal(*((int *)vals_out[1]), vals_in[1]);
+	assert_int_equal(*((int *)vals_out[2]), 5);
+
+	for (i = 0; i < 3; i++)
+		D_FREE(vals_out[i]);
+	D_FREE(val_sizes);
 }
 
 static const struct CMUnitTest dfs_unit_tests[] = {

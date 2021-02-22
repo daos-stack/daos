@@ -53,6 +53,11 @@ dfs_lookupx(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 	    dfs_obj_t **obj, mode_t *mode, struct stat *stbuf, int xnr,
 	    char *xnames[], void *xvals[], daos_size_t *xsizes);
 
+int
+dfs_statx(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf,
+	  daos_obj_id_t *expected_oid, int xnr, char *xnames[], void *xvals[],
+	  daos_size_t *xsizes);
+
 #if defined(__cplusplus)
 }
 #endif
