@@ -44,7 +44,9 @@ collect_bs_usage(struct spdk_blob_store *bs, struct nvme_stats *stats)
 {
 	uint64_t	cl_sz;
 
-	D_ASSERT(bs != NULL);
+	if (bs == NULL)
+		return;
+
 	D_ASSERT(stats != NULL);
 
 	cl_sz = spdk_bs_get_cluster_size(bs);

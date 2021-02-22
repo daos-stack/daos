@@ -324,7 +324,7 @@ typedef struct {
  * \param[in]	cid	Class Identifier
  * \param[in]	args	Reserved.
  */
-static inline void
+static inline void  __attribute__ ((deprecated))
 daos_obj_generate_id(daos_obj_id_t *oid, daos_ofeat_t ofeats,
 		     daos_oclass_id_t cid, uint32_t args)
 {
@@ -346,6 +346,53 @@ daos_obj_generate_id(daos_obj_id_t *oid, daos_ofeat_t ofeats,
 	hdr |= ((uint64_t)cid << OID_FMT_CLASS_SHIFT);
 	oid->hi |= hdr;
 }
+
+/** Flags for oclass hints */
+enum {
+	/** Flags to control OC Redundancy */
+	DAOS_OC_RDD_DEF		= (1 << 0),	/** Default - use RF prop */
+	DAOS_OC_RDD_NO		= (1 << 1),	/** No redundancy */
+	DAOS_OC_RDD_RP		= (1 << 2),	/** Replication */
+	DAOS_OC_RDD_EC		= (1 << 3),	/** Erasure Code */
+	/** Flags to control OC Sharding */
+	DAOS_OC_SHD_DEF		= (1 << 4),	/** Default - use 1 grp */
+	DAOS_OC_SHD_TINY	= (1 << 5),	/** <= 4 grps */
+	DAOS_OC_SHD_REG		= (1 << 6),	/** max(128, 25%) */
+	DAOS_OC_SHD_HI		= (1 << 7),	/** max(256, 50%) */
+	DAOS_OC_SHD_EXT		= (1 << 8),	/** max(1024, 80%) */
+	DAOS_OC_SHD_MAX		= (1 << 9),	/** 100% */
+};
+
+/**
+ * Generate a DAOS object ID by encoding the private DAOS bits of the object
+ * address space. This allows the user to either select an object class
+ * manually, or ask DAOS to generate one based on some hints provided.
+ *
+ * \param[in]	coh	Container open handle.
+ * \param[in,out]
+ *		oid	[in]: Object ID with low 96 bits set and unique inside
+ *			the container.
+ *			[out]: Fully populated DAOS object identifier with the
+ *			the low 96 bits untouched and the DAOS private bits
+ *			(the high 32 bits) encoded.
+ * \param[in]	ofeats	Feature bits specific to object
+ * \param[in]	cid	Class Identifier. This setting is for advanced users who
+ *			are knowledgeable on the specific oclass being set and
+ *			what that means for the object in the current system and
+ *			the container it's in.
+ *			Setting this to 0 (unknown) will check if there are any
+ *			hints specified and use an oclass accordingly. If there
+ *			are no hints specified we use the container properties
+ *			to select the object class.
+ * \param[in]   hints	Optional hints to select oclass with redundancy type
+ *			and sharding. This will be ignored if cid is not
+ *			OC_UNKNOWN (0).
+ * \param[in]	args	Reserved.
+ */
+int
+daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
+		      daos_ofeat_t ofeats, daos_oclass_id_t cid,
+		      daos_oclass_hints_t hints, uint32_t args);
 
 /**
  * Open an DAOS object.

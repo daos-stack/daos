@@ -1064,7 +1064,7 @@ cmd_parse_oid(test_arg_t *arg, int argc, char **argv)
 		D_GOTO(out, rc = -DER_INVAL);
 
 	type = daos_oclass_name2id(obj_class);
-	eio_arg->op_oid = dts_oid_gen(type, 0, arg->myrank);
+	eio_arg->op_oid = daos_test_oid_gen(arg->coh, type, 0, 0, arg->myrank);
 	if (type == DAOS_OC_R2S_SPEC_RANK || type == DAOS_OC_R3S_SPEC_RANK ||
 	    type == DAOS_OC_R1S_SPEC_RANK) {
 		if (rank == -1) {
@@ -1244,12 +1244,14 @@ cmd_line_parse(test_arg_t *arg, const char *cmd_line,
 				print_message("bad parameter");
 				D_GOTO(out, rc = -DER_INVAL);
 			}
-			arg->eio_args.op_oid = dts_oid_gen(dts_ec_obj_class, 0,
-							   arg->myrank);
+			arg->eio_args.op_oid = daos_test_oid_gen(arg->coh,
+							   dts_ec_obj_class,
+							   0, 0, arg->myrank);
 		} else if (strcmp(argv[1], "replica") == 0) {
 			arg->eio_args.op_ec = 0;
-			arg->eio_args.op_oid = dts_oid_gen(dts_obj_class, 0,
-							   arg->myrank);
+			arg->eio_args.op_oid = daos_test_oid_gen(arg->coh,
+							   dts_obj_class, 0,
+							   0, arg->myrank);
 			print_message("the test is for replica object.\n");
 		} else {
 			print_message("bad obj_class %s.\n", argv[1]);
@@ -1579,7 +1581,8 @@ epoch_io_setup(void **state)
 	D_INIT_LIST_HEAD(&eio_arg->op_list);
 	eio_arg->op_lvl = TEST_LVL_DAOS;
 	eio_arg->op_iod_size = 1;
-	eio_arg->op_oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	eio_arg->op_oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0,
+				      arg->myrank);
 
 	/* generate the temporary IO dir for epoch IO test */
 	if (test_io_dir == NULL) {
