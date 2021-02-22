@@ -15,6 +15,7 @@ import json
 import re
 import requests
 import errno
+import subprocess
 
 from avocado import Test as avocadoTest
 from avocado import skip, TestFail, fail_on
@@ -184,12 +185,18 @@ class Test(avocadoTest):
                             if error.errno == errno.ENOENT:
                                 print("Unable to read commit list: ", error)
                                 print("Trudging on")
+                    elif subprocess.check_output(['git', 'log', '--format=%s',
+                                                 '-n', '1', 'HEAD']
+                                                 ).startswith(ticket + " "):
+                        # fix is in this PR
+                        print("On the skip list for ticket {}, but is "
+                              "is being fixed in this PR, so not "
+                              "skipping".format(ticket))
                     else:
-                        # and there is a commit that fixes it
+                        # there is no commit that fixes it
                         self.cancel("Skipping due to being on the skip list "
                                     "for ticket {} with no fix available "
                                     "yet".format(ticket))
-
         else:
             print("Unable to read skip list: ", response)
             print("Trudging on")
