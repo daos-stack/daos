@@ -83,7 +83,7 @@ dtx_io_test_succ(void **state, daos_iod_type_t iod_type)
 	assert_non_null(update_buf);
 	dts_buf_render(update_buf, dts_dtx_iosize);
 
-	oid = dts_oid_gen(dts_dtx_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_dtx_class, 0, 0, arg->myrank);
 
 	/* Synchronously commit the update. */
 	arg->fail_loc = DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS;
@@ -142,7 +142,7 @@ dtx_io_test_fail(void **state, uint64_t fail_loc)
 	assert_non_null(update_buf2);
 	dts_buf_render(update_buf2, dts_dtx_iosize / 2);
 
-	oid = dts_oid_gen(dts_dtx_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_dtx_class, 0, 0, arg->myrank);
 
 	/* Synchronously commit the update_1. */
 	arg->fail_loc = DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS;
@@ -263,7 +263,7 @@ dtx_fetch_committable(void **state, bool punch)
 	D_ALLOC(zero_buf, dts_dtx_iosize);
 	assert_non_null(zero_buf);
 
-	oid = dts_oid_gen(dts_dtx_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_dtx_class, 0, 0, arg->myrank);
 
 	/* Synchronously commit the 1st update. */
 	arg->fail_loc = DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS;
@@ -345,7 +345,7 @@ dtx_modify_committable(void **state, bool committable_punch, bool sync_update)
 	assert_non_null(update_buf2);
 	dts_buf_render(update_buf2, dts_dtx_iosize / 2);
 
-	oid = dts_oid_gen(dts_dtx_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_dtx_class, 0, 0, arg->myrank);
 
 	/* Synchronously commit the 1st update. */
 	arg->fail_loc = DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS;
@@ -424,7 +424,7 @@ dtx_batched_commit(void **state, int count)
 	D_ALLOC(update_buf, size);
 	assert_non_null(update_buf);
 
-	oid = dts_oid_gen(dts_dtx_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_dtx_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
 
 	for (i = 0; i < count; i++) {
@@ -486,7 +486,7 @@ dtx_handle_resend(void **state, uint64_t fail_loc, uint16_t oclass)
 	D_ALLOC(fetch_buf, dts_dtx_iosize);
 	assert_non_null(fetch_buf);
 
-	oid = dts_oid_gen(oclass, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, oclass, 0, 0, arg->myrank);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
@@ -579,7 +579,7 @@ dtx_16(void **state)
 	assert_non_null(update_buf);
 	dts_buf_render(update_buf, dts_dtx_iosize);
 
-	oid = dts_oid_gen(dts_dtx_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_dtx_class, 0, 0, arg->myrank);
 
 	/* Synchronously commit the modification. */
 	arg->fail_loc = DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS;
@@ -625,7 +625,7 @@ dtx_17(void **state)
 	D_ALLOC(fetch_buf, dts_dtx_iosize);
 	assert_non_null(fetch_buf);
 
-	oid = dts_oid_gen(dts_dtx_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_dtx_class, 0, 0, arg->myrank);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 

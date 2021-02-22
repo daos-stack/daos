@@ -33,7 +33,7 @@ rebuild_ec_internal(void **state, uint16_t oclass, int kill_data_nr,
 	if (oclass == OC_EC_4P2G1 && !test_runable(arg, 8))
 		return;
 
-	oid = dts_oid_gen(oclass, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, oclass, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	if (write_type == PARTIAL_UPDATE)
@@ -102,7 +102,7 @@ rebuild_mixed_stripes(void **state)
 	if (!test_runable(arg, 7))
 		return;
 
-	oid = dts_oid_gen(OC_EC_4P2G1, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	recxs[0].rx_idx = 0;		/* full stripe */
