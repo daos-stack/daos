@@ -49,7 +49,7 @@ RUN zypper --non-interactive update &&					\
 	libjson-c-devel liblz4-devel python3-distro curl		\
 	python3-pyxattr							\
 	java-1_8_0-openjdk-devel maven python3-PyYAML &&		\
-    zypper clean all
+    zypper clean --all
 
 # Monkey-patch MODULEPATH
 RUN if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then        \
@@ -57,7 +57,7 @@ RUN if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then      
     fi
 
 RUN update-ca-certificates
-RUN zypper --non-interactive install --allow-unsigned-rpm lua-lmod
+RUN zypper --non-interactive --no-gpg-checks install --allow-unsigned-rpm lua-lmod
 
 RUN if [ -z "${REPO_GROUP_LEAP15}" ]; then                                                                                        \
         zypper --non-interactive addrepo                                                                                          \
