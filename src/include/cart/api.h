@@ -1626,7 +1626,10 @@ typedef void
 
 enum crt_event_source {
 	CRT_EVS_UNKNOWN,
+	/**< Event triggered by SWIM >*/
 	CRT_EVS_SWIM,
+	/**< Event triggered by Group changes >*/
+	CRT_EVS_GRPMOD,
 };
 
 enum crt_event_type {
