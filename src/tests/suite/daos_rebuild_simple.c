@@ -41,7 +41,7 @@ rebuild_dkeys(void **state)
 	if (!test_runable(arg, 4))
 		return;
 
-	oid = dts_oid_gen(arg->obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	/** Insert 1000 records */
@@ -94,7 +94,7 @@ rebuild_akeys(void **state)
 	if (!test_runable(arg, 4))
 		return;
 
-	oid = dts_oid_gen(arg->obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	/** Insert 1000 records */
@@ -148,7 +148,7 @@ rebuild_indexes(void **state)
 	if (!test_runable(arg, 4))
 		return;
 
-	oid = dts_oid_gen(arg->obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
 	oid = dts_oid_set_tgt(oid, tgt);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -194,7 +194,7 @@ rebuild_snap_update_recs(void **state)
 	if (!test_runable(arg, 4))
 		return;
 
-	oid = dts_oid_gen(arg->obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
 	oid = dts_oid_set_tgt(oid, tgt);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -256,7 +256,7 @@ rebuild_snap_punch_recs(void **state)
 	if (!test_runable(arg, 4))
 		return;
 
-	oid = dts_oid_gen(arg->obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
 	oid = dts_oid_set_tgt(oid, tgt);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -312,7 +312,7 @@ rebuild_snap_update_keys(void **state)
 	if (!test_runable(arg, 4))
 		return;
 
-	oid = dts_oid_gen(arg->obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
 	oid = dts_oid_set_tgt(oid, tgt);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -395,7 +395,7 @@ rebuild_snap_punch_keys(void **state)
 	if (!test_runable(arg, 4))
 		return;
 
-	oid = dts_oid_gen(arg->obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
 	oid = dts_oid_set_tgt(oid, tgt);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -499,7 +499,8 @@ rebuild_snap_punch_empty(void **state)
 	if (!test_runable(arg, 4))
 		return;
 
-	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0,
+				arg->myrank);
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
 	oid = dts_oid_set_tgt(oid, tgt);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -573,7 +574,7 @@ rebuild_multiple(void **state)
 	if (!test_runable(arg, 4))
 		return;
 
-	oid = dts_oid_gen(arg->obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
 	oid = dts_oid_set_tgt(oid, tgt);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -618,7 +619,7 @@ rebuild_large_rec(void **state)
 	if (!test_runable(arg, 4))
 		return;
 
-	oid = dts_oid_gen(arg->obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
 	oid = dts_oid_set_tgt(oid, tgt);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -670,7 +671,8 @@ rebuild_objects(void **state)
 		return;
 
 	for (i = 0; i < OBJ_NR; i++) {
-		oids[i] = dts_oid_gen(arg->obj_class, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0,
+				      arg->myrank);
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 		oids[i] = dts_oid_set_tgt(oids[i], DEFAULT_FAIL_TGT);
 	}
@@ -709,7 +711,7 @@ rebuild_sx_object_internal(void **state, uint16_t oclass)
 	if (!test_runable(arg, 4))
 		return;
 
-	oid = dts_oid_gen(oclass, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, oclass, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	print_message("insert 100 dkeys\n");
 	for (i = 0; i < 100; i++) {
@@ -764,7 +766,7 @@ rebuild_large_object(void **state)
 		return;
 
 	for (i = 0; i < 5; i++) {
-		oid = dts_oid_gen(OC_RP_2G8, 0, arg->myrank);
+		oid = daos_test_oid_gen(arg->coh, OC_RP_2G8, 0, 0, arg->myrank);
 		ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 		for (j = 0; j < 10; j++) {
 			sprintf(dkey, "dkey_%d\n", j);

@@ -60,7 +60,7 @@ gen_oid(daos_obj_id_t *oid, uint64_t lo, uint64_t hi, daos_oclass_id_t cid)
 	oid->lo = lo;
 	/* make sure top 32 bits are unset (DAOS only) */
 	oid->hi = hi & 0xFFFFFFFF;
-	daos_obj_generate_id(oid, 0, cid, 0);
+	daos_obj_set_oid(oid, 0, cid, 0);
 }
 
 #define assert_placement_success(pl_map, cid) \

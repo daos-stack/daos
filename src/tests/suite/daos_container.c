@@ -2059,8 +2059,9 @@ co_open_fail_destroy(void **state)
 
 	rc = daos_cont_open(arg->pool.poh, uuid, DAOS_COO_RW, &coh, &info,
 			    NULL);
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+			      0, 0, NULL);
 	assert_rc_equal(rc, -DER_IO);
-
 	print_message("destroying container ... ");
 	rc = daos_cont_destroy(arg->pool.poh, uuid, 1 /* force */, NULL);
 	assert_rc_equal(rc, 0);
@@ -2108,21 +2109,21 @@ co_rf_simple(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	print_message("verify cont rf and obj open ...\n");
-	oid = dts_oid_gen(OC_RP_2G1, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_2G1, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_rc_equal(rc, -DER_INVAL);
 
-	oid = dts_oid_gen(OC_EC_2P1G1, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_EC_2P1G1, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_rc_equal(rc, -DER_INVAL);
 
-	oid = dts_oid_gen(OC_RP_3G1, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_3G1, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_rc_equal(rc, 0);
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
 
-	oid = dts_oid_gen(OC_EC_2P2G1, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_EC_2P2G1, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_rc_equal(rc, 0);
 	rc = daos_obj_close(oh, NULL);
@@ -2229,7 +2230,7 @@ delet_container_during_aggregation(void **state)
 	int		rc;
 
 	/* Prepare records */
-	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
 
 	print_message("Initial Pool Query\n");
 	pool_storage_info(state, &pinfo);
