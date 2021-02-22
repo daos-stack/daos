@@ -65,21 +65,14 @@ class IorTestBase(DfuseTestBase):
         # Create a pool
         self.pool.create()
 
-    def create_cont(self, oclass):
+    def create_cont(self):
         """Create a TestContainer object to be used to create container.
 
-        Args:
-            oclass: Explicitly supply object class for container create
         """
         # Get container params
         self.container = TestContainer(
             self.pool, daos_command=DaosCommand(self.bin))
         self.container.get_params(self)
-
-        # update object class for container create, if supplied
-        # explicitly.
-        if oclass:
-            self.container.oclass.update(oclass)
 
         # create container
         self.container.create()
