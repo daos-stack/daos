@@ -317,7 +317,7 @@ static void
 destroy_del_obj_tables(struct migrate_pool_tls *pool_tls) {
 	int i;
 
-	if (pool_tls->mpt_del_tabs != NULL)
+	if (pool_tls->mpt_del_tabs == NULL)
 		return;
 
 	for (i = 0; i < dss_tgt_nr; i++)
@@ -2260,8 +2260,6 @@ migrate_one_obj_prepare_ult(void *data)
 			    arg->oid.id_pub.lo % dss_tgt_nr, MIGRATE_STACK_SIZE,
 			    NULL);
 	/* TODO: Error handling here? This is bad */
-
-	return;
 }
 
 /* This is still running on the main migration ULT */

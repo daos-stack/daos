@@ -4033,7 +4033,7 @@ pool_find_all_targets_by_addr(uuid_t pool_uuid,
 				list->pta_addrs[i].pta_rank,
 				(int)list->pta_addrs[i].pta_target);
 			ret = pool_target_addr_list_append(inval_list_out,
-						&list->pta_addrs[i]);
+							   &list->pta_addrs[i]);
 			if (ret) {
 				rc = ret;
 				break;
