@@ -4,7 +4,7 @@
  *
  * This file is part of the DAOS Project. It is subject to the license terms
  * in the LICENSE file found in the top-level directory of this distribution
- * and at https://img.shields.io/badge/License-Apache%202.0-blue.svg.
+ * and at https://img.shields.io/badge/License-BSD--2--Clause--Patent-blue.svg.
  * No part of the DAOS Project, including this file, may be copied, modified,
  * propagated, or distributed except according to the terms contained in the
  * LICENSE file.
@@ -358,11 +358,12 @@ pipeline {
                                     withSubmodules: true
                         functionalTest inst_repos: daos_repos(),
                                        inst_rpms: functional_packages(),
+                                       test_function: 'runTestFunctionalV2',
                                        test_tag: test_tag
                     }
                     post {
                         always {
-                            functionalTestPost()
+                            functionalTestPostV2()
                         }
                     }
                 } // stage('Functional on CentOS 7')
@@ -381,11 +382,12 @@ pipeline {
                                     withSubmodules: true
                         functionalTest inst_repos: daos_repos(),
                                        inst_rpms: functional_packages(),
+                                       test_function: 'runTestFunctionalV2',
                                        test_tag: test_tag
                     }
                     post {
                         always {
-                            functionalTestPost()
+                            functionalTestPostV2()
                         }
                     } // post
                 } // stage('Functional on Leap 15')
@@ -403,11 +405,13 @@ pipeline {
                                     branch: "master",
                                     withSubmodules: true
                         functionalTest inst_repos: daos_repos(),
-                                       inst_rpms: functional_packages()
+                                       inst_rpms: functional_packages(),
+                                       test_function: 'runTestFunctionalV2',
+                                       test_tag: test_tag
                     }
                     post {
                         always {
-                            functionalTestPost()
+                            functionalTestPostV2()
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
@@ -428,11 +432,12 @@ pipeline {
                         functionalTest target: hw_distro_target(),
                                        inst_repos: daos_repos(),
                                        inst_rpms: functional_packages(),
+                                       test_function: 'runTestFunctionalV2',
                                        test_tag: test_tag
                     }
                     post {
                         always {
-                            functionalTestPost()
+                            functionalTestPostV2()
                         }
                     }
                 } // stage('Functional_Hardware_Small')
@@ -453,11 +458,12 @@ pipeline {
                         functionalTest target: hw_distro_target(),
                                        inst_repos: daos_repos(),
                                        inst_rpms: functional_packages(),
+                                       test_function: 'runTestFunctionalV2',
                                        test_tag: test_tag
                     }
                     post {
                         always {
-                            functionalTestPost()
+                            functionalTestPostV2()
                         }
                     }
                 } // stage('Functional_Hardware_Medium')
@@ -478,11 +484,12 @@ pipeline {
                         functionalTest target: hw_distro_target(),
                                        inst_repos: daos_repos(),
                                        inst_rpms: functional_packages(),
+                                       test_function: 'runTestFunctionalV2',
                                        test_tag: test_tag
                     }
                     post {
                         always {
-                            functionalTestPost()
+                            functionalTestPostV2()
                         }
                     }
                 } // stage('Functional_Hardware_Large')
