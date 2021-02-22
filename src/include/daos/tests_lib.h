@@ -30,6 +30,8 @@
 		assert_string_equal(d_errstr(rc), d_errstr(expected_rc)); \
 	} while (0)
 
+#define DTS_OCLASS_DEF OC_RP_XSF
+
 /** Read a command line from stdin. */
 char *dts_readline(const char *prompt);
 
@@ -46,10 +48,10 @@ void dts_buf_render_uppercase(char *buf, unsigned int buf_len);
 void dts_key_gen(char *key, unsigned int key_len, const char *prefix);
 
 /** generate a random and unique object ID */
-daos_obj_id_t dts_oid_gen(uint16_t oclass, uint8_t ofeats, unsigned seed);
+daos_obj_id_t dts_oid_gen(unsigned seed);
 
 /** generate a random and unique baseline object ID */
-daos_unit_oid_t dts_unit_oid_gen(uint16_t oclass, uint8_t ofeats,
+daos_unit_oid_t dts_unit_oid_gen(daos_oclass_id_t oclass, uint8_t ofeats,
 				 uint32_t shard);
 
 /** Set rank into the oid */

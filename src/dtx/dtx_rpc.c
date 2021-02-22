@@ -813,7 +813,7 @@ dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont)
 
 again:
 			rc = ds_pool_elect_dtx_leader(pool, &dsp->dsp_oid,
-						      dsp->dsp_ver);
+						      dth->dth_ver);
 			if (rc < 0) {
 				D_ERROR("Failed to find DTX leader for "DF_DTI
 					": "DF_RC"\n",
