@@ -40,7 +40,7 @@ type subscriber struct {
 	handler Handler
 }
 
-// filterUpdate enables or disables publishing of given event ids.
+// filterUpdate enables or disables forwarding of given event ids.
 type filterUpdate struct {
 	enable bool
 	ids    []RASID
@@ -54,7 +54,7 @@ type PubSub struct {
 	subscribers   chan *subscriber
 	handlers      map[RASTypeID][]Handler
 	filterUpdates chan *filterUpdate
-	disabledIDs   map[RASID]struct{}
+	fwdDisableIDs map[RASID]struct{}
 	reset         chan struct{}
 	shutdown      context.CancelFunc
 }
@@ -67,7 +67,7 @@ func NewPubSub(parent context.Context, log logging.Logger) *PubSub {
 		subscribers:   make(chan *subscriber),
 		handlers:      make(map[RASTypeID][]Handler),
 		filterUpdates: make(chan *filterUpdate),
-		disabledIDs:   make(map[RASID]struct{}),
+		fwdDisableIDs: make(map[RASID]struct{}),
 		reset:         make(chan struct{}),
 	}
 
@@ -78,9 +78,9 @@ func NewPubSub(parent context.Context, log logging.Logger) *PubSub {
 	return ps
 }
 
-// DisableEventIDs adds event IDs to the filter preventing those event IDs from
+// DisableForwarding adds event IDs to the filter preventing those event IDs from
 // being published.
-func (ps *PubSub) DisableEventIDs(ids ...RASID) {
+func (ps *PubSub) DisableForwarding(ids ...RASID) {
 	select {
 	case <-time.After(submitTimeout):
 		ps.log.Errorf("failed to submit filter update within %s", submitTimeout)
@@ -88,9 +88,9 @@ func (ps *PubSub) DisableEventIDs(ids ...RASID) {
 	}
 }
 
-// EnableEventIDs removes event IDs from the filter enabling those event IDs
+// EnableForwarding removes event IDs from the filter enabling those event IDs
 // to be published.
-func (ps *PubSub) EnableEventIDs(ids ...RASID) {
+func (ps *PubSub) EnableForwarding(ids ...RASID) {
 	select {
 	case <-time.After(submitTimeout):
 		ps.log.Errorf("failed to submit filter update within %s", submitTimeout)
@@ -128,8 +128,8 @@ func (ps *PubSub) Subscribe(topic RASTypeID, handler Handler) {
 }
 
 func (ps *PubSub) publish(ctx context.Context, event *RASEvent) {
-	if _, exists := ps.disabledIDs[event.ID]; exists {
-		return
+	if _, exists := ps.fwdDisableIDs[event.ID]; exists {
+		event.forwardable.SetFalse()
 	}
 
 	for _, hdlr := range ps.handlers[RASTypeAny] {
@@ -142,12 +142,12 @@ func (ps *PubSub) publish(ctx context.Context, event *RASEvent) {
 
 func (ps *PubSub) updateFilter(fu *filterUpdate) {
 	for _, id := range fu.ids {
-		_, exists := ps.disabledIDs[id]
+		_, exists := ps.fwdDisableIDs[id]
 		switch {
 		case exists && fu.enable:
-			delete(ps.disabledIDs, id)
+			delete(ps.fwdDisableIDs, id)
 		case !exists && !fu.enable:
-			ps.disabledIDs[id] = struct{}{}
+			ps.fwdDisableIDs[id] = struct{}{}
 		}
 	}
 }
