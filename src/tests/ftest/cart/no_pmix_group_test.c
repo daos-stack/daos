@@ -509,10 +509,6 @@ int main(int argc, char **argv)
 	if (my_rank != 1)
 		D_GOTO(join, 0);
 
-	/* Wait for all servers to load up */
-	/* TODO: This will be replaced by proper sync when CART-715 is done */
-	sleep(10);
-
 	rc = crt_group_ranks_get(grp, &rank_list);
 	if (rc != 0) {
 		D_ERROR("crt_group_ranks_get() failed; rc=%d\n", rc);

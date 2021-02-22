@@ -172,7 +172,7 @@ rdb_oid_to_uoid(rdb_oid_t oid, daos_unit_oid_t *uoid)
 	if ((oid & RDB_OID_CLASS_MASK) != RDB_OID_CLASS_GENERIC)
 		feat = DAOS_OF_AKEY_UINT64;
 
-	daos_obj_generate_id(&uoid->id_pub, feat, 0 /* cid */, 0);
+	daos_obj_set_oid(&uoid->id_pub, feat, 0 /* cid */, 0);
 }
 
 void

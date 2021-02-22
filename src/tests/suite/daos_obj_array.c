@@ -32,7 +32,7 @@ byte_array_simple_stack(void **state)
 	dts_buf_render(buf, STACK_BUF_LEN);
 
 	/** open object */
-	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
@@ -88,16 +88,16 @@ static void
 array_simple(void **state)
 {
 	test_arg_t	*arg = *state;
-	daos_obj_id_t	 oid;
-	daos_handle_t	 oh;
-	d_iov_t	 dkey;
-	d_sg_list_t	 sgl;
-	d_iov_t	 sg_iov;
-	daos_iod_t	 iod;
-	daos_recx_t	 recx;
+	daos_obj_id_t	oid;
+	daos_handle_t	oh;
+	d_iov_t		dkey;
+	d_sg_list_t	sgl;
+	d_iov_t		sg_iov;
+	daos_iod_t	iod;
+	daos_recx_t	recx;
 	char		*buf;
 	char		*buf_out;
-	int		 rc;
+	int		rc;
 
 	D_ALLOC(buf, arg->size * arg->nr);
 	assert_non_null(buf);
@@ -105,7 +105,7 @@ array_simple(void **state)
 	dts_buf_render(buf, arg->size * arg->nr);
 
 	/** open object */
-	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
@@ -186,7 +186,7 @@ array_partial(void **state)
 	dts_buf_render(buf, arg->size * NUM_RECORDS);
 
 	/** open object */
-	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
@@ -338,7 +338,7 @@ replicator(void **state)
 	dts_buf_render(buf, 192);
 
 	/** open object */
-	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
@@ -414,7 +414,7 @@ read_empty(void **state)
 	D_ASSERT(buf != NULL);
 
 	/** open object */
-	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
@@ -520,7 +520,7 @@ array_dkey_punch_enumerate(void **state)
 	dts_buf_render(buf, SM_BUF_LEN);
 
 	/** open object */
-	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
@@ -601,7 +601,7 @@ array_akey_punch_enumerate(void **state)
 	dts_buf_render(buf, SM_BUF_LEN);
 
 	/** open object */
-	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
@@ -702,7 +702,7 @@ array_recx_punch_enumerate(void **state)
 	dts_buf_render(buf, SM_BUF_LEN);
 
 	/** open object */
-	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
@@ -808,7 +808,7 @@ array_recx_read_incomplete(void **state)
 	dts_buf_render(rbuf_orig, SM_BUF_LEN);
 
 	/** open object */
-	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
@@ -864,7 +864,7 @@ array_recx_read_incomplete(void **state)
 			    NULL, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("DONE record fetch --------\n");
-	for (i = 0; i < SM_BUF_LEN/2; i++) {
+	for (i = 0; i < SM_BUF_LEN / 2; i++) {
 		if (i == 1)
 			assert_int_equal((int)rbuf[i], (int)wbuf[0]);
 		else
@@ -922,7 +922,7 @@ fetch_array_with_map(void **state)
 	dts_buf_render(buf, SM_BUF_LEN);
 
 	/** open object */
-	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
@@ -1037,7 +1037,7 @@ fetch_array_with_map_2(void **state)
 	dts_buf_render(buf, SM_BUF_LEN);
 
 	/** open object */
-	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
@@ -1114,7 +1114,7 @@ fetch_array_with_map_3(void **state)
 	dts_buf_render(buf, SM_BUF_LEN);
 
 	/** open object */
-	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
@@ -1191,7 +1191,7 @@ fetch_array_with_map_4(void **state)
 	dts_buf_render(buf, SM_BUF_LEN);
 
 	/** open object */
-	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
@@ -1271,7 +1271,7 @@ small_sgl(void **state)
 	dts_buf_render(buf3, 24);
 
 	/** open object */
-	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
@@ -1335,7 +1335,7 @@ cond_ops(void **state)
 	int		i, rc;
 
 	/** open object */
-	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
