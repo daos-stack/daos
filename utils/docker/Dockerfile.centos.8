@@ -3,14 +3,14 @@
 #
 # 'recipe' for Docker to build an image of centOS 8
 # environment for building the DAOS project.
+#
 
 # Pull base image
 FROM centos:8.3.2011
 LABEL maintainer="daos@daos.groups.io"
 
-# Build arguments can be set via --build-arg
-# use same UID as host and default value of 1000 if not specified
-ARG UID=1000
+# Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
+ARG CB0
 
 # Install basic tools to build DAOS
 RUN yum clean all && yum -y install epel-release dnf-plugins-core &&	\
@@ -69,8 +69,15 @@ ARG DAOS_DEPS_BUILD=yes
 ARG DEPS_JOBS=1
 
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    (scons-3 --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos --deps-only && \
-    /bin/rm -rf build *.gz)
+    {scons-3 --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos --deps-only && \
+    /bin/rm -rf build *.gz; }
+
+# force an upgrade to get any newly built RPMs
+USER root:root
+ARG CACHEBUST
+RUN yum -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
+    yum clean all
+USER daos_server:daos_server
 
 WORKDIR /home/daos/daos/
 COPY VERSION LICENSE ftest.sh SConstruct ./
@@ -88,9 +95,9 @@ ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
-    (scons-3 --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER && \
+    { scons-3 --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER && \
     /bin/rm -rf build && \
-    cp -r utils/config/examples /opt/daos)
+    cp -r utils/config/examples /opt/daos; }
 
 # Set environment variables
 ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:$LD_LIBRARY_PATH

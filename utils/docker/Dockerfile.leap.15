@@ -9,6 +9,9 @@
 FROM opensuse/leap:15.2
 LABEL maintainer="daos@daos.groups.io"
 
+# Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
+ARG CB0
+
 # Use our own repo cache
 ARG REPO_URL=""
 ARG REPO_GROUP_LEAP15=""
@@ -113,11 +116,6 @@ RUN if $QUICKBUILD; then                                                        
         echo "$QUICKBUILD_DEPS" | tr '\n' '\0' | xargs -0 zypper --non-interactive install;                      \
     fi
 
-# force an upgrade to get any newly built RPMs
-RUN zypper addlock fuse fuse-libs fuse-devel libraft0 raft-devel mercury mercury-devel
-ARG CACHEBUST=1
-RUN zypper --non-interactive update && zypper clean all
-
 # The COPY command has a --chown option but it's not well supported so copy as
 # root then run a chown command which is frustrating as the copy can take a few
 # seconds.
@@ -136,8 +134,15 @@ ARG DAOS_DEPS_BUILD=yes
 ARG DEPS_JOBS=1
 
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    (scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos --deps-only && \
-    /bin/rm -rf build *.gz)
+    { scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos --deps-only && \
+    /bin/rm -rf build *.gz; }
+
+# force an upgrade to get any newly built RPMs
+USER root:root
+RUN zypper addlock fuse fuse-libs fuse-devel libraft0 raft-devel mercury mercury-devel
+ARG CACHEBUST
+RUN zypper --non-interactive update && zypper clean all
+USER daos_server:daos_server
 
 WORKDIR /home/daos/daos/
 COPY VERSION LICENSE ftest.sh SConstruct ./
@@ -155,9 +160,9 @@ ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
-    (scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER && \
+    { scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER && \
     /bin/rm -rf build && \
-    cp -r utils/config/examples /opt/daos)
+    cp -r utils/config/examples /opt/daos; }
 
 # Set environment variables
 ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:$LD_LIBRARY_PATH
