@@ -63,7 +63,7 @@ oid_iv_key_cmp(void *key1, void *key2)
 
 static int
 oid_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
-		 d_sg_list_t *src, d_sg_list_t *dst, void **priv)
+		 d_sg_list_t *src, void **priv)
 {
 	D_ASSERT(0);
 	return 0;
@@ -272,7 +272,8 @@ oid_iv_ent_destroy(d_sg_list_t *sgl)
 }
 
 static int
-oid_iv_alloc(struct ds_iv_entry *entry, d_sg_list_t *sgl)
+oid_iv_alloc(struct ds_iv_entry *entry, struct ds_iv_key *key,
+	     d_sg_list_t *sgl)
 {
 	int rc;
 
