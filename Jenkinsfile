@@ -958,10 +958,10 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on CentOS 7 release') {
+                stage('Build on CentOS 7 with clang') {
                     when {
                         beforeAgent true
-                        expression { ! skip_build_on_centos7_gcc_release() }
+                        expression { ! skip_build_on_centos7_clang_dev() }
                     }
                     agent {
                         dockerfile {
@@ -978,21 +978,21 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
+                                   scons_args: "PREFIX=/opt/daos TARGET_TYPE=dev",
                                    build_deps: "no"
                     }
                     post {
                         always {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
-                                         tool: gcc4(pattern: 'centos7-gcc-release-build.log',
-                                                    id: "analysis-gcc-centos7-release")
+                                         tool: gcc4(pattern: 'centos7-clang-dev-build.log',
+                                                    id: "analysis-clang-centos7-dev")
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
-                                      mv config.log config.log-centos7-gcc-release
+                                      mv config.log config.log-centos7-clang-dev
                                   fi"""
-                            archiveArtifacts artifacts: 'config.log-centos7-gcc-release',
+                            archiveArtifacts artifacts: 'config.log-centos7-clang-dev',
                                              allowEmptyArchive: true
                         }
                     }
