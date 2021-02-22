@@ -13,9 +13,6 @@ from __future__ import print_function
 import os
 import json
 import re
-import requests
-import errno
-import subprocess
 
 from avocado import Test as avocadoTest
 from avocado import skip, TestFail, fail_on
@@ -155,51 +152,56 @@ class Test(avocadoTest):
 
     def skip_from_list(self):
         """Check if test is in skip list"""
-        response = requests.get('https://pastebin.com/raw/P35b1UjW')
-        if response.status_code == 200:
-            skip_list = response.text
-            for item in skip_list.splitlines():
-                vals = item.split('|')
-                skip_it, ticket = self._check_variant_skip(eval(vals[0]))
-                if skip_it:
-                    # test is on the skiplist
-                    if len(vals) > 1:
-                        # but there is a commit that fixes it
-                        try:
-                            commits = open(os.path.join(self.prefix, 'lib',
-                                                        'daos', 'commit_list')
-                                          ).read().splitlines()
-                            if vals[1] in commits:
-                                # fix is in this code base
-                                print("On the skip list for ticket {}, but is "
-                                      "fixed in {} so not "
-                                      "skipping".format(ticket, vals[1]))
-                            else:
-                                # fix is not in this code base
-                                self.cancel("Skipping due to being on the "
-                                             "skip list for ticket {}, and "
-                                             "the fix in {} is not in the "
-                                             "current code".format(ticket,
-                                                                   vals[1]))
-                        except IOError as error:
-                            if error.errno == errno.ENOENT:
-                                print("Unable to read commit list: ", error)
-                                print("Trudging on")
-                    elif subprocess.check_output(['git', 'log', '--format=%s',
-                                                 '-n', '1', 'HEAD']
-                                                 ).startswith(ticket + " "):
-                        # fix is in this PR
-                        print("On the skip list for ticket {}, but is "
-                              "is being fixed in this PR, so not "
-                              "skipping".format(ticket))
+        skip_list = ""
+        try:
+            skip_list = open("/scratch/CI-skip-list").read()
+        except Exception as excpt: # pylint: disable=broad-except
+            print("Unable to read skip list: ", excpt)
+            print("Trudging on without skipping known failing tests")
+            return
+
+        for item in skip_list.splitlines():
+            vals = item.split('|')
+            skip_it, ticket = self._check_variant_skip(eval(vals[0])) # pylint: disable=eval-used
+            if skip_it:
+                # test is on the skiplist
+                if len(vals) > 1:
+                    # but there is a commit that fixes it
+                    try:
+                        commits = open('/tmp/commit_list').read().splitlines()
+                        if vals[1] in commits:
+                            # fix is in this code base
+                            print("On the skip list for ticket {}, but is "
+                                  "fixed in {} so not "
+                                  "skipping".format(ticket, vals[1]))
+                        else:
+                            # fix is not in this code base
+                            self.cancel("Skipping due to being on the "
+                                         "skip list for ticket {}, and "
+                                         "the fix in {} is not in the "
+                                         "current code".format(ticket,
+                                                               vals[1]))
+                    except Exception as excpt: # pylint: disable=broad-except
+                        print("Unable to read commit list: ", excpt)
+                        print("Trudging on without skipping known failing"
+                              "tests")
+                else:
+                    try:
+                        if open("/tmp/commit_title").read().trim().startswith(
+                            ticket + " "):
+                            # fix is in this PR
+                            print("On the skip list for ticket {}, but is "
+                                  "is being fixed in this PR, so not "
+                                  "skipping".format(ticket))
+                    except Exception as excpt: # pylint: disable=broad-except
+                        print("Unable to read commit title: ", excpt)
+                        print("Trudging on without skipping known failing"
+                               "tests")
                     else:
                         # there is no commit that fixes it
                         self.cancel("Skipping due to being on the skip list "
                                     "for ticket {} with no fix available "
                                     "yet".format(ticket))
-        else:
-            print("Unable to read skip list: ", response)
-            print("Trudging on")
 
     def _check_variant_skip(self, cancel_list):
         """Determine if this test variant should be skipped.
@@ -236,7 +238,7 @@ class Test(avocadoTest):
         """Determine if this test variant should be skipped."""
         skip_variant, ticket = self._check_variant_skip(self.CANCEL_FOR_TICKET)
         if skip_variant:
-                self.cancelForTicket(ticket)
+            self.cancelForTicket(ticket)
 
     # pylint: disable=invalid-name
     def cancelForTicket(self, ticket):

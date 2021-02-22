@@ -27,13 +27,9 @@ PACKAGING_CHECK_DIR ?= ../../../rpm/packaging
 $(NAME)-$(VERSION).tar.gz: $(shell git ls-files :/:)
 	echo Creating $@
 	echo $(basename $@)
-	cd ../../ &&                                                \
-	git log --pretty=format:%h --abbrev-commit > commit_list && \
-	git archive --format tar --prefix $(NAME)-$(VERSION)/       \
+	cd ../../ &&                                          \
+	git archive --format tar --prefix $(NAME)-$(VERSION)/ \
 	            -o $$OLDPWD/$(basename $@) HEAD ./
-	pwd
-	tar -C ../../ --transform "s|^|$(NAME)-$(VERSION)/|" --append -f $(basename $@) \
-	    commit_list
 	rm -f $@
 	gzip $(basename $@)
 
