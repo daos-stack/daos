@@ -1069,29 +1069,35 @@ get_server_config(char *host, char *server_config_file)
 	while ((read = getline(&line, &len, fp)) != -1) {
 		print_message("line %s", line);
 		if (strstr(line, "--config") != NULL ||
-		    strstr(line, "-o") != NULL)
+			strstr(line, "-o") != NULL) {
+			conf = false;
 			break;
+		}
 	}
 
 	if (conf)
-		strcpy(server_config_file, DAOS_SERVER_CONF);
+		strncpy(server_config_file, DAOS_SERVER_CONF,
+			DAOS_SERVER_CONF_LENGTH);
 	else {
 		pch = strtok(line, " ");
 		while (pch != NULL) {
 			if (strstr(pch, "--config") != NULL) {
 				if (strchr(pch, '=') != NULL)
-					strcpy(server_config_file,
-					       strchr(pch, '=') + 1);
+					strncpy(server_config_file,
+						strchr(pch, '=') + 1,
+						DAOS_SERVER_CONF_LENGTH);
 				else {
 					pch = strtok(NULL, " ");
-					strcpy(server_config_file, pch);
+					strncpy(server_config_file, pch,
+						DAOS_SERVER_CONF_LENGTH);
 				}
 				break;
 			}
 
 			if (strstr(pch, "-o") != NULL) {
 				pch = strtok(NULL, " ");
-				strcpy(server_config_file, pch);
+				strncpy(server_config_file, pch,
+					DAOS_SERVER_CONF_LENGTH);
 				break;
 			}
 			pch = strtok(NULL, " ");
