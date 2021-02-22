@@ -124,8 +124,7 @@ spec_place_rank_get(unsigned int *pos, daos_obj_id_t oid,
 		    struct pool_map *pl_poolmap);
 
 int
-pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list,
-	      bool is_pool_adding);
+pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list);
 
 bool
 is_pool_adding(struct pool_domain *dom);

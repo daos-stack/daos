@@ -6,7 +6,6 @@
 '''
 from data_mover_test_base import DataMoverTestBase
 from os.path import basename, join
-from apricot import skipForTicket
 
 
 class CopyBasicsTest(DataMoverTestBase):
@@ -33,7 +32,6 @@ class CopyBasicsTest(DataMoverTestBase):
             "ior_flags", "/run/ior/*")
         self.test_file = self.ior_cmd.test_file.value
 
-    @skipForTicket("DAOS-6484")
     def test_copy_types(self):
         """
         Test Description:
@@ -202,7 +200,6 @@ class CopyBasicsTest(DataMoverTestBase):
                 dst[0], dst[1], dst[2], dst[3])
             self.read_verify_location(dst[0], dst[1], dst[2], dst[3])
 
-    @skipForTicket("DAOS-6484")
     def test_copy_subsets(self):
         """
         Test Description:

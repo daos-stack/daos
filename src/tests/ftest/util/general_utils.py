@@ -583,7 +583,7 @@ def convert_list(value, separator=","):
     return separator.join([str(item) for item in value])
 
 
-def stop_processes(hosts, pattern, verbose=True, timeout=60):
+def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None):
     """Stop the processes on each hosts that match the pattern.
 
     Args:
@@ -605,17 +605,23 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60):
     result = {}
     log = getLogger()
     log.info("Killing any processes on %s that match: %s", hosts, pattern)
+
+    if added_filter:
+        ps_cmd = "ps x | grep -E {} | grep -vE {}".format(pattern, added_filter)
+    else:
+        ps_cmd = "pgrep --list-full {}".format(pattern)
+
     if hosts is not None:
         commands = [
             "rc=0",
-            "if pgrep --list-full {}".format(pattern),
+            "if " + ps_cmd,
             "then rc=1",
             "sudo pkill {}".format(pattern),
             "sleep 5",
-            "if pgrep --list-full {}".format(pattern),
+            "if " + ps_cmd,
             "then pkill --signal ABRT {}".format(pattern),
             "sleep 1",
-            "if pgrep --list-full {}".format(pattern),
+            "if " + ps_cmd,
             "then pkill --signal KILL {}".format(pattern),
             "fi",
             "fi",

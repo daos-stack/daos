@@ -12,7 +12,7 @@
 #define D_LOGFAC DD_FAC(rsvc)
 
 #include <sys/stat.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/rsvc.h>
 #include "rpc.h"
 
@@ -609,7 +609,7 @@ map_distd(void *arg)
 				svc->s_map_dist = false;
 				break;
 			}
-			ABT_cond_wait(svc->s_map_dist_cv, svc->s_mutex);
+			sched_cond_wait(svc->s_map_dist_cv, svc->s_mutex);
 		}
 		ABT_mutex_unlock(svc->s_mutex);
 		if (stop)
@@ -1211,7 +1211,7 @@ ds_rsvc_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
  * XXX excluded and ranks are a bit duplicate here, since this function only
  * suppose to send RPC to @ranks list, but cart does not have such interface
  * for collective RPC, so we have to use both ranks and exclued for the moment,
- * and it should be simplied once cart can provide rank list collective RPC.
+ * and it should be simplified once cart can provide rank list collective RPC.
  *
  * \param[in]	class		replicated service class
  * \param[in]	id		replicated service ID

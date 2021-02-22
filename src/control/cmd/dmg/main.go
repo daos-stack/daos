@@ -223,8 +223,8 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			}
 			ctlCfg = control.DefaultConfig()
 		}
-		if opts.ConfigPath != "" {
-			log.Debugf("control config loaded from %s", opts.ConfigPath)
+		if ctlCfg.Path != "" {
+			log.Debugf("control config loaded from %s", ctlCfg.Path)
 		}
 
 		if opts.Insecure {
@@ -239,7 +239,9 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			ctlCmd.setInvoker(invoker)
 			if opts.HostList != "" {
 				if hlCmd, ok := cmd.(hostListSetter); ok {
-					hlCmd.setHostList(strings.Split(opts.HostList, ","))
+					hl := strings.Split(opts.HostList, ",")
+					hlCmd.setHostList(hl)
+					ctlCfg.HostList = hl
 				} else {
 					return errors.Errorf("this command does not accept a hostlist parameter (set it in %s or %s)",
 						control.UserConfigPath(), control.SystemConfigPath())

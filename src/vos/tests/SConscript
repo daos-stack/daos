@@ -3,10 +3,11 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('denv', 'prereqs', 'utest_utils')
+    Import('denv', 'prereqs', 'utest_utils', 'conf_dir')
 
-    libraries = ['vos', 'bio', 'abt', 'pthread', 'daos_common', 'daos_tests',
-                 'gurt', 'cart', 'uuid', 'pthread', 'pmemobj', 'cmocka', 'gomp']
+    libraries = ['vos', 'bio', 'abt', 'pthread', 'daos_common_pmem',
+                 'daos_tests', 'gurt', 'cart', 'uuid', 'pthread',
+                 'pmemobj', 'cmocka', 'gomp']
 
     prereqs.require(denv, 'argobots')
 
@@ -27,7 +28,7 @@ def scons():
                                  LIBS=libraries)
 
     denv.Install('$PREFIX/bin/', [vos_tests, evt_ctl])
-    denv.Install('$PREFIX/etc/', ['vos_size_input.yaml'])
+    denv.Install(conf_dir, ['vos_size_input.yaml'])
 
 if __name__ == "SCons.Script":
     scons()

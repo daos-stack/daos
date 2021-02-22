@@ -27,7 +27,7 @@ func TestDmg_ConfigCommands(t *testing.T) {
 		},
 		{
 			"Generate with no nvme",
-			"config generate --num-nvme 0",
+			"config generate --min-ssds 0",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
@@ -35,7 +35,7 @@ func TestDmg_ConfigCommands(t *testing.T) {
 		},
 		{
 			"Generate with storage parameters",
-			"config generate --num-pmem 2 --num-nvme 4",
+			"config generate --num-engines 2 --min-ssds 4",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
@@ -43,7 +43,7 @@ func TestDmg_ConfigCommands(t *testing.T) {
 		},
 		{
 			"Generate with short option storage parameters",
-			"config generate -p 2 -n 4",
+			"config generate -e 2 -s 4",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),

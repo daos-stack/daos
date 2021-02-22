@@ -15,19 +15,19 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
-func TestIOServerInstance_MountScmDevice(t *testing.T) {
+func TestIOEngineInstance_MountScmDevice(t *testing.T) {
 	testDir, cleanup := common.CreateTestDir(t)
 	defer cleanup()
 
 	var (
 		goodMountPoint = testDir + "/mnt/daos"
-		ramCfg         = &ioserver.Config{
-			Storage: ioserver.StorageConfig{
+		ramCfg         = &engine.Config{
+			Storage: engine.StorageConfig{
 				SCM: storage.ScmConfig{
 					MountPoint:  goodMountPoint,
 					Class:       storage.ScmClassRAM,
@@ -35,8 +35,8 @@ func TestIOServerInstance_MountScmDevice(t *testing.T) {
 				},
 			},
 		}
-		dcpmCfg = &ioserver.Config{
-			Storage: ioserver.StorageConfig{
+		dcpmCfg = &engine.Config{
+			Storage: engine.StorageConfig{
 				SCM: storage.ScmConfig{
 					MountPoint: goodMountPoint,
 					Class:      storage.ScmClassDCPM,
@@ -47,9 +47,9 @@ func TestIOServerInstance_MountScmDevice(t *testing.T) {
 	)
 
 	for name, tc := range map[string]struct {
-		ioCfg  *ioserver.Config
-		msCfg  *scm.MockSysConfig
-		expErr error
+		engineCfg *engine.Config
+		msCfg     *scm.MockSysConfig
+		expErr    error
 	}{
 		"empty config": {
 			expErr: errors.New("operation unsupported on SCM class"),
@@ -66,28 +66,28 @@ func TestIOServerInstance_MountScmDevice(t *testing.T) {
 			},
 		},
 		"mount ramdisk": {
-			ioCfg: ramCfg,
+			engineCfg: ramCfg,
 		},
 		"mount ramdisk fails": {
-			ioCfg: ramCfg,
+			engineCfg: ramCfg,
 			msCfg: &scm.MockSysConfig{
 				MountErr: errors.New("mount failed"),
 			},
 			expErr: errors.New("mount failed"),
 		},
 		"mount dcpm": {
-			ioCfg: dcpmCfg,
+			engineCfg: dcpmCfg,
 		},
 		"mount dcpm fails": {
-			ioCfg: dcpmCfg,
+			engineCfg: dcpmCfg,
 			msCfg: &scm.MockSysConfig{
 				MountErr: errors.New("mount failed"),
 			},
 			expErr: errors.New("mount failed"),
 		},
 		"mount dcpm fails (missing device)": {
-			ioCfg: &ioserver.Config{
-				Storage: ioserver.StorageConfig{
+			engineCfg: &engine.Config{
+				Storage: engine.StorageConfig{
 					SCM: storage.ScmConfig{
 						MountPoint: goodMountPoint,
 						Class:      storage.ScmClassDCPM,
@@ -101,13 +101,13 @@ func TestIOServerInstance_MountScmDevice(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			if tc.ioCfg == nil {
-				tc.ioCfg = &ioserver.Config{}
+			if tc.engineCfg == nil {
+				tc.engineCfg = &engine.Config{}
 			}
 
-			runner := ioserver.NewRunner(log, tc.ioCfg)
+			runner := engine.NewRunner(log, tc.engineCfg)
 			mp := scm.NewMockProvider(log, nil, tc.msCfg)
-			instance := NewIOServerInstance(log, nil, mp, nil, runner)
+			instance := NewEngineInstance(log, nil, mp, nil, runner)
 
 			gotErr := instance.MountScmDevice()
 			common.CmpErr(t, tc.expErr, gotErr)
@@ -115,13 +115,13 @@ func TestIOServerInstance_MountScmDevice(t *testing.T) {
 	}
 }
 
-func TestIOServerInstance_NeedsScmFormat(t *testing.T) {
+func TestEngineInstance_NeedsScmFormat(t *testing.T) {
 	const (
 		goodMountPoint = "/mnt/daos"
 	)
 	var (
-		ramCfg = &ioserver.Config{
-			Storage: ioserver.StorageConfig{
+		ramCfg = &engine.Config{
+			Storage: engine.StorageConfig{
 				SCM: storage.ScmConfig{
 					MountPoint:  goodMountPoint,
 					Class:       storage.ScmClassRAM,
@@ -129,8 +129,8 @@ func TestIOServerInstance_NeedsScmFormat(t *testing.T) {
 				},
 			},
 		}
-		dcpmCfg = &ioserver.Config{
-			Storage: ioserver.StorageConfig{
+		dcpmCfg = &engine.Config{
+			Storage: engine.StorageConfig{
 				SCM: storage.ScmConfig{
 					MountPoint: goodMountPoint,
 					Class:      storage.ScmClassDCPM,
@@ -141,7 +141,7 @@ func TestIOServerInstance_NeedsScmFormat(t *testing.T) {
 	)
 
 	for name, tc := range map[string]struct {
-		ioCfg          *ioserver.Config
+		engineCfg      *engine.Config
 		mbCfg          *scm.MockBackendConfig
 		msCfg          *scm.MockSysConfig
 		expNeedsFormat bool
@@ -151,53 +151,53 @@ func TestIOServerInstance_NeedsScmFormat(t *testing.T) {
 			expErr: errors.New("operation unsupported on SCM class"),
 		},
 		"check ramdisk fails (IsMounted fails)": {
-			ioCfg: ramCfg,
+			engineCfg: ramCfg,
 			msCfg: &scm.MockSysConfig{
 				IsMountedErr: errors.New("failed to check mount"),
 			},
 			expErr: errors.New("failed to check mount"),
 		},
 		"check ramdisk (mounted)": {
-			ioCfg: ramCfg,
+			engineCfg: ramCfg,
 			msCfg: &scm.MockSysConfig{
 				IsMountedBool: true,
 			},
 			expNeedsFormat: false,
 		},
 		"check ramdisk (unmounted)": {
-			ioCfg:          ramCfg,
+			engineCfg:      ramCfg,
 			expNeedsFormat: true,
 		},
 		"check ramdisk (unmounted, mountpoint doesn't exist)": {
-			ioCfg: ramCfg,
+			engineCfg: ramCfg,
 			msCfg: &scm.MockSysConfig{
 				IsMountedErr: os.ErrNotExist,
 			},
 			expNeedsFormat: true,
 		},
 		"check dcpm (mounted)": {
-			ioCfg: dcpmCfg,
+			engineCfg: dcpmCfg,
 			msCfg: &scm.MockSysConfig{
 				IsMountedBool: true,
 			},
 			expNeedsFormat: false,
 		},
 		"check dcpm (unmounted, unformatted)": {
-			ioCfg: dcpmCfg,
+			engineCfg: dcpmCfg,
 			msCfg: &scm.MockSysConfig{
 				GetfsStr: "none",
 			},
 			expNeedsFormat: true,
 		},
 		"check dcpm (unmounted, formatted)": {
-			ioCfg: dcpmCfg,
+			engineCfg: dcpmCfg,
 			msCfg: &scm.MockSysConfig{
 				GetfsStr: "ext4",
 			},
 			expNeedsFormat: false,
 		},
 		"check dcpm (unmounted, formatted, mountpoint doesn't exist)": {
-			ioCfg: dcpmCfg,
+			engineCfg: dcpmCfg,
 			msCfg: &scm.MockSysConfig{
 				IsMountedErr: os.ErrNotExist,
 				GetfsStr:     "ext4",
@@ -205,15 +205,15 @@ func TestIOServerInstance_NeedsScmFormat(t *testing.T) {
 			expNeedsFormat: false,
 		},
 		"check dcpm fails (IsMounted fails)": {
-			ioCfg: dcpmCfg,
+			engineCfg: dcpmCfg,
 			msCfg: &scm.MockSysConfig{
 				IsMountedErr: errors.New("failed to check mount"),
 			},
 			expErr: errors.New("failed to check mount"),
 		},
 		"check dcpm fails (missing device)": {
-			ioCfg: &ioserver.Config{
-				Storage: ioserver.StorageConfig{
+			engineCfg: &engine.Config{
+				Storage: engine.StorageConfig{
 					SCM: storage.ScmConfig{
 						MountPoint: goodMountPoint,
 						Class:      storage.ScmClassDCPM,
@@ -227,13 +227,13 @@ func TestIOServerInstance_NeedsScmFormat(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			if tc.ioCfg == nil {
-				tc.ioCfg = &ioserver.Config{}
+			if tc.engineCfg == nil {
+				tc.engineCfg = &engine.Config{}
 			}
 
-			runner := ioserver.NewRunner(log, tc.ioCfg)
+			runner := engine.NewRunner(log, tc.engineCfg)
 			mp := scm.NewMockProvider(log, tc.mbCfg, tc.msCfg)
-			instance := NewIOServerInstance(log, nil, mp, nil, runner)
+			instance := NewEngineInstance(log, nil, mp, nil, runner)
 
 			gotNeedsFormat, gotErr := instance.NeedsScmFormat()
 			common.CmpErr(t, tc.expErr, gotErr)

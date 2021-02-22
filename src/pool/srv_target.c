@@ -352,7 +352,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	return 0;
 
 err_iv_ns:
-	ds_iv_ns_destroy(pool->sp_iv_ns);
+	ds_iv_ns_put(pool->sp_iv_ns);
 err_group:
 	rc_tmp = crt_group_secondary_destroy(pool->sp_group);
 	if (rc_tmp != 0)
@@ -380,7 +380,7 @@ pool_free_ref(struct daos_llink *llink)
 
 	D_DEBUG(DF_DSMS, DF_UUID": freeing\n", DP_UUID(pool->sp_uuid));
 
-	ds_iv_ns_destroy(pool->sp_iv_ns);
+	ds_iv_ns_put(pool->sp_iv_ns);
 
 	rc = crt_group_secondary_destroy(pool->sp_group);
 	if (rc != 0)
@@ -507,7 +507,7 @@ pool_fetch_hdls_ult(void *data)
 	ABT_mutex_unlock(pool->sp_mutex);
 retry:
 	if (pool->sp_stopping) {
-		D_DEBUG(DB_MD, DF_UUID" skip fetching hdl due to stop\n",
+		D_DEBUG(DB_MD, DF_UUID": skip fetching hdl due to stop\n",
 			DP_UUID(pool->sp_uuid));
 		D_GOTO(out, rc);
 	}
@@ -570,8 +570,8 @@ ds_pool_start_ec_eph_query_ult(struct ds_pool *pool)
 	sched_req_attr_init(&attr, SCHED_REQ_GC, &pool->sp_uuid);
 	pool->sp_ec_ephs_req = sched_req_get(&attr, ec_eph_query_ult);
 	if (pool->sp_ec_ephs_req == NULL) {
-		D_ERROR(DF_UUID"Failed to get req for ec eph query ULT\n",
-		       DP_UUID(pool->sp_uuid));
+		D_ERROR(DF_UUID": Failed to get req for ec eph query ULT\n",
+			DP_UUID(pool->sp_uuid));
 		ABT_thread_join(ec_eph_query_ult);
 		return -DER_NOMEM;
 	}
@@ -585,7 +585,7 @@ ds_pool_tgt_ec_eph_query_abort(struct ds_pool *pool)
 	if (pool->sp_ec_ephs_req == NULL)
 		return;
 
-	D_DEBUG(DB_MD, DF_UUID"Stopping EC query ULT\n",
+	D_DEBUG(DB_MD, DF_UUID": Stopping EC query ULT\n",
 		DP_UUID(pool->sp_uuid));
 
 	sched_req_wait(pool->sp_ec_ephs_req, true);
@@ -655,6 +655,7 @@ ds_pool_start(uuid_t uuid)
 		ds_pool_put(pool);
 		D_GOTO(out_lock, rc);
 	}
+	ds_iv_ns_start(pool->sp_iv_ns);
 out_lock:
 	ABT_mutex_unlock(pool_cache_lock);
 	return rc;
@@ -691,6 +692,7 @@ ds_pool_stop(uuid_t uuid)
 		return;
 	pool->sp_stopping = 1;
 
+	ds_iv_ns_stop(pool->sp_iv_ns);
 	ds_pool_tgt_ec_eph_query_abort(pool);
 	pool_fetch_hdls_ult_abort(pool);
 
@@ -926,8 +928,19 @@ pool_query_one(void *vin)
 	x_ps->ps_ntargets = 1;
 	x_ps->ps_space.s_total[DAOS_MEDIA_SCM] = SCM_TOTAL(vps);
 	x_ps->ps_space.s_total[DAOS_MEDIA_NVME] = NVME_TOTAL(vps);
-	x_ps->ps_space.s_free[DAOS_MEDIA_SCM] = SCM_FREE(vps);
-	x_ps->ps_space.s_free[DAOS_MEDIA_NVME] = NVME_FREE(vps);
+
+	/* Exclude the sys reserved space before reporting to user */
+	if (SCM_FREE(vps) > SCM_SYS(vps))
+		x_ps->ps_space.s_free[DAOS_MEDIA_SCM] =
+				SCM_FREE(vps) - SCM_SYS(vps);
+	else
+		x_ps->ps_space.s_free[DAOS_MEDIA_SCM] = 0;
+
+	if (NVME_FREE(vps) > NVME_SYS(vps))
+		x_ps->ps_space.s_free[DAOS_MEDIA_NVME] =
+				NVME_FREE(vps) - NVME_SYS(vps);
+	else
+		x_ps->ps_space.s_free[DAOS_MEDIA_NVME] = 0;
 
 	for (i = DAOS_MEDIA_SCM; i < DAOS_MEDIA_MAX; i++) {
 		x_ps->ps_free_max[i] = x_ps->ps_space.s_free[i];
@@ -966,14 +979,13 @@ pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
 					&coll_args.ca_exclude_tgts,
 					&coll_args.ca_exclude_tgts_cnt);
 	if (rc) {
-		D_ERROR(DF_UUID "failed to get index : rc "DF_RC"\n",
+		D_ERROR(DF_UUID": failed to get index : rc "DF_RC"\n",
 			DP_UUID(pool->sp_uuid), DP_RC(rc));
 		return rc;
 	}
 
 	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
-	if (coll_args.ca_exclude_tgts)
-		D_FREE(coll_args.ca_exclude_tgts);
+	D_FREE(coll_args.ca_exclude_tgts);
 	if (rc) {
 		D_ERROR("Pool query on pool "DF_UUID" failed, "DF_RC"\n",
 			DP_UUID(pool->sp_uuid), DP_RC(rc));
@@ -1037,7 +1049,7 @@ ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic)
 	}
 
 out:
-	if (rc != 0 && hdl != NULL)
+	if (rc != 0)
 		D_FREE(hdl);
 
 	D_DEBUG(DF_DSMS, DF_UUID": connect "DF_RC"\n",
@@ -1244,7 +1256,7 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 				     0, 0, NULL);
 		if (ret) {
 			D_ERROR("dtx_resync_ult failure %d\n", ret);
-			D_FREE_PTR(arg);
+			D_FREE(arg);
 		}
 	} else {
 		D_WARN("Ignore update pool "DF_UUID" %d -> %d\n",

@@ -425,7 +425,7 @@ cont_start_agg_ult(struct ds_cont_child *cont)
 		return 0;
 
 	rc = dss_ult_create(cont_aggregate_ult, cont, DSS_XS_SELF,
-			    0, 0, &agg_ult);
+			    0, DSS_DEEP_STACK_SZ, &agg_ult);
 	if (rc) {
 		D_ERROR(DF_CONT"[%d]: Failed to create aggregation ULT. %d\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
@@ -1358,6 +1358,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		 * NB: When cont_uuid == NULL, it's not a real container open
 		 *     but for creating rebuild global container handle.
 		 */
+		D_ASSERT(hdl->sch_cont != NULL);
 		hdl->sch_cont->sc_open++;
 
 		if (hdl->sch_cont->sc_open > 1)
@@ -1414,8 +1415,7 @@ err_register:
 	if (hdl->sch_cont->sc_open == 0)
 		dtx_batched_commit_deregister(hdl->sch_cont);
 err_reindex:
-	if (hdl->sch_cont)
-		cont_stop_dtx_reindex_ult(hdl->sch_cont);
+	cont_stop_dtx_reindex_ult(hdl->sch_cont);
 err_cont:
 	if (daos_handle_is_valid(poh)) {
 		D_DEBUG(DF_DSMS, DF_CONT": destroying new vos container\n",
@@ -2328,7 +2328,8 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 		coll_args.ca_aggregator = pool;
 		coll_args.ca_func_args	= &coll_args.ca_stream_args;
 
-		rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
+		rc = dss_thread_collective_reduce(&coll_ops, &coll_args,
+						  DSS_ULT_FL_PERIODIC);
 		if (rc) {
 			D_ERROR(DF_UUID": Can not collect min epoch: %d\n",
 				DP_UUID(pool->sp_uuid), rc);
