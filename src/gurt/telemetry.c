@@ -1861,14 +1861,14 @@ failure:
  * is stored as metadata for each counter.
  *
  * \param[in]	node		Pointer to a node with a metric of type duration
- * 				or gauge
- * \param[in]	path		Path name of the metric specified
+ *				or gauge.
+ * \param[in]	path		Path name of the metric specified.
  *				by \a node.  Can be an arbitrary location.
  *				However, specifying the full path allows this
  *				function to create counters underneath the given
  *				node.
  * \param[in]	num_buckets	Specifies the number of buckets the histogram
- * 				should have
+ *				should have.
  * \param[in]	initial_width	The number of elements in the first bucket
  * \param[in]	multiplier	Applied to the second .. nth bucket to
  *				increase the width of each successive bucket
@@ -1915,7 +1915,7 @@ d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets,
 		return -DER_INVAL;
 
 	if (!((node->dtn_type == D_TM_GAUGE) ||
-	    (node->dtn_type & D_TM_DURATION)))
+	      (node->dtn_type & D_TM_DURATION)))
 		return -DER_OP_NOT_PERMITTED;
 
 	rc = D_MUTEX_LOCK(&d_tm_add_lock);
@@ -2032,7 +2032,7 @@ d_tm_get_num_buckets(struct d_tm_histogram_t *histogram,
 		return -DER_METRIC_NOT_FOUND;
 
 	if (!((node->dtn_type == D_TM_GAUGE) ||
-	    (node->dtn_type & D_TM_DURATION)))
+	      (node->dtn_type & D_TM_DURATION)))
 		return -DER_OP_NOT_PERMITTED;
 
 	metric_data = d_tm_conv_ptr(shmem_root, node->dtn_metric);
@@ -2076,7 +2076,7 @@ d_tm_get_bucket_range(struct d_tm_bucket_t *bucket, int bucket_id,
 		      uint64_t *shmem_root, struct d_tm_node_t *node)
 {
 	struct d_tm_histogram_t	*dtm_histogram = NULL;
-	struct d_tm_bucket_t 	*dth_bucket = NULL;
+	struct d_tm_bucket_t	*dth_bucket = NULL;
 	struct d_tm_metric_t	*metric_data = NULL;
 
 	if (node == NULL)
@@ -2092,7 +2092,7 @@ d_tm_get_bucket_range(struct d_tm_bucket_t *bucket, int bucket_id,
 		return -DER_METRIC_NOT_FOUND;
 
 	if (!((node->dtn_type == D_TM_GAUGE) ||
-	    (node->dtn_type & D_TM_DURATION)))
+	      (node->dtn_type & D_TM_DURATION)))
 		return -DER_OP_NOT_PERMITTED;
 
 	metric_data = d_tm_conv_ptr(shmem_root, node->dtn_metric);
