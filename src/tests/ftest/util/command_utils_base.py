@@ -431,9 +431,6 @@ class YamlParameters(ObjectWithParameters):
             yaml_data_updated = self.other_params.is_yaml_data_updated()
         if not yaml_data_updated:
             for name in self.get_param_names():
-                self.log.info(
-                    "*** IS_UPDATED %s: %s***",
-                    name, getattr(self, name).updated)
                 if getattr(self, name).updated:
                     yaml_data_updated = True
                     break

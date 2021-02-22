@@ -87,7 +87,7 @@ class RebuildTests(TestWithServers):
         # Manually exclude the specified rank
         for index in range(pool_quantity):
             if index == 0:
-                self.server_managers[0].stop_ranks([rank], self.d_log)
+                self.server_managers[0].stop_ranks([rank], self.d_log, True)
             else:
                 self.pool[index].exclude([rank], self.d_log)
 
