@@ -30,15 +30,6 @@ class CartNoPmixOneNodeTest(TestWithoutServers):
         super(CartNoPmixOneNodeTest, self).setUp()
         self.utils = CartUtils()
         self.env = self.utils.get_env(self)
-        crt_phy_addr = self.params.get("CRT_PHY_ADDR_STR", '/run/defaultENV/')
-        ofi_interface = self.params.get("OFI_INTERFACE", '/run/defaultENV/')
-        ofi_ctx_num = self.params.get("CRT_CTX_NUM", '/run/defaultENV/')
-        ofi_share_addr = self.params.get("CRT_CTX_SHARE_ADDR",
-                                         '/run/defaultENV/')
-        self.pass_env = {"CRT_PHY_ADDR_STR": crt_phy_addr,
-                         "OFI_INTERFACE": ofi_interface,
-                         "CRT_CTX_SHARE_ADDR": ofi_share_addr,
-                         "CRT_CTX_NUM": ofi_ctx_num}
 
     def tearDown(self):
         """ Tear down """
@@ -57,8 +48,7 @@ class CartNoPmixOneNodeTest(TestWithoutServers):
 
         self.utils.print("\nTest cmd : %s\n" % cmd)
 
-        test_env = self.pass_env
-        p = subprocess.Popen([cmd], env=test_env, stdout=subprocess.PIPE)
+        p = subprocess.Popen([cmd], stdout=subprocess.PIPE)
 
         rc = self.utils.wait_process(p, 30)
         if rc != 0:
