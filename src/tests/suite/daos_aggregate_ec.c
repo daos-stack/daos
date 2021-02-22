@@ -118,7 +118,7 @@ ec_setup_cont_obj(struct ec_agg_test_ctx *ctx, daos_oclass_id_t oclass)
 
 	ctx->oid.lo = 1;
 	ctx->oid.hi =  100;
-	daos_obj_generate_id(&ctx->oid, 0, oclass, 0);
+	daos_obj_generate_oid(ctx->coh, &ctx->oid, 0, oclass, 0, 0);
 	rc = daos_obj_open(ctx->coh, ctx->oid, 0, &ctx->oh, NULL);
 	assert_success(rc);
 }
@@ -130,7 +130,7 @@ ec_setup_obj(struct ec_agg_test_ctx *ctx, daos_oclass_id_t oclass, int low)
 
 	ctx->oid.lo = low;
 	ctx->oid.hi =  100;
-	daos_obj_generate_id(&ctx->oid, 0, oclass, 0);
+	daos_obj_generate_oid(ctx->coh, &ctx->oid, 0, oclass, 0, 0);
 	ctx->oh = DAOS_HDL_INVAL;
 	rc = daos_obj_open(ctx->coh, ctx->oid, 0, &ctx->oh, NULL);
 	assert_success(rc);

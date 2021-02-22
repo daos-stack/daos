@@ -30,7 +30,7 @@ remap_add_one(d_list_t *remap_list, struct failed_shard *f_new)
 	d_list_for_each_prev(tmp, remap_list) {
 		f_shard = d_list_entry(tmp, struct failed_shard, fs_list);
 		/*
-		* Since we can only reuild one target at a time, the
+		* Since we can only rebuild one target at a time, the
 		* target fseq should be assigned uniquely, even if all
 		* the targets of the same domain failed at same time.
 		*/
@@ -208,23 +208,21 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 			 * for rebuild, perhaps they should be unified.
 			 */
 			if (l_shard->po_shard != -1) {
-				D_ASSERT(f_shard->fs_tgt_id != -1);
 				if (*idx >= array_size)
 					/*
 					 * Not enough space for this layout in
 					 * the buffer provided by the caller
 					 */
 					return -DER_REC2BIG;
-				tgt_id[*idx] = f_shard->fs_tgt_id;
+				tgt_id[*idx] = l_shard->po_target;
 				shard_idx[*idx] = l_shard->po_shard;
 				(*idx)++;
 			}
 		} else {
-			D_DEBUG(DB_REBUILD, ""DF_OID" skip id %u idx %u"
+			D_DEBUG(DB_REBUILD, ""DF_OID" skip idx %u"
 				"fseq:%d(status:%d)? rbd_ver:%d\n",
-				DP_OID(md->omd_id), f_shard->fs_tgt_id,
-				f_shard->fs_shard_idx, f_shard->fs_fseq,
-				f_shard->fs_status, r_ver);
+				DP_OID(md->omd_id), f_shard->fs_shard_idx,
+				f_shard->fs_fseq, f_shard->fs_status, r_ver);
 		}
 	}
 
@@ -320,10 +318,8 @@ next_fail:
 		 * skip this shard.
 		 */
 		if (f_shard->fs_status == PO_COMP_ST_DOWN ||
-		    f_shard->fs_status == PO_COMP_ST_DRAIN) {
+		    f_shard->fs_status == PO_COMP_ST_DRAIN)
 			l_shard->po_rebuilding = 1;
-			f_shard->fs_tgt_id = spare_tgt->ta_comp.co_id;
-		}
 	} else {
 		l_shard->po_shard = -1;
 		l_shard->po_target = -1;
@@ -371,17 +367,19 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 	struct failed_shard	*f_shard;
 	struct failed_shard	*tmp;
 	uint32_t                *grp_map = NULL;
-	uint32_t		grp_map_idx = 0;
-	uint32_t		grp_map_size;
-	uint32_t		grp_map_array[STACK_TGTS_SIZE] = {-1};
+	uint32_t		 grp_map_idx = 0;
+	uint32_t		 grp_map_size;
+	uint32_t		 grp_map_array[STACK_TGTS_SIZE] = {-1};
+	/* holds number of "extra" shards for the group in the new_shards */
 	uint32_t                *grp_count = NULL;
-	uint32_t		grp_cnt_array[STACK_TGTS_SIZE] = {0};
-	uint32_t                max_fail_grp;
-	uint32_t		new_group_size;
-	uint32_t		grp;
-	uint32_t		grp_idx;
-	int i, j, k = 0;
-	int rc = 0;
+	uint32_t		 grp_cnt_array[STACK_TGTS_SIZE] = {0};
+	uint32_t                 max_fail_grp;
+	uint32_t		 new_group_size;
+	uint32_t		 grp;
+	uint32_t		 grp_idx;
+	uint32_t		 new_shards_nr;
+	int			 i, j, k = 0;
+	int			 rc = 0;
 
 	/* Empty list, no extension needed */
 	if (d_list_empty(extended_list))
@@ -424,7 +422,8 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 	}
 
 	new_group_size = layout->ol_grp_size + max_fail_grp;
-	D_ALLOC_ARRAY(new_shards, new_group_size * layout->ol_grp_nr);
+	new_shards_nr = new_group_size * layout->ol_grp_nr;
+	D_ALLOC_ARRAY(new_shards, new_shards_nr);
 	if (new_shards == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -438,10 +437,15 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 	}
 
 	d_list_for_each_entry(f_shard, extended_list, fs_list) {
+		/* get the group number for this shard */
 		grp = f_shard->fs_shard_idx / layout->ol_grp_size;
-		grp_idx = ((grp + 1) * layout->ol_grp_size) + grp;
-		grp_count[grp]--;
+		/* grp_idx will be the last shard index within the group */
+		grp_idx = (grp * new_group_size) + (layout->ol_grp_size - 1);
+		/* grp_idx will be the index to one of the "new" shards in the
+		 * group array
+		 */
 		grp_idx += grp_count[grp];
+		grp_count[grp]--;
 
 		new_shards[grp_idx].po_fseq = f_shard->fs_fseq;
 		new_shards[grp_idx].po_shard = f_shard->fs_shard_idx;

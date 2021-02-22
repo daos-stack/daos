@@ -8,7 +8,6 @@ package server
 
 import (
 	"crypto"
-	"encoding/hex"
 	"fmt"
 	"path/filepath"
 
@@ -43,7 +42,7 @@ func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error)
 
 	cred := req.Cred
 	if cred == nil || cred.GetToken() == nil || cred.GetVerifier() == nil {
-		m.log.Errorf("Invalid credential: %+v", cred)
+		m.log.Error("malformed credential")
 		return m.validateRespWithStatus(drpc.DaosInvalidInput)
 	}
 
@@ -64,7 +63,7 @@ func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error)
 	// Check our verifier
 	err = auth.VerifyToken(key, cred.GetToken(), cred.GetVerifier().GetData())
 	if err != nil {
-		m.log.Errorf("cred verification failed: %v for verifier %s", err, hex.Dump(cred.GetVerifier().GetData()))
+		m.log.Errorf("cred verification failed: %v", err)
 		return m.validateRespWithStatus(drpc.DaosNoPermission)
 	}
 

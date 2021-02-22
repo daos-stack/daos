@@ -185,17 +185,38 @@ struct crt_rpc_priv {
 	struct crt_corpc_hdr	crp_coreq_hdr; /* collective request header */
 };
 
-#define CRT_PROTO_INTERNAL_VERSION 3
-#define CRT_PROTO_FI_VERSION 1
+#define CRT_PROTO_INTERNAL_VERSION 4
+#define CRT_PROTO_FI_VERSION 2
+#define CRT_PROTO_ST_VERSION 1
+#define CRT_PROTO_CTL_VERSION 1
+#define CRT_PROTO_IV_VERSION 1
 
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
- * TODO: Split this into four, internal (client/server), self_test, IV and CTL
+ * TODO: CRT_OPC_CTL_LS should be in the ctl protocol however cart_ctl uses
+ * this to ping the server waiting for start so needs to work before
+ * proto_query() can be called.
  */
 #define CRT_INTERNAL_RPCS_LIST						\
 	X(CRT_OPC_URI_LOOKUP,						\
 		0, &CQF_crt_uri_lookup,					\
 		crt_hdlr_uri_lookup, NULL)				\
+	X(CRT_OPC_PROTO_QUERY,						\
+		0, &CQF_crt_proto_query,				\
+		crt_hdlr_proto_query, NULL)				\
+	X(CRT_OPC_CTL_LS,						\
+		0, &CQF_crt_ctl_ep_ls,					\
+		crt_hdlr_ctl_ls, NULL)					\
+
+#define CRT_FI_RPCS_LIST						\
+	X(CRT_OPC_CTL_FI_TOGGLE,					\
+		0, &CQF_crt_ctl_fi_toggle,				\
+		crt_hdlr_ctl_fi_toggle, NULL)				\
+	X(CRT_OPC_CTL_FI_SET_ATTR,					\
+		0, &CQF_crt_ctl_fi_attr_set,				\
+		crt_hdlr_ctl_fi_attr_set, NULL)				\
+
+#define CRT_ST_RPCS_LIST						\
 	X(CRT_OPC_SELF_TEST_BOTH_EMPTY,					\
 		0, NULL,						\
 		crt_self_test_msg_handler, NULL)			\
@@ -229,6 +250,25 @@ struct crt_rpc_priv {
 	X(CRT_OPC_SELF_TEST_STATUS_REQ,					\
 		0, &CQF_crt_st_status_req,				\
 		crt_self_test_status_req_handler, NULL)			\
+
+#define CRT_CTL_RPCS_LIST						\
+	X(CRT_OPC_CTL_LOG_SET,						\
+		0, &CQF_crt_ctl_log_set,				\
+		crt_hdlr_ctl_log_set, NULL)				\
+	X(CRT_OPC_CTL_LOG_ADD_MSG,					\
+		0, &CQF_crt_ctl_log_add_msg,				\
+		crt_hdlr_ctl_log_add_msg, NULL)				\
+	X(CRT_OPC_CTL_GET_URI_CACHE,					\
+		0, &CQF_crt_ctl_get_uri_cache,				\
+		crt_hdlr_ctl_get_uri_cache, NULL)			\
+	X(CRT_OPC_CTL_GET_HOSTNAME,					\
+		0, &CQF_crt_ctl_get_host,				\
+		crt_hdlr_ctl_get_hostname, NULL)			\
+	X(CRT_OPC_CTL_GET_PID,						\
+		0, &CQF_crt_ctl_get_pid,				\
+		crt_hdlr_ctl_get_pid, NULL)				\
+
+#define CRT_IV_RPCS_LIST						\
 	X(CRT_OPC_IV_FETCH,						\
 		0, &CQF_crt_iv_fetch,					\
 		crt_hdlr_iv_fetch, NULL)				\
@@ -238,63 +278,58 @@ struct crt_rpc_priv {
 	X(CRT_OPC_IV_SYNC,						\
 		0, &CQF_crt_iv_sync,					\
 		crt_hdlr_iv_sync, &crt_iv_sync_co_ops)			\
-	X(CRT_OPC_CTL_GET_URI_CACHE,					\
-		0, &CQF_crt_ctl_get_uri_cache,				\
-		crt_hdlr_ctl_get_uri_cache, NULL)			\
-	X(CRT_OPC_CTL_LS,						\
-		0, &CQF_crt_ctl_ep_ls,					\
-		crt_hdlr_ctl_ls, NULL)					\
-	X(CRT_OPC_CTL_GET_HOSTNAME,					\
-		0, &CQF_crt_ctl_get_host,				\
-		crt_hdlr_ctl_get_hostname, NULL)			\
-	X(CRT_OPC_CTL_GET_PID,						\
-		0, &CQF_crt_ctl_get_pid,				\
-		crt_hdlr_ctl_get_pid, NULL)				\
-	X(CRT_OPC_PROTO_QUERY,						\
-		0, &CQF_crt_proto_query,				\
-		crt_hdlr_proto_query, NULL)
-
-#define CRT_FI_RPCS_LIST						\
-	X(CRT_OPC_CTL_FI_TOGGLE,					\
-		0, &CQF_crt_ctl_fi_toggle,				\
-		crt_hdlr_ctl_fi_toggle, NULL)				\
-	X(CRT_OPC_CTL_FI_SET_ATTR,					\
-		0, &CQF_crt_ctl_fi_attr_set,				\
-		crt_hdlr_ctl_fi_attr_set, NULL)				\
-	X(CRT_OPC_CTL_LOG_SET,						\
-		0, &CQF_crt_ctl_log_set,				\
-		crt_hdlr_ctl_log_set, NULL)				\
-	X(CRT_OPC_CTL_LOG_ADD_MSG,					\
-		0, &CQF_crt_ctl_log_add_msg,				\
-		crt_hdlr_ctl_log_add_msg, NULL)
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a,
 
 /* CRT internal opcode definitions, must be 0xFF00xxxx.*/
+#define CRT_OPC_INTERNAL_BASE	0xFF000000UL
 enum {
 	__FIRST_INTERNAL  = CRT_PROTO_OPC(CRT_OPC_INTERNAL_BASE,
 					  CRT_PROTO_INTERNAL_VERSION, 0) - 1,
 	CRT_INTERNAL_RPCS_LIST
 };
 
+/* CRT fault injection opcode definitions, must be 0xFF00xxxx.*/
 #define CRT_OPC_FI_BASE		0xF1000000UL
-
-/* CRT internal opcode definitions, must be 0xFF00xxxx.*/
 enum {
 	__FIRST_FI  = CRT_PROTO_OPC(CRT_OPC_FI_BASE,
 				    CRT_PROTO_FI_VERSION, 0) - 1,
 	CRT_FI_RPCS_LIST
 };
 
-#define CRT_OPC_SWIM_PROTO	0xFE000000U
+/* CRT self-test opcode definitions, must be 0xFF00xxxx.*/
+#define CRT_OPC_ST_BASE		0xF2000000UL
+enum {
+	__FIRST_ST  = CRT_PROTO_OPC(CRT_OPC_ST_BASE,
+				    CRT_PROTO_ST_VERSION, 0) - 1,
+	CRT_ST_RPCS_LIST
+};
+
+/* CRT ctl opcode definitions, must be 0xFF00xxxx.*/
+#define CRT_OPC_CTL_BASE		0xF3000000UL
+enum {
+	__FIRST_CTL  = CRT_PROTO_OPC(CRT_OPC_CTL_BASE,
+				     CRT_PROTO_CTL_VERSION, 0) - 1,
+	CRT_CTL_RPCS_LIST
+};
+
+/* CRT IV opcode definitions, must be 0xFF00xxxx.*/
+#define CRT_OPC_IV_BASE		0xF4000000UL
+enum {
+	__FIRST_IV  = CRT_PROTO_OPC(CRT_OPC_IV_BASE,
+				    CRT_PROTO_IV_VERSION, 0) - 1,
+	CRT_IV_RPCS_LIST
+};
+
+#define CRT_OPC_SWIM_BASE	0xFE000000UL
 
 #undef X
 
 static inline bool
 crt_opc_is_swim(crt_opcode_t opc)
 {
-	return ((opc & CRT_PROTO_BASEOPC_MASK) == CRT_OPC_SWIM_PROTO);
+	return ((opc & CRT_PROTO_BASEOPC_MASK) == CRT_OPC_SWIM_BASE);
 }
 
 #define CRT_SEQ_GRP_CACHE					 \

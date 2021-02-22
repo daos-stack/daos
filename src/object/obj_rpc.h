@@ -42,78 +42,89 @@
  */
 #define DAOS_OBJ_VERSION 2
 /* LIST of internal RPCS in form of:
- * OPCODE, flags, FMT, handler, corpc_hdlr,
+ * OPCODE, flags, FMT, handler, corpc_hdlr and name
  */
 #define OBJ_PROTO_CLI_RPC_LIST						\
 	X(DAOS_OBJ_RPC_UPDATE,						\
 		0, &CQF_obj_rw,						\
-		ds_obj_rw_handler, NULL),				\
+		ds_obj_rw_handler, NULL, "update")			\
 	X(DAOS_OBJ_RPC_FETCH,						\
 		0, &CQF_obj_rw,						\
-		ds_obj_rw_handler, NULL),				\
+		ds_obj_rw_handler, NULL, "fetch")			\
 	X(DAOS_OBJ_DKEY_RPC_ENUMERATE,					\
 		0, &CQF_obj_key_enum,					\
-		ds_obj_enum_handler, NULL),				\
+		ds_obj_enum_handler, NULL, "dkey_enum")			\
 	X(DAOS_OBJ_AKEY_RPC_ENUMERATE,					\
 		0, &CQF_obj_key_enum,					\
-		ds_obj_enum_handler, NULL),				\
+		ds_obj_enum_handler, NULL, "akey_enum")			\
 	X(DAOS_OBJ_RECX_RPC_ENUMERATE,					\
 		0, &CQF_obj_key_enum,					\
-		ds_obj_enum_handler, NULL),				\
+		ds_obj_enum_handler, NULL, "recx_enum")			\
 	X(DAOS_OBJ_RPC_ENUMERATE,					\
 		0, &CQF_obj_key_enum,					\
-		ds_obj_enum_handler, NULL),				\
+		ds_obj_enum_handler, NULL, "obj_enum")			\
 	X(DAOS_OBJ_RPC_PUNCH,						\
 		0, &CQF_obj_punch,					\
-		ds_obj_punch_handler, NULL),				\
+		ds_obj_punch_handler, NULL, "obj_punch")		\
 	X(DAOS_OBJ_RPC_PUNCH_DKEYS,					\
 		0, &CQF_obj_punch,					\
-		ds_obj_punch_handler, NULL),				\
+		ds_obj_punch_handler, NULL, "dkey_punch")		\
 	X(DAOS_OBJ_RPC_PUNCH_AKEYS,					\
 		0, &CQF_obj_punch,					\
-		ds_obj_punch_handler, NULL),				\
+		ds_obj_punch_handler, NULL, "akey_punch")		\
 	X(DAOS_OBJ_RPC_QUERY_KEY,					\
 		0, &CQF_obj_query_key,					\
-		ds_obj_query_key_handler, NULL),			\
+		ds_obj_query_key_handler, NULL, "key_query")		\
 	X(DAOS_OBJ_RPC_SYNC,						\
 		0, &CQF_obj_sync,					\
-		ds_obj_sync_handler, NULL),				\
+		ds_obj_sync_handler, NULL, "obj_sync")			\
 	X(DAOS_OBJ_RPC_TGT_UPDATE,					\
 		0, &CQF_obj_rw,						\
-		ds_obj_tgt_update_handler, NULL),			\
+		ds_obj_tgt_update_handler, NULL, "tgt_update")		\
 	X(DAOS_OBJ_RPC_TGT_PUNCH,					\
 		0, &CQF_obj_punch,					\
-		ds_obj_tgt_punch_handler, NULL),			\
+		ds_obj_tgt_punch_handler, NULL, "tgt_punch")		\
 	X(DAOS_OBJ_RPC_TGT_PUNCH_DKEYS,					\
 		0, &CQF_obj_punch,					\
-		ds_obj_tgt_punch_handler, NULL),			\
+		ds_obj_tgt_punch_handler, NULL, "tgt_dkey_punch")	\
 	X(DAOS_OBJ_RPC_TGT_PUNCH_AKEYS,					\
 		0, &CQF_obj_punch,					\
-		ds_obj_tgt_punch_handler, NULL),			\
+		ds_obj_tgt_punch_handler, NULL, "tgt_akey_punch")	\
 	X(DAOS_OBJ_RPC_MIGRATE,						\
 		0, &CQF_obj_migrate,					\
-		ds_obj_migrate_handler, NULL),				\
+		ds_obj_migrate_handler, NULL, "migrate")		\
 	X(DAOS_OBJ_RPC_EC_AGGREGATE,					\
 		0, &CQF_obj_ec_agg,					\
-		ds_obj_ec_agg_handler, NULL),				\
+		ds_obj_ec_agg_handler, NULL, "ec_agg")			\
 	X(DAOS_OBJ_RPC_EC_REPLICATE,					\
-		0, &CQF_obj_ec_rep,					\
-		ds_obj_ec_rep_handler, NULL),				\
+		0, &CQF_obj_ec_agg,					\
+		ds_obj_ec_rep_handler, NULL, "ec_rep")			\
 	X(DAOS_OBJ_RPC_CPD,						\
 		0, &CQF_obj_cpd,					\
-		ds_obj_cpd_handler, NULL)
-/* Define for RPC enum population below */
-#define X(a, b, c, d, e) a
+		ds_obj_cpd_handler, NULL, "compound")
 
+/* Define for RPC enum population below */
+#define X(a, b, c, d, e, f) a,
 enum obj_rpc_opc {
-	OBJ_PROTO_CLI_RPC_LIST,
+	OBJ_PROTO_CLI_RPC_LIST
 	OBJ_PROTO_CLI_COUNT,
 	OBJ_PROTO_CLI_LAST = OBJ_PROTO_CLI_COUNT - 1,
 };
-
 #undef X
 
 extern struct crt_proto_format obj_proto_fmt;
+
+/* Helper function to convert opc to name */
+static inline char *
+obj_opc_to_str(crt_opcode_t opc)
+{
+	switch (opc) {
+#define X(a, b, c, d, e, f) case a: return f;
+		OBJ_PROTO_CLI_RPC_LIST
+#undef X
+	}
+	return "unknown";
+}
 
 enum obj_rpc_flags {
 	ORF_BULK_BIND		= (1 << 0),

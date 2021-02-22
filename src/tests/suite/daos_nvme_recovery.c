@@ -42,7 +42,7 @@ is_nvme_enabled(test_arg_t *arg)
 
 	pinfo.pi_bits = DPI_ALL;
 	rc = test_pool_get_info(arg, &pinfo);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	return ps->ps_free_min[DAOS_MEDIA_NVME] != 0;
 }
@@ -76,14 +76,14 @@ nvme_recov_1(void **state)
 	 * Get the Total number of NVMe devices from all the servers.
 	 */
 	rc = dmg_storage_device_list(dmg_config_file, &ndisks, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/**
 	 * Get the Device info of all NVMe devices.
 	 */
 	D_ALLOC_ARRAY(devices, ndisks);
 	rc = dmg_storage_device_list(dmg_config_file, NULL, devices);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	for (i = 0; i < ndisks; i++) {
 		if (devices[i].rank != rank)
 			continue;
@@ -100,7 +100,7 @@ nvme_recov_1(void **state)
 	else
 		obj_class = DAOS_OC_R2S_SPEC_RANK;
 
-	oid = dts_oid_gen(obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, obj_class, 0, 0, arg->myrank);
 	oid = dts_oid_set_rank(oid, rank);
 	oid = dts_oid_set_tgt(oid, tgt_idx);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -127,7 +127,7 @@ nvme_recov_1(void **state)
 	for (i = 0; i < per_node_tgt_cnt; i++) {
 		rc = daos_pool_query_target(arg->pool.poh, i/*tgt*/,
 					    rank, &tgt_info, NULL /*ev*/);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		rc = strcmp(daos_target_state_enum_to_str(tgt_info.ta_state),
 			    "UPIN");
 		assert_int_equal(rc, 0);
@@ -149,7 +149,7 @@ nvme_recov_1(void **state)
 	print_message("Waiting for faulty reaction being triggered...\n");
 	rc = wait_and_verify_pool_tgt_state(arg->pool.poh, fail_loc_tgt,
 						    rank, "DOWN|DOWNOUT");
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	/* Need to reset lock when using DAOS_FAIL_ALWAYS flag */
 	reset_fail_loc(arg);
 
@@ -180,7 +180,7 @@ nvme_recov_1(void **state)
 	for (i = 0; i < n_tgtidx; i++) {
 		rc = wait_and_verify_pool_tgt_state(arg->pool.poh, tgtidx[i],
 						    rank, "DOWNOUT");
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 	print_message("All mapped device targets are in DOWNOUT\n");
 
@@ -190,7 +190,7 @@ nvme_recov_1(void **state)
 	for (i = 0; i < per_node_tgt_cnt; i++) {
 		rc = daos_pool_query_target(arg->pool.poh, i/*tgt*/,
 					    rank, &tgt_info, NULL /*ev*/);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		print_message("Pool target:%d, state:%s\n", i,
 			      daos_target_state_enum_to_str(tgt_info.ta_state));
 	}
@@ -220,7 +220,7 @@ nvme_test_verify_device_stats(void **state)
 	*Get the Total number of NVMe devices from all the servers.
 	*/
 	rc = dmg_storage_device_list(dmg_config_file, &ndisks, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	print_message("Total Disks = %d\n", ndisks);
 
 	/**
@@ -228,7 +228,7 @@ nvme_test_verify_device_stats(void **state)
 	*/
 	D_ALLOC_ARRAY(devices, ndisks);
 	rc = dmg_storage_device_list(dmg_config_file, NULL, devices);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	for (i = 0; i < ndisks; i++)
 		print_message("Rank=%d UUID=" DF_UUIDF " state=%s host=%s\n",
 			      devices[i].rank, DP_UUID(devices[i].device_id),
@@ -257,7 +257,7 @@ nvme_test_verify_device_stats(void **state)
 	D_ALLOC(log_file, 1024);
 	rc = get_server_config(devices[rank_pos].host,
 			       server_config_file);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	print_message("server_config_file = %s\n", server_config_file);
 
 	get_log_file(devices[rank_pos].host, server_config_file,
@@ -281,7 +281,7 @@ nvme_test_verify_device_stats(void **state)
 	rc = dmg_storage_set_nvme_fault(dmg_config_file,
 					devices[rank_pos].host,
 		devices[rank_pos].device_id, 1);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	sleep(60);
 
 	/**
@@ -290,7 +290,7 @@ nvme_test_verify_device_stats(void **state)
 	* in server log.
 	*/
 	rc = dmg_storage_device_list(dmg_config_file, NULL, devices);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	/*
 	 * Get the rank 0 position from array devices.
 	 */
@@ -305,7 +305,7 @@ nvme_test_verify_device_stats(void **state)
 	if (rc != 0) {
 		print_message("NORMAL -> FAULTY not found in log %s\n",
 			      log_file);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 
 	rc = verify_state_in_log(devices[rank_pos].host, log_file,
@@ -313,7 +313,7 @@ nvme_test_verify_device_stats(void **state)
 	if (rc != 0) {
 		print_message("FAULTY -> TEARDOWN not found in %s\n",
 			      log_file);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 
 	rc = verify_state_in_log(devices[rank_pos].host, log_file,
@@ -321,7 +321,7 @@ nvme_test_verify_device_stats(void **state)
 	if (rc != 0) {
 		print_message("TEARDOWN -> OUT not found in log %s\n",
 			      log_file);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 
 	/*
@@ -365,7 +365,7 @@ nvme_test_get_blobstore_state(void **state)
 	 * Get the total number of NVMe devices from all the servers.
 	 */
 	rc = dmg_storage_device_list(dmg_config_file, &ndisks, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	print_message("Total Disks = %d\n", ndisks);
 
 	/**
@@ -373,7 +373,7 @@ nvme_test_get_blobstore_state(void **state)
 	 */
 	D_ALLOC_ARRAY(devices, ndisks);
 	rc = dmg_storage_device_list(dmg_config_file, NULL, devices);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	for (i = 0; i < ndisks; i++) {
 		print_message("Rank=%d UUID=" DF_UUIDF " state=%s host=%s\n",
 			      devices[i].rank, DP_UUID(devices[i].device_id),
@@ -391,7 +391,7 @@ nvme_test_get_blobstore_state(void **state)
 	else
 		obj_class = DAOS_OC_R2S_SPEC_RANK;
 
-	oid = dts_oid_gen(obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, obj_class, 0, 0, arg->myrank);
 	oid = dts_oid_set_rank(oid, rank);
 	oid = dts_oid_set_tgt(oid, tgt_idx);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -414,7 +414,7 @@ nvme_test_get_blobstore_state(void **state)
 	rc = daos_mgmt_get_bs_state(arg->group,
 				    devices[faulty_disk_idx].device_id,
 				    &blobstore_state, NULL /*ev*/);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	rc = verify_blobstore_state(blobstore_state, "normal");
 	assert_int_equal(rc, 0);
@@ -431,7 +431,7 @@ nvme_test_get_blobstore_state(void **state)
 					devices[faulty_disk_idx].host,
 					devices[faulty_disk_idx].device_id,
 					1);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/**
 	 *  Continue to check blobstore state until "OUT" state is returned
@@ -440,7 +440,7 @@ nvme_test_get_blobstore_state(void **state)
 	rc = wait_and_verify_blobstore_state(devices[faulty_disk_idx].device_id,
 					     /*expected state*/"out",
 					     arg->group);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	print_message("Blobstore is in OUT state\n");
 	D_FREE(devices);
@@ -492,7 +492,8 @@ nvme_test_simulate_IO_error(void **state)
 	/*
 	 * Prepare records
 	 */
-	oid = dts_oid_gen(DAOS_OC_R1S_SPEC_RANK, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
+				arg->myrank);
 	oid = dts_oid_set_rank(oid, rank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
@@ -508,7 +509,7 @@ nvme_test_simulate_IO_error(void **state)
 	 *  Get the Total number of NVMe devices from all the servers.
 	 */
 	rc = dmg_storage_device_list(dmg_config_file, &ndisks, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	print_message("Total Disks = %d\n", ndisks);
 
 	/*
@@ -516,7 +517,7 @@ nvme_test_simulate_IO_error(void **state)
 	 */
 	D_ALLOC_ARRAY(devices, ndisks);
 	rc = dmg_storage_device_list(dmg_config_file, NULL, devices);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/*
 	 * Get the rank 1 position from array devices
@@ -534,7 +535,7 @@ nvme_test_simulate_IO_error(void **state)
 	D_ALLOC(control_log_file, 1024);
 	D_ALLOC(server_config_file, 512);
 	rc = get_server_config(devices[rank_pos].host, server_config_file);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	print_message("server_config_file = %s\n", server_config_file);
 
 	/*
@@ -553,7 +554,7 @@ nvme_test_simulate_IO_error(void **state)
 					     devices[rank_pos].host,
 					     write_errors,
 		devices[rank_pos].device_id);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	print_message("Initial write_errors = %s\n", write_errors);
 
 	/*
@@ -564,7 +565,7 @@ nvme_test_simulate_IO_error(void **state)
 					     devices[rank_pos].host,
 					     read_errors,
 		devices[rank_pos].device_id);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	print_message("Initial read_errors = %s\n", read_errors);
 
 	/*
@@ -605,7 +606,7 @@ nvme_test_simulate_IO_error(void **state)
 					     devices[rank_pos].host,
 					     check_errors,
 		devices[rank_pos].device_id);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	print_message("Final write_error = %s\n", check_errors);
 	assert_true(atoi(check_errors) == atoi(write_errors) + 1);
 
@@ -618,7 +619,7 @@ nvme_test_simulate_IO_error(void **state)
 					     devices[rank_pos].host,
 					     check_errors,
 		devices[rank_pos].device_id);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	print_message("Final read_errors = %s\n", check_errors);
 	assert_true(atoi(check_errors) == atoi(read_errors) + 1);
 
@@ -635,7 +636,7 @@ nvme_test_simulate_IO_error(void **state)
 			print_message(
 				" %s not found in log %s\n", control_err[i],
 				control_log_file);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 		}
 	}
 
