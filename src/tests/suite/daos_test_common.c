@@ -1069,7 +1069,7 @@ get_server_config(char *host, char *server_config_file)
 	while ((read = getline(&line, &len, fp)) != -1) {
 		print_message("line %s", line);
 		if (strstr(line, "--config") != NULL ||
-			strstr(line, "-o") != NULL) {
+		    strstr(line, "-o") != NULL) {
 			conf = false;
 			break;
 		}
