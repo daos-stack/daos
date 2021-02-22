@@ -3275,7 +3275,7 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs,
 	int				rc = 0;
 	crt_event_cb			cb_func;
 	void				*cb_args;
-	struct crt_event_cb_priv 	*cbs_event;
+	struct crt_event_cb_priv	*cbs_event;
 	size_t				cbs_size;
 
 	grp_priv = crt_grp_pub2priv(grp);
@@ -3345,7 +3345,8 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs,
 			cb_args = cbs_event[cb_idx].cecp_args;
 
 			if (cb_func != NULL)
-				cb_func(rank, CRT_EVS_GRPMOD, CRT_EVT_ALIVE, cb_args);
+				cb_func(rank, CRT_EVS_GRPMOD, CRT_EVT_ALIVE,
+					cb_args);
 		}
 	}
 
@@ -3365,7 +3366,8 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs,
 			cb_args = cbs_event[cb_idx].cecp_args;
 
 			if (cb_func != NULL)
-				cb_func(rank, CRT_EVS_GRPMOD, CRT_EVT_DEAD, cb_args);
+				cb_func(rank, CRT_EVS_GRPMOD, CRT_EVT_DEAD,
+					cb_args);
 		}
 
 		/* Remove rank from swim tracking */
