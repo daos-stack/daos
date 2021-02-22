@@ -1437,7 +1437,7 @@ agg_process_holes_ult(void *arg)
 		}
 		last_ext_end = agg_extent->ae_recx.rx_idx +
 			agg_extent->ae_recx.rx_nr - ss;
-		if (last_ext_end >= ss + k *len)
+		if (last_ext_end >= ss + k * len)
 			break;
 	}
 

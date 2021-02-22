@@ -138,8 +138,8 @@ ec_setup_obj(struct ec_agg_test_ctx *ctx, daos_oclass_id_t oclass, int low)
 
 static void
 ec_setup_punch_recx_data(struct ec_agg_test_ctx *ctx, unsigned int mode,
-			  daos_size_t offset, daos_size_t data_bytes,
-			  unsigned char switch_akey, unsigned int cell)
+			 daos_size_t offset, daos_size_t data_bytes,
+			 unsigned char switch_akey, unsigned int cell)
 {
 	struct daos_oclass_attr	*oca;
 	unsigned int		len;
@@ -603,6 +603,7 @@ test_partial_stripe(struct ec_agg_test_ctx *ctx)
 	rc = daos_obj_close(ctx->oh, NULL);
 	assert_rc_equal(rc, 0);
 }
+
 static void
 test_range_punch(struct ec_agg_test_ctx *ctx)
 {
@@ -631,7 +632,7 @@ test_range_punch(struct ec_agg_test_ctx *ctx)
 	for (j = 0; j < NUM_KEYS; j++)
 		for (i = 0; i < NUM_STRIPES; i++) {
 			ec_setup_punch_recx_data(ctx, EC_SPECIFIED,
-						  i * (len * 4), len, j, 0);
+						 i * (len * 4), len, j, 0);
 			rc = daos_obj_update(ctx->oh, DAOS_TX_NONE, 0,
 					     &ctx->dkey, 1, &ctx->update_iod,
 					     &ctx->update_sgl, NULL);
@@ -681,7 +682,6 @@ test_all_ec_agg(void **statep)
 	verify_1p(&ctx, DAOS_OC_EC_K2P1_L32K, 2);
 	verify_2p(&ctx, DAOS_OC_EC_K2P2_L32K);
 	verify_1p(&ctx, DAOS_OC_EC_K4P1_L32K, 4);
-//	verify_range_punch(&ctx);
 	cleanup_ec_agg_tests(&ctx);
 }
 

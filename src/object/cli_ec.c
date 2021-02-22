@@ -436,7 +436,6 @@ obj_ec_recx_scan(daos_iod_t *iod, d_sg_list_t *sgl,
 		rc = obj_ec_pbufs_init(ec_recx_array,
 				       obj_ec_cell_bytes(iod, oca));
 
-	//obj_reasb_req_dump(reasb_req, sgl, oca, stripe_rec_nr, iod_idx);
 out:
 	return rc;
 }
@@ -1164,7 +1163,6 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 				  "bad recx\n");
 			ec_data_recx_add(&tmp_recx, riod->iod_recxs, ridx,
 					 tgt_recx_idxs, oca, true);
-			//if (!punch)
 				ec_data_seg_add(&tmp_recx, iod_size,
 						sgl, &iov_idx, &iov_off, oca,
 						iovs, iov_nr, sorter, true);
