@@ -225,7 +225,7 @@ agg_clear_extents(struct ec_agg_entry *entry)
 					   &entry->ae_cur_stripe.as_hoextents,
 					   ae_link) {
 			d_list_del(&extent->ae_link);
-			D_FREE_PTR(extent);
+			D_FREE(extent);
 		}
 		entry->ae_cur_stripe.as_ho_ext_cnt = 0;
 	}
@@ -265,7 +265,7 @@ agg_clear_extents(struct ec_agg_entry *entry)
 		} else {
 			entry->ae_cur_stripe.as_extent_cnt--;
 			d_list_del(&extent->ae_link);
-			D_FREE_PTR(extent);
+			D_FREE(extent);
 		}
 	}
 	entry->ae_cur_stripe.as_offset = 0U;
@@ -400,7 +400,6 @@ agg_prep_sgl(struct ec_agg_entry *entry)
 out:
 	d_sgl_fini(&entry->ae_sgl, true);
 	return rc;
-
 }
 
 /* Determines if an extent overlaps a cell.
@@ -659,7 +658,6 @@ ev_out:
 	ABT_eventual_free(&stripe_ud.asu_eventual);
 out:
 	return rc;
-
 }
 
 /* Driver function for full_stripe encode. Fetches the data and then invokes
@@ -838,7 +836,6 @@ agg_update_vos(struct ec_agg_entry *entry, bool write_parity)
 					rc = erc;
 			}
 		}
-
 	}
 out:
 	return rc;
@@ -920,10 +917,8 @@ agg_fetch_local_extents(struct ec_agg_entry *entry, uint8_t *bit_map,
 	if (rc)
 		D_ERROR("vos_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
 out:
-	if (recxs != NULL)
-		D_FREE(recxs);
-	if (sgl.sg_iovs != NULL)
-		D_FREE(sgl.sg_iovs);
+	D_FREE(recxs);
+	D_FREE(sgl.sg_iovs);
 	return rc;
 }
 
@@ -1086,7 +1081,6 @@ agg_process_partial_stripe_ult(void *arg)
 
 out:
 	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
-
 }
 
 /* Driver function for partial stripe update. Fetches the data and then invokes
@@ -1944,7 +1938,6 @@ ec_aggregate_yield(struct ec_agg_param *agg_param)
 	D_ASSERT(agg_param->ap_yield_func != NULL);
 
 	return agg_param->ap_yield_func(agg_param->ap_yield_arg);
-
 }
 
 /* Post iteration call back for outer iterator
@@ -2252,7 +2245,7 @@ out:
 	daos_prop_free(agg_param.ap_prop);
 	ABT_eventual_free(&agg_param.ap_pool_info.api_eventual);
 	d_sgl_fini(&agg_param.ap_agg_entry.ae_sgl, true);
-	if (!daos_handle_is_inval(ph))
+	if (daos_handle_is_valid(ph))
 		dsc_pool_close(ph);
 	return rc;
 }

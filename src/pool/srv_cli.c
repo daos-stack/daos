@@ -30,6 +30,7 @@ dsc_pool_close(daos_handle_t ph)
 
 	pl_map_disconnect(pool->dp_pool);
 	dc_pool_put(pool);
+	dc_pool_put(pool);
 	return 0;
 }
 
@@ -77,6 +78,7 @@ dsc_pool_open(uuid_t pool_uuid, uuid_t poh_uuid, unsigned int flags,
 
 	dc_pool_hdl_link(pool);
 	dc_pool2hdl(pool, ph);
+	dc_pool_put(pool);
 out:
 	if (pool != NULL)
 		dc_pool_put(pool);

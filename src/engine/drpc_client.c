@@ -214,6 +214,8 @@ ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 	if (ranks == NULL)
 		D_GOTO(out_dresp, rc = -DER_NOMEM);
 
+	D_FREE(gps_resp->svcreps);
+
 	D_DEBUG(DB_MGMT, "fetched %d svc_ranks for "DF_UUID"\n",
 		ranks->rl_nr, DP_UUID(pool_uuid));
 	*svc_ranks = ranks;
