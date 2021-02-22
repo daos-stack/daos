@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC        DD_FAC(tests)
 
@@ -88,7 +71,7 @@ main(int argc, char **argv)
 	oid.hi = 5;
 
 	/* initial placement when all nodes alive */
-	daos_obj_generate_id(&oid, 0, OC_RP_4G2, 0);
+	daos_obj_set_oid(&oid, 0, OC_RP_4G2, 0);
 	D_PRINT("\ntest initial placement when no failed shard ...\n");
 	assert_success(plt_obj_place(oid, &lo_1, pl_map, true));
 	plt_obj_layout_check(lo_1, COMPONENT_NR, 0);

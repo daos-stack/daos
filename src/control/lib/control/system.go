@@ -46,8 +46,8 @@ type sysRequest struct {
 }
 
 type sysResponse struct {
-	AbsentRanks system.RankSet
-	AbsentHosts hostlist.HostSet
+	AbsentRanks system.RankSet   `json:"-"`
+	AbsentHosts hostlist.HostSet `json:"-"`
 }
 
 func (resp *sysResponse) getAbsentHostsRanks(inHosts, inRanks string) error {
@@ -219,26 +219,29 @@ type EventForwarder struct {
 }
 
 // OnEvent implements the events.Handler interface.
-func (fwdr *EventForwarder) OnEvent(ctx context.Context, evt *events.RASEvent) {
+func (ef *EventForwarder) OnEvent(ctx context.Context, evt *events.RASEvent) {
 	switch {
 	case evt == nil:
-		fwdr.client.Debug("skip event forwarding, nil event")
+		ef.client.Debug("skip event forwarding, nil event")
 		return
-	case len(fwdr.accessPts) == 0:
-		fwdr.client.Debug("skip event forwarding, missing access points")
+	case len(ef.accessPts) == 0:
+		ef.client.Debug("skip event forwarding, missing access points")
+		return
+	case !evt.ShouldForward():
+		ef.client.Debugf("forwarding disabled for %s event", evt.ID)
 		return
 	}
 
 	req := &SystemNotifyReq{
-		Sequence: <-fwdr.seq,
+		Sequence: <-ef.seq,
 		Event:    evt,
 	}
-	req.SetHostList(fwdr.accessPts)
-	fwdr.client.Debugf("forwarding %s event to MS access points %v (seq: %d)",
-		evt.ID, fwdr.accessPts, req.Sequence)
+	req.SetHostList(ef.accessPts)
+	ef.client.Debugf("forwarding %s event to MS access points %v (seq: %d)",
+		evt.ID, ef.accessPts, req.Sequence)
 
-	if _, err := SystemNotify(ctx, fwdr.client, req); err != nil {
-		fwdr.client.Debugf("failed to forward event to MS: %s", err)
+	if _, err := SystemNotify(ctx, ef.client, req); err != nil {
+		ef.client.Debugf("failed to forward event to MS: %s", err)
 	}
 }
 
@@ -266,7 +269,15 @@ type EventLogger struct {
 
 // OnEvent implements the events.Handler interface.
 func (el *EventLogger) OnEvent(_ context.Context, evt *events.RASEvent) {
-	el.log.Infof("RAS event received: %+v", evt)
+	switch {
+	case evt == nil:
+		el.log.Debug("skip event forwarding, nil event")
+		return
+	case evt.IsForwarded():
+		return // event has already been logged at source
+	}
+	// TODO: DAOS-6327 write directly to syslog
+	el.log.Info(evt.PrintRAS())
 }
 
 // NewEventLogger returns an initialized EventLogger.
@@ -284,7 +295,7 @@ type SystemQueryReq struct {
 // SystemQueryResp contains the request response.
 type SystemQueryResp struct {
 	sysResponse
-	Members system.Members
+	Members system.Members `json:"members"`
 }
 
 // UnmarshalJSON unpacks JSON message into SystemQueryResp struct.
@@ -513,11 +524,11 @@ type SystemResetFormatResp struct {
 //
 // First phase trigger format reset on each rank in membership registry, if
 // successful, putting selected harness managed instances in "awaiting format"
-// state (but not proceeding to starting the io_server process runner).
+// state (but not proceeding to starting the engine process runner).
 //
 // Second phase is to perform storage format on each host which, if successful,
 // will reformat storage, un-block "awaiting format" state and start the
-// io_server process. SystemReformat() will only return when relevant io_server
+// engine process. SystemReformat() will only return when relevant io_server
 // processes are running and ready.
 //
 // This method handles request sent from management client app e.g. 'dmg'.

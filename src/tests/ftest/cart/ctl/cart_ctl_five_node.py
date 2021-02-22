@@ -8,7 +8,6 @@
 from __future__ import print_function
 
 import sys
-import time
 
 from apricot  import TestWithoutServers
 
@@ -32,8 +31,9 @@ class CartCtlFiveNodeTest(TestWithoutServers):
 
     def tearDown(self):
         """ Tear down """
+        self.report_timeout()
+        self._teardown_errors.extend(self.utils.cleanup_processes())
         super(CartCtlFiveNodeTest, self).tearDown()
-        self.utils.cleanup_processes()
 
     def test_cart_ctl(self):
         """
@@ -57,15 +57,9 @@ class CartCtlFiveNodeTest(TestWithoutServers):
             self.fail("Server did not launch, return code %s" \
                        % procrtn)
 
-        time.sleep(5)
-
-        for index in range(2):
+        for index in range(3):
             clicmd = self.utils.build_cmd(
                 self, self.env, "test_clients", index=index)
             self.utils.launch_test(self, clicmd, srv_rtn)
 
         self.utils.stop_process(srv_rtn)
-
-
-if __name__ == "__main__":
-    main()

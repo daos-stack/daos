@@ -3,18 +3,19 @@
 %define agent_svc_name daos_agent.service
 
 %global mercury_version 2.0.1~rc1-1%{?dist}
+%global libfabric_version 1.12.0~rc1-1
 
 Name:          daos
-Version:       1.1.2.1
-Release:       6%{?relval}%{?dist}
+Version:       1.1.3
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
-License:       Apache
+License:       BSD-2-Clause-Patent
 URL:           https//github.com/daos-stack/daos
 Source0:       %{name}-%{version}.tar.gz
 
 BuildRequires: scons >= 2.4
-BuildRequires: libfabric-devel >= 1.11.0
+BuildRequires: libfabric-devel >= %{libfabric_version}
 BuildRequires: boost-devel
 BuildRequires: mercury-devel = %{mercury_version}
 BuildRequires: openpa-devel
@@ -93,9 +94,9 @@ BuildRequires: libcurl4
 # have choice for libpsm_infinipath.so.1()(64bit) needed by libfabric1: libpsm2-compat libpsm_infinipath1
 # have choice for libpsm_infinipath.so.1()(64bit) needed by openmpi-libs: libpsm2-compat libpsm_infinipath1
 BuildRequires: libpsm_infinipath1
-%endif # 0%{?is_opensuse}
-%endif # (0%{?suse_version} >= 1315)
-%endif # (0%{?rhel} >= 7)
+%endif
+%endif
+%endif
 %if (0%{?suse_version} >= 1500)
 Requires: libpmem1 >= 1.8, libpmemobj1 >= 1.8
 %else
@@ -135,9 +136,9 @@ Requires: hwloc
 Requires: mercury = %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
-Requires: libfabric >= 1.11.0
+Requires: libfabric >= %{libfabric_version}
 %{?systemd_requires}
-Obsoletes: cart
+Obsoletes: cart < 1000
 
 %description server
 This is the package needed to run a DAOS server
@@ -146,9 +147,9 @@ This is the package needed to run a DAOS server
 Summary: The DAOS client
 Requires: %{name} = %{version}-%{release}
 Requires: mercury = %{mercury_version}
-Requires: libfabric >= 1.11.0
+Requires: libfabric >= %{libfabric_version}
 Requires: fuse3 >= 3.4.2
-Obsoletes: cart
+Obsoletes: cart < 1000
 %if (0%{?suse_version} >= 1500)
 Requires: libfuse3-3 >= 3.4.2
 %else
@@ -168,6 +169,7 @@ Requires: python-pathlib
 Requires: python-distro
 Requires: python2-tabulate
 Requires: fio
+Requires: dbench
 Requires: lbzip2
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
@@ -235,7 +237,7 @@ mkdir -p %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{server_svc_name} %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
 mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
-mv %{?buildroot}/%{_prefix}/etc/bash_completion.d %{?buildroot}/%{_sysconfdir}
+mv %{?buildroot}/%{_sysconfdir}/daos/bash_completion.d %{?buildroot}/%{_sysconfdir}
 
 %pre server
 getent group daos_metrics >/dev/null || groupadd -r daos_metrics
@@ -277,12 +279,13 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libvos.so
 %{_libdir}/libcart*
 %{_libdir}/libgurt*
-%{_prefix}/%{_sysconfdir}/memcheck-cart.supp
-%dir %{_prefix}%{_sysconfdir}
-%{_prefix}%{_sysconfdir}/vos_size_input.yaml
+%{_sysconfdir}/daos/memcheck-cart.supp
+%dir %{_sysconfdir}/daos
+%{_sysconfdir}/daos/vos_size_input.yaml
 %dir %{_sysconfdir}/bash_completion.d
 %{_sysconfdir}/bash_completion.d/daos.bash
 %{_libdir}/libdaos_common.so
+%{_libdir}/libdaos_common_pmem.so
 # TODO: this should move from daos_srv to daos
 %{_libdir}/daos_srv/libplacement.so
 # Certificate generation files
@@ -294,7 +297,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files server
 %config(noreplace) %{conf_dir}/daos_server.yml
 %dir %{conf_dir}/certs
-%attr(0700,daos_server,daos_server) %{conf_dir}/certs
+%attr(0755,root,root) %{conf_dir}/certs
 %dir %{conf_dir}/certs/clients
 %attr(0700,daos_server,daos_server) %{conf_dir}/certs/clients
 %attr(0644,root,root) %{conf_dir}/daos_server.yml
@@ -302,7 +305,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(4750,root,daos_server) %{_bindir}/daos_admin
 # set daos_server to be setgid daos_server in order to invoke daos_admin
 %attr(2755,root,daos_server) %{_bindir}/daos_server
-%{_bindir}/daos_io_server
+%{_bindir}/daos_engine
 %dir %{_libdir}/daos_srv
 %{_libdir}/daos_srv/libcont.so
 %{_libdir}/daos_srv/libdtx.so
@@ -397,7 +400,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_run_io_conf
 %{_bindir}/crt_launch
 %{_bindir}/daos_metrics
-%{_prefix}/etc/fault-inject-cart.yaml
+%{_sysconfdir}/daos/fault-inject-cart.yaml
 %{_bindir}/fault_status
 # For avocado tests
 %{_prefix}/lib/daos/.build_vars.json
@@ -409,6 +412,27 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Tue Feb 16 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.1.3-2
+- Update libfabric to v1.12.0rc1
+
+* Wed Feb 10 2021 Johann Lombardi <johann.lombardi@intel.com> 1.1.3-1
+- Version bump up to 1.1.3
+
+* Tue Feb 9 2021 Vish Venkatesan <vishwanath.venkatesan@intel.com> 1.1.2.1-11
+- Add new pmem specific version of DAOS common library
+
+* Fri Feb 5 2021 Saurabh Tandan <saurabh.tandan@intel.com> 1.1.2.1-10
+- Added dbench as requirement for test package.
+
+* Wed Feb 3 2021 Hua Kuang <hua.kuang@intel.com> 1.1.2.1-9
+- Changed License to BSD-2-Clause-Patent
+
+* Wed Feb 03 2021 Brian J. Murrell <brian.murrell@intel.com> - 1.1.2-8
+- Update minimum required libfabric to 1.11.1
+
+* Thu Jan 28 2021 Phillip Henderson <phillip.henderson@intel.com> 1.1.2.1-7
+- Change ownership and permissions for the /etc/daos/certs directory.
+
 * Sat Jan 23 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.1.2.1-6
 - Update to mercury v2.0.1rc1
 

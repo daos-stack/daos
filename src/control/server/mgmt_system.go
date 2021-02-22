@@ -23,6 +23,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/system"
@@ -271,7 +272,7 @@ func (svc *mgmtSvc) join(ctx context.Context, req *batchJoinRequest) *batchJoinR
 			}
 		}
 
-		// mark the ioserver as ready to handle dRPC requests
+		// mark the engine as ready to handle dRPC requests
 		srv.ready.SetTrue()
 	}
 
@@ -292,7 +293,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
 	}
 	rankSet := &system.RankSet{}
 	for rank, uri := range gm.RankURIs {
-		req.Servers = append(req.Servers, &mgmtpb.GroupUpdateReq_Server{
+		req.Engines = append(req.Engines, &mgmtpb.GroupUpdateReq_Engine{
 			Rank: rank.Uint32(),
 			Uri:  uri,
 		})
@@ -327,7 +328,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
 // On receipt of the join request, add to a queue of requests to be processed
 // periodically in a dedicated goroutine. This architecture provides for thread
 // safety and improved performance while updating the system membership and CaRT
-// primary group in the local ioserver.
+// primary group in the local engine.
 //
 // The state of the newly joined/evicted rank along with the reply address used
 // to contact the new rank in future will be registered in the system membership.
@@ -408,7 +409,6 @@ func (svc *mgmtSvc) resolveRanks(hosts, ranks string) (hitRS, missRS *system.Ran
 	case hasHosts && hasRanks:
 		err = errors.New("ranklist and hostlist cannot both be set in request")
 	case hasHosts:
-		//if hitRS, missHS, err = svc.membership.CheckHosts(hosts, svc.srvCfg.ControlPort); err != nil {
 		if hitRS, missHS, err = svc.membership.CheckHosts(hosts, build.DefaultControlPort); err != nil {
 			return
 		}
@@ -574,6 +574,16 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, pbReq *mgmtpb.SystemStopReq)
 	}
 	svc.log.Debug("Received SystemStop RPC")
 
+	// Raise event on systemwide shutdown
+	if pbReq.GetHosts() == "" && pbReq.GetRanks() == "" && pbReq.GetKill() {
+		svc.events.Publish(events.New(&events.RASEvent{
+			ID:   events.RASSystemStop,
+			Type: events.RASTypeInfoOnly,
+			Msg:  "System-wide shutdown requested",
+			Rank: uint32(system.NilRank),
+		}))
+	}
+
 	// TODO: consider locking to prevent join attempts when shutting down
 	pbResp := new(mgmtpb.SystemStopResp)
 
@@ -633,6 +643,16 @@ func (svc *mgmtSvc) SystemStart(ctx context.Context, pbReq *mgmtpb.SystemStartRe
 		return nil, err
 	}
 	svc.log.Debug("Received SystemStart RPC")
+
+	// Raise event on systemwide start
+	if pbReq.GetHosts() == "" && pbReq.GetRanks() == "" {
+		svc.events.Publish(events.New(&events.RASEvent{
+			ID:   events.RASSystemStart,
+			Type: events.RASTypeInfoOnly,
+			Msg:  "System-wide start requested",
+			Rank: uint32(system.NilRank),
+		}))
+	}
 
 	fanResp, _, err := svc.rpcFanout(ctx, fanoutRequest{
 		Method: control.StartRanks,
@@ -713,7 +733,8 @@ func (svc *mgmtSvc) ClusterEvent(ctx context.Context, req *sharedpb.ClusterEvent
 		return nil, err
 	}
 
-	resp, err := svc.events.HandleClusterEvent(req)
+	// indicate to handler that event has been forwarded
+	resp, err := svc.events.HandleClusterEvent(req, true)
 	if err != nil {
 		return nil, errors.Wrapf(err, "handle cluster event %+v", req)
 	}

@@ -31,8 +31,9 @@ class CartSelfThreeNodeTest(TestWithoutServers):
 
     def tearDown(self):
         """ Tear down """
+        self.report_timeout()
+        self._teardown_errors.extend(self.utils.cleanup_processes())
         super(CartSelfThreeNodeTest, self).tearDown()
-        self.utils.cleanup_processes()
 
     def test_cart_selftest(self):
         """
@@ -60,6 +61,11 @@ class CartSelfThreeNodeTest(TestWithoutServers):
             clicmd = self.utils.build_cmd(
                 self, self.env, "test_clients", index=index)
             self.utils.launch_test(self, clicmd, srv_rtn)
+
+        # Give few seconds for servers to fully shut down before exiting
+        # from this test.
+        if not self.utils.wait_process(srv_rtn, 5):
+            self.utils.stop_process(srv_rtn)
 
 if __name__ == "__main__":
     main()

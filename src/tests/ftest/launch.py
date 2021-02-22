@@ -210,13 +210,6 @@ def set_test_environment(args):
         os.environ["D_LOG_FILE"] = os.path.join(
             os.environ["DAOS_TEST_LOG_DIR"], "daos.log")
 
-        # Ensure the daos log files directory exists on each possible test node
-        test_hosts = NodeSet(socket.gethostname().split(".")[0])
-        test_hosts.update(args.test_clients)
-        test_hosts.update(args.test_servers)
-        spawn_commands(
-            test_hosts, "mkdir -p {}".format(os.environ["DAOS_TEST_LOG_DIR"]))
-
         # Assign the default value for transport configuration insecure mode
         os.environ["DAOS_INSECURE_MODE"] = str(args.insecure_mode)
 
@@ -291,6 +284,7 @@ def get_output(cmd, check=True):
 
     Returns:
         str: command output
+
     """
     try:
         stdout = run_command(cmd)
@@ -377,16 +371,19 @@ def check_remote_output(task, command):
         for output, o_hosts in output_data:
             n_set = NodeSet.fromlist(o_hosts)
             lines = str(output).splitlines()
-            print("There are {} lines of output".format(len(lines)))
             if len(lines) > 1:
                 print("    {}: rc={}, output:".format(n_set, code))
-                for line in lines:
+                for number, line in enumerate(lines):
                     try:
                         print("      {}".format(line))
                     except IOError:
                         # DAOS-5781 Jenkins doesn't like receiving large
                         # amounts of data in a short space of time so catch
                         # this and retry.
+                        print(
+                            "*** DAOS-5781: Handling IOError detected while "
+                            "processing line {}/{} with retry ***".format(
+                                number + 1, len(lines)))
                         time.sleep(5)
                         print("      {}".format(line))
             else:
@@ -788,6 +785,37 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
     return yaml_file
 
 
+def setup_test_directory(args, mode="all"):
+    """Set up the common test directory on all hosts.
+
+    Ensure the common test directory exists on each possible test node.
+
+    Args:
+        args (argparse.Namespace): command line arguments for this program
+        mode (str, optional): setup mode. Defaults to "all".
+            "rm"    = remove the directory
+            "mkdir" = create the directory
+            "chmod" = change the permissions of the directory (a+rw)
+            "list"  = list the contents of the directory
+            "all"  = execute all of the mode options
+    """
+    host_list = NodeSet(socket.gethostname().split(".")[0])
+    host_list.update(args.test_clients)
+    host_list.update(args.test_servers)
+    test_dir = os.environ["DAOS_TEST_LOG_DIR"]
+    print(
+        "Setting up '{}' on {}:".format(
+            test_dir, str(NodeSet.fromlist(host_list))))
+    if mode in ["all", "rm"]:
+        spawn_commands(host_list, "sudo rm -fr {}".format(test_dir))
+    if mode in ["all", "mkdir"]:
+        spawn_commands(host_list, "mkdir -p {}".format(test_dir))
+    if mode in ["all", "chmod"]:
+        spawn_commands(host_list, "chmod a+wr {}".format(test_dir))
+    if mode in ["all", "list"]:
+        spawn_commands(host_list, "ls -al {}".format(test_dir))
+
+
 def generate_certs():
     """Generate the certificates for the test."""
     daos_test_log_dir = os.environ["DAOS_TEST_LOG_DIR"]
@@ -839,7 +867,7 @@ def run_tests(test_files, tag_filter, args):
             # this is typically an indication of a communication issue with one
             # of the hosts, do not attempt to run subsequent tests.
             if not report_skipped_test(
-                    test_file["py"], avocado_logs_dir, skip_reason):
+                    test_file["py"], avocado_logs_dir, skip_reason, args):
                 return_code |= 64
 
         elif not isinstance(test_file["yaml"], str):
@@ -847,7 +875,7 @@ def run_tests(test_files, tag_filter, args):
             # in the yaml file.  Treat this like a failed avocado command.
             reason = "error replacing yaml file placeholders"
             if not report_skipped_test(
-                    test_file["py"], avocado_logs_dir, reason):
+                    test_file["py"], avocado_logs_dir, reason, args):
                 return_code |= 64
             return_code |= 4
 
@@ -862,7 +890,8 @@ def run_tests(test_files, tag_filter, args):
                         "leftover logs from a previous test run prior to "
                         "running this test")
                     if not report_skipped_test(
-                            test_file["py"], avocado_logs_dir, skip_reason):
+                            test_file["py"], avocado_logs_dir, skip_reason,
+                            args):
                         return_code |= 64
                     return_code |= 128
                     continue
@@ -872,6 +901,7 @@ def run_tests(test_files, tag_filter, args):
             test_command_list.extend([
                 "--mux-yaml", test_file["yaml"], "--", test_file["py"]])
             return_code |= time_command(test_command_list)
+            return_code |= stop_daos_server_service(test_file["py"], args)
 
             # Optionally store all of the server and client config files
             # and archive remote logs and report big log files, if any.
@@ -887,7 +917,8 @@ def run_tests(test_files, tag_filter, args):
 
             # Optionally rename the test results directory for this test
             if args.rename:
-                rename_logs(avocado_logs_dir, test_file["py"])
+                return_code |= rename_logs(avocado_logs_dir, test_file["py"],
+                                           args)
 
             # Optionally process core files
             if args.process_cores:
@@ -1151,17 +1182,28 @@ def archive_files(destination, hosts, source_files, cart, args):
     return get_remote_output(hosts, " ".join(command), 900)
 
 
-def rename_logs(avocado_logs_dir, test_file):
+def rename_logs(avocado_logs_dir, test_file, args):
     """Append the test name to its avocado job-results directory name.
 
     Args:
         avocado_logs_dir (str): avocado job-results directory
         test_file (str): the test python file
     """
+    status = 0
     test_name = get_test_category(test_file)
     test_logs_lnk = os.path.join(avocado_logs_dir, "latest")
     test_logs_dir = os.path.realpath(test_logs_lnk)
-    new_test_logs_dir = "{}-{}".format(test_logs_dir, test_name)
+
+    if args.jenkinslog:
+        new_test_logs_dir = os.path.join(avocado_logs_dir, test_file)
+        try:
+            os.makedirs(new_test_logs_dir)
+        except OSError as error:
+            print("Error mkdir {}: {}".format(new_test_logs_dir, error))
+            status |= 1024
+    else:
+        new_test_logs_dir = "{}-{}".format(test_logs_dir, test_name)
+
     try:
         os.rename(test_logs_dir, new_test_logs_dir)
         os.remove(test_logs_lnk)
@@ -1172,6 +1214,29 @@ def rename_logs(avocado_logs_dir, test_file):
             "Error renaming {} to {}: {}".format(
                 test_logs_dir, new_test_logs_dir, error))
 
+    if args.jenkinslog:
+        xml_file = os.path.join(new_test_logs_dir, "results.xml")
+        try:
+            with open(xml_file) as xml_buffer:
+                xml_data = xml_buffer.read()
+        except OSError as error:
+            print("Error reading {} : {}".format(xml_file, str(error)))
+            status |= 1024
+            return status
+
+        test_dir = os.path.split(os.path.dirname(test_file))[-1]
+        org_class = "classname=\""
+        new_class = "{}FTEST_{}.".format(org_class, test_dir)
+        xml_data = re.sub(org_class, new_class, xml_data)
+
+        try:
+            with open(xml_file, "w") as xml_buffer:
+                xml_buffer.write(xml_data)
+        except OSError as error:
+            print("Error writing {}: {}".format(xml_file, str(error)))
+            status |= 1024
+
+    return status
 
 def check_big_files(avocado_logs_dir, task, test_name, args):
     """Check the contents of the task object, tag big files, create junit xml.
@@ -1211,7 +1276,7 @@ def check_big_files(avocado_logs_dir, task, test_name, args):
     return status
 
 
-def report_skipped_test(test_file, avocado_logs_dir, reason):
+def report_skipped_test(test_file, avocado_logs_dir, reason, args):
     """Report an error for the skipped test.
 
     Args:
@@ -1238,6 +1303,7 @@ def report_skipped_test(test_file, avocado_logs_dir, reason):
         print(
             "Warning: Continuing after failing to create {}: {}".format(
                 destination, error))
+
     return create_results_xml(
         message, test_name, "See launch.py command output for more details",
         destination)
@@ -1270,7 +1336,8 @@ def create_results_xml(message, testname, output, destination):
     testsuite = ET.Element("testsuite", testsuite_attributes)
 
     # Define the test case error
-    testcase_attributes = {"name": "framework_results", "time": "0.0"}
+    testcase_attributes = {"classname": testname, "name": "framework_results",
+                           "time": "0.0"}
     testcase = ET.SubElement(testsuite, "testcase", testcase_attributes)
     ET.SubElement(testcase, "error", {"message": message})
     system_out = ET.SubElement(testcase, "system-out")
@@ -1338,7 +1405,7 @@ def install_debuginfos():
     cmds = []
 
     # -debuginfo packages that don't get installed with debuginfo-install
-    for pkg in ['python', 'daos', 'systemd', 'ndctl', 'mercury']:
+    for pkg in ['python', 'daos', 'systemd', 'ndctl', 'mercury', 'hdf5']:
         debug_pkg = resolve_debuginfo(pkg)
         if debug_pkg and debug_pkg not in install_pkgs:
             install_pkgs.append(debug_pkg)
@@ -1408,13 +1475,14 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
     """Copy all of the host test log files to the avocado results directory.
 
     Args:
-        avocado_logs_dir ([type]): [description]
+        avocado_logs_dir (str): location of the avocado job logs
         test_yaml (str): yaml file containing host names
         args (argparse.Namespace): command line arguments for this program
 
     Returns:
         bool: True if everything was done as expected, False if there were
               any issues processing core files
+
     """
     import fnmatch  # pylint: disable=import-outside-toplevel
 
@@ -1542,6 +1610,104 @@ def get_test_category(test_file):
     file_parts = os.path.split(test_file)
     return "-".join(
         [os.path.splitext(os.path.basename(part))[0] for part in file_parts])
+
+
+def stop_daos_server_service(test_file, args):
+    """Stop any daos_server.service running on the hosts running servers.
+
+    Args:
+        test_file (str): the test python file
+        args (argparse.Namespace): command line arguments for this program
+
+    Returns:
+        int: status code: 0 = success, 512 = failure
+
+    """
+    hosts = list(args.test_servers)
+    print("Verifying daos_server.service after running '{}'".format(test_file))
+    status, stop_hosts, disable_hosts = get_daos_server_service_status(hosts)
+    if stop_hosts:
+        print("Stopping daos_server.service on {}".format(stop_hosts))
+        command = "sudo systemctl stop daos_server.service"
+        get_remote_output(str(stop_hosts), command)
+    if disable_hosts:
+        print("Disabling daos_server.service on {}".format(stop_hosts))
+        command = "sudo systemctl disable daos_server.service"
+        get_remote_output(str(disable_hosts), command)
+    if stop_hosts or disable_hosts:
+        check_hosts = NodeSet()
+        check_hosts.add(stop_hosts)
+        check_hosts.add(disable_hosts)
+        result = get_daos_server_service_status(hosts)
+        if result[1]:
+            print(
+                "Error daos_server.service still active on {}".format(
+                    result[1]))
+            status = 512
+        if result[2]:
+            print(
+                "Error daos_server.service still enabled on {}".format(
+                    result[2]))
+            status = 512
+        if result[0] != 0:
+            status = 512
+    return status
+
+
+def get_daos_server_service_status(host_list):
+    """Get the status of the daos_server.service.
+
+    Args:
+        host_list (list): list of hosts on which to determine the state of the
+            daos_server.service.
+
+    Returns:
+        tuple: a tuple containing:
+            - (int): status code: 0 = success, 512 = failure
+            - (NodeSet): hosts with an active daos_server.service
+            - (NodeSet): hosts with a loaded daos_server.service
+
+    """
+    status = 0
+    hosts = {"stop": NodeSet(), "disable": NodeSet()}
+    # Possible states:
+    #   active, inactive, activating, deactivating, failed, unknown
+    states_requiring_stop = ["active", "activating", "deactivating"]
+    states_requiring_disable = states_requiring_stop + ["failed"]
+    command = "systemctl is-active daos_server.service"
+    task = get_remote_output(host_list, command)
+    for output, nodelist in task.iter_buffers():
+        output = str(output)
+        nodeset = NodeSet.fromlist(nodelist)
+        if output in states_requiring_stop:
+            hosts["stop"].add(nodeset)
+        if output in states_requiring_disable:
+            hosts["disable"].add(nodeset)
+        print("  {}: {}".format(nodeset, output))
+    if task.num_timeout() > 0:
+        status = 512
+        hosts["stop"].add(nodeset)
+        hosts["disable"].add(nodeset)
+        nodeset = NodeSet.fromlist(task.iter_keys_timeout())
+        print("  {}: TIMEOUT".format(nodeset))
+    return status, hosts["stop"], hosts["disable"]
+
+
+def indent_text(indent, text):
+    """Prepend the specified number of spaces to the specified text.
+
+    Args:
+        indent (int): the number of spaces to use as an indentation
+        text (object): text to indent. lists will be converted into a
+            newline-separated str with spaces prepended to each line
+
+    Returns:
+        str: indented text
+
+    """
+    if isinstance(text, (list, tuple)):
+        return "\n".join(["{}{}".format(" " * indent, line) for line in text])
+    return " " * indent + str(text)
 
 
 def main():
@@ -1674,6 +1840,10 @@ def main():
         "-v", "--verbose",
         action="store_true",
         help="verbose output")
+    parser.add_argument(
+        "-j", "--jenkinslog",
+        action="store_true",
+        help="rename the avocado test logs directory for publishing in Jenkins")
     args = parser.parse_args()
     print("Arguments: {}".format(args))
 
@@ -1708,6 +1878,9 @@ def main():
     test_files = get_test_files(test_list, args, tmp_dir)
     if args.modify:
         exit(0)
+
+    # Setup (clean/create/list) the common test directory
+    setup_test_directory(args)
 
     # Generate certificate files
     generate_certs()
@@ -1745,6 +1918,14 @@ def main():
         if status & 256 == 256:
             print("ERROR: Detected one or more tests with failure to create "
                   "stack traces from core files!")
+            ret_code = 1
+        if status & 512 == 512:
+            print("ERROR: Detected stopping daos_server.service after one or "
+                  "more tests!")
+            ret_code = 1
+        if status & 1024 == 1024:
+            print("ERROR: Detected one or more failures in renaming logs and "
+                  "results for Jenkins!")
             ret_code = 1
     exit(ret_code)
 

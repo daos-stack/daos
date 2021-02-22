@@ -14,7 +14,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 )
@@ -31,7 +31,7 @@ func TestServer_CtlSvc_checkCfgBdevs(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		numIOSrvs       int
+		numEngines      int
 		vmdEnabled      bool
 		inScanResp      *bdev.ScanResponse
 		inCfgBdevLists  [][]string
@@ -69,7 +69,7 @@ func TestServer_CtlSvc_checkCfgBdevs(t *testing.T) {
 			},
 		},
 		"vmd and non vmd in scan with addr in cfg bdev list on multiple io servers": {
-			numIOSrvs:  2,
+			numEngines: 2,
 			vmdEnabled: true,
 			inScanResp: &bdev.ScanResponse{
 				Controllers: append(scanCtrlrs,
@@ -86,12 +86,12 @@ func TestServer_CtlSvc_checkCfgBdevs(t *testing.T) {
 			},
 		},
 		"missing ssd in cfg bdev list": {
-			numIOSrvs:      2,
+			numEngines:     2,
 			inCfgBdevLists: [][]string{{"0000:90:00.0"}, {"0000:80:00.0"}},
 			expErr:         FaultBdevNotFound([]string{"0000:80:00.0"}),
 		},
 		"present ssds in cfg bdev list": {
-			numIOSrvs: 2,
+			numEngines: 2,
 			inCfgBdevLists: [][]string{
 				{"0000:90:00.0", "0000:d8:00.0", "0000:8e:00.0", "0000:8a:00.0"},
 				{"0000:8d:00.0", "0000:8b:00.0", "0000:8c:00.0", "0000:8f:00.0"},
@@ -102,7 +102,7 @@ func TestServer_CtlSvc_checkCfgBdevs(t *testing.T) {
 			},
 		},
 		"unexpected scan": {
-			numIOSrvs: 2,
+			numEngines: 2,
 			inScanResp: &bdev.ScanResponse{
 				Controllers: storage.MockNvmeControllers(3),
 			},
@@ -119,18 +119,18 @@ func TestServer_CtlSvc_checkCfgBdevs(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			if tc.numIOSrvs == 0 {
-				tc.numIOSrvs = 1
+			if tc.numEngines == 0 {
+				tc.numEngines = 1
 			}
-			if len(tc.inCfgBdevLists) != tc.numIOSrvs {
+			if len(tc.inCfgBdevLists) != tc.numEngines {
 				t.Fatal("test params: inCfgBdevLists length incorrect")
 			}
 
 			// set config device lists
 			testCfg := config.DefaultServer()
-			testCfg.Servers = make([]*ioserver.Config, tc.numIOSrvs)
-			for idx := 0; idx < tc.numIOSrvs; idx++ {
-				testCfg.Servers[idx] = ioserver.NewConfig().
+			testCfg.Engines = make([]*engine.Config, tc.numEngines)
+			for idx := 0; idx < tc.numEngines; idx++ {
+				testCfg.Engines[idx] = engine.NewConfig().
 					WithBdevClass("nvme").
 					WithBdevDeviceList(tc.inCfgBdevLists[idx]...)
 			}
@@ -149,11 +149,11 @@ func TestServer_CtlSvc_checkCfgBdevs(t *testing.T) {
 				return
 			}
 
-			if len(tc.expCfgBdevLists) != tc.numIOSrvs {
+			if len(tc.expCfgBdevLists) != tc.numEngines {
 				t.Fatal("test params: expCfgBdevLists length incorrect")
 			}
 
-			for idx := 0; idx < tc.numIOSrvs; idx++ {
+			for idx := 0; idx < tc.numEngines; idx++ {
 				cfgBdevs := cs.instanceStorage[idx].Bdev.GetNvmeDevs()
 				diff := cmp.Diff(tc.expCfgBdevLists[idx], cfgBdevs)
 				if diff != "" {

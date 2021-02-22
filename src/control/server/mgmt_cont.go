@@ -15,7 +15,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 )
 
-// ListContainers forwards a gRPC request to the DAOS IO server to retrieve a pool's
+// ListContainers forwards a gRPC request to the DAOS I/O Engine to retrieve a pool's
 // list of containers.
 func (svc *mgmtSvc) ListContainers(ctx context.Context, req *mgmtpb.ListContReq) (*mgmtpb.ListContResp, error) {
 	if err := svc.checkReplicaRequest(req); err != nil {
@@ -38,7 +38,7 @@ func (svc *mgmtSvc) ListContainers(ctx context.Context, req *mgmtpb.ListContReq)
 	return resp, nil
 }
 
-// ContSetOwner forwards a gRPC request to the DAOS IO server to change a container's ownership.
+// ContSetOwner forwards a gRPC request to the DAOS I/O Engine to change a container's ownership.
 func (svc *mgmtSvc) ContSetOwner(ctx context.Context, req *mgmtpb.ContSetOwnerReq) (*mgmtpb.ContSetOwnerResp, error) {
 	if err := svc.checkReplicaRequest(req); err != nil {
 		return nil, err

@@ -12,7 +12,7 @@
 
 #include <daos/lru.h>
 #include <daos_security.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/rdb.h>
 #include <daos_srv/rsvc.h>
 #include <daos_srv/container.h>
@@ -98,7 +98,7 @@ struct oid_iv_range {
 
 /* Container IV structure */
 struct cont_iv_snapshot {
-	int snap_cnt;
+	uint64_t snap_cnt;
 	uint64_t snaps[0];
 };
 
@@ -119,13 +119,16 @@ struct cont_iv_prop {
 	uint64_t	cip_csum_server_verify;
 	uint64_t	cip_dedup;
 	uint64_t	cip_dedup_size;
+	uint64_t	cip_alloced_oid;
 	uint64_t	cip_redun_fac;
 	uint64_t	cip_redun_lvl;
 	uint64_t	cip_snap_max;
 	uint64_t	cip_compress;
 	uint64_t	cip_encrypt;
-
-	struct daos_acl	cip_acl;
+	struct daos_prop_co_roots	cip_roots;
+	struct daos_co_status		cip_co_status;
+	/* MUST be the last member */
+	struct daos_acl			cip_acl;
 };
 
 struct cont_iv_agg_eph {
@@ -150,6 +153,7 @@ struct cont_iv_key {
 	uuid_t		cont_uuid;
 	/* IV class id, to differentiate SNAP/CAPA/PROP IV */
 	uint32_t	class_id;
+	uint32_t	entry_size;
 };
 
 /*

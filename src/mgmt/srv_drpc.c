@@ -1,33 +1,16 @@
 /*
  * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
- * This file is part of the DAOS server. It implements the handlers to
+ * This file is part of the DAOS Engine. It implements the handlers to
  * process incoming dRPC requests for management tasks.
  */
 #define D_LOGFAC	DD_FAC(mgmt)
 
 #include <signal.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/pool.h>
 #include <daos_api.h>
 #include <daos_security.h>
@@ -106,7 +89,7 @@ ds_mgmt_drpc_ping_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_INFO("Received request to ping rank %u\n", req->rank);
 
-	/* TODO: verify iosrv components are functioning as expected */
+	/* TODO: verify engine components are functioning as expected */
 
 	pack_daos_response(&resp, drpc_resp);
 	mgmt__ping_rank_req__free_unpacked(req, &alloc.alloc);
@@ -165,17 +148,17 @@ ds_mgmt_drpc_group_update(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_INFO("Received request to update group map\n");
 
-	D_ALLOC_ARRAY(in.gui_servers, req->n_servers);
+	D_ALLOC_ARRAY(in.gui_servers, req->n_engines);
 	if (in.gui_servers == NULL) {
 		rc = -DER_NOMEM;
 		goto out;
 	}
 
-	for (i = 0; i < req->n_servers; i++) {
-		in.gui_servers[i].se_rank = req->servers[i]->rank;
-		in.gui_servers[i].se_uri = req->servers[i]->uri;
+	for (i = 0; i < req->n_engines; i++) {
+		in.gui_servers[i].se_rank = req->engines[i]->rank;
+		in.gui_servers[i].se_uri = req->engines[i]->uri;
 	}
-	in.gui_n_servers = req->n_servers;
+	in.gui_n_servers = req->n_engines;
 	in.gui_map_version = req->map_version;
 
 	rc = ds_mgmt_group_update_handler(&in);
@@ -487,7 +470,7 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			rc = uuid_parse(req->handles[i], handles[i]);
 			if (rc != 0) {
 				D_ERROR("Unable to parse handle UUID %s: "
-				DF_RC "\n", req->uuid, DP_RC(rc));
+				DF_RC"\n", req->uuid, DP_RC(rc));
 				D_GOTO(out_free, rc = -DER_INVAL);
 			}
 		}
@@ -2019,7 +2002,7 @@ ds_mgmt_drpc_set_up(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__DaosResp	resp = MGMT__DAOS_RESP__INIT;
 
-	D_INFO("Received request to setup server\n");
+	D_INFO("Received request to setup engine\n");
 
 	dss_init_state_set(DSS_INIT_STATE_SET_UP);
 

@@ -94,7 +94,6 @@ struct ctrlr_entry {
 
 struct ns_entry {
 	struct spdk_nvme_ns	*ns;
-	struct spdk_nvme_qpair	*qpair;
 	struct ns_entry		*next;
 };
 

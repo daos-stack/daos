@@ -143,13 +143,20 @@ class DaosObjId(ctypes.Structure):
     _fields_ = [("lo", ctypes.c_uint64),
                 ("hi", ctypes.c_uint64)]
 
+class DaosShardLoc(ctypes.Structure):
+    """ Structure to represent shard """
+    _fields_ = [("sd_rank", ctypes.c_uint32),
+                ("sd_tgt_idx", ctypes.c_uint32)]
+
 # Note hard-coded number of ranks, might eventually be a problem
 class DaosObjShard(ctypes.Structure):
+    """ Structure to represent one shard of an obj layout """
     _fields_ = [("os_replica_nr", ctypes.c_uint32),
-                ("os_ranks", ctypes.c_uint32 * 5)]
+                ("os_shard_loc", DaosShardLoc * 5)]
 
 # note the hard-coded number of ranks, might eventually be a problem
 class DaosObjLayout(ctypes.Structure):
+    """ Structure to represent obj layout """
     _fields_ = [("ol_ver", ctypes.c_uint32),
                 ("ol_class", ctypes.c_uint32),
                 ("ol_nr", ctypes.c_uint32),

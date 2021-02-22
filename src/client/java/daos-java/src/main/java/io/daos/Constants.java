@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 package io.daos;
@@ -43,6 +26,10 @@ public final class Constants {
   public static final int ENCODED_LENGTH_EXTENT = 4;
 
   public static final int KEY_LIST_LEN_DEFAULT = 64;
+
+  public static final int UUID_LENGTH = 36;
+
+  public static final int SERVER_GROUP_NAME_MAX_LEN = 1024;
 
   public static final byte KEY_LIST_CODE_NOT_STARTED = (byte)0;
   public static final byte KEY_LIST_CODE_IN_USE = (byte)1;
@@ -86,8 +73,10 @@ public final class Constants {
       new ErrorCode(-1000004, "value length greater than expected");
   public static final ErrorCode CUSTOM_ERR_UNS_INVALID =
       new ErrorCode(-1000005, "invalid argument in UNS");
-  public static final ErrorCode CUSTOM_ERR_OBJECT_INVALID_ARG =
-      new ErrorCode(-1000006, "invalid argument in object");
+  public static final ErrorCode CUSTOM_ERR_INVALID_ARG =
+      new ErrorCode(-1000006, "invalid argument");
+  public static final ErrorCode CUSTOM_ERR_BUF_EXCEED_CAP =
+      new ErrorCode(-1000007, "length exceeds buffer capacity");
 
   public static final int FILE_NAME_LEN_MAX = 255;
   public static final int FILE_PATH_LEN_MAX = 4096;

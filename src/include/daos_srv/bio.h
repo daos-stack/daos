@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B620873.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /*
@@ -47,6 +30,8 @@ typedef struct {
 	uint16_t	ba_dedup;
 	uint16_t	ba_padding;
 } bio_addr_t;
+
+struct sys_db;
 
 /** Ensure this remains compatible */
 D_CASSERT(sizeof(((bio_addr_t *)0)->ba_off) == sizeof(umem_off_t));
@@ -374,15 +359,15 @@ void bio_register_ract_ops(struct bio_reaction_ops *ops);
 /**
  * Global NVMe initialization.
  *
- * \param[IN] storage_path	daos storage directory path
  * \param[IN] nvme_conf		NVMe config file
  * \param[IN] shm_id		shm id to enable multiprocess mode in SPDK
  * \param[IN] mem_size		SPDK memory alloc size when using primary mode
+ * \param[IN] db		persistent database to store SMD data
  *
  * \return		Zero on success, negative value on error
  */
-int bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
-		  int mem_size);
+int bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
+		  struct sys_db *db);
 
 /**
  * Global NVMe finilization.
@@ -633,7 +618,9 @@ struct bio_sglist *bio_iod_sgl(struct bio_desc *biod, unsigned int idx);
 static inline void
 bio_yield(void)
 {
+#ifdef DAOS_PMEM_BUILD
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
+#endif
 	ABT_thread_yield();
 }
 

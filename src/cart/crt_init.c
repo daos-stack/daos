@@ -29,10 +29,10 @@ dump_envariables(void)
 		"FI_UNIVERSE_SIZE", "CRT_DISABLE_MEM_PIN",
 		"FI_OFI_RXM_USE_SRX" };
 
-	D_DEBUG(DB_ALL, "-- ENVARS: --\n");
+	D_INFO("-- ENVARS: --\n");
 	for (i = 0; i < ARRAY_SIZE(envars); i++) {
 		val = getenv(envars[i]);
-		D_DEBUG(DB_ALL, "%s = %s\n", envars[i], val);
+		D_INFO("%s = %s\n", envars[i], val);
 	}
 }
 
@@ -70,6 +70,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	uint32_t	ctx_num = 1;
 	uint32_t	fi_univ_size = 0;
 	uint32_t	mem_pin_disable = 0;
+	uint32_t	mrc_enable = 0;
 	uint64_t	start_rpcid;
 	int		rc = 0;
 
@@ -145,6 +146,12 @@ static int data_init(int server, crt_init_options_t *opt)
 		setenv("FI_UNIVERSE_SIZE", "2048", 1);
 	}
 
+	d_getenv_int("CRT_MRC_ENABLE", &mrc_enable);
+	if (mrc_enable == 0) {
+		D_INFO("Disabling MR CACHE (FI_MR_CACHE_MAX_COUNT=0)\n");
+		setenv("FI_MR_CACHE_MAX_COUNT", "0", 1);
+	}
+
 	if (credits == 0) {
 		D_DEBUG(DB_ALL, "CRT_CREDIT_EP_CTX set as 0, flow control "
 			"disabled.\n");
@@ -176,8 +183,10 @@ static int data_init(int server, crt_init_options_t *opt)
 		d_getenv_int("CRT_CTX_NUM", &ctx_num);
 		crt_gdata.cg_ctx_max_num = ctx_num;
 	}
+
 	D_DEBUG(DB_ALL, "set cg_sep_mode %d, cg_ctx_max_num %d.\n",
 		crt_gdata.cg_sep_mode, crt_gdata.cg_ctx_max_num);
+
 	if (crt_gdata.cg_sep_mode == false && crt_gdata.cg_ctx_max_num > 1)
 		D_WARN("CRT_CTX_NUM has no effect because CRT_CTX_SHARE_ADDR "
 		       "is not set or set to 0\n");
@@ -212,9 +221,9 @@ crt_plugin_init(void)
 
 	crt_plugin_gdata.cpg_timeout_cbs_old = NULL;
 	D_ALLOC_ARRAY(cbs_timeout, cbs_size);
-	if (cbs_timeout == NULL) {
+	if (cbs_timeout == NULL)
 		D_GOTO(out_destroy_prog, rc = -DER_NOMEM);
-	}
+
 	crt_plugin_gdata.cpg_timeout_size = cbs_size;
 	crt_plugin_gdata.cpg_timeout_cbs  = cbs_timeout;
 
@@ -316,9 +325,8 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	if (gdata_init_flag == 0) {
 		rc = data_init(server, opt);
 		if (rc != 0) {
-			D_ERROR("data_init failed, rc(%d) - %s.\n",
-				rc, strerror(rc));
-			D_GOTO(out, rc = -rc);
+			D_ERROR("data_init failed "DF_RC"\n", DP_RC(rc));
+			D_GOTO(out, rc);
 		}
 	}
 	D_ASSERT(gdata_init_flag == 1);
@@ -414,20 +422,20 @@ do_init:
 			rc = crt_na_ofi_config_init();
 			if (rc != 0) {
 				D_ERROR("crt_na_ofi_config_init() failed, "
-					DF_RC "\n", DP_RC(rc));
+					DF_RC"\n", DP_RC(rc));
 				D_GOTO(out, rc);
 			}
 		}
 
 		rc = crt_hg_init();
 		if (rc != 0) {
-			D_ERROR("crt_hg_init() failed, " DF_RC "\n", DP_RC(rc));
+			D_ERROR("crt_hg_init() failed, "DF_RC"\n", DP_RC(rc));
 			D_GOTO(cleanup, rc);
 		}
 
 		rc = crt_grp_init(grpid);
 		if (rc != 0) {
-			D_ERROR("crt_grp_init() failed, " DF_RC "\n",
+			D_ERROR("crt_grp_init() failed, "DF_RC"\n",
 				DP_RC(rc));
 			D_GOTO(cleanup, rc);
 		}
@@ -435,7 +443,7 @@ do_init:
 		if (crt_plugin_gdata.cpg_inited == 0) {
 			rc = crt_plugin_init();
 			if (rc != 0) {
-				D_ERROR("crt_plugin_init() failed, " DF_RC "\n",
+				D_ERROR("crt_plugin_init() failed, "DF_RC"\n",
 					DP_RC(rc));
 				D_GOTO(cleanup, rc);
 			}
@@ -443,13 +451,20 @@ do_init:
 
 		crt_self_test_init();
 
-		rc = crt_opc_map_create(CRT_OPC_MAP_BITS);
+		rc = crt_opc_map_create();
 		if (rc != 0) {
-			D_ERROR("crt_opc_map_create() failed, " DF_RC "\n",
+			D_ERROR("crt_opc_map_create() failed, "DF_RC"\n",
 				DP_RC(rc));
-			crt_self_test_fini();
-			D_GOTO(cleanup, rc);
+			D_GOTO(self_test, rc);
 		}
+
+		rc = crt_internal_rpc_register(server);
+		if (rc != 0) {
+			D_ERROR("crt_internal_rpc_register() failed, "DF_RC"\n",
+				DP_RC(rc));
+			D_GOTO(self_test, rc);
+		}
+
 		D_ASSERT(crt_gdata.cg_opc_map != NULL);
 
 		crt_gdata.cg_inited = 1;
@@ -465,6 +480,9 @@ do_init:
 	crt_gdata.cg_refcount++;
 
 	D_GOTO(unlock, rc);
+
+self_test:
+	crt_self_test_fini();
 
 cleanup:
 	crt_gdata.cg_inited = 0;
@@ -482,7 +500,7 @@ unlock:
 
 out:
 	if (rc != 0) {
-		D_ERROR("failed, " DF_RC "\n", DP_RC(rc));
+		D_ERROR("failed, "DF_RC"\n", DP_RC(rc));
 		d_fault_inject_fini();
 		d_log_fini();
 	}
@@ -706,9 +724,8 @@ int crt_na_ofi_config_init(void)
 	}
 
 	D_STRNDUP(crt_na_ofi_conf.noc_domain, domain, 64);
-	if (!crt_na_ofi_conf.noc_domain) {
+	if (!crt_na_ofi_conf.noc_domain)
 		D_GOTO(out, rc = -DER_NOMEM);
-	}
 
 	rc = getifaddrs(&if_addrs);
 	if (rc != 0) {

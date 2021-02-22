@@ -112,7 +112,7 @@ func checkSocketDir(sockDir string) error {
 type drpcServerSetupReq struct {
 	log     logging.Logger
 	sockDir string
-	iosrvs  []*IOServerInstance
+	engines []*EngineInstance
 	tc      *security.TransportConfig
 	sysdb   *system.Database
 	events  *events.PubSub
@@ -134,7 +134,7 @@ func drpcServerSetup(ctx context.Context, req *drpcServerSetupReq) error {
 	// Create and add our modules
 	drpcServer.RegisterRPCModule(NewSecurityModule(req.log, req.tc))
 	drpcServer.RegisterRPCModule(newMgmtModule())
-	drpcServer.RegisterRPCModule(newSrvModule(req.log, req.sysdb, req.iosrvs, req.events))
+	drpcServer.RegisterRPCModule(newSrvModule(req.log, req.sysdb, req.engines, req.events))
 
 	if err := drpcServer.Start(); err != nil {
 		return errors.Wrapf(err, "unable to start socket server on %s", sockPath)
@@ -152,13 +152,13 @@ func drpcCleanup(sockDir string) error {
 	srvSock := getDrpcServerSocketPath(sockDir)
 	os.Remove(srvSock)
 
-	pattern := filepath.Join(sockDir, "daos_io_server*.sock")
-	iosrvSocks, err := filepath.Glob(pattern)
+	pattern := filepath.Join(sockDir, "daos_engine*.sock")
+	engineSocks, err := filepath.Glob(pattern)
 	if err != nil {
-		return errors.WithMessage(err, "couldn't get list of iosrv sockets")
+		return errors.WithMessage(err, "couldn't get list of engine sockets")
 	}
 
-	for _, s := range iosrvSocks {
+	for _, s := range engineSocks {
 		os.Remove(s)
 	}
 
@@ -211,7 +211,7 @@ func makeDrpcCall(ctx context.Context, log logging.Logger, client drpc.DomainSoc
 			return nil, errors.Wrap(err, "build drpc call")
 		}
 
-		// Forward the request to the I/O server via dRPC
+		// Forward the request to the I/O Engine via dRPC
 		if err = client.Connect(); err != nil {
 			if te, ok := errors.Cause(err).(interface{ Temporary() bool }); ok {
 				if !te.Temporary() {
@@ -223,7 +223,7 @@ func makeDrpcCall(ctx context.Context, log logging.Logger, client drpc.DomainSoc
 		defer client.Close()
 
 		if drpcResp, err = client.SendMsg(drpcCall); err != nil {
-			return nil, errors.Wrap(err, "send message")
+			return nil, errors.Wrapf(err, "failed to send %dB message", proto.Size(msg))
 		}
 
 		if err = checkDrpcResponse(drpcResp); err != nil {

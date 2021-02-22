@@ -23,7 +23,7 @@ class EcDisabledRebuild(ErasureCodeIor):
         """Set up for test case."""
         super(EcDisabledRebuild, self).setUp()
 
-    @skipForTicket("DAOS-6496")
+    @skipForTicket("DAOS-6660")
     def test_ec_degrade(self):
         """Jira ID: DAOS-5893.
 
