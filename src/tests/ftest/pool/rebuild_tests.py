@@ -16,17 +16,6 @@ class RebuildTests(TestWithServers):
     :avocado: recursive
     """
 
-    CANCEL_FOR_TICKET = [
-        [
-            "DAOS-6800",
-            "test_method_name", "test_multipool_rebuild",
-            "data_size", 250,
-            "object_qty", 20,
-            "record_qty", 1,
-            "rank", 1
-        ],
-    ]
-
     def run_rebuild_test(self, pool_quantity):
         """Run the rebuild test for the specified number of pools.
 
