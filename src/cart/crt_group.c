@@ -2442,7 +2442,7 @@ crt_rank_self_set(d_rank_t rank)
 
 	default_grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 
-	D_EMIT("Setting self rank to %d\n", rank);
+	D_INFO("Setting self rank to %d\n", rank);
 
 	if (!crt_is_service()) {
 		D_WARN("Setting self rank is not supported on client\n");
