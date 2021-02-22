@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/daos-stack/daos/src/control/events"
-	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -43,17 +42,17 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 		events: events.NewPubSub(context.TODO(), log),
 	}
 
-	for _, srvCfg := range cfg.Engines {
-		bp, err := bdev.NewClassProvider(log, "", &srvCfg.Storage.Bdev)
+	for _, engineCfg := range cfg.Engines {
+		bp, err := bdev.NewClassProvider(log, "", &engineCfg.Storage.Bdev)
 		if err != nil {
 			t.Fatal(err)
 		}
-		runner := engine.NewTestRunner(&engine.TestRunnerConfig{
-			Running: atm.NewBool(true),
-		}, srvCfg)
+		rCfg := new(engine.TestRunnerConfig)
+		rCfg.Running.SetTrue()
+		runner := engine.NewTestRunner(rCfg, engineCfg)
 		instance := NewEngineInstance(log, bp, cs.scm, nil, runner)
 		instance.setSuperblock(&Superblock{
-			Rank: system.NewRankPtr(srvCfg.Rank.Uint32()),
+			Rank: system.NewRankPtr(engineCfg.Rank.Uint32()),
 		})
 		if err := cs.harness.AddInstance(instance); err != nil {
 			t.Fatal(err)
