@@ -948,8 +948,8 @@ pipeline {
                         always {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
-                                         tool: gcc4(pattern: 'centos7-clang-dev-build.log',
-                                                    id: "analysis-clang-centos7-dev")
+                                         tool: clang(pattern: 'centos7-clang-build.log',
+                                                     id: "analysis-centos7-clang")
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -979,14 +979,14 @@ pipeline {
                         sconsBuild parallel_build: parallel_build(),
                                    scons_args: scons_faults_args() + " PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no",
-				   scons_exe: 'scons-3'
+                                   scons_exe: 'scons-3'
                     }
                     post {
                         always {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
-                                         tool: clang(pattern: 'centos8-gcc-build.log',
-                                                     id: "analysis-centos8-gcc")
+                                         tool: gcc4(pattern: 'centos8-gcc-build.log',
+                                                    id: "analysis-centos8-gcc")
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
