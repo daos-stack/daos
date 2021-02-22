@@ -63,7 +63,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-	oid = dts_oid_gen(OC_RP_XSF, 0, rank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, rank);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	if (!rank) {

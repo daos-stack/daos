@@ -637,8 +637,12 @@ class DaosObj(object):
         else:
             obj_cls_int = get_object_class(objcls).value
 
-        func.restype = daos_cref.DaosObjId
-        self.c_oid = func(obj_cls_int, 0, 0)
+        self.c_oid = daos_cref.DaosObjId()
+        ret = func(self.container.coh, ctypes.byref(self.c_oid), 0, obj_cls_int,
+                   0, 0)
+        if ret != 0:
+            raise DaosApiError("Object generate oid returned non-zero. RC: {0} "
+                               .format(ret))
 
         if rank is not None:
             self.c_oid.hi |= rank << 24
@@ -2177,7 +2181,7 @@ class DaosContext(object):
             'disconnect-pool': self.libdaos.daos_pool_disconnect,
             'exclude-target':  self.libdaos.daos_pool_tgt_exclude,
             'fetch-obj':       self.libdaos.daos_obj_fetch,
-            'generate-oid':    self.libtest.dts_oid_gen,
+            'generate-oid':    self.libdaos.daos_obj_generate_oid,
             'get-cont-attr':   self.libdaos.daos_cont_get_attr,
             'get-pool-attr':   self.libdaos.daos_pool_get_attr,
             'get-layout':      self.libdaos.daos_obj_layout_get,

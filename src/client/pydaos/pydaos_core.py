@@ -147,7 +147,7 @@ class Cont(object):
 
         if self._root_kv:
             return self._root_kv
-        (ret, hi, lo) = pydaos_shim.obj_idroot(DAOS_MAGIC, cid.value)
+        (ret, hi, lo) = pydaos_shim.obj_idroot(DAOS_MAGIC, self.coh, cid.value)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to generate root object identifier", ret)
         oid = ObjID(hi, lo)
