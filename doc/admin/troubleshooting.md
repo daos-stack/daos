@@ -52,10 +52,10 @@ errors are documented in the table below.
 |DER_TX_BUSY|2028|TX is not committed
 |DER_AGENT_INCOMPAT|2029|Agent is incompatible with libdaos
 
-When an operation fails, DAOS returns a negative DER error. For a full
-list of errors, please check
-<https://github.com/daos-stack/cart/blob/master/src/include/daos_errno.h>
-(DER_ERR_GURT_BASE is equal to 1000 and DER_ERR_DAOS_BASE is equal
+When an operation fails, DAOS returns a negative DER error.
+For a full list of errors, please check
+<https://github.com/daos-stack/daos/blob/master/src/include/daos_errno.h>
+(`DER_ERR_GURT_BASE` is equal to 1000, and `DER_ERR_DAOS_BASE` is equal
 to 2000).
 
 The function d_errstr() is provided in the API to convert an error
@@ -68,8 +68,8 @@ server operations:
 
 |Component|Config Parameter|Example Config Value|
 |-|-|-|
-|Control Plane|control_log_file|/tmp/daos_control.log|
-|Data Plane|log_file|/tmp/daos_server.log|
+|Control Plane|control_log_file|/tmp/daos_server.log|
+|Data Plane|log_file|/tmp/daos_engine.*.log|
 |[Privileged Helper](https://daos-stack.github.io/admin/deployment/#elevated-privileges)|helper_log_file|/tmp/daos_admin.log|
 |agent|log_file|/tmp/daos_agent.log|
 
@@ -103,12 +103,12 @@ DEBUG-level logging will be sent to the specified file.
 If the `log_file` config parameter is set in the agent config, then
 DEBUG-level logging will be sent to the specified file.
 
-
 ## Debugging System
 
 DAOS uses the debug system defined in
-[CaRT](https://github.com/daos-stack/cart) but more specifically the
-GURT library. Both server and client default log is stdout, unless
+[CaRT](https://github.com/daos-stack/daos/tree/master/src/cart),
+specifically the GURT library. 
+Both server and client default log is `stdout`, unless
 otherwise set by `D_LOG_FILE` environment variable (client) or
 `log_file` config parameter (server).
 

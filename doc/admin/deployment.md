@@ -176,12 +176,11 @@ host list.
 devices, taking into account any specified network device class preference
 (ethernet or infiniband).
 
-Note that there is currently a [bug](https://github.com/pmem/ndctl/issues/130)
-in `ndctl` that prevents the NUMA affinity of an nvdimm namespace from being
-correctly reported.
+Some CentOS 7.x kernels from before the 7.9 release were known to have a defect
+that prevented `ndctl` from being able to report the NUMA affinity for a
+namespace.
 This prevents generation of dual engine configs using `dmg config generate`
-command on CentOS7 operating systems, the issue has reportedly been fixed on
-CentOS8.
+when running with one of the above-mentioned affected kernels.
 
 #### Certificate Configuration
 

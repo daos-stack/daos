@@ -153,7 +153,6 @@ extern struct bio_reaction_ops nvme_reaction_ops;
 uint32_t pool_iv_map_ent_size(int nr);
 int ds_pool_iv_init(void);
 int ds_pool_iv_fini(void);
-int pool_iv_map_fetch(void *ns, struct pool_iv_entry *pool_iv);
 void ds_pool_map_refresh_ult(void *arg);
 
 int ds_pool_iv_conn_hdl_update(struct ds_pool *pool, uuid_t hdl_uuid,
@@ -163,8 +162,7 @@ int ds_pool_iv_srv_hdl_update(struct ds_pool *pool, uuid_t pool_hdl_uuid,
 			      uuid_t cont_hdl_uuid);
 
 int ds_pool_iv_srv_hdl_invalidate(struct ds_pool *pool);
-int ds_pool_iv_conn_hdl_fetch(struct ds_pool *pool, uuid_t key_uuid,
-			      d_iov_t *conn_iov);
+int ds_pool_iv_conn_hdl_fetch(struct ds_pool *pool);
 int ds_pool_iv_conn_hdl_invalidate(struct ds_pool *pool, uuid_t hdl_uuid);
 
 int ds_pool_iv_srv_hdl_fetch_non_sys(struct ds_pool *pool,
