@@ -90,8 +90,6 @@ RUN echo "daos_agent:daos_agent" | chpasswd
 # Removing PyYAML 3.10 to allow pip install to upgrade
 RUN yum -y remove python36-PyYAML
 
-RUN yum -y install python36-clustershell
-
 RUN pip3 install --upgrade pip
 
 RUN pip3 --no-cache-dir install \
@@ -101,6 +99,8 @@ RUN pip3 --no-cache-dir install \
     pep8 \
     pygit2 \
     python-magic
+
+RUN yum -y install python36-clustershell
 
 # Add codespell to path.
 ENV PATH=$PATH:/home/daos/.local/bin
