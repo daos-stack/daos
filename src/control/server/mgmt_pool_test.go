@@ -209,14 +209,14 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			srvCfg := engine.NewConfig().WithTargetCount(testTargetCount)
+			engineCfg := engine.NewConfig().WithTargetCount(testTargetCount)
 			if !tc.disableNVMe {
-				srvCfg = srvCfg.
+				engineCfg = engineCfg.
 					WithBdevClass("nvme").
 					WithBdevDeviceList("foo", "bar")
 			}
 			svc := newTestMgmtSvc(t, log)
-			svc.harness.instances[0] = newTestEngine(log, false, srvCfg)
+			svc.harness.instances[0] = newTestEngine(log, false, engineCfg)
 
 			gotErr := svc.calculateCreateStorage(tc.in)
 			common.CmpErr(t, tc.expErr, gotErr)
