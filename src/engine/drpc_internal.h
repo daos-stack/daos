@@ -9,7 +9,7 @@
  *
  * The dRPC listener is a thread that sets up a UNIX Domain Socket to listen for
  * local client connections and processes dRPC messages from those clients. It
- * is expected to stay alive for the life of the I/O server.
+ * is expected to stay alive for the life of the I/O Engine.
  */
 
 #ifndef __DAOS_DRPC_INTERNAL_H__
