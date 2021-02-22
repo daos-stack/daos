@@ -81,19 +81,19 @@ simple_array_mgmt(void **state)
 	int		rc;
 
 	/** create the array with HASHED DKEY, should FAIL */
-	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
 	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 4, chunk_size,
 			       &oh, NULL);
 	assert_rc_equal(rc, -DER_INVAL);
 
 	/** create the array with LEXICAL DKEY, should FAIL */
-	oid = dts_oid_gen(OC_SX, DAOS_OF_DKEY_LEXICAL,
+	oid = daos_test_oid_gen(arg->coh, OC_SX, DAOS_OF_DKEY_LEXICAL, 0,
 			  arg->myrank);
 	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 4, chunk_size,
 			       &oh, NULL);
 	assert_rc_equal(rc, -DER_INVAL);
 
-	oid = dts_oid_gen(OC_SX, feat, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, feat, 0, arg->myrank);
 
 	/** create the array */
 	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 4, chunk_size,
@@ -166,13 +166,14 @@ simple_array_mgmt(void **state)
 	/** Test the open_with_attr interface */
 
 	/** Open_with_attr with DAOS_OF_ARRAY, should fail */
-	oid = dts_oid_gen(OC_SX, feat, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, feat, 0, arg->myrank);
 	rc = daos_array_open_with_attr(arg->coh, oid, DAOS_TX_NONE, DAOS_OO_RW,
 				       4, chunk_size, &oh, NULL);
 	assert_rc_equal(rc, -DER_INVAL);
 
-	oid = dts_oid_gen(OC_SX, DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT,
-			  arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX,
+				DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT,
+				0, arg->myrank);
 	rc = daos_array_open_with_attr(arg->coh, oid, DAOS_TX_NONE, DAOS_OO_RW,
 				       4, chunk_size, &oh, NULL);
 	assert_rc_equal(rc, 0);
@@ -223,7 +224,7 @@ small_io(void **state)
 	int		rc;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	oid = dts_oid_gen(OC_SX, feat, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, feat, 0, arg->myrank);
 
 	/** create the array */
 	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 1, 1048576, &oh,
@@ -354,7 +355,8 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 	MPI_Barrier(MPI_COMM_WORLD);
 	/** create the array on rank 0 and share the oh. */
 	if (arg->myrank == 0) {
-		oid = dts_oid_gen(OC_SX, (cell_size == 1) ? featb : feat, 0);
+		oid = daos_test_oid_gen(arg->coh, OC_SX,
+					(cell_size == 1) ? featb : feat, 0, 0);
 		rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, cell_size,
 				       chunk_size, &oh, NULL);
 		assert_rc_equal(rc, 0);
@@ -511,7 +513,8 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 
 	/** create the array on rank 0 and share the oh. */
 	if (arg->myrank == 0) {
-		oid = dts_oid_gen(OC_SX, (cell_size == 1) ? featb : feat, 0);
+		oid = daos_test_oid_gen(arg->coh, OC_SX,
+					(cell_size == 1) ? featb : feat, 0, 0);
 		rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, cell_size,
 				       chunk_size, &oh, NULL);
 		assert_rc_equal(rc, 0);
@@ -667,7 +670,8 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	MPI_Barrier(MPI_COMM_WORLD);
 	/** create the array on rank 0 and share the oh. */
 	if (arg->myrank == 0) {
-		oid = dts_oid_gen(OC_SX, (cell_size == 1) ? featb : feat, 0);
+		oid = daos_test_oid_gen(arg->coh, OC_SX,
+					(cell_size == 1) ? featb : feat, 0, 0);
 		rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, cell_size,
 				       chunk_size, &oh, NULL);
 		assert_rc_equal(rc, 0);
@@ -820,7 +824,7 @@ read_empty_records(void **state)
 	int		rc;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	oid = dts_oid_gen(OC_SX, featb, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, featb, 0, arg->myrank);
 
 	if (arg->async) {
 		rc = daos_event_init(&ev, arg->eq, NULL);
@@ -933,7 +937,7 @@ strided_array(void **state)
 	int		rc;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	oid = dts_oid_gen(OC_SX, featb, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, featb, 0, arg->myrank);
 
 	/** create the array */
 	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 1, 1048576, &oh,
@@ -1024,7 +1028,7 @@ truncate_array(void **state)
 	daos_size_t	size;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	oid = dts_oid_gen(OC_SX, featb, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, featb, 0, arg->myrank);
 
 	/** create the array */
 	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 1, 1048576, &oh,

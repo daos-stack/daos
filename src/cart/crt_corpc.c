@@ -502,14 +502,14 @@ corpc_del_child_rpc_locked(struct crt_rpc_priv *parent_rpc_priv,
 static inline void
 crt_corpc_fail_parent_rpc(struct crt_rpc_priv *parent_rpc_priv, int failed_rc)
 {
-	d_rank_t	 myrank;
-
-	crt_group_rank(NULL, &myrank);
-
 	parent_rpc_priv->crp_reply_hdr.cch_rc = failed_rc;
 	parent_rpc_priv->crp_corpc_info->co_rc = failed_rc;
-	D_ERROR("myrank %d, set parent rpc (opc %#x) as failed, rc: %d.\n",
-		myrank, parent_rpc_priv->crp_pub.cr_opc, failed_rc);
+	if (failed_rc != -DER_GRPVER)
+		RPC_ERROR(parent_rpc_priv,
+			  "Failing CORPC with rc=%d\n", failed_rc);
+	else
+		RPC_TRACE(DB_NET, parent_rpc_priv,
+			  "Failing CORPC with rc=%d\n", failed_rc);
 }
 
 static inline void

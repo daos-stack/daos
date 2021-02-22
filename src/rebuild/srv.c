@@ -111,8 +111,7 @@ rebuild_pool_tls_destroy(struct rebuild_pool_tls *tls)
 }
 
 static void *
-rebuild_tls_init(const struct dss_thread_local_storage *dtls,
-		 struct dss_module_key *key)
+rebuild_tls_init(int xs_id, int tgt_id)
 {
 	struct rebuild_tls *tls;
 
@@ -296,8 +295,7 @@ rebuild_status_completed_remove(const uuid_t pool_uuid)
 }
 
 static void
-rebuild_tls_fini(const struct dss_thread_local_storage *dtls,
-		 struct dss_module_key *key, void *data)
+rebuild_tls_fini(void *data)
 {
 	struct rebuild_tls *tls = data;
 	struct rebuild_pool_tls *pool_tls;
@@ -953,13 +951,13 @@ rebuild_debug_print_queue()
 	char tgts_buf[200];
 	int i;
 	/* Position in stack buffer where str data should be written next */
-	size_t tgts_pos = 0;
+	size_t tgts_pos;
 
 	D_DEBUG(DB_REBUILD, "Current rebuild queue:\n");
 
 	d_list_for_each_entry_safe(task, task_tmp,
 				   &rebuild_gst.rg_queue_list, dst_list) {
-
+		tgts_pos = 0;
 		for (i = 0; i < task->dst_tgts.pti_number; i++) {
 			if (tgts_pos > sizeof(tgts_buf) - 10) {
 				/* Stop a bit before we get to the end of the

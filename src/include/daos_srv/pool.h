@@ -247,4 +247,32 @@ int dsc_pool_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		       daos_handle_t *ph);
 int dsc_pool_close(daos_handle_t ph);
 
+/**
+ * Verify if pool status satisfy Redundancy Factor requirement, by checking
+ * pool map device status.
+ */
+static inline int
+ds_pool_rf_verify(struct ds_pool *pool, uint32_t last_ver, uint32_t rf)
+{
+	int	rc;
+
+	ABT_rwlock_rdlock(pool->sp_lock);
+	rc = pool_map_rf_verify(pool->sp_map, last_ver, rf);
+	ABT_rwlock_unlock(pool->sp_lock);
+
+	return rc;
+}
+
+static inline uint32_t
+ds_pool_get_version(struct ds_pool *pool)
+{
+	uint32_t	ver;
+
+	ABT_rwlock_rdlock(pool->sp_lock);
+	ver = pool_map_get_version(pool->sp_map);
+	ABT_rwlock_unlock(pool->sp_lock);
+
+	return ver;
+}
+
 #endif /* __DAOS_SRV_POOL_H__ */
