@@ -607,7 +607,7 @@ ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 	D_ASSERT(entry != NULL);
 
 	/* Let's deal with iv_value first */
-	d_sgl_fini(iv_value, false);
+	d_sgl_fini(iv_value, true);
 
 	rc = entry->iv_class->iv_class_ops->ivc_ent_put(entry,
 							priv_entry->priv);
