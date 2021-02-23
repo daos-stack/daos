@@ -159,6 +159,9 @@ create_entry(struct dfuse_projection_info *fs_handle,
 				"Maybe updating parent inode %#lx dfs_ino %#lx",
 				entry->ino, ie->ie_dfs->dfs_ino);
 
+		/** update the chunk size and oclass of inode entry */
+		dfs_obj_copy_attr(inode->ie_obj, ie->ie_obj);
+
 		if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino) {
 			DFUSE_TRA_DEBUG(inode, "Not updating parent");
 		} else {
