@@ -138,8 +138,8 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	req->osr_tgt_oiods = tgt_oiods;
-	tgt_oiod = obj_ec_tgt_oiod_get(tgt_oiods, count, tgt_max_idx);
-	D_ASSERT(tgt_oiod != NULL && tgt_oiod->oto_tgt_idx == tgt_max_idx);
+	tgt_oiod = obj_ec_tgt_oiod_get(tgt_oiods, count, self_tgt_idx);
+	D_ASSERT(tgt_oiod != NULL && tgt_oiod->oto_tgt_idx == self_tgt_idx);
 
 	req->osr_offs = tgt_oiod->oto_offs;
 	split_iods = req->osr_iods;

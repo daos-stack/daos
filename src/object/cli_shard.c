@@ -826,7 +826,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 			daos_iod_t	*orig_iod = NULL;
 
 			D_DEBUG(DB_IO, DF_UOID" size "DF_U64
-				" eph "DF_U64"\n", DP_UOID(orw->orw_oid),
+				" eph "DF_X64"\n", DP_UOID(orw->orw_oid),
 				sizes[i], orw->orw_epoch);
 
 			if (!is_ec_obj) {

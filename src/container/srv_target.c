@@ -244,7 +244,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 		 * aggregation, let's restart from 0.
 		 */
 		epoch_min = 0;
-		D_DEBUG(DB_EPC, "change hlc "DF_U64" > full "DF_U64"\n",
+		D_DEBUG(DB_EPC, "change hlc "DF_X64" > full "DF_X64"\n",
 			change_hlc, cont->sc_aggregation_full_scan_hlc);
 	} else {
 		epoch_min = cinfo.ci_hae;
@@ -276,7 +276,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 	if (epoch_max >= cont->sc_aggregation_max)
 		epoch_max = cont->sc_aggregation_max - 1;
 
-	D_ASSERTF(epoch_min <= epoch_max, "Min "DF_U64", Max "DF_U64"\n",
+	D_ASSERTF(epoch_min <= epoch_max, "Min "DF_X64", Max "DF_X64"\n",
 		  epoch_min, epoch_max);
 
 	if (cont->sc_pool->spc_rebuild_fence != 0) {
@@ -284,7 +284,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 		int	j;
 		int	insert_idx;
 
-		D_DEBUG(DB_EPC, "rebuild fence "DF_U64"\n", rebuild_fence);
+		D_DEBUG(DB_EPC, "rebuild fence "DF_X64"\n", rebuild_fence);
 		/* Insert the rebuild_epoch into snapshots */
 		D_ALLOC(snapshots, (cont->sc_snapshots_nr + 1) *
 			sizeof(daos_epoch_t));
@@ -2295,7 +2295,7 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 			    ec_eph->ce_eph < ec_eph->ce_last_eph)
 				ec_eph->ce_eph = 0;
 
-			D_DEBUG(DB_MD, "eph "DF_U64" "DF_UUID"\n",
+			D_DEBUG(DB_MD, "eph "DF_X64" "DF_UUID"\n",
 				ec_eph->ce_eph, DP_UUID(ec_eph->ce_cont_uuid));
 			rc = cont_iv_ec_agg_eph_update(pool->sp_iv_ns,
 						       ec_eph->ce_cont_uuid,
