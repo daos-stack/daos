@@ -17,6 +17,7 @@ import re
 from avocado import Test as avocadoTest
 from avocado import skip, TestFail, fail_on
 from avocado.utils.distro import detect
+from avocado.core import exceptions
 
 import fault_config_utils
 from pydaos.raw import DaosContext, DaosLog, DaosApiError
@@ -191,18 +192,20 @@ class Test(avocadoTest):
                         if open("/tmp/commit_title").read().strip().startswith(
                             ticket + " "):
                             # fix is in this PR
-                            print("On the skip list for ticket {}, but is "
+                            print("On the skip list for ticket {}, but "
                                   "is being fixed in this PR, so not "
                                   "skipping".format(ticket))
+                        else:
+                            # there is no commit that fixes it
+                            self.cancel("Skipping due to being on the skip list "
+                                        "for ticket {} with no fix available "
+                                        "yet".format(ticket))
+                    except exceptions.TestCancel():
+                        raise
                     except Exception as excpt: # pylint: disable=broad-except
                         print("Unable to read commit title: ", excpt)
                         print("Trudging on without skipping known failing"
                                "tests")
-                    else:
-                        # there is no commit that fixes it
-                        self.cancel("Skipping due to being on the skip list "
-                                    "for ticket {} with no fix available "
-                                    "yet".format(ticket))
 
     def _check_variant_skip(self, cancel_list):
         """Determine if this test variant should be skipped.
