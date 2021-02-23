@@ -167,27 +167,28 @@ class Test(avocadoTest):
                 # test is on the skiplist
                 if len(vals) > 1:
                     # but there is a commit that fixes it
+                    commits = None
                     try:
                         commits = open('/tmp/commit_list').read().splitlines()
-                        if vals[1] in commits:
-                            # fix is in this code base
-                            print("On the skip list for ticket {}, but is "
-                                  "fixed in {} so not "
-                                  "skipping".format(ticket, vals[1]))
-                        else:
-                            # fix is not in this code base
-                            self.cancel("Skipping due to being on the "
-                                         "skip list for ticket {}, and "
-                                         "the fix in {} is not in the "
-                                         "current code".format(ticket,
-                                                               vals[1]))
                     except Exception as excpt: # pylint: disable=broad-except
                         print("Unable to read commit list: ", excpt)
-                        print("Trudging on without skipping known failing"
+                        print("Trudging on without skipping known failing "
                               "tests")
+                    if commits and vals[1] in commits:
+                        # fix is in this code base
+                        print("On the skip list for ticket {}, but is "
+                              "fixed in {} so not "
+                              "skipping".format(ticket, vals[1]))
+                    else:
+                        # fix is not in this code base
+                        self.cancel("Skipping due to being on the "
+                                     "skip list for ticket {}, and "
+                                     "the fix in {} is not in the "
+                                     "current code".format(ticket,
+                                                           vals[1]))
                 else:
                     try:
-                        if open("/tmp/commit_title").read().trim().startswith(
+                        if open("/tmp/commit_title").read().strip().startswith(
                             ticket + " "):
                             # fix is in this PR
                             print("On the skip list for ticket {}, but is "
