@@ -180,7 +180,9 @@ class ExecutableCommand(CommandWithParameters):
         if self._process is not None:
             # Send a SIGTERM to stop the subprocess and if it is still
             # running after 5 seconds give it another try. If that doesn't
-            # stop the process send a SIGKILL and report an error
+            # stop the process send a SIGKILL and report an error.
+            # Sending 2 SIGTERM signals is a known issue based on
+            # DAOS-6850.
             signal_list = [signal.SIGTERM, signal.SIGTERM, signal.SIGKILL]
 
             # Turn off verbosity to keep the logs clean as the server stops
