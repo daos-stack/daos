@@ -1303,6 +1303,9 @@ agg_peer_update_ult(void *arg)
 					ext->ae_epoch;
 			}
 		}
+		D_ASSERT(ec_agg_in->ea_remove_nr == i);
+		ec_agg_in->ea_remove_recxs.ca_count = i;
+		ec_agg_in->ea_remove_eps.ca_count = i;
 	}
 
 	rc = dss_rpc_send(rpc);

@@ -548,13 +548,7 @@ crt_finalize(void)
 		if (crt_is_service() && crt_gdata.cg_swim_inited)
 			crt_swim_fini();
 
-		rc = crt_grp_fini();
-		if (rc != 0) {
-			D_ERROR("crt_grp_fini failed, rc: %d.\n", rc);
-			crt_gdata.cg_refcount++;
-			D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
-			D_GOTO(out, rc);
-		}
+		crt_grp_fini();
 
 		rc = crt_hg_fini();
 		if (rc != 0) {
