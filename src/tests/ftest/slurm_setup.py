@@ -74,10 +74,11 @@ def update_config_cmdlist(args):
     command = r"lscpu | grep -E '(Socket|Core|Thread)\(s\)'"
     task = run_task(all_nodes, command)
     for output, nodes in task.iter_buffers():
+        output_str = "\n".join([line.decode("utf-8") for line in output])
         info = {
             data[0]: data[1]
             for data in re.findall(
-                r"(Socket|Core|Thread).*:\s+(\d+)", str(output))
+                r"(Socket|Core|Thread).*:\s+(\d+)", str(output_str))
             if len(data) > 1}
 
         if "Socket" not in info or "Core" not in info or "Thread" not in info:

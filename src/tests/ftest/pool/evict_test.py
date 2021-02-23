@@ -30,8 +30,9 @@ class EvictTests(TestWithServers):
         Args:
             hostlist (list): list of daos server nodes
             targets (list): List of targets for pool create
+
         Returns:
-            TestPool (object)
+            TestPool: a TestPool objectfor the created pool
 
         """
         pool = TestPool(self.context, self.get_dmg_command())
@@ -54,14 +55,14 @@ class EvictTests(TestWithServers):
         return pool
 
     def pool_handle_exist(self, test_param):
-        """
-        Check if pool handle still exists
+        """Check if pool handle still exists.
 
         Args:
             test_param (str): either invalid UUID or bad server name
 
         Returns:
             True or False, depending if the handle exists or not
+
         """
         status = True
         if int(self.pool.pool.handle.value) == 0:

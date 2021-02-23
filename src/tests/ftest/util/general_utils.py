@@ -25,27 +25,25 @@ class DaosTestError(Exception):
     """DAOS API exception class."""
 
 
-class SimpleProfiler(object):
+class SimpleProfiler():
     """
     Simple profiler that counts the number of times a function is called
     and measure its execution time.
     """
 
     def __init__(self):
+        """Initialize a SimpleProfiler object."""
         self._stats = {}
         self._logger = None
 
     def clean(self):
-        """
-        Clean the metrics collect so far.
-        """
+        """Clean the metrics collect so far."""
         self._stats = {}
 
     def run(self, fn, tag, *args, **kwargs):
-        """
-        Run a function and update its stats.
+        """Run a function and update its stats.
 
-        Parameters:
+        Args:
             fn (function): Function to be executed
             args  (tuple): Argument list
             kwargs (dict): Keyworded, variable-length argument list
@@ -71,15 +69,15 @@ class SimpleProfiler(object):
         return ret
 
     def get_stat(self, tag):
-        """
-        Retrieves the stats of a function.
+        """Retrieves the stats of a function.
 
-        Parameters:
+        Args:
             tag (str): Tag to be query
 
-        Return:
+        Returns:
             max, min, avg (tuple): A tuple with the slowest, fastest and
             average execution times.
+
         """
         data = self._stats.get(tag, [0, []])
 
@@ -93,13 +91,15 @@ class SimpleProfiler(object):
 
         Parameters:
             fn (function): Function to be used for logging.
+
         """
         self._logger = fn
 
     def print_stats(self):
-        """
-        Prints all the stats collected so far. If the logger has not been set,
-        the stats will be printed by using the built-in print function.
+        """Prints all the stats collected so far.
+
+        If the logger has not been set, the stats will be printed by using the
+        built-in print function.
         """
         self._pmsg("{0:20} {1:5} {2:10} {3:10} {4:10}".format(
             "Function Tag", "Hits", "Max", "Min", "Average"))
@@ -115,14 +115,14 @@ class SimpleProfiler(object):
                     self._pretty_time(avg_time)))
 
     def _log(self, msg):
-        """If logger function is set, print log messages"""
+        """If logger function is set, print log messages."""
         if self._logger:
             self._logger(msg)
 
     def _pmsg(self, msg):
-        """
-        Print messages using the logger. If it has not been set, print
-        messages using python print() function.
+        """Print messages using the logger.
+
+        If it has not been set, print messages using python print() function.
         """
         if self._logger:
             self._log(msg)
@@ -131,14 +131,12 @@ class SimpleProfiler(object):
 
     @classmethod
     def _pretty_time(cls, ftime):
-        """Convert to pretty time string"""
+        """Convert to pretty time string."""
         return time.strftime("%H:%M:%S", time.gmtime(ftime))
 
     @classmethod
     def _calculate_metrics(cls, data):
-        """
-        Calculate the maximum, minimum and average values of a given list.
-        """
+        """Calculate the maximum, minimum and average values of a given list."""
         max_time = max(data)
         min_time = min(data)
 
@@ -324,6 +322,112 @@ def run_task(hosts, command, timeout=None):
     return task
 
 
+def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
+    """Run a command on each host in parallel and get the results.
+
+    Args:
+        hosts (list): list of hosts
+        command (str): the command to run in parallel
+        verbose (bool, optional): display command output. Defaults to True.
+        timeout (int, optional): command timeout in seconds. Defaults to None.
+        expect_rc (int, optional): display output if the command return code
+            does not match this value. Defaults to 0. A value of None will
+            bypass this feature.
+
+    Returns:
+        list: a list of dictionaries with each entry containing output, exit
+            status, and interrupted status common to each group of hosts, e.g.:
+                [
+                    {
+                        "command": "ls my_dir",
+                        "hosts": NodeSet(wolf-[1-3]),
+                        "exit_status": 0,
+                        "interrupted": False,
+                        "stdout": ["file1.txt", "file2.json"],
+                    },
+                    {
+                        "command": "ls my_dir",
+                        "hosts": NodeSet(wolf-[4]),
+                        "exit_status": 1,
+                        "interrupted": False,
+                        "stdout": ["No such file or directory"],
+                    },
+                    {
+                        "command": "ls my_dir",
+                        "hosts": NodeSet(wolf-[5-6]),
+                        "exit_status": 255,
+                        "interrupted": True,
+                        "stdout": ""
+                    },
+                ]
+
+    """
+    results = []
+
+    # Run the command on each host in parallel
+    task = run_task(hosts, command, timeout)
+
+    # Get the exit status of each host
+    host_exit_status = {
+        host: exit_status for exit_status, host_list in task.iter_retcodes()
+        for host in host_list}
+
+    # Get a list of any interrupted hosts
+    host_interrupted = []
+    if timeout and task.num_timeout() > 0:
+        host_interrupted.extend(list(task.iter_keys_timeout()))
+
+    # Iterate through all the groups of common output
+    output_data = list(task.iter_buffers())
+    if not output_data:
+        output_data = [["", hosts]]
+    for output, host_list in output_data:
+        # Deterimine the unique exit status for each host with the same output
+        output_exit_status = {}
+        for host in host_list:
+            if host_exit_status[host] not in output_exit_status:
+                output_exit_status[host_exit_status[host]] = NodeSet()
+            output_exit_status[host_exit_status[host]].add(host)
+
+        # Determine the unique interrupted state for each host with the same
+        # output and exit status
+        for exit_status in output_exit_status:
+            output_interrupted = {}
+            for host in list(output_exit_status[exit_status]):
+                is_interrupted = host in host_interrupted
+                if is_interrupted not in output_interrupted:
+                    output_interrupted[is_interrupted] = NodeSet()
+                output_interrupted[is_interrupted].add(host)
+
+            # Add a result entry for each group of hosts with the same output,
+            # exit status, and interrupted status
+            for interrupted in output_interrupted:
+                results.append({
+                    "command": command,
+                    "hosts": output_interrupted[interrupted],
+                    "exit_status": exit_status,
+                    "interrupted": interrupted,
+                    "stdout": [line.decode("utf-8") for line in output],
+                })
+
+    # Display results if requested or there is an unexpected exit status
+    bad_exit_status = [
+        item["exit_status"]
+        for item in results
+        if expect_rc is not None and item["exit_status"] != expect_rc]
+    if verbose or bad_exit_status:
+        print("Command: {}\nResults:".format(command))
+        for result in results:
+            print(
+                "  {}: exit_status={}, interrupted={}:".format(
+                    result["hosts"], result["exit_status"],
+                    result["interrupted"]))
+            for line in result["stdout"]:
+                print("    {}".format(line))
+
+    return results
+
+
 def get_host_data(hosts, command, text, error, timeout=None):
     """Get the data requested for each host using the specified command.
 
@@ -337,46 +441,29 @@ def get_host_data(hosts, command, text, error, timeout=None):
         dict: a dictionary of data values for each NodeSet key
 
     """
-    # Find the data for each specified servers
-    print("  Obtaining {} data on {}".format(text, hosts))
-    task = run_task(hosts, command, timeout)
     host_data = {}
     DATA_ERROR = "[ERROR]"
 
-    # Create a list of NodeSets with the same return code
-    data = {code: host_list for code, host_list in task.iter_retcodes()}
-
-    # Multiple return codes or a single non-zero return code
-    # indicate at least one error obtaining the data
-    if len(data) > 1 or 0 not in data:
-        # Report the errors
-        messages = []
-        for code, host_list in list(data.items()):
-            if code != 0:
-                output_data = list(task.iter_buffers(host_list))
-                if not output_data:
-                    messages.append(
-                        "{}: rc={}, command=\"{}\"".format(
-                            NodeSet.fromlist(host_list), code, command))
-                else:
-                    for output, o_hosts in output_data:
-                        lines = str(output).splitlines()
-                        info = "rc={}{}".format(
-                            code,
-                            ", {}".format(output) if len(lines) < 2 else
-                            "\n  {}".format("\n  ".join(lines)))
-                        messages.append(
-                            "{}: {}".format(
-                                NodeSet.fromlist(o_hosts), info))
-        print("    {} on the following hosts:\n      {}".format(
-            error, "\n      ".join(messages)))
-
-        # Return an error data set for all of the hosts
+    # Find the data for each specified servers
+    print("  Obtaining {} data on {}".format(text, hosts))
+    results = run_pcmd(hosts, command, False, timeout, None)
+    errors = [
+        item["exit_status"]
+        for item in results if item["exit_status"] != 0]
+    if errors:
+        print("    {} on the following hosts:".format(error))
+        for result in results:
+            if result["exit_status"] in errors:
+                print(
+                    "      {}: rc={}, interrupted={}, command=\"{}\":".format(
+                        result["hosts"], result["exit_status"],
+                        result["interrupted"], result["command"]))
+                for line in result["stdout"]:
+                    print("        {}".format(line))
         host_data = {NodeSet.fromlist(hosts): DATA_ERROR}
-
     else:
-        for output, host_list in task.iter_buffers(data[0]):
-            host_data[NodeSet.fromlist(host_list)] = str(output)
+        for result in results:
+            host_data[result["hosts"]] = "\n".join(result["stdout"])
 
     return host_data
 
@@ -397,53 +484,13 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
 
     """
     # Run the command on each host in parallel
-    task = run_task(hosts, command, timeout)
-
-    # Report any errors
-    retcode_dict = {}
-    errors = False
-    for retcode, rc_nodes in task.iter_retcodes():
-        # Create a NodeSet for this list of nodes
-        nodeset = NodeSet.fromlist(rc_nodes)
-
-        # Include this NodeSet for this return code
-        if retcode not in retcode_dict:
-            retcode_dict[retcode] = NodeSet()
-        retcode_dict[retcode].add(nodeset)
-
-        # Keep track of any errors
-        if expect_rc is not None and expect_rc != retcode:
-            errors = True
-
-    # Report command output if requested or errors are detected
-    if verbose or errors:
-        print("Command:\n  {}".format(command))
-        print("Command return codes:")
-        for retcode in sorted(retcode_dict):
-            print("  {}: rc={}".format(retcode_dict[retcode], retcode))
-
-        print("Command output:")
-        for output, bf_nodes in task.iter_buffers():
-            # Create a NodeSet for this list of nodes
-            nodeset = NodeSet.fromlist(bf_nodes)
-
-            # Display the output per node set
-            print("  {}:\n    {}".format(
-                nodeset, "\n    ".join(str(output).splitlines())))
-
-    # Report any timeouts
-    if timeout and task.num_timeout() > 0:
-        nodes = task.iter_keys_timeout()
-        print(
-            "{}: timeout detected running '{}' on {}/{} hosts after {}s".format(
-                NodeSet.fromlist(nodes),
-                command, task.num_timeout(), len(hosts), timeout))
-        retcode = 255
-        if retcode not in retcode_dict:
-            retcode_dict[retcode] = NodeSet()
-        retcode_dict[retcode].add(NodeSet.fromlist(nodes))
-
-    return retcode_dict
+    results = run_pcmd(hosts, command, verbose, timeout, expect_rc)
+    exit_status = {}
+    for result in results:
+        if result["exit_status"] not in exit_status:
+            exit_status[result["exit_status"]] = NodeSet()
+        exit_status[result["exit_status"]].add(result["hosts"])
+    return exit_status
 
 
 def check_file_exists(hosts, filename, user=None, directory=False):
@@ -791,20 +838,17 @@ def error_count(error, hostlist, log_file):
 
     """
     # Get the Client side Error from client_log file.
-    output = []
     requested_error_count = 0
     other_error_count = 0
-    cmd = 'cat {} | grep ERR'.format(get_log_file(log_file))
-    task = run_task(hostlist, cmd)
-    for buf, _nodes in task.iter_buffers():
-        output = str(buf).split('\n')
-
-    for line in output:
-        if 'ERR' in line:
-            if error in line:
-                requested_error_count += 1
-            else:
-                other_error_count += 1
+    command = 'cat {} | grep ERR'.format(get_log_file(log_file))
+    results = run_pcmd(hostlist, command, False, None, None)
+    for result in results:
+        for line in result["stdout"]:
+            if 'ERR' in line:
+                if error in line:
+                    requested_error_count += 1
+                else:
+                    other_error_count += 1
 
     return requested_error_count, other_error_count
 

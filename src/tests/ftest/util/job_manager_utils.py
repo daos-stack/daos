@@ -16,7 +16,7 @@ from command_utils import ExecutableCommand, SystemctlCommand
 from command_utils_base import FormattedParameter, EnvironmentVariables
 from command_utils_base import CommandFailure
 from env_modules import load_mpi
-from general_utils import pcmd, run_task
+from general_utils import pcmd, run_pcmd
 from write_host_file import write_host_file
 
 
@@ -753,17 +753,18 @@ class Systemctl(JobManager):
         states = {}
         valid_states = ["active", "activating"]
         self._systemctl.unit_command.value = "is-active"
-        task = run_task(self._hosts, self.__str__(), self.timeout)
-        for output, nodelist in task.iter_buffers():
-            output = str(output)
-            nodeset = NodeSet.fromlist(nodelist)
-            status &= output in valid_states
-            if output not in states:
-                states[output] = NodeSet()
-            states[output].add(nodeset)
-        if self.timeout and task.num_timeout() > 0:
-            nodeset = NodeSet.fromlist(task.iter_keys_timeout())
-            states["timeout"] = nodeset
+        results = run_pcmd(
+            self._hosts, self.__str__(), False, self.timeout, None)
+        for result in results:
+            if result["interrupted"]:
+                states["timeout"] = result["hosts"]
+                status = False
+            else:
+                output = result["stdout"][-1]
+                if output not in states:
+                    states[output] = NodeSet()
+                states[output].add(result["hosts"])
+                status &= output in valid_states
         data = ["=".join([key, str(states[key])]) for key in sorted(states)]
         self.log.info(
             "  Detected %s states: %s",
@@ -812,52 +813,42 @@ class Systemctl(JobManager):
             "Gathering log data on %s: %s", str(hosts), " ".join(command))
 
         # Gather the log information per host
-        task = run_task(hosts, " ".join(command), timeout)
+        results = run_pcmd(hosts, " ".join(command), False, timeout, None)
 
-        # Create a dictionary of hosts for each unique return code
-        results = {code: hosts for code, hosts in task.iter_retcodes()}
-
-        # Determine if the command completed successfully across all the hosts
-        status = len(results) == 1 and 0 in results
-
-        # Determine if any commands timed out
-        timed_out = [str(hosts) for hosts in task.iter_keys_timeout()]
-        if timed_out:
-            status = False
-        if not status:
-            self.log.info("  Errors detected running \"%s\":", command)
-
-        # List any hosts that timed out
-        if timed_out:
-            self.log.info(
-                "    %s: timeout detected after %s seconds",
-                str(NodeSet.fromlist(timed_out)), timeout)
+        # Determine if the command completed successfully without a timeout
+        status = True
+        for result in results:
+            if result["interrupted"]:
+                self.log.info("  Errors detected running \"%s\":", command)
+                self.log.info(
+                    "    %s: timeout detected after %s seconds",
+                    str(result["hosts"]), timeout)
+                status = False
+            elif result["exit_status"] != 0:
+                self.log.info("  Errors detected running \"%s\":", command)
+                status = False
+            if not status:
+                break
 
         # Display/return the command output
         log_data = {}
-        for code in sorted(results):
-            # Get the command output from the hosts with this return code
-            output_data = list(task.iter_buffers(results[code]))
-            if not output_data:
-                output_data = [["<NONE>", results[code]]]
-
-            for output_buffer, output_hosts in output_data:
-                node_set = NodeSet.fromlist(output_hosts)
-                lines = str(output_buffer).splitlines()
-
-                if status:
-                    # Add the successful output from each node to the dictionary
-                    log_data[node_set] = lines
+        for result in results:
+            if result["exit_status"] == 0 and not result["interrupted"]:
+                # Add the successful output from each node to the dictionary
+                log_data[result["hosts"]] = lines
+            else:
+                # Display all of the results in the case of an error
+                if len(result["stdout"]) > 1:
+                    self.log.info(
+                        "    %s: rc=%s, output:",
+                        str(result["hosts"]), result["exit_status"])
+                    for line in result["stdout"]:
+                        self.log.info("      %s", line)
                 else:
-                    # Display all of the results in the case of an error
-                    if len(lines) > 1:
-                        self.log.info("    %s: rc=%s, output:", node_set, code)
-                        for line in lines:
-                            self.log.info("      %s", line)
-                    else:
-                        self.log.info(
-                            "    %s: rc=%s, output: %s",
-                            node_set, code, output_buffer)
+                    self.log.info(
+                        "    %s: rc=%s, output: %s",
+                        str(result["hosts"]), result["exit_status"],
+                        result["stdout"][0])
 
         # Report any errors through an exception
         if not status:

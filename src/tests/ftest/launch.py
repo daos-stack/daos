@@ -15,6 +15,7 @@ import re
 import socket
 import subprocess
 import site
+from tempfile import TemporaryDirectory
 import time
 import yaml
 import errno
@@ -23,30 +24,6 @@ from xml.dom import minidom
 
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
-
-try:
-    # For python versions >= 3.2
-    from tempfile import TemporaryDirectory
-
-except ImportError:
-    # Basic implementation of TemporaryDirectory for python versions < 3.2
-    from tempfile import mkdtemp
-    from shutil import rmtree
-
-    class TemporaryDirectory(object):
-        # pylint: disable=too-few-public-methods
-        """Create a temporary directory.
-        When the last reference of this object goes out of scope the directory
-        and its contents are removed.
-        """
-
-        def __init__(self):
-            """Initialize a TemporaryDirectory object."""
-            self.name = mkdtemp()
-
-        def __del__(self):
-            """Destroy a TemporaryDirectory object."""
-            rmtree(self.name)
 
 DEFAULT_DAOS_TEST_LOG_DIR = "/var/tmp/daos_testing"
 YAML_KEYS = {
@@ -160,17 +137,17 @@ def set_test_environment(args):
                 if device == "bonding_masters":
                     continue
                 # Get the interface state - only include active (up) interfaces
-                with open(os.path.join(net_path, device, "operstate"), "r") as \
-                     fileh:
-                    state = fileh.read().strip()
+                device_operstate = os.path.join(net_path, device, "operstate")
+                with open(device_operstate, "r") as file_handle:
+                    state = file_handle.read().strip()
                 # Only include interfaces that are up
                 if state.lower() == "up":
                     # Get the interface speed - used to select the fastest
                     # available
-                    with open(os.path.join(net_path, device, "speed"), "r") as \
-                         fileh:
+                    device_speed = os.path.join(net_path, device, "speed")
+                    with open(device_speed, "r") as file_handle:
                         try:
-                            speed = int(fileh.read().strip())
+                            speed = int(file_handle.read().strip())
                             # KVM/Qemu/libvirt returns an EINVAL
                         except IOError as ioerror:
                             if ioerror.errno == errno.EINVAL:
@@ -1277,7 +1254,8 @@ def check_big_files(avocado_logs_dir, task, test_name, args):
     for output, nodelist in task.iter_buffers():
         node_set = NodeSet.fromlist(nodelist)
         hosts.update(node_set)
-        big_files = re.findall(r"Y:\s([0-9]+)", str(output))
+        output_str = "\n".join([line.decode("utf-8") for line in output])
+        big_files = re.findall(r"Y:\s([0-9]+)", output_str)
         if big_files:
             cdata.append(
                 "The following log files on {} exceeded the {} "
@@ -1696,13 +1674,13 @@ def get_daos_server_service_status(host_list):
     command = "systemctl is-active daos_server.service"
     task = get_remote_output(host_list, command)
     for output, nodelist in task.iter_buffers():
-        output = str(output)
+        output_str = "\n".join([line.decode("utf-8") for line in output])
         nodeset = NodeSet.fromlist(nodelist)
-        if output in states_requiring_stop:
+        if output_str in states_requiring_stop:
             hosts["stop"].add(nodeset)
-        if output in states_requiring_disable:
+        if output_str in states_requiring_disable:
             hosts["disable"].add(nodeset)
-        print("  {}: {}".format(nodeset, output))
+        print("  {}: {}".format(nodeset, output_str))
     if task.num_timeout() > 0:
         status = 512
         hosts["stop"].add(nodeset)
