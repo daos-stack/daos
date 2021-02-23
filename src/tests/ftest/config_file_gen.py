@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/python3
 """
   (C) Copyright 2020-2021 Intel Corporation.
 
