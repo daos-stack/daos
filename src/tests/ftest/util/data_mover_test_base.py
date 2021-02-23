@@ -543,7 +543,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                       src_pool=None, src_cont=None,
                       dst_type=None, dst_path=None,
                       dst_pool=None, dst_cont=None,
-                      expected_rc=0, expected_output=None,
+                      expected_rc=0, expected_output=None, expected_err=None,
                       processes=None):
         """Run the corresponding command specified by self.tool.
         Calls set_datamover_params if and only if any are passed in.
@@ -558,7 +558,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             dst_path: see set_datamover_params
             dst_cont: see set_datamover_params
             expected_rc (int, optional): rc expected to be returned
-            expected_output (list, optional): substrings expected to be output
+            expected_output (list, optional): substrings expected in stdout
+            expected_err (list, optional): substrings expected in stderr
             processes (int, optional): number of mpi processes.
                 defaults to self.dcp_processes
 
@@ -578,13 +579,17 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 src_type, src_path, src_pool, src_cont,
                 dst_type, dst_path, dst_pool, dst_cont)
 
-        # Default expected_output to empty list
+        # Default expected_output and expected_err to empty lists
         if not expected_output:
             expected_output = []
+        if not expected_err:
+            expected_err = []
 
         # Convert singular value to list
         if not isinstance(expected_output, list):
             expected_output = [expected_output]
+        if not isinstance(expected_err, list):
+            expected_err = [expected_err]
 
         if test_desc is not None:
             self.log.info("Running %s: %s", self.tool, test_desc)
@@ -612,6 +617,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # Check for expected output
         for s in expected_output:
             if s not in result.stdout:
-                self.fail("Expected {}: {}".format(s, test_desc))
+                self.fail("stdout expected {}: {}".format(s, test_desc))
+        for s in expected_err:
+            if s not in result.stderr:
+                self.fail("stderr xpected {}: {}".format(s, test_desc))
 
         return result
