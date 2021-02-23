@@ -194,7 +194,7 @@ public class DaosEventQueue {
    * @return event
    * @throws IOException
    */
-  public Event acquireEventBlocking(int maxWaitMs, List<Attachment> completedList)
+  public Event acquireEventBlocking(long maxWaitMs, List<Attachment> completedList)
       throws IOException {
     Event e = acquireEvent();
     if (e != null) { // for most of cases
@@ -249,7 +249,7 @@ public class DaosEventQueue {
    * null means you want to ignore them.
    * @throws IOException
    */
-  public void waitForCompletion(int maxWaitMs, List<Attachment> completedList)
+  public void waitForCompletion(long maxWaitMs, List<Attachment> completedList)
       throws IOException {
     long start = System.currentTimeMillis();
     int timeout = 0;
@@ -271,7 +271,7 @@ public class DaosEventQueue {
 
   /**
    * It's just for accessing event without acquiring it for DAOS API calls.
-   * Use {@link #acquireEvent()} or {@link #acquireEventBlocking(int, List)} instead for DAOS API calls.
+   * Use {@link #acquireEvent()} or {@link #acquireEventBlocking(long, List)} instead for DAOS API calls.
    *
    * @param idx
    * @return
@@ -294,7 +294,7 @@ public class DaosEventQueue {
    * @return number of events completed
    * @throws IOException
    */
-  public int pollCompleted(List<Attachment> completedList, int timeOutMs) throws IOException {
+  public int pollCompleted(List<Attachment> completedList, long timeOutMs) throws IOException {
     return pollCompleted(completedList, nbrOfEvents, timeOutMs);
   }
 
@@ -310,7 +310,7 @@ public class DaosEventQueue {
    * @return number of events completed
    * @throws IOException
    */
-  public int pollCompleted(List<Attachment> completedList, int expNbrOfRet, int timeOutMs) throws IOException {
+  public int pollCompleted(List<Attachment> completedList, int expNbrOfRet, long timeOutMs) throws IOException {
     DaosClient.pollCompleted(eqWrapperHdl, completed.memoryAddress(),
         expNbrOfRet, timeOutMs < 0 ? DEFAULT_POLL_TIMEOUT_MS : timeOutMs);
     completed.readerIndex(0);
