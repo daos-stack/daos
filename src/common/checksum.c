@@ -90,6 +90,7 @@ daos_csummer_init_with_props(struct daos_csummer **obj, daos_prop_t *props)
 					   daos_cont_prop2chunksize(props),
 					   daos_cont_prop2serververify(props));
 }
+
 /*
  * If checksums are enabled, then csums_iov should have at least 1
  * checksum info structure, use the first checksum info  (all will have

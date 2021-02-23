@@ -653,7 +653,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 		rc = mrone_obj_fetch(mrone, oh, sgls, &csum_iov_fetch);
 
 		if (rc) {
-			D_ERROR("mrone_obj_fetch %d\n", rc);
+			D_ERROR("mrone_obj_fetch "DF_RC"\n", DP_RC(rc));
 			return rc;
 		}
 
@@ -681,7 +681,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 
 	rc = daos_csummer_csum_init_with_packed(&csummer, csums_iov);
 	if (rc != 0)
-		return rc;
+		D_GOTO(out, rc);
 
 	for (i = 0, start = 0; i < mrone->mo_iod_num; i++) {
 		if (mrone->mo_iods[i].iod_size > 0) {

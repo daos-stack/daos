@@ -167,10 +167,10 @@ csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 	 * starting at the correct offset of the checksum array for the input
 	 * segment.
 	 */
-	match = !memcmp(new_csum->cs_csum,
+	match = memcmp(new_csum->cs_csum,
 			&recalc->cr_phy_csum->cs_csum[j *
 						      new_csum->cs_len],
-			new_csum->cs_nr * new_csum->cs_len);
+			new_csum->cs_nr * new_csum->cs_len) == 0;
 	if (!match) {
 		D_ERROR("calc ("DF_CI") != phy ("DF_CI")\n",
 			DP_CI(*new_csum), DP_CI(*recalc->cr_phy_csum));
