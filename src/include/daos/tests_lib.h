@@ -180,7 +180,7 @@ static inline bool
 tsc_create_cont(struct dts_context *tsc)
 {
 	/* Can't skip container if pool isn't also skipped */
-	return tsc_create_pool(tsc) && !tsc->tsc_skip_cont_create;
+	return tsc_create_pool(tsc) || !tsc->tsc_skip_cont_create;
 }
 
 /* match BIO_XS_CNT_MAX, which is the max VOS xstreams mapped to a device */
