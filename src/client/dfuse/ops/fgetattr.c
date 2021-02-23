@@ -13,10 +13,17 @@ dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *ie)
 	struct stat	stat = {};
 	int		rc;
 
-	rc = dfs_ostat(ie->ie_dfs->dfs_ns, ie->ie_obj, &stat);
-	if (rc != 0)
-		D_GOTO(err, rc);
-
+	if (S_ISDIR(ie->ie_stat.st_mode) || !ie->ie_parent_ie) {
+		rc = dfs_ostat(ie->ie_dfs->dfs_ns, ie->ie_obj, &stat);
+		if (rc != 0)
+			D_GOTO(err, rc);
+	} else {
+		rc = dfs_statx(ie->ie_dfs->dfs_ns, ie->ie_parent_ie->ie_obj,
+			       ie->ie_name, &stat, &ie->ie_oid,
+			       0, NULL, NULL, NULL);
+		if (rc != 0)
+			D_GOTO(err, rc);
+	}
 	/* Copy the inode number from the inode struct, to avoid having to
 	 * recompute it each time.
 	 */

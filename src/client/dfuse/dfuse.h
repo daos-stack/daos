@@ -493,6 +493,7 @@ struct dfuse_inode_entry {
 	 * a reference on the parent so the inode may not be valid.
 	 */
 	fuse_ino_t		ie_parent;
+	struct dfuse_inode_entry *ie_parent_ie;
 
 	struct dfuse_dfs	*ie_dfs;
 
