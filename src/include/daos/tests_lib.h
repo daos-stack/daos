@@ -31,8 +31,10 @@
 	do {								\
 		if ((rc) == (expected_rc))				\
 			break;						\
-		print_message("assert_rc_equal: %d != %d\n",		\
-			      rc, expected_rc);				\
+		print_message("Failure assert_rc_equal %s:%d "		\
+			      "%s(%d) != %s(%d)\n", __FILE__, __LINE__, \
+			      d_errstr(rc), rc,				\
+			      d_errstr(expected_rc), expected_rc);	\
 		assert_string_equal(d_errstr(rc), d_errstr(expected_rc)); \
 		assert_int_equal(rc, expected_rc);			\
 	} while (0)
