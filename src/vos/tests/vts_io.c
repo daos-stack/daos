@@ -802,11 +802,16 @@ io_oi_test(void **state)
 	cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
 	assert_ptr_not_equal(cont, NULL);
 
+	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
+	assert_rc_equal(rc, 0);
+
 	rc = vos_oi_find_alloc(cont, oid, 1, true, &obj[0], NULL);
 	assert_rc_equal(rc, 0);
 
 	rc = vos_oi_find_alloc(cont, oid, 2, true, &obj[1], NULL);
 	assert_rc_equal(rc, 0);
+
+	rc = umem_tx_end(vos_cont2umm(cont), 0);
 }
 
 static void
@@ -816,6 +821,8 @@ io_obj_cache_test(void **state)
 	struct vos_test_ctx	*ctx = &arg->ctx;
 	struct daos_lru_cache	*occ = NULL;
 	struct vos_object	*objs[20];
+	struct umem_instance	*ummg;
+	struct umem_instance	*umml;
 	daos_epoch_range_t	 epr = {0, 1};
 	daos_unit_oid_t		 oids[2];
 	char			*po_name;
@@ -845,17 +852,32 @@ io_obj_cache_test(void **state)
 	oids[0] = gen_oid(arg->ofeat);
 	oids[1] = gen_oid(arg->ofeat);
 
+	ummg = vos_cont2umm(vos_hdl2cont(ctx->tc_co_hdl));
+	umml = vos_cont2umm(vos_hdl2cont(l_coh));
+	rc = umem_tx_begin(ummg, NULL);
+	assert_rc_equal(rc, 0);
+
 	rc = vos_obj_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0], &epr, 0,
 			  VOS_OBJ_CREATE | VOS_OBJ_VISIBLE, DAOS_INTENT_DEFAULT,
 			  &objs[0], 0);
 	assert_rc_equal(rc, 0);
+
+	rc = umem_tx_end(ummg, 0);
+	assert_rc_equal(rc, 0);
+
 	vos_obj_release(occ, objs[0], false);
+
+	rc = umem_tx_begin(umml, NULL);
+	assert_rc_equal(rc, 0);
 
 	rc = vos_obj_hold(occ, vos_hdl2cont(l_coh), oids[1], &epr, 0,
 			  VOS_OBJ_CREATE | VOS_OBJ_VISIBLE, DAOS_INTENT_DEFAULT,
 			  &objs[0], 0);
 	assert_rc_equal(rc, 0);
 	vos_obj_release(occ, objs[0], false);
+
+	rc = umem_tx_end(umml, 0);
+	assert_rc_equal(rc, 0);
 
 	rc = hold_objects(objs, occ, &ctx->tc_co_hdl, &oids[0], 0, 10, true, 0);
 	assert_int_equal(rc, 0);
