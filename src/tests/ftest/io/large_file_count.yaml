@@ -29,7 +29,7 @@ pool:
     scm_size: 40000000000
     nvme_size: 400000000000 # large nvme_size for mdtest 1M file creation
   createsvc:
-    svcn: 1
+    svcn: 3
   control_method: dmg
 container:
   type: POSIX
