@@ -22,6 +22,8 @@ dist: $(SOURCES)
 
 include packaging/Makefile_packaging.mk
 
+JOB_REPO        := "https://repo.dc.hpdd.intel.com/repository/bullseye-el-7-x86_64/"
+
 PACKAGING_CHECK_DIR ?= ../../../rpm/packaging
 
 $(NAME)-$(VERSION).tar.gz: $(shell git ls-files :/:)
