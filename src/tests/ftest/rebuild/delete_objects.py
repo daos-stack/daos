@@ -23,7 +23,11 @@ class RebuildDeleteObjects(RebuildTestBase):
             "DAOS-6751",
             "test_method_name", "test_rebuild_delete_records",
             "record_qty", 1
-        ]
+        ],
+        [
+            "DAOS-6865",
+            "rank", 4
+        ],
     ]
 
     def __init__(self, *args, **kwargs):
