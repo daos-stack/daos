@@ -98,7 +98,7 @@ struct oid_iv_range {
 
 /* Container IV structure */
 struct cont_iv_snapshot {
-	int snap_cnt;
+	uint64_t snap_cnt;
 	uint64_t snaps[0];
 };
 
@@ -153,6 +153,7 @@ struct cont_iv_key {
 	uuid_t		cont_uuid;
 	/* IV class id, to differentiate SNAP/CAPA/PROP IV */
 	uint32_t	class_id;
+	uint32_t	entry_size;
 };
 
 /*

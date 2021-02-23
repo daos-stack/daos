@@ -28,10 +28,10 @@ type StorageControlService struct {
 }
 
 // NewStorageControlService returns an initialized *StorageControlService
-func NewStorageControlService(log logging.Logger, bdev *bdev.Provider, scm *scm.Provider, srvCfgs []*engine.Config) *StorageControlService {
+func NewStorageControlService(log logging.Logger, bdev *bdev.Provider, scm *scm.Provider, engineCfgs []*engine.Config) *StorageControlService {
 	instanceStorage := []*engine.StorageConfig{}
-	for _, srvCfg := range srvCfgs {
-		instanceStorage = append(instanceStorage, &srvCfg.Storage)
+	for _, cfg := range engineCfgs {
+		instanceStorage = append(instanceStorage, &cfg.Storage)
 	}
 
 	return &StorageControlService{

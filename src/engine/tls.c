@@ -56,7 +56,8 @@ dss_unregister_key(struct dss_module_key *key)
  * \retval		negative errno if initialization fails
  */
 static int
-dss_thread_local_storage_init(struct dss_thread_local_storage *dtls)
+dss_thread_local_storage_init(struct dss_thread_local_storage *dtls,
+			      int xs_id, int tgt_id)
 {
 	int rc = 0;
 	int i;
@@ -73,7 +74,7 @@ dss_thread_local_storage_init(struct dss_thread_local_storage *dtls)
 
 		if (dmk != NULL && dtls->dtls_tag & dmk->dmk_tags) {
 			D_ASSERT(dmk->dmk_init != NULL);
-			dtls->dtls_values[i] = dmk->dmk_init(dtls, dmk);
+			dtls->dtls_values[i] = dmk->dmk_init(xs_id, tgt_id);
 			if (dtls->dtls_values[i] == NULL) {
 				rc = -DER_NOMEM;
 				break;
@@ -101,7 +102,7 @@ dss_thread_local_storage_fini(struct dss_thread_local_storage *dtls)
 			if (dmk != NULL && dtls->dtls_tag & dmk->dmk_tags) {
 				D_ASSERT(dtls->dtls_values[i] != NULL);
 				D_ASSERT(dmk->dmk_fini != NULL);
-				dmk->dmk_fini(dtls, dmk, dtls->dtls_values[i]);
+				dmk->dmk_fini(dtls->dtls_values[i]);
 			}
 		}
 	}
@@ -117,7 +118,7 @@ pthread_key_t dss_tls_key;
  * fetched at any time with dss_tls_get().
  */
 struct dss_thread_local_storage *
-dss_tls_init(int tag)
+dss_tls_init(int tag, int xs_id, int tgt_id)
 {
 	struct dss_thread_local_storage *dtls;
 	int		 rc;
@@ -127,7 +128,7 @@ dss_tls_init(int tag)
 		return NULL;
 
 	dtls->dtls_tag = tag;
-	rc = dss_thread_local_storage_init(dtls);
+	rc = dss_thread_local_storage_init(dtls, xs_id, tgt_id);
 	if (rc != 0) {
 		D_FREE(dtls);
 		return NULL;

@@ -66,7 +66,9 @@ Environment variables in this section only apply to the client side.
 
 |Variable    |Description|
 |------------|-----------|
-|D\_LOG\_FILE|DAOS debug logs (both server and client) are written to `/tmp/daos.log` by default. The debug location can be modified by setting this environment variable ("D\_LOG\_FILE=/tmp/daos_debug.log").|
+|D\_LOG\_FILE|DAOS debug logs (both server and client) are written to stdout by default. The debug location can be modified by setting this environment variable ("D\_LOG\_FILE=/tmp/daos_debug.log").|
+|D\_LOG\_FILE\_APPEND\_PID|If set and not 0, causes the main PID to be appended at the end of D\_LOG\_FILE path name (both server and client).|
+|D\_LOG\_STDERR\_IN\_LOG|If set and not 0, causes stderr messages to be merged in D\_LOG\_FILE.|
 |D\_LOG\_SIZE|DAOS debug logs (both server and client) have a 1GB file size limit by default. When this limit is reached, the current log file is closed and renamed with a .old suffix, and a new one is opened. This mechanism will repeat each time the limit is reached, meaning that available saved log records could be found in both ${D_LOG_FILE} and last generation of ${D_LOG_FILE}.old files, to a maximum of the most recent 2*D_LOG_SIZE records.  This can be modified by setting this environment variable ("D_LOG_SIZE=536870912"). Sizes can also be specified in human-readable form using `k`, `m`, `g`, `K`, `M`, and `G`. The lower-case specifiers are base-10 multipliers and the upper case specifiers are base-2 multipliers.|
 |DD\_SUBSYS  |Used to specify which subsystems to enable. DD\_SUBSYS can be set to individual subsystems for finer-grained debugging ("DD\_SUBSYS=vos"), multiple facilities ("DD\_SUBSYS=eio,mgmt,misc,mem"), or all facilities ("DD\_SUBSYS=all") which is also the default setting. If a facility is not enabled, then only ERR messages or more severe messages will print.|
 |DD\_STDERR  |Used to specify the priority level to output to stderr. Options in decreasing priority level order: FATAL, CRIT, ERR, WARN, NOTE, INFO, DEBUG. By default, all CRIT and more severe DAOS messages will log to stderr ("DD\_STDERR=CRIT"), and the default for CaRT/GURT is FATAL.|

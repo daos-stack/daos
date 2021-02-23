@@ -211,7 +211,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithDisableVMD(false). // vmd disabled by default
 		WithNrHugePages(4096).
 		WithControlLogMask(ControlLogLevelError).
-		WithControlLogFile("/tmp/daos_control.log").
+		WithControlLogFile("/tmp/daos_server.log").
 		WithHelperLogFile("/tmp/daos_admin.log").
 		WithFirmwareHelperLogFile("/tmp/daos_firmware.log").
 		WithSystemName("daos_server").
@@ -229,9 +229,9 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithEngines(
 			engine.NewConfig().
 				WithRank(0).
-				WithTargetCount(20).
-				WithHelperStreamCount(20).
-				WithServiceThreadCore(1).
+				WithTargetCount(16).
+				WithHelperStreamCount(6).
+				WithServiceThreadCore(0).
 				WithScmMountPoint("/mnt/daos/1").
 				WithScmClass("ram").
 				WithScmRamdiskSize(16).
@@ -241,12 +241,12 @@ func TestServerConfig_Constructed(t *testing.T) {
 				WithFabricInterfacePort(20000).
 				WithPinnedNumaNode(&numaNode0).
 				WithEnvVars("CRT_TIMEOUT=30").
-				WithLogFile("/tmp/daos_server1.log").
+				WithLogFile("/tmp/daos_engine.0.log").
 				WithLogMask("WARN"),
 			engine.NewConfig().
 				WithRank(1).
-				WithTargetCount(20).
-				WithHelperStreamCount(20).
+				WithTargetCount(16).
+				WithHelperStreamCount(6).
 				WithServiceThreadCore(22).
 				WithScmMountPoint("/mnt/daos/2").
 				WithScmClass("dcpm").
@@ -259,7 +259,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 				WithFabricInterfacePort(20000).
 				WithPinnedNumaNode(&numaNode1).
 				WithEnvVars("CRT_TIMEOUT=100").
-				WithLogFile("/tmp/daos_server2.log").
+				WithLogFile("/tmp/daos_engine.1.log").
 				WithLogMask("WARN"),
 		)
 	constructed.Path = testFile // just to avoid failing the cmp

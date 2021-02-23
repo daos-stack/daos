@@ -72,9 +72,9 @@ func (srv *EngineInstance) start(ctx context.Context, errChan chan<- error) erro
 	return srv.runner.Start(ctx, errChan)
 }
 
-// waitReady awaits ready signal from I/O server before starting
+// waitReady awaits ready signal from I/O Engine before starting
 // management service on MS replicas immediately so other instances can join.
-// I/O server modules are then loaded.
+// I/O Engine modules are then loaded.
 func (srv *EngineInstance) waitReady(ctx context.Context, errChan chan error) error {
 	srv.log.Debugf("instance %d: awaiting %s init", srv.Index(), build.DataPlaneName)
 
@@ -93,7 +93,7 @@ func (srv *EngineInstance) waitReady(ctx context.Context, errChan chan error) er
 }
 
 // finishStartup sets up instance once dRPC comms are ready, this includes
-// setting the instance rank, starting management service and loading IO server
+// setting the instance rank, starting management service and loading I/O Engine
 // modules.
 //
 // Instance ready state is set to indicate that all setup is complete.
@@ -123,8 +123,12 @@ func publishInstanceExitFn(publishFn func(*events.RASEvent), hostname string, sr
 		if exitErr == nil {
 			return errors.New("expected non-nil exit error")
 		}
-		publishFn(events.NewRankDownEvent(hostname, srvIdx, rank.Uint32(),
-			common.ExitStatus(exitErr.Error())))
+
+		evt := events.NewRankDownEvent(hostname, srvIdx, rank.Uint32(),
+			common.ExitStatus(exitErr.Error()))
+
+		// set forwardable if there is a rank for the MS to operate on
+		publishFn(evt.WithForwardable(!rank.Equals(system.NilRank)))
 
 		return nil
 	}
@@ -154,10 +158,10 @@ func (srv *EngineInstance) exit(ctx context.Context, exitErr error) {
 	}
 }
 
-// run performs setup of and starts process runner for IO server instance and
-// will only return (if no errors are returned during setup) on IO server
+// run performs setup of and starts process runner for I/O Engine instance and
+// will only return (if no errors are returned during setup) on I/O Engine
 // process exit (triggered by harness shutdown through context cancellation
-// or abnormal IO server process termination).
+// or abnormal I/O Engine process termination).
 func (srv *EngineInstance) run(ctx context.Context, recreateSBs bool) (err error) {
 	errChan := make(chan error)
 
