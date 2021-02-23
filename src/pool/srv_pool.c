@@ -924,7 +924,8 @@ ds_pool_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 	int			rc = 0;
 
 	/* Only used for evict the rank for the moment */
-	if (src != CRT_EVS_SWIM || type != CRT_EVT_DEAD || pool_disable_evict) {
+	if ((src != CRT_EVS_SWIM && src != CRT_EVS_GRPMOD) ||
+	    type != CRT_EVT_DEAD || pool_disable_evict) {
 		D_DEBUG(DB_MGMT, "ignore src/type/evict %u/%u/%d\n",
 			src, type, pool_disable_evict);
 		return;

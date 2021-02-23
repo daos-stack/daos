@@ -492,10 +492,10 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
-	/* Add non-existent primary rank - Negative test */
+	/* Add existing secondary rank with bogus primary one */
 	rc = crt_group_secondary_rank_add(sec_grp1, 50, 15);
-	if (rc != -DER_OOG) {
-		D_ERROR("Expected -DER_OOG got %d\n", rc);
+	if (rc != -DER_EXIST) {
+		D_ERROR("Expected -DER_EXIST got %d\n", rc);
 		assert(0);
 	}
 
