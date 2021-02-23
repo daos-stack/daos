@@ -178,7 +178,9 @@ main(int argc, char **argv)
 failure:
 	printf("Unable to attach to the shared memory for the server index: %d"
 	       "\nMake sure to run the I/O Engine with the same index to "
-	       "initialize the shared memory and populate it with metrics.\n",
+	       "initialize the shared memory and populate it with metrics.\n"
+	       "Verify user/group settings match those that started the I/O "
+	       "Engine.\n",
 	       srv_idx);
 	return -1;
 }
