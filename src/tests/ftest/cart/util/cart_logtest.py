@@ -176,12 +176,12 @@ shown_logs = set()
 # Both the alloc and free function need to be whitelisted.
 
 mismatch_table = {'client': ('array'),
-                  'daos': ('common', 'container', 'pool'),
+                  'daos': ('common', 'container', 'pool', 'server'),
                   'common': ('container', 'pool'),
-                  'container': ('common'),
+                  'container': ('common', 'server'),
                   'mgmt': ('common', 'daos', 'pool', 'rsvc'),
                   'misc': ('common', 'mgmt'),
-                  'pool': ('common'),
+                  'pool': ('common', 'server'),
                   'server': ('daos')}
 
 mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
