@@ -158,18 +158,18 @@ vts_ctx_fini(struct vos_test_ctx *tcx)
 	case TCX_READY:
 	case TCX_CO_OPEN:
 		rc = vos_cont_close(tcx->tc_co_hdl);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		/* fallthrough */
 	case TCX_CO_CREATE:
 		rc = vos_cont_destroy(tcx->tc_po_hdl, tcx->tc_co_uuid);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		/* fallthrough */
 	case TCX_PO_OPEN:
 		rc = vos_pool_close(tcx->tc_po_hdl);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	case TCX_PO_CREATE:
 		rc = vos_pool_destroy(tcx->tc_po_name, tcx->tc_po_uuid);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		/* fallthrough */
 		free(tcx->tc_po_name);
 	}
