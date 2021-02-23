@@ -1442,7 +1442,7 @@ out:
 	return rc;
 }
 
-static int
+static void
 crt_primary_grp_fini(void)
 {
 	struct crt_grp_priv	*grp_priv;
@@ -1453,8 +1453,6 @@ crt_primary_grp_fini(void)
 
 	grp_priv = grp_gdata->gg_primary_grp;
 	crt_grp_priv_decref(grp_priv);
-
-	return 0;
 }
 
 void
@@ -1632,11 +1630,7 @@ crt_group_detach(crt_group_t *attached_grp)
 
 	grp_priv = crt_grp_pub2priv(attached_grp);
 
-	rc = crt_grp_priv_decref(grp_priv);
-	if (rc < 0)
-		D_ERROR("crt_grp_priv_decref (group %s) failed, rc: %d.\n",
-			grp_priv->gp_pub.cg_grpid, rc);
-
+	crt_grp_priv_decref(grp_priv);
 out:
 	return rc;
 }
@@ -1676,29 +1670,21 @@ out:
 	return rc;
 }
 
-int
+void
 crt_grp_fini(void)
 {
 	struct crt_grp_gdata	*grp_gdata;
-	int			 rc = 0;
 
 	D_ASSERT(crt_gdata.cg_grp_inited == 1);
 	D_ASSERT(crt_gdata.cg_grp != NULL);
 	grp_gdata = crt_gdata.cg_grp;
 
-	rc = crt_primary_grp_fini();
-	if (rc != 0)
-		D_GOTO(out, rc);
+	crt_primary_grp_fini();
 
 	D_RWLOCK_DESTROY(&grp_gdata->gg_rwlock);
 	D_FREE(grp_gdata);
 	crt_gdata.cg_grp = NULL;
 	crt_gdata.cg_grp_inited = 0;
-
-out:
-	if (rc != 0)
-		D_ERROR("crt_grp_fini failed, rc: %d.\n", rc);
-	return rc;
 }
 
 #define CRT_MAX_ATTACH_PREFIX 256
@@ -2768,12 +2754,7 @@ crt_group_view_destroy(crt_group_t *grp)
 
 	grp_priv = container_of(grp, struct crt_grp_priv, gp_pub);
 
-	rc = crt_grp_priv_decref(grp_priv);
-	if (rc != 0) {
-		D_ERROR("crt_grp_priv_decref() failed, " DF_RC "\n", DP_RC(rc));
-		D_GOTO(out, rc);
-	}
-
+	crt_grp_priv_decref(grp_priv);
 out:
 	return rc;
 }
@@ -2928,12 +2909,7 @@ crt_group_secondary_destroy(crt_group_t *grp)
 
 	grp_priv = container_of(grp, struct crt_grp_priv, gp_pub);
 
-	rc = crt_grp_priv_decref(grp_priv);
-	if (rc != 0) {
-		D_ERROR("crt_grp_priv_decref() failed, " DF_RC "\n", DP_RC(rc));
-		D_GOTO(out, rc);
-	}
-
+	crt_grp_priv_decref(grp_priv);
 out:
 	return rc;
 }

@@ -28,6 +28,8 @@ class DaosCommandBase(CommandWithSubCommand):
             self.sub_command_class = self.ContainerSubCommand()
         elif self.sub_command.value == "object":
             self.sub_command_class = self.ObjectSubCommand()
+        elif self.sub_command.value == "filesystem":
+            self.sub_command_class = self.FilesystemSubCommand()
         else:
             self.sub_command_class = None
 
@@ -440,3 +442,44 @@ class DaosCommandBase(CommandWithSubCommand):
             def __init__(self):
                 """Create a daos object dump command object."""
                 super().__init__("dump")
+
+    class FilesystemSubCommand(CommandWithSubCommand):
+        """Defines an object for the daos filesystem sub command."""
+
+        def __init__(self):
+            """Create a daos filesystem subcommand object."""
+            super().__init__("/run/daos/filesystem/*", "filesystem")
+
+        def get_sub_command_class(self):
+            # pylint: disable=redefined-variable-type
+            """Get the daos filesystem sub command object."""
+            if self.sub_command.value == "copy":
+                self.sub_command_class = self.CopySubCommand()
+            else:
+                self.sub_command_class = None
+
+        class CommonFilesystemSubCommand(CommandWithParameters):
+            """Defines an object for the common daos filesystem sub-command."""
+
+            def __init__(self, sub_command):
+                """Create a common daos filesystem sub-command object.
+
+                Args:
+                    sub_command (str): sub-command name
+                """
+                super().__init__(
+                    "/run/daos/filesystem/{}/*".format(
+                        sub_command), sub_command)
+
+        class CopySubCommand(CommonFilesystemSubCommand):
+            """Defines an object for the daos filesystem copy command."""
+
+            def __init__(self):
+                """Create a daos filesystem copy command object."""
+                super().__init__("copy")
+                #   --src=<type>:<pool/cont | path>
+                #   supported types are daos, posix
+                self.src = FormattedParameter("--src={}")
+                #   --src=<type>:<pool/cont | path>
+                #   supported types are daos, posix
+                self.dst = FormattedParameter("--dst={}")
