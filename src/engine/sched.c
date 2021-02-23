@@ -234,11 +234,29 @@ spi_rec_decref(struct d_hash_table *htable, d_list_t *rlink)
 	return spi->spi_ref == 0;
 }
 
+static inline bool
+is_spi_inuse(struct sched_pool_info *spi)
+{
+	return spi->spi_req_cnt != 0 || spi->spi_gc_ults != 0;
+}
+
 static void
 spi_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct sched_pool_info	*spi = sched_rlink2spi(rlink);
 	unsigned int		 type;
+
+	/*
+	 * If server shutdown before disconnecting pools, pool cache
+	 * isn't cleared, so spi_gc_ults could be non-zero here.
+	 *
+	 * See pool_tls_fini(), it should be fixed by local cont/pool
+	 * close/disconnect on shutdown. Once that's fixed, following
+	 * two assertions could be changed to D_ASSERT(!is_spi_inuse()).
+	 */
+	D_ASSERTF(spi->spi_req_cnt == 0, "req_cnt:%u\n", spi->spi_req_cnt);
+	D_ASSERTF(spi->spi_gc_sleeping == 0, "gc_sleeping:%d\n",
+		  spi->spi_gc_sleeping);
 
 	for (type = SCHED_REQ_UPDATE; type < SCHED_REQ_MAX; type++) {
 		D_ASSERTF(pool2req_cnt(spi, type) == 0, "type:%u cnt:%u\n",
@@ -285,7 +303,7 @@ prune_purge_list(struct dss_xstream *dx)
 		spi = sched_rlink2spi(rlink);
 		D_ASSERT(spi->spi_ref > 1);
 		d_hash_rec_decref(info->si_pool_hash, rlink);
-		if (spi->spi_req_cnt == 0) {
+		if (!is_spi_inuse(spi)) {
 			deleted = d_hash_rec_delete(info->si_pool_hash,
 						    pi->pi_pool_id,
 						    sizeof(uuid_t));
@@ -295,9 +313,10 @@ prune_purge_list(struct dss_xstream *dx)
 		} else {
 			unsigned int type;
 
-			D_ERROR("XS(%d): Pool "DF_UUID", req_cnt:%u\n",
-				dx->dx_xs_id, DP_UUID(pi->pi_pool_id),
-				spi->spi_req_cnt);
+			D_ERROR("XS(%d): Pool "DF_UUID", req_cnt:%u, "
+				"gc_ults:%d\n", dx->dx_xs_id,
+				DP_UUID(pi->pi_pool_id), spi->spi_req_cnt,
+				spi->spi_gc_ults);
 
 			for (type = SCHED_REQ_UPDATE; type < SCHED_REQ_MAX;
 			     type++) {
@@ -318,12 +337,14 @@ add_purge_list(struct dss_xstream *dx, struct sched_pool_info *spi)
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct purge_item	*pi;
 
-	D_CDEBUG(spi->spi_req_cnt == 0, DB_TRACE, DLOG_ERR,
-		 "XS(%d): vos pool:"DF_UUID" is destroyed. req_cnt:%u\n",
-		 dx->dx_xs_id, DP_UUID(spi->spi_pool_id), spi->spi_req_cnt);
+	D_CDEBUG(!is_spi_inuse(spi), DB_TRACE, DLOG_ERR,
+		 "XS(%d): vos pool:"DF_UUID" is destroyed. "
+		 "req_cnt:%u, gc_ults:%u\n", dx->dx_xs_id,
+		 DP_UUID(spi->spi_pool_id), spi->spi_req_cnt,
+		 spi->spi_gc_ults);
 
-	/* Don't purge the spi when there is queued request */
-	if (spi->spi_req_cnt != 0)
+	/* Don't purge the spi when it's still inuse */
+	if (is_spi_inuse(spi))
 		return;
 
 	d_list_for_each_entry(pi, &info->si_purge_list, pi_link) {
@@ -969,9 +990,10 @@ sleep_counting(struct dss_xstream *dx, struct sched_request *req, int sleep)
 
 	spi->spi_gc_sleeping += sleep;
 
-	D_ASSERT(spi->spi_gc_sleeping >= 0);
-	D_ASSERTF(spi->spi_gc_sleeping <= spi->spi_gc_ults,
-		  "gc:%d, sleeping:%d\n", spi->spi_gc_ults,
+	D_ASSERTF(spi->spi_gc_sleeping >= 0 &&
+		  spi->spi_gc_sleeping <= spi->spi_gc_ults,
+		  "XS(%d): pool:"DF_UUID", gc_ults:%d, sleeping:%d\n",
+		  dx->dx_xs_id, DP_UUID(spi->spi_pool_id), spi->spi_gc_ults,
 		  spi->spi_gc_sleeping);
 }
 

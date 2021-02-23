@@ -92,7 +92,7 @@ simple_put_get(void **state)
 	D_ALLOC(buf_out, buf_size);
 	assert_non_null(buf_out);
 
-	oid = dts_oid_gen(OC_SX, feat, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, feat, 0, arg->myrank);
 
 	if (arg->async) {
 		rc = daos_event_init(&ev, arg->eq, NULL);
@@ -260,7 +260,7 @@ kv_cond_ops(void **state)
 	size_t		size;
 	int		rc;
 
-	oid = dts_oid_gen(OC_SX, feat, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, feat, 0, arg->myrank);
 
 	/** open the object */
 	rc = daos_kv_open(arg->coh, oid, 0, &oh, NULL);

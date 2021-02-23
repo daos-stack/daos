@@ -3,9 +3,7 @@ hosts:
         - server-A
     test_clients:
         - server-B
-timeouts:
-    test_copy_types: 300
-    test_copy_subsets: 120
+timeout: 300
 server_config:
     name: daos_server
 pool:
@@ -29,9 +27,5 @@ ior:
 dcp:
     client_processes:
         np: 1
-datamover:
-    mux_tool: !mux
-        tool_dcp:
-            tool: "DCP"
 dfuse:
     mount_dir: "/tmp/daos_dfuse"
