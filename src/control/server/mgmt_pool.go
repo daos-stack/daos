@@ -370,11 +370,13 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		return nil, err
 	}
 
+	inCleanupMode := false
 	if ps.State == system.PoolServiceStateDestroying {
 		// If we already tried to destroy the pool but it failed for some
 		// reason, try again, but instead use the full set of storage ranks
 		// in case the MS has lost track of the actual svc ranks.
 		req.SvcRanks = system.RanksToUint32(ps.Storage.CreationRanks())
+		inCleanupMode = true
 	} else {
 		ps.State = system.PoolServiceStateDestroying
 		if err := svc.sysdb.UpdatePoolService(ps); err != nil {
@@ -400,9 +402,8 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	case drpc.DaosSuccess, drpc.DaosNotLeader, drpc.DaosNotReplica:
 		if ds == drpc.DaosNotLeader || ds == drpc.DaosNotReplica {
 			// If we're not cleaning up, then this is an error.
-			if len(req.SvcRanks) != len(ps.Storage.CreationRanks()) {
+			if !inCleanupMode {
 				svc.log.Errorf("PoolDestroy dRPC call failed due to %s in non-cleanup path", ds)
-
 				break
 			}
 			// Otherwise, we've done all we can to try to recover.
