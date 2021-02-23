@@ -100,7 +100,7 @@ nvme_recov_1(void **state)
 	else
 		obj_class = DAOS_OC_R2S_SPEC_RANK;
 
-	oid = dts_oid_gen(obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, obj_class, 0, 0, arg->myrank);
 	oid = dts_oid_set_rank(oid, rank);
 	oid = dts_oid_set_tgt(oid, tgt_idx);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -391,7 +391,7 @@ nvme_test_get_blobstore_state(void **state)
 	else
 		obj_class = DAOS_OC_R2S_SPEC_RANK;
 
-	oid = dts_oid_gen(obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, obj_class, 0, 0, arg->myrank);
 	oid = dts_oid_set_rank(oid, rank);
 	oid = dts_oid_set_tgt(oid, tgt_idx);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -492,7 +492,8 @@ nvme_test_simulate_IO_error(void **state)
 	/*
 	 * Prepare records
 	 */
-	oid = dts_oid_gen(DAOS_OC_R1S_SPEC_RANK, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
+				arg->myrank);
 	oid = dts_oid_set_rank(oid, rank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
