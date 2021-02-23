@@ -211,7 +211,7 @@ fail:
 JNIEXPORT void JNICALL
 Java_io_daos_DaosClient_pollCompleted(JNIEnv *env, jclass clientClass,
 		jlong eqWrapperHdl, jlong memAddress,
-		jint nbrOfEvents, jint timeoutMs)
+		jint nbrOfEvents, jlong timeoutMs)
 {
 	event_queue_wrapper_t *eq = *(event_queue_wrapper_t **)&eqWrapperHdl;
 	char *buffer = (char *)memAddress;
