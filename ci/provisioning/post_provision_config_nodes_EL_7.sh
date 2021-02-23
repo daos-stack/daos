@@ -121,6 +121,15 @@ post_provision_config_nodes() {
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
     dnf -y install redhat-lsb-core
+
+    # force install of avocado 82.0
+    dnf -y erase avocado{,-common} python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}}
+    pip3 install --upgrade pip
+    pip3 install "avocado-framework<83.0"
+    pip3 install "avocado-framework-plugin-result-html<83.0"
+    pip3 install "avocado-framework-plugin-varianter-yaml-to-mux<83.0"
+    pip3 install clustershell
+
     # shellcheck disable=SC2086
     if [ -n "$INST_RPMS" ] &&
        ! dnf -y $dnf_repo_args install $INST_RPMS; then

@@ -19,7 +19,7 @@ class SameKeyDifferentValue(TestWithServers):
     :avocado: recursive
     """
     def setUp(self):
-        super(SameKeyDifferentValue, self).setUp()
+        super().setUp()
         self.prepare_pool()
 
         try:

@@ -18,7 +18,7 @@ class NvmeFault(ServerFillUp):
     """
     def setUp(self):
         """Set up for test case."""
-        super(NvmeFault, self).setUp()
+        super().setUp()
         self.no_of_pools = self.params.get("number_of_pools", '/run/pool/*', 1)
         self.capacity = self.params.get("percentage",
                                         '/run/faulttests/pool_capacity/*')

@@ -35,7 +35,7 @@ class DaosSnapshotTest(TestWithServers):
     """
     def __init__(self, *args, **kwargs):
         """Initialize a DaosSnapshotTest object."""
-        super(DaosSnapshotTest, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.daos_cmd = None
 
     def create_snapshot(self, pool_uuid, cont_uuid, count):

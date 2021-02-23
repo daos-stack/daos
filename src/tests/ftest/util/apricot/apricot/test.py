@@ -74,7 +74,7 @@ class Test(avocadoTest):
 
     def __init__(self, *args, **kwargs):
         """Initialize a Test object."""
-        super(Test, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         # Define a test ID using the test_* method name
         self.test_id = self.get_test_name()
@@ -137,7 +137,7 @@ class Test(avocadoTest):
         """Set up each test case."""
         self.check_variant_skip()
         self.log.info("*** SETUP running on %s ***", str(detect()))
-        super(Test, self).setUp()
+        super().setUp()
 
     def check_variant_skip(self):
         """Determine if this test variant should be skipped.
@@ -254,7 +254,7 @@ class Test(avocadoTest):
     def tearDown(self):
         """Tear down after each test case."""
         self.report_timeout()
-        super(Test, self).tearDown()
+        super().tearDown()
 
         # Fail the test if any errors occurred during tear down
         if self._teardown_errors:
@@ -274,7 +274,7 @@ class TestWithoutServers(Test):
 
     def __init__(self, *args, **kwargs):
         """Initialize a Test object."""
-        super(TestWithoutServers, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         self.client_mca = None
         self.orterun = None
@@ -299,7 +299,7 @@ class TestWithoutServers(Test):
 
     def setUp(self):
         """Set up run before each test."""
-        super(TestWithoutServers, self).setUp()
+        super().setUp()
         if not load_mpi("openmpi"):
             self.fail("Failed to load openmpi")
 
@@ -363,7 +363,7 @@ class TestWithoutServers(Test):
                 self._teardown_errors.append(
                     "Error running inherited teardown(): {}".format(error))
 
-        super(TestWithoutServers, self).tearDown()
+        super().tearDown()
 
     def stop_leftover_processes(self, processes, hosts):
         """Stop leftover processes on the specified hosts before starting tests.
@@ -391,7 +391,7 @@ class TestWithServers(TestWithoutServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a TestWithServers object."""
-        super(TestWithServers, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         # Add additional time to the test timeout for reporting running
         # processes while stopping the daos_agent and daos_server.
@@ -456,7 +456,7 @@ class TestWithServers(TestWithoutServers):
 
     def setUp(self):
         """Set up each test case."""
-        super(TestWithServers, self).setUp()
+        super().setUp()
 
         # Support starting the servers once per test for all test variants
         self.start_servers_once = self.params.get(
@@ -933,7 +933,7 @@ class TestWithServers(TestWithoutServers):
         # Stop the servers
         self._teardown_errors.extend(self.stop_servers())
 
-        super(TestWithServers, self).tearDown()
+        super().tearDown()
 
     def pre_tear_down(self):
         """Tear down steps to optionally run before tearDown().

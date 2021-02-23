@@ -17,7 +17,7 @@ class DcpCommand(ExecutableCommand):
 
     def __init__(self, namespace, command):
         """Create a dcp Command object."""
-        super(DcpCommand, self).__init__(namespace, command)
+        super().__init__(namespace, command)
 
         # dcp options
 
@@ -65,7 +65,7 @@ class DcpCommand(ExecutableCommand):
     def get_param_names(self):
         """Overriding the original get_param_names."""
 
-        param_names = super(DcpCommand, self).get_param_names()
+        param_names = super().get_param_names()
 
         # move key=dst_path to the end
         param_names.sort(key='dst_path'.__eq__)
@@ -117,8 +117,7 @@ class Dcp(DcpCommand):
 
     def __init__(self, hosts, tmp, timeout=30):
         """Create a dcp object."""
-        super(Dcp, self).__init__(
-            "/run/dcp/*", "dcp")
+        super().__init__("/run/dcp/*", "dcp")
 
         # set params
         self.timeout = timeout

@@ -65,7 +65,7 @@ class ContainerAttributeTest(TestWithServers):
     """
 
     def setUp(self):
-        super(ContainerAttributeTest, self).setUp()
+        super().setUp()
 
         self.large_data_set = {}
 

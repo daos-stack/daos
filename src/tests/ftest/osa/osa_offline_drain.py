@@ -20,7 +20,7 @@ class OSAOfflineDrain(OSAUtils):
     """
     def setUp(self):
         """Set up for test case."""
-        super(OSAOfflineDrain, self).setUp()
+        super().setUp()
         self.dmg_command = self.get_dmg_command()
 
     def run_offline_drain_test(self, num_pool, data=False):

@@ -62,13 +62,13 @@ class ObjectMetadata(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a ObjectMetadata object."""
-        super(ObjectMetadata, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.out_queue = None
 
     def setUp(self):
         """Set up each test case."""
         # Start the servers and agents
-        super(ObjectMetadata, self).setUp()
+        super().setUp()
 
         # Create a pool
         self.pool = TestPool(self.context, self.get_dmg_command())

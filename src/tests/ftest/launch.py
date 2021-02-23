@@ -33,7 +33,7 @@ except ImportError:
     from tempfile import mkdtemp
     from shutil import rmtree
 
-    class TemporaryDirectory(object):
+    class TemporaryDirectory():
         # pylint: disable=too-few-public-methods
         """Create a temporary directory.
         When the last reference of this object goes out of scope the directory

@@ -43,7 +43,7 @@ class ExecutableCommand(CommandWithParameters):
             subprocess (bool, optional): whether the command is run as a
                 subprocess. Defaults to False.
         """
-        super(ExecutableCommand, self).__init__(namespace, command, path)
+        super().__init__(namespace, command, path)
         self._process = None
         self.run_as_subprocess = subprocess
         self.timeout = None
@@ -70,7 +70,7 @@ class ExecutableCommand(CommandWithParameters):
             str: the command with all the defined parameters
 
         """
-        value = super(ExecutableCommand, self).__str__()
+        value = super().__str__()
         if self.sudo:
             value = " ".join(["sudo -n", value])
         return value
@@ -376,7 +376,7 @@ class CommandWithSubCommand(ExecutableCommand):
             subprocess (bool, optional): whether the command is run as a
                 subprocess. Defaults to False.
         """
-        super(CommandWithSubCommand, self).__init__(namespace, command, path)
+        super().__init__(namespace, command, path)
 
         # Define the sub-command parameter whose value is used to assign the
         # sub-command's CommandWithParameters-based class.  Use the command to
@@ -438,7 +438,7 @@ class CommandWithSubCommand(ExecutableCommand):
         Args:
             test (Test): avocado Test object
         """
-        super(CommandWithSubCommand, self).get_params(test)
+        super().get_params(test)
         self.get_sub_command_class()
         if isinstance(self.sub_command_class, ObjectWithParameters):
             self.sub_command_class.get_params(test)
@@ -495,7 +495,7 @@ class CommandWithSubCommand(ExecutableCommand):
 
         """
         try:
-            self.result = super(CommandWithSubCommand, self).run()
+            self.result = super().run()
         except CommandFailure as error:
             raise CommandFailure(
                 "<{}> command failed: {}".format(self.command, error))
@@ -558,7 +558,7 @@ class SubProcessCommand(CommandWithSubCommand):
             timeout (int, optional): number of seconds to wait for patterns to
                 appear in the subprocess output. Defaults to 10 seconds.
         """
-        super(SubProcessCommand, self).__init__(namespace, command, path, True)
+        super().__init__(namespace, command, path, True)
 
         # Attributes used to determine command success when run as a subprocess
         # See self.check_subprocess_status() for details.
@@ -675,7 +675,7 @@ class YamlCommand(SubProcessCommand):
             timeout (int, optional): number of seconds to wait for patterns to
                 appear in the subprocess output. Defaults to 10 seconds.
         """
-        super(YamlCommand, self).__init__(namespace, command, path, timeout)
+        super().__init__(namespace, command, path, timeout)
 
         # Command configuration yaml file
         self.yaml = yaml_cfg
@@ -705,7 +705,7 @@ class YamlCommand(SubProcessCommand):
         Args:
             test (Test): avocado Test object
         """
-        super(YamlCommand, self).get_params(test)
+        super().get_params(test)
         if isinstance(self.yaml, YamlParameters):
             self.yaml.get_params(test)
 
@@ -778,7 +778,7 @@ class YamlCommand(SubProcessCommand):
         """
         if self.yaml:
             self.create_yaml_file()
-        return super(YamlCommand, self).run()
+        return super().run()
 
     def copy_certificates(self, source, hosts):
         """Copy certificates files from the source to the destination hosts.
@@ -887,7 +887,7 @@ class YamlCommand(SubProcessCommand):
         return self.get_config_value("socket_dir")
 
 
-class SubprocessManager(object):
+class SubprocessManager():
     """Defines an object that manages a sub process launched with orterun."""
 
     def __init__(self, command, manager="Orterun"):
@@ -1054,7 +1054,7 @@ class SystemctlCommand(ExecutableCommand):
 
     def __init__(self):
         """Create a SystemctlCommand object."""
-        super(SystemctlCommand, self).__init__(
+        super().__init__(
             "/run/systemctl/*", "systemctl", subprocess=False)
         self.sudo = True
 
@@ -1074,4 +1074,4 @@ class SystemctlCommand(ExecutableCommand):
 
         """
         return list(
-            reversed(super(SystemctlCommand, self).get_str_param_names()))
+            reversed(super().get_str_param_names()))

@@ -91,7 +91,7 @@ class CartIvOneNodeTest(TestWithoutServers):
         """ Tear down """
         self.report_timeout()
         self._teardown_errors.extend(self.utils.cleanup_processes())
-        super(CartIvOneNodeTest, self).tearDown()
+        super().tearDown()
 
     def _verify_action(self, action):
         """verify the action"""

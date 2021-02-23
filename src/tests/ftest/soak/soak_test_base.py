@@ -33,7 +33,7 @@ class SoakTestBase(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a SoakBase object."""
-        super(SoakTestBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.failed_job_id_list = None
         self.test_log_dir = None
         self.exclude_slurm_nodes = None
@@ -63,7 +63,7 @@ class SoakTestBase(TestWithServers):
     def setUp(self):
         """Define test setup to be done."""
         self.log.info("<<setUp Started>> at %s", time.ctime())
-        super(SoakTestBase, self).setUp()
+        super().setUp()
         self.username = getuser()
         # Initialize loop param for all tests
         self.loop = 1

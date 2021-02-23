@@ -25,7 +25,7 @@ class DaosTestError(Exception):
     """DAOS API exception class."""
 
 
-class SimpleProfiler(object):
+class SimpleProfiler():
     """
     Simple profiler that counts the number of times a function is called
     and measure its execution time.

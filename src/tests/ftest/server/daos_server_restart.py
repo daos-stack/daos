@@ -24,7 +24,7 @@ class DaosServerTest(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a DaosServerTest object."""
-        super(DaosServerTest, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     @fail_on(ServerFailed)
     @fail_on(CommandFailure)

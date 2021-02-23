@@ -96,7 +96,7 @@ post_provision_config_nodes() {
                /etc/profile.d/lmod.sh;                                        \
     fi
 
-    # force install of avocado 52.1
+    # force install of avocado 82.0
     dnf -y erase avocado{,-common} python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}}
     pip3 install --upgrade pip
     pip3 install "avocado-framework<83.0"

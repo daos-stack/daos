@@ -77,7 +77,7 @@ class DaosServerCommand(YamlCommand):
             timeout (int, optional): number of seconds to wait for patterns to
                 appear in the subprocess output. Defaults to 30 seconds.
         """
-        super(DaosServerCommand, self).__init__(
+        super().__init__(
             "/run/daos_server/*", "daos_server", path, yaml_cfg, timeout)
         self.pattern = self.NORMAL_PATTERN
 
@@ -134,7 +134,7 @@ class DaosServerCommand(YamlCommand):
         Args:
             test (Test): avocado Test object
         """
-        super(DaosServerCommand, self).get_params(test)
+        super().get_params(test)
 
         # Run daos_server with test variant specific log file names if specified
         self.yaml.update_log_files(
@@ -189,7 +189,7 @@ class DaosServerCommand(YamlCommand):
 
         def __init__(self):
             """Create a network subcommand object."""
-            super(DaosServerCommand.NetworkSubCommand, self).__init__(
+            super().__init__(
                 "/run/daos_server/network/*", "network")
 
         def get_sub_command_class(self):
@@ -207,10 +207,7 @@ class DaosServerCommand(YamlCommand):
 
             def __init__(self):
                 """Create a network scan subcommand object."""
-                super(
-                    DaosServerCommand.NetworkSubCommand.ScanSubCommand,
-                    self).__init__(
-                        "/run/daos_server/network/scan/*", "scan")
+                super().__init__("/run/daos_server/network/scan/*", "scan")
 
                 # daos_server network scan command options:
                 #   --provider=     Filter device list to those that support the
@@ -226,8 +223,7 @@ class DaosServerCommand(YamlCommand):
 
         def __init__(self):
             """Create a start subcommand object."""
-            super(DaosServerCommand.StartSubCommand, self).__init__(
-                "/run/daos_server/start/*", "start")
+            super().__init__("/run/daos_server/start/*", "start")
 
             # daos_server start command options:
             #   --port=                 Port for the gRPC management interface
@@ -261,8 +257,7 @@ class DaosServerCommand(YamlCommand):
 
         def __init__(self):
             """Create a storage subcommand object."""
-            super(DaosServerCommand.StorageSubCommand, self).__init__(
-                "/run/daos_server/storage/*", "storage")
+            super().__init__("/run/daos_server/storage/*", "storage")
 
         def get_sub_command_class(self):
             """Get the daos_server storage sub command object."""
@@ -279,10 +274,8 @@ class DaosServerCommand(YamlCommand):
 
             def __init__(self):
                 """Create a storage subcommand object."""
-                super(
-                    DaosServerCommand.StorageSubCommand.PrepareSubCommand,
-                    self).__init__(
-                        "/run/daos_server/storage/prepare/*", "prepare")
+                super().__init__(
+                    "/run/daos_server/storage/prepare/*", "prepare")
 
                 # daos_server storage prepare command options:
                 #   --pci-whitelist=    Whitespace separated list of PCI
@@ -348,7 +341,7 @@ class DaosServerManager(SubprocessManager):
         """
         server_command = get_server_command(
             group, svr_cert_dir, bin_dir, svr_config_file, svr_config_temp)
-        super(DaosServerManager, self).__init__(server_command, manager)
+        super().__init__(server_command, manager)
         self.manager.job.sub_command_override = "start"
 
         # Dmg command to access this group of servers which will be configured
@@ -382,7 +375,7 @@ class DaosServerManager(SubprocessManager):
         Args:
             test (Test): avocado Test object
         """
-        super(DaosServerManager, self).get_params(test)
+        super().get_params(test)
         # Get the values for the dmg parameters
         self.dmg.get_params(test)
 
@@ -686,7 +679,7 @@ class DaosServerManager(SubprocessManager):
 
         # Stop the subprocess running the job manager command
         try:
-            super(DaosServerManager, self).stop()
+            super().stop()
         except CommandFailure as error:
             messages.append(
                 "Error stopping the {} subprocess: {}".format(

@@ -37,7 +37,7 @@ def check_key_type(spec):
         raise RuntimeError("Size required for hashed key %s" % spec)
 
 
-class Stats(object):
+class Stats():
     """Class for calculating and storing stats"""
 
     def __init__(self):
@@ -120,7 +120,7 @@ class Stats(object):
 # pylint: disable=too-many-instance-attributes
 
 
-class MetaOverhead(object):
+class MetaOverhead():
     """Class for calculating overheads"""
 
     def __init__(self, args, num_pools, meta_yaml):

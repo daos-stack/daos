@@ -69,7 +69,7 @@ class PoolAttributeTest(TestWithServers):
     """
 
     def setUp(self):
-        super(PoolAttributeTest, self).setUp()
+        super().setUp()
 
         self.large_data_set = {}
 

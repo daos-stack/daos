@@ -15,7 +15,7 @@ class RebuildTestParams(ObjectWithParameters):
 
     def __init__(self):
         """Initialize a RebuildTestParams object."""
-        super(RebuildTestParams, self).__init__("/run/rebuild/*")
+        super().__init__("/run/rebuild/*")
         self.object_class = BasicParameter(None)
         self.rank = BasicParameter(None)
 
@@ -28,7 +28,7 @@ class RebuildTestBase(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a RebuildTestBase object."""
-        super(RebuildTestBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.inputs = RebuildTestParams()
         self.targets = None
         self.server_count = 0
@@ -38,7 +38,7 @@ class RebuildTestBase(TestWithServers):
     def setUp(self):
         """Set up each test case."""
         # Start the servers and agents
-        super(RebuildTestBase, self).setUp()
+        super().setUp()
 
         # Get the test parameters
         self.inputs.get_params(self)

@@ -25,14 +25,14 @@ class MpiioTests(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a TestWithServers object."""
-        super(MpiioTests, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.hostfile_clients_slots = None
         self.mpio = None
         self.daos_cmd = None
         self.cont_uuid = None
 
     def setUp(self):
-        super(MpiioTests, self).setUp()
+        super().setUp()
 
         # initialize daos_cmd
         self.daos_cmd = DaosCommand(self.bin)

@@ -31,7 +31,7 @@ class CopyNegativeTest(DataMoverTestBase):
     def setUp(self):
         """Set up each test case."""
         # Start the servers and agents
-        super(CopyNegativeTest, self).setUp()
+        super().setUp()
 
         # Get the parameters
         self.test_file = self.ior_cmd.test_file.value

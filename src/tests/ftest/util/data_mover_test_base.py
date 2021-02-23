@@ -42,7 +42,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
     def __init__(self, *args, **kwargs):
         """Initialize a DataMoverTestBase object."""
-        super(DataMoverTestBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.tool = None
         self.daos_cmd = None
         self.dcp_cmd = None
@@ -69,7 +69,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
     def setUp(self):
         """Set up each test case."""
         # Start the servers and agents
-        super(DataMoverTestBase, self).setUp()
+        super().setUp()
 
         self.dfuse_hosts = self.agent_managers[0].hosts
 

@@ -21,7 +21,7 @@ class DfuseSparseFile(IorTestBase):
 
     def __init__(self, *args, **kwargs):
         """Initialize a DfuseSparseFile object."""
-        super(DfuseSparseFile, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.space_before = None
 
     def test_dfusesparsefile(self):

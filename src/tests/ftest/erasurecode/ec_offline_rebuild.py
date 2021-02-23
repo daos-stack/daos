@@ -16,11 +16,11 @@ class EcOfflineRebuild(ErasureCodeIor):
     """
     def __init__(self, *args, **kwargs):
         """Initialize a ErasureCodeIor object."""
-        super(EcOfflineRebuild, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def setUp(self):
         """Set up for test case."""
-        super(EcOfflineRebuild, self).setUp()
+        super().setUp()
 
     @skipForTicket("DAOS-6450")
     def test_ec_offline_rebuild(self):

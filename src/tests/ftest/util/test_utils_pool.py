@@ -36,7 +36,7 @@ class TestPool(TestDaosApiBase):
             cb_handler (CallbackHandler, optional): callback object to use with
                 the API methods. Defaults to None.
         """
-        super(TestPool, self).__init__("/run/pool/*", cb_handler)
+        super().__init__("/run/pool/*", cb_handler)
         self.context = context
         self.uid = os.geteuid()
         self.gid = os.getegid()

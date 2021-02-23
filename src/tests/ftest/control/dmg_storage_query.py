@@ -25,7 +25,7 @@ class DmgStorageQuery(ControlTestBase):
 
     def setUp(self):
         "Set up for dmg storage query."
-        super(DmgStorageQuery, self).setUp()
+        super().setUp()
         self.bdev_list = self.server_managers[-1].get_config_value("bdev_list")
         self.targets = self.server_managers[-1].get_config_value("targets")
 

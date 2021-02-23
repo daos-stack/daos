@@ -25,7 +25,7 @@ class DaosCoreBase(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize the DaosCoreBase object."""
-        super(DaosCoreBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.subtest_name = None
 
     def setUp(self):
@@ -36,7 +36,7 @@ class DaosCoreBase(TestWithServers):
         # obtain separate logs
         self.update_log_file_names(self.subtest_name)
 
-        super(DaosCoreBase, self).setUp()
+        super().setUp()
 
         # if no client specified update self.hostlist_clients to local host
         # and create a new self.hostfile_clients.
@@ -92,7 +92,7 @@ class DaosCoreBase(TestWithServers):
                     )
 
         # Start the servers
-        super(DaosCoreBase, self).start_server_managers()
+        super().start_server_managers()
 
     def run_subtest(self):
         """Run daos_test with a subtest argument."""

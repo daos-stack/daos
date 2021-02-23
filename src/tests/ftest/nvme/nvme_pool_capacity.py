@@ -32,7 +32,7 @@ class NvmePoolCapacity(TestWithServers):
 
     def setUp(self):
         """Set up for test case."""
-        super(NvmePoolCapacity, self).setUp()
+        super().setUp()
 
         self.ior_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')

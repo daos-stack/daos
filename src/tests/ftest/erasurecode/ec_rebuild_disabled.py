@@ -17,11 +17,11 @@ class EcDisabledRebuild(ErasureCodeIor):
     """
     def __init__(self, *args, **kwargs):
         """Initialize a ErasureCodeIor object."""
-        super(EcDisabledRebuild, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def setUp(self):
         """Set up for test case."""
-        super(EcDisabledRebuild, self).setUp()
+        super().setUp()
 
     @skipForTicket("DAOS-6660")
     def test_ec_degrade(self):

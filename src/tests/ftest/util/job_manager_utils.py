@@ -35,7 +35,7 @@ class JobManager(ExecutableCommand):
             subprocess (bool, optional): whether the command is run as a
                 subprocess. Defaults to False.
         """
-        super(JobManager, self).__init__(namespace, command, path, subprocess)
+        super().__init__(namespace, command, path, subprocess)
         self.job = job
         self._hosts = None
 
@@ -51,7 +51,7 @@ class JobManager(ExecutableCommand):
             str: the command with all the defined parameters
 
         """
-        commands = [super(JobManager, self).__str__(), str(self.job)]
+        commands = [super().__str__(), str(self.job)]
         return " ".join(commands)
 
     def check_subprocess_status(self, sub_process):
@@ -127,7 +127,7 @@ class JobManager(ExecutableCommand):
 
         """
         # Get/display the state of the local job manager process
-        state = super(JobManager, self).get_subprocess_state(message)
+        state = super().get_subprocess_state(message)
         if self._process is not None and self._hosts:
             # Determine if the status of the remote job processes on each host
             remote_state = self._get_remote_process_state(message)
@@ -181,8 +181,7 @@ class Orterun(JobManager):
             raise CommandFailure("Failed to load openmpi")
 
         path = os.path.dirname(find_executable("orterun"))
-        super(Orterun, self).__init__(
-            "/run/orterun/*", "orterun", job, path, subprocess)
+        super().__init__("/run/orterun/*", "orterun", job, path, subprocess)
 
         # Default mca values to avoid queue pair errors
         mca_default = {
@@ -273,7 +272,7 @@ class Orterun(JobManager):
         if not load_mpi("openmpi"):
             raise CommandFailure("Failed to load openmpi")
 
-        return super(Orterun, self).run()
+        return super().run()
 
 
 class Mpirun(JobManager):
@@ -291,8 +290,7 @@ class Mpirun(JobManager):
             raise CommandFailure("Failed to load {}".format(mpitype))
 
         path = os.path.dirname(find_executable("mpirun"))
-        super(Mpirun, self).__init__(
-            "/run/mpirun", "mpirun", job, path, subprocess)
+        super().__init__("/run/mpirun", "mpirun", job, path, subprocess)
 
         mca_default = None
         if mpitype == "openmpi":
@@ -372,7 +370,7 @@ class Mpirun(JobManager):
         if not load_mpi(self.mpitype):
             raise CommandFailure("Failed to load {}".format(self.mpitype))
 
-        return super(Mpirun, self).run()
+        return super().run()
 
 
 class Srun(JobManager):
@@ -388,7 +386,7 @@ class Srun(JobManager):
             subprocess (bool, optional): whether the command is run as a
                 subprocess. Defaults to False.
         """
-        super(Srun, self).__init__("/run/srun", "srun", job, path, subprocess)
+        super().__init__("/run/srun", "srun", job, path, subprocess)
 
         self.label = FormattedParameter("--label", True)
         self.mpi = FormattedParameter("--mpi={}", "pmi2")
@@ -472,7 +470,7 @@ class Systemctl(JobManager):
             job (SubProcessCommand): command object to manage.
         """
         # path = os.path.dirname(find_executable("systemctl"))
-        super(Systemctl, self).__init__("/run/systemctl/*", "", job)
+        super().__init__("/run/systemctl/*", "", job)
         self.job = job
         self._systemctl = SystemctlCommand()
         self._systemctl.service.value = self.job.service_name

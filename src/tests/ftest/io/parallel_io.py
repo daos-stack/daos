@@ -26,7 +26,7 @@ class ParallelIo(FioBase, IorTestBase):
 
     def __init__(self, *args, **kwargs):
         """Initialize a ParallelIo object."""
-        super(ParallelIo, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.dfuse = None
         self.cont_count = None
         self.pool_count = None

@@ -62,7 +62,7 @@ def build_test_data(destdir):
         f.close()
 
 def doRpcServer(port, stopTimeSec):
-    class EchoHandler(object):
+    class EchoHandler():
         def Echo123(self, msg1, msg2, msg3):
             return ("1:%s 2:%s 3:%s" % (msg1, msg2, msg3))
         def EchoStruct(self, msg):

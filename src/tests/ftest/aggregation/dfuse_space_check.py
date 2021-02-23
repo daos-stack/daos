@@ -18,7 +18,7 @@ class DfuseSpaceCheck(IorTestBase):
 
     def __init__(self, *args, **kwargs):
         """Initialize a DfuseSpaceCheck object."""
-        super(DfuseSpaceCheck, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.space_before = None
         self.block_size = None
 

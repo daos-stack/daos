@@ -20,7 +20,7 @@ class ObjOpenBadParam(TestWithServers):
     :avocado: recursive
     """
     def setUp(self):
-        super(ObjOpenBadParam, self).setUp()
+        super().setUp()
         self.prepare_pool()
 
         try:

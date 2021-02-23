@@ -31,7 +31,7 @@ class IoConfGen(ExecutableCommand):
             path (str, optional): path to location of command binary file.
                 Defaults to ""
         """
-        super(IoConfGen, self).__init__("/run/gen_io_conf/*",
+        super().__init__("/run/gen_io_conf/*",
                                         "daos_gen_io_conf", path)
         self.verbose = True
         self.env = env
@@ -115,7 +115,7 @@ class IoConfTestBase(TestWithServers):
     """
     def __init__(self, *args, **kwargs):
         """Initialize a IoConfTestBase object."""
-        super(IoConfTestBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.testfile = None
         self.dmg = None
         self.dmg_config_file = None

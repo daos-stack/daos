@@ -58,7 +58,7 @@ class ServerFillUp(IorTestBase):
     # pylint: disable=too-many-instance-attributes
     def __init__(self, *args, **kwargs):
         """Initialize a IorTestBase object."""
-        super(ServerFillUp, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.no_of_pools = 1
         self.capacity = 1
         self.no_of_servers = 1
@@ -78,7 +78,7 @@ class ServerFillUp(IorTestBase):
         # obtain separate logs
         self.update_log_file_names()
         # Start the servers and agents
-        super(ServerFillUp, self).setUp()
+        super().setUp()
         self.hostfile_clients = None
         self.ior_default_flags = self.ior_cmd.flags.value
         self.ior_scm_xfersize = self.ior_cmd.transfer_size.value

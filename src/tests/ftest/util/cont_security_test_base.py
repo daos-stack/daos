@@ -32,7 +32,7 @@ class ContSecurityTestBase(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a ContSecurityTestBase object."""
-        super(ContSecurityTestBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.dmg = None
         self.daos_tool = None
         self.user_uid = None
@@ -44,7 +44,7 @@ class ContSecurityTestBase(TestWithServers):
 
     def setUp(self):
         """Set up each test case."""
-        super(ContSecurityTestBase, self).setUp()
+        super().setUp()
         self.user_uid = os.geteuid()
         self.user_gid = os.getegid()
         self.current_user = pwd.getpwuid(self.user_uid)[0]

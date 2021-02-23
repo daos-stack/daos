@@ -21,7 +21,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
     # pylint: disable=too-many-ancestors
     def setUp(self):
         """Set up for dmg pool query."""
-        super(DmgPoolQueryTest, self).setUp()
+        super().setUp()
 
         # Init the pool
         self.pool = TestPool(self.context, self.dmg)

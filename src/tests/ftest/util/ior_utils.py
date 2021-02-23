@@ -35,7 +35,7 @@ class IorCommand(ExecutableCommand):
 
     def __init__(self):
         """Create an IorCommand object."""
-        super(IorCommand, self).__init__("/run/ior/*", "ior")
+        super().__init__("/run/ior/*", "ior")
 
         # Flags
         self.flags = FormattedParameter("{}")
@@ -109,7 +109,7 @@ class IorCommand(ExecutableCommand):
     def get_param_names(self):
         """Get a sorted list of the defined IorCommand parameters."""
         # Sort the IOR parameter names to generate consistent ior commands
-        all_param_names = super(IorCommand, self).get_param_names()
+        all_param_names = super().get_param_names()
 
         # List all of the common ior params first followed by any daos-specific
         # and dfs-specific params (except when using MPIIO).
