@@ -90,8 +90,7 @@ class DynamicStartStop(TestWithServers):
         self.verify_system_query_all()
 
         # Stop one of the added servers - Single stop.
-        #self.dmg_cmd.system_stop(ranks="4")
-        self.dmg_cmd.system_stop(ranks="2")
+        self.dmg_cmd.system_stop(ranks="4")
 
         # Verify that the State of the stopped server is evicted and Reason is
         # system stop.
