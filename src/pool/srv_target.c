@@ -380,13 +380,6 @@ pool_free_ref(struct daos_llink *llink)
 
 	D_DEBUG(DF_DSMS, DF_UUID": freeing\n", DP_UUID(pool->sp_uuid));
 
-	ds_iv_ns_put(pool->sp_iv_ns);
-
-	rc = crt_group_secondary_destroy(pool->sp_group);
-	if (rc != 0)
-		D_ERROR(DF_UUID": failed to destroy pool group: %d\n",
-			DP_UUID(pool->sp_uuid), rc);
-
 	rc = dss_thread_collective(pool_child_delete_one, pool->sp_uuid, 0);
 	if (rc == -DER_CANCELED)
 		D_DEBUG(DB_MD, DF_UUID": no ESs\n", DP_UUID(pool->sp_uuid));
@@ -397,6 +390,13 @@ pool_free_ref(struct daos_llink *llink)
 	pl_map_disconnect(pool->sp_uuid);
 	if (pool->sp_map != NULL)
 		pool_map_decref(pool->sp_map);
+
+	ds_iv_ns_put(pool->sp_iv_ns);
+
+	rc = crt_group_secondary_destroy(pool->sp_group);
+	if (rc != 0)
+		D_ERROR(DF_UUID": failed to destroy pool group: %d\n",
+			DP_UUID(pool->sp_uuid), rc);
 
 	ABT_cond_free(&pool->sp_fetch_hdls_cond);
 	ABT_cond_free(&pool->sp_fetch_hdls_done_cond);
@@ -488,13 +488,10 @@ ds_pool_put(struct ds_pool *pool)
 	ABT_mutex_unlock(pool_cache_lock);
 }
 
-#define STACK_HDL_BUF_SIZE	1024
 void
 pool_fetch_hdls_ult(void *data)
 {
 	struct ds_pool	*pool = data;
-	char		buf[STACK_HDL_BUF_SIZE];
-	d_iov_t		iov = { 0 };
 	int		rc = 0;
 
 	/* sp_map == NULL means the IV ns is not setup yet, i.e.
@@ -505,32 +502,15 @@ pool_fetch_hdls_ult(void *data)
 	if (pool->sp_map == NULL)
 		ABT_cond_wait(pool->sp_fetch_hdls_cond, pool->sp_mutex);
 	ABT_mutex_unlock(pool->sp_mutex);
-retry:
+
 	if (pool->sp_stopping) {
-		D_DEBUG(DB_MD, DF_UUID" skip fetching hdl due to stop\n",
+		D_DEBUG(DB_MD, DF_UUID": skip fetching hdl due to stop\n",
 			DP_UUID(pool->sp_uuid));
 		D_GOTO(out, rc);
 	}
-	memset(buf, 0, STACK_HDL_BUF_SIZE);
-	d_iov_set(&iov, buf, STACK_HDL_BUF_SIZE);
-	rc = ds_pool_iv_conn_hdl_fetch(pool, NULL, &iov);
+	rc = ds_pool_iv_conn_hdl_fetch(pool);
 	if (rc) {
-		if (rc == -DER_REC2BIG) {
-			char		*new_buf;
-			uint64_t	new_size = iov.iov_len;
-
-			D_ALLOC(new_buf, new_size);
-			if (new_buf == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
-			if (iov.iov_buf != buf)
-				daos_iov_free(&iov);
-			iov.iov_buf = new_buf;
-			iov.iov_buf_len = new_size;
-			iov.iov_len = 0;
-			D_DEBUG(DB_MD, "realloc "DF_U64" and retry.\n",
-				new_size);
-			D_GOTO(retry, rc);
-		}
+		D_ERROR("iv conn fetch %d\n", rc);
 		D_GOTO(out, rc);
 	}
 
@@ -540,9 +520,6 @@ out:
 	ABT_mutex_unlock(pool->sp_mutex);
 
 	pool->sp_fetch_hdls = 0;
-
-	if (iov.iov_buf != NULL && iov.iov_buf != buf)
-		D_FREE(iov.iov_buf);
 }
 
 static void
@@ -570,8 +547,8 @@ ds_pool_start_ec_eph_query_ult(struct ds_pool *pool)
 	sched_req_attr_init(&attr, SCHED_REQ_GC, &pool->sp_uuid);
 	pool->sp_ec_ephs_req = sched_req_get(&attr, ec_eph_query_ult);
 	if (pool->sp_ec_ephs_req == NULL) {
-		D_ERROR(DF_UUID"Failed to get req for ec eph query ULT\n",
-		       DP_UUID(pool->sp_uuid));
+		D_ERROR(DF_UUID": Failed to get req for ec eph query ULT\n",
+			DP_UUID(pool->sp_uuid));
 		ABT_thread_join(ec_eph_query_ult);
 		return -DER_NOMEM;
 	}
@@ -585,7 +562,7 @@ ds_pool_tgt_ec_eph_query_abort(struct ds_pool *pool)
 	if (pool->sp_ec_ephs_req == NULL)
 		return;
 
-	D_DEBUG(DB_MD, DF_UUID"Stopping EC query ULT\n",
+	D_DEBUG(DB_MD, DF_UUID": Stopping EC query ULT\n",
 		DP_UUID(pool->sp_uuid));
 
 	sched_req_wait(pool->sp_ec_ephs_req, true);
@@ -979,14 +956,13 @@ pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
 					&coll_args.ca_exclude_tgts,
 					&coll_args.ca_exclude_tgts_cnt);
 	if (rc) {
-		D_ERROR(DF_UUID "failed to get index : rc "DF_RC"\n",
+		D_ERROR(DF_UUID": failed to get index : rc "DF_RC"\n",
 			DP_UUID(pool->sp_uuid), DP_RC(rc));
 		return rc;
 	}
 
 	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
-	if (coll_args.ca_exclude_tgts)
-		D_FREE(coll_args.ca_exclude_tgts);
+	D_FREE(coll_args.ca_exclude_tgts);
 	if (rc) {
 		D_ERROR("Pool query on pool "DF_UUID" failed, "DF_RC"\n",
 			DP_UUID(pool->sp_uuid), DP_RC(rc));
@@ -1050,7 +1026,7 @@ ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic)
 	}
 
 out:
-	if (rc != 0 && hdl != NULL)
+	if (rc != 0)
 		D_FREE(hdl);
 
 	D_DEBUG(DF_DSMS, DF_UUID": connect "DF_RC"\n",
@@ -1257,7 +1233,7 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 				     0, 0, NULL);
 		if (ret) {
 			D_ERROR("dtx_resync_ult failure %d\n", ret);
-			D_FREE_PTR(arg);
+			D_FREE(arg);
 		}
 	} else {
 		D_WARN("Ignore update pool "DF_UUID" %d -> %d\n",
