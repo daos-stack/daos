@@ -11,7 +11,7 @@ from command_utils_base import ObjectWithParameters, BasicParameter
 from pydaos.raw import DaosApiError
 
 
-class CallbackHandler(object):
+class CallbackHandler():
     """Defines a callback method to use with DaosApi class methods."""
 
     def __init__(self, delay=1):

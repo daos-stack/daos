@@ -16,7 +16,7 @@ from pydaos.raw import (DaosApiError, DaosContainer, DaosInputParams,
 from general_utils import get_random_string, DaosTestError
 
 
-class TestContainerData(object):
+class TestContainerData():
     """A class for storing data written to DaosContainer objects."""
 
     def __init__(self, debug=False):

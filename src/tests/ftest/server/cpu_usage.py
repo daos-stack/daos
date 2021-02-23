@@ -35,7 +35,10 @@ class CPUUsage(TestWithServers):
             task = run_task(hosts=self.hostlist_servers, command=ps_engine)
             for output, _ in task.iter_buffers():
                 self.log.info("ps output = %s", output)
-                pid = str(output).splitlines()[-1]
+                if isinstance(output, bytes):
+                    pid = output.decode("utf-8").splitlines()[-1]
+                else:
+                    pid = str(output).splitlines()[-1]
                 self.log.info("PID = %s", pid)
                 if "PID" not in pid:
                     pid_found = True
@@ -51,7 +54,10 @@ class CPUUsage(TestWithServers):
             usage = -1
             task = run_task(hosts=self.hostlist_servers, command=top_pid)
             for output, _ in task.iter_buffers():
-                process_row = str(output).splitlines()[-1]
+                if isinstance(output, bytes):
+                    process_row = output.decode("utf-8").splitlines()[-1]
+                else:
+                    process_row = str(output).splitlines()[-1]
                 self.log.info("Process row = %s", process_row)
                 values = process_row.split()
                 self.log.info("Values = %s", values)

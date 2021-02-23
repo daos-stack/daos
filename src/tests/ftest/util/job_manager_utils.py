@@ -755,7 +755,10 @@ class Systemctl(JobManager):
         self._systemctl.unit_command.value = "is-active"
         task = run_task(self._hosts, self.__str__(), self.timeout)
         for output, nodelist in task.iter_buffers():
-            output = str(output)
+            if isinstance(output, bytes):
+                output = output.decode("utf-8")
+            else:
+                output = str(output)
             nodeset = NodeSet.fromlist(nodelist)
             status &= output in valid_states
             if output not in states:
@@ -843,7 +846,10 @@ class Systemctl(JobManager):
 
             for output_buffer, output_hosts in output_data:
                 node_set = NodeSet.fromlist(output_hosts)
-                lines = str(output_buffer).splitlines()
+                if isinstance(output_buffer, bytes):
+                    lines = output_buffer.decode("utf-8").splitlines()
+                else:
+                    lines = str(output_buffer).splitlines()
 
                 if status:
                     # Add the successful output from each node to the dictionary

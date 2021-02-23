@@ -33,7 +33,7 @@ except ImportError:
     from tempfile import mkdtemp
     from shutil import rmtree
 
-    class TemporaryDirectory(object):
+    class TemporaryDirectory():
         # pylint: disable=too-few-public-methods
         """Create a temporary directory.
         When the last reference of this object goes out of scope the directory
@@ -1277,7 +1277,11 @@ def check_big_files(avocado_logs_dir, task, test_name, args):
     for output, nodelist in task.iter_buffers():
         node_set = NodeSet.fromlist(nodelist)
         hosts.update(node_set)
-        big_files = re.findall(r"Y:\s([0-9]+)", str(output))
+        if isinstance(output, bytes):
+            output = output.decode("utf-8")
+        else:
+            output = str(output)
+        big_files = re.findall(r"Y:\s([0-9]+)", output)
         if big_files:
             cdata.append(
                 "The following log files on {} exceeded the {} "
@@ -1696,7 +1700,10 @@ def get_daos_server_service_status(host_list):
     command = "systemctl is-active daos_server.service"
     task = get_remote_output(host_list, command)
     for output, nodelist in task.iter_buffers():
-        output = str(output)
+        if isinstance(output, bytes):
+            output = output.decode("utf-8")
+        else:
+            output = str(output)
         nodeset = NodeSet.fromlist(nodelist)
         if output in states_requiring_stop:
             hosts["stop"].add(nodeset)

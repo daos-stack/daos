@@ -30,8 +30,9 @@ class EvictTests(TestWithServers):
         Args:
             hostlist (list): list of daos server nodes
             targets (list): List of targets for pool create
+
         Returns:
-            TestPool (object)
+            TestPool: a TestPool object
 
         """
         pool = TestPool(self.context, self.get_dmg_command())

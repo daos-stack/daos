@@ -16,7 +16,7 @@ import os
 import random
 
 
-class DirTree(object):
+class DirTree():
     """
     This class creates a directory-tree. The height, the number of files and
     subdirectories that will be created to populate the directory-tree are

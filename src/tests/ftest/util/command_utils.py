@@ -887,7 +887,7 @@ class YamlCommand(SubProcessCommand):
         return self.get_config_value("socket_dir")
 
 
-class SubprocessManager(object):
+class SubprocessManager():
     """Defines an object that manages a sub process launched with orterun."""
 
     def __init__(self, command, manager="Orterun"):

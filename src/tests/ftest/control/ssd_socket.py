@@ -94,7 +94,10 @@ class SSDSocketTest(TestWithServers):
             # Obtain the numa_node content.
             fs_socket_id = ""
             for output, _ in task.iter_buffers():
-                fs_socket_id = str(output).splitlines()[-1]
+                if isinstance(output, bytes):
+                    fs_socket_id = output.decode("utf-8").splitlines()[-1]
+                else:
+                    fs_socket_id = str(output).splitlines()[-1]
 
             # Test that the content is expected.
             if fs_socket_id != cmd_socket_id:

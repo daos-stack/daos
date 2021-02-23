@@ -128,13 +128,16 @@ class ServerFillUp(IorTestBase):
             if _rc_code == 1:
                 print("Failed to lsblk on {}".format(_node))
                 raise ValueError
-        #Get the drive size from each engine
-        for buf, nodelist in task.iter_buffers():
+        # Get the drive size from each engine
+        for output, nodelist in task.iter_buffers():
             for node in nodelist:
                 pcmem_data = {}
-                output = str(buf).split('\n')
-                for _tmp in output:
-                    pcmem_data[_tmp.split()[0]] = _tmp.split()[3]
+                if isinstance(output, bytes):
+                    lines = output.decode("utf-8").splitlines()
+                else:
+                    lines = str(output).splitlines()
+                for line in lines:
+                    pcmem_data[line.split()[0]] = line.split()[3]
                 scm_data['{}'.format(node)] = pcmem_data
 
         return scm_data
@@ -153,14 +156,17 @@ class ServerFillUp(IorTestBase):
             if _rc_code == 1:
                 print("Failed to lsblk on {}".format(_node))
                 raise ValueError
-        #Get the drive size from each engine
-        for buf, nodelist in task.iter_buffers():
+        # Get the drive size from each engine
+        for output, nodelist in task.iter_buffers():
             for node in nodelist:
                 disk_data = {}
-                output = str(buf).split('\n')
-                for _tmp in output[1:]:
-                    if 'nvme' in _tmp:
-                        disk_data[_tmp.split()[0]] = _tmp.split()[3]
+                if isinstance(output, bytes):
+                    lines = output.decode("utf-8").splitlines()
+                else:
+                    lines = str(output).splitlines()
+                for line in lines[1:]:
+                    if 'nvme' in line:
+                        disk_data[line.split()[0]] = line.split()[3]
                     nvme_data['{}'.format(node)] = disk_data
 
         return nvme_data
@@ -177,7 +183,7 @@ class ServerFillUp(IorTestBase):
         nvme_lsblk = self.get_nvme_lsblk()
         nvme_readlink = {}
 
-        #Create the dictionary for NVMe readlink.
+        # Create the dictionary for NVMe readlink.
         for server, items in list(nvme_lsblk.items()):
             tmp_dict = {}
             for drive in items:
@@ -188,10 +194,13 @@ class ServerFillUp(IorTestBase):
                     if _rc_code == 1:
                         print("Failed to readlink on {}".format(_node))
                         raise ValueError
-                #Get the drive size from each engine
-                for buf, _node in task.iter_buffers():
-                    output = str(buf).split('\n')
-                tmp_dict[output[0].split('/')[-1]] = drive.split()[0]
+                # Get the drive size from each engine
+                for output, _ in task.iter_buffers():
+                    if isinstance(output, bytes):
+                        lines = output.decode("utf-8").splitlines()
+                    else:
+                        lines = str(output).splitlines()
+                    tmp_dict[lines[0].split('/')[-1]] = drive.split()[0]
             nvme_readlink[server] = tmp_dict
 
         return nvme_lsblk, nvme_readlink

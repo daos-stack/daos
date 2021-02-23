@@ -25,7 +25,7 @@ class DaosTestError(Exception):
     """DAOS API exception class."""
 
 
-class SimpleProfiler(object):
+class SimpleProfiler():
     """
     Simple profiler that counts the number of times a function is called
     and measure its execution time.
@@ -360,7 +360,10 @@ def get_host_data(hosts, command, text, error, timeout=None):
                             NodeSet.fromlist(host_list), code, command))
                 else:
                     for output, o_hosts in output_data:
-                        lines = str(output).splitlines()
+                        if isinstance(output, bytes):
+                            lines = output.decode("utf-8").splitlines()
+                        else:
+                            lines = str(output).splitlines()
                         info = "rc={}{}".format(
                             code,
                             ", {}".format(output) if len(lines) < 2 else
@@ -376,7 +379,10 @@ def get_host_data(hosts, command, text, error, timeout=None):
 
     else:
         for output, host_list in task.iter_buffers(data[0]):
-            host_data[NodeSet.fromlist(host_list)] = str(output)
+            if isinstance(output, bytes):
+                host_data[NodeSet.fromlist(host_list)] = output.decode("utf-8")
+            else:
+                host_data[NodeSet.fromlist(host_list)] = str(output)
 
     return host_data
 
@@ -428,8 +434,11 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
             nodeset = NodeSet.fromlist(bf_nodes)
 
             # Display the output per node set
-            print("  {}:\n    {}".format(
-                nodeset, "\n    ".join(str(output).splitlines())))
+            if isinstance(output, bytes):
+                lines = output.decode("utf-8").splitlines()
+            else:
+                lines = str(output).splitlines()
+            print("  {}:\n    {}".format(nodeset, "\n    ".join(lines)))
 
     # Report any timeouts
     if timeout and task.num_timeout() > 0:
@@ -796,15 +805,17 @@ def error_count(error, hostlist, log_file):
     other_error_count = 0
     cmd = 'cat {} | grep ERR'.format(get_log_file(log_file))
     task = run_task(hostlist, cmd)
-    for buf, _nodes in task.iter_buffers():
-        output = str(buf).split('\n')
-
-    for line in output:
-        if 'ERR' in line:
-            if error in line:
-                requested_error_count += 1
-            else:
-                other_error_count += 1
+    for output, _ in task.iter_buffers():
+        if isinstance(output, bytes):
+            lines = output.decode("utf-8").splitlines()
+        else:
+            lines = str(output).splitlines()
+        for line in lines:
+            if 'ERR' in line:
+                if error in line:
+                    requested_error_count += 1
+                else:
+                    other_error_count += 1
 
     return requested_error_count, other_error_count
 

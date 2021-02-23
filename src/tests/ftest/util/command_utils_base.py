@@ -13,7 +13,7 @@ class CommandFailure(Exception):
     """Base exception for this module."""
 
 
-class BasicParameter(object):
+class BasicParameter():
     """A class for parameters whose values are read from a yaml file."""
 
     def __init__(self, value, default=None, yaml_key=None):
@@ -222,7 +222,7 @@ class LogParameter(FormattedParameter):
         self.log.debug("  Added the directory: %s => %s", name, self.value)
 
 
-class ObjectWithParameters(object):
+class ObjectWithParameters():
     """A class for an object with parameters."""
 
     def __init__(self, namespace):

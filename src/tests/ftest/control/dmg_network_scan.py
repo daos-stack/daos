@@ -14,7 +14,7 @@ from avocado.utils import process
 from apricot import TestWithServers
 
 
-class NetDev(object):
+class NetDev():
     # pylint: disable=too-few-public-methods
     """A class to represent the information of a network device"""
 
