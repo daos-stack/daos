@@ -306,7 +306,10 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 	int			rc;
 
 	pool = dc_hdl2pool(dc_cont_hdl2pool_hdl(obj->cob_coh));
-	D_ASSERT(pool != NULL);
+	if (pool == NULL) {
+		D_WARN("Cannot find valid pool\n");
+		D_GOTO(out, rc = -DER_NO_HDL);
+	}
 
 	map = pl_map_find(pool->dp_pool, obj->cob_md.omd_id);
 	dc_pool_put(pool);
@@ -316,7 +319,7 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	obj->cob_md.omd_ver = pool_map_get_version(pool->dp_map);
+	obj->cob_md.omd_ver = dc_pool_get_version(pool);
 	rc = pl_obj_place(map, &obj->cob_md, NULL, &layout);
 	pl_map_decref(map);
 	if (rc != 0) {
@@ -769,11 +772,10 @@ obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr)
 		return;
 
 	for (i = 0; i < iod_nr; i++) {
-		iod = reasb_req->orr_iods + i;
-		if (iod->iod_recxs != NULL)
-			D_FREE(iod->iod_recxs);
-		d_sgl_fini(reasb_req->orr_sgls + i, false);
-		obj_io_desc_fini(reasb_req->orr_oiods + i);
+		iod = &reasb_req->orr_iods[i];
+		D_FREE(iod->iod_recxs);
+		d_sgl_fini(&reasb_req->orr_sgls[i], false);
+		obj_io_desc_fini(&reasb_req->orr_oiods[i]);
 		obj_ec_recxs_fini(&reasb_req->orr_recxs[i]);
 		obj_ec_seg_sorter_fini(&reasb_req->orr_sorters[i]);
 		obj_ec_tgt_oiod_fini(reasb_req->tgt_oiods);
@@ -2990,7 +2992,8 @@ obj_shard_list_obj_cb(struct shard_auxi_args *shard_auxi,
 	}
 	iter_arg->merge_nr += shard_arg->la_nr;
 
-	D_DEBUG(DB_TRACE, "merge_nr %d\n", iter_arg->merge_nr);
+	D_DEBUG(DB_TRACE, "merge_nr %d/"DF_U64"\n", iter_arg->merge_nr,
+		obj_arg->sgl->sg_iovs[0].iov_len);
 	return rc;
 }
 
@@ -5387,4 +5390,43 @@ daos_dc_obj2id(void *ptr, daos_obj_id_t *id)
 	struct dc_object *obj = ptr;
 
 	*id = obj->cob_md.omd_id;
+}
+
+int
+daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
+		      daos_ofeat_t ofeats, daos_oclass_id_t cid,
+		      daos_oclass_hints_t hints, uint32_t args)
+{
+	daos_handle_t		poh;
+	struct dc_pool		*pool;
+	struct pl_map_attr	attr;
+	int			rc;
+
+	/** TODO - unsupported for now */
+	if (cid == OC_UNKNOWN)
+		return -DER_INVAL;
+
+	/** select the oclass */
+	poh = dc_cont_hdl2pool_hdl(coh);
+	if (daos_handle_is_inval(poh))
+		return -DER_NO_HDL;
+
+	pool = dc_hdl2pool(poh);
+	D_ASSERT(pool);
+
+	rc = pl_map_query(pool->dp_pool, &attr);
+	D_ASSERT(rc == 0);
+	dc_pool_put(pool);
+
+	D_DEBUG(DB_TRACE, "available domain=%d, targets=%d\n",
+		attr.pa_domain_nr, attr.pa_target_nr);
+
+	rc = daos_oclass_fit_max(cid, attr.pa_domain_nr, attr.pa_target_nr,
+				 &cid);
+	if (rc)
+		return rc;
+
+	daos_obj_set_oid(oid, ofeats, cid, args);
+
+	return rc;
 }

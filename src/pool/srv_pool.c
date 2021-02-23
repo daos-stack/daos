@@ -1869,21 +1869,21 @@ transfer_map_buf(struct pool_buf *map_buf, uint32_t map_version,
 {
 	size_t			map_buf_size;
 	daos_size_t		remote_bulk_size;
-	d_iov_t		map_iov;
+	d_iov_t			map_iov;
 	d_sg_list_t		map_sgl;
 	crt_bulk_t		bulk = CRT_BULK_NULL;
 	struct crt_bulk_desc	map_desc;
 	crt_bulk_opid_t		map_opid;
 	ABT_eventual		eventual;
+	uint32_t		pm_ver;
 	int		       *status;
 	int			rc;
 
-	if (map_version != pool_map_get_version(svc->ps_pool->sp_map)) {
+	pm_ver = ds_pool_get_version(svc->ps_pool);
+	if (map_version != pm_ver) {
 		D_ERROR(DF_UUID": found different cached and persistent pool "
 			"map versions: cached=%u persistent=%u\n",
-			DP_UUID(svc->ps_uuid),
-			pool_map_get_version(svc->ps_pool->sp_map),
-			map_version);
+			DP_UUID(svc->ps_uuid), pm_ver, map_version);
 		D_GOTO(out, rc = -DER_IO);
 	}
 
@@ -2151,7 +2151,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 		rc = pool_space_query_bcast(rpc->cr_ctx, svc, in->pci_op.pi_hdl,
 					    &out->pco_space);
 out_map_version:
-	out->pco_op.po_map_version = pool_map_get_version(svc->ps_pool->sp_map);
+	out->pco_op.po_map_version = ds_pool_get_version(svc->ps_pool);
 	if (map_buf)
 		D_FREE(map_buf);
 out_lock:
@@ -2794,7 +2794,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 		D_GOTO(out_map_version, rc);
 
 out_map_version:
-	out->pqo_op.po_map_version = pool_map_get_version(svc->ps_pool->sp_map);
+	out->pqo_op.po_map_version = ds_pool_get_version(svc->ps_pool);
 	if (map_buf)
 		D_FREE(map_buf);
 out_lock:
@@ -3963,10 +3963,12 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 	}
 
 out_map:
-	if (map_version_p != NULL)
-		*map_version_p = pool_map_get_version((map == NULL || rc != 0) ?
-						      svc->ps_pool->sp_map :
-						      map);
+	if (map_version_p != NULL) {
+		if (map == NULL || rc != 0)
+			*map_version_p = ds_pool_get_version(svc->ps_pool);
+		else
+			*map_version_p = pool_map_get_version(map);
+	}
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 	if (map)
@@ -4284,6 +4286,26 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 	if (rc)
 		D_GOTO(out, rc);
 
+	if (out_list->pta_number > 0) {
+		int i;
+
+		/*
+		 * If any invalid ranks/targets were specified here, abort the
+		 * entire request. This will mean the operator needs to resubmit
+		 * the request with corrected arguments, which will be easier
+		 * without trying to figure out which arguments were accepted &
+		 * started processing already.
+		 */
+		for (i = 0; i < out_list->pta_number; i++) {
+			D_WARN("Got request to update nonexistent rank %u "
+			       "target %u\n",
+			       out_list->pta_addrs[i].pta_rank,
+			       out_list->pta_addrs[i].pta_target);
+		}
+		D_GOTO(out, rc = -DER_NONEXIST);
+	}
+
+
 	/* Update target by target id */
 	rc = ds_pool_update_internal(pool_uuid, &target_list, opc, hint,
 				     &updated, evict_rank, map_version,
@@ -4419,10 +4441,12 @@ pool_extend_map(struct rdb_tx *tx, struct pool_svc *svc,
 	ds_rsvc_request_map_dist(&svc->ps_rsvc);
 
 out_map:
-	if (map_version_p != NULL)
-		*map_version_p = pool_map_get_version((map == NULL || rc != 0) ?
-						      svc->ps_pool->sp_map :
-						      map);
+	if (map_version_p != NULL) {
+		if (map == NULL || rc != 0)
+			*map_version_p = ds_pool_get_version(svc->ps_pool);
+		else
+			*map_version_p = pool_map_get_version(map);
+	}
 	rdb_tx_end(tx);
 
 out_map_buf:

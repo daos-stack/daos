@@ -15,10 +15,10 @@
  * a whole message at a time without knowing its size. So for this reason
  * we need to restrict the maximum message size so we can preallocate a
  * buffer to put all of the information in. This value is also defined in
- * the corresponding golang file domain_socket_server.go. If changed here
+ * the corresponding control plane file drpc_server.go. If changed here
  * it must be changed in that file as well
  */
-#define UNIXCOMM_MAXMSGSIZE 16384
+#define UNIXCOMM_MAXMSGSIZE (1 << 17)
 
 struct unixcomm {
 	int fd; /** File descriptor of the unix domain socket */
