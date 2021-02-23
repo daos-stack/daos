@@ -121,6 +121,10 @@ post_provision_config_nodes() {
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
     dnf -y install redhat-lsb-core
+
+    pip3 install --upgrade pip
+    pip3 install clustershell
+
     # shellcheck disable=SC2086
     if [ -n "$INST_RPMS" ] &&
        ! dnf -y $dnf_repo_args install $INST_RPMS; then
