@@ -435,8 +435,10 @@ int migrate_pool_tls_create_one(void *data)
 	if (rc)
 		D_GOTO(out, rc);
 
-	D_DEBUG(DB_REBUILD, "TLS %p create for "DF_UUID" ver %d rc %d\n",
-		pool_tls, DP_UUID(pool_tls->mpt_pool_uuid), arg->version, rc);
+	D_DEBUG(DB_REBUILD, "TLS %p create for "DF_UUID" "DF_UUID"/"DF_UUID
+		"ver %d rc %d\n", pool_tls, DP_UUID(pool_tls->mpt_pool_uuid),
+		DP_UUID(arg->pool_hdl_uuid), DP_UUID(arg->co_hdl_uuid),
+		arg->version, rc);
 	d_list_add(&pool_tls->mpt_list, &tls->ot_pool_list);
 out:
 	if (rc && pool_tls)
@@ -2494,11 +2496,8 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 	while (!dbtree_is_empty(root->root_hdl)) {
 		rc = dbtree_iterate(root->root_hdl, DAOS_INTENT_MIGRATION,
 				    false, migrate_obj_iter_cb, &arg);
-		if (rc || tls->mpt_fini) {
-			if (tls->mpt_status == 0)
-				tls->mpt_status = rc;
+		if (rc || tls->mpt_fini)
 			break;
-		}
 	}
 
 	rc1 = dsc_cont_close(tls->mpt_pool_hdl, coh);
@@ -2536,6 +2535,8 @@ free:
 		D_FREE(snapshots);
 
 out_put:
+	if (tls->mpt_status == 0 && rc < 0)
+		tls->mpt_status = rc;
 	ds_pool_put(dp);
 	return rc;
 }

@@ -248,7 +248,8 @@ struct daos_oclass_attr *daos_oclass_attr_find(daos_obj_id_t oid);
 unsigned int daos_oclass_grp_size(struct daos_oclass_attr *oc_attr);
 unsigned int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
 				struct daos_obj_md *md);
-int daos_oclass_fit_max(int oc_id, int domain_nr, int target_nr, int *oc_id_p);
+int daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
+			daos_oclass_id_t *oc_id_p);
 
 /** bits for the specified rank */
 #define DAOS_OC_SR_SHIFT	24
@@ -319,13 +320,36 @@ daos_oclass_is_ec(daos_obj_id_t oid, struct daos_oclass_attr **attr)
 	return DAOS_OC_IS_EC(oca);
 }
 
+static inline void
+daos_obj_set_oid(daos_obj_id_t *oid, daos_ofeat_t ofeats,
+		 daos_oclass_id_t cid, uint32_t args)
+{
+	uint64_t hdr;
+
+	/* TODO: add check at here, it should return error if user specified
+	 * bits reserved by DAOS
+	 */
+	oid->hi &= (1ULL << OID_FMT_INTR_BITS) - 1;
+	/**
+	 * | Upper bits contain
+	 * | OID_FMT_VER_BITS (version)		 |
+	 * | OID_FMT_FEAT_BITS (object features) |
+	 * | OID_FMT_CLASS_BITS (object class)	 |
+	 * | 96-bit for upper layer ...		 |
+	 */
+	hdr  = ((uint64_t)OID_FMT_VER << OID_FMT_VER_SHIFT);
+	hdr |= ((uint64_t)ofeats << OID_FMT_FEAT_SHIFT);
+	hdr |= ((uint64_t)cid << OID_FMT_CLASS_SHIFT);
+	oid->hi |= hdr;
+}
+
 /* generate ID for Object ID Table which is just an object */
 static inline daos_obj_id_t
 daos_oit_gen_id(daos_epoch_t epoch)
 {
 	daos_obj_id_t	oid = {0};
 
-	daos_obj_generate_id(&oid, 0, DAOS_OC_OIT, 0);
+	daos_obj_set_oid(&oid, 0, DAOS_OC_OIT, 0);
 	oid.lo = epoch;
 	return oid;
 }
