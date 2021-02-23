@@ -774,16 +774,14 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	uint64_t	log_size = LOG_SIZE_DEF;
 	int		pri;
 
+	mst.flush_pri = DLOG_WARN;
+
 	env = getenv(D_LOG_FLUSH_ENV);
 	if (env) {
 		pri = d_log_str2pri(env, strlen(env) + 1);
 
 		if (pri != -1)
 			mst.flush_pri = pri;
-		else
-			mst.flush_pri = DLOG_WARN;
-	} else {
-		mst.flush_pri = DLOG_WARN;
 	}
 
 	env = getenv(D_LOG_TRUNCATE_ENV);

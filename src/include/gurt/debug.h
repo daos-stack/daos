@@ -53,7 +53,7 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 
 #define D_LOG_TRUNCATE_ENV		"D_LOG_TRUNCATE"
 
-/*/< Env to specify flush priority */
+/**< Env to specify flush priority */
 #define D_LOG_FLUSH_ENV			"D_LOG_FLUSH"
 
 /**< Env to specify stderr merge with logfile*/
