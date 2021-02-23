@@ -157,12 +157,11 @@ class IorTestBase(DfuseTestBase):
 
         return out
 
-    def update_ior_cmd_with_pool(self, create_cont=True, oclass=None):
+    def update_ior_cmd_with_pool(self, create_cont=True):
         """Update ior_cmd with pool.
 
         Args:
           create_cont (bool, optional): create a container. Defaults to True.
-          oclass (string, optional): Specify object class
         """
         # Create a pool if one does not already exist
         if self.pool is None:
@@ -172,7 +171,7 @@ class IorTestBase(DfuseTestBase):
         # It will not enable checksum feature
         if create_cont:
             self.pool.connect()
-            self.create_cont(oclass)
+            self.create_cont()
         # Update IOR params with the pool and container params
         self.ior_cmd.set_daos_params(self.server_group, self.pool,
                                      self.container.uuid)
