@@ -22,7 +22,7 @@ class ChecksumContainerValidation(TestWithServers):
     """
     # pylint: disable=too-many-instance-attributes
     def setUp(self):
-        super(ChecksumContainerValidation, self).setUp()
+        super().setUp()
         self.agent_sessions = None
         self.pool = None
         self.container = None

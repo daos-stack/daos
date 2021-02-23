@@ -36,7 +36,7 @@ DaosContPropEnum = enum.Enum(
     {key: value for key, value in list(pydaos_shim.__dict__.items())
      if key.startswith("DAOS_PROP_")})
 
-class DaosPool(object):
+class DaosPool():
     """A python object representing a DAOS pool."""
 
     def __init__(self, context):
@@ -556,7 +556,7 @@ def get_object_class(item):
     """Get the DAOS object class that represents the specified item.
 
     Args:
-        item (object): object enumeration class name, number, or object
+        item (): object enumeration class name, number, or object
 
     Raises:
         DaosApiError: if the object class name does not match
@@ -593,7 +593,7 @@ def get_object_class(item):
                 item, type(item)))
 
 
-class DaosObj(object):
+class DaosObj():
     """A class representing an object stored in a DAOS container."""
 
     def __init__(self, context, container, c_oid=None):
@@ -855,7 +855,7 @@ class DaosObj(object):
             thread.start()
 
 
-class IORequest(object):
+class IORequest():
     """Python object that centralizes details about an I/O type.
 
     Type is either 1 (single) or 2 (array)
@@ -1279,14 +1279,14 @@ class DaosContProperties(ctypes.Structure):
         # input variables which is used
         # to set appropriate
         # container properties.
-        super(DaosContProperties, self).__init__()
+        super().__init__()
         self.type = "Unknown"
         self.enable_chksum = False
         self.srv_verify = False
         self.chksum_type = ctypes.c_uint64(100)
         self.chunk_size = ctypes.c_uint64(0)
 
-class DaosInputParams(object):
+class DaosInputParams():
     # pylint: disable=too-few-public-methods
     """ This is a helper python method
     which can be used to pack input
@@ -1294,7 +1294,7 @@ class DaosInputParams(object):
     (eg: container or pool (future)).
     """
     def __init__(self):
-        super(DaosInputParams, self).__init__()
+        super().__init__()
         # Get the input params for setting
         # container properties for
         # create method.
@@ -1311,7 +1311,7 @@ class DaosInputParams(object):
         """
         return self.co_prop
 
-class DaosContainer(object):
+class DaosContainer():
     """A python object representing a DAOS container."""
 
     def __init__(self, context):
@@ -2040,7 +2040,7 @@ class DaosContainer(object):
             thread.start()
 
 
-class DaosSnapshot(object):
+class DaosSnapshot():
     """A python object that can represent a DAOS snapshot.
 
     We do not save the coh in the snapshot since it is different each time the
@@ -2138,7 +2138,7 @@ class DaosSnapshot(object):
             raise Exception("Failed to destroy the snapshot. RC: {0}"
                             .format(retcode))
 
-class DaosContext(object):
+class DaosContext():
     # pylint: disable=too-few-public-methods
     """Provides environment and other info for a DAOS client."""
 

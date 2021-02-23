@@ -20,7 +20,7 @@ class DeleteContainerACLTest(ContSecurityTestBase):
     """
     def setUp(self):
         """Set up each test case."""
-        super(DeleteContainerACLTest, self).setUp()
+        super().setUp()
         self.daos_cmd = self.get_daos_command()
         self.prepare_pool()
         self.add_container(self.pool)

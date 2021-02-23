@@ -18,7 +18,7 @@ class SimpleCreateDeleteTest(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a SimpleCreateDeleteTest object."""
-        super(SimpleCreateDeleteTest, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.pool = None
         self.container = None
 

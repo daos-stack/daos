@@ -29,7 +29,7 @@ class ZeroConfigTest(TestWithServers):
     def setUp(self):
         """Set up for zero-config test."""
         self.setup_start_servers = False
-        super(ZeroConfigTest, self).setUp()
+        super().setUp()
 
     def get_port_cnt(self, hosts, dev, port_counter):
         """Get the port count info for device names specified.

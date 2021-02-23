@@ -20,7 +20,7 @@ class ObjFetchBadParam(TestWithServers):
     :avocado: recursive
     """
     def setUp(self):
-        super(ObjFetchBadParam, self).setUp()
+        super().setUp()
         time.sleep(5)
 
         self.prepare_pool()

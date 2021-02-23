@@ -26,7 +26,7 @@ class OSAUtils(IorTestBase):
     """
     def setUp(self):
         """Set up for test case."""
-        super(OSAUtils, self).setUp()
+        super().setUp()
         self.container = None
         self.obj = None
         self.ioreq = None

@@ -32,12 +32,12 @@ class PoolSecurityTestBase(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a PoolSecurityTestBase object."""
-        super(PoolSecurityTestBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.dmg = None
 
     def setUp(self):
         """Set up each test case."""
-        super(PoolSecurityTestBase, self).setUp()
+        super().setUp()
 
         # Setup the dmg command object - requires a server to be started
         self.dmg = self.get_dmg_command()

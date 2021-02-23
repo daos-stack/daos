@@ -16,7 +16,7 @@ class DaosCoreTestDfs(DaosCoreBase):
 
     def __init__(self, *args, **kwargs):
         """Initialize the DaosCoreBase object."""
-        super(DaosCoreTestDfs, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.hostfile_clients_slots = None
 
     def test_daos_dfs_unit(self):

@@ -11,7 +11,7 @@ from command_utils_base import ObjectWithParameters, BasicParameter
 from pydaos.raw import DaosApiError
 
 
-class CallbackHandler(object):
+class CallbackHandler():
     """Defines a callback method to use with DaosApi class methods."""
 
     def __init__(self, delay=1):
@@ -74,7 +74,7 @@ class TestDaosApiBase(ObjectWithParameters):
             cb_handler (CallbackHandler, optional): callback object to use with
                 the API methods. Defaults to None.
         """
-        super(TestDaosApiBase, self).__init__(namespace)
+        super().__init__(namespace)
         self.cb_handler = cb_handler
         self.debug = BasicParameter(None, False)
 

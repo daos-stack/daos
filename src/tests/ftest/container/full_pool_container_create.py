@@ -14,7 +14,7 @@ class FullPoolContainerCreate(TestWithServers):
     :avocado: recursive
     """
     def __init__(self, *args, **kwargs):
-        super(FullPoolContainerCreate, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.cont = None
         self.cont2 = None
 

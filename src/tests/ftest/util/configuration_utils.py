@@ -14,7 +14,7 @@ from general_utils import get_host_data
 DATA_ERROR = "[ERROR]"
 
 
-class ConfigurationData(object):
+class ConfigurationData():
     """Defines requirement data for a set of hosts."""
 
     def __init__(self, hosts, timeout=120):
@@ -119,7 +119,7 @@ class ConfigurationParameters(ObjectWithParameters):
             data (ConfigurationData): object retaining the host data needed to
                 verify the configuration requirement
         """
-        super(ConfigurationParameters, self).__init__(namespace + name + "/*")
+        super().__init__(namespace + name + "/*")
         self.name = name
         self._config_data = data
 
@@ -171,7 +171,7 @@ class ConfigurationParameters(ObjectWithParameters):
         return status
 
 
-class Configuration(object):
+class Configuration():
     """Defines a means of obtaining configuration-specific test parameters."""
 
     def __init__(self, test_params, hosts, timeout=120, debug=True):

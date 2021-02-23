@@ -26,7 +26,7 @@ class OSAOfflineParallelTest(OSAUtils):
     """
     def setUp(self):
         """Set up for test case."""
-        super(OSAOfflineParallelTest, self).setUp()
+        super().setUp()
         self.dmg_command = self.get_dmg_command()
         self.out_queue = queue.Queue()
 

@@ -23,7 +23,7 @@ class MacsioCommand(ExecutableCommand):
         Args:
             path (str, optional): path to the macsio command. Defaults to "".
         """
-        super(MacsioCommand, self).__init__("/run/macsio/*", "macsio", path)
+        super().__init__("/run/macsio/*", "macsio", path)
 
         # MACSio command parameters - defaults specified in square brackets:
 
@@ -444,7 +444,7 @@ class MacsioCommand(ExecutableCommand):
                 values to export prior to running daos_racer
 
         """
-        env = super(MacsioCommand, self).get_environment(manager, log_file)
+        env = super().get_environment(manager, log_file)
         mapping = {
             "DAOS_POOL": self.daos_pool,
             "DAOS_SVCL": self.daos_svcl,

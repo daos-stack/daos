@@ -21,7 +21,7 @@ class ArrayObjTest(TestWithServers):
     :avocado: recursive
     """
     def setUp(self):
-        super(ArrayObjTest, self).setUp()
+        super().setUp()
         self.plog = logging.getLogger("progress")
 
     def test_array_obj(self):

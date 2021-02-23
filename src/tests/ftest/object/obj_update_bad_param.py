@@ -20,7 +20,7 @@ class ObjUpdateBadParam(TestWithServers):
     :avocado: recursive
     """
     def setUp(self):
-        super(ObjUpdateBadParam, self).setUp()
+        super().setUp()
         self.plog = logging.getLogger("progress")
         try:
             self.prepare_pool()

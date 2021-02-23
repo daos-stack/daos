@@ -38,7 +38,7 @@ class KvNotFound(Exception):
     def __str__(self):
         return "Failed to create '{}'".format(self.name)
 
-class ObjID(object):
+class ObjID():
     """
     Class representing of DAOS 128-bit object identifier
 
@@ -61,7 +61,7 @@ class ObjID(object):
     def __str__(self):
         return "[" + hex(self.hi) + ":" + hex(self.lo) + "]"
 
-class Cont(object):
+class Cont():
     """
     Class representing of DAOS Container
     Can be identified via a path or a combination of pool UUID and container
@@ -181,7 +181,7 @@ class Cont(object):
     def __str__(self):
         return '{}@{}'.format(self.cuuid, self.puuid)
 
-class _Obj(object):
+class _Obj():
     oh = None
 
     def __init__(self, coh, oid, cont):

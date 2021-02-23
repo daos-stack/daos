@@ -19,7 +19,7 @@ class ErasureCodeIor(ServerFillUp):
     """
     def __init__(self, *args, **kwargs):
         """Initialize a ServerFillUp object."""
-        super(ErasureCodeIor, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.server_count = None
         self.ec_container = None
         self.cont_uuid = []
@@ -27,7 +27,7 @@ class ErasureCodeIor(ServerFillUp):
     def setUp(self):
         """Set up each test case."""
         # Start the servers and agents
-        super(ErasureCodeIor, self).setUp()
+        super().setUp()
 
         self.obj_class = self.params.get("dfs_oclass", '/run/ior/objectclass/*')
         self.ior_chu_trs_blk_size = self.params.get(

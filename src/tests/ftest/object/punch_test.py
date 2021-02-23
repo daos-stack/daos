@@ -18,7 +18,7 @@ class PunchTest(TestWithServers):
     :avocado: recursive
     """
     def setUp(self):
-        super(PunchTest, self).setUp()
+        super().setUp()
         self.prepare_pool()
 
         try:

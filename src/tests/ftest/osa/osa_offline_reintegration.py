@@ -23,7 +23,7 @@ class OSAOfflineReintegration(OSAUtils):
     """
     def setUp(self):
         """Set up for test case."""
-        super(OSAOfflineReintegration, self).setUp()
+        super().setUp()
         self.dmg_command = self.get_dmg_command()
         self.ior_w_flags = self.params.get("write_flags", '/run/ior/iorflags/*')
         self.ior_r_flags = self.params.get("read_flags", '/run/ior/iorflags/*')

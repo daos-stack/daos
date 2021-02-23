@@ -16,11 +16,11 @@ class EcOnlineRebuild(ErasureCodeIor):
     """
     def __init__(self, *args, **kwargs):
         """Initialize a ErasureCodeIor object."""
-        super(EcOnlineRebuild, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def setUp(self):
         """Set up for test case."""
-        super(EcOnlineRebuild, self).setUp()
+        super().setUp()
         #Enabled Online rebuild
         self.set_online_rebuild = True
 

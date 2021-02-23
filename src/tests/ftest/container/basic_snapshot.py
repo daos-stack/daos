@@ -30,7 +30,7 @@ class BasicSnapshot(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a BasicSnapshot object."""
-        super(BasicSnapshot, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.snapshot = None
 
     def test_basic_snapshot(self):

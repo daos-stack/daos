@@ -24,7 +24,7 @@ class CartRpcOneNodeTest(TestWithoutServers):
         """ Tear down """
         self.report_timeout()
         self._teardown_errors.extend(self.utils.cleanup_processes())
-        super(CartRpcOneNodeTest, self).tearDown()
+        super().tearDown()
 
     def test_cart_rpc(self):
         """

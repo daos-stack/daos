@@ -20,7 +20,7 @@ class SCMConfigTest(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a SCMConfigTest object."""
-        super(SCMConfigTest, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.obj = None
 
     @avocado.fail_on(DaosApiError)

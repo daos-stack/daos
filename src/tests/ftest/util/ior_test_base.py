@@ -33,7 +33,7 @@ class IorTestBase(DfuseTestBase):
 
     def __init__(self, *args, **kwargs):
         """Initialize a IorTestBase object."""
-        super(IorTestBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.ior_cmd = None
         self.processes = None
         self.hostfile_clients_slots = None
@@ -45,7 +45,7 @@ class IorTestBase(DfuseTestBase):
         # obtain separate logs
         self.update_log_file_names()
         # Start the servers and agents
-        super(IorTestBase, self).setUp()
+        super().setUp()
 
         # Get the parameters for IOR
         self.ior_cmd = IorCommand()

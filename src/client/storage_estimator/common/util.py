@@ -14,7 +14,7 @@ from storage_estimator.vos_size import MetaOverhead
 from storage_estimator.vos_structures import Containers
 
 
-class CommonBase(object):
+class CommonBase():
     def __init__(self):
         self._verbose = False
 
@@ -116,7 +116,7 @@ class CommonBase(object):
 
 class ObjectClass(CommonBase):
     def __init__(self, args):
-        super(ObjectClass, self).__init__()
+        super().__init__()
         self._dir_oclass = self._update_oclass(args, 'dir_oclass', 'S1')
         self._file_oclass = self._update_oclass(args, 'file_oclass', 'SX')
         self.set_verbose(args.verbose)
@@ -350,7 +350,7 @@ class Common(CommonBase):
 
 class ProcessBase(Common):
     def __init__(self, args):
-        super(ProcessBase, self).__init__(args)
+        super().__init__(args)
         self._oclass = ObjectClass(args)
         self._process_block_values()
         self._process_checksum()

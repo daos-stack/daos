@@ -24,7 +24,7 @@ class ObjectDataValidation(TestWithServers):
     """
     # pylint: disable=too-many-instance-attributes
     def setUp(self):
-        super(ObjectDataValidation, self).setUp()
+        super().setUp()
         self.obj = None
         self.ioreq = None
         self.no_of_dkeys = None

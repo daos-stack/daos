@@ -20,7 +20,7 @@ class CSumErrorLog(DaosCoreBase):
     """
     # pylint: disable=too-many-instance-attributes,too-many-ancestors
     def setUp(self):
-        super(CSumErrorLog, self).setUp()
+        super().setUp()
         self.dmg = self.get_dmg_command()
         self.dmg.hostlist = self.hostlist_servers[0]
 

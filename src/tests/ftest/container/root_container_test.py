@@ -21,7 +21,7 @@ class RootContainerTest(DfuseTestBase):
 
     def __init__(self, *args, **kwargs):
         """Initialize a RootContainerTest object."""
-        super(RootContainerTest, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.pool = []
         self.container = []
         self.tmp_file_count = self.params.get(
@@ -38,7 +38,7 @@ class RootContainerTest(DfuseTestBase):
     def setUp(self):
         """Set up each test case."""
         # Start the servers and agents
-        super(RootContainerTest, self).setUp()
+        super().setUp()
         self.dfuse_hosts = None
 
     def _create_pool(self):

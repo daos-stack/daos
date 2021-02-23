@@ -18,7 +18,7 @@ class DfuseCommand(ExecutableCommand):
 
     def __init__(self, namespace, command):
         """Create a dfuse Command object."""
-        super(DfuseCommand, self).__init__(namespace, command)
+        super().__init__(namespace, command)
 
         # dfuse options
         self.puuid = FormattedParameter("--pool {}")
@@ -79,7 +79,7 @@ class Dfuse(DfuseCommand):
 
     def __init__(self, hosts, tmp):
         """Create a dfuse object."""
-        super(Dfuse, self).__init__("/run/dfuse/*", "dfuse")
+        super().__init__("/run/dfuse/*", "dfuse")
 
         # set params
         self.hosts = hosts

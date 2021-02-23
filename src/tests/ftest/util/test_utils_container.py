@@ -16,7 +16,7 @@ from pydaos.raw import (DaosApiError, DaosContainer, DaosInputParams,
 from general_utils import get_random_string, DaosTestError
 
 
-class TestContainerData(object):
+class TestContainerData():
     """A class for storing data written to DaosContainer objects."""
 
     def __init__(self, debug=False):
@@ -244,7 +244,7 @@ class TestContainer(TestDaosApiBase):
             cb_handler (CallbackHandler, optional): callback object to use with
                 the API methods. Defaults to None.
         """
-        super(TestContainer, self).__init__("/run/container/*", cb_handler)
+        super().__init__("/run/container/*", cb_handler)
         self.pool = pool
 
         self.object_qty = BasicParameter(None)
@@ -285,7 +285,7 @@ class TestContainer(TestDaosApiBase):
         """
         if self.container is not None and self.uuid is not None:
             return str(self.uuid)
-        return super(TestContainer, self).__str__()
+        return super().__str__()
 
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
@@ -301,7 +301,7 @@ class TestContainer(TestDaosApiBase):
         Args:
             test (Test): avocado Test object
         """
-        super(TestContainer, self).get_params(test)
+        super().get_params(test)
         if self.daos:
             self.daos.timeout = self.daos_timeout.value
 

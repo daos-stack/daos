@@ -36,7 +36,7 @@ class Snapshot(TestWithServers):
         """
         set up method
         """
-        super(Snapshot, self).setUp()
+        super().setUp()
         self.log.info("==In setUp, self.context= %s", self.context)
 
         # initialize a python pool object then create the underlying
