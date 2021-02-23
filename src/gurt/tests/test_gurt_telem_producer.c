@@ -36,8 +36,8 @@ test_increment_counter(void **state)
 	int				i;
 
 	for (i = 0; i < count - 1; i++) {
-		rc = d_tm_increment_counter(&loop, "gurt", "tests", "telem",
-					    "loop counter", NULL);
+		rc = d_tm_increment_counter(&loop,
+					    "gurt/tests/telem/loop counter");
 		assert(rc == D_TM_SUCCESS);
 	}
 
@@ -59,19 +59,16 @@ test_gauge(void **state)
 	int				rc;
 	int				i;
 
-	rc = d_tm_set_gauge(&gauge, init_val, "gurt", "tests", "telem",
-			    "gauge", NULL);
+	rc = d_tm_set_gauge(&gauge, init_val, "gurt/tests/telem/gauge");
 	assert(rc == D_TM_SUCCESS);
 
 	for (i = 0; i < inc_count; i++) {
-		rc = d_tm_increment_gauge(&gauge, 1, "gurt", "tests", "telem",
-					  "gauge", NULL);
+		rc = d_tm_increment_gauge(&gauge, 1, "gurt/tests/telem/gauge");
 		assert(rc == D_TM_SUCCESS);
 	}
 
 	for (i = 0; i < dec_count; i++) {
-		rc = d_tm_decrement_gauge(&gauge, 1, "gurt", "tests", "telem",
-					  "gauge", NULL);
+		rc = d_tm_decrement_gauge(&gauge, 1, "gurt/tests/telem/gauge");
 		assert(rc == D_TM_SUCCESS);
 	}
 }
@@ -82,8 +79,7 @@ test_record_timestamp(void **state)
 	static struct d_tm_node_t	*ts;
 	int				rc;
 
-	rc = d_tm_record_timestamp(&ts, "gurt", "tests", "telem",
-				   "last executed", NULL);
+	rc = d_tm_record_timestamp(&ts, "gurt/tests/telem/last executed");
 	assert(rc == D_TM_SUCCESS);
 }
 
@@ -95,9 +91,7 @@ test_interval_timer(void **state)
 	int				rc;
 
 	rc = d_tm_mark_duration_start(&timer, D_TM_CLOCK_REALTIME,
-				      "gurt", "tests", "telem", "interval",
-				      NULL);
-
+				      "gurt/tests/telem/interval");
 	assert(rc == D_TM_SUCCESS);
 
 	ts.tv_sec = 0;
@@ -115,8 +109,7 @@ test_timer_snapshot_sample_1(void **state)
 	int				rc;
 
 	rc = d_tm_take_timer_snapshot(&snapshot, D_TM_CLOCK_REALTIME,
-				      "gurt", "tests", "telem",
-				      "snapshot sample 1", NULL);
+				      "gurt/tests/telem/snapshot sample 1");
 	assert(rc == D_TM_SUCCESS);
 }
 
@@ -127,8 +120,7 @@ test_timer_snapshot_sample_2(void **state)
 	int				rc;
 
 	rc = d_tm_take_timer_snapshot(&snapshot, D_TM_CLOCK_REALTIME,
-				      "gurt", "tests", "telem",
-				      "snapshot sample 2", NULL);
+				      "gurt/tests/telem/snapshot sample 2");
 	assert(rc == D_TM_SUCCESS);
 }
 
@@ -142,8 +134,7 @@ test_input_validation(void **state)
 	int				i;
 
 	/** uninitialized node ptr at initialization time */
-	rc = d_tm_increment_counter(&node, "gurt", "tests", "telem",
-				    "counter 1", NULL);
+	rc = d_tm_increment_counter(&node, "gurt/tests/telem/counter 1");
 	assert(rc == D_TM_SUCCESS);
 
 	/** Use the initialized node without specifying a name */
@@ -151,14 +142,12 @@ test_input_validation(void **state)
 	assert(rc == D_TM_SUCCESS);
 
 	/** Provide a NULL node pointer, force the API to use the name */
-	rc = d_tm_increment_counter(NULL, "gurt", "tests", "telem",
-				    "counter 1", NULL);
+	rc = d_tm_increment_counter(NULL, "gurt/tests/telem/counter 1");
 	assert(rc == D_TM_SUCCESS);
 
 	/** Verify correct function associated with this metric type is used */
 	printf("This operation is expected to generate an error:\n");
-	rc = d_tm_increment_gauge(NULL, 1, "gurt", "tests", "telem",
-				  "counter 1", NULL);
+	rc = d_tm_increment_gauge(NULL, 1, "gurt/tests/telem/counter 1");
 	assert(rc == -DER_OP_NOT_PERMITTED);
 
 	/** Verify correct function associated with this metric type is used */
@@ -174,6 +163,20 @@ test_input_validation(void **state)
 	rc = d_tm_increment_counter(&temp, NULL);
 	assert(rc == -DER_INVAL);
 
+
+	/** format specifier with strings */
+	rc = d_tm_increment_counter(NULL, "%s/%s", "my", "counter");
+	assert(rc == D_TM_SUCCESS);
+
+	/** format specifier with numbers */
+	rc = d_tm_increment_counter(NULL, "%d", rand() % 10000);
+	assert(rc == D_TM_SUCCESS);
+
+	/** format specifier with strings and numbers */
+	rc = d_tm_increment_counter(NULL, "my/%s/format/type/%d", "arbitrary",
+				    7);
+	assert(rc == D_TM_SUCCESS);
+
 	/**
 	 * The API accepts a path length that is D_TM_MAX_NAME_LEN including
 	 * the null terminator.  Any path exceeding that generates an error.
@@ -185,30 +188,29 @@ test_input_validation(void **state)
 	for (i = 0; i < D_TM_MAX_NAME_LEN; i++)
 		path[i] = '0' + i % 10;
 	path[D_TM_MAX_NAME_LEN] = 0;
-	rc = d_tm_increment_counter(NULL, path, NULL);
+	rc = d_tm_increment_counter(NULL, path);
 	assert(rc == -DER_EXCEEDS_PATH_LEN);
 
 	/** Now trim the path by 1 character to make it fit */
 	path[D_TM_MAX_NAME_LEN - 1] = 0;
-	rc = d_tm_increment_counter(NULL, path, NULL);
+	rc = d_tm_increment_counter(NULL, path);
 	assert(rc == D_TM_SUCCESS);
 
 	/**
 	 * After using "root" + "/", size the buffer 1 character too large
-	 * Note that the "/" is added by the API when building the full path.
 	 */
 	path[D_TM_MAX_NAME_LEN - 5]  = 0;
-	rc = d_tm_increment_counter(NULL, "root", path, NULL);
+	rc = d_tm_increment_counter(NULL, "root/%s", path);
 	assert(rc == -DER_EXCEEDS_PATH_LEN);
 
 	/**
 	 * After using "root" + "/", size the buffer correctly so it just fits.
-	 * Note that the "/" is added by the API when building the full path.
 	 */
 	path[D_TM_MAX_NAME_LEN - 6] = 0;
-	rc = d_tm_increment_counter(NULL, "root", path, NULL);
+	rc = d_tm_increment_counter(NULL, "root/%s", path);
 	assert(rc == D_TM_SUCCESS);
 	D_FREE_PTR(path);
+
 }
 
 static void
@@ -247,7 +249,7 @@ test_gauge_stats(void **state)
 	len =  (int)(sizeof(test_values) / sizeof(int));
 	for (i = 0; i < len; i++) {
 		rc = d_tm_set_gauge(NULL, test_values[i],
-				    "gurt/tests/telem/gauge-stats", NULL);
+				    "gurt/tests/telem/gauge-stats");
 		assert(rc == D_TM_SUCCESS);
 	}
 }
@@ -271,8 +273,8 @@ test_duration_stats(void **state)
 	 * or failure.
 	 */
 
-	rc = d_tm_add_metric(&timer, "gurt/tests/telem/duration-stats",
-			     D_TM_DURATION | D_TM_CLOCK_REALTIME, "N/A", "N/A");
+	rc = d_tm_add_metric(&timer, D_TM_DURATION | D_TM_CLOCK_REALTIME,
+			     "N/A", "N/A", "gurt/tests/telem/duration-stats");
 	assert(rc == D_TM_SUCCESS);
 
 	timer->dtn_metric->dtm_data.tms[0].tv_sec = 1;

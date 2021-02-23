@@ -110,7 +110,6 @@ void d_tm_list_free(struct d_tm_nodeList_t *nodeList);
 void d_tm_free_node(uint64_t *shmem_root, struct d_tm_node_t *node);
 struct d_tm_node_t *d_tm_find_child(uint64_t *shmem_root,
 				    struct d_tm_node_t *parent, char *name);
-int d_tm_build_path(char **path, char *item, va_list args);
 int d_tm_alloc_node(struct d_tm_node_t **newnode, char *name);
 int d_tm_add_child(struct d_tm_node_t **newnode, struct d_tm_node_t *parent,
 		   char *name);
