@@ -2815,7 +2815,7 @@ dm_connect(bool is_posix_copy,
 			}
 		}
 	}
-	return rc;
+	D_GOTO(out, rc);
 err_dst:
 	rc = daos_cont_close(ca->dst_coh, NULL);
 	if (rc != 0) {
