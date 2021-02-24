@@ -50,13 +50,14 @@ test_increment_counter(void **state)
 }
 
 static void
-test_set_counter(void **state)
+test_add_to_counter(void **state)
 {
 	static struct d_tm_node_t	*loop;
 	int				count = 5000;
 	int				rc;
 
-	rc = d_tm_set_counter(&loop, count, "gurt/tests/telem/manually_set");
+	/** Create this counter, and add 'count' to it */
+	rc = d_tm_add_to_counter(&loop, count, "gurt/tests/telem/manually_set");
 	assert(rc == DER_SUCCESS);
 
 	/**
@@ -346,7 +347,7 @@ main(int argc, char **argv)
 	const struct CMUnitTest	tests[] = {
 		cmocka_unit_test(test_timer_snapshot_sample_1),
 		cmocka_unit_test(test_increment_counter),
-		cmocka_unit_test(test_set_counter),
+		cmocka_unit_test(test_add_to_counter),
 		cmocka_unit_test(test_timer_snapshot_sample_2),
 		cmocka_unit_test(test_gauge),
 		cmocka_unit_test(test_record_timestamp),
