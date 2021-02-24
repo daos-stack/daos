@@ -27,12 +27,12 @@ dump_envariables(void)
 		"OFI_PORT", "OFI_INTERFACE", "OFI_DOMAIN", "CRT_CREDIT_EP_CTX",
 		"CRT_CTX_SHARE_ADDR", "CRT_CTX_NUM", "D_FI_CONFIG",
 		"FI_UNIVERSE_SIZE", "CRT_DISABLE_MEM_PIN",
-		"FI_OFI_RXM_USE_SRX" };
+		"FI_OFI_RXM_USE_SRX", "D_LOG_FLUSH", "CRT_MRC_ENABLE" };
 
-	D_DEBUG(DB_ALL, "-- ENVARS: --\n");
+	D_INFO("-- ENVARS: --\n");
 	for (i = 0; i < ARRAY_SIZE(envars); i++) {
 		val = getenv(envars[i]);
-		D_DEBUG(DB_ALL, "%s = %s\n", envars[i], val);
+		D_INFO("%s = %s\n", envars[i], val);
 	}
 }
 
@@ -183,8 +183,10 @@ static int data_init(int server, crt_init_options_t *opt)
 		d_getenv_int("CRT_CTX_NUM", &ctx_num);
 		crt_gdata.cg_ctx_max_num = ctx_num;
 	}
+
 	D_DEBUG(DB_ALL, "set cg_sep_mode %d, cg_ctx_max_num %d.\n",
 		crt_gdata.cg_sep_mode, crt_gdata.cg_ctx_max_num);
+
 	if (crt_gdata.cg_sep_mode == false && crt_gdata.cg_ctx_max_num > 1)
 		D_WARN("CRT_CTX_NUM has no effect because CRT_CTX_SHARE_ADDR "
 		       "is not set or set to 0\n");
@@ -546,13 +548,7 @@ crt_finalize(void)
 		if (crt_is_service() && crt_gdata.cg_swim_inited)
 			crt_swim_fini();
 
-		rc = crt_grp_fini();
-		if (rc != 0) {
-			D_ERROR("crt_grp_fini failed, rc: %d.\n", rc);
-			crt_gdata.cg_refcount++;
-			D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
-			D_GOTO(out, rc);
-		}
+		crt_grp_fini();
 
 		rc = crt_hg_fini();
 		if (rc != 0) {

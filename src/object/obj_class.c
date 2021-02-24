@@ -803,7 +803,7 @@ static int oc_ident_array_sz;
 static int oc_scale_array_sz;
 static int oc_resil_array_sz;
 
-static struct daos_obj_class  *oclass_ident2cl(int oc_id);
+static struct daos_obj_class  *oclass_ident2cl(daos_oclass_id_t oc_id);
 static struct daos_obj_class  *oclass_scale2cl(struct daos_oclass_attr *ca);
 static struct daos_obj_class  *oclass_resil2cl(struct daos_oclass_attr *ca);
 
@@ -924,7 +924,7 @@ daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr, struct daos_obj_md *md)
 }
 
 static struct daos_obj_class *
-oclass_fit_max(int oc_id, int domain_nr, int target_nr)
+oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr)
 {
 	struct daos_obj_class	*oc;
 	struct daos_oclass_attr	 ca;
@@ -961,7 +961,8 @@ out:
 }
 
 int
-daos_oclass_fit_max(int oc_id, int domain_nr, int target_nr, int *oc_id_p)
+daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
+		    daos_oclass_id_t *oc_id_p)
 {
 	struct daos_obj_class	*oc;
 
@@ -1341,7 +1342,7 @@ static daos_sort_ops_t	oc_scale_sort_ops = {
 
 /* find object class by ID */
 static struct daos_obj_class *
-oclass_ident2cl(int oc_id)
+oclass_ident2cl(daos_oclass_id_t oc_id)
 {
 	int	idx;
 
