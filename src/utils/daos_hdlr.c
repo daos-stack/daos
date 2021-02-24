@@ -2803,7 +2803,7 @@ dm_connect(bool is_posix_copy,
 			fprintf(stderr, "failed to open container: "
 				"%d\n", rc);
 			D_GOTO(err_dst_root, rc);
-
+		}
 		}	      	
 		if (is_posix_copy) {
 			rc = dfs_mount(ca->dst_poh, ca->dst_coh, O_RDWR,
