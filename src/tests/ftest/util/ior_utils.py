@@ -245,7 +245,7 @@ class IorCommand(ExecutableCommand):
 
         """
         ior_metric_summary = "Summary of all tests:"
-        messages = cmdresult.stdout.splitlines()
+        messages = cmdresult.stdout_text.splitlines()
         # Get the index whre the summary starts and add one to
         # get to the header.
         idx = messages.index(ior_metric_summary)

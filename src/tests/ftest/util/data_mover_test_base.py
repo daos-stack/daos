@@ -705,10 +705,10 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         # Check for expected output
         for s in expected_output:
-            if s not in result.stdout:
+            if s not in result.stdout_text:
                 self.fail("stdout expected {}: {}".format(s, test_desc))
         for s in expected_err:
-            if s not in result.stderr:
+            if s not in result.stderr_text:
                 self.fail("stderr xpected {}: {}".format(s, test_desc))
 
         return result

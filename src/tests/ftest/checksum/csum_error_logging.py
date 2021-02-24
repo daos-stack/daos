@@ -34,7 +34,7 @@ class CSumErrorLog(DaosCoreBase):
         finally:
             self.dmg.json.value = False
 
-        data = json.loads(result.stdout)
+        data = json.loads(result.stdout_text)
         resp = data['response']
         if data['error'] or len(resp['host_errors']) > 0:
             if data['error']:
@@ -62,7 +62,7 @@ class CSumErrorLog(DaosCoreBase):
         finally:
             self.dmg.json.value = False
 
-        data = json.loads(result.stdout)
+        data = json.loads(result.stdout_text)
         resp = data['response']
         if data['error'] or len(resp['host_errors']) > 0:
             if data['error']:

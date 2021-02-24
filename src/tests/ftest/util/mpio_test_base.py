@@ -59,11 +59,11 @@ class MpiioTests(TestWithServers):
 
         # Extract the container UUID from the daos container create output
         cont_uuid = re.findall(
-            r"created\s+container\s+([0-9a-f-]+)", result.stdout)
+            r"created\s+container\s+([0-9a-f-]+)", result.stdout_text)
         if not cont_uuid:
             self.fail(
                 "Error obtaining the container uuid from: {}".format(
-                    result.stdout))
+                    result.stdout_text))
         self.cont_uuid = cont_uuid[0]
 
     def run_test(self, test_repo, test_name):

@@ -84,7 +84,7 @@ class NetDev():
         # Parse the list and divide the info
         # pylint: disable=no-member
         prov = re.findall(
-            r"(?:provider:|domain:)\s+([A-Za-z0-9;_+]+)", out.stdout, re.M)
+            r"(?:provider:|domain:)\s+([A-Za-z0-9;_+]+)", out.stdout_text, re.M)
         # pylint: enable=no-member
         info = [prov[i:(i + 2)] for i in range(0, len(prov), 2)]
 

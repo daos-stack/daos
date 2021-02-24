@@ -138,7 +138,7 @@ class ContSecurityTestBase(TestWithServers):
                                                   verbose, outfile)
 
         cont_permission_list = []
-        for line in result.stdout.splitlines():
+        for line in result.stdout_text.splitlines():
             if not line.startswith("A:"):
                 continue
             elif line.startswith("A::"):
@@ -398,14 +398,14 @@ class ContSecurityTestBase(TestWithServers):
         test_errs = []
         if results.exit_status == 0:
             test_errs.append("{} passed unexpectedly: {}".format(
-                results.command, results.stdout))
+                results.command, results.stdout_text))
         elif results.exit_status == 1:
             # REMOVE BELOW IF Once DAOS-5635 is resolved
-            if results.stdout and err_msg in results.stdout:
-                self.log.info("Found expected error %s", results.stdout)
+            if results.stdout_text and err_msg in results.stdout_text:
+                self.log.info("Found expected error %s", results.stdout_text)
             # REMOVE ABOVE IF Once DAOS-5635 is resolved
-            elif results.stderr and err_msg in results.stderr:
-                self.log.info("Found expected error %s", results.stderr)
+            elif results.stderr_text and err_msg in results.stderr_text:
+                self.log.info("Found expected error %s", results.stderr_text)
             else:
                 self.fail("{} seems to have failed with \
                     unexpected error: {}".format(results.command, results))

@@ -185,6 +185,7 @@ class DaosCoreBase(TestWithServers):
 <![CDATA[{2}]]>
     </system-err>
   </testcase>
-</testsuite>'''.format(testname, result.result.stdout, result.result.stderr))
+</testsuite>'''.format(
+    testname, result.result.stdout_text, result.result.stderr_text))
         except IOError as error:
             self.log.error("Error creating %s: %s", filename, error)

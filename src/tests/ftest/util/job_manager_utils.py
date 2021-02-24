@@ -793,7 +793,9 @@ class Systemctl(JobManager):
                 to 60 seconds.
 
         Returns:
-            dict: log output per host
+            list: a list of dictionaries including:
+                "hosts": <NodeSet() of hosts with this data>
+                "data": <journalctl output>
 
         """
         # Setup the journalctl command to capture all unit activity from the
@@ -829,11 +831,12 @@ class Systemctl(JobManager):
                 break
 
         # Display/return the command output
-        log_data = {}
+        log_data = []
         for result in results:
             if result["exit_status"] == 0 and not result["interrupted"]:
                 # Add the successful output from each node to the dictionary
-                log_data[result["hosts"]] = result["stdout"]
+                log_data.append(
+                    {"hosts": result["hosts"], "data": result["stdout"]})
             else:
                 # Display all of the results in the case of an error
                 if len(result["stdout"]) > 1:
@@ -879,9 +882,9 @@ class Systemctl(JobManager):
 
         """
         data = []
-        for node_set in sorted(log_data):
-            data.append("  {}:".format(node_set))
-            for line in log_data[node_set]:
+        for entry in log_data:
+            data.append("  {}:".format(entry["hosts"]))
+            for line in entry["data"]:
                 data.append("    {}".format(line))
         return "\n".join(data)
 
@@ -920,8 +923,8 @@ class Systemctl(JobManager):
         while not complete and not timed_out and self.service_running():
             detected = 0
             log_data = self.get_log_data(self._hosts, since, until, timeout)
-            for node_set in sorted(log_data):
-                match = re.findall(pattern, "\n".join(log_data[node_set]))
+            for entry in log_data:
+                match = re.findall(pattern, "\n".join(entry["data"]))
                 detected += len(match) if match else 0
 
             complete = detected == quantity

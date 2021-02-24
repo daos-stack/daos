@@ -83,7 +83,7 @@ class PoolSecurityTestBase(TestWithServers):
         result = self.dmg.pool_get_acl(uuid)
 
         pool_permission_list = []
-        for line in result.stdout.splitlines():
+        for line in result.stdout_text.splitlines():
             if not line.startswith("A:"):
                 continue
             elif line.startswith("A::"):
@@ -131,16 +131,17 @@ class PoolSecurityTestBase(TestWithServers):
 
         """
         if expect.lower() == 'pass':
-            if result.exit_status != 0 or result.stderr != "":
+            if result.exit_status != 0 or result.stderr_text != "":
                 self.fail(
                     "##Test Fail on verify_daos_pool {}, expected Pass, but "
                     "Failed.".format(action))
             else:
                 self.log.info(
                     " =Test Passed on verify_daos_pool %s, Succeed.\n", action)
-        # Remove "and err_code not in result.stdout" on the next statement elif
-        # after DAOS-5635 resolved.
-        elif err_code not in result.stderr and err_code not in result.stdout:
+        # Remove "and err_code not in result.stdout_text" on the next statement
+        # elif after DAOS-5635 resolved.
+        elif (err_code not in result.stderr_text and
+                err_code not in result.stdout_text):
             self.fail(
                 "##Test Fail on verify_daos_pool {}, expected Failure of {}, "
                 "but Passed.".format(action, expect))
@@ -323,7 +324,7 @@ class PoolSecurityTestBase(TestWithServers):
             user_type, user_name, perm_type, permission)
         result = self.update_container_acl(
             secTestBase.acl_entry(user_type, user_name, permission))
-        if result.stderr is not "":
+        if result.stderr_text is not "":
             self.fail(
                 "##setup_container_acl_and_permission, fail on "
                 "update_container_acl, expected Pass, but Failed.")
@@ -538,7 +539,7 @@ class PoolSecurityTestBase(TestWithServers):
 
         # (4)Verify the pool create status
         self.log.info("  (4)dmg.run() result=\n%s", self.dmg.result)
-        if "ERR" in self.dmg.result.stderr:
+        if "ERR" in self.dmg.result.stderr_text:
             self.fail("##(4)Unable to parse pool uuid and svc.")
 
         # (5)Get the pool's acl list

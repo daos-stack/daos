@@ -31,7 +31,7 @@ class DynamicStartStop(TestWithServers):
         rank is in self.stopped_ranks, verify that its status is Stopped.
         Otherwise, Joined.
         """
-        output = self.dmg_cmd.system_query().stdout
+        output = self.dmg_cmd.system_query().stdout_text
         data = json.loads(output)
         members = data["response"]["members"]
         for member in members:

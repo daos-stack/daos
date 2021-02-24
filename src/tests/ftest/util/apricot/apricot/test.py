@@ -545,7 +545,8 @@ class TestWithServers(TestWithoutServers):
         hosts = list(self.hostlist_servers)
         if self.hostlist_clients:
             hosts.extend(self.hostlist_clients)
-        for line in get_file_listing(hosts, self.test_dir).stdout.splitlines():
+        lines = get_file_listing(hosts, self.test_dir).stdout_text.splitlines()
+        for line in lines:
             self.log.debug("  %s", line)
 
         if not self.start_servers_once or self.get_test_info()["id"] == 1:

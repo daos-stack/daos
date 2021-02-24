@@ -256,7 +256,9 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
                 command         - command string
                 exit_status     - exit_status of the command
                 stdout          - the stdout
+                stdout_text     - decoded stdout
                 stderr          - the stderr
+                stderr_text     - decoded stderr
                 duration        - command execution time
                 interrupted     - whether the command completed within timeout
                 pid             - command's pid
@@ -706,7 +708,7 @@ def get_partition_hosts(partition, reservation=None):
 
         if result:
             # Get the list of hosts from the partition information
-            output = result.stdout
+            output = result.stdout_text
             try:
                 hosts = list(NodeSet(re.findall(r"\s+Nodes=(.*)", output)[0]))
             except (NodeSetParseError, IndexError):
@@ -727,7 +729,7 @@ def get_partition_hosts(partition, reservation=None):
                     hosts = []
                 if result:
                     # Get the list of hosts from the reservation information
-                    output = result.stdout
+                    output = result.stdout_text
                     try:
                         reservation_hosts = list(
                             NodeSet(re.findall(r"\sNodes=(\S+)", output)[0]))
@@ -821,7 +823,7 @@ def get_remote_file_size(host, file_name):
         getuser(), host, file_name)
     result = run_command(cmd)
 
-    return int(result.stdout)
+    return int(result.stdout_text)
 
 
 def error_count(error, hostlist, log_file):

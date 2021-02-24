@@ -51,7 +51,7 @@ class MpioUtils():
         try:
             result = run_command(cmd)
             self.mpichinstall = \
-                result.stdout.rstrip()[:-len('bin/mpichversion')]
+                result.stdout_text.rstrip()[:-len('bin/mpichversion')]
             return True
 
         except DaosTestError as excep:

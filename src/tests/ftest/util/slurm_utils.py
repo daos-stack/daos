@@ -97,7 +97,7 @@ def get_reserved_nodes(reservation, partition):
 
     if partition_result:
         # Get the list of hosts from the reservation information
-        output = partition_result.stdout
+        output = partition_result.stdout_text
         match = re.search(r"\sNodes=(\S+)", str(output))
         if match is not None:
             partition_hosts = list(NodeSet(match.group(1)))
@@ -107,7 +107,7 @@ def get_reserved_nodes(reservation, partition):
             reservation_result = run_command(cmd, raise_exception=False)
             if reservation_result:
                 # Get the list of hosts from the reservation information
-                output = reservation_result.stdout
+                output = reservation_result.stdout_text
                 match = re.search(r"\sNodes=(\S+)", str(output))
                 if match is not None:
                     reservation_hosts = list(NodeSet(match.group(1)))
@@ -189,7 +189,7 @@ def run_slurm_script(script, logfile=None):
     except DaosTestError as error:
         raise SlurmFailed("job failed : {}".format(error))
     if result:
-        output = result.stdout
+        output = result.stdout_text
         match = re.search(r"Submitted\s+batch\s+job\s+(\d+)", str(output))
         if match is not None:
             job_id = match.group(1)
@@ -209,7 +209,7 @@ def check_slurm_job(handle):
     """
     command = "scontrol show job {}".format(handle)
     result = run_command(command, raise_exception=False, verbose=False)
-    match = re.search(r"JobState=([a-zA-Z]+)", result.stdout)
+    match = re.search(r"JobState=([a-zA-Z]+)", result.stdout_text)
     if match is not None:
         state = match.group(1)
     else:

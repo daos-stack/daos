@@ -91,7 +91,7 @@ class DmgCommand(DmgCommandBase):
             self._get_result(sub_command_list, **kwargs)
         finally:
             self.json.update(prev_json_val)
-        return json.loads(self.result.stdout)
+        return json.loads(self.result.stdout_text)
 
     def network_scan(self, provider=None, all_devs=False):
         """Get the result of the dmg network scan command.
@@ -153,7 +153,7 @@ class DmgCommand(DmgCommandBase):
                 r"(?:([0-9a-fA-F:.]+)\s+([a-zA-Z0-9 ]+)\s+"
                 r"([a-zA-Z0-9]+)\s+(\d+)\s+([0-9\.]+\s+[A-Z]+))|"
                 r"(?:([a-zA-Z0-9]+)\s+(\d+)\s+([0-9\.]+\s+[A-Z]+)))",
-                self.result.stdout)
+                self.result.stdout_text)
             host = ""
             for item in match:
                 if item[0]:
@@ -182,7 +182,7 @@ class DmgCommand(DmgCommandBase):
             values = re.findall(
                 r"([a-z0-9-\[\]]+)\s+([\d.]+)\s+([A-Z]+)\s+"
                 r"\(([\w\s]+)\)\s+([\d.]+)\s+([A-Z]+)\s+\(([\w\s]+)",
-                self.result.stdout)
+                self.result.stdout_text)
             self.log.info("--- Non-verbose output parse result ---")
             self.log.info(values)
 
@@ -498,7 +498,7 @@ class DmgCommand(DmgCommandBase):
             r"\s+max:([0-9.]+\s+[A-Z]+),\s+mean:([0-9.]+\s+[A-Z]+))"
             r"|Rebuild\s+(\w+),\s+(?:rc=)?(\d+)(?:\s+\w+)?,"
             r"\s+(?:status=-)?(\d+)(?:\s+\w+)?)",
-            self.result.stdout)
+            self.result.stdout_text)
         if match:
             # Mapping of the pool data entries to the match[0] indices
             pool_map = {
@@ -653,7 +653,7 @@ class DmgCommand(DmgCommandBase):
         data = {}
         match = re.findall(
             r"(?:([0-9a-fA-F][0-9a-fA-F-]+)\W+([0-9][0-9,-]*))",
-            self.result.stdout)
+            self.result.stdout_text)
         for info in match:
             data[info[0]] = get_numeric_list(info[1])
         return data
@@ -795,7 +795,7 @@ class DmgCommand(DmgCommandBase):
         self._get_result(("system", "query"), ranks=ranks, verbose=verbose)
 
         data = {}
-        if re.findall(r"Rank \d+", self.result.stdout):
+        if re.findall(r"Rank \d+", self.result.stdout_text):
             # Process the unique single rank system query output, e.g.
             #   Rank 1
             #   ------
@@ -807,7 +807,7 @@ class DmgCommand(DmgCommandBase):
             match = re.findall(
                 r"(?:Rank|address\s+:|uuid\s+:|domain\s+:|status\s+:|"
                 r"reason\s+:)\s+(.*)",
-                self.result.stdout)
+                self.result.stdout_text)
             if match:
                 print("--- match: {}".format(match))
                 data[int(match[0])] = {
@@ -836,7 +836,7 @@ class DmgCommand(DmgCommandBase):
             match = re.findall(
                 r"(\d+)\s+([0-9a-f-]+)\s+([0-9.:]+)\s+([/A-Za-z0-9-_.]+)"
                 r"\s+([A-Za-z]+)(.*)",
-                self.result.stdout)
+                self.result.stdout_text)
             for info in match:
                 data[int(info[0])] = {
                     "uuid": info[1],
@@ -851,7 +851,7 @@ class DmgCommand(DmgCommandBase):
             #   ----  -----
             #   [0-1] Joined
             match = re.findall(
-                r"(?:\[*([0-9-,]+)\]*)\s+([A-Za-z]+)", self.result.stdout)
+                r"(?:\[*([0-9-,]+)\]*)\s+([A-Za-z]+)", self.result.stdout_text)
             for info in match:
                 for rank in get_numeric_list(info[0]):
                     data[rank] = {"state": info[1]}
@@ -902,7 +902,7 @@ class DmgCommand(DmgCommandBase):
         data = {}
         match = re.findall(
             r"(?:\[*([0-9-,]+)\]*)\s+([A-Za-z]+)\s+(.*)",
-            self.result.stdout)
+            self.result.stdout_text)
         for info in match:
             for rank in get_numeric_list(info[0]):
                 data[rank] = info[1].strip()
@@ -933,7 +933,7 @@ class DmgCommand(DmgCommandBase):
         data = {}
         match = re.findall(
             r"(?:\[*([0-9-,]+)\]*)\s+([A-Za-z]+)\s+(.*)",
-            self.result.stdout)
+            self.result.stdout_text)
         for info in match:
             for rank in get_numeric_list(info[0]):
                 data[rank] = info[1].strip()

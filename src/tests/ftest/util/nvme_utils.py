@@ -41,7 +41,7 @@ def get_device_ids(dmg, servers):
             raise CommandFailure(
                 "dmg list-devices failed with error {}".format(_error))
         drive_list = []
-        for line in result.stdout.split('\n'):
+        for line in result.stdout_text.split('\n'):
             if 'UUID' in line:
                 drive_list.append(line.split(':')[1])
         devices[host] = drive_list
@@ -352,7 +352,7 @@ class ServerFillUp(IorTestBase):
         self.dmg.storage_set_faulty(disk_id)
         result = self.dmg.storage_query_device_health(disk_id)
         # Check if device state changed to EVICTED.
-        if 'State:EVICTED' not in result.stdout:
+        if 'State:EVICTED' not in result.stdout_text:
             self.fail("device State {} on host {} suppose to be EVICTED"
                       .format(disk_id, server))
         # Wait for rebuild to start

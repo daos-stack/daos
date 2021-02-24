@@ -151,10 +151,10 @@ class Dcp(DcpCommand):
         self.exit_status_exception = False
         result = self.run(self.tmp, 1)
         self.exit_status_exception = True
-        self.has_src_pool = ("--daos-src-pool" in result.stdout)
+        self.has_src_pool = ("--daos-src-pool" in result.stdout_text)
         self.log.info("query_compatibility: has_src_pool=%s\n",
                       str(self.has_src_pool))
-        self.has_bufsize = ("--bufsize" in result.stdout)
+        self.has_bufsize = ("--bufsize" in result.stdout_text)
         self.log.info("query_compatibility: has_bufsize=%s\n",
                       str(self.has_bufsize))
 

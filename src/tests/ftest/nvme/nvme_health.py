@@ -69,7 +69,7 @@ class NvmeHealth(ServerFillUp):
                 self.fail("dmg command failed: {}".format(error))
             #Verify all pools UUID listed as part of query
             for pool in self.pool:
-                if pool.uuid.lower() not in result.stdout:
+                if pool.uuid.lower() not in result.stdout_text:
                     self.fail('Pool uuid {} not found in smd query'
                               .format(pool.uuid.lower()))
 
@@ -84,7 +84,7 @@ class NvmeHealth(ServerFillUp):
                     result = self.dmg.storage_query_device_health(_dev)
                 except CommandFailure as error:
                     self.fail("dmg get device states failed {}".format(error))
-                if 'State:NORMAL' not in result.stdout:
+                if 'State:NORMAL' not in result.stdout_text:
                     self.fail("device {} on host {} is not NORMAL"
                               .format(_dev, host))
 

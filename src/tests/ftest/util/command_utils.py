@@ -256,7 +256,7 @@ class ExecutableCommand(CommandWithParameters):
 
             # Get the state of the process from the output
             state = re.findall(
-                r"\d+\s+([DRSTtWXZ<NLsl+]+)\s+\d+", result.stdout)
+                r"\d+\s+([DRSTtWXZ<NLsl+]+)\s+\d+", result.stdout_text)
         return state
 
     def get_output(self, method_name, regex_method=None, **kwargs):
@@ -293,7 +293,7 @@ class ExecutableCommand(CommandWithParameters):
         # Parse the output and return
         if not regex_method:
             regex_method = method_name
-        return self.parse_output(result.stdout, regex_method)
+        return self.parse_output(result.stdout_text, regex_method)
 
     def parse_output(self, stdout, regex_method):
         """Parse output using findall() with supplied 'regex_method' as pattern.
@@ -817,7 +817,7 @@ class YamlCommand(SubProcessCommand):
             self.log.debug(
                 "Copied certificates for %s (in %s):",
                 self._command, ", ".join(names))
-            for line in get_file_listing(hosts, names).stdout.splitlines():
+            for line in get_file_listing(hosts, names).stdout_text.splitlines():
                 self.log.debug("  %s", line)
 
     def copy_configuration(self, hosts):

@@ -263,7 +263,7 @@ class IorTestBase(DfuseTestBase):
             else:
                 report_warning = self.log.warning
 
-            for line in out.stdout.splitlines():
+            for line in out.stdout_text.splitlines():
                 if 'WARNING' in line:
                     report_warning("IOR command issued warnings.\n")
             return out
