@@ -2722,8 +2722,8 @@ dm_connect(bool is_posix_copy,
 		if (!uuid_is_null(ca->dst_p_uuid)) {
 			if (!daos_handle_is_valid(ca->dst_poh)) {
 				rc = daos_pool_connect(ca->dst_p_uuid, sysname,
-		       	       			       DAOS_PC_RW, &ca->dst_poh,
-				       		       NULL, NULL);
+						       DAOS_PC_RW, &ca->dst_poh,
+						       NULL, NULL);
 				if (rc != 0) {
 					fprintf(stderr, "failed to connect to "
 						"destination pool: %d\n", rc);
