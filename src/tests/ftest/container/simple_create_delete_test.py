@@ -25,7 +25,7 @@ class SimpleCreateDeleteTest(TestWithServers):
     def test_container_basics(self):
         """Test basic container create/destroy/open/close/query.
 
-        :avocado: tags=all,container,pr,daily_regression,medium,basecont
+        :avocado: tags=all,container,pr,schancov
         """
         # Create a pool
         self.log.info("Create a pool")

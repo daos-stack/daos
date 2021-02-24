@@ -9,4 +9,6 @@ export DAOS_TEST_SHARED_DIR
 export TEST_RPMS=true
 export REMOTE_ACCT=jenkins
 
+export COVFILE=/usr/test.cov
+
 /usr/lib/daos/TESTING/ftest/ftest.sh "$TEST_TAG" "$TNODES" "$FTEST_ARG"
