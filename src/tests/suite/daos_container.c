@@ -10,6 +10,7 @@
  */
 #define D_LOGFAC	DD_FAC(tests)
 #include "daos_test.h"
+#include "daos_iotest.h"
 
 #define TEST_MAX_ATTR_LEN	(128)
 
@@ -2058,8 +2059,9 @@ co_open_fail_destroy(void **state)
 
 	rc = daos_cont_open(arg->pool.poh, uuid, DAOS_COO_RW, &coh, &info,
 			    NULL);
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+			      0, 0, NULL);
 	assert_rc_equal(rc, -DER_IO);
-
 	print_message("destroying container ... ");
 	rc = daos_cont_destroy(arg->pool.poh, uuid, 1 /* force */, NULL);
 	assert_rc_equal(rc, 0);
@@ -2107,21 +2109,21 @@ co_rf_simple(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	print_message("verify cont rf and obj open ...\n");
-	oid = dts_oid_gen(OC_RP_2G1, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_2G1, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_rc_equal(rc, -DER_INVAL);
 
-	oid = dts_oid_gen(OC_EC_2P1G1, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_EC_2P1G1, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_rc_equal(rc, -DER_INVAL);
 
-	oid = dts_oid_gen(OC_RP_3G1, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_3G1, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_rc_equal(rc, 0);
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
 
-	oid = dts_oid_gen(OC_EC_2P2G1, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_EC_2P2G1, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_rc_equal(rc, 0);
 	rc = daos_obj_close(oh, NULL);
@@ -2218,6 +2220,52 @@ co_rf_simple(void **state)
 	test_teardown((void **)&arg);
 }
 
+static void
+delet_container_during_aggregation(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	daos_pool_info_t pinfo;
+	int		i;
+	int		rc;
+
+	/* Prepare records */
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
+
+	print_message("Initial Pool Query\n");
+	pool_storage_info(state, &pinfo);
+
+	/* Aggregation will be Hold */
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+			      DAOS_VOS_AGG_BLOCKED | DAOS_FAIL_ALWAYS, 0, NULL);
+
+	/* Write/fetch and Punch Data with 2K size */
+	for (i = 0; i <= 5000; i++)
+		io_simple_internal(state, oid, IO_SIZE_SCM * 32, DAOS_IOD_ARRAY,
+				   "io_simple_scm_array dkey",
+				   "io_simple_scm_array akey");
+
+	/**
+	 * Run Pool query every 5 seconds for Total 30 seconds
+	 * Aggregation will be ready to run by this time
+	 */
+	for (i = 0; i <= 5; i++) {
+		pool_storage_info(state, &pinfo);
+		sleep(5);
+	}
+
+	/* Aggregation will continue */
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+
+	/* Destroy the container while Aggregation is running */
+	rc = test_teardown_cont(arg);
+	assert_rc_equal(rc, 0);
+
+	/* Run Pool query at the end */
+	pool_storage_info(state, &pinfo);
+}
+
+
 static int
 co_setup_sync(void **state)
 {
@@ -2290,6 +2338,9 @@ static const struct CMUnitTest co_tests[] = {
 	  co_open_fail_destroy, NULL, test_case_teardown},
 	{ "CONT24: container RF simple test",
 	  co_rf_simple, NULL, test_case_teardown},
+	{ "CONT25: Delete Container during Aggregation",
+	  delet_container_during_aggregation, co_setup_async,
+	  test_case_teardown},
 };
 
 int

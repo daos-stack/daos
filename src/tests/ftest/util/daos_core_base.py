@@ -129,7 +129,8 @@ class DaosCoreBase(TestWithServers):
         )
 
         env = {}
-        env['CMOCKA_XML_FILE'] = os.path.join(self.outputdir, "%g_results.xml")
+        env['CMOCKA_XML_FILE'] = os.path.join(self.outputdir,
+                                              "%g_cmocka_results.xml")
         env['CMOCKA_MESSAGE_OUTPUT'] = "xml"
         env['POOL_SCM_SIZE'] = "{}".format(scm_size)
         if not nvme_size:

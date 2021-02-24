@@ -186,15 +186,15 @@ func TestServer_Harness_Start(t *testing.T) {
 			testDir, cleanup := CreateTestDir(t)
 			defer cleanup()
 
-			srvCfgs := make([]*engine.Config, maxEngines)
+			engineCfgs := make([]*engine.Config, maxEngines)
 			for i := 0; i < maxEngines; i++ {
-				srvCfgs[i] = engine.NewConfig().
+				engineCfgs[i] = engine.NewConfig().
 					WithScmClass("ram").
 					WithScmRamdiskSize(1).
 					WithScmMountPoint(filepath.Join(testDir, strconv.Itoa(i)))
 			}
 			config := config.DefaultServer().
-				WithEngines(srvCfgs...).
+				WithEngines(engineCfgs...).
 				WithSocketDir(testDir).
 				WithTransportConfig(&security.TransportConfig{AllowInsecure: true})
 
@@ -202,8 +202,8 @@ func TestServer_Harness_Start(t *testing.T) {
 			joinRequests := make(map[uint32][]string)
 			var instanceStarts uint32
 			harness := NewEngineHarness(log)
-			for i, srvCfg := range config.Engines {
-				if err := os.MkdirAll(srvCfg.Storage.SCM.MountPoint, 0777); err != nil {
+			for i, engineCfg := range config.Engines {
+				if err := os.MkdirAll(engineCfg.Storage.SCM.MountPoint, 0777); err != nil {
 					t.Fatal(err)
 				}
 
@@ -216,9 +216,9 @@ func TestServer_Harness_Start(t *testing.T) {
 							atomic.AddUint32(&instanceStarts, 1))
 					}
 				}
-				runner := engine.NewTestRunner(tc.trc, srvCfg)
+				runner := engine.NewTestRunner(tc.trc, engineCfg)
 				bdevProvider, err := bdev.NewClassProvider(log,
-					srvCfg.Storage.SCM.MountPoint, &srvCfg.Storage.Bdev)
+					engineCfg.Storage.SCM.MountPoint, &engineCfg.Storage.Bdev)
 				if err != nil {
 					t.Fatal(err)
 				}
