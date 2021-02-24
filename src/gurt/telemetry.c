@@ -1282,7 +1282,7 @@ failure:
  *
  * \param[in]		metric	Pointer to the metric
  * \param[in]		err	If non-zero, aborts the interval calculation
- * 				so that this interval is not added to the stats.
+ *				so that this interval is not added to the stats.
  * \param[in]		fmt	Format specifier for the name and full path of
  *				the metric followed by optional args to
  *				populate the string, printf style.
