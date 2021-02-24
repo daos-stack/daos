@@ -1067,7 +1067,7 @@ class SubprocessManager(object):
         Returns:
             dict: dictionary of server rank keys, each referencing a dictionary
                 of information containing at least the following information:
-                    {"domain": <>, "uuid": <>, "state": <>}
+                    {"host": <>, "uuid": <>, "state": <>}
                 This will be empty if there was error obtaining the dmg system
                 query output.
 
@@ -1083,7 +1083,7 @@ class SubprocessManager(object):
         for output, nodelist in task.iter_buffers():
             for node in nodelist:
                 data[ranks[node]] = {
-                    "domain": node, "uuid": "-", "state": str(output)}
+                    "host": node, "uuid": "-", "state": str(output)}
         return data
 
     def update_expected_states(self, ranks, state):
@@ -1104,7 +1104,7 @@ class SubprocessManager(object):
             if rank in self._expected_states:
                 self.log.info(
                     "Updating the expected state for rank %s on %s: %s -> %s",
-                    rank, self._expected_states[rank]["domain"],
+                    rank, self._expected_states[rank]["host"],
                     self._expected_states[rank]["state"], state)
                 self._expected_states[rank]["state"] = state
 
@@ -1153,8 +1153,7 @@ class SubprocessManager(object):
 
             # Verify that each expected rank appears in the current states
             for rank in sorted(self._expected_states):
-                domain = self._expected_states[rank]["domain"].split(".")
-                current_host = domain[0].replace("/", "")
+                current_host = self._expected_states[rank]["host"]
                 expected = self._expected_states[rank]["state"]
                 if isinstance(expected, (list, tuple)):
                     expected = [item.lower() for item in expected]

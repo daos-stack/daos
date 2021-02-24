@@ -925,20 +925,26 @@ class DaosServerManager(SubprocessManager):
         Returns:
             dict: dictionary of server rank keys, each referencing a dictionary
                 of information containing at least the following information:
-                    {"domain": <>, "uuid": <>, "state": <>}
+                    {"host": <>, "uuid": <>, "state": <>}
                 This will be empty if there was error obtaining the dmg system
                 query output.
 
         """
+        data = {}
         try:
-            all_data = self.dmg.system_query()
-            data = {}
-            for key in all_data:
-                host = all_data[key]["domain"].split(".")[0].replace("/", "")
-                if host in self._hosts:
-                    data[key] = all_data[key]
+            query_data = self.dmg.system_query()
         except CommandFailure:
-            data = {}
+            query_data = {"status": 1}
+        if query_data["status"] == 0:
+            if "response" in query_data and "members" in query_data["response"]:
+                for member in query_data["response"]["members"]:
+                    host = member["fault_domain"].split(".")[0].replace("/", "")
+                    if host in self._hosts:
+                        data[member["rank"]] = {
+                            "uuid": member["uuid"],
+                            "host": host,
+                            "state": member["state"],
+                        }
         return data
 
     @fail_on(CommandFailure)

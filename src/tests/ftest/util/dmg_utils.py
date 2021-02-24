@@ -821,21 +821,8 @@ class DmgCommand(DmgCommandBase):
         # "error": null,
         # "status": 0
         # }
-        output = self._get_json_result(
+        return self._get_json_result(
             ("system", "query"), ranks=ranks, verbose=verbose)
-        if "response" in output and "members" in output["response"]:
-            for member in output["response"]["members"]:
-                data[member["rank"]] = {
-                    "address": member["addr"],
-                    "uuid": member["uuid"],
-                    "domain": member["fault_domain"],
-                    "state": member["state"],
-                    "reason": member["info"],
-                    "fabric_uri": member["fabric_uri"],
-                    "fabric_contexts": member["fabric_contexts"],
-                }
-        self.log.info("system_query data: %s", str(data))
-        return data
 
     def system_leader_query(self):
         """Query system to obtain the MS leader and replica information.
@@ -947,25 +934,25 @@ def check_system_query_status(data):
         bool: True if no server crashed, False otherwise.
 
     """
-    failed_states = ("Unknown", "Evicted", "Errored", "Unresponsive")
-    failed_rank_list = []
+    failed_states = ("unknown", "evicted", "errored", "unresponsive")
+    failed_rank_list = {}
 
     # Check the state of each rank.
-    for rank in data:
-        rank_info = [
-            "{}: {}".format(key, data[rank][key])
-            for key in sorted(data[rank].keys())
-        ]
-        print("Rank {} info:\n  {}".format(rank, "\n  ".join(rank_info)))
-        if "state" in data[rank] and data[rank]["state"] in failed_states:
-            failed_rank_list.append(rank)
+    if "response" in data and "members" in data["response"]:
+        for member in data["response"]["members"]:
+            rank_info = [
+                "{}: {}".format(key, member[key]) for key in sorted(member)]
+            print(
+                "Rank {} info:\n  {}".format(
+                    member["rank"], "\n  ".join(rank_info)))
+            if "state" in member and member["state"].lower() in failed_states:
+                failed_rank_list[member["rank"]] = member["state"]
 
     # Display the details of any failed ranks
-    if failed_rank_list:
-        for rank in failed_rank_list:
-            print(
-                "Rank {} failed with state '{}'".format(
-                    rank, data[rank]["state"]))
+    for rank in sorted(failed_rank_list):
+        print(
+            "Rank {} failed with state '{}'".format(
+                rank, failed_rank_list[rank]))
 
     # Return True if no ranks failed
     return not bool(failed_rank_list)
