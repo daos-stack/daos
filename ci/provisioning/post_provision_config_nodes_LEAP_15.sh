@@ -1,37 +1,5 @@
 #!/bin/bash
 
-url_to_repo() {
-    local url="$1"
-
-    local repo=${url#*://}
-    repo="${repo//%252F/_}"
-    repo="${repo//\//_}"
-
-    echo "$repo"
-}
-
-add_repo() {
-    local repo="$1"
-    local gpg_check="${2:-true}"
-
-    if [ -n "$repo" ]; then
-        repo="${REPOSITORY_URL}${repo}"
-        if ! dnf repolist | grep "$(url_to_repo "$repo")"; then
-            dnf config-manager --add-repo="${repo}"
-            if ! $gpg_check; then
-                disable_gpg_check "$repo"
-            fi
-        fi
-    fi
-}
-
-
-disable_gpg_check() {
-    local repo="$1"
-
-    dnf config-manager --save --setopt="$(url_to_repo "$repo")".gpgcheck=0
-}
-
 post_provision_config_nodes() {
     time zypper --non-interactive install dnf
 
@@ -62,6 +30,7 @@ post_provision_config_nodes() {
     dnf_repo_args+=" --enablerepo=repo.dc.hpdd.intel.com_repository_*"
 
     if [ -n "$INST_REPOS" ]; then
+        local repo
         for repo in $INST_REPOS; do
             branch="master"
             build_number="lastSuccessfulBuild"
@@ -73,9 +42,9 @@ post_provision_config_nodes() {
                     branch="${branch%:*}"
                 fi
             fi
-            local repo="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/leap15/
-            dnf config-manager --add-repo="${repo}"
-            disable_gpg_check "$repo"
+            local repo_url="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/leap15/
+            dnf config-manager --add-repo="${repo_url}"
+            disable_gpg_check "$repo_url"
             # TODO: this should be per repo in the above loop
             if [ -n "$INST_REPOS" ]; then
                 dnf_repo_args+=",build.hpdd.intel.com_job_daos-stack*"

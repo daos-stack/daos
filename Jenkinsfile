@@ -302,7 +302,8 @@ def getuid() {
 // in faster time-to-result for PRs.
 
 String get_priority() {
-    if (env.BRANCH_NAME == 'master') {
+    if (env.BRANCH_NAME == 'master' ||
+        env.BRANCH_NAME.startsWith("release/")) {
         string p = '2'
     } else {
         string p = ''

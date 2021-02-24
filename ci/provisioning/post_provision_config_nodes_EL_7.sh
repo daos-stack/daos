@@ -1,29 +1,5 @@
 #!/bin/bash
 
-url_to_repo() {
-    local url="$1"
-
-    local repo=${url#*://}
-    repo="${repo//%252F/_}"
-    repo="${repo//\//_}"
-
-    echo "$repo"
-}
-
-add_repo() {
-    local repo="$1"
-    local gpg_check="${2:-true}"
-
-    if [ -n "$repo" ]; then
-        repo="${REPOSITORY_URL}${repo}"
-        if ! dnf repolist | grep "$(url_to_repo "$repo")"; then
-            dnf config-manager --add-repo="${repo}"
-            if ! $gpg_check; then
-                disable_gpg_check "$repo"
-            fi
-        fi
-    fi
-}
 
 timeout_yum() {
     local timeout="$1"
@@ -46,19 +22,6 @@ timeout_yum() {
     done
 
     return 1
-}
-
-disable_gpg_check() {
-    local url="$1"
-
-    repo="$(url_to_repo "$repo")"
-    # bug in EL7 DNF: this needs to be enabled before it can be disabled
-    dnf config-manager --save --setopt="$repo".gpgcheck=1
-    dnf config-manager --save --setopt="$repo".gpgcheck=0
-    # but even that seems to be not enough, so just brute-force it
-    if ! grep gpgcheck /etc/yum.repos.d/"$repo".repo; then
-        echo "gpgcheck=0" >> /etc/yum.repos.d/"$repo".repo
-    fi
 }
 
 dump_repos() {
@@ -94,6 +57,7 @@ post_provision_config_nodes() {
     dnf_repo_args+=" --enablerepo=repo.dc.hpdd.intel.com_repository_*"
 
     if [ -n "$INST_REPOS" ]; then
+        local repo
         for repo in $INST_REPOS; do
             branch="master"
             build_number="lastSuccessfulBuild"
@@ -105,9 +69,9 @@ post_provision_config_nodes() {
                     branch="${branch%:*}"
                 fi
             fi
-            local repo="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/centos7/
-            dnf config-manager --add-repo="${repo}"
-            disable_gpg_check "$repo"
+            local repo_url="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/centos7/
+            dnf config-manager --add-repo="${repo_url}"
+            disable_gpg_check "$repo_url"
             # TODO: this should be per repo in the above loop
             if [ -n "$INST_REPOS" ]; then
                 dnf_repo_args+=",build.hpdd.intel.com_job_daos-stack*"
