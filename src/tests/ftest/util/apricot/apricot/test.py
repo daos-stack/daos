@@ -1088,6 +1088,12 @@ class TestWithServers(TestWithoutServers):
             self.test_log.info(
                 "Stopping %s group(s) of servers", len(self.server_managers))
             errors.extend(self._stop_managers(self.server_managers, "servers"))
+
+            # Stopping agents whenever servers are stopped for DAOS-6873
+            self.log.info(
+                "Workaround for DAOS-6873: Stopping %s group(s) of agents",
+                len(self.agent_managers))
+            errors.extend(self._stop_managers(self.agent_managers, "agents"))
         return errors
 
     def _stop_managers(self, managers, name):
