@@ -31,7 +31,7 @@ index 104a7dac..ca349e98 100644
                  result_dispatcher.map_method('test_progress', False)
                  if wait.wait_for(lambda: not proc.is_alive(), 1, 0,
                                   step):
-@@ -413,13 +415,17 @@ class TestRunner(object):
+@@ -413,7 +415,12 @@ class TestRunner(object):
  
          while True:
              try:
@@ -47,7 +47,7 @@ index 104a7dac..ca349e98 100644
                          os.kill(proc.pid, signal.SIGTERM)
                      except OSError:
                          pass
--                    break
+                     break
                  wait.wait_for(lambda: not queue.empty() or not proc.is_alive(),
                                cycle_timeout, first, step)
                  if test_status.interrupt:

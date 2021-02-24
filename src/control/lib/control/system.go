@@ -227,6 +227,9 @@ func (ef *EventForwarder) OnEvent(ctx context.Context, evt *events.RASEvent) {
 	case len(ef.accessPts) == 0:
 		ef.client.Debug("skip event forwarding, missing access points")
 		return
+	case !evt.ShouldForward():
+		ef.client.Debugf("forwarding disabled for %s event", evt.ID)
+		return
 	}
 
 	req := &SystemNotifyReq{
@@ -266,11 +269,11 @@ type EventLogger struct {
 
 // OnEvent implements the events.Handler interface.
 func (el *EventLogger) OnEvent(_ context.Context, evt *events.RASEvent) {
-	if evt == nil {
+	switch {
+	case evt == nil:
 		el.log.Debug("skip event forwarding, nil event")
 		return
-	}
-	if evt.IsForwarded() {
+	case evt.IsForwarded():
 		return // event has already been logged at source
 	}
 	// TODO: DAOS-6327 write directly to syslog

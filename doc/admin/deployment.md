@@ -176,6 +176,12 @@ host list.
 devices, taking into account any specified network device class preference
 (ethernet or infiniband).
 
+Some CentOS 7.x kernels from before the 7.9 release were known to have a defect
+that prevented `ndctl` from being able to report the NUMA affinity for a
+namespace.
+This prevents generation of dual engine configs using `dmg config generate`
+when running with one of the above-mentioned affected kernels.
+
 #### Certificate Configuration
 
 The DAOS security framework relies on certificates to authenticate
@@ -1147,3 +1153,5 @@ each storage node.
 [^3]: [*https://www.open-mpi.org/faq/?category=running\#mpirun-hostfile*](https://www.open-mpi.org/faq/?category=running#mpirun-hostfile)
 
 [^4]: https://github.com/daos-stack/daos/tree/master/src/control/README.md
+
+[^5]: https://github.com/pmem/ndctl/issues/130
