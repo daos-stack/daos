@@ -226,17 +226,6 @@ class CartUtils():
                   "--suppressions=../etc/memcheck-cart.supp " + \
                   "--show-reachable=yes "
 
-
-        self.init_mpi("openmpi")
-
-        openmpi_path = os.environ["PATH"]
-        openmpi_path += ":/usr/lib64/openmpi3/bin"
-        openmpi_path += ":/usr/lib64/mpi/gcc/openmpi3/bin"
-        orterun_bin = find_executable("orterun", openmpi_path)
-
-        if orterun_bin is None:
-            orterun_bin = "orterun_not_installed"
-
         _tst_bin = cartobj.params.get("{}_bin".format(host),
                                       "/run/tests/*/")
         _tst_arg = cartobj.params.get("{}_arg".format(host),
@@ -279,8 +268,8 @@ class CartUtils():
         if self.provider == "ofi+psm2":
             mca_flags += "--mca pml ob1 "
 
-        tst_cmd = "{} {} -N {} --hostfile {} "\
-                  .format(orterun_bin, mca_flags, tst_ppn, hostfile)
+        tst_cmd = "{} {} -N {} --hostfile {} ".format(
+            cartobj.orterun, mca_flags, tst_ppn, hostfile)
 
         tst_cmd += env
 
@@ -326,72 +315,6 @@ class CartUtils():
                       "server %d" % srv_rtn)
 
         return 0
-
-    def init_mpi_old(self, mpi):
-        """load mpi with older environment-modules"""
-        self.print("Loading old %s" % mpi)
-        self.module('purge')
-        self.module('load', mpi)
-        return True
-
-    def init_mpi(self, mpi):
-        """load mpi"""
-
-        mpich = ['mpi/mpich-x86_64']
-        openmpi = ['mpi/openmpi3-x86_64', 'mpi/openmpi-x86_64']
-
-        init_file = '/usr/share/Modules/init/python.py'
-
-        if mpi == "mpich":
-            load = mpich
-            unload = openmpi
-        else:
-            load = openmpi
-            unload = mpich
-
-        #initialize Modules
-        if not os.path.exists(init_file):
-            if not self.module_init:
-                self.print("Modules (environment-modules) is not installed")
-            self.module_init = True
-            return False
-
-        #pylint: disable=exec-used
-        #pylint: disable=undefined-variable
-        if not self.module_init:
-            exec(open(init_file).read()) # nosec
-            self.module = module
-            self.module_init = True
-        #pylint: enable=exec-used
-        #pylint: enable=undefined-variable
-
-        try:
-            with open(os.devnull, 'w') as devnull:
-                subprocess.check_call(['/bin/sh', '-l', '-c', 'module -V'],
-                                      stdout=devnull,
-                                      stderr=devnull)
-        except subprocess.CalledProcessError:
-            # older version of module return -1
-            return self.init_mpi_old(load[0])
-
-        self.print("Checking for loaded modules")
-        for to_load in load:
-            if self.module('is-loaded', to_load):
-                self.print("%s is already loaded" % to_load)
-                return True
-
-        for to_unload in unload:
-            if self.module('is-loaded', to_unload):
-                self.module('unload', to_unload)
-                self.print("Unloading %s" % to_unload)
-
-        for to_load in load:
-            if self.module('load', to_load):
-                self.print("Loaded %s" % to_load)
-                return True
-
-        self.print("No MPI found on system")
-        return False
 
     def launch_test(self, cartobj, cmd, srv1=None, srv2=None):
         """ launches test """
