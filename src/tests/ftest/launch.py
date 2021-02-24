@@ -25,6 +25,30 @@ from xml.dom import minidom
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
+try:
+    # For python versions >= 3.2
+    # from tempfile import TemporaryDirectory
+
+except ImportError:
+    # Basic implementation of TemporaryDirectory for python versions < 3.2
+    from tempfile import mkdtemp
+    from shutil import rmtree
+
+    class TemporaryDirectory(object):
+        # pylint: disable=too-few-public-methods
+        """Create a temporary directory.
+        When the last reference of this object goes out of scope the directory
+        and its contents are removed.
+        """
+
+        def __init__(self):
+            """Initialize a TemporaryDirectory object."""
+            self.name = mkdtemp()
+
+        def __del__(self):
+            """Destroy a TemporaryDirectory object."""
+            rmtree(self.name)
+
 DEFAULT_DAOS_TEST_LOG_DIR = "/var/tmp/daos_testing"
 YAML_KEYS = {
     "test_servers": "test_servers",
