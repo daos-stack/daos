@@ -383,7 +383,7 @@ main(int argc, char **argv)
 	}
 
 	test_function1(10000);
-	rc = d_tm_mark_duration_end(&timer1, NULL);
+	rc = d_tm_mark_duration_end(&timer1, rc, NULL);
 	if (rc != D_TM_SUCCESS) {
 		printf("d_tm_mark_duration_end failed: " DF_RC "\n", DP_RC(rc));
 		goto failure;
@@ -402,7 +402,7 @@ main(int argc, char **argv)
 	}
 
 	test_function1(10000);
-	rc = d_tm_mark_duration_end(&timer2, NULL);
+	rc = d_tm_mark_duration_end(&timer2, rc, NULL);
 	if (rc != D_TM_SUCCESS) {
 		printf("d_tm_mark_duration_end failed: " DF_RC "\n", DP_RC(rc));
 		goto failure;

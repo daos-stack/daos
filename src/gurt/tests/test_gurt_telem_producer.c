@@ -50,6 +50,24 @@ test_increment_counter(void **state)
 }
 
 static void
+test_set_counter(void **state)
+{
+	static struct d_tm_node_t	*loop;
+	int				count = 5000;
+	int				rc;
+
+	rc = d_tm_set_counter(&loop, count, "gurt/tests/telem/manually_set");
+	assert(rc == D_TM_SUCCESS);
+
+	/**
+	 * Counter now has value 'count'
+	 * We will now increment it, and the result should be 'count + 1'.
+	 */
+	rc = d_tm_increment_counter(&loop, NULL);
+	assert(rc == D_TM_SUCCESS);
+}
+
+static void
 test_gauge(void **state)
 {
 	static struct d_tm_node_t	*gauge;
@@ -98,7 +116,22 @@ test_interval_timer(void **state)
 	ts.tv_nsec = 50000000;
 	nanosleep(&ts, NULL);
 
-	rc = d_tm_mark_duration_end(&timer, NULL);
+	rc = d_tm_mark_duration_end(&timer, rc, NULL);
+	assert(rc == D_TM_SUCCESS);
+
+	/**
+	 * Now start a timer that will be aborted.  The consumer test will
+	 * not see these intervals in the stats.
+	 */
+	rc = d_tm_mark_duration_start(&timer, D_TM_CLOCK_REALTIME,
+				      "gurt/tests/telem/interval");
+	assert(rc == D_TM_SUCCESS);
+
+	ts.tv_sec = 0;
+	ts.tv_nsec = 25000000;
+	nanosleep(&ts, NULL);
+
+	rc = d_tm_mark_duration_end(&timer, ~rc, NULL);
 	assert(rc == D_TM_SUCCESS);
 }
 
@@ -313,6 +346,7 @@ main(int argc, char **argv)
 	const struct CMUnitTest	tests[] = {
 		cmocka_unit_test(test_timer_snapshot_sample_1),
 		cmocka_unit_test(test_increment_counter),
+		cmocka_unit_test(test_set_counter),
 		cmocka_unit_test(test_timer_snapshot_sample_2),
 		cmocka_unit_test(test_gauge),
 		cmocka_unit_test(test_record_timestamp),

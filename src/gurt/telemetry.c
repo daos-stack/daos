@@ -769,6 +769,101 @@ d_tm_compute_duration_stats(struct d_tm_node_t *node)
 }
 
 /**
+ * Set the given counter to an arbitary value
+ *
+ * The counter is specified either by an initialized pointer or by a fully
+ * qualified item name.  If an initialized pointer is provided, the metric is
+ * accessed directly.  Otherwise, a lookup is performed on the path name
+ * provided in order to find the specified item.  If the item cannot be found,
+ * it is created.  If the item is created, the callers pointer is initialized
+ * for this item.  The pointer is used for direct access on subsequent calls for
+ * faster access.
+ *
+ * \param[in,out]	metric	Pointer to the metric
+ * \param[in]		fmt	Format specifier for the name and full path of
+ *				the metric followed by optional args to
+ *				populate the string, printf style.
+ *				The format specifier and optional arguments
+ *				are used only if the pointer to the metric
+ *				is NULL.
+ *
+ * \return			D_TM_SUCCESS		Success
+ *				-DER_EXCEEDS_PATH_LEN	The full name length is
+ *							too long
+ *				-DER_OP_NOT_PERMITTED	Operation not permitted
+ *							because the \a item is
+ *							not a counter
+ *				-DER_UNINIT		API not initialized
+ *				-DER_INVAL		\a metric and \a item
+ *							are NULL
+ */
+int
+d_tm_set_counter(struct d_tm_node_t **metric, uint64_t val,
+		 const char *fmt, ...)
+{
+	struct d_tm_node_t	*node = NULL;
+	char			path[D_TM_MAX_NAME_LEN] = {};
+	int			rc = D_TM_SUCCESS;
+
+	if (d_tm_shmem_root == NULL)
+		return -DER_UNINIT;
+
+	if ((metric != NULL) && (*metric != NULL)) {
+		node = *metric;
+	} else {
+		va_list	args;
+		int	ret;
+
+		if (fmt == NULL) {
+			rc = -DER_INVAL;
+			goto failure;
+		}
+
+		va_start(args, fmt);
+		ret = vsnprintf(path, sizeof(path), fmt, args);
+		va_end(args);
+
+		if (!((ret > 0) && (ret < D_TM_MAX_NAME_LEN))) {
+			rc = -DER_EXCEEDS_PATH_LEN;
+			goto failure;
+		}
+
+		node = d_tm_find_metric(d_tm_shmem_root, path);
+		if (metric != NULL)
+			*metric = node;
+	}
+
+	if (node == NULL) {
+		rc = d_tm_add_metric(&node, D_TM_COUNTER, "N/A", "N/A", path);
+		if (rc != D_TM_SUCCESS) {
+			D_ERROR("Failed to add and incremement counter [%s]: "
+				DF_RC "\n", path, DP_RC(rc));
+			goto failure;
+		}
+		if (metric != NULL)
+			*metric = node;
+	}
+
+	if (node->dtn_type == D_TM_COUNTER) {
+		if (node->dtn_protect)
+			D_MUTEX_LOCK(&node->dtn_lock);
+		node->dtn_metric->dtm_data.value = val;
+		if (node->dtn_protect)
+			D_MUTEX_UNLOCK(&node->dtn_lock);
+	} else {
+		rc = -DER_OP_NOT_PERMITTED;
+		D_ERROR("Failed to set counter [%s] on item not a "
+			"counter.  Operation mismatch: " DF_RC "\n",
+			node->dtn_name, DP_RC(rc));
+		goto failure;
+	}
+	return rc;
+
+failure:
+	return rc;
+}
+
+/**
  * Increment the given counter
  *
  * The counter is specified either by an initialized pointer or by a fully
@@ -1186,6 +1281,8 @@ failure:
  * does not already exist.
  *
  * \param[in]		metric	Pointer to the metric
+ * \param[in]		err	If non-zero, aborts the interval calculation
+ * 				so that this interval is not added to the stats.
  * \param[in]		fmt	Format specifier for the name and full path of
  *				the metric followed by optional args to
  *				populate the string, printf style.
@@ -1207,7 +1304,8 @@ failure:
  *							are NULL
  */
 int
-d_tm_mark_duration_end(struct d_tm_node_t **metric, const char *fmt, ...)
+d_tm_mark_duration_end(struct d_tm_node_t **metric, int err,
+		       const char *fmt, ...)
 {
 	struct d_tm_node_t	*node = NULL;
 	struct timespec		end;
@@ -1216,6 +1314,9 @@ d_tm_mark_duration_end(struct d_tm_node_t **metric, const char *fmt, ...)
 
 	if (d_tm_shmem_root == NULL)
 		return -DER_UNINIT;
+
+	if (err != DER_SUCCESS)
+		return rc;
 
 	if ((metric != NULL) && (*metric != NULL)) {
 		node = *metric;
