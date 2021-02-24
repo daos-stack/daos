@@ -15,7 +15,6 @@ import re
 import socket
 import subprocess
 import site
-from tempfile import TemporaryDirectory
 import time
 import yaml
 import errno
@@ -27,7 +26,7 @@ from ClusterShell.Task import task_self
 
 try:
     # For python versions >= 3.2
-    # from tempfile import TemporaryDirectory
+    from tempfile import TemporaryDirectory
 
 except ImportError:
     # Basic implementation of TemporaryDirectory for python versions < 3.2
@@ -37,6 +36,7 @@ except ImportError:
     class TemporaryDirectory(object):
         # pylint: disable=too-few-public-methods
         """Create a temporary directory.
+
         When the last reference of this object goes out of scope the directory
         and its contents are removed.
         """
