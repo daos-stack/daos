@@ -2051,6 +2051,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	struct rebuild_pool_tls		*pool_tls;
 	daos_prop_t			prop = { 0 };
 	struct daos_prop_entry		*entry;
+	uuid_t				cont_uuid;
 	int				rc;
 
 	D_DEBUG(DB_REBUILD, "prepare rebuild for "DF_UUID"/%d\n",
@@ -2074,21 +2075,18 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 		}
 	}
 
-	if (pool->sp_iv_ns) {
-		uuid_t	cont_uuid;
-
-		uuid_clear(cont_uuid);
-		/* Let's invalidate local snapshot cache before
-		 * rebuild, so to make sure rebuild will use the updated
-		 * snapshot during rebuild fetch, otherwise it may cause
-		 * corruption.
-		 */
-		rc = ds_cont_revoke_snaps(pool->sp_iv_ns, cont_uuid,
-					  CRT_IV_SHORTCUT_NONE,
-					  CRT_IV_SYNC_NONE);
-		if (rc)
-			D_GOTO(out, rc);
-	}
+	D_ASSERT(pool->sp_iv_ns != NULL);
+	/* Let's invalidate local snapshot cache before
+	 * rebuild, so to make sure rebuild will use the updated
+	 * snapshot during rebuild fetch, otherwise it may cause
+	 * corruption.
+	 */
+	uuid_clear(cont_uuid);
+	rc = ds_cont_revoke_snaps(pool->sp_iv_ns, cont_uuid,
+				  CRT_IV_SHORTCUT_NONE,
+				  CRT_IV_SYNC_NONE);
+	if (rc)
+		D_GOTO(out, rc);
 
 	/* Create rpt for the target */
 	rc = rpt_create(pool, rsi->rsi_rebuild_ver, rsi->rsi_leader_term,
@@ -2106,7 +2104,6 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	D_DEBUG(DB_REBUILD, "rebuild coh/poh "DF_UUID"/"DF_UUID"\n",
 		DP_UUID(rpt->rt_coh_uuid), DP_UUID(rpt->rt_poh_uuid));
 
-	D_ASSERT(pool->sp_iv_ns != NULL);
 	ds_pool_iv_ns_update(pool, rsi->rsi_master_rank);
 
 	rc = ds_pool_iv_prop_fetch(pool, &prop);

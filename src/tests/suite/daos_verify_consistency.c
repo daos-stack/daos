@@ -141,7 +141,7 @@ vc_without_inconsistency(void **state, daos_iod_type_t iod_type)
 	if (!test_runable(arg, dts_vc_replica_cnt))
 		return;
 
-	oid = dts_oid_gen(dts_vc_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_vc_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, iod_type, arg);
 
 	vc_gen_modifications(arg, &req, oid, 7, 7, 7, 0, 0, 0);
@@ -179,7 +179,7 @@ vc_3(void **state)
 	if (!test_runable(arg, dts_vc_replica_cnt))
 		return;
 
-	oid = dts_oid_gen(dts_vc_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_vc_class, 0, 0, arg->myrank);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
 	vc_gen_modifications(arg, &req, oid, 7, 7, 7, 0, 0, 0);
@@ -209,7 +209,7 @@ vc_4(void **state)
 	if (!test_runable(arg, dts_vc_replica_cnt))
 		return;
 
-	oid = dts_oid_gen(dts_vc_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_vc_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
 
 	vc_gen_modifications(arg, &req, oid, 7, 7, 7, 0, 0,
@@ -238,7 +238,7 @@ vc_test_lost_data(void **state, int type)
 	if (!test_runable(arg, dts_vc_replica_cnt))
 		return;
 
-	oid = dts_oid_gen(dts_vc_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_vc_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	switch (type) {
@@ -310,7 +310,7 @@ vc_8(void **state)
 	if (!test_runable(arg, dts_vc_replica_cnt))
 		return;
 
-	oid = dts_oid_gen(dts_vc_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_vc_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	vc_gen_modifications(arg, &req, oid, 7, 7, 7, 0, 0, 0);
@@ -347,7 +347,7 @@ vc_9(void **state)
 	if (!test_runable(arg, dts_vc_replica_cnt))
 		return;
 
-	oid = dts_oid_gen(dts_vc_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_vc_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	vc_gen_modifications(arg, &req, oid, 7, 7, 7,
