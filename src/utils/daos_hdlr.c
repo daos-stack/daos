@@ -2722,8 +2722,8 @@ dm_connect(bool is_posix_copy,
 		if (!uuid_is_null(ca->dst_p_uuid)) {
 			if (!daos_handle_is_valid(ca->dst_poh)) {
 				rc = daos_pool_connect(ca->dst_p_uuid, sysname,
-		       	       			       DAOS_PC_RW, &ca->dst_poh,
-				       		       NULL, NULL);
+						       DAOS_PC_RW, &ca->dst_poh,
+						       NULL, NULL);
 				if (rc != 0) {
 					fprintf(stderr, "failed to connect to "
 						"destination pool: %d\n", rc);
@@ -2804,7 +2804,7 @@ dm_connect(bool is_posix_copy,
 				"%d\n", rc);
 			D_GOTO(err_dst_root, rc);
 
-		}	      	
+		}
 		if (is_posix_copy) {
 			rc = dfs_mount(ca->dst_poh, ca->dst_coh, O_RDWR,
 				       &dst_file_dfs->dfs);
@@ -3523,9 +3523,9 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 			uuid_parse(ca.dst, ca.dst_p_uuid);
 			ap->dst -= 1;
 			/* not considered an error yet since this could
-		 	* be a UNS path, dm_connect will check this
-		 	* when it attempts to do a uns_path_create
-		 	*/
+			 * be a UNS path, dm_connect will check this
+			 * when it attempts to do a uns_path_create
+			 */
 			rc = 0;
 		} else {
 			fprintf(stderr, "failed to parse destination path: "
