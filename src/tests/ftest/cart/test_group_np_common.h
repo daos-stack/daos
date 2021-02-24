@@ -483,8 +483,13 @@ parse_verify_swim_status_arg(char *source)
 
 				char exp_status[8];
 
-				strcpy(exp_status, cursorCopy +
-				       groupArray[g].rm_so);
+				if (strlen(exp_status) < 
+				    cursorCopy + groupArray[g].rm_so) {
+					D_ERROR("Use 'dead' or 'alive' for "
+						"swim status label.\n");
+					strcpy(exp_status, cursorCopy +
+					       groupArray[g].rm_so);
+				}
 
 				/* "d(ead)?"=1, a(live)?=0 as
 				 * specified in crt_event_type:
