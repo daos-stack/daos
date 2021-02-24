@@ -95,13 +95,13 @@ test_verify_loop_counter(void **state)
 
 	rc = d_tm_get_counter(&val, shmem_root, NULL,
 			      "gurt/tests/telem/loop counter");
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 
 	assert_int_equal(val, 5000);
 
 	rc = d_tm_get_counter(&val, shmem_root, NULL,
 			      "gurt/tests/telem/manually_set");
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 
 	assert_int_equal(val, 5001);
 }
@@ -114,7 +114,7 @@ test_verify_test_counter(void **state)
 
 	rc = d_tm_get_counter(&val, shmem_root, NULL,
 			      "gurt/tests/telem/counter 1");
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 	assert_int_equal(val, 3);
 }
 
@@ -169,11 +169,11 @@ test_verify_gauge(void **state)
 
 	rc = d_tm_get_gauge(&val, &stats, shmem_root, NULL,
 			    "gurt/tests/telem/gauge");
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 
 	rc = d_tm_get_gauge(&val, NULL, shmem_root, NULL,
 			    "gurt/tests/telem/gauge");
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 
 	assert_int_equal(val, 1650);
 }
@@ -188,11 +188,11 @@ test_timer_snapshot(void **state)
 
 	rc = d_tm_get_timer_snapshot(&tms1, shmem_root, NULL,
 				     "gurt/tests/telem/snapshot sample 1");
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 
 	rc = d_tm_get_timer_snapshot(&tms2, shmem_root, NULL,
 				     "gurt/tests/telem/snapshot sample 2");
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 
 	tms3 = d_timediff(tms1, tms2);
 
@@ -215,7 +215,7 @@ test_gauge_stats(void **state)
 
 	rc = d_tm_get_gauge(&val, &stats, shmem_root, NULL,
 			    "gurt/tests/telem/gauge-stats");
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 
 	assert_int_equal(val, 20);
 	assert_int_equal(stats.dtm_min.min_int, 2);
@@ -234,7 +234,7 @@ test_duration_stats(void **state)
 
 	rc = d_tm_get_duration(&tms, &stats, shmem_root, NULL,
 			       "gurt/tests/telem/duration-stats");
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 
 	assert_int_equal(stats.sample_size, 5);
 	assert(stats.dtm_min.min_float - 1.125 < STATS_EPSILON);
@@ -248,7 +248,7 @@ test_duration_stats(void **state)
 	 */
 	rc = d_tm_get_duration(&tms, &stats, shmem_root, NULL,
 			       "gurt/tests/telem/interval");
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 	assert_int_equal(stats.sample_size, 1);
 }
 
