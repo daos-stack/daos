@@ -276,10 +276,12 @@ pool_init(struct dts_context *tsc)
 	}
 
 	/* Use pool size as blob size for this moment. */
-	rc = vos_pool_create(pmem_file, tsc->tsc_pool_uuid, 0,
-			     tsc->tsc_nvme_size);
-	if (rc)
-		goto out;
+	if (tsc_create_pool(tsc)) {
+		rc = vos_pool_create(pmem_file, tsc->tsc_pool_uuid, 0,
+				     tsc->tsc_nvme_size);
+		if (rc)
+			goto out;
+	}
 
 	rc = vos_pool_open(pmem_file, tsc->tsc_pool_uuid, false, &poh);
 	if (rc)
@@ -306,9 +308,11 @@ cont_init(struct dts_context *tsc)
 	daos_handle_t	coh = DAOS_HDL_INVAL;
 	int		rc;
 
-	rc = vos_cont_create(tsc->tsc_poh, tsc->tsc_cont_uuid);
-	if (rc)
-		goto out;
+	if (tsc_create_cont(tsc)) {
+		rc = vos_cont_create(tsc->tsc_poh, tsc->tsc_cont_uuid);
+		if (rc)
+			goto out;
+	}
 
 	rc = vos_cont_open(tsc->tsc_poh, tsc->tsc_cont_uuid, &coh);
 	if (rc)
