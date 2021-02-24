@@ -2337,8 +2337,6 @@ ts_cmd_run(char opc, char *args)
 		rc = 0;
 		break;
 	}
-	if (st != NULL)
-		rc = -1;
 
 	return rc;
 }
