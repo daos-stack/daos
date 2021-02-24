@@ -223,6 +223,9 @@ scons %{?_smp_mflags}                 \
 
 BUILDROOT="%{?buildroot}"
 PREFIX="%{?_prefix}"
+echo SCHAN15 - where is test.cov?
+cp test.cov %{?buildroot}/usr/
+ls %{?buildroot}/usr/
 mkdir -p %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{?buildroot}/%{_unitdir}
