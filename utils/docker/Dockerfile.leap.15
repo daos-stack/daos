@@ -45,7 +45,8 @@ RUN zypper --non-interactive update &&					\
 	openmpi3-devel man fuse3-devel patchelf scons lua-lmod		\
 	libjson-c-devel liblz4-devel python3-distro curl		\
 	python3-pyxattr							\
-	java-1_8_0-openjdk-devel maven python3-PyYAML &&		\
+	java-1_8_0-openjdk-devel maven python3-PyYAML			\
+	libunwind-devel &&						\
     zypper clean all
 
 # Monkey-patch MODULEPATH

@@ -35,7 +35,8 @@ RUN yum clean all &&							\
 	python36-numpy Lmod						\
 	fuse3-devel libipmctl-devel python36-pyxattr			\
 	hwloc-devel patchelf python36-tabulate				\
-	java-1.8.0-openjdk python-distro python36-distro &&		\
+	java-1.8.0-openjdk python-distro python36-distro		\
+	libunwind-devel &&						\
     yum clean all
 
 # Install this individually because of potential conflicts

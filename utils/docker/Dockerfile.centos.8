@@ -35,7 +35,7 @@ RUN yum clean all && yum -y install epel-release dnf-plugins-core &&	\
 	python3-clustershell python3-paramiko				\
 	python3-numpy python3-jira Lmod					\
 	python3-tabulate python2-distro python3-distro			\
-	java-1.8.0-openjdk maven openmpi-devel &&			\
+	java-1.8.0-openjdk maven openmpi-devel libunwind-devel &&	\
     yum clean all
 
 ARG UID=1000
