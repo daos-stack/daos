@@ -481,12 +481,15 @@ parse_verify_swim_status_arg(char *source)
 			}
 			if (g == 2) {
 
-				char exp_status[8];
+				int exp_status_len = 8;
+				char exp_status[exp_status_len];
 
-				if (strlen(exp_status) < 
-				    cursorCopy + groupArray[g].rm_so) {
+				if (exp_status_len >
+				    strlen(cursorCopy + groupArray[g].rm_so)) {
 					D_ERROR("Use 'dead' or 'alive' for "
 						"swim status label.\n");
+					break;
+				} else {
 					strcpy(exp_status, cursorCopy +
 					       groupArray[g].rm_so);
 				}
