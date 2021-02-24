@@ -122,7 +122,9 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			expResp: &sharedpb.ClusterEventResp{
 				Sequence: 1,
 			},
-			expDispatched: []*events.RASEvent{eventRankDown.WithIsForwarded(true)},
+			expDispatched: []*events.RASEvent{
+				eventRankDown.WithForwarded(true),
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
