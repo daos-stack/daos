@@ -100,11 +100,11 @@ function export_pythonpath()
 }
 
 # look for a valid installation of python
-if [ -x "$(command -v python)" ]; then
-  PYTHON_VERSION="$(python -c 'import sys; print(sys.version_info.major)')"
-  export_pythonpath "${PYTHON_VERSION}"
-# there is still a chance that python3 is installed
-elif [ -x "$(command -v python3)" ]; then
+# if [ -x "$(command -v python)" ]; then
+#   PYTHON_VERSION="$(python -c 'import sys; print(sys.version_info.major)')"
+#   export_pythonpath "${PYTHON_VERSION}"
+# # there is still a chance that python3 is installed
+if [ -x "$(command -v python3)" ]; then
   PYTHON_VERSION="$(python3 -c 'import sys; print(sys.version_info.major)')"
   export_pythonpath "${PYTHON_VERSION}"
 else
