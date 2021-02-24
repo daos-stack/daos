@@ -10,7 +10,7 @@ hosts:
 timeout: 700
 server_config:
   name: daos_server
-  target: 8
+  targets: 8
 pool:
   mode: 511
   name: daos_server
