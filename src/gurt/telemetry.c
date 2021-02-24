@@ -769,7 +769,7 @@ d_tm_compute_duration_stats(struct d_tm_node_t *node)
 }
 
 /**
- * Set the given counter to an arbitary value
+ * Set the given counter to an arbitrary value
  *
  * The counter is specified either by an initialized pointer or by a fully
  * qualified item name.  If an initialized pointer is provided, the metric is
