@@ -4,7 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from avocado.core.exceptions import TestFail
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun
 from ior_utils import IorCommand
@@ -21,12 +21,6 @@ class ContainerCreate(TestWithServers):
 
     :avocado: recursive
     """
-
-    # Cancel any tests with tickets already assigned
-    CANCEL_FOR_TICKET = [
-        ["DAOS-2434", "rank", 1],
-        ["DAOS-2434", "rank", 2],
-    ]
 
     def add_containers_during_rebuild(self, loop_id, qty, pool1, pool2):
         """Add containers to a pool while rebuild is still in progress.
@@ -102,7 +96,6 @@ class ContainerCreate(TestWithServers):
 
         return status
 
-    @skipForTicket("DAOS-3550")
     def test_rebuild_container_create(self):
         """Jira ID: DAOS-1168.
 
