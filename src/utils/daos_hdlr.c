@@ -2608,7 +2608,7 @@ dm_get_cont_prop(daos_handle_t coh,
 	int                     i = 0;
 	daos_prop_t		*prop = NULL;
 
-	prop = daos_prop_alloc(2);
+	prop = daos_prop_alloc(size);
 	if (prop == NULL) {
 		fprintf(stderr, "Failed to allocate prop (%d)", rc);
 		D_GOTO(out, rc = -DER_NOMEM);
@@ -2718,14 +2718,17 @@ dm_connect(bool is_posix_copy,
 
 	/* open dst pool, dst cont, and mount dfs */
 	if (dst_file_dfs->type == DAOS) {
+		/* only connect if destination pool wasn't already opened */
 		if (!uuid_is_null(ca->dst_p_uuid)) {
-			rc = daos_pool_connect(ca->dst_p_uuid, sysname,
-					       DAOS_PC_RW, &ca->dst_poh, NULL,
-					       NULL);
-			if (rc != 0) {
-				fprintf(stderr, "failed to connect to "
-					"destination pool: %d\n", rc);
-				D_GOTO(out, rc);
+			if (!daos_handle_is_valid(ca->dst_poh)) {
+				rc = daos_pool_connect(ca->dst_p_uuid, sysname,
+		       	       			       DAOS_PC_RW, &ca->dst_poh,
+				       		       NULL, NULL);
+				if (rc != 0) {
+					fprintf(stderr, "failed to connect to "
+						"destination pool: %d\n", rc);
+					D_GOTO(err_src, rc);
+				}
 			}
 		/* if the dst pool uuid is null that means that this
 		 * is a UNS destination path, so we copy the source
@@ -2796,7 +2799,12 @@ dm_connect(bool is_posix_copy,
 					"%d\n", rc);
 				D_GOTO(err_dst_root, rc);
 			}
-		}
+		} else if (rc != 0) {
+			fprintf(stderr, "failed to open container: "
+				"%d\n", rc);
+			D_GOTO(err_dst_root, rc);
+
+		}	      	
 		if (is_posix_copy) {
 			rc = dfs_mount(ca->dst_poh, ca->dst_coh, O_RDWR,
 				       &dst_file_dfs->dfs);
@@ -3239,7 +3247,6 @@ cont_clone_list_akeys(daos_handle_t *src_oh,
 	char		*large_key = NULL;
 	char		*key_buf = NULL;
 	daos_size_t	key_buf_len = 0;
-	int		len = 0;
 
 	D_ALLOC(small_key, ENUM_DESC_BUF);
 	if (small_key == NULL)
@@ -3298,12 +3305,7 @@ cont_clone_list_akeys(daos_handle_t *src_oh,
 			D_ALLOC(akey, key_buf_len);
 			if (akey == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
-			len = snprintf(akey, akey_kds[j].kd_key_len + 1,
-				       "%s", ptr);
-			if (len > key_buf_len) {
-				fprintf(stderr, "akey buffer is too small\n");
-				D_GOTO(out, rc = 1);
-			}
+			memcpy(akey, ptr, akey_kds[j].kd_key_len);
 			d_iov_set(&aiov, (void *)akey, akey_kds[j].kd_key_len);
 
 			/* set iod values */
@@ -3378,7 +3380,6 @@ cont_clone_list_dkeys(daos_handle_t *src_oh,
 	char		*large_key = NULL;
 	char		*key_buf = NULL;
 	daos_size_t	key_buf_len = 0;
-	int		len = 0;
 
 	D_ALLOC(small_key, ENUM_DESC_BUF);
 	if (small_key == NULL)
@@ -3437,13 +3438,7 @@ cont_clone_list_dkeys(daos_handle_t *src_oh,
 			D_ALLOC(dkey, key_buf_len);
 			if (dkey == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
-			len = snprintf(dkey, dkey_kds[j].kd_key_len + 1,
-				       "%s", ptr);
-			if (len > key_buf_len) {
-				fprintf(stderr, "dkey buffer is too small\n");
-				D_FREE(dkey);
-				D_GOTO(out, rc = 1);
-			}
+			memcpy(dkey, ptr, dkey_kds[j].kd_key_len);
 			d_iov_set(&diov, (void *)dkey, dkey_kds[j].kd_key_len);
 
 			/* enumerate and parse akeys */
@@ -3520,17 +3515,23 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 	 */
 	if (rc != 0) {
 		uuid_generate(ca.dst_c_uuid);
-		ap->dst += 1;
-		D_STRNDUP(ca.dst, ap->dst, uuid_len);
-		if (ca.dst == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-		uuid_parse(ca.dst, ca.dst_p_uuid);
-		ap->dst -= 1;
-		/* not considered an error yet since this could
-		 * be a UNS path, dm_connect will check this
-		 * when it attempts to do a uns_path_create
-		 */
-		rc = 0;
+		if (strncmp(ap->dst, "/", 1) == 0) {
+			ap->dst += 1;
+			D_STRNDUP(ca.dst, ap->dst, uuid_len);
+			if (ca.dst == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			uuid_parse(ca.dst, ca.dst_p_uuid);
+			ap->dst -= 1;
+			/* not considered an error yet since this could
+		 	* be a UNS path, dm_connect will check this
+		 	* when it attempts to do a uns_path_create
+		 	*/
+			rc = 0;
+		} else {
+			fprintf(stderr, "failed to parse destination path: "
+				"%d\n", rc);
+			D_GOTO(out, rc);
+		}
 	} else {
 		rc = daos_pool_connect(ca.dst_p_uuid, ap->sysname,
 				       DAOS_PC_RW, &ca.dst_poh, NULL, NULL);
@@ -3634,10 +3635,6 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 	}
 	D_GOTO(out_oit, rc);
 err_obj:
-	rc = daos_obj_close(oh, NULL);
-	if (rc != 0) {
-		fprintf(stderr, "failed to close source object: %d\n", rc);
-	}
 	rc = daos_obj_close(dst_oh, NULL);
 	if (rc != 0) {
 		fprintf(stderr, "failed to close destination object: %d\n", rc);

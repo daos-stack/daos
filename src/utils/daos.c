@@ -986,7 +986,11 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	 * dst
 	 */
 	if (op == CONT_CLONE) {
-		rc = cont_clone_hdlr(ap);
+		if (ap->src != NULL && ap->dst != NULL) {
+			rc = cont_clone_hdlr(ap);
+		} else {
+			rc = RC_PRINT_HELP;
+		}
 		return rc;
 	}
 
