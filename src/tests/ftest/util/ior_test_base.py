@@ -65,7 +65,7 @@ class IorTestBase(DfuseTestBase):
         # Create a pool
         self.pool.create()
 
-    def create_cont(self, oclass):
+    def create_cont(self, oclass="SX"):
         """Create a TestContainer object to be used to create container.
 
         Args:
