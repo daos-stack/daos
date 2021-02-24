@@ -67,7 +67,7 @@ test_verify_object_count(void **state)
 	assert_non_null(node);
 
 	num = d_tm_count_metrics(shmem_root, node, D_TM_COUNTER);
-	assert_int_equal(num, 2);
+	assert_int_equal(num, 3);
 
 	num = d_tm_count_metrics(shmem_root, node, D_TM_GAUGE);
 	assert_int_equal(num, 2);
@@ -84,7 +84,7 @@ test_verify_object_count(void **state)
 	num = d_tm_count_metrics(shmem_root, node,
 				 D_TM_COUNTER | D_TM_GAUGE | D_TM_DURATION |
 				 D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT);
-	assert_int_equal(num, 9);
+	assert_int_equal(num, 10);
 }
 
 static void
@@ -95,9 +95,15 @@ test_verify_loop_counter(void **state)
 
 	rc = d_tm_get_counter(&val, shmem_root, NULL,
 			      "gurt/tests/telem/loop counter");
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 
 	assert_int_equal(val, 5000);
+
+	rc = d_tm_get_counter(&val, shmem_root, NULL,
+			      "gurt/tests/telem/manually_set");
+	assert(rc == DER_SUCCESS);
+
+	assert_int_equal(val, 5001);
 }
 
 static void
@@ -108,7 +114,7 @@ test_verify_test_counter(void **state)
 
 	rc = d_tm_get_counter(&val, shmem_root, NULL,
 			      "gurt/tests/telem/counter 1");
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 	assert_int_equal(val, 3);
 }
 
@@ -163,11 +169,11 @@ test_verify_gauge(void **state)
 
 	rc = d_tm_get_gauge(&val, &stats, shmem_root, NULL,
 			    "gurt/tests/telem/gauge");
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 
 	rc = d_tm_get_gauge(&val, NULL, shmem_root, NULL,
 			    "gurt/tests/telem/gauge");
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 
 	assert_int_equal(val, 1650);
 }
@@ -182,11 +188,11 @@ test_timer_snapshot(void **state)
 
 	rc = d_tm_get_timer_snapshot(&tms1, shmem_root, NULL,
 				     "gurt/tests/telem/snapshot sample 1");
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 
 	rc = d_tm_get_timer_snapshot(&tms2, shmem_root, NULL,
 				     "gurt/tests/telem/snapshot sample 2");
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 
 	tms3 = d_timediff(tms1, tms2);
 
@@ -209,7 +215,7 @@ test_gauge_stats(void **state)
 
 	rc = d_tm_get_gauge(&val, &stats, shmem_root, NULL,
 			    "gurt/tests/telem/gauge-stats");
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 
 	assert_int_equal(val, 20);
 	assert_int_equal(stats.dtm_min.min_int, 2);
@@ -228,12 +234,22 @@ test_duration_stats(void **state)
 
 	rc = d_tm_get_duration(&tms, &stats, shmem_root, NULL,
 			       "gurt/tests/telem/duration-stats");
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 
+	assert_int_equal(stats.sample_size, 5);
 	assert(stats.dtm_min.min_float - 1.125 < STATS_EPSILON);
 	assert(stats.dtm_max.max_float - 5.6 < STATS_EPSILON);
 	assert(stats.mean - 3.25 < STATS_EPSILON);
 	assert(stats.std_dev - 1.74329 < STATS_EPSILON);
+
+	/**
+	 * This duration was initialized with one good interval, and one
+	 * failed interval.  Therefore, there should be one item in the stats.
+	 */
+	rc = d_tm_get_duration(&tms, &stats, shmem_root, NULL,
+			       "gurt/tests/telem/interval");
+	assert(rc == DER_SUCCESS);
+	assert_int_equal(stats.sample_size, 1);
 }
 
 static int

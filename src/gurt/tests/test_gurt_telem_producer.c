@@ -22,7 +22,7 @@ init_tests(void **state)
 
 	rc = d_tm_init(simulated_srv_idx, D_TM_SHARED_MEMORY_SIZE,
 		       D_TM_RETAIN_SHMEM);
-	assert_true(rc == D_TM_SUCCESS);
+	assert_true(rc == DER_SUCCESS);
 
 	return d_log_init();
 }
@@ -38,7 +38,7 @@ test_increment_counter(void **state)
 	for (i = 0; i < count - 1; i++) {
 		rc = d_tm_increment_counter(&loop,
 					    "gurt/tests/telem/loop counter");
-		assert(rc == D_TM_SUCCESS);
+		assert(rc == DER_SUCCESS);
 	}
 
 	/**
@@ -46,7 +46,25 @@ test_increment_counter(void **state)
 	 * increments the loop counter.
 	 */
 	rc = d_tm_increment_counter(&loop, NULL);
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
+}
+
+static void
+test_set_counter(void **state)
+{
+	static struct d_tm_node_t	*loop;
+	int				count = 5000;
+	int				rc;
+
+	rc = d_tm_set_counter(&loop, count, "gurt/tests/telem/manually_set");
+	assert(rc == DER_SUCCESS);
+
+	/**
+	 * Counter now has value 'count'
+	 * We will now increment it, and the result should be 'count + 1'.
+	 */
+	rc = d_tm_increment_counter(&loop, NULL);
+	assert(rc == DER_SUCCESS);
 }
 
 static void
@@ -60,16 +78,16 @@ test_gauge(void **state)
 	int				i;
 
 	rc = d_tm_set_gauge(&gauge, init_val, "gurt/tests/telem/gauge");
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 
 	for (i = 0; i < inc_count; i++) {
 		rc = d_tm_increment_gauge(&gauge, 1, "gurt/tests/telem/gauge");
-		assert(rc == D_TM_SUCCESS);
+		assert(rc == DER_SUCCESS);
 	}
 
 	for (i = 0; i < dec_count; i++) {
 		rc = d_tm_decrement_gauge(&gauge, 1, "gurt/tests/telem/gauge");
-		assert(rc == D_TM_SUCCESS);
+		assert(rc == DER_SUCCESS);
 	}
 }
 
@@ -80,7 +98,7 @@ test_record_timestamp(void **state)
 	int				rc;
 
 	rc = d_tm_record_timestamp(&ts, "gurt/tests/telem/last executed");
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 }
 
 static void
@@ -92,14 +110,29 @@ test_interval_timer(void **state)
 
 	rc = d_tm_mark_duration_start(&timer, D_TM_CLOCK_REALTIME,
 				      "gurt/tests/telem/interval");
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 
 	ts.tv_sec = 0;
 	ts.tv_nsec = 50000000;
 	nanosleep(&ts, NULL);
 
-	rc = d_tm_mark_duration_end(&timer, NULL);
-	assert(rc == D_TM_SUCCESS);
+	rc = d_tm_mark_duration_end(&timer, rc, NULL);
+	assert(rc == DER_SUCCESS);
+
+	/**
+	 * Now start a timer that will be aborted.  The consumer test will
+	 * not see these intervals in the stats.
+	 */
+	rc = d_tm_mark_duration_start(&timer, D_TM_CLOCK_REALTIME,
+				      "gurt/tests/telem/interval");
+	assert(rc == DER_SUCCESS);
+
+	ts.tv_sec = 0;
+	ts.tv_nsec = 25000000;
+	nanosleep(&ts, NULL);
+
+	rc = d_tm_mark_duration_end(&timer, ~rc, NULL);
+	assert(rc == DER_SUCCESS);
 }
 
 static void
@@ -110,7 +143,7 @@ test_timer_snapshot_sample_1(void **state)
 
 	rc = d_tm_take_timer_snapshot(&snapshot, D_TM_CLOCK_REALTIME,
 				      "gurt/tests/telem/snapshot sample 1");
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 }
 
 static void
@@ -121,7 +154,7 @@ test_timer_snapshot_sample_2(void **state)
 
 	rc = d_tm_take_timer_snapshot(&snapshot, D_TM_CLOCK_REALTIME,
 				      "gurt/tests/telem/snapshot sample 2");
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 }
 
 static void
@@ -135,15 +168,15 @@ test_input_validation(void **state)
 
 	/** uninitialized node ptr at initialization time */
 	rc = d_tm_increment_counter(&node, "gurt/tests/telem/counter 1");
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 
 	/** Use the initialized node without specifying a name */
 	rc = d_tm_increment_counter(&node, NULL);
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 
 	/** Provide a NULL node pointer, force the API to use the name */
 	rc = d_tm_increment_counter(NULL, "gurt/tests/telem/counter 1");
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 
 	/** Verify correct function associated with this metric type is used */
 	printf("This operation is expected to generate an error:\n");
@@ -166,16 +199,16 @@ test_input_validation(void **state)
 
 	/** format specifier with strings */
 	rc = d_tm_increment_counter(NULL, "%s/%s", "my", "counter");
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 
 	/** format specifier with numbers */
 	rc = d_tm_increment_counter(NULL, "%d", rand() % 10000);
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 
 	/** format specifier with strings and numbers */
 	rc = d_tm_increment_counter(NULL, "my/%s/format/type/%d", "arbitrary",
 				    7);
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 
 	/**
 	 * The API accepts a path length that is D_TM_MAX_NAME_LEN including
@@ -194,7 +227,7 @@ test_input_validation(void **state)
 	/** Now trim the path by 1 character to make it fit */
 	path[D_TM_MAX_NAME_LEN - 1] = 0;
 	rc = d_tm_increment_counter(NULL, path);
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 
 	/**
 	 * After using "root" + "/", size the buffer 1 character too large
@@ -208,7 +241,7 @@ test_input_validation(void **state)
 	 */
 	path[D_TM_MAX_NAME_LEN - 6] = 0;
 	rc = d_tm_increment_counter(NULL, "root/%s", path);
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 	D_FREE_PTR(path);
 
 }
@@ -233,7 +266,7 @@ test_shared_memory_cleanup(void **state)
 
 	rc = d_tm_init(simulated_srv_idx, D_TM_SHARED_MEMORY_SIZE,
 		       D_TM_SERVER_PROCESS);
-	assert_true(rc == D_TM_SUCCESS);
+	assert_true(rc == DER_SUCCESS);
 }
 
 static void
@@ -250,7 +283,7 @@ test_gauge_stats(void **state)
 	for (i = 0; i < len; i++) {
 		rc = d_tm_set_gauge(NULL, test_values[i],
 				    "gurt/tests/telem/gauge-stats");
-		assert(rc == D_TM_SUCCESS);
+		assert(rc == DER_SUCCESS);
 	}
 }
 
@@ -275,7 +308,7 @@ test_duration_stats(void **state)
 
 	rc = d_tm_add_metric(&timer, D_TM_DURATION | D_TM_CLOCK_REALTIME,
 			     "N/A", "N/A", "gurt/tests/telem/duration-stats");
-	assert(rc == D_TM_SUCCESS);
+	assert(rc == DER_SUCCESS);
 
 	timer->dtn_metric->dtm_data.tms[0].tv_sec = 1;
 	timer->dtn_metric->dtm_data.tms[0].tv_nsec = 125000000;
@@ -313,6 +346,7 @@ main(int argc, char **argv)
 	const struct CMUnitTest	tests[] = {
 		cmocka_unit_test(test_timer_snapshot_sample_1),
 		cmocka_unit_test(test_increment_counter),
+		cmocka_unit_test(test_set_counter),
 		cmocka_unit_test(test_timer_snapshot_sample_2),
 		cmocka_unit_test(test_gauge),
 		cmocka_unit_test(test_record_timestamp),
