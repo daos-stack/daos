@@ -3523,9 +3523,9 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 			uuid_parse(ca.dst, ca.dst_p_uuid);
 			ap->dst -= 1;
 			/* not considered an error yet since this could
-		 	* be a UNS path, dm_connect will check this
-		 	* when it attempts to do a uns_path_create
-		 	*/
+			* be a UNS path, dm_connect will check this
+			* when it attempts to do a uns_path_create
+			*/
 			rc = 0;
 		} else {
 			fprintf(stderr, "failed to parse destination path: "
