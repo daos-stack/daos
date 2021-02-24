@@ -1127,7 +1127,7 @@ pool_svc_check_node_status(struct pool_svc *svc)
 
 		rc = crt_rank_state_get(crt_group_lookup(NULL),
 				   doms[i].do_comp.co_rank, &state);
-		if (rc != 0 && rc != -DER_OOG) {
+		if (rc != 0 && rc != -DER_NONEXIST) {
 			D_ERROR("failed to get swim for rank %u: %d\n",
 				doms[i].do_comp.co_rank, rc);
 			break;
@@ -1138,8 +1138,10 @@ pool_svc_check_node_status(struct pool_svc *svc)
 		 * moment.
 		 */
 		D_DEBUG(DB_REBUILD, "rank/state %d/%d\n",
-			doms[i].do_comp.co_rank, state.sms_status);
-		if (rc == -DER_OOG || state.sms_status == SWIM_MEMBER_DEAD) {
+			doms[i].do_comp.co_rank,
+			rc == -DER_NONEXIST ? -1 : state.sms_status);
+		if (rc == -DER_NONEXIST ||
+		    state.sms_status == SWIM_MEMBER_DEAD) {
 			rc = pool_evict_rank(svc, doms[i].do_comp.co_rank);
 			if (rc) {
 				D_ERROR("failed to evict rank %u: %d\n",
