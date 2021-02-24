@@ -549,9 +549,11 @@ eq_test_4()
 		events[i] = malloc(sizeof(*events[i]));
 		if (events[i] == NULL) {
 			rc = -ENOMEM;
-			goto out;
+			goto free;
 		}
-		daos_event_init(events[i], my_eqh, NULL);
+		rc = daos_event_init(events[i], my_eqh, NULL);
+		if (rc != 0)
+			goto free;
 	}
 
 	pthread_cond_init(&epc_data.epc_cond, NULL);
@@ -627,7 +629,7 @@ out:
 
 	D_MUTEX_DESTROY(&epc_data.epc_mutex);
 	pthread_cond_destroy(&epc_data.epc_cond);
-
+free:
 	for (i = 0; i < EQT_EV_COUNT * 3; i++) {
 		if (events[i] != NULL) {
 			daos_event_fini(events[i]);

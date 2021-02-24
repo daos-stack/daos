@@ -30,7 +30,7 @@ degrade_ec_internal(void **state, int *shards, int shards_nr, int write_type)
 	if (!test_runable(arg, 6))
 		return;
 
-	oid = dts_oid_gen(OC_EC_4P2G1, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	if (write_type == PARTIAL_UPDATE)

@@ -1,5 +1,5 @@
-#
-# Copyright 2018-2020, Intel Corporation
+# Copyright (C) 2018-2021 Intel Corporation
+# All rights reserved.
 #
 # 'recipe' for Docker to build an image of Ubuntu-based
 # environment for building the DAOS project.
@@ -9,59 +9,34 @@
 FROM ubuntu:20.04
 LABEL maintainer="daos@daos.groups.io"
 
-# Build arguments can be set via --build-arg
-# use same UID as host and default value of 1000 if not specified
-ARG UID=1000
-
-# Update distribution
-# It's better to put the apt-get update in the same "cache layer" as the
-# apt-get install command so that the apt database is updated if/when the
-# installed packages list below is updated
-
 # Install basic tools
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            autoconf bash clang cmake curl doxygen flex                 \
-            gcc git graphviz                                            \
-            libaio-dev libboost-dev libcmocka0 libcmocka-dev            \
-            libcunit1-dev libevent-dev libibverbs-dev libiscsi-dev      \
-            libltdl-dev libnuma-dev librdmacm-dev libreadline6-dev      \
-            libssl-dev libtool-bin libyaml-dev python3-tabulate         \
-            locales make meson nasm ninja-build pandoc patch            \
-            pylint python-dev python3-dev scons sg3-utils uuid-dev      \
-            yasm valgrind libhwloc-dev man fuse3 libfuse3-dev           \
-            openjdk-8-jdk maven libopenmpi-dev patchelf libjson-c-dev   \
-            liblz4-dev python3-distro python3-pyxattr
-
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
-                       software-properties-common &&                    \
-    apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
-                       libsafec-dev libipmctl-dev ndctl ipmctl golang-go
+RUN apt-get update &&							\
+    DEBIAN_FRONTEND=noninteractive apt-get install -y			\
+	build-essential scons python3-distro python3-distutils valgrind	\
+	autoconf libtool-bin locales pkg-config pandoc clang cmake	\
+	libcmocka-dev libnuma-dev patchelf libhwloc-dev libboost-dev	\
+	uuid-dev libssl-dev fuse3 libfuse3-dev curl libjson-c-dev 	\
+	liblz4-dev libibverbs-dev librdmacm-dev libaio-dev yasm		\
+	python3-dev golang-go git libyaml-dev python3-tabulate		\
+	python3-pyxattr openjdk-8-jdk maven libipmctl-dev 		\
+	libcunit1-dev libopenmpi-dev numactl doxygen libunwind-dev && 	\
+    apt-get clean all
 
 # hack the default shell to bash instead of dash
 RUN rm /bin/sh && ln -s bash /bin/sh
 
-RUN locale-gen en_US.UTF-8 || cat /usr/share/i18n/SUPPORTED
+RUN locale-gen en_US.UTF-8
 
 # use Java 8 instead of default Java 11
 RUN update-alternatives --set java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java
 
-# Dependencies
+ARG UID=1000
 
-# Add DAOS user
-ENV USER daos
-ENV PASSWD daos
-RUN useradd -u $UID -ms /bin/bash $USER
-RUN echo "$USER:$PASSWD" | chpasswd
-
-ENV USER daos_server
-ENV PASSWD daos_server
-RUN useradd -ms /bin/bash $USER
-RUN echo "$USER:$PASSWD" | chpasswd
-
-ENV USER daos_agent
-ENV PASSWD daos_agent
-RUN useradd -ms /bin/bash $USER
-RUN echo "$USER:$PASSWD" | chpasswd
+# Add DAOS users
+RUN useradd --uid $UID --user-group --create-home --shell /bin/bash --home /home/daos daos_server
+RUN echo "daos_server:daos_server" | chpasswd
+RUN useradd --user-group --create-home --shell /bin/bash daos_agent
+RUN echo "daos_agent:daos_agent" | chpasswd
 
 # Create directory for DAOS backend storage
 RUN mkdir -p /opt/daos && chown -R daos_server.daos_server /opt/daos
@@ -69,47 +44,74 @@ RUN mkdir /mnt/daos && chown daos_server.daos_server /mnt/daos
 RUN mkdir /var/run/daos_server && chown daos_server.daos_server /var/run/daos_server
 RUN mkdir /var/run/daos_agent && chown daos_agent.daos_agent /var/run/daos_agent
 
-# Set maven repo mirror
-RUN mkdir -p /root/.m2
-RUN echo -e "<settings>\n\
-	<mirrors>\n\
-		<mirror>\n\
-			<id>google-maven-central</id>\n\
-			<name>GCS Maven Central mirror</name>\n\
-			<url>https://maven-central.storage-download.googleapis.com/maven2/</url>\n\
-			<mirrorOf>central</mirrorOf>\n\
-		</mirror>\n\
-	</mirrors>\n\
-</settings>" > /root/.m2/settings.xml
+ARG CACHEBUST=1
+RUN apt-get -y upgrade && apt-get clean all
 
-# set NOBUILD to disable build
-ARG NOBUILD
+# Control what to build.  By default Dockerfiles build everything to allow for
+# ease-of-use for users, however in CI everything is turned off and then
+# selectively enabled.  Turning off any step disables all future steps.
+ARG DAOS_DEPS_BUILD=yes
+ARG DAOS_BUILD=$DAOS_DEPS_BUILD
+ARG DAOS_JAVA_BUILD=$DAOS_BUILD
+# Legacy, NOBUILD should be set to any string to disable all three.
+ARG NOBUILD=no
 
 # select compiler to use
 ARG COMPILER=gcc
 
-# copy DAOS tree
-WORKDIR /home/daos
-COPY ./ .
+# The COPY command has a --chown option but it's not well supported so copy as
+# root then run a chown command which is frustrating as the copy can take a few
+# seconds.
+WORKDIR /home/daos/pre
+COPY SConstruct .
+COPY utils/sl utils/sl
+COPY utils/build.config utils/
+RUN chown -R daos_server.daos_server /home/daos
+USER daos_server:daos_server
+RUN ln -s utils/sl site_scons
 
-# Build DAOS & dependencies
-RUN if [ "x$NOBUILD" = "x" ] ; then \
-    scons --build-deps=yes -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER; fi
+RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
+    (scons --build-deps=yes install PREFIX=/opt/daos --deps-only && \
+    /bin/rm -rf build *.gz)
+
+WORKDIR /home/daos/daos/
+COPY VERSION LICENSE ftest.sh SConstruct ./
+COPY utils utils
+COPY src src
+USER root:root
+RUN chown -R daos_server.daos_server /home/daos
+USER daos_server:daos_server
+RUN ln -s utils/sl site_scons
+
+# Build DAOS
+RUN [ "$DAOS_BUILD" != "yes" ] || \
+    (scons -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER && \
+    /bin/rm -rf build && \
+    cp -r utils/config/examples /opt/daos)
 
 # Set environment variables
 ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:$LD_LIBRARY_PATH
 ENV PATH=/opt/daos/bin:$PATH
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
 
-# Copy example config files to /opt/daos
-RUN if [ "x$NOBUILD" = "x" ] ; then \
-    cp -r utils/config/examples /opt/daos; fi
-
 # Build java and hadoop bindings
-RUN if [ "x$NOBUILD" = "x" ] ; then \
-    pushd src/client/java && \
-    mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos && \
-    popd; fi
+WORKDIR /home/daos/daos/src/client/java
+# Set maven repo mirror
+RUN mkdir -p /home/daos/.m2
+RUN echo -e "<settings>\n\
+        <mirrors>\n\
+                <mirror>\n\
+                        <id>google-maven-central</id>\n\
+                        <name>GCS Maven Central mirror</name>\n\
+                        <url>https://maven-central.storage-download.googleapis.com/maven2/</url>\n\
+                        <mirrorOf>central</mirrorOf>\n\
+                </mirror>\n\
+        </mirrors>\n\
+</settings>" > /home/daos/.m2/settings.xml
+
+RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
+    mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
+WORKDIR /home/daos
 
 # Remove local copy
 RUN rm -rf /home/daos/*

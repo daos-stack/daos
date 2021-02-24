@@ -8,9 +8,6 @@
 #include <daos/pool_map.h>
 #include "rpc.h"
 
-#define DF_TARGET "Target[%d] (rank %u idx %u)"
-#define DP_TARGET(t) t->ta_comp.co_id, t->ta_comp.co_rank, t->ta_comp.co_index
-
 /*
  * Updates a single target by the operation given in opc
  * If something changed, *version is incremented
@@ -231,16 +228,18 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 		rc = pool_map_find_target(map, tgts->pti_ids[i].pti_id,
 					  &target);
 		if (rc <= 0) {
-			D_DEBUG(DF_DSMS, "not find target %u in map %p\n",
+			D_ERROR("Got request to change nonexistent target %u"
+				" in map %p\n",
 				tgts->pti_ids[i].pti_id, map);
-			continue;
+			return -DER_NONEXIST;
 		}
 
 		dom = pool_map_find_node_by_rank(map, target->ta_comp.co_rank);
 		if (dom == NULL) {
-			D_DEBUG(DF_DSMS, "not find rank %u in map %p\n",
+			D_ERROR("Got request to change nonexistent rank %u"
+				" in map %p\n",
 				target->ta_comp.co_rank, map);
-			continue;
+			return -DER_NONEXIST;
 		}
 
 		rc = update_one_tgt(map, target, dom, opc, evict_rank,
