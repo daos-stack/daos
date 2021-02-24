@@ -109,7 +109,7 @@ class NvmeFragmentation(TestWithServers):
         # Destroy the container created by thread
         for key in container_info:
             cmd.sub_command_class.sub_command_class.pool.value = self.pool.uuid
-            #cmd.sub_command_class.sub_command_class.svc.value = \
+            # cmd.sub_command_class.sub_command_class.svc.value = \
             #    self.pool.svc_ranks
             cmd.sub_command_class.sub_command_class.cont.value = \
                 container_info[key]
