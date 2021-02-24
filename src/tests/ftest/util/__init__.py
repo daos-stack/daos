@@ -36,7 +36,6 @@ __all__ = [
     'logger_utils',
     'macsio_test_base',
     'macsio_util',
-    'makefile
     'mdtest_test_base',
     'mdtest_utils',
     'mpio_test_base',
