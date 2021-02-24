@@ -337,6 +337,30 @@ public class DaosObject {
   }
 
   /**
+   * Same as {@link #fetch(IODataDesc)}, but fetch object with {@link IODataDescAsync}.
+   *
+   * @param desc
+   * request and data description
+   * @throws DaosObjectException
+   */
+  public void fetchAsync(IODataDescAsync desc) throws DaosObjectException {
+    checkOpen();
+    desc.encode();
+
+    if (log.isDebugEnabled()) {
+      log.debug(oid + " fetch object with description: " + desc.toString(MAX_DEBUG_SIZE));
+    }
+    try {
+      client.fetchObjectAsync(objectPtr, 0, desc.getDescBuffer().memoryAddress());
+    } catch (DaosIOException e) {
+      DaosObjectException de = new DaosObjectException(oid, "failed to fetch object with description " +
+          desc.toString(MAX_EXCEPTION_SIZE), e);
+      desc.setCause(de);
+      throw de;
+    }
+  }
+
+  /**
    * update object with given <code>desc</code>.
    *
    * @param desc
@@ -381,6 +405,30 @@ public class DaosObject {
       if (!desc.isAsync()) {
         desc.succeed();
       }
+    } catch (DaosIOException e) {
+      DaosObjectException de = new DaosObjectException(oid, "failed to update object with description " +
+          desc.toString(MAX_EXCEPTION_SIZE), e);
+      desc.setCause(de);
+      throw de;
+    }
+  }
+
+  /**
+   * Same as {@link #fetch(IODataDesc)}, but fetch object with {@link IODataDescAsync}.
+   *
+   * @param desc
+   * request and data description
+   * @throws DaosObjectException
+   */
+  public void updateAsync(IODataDescAsync desc) throws DaosObjectException {
+    checkOpen();
+    desc.encode();
+
+    if (log.isDebugEnabled()) {
+      log.debug(oid + " update object with description: " + desc.toString(MAX_DEBUG_SIZE));
+    }
+    try {
+      client.updateObjectAsync(objectPtr, 0, desc.getDescBuffer().memoryAddress());
     } catch (DaosIOException e) {
       DaosObjectException de = new DaosObjectException(oid, "failed to update object with description " +
           desc.toString(MAX_EXCEPTION_SIZE), e);
