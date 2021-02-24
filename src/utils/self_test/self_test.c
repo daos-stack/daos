@@ -78,16 +78,16 @@ const struct {
 
 #define	TST_HIGH	0x01	/* test in higher direction */
 #define	TST_LOW		0x02	/* test in lower direction */
-#define TST_OUTPUT	0x10	/* print results */
-typedef struct {
+#define	TST_OUTPUT	0x10	/* print results */
+struct status_feature {
 	char	*name;
 	int	 value;
 	float	 scale;
 	int	 flag;
 	char	*description;
-} status_feature;
+};
 
-static status_feature status[] = {
+static struct status_feature status[] = {
 	{"bw", 0, 0, TST_HIGH | TST_LOW | TST_OUTPUT, "Bandwidth"},
 	{"tp", 0, 0, TST_HIGH | TST_LOW | TST_OUTPUT, "Throughput"},
 	{"av", 0, 0, TST_HIGH | TST_LOW | TST_OUTPUT, "Averages"},
@@ -845,7 +845,7 @@ static int config_create_output_config(char *section_name, bool remove)
 		if (config_ret != CONFIG_OK) {
 			D_ERROR("Output file does not exist: %s\n",
 			       g_expected_outfile);
-			D_GOTO(cleanup, ret_value = -ENOMEM);
+			D_GOTO(cleanup, ret_value = -ENOENT);
 		}
 	}
 	/* Out put config does not exist, create one */
@@ -909,7 +909,8 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 	char		*c_remaining = NULL;
 	char		*c_tag = NULL;
 	int		 i;
-	int		 status_size = sizeof(status) / sizeof(status_feature);
+	int		 status_size = sizeof(status) /
+				       sizeof(struct status_feature);
 	int		 master = -1;
 	int		 endpoint = -1;
 	int		 endpoint_tag = -1;
@@ -1195,7 +1196,8 @@ static int compare_print_results(char *section_name, char *input_section_name,
 	char		*sec_name;
 	int		 ret_value = 0;
 	int		 i;
-	int		 status_size = sizeof(status) / sizeof(status_feature);
+	int		 status_size = sizeof(status) /
+				       sizeof(struct status_feature);
 
 	/* Read in expected file if specified */
 	if (g_expected_infile != NULL) {
@@ -1568,7 +1570,8 @@ static int combine_results(Config *cfg_results, char *section_name)
 	size_t		 size = MASTER_VALUE_SIZE;
 	char		 new_key_name[2 * MASTER_VALUE_SIZE];
 	char		 master[MASTER_VALUE_SIZE];
-	int		 status_size = sizeof(status) / sizeof(status_feature);
+	int		 status_size = sizeof(status) /
+				       sizeof(struct status_feature);
 
 	/* Read master-endpoint string */
 	ret = ConfigReadString(cfg_results, section_name, "master_endpoint",
@@ -2295,9 +2298,11 @@ cleanup:
 	/* Tell the progress thread to abort and exit */
 	g_shutdown_flag = 1;
 
-	ret = pthread_join(tid, NULL);
-	if (ret)
+	cleanup_ret = pthread_join(tid, NULL);
+	if (cleanup_ret)
 		D_ERROR("Could not join progress thread");
+	/* Make sure first error is returned, if applicable */
+	ret = ((ret == 0) ? cleanup_ret : ret);
 
 cleanup_nothread:
 	if (latencies_bulk_hdl != NULL) {
@@ -3103,6 +3108,7 @@ static int config_file_setup(char *file_name, char *section_name,
 	config_ret = ConfigReadFile(file_name, &cfg);
 	if (config_ret != CONFIG_OK) {
 		LOG_ERR("ConfigOpenFile failed for %s", file_name);
+		D_ERROR("ConfigOpenFile failed for %s", file_name);
 		return -ENOENT;
 	}
 
@@ -3755,8 +3761,11 @@ int main(int argc, char *argv[])
 	/****** Open global configuration for output results *****/
 	/*
 	 * If no section name specified, then will be created later on.
+	 * ENOENT return when file specified but cannot be opened.
 	 */
 	ret = config_create_output_config(section_name, true);
+	if (ret == -ENOENT)
+		goto cleanup;
 
 	/********************* Run the self test *********************/
 	ret = run_self_test(all_params, num_msg_sizes, g_rep_count,

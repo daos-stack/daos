@@ -16,7 +16,7 @@ LIB_CONFIG_ECNF = 'etc/selftest_expected.cnf'
 # Function to filter out gcc flags from this compilation env
 def remove_certain_gcc_flags(str):
     import re
-    r = re.compile("\-Wframe\-larger\-than\=")
+    r = re.compile(r"-Wframe-larger-than=")
     if r.match(str):
         return False
     else:
