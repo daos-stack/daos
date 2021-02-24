@@ -384,26 +384,30 @@ def check_remote_output(task, command):
             output_data = [["<NONE>", results[code]]]
         for output, o_hosts in output_data:
             n_set = NodeSet.fromlist(o_hosts)
+            lines = []
             lines = list(output.splitlines())
             if len(lines) > 1:
+                # Print the sub-header for multiple lines of output
                 print("    {}: rc={}, output:".format(n_set, code))
-                for number, line in enumerate(lines):
-                    if isinstance(line, bytes):
-                        line = line.decode("utf-8")
-                    try:
-                        print("      {}".format(line))
-                    except IOError:
-                        # DAOS-5781 Jenkins doesn't like receiving large
-                        # amounts of data in a short space of time so catch
-                        # this and retry.
-                        print(
-                            "*** DAOS-5781: Handling IOError detected while "
-                            "processing line {}/{} with retry ***".format(
-                                number + 1, len(lines)))
-                        time.sleep(5)
-                        print("      {}".format(line))
-            else:
-                print("    {}: rc={}, output: {}".format(n_set, code, output))
+            for number, line in enumerate(lines):
+                if isinstance(line, bytes):
+                    line = line.decode("utf-8")
+                if len(lines) == 1:
+                    # Print the sub-header and line for one line of output
+                    print("    {}: rc={}, output: {}".format(n_set, code, line))
+                    continue
+                try:
+                    print("      {}".format(line))
+                except IOError:
+                    # DAOS-5781 Jenkins doesn't like receiving large
+                    # amounts of data in a short space of time so catch
+                    # this and retry.
+                    print(
+                        "*** DAOS-5781: Handling IOError detected while "
+                        "processing line {}/{} with retry ***".format(
+                            number + 1, len(lines)))
+                    time.sleep(5)
+                    print("      {}".format(line))
 
     # List any hosts that timed out
     timed_out = [str(hosts) for hosts in task.iter_keys_timeout()]

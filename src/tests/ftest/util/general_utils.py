@@ -26,9 +26,10 @@ class DaosTestError(Exception):
 
 
 class SimpleProfiler():
-    """
-    Simple profiler that counts the number of times a function is called
-    and measure its execution time.
+    """Simple profiler class.
+
+    Counts the number of times a function is called and measure its execution
+    time.
     """
 
     def __init__(self):
@@ -69,14 +70,14 @@ class SimpleProfiler():
         return ret
 
     def get_stat(self, tag):
-        """Retrieves the stats of a function.
+        """Retrieve the stats of a function.
 
         Args:
             tag (str): Tag to be query
 
         Returns:
-            max, min, avg (tuple): A tuple with the slowest, fastest and
-            average execution times.
+            tuple: A tuple of the fastest (max), slowest (min), and average
+                execution times.
 
         """
         data = self._stats.get(tag, [0, []])
@@ -84,7 +85,8 @@ class SimpleProfiler():
         return self._calculate_metrics(data[1])
 
     def set_logger(self, fn):
-        """
+        """Assign the function to be used for logging.
+
         Set the function that will be used to print the elapsed time on each
         function call. If this value is not set, the profiling will be
         performed silently.
@@ -96,7 +98,7 @@ class SimpleProfiler():
         self._logger = fn
 
     def print_stats(self):
-        """Prints all the stats collected so far.
+        """Print all the stats collected so far.
 
         If the logger has not been set, the stats will be printed by using the
         built-in print function.
@@ -1151,3 +1153,19 @@ def get_file_listing(hosts, files):
             convert_string(files, " ")),
         verbose=False, raise_exception=False)
     return result
+
+
+def get_subprocess_stdout(subprocess):
+    """Get the stdout from the specified subprocess.
+
+    Args:
+        subprocess (process.SubProcess): subprocess from which to get stdout
+
+    Returns:
+        str: the std out of the subprocess
+
+    """
+    output = subprocess.get_stdout()
+    if isinstance(output, bytes):
+        output = output.decode("utf-8")
+    return output

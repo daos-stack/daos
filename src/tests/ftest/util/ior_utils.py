@@ -13,6 +13,7 @@ from enum import IntEnum
 
 from command_utils_base import CommandFailure, FormattedParameter
 from command_utils import ExecutableCommand
+from general_utils import get_subprocess_stdout
 
 
 class IorCommand(ExecutableCommand):
@@ -304,7 +305,7 @@ class IorCommand(ExecutableCommand):
             #   - the time out is reached (failure)
             #   - the subprocess is no longer running (failure)
             while not complete and not timed_out and sub_process.poll() is None:
-                output = sub_process.get_stdout()
+                output = get_subprocess_stdout(sub_process)
                 detected = len(re.findall(self.pattern, output))
                 complete = detected == self.pattern_count
                 timed_out = time.time() - start > pattern_timeout
@@ -320,7 +321,7 @@ class IorCommand(ExecutableCommand):
                     "%s detected - %s:\n%s",
                     "Time out" if timed_out else "Error",
                     msg,
-                    sub_process.get_stdout())
+                    get_subprocess_stdout(sub_process))
 
                 # Stop the timed out process
                 if timed_out:

@@ -19,7 +19,7 @@ from command_utils_base import \
     CommandWithParameters, YamlParameters, EnvironmentVariables, LogParameter
 from general_utils import check_file_exists, stop_processes, get_log_file, \
     run_command, DaosTestError, get_job_manager_class, create_directory, \
-    distribute_files, change_file_owner, get_file_listing
+    distribute_files, change_file_owner, get_file_listing, get_subprocess_stdout
 
 
 class ExecutableCommand(CommandWithParameters):
@@ -615,7 +615,7 @@ class SubProcessCommand(CommandWithSubCommand):
             #   - the time out is reached (failure)
             #   - the subprocess is no longer running (failure)
             while not complete and not timed_out and sub_process.poll() is None:
-                output = sub_process.get_stdout()
+                output = get_subprocess_stdout(sub_process)
                 detected = len(re.findall(self.pattern, output))
                 complete = detected == self.pattern_count
                 timed_out = time.time() - start > self.pattern_timeout.value
@@ -636,7 +636,7 @@ class SubProcessCommand(CommandWithSubCommand):
                     runtime = "{} seconds".format(time.time() - start)
                 if not self.verbose:
                     # Include the stdout if verbose is not enabled
-                    details = ":\n{}".format(sub_process.get_stdout())
+                    details = ":\n{}".format(get_subprocess_stdout(sub_process))
                 self.log.info("%s - %s %s%s", reason, msg, runtime, details)
                 if timed_out:
                     self.log.debug(

@@ -833,7 +833,7 @@ class Systemctl(JobManager):
         for result in results:
             if result["exit_status"] == 0 and not result["interrupted"]:
                 # Add the successful output from each node to the dictionary
-                log_data[result["hosts"]] = lines
+                log_data[result["hosts"]] = result["stdout"]
             else:
                 # Display all of the results in the case of an error
                 if len(result["stdout"]) > 1:
