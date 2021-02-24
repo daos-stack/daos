@@ -67,9 +67,6 @@ test_sequence:
     - ["7", "11", "Fail"]
   # Valid Rank and Target
     - ["0", "1,2", "Pass"]
-  # TODO: The following test sequence
-  # need to be enabled after DAOS-6838
-  # is addressed. Verify Extend functionality
-  #  - ["4", "0,2", "Pass"]
-  #  - ["5", "1,2", "Pass"]
+    - ["4", "0,2", "Pass"]
+    - ["5", "1,2", "Pass"]
 

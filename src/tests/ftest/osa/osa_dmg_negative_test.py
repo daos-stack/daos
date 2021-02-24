@@ -6,6 +6,7 @@
 """
 from osa_utils import OSAUtils
 from test_utils_pool import TestPool
+from apricot import skipForTicket
 
 
 class OSADmgNegativeTest(OSAUtils):
@@ -50,11 +51,12 @@ class OSADmgNegativeTest(OSAUtils):
         else:
             self.fail("Invalid Parameter")
 
-    def run_osa_dmg_test(self, num_pool):
+    def run_osa_dmg_test(self, num_pool, extend=False):
         """Run the offline extend without data.
 
         Args:
             num_pool (int) : total pools to create for testing purposes.
+            extend (bool) : Run testing after performing pool extend.
         """
         # Create a pool
         self.dmg_command.exit_status_exception = False
@@ -74,32 +76,31 @@ class OSADmgNegativeTest(OSAUtils):
             self.pool = pool[val]
 
         # Start the additional servers and extend the pool
-        # Extend functionality test infrastructure
-        # presently broken due to DAOS-6838 : TODO
-        # self.log.info("Extra Servers = %s", self.extra_servers)
-        # self.start_additional_servers(self.extra_servers)
+        if extend is True:
+            self.log.info("Extra Servers = %s", self.extra_servers)
+            self.start_additional_servers(self.extra_servers)
 
         # Get rank, target from the test_dmg_sequence
         # Some test_dmg_sequence data will be invalid, valid.
         for val in range(0, num_pool):
             for i in range(len(self.test_seq)):
                 self.pool = pool[val]
-                # Will enable extend functionality after
-                # DAOS-6838 is addressed. : TODO
-                # scm_size = self.pool.scm_size
-                # nvme_size = self.pool.nvme_size
+                if extend is True:
+                    scm_size = self.pool.scm_size
+                    nvme_size = self.pool.nvme_size
                 rank = self.test_seq[i][0]
                 target = "{}".format(self.test_seq[i][1])
                 expected_result = "{}".format(self.test_seq[i][2])
                 # Extend the pool
-                # Will enable extend functionality after
-                # DAOS-6838 is addressed. : TODO
-                # output = self.dmg_command.pool_extend(self.pool.uuid,
-                #                                      rank,
-                #                                      scm_size,
-                #                                      nvme_size)
-                # self.log.info(output)
-                # self.validate_results(expected_result, output.stdout)
+                if extend is True:
+                    output = self.dmg_command.pool_extend(self.pool.uuid,
+                                                          rank,
+                                                          scm_size,
+                                                          nvme_size)
+                    self.log.info(output)
+                    self.validate_results(expected_result, output.stdout)
+                if (extend is False and (rank == "4" or rank == "5")):
+                    continue
                 # Exclude a rank, target
                 output = self.dmg_command.pool_exclude(self.pool.uuid,
                                                        rank,
@@ -125,7 +126,7 @@ class OSADmgNegativeTest(OSAUtils):
                 self.log.info(output)
                 self.validate_results(expected_result, output.stdout)
 
-    def test_osa_dmg_cmd(self):
+    def test_osa_dmg_cmd_without_extend(self):
         """
         JIRA ID: DAOS-5866
 
@@ -134,5 +135,18 @@ class OSADmgNegativeTest(OSAUtils):
         :avocado: tags=all,daily_regression,hw,medium,ib2
         :avocado: tags=osa,osa_dmg_negative_test,dmg_negative_test
         """
+        # Perform testing with a single pool
+        self.run_osa_dmg_test(1, False)
+
+    @skipForTicket("DAOS-6838")
+    def test_osa_dmg_cmd_with_extend(self):
+        """
+        JIRA ID: DAOS-5866
+
+        Test Description: Test
+
+        :avocado: tags=all,full_regression,hw,medium,ib2
+        :avocado: tags=osa,osa_dmg_negative_test,dmg_negative_test_extend
+        """
         # Perform extend testing with 1 pool
-        self.run_osa_dmg_test(1)
+        self.run_osa_dmg_test(1, True)
