@@ -19,5 +19,5 @@ class CartCoRpcOneNodeTest(CartTest):
 
         :avocado: tags=all,cart,pr,daily_regression,corpc,one_node
         """
-        cmd = self.build_cmd(self, self.env, "test_servers")
-        self.launch_test(self, cmd)
+        cmd = self.build_cmd(self.env, "test_servers")
+        self.launch_test(cmd)
