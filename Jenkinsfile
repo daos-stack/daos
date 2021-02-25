@@ -13,8 +13,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
-
-Calendar current_time = Calendar.getInstance()
+@Library(value="pipeline-lib@docker-build-args") _
 
 boolean doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
@@ -565,8 +564,7 @@ pipeline {
                             filename 'Dockerfile.checkpatch'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(add_repos:false) +
-                                                " --build-arg CB0=" + current_time.get(Calendar.WEEK_OF_YEAR)
+                            additionalBuildArgs dockerBuildArgs(add_repos:false)
                         }
                     }
                     steps {
@@ -778,7 +776,6 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
-                                                " --build-arg CB0=" + current_time.get(Calendar.WEEK_OF_YEAR) +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quick_build_deps('centos7') + '"' +
                                                 ' --build-arg REPOS="' + pr_repos() + '"'
@@ -817,7 +814,6 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
                                 " -t ${sanitized_JOB_NAME}-centos7 " +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
-                                " --build-arg CB0=" + current_time.get(Calendar.WEEK_OF_YEAR) +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                 quick_build_deps('centos7') + '"' +
                                 ' --build-arg REPOS="' + pr_repos() + '"'
@@ -856,7 +852,6 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(qb: quickbuild(),
                                                                 deps_build:true) +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
-                                                " --build-arg CB0=" + current_time.get(Calendar.WEEK_OF_YEAR) +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quick_build_deps('centos7') + '"' +
                                                 ' --build-arg REPOS="' + pr_repos() + '"'
@@ -895,7 +890,6 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(qb: quickbuild(),
                                                                 deps_build:true) +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
-                                                " --build-arg CB0=" + current_time.get(Calendar.WEEK_OF_YEAR) +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quick_build_deps('centos7') + '"' +
                                                 ' --build-arg REPOS="' + pr_repos() + '"'
@@ -934,7 +928,6 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(qb: quickbuild(),
                                                                 deps_build:true) +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
-                                                " --build-arg CB0=" + current_time.get(Calendar.WEEK_OF_YEAR) +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quick_build_deps('centos7') + '"'
                         }
@@ -971,8 +964,7 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(qb: quickbuild(),
                                                                 deps_build:true) +
-                                                " -t ${sanitized_JOB_NAME}-centos8 " +
-                                                " --build-arg CB0=" + current_time.get(Calendar.WEEK_OF_YEAR)
+                                                " -t ${sanitized_JOB_NAME}-centos8 "
                         }
                     }
                     steps {
@@ -1007,7 +999,6 @@ pipeline {
                             filename 'utils/docker/Dockerfile.ubuntu.20.04'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(deps_build:true) +
-                                                " --build-arg CB0=" + current_time.get(Calendar.WEEK_OF_YEAR) +
                                                 " -t ${sanitized_JOB_NAME}-ubuntu20.04"
                         }
                     }
@@ -1042,7 +1033,6 @@ pipeline {
                             filename 'utils/docker/Dockerfile.ubuntu.20.04'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(deps_build:true) +
-                                                " --build-arg CB0=" + current_time.get(Calendar.WEEK_OF_YEAR) +
                                                 " -t ${sanitized_JOB_NAME}-ubuntu20.04"
                         }
                     }
@@ -1078,7 +1068,6 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
                                                 " -t ${sanitized_JOB_NAME}-leap15 " +
-                                                " --build-arg CB0=" + current_time.get(Calendar.WEEK_OF_YEAR) +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quick_build_deps('leap15') + '"' +
                                                 ' --build-arg REPOS="' + pr_repos() + '"'
@@ -1115,7 +1104,6 @@ pipeline {
                             filename 'utils/docker/Dockerfile.leap.15'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(deps_build:true) +
-                                                " --build-arg CB0=" + current_time.get(Calendar.WEEK_OF_YEAR) +
                                                 " -t ${sanitized_JOB_NAME}-leap15"
                         }
                     }
@@ -1150,7 +1138,6 @@ pipeline {
                             filename 'utils/docker/Dockerfile.leap.15'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(deps_build:true) +
-                                                " --build-arg CB0=" + current_time.get(Calendar.WEEK_OF_YEAR) +
                                                 " -t ${sanitized_JOB_NAME}-leap15"
                             args '-v /opt/intel:/opt/intel'
                         }
