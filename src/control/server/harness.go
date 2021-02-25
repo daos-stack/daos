@@ -23,8 +23,8 @@ import (
 )
 
 const (
-	defaultRequestTimeout = 3 * time.Second
-	defaultStartTimeout   = 10 * defaultRequestTimeout
+	rankReqTimeout   = 10 * time.Second
+	rankStartTimeout = 3 * rankReqTimeout
 )
 
 // EngineHarness is responsible for managing Engine instances.
@@ -43,8 +43,8 @@ func NewEngineHarness(log logging.Logger) *EngineHarness {
 	return &EngineHarness{
 		log:              log,
 		instances:        make([]*EngineInstance, 0),
-		rankReqTimeout:   defaultRequestTimeout,
-		rankStartTimeout: defaultStartTimeout,
+		rankReqTimeout:   rankReqTimeout,
+		rankStartTimeout: rankStartTimeout,
 	}
 }
 
