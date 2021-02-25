@@ -141,11 +141,6 @@ After that, configure `daos-site.xml` with the pool and container created.
     <value>your container UUID</value>
     <description>UUID of DAOS container created with "--type posix"</description>
   </property>
-  <property>
-    <name>fs.daos.pool.svc</name>
-    <value>your pool service replicas</value>
-    <description>service list separated by ":" if more than one service</description>
-  </property>
 ...
 </configuration>
 ```
@@ -177,12 +172,12 @@ path with below command.
 
 ```bash
 # install attr package if get "command not found" error
-$ setfattr -n user.daos.hadoop -v "fs.daos.server.group=daos_server:fs.daos.pool.svc=0" <your path>
+$ setfattr -n user.daos.hadoop -v "fs.daos.server.group=daos_server" <your path>
 ```
 Or
 
 ```bash
-$ java -Dpath="your path" -Dattr=user.daos.hadoop -Dvalue="fs.daos.server.group=daos_server:fs.daos.pool.svc=0"
+$ java -Dpath="your path" -Dattr=user.daos.hadoop -Dvalue="fs.daos.server.group=daos_server"
     -cp ./daos-java-1.1.0-shaded.jar io.daos.dfs.DaosUns setappinfo
 ```
 
@@ -216,13 +211,13 @@ spark.driver.extraClassPath     /path/to/daos-java-<version>.jar:/path/to/hadoop
 
 #### Access DAOS in Spark
 
-All Spark APIs that work with the Hadoop filesystem will work with DAOS. We use
-the `daos://` URI to access files stored in DAOS. For example, to read the
+All Spark APIs that work with the Hadoop filesystem will work with DAOS. We can
+use the `daos:///` URI to access files stored in DAOS. For example, to read the
 `people.json` file from the root directory of DAOS filesystem, we can use the
 following pySpark code:
 
 ```python
-df = spark.read.json("daos://default:1/people.json")
+df = spark.read.json("daos:///people.json")
 ```
 
 ### Configure Hadoop to Use DAOS
