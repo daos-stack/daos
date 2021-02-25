@@ -212,12 +212,13 @@ pool_init(struct dts_context *tsc)
 			if (rc)
 				goto out;
 		}
-
-		/* Use pool size as blob size for this moment. */
-		rc = vos_pool_create(pmem_file, tsc->tsc_pool_uuid, 0,
-				     tsc->tsc_nvme_size);
-		if (rc)
-			goto out;
+		if (tsc_create_pool(tsc)) {
+			/* Use pool size as blob size for this moment. */
+			rc = vos_pool_create(pmem_file, tsc->tsc_pool_uuid, 0,
+					     tsc->tsc_nvme_size);
+			if (rc)
+				goto out;
+		}
 
 		rc = vos_pool_open(pmem_file, tsc->tsc_pool_uuid, false, &poh);
 		if (rc)
@@ -229,12 +230,15 @@ pool_init(struct dts_context *tsc)
 		if (tsc->tsc_dmg_conf)
 			dmg_config_file = tsc->tsc_dmg_conf;
 
-		rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(),
-				     NULL, NULL,
-				     tsc->tsc_scm_size, tsc->tsc_nvme_size,
-				     NULL, svc, tsc->tsc_pool_uuid);
-		if (rc)
-			goto bcast;
+		if (tsc_create_pool(tsc)) {
+			rc = dmg_pool_create(dmg_config_file, geteuid(),
+					     getegid(), NULL, NULL,
+					     tsc->tsc_scm_size,
+					     tsc->tsc_nvme_size,
+					     NULL, svc, tsc->tsc_pool_uuid);
+			if (rc)
+				goto bcast;
+		}
 
 		rc = daos_pool_connect(tsc->tsc_pool_uuid, NULL,
 				       DAOS_PC_EX, &poh, NULL, NULL);
@@ -289,20 +293,23 @@ cont_init(struct dts_context *tsc)
 	int		rc;
 
 	if (tsc->tsc_pmem_file) { /* VOS mode */
-		rc = vos_cont_create(tsc->tsc_poh, tsc->tsc_cont_uuid);
-		if (rc)
-			goto out;
+		if (tsc_create_cont(tsc)) {
+			rc = vos_cont_create(tsc->tsc_poh, tsc->tsc_cont_uuid);
+			if (rc)
+				goto out;
+		}
 
 		rc = vos_cont_open(tsc->tsc_poh, tsc->tsc_cont_uuid, &coh);
 		if (rc)
 			goto out;
 
 	} else if (tsc->tsc_mpi_rank == 0) { /* DAOS mode and rank zero */
-		rc = daos_cont_create(tsc->tsc_poh, tsc->tsc_cont_uuid, NULL,
-				      NULL);
-		if (rc != 0)
-			goto bcast;
-
+		if (tsc_create_cont(tsc)) {
+			rc = daos_cont_create(tsc->tsc_poh, tsc->tsc_cont_uuid,
+					      NULL, NULL);
+			if (rc != 0)
+				goto bcast;
+		}
 		rc = daos_cont_open(tsc->tsc_poh, tsc->tsc_cont_uuid,
 				    DAOS_COO_RW, &coh, NULL, NULL);
 		if (rc != 0)
