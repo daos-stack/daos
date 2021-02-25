@@ -286,14 +286,20 @@ func displaySystemAction(log logging.Logger, results system.MemberResults,
 	}
 
 	if absentHosts.Count() > 0 {
-		out += fmt.Sprintf("\nUnknown %s: %s",
+		log.Infof("%s\nUnknown %s: %s", out,
 			english.Plural(absentHosts.Count(), "host", "hosts"),
 			absentHosts.String())
 	} else {
-		out += "\n"
+		log.Infof("%s\n", out)
 	}
 
-	log.Info(out)
+	if absentRanks.Count() > 0 || absentHosts.Count() > 0 {
+		return errors.New("non-existent ranks or hosts in cmd request")
+	}
+
+	if results.HasErrors() {
+		return errors.New("cmd results contain errors")
+	}
 
 	return nil
 }
