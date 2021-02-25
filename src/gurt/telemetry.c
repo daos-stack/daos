@@ -322,8 +322,8 @@ void d_tm_fini(void)
 	if (!d_tm_retain_shmem) {
 		rc = shmctl(d_tm_shmid, IPC_RMID, NULL);
 		if (rc < 0)
-			D_ERROR("Unable to remove shared memory segment. "
-				DF_RC "\n", DP_RC(rc));
+			D_ERROR("Unable to remove shared memory segment, %s.\n",
+				strerror(errno));
 	}
 
 	d_tm_serialization = false;
@@ -2424,6 +2424,14 @@ d_tm_add_node(struct d_tm_node_t *src, struct d_tm_nodeList_t **nodelist)
 	}
 	return -DER_NOMEM;
 }
+
+/** create a unique key for this instance */
+static key_t
+d_tm_get_key(int srv_idx)
+{
+	return D_TM_SHARED_MEMORY_KEY + srv_idx;
+}
+
 /**
  * Server side function that allocates the shared memory segment for this
  * server instance
@@ -2440,11 +2448,12 @@ d_tm_allocate_shared_memory(int srv_idx, size_t mem_size)
 {
 	key_t	key;
 
-	/** create a unique key for this instance */
-	key = D_TM_SHARED_MEMORY_KEY + srv_idx;
+	key = d_tm_get_key(srv_idx);
 	d_tm_shmid = shmget(key, mem_size, IPC_CREAT | 0660);
-	if (d_tm_shmid < 0)
+	if (d_tm_shmid < 0) {
+		D_ERROR("shmget failed, %s\n", strerror(errno));
 		return NULL;
+	}
 
 	return (uint64_t *)shmat(d_tm_shmid, NULL, 0);
 }
@@ -2465,15 +2474,18 @@ d_tm_get_shared_memory(int srv_idx)
 	key_t		key;
 	int		shmid;
 
-	/** create a unique key for this instance */
-	key = D_TM_SHARED_MEMORY_KEY + srv_idx;
+	key = d_tm_get_key(srv_idx);
 	shmid = shmget(key, 0, 0);
-	if (shmid < 0)
+	if (shmid < 0) {
+		D_ERROR("shmget failed, %s\n", strerror(errno));
 		return NULL;
+	}
 
 	addr = shmat(shmid, NULL, 0);
-	if (addr == (void *)-1)
+	if (addr == (void *)-1) {
+		D_ERROR("shmat failed, %s\n", strerror(errno));
 		return NULL;
+	}
 	return addr;
 }
 
