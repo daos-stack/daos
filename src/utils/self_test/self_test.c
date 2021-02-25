@@ -837,18 +837,18 @@ static int config_create_output_config(char *section_name, bool remove)
 
 	/*
 	 * Read result file if specified and exists.
+	 * Not requirement that file exist so don't exit if cannot be read.
 	 * May be called more than once so verify that cfg_output == null
 	 * Else, open new configuration to use.
 	 */
 	if ((g_expected_outfile != NULL) && (cfg_output == NULL)) {
 		config_ret = ConfigReadFile(g_expected_outfile, &cfg_output);
 		if (config_ret != CONFIG_OK) {
-			D_ERROR("Output file does not exist: %s\n",
+			D_WARN("Output file does not exist: %s\n",
 			       g_expected_outfile);
-			D_GOTO(cleanup, ret_value = -ENOENT);
 		}
 	}
-	/* Out put config does not exist, create one */
+	/* Output config does not exist or couldn't be open, create one */
 	if (cfg_output == NULL) {
 		cfg_output = ConfigNew();
 		if (cfg_output == NULL) {
@@ -1399,7 +1399,7 @@ next_arg:
 		char	*results;
 		Config	*Ecfg = cfg_expected;
 
-		/* See if we are to out put this stats */
+		/* See if we are to output this stats */
 		if (status[i].flag & TST_OUTPUT) {
 			/* Set ranges for comparison */
 			firstpass = true;
@@ -3761,11 +3761,8 @@ int main(int argc, char *argv[])
 	/****** Open global configuration for output results *****/
 	/*
 	 * If no section name specified, then will be created later on.
-	 * ENOENT return when file specified but cannot be opened.
 	 */
 	ret = config_create_output_config(section_name, true);
-	if (ret == -ENOENT)
-		goto cleanup;
 
 	/********************* Run the self test *********************/
 	ret = run_self_test(all_params, num_msg_sizes, g_rep_count,

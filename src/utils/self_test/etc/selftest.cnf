@@ -21,7 +21,7 @@ path=.
 #config-append=new_test         # append name to output sector name
 #expected-threshold=25          # set global scale factor to default 25%
 expected-results=av,sd,bw=9,tp=20,med25,med50,med75,max,min
-expected-output=./selftest_results.cnf
+#expected-output=./selftest_results.cnf
 expected-input=../../../../etc/selftest_expected.cnf
 
 
@@ -43,7 +43,7 @@ path='
 #config-append=test1		# append test1 to sector names.
 #expected-threshold=25          # set global scale factor to default 25%
 expected-results=av,sd,bw=9,tp=20,med25,med50,med75,max,min
-expected-output=./selftest_results.cnf
+#expected-output=./selftest_results.cnf
 expected-input=../../../../etc/selftest_expected.cnf
 
 
@@ -65,7 +65,7 @@ randomize-endpoints=0
 #config-append=test1		# append test1 to sector names.
 expected-threshold=25          # set global scale factor to default 25%
 expected-results=av,sd,bw=9,tp=20,med25,med50,med75,max,min
-expected-output=./selftest_results.cnf
+#expected-output=./selftest_results.cnf
 expected-input=../../../../etc/selftest_expected.cnf
 
 
@@ -89,6 +89,6 @@ randomize-endpoints=0
 #config-append=test1		# append test1 to sector names.
 expected-threshold=25          # set global scale factor to default 25%
 expected-results=av,sd,bw=9,tp=20,med25,med50,med75,max,min
-expected-output=./selftest_results.cnf
+#expected-output=./selftest_results.cnf
 expected-input=../../../../etc/selftest_expected.cnf
 
