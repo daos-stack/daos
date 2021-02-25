@@ -498,7 +498,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             self.dsync_cmd.set_dsync_params(
                 dst=dst_path)
         elif dst_type == "DAOS_UUID":
-            param = param = self._format_daos_path(dst_pool, dst_cont, dst_path)
+            param = self._format_daos_path(dst_pool, dst_cont, dst_path)
             self.dsync_cmd.set_dsync_params(
                 dst=param)
         elif dst_type == "DAOS_UNS":
