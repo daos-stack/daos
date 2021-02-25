@@ -2841,7 +2841,7 @@ d_tm_add_node(struct d_tm_node_t *src, struct d_tm_nodeList_t **nodelist)
 static key_t
 d_tm_get_key(int srv_idx)
 {
-	return D_TM_SHARED_MEMORY_KEY + srv_idx;
+	return D_TM_SHARED_MEMORY_KEY + srv_idx + 113;
 }
 
 /**
