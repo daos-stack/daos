@@ -87,7 +87,7 @@ post_provision_config_nodes() {
     dnf -y install redhat-lsb-core
     # shellcheck disable=SC2086
     if [ -n "$INST_RPMS" ] &&
-       ! dnf -y $dnf_repo_args install $INST_RPMS; then
+       ! dnf -y $dnf_repo_args install $INST_RPMS rpmdevtools; then
         rc=${PIPESTATUS[0]}
         dump_repos
         exit "$rc"
