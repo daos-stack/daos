@@ -591,7 +591,7 @@ public class DaosObject {
   }
 
   /**
-   * create a new instance of {@link IODataDesc} for update
+   * create a new instance of {@link IODataDesc} for update.
    *
    * @param dkey
    * distribution key
@@ -610,7 +610,7 @@ public class DaosObject {
   }
 
   /**
-   * create a new instance of {@link IODataDesc} for fetch
+   * create a new instance of {@link IODataDesc} for fetch.
    *
    * @param dkey
    * distribution key
@@ -626,6 +626,34 @@ public class DaosObject {
       throws IOException {
     IODataDesc desc = new IODataDesc(dkey, iodType, recordSize, false);
     return desc;
+  }
+
+  /**
+   * create a new instance of {@link IODataDescAsync} for update.
+   *
+   * @param dkey
+   * distribution key
+   * @param eqHandle
+   * handle of event queue
+   * @return {@link IODataDescAsync}
+   * @throws IOException
+   */
+  public static IODataDescAsync createAsyncDataDescForUpdate(String dkey, long eqHandle) throws IOException {
+    return new IODataDescAsync(dkey, true, eqHandle);
+  }
+
+  /**
+   * create a new instance of {@link IODataDescAsync} for fetch.
+   *
+   * @param dkey
+   * distribution key
+   * @param eqHandle
+   * handle of event queue
+   * @return {@link IODataDescAsync}
+   * @throws IOException
+   */
+  public static IODataDescAsync createAsyncDataDescForFetch(String dkey, long eqHandle) throws IOException {
+    return new IODataDescAsync(dkey, false, eqHandle);
   }
 
   /**
