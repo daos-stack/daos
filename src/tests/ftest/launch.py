@@ -636,6 +636,7 @@ def get_nvme_replacement(args):
     if len(output_data) > 1:
         print("ERROR: Non-homogeneous NVMe PCI addresses.")
         exit(1)
+
     output_str = "\n".join([line.decode("utf-8") for line in output_data[0][0]])
     # Get the list of NVMe PCI addresses found in the output
     devices = find_pci_address(output_str)

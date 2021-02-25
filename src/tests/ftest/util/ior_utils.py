@@ -345,11 +345,11 @@ class IorMetrics(IntEnum):
     Max_MiB = 1
     Min_MiB = 2
     Mean_MiB = 3
-    StdDev = 4
+    StdDev_MiB = 4
     Max_OPs = 5
     Min_OPs = 6
     Mean_OPs = 7
-    StdDev = 8
+    StdDev_OPs = 8
     Mean_seconds = 9
     Stonewall_seconds = 10
     Stonewall_MiB = 11

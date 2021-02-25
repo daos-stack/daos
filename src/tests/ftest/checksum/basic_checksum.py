@@ -9,7 +9,7 @@ import ctypes
 from pydaos.raw import (DaosContainer, IORequest,
                         DaosObj)
 from apricot import TestWithServers
-
+from general_utils import create_string_buffer
 
 class ChecksumContainerValidation(TestWithServers):
     """
@@ -69,9 +69,9 @@ class ChecksumContainerValidation(TestWithServers):
             for akey in range(self.no_of_akeys):
                 indata = ("{0}".format(str(akey)[0])
                           * self.record_length[record_index])
-                c_dkey = ctypes.create_string_buffer(b"dkey {0}".format(dkey))
-                c_akey = ctypes.create_string_buffer(b"akey {0}".format(akey))
-                c_value = ctypes.create_string_buffer(indata.encode('utf-8'))
+                c_dkey = create_string_buffer("dkey {0}".format(dkey))
+                c_akey = create_string_buffer("akey {0}".format(akey))
+                c_value = create_string_buffer(indata)
                 c_size = ctypes.c_size_t(ctypes.sizeof(c_value))
 
                 self.ioreq.single_insert(c_dkey, c_akey, c_value, c_size)
@@ -85,8 +85,8 @@ class ChecksumContainerValidation(TestWithServers):
             for akey in range(self.no_of_akeys):
                 indata = ("{0}".format(str(akey)[0]) *
                           self.record_length[record_index])
-                c_dkey = ctypes.create_string_buffer(b"dkey {0}".format(dkey))
-                c_akey = ctypes.create_string_buffer(b"akey {0}".format(akey))
+                c_dkey = create_string_buffer("dkey {0}".format(dkey))
+                c_akey = create_string_buffer("akey {0}".format(akey))
                 val = self.ioreq.single_fetch(c_dkey,
                                               c_akey,
                                               len(indata)+1)

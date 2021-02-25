@@ -1280,7 +1280,7 @@ class DaosContProperties(ctypes.Structure):
         # to set appropriate
         # container properties.
         super().__init__()
-        self.type = "Unknown"
+        self.type = bytes("Unknown", "utf-8")
         self.enable_chksum = False
         self.srv_verify = False
         self.chksum_type = ctypes.c_uint64(100)

@@ -6,14 +6,13 @@
 """
 
 
-import ctypes
 import uuid
 from apricot import TestWithServers, skipForTicket
 from pydaos.raw import DaosApiError, c_uuid_to_str
 from command_utils_base import CommandFailure
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
-
+from general_utils import create_string_buffer
 
 class EvictTests(TestWithServers):
     """
@@ -92,8 +91,7 @@ class EvictTests(TestWithServers):
         if test_param == "BAD_SERVER_NAME":
             # Attempt to evict pool with invalid server group name
             # set the server group name directly
-            self.pool.pool.group = ctypes.create_string_buffer(
-                test_param.encode('utf-8'))
+            self.pool.pool.group = create_string_buffer(test_param)
             self.log.info(
                 "Evicting pool with invalid Server Group Name: %s", test_param)
         elif test_param == "invalid_uuid":
@@ -123,8 +121,7 @@ class EvictTests(TestWithServers):
         finally:
             # Restore the valid server group name or uuid
             if "BAD_SERVER_NAME" in test_param:
-                self.pool.pool.group = ctypes.create_string_buffer(
-                    self.server_group.encode('utf-8'))
+                self.pool.pool.group = create_string_buffer(self.server_group)
             else:
                 self.pool.pool.set_uuid_str(self.pool.uuid)
 

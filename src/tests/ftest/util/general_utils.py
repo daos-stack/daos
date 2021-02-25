@@ -12,6 +12,7 @@ import re
 import random
 import string
 import time
+import ctypes
 from getpass import getuser
 from importlib import import_module
 from socket import gethostname
@@ -411,7 +412,9 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
                     "hosts": output_interrupted[interrupted],
                     "exit_status": exit_status,
                     "interrupted": interrupted,
-                    "stdout": [line.decode("utf-8") for line in output],
+                    "stdout": [
+                        line.decode(
+                            "utf-8").rstrip(os.linesep) for line in output],
                 })
 
     # Display results if requested or there is an unexpected exit status
@@ -1171,3 +1174,22 @@ def get_subprocess_stdout(subprocess):
     if isinstance(output, bytes):
         output = output.decode("utf-8")
     return output
+
+
+def create_string_buffer(value, size=None):
+    """Create a ctypes string buffer.
+
+    Converts any string to a bytes object before calling
+    ctypes.create_string_buffer().
+
+    Args:
+    value (object): value to pass to ctypes.create_string_buffer()
+    size (int, optional): sze to pass to ctypes.create_string_buffer()
+
+    Returns:
+    array: return value from ctypes.create_string_buffer()
+
+    """
+    if isinstance(value, str):
+        value = value.encode("utf-8")
+    return ctypes.create_string_buffer(value, size)

@@ -14,7 +14,7 @@ from avocado import fail_on
 from command_utils import BasicParameter, CommandFailure
 from pydaos.raw import (DaosApiError, DaosPool, c_uuid_to_str, daos_cref)
 from general_utils import (check_pool_files, DaosTestError, run_command,
-                           convert_list)
+                           convert_list, create_string_buffer)
 from env_modules import load_mpi
 
 
@@ -114,8 +114,7 @@ class TestPool(TestDaosApiBase):
                 # Populate the empty DaosPool object with the properties of the
                 # pool created with dmg pool create.
                 if self.name.value:
-                    self.pool.group = ctypes.create_string_buffer(
-                        self.name.value.encode('utf-8'))
+                    self.pool.group = create_string_buffer(self.name.value)
 
                 # Convert the string of service replicas from the dmg command
                 # output into an ctype array for the DaosPool object using the
