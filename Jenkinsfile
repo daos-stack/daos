@@ -14,6 +14,11 @@
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
 
+// Should try to figure this out automatically
+String base_branch = "master"
+// For master, this is just some wildly high number
+String next_version = "1000"
+
 boolean doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
         return true
@@ -147,7 +152,7 @@ String rpm_dist(String distro) {
 rpm_version_cache = ""
 String daos_packages_version(String distro) {
     // for weekly-test:
-    if (target_branch == "weekly-testing") {
+    if (target_branch.startsWith("weekly-testing")) {
         if (rpm_version_cache != "" && rpm_version_cache != "locked") {
             return rpm_version_cache + rpm_dist(distro)
         }
@@ -156,7 +161,19 @@ String daos_packages_version(String distro) {
             rpm_version_cache = "locked"
             rpm_version_cache = sh(label: "Get RPM packages version",
                                    script: '''repoquery --repofrompath=daos,https://repo.dc.hpdd.intel.com/repository/daos-stack-el-7-x86_64-stable-local/ \
-                                                        --repoid daos -q --qf %{version}-%{release} daos''',
+                                                        --repoid daos -q --qf %{version}-%{release} --show-duplicates daos | {
+                                                    ov=0
+                                                    while read v; do
+                                                        if ! rpmdev-vercmp $v ''' + ${next_version} + ''' > /dev/null; then
+                                                            if [ ${PIPESTATUS[0]} -ne 12 ]; then
+                                                                echo "$ov"
+                                                                break
+                                                            fi
+                                                        fi
+                                                        ov=$v
+                                                    done
+                                                    echo "$ov"
+                                                }''',
                                    returnStdout: true).trim()[0..-5]
         } else {
             // somebody else is getting it, wait for them
@@ -291,7 +308,9 @@ boolean skip_testing_stage() {
             (skip_stage('build') &&
              rpm_test_version() == '') ||
             doc_only_change() ||
-            skip_stage('test')
+            skip_stage('test') ||
+            (env.BRANCH_NAME.startsWith('weekly-testing') &&
+             ! startedByTimer())
 }
 
 pipeline {
@@ -352,9 +371,9 @@ pipeline {
                         label 'ci_vm9'
                     }
                     steps {
-                        // Need to get back onto master for ci/
+                        // Need to get back onto base_branch for ci/
                         checkoutScm url: 'https://github.com/daos-stack/daos.git',
-                                    branch: "master",
+                                    branch: base_branch,
                                     withSubmodules: true
                         functionalTest inst_repos: daos_repos(),
                                        inst_rpms: functional_packages(),
@@ -376,9 +395,9 @@ pipeline {
                         label 'ci_vm9'
                     }
                     steps {
-                        // Need to get back onto master for ci/
+                        // Need to get back onto base_branch for ci/
                         checkoutScm url: 'https://github.com/daos-stack/daos.git',
-                                    branch: "master",
+                                    branch: base_branch,
                                     withSubmodules: true
                         functionalTest inst_repos: daos_repos(),
                                        inst_rpms: functional_packages(),
@@ -400,9 +419,9 @@ pipeline {
                         label 'ci_vm9'
                     }
                     steps {
-                        // Need to get back onto master for ci/
+                        // Need to get back onto base_branch for ci/
                         checkoutScm url: 'https://github.com/daos-stack/daos.git',
-                                    branch: "master",
+                                    branch: base_branch,
                                     withSubmodules: true
                         functionalTest inst_repos: daos_repos(),
                                        inst_rpms: functional_packages(),
@@ -425,9 +444,9 @@ pipeline {
                         label 'ci_nvme3'
                     }
                     steps {
-                        // Need to get back onto master for ci/
+                        // Need to get back onto base_branch for ci/
                         checkoutScm url: 'https://github.com/daos-stack/daos.git',
-                                    branch: "master",
+                                    branch: base_branch,
                                     withSubmodules: true
                         functionalTest target: hw_distro_target(),
                                        inst_repos: daos_repos(),
@@ -451,9 +470,9 @@ pipeline {
                         label 'ci_nvme5'
                     }
                     steps {
-                        // Need to get back onto master for ci/
+                        // Need to get back onto base_branch for ci/
                         checkoutScm url: 'https://github.com/daos-stack/daos.git',
-                                    branch: "master",
+                                    branch: base_branch,
                                     withSubmodules: true
                         functionalTest target: hw_distro_target(),
                                        inst_repos: daos_repos(),
@@ -477,9 +496,9 @@ pipeline {
                         label 'ci_nvme9'
                     }
                     steps {
-                        // Need to get back onto master for ci/
+                        // Need to get back onto base_branch for ci/
                         checkoutScm url: 'https://github.com/daos-stack/daos.git',
-                                    branch: "master",
+                                    branch: base_branch,
                                     withSubmodules: true
                         functionalTest target: hw_distro_target(),
                                        inst_repos: daos_repos(),
