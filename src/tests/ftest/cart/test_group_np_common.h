@@ -54,6 +54,7 @@ struct test_t {
 	int			 t_roomno;
 	struct d_fault_attr_t	*t_fault_attr_1000;
 	struct d_fault_attr_t	*t_fault_attr_5000;
+	int 			 global_client_cb_arg;
 };
 
 struct test_t test_g = { .t_hold_time = 0,
@@ -91,8 +92,6 @@ CRT_RPC_DECLARE(test_swim_status,
 		CRT_ISEQ_TEST_SWIM_STATUS, CRT_OSEQ_TEST_SWIM_STATUS)
 CRT_RPC_DEFINE(test_swim_status,
 	       CRT_ISEQ_TEST_SWIM_STATUS, CRT_OSEQ_TEST_SWIM_STATUS)
-
-int global_client_cb_arg = -1;
 
 static void
 test_checkin_handler(crt_rpc_t *rpc_req)
@@ -420,8 +419,8 @@ check_in(crt_group_t *remote_group, int rank, int tag)
 		rpc_req_input->age, rpc_req_input->days,
 		rpc_req_input->bool_val);
 
-	global_client_cb_arg = rank;
-	rc = crt_req_send(rpc_req, client_cb_common, &global_client_cb_arg);
+	test_g.global_client_cb_arg = rank;
+	rc = crt_req_send(rpc_req, client_cb_common, &test_g.global_client_cb_arg);
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 
 	/* If we're testing crt_ep_abort(), abort the previous RPC */
