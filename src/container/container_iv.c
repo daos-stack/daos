@@ -550,7 +550,7 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 out:
 	if (rc < 0 && rc != -DER_IVCB_FORWARD)
 		D_CDEBUG(rc == -DER_NONEXIST, DB_ANY, DLOG_ERR,
-			"failed to insert: rc "DF_RC"\n", DP_RC(rc));
+			 "failed to insert: rc "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -1318,4 +1318,3 @@ out:
 
 	return rc;
 }
-
