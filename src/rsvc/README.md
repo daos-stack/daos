@@ -4,7 +4,7 @@ Module `rsvc` implements a generic replicated service framework. This file cover
 
 ## Introduction
 
-Certain DAOS RPC services, such as Management Service (`mgmt_svc`), Pool Service (`pool_svc`), and Container Service (`cont_svc`), are replicated using the state machine approach with Raft. Each of these services tolerates the failure of any minority of its replicas. By spreading its replicas across different fault domains, the service can be highly available. Since this replication approach is self-contained in the sense that it requires only local persistent storage and point to point unreliable messaging, but not any external configuration management service, these services are mandatory for bootstrapping DAOS systems as well as managing the configuration of the lighter-weight I/O replication protocol.
+Certain DAOS RPC services, such as Pool Service (`pool_svc`), and Container Service (`cont_svc`), are replicated using the state machine approach with Raft. Each of these services tolerates the failure of any minority of its replicas. By spreading its replicas across different fault domains, the service can be highly available. Since this replication approach is self-contained in the sense that it requires only local persistent storage and point to point unreliable messaging, but not any external configuration management service, these services are mandatory for bootstrapping DAOS systems as well as managing the configuration of the lighter-weight I/O replication protocol.
 
 ### Architecture
 
@@ -16,24 +16,24 @@ Raft adopts a strong leadership design, so does each replicated service. A servi
 
 A replicated service is implemented using a stack of modules:
 
-	[ mgmt_svc, pool_svc, cont_svc, ... ]
+	[ pool_svc, cont_svc, ... ]
 	[ ds_rsvc ]
 	[                rdb                ]
 	[ raft ]
 	[                vos                ]
 
-`mgmt_svc`, `pool_svc`, and `cont_svc` implement the request handlers and the leadership change event handlers of the respective services. They define their respective service state in terms of the RDB data model provided by `rdb`, implement state queries and updates using RDB transactions, and register their leadership change event handlers into the framework `rsvc` offers.
+`pool_svc`, and `cont_svc` implement the request handlers and the leadership change event handlers of the respective services. They define their respective service state in terms of the RDB data model provided by `rdb`, implement state queries and updates using RDB transactions, and register their leadership change event handlers into the framework `rsvc` offers.
 
-`rdb` (`daos_srv/rdb`) implements a hierarchical key-value store data model with transactions, replicated using Raft. It delivers Raft leadership change events to `ds_rsvc`, implements transactions using the Raft log, and stores a service's data model and its internal metadata using the VOS data model.
+`rdb` (`daos_srv/rdb`) implements a hierarchical key-value store data model with transactions, replicated using Raft. It delivers Raft leadership change events to `ds_rsvc`, implements transactions using the Raft log, and stores a service's data model and its own internal metadata using the VOS data model. `rdb` on the leader replica, interfaces with VOS to monitor available persistent storage and, when free space drops below a threshold, rejects new transactions before appending entries to the Raft log that could otherwise result in the service becoming unavailable (due to a mix of successful and "out of space" failures in applying the entries). It also interfaces with VOS to periodically compact storage by triggering aggregation of older versions (epochs) of the log.
 
-`raft` (`rdb/raft/include/raft.h`) implements the Raft core protocol in a library. Its integration with VOS and CaRT is done inside `rdb`.
+`raft` (`rdb/raft/include/raft.h`) implements the Raft core protocol in a library. Its integration with VOS and CaRT is done inside `rdb` via callback functions.
 
 A replicated service client (e.g., `dc_pool`) uses `dc_rsvc` to search for the current service leader:
 
 	[ dc_pool ]
 	[ dc_rsvc ]
 
-The search is currently accomplished with a combination of a client maintained list of candidate service replicas and server RPC error responses in some cases containing a hint where the current leader may be found. A server not running the service responds with an error a client uses to remove that server from its list. A server acting in a non-leader role responds with an error, including a hint a client uses to (if necessary) add to its list and alter its search for the leader. A future patch will provide a management service interface that dc_rsvc will use (e.g., when its list becomes empty) to retrieve the current list of service replicas.
+The search is accomplished with a combination of a client maintained list of candidate service replicas and server RPC error responses in some cases containing a hint where the current leader may be found. A server not running the service responds with an error a client uses to remove that server from its list. A server acting as a non-leader replica responds with a different error, including a hint a client uses to (if necessary) add to its list and alter its search for the leader. And, `dc_rsvc` both at client startup and later when the client's list of candidate service replicas may become empty (e.g., due to membership changes in the service), contacts one of the DAOS servers running on a management service node to get an up-to-date list of service replicas for the pool.
 
 ## Module `rsvc`
 
