@@ -266,7 +266,8 @@ class DestroyTests(TestWithServers):
 
         # Change the pool server group name
         valid_group = self.pool.pool.group
-        self.pool.pool.group = ctypes.create_string_buffer(badsetid)
+        self.pool.pool.group = ctypes.create_string_buffer(
+            badsetid.encode('utf-8'))
 
         # Attempt to destroy the pool with an invalid server group name
         self.validate_pool_destroy(
@@ -314,7 +315,8 @@ class DestroyTests(TestWithServers):
         #        self.pool.uuid, group_names[1]))
 
         # Attempt to delete the pool from the wrong server group - should fail
-        self.pool.pool.group = ctypes.create_string_buffer(group_names[1])
+        self.pool.pool.group = ctypes.create_string_buffer(
+            group_names[1].encode('utf-8'))
         self.validate_pool_destroy(
             group_hosts[group_names[0]],
             "{} from the wrong server group {}".format(
@@ -322,7 +324,8 @@ class DestroyTests(TestWithServers):
             True)
 
         # Attempt to delete the pool from the right server group - should pass
-        self.pool.pool.group = ctypes.create_string_buffer(group_names[0])
+        self.pool.pool.group = ctypes.create_string_buffer(
+            group_names[0].encode('utf-8'))
         self.validate_pool_destroy(
             group_hosts[group_names[1]],
             "{} from the right server group {}".format(

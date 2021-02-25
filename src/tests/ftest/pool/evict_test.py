@@ -92,7 +92,8 @@ class EvictTests(TestWithServers):
         if test_param == "BAD_SERVER_NAME":
             # Attempt to evict pool with invalid server group name
             # set the server group name directly
-            self.pool.pool.group = ctypes.create_string_buffer(test_param)
+            self.pool.pool.group = ctypes.create_string_buffer(
+                test_param.encode('utf-8'))
             self.log.info(
                 "Evicting pool with invalid Server Group Name: %s", test_param)
         elif test_param == "invalid_uuid":
@@ -123,7 +124,7 @@ class EvictTests(TestWithServers):
             # Restore the valid server group name or uuid
             if "BAD_SERVER_NAME" in test_param:
                 self.pool.pool.group = ctypes.create_string_buffer(
-                    self.server_group)
+                    self.server_group.encode('utf-8'))
             else:
                 self.pool.pool.set_uuid_str(self.pool.uuid)
 

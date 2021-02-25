@@ -39,10 +39,10 @@ class CreateManyDkeys(TestWithServers):
         inc = 50000
         last_key = inc
         for key in range(how_many):
-            c_dkey = ctypes.create_string_buffer("dkey {0}".format(key))
-            c_akey = ctypes.create_string_buffer("akey {0}".format(key))
+            c_dkey = ctypes.create_string_buffer(b"dkey {0}".format(key))
+            c_akey = ctypes.create_string_buffer(b"akey {0}".format(key))
             c_value = ctypes.create_string_buffer(
-                "some data that gets stored with the key {0}".format(key))
+                b"some data that gets stored with the key {0}".format(key))
             c_size = ctypes.c_size_t(ctypes.sizeof(c_value))
             ioreq.single_insert(c_dkey,
                                 c_akey,
@@ -57,8 +57,8 @@ class CreateManyDkeys(TestWithServers):
         print("Started Verification of the Dataset-----------\n")
         last_key = inc
         for key in range(how_many):
-            c_dkey = ctypes.create_string_buffer("dkey {0}".format(key))
-            c_akey = ctypes.create_string_buffer("akey {0}".format(key))
+            c_dkey = ctypes.create_string_buffer(b"dkey {0}".format(key))
+            c_akey = ctypes.create_string_buffer(b"akey {0}".format(key))
             the_data = "some data that gets stored with the key {0}".format(key)
             val = ioreq.single_fetch(c_dkey,
                                      c_akey,

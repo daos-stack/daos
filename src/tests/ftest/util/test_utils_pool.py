@@ -115,7 +115,7 @@ class TestPool(TestDaosApiBase):
                 # pool created with dmg pool create.
                 if self.name.value:
                     self.pool.group = ctypes.create_string_buffer(
-                        self.name.value)
+                        self.name.value.encode('utf-8'))
 
                 # Convert the string of service replicas from the dmg command
                 # output into an ctype array for the DaosPool object using the
