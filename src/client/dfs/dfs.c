@@ -257,7 +257,8 @@ check_tx(daos_handle_t th, int rc)
 }
 
 int
-dfs_oclass_select(daos_handle_t poh, int oc_id, int *oc_id_p)
+dfs_oclass_select(daos_handle_t poh, daos_oclass_id_t oc_id,
+		  daos_oclass_id_t *oc_id_p)
 {
 	struct dc_pool		*pool;
 	struct pl_map_attr	 attr;
@@ -289,7 +290,7 @@ dfs_oclass_select(daos_handle_t poh, int oc_id, int *oc_id_p)
  * hence discarded when the dfs is unmounted.
  */
 static int
-oid_gen(dfs_t *dfs, int oclass, bool file, daos_obj_id_t *oid)
+oid_gen(dfs_t *dfs, daos_oclass_id_t oclass, bool file, daos_obj_id_t *oid)
 {
 	daos_ofeat_t	feat = 0;
 	int		rc;
@@ -325,7 +326,7 @@ oid_gen(dfs_t *dfs, int oclass, bool file, daos_obj_id_t *oid)
 			DAOS_OF_ARRAY_BYTE;
 
 	/** generate the daos object ID (set the DAOS owned bits) */
-	daos_obj_generate_id(oid, feat, oclass, 0);
+	daos_obj_set_oid(oid, feat, oclass, 0);
 
 	return 0;
 }
@@ -1183,7 +1184,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 	dfs_t			*dfs;
 	dfs_attr_t		dattr;
 	struct daos_prop_co_roots roots;
-	int			oclass;
+	daos_oclass_id_t	oclass;
 	int			rc;
 
 	if (_dfs && _coh == NULL) {
@@ -1221,7 +1222,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 	}
 	roots.cr_oids[0].lo = RESERVED_LO;
 	roots.cr_oids[0].hi = SB_HI;
-	daos_obj_generate_id(&roots.cr_oids[0], 0, oclass, 0);
+	daos_obj_set_oid(&roots.cr_oids[0], 0, oclass, 0);
 
 	/* select oclass and generate ROOT OID */
 	rc = dfs_oclass_select(poh, dattr.da_oclass_id, &oclass);
@@ -1231,7 +1232,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 	}
 	roots.cr_oids[1].lo = RESERVED_LO;
 	roots.cr_oids[1].hi = ROOT_HI;
-	daos_obj_generate_id(&roots.cr_oids[1], 0, oclass, 0);
+	daos_obj_set_oid(&roots.cr_oids[1], 0, oclass, 0);
 
 	/* store SB & root OIDs as container property */
 	roots.cr_oids[2] = roots.cr_oids[3] = DAOS_OBJ_NIL;

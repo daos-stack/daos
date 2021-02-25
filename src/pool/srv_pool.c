@@ -3990,7 +3990,7 @@ static int
 pool_find_all_targets_by_addr(uuid_t pool_uuid,
 			      struct pool_target_addr_list *list,
 			      struct pool_target_id_list *tgt_list,
-			      struct pool_target_addr_list *out_list,
+			      struct pool_target_addr_list *inval_list_out,
 			      struct rsvc_hint *hint)
 {
 	struct pool_svc	*svc;
@@ -4029,11 +4029,11 @@ pool_find_all_targets_by_addr(uuid_t pool_uuid,
 			/* Can not locate the target in pool map, let's
 			 * add it to the output list
 			 */
-			D_WARN("Can not find %u/%d , add to out_list\n",
+			D_WARN("Can not find %u/%d, add to inval_list_out\n",
 				list->pta_addrs[i].pta_rank,
 				(int)list->pta_addrs[i].pta_target);
-			ret = pool_target_addr_list_append(out_list,
-						&list->pta_addrs[i]);
+			ret = pool_target_addr_list_append(inval_list_out,
+							   &list->pta_addrs[i]);
 			if (ret) {
 				rc = ret;
 				break;
@@ -4268,7 +4268,7 @@ ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list)
 static int
 ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 	       struct pool_target_addr_list *list,
-	       struct pool_target_addr_list *out_list,
+	       struct pool_target_addr_list *inval_list_out,
 	       uint32_t *map_version, struct rsvc_hint *hint, bool evict_rank)
 {
 	daos_rebuild_opc_t		op;
@@ -4282,11 +4282,11 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 	char				*env;
 
 	rc = pool_find_all_targets_by_addr(pool_uuid, list, &target_list,
-					   out_list, hint);
+					   inval_list_out, hint);
 	if (rc)
 		D_GOTO(out, rc);
 
-	if (out_list->pta_number > 0) {
+	if (inval_list_out->pta_number > 0) {
 		int i;
 
 		/*
@@ -4296,11 +4296,11 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 		 * without trying to figure out which arguments were accepted &
 		 * started processing already.
 		 */
-		for (i = 0; i < out_list->pta_number; i++) {
+		for (i = 0; i < inval_list_out->pta_number; i++) {
 			D_WARN("Got request to update nonexistent rank %u "
 			       "target %u\n",
-			       out_list->pta_addrs[i].pta_rank,
-			       out_list->pta_addrs[i].pta_target);
+			       inval_list_out->pta_addrs[i].pta_rank,
+			       inval_list_out->pta_addrs[i].pta_target);
 		}
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
@@ -4555,7 +4555,7 @@ ds_pool_update_handler(crt_rpc_t *rpc)
 	struct pool_tgt_update_in	*in = crt_req_get(rpc);
 	struct pool_tgt_update_out	*out = crt_reply_get(rpc);
 	struct pool_target_addr_list	list = { 0 };
-	struct pool_target_addr_list	out_list = { 0 };
+	struct pool_target_addr_list	inval_list_out = { 0 };
 	int				rc;
 
 	if (in->pti_addr_list.ca_arrays == NULL ||
@@ -4568,27 +4568,27 @@ ds_pool_update_handler(crt_rpc_t *rpc)
 	list.pta_number = in->pti_addr_list.ca_count;
 	list.pta_addrs = in->pti_addr_list.ca_arrays;
 	rc = ds_pool_update(in->pti_op.pi_uuid, opc_get(rpc->cr_opc), &list,
-			    &out_list, &out->pto_op.po_map_version,
+			    &inval_list_out, &out->pto_op.po_map_version,
 			    &out->pto_op.po_hint, false);
 	if (rc)
 		D_GOTO(out, rc);
 
-	out->pto_addr_list.ca_arrays = out_list.pta_addrs;
-	out->pto_addr_list.ca_count = out_list.pta_number;
+	out->pto_addr_list.ca_arrays = inval_list_out.pta_addrs;
+	out->pto_addr_list.ca_count = inval_list_out.pta_number;
 
 out:
 	out->pto_op.po_rc = rc;
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",
 		DP_UUID(in->pti_op.pi_uuid), rpc, DP_RC(rc));
 	crt_reply_send(rpc);
-	pool_target_addr_list_free(&out_list);
+	pool_target_addr_list_free(&inval_list_out);
 }
 
 int
 ds_pool_evict_rank(uuid_t pool_uuid, d_rank_t rank)
 {
 	struct pool_target_addr_list	list;
-	struct pool_target_addr_list	out_list = { 0 };
+	struct pool_target_addr_list	inval_list_out = { 0 };
 	struct pool_target_addr		tgt_rank;
 	uint32_t			map_version = 0;
 	int				rc;
@@ -4598,13 +4598,13 @@ ds_pool_evict_rank(uuid_t pool_uuid, d_rank_t rank)
 	list.pta_number = 1;
 	list.pta_addrs = &tgt_rank;
 
-	rc = ds_pool_update(pool_uuid, POOL_EXCLUDE, &list, &out_list,
+	rc = ds_pool_update(pool_uuid, POOL_EXCLUDE, &list, &inval_list_out,
 			    &map_version, NULL, true);
 
 	D_DEBUG(DB_MGMT, "Exclude pool "DF_UUID"/%u rank %u: rc %d\n",
 		DP_UUID(pool_uuid), map_version, rank, rc);
 
-	pool_target_addr_list_free(&out_list);
+	pool_target_addr_list_free(&inval_list_out);
 
 	return rc;
 }

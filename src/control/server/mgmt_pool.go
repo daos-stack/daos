@@ -365,26 +365,26 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		return nil, err
 	}
 
-	// FIXME: There are some potential races here. We may want
-	// to somehow do all of this under a lock, to prevent multiple
-	// gRPC callers from modifying the same pool concurrently.
-
 	ps, err := svc.sysdb.FindPoolServiceByUUID(uuid)
 	if err != nil {
 		return nil, err
 	}
 
-	lastState := ps.State
+	inCleanupMode := false
 	if ps.State == system.PoolServiceStateDestroying {
-		return nil, drpc.DaosAlready
+		// If we already tried to destroy the pool but it failed for some
+		// reason, try again, but instead use the full set of storage ranks
+		// in case the MS has lost track of the actual svc ranks.
+		req.SvcRanks = system.RanksToUint32(ps.Storage.CreationRanks())
+		inCleanupMode = true
+	} else {
+		ps.State = system.PoolServiceStateDestroying
+		if err := svc.sysdb.UpdatePoolService(ps); err != nil {
+			return nil, errors.Wrapf(err, "failed to update pool %s", uuid)
+		}
+		req.SvcRanks = system.RanksToUint32(ps.Replicas)
 	}
 
-	ps.State = system.PoolServiceStateDestroying
-	if err := svc.sysdb.UpdatePoolService(ps); err != nil {
-		return nil, err
-	}
-
-	req.SvcRanks = system.RanksToUint32(ps.Replicas)
 	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolDestroy, req)
 	if err != nil {
 		return nil, err
@@ -397,20 +397,23 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 
 	svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, resp:%+v\n", resp)
 
-	switch drpc.DaosStatus(resp.Status) {
-	case drpc.DaosSuccess:
+	ds := drpc.DaosStatus(resp.Status)
+	switch ds {
+	case drpc.DaosSuccess, drpc.DaosNotLeader, drpc.DaosNotReplica:
+		if ds == drpc.DaosNotLeader || ds == drpc.DaosNotReplica {
+			// If we're not cleaning up, then this is an error.
+			if !inCleanupMode {
+				svc.log.Errorf("PoolDestroy dRPC call failed due to %s in non-cleanup path", ds)
+				break
+			}
+			// Otherwise, we've done all we can to try to recover.
+			resp.Status = int32(drpc.DaosSuccess)
+		}
 		if err := svc.sysdb.RemovePoolService(uuid); err != nil {
 			return nil, errors.Wrapf(err, "failed to remove pool %s", uuid)
 		}
-	// TODO: Identify errors that should leave the pool in a "Destroying"
-	// state and enumerate them here.
 	default:
-		// Revert the pool back to the previous state if the destroy failed
-		// and the pool should not remain in the "Destroying" state.
-		ps.State = lastState
-		if err := svc.sysdb.UpdatePoolService(ps); err != nil {
-			return nil, err
-		}
+		svc.log.Errorf("PoolDestroy dRPC call failed: %s", ds)
 	}
 
 	return resp, nil
