@@ -196,18 +196,25 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 	req.Ranks.ReplaceSet(rankSet)
 
 	resp, err := control.SystemQuery(context.Background(), cmd.ctlInvoker, req)
+	errCmd := errors.Wrap(err, "System-Query command")
+	errResp := errors.Wrap(resp.Errors(), "System-Query command")
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+		if errCmd != nil {
+			return cmd.outputJSON(resp, errCmd)
+		}
+
+		return cmd.outputJSON(resp, errResp)
 	}
 
-	if err != nil {
-		return errors.Wrap(err, "System-Query command failed")
+	if errCmd != nil {
+		return errCmd
 	}
 
 	cmd.log.Debugf("System-Query command succeeded, absent hosts: %s, absent ranks: %s",
 		resp.AbsentHosts.String(), resp.AbsentRanks.String())
 
+	var absentRanksPrinted bool
 	switch {
 	case len(resp.Members) == 0:
 		cmd.log.Info("Query matches no members in system.")
@@ -216,15 +223,27 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 	case cmd.Verbose:
 		displaySystemQueryVerbose(cmd.log, resp.Members)
 	default:
-		err = displaySystemQuery(cmd.log, resp.Members, &resp.AbsentRanks)
+		if errDisplay := displaySystemQuery(cmd.log, resp.Members,
+			&resp.AbsentRanks); errDisplay != nil {
+			return errDisplay
+		}
+		absentRanksPrinted = true
 	}
 
-	if err != nil || resp.AbsentRanks.Count() == 0 {
-		// report absent hosts xor ranks
-		cmd.log.Info(resp.DisplayAbsentHostsRanks())
+	cmd.log.Info("\n")
+
+	if resp.AbsentHosts.Count() > 0 {
+		cmd.log.Infof("Unknown %s: %s",
+			english.Plural(resp.AbsentHosts.Count(), "host", "hosts"),
+			resp.AbsentHosts.String())
+	}
+	if !absentRanksPrinted && resp.AbsentRanks.Count() > 0 {
+		cmd.log.Infof("Unknown %s: %s",
+			english.Plural(resp.AbsentRanks.Count(), "rank", "ranks"),
+			resp.AbsentRanks.String())
 	}
 
-	return err
+	return errResp
 }
 
 // rankActionGroups initializes groupings of ranks that return the same results.
@@ -286,14 +305,12 @@ func displaySystemAction(log logging.Logger, results system.MemberResults,
 	}
 
 	if absentHosts.Count() > 0 {
-		out += fmt.Sprintf("\nUnknown %s: %s",
+		log.Infof("%s\nUnknown %s: %s", out,
 			english.Plural(absentHosts.Count(), "host", "hosts"),
 			absentHosts.String())
 	} else {
-		out += "\n"
+		log.Infof("%s\n", out)
 	}
-
-	log.Info(out)
 
 	return nil
 }
@@ -319,26 +336,30 @@ func (cmd *systemStopCmd) Execute(_ []string) error {
 	req.Hosts.ReplaceSet(hostSet)
 	req.Ranks.ReplaceSet(rankSet)
 
-	// TODO DAOS-5079: group errors when ranks don't exist
 	resp, err := control.SystemStop(context.Background(), cmd.ctlInvoker, req)
+	errCmd := errors.Wrap(err, "System-Stop command")
+	errResp := errors.Wrap(resp.Errors(), "System-Stop command")
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+		if errCmd != nil {
+			return cmd.outputJSON(resp, errCmd)
+		}
+
+		return cmd.outputJSON(resp, errResp)
 	}
 
-	if err != nil {
-		return errors.Wrap(err, "System-Stop command failed")
+	if errCmd != nil {
+		return errCmd
 	}
 
-	if len(resp.Results) == 0 {
-		cmd.log.Debug("System-Stop no results returned")
-		return nil
-	}
-	cmd.log.Debugf("System-Stop command succeeded, absent hosts: %s, absent ranks: %s",
+	cmd.log.Debugf("System-Stop command: absent hosts: %s, absent ranks: %s",
 		resp.AbsentHosts.String(), resp.AbsentRanks.String())
 
-	return displaySystemAction(cmd.log, resp.Results,
-		&resp.AbsentHosts, &resp.AbsentRanks)
+	if errDisplay := displaySystemAction(cmd.log, resp.Results,
+		&resp.AbsentHosts, &resp.AbsentRanks); errDisplay != nil {
+		return errDisplay
+	}
+	return errResp
 }
 
 // systemStartCmd is the struct representing the command to start system.
@@ -359,26 +380,31 @@ func (cmd *systemStartCmd) Execute(_ []string) error {
 	req.Hosts.ReplaceSet(hostSet)
 	req.Ranks.ReplaceSet(rankSet)
 
-	// TODO DAOS-5079: group errors when ranks don't exist
 	resp, err := control.SystemStart(context.Background(), cmd.ctlInvoker, req)
+	errCmd := errors.Wrap(err, "System-Start command")
+	errResp := errors.Wrap(resp.Errors(), "System-Start command")
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+		if errCmd != nil {
+			return cmd.outputJSON(resp, errCmd)
+		}
+
+		return cmd.outputJSON(resp, errResp)
 	}
 
-	if err != nil {
-		return errors.Wrap(err, "System-Start command failed")
+	if errCmd != nil {
+		return errCmd
 	}
 
-	if len(resp.Results) == 0 {
-		cmd.log.Debug("System-Start no results returned")
-		return nil
-	}
-	cmd.log.Debugf("System-Start command succeeded, absent hosts: %s, absent ranks: %s",
+	cmd.log.Debugf("System-Start command: absent hosts: %s, absent ranks: %s",
 		resp.AbsentHosts.String(), resp.AbsentRanks.String())
 
-	return displaySystemAction(cmd.log, resp.Results,
-		&resp.AbsentHosts, &resp.AbsentRanks)
+	if errDisplay := displaySystemAction(cmd.log, resp.Results,
+		&resp.AbsentHosts, &resp.AbsentRanks); errDisplay != nil {
+		return errDisplay
+	}
+
+	return errResp
 }
 
 // systemListPoolsCmd represents the command to fetch a list of all DAOS pools in the system.
