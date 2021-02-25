@@ -405,6 +405,11 @@ boolean skip_build_on_centos7_gcc_release() {
            quickbuild()
 }
 
+boolean skip_build_on_centos7_clang_release() {
+    return skip_stage('build-centos7-clang-release') ||
+           quickbuild()
+}
+
 boolean skip_build_on_centos8_gcc_dev() {
     return skip_stage('build-centos8-gcc-dev') ||
            quickbuild()
@@ -895,6 +900,7 @@ pipeline {
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quick_build_deps('centos7') + '"' +
                                                 ' --build-arg REPOS="' + pr_repos() + '"'
+                            args '--tmpfs /mnt/daos'
                         }
                     }
                     steps {
@@ -902,6 +908,7 @@ pipeline {
                                    scons_exe: 'scons-3',
                                    scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
+                        sh """sudo ./ci/unit/docker_nlt.sh"""
                     }
                     post {
                         always {
@@ -922,7 +929,7 @@ pipeline {
                 stage('Build on CentOS 7 with Clang') {
                     when {
                         beforeAgent true
-                        expression { ! skip_build_on_landing_branch() }
+                        expression { ! skip_build_on_centos7_clang_release() }
                     }
                     agent {
                         dockerfile {
@@ -933,6 +940,7 @@ pipeline {
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quick_build_deps('centos7') + '"'
+                            args '--tmpfs /mnt/daos'
                         }
                     }
                     steps {
@@ -940,6 +948,7 @@ pipeline {
                                    scons_exe: 'scons-3',
                                    scons_args: scons_faults_args() + " PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
+                        sh """sudo ./ci/unit/docker_nlt.sh"""
                     }
                     post {
                         always {

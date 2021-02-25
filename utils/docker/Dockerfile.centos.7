@@ -61,7 +61,6 @@ RUN yum clean all && \
         patch \
         patchelf \
         pciutils \
-        python3-pip \
         python36-Cython \
         python36-devel \
         python36-distro \
@@ -73,9 +72,11 @@ RUN yum clean all && \
         python36-requests \
         python36-tabulate \
         python36-pyxattr \
+        python36-PyYAML \
         python36-scons \
         readline-devel \
         sg3_utils \
+        sudo \
         valgrind-devel \
         yasm && \
     yum clean all
@@ -90,24 +91,7 @@ RUN useradd --uid $UID --user-group --create-home --shell /bin/bash --home /home
 RUN echo "daos_server:daos_server" | chpasswd
 RUN useradd --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
-
-# Removing PyYAML 3.10 to allow pip install to upgrade
-RUN yum -y remove python36-PyYAML
-
-RUN python3 -m pip install --upgrade pip
-
-RUN python3 -m pip --no-cache-dir install \
-    "avocado-framework<70.0" \
-    "avocado-framework-plugin-result-html<70.0" \
-    "avocado-framework-plugin-varianter-yaml-to-mux<70.0" \
-    clustershell \
-    pep8 \
-    pygit2 \
-    python-magic
-
-# Add codespell to path.
-ENV PATH=$PATH:/home/daos/.local/bin
-
+RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup
 
 # Create directory for DAOS backend storage
 RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&	\
@@ -135,7 +119,6 @@ name=created from ${MY_REPO}\n\
 baseurl=${MY_REPO}\n\
 enabled=1\n\
 gpgcheck=False\n" >> /etc/yum.repos.d/local-centos-group.repo;                \
-      yum --assumeyes install yum-utils;                                      \
       yum-config-manager --assumeyes --quiet                                  \
                          --disable base epel extra updates;                   \
     fi
@@ -266,5 +249,7 @@ RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
     mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
 WORKDIR /home/daos
 
+ARG DAOS_KEEP_SRC=no
+
 # Remove local copy
-RUN rm -rf /home/daos/*
+RUN [ "$DAOS_KEEP_SRC" == "yes" ] || rm -rf /home/daos/*

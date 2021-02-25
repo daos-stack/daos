@@ -421,6 +421,9 @@ class DaosServer():
         cmd = [daos_server, '--config={}'.format(self._yaml_file.name),
                'start', '-t' '4', '--insecure', '-d', self.agent_dir]
 
+        if self.conf.args.no_root:
+            cmd.append('--recreate-superblocks')
+
         self._sp = subprocess.Popen(cmd)
 
         agent_config = os.path.join(self_dir, 'nlt_agent.yaml')
@@ -451,7 +454,11 @@ class DaosServer():
 
         cmd = ['storage', 'format']
         while True:
-            time.sleep(0.5)
+            try:
+                self._sp.wait(timeout=0.5)
+                raise Exception('daos server died waiting for start')
+            except subprocess.TimeoutExpired:
+                pass
             rc = self.run_dmg(cmd)
             ready = False
             if rc.returncode == 1:
@@ -465,6 +472,9 @@ class DaosServer():
                 for line in rc.stderr.decode('utf-8').splitlines():
                     if 'system reformat requires the following' in line:
                         ready = True
+                for line in rc.stderr.decode('utf-8').splitlines():
+                    if 'operation not permitted' in line:
+                        raise Exception('Permission denied formatting storage')
             if ready:
                 break
             self._check_timing("format", start, max_start_time)
@@ -2463,6 +2473,7 @@ def main():
     parser.add_argument('--dfuse-debug', default=None)
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
+    parser.add_argument('--no-root', action='store_true')
     parser.add_argument('--max-log-size', default=None)
     parser.add_argument('--dfuse-dir', default='/tmp',
                         help='parent directory for all dfuse mounts')
