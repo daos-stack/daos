@@ -791,7 +791,6 @@ class DmgCommand(DmgCommandBase):
             dict: a dictionary of host ranks and their unique states.
 
         """
-        data = {}
         # Sample output:
         # {
         # "response": {

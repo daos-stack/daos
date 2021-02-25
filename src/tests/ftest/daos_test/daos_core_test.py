@@ -4,7 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from apricot import skipForTicket
 from daos_core_base import DaosCoreBase
 
 
@@ -30,7 +29,6 @@ class DaosCoreTest(DaosCoreBase):
         """
         self.run_subtest()
 
-    @skipForTicket("DAOS-6815")
     def test_daos_management(self):
         """Jira ID: DAOS-1568
 
