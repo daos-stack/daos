@@ -146,8 +146,9 @@ func TestSystem_MemberResult_Convert(t *testing.T) {
 	}
 	mrsOut := MemberResults{}
 
-	AssertTrue(t, mrsIn.HasErrors(), "")
-	AssertFalse(t, mrsOut.HasErrors(), "")
+	AssertEqual(t, mrsIn.Errors().Error(), errors.New("failed ranks 1-2").Error(),
+		"unexpected error message")
+	AssertEqual(t, mrsOut.Errors(), nil, "expected no error")
 
 	if err := convert.Types(mrsIn, &mrsOut); err != nil {
 		t.Fatal(err)

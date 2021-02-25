@@ -659,6 +659,39 @@ func TestControl_SystemQuery(t *testing.T) {
 	}
 }
 
+func TestControl_SystemQueryRespErrors(t *testing.T) {
+	for name, tc := range map[string]struct {
+		absentHosts string
+		absentRanks string
+		expErr      error
+	}{
+		"no errors": {},
+		"absent hosts": {
+			absentHosts: "foo-[1-23]",
+			expErr:      errors.New("non-existent hosts foo-[1-23]"),
+		},
+		"absent ranks": {
+			absentRanks: "1-23",
+			expErr:      errors.New("non-existent ranks 1-23"),
+		},
+		"both absent hosts and ranks": {
+			absentHosts: "foo-[1-23]",
+			absentRanks: "1-23",
+			expErr:      errors.New("non-existent hosts foo-[1-23], non-existent ranks 1-23"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			resp := new(SystemQueryResp)
+			ahs := hostlist.MustCreateSet(tc.absentHosts)
+			resp.AbsentHosts.ReplaceSet(ahs)
+			ars := system.MustCreateRankSet(tc.absentRanks)
+			resp.AbsentRanks.ReplaceSet(ars)
+
+			common.CmpErr(t, tc.expErr, resp.Errors())
+		})
+	}
+}
+
 func TestControl_SystemStart(t *testing.T) {
 	testHS := hostlist.MustCreateSet("foo-[1-23]")
 	testReqHS := new(SystemStartReq)
@@ -772,6 +805,64 @@ func TestControl_SystemStart(t *testing.T) {
 	}
 }
 
+func TestControl_SystemStartRespErrors(t *testing.T) {
+	successResults := system.MemberResults{
+		system.NewMemberResult(1, nil, system.MemberStateReady),
+		system.NewMemberResult(2, nil, system.MemberStateReady),
+		system.NewMemberResult(0, nil, system.MemberStateStopped),
+		system.NewMemberResult(3, nil, system.MemberStateStopped),
+	}
+	failedResults := system.MemberResults{
+		system.NewMemberResult(1, nil, system.MemberStateReady),
+		system.NewMemberResult(2, errors.New("fail"), system.MemberStateReady),
+		system.NewMemberResult(0, errors.New("failed"), system.MemberStateStopped),
+		system.NewMemberResult(3, nil, system.MemberStateStopped),
+	}
+
+	for name, tc := range map[string]struct {
+		absentHosts string
+		absentRanks string
+		results     system.MemberResults
+		expErr      error
+	}{
+		"no errors": {
+			results: successResults,
+		},
+		"absent hosts": {
+			absentHosts: "foo-[1-23]",
+			results:     successResults,
+			expErr:      errors.New("non-existent hosts foo-[1-23]"),
+		},
+		"absent ranks": {
+			absentRanks: "1-23",
+			results:     successResults,
+			expErr:      errors.New("non-existent ranks 1-23"),
+		},
+		"failed ranks": {
+			results: failedResults,
+			expErr:  errors.New("check results for failed ranks 0,2"),
+		},
+		"absent hosts and ranks with failed ranks": {
+			absentHosts: "foo-[1-23]",
+			absentRanks: "1-23",
+			results:     failedResults,
+			expErr: errors.New("non-existent hosts foo-[1-23], " +
+				"non-existent ranks 1-23, check results for failed ranks 0,2"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			resp := new(SystemStartResp)
+			ahs := hostlist.MustCreateSet(tc.absentHosts)
+			resp.AbsentHosts.ReplaceSet(ahs)
+			ars := system.MustCreateRankSet(tc.absentRanks)
+			resp.AbsentRanks.ReplaceSet(ars)
+			resp.Results = tc.results
+
+			common.CmpErr(t, tc.expErr, resp.Errors())
+		})
+	}
+}
+
 func TestControl_SystemStop(t *testing.T) {
 	testHS := hostlist.MustCreateSet("foo-[1-23]")
 	testReqHS := new(SystemStopReq)
@@ -881,6 +972,64 @@ func TestControl_SystemStop(t *testing.T) {
 			if diff := cmp.Diff(tc.expResp.AbsentRanks.String(), gotResp.AbsentRanks.String()); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func TestControl_SystemStopRespErrors(t *testing.T) {
+	successResults := system.MemberResults{
+		system.NewMemberResult(1, nil, system.MemberStateReady),
+		system.NewMemberResult(2, nil, system.MemberStateReady),
+		system.NewMemberResult(0, nil, system.MemberStateStopped),
+		system.NewMemberResult(3, nil, system.MemberStateStopped),
+	}
+	failedResults := system.MemberResults{
+		system.NewMemberResult(1, nil, system.MemberStateReady),
+		system.NewMemberResult(2, errors.New("fail"), system.MemberStateReady),
+		system.NewMemberResult(0, errors.New("failed"), system.MemberStateStopped),
+		system.NewMemberResult(3, nil, system.MemberStateStopped),
+	}
+
+	for name, tc := range map[string]struct {
+		absentHosts string
+		absentRanks string
+		results     system.MemberResults
+		expErr      error
+	}{
+		"no errors": {
+			results: successResults,
+		},
+		"absent hosts": {
+			absentHosts: "foo-[1-23]",
+			results:     successResults,
+			expErr:      errors.New("non-existent hosts foo-[1-23]"),
+		},
+		"absent ranks": {
+			absentRanks: "1-23",
+			results:     successResults,
+			expErr:      errors.New("non-existent ranks 1-23"),
+		},
+		"failed ranks": {
+			results: failedResults,
+			expErr:  errors.New("check results for failed ranks 0,2"),
+		},
+		"absent hosts and ranks with failed ranks": {
+			absentHosts: "foo-[1-23]",
+			absentRanks: "1-23",
+			results:     failedResults,
+			expErr: errors.New("non-existent hosts foo-[1-23], " +
+				"non-existent ranks 1-23, check results for failed ranks 0,2"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			resp := new(SystemStopResp)
+			ahs := hostlist.MustCreateSet(tc.absentHosts)
+			resp.AbsentHosts.ReplaceSet(ahs)
+			ars := system.MustCreateRankSet(tc.absentRanks)
+			resp.AbsentRanks.ReplaceSet(ars)
+			resp.Results = tc.results
+
+			common.CmpErr(t, tc.expErr, resp.Errors())
 		})
 	}
 }
