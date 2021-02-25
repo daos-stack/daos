@@ -413,8 +413,8 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
                     "exit_status": exit_status,
                     "interrupted": interrupted,
                     "stdout": [
-                        line.decode(
-                            "utf-8").rstrip(os.linesep) for line in output],
+                        line.decode("utf-8").rstrip(os.linesep)
+                        for line in output],
                 })
 
     # Display results if requested or there is an unexpected exit status
