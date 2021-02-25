@@ -207,7 +207,7 @@ public class DaosObjClient extends ShareableClient implements ForceCloseable {
    * number of entries in <code>descBuffer</code>
    * @param descBufferAddress
    * address of direct byte buffer holds serialized dkey and list of akeys, types, offset, record
-   * sizes, index in value buffer from {@link IODataDesc} and how many records to fetch
+   * sizes, index in value buffer from {@link IODataDescSync} and how many records to fetch
    * @param descBufferCap
    * desc buffer capacity
    * @throws DaosIOException
@@ -242,7 +242,7 @@ public class DaosObjClient extends ShareableClient implements ForceCloseable {
    * Fetch flags (currently ignored)
    * @param descBufferAddress
    * address of direct byte buffer holds serialized dkey and list of akeys, offset, index in value buffer from
-   * {@link IODataDescAsync} and how many records to fetch
+   * {@link IOSimpleDDAsync} and how many records to fetch
    * @throws DaosIOException
    */
   native void fetchObjectAsync(long objectPtr, long flags, long descBufferAddress)
@@ -259,7 +259,7 @@ public class DaosObjClient extends ShareableClient implements ForceCloseable {
    * number of entries in <code>descBuffer</code>
    * @param descBufferAddress
    * address of direct byte buffer holds serialized dkey and serialized list of akeys, types,
-   * offset and record sizes, index in value buffer from {@link IODataDesc} and how many records to update
+   * offset and record sizes, index in value buffer from {@link IODataDescSync} and how many records to update
    * @param descBufferCap
    * desc buffer capacity
    * @throws DaosIOException
@@ -294,7 +294,7 @@ public class DaosObjClient extends ShareableClient implements ForceCloseable {
    * update flags (currently ignored)
    * @param descBufferAddress
    * address of direct byte buffer holds serialized dkey and serialized list of akeys, types,
-   * offset and index in value buffer from {@link IODataDescAsync} and how many records to update
+   * offset and index in value buffer from {@link IOSimpleDDAsync} and how many records to update
    * @throws DaosIOException
    */
   native void updateObjectAsync(long objectPtr, long flags, long descBufferAddress)

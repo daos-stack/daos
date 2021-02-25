@@ -16,7 +16,7 @@ import java.io.UnsupportedEncodingException;
 
 /**
  * IO simple description for fetching and updating object records on given dkey. The differences between this class and
- * {@link IODataDesc} are,
+ * {@link IODataDescSync} are,
  * - this class defaults record size as 1, iod type as ARRAY.
  * - this class is always reusable.
  * - this class support asynchronous update/fetch.
@@ -33,9 +33,7 @@ import java.io.UnsupportedEncodingException;
  *   See {@link SimpleEntry#release(boolean)}.
  * </p>
  */
-public class IOSimpleDataDesc implements DaosEventQueue.Attachment {
-
-  private String dkey;
+public class IOSimpleDataDesc extends IODataDescBase implements DaosEventQueue.Attachment {
 
   private boolean dkeyChanged;
 
@@ -43,31 +41,15 @@ public class IOSimpleDataDesc implements DaosEventQueue.Attachment {
 
   private int dkeyLen;
 
-  private final SimpleEntry[] akeyEntries;
-
-  private boolean updateOrFetch;
-
-  private final int totalDescBufferLen;
-
-  private final int totalRequestBufLen;
-
-  private int totalRequestSize;
-
   private int nbrOfAkeysToRequest;
 
-  private final ByteBuf descBuffer;
-
-  private Throwable cause;
-
-  private boolean resultParsed;
-
   private final boolean async;
+
+  private boolean released;
 
   private DaosEventQueue.Event event;
 
   private final long eqHandle;
-
-  private boolean released;
 
   private int retCode = Integer.MAX_VALUE;
 
@@ -87,6 +69,7 @@ public class IOSimpleDataDesc implements DaosEventQueue.Attachment {
    * 0L for synchronous. asynchronous otherwise.
    */
   protected IOSimpleDataDesc(int maxKeyStrLen, int nbrOfEntries, int entryBufLen, long eqWrapperHandle) {
+    super(null, true);
     if (maxKeyStrLen > Short.MAX_VALUE/2 || maxKeyStrLen <= 0) {
       throw new IllegalArgumentException("number of entries should be positive and no larger than " +
           Short.MAX_VALUE/2 + ". " + maxKeyStrLen);
@@ -107,15 +90,14 @@ public class IOSimpleDataDesc implements DaosEventQueue.Attachment {
     // 8 for native EQ pointer
     // 2 for event ID
     tmpLen += async ? 10 : 0;
-    this.akeyEntries = new SimpleEntry[nbrOfEntries];
     for (int i = 0; i < nbrOfEntries; i++) {
       SimpleEntry entry = new SimpleEntry(entryBufLen);
-      akeyEntries[i] = entry;
+      akeyEntries.add(entry);
       tmpLen += entry.getDescLen();
     }
     totalRequestBufLen = tmpLen;
     // for rc and returned actual size
-    tmpLen += 4 + akeyEntries.length * Constants.ENCODED_LENGTH_EXTENT;
+    tmpLen += 4 + nbrOfEntries * Constants.ENCODED_LENGTH_EXTENT;
     totalDescBufferLen = tmpLen;
     this.descBuffer = BufferAllocator.objBufWithNativeOrder(totalDescBufferLen);
     prepareNativeDesc();
@@ -155,14 +137,6 @@ public class IOSimpleDataDesc implements DaosEventQueue.Attachment {
     return updateOrFetch;
   }
 
-  public String getDkey() {
-    return dkey;
-  }
-
-  public int getTotalRequestSize() {
-    return totalRequestSize;
-  }
-
   public int getNbrOfAkeysToRequest() {
     return nbrOfAkeysToRequest;
   }
@@ -171,54 +145,8 @@ public class IOSimpleDataDesc implements DaosEventQueue.Attachment {
     return async;
   }
 
-  /**
-   * duplicate this object and all its entries.
-   * Do not forget to release this object and its entries.
-   *
-   * @return duplicated IODataDesc
-   * @throws IOException
-   */
-//  public IODataDescSimple duplicate() throws IOException {
-//    List<Entry> newEntries = new ArrayList<>(akeyEntries.size());
-//    for (Entry e : akeyEntries) {
-//      newEntries.add(e.duplicate());
-//    }
-//    return new IODataDescSimple(dkey, newEntries, updateOrFetch);
-//  }
-
-  private String updateOrFetchStr(boolean v) {
-    return v ? "update" : "fetch";
-  }
-
-  /**
-   * number of records to fetch or update.
-   *
-   * @return number of records
-   */
-  public int getNbrOfEntries() {
-    return akeyEntries.length;
-  }
-
-  /**
-   * total length of all encoded entries, including reserved buffer for holding sizes of returned data and actual record
-   * size.
-   *
-   * @return total length
-   */
-  public int getDescBufferLen() {
-    return totalDescBufferLen;
-  }
-
-  /**
-   * total length of all encoded entries to request data.
-   *
-   * @return
-   */
-  public int getRequestBufLen() {
-    return totalRequestBufLen;
-  }
-
-  public void setDkey(String dkey) throws UnsupportedEncodingException {
+  @Override
+  public void setDkey(String dkey) {
     this.dkey = dkey;
     this.dkeyLen = dkey.length() * 2;
     checkLen(dkeyLen, "dkey");
@@ -229,6 +157,7 @@ public class IOSimpleDataDesc implements DaosEventQueue.Attachment {
    * encode dkey + entries descriptions to the Description Buffer.
    * encode entries data to Data Buffer.
    */
+  @Override
   public void encode() {
     if (nbrOfAkeysToRequest == 0) {
       throw new IllegalArgumentException("at least one of entries should have data");
@@ -250,11 +179,11 @@ public class IOSimpleDataDesc implements DaosEventQueue.Attachment {
     }
     descBuffer.writeShort(nbrOfAkeysToRequest);
     int count = 0;
-    for (SimpleEntry entry : akeyEntries) {
-      if (!entry.isReused()) {
+    for (Entry entry : akeyEntries) {
+      if (!((SimpleEntry)entry).isReused()) {
         break;
       }
-      entry.encode(descBuffer);
+      entry.encode();
       count++;
     }
     if (nbrOfAkeysToRequest > count) {
@@ -267,7 +196,7 @@ public class IOSimpleDataDesc implements DaosEventQueue.Attachment {
     // skip native handle
     descBuffer.writeLong(0L);
     descBuffer.writeShort(maxKenLen);
-    descBuffer.writeShort(akeyEntries.length);
+    descBuffer.writeShort(akeyEntries.size());
     if (async) { // for asynchronous
       descBuffer.writeLong(eqHandle);
       // skip event id
@@ -275,8 +204,8 @@ public class IOSimpleDataDesc implements DaosEventQueue.Attachment {
     }
     // skip dkeylen, dkey and nbr of requests
     descBuffer.writerIndex(descBuffer.writerIndex() + 2 + maxKenLen + 2);
-    for (SimpleEntry entry : akeyEntries) {
-      entry.putAddress(descBuffer);
+    for (Entry entry : akeyEntries) {
+      ((SimpleEntry)entry).putAddress(descBuffer);
     }
   }
 
@@ -293,12 +222,14 @@ public class IOSimpleDataDesc implements DaosEventQueue.Attachment {
    *
    * @return true or false
    */
+  @Override
   public boolean isSucceeded() {
     return retCode == RET_CODE_SUCCEEDED;
   }
 
-  public Throwable getCause() {
-    return cause;
+  @Override
+  public IODataDesc duplicate() throws IOException {
+    throw new UnsupportedOperationException("duplicate is not supported");
   }
 
   public int getRetCode() {
@@ -309,7 +240,7 @@ public class IOSimpleDataDesc implements DaosEventQueue.Attachment {
     cause = de;
   }
 
-  protected void succeed() {
+  protected void parseUpdateResult() {
     if (async) {
       descBuffer.writerIndex(descBuffer.capacity());
       descBuffer.readerIndex(totalRequestBufLen);
@@ -323,7 +254,7 @@ public class IOSimpleDataDesc implements DaosEventQueue.Attachment {
   /**
    * parse result after JNI call.
    */
-  protected void parseResult() {
+  protected void parseFetchResult() {
     if (!updateOrFetch) {
       if (resultParsed) {
         return;
@@ -340,7 +271,7 @@ public class IOSimpleDataDesc implements DaosEventQueue.Attachment {
         return;
       }
       idx += 4;
-      for (SimpleEntry entry : akeyEntries) {
+      for (Entry entry : akeyEntries) {
         if (count < nbrOfReq) {
           descBuffer.readerIndex(idx);
           entry.setActualSize(descBuffer.readInt());
@@ -358,25 +289,6 @@ public class IOSimpleDataDesc implements DaosEventQueue.Attachment {
   }
 
   /**
-   * get reference to the Description Buffer after being encoded.
-   * The buffer's reader index and write index should be restored if user
-   * changed them.
-   *
-   * @return ByteBuf
-   */
-  protected ByteBuf getDescBuffer() {
-    return descBuffer;
-  }
-
-  public SimpleEntry[] getAkeyEntries() {
-    return akeyEntries;
-  }
-
-  public SimpleEntry getEntry(int index) {
-    return akeyEntries[index];
-  }
-
-  /**
    * should be called before setting keys and entries except it's first time use.
    */
   @Override
@@ -386,19 +298,24 @@ public class IOSimpleDataDesc implements DaosEventQueue.Attachment {
     this.totalRequestSize = 0;
     this.dkeyChanged = false;
     this.retCode = Integer.MAX_VALUE;
-    for (SimpleEntry e : akeyEntries) {
+    for (Entry e : akeyEntries) {
       e.actualSize = 0;
-      e.reused = false;
-      e.akeyChanged = false;
+      ((SimpleEntry)e).reused = false;
+      ((SimpleEntry)e).akeyChanged = false;
     }
+  }
+
+  @Override
+  public boolean isReusable() {
+    return true;
   }
 
   @Override
   public void ready() {
     if (isUpdateOrFetch()) {
-      succeed();
+      parseUpdateResult();
     } else {
-      parseResult();
+      parseFetchResult();
     }
   }
 
@@ -437,8 +354,8 @@ public class IOSimpleDataDesc implements DaosEventQueue.Attachment {
       this.released = true;
     }
     if (updateOrFetch || releaseFetchBuffer) {
-      for (SimpleEntry entry : akeyEntries) {
-        entry.releaseBuffer();
+      for (Entry entry : akeyEntries) {
+        entry.releaseDataBuffer();
       }
     }
   }
@@ -456,7 +373,7 @@ public class IOSimpleDataDesc implements DaosEventQueue.Attachment {
     StringBuilder sb = new StringBuilder();
     sb.append("dkey: ").append(dkey).append(", akey entries\n");
     int nbr = 0;
-    for (SimpleEntry e : akeyEntries) {
+    for (Entry e : akeyEntries) {
       sb.append("[").append(e.toString()).append("]");
       nbr++;
       if (sb.length() < maxSize) {
@@ -465,7 +382,7 @@ public class IOSimpleDataDesc implements DaosEventQueue.Attachment {
         break;
       }
     }
-    if (nbr < akeyEntries.length) {
+    if (nbr < akeyEntries.size()) {
       sb.append("...");
     }
     return sb.toString();
@@ -475,16 +392,10 @@ public class IOSimpleDataDesc implements DaosEventQueue.Attachment {
    * A entry to describe record update or fetch on given akey. For array, each entry object represents consecutive
    * records of given key. Multiple entries should be created for non-consecutive records of given key.
    */
-  public class SimpleEntry {
-    private String akey;
+  public class SimpleEntry extends BaseEntry {
     private boolean akeyChanged;
     private int akeyLen;
-    private int offset;
     private boolean reused;
-    private int dataSize;
-    private ByteBuf dataBuffer;
-
-    private int actualSize; // to get from value buffer
 
     /**
      * construction for reusable entry.
@@ -497,48 +408,11 @@ public class IOSimpleDataDesc implements DaosEventQueue.Attachment {
     }
 
     /**
-     * get size of actual data returned.
-     *
-     * @return actual data size returned
-     */
-    public int getActualSize() {
-      if (!updateOrFetch) {
-        return actualSize;
-      }
-      throw new UnsupportedOperationException("only support for fetch, akey: " + akey);
-    }
-
-    /**
-     * set size of actual data returned after fetch.
-     *
-     * @param actualSize
-     */
-    public void setActualSize(int actualSize) {
-      if (!updateOrFetch) {
-        this.actualSize = actualSize;
-        return;
-      }
-      throw new UnsupportedOperationException("only support for fetch, akey: " + akey);
-    }
-
-    /**
-     * get data buffer holding fetched data. User should read data without changing buffer's readerIndex and writerIndex
-     * since the indices are managed based on the actual data returned.
-     *
-     * @return data buffer with writerIndex set to existing readerIndex + actual data size
-     */
-    public ByteBuf getFetchedData() {
-      if (!updateOrFetch) {
-        return dataBuffer;
-      }
-      throw new UnsupportedOperationException("only support for fetch, akey: " + akey);
-    }
-
-    /**
      * length of this entry when encoded into the Description Buffer.
      *
      * @return length
      */
+    @Override
     public int getDescLen() {
       // 18 = dkey len(2) + recx idx(4) + recx nr(4) + data buffer mem address(8)
       return 18 + maxKenLen;
@@ -619,26 +493,21 @@ public class IOSimpleDataDesc implements DaosEventQueue.Attachment {
     }
 
     private void setAkey(String akey) {
-      this.akey = akey;
+      this.key = akey;
       this.akeyLen = akey.length() * 2;
       checkLen(akeyLen, "akey");
       this.akeyChanged = true;
     }
 
-    public String getAkey() {
-      return akey;
-    }
-
     /**
      * encode entry to the description buffer which will be decoded in native code.<br/>
      *
-     * @param descBuffer
-     * the description buffer
      */
-    protected void encode(ByteBuf descBuffer) {
+    @Override
+    protected void encode() {
       if (akeyChanged) {
         descBuffer.writeShort(akeyLen);
-        writeKey(akey);
+        writeKey(key);
       } else {
         descBuffer.writerIndex(descBuffer.writerIndex() + 2 + maxKenLen);
       }
@@ -648,66 +517,24 @@ public class IOSimpleDataDesc implements DaosEventQueue.Attachment {
       descBuffer.writerIndex(descBuffer.writerIndex() + 8);
     }
 
-    /**
-     * depend on encoded of IODataDesc to protect entry from encoding multiple times.
-     *
-     * @param descBuffer
-     */
-    private void reuseEntry(ByteBuf descBuffer) {
-
-    }
-
     private void putAddress(ByteBuf descBuffer) {
       // skip akeylen, akey, offset and length
       descBuffer.writerIndex(descBuffer.writerIndex() + maxKenLen + 10);
       descBuffer.writeLong(dataBuffer.memoryAddress());
     }
 
-    public void releaseBuffer() {
-      if (dataBuffer != null) {
-        dataBuffer.release();
-        dataBuffer = null;
-      }
-    }
-
     public boolean isFetchBufReleased() {
       if (!updateOrFetch) {
         return dataBuffer == null;
       }
-      throw new UnsupportedOperationException("only support for fetch, akey: " + akey);
-    }
-
-    public int getRequestSize() {
-      return dataSize;
-    }
-
-    public int getOffset() {
-      return offset;
-    }
-
-    /**
-     * duplicate this object.
-     * Do not forget to release this object.
-     *
-     * @return duplicated Entry
-     * @throws IOException
-     */
-//    public Entry duplicate() throws IOException {
-//      if (updateOrFetch) {
-//        return new Entry(key, type, recordSize, offset, dataBuffer);
-//      }
-//      return new Entry(key, type, recordSize, offset, dataSize);
-//    }
-
-    public ByteBuf getDataBuffer() {
-      return dataBuffer;
+      throw new UnsupportedOperationException("only support for fetch, akey: " + key);
     }
 
     @Override
     public String toString() {
       StringBuilder sb = new StringBuilder();
       sb.append(updateOrFetch ? "update " : "fetch ").append("entry: ");
-      sb.append(akey).append('|')
+      sb.append(key).append('|')
         .append(offset).append('|')
         .append(dataSize);
       return sb.toString();

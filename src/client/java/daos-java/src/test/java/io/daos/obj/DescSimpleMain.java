@@ -155,7 +155,7 @@ public class DescSimpleMain {
     for (int i = 0; i < dq.getNbrOfEvents(); i++) {
       DaosEventQueue.Event e = dq.getEvent(i);
       descList.get(i).setEvent(e);
-      IOSimpleDataDesc.SimpleEntry entry = descList.get(i).getEntry(0);
+      IOSimpleDataDesc.SimpleEntry entry = (IOSimpleDataDesc.SimpleEntry)descList.get(i).getEntry(0);
       ByteBuf buf = entry.reuseBuffer();
       buf.writeBytes(data);
     }
@@ -178,7 +178,7 @@ public class DescSimpleMain {
           desc = (IOSimpleDataDesc) e.getAttachment();
           desc.reuse();
           desc.setDkey(String.valueOf(i));
-          entry = desc.getEntry(0);
+          entry = (IOSimpleDataDesc.SimpleEntry)desc.getEntry(0);
           buf = entry.reuseBuffer();
           buf.writerIndex(buf.capacity());
           entry.setEntryForUpdate(String.valueOf(j), 0, buf);
@@ -350,7 +350,7 @@ public class DescSimpleMain {
             desc.reuse();
             desc.setDkey(String.valueOf(i));
           }
-          desc.getEntry(idx++).setEntryForFetch(String.valueOf(j), 0, akeyValLen);
+          ((IOSimpleDataDesc.SimpleEntry)desc.getEntry(idx++)).setEntryForFetch(String.valueOf(j), 0, akeyValLen);
           if (idx == nbrOfEntries) {
             // read
             object.fetchSimple(desc);
