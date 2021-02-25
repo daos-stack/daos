@@ -107,7 +107,7 @@ DEBUG-level logging will be sent to the specified file.
 
 DAOS uses the debug system defined in
 [CaRT](https://github.com/daos-stack/daos/tree/master/src/cart),
-specifically the GURT library. 
+specifically the GURT library.
 Both server and client default log is `stdout`, unless
 otherwise set by `D_LOG_FILE` environment variable (client) or
 `log_file` config parameter (server).
@@ -246,6 +246,57 @@ are off by more than maximum allowed system clock offset (1 second by default).
 
 In order to correct this situation synchronize all server clocks to the same
 reference time, using services like NTP.
+
+When DER_NO_SHMEM is received accompanied with the log message:
+```
+Failed to initialize telemetry and metrics for ID ...
+```
+it means that this IO Engine lacked the permissions to access the shared memory
+segment left behind by a previous run of the IO Engine on the same machine.
+This happens when the IO Engine fails to remove the shared memory segment upon
+shutdown, and, there is a mismatch between the user/group used to launch the IO
+Engine between these successive runs.  To remedy the problem, manually identify
+the shared memory segment and remove it.  Issue ```ipcs``` to view the Shared
+Memory Segments.  The output will show a list of segments organized by
+```key```.
+
+```
+$ipcs
+
+------ Message Queues --------
+key        msqid      owner      perms      used-bytes   messages
+
+------ Shared Memory Segments --------
+key        shmid      owner      perms      bytes      nattch     status
+0xffffffff 49938432   root       666        40         0
+0x10242048 98598913   jbrosenz   660        1048576    0
+0x10242049 98631682   jbrosenz   660        1048576    0
+
+------ Semaphore Arrays --------
+key        semid      owner      perms      nsems
+```
+
+Shared Memory Segments with keys [0x10242048 .. (0x10242048 + number of IO
+Engines running)] are the segments that must be removed.  Use ```ipcrm``` to
+remove the segment.
+
+For example, to remove the shared memory segment left behind by IO Engine
+instance 0, issue:
+```
+sudo ipcrm -M 0x10242048
+```
+To remove the shared memory segment left behind by IO Engine instance 1, issue:
+```
+sudo ipcrm -M 0x10242049
+```
+
+In the event that DER_NO_SHMEM is encountered after an otherwise successful
+IO Engine startup, it means that there was not enough space left in the shared
+memory segment to allocate the given metric.  This can only be remedied by
+increasing the size of the shared memory pool in the source code.  Adjust the
+size in bytes defined by D_TM_SHARED_MEMORY_SIZE in telemetry_common.h.  Please
+notify DAOS staff if you encounter this error because it indicates a
+miscalculation of the memory size that should be fixed in the source code.
 
 ## Bug Report
 
