@@ -76,35 +76,6 @@ struct pl_jump_map {
 };
 
 /**
- * Jump Consistent Hash Algorithm that provides a bucket location
- * for the given key. This algorithm hashes a minimal (1/n) number
- * of keys to a new bucket when extending the number of buckets.
- *
- * \param[in]   key             A unique key representing the object that
- *                              will be placed in the bucket.
- * \param[in]   num_buckets     The total number of buckets the hashing
- *                              algorithm can choose from.
- *
- * \return                      Returns an index ranging from 0 to
- *                              num_buckets representing the bucket
- *                              the given key hashes to.
- */
-static inline uint32_t
-jump_consistent_hash(uint64_t key, uint32_t num_buckets)
-{
-	int64_t z = -1;
-	int64_t y = 0;
-
-	while (y < num_buckets) {
-		z = y;
-		key = key * 2862933555777941757ULL + 1;
-		y = (z + 1) * ((double)(1LL << 31) /
-			       ((double)((key >> 33) + 1)));
-	}
-	return z;
-}
-
-/**
  * This functions determines whether the object layout should be extended or
  * not based on the operation performed and the target status.
  *
@@ -392,8 +363,7 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 				obj_key = crc(obj_key, fail_num++);
 
 				/* Get target for shard */
-				selected_dom = jump_consistent_hash(obj_key,
-								    num_doms);
+				selected_dom = d_hash_jump(obj_key, num_doms);
 
 				/* Retrieve actual target using index */
 				*target = &curr_dom->do_targets[selected_dom];
@@ -432,8 +402,7 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 			 * not been used is found
 			 */
 			do {
-				selected_dom = jump_consistent_hash(key,
-								    num_doms);
+				selected_dom = d_hash_jump(key, num_doms);
 				key = crc(key, fail_num++);
 			} while (isset(dom_used, start_dom + selected_dom));
 
