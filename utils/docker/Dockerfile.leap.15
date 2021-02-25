@@ -115,6 +115,8 @@ RUN if $QUICKBUILD; then                                                        
         echo "$QUICKBUILD_DEPS" | tr '\n' '\0' | xargs -0 zypper --non-interactive install;                      \
     fi
 
+RUN zypper addlock fuse fuse-libs fuse-devel libraft0 raft-devel mercury mercury-devel
+
 # The COPY command has a --chown option but it's not well supported so copy as
 # root then run a chown command which is frustrating as the copy can take a few
 # seconds.
@@ -135,9 +137,8 @@ ARG DAOS_DEPS_BUILD=yes
 # src hasn't changed then this won't do anything, but if it has then we want to
 # ensure that latest dependencies are used.
 USER root:root
-RUN zypper --non-interactive update && zypper clean --all && [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    { yum -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
-    yum clean all; }
+RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
+    { zypper --non-interactive --no-gpg-checks update && zypper clean --all; }
 USER daos_server:daos_server
 
 ARG DEPS_JOBS=1
@@ -149,7 +150,7 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
 # force an upgrade to get any newly built RPMs
 USER root:root
 ARG CACHEBUST
-RUN zypper --non-interactive update && zypper clean --all
+RUN zypper --non-interactive --no-gpg-checks update && zypper clean --all
 USER daos_server:daos_server
 
 WORKDIR /home/daos/daos/
