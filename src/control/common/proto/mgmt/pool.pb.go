@@ -50,12 +50,16 @@ func (PoolRebuildStatus_State) EnumDescriptor() ([]byte, []int) {
 
 // PoolCreateReq supplies new pool parameters.
 type PoolCreateReq struct {
-	Uuid                 string   `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
-	Name                 string   `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Sys                  string   `protobuf:"bytes,3,opt,name=sys,proto3" json:"sys,omitempty"`
-	User                 string   `protobuf:"bytes,4,opt,name=user,proto3" json:"user,omitempty"`
-	Usergroup            string   `protobuf:"bytes,5,opt,name=usergroup,proto3" json:"usergroup,omitempty"`
-	Acl                  []string `protobuf:"bytes,6,rep,name=acl,proto3" json:"acl,omitempty"`
+	Uuid      string   `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	Name      string   `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Sys       string   `protobuf:"bytes,3,opt,name=sys,proto3" json:"sys,omitempty"`
+	User      string   `protobuf:"bytes,4,opt,name=user,proto3" json:"user,omitempty"`
+	Usergroup string   `protobuf:"bytes,5,opt,name=usergroup,proto3" json:"usergroup,omitempty"`
+	Acl       []string `protobuf:"bytes,6,rep,name=acl,proto3" json:"acl,omitempty"`
+	// The minimal fault domain tree format consists of a set of tuples
+	// representing members of the tree in a breadth-first traversal order.
+	// Each domain above rank consists of: (level, id, num children)
+	// Each rank consists of: (rank number)
 	FaultDomains         []uint32 `protobuf:"varint,7,rep,packed,name=faultDomains,proto3" json:"faultDomains,omitempty"`
 	Numsvcreps           uint32   `protobuf:"varint,8,opt,name=numsvcreps,proto3" json:"numsvcreps,omitempty"`
 	Totalbytes           uint64   `protobuf:"varint,9,opt,name=totalbytes,proto3" json:"totalbytes,omitempty"`

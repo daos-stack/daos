@@ -147,6 +147,7 @@ if [ -d "/mnt/daos" ]; then
     run_test "${SL_BUILD_DIR}/src/common/tests/acl_principal_tests"
     run_test "${SL_BUILD_DIR}/src/common/tests/acl_real_tests"
     run_test "${SL_BUILD_DIR}/src/common/tests/prop_tests"
+    run_test "${SL_BUILD_DIR}/src/common/tests/fault_domain_tests"
 
     COMP="UTEST_client"
     run_test "${SL_BUILD_DIR}/src/client/api/tests/eq_tests"
