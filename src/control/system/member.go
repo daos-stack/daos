@@ -12,6 +12,7 @@ import (
 	"net"
 	"strings"
 
+	"github.com/dustin/go-humanize/english"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 )
@@ -125,6 +126,9 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 		},
 		MemberStateStopping: {
 			MemberStateReady: true,
+		},
+		MemberStateStopped: {
+			MemberStateEvicted: true,
 		},
 		MemberStateEvicted: {
 			MemberStateReady:    true,
@@ -322,13 +326,24 @@ func NewMemberResult(rank Rank, err error, state MemberState) *MemberResult {
 // MemberResults is a type alias for a slice of member result references.
 type MemberResults []*MemberResult
 
-// HasErrors returns true if any of the member results errored.
-func (smr MemberResults) HasErrors() bool {
-	for _, res := range smr {
-		if res.Errored {
-			return true
+// Errors returns an error indicating if and which ranks failed.
+func (mrs MemberResults) Errors() error {
+	rs, err := CreateRankSet("")
+	if err != nil {
+		return err
+	}
+
+	for _, mr := range mrs {
+		if mr.Errored {
+			rs.Add(mr.Rank)
 		}
 	}
 
-	return false
+	if rs.Count() > 0 {
+		return errors.Errorf("failed %s %s",
+			english.PluralWord(rs.Count(), "rank", "ranks"),
+			rs.String())
+	}
+
+	return nil
 }
