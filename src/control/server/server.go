@@ -44,8 +44,8 @@ const (
 )
 
 func cfgHasBdev(cfg *config.Server) bool {
-	for _, srvCfg := range cfg.Engines {
-		if len(srvCfg.Storage.Bdev.DeviceList) > 0 {
+	for _, engineCfg := range cfg.Engines {
+		if len(engineCfg.Storage.Bdev.DeviceList) > 0 {
 			return true
 		}
 	}
@@ -245,48 +245,50 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		return control.SystemJoin(ctx, rpcClient, req)
 	}
 
-	for idx, srvCfg := range cfg.Engines {
+	for idx, engineCfg := range cfg.Engines {
 		// Provide special handling for the ofi+verbs provider.
-		// Mercury uses the interface name such as ib0, while OFI uses the device name such as hfi1_0
-		// CaRT and Mercury will now support the new OFI_DOMAIN environment variable so that we can
-		// specify the correct device for each.
-		if strings.HasPrefix(srvCfg.Fabric.Provider, "ofi+verbs") && !srvCfg.HasEnvVar("OFI_DOMAIN") {
-			deviceAlias, err := netdetect.GetDeviceAlias(netCtx, srvCfg.Fabric.Interface)
+		// Mercury uses the interface name such as ib0, while OFI uses the
+		// device name such as hfi1_0 CaRT and Mercury will now support the
+		// new OFI_DOMAIN environment variable so that we can specify the
+		// correct device for each.
+		if strings.HasPrefix(engineCfg.Fabric.Provider, "ofi+verbs") && !engineCfg.HasEnvVar("OFI_DOMAIN") {
+			deviceAlias, err := netdetect.GetDeviceAlias(netCtx, engineCfg.Fabric.Interface)
 			if err != nil {
-				return errors.Wrapf(err, "failed to resolve alias for %s", srvCfg.Fabric.Interface)
+				return errors.Wrapf(err, "failed to resolve alias for %s", engineCfg.Fabric.Interface)
 			}
 			envVar := "OFI_DOMAIN=" + deviceAlias
-			srvCfg.WithEnvVars(envVar)
+			engineCfg.WithEnvVars(envVar)
 		}
 
-		// If the configuration specifies that we should explicitly set hugepage values
-		// per instance, do it. Otherwise, let SPDK/DPDK figure it out.
+		// If the configuration specifies that we should explicitly set
+		// hugepage values per engine instance, do it. Otherwise, let
+		// SPDK/DPDK figure it out.
 		if cfg.SetHugepages {
-			// If we have multiple I/O instances with block devices, then we need to apportion
-			// the hugepage memory among the instances.
-			srvCfg.Storage.Bdev.MemSize = hugePages.FreeMB() / len(cfg.Engines)
+			// If we have multiple engine instances with block devices, then
+			// apportion the hugepage memory among the instances.
+			engineCfg.Storage.Bdev.MemSize = hugePages.FreeMB() / len(cfg.Engines)
 			// reserve a little for daos_admin
-			srvCfg.Storage.Bdev.MemSize -= srvCfg.Storage.Bdev.MemSize / 16
+			engineCfg.Storage.Bdev.MemSize -= engineCfg.Storage.Bdev.MemSize / 16
 		}
 
 		// Indicate whether VMD devices have been detected and can be used.
-		srvCfg.Storage.Bdev.VmdDisabled = bdevProvider.IsVMDDisabled()
+		engineCfg.Storage.Bdev.VmdDisabled = bdevProvider.IsVMDDisabled()
 
-		bp, err := bdev.NewClassProvider(log, srvCfg.Storage.SCM.MountPoint, &srvCfg.Storage.Bdev)
+		bp, err := bdev.NewClassProvider(log, engineCfg.Storage.SCM.MountPoint, &engineCfg.Storage.Bdev)
 		if err != nil {
 			return err
 		}
 
-		srv := NewEngineInstance(log, bp, scmProvider, joinInstance, engine.NewRunner(log, srvCfg)).
+		engine := NewEngineInstance(log, bp, scmProvider, joinInstance, engine.NewRunner(log, engineCfg)).
 			WithHostFaultDomain(faultDomain)
-		if err := harness.AddInstance(srv); err != nil {
+		if err := harness.AddInstance(engine); err != nil {
 			return err
 		}
-		// Register callback to publish I/O Server process exit events.
-		srv.OnInstanceExit(publishInstanceExitFn(eventPubSub.Publish, hostname(), srv.Index()))
+		// Register callback to publish I/O Engine process exit events.
+		engine.OnInstanceExit(publishInstanceExitFn(eventPubSub.Publish, hostname(), engine.Index()))
 
 		if idx == 0 {
-			netDevClass, err = cfg.GetDeviceClassFn(srvCfg.Fabric.Interface)
+			netDevClass, err = cfg.GetDeviceClassFn(engineCfg.Fabric.Interface)
 			if err != nil {
 				return err
 			}
@@ -298,7 +300,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 			// Start the system db after instance 0's SCM is
 			// ready.
 			var once sync.Once
-			srv.OnStorageReady(func(ctx context.Context) (err error) {
+			engine.OnStorageReady(func(ctx context.Context) (err error) {
 				once.Do(func() {
 					err = errors.Wrap(sysdb.Start(ctx),
 						"failed to start system db",
@@ -315,9 +317,9 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 			// instance on the raft bootstrap server. This implies that
 			// rank 0 will always be associated with a MS replica, but
 			// it is not guaranteed to always be the leader.
-			srv.joinSystem = func(ctx context.Context, req *control.SystemJoinReq) (*control.SystemJoinResp, error) {
-				if sb := srv.getSuperblock(); !sb.ValidRank {
-					srv.log.Debug("marking bootstrap instance as rank 0")
+			engine.joinSystem = func(ctx context.Context, req *control.SystemJoinReq) (*control.SystemJoinResp, error) {
+				if sb := engine.getSuperblock(); !sb.ValidRank {
+					engine.log.Debug("marking bootstrap instance as rank 0")
 					req.Rank = 0
 					sb.Rank = system.NewRankPtr(0)
 				}
@@ -439,8 +441,8 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	go func() {
-		// SIGKILL I/O engine immediately on exit.
-		// TODO: Re-enable attempted graceful shutdown of I/O engines.
+		// SIGKILL I/O Engine immediately on exit.
+		// TODO: Re-enable attempted graceful shutdown of I/O Engines.
 		sig := <-sigChan
 		log.Debugf("Caught signal: %s", sig)
 

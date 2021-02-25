@@ -45,7 +45,7 @@ func (JoinResp_State) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_314b26c93482b8d7, []int{4, 0}
 }
 
-// Generic response just containing DER from IO server.
+// Generic response just containing DER from I/O Engine.
 type DaosResp struct {
 	Status               int32    `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -528,7 +528,7 @@ type GetAttachInfoResp struct {
 	CrtCtxShareAddr uint32 `protobuf:"varint,6,opt,name=crt_ctx_share_addr,json=crtCtxShareAddr,proto3" json:"crt_ctx_share_addr,omitempty"`
 	CrtTimeout      uint32 `protobuf:"varint,7,opt,name=crt_timeout,json=crtTimeout,proto3" json:"crt_timeout,omitempty"`
 	NetDevClass     uint32 `protobuf:"varint,8,opt,name=net_dev_class,json=netDevClass,proto3" json:"net_dev_class,omitempty"`
-	// IO server network interface
+	// I/O Engine network interface
 	MsRanks              []uint32 `protobuf:"varint,9,rep,packed,name=ms_ranks,json=msRanks,proto3" json:"ms_ranks,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`

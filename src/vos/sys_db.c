@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -134,10 +117,21 @@ db_open_create(struct sys_db *db, bool try_create)
 			D_CRIT("sys pool create error: "DF_RC"\n", DP_RC(rc));
 			goto failed;
 		}
+	} else if (access(vdb->db_file, F_OK) != 0) {
+		D_DEBUG(DB_IO, "%s doesn't exist, bypassing vos_pool_open\n",
+			vdb->db_file);
+		rc = -DER_NONEXIST;
+		goto failed;
+	} else if (access(vdb->db_file, R_OK | W_OK) != 0) {
+		rc = -DER_NO_PERM;
+		D_CRIT("No access to existing db file %s\n", vdb->db_file);
+		goto failed;
 	}
+	D_DEBUG(DB_IO, "Opening %s, try_create=%d\n", vdb->db_file, try_create);
 	rc = vos_pool_open(vdb->db_file, vdb->db_pool, false, &vdb->db_poh);
 	if (rc) {
-		if (rc != -DER_NONEXIST || try_create)
+		/** The access checks above should ensure the file exists. */
+		if (try_create)
 			D_CRIT("sys pool open error: "DF_RC"\n", DP_RC(rc));
 		goto failed;
 	}

@@ -43,7 +43,7 @@ dedup_is_nvme_enabled(test_arg_t *arg)
 
 	pinfo.pi_bits = DPI_ALL;
 	rc = test_pool_get_info(arg, &pinfo);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	return ps->ps_free_min[DAOS_MEDIA_NVME] != 0;
 }
@@ -150,16 +150,16 @@ setup_cont_obj(struct dedup_test_ctx *ctx,
 	props->dpp_entries[2].dpe_val = dedup_threshold;
 
 	rc = daos_cont_create(ctx->poh, ctx->uuid, props, NULL);
-	assert_int_equal(0, rc);
+	assert_rc_equal(0, rc);
 	daos_prop_free(props);
 
 	rc = daos_cont_open(ctx->poh, ctx->uuid, DAOS_COO_RW,
 			    &ctx->coh, &ctx->info, NULL);
-	assert_int_equal(0, rc);
+	assert_rc_equal(0, rc);
 
-	ctx->oid = dts_oid_gen(oclass, 0, 1);
+	ctx->oid = daos_test_oid_gen(ctx->coh, oclass, 0, 0, 1);
 	rc = daos_obj_open(ctx->coh, ctx->oid, 0, &ctx->oh, NULL);
-	assert_int_equal(0, rc);
+	assert_rc_equal(0, rc);
 }
 
 static void

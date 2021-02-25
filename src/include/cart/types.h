@@ -109,7 +109,6 @@ typedef d_string_t crt_phy_addr_t;
  * expected.
  */
 typedef uint32_t crt_opcode_t;
-#define CRT_OPC_INTERNAL_BASE	0xFF000000UL
 
 /**
  * Check if the opcode is reserved by CRT internally.
@@ -267,7 +266,6 @@ typedef enum {
  */
 #define CRT_RPC_FEAT_QUEUE_FRONT	(1U << 3)
 
-
 typedef void *crt_bulk_opid_t;
 
 /** Bulk transfer permissions */
@@ -395,7 +393,6 @@ typedef enum {
 	/** Total count of supported operations */
 	CRT_GROUP_MOD_OP_COUNT,
 } crt_group_mod_op_t;
-
 
 /** @}
  */

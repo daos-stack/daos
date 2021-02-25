@@ -14,7 +14,7 @@
 |CPU|Central Processing Unit|
 |Daemon|A process offering system-level resources.|
 |[DAOS](http://www.daos.io)|Distributed Asynchronous Object Storage |
-|DCPM|Intel Optane DC Persistent Memory|
+|PMEM|Intel Optane Persistent Memory|
 |DPDK|Data Plane Development Kit|
 |dRPC|DAOS Remote Procedure Call|
 |[gRPC](https://grpc.io)|gRPC Remote Procedure Calls|
@@ -31,7 +31,7 @@
 |NVMe|Non-Volatile Memory express|
 |[OFI](https://ofiwg.github.io/libfabric/)|Open Fabrics Interface|
 |OS|Operating System|
-|PM/PMEM|Persistent Memory|
+|PM|Persistent Memory|
 |[PMDK](https://pmem.io/pmdk/)|Persistent Memory Devevelopment Kit|
 |RAFT|Raft is a consensus algorithm used to distribute state transitions among DAOS server nodes.|
 |RAS|Reliability, Availability & Serviceability|
