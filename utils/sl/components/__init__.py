@@ -126,6 +126,7 @@ def define_mercury(reqs):
         OFI_DEBUG = '--enable-debug '
     else:
         OFI_DEBUG = '--disable-debug '
+
     retriever = GitRepoRetriever('https://github.com/ofiwg/libfabric')
     reqs.define('ofi',
                 retriever=retriever,
