@@ -1243,7 +1243,8 @@ class TestWithServers(TestWithoutServers):
         """
         self.container = self.get_container(pool, namespace, create)
 
-    def start_additional_servers(self, additional_servers, index=0):
+    def start_additional_servers(self, additional_servers, index=0,
+                                 access_points=None):
         """Start additional servers.
 
         This method can be used to start a new daos_server during a test.
@@ -1253,6 +1254,8 @@ class TestWithServers(TestWithoutServers):
                 daos_server.
             index (int): Determines which server_managers to use when creating
                 the new server.
+            access_points (list, optional) : Access point node list.
+                                            Defaults to None.
         """
         self.add_server_manager(
             self.server_managers[index].manager.job.get_config_value("name"),
@@ -1266,6 +1269,6 @@ class TestWithServers(TestWithoutServers):
             self.server_managers[-1],
             additional_servers,
             self.hostfile_servers_slots,
-            additional_servers
+            access_points
         )
         self._start_manager_list("server", [self.server_managers[-1]])
