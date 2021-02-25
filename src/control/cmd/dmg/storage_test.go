@@ -1,24 +1,7 @@
 //
 // (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package main
@@ -240,29 +223,29 @@ func TestDmg_Storage_shouldReformatSystem(t *testing.T) {
 		"rank not stopped": {
 			reformat: true,
 			members: []*mgmtpb.SystemMember{
-				{Rank: 0, State: uint32(system.MemberStateStopped)},
-				{Rank: 1, State: uint32(system.MemberStateJoined)},
+				{Rank: 0, State: system.MemberStateStopped.String()},
+				{Rank: 1, State: system.MemberStateJoined.String()},
 			},
 			expErr: errors.New("system reformat requires the following 1 rank to be stopped: 1"),
 		},
 		"ranks not stopped": {
 			reformat: true,
 			members: []*mgmtpb.SystemMember{
-				{Rank: 0, State: uint32(system.MemberStateJoined)},
-				{Rank: 1, State: uint32(system.MemberStateStopped)},
-				{Rank: 5, State: uint32(system.MemberStateJoined)},
-				{Rank: 2, State: uint32(system.MemberStateJoined)},
-				{Rank: 4, State: uint32(system.MemberStateJoined)},
-				{Rank: 3, State: uint32(system.MemberStateJoined)},
-				{Rank: 6, State: uint32(system.MemberStateStopped)},
+				{Rank: 0, State: system.MemberStateJoined.String()},
+				{Rank: 1, State: system.MemberStateStopped.String()},
+				{Rank: 5, State: system.MemberStateJoined.String()},
+				{Rank: 2, State: system.MemberStateJoined.String()},
+				{Rank: 4, State: system.MemberStateJoined.String()},
+				{Rank: 3, State: system.MemberStateJoined.String()},
+				{Rank: 6, State: system.MemberStateStopped.String()},
 			},
 			expErr: errors.New("system reformat requires the following 5 ranks to be stopped: 0,2-5"),
 		},
 		"system reformat": {
 			reformat: true,
 			members: []*mgmtpb.SystemMember{
-				{Rank: 0, State: uint32(system.MemberStateStopped)},
-				{Rank: 0, State: uint32(system.MemberStateStopped)},
+				{Rank: 0, State: system.MemberStateStopped.String()},
+				{Rank: 0, State: system.MemberStateStopped.String()},
 			},
 			expSysReformat: true,
 		},

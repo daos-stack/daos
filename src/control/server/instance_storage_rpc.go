@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
@@ -38,7 +21,7 @@ import (
 
 // newMntRet creates and populates SCM mount result.
 // Currently only used for format operations.
-func (srv *IOServerInstance) newMntRet(inErr error) *ctlpb.ScmMountResult {
+func (srv *EngineInstance) newMntRet(inErr error) *ctlpb.ScmMountResult {
 	var info string
 	if fault.HasResolution(inErr) {
 		info = fault.ShowResolutionFor(inErr)
@@ -51,7 +34,7 @@ func (srv *IOServerInstance) newMntRet(inErr error) *ctlpb.ScmMountResult {
 }
 
 // newCret creates and populates NVMe controller result and logs error
-func (srv *IOServerInstance) newCret(pciAddr string, inErr error) *ctlpb.NvmeControllerResult {
+func (srv *EngineInstance) newCret(pciAddr string, inErr error) *ctlpb.NvmeControllerResult {
 	var info string
 	if pciAddr == "" {
 		pciAddr = "<nil>"
@@ -66,7 +49,7 @@ func (srv *IOServerInstance) newCret(pciAddr string, inErr error) *ctlpb.NvmeCon
 }
 
 // scmFormat will return either successful result or error.
-func (srv *IOServerInstance) scmFormat(reformat bool) (*ctlpb.ScmMountResult, error) {
+func (srv *EngineInstance) scmFormat(reformat bool) (*ctlpb.ScmMountResult, error) {
 	srvIdx := srv.Index()
 	cfg := srv.scmConfig()
 
@@ -91,7 +74,7 @@ func (srv *IOServerInstance) scmFormat(reformat bool) (*ctlpb.ScmMountResult, er
 	return srv.newMntRet(nil), nil
 }
 
-func (srv *IOServerInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeControllerResults) {
+func (srv *EngineInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeControllerResults) {
 	srvIdx := srv.Index()
 	cfg := srv.bdevConfig()
 	results = make(proto.NvmeControllerResults, 0, len(cfg.DeviceList))
@@ -131,7 +114,7 @@ func (srv *IOServerInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeCon
 
 // StorageFormatSCM performs format on SCM and identifies if superblock needs
 // writing.
-func (srv *IOServerInstance) StorageFormatSCM(reformat bool) (mResult *ctlpb.ScmMountResult) {
+func (srv *EngineInstance) StorageFormatSCM(reformat bool) (mResult *ctlpb.ScmMountResult) {
 	srvIdx := srv.Index()
 	needsScmFormat := reformat
 
@@ -171,7 +154,7 @@ func (srv *IOServerInstance) StorageFormatSCM(reformat bool) (mResult *ctlpb.Scm
 }
 
 // StorageFormatNVMe performs format on NVMe if superblock needs writing.
-func (srv *IOServerInstance) StorageFormatNVMe(bdevProvider *bdev.Provider) (cResults proto.NvmeControllerResults) {
+func (srv *EngineInstance) StorageFormatNVMe(bdevProvider *bdev.Provider) (cResults proto.NvmeControllerResults) {
 	srv.log.Infof("Formatting nvme storage for %s instance %d", build.DataPlaneName, srv.Index())
 
 	// If no superblock exists, format NVMe and populate response with results.

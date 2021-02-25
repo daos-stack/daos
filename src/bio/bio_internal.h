@@ -7,7 +7,7 @@
 #ifndef __BIO_INTERNAL_H__
 #define __BIO_INTERNAL_H__
 
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
 #include <spdk/bdev.h>
 
@@ -311,5 +311,13 @@ int bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state);
 
 /* bio_device.c */
 void bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now);
+
+/*
+ * FIXME copied from spdk_internal/event.h, should be removed once they are
+ * exported by SPDK.
+ */
+typedef void (*spdk_subsystem_init_fn)(int rc, void *ctx);
+void spdk_subsystem_init(spdk_subsystem_init_fn cb_fn, void *cb_arg);
+void spdk_subsystem_fini(spdk_msg_fn cb_fn, void *cb_arg);
 
 #endif /* __BIO_INTERNAL_H__ */

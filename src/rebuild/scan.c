@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * rebuild: Scanning the objects
@@ -37,7 +20,7 @@
 #include <daos/placement.h>
 #include <daos_srv/container.h>
 #include <daos_srv/daos_mgmt_srv.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/rebuild.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/dtx_srv.h>
@@ -138,7 +121,7 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 				       arg->tgt_id, rpt->rt_rebuild_ver,
 				       rpt->rt_stable_epoch, arg->oids,
 				       arg->ephs, arg->shards, arg->count,
-				       /* Clear containers for reint */
+				       /* Delete local objects for reint */
 				       rpt->rt_rebuild_op == RB_OP_REINT);
 		/* If it does not need retry */
 		if (rc == 0 || (rc != -DER_TIMEDOUT && rc != -DER_GRPVER &&
@@ -544,9 +527,16 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		still_needed = pl_obj_layout_contains(rpt->rt_pool->sp_map,
 						      layout, myrank, mytarget);
 		if (!still_needed) {
+			struct rebuild_pool_tls *tls;
+
+			tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
+						      rpt->rt_rebuild_ver);
+			D_ASSERT(tls != NULL);
+			tls->rebuild_pool_reclaim_obj_count++;
 			D_DEBUG(DB_REBUILD, "deleting object "DF_UOID
 				" which is not reachable on rank %u tgt %u",
 				DP_UOID(oid), myrank, mytarget);
+
 			/*
 			 * It's possible this object might still be being
 			 * accessed elsewhere - retry until until it is possible

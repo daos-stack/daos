@@ -548,6 +548,8 @@ akey_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 		fprintf(stderr, "%s failed. rc=%d, epoch=%"PRIu64"\n",
 			op_type == TS_DO_FETCH ? "Fetch" : "Update",
 			rc, *epoch);
+		if (param->pa_rw.verify)
+			dts_credit_return(&ts_ctx, cred);
 		return rc;
 	}
 
@@ -600,8 +602,10 @@ objects_open(void)
 
 	for (i = 0; i < ts_obj_p_cont; i++) {
 		if (!ts_oid_init) {
-			ts_oids[i] = dts_oid_gen(ts_class, 0,
-						 ts_ctx.tsc_mpi_rank);
+			ts_oids[i] = daos_test_oid_gen(
+				ts_mode == TS_MODE_VOS ? DAOS_HDL_INVAL :
+				ts_ctx.tsc_coh, ts_class, 0, 0,
+				ts_ctx.tsc_mpi_rank);
 			if (ts_class == DAOS_OC_R2S_SPEC_RANK)
 				ts_oids[i] = dts_oid_set_rank(ts_oids[i],
 							      RANK_ZERO);

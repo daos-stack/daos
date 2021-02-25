@@ -105,6 +105,9 @@ void dts_ctx_fini(struct dts_context *tsc);
  */
 struct dts_io_credit *dts_credit_take(struct dts_context *tsc);
 
+/** return the IO credit to the I/O context */
+void dts_credit_return(struct dts_context *tsc, struct dts_io_credit *cred);
+
 /**
  * VOS test suite run tests
  */

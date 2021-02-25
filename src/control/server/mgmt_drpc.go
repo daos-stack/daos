@@ -1,24 +1,7 @@
 //
 // (C) Copyright 2018-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
@@ -37,7 +20,7 @@ import (
 )
 
 // mgmtModule represents the daos_server mgmt dRPC module. It sends dRPCs to
-// the daos_io_server iosrv module (src/iosrv) but doesn't receive.
+// the daos_engine (src/engine) but doesn't receive.
 type mgmtModule struct{}
 
 // newMgmtModule creates a new management module and returns its reference.
@@ -56,22 +39,22 @@ func (mod *mgmtModule) ID() drpc.ModuleID {
 }
 
 // srvModule represents the daos_server dRPC module. It handles dRPCs sent by
-// the daos_io_server iosrv module (src/iosrv).
+// the daos_engine (src/engine).
 type srvModule struct {
-	log    logging.Logger
-	sysdb  *system.Database
-	iosrvs []*IOServerInstance
-	events *events.PubSub
+	log     logging.Logger
+	sysdb   *system.Database
+	engines []*EngineInstance
+	events  *events.PubSub
 }
 
 // newSrvModule creates a new srv module references to the system database,
-// resident IOServerInstances and event publish subscribe reference.
-func newSrvModule(log logging.Logger, sysdb *system.Database, iosrvs []*IOServerInstance, events *events.PubSub) *srvModule {
+// resident EngineInstances and event publish subscribe reference.
+func newSrvModule(log logging.Logger, sysdb *system.Database, engines []*EngineInstance, events *events.PubSub) *srvModule {
 	return &srvModule{
-		log:    log,
-		sysdb:  sysdb,
-		iosrvs: iosrvs,
-		events: events,
+		log:     log,
+		sysdb:   sysdb,
+		engines: engines,
+		events:  events,
 	}
 }
 
@@ -132,16 +115,16 @@ func (mod *srvModule) handleNotifyReady(reqb []byte) error {
 		return drpc.UnmarshalingPayloadFailure()
 	}
 
-	if req.InstanceIdx >= uint32(len(mod.iosrvs)) {
+	if req.InstanceIdx >= uint32(len(mod.engines)) {
 		return errors.Errorf("instance index %v is out of range (%v instances)",
-			req.InstanceIdx, len(mod.iosrvs))
+			req.InstanceIdx, len(mod.engines))
 	}
 
 	if err := checkDrpcClientSocketPath(req.DrpcListenerSock); err != nil {
 		return errors.Wrap(err, "check NotifyReady request socket path")
 	}
 
-	mod.iosrvs[req.InstanceIdx].NotifyDrpcReady(req)
+	mod.engines[req.InstanceIdx].NotifyDrpcReady(req)
 
 	return nil
 }
@@ -152,16 +135,16 @@ func (mod *srvModule) handleBioErr(reqb []byte) error {
 		return errors.Wrap(err, "unmarshal BioError request")
 	}
 
-	if req.InstanceIdx >= uint32(len(mod.iosrvs)) {
+	if req.InstanceIdx >= uint32(len(mod.engines)) {
 		return errors.Errorf("instance index %v is out of range (%v instances)",
-			req.InstanceIdx, len(mod.iosrvs))
+			req.InstanceIdx, len(mod.engines))
 	}
 
 	if err := checkDrpcClientSocketPath(req.DrpcListenerSock); err != nil {
 		return errors.Wrap(err, "check BioErr request socket path")
 	}
 
-	mod.iosrvs[req.InstanceIdx].BioErrorNotify(req)
+	mod.engines[req.InstanceIdx].BioErrorNotify(req)
 
 	return nil
 }
@@ -172,7 +155,7 @@ func (mod *srvModule) handleClusterEvent(reqb []byte) ([]byte, error) {
 		return nil, drpc.UnmarshalingPayloadFailure()
 	}
 
-	resp, err := mod.events.HandleClusterEvent(req)
+	resp, err := mod.events.HandleClusterEvent(req, false)
 	if err != nil {
 		return nil, errors.Wrapf(err, "handle cluster event %+v", req)
 	}

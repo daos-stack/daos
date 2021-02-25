@@ -1,24 +1,7 @@
 /*
  * (C) Copyright 2015-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * \file
@@ -109,7 +92,7 @@ daos_tx_commit(daos_handle_t th, daos_event_t *ev);
  * snapshot, but only a read transaction to be able to read from a snapshot
  * created with daos_cont_create_snap. If the user passes an epoch that is not
  * snapshoted, or the snapshot was deleted, reads using that transaction may
- * fail if the epoch was aggregated.
+ * get undefined results.
  *
  * \param[in]	coh	Container handle.
  * \param[in]	epoch	Epoch of snapshot to read from.
@@ -182,6 +165,40 @@ daos_tx_restart(daos_handle_t th, daos_event_t *ev);
  */
 int
 daos_tx_hdl2epoch(daos_handle_t th, daos_epoch_t *epoch);
+
+/**
+ * Initialize an iteratror anchor.
+ *
+ * \param[in]	anchor	Anchor to be initialized
+ * \param[in]	opts	(reserved) Initialization options
+ */
+static inline int
+daos_anchor_init(daos_anchor_t *anchor, unsigned int opts)
+{
+	*anchor = DAOS_ANCHOR_INIT;
+	return 0;
+}
+
+/**
+ * Finalizie an iteratror anchor, free resources allocated
+ * during the iteration.
+ *
+ * \param[in]	anchor	Anchor to be finialized
+ */
+static inline void
+daos_anchor_fini(daos_anchor_t *anchor)
+{
+	/* NOOP for now, might need to free memory */
+}
+
+/**
+ * End of the iteration
+ */
+static inline bool
+daos_anchor_is_eof(daos_anchor_t *anchor)
+{
+	return anchor->da_type == DAOS_ANCHOR_TYPE_EOF;
+}
 
 #if defined(__cplusplus)
 }

@@ -7,6 +7,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 
 import os
 import time
+from datetime import datetime, timedelta
 import multiprocessing
 import threading
 from apricot import TestWithServers
@@ -19,7 +20,8 @@ from agent_utils import include_local_host
 from soak_utils import DDHHMMSS_format, add_pools, get_remote_logs, \
     launch_snapshot, launch_exclude_reintegrate, \
     create_ior_cmdline, cleanup_dfuse, create_fio_cmdline, \
-    build_job_script, SoakTestError, launch_server_stop_start, get_harassers
+    build_job_script, SoakTestError, launch_server_stop_start, get_harassers, \
+    create_racer_cmdline, run_event_check, run_monitor_check
 
 
 class SoakTestBase(TestWithServers):
@@ -56,6 +58,7 @@ class SoakTestBase(TestWithServers):
         self.harasser_loop_time = None
         self.all_failed_harassers = None
         self.soak_errors = None
+        self.check_errors = None
 
     def setUp(self):
         """Define test setup to be done."""
@@ -136,6 +139,8 @@ class SoakTestBase(TestWithServers):
             errors.extend(self.all_failed_harassers)
         if self.soak_errors:
             errors.extend(self.soak_errors)
+        if self.check_errors:
+            errors.extend(self.check_errors)
         # Check if any dfuse mount points need to be cleaned
         if self.dfuse:
             try:
@@ -273,7 +278,11 @@ class SoakTestBase(TestWithServers):
             # scripts are single cmdline
             scripts = build_job_script(self, commands, job, 1, 1)
             job_cmdlist.extend(scripts)
-
+        elif "daos_racer" in job:
+            commands = create_racer_cmdline(self, job, pool)
+            # scripts are single cmdline
+            scripts = build_job_script(self, commands, job, 1, 1)
+            job_cmdlist.extend(scripts)
         else:
             raise SoakTestError(
                 "<<FAILED: Job {} is not supported. ".format(
@@ -335,10 +344,13 @@ class SoakTestBase(TestWithServers):
         harasser_interval = 0
         failed_harasser_msg = None
         harasser_timer = time.time()
+        check_time = datetime.now()
+        event_check_messages = []
+        since = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         # loop time exists after the first pass; no harassers in the first pass
         if self.harasser_loop_time and self.harassers:
             harasser_interval = self.harasser_loop_time / (
-                len(self.harassers) + 3)
+                len(self.harassers) + 1)
         # If there is nothing to do; exit
         if job_id_list:
             # wait for all the jobs to finish
@@ -351,17 +363,27 @@ class SoakTestBase(TestWithServers):
                         time.ctime())
                     for job in job_id_list:
                         _ = slurm_utils.cancel_jobs(int(job))
-
+                # monitor events every 15 min
+                if datetime.now() > check_time:
+                    run_monitor_check(self)
+                    check_time = datetime.now() + timedelta(minutes=15)
                 # launch harassers if enabled;
                 # one harasser at a time starting on pass2
                 if self.harassers:
                     if self.loop >= 2 and (
-                            time.time() > harasser_timer + harasser_interval):
+                            time.time() > (harasser_timer + harasser_interval)):
                         harasser = self.harassers.pop(0)
                         harasser_timer += harasser_interval
                         failed_harasser_msg = self.launch_harasser(
                             harasser, self.pool)
                 time.sleep(5)
+            # check journalctl for events;
+            until = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            event_check_messages = run_event_check(self, since, until)
+            self.check_errors.extend(event_check_messages)
+            run_monitor_check(self)
+            # init harasser list when all jobs are done
+            self.harassers = []
             if failed_harasser_msg is not None:
                 self.all_failed_harassers.append(failed_harasser_msg)
             # check for JobStatus = COMPLETED or CANCELLED (i.e. TEST TO)
@@ -457,11 +479,17 @@ class SoakTestBase(TestWithServers):
         self.all_failed_jobs = []
         self.all_failed_harassers = []
         self.soak_errors = []
+        self.check_errors = []
         test_to = self.params.get("test_timeout", test_param + "*")
         self.job_timeout = self.params.get("job_timeout", test_param + "*")
         self.test_name = self.params.get("name", test_param + "*")
         self.nodesperjob = self.params.get("nodesperjob", test_param + "*")
         self.taskspernode = self.params.get("taskspernode", test_param + "*")
+        single_test_pool = self.params.get(
+            "single_test_pool", test_param + "*", True)
+        self.dmg_command.copy_certificates(
+            get_log_file("daosCA/certs"), self.hostlist_clients)
+        self.dmg_command.copy_configuration(self.hostlist_clients)
         harassers = self.params.get("harasserlist", test_param + "*")
         job_list = self.params.get("joblist", test_param + "*")
         rank = self.params.get("rank", "/run/container_reserved/*")
@@ -483,6 +511,13 @@ class SoakTestBase(TestWithServers):
         resv_cont = self.get_container(
             self.pool[0], "/run/container_reserved/*", True)
         resv_cont.write_objects(rank, obj_class)
+
+        # Create pool for jobs
+        if single_test_pool:
+            add_pools(self, ["pool_jobs"])
+            self.log.info(
+                "Current pools: %s",
+                " ".join([pool.uuid for pool in self.pool]))
 
         # cleanup soak log directories before test on all nodes
         result = slurm_utils.srun(
@@ -513,11 +548,12 @@ class SoakTestBase(TestWithServers):
             self.log.info(
                 "<<SOAK LOOP %s: time until done %s>>", self.loop,
                 DDHHMMSS_format(self.end_time - time.time()))
-            # Create pool for jobs
-            add_pools(self, ["pool_jobs"])
-            self.log.info(
-                "Current pools: %s",
-                " ".join([pool.uuid for pool in self.pool]))
+            if not single_test_pool:
+                # Create pool for jobs
+                add_pools(self, ["pool_jobs"])
+                self.log.info(
+                    "Current pools: %s",
+                    " ".join([pool.uuid for pool in self.pool]))
             # Initialize if harassers
             if run_harasser and not self.harassers:
                 self.harasser_results = {}
@@ -531,10 +567,11 @@ class SoakTestBase(TestWithServers):
             for pool in self.pool:
                 self.dmg_command.pool_query(pool.uuid)
             self.soak_errors.extend(self.destroy_containers(self.container))
-            self.soak_errors.extend(self.destroy_pools(self.pool[1]))
-            # remove the test pools from self.pool; preserving reserved pool
             self.container = []
-            self.pool = [self.pool[0]]
+            # remove the test pools from self.pool; preserving reserved pool
+            if not single_test_pool:
+                self.soak_errors.extend(self.destroy_pools(self.pool[1]))
+                self.pool = [self.pool[0]]
             self.log.info(
                 "Current pools: %s",
                 " ".join([pool.uuid for pool in self.pool]))
@@ -549,13 +586,13 @@ class SoakTestBase(TestWithServers):
                 "<<LOOP %s completed in %s at %s>>", self.loop, DDHHMMSS_format(
                     loop_time), time.ctime())
             # Initialize harasser loop time from first pass loop time
-            if self.loop == 1 and self.harassers:
+            if self.loop == 1 and run_harasser:
                 self.harasser_loop_time = loop_time
             self.loop += 1
         # TO-DO: use IOR
         if not resv_cont.read_objects():
             self.soak_errors.append("Data verification error on reserved pool"
-                                    "after SOAK completed")
+                                    " after SOAK completed")
         self.container.append(resv_cont)
         # gather the daos logs from the client nodes
         self.log.info(

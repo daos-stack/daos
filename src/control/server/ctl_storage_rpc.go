@@ -1,24 +1,7 @@
 //
 // (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
@@ -145,10 +128,10 @@ func mapCtrlrs(ctrlrs storage.NvmeControllers) (map[string]*storage.NvmeControll
 }
 
 // scanInstanceBdevs retrieves up-to-date NVMe controller info including
-// health statistics and stored server meta-data. If I/O servers are running
+// health statistics and stored server meta-data. If I/O Engines are running
 // then query is issued over dRPC as go-spdk bindings cannot be used to access
 // controller claimed by another process. Only update info for controllers
-// assigned to I/O servers.
+// assigned to I/O Engines.
 func (c *ControlService) scanInstanceBdevs(ctx context.Context) (*bdev.ScanResponse, error) {
 	var ctrlrs storage.NvmeControllers
 	instances := c.harness.Instances()
@@ -420,7 +403,7 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	formatting := 0
 	for _, srv := range instances {
 		formatting++
-		go func(s *IOServerInstance) {
+		go func(s *EngineInstance) {
 			scmChan <- s.StorageFormatSCM(req.Reformat)
 		}(srv)
 	}
@@ -460,7 +443,7 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 
 	// Notify storage ready for instances formatted without error.
 	// Block until all instances have formatted NVMe to avoid
-	// VFIO device or resource busy when starting IO servers
+	// VFIO device or resource busy when starting I/O Engines
 	// because devices have already been claimed during format.
 	// TODO: supply whitelist of instance.Devs to init() on format.
 	for _, srv := range instances {

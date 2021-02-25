@@ -182,7 +182,7 @@ vos_obj_cache_evict(struct daos_lru_cache *cache, struct vos_container *cont)
 struct daos_lru_cache *
 vos_obj_cache_current(void)
 {
-	return vos_get_obj_cache();
+	return vos_obj_cache_get();
 }
 
 void
@@ -290,8 +290,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	}
 
 check_object:
-	if (intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH ||
-	    intent == DAOS_INTENT_COS)
+	if (intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH)
 		goto out;
 
 	if (!create) {
@@ -348,8 +347,8 @@ out:
 		obj->obj_sync_epoch = obj->obj_df->vo_sync;
 
 	if (obj->obj_df != NULL && epr->epr_hi <= obj->obj_sync_epoch &&
-	    (intent == DAOS_INTENT_COS || (vos_dth_get() != NULL &&
-	     (intent == DAOS_INTENT_PUNCH || intent == DAOS_INTENT_UPDATE)))) {
+	    vos_dth_get() != NULL &&
+	    (intent == DAOS_INTENT_PUNCH || intent == DAOS_INTENT_UPDATE)) {
 		/* If someone has synced the object against the
 		 * obj->obj_sync_epoch, then we do not allow to modify the
 		 * object with old epoch. Let's ask the caller to retry with

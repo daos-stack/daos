@@ -6,6 +6,8 @@ hosts:
     - client-B
     - client-C
 timeout: 600
+timeouts:
+  test_csum_error_logging: 400
 server_config:
   name: daos_server
   servers:
@@ -17,12 +19,9 @@ server_config:
     targets: 1
 # Run only checksum tests
 daos_tests:
-  num_clients:
-    num_clients: 1
-  num_replicas:
-    num_replicas: 1
-  Tests:
-    test_z:
-      daos_test: z
-      test_name: Checksum tests
-      test_timeout: 400
+  num_clients: 1
+  num_replicas: 1
+  test_name:
+    test_csum_error_logging: DAOS_Checksum_tests
+  daos_test:
+    test_csum_error_logging: z
