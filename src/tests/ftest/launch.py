@@ -638,7 +638,7 @@ def get_nvme_replacement(args):
         exit(1)
 
     # Get the list of NVMe PCI addresses found in the output
-    devices = find_pci_address(output_data[0][0])
+    devices = find_pci_address(output_data[0][0].decode("utf-8"))
     print("Auto-detected NVMe devices on {}: {}".format(host_list, devices))
     return ",".join(devices)
 
