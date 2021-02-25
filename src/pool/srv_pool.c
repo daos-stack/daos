@@ -1064,7 +1064,7 @@ check_map:
 			 */
 			D_DEBUG(DB_MD, DF_UUID": new db\n",
 				DP_UUID(svc->ps_uuid));
-			rc = +DER_UNINIT;
+			rc = -DER_UNINIT;
 		} else {
 			D_ERROR(DF_UUID": failed to read pool map buffer: "DF_RC
 				"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
@@ -1800,7 +1800,7 @@ out_tx:
 			DP_UUID(in->pri_op.pi_uuid));
 		rc = pool_svc_step_up_cb(&svc->ps_rsvc);
 		if (rc != 0) {
-			D_ASSERT(rc != DER_UNINIT);
+			D_ASSERT(rc != -DER_UNINIT);
 			/* TODO: Ask rdb to step down. */
 			D_GOTO(out_svc, rc);
 		}

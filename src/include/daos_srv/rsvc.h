@@ -70,7 +70,7 @@ struct ds_rsvc_class {
 
 	/**
 	 * Step up to be the new leader. If the DB is new (i.e., has not been
-	 * bootstrapped), return +DER_UNINIT.
+	 * bootstrapped), return -DER_UNINIT.
 	 */
 	int (*sc_step_up)(struct ds_rsvc *svc);
 

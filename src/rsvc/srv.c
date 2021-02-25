@@ -449,7 +449,7 @@ rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 	}
 
 	rc = rsvc_class(svc->s_class)->sc_step_up(svc);
-	if (rc == DER_UNINIT) {
+	if (rc == -DER_UNINIT) {
 		change_state(svc, DS_RSVC_UP_EMPTY);
 		rc = 0;
 		goto out_mutex;
@@ -504,7 +504,7 @@ bootstrap_self(struct ds_rsvc *svc, void *arg)
 	D_DEBUG(DB_MD, "%s: calling sc_step_up\n", svc->s_name);
 	rc = rsvc_class(svc->s_class)->sc_step_up(svc);
 	if (rc != 0) {
-		D_ASSERT(rc != DER_UNINIT);
+		D_ASSERT(rc != -DER_UNINIT);
 		goto out_mutex;
 	}
 
