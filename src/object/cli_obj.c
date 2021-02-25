@@ -319,7 +319,7 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	obj->cob_md.omd_ver = pool_map_get_version(pool->dp_map);
+	obj->cob_md.omd_ver = dc_pool_get_version(pool);
 	rc = pl_obj_place(map, &obj->cob_md, NULL, &layout);
 	pl_map_decref(map);
 	if (rc != 0) {
@@ -5390,4 +5390,43 @@ daos_dc_obj2id(void *ptr, daos_obj_id_t *id)
 	struct dc_object *obj = ptr;
 
 	*id = obj->cob_md.omd_id;
+}
+
+int
+daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
+		      daos_ofeat_t ofeats, daos_oclass_id_t cid,
+		      daos_oclass_hints_t hints, uint32_t args)
+{
+	daos_handle_t		poh;
+	struct dc_pool		*pool;
+	struct pl_map_attr	attr;
+	int			rc;
+
+	/** TODO - unsupported for now */
+	if (cid == OC_UNKNOWN)
+		return -DER_INVAL;
+
+	/** select the oclass */
+	poh = dc_cont_hdl2pool_hdl(coh);
+	if (daos_handle_is_inval(poh))
+		return -DER_NO_HDL;
+
+	pool = dc_hdl2pool(poh);
+	D_ASSERT(pool);
+
+	rc = pl_map_query(pool->dp_pool, &attr);
+	D_ASSERT(rc == 0);
+	dc_pool_put(pool);
+
+	D_DEBUG(DB_TRACE, "available domain=%d, targets=%d\n",
+		attr.pa_domain_nr, attr.pa_target_nr);
+
+	rc = daos_oclass_fit_max(cid, attr.pa_domain_nr, attr.pa_target_nr,
+				 &cid);
+	if (rc)
+		return rc;
+
+	daos_obj_set_oid(oid, ofeats, cid, args);
+
+	return rc;
 }

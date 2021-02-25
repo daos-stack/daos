@@ -107,6 +107,7 @@ main(int argc, char **argv)
 	uint64_t		*keys;
 	struct daos_llink	*link_ret[3] = {NULL};
 	struct daos_lru_cache	*tcache = NULL;
+	int			csize;
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
@@ -117,13 +118,15 @@ main(int argc, char **argv)
 		exit(-1);
 	}
 
-	rc = daos_lru_cache_create(atoi(argv[1]), D_HASH_FT_RWLOCK,
+	csize	 = (int)strtol(argv[1], (char **)NULL, 10);
+	num_keys = (int)strtol(argv[2], (char **)NULL, 10);
+
+	rc = daos_lru_cache_create(csize, D_HASH_FT_RWLOCK,
 				   &uint_ref_llink_ops,
 				   &tcache);
 	if (rc)
 		D_ASSERTF(0, "Error in creating lru cache\n");
 
-	num_keys = atoi(argv[2]);
 	D_ALLOC_ARRAY(keys, (num_keys + 2));
 	if (keys == NULL)
 		D_ASSERTF(0, "Error in allocating keys_array\n");

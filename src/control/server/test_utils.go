@@ -18,7 +18,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
-	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/system"
@@ -161,9 +160,9 @@ func newTestEngine(log logging.Logger, isAP bool, engineCfg ...*engine.Config) *
 	if len(engineCfg) == 0 {
 		engineCfg = append(engineCfg, engine.NewConfig().WithTargetCount(1))
 	}
-	r := engine.NewTestRunner(&engine.TestRunnerConfig{
-		Running: atm.NewBool(true),
-	}, engineCfg[0])
+	rCfg := new(engine.TestRunnerConfig)
+	rCfg.Running.SetTrue()
+	r := engine.NewTestRunner(rCfg, engineCfg[0])
 
 	srv := NewEngineInstance(log, nil, nil, nil, r)
 	srv.setSuperblock(&Superblock{
