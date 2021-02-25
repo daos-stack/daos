@@ -110,12 +110,16 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 	}
 out:
 	/** broadcast pool create result */
-	if (arg->multi_rank && outpool->svc != NULL) {
+	if (arg->multi_rank) {
 		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 		/** broadcast pool UUID and svc addresses */
 		if (!rc) {
 			MPI_Bcast(outpool->pool_uuid, 16,
 				  MPI_CHAR, 0, MPI_COMM_WORLD);
+
+			/* TODO: Should we even be broadcasting this now? */
+			if (outpool->svc == NULL)
+				return rc;
 			MPI_Bcast(&outpool->svc->rl_nr,
 				  sizeof(outpool->svc->rl_nr),
 				  MPI_CHAR, 0, MPI_COMM_WORLD);
