@@ -203,7 +203,7 @@ verify_notify_bio_error(void)
 
 	/* Verify payload contents */
 	req = srv__bio_error_req__unpack(NULL, call->body.len,
-					    call->body.data);
+					 call->body.data);
 	assert_non_null(req);
 	assert_string_equal(req->uri, crt_self_uri_get_uri);
 	assert_string_equal(req->drpclistenersock, drpc_listener_socket_path);
@@ -328,7 +328,7 @@ test_drpc_verify_notify_pool_svc_update_noreps(void **state)
 				    pool_uuid), 0);
 
 	assert_rc_equal(ds_notify_pool_svc_update(&pool_uuid, NULL),
-			 -DER_INVAL);
+			-DER_INVAL);
 	verify_cluster_event_not_sent();
 
 	drpc_fini();
@@ -347,7 +347,7 @@ test_drpc_verify_notify_pool_svc_update_nopool(void **state)
 	assert_non_null(svc_ranks);
 
 	assert_rc_equal(ds_notify_pool_svc_update(NULL, svc_ranks),
-			 -DER_INVAL);
+			-DER_INVAL);
 	verify_cluster_event_not_sent();
 
 	d_rank_list_free(svc_ranks);

@@ -33,7 +33,7 @@ static size_t dss_ult_create_stack_size; /* saved input */
 static ABT_thread *dss_ult_create_ult_ptr; /* saved ptr addr */
 int
 dss_ult_create(void (*func)(void *), void *arg, int ult_type, int tgt_id,
-		size_t stack_size, ABT_thread *ult)
+	       size_t stack_size, ABT_thread *ult)
 {
 	dss_ult_create_func = func;
 	dss_ult_create_arg_ptr = arg;
@@ -203,9 +203,9 @@ test_drpc_listener_init_success(void **state)
 	 */
 	assert_non_null(drpc_progress_context_create_listener_ptr);
 	assert_int_equal(drpc_progress_context_create_listener_fd,
-			listen_sockfd);
+			 listen_sockfd);
 	assert_ptr_equal(drpc_progress_context_create_listener_handler,
-			drpc_hdlr_process_msg);
+			 drpc_hdlr_process_msg);
 
 	/* Created a ULT on xstream 0 */
 	assert_non_null(dss_ult_create_func);
@@ -248,7 +248,7 @@ test_drpc_listener_init_cant_create_ult(void **state)
 
 	/* Context that was created was closed after ULT failed */
 	assert_ptr_equal(drpc_progress_context_close_ctx_ptr,
-			drpc_progress_context_create_return);
+			 drpc_progress_context_create_return);
 }
 
 static void

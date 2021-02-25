@@ -135,7 +135,7 @@ cleanup_drpc_progress_context(struct drpc_progress_context *ctx)
 
 void
 init_drpc_progress_context(struct drpc_progress_context *ctx,
-		struct drpc *listener)
+			   struct drpc *listener)
 {
 	ctx->listener_ctx = listener;
 	D_INIT_LIST_HEAD(&ctx->session_ctx_list);
@@ -143,13 +143,13 @@ init_drpc_progress_context(struct drpc_progress_context *ctx,
 
 void
 add_sessions_to_drpc_progress_context(struct drpc_progress_context *ctx,
-		int *session_fds, int num_sessions)
+				      int *session_fds, int num_sessions)
 {
 	int i;
 
 	for (i = 0; i < num_sessions; i++) {
 		add_new_drpc_node_to_list(&ctx->session_ctx_list,
-				new_drpc_with_fd(session_fds[i]));
+					  new_drpc_with_fd(session_fds[i]));
 	}
 }
 
@@ -165,7 +165,8 @@ set_poll_revents_for_sessions(int revents, int num_sessions)
 
 void
 expect_sessions_in_drpc_progress_session_list(struct drpc_progress_context *ctx,
-		int *session_fds, int num_sessions)
+					      int *session_fds,
+					      int num_sessions)
 {
 	struct drpc_list	*current;
 	int			num_found = 0;
@@ -192,7 +193,7 @@ expect_sessions_missing_from_drpc_progress_session_list(
 	d_list_for_each_entry(current, &ctx->session_ctx_list, link) {
 		for (i = 0; i < num_sessions; i++) {
 			assert_int_not_equal(current->ctx->comm->fd,
-					session_fds[i]);
+					     session_fds[i]);
 		}
 	}
 }
@@ -472,7 +473,7 @@ test_drpc_progress_single_session_success(void **state)
 
 	/* Final ctx should be unchanged */
 	assert_memory_equal(&ctx, &original_ctx,
-			sizeof(struct drpc_progress_context));
+			    sizeof(struct drpc_progress_context));
 
 	cleanup_drpc_progress_context(&ctx);
 }
@@ -508,7 +509,8 @@ test_drpc_progress_session_cleanup_if_recv_fails(void **state)
 
 	/* Failed sessions should be removed */
 	expect_sessions_missing_from_drpc_progress_session_list(&ctx,
-			session_fds, num_sessions);
+								session_fds,
+								num_sessions);
 
 	cleanup_drpc_progress_context(&ctx);
 }
@@ -544,7 +546,7 @@ test_drpc_progress_session_fails_if_no_data(void **state)
 
 	/* Make sure our old sessions are still there */
 	expect_sessions_in_drpc_progress_session_list(&ctx, session_fds,
-			num_sessions);
+						      num_sessions);
 
 	cleanup_drpc_progress_context(&ctx);
 }
@@ -580,7 +582,8 @@ test_drpc_progress_session_cleanup_if_pollerr(void **state)
 
 	/* failed session should be removed */
 	expect_sessions_missing_from_drpc_progress_session_list(&ctx,
-			&session_fds[bad_session_idx], 1);
+						&session_fds[bad_session_idx],
+						1);
 
 	cleanup_drpc_progress_context(&ctx);
 }
@@ -616,7 +619,8 @@ test_drpc_progress_session_cleanup_if_pollhup(void **state)
 
 	/* disconnected session should be removed */
 	expect_sessions_missing_from_drpc_progress_session_list(&ctx,
-			&session_fds[dead_session_idx], 1);
+						&session_fds[dead_session_idx],
+						1);
 
 	cleanup_drpc_progress_context(&ctx);
 }
@@ -651,7 +655,8 @@ test_drpc_progress_session_cleanup_if_ult_fails(void **state)
 
 	/* Failed sessions should be removed */
 	expect_sessions_missing_from_drpc_progress_session_list(&ctx,
-			session_fds, num_sessions);
+								session_fds,
+								num_sessions);
 
 	cleanup_drpc_progress_context(&ctx);
 }
@@ -684,7 +689,7 @@ test_drpc_progress_listener_fails_if_pollerr(void **state)
 
 	/* Make sure our old sessions are still there */
 	expect_sessions_in_drpc_progress_session_list(&ctx, session_fds,
-			num_sessions);
+						      num_sessions);
 
 	cleanup_drpc_progress_context(&ctx);
 }
@@ -717,7 +722,7 @@ test_drpc_progress_listener_fails_if_pollhup(void **state)
 
 	/* Make sure our old sessions are still there */
 	expect_sessions_in_drpc_progress_session_list(&ctx, session_fds,
-			num_sessions);
+						      num_sessions);
 
 	cleanup_drpc_progress_context(&ctx);
 }

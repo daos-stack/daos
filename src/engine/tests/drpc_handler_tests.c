@@ -112,19 +112,19 @@ static void
 drpc_hdlr_register_with_good_handler(void **state)
 {
 	assert_rc_equal(drpc_hdlr_register(DRPC_MODULE_TEST,
-			dummy_drpc_handler1), DER_SUCCESS);
+					   dummy_drpc_handler1), DER_SUCCESS);
 
 	assert_ptr_equal(drpc_hdlr_get_handler(DRPC_MODULE_TEST),
-			dummy_drpc_handler1);
+			 dummy_drpc_handler1);
 }
 
 static void
 drpc_hdlr_register_same_id_twice(void **state)
 {
 	assert_rc_equal(drpc_hdlr_register(DRPC_MODULE_TEST,
-			dummy_drpc_handler1), DER_SUCCESS);
+					   dummy_drpc_handler1), DER_SUCCESS);
 	assert_rc_equal(drpc_hdlr_register(DRPC_MODULE_TEST,
-			dummy_drpc_handler2), -DER_EXIST);
+					   dummy_drpc_handler2), -DER_EXIST);
 
 	/* Should be unchanged */
 	assert_ptr_equal(drpc_hdlr_get_handler(0), dummy_drpc_handler1);
@@ -134,20 +134,20 @@ static void
 drpc_hdlr_register_null_handler_after_good_one(void **state)
 {
 	assert_rc_equal(drpc_hdlr_register(DRPC_MODULE_TEST,
-			dummy_drpc_handler1), DER_SUCCESS);
+					   dummy_drpc_handler1), DER_SUCCESS);
 	assert_rc_equal(drpc_hdlr_register(DRPC_MODULE_TEST, NULL),
 			-DER_INVAL);
 
 	/* Should be unchanged */
 	assert_ptr_equal(drpc_hdlr_get_handler(DRPC_MODULE_TEST),
-			dummy_drpc_handler1);
+			 dummy_drpc_handler1);
 }
 
 static void
 drpc_hdlr_register_bad_module_id(void **state)
 {
 	assert_rc_equal(drpc_hdlr_register(NUM_DRPC_MODULES,
-			dummy_drpc_handler2), -DER_INVAL);
+					   dummy_drpc_handler2), -DER_INVAL);
 }
 
 static void
@@ -156,36 +156,36 @@ drpc_hdlr_get_handler_with_unregistered_id(void **state)
 	drpc_hdlr_register(DRPC_MODULE_TEST, dummy_drpc_handler1);
 
 	assert_ptr_equal(drpc_hdlr_get_handler(DRPC_MODULE_TEST + 1),
-			NULL);
+			 NULL);
 }
 
 static void
 drpc_hdlr_get_handler_with_invalid_id(void **state)
 {
 	assert_ptr_equal(drpc_hdlr_get_handler(NUM_DRPC_MODULES),
-			NULL);
+			 NULL);
 }
 
 static void
 drpc_hdlr_register_multiple(void **state)
 {
 	assert_rc_equal(drpc_hdlr_register(DRPC_MODULE_TEST,
-			dummy_drpc_handler1), DER_SUCCESS);
+					   dummy_drpc_handler1), DER_SUCCESS);
 	assert_rc_equal(drpc_hdlr_register(DRPC_MODULE_SEC_AGENT,
-			dummy_drpc_handler2), DER_SUCCESS);
+					   dummy_drpc_handler2), DER_SUCCESS);
 	assert_rc_equal(drpc_hdlr_register(DRPC_MODULE_MGMT,
-			dummy_drpc_handler3), DER_SUCCESS);
+					   dummy_drpc_handler3), DER_SUCCESS);
 	assert_rc_equal(drpc_hdlr_register(DRPC_MODULE_SRV,
-			dummy_drpc_handler4), DER_SUCCESS);
+					   dummy_drpc_handler4), DER_SUCCESS);
 
 	assert_ptr_equal(drpc_hdlr_get_handler(DRPC_MODULE_TEST),
-			dummy_drpc_handler1);
+			 dummy_drpc_handler1);
 	assert_ptr_equal(drpc_hdlr_get_handler(DRPC_MODULE_SEC_AGENT),
-			dummy_drpc_handler2);
+			 dummy_drpc_handler2);
 	assert_ptr_equal(drpc_hdlr_get_handler(DRPC_MODULE_MGMT),
-			dummy_drpc_handler3);
+			 dummy_drpc_handler3);
 	assert_ptr_equal(drpc_hdlr_get_handler(DRPC_MODULE_SRV),
-			dummy_drpc_handler4);
+			 dummy_drpc_handler4);
 }
 
 static void
@@ -249,7 +249,7 @@ drpc_hdlr_register_all_with_one_item(void **state)
 	assert_rc_equal(drpc_hdlr_register_all(handlers), DER_SUCCESS);
 
 	assert_ptr_equal(drpc_hdlr_get_handler(DRPC_MODULE_TEST),
-			handlers[DRPC_MODULE_TEST].handler);
+			 handlers[DRPC_MODULE_TEST].handler);
 
 	destroy_handler_list(handlers);
 }
@@ -265,7 +265,7 @@ drpc_hdlr_register_all_with_multiple_items(void **state)
 
 	for (i = 0; i < num_items; i++) {
 		assert_ptr_equal(drpc_hdlr_get_handler(i),
-				handlers[i].handler);
+				 handlers[i].handler);
 	}
 
 	destroy_handler_list(handlers);
@@ -288,7 +288,7 @@ drpc_hdlr_register_all_with_duplicate(void **state)
 	for (i = 0; i < num_items; i++) {
 		if (i != dup_idx) { /* dup is the one that fails */
 			assert_ptr_equal(drpc_hdlr_get_handler(i),
-					dup_list[i].handler);
+					 dup_list[i].handler);
 		}
 	}
 
@@ -371,10 +371,10 @@ drpc_hdlr_process_msg_success(void **state)
 
 	/* Got back a copy of the mocked response */
 	assert_int_equal(resp->sequence,
-			mock_drpc_handler_resp_return->sequence);
+			 mock_drpc_handler_resp_return->sequence);
 	assert_int_equal(resp->status, mock_drpc_handler_resp_return->status);
 	assert_int_equal(resp->body.len,
-			mock_drpc_handler_resp_return->body.len);
+			 mock_drpc_handler_resp_return->body.len);
 
 	drpc__call__free_unpacked(request, NULL);
 	drpc__response__free_unpacked(resp, NULL);
