@@ -233,7 +233,7 @@ Refer to the DAOS Environment Variables document for
 more information about the debug system environment.
 
 ## Common DAOS Problems
-
+### Incompatible Agent ####
 When DER_AGENT_INCOMPAT is received, it means that the client library libdaos.so
 is likely mismatched with the DAOS Agent.  The libdaos.so, DAOS Agent and DAOS
 Server must be built from compatible sources so that the GetAttachInfo protocol
@@ -241,12 +241,14 @@ is the same between each component.  Depending on your situation, you will need
 to either update the DAOS Agent or the libdaos.so to the newer version in order
 to maintain compatibility with each other.
 
+### HLC Sync ###
 When DER_HLC_SYNC is received, it means that sender and receiver HLC timestamps
 are off by more than maximum allowed system clock offset (1 second by default).
 
 In order to correct this situation synchronize all server clocks to the same
 reference time, using services like NTP.
 
+### Shared Memory Errors ###
 When DER_NO_SHMEM is received accompanied with the log message:
 ```
 Failed to initialize telemetry and metrics for ID ...
@@ -295,7 +297,7 @@ IO Engine startup, it means that there was not enough space left in the shared
 memory segment to allocate the given metric.  This can only be remedied by
 increasing the size of the shared memory pool in the source code.  Adjust the
 size in bytes defined by D_TM_SHARED_MEMORY_SIZE in telemetry_common.h.  Please
-notify DAOS staff if you encounter this error because it indicates a
+notify DAOS maintainers if you encounter this error because it indicates a
 miscalculation of the memory size that should be fixed in the source code.
 
 ## Bug Report
