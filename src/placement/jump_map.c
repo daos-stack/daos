@@ -423,6 +423,18 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 					if (isclr(dom_occupied, idx))
 						clrbit(dom_used, idx);
 				}
+				/* if all children of the current dom have been
+				 * used, then let's go back its parent to check
+				 * its siblings.
+				 */
+				if (curr_dom != root_pos) {
+					setbit(dom_used, curr_dom - root_pos);
+					D_ASSERT(top != -1);
+					curr_dom = dom_stack[top--];
+				} else {
+					curr_dom = root_pos;
+				}
+				continue;
 			}
 
 			range_set = isset_range(dom_occupied, start_dom,
