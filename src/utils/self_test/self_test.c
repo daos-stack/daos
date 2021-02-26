@@ -1624,6 +1624,63 @@ static int combine_results(Config *cfg_results, char *section_name)
 	return ret_value;
 }
 
+static int
+file_name_create(char **gpath_name, bool *name_allocated, char *env)
+{
+	char		*new_name = NULL;
+	char		*env_name;
+	char		*file_name;
+	char		*dup_name;
+	char		*temp_name;
+	int		 t_length;
+	int		 ret;
+	int		 ret_value = 0;
+	char		*path_name = *gpath_name;
+
+	/* If no name given, then just return */
+	if (path_name == NULL)
+		goto cleanup;
+
+	/* get env to append, if not defined, then leave name as it is */
+	env_name = getenv(env);
+	if (env_name == NULL)
+		goto cleanup;
+	/*
+	 * Extract file name.
+	 *  The path_name may be constant so we cannot modify it.
+	 */
+	dup_name = strdup(path_name);
+	file_name = strrchr(dup_name, '/');
+	if (file_name == NULL) {
+		/* avoid ckeckpatch warning */
+		file_name = dup_name;
+		}
+	file_name = strtok_r(file_name, "/", &temp_name);
+
+	/* Create new path/file name */
+	t_length = strlen(file_name) + strlen(env_name) + 2;
+	new_name = (char *)malloc(t_length);
+	ret = snprintf(new_name, t_length, "%s/%s",
+		       env_name, file_name);
+	if (ret != 0) {
+		if (name_allocated) {
+			/* avoid ckeckpatch warning */
+			free(*gpath_name);
+		}
+		*gpath_name = new_name;
+		*name_allocated = true;
+	} else {
+		D_WARN("Could not create Path/File_name: %s/%s\n",
+		       env_name, file_name);
+		ret_value = -1;
+	}
+
+	/* Free up space allocated. */
+	 free(dup_name);
+cleanup:
+	return ret_value;
+}
+
 static char *config_section_name_create(char *section_name,
 					struct crt_st_start_params
 					*test_params)
@@ -3758,11 +3815,20 @@ int main(int argc, char *argv[])
 	       "  Max inflight RPCs:          %3d\n\n",
 	       g_rep_count, g_max_inflight);
 
+	/* Evaluate name of results file */
+	ret = file_name_create(&g_expected_outfile, &alloc_g_expected_outfile,
+			 "DAOS_TEST_SHARED_DIR");
+	if (ret != 0) {
+		D_WARN("Error creating output name\n");
+		goto cleanup;
+	}
+
 	/****** Open global configuration for output results *****/
 	/*
 	 * If no section name specified, then will be created later on.
 	 */
 	ret = config_create_output_config(section_name, true);
+
 
 	/********************* Run the self test *********************/
 	ret = run_self_test(all_params, num_msg_sizes, g_rep_count,
