@@ -34,7 +34,7 @@ Additionally, DAOS will support:
  1. End to End Data Integrity as a Quality of Service Attribute - Container
  properties are used to enable/disable the use of checksums for data integrity
  as well as define specific attributes of data integrity feature.  Refer to
-[Data Integrity Readme](https://daos-stack.github.io/user/container/#data-integrity) 
+[Data Integrity Readme](https://daos-stack.github.io/user/container/#data-integrity)
 for details on configuring a container with checksums enabled.
 
  1. Minimize Performance Impact - When there is no data corruption, the End to
