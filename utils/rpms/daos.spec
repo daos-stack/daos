@@ -23,6 +23,7 @@ BuildRequires: libpsm2-devel
 BuildRequires: gcc-c++
 BuildRequires: openmpi3-devel
 BuildRequires: hwloc-devel
+BuildRequires: bullseye
 %if (0%{?rhel} >= 7)
 BuildRequires: argobots-devel >= 1.0rc1
 BuildRequires: json-c-devel
@@ -202,6 +203,7 @@ scons %{?_smp_mflags}      \
       --config=force       \
       --no-rpath           \
       USE_INSTALLED=all    \
+      COMPILER=covc        \
       CONF_DIR=%{conf_dir} \
       PREFIX=%{?buildroot} \
      %{?scons_args}
@@ -214,12 +216,14 @@ scons %{?_smp_mflags}                 \
       %{?buildroot}%{_prefix}         \
       %{?buildroot}%{conf_dir}        \
       USE_INSTALLED=all               \
+      COMPILER=covc                   \
       CONF_DIR=%{conf_dir}            \
       PREFIX=%{_prefix}               \
       %{?scons_args}
 
 BUILDROOT="%{?buildroot}"
 PREFIX="%{?_prefix}"
+cp test.cov %{?buildroot}/usr/
 mkdir -p %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{?buildroot}/%{_unitdir}
@@ -375,6 +379,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files tests
 %dir %{_prefix}/lib/daos
 %{_prefix}/lib/daos/TESTING
+%{_prefix}/test.cov
 %{_bindir}/hello_drpc
 %{_bindir}/*_test*
 %{_bindir}/jobtest
