@@ -403,9 +403,9 @@ test_gauge_with_histogram_multiplier_2(void **state)
 	assert(rc == D_TM_SUCCESS);
 
 	/* bucket 0 - gets 3 values */
-	rc = d_tm_set_gauge(&gauge, 1024, NULL);
+	rc = d_tm_set_gauge(&gauge, 0, NULL);
 	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&gauge, 12, NULL);
+	rc = d_tm_set_gauge(&gauge, 512, NULL);
 	assert(rc == D_TM_SUCCESS);
 	rc = d_tm_set_gauge(&gauge, 2047, NULL);
 	assert(rc == D_TM_SUCCESS);
@@ -417,26 +417,26 @@ test_gauge_with_histogram_multiplier_2(void **state)
 	assert(rc == D_TM_SUCCESS);
 	rc = d_tm_set_gauge(&gauge, 3000, NULL);
 	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&gauge, 4095, NULL);
+	rc = d_tm_set_gauge(&gauge, 6143, NULL);
 
 	/* bucket 2 - gets 2 values  */
-	rc = d_tm_set_gauge(&gauge, 4096, NULL);
+	rc = d_tm_set_gauge(&gauge, 6144, NULL);
 	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&gauge, 8191, NULL);
+	rc = d_tm_set_gauge(&gauge, 14335, NULL);
 	assert(rc == D_TM_SUCCESS);
 
 	/* bucket 3 - gets 3 values  */
-	rc = d_tm_set_gauge(&gauge, 8192, NULL);
-	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&gauge, 12000, NULL);
+	rc = d_tm_set_gauge(&gauge, 14336, NULL);
 	assert(rc == D_TM_SUCCESS);
 	rc = d_tm_set_gauge(&gauge, 16383, NULL);
 	assert(rc == D_TM_SUCCESS);
+	rc = d_tm_set_gauge(&gauge, 30719, NULL);
+	assert(rc == D_TM_SUCCESS);
 
 	/* bucket 4 - gets 4 values  */
-	rc = d_tm_set_gauge(&gauge, 16384, NULL);
+	rc = d_tm_set_gauge(&gauge, 30720, NULL);
 	assert(rc == D_TM_SUCCESS);
-	rc = d_tm_set_gauge(&gauge, 20000, NULL);
+	rc = d_tm_set_gauge(&gauge, 35000, NULL);
 	assert(rc == D_TM_SUCCESS);
 	rc = d_tm_set_gauge(&gauge, 40000, NULL);
 	assert(rc == D_TM_SUCCESS);

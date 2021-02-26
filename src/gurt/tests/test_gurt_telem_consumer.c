@@ -394,26 +394,26 @@ test_histogram_metadata(void **state)
 	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m2/bucket 1");
 	assert(rc == D_TM_SUCCESS);
-	assert_string_equal(metadata, "histogram bucket 1 [2048 .. 4095]");
+	assert_string_equal(metadata, "histogram bucket 1 [2048 .. 6143]");
 	D_FREE(metadata);
 
 	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m2/bucket 2");
 	assert(rc == D_TM_SUCCESS);
-	assert_string_equal(metadata, "histogram bucket 2 [4096 .. 8191]");
+	assert_string_equal(metadata, "histogram bucket 2 [6144 .. 14335]");
 	D_FREE(metadata);
 
 	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m2/bucket 3");
 	assert(rc == D_TM_SUCCESS);
-	assert_string_equal(metadata, "histogram bucket 3 [8192 .. 16383]");
+	assert_string_equal(metadata, "histogram bucket 3 [14336 .. 30719]");
 	D_FREE(metadata);
 
 	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m2/bucket 4");
 	assert(rc == D_TM_SUCCESS);
 	assert_string_equal(metadata,
-			    "histogram bucket 4 [16384 .. "
+			    "histogram bucket 4 [30720 .. "
 			    "18446744073709551615]");
 	D_FREE(metadata);
 }
@@ -472,12 +472,22 @@ test_histogram_bucket_data(void **state)
 	rc = d_tm_get_bucket_range(&bucket, 1, shmem_root, node);
 	assert(rc == D_TM_SUCCESS);
 	assert_int_equal(bucket.dtb_min, 2048);
-	assert_int_equal(bucket.dtb_max, 4095);
+	assert_int_equal(bucket.dtb_max, 6143);
 
 	rc = d_tm_get_bucket_range(&bucket, 2, shmem_root, node);
 	assert(rc == D_TM_SUCCESS);
-	assert_int_equal(bucket.dtb_min, 4096);
-	assert_int_equal(bucket.dtb_max, 8191);
+	assert_int_equal(bucket.dtb_min, 6144);
+	assert_int_equal(bucket.dtb_max, 14335);
+
+	rc = d_tm_get_bucket_range(&bucket, 3, shmem_root, node);
+	assert(rc == D_TM_SUCCESS);
+	assert_int_equal(bucket.dtb_min, 14336);
+	assert_int_equal(bucket.dtb_max, 30719);
+
+	rc = d_tm_get_bucket_range(&bucket, 4, shmem_root, node);
+	assert(rc == D_TM_SUCCESS);
+	assert_int_equal(bucket.dtb_min, 30720);
+	assert_true(bucket.dtb_max == UINT64_MAX);
 
 	rc = d_tm_get_bucket_range(&bucket, 5, shmem_root, node);
 	assert(rc == -DER_INVAL);

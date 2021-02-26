@@ -782,6 +782,7 @@ d_tm_compute_standard_dev(double sum_of_squares, uint64_t sample_size,
  * Standard deviation calculation is deferred until the metric is read.
  *
  * \param[in]	node		Pointer to a node with stats
+ * \param[in]	value		The new sample value
  */
 void
 d_tm_compute_stats(struct d_tm_node_t *node, uint64_t value)
@@ -810,13 +811,20 @@ d_tm_compute_stats(struct d_tm_node_t *node, uint64_t value)
  *
  * \param[in]	node		Pointer to a duration or gauge node
  * \param[in]	value		The value that is sorted into a bucket
+ *
+ * \return			D_TM_SUCCESS		Success
+ *				-DER_INVAL		\a node was NULL,
+ *							\a node has no metric
+ *							data
+ *							\a metric has no
+ *							histogram
  */
 int
 d_tm_compute_histogram(struct d_tm_node_t *node, uint64_t value)
 {
 	struct d_tm_histogram_t	*dtm_histogram;
 	struct d_tm_node_t	*bucket;
-	int			rc = D_TM_SUCCESS;
+	int			rc = -DER_INVAL;
 	int			i;
 
 	if (!node)
@@ -1868,14 +1876,15 @@ failure:
  *				function to create counters underneath the given
  *				node.
  * \param[in]	num_buckets	Specifies the number of buckets the histogram
- *				should have.
+ *				should have.  Must be > 1.
  * \param[in]	initial_width	The number of elements in the first bucket
- * \param[in]	multiplier	Applied to the second .. nth bucket to
- *				increase the width of each successive bucket
- *				by this factor over the previous bucket.
+ *				Must be > 0.
+ * \param[in]	multiplier	Increases the width of bucket N (for N > 0)
+ *				by this factor over the width of bucket (N-1).
  *				A multiplier of 1 creates equal size buckets.
  *				A multiplier of 2 creates buckets that are
  *				twice the size of the previous bucket.
+ *				Must be > 0.
  *
  * \return			D_TM_SUCCESS		Success
  *				-DER_INVAL		node, path, num_buckets,
@@ -1894,10 +1903,11 @@ d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets,
 	struct d_tm_bucket_t	*dth_buckets;
 	uint64_t		min = 0;
 	uint64_t		max = 0;
+	uint64_t		prev_width = 0;
 	int			rc = D_TM_SUCCESS;
+	int			i;
 	char			*meta_data;
 	char			*fullpath;
-	int			i;
 
 	if (node == NULL)
 		return -DER_INVAL;
@@ -1950,6 +1960,7 @@ d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets,
 
 	min = 0;
 	max = initial_width - 1;
+	prev_width = initial_width;
 	for (i = 0; i < num_buckets; i++) {
 		D_ASPRINTF(meta_data, "histogram bucket %d [%lu .. %lu]",
 			   i, min, max);
@@ -1981,8 +1992,9 @@ d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets,
 		} else if (multiplier == 1) {
 			max += initial_width;
 		} else {
-			max = (min * multiplier) - 1;
+			max = min + (prev_width * multiplier) - 1;
 		}
+		prev_width = (max - min) + 1;
 	}
 
 	D_DEBUG(DB_TRACE, "Successfully added histogram for: [%s]\n", path);
@@ -2053,7 +2065,7 @@ d_tm_get_num_buckets(struct d_tm_histogram_t *histogram,
 /**
  * Retrieves the range of the given bucket for the node with a histogram.
  *
- * \param[in,out]	histogram	Pointer to a d_tm_histogram_t used to
+ * \param[in,out]	bucket		Pointer to a d_tm_bucket_t used to
  *					store the results.
  * \param[in]		bucket_id	Identifies which bucket (0 .. n-1)
  * \param[in]		shmem_root	Pointer to the shared memory segment.
