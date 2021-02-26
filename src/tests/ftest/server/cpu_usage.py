@@ -24,7 +24,9 @@ class CPUUsage(TestWithServers):
         """
         JIRA ID: DAOS-4826
         Test Description: Test CPU usage of formatted and idle engine.
-        :avocado: tags=all,hw,server,small,full_regression,cpu_usage
+        :avocado: tags=all,full_regression
+        :avocado: tags=server
+        :avocado: tags=cpu_usage
         """
         # Get PID of daos_engine with ps.
         ps_engine = r"ps -C daos_engine -o %\p"
