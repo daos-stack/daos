@@ -355,7 +355,6 @@ class TestWithoutServers(Test):
         # import and set env vars from yaml file
         default_env = self.params.get("default", "/run/ENV/")
         if default_env is None:
-            print("default_env was not set in yaml file.\n")
             return
 
         for kv_pair in default_env:
@@ -398,7 +397,6 @@ class TestWithoutServers(Test):
         """ import env vars from other_env_var param """
         default_env = self.params.get("default", "/run/ENV/")
         if default_env is None:
-            print("default_env was not set in yaml file.\n")
             return
 
         for kv_pair in default_env:
