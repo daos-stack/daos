@@ -1631,7 +1631,7 @@ file_name_create(char **gpath_name, bool *name_allocated, char *env)
 	char		*env_name;
 	char		*file_name;
 	char		*dup_name;
-	char		*temp_name;
+	char		*temp_name = NULL;
 	int		 t_length;
 	int		 ret;
 	int		 ret_value = 0;
@@ -1719,12 +1719,8 @@ static char *config_section_name_create(char *section_name,
 	} else {
 		/* Verify we have test parameters passed. */
 		if (test_params == (struct crt_st_start_params *)NULL) {
-#if 0
-			snprintf(name_str, len, "%s", "temp");
-#else
 			free(name_str);
 			name_str = NULL;
-#endif
 			goto exit_code;
 		}
 
@@ -3817,7 +3813,7 @@ int main(int argc, char *argv[])
 
 	/* Evaluate name of results file */
 	ret = file_name_create(&g_expected_outfile, &alloc_g_expected_outfile,
-			 "DAOS_TEST_SHARED_DIR");
+			       "DAOS_TEST_SHARED_DIR");
 	if (ret != 0) {
 		D_WARN("Error creating output name\n");
 		goto cleanup;
@@ -3828,7 +3824,6 @@ int main(int argc, char *argv[])
 	 * If no section name specified, then will be created later on.
 	 */
 	ret = config_create_output_config(section_name, true);
-
 
 	/********************* Run the self test *********************/
 	ret = run_self_test(all_params, num_msg_sizes, g_rep_count,
