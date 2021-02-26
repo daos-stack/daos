@@ -1,22 +1,23 @@
 [Unit]
-Description=DAOS Agent
+Description=DAOS Server
+
 Wants=network-online.target
 After=network-online.target
 
 [Service]
 Type=simple
-User=daos_agent
-Group=daos_agent
-RuntimeDirectory=daos_agent
+User=daos_server
+Group=daos_server
+RuntimeDirectory=daos_server
 RuntimeDirectoryMode=0755
-ExecStart=/usr/bin/daos_agent
+ExecStart=/usr/bin/daos_server start
 StandardOutput=journal
 StandardError=journal
-Restart=always
+Restart=on-failure
 RestartSec=10
 LimitMEMLOCK=infinity
 LimitCORE=infinity
-StartLimitIntervalSec=60
+StartLimitInterval=60
 StartLimitBurst=5
 
 [Install]
