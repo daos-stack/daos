@@ -55,7 +55,7 @@ run_test()
 
     ((log_num += 1))
 
-    FILES=(${DAOS_BASE}/test_results/*.xml)
+    FILES=("${DAOS_BASE}"/test_results/*.xml)
 
     "${SL_PREFIX}"/lib/daos/TESTING/ftest/scripts/post_process_xml.sh \
                                                                   "${COMP}" \
@@ -196,7 +196,7 @@ if [ -d "/mnt/daos" ]; then
     rm -rf "${DAOS_BASE}"/test_results/xml
 
     # Reporting
-    if [ $failed -eq 0 ]; then
+    if [ "$failed" -eq 0 ]; then
         # spit out the magic string that the post build script looks for
         echo "SUCCESS! NO TEST FAILURES"
     else

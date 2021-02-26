@@ -60,7 +60,7 @@ get_next_domain(struct d_fd_tree *tree, struct d_fd_node *next)
 		return -DER_TRUNC;
 	}
 
-	fd = (struct d_fault_domain *)&(tree->fdt_compressed[tree->fdt_idx]);
+	fd = (struct d_fault_domain *)&tree->fdt_compressed[tree->fdt_idx];
 	next->fdn_type = D_FD_NODE_TYPE_DOMAIN;
 	next->fdn_val.dom = fd;
 
@@ -87,7 +87,7 @@ get_next_rank(struct d_fd_tree *tree, struct d_fd_node *next)
 	uint32_t			cur_idx;
 
 	cur_idx = tree->fdt_idx;
-	rank = (struct d_fault_domain_rank *)&(tree->fdt_compressed[cur_idx]);
+	rank = (struct d_fault_domain_rank *)&tree->fdt_compressed[cur_idx];
 	next->fdn_type = D_FD_NODE_TYPE_RANK;
 	next->fdn_val.rank = rank;
 

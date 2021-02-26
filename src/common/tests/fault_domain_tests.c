@@ -58,7 +58,7 @@ test_fd_tree_next_bad_input(void **state)
 	struct d_fd_node	next = {0};
 
 	assert_rc_equal(d_fd_tree_init(&tree, test_compressed,
-					ARRAY_SIZE(test_compressed)), 0);
+				       ARRAY_SIZE(test_compressed)), 0);
 
 	assert_rc_equal(d_fd_tree_next(&tree, NULL), -DER_INVAL);
 	assert_rc_equal(d_fd_tree_next(NULL, &next), -DER_INVAL);
@@ -229,17 +229,17 @@ test_fd_get_exp_num_domains(void **state)
 
 	/* array too short for even a root node */
 	assert_rc_equal(d_fd_get_exp_num_domains(DOM_LEN - 1, 0, &result),
-						 -DER_INVAL);
+			-DER_INVAL);
 
 	/* not enough room in array for ranks */
 	assert_rc_equal(d_fd_get_exp_num_domains(DOM_LEN, 1, &result),
-						 -DER_INVAL);
+			-DER_INVAL);
 
 	/* remaining array isn't a multiple of the domain tuple length */
 	assert_rc_equal(d_fd_get_exp_num_domains(DOM_LEN * 2 + 1, 0, &result),
-						 -DER_INVAL);
+			-DER_INVAL);
 	assert_rc_equal(d_fd_get_exp_num_domains(DOM_LEN * 2 + 1, 2, &result),
-						 -DER_INVAL);
+			-DER_INVAL);
 
 	/* success */
 	assert_rc_equal(d_fd_get_exp_num_domains(DOM_LEN, 0, &result), 0);
