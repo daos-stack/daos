@@ -148,6 +148,11 @@ public class IOSimpleDDAsync extends IODataDescBase implements DaosEventQueue.At
     throw new UnsupportedOperationException("duplicate is not supported");
   }
 
+  @Override
+  public AsyncEntry getEntry(int index) {
+    return (AsyncEntry) akeyEntries.get(index);
+  }
+
   protected void setCause(Throwable de) {
     cause = de;
   }
@@ -332,7 +337,7 @@ public class IOSimpleDDAsync extends IODataDescBase implements DaosEventQueue.At
      * size of data to fetch
      * @throws IOException
      */
-    private AsyncEntry(String key, int offset, int dataSize)
+    private AsyncEntry(String key, long offset, int dataSize)
         throws IOException {
       if (StringUtils.isBlank(key)) {
         throw new IllegalArgumentException("key is blank");
@@ -364,7 +369,7 @@ public class IOSimpleDDAsync extends IODataDescBase implements DaosEventQueue.At
      * of recordSize. user should release the buffer by himself.
      * @throws IOException
      */
-    protected AsyncEntry(String key, int offset, ByteBuf dataBuffer) throws IOException {
+    protected AsyncEntry(String key, long offset, ByteBuf dataBuffer) throws IOException {
       this(key, offset, dataBuffer.readableBytes());
       this.dataBuffer = dataBuffer;
     }
@@ -376,8 +381,8 @@ public class IOSimpleDDAsync extends IODataDescBase implements DaosEventQueue.At
      */
     @Override
     public int getDescLen() {
-      // 10 or 18 = key len(2) + [recx idx(4) + recx nr(4)] + data buffer mem address(8)
-      return 18 + keyBytes.length;
+      // 22 = key len(2) + recx idx(8) + recx nr(4) + data buffer mem address(8)
+      return 22 + keyBytes.length;
     }
 
     /**
@@ -395,7 +400,7 @@ public class IOSimpleDDAsync extends IODataDescBase implements DaosEventQueue.At
         }
         descBuffer.writeShort(keyBytes.length);
         descBuffer.writeBytes(keyBytes);
-        descBuffer.writeInt(offset);
+        descBuffer.writeLong(offset);
         descBuffer.writeInt(dataSize);
         descBuffer.writeLong(memoryAddress);
         encoded = true;

@@ -994,12 +994,12 @@ public class DaosObjectIT {
     fetchDesc.setDkey(dkey);
     long l = generateLong(valueLen);
     for (int i = 0; i < nbrOfEntries; i++) {
-      IODataDescSync.SyncEntry entry = (IODataDescSync.SyncEntry)desc.getEntry(i);
+      IODataDescSync.SyncEntry entry = desc.getEntry(i);
       // buffer index
       ByteBuf buf = entry.reuseBuffer();
       buf.writeLong(l);
       entry.setKey(akey + i, 0, buf);
-      IODataDescSync.SyncEntry fetchEntry = (IODataDescSync.SyncEntry)fetchDesc.getEntry(i);
+      IODataDescSync.SyncEntry fetchEntry = fetchDesc.getEntry(i);
       fetchEntry.getDataBuffer().clear();
       fetchEntry.setKey(akey + i, 0, 8);
     }
@@ -1032,7 +1032,7 @@ public class DaosObjectIT {
       Assert.assertTrue(ee instanceof IllegalArgumentException);
       Assert.assertTrue(ee.getMessage().contains("please set dkey first"));
       ee = null;
-      IODataDescSync.SyncEntry et = (IODataDescSync.SyncEntry)desc.getEntry(0);
+      IODataDescSync.SyncEntry et = desc.getEntry(0);
       try {
         et.setKey("", 0, et.getDataBuffer());
       } catch (Exception e) {
@@ -1064,7 +1064,7 @@ public class DaosObjectIT {
       // success
       ee = null;
       desc = object.createReusableDesc(IODataDescSync.IodType.ARRAY, 1, true);
-      IODataDescSync.SyncEntry entry = (IODataDescSync.SyncEntry)desc.getEntry(0);
+      IODataDescSync.SyncEntry entry = desc.getEntry(0);
       entry.getDataBuffer().writeLong(1234567L);
       desc.setDkey("dkey1");
       entry.setKey("akey1", 0, entry.getDataBuffer());
@@ -1131,12 +1131,12 @@ public class DaosObjectIT {
     // write
     long l = generateLong(valueLen);
     for (int i = 0; i < nbrOfEntries; i++) {
-      IOSimpleDataDesc.SimpleEntry entry = (IOSimpleDataDesc.SimpleEntry)desc.getEntry(i);
+      IOSimpleDataDesc.SimpleEntry entry = desc.getEntry(i);
       // buffer index
       ByteBuf buf = entry.reuseBuffer();
       buf.writeLong(l);
       entry.setEntryForUpdate(String.valueOf(i), 0, buf);
-      IOSimpleDataDesc.SimpleEntry fetchEntry = (IOSimpleDataDesc.SimpleEntry)fetchDesc.getEntry(i);
+      IOSimpleDataDesc.SimpleEntry fetchEntry = fetchDesc.getEntry(i);
       fetchEntry.getDataBuffer().clear();
       fetchEntry.setEntryForFetch(String.valueOf(i), 0, 8);
     }
@@ -1144,7 +1144,7 @@ public class DaosObjectIT {
     // fetch
     object.fetchSimple(fetchDesc);
     for (int i = 0; i < nbrOfEntries; i++) {
-      IOSimpleDataDesc.SimpleEntry entry = (IOSimpleDataDesc.SimpleEntry)fetchDesc.getEntry(i);
+      IOSimpleDataDesc.SimpleEntry entry = fetchDesc.getEntry(i);
       Assert.assertEquals(8, entry.getActualSize());
       Assert.assertEquals(l, entry.getDataBuffer().readLong());
     }
@@ -1172,7 +1172,7 @@ public class DaosObjectIT {
       object.open();
       object.punch();
       byte[] data = generateDataArray(bufLen);
-      IODataDescSync.SyncEntry entry = (IODataDescSync.SyncEntry)desc.getEntry(0);
+      IODataDescSync.SyncEntry entry = desc.getEntry(0);
       ByteBuf buf = entry.reuseBuffer();
       buf.writeBytes(data);
       // write
@@ -1250,7 +1250,7 @@ public class DaosObjectIT {
       object.open();
       object.punch();
       byte[] data = generateDataArray(bufLen);
-      IOSimpleDataDesc.SimpleEntry entry = (IOSimpleDataDesc.SimpleEntry)desc.getEntry(0);
+      IOSimpleDataDesc.SimpleEntry entry = desc.getEntry(0);
       ByteBuf buf = entry.reuseBuffer();
       buf.writeBytes(data);
       // write
@@ -1268,7 +1268,7 @@ public class DaosObjectIT {
       System.out.println((System.nanoTime() - start) / 1000000);
       // fetch
       start = System.nanoTime();
-      IOSimpleDataDesc.SimpleEntry fe = (IOSimpleDataDesc.SimpleEntry)fetchDesc.getEntry(0);
+      IOSimpleDataDesc.SimpleEntry fe = fetchDesc.getEntry(0);
       for (int i = 0; i < reduces; i++) {
         fetchDesc.setDkey(String.valueOf(i));
         for (int j = 0; j < maps; j++) {
@@ -1319,7 +1319,7 @@ public class DaosObjectIT {
     for (int i = 0; i < dq.getNbrOfEvents(); i++) {
       DaosEventQueue.Event e = dq.getEvent(i);
       descList.get(i).setEvent(e);
-      IOSimpleDataDesc.SimpleEntry entry = (IOSimpleDataDesc.SimpleEntry)descList.get(i).getEntry(0);
+      IOSimpleDataDesc.SimpleEntry entry = descList.get(i).getEntry(0);
       ByteBuf buf = entry.reuseBuffer();
       buf.writeBytes(data);
     }

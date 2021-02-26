@@ -253,7 +253,7 @@ public class IODataDescSyncTest {
     desc.encode();
     ByteBuf descBuffer = desc.getDescBuffer();
     if (update) {
-      Assert.assertEquals(85, descBuffer.writerIndex());
+      Assert.assertEquals(93, descBuffer.writerIndex());
     } else {
       Assert.assertEquals(69, descBuffer.writerIndex());
       Assert.assertEquals(85, descBuffer.capacity());
@@ -282,7 +282,7 @@ public class IODataDescSyncTest {
       Assert.assertTrue(Arrays.equals(("key" + i).getBytes(Constants.KEY_CHARSET), keyBytes));
       descBuffer.readerIndex(descBuffer.readerIndex() + 10 - 4);
       if (type == IODataDescSync.IodType.ARRAY) {
-        Assert.assertEquals(0, descBuffer.readInt());
+        Assert.assertEquals(0, descBuffer.readLong());
         Assert.assertEquals(3, descBuffer.readInt());
       }
       descBuffer.readerIndex(descBuffer.readerIndex() + 8);
@@ -318,7 +318,7 @@ public class IODataDescSyncTest {
       IODataDescSync.Entry entry = desc.addEntryForFetch("akey", 0, 30);
       desc.encode();
       ByteBuf descBuf = desc.getDescBuffer();
-      Assert.assertEquals(41, descBuf.writerIndex());
+      Assert.assertEquals(45, descBuf.writerIndex());
       // not reusable
       descBuf.readerIndex(0);
       Assert.assertEquals(-1L, descBuf.readLong());
@@ -333,7 +333,7 @@ public class IODataDescSyncTest {
       Assert.assertEquals(4, descBuf.readShort());
       descBuf.readBytes(keyBytes);
       Assert.assertTrue(Arrays.equals("akey".getBytes(Constants.KEY_CHARSET), keyBytes));
-      Assert.assertEquals(0, descBuf.readInt());
+      Assert.assertEquals(0, descBuf.readLong());
       Assert.assertEquals(3, descBuf.readInt());
       // parse
       descBuf.writeInt(30);

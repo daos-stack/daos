@@ -264,9 +264,8 @@ decode_initial(data_desc_t *desc, char *desc_buffer)
 	daos_iod_t *iod;
 	uint16_t len;
 	uint16_t pad;
-	uint32_t value;
 	uint32_t nbr_of_record;
-	uint64_t address;
+	uint64_t value64;
 	int i;
 
 	if (desc->iods == NULL || desc->sgls == NULL
@@ -293,9 +292,9 @@ decode_initial(data_desc_t *desc, char *desc_buffer)
 		iod->iod_nr = 1;
 		if (iod->iod_type == DAOS_IOD_ARRAY) {
 			/* offset */
-			memcpy(&value, desc_buffer, 4);
-			desc->recxs[i].rx_idx = (uint64_t)value;
-			desc_buffer += 4;
+			memcpy(&value64, desc_buffer, 8);
+			desc->recxs[i].rx_idx = value64;
+			desc_buffer += 8;
 			/* length */
 			memcpy(&nbr_of_record, desc_buffer, 4);
 			desc->recxs[i].rx_nr = (uint64_t)nbr_of_record;
@@ -306,9 +305,9 @@ decode_initial(data_desc_t *desc, char *desc_buffer)
 		}
 
 		/* sgl */
-		memcpy(&address, desc_buffer, 8);
+		memcpy(&value64, desc_buffer, 8);
 		desc_buffer += 8;
-		d_iov_set(&desc->iovs[i], address,
+		d_iov_set(&desc->iovs[i], value64,
 			nbr_of_record * desc->record_size);
 		desc->sgls[i].sg_iovs = &desc->iovs[i];
 		desc->sgls[i].sg_nr = 1;
@@ -324,8 +323,7 @@ decode_reused(data_desc_t *desc, char *desc_buffer,
 	uint16_t len;
 	uint16_t pad;
 	uint32_t nbr_of_record;
-	uint32_t value;
-	uint64_t address;
+	uint64_t value64;
 	daos_iod_t *iod;
 	int i;
 
@@ -343,9 +341,9 @@ decode_reused(data_desc_t *desc, char *desc_buffer,
 		}
 		if (desc->iod_type == DAOS_IOD_ARRAY) {
 			/* offset */
-			memcpy(&value, desc_buffer, 4);
-			desc->recxs[i].rx_idx = (uint64_t)value;
-			desc_buffer += 4;
+			memcpy(&value64, desc_buffer, 8);
+			desc->recxs[i].rx_idx = value64;
+			desc_buffer += 8;
 			/* length */
 			memcpy(&nbr_of_record, desc_buffer, 4);
 			desc->recxs[i].rx_nr = (uint64_t)nbr_of_record;
@@ -649,7 +647,7 @@ decode_reused_simple(data_desc_simple_t *desc, char *desc_buffer)
 {
 	uint16_t len;
 	uint32_t value;
-	uint64_t address;
+	uint64_t value64;
 	daos_iod_t *iod;
 	int i;
 
@@ -662,9 +660,9 @@ decode_reused_simple(data_desc_simple_t *desc, char *desc_buffer)
 		iod->iod_name.iov_len = iod->iod_name.iov_buf_len = len;
 		desc_buffer += desc->maxKeyLen;
 		/* offset */
-		memcpy(&value, desc_buffer, 4);
-		desc->recxs[i].rx_idx = (uint64_t)value;
-		desc_buffer += 4;
+		memcpy(&value64, desc_buffer, 8);
+		desc->recxs[i].rx_idx = value64;
+		desc_buffer += 8;
 		/* length */
 		memcpy(&value, desc_buffer, 4);
 		desc->recxs[i].rx_nr = (uint64_t)value;
@@ -781,7 +779,7 @@ allocate_simple_desc(char *descBufAddress, data_desc_simple_t *desc,
 		iod->iod_size = 1;
 		iod->iod_nr = 1;
 		/* skip offset and length */
-		desc_buffer += 8;
+		desc_buffer += 12;
 		iod->iod_recxs = &desc->recxs[i];
 		/* sgl */
 		memcpy(&address, desc_buffer, 8);
@@ -1000,9 +998,9 @@ decode_async(JNIEnv *env, jlong descBufAddress,
         	iod->iod_nr = 1;
         	iod->iod_recxs = &desc->recxs[i];
         	/* offset */
-        	memcpy(&value, desc_buffer, 4);
-        	desc->recxs[i].rx_idx = (uint64_t)value;
-        	desc_buffer += 4;
+        	memcpy(&value64, desc_buffer, 8);
+        	desc->recxs[i].rx_idx = value64;
+        	desc_buffer += 8;
         	/* length */
         	memcpy(&value, desc_buffer, 4);
         	desc->recxs[i].rx_nr = (uint64_t)value;

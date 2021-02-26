@@ -29,8 +29,8 @@ import java.util.List;
  *   See {@link Entry#releaseDataBuffer()}.
  * </p>
  * <p>
- *   For update entries, user should call {@link #addEntryForUpdate(String, int, ByteBuf)}.
- *   And {@link #addEntryForFetch(String, int, int)} for fetch entries. Results of fetch should be get
+ *   For update entries, user should call {@link #addEntryForUpdate(String, long, ByteBuf)}.
+ *   And {@link #addEntryForFetch(String, long, int)} for fetch entries. Results of fetch should be get
  *   from each entry by calling {@link Entry#getFetchedData()} For each IODataDesc object, there must be only one type
  *   of action, either update or fetch, among all its entries.
  * </p>
@@ -129,8 +129,8 @@ public class IODataDescSync extends IODataDescBase {
 
   /**
    * constructor for non-reusable description.
-   * User should call {@link #addEntryForFetch(String, int, int)} or
-   * {@link #addEntryForUpdate(String, int, ByteBuf)} to add entries.
+   * User should call {@link #addEntryForFetch(String, long, int)} or
+   * {@link #addEntryForUpdate(String, long, ByteBuf)} to add entries.
    * {@link #release()} should be called after it's done.
    *
    * @param dkey
@@ -409,6 +409,11 @@ public class IODataDescSync extends IODataDescBase {
     throw new IllegalStateException("not encoded yet");
   }
 
+  @Override
+  public SyncEntry getEntry(int index) {
+    return (SyncEntry) akeyEntries.get(index);
+  }
+
   /**
    * create data description entry for fetch.
    *
@@ -422,7 +427,7 @@ public class IODataDescSync extends IODataDescBase {
    * @return data description entry
    * @throws IOException
    */
-  public Entry addEntryForFetch(String key, int offset,
+  public Entry addEntryForFetch(String key, long offset,
                                               int dataSize) throws IOException {
     if (updateOrFetch) {
       throw new IllegalArgumentException("It's desc for update");
@@ -447,7 +452,7 @@ public class IODataDescSync extends IODataDescBase {
    * @return data description entry
    * @throws IOException
    */
-  public Entry addEntryForUpdate(String key, int offset, ByteBuf dataBuffer) throws IOException {
+  public Entry addEntryForUpdate(String key, long offset, ByteBuf dataBuffer) throws IOException {
     if (!updateOrFetch) {
       throw new IllegalArgumentException("It's desc for fetch");
     }
@@ -480,11 +485,13 @@ public class IODataDescSync extends IODataDescBase {
    */
   public void release(boolean releaseFetchBuffer) {
     if (descBuffer != null) {
-      descBuffer.readerIndex(0);
-      descBuffer.writerIndex(descBuffer.capacity());
-      long nativeDescPtr = descBuffer.readLong();
-      if (hasNativeDec(nativeDescPtr)) {
-        DaosObjClient.releaseDesc(nativeDescPtr);
+      if (encoded) {
+        descBuffer.readerIndex(0);
+        descBuffer.writerIndex(descBuffer.capacity());
+        long nativeDescPtr = descBuffer.readLong();
+        if (hasNativeDec(nativeDescPtr)) {
+          DaosObjClient.releaseDesc(nativeDescPtr);
+        }
       }
       this.descBuffer.release();
       descBuffer = null;
@@ -554,7 +561,7 @@ public class IODataDescSync extends IODataDescBase {
      * size of data to fetch
      * @throws IOException
      */
-    private SyncEntry(String key, int offset, int dataSize)
+    private SyncEntry(String key, long offset, int dataSize)
         throws IOException {
       if (StringUtils.isBlank(key)) {
         throw new IllegalArgumentException("key is blank");
@@ -611,7 +618,7 @@ public class IODataDescSync extends IODataDescBase {
      * of recordSize. user should release the buffer by himself.
      * @throws IOException
      */
-    protected SyncEntry(String key, int offset, ByteBuf dataBuffer) throws IOException {
+    protected SyncEntry(String key, long offset, ByteBuf dataBuffer) throws IOException {
       this(key, offset, dataBuffer.readableBytes());
       this.dataBuffer = dataBuffer;
     }
@@ -661,9 +668,9 @@ public class IODataDescSync extends IODataDescBase {
      */
     @Override
     public int getDescLen() {
-      // 10 or 18 = key len(2) + [recx idx(4) + recx nr(4)] + data buffer mem address(8)
+      // 10 or 22 = key len(2) + [recx idx(8) + recx nr(4)] + data buffer mem address(8)
       if (type == IodType.ARRAY) {
-        return 18 + calcKeyLen();
+        return 22 + calcKeyLen();
       }
       return 10 + calcKeyLen();
     }
@@ -697,7 +704,7 @@ public class IODataDescSync extends IODataDescBase {
      * reused data buffer
      * @throws UnsupportedEncodingException
      */
-    public void setKey(String akey, int offset, ByteBuf buf) throws UnsupportedEncodingException {
+    public void setKey(String akey, long offset, ByteBuf buf) throws UnsupportedEncodingException {
       if (!isReusable()) {
         throw new UnsupportedOperationException("entry is not reusable");
       }
@@ -717,7 +724,7 @@ public class IODataDescSync extends IODataDescBase {
      * @param fetchDataSize
      * @throws UnsupportedEncodingException
      */
-    public void setKey(String akey, int offset, int fetchDataSize) throws UnsupportedEncodingException {
+    public void setKey(String akey, long offset, int fetchDataSize) throws UnsupportedEncodingException {
       if (!isReusable()) {
         throw new UnsupportedOperationException("entry is not reusable");
       }
@@ -725,7 +732,7 @@ public class IODataDescSync extends IODataDescBase {
       setKey(akey, offset, this.dataBuffer, fetchDataSize);
     }
 
-    private void setKey(String akey, int offset, ByteBuf buf, int fetchDataSize) throws UnsupportedEncodingException {
+    private void setKey(String akey, long offset, ByteBuf buf, int fetchDataSize) throws UnsupportedEncodingException {
       if (StringUtils.isBlank(akey)) {
         throw new IllegalArgumentException("key is blank");
       }
@@ -801,7 +808,7 @@ public class IODataDescSync extends IODataDescBase {
       }
       encodeKey(keyBytes, isReusable());
       if (type == IodType.ARRAY) {
-        descBuffer.writeInt(offset/recordSize);
+        descBuffer.writeLong(offset/recordSize);
         descBuffer.writeInt(paddedDataSize/recordSize);
       }
       // skip address
@@ -833,7 +840,7 @@ public class IODataDescSync extends IODataDescBase {
       }
       encodeKey(bytes, reusable);
       if (type == IodType.ARRAY) {
-        descBuffer.writeInt(offset/recordSize);
+        descBuffer.writeLong(offset/recordSize);
         descBuffer.writeInt(paddedDataSize/recordSize);
       }
       descBuffer.writeLong(memoryAddress);

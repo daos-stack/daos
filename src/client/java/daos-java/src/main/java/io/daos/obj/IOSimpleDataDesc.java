@@ -240,6 +240,11 @@ public class IOSimpleDataDesc extends IODataDescBase implements DaosEventQueue.A
     return descBuffer;
   }
 
+  @Override
+  public SimpleEntry getEntry(int index) {
+    return (SimpleEntry) akeyEntries.get(index);
+  }
+
   public int getRetCode() {
     return retCode;
   }
@@ -423,8 +428,8 @@ public class IOSimpleDataDesc extends IODataDescBase implements DaosEventQueue.A
      */
     @Override
     public int getDescLen() {
-      // 18 = dkey len(2) + recx idx(4) + recx nr(4) + data buffer mem address(8)
-      return 18 + maxKenLen;
+      // 22 = dkey len(2) + recx idx(8) + recx nr(4) + data buffer mem address(8)
+      return 22 + maxKenLen;
     }
 
     public boolean isReused() {
@@ -453,7 +458,7 @@ public class IOSimpleDataDesc extends IODataDescBase implements DaosEventQueue.A
      * reused data buffer
      * @throws UnsupportedEncodingException
      */
-    public void setEntryForUpdate(String akey, int offset, ByteBuf buf) {
+    public void setEntryForUpdate(String akey, long offset, ByteBuf buf) {
       if (buf.readerIndex() != 0) {
         throw new IllegalArgumentException("buffer's reader index should be 0. " + buf.readerIndex());
       }
@@ -471,12 +476,12 @@ public class IOSimpleDataDesc extends IODataDescBase implements DaosEventQueue.A
      * @param fetchDataSize
      * @throws UnsupportedEncodingException
      */
-    public void setEntryForFetch(String akey, int offset, int fetchDataSize) {
+    public void setEntryForFetch(String akey, long offset, int fetchDataSize) {
       this.dataBuffer.clear();
       setEntry(akey, offset, this.dataBuffer, fetchDataSize);
     }
 
-    private void setEntry(String akey, int offset, ByteBuf buf, int fetchDataSize) {
+    private void setEntry(String akey, long offset, ByteBuf buf, int fetchDataSize) {
       if (akey != null) {
         setAkey(akey);
       }
@@ -520,7 +525,7 @@ public class IOSimpleDataDesc extends IODataDescBase implements DaosEventQueue.A
       } else {
         descBuffer.writerIndex(descBuffer.writerIndex() + 2 + maxKenLen);
       }
-      descBuffer.writeInt(offset);
+      descBuffer.writeLong(offset);
       descBuffer.writeInt(dataSize);
       // skip memory address
       descBuffer.writerIndex(descBuffer.writerIndex() + 8);
@@ -528,7 +533,7 @@ public class IOSimpleDataDesc extends IODataDescBase implements DaosEventQueue.A
 
     private void putAddress(ByteBuf descBuffer) {
       // skip akeylen, akey, offset and length
-      descBuffer.writerIndex(descBuffer.writerIndex() + maxKenLen + 10);
+      descBuffer.writerIndex(descBuffer.writerIndex() + maxKenLen + 14);
       descBuffer.writeLong(dataBuffer.memoryAddress());
     }
 

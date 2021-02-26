@@ -52,7 +52,7 @@ public interface IODataDesc {
   abstract class Entry {
     protected String key;
     protected byte[] keyBytes;
-    protected int offset;
+    protected long offset;
     protected int dataSize;
     protected ByteBuf dataBuffer;
     protected boolean encoded;
@@ -78,7 +78,7 @@ public interface IODataDesc {
       return dataSize;
     }
 
-    public int getOffset() {
+    public long getOffset() {
       return offset;
     }
 
@@ -87,6 +87,8 @@ public interface IODataDesc {
     }
 
     public abstract ByteBuf getFetchedData();
+
+    public abstract boolean isFetchBufReleased();
 
     public void releaseDataBuffer() {
       if (dataBuffer != null) {

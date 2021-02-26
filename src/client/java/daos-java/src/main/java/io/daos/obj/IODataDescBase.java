@@ -118,11 +118,11 @@ public abstract class IODataDescBase implements IODataDesc {
   }
 
   @Override
-  public Entry getEntry(int index) {
-    return akeyEntries.get(index);
+  public BaseEntry getEntry(int index) {
+    return (BaseEntry) akeyEntries.get(index);
   }
 
-  protected abstract class BaseEntry extends Entry {
+  public abstract class BaseEntry extends Entry {
     /**
      * get size of actual data returned.
      *
@@ -160,6 +160,14 @@ public abstract class IODataDescBase implements IODataDesc {
     public ByteBuf getFetchedData() {
       if (!updateOrFetch) {
         return dataBuffer;
+      }
+      throw new UnsupportedOperationException("only support for fetch, akey: " + key);
+    }
+
+    @Override
+    public boolean isFetchBufReleased() {
+      if (!updateOrFetch) {
+        return encoded && (dataBuffer == null);
       }
       throw new UnsupportedOperationException("only support for fetch, akey: " + key);
     }
