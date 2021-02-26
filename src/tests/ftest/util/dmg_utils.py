@@ -438,7 +438,8 @@ class DmgCommand(DmgCommandBase):
                 extracted form the dmg command result.
 
         """
-        self._get_result(("pool", "query"), pool=pool)
+        return self._get_json_result(("pool", "query"), pool=pool)
+        #self._get_result(("pool", "query"), pool=pool)
 
         # Extract the new pool information from the command output.
         # Sample output:
@@ -489,60 +490,60 @@ class DmgCommand(DmgCommandBase):
         #       }
         #   }
         #
-        data = {}
-        match = re.findall(
-            r"(?:Pool\s+([0-9a-fA-F-]+),\s+ntarget=(\d+),\s+disabled=(\d+),"
-            r"\s+leader=(\d+),\s+version=(\d+)|Target\(VOS\)\s+count:"
-            r"\s*(\d+)|(?:(?:SCM:|NVMe:)\s+Total\s+size:\s+([0-9.]+\s+[A-Z]+)"
-            r"\s+Free:\s+([0-9.]+\s+[A-Z]+),\smin:([0-9.]+\s+[A-Z]+),"
-            r"\s+max:([0-9.]+\s+[A-Z]+),\s+mean:([0-9.]+\s+[A-Z]+))"
-            r"|Rebuild\s+(\w+),\s+(?:rc=)?(\d+)(?:\s+\w+)?,"
-            r"\s+(?:status=-)?(\d+)(?:\s+\w+)?)",
-            self.result.stdout)
-        if match:
-            # Mapping of the pool data entries to the match[0] indices
-            pool_map = {
-                "uuid": 0,
-                "ntarget": 1,
-                "disabled": 2,
-                "leader": 3,
-                "version": 4
-            }
-            # Mapping of the pool space entries to the match[2|3] indices
-            space_map = {
-                "total": 6,
-                "free": 7,
-                "free_min": 8,
-                "free_max": 9,
-                "free_mean": 10
-            }
-            # Mapping of the second indices mappings to the first match indices
-            map_values = {
-                0: pool_map,
-                1: {"target_count": 5},
-                2: space_map,
-                3: space_map,
-                4: {"status": 11, "status2": 12, "status3": 13}
-            }
-            for index_1, match_list in enumerate(match):
-                if index_1 not in map_values:
-                    continue
-                for key, index_2 in map_values[index_1].items():
-                    if index_1 == 2:
-                        if "scm" not in data:
-                            data["scm"] = {}
-                        data["scm"][key] = match_list[index_2]
-                    elif index_1 == 3:
-                        if "nvme" not in data:
-                            data["nvme"] = {}
-                        data["nvme"][key] = match_list[index_2]
-                    elif index_1 == 4:
-                        if "rebuild" not in data:
-                            data["rebuild"] = {}
-                        data["rebuild"][key] = match_list[index_2]
-                    else:
-                        data[key] = match_list[index_2]
-        return data
+        # data = {}
+        # match = re.findall(
+        #     r"(?:Pool\s+([0-9a-fA-F-]+),\s+ntarget=(\d+),\s+disabled=(\d+),"
+        #     r"\s+leader=(\d+),\s+version=(\d+)|Target\(VOS\)\s+count:"
+        #     r"\s*(\d+)|(?:(?:SCM:|NVMe:)\s+Total\s+size:\s+([0-9.]+\s+[A-Z]+)"
+        #     r"\s+Free:\s+([0-9.]+\s+[A-Z]+),\smin:([0-9.]+\s+[A-Z]+),"
+        #     r"\s+max:([0-9.]+\s+[A-Z]+),\s+mean:([0-9.]+\s+[A-Z]+))"
+        #     r"|Rebuild\s+(\w+),\s+(?:rc=)?(\d+)(?:\s+\w+)?,"
+        #     r"\s+(?:status=-)?(\d+)(?:\s+\w+)?)",
+        #     self.result.stdout)
+        # if match:
+        #     # Mapping of the pool data entries to the match[0] indices
+        #     pool_map = {
+        #         "uuid": 0,
+        #         "ntarget": 1,
+        #         "disabled": 2,
+        #         "leader": 3,
+        #         "version": 4
+        #     }
+        #     # Mapping of the pool space entries to the match[2|3] indices
+        #     space_map = {
+        #         "total": 6,
+        #         "free": 7,
+        #         "free_min": 8,
+        #         "free_max": 9,
+        #         "free_mean": 10
+        #     }
+        #     # Mapping of the second indices mappings to the first match indices
+        #     map_values = {
+        #         0: pool_map,
+        #         1: {"target_count": 5},
+        #         2: space_map,
+        #         3: space_map,
+        #         4: {"status": 11, "status2": 12, "status3": 13}
+        #     }
+        #     for index_1, match_list in enumerate(match):
+        #         if index_1 not in map_values:
+        #             continue
+        #         for key, index_2 in map_values[index_1].items():
+        #             if index_1 == 2:
+        #                 if "scm" not in data:
+        #                     data["scm"] = {}
+        #                 data["scm"][key] = match_list[index_2]
+        #             elif index_1 == 3:
+        #                 if "nvme" not in data:
+        #                     data["nvme"] = {}
+        #                 data["nvme"][key] = match_list[index_2]
+        #             elif index_1 == 4:
+        #                 if "rebuild" not in data:
+        #                     data["rebuild"] = {}
+        #                 data["rebuild"][key] = match_list[index_2]
+        #             else:
+        #                 data[key] = match_list[index_2]
+        # return data
 
     def pool_destroy(self, pool, force=True):
         """Destroy a pool with the dmg command.

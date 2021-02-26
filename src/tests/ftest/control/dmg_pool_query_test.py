@@ -42,7 +42,6 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         self.log.info("==>   Running dmg pool query:")
         return self.dmg.pool_query(uuid)
 
-    @skipForTicket("DAOS-6452")
     def test_pool_query_basic(self):
         """
         JIRA ID: DAOS-2976
@@ -51,8 +50,10 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         the system. Provided a valid pool UUID, verify the output received from
         pool query command.
 
-        :avocado: tags=all,small,daily_regression,hw,dmg,pool_query,basic
-        :avocado: tags=poolquerybasic
+        :avocado: tags=all,daily_regression
+        :avocado: tags=small,hw
+        :avocado: tags=dmg,pool_query,basic
+        :avocado: tags=pool_query_basic
         """
         self.log.info("==>   Verify dmg output against expected output:")
         dmg_info = self.get_pool_query_info(self.uuid)
@@ -63,45 +64,46 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         # but this yields an empty dictionary (the default), so it needs to be
         # defined manually:
         exp_info = {
-            "uuid": self.uuid.upper(),
-            "ntarget": self.params.get("ntarget", path="/run/exp_vals/*"),
-            "disabled": self.params.get("disabled", path="/run/exp_vals/*"),
-            "leader": self.params.get("leader", path="/run/exp_vals/*"),
-            "version": self.params.get("version", path="/run/exp_vals/*"),
-            "target_count": self.params.get(
-                "target_count", path="/run/exp_vals/*"),
-            "scm": {
-                "total": self.params.get("total", path="/run/exp_vals/scm/*"),
-                "free": self.params.get("free", path="/run/exp_vals/scm/*"),
-                "free_min": self.params.get(
-                    "free_min", path="/run/exp_vals/scm/*"),
-                "free_max": self.params.get(
-                    "free_max", path="/run/exp_vals/scm/*"),
-                "free_mean": self.params.get(
-                    "free_mean", path="/run/exp_vals/scm/*"),
+            "Status": self.params.get("pool_status", path="/run/exp_vals/*"),
+            "UUID": self.uuid.upper(),
+            "TotalTargets": self.params.get(
+                "total_targets", path="/run/exp_vals/*"),
+            "ActiveTargets": self.params.get(
+                "active_targets", path="/run/exp_vals/*"),
+            "TotalNodes": self.params.get(
+                "total_nodes", path="/run/exp_vals/*"),
+            "DisabledTargets": self.params.get(
+                "disabled_targets", path="/run/exp_vals/*"),
+            "Version": self.params.get("version", path="/run/exp_vals/*"),
+            "Leader": self.params.get("leader", path="/run/exp_vals/*"),
+            "Scm": {
+                "Total": self.params.get("total", path="/run/exp_vals/scm/*"),
+                "Free": self.params.get("free", path="/run/exp_vals/scm/*"),
+                "Min": self.params.get("min", path="/run/exp_vals/scm/*"),
+                "Max": self.params.get("max", path="/run/exp_vals/scm/*"),
+                "Mean": self.params.get("mean", path="/run/exp_vals/scm/*"),
             },
-            "nvme": {
-                "total": self.params.get("total", path="/run/exp_vals/nvme/*"),
-                "free": self.params.get("free", path="/run/exp_vals/nvme/*"),
-                "free_min": self.params.get(
-                    "free_min", path="/run/exp_vals/nvme/*"),
-                "free_max": self.params.get(
-                    "free_max", path="/run/exp_vals/nvme/*"),
-                "free_mean": self.params.get(
-                    "free_mean", path="/run/exp_vals/nvme/*"),
+            "Nvme": {
+                "Total": self.params.get("total", path="/run/exp_vals/nvme/*"),
+                "Free": self.params.get("free", path="/run/exp_vals/nvme/*"),
+                "Min": self.params.get("min", path="/run/exp_vals/nvme/*"),
+                "Max": self.params.get("max", path="/run/exp_vals/nvme/*"),
+                "Mean": self.params.get("mean", path="/run/exp_vals/nvme/*"),
             },
-            "rebuild": {
-                "status": self.params.get(
-                    "status", path="/run/exp_vals/rebuild/*"),
-                "objects": self.params.get(
+            "Rebuild": {
+                "Status": self.params.get(
+                    "rebuild_status", path="/run/exp_vals/rebuild/*"),
+                "State": self.params.get(
+                    "state", path="/run/exp_vals/rebuild/*"),
+                "Objects": self.params.get(
                     "objects", path="/run/exp_vals/rebuild/*"),
-                "records": self.params.get(
+                "Records": self.params.get(
                     "records", path="/run/exp_vals/rebuild/*"),
             }
         }
 
         self.assertDictEqual(
-            dmg_info, exp_info,
+            dmg_info["response"], exp_info,
             "Found difference in dmg pool query output and the expected values")
 
         self.log.info("All expect values found in dmg pool query output.")
@@ -114,8 +116,10 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         the system. Verify the inputs that can be provided to 'query --pool'
         argument of the dmg pool subcommand.
 
-        :avocado: tags=all,small,daily_regression,hw,dmg,pool_query,basic
-        :avocado: tags=poolqueryinputs
+        :avocado: tags=all,daily_regression
+        :avocado: tags=small,hw
+        :avocado: tags=dmg,pool_query,basic
+        :avocado: tags=pool_query_inputs
         """
         # Get test UUIDs
         errors_list = []
@@ -154,8 +158,10 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         Test Description: Test that pool query command will properly and
         accurately show the size changes once there is content in the pool.
 
-        :avocado: tags=all,small,daily_regression,hw,dmg,pool_query,basic
-        :avocado: tags=poolquerywrite
+        :avocado: tags=all,daily_regression
+        :avocado: tags=small,hw
+        :avocado: tags=dmg,pool_query,basic
+        :avocado: tags=pool_query_write
         """
         # Store original pool info
         out_b = self.get_pool_query_info(self.uuid)
@@ -170,8 +176,9 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         self.log.info("==>   Pool info after write: \n%s", out_a)
 
         # The file should have been written into nvme, compare info
-        bytes_orig_val = human_to_bytes(out_b["nvme"]["free"])
-        bytes_curr_val = human_to_bytes(out_a["nvme"]["free"])
+        bytes_orig_val = human_to_bytes(out_b["Nvme"]["Free"])
+        bytes_curr_val = human_to_bytes(out_a["Nvme"]["Free"])
         if bytes_orig_val <= bytes_curr_val:
-            self.fail("NVMe free space should be < {}".format(
-                out_b["nvme_info"][1]))
+            self.fail(
+                "Current NVMe free space should be smaller than {}".format(
+                    out_b["Nvme"]["Free"]))
