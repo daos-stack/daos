@@ -582,8 +582,7 @@ test_drpc_progress_session_cleanup_if_pollerr(void **state)
 
 	/* failed session should be removed */
 	expect_sessions_missing_from_drpc_progress_session_list(&ctx,
-						&session_fds[bad_session_idx],
-						1);
+			&session_fds[bad_session_idx], 1);
 
 	cleanup_drpc_progress_context(&ctx);
 }
@@ -619,8 +618,7 @@ test_drpc_progress_session_cleanup_if_pollhup(void **state)
 
 	/* disconnected session should be removed */
 	expect_sessions_missing_from_drpc_progress_session_list(&ctx,
-						&session_fds[dead_session_idx],
-						1);
+			&session_fds[dead_session_idx], 1);
 
 	cleanup_drpc_progress_context(&ctx);
 }
