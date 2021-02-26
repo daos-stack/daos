@@ -29,7 +29,7 @@ void test_function1(int count)
 	 * if desired.  See the final d_tm_increment_counter() below.
 	 */
 	for (i = 0; i < count - 1; i++) {
-		rc = d_tm_increment_counter(&loop, "%s/%s/loop counter",
+		rc = d_tm_increment_counter(&loop, 1, "%s/%s/loop counter",
 					    __FILE__, __func__);
 		if (rc != DER_SUCCESS) {
 			printf("d_tm_increment_counter failed: " DF_RC "\n",
@@ -44,7 +44,7 @@ void test_function1(int count)
 	 * provided, and only uses the name if the pointer doesn't reference
 	 * anything.
 	 */
-	rc = d_tm_increment_counter(&loop, NULL);
+	rc = d_tm_increment_counter(&loop, 1, NULL);
 	if (rc != DER_SUCCESS)
 		printf("d_tm_increment_counter failed: " DF_RC "\n", DP_RC(rc));
 
@@ -281,7 +281,7 @@ void use_manually_added_metrics(struct d_tm_nodeList_t *node_list)
 			 * Supplying an initialized pointer to the metric
 			 * so it is only used and not created implicitly here.
 			 */
-			rc = d_tm_increment_counter(&node_list->dtnl_node,
+			rc = d_tm_increment_counter(&node_list->dtnl_node, 1,
 						    NULL);
 			if (rc != DER_SUCCESS) {
 				printf("d_tm_increment_counter failed: "
@@ -341,7 +341,7 @@ main(int argc, char **argv)
 	 * it.  The counter is created, and incremented by one.  It now has the
 	 * value 1.
 	 */
-	rc = d_tm_increment_counter(&entry, "%s/%s/sample_counter", __FILE__,
+	rc = d_tm_increment_counter(&entry, 1, "%s/%s/sample_counter", __FILE__,
 				    __func__);
 	if (rc != DER_SUCCESS) {
 		printf("d_tm_increment_counter failed: " DF_RC "\n", DP_RC(rc));
@@ -355,7 +355,7 @@ main(int argc, char **argv)
 	 * for faster lookup.
 	 */
 	for (i = 0; i < 1000; i++) {
-		rc = d_tm_increment_counter(&loop, "%s/%s/loop counter",
+		rc = d_tm_increment_counter(&loop, 1, "%s/%s/loop counter",
 					    __FILE__, __func__);
 		if (rc != DER_SUCCESS) {
 			printf("d_tm_increment_counter failed: " DF_RC "\n",

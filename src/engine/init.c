@@ -471,7 +471,7 @@ dss_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		return;
 	}
 
-	d_tm_increment_counter(&dead_rank_cnt, "events/dead_rank_cnt");
+	d_tm_increment_counter(&dead_rank_cnt, 1, "events/dead_rank_cnt");
 	d_tm_record_timestamp(&last_ts, "events/last_event_ts");
 
 	rc = ds_notify_swim_rank_dead(rank);

@@ -768,8 +768,9 @@ d_tm_compute_duration_stats(struct d_tm_node_t *node)
 		dtm_stats->dtm_min.min_float = value;
 }
 
+
 /**
- * Add an arbitrary value to a counter (i.e. to set an initial value)
+ * Increment the given counter by the specified \a value
  *
  * The counter is specified either by an initialized pointer or by a fully
  * qualified item name.  If an initialized pointer is provided, the metric is
@@ -780,6 +781,7 @@ d_tm_compute_duration_stats(struct d_tm_node_t *node)
  * faster access.
  *
  * \param[in,out]	metric	Pointer to the metric
+ * \param[in]		value	Increments the counter by this \a value
  * \param[in]		fmt	Format specifier for the name and full path of
  *				the metric followed by optional args to
  *				populate the string, printf style.
@@ -798,8 +800,8 @@ d_tm_compute_duration_stats(struct d_tm_node_t *node)
  *							are NULL
  */
 int
-d_tm_add_to_counter(struct d_tm_node_t **metric, uint64_t val,
-		    const char *fmt, ...)
+d_tm_increment_counter(struct d_tm_node_t **metric, uint64_t value,
+		       const char *fmt, ...)
 {
 	struct d_tm_node_t	*node = NULL;
 	char			path[D_TM_MAX_NAME_LEN] = {};
@@ -823,102 +825,7 @@ d_tm_add_to_counter(struct d_tm_node_t **metric, uint64_t val,
 		ret = vsnprintf(path, sizeof(path), fmt, args);
 		va_end(args);
 
-		if (!((ret > 0) && (ret < D_TM_MAX_NAME_LEN))) {
-			rc = -DER_EXCEEDS_PATH_LEN;
-			goto failure;
-		}
-
-		node = d_tm_find_metric(d_tm_shmem_root, path);
-		if (metric != NULL)
-			*metric = node;
-	}
-
-	if (node == NULL) {
-		rc = d_tm_add_metric(&node, D_TM_COUNTER, "N/A", "N/A", path);
-		if (rc != DER_SUCCESS) {
-			D_ERROR("Failed to add and incremement counter [%s]: "
-				DF_RC "\n", path, DP_RC(rc));
-			goto failure;
-		}
-		if (metric != NULL)
-			*metric = node;
-	}
-
-	if (node->dtn_type != D_TM_COUNTER) {
-		rc = -DER_OP_NOT_PERMITTED;
-		D_ERROR("Failed to set counter [%s] on item not a "
-			"counter.  Operation mismatch: " DF_RC "\n",
-			node->dtn_name, DP_RC(rc));
-		goto failure;
-	}
-
-	if (node->dtn_protect)
-		D_MUTEX_LOCK(&node->dtn_lock);
-	node->dtn_metric->dtm_data.value += val;
-	if (node->dtn_protect)
-		D_MUTEX_UNLOCK(&node->dtn_lock);
-
-	return rc;
-
-failure:
-	return rc;
-}
-
-/**
- * Increment the given counter
- *
- * The counter is specified either by an initialized pointer or by a fully
- * qualified item name.  If an initialized pointer is provided, the metric is
- * accessed directly.  Otherwise, a lookup is performed on the path name
- * provided in order to find the specified item.  If the item cannot be found,
- * it is created.  If the item is created, the callers pointer is initialized
- * for this item.  The pointer is used for direct access on subsequent calls for
- * faster access.
- *
- * \param[in,out]	metric	Pointer to the metric
- * \param[in]		fmt	Format specifier for the name and full path of
- *				the metric followed by optional args to
- *				populate the string, printf style.
- *				The format specifier and optional arguments
- *				are used only if the pointer to the metric
- *				is NULL.
- *
- * \return			DER_SUCCESS		Success
- *				-DER_EXCEEDS_PATH_LEN	The full name length is
- *							too long
- *				-DER_OP_NOT_PERMITTED	Operation not permitted
- *							because the \a item is
- *							not a counter
- *				-DER_UNINIT		API not initialized
- *				-DER_INVAL		\a metric and \a item
- *							are NULL
- */
-int
-d_tm_increment_counter(struct d_tm_node_t **metric, const char *fmt, ...)
-{
-	struct d_tm_node_t	*node = NULL;
-	char			path[D_TM_MAX_NAME_LEN] = {};
-	int			rc = DER_SUCCESS;
-
-	if (d_tm_shmem_root == NULL)
-		return -DER_UNINIT;
-
-	if ((metric != NULL) && (*metric != NULL)) {
-		node = *metric;
-	} else {
-		va_list	args;
-		int	ret;
-
-		if (fmt == NULL) {
-			rc = -DER_INVAL;
-			goto failure;
-		}
-
-		va_start(args, fmt);
-		ret = vsnprintf(path, sizeof(path), fmt, args);
-		va_end(args);
-
-		if (!((ret > 0) && (ret < D_TM_MAX_NAME_LEN))) {
+		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
 			rc = -DER_EXCEEDS_PATH_LEN;
 			goto failure;
 		}
@@ -949,7 +856,7 @@ d_tm_increment_counter(struct d_tm_node_t **metric, const char *fmt, ...)
 
 	if (node->dtn_protect)
 		D_MUTEX_LOCK(&node->dtn_lock);
-	node->dtn_metric->dtm_data.value++;
+	node->dtn_metric->dtm_data.value += value;
 	if (node->dtn_protect)
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 
@@ -1013,7 +920,7 @@ d_tm_record_timestamp(struct d_tm_node_t **metric, const char *fmt, ...)
 		ret = vsnprintf(path, sizeof(path), fmt, args);
 		va_end(args);
 
-		if (!((ret > 0) && (ret < D_TM_MAX_NAME_LEN))) {
+		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
 			rc = -DER_EXCEEDS_PATH_LEN;
 			goto failure;
 		}
@@ -1111,7 +1018,7 @@ d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
 		ret = vsnprintf(path, sizeof(path), fmt, args);
 		va_end(args);
 
-		if (!((ret > 0) && (ret < D_TM_MAX_NAME_LEN))) {
+		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
 			rc = -DER_EXCEEDS_PATH_LEN;
 			goto failure;
 		}
@@ -1220,7 +1127,7 @@ d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
 		ret = vsnprintf(path, sizeof(path), fmt, args);
 		va_end(args);
 
-		if (!((ret > 0) && (ret < D_TM_MAX_NAME_LEN))) {
+		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
 			rc = -DER_EXCEEDS_PATH_LEN;
 			goto failure;
 		}
@@ -1337,7 +1244,7 @@ d_tm_mark_duration_end(struct d_tm_node_t **metric, int err,
 		ret = vsnprintf(path, sizeof(path), fmt, args);
 		va_end(args);
 
-		if (!((ret > 0) && (ret < D_TM_MAX_NAME_LEN))) {
+		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
 			rc = -DER_EXCEEDS_PATH_LEN;
 			goto failure;
 		}
@@ -1434,7 +1341,7 @@ d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value,
 		ret = vsnprintf(path, sizeof(path), fmt, args);
 		va_end(args);
 
-		if (!((ret > 0) && (ret < D_TM_MAX_NAME_LEN))) {
+		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
 			rc = -DER_EXCEEDS_PATH_LEN;
 			goto failure;
 		}
@@ -1532,7 +1439,7 @@ d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
 		ret = vsnprintf(path, sizeof(path), fmt, args);
 		va_end(args);
 
-		if (!((ret > 0) && (ret < D_TM_MAX_NAME_LEN))) {
+		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
 			rc = -DER_EXCEEDS_PATH_LEN;
 			goto failure;
 		}
@@ -1630,7 +1537,7 @@ d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
 		ret = vsnprintf(path, sizeof(path), fmt, args);
 		va_end(args);
 
-		if (!((ret > 0) && (ret < D_TM_MAX_NAME_LEN))) {
+		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
 			rc = -DER_EXCEEDS_PATH_LEN;
 			goto failure;
 		}
@@ -1789,7 +1696,7 @@ int d_tm_add_metric(struct d_tm_node_t **node, int metric_type, char *sh_desc,
 	ret = vsnprintf(path, sizeof(path), fmt, args);
 	va_end(args);
 
-	if (!((ret > 0) && (ret < D_TM_MAX_NAME_LEN))) {
+	if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
 		rc = -DER_EXCEEDS_PATH_LEN;
 		goto failure;
 	}

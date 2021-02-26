@@ -7,9 +7,8 @@
 #define __TELEMETRY_PRODUCER_H__
 
 /* Developer facing server API to write data */
-int d_tm_increment_counter(struct d_tm_node_t **metric, const char *fmt, ...);
-int d_tm_add_to_counter(struct d_tm_node_t **metric, uint64_t value,
-			const char *fmt, ...);
+int d_tm_increment_counter(struct d_tm_node_t **metric, uint64_t value,
+			   const char *fmt, ...);
 int d_tm_record_timestamp(struct d_tm_node_t **metric, const char *fmt, ...);
 int d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
 			     const char *fmt, ...);
