@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <setjmp.h>
 #include <cmocka.h>
+#include <daos/tests_lib.h>
 #include <daos_types.h>
 #include <daos_errno.h>
 #include <daos/common.h>
@@ -115,7 +116,7 @@ teardown_security_mocks(void **state)
 static void
 test_request_credentials_fails_with_null_creds(void **state)
 {
-	assert_int_equal(dc_sec_request_creds(NULL), -DER_INVAL);
+	assert_rc_equal(dc_sec_request_creds(NULL), -DER_INVAL);
 }
 
 static void
@@ -125,7 +126,7 @@ test_request_credentials_succeeds_with_good_values(void **state)
 
 	memset(&creds, 0, sizeof(d_iov_t));
 
-	assert_int_equal(dc_sec_request_creds(&creds), DER_SUCCESS);
+	assert_rc_equal(dc_sec_request_creds(&creds), DER_SUCCESS);
 
 	daos_iov_free(&creds);
 }
@@ -138,7 +139,7 @@ test_request_credentials_fails_if_drpc_connect_fails(void **state)
 	memset(&creds, 0, sizeof(d_iov_t));
 	free_drpc_connect_return(); /* drpc_connect returns NULL on failure */
 
-	assert_int_equal(dc_sec_request_creds(&creds), -DER_BADPATH);
+	assert_rc_equal(dc_sec_request_creds(&creds), -DER_BADPATH);
 
 	daos_iov_free(&creds);
 }
@@ -166,7 +167,7 @@ test_request_credentials_fails_if_drpc_call_fails(void **state)
 	memset(&creds, 0, sizeof(d_iov_t));
 	drpc_call_return = -DER_BUSY;
 
-	assert_int_equal(dc_sec_request_creds(&creds),
+	assert_rc_equal(dc_sec_request_creds(&creds),
 			drpc_call_return);
 
 	daos_iov_free(&creds);
@@ -240,7 +241,7 @@ test_request_credentials_fails_if_reply_null(void **state)
 	memset(&creds, 0, sizeof(d_iov_t));
 	drpc_call_resp_return_ptr = NULL;
 
-	assert_int_equal(dc_sec_request_creds(&creds), -DER_NOREPLY);
+	assert_rc_equal(dc_sec_request_creds(&creds), -DER_NOREPLY);
 
 	daos_iov_free(&creds);
 }
@@ -253,7 +254,7 @@ test_request_credentials_fails_if_reply_status_failure(void **state)
 	memset(&creds, 0, sizeof(d_iov_t));
 	drpc_call_resp_return_content.status = DRPC__STATUS__FAILURE;
 
-	assert_int_equal(dc_sec_request_creds(&creds), -DER_MISC);
+	assert_rc_equal(dc_sec_request_creds(&creds), -DER_MISC);
 
 	daos_iov_free(&creds);
 }
@@ -268,7 +269,7 @@ test_request_credentials_fails_if_reply_body_malformed(void **state)
 	D_ALLOC(drpc_call_resp_return_content.body.data, 1);
 	drpc_call_resp_return_content.body.len = 1;
 
-	assert_int_equal(dc_sec_request_creds(&creds), -DER_PROTO);
+	assert_rc_equal(dc_sec_request_creds(&creds), -DER_PROTO);
 
 	daos_iov_free(&creds);
 }
@@ -281,7 +282,7 @@ test_request_credentials_fails_if_reply_cred_missing(void **state)
 	memset(&creds, 0, sizeof(d_iov_t));
 	init_drpc_resp_with_cred(NULL);
 
-	assert_int_equal(dc_sec_request_creds(&creds), -DER_PROTO);
+	assert_rc_equal(dc_sec_request_creds(&creds), -DER_PROTO);
 
 	daos_iov_free(&creds);
 }
@@ -297,7 +298,7 @@ test_request_credentials_fails_if_reply_token_missing(void **state)
 	drpc_call_resp_return_auth_credential->token = NULL;
 	init_drpc_resp_with_cred(drpc_call_resp_return_auth_credential);
 
-	assert_int_equal(dc_sec_request_creds(&creds), -DER_PROTO);
+	assert_rc_equal(dc_sec_request_creds(&creds), -DER_PROTO);
 
 	daos_iov_free(&creds);
 }
@@ -312,7 +313,7 @@ test_request_credentials_fails_if_reply_cred_status(void **state)
 	pack_get_cred_resp_in_drpc_call_resp_body(&resp);
 	memset(&creds, 0, sizeof(d_iov_t));
 
-	assert_int_equal(dc_sec_request_creds(&creds), -DER_UNKNOWN);
+	assert_rc_equal(dc_sec_request_creds(&creds), -DER_UNKNOWN);
 }
 
 static void
@@ -333,7 +334,7 @@ test_request_credentials_returns_raw_bytes(void **state)
 	auth__credential__pack(drpc_call_resp_return_auth_credential,
 			expected_data);
 
-	assert_int_equal(dc_sec_request_creds(&creds), DER_SUCCESS);
+	assert_rc_equal(dc_sec_request_creds(&creds), DER_SUCCESS);
 
 	assert_int_equal(creds.iov_buf_len, expected_len);
 	assert_int_equal(creds.iov_len, expected_len);
