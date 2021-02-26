@@ -271,17 +271,17 @@ class SoakTestBase(TestWithServers):
                 for ppn in self.taskspernode:
                     commands = create_ior_cmdline(self, job, pool, ppn, npj)
                     # scripts are single cmdline
-                    scripts = build_job_script(self, commands, job, ppn, npj)
+                    scripts = build_job_script(self, commands, job, npj)
                     job_cmdlist.extend(scripts)
         elif "fio" in job:
             commands = create_fio_cmdline(self, job, pool)
             # scripts are single cmdline
-            scripts = build_job_script(self, commands, job, 1, 1)
+            scripts = build_job_script(self, commands, job, 1)
             job_cmdlist.extend(scripts)
         elif "daos_racer" in job:
             commands = create_racer_cmdline(self, job, pool)
             # scripts are single cmdline
-            scripts = build_job_script(self, commands, job, 1, 1)
+            scripts = build_job_script(self, commands, job, 1)
             job_cmdlist.extend(scripts)
         else:
             raise SoakTestError(

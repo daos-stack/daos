@@ -40,7 +40,7 @@ class ZeroConfigTest(TestWithServers):
             port_counter (str): port counter to get information from
 
         Returns:
-            dict: a dictionary of data values for each NodeSet key
+            list: a list of the data common to each unique NodeSet of hosts
 
         """
         b_path = "/sys/class/infiniband/{}".format(dev)
@@ -54,7 +54,8 @@ class ZeroConfigTest(TestWithServers):
         cmd = "cat {}".format(file)
         text = "port_counter"
         error = "Error obtaining {} info".format(port_counter)
-        return get_host_data(hosts, cmd, text, error, 20)
+        all_host_data = get_host_data(hosts, cmd, text, error, 20)
+        return [host_data["data"] for host_data in all_host_data]
 
     def get_log_info(self, hosts, dev, env_state, log_file):
         """Get information from daos.log file to verify device used.
@@ -76,8 +77,8 @@ class ZeroConfigTest(TestWithServers):
         pattern = r"Using\s+client\s+provided\s+OFI_INTERFACE:\s+{}".format(dev)
 
         detected = 0
-        for output in list(get_host_data(hosts, cmd, log_file, err).values()):
-            detected = len(re.findall(pattern, output))
+        for host_data in get_host_data(hosts, cmd, log_file, err):
+            detected = len(re.findall(pattern, host_data["data"]))
         self.log.info(
             "Found %s instances of client setting up OFI_INTERFACE=%s",
             detected, dev)
@@ -138,8 +139,7 @@ class ZeroConfigTest(TestWithServers):
             self.hostlist_clients, hfi_map[exp_iface], "port_rcv_data")
 
         diff = 0
-        for cnt_b, cnt_a in zip(
-                list(cnt_before.values()), list(cnt_after.values())):
+        for cnt_b, cnt_a in zip(cnt_before, cnt_after):
             diff = int(cnt_a) - int(cnt_b)
             self.log.info("Port [%s] count difference: %s", exp_iface, diff)
 

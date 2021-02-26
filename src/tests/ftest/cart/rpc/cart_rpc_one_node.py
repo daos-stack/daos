@@ -23,4 +23,4 @@ class CartRpcOneNodeTest(CartTest):
         clicmd = self.build_cmd(self.env, "test_clients")
 
         self.launch_srv_cli_test(srvcmd, clicmd)
-        self.log_check(self)
+        self.log_check()

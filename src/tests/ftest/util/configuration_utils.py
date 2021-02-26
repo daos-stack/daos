@@ -44,7 +44,7 @@ class ConfigurationData():
         """Get the total non-swap memory in bytes for each host.
 
         Returns:
-            dict: a dictionary of data values for each NodeSet key
+            list: a list of dictionaries with data values for each NodeSet
 
         """
         cmd = r"free -b | sed -En 's/Mem:\s+([0-9]+).*/\1/p'"
@@ -56,7 +56,7 @@ class ConfigurationData():
         """Get the largest NVMe capacity in bytes for each host.
 
         Returns:
-            dict: a dictionary of data values for each NodeSet key
+            list: a list of dictionaries with data values for each NodeSet
 
         """
         cmd = "lsblk -b -o SIZE,NAME | grep nvme"
@@ -68,7 +68,7 @@ class ConfigurationData():
         """Get the total SCM capacity in bytes for each host.
 
         Returns:
-            dict: a dictionary of data values for each NodeSet key
+            list: a list of dictionaries with data values for each NodeSet
 
         """
         cmd_list = [
@@ -80,35 +80,36 @@ class ConfigurationData():
         error = "No SCM devices detected"
         return get_host_data(self.hosts, cmd, text, error, self.timeout)
 
-    def get_data(self, requirememt):
+    def get_data(self, requirement):
         """Get the specified requirement data.
 
         Args:
-            requirememt (str): requirememt name
+            requirement (str): requirement name
 
         Raises:
             AttributeError: if the requirement key is invalid
 
         Returns:
-            dict: a dictionary of the requested data keyed by the NodeSet of
+            list: a list of dictionaries with the requested data and NodeSet of
                 hosts with the same data value
 
         """
-        if requirememt in self._data:
+        if requirement in self._data:
             # Return the previously stored requested data
-            return self._data[requirememt]
-        elif requirememt in self._data_key_map:
+            return self._data[requirement]
+        elif requirement in self._data_key_map:
             # Obtain, store (for future requests), and return the data
-            self._data[requirememt] = self._data_key_map[requirememt]()
-            return self._data[requirememt]
+            self._data[requirement] = self._data_key_map[requirement]()
+            return self._data[requirement]
         else:
             # No known method for obtaining this data
             raise AttributeError(
-                "Unknown data requirememt for ConfigurationData object: "
-                "{}".format(requirememt))
+                "Unknown data requirement for ConfigurationData object: "
+                "{}".format(requirement))
 
 
 class ConfigurationParameters(ObjectWithParameters):
+    # pylint: disable=too-few-public-methods
     """Defines a configuration with a set of requirement parameters."""
 
     def __init__(self, namespace, name, data):
@@ -157,13 +158,14 @@ class ConfigurationParameters(ObjectWithParameters):
             if value != 0:
                 # Retrieve the data for all of the hosts which is grouped by
                 # hosts with the same values
-                requirement_data = self._config_data.get_data(requirement)
-                for group, data in list(requirement_data.items()):
-                    status = data != DATA_ERROR and data >= value
+                for info in self._config_data.get_data(requirement):
+                    status = \
+                        info["data"] != DATA_ERROR and info["data"] >= value
                     self.log.debug(
-                        "  %s: Verifying the maximum %s meets the requirememt: "
+                        "  %s: Verifying the maximum %s meets the requirement: "
                         "%s >= %s: %s",
-                        group, requirement.replace("_", " "), data, value,
+                        str(info["hosts"]), requirement.replace("_", " "),
+                        info["data"], value,
                         str(status))
                     if not status:
                         break

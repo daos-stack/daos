@@ -151,9 +151,8 @@ def run_event_check(self, since, until):
         "daos_server --since=\"{}\" --until=\"{}\"".format(since, until)
         err = "Error gathering system log events"
         for event in events:
-            for output in list(get_host_data(
-                    hosts, command, "journalctl", err).values()):
-                lines = str(output).splitlines()
+            for output in get_host_data(hosts, command, "journalctl", err):
+                lines = output["data"].splitlines()
                 for line in lines:
                     match = re.search(r"{}".format(event), str(line))
                     if match:
@@ -808,14 +807,13 @@ def create_fio_cmdline(self, job_spec, pool):
     return commands
 
 
-def build_job_script(self, commands, job, ppn, nodesperjob):
+def build_job_script(self, commands, job, nodesperjob):
     """Create a slurm batch script that will execute a list of cmdlines.
 
     Args:
         self (obj): soak obj
         commands(list): commandlines and cmd specific log_name
         job(str): the job name that will be defined in the slurm script
-        ppn(int): number of tasks to run on each node
 
     Returns:
         script_list: list of slurm batch scripts

@@ -36,7 +36,7 @@ class SimpleProfiler():
     def __init__(self):
         """Initialize a SimpleProfiler object."""
         self._stats = {}
-        self._logger = None
+        self._logger = getLogger()
 
     def clean(self):
         """Clean the metrics collect so far."""
@@ -50,7 +50,7 @@ class SimpleProfiler():
             args  (tuple): Argument list
             kwargs (dict): Keyworded, variable-length argument list
         """
-        self._log("Running function: {0}()".format(fn.__name__))
+        self._logger.info("Running function: %s()", fn.__name__)
 
         start_time = time.time()
 
@@ -58,9 +58,8 @@ class SimpleProfiler():
 
         end_time = time.time()
         elapsed_time = end_time - start_time
-        self._log(
-            "Execution time: {0}".format(
-                self._pretty_time(elapsed_time)))
+        self._logger.info(
+            "Execution time: %s", self._pretty_time(elapsed_time))
 
         if tag not in self._stats:
             self._stats[tag] = [0, []]
@@ -104,33 +103,18 @@ class SimpleProfiler():
         If the logger has not been set, the stats will be printed by using the
         built-in print function.
         """
-        self._pmsg("{0:20} {1:5} {2:10} {3:10} {4:10}".format(
+        self._logger.info("{0:20} {1:5} {2:10} {3:10} {4:10}".format(
             "Function Tag", "Hits", "Max", "Min", "Average"))
 
         for fname, data in list(self._stats.items()):
             max_time, min_time, avg_time = self._calculate_metrics(data[1])
-            self._pmsg(
+            self._logger.info(
                 "{0:20} {1:5} {2:10} {3:10} {4:10}".format(
                     fname,
                     data[0],
                     self._pretty_time(max_time),
                     self._pretty_time(min_time),
                     self._pretty_time(avg_time)))
-
-    def _log(self, msg):
-        """If logger function is set, print log messages."""
-        if self._logger:
-            self._logger(msg)
-
-    def _pmsg(self, msg):
-        """Print messages using the logger.
-
-        If it has not been set, print messages using python print() function.
-        """
-        if self._logger:
-            self._log(msg)
-        else:
-            print(msg)
 
     @classmethod
     def _pretty_time(cls, ftime):
@@ -142,11 +126,7 @@ class SimpleProfiler():
         """Calculate the maximum, minimum and average values of a given list."""
         max_time = max(data)
         min_time = min(data)
-
-        if len(data):
-            avg_time = sum(data) / len(data)
-        else:
-            avg_time = 0
+        avg_time = sum(data) / len(data) if data else 0
 
         return max_time, min_time, avg_time
 
@@ -265,6 +245,7 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
                 pid             - command's pid
 
     """
+    log = getLogger()
     msg = None
     kwargs = {
         "cmd": command,
@@ -276,7 +257,7 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
         "env": env,
     }
     if verbose:
-        print("Command environment vars:\n  {}".format(env))
+        log.info("Command environment vars:\n  %s", env)
     try:
         # Block until the command is complete or times out
         return process.run(**kwargs)
@@ -301,7 +282,7 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
                 command, error.result)
 
     if msg is not None:
-        print(msg)
+        log.info(msg)
         raise DaosTestError(msg)
 
 
@@ -367,6 +348,7 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
                 ]
 
     """
+    log = getLogger()
     results = []
 
     # Run the command on each host in parallel
@@ -423,14 +405,13 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
         for item in results
         if expect_rc is not None and item["exit_status"] != expect_rc]
     if verbose or bad_exit_status:
-        print("Command: {}\nResults:".format(command))
+        log.info("Command: %s\nResults:", command)
         for result in results:
-            print(
-                "  {}: exit_status={}, interrupted={}:".format(
-                    result["hosts"], result["exit_status"],
-                    result["interrupted"]))
+            log.info(
+                "  %s: exit_status=%s, interrupted=%s:",
+                result["hosts"], result["exit_status"], result["interrupted"])
             for line in result["stdout"]:
-                print("    {}".format(line))
+                log.info("    %s", line)
 
     return results
 
@@ -445,32 +426,36 @@ def get_host_data(hosts, command, text, error, timeout=None):
         error (str): data error string
 
     Returns:
-        dict: a dictionary of data values for each NodeSet key
+        list: a list of dictionaries containing the following key/value pairs:
+            "hosts": NodeSet containing the hosts with this data
+            "data":  data requested for the group of hosts
 
     """
-    host_data = {}
+    log = getLogger()
+    host_data = []
     DATA_ERROR = "[ERROR]"
 
     # Find the data for each specified servers
-    print("  Obtaining {} data on {}".format(text, hosts))
+    log.info("  Obtaining %s data on %s", text, hosts)
     results = run_pcmd(hosts, command, False, timeout, None)
     errors = [
         item["exit_status"]
         for item in results if item["exit_status"] != 0]
     if errors:
-        print("    {} on the following hosts:".format(error))
+        log.info("    %s on the following hosts:", error)
         for result in results:
             if result["exit_status"] in errors:
-                print(
-                    "      {}: rc={}, interrupted={}, command=\"{}\":".format(
-                        result["hosts"], result["exit_status"],
-                        result["interrupted"], result["command"]))
+                log.info(
+                    "      %s: rc=%s, interrupted=%s, command=\"%s\":",
+                    result["hosts"], result["exit_status"],
+                    result["interrupted"], result["command"])
                 for line in result["stdout"]:
-                    print("        {}".format(line))
-        host_data = {NodeSet.fromlist(hosts): DATA_ERROR}
+                    log.info("        %s", line)
+        host_data.append({"hosts": NodeSet.fromlist(hosts), "data": DATA_ERROR})
     else:
         for result in results:
-            host_data[result["hosts"]] = "\n".join(result["stdout"])
+            host_data.append(
+                {"hosts": result["hosts"], "data": "\n".join(result["stdout"])})
 
     return host_data
 

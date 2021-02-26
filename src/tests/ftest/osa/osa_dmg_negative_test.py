@@ -98,7 +98,7 @@ class OSADmgNegativeTest(OSAUtils):
                                                           scm_size,
                                                           nvme_size)
                     self.log.info(output)
-                    self.validate_results(expected_result, output.stdout)
+                    self.validate_results(expected_result, output.stdout_text)
                 if (extend is False and (rank == "4" or rank == "5")):
                     continue
                 # Exclude a rank, target
@@ -106,25 +106,25 @@ class OSADmgNegativeTest(OSAUtils):
                                                        rank,
                                                        target)
                 self.log.info(output)
-                self.validate_results(expected_result, output.stdout)
+                self.validate_results(expected_result, output.stdout_text)
                 # Now reintegrate the excluded rank.
                 output = self.dmg_command.pool_reintegrate(self.pool.uuid,
                                                            rank,
                                                            target)
                 self.log.info(output)
-                self.validate_results(expected_result, output.stdout)
+                self.validate_results(expected_result, output.stdout_text)
                 # Drain the data from a rank
                 output = self.dmg_command.pool_drain(self.pool.uuid,
                                                      rank,
                                                      target)
                 self.log.info(output)
-                self.validate_results(expected_result, output.stdout)
+                self.validate_results(expected_result, output.stdout_text)
                 # Now reintegrate the drained rank
                 output = self.dmg_command.pool_reintegrate(self.pool.uuid,
                                                            rank,
                                                            target)
                 self.log.info(output)
-                self.validate_results(expected_result, output.stdout)
+                self.validate_results(expected_result, output.stdout_text)
 
     def test_osa_dmg_cmd_without_extend(self):
         """

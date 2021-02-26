@@ -5,7 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from command_utils_base import \
+from .command_utils_base import \
     BasicParameter, LogParameter, YamlParameters, TransportCredentials
 
 

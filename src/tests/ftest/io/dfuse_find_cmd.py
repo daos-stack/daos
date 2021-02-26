@@ -179,7 +179,7 @@ class FindCmd(DfuseTestBase):
         the number of expected files. The test fails.
         """
         profiler = general_utils.SimpleProfiler()
-        profiler.set_logger(self.log.info)
+        profiler.set_logger(self.log)
 
         def _search_needles(file_name, sample_tag, expected_res):
             self.log.info("Searching pattern: %s", file_name)
