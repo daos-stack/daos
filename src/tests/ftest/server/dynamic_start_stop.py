@@ -33,8 +33,8 @@ class DynamicStartStop(TestWithServers):
         output = self.dmg_cmd.system_query()
         for member in output["response"]["members"]:
             if member["rank"] in self.stopped_ranks:
-                self.assertEqual(
-                    member["state"], "stopped",
+                self.assertIn(
+                    member["state"], ["stopped", "evicted"],
                     "State isn't stopped! Actual: {}".format(member["state"]))
                 self.assertEqual(
                     member["info"], "system stop",
