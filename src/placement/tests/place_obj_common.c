@@ -805,7 +805,7 @@ extend_test_pool_map(struct pool_map *map,
 		int32_t *domains, bool *updated_p, uint32_t *map_version_p,
 		uint32_t dss_tgt_nr)
 {
-	struct pool_buf	*map_buf;
+	struct pool_buf	*map_buf = NULL;
 	uint32_t	map_version;
 	int		ntargets;
 	int		rc;
@@ -817,10 +817,20 @@ extend_test_pool_map(struct pool_map *map,
 	rc = gen_pool_buf(map, &map_buf, map_version, ndomains, nnodes,
 			  ntargets, domains, target_uuids, rank_list, NULL,
 			dss_tgt_nr);
-	assert_success(rc);
+	if (rc != 0)
+		D_GOTO(out_map, rc);
 
 	/* Extend the current pool map */
 	rc = pool_map_extend(map, map_version, map_buf);
+	if (rc != 0)
+		D_GOTO(out_map, rc);
+
+	return rc;
+
+out_map:
+	if (map_buf != NULL)
+		pool_buf_free(map_buf);
+
 	assert_success(rc);
 
 	return rc;
