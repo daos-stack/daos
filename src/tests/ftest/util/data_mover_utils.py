@@ -37,6 +37,8 @@ class DcpCommand(ExecutableCommand):
         self.daos_dst_cont = FormattedParameter("--daos-dst-cont {}")
         # DAOS prefix for unified namespace path
         self.daos_prefix = FormattedParameter("--daos-prefix {}")
+        # DAOS API in {DFS, DAOS} (default uses DFS for POSIX containers)
+        self.daos_api = FormattedParameter("--daos-api {}")
         # read source list from file
         self.input_file = FormattedParameter("--input {}")
         # copy original files instead of links

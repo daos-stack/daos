@@ -523,7 +523,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         display_test_file = "test_file" if display else None
 
         # Allow cont to be either the container or the uuid
-        cont_uuid = cont.uuid if hasattr(cont, "uuid") else cont
+        cont_uuid = self._uuid_from_obj(cont)
 
         # Optionally append suffix
         if path_suffix:
@@ -592,7 +592,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         display_test_dir = "test_dir" if display else None
 
         # Allow cont to be either the container or the uuid
-        cont_uuid = cont.uuid if hasattr(cont, "uuid") else cont
+        cont_uuid =self. _uuid_from_obj(cont)
 
         if param_type == "POSIX":
             self.mdtest_cmd.api.update("POSIX", display_api)
