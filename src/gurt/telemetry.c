@@ -265,7 +265,7 @@ d_tm_init(int id, uint64_t mem_size, int flags)
 	d_tm_shmem_root = d_tm_allocate_shared_memory(id, mem_size);
 
 	if (d_tm_shmem_root == NULL) {
-		rc = -DER_NO_SHMEM;
+		rc = -DER_SHMEM_PERMS;
 		goto failure;
 	}
 
@@ -2352,7 +2352,8 @@ d_tm_get_key(int srv_idx)
 uint64_t *
 d_tm_allocate_shared_memory(int srv_idx, size_t mem_size)
 {
-	key_t	key;
+	uint64_t	*addr;
+	key_t		key;
 
 	key = d_tm_get_key(srv_idx);
 	d_tm_shmid = shmget(key, mem_size, IPC_CREAT | 0660);
@@ -2361,7 +2362,12 @@ d_tm_allocate_shared_memory(int srv_idx, size_t mem_size)
 		return NULL;
 	}
 
-	return (uint64_t *)shmat(d_tm_shmid, NULL, 0);
+	addr = shmat(d_tm_shmid, NULL, 0);
+	if (addr == (void *)-1) {
+		D_ERROR("shmat failed, %s\n", strerror(errno));
+		return NULL;
+	}
+	return addr;
 }
 
 /**

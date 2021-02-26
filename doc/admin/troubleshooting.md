@@ -249,18 +249,15 @@ In order to correct this situation synchronize all server clocks to the same
 reference time, using services like NTP.
 
 ### Shared Memory Errors ###
-When DER_NO_SHMEM is received accompanied with the log message:
-```
-Failed to initialize telemetry and metrics for ID ...
-```
-it means that this IO Engine lacked the permissions to access the shared memory
-segment left behind by a previous run of the IO Engine on the same machine.
-This happens when the IO Engine fails to remove the shared memory segment upon
-shutdown, and, there is a mismatch between the user/group used to launch the IO
-Engine between these successive runs.  To remedy the problem, manually identify
-the shared memory segment and remove it.  Issue ```ipcs``` to view the Shared
-Memory Segments.  The output will show a list of segments organized by
-```key```.
+When DER_SHMEM_PERMS is received it means that this IO Engine lacked the
+permissions to access the shared memory megment left behind by a previous run of
+the IO Engine on the same machine.  This happens when the IO Engine fails to
+remove the shared memory segment upon shutdown, and, there is a mismatch between
+the user/group used to launch the IO Engine between these successive runs.  To
+remedy the problem, manually identify the shared memory segment and remove it.
+
+Issue ```ipcs``` to view the Shared Memory Segments.  The output will show a
+list of segments organized by ```key```.
 
 ```
 $ipcs
@@ -291,14 +288,6 @@ To remove the shared memory segment left behind by IO Engine instance 1, issue:
 ```
 sudo ipcrm -M 0x10242049
 ```
-
-In the event that DER_NO_SHMEM is encountered after an otherwise successful
-IO Engine startup, it means that there was not enough space left in the shared
-memory segment to allocate the given metric.  This can only be remedied by
-increasing the size of the shared memory pool in the source code.  Adjust the
-size in bytes defined by D_TM_SHARED_MEMORY_SIZE in telemetry_common.h.  Please
-notify DAOS maintainers if you encounter this error because it indicates a
-miscalculation of the memory size that should be fixed in the source code.
 
 ## Bug Report
 
