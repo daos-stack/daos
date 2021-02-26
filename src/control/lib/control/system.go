@@ -637,7 +637,6 @@ func SystemReformat(ctx context.Context, rpcClient UnaryInvoker, resetReq *Syste
 type LeaderQueryReq struct {
 	unaryRequest
 	msRequest
-	System string
 }
 
 // LeaderQueryResp contains the status of the request and, if successful, the
@@ -652,7 +651,7 @@ type LeaderQueryResp struct {
 func LeaderQuery(ctx context.Context, rpcClient UnaryInvoker, req *LeaderQueryReq) (*LeaderQueryResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).LeaderQuery(ctx, &mgmtpb.LeaderQueryReq{
-			Sys: req.System,
+			Sys: req.getSystem(),
 		})
 	})
 	rpcClient.Debugf("DAOS system leader-query request: %s", req)

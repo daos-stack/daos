@@ -314,11 +314,14 @@ func (mr *MemberResult) UnmarshalJSON(data []byte) error {
 // NewMemberResult returns a reference to a new member result struct.
 //
 // Host address and action fields are not always used so not populated here.
-func NewMemberResult(rank Rank, err error, state MemberState) *MemberResult {
+func NewMemberResult(rank Rank, err error, state MemberState, action ...string) *MemberResult {
 	result := MemberResult{Rank: rank, State: state}
 	if err != nil {
 		result.Errored = true
 		result.Msg = err.Error()
+	}
+	if len(action) > 0 {
+		result.Action = action[0]
 	}
 
 	return &result
