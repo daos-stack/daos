@@ -223,8 +223,13 @@ PREFIX="%{?_prefix}"
 mkdir -p %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{?buildroot}/%{_unitdir}
+%if (0%{?rhel} == 7)
+install -m 644 utils/systemd/%{server_svc_name}.pre230 %{?buildroot}/%{_unitdir}/%{server_svc_name}
+install -m 644 utils/systemd/%{agent_svc_name}.pre230 %{?buildroot}/%{_unitdir}/%{agent_svc_name}
+%else
 install -m 644 utils/systemd/%{server_svc_name} %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
+%endif
 mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
 mv %{?buildroot}/%{_sysconfdir}/daos/bash_completion.d %{?buildroot}/%{_sysconfdir}
 
