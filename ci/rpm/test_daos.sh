@@ -5,7 +5,7 @@ set -uex
 # DAOS_PKG_VERSION environment variable needs to be set for this script
 
 nodelist=(${NODELIST//,/ })
-PYTHONPATH="${PYTHONPATH}:src/tests/ftest/util"
+PYTHONPATH="src/tests/ftest/util"
 src/tests/ftest/config_file_gen.py -n "${nodelist[0]}" \
   -a /tmp/daos_agent.yml -s /tmp/daos_server.yml
 src/tests/ftest/config_file_gen.py -n "${nodelist[0]}" -d /tmp/dmg.yml

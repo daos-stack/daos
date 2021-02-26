@@ -6,7 +6,8 @@
 """
 
 from mpio_test_base import MpiioTests
-
+import site
+import os
 
 # pylint: disable=too-many-ancestors
 class LlnlMpi4py(MpiioTests):
