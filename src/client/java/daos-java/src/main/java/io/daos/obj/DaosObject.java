@@ -268,7 +268,7 @@ public class DaosObject {
    * @param desc
    * {@link IODataDescSync} describes list of {@link IODataDescSync.Entry} to fetch akeyes' data under dkey.
    * Check {@link #createDataDescForFetch(String, IODataDescSync.IodType, int)} and
-   * {@link IODataDescSync#addEntryForFetch(String, int, int)}.
+   * {@link IODataDescSync#addEntryForFetch(String, long, int)}.
    * User should release internal buffer of <code>desc</code> by himself.
    * @throws DaosObjectException
    */
@@ -588,7 +588,7 @@ public class DaosObject {
    * @return {@link IODataDescSync}
    * @throws IOException
    */
-  public IODataDescSync createDataDescForUpdate(String dkey, IODataDescSync.IodType iodType, int recordSize)
+  public static IODataDescSync createDataDescForUpdate(String dkey, IODataDescSync.IodType iodType, int recordSize)
       throws IOException {
     IODataDescSync desc = new IODataDescSync(dkey, iodType, recordSize, true);
     return desc;
@@ -607,7 +607,7 @@ public class DaosObject {
    * @return {@link IODataDescSync}
    * @throws IOException
    */
-  public IODataDescSync createDataDescForFetch(String dkey, IODataDescSync.IodType iodType, int recordSize)
+  public static IODataDescSync createDataDescForFetch(String dkey, IODataDescSync.IodType iodType, int recordSize)
       throws IOException {
     IODataDescSync desc = new IODataDescSync(dkey, iodType, recordSize, false);
     return desc;
@@ -684,7 +684,7 @@ public class DaosObject {
    * true for update. false for fetch
    * @return
    */
-  public IODataDescSync createReusableDesc(int maxKeyLen, int nbrOfEntries, int entryBufLen,
+  public static IODataDescSync createReusableDesc(int maxKeyLen, int nbrOfEntries, int entryBufLen,
                                            IODataDescSync.IodType iodType, int recordSize, boolean updateOrFetch) {
     return new IODataDescSync(maxKeyLen, nbrOfEntries, entryBufLen, iodType, recordSize, updateOrFetch);
   }
@@ -703,7 +703,7 @@ public class DaosObject {
    * true for update. false for fetch
    * @return
    */
-  public IODataDescSync createReusableDesc(IODataDescSync.IodType iodType, int recordSize, boolean updateOrFetch) {
+  public static IODataDescSync createReusableDesc(IODataDescSync.IodType iodType, int recordSize, boolean updateOrFetch) {
     return new IODataDescSync(iodType, recordSize, updateOrFetch);
   }
 
@@ -722,7 +722,7 @@ public class DaosObject {
    * @return new instance of IOKeyDesc
    * @throws IOException
    */
-  public IOKeyDesc createKDWithAllParams(String dkey, int nbrOfKeys, int keyLen, int batchSize)
+  public static IOKeyDesc createKDWithAllParams(String dkey, int nbrOfKeys, int keyLen, int batchSize)
                   throws IOException {
     return new IOKeyDesc(dkey, nbrOfKeys, keyLen, batchSize);
   }
@@ -741,7 +741,7 @@ public class DaosObject {
    * @return new instance of IOKeyDesc
    * @throws IOException
    */
-  public IOKeyDesc createKDWithDefaultBs(String dkey, int nbrOfKeys, int keyLen) throws IOException {
+  public static IOKeyDesc createKDWithDefaultBs(String dkey, int nbrOfKeys, int keyLen) throws IOException {
     return new IOKeyDesc(dkey, nbrOfKeys, keyLen);
   }
 
@@ -756,7 +756,7 @@ public class DaosObject {
    * @return new instance of IOKeyDesc
    * @throws IOException
    */
-  public IOKeyDesc createKDWithNbrOfKeys(String dkey, int nbrOfKeys) throws IOException {
+  public static IOKeyDesc createKDWithNbrOfKeys(String dkey, int nbrOfKeys) throws IOException {
     return new IOKeyDesc(dkey, nbrOfKeys);
   }
 
@@ -770,7 +770,7 @@ public class DaosObject {
    * @return new instance of IOKeyDesc
    * @throws IOException
    */
-  public IOKeyDesc createKD(String dkey) throws IOException {
+  public static IOKeyDesc createKD(String dkey) throws IOException {
     return new IOKeyDesc(dkey);
   }
 
@@ -786,7 +786,7 @@ public class DaosObject {
    * @return new instance of IOKeyDesc
    * @throws IOException
    */
-  public IOKeyDesc createKDWithKlAndBs(String dkey, int keyLen, int batchSize) throws IOException {
+  public static IOKeyDesc createKDWithKlAndBs(String dkey, int keyLen, int batchSize) throws IOException {
     return new IOKeyDesc(dkey, Integer.MAX_VALUE, keyLen, batchSize);
   }
 
