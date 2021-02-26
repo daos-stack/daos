@@ -285,7 +285,7 @@ def launch_snapshot(self, pool, name):
             status &= False
         if status:
             # Compare the snapshot to the original written data.
-            if data_pattern3.value != data_pattern:
+            if data_pattern3.value.decode("utf-8") != data_pattern:
                 self.log.error("Snapshot data miscompere")
                 status &= False
     # Destroy the snapshot

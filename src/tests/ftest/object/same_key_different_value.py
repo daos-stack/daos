@@ -31,8 +31,8 @@ class SameKeyDifferentValue(TestWithServers):
             self.container.open()
 
         except DaosApiError as excpn:
-            print(excpn)
-            print(traceback.format_exc())
+            self.log.info(excpn)
+            self.log.info(traceback.format_exc())
             self.fail("Test failed during setup.\n")
 
     def test_single_to_array_value(self):
@@ -77,9 +77,10 @@ class SameKeyDifferentValue(TestWithServers):
                 # read the data back and make sure its correct
                 read_back_data = self.container.read_an_obj(
                     len(single_value_data)+1, dkey, akey, obj)
-                if single_value_data != read_back_data.value:
-                    print("data I wrote:" + single_value_data)
-                    print("data I read back" + read_back_data.value)
+                if single_value_data != read_back_data.value.decode("utf-8"):
+                    self.log.info("wrote data: %s", single_value_data)
+                    self.log.info(
+                        "read data:  %s", read_back_data.value.decode("utf-8"))
                     self.fail("Write data, read it back, didn't match\n")
 
                 # test case 1
@@ -98,7 +99,7 @@ class SameKeyDifferentValue(TestWithServers):
                     # should fail with -1001 ERR
                     except DaosApiError as excp:
                         if "-1001" not in str(excp):
-                            print(excp)
+                            self.log.info(excp)
                             self.fail("Should have failed with -1001 error"
                                       + " message, but it did not\n")
 
@@ -123,7 +124,7 @@ class SameKeyDifferentValue(TestWithServers):
                     # or fail with -1001 ERR
                     except DaosApiError as excp:
                         if "-1001" not in str(excp):
-                            print(excp)
+                            self.log.info(excp)
                             self.fail("Should have failed with -1001 error"
                                       + " message or the write should have"
                                       + " been successful, but it did not\n")
@@ -185,8 +186,9 @@ class SameKeyDifferentValue(TestWithServers):
                 for j in range(3):
                     if (array_value_data[j][0:length-1] !=
                             read_back_data[j][0:length-1]):
-                        print("Written Data: {}".format(array_value_data[j]))
-                        print("Read Data: {}".format(read_back_data[j]))
+                        self.log.info(
+                            "Written Data: {}".format(array_value_data[j]))
+                        self.log.info("Read Data: {}".format(read_back_data[j]))
                         self.fail("Data mismatch\n")
                 # test case 1
                 if i == 0:
@@ -203,7 +205,7 @@ class SameKeyDifferentValue(TestWithServers):
                     # should fail with -1001 ERR
                     except DaosApiError as excp:
                         if "-1001" not in str(excp):
-                            print(excp)
+                            self.log.info(excp)
                             self.fail("Should have failed with -1001 error"
                                       + " message, but it did not\n")
 
@@ -227,7 +229,7 @@ class SameKeyDifferentValue(TestWithServers):
                     # or fail with -1001 ERR
                     except DaosApiError as excp:
                         if "-1001" not in str(excp):
-                            print(excp)
+                            self.log.info(excp)
                             self.fail("Should have failed with -1001 error"
                                       + " message or the write should have"
                                       + " been successful, but it did not\n")

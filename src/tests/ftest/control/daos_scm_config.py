@@ -79,7 +79,7 @@ class SCMConfigTest(TestWithServers):
 
         # Compare the written data and read data
         msg = "Written and read data not equal"
-        self.assertEqual(data_w, data_r.value, msg)
+        self.assertEqual(data_w, data_r.value.decode("utf-8"), msg)
 
         # Lets make sure we can still write data after preparing.
         data_w2 = "Almost done testing... just this last thing."

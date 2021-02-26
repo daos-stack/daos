@@ -64,9 +64,9 @@ class BasicTxTest(TestWithServers):
             # read the data back and make sure its correct
             thedata2 = container.read_an_obj(thedatasize, dkey, akey,
                                              oid)
-            if thedata != thedata2.value:
-                print("thedata>" + thedata)
-                print("thedata2>" + thedata2.value)
+            if thedata != thedata2.value.decode("utf-8"):
+                self.log.info("thedata:  %s", thedata)
+                self.log.info("thedata2: %s", thedata2.value.decode("utf-8"))
                 self.fail("Write data 1, read it back, didn't match\n")
 
             # repeat above, but know that the write_an_obj call is advancing
@@ -84,7 +84,7 @@ class BasicTxTest(TestWithServers):
             # read the data back and make sure its correct
             thedata4 = container.read_an_obj(thedatasize2, dkey, akey,
                                              oid)
-            if thedata3 != thedata4.value:
+            if thedata3 != thedata4.value.decode("utf-8"):
                 self.fail("Write data 2, read it back, didn't match\n")
 
             # transactions generally don't work this way but need to explore
@@ -94,7 +94,7 @@ class BasicTxTest(TestWithServers):
             # the original data should still be there too
             #thedata5 = container.read_an_obj(thedatasize, dkey, akey,
             #                                 oid, transaction)
-            #if thedata != thedata5.value:
+            #if thedata != thedata5.value.decode("utf-8"):
             #    self.fail("Write data 3, read it back, didn't match\n")
 
             container.close()

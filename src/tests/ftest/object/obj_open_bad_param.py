@@ -44,9 +44,9 @@ class ObjOpenBadParam(TestWithServers):
 
             thedata2 = self.container.read_an_obj(self.datasize, self.dkey,
                                                   self.akey, self.obj)
-            if thedata not in thedata2.value:
-                print(thedata)
-                print(thedata2.value)
+            if thedata not in thedata2.value.decode("utf-8"):
+                self.log.info("thedata:  %s", thedata)
+                self.log.info("thedata2: %s", thedata2.value.decode("utf-8"))
                 err_str = "Error reading back data, test failed during the " \
                           "initial setup."
                 self.d_log.error(err_str)

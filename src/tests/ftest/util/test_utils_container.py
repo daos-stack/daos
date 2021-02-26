@@ -179,7 +179,7 @@ class TestContainerData():
                     "array " if data_array_size > 0 else "", dkey, akey,
                     data_size, container.uuid, error))
         return [data[:-1] for data in read_data] \
-            if data_array_size > 0 else read_data.value
+            if data_array_size > 0 else read_data.value.decode("utf-8")
 
     def read_object(self, container, txn=None):
         """Read an object from the container.

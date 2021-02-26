@@ -215,7 +215,7 @@ def continuous_io(container, seconds):
         data2 = container.read_an_obj(size, dkey, akey, oid)
 
         # verify it came back correctly
-        if data != data2.value:
+        if data != data2.value.decode("utf-8"):
             raise ValueError("Data mismatch in ContinousIo")
 
         # collapse down the committed epochs
@@ -254,7 +254,7 @@ def write_until_full(container):
             container.slip_epoch()
 
     except ValueError as exp:
-        print(exp)
+        self.log.info(exp)
 
     return total_written
 
@@ -294,7 +294,7 @@ def write_quantity(container, size_in_bytes):
             container.slip_epoch()
 
     except ValueError as exp:
-        print(exp)
+        self.log.info(exp)
 
     return total_written
 
@@ -385,7 +385,7 @@ def read_single_objects(container, size, dkey, akey, obj):
         raise DaosTestError(
             "Error reading data (dkey={}, akey={}, size={}) from the "
             "container: {}".format(dkey, akey, size, error))
-    return data.value
+    return data.value.decode("utf-8")
 
 
 def write_array_objects(

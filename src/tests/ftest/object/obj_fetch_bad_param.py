@@ -46,11 +46,12 @@ class ObjFetchBadParam(TestWithServers):
 
             thedata2 = self.container.read_an_obj(self.datasize, self.dkey,
                                                   self.akey, self.obj)
-            if thedata not in thedata2.value:
-                print(thedata)
-                print(thedata2.value)
-                self.fail("Error reading back data, test failed during"\
-                         " the initial setup.\n")
+            if thedata not in thedata2.value.decode("utf-8"):
+                self.log.info("thedata:  %s", thedata)
+                self.log.info("thedata2: %s", thedata2.value.decode("utf-8"))
+                self.fail(
+                    "Error reading back data, test failed during the initial "
+                    "setup.\n")
 
         except DaosApiError as excep:
             print(excep)
@@ -124,11 +125,11 @@ class ObjFetchBadParam(TestWithServers):
         try:
             # when DAOS-1449 is complete, uncomment and retest
             # now try it with a null iod, expecting this to fail with -1003
-            #test_hints = ['iodnull']
-            #thedata2 = self.container.read_an_obj(self.datasize, dkey, akey,
+            # test_hints = ['iodnull']
+            # thedata2 = self.container.read_an_obj(self.datasize, dkey, akey,
             #                                 self.obj, test_hints)
             pass
-            #self.fail("Test was expected to return a -1003 but it has not.\n")
+            # self.fail("Test was expected to return a -1003 but it has not.\n")
 
         except DaosApiError as excep:
             if '-1003' not in str(excep):

@@ -132,7 +132,7 @@ class BasicSnapshot(TestWithServers):
                 "Error when retrieving the snapshot data.\n{0}".format(error))
 
         # Compare the snapshot to the originally written data.
-        if thedata2.value != thedata:
+        if thedata2.value.decode("utf-8") != thedata:
             self.fail(
                 "The data in the snapshot is not the same as the original data")
 
