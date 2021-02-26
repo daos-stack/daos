@@ -88,6 +88,12 @@ struct  _Mgmt__PoolCreateReq
   size_t n_acl;
   char **acl;
   /*
+   * The minimal fault domain tree format consists of a set of tuples
+   * representing members of the tree in a breadth-first traversal order.
+   * Each domain above rank consists of: (level, id, num children)
+   * Each rank consists of: (rank number)
+   */
+  /*
    * Fault domain tree, minimal format
    */
   size_t n_faultdomains;

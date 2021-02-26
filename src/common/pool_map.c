@@ -11,6 +11,7 @@
 #define D_LOGFAC	DD_FAC(common)
 
 #include <daos/pool_map.h>
+#include "fault_domain.h"
 
 /** counters for component (sub)tree */
 struct pool_comp_cntr {
@@ -1368,11 +1369,12 @@ add_domains_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 			int map_version,
 			int ndomains, const uint32_t *domains)
 {
-	int		i, rc;
-	uint32_t	num_comps;
-	uint8_t		new_status;
-	const int	TUPLE_SIZE = POOL_BUF_DOMAIN_TUPLE_LEN;
-	uint32_t	domains_found;
+	int			i = 0;
+	int			rc;
+	uint32_t		num_comps;
+	uint8_t			new_status;
+	struct d_fd_tree	tree = {0};
+	struct d_fd_node	node = {0};
 
 	if (map != NULL) {
 		new_status = PO_COMP_ST_NEW;
@@ -1383,40 +1385,42 @@ add_domains_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 		num_comps = 0;
 	}
 
-	/*
-	 * Fault domains are structured as an array of tuples:
-	 * (layer, ID, number of children)
-	 * The leaves are simply the rank IDs, and may be ignored for now.
-	 */
-	domains_found = 1 + domains[TUPLE_SIZE - 1];
-	for (i = TUPLE_SIZE;
-	     (i < ndomains - TUPLE_SIZE) &&
-	     (i < domains_found * TUPLE_SIZE);) {
-		struct pool_component	map_comp = {0};
-		uint32_t		layer = domains[i++];
-		uint32_t		id = domains[i++];
-		uint32_t		num_children = domains[i++];
+	rc = d_fd_tree_init(&tree, domains, ndomains);
+	if (rc != 0)
+		return rc;
+
+	/* discard the root - it's being added to the pool buf elsewhere */
+	rc = d_fd_tree_next(&tree, &node);
+	while (rc == 0) {
+		struct pool_component map_comp;
+
+		rc = d_fd_tree_next(&tree, &node);
+		if (rc != 0) {
+			/* got to the end of the tree with no problems */
+			if (rc == -DER_NONEXIST)
+				rc = 0;
+			break;
+		}
+
+		/* ranks are handled elsewhere for now */
+		if (node.fdn_type != D_FD_NODE_TYPE_DOMAIN)
+			break;
 
 		/* TODO DAOS-6353: Use the layer number as type */
 		map_comp.co_type = PO_COMP_TP_RACK;
 		map_comp.co_status = new_status;
 		map_comp.co_index = i + num_comps;
-		map_comp.co_id = id;
+		map_comp.co_id = node.fdn_val.dom->fd_id;
 		map_comp.co_rank = 0;
 		map_comp.co_ver = map_version;
 		map_comp.co_fseq = 1;
-		map_comp.co_nr = num_children;
-
-		/* layer 1 is the bottom user-defined layer, above ranks */
-		if (layer > 1)
-			domains_found += num_children;
+		map_comp.co_nr = node.fdn_val.dom->fd_children_nr;
 
 		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
-		if (rc != 0)
-			return rc;
+		i++;
 	}
 
-	return 0;
+	return rc;
 }
 
 int
@@ -1434,17 +1438,20 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 	uint8_t			new_status;
 	bool			updated;
 	int			i, rc;
-	int			num_domain_comps;
+	uint32_t		num_domain_comps;
 
 	updated = false;
 
 	/*
-	 * Incoming domain tree map includes the root and the ranks, which are
-	 * currently allocated separately.
-	 * Higher-level domains are formatted in tuples, ranks are a single
-	 * integer.
+	 * Estimate number of domains for allocating the pool buffer
 	 */
-	num_domain_comps = (ndomains - nnodes) / POOL_BUF_DOMAIN_TUPLE_LEN - 1;
+	rc = d_fd_get_exp_num_domains(ndomains, nnodes, &num_domain_comps);
+	if (rc != 0) {
+		D_ERROR("Invalid domain array, len=%u\n", ndomains);
+		return rc;
+	}
+	D_ASSERT(num_domain_comps > 0);
+	num_domain_comps--; /* remove the root domain - allocated separately */
 
 	/* Prepare the pool map attribute buffers. */
 	map_buf = pool_buf_alloc(num_domain_comps + nnodes + ntargets);

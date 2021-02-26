@@ -539,8 +539,8 @@ pool_change_target_state(char *id, d_rank_list_t *svc_ranks,
 	rc = ds_mgmt_pool_target_update_state(uuid, svc_ranks, rank,
 					      &target_id_list, state);
 	if (rc != 0) {
-		D_ERROR("Failed to set pool target up %s: "DF_RC"\n", uuid,
-			DP_RC(rc));
+		D_ERROR("Failed to set pool target up "DF_UUID": "DF_RC"\n",
+			DP_UUID(uuid), DP_RC(rc));
 	}
 
 	pool_target_id_list_free(&target_id_list);
