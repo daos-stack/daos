@@ -84,7 +84,7 @@ public class DaosFileSystemTest {
       eie = e;
     }
     Assert.assertNotNull(eie);
-    Assert.assertTrue(eie.getMessage().contains("No FileSystem for scheme: daosss"));
+    Assert.assertTrue(eie.getMessage().contains("No FileSystem for scheme \"daosss\""));
   }
 
   @Test
