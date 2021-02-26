@@ -72,6 +72,9 @@ cat <<EOF > ~/.config/avocado/avocado.conf
 [datadir.paths]
 logs_dir = $logs_prefix/ftest/avocado/job-results
 
+[runner.timeout]
+process_died = 60
+
 [sysinfo.collectibles]
 files = \$HOME/.config/avocado/sysinfo/files
 # File with list of commands that will be executed and have their output
