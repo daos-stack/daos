@@ -48,7 +48,7 @@ class RebuildTests(TestWithServers):
                 rs_done=1, rs_obj_nr=0, rs_rec_nr=0, rs_errno=0)
         self.assertTrue(status, "Error confirming pool info before rebuild")
 
-        # Create containers in each pool and fill it with data
+        # Create containers in each pool and fill them with data
         rs_obj_nr = []
         rs_rec_nr = []
         for index in range(pool_quantity):
