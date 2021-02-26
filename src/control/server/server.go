@@ -411,9 +411,9 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 				// FIXME CART-944: We should be able to update the
 				// primary group in order to remove the dead rank,
 				// but for the moment this will cause problems.
-				/*if err := mgmtSvc.doGroupUpdate(ctx); err != nil {
+				if err := mgmtSvc.doGroupUpdate(ctx); err != nil {
 					log.Errorf("GroupUpdate failed: %s", err)
-				}*/
+				}
 			}
 		}))
 
