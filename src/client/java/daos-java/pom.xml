@@ -16,7 +16,7 @@
 
   <properties>
     <native.build.path>${project.basedir}/build</native.build.path>
-    <daos.install.path>/usr/local/daos</daos.install.path>
+    <daos.install.path>${project.basedir}/install</daos.install.path>
     <compile.proto>false</compile.proto>
   </properties>
 
