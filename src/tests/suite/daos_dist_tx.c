@@ -1389,9 +1389,10 @@ dtx_24(void **state)
 	sleep(DTX_COMMIT_THRESHOLD_AGE + 3);
 
 	MPI_Barrier(MPI_COMM_WORLD);
+	daos_fail_loc_set(DAOS_DTX_NO_RETRY | DAOS_FAIL_ALWAYS);
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-				      DAOS_DTX_NO_INPROGRESS | DAOS_FAIL_ALWAYS,
+				      DAOS_DTX_NO_RETRY | DAOS_FAIL_ALWAYS,
 				      0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -1408,6 +1409,7 @@ dtx_24(void **state)
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
+	daos_fail_loc_set(0);
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				      0, 0, NULL);
@@ -2398,9 +2400,10 @@ dtx_35(void **state)
 	MUST(daos_obj_open(arg->coh, oids[0], 0, &reqs[0].oh, NULL));
 	MUST(daos_obj_open(arg->coh, oids[1], 0, &reqs[1].oh, NULL));
 
+	daos_fail_loc_set(DAOS_DTX_NO_RETRY | DAOS_FAIL_ALWAYS);
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-				      DAOS_DTX_NO_INPROGRESS | DAOS_FAIL_ALWAYS,
+				      DAOS_DTX_NO_RETRY | DAOS_FAIL_ALWAYS,
 				      0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -2420,6 +2423,7 @@ dtx_35(void **state)
 	dtx_fini_req_akey(reqs, akeys, 2, DTX_NC_CNT);
 
 	MPI_Barrier(MPI_COMM_WORLD);
+	daos_fail_loc_set(0);
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				      0, 0, NULL);

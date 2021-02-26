@@ -806,6 +806,9 @@ dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont)
 	int			 len = 0;
 	int			 rc = 0;
 
+	if (DAOS_FAIL_CHECK(DAOS_DTX_NO_RETRY))
+		return -DER_IO;
+
 	D_INIT_LIST_HEAD(&head);
 
 	d_list_for_each_entry(dsp, &dth->dth_share_tbd_list, dsp_link) {
