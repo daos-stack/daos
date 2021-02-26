@@ -143,14 +143,14 @@ specific client session.
 The server flow is dependent on a custom handler function, whose job is to
 dispatch incoming `Drpc__Call` messages appropriately. The handler function
 should inspect the module and method IDs, ensure that the desired method is
-executed, and create a `Drpc__Response` based on the results.
+executed, and populate a `Drpc__Response` based on the results.
 
 #### Basic Server Workflow
 
 1. Set up the Unix Domain Socket at a given path and create a listening context
 using a custom handler function:
     ```
-    void my_handler(Drpc__Call *call, Drpc__Response **resp) {
+    void my_handler(Drpc__Call *call, Drpc__Response *resp) {
         /* Handle the message based on module/method IDs */
     }
     ...

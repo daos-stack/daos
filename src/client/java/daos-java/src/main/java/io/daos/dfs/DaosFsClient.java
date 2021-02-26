@@ -299,7 +299,12 @@ public final class DaosFsClient extends ShareableClient implements ForceCloseabl
    * {@link DaosIOException}
    */
   public void move(String srcPath, String destPath) throws IOException {
-    move(dfsPtr, DaosUtils.normalize(srcPath), DaosUtils.normalize(destPath));
+    String src = DaosUtils.normalize(srcPath);
+    String dest = DaosUtils.normalize(destPath);
+    if (dest.length() > src.length() && dest.startsWith(src + '/')) {
+      throw new IOException("cannot move to subdirectory of itself. " + src + " to " + dest);
+    }
+    move(dfsPtr, src, dest);
   }
 
   /**

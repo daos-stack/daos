@@ -42,7 +42,7 @@ update_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 	d_iov_set(&akey_iov, akey, strlen(akey));
 
 	rc = d_sgl_init(&sgl, 1);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	if (type == DAOS_IOD_SINGLE)
 		buf_len = iod_size;
@@ -71,7 +71,7 @@ update_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	rc = io_test_obj_update(arg, epoch, flags, &dkey_iov, &iod, &sgl, NULL,
 				true);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	d_sgl_fini(&sgl, false);
 	arg->ta_flags &= ~TF_ZERO_COPY;
@@ -97,7 +97,7 @@ fetch_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 	d_iov_set(&akey_iov, akey, strlen(akey));
 
 	rc = d_sgl_init(&sgl, 1);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	if (type == DAOS_IOD_SINGLE)
 		buf_len = iod_size;
@@ -120,7 +120,7 @@ fetch_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 		arg->ta_flags |= TF_ZERO_COPY;
 
 	rc = io_test_obj_fetch(arg, epoch, flags, &dkey_iov, &iod, &sgl, true);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	assert_true(iod.iod_size == 0 || iod.iod_size == iod_size);
 
 	d_sgl_fini(&sgl, false);
@@ -180,7 +180,7 @@ phy_recs_nr(struct io_test_args *arg, daos_unit_oid_t oid,
 
 	rc = vos_iterate(&iter_param, iter_type, false, &anchors,
 			 counting_cb, NULL, &nr, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	return nr;
 }
@@ -409,7 +409,7 @@ aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a,
 				   ds_csum_agg_recalc, NULL, NULL);
 	if (rc != -DER_CSUM) {
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		verify_view(arg, oid, dkey, akey, ds);
 	}
 }
@@ -579,7 +579,7 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 		rc = vos_discard(arg->ctx.tc_co_hdl, epr_a, NULL, NULL);
 	else
 		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL, NULL, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	multi_view(arg, oids, dkeys, akeys, AT_OBJ_KEY_NR, ds_arr, true);
 	D_FREE(ds_arr);
@@ -672,7 +672,7 @@ discard_3(void **state)
 
 	/* Object should have been deleted by discard */
 	rc = lookup_object(arg, arg->oid);
-	assert_int_equal(rc, -DER_NONEXIST);
+	assert_rc_equal(rc, -DER_NONEXIST);
 }
 
 /*
@@ -860,7 +860,7 @@ discard_9(void **state)
 
 	/* Object should have been deleted by discard */
 	rc = lookup_object(arg, arg->oid);
-	assert_int_equal(rc, -DER_NONEXIST);
+	assert_rc_equal(rc, -DER_NONEXIST);
 }
 
 /*
@@ -1039,7 +1039,7 @@ do_punch(struct io_test_args *arg, int type, daos_unit_oid_t oid,
 
 	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, epoch, 0, 0,
 			   dkey_ptr, num_akeys, akey_ptr, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 #define NUM_INTERNAL 200
@@ -1108,7 +1108,7 @@ agg_punches_test_helper(void **state, int record_type, int type, bool discard,
 			rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL,
 					   NULL, NULL);
 
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 
 		if (first != AGG_NONE) {
 			/* regardless of aggregate or discard, the first entry
@@ -1763,7 +1763,7 @@ aggregate_14(void **state)
 	int			 i, repeat_cnt, rc;
 
 	rc = vos_pool_query(arg->ctx.tc_po_hdl, &pool_info);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	print_space_info(&pool_info, "INIT");
 
 	fill_size = NVME_FREE(vps) ? : SCM_FREE(vps);
@@ -1797,7 +1797,7 @@ aggregate_14(void **state)
 		}
 
 		rc = vos_pool_query(arg->ctx.tc_po_hdl, &pool_info);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		print_space_info(&pool_info, "FILLED");
 
 		VERBOSE_MSG("Aggregate round: %d\n", i);
@@ -1809,7 +1809,7 @@ aggregate_14(void **state)
 		}
 
 		rc = vos_pool_query(arg->ctx.tc_po_hdl, &pool_info);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		print_space_info(&pool_info, "AGGREGATED");
 
 		VERBOSE_MSG("Wait 10 secs for free extents expiring...\n");
@@ -1817,7 +1817,7 @@ aggregate_14(void **state)
 	}
 
 	rc = vos_pool_query(arg->ctx.tc_po_hdl, &pool_info);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	print_space_info(&pool_info, "FINAL");
 
 	assert_int_equal(i, repeat_cnt);
@@ -1986,7 +1986,7 @@ aggregate_22(void **state)
 	epr.epr_hi = epoch++;
 
 	rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	fetch_value(arg, oid, epoch++,
 		    VOS_OF_COND_AKEY_FETCH, dkey, akey,
