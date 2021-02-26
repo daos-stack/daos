@@ -106,7 +106,6 @@ public class IOSimpleDataDesc extends IODataDescBase implements DaosEventQueue.A
       DaosObjClient.allocateSimpleDesc(descBuffer.memoryAddress(), false);
       checkNativeDesc();
     } // group managed native desc for asynchronous desc
-    this.updateOrFetch = true; // default to update
   }
 
   private void checkLen(int len, String keyType) {
@@ -159,6 +158,9 @@ public class IOSimpleDataDesc extends IODataDescBase implements DaosEventQueue.A
    */
   @Override
   public void encode() {
+    if (encoded) {
+      return;
+    }
     if (nbrOfAkeysToRequest == 0) {
       throw new IllegalArgumentException("at least one of entries should have data");
     }
@@ -190,6 +192,7 @@ public class IOSimpleDataDesc extends IODataDescBase implements DaosEventQueue.A
       throw new IllegalStateException("number of akeys to request " + nbrOfAkeysToRequest + ", should not exceed " +
           "total reused entries, " + count);
     }
+    encoded = true;
   }
 
   private void prepareNativeDesc() {
@@ -230,6 +233,11 @@ public class IOSimpleDataDesc extends IODataDescBase implements DaosEventQueue.A
   @Override
   public IODataDesc duplicate() throws IOException {
     throw new UnsupportedOperationException("duplicate is not supported");
+  }
+
+  @Override
+  public ByteBuf getDescBuffer() {
+    return descBuffer;
   }
 
   public int getRetCode() {
@@ -297,6 +305,7 @@ public class IOSimpleDataDesc extends IODataDescBase implements DaosEventQueue.A
     this.nbrOfAkeysToRequest = 0;
     this.totalRequestSize = 0;
     this.dkeyChanged = false;
+    this.encoded = false;
     this.retCode = Integer.MAX_VALUE;
     for (Entry e : akeyEntries) {
       e.actualSize = 0;
