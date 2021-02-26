@@ -1,4 +1,5 @@
-# Introduction
+# Data Integrity
+
 Arguably, one of the worst things a data storage system can do is to return
  incorrect data without the requester knowing. While each component in the
  system (network layer, storage devices) may offer protection against silent
@@ -15,34 +16,41 @@ good checksum with the requested data to the DAOS Client, which will calculate
 checksums on the data received and verify.
 
 ## Requirements
+
 ### Key Requirements
+
 There are two key requirements that DAOS will support.
-1. Detect silent data corruption - Corruption will be detected on the
+
+ 1. Detect silent data corruption - Corruption will be detected on the
  distribution and attribute keys and records within a DAOS object. At a minimum,
  when corruption is detected, an error will be reported.
 1. Correct data corruption - When data corruption is detected, an attempt will
  be made to recover the data using data redundancy mechanisms.
 
 ### Supportive/Additional Requirements
-Additionally, DAOS will support ...
-1. End to End Data Integrity as a Quality of Service Attribute - Container
+
+Additionally, DAOS will support:
+
+ 1. End to End Data Integrity as a Quality of Service Attribute - Container
  properties are used to enable/disable the use of checksums for data integrity
- as well as define specific attributes of data integrity feature.  See
- https://daos-stack.github.io/user/container/#data-integrity for details on
- configuring a container with checksums enabled.
-1. Minimize Performance Impact - When there is no data corruption, the End to
+ as well as define specific attributes of data integrity feature.  Refer to
+[Data Integrity Readme](https://daos-stack.github.io/user/container/#data-integrity) 
+for details on configuring a container with checksums enabled.
+
+ 1. Minimize Performance Impact - When there is no data corruption, the End to
  End Data Integrity feature should have minimal performance impacted. If data
  corruption is detected, performance can be impacted to correct the data.
  Work is ongoing to minimize performance impact.
 1. Inject Errors - The ability to corrupt data within a specific record, key,
  or checksum will be necessary for testing purposes. Fault injection is used to
- simulate corruption over the network and on disk. The DAOS_CSUM_CORRUPT_*
- flags used for data corruption are defined in src/include/daos/common.h.
+ simulate corruption over the network and on disk. The `DAOS_CSUM_CORRUPT_*`
+ flags used for data corruption are defined in `src/include/daos/common.h`.
 1. Logging - When data corruption is detected, error logs are captured in
  the client and server logs.
 
-Up coming features not supported yet
-1. Event Logging - When silent data corruption is discovered, an event should
+Features not yet supported:
+
+ 1. Event Logging - When silent data corruption is discovered, an event should
  be logged in such a way that it can be retrieved with other system health and
  diagnostic information.
 1. Proactive background service task - A background task on
@@ -66,7 +74,7 @@ received.
 !!! note
     Checksums for keys are not stored on the server. A hash of the key is
     calculated and used to index the key in the server tree of the keys
-    (see [VOS Key Array Stores](../../src/vos/README.md#key-array-stores)).
+    (see [VOS Key Array Stores](https://github.com/daos-stack/daos/blob/master/src/vos/README.md#key-array-stores)).
     It is also expected that keys are stored only in Storage Class Memory which
     has reliable data integrity protection.
 
@@ -78,8 +86,8 @@ received from the client to verify the integrity of the value. If the checksums
 don't match, then data corruption has occurred and an error is returned to the
 client indicating that the client should try the update again. Whether "server
 verify" is enabled or not, the server will store the checksum.
-See [VOS](../../src/vos/README.md) for more info about checksum management and
-storage in VOS.
+See [VOS](https://github.com/daos-stack/daos/blob/master/src/vos/README.md)
+for more info about checksum management and storage in VOS.
 
 On a fetch, the server will return the stored checksum to the client with the
 values fetched so the client can verify the values received. If the checksums
@@ -91,7 +99,7 @@ of values. The following diagram illustrates a basic example.
  (See [Storage Model](storage.md) for more details about the single value
  and array value types)
 
-![](../graph/data_integrity/basic_checksum_flow.png)
+![Basic Checksum Flow](../graph/data_integrity/basic_checksum_flow.png)
 
 ### Single Value
 A Single Value is an atomic value, meaning that writes to a single value will
@@ -110,23 +118,23 @@ Unlike Single Values, Array Values can be updated and fetched at any part of
 an array. In addition, updates to an array are versioned, so a fetch can include
 parts from multiple versions of the array. Each of these versioned parts of an
 array are called extents. The following diagrams illustrate a couple examples
-(also see [VOS Key Array Stores](../../src/vos/README.md#key-array-stores) for
+(also see [VOS Key Array Stores](https://github.com/daos-stack/daos/blob/master/src/vos/README.md#key-array-stores) for
 more information):
 
-<div>
+
 A single extent update (blue line) from index 2-13. A fetched extent (orange
 line) from index 2-6. The fetch is only part of the original extent written.
 
 ![](../graph/data_integrity/array_example_1.png)
-</div>
 
-<div>
+
+
 Many extent updates and different epochs. A fetch from index 2-13 requires parts
 from each extent.
 
 ![Array Example 2](../graph/data_integrity/array_example_2.png)
 
-</div>
+
 
 The nature of the array type requires that a more sophisticated approach to
 creating checksums is used. DAOS uses a "chunking" approach where each extent
@@ -137,9 +145,9 @@ size configured to be 4 (units is arbitrary in this example). Though not all
 chunks have a full size of 4, an  absolute offset alignment is maintained.
 The gray boxes around the extents represent the chunks.
 
-<img src="../graph/data_integrity/array_with_chunks.png" width="700" />
+![](../graph/data_integrity/array_with_chunks.png)
 
-(See [Object Layer](../../src/object/README.md) for more details about the
+(See [Object Layer](https://github.com/daos-stack/daos/blob/master/src/object/README.md) for more details about the
 checksum process on object update and fetch)
 
 # Checksum calculations
@@ -287,7 +295,8 @@ scanning anything on that SSD.
 ## Additional Checksum Properties > doc/user/container.md / doc/user/pool.md?
 These properties are provided when a container or pool is created, but should
 also be able to update them. When updated, they should be active right away.
-- Scanner Interval - Minimum number of days scanning will take. Could take
+
+ - Scanner Interval - Minimum number of days scanning will take. Could take
   longer, but if only a few records will pad so takes longer. (Pool property)
 - Disable scrubbing - at container level & pool level
 - Threshold for when to evict SSD (number of corruption events)
