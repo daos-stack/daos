@@ -133,7 +133,7 @@ def define_mercury(reqs):
                 commands=['./autogen.sh',
                           './configure --prefix=$OFI_PREFIX ' +
                           '--disable-efa ' +
-                          '--with-gdrcopy=no ' +
+                          '--without-gdrcopy ' +
                           OFI_DEBUG +
                           exclude(reqs, 'psm2',
                                   '--enable-psm2' +
