@@ -6,8 +6,8 @@
 %global libfabric_version 1.12.0~rc1-1
 
 Name:          daos
-Version:       1.1.3
-Release:       3%{?relval}%{?dist}
+Version:       1.3.0
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -223,8 +223,13 @@ PREFIX="%{?_prefix}"
 mkdir -p %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{?buildroot}/%{_unitdir}
+%if (0%{?rhel} == 7)
+install -m 644 utils/systemd/%{server_svc_name}.pre230 %{?buildroot}/%{_unitdir}/%{server_svc_name}
+install -m 644 utils/systemd/%{agent_svc_name}.pre230 %{?buildroot}/%{_unitdir}/%{agent_svc_name}
+%else
 install -m 644 utils/systemd/%{server_svc_name} %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
+%endif
 mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
 mv %{?buildroot}/%{_sysconfdir}/daos/bash_completion.d %{?buildroot}/%{_sysconfdir}
 
@@ -401,6 +406,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Wed Feb 24 2021 Brian J. Murrell <brian.murrell@intel.com> - 1.3.0-1
+- Version bump up to 1.3.0
+
 * Mon Feb 22 2021 Brian J. Murrell <brian.murrell@intel.com> 1.1.3-3
 - Remove all *-devel Requires from daos-devel as none of those are
   actually necessary to build libdaos clients
