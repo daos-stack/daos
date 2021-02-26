@@ -318,8 +318,12 @@ void d_tm_fini(void)
 	if (d_tm_shmem_root == NULL)
 		return;
 
-	shmdt(d_tm_shmem_root);
-	if (!d_tm_retain_shmem) {
+	rc = shmdt(d_tm_shmem_root);
+	if (rc < 0)
+		D_ERROR("Unable to detach from shared memory segment, %s.\n",
+			strerror(errno));
+
+	if ((rc == 0) && !d_tm_retain_shmem) {
 		rc = shmctl(d_tm_shmid, IPC_RMID, NULL);
 		if (rc < 0)
 			D_ERROR("Unable to remove shared memory segment, %s.\n",
