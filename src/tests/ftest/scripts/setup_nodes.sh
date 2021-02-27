@@ -72,6 +72,14 @@ fi
 # make sure to set up for daos_agent. The test harness will take care of
 # creating the /var/run/daos_{agent,server} directories when needed.
 sudo bash -c "set -ex
+
+echo SCHAN15
+ls -al /usr/lib/daos/TESTING/ftest/
+if [ -f  /var/tmp/test.cov ]; then
+    rm -f /var/tmp/test.cov
+fi
+cp /usr/lib/daos/TESTING/ftest/test.cov /var/tmp/
+
 if [ -d  /var/run/daos_agent ]; then
     rm -rf /var/run/daos_agent
 fi

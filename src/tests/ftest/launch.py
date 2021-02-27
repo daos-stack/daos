@@ -216,6 +216,9 @@ def set_test_environment(args):
     # Update PATH
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
 
+    # SCHAN15
+    os.environ["COVFILE"] = "/var/tmp/test.cov"
+
     # Python paths required for functional testing
     python_version = "python{}{}".format(
         version_info.major,
