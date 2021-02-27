@@ -25,7 +25,7 @@ pool:
   control_method: dmg
   mode: 146
   scm_size: 16GB
-  nvme_size: "32GB"
+  nvme_size: 32GB
   name: daos_server
 container:
     type: POSIX
@@ -46,21 +46,8 @@ exp_vals:
   leader: 0
   scm:
     total: 16000000000
-    free: 15999997440
-    min: 1999999680
-    max: 1999999680
-    mean: 1999999680
   nvme:
-    # total: "32 GB"
-    # free: "32 GB"
-    # min: "4.0 GB"
-    # max: "4.0 GB"
-    # mean: "4.0 GB"
-    total: 0
-    free: 0
-    min: 0
-    max: 0
-    mean: 0
+    total: 32000000000
   rebuild:
     rebuild_status: 0
     state: 0

@@ -6,7 +6,6 @@
 """
 from __future__ import print_function
 
-from apricot import skipForTicket
 from ior_test_base import IorTestBase
 from test_utils_pool import TestPool
 from control_test_base import ControlTestBase
@@ -57,6 +56,18 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         """
         self.log.info("==>   Verify dmg output against expected output:")
         dmg_info = self.get_pool_query_info(self.uuid)
+        # We won't be testing Free, Min, Max, and Mean because the values
+        # fluctuate across test runs. In addition, they're related to object
+        # placement and testing them wouldn't be straightforward, so we'll need
+        # some separate test cases.
+        del dmg_info["response"]["Scm"]["Free"]
+        del dmg_info["response"]["Scm"]["Min"]
+        del dmg_info["response"]["Scm"]["Max"]
+        del dmg_info["response"]["Scm"]["Mean"]
+        del dmg_info["response"]["Nvme"]["Free"]
+        del dmg_info["response"]["Nvme"]["Min"]
+        del dmg_info["response"]["Nvme"]["Max"]
+        del dmg_info["response"]["Nvme"]["Mean"]
 
         # Get the expected pool query values from the test yaml.  This should be
         # as simple as:
@@ -77,18 +88,10 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
             "Version": self.params.get("version", path="/run/exp_vals/*"),
             "Leader": self.params.get("leader", path="/run/exp_vals/*"),
             "Scm": {
-                "Total": self.params.get("total", path="/run/exp_vals/scm/*"),
-                "Free": self.params.get("free", path="/run/exp_vals/scm/*"),
-                "Min": self.params.get("min", path="/run/exp_vals/scm/*"),
-                "Max": self.params.get("max", path="/run/exp_vals/scm/*"),
-                "Mean": self.params.get("mean", path="/run/exp_vals/scm/*"),
+                "Total": self.params.get("total", path="/run/exp_vals/scm/*")
             },
             "Nvme": {
-                "Total": self.params.get("total", path="/run/exp_vals/nvme/*"),
-                "Free": self.params.get("free", path="/run/exp_vals/nvme/*"),
-                "Min": self.params.get("min", path="/run/exp_vals/nvme/*"),
-                "Max": self.params.get("max", path="/run/exp_vals/nvme/*"),
-                "Mean": self.params.get("mean", path="/run/exp_vals/nvme/*"),
+                "Total": self.params.get("total", path="/run/exp_vals/nvme/*")
             },
             "Rebuild": {
                 "Status": self.params.get(
@@ -98,7 +101,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
                 "Objects": self.params.get(
                     "objects", path="/run/exp_vals/rebuild/*"),
                 "Records": self.params.get(
-                    "records", path="/run/exp_vals/rebuild/*"),
+                    "records", path="/run/exp_vals/rebuild/*")
             }
         }
 
@@ -176,9 +179,9 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         self.log.info("==>   Pool info after write: \n%s", out_a)
 
         # The file should have been written into nvme, compare info
-        bytes_orig_val = human_to_bytes(out_b["Nvme"]["Free"])
-        bytes_curr_val = human_to_bytes(out_a["Nvme"]["Free"])
+        bytes_orig_val = human_to_bytes(out_b["response"]["Nvme"]["Free"])
+        bytes_curr_val = human_to_bytes(out_a["response"]["Nvme"]["Free"])
         if bytes_orig_val <= bytes_curr_val:
             self.fail(
                 "Current NVMe free space should be smaller than {}".format(
-                    out_b["Nvme"]["Free"]))
+                    out_b["response"]["Nvme"]["Free"]))
