@@ -1178,6 +1178,100 @@ class posix_tests():
         assert stbuf.st_ino < 100
         print(os.listdir(path))
 
+    def test_uns_basic(self):
+        """Create a UNS entry point and access it via both EP and path"""
+
+        pool = self.pool
+        container = self.container
+        server = self.server
+        conf = self.conf
+
+        # Start dfuse on the container.
+        dfuse = DFuse(server, conf, pool=pool, container=container)
+        dfuse.start('uns-0')
+
+        # Create a new container within it using UNS
+        uns_path = os.path.join(dfuse.dir, 'ep0')
+        uns_container = str(uuid.uuid4())
+        cmd = ['container', 'create',
+               '--pool', pool, '--cont', uns_container, '--path', uns_path,
+               '--type', 'POSIX']
+
+        print('Inserting entry point')
+        rc = run_daos_cmd(conf, cmd)
+        print('rc is {}'.format(rc))
+        print(os.stat(uns_path))
+        print(os.listdir(dfuse.dir))
+
+        # Verify that it exists.
+        run_container_query(conf, uns_path)
+
+        # Make a directory in the new container itself, and query that.
+        child_path = os.path.join(uns_path, 'child')
+        os.mkdir(child_path)
+        run_container_query(conf, child_path)
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        print('Trying UNS')
+        dfuse = DFuse(server, conf)
+        dfuse.start('uns-1')
+
+        # List the root container.
+        print(os.listdir(os.path.join(dfuse.dir, pool, container)))
+
+        # Now create a UNS link from the 2nd container to a 3rd one.
+        uns_path = os.path.join(dfuse.dir, pool, container, 'ep0', 'ep')
+        second_path = os.path.join(dfuse.dir, pool, uns_container)
+
+        uns_container = str(uuid.uuid4())
+
+        # Make a link within the new container.
+        cmd = ['container', 'create',
+               '--pool', pool, '--cont', uns_container,
+               '--path', uns_path, '--type', 'POSIX']
+
+        print('Inserting entry point')
+        rc = run_daos_cmd(conf, cmd)
+        print('rc is {}'.format(rc))
+
+        # List the root container again.
+        print(os.listdir(os.path.join(dfuse.dir, pool, container)))
+
+        # List the 2nd container.
+        files = os.listdir(second_path)
+        print(files)
+        # List the target container through UNS.
+        print(os.listdir(uns_path))
+        direct_stat = os.stat(os.path.join(second_path, 'ep'))
+        uns_stat = os.stat(uns_path)
+        print(direct_stat)
+        print(uns_stat)
+        assert uns_stat.st_ino == direct_stat.st_ino # nosec
+
+        third_path = os.path.join(dfuse.dir, pool, uns_container)
+        third_stat = os.stat(third_path)
+        print(third_stat)
+        assert third_stat.st_ino == direct_stat.st_ino # nosec
+
+        if dfuse.stop():
+            self.fatal_errors = True
+        print('Trying UNS with previous cont')
+        dfuse = DFuse(server, conf)
+        dfuse.start('uns-3')
+
+        files = os.listdir(second_path)
+        print(files)
+        print(os.listdir(uns_path))
+
+        direct_stat = os.stat(os.path.join(second_path, 'ep'))
+        uns_stat = os.stat(uns_path)
+        print(direct_stat)
+        print(uns_stat)
+        assert uns_stat.st_ino == direct_stat.st_ino # nosec
+        if dfuse.stop():
+            self.fatal_errors = True
+
 def run_posix_tests(server, conf, test=None):
     """Run one or all posix tests"""
 
@@ -1600,83 +1694,6 @@ def run_dfuse(server, conf):
 
     run_tests(dfuse)
 
-    fatal_errors.add_result(dfuse.stop())
-
-    dfuse = DFuse(server, conf, pool=pools[0], container=container2)
-    dfuse.start('uns-0')
-
-    uns_path = os.path.join(dfuse.dir, 'ep0')
-
-    uns_container = str(uuid.uuid4())
-
-    cmd = ['container', 'create',
-           '--pool', pools[0], '--cont', uns_container, '--path', uns_path,
-           '--type', 'POSIX']
-
-    print('Inserting entry point')
-    rc = run_daos_cmd(conf, cmd)
-    print('rc is {}'.format(rc))
-    print(os.stat(uns_path))
-    print(os.stat(uns_path))
-    print(os.listdir(dfuse.dir))
-
-    run_container_query(conf, uns_path)
-
-    child_path = os.path.join(uns_path, 'child')
-    os.mkdir(child_path)
-    run_container_query(conf, child_path)
-
-    fatal_errors.add_result(dfuse.stop())
-
-    print('Trying UNS')
-    dfuse = DFuse(server, conf)
-    dfuse.start('uns-2')
-
-    # List the root container.
-    print(os.listdir(os.path.join(dfuse.dir, pools[0], container2)))
-
-    uns_path = os.path.join(dfuse.dir, pools[0], container2, 'ep0', 'ep')
-    direct_path = os.path.join(dfuse.dir, pools[0], uns_container)
-
-    uns_container = str(uuid.uuid4())
-
-    # Make a link within the new container.
-    cmd = ['container', 'create',
-           '--pool', pools[0], '--cont', uns_container,
-           '--path', uns_path, '--type', 'POSIX']
-
-    print('Inserting entry point')
-    rc = run_daos_cmd(conf, cmd)
-    print('rc is {}'.format(rc))
-
-    # List the root container again.
-    print(os.listdir(os.path.join(dfuse.dir, pools[0], container2)))
-
-    # List the target container.
-    files = os.listdir(direct_path)
-    print(files)
-    # List the target container through UNS.
-    print(os.listdir(uns_path))
-    direct_stat = os.stat(os.path.join(direct_path, files[0]))
-    uns_stat = os.stat(uns_path)
-    print(direct_stat)
-    print(uns_stat)
-    assert uns_stat.st_ino == direct_stat.st_ino # nosec
-
-    fatal_errors.add_result(dfuse.stop())
-    print('Trying UNS with previous cont')
-    dfuse = DFuse(server, conf)
-    dfuse.start('uns-3')
-
-    files = os.listdir(direct_path)
-    print(files)
-    print(os.listdir(uns_path))
-
-    direct_stat = os.stat(os.path.join(direct_path, files[0]))
-    uns_stat = os.stat(uns_path)
-    print(direct_stat)
-    print(uns_stat)
-    assert uns_stat.st_ino == direct_stat.st_ino # nosec
     fatal_errors.add_result(dfuse.stop())
 
     if fatal_errors.errors:
