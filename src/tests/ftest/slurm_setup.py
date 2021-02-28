@@ -231,7 +231,7 @@ def main():
     logging.basicConfig(
         format="%(asctime)s %(levelname)-5s %(message)s",
         datefmt=r"%Y/%m/%d %I:%M:%S",
-        name="slurm_setup", level=logging.DEBUG)
+        filename="slurm_setup", level=logging.DEBUG)
 
     parser = argparse.ArgumentParser(prog="slurm_setup.py")
 
