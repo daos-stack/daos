@@ -54,7 +54,7 @@ struct test_t {
 	int			 t_roomno;
 	struct d_fault_attr_t	*t_fault_attr_1000;
 	struct d_fault_attr_t	*t_fault_attr_5000;
-	int 			 global_client_cb_arg;
+	int			 global_client_cb_arg;
 };
 
 struct test_t test_g = { .t_hold_time = 0,
