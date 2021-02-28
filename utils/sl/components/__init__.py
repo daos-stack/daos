@@ -209,9 +209,6 @@ def define_common(reqs):
     reqs.define('python34_devel', headers=['python3.4m/Python.h'],
                 package='python34-devel')
 
-    reqs.define('python27_devel', headers=['python2.7/Python.h'],
-                package='python-devel')
-
     reqs.define('libelf', headers=['libelf.h'], package='elfutils-libelf-devel')
 
     reqs.define('tbbmalloc', libs=['tbbmalloc_proxy'], package='tbb-devel')
