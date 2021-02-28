@@ -219,3 +219,52 @@ class Dcp(DcpCommand):
         out = mpirun.run()
 
         return out
+
+class FsCopy():
+    """Class defining an object of type FsCopy.
+       Allows interfacing with daos fs copy in a similar
+       manner to DcpCommand.
+    """
+
+    def __init__(self, daos_cmd, log):
+        """Create a FsCopy object.
+
+        Args:
+            daos_cmd (DaosCommand): daos command to issue the filesystem
+                copy command.
+            log (TestLogger): logger to log messages
+
+        """
+        self.src = None
+        self.dst = None
+        self.daos_cmd = daos_cmd
+        self.log = log
+
+    def set_fs_copy_params(self, src=None, dst=None):
+        """Set the daos fs copy params.
+
+        Args:
+            src (str, optional): the src
+            dst (str, optional): the dst
+
+        """
+        if src:
+            self.src = src
+        if dst:
+            self.dst = dst
+
+    def run(self):
+        # pylint: disable=arguments-differ
+        """Run the daos fs copy command.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: In case daos fs copy run command fails
+
+        """
+        self.log.info("Starting daos filesystem copy")
+
+        return self.daos_cmd.filesystem_copy(src=self.src, dst=self.dst)
