@@ -107,6 +107,7 @@ PATCH_DIR="$PREFIX"/lib/daos/TESTING/ftest
 # before 69.2
 if grep "self.job.result_proxy.notify_progress(False)" \
     "$pydir"/avocado/core/runner.py; then
+    echo "Applying patch avocado-job-result_proxy-reference-fix.patch"
     if ! cat < "$PATCH_DIR"/avocado-job-result_proxy-reference-fix.patch | \
       sudo patch -p1 -d "$pydir"; then
         echo "Failed to apply avocado PR-4345 patch"
@@ -116,6 +117,7 @@ fi
 # https://github.com/avocado-framework/avocado/pull/2908 fixed in
 # https://github.com/avocado-framework/avocado/pull/3076/
 if ! grep TIMEOUT_TEARDOWN "$pydir"/avocado/core/runner.py; then
+    echo "Applying patch avocado-teardown-timeout.patch"
     if ! cat < "$PATCH_DIR"/avocado-teardown-timeout.patch | \
       sudo patch -p1 -d "$pydir"; then
         echo "Failed to apply avocado PR-3076 patch"
@@ -125,6 +127,7 @@ fi
 # https://github.com/avocado-framework/avocado/pull/3154
 if ! grep "def phase(self)" \
     "$pydir"/avocado/core/test.py; then
+    echo "Applying patch avocado-report-test-phases-common.patch"
     if ! filterdiff -p1 -x selftests/* <                       \
         "$PATCH_DIR"/avocado-report-test-phases-common.patch | \
       sed -e '/selftests\/.*/d' |                              \
@@ -132,14 +135,15 @@ if ! grep "def phase(self)" \
         echo "Failed to apply avocado PR-3154 patch - common portion"
         exit 1
     fi
-    if grep "^TEST_STATE_ATTRIBUTES = "
-        "$pydir"/avocado/core/test.py; then
+    if grep "^TEST_STATE_ATTRIBUTES = " "$pydir"/avocado/core/test.py; then
+        echo "Applying patch avocado-report-test-phases-py3.patch"
         if ! cat < "$PATCH_DIR"/avocado-report-test-phases-py3.patch | \
           sudo patch -p1 -d "$pydir"; then
             echo "Failed to apply avocado PR-3154 patch - py3 portion"
             exit 1
         fi
     else
+        echo "Applying patch avocado-report-test-phases-py2.patch"
         if ! cat < "$PATCH_DIR"/avocado-report-test-phases-py2.patch | \
           sudo patch -p1 -d "$pydir"; then
             echo "Failed to apply avocado PR-3154 patch - py2 portion"
