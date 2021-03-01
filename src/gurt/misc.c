@@ -27,6 +27,7 @@
 #define D_LOGFAC	DD_FAC(misc)
 
 #include <stdarg.h>
+#include <math.h>
 #include <gurt/common.h>
 
 int
@@ -746,4 +747,22 @@ d_backoff_seq_next(struct d_backoff_seq *seq)
 
 	/* Return a random backoff in [0, next]. */
 	return (next * ((double)rand() / RAND_MAX));
+}
+
+double
+d_stand_div(double *array, int nr)
+{
+	double		avg = 0;
+	double		std = 0;
+	int		i;
+
+	for (i = 0; i < nr; i++)
+		avg += array[i];
+
+	avg /= nr;
+	for (i = 0; i < nr; i++)
+		std += pow(array[i] - avg, 2);
+
+	std /= nr;
+	return sqrt(std);
 }

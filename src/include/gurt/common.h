@@ -613,6 +613,7 @@ d_iov_set_safe(d_iov_t *iov, void *buf, size_t size)
 	iov->iov_len = iov->iov_buf_len = size;
 }
 
+double d_stand_div(double *array, int nr);
 
 #if defined(__cplusplus)
 }
