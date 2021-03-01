@@ -19,3 +19,12 @@ class HarnessBasicTest(Test):
         """
 
         self.log.info("NOOP test to do nothing but run successfully")
+
+    def test_always_passes_hw(self):
+        """
+        :avocado: tags=all
+        :avocado: tags=hw,large,medium,ib2,small
+        :avocado: tags=harness
+        :avocado: tags=always_passes
+        """
+        self.test_always_passes()
