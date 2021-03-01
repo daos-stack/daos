@@ -323,41 +323,41 @@ type (
 
 	// StorageUsageStats represents DAOS storage usage statistics.
 	StorageUsageStats struct {
-		Total uint64
-		Free  uint64
-		Min   uint64
-		Max   uint64
-		Mean  uint64
+		Total uint64 `json:"total"`
+		Free  uint64 `json:"free"`
+		Min   uint64 `json:"min"`
+		Max   uint64 `json:"max"`
+		Mean  uint64 `json:"mean"`
 	}
 
 	// PoolRebuildState indicates the current state of the pool rebuild process.
-	PoolRebuildState uint
+	PoolRebuildState int32
 
 	// PoolRebuildStatus contains detailed information about the pool rebuild process.
 	PoolRebuildStatus struct {
-		Status  int32
-		State   PoolRebuildState
-		Objects uint64
-		Records uint64
+		Status  int32            `json:"status"`
+		State   PoolRebuildState `json:"state"`
+		Objects uint64           `json:"objects"`
+		Records uint64           `json:"records"`
 	}
 
 	// PoolInfo contains information about the pool.
 	PoolInfo struct {
-		TotalTargets    uint32
-		ActiveTargets   uint32
-		TotalNodes      uint32
-		DisabledTargets uint32
-		Version         uint32
-		Leader          uint32
-		Rebuild         *PoolRebuildStatus
-		Scm             *StorageUsageStats
-		Nvme            *StorageUsageStats
+		TotalTargets    uint32             `json:"total_targets"`
+		ActiveTargets   uint32             `json:"active_targets"`
+		TotalNodes      uint32             `json:"total_nodes"`
+		DisabledTargets uint32             `json:"disabled_targets"`
+		Version         uint32             `json:"version"`
+		Leader          uint32             `json:"leader"`
+		Rebuild         *PoolRebuildStatus `json:"rebuild"`
+		Scm             *StorageUsageStats `json:"scm"`
+		Nvme            *StorageUsageStats `json:"nvme"`
 	}
 
 	// PoolQueryResp contains the pool query response.
 	PoolQueryResp struct {
-		Status int32
-		UUID   string
+		Status int32  `json:"status"`
+		UUID   string `json:"uuid"`
 		PoolInfo
 	}
 )
@@ -372,7 +372,35 @@ const (
 )
 
 func (prs PoolRebuildState) String() string {
-	return [...]string{"idle", "done", "busy"}[prs]
+	return strings.ToLower(mgmtpb.PoolRebuildStatus_State_name[int32(prs)])
+}
+
+func (prs PoolRebuildState) MarshalJSON() ([]byte, error) {
+	stateStr, ok := mgmtpb.PoolRebuildStatus_State_name[int32(prs)]
+	if !ok {
+		return nil, errors.Errorf("invalid rebuild state %d", prs)
+	}
+	return []byte(`"` + strings.ToLower(stateStr) + `"`), nil
+}
+
+func (prs *PoolRebuildState) UnmarshalJSON(data []byte) error {
+	stateStr := strings.ToUpper(string(data))
+	state, ok := mgmtpb.PoolRebuildStatus_State_value[stateStr]
+	if !ok {
+		// Try converting the string to an int32, to handle the
+		// conversion from protobuf message using convert.Types().
+		if si, err := strconv.ParseInt(stateStr, 0, 32); err == nil {
+			if _, ok = mgmtpb.PoolRebuildStatus_State_name[int32(si)]; !ok {
+				return errors.Errorf("invalid rebuild state %q", stateStr)
+			}
+			state = int32(si)
+		} else {
+			return errors.Errorf("invalid rebuild state %q", stateStr)
+		}
+	}
+	*prs = PoolRebuildState(state)
+
+	return nil
 }
 
 // PoolQuery performs a pool query operation for the specified pool UUID on a
