@@ -111,6 +111,7 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 	if ms == to {
 		return true // identical state
 	}
+
 	return map[MemberState]map[MemberState]bool{
 		MemberStateAwaitFormat: {
 			MemberStateEvicted: true,
