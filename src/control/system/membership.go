@@ -56,12 +56,6 @@ func (m *Membership) addMember(member *Member) error {
 	return m.db.AddMember(member)
 }
 
-func (m *Membership) updateMember(member *Member) error {
-	m.log.Debugf("updating system member: %s", member)
-
-	return m.db.UpdateMember(member)
-}
-
 // Add adds member to membership, returns member count.
 func (m *Membership) Add(member *Member) (int, error) {
 	m.Lock()
@@ -189,7 +183,7 @@ func (m *Membership) AddOrReplace(newMember *Member) error {
 		return nil
 	}
 
-	return m.updateMember(newMember)
+	return m.db.UpdateMember(newMember)
 }
 
 // Remove removes member from membership, idempotent.
@@ -352,7 +346,7 @@ func (m *Membership) UpdateMemberStates(results MemberResults, updateOnFail bool
 		member.state = result.State
 		member.Info = result.Msg
 
-		if err := m.updateMember(member); err != nil {
+		if err := m.db.UpdateMember(member); err != nil {
 			return err
 		}
 	}

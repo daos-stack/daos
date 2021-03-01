@@ -580,6 +580,10 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, pbReq *mgmtpb.SystemStopReq)
 	}
 	svc.log.Debug("Received SystemStop RPC")
 
+	if !pbReq.GetPrep() && !pbReq.GetKill() {
+		return nil, errors.New("invalid request, no action specified")
+	}
+
 	// Raise event on systemwide shutdown
 	if pbReq.GetHosts() == "" && pbReq.GetRanks() == "" && pbReq.GetKill() {
 		svc.events.Publish(events.New(&events.RASEvent{
@@ -613,7 +617,7 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, pbReq *mgmtpb.SystemStopReq)
 	}
 	if pbReq.GetKill() {
 		fanReq.Method = control.StopRanks
-		fanResp, _, err := svc.rpcFanout(ctx, fanReq, false)
+		fanResp, _, err := svc.rpcFanout(ctx, fanReq, true)
 		if err != nil {
 			return nil, err
 		}
@@ -655,7 +659,7 @@ func (svc *mgmtSvc) SystemStart(ctx context.Context, pbReq *mgmtpb.SystemStartRe
 		Method: control.StartRanks,
 		Hosts:  pbReq.GetHosts(),
 		Ranks:  pbReq.GetRanks(),
-	}, false)
+	}, true)
 	if err != nil {
 		return nil, err
 	}
