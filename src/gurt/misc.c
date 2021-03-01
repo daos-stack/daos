@@ -27,6 +27,7 @@
 #define D_LOGFAC	DD_FAC(misc)
 
 #include <stdarg.h>
+#include <math.h>
 #include <gurt/common.h>
 
 int
@@ -651,4 +652,22 @@ d_free_string(struct d_string_buffer_t *buf)
 		buf->str_size = 0;
 		buf->buf_size = 0;
 	}
+}
+
+double
+d_stand_div(double *array, int nr)
+{
+	double		avg = 0;
+	double		std = 0;
+	int		i;
+
+	for (i = 0; i < nr; i++)
+		avg += array[i];
+
+	avg /= nr;
+	for (i = 0; i < nr; i++)
+		std += pow(array[i] - avg, 2);
+
+	std /= nr;
+	return sqrt(std);
 }
