@@ -105,8 +105,8 @@ done
 PATCH_DIR="$PREFIX"/lib/daos/TESTING/ftest
 # https://github.com/avocado-framework/avocado/pull/4345 fixed somewhere
 # before 69.2
-if ! grep "self.job.result_proxy.notify_progress(False)" \
-          "$pydir"/avocado/core/runner.py; then
+if grep "self.job.result_proxy.notify_progress(False)" \
+    "$pydir"/avocado/core/runner.py; then
     if ! cat < "$PATCH_DIR"/avocado-job-result_proxy-reference-fix.patch | \
       sudo patch -p1 -d "$pydir"; then
         echo "Failed to apply avocado PR-4345 patch"
