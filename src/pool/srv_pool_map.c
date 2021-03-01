@@ -8,9 +8,6 @@
 #include <daos/pool_map.h>
 #include "rpc.h"
 
-#define DF_TARGET "Target[%d] (rank %u idx %u)"
-#define DP_TARGET(t) t->ta_comp.co_id, t->ta_comp.co_rank, t->ta_comp.co_index
-
 /*
  * Updates a single target by the operation given in opc
  * If something changed, *version is incremented
