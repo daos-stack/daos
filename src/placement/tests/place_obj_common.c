@@ -48,6 +48,7 @@ plt_obj_place(daos_obj_id_t oid, struct pl_obj_layout **layout,
 
 	memset(&md, 0, sizeof(md));
 	md.omd_id  = oid;
+	D_ASSERT(pl_map != NULL);
 	md.omd_ver = pool_map_get_version(pl_map->pl_poolmap);
 
 	rc = pl_obj_place(pl_map, &md, NULL, layout);
