@@ -720,7 +720,7 @@ class TestPool(TestDaosApiBase):
                                 "Pool %s query still non-responsive: %s",
                                 uuid, str(error))
                             if time() > end_time:
-                                raise TimeoutError(
+                                raise CommandFailure(
                                     "TIMEOUT detected after {} seconds while "
                                     "waiting for pool {} query response. This "
                                     "timeout can be adjusted via the "
