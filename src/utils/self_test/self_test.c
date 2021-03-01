@@ -1643,8 +1643,11 @@ file_name_create(char **gpath_name, bool *name_allocated, char *env)
 
 	/* get env to append, if not defined, then leave name as it is */
 	env_name = getenv(env);
-	if (env_name == NULL)
+	if (env_name == NULL) {
+		D_EMIT(" Environemnt %s not set\n", env);
 		goto cleanup;
+	}
+
 	/*
 	 * Extract file name.
 	 *  The path_name may be constant so we cannot modify it.
