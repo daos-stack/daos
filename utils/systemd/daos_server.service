@@ -1,7 +1,5 @@
 [Unit]
 Description=DAOS Server
-StartLimitIntervalSec=60
-StartLimitBurst=5
 Wants=network-online.target
 After=network-online.target
 
@@ -18,6 +16,8 @@ Restart=on-failure
 RestartSec=10
 LimitMEMLOCK=infinity
 LimitCORE=infinity
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Install]
 WantedBy = multi-user.target
