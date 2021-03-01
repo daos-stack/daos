@@ -225,7 +225,7 @@ class CartUtils():
                   r"valgrind.%q\{PMIX_ID\}.memcheck " + \
                   "--fair-sched=try  --partial-loads-ok=yes " + \
                   "--leak-check=yes --gen-suppressions=all " + \
-                  "--suppressions=../etc/memcheck-cart.supp " + \
+                  "--suppressions=/etc/daos/memcheck-cart.supp " + \
                   "--show-reachable=yes "
 
 
@@ -296,20 +296,12 @@ class CartUtils():
             tst_cmd += " -x D_LOG_FILE_APPEND_PID=1"
 
         tst_mod = os.getenv("CART_TEST_MODE", "native")
+        os.environ["CART_TEST_MODE"] = "memcheck"
+
         if tst_mod == "memcheck":
             tst_cmd += tst_vgd
 
-        # FIXME: Remove before merging
-        os.environ["USE_VALGRIND"] = "1"
-
         if tst_bin is not None:
-            if 'USE_VALGRIND' in os.environ:
-              valgrind = os.path.dirname(find_executable("valgrind"))
-              valgrind += "/valgrind"
-              tst_cmd += valgrind + " "
-            else:
-              self.print("WARNING: 'valgrind' executable not found.")
-
             tst_cmd += " " + tst_bin
 
         if tst_arg is not None:
