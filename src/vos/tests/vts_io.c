@@ -812,6 +812,7 @@ io_oi_test(void **state)
 	assert_rc_equal(rc, 0);
 
 	rc = umem_tx_end(vos_cont2umm(cont), 0);
+	assert_rc_equal(rc, 0);
 }
 
 static void
@@ -1972,12 +1973,18 @@ oid_iter_test_setup(void **state)
 	cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
 	assert_ptr_not_equal(cont, NULL);
 
+	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
+	assert_rc_equal(rc, 0);
 	for (i = 0; i < VTS_IO_OIDS; i++) {
 		oids[i] = gen_oid(arg->ofeat);
 
 		rc = vos_oi_find_alloc(cont, oids[i], 1, true, &obj_df, NULL);
 		assert_rc_equal(rc, 0);
 	}
+
+	rc = umem_tx_end(vos_cont2umm(cont), 0);
+	assert_rc_equal(rc, 0);
+
 	return 0;
 }
 
