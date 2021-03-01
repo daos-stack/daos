@@ -10,7 +10,7 @@ FROM centos:centos7.9.2009
 LABEL maintainer="daos@daos.groups.io"
 
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
-ARG CB0
+ARG CB_WEEKLY
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
