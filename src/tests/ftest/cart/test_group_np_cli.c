@@ -80,7 +80,6 @@ test_run(void)
 		DBG_PRINT("Skipping init stage.\n");
 
 	} else {
-
 		if (test_g.t_save_cfg) {
 			rc = crt_group_config_path_set(test_g.t_cfg_path);
 			D_ASSERTF(rc == 0,
@@ -128,8 +127,14 @@ test_run(void)
 	test_g.t_fault_attr_5000 = d_fault_attr_lookup(5000);
 
 	if (!test_g.t_shut_only && !test_g.t_skip_check_in) {
+		char  msg[256];
+
 		for (i = 0; i < rank_list->rl_nr; i++) {
 			rank = rank_list->rl_ranks[i];
+
+			snprintf(msg, sizeof(msg), "Sending message to %d",
+				 rank);
+			tc_log_msg(test_g.t_crt_ctx[0], grp, rank, msg);
 
 			for (tag = 0; tag < test_g.t_srv_ctx_num; tag++) {
 				DBG_PRINT("Sending rpc to %d:%d\n", rank, tag);

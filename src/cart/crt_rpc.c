@@ -49,7 +49,7 @@ crt_hdlr_ctl_log_add_msg(crt_rpc_t *rpc_req)
 		D_ERROR("Empty log message\n");
 		rc = -DER_INVAL;
 	} else {
-		D_INFO("%.*s\n", CRT_CTL_MAX_LOG_MSG_SIZE,
+		D_EMIT("%.*s\n", CRT_CTL_MAX_LOG_MSG_SIZE,
 		       in_args->log_msg);
 	}
 
@@ -259,7 +259,6 @@ crt_internal_rpc_register(bool server)
 		D_ERROR("crt_proto_register() failed, "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
-
 	if (!server)
 		return -DER_SUCCESS;
 

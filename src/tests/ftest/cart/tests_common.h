@@ -14,18 +14,18 @@
 #include "crt_internal.h"
 
 
-#define DBG_PRINT(x...)                                                 \
-	do {                                                            \
+#define DBG_PRINT(x...)						 \
+	do {							    \
 		D_INFO(x);						\
-		if (opts.is_server)                                     \
+		if (opts.is_server)				     \
 			fprintf(stderr, "SRV [rank=%d pid=%d]\t",       \
-			opts.self_rank,                                 \
-			opts.mypid);                                    \
-		else                                                    \
+			opts.self_rank,				 \
+			opts.mypid);				    \
+		else						    \
 			fprintf(stderr, "CLI [rank=%d pid=%d]\t",       \
-			opts.self_rank,                                 \
-			opts.mypid);                                    \
-		fprintf(stderr, x);                                     \
+			opts.self_rank,				 \
+			opts.mypid);				    \
+		fprintf(stderr, x);				     \
 	} while (0)
 
 struct test_options {
@@ -62,7 +62,7 @@ static inline int
 tc_drain_queue(crt_context_t ctx)
 {
 	int	rc;
-	int 	i;
+	int	i;
 
 	/* TODO: Need better mechanism for tests to drain all queues */
 	for (i = 0; i < 1000; i++)
@@ -497,6 +497,82 @@ tc_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 
 	rc = crt_group_size(NULL, grp_size);
 	D_ASSERTF(rc == 0, "crt_group_size() failed; rc=%d\n", rc);
+}
+
+struct tc_log_msg_cb_resp {
+	sem_t	sem;
+	int	rc;
+};
+
+static void
+tc_log_msg_cb(const struct crt_cb_info *info)
+{
+	struct tc_log_msg_cb_resp	*resp;
+
+	if (info->cci_rc != 0) {
+		D_WARN(" Add Log message CB failue\n");
+		return;
+	}
+	resp = (struct tc_log_msg_cb_resp *)info->cci_arg;
+	resp->rc = info->cci_rc;
+	sem_post(&resp->sem);
+}
+
+int
+tc_log_msg(crt_context_t ctx, crt_group_t *grp, d_rank_t rank,
+	   char *msg) {
+	int32_t			     rc = 0;
+	struct crt_ctl_log_add_msg_in   *send_args;
+	struct crt_ctl_log_add_msg_out  *recv_args;
+	crt_rpc_t		       *rpc_req = NULL;
+	crt_endpoint_t			ep;
+	crt_opcode_t			opcode = CRT_OPC_CTL_LOG_ADD_MSG;
+	struct tc_log_msg_cb_resp       resp;
+
+	/* Initialize respons structure */
+	rc = sem_init(&resp.sem, 0, 0);
+	D_ASSERTF(rc == 0, "sem_init() failed\n");
+	resp.rc = 0;
+
+	/* Fill in the endpoint info */
+	ep.ep_grp = grp;
+	ep.ep_rank = rank;
+	ep.ep_tag = 0;
+
+	rc = crt_req_create(ctx, &ep, opcode, &rpc_req);
+	if (rc != 0) {
+		D_ERROR("crt_req_create() failed. rc %d.\n", rc);
+		D_GOTO(endcode, rc);
+	}
+
+	crt_req_addref(rpc_req);
+	send_args =  crt_req_get(rpc_req);
+	send_args->log_msg = msg;
+
+	/* send the request */
+	rc = crt_req_send(rpc_req, tc_log_msg_cb, &resp);
+
+	/* Wait for response */
+	rc = tc_sem_timedwait(&resp.sem, 30, __LINE__);
+	if (rc < 0) {
+		D_WARN("Messaage logged timed out: %s\n", msg);
+		goto cleanup;
+	}
+
+	/* Check of valid output */
+	recv_args =  crt_reply_get(rpc_req);
+
+	if (recv_args->rc == 0)
+		D_INFO("Message logged to rank %d:  %s\n", rank, msg);
+	else
+		D_WARN("Message Failed logged to rank %d:  %s\n", rank, msg);
+
+	/* get response and decrement reference */
+	rc = recv_args->rc;
+cleanup:
+	crt_req_decref(rpc_req);
+endcode:
+	return rc;
 }
 
 #endif /* __TESTS_COMMON_H__ */
