@@ -17,6 +17,14 @@ from mpio_utils import MpioUtils
 from pydaos.raw import (DaosContainer, IORequest,
                         DaosObj, DaosApiError)
 
+try:
+    # python 3.x
+    import queue as queue
+except ImportError:
+    # python 2.7
+    import Queue as queue
+
+
 class OSAUtils(IorTestBase):
     # pylint: disable=too-many-ancestors
     """
@@ -38,6 +46,10 @@ class OSAUtils(IorTestBase):
                                            default=[0])[0]
         self.record_length = self.params.get("length", '/run/record/*',
                                              default=[0])[0]
+        self.ior_w_flags = self.params.get("write_flags", '/run/ior/iorflags/*',
+                                           default="")
+        self.ior_r_flags = self.params.get("read_flags", '/run/ior/iorflags/*')
+        self.out_queue = queue.Queue()
 
     @fail_on(CommandFailure)
     def get_pool_leader(self):
