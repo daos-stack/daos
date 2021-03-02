@@ -8,7 +8,7 @@
 FROM fedora:latest
 
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
-ARG CB_WEEKLY
+ARG CB0
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
