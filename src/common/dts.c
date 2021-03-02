@@ -274,7 +274,9 @@ pool_fini(struct dts_context *tsc)
 			DP_RC(rc));
 
 	} else { /* DAOS mode */
-		daos_pool_disconnect(tsc->tsc_poh, NULL);
+		rc = daos_pool_disconnect(tsc->tsc_poh, NULL);
+		D_ASSERTF(rc == 0 || rc == -DER_NO_HDL, "rc="DF_RC"\n",
+			  DP_RC(rc));
 		MPI_Barrier(MPI_COMM_WORLD);
 		if (tsc->tsc_mpi_rank == 0) {
 			rc = dmg_pool_destroy(dmg_config_file,
