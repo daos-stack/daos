@@ -9,7 +9,6 @@ from __future__ import print_function
 from ior_test_base import IorTestBase
 from test_utils_pool import TestPool
 from control_test_base import ControlTestBase
-from general_utils import human_to_bytes
 
 
 class DmgPoolQueryTest(ControlTestBase, IorTestBase):
@@ -179,8 +178,8 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         self.log.info("==>   Pool info after write: \n%s", out_a)
 
         # The file should have been written into nvme, compare info
-        bytes_orig_val = human_to_bytes(out_b["response"]["Nvme"]["Free"])
-        bytes_curr_val = human_to_bytes(out_a["response"]["Nvme"]["Free"])
+        bytes_orig_val = int(out_b["response"]["Nvme"]["Free"])
+        bytes_curr_val = int(out_a["response"]["Nvme"]["Free"])
         if bytes_orig_val <= bytes_curr_val:
             self.fail(
                 "Current NVMe free space should be smaller than {}".format(
