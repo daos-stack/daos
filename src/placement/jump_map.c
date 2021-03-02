@@ -414,6 +414,18 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 			start_dom = (curr_dom->do_children) - root_pos;
 			end_dom = start_dom + (num_doms - 1);
 
+			range_set = isset_range(dom_occupied, start_dom,
+						end_dom);
+			if (range_set) {
+				if (top == -1) {
+					*target = NULL;
+					return;
+				}
+				setbit(dom_occupied, curr_dom - root_pos);
+				curr_dom = dom_stack[top--];
+				continue;
+			}
+
 			range_set = isset_range(dom_used, start_dom, end_dom);
 			if (range_set) {
 				int idx;
@@ -434,18 +446,6 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 				} else {
 					curr_dom = root_pos;
 				}
-				continue;
-			}
-
-			range_set = isset_range(dom_occupied, start_dom,
-						end_dom);
-			if (range_set) {
-				if (top == -1) {
-					*target = NULL;
-					return;
-				}
-				setbit(dom_occupied, curr_dom - root_pos);
-				curr_dom = dom_stack[top--];
 				continue;
 			}
 
