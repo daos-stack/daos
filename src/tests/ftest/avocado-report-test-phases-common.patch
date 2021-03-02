@@ -45,15 +45,6 @@ index 4ff4ee03..73241b4e 100644
      def __str__(self):
          return str(self.name)
  
-@@ -461,7 +472,7 @@ class Test(unittest.TestCase):
-                          'status', 'time_elapsed',
-                          'traceback', 'workdir', 'whiteboard', 'time_start',
-                          'time_end', 'running', 'paused', 'paused_msg',
--                         'fail_class', 'params', "timeout"]
-+                         'fail_class', 'params', "timeout", 'phase']
-         state = {key: getattr(self, key, None) for (key) in preserve_attr}
-         state['class_name'] = self.__class__.__name__
-         state['job_logdir'] = self.job.logdir
 @@ -565,6 +576,7 @@ class Test(unittest.TestCase):
          skip_test = getattr(testMethod, '__skip_test_decorator__', False)
          try:
