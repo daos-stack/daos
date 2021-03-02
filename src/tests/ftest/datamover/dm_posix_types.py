@@ -11,7 +11,7 @@ from os.path import basename, join
 class DmPosixTypesTest(DataMoverTestBase):
     # pylint: disable=too-many-ancestors
     """POSIX Data Mover validation for varying source and destination types
-       using "dcp" and "daos filesystem copy" with POSIX containers.
+       using "dcp", "dsync, and "daos filesystem copy" with POSIX containers.
 
     Test Class Description:
         Tests the following cases:
@@ -179,10 +179,14 @@ class DmPosixTypesTest(DataMoverTestBase):
                 src[0], src[1], src[2], src[3],
                 dst[0], dst[1], dst[2], dst[3])
 
-            # The source directory is created IN the destination
-            # so append the directory name to the destination path.
-            self.read_verify_location(dst[0], join(dst[1], basename(src[1])),
-                                      dst[2], dst[3])
+            if self.tool == "DSYNC":
+                # The source directory is sync'ed TO the destination.
+                dst_path = dst[1]
+            else:
+                # The source directory is created IN the destination
+                # so append the directory name to the destination path.
+                dst_path = join(dst[1], basename(src[1]))
+            self.read_verify_location(dst[0], dst_path, dst[2], dst[3])
 
             # file -> file variation
             # A UNS subset is not supported for both src and dst.
@@ -198,7 +202,8 @@ class DmPosixTypesTest(DataMoverTestBase):
             # file -> dir variation
             # This works because the destination dir is already created above.
             # FS_COPY only supports directories.
-            if self.tool != "FS_COPY":
+            # DSYNC overwrites existing directories with the source file.
+            if self.tool not in ("FS_COPY", "DSYNC"):
                 self.run_datamover(
                     test_desc + " (file->dir)",
                     src[0], join(src[1], self.test_file), src[2], src[3],
@@ -225,7 +230,18 @@ class DmPosixTypesTest(DataMoverTestBase):
         :avocado: tags=datamover,dcp
         :avocado: tags=dm_posix_types,dm_posix_types_dcp
         """
-        self.run_dm_posix_types("DCP");
+        self.run_dm_posix_types("DCP")
+
+    def test_dm_posix_types_dsync(self):
+        """
+        Test Description:
+            Tests POSIX copies with dsync using different src and dst types.
+            DAOS-6389: add basic tests for dsync posix
+        :avocado: tags=all,daily_regression
+        :avocado: tags=datamover,dsync
+        :avocado: tags=dm_posix_types,dm_posix_types_dsync
+        """
+        self.run_dm_posix_types("DSYNC")
 
     def test_dm_posix_types_fs_copy(self):
         """
@@ -237,4 +253,4 @@ class DmPosixTypesTest(DataMoverTestBase):
         :avocado: tags=datamover,fs_copy
         :avocado: tags=dm_posix_types,dm_posix_types_fs_copy
         """
-        self.run_dm_posix_types("FS_COPY");
+        self.run_dm_posix_types("FS_COPY")
