@@ -320,14 +320,14 @@ client_cb_common(const struct crt_cb_info *cb_info)
 static void
 test_shutdown_handler(crt_rpc_t *rpc_req)
 {
-	DBG_PRINT("tier1 test_srver received shutdown request, opc: %#x.\n",
+	DBG_PRINT("tier1 test_server received shutdown request, opc: %#x.\n",
 		  rpc_req->cr_opc);
 
 	D_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");
 	D_ASSERTF(rpc_req->cr_output == NULL, "RPC request output is NULL\n");
 
 	tc_progress_stop();
-	DBG_PRINT("tier1 test_srver set shutdown flag.\n");
+	DBG_PRINT("tier1 test_server set shutdown flag.\n");
 }
 
 static struct crt_proto_rpc_format my_proto_rpc_fmt_test_group1[] = {
