@@ -544,13 +544,11 @@ io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch, uint64_t flags,
 		   struct dtx_handle *dth, bool verbose)
 {
 	struct bio_sglist	*bsgl;
-	struct bio_iov		*biov;
 	struct dcs_iod_csums	*iod_csums = NULL;
 	struct daos_csummer	*csummer = NULL;
 	d_iov_t			*srv_iov;
 	daos_handle_t		ioh;
-	unsigned int		off;
-	int			i, rc = 0;
+	int			rc = 0;
 
 	if ((arg->ta_flags & TF_USE_CSUMS) && iod->iod_size > 0) {
 		rc = io_test_add_csums(iod, sgl, &csummer, &iod_csums);
@@ -585,13 +583,18 @@ io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch, uint64_t flags,
 	bsgl = vos_iod_sgl_at(ioh, 0);
 	assert_true(bsgl != NULL);
 
+	rc = bio_iod_copy(vos_ioh2desc(ioh), sgl, 1);
+	assert_rc_equal(rc, 0);
+	/*
 	for (i = off = 0; i < bsgl->bs_nr_out; i++) {
 		biov = &bsgl->bs_iovs[i];
-		memcpy(bio_iov2req_buf(biov), srv_iov->iov_buf + off,
-		       bio_iov2req_len(biov));
+		pmemobj_memcpy_persist(bio_iov2req_buf(biov),
+				       srv_iov->iov_buf + off,
+				       bio_iov2req_len(biov));
 		off += bio_iov2req_len(biov);
 	}
-	assert_true(srv_iov->iov_len == off);
+	*/
+	assert_true(srv_iov->iov_len == sgl->sg_iovs[0].iov_len);
 
 	rc = bio_iod_post(vos_ioh2desc(ioh));
 end:

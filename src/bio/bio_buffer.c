@@ -782,7 +782,10 @@ bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 		 * copy and drain controller here is faster.
 		 */
 		if (DAOS_ON_VALGRIND && pmemobj_tx_stage() == TX_STAGE_WORK) {
-			/** Ignore the update to what is reserved block */
+			/** Ignore the update to what is reserved block.
+			 *  Ordinarily, this wouldn't be inside a transaction
+			 *  but in MVCC tests, it can happen.
+			 */
 			umem_tx_xadd_ptr(umem, media_addr, n,
 					 POBJ_XADD_NO_SNAPSHOT);
 		}
