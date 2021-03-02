@@ -75,6 +75,10 @@ class MpioUtils():
         Raises:
             MpioFailed: for an invalid test name or test execution failure
 
+        Return:
+            CmdResult: an avocado.utils.process CmdResult object containing the
+                result of the command execution.
+
         """
         print("self.mpichinstall: {}".format(self.mpichinstall))
 
@@ -133,8 +137,11 @@ class MpioUtils():
         for command in commands:
             print("run command: {}".format(command))
             try:
-                run_command(command, timeout=None, verbose=True, env=env)
+                result = run_command(
+                    command, timeout=None, verbose=True, env=env)
 
             except DaosTestError as excep:
                 raise MpioFailed(
                     "<Test FAILED> \nException occurred: {}".format(str(excep)))
+
+        return result

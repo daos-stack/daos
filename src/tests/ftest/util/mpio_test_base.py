@@ -88,21 +88,18 @@ class MpiioTests(TestWithServers):
 
         try:
             # running tests
-            self.mpio.run_mpiio_tests(
+            result = self.mpio.run_mpiio_tests(
                 self.hostfile_clients, self.pool.uuid, test_repo, test_name,
                 client_processes, self.cont_uuid)
         except MpioFailed as excep:
             self.fail("<{0} Test Failed> \n{1}".format(test_name, excep))
 
-        # Parsing output to look for failures
-        # stderr directed to stdout
-        stdout = os.path.join(self.logdir, "stdout")
-        searchfile = open(stdout, "r")
-        error_message = ["non-zero exit code", "MPI_Abort", "MPI_ABORT",
-                         "ERROR"]
-
-        for line in searchfile:
-            for error in error_message:
-                if error in line:
-                    self.fail(
-                        "Test Failed with error_message: {}".format(error))
+        # Check output for errors
+        error_message = [
+            "non-zero exit code", "MPI_Abort", "MPI_ABORT", "ERROR"]
+        for output in (result.stdout, result.stderr):
+            for line in output:
+                for error in error_message:
+                    if error in line:
+                        self.fail(
+                            "Test Failed with error_message: {}".format(error))

@@ -1,45 +1,45 @@
 #!/bin/bash
 
-url_to_repo() {
-    local url="$1"
+REPOS_DIR=/etc/dnf.repos.d
+DISTRO_NAME=leap15
+LSB_RELEASE=lsb-release
+EXCLUDE_UPGRADE=fuse,fuse-libs,fuse-devel,mercury,daos,daos-\*
 
-    local repo=${url#*://}
-    repo="${repo//%252F/_}"
-    repo="${repo//\//_}"
-
-    echo "$repo"
+bootstrap_dnf() {
+    time zypper --non-interactive install dnf
 }
 
-add_repo() {
-    local repo="$1"
-    local gpg_check="${2:-true}"
-
-    if [ -n "$repo" ]; then
-        repo="${REPOSITORY_URL}${repo}"
-        if ! dnf repolist | grep "$(url_to_repo "$repo")"; then
-            dnf config-manager --add-repo="${repo}"
-            if ! $gpg_check; then
-                disable_gpg_check "$repo"
-            fi
-        fi
+group_repo_post() {
+    if [ -n "$DAOS_STACK_GROUP_REPO" ]; then
+        rpm --import \
+            "${REPOSITORY_URL}${DAOS_STACK_GROUP_REPO%/*}/opensuse-15.2-devel-languages-go-x86_64-proxy/repodata/repomd.xml.key"
     fi
 }
 
+distro_custom() {
+    # monkey-patch lua-lmod
+    if ! grep MODULEPATH=".*"/usr/share/modules /etc/profile.d/lmod.sh; then \
+        sed -e '/MODULEPATH=/s/$/:\/usr\/share\/modules/'                     \
+               /etc/profile.d/lmod.sh;                                        \
+    fi
 
-disable_gpg_check() {
-    local repo="$1"
+    # force install of avocado 82.0
+    dnf -y erase avocado{,-common} python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}}
+    pip3 install --upgrade pip
+    pip3 install "avocado-framework<83.0"
+    pip3 install "avocado-framework-plugin-result-html<83.0"
+    pip3 install "avocado-framework-plugin-varianter-yaml-to-mux<83.0"
 
-    dnf config-manager --save --setopt="$(url_to_repo "$repo")".gpgcheck=0
 }
 
 post_provision_config_nodes() {
-    time zypper --non-interactive install dnf
+    bootstrap_dnf
 
     # Reserve port ranges 31416-31516 for DAOS and CART servers
     echo 31416-31516 > /proc/sys/net/ipv4/ip_local_reserved_ports
 
     if $CONFIG_POWER_ONLY; then
-        rm -f /etc/dnf.repos.d/*.hpdd.intel.com_job_daos-stack_job_*_job_*.repo
+        rm -f $REPOS_DIR/*.hpdd.intel.com_job_daos-stack_job_*_job_*.repo
         dnf -y erase fio fuse ior-hpc mpich-autoload               \
                      ompi argobots cart daos daos-client dpdk      \
                      fuse-libs libisa-l libpmemobj mercury mpich   \
@@ -51,10 +51,7 @@ post_provision_config_nodes() {
     local dnf_repo_args="--disablerepo=*"
 
     add_repo "$DAOS_STACK_GROUP_REPO"
-    if [ -n "$DAOS_STACK_GROUP_REPO" ]; then
-        rpm --import \
-            "${REPOSITORY_URL}${DAOS_STACK_GROUP_REPO%/*}/opensuse-15.2-devel-languages-go-x86_64-proxy/repodata/repomd.xml.key"
-    fi
+    group_repo_post
 
     add_repo "${DAOS_STACK_LOCAL_REPO}" false
 
@@ -62,6 +59,7 @@ post_provision_config_nodes() {
     dnf_repo_args+=" --enablerepo=repo.dc.hpdd.intel.com_repository_*"
 
     if [ -n "$INST_REPOS" ]; then
+        local repo
         for repo in $INST_REPOS; do
             branch="master"
             build_number="lastSuccessfulBuild"
@@ -73,9 +71,9 @@ post_provision_config_nodes() {
                     branch="${branch%:*}"
                 fi
             fi
-            local repo="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/leap15/
-            dnf config-manager --add-repo="${repo}"
-            disable_gpg_check "$repo"
+            local repo_url="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/$DISTRO_NAME/
+            dnf config-manager --add-repo="${repo_url}"
+            disable_gpg_check "$repo_url"
             # TODO: this should be per repo in the above loop
             if [ -n "$INST_REPOS" ]; then
                 dnf_repo_args+=",build.hpdd.intel.com_job_daos-stack*"
@@ -90,33 +88,20 @@ post_provision_config_nodes() {
     rm -f /tmp/daos_control.log
     dnf -y install lsb-release
 
-    # monkey-patch lua-lmod
-    if ! grep MODULEPATH=".*"/usr/share/modules /etc/profile.d/lmod.sh; then \
-        sed -e '/MODULEPATH=/s/$/:\/usr\/share\/modules/'                     \
-               /etc/profile.d/lmod.sh;                                        \
-    fi
-
-    # force install of avocado 82.0
-    dnf -y erase avocado{,-common} python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}}
-    pip3 install --upgrade pip
-    pip3 install "avocado-framework<83.0"
-    pip3 install "avocado-framework-plugin-result-html<83.0"
-    pip3 install "avocado-framework-plugin-varianter-yaml-to-mux<83.0"
-
     # shellcheck disable=SC2086
     if [ -n "$INST_RPMS" ] &&
        ! dnf -y $dnf_repo_args install $INST_RPMS; then
         rc=${PIPESTATUS[0]}
-        for file in /etc/dnf.repos.d/*.repo; do
-            echo "---- $file ----"
-            cat "$file"
-        done
+        dump_repos
         exit "$rc"
     fi
 
+    distro_custom
+
     # now make sure everything is fully up-to-date
     if ! time dnf -y upgrade \
-                  --exclude fuse,fuse-libs,fuse-devel,mercury,daos,daos-\*; then
+                  --exclude "$EXCLUDE_UPGRADE"; then
+        dump_repos
         exit 1
     fi
 

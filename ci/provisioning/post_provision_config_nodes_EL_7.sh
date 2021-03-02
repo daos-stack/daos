@@ -1,29 +1,8 @@
 #!/bin/bash
 
-url_to_repo() {
-    local url="$1"
-
-    local repo=${url#*://}
-    repo="${repo//%252F/_}"
-    repo="${repo//\//_}"
-
-    echo "$repo"
-}
-
-add_repo() {
-    local repo="$1"
-    local gpg_check="${2:-true}"
-
-    if [ -n "$repo" ]; then
-        repo="${REPOSITORY_URL}${repo}"
-        if ! dnf repolist | grep "$(url_to_repo "$repo")"; then
-            dnf config-manager --add-repo="${repo}"
-            if ! $gpg_check; then
-                disable_gpg_check "$repo"
-            fi
-        fi
-    fi
-}
+REPOS_DIR=/etc/yum.repos.d
+DISTRO_NAME=centos7
+LSB_RELEASE=redhat-lsb-core
 
 timeout_yum() {
     local timeout="$1"
@@ -48,34 +27,53 @@ timeout_yum() {
     return 1
 }
 
-disable_gpg_check() {
-    local url="$1"
-
-    repo="$(url_to_repo "$repo")"
-    # bug in EL7 DNF: this needs to be enabled before it can be disabled
-    dnf config-manager --save --setopt="$repo".gpgcheck=1
-    dnf config-manager --save --setopt="$repo".gpgcheck=0
-    # but even that seems to be not enough, so just brute-force it
-    if ! grep gpgcheck /etc/yum.repos.d/"$repo".repo; then
-        echo "gpgcheck=0" >> /etc/yum.repos.d/"$repo".repo
-    fi
+bootstrap_dnf() {
+    timeout_yum 5m install dnf 'dnf-command(config-manager)'
 }
 
-dump_repos() {
-        for file in /etc/yum.repos.d/*.repo; do
-            echo "---- $file ----"
-            cat "$file"
-        done
+group_repo_post() {
+    # nothing for EL7
+    :
+}
+
+distro_custom() {
+    dnf -y $dnf_repo_args install python3
+
+    if [ ! -e /usr/bin/pip3 ] &&
+       [ -e /usr/bin/pip3.6 ]; then
+        ln -s pip3.6 /usr/bin/pip3
+    fi
+    if [ ! -e /usr/bin/python3 ] &&
+       [ -e /usr/bin/python3.6 ]; then
+        ln -s python3.6 /usr/bin/python3
+    fi
+    # install the debuginfo repo in case we get segfaults
+    cat <<"EOF" > $REPOS_DIR/CentOS-Debuginfo.repo
+[core-0-debuginfo]
+name=CentOS-7 - Debuginfo
+baseurl=http://debuginfo.centos.org/7/$basearch/
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-Debug-7
+enabled=0
+EOF
+
+    # force install of avocado 82.0
+    dnf -y erase avocado{,-common} python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}}
+    pip3 install --upgrade pip
+    pip3 install "avocado-framework<83.0"
+    pip3 install "avocado-framework-plugin-result-html<83.0"
+    pip3 install "avocado-framework-plugin-varianter-yaml-to-mux<83.0"
+
 }
 
 post_provision_config_nodes() {
-    timeout_yum 5m install dnf 'dnf-command(config-manager)'
+    bootstrap_dnf
 
     # Reserve port ranges 31416-31516 for DAOS and CART servers
     echo 31416-31516 > /proc/sys/net/ipv4/ip_local_reserved_ports
 
     if $CONFIG_POWER_ONLY; then
-        rm -f /etc/yum.repos.d/*.hpdd.intel.com_job_daos-stack_job_*_job_*.repo
+        rm -f $REPOS_DIR/*.hpdd.intel.com_job_daos-stack_job_*_job_*.repo
         dnf -y erase fio fuse ior-hpc mpich-autoload               \
                      ompi argobots cart daos daos-client dpdk      \
                      fuse-libs libisa-l libpmemobj mercury mpich   \
@@ -87,6 +85,7 @@ post_provision_config_nodes() {
     local dnf_repo_args="--disablerepo=*"
 
     add_repo "$DAOS_STACK_GROUP_REPO"
+    group_repo_post
 
     add_repo "${DAOS_STACK_LOCAL_REPO}" false
 
@@ -94,6 +93,7 @@ post_provision_config_nodes() {
     dnf_repo_args+=" --enablerepo=repo.dc.hpdd.intel.com_repository_*"
 
     if [ -n "$INST_REPOS" ]; then
+        local repo
         for repo in $INST_REPOS; do
             branch="master"
             build_number="lastSuccessfulBuild"
@@ -105,9 +105,9 @@ post_provision_config_nodes() {
                     branch="${branch%:*}"
                 fi
             fi
-            local repo="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/centos7/
-            dnf config-manager --add-repo="${repo}"
-            disable_gpg_check "$repo"
+            local repo_url="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/$DISTRO_NAME/
+            dnf config-manager --add-repo="${repo_url}"
+            disable_gpg_check "$repo_url"
             # TODO: this should be per repo in the above loop
             if [ -n "$INST_REPOS" ]; then
                 dnf_repo_args+=",build.hpdd.intel.com_job_daos-stack*"
@@ -120,15 +120,7 @@ post_provision_config_nodes() {
     fi
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
-    dnf -y install redhat-lsb-core
-
-    # force install of avocado 82.0
-    dnf -y erase avocado{,-common} python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}} python36-PyYAML
-    pip3 install --upgrade pip
-    pip3 install "avocado-framework<83.0"
-    pip3 install "avocado-framework-plugin-result-html<83.0"
-    pip3 install "avocado-framework-plugin-varianter-yaml-to-mux<83.0"
-    pip3 install clustershell
+    dnf -y install $LSB_RELEASE
 
     # shellcheck disable=SC2086
     if [ -n "$INST_RPMS" ] &&
@@ -137,25 +129,8 @@ post_provision_config_nodes() {
         dump_repos
         exit "$rc"
     fi
-    dnf -y $dnf_repo_args install python3
 
-    if [ ! -e /usr/bin/pip3 ] &&
-       [ -e /usr/bin/pip3.6 ]; then
-        ln -s pip3.6 /usr/bin/pip3
-    fi
-    if [ ! -e /usr/bin/python3 ] &&
-       [ -e /usr/bin/python3.6 ]; then
-        ln -s python3.6 /usr/bin/python3
-    fi
-    # install the debuginfo repo in case we get segfaults
-    cat <<"EOF" > /etc/yum.repos.d/CentOS-Debuginfo.repo
-[core-0-debuginfo]
-name=CentOS-7 - Debuginfo
-baseurl=http://debuginfo.centos.org/7/$basearch/
-gpgcheck=1
-gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-Debug-7
-enabled=0
-EOF
+    distro_custom
 
     # now make sure everything is fully up-to-date
     if ! time dnf -y upgrade \
