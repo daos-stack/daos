@@ -1,3 +1,10 @@
+daos (1.3.0-2) unstable; urgency=medium
+  [ Li Wei ]
+  * Require raft-devel 0.7.3 that fixes an unstable leadership problem caused
+    by removed replicas as well as some Coverity issues
+
+ -- Li Wei <wei.g.li@intel.com> Thu, 25 Feb 2021 09:55:00 +0800
+
 daos (1.3.0-1) unstable; urgency=medium
   [ Brian J. Murrell ]
   * Version bump up to 1.3.0
