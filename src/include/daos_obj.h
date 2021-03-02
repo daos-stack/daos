@@ -347,6 +347,15 @@ daos_obj_generate_id(daos_obj_id_t *oid, daos_ofeat_t ofeats,
 	oid->hi |= hdr;
 }
 
+#define DAOS_OC_RDD_BITS	4
+#define DAOS_OC_SHD_BITS	6
+#define DAOS_OC_RDD_SHIFT	0
+#define DAOS_OC_SHD_SHIFT	DAOS_OC_RDD_BITS
+#define DAOS_OC_RDD_MAX_VAL	((1ULL << DAOS_OC_RDD_BITS) - 1)
+#define DAOS_OC_SHD_MAX_VAL	((1ULL << DAOS_OC_SHD_BITS) - 1)
+#define DAOS_OC_RDD_MASK	(DAOS_OC_RDD_MAX_VAL << DAOS_OC_RDD_SHIFT)
+#define DAOS_OC_SHD_MASK	(DAOS_OC_SHD_MAX_VAL << DAOS_OC_SHD_SHIFT)
+
 /** Flags for oclass hints */
 enum {
 	/** Flags to control OC Redundancy */
