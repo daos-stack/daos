@@ -49,7 +49,7 @@ class GlobalHandle(TestWithServers):
         buf2.extend(buf.contents)
         pool_handle = pool.global2local(
             self.context, pool_glob_handle.iov_len,
-            pool_glob_handle.iov_buf_len, buf2)
+            pool_glob_handle.iov_buf_len, buf2.decode("utf-8"))
 
         # perform an operation that will use the new handle, if it
         # doesn't throw an exception, then all is well.
@@ -65,7 +65,7 @@ class GlobalHandle(TestWithServers):
         buf2.extend(buf.contents)
         dummy_cont_handle = container.global2local(
             self.context, cont_glob_handle.iov_len,
-            cont_glob_handle.iov_buf_len, buf2)
+            cont_glob_handle.iov_buf_len, buf2.decode("utf-8"))
         # just try one thing to make sure handle is good
         container.query()
 
@@ -85,7 +85,7 @@ class GlobalHandle(TestWithServers):
         # create a pool global handle
         iov_len, buf_len, buf = self.pool.pool.local2global()
         buftype = ctypes.c_byte * buf_len
-        c_buf = buftype.from_buffer(buf)
+        c_buf = buftype.from_buffer(buf.decode("utf-8"))
         sct_pool_handle = (
             sharedctypes.RawValue(
                 IOV, ctypes.cast(c_buf, ctypes.c_void_p), buf_len, iov_len))
@@ -98,7 +98,7 @@ class GlobalHandle(TestWithServers):
             # create a container global handle
             iov_len, buf_len, buf = self.container.container.local2global()
             buftype = ctypes.c_byte * buf_len
-            c_buf = buftype.from_buffer(buf)
+            c_buf = buftype.from_buffer(buf.decode("utf-8"))
             sct_cont_handle = (
                 sharedctypes.RawValue(
                     IOV, ctypes.cast(c_buf, ctypes.c_void_p), buf_len, iov_len))

@@ -84,7 +84,7 @@ class PoolAttributeTest(TestWithServers):
         """
         allchar = string.ascii_letters + string.digits
         for i in range(1024):
-            self.large_data_set[str(i)] = (
+            self.large_data_set[i] = (
                 "".join(random.choice(allchar)
                         for x in range(random.randint(1, 100))))
 

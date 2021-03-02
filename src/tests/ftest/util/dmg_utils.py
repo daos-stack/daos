@@ -91,7 +91,7 @@ class DmgCommand(DmgCommandBase):
             self._get_result(sub_command_list, **kwargs)
         finally:
             self.json.update(prev_json_val)
-        return json.loads(self.result.stdout_text)
+        return json.loads(self.result.stdout)
 
     def network_scan(self, provider=None, all_devs=False):
         """Get the result of the dmg network scan command.

@@ -166,7 +166,7 @@ class Snapshot(TestWithServers):
         dkey = self.params.get("dkey", '/run/snapshot/*', default="dkey")
         data_size = self.params.get("test_datasize",
                                     '/run/snapshot/*', default=150)
-        rand_str = lambda n: ''.join([random.choice(string.lowercase)
+        rand_str = lambda n: ''.join([random.choice(string.ascii_lowercase)
                                       for i in range(n)])
         thedata = "--->>>Happy Daos Snapshot-Create Negative Testing " + \
                   "<<<---" + rand_str(random.randint(1, data_size))
@@ -333,7 +333,7 @@ class Snapshot(TestWithServers):
                                     '/run/snapshot/*', default=150)
         snapshot_loop = self.params.get("num_of_snapshot",
                                         '/run/snapshot/*', default=3)
-        rand_str = lambda n: ''.join([random.choice(string.lowercase)
+        rand_str = lambda n: ''.join([random.choice(string.ascii_lowercase)
                                       for i in range(n)])
         #
         # Test loop for creat, modify and snapshot object in the DAOS container.

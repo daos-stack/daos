@@ -43,7 +43,7 @@ class GlobalHandle(TestWithServers):
 
         # note that the handle is stored inside the pool as well
         dummy_local_handle = pool.global2local(self.context, iov_len,
-                                               buf_len, buf)
+                                               buf_len, buf.decode("utf-8"))
 
         # perform some operations that will use the new handle
         pool.pool_query()
@@ -77,7 +77,7 @@ class GlobalHandle(TestWithServers):
             # p.join()
             # for now verifying global handle in the same process which is not
             # the intended use case
-            self.check_handle(buf_len, iov_len, buf,
+            self.check_handle(buf_len, iov_len, buf.decode("utf-8"),
                               self.pool.pool.get_uuid_str(), 0)
 
         except DaosApiError as error:

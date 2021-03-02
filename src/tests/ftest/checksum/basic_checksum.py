@@ -11,6 +11,7 @@ from pydaos.raw import (DaosContainer, IORequest,
 from apricot import TestWithServers
 from general_utils import create_string_buffer
 
+
 class ChecksumContainerValidation(TestWithServers):
     """
     Test Class Description: This test is enables
@@ -20,6 +21,7 @@ class ChecksumContainerValidation(TestWithServers):
     test for enabling checksum testing.
     :avocado: recursive
     """
+
     # pylint: disable=too-many-instance-attributes
     def setUp(self):
         super().setUp()
@@ -91,15 +93,12 @@ class ChecksumContainerValidation(TestWithServers):
                                               c_akey,
                                               len(indata)+1)
                 if indata != (repr(val.value)[1:-1]):
-                    self.d_log.error("ERROR:Data mismatch for "
-                                     "dkey = {0}, "
-                                     "akey = {1}".format(
-                                         "dkey {0}".format(dkey),
-                                         "akey {0}".format(akey)))
-                    self.fail("ERROR: Data mismatch for dkey = {0}, akey={1}"
-                              .format("dkey {0}".format(dkey),
-                                      "akey {0}".format(akey)))
-
+                    message = (
+                        "ERROR:Data mismatch for dkey={}, akey={}: indata={}, "
+                        "val={}".format(
+                            dkey, akey, indata, repr(val.value)[1:-1]))
+                    self.d_log.error(message)
+                    self.fail(message)
                 record_index = record_index + 1
                 if record_index == len(self.record_length):
                     record_index = 0
