@@ -136,9 +136,6 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 			goto out;
 	}
 
-	if (DAOS_FAIL_CHECK(DAOS_DTX_NO_INPROGRESS))
-		return -DER_IO;
-
 	s_try = true;
 
 	d_list_for_each_entry(dsp, &dth->dth_share_tbd_list, dsp_link) {
