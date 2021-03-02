@@ -500,6 +500,18 @@ main(int argc, char **argv)
 		}
 	}
 
+	/*
+	 * For daos_racer, if pool/cont uuids are supplied as command line
+	 * arguments it's assumed that the pool/cont were created. If only a
+	 * cont uuid is supplied then a pool and container will be created and
+	 * the cont uuid will be used during creation
+	 */
+	if (!uuid_is_null(ts_ctx.tsc_pool_uuid)) {
+		ts_ctx.tsc_skip_pool_create = true;
+		if (!uuid_is_null(ts_ctx.tsc_cont_uuid))
+			ts_ctx.tsc_skip_cont_create = true;
+	}
+
 	if (seed == 0) {
 		gettimeofday(&tv, NULL);
 		seed = tv.tv_usec;
