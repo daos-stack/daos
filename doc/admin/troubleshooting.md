@@ -249,11 +249,11 @@ In order to correct this situation synchronize all server clocks to the same
 reference time, using services like NTP.
 
 ### Shared Memory Errors ###
-When DER_SHMEM_PERMS is received it means that this IO Engine lacked the
+When DER_SHMEM_PERMS is received it means that this I/O Engine lacked the
 permissions to access the shared memory megment left behind by a previous run of
-the IO Engine on the same machine.  This happens when the IO Engine fails to
+the I/O Engine on the same machine.  This happens when the I/O Engine fails to
 remove the shared memory segment upon shutdown, and, there is a mismatch between
-the user/group used to launch the IO Engine between these successive runs.  To
+the user/group used to launch the I/O Engine between these successive runs.  To
 remedy the problem, manually identify the shared memory segment and remove it.
 
 Issue ```ipcs``` to view the Shared Memory Segments.  The output will show a
@@ -275,16 +275,16 @@ key        shmid      owner      perms      bytes      nattch     status
 key        semid      owner      perms      nsems
 ```
 
-Shared Memory Segments with keys [0x10242048 .. (0x10242048 + number of IO
+Shared Memory Segments with keys [0x10242048 .. (0x10242048 + number of I/O
 Engines running)] are the segments that must be removed.  Use ```ipcrm``` to
 remove the segment.
 
-For example, to remove the shared memory segment left behind by IO Engine
+For example, to remove the shared memory segment left behind by I/O Engine
 instance 0, issue:
 ```
 sudo ipcrm -M 0x10242048
 ```
-To remove the shared memory segment left behind by IO Engine instance 1, issue:
+To remove the shared memory segment left behind by I/O Engine instance 1, issue:
 ```
 sudo ipcrm -M 0x10242049
 ```
