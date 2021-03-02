@@ -510,7 +510,7 @@ tc_log_msg_cb(const struct crt_cb_info *info)
 	struct tc_log_msg_cb_resp	*resp;
 
 	if (info->cci_rc != 0) {
-		D_WARN(" Add Log message CB failue\n");
+		D_WARN(" Add Log message CB failure\n");
 		return;
 	}
 	resp = (struct tc_log_msg_cb_resp *)info->cci_arg;
@@ -529,7 +529,7 @@ tc_log_msg(crt_context_t ctx, crt_group_t *grp, d_rank_t rank,
 	crt_opcode_t			opcode = CRT_OPC_CTL_LOG_ADD_MSG;
 	struct tc_log_msg_cb_resp       resp;
 
-	/* Initialize respons structure */
+	/* Initialize response structure */
 	rc = sem_init(&resp.sem, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed\n");
 	resp.rc = 0;
