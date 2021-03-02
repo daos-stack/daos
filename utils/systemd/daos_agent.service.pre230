@@ -16,7 +16,7 @@ Restart=always
 RestartSec=10
 LimitMEMLOCK=infinity
 LimitCORE=infinity
-StartLimitIntervalSec=60
+StartLimitInterval=60
 StartLimitBurst=5
 
 [Install]
