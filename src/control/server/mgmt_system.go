@@ -57,6 +57,16 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 				Uri:  uri,
 			})
 		}
+	} else {
+		// If the request does not indicate that all ranks should be returned,
+		// it may be from an older client, in which case we should just return
+		// the MS ranks.
+		for _, rank := range groupMap.MSRanks {
+			resp.RankUris = append(resp.RankUris, &mgmtpb.GetAttachInfoResp_RankUri{
+				Rank: rank.Uint32(),
+				Uri:  groupMap.RankURIs[rank],
+			})
+		}
 	}
 	resp.Provider = svc.clientNetworkCfg.Provider
 	resp.CrtCtxShareAddr = svc.clientNetworkCfg.CrtCtxShareAddr
