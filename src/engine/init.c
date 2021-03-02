@@ -643,7 +643,7 @@ server_init(int argc, char *argv[])
 	d_tm_record_timestamp(NULL, "servicing_at");
 
 	/** Report rank */
-	d_tm_set_gauge(NULL, dss_self_rank(), "rank");
+	d_tm_increment_counter(NULL, dss_self_rank(), "rank");
 
 	D_PRINT("DAOS I/O Engine (v%s) process %u started on rank %u "
 		"with %u target, %d helper XS, firstcore %d, host %s.\n",
