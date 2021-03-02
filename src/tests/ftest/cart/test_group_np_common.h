@@ -126,7 +126,7 @@ test_checkin_handler(crt_rpc_t *rpc_req)
 	rc = crt_reply_send(rpc_req);
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
 
-	DBG_PRINT("tier1 test_srver sent checkin reply, ret: %d, \
+	DBG_PRINT("tier1 test_server sent checkin reply, ret: %d, \
 			 room_no: %d.\n", e_reply->ret, e_reply->room_no);
 }
 
@@ -200,7 +200,7 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 	rc = crt_reply_send(rpc_req);
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
 
-	DBG_PRINT("tier1 test_srver sent swim_status reply,"
+	DBG_PRINT("tier1 test_server sent swim_status reply,"
 		  "e_reply->bool_val: %d.\n",
 		  e_reply->bool_val);
 }
@@ -233,7 +233,7 @@ test_ping_delay_handler(crt_rpc_t *rpc_req)
 	rc = crt_reply_send(rpc_req);
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
 
-	DBG_PRINT("tier1 test_srver sent checkin reply, ret: %d, "
+	DBG_PRINT("tier1 test_server sent checkin reply, ret: %d, "
 		   "room_no: %d.\n", p_reply->ret, p_reply->room_no);
 }
 
