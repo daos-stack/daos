@@ -26,7 +26,7 @@ struct d_fd_node {
 	enum d_fd_node_type fdn_type; /* indicates which union member to use */
 	union {
 		const struct d_fault_domain	*dom;
-		uint32_t			*rank;
+		uint32_t			rank;
 	} fdn_val;
 };
 

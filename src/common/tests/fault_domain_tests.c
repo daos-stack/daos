@@ -108,8 +108,7 @@ expect_ranks(struct d_fd_tree *tree, size_t num_ranks, size_t *next_idx)
 
 		assert_rc_equal(d_fd_tree_next(tree, &next), 0);
 		assert_int_equal(next.fdn_type, D_FD_NODE_TYPE_RANK);
-		assert_non_null(next.fdn_val.rank);
-		assert_int_equal(*next.fdn_val.rank,
+		assert_int_equal(next.fdn_val.rank,
 				 tree->fdt_compressed[exp_idx++]);
 	}
 
