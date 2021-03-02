@@ -713,6 +713,8 @@ class DFuse():
 
         if v_hint is None:
             v_hint = get_inc_id()
+        else:
+            v_hint = '{}_{}'.format(v_hint, get_inc_id())
 
         prefix = 'dnt_dfuse_{}_'.format(v_hint)
         log_file = tempfile.NamedTemporaryFile(prefix=prefix,
@@ -1163,6 +1165,7 @@ class posix_tests():
         print(stbuf)
         assert stbuf.st_ino < 100
         print(os.listdir(path))
+        os.rmdir(path)
 
     @needs_dfuse_with_cache
     def test_uns_create_with_cache(self):
@@ -1296,6 +1299,14 @@ def run_posix_tests(server, conf, test=None):
                 continue
 
             print('Calling {}'.format(fn))
+            rc = obj()
+            print('rc from {} is {}'.format(fn, rc))
+
+        # TODO: Hack, do not land.  Repeat this test 100 times.
+        fn = 'uns_create'
+        obj = getattr(pt, 'test_{}'.format(fn))
+        for rep in range(100):
+            print('Calling {} {}'.format(fn, rep))
             rc = obj()
             print('rc from {} is {}'.format(fn, rc))
 

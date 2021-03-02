@@ -61,13 +61,13 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 
 		/* Update the existing object with the new name/parent */
 
-		DFUSE_TRA_DEBUG(ie, "inode dfs %p %ld hi %#lx lo %#lx",
+		DFUSE_TRA_DEBUG(ie, "inode dfs %p %lx hi %#lx lo %#lx",
 				inode->ie_dfs,
 				inode->ie_dfs->dfs_ino,
 				inode->ie_oid.hi,
 				inode->ie_oid.lo);
 
-		DFUSE_TRA_DEBUG(ie, "inode dfs %p %ld hi %#lx lo %#lx",
+		DFUSE_TRA_DEBUG(ie, "inode dfs %p %lx hi %#lx lo %#lx",
 				ie->ie_dfs,
 				ie->ie_dfs->dfs_ino,
 				ie->ie_oid.hi,
@@ -270,7 +270,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 
 	ie->ie_dfs = dfs;
 
-	DFUSE_TRA_INFO(dfs, "UNS entry point activated, root %lu",
+	DFUSE_TRA_INFO(dfs, "UNS entry point activated, root %#lx",
 		       dfs->dfs_ino);
 
 	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
@@ -321,7 +321,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	daos_size_t			attr_len = DUNS_MAX_XATTR_LEN;
 
 	DFUSE_TRA_DEBUG(fs_handle,
-			"Parent:%lu '%s'", parent->ie_stat.st_ino, name);
+			"Parent:%#lx '%s'", parent->ie_stat.st_ino, name);
 
 	D_ALLOC_PTR(ie);
 	if (!ie)
