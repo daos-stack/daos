@@ -516,12 +516,19 @@ static int
 mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 		d_iov_t *csum_iov_fetch)
 {
-	int rc;
+	uint32_t		 flags = DIOF_FOR_MIGRATION;
+	int			 rc;
+	struct daos_oclass_attr *oca;
+
+	oca = daos_oclass_attr_find(mrone->mo_oid.id_pub);
+	D_ASSERT(oca != NULL);
+
+	if (daos_oclass_grp_size(oca) > 1)
+		flags |= DIOF_TO_LEADER;
 
 	rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
 			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL,
-			   DIOF_TO_LEADER | DIOF_FOR_MIGRATION, NULL,
-			   csum_iov_fetch);
+			   flags, NULL, csum_iov_fetch);
 
 	if (rc != 0)
 		return rc;
@@ -600,8 +607,16 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 		DP_KEY(&mrone->mo_dkey), mrone->mo_iod_num,
 		mrone->mo_epoch, fetch ? "yes":"no");
 
-	if (fetch) {
+	if (DAOS_FAIL_CHECK(DAOS_REBUILD_NO_UPDATE))
+		return 0;
 
+	if (DAOS_FAIL_CHECK(DAOS_REBUILD_UPDATE_FAIL))
+		return -DER_INVAL;
+
+
+	oca = daos_oclass_attr_find(mrone->mo_oid.id_pub);
+	D_ASSERT(oca != NULL);
+	if (fetch) {
 		rc = daos_iov_alloc(&csum_iov_fetch, CSUM_BUF_SIZE, false);
 		if (rc != 0)
 			D_GOTO(out, rc);
@@ -625,14 +640,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 	 */
 	tmp_csum_iov = *csums_iov;
 
-	if (DAOS_FAIL_CHECK(DAOS_REBUILD_NO_UPDATE))
-		return 0;
-
-	if (DAOS_FAIL_CHECK(DAOS_REBUILD_UPDATE_FAIL))
-		return -DER_INVAL;
-
-	if (daos_oclass_is_ec(mrone->mo_oid.id_pub, &oca) &&
-	    !obj_shard_is_ec_parity(mrone->mo_oid, &oca))
+	if (DAOS_OC_IS_EC(oca) && !obj_shard_is_ec_parity(mrone->mo_oid, NULL))
 		mrone_recx_daos2_vos(mrone, oca);
 
 	rc = daos_csummer_csum_init_with_packed(&csummer, csums_iov);
