@@ -19,7 +19,7 @@ import (
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -90,7 +90,7 @@ func (svc *mgmtSvc) getPoolServiceRanks(uuidStr string) ([]uint32, error) {
 }
 
 // calculateCreateStorage determines the amount of SCM/NVMe storage to
-// allocate per server in order to fulfill the create request, if those
+// allocate per engine in order to fulfill the create request, if those
 // values are not already supplied as part of the request.
 func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 	instances := svc.harness.Instances()
@@ -129,12 +129,12 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 	if targetCount == 0 {
 		return errors.New("zero target count")
 	}
-	minNvmeRequired := ioserver.NvmeMinBytesPerTarget * uint64(targetCount)
+	minNvmeRequired := engine.NvmeMinBytesPerTarget * uint64(targetCount)
 
 	if req.Nvmebytes != 0 && req.Nvmebytes < minNvmeRequired {
 		return FaultPoolNvmeTooSmall(req.Nvmebytes, targetCount)
 	}
-	if req.Scmbytes < ioserver.ScmMinBytesPerTarget*uint64(targetCount) {
+	if req.Scmbytes < engine.ScmMinBytesPerTarget*uint64(targetCount) {
 		return FaultPoolScmTooSmall(req.Scmbytes, targetCount)
 	}
 
@@ -144,7 +144,7 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 // PoolCreate implements the method defined for the Management Service.
 //
 // Validate minimum SCM/NVMe pool size per VOS target, pool size request params
-// are per-ioserver so need to be larger than (minimum_target_allocation *
+// are per-engine so need to be larger than (minimum_target_allocation *
 // target_count).
 func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (resp *mgmtpb.PoolCreateResp, err error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
@@ -238,7 +238,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return nil, FaultPoolInvalidServiceReps
 	}
 
-	// IO server needs the fault domain tree for placement purposes
+	// I/O Engine needs the fault domain tree for placement purposes
 	req.FaultDomains = svc.sysdb.FaultDomainTree().ToProto()
 
 	if err := svc.calculateCreateStorage(req); err != nil {
@@ -365,26 +365,26 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		return nil, err
 	}
 
-	// FIXME: There are some potential races here. We may want
-	// to somehow do all of this under a lock, to prevent multiple
-	// gRPC callers from modifying the same pool concurrently.
-
 	ps, err := svc.sysdb.FindPoolServiceByUUID(uuid)
 	if err != nil {
 		return nil, err
 	}
 
-	lastState := ps.State
+	inCleanupMode := false
 	if ps.State == system.PoolServiceStateDestroying {
-		return nil, drpc.DaosAlready
+		// If we already tried to destroy the pool but it failed for some
+		// reason, try again, but instead use the full set of storage ranks
+		// in case the MS has lost track of the actual svc ranks.
+		req.SvcRanks = system.RanksToUint32(ps.Storage.CreationRanks())
+		inCleanupMode = true
+	} else {
+		ps.State = system.PoolServiceStateDestroying
+		if err := svc.sysdb.UpdatePoolService(ps); err != nil {
+			return nil, errors.Wrapf(err, "failed to update pool %s", uuid)
+		}
+		req.SvcRanks = system.RanksToUint32(ps.Replicas)
 	}
 
-	ps.State = system.PoolServiceStateDestroying
-	if err := svc.sysdb.UpdatePoolService(ps); err != nil {
-		return nil, err
-	}
-
-	req.SvcRanks = system.RanksToUint32(ps.Replicas)
 	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolDestroy, req)
 	if err != nil {
 		return nil, err
@@ -397,20 +397,23 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 
 	svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, resp:%+v\n", resp)
 
-	switch drpc.DaosStatus(resp.Status) {
-	case drpc.DaosSuccess:
+	ds := drpc.DaosStatus(resp.Status)
+	switch ds {
+	case drpc.DaosSuccess, drpc.DaosNotLeader, drpc.DaosNotReplica:
+		if ds == drpc.DaosNotLeader || ds == drpc.DaosNotReplica {
+			// If we're not cleaning up, then this is an error.
+			if !inCleanupMode {
+				svc.log.Errorf("PoolDestroy dRPC call failed due to %s in non-cleanup path", ds)
+				break
+			}
+			// Otherwise, we've done all we can to try to recover.
+			resp.Status = int32(drpc.DaosSuccess)
+		}
 		if err := svc.sysdb.RemovePoolService(uuid); err != nil {
 			return nil, errors.Wrapf(err, "failed to remove pool %s", uuid)
 		}
-	// TODO: Identify errors that should leave the pool in a "Destroying"
-	// state and enumerate them here.
 	default:
-		// Revert the pool back to the previous state if the destroy failed
-		// and the pool should not remain in the "Destroying" state.
-		ps.State = lastState
-		if err := svc.sysdb.UpdatePoolService(ps); err != nil {
-			return nil, err
-		}
+		svc.log.Errorf("PoolDestroy dRPC call failed: %s", ds)
 	}
 
 	return resp, nil
@@ -490,7 +493,7 @@ func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (
 
 	svc.log.Debugf("MgmtSvc.PoolExtend dispatch, req:%+v\n", req)
 
-	// the IO server needs the domain tree for placement purposes
+	// the I/O Engine needs the domain tree for placement purposes
 	req.FaultDomains = svc.sysdb.FaultDomainTree().ToProto()
 
 	svc.log.Debugf("MgmtSvc.PoolExtend forwarding modified req:%+v\n", req)
@@ -532,7 +535,7 @@ func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReinteg
 	return resp, nil
 }
 
-// PoolQuery forwards a pool query request to the I/O server.
+// PoolQuery forwards a pool query request to the I/O Engine.
 func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*mgmtpb.PoolQueryResp, error) {
 	if err := svc.checkReplicaRequest(req); err != nil {
 		return nil, err
@@ -610,7 +613,7 @@ func resolvePoolPropVal(req *mgmtpb.PoolSetPropReq) (*mgmtpb.PoolSetPropReq, err
 	return newReq, nil
 }
 
-// PoolSetProp forwards a request to the I/O server to set a pool property.
+// PoolSetProp forwards a request to the I/O Engine to set a pool property.
 func (svc *mgmtSvc) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq) (*mgmtpb.PoolSetPropResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
@@ -707,7 +710,7 @@ func (svc *mgmtSvc) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq)
 	return resp, nil
 }
 
-// PoolGetACL forwards a request to the IO server to fetch a pool's Access Control List
+// PoolGetACL forwards a request to the I/O Engine to fetch a pool's Access Control List
 func (svc *mgmtSvc) PoolGetACL(ctx context.Context, req *mgmtpb.GetACLReq) (*mgmtpb.ACLResp, error) {
 	if err := svc.checkReplicaRequest(req); err != nil {
 		return nil, err
@@ -729,7 +732,7 @@ func (svc *mgmtSvc) PoolGetACL(ctx context.Context, req *mgmtpb.GetACLReq) (*mgm
 	return resp, nil
 }
 
-// PoolOverwriteACL forwards a request to the IO server to overwrite a pool's Access Control List
+// PoolOverwriteACL forwards a request to the I/O Engine to overwrite a pool's Access Control List
 func (svc *mgmtSvc) PoolOverwriteACL(ctx context.Context, req *mgmtpb.ModifyACLReq) (*mgmtpb.ACLResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
@@ -751,7 +754,7 @@ func (svc *mgmtSvc) PoolOverwriteACL(ctx context.Context, req *mgmtpb.ModifyACLR
 	return resp, nil
 }
 
-// PoolUpdateACL forwards a request to the IO server to add or update entries in
+// PoolUpdateACL forwards a request to the I/O Engine to add or update entries in
 // a pool's Access Control List
 func (svc *mgmtSvc) PoolUpdateACL(ctx context.Context, req *mgmtpb.ModifyACLReq) (*mgmtpb.ACLResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
@@ -774,7 +777,7 @@ func (svc *mgmtSvc) PoolUpdateACL(ctx context.Context, req *mgmtpb.ModifyACLReq)
 	return resp, nil
 }
 
-// PoolDeleteACL forwards a request to the IO server to delete an entry from a
+// PoolDeleteACL forwards a request to the I/O Engine to delete an entry from a
 // pool's Access Control List.
 func (svc *mgmtSvc) PoolDeleteACL(ctx context.Context, req *mgmtpb.DeleteACLReq) (*mgmtpb.ACLResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {

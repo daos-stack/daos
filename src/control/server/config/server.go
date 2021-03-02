@@ -24,7 +24,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/engine"
 )
 
 const (
@@ -51,27 +51,29 @@ type ClientNetworkCfg struct {
 // See utils/config/daos_server.yml for parameter descriptions.
 type Server struct {
 	// control-specific
-	ControlPort         int                       `yaml:"port"`
-	TransportConfig     *security.TransportConfig `yaml:"transport_config"`
-	Servers             []*ioserver.Config        `yaml:"servers"`
-	BdevInclude         []string                  `yaml:"bdev_include,omitempty"`
-	BdevExclude         []string                  `yaml:"bdev_exclude,omitempty"`
-	DisableVFIO         bool                      `yaml:"disable_vfio"`
-	DisableVMD          bool                      `yaml:"disable_vmd"`
-	NrHugepages         int                       `yaml:"nr_hugepages"`
-	SetHugepages        bool                      `yaml:"set_hugepages"`
-	ControlLogMask      ControlLogLevel           `yaml:"control_log_mask"`
-	ControlLogFile      string                    `yaml:"control_log_file"`
-	ControlLogJSON      bool                      `yaml:"control_log_json,omitempty"`
-	HelperLogFile       string                    `yaml:"helper_log_file"`
-	FWHelperLogFile     string                    `yaml:"firmware_helper_log_file"`
-	RecreateSuperblocks bool                      `yaml:"recreate_superblocks"`
-	FaultPath           string                    `yaml:"fault_path"`
+	ControlPort     int                       `yaml:"port"`
+	TransportConfig *security.TransportConfig `yaml:"transport_config"`
+	// support both "engines:" and "servers:" for backward compatibility
+	Servers             []*engine.Config `yaml:"servers"`
+	Engines             []*engine.Config `yaml:"engines"`
+	BdevInclude         []string         `yaml:"bdev_include,omitempty"`
+	BdevExclude         []string         `yaml:"bdev_exclude,omitempty"`
+	DisableVFIO         bool             `yaml:"disable_vfio"`
+	DisableVMD          bool             `yaml:"disable_vmd"`
+	NrHugepages         int              `yaml:"nr_hugepages"`
+	SetHugepages        bool             `yaml:"set_hugepages"`
+	ControlLogMask      ControlLogLevel  `yaml:"control_log_mask"`
+	ControlLogFile      string           `yaml:"control_log_file"`
+	ControlLogJSON      bool             `yaml:"control_log_json,omitempty"`
+	HelperLogFile       string           `yaml:"helper_log_file"`
+	FWHelperLogFile     string           `yaml:"firmware_helper_log_file"`
+	RecreateSuperblocks bool             `yaml:"recreate_superblocks"`
+	FaultPath           string           `yaml:"fault_path"`
 
-	// duplicated in ioserver.Config
-	SystemName string                `yaml:"name"`
-	SocketDir  string                `yaml:"socket_dir"`
-	Fabric     ioserver.FabricConfig `yaml:",inline"`
+	// duplicated in engine.Config
+	SystemName string              `yaml:"name"`
+	SocketDir  string              `yaml:"socket_dir"`
+	Fabric     engine.FabricConfig `yaml:",inline"`
 	Modules    string
 
 	AccessPoints []string `yaml:"access_points"`
@@ -88,7 +90,7 @@ type Server struct {
 	// pointer to a function that validates the chosen numa node
 	validateNUMAFn networkNUMAValidation
 
-	// pointer to a function that retrieves the IO server network device class
+	// pointer to a function that retrieves the I/O Engine network device class
 	GetDeviceClassFn networkDeviceClass `yaml:"-"`
 }
 
@@ -120,8 +122,8 @@ func (c *Server) WithGetNetworkDeviceClass(fn networkDeviceClass) *Server {
 // WithSystemName sets the system name.
 func (c *Server) WithSystemName(name string) *Server {
 	c.SystemName = name
-	for _, srv := range c.Servers {
-		srv.WithSystemName(name)
+	for _, engine := range c.Engines {
+		engine.WithSystemName(name)
 	}
 	return c
 }
@@ -129,8 +131,8 @@ func (c *Server) WithSystemName(name string) *Server {
 // WithSocketDir sets the default socket directory.
 func (c *Server) WithSocketDir(sockDir string) *Server {
 	c.SocketDir = sockDir
-	for _, srv := range c.Servers {
-		srv.WithSocketDir(sockDir)
+	for _, engine := range c.Engines {
+		engine.WithSocketDir(sockDir)
 	}
 	return c
 }
@@ -138,8 +140,8 @@ func (c *Server) WithSocketDir(sockDir string) *Server {
 // WithModules sets a list of server modules to load.
 func (c *Server) WithModules(mList string) *Server {
 	c.Modules = mList
-	for _, srv := range c.Servers {
-		srv.WithModules(mList)
+	for _, engine := range c.Engines {
+		engine.WithModules(mList)
 	}
 	return c
 }
@@ -147,8 +149,8 @@ func (c *Server) WithModules(mList string) *Server {
 // WithFabricProvider sets the top-level fabric provider.
 func (c *Server) WithFabricProvider(provider string) *Server {
 	c.Fabric.Provider = provider
-	for _, srv := range c.Servers {
-		srv.Fabric.Update(c.Fabric)
+	for _, engine := range c.Engines {
+		engine.Fabric.Update(c.Fabric)
 	}
 	return c
 }
@@ -156,8 +158,8 @@ func (c *Server) WithFabricProvider(provider string) *Server {
 // WithCrtCtxShareAddr sets the top-level CrtCtxShareAddr.
 func (c *Server) WithCrtCtxShareAddr(addr uint32) *Server {
 	c.Fabric.CrtCtxShareAddr = addr
-	for _, srv := range c.Servers {
-		srv.Fabric.Update(c.Fabric)
+	for _, engine := range c.Engines {
+		engine.Fabric.Update(c.Fabric)
 	}
 	return c
 }
@@ -165,50 +167,50 @@ func (c *Server) WithCrtCtxShareAddr(addr uint32) *Server {
 // WithCrtTimeout sets the top-level CrtTimeout.
 func (c *Server) WithCrtTimeout(timeout uint32) *Server {
 	c.Fabric.CrtTimeout = timeout
-	for _, srv := range c.Servers {
-		srv.Fabric.Update(c.Fabric)
+	for _, engine := range c.Engines {
+		engine.Fabric.Update(c.Fabric)
 	}
 	return c
 }
 
 // NB: In order to ease maintenance, the set of chained config functions
-// which modify nested ioserver configurations should be kept above this
+// which modify nested engine configurations should be kept above this
 // one as a reference for which things should be set/updated in the next
 // function.
-func (c *Server) updateServerConfig(cfgPtr **ioserver.Config) {
+func (c *Server) updateServerConfig(cfgPtr **engine.Config) {
 	// If we somehow get a nil config, we can't return an error, and
 	// we don't want to cause a segfault. Instead, just create an
 	// empty config and return early, so that it eventually fails
 	// validation.
 	if *cfgPtr == nil {
-		*cfgPtr = &ioserver.Config{}
+		*cfgPtr = &engine.Config{}
 		return
 	}
 
-	srvCfg := *cfgPtr
-	srvCfg.Fabric.Update(c.Fabric)
-	srvCfg.SystemName = c.SystemName
-	srvCfg.SocketDir = c.SocketDir
-	srvCfg.Modules = c.Modules
+	engineCfg := *cfgPtr
+	engineCfg.Fabric.Update(c.Fabric)
+	engineCfg.SystemName = c.SystemName
+	engineCfg.SocketDir = c.SocketDir
+	engineCfg.Modules = c.Modules
 }
 
-// WithServers sets the list of IOServer configurations.
-func (c *Server) WithServers(srvList ...*ioserver.Config) *Server {
-	c.Servers = srvList
-	for i := range c.Servers {
-		c.updateServerConfig(&c.Servers[i])
+// WithEngines sets the list of engine configurations.
+func (c *Server) WithEngines(engineList ...*engine.Config) *Server {
+	c.Engines = engineList
+	for i := range c.Engines {
+		c.updateServerConfig(&c.Engines[i])
 	}
 	return c
 }
 
-// WithScmMountPoint sets the SCM mountpoint for the first I/O Server.
+// WithScmMountPoint sets the SCM mountpoint for the first I/O Engine.
 //
 // Deprecated: This function exists to ease transition away from
 // specifying the SCM mountpoint via daos_server CLI flag. Future
 // versions will require the mountpoint to be set via configuration.
 func (c *Server) WithScmMountPoint(mp string) *Server {
-	if len(c.Servers) > 0 {
-		c.Servers[0].WithScmMountPoint(mp)
+	if len(c.Engines) > 0 {
+		c.Engines[0].WithScmMountPoint(mp)
 	}
 	return c
 }
@@ -348,8 +350,8 @@ func (c *Server) Load() error {
 	}
 
 	// propagate top-level settings to server configs
-	for i := range c.Servers {
-		c.updateServerConfig(&c.Servers[i])
+	for i := range c.Engines {
+		c.updateServerConfig(&c.Engines[i])
 	}
 
 	return nil
@@ -402,14 +404,6 @@ func SaveActiveConfig(log logging.Logger, config *Server) {
 
 // Validate asserts that config meets minimum requirements.
 func (c *Server) Validate(log logging.Logger) (err error) {
-	// config without servers is valid when initially discovering hardware
-	// prior to adding per-server sections with device allocations
-	if len(c.Servers) == 0 {
-		log.Infof("No %ss in configuration, %s starting in discovery mode", build.DataPlaneName, build.ControlPlaneName)
-		c.Servers = nil
-		return nil
-	}
-
 	// append the user-friendly message to any error
 	defer func() {
 		if err != nil && !fault.HasResolution(err) {
@@ -417,6 +411,27 @@ func (c *Server) Validate(log logging.Logger) (err error) {
 			err = errors.WithMessage(FaultBadConfig, err.Error()+", examples: "+examplesPath)
 		}
 	}()
+
+	// For backwards compatibility, allow specifying "servers" rather than
+	// "engines" in the server config file.
+	if len(c.Servers) > 0 {
+		log.Info("\"servers\" server config file parameter is deprecated, use \"engines\" instead")
+		if len(c.Engines) > 0 {
+			return errors.New("cannot specify both servers and engines")
+		}
+		// replace and update engine configs
+		c = c.WithEngines(c.Servers...)
+	}
+	c.Servers = nil
+
+	// config without engines is valid when initially discovering hardware
+	// prior to adding per-engine sections with device allocations
+	if len(c.Engines) == 0 {
+		log.Infof("No %ss in configuration, %s starting in discovery mode", build.DataPlaneName,
+			build.ControlPlaneName)
+		c.Engines = nil
+		return nil
+	}
 
 	if c.Fabric.Provider == "" {
 		return FaultConfigNoProvider
@@ -455,33 +470,33 @@ func (c *Server) Validate(log logging.Logger) (err error) {
 		return err
 	}
 
-	for i, srv := range c.Servers {
-		srv.Fabric.Update(c.Fabric)
-		if err := srv.Validate(); err != nil {
-			return errors.Wrapf(err, "I/O server %d failed config validation", i)
+	for i, engine := range c.Engines {
+		engine.Fabric.Update(c.Fabric)
+		if err := engine.Validate(); err != nil {
+			return errors.Wrapf(err, "I/O Engine %d failed config validation", i)
 		}
 
-		err := c.validateProviderFn(netCtx, srv.Fabric.Interface, srv.Fabric.Provider)
+		err := c.validateProviderFn(netCtx, engine.Fabric.Interface, engine.Fabric.Provider)
 		if err != nil {
 			return errors.Wrapf(err, "Network device %s does not support provider %s.  The configuration is invalid.",
-				srv.Fabric.Interface, srv.Fabric.Provider)
+				engine.Fabric.Interface, engine.Fabric.Provider)
 		}
 
 		// Check to see if the pinned NUMA node was provided in the configuration.
 		// If it was provided, validate that the NUMA node is correct for the given device.
-		// An error from srv.Fabric.GetNumaNode() means that no configuration was provided in the YML.
+		// An error from engine.Fabric.GetNumaNode() means that no configuration was provided in the YML.
 		// Because this is an optional parameter, this is considered non-fatal.
-		numaNode, err := srv.Fabric.GetNumaNode()
+		numaNode, err := engine.Fabric.GetNumaNode()
 		if err == nil {
-			err = c.validateNUMAFn(netCtx, srv.Fabric.Interface, numaNode)
+			err = c.validateNUMAFn(netCtx, engine.Fabric.Interface, numaNode)
 			if err != nil {
 				return errors.Wrapf(err, "Network device %s on NUMA node %d is an invalid configuration.",
-					srv.Fabric.Interface, numaNode)
+					engine.Fabric.Interface, numaNode)
 			}
 		}
 	}
 
-	if len(c.Servers) > 1 {
+	if len(c.Engines) > 1 {
 		if err := validateMultiServerConfig(log, c); err != nil {
 			return err
 		}
@@ -495,7 +510,7 @@ func (c *Server) Validate(log logging.Logger) (err error) {
 // has unique values for resources which cannot be shared (e.g. log files,
 // fabric configurations, PCI devices, etc.)
 func validateMultiServerConfig(log logging.Logger, c *Server) error {
-	if len(c.Servers) < 2 {
+	if len(c.Engines) < 2 {
 		return nil
 	}
 
@@ -504,11 +519,11 @@ func validateMultiServerConfig(log logging.Logger, c *Server) error {
 	seenBdevSet := make(map[string]int)
 
 	var netDevClass uint32
-	for idx, srv := range c.Servers {
+	for idx, engine := range c.Engines {
 		fabricConfig := fmt.Sprintf("fabric:%s-%s-%d",
-			srv.Fabric.Provider,
-			srv.Fabric.Interface,
-			srv.Fabric.InterfacePort)
+			engine.Fabric.Provider,
+			engine.Fabric.Interface,
+			engine.Fabric.InterfacePort)
 
 		if seenIn, exists := seenValues[fabricConfig]; exists {
 			log.Debugf("%s in %d duplicates %d", fabricConfig, idx, seenIn)
@@ -516,8 +531,8 @@ func validateMultiServerConfig(log logging.Logger, c *Server) error {
 		}
 		seenValues[fabricConfig] = idx
 
-		if srv.LogFile != "" {
-			logConfig := fmt.Sprintf("log_file:%s", srv.LogFile)
+		if engine.LogFile != "" {
+			logConfig := fmt.Sprintf("log_file:%s", engine.LogFile)
 			if seenIn, exists := seenValues[logConfig]; exists {
 				log.Debugf("%s in %d duplicates %d", logConfig, idx, seenIn)
 				return FaultConfigDuplicateLogFile(idx, seenIn)
@@ -525,7 +540,7 @@ func validateMultiServerConfig(log logging.Logger, c *Server) error {
 			seenValues[logConfig] = idx
 		}
 
-		scmConf := srv.Storage.SCM
+		scmConf := engine.Storage.SCM
 		mountConfig := fmt.Sprintf("scm_mount:%s", scmConf.MountPoint)
 		if seenIn, exists := seenValues[mountConfig]; exists {
 			log.Debugf("%s in %d duplicates %d", mountConfig, idx, seenIn)
@@ -541,7 +556,7 @@ func validateMultiServerConfig(log logging.Logger, c *Server) error {
 			seenScmSet[dev] = idx
 		}
 
-		bdevConf := srv.Storage.Bdev
+		bdevConf := engine.Storage.Bdev
 		for _, dev := range bdevConf.DeviceList {
 			if seenIn, exists := seenBdevSet[dev]; exists {
 				log.Debugf("bdev_list entry %s in %d overlaps %d", dev, idx, seenIn)
@@ -550,7 +565,7 @@ func validateMultiServerConfig(log logging.Logger, c *Server) error {
 			seenBdevSet[dev] = idx
 		}
 
-		ndc, err := c.GetDeviceClassFn(srv.Fabric.Interface)
+		ndc, err := c.GetDeviceClassFn(engine.Fabric.Interface)
 		if err != nil {
 			return err
 		}
@@ -560,7 +575,7 @@ func validateMultiServerConfig(log logging.Logger, c *Server) error {
 			netDevClass = ndc
 		default:
 			if ndc != netDevClass {
-				return FaultConfigInvalidNetDevClass(idx, netDevClass, ndc, srv.Fabric.Interface)
+				return FaultConfigInvalidNetDevClass(idx, netDevClass, ndc, engine.Fabric.Interface)
 			}
 		}
 	}

@@ -511,20 +511,17 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 
 		shard_id = f_shard->fs_shard_idx;
 		l_shard = &layout->ol_shards[f_shard->fs_shard_idx];
-
+		D_DEBUG(DB_PL, "Attempting to remap failed shard: "
+			DF_FAILEDSHARD"\n", DP_FAILEDSHARD(*f_shard));
 		spare_avail = jump_map_has_next_spare(jmap, jmop, spares_left,
 				op_type, f_shard->fs_status);
 		if (spare_avail) {
 			rebuild_key = crc(key, f_shard->fs_shard_idx);
 			get_target(root, &spare_tgt, crc(key, rebuild_key),
 				   dom_used, tgts_used, shard_id, op_type);
+			D_DEBUG(DB_PL, "Trying new target: "DF_TARGET"\n",
+				DP_TARGET(spare_tgt));
 			spares_left--;
-			if (can_extend(op_type, spare_tgt->ta_comp.co_status)) {
-				rc = remap_alloc_one(extend_list, shard_id,
-						spare_tgt, true);
-				if (rc)
-					return rc;
-			}
 		}
 
 		determine_valid_spares(spare_tgt, md, spare_avail,
@@ -533,7 +530,7 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 	}
 
 	if (op_type == PL_PLACE_EXTENDED) {
-		rc = pl_map_extend(layout, extend_list, false);
+		rc = pl_map_extend(layout, extend_list);
 		if (rc != 0)
 			return rc;
 	}
@@ -632,6 +629,7 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 
 	/* Set the pool map version */
 	layout->ol_ver = pl_map_version(&(jmap->jmp_map));
+	D_DEBUG(DB_PL, "Building layout. map version: %d\n", layout->ol_ver);
 
 	j = 0;
 	k = 0;
@@ -640,6 +638,7 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 	key = oid.hi ^ oid.lo;
 	target = NULL;
 	for_reint = (op_type == PL_REINT);
+	D_DEBUG(DB_PL, "for_reint: %s", for_reint ? "Yes" : "No");
 
 	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_ROOT,
 				  PO_COMP_ID_ALL, &root);
@@ -714,6 +713,9 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 
 			/** If target is failed queue it for remap*/
 			if (pool_target_unavail(target, for_reint)) {
+				D_DEBUG(DB_PL, "Target unavailable " DF_TARGET
+					". Adding to remap_list:\n",
+					DP_TARGET(target));
 				fail_tgt_cnt++;
 				state = target->ta_comp.co_status;
 				rc = remap_alloc_one(remap_list, k, target,
@@ -722,10 +724,12 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 					D_GOTO(out, rc);
 
 				if (can_extend(op_type, state)) {
+					D_DEBUG(DB_PL, "Adding "DF_TARGET" to"
+						" extend_list\n",
+						DP_TARGET(target));
 					remap_alloc_one(&extend_list, k,
 							target, true);
 				}
-
 			}
 		}
 
@@ -733,6 +737,7 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 	}
 
 	rc = 0;
+	D_DEBUG(DB_PL, "Fail tgt cnt: %d\n", fail_tgt_cnt);
 	if (fail_tgt_cnt > 0)
 		rc = obj_remap_shards(jmap, md, layout, jmop, remap_list,
 				op_type, tgts_used, dom_used, fail_tgt_cnt,
@@ -875,6 +880,9 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	daos_obj_id_t		oid;
 	int			rc;
 
+	D_DEBUG(DB_PL, "Determining location for object: "DF_OID", ver: %d\n",
+		DP_OID(md->omd_id), md->omd_ver);
+
 	jmap = pl_map2jmap(map);
 	oid = md->omd_id;
 
@@ -925,7 +933,7 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 		layout_find_diff(jmap, layout, add_layout, &add_list);
 
 		if (!d_list_empty(&add_list))
-			rc = pl_map_extend(layout, &add_list, true);
+			rc = pl_map_extend(layout, &add_list);
 	}
 out:
 	remap_list_free_all(&remap_list);

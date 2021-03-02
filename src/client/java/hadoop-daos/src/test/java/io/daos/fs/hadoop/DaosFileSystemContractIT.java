@@ -11,24 +11,22 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystemContractBaseTest;
 import org.apache.hadoop.fs.Path;
 import org.junit.Test;
+import org.junit.Before;
 
 import java.io.IOException;
 
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assume.assumeTrue;
 
 public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
 
   private static final Log LOG = LogFactory.getLog(DaosFileSystemContractIT.class);
 
-  @Override
-  protected void setUp() throws Exception {
+  public DaosFileSystemContractIT() throws IOException {
     fs = DaosFSFactory.getFS();
     fs.mkdirs(new Path("/test"));
-  }
-
-  @Override
-  protected void tearDown() throws Exception {
-    super.tearDown();
   }
 
   @Override
@@ -74,8 +72,7 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
     assertTrue("Parent should exist", this.fs.exists(parentDir));
   }
 
-  @Test
-  protected boolean renameSupported() {
+  public boolean renameSupported() {
     return true;
   }
 
@@ -101,6 +98,13 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
     assertFalse(fs.exists(src));
   }
 
+  @Test
+  public void testRenameFailed() throws Exception {
+    Path parentdir = path("testRenameChildDirForbidden");
+    fs.mkdirs(parentdir);
+    Path childdir = new Path(parentdir, "childdir");
+    fs.rename(parentdir, childdir);
+  }
 
   @Test
   public void testGetFileStatusFileAndDirectory() throws Exception {
@@ -130,6 +134,7 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
     }
   }
 
+  @Test
   public void testRenameDirectoryMoveToExistingDirectory() throws Exception {
     if (!renameSupported()) return;
 
@@ -234,6 +239,7 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
     assertEquals(0, paths.length);
   }
 
+  @Test
   public void testRenameDirMoveToDescentdantDir() throws Exception {
     if (!renameSupported()) return;
 
@@ -247,6 +253,7 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
         fs.exists(path("/test/hadoop/dir/subdir/dir")));
   }
 
+  @Test
   public void testRenameDirMoveToItSelf() throws Exception {
     if (!renameSupported()) return;
 
@@ -259,6 +266,7 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
         fs.exists(path("/test/hadoop/dir")));
   }
 
+  @Test
   public void testRenameFileToItSelf() throws Exception {
     if (!renameSupported()) return;
 

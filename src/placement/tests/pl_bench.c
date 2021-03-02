@@ -213,7 +213,7 @@ benchmark_placement(int argc, char **argv, uint32_t num_domains,
 		memset(&obj_table[i], 0, sizeof(obj_table[i]));
 		obj_table[i].omd_id.lo = rand();
 		obj_table[i].omd_id.hi = 5;
-		daos_obj_generate_id(&obj_table[i].omd_id, 0, OC_RP_4G2, 0);
+		daos_obj_set_oid(&obj_table[i].omd_id, 0, OC_RP_4G2, 0);
 		obj_table[i].omd_ver = 1;
 	}
 
@@ -471,8 +471,8 @@ benchmark_add_data_movement(int argc, char **argv, uint32_t num_domains,
 		memset(&obj_table[obj_idx], 0, sizeof(obj_table[obj_idx]));
 		obj_table[obj_idx].omd_id.lo = rand();
 		obj_table[obj_idx].omd_id.hi = 5;
-		daos_obj_generate_id(&obj_table[obj_idx].omd_id, 0,
-				     OC_RP_4G2, 0);
+		daos_obj_set_oid(&obj_table[obj_idx].omd_id, 0,
+				 OC_RP_4G2, 0);
 		obj_table[obj_idx].omd_ver = 1;
 	}
 

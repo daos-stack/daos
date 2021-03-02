@@ -57,6 +57,16 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 				Uri:  uri,
 			})
 		}
+	} else {
+		// If the request does not indicate that all ranks should be returned,
+		// it may be from an older client, in which case we should just return
+		// the MS ranks.
+		for _, rank := range groupMap.MSRanks {
+			resp.RankUris = append(resp.RankUris, &mgmtpb.GetAttachInfoResp_RankUri{
+				Rank: rank.Uint32(),
+				Uri:  groupMap.RankURIs[rank],
+			})
+		}
 	}
 	resp.Provider = svc.clientNetworkCfg.Provider
 	resp.CrtCtxShareAddr = svc.clientNetworkCfg.CrtCtxShareAddr
@@ -272,7 +282,7 @@ func (svc *mgmtSvc) join(ctx context.Context, req *batchJoinRequest) *batchJoinR
 			}
 		}
 
-		// mark the ioserver as ready to handle dRPC requests
+		// mark the engine as ready to handle dRPC requests
 		srv.ready.SetTrue()
 	}
 
@@ -293,7 +303,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
 	}
 	rankSet := &system.RankSet{}
 	for rank, uri := range gm.RankURIs {
-		req.Servers = append(req.Servers, &mgmtpb.GroupUpdateReq_Server{
+		req.Engines = append(req.Engines, &mgmtpb.GroupUpdateReq_Engine{
 			Rank: rank.Uint32(),
 			Uri:  uri,
 		})
@@ -328,7 +338,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
 // On receipt of the join request, add to a queue of requests to be processed
 // periodically in a dedicated goroutine. This architecture provides for thread
 // safety and improved performance while updating the system membership and CaRT
-// primary group in the local ioserver.
+// primary group in the local engine.
 //
 // The state of the newly joined/evicted rank along with the reply address used
 // to contact the new rank in future will be registered in the system membership.
@@ -409,7 +419,6 @@ func (svc *mgmtSvc) resolveRanks(hosts, ranks string) (hitRS, missRS *system.Ran
 	case hasHosts && hasRanks:
 		err = errors.New("ranklist and hostlist cannot both be set in request")
 	case hasHosts:
-		//if hitRS, missHS, err = svc.membership.CheckHosts(hosts, svc.srvCfg.ControlPort); err != nil {
 		if hitRS, missHS, err = svc.membership.CheckHosts(hosts, build.DefaultControlPort); err != nil {
 			return
 		}

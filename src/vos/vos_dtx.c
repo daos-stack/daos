@@ -124,7 +124,7 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 	 * to be blocked until such DTX has been handled by the new leader.
 	 */
 
-	if (!dth->dth_force_refresh) {
+	if (!dth->dth_force_refresh && dth->dth_ver <= DAE_VER(dae)) {
 		if (DAE_FLAGS(dae) & DTE_BLOCK &&
 		    dth->dth_modification_cnt == 0) {
 			if (dth->dth_share_tbd_count == 0)
@@ -135,9 +135,6 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 		if (DAE_MBS_FLAGS(dae) & DMF_SRDG_REP && dth->dth_dist == 0)
 			goto out;
 	}
-
-	if (DAOS_FAIL_CHECK(DAOS_DTX_NO_INPROGRESS))
-		return -DER_IO;
 
 	s_try = true;
 
@@ -180,9 +177,10 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 
 out:
 	D_DEBUG(DB_IO,
-		"%s hit uncommitted DTX "DF_DTI" at %d: lid=%d, "
+		"%s hit uncommitted DTX "DF_DTI" at %d: dth %p, lid=%d, %x, "
 		"may need %s retry.\n", hit_again ? "Repeat" : "First",
-		DP_DTI(&DAE_XID(dae)), pos, DAE_LID(dae), s_try ? "server" :
+		DP_DTI(&DAE_XID(dae)), pos, dth, DAE_LID(dae), DAE_FLAGS(dae),
+		s_try ? "server" :
 		(dth != NULL && dth->dth_local_retry) ? "local" : "client");
 
 	return -DER_INPROGRESS;
@@ -1292,11 +1290,11 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	 * sponsor to wait and retry, otherwise, the new in-rebuilding
 	 * target may miss some data.
 	 * Under such case, DTX resync on related leader server is not
-	 * finished yet. It is unnecessary to DTX refresh with leader.
-	 * So use "UNLL" as the DTX handle for dtx_inprogress().
+	 * finished yet. The DTX entry may be stale, need refresh with
+	 * the leader.
 	 */
 	if (intent == DAOS_INTENT_MIGRATION)
-		return dtx_inprogress(dae, NULL, false, 6);
+		return dtx_inprogress(dae, dth, false, 6);
 
 	if (intent == DAOS_INTENT_DEFAULT) {
 		if (!(DAE_FLAGS(dae) & DTE_LEADER) ||

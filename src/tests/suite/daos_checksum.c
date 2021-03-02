@@ -183,7 +183,7 @@ setup_cont_obj(struct csum_test_ctx *ctx, int csum_prop_type, bool csum_sv,
 
 	ctx->oid.lo = 1;
 	ctx->oid.hi =  100;
-	daos_obj_generate_id(&ctx->oid, 0, oclass, 0);
+	daos_obj_generate_oid(ctx->coh, &ctx->oid, 0, oclass, 0, 0);
 	rc = daos_obj_open(ctx->coh, ctx->oid, 0, &ctx->oh, NULL);
 	assert_success(rc);
 }
@@ -2349,7 +2349,7 @@ static const struct CMUnitTest csum_tests[] = {
 static int
 run_csum_tests(int rc)
 {
-	rc += cmocka_run_group_tests_name("DAOS Checksum Tests",
+	rc += cmocka_run_group_tests_name("DAOS_Checksum",
 		  csum_tests, setup,
 		  test_teardown);
 	return rc;
@@ -2380,7 +2380,7 @@ run_daos_checksum_test(int rank, int size, int *sub_tests, int sub_tests_size)
 		}
 
 	} else {
-		rc = run_daos_sub_tests("DAOS Checksum Tests",
+		rc = run_daos_sub_tests("DAOS_Checksum",
 					csum_tests,
 					ARRAY_SIZE(csum_tests),
 					sub_tests,

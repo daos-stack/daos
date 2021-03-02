@@ -20,7 +20,7 @@
 #include <daos/placement.h>
 #include <daos_srv/container.h>
 #include <daos_srv/daos_mgmt_srv.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/rebuild.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/dtx_srv.h>
@@ -121,7 +121,7 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 				       arg->tgt_id, rpt->rt_rebuild_ver,
 				       rpt->rt_stable_epoch, arg->oids,
 				       arg->ephs, arg->shards, arg->count,
-				       /* Clear containers for reint */
+				       /* Delete local objects for reint */
 				       rpt->rt_rebuild_op == RB_OP_REINT);
 		/* If it does not need retry */
 		if (rc == 0 || (rc != -DER_TIMEDOUT && rc != -DER_GRPVER &&
@@ -527,9 +527,16 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		still_needed = pl_obj_layout_contains(rpt->rt_pool->sp_map,
 						      layout, myrank, mytarget);
 		if (!still_needed) {
+			struct rebuild_pool_tls *tls;
+
+			tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
+						      rpt->rt_rebuild_ver);
+			D_ASSERT(tls != NULL);
+			tls->rebuild_pool_reclaim_obj_count++;
 			D_DEBUG(DB_REBUILD, "deleting object "DF_UOID
 				" which is not reachable on rank %u tgt %u",
 				DP_UOID(oid), myrank, mytarget);
+
 			/*
 			 * It's possible this object might still be being
 			 * accessed elsewhere - retry until until it is possible

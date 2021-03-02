@@ -142,7 +142,7 @@ gen_oid_stable(daos_ofeat_t ofeats)
 	uoid.id_pub.lo = oid_count;
 	oid_count += 66179; /* prime */
 	uoid.id_pub.lo |= hdr;
-	daos_obj_generate_id(&uoid.id_pub, oid_count, OC_RP_XSF, oid_seed);
+	daos_obj_set_oid(&uoid.id_pub, oid_count, OC_RP_XSF, oid_seed);
 	oid_count += 1171; /* prime */
 
 	vts_cntr.cn_oids++;
