@@ -211,11 +211,6 @@ func (cmd *PoolDestroyCmd) Execute(args []string) error {
 
 	ctx := context.Background()
 	err := control.PoolDestroy(ctx, cmd.ctlInvoker, req)
-
-	if cmd.jsonOutputEnabled() {
-		return err
-	}
-
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
