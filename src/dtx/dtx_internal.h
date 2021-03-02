@@ -25,17 +25,18 @@
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
-#define DTX_PROTO_SRV_RPC_LIST(X)				\
-	X(DTX_COMMIT, 0, &CQF_dtx, dtx_handler, NULL),		\
-	X(DTX_ABORT, 0, &CQF_dtx, dtx_handler, NULL),		\
-	X(DTX_CHECK, 0, &CQF_dtx, dtx_handler, NULL),		\
-	X(DTX_REFRESH, 0, &CQF_dtx, dtx_handler, NULL)
+#define DTX_PROTO_SRV_RPC_LIST						\
+	X(DTX_COMMIT, 0, &CQF_dtx, dtx_handler, NULL, "dtx_commit")	\
+	X(DTX_ABORT, 0, &CQF_dtx, dtx_handler, NULL, "dtx_abort")	\
+	X(DTX_CHECK, 0, &CQF_dtx, dtx_handler, NULL, "dtx_check")	\
+	X(DTX_REFRESH, 0, &CQF_dtx, dtx_handler, NULL, "dtx_refresh")
 
-#define X_OPC(a, b, c, d, e) a
-
+#define X(a, b, c, d, e, f) a,
 enum dtx_operation {
-	DTX_PROTO_SRV_RPC_LIST(X_OPC)
+	DTX_PROTO_SRV_RPC_LIST
+	DTX_PROTO_SRV_RPC_COUNT,
 };
+#undef X
 
 /* DTX RPC input fields */
 #define DAOS_ISEQ_DTX							\
