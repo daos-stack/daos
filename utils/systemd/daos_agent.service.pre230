@@ -14,6 +14,7 @@ StandardOutput=journal
 StandardError=journal
 Restart=always
 RestartSec=10
+LimitMEMLOCK=infinity
 LimitCORE=infinity
 StartLimitInterval=60
 StartLimitBurst=5
