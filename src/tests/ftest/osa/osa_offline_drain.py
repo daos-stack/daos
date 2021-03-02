@@ -7,8 +7,14 @@
 import random
 from osa_utils import OSAUtils
 from test_utils_pool import TestPool
-from apricot import skipForTicket
+from write_host_file import write_host_file
 
+try:
+    # python 3.x
+    import queue as queue
+except ImportError:
+    # python 2.7
+    import Queue as queue
 
 class OSAOfflineDrain(OSAUtils):
     # pylint: disable=too-many-ancestors
@@ -22,6 +28,17 @@ class OSAOfflineDrain(OSAUtils):
         """Set up for test case."""
         super(OSAOfflineDrain, self).setUp()
         self.dmg_command = self.get_dmg_command()
+        self.ior_w_flags = self.params.get("write_flags", '/run/ior/iorflags/*')
+        self.ior_r_flags = self.params.get("read_flags", '/run/ior/iorflags/*')
+        self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
+        self.ior_test_sequence = self.params.get(
+            "ior_test_sequence", '/run/ior/iorflags/*')
+        self.ior_dfs_oclass = self.params.get(
+            "obj_class", '/run/ior/iorflags/*')
+        # Recreate the client hostfile without slots defined
+        self.hostfile_clients = write_host_file(
+            self.hostlist_clients, self.workdir, None)
+        self.out_queue = queue.Queue()
 
     def run_offline_drain_test(self, num_pool, data=False):
         """Run the offline drain without data.
@@ -34,7 +51,6 @@ class OSAOfflineDrain(OSAUtils):
         pool = {}
         pool_uuid = []
         target_list = []
-        drain_servers = (len(self.hostlist_servers) * 2) - 1
 
         # Exclude target : random two targets  (target idx : 0-7)
         n = random.randint(0, 6)
@@ -42,8 +58,8 @@ class OSAOfflineDrain(OSAUtils):
         target_list.append(n+1)
         t_string = "{},{}".format(target_list[0], target_list[1])
 
-        # Drain a rank (or server)
-        rank = random.randint(1, drain_servers)
+        # Drain a rank 1 (or server)
+        rank = 1
 
         for val in range(0, num_pool):
             pool[val] = TestPool(self.context, dmg_command=self.dmg_command)
@@ -57,11 +73,14 @@ class OSAOfflineDrain(OSAUtils):
             pool_uuid.append(pool[val].uuid)
             self.pool = pool[val]
             if data:
-                self.write_single_object()
+                self.run_ior_thread("Write", self.ior_dfs_oclass[0],
+                                    self.ior_apis[0],
+                                    self.ior_test_sequence[0])
 
         # Drain the pool_uuid, rank and targets
         for val in range(0, num_pool):
             self.pool = pool[val]
+            rank = rank + val
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
@@ -82,9 +101,9 @@ class OSAOfflineDrain(OSAUtils):
             pool[val].display_pool_daos_space(display_string)
 
         if data:
-            self.verify_single_object()
+            self.run_ior_thread("Read", self.ior_dfs_oclass[0],
+                                self.ior_apis[0], self.ior_test_sequence[0])
 
-    @skipForTicket("DAOS-6668")
     def test_osa_offline_drain(self):
         """
         JIRA ID: DAOS-4750
@@ -94,5 +113,4 @@ class OSAOfflineDrain(OSAUtils):
         :avocado: tags=all,daily_regression,hw,medium,ib2
         :avocado: tags=osa,osa_drain,offline_drain
         """
-        for pool_num in range(1, 3):
-            self.run_offline_drain_test(pool_num, True)
+        self.run_offline_drain_test(1, True)
