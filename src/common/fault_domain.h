@@ -50,14 +50,19 @@ struct d_fault_domain_rank {
  * See src/proto/mgmt/pool.proto for details.
  */
 struct d_fd_tree {
+	/**
+	 * This structure should be considered opaque by callers. Access its
+	 * contents through the d_fd_tree_* functions.
+	 */
+
 	const uint32_t *fdt_compressed; /** compressed domain array */
 	int32_t fdt_len; /** length of compressed array */
 
 	/** Tree traversal state */
 	uint32_t fdt_idx; /** index of the next item in the tree */
-	uint32_t fdt_domains_expected; /** counting children up to this point */
+	uint32_t fdt_domains_expected; /** counted up to this point */
 	uint32_t fdt_domains_found; /** actually traversed */
-	uint32_t fdt_ranks_expected; /** counting children up to this point */
+	uint32_t fdt_ranks_expected; /** counted up to this point */
 	uint32_t fdt_ranks_found; /** actually traversed */
 };
 
@@ -92,7 +97,7 @@ d_fd_tree_init(struct d_fd_tree *tree, const uint32_t *compressed,
  * \return	0		Success - next is populated
  *		-DER_INVAL	Invalid inputs
  *		-DER_UNINIT	Tree isn't initialized
- *		-DER_NOTFOUND	Traversal is complete
+ *		-DER_NONEXIST	Traversal is complete
  */
 int
 d_fd_tree_next(struct d_fd_tree *tree, struct d_fd_node *next);
