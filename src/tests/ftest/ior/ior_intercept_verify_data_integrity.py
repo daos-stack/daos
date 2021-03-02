@@ -35,8 +35,9 @@ class IorInterceptVerifyDataIntegrity(IorTestBase):
             Run ior with read, write, read verify
             write verify for 30 minutes
 
-        :avocado: tags=all,full_regression,hw,large
-        :avocado: tags=daosio,iorinterceptverifydata
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=daos_io,ior_intercept_verify_data
         """
         intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
         with_intercept = dict()
