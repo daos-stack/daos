@@ -158,7 +158,7 @@ class EvictTests(TestWithServers):
         by the evict
         :avocado: tags=all,pr,daily_regression,full_regression
         :avocado: tags=small
-        :avocado: tags=pool,poolevict
+        :avocado: tags=pool,poolevict,schancov
         :avocado: tags=DAOS_5610
         """
         pool = []
@@ -262,7 +262,7 @@ class EvictTests(TestWithServers):
 
         :avocado: tags=all,pool,pr,daily_regression,full_regression,small
         :avocado: tags=poolevict
-        :avocado: tags=poolevict_bad_uuid,DAOS_5610
+        :avocado: tags=poolevict_bad_uuid,DAOS_5610,schancov
         """
         test_param = self.params.get("uuid", '/run/badparams/*')
         self.assertTrue(self.evict_badparam(test_param))
