@@ -7,7 +7,7 @@
 
 Name:          daos
 Version:       1.3.0
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -51,7 +51,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: raft-devel = 0.7.1
+BuildRequires: raft-devel = 0.7.3
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -223,8 +223,13 @@ PREFIX="%{?_prefix}"
 mkdir -p %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{?buildroot}/%{_unitdir}
+%if (0%{?rhel} == 7)
+install -m 644 utils/systemd/%{server_svc_name}.pre230 %{?buildroot}/%{_unitdir}/%{server_svc_name}
+install -m 644 utils/systemd/%{agent_svc_name}.pre230 %{?buildroot}/%{_unitdir}/%{agent_svc_name}
+%else
 install -m 644 utils/systemd/%{server_svc_name} %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
+%endif
 mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
 mv %{?buildroot}/%{_sysconfdir}/daos/bash_completion.d %{?buildroot}/%{_sysconfdir}
 
@@ -401,6 +406,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Thu Feb 25 2021 Li Wei <wei.g.li@intel.com> 1.3.0-2
+- Require raft-devel 0.7.3 that fixes an unstable leadership problem caused by
+  removed replicas as well as some Coverity issues
+
 * Wed Feb 24 2021 Brian J. Murrell <brian.murrell@intel.com> - 1.3.0-1
 - Version bump up to 1.3.0
 
