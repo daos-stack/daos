@@ -1637,20 +1637,26 @@ file_name_create(char **gpath_name, bool *name_allocated, char *env)
 	int		 ret_value = 0;
 	char		*path_name = *gpath_name;
 
-	/* If no name given, then just return */
-	if (path_name == NULL)
-		goto cleanup;
-
 	/* get env to append, if not defined, then leave name as it is */
 	env_name = getenv(env);
+
+	D_EMIT(" Path name: %s\n", path_name);
+	D_EMIT(" env:       %s\n", env_name);
+
 	if (env_name == NULL) {
 		D_EMIT(" Environemnt %s not set\n", env);
 		goto cleanup;
 	}
 
+	/* If no name given, then just return */
+	if (path_name == NULL) {
+		D_EMIT(" Path Name not set\n");
+		goto cleanup;
+	}
+
 	/*
 	 * Extract file name.
-	 *  The path_name may be constant so we cannot modify it.
+	 *  The path_name may be constant (argv) so we cannot modify it.
 	 */
 	dup_name = strdup(path_name);
 	file_name = strrchr(dup_name, '/');
@@ -1675,12 +1681,14 @@ file_name_create(char **gpath_name, bool *name_allocated, char *env)
 	} else {
 		D_WARN("Could not create Path/File_name: %s/%s\n",
 		       env_name, file_name);
+		free(new_name);
 		ret_value = -1;
 	}
 
 	/* Free up space allocated. */
 	 free(dup_name);
 cleanup:
+	D_EMIT(" New Path name: %s\n", *gpath_name);
 	return ret_value;
 }
 
@@ -3815,8 +3823,13 @@ int main(int argc, char *argv[])
 	       g_rep_count, g_max_inflight);
 
 	/* Evaluate name of results file */
+#ifdef ORIG
 	ret = file_name_create(&g_expected_outfile, &alloc_g_expected_outfile,
 			       "DAOS_TEST_SHARED_DIR");
+#else
+	ret = file_name_create(&g_expected_outfile, &alloc_g_expected_outfile,
+			       "DAOS_TEST_LOG_DIR");
+#endif
 	if (ret != 0) {
 		D_WARN("Error creating output name\n");
 		goto cleanup;

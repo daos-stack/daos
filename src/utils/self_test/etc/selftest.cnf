@@ -19,9 +19,8 @@ randomize-endpoints=0
 
 #raw_data=20			# first 20 points of output data
 #config-append=new_test         # append name to output sector name
-#expected-threshold=25          # set global scale factor to default 25%
-expected-results=av,sd,bw=9,tp=20,med25,med50,med75,max,min
-expected-output=./selftest_results.cnf
+expected-results=av,sd,bw=25,tp=20,med25,med50,med75,max,min
+expected-output=../../../../selftest_results.cnf
 expected-input=../../../../etc/selftest_expected.cnf
 
 
@@ -41,9 +40,8 @@ randomize-endpoints=0
 
 #raw_data=20			# first 20 points of output data
 #config-append=test1		# append test1 to sector names.
-#expected-threshold=25          # set global scale factor to default 25%
-expected-results=av,sd,bw=9,tp=20,med25,med50,med75,max,min
-expected-output=./selftest_results.cnf
+expected-results=av,sd,bw=25,tp=20,med25,med50,med75,max,min
+expected-output=../../../../selftest_results.cnf
 expected-input=../../../../etc/selftest_expected.cnf
 
 
@@ -64,8 +62,8 @@ randomize-endpoints=0
 #raw_data=20			# first 20 points of output data
 #config-append=test1		# append test1 to sector names.
 expected-threshold=25          # set global scale factor to default 25%
-expected-results=av,sd,bw=9,tp=20,med25,med50,med75,max,min
-expected-output=./selftest_results.cnf
+expected-results=av,sd,bw=25,tp=20,med25,med50,med75,max,min
+expected-output=../../../../selftest_results.cnf
 expected-input=../../../../etc/selftest_expected.cnf
 
 
@@ -81,14 +79,13 @@ repetitions-per-size=100
 align=10			# align to 1k page
 Mbits=0
 randomize-endpoints=0
+
 #raw_data=20			# first 20 points of output data
 #config-append=test1		# append test1 to sector names.
 #path=.
 
-#raw_data=20			# first 20 points of output data
-#config-append=test1		# append test1 to sector names.
 expected-threshold=25          # set global scale factor to default 25%
-expected-results=av,sd,bw=9,tp=20,med25,med50,med75,max,min
-expected-output=./selftest_results.cnf
+expected-results=av,sd,bw=25,tp=20,med25,med50,med75,max,min
+expected-output=../../../../selftest_results.cnf
 expected-input=../../../../etc/selftest_expected.cnf
 
