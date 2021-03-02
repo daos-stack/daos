@@ -83,11 +83,11 @@ get_next_domain(struct d_fd_tree *tree, struct d_fd_node *next)
 static void
 get_next_rank(struct d_fd_tree *tree, struct d_fd_node *next)
 {
-	struct d_fault_domain_rank	*rank;
-	uint32_t			cur_idx;
+	uint32_t	*rank;
+	uint32_t	cur_idx;
 
 	cur_idx = tree->fdt_idx;
-	rank = (struct d_fault_domain_rank *)&tree->fdt_compressed[cur_idx];
+	rank = (uint32_t *)&tree->fdt_compressed[cur_idx];
 	next->fdn_type = D_FD_NODE_TYPE_RANK;
 	next->fdn_val.rank = rank;
 

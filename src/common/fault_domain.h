@@ -25,8 +25,8 @@ enum d_fd_node_type {
 struct d_fd_node {
 	enum d_fd_node_type fdn_type; /* indicates which union member to use */
 	union {
-		const struct d_fault_domain		*dom;
-		const struct d_fault_domain_rank	*rank;
+		const struct d_fault_domain	*dom;
+		uint32_t			*rank;
 	} fdn_val;
 };
 
@@ -37,11 +37,6 @@ struct d_fault_domain {
 	uint32_t fd_level;	/** level in the fault domain tree >= 1 */
 	uint32_t fd_id;		/** unique ID */
 	uint32_t fd_children_nr; /** number of children */
-};
-
-/** Represents a fault domain rank */
-struct d_fault_domain_rank {
-	uint32_t fdr_rank; /** rank number */
 };
 
 /**
@@ -55,8 +50,8 @@ struct d_fd_tree {
 	 * contents through the d_fd_tree_* functions.
 	 */
 
-	const uint32_t *fdt_compressed; /** compressed domain array */
-	int32_t fdt_len; /** length of compressed array */
+	const uint32_t	*fdt_compressed; /** compressed domain array */
+	int32_t		fdt_len; /** length of compressed array */
 
 	/** Tree traversal state */
 	uint32_t fdt_idx; /** index of the next item in the tree */
