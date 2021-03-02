@@ -82,6 +82,8 @@ extern const char *test_io_conf;
 
 extern int daos_event_priv_reset(void);
 #define TEST_RANKS_MAX_NUM	(13)
+#define DAOS_SERVER_CONF	"/etc/daos/daos_server.yml"
+#define DAOS_SERVER_CONF_LENGTH		512
 
 /* the pool used for daos test suite */
 struct test_pool {
@@ -254,6 +256,25 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 		       struct test_pool *opool, daos_prop_t *prop);
 int
 pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool);
+
+static inline daos_obj_id_t
+daos_test_oid_gen(daos_handle_t coh, daos_oclass_id_t oclass, uint8_t ofeats,
+		  daos_oclass_hints_t hints, unsigned seed)
+{
+	daos_obj_id_t	oid;
+
+	if (oclass == 0)
+		oclass = DTS_OCLASS_DEF;
+
+	oid = dts_oid_gen(seed);
+	if (daos_handle_is_valid(coh))
+		daos_obj_generate_oid(coh, &oid, ofeats, oclass, hints, 0);
+	else
+		daos_obj_set_oid(&oid, ofeats, oclass, 0);
+
+	return oid;
+}
+
 
 static inline int
 async_enable(void **state)

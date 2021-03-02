@@ -13,6 +13,7 @@
 #include <setjmp.h>
 #include <cmocka.h>
 
+#include <daos/tests_lib.h>
 #include <daos_prop.h>
 #include <daos/common.h>
 
@@ -61,9 +62,9 @@ expect_merge_result(daos_prop_t *old, daos_prop_t *new, daos_prop_t *exp_result)
 			break;
 		case DAOS_PROP_PO_ACL:
 		case DAOS_PROP_CO_ACL:
-			assert_int_equal(daos_prop_entry_cmp_acl(entry,
+			assert_rc_equal(daos_prop_entry_cmp_acl(entry,
 								 exp_entry),
-					 0);
+					0);
 			break;
 		default:
 			assert_int_equal(entry->dpe_val, exp_entry->dpe_val);
@@ -236,22 +237,22 @@ test_daos_prop_merge_add_and_update(void **state)
 	result_i = 0;
 	for (i = 0; i < prop1->dpp_nr; i++, result_i++) {
 		entry = &exp_result->dpp_entries[result_i];
-		assert_int_equal(daos_prop_entry_copy(&prop1->dpp_entries[i],
-						      entry), 0);
+		assert_rc_equal(daos_prop_entry_copy(&prop1->dpp_entries[i],
+						     entry), 0);
 	}
 
 	entry = &exp_result->dpp_entries[result_i];
-	assert_int_equal(daos_prop_entry_copy(&prop2->dpp_entries[new_idx],
-					      entry), 0);
+	assert_rc_equal(daos_prop_entry_copy(&prop2->dpp_entries[new_idx],
+					     entry), 0);
 	result_i++;
 	assert_int_equal(result_i, exp_nr);
 
 	/* Overwrite the entry prop2 is duplicating */
 	entry = daos_prop_entry_get(exp_result,
 				    prop2->dpp_entries[dup_idx].dpe_type);
-	assert_int_equal(daos_prop_entry_copy(&prop2->dpp_entries[dup_idx],
+	assert_rc_equal(daos_prop_entry_copy(&prop2->dpp_entries[dup_idx],
 					      entry),
-			 0);
+			0);
 
 	expect_merge_result(prop1, prop2, exp_result);
 
