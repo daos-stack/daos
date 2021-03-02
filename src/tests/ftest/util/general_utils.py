@@ -794,7 +794,7 @@ def error_count(error, hostlist, log_file):
     output = []
     requested_error_count = 0
     other_error_count = 0
-    cmd = 'cat {} | grep ERR'.format(get_log_file(log_file))
+    cmd = 'cat {} | grep \" ERR \"'.format(get_log_file(log_file))
     task = run_task(hostlist, cmd)
     for buf, _nodes in task.iter_buffers():
         output = str(buf).split('\n')
