@@ -250,6 +250,7 @@ client_cb_common(const struct crt_cb_info *cb_info)
 	rpc_req = cb_info->cci_rpc;
 
 	if (cb_info->cci_arg != NULL) {
+		aborted_rank = *(int *) cb_info->cci_arg;
 		*(int *) cb_info->cci_arg = 1;
 	}
 
@@ -260,6 +261,16 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		D_ASSERT(test_ping_rpc_req_input != NULL);
 		test_ping_rpc_req_output = crt_reply_get(rpc_req);
 		D_ASSERT(test_ping_rpc_req_output != NULL);
+
+		if (test_g.t_issue_crt_ep_abort > -1 &&
+		    test_g.t_issue_crt_ep_abort == aborted_rank) {
+			D_ASSERT(cb_info->cci_rc == -DER_CANCELED);
+			DBG_PRINT("rpc (opc: %#x) was cancelled "
+				  " (as expected), rc: %d.\n",
+			rpc_req->cr_opc, cb_info->cci_rc);
+			sem_post(&test_g.t_token_to_proceed);
+			break;
+		}
 
 		if (cb_info->cci_rc != 0) {
 			D_ERROR("rpc (opc: %#x) failed, rc: %d.\n",
