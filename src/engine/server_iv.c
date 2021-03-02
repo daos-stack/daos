@@ -803,9 +803,12 @@ ds_iv_ns_stop(struct ds_iv_ns *ns)
 	ns->iv_stop = 1;
 	ds_iv_ns_put(ns);
 	if (ns->iv_refcount > 1) {
+		int rc;
+
 		D_DEBUG(DB_MGMT, DF_UUID" ns stop wait ref %u\n",
 			DP_UUID(ns->iv_pool_uuid), ns->iv_refcount);
-		ABT_eventual_wait(ns->iv_done_eventual, NULL);
+		rc = ABT_eventual_wait(ns->iv_done_eventual, NULL);
+		D_ASSERT(rc == ABT_SUCCESS);
 		D_DEBUG(DB_MGMT, DF_UUID" ns stopped\n",
 			DP_UUID(ns->iv_pool_uuid));
 	}

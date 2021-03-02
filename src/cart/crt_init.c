@@ -27,7 +27,7 @@ dump_envariables(void)
 		"OFI_PORT", "OFI_INTERFACE", "OFI_DOMAIN", "CRT_CREDIT_EP_CTX",
 		"CRT_CTX_SHARE_ADDR", "CRT_CTX_NUM", "D_FI_CONFIG",
 		"FI_UNIVERSE_SIZE", "CRT_DISABLE_MEM_PIN",
-		"FI_OFI_RXM_USE_SRX" };
+		"FI_OFI_RXM_USE_SRX", "D_LOG_FLUSH", "CRT_MRC_ENABLE" };
 
 	D_INFO("-- ENVARS: --\n");
 	for (i = 0; i < ARRAY_SIZE(envars); i++) {
@@ -548,13 +548,7 @@ crt_finalize(void)
 		if (crt_is_service() && crt_gdata.cg_swim_inited)
 			crt_swim_fini();
 
-		rc = crt_grp_fini();
-		if (rc != 0) {
-			D_ERROR("crt_grp_fini failed, rc: %d.\n", rc);
-			crt_gdata.cg_refcount++;
-			D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
-			D_GOTO(out, rc);
-		}
+		crt_grp_fini();
 
 		rc = crt_hg_fini();
 		if (rc != 0) {

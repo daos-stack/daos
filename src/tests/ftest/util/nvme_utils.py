@@ -7,14 +7,13 @@
 import threading
 import re
 import time
-import os
 
-from general_utils import run_task
 from command_utils_base import CommandFailure
 from avocado.core.exceptions import TestFail
 from ior_test_base import IorTestBase
 from test_utils_pool import TestPool
 from ior_utils import IorCommand
+from server_utils import ServerFailed
 
 try:
     # python 3.x
@@ -48,7 +47,7 @@ def get_device_ids(dmg, servers):
         drive_list = []
         for line in result.stdout.split('\n'):
             if 'UUID' in line:
-                drive_list.append(line.split(':')[1])
+                drive_list.append(line.split('UUID:')[1].split(' ')[0])
         devices[host] = drive_list
     return devices
 
@@ -97,173 +96,6 @@ class ServerFillUp(IorTestBase):
         #Get the number of daos_engine
         self.engines = (self.server_managers[0].manager.job.yaml.engine_params)
         self.out_queue = queue.Queue()
-
-    def get_max_capacity(self, mem_size_info):
-        """Get storage capacity based on server yaml file.
-
-        Args:
-            mem_size_info(dict): List of NVMe/SCM size from each servers
-
-        Returns:
-            int: Maximum NVMe storage capacity.
-
-        """
-        # Get the Maximum storage space among all the servers.
-        drive_capa = []
-        for server in self.hostlist_servers:
-            for engine in range(len(self.engines)):
-                drive_capa.append(sum(mem_size_info[server][engine]))
-        print('Maximum Storage space from the servers is {}'
-              .format(int(min(drive_capa) * 0.96)))
-
-        #Return the 99% of storage space as it won't be used 100% for
-        #pool creation.
-        return int(min(drive_capa) * 0.96)
-
-    def get_scm_lsblk(self):
-        """Get SCM size using lsblk from servers.
-
-        Returns:
-            dict: Dictionary of server mapping with disk ID and size
-                  'wolf-A': {'nvme2n1': '1600321314816'}.
-        """
-        scm_data = {}
-
-        task = run_task(self.hostlist_servers, "lsblk -b | grep pmem")
-        for _rc_code, _node in task.iter_retcodes():
-            if _rc_code == 1:
-                print("Failed to lsblk on {}".format(_node))
-                raise ValueError
-        #Get the drive size from each engine
-        for buf, nodelist in task.iter_buffers():
-            for node in nodelist:
-                pcmem_data = {}
-                output = str(buf).split('\n')
-                for _tmp in output:
-                    pcmem_data[_tmp.split()[0]] = _tmp.split()[3]
-                scm_data['{}'.format(node)] = pcmem_data
-
-        return scm_data
-
-    def get_nvme_lsblk(self):
-        """Get NVMe size using lsblk from servers.
-
-        Returns:
-            dict: Dictionary of server mapping with disk ID and size
-                  'wolf-A': {'nvme2n1': '1600321314816'}.
-        """
-        nvme_data = {}
-
-        task = run_task(self.hostlist_servers, "lsblk -b /dev/nvme*n*")
-        for _rc_code, _node in task.iter_retcodes():
-            if _rc_code == 1:
-                print("Failed to lsblk on {}".format(_node))
-                raise ValueError
-        #Get the drive size from each engine
-        for buf, nodelist in task.iter_buffers():
-            for node in nodelist:
-                disk_data = {}
-                output = str(buf).split('\n')
-                for _tmp in output[1:]:
-                    if 'nvme' in _tmp:
-                        disk_data[_tmp.split()[0]] = _tmp.split()[3]
-                    nvme_data['{}'.format(node)] = disk_data
-
-        return nvme_data
-
-    def get_nvme_readlink(self):
-        """Get NVMe readlink from servers.
-
-        Returns:
-            dict: Dictionary of server readlink pci mapping with disk ID
-                  'wolf-A': {'0000:da:00.0': 'nvme9n1'}.
-                  Dictionary of server mapping with disk ID and size
-                  'wolf-A': {'nvme2n1': '1600321314816'}.
-        """
-        nvme_lsblk = self.get_nvme_lsblk()
-        nvme_readlink = {}
-
-        #Create the dictionary for NVMe readlink.
-        for server, items in nvme_lsblk.items():
-            tmp_dict = {}
-            for drive in items:
-                cmd = ('readlink /sys/block/{}/device/device'
-                       .format(drive.split()[0]))
-                task = run_task([server], cmd)
-                for _rc_code, _node in task.iter_retcodes():
-                    if _rc_code == 1:
-                        print("Failed to readlink on {}".format(_node))
-                        raise ValueError
-                #Get the drive size from each engine
-                for buf, _node in task.iter_buffers():
-                    output = str(buf).split('\n')
-                tmp_dict[output[0].split('/')[-1]] = drive.split()[0]
-            nvme_readlink[server] = tmp_dict
-
-        return nvme_lsblk, nvme_readlink
-
-    def get_scm_max_capacity(self):
-        """Check with server.yaml and return maximum SCM size allow to create.
-
-        Returns:
-            int: Maximum NVMe storage capacity for pool creation.
-
-        Note: Read the PCMEM sizes from the server using lsblk command.
-        This need to be replaced with dmg command when it's available.
-        """
-        scm_lsblk = self.get_scm_lsblk()
-
-        scm_size = {}
-        #Create the dictionary for Max SCM size for all the servers.
-        for server in scm_lsblk:
-            tmp_dict = {}
-            for engine in range(len(self.engines)):
-                tmp_disk_list = []
-                for pcmem in (self.server_managers[0].manager.job.yaml.
-                              engine_params[engine].scm_list.value):
-                    pcmem_num = pcmem.split('/')[-1]
-                    if pcmem_num in scm_lsblk[server].keys():
-                        tmp_disk_list.append(int(scm_lsblk[server][pcmem_num]))
-                    else:
-                        self.fail("PCMEM {} can not found on server {}"
-                                  .format(pcmem, server))
-                tmp_dict[engine] = tmp_disk_list
-            scm_size[server] = tmp_dict
-
-        return self.get_max_capacity(scm_size)
-
-    def get_nvme_max_capacity(self):
-        """Get Server NVMe storage maximum capacity.
-
-        Returns:
-            int: Maximum NVMe storage capacity for pool creation.
-
-        Note: Read the drive sizes from the server using lsblk command.
-        This need to be replaced with dmg command when it's available.
-        This is time consuming and not a final solution to get the maximum
-        capacity of servers.
-        """
-        drive_info = {}
-        nvme_lsblk, nvme_readlink = self.get_nvme_readlink()
-
-        #Create the dictionary for NVMe size for all the servers and drives.
-        for server in nvme_lsblk:
-            tmp_dict = {}
-            for engine in range(len(self.engines)):
-                tmp_disk_list = []
-                for disk in (self.server_managers[0].manager.job.yaml.
-                             engine_params[engine].bdev_list.value):
-                    if disk in nvme_readlink[server].keys():
-                        size = int(nvme_lsblk[server]
-                                   [nvme_readlink[server][disk]])
-                        tmp_disk_list.append(size)
-                    else:
-                        self.fail("Disk {} can not found on server {}"
-                                  .format(disk, server))
-                tmp_dict[engine] = tmp_disk_list
-            drive_info[server] = tmp_dict
-
-        return self.get_max_capacity(drive_info)
 
     def start_ior_thread(self, results, create_cont, operation='WriteRead'):
         """Start IOR write/read threads and wait until all threads are finished.
@@ -372,6 +204,25 @@ class ServerFillUp(IorTestBase):
             for disk_id in range(0, self.no_of_drives):
                 self.set_device_faulty(server, device_ids[server][disk_id])
 
+    def get_max_storage_sizes(self):
+        """Get the maximum pool sizes for the current server configuration.
+
+        Returns:
+            list: a list of the maximum SCM and NVMe size
+
+        """
+        try:
+            sizes = self.server_managers[0].get_available_storage()
+        except ServerFailed as error:
+            self.fail(error)
+
+        # Return the 96% of storage space as it won't be used 100%
+        # for pool creation.
+        for index, _size in enumerate(sizes):
+            sizes[index] = int(sizes[index] * 0.96)
+
+        return sizes
+
     def create_pool_max_size(self, scm=False, nvme=False):
         """
         Method to create the single pool with Maximum NVMe/SCM size available.
@@ -388,32 +239,16 @@ class ServerFillUp(IorTestBase):
         self.pool = TestPool(self.context, self.get_dmg_command())
         self.pool.get_params(self)
 
+        if nvme or scm:
+            sizes = self.get_max_storage_sizes()
+
         #If NVMe is True get the max NVMe size from servers
         if nvme:
-            avocao_tmp_dir = os.environ['AVOCADO_TESTS_COMMON_TMPDIR']
-            capacity_file = os.path.join(avocao_tmp_dir, 'storage_capacity')
-            if not os.path.exists(capacity_file):
-                #Stop servers.
-                self.stop_servers()
-                total_nvme_capacity = self.get_nvme_max_capacity()
-                with open(capacity_file,
-                          'w') as _file: _file.write(
-                              '{}'.format(total_nvme_capacity))
-                #Start the server.
-                self.start_servers()
-            else:
-                total_nvme_capacity = open(capacity_file).readline().rstrip()
-
-            print("Server NVMe Max Storage capacity = {}"
-                  .format(total_nvme_capacity))
-            self.pool.nvme_size.update('{}'.format(total_nvme_capacity))
+            self.pool.nvme_size.update('{}'.format(sizes[1]))
 
         #If SCM is True get the max SCM size from servers
         if scm:
-            total_scm_capacity = self.get_scm_max_capacity()
-            print("Server SCM Max Storage capacity = {}"
-                  .format(total_scm_capacity))
-            self.pool.scm_size.update('{}'.format(total_scm_capacity))
+            self.pool.scm_size.update('{}'.format(sizes[0]))
 
         #Create the Pool
         self.pool.create()
