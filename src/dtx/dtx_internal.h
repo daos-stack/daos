@@ -52,28 +52,26 @@ enum dtx_operation {
 
 CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
 
-/* The age unit is second. */
-
 /* The count threshould for triggerring DTX aggregation.
  * This threshould should consider the real SCM size.
  */
-#define DTX_AGG_THRESHOLD_CNT_UPPER	(1 << 27)
+#define DTX_AGG_THRESHOLD_CNT_UPPER	(1 << 20)
 
 /* If the DTX entries are not more than this count threshould,
  * then no need DTX aggregation.
  */
-#define DTX_AGG_THRESHOLD_CNT_LOWER	(1 << 17)
+#define DTX_AGG_THRESHOLD_CNT_LOWER	(1 << 10)
 
 /* The time threshould for triggerring DTX aggregation. If the oldest
  * DTX in the DTX table exceeds such threshould, it will trigger DTX
- * aggregation locally.
+ * aggregation locally. In seconds.
  */
-#define DTX_AGG_THRESHOLD_AGE_UPPER	4800
+#define DTX_AGG_THRESHOLD_AGE_UPPER	600
 
 /* If DTX aggregation is triggered, then he DTXs with older ages than
- * this threshold will be aggregated.
+ * this threshold will be aggregated. In seconds.
  */
-#define DTX_AGG_THRESHOLD_AGE_LOWER	3600
+#define DTX_AGG_THRESHOLD_AGE_LOWER	300
 
 extern struct crt_proto_format dtx_proto_fmt;
 extern btr_ops_t dbtree_dtx_cf_ops;
