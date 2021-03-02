@@ -1626,7 +1626,10 @@ typedef void
 
 enum crt_event_source {
 	CRT_EVS_UNKNOWN,
+	/**< Event triggered by SWIM >*/
 	CRT_EVS_SWIM,
+	/**< Event triggered by Group changes >*/
+	CRT_EVS_GRPMOD,
 };
 
 enum crt_event_type {
@@ -1984,6 +1987,19 @@ int crt_group_secondary_rank_add(crt_group_t *grp, d_rank_t secondary_rank,
 int crt_group_secondary_create(crt_group_id_t grp_name,
 			crt_group_t *primary_grp, d_rank_list_t *ranks,
 			crt_group_t **ret_grp);
+
+/**
+ * Enable auto-rank removal on secondary group. Only applicable for primary
+ * groups.
+ *
+ * \param[in] grp               Group handle
+ *
+ * \param[in] enable		Flag to enable or disable the option
+ *
+ * \return                       DER_SUCCESS on success, negative value on
+ *                               failure.
+ */
+int crt_group_auto_rank_remove(crt_group_t *grp, bool enable);
 
 /**
  * Destroy a secondary group.
