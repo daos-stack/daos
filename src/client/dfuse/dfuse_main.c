@@ -302,7 +302,10 @@ main(int argc, char **argv)
 			dfuse_info->di_mountpoint = optarg;
 			break;
 		case 'S':
+			/* Create two threads, one for dfuse and one for the
+			 * daos completion event */
 			dfuse_info->di_threaded = false;
+			dfuse_info->di_thread_count = 2;
 			break;
 		case 't':
 			dfuse_info->di_thread_count = atoi(optarg);
