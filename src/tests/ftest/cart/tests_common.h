@@ -13,7 +13,6 @@
 
 #include "crt_internal.h"
 
-
 #define DBG_PRINT(x...)						 \
 	do {							    \
 		D_INFO(x);						\
@@ -40,7 +39,6 @@ struct test_options {
 };
 
 static struct test_options opts = { .is_initialized = false };
-
 
 void
 tc_test_init(d_rank_t rank, int num_attach_retries, bool is_server,
@@ -200,7 +198,6 @@ tc_wait_for_ranks(crt_context_t ctx, crt_group_t *grp, d_rank_list_t *rank_list,
 	int				i = 0;
 	int				rc = 0;
 
-
 	D_ASSERTF(opts.is_initialized == true, "tc_test_init not called.\n");
 
 	rc = d_gettime(&t1);
@@ -213,9 +210,7 @@ tc_wait_for_ranks(crt_context_t ctx, crt_group_t *grp, d_rank_list_t *rank_list,
 	server_ep.ep_grp = grp;
 
 	for (i = 0; i < rank_list->rl_nr; i++) {
-
 		rank = rank_list->rl_ranks[i];
-
 		server_ep.ep_rank = rank;
 
 		rc = crt_req_create(ctx, &server_ep, CRT_OPC_CTL_LS, &rpc);
@@ -239,11 +234,10 @@ tc_wait_for_ranks(crt_context_t ctx, crt_group_t *grp, d_rank_list_t *rank_list,
 			ws.rc = rc;
 
 		while (ws.rc != 0 && time_s < total_timeout) {
-
 			rc = crt_req_create(ctx, &server_ep,
 					    CRT_OPC_CTL_LS, &rpc);
 			D_ASSERTF(rc == 0,
-				   "crt_req_create failed; rc=%d\n", rc);
+				  "crt_req_create failed; rc=%d\n", rc);
 
 			in_args = crt_req_get(rpc);
 			in_args->cel_grp_id = grp->cg_grpid;
@@ -251,7 +245,7 @@ tc_wait_for_ranks(crt_context_t ctx, crt_group_t *grp, d_rank_list_t *rank_list,
 
 			rc = crt_req_set_timeout(rpc, ping_timeout);
 			D_ASSERTF(rc == 0,
-				   "crt_req_set_timeout failed; rc=%d\n", rc);
+				  "crt_req_set_timeout failed; rc=%d\n", rc);
 
 			ws.rc = 0;
 			ws.num_ctx = 0;
@@ -428,7 +422,7 @@ tc_cli_start_basic(char *local_group_name, char *srv_group_name,
 
 	if ((*rank_list)->rl_nr != grp_size) {
 		D_ERROR("rank_list differs in size. expected %d got %d\n",
-			 grp_size, (*rank_list)->rl_nr);
+			grp_size, (*rank_list)->rl_nr);
 		assert(0);
 	}
 
@@ -472,7 +466,7 @@ tc_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 
 	rc = crt_rank_self_set(my_rank);
 	D_ASSERTF(rc == 0, "crt_rank_self_set(%d) failed; rc=%d\n",
-		   my_rank, rc);
+		  my_rank, rc);
 
 	rc = crt_context_create(crt_ctx);
 	D_ASSERTF(rc == 0, "crt_context_create() failed; rc=%d\n", rc);

@@ -19,7 +19,6 @@
 #include "test_group_rpc.h"
 #include "test_group_np_common.h"
 
-
 static void
 send_rpc_shutdown(crt_endpoint_t server_ep, crt_rpc_t *rpc_req)
 {
@@ -154,7 +153,6 @@ test_run(void)
 
 	/* Shutdown one particular rank */
 	if (test_g.t_verify_swim_status.rank >= 0) {
-
 		/* Check swim status on all (remaining) ranks */
 		for (i = 0; i < rank_list->rl_nr; i++) {
 			server_ep.ep_rank = rank_list->rl_ranks[i];
@@ -165,7 +163,6 @@ test_run(void)
 	if (test_g.t_skip_shutdown) {
 		DBG_PRINT("Skipping shutdown stage.\n");
 	} else {
-
 		/* Shutdown all ranks */
 		for (i = 0; i < rank_list->rl_nr; i++) {
 			server_ep.ep_rank = rank_list->rl_ranks[i];
