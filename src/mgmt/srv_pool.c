@@ -162,8 +162,8 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev,
 		D_DEBUG(DB_TRACE, "fill ranks %d idx %d "DF_UUID"\n",
 			tc_out_ranks[i], idx, DP_UUID(tc_out_uuids[i]));
 	}
-	D_FREE(tc_out_uuids);
-	D_FREE(tc_out_ranks);
+	D_FREE(tc_out->tc_tgt_uuids.ca_arrays);
+	D_FREE(tc_out->tc_ranks.ca_arrays);
 
 	rc = DER_SUCCESS;
 
