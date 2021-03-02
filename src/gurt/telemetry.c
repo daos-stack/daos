@@ -2363,14 +2363,14 @@ d_tm_allocate_shared_memory(int srv_idx, size_t mem_size)
 	d_tm_shmid = shmget(key, mem_size, IPC_CREAT | 0660);
 	if (d_tm_shmid < 0) {
 		D_ERROR("Unable to allocate shared memory.  shmget failed, "
-		"%s\n", strerror(errno));
+			"%s\n", strerror(errno));
 		return NULL;
 	}
 
 	addr = shmat(d_tm_shmid, NULL, 0);
 	if (addr == (void *)-1) {
 		D_ERROR("Unable to allocate shared memory.  shmat failed, "
-		"%s\n", strerror(errno));
+			"%s\n", strerror(errno));
 		return NULL;
 	}
 	return addr;
@@ -2396,14 +2396,14 @@ d_tm_get_shared_memory(int srv_idx)
 	shmid = shmget(key, 0, 0);
 	if (shmid < 0) {
 		D_ERROR("Unable to access shared memory.  shmget failed, "
-		"%s\n", strerror(errno));
+			"%s\n", strerror(errno));
 		return NULL;
 	}
 
 	addr = shmat(shmid, NULL, 0);
 	if (addr == (void *)-1) {
 		D_ERROR("Unable to access shared memory.  shmat failed, "
-		"%s\n", strerror(errno));
+			"%s\n", strerror(errno));
 		return NULL;
 	}
 	return addr;
