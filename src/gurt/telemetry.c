@@ -322,8 +322,8 @@ void d_tm_fini(void)
 	if (!d_tm_retain_shmem) {
 		rc = shmctl(d_tm_shmid, IPC_RMID, NULL);
 		if (rc < 0)
-			D_ERROR("Unable to remove shared memory segment. "
-				DF_RC "\n", DP_RC(rc));
+			D_ERROR("Unable to remove shared memory segment, %s.\n",
+				strerror(errno));
 	}
 
 	d_tm_serialization = false;
@@ -2023,7 +2023,7 @@ d_tm_get_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 			D_MUTEX_LOCK(&node->dtn_lock);
 		tms->tv_sec = metric_data->dtm_data.tms[0].tv_sec;
 		tms->tv_nsec = metric_data->dtm_data.tms[0].tv_nsec;
-		if (stats != NULL) {
+		if ((stats != NULL) && (dtm_stats != NULL)) {
 			stats->dtm_min.min_float = dtm_stats->dtm_min.min_float;
 			stats->dtm_max.max_float = dtm_stats->dtm_max.max_float;
 			stats->dtm_sum.sum_float = dtm_stats->dtm_sum.sum_float;
@@ -2095,7 +2095,7 @@ d_tm_get_gauge(uint64_t *val, struct d_tm_stats_t *stats, uint64_t *shmem_root,
 		if (node->dtn_protect)
 			D_MUTEX_LOCK(&node->dtn_lock);
 		*val = metric_data->dtm_data.value;
-		if (stats != NULL) {
+		if ((stats != NULL) && (dtm_stats != NULL)) {
 			stats->dtm_min.min_int = dtm_stats->dtm_min.min_int;
 			stats->dtm_max.max_int = dtm_stats->dtm_max.max_int;
 			stats->dtm_sum.sum_int = dtm_stats->dtm_sum.sum_int;
@@ -2330,6 +2330,14 @@ d_tm_add_node(struct d_tm_node_t *src, struct d_tm_nodeList_t **nodelist)
 	}
 	return -DER_NOMEM;
 }
+
+/** create a unique key for this instance */
+static key_t
+d_tm_get_key(int srv_idx)
+{
+	return D_TM_SHARED_MEMORY_KEY + srv_idx;
+}
+
 /**
  * Server side function that allocates the shared memory segment for this
  * server instance
@@ -2346,11 +2354,12 @@ d_tm_allocate_shared_memory(int srv_idx, size_t mem_size)
 {
 	key_t	key;
 
-	/** create a unique key for this instance */
-	key = D_TM_SHARED_MEMORY_KEY + srv_idx;
+	key = d_tm_get_key(srv_idx);
 	d_tm_shmid = shmget(key, mem_size, IPC_CREAT | 0660);
-	if (d_tm_shmid < 0)
+	if (d_tm_shmid < 0) {
+		D_ERROR("shmget failed, %s\n", strerror(errno));
 		return NULL;
+	}
 
 	return (uint64_t *)shmat(d_tm_shmid, NULL, 0);
 }
@@ -2367,16 +2376,23 @@ d_tm_allocate_shared_memory(int srv_idx, size_t mem_size)
 uint64_t *
 d_tm_get_shared_memory(int srv_idx)
 {
-	key_t	key;
-	int	shmid;
+	uint64_t	*addr;
+	key_t		key;
+	int		shmid;
 
-	/** create a unique key for this instance */
-	key = D_TM_SHARED_MEMORY_KEY + srv_idx;
+	key = d_tm_get_key(srv_idx);
 	shmid = shmget(key, 0, 0);
-	if (shmid < 0)
+	if (shmid < 0) {
+		D_ERROR("shmget failed, %s\n", strerror(errno));
 		return NULL;
+	}
 
-	return (uint64_t *)shmat(shmid, NULL, 0);
+	addr = shmat(shmid, NULL, 0);
+	if (addr == (void *)-1) {
+		D_ERROR("shmat failed, %s\n", strerror(errno));
+		return NULL;
+	}
+	return addr;
 }
 
 /**

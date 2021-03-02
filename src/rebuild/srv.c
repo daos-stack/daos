@@ -111,8 +111,7 @@ rebuild_pool_tls_destroy(struct rebuild_pool_tls *tls)
 }
 
 static void *
-rebuild_tls_init(const struct dss_thread_local_storage *dtls,
-		 struct dss_module_key *key)
+rebuild_tls_init(int xs_id, int tgt_id)
 {
 	struct rebuild_tls *tls;
 
@@ -296,8 +295,7 @@ rebuild_status_completed_remove(const uuid_t pool_uuid)
 }
 
 static void
-rebuild_tls_fini(const struct dss_thread_local_storage *dtls,
-		 struct dss_module_key *key, void *data)
+rebuild_tls_fini(void *data)
 {
 	struct rebuild_tls *tls = data;
 	struct rebuild_pool_tls *pool_tls;
@@ -953,13 +951,13 @@ rebuild_debug_print_queue()
 	char tgts_buf[200];
 	int i;
 	/* Position in stack buffer where str data should be written next */
-	size_t tgts_pos = 0;
+	size_t tgts_pos;
 
 	D_DEBUG(DB_REBUILD, "Current rebuild queue:\n");
 
 	d_list_for_each_entry_safe(task, task_tmp,
 				   &rebuild_gst.rg_queue_list, dst_list) {
-
+		tgts_pos = 0;
 		for (i = 0; i < task->dst_tgts.pti_number; i++) {
 			if (tgts_pos > sizeof(tgts_buf) - 10) {
 				/* Stop a bit before we get to the end of the
@@ -1118,6 +1116,7 @@ re_dist:
 		if (rc == -DER_GRPVER) {
 			D_DEBUG(DB_REBUILD, DF_UUID" redistribute pool map\n",
 				DP_UUID(pool->sp_uuid));
+			dss_sleep(1000);
 			goto re_dist;
 		} else {
 			D_ERROR("pool map broadcast failed: rc "DF_RC"\n",
@@ -1297,6 +1296,7 @@ try_reschedule:
 		 * rebuild sequence, which has to be done by failure
 		 * sequence order.
 		 */
+		dss_sleep(1000);
 		ret = ds_rebuild_schedule(pool, task->dst_map_ver,
 					  &task->dst_tgts,
 					  task->dst_rebuild_op);
@@ -2053,6 +2053,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	struct rebuild_pool_tls		*pool_tls;
 	daos_prop_t			prop = { 0 };
 	struct daos_prop_entry		*entry;
+	uuid_t				cont_uuid;
 	int				rc;
 
 	D_DEBUG(DB_REBUILD, "prepare rebuild for "DF_UUID"/%d\n",
@@ -2076,21 +2077,18 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 		}
 	}
 
-	if (pool->sp_iv_ns) {
-		uuid_t	cont_uuid;
-
-		uuid_clear(cont_uuid);
-		/* Let's invalidate local snapshot cache before
-		 * rebuild, so to make sure rebuild will use the updated
-		 * snapshot during rebuild fetch, otherwise it may cause
-		 * corruption.
-		 */
-		rc = ds_cont_revoke_snaps(pool->sp_iv_ns, cont_uuid,
-					  CRT_IV_SHORTCUT_NONE,
-					  CRT_IV_SYNC_NONE);
-		if (rc)
-			D_GOTO(out, rc);
-	}
+	D_ASSERT(pool->sp_iv_ns != NULL);
+	/* Let's invalidate local snapshot cache before
+	 * rebuild, so to make sure rebuild will use the updated
+	 * snapshot during rebuild fetch, otherwise it may cause
+	 * corruption.
+	 */
+	uuid_clear(cont_uuid);
+	rc = ds_cont_revoke_snaps(pool->sp_iv_ns, cont_uuid,
+				  CRT_IV_SHORTCUT_NONE,
+				  CRT_IV_SYNC_NONE);
+	if (rc)
+		D_GOTO(out, rc);
 
 	/* Create rpt for the target */
 	rc = rpt_create(pool, rsi->rsi_rebuild_ver, rsi->rsi_leader_term,
@@ -2108,7 +2106,6 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	D_DEBUG(DB_REBUILD, "rebuild coh/poh "DF_UUID"/"DF_UUID"\n",
 		DP_UUID(rpt->rt_coh_uuid), DP_UUID(rpt->rt_poh_uuid));
 
-	D_ASSERT(pool->sp_iv_ns != NULL);
 	ds_pool_iv_ns_update(pool, rsi->rsi_master_rank);
 
 	rc = ds_pool_iv_prop_fetch(pool, &prop);

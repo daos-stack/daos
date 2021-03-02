@@ -100,7 +100,7 @@ nvme_recov_1(void **state)
 	else
 		obj_class = DAOS_OC_R2S_SPEC_RANK;
 
-	oid = dts_oid_gen(obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, obj_class, 0, 0, arg->myrank);
 	oid = dts_oid_set_rank(oid, rank);
 	oid = dts_oid_set_tgt(oid, tgt_idx);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -253,7 +253,7 @@ nvme_test_verify_device_stats(void **state)
 	 * different state of NVMe drives. Skip the test if log_mask is not
 	 * set to DEBUG.
 	 */
-	D_ALLOC(server_config_file, 512);
+	D_ALLOC(server_config_file, DAOS_SERVER_CONF_LENGTH);
 	D_ALLOC(log_file, 1024);
 	rc = get_server_config(devices[rank_pos].host,
 			       server_config_file);
@@ -391,7 +391,7 @@ nvme_test_get_blobstore_state(void **state)
 	else
 		obj_class = DAOS_OC_R2S_SPEC_RANK;
 
-	oid = dts_oid_gen(obj_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, obj_class, 0, 0, arg->myrank);
 	oid = dts_oid_set_rank(oid, rank);
 	oid = dts_oid_set_tgt(oid, tgt_idx);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -492,7 +492,8 @@ nvme_test_simulate_IO_error(void **state)
 	/*
 	 * Prepare records
 	 */
-	oid = dts_oid_gen(DAOS_OC_R1S_SPEC_RANK, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
+				arg->myrank);
 	oid = dts_oid_set_rank(oid, rank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
@@ -532,7 +533,7 @@ nvme_test_simulate_IO_error(void **state)
 	 * Get DAOS server file
 	 */
 	D_ALLOC(control_log_file, 1024);
-	D_ALLOC(server_config_file, 512);
+	D_ALLOC(server_config_file, DAOS_SERVER_CONF_LENGTH);
 	rc = get_server_config(devices[rank_pos].host, server_config_file);
 	assert_rc_equal(rc, 0);
 	print_message("server_config_file = %s\n", server_config_file);
