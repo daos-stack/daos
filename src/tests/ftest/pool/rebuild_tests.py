@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from apricot import TestWithServers
+from apricot import TestWithServers, skipForTicket
 
 
 class RebuildTests(TestWithServers):
@@ -15,8 +15,6 @@ class RebuildTests(TestWithServers):
 
     :avocado: recursive
     """
-
-    CANCEL_FOR_TICKET = [["DAOS-6865", "data_size", 250, "rank", 3]]
 
     def run_rebuild_test(self, pool_quantity):
         """Run the rebuild test for the specified number of pools.
@@ -111,6 +109,7 @@ class RebuildTests(TestWithServers):
                     "Data verification error after rebuild")
         self.log.info("Test Passed")
 
+    @skipForTicket("DAOS-6865")
     def test_simple_rebuild(self):
         """JIRA ID: DAOS-XXXX Rebuild-001.
 
@@ -124,6 +123,7 @@ class RebuildTests(TestWithServers):
         """
         self.run_rebuild_test(1)
 
+    @skipForTicket("DAOS-6865")
     def test_multipool_rebuild(self):
         """JIRA ID: DAOS-XXXX (Rebuild-002).
 
