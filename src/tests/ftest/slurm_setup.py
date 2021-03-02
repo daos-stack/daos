@@ -230,8 +230,7 @@ def main():
     """Set up test env with slurm."""
     logging.basicConfig(
         format="%(asctime)s %(levelname)-5s %(message)s",
-        datefmt=r"%Y/%m/%d %I:%M:%S",
-        filename="slurm_setup", level=logging.DEBUG)
+        datefmt=r"%Y/%m/%d %I:%M:%S", level=logging.DEBUG)
 
     parser = argparse.ArgumentParser(prog="slurm_setup.py")
 
