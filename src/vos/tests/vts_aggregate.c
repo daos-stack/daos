@@ -37,6 +37,7 @@
 }
 
 static bool slow_test;
+static int agg_ofeats;
 
 static void
 update_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
@@ -376,7 +377,7 @@ aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 	int			 punch_idx = 0, recx_idx = 0, rc;
 
 	if (daos_unit_oid_is_null(ds->td_oid))
-		oid = dts_unit_oid_gen(0, 0, 0);
+		oid = dts_unit_oid_gen(0, agg_ofeats, 0);
 	else
 		oid = ds->td_oid;
 	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
@@ -506,7 +507,7 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 	epr_a = &ds_sample->td_agg_epr;
 
 	for (i = 0; i < AT_OBJ_KEY_NR; i++) {
-		oids[i] = dts_unit_oid_gen(0, 0, 0);
+		oids[i] = dts_unit_oid_gen(0, agg_ofeats, 0);
 		dts_key_gen(dkeys[i], UPDATE_DKEY_SIZE, UPDATE_DKEY);
 		dts_key_gen(akeys[i], UPDATE_AKEY_SIZE, UPDATE_AKEY);
 	}
@@ -538,7 +539,10 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 	for (epoch = epr_u->epr_lo; epoch <= epr_u->epr_hi; epoch++) {
 		oid_idx = rand() % AT_OBJ_KEY_NR;
 		dkey_idx = rand() % AT_OBJ_KEY_NR;
-		akey_idx = rand() % AT_OBJ_KEY_NR;
+		if (agg_ofeats & DAOS_OF_KV_FLAT)
+			akey_idx = 0; /* use the same akey for flat_kv */
+		else
+			akey_idx = rand() % AT_OBJ_KEY_NR;
 
 		oid = oids[oid_idx];
 		dkey = dkeys[dkey_idx];
@@ -991,7 +995,7 @@ discard_13(void **state)
 	daos_recx_t		 recx_tot;
 	int			 i;
 
-	ds.td_oid = dts_unit_oid_gen(0, 0, 0);
+	ds.td_oid = dts_unit_oid_gen(0, agg_ofeats, 0);
 	/*
 	 * Generate enough amount of akeys to ensure vos_iterate()
 	 * trigger re-probe on dkey
@@ -1078,7 +1082,7 @@ agg_punches_test_helper(void **state, int record_type, int type, bool discard,
 	int			 old_flags = arg->ta_flags;
 	daos_recx_t		 recx = {0, 1};
 
-	oid = dts_unit_oid_gen(0, 0, 0);
+	oid = dts_unit_oid_gen(0, agg_ofeats, 0);
 
 	arg->ta_flags = TF_USE_VAL;
 
@@ -1192,13 +1196,16 @@ agg_punches_test(void **state, int record_type, bool discard)
 {
 	int	first, last, type;
 	int	lstart;
+	int	punch_type;
+
+	punch_type = (agg_ofeats & DAOS_OF_KV_FLAT) ?
+		      AGG_DKEY_TYPE : AGG_AKEY_TYPE;
 
 	daos_fail_loc_set(DAOS_VOS_AGG_RANDOM_YIELD | DAOS_FAIL_ALWAYS);
 	for (first = AGG_NONE; first <= AGG_UPDATE; first++) {
 		lstart = first == AGG_NONE ? AGG_PUNCH : AGG_NONE;
 		for (last = lstart; last <= AGG_UPDATE; last++) {
-			for (type = AGG_OBJ_TYPE; type <= AGG_AKEY_TYPE;
-			     type++) {
+			for (type = AGG_OBJ_TYPE; type <= punch_type; type++) {
 				agg_punches_test_helper(state, record_type,
 							type, discard, first,
 							last);
@@ -1788,7 +1795,7 @@ aggregate_14(void **state)
 	}
 	fill_size = fill_size / 3;
 
-	oid = dts_unit_oid_gen(0, 0, 0);
+	oid = dts_unit_oid_gen(0, agg_ofeats, 0);
 	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
 	dts_key_gen(akey, UPDATE_AKEY_SIZE, UPDATE_AKEY);
 
@@ -1919,16 +1926,24 @@ static const struct CMUnitTest aggregate_tests[] = {
 };
 
 int
-run_discard_tests(void)
+run_discard_tests(int ofeats)
 {
+	agg_ofeats = ofeats;
+	if (ofeats & DAOS_OF_KV_FLAT)
+		D_PRINT("Flat key is enabled for discard\n");
+
 	return cmocka_run_group_tests_name("VOS Discard Test", discard_tests,
 					   setup_io, teardown_io);
 }
 
 int
-run_aggregate_tests(bool slow)
+run_aggregate_tests(int ofeats, bool slow)
 {
 	slow_test = slow;
+	agg_ofeats = ofeats;
+	if (ofeats & DAOS_OF_KV_FLAT)
+		D_PRINT("Flat key is enabled for aggregation\n");
+
 	return cmocka_run_group_tests_name("VOS Aggregate Test",
 					   aggregate_tests, setup_io,
 					   teardown_io);

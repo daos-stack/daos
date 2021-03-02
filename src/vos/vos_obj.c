@@ -1123,12 +1123,16 @@ vos_obj_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
 		D_ERROR("Iterator type has no subtree\n");
 		return -DER_INVAL;
 	case VOS_ITER_DKEY:
-		if (type != VOS_ITER_AKEY) {
+		if (obj_is_flat(oiter->it_obj)) {
+			/* fall through */
+		} else if (type != VOS_ITER_AKEY) {
 			D_ERROR("Invalid nested iterator type for "
 				"VOS_ITER_DKEY: %d\n", type);
 			return -DER_INVAL;
+		} else {
+			/* done the check */
+			break;
 		}
-		break;
 	case VOS_ITER_AKEY:
 		if (type != VOS_ITER_RECX &&
 		    type != VOS_ITER_SINGLE) {
@@ -1139,7 +1143,6 @@ vos_obj_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
 	};
 
 	rc = key_iter_fetch_root(oiter, type, info);
-
 	if (rc != 0) {
 		D_DEBUG(DB_TRACE, "Failed to fetch and initialize cursor "
 			"subtree: rc="DF_RC"\n", DP_RC(rc));

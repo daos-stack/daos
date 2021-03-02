@@ -789,6 +789,9 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 	int			 unexpected_flag;
 	int			 rc = 0;
 
+	if (!(flags & SUBTR_CREATE) && (krec->kr_bmap & KREC_BF_EVT))
+		flags |= SUBTR_EVT;
+
 	if (flags & SUBTR_EVT) {
 		expected_flag = KREC_BF_EVT;
 		unexpected_flag = KREC_BF_BTR;

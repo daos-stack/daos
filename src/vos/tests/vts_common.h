@@ -126,8 +126,8 @@ struct dts_io_credit *dts_credit_take(struct dts_context *tsc);
  */
 int run_pool_test(void);
 int run_co_test(void);
-int run_discard_tests(void);
-int run_aggregate_tests(bool slow);
+int run_discard_tests(int ofeats);
+int run_aggregate_tests(int ofeats, bool slow);
 int run_dtx_tests(void);
 int run_gc_tests(void);
 int run_pm_tests(void);

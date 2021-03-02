@@ -75,6 +75,28 @@ static int akey_feats[] = {
 	-1,
 };
 
+int
+ofeat_from_str(char *str)
+{
+	int	feats = 0;
+
+	if (strstr(str, "flat_key"))
+		feats |= DAOS_OF_KV_FLAT;
+	if (strstr(str, "dkey_int"))
+		feats |= DAOS_OF_DKEY_UINT64;
+	if (strstr(str, "dkey_lex"))
+		feats |= DAOS_OF_DKEY_LEXICAL;
+	if (strstr(str, "akey_int"))
+		feats |= DAOS_OF_AKEY_UINT64;
+	if (strstr(str, "akey_lex"))
+		feats |= DAOS_OF_AKEY_LEXICAL;
+
+	if (feats)
+		D_PRINT("ofeats=%x\n", feats);
+
+	return feats;
+}
+
 static inline int
 run_all_tests(int keys, bool nest_iterators)
 {
@@ -92,8 +114,8 @@ run_all_tests(int keys, bool nest_iterators)
 			failed += run_io_test(feats, keys, nest_iterators);
 		}
 	}
-	failed += run_discard_tests();
-	failed += run_aggregate_tests(false);
+	failed += run_discard_tests(0);
+	failed += run_aggregate_tests(0, false);
 	failed += run_gc_tests();
 	failed += run_dtx_tests();
 	failed += run_ilog_tests();
@@ -108,10 +130,10 @@ main(int argc, char **argv)
 	int	nr_failed = 0;
 	int	opt = 0;
 	int	index = 0;
-	int	ofeats;
+	int	ofeats = 0;
 	int	keys;
 	bool	nest_iterators = false;
-	const char *short_options = "apcdglzni:mXA:hf:e:";
+	const char *short_options = "apcdglzni:mXA:hf:e:o:";
 	static struct option long_options[] = {
 		{"all_tests",		required_argument, 0, 'A'},
 		{"pool_tests",		no_argument, 0, 'p'},
@@ -128,6 +150,7 @@ main(int argc, char **argv)
 		{"help",		no_argument, 0, 'h'},
 		{"filter",		required_argument, 0, 'f'},
 		{"exclude",		required_argument, 0, 'e'},
+		{"oclass",		required_argument, 0, 'o'},
 	};
 
 	d_register_alt_assert(mock_assert);
@@ -172,6 +195,9 @@ main(int argc, char **argv)
 			D_PRINT("filter not enabled");
 #endif
 			break;
+		case 'o':
+			ofeats = ofeat_from_str(optarg);
+			break;
 		default:
 			break;
 		}
@@ -200,11 +226,11 @@ main(int argc, char **argv)
 			test_run = true;
 			break;
 		case 'a':
-			nr_failed += run_aggregate_tests(true);
+			nr_failed += run_aggregate_tests(ofeats, true);
 			test_run = true;
 			break;
 		case 'd':
-			nr_failed += run_discard_tests();
+			nr_failed += run_discard_tests(ofeats);
 			test_run = true;
 			break;
 		case 'g':
@@ -234,6 +260,7 @@ main(int argc, char **argv)
 			break;
 		case 'f':
 		case 'e':
+		case 'o':
 			/** already handled */
 			break;
 		case 'h':
