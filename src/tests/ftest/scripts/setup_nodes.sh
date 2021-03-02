@@ -79,6 +79,8 @@ if [ -f  /var/tmp/test.cov ]; then
     rm -f /var/tmp/test.cov
 fi
 cp /usr/lib/daos/TESTING/ftest/test.cov /var/tmp/
+chmod 777 /var/tmp/test.cov
+ls -al /var/tmp/test.cov
 
 if [ -d  /var/run/daos_agent ]; then
     rm -rf /var/run/daos_agent

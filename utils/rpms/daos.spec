@@ -216,7 +216,7 @@ scons %{?_smp_mflags}                 \
       %{?buildroot}%{_prefix}         \
       %{?buildroot}%{conf_dir}        \
       USE_INSTALLED=all               \
-      COMPILER=covc                   \
+      COMPILER=gcc                    \
       CONF_DIR=%{conf_dir}            \
       PREFIX=%{_prefix}               \
       %{?scons_args}
