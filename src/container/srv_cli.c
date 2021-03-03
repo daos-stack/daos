@@ -32,6 +32,9 @@ dsc_cont_close(daos_handle_t poh, daos_handle_t coh)
 	if (cont == NULL)
 		return 0;
 
+	D_ERROR("rc is %d ref is %d\n",
+		rc, cont->dc_hlink.hl_link.rl_ref);
+
 	pool = dc_hdl2pool(poh);
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
@@ -127,6 +130,10 @@ out:
 		dc_cont_put(cont);
 	if (pool != NULL)
 		dc_pool_put(pool);
+
+	if (cont)
+		D_ERROR("rc is %d ref is %d\n",
+			rc, cont->dc_hlink.hl_link.rl_ref);
 
 	return rc;
 }
