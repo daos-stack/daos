@@ -73,6 +73,7 @@ pool_file_destroy(void **state)
 		D_FREE(arg->fname[0]);
 	}
 	D_FREE(arg->fname);
+	D_FREE(arg->poh);
 	return 0;
 }
 
