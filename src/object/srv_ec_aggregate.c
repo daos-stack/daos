@@ -1421,7 +1421,7 @@ agg_process_holes_ult(void *arg)
 	unsigned int		 ext_cnt = 0;
 	unsigned int		 ext_tot_len = 0;
 	unsigned int		 failed_tgts_cnt = 0;
-	int			 rc = 0;
+	int			 i, rc = 0;
 
 	/* Process extent list to find what to re-replicate -- build recx array
 	 */
@@ -1458,6 +1458,10 @@ agg_process_holes_ult(void *arg)
 	iod.iod_size = entry->ae_rsize;
 	iod.iod_nr = ext_cnt;
 	iod.iod_recxs = stripe_ud->asu_recxs;
+	D_PRINT("Extent cnt: %u\n", ext_cnt);
+	for (i = 0; i < ext_cnt; i++)
+		D_PRINT("idx: %lu, nr: %lu\n", iod.iod_recxs[i].rx_idx,
+			iod.iod_recxs[i].rx_nr);
 	entry->ae_sgl.sg_nr = 1;
 	entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_len = ext_cnt * ext_tot_len *
 								entry->ae_rsize;
@@ -1474,6 +1478,9 @@ agg_process_holes_ult(void *arg)
 		}
 	}
 
+	if (ec_age2p(entry) < 2)
+		goto out;
+
 	/* Invoke peer re-replicate */
 	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
 	rc = pool_map_find_failed_tgts(agg_param->ap_pool_info.api_pool->sp_map,
@@ -1485,7 +1492,7 @@ agg_process_holes_ult(void *arg)
 	}
 
 	if (targets != NULL) {
-		int i;
+		//int i;
 
 		for (i = 0; i < failed_tgts_cnt; i++) {
 			if (targets[i].ta_comp.co_rank ==
@@ -1590,8 +1597,10 @@ agg_process_holes(struct ec_agg_entry *entry)
 		rc = dss_abterr2der(rc);
 		goto ev_out;
 	}
-	if (*status != 0)
+	if (*status != 0) {
 		rc = *status;
+		goto ev_out;
+	}
 	/* Update local vos with replicate */
 	iod.iod_name = entry->ae_akey;
 	iod.iod_type = DAOS_IOD_ARRAY;
@@ -1609,6 +1618,8 @@ agg_process_holes(struct ec_agg_entry *entry)
 				    &entry->ae_sgl);
 		if (rc) {
 			D_ERROR("vos_update_begin failed: "DF_RC"\n",
+				DP_RC(rc));
+			D_PRINT("vos_update_begin failed: "DF_RC"\n",
 				DP_RC(rc));
 			goto ev_out;
 		}

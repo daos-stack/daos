@@ -97,7 +97,7 @@
 		0, &CQF_obj_ec_agg,					\
 		ds_obj_ec_agg_handler, NULL, "ec_agg")			\
 	X(DAOS_OBJ_RPC_EC_REPLICATE,					\
-		0, &CQF_obj_ec_agg,					\
+		0, &CQF_obj_ec_rep,					\
 		ds_obj_ec_rep_handler, NULL, "ec_rep")			\
 	X(DAOS_OBJ_RPC_CPD,						\
 		0, &CQF_obj_cpd,					\
