@@ -5,6 +5,7 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from pool_test_base import PoolTestBase
+from apricot import skipForTicket
 
 
 class PoolCreateTests(PoolTestBase):
@@ -51,6 +52,7 @@ class PoolCreateTests(PoolTestBase):
         self.pool = self.get_pool_list(1, 0.9, 0.9, 1)
         self.check_pool_creation(120)
 
+    @skipForTicket("DAOS-6932")
     def test_create_no_space(self):
         """JIRA ID: DAOS-3728.
 
@@ -102,6 +104,7 @@ class PoolCreateTests(PoolTestBase):
             "should succeed."
         )
 
+    @skipForTicket("DAOS-6932")
     def test_create_no_space_loop(self):
         """JIRA ID: DAOS-3728.
 
