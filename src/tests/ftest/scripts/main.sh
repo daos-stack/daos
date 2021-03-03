@@ -101,7 +101,7 @@ for loc in /usr/lib/python2*/site-packages/ \
         break
     fi
 done
-if [ -n "${pydir}" ]; then
+if [ -z "${pydir}" ]; then
     echo "Could not determine avocado installation location"
     exit 1
 fi
