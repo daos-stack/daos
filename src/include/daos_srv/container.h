@@ -61,6 +61,7 @@ struct ds_cont_child {
 	ABT_cond		 sc_dtx_resync_cond;
 	uint32_t		 sc_dtx_resyncing:1,
 				 sc_dtx_aggregating:1,
+				 sc_dtx_committing:1,
 				 sc_dtx_reindex:1,
 				 sc_dtx_reindex_abort:1,
 				 sc_dtx_cos_shutdown:1,

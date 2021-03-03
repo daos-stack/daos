@@ -27,6 +27,36 @@ struct dtx_cleanup_stale_cb_args {
 	int			dcsca_count;
 };
 
+static inline void
+dtx_free_committable(struct dtx_entry **dtes, int count)
+{
+	int	i;
+
+	for (i = 0; i < count; i++)
+		dtx_entry_put(dtes[i]);
+	D_FREE(dtes);
+}
+
+static void
+dtx_free_dbca(struct dtx_batched_commit_args *dbca)
+{
+	struct ds_cont_child	*cont = dbca->dbca_cont;
+
+	/* Nobody re-opened it during waiting dtx_flush_on_deregister(). */
+	if (cont->sc_closing) {
+		if (daos_handle_is_valid(cont->sc_dtx_cos_hdl)) {
+			dbtree_destroy(cont->sc_dtx_cos_hdl, NULL);
+			cont->sc_dtx_cos_hdl = DAOS_HDL_INVAL;
+		}
+
+		D_ASSERT(cont->sc_dtx_committable_count == 0);
+		D_ASSERT(d_list_empty(&cont->sc_dtx_cos_list));
+	}
+
+	ds_cont_child_put(cont);
+	D_FREE_PTR(dbca);
+}
+
 static void
 dtx_stat(struct ds_cont_child *cont, struct dtx_stat *stat)
 {
@@ -34,39 +64,6 @@ dtx_stat(struct ds_cont_child *cont, struct dtx_stat *stat)
 
 	stat->dtx_committable_count = cont->sc_dtx_committable_count;
 	stat->dtx_oldest_committable_time = dtx_cos_oldest(cont);
-}
-
-static void
-dtx_aggregate(void *arg)
-{
-	struct ds_cont_child	*cont = arg;
-
-	while (!cont->sc_closing && !cont->sc_dtx_cos_shutdown) {
-		struct dtx_stat		stat = { 0 };
-		int			rc;
-
-		rc = vos_dtx_aggregate(cont->sc_hdl);
-		if (rc != 0)
-			break;
-
-		ABT_thread_yield();
-
-		dtx_stat(cont, &stat);
-
-		if (stat.dtx_committed_count <= DTX_AGG_THRESHOLD_CNT_LOWER)
-			break;
-
-		if (stat.dtx_committed_count >= DTX_AGG_THRESHOLD_CNT_UPPER)
-			continue;
-
-		if (stat.dtx_oldest_committed_time == 0 ||
-		    dtx_hlc_age2sec(stat.dtx_oldest_committed_time) <=
-		    DTX_AGG_THRESHOLD_AGE_LOWER)
-			break;
-	}
-
-	cont->sc_dtx_aggregating = 0;
-	ds_cont_child_put(cont);
 }
 
 static int
@@ -88,7 +85,7 @@ dtx_cleanup_stale_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	if (ent->ie_dtx_flags & DTE_CORRUPTED)
 		return 0;
 
-	/* Stop cleanup iteration if current DTX is not too old. */
+	/* Stop the iteration if current DTX is not too old. */
 	if (dtx_hlc_age2sec(ent->ie_dtx_start_time) <=
 	    DTX_CLEANUP_THRESHOLD_AGE_LOWER)
 		return 1;
@@ -159,80 +156,71 @@ dtx_cleanup_stale(void *arg)
 	ds_cont_child_put(cont);
 }
 
-static inline void
-dtx_free_committable(struct dtx_entry **dtes, int count)
+static void
+dtx_aggregate(void *arg)
 {
-	int	i;
+	struct ds_cont_child	*cont = arg;
 
-	for (i = 0; i < count; i++)
-		dtx_entry_put(dtes[i]);
-	D_FREE(dtes);
-}
+	while (!cont->sc_closing && !cont->sc_dtx_cos_shutdown) {
+		struct dtx_stat		stat = { 0 };
+		int			rc;
 
-static inline void
-dtx_free_dbca(struct dtx_batched_commit_args *dbca)
-{
-	struct ds_cont_child	*cont = dbca->dbca_cont;
+		rc = vos_dtx_aggregate(cont->sc_hdl);
+		if (rc != 0)
+			break;
 
-	/* Someone re-opened it during waiting dtx_flush_on_deregister(). */
-	if (!cont->sc_closing)
-		goto out;
+		ABT_thread_yield();
 
-	if (daos_handle_is_valid(cont->sc_dtx_cos_hdl)) {
-		dbtree_destroy(cont->sc_dtx_cos_hdl, NULL);
-		cont->sc_dtx_cos_hdl = DAOS_HDL_INVAL;
+		dtx_stat(cont, &stat);
+
+		if (stat.dtx_committed_count <= DTX_AGG_THRESHOLD_CNT_LOWER)
+			break;
+
+		if (stat.dtx_committed_count >= DTX_AGG_THRESHOLD_CNT_UPPER)
+			continue;
+
+		if (stat.dtx_oldest_committed_time == 0 ||
+		    dtx_hlc_age2sec(stat.dtx_oldest_committed_time) <=
+		    DTX_AGG_THRESHOLD_AGE_LOWER)
+			break;
 	}
 
-	D_ASSERT(cont->sc_dtx_committable_count == 0);
-	D_ASSERT(d_list_empty(&cont->sc_dtx_cos_list));
-
-out:
+	cont->sc_dtx_aggregating = 0;
 	ds_cont_child_put(cont);
-	D_FREE_PTR(dbca);
 }
 
 static void
-dtx_flush_on_deregister(struct dss_module_info *dmi,
-			struct dtx_batched_commit_args *dbca)
+dtx_batched_commit_one(void *arg)
 {
-	struct ds_cont_child	*cont = dbca->dbca_cont;
-	struct dtx_stat		 stat = { 0 };
-	uint64_t		 total = 0;
-	uint32_t		 gen = cont->sc_dtx_batched_gen;
-	int			 cnt;
-	int			 rc = 0;
+	struct ds_cont_child	 *cont = arg;
 
-	dtx_stat(cont, &stat);
-
-	/* gen != cont->sc_dtx_batched_gen means someone reopen the cont. */
-	while (gen == cont->sc_dtx_batched_gen && rc >= 0) {
+	while (!cont->sc_closing && !cont->sc_dtx_cos_shutdown) {
 		struct dtx_entry	**dtes = NULL;
+		struct dtx_stat		  stat = { 0 };
+		int			  cnt;
+		int			  rc;
 
-		cnt = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT,
-					    NULL, DAOS_EPOCH_MAX, &dtes);
-		if (cnt <= 0) {
-			rc = cnt;
+		cnt = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT, NULL,
+					    DAOS_EPOCH_MAX, &dtes);
+		if (cnt <= 0)
 			break;
-		}
-
-		total += cnt;
-		/* When flush_on_deregister, nobody will add more DTX
-		 * into the CoS cache. So if accumulated commit count
-		 * is more than the total committable ones, then some
-		 * DTX entries cannot be removed from the CoS cache.
-		 */
-		D_ASSERTF(total <= stat.dtx_committable_count,
-			  "Some DTX in CoS may cannot be removed: %lu/%lu\n",
-			  (unsigned long)total,
-			  (unsigned long)stat.dtx_committable_count);
 
 		rc = dtx_commit(cont, dtes, cnt, true);
 		dtx_free_committable(dtes, cnt);
+		if (rc != 0)
+			break;
+
+		dtx_stat(cont, &stat);
+
+		if ((stat.dtx_committable_count <= DTX_THRESHOLD_COUNT) &&
+		    (stat.dtx_oldest_committable_time == 0 ||
+		     dtx_hlc_age2sec(stat.dtx_oldest_committable_time) <
+		     DTX_COMMIT_THRESHOLD_AGE))
+			break;
 	}
 
-	if (rc < 0)
-		D_ERROR(DF_UUID": Fail to flush CoS cache: rc = %d\n",
-			DP_UUID(cont->sc_uuid), rc);
+	cont->sc_dtx_committing = 0;
+	ds_cont_child_put(cont);
 }
 
 void
@@ -257,11 +245,10 @@ dtx_batched_commit(void *arg)
 	dmi->dmi_dtx_batched_started = 1;
 
 	while (1) {
-		struct dtx_entry	**dtes = NULL;
-		struct ds_cont_child	 *cont;
-		struct dtx_stat		  stat = { 0 };
-		int			  cnt, rc;
-		int			  sleep_time = 10; /* ms */
+		struct ds_cont_child	*cont;
+		struct dtx_stat		 stat = { 0 };
+		int			 sleep_time = 10; /* ms */
+		int			 rc;
 
 		if (d_list_empty(&dmi->dmi_dtx_batched_list))
 			goto check;
@@ -273,32 +260,25 @@ dtx_batched_commit(void *arg)
 		dbca = d_list_entry(dmi->dmi_dtx_batched_list.next,
 				    struct dtx_batched_commit_args, dbca_link);
 		cont = dbca->dbca_cont;
-		ds_cont_child_get(cont);
-
 		d_list_move_tail(&dbca->dbca_link, &dmi->dmi_dtx_batched_list);
 		dtx_stat(cont, &stat);
 
-		if ((stat.dtx_committable_count > DTX_THRESHOLD_COUNT) ||
-		    (stat.dtx_oldest_committable_time != 0 &&
-		     dtx_hlc_age2sec(stat.dtx_oldest_committable_time) >
-		     DTX_COMMIT_THRESHOLD_AGE)) {
+		if (!cont->sc_closing && !cont->sc_dtx_committing &&
+		    ((stat.dtx_committable_count > DTX_THRESHOLD_COUNT) ||
+		     (stat.dtx_oldest_committable_time != 0 &&
+		      dtx_hlc_age2sec(stat.dtx_oldest_committable_time) >=
+		      DTX_COMMIT_THRESHOLD_AGE))) {
 			sleep_time = 0;
-			cnt = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT,
-						    NULL, DAOS_EPOCH_MAX,
-						    &dtes);
-			if (cnt > 0) {
-				rc = dtx_commit(cont, dtes, cnt, true);
-				dtx_free_committable(dtes, cnt);
-				if (rc != 0)
-					/* Not fatal, continue other batched
-					 * DTX commit, DTX aggregation.
-					 */
-					D_WARN("Fail to batched commit dtx: "
-					       DF_RC"\n", DP_RC(rc));
-
-				if (!cont->sc_dtx_aggregating ||
-				    !cont->sc_dtx_cleanup_stale)
-					dtx_stat(cont, &stat);
+			ds_cont_child_get(cont);
+			cont->sc_dtx_committing = 1;
+			rc = dss_ult_create(dtx_batched_commit_one, cont,
+					    DSS_XS_SELF, 0, 0, NULL);
+			if (rc != 0) {
+				D_WARN("Fail to start DTX batched commit for "
+				       DF_UUID": "DF_RC"\n",
+				       DP_UUID(cont->sc_uuid), DP_RC(rc));
+				cont->sc_dtx_committing = 0;
+				ds_cont_child_put(cont);
 			}
 		}
 
@@ -314,6 +294,9 @@ dtx_batched_commit(void *arg)
 			rc = dss_ult_create(dtx_aggregate, cont, DSS_XS_SELF,
 					    0, 0, NULL);
 			if (rc != 0) {
+				D_WARN("Fail to start DTX aggregation for "
+				       DF_UUID": "DF_RC"\n",
+				       DP_UUID(cont->sc_uuid), DP_RC(rc));
 				cont->sc_dtx_aggregating = 0;
 				ds_cont_child_put(cont);
 			}
@@ -329,12 +312,14 @@ dtx_batched_commit(void *arg)
 			rc = dss_ult_create(dtx_cleanup_stale, cont,
 					    DSS_XS_SELF, 0, 0, NULL);
 			if (rc != 0) {
+				D_WARN("Fail to start stale DTX cleanup for "
+				       DF_UUID": "DF_RC"\n",
+				       DP_UUID(cont->sc_uuid), DP_RC(rc));
 				cont->sc_dtx_cleanup_stale = 0;
 				ds_cont_child_put(cont);
 			}
 		}
 
-		ds_cont_child_put(cont);
 check:
 		if (dss_xstream_exiting(dmi->dmi_xstream))
 			break;
@@ -1059,6 +1044,50 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 }
 
 #define DTX_COS_BTREE_ORDER		23
+
+static void
+dtx_flush_on_deregister(struct dss_module_info *dmi,
+			struct dtx_batched_commit_args *dbca)
+{
+	struct ds_cont_child	*cont = dbca->dbca_cont;
+	struct dtx_stat		 stat = { 0 };
+	uint64_t		 total = 0;
+	uint32_t		 gen = cont->sc_dtx_batched_gen;
+	int			 cnt;
+	int			 rc = 0;
+
+	dtx_stat(cont, &stat);
+
+	/* gen != cont->sc_dtx_batched_gen means someone reopen the cont. */
+	while (gen == cont->sc_dtx_batched_gen && rc >= 0) {
+		struct dtx_entry	**dtes = NULL;
+
+		cnt = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT,
+					    NULL, DAOS_EPOCH_MAX, &dtes);
+		if (cnt <= 0) {
+			rc = cnt;
+			break;
+		}
+
+		total += cnt;
+		/* When flush_on_deregister, nobody will add more DTX
+		 * into the CoS cache. So if accumulated commit count
+		 * is more than the total committable ones, then some
+		 * DTX entries cannot be removed from the CoS cache.
+		 */
+		D_ASSERTF(total <= stat.dtx_committable_count,
+			  "Some DTX in CoS may cannot be removed: %lu/%lu\n",
+			  (unsigned long)total,
+			  (unsigned long)stat.dtx_committable_count);
+
+		rc = dtx_commit(cont, dtes, cnt, true);
+		dtx_free_committable(dtes, cnt);
+	}
+
+	if (rc < 0)
+		D_ERROR(DF_UUID": Fail to flush CoS cache: rc = %d\n",
+			DP_UUID(cont->sc_uuid), rc);
+}
 
 int
 dtx_batched_commit_register(struct ds_cont_child *cont)
