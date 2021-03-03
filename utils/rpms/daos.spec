@@ -203,7 +203,6 @@ scons %{?_smp_mflags}      \
       --config=force       \
       --no-rpath           \
       USE_INSTALLED=all    \
-      COMPILER=covc        \
       CONF_DIR=%{conf_dir} \
       PREFIX=%{?buildroot} \
      %{?scons_args}
@@ -216,7 +215,7 @@ scons %{?_smp_mflags}                 \
       %{?buildroot}%{_prefix}         \
       %{?buildroot}%{conf_dir}        \
       USE_INSTALLED=all               \
-      COMPILER=gcc                    \
+      COMPILER=covc                   \
       CONF_DIR=%{conf_dir}            \
       PREFIX=%{_prefix}               \
       %{?scons_args}
