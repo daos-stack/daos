@@ -329,8 +329,8 @@ class LogTest():
                 else:
                     client_pids[pid].add(start, end, line.ts)
 
-            for pid in client_pids:
-                print('{}:{}'.format(pid, client_pids[pid]))
+            for cpid in client_pids:
+                print('{}:{}'.format(cpid, client_pids[pid]))
 
 #pylint: disable=too-many-branches,too-many-nested-blocks
     def _check_pid_from_log_file(self,
@@ -391,7 +391,7 @@ class LogTest():
                             if line.filename == self.fi_location.filename:
                                 src_offset = line.lineno
                                 src_offset -= self.fi_location.lineno
-                                if src_offset > 0 and src_offset < 5:
+                                if 0 < src_offset < 5:
                                     show_line(line, 'NORMAL',
                                               'Logging allocation failure')
 
