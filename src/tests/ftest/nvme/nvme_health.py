@@ -41,7 +41,6 @@ class NvmeHealth(ServerFillUp):
         for _pool in range(no_of_pools):
             pool = TestPool(self.context, self.get_dmg_command())
             pool.get_params(self)
-
             pool.scm_size.update('{}'.format(single_pool_scm_size))
             pool.nvme_size.update('{}'.format(single_pool_nvme_size))
             pool.create()
