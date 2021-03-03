@@ -466,6 +466,7 @@ static bool
 tse_task_complete_callback(tse_task_t *task)
 {
 	struct tse_task_private	*dtp = tse_task2priv(task);
+	uint32_t		 dep_cnt = dtp->dtp_dep_cnt;
 	struct tse_task_cb	*dtc;
 	struct tse_task_cb	*tmp;
 
@@ -482,6 +483,13 @@ tse_task_complete_callback(tse_task_t *task)
 		/** Task was re-initialized; break */
 		if (!dtp->dtp_completing) {
 			D_DEBUG(DB_TRACE, "re-init task %p\n", task);
+			return false;
+		}
+
+		/** New dependent task added in completion call-back */
+		if (dtp->dtp_dep_cnt > dep_cnt) {
+			D_DEBUG(DB_TRACE, "new dep-task added to task %p\n",
+				task);
 			return false;
 		}
 	}

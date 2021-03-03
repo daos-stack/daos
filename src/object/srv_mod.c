@@ -60,36 +60,96 @@ obj_mod_fini(void)
 /* Define for cont_rpcs[] array population below.
  * See OBJ_PROTO_*_RPC_LIST macro definition
  */
-#define X(a, b, c, d, e)	\
+#define X(a, b, c, d, e, f)	\
 {				\
 	.dr_opc       = a,	\
 	.dr_hdlr      = d,	\
 	.dr_corpc_ops = e,	\
-}
+},
 
 static struct daos_rpc_handler obj_handlers[] = {
-	OBJ_PROTO_CLI_RPC_LIST,
+	OBJ_PROTO_CLI_RPC_LIST
 };
 
 #undef X
 
 static void *
-obj_tls_init(const struct dss_thread_local_storage *dtls,
-	     struct dss_module_key *key)
+obj_tls_init(int xs_id, int tgt_id)
 {
-	struct obj_tls *tls;
+	struct obj_tls	*tls;
+	uint32_t	opc;
+	char		*path;
+	int		rc;
 
 	D_ALLOC_PTR(tls);
 	if (tls == NULL)
 		return NULL;
 
 	D_INIT_LIST_HEAD(&tls->ot_pool_list);
+
+	if (tgt_id < 0)
+		/** skip sensor setup on system xstreams */
+		return tls;
+
+	/** register different per-opcode sensors */
+	for (opc = 0; opc < OBJ_PROTO_CLI_COUNT; opc++) {
+		/** Start with latency, of type gauge */
+		D_ASPRINTF(path, "io/%u/ops/%s/latency_us", tgt_id,
+			   obj_opc_to_str(opc));
+		rc = d_tm_add_metric(&tls->ot_op_lat[opc], path, D_TM_GAUGE,
+				     "object RPC processing time", "");
+		if (rc)
+			D_WARN("Failed to create latency sensor: "DF_RC"\n",
+			       DP_RC(rc));
+		D_FREE(path);
+
+		/** Continue with number of active requests, of type gauge */
+		D_ASPRINTF(path, "io/%u/ops/%s/active_cnt", tgt_id,
+			   obj_opc_to_str(opc));
+		rc = d_tm_add_metric(&tls->ot_op_active[opc], path, D_TM_GAUGE,
+				     "number of active object RPCs", "");
+		if (rc)
+			D_WARN("Failed to create active cnt sensor: "DF_RC"\n",
+			       DP_RC(rc));
+		D_FREE(path);
+
+		/** And finally the total number of requests, of type counter */
+		D_ASPRINTF(path, "io/%u/ops/%s/total_cnt", tgt_id,
+			   obj_opc_to_str(opc));
+		rc = d_tm_add_metric(&tls->ot_op_total[opc], path, D_TM_COUNTER,
+				     "total number of processed object RPCs",
+				     "");
+		if (rc)
+			D_WARN("Failed to create total cnt sensor: "DF_RC"\n",
+			       DP_RC(rc));
+		D_FREE(path);
+	}
+
+	/** Total number of silently restarted updates, of type counter */
+	D_ASPRINTF(path, "io/%u/ops/%s/restarted_cnt", tgt_id,
+		   obj_opc_to_str(DAOS_OBJ_RPC_UPDATE));
+	rc = d_tm_add_metric(&tls->ot_update_restart, path, D_TM_COUNTER,
+			     "total number of restarted update ops", "");
+	if (rc)
+		D_WARN("Failed to create restarted cnt sensor: "DF_RC"\n",
+		       DP_RC(rc));
+	D_FREE(path);
+
+	/** Total number of resent updates, of type counter */
+	D_ASPRINTF(path, "io/%u/ops/%s/resent_cnt", tgt_id,
+		   obj_opc_to_str(DAOS_OBJ_RPC_UPDATE));
+	rc = d_tm_add_metric(&tls->ot_update_resent, path, D_TM_COUNTER,
+			     "total number of resent update RPCs", "");
+	if (rc)
+		D_WARN("Failed to create resent cnt sensor: "DF_RC"\n",
+		       DP_RC(rc));
+	D_FREE(path);
+
 	return tls;
 }
 
 static void
-obj_tls_fini(const struct dss_thread_local_storage *dtls,
-	     struct dss_module_key *key, void *data)
+obj_tls_fini(void *data)
 {
 	struct obj_tls *tls = data;
 	struct migrate_pool_tls *pool_tls;

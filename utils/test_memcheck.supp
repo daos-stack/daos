@@ -1,16 +1,6 @@
 {
    <insert_a_suppression_name_here>
    Memcheck:Leak
-   match-leak-kinds:possible
-   fun:calloc
-   ...
-   fun:vos_ts_table_alloc
-   fun:alloc_ts_cache
-   ...
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
    ...
    fun:vea_reserve
    ...
@@ -176,18 +166,6 @@
 }
 {
    <insert_a_suppression_name_here>
-   Memcheck:Leak
-   match-leak-kinds:definite
-   fun:calloc
-   ...
-   fun:gc_cont_run
-   fun:gc_cont_test
-   ...
-   fun:run_gc_tests
-   ...
-}
-{
-   <insert_a_suppression_name_here>
    Memcheck:User
    fun:pmemobj_tx_add_snapshot
    fun:pmemobj_tx_add_common.constprop.*
@@ -312,16 +290,6 @@
    Memcheck:Leak
    match-leak-kinds:definite
    fun:calloc
-   ...
-   fun:pool_file_setup
-   ...
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   match-leak-kinds:definite
-   fun:calloc
-   ...
    fun:generate_view
    fun:aggregate_basic
    fun:aggregate_21

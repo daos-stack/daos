@@ -12,6 +12,7 @@
 #include <setjmp.h>
 #include <cmocka.h>
 
+#include <daos/tests_lib.h>
 #include <daos_security.h>
 #include <gurt/common.h>
 #include <stdio.h>
@@ -31,7 +32,7 @@ test_acl_euid_principal_conversion(void **state)
 	printf("Principal user name: '%s'\n", name);
 
 	printf("Converting back to UID...\n");
-	assert_int_equal(daos_acl_principal_to_uid(name, &result), 0);
+	assert_rc_equal(daos_acl_principal_to_uid(name, &result), 0);
 	printf("Got UID %u\n", result);
 	assert_int_equal(result, uid);
 
@@ -45,12 +46,12 @@ verify_gid_principal_conversion(gid_t gid)
 	char	*name = NULL;
 
 	printf("Converting GID %u to principal name...\n", gid);
-	assert_int_equal(daos_acl_gid_to_principal(gid, &name), 0);
+	assert_rc_equal(daos_acl_gid_to_principal(gid, &name), 0);
 	assert_non_null(name);
 	printf("Principal group name: '%s'\n", name);
 
 	printf("Converting back to GID...\n");
-	assert_int_equal(daos_acl_principal_to_gid(name, &result), 0);
+	assert_rc_equal(daos_acl_principal_to_gid(name, &result), 0);
 	printf("Got GID %u\n", result);
 	assert_int_equal(result, gid);
 
@@ -91,10 +92,10 @@ test_acl_id_not_found(void **state)
 {
 	char	*name = NULL;
 
-	assert_int_equal(daos_acl_uid_to_principal(-1, &name), -DER_NONEXIST);
+	assert_rc_equal(daos_acl_uid_to_principal(-1, &name), -DER_NONEXIST);
 	assert_null(name);
 
-	assert_int_equal(daos_acl_gid_to_principal(-1, &name), -DER_NONEXIST);
+	assert_rc_equal(daos_acl_gid_to_principal(-1, &name), -DER_NONEXIST);
 	assert_null(name);
 }
 
@@ -105,8 +106,8 @@ test_acl_name_not_found(void **state)
 	uid_t		uid;
 	gid_t		gid;
 
-	assert_int_equal(daos_acl_principal_to_uid(name, &uid), -DER_NONEXIST);
-	assert_int_equal(daos_acl_principal_to_gid(name, &gid), -DER_NONEXIST);
+	assert_rc_equal(daos_acl_principal_to_uid(name, &uid), -DER_NONEXIST);
+	assert_rc_equal(daos_acl_principal_to_gid(name, &gid), -DER_NONEXIST);
 }
 
 int

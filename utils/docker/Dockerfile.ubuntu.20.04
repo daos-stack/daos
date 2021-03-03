@@ -19,7 +19,7 @@ RUN apt-get update &&							\
 	liblz4-dev libibverbs-dev librdmacm-dev libaio-dev yasm		\
 	python3-dev golang-go git libyaml-dev python3-tabulate		\
 	python3-pyxattr openjdk-8-jdk maven libipmctl-dev 		\
-	libcunit1-dev libopenmpi-dev numactl doxygen && 		\
+	libcunit1-dev libopenmpi-dev numactl doxygen libunwind-dev && 	\
     apt-get clean all
 
 # hack the default shell to bash instead of dash

@@ -13,7 +13,6 @@
 #include <gurt/atomic.h>
 #include "crt_swim.h"
 
-
 /* (1 << CRT_LOOKUP_CACHE_BITS) is the number of buckets of lookup hash table */
 #define CRT_LOOKUP_CACHE_BITS	(4)
 
@@ -105,14 +104,15 @@ struct crt_grp_priv {
 
 	/* set of variables only valid in primary service groups */
 	uint32_t		 gp_primary:1, /* flag of primary group */
-				 gp_view:1; /* flag to indicate it is a view */
+				 gp_view:1, /* flag to indicate it is a view */
+				/* Auto remove rank from secondary group */
+				 gp_auto_remove:1;
 
 	/* group reference count */
 	uint32_t		 gp_refcount;
 
 	pthread_rwlock_t	 gp_rwlock; /* protect all fields above */
 };
-
 
 static inline d_rank_list_t*
 grp_priv_get_membs(struct crt_grp_priv *priv)
@@ -140,7 +140,6 @@ grp_priv_set_membs(struct crt_grp_priv *priv, d_rank_list_t *list)
 	D_ASSERT(list == NULL);
 
 	return 0;
-
 }
 
 static inline int
@@ -225,7 +224,6 @@ struct crt_lookup_item {
 	pthread_mutex_t		 li_mutex;
 };
 
-
 /* structure of global group data */
 struct crt_grp_gdata {
 	struct crt_grp_priv	*gg_primary_grp;
@@ -249,11 +247,10 @@ struct crt_grp_priv *crt_grp_lookup_int_grpid(uint64_t int_grpid);
 struct crt_grp_priv *crt_grp_lookup_grpid(crt_group_id_t grp_id);
 int crt_validate_grpid(const crt_group_id_t grpid);
 int crt_grp_init(crt_group_id_t grpid);
-int crt_grp_fini(void);
+void crt_grp_fini(void);
 void crt_grp_priv_destroy(struct crt_grp_priv *grp_priv);
 
 int crt_grp_config_load(struct crt_grp_priv *grp_priv);
-
 
 /* some simple helpers */
 static inline bool
@@ -301,35 +298,25 @@ crt_grp_priv_addref(struct crt_grp_priv *grp_priv)
  * Decrease the attach refcount and return the result.
  * Returns negative value for error case.
  */
-static inline int
+static inline void
 crt_grp_priv_decref(struct crt_grp_priv *grp_priv)
 {
 	bool	destroy = false;
-	int	rc = 0;
 
 	D_ASSERT(grp_priv != NULL);
 
 	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
-	if (grp_priv->gp_refcount == 0) {
-		D_DEBUG(DB_TRACE, "group (%s), refcount already dropped "
-			"to 0.\n", grp_priv->gp_pub.cg_grpid);
-		D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
-		D_GOTO(out, rc = -DER_ALREADY);
-	} else {
-		grp_priv->gp_refcount--;
-		D_DEBUG(DB_TRACE, "group (%s), refcount decreased to "
-			"%d.\n", grp_priv->gp_pub.cg_grpid,
-			grp_priv->gp_refcount);
-		if (grp_priv->gp_refcount == 0) {
-			destroy = true;
-		}
-	}
+	D_ASSERT(grp_priv->gp_refcount >= 1);
+	grp_priv->gp_refcount--;
+	D_DEBUG(DB_TRACE, "group (%s), decref to %d.\n",
+		grp_priv->gp_pub.cg_grpid, grp_priv->gp_refcount);
+	if (grp_priv->gp_refcount == 0)
+		destroy = true;
+
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
 	if (destroy)
 		crt_grp_priv_destroy(grp_priv);
-out:
-	return rc;
 }
 
 static inline int
@@ -379,7 +366,6 @@ crt_rank_present(crt_group_t *grp, d_rank_t rank)
 
 #define CRT_RANK_PRESENT(grp, rank) \
 	crt_rank_present(grp, rank)
-
 
 bool
 crt_grp_id_identical(crt_group_id_t grp_id_1, crt_group_id_t grp_id_2);

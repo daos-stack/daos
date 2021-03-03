@@ -147,8 +147,8 @@ def run_event_check(self, since, until):
     # check events on all nodes
     hosts = list(set(self.hostlist_clients + self.hostlist_servers))
     if events:
-        command = "sudo /usr/bin/journalctl --system -t kernel -t daos_server "
-        "--since='{}' --until='{}'".format(since, until)
+        command = "sudo /usr/bin/journalctl --system -t kernel -t "
+        "daos_server --since=\"{}\" --until=\"{}\"".format(since, until)
         err = "Error gathering system log events"
         for event in events:
             for output in get_host_data(
@@ -317,13 +317,18 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
     status = False
     params = {}
     rank = None
+    tgt_idx = None
     if name == "EXCLUDE":
+        targets = self.params.get("targets_exclude", "/run/soak_harassers/*", 8)
         exclude_servers = len(self.hostlist_servers) - 1
-        # Exclude target : random 4 targets  (target idx : 0-7)
-        target_list = random.sample(range(0, 7), 4)
-        tgt_idx = "{}".format(','.join(str(tgt) for tgt in target_list))
         # Exclude one rank : other than rank 0 and 1.
         rank = random.randint(2, exclude_servers)
+        if targets >= 8:
+            tgt_idx = None
+        else:
+            target_list = random.sample(range(0, 8), targets)
+            tgt_idx = "{}".format(','.join(str(tgt) for tgt in target_list))
+
         # init the status dictionary
         params = {"name": name,
                   "status": status,

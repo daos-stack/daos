@@ -14,6 +14,8 @@
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
 
+Calendar current_time = Calendar.getInstance()
+
 boolean doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
         return true
@@ -300,7 +302,8 @@ def getuid() {
 // in faster time-to-result for PRs.
 
 String get_priority() {
-    if (env.BRANCH_NAME == 'master') {
+    if (env.BRANCH_NAME == 'master' ||
+        env.BRANCH_NAME.startsWith("release/")) {
         string p = '2'
     } else {
         string p = ''
@@ -509,7 +512,8 @@ pipeline {
     agent { label 'lightweight' }
 
     triggers {
-        cron(env.BRANCH_NAME == 'master' ? 'TZ=America/Toronto\n0 0,12 * * *\n' : '' +
+        cron(env.BRANCH_NAME == 'master' ? 'TZ=America/Toronto\n0 0 * * *\n' : '' +
+             env.BRANCH_NAME == 'release/1.2' ? 'TZ=America/Toronto\n0 12 * * *\n' : '' +
              env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
     }
 
@@ -555,10 +559,11 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
+                            filename 'Dockerfile.checkpatch'
+                            dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs() +
-                                           " -t ${sanitized_JOB_NAME}-centos7 "
+                            additionalBuildArgs dockerBuildArgs(add_repos:false) +
+                                                " --build-arg CB0=" + current_time.get(Calendar.WEEK_OF_YEAR)
                         }
                     }
                     steps {

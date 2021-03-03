@@ -1405,7 +1405,7 @@ def install_debuginfos():
     cmds = []
 
     # -debuginfo packages that don't get installed with debuginfo-install
-    for pkg in ['python', 'daos', 'systemd', 'ndctl', 'mercury']:
+    for pkg in ['python', 'daos', 'systemd', 'ndctl', 'mercury', 'hdf5']:
         debug_pkg = resolve_debuginfo(pkg)
         if debug_pkg and debug_pkg not in install_pkgs:
             install_pkgs.append(debug_pkg)
