@@ -217,7 +217,7 @@ def set_test_environment(args):
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
 
     # SCHAN15
-    # os.environ["COVFILE"] = "/var/tmp/test.cov"
+    os.environ["COVFILE"] = "/usr/lib/daos/TESTING/ftest/test.cov"
 
     # Python paths required for functional testing
     python_version = "python{}{}".format(
