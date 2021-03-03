@@ -21,7 +21,7 @@ pool:
   mode: 146
   name: daos_server
   scm_size: 30000000000
-  svcn: 1
+  svcn: 3
   control_method: dmg
   pool_query_timeout: 30
 ior:
