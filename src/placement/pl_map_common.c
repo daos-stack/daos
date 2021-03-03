@@ -453,7 +453,8 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 		new_shards[grp_idx].po_fseq = f_shard->fs_fseq;
 		new_shards[grp_idx].po_shard = f_shard->fs_shard_idx;
 		new_shards[grp_idx].po_target = f_shard->fs_tgt_id;
-		new_shards[grp_idx].po_rebuilding = 1;
+		if (f_shard->fs_status != PO_COMP_ST_DRAIN)
+			new_shards[grp_idx].po_rebuilding = 1;
 	}
 
 	layout->ol_grp_size += max_fail_grp;
