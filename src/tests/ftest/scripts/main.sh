@@ -95,16 +95,17 @@ EOF
 
 # apply patches to Avocado
 for loc in /usr/lib/python2*/site-packages/ \
-           /usr/lib/python3*/dist-packages/; do
+           /usr/lib/python3*/site-packages/; do
     if [ -f "$loc"/avocado/core/runner.py ]; then
         pydir=$loc
         break
     fi
-    if [ -z "$loc" ]; then
-        echo "Could not determine avocado installation location"
-        exit 1
-    fi
 done
+if [ -n "${pydir}" ]; then
+    echo "Could not determine avocado installation location"
+    exit 1
+fi
+
 PATCH_DIR="$PREFIX"/lib/daos/TESTING/ftest
 # https://github.com/avocado-framework/avocado/pull/4345 fixed somewhere
 # before 69.2
@@ -164,7 +165,8 @@ if ! grep "TIMEOUT_TEST_INTERRUPTED = 60" \
 wq
 EOF
 fi
-# apply fix for https://github.com/avocado-framework/avocado/pull/2922
+# apply fix for https://github.com/avocado-framework/avocado/pull/2922 - fixed
+# somewhere before 69.2
 if grep "testsuite.setAttribute('name', 'avocado')" \
     "$pydir"/avocado/plugins/xunit.py; then
     sudo ed <<EOF "$pydir"/avocado/plugins/xunit.py
@@ -172,7 +174,7 @@ if grep "testsuite.setAttribute('name', 'avocado')" \
 wq
 EOF
 fi
-# Fix for bug to be filed upstream
+# Fix for bug to be filed upstream - fixed somewhere before 69.2
 if grep "self\.job\.result_proxy\.notify_progress(False)" \
     "$pydir"/avocado/core/runner.py; then
     sudo ed <<EOF "$pydir"/avocado/core/runner.py
