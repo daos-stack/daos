@@ -853,9 +853,33 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 		D_GOTO(out, rc);
 	}
 
-	for (i = 0; i < mrone->mo_iod_num && DAOS_OC_IS_EC(oca); i++) {
+	for (i = 0; i < mrone->mo_iod_num; i++) {
 		daos_iod_t	*iod = &mrone->mo_iods[i];
 		uint32_t	start_shard;
+
+		if (mrone->mo_iods[i].iod_size == 0) {
+			/* zero size iod will cause assertion failure
+			 * in VOS, so let's check here.
+			 * So the object is being destroyed between
+			 * object enumeration and object fetch on
+			 * the remote target, which is usually caused
+			 * by container destroy or snapshot deletion.
+			 * Since this is rare, let's simply return
+			 * failure for this rebuild, then reschedule
+			 * the rebuild and retry.
+			 */
+			rc = -DER_DATA_LOSS;
+			D_DEBUG(DB_REBUILD,
+				DF_UOID" %p dkey "DF_KEY" "DF_KEY" nr %d/%d"
+				" eph "DF_U64" %d\n", DP_UOID(mrone->mo_oid),
+				mrone, DP_KEY(&mrone->mo_dkey),
+				DP_KEY(&mrone->mo_iods[i].iod_name),
+				mrone->mo_iod_num, i, mrone->mo_epoch, rc);
+			D_GOTO(out, rc);
+		}
+
+		if (!DAOS_OC_IS_EC(oca))
+			continue;
 
 		start_shard = rounddown(mrone->mo_oid.id_shard,
 					obj_ec_tgt_nr(oca));
@@ -982,6 +1006,28 @@ post:
 		rc = rc ? : ret;
 	}
 
+	for (i = 0; rc == 0 && i < mrone->mo_iod_num; i++) {
+		if (mrone->mo_iods[i].iod_size == 0) {
+			/* zero size iod will cause assertion failure
+			 * in VOS, so let's check here.
+			 * So the object is being destroyed between
+			 * object enumeration and object fetch on
+			 * the remote target, which is usually caused
+			 * by container destroy or snapshot deletion.
+			 * Since this is rare, let's simply return
+			 * failure for this rebuild, then reschedule
+			 * the rebuild and retry.
+			 */
+			rc = -DER_DATA_LOSS;
+			D_DEBUG(DB_REBUILD,
+				DF_UOID" %p dkey "DF_KEY" "DF_KEY" nr %d/%d"
+				" eph "DF_U64" %d\n", DP_UOID(mrone->mo_oid),
+				mrone, DP_KEY(&mrone->mo_dkey),
+				DP_KEY(&mrone->mo_iods[i].iod_name),
+				mrone->mo_iod_num, i, mrone->mo_epoch, rc);
+			D_GOTO(end, rc);
+		}
+	}
 end:
 	rc1 = vos_update_end(ioh, mrone->mo_version, &mrone->mo_dkey, rc, NULL);
 	if (rc == 0)
