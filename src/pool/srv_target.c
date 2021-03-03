@@ -436,7 +436,13 @@ ds_pool_cache_init(void)
 	rc = ABT_mutex_create(&pool_cache_lock);
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
-	rc = daos_lru_cache_create(-1 /* bits */, D_HASH_FT_NOLOCK /* feats */,
+	/** Keep the cache small because PMDK uses a pthread key per open pool
+	 *  and around 1024 open handles across all targets will exhaust the
+	 *  system limit on keys (PTHREAD_KEYS_MAX). PMDK FEAT #5172 would
+	 *  address this but isn't yet implemented.
+	 */
+	rc = daos_lru_cache_create(6 /* 2^6 entries */,
+				   D_HASH_FT_NOLOCK /* feats */,
 				   &pool_cache_ops, &pool_cache);
 	if (rc != 0)
 		ABT_mutex_free(&pool_cache_lock);
