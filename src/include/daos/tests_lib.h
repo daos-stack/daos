@@ -12,12 +12,6 @@
 #include <daos/common.h>
 #include <daos_mgmt.h>
 #include <daos/object.h>
-#ifdef DAOS_HAS_VALGRIND
-#include <valgrind/valgrind.h>
-#define DAOS_ON_VALGRIND RUNNING_ON_VALGRIND
-#else
-#define DAOS_ON_VALGRIND 0
-#endif
 
 #define assert_success(r)						\
 	do {								\
