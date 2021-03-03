@@ -358,8 +358,7 @@ rebuild_add_back_tgts(test_arg_t *arg, d_rank_t failed_rank, int *failed_tgts,
 }
 
 static int
-rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
-			daos_epoch_t validate_eph, int index)
+rebuild_io_obj_internal(struct ioreq *req, bool validate, int index)
 {
 #define BULK_SIZE	5000
 #define REC_SIZE	64
@@ -383,13 +382,12 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
 	if (large_key == NULL)
 		return -DER_NOMEM;
 	memset(large_key, 'L', LARGE_KEY_SIZE - 1);
-
+	sprintf(data, "data");
+	sprintf(data_verify, "data");
 	for (j = 0; j < DKEY_LOOP; j++) {
 		req->iod_type = DAOS_IOD_ARRAY;
 		/* small records */
 		sprintf(dkey, "dkey_%d_%d", index, j);
-		sprintf(data, "%s_"DF_U64, "data", eph);
-		sprintf(data_verify, "%s_"DF_U64, "data", validate_eph);
 		for (k = 0; k < AKEY_LOOP; k++) {
 			sprintf(akey, "akey_%d_%d", index, k);
 			for (l = 0; l < REC_LOOP; l++) {
@@ -471,9 +469,6 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
 			punch_dkey(dkey, DAOS_TX_NONE, req);
 
 		/* single record */
-		sprintf(data, "%s_"DF_U64, "single_data", eph);
-		sprintf(data_verify, "%s_"DF_U64, "single_data",
-			validate_eph);
 		req->iod_type = DAOS_IOD_SINGLE;
 		sprintf(dkey, "dkey_single_%d_%d", index, j);
 		if (validate) {
@@ -496,32 +491,45 @@ void
 rebuild_io(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
 {
 	struct ioreq	req;
-	daos_epoch_t	eph = arg->hce + arg->index * 2 + 1;
 	int		i;
 	int		punch_idx = 1;
 
-	print_message("update obj %d eph "DF_U64" before rebuild\n", oids_nr,
-		      eph);
-
+	print_message("rebuild io obj %d\n", oids_nr);
 	for (i = 0; i < oids_nr; i++) {
 		ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
 		if (i == punch_idx) {
 			punch_obj(DAOS_TX_NONE, &req);
 		} else {
-			rebuild_io_obj_internal((&req), false, eph, -1,
-						 arg->index);
+			rebuild_io_obj_internal((&req), false, arg->index);
 		}
 		ioreq_fini(&req);
 	}
 }
 
 void
-rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
-		    bool discard)
+rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
+{
+	struct ioreq	req;
+	int		i;
+
+	print_message("rebuild io validate obj %d\n", oids_nr);
+	for (i = 0; i < oids_nr; i++) {
+		/* XXX: skip punch object. */
+		if (i == 1)
+			continue;
+		ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
+		rebuild_io_obj_internal((&req), true, arg->index);
+		ioreq_fini(&req);
+	}
+}
+
+void
+rebuild_io_verify(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
 {
 	int	rc;
 	int	i;
 
+	print_message("rebuild io verify obj %d\n", oids_nr);
 	for (i = 0; i < oids_nr; i++) {
 		/* XXX: skip punch object. */
 		if (i == 1)
