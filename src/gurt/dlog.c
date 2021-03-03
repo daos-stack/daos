@@ -78,7 +78,6 @@ struct d_log_state {
 	struct utsname uts;	/* for hostname, from uname(3) */
 	int stdout_isatty;	/* non-zero if stdout is a tty */
 	int stderr_isatty;	/* non-zero if stderr is a tty */
-	int flush_pri;		/* flush priority */
 #ifdef DLOG_MUTEX
 	pthread_mutex_t clogmux;	/* protect clog in threaded env */
 #endif
@@ -637,10 +636,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	 * NB: flush to logfile if the message is important (warning/error...)
 	 * or the last flush was 1+ second ago.
 	 */
-	if (mst.flush_pri == DLOG_DBG)
-		flush = true;
-	else
-		flush = (lvl >= mst.flush_pri) || (tv.tv_sec > last_flush);
+	flush = (lvl >= DLOG_WARN) || (tv.tv_sec > last_flush);
 	if (flush)
 		last_flush = tv.tv_sec;
 
@@ -766,23 +762,12 @@ int
 d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	   char *logfile, int flags)
 {
-	int		tagblen;
-	char		*newtag = NULL, *cp;
-	int		truncate = 0, rc;
-	char		*env;
-	char		*buffer = NULL;
-	uint64_t	log_size = LOG_SIZE_DEF;
-	int		pri;
-
-	mst.flush_pri = DLOG_WARN;
-
-	env = getenv(D_LOG_FLUSH_ENV);
-	if (env) {
-		pri = d_log_str2pri(env, strlen(env) + 1);
-
-		if (pri != -1)
-			mst.flush_pri = pri;
-	}
+	int	tagblen;
+	char	*newtag = NULL, *cp;
+	int	truncate = 0, rc;
+	char	*env;
+	char	*buffer = NULL;
+	uint64_t log_size = LOG_SIZE_DEF;
 
 	env = getenv(D_LOG_TRUNCATE_ENV);
 	if (env != NULL && atoi(env) > 0)
