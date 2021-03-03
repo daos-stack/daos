@@ -164,47 +164,6 @@ class RegionCounter():
 # error lines.
 shown_logs = set()
 
-# List of known areas where there may be a mismatch between the facility used
-# for alloc vs free.  Typically this is where memory is allocated in one file
-# but freed in another, however allocations in header file also feature.
-
-# First is a lookup dict of commonly shared facilities, key is allocation
-# facility, value is set of free facilities.
-
-# Second part is a unordered dict of functions which are whitelisted
-# specifically, key is function name, value is list of variables.
-# Both the alloc and free function need to be whitelisted.
-
-mismatch_table = {'client': ('array'),
-                  'daos': ('common', 'container', 'pool'),
-                  'common': ('container', 'pool'),
-                  'container': ('common'),
-                  'mgmt': ('common', 'daos', 'pool', 'rsvc'),
-                  'misc': ('common', 'mgmt'),
-                  'pool': ('common'),
-                  'server': ('daos')}
-
-mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
-                     'crt_rpc_handler_common': ('rpc_priv'),
-                     'bio_sgl_init': ('sgl->bs_iovs'),
-                     'pool_svc_name_cb': ('s'),
-                     'daos_iov_copy': ('dst->iov_buf'),
-                     'ds_pool_tgt_map_update': ('arg'),
-                     'enum_cont_cb': ('ptr'),
-                     'path_gen': ('*fpath'),
-                     'd_sgl_init': ('sgl->sg_iovs'),
-                     'iod_fetch': ('biovs')}
-
-mismatch_free_ok = {'crt_rpc_priv_free': ('rpc_priv'),
-                    'bio_sgl_fini': ('sgl->bs_iovs'),
-                    'fini_free': ('svc->s_name',
-                                  'svc->s_db_path'),
-                    'd_sgl_fini': ('sgl->sg_iovs[i].iov_buf',
-                                   'sgl->sg_iovs'),
-                    'dtx_resync_ult': ('arg'),
-                    'ds_pool_list_cont_handler': ('cont_buf'),
-                    'notify_ready': ('req.uri')}
-
 wf = None
 
 def show_line(line, sev, msg, custom=None):
@@ -533,35 +492,6 @@ class LogTest():
                     if pointer in active_desc:
                         del active_desc[pointer]
                     if pointer in regions:
-                        if line.fac != regions[pointer].fac:
-                            fvar = line.get_field(3).strip("'")
-                            afunc = regions[pointer].function
-                            avar = regions[pointer].get_field(3).strip("':")
-                            if line.function in mismatch_free_ok and \
-                               fvar in mismatch_free_ok[line.function] and \
-                               afunc in mismatch_alloc_ok and \
-                               avar in mismatch_alloc_ok[afunc]:
-                                pass
-                            elif regions[pointer].fac in mismatch_table \
-                                 and line.fac in  \
-                                 mismatch_table[regions[pointer].fac]:
-                                pass
-                            else:
-                                show_line(regions[pointer], 'LOW',
-                                          'facility mismatch in alloc/free ' +
-                                          '{} != {}'.format(
-                                              regions[pointer].fac, line.fac))
-                                show_line(line, 'LOW',
-                                          'facility mismatch in alloc/free ' +
-                                          '{} != {}'.format(
-                                              regions[pointer].fac, line.fac))
-                                err_count += 1
-                        if line.level != regions[pointer].level:
-                            show_line(regions[pointer], 'LOW',
-                                      'level mismatch in alloc/free')
-                            show_line(line, 'LOW',
-                                      'level mismatch in alloc/free')
-                            err_count += 1
                         memsize.subtract(regions[pointer].calloc_size())
                         old_regions[pointer] = [regions[pointer], line]
                         del regions[pointer]
