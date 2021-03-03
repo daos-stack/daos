@@ -641,6 +641,9 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 		flush = true;
 	else
 		flush = (lvl >= mst.flush_pri) || (tv.tv_sec > last_flush);
+
+	flush = (lvl >= DLOG_WARN) || (tv.tv_sec > last_flush);
+
 	if (flush)
 		last_flush = tv.tv_sec;
 
