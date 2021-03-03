@@ -1644,7 +1644,7 @@ file_name_create(char **gpath_name, bool *name_allocated, char *env)
 	D_EMIT(" env:       %s\n", env_name);
 
 	if (env_name == NULL) {
-		D_EMIT(" Environemnt %s not set\n", env);
+		D_EMIT(" Environment %s not set\n", env);
 		goto cleanup;
 	}
 
@@ -3823,16 +3823,14 @@ int main(int argc, char *argv[])
 	       g_rep_count, g_max_inflight);
 
 	/* Evaluate name of results file */
-#ifdef ORIG
-	ret = file_name_create(&g_expected_outfile, &alloc_g_expected_outfile,
-			       "DAOS_TEST_SHARED_DIR");
-#else
 	ret = file_name_create(&g_expected_outfile, &alloc_g_expected_outfile,
 			       "DAOS_TEST_LOG_DIR");
-#endif
 	if (ret != 0) {
 		D_WARN("Error creating output name\n");
 		goto cleanup;
+	} else {
+		D_WARN("Selftest Results File: %s\n", g_expected_outfile);
+		printf("Selftest Results File:\n\t %s\n", g_expected_outfile);
 	}
 
 	/****** Open global configuration for output results *****/
@@ -3852,12 +3850,18 @@ int main(int argc, char *argv[])
 	if (g_expected_outfile != NULL) {
 		ConfigRet config_ret;
 
+		printf(" Selftest Results File:\n\t %s\n", g_expected_outfile);
 		config_ret = ConfigPrintToFile(cfg_output, g_expected_outfile);
 		if (config_ret != CONFIG_OK) {
 			D_ERROR("Fail to write to output file: %s\n",
 				g_expected_outfile);
 		ret = -ENOENT;
 		}
+	} else {
+		printf(" Selftest Results File not specified:"
+		       " no results written\n");
+		D_INFO(" Selftest Results File not specified:"
+		       " no results written\n");
 	}
 	ConfigFree(cfg_output);
 

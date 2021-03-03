@@ -19,8 +19,7 @@ def remove_certain_gcc_flags(str):
     r = re.compile(r"-Wframe-larger-than=")
     if r.match(str):
         return False
-    else:
-        return True
+    return True
 
 def scons():
     """scons function"""
