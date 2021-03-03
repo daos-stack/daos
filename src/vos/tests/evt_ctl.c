@@ -121,7 +121,7 @@ static struct evt_desc_cbs	ts_evt_desc_nofree_cbs  = {
 };
 
 static void
-ts_open_create()
+ts_open_create(void)
 {
 	bool    create;
 	char    *arg;
@@ -166,7 +166,7 @@ ts_open_create()
 }
 
 static void
-ts_close_destroy()
+ts_close_destroy(void)
 {
 	bool destroy;
 	int rc;
@@ -321,7 +321,7 @@ bio_strdup(struct utest_context *utx, bio_addr_t *addr, const char *str)
 }
 
 static void
-ts_add_rect()
+ts_add_rect(void)
 {
 	char			*val;
 	bio_addr_t		 bio_addr = {0}; /* Fake bio addr */
@@ -421,7 +421,7 @@ ts_delete_rect()
 }
 
 static void
-ts_remove_rect()
+ts_remove_rect(void)
 {
 	char			*arg;
 	struct evt_rect		 rect;
@@ -458,7 +458,7 @@ ts_remove_rect()
 
 
 static void
-ts_find_rect()
+ts_find_rect(void)
 {
 	struct evt_entry	*ent;
 	char			*val;
@@ -506,7 +506,7 @@ ts_find_rect()
 }
 
 static void
-ts_list_rect()
+ts_list_rect(void)
 {
 	char			*val;
 	daos_anchor_t		 anchor;
@@ -651,7 +651,7 @@ skip_probe:
 #define TS_VAL_CYCLE	4
 
 static void
-ts_many_add()
+ts_many_add(void)
 {
 	char			*buf;
 	char			*tmp;
@@ -757,7 +757,7 @@ ts_many_add()
 }
 
 static void
-ts_tree_debug()
+ts_tree_debug(void)
 {
 	int	level;
 	char   *arg;
@@ -768,7 +768,7 @@ ts_tree_debug()
 }
 
 static void
-ts_drain()
+ts_drain(void)
 {
 	static int const drain_creds = 256;
 	int	rc;
