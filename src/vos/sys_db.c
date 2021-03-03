@@ -49,8 +49,6 @@ struct vos_sys_db {
 	daos_unit_oid_t		 db_obj;
 };
 
-char * tmp;
-
 static struct vos_sys_db	vos_db;
 
 /** data structure for VOS I/O */
@@ -340,14 +338,7 @@ vos_db_init(const char *db_path, const char *db_name, bool self_mode)
 	memset(&vos_db, 0, sizeof(vos_db));
 	vos_db.db_vos_self = self_mode;
 
-	printf("debug>> reserve mem for tmp\n");
-	rc = asprintf(&tmp, "hello there");
-	printf("debug>> my tmp var %s\n", tmp);
-	printf("debug>> my tmp var address is %p\n", &tmp);
-
-	printf("debug>> reserve mem for db_path\n");
 	rc = asprintf(&vos_db.db_path, "%s/%s", db_path, SYS_DB_DIR);
-	printf("debug>> db_path var address is %p\n", &vos_db.db_path);
 	if (rc < 0) {
 		D_ERROR("Generate sysdb path failed. %d\n", rc);
 		return -DER_NOMEM;
@@ -356,7 +347,6 @@ vos_db_init(const char *db_path, const char *db_name, bool self_mode)
 	if (!db_name)
 		db_name = SYS_DB_NAME;
 
-	printf("debug>> reserve mem for db_file\n");
 	rc = asprintf(&vos_db.db_file, "%s/%s", vos_db.db_path, db_name);
 	if (rc < 0) {
 		D_ERROR("Generate sysdb filename failed. %d\n", rc);
@@ -423,20 +413,10 @@ vos_db_fini(void)
 		if (vos_db.db_vos_self)
 			vos_pool_destroy(vos_db.db_file, vos_db.db_pool);
 		free(vos_db.db_file);
-		printf("debug>> after free vos_db.db_file\n");
 	}
 
-	printf("debug>> vos_db.db_path is %s\n", vos_db.db_path);
-	printf("debug>> db_path var address is %p\n", &vos_db.db_path);
-	if (vos_db.db_path){
-		printf("debug>> before free vos_db.db_path\n");
+	if (vos_db.db_path)
 		free(vos_db.db_path);
-		printf("debug>> after free vos_db.db_path\n");
-		vos_db.db_path = NULL;
-	}
-
-	printf("debug>> my tmp var address is %p\n", &tmp);
-	free(tmp);
 
 	memset(&vos_db, 0, sizeof(vos_db));
 }
