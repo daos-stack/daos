@@ -94,8 +94,10 @@ cat <<EOF > ~/.config/avocado/sysinfo/files
 EOF
 
 # apply patches to Avocado
+pydir=""
 for loc in /usr/lib/python2*/site-packages/ \
-           /usr/lib/python3*/site-packages/; do
+           /usr/lib/python3*/site-packages/ \
+           /usr/local/lib/python3*/site-packages/; do
     if [ -f "$loc"/avocado/core/runner.py ]; then
         pydir=$loc
         break
