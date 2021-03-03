@@ -22,6 +22,11 @@ struct dtx_batched_commit_args {
 	struct ds_cont_child	*dbca_cont;
 };
 
+struct dtx_cleanup_stale_cb_args {
+	d_list_t		dcsca_list;
+	int			dcsca_count;
+};
+
 static void
 dtx_stat(struct ds_cont_child *cont, struct dtx_stat *stat)
 {
@@ -31,7 +36,7 @@ dtx_stat(struct ds_cont_child *cont, struct dtx_stat *stat)
 	stat->dtx_oldest_committable_time = dtx_cos_oldest(cont);
 }
 
-void
+static void
 dtx_aggregate(void *arg)
 {
 	struct ds_cont_child	*cont = arg;
@@ -61,6 +66,96 @@ dtx_aggregate(void *arg)
 	}
 
 	cont->sc_dtx_aggregating = 0;
+	ds_cont_child_put(cont);
+}
+
+static int
+dtx_cleanup_stale_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
+{
+	struct dtx_cleanup_stale_cb_args	*dcsca = args;
+	struct dtx_share_peer			*dsp;
+
+	/* We commit the DTXs periodically, there will be very limited DTXs
+	 * to be checked when cleanup. So we can load all those uncommitted
+	 * DTXs in RAM firstly, then check the state one by one. That avoid
+	 * the race trouble between iteration of active-DTX tree and commit
+	 * (or abort) the DTXs (that will change the active-DTX tree).
+	 */
+
+	D_ASSERT(!(ent->ie_dtx_flags & DTE_INVALID));
+
+	/* Skip corrupted entry that will be handled via other special tool. */
+	if (ent->ie_dtx_flags & DTE_CORRUPTED)
+		return 0;
+
+	/* Stop cleanup iteration if current DTX is not too old. */
+	if (dtx_hlc_age2sec(ent->ie_dtx_start_time) <=
+	    DTX_CLEANUP_THRESHOLD_AGE_LOWER)
+		return 1;
+
+	D_ALLOC_PTR(dsp);
+	if (dsp == NULL)
+		return -DER_NOMEM;
+
+	dsp->dsp_xid = ent->ie_dtx_xid;
+	dsp->dsp_oid = ent->ie_dtx_oid;
+	if (ent->ie_dtx_mbs_flags & DMF_CONTAIN_LEADER) {
+		struct dtx_daos_target	*ddt = ent->ie_dtx_mbs;
+
+		D_ASSERT(ddt != NULL);
+		dsp->dsp_leader = ddt->ddt_id;
+	} else {
+		dsp->dsp_leader = PO_COMP_ID_ALL;
+	}
+
+	d_list_add_tail(&dsp->dsp_link, &dcsca->dcsca_list);
+	dcsca->dcsca_count++;
+
+	return 0;
+}
+
+static void
+dtx_cleanup_stale(void *arg)
+{
+	struct ds_cont_child			*cont = arg;
+	struct dtx_share_peer			*dsp;
+	struct dtx_cleanup_stale_cb_args	 dcsca;
+	d_rank_t				 myrank;
+	int					 count;
+	int					 rc;
+
+	D_INIT_LIST_HEAD(&dcsca.dcsca_list);
+	dcsca.dcsca_count = 0;
+	rc = ds_cont_iter(cont->sc_pool->spc_hdl, cont->sc_uuid,
+			  dtx_cleanup_stale_iter_cb, &dcsca, VOS_ITER_DTX);
+
+	crt_group_rank(NULL, &myrank);
+	while (!cont->sc_closing && !cont->sc_dtx_cos_shutdown &&
+	       !d_list_empty(&dcsca.dcsca_list)) {
+		if (dcsca.dcsca_count > DTX_REFRESH_MAX) {
+			count = DTX_REFRESH_MAX;
+			dcsca.dcsca_count -= DTX_REFRESH_MAX;
+		} else {
+			D_ASSERT(dcsca.dcsca_count > 0);
+
+			count = dcsca.dcsca_count;
+			dcsca.dcsca_count = 0;
+		}
+
+		rc = dtx_refresh_internal(cont, myrank,
+					  cont->sc_pool->spc_map_version,
+					  &count, &dcsca.dcsca_list,
+					  NULL, NULL, false);
+		if (rc != 0)
+			break;
+	}
+
+	while ((dsp = d_list_pop_entry(&dcsca.dcsca_list,
+				       struct dtx_share_peer,
+				       dsp_link)) != NULL)
+		D_FREE(dsp);
+
+	cont->sc_dtx_cleanup_stale = 0;
 	ds_cont_child_put(cont);
 }
 
@@ -201,7 +296,8 @@ dtx_batched_commit(void *arg)
 					D_WARN("Fail to batched commit dtx: "
 					       DF_RC"\n", DP_RC(rc));
 
-				if (!cont->sc_dtx_aggregating)
+				if (!cont->sc_dtx_aggregating ||
+				    !cont->sc_dtx_cleanup_stale)
 					dtx_stat(cont, &stat);
 			}
 		}
@@ -219,6 +315,21 @@ dtx_batched_commit(void *arg)
 					    0, 0, NULL);
 			if (rc != 0) {
 				cont->sc_dtx_aggregating = 0;
+				ds_cont_child_put(cont);
+			}
+		}
+
+		if (!cont->sc_closing && !cont->sc_dtx_cleanup_stale &&
+		    stat.dtx_oldest_active_time != 0 &&
+		    dtx_hlc_age2sec(stat.dtx_oldest_active_time) >=
+		    DTX_CLEANUP_THRESHOLD_AGE_UPPER) {
+			sleep_time = 0;
+			ds_cont_child_get(cont);
+			cont->sc_dtx_cleanup_stale = 1;
+			rc = dss_ult_create(dtx_cleanup_stale, cont,
+					    DSS_XS_SELF, 0, 0, NULL);
+			if (rc != 0) {
+				cont->sc_dtx_cleanup_stale = 0;
 				ds_cont_child_put(cont);
 			}
 		}

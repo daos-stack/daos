@@ -190,6 +190,8 @@ struct vos_container {
 	d_list_t		vc_dtx_committed_list;
 	/* The temporary list for committed DTXs during re-index. */
 	d_list_t		vc_dtx_committed_tmp_list;
+	/* The list for active DTXs, roughly ordered in time. */
+	d_list_t		vc_dtx_act_list;
 	/* The count of committed DTXs. */
 	uint32_t		vc_dtx_committed_count;
 	/* The items count in vc_dtx_committed_tmp_list. */
@@ -242,6 +244,10 @@ struct vos_dtx_act_ent {
 	 * it is not fatal.
 	 */
 	daos_unit_oid_t			*dae_oids;
+	/* The time (hlc) when the DTX entry is created. */
+	daos_epoch_t			 dae_start_time;
+	/* Link into container::vc_dtx_act_list. */
+	d_list_t			 dae_link;
 
 	unsigned int			 dae_committable:1,
 					 dae_committed:1,

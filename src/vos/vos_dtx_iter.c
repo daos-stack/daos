@@ -21,6 +21,8 @@ struct vos_dtx_iter {
 	daos_handle_t		 oit_hdl;
 	/** Reference to the container */
 	struct vos_container	*oit_cont;
+	struct vos_dtx_act_ent	*oit_cur;
+	bool			 oit_linear;
 };
 
 static struct vos_dtx_iter *
@@ -83,6 +85,8 @@ dtx_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		dtx_iter_fini(&oiter->oit_iter);
 	} else {
 		*iter_pp = &oiter->oit_iter;
+		oiter->oit_cur = NULL;
+		oiter->oit_linear = false;
 	}
 
 	return rc;
@@ -92,13 +96,25 @@ static int
 dtx_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
 {
 	struct vos_dtx_iter	*oiter = iter2oiter(iter);
-	dbtree_probe_opc_t	 opc;
+	int			 rc = 0;
 
 	D_ASSERT(iter->it_type == VOS_ITER_DTX);
 
-	opc = anchor == NULL ? BTR_PROBE_FIRST : BTR_PROBE_GE;
-	return dbtree_iter_probe(oiter->oit_hdl, opc, vos_iter_intent(iter),
-				 NULL, anchor);
+	if (anchor == NULL) {
+		oiter->oit_linear = true;
+		if (d_list_empty(&oiter->oit_cont->vc_dtx_act_list))
+			oiter->oit_cur = NULL;
+		else
+			oiter->oit_cur =
+			d_list_entry(oiter->oit_cont->vc_dtx_act_list.next,
+				     struct vos_dtx_act_ent, dae_link);
+	} else {
+		oiter->oit_linear = false;
+		rc = dbtree_iter_probe(oiter->oit_hdl, BTR_PROBE_GE,
+				       vos_iter_intent(iter), NULL, anchor);
+	}
+
+	return rc;
 }
 
 static int
@@ -112,17 +128,34 @@ dtx_iter_next(struct vos_iterator *iter)
 	D_ASSERT(iter->it_type == VOS_ITER_DTX);
 
 	while (1) {
-		rc = dbtree_iter_next(oiter->oit_hdl);
-		if (rc != 0)
-			break;
+		if (oiter->oit_linear) {
+			if (oiter->oit_cur == NULL)
+				D_GOTO(out, rc = 1);
 
-		d_iov_set(&rec_iov, NULL, 0);
-		rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &rec_iov, NULL);
-		if (rc != 0)
-			break;
+			if (oiter->oit_cur->dae_link.next ==
+			    &oiter->oit_cont->vc_dtx_act_list) {
+				oiter->oit_cur = NULL;
+				D_GOTO(out, rc = 1);
+			}
 
-		D_ASSERT(rec_iov.iov_len == sizeof(struct vos_dtx_act_ent));
-		dae = (struct vos_dtx_act_ent *)rec_iov.iov_buf;
+			dae = oiter->oit_cur =
+				d_list_entry(oiter->oit_cur->dae_link.next,
+					     struct vos_dtx_act_ent, dae_link);
+		} else {
+			rc = dbtree_iter_next(oiter->oit_hdl);
+			if (rc != 0)
+				goto out;
+
+			d_iov_set(&rec_iov, NULL, 0);
+			rc = dbtree_iter_fetch(oiter->oit_hdl, NULL,
+					       &rec_iov, NULL);
+			if (rc != 0)
+				goto out;
+
+			D_ASSERT(rec_iov.iov_len ==
+				 sizeof(struct vos_dtx_act_ent));
+			dae = (struct vos_dtx_act_ent *)rec_iov.iov_buf;
+		}
 
 		/* Only return prepared ones. */
 		if (!dae->dae_committable && !dae->dae_committed &&
@@ -130,6 +163,7 @@ dtx_iter_next(struct vos_iterator *iter)
 			break;
 	}
 
+out:
 	return rc;
 }
 
@@ -144,16 +178,24 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 
 	D_ASSERT(iter->it_type == VOS_ITER_DTX);
 
-	d_iov_set(&rec_iov, NULL, 0);
-	rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &rec_iov, anchor);
-	if (rc != 0) {
-		D_ERROR("Error while fetching DTX info: rc = "DF_RC"\n",
-			DP_RC(rc));
-		return rc;
-	}
+	if (oiter->oit_linear) {
+		if (oiter->oit_cur == NULL)
+			return -DER_NONEXIST;
 
-	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_dtx_act_ent));
-	dae = (struct vos_dtx_act_ent *)rec_iov.iov_buf;
+		dae = d_list_entry(oiter->oit_cur->dae_link.next,
+				   struct vos_dtx_act_ent, dae_link);
+	} else {
+		d_iov_set(&rec_iov, NULL, 0);
+		rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &rec_iov, anchor);
+		if (rc != 0) {
+			D_ERROR("Error while fetching DTX info: rc = "DF_RC"\n",
+				DP_RC(rc));
+			return rc;
+		}
+
+		D_ASSERT(rec_iov.iov_len == sizeof(struct vos_dtx_act_ent));
+		dae = (struct vos_dtx_act_ent *)rec_iov.iov_buf;
+	}
 
 	it_entry->ie_epoch = DAE_EPOCH(dae);
 	it_entry->ie_dtx_xid = DAE_XID(dae);
@@ -170,6 +212,7 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 		it_entry->ie_dtx_mbs = umem_off2ptr(
 					&oiter->oit_cont->vc_pool->vp_umm,
 					DAE_MBS_OFF(dae));
+	it_entry->ie_dtx_start_time = dae->dae_start_time;
 
 	D_DEBUG(DB_IO, "DTX iterator fetch the one "DF_DTI"\n",
 		DP_DTI(&DAE_XID(dae)));
@@ -180,27 +223,11 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 static int
 dtx_iter_delete(struct vos_iterator *iter, void *args)
 {
-	struct vos_dtx_iter	*oiter = iter2oiter(iter);
-	struct umem_instance	*umm;
-	int			 rc;
-
 	D_ASSERT(iter->it_type == VOS_ITER_DTX);
 
-	umm = &oiter->oit_cont->vc_pool->vp_umm;
-	rc = umem_tx_begin(umm, NULL);
-	if (rc != 0)
-		return rc;
+	D_WARN("NOT allow to remove DTX entry via iteration!\n");
 
-	rc = dbtree_iter_delete(oiter->oit_hdl, args);
-	if (rc != 0) {
-		umem_tx_abort(umm, rc);
-		D_ERROR("Failed to delete DTX entry: rc = "DF_RC"\n",
-			DP_RC(rc));
-	} else {
-		umem_tx_commit(umm);
-	}
-
-	return rc;
+	return -DER_NO_PERM;
 }
 
 struct vos_iter_ops vos_dtx_iter_ops = {

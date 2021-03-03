@@ -58,10 +58,12 @@ struct dtx_req_args {
 	int				 dra_length;
 	/* The collective RPC result. */
 	int				 dra_result;
-	/* Pointer to the DTX handle, used for DTX_REFRESH case. */
-	struct dtx_handle		*dra_dth;
 	/* Pointer to the container, used for DTX_REFRESH case. */
 	struct ds_cont_child		*dra_cont;
+	/* Pointer to the active DTX list, used for DTX_REFRESH case. */
+	d_list_t			*dra_act_list;
+	/* Pointer to the committed DTX list, used for DTX_REFRESH case. */
+	d_list_t			*dra_cmt_list;
 };
 
 /* The record for the DTX classify-tree in DRAM.
@@ -128,7 +130,6 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 		D_GOTO(out, rc = -DER_PROTO);
 
 	for (i = 0; i < dout->do_sub_rets.ca_count; i++) {
-		struct dtx_handle	*dth = dra->dra_dth;
 		struct dtx_share_peer	*dsp;
 		int			*ret;
 		int			 rc1;
@@ -144,13 +145,19 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 		case DTX_ST_PREPARED:
 		case -DER_INPROGRESS:
 			/* Not committable yet. */
-			d_list_add_tail(&dsp->dsp_link,
-					&dth->dth_share_act_list);
+			if (dra->dra_act_list != NULL)
+				d_list_add_tail(&dsp->dsp_link,
+						dra->dra_act_list);
+			else
+				D_FREE(dsp);
 			break;
 		case DTX_ST_COMMITTABLE:
 			/* Committable, will be committed soon. */
-			d_list_add_tail(&dsp->dsp_link,
-					&dth->dth_share_cmt_list);
+			if (dra->dra_cmt_list != NULL)
+				d_list_add_tail(&dsp->dsp_link,
+						dra->dra_cmt_list);
+			else
+				D_FREE(dsp);
 			break;
 		case DTX_ST_COMMITTED:
 			/* Has been committed on leader, we may miss related
@@ -158,9 +165,10 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 			 */
 			rc1 = vos_dtx_commit(dra->dra_cont->sc_hdl,
 					     &dsp->dsp_xid, 1, NULL);
-			if (rc1 < 0 && rc1 != -DER_NONEXIST)
+			if (rc1 < 0 && rc1 != -DER_NONEXIST &&
+			    dra->dra_cmt_list != NULL)
 				d_list_add_tail(&dsp->dsp_link,
-						&dth->dth_share_cmt_list);
+						dra->dra_cmt_list);
 			else
 				D_FREE(dsp);
 			break;
@@ -175,9 +183,10 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 			 */
 			rc1 = vos_dtx_abort(dra->dra_cont->sc_hdl,
 					    DAOS_EPOCH_MAX, &dsp->dsp_xid, 1);
-			if (rc1 < 0 && rc1 != -DER_NONEXIST)
+			if (rc1 < 0 && rc1 != -DER_NONEXIST &&
+			    dra->dra_act_list != NULL)
 				d_list_add_tail(&dsp->dsp_link,
-						&dth->dth_share_act_list);
+						dra->dra_act_list);
 			else
 				D_FREE(dsp);
 			break;
@@ -323,7 +332,8 @@ dtx_req_wait(struct dtx_req_args *dra)
 static int
 dtx_req_list_send(struct dtx_req_args *dra, crt_opcode_t opc, d_list_t *head,
 		  int len, uuid_t po_uuid, uuid_t co_uuid, daos_epoch_t epoch,
-		  struct dtx_handle *dth, struct ds_cont_child *cont)
+		  struct ds_cont_child *cont,
+		  d_list_t *act_list, d_list_t *cmt_list)
 {
 	ABT_future		 future;
 	struct dtx_req_rec	*drr;
@@ -336,8 +346,9 @@ dtx_req_list_send(struct dtx_req_args *dra, crt_opcode_t opc, d_list_t *head,
 	dra->dra_list = head;
 	dra->dra_length = len;
 	dra->dra_result = 0;
-	dra->dra_dth = dth;
 	dra->dra_cont = cont;
+	dra->dra_act_list = act_list;
+	dra->dra_cmt_list = cmt_list;
 
 	rc = ABT_future_create(len, dtx_req_list_cb, &future);
 	if (rc != ABT_SUCCESS) {
@@ -592,7 +603,7 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 	if (!d_list_empty(&head)) {
 		rc = dtx_req_list_send(&dra, DTX_COMMIT, &head, length,
 				       pool->sp_uuid, cont->sc_uuid, 0,
-				       NULL, NULL);
+				       NULL, NULL, NULL);
 		if (rc != 0)
 			goto out;
 	}
@@ -678,7 +689,7 @@ dtx_abort(struct ds_cont_child *cont, daos_epoch_t epoch,
 	if (rc == 0 && !d_list_empty(&head)) {
 		rc = dtx_req_list_send(&dra, DTX_ABORT, &head, length,
 				       pool->sp_uuid, cont->sc_uuid, epoch,
-				       NULL, NULL);
+				       NULL, NULL, NULL);
 		if (rc != 0)
 			goto out;
 
@@ -774,7 +785,7 @@ dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 	}
 
 	rc = dtx_req_list_send(&dra, DTX_CHECK, &head, length, pool->sp_uuid,
-			       cont->sc_uuid, epoch, NULL, NULL);
+			       cont->sc_uuid, epoch, NULL, NULL, NULL);
 	if (rc == 0)
 		rc = dtx_req_wait(&dra);
 
@@ -787,48 +798,49 @@ out:
 	return rc;
 }
 
-/*
- * Because of async batched commit semantics, the DTX status on the leader
- * maybe different from the one on non-leaders. For the leader, it exactly
- * knows whether the DTX is committable or not, but the non-leader does not
- * know if the DTX is in 'prepared' status. If someone on non-leader wants
- * to know whether some 'prepared' DTX is real committable or not, it needs
- * to refresh such DTX status from the leader. The DTX_REFRESH RPC is used
- * for such purpose.
- */
 int
-dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont)
+dtx_refresh_internal(struct ds_cont_child *cont, d_rank_t myrank, uint32_t ver,
+		     int *check_count, d_list_t *check_list,
+		     d_list_t *act_list, d_list_t *cmt_list, bool failout)
 {
 	struct ds_pool		*pool = cont->sc_pool->spc_pool;
 	struct pool_target	*target;
 	struct dtx_share_peer	*dsp;
+	struct dtx_share_peer	*tmp;
 	struct dtx_req_rec	*drr;
 	struct dtx_req_args	 dra;
 	d_list_t		 head;
 	int			 len = 0;
 	int			 rc = 0;
 
-	if (DAOS_FAIL_CHECK(DAOS_DTX_NO_RETRY))
-		return -DER_IO;
-
 	D_INIT_LIST_HEAD(&head);
 
-	d_list_for_each_entry(dsp, &dth->dth_share_tbd_list, dsp_link) {
+	d_list_for_each_entry_safe(dsp, tmp, check_list, dsp_link) {
+		bool	drop = false;
+
 		if (dsp->dsp_leader == PO_COMP_ID_ALL) {
 
 again:
-			rc = ds_pool_elect_dtx_leader(pool, &dsp->dsp_oid,
-						      dth->dth_ver);
+			rc = ds_pool_elect_dtx_leader(pool, &dsp->dsp_oid, ver);
 			if (rc < 0) {
 				D_ERROR("Failed to find DTX leader for "DF_DTI
 					": "DF_RC"\n",
 					DP_DTI(&dsp->dsp_xid), DP_RC(rc));
-				goto out;
+				if (failout)
+					goto out;
+
+				drop = true;
+				goto next;
 			}
 
-			/* Still get the same leader, ask client to retry. */
-			if (dsp->dsp_leader == rc)
-				D_GOTO(out, rc = -DER_INPROGRESS);
+			/* Still get the same leader. */
+			if (dsp->dsp_leader == rc) {
+				if (failout)
+					D_GOTO(out, rc = -DER_INPROGRESS);
+
+				drop = true;
+				goto next;
+			}
 
 			dsp->dsp_leader = rc;
 		}
@@ -838,6 +850,24 @@ again:
 					  &target);
 		ABT_rwlock_unlock(pool->sp_lock);
 		D_ASSERT(rc == 1);
+
+		/* If myself is the leader, then two possible cases:
+		 * 1. In DTX resync, then let client to retry later.
+		 * 2. The DTX resync is done, but failed to handle related DTX.
+		 *    Under such case, return -DER_IO to avoid application hung.
+		 */
+		if (myrank == target->ta_comp.co_rank &&
+		    dss_get_module_info()->dmi_tgt_id ==
+		    target->ta_comp.co_index) {
+			if (cont->sc_dtx_resyncing)
+				D_GOTO(out, rc = -DER_INPROGRESS);
+
+			if (failout)
+				D_GOTO(out, rc = -DER_IO);
+
+			drop = true;
+			goto next;
+		}
 
 		/* The leader is not healthy, related DTX will be resynced
 		 * by the new leader, let's find out new leader and retry.
@@ -858,13 +888,13 @@ again:
 		if (drr == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 
-		D_ALLOC_ARRAY(drr->drr_dti, dth->dth_share_tbd_count);
+		D_ALLOC_ARRAY(drr->drr_dti, *check_count);
 		if (drr->drr_dti == NULL) {
 			D_FREE(drr);
 			D_GOTO(out, rc = -DER_NOMEM);
 		}
 
-		D_ALLOC_ARRAY(drr->drr_cb_args, dth->dth_share_tbd_count);
+		D_ALLOC_ARRAY(drr->drr_cb_args, *check_count);
 		if (drr->drr_cb_args == NULL) {
 			D_FREE(drr->drr_dti);
 			D_FREE(drr);
@@ -881,14 +911,19 @@ again:
 
 next:
 		d_list_del(&dsp->dsp_link);
-		dth->dth_share_tbd_count--;
-		D_ASSERT(dth->dth_share_tbd_count >= 0);
+		if (drop)
+			D_FREE(dsp);
+		if (--(*check_count) == 0)
+			break;
 	}
 
-	rc = dtx_req_list_send(&dra, DTX_REFRESH, &head, len,
-			       pool->sp_uuid, cont->sc_uuid, 0, dth, cont);
-	if (rc == 0)
-		rc = dtx_req_wait(&dra);
+	if (len > 0) {
+		rc = dtx_req_list_send(&dra, DTX_REFRESH, &head, len,
+				       pool->sp_uuid, cont->sc_uuid, 0, cont,
+				       act_list, cmt_list);
+		if (rc == 0)
+			rc = dtx_req_wait(&dra);
+	}
 
 out:
 	while ((drr = d_list_pop_entry(&head, struct dtx_req_rec,
@@ -897,6 +932,35 @@ out:
 		D_FREE(drr->drr_dti);
 		D_FREE(drr);
 	}
+
+	return rc;
+}
+
+/*
+ * Because of async batched commit semantics, the DTX status on the leader
+ * maybe different from the one on non-leaders. For the leader, it exactly
+ * knows whether the DTX is committable or not, but the non-leader does not
+ * know if the DTX is in 'prepared' status. If someone on non-leader wants
+ * to know whether some 'prepared' DTX is real committable or not, it needs
+ * to refresh such DTX status from the leader. The DTX_REFRESH RPC is used
+ * for such purpose.
+ */
+int
+dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont)
+{
+	d_rank_t	myrank;
+	int		rc;
+
+	if (DAOS_FAIL_CHECK(DAOS_DTX_NO_RETRY))
+		return -DER_IO;
+
+	crt_group_rank(NULL, &myrank);
+
+	rc = dtx_refresh_internal(cont, myrank, dth->dth_ver,
+				  &dth->dth_share_tbd_count,
+				  &dth->dth_share_tbd_list,
+				  &dth->dth_share_act_list,
+				  &dth->dth_share_cmt_list, true);
 
 	/* If some DTX entry is corrupted, then reply -DER_DATA_LOSS.
 	 * Otherwise if we cannot resolve the DTX status, then reply

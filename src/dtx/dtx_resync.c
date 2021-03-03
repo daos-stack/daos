@@ -335,7 +335,27 @@ dtx_status_handle(struct dtx_resync_args *dra)
 		 * is race that one DTX may become committable when we abort
 		 * some other DTX(s). To avoid complex rollback logic, let's
 		 * abort the DTXs one by one, not batched.
+		 *
+		 * XXX: There is one corner case: the DTX entry may be too
+		 *	old as to be removed on others via DTX aggregation.
+		 *	Under such case, we cannot know whether it has ever
+		 *	been committed (but current server missed or failed
+		 *	to commit) or should be aborted now. If we abort it,
+		 *	then may cause data inconsistency.
+		 *	Currently, we cannot make the accurate judgment, then
+		 *	have to skip it and leave it to be handled via further
+		 *	DAOS fsck.
 		 */
+
+		if (dtx_hlc_age2sec(dre->dre_epoch) >
+		    DTX_AGG_THRESHOLD_AGE_LOWER) {
+			D_WARN("Not sure about whether the old DTX "DF_DTI
+			       " should be aborted or not, skip it\n",
+			       DP_DTI(&dre->dre_xid));
+			dtx_dre_release(drh, dre);
+			continue;
+		}
+
 		dte = &dre->dre_dte;
 		rc = dtx_abort(cont, dre->dre_epoch, &dte, 1);
 
