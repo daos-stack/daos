@@ -4,85 +4,157 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from __future__ import print_function
-import traceback
-
-from apricot import TestWithServers
-from test_utils_pool import TestPool
 from avocado.core.exceptions import TestFail
 
-RESULT_PASS = "PASS"
-RESULT_FAIL = "FAIL"
+from apricot import TestWithServers
+from pydaos.raw import DaosApiError
 
 
 class PoolSvc(TestWithServers):
-    """
-    Tests svc argument while pool create.
+    # pylint: disable=too-few-public-methods
+    """Tests svc argument while pool create.
+
     :avocado: recursive
     """
 
-    def test_poolsvc(self):
-        """
-        Test svc arg during pool create.
+    def test_pool_svc(self):
+        """Test svc arg during pool create.
 
-        :avocado: tags=all,pool,daily_regression,medium,svc,DAOS_5610
+        :avocado: tags=all,daily_regression
+        :avocado: tags=medium
+        :avocado: tags=pool,pool_svc,test_pool_svc,svc
+        :avocado: tags=DAOS_5610
         """
         # parameter used in pool create
-        createsvc = self.params.get("svc", '/run/createtests/createsvc/*/')
+        svc_params = self.params.get("svc_params")
 
-        expected_result = createsvc[1]
+        # Setup the TestPool object
+        self.add_pool(create=False)
 
-        # initialize a python pool object then create the underlying
-        # daos storage
-        self.pool = TestPool(self.context, self.get_dmg_command())
-        self.pool.get_params(self)
-        self.pool.svcn.update(createsvc[0])
+        # Assign the expected svcn value
+        if svc_params[0] != "None":
+            self.pool.svcn.update(svc_params[0], "svcn")
+
+        # Create the pool
+        pool_create_error = None
         try:
             self.pool.create()
-            if expected_result == RESULT_FAIL:
-                self.fail("Test was expected to fail, but it passed.\n")
-        except TestFail as excep:
-            print("## TestFail exception is caught at pool create!")
-            print(excep)
-            print(traceback.format_exc())
-            if expected_result == RESULT_PASS:
-                self.fail("Test was expected to pass but it failed.\n")
+        except TestFail as error:
+            pool_create_error = error
 
-        # FAIL case should fail at above pool create, so do below only for
-        # PASS case
-        if expected_result == RESULT_PASS:
-            self.log.debug("self.pool.svc_ranks = %s", self.pool.svc_ranks)
+        # Verify the result - If the svc_params[1] == 0 the dmp pool create is
+        # expected to fail
+        if svc_params[1] == 0 and pool_create_error:
+            self.log.info(
+                "Pool creation with svcn=%s failed as expected", svc_params[0])
+        elif pool_create_error:
+            self.fail(
+                "Pool creation with svcn={} failed when it was expected to "
+                "pass: {}".format(svc_params[0], pool_create_error))
+        else:
+            self.log.info("Pool creation passed as expected")
+            self.log.info(
+                "Verifying that the pool has %s pool service members",
+                svc_params[1])
+            self.log.info("  self.pool.svc_ranks = %s", self.pool.svc_ranks)
+
+            # Verify the pool service member list:
+            #   - does not contain an invalid rank
+            #   - contains the expected number of members
+            #   - does not contain any duplicate ranks
             self.assertTrue(999999 not in self.pool.svc_ranks,
                             "999999 is in the pool's service ranks.")
-            self.assertEqual(len(self.pool.svc_ranks), self.pool.svcn.value,
-                             "Length of Returned Rank list is not equal to " +
-                             "the number of Pool Service members.")
-
-            # Verify there are no duplicate ranks in the rank list
+            self.assertEqual(len(self.pool.svc_ranks), svc_params[1],
+                             "Length of pool scv rank list is not equal to " +
+                             "the expected number of pool service members.")
             self.assertEqual(len(self.pool.svc_ranks),
                              len(set(self.pool.svc_ranks)),
                              "Duplicate values in returned rank list")
 
-            try:
+            if svc_params[1] > 2:
                 self.pool.get_info()
                 leader = self.pool.info.pi_leader
-                if createsvc[0] == 3:
-                    # kill pool leader and exclude it
+                all_svc_ranks = self.pool.svc_ranks.copy()
+                all_svc_ranks.remove(leader)
+                non_leader = all_svc_ranks[-1]
+
+                # Stop the pool leader
+                self.log.info("Stopping the pool leader: %s", leader)
+                try:
                     self.pool.pool.pool_svc_stop()
+                except DaosApiError as error:
+                    self.log.info(error)
+                    self.fail("Error issuing DaosPool.pool_svc_stop()")
+
+                # Exclude the pool leader
+                self.log.info("Excluding the pool leader: %s", leader)
+                try:
                     self.pool.exclude([leader], self.d_log)
-                    # perform pool disconnect, try connect again and disconnect
+                except TestFail as error:
+                    self.log.info(error)
+                    self.fail(
+                        "Error issuing TestPool.exclude([{}])".format(leader))
+                self.server_managers[-1].update_expected_states(
+                    [leader], "evicted")
+
+                # Disconnect from the pool
+                self.log.info("Disconnecting from the pool")
+                try:
                     self.pool.disconnect()
+                except TestFail as error:
+                    self.log.info(error)
+                    self.fail(
+                        "Error issuing TestPool.disconnect() after excluding "
+                        "the leader")
+
+                # Connect to the pool
+                self.log.info("Connecting from the pool")
+                try:
                     self.pool.connect()
+                except TestFail as error:
+                    self.log.info(error)
+                    self.fail("Error issuing TestPool.connect()")
+
+                # Disconnect from the pool
+                self.log.info("Disconnecting from the pool")
+                try:
                     self.pool.disconnect()
-                    # kill another server which is not a leader and exclude it
-                    self.pool.start_rebuild([3], self.test_log)
-                    self.pool.exclude([3], self.d_log)
-                    # perform pool connect
+                except TestFail as error:
+                    self.log.info(error)
+                    self.fail(
+                        "Error issuing TestPool.disconnect() after connecting "
+                        "to the pool")
+
+                # Stop a pool non-leader
+                self.log.info("Stopping a pool non-leader: %s", non_leader)
+                try:
+                    self.pool.start_rebuild([non_leader], self.test_log)
+                except TestFail as error:
+                    self.log.info(error)
+                    self.fail(
+                        "Error issuing TestPool.start_rebuild([{}])".format(
+                            non_leader))
+                self.server_managers[-1].update_expected_states(
+                    [non_leader], "evicted")
+
+                # Exclude a pool non-leader
+                self.log.info("Excluding a pool non-leader: %s", non_leader)
+                try:
+                    self.pool.exclude([non_leader], self.d_log)
+                except TestFail as error:
+                    self.log.info(error)
+                    self.fail(
+                        "Error issuing TestPool.exclude([{}])".format(
+                            non_leader))
+                self.server_managers[-1].update_expected_states(
+                    [non_leader], "evicted")
+
+                # Connect to the pool
+                self.log.info("Connecting from the pool")
+                try:
                     self.pool.connect()
-            # Use TestFail instead of DaosApiError because create method has
-            # @fail_on
-            except TestFail as excep:
-                print("## TestFail exception caught")
-                print(excep)
-                print(traceback.format_exc())
-                self.fail("Test was expected to pass but it failed.\n")
+                except TestFail as error:
+                    self.log.info(error)
+                    self.fail("Error issuing TestPool.connect()")
+
+        self.log.info("Test passed!")
