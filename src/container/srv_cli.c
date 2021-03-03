@@ -121,7 +121,6 @@ dsc_cont_open(daos_handle_t poh, uuid_t cont_uuid, uuid_t coh_uuid,
 
 	dc_cont_hdl_link(cont);
 	dc_cont2hdl(cont, coh);
-	dc_cont_put(cont);
 out:
 	if (cont != NULL)
 		dc_cont_put(cont);

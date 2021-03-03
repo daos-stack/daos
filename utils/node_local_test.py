@@ -345,10 +345,11 @@ class DaosServer():
             desired_states = [desired_states]
 
         rc = self.run_dmg(['system', 'query', '--json'])
-        print(rc)
-        print(rc.stdout)
+#        print(rc)
+#        print(rc.stdout)
         if rc.returncode == 0:
             data = json.loads(rc.stdout.decode('utf-8'))
+            print(data)
             members = data['response']['members']
             if members is not None:
                 for desired_state in desired_states:
@@ -390,8 +391,9 @@ class DaosServer():
                              '--gen-suppressions=all',
                              '--xml=yes',
                              '--xml-file=dnt_server.%p.memcheck.xml',
-                             '--num-callers=10',
-                             '--leak-check=full']
+                             '--num-callers=2',
+                             '--undef-value-errors=no',
+                             '--leak-check=no']
             suppression_file = os.path.join('src',
                                             'cart',
                                             'utils',
@@ -459,7 +461,7 @@ class DaosServer():
 
         cmd = ['storage', 'format']
         while True:
-            time.sleep(0.5)
+            time.sleep(5)
             rc = self.run_dmg(cmd)
             ready = False
             if rc.returncode == 1:
@@ -480,11 +482,13 @@ class DaosServer():
 
         # How wait until the system is up, basically the format to happen.
         while True:
-            time.sleep(0.5)
+            time.sleep(5)
             if self._check_system_state(['ready', 'joined']):
                 break
             self._check_timing("start", start, self.max_start_time)
         print('Server started in {:.2f} seconds'.format(time.time() - start))
+        if self.valgrind:
+            time.sleep(120)
 
     def stop(self, wf):
         """Stop a previously started DAOS server"""
@@ -2487,6 +2491,8 @@ def main():
             fatal_errors.add_result(run_posix_tests(server, conf))
         else:
             fatal_errors.add_result(run_posix_tests(server, conf, args.test))
+    elif args.server_valgrind :
+        pass
     else:
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))

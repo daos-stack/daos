@@ -66,6 +66,7 @@ evt_iter_prepare(daos_handle_t toh, unsigned int options,
 		evt_tcx_decref(tcx); /* -1 for clone */
 	}
 
+
 	iter->it_state = EVT_ITER_INIT;
 	iter->it_options = options;
 	iter->it_forward = true;
@@ -495,6 +496,7 @@ int evt_iter_delete(daos_handle_t ih, struct evt_entry *ent)
 	rc = evt_iter_is_ready(iter);
 	if (rc != 0)
 		return rc;
+
 
 	if (ent != NULL) {
 		unsigned int inob;
