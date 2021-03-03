@@ -1040,6 +1040,8 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 		/** Key hash may already be calculated but isn't for some key
 		 * types so pass it in here.
 		 */
+		if (ilog != NULL && (flags & SUBTR_CREATE))
+			vos_ilog_ts_ignore(vos_obj2umm(obj), &krec->kr_ilog);
 		tmprc = vos_ilog_ts_add(ts_set, ilog, key->iov_buf,
 					(int)key->iov_len);
 		if (tmprc != 0) {
@@ -1063,6 +1065,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 			goto out;
 		}
 		krec = rbund.rb_krec;
+		vos_ilog_ts_ignore(vos_obj2umm(obj), &krec->kr_ilog);
 		vos_ilog_ts_mark(ts_set, &krec->kr_ilog);
 		created = true;
 	}
@@ -1125,6 +1128,8 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 			ilog = &krec->kr_ilog;
 		}
 
+		if (ilog)
+			vos_ilog_ts_ignore(vos_obj2umm(obj), ilog);
 		lrc = vos_ilog_ts_add(ts_set, ilog, key_iov->iov_buf,
 				      (int)key_iov->iov_len);
 		if (lrc != 0) {
@@ -1159,8 +1164,10 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	krec = rbund->rb_krec;
 	ilog = &krec->kr_ilog;
 
-	if (mark)
+	if (mark) {
+		vos_ilog_ts_ignore(vos_obj2umm(obj), ilog);
 		vos_ilog_ts_mark(ts_set, ilog);
+	}
 
 	rc = vos_ilog_punch(obj->obj_cont, ilog, &epr, bound, parent,
 			    info, ts_set, true,

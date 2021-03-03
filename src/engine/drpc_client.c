@@ -206,18 +206,20 @@ ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 	if (gps_resp->status != 0) {
 		D_ERROR("failure fetching svc_ranks for "DF_UUID": "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(gps_resp->status));
-		D_GOTO(out_dresp, rc = gps_resp->status);
+		D_GOTO(out_resp, rc = gps_resp->status);
 	}
 
 	ranks = uint32_array_to_rank_list(gps_resp->svcreps,
 					  gps_resp->n_svcreps);
 	if (ranks == NULL)
-		D_GOTO(out_dresp, rc = -DER_NOMEM);
+		D_GOTO(out_resp, rc = -DER_NOMEM);
 
 	D_DEBUG(DB_MGMT, "fetched %d svc_ranks for "DF_UUID"\n",
 		ranks->rl_nr, DP_UUID(pool_uuid));
 	*svc_ranks = ranks;
 
+out_resp:
+	srv__get_pool_svc_resp__free_unpacked(gps_resp, &alloc.alloc);
 out_dresp:
 	drpc_response_free(dresp);
 out_dreq:
