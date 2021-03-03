@@ -23,6 +23,12 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <byteswap.h>
+#ifdef DAOS_HAS_VALGRIND
+#include <valgrind/valgrind.h>
+#define DAOS_ON_VALGRIND RUNNING_ON_VALGRIND
+#else
+#define DAOS_ON_VALGRIND 0
+#endif
 
 #include <daos_errno.h>
 #include <daos/debug.h>
@@ -507,7 +513,7 @@ daos_crt_network_error(int err)
 	return err == -DER_HG || err == -DER_ADDRSTR_GEN ||
 	       err == -DER_PMIX || err == -DER_UNREG ||
 	       err == -DER_UNREACH || err == -DER_CANCELED ||
-	       err == -DER_NOREPLY;
+	       err == -DER_NOREPLY || err == -DER_OOG;
 }
 
 #define daos_rank_list_dup		d_rank_list_dup
@@ -645,7 +651,6 @@ enum {
 #define DAOS_DTX_STALE_PM		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x39)
 #define DAOS_DTX_FAIL_IO		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x3a)
 #define DAOS_DTX_START_EPOCH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x3b)
-#define DAOS_DTX_NO_INPROGRESS		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x3c)
 #define DAOS_DTX_NO_BATCHED_CMT		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x3d)
 #define DAOS_DTX_NO_COMMITTABLE		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x3e)
 #define DAOS_DTX_MISS_COMMIT		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x3f)

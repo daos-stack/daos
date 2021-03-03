@@ -21,6 +21,7 @@ import (
 )
 
 const (
+	// instanceUpdateDelay is the polling time period
 	instanceUpdateDelay = 500 * time.Millisecond
 )
 
@@ -183,11 +184,9 @@ func (svc *ControlService) StopRanks(ctx context.Context, req *ctlpb.RanksReq) (
 	defer svc.events.EnableEventIDs(events.RASRankDown)
 
 	for _, srv := range instances {
-		svc.log.Debugf("%d: check started", srv.Index())
 		if !srv.isStarted() {
 			continue
 		}
-		svc.log.Debugf("%d: call Stop()", srv.Index())
 		if err := srv.Stop(signal); err != nil {
 			return nil, errors.Wrapf(err, "sending %s", signal)
 		}
