@@ -40,6 +40,9 @@ esac
 rm -rf $test_log_dir
 mkdir $test_log_dir
 
+#SCHAN15
+cp ${DAOS_BASE}/test.cov $test_log_dir
+
 # Copy any log files.  Use rsync filters here to allow us to specify
 # all files we want to copy, as it's much more flexible than using
 # standard wildcards.
