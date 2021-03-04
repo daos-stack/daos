@@ -160,14 +160,12 @@ if ! grep "def phase(self)" \
 fi
 # apply fix for https://github.com/avocado-framework/avocado/issues/2908 - fixed
 # somewhere before 69.2
-if grep "TIMEOUT_TEST_INTERRUPTED" "$pydir"/avocado/core/runner.py; then
-    if ! grep "TIMEOUT_TEST_INTERRUPTED = 60" \
-        "$pydir"/avocado/core/runner.py; then
-            sudo ed <<EOF "$pydir"/avocado/core/runner.py
+if grep "TIMEOUT_TEST_INTERRUPTED" \
+    "$pydir"/avocado/core/runner.py; then
+        sudo ed <<EOF "$pydir"/avocado/core/runner.py
 /TIMEOUT_TEST_INTERRUPTED/s/[0-9]*$/60/
 wq
 EOF
-    fi
 fi
 # apply fix for https://github.com/avocado-framework/avocado/pull/2922 - fixed
 # somewhere before 69.2
