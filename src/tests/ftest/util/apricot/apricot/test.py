@@ -18,6 +18,7 @@ from avocado import Test as avocadoTest
 from avocado import skip, TestFail, fail_on
 from avocado.utils.distro import detect
 from avocado.core import exceptions
+from ast import literal_eval
 
 import fault_config_utils
 from pydaos.raw import DaosContext, DaosLog, DaosApiError
@@ -145,67 +146,100 @@ class Test(avocadoTest):
         try:
             self.ofi_prefix = build_paths['OFI_PREFIX']
         except KeyError:
-            self.ofi_prefix = "/usr"
-        self.skip_from_list()
+            self.ofi_prefix = os.sep + "usr"
+        self.cancel_from_list()
         self.check_variant_skip()
         self.log.info("*** SETUP running on %s ***", str(detect()))
         super(Test, self).setUp()
 
-    def skip_from_list(self):
-        """Check if test is in skip list"""
-        skip_list = ""
-        try:
-            skip_list = open("/scratch/CI-skip-list").read()
-        except Exception as excpt: # pylint: disable=broad-except
-            print("Unable to read skip list: ", excpt)
-            print("Trudging on without skipping known failing tests")
-            return
+    def add_test_data(self, filename, data):
+        """Add a file containing the specified data to the test variant
+           specific data directory.
 
-        for item in skip_list.splitlines():
+        Args:
+            filename (str): name of the file to create
+            data (list): data to write to the new file
+        """
+        try:
+            with open(os.path.join(self.outputdir, filename),
+                      "w") as file_handle:
+                file_handle.writelines(data)
+        except IOError as error:
+            self.fail("Error writing {}: {}".format(filename, error))
+
+    def cancel_from_list(self):
+        """Check if test is in skip list"""
+
+        def skip_process_error(message):
+            self.log.info(message)
+            self.log.info("Trudging on without skipping known failing tests")
+
+        def cancelForTicket(ticket, skip_list):
+            # put a copy of the skip-list into the logdir
+            self.add_test_data("skip-list", skip_list)
+            self.cancelForTicket(ticket)
+
+        try:
+            with open(os.path.join(os.sep, "scratch",
+                                   "CI-skip-list-master")) as skip_handle:
+                skip_list = skip_handle.readlines()
+        except Exception as excpt: # pylint: disable=broad-except
+            skip_process_error("Unable to read skip list: {}".format(excpt))
+            skip_list = []
+
+        for item in skip_list:
             vals = item.split('|')
-            skip_it, ticket = self._check_variant_skip(eval(vals[0])) # pylint: disable=eval-used
+            skip_it, ticket = self._check_variant_skip(literal_eval(vals[0]))
             if skip_it:
                 # test is on the skiplist
                 if len(vals) > 1:
                     # but there is a commit that fixes it
-                    commits = None
                     try:
-                        commits = open('/tmp/commit_list').read().splitlines()
+                        with open(os.path.join(os.sep, 'tmp',
+                                               'commit_list')) as commit_handle:
+                            commits = commit_handle.readlines()
                     except Exception as excpt: # pylint: disable=broad-except
-                        print("Unable to read commit list: ", excpt)
-                        print("Trudging on without skipping known failing "
-                              "tests")
+                        skip_process_error("Unable to read commit list: "
+                                           "{}".format(excpt))
+                        commits = None
                     if commits and vals[1] in commits:
                         # fix is in this code base
-                        print("On the skip list for ticket {}, but is "
-                              "fixed in {} so not "
-                              "skipping".format(ticket, vals[1]))
+                        self.log.info("This test variant is included in the "
+                                     "skip list for ticket {}, but is fixed "
+                                     "in {}.  Test will not be "
+                                     "skipped".format(ticket, vals[1]))
                     else:
                         # fix is not in this code base
-                        self.cancel("Skipping due to being on the "
-                                     "skip list for ticket {}, and "
-                                     "the fix in {} is not in the "
-                                     "current code".format(ticket,
-                                                           vals[1]))
+                        self.log.info("Skipping due to being on the "
+                                      "skip list for ticket {}, and "
+                                      "the fix in {} is not in the "
+                                      "current code".format(ticket,
+                                                            vals[1]))
+                        cancelForTicket(ticket, skip_list)
                 else:
                     try:
-                        if open("/tmp/commit_title").read().strip().startswith(
-                            ticket + " "):
-                            # fix is in this PR
-                            print("On the skip list for ticket {}, but "
-                                  "is being fixed in this PR, so not "
-                                  "skipping".format(ticket))
-                        else:
-                            # there is no commit that fixes it
-                            self.cancel("Skipping due to being on the skip list "
-                                        "for ticket {} with no fix available "
-                                        "yet".format(ticket))
+                        with open(os.path.join(os.sep, 'tmp',
+                                  'commit_title')) as commit_handle:
+                            if commit_handle.read().strip().startswith(
+                                    ticket + " "):
+                                # fix is in this PR
+                               self.log.info("This test variant is included in "
+                                             "the skip list for ticket {}, but "
+                                             "it is being fixed in this PR.  "
+                                             "Test will not be "
+                                             "skipped".format(ticket))
+                            else:
+                                # there is no commit that fixes it
+                                self.log.info("This test variant is included "
+                                              "in the skip list for ticket {} "
+                                              "with no fix yet "
+                                              "available.".format(ticket))
+                                cancelForTicket(ticket, skip_list)
                     except exceptions.TestCancel():
                         raise
                     except Exception as excpt: # pylint: disable=broad-except
-                        print("Unable to read commit title: ", excpt)
-                        print("Trudging on without skipping known failing"
-                               "tests")
+                        skip_process_error("Unable to read commit title: "
+                                           "{}".format(excpt))
 
     def _check_variant_skip(self, cancel_list):
         """Determine if this test variant should be skipped.
