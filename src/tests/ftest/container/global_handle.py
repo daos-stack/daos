@@ -85,7 +85,7 @@ class GlobalHandle(TestWithServers):
         # create a pool global handle
         iov_len, buf_len, buf = self.pool.pool.local2global()
         buftype = ctypes.c_byte * buf_len
-        c_buf = buftype.from_buffer(buf.decode("utf-8"))
+        c_buf = buftype.from_buffer(buf)
         sct_pool_handle = (
             sharedctypes.RawValue(
                 IOV, ctypes.cast(c_buf, ctypes.c_void_p), buf_len, iov_len))
@@ -98,7 +98,7 @@ class GlobalHandle(TestWithServers):
             # create a container global handle
             iov_len, buf_len, buf = self.container.container.local2global()
             buftype = ctypes.c_byte * buf_len
-            c_buf = buftype.from_buffer(buf.decode("utf-8"))
+            c_buf = buftype.from_buffer(buf)
             sct_cont_handle = (
                 sharedctypes.RawValue(
                     IOV, ctypes.cast(c_buf, ctypes.c_void_p), buf_len, iov_len))

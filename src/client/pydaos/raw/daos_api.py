@@ -410,12 +410,15 @@ class DaosPool():
 
         func = self.context.get_function('set-pool-attr')
 
-        att_names = (ctypes.c_char_p * len(data))(*list(data.keys()))
+        data_keys = [
+            key.encode("utf-8") if isinstance(key, str) else key
+            for key in data.keys()]
+        att_names = (ctypes.c_char_p * len(data))(*data_keys)
         names = ctypes.cast(att_names, ctypes.POINTER(ctypes.c_char_p))
 
         no_of_att = ctypes.c_int(len(data))
 
-        att_values = (ctypes.c_char_p * len(data))(*list(data.values()))
+        att_values = (ctypes.c_char_p * len(data))(*data_keys)
         values = ctypes.cast(att_values, ctypes.POINTER(ctypes.c_char_p))
 
         size_of_att_val = []
@@ -1665,9 +1668,7 @@ class DaosContainer():
         # strings as the data)
         c_values = []
         for item in datalist:
-            c_values.append(
-                (ctypes.create_string_buffer(item.decode('utf-8')),
-                 len(item) + 1))
+            c_values.append((ctypes.create_string_buffer(item), len(item) + 1))
         c_dkey = ctypes.create_string_buffer(dkey.encode('utf-8'))
         c_akey = ctypes.create_string_buffer(akey.encode('utf-8'))
 

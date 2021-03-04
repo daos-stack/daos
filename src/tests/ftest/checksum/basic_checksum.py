@@ -92,11 +92,11 @@ class ChecksumContainerValidation(TestWithServers):
                 val = self.ioreq.single_fetch(c_dkey,
                                               c_akey,
                                               len(indata)+1)
-                if indata != (repr(val.value)[1:-1]):
+                if indata != str(val.value):
                     message = (
                         "ERROR:Data mismatch for dkey={}, akey={}: indata={}, "
                         "val={}".format(
-                            dkey, akey, indata, repr(val.value)[1:-1]))
+                            dkey, akey, indata, str(val.value)))
                     self.d_log.error(message)
                     self.fail(message)
                 record_index = record_index + 1

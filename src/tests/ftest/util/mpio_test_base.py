@@ -95,11 +95,15 @@ class MpiioTests(TestWithServers):
             self.fail("<{0} Test Failed> \n{1}".format(test_name, excep))
 
         # Check output for errors
-        error_message = [
-            "non-zero exit code", "MPI_Abort", "MPI_ABORT", "ERROR"]
-        for output in (result.stdout, result.stderr):
-            for line in output:
-                for error in error_message:
-                    if error in line:
-                        self.fail(
-                            "Test Failed with error_message: {}".format(error))
+        for output in (result.stdout_text, result.stderr_text):
+            match = re.findall(
+                r"(non-zero exit code|MPI_Abort|MPI_ABORT|ERROR)",
+                output, re.IGNORECASE)
+            if match:
+                self.log.info(
+                    "The following error messages have been detected in the %s "
+                    "output:", test_name)
+                for item in match:
+                    self.log.info("  %s", item)
+                self.fail(
+                    "Error messages detected in {} output".format(test_name))
