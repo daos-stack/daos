@@ -410,15 +410,12 @@ class DaosPool():
 
         func = self.context.get_function('set-pool-attr')
 
-        data_keys = [
-            key.encode("utf-8") if isinstance(key, str) else key
-            for key in data.keys()]
-        att_names = (ctypes.c_char_p * len(data))(*data_keys)
+        att_names = (ctypes.c_char_p * len(data))(*list(data.keys())
         names = ctypes.cast(att_names, ctypes.POINTER(ctypes.c_char_p))
 
         no_of_att = ctypes.c_int(len(data))
 
-        att_values = (ctypes.c_char_p * len(data))(*data_keys)
+        att_values = (ctypes.c_char_p * len(data))(*list(data.keys()))
         values = ctypes.cast(att_values, ctypes.POINTER(ctypes.c_char_p))
 
         size_of_att_val = []
