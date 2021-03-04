@@ -391,6 +391,7 @@ class LogTest():
         err_count = 0
         warnings_strict = False
         warnings_mode = False
+        server_shutdown = False
 
         regions = OrderedDict()
         memsize = hwm_counter()
@@ -417,6 +418,8 @@ class LogTest():
             except AttributeError:
                 pass
             if abort_on_warning:
+                if not server_shutdown and line.function == 'server_fini':
+                    server_shutdown = True
                 if line.level <= cart_logparse.LOG_LEVELS['WARN']:
                     show = True
                     if self.hide_fi_calls:
@@ -456,6 +459,11 @@ class LogTest():
                         if line.rpc_opcode == '0xfe000000':
                             show = False
                     if line.fac == 'external':
+                        show = False
+                    if show and server_shutdown and line.get_msg().endswith(
+                            "DER_SHUTDOWN(-2017): 'Service should shut down'"):
+                        show_line(line, 'LOW',
+                                  'silenced because of server shutdwon')
                         show = False
                     if show:
                         # Allow WARNING or ERROR messages, but anything higher
