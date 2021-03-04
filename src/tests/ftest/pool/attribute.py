@@ -83,10 +83,9 @@ class PoolAttributeTest(TestWithServers):
         To create the large attribute dictionary
         """
         allchar = string.ascii_letters + string.digits
-        for i in range(1024):
-            self.large_data_set[i] = "".join(
-                random.sample(
-                    allchar, range(random.randint(1, 100)))).encode("utf-8")
+        for index in range(1024):
+            data = random.sample(allchar, random.randint(1, 100))
+            self.large_data_set[index] = "".join(data).encode("utf-8")
 
     def test_pool_large_attributes(self):
         """
