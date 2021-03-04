@@ -549,25 +549,31 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 		DP_KEY(&mrone->mo_dkey), mrone->mo_iod_num,
 		mrone->mo_epoch, fetch ? "yes":"no");
 
-	if (fetch) {
-		rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
-				   mrone->mo_iod_num, mrone->mo_iods, sgls,
-				   NULL, DIOF_TO_LEADER | DIOF_FOR_MIGRATION,
-				   NULL);
-		if (rc) {
-			D_ERROR("dsc_obj_fetch %d\n", rc);
-			return rc;
-		}
-	}
-
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_NO_UPDATE))
 		return 0;
 
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_UPDATE_FAIL))
 		return -DER_INVAL;
 
-	if (daos_oclass_is_ec(mrone->mo_oid.id_pub, &oca) &&
-	    !obj_shard_is_ec_parity(mrone->mo_oid, &oca))
+
+	oca = daos_oclass_attr_find(mrone->mo_oid.id_pub);
+	D_ASSERT(oca != NULL);
+	if (fetch) {
+		uint32_t flags = DIOF_FOR_MIGRATION;
+
+		if (daos_oclass_grp_size(oca) > 1)
+			flags |= DIOF_TO_LEADER;
+
+		rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
+				   mrone->mo_iod_num, mrone->mo_iods, sgls,
+				   NULL, flags, NULL);
+		if (rc) {
+			D_ERROR("dsc_obj_fetch %d\n", rc);
+			return rc;
+		}
+	}
+
+	if (DAOS_OC_IS_EC(oca) && !obj_shard_is_ec_parity(mrone->mo_oid, NULL))
 		mrone_recx_daos2_vos(mrone, oca);
 
 	for (i = 0, start = 0; i < mrone->mo_iod_num; i++) {
@@ -804,12 +810,13 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 			    struct ds_cont_child *ds_cont)
 {
 	struct daos_oclass_attr	*oca;
-	d_sg_list_t	 	sgls[DSS_ENUM_UNPACK_MAX_IODS];
-	d_iov_t		 	iov[DSS_ENUM_UNPACK_MAX_IODS] = { 0 };
-	char		 	*data;
-	daos_size_t	 	size;
-	int		 	i;
-	int		 	rc;
+	d_sg_list_t		sgls[DSS_ENUM_UNPACK_MAX_IODS];
+	d_iov_t			iov[DSS_ENUM_UNPACK_MAX_IODS] = { 0 };
+	uint32_t		flags = DIOF_FOR_MIGRATION;
+	char			*data;
+	daos_size_t		size;
+	int			i;
+	int			rc;
 
 	oca = daos_oclass_attr_find(mrone->mo_oid.id_pub);
 	D_ASSERT(oca != NULL);
@@ -834,18 +841,45 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 		DP_UOID(mrone->mo_oid), mrone, DP_KEY(&mrone->mo_dkey),
 		mrone->mo_iod_num, mrone->mo_epoch);
 
+	if (daos_oclass_grp_size(oca) > 1)
+		flags |= DIOF_TO_LEADER;
+
 	rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
 			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL,
-			   DIOF_TO_LEADER | DIOF_FOR_MIGRATION, NULL);
+			   flags, NULL);
 	if (rc) {
 		D_ERROR("migrate dkey "DF_KEY" failed rc %d\n",
 			DP_KEY(&mrone->mo_dkey), rc);
 		D_GOTO(out, rc);
 	}
 
-	for (i = 0; i < mrone->mo_iod_num && DAOS_OC_IS_EC(oca); i++) {
+	for (i = 0; i < mrone->mo_iod_num; i++) {
 		daos_iod_t	*iod = &mrone->mo_iods[i];
 		uint32_t	start_shard;
+
+		if (mrone->mo_iods[i].iod_size == 0) {
+			/* zero size iod will cause assertion failure
+			 * in VOS, so let's check here.
+			 * So the object is being destroyed between
+			 * object enumeration and object fetch on
+			 * the remote target, which is usually caused
+			 * by container destroy or snapshot deletion.
+			 * Since this is rare, let's simply return
+			 * failure for this rebuild, then reschedule
+			 * the rebuild and retry.
+			 */
+			rc = -DER_DATA_LOSS;
+			D_DEBUG(DB_REBUILD,
+				DF_UOID" %p dkey "DF_KEY" "DF_KEY" nr %d/%d"
+				" eph "DF_U64" %d\n", DP_UOID(mrone->mo_oid),
+				mrone, DP_KEY(&mrone->mo_dkey),
+				DP_KEY(&mrone->mo_iods[i].iod_name),
+				mrone->mo_iod_num, i, mrone->mo_epoch, rc);
+			D_GOTO(out, rc);
+		}
+
+		if (!DAOS_OC_IS_EC(oca))
+			continue;
 
 		start_shard = rounddown(mrone->mo_oid.id_shard,
 					obj_ec_tgt_nr(oca));
@@ -899,10 +933,11 @@ static int
 migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 			  struct ds_cont_child *ds_cont)
 {
-	d_sg_list_t	 sgls[DSS_ENUM_UNPACK_MAX_IODS];
-	daos_handle_t	 ioh;
+	d_sg_list_t	sgls[DSS_ENUM_UNPACK_MAX_IODS];
+	daos_handle_t	ioh;
 	struct daos_oclass_attr *oca;
-	int		 rc, rc1, i, ret, sgl_cnt = 0;
+	uint32_t	flags = DIOF_FOR_MIGRATION;
+	int		rc, rc1, i, ret, sgl_cnt = 0;
 
 	if (obj_shard_is_ec_parity(mrone->mo_oid, &oca))
 		return migrate_fetch_update_parity(mrone, oh, ds_cont, oca);
@@ -948,9 +983,12 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 	if (DAOS_OC_IS_EC(oca))
 		mrone_recx_vos2_daos(mrone, oca, mrone->mo_oid.id_shard);
 
+	if (daos_oclass_grp_size(oca) > 1)
+		flags |= DIOF_TO_LEADER;
+
 	rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
 			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL,
-			   DIOF_TO_LEADER | DIOF_FOR_MIGRATION, NULL);
+			   flags, NULL);
 	if (rc)
 		D_ERROR("migrate dkey "DF_KEY" failed rc %d\n",
 			DP_KEY(&mrone->mo_dkey), rc);
@@ -968,6 +1006,28 @@ post:
 		rc = rc ? : ret;
 	}
 
+	for (i = 0; rc == 0 && i < mrone->mo_iod_num; i++) {
+		if (mrone->mo_iods[i].iod_size == 0) {
+			/* zero size iod will cause assertion failure
+			 * in VOS, so let's check here.
+			 * So the object is being destroyed between
+			 * object enumeration and object fetch on
+			 * the remote target, which is usually caused
+			 * by container destroy or snapshot deletion.
+			 * Since this is rare, let's simply return
+			 * failure for this rebuild, then reschedule
+			 * the rebuild and retry.
+			 */
+			rc = -DER_DATA_LOSS;
+			D_DEBUG(DB_REBUILD,
+				DF_UOID" %p dkey "DF_KEY" "DF_KEY" nr %d/%d"
+				" eph "DF_U64" %d\n", DP_UOID(mrone->mo_oid),
+				mrone, DP_KEY(&mrone->mo_dkey),
+				DP_KEY(&mrone->mo_iods[i].iod_name),
+				mrone->mo_iod_num, i, mrone->mo_epoch, rc);
+			D_GOTO(end, rc);
+		}
+	}
 end:
 	rc1 = vos_update_end(ioh, mrone->mo_version, &mrone->mo_dkey, rc, NULL);
 	if (rc == 0)
