@@ -123,24 +123,24 @@ d_tm_alloc_node(struct d_tm_node_t **newnode, char *name)
 
 	if ((newnode == NULL) || (name == NULL)) {
 		rc = -DER_INVAL;
-		goto failure;
+		goto out;
 	}
 
 	node = d_tm_shmalloc(sizeof(struct d_tm_node_t));
 	if (node == NULL) {
 		rc = -DER_NO_SHMEM;
-		goto failure;
+		goto out;
 	}
 	buff_len = strnlen(name, D_TM_MAX_NAME_LEN);
 	if (buff_len == D_TM_MAX_NAME_LEN) {
 		rc = DER_EXCEEDS_PATH_LEN;
-		goto failure;
+		goto out;
 	}
 	buff_len += 1; /* make room for the trailing null */
 	node->dtn_name = d_tm_shmalloc(buff_len);
 	if (node->dtn_name == NULL) {
 		rc = -DER_NO_SHMEM;
-		goto failure;
+		goto out;
 	}
 	strncpy(node->dtn_name, name, buff_len);
 	node->dtn_child = NULL;
@@ -148,9 +148,8 @@ d_tm_alloc_node(struct d_tm_node_t **newnode, char *name)
 	node->dtn_metric = NULL;
 	node->dtn_type = D_TM_DIRECTORY;
 	*newnode = node;
-	return rc;
 
-failure:
+out:
 	return rc;
 }
 
@@ -848,7 +847,7 @@ d_tm_increment_counter(struct d_tm_node_t **metric, uint64_t value,
 
 		if (fmt == NULL) {
 			rc = -DER_INVAL;
-			goto failure;
+			goto out;
 		}
 
 		va_start(args, fmt);
@@ -857,7 +856,7 @@ d_tm_increment_counter(struct d_tm_node_t **metric, uint64_t value,
 
 		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
 			rc = -DER_EXCEEDS_PATH_LEN;
-			goto failure;
+			goto out;
 		}
 
 		node = d_tm_find_metric(d_tm_shmem_root, path);
@@ -870,7 +869,7 @@ d_tm_increment_counter(struct d_tm_node_t **metric, uint64_t value,
 		if (rc != DER_SUCCESS) {
 			D_ERROR("Failed to add and incremement counter [%s]: "
 				DF_RC "\n", path, DP_RC(rc));
-			goto failure;
+			goto out;
 		}
 		if (metric != NULL)
 			*metric = node;
@@ -881,7 +880,7 @@ d_tm_increment_counter(struct d_tm_node_t **metric, uint64_t value,
 		D_ERROR("Failed to increment counter [%s] on item not a "
 			"counter.  Operation mismatch: " DF_RC "\n",
 			node->dtn_name, DP_RC(rc));
-		goto failure;
+		goto out;
 	}
 
 	if (node->dtn_protect)
@@ -890,9 +889,7 @@ d_tm_increment_counter(struct d_tm_node_t **metric, uint64_t value,
 	if (node->dtn_protect)
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 
-	return rc;
-
-failure:
+out:
 	return rc;
 }
 
@@ -943,7 +940,7 @@ d_tm_record_timestamp(struct d_tm_node_t **metric, const char *fmt, ...)
 
 		if (fmt == NULL) {
 			rc = -DER_INVAL;
-			goto failure;
+			goto out;
 		}
 
 		va_start(args, fmt);
@@ -952,7 +949,7 @@ d_tm_record_timestamp(struct d_tm_node_t **metric, const char *fmt, ...)
 
 		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
 			rc = -DER_EXCEEDS_PATH_LEN;
-			goto failure;
+			goto out;
 		}
 
 		node = d_tm_find_metric(d_tm_shmem_root, path);
@@ -965,7 +962,7 @@ d_tm_record_timestamp(struct d_tm_node_t **metric, const char *fmt, ...)
 		if (rc != DER_SUCCESS) {
 			D_ERROR("Failed to add and record timestamp [%s]: "
 				DF_RC "\n", path, DP_RC(rc));
-			goto failure;
+			goto out;
 		}
 		if (metric != NULL)
 			*metric = node;
@@ -984,9 +981,7 @@ d_tm_record_timestamp(struct d_tm_node_t **metric, const char *fmt, ...)
 	if (node->dtn_protect)
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 
-	return rc;
-
-failure:
+out:
 	return rc;
 }
 
@@ -1041,7 +1036,7 @@ d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
 
 		if (fmt == NULL) {
 			rc = -DER_INVAL;
-			goto failure;
+			goto out;
 		}
 
 		va_start(args, fmt);
@@ -1050,7 +1045,7 @@ d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
 
 		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
 			rc = -DER_EXCEEDS_PATH_LEN;
-			goto failure;
+			goto out;
 		}
 
 		node = d_tm_find_metric(d_tm_shmem_root, path);
@@ -1066,14 +1061,14 @@ d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
 			D_ERROR("Invalid clk_id for [%s] "
 				"Failed to add metric: " DF_RC "\n", path,
 				DP_RC(rc));
-			goto failure;
+			goto out;
 		}
 		rc = d_tm_add_metric(&node, D_TM_TIMER_SNAPSHOT | clk_id,
 				     "N/A", "N/A", path);
 		if (rc != DER_SUCCESS) {
 			D_ERROR("Failed to add and record high resolution timer"
 				" [%s]: " DF_RC "\n", path, DP_RC(rc));
-			goto failure;
+			goto out;
 		}
 		if (metric != NULL)
 			*metric = node;
@@ -1084,7 +1079,7 @@ d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
 		D_ERROR("Failed to record high resolution timer [%s] on item "
 			"not a high resolution timer.  Operation mismatch: "
 			DF_RC "\n", path, DP_RC(rc));
-		goto failure;
+		goto out;
 	}
 
 	if (node->dtn_protect)
@@ -1094,9 +1089,7 @@ d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
 	if (node->dtn_protect)
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 
-	return rc;
-
-failure:
+out:
 	return rc;
 }
 
@@ -1150,7 +1143,7 @@ d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
 
 		if (fmt == NULL) {
 			rc = -DER_INVAL;
-			goto failure;
+			goto out;
 		}
 
 		va_start(args, fmt);
@@ -1159,7 +1152,7 @@ d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
 
 		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
 			rc = -DER_EXCEEDS_PATH_LEN;
-			goto failure;
+			goto out;
 		}
 
 		node = d_tm_find_metric(d_tm_shmem_root, path);
@@ -1175,14 +1168,14 @@ d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
 			D_ERROR("Invalid clk_id for [%s] "
 				"Failed to add metric: " DF_RC "\n", path,
 				DP_RC(rc));
-			goto failure;
+			goto out;
 		}
 		rc = d_tm_add_metric(&node, D_TM_DURATION | clk_id,
 				     "N/A", "N/A", path);
 		if (rc != DER_SUCCESS) {
 			D_ERROR("Failed to add and mark duration start [%s]: "
 				DF_RC "\n", path, DP_RC(rc));
-			goto failure;
+			goto out;
 		}
 		if (metric != NULL)
 			*metric = node;
@@ -1193,7 +1186,7 @@ d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
 		D_ERROR("Failed to mark duration start [%s] on item "
 			"not a duration.  Operation mismatch: " DF_RC "\n",
 			path, DP_RC(rc));
-		goto failure;
+		goto out;
 	}
 
 	if (node->dtn_protect)
@@ -1203,9 +1196,7 @@ d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
 	if (node->dtn_protect)
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 
-	return rc;
-
-failure:
+out:
 	return rc;
 }
 
@@ -1269,7 +1260,7 @@ d_tm_mark_duration_end(struct d_tm_node_t **metric, int err,
 
 		if (fmt == NULL) {
 			rc = -DER_INVAL;
-			goto failure;
+			goto out;
 		}
 
 		va_start(args, fmt);
@@ -1278,7 +1269,7 @@ d_tm_mark_duration_end(struct d_tm_node_t **metric, int err,
 
 		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
 			rc = -DER_EXCEEDS_PATH_LEN;
-			goto failure;
+			goto out;
 		}
 
 		node = d_tm_find_metric(d_tm_shmem_root, path);
@@ -1291,7 +1282,7 @@ d_tm_mark_duration_end(struct d_tm_node_t **metric, int err,
 		D_ERROR("Failed to mark duration end [%s].  "
 			"No existing metric found: " DF_RC "\n", path,
 			DP_RC(rc));
-		goto failure;
+		goto out;
 	}
 
 	if (!(node->dtn_type & D_TM_DURATION)) {
@@ -1299,7 +1290,7 @@ d_tm_mark_duration_end(struct d_tm_node_t **metric, int err,
 		D_ERROR("Failed to mark duration end [%s] on item "
 			"not a duration.  Operation mismatch: " DF_RC "\n",
 			path, DP_RC(rc));
-		goto failure;
+		goto out;
 	}
 
 	if (node->dtn_protect)
@@ -1315,9 +1306,7 @@ d_tm_mark_duration_end(struct d_tm_node_t **metric, int err,
 	if (node->dtn_protect)
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 
-	return rc;
-
-failure:
+out:
 	return rc;
 }
 
@@ -1370,7 +1359,7 @@ d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value,
 
 		if (fmt == NULL) {
 			rc = -DER_INVAL;
-			goto failure;
+			goto out;
 		}
 
 		va_start(args, fmt);
@@ -1379,7 +1368,7 @@ d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value,
 
 		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
 			rc = -DER_EXCEEDS_PATH_LEN;
-			goto failure;
+			goto out;
 		}
 
 		node = d_tm_find_metric(d_tm_shmem_root, path);
@@ -1392,7 +1381,7 @@ d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value,
 		if (rc != DER_SUCCESS) {
 			D_ERROR("Failed to add and set gauge [%s]: "
 				DF_RC "\n", path, DP_RC(rc));
-			goto failure;
+			goto out;
 		}
 		if (metric != NULL)
 			*metric = node;
@@ -1403,7 +1392,7 @@ d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value,
 		D_ERROR("Failed to set gauge [%s] on item "
 			"not a gauge.  Operation mismatch: " DF_RC "\n",
 			path, DP_RC(rc));
-		goto failure;
+		goto out;
 	}
 
 	if (node->dtn_protect)
@@ -1415,9 +1404,7 @@ d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value,
 	if (node->dtn_protect)
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 
-	return rc;
-
-failure:
+out:
 	return rc;
 }
 
@@ -1470,7 +1457,7 @@ d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
 
 		if (fmt == NULL) {
 			rc = -DER_INVAL;
-			goto failure;
+			goto out;
 		}
 
 		va_start(args, fmt);
@@ -1479,7 +1466,7 @@ d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
 
 		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
 			rc = -DER_EXCEEDS_PATH_LEN;
-			goto failure;
+			goto out;
 		}
 
 		node = d_tm_find_metric(d_tm_shmem_root, path);
@@ -1492,7 +1479,7 @@ d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
 		if (rc != DER_SUCCESS) {
 			D_ERROR("Failed to add and incremement gauge [%s]: "
 				DF_RC "\n", path, DP_RC(rc));
-			goto failure;
+			goto out;
 		}
 		if (metric != NULL)
 			*metric = node;
@@ -1503,7 +1490,7 @@ d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
 		D_ERROR("Failed to increment gauge [%s] on item "
 			"not a gauge.  Operation mismatch: " DF_RC "\n",
 			path, DP_RC(rc));
-		goto failure;
+		goto out;
 	}
 
 	if (node->dtn_protect)
@@ -1515,9 +1502,7 @@ d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
 	if (node->dtn_protect)
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 
-	return rc;
-
-failure:
+out:
 	return rc;
 }
 
@@ -1570,7 +1555,7 @@ d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
 
 		if (fmt == NULL) {
 			rc = -DER_INVAL;
-			goto failure;
+			goto out;
 		}
 
 		va_start(args, fmt);
@@ -1579,7 +1564,7 @@ d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
 
 		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
 			rc = -DER_EXCEEDS_PATH_LEN;
-			goto failure;
+			goto out;
 		}
 
 		node = d_tm_find_metric(d_tm_shmem_root, path);
@@ -1592,7 +1577,7 @@ d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
 		if (rc != DER_SUCCESS) {
 			D_ERROR("Failed to add and decrement gauge [%s]: "
 				DF_RC "\n", path, DP_RC(rc));
-			goto failure;
+			goto out;
 		}
 		if (metric != NULL)
 			*metric = node;
@@ -1603,7 +1588,7 @@ d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
 		D_ERROR("Failed to decrement gauge [%s] on item "
 			"not a gauge.  Operation mismatch: " DF_RC "\n",
 			path, DP_RC(rc));
-		goto failure;
+		goto out;
 	}
 
 	if (node->dtn_protect)
@@ -1615,9 +1600,7 @@ d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
 	if (node->dtn_protect)
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 
-	return rc;
-
-failure:
+out:
 	return rc;
 }
 
@@ -2528,28 +2511,28 @@ d_tm_list(struct d_tm_nodeList_t **head, uint64_t *shmem_root,
 
 	if ((head == NULL) || (node == NULL)) {
 		rc = -DER_INVAL;
-		goto failure;
+		goto out;
 	}
 
 	if (d_tm_type & node->dtn_type) {
 		rc = d_tm_add_node(node, head);
 		if (rc != DER_SUCCESS)
-			goto failure;
+			goto out;
 	}
 
 	node = node->dtn_child;
 	if (node == NULL)
-		goto success;
+		goto out;
 
 	node = d_tm_conv_ptr(shmem_root, node);
 	if (node == NULL) {
 		rc = -DER_INVAL;
-		goto failure;
+		goto out;
 	}
 
 	rc = d_tm_list(head, shmem_root, node, d_tm_type);
 	if (rc != DER_SUCCESS)
-		goto failure;
+		goto out;
 
 	node = node->dtn_sibling;
 	if (node == NULL)
@@ -2559,14 +2542,12 @@ d_tm_list(struct d_tm_nodeList_t **head, uint64_t *shmem_root,
 	while (node != NULL) {
 		rc = d_tm_list(head, shmem_root, node, d_tm_type);
 		if (rc != DER_SUCCESS)
-			goto failure;
+			goto out;
 		node = node->dtn_sibling;
 		node = d_tm_conv_ptr(shmem_root, node);
 	}
-success:
-	return rc;
 
-failure:
+out:
 	return rc;
 }
 

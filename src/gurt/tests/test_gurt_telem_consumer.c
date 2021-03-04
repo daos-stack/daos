@@ -14,11 +14,10 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <pthread.h>
-#include "gurt/telemetry_common.h"
-#include "gurt/telemetry_consumer.h"
-#undef DD_FAC
 #include "tests_lib.h"
 #include "wrap_cmocka.h"
+#include "gurt/telemetry_common.h"
+#include "gurt/telemetry_consumer.h"
 
 #define STATS_EPSILON	0.00001
 
@@ -346,86 +345,85 @@ test_histogram_metadata(void **state)
 			       "gurt/tests/telem/test_gauge_m1/bucket 0");
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal(metadata, "histogram bucket 0 [0 .. 4]");
-	D_FREE(metadata);
+	free(metadata);
 
 	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m1/bucket 1");
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal(metadata, "histogram bucket 1 [5 .. 9]");
-	D_FREE(metadata);;
-
+	free(metadata);
 	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m1/bucket 2");
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal(metadata, "histogram bucket 2 [10 .. 14]");
-	D_FREE(metadata);;
+	free(metadata);
 
 	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m1/bucket 3");
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal(metadata, "histogram bucket 3 [15 .. 19]");
-	D_FREE(metadata);;
+	free(metadata);
 
 	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m1/bucket 4");
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal(metadata, "histogram bucket 4 [20 .. 24]");
-	D_FREE(metadata);;
+	free(metadata);
 
 	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m1/bucket 5");
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal(metadata, "histogram bucket 5 [25 .. 29]");
-	D_FREE(metadata);;
+	free(metadata);
 
 	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m1/bucket 6");
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal(metadata, "histogram bucket 6 [30 .. 34]");
-	D_FREE(metadata);;
+	free(metadata);
 
 	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m1/bucket 7");
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal(metadata, "histogram bucket 7 [35 .. 39]");
-	D_FREE(metadata);;
+	free(metadata);
 
 	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m1/bucket 8");
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal(metadata, "histogram bucket 8 [40 .. 44]");
-	D_FREE(metadata);;
+	free(metadata);
 
 	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m1/bucket 9");
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal(metadata,
 			    "histogram bucket 9 [45 .. 18446744073709551615]");
-	D_FREE(metadata);;
+	free(metadata);
 
 	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m2/bucket 0");
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal(metadata, "histogram bucket 0 [0 .. 2047]");
-	D_FREE(metadata);;
+	free(metadata);
 
 	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m2/bucket 1");
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal(metadata, "histogram bucket 1 [2048 .. 6143]");
-	D_FREE(metadata);;
+	free(metadata);
 
 	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m2/bucket 2");
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal(metadata, "histogram bucket 2 [6144 .. 14335]");
-	D_FREE(metadata);;
+	free(metadata);
 
 	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m2/bucket 3");
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal(metadata, "histogram bucket 3 [14336 .. 30719]");
-	D_FREE(metadata);;
+	free(metadata);
 
 	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m2/bucket 4");
@@ -433,7 +431,7 @@ test_histogram_metadata(void **state)
 	assert_string_equal(metadata,
 			    "histogram bucket 4 [30720 .. "
 			    "18446744073709551615]");
-	D_FREE(metadata);;
+	free(metadata);
 }
 
 static void

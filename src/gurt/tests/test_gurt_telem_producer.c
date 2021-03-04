@@ -11,11 +11,10 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <pthread.h>
-#include "gurt/telemetry_common.h"
-#include "gurt/telemetry_producer.h"
-#undef DD_FAC
 #include "tests_lib.h"
 #include "wrap_cmocka.h"
+#include "gurt/telemetry_common.h"
+#include "gurt/telemetry_producer.h"
 
 static int
 init_tests(void **state)
@@ -355,10 +354,9 @@ test_gauge_with_histogram_multiplier_1(void **state)
 	int				initial_width;
 	int				multiplier;
 	int				rc;
-	char				*path;
+	char				path[D_TM_MAX_NAME_LEN];
 
-	D_ASPRINTF(path, "%s", "gurt/tests/telem/test_gauge_m1");
-	assert_non_null(path);
+	snprintf(path, sizeof(path), "%s", "gurt/tests/telem/test_gauge_m1");
 
 	rc = d_tm_add_metric(&gauge, D_TM_GAUGE,
 			     "A gauge with a histogram", "", path);
@@ -371,7 +369,6 @@ test_gauge_with_histogram_multiplier_1(void **state)
 	rc = d_tm_init_histogram(gauge, path, num_buckets,
 				 initial_width, multiplier);
 	assert_rc_equal(rc, DER_SUCCESS);
-	D_FREE(path);
 
 	/* bucket 0 - gets 3 values */
 	rc = d_tm_set_gauge(&gauge, 2, NULL);
@@ -421,10 +418,9 @@ test_gauge_with_histogram_multiplier_2(void **state)
 	int				initial_width;
 	int				multiplier;
 	int				rc;
-	char				*path;
+	char				path[D_TM_MAX_NAME_LEN];
 
-	D_ASPRINTF(path, "%s", "gurt/tests/telem/test_gauge_m2");
-	assert_non_null(path);
+	snprintf(path, sizeof(path), "%s", "gurt/tests/telem/test_gauge_m2");
 
 	rc = d_tm_add_metric(&gauge, D_TM_GAUGE,
 			     "A gauge with a histogram", "", path);
@@ -437,7 +433,6 @@ test_gauge_with_histogram_multiplier_2(void **state)
 	rc = d_tm_init_histogram(gauge, path, num_buckets,
 				 initial_width, multiplier);
 	assert_rc_equal(rc, DER_SUCCESS);
-	D_FREE(path);
 
 	/* bucket 0 - gets 3 values */
 	rc = d_tm_set_gauge(&gauge, 0, NULL);
