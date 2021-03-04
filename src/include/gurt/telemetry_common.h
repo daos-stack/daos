@@ -42,6 +42,12 @@ enum {
 	D_TM_CLOCK_REALTIME		= 0x040,
 	D_TM_CLOCK_PROCESS_CPUTIME	= 0x080,
 	D_TM_CLOCK_THREAD_CPUTIME	= 0x100,
+	D_TM_ALL_NODES			= (D_TM_DIRECTORY | \
+					   D_TM_COUNTER | \
+					   D_TM_TIMESTAMP | \
+					   D_TM_TIMER_SNAPSHOT | \
+					   D_TM_DURATION | \
+					   D_TM_GAUGE)
 };
 
 enum {

@@ -1,4 +1,4 @@
-.TH dmg 1 "15 February 2021"
+.TH dmg 1 "25 February 2021"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -593,5 +593,23 @@ Hostlist representing hosts whose managed ranks are to be operated on
 .TP
 \fB\fB\-\-force\fR\fP
 Force stop DAOS system members
+.SS telemetry
+Perform telemetry operations
+.SS telemetry config
+Configure telemetry
+
+\fBUsage\fP: telemetry config [config-OPTIONS]
+.TP
+.TP
+\fB\fB\-f\fR, \fB\-\-for\fR <default: \fI"prometheus"\fR>\fP
+Telemetry system to configure
+.SS telemetry run
+Launch telemetry system
+
+\fBUsage\fP: telemetry run [run-OPTIONS]
+.TP
+.TP
+\fB\fB\-f\fR, \fB\-\-for\fR <default: \fI"prometheus"\fR>\fP
+Telemetry system to configure
 .SS version
 Print dmg version

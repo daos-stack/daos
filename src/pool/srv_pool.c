@@ -35,6 +35,8 @@
 #include "srv_internal.h"
 #include "srv_layout.h"
 #include "srv_pool_map.h"
+#include "gurt/telemetry_common.h"
+#include "gurt/telemetry_producer.h"
 
 /* Pool service */
 struct pool_svc {
@@ -1949,6 +1951,7 @@ out:
 void
 ds_pool_connect_handler(crt_rpc_t *rpc)
 {
+	struct d_tm_node_t	       *open_hdl_gauge = NULL;
 	struct pool_connect_in	       *in = crt_req_get(rpc);
 	struct pool_connect_out	       *out = crt_reply_get(rpc);
 	struct pool_svc		       *svc;
@@ -2073,6 +2076,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 		D_GOTO(out_map_version, rc = -DER_NO_PERM);
 	}
 
+	d_tm_increment_gauge(&open_hdl_gauge, 1,
+			     "pool/ops/open/active");
 	/*
 	 * Transfer the pool map to the client before adding the pool handle,
 	 * so that we don't need to worry about rolling back the transaction
@@ -2217,10 +2222,11 @@ static int
 pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 		     int n_hdl_uuids, crt_context_t ctx)
 {
-	d_iov_t	value;
-	uint32_t	nhandles;
-	int		i;
-	int		rc;
+	struct d_tm_node_t	*open_hdl_gauge = NULL;
+	d_iov_t			 value;
+	uint32_t		 nhandles;
+	int			 i;
+	int			 rc;
 
 	D_ASSERTF(n_hdl_uuids > 0, "%d\n", n_hdl_uuids);
 
@@ -2240,6 +2246,9 @@ pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 	rc = pool_disconnect_bcast(ctx, svc, hdl_uuids, n_hdl_uuids);
 	if (rc != 0)
 		D_GOTO(out, rc);
+
+	d_tm_decrement_gauge(&open_hdl_gauge, n_hdl_uuids,
+			     "pool/ops/open/active");
 
 	d_iov_set(&value, &nhandles, sizeof(nhandles));
 	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_nhandles, &value);
