@@ -1735,7 +1735,7 @@ obj_ioc_end(struct obj_io_context *ioc, int err)
 					ioc->ioc_start_time) / 1000,
 				       NULL);
 		d_tm_decrement_gauge(&tls->ot_op_active[opc], 1, NULL);
-		d_tm_increment_counter(&tls->ot_op_total[opc], NULL);
+		d_tm_increment_counter(&tls->ot_op_total[opc], 1, NULL);
 	}
 	obj_ioc_fini(ioc);
 }
@@ -2263,7 +2263,7 @@ again:
 		daos_epoch_t	e = 0;
 		struct obj_tls  *tls = obj_tls_get();
 
-		d_tm_increment_counter(&tls->ot_update_resent, NULL);
+		d_tm_increment_counter(&tls->ot_update_resent, 1, NULL);
 
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti,
 				       &e, &version);
@@ -2370,7 +2370,8 @@ again:
 			orw->orw_epoch = crt_hlc_get();
 			orw->orw_flags &= ~ORF_RESEND;
 			flags = 0;
-			d_tm_increment_counter(&tls->ot_update_restart, NULL);
+			d_tm_increment_counter(&tls->ot_update_restart, 1,
+					       NULL);
 			goto again;
 		}
 
