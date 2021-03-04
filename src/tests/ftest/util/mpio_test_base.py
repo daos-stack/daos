@@ -97,8 +97,7 @@ class MpiioTests(TestWithServers):
         # Check output for errors
         for output in (result.stdout_text, result.stderr_text):
             match = re.findall(
-                r"(non-zero exit code|MPI_Abort|MPI_ABORT|ERROR)",
-                output, re.IGNORECASE)
+                r"(non-zero exit code|MPI_Abort|MPI_ABORT|ERROR)", output)
             if match:
                 self.log.info(
                     "The following error messages have been detected in the %s "

@@ -43,7 +43,7 @@ class GlobalHandle(TestWithServers):
 
         # note that the handle is stored inside the pool as well
         dummy_local_handle = pool.global2local(self.context, iov_len,
-                                               buf_len, buf.decode("utf-8"))
+                                               buf_len, buf)
 
         # perform some operations that will use the new handle
         pool.pool_query()

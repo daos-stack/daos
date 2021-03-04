@@ -49,7 +49,7 @@ class GlobalHandle(TestWithServers):
         buf2.extend(buf.contents)
         pool_handle = pool.global2local(
             self.context, pool_glob_handle.iov_len,
-            pool_glob_handle.iov_buf_len, buf2.decode("utf-8"))
+            pool_glob_handle.iov_buf_len, buf2)
 
         # perform an operation that will use the new handle, if it
         # doesn't throw an exception, then all is well.
@@ -65,7 +65,7 @@ class GlobalHandle(TestWithServers):
         buf2.extend(buf.contents)
         dummy_cont_handle = container.global2local(
             self.context, cont_glob_handle.iov_len,
-            cont_glob_handle.iov_buf_len, buf2.decode("utf-8"))
+            cont_glob_handle.iov_buf_len, buf2)
         # just try one thing to make sure handle is good
         container.query()
 

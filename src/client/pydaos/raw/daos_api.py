@@ -147,7 +147,7 @@ class DaosPool():
         c_glob = daos_cref.IOV()
         c_glob.iov_len = iov_len
         c_glob.iov_buf_len = buf_len
-        c_buf = ctypes.create_string_buffer(str(buf))
+        c_buf = ctypes.create_string_buffer(buf)
         c_glob.iov_buf = ctypes.cast(c_buf, ctypes.c_void_p)
 
         local_handle = ctypes.c_uint64(0)
@@ -1668,7 +1668,9 @@ class DaosContainer():
         # strings as the data)
         c_values = []
         for item in datalist:
-            c_values.append((ctypes.create_string_buffer(item), len(item) + 1))
+            c_values.append((
+                ctypes.create_string_buffer(item.encode('utf-8')),
+                len(item) + 1))
         c_dkey = ctypes.create_string_buffer(dkey.encode('utf-8'))
         c_akey = ctypes.create_string_buffer(akey.encode('utf-8'))
 
