@@ -108,7 +108,7 @@ d_tm_find_child(uint64_t *shmem_root, struct d_tm_node_t *parent, char *name)
  * \param[in,out]	newnode	A pointer for the new node
  * \param[in]		name	The name of the new node
  *
- * \return		D_TM_SUCCESS		Success
+ * \return		DER_SUCCESS		Success
  *			-DER_NO_SHMEM		No shared memory available
  *			-DER_EXCEEDS_PATH_LEN	The full name length is
  *						too long
@@ -119,7 +119,7 @@ d_tm_alloc_node(struct d_tm_node_t **newnode, char *name)
 {
 	struct d_tm_node_t	*node = NULL;
 	int			buff_len = 0;
-	int			rc = D_TM_SUCCESS;
+	int			rc = DER_SUCCESS;
 
 	if ((newnode == NULL) || (name == NULL)) {
 		rc = -DER_INVAL;
@@ -161,7 +161,7 @@ failure:
  * \param[in]		parent	The parent node for this new child
  * \param[in]		name	The name of the new node
  *
- * \return		D_TM_SUCCESS		Success
+ * \return		DER_SUCCESS		Success
  *			-DER_NO_SHMEM		No shared memory available
  *			-DER_EXCEEDS_PATH_LEN	The full name length is
  *						too long
@@ -174,7 +174,7 @@ d_tm_add_child(struct d_tm_node_t **newnode, struct d_tm_node_t *parent,
 	struct d_tm_node_t	*child = NULL;
 	struct d_tm_node_t	*sibling = NULL;
 	struct d_tm_node_t	*node = NULL;
-	int			rc = D_TM_SUCCESS;
+	int			rc = DER_SUCCESS;
 
 	if ((newnode == NULL) || (parent == NULL) || (name == NULL)) {
 		rc = -DER_INVAL;
@@ -184,7 +184,7 @@ d_tm_add_child(struct d_tm_node_t **newnode, struct d_tm_node_t *parent,
 	child = parent->dtn_child;
 	sibling = parent->dtn_child;
 	rc = d_tm_alloc_node(&node, name);
-	if (rc != D_TM_SUCCESS)
+	if (rc != DER_SUCCESS)
 		goto failure;
 
 	*newnode = node;
@@ -230,7 +230,7 @@ failure:
  *				memory segment created for these metrics after
  *				this process exits.
  *
- * \return		D_TM_SUCCESS		Success
+ * \return		DER_SUCCESS		Success
  *			-DER_NO_SHMEM		Out of shared memory
  *			-DER_EXCEEDS_PATH_LEN	Root node name exceeds path len
  *			-DER_INVAL		Invalid \a flag(s)
@@ -240,7 +240,7 @@ d_tm_init(int id, uint64_t mem_size, int flags)
 {
 	uint64_t	*base_addr = NULL;
 	char		tmp[D_TM_MAX_NAME_LEN];
-	int		rc = D_TM_SUCCESS;
+	int		rc = DER_SUCCESS;
 
 	if ((d_tm_shmem_root != NULL) && (d_tm_root != NULL)) {
 		D_INFO("d_tm_init already completed for id %d\n", id);
@@ -265,7 +265,7 @@ d_tm_init(int id, uint64_t mem_size, int flags)
 	d_tm_shmem_root = d_tm_allocate_shared_memory(id, mem_size);
 
 	if (d_tm_shmem_root == NULL) {
-		rc = -DER_NO_SHMEM;
+		rc = -DER_SHMEM_PERMS;
 		goto failure;
 	}
 
@@ -289,7 +289,7 @@ d_tm_init(int id, uint64_t mem_size, int flags)
 
 	snprintf(tmp, sizeof(tmp), "ID: %d", id);
 	rc = d_tm_alloc_node(&d_tm_root, tmp);
-	if (rc != D_TM_SUCCESS)
+	if (rc != DER_SUCCESS)
 		goto failure;
 
 	rc = D_MUTEX_INIT(&d_tm_add_lock, NULL);
@@ -318,12 +318,16 @@ void d_tm_fini(void)
 	if (d_tm_shmem_root == NULL)
 		return;
 
-	shmdt(d_tm_shmem_root);
-	if (!d_tm_retain_shmem) {
+	rc = shmdt(d_tm_shmem_root);
+	if (rc < 0)
+		D_ERROR("Unable to detach from shared memory segment.  "
+			"shmdt failed, %s.\n", strerror(errno));
+
+	if ((rc == 0) && !d_tm_retain_shmem) {
 		rc = shmctl(d_tm_shmid, IPC_RMID, NULL);
 		if (rc < 0)
-			D_ERROR("Unable to remove shared memory segment, %s.\n",
-				strerror(errno));
+			D_ERROR("Unable to remove shared memory segment.  "
+				"shmctl failed, %s.\n", strerror(errno));
 	}
 
 	d_tm_serialization = false;
@@ -564,7 +568,7 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 		break;
 	case D_TM_COUNTER:
 		rc = d_tm_get_counter(&val, shmem_root, node, NULL);
-		if (rc != D_TM_SUCCESS) {
+		if (rc != DER_SUCCESS) {
 			fprintf(stream, "Error on counter read: %d\n", rc);
 			break;
 		}
@@ -572,7 +576,7 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 		break;
 	case D_TM_TIMESTAMP:
 		rc = d_tm_get_timestamp(&clk, shmem_root, node, NULL);
-		if (rc != D_TM_SUCCESS) {
+		if (rc != DER_SUCCESS) {
 			fprintf(stream, "Error on timestamp read: %d\n", rc);
 			break;
 		}
@@ -582,7 +586,7 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 	case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_PROCESS_CPUTIME):
 	case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_THREAD_CPUTIME):
 		rc = d_tm_get_timer_snapshot(&tms, shmem_root, node, NULL);
-		if (rc != D_TM_SUCCESS) {
+		if (rc != DER_SUCCESS) {
 			fprintf(stream, "Error on highres timer read: %d\n",
 				rc);
 			break;
@@ -593,7 +597,7 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 	case (D_TM_DURATION | D_TM_CLOCK_PROCESS_CPUTIME):
 	case (D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME):
 		rc = d_tm_get_duration(&tms, &stats, shmem_root, node, NULL);
-		if (rc != D_TM_SUCCESS) {
+		if (rc != DER_SUCCESS) {
 			fprintf(stream, "Error on duration read: %d\n", rc);
 			break;
 		}
@@ -602,7 +606,7 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 		break;
 	case D_TM_GAUGE:
 		rc = d_tm_get_gauge(&val, &stats, shmem_root, node, NULL);
-		if (rc != D_TM_SUCCESS) {
+		if (rc != DER_SUCCESS) {
 			fprintf(stream, "Error on gauge read: %d\n", rc);
 			break;
 		}
@@ -704,60 +708,6 @@ d_tm_count_metrics(uint64_t *shmem_root, struct d_tm_node_t *node,
 }
 
 /**
- * Build a full path string from the variable list
- * Caller must call va_start prior to this call, and va_end after.
- *
- * \param[in,out]	path	Pointer to the path string buffer allocated by
- *				caller.
- * \param[in]		item	First item added to the path
- * \param[in]		args	Optional strings that further qualify the path
- *
- * \return			D_TM_SUCCESS		Success
- *				-DER_EXCEEDS_PATH_LEN	The full name length is
- *							too long
- *				-DER_INVAL		\a item was NULL
- */
-int
-d_tm_build_path(char **path, char *item, va_list args)
-{
-	char	*str;
-	int	rc = D_TM_SUCCESS;
-
-	if (item == NULL) {
-		rc = -DER_INVAL;
-		goto failure;
-	}
-
-	if (strnlen(item, D_TM_MAX_NAME_LEN) == D_TM_MAX_NAME_LEN) {
-		rc = -DER_EXCEEDS_PATH_LEN;
-		goto failure;
-	}
-
-	snprintf(*path, D_TM_MAX_NAME_LEN, "%s", item);
-	str = va_arg(args, char *);
-	while (str != NULL) {
-		/**
-		 * verify that adding the next str token + '/'
-		 * will fit into the path string buffer
-		 * If it fits, append it to the path
-		 */
-		if ((strnlen(*path, D_TM_MAX_NAME_LEN) +
-			strnlen(str, D_TM_MAX_NAME_LEN) + 1) <
-			D_TM_MAX_NAME_LEN) {
-			strncat(*path, "/", 1);
-			strncat(*path, str, D_TM_MAX_NAME_LEN - 1);
-			str = va_arg(args, char *);
-		} else {
-			rc = -DER_EXCEEDS_PATH_LEN;
-			goto failure;
-		}
-	}
-
-failure:
-	return rc;
-}
-
-/**
  * Compute standard deviation
  *
  * \param[in]	sum_of_squares	Precomputed sum of squares
@@ -812,7 +762,7 @@ d_tm_compute_stats(struct d_tm_node_t *node, uint64_t value)
  * \param[in]	node		Pointer to a duration or gauge node
  * \param[in]	value		The value that is sorted into a bucket
  *
- * \return			D_TM_SUCCESS		Success
+ * \return			DER_SUCCESS		Success
  *				-DER_INVAL		\a node was NULL,
  *							\a node has no metric
  *							data
@@ -841,7 +791,7 @@ d_tm_compute_histogram(struct d_tm_node_t *node, uint64_t value)
 	for (i = 0; i < dtm_histogram->dth_num_buckets; i++) {
 		if (value <= dtm_histogram->dth_buckets[i].dtb_max) {
 			bucket = dtm_histogram->dth_buckets[i].dtb_bucket;
-			rc = d_tm_increment_counter(&bucket, NULL);
+			rc = d_tm_increment_counter(&bucket, 1, NULL);
 			break;
 		}
 	}
@@ -850,7 +800,7 @@ d_tm_compute_histogram(struct d_tm_node_t *node, uint64_t value)
 
 
 /**
- * Increment the given counter
+ * Increment the given counter by the specified \a value
  *
  * The counter is specified either by an initialized pointer or by a fully
  * qualified item name.  If an initialized pointer is provided, the metric is
@@ -861,12 +811,15 @@ d_tm_compute_histogram(struct d_tm_node_t *node, uint64_t value)
  * faster access.
  *
  * \param[in,out]	metric	Pointer to the metric
- * \param[in]		item	Full path name to this \a item
- *				If supplied, the path name is specified by the
- *				\a item and any strings following it.  The last
- *				item must be NULL.
+ * \param[in]		value	Increments the counter by this \a value
+ * \param[in]		fmt	Format specifier for the name and full path of
+ *				the metric followed by optional args to
+ *				populate the string, printf style.
+ *				The format specifier and optional arguments
+ *				are used only if the pointer to the metric
+ *				is NULL.
  *
- * \return			D_TM_SUCCESS		Success
+ * \return			DER_SUCCESS		Success
  *				-DER_EXCEEDS_PATH_LEN	The full name length is
  *							too long
  *				-DER_OP_NOT_PERMITTED	Operation not permitted
@@ -877,11 +830,12 @@ d_tm_compute_histogram(struct d_tm_node_t *node, uint64_t value)
  *							are NULL
  */
 int
-d_tm_increment_counter(struct d_tm_node_t **metric, char *item, ...)
+d_tm_increment_counter(struct d_tm_node_t **metric, uint64_t value,
+		       const char *fmt, ...)
 {
 	struct d_tm_node_t	*node = NULL;
 	char			path[D_TM_MAX_NAME_LEN] = {};
-	int			rc = D_TM_SUCCESS;
+	int			rc = DER_SUCCESS;
 
 	if (d_tm_shmem_root == NULL)
 		return -DER_UNINIT;
@@ -890,28 +844,30 @@ d_tm_increment_counter(struct d_tm_node_t **metric, char *item, ...)
 		node = *metric;
 	} else {
 		va_list	args;
-		char	*p;
+		int	ret;
 
-		if (item == NULL) {
+		if (fmt == NULL) {
 			rc = -DER_INVAL;
 			goto failure;
 		}
 
-		va_start(args, item);
-		p = path;
-		rc = d_tm_build_path(&p, item, args);
+		va_start(args, fmt);
+		ret = vsnprintf(path, sizeof(path), fmt, args);
 		va_end(args);
 
-		if (rc != D_TM_SUCCESS)
+		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
+			rc = -DER_EXCEEDS_PATH_LEN;
 			goto failure;
+		}
+
 		node = d_tm_find_metric(d_tm_shmem_root, path);
 		if (metric != NULL)
 			*metric = node;
 	}
 
 	if (node == NULL) {
-		rc = d_tm_add_metric(&node, path, D_TM_COUNTER, "N/A", "N/A");
-		if (rc != D_TM_SUCCESS) {
+		rc = d_tm_add_metric(&node, D_TM_COUNTER, "N/A", "N/A", path);
+		if (rc != DER_SUCCESS) {
 			D_ERROR("Failed to add and incremement counter [%s]: "
 				DF_RC "\n", path, DP_RC(rc));
 			goto failure;
@@ -920,19 +876,20 @@ d_tm_increment_counter(struct d_tm_node_t **metric, char *item, ...)
 			*metric = node;
 	}
 
-	if (node->dtn_type == D_TM_COUNTER) {
-		if (node->dtn_protect)
-			D_MUTEX_LOCK(&node->dtn_lock);
-		node->dtn_metric->dtm_data.value++;
-		if (node->dtn_protect)
-			D_MUTEX_UNLOCK(&node->dtn_lock);
-	} else {
+	if (node->dtn_type != D_TM_COUNTER) {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to increment counter [%s] on item not a "
 			"counter.  Operation mismatch: " DF_RC "\n",
 			node->dtn_name, DP_RC(rc));
 		goto failure;
 	}
+
+	if (node->dtn_protect)
+		D_MUTEX_LOCK(&node->dtn_lock);
+	node->dtn_metric->dtm_data.value += value;
+	if (node->dtn_protect)
+		D_MUTEX_UNLOCK(&node->dtn_lock);
+
 	return rc;
 
 failure:
@@ -951,12 +908,14 @@ failure:
  * faster access.
  *
  * \param[in,out]	metric	Pointer to the metric
- * \param[in]		item	Full path name to this \a item
- *				If supplied, the path name is specified by the
- *				\a item and any strings following it.  The last
- *				item must be NULL.
+ * \param[in]		fmt	Format specifier for the name and full path of
+ *				the metric followed by optional args to
+ *				populate the string, printf style.
+ *				The format specifier and optional arguments
+ *				are used only if the pointer to the metric
+ *				is NULL.
  *
- * \return			D_TM_SUCCESS		Success
+ * \return			DER_SUCCESS		Success
  *				-DER_EXCEEDS_PATH_LEN	The full name length is
  *							too long
  *				-DER_OP_NOT_PERMITTED	Operation not permitted
@@ -967,11 +926,11 @@ failure:
  *							are NULL
  */
 int
-d_tm_record_timestamp(struct d_tm_node_t **metric, char *item, ...)
+d_tm_record_timestamp(struct d_tm_node_t **metric, const char *fmt, ...)
 {
 	struct d_tm_node_t	*node = NULL;
 	char			path[D_TM_MAX_NAME_LEN] = {};
-	int			rc = D_TM_SUCCESS;
+	int			rc = DER_SUCCESS;
 
 	if (d_tm_shmem_root == NULL)
 		return -DER_UNINIT;
@@ -980,27 +939,30 @@ d_tm_record_timestamp(struct d_tm_node_t **metric, char *item, ...)
 		node = *metric;
 	} else {
 		va_list	args;
-		char	*p;
+		int	ret;
 
-		if (item == NULL) {
+		if (fmt == NULL) {
 			rc = -DER_INVAL;
 			goto failure;
 		}
 
-		va_start(args, item);
-		p = path;
-		rc = d_tm_build_path(&p, item, args);
+		va_start(args, fmt);
+		ret = vsnprintf(path, sizeof(path), fmt, args);
 		va_end(args);
-		if (rc != D_TM_SUCCESS)
+
+		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
+			rc = -DER_EXCEEDS_PATH_LEN;
 			goto failure;
+		}
+
 		node = d_tm_find_metric(d_tm_shmem_root, path);
 		if (metric != NULL)
 			*metric = node;
 	}
 
 	if (node == NULL) {
-		rc = d_tm_add_metric(&node, path, D_TM_TIMESTAMP, "N/A", "N/A");
-		if (rc != D_TM_SUCCESS) {
+		rc = d_tm_add_metric(&node, D_TM_TIMESTAMP, "N/A", "N/A", path);
+		if (rc != DER_SUCCESS) {
 			D_ERROR("Failed to add and record timestamp [%s]: "
 				DF_RC "\n", path, DP_RC(rc));
 			goto failure;
@@ -1009,18 +971,19 @@ d_tm_record_timestamp(struct d_tm_node_t **metric, char *item, ...)
 			*metric = node;
 	}
 
-	if (node->dtn_type == D_TM_TIMESTAMP) {
-		if (node->dtn_protect)
-			D_MUTEX_LOCK(&node->dtn_lock);
-		node->dtn_metric->dtm_data.value = (uint64_t)time(NULL);
-		if (node->dtn_protect)
-			D_MUTEX_UNLOCK(&node->dtn_lock);
-	} else {
+	if (node->dtn_type != D_TM_TIMESTAMP) {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to record timestamp [%s] on item not a "
 			"timestamp.  Operation mismatch: " DF_RC "\n", path,
 			DP_RC(rc));
 	}
+
+	if (node->dtn_protect)
+		D_MUTEX_LOCK(&node->dtn_lock);
+	node->dtn_metric->dtm_data.value = (uint64_t)time(NULL);
+	if (node->dtn_protect)
+		D_MUTEX_UNLOCK(&node->dtn_lock);
+
 	return rc;
 
 failure:
@@ -1040,12 +1003,14 @@ failure:
  *
  * \param[in,out]	metric	Pointer to the metric
  * \param[in]		clk_id	A D_TM_CLOCK_* that identifies the clock type
- * \param[in]		item	Full path name to this \a item
- *				If supplied, the path name is specified by the
- *				\a item and any strings following it.  The last
- *				item must be NULL.
+ * \param[in]		fmt	Format specifier for the name and full path of
+ *				the metric followed by optional args to
+ *				populate the string, printf style.
+ *				The format specifier and optional arguments
+ *				are used only if the pointer to the metric
+ *				is NULL.
  *
- * \return			D_TM_SUCCESS		Success
+ * \return			DER_SUCCESS		Success
  *				-DER_EXCEEDS_PATH_LEN	The full name length is
  *							too long
  *				-DER_OP_NOT_PERMITTED	Operation not permitted
@@ -1059,11 +1024,11 @@ failure:
  */
 int
 d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
-			 char *item, ...)
+			 const char *fmt, ...)
 {
 	struct d_tm_node_t	*node = NULL;
 	char			path[D_TM_MAX_NAME_LEN] = {};
-	int			rc = D_TM_SUCCESS;
+	int			rc = DER_SUCCESS;
 
 	if (d_tm_shmem_root == NULL)
 		return -DER_UNINIT;
@@ -1072,19 +1037,22 @@ d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
 		node = *metric;
 	} else {
 		va_list	args;
-		char	*p;
+		int	ret;
 
-		if (item == NULL) {
+		if (fmt == NULL) {
 			rc = -DER_INVAL;
 			goto failure;
 		}
 
-		va_start(args, item);
-		p = path;
-		rc = d_tm_build_path(&p, item, args);
+		va_start(args, fmt);
+		ret = vsnprintf(path, sizeof(path), fmt, args);
 		va_end(args);
-		if (rc != D_TM_SUCCESS)
+
+		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
+			rc = -DER_EXCEEDS_PATH_LEN;
 			goto failure;
+		}
+
 		node = d_tm_find_metric(d_tm_shmem_root, path);
 		if (metric != NULL)
 			*metric = node;
@@ -1100,9 +1068,9 @@ d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
 				DP_RC(rc));
 			goto failure;
 		}
-		rc = d_tm_add_metric(&node, path, D_TM_TIMER_SNAPSHOT | clk_id,
-				     "N/A", "N/A");
-		if (rc != D_TM_SUCCESS) {
+		rc = d_tm_add_metric(&node, D_TM_TIMER_SNAPSHOT | clk_id,
+				     "N/A", "N/A", path);
+		if (rc != DER_SUCCESS) {
 			D_ERROR("Failed to add and record high resolution timer"
 				" [%s]: " DF_RC "\n", path, DP_RC(rc));
 			goto failure;
@@ -1111,21 +1079,21 @@ d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
 			*metric = node;
 	}
 
-	if (node->dtn_type & D_TM_TIMER_SNAPSHOT) {
-		if (node->dtn_protect)
-			D_MUTEX_LOCK(&node->dtn_lock);
-		clock_gettime(d_tm_clock_id(node->dtn_type &
-					    ~D_TM_TIMER_SNAPSHOT),
-			      &node->dtn_metric->dtm_data.tms[0]);
-		if (node->dtn_protect)
-			D_MUTEX_UNLOCK(&node->dtn_lock);
-	} else {
+	if (!(node->dtn_type & D_TM_TIMER_SNAPSHOT)) {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to record high resolution timer [%s] on item "
 			"not a high resolution timer.  Operation mismatch: "
 			DF_RC "\n", path, DP_RC(rc));
 		goto failure;
 	}
+
+	if (node->dtn_protect)
+		D_MUTEX_LOCK(&node->dtn_lock);
+	clock_gettime(d_tm_clock_id(node->dtn_type & ~D_TM_TIMER_SNAPSHOT),
+		      &node->dtn_metric->dtm_data.tms[0]);
+	if (node->dtn_protect)
+		D_MUTEX_UNLOCK(&node->dtn_lock);
+
 	return rc;
 
 failure:
@@ -1145,12 +1113,14 @@ failure:
  *
  * \param[in,out]	metric	Pointer to the metric
  * \param[in]		clk_id	A D_TM_CLOCK_* that identifies the clock type
- * \param[in]		item	Full path name to this \a item
- *				If supplied, the path name is specified by the
- *				\a item and any strings following it.  The last
- *				item must be NULL.
+ * \param[in]		fmt	Format specifier for the name and full path of
+ *				the metric followed by optional args to
+ *				populate the string, printf style.
+ *				The format specifier and optional arguments
+ *				are used only if the pointer to the metric
+ *				is NULL.
  *
- * \return			D_TM_SUCCESS		Success
+ * \return			DER_SUCCESS		Success
  *				-DER_EXCEEDS_PATH_LEN	The full name length is
  *							too long
  *				-DER_OP_NOT_PERMITTED	Operation not permitted
@@ -1163,11 +1133,11 @@ failure:
  */
 int
 d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
-			 char *item, ...)
+			 const char *fmt, ...)
 {
 	struct d_tm_node_t	*node = NULL;
 	char			path[D_TM_MAX_NAME_LEN] = {};
-	int			rc = D_TM_SUCCESS;
+	int			rc = DER_SUCCESS;
 
 	if (d_tm_shmem_root == NULL)
 		return -DER_UNINIT;
@@ -1176,19 +1146,22 @@ d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
 		node = *metric;
 	} else {
 		va_list	args;
-		char	*p;
+		int	ret;
 
-		if (item == NULL) {
+		if (fmt == NULL) {
 			rc = -DER_INVAL;
 			goto failure;
 		}
 
-		va_start(args, item);
-		p = path;
-		rc = d_tm_build_path(&p, item, args);
+		va_start(args, fmt);
+		ret = vsnprintf(path, sizeof(path), fmt, args);
 		va_end(args);
-		if (rc != D_TM_SUCCESS)
+
+		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
+			rc = -DER_EXCEEDS_PATH_LEN;
 			goto failure;
+		}
+
 		node = d_tm_find_metric(d_tm_shmem_root, path);
 		if (metric != NULL)
 			*metric = node;
@@ -1204,9 +1177,9 @@ d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
 				DP_RC(rc));
 			goto failure;
 		}
-		rc = d_tm_add_metric(&node, path, D_TM_DURATION | clk_id,
-				     "N/A", "N/A");
-		if (rc != D_TM_SUCCESS) {
+		rc = d_tm_add_metric(&node, D_TM_DURATION | clk_id,
+				     "N/A", "N/A", path);
+		if (rc != DER_SUCCESS) {
 			D_ERROR("Failed to add and mark duration start [%s]: "
 				DF_RC "\n", path, DP_RC(rc));
 			goto failure;
@@ -1215,20 +1188,21 @@ d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
 			*metric = node;
 	}
 
-	if (node->dtn_type & D_TM_DURATION) {
-		if (node->dtn_protect)
-			D_MUTEX_LOCK(&node->dtn_lock);
-		clock_gettime(d_tm_clock_id(node->dtn_type & ~D_TM_DURATION),
-			      &node->dtn_metric->dtm_data.tms[1]);
-		if (node->dtn_protect)
-			D_MUTEX_UNLOCK(&node->dtn_lock);
-	} else {
+	if (!(node->dtn_type & D_TM_DURATION)) {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to mark duration start [%s] on item "
 			"not a duration.  Operation mismatch: " DF_RC "\n",
 			path, DP_RC(rc));
 		goto failure;
 	}
+
+	if (node->dtn_protect)
+		D_MUTEX_LOCK(&node->dtn_lock);
+	clock_gettime(d_tm_clock_id(node->dtn_type & ~D_TM_DURATION),
+		      &node->dtn_metric->dtm_data.tms[1]);
+	if (node->dtn_protect)
+		D_MUTEX_UNLOCK(&node->dtn_lock);
+
 	return rc;
 
 failure:
@@ -1248,12 +1222,16 @@ failure:
  * does not already exist.
  *
  * \param[in]		metric	Pointer to the metric
- * \param[in]		item	Full path name to this \a item
- *				If supplied, the path name is specified by the
- *				\a item and any strings following it.  The last
- *				item must be NULL.
+ * \param[in]		err	If non-zero, aborts the interval calculation
+ *				so that this interval is not added to the stats.
+ * \param[in]		fmt	Format specifier for the name and full path of
+ *				the metric followed by optional args to
+ *				populate the string, printf style.
+ *				The format specifier and optional arguments
+ *				are used only if the pointer to the metric
+ *				is NULL.
  *
- * \return			D_TM_SUCCESS		Success
+ * \return			DER_SUCCESS		Success
  *				-DER_EXCEEDS_PATH_LEN	The full name length is
  *							too long
  *				-DER_OP_NOT_PERMITTED	Operation not permitted
@@ -1267,35 +1245,42 @@ failure:
  *							are NULL
  */
 int
-d_tm_mark_duration_end(struct d_tm_node_t **metric, char *item, ...)
+d_tm_mark_duration_end(struct d_tm_node_t **metric, int err,
+		       const char *fmt, ...)
 {
 	struct d_tm_node_t	*node = NULL;
 	struct timespec		end;
 	struct timespec		*tms;
 	char			path[D_TM_MAX_NAME_LEN] = {};
-	int			rc = D_TM_SUCCESS;
 	uint64_t		microseconds;
+	int			rc = DER_SUCCESS;
 
 	if (d_tm_shmem_root == NULL)
 		return -DER_UNINIT;
+
+	if (err != DER_SUCCESS)
+		return rc;
 
 	if ((metric != NULL) && (*metric != NULL)) {
 		node = *metric;
 	} else {
 		va_list	args;
-		char	*p;
+		int	ret;
 
-		if (item == NULL) {
+		if (fmt == NULL) {
 			rc = -DER_INVAL;
 			goto failure;
 		}
 
-		va_start(args, item);
-		p = path;
-		rc = d_tm_build_path(&p, item, args);
+		va_start(args, fmt);
+		ret = vsnprintf(path, sizeof(path), fmt, args);
 		va_end(args);
-		if (rc != D_TM_SUCCESS)
+
+		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
+			rc = -DER_EXCEEDS_PATH_LEN;
 			goto failure;
+		}
+
 		node = d_tm_find_metric(d_tm_shmem_root, path);
 		if (metric != NULL)
 			*metric = node;
@@ -1309,29 +1294,27 @@ d_tm_mark_duration_end(struct d_tm_node_t **metric, char *item, ...)
 		goto failure;
 	}
 
-	if (node->dtn_type & D_TM_DURATION) {
-		if (node->dtn_protect)
-			D_MUTEX_LOCK(&node->dtn_lock);
-		clock_gettime(d_tm_clock_id(node->dtn_type & ~D_TM_DURATION),
-			      &end);
-		node->dtn_metric->dtm_data.tms[0] = d_timediff(
-					node->dtn_metric->dtm_data.tms[1], end);
-		tms = node->dtn_metric->dtm_data.tms;
-		microseconds = (tms->tv_sec * 1000000) + (tms->tv_nsec / 1000);
-		d_tm_compute_stats(node, microseconds);
-
-		if (node->dtn_metric->dtm_histogram != NULL)
-			rc = d_tm_compute_histogram(node, microseconds);
-
-		if (node->dtn_protect)
-			D_MUTEX_UNLOCK(&node->dtn_lock);
-	} else {
+	if (!(node->dtn_type & D_TM_DURATION)) {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to mark duration end [%s] on item "
 			"not a duration.  Operation mismatch: " DF_RC "\n",
 			path, DP_RC(rc));
 		goto failure;
 	}
+
+	if (node->dtn_protect)
+		D_MUTEX_LOCK(&node->dtn_lock);
+	clock_gettime(d_tm_clock_id(node->dtn_type & ~D_TM_DURATION), &end);
+	node->dtn_metric->dtm_data.tms[0] = d_timediff(
+					node->dtn_metric->dtm_data.tms[1], end);
+	tms = node->dtn_metric->dtm_data.tms;
+	microseconds = (tms->tv_sec * 1000000) + (tms->tv_nsec / 1000);
+	d_tm_compute_stats(node, microseconds);
+	if (node->dtn_metric->dtm_histogram != NULL)
+		rc = d_tm_compute_histogram(node, microseconds);
+	if (node->dtn_protect)
+		D_MUTEX_UNLOCK(&node->dtn_lock);
+
 	return rc;
 
 failure:
@@ -1351,12 +1334,14 @@ failure:
  *
  * \param[in,out]	metric	Pointer to the metric
  * \param[in]		value	Set the gauge to this value
- * \param[in]		item	Full path name to this \a item
- *				If supplied, the path name is specified by the
- *				\a item and any strings following it.  The last
- *				item must be NULL.
+ * \param[in]		fmt	Format specifier for the name and full path of
+ *				the metric followed by optional args to
+ *				populate the string, printf style.
+ *				The format specifier and optional arguments
+ *				are used only if the pointer to the metric
+ *				is NULL.
  *
- * \return			D_TM_SUCCESS		Success
+ * \return			DER_SUCCESS		Success
  *				-DER_EXCEEDS_PATH_LEN	The full name length is
  *							too long
  *				-DER_OP_NOT_PERMITTED	Operation not permitted
@@ -1367,11 +1352,12 @@ failure:
  *							are NULL
  */
 int
-d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value, char *item, ...)
+d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value,
+	       const char *fmt, ...)
 {
 	struct d_tm_node_t	*node = NULL;
 	char			path[D_TM_MAX_NAME_LEN] = {};
-	int			rc = D_TM_SUCCESS;
+	int			rc = DER_SUCCESS;
 
 	if (d_tm_shmem_root == NULL)
 		return -DER_UNINIT;
@@ -1380,27 +1366,30 @@ d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value, char *item, ...)
 		node = *metric;
 	} else {
 		va_list	args;
-		char	*p;
+		int	ret;
 
-		if (item == NULL) {
+		if (fmt == NULL) {
 			rc = -DER_INVAL;
 			goto failure;
 		}
 
-		va_start(args, item);
-		p = path;
-		rc = d_tm_build_path(&p, item, args);
+		va_start(args, fmt);
+		ret = vsnprintf(path, sizeof(path), fmt, args);
 		va_end(args);
-		if (rc != D_TM_SUCCESS)
+
+		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
+			rc = -DER_EXCEEDS_PATH_LEN;
 			goto failure;
+		}
+
 		node = d_tm_find_metric(d_tm_shmem_root, path);
 		if (metric != NULL)
 			*metric = node;
 	}
 
 	if (node == NULL) {
-		rc = d_tm_add_metric(&node, path, D_TM_GAUGE, "N/A", "N/A");
-		if (rc != D_TM_SUCCESS) {
+		rc = d_tm_add_metric(&node, D_TM_GAUGE, "N/A", "N/A", path);
+		if (rc != DER_SUCCESS) {
 			D_ERROR("Failed to add and set gauge [%s]: "
 				DF_RC "\n", path, DP_RC(rc));
 			goto failure;
@@ -1409,24 +1398,23 @@ d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value, char *item, ...)
 			*metric = node;
 	}
 
-	if (node->dtn_type == D_TM_GAUGE) {
-		if (node->dtn_protect)
-			D_MUTEX_LOCK(&node->dtn_lock);
-		node->dtn_metric->dtm_data.value = value;
-		d_tm_compute_stats(node, node->dtn_metric->dtm_data.value);
-
-		if (node->dtn_metric->dtm_histogram != NULL)
-			rc = d_tm_compute_histogram(node, value);
-
-		if (node->dtn_protect)
-			D_MUTEX_UNLOCK(&node->dtn_lock);
-	} else {
+	if (node->dtn_type != D_TM_GAUGE) {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to set gauge [%s] on item "
 			"not a gauge.  Operation mismatch: " DF_RC "\n",
 			path, DP_RC(rc));
 		goto failure;
 	}
+
+	if (node->dtn_protect)
+		D_MUTEX_LOCK(&node->dtn_lock);
+	node->dtn_metric->dtm_data.value = value;
+	d_tm_compute_stats(node, node->dtn_metric->dtm_data.value);
+	if (node->dtn_metric->dtm_histogram != NULL)
+		rc = d_tm_compute_histogram(node, value);
+	if (node->dtn_protect)
+		D_MUTEX_UNLOCK(&node->dtn_lock);
+
 	return rc;
 
 failure:
@@ -1446,12 +1434,14 @@ failure:
  *
  * \param[in,out]	metric	Pointer to the metric
  * \param[in]		value	Increment the gauge by this value
- * \param[in]		item	Full path name to this \a item
- *				If supplied, the path name is specified by the
- *				\a item and any strings following it.  The last
- *				item must be NULL.
+ * \param[in]		fmt	Format specifier for the name and full path of
+ *				the metric followed by optional args to
+ *				populate the string, printf style.
+ *				The format specifier and optional arguments
+ *				are used only if the pointer to the metric
+ *				is NULL.
  *
- * \return			D_TM_SUCCESS		Success
+ * \return			DER_SUCCESS		Success
  *				-DER_EXCEEDS_PATH_LEN	The full name length is
  *							too long
  *				-DER_OP_NOT_PERMITTED	Operation not permitted
@@ -1463,11 +1453,11 @@ failure:
  */
 int
 d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
-		     char *item, ...)
+		     const char *fmt, ...)
 {
 	struct d_tm_node_t	*node = NULL;
 	char			path[D_TM_MAX_NAME_LEN] = {};
-	int			rc = D_TM_SUCCESS;
+	int			rc = DER_SUCCESS;
 
 	if (d_tm_shmem_root == NULL)
 		return -DER_UNINIT;
@@ -1476,27 +1466,30 @@ d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
 		node = *metric;
 	} else {
 		va_list	args;
-		char	*p;
+		int	ret;
 
-		if (item == NULL) {
+		if (fmt == NULL) {
 			rc = -DER_INVAL;
 			goto failure;
 		}
 
-		va_start(args, item);
-		p = path;
-		rc = d_tm_build_path(&p, item, args);
+		va_start(args, fmt);
+		ret = vsnprintf(path, sizeof(path), fmt, args);
 		va_end(args);
-		if (rc != D_TM_SUCCESS)
+
+		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
+			rc = -DER_EXCEEDS_PATH_LEN;
 			goto failure;
+		}
+
 		node = d_tm_find_metric(d_tm_shmem_root, path);
 		if (metric != NULL)
 			*metric = node;
 	}
 
 	if (node == NULL) {
-		rc = d_tm_add_metric(&node, path, D_TM_GAUGE, "N/A", "N/A");
-		if (rc != D_TM_SUCCESS) {
+		rc = d_tm_add_metric(&node, D_TM_GAUGE, "N/A", "N/A", path);
+		if (rc != DER_SUCCESS) {
 			D_ERROR("Failed to add and incremement gauge [%s]: "
 				DF_RC "\n", path, DP_RC(rc));
 			goto failure;
@@ -1505,24 +1498,23 @@ d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
 			*metric = node;
 	}
 
-	if (node->dtn_type == D_TM_GAUGE) {
-		if (node->dtn_protect)
-			D_MUTEX_LOCK(&node->dtn_lock);
-		node->dtn_metric->dtm_data.value += value;
-		d_tm_compute_stats(node, node->dtn_metric->dtm_data.value);
-
-		if (node->dtn_metric->dtm_histogram != NULL)
-			rc = d_tm_compute_histogram(node, value);
-
-		if (node->dtn_protect)
-			D_MUTEX_UNLOCK(&node->dtn_lock);
-	} else {
+	if (node->dtn_type != D_TM_GAUGE) {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to increment gauge [%s] on item "
 			"not a gauge.  Operation mismatch: " DF_RC "\n",
 			path, DP_RC(rc));
 		goto failure;
 	}
+
+	if (node->dtn_protect)
+		D_MUTEX_LOCK(&node->dtn_lock);
+	node->dtn_metric->dtm_data.value += value;
+	d_tm_compute_stats(node, node->dtn_metric->dtm_data.value);
+	if (node->dtn_metric->dtm_histogram != NULL)
+		rc = d_tm_compute_histogram(node, value);
+	if (node->dtn_protect)
+		D_MUTEX_UNLOCK(&node->dtn_lock);
+
 	return rc;
 
 failure:
@@ -1542,12 +1534,14 @@ failure:
  *
  * \param[in,out]	metric	Pointer to the metric
  * \param[in]		value	Decrement the gauge by this value
- * \param[in]		item	Full path name to this \a item
- *				If supplied, the path name is specified by the
- *				\a item and any strings following it.  The last
- *				item must be NULL.
+ * \param[in]		fmt	Format specifier for the name and full path of
+ *				the metric followed by optional args to
+ *				populate the string, printf style.
+ *				The format specifier and optional arguments
+ *				are used only if the pointer to the metric
+ *				is NULL.
  *
- * \return			D_TM_SUCCESS		Success
+ * \return			DER_SUCCESS		Success
  *				-DER_EXCEEDS_PATH_LEN	The full name length is
  *							too long
  *				-DER_OP_NOT_PERMITTED	Operation not permitted
@@ -1559,11 +1553,11 @@ failure:
  */
 int
 d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
-		     char *item, ...)
+		     const char *fmt, ...)
 {
 	struct d_tm_node_t	*node = NULL;
 	char			path[D_TM_MAX_NAME_LEN] = {};
-	int			rc = D_TM_SUCCESS;
+	int			rc = DER_SUCCESS;
 
 	if (d_tm_shmem_root == NULL)
 		return -DER_UNINIT;
@@ -1572,27 +1566,30 @@ d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
 		node = *metric;
 	} else {
 		va_list	args;
-		char	*p;
+		int	ret;
 
-		if (item == NULL) {
+		if (fmt == NULL) {
 			rc = -DER_INVAL;
 			goto failure;
 		}
 
-		va_start(args, item);
-		p = path;
-		rc = d_tm_build_path(&p, item, args);
+		va_start(args, fmt);
+		ret = vsnprintf(path, sizeof(path), fmt, args);
 		va_end(args);
-		if (rc != D_TM_SUCCESS)
+
+		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
+			rc = -DER_EXCEEDS_PATH_LEN;
 			goto failure;
+		}
+
 		node = d_tm_find_metric(d_tm_shmem_root, path);
 		if (metric != NULL)
 			*metric = node;
 	}
 
 	if (node == NULL) {
-		rc = d_tm_add_metric(&node, path, D_TM_GAUGE, "N/A", "N/A");
-		if (rc != D_TM_SUCCESS) {
+		rc = d_tm_add_metric(&node, D_TM_GAUGE, "N/A", "N/A", path);
+		if (rc != DER_SUCCESS) {
 			D_ERROR("Failed to add and decrement gauge [%s]: "
 				DF_RC "\n", path, DP_RC(rc));
 			goto failure;
@@ -1601,24 +1598,23 @@ d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
 			*metric = node;
 	}
 
-	if (node->dtn_type == D_TM_GAUGE) {
-		if (node->dtn_protect)
-			D_MUTEX_LOCK(&node->dtn_lock);
-		node->dtn_metric->dtm_data.value -= value;
-		d_tm_compute_stats(node, node->dtn_metric->dtm_data.value);
-
-		if (node->dtn_metric->dtm_histogram != NULL)
-			rc = d_tm_compute_histogram(node, value);
-
-		if (node->dtn_protect)
-			D_MUTEX_UNLOCK(&node->dtn_lock);
-	} else {
+	if (node->dtn_type != D_TM_GAUGE) {
 		rc = -DER_OP_NOT_PERMITTED;
 		D_ERROR("Failed to decrement gauge [%s] on item "
 			"not a gauge.  Operation mismatch: " DF_RC "\n",
 			path, DP_RC(rc));
 		goto failure;
 	}
+
+	if (node->dtn_protect)
+		D_MUTEX_LOCK(&node->dtn_lock);
+	node->dtn_metric->dtm_data.value -= value;
+	d_tm_compute_stats(node, node->dtn_metric->dtm_data.value);
+	if (node->dtn_metric->dtm_histogram != NULL)
+		rc = d_tm_compute_histogram(node, value);
+	if (node->dtn_protect)
+		D_MUTEX_UNLOCK(&node->dtn_lock);
+
 	return rc;
 
 failure:
@@ -1692,14 +1688,15 @@ d_tm_find_metric(uint64_t *shmem_root, char *path)
  * critical time.
  *
  * \param[out]	node		Points to the new metric if supplied
- * \param[in]	metric		Full path name of the new metric to create
  * \param[in]	metric_type	One of the corresponding d_tm_metric_types
  * \param[in]	sh_desc		A short description of the metric containing
  *				D_TM_MAX_SHORT_LEN - 1 characters maximum
  * \param[in]	lng_desc	A long description of the metric containing
  *				D_TM_MAX_LONG_LEN - 1 characters maximum
- *
- * \return			D_TM_SUCCESS		Success
+ * \param[in]	fmt		Format specifier for the name and full path of
+ *				the new metric followed by optional args to
+ *				populate the string, printf style.
+ * \return			DER_SUCCESS		Success
  *				-DER_NO_SHMEM		Out of shared memory
  *				-DER_NOMEM		Out of global heap
  *				-DER_EXCEEDS_PATH_LEN	node name exceeds
@@ -1708,18 +1705,19 @@ d_tm_find_metric(uint64_t *shmem_root, char *path)
  *				-DER_ADD_METRIC_FAILED	Operation failed
  *				-DER_UNINIT		API not initialized
  */
-int
-d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
-		char *sh_desc, char *lng_desc)
+int d_tm_add_metric(struct d_tm_node_t **node, int metric_type, char *sh_desc,
+		    char *lng_desc, const char *fmt, ...)
 {
 	pthread_mutexattr_t	mattr;
 	struct d_tm_node_t	*parent_node;
 	struct d_tm_node_t	*temp;
-	char			*str = NULL;
+	char			path[D_TM_MAX_NAME_LEN] = {};
 	char			*token;
 	char			*rest;
 	int			buff_len;
 	int			rc;
+	int			ret;
+	va_list			args;
 
 	if (d_tm_shmem_root == NULL)
 		return -DER_UNINIT;
@@ -1727,9 +1725,21 @@ d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
 	if (node == NULL)
 		return -DER_INVAL;
 
+	if (fmt == NULL)
+		return -DER_INVAL;
+
 	rc = D_MUTEX_LOCK(&d_tm_add_lock);
 	if (rc != 0) {
 		D_ERROR("Failed to get mutex: " DF_RC "\n", DP_RC(rc));
+		goto failure;
+	}
+
+	va_start(args, fmt);
+	ret = vsnprintf(path, sizeof(path), fmt, args);
+	va_end(args);
+
+	if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
+		rc = -DER_EXCEEDS_PATH_LEN;
 		goto failure;
 	}
 
@@ -1739,31 +1749,20 @@ d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
 	 * which leads to this d_tm_add_metric() call.
 	 * If the metric is found, it's not an error.  Just return.
 	 */
-	*node = d_tm_find_metric(d_tm_shmem_root, metric);
+	*node = d_tm_find_metric(d_tm_shmem_root, path);
 	if (*node != NULL) {
 		D_MUTEX_UNLOCK(&d_tm_add_lock);
-		return D_TM_SUCCESS;
+		return DER_SUCCESS;
 	}
 
-	D_STRNDUP(str, metric, D_TM_MAX_NAME_LEN);
-	if (str == NULL) {
-		rc = -DER_NOMEM;
-		goto failure;
-	}
-
-	if (strnlen(metric, D_TM_MAX_NAME_LEN) == D_TM_MAX_NAME_LEN) {
-		rc = -DER_EXCEEDS_PATH_LEN;
-		goto failure;
-	}
-
-	rest = str;
+	rest = path;
 	parent_node = d_tm_get_root(d_tm_shmem_root);
 	token = strtok_r(rest, "/", &rest);
 	while (token != NULL) {
 		temp = d_tm_find_child(d_tm_shmem_root, parent_node, token);
 		if (temp == NULL) {
 			rc = d_tm_add_child(&temp, parent_node, token);
-			if (rc != D_TM_SUCCESS)
+			if (rc != DER_SUCCESS)
 				goto failure;
 			temp->dtn_type = D_TM_DIRECTORY;
 		}
@@ -1848,16 +1847,13 @@ d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
 	}
 	*node = temp;
 
-	D_DEBUG(DB_TRACE, "successfully added item: [%s]\n", metric);
-	D_FREE_PTR(str);
+	D_DEBUG(DB_TRACE, "successfully added item: [%s]\n", path);
 	D_MUTEX_UNLOCK(&d_tm_add_lock);
-	return D_TM_SUCCESS;
+	return DER_SUCCESS;
 
 failure:
-	D_FREE_PTR(str);
 	D_MUTEX_UNLOCK(&d_tm_add_lock);
-	D_ERROR("Failed to add child node for [%s]: " DF_RC "\n", metric,
-		DP_RC(rc));
+	D_ERROR("Failed to add metric [%s]: " DF_RC "\n", path, DP_RC(rc));
 	return rc;
 }
 
@@ -1886,7 +1882,7 @@ failure:
  *				twice the size of the previous bucket.
  *				Must be > 0.
  *
- * \return			D_TM_SUCCESS		Success
+ * \return			DER_SUCCESS		Success
  *				-DER_INVAL		node, path, num_buckets,
  *							initial_width or
  *							multiplier is invalid.
@@ -1904,7 +1900,7 @@ d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets,
 	uint64_t		min = 0;
 	uint64_t		max = 0;
 	uint64_t		prev_width = 0;
-	int			rc = D_TM_SUCCESS;
+	int			rc = DER_SUCCESS;
 	int			i;
 	char			*meta_data;
 	char			*fullpath;
@@ -1978,8 +1974,8 @@ d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets,
 		dth_buckets[i].dtb_min = min;
 		dth_buckets[i].dtb_max = max;
 
-		rc = d_tm_add_metric(&dth_buckets[i].dtb_bucket, fullpath,
-				     D_TM_COUNTER, meta_data, "");
+		rc = d_tm_add_metric(&dth_buckets[i].dtb_bucket, D_TM_COUNTER,
+				     meta_data, "", fullpath);
 		D_FREE(fullpath);
 		D_FREE(meta_data);
 		if (rc)
@@ -1998,7 +1994,7 @@ d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets,
 	}
 
 	D_DEBUG(DB_TRACE, "Successfully added histogram for: [%s]\n", path);
-	return D_TM_SUCCESS;
+	return DER_SUCCESS;
 
 failure:
 
@@ -2017,7 +2013,7 @@ failure:
  * \param[in]		node		Pointer to the metric node with a
  *					histogram.
  *
- * \return			D_TM_SUCCESS		Success
+ * \return			DER_SUCCESS		Success
  *				-DER_INVAL		node or histogram is
  *							invalid.
  *				-DER_METRIC_NOT_FOUND	The metric node, the
@@ -2059,7 +2055,7 @@ d_tm_get_num_buckets(struct d_tm_histogram_t *histogram,
 	histogram->dth_initial_width = dtm_histogram->dth_initial_width;
 	histogram->dth_value_multiplier = dtm_histogram->dth_value_multiplier;
 
-	return D_TM_SUCCESS;
+	return DER_SUCCESS;
 }
 
 /**
@@ -2072,7 +2068,7 @@ d_tm_get_num_buckets(struct d_tm_histogram_t *histogram,
  * \param[in]		node		Pointer to the metric node with a
  *					histogram.
  *
- * \return			D_TM_SUCCESS		Success
+ * \return			DER_SUCCESS		Success
  *				-DER_INVAL		node, bucket, or bucket
  *							ID is invalid.
  *				-DER_METRIC_NOT_FOUND	The metric node, the
@@ -2124,7 +2120,7 @@ d_tm_get_bucket_range(struct d_tm_bucket_t *bucket, int bucket_id,
 
 	bucket->dtb_min = dth_bucket[bucket_id].dtb_min;
 	bucket->dtb_max = dth_bucket[bucket_id].dtb_max;
-	return D_TM_SUCCESS;
+	return DER_SUCCESS;
 }
 
 
@@ -2138,7 +2134,7 @@ d_tm_get_bucket_range(struct d_tm_bucket_t *bucket, int bucket_id,
  * \param[in]		node		Pointer to the stored metric node
  * \param[in]		metric		Full path name to the stored metric
  *
- * \return		D_TM_SUCCESS		Success
+ * \return		DER_SUCCESS		Success
  *			-DER_INVAL		Bad \a value pointer
  *			-DER_METRIC_NOT_FOUND	Metric not found
  *			-DER_OP_NOT_PERMITTED	Metric was not a counter
@@ -2174,7 +2170,7 @@ d_tm_get_counter(uint64_t *val, uint64_t *shmem_root, struct d_tm_node_t *node,
 	} else {
 		return -DER_METRIC_NOT_FOUND;
 	}
-	return D_TM_SUCCESS;
+	return DER_SUCCESS;
 }
 
 /**
@@ -2188,7 +2184,7 @@ d_tm_get_counter(uint64_t *val, uint64_t *shmem_root, struct d_tm_node_t *node,
  * \param[in]		node		Pointer to the stored metric node
  * \param[in]		metric		Full path name to the stored metric
  *
- * \return		D_TM_SUCCESS		Success
+ * \return		DER_SUCCESS		Success
  *			-DER_INVAL		Bad \a val pointer
  *			-DER_METRIC_NOT_FOUND	Metric not found
  *			-DER_OP_NOT_PERMITTED	Metric was not a timestamp
@@ -2224,7 +2220,7 @@ d_tm_get_timestamp(time_t *val, uint64_t *shmem_root, struct d_tm_node_t *node,
 	} else {
 		return -DER_METRIC_NOT_FOUND;
 	}
-	return D_TM_SUCCESS;
+	return DER_SUCCESS;
 }
 
 /**
@@ -2237,7 +2233,7 @@ d_tm_get_timestamp(time_t *val, uint64_t *shmem_root, struct d_tm_node_t *node,
  * \param[in]		node		Pointer to the stored metric node
  * \param[in]		metric		Full path name to the stored metric
  *
- * \return		D_TM_SUCCESS		Success
+ * \return		DER_SUCCESS		Success
  *			-DER_INVAL		Bad \a tms pointer
  *			-DER_METRIC_NOT_FOUND	Metric not found
  *			-DER_OP_NOT_PERMITTED	Metric was not a high resolution
@@ -2275,7 +2271,7 @@ d_tm_get_timer_snapshot(struct timespec *tms, uint64_t *shmem_root,
 	} else {
 		return -DER_METRIC_NOT_FOUND;
 	}
-	return D_TM_SUCCESS;
+	return DER_SUCCESS;
 }
 
 /**
@@ -2293,7 +2289,7 @@ d_tm_get_timer_snapshot(struct timespec *tms, uint64_t *shmem_root,
  * \param[in]		node		Pointer to the stored metric node
  * \param[in]		metric		Full path name to the stored metric
  *
- * \return		D_TM_SUCCESS		Success
+ * \return		DER_SUCCESS		Success
  *			-DER_INVAL		Bad \a tms pointer
  *			-DER_METRIC_NOT_FOUND	Metric not found
  *			-DER_OP_NOT_PERMITTED	Metric was not a duration
@@ -2348,7 +2344,7 @@ d_tm_get_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 	} else {
 		return -DER_METRIC_NOT_FOUND;
 	}
-	return D_TM_SUCCESS;
+	return DER_SUCCESS;
 }
 
 /**
@@ -2366,7 +2362,7 @@ d_tm_get_duration(struct timespec *tms, struct d_tm_stats_t *stats,
  * \param[in]		node		Pointer to the stored metric node
  * \param[in]		metric		Full path name to the stored metric
  *
- * \return		D_TM_SUCCESS		Success
+ * \return		DER_SUCCESS		Success
  *			-DER_INVAL		Bad \a val pointer
  *			-DER_METRIC_NOT_FOUND	Metric not found
  *			-DER_OP_NOT_PERMITTED	Metric was not a gauge
@@ -2421,7 +2417,7 @@ d_tm_get_gauge(uint64_t *val, struct d_tm_stats_t *stats, uint64_t *shmem_root,
 	} else {
 		return -DER_METRIC_NOT_FOUND;
 	}
-	return D_TM_SUCCESS;
+	return DER_SUCCESS;
 }
 
 /**
@@ -2438,7 +2434,7 @@ d_tm_get_gauge(uint64_t *val, struct d_tm_stats_t *stats, uint64_t *shmem_root,
  * \param[in]		node		Pointer to the stored metric node
  * \param[in]		metric		Full path name to the stored metric
  *
- * \return		D_TM_SUCCESS		Success
+ * \return		DER_SUCCESS		Success
  *			-DER_INVAL		Bad \a sh_desc or \a lng_desc
  *						pointer
  *			-DER_METRIC_NOT_FOUND	Metric node not found
@@ -2485,7 +2481,7 @@ int d_tm_get_metadata(char **sh_desc, char **lng_desc, uint64_t *shmem_root,
 	} else {
 		return -DER_METRIC_NOT_FOUND;
 	}
-	return D_TM_SUCCESS;
+	return DER_SUCCESS;
 }
 
 /**
@@ -2519,7 +2515,7 @@ d_tm_get_version(void)
  * \param[in]		d_tm_type	A bitmask of d_tm_metric_types that
  *					filters the results.
  *
- * \return		D_TM_SUCCESS		Success
+ * \return		DER_SUCCESS		Success
  *			-DER_NOMEM		Out of global heap
  *			-DER_INVAL		Invalid pointer for \a head or
  *						\a node
@@ -2528,7 +2524,7 @@ int
 d_tm_list(struct d_tm_nodeList_t **head, uint64_t *shmem_root,
 	  struct d_tm_node_t *node, int d_tm_type)
 {
-	int	rc = D_TM_SUCCESS;
+	int	rc = DER_SUCCESS;
 
 	if ((head == NULL) || (node == NULL)) {
 		rc = -DER_INVAL;
@@ -2537,7 +2533,7 @@ d_tm_list(struct d_tm_nodeList_t **head, uint64_t *shmem_root,
 
 	if (d_tm_type & node->dtn_type) {
 		rc = d_tm_add_node(node, head);
-		if (rc != D_TM_SUCCESS)
+		if (rc != DER_SUCCESS)
 			goto failure;
 	}
 
@@ -2552,7 +2548,7 @@ d_tm_list(struct d_tm_nodeList_t **head, uint64_t *shmem_root,
 	}
 
 	rc = d_tm_list(head, shmem_root, node, d_tm_type);
-	if (rc != D_TM_SUCCESS)
+	if (rc != DER_SUCCESS)
 		goto failure;
 
 	node = node->dtn_sibling;
@@ -2562,7 +2558,7 @@ d_tm_list(struct d_tm_nodeList_t **head, uint64_t *shmem_root,
 	node = d_tm_conv_ptr(shmem_root, node);
 	while (node != NULL) {
 		rc = d_tm_list(head, shmem_root, node, d_tm_type);
-		if (rc != D_TM_SUCCESS)
+		if (rc != DER_SUCCESS)
 			goto failure;
 		node = node->dtn_sibling;
 		node = d_tm_conv_ptr(shmem_root, node);
@@ -2598,7 +2594,7 @@ d_tm_list_free(struct d_tm_nodeList_t *nodeList)
  * \param[in]		src		The src node to add
  * \param[in,out]	nodelist	The nodelist to add \a src to
  *
- * \return		D_TM_SUCCESS	Success
+ * \return		DER_SUCCESS	Success
  *			-DER_NOMEM	Out of global heap
  *			-DER_INVAL	Invalid pointer for \a head or
  *					\a node
@@ -2616,7 +2612,7 @@ d_tm_add_node(struct d_tm_node_t *src, struct d_tm_nodeList_t **nodelist)
 		if (*nodelist) {
 			(*nodelist)->dtnl_node = src;
 			(*nodelist)->dtnl_next = NULL;
-			return D_TM_SUCCESS;
+			return DER_SUCCESS;
 		}
 		return -DER_NOMEM;
 	}
@@ -2632,7 +2628,7 @@ d_tm_add_node(struct d_tm_node_t *src, struct d_tm_nodeList_t **nodelist)
 		list = list->dtnl_next;
 		list->dtnl_node = src;
 		list->dtnl_next = NULL;
-		return D_TM_SUCCESS;
+		return DER_SUCCESS;
 	}
 	return -DER_NOMEM;
 }
@@ -2658,16 +2654,24 @@ d_tm_get_key(int srv_idx)
 uint64_t *
 d_tm_allocate_shared_memory(int srv_idx, size_t mem_size)
 {
-	key_t	key;
+	uint64_t	*addr;
+	key_t		key;
 
 	key = d_tm_get_key(srv_idx);
 	d_tm_shmid = shmget(key, mem_size, IPC_CREAT | 0660);
 	if (d_tm_shmid < 0) {
-		D_ERROR("shmget failed, %s\n", strerror(errno));
+		D_ERROR("Unable to allocate shared memory.  shmget failed, "
+			"%s\n", strerror(errno));
 		return NULL;
 	}
 
-	return (uint64_t *)shmat(d_tm_shmid, NULL, 0);
+	addr = shmat(d_tm_shmid, NULL, 0);
+	if (addr == (void *)-1) {
+		D_ERROR("Unable to allocate shared memory.  shmat failed, "
+			"%s\n", strerror(errno));
+		return NULL;
+	}
+	return addr;
 }
 
 /**
@@ -2689,13 +2693,15 @@ d_tm_get_shared_memory(int srv_idx)
 	key = d_tm_get_key(srv_idx);
 	shmid = shmget(key, 0, 0);
 	if (shmid < 0) {
-		D_ERROR("shmget failed, %s\n", strerror(errno));
+		D_ERROR("Unable to access shared memory.  shmget failed, "
+			"%s\n", strerror(errno));
 		return NULL;
 	}
 
 	addr = shmat(shmid, NULL, 0);
 	if (addr == (void *)-1) {
-		D_ERROR("shmat failed, %s\n", strerror(errno));
+		D_ERROR("Unable to access shared memory.  shmat failed, "
+			"%s\n", strerror(errno));
 		return NULL;
 	}
 	return addr;
