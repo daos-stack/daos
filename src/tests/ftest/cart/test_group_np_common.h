@@ -462,10 +462,10 @@ parse_verify_swim_status_arg(char *source)
 				offset = groupArray[g].rm_eo;
 			}
 
-			char cursorCopy[strlen(cursor) + 1];
+			char cC[strlen(cursor) + 1];
 
-			strcpy(cursorCopy, cursor);
-			cursorCopy[groupArray[g].rm_eo] = 0;
+			strcpy(cC, cursor);
+			cC[groupArray[g].rm_eo] = 0;
 			D_DEBUG(DB_TEST,
 				"parse_verify_swim_status_arg, match %u, "
 					 "group %u: [%2u-%2u]: %s\n",
@@ -473,10 +473,10 @@ parse_verify_swim_status_arg(char *source)
 					 g,
 					 groupArray[g].rm_so,
 					 groupArray[g].rm_eo,
-					 cursorCopy + groupArray[g].rm_so);
+					 cC + groupArray[g].rm_so);
 
 			if (g == 1) {
-				ss.rank = atoi(cursorCopy +
+				ss.rank = atoi(cC +
 					       groupArray[g].rm_so);
 			}
 			if (g == 2) {
@@ -484,10 +484,12 @@ parse_verify_swim_status_arg(char *source)
 				int exp_status_len = 8;
 				char exp_status[exp_status_len];
 
-				if (exp_status_len >
-				    strlen(cursorCopy + groupArray[g].rm_so)) {
-					strcpy(exp_status, cursorCopy +
-					       groupArray[g].rm_so);
+				if (exp_status_len - 1 >
+				    strlen(cC + groupArray[g].rm_so)) {
+					strncpy(exp_status, cC +
+						groupArray[g].rm_so,
+						strlen(cC +
+						       groupArray[g].rm_so));
 				} else {
 					D_ERROR("Use 'dead' or 'alive' for "
 						"swim status label.\n");
