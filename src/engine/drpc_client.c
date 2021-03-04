@@ -140,9 +140,11 @@ dss_drpc_call(int32_t module, int32_t method, void *req, size_t req_size,
 		rc = pthread_tryjoin_np(thread, &thread_rc);
 	} while (rc == EBUSY);
 	/*
-	 * If the thread may still be running, then we can't return safely, for
-	 * arg is on the stack. Allocating arg on the heap seems to be a
-	 * overkill.
+	 * The pthread_tryjoin_np call is expected to return either EBUSY or 0,
+	 * unless there is a bug somewhere affecting its internal logic. If the
+	 * thread may still be running, then we can't return safely, for arg is
+	 * on the stack. Allocating arg on the heap seems to be a overkill.
+	 * Hence, we simply assert that rc must be 0.
 	 */
 	D_ASSERTF(rc == 0, "failed to join dRPC thread: %d\n", rc);
 	d_backoff_seq_fini(&backoff_seq);
