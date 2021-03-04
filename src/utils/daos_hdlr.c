@@ -2769,6 +2769,9 @@ dm_connect(bool is_posix_copy,
 		if (rc == -DER_NONEXIST) {
 			if (ca->cont_layout == DAOS_PROP_CO_LAYOUT_POSIX) {
 				attr.da_props = props;
+				attr.da_id = 0;
+                		attr.da_oclass_id = OC_UNKNOWN;
+                		attr.da_chunk_size = 0;
 				rc = dfs_cont_create(ca->dst_poh,
 						     ca->dst_c_uuid,
 						     &attr, NULL, NULL);
