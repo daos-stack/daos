@@ -50,6 +50,7 @@ class OSAUtils(IorTestBase):
                                            default="")
         self.ior_r_flags = self.params.get("read_flags", '/run/ior/iorflags/*')
         self.out_queue = test_queue.Queue()
+        self.dmg_command.exit_status_exception = False
 
     @fail_on(CommandFailure)
     def get_pool_leader(self):
