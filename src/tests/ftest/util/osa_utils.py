@@ -19,10 +19,10 @@ from pydaos.raw import (DaosContainer, IORequest,
 
 try:
     # python 3.x
-    import queue as queue
+    import queue as test_queue
 except ImportError:
     # python 2.7
-    import Queue as queue
+    import Queue as test_queue
 
 
 class OSAUtils(IorTestBase):
@@ -49,7 +49,7 @@ class OSAUtils(IorTestBase):
         self.ior_w_flags = self.params.get("write_flags", '/run/ior/iorflags/*',
                                            default="")
         self.ior_r_flags = self.params.get("read_flags", '/run/ior/iorflags/*')
-        self.out_queue = queue.Queue()
+        self.out_queue = test_queue.Queue()
 
     @fail_on(CommandFailure)
     def get_pool_leader(self):
