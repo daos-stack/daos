@@ -26,6 +26,7 @@ class SimpleCreateDeleteTest(TestWithServers):
         """Test basic container create/destroy/open/close/query.
 
         :avocado: tags=all,container,pr,daily_regression,medium,basecont
+        :avocado: tags=schancov
         """
         # Create a pool
         self.log.info("Create a pool")
