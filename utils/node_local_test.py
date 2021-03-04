@@ -2463,6 +2463,9 @@ def main():
     fatal_errors = BoolRatchet()
     fi_test = False
 
+    if args.server_valgrind:
+        args.mode = 'kv'
+
     if args.mode == 'launch':
         run_in_fg(server, conf)
     elif args.mode == 'il':
