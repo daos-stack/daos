@@ -418,7 +418,8 @@ class LogTest():
             except AttributeError:
                 pass
             if abort_on_warning:
-                if not server_shutdown and line.function == 'server_fini':
+                if not server_shutdown and \
+                   line.fac != 'external' and line.function == 'server_fini':
                     server_shutdown = True
                 if line.level <= cart_logparse.LOG_LEVELS['WARN']:
                     show = True
@@ -768,6 +769,7 @@ def run():
     parser.add_argument('--dfuse',
                         help='Summarise dfuse I/O',
                         action='store_true')
+    parser.add_argument('--warnings', action='store_true')
     parser.add_argument('file', help='input file')
     args = parser.parse_args()
     try:
@@ -787,7 +789,7 @@ def run():
         test_iter.check_dfuse_io()
     else:
         try:
-            test_iter.check_log_file(False)
+            test_iter.check_log_file(args.warnings)
         except LogError:
             print('Errors in log file, ignoring')
         except NotAllFreed:
