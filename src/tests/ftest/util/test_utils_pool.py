@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 from time import sleep, time
@@ -67,6 +50,7 @@ class TestPool(TestDaosApiBase):
         self.prop_name = BasicParameter(None)       # name of property to be set
         self.prop_value = BasicParameter(None)      # value of property
         self.rebuild_timeout = BasicParameter(None)
+        self.pool_query_timeout = BasicParameter(None)
 
         self.pool = None
         self.uuid = None
@@ -277,6 +261,24 @@ class TestPool(TestDaosApiBase):
                 if prop_value is None:
                     prop_value = self.prop_value.value
                 self.dmg.pool_set_prop(self.uuid, prop_name, prop_value)
+
+            elif self.control_method.value == self.USE_DMG:
+                self.log.error("Error: Undefined dmg command")
+
+            else:
+                self.log.error(
+                    "Error: Undefined control_method: %s",
+                    self.control_method.value)
+
+    @fail_on(CommandFailure)
+    def evict(self):
+        """Evict all pool connections to a DAOS pool"""
+
+        if self.pool:
+            self.log.info("Evict all pool connections for pool: %s", self.uuid)
+
+            if self.control_method.value == self.USE_DMG and self.dmg:
+                self.dmg.pool_evict(self.uuid, self.name.value)
 
             elif self.control_method.value == self.USE_DMG:
                 self.log.error("Error: Undefined dmg command")
@@ -498,6 +500,27 @@ class TestPool(TestDaosApiBase):
                 waiting for rebuild to start or end
 
         """
+        if self.pool_query_timeout.value is not None:
+            self.log.info(
+                "Waiting for pool query to be responsive %s",
+                " with a {} second timeout".format(
+                    self.pool_query_timeout.value))
+
+            end_time = time() + self.pool_query_timeout.value
+            while time() < end_time:
+                try:
+                    self.dmg.pool_query(self.pool.get_uuid_str())
+                    self.log.info("Pool query is responsive")
+                    break
+                except CommandFailure as err:
+                    self.log.info("Pool Query still non-responsive %s", err)
+            if time() > end_time:
+                raise DaosTestError("TIMEOUT detected after {} seconds of pool "
+                                    "query. This timeout can be adjusted via "
+                                    "the 'pool/pool_query_timeout' test yaml "
+                                    "parameter.".\
+                                        format(self.pool_query_timeout.value))
+
         self.log.info(
             "Waiting for rebuild to %s%s ...",
             "start" if to_start else "complete",
@@ -524,12 +547,13 @@ class TestPool(TestDaosApiBase):
 
     @fail_on(DaosApiError)
     @fail_on(CommandFailure)
-    def start_rebuild(self, ranks, daos_log):
+    def start_rebuild(self, ranks, daos_log, force=False):
         """Kill/Stop the specific server ranks using this pool.
 
         Args:
             ranks (list): a list of daos server ranks (int) to kill
             daos_log (DaosLog): object for logging messages
+            force (bool): whether to use --force option to dmg system stop
 
         Returns:
             bool: True if the server ranks have been killed/stopped and the
@@ -544,7 +568,7 @@ class TestPool(TestDaosApiBase):
 
         if self.control_method.value == self.USE_DMG and self.dmg:
             # Stop desired ranks using dmg
-            self.dmg.system_stop(ranks=convert_list(value=ranks))
+            self.dmg.system_stop(force=force, ranks=convert_list(value=ranks))
             status = True
 
         elif self.control_method.value == self.USE_DMG:

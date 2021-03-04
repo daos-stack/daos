@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(tests)
 
@@ -229,12 +212,13 @@ pool_init(struct dts_context *tsc)
 			if (rc)
 				goto out;
 		}
-
-		/* Use pool size as blob size for this moment. */
-		rc = vos_pool_create(pmem_file, tsc->tsc_pool_uuid, 0,
-				     tsc->tsc_nvme_size);
-		if (rc)
-			goto out;
+		if (tsc_create_pool(tsc)) {
+			/* Use pool size as blob size for this moment. */
+			rc = vos_pool_create(pmem_file, tsc->tsc_pool_uuid, 0,
+					     tsc->tsc_nvme_size);
+			if (rc)
+				goto out;
+		}
 
 		rc = vos_pool_open(pmem_file, tsc->tsc_pool_uuid, false, &poh);
 		if (rc)
@@ -246,14 +230,17 @@ pool_init(struct dts_context *tsc)
 		if (tsc->tsc_dmg_conf)
 			dmg_config_file = tsc->tsc_dmg_conf;
 
-		rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(),
-				     NULL, NULL,
-				     tsc->tsc_scm_size, tsc->tsc_nvme_size,
-				     NULL, svc, tsc->tsc_pool_uuid);
-		if (rc)
-			goto bcast;
+		if (tsc_create_pool(tsc)) {
+			rc = dmg_pool_create(dmg_config_file, geteuid(),
+					     getegid(), NULL, NULL,
+					     tsc->tsc_scm_size,
+					     tsc->tsc_nvme_size,
+					     NULL, svc, tsc->tsc_pool_uuid);
+			if (rc)
+				goto bcast;
+		}
 
-		rc = daos_pool_connect(tsc->tsc_pool_uuid, NULL, NULL /* svc */,
+		rc = daos_pool_connect(tsc->tsc_pool_uuid, NULL,
 				       DAOS_PC_EX, &poh, NULL, NULL);
 		if (rc)
 			goto bcast;
@@ -287,7 +274,9 @@ pool_fini(struct dts_context *tsc)
 			DP_RC(rc));
 
 	} else { /* DAOS mode */
-		daos_pool_disconnect(tsc->tsc_poh, NULL);
+		rc = daos_pool_disconnect(tsc->tsc_poh, NULL);
+		D_ASSERTF(rc == 0 || rc == -DER_NO_HDL, "rc="DF_RC"\n",
+			  DP_RC(rc));
 		MPI_Barrier(MPI_COMM_WORLD);
 		if (tsc->tsc_mpi_rank == 0) {
 			rc = dmg_pool_destroy(dmg_config_file,
@@ -306,20 +295,23 @@ cont_init(struct dts_context *tsc)
 	int		rc;
 
 	if (tsc->tsc_pmem_file) { /* VOS mode */
-		rc = vos_cont_create(tsc->tsc_poh, tsc->tsc_cont_uuid);
-		if (rc)
-			goto out;
+		if (tsc_create_cont(tsc)) {
+			rc = vos_cont_create(tsc->tsc_poh, tsc->tsc_cont_uuid);
+			if (rc)
+				goto out;
+		}
 
 		rc = vos_cont_open(tsc->tsc_poh, tsc->tsc_cont_uuid, &coh);
 		if (rc)
 			goto out;
 
 	} else if (tsc->tsc_mpi_rank == 0) { /* DAOS mode and rank zero */
-		rc = daos_cont_create(tsc->tsc_poh, tsc->tsc_cont_uuid, NULL,
-				      NULL);
-		if (rc != 0)
-			goto bcast;
-
+		if (tsc_create_cont(tsc)) {
+			rc = daos_cont_create(tsc->tsc_poh, tsc->tsc_cont_uuid,
+					      NULL, NULL);
+			if (rc != 0)
+				goto bcast;
+		}
 		rc = daos_cont_open(tsc->tsc_poh, tsc->tsc_cont_uuid,
 				    DAOS_COO_RW, &coh, NULL, NULL);
 		if (rc != 0)
@@ -374,7 +366,7 @@ dts_ctx_init(struct dts_context *tsc)
 	tsc->tsc_init = DTS_INIT_DEBUG;
 
 	if (tsc->tsc_pmem_file) /* VOS mode */
-		rc = vos_init();
+		rc = vos_self_init("/mnt/daos");
 	else
 		rc = daos_init();
 	if (rc)
@@ -421,7 +413,7 @@ dts_ctx_fini(struct dts_context *tsc)
 		/* fall through */
 	case DTS_INIT_MODULE:	/* finalize module */
 		if (tsc->tsc_pmem_file)
-			vos_fini();
+			vos_self_fini();
 		else
 			daos_fini();
 		/* fall through */

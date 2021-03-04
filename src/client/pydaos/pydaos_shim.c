@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #ifdef __USE_PYTHON3__
 /* Those are gone from python3, replaced with new functions */
@@ -145,7 +128,7 @@ cont_open(int ret, uuid_t puuid, uuid_t cuuid, int flags)
 	}
 
 	/** Connect to pool */
-	rc = daos_pool_connect(puuid, "daos_server", NULL, DAOS_PC_RW, &poh,
+	rc = daos_pool_connect(puuid, "daos_server", DAOS_PC_RW, &poh,
 			       NULL, NULL);
 	if (rc)
 		goto out;
@@ -351,6 +334,8 @@ anchor_destructor(PyObject *obj)
 	anchor = capsule2anchor(obj);
 	if (anchor == NULL)
 		return;
+
+	daos_anchor_fini(anchor);
 	D_FREE(anchor);
 }
 
@@ -369,16 +354,17 @@ __shim_handle__obj_idroot(PyObject *self, PyObject *args)
 {
 	PyObject		*return_list;
 	daos_oclass_id_t	 cid;
+	daos_handle_t		 coh;
 	int			 cid_in;
 	daos_obj_id_t		 oid;
 
 	/* Parse arguments */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "i", &cid_in);
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "Li", &coh.cookie, &cid_in);
 	cid = (uint16_t) cid_in;
 	oid.hi = 0;
 	oid.lo = 0;
 
-	daos_obj_generate_id(&oid, DAOS_OF_KV_FLAT, cid, 0);
+	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, cid, 0, 0);
 
 	return_list = PyList_New(3);
 	PyList_SetItem(return_list, 0, PyInt_FromLong(DER_SUCCESS));
@@ -406,7 +392,7 @@ __shim_handle__obj_idgen(PyObject *self, PyObject *args)
 	oid.lo = rand();
 	oid.hi = 0;
 
-	daos_obj_generate_id(&oid, DAOS_OF_KV_FLAT, cid, 0);
+	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, cid, 0, 0);
 
 	return_list = PyList_New(3);
 	PyList_SetItem(return_list, 0, PyInt_FromLong(DER_SUCCESS));
@@ -835,7 +821,7 @@ __shim_handle__kv_iter(PyObject *self, PyObject *args)
 			rc = -DER_NOMEM;
 			goto out;
 		}
-		daos_anchor_set_zero(anchor);
+		daos_anchor_init(anchor, 0);
 		anchor_cap = anchor2capsule(anchor);
 		if (anchor_cap == NULL) {
 			D_FREE(anchor);

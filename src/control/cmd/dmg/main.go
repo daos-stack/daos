@@ -1,24 +1,7 @@
 //
 // (C) Copyright 2018-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package main
@@ -240,8 +223,8 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			}
 			ctlCfg = control.DefaultConfig()
 		}
-		if opts.ConfigPath != "" {
-			log.Debugf("control config loaded from %s", opts.ConfigPath)
+		if ctlCfg.Path != "" {
+			log.Debugf("control config loaded from %s", ctlCfg.Path)
 		}
 
 		if opts.Insecure {
@@ -256,7 +239,9 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			ctlCmd.setInvoker(invoker)
 			if opts.HostList != "" {
 				if hlCmd, ok := cmd.(hostListSetter); ok {
-					hlCmd.setHostList(strings.Split(opts.HostList, ","))
+					hl := strings.Split(opts.HostList, ",")
+					hlCmd.setHostList(hl)
+					ctlCfg.HostList = hl
 				} else {
 					return errors.Errorf("this command does not accept a hostlist parameter (set it in %s or %s)",
 						control.UserConfigPath(), control.SystemConfigPath())

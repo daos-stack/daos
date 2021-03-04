@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2015-2020 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #ifndef __DAOS_COMMON_H__
@@ -40,6 +23,12 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <byteswap.h>
+#ifdef DAOS_HAS_VALGRIND
+#include <valgrind/valgrind.h>
+#define DAOS_ON_VALGRIND RUNNING_ON_VALGRIND
+#else
+#define DAOS_ON_VALGRIND 0
+#endif
 
 #include <daos_errno.h>
 #include <daos/debug.h>
@@ -233,7 +222,7 @@ typedef struct {
 	 * -1	array[a] < array[b]
 	 */
 	int     (*so_cmp)(void *array, int a, int b);
-	/** for binary search */
+	/** for binary search, returned value is the same as so_cmp() */
 	int	(*so_cmp_key)(void *array, int i, uint64_t key);
 } daos_sort_ops_t;
 
@@ -241,6 +230,11 @@ int daos_array_sort(void *array, unsigned int len, bool unique,
 		    daos_sort_ops_t *ops);
 int daos_array_find(void *array, unsigned int len, uint64_t key,
 		    daos_sort_ops_t *ops);
+int daos_array_find_le(void *array, unsigned int len, uint64_t key,
+		       daos_sort_ops_t *ops);
+int daos_array_find_ge(void *array, unsigned int len, uint64_t key,
+		       daos_sort_ops_t *ops);
+
 void daos_array_shuffle(void *arr, unsigned int len, daos_sort_ops_t *ops);
 
 int daos_sgls_copy_ptr(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
@@ -519,7 +513,7 @@ daos_crt_network_error(int err)
 	return err == -DER_HG || err == -DER_ADDRSTR_GEN ||
 	       err == -DER_PMIX || err == -DER_UNREG ||
 	       err == -DER_UNREACH || err == -DER_CANCELED ||
-	       err == -DER_NOREPLY;
+	       err == -DER_NOREPLY || err == -DER_OOG;
 }
 
 #define daos_rank_list_dup		d_rank_list_dup
@@ -624,10 +618,6 @@ enum {
 #define DAOS_RDB_SKIP_APPENDENTRIES_FAIL (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x19)
 #define DAOS_FORCE_REFRESH_POOL_MAP	  (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1a)
 
-#define DAOS_VOS_AGG_RANDOM_YIELD	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1b)
-#define DAOS_VOS_AGG_MW_THRESH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1c)
-#define DAOS_VOS_NON_LEADER		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1d)
-
 #define DAOS_FORCE_CAPA_FETCH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1e)
 #define DAOS_FORCE_PROP_VERIFY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1f)
 
@@ -661,7 +651,6 @@ enum {
 #define DAOS_DTX_STALE_PM		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x39)
 #define DAOS_DTX_FAIL_IO		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x3a)
 #define DAOS_DTX_START_EPOCH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x3b)
-#define DAOS_DTX_NO_INPROGRESS		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x3c)
 #define DAOS_DTX_NO_BATCHED_CMT		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x3d)
 #define DAOS_DTX_NO_COMMITTABLE		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x3e)
 #define DAOS_DTX_MISS_COMMIT		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x3f)
@@ -699,6 +688,11 @@ enum {
 #define DAOS_SHARD_OBJ_RW_DROP_REPLY (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x80)
 #define DAOS_OBJ_FETCH_DATA_LOST	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x81)
 #define DAOS_OBJ_TRY_SPECIAL_SHARD	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x82)
+
+#define DAOS_VOS_AGG_RANDOM_YIELD	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x90)
+#define DAOS_VOS_AGG_MW_THRESH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x91)
+#define DAOS_VOS_NON_LEADER		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x92)
+#define DAOS_VOS_AGG_BLOCKED		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x93)
 
 #define DAOS_DTX_SKIP_PREPARE		DAOS_DTX_SPEC_LEADER
 
@@ -809,6 +803,36 @@ daos_unparse_ctype(daos_cont_layout_t ctype, char *string)
 		strcpy(string, "unknown");
 		break;
 	}
+}
+
+static inline void
+daos_anchor_set_flags(daos_anchor_t *anchor, uint32_t flags)
+{
+	anchor->da_flags = flags;
+}
+
+static inline uint32_t
+daos_anchor_get_flags(daos_anchor_t *anchor)
+{
+	return anchor->da_flags;
+}
+
+static inline void
+daos_anchor_set_eof(daos_anchor_t *anchor)
+{
+	anchor->da_type = DAOS_ANCHOR_TYPE_EOF;
+}
+
+static inline void
+daos_anchor_set_zero(daos_anchor_t *anchor)
+{
+	anchor->da_type = DAOS_ANCHOR_TYPE_ZERO;
+}
+
+static inline bool
+daos_anchor_is_zero(daos_anchor_t *anchor)
+{
+	return anchor->da_type == DAOS_ANCHOR_TYPE_ZERO;
 }
 
 /* default debug log file */

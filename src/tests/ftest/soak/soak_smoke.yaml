@@ -60,10 +60,9 @@ pool_reserved:
 container:
     type: POSIX
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-    oclass: SX
     control_method: daos
 container_reserved:
-    oclass: OC_SX
+    oclass: OC_RP_2G1
     akey_size: 5
     dkey_size: 5
     data_size: 4096
@@ -100,6 +99,7 @@ smoke:
     joblist:
         - ior_smoke
         - fio_smoke
+        - daos_racer
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -112,7 +112,7 @@ ior_smoke:
         - HDF5
         - HDF5-VOL
     test_file: daos:testFile
-    flags: -v -w -W -r -R
+    flags: -v -w -W -r -R -k -F
     block_size:
         - '64M'
     repetitions: 1
@@ -123,8 +123,7 @@ ior_smoke:
     segment_count: 1
     dfs_oclass:
         - 'SX'
-    dfs_dir_oclass:
-        - 'SX'
+        - 'RP_2G1'
 fio_smoke:
   names:
       - global
@@ -147,8 +146,23 @@ fio_smoke:
     rw:
         - 'rw'
         - 'randrw'
+    oclass:
+        - 'SX'
+        - 'RP_2G1'
+daos_racer:
+  runtime: 120
+  container:
+      type: POSIX
+      control_method: daos
+      oclass: 'SX'
 dfuse:
     mount_dir: "/tmp/daos_dfuse/"
     disable_direct_io: True
 hdf5_vol:
     plugin_path: "/usr/lib64/mpich/lib"
+events:
+    - "mce: [Hardware Error]: Machine check events logged"
+    - "Package temperature above threshold"
+monitor:
+    - "/usr/bin/free -h"
+    - "/usr/bin/vmstat -w"

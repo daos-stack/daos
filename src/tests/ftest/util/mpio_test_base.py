@@ -1,26 +1,10 @@
 #!/usr/bin/python
 '''
-    (C) Copyright 2020 Intel Corporation.
+    (C) Copyright 2020-2021 Intel Corporation.
 
-    Licensed under the Apache License, Version 2.0 (the "License");
-    you may not use this file except in compliance with the License.
-    You may obtain a copy of the License at
+    SPDX-License-Identifier: BSD-2-Clause-Patent
 
-    http://www.apache.org/licenses/LICENSE-2.0
-
-    Unless required by applicable law or agreed to in writing, software
-    distributed under the License is distributed on an "AS IS" BASIS,
-    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-    See the License for the specific language governing permissions and
-    limitations under the License.
-
-    GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-    The Government's rights to use, modify, reproduce, release, perform,
-    display, or disclose this software are subject to the terms of the Apache
-    License as provided in Contract No. B609815.
-    Any reproduction of computer software, computer software documentation, or
-    portions thereof marked with this legend must also reproduce the markings.
-    '''
+'''
 from __future__    import print_function
 
 import os
@@ -104,21 +88,18 @@ class MpiioTests(TestWithServers):
 
         try:
             # running tests
-            self.mpio.run_mpiio_tests(
-                self.hostfile_clients, self.pool.uuid, self.pool.svc_ranks,
-                test_repo, test_name, client_processes, self.cont_uuid)
+            result = self.mpio.run_mpiio_tests(
+                self.hostfile_clients, self.pool.uuid, test_repo, test_name,
+                client_processes, self.cont_uuid)
         except MpioFailed as excep:
             self.fail("<{0} Test Failed> \n{1}".format(test_name, excep))
 
-        # Parsing output to look for failures
-        # stderr directed to stdout
-        stdout = os.path.join(self.logdir, "stdout")
-        searchfile = open(stdout, "r")
-        error_message = ["non-zero exit code", "MPI_Abort", "MPI_ABORT",
-                         "ERROR"]
-
-        for line in searchfile:
-            for error in error_message:
-                if error in line:
-                    self.fail(
-                        "Test Failed with error_message: {}".format(error))
+        # Check output for errors
+        error_message = [
+            "non-zero exit code", "MPI_Abort", "MPI_ABORT", "ERROR"]
+        for output in (result.stdout, result.stderr):
+            for line in output:
+                for error in error_message:
+                    if error in line:
+                        self.fail(
+                            "Test Failed with error_message: {}".format(error))

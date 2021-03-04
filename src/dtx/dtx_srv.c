@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * dtx: DTX rpc service
@@ -27,17 +10,85 @@
 
 #include <daos/rpc.h>
 #include <daos/btree_class.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/container.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/dtx_srv.h>
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 #include "dtx_internal.h"
 
 #define DTX_YIELD_CYCLE		(DTX_THRESHOLD_COUNT >> 3)
 
+static inline char *
+dtx_opc_to_str(crt_opcode_t opc)
+{
+	switch (opc) {
+#define X(a, b, c, d, e, f) case a: return f;
+		DTX_PROTO_SRV_RPC_LIST
+#undef X
+	}
+	return "dtx_unknown";
+}
+
+struct dtx_tls {
+	struct d_tm_node_t	*ot_op_total[DTX_PROTO_SRV_RPC_COUNT];
+};
+
+static void *
+dtx_tls_init(int xs_id, int tgt_id)
+{
+	struct dtx_tls	*tls;
+	char		*path;
+	uint32_t	 opc;
+	int		 rc;
+
+	D_ALLOC_PTR(tls);
+	if (tls == NULL)
+		return NULL;
+
+	/** Skip sensor setup on system xstreams */
+	if (tgt_id < 0)
+		return tls;
+
+	/** Register different per-opcode sensors */
+	for (opc = 0; opc < DTX_PROTO_SRV_RPC_COUNT; opc++) {
+		D_ASPRINTF(path, "io/%u/ops/%s/total_cnt", tgt_id,
+			   dtx_opc_to_str(opc));
+		rc = d_tm_add_metric(&tls->ot_op_total[opc], path, D_TM_COUNTER,
+				     "total number of processed DTX RPCs", "");
+		if (rc != D_TM_SUCCESS)
+			D_WARN("Failed to create DTX RPC cnt sensor for %s: "
+			       DF_RC"\n", dtx_opc_to_str(opc), DP_RC(rc));
+		D_FREE(path);
+	}
+
+	return tls;
+}
+
+static void
+dtx_tls_fini(void *data)
+{
+	D_FREE(data);
+}
+
+struct dss_module_key dtx_module_key = {
+	.dmk_tags	= DAOS_SERVER_TAG,
+	.dmk_index	= -1,
+	.dmk_init	= dtx_tls_init,
+	.dmk_fini	= dtx_tls_fini,
+};
+
+static inline struct dtx_tls *
+dtx_tls_get(void)
+{
+	return dss_module_key_get(dss_tls_get(), &dtx_module_key);
+}
+
 static void
 dtx_handler(crt_rpc_t *rpc)
 {
+	struct dtx_tls		*tls = dtx_tls_get();
 	struct dtx_in		*din = crt_req_get(rpc);
 	struct dtx_out		*dout = crt_reply_get(rpc);
 	struct ds_cont_child	*cont = NULL;
@@ -150,6 +201,11 @@ out:
 		D_ERROR("send reply failed for DTX rpc %u: rc = "DF_RC"\n", opc,
 			DP_RC(rc));
 
+	rc = d_tm_increment_counter(&tls->ot_op_total[opc], NULL);
+	if (rc != D_TM_SUCCESS)
+		D_WARN("Failed to increase DTX RPC cnt for %s: "DF_RC"\n",
+		       dtx_opc_to_str(opc), DP_RC(rc));
+
 	if (opc == DTX_REFRESH && rc1 > 0) {
 		struct dtx_entry	 dtes[DTX_REFRESH_MAX] = { 0 };
 		struct dtx_entry	*pdte[DTX_REFRESH_MAX] = { 0 };
@@ -175,7 +231,11 @@ out:
 		/* Commit the DTX after replied the original refresh request to
 		 * avoid further query the same DTX.
 		 */
-		dtx_commit(cont, pdte, j, true);
+		rc = dtx_commit(cont, pdte, j, true);
+		if (rc < 0)
+			D_WARN("Failed to commit DTX "DF_DTI", count %d: "
+			       DF_RC"\n", DP_DTI(&dtes[0].dte_xid), j,
+			       DP_RC(rc));
 
 		for (i = 0; i < j; i++)
 			D_FREE(pdte[i]->dte_mbs);
@@ -222,16 +282,18 @@ dtx_setup(void)
 	return rc;
 }
 
-#define X_SRV(a, b, c, d, e)	\
+#define X(a, b, c, d, e, f)	\
 {				\
 	.dr_opc       = a,	\
 	.dr_hdlr      = d,	\
 	.dr_corpc_ops = e,	\
-}
+},
 
 static struct daos_rpc_handler dtx_handlers[] = {
-	DTX_PROTO_SRV_RPC_LIST(X_SRV)
+	DTX_PROTO_SRV_RPC_LIST
 };
+
+#undef X
 
 struct dss_module dtx_module =  {
 	.sm_name	= "dtx",
@@ -243,4 +305,5 @@ struct dss_module dtx_module =  {
 	.sm_proto_fmt	= &dtx_proto_fmt,
 	.sm_cli_count	= 0,
 	.sm_handlers	= dtx_handlers,
+	.sm_key		= &dtx_module_key,
 };

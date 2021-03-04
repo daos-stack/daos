@@ -17,14 +17,13 @@
 # default: daos_server
 #name: daos_server
 
-# Default destination port to use if port not specified in host list addresses.
+# Default destination port to use when connecting to hosts in the hostlist.
 # default: 10001
 #port: 10001
 
-# Hostlist
-# comma separated list of addresses <ipv4addr/hostname:port>
-# default: ['localhost:10001']
-#hostlist: ['localhost:10001']
+# Hostlist, a comma separated list of addresses (hostnames or IPv4 addresses).
+# default: ['localhost']
+#hostlist: ['localhost']
 
 ## Transport Credentials Specifying certificates to secure communications
 

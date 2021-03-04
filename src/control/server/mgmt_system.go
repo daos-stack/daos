@@ -1,24 +1,7 @@
 //
 // (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
@@ -38,6 +21,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
@@ -45,44 +29,12 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-// ClusterEvent management service gRPC handler receives ClusterEvent requests
-// from control-plane instances attempting to notify the MS of a cluster event
-// in the DAOS system.
-//
-// On receipt of the request publish extracted event to make it available to
-// locally subscribed consumers to act upon.
-func (svc *mgmtSvc) ClusterEvent(ctx context.Context, req *mgmtpb.ClusterEventReq) (*mgmtpb.ClusterEventResp, error) {
-	if err := svc.checkLeaderRequest(req); err != nil {
-		return nil, err
-	}
-	if req.Sequence < 1 {
-		return nil, errors.New("invalid sequence number in request")
-	}
-	svc.log.Debugf("MgmtSvc.ClusterEvent dispatch, req:%#v\n", req)
-
-	rasEventPB := req.GetRas()
-	if rasEventPB == nil {
-		return nil, errors.Errorf("unexpected event type received, want RAS got %T",
-			req.GetEvent())
-	}
-
-	event, err := events.NewFromProto(rasEventPB)
-	if err != nil {
-		return nil, err
-	}
-	svc.events.Publish(event)
-
-	resp := &mgmtpb.ClusterEventResp{Sequence: req.Sequence}
-	svc.log.Debugf("MgmtSvc.ClusterEvent dispatch, resp:%#v\n", resp)
-
-	return resp, nil
-}
-
 // GetAttachInfo handles a request to retrieve a map of ranks to fabric URIs, in addition
 // to client network autoconfiguration hints.
 //
-// The default use case is for libdaos clients to obtain the set of ranks associated
-// with MS replicas.
+// The default use case, where req.AllRanks is false, is for libdaos clients to obtain
+// the client network autoconfiguration hints, and the set of ranks associated with MS
+// replicas. If req.AllRanks is true, all ranks' fabric URIs are also given the client.
 func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
 	if err := svc.checkReplicaRequest(req); err != nil {
 		return nil, err
@@ -92,30 +44,49 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 	}
 	svc.log.Debugf("MgmtSvc.GetAttachInfo dispatch, req:%+v\n", *req)
 
-	var groupMap *system.GroupMap
-	var err error
-	if req.GetAllRanks() {
-		groupMap, err = svc.sysdb.GroupMap()
-	} else {
-		groupMap, err = svc.sysdb.ReplicaRanks()
-	}
+	groupMap, err := svc.sysdb.GroupMap()
 	if err != nil {
 		return nil, err
 	}
 
 	resp := new(mgmtpb.GetAttachInfoResp)
-	for rank, uri := range groupMap.RankURIs {
-		resp.Psrs = append(resp.Psrs, &mgmtpb.GetAttachInfoResp_Psr{
-			Rank: rank.Uint32(),
-			Uri:  uri,
-		})
+	if req.GetAllRanks() {
+		for rank, uri := range groupMap.RankURIs {
+			resp.RankUris = append(resp.RankUris, &mgmtpb.GetAttachInfoResp_RankUri{
+				Rank: rank.Uint32(),
+				Uri:  uri,
+			})
+		}
+	} else {
+		// If the request does not indicate that all ranks should be returned,
+		// it may be from an older client, in which case we should just return
+		// the MS ranks.
+		for _, rank := range groupMap.MSRanks {
+			resp.RankUris = append(resp.RankUris, &mgmtpb.GetAttachInfoResp_RankUri{
+				Rank: rank.Uint32(),
+				Uri:  groupMap.RankURIs[rank],
+			})
+		}
 	}
 	resp.Provider = svc.clientNetworkCfg.Provider
 	resp.CrtCtxShareAddr = svc.clientNetworkCfg.CrtCtxShareAddr
 	resp.CrtTimeout = svc.clientNetworkCfg.CrtTimeout
 	resp.NetDevClass = svc.clientNetworkCfg.NetDevClass
+	resp.MsRanks = system.RanksToUint32(groupMap.MSRanks)
 
-	svc.log.Debugf("MgmtSvc.GetAttachInfo dispatch, resp:%+v\n", *resp)
+	// For resp.RankUris may be large, we make a resp copy with a limited
+	// number of rank URIs, to avoid flooding the debug log.
+	svc.log.Debugf("MgmtSvc.GetAttachInfo dispatch, resp:%+v len(RankUris):%d\n",
+		*func(r *mgmtpb.GetAttachInfoResp) *mgmtpb.GetAttachInfoResp {
+			max := 1
+			if len(r.RankUris) <= max {
+				return r
+			}
+			s := *r
+			s.RankUris = s.RankUris[0:max]
+			return &s
+		}(resp), len(resp.RankUris))
+
 	return resp, nil
 }
 
@@ -211,7 +182,7 @@ func (svc *mgmtSvc) joinLoop(parent context.Context) {
 
 			for i := 0; i < len(svc.harness.Instances()); i++ {
 				if err := svc.doGroupUpdate(parent); err != nil {
-					if err == instanceNotReady {
+					if err == errInstanceNotReady {
 						svc.log.Debug("group update not ready (retrying)")
 						continue
 					}
@@ -311,7 +282,7 @@ func (svc *mgmtSvc) join(ctx context.Context, req *batchJoinRequest) *batchJoinR
 			}
 		}
 
-		// mark the ioserver as ready to handle dRPC requests
+		// mark the engine as ready to handle dRPC requests
 		srv.ready.SetTrue()
 	}
 
@@ -332,7 +303,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
 	}
 	rankSet := &system.RankSet{}
 	for rank, uri := range gm.RankURIs {
-		req.Servers = append(req.Servers, &mgmtpb.GroupUpdateReq_Server{
+		req.Engines = append(req.Engines, &mgmtpb.GroupUpdateReq_Engine{
 			Rank: rank.Uint32(),
 			Uri:  uri,
 		})
@@ -342,7 +313,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
 	svc.log.Debugf("group update request: version: %d, ranks: %s", req.MapVersion, rankSet)
 	dResp, err := svc.harness.CallDrpc(ctx, drpc.MethodGroupUpdate, req)
 	if err != nil {
-		if err == instanceNotReady {
+		if err == errInstanceNotReady {
 			return err
 		}
 		svc.log.Errorf("dRPC GroupUpdate call failed: %s", err)
@@ -367,7 +338,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
 // On receipt of the join request, add to a queue of requests to be processed
 // periodically in a dedicated goroutine. This architecture provides for thread
 // safety and improved performance while updating the system membership and CaRT
-// primary group in the local ioserver.
+// primary group in the local engine.
 //
 // The state of the newly joined/evicted rank along with the reply address used
 // to contact the new rank in future will be registered in the system membership.
@@ -448,7 +419,6 @@ func (svc *mgmtSvc) resolveRanks(hosts, ranks string) (hitRS, missRS *system.Ran
 	case hasHosts && hasRanks:
 		err = errors.New("ranklist and hostlist cannot both be set in request")
 	case hasHosts:
-		//if hitRS, missHS, err = svc.membership.CheckHosts(hosts, svc.srvCfg.ControlPort); err != nil {
 		if hitRS, missHS, err = svc.membership.CheckHosts(hosts, build.DefaultControlPort); err != nil {
 			return
 		}
@@ -614,6 +584,16 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, pbReq *mgmtpb.SystemStopReq)
 	}
 	svc.log.Debug("Received SystemStop RPC")
 
+	// Raise event on systemwide shutdown
+	if pbReq.GetHosts() == "" && pbReq.GetRanks() == "" && pbReq.GetKill() {
+		svc.events.Publish(events.New(&events.RASEvent{
+			ID:   events.RASSystemStop,
+			Type: events.RASTypeInfoOnly,
+			Msg:  "System-wide shutdown requested",
+			Rank: uint32(system.NilRank),
+		}))
+	}
+
 	// TODO: consider locking to prevent join attempts when shutting down
 	pbResp := new(mgmtpb.SystemStopResp)
 
@@ -673,6 +653,16 @@ func (svc *mgmtSvc) SystemStart(ctx context.Context, pbReq *mgmtpb.SystemStartRe
 		return nil, err
 	}
 	svc.log.Debug("Received SystemStart RPC")
+
+	// Raise event on systemwide start
+	if pbReq.GetHosts() == "" && pbReq.GetRanks() == "" {
+		svc.events.Publish(events.New(&events.RASEvent{
+			ID:   events.RASSystemStart,
+			Type: events.RASTypeInfoOnly,
+			Msg:  "System-wide start requested",
+			Rank: uint32(system.NilRank),
+		}))
+	}
 
 	fanResp, _, err := svc.rpcFanout(ctx, fanoutRequest{
 		Method: control.StartRanks,
@@ -743,4 +733,21 @@ func (svc *mgmtSvc) SystemResetFormat(ctx context.Context, pbReq *mgmtpb.SystemR
 	svc.log.Debugf("Responding to SystemResetFormat RPC: %+v", pbResp)
 
 	return pbResp, nil
+}
+
+// ClusterEvent management service gRPC handler receives ClusterEvent requests
+// from control-plane instances attempting to notify the MS of a cluster event
+// in the DAOS system (this handler should only get called on the MS leader).
+func (svc *mgmtSvc) ClusterEvent(ctx context.Context, req *sharedpb.ClusterEventReq) (*sharedpb.ClusterEventResp, error) {
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
+	}
+
+	// indicate to handler that event has been forwarded
+	resp, err := svc.events.HandleClusterEvent(req, true)
+	if err != nil {
+		return nil, errors.Wrapf(err, "handle cluster event %+v", req)
+	}
+
+	return resp, nil
 }
