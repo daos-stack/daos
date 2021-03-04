@@ -47,8 +47,8 @@ import java.util.List;
  *   See {@link Entry#releaseDataBuffer()}.
  * </p>
  * <p>
- *   For update entries, user should call {@link #addEntryForUpdate(String, int, ByteBuf)}.
- *   And {@link #addEntryForFetch(String, int, int)} for fetch entries. Results of fetch should be get
+ *   For update entries, user should call {@link #addEntryForUpdate(String, long, ByteBuf)}.
+ *   And {@link #addEntryForFetch(String, long, int)} for fetch entries. Results of fetch should be get
  *   from each entry by calling {@link Entry#getFetchedData()} For each IODataDesc object, there must be only one
  *   type of action, either update or fetch, among all its entries.
  * </p>
@@ -65,8 +65,8 @@ public class IOSimpleDDAsync extends IODataDescBase implements DaosEventQueue.At
 
   /**
    * constructor for non-reusable description.
-   * User should call {@link #addEntryForFetch(String, int, int)} or
-   * {@link #addEntryForUpdate(String, int, ByteBuf)} to add entries.
+   * User should call {@link #addEntryForFetch(String, long, int)} or
+   * {@link #addEntryForUpdate(String, long, ByteBuf)} to add entries.
    * {@link #release()} should be called after it's done.
    *
    * @param dkey
@@ -205,7 +205,7 @@ public class IOSimpleDDAsync extends IODataDescBase implements DaosEventQueue.At
    * @return data description entry
    * @throws IOException
    */
-  public Entry addEntryForFetch(String key, int offset,
+  public Entry addEntryForFetch(String key, long offset,
                                               int dataSize) throws IOException {
     if (updateOrFetch) {
       throw new IllegalArgumentException("It's desc for update");
@@ -230,7 +230,7 @@ public class IOSimpleDDAsync extends IODataDescBase implements DaosEventQueue.At
    * @return data description entry
    * @throws IOException
    */
-  public Entry addEntryForUpdate(String key, int offset, ByteBuf dataBuffer) throws IOException {
+  public Entry addEntryForUpdate(String key, long offset, ByteBuf dataBuffer) throws IOException {
     if (!updateOrFetch) {
       throw new IllegalArgumentException("It's desc for fetch");
     }

@@ -25,12 +25,37 @@ public class DaosOutputStream extends OutputStream {
   private boolean closed;
   private final DaosFileSource source;
   private final FileSystem.Statistics stats;
+  private final ByteBuf buffer;
 
   private static final Logger LOG = LoggerFactory.getLogger(DaosOutputStream.class);
 
-  public DaosOutputStream(DaosFile daosFile,
+  protected DaosOutputStream(DaosFile daosFile,
                           final int writeBufferSize, FileSystem.Statistics stats, boolean async) {
-    this(daosFile, BufferAllocator.directNettyBuf(writeBufferSize), stats, async);
+    this(daosFile, BufferAllocator.directNettyBuf(writeBufferSize), stats, async, true);
+  }
+
+  /**
+   * Constructor with daosFile, file path, direct byte buffer and Hadoop file system statistics.
+   *
+   * @param daosFile
+   * DAOS file object
+   * @param buffer
+   * direct byte buffer
+   * @param stats
+   * Hadoop file system statistics
+   * @param selfBuffer
+   * is self managed buffer?
+   */
+  private DaosOutputStream(DaosFile daosFile,
+                          ByteBuf buffer, FileSystem.Statistics stats, boolean async, boolean selfBuffer) {
+    this.closed = false;
+    this.source = async ? new DaosFileSourceAsync(daosFile, buffer, 0, false, stats) :
+        new DaosFileSourceSync(daosFile, buffer, 0, stats);
+    this.buffer = selfBuffer ? buffer : null;
+    this.stats = stats;
+    if (!buffer.hasMemoryAddress()) {
+      throw new IllegalArgumentException("need direct buffer, but " + buffer.getClass().getName());
+    }
   }
 
   /**
@@ -43,15 +68,9 @@ public class DaosOutputStream extends OutputStream {
    * @param stats
    * Hadoop file system statistics
    */
-  public DaosOutputStream(DaosFile daosFile,
+  protected DaosOutputStream(DaosFile daosFile,
                           ByteBuf buffer, FileSystem.Statistics stats, boolean async) {
-    this.closed = false;
-    this.source = async ? new DaosFileSourceAsync(daosFile, buffer, 0, false, stats) :
-        new DaosFileSourceSync(daosFile, buffer, 0, stats);
-    this.stats = stats;
-    if (!buffer.hasMemoryAddress()) {
-      throw new IllegalArgumentException("need direct buffer, but " + buffer.getClass().getName());
-    }
+    this(daosFile, buffer, stats, async, false);
   }
 
   /**
@@ -95,6 +114,9 @@ public class DaosOutputStream extends OutputStream {
     }
     source.flush();
     source.close();
+    if (this.buffer != null) {
+      this.buffer.release();
+    }
     super.close();
     this.closed = true;
   }

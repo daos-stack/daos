@@ -36,6 +36,8 @@ public class DaosInputStream extends FSInputStream {
   private final int bufferCapacity;
   private final int readSize;
 
+  private final ByteBuf buffer;
+
   private final DaosFileSource source;
 
   private byte[] singleByte = new byte[]{0};
@@ -69,11 +71,12 @@ public class DaosInputStream extends FSInputStream {
     this.source = async ? new DaosFileSourceAsync(daosFile, bufferCapacity, fileLen, true, stats) :
         new DaosFileSourceSync(daosFile, bufferCapacity, fileLen, stats);
     source.setReadSize(readSize);
+    buffer = null;
   }
 
-  protected DaosInputStream(DaosFile daosFile,
+  private DaosInputStream(DaosFile daosFile,
                             FileSystem.Statistics stats,
-                            ByteBuf buffer, int readSize, boolean async) throws IOException {
+                            ByteBuf buffer, int readSize, boolean async, boolean selfBuffer) throws IOException {
     if (!(buffer.hasMemoryAddress())) {
       throw new IllegalArgumentException("Buffer must be direct buffer. " + buffer.getClass().getName());
     }
@@ -82,12 +85,19 @@ public class DaosInputStream extends FSInputStream {
     this.source = async ? new DaosFileSourceAsync(daosFile, buffer, fileLen, true, stats) :
         new DaosFileSourceSync(daosFile, buffer, fileLen, stats);
     source.setReadSize(readSize);
+    this.buffer = selfBuffer ? buffer : null;
     this.bufferCapacity = buffer.capacity();
     if (bufferCapacity < readSize) {
       throw new IllegalArgumentException("buffer capacity " + bufferCapacity +
         " should be bigger than readSize " + readSize);
     }
     this.readSize = readSize;
+  }
+
+  protected DaosInputStream(DaosFile daosFile,
+                            FileSystem.Statistics stats,
+                            ByteBuf buffer, int readSize, boolean async) throws IOException {
+    this(daosFile, stats, buffer, readSize, async, false);
   }
 
   @Override
@@ -207,6 +217,9 @@ public class DaosInputStream extends FSInputStream {
     }
     this.closed = true;
     source.close();
+    if (this.buffer != null) {
+      this.buffer.release();
+    }
     super.close();
   }
 
