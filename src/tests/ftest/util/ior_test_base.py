@@ -315,7 +315,7 @@ class IorTestBase(DfuseTestBase):
         # Since same ior_cmd is used to trigger the MPIRUN
         # with different parameters, pausing for 2 seconds to
         # avoid data collisions.
-        #time.sleep(2)
+        # DAOS-6937
         time.sleep(10)
         job2.start()
         job1.join()
