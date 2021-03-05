@@ -863,6 +863,7 @@ fetch_done(crt_iv_namespace_t ivns, uint32_t class_id,
 		if (keys_equal(iv_key, &entry->key) == true) {
 			rc = crt_bulk_create(g_main_ctx, &entry->value,
 					     perms, &bulk_hdl);
+			assert(rc == 0);
 			found = true;
 			break;
 		}
