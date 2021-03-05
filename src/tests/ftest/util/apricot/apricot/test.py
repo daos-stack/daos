@@ -359,9 +359,9 @@ class TestWithoutServers(Test):
 
         for kv_pair in default_env:
             if 0 in kv_pair:
-              key, value = kv_pair[0]
-              print("Adding {}={} to environment.\n".format(key, value))
-              os.environ[key] = value
+                key, value = kv_pair[0]
+                print("Adding {}={} to environment.\n".format(key, value))
+                os.environ[key] = value
 
         # For compatibility with cart tests, which set env vars in oretrun
         # command via -x options
@@ -402,11 +402,11 @@ class TestWithoutServers(Test):
 
         for kv_pair in default_env:
             try:
-              key = kv_pair[0][0]
-              print("Removing key {} from environment.\n".format(key))
-              del os.environ[key]
+                key = kv_pair[0][0]
+                print("Removing key {} from environment.\n".format(key))
+                del os.environ[key]
             except IndexError:
-              pass
+                pass
 
 class TestWithServers(TestWithoutServers):
     # pylint: disable=too-many-public-methods,too-many-instance-attributes
