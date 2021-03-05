@@ -249,7 +249,8 @@ struct rebuild_iv {
 	uint32_t	riv_global_done:1,
 			riv_global_scan_done:1,
 			riv_scan_done:1,
-			riv_pull_done:1;
+			riv_pull_done:1,
+			riv_sync:1;
 	int		riv_status;
 };
 

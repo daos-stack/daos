@@ -110,11 +110,19 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 	defer m.Unlock()
 
 	resp = new(JoinResponse)
-	curMember, err := m.db.FindMemberByUUID(req.UUID)
+	var curMember *Member
+	if !req.Rank.Equals(NilRank) {
+		curMember, err = m.db.FindMemberByRank(req.Rank)
+	} else {
+		curMember, err = m.db.FindMemberByUUID(req.UUID)
+	}
 	if err == nil {
 		if !curMember.Rank.Equals(req.Rank) {
-			return nil, errors.Errorf("re-joining server %s has different rank (%d != %d)",
-				req.UUID, req.Rank, curMember.Rank)
+			return nil, errRankChanged(req.Rank, curMember.Rank, curMember.UUID)
+
+		}
+		if curMember.UUID != req.UUID {
+			return nil, errUuidChanged(req.UUID, curMember.UUID, curMember.Rank)
 		}
 
 		if !curMember.FaultDomain.Equals(req.FaultDomain) {
@@ -158,7 +166,7 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		state:          MemberStateJoined,
 	}
 	if err := m.db.AddMember(newMember); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to add new member")
 	}
 	resp.Created = true
 	resp.Member = newMember
