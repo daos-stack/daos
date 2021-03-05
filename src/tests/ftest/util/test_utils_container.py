@@ -201,7 +201,7 @@ class TestContainerData():
                 "container": container,
                 "akey": record_info["akey"],
                 "dkey": record_info["dkey"],
-                "data_size": len(data[0].split()),
+                "data_size": len(data[0]),
                 "txn": txn,
             }
             try:

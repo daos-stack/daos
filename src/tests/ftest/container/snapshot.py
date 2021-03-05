@@ -170,7 +170,7 @@ class Snapshot(TestWithServers):
         data_size = self.params.get("test_datasize",
                                     '/run/snapshot/*', default=150)
         thedata = b"--->>>Happy Daos Snapshot-Create Negative Testing " + \
-                  "<<<---" + get_random_bytes(random.randint(1, data_size))
+                  b"<<<---" + get_random_bytes(random.randint(1, data_size))
         try:
             obj = self.container.write_an_obj(thedata,
                                               len(thedata)+1,
@@ -344,7 +344,7 @@ class Snapshot(TestWithServers):
             ss_number += 1
             thedata = b"--->>>Happy Daos Snapshot Testing " + \
                 str(ss_number).encode("utf-8") + \
-                "<<<---" + get_random_bytes(random.randint(1, data_size))
+                b"<<<---" + get_random_bytes(random.randint(1, data_size))
             datasize = len(thedata) + 1
             try:
                 obj = self.container.write_an_obj(thedata,
