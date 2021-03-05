@@ -5,7 +5,7 @@
 #
 
 # Pull base image
-FROM fedora:31
+FROM fedora:latest
 MAINTAINER daos-stack <daos@daos.groups.io>
 
 # First do a big update, this will be cached forever.
