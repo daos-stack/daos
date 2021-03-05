@@ -13,6 +13,7 @@
 #include "../srv.pb-c.h"
 #include "../event.pb-c.h"
 #include "../srv_internal.h"
+#include <daos/tests_lib.h>
 #include <daos/test_mocks.h>
 #include <daos/test_utils.h>
 #include <daos/drpc_modules.h>
@@ -102,14 +103,14 @@ test_drpc_init_connect_fails(void **state)
 	skip(); /* DAOS-6436 */
 	connect_return = -1;
 
-	assert_int_equal(drpc_init(), -DER_NOMEM);
+	assert_rc_equal(drpc_init(), -DER_NOMEM);
 }
 
 static void
 test_drpc_init_crt_get_uri_fails(void **state)
 {
 	crt_self_uri_get_return = -DER_BUSY;
-	assert_int_equal(drpc_init(), crt_self_uri_get_return);
+	assert_rc_equal(drpc_init(), crt_self_uri_get_return);
 
 	/* make sure socket was closed */
 	assert_int_equal(close_call_count, 1);
@@ -122,7 +123,7 @@ test_drpc_init_sendmsg_fails(void **state)
 	sendmsg_return = -1;
 	errno = EPERM;
 
-	assert_int_equal(drpc_init(), -DER_NO_PERM);
+	assert_rc_equal(drpc_init(), -DER_NO_PERM);
 
 	/* make sure socket was closed */
 	assert_int_equal(close_call_count, 1);
@@ -159,7 +160,7 @@ static void
 test_drpc_init_fini(void **state)
 {
 	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
-	assert_int_equal(drpc_init(), 0);
+	assert_rc_equal(drpc_init(), 0);
 
 	/* drpc connection created */
 	assert_int_equal(connect_sockfd, socket_return);
@@ -182,7 +183,7 @@ static void
 test_drpc_init_bad_response(void **state)
 {
 	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__FAILURE);
-	assert_int_equal(drpc_init(), -DER_IO);
+	assert_rc_equal(drpc_init(), -DER_IO);
 
 	/* make sure socket was closed */
 	assert_int_equal(close_call_count, 1);
@@ -202,7 +203,7 @@ verify_notify_bio_error(void)
 
 	/* Verify payload contents */
 	req = srv__bio_error_req__unpack(NULL, call->body.len,
-					    call->body.data);
+					 call->body.data);
 	assert_non_null(req);
 	assert_string_equal(req->uri, crt_self_uri_get_uri);
 	assert_string_equal(req->drpclistenersock, drpc_listener_socket_path);
@@ -221,9 +222,9 @@ static void
 test_drpc_verify_notify_bio_error(void **state)
 {
 	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
-	assert_int_equal(drpc_init(), 0);
+	assert_rc_equal(drpc_init(), 0);
 
-	assert_int_equal(ds_notify_bio_error(MET_WRITE, 0), 0);
+	assert_rc_equal(ds_notify_bio_error(MET_WRITE, 0), 0);
 	verify_notify_bio_error();
 
 	/* Now let's shut things down... */
@@ -279,7 +280,7 @@ test_drpc_verify_notify_pool_svc_update(void **state)
 	d_rank_list_t	*svc_ranks;
 
 	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
-	assert_int_equal(drpc_init(), 0);
+	assert_rc_equal(drpc_init(), 0);
 
 	assert_int_equal(uuid_parse("11111111-1111-1111-1111-111111111111",
 				    pool_uuid), 0);
@@ -287,7 +288,7 @@ test_drpc_verify_notify_pool_svc_update(void **state)
 	svc_ranks = uint32_array_to_rank_list(svc_reps, 4);
 	assert_non_null(svc_ranks);
 
-	assert_int_equal(ds_notify_pool_svc_update(&pool_uuid, svc_ranks), 0);
+	assert_rc_equal(ds_notify_pool_svc_update(&pool_uuid, svc_ranks), 0);
 	verify_notify_pool_svc_update(&pool_uuid, svc_ranks);
 
 	d_rank_list_free(svc_ranks);
@@ -321,13 +322,13 @@ test_drpc_verify_notify_pool_svc_update_noreps(void **state)
 	uuid_t	pool_uuid;
 
 	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
-	assert_int_equal(drpc_init(), 0);
+	assert_rc_equal(drpc_init(), 0);
 
 	assert_int_equal(uuid_parse("11111111-1111-1111-1111-111111111111",
 				    pool_uuid), 0);
 
-	assert_int_equal(ds_notify_pool_svc_update(&pool_uuid, NULL),
-			 -DER_INVAL);
+	assert_rc_equal(ds_notify_pool_svc_update(&pool_uuid, NULL),
+			-DER_INVAL);
 	verify_cluster_event_not_sent();
 
 	drpc_fini();
@@ -340,13 +341,13 @@ test_drpc_verify_notify_pool_svc_update_nopool(void **state)
 	d_rank_list_t	*svc_ranks;
 
 	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
-	assert_int_equal(drpc_init(), 0);
+	assert_rc_equal(drpc_init(), 0);
 
 	svc_ranks = uint32_array_to_rank_list(svc_reps, 4);
 	assert_non_null(svc_ranks);
 
-	assert_int_equal(ds_notify_pool_svc_update(NULL, svc_ranks),
-			 -DER_INVAL);
+	assert_rc_equal(ds_notify_pool_svc_update(NULL, svc_ranks),
+			-DER_INVAL);
 	verify_cluster_event_not_sent();
 
 	d_rank_list_free(svc_ranks);
@@ -404,7 +405,7 @@ test_drpc_verify_cluster_event(void **state)
 	daos_obj_id_t	 objid = { .hi = 1, .lo = 1 };
 
 	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
-	assert_int_equal(drpc_init(), 0);
+	assert_rc_equal(drpc_init(), 0);
 
 	assert_int_equal(uuid_parse(pool_str, pool), 0);
 	assert_int_equal(uuid_parse(cont_str, cont), 0);
@@ -426,7 +427,7 @@ static void
 test_drpc_verify_cluster_event_min_viable(void **state)
 {
 	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
-	assert_int_equal(drpc_init(), 0);
+	assert_rc_equal(drpc_init(), 0);
 
 	ds_notify_ras_event(RAS_RANK_DOWN, "rank down", RAS_TYPE_STATE_CHANGE,
 			    RAS_SEV_ERROR, NULL, NULL, NULL, NULL, NULL, NULL,
@@ -443,7 +444,7 @@ static void
 test_drpc_verify_cluster_event_emptymsg(void **state)
 {
 	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
-	assert_int_equal(drpc_init(), 0);
+	assert_rc_equal(drpc_init(), 0);
 
 	ds_notify_ras_event(RAS_RANK_DOWN, "", RAS_TYPE_STATE_CHANGE,
 			    RAS_SEV_ERROR, NULL, NULL, NULL, NULL, NULL, NULL,
@@ -457,7 +458,7 @@ static void
 test_drpc_verify_cluster_event_nomsg(void **state)
 {
 	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
-	assert_int_equal(drpc_init(), 0);
+	assert_rc_equal(drpc_init(), 0);
 
 	ds_notify_ras_event(RAS_RANK_DOWN, NULL, RAS_TYPE_STATE_CHANGE,
 			    RAS_SEV_ERROR, NULL, NULL, NULL, NULL, NULL, NULL,
