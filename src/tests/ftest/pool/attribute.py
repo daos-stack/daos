@@ -132,7 +132,7 @@ class PoolAttributeTest(TestWithServers):
                 expected_result = 'FAIL'
                 break
 
-        attr_dict = {name[0]: value[0]}
+        attr_dict = {name[0]: value[0].encode("utf-8")}
         try:
             self.pool.pool.set_attr(data=attr_dict)
             size, buf = self.pool.pool.list_attr()
@@ -182,7 +182,7 @@ class PoolAttributeTest(TestWithServers):
                 expected_result = 'FAIL'
                 break
 
-        attr_dict = {name[0]: value[0]}
+        attr_dict = {name[0]: value[0].encode("utf-8")}
         try:
             GLOB_SIGNAL = threading.Event()
             self.pool.pool.set_attr(attr_dict, None, cb_func)
