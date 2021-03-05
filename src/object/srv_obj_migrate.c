@@ -20,6 +20,7 @@
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/dtx_srv.h>
+#include <daos_srv/srv_csum.h>
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
@@ -49,6 +50,7 @@ struct migrate_one {
 	uint64_t		 mo_version;
 	uint32_t		 mo_pool_tls_version;
 	d_list_t		 mo_list;
+	d_iov_t			 mo_csum_iov;
 };
 
 struct migrate_obj_key {
@@ -510,8 +512,60 @@ mrone_recx_vos2_daos(struct migrate_one *mrone, struct daos_oclass_attr *oca,
 	mrone_recx_daos_vos_internal(mrone, oca, false, shard);
 }
 
+static int
+mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
+		d_iov_t *csum_iov_fetch)
+{
+	uint32_t		 flags = DIOF_FOR_MIGRATION;
+	int			 rc;
+	struct daos_oclass_attr *oca;
+
+	oca = daos_oclass_attr_find(mrone->mo_oid.id_pub);
+	D_ASSERT(oca != NULL);
+
+	if (daos_oclass_grp_size(oca) > 1)
+		flags |= DIOF_TO_LEADER;
+
+	rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
+			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL,
+			   flags, NULL, csum_iov_fetch);
+
+	if (rc != 0)
+		return rc;
+
+	if (csum_iov_fetch != NULL &&
+	    csum_iov_fetch->iov_len > csum_iov_fetch->iov_buf_len) {
+		/** retry dsc_obj_fetch with appropriate csum_iov
+		 * buf length
+		 */
+		void *p;
+
+		D_REALLOC(p, csum_iov_fetch->iov_buf, csum_iov_fetch->iov_len);
+		if (p == NULL)
+			return -DER_NOMEM;
+		csum_iov_fetch->iov_buf_len = csum_iov_fetch->iov_len;
+		csum_iov_fetch->iov_len = 0;
+		csum_iov_fetch->iov_buf = p;
+
+		rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
+				   mrone->mo_iod_num, mrone->mo_iods, sgls,
+				   NULL, DIOF_TO_LEADER, NULL, csum_iov_fetch);
+	}
+
+	return rc;
+}
+
 #define MIGRATE_STACK_SIZE	131072
 #define MAX_BUF_SIZE		2048
+#define CSUM_BUF_SIZE		256
+
+/**
+ * allocate the memory for the iods_csums and unpack the csum_iov into the
+ * into the iods_csums.
+ * Note: the csum_iov is modified so a shallow copy should be sent instead of
+ * the original.
+ */
+
 
 static int
 migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
@@ -527,6 +581,10 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 	int			 i;
 	int			 rc = 0;
 	struct daos_oclass_attr	*oca;
+	struct daos_csummer	*csummer;
+	d_iov_t			*csums_iov = NULL;
+	d_iov_t			 csum_iov_fetch = {0};
+	d_iov_t			 tmp_csum_iov;
 
 	D_ASSERT(mrone->mo_iod_num <= DSS_ENUM_UNPACK_MAX_IODS);
 	for (i = 0; i < mrone->mo_iod_num; i++) {
@@ -559,22 +617,35 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 	oca = daos_oclass_attr_find(mrone->mo_oid.id_pub);
 	D_ASSERT(oca != NULL);
 	if (fetch) {
-		uint32_t flags = DIOF_FOR_MIGRATION;
+		rc = daos_iov_alloc(&csum_iov_fetch, CSUM_BUF_SIZE, false);
+		if (rc != 0)
+			D_GOTO(out, rc);
 
-		if (daos_oclass_grp_size(oca) > 1)
-			flags |= DIOF_TO_LEADER;
+		rc = mrone_obj_fetch(mrone, oh, sgls, &csum_iov_fetch);
 
-		rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
-				   mrone->mo_iod_num, mrone->mo_iods, sgls,
-				   NULL, flags, NULL);
 		if (rc) {
-			D_ERROR("dsc_obj_fetch %d\n", rc);
+			D_ERROR("mrone_obj_fetch "DF_RC"\n", DP_RC(rc));
 			return rc;
 		}
+
+		/** Using all fetched data so use all fetched checksums */
+		csums_iov = &csum_iov_fetch;
+	} else {
+		/** csums were packed from obj_enum because data is inlined */
+		csums_iov = &mrone->mo_csum_iov;
 	}
+	D_ASSERT(csums_iov != NULL);
+	/** make a copy of the iov because it will be modified while
+	 * iterating over the csums
+	 */
+	tmp_csum_iov = *csums_iov;
 
 	if (DAOS_OC_IS_EC(oca) && !obj_shard_is_ec_parity(mrone->mo_oid, NULL))
 		mrone_recx_daos2_vos(mrone, oca);
+
+	rc = daos_csummer_csum_init_with_packed(&csummer, csums_iov);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	for (i = 0, start = 0; i < mrone->mo_iod_num; i++) {
 		if (mrone->mo_iods[i].iod_size > 0) {
@@ -587,16 +658,28 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 				continue;
 			}
 
-			iod_csums = mrone->mo_iods_csums == NULL ? NULL
-					: &mrone->mo_iods_csums[start];
 			D_DEBUG(DB_TRACE, "update start %d cnt %d\n",
 				start, iod_cnt);
+
+			rc = daos_csummer_alloc_iods_csums_with_packed(
+				csummer,
+				&mrone->mo_iods[start],
+				iod_cnt, &tmp_csum_iov,
+				&iod_csums);
+			if (rc != 0) {
+				D_ERROR("setting up iods csums failed: "
+						DF_RC"\n", DP_RC(rc));
+				break;
+			}
+
 			rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
 					    mrone->mo_update_epoch,
 					    mrone->mo_version,
 					    0, &mrone->mo_dkey, iod_cnt,
 					    &mrone->mo_iods[start], iod_csums,
 					    &sgls[start]);
+			daos_csummer_free_ic(csummer, &iod_csums);
+
 			if (rc) {
 				D_ERROR("migrate failed: rc %d\n", rc);
 				break;
@@ -607,15 +690,34 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 	}
 
 	if (iod_cnt > 0) {
-		iod_csums = mrone->mo_iods_csums == NULL ? NULL
-				: &mrone->mo_iods_csums[start];
+		rc = daos_csummer_alloc_iods_csums_with_packed(
+			csummer,
+			&mrone->mo_iods[start],
+			iod_cnt,
+			&tmp_csum_iov, &iod_csums);
+		if (rc != 0) {
+			D_ERROR("failed to alloc iod csums: rc "DF_RC". "
+				"csum_iov was '%s'\n",
+				DP_RC(rc), fetch ? "FETCHED" : "INLINE");
+			D_GOTO(out, rc);
+		}
 		rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
 				    mrone->mo_update_epoch,
 				    mrone->mo_version,
 				    0, &mrone->mo_dkey, iod_cnt,
 				    &mrone->mo_iods[start], iod_csums,
 				    &sgls[start]);
+
+		if (rc) {
+			D_ERROR("migrate failed: rc "DF_RC"\n", DP_RC(rc));
+			D_GOTO(out, rc);
+		}
+		daos_csummer_free_ic(csummer, &iod_csums);
 	}
+
+out:
+	D_FREE(csum_iov_fetch.iov_buf);
+	daos_csummer_destroy(&csummer);
 
 	return rc;
 }
@@ -652,14 +754,17 @@ static int
 migrate_update_parity(struct migrate_one *mrone, struct ds_cont_child *ds_cont,
 		      unsigned char *buffer, daos_off_t offset,
 		      daos_size_t size, struct daos_oclass_attr *oca,
-		      daos_iod_t *iod, unsigned char *p_bufs[])
+		      daos_iod_t *iod, unsigned char *p_bufs[],
+		      d_iov_t *csum_iov)
 {
-	daos_size_t	stride_nr = obj_ec_stripe_rec_nr(oca);
-	daos_size_t	cell_nr = obj_ec_cell_rec_nr(oca);
-	daos_recx_t	tmp_recx;
-	d_iov_t		tmp_iov;
-	d_sg_list_t	tmp_sgl;
-	daos_size_t	write_nr;
+	daos_size_t		 stride_nr = obj_ec_stripe_rec_nr(oca);
+	daos_size_t		 cell_nr = obj_ec_cell_rec_nr(oca);
+	daos_recx_t		 tmp_recx;
+	d_iov_t			 tmp_iov;
+	d_sg_list_t		 tmp_sgl;
+	daos_size_t		 write_nr;
+	struct daos_csummer	*csummer = NULL;
+	struct dcs_iod_csums	*iod_csums = NULL;
 	int		rc = 0;
 
 	tmp_sgl.sg_nr = tmp_sgl.sg_nr_out = 1;
@@ -702,16 +807,39 @@ migrate_update_parity(struct migrate_one *mrone, struct ds_cont_child *ds_cont,
 
 		tmp_sgl.sg_iovs = &tmp_iov;
 		iod->iod_recxs = &tmp_recx;
+
+		rc = daos_csummer_csum_init_with_packed(&csummer, csum_iov);
+		if (rc != 0) {
+			D_ERROR("Error initializing csummer");
+			D_GOTO(out, rc);
+		}
+
+		rc = daos_csummer_alloc_iods_csums_with_packed(
+			csummer,
+			iod,
+			1, csum_iov, &iod_csums);
+		if (rc != 0) {
+			D_ERROR("Error allocating iods");
+			D_GOTO(out, rc);
+		}
+
+		D_ASSERTF(iod_csums == NULL, "DAOS-6811 - EC Rebuild with "
+					     "checksums is currently "
+					     "unsupported.");
+
+
 		rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
 				    mrone->mo_epoch,
 				    mrone->mo_version,
-				    0, &mrone->mo_dkey, 1, iod, NULL,
+				    0, &mrone->mo_dkey, 1, iod, iod_csums,
 				    &tmp_sgl);
 		size -= write_nr;
 		offset += write_nr;
 		buffer += write_nr * iod->iod_size;
 	}
 out:
+	daos_csummer_free_ic(csummer, &iod_csums);
+	daos_csummer_destroy(&csummer);
 	return rc;
 }
 
@@ -722,11 +850,13 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 {
 	d_sg_list_t	 sgls[DSS_ENUM_UNPACK_MAX_IODS];
 	d_iov_t		 iov[DSS_ENUM_UNPACK_MAX_IODS] = { 0 };
-	char		 *data;
+	d_iov_t		 csum_iov_fetch = { 0 };
+	d_iov_t		 tmp_csum_iov_fetch;
+	char		*data;
 	daos_size_t	 size;
 	unsigned int	 p = obj_ec_parity_tgt_nr(oca);
-	unsigned char	 *p_bufs[p];
-	unsigned char	 *ptr;
+	unsigned char	*p_bufs[p];
+	unsigned char	*ptr;
 	int		 i;
 	int		 rc;
 
@@ -749,9 +879,11 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 		DP_UOID(mrone->mo_oid), mrone, DP_KEY(&mrone->mo_dkey),
 		mrone->mo_iod_num, mrone->mo_epoch);
 
-	rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
-			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL,
-			   DIOF_TO_LEADER | DIOF_FOR_MIGRATION, NULL);
+	rc = daos_iov_alloc(&csum_iov_fetch, CSUM_BUF_SIZE, false);
+	if (rc)
+		D_GOTO(out, rc);
+	rc = mrone_obj_fetch(mrone, oh, sgls, &csum_iov_fetch);
+	tmp_csum_iov_fetch = csum_iov_fetch;
 	if (rc) {
 		D_ERROR("migrate dkey "DF_KEY" failed rc %d\n",
 			DP_KEY(&mrone->mo_dkey), rc);
@@ -779,7 +911,8 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 
 			tmp_iod.iod_nr = 1;
 			rc = migrate_update_parity(mrone, ds_cont, ptr, offset,
-						   size, oca, &tmp_iod, p_bufs);
+						   size, oca, &tmp_iod, p_bufs,
+						   &tmp_csum_iov_fetch);
 			if (rc)
 				D_GOTO(out, rc);
 			ptr += size * iod->iod_size;
@@ -789,7 +922,8 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 
 		if (size > 0)
 			rc = migrate_update_parity(mrone, ds_cont, ptr, offset,
-						   size, oca, &tmp_iod, p_bufs);
+						   size, oca, &tmp_iod, p_bufs,
+						   &tmp_csum_iov_fetch);
 	}
 out:
 	for (i = 0; i < mrone->mo_iod_num; i++) {
@@ -802,6 +936,8 @@ out:
 			D_FREE(p_bufs[i]);
 	}
 
+	daos_iov_free(&csum_iov_fetch);
+
 	return rc;
 }
 
@@ -810,13 +946,16 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 			    struct ds_cont_child *ds_cont)
 {
 	struct daos_oclass_attr	*oca;
-	d_sg_list_t		sgls[DSS_ENUM_UNPACK_MAX_IODS];
-	d_iov_t			iov[DSS_ENUM_UNPACK_MAX_IODS] = { 0 };
-	uint32_t		flags = DIOF_FOR_MIGRATION;
+	d_sg_list_t		 sgls[DSS_ENUM_UNPACK_MAX_IODS];
+	d_iov_t			 iov[DSS_ENUM_UNPACK_MAX_IODS] = { 0 };
 	char			*data;
-	daos_size_t		size;
-	int			i;
-	int			rc;
+	daos_size_t		 size;
+	int			 i;
+	int			 rc;
+	d_iov_t			 csum_iov_fetch = {0};
+	struct daos_csummer	*csummer = NULL;
+	d_iov_t			 tmp_csum_iov;
+	struct dcs_iod_csums	*iod_csums = NULL;
 
 	oca = daos_oclass_attr_find(mrone->mo_oid.id_pub);
 	D_ASSERT(oca != NULL);
@@ -841,12 +980,11 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 		DP_UOID(mrone->mo_oid), mrone, DP_KEY(&mrone->mo_dkey),
 		mrone->mo_iod_num, mrone->mo_epoch);
 
-	if (daos_oclass_grp_size(oca) > 1)
-		flags |= DIOF_TO_LEADER;
+	rc = daos_iov_alloc(&csum_iov_fetch, CSUM_BUF_SIZE, false);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
-	rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
-			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL,
-			   flags, NULL);
+	rc = mrone_obj_fetch(mrone, oh, sgls, &csum_iov_fetch);
 	if (rc) {
 		D_ERROR("migrate dkey "DF_KEY" failed rc %d\n",
 			DP_KEY(&mrone->mo_dkey), rc);
@@ -910,10 +1048,24 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 				       true, false, NULL);
 	}
 
+	rc = daos_csummer_csum_init_with_packed(&csummer, &csum_iov_fetch);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	tmp_csum_iov = csum_iov_fetch;
+	rc = daos_csummer_alloc_iods_csums_with_packed(
+		csummer,
+		&mrone->mo_iods[0],
+		mrone->mo_iod_num,
+		&tmp_csum_iov, &iod_csums);
+	if (rc != 0) {
+		D_ERROR("unable to allocate iod csums.");
+		goto out;
+	}
 	rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
 			    mrone->mo_update_epoch, mrone->mo_version,
 			    0, &mrone->mo_dkey, mrone->mo_iod_num,
-			    mrone->mo_iods, mrone->mo_iods_csums, sgls);
+			    mrone->mo_iods, iod_csums, sgls);
 out:
 	for (i = 0; i < mrone->mo_iod_num; i++) {
 		if (iov[i].iov_buf)
@@ -926,6 +1078,9 @@ out:
 			mrone->mo_iods[i].iod_recxs = NULL;
 	}
 
+	daos_iov_free(&csum_iov_fetch);
+	daos_csummer_destroy(&csummer);
+
 	return rc;
 }
 
@@ -933,11 +1088,15 @@ static int
 migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 			  struct ds_cont_child *ds_cont)
 {
-	d_sg_list_t	sgls[DSS_ENUM_UNPACK_MAX_IODS];
-	daos_handle_t	ioh;
+	d_sg_list_t		 sgls[DSS_ENUM_UNPACK_MAX_IODS];
+	daos_handle_t		 ioh;
 	struct daos_oclass_attr *oca;
-	uint32_t	flags = DIOF_FOR_MIGRATION;
-	int		rc, rc1, i, ret, sgl_cnt = 0;
+	int			 rc, rc1, i, ret, sgl_cnt = 0;
+	struct daos_csummer	*csummer = NULL;
+	d_iov_t			 csum_iov_fetch = {0};
+	struct dcs_iod_csums	*iod_csums = NULL;
+	d_iov_t			 tmp_csum_iov;
+
 
 	if (obj_shard_is_ec_parity(mrone->mo_oid, &oca))
 		return migrate_fetch_update_parity(mrone, oh, ds_cont, oca);
@@ -983,15 +1142,31 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 	if (DAOS_OC_IS_EC(oca))
 		mrone_recx_vos2_daos(mrone, oca, mrone->mo_oid.id_shard);
 
-	if (daos_oclass_grp_size(oca) > 1)
-		flags |= DIOF_TO_LEADER;
+	rc = daos_iov_alloc(&csum_iov_fetch, CSUM_BUF_SIZE, false);
+	if (rc != 0)
+		D_GOTO(post, rc);
 
-	rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
-			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL,
-			   flags, NULL);
+	rc = mrone_obj_fetch(mrone, oh, sgls, &csum_iov_fetch);
 	if (rc)
 		D_ERROR("migrate dkey "DF_KEY" failed rc %d\n",
 			DP_KEY(&mrone->mo_dkey), rc);
+
+	rc = daos_csummer_csum_init_with_packed(&csummer, &csum_iov_fetch);
+	if (rc != 0)
+		D_GOTO(post, rc);
+
+	tmp_csum_iov = csum_iov_fetch;
+	rc = daos_csummer_alloc_iods_csums_with_packed(csummer,
+						       mrone->mo_iods,
+						       mrone->mo_iod_num,
+						       &tmp_csum_iov,
+						       &iod_csums);
+	if (rc != 0) {
+		D_ERROR("Failed to alloc iod csums");
+		D_GOTO(post, rc);
+	}
+
+	vos_set_io_csum(ioh, iod_csums);
 post:
 	for (i = 0; i < sgl_cnt; i++)
 		d_sgl_fini(&sgls[i], false);
@@ -1030,6 +1205,9 @@ post:
 	}
 end:
 	rc1 = vos_update_end(ioh, mrone->mo_version, &mrone->mo_dkey, rc, NULL);
+	daos_csummer_free_ic(csummer, &iod_csums);
+	daos_csummer_destroy(&csummer);
+	daos_iov_free(&csum_iov_fetch);
 	if (rc == 0)
 		rc = rc1;
 	return rc;
@@ -1155,7 +1333,7 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone)
 	data_size = daos_iods_len(mrone->mo_iods, mrone->mo_iod_num);
 	D_DEBUG(DB_TRACE, "data size is "DF_U64"\n", data_size);
 	if (data_size == 0) {
-		D_DEBUG(DB_REBUILD, "skipe empty iod\n");
+		D_DEBUG(DB_REBUILD, "skip empty iod\n");
 		D_GOTO(obj_close, rc);
 	}
 
@@ -1202,18 +1380,8 @@ migrate_one_destroy(struct migrate_one *mrone)
 		D_FREE(mrone->mo_sgls);
 	}
 
-	if (mrone->mo_iods_csums) {
-		struct dcs_iod_csums	*iod_csum;
-		int			 j;
-
-		for (i = 0; i < mrone->mo_iod_alloc_num; i++) {
-			iod_csum = &mrone->mo_iods_csums[i];
-			for (j = 0; j < iod_csum->ic_nr; j++)
-				D_FREE(iod_csum->ic_data[j].cs_csum);
-			D_FREE(iod_csum->ic_data);
-		}
+	if (mrone->mo_iods_csums)
 		D_FREE(mrone->mo_iods_csums);
-	}
 
 	D_FREE(mrone);
 }
@@ -1528,7 +1696,6 @@ migrate_one_insert(struct enum_unpack_arg *arg,
 	daos_key_t		*dkey = &io->ui_dkey;
 	daos_epoch_t		dkey_punch_eph = io->ui_dkey_punch_eph;
 	daos_iod_t		*iods = io->ui_iods;
-	struct dcs_iod_csums	*iods_csums = io->ui_iods_csums;
 	daos_epoch_t		*akey_ephs = io->ui_akey_punch_ephs;
 	daos_epoch_t		*rec_ephs = io->ui_rec_punch_ephs;
 	int			iod_eph_total = io->ui_iods_top + 1;
@@ -1560,10 +1727,6 @@ migrate_one_insert(struct enum_unpack_arg *arg,
 	D_INIT_LIST_HEAD(&mrone->mo_list);
 	D_ALLOC_ARRAY(mrone->mo_iods, iod_eph_total);
 	if (mrone->mo_iods == NULL)
-		D_GOTO(free, rc = -DER_NOMEM);
-
-	D_ALLOC_ARRAY(mrone->mo_iods_csums, iod_eph_total);
-	if (mrone->mo_iods_csums == NULL)
 		D_GOTO(free, rc = -DER_NOMEM);
 
 	mrone->mo_epoch = arg->epr.epr_hi;
@@ -1620,16 +1783,12 @@ migrate_one_insert(struct enum_unpack_arg *arg,
 					 inline_copy ? &sgls[i] : NULL);
 			if (rc)
 				D_GOTO(free, rc);
-			/**
-			 * mrone owns the allocated memory now and will free
-			 * it in migrate_one_destroy().
-			 */
-			mrone->mo_iods_csums[mrone->mo_iod_num - 1] =
-				iods_csums[i];
-			iods_csums[i].ic_data = NULL;
-			iods_csums[i].ic_nr = 0;
 		}
 	}
+
+	rc = daos_iov_copy(&mrone->mo_csum_iov, &io->ui_csum_iov);
+	if (rc != 0)
+		D_GOTO(free, rc);
 
 	mrone->mo_version = version;
 	D_DEBUG(DB_TRACE, "create migrate dkey ult %d\n",
@@ -1797,7 +1956,6 @@ migrate_start_ult(struct enum_unpack_arg *unpack_arg)
 
 #define KDS_NUM		16
 #define ITER_BUF_SIZE	2048
-#define CSUM_BUF_SIZE	256
 
 /**
  * Iterate akeys/dkeys of the object

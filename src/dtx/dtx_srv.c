@@ -39,7 +39,6 @@ static void *
 dtx_tls_init(int xs_id, int tgt_id)
 {
 	struct dtx_tls	*tls;
-	char		*path;
 	uint32_t	 opc;
 	int		 rc;
 
@@ -53,14 +52,13 @@ dtx_tls_init(int xs_id, int tgt_id)
 
 	/** Register different per-opcode sensors */
 	for (opc = 0; opc < DTX_PROTO_SRV_RPC_COUNT; opc++) {
-		D_ASPRINTF(path, "io/%u/ops/%s/total_cnt", tgt_id,
-			   dtx_opc_to_str(opc));
-		rc = d_tm_add_metric(&tls->ot_op_total[opc], path, D_TM_COUNTER,
-				     "total number of processed DTX RPCs", "");
-		if (rc != D_TM_SUCCESS)
+		rc = d_tm_add_metric(&tls->ot_op_total[opc], D_TM_COUNTER,
+				     "total number of processed DTX RPCs", "",
+				     "io/%u/ops/%s/total_cnt",
+				     tgt_id, dtx_opc_to_str(opc));
+		if (rc != DER_SUCCESS)
 			D_WARN("Failed to create DTX RPC cnt sensor for %s: "
 			       DF_RC"\n", dtx_opc_to_str(opc), DP_RC(rc));
-		D_FREE(path);
 	}
 
 	return tls;
@@ -201,8 +199,8 @@ out:
 		D_ERROR("send reply failed for DTX rpc %u: rc = "DF_RC"\n", opc,
 			DP_RC(rc));
 
-	rc = d_tm_increment_counter(&tls->ot_op_total[opc], NULL);
-	if (rc != D_TM_SUCCESS)
+	rc = d_tm_increment_counter(&tls->ot_op_total[opc], 1, NULL);
+	if (rc != DER_SUCCESS)
 		D_WARN("Failed to increase DTX RPC cnt for %s: "DF_RC"\n",
 		       dtx_opc_to_str(opc), DP_RC(rc));
 
