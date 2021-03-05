@@ -26,7 +26,7 @@ except ImportError:
     import Queue as test_queue
 
 
-class OSAUtils(IorTestBase, MdtestBase):
+class OSAUtils(MdtestBase, IorTestBase):
     # pylint: disable=too-many-ancestors
     """
     Test Class Description: This test runs
@@ -206,7 +206,7 @@ class OSAUtils(IorTestBase, MdtestBase):
         # Wait for the thread to finish
         process.join()
 
-    def ior_thread(self, pool, oclass, test, flags, results):
+    def ior_thread(self, pool, oclass, test, flags):
         """Start threads and wait until all threads are finished.
 
         Args:
@@ -231,7 +231,7 @@ class OSAUtils(IorTestBase, MdtestBase):
         self.ior_cmd.block_size.update(test[3])
         self.ior_cmd.flags.update(flags)
         self.run_ior_with_pool(create_pool=False, create_cont=False)
-    
+
     def run_mdtest_thread(self):
         """Start mdtest thread and wait until thread completes.
         """

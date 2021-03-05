@@ -76,7 +76,7 @@ class OSAOfflineReintegration(OSAUtils):
 
         # Exclude all the ranks
         random_pool = random.randint(0, (num_pool-1))
-        for val in range(0, len(rank)):
+        for val, _ in enumerate(rank)::
             self.pool = pool[random_pool]
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
@@ -118,7 +118,7 @@ class OSAOfflineReintegration(OSAUtils):
                             "Pool Version Error:  After exclude")
 
         # Reintegrate the ranks which was excluded
-        for val in range(0, len(rank)):
+        for val, _ in enumerate(rank):
             if (val == 2 and "RP_2G" in oclass):
                 output = self.dmg_command.pool_reintegrate(self.pool.uuid,
                                                            rank[val], "0,2")
