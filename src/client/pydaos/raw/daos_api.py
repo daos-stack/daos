@@ -62,7 +62,7 @@ class DaosPool():
 
     def set_group(self, group):
         """Set group given a string"""
-        self.group = ctypes.create_string_buffer(group.encode('utf-8'))
+        self.group = ctypes.create_string_buffer(group)
 
     def connect(self, flags, cb_func=None):
         """Connect to this pool."""
@@ -147,7 +147,7 @@ class DaosPool():
         c_glob = daos_cref.IOV()
         c_glob.iov_len = iov_len
         c_glob.iov_buf_len = buf_len
-        c_buf = ctypes.create_string_buffer(buf)
+        c_buf = ctypes.create_string_buffer(bytes(buf))
         c_glob.iov_buf = ctypes.cast(c_buf, ctypes.c_void_p)
 
         local_handle = ctypes.c_uint64(0)
@@ -410,12 +410,12 @@ class DaosPool():
 
         func = self.context.get_function('set-pool-attr')
 
-        att_names = (ctypes.c_char_p * len(data))(*list(data.keys()))
+        att_names = (ctypes.c_char_p * len(data))(*list(data.values()))
         names = ctypes.cast(att_names, ctypes.POINTER(ctypes.c_char_p))
 
         no_of_att = ctypes.c_int(len(data))
 
-        att_values = (ctypes.c_char_p * len(data))(*list(data.keys()))
+        att_values = (ctypes.c_char_p * len(data))(*list(data.values()))
         values = ctypes.cast(att_values, ctypes.POINTER(ctypes.c_char_p))
 
         size_of_att_val = []
@@ -771,7 +771,7 @@ class DaosObj():
             c_dkeys = (daos_cref.IOV * len(dkeys))()
             i = 0
             for dkey in dkeys:
-                c_dkey = ctypes.create_string_buffer(dkey.encode('utf-8'))
+                c_dkey = ctypes.create_string_buffer(dkey)
                 c_dkeys[i].iov_buf = ctypes.cast(c_dkey, ctypes.c_void_p)
                 c_dkeys[i].iov_buf_len = ctypes.sizeof(c_dkey)
                 c_dkeys[i].iov_len = ctypes.sizeof(c_dkey)
@@ -818,7 +818,7 @@ class DaosObj():
         c_tx = ctypes.c_uint64(txn)
 
         c_dkey_iov = daos_cref.IOV()
-        c_dkey = ctypes.create_string_buffer(dkey.encode('utf-8'))
+        c_dkey = ctypes.create_string_buffer(dkey)
         c_dkey_iov.iov_buf = ctypes.cast(c_dkey, ctypes.c_void_p)
         c_dkey_iov.iov_buf_len = ctypes.sizeof(c_dkey)
         c_dkey_iov.iov_len = ctypes.sizeof(c_dkey)
@@ -827,7 +827,7 @@ class DaosObj():
         c_akeys = (daos_cref.IOV * len(akeys))()
         i = 0
         for akey in akeys:
-            c_akey = ctypes.create_string_buffer(akey.encode('utf-8'))
+            c_akey = ctypes.create_string_buffer(akey)
             c_akeys[i].iov_buf = ctypes.cast(c_akey, ctypes.c_void_p)
             c_akeys[i].iov_buf_len = ctypes.sizeof(c_akey)
             c_akeys[i].iov_len = ctypes.sizeof(c_akey)
@@ -1665,11 +1665,9 @@ class DaosContainer():
         # strings as the data)
         c_values = []
         for item in datalist:
-            c_values.append((
-                ctypes.create_string_buffer(item.encode('utf-8')),
-                len(item) + 1))
-        c_dkey = ctypes.create_string_buffer(dkey.encode('utf-8'))
-        c_akey = ctypes.create_string_buffer(akey.encode('utf-8'))
+            c_values.append((ctypes.create_string_buffer(item), len(item) + 1))
+        c_dkey = ctypes.create_string_buffer(dkey)
+        c_akey = ctypes.create_string_buffer(akey)
 
         # oid can be None in which case a new one is created
         ioreq = IORequest(self.context, self, obj, rank, 2, objtype=obj_cls)
@@ -1690,7 +1688,7 @@ class DaosContainer():
             raise DaosApiError("Container needs to be open.")
 
         if thedata is not None:
-            c_value = ctypes.create_string_buffer(thedata.encode('utf-8'))
+            c_value = ctypes.create_string_buffer(thedata)
         else:
             c_value = None
         c_size = ctypes.c_size_t(size)
@@ -1698,11 +1696,11 @@ class DaosContainer():
         if dkey is None:
             c_dkey = None
         else:
-            c_dkey = ctypes.create_string_buffer(dkey.encode('utf-8'))
+            c_dkey = ctypes.create_string_buffer(dkey)
         if akey is None:
             c_akey = None
         else:
-            c_akey = ctypes.create_string_buffer(akey.encode('utf-8'))
+            c_akey = ctypes.create_string_buffer(akey)
 
         # obj can be None in which case a new one is created
         ioreq = IORequest(self.context, self, obj, rank, objtype=obj_cls)
@@ -1733,12 +1731,12 @@ class DaosContainer():
         if dkey is None:
             c_dkey = None
         else:
-            c_dkey = ctypes.create_string_buffer(dkey.encode('utf-8'))
+            c_dkey = ctypes.create_string_buffer(dkey)
 
         c_data = []
         for tup in data:
-            newtup = (ctypes.create_string_buffer(tup[0].encode('utf-8')),
-                      ctypes.create_string_buffer(tup[1].encode('utf-8')))
+            newtup = (ctypes.create_string_buffer(tup[0]),
+                      ctypes.create_string_buffer(tup[1]))
             c_data.append(newtup)
 
         # obj can be None in which case a new one is created
@@ -1762,8 +1760,8 @@ class DaosContainer():
 
         c_rec_count = ctypes.c_uint(rec_count)
         c_rec_size = ctypes.c_size_t(rec_size)
-        c_dkey = ctypes.create_string_buffer(dkey.encode('utf-8'))
-        c_akey = ctypes.create_string_buffer(akey.encode('utf-8'))
+        c_dkey = ctypes.create_string_buffer(dkey)
+        c_akey = ctypes.create_string_buffer(akey)
 
         ioreq = IORequest(self.context, self, obj)
         buf = ioreq.fetch_array(c_dkey, c_akey, c_rec_count,
@@ -1786,11 +1784,11 @@ class DaosContainer():
         if self.coh == 0:
             raise DaosApiError("Container needs to be open.")
 
-        c_dkey = ctypes.create_string_buffer(dkey.encode('utf-8'))
+        c_dkey = ctypes.create_string_buffer(dkey)
 
         c_data = []
         for tup in data:
-            newtup = (ctypes.create_string_buffer(tup[0].encode('utf-8')),
+            newtup = (ctypes.create_string_buffer(tup[0]),
                       ctypes.c_size_t(tup[1]))
             c_data.append(newtup)
 
@@ -1812,8 +1810,8 @@ class DaosContainer():
         if dkey is None:
             c_dkey = None
         else:
-            c_dkey = ctypes.create_string_buffer(dkey.encode('utf-8'))
-        c_akey = ctypes.create_string_buffer(akey.encode('utf-8'))
+            c_dkey = ctypes.create_string_buffer(dkey)
+        c_akey = ctypes.create_string_buffer(akey)
 
         ioreq = IORequest(self.context, self, obj)
         buf = ioreq.single_fetch(c_dkey, c_akey, size, test_hints, txn)
@@ -1846,7 +1844,7 @@ class DaosContainer():
         c_glob = daos_cref.IOV()
         c_glob.iov_len = iov_len
         c_glob.iov_buf_len = buf_len
-        c_buf = ctypes.create_string_buffer(str(buf))
+        c_buf = ctypes.create_string_buffer(bytes(buf))
         c_glob.iov_buf = ctypes.cast(c_buf, ctypes.c_void_p)
 
         local_handle = ctypes.c_uint64(0)

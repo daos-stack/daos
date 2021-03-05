@@ -56,14 +56,14 @@ class SameKeyDifferentValue(TestWithServers):
         """
 
         # define akey,dkey, single value data and array value data
-        single_value_data = "a string that I want to stuff into an object"
+        single_value_data = b"a string that I want to stuff into an object"
         array_value_data = []
-        array_value_data.append("data string one")
-        array_value_data.append("data string two")
-        array_value_data.append("data string tre")
+        array_value_data.append(b"data string one")
+        array_value_data.append(b"data string two")
+        array_value_data.append(b"data string tre")
 
-        dkey = "this is the dkey"
-        akey = "this is the akey"
+        dkey = b"this is the dkey"
+        akey = b"this is the akey"
 
         aggregation = False
 
@@ -77,10 +77,9 @@ class SameKeyDifferentValue(TestWithServers):
                 # read the data back and make sure its correct
                 read_back_data = self.container.read_an_obj(
                     len(single_value_data)+1, dkey, akey, obj)
-                if single_value_data != read_back_data.value.decode("utf-8"):
+                if single_value_data != read_back_data.value:
                     self.log.info("wrote data: %s", single_value_data)
-                    self.log.info(
-                        "read data:  %s", read_back_data.value.decode("utf-8"))
+                    self.log.info("read data:  %s", read_back_data.value)
                     self.fail("Write data, read it back, didn't match\n")
 
                 # test case 1
@@ -161,14 +160,14 @@ class SameKeyDifferentValue(TestWithServers):
         """
 
         # define akey,dkey, single value data and array value data
-        single_value_data = "a string that I want to stuff into an object"
+        single_value_data = b"a string that I want to stuff into an object"
         array_value_data = []
-        array_value_data.append("data string one")
-        array_value_data.append("data string two")
-        array_value_data.append("data string tre")
+        array_value_data.append(b"data string one")
+        array_value_data.append(b"data string two")
+        array_value_data.append(b"data string tre")
 
-        dkey = "this is the dkey"
-        akey = "this is the akey"
+        dkey = b"this is the dkey"
+        akey = b"this is the akey"
 
         aggregation = False
 

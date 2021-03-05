@@ -42,9 +42,9 @@ class PunchTest(TestWithServers):
 
         try:
             # create an object and write some data into it
-            thedata = "a string that I want to stuff into an object"
-            dkey = "this is the dkey"
-            akey = "this is the akey"
+            thedata = b"a string that I want to stuff into an object"
+            dkey = b"this is the dkey"
+            akey = b"this is the akey"
             tx_handle = self.container.get_new_tx()
             self.log.info("Created a new TX for punch dkey test")
 
@@ -57,9 +57,9 @@ class PunchTest(TestWithServers):
             # read the data back and make sure its correct
             thedata2 = self.container.read_an_obj(len(thedata)+1, dkey, akey,
                                                   obj, txn=tx_handle)
-            if thedata != thedata2.value.decode("utf-8"):
+            if thedata != thedata2.value:
                 self.log.info("wrote data: %s", thedata)
-                self.log.info("read data:  %s", thedata2.value.decode("utf-8"))
+                self.log.info("read data:  %s", thedata2.value)
                 self.fail("Wrote data, read it back, didn't match\n")
 
             # now punch this data, should fail, can't punch committed data
@@ -97,10 +97,10 @@ class PunchTest(TestWithServers):
 
         try:
             # create an object and write some data into it
-            dkey = "this is the dkey"
-            data1 = [("this is akey 1", "this is data value 1"),
-                     ("this is akey 2", "this is data value 2"),
-                     ("this is akey 3", "this is data value 3")]
+            dkey = b"this is the dkey"
+            data1 = [(b"this is akey 1", b"this is data value 1"),
+                     (b"this is akey 2", b"this is data value 2"),
+                     (b"this is akey 3", b"this is data value 3")]
             tx_handle = self.container.get_new_tx()
             self.log.info("Created a new TX for punch akey test")
             obj = self.container.write_multi_akeys(dkey, data1, obj_cls=1,
@@ -152,9 +152,9 @@ class PunchTest(TestWithServers):
         try:
 
             # create an object and write some data into it
-            thedata = "a string that I want to stuff into an object"
-            dkey = "this is the dkey"
-            akey = "this is the akey"
+            thedata = b"a string that I want to stuff into an object"
+            dkey = b"this is the dkey"
+            akey = b"this is the akey"
             tx_handle = self.container.get_new_tx()
             self.log.info("Created a new TX for punch obj test")
             obj = self.container.write_an_obj(thedata, len(thedata)+1, dkey,
@@ -165,9 +165,9 @@ class PunchTest(TestWithServers):
             # read the data back and make sure its correct
             thedata2 = self.container.read_an_obj(len(thedata)+1, dkey, akey,
                                                   obj, txn=tx_handle)
-            if thedata != thedata2.value.decode("utf-8"):
+            if thedata != thedata2.value:
                 self.log.info("wrote data: %s", thedata)
-                self.log.info("read data:  %s", thedata2.value.decode("utf-8"))
+                self.log.info("read data:  %s", thedata2.value)
                 self.fail("Wrote data, read it back, didn't match\n")
 
             # now punch the object, committed so not expecting it to work

@@ -11,6 +11,7 @@ import string
 from apricot import TestWithServers
 from pydaos.raw import (DaosContainer, DaosSnapshot, DaosApiError,
                         c_uuid_to_str)
+from general_utils import get_random_bytes
 
 
 # pylint: disable=broad-except
@@ -164,12 +165,12 @@ class Snapshot(TestWithServers):
         obj_cls = self.params.get("obj_class", '/run/object_class/*')
         akey = self.params.get("akey", '/run/snapshot/*', default="akey")
         dkey = self.params.get("dkey", '/run/snapshot/*', default="dkey")
+        akey = akey.encode("utf-8")
+        dkey = dkey.encode("utf-8")
         data_size = self.params.get("test_datasize",
                                     '/run/snapshot/*', default=150)
-        rand_str = lambda n: ''.join([random.choice(string.ascii_lowercase)
-                                      for i in range(n)])
-        thedata = "--->>>Happy Daos Snapshot-Create Negative Testing " + \
-                  "<<<---" + rand_str(random.randint(1, data_size))
+        thedata = b"--->>>Happy Daos Snapshot-Create Negative Testing " + \
+                  "<<<---" + get_random_bytes(random.randint(1, data_size))
         try:
             obj = self.container.write_an_obj(thedata,
                                               len(thedata)+1,
@@ -199,8 +200,8 @@ class Snapshot(TestWithServers):
         self.log.info("==(2)snapshot_list[ind]=%s", snapshot)
         self.log.info("==snapshot.epoch=  %s", snapshot.epoch)
         self.log.info("==written thedata=%s", thedata)
-        self.log.info("==thedata2.value= %s", thedata2.value.decode("utf-8"))
-        if thedata2.value.decode("utf-8") != thedata:
+        self.log.info("==thedata2.value= %s", thedata2.value)
+        if thedata2.value != thedata:
             self.fail("##(2)The data in the snapshot is not the same as the "
                       "original data")
         self.log.info("==Snapshot data matches the data originally "
@@ -329,21 +330,21 @@ class Snapshot(TestWithServers):
         obj_cls = self.params.get("obj_class", '/run/object_class/*')
         akey = self.params.get("akey", '/run/snapshot/*', default="akey")
         dkey = self.params.get("dkey", '/run/snapshot/*', default="dkey")
+        akey = akey.encode("utf-8")
+        dkey = dkey.encode("utf-8")
         data_size = self.params.get("test_datasize",
                                     '/run/snapshot/*', default=150)
         snapshot_loop = self.params.get("num_of_snapshot",
                                         '/run/snapshot/*', default=3)
-        rand_str = lambda n: ''.join([random.choice(string.ascii_lowercase)
-                                      for i in range(n)])
         #
         # Test loop for creat, modify and snapshot object in the DAOS container.
         #
         while ss_number < snapshot_loop:
             # (1)Create an object, write some data into it, and take a snapshot
             ss_number += 1
-            thedata = "--->>>Happy Daos Snapshot Testing " + \
-                str(ss_number) + \
-                "<<<---" + rand_str(random.randint(1, data_size))
+            thedata = b"--->>>Happy Daos Snapshot Testing " + \
+                str(ss_number).encode("utf-8") + \
+                "<<<---" + get_random_bytes(random.randint(1, data_size))
             datasize = len(thedata) + 1
             try:
                 obj = self.container.write_an_obj(thedata,
@@ -381,7 +382,7 @@ class Snapshot(TestWithServers):
                           "the same KV.", ss_number, more_transactions)
             while more_transactions:
                 size = random.randint(1, 250) + 1
-                new_data = rand_str(size)
+                new_data = get_random_bytes(size)
                 try:
                     new_obj = self.container.write_an_obj(
                         new_data, size, dkey, akey, obj_cls=obj_cls)
@@ -407,9 +408,8 @@ class Snapshot(TestWithServers):
                 self.fail("##(3.1)Error when retrieving the snapshot data: {}"
                           .format(str(error)))
             self.display_snapshot_test_data(test_data, ss_number)
-            self.log.info(
-                "  ==thedata3.value= %s", thedata3.value.decode("utf-8"))
-            if thedata3.value.decode("utf-8") != thedata:
+            self.log.info("  ==thedata3.value= %s", thedata3.value)
+            if thedata3.value != thedata:
                 raise Exception("##(3.2)The data in the snapshot is not the "
                                 "same as the original data")
             self.log.info("  ==The snapshot data matches the data originally"
@@ -448,9 +448,8 @@ class Snapshot(TestWithServers):
             except Exception as error:
                 self.fail("##(5.1)Error when retrieving the snapshot data: {}"
                           .format(str(error)))
-            self.log.info(
-                "  ==snapshot tst_data =%s", thedata5.value.decode("utf-8"))
-            if thedata5.value.decode("utf-8") != tst_data:
+            self.log.info("  ==snapshot tst_data =%s", thedata5.value)
+            if thedata5.value != tst_data:
                 raise Exception("##(5.2)Snapshot #%s, test data Mis-matches"
                                 "the original data written.", ss_number)
             self.log.info("  snapshot test number %s, test data matches"
@@ -480,7 +479,7 @@ class Snapshot(TestWithServers):
             self.fail("##(7)Error when retrieving the snapshot data: {}"
                       .format(str(error)))
         self.log.info("=(7)=>thedata_after_snapshot.destroyed.value= %s",
-                      thedata7.value.decode("utf-8"))
+                      thedata7.value)
         self.log.info("  ==>snapshot.epoch=     %s", snapshot.epoch)
 
         # Still able to open the snapshot and read data after destroyed.

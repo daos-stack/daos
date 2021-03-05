@@ -17,7 +17,7 @@ from dfuse_utils import Dfuse
 from job_manager_utils import Srun
 from command_utils_base import BasicParameter
 from general_utils import get_host_data, get_random_string, \
-    run_command, DaosTestError, pcmd
+    run_command, DaosTestError, pcmd get_random_bytes
 import slurm_utils
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
@@ -247,10 +247,10 @@ def launch_snapshot(self, pool, name):
         "object_class", '/run/container_reserved/*')
 
     # write data to object
-    data_pattern = get_random_string(500)
+    data_pattern = get_random_bytes(500)
     datasize = len(data_pattern) + 1
-    dkey = "dkey"
-    akey = "akey"
+    dkey = b"dkey"
+    akey = b"akey"
     obj = container.container.write_an_obj(
         data_pattern, datasize, dkey, akey, obj_cls=obj_cls)
     obj.close()
@@ -264,10 +264,10 @@ def launch_snapshot(self, pool, name):
     if status:
         self.log.info("Sanpshot Created")
         # write more data to object
-        data_pattern2 = get_random_string(500)
+        data_pattern2 = get_random_bytes(500)
         datasize2 = len(data_pattern2) + 1
-        dkey = "dkey"
-        akey = "akey"
+        dkey = b"dkey"
+        akey = b"akey"
         obj2 = container.container.write_an_obj(
             data_pattern2, datasize2, dkey, akey, obj_cls=obj_cls)
         obj2.close()
@@ -284,8 +284,8 @@ def launch_snapshot(self, pool, name):
             status &= False
         if status:
             # Compare the snapshot to the original written data.
-            if data_pattern3.value.decode("utf-8") != data_pattern:
-                self.log.error("Snapshot data miscompere")
+            if data_pattern3.value != data_pattern:
+                self.log.error("Snapshot data miscompare")
                 status &= False
     # Destroy the snapshot
     try:

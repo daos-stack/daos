@@ -198,7 +198,7 @@ def bytes_to_human(size, digits=2, binary=True):
 
 
 def run_command(command, timeout=60, verbose=True, raise_exception=True,
-                output_check="combined", env=None):
+                output_check="both", env=None):
     """Run the command on the local host.
 
     This method uses the avocado.utils.process.run() method to run the specified
@@ -223,7 +223,7 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
                 "both"      - both standard output and error in separate files
                 "combined"  - standard output and error in a single file
                 "none"      - disable all recording
-            Defaults to "combined".
+            Defaults to "both".
         env (dict, optional): dictionary of environment variable names and
             values to set when running the command. Defaults to None.
 
@@ -576,6 +576,25 @@ def get_random_string(length, exclude=None):
             random.choice(string.ascii_uppercase + string.digits)
             for _ in range(length))
     return random_string
+
+
+def get_random_bytes(length, exclude=None, encoding="utf-8"):
+    """Create a specified length string of random ascii letters and numbers.
+
+    Optionally exclude specific random strings from being returned.
+
+    Args:
+        length (int): length of the string to return
+        exclude (list, optional): list of strings to not return. Defaults to
+            None.
+        encoding (str, optional): bytes encoding. Defaults to "utf-8"
+
+    Returns:
+        bytes : a string of random ascii letters and numbers converted to
+                bytes object
+
+    """
+    return get_random_string(length, exclude).encode(encoding)
 
 
 def check_pool_files(log, hosts, uuid):

@@ -6,7 +6,7 @@
 '''
 
 
-from general_utils import get_random_string, DaosTestError
+from general_utils import get_random_bytes, DaosTestError
 from pydaos.raw import DaosApiError
 
 import time
@@ -206,17 +206,17 @@ def continuous_io(container, seconds):
 
     while time.time() < finish_time:
         # make some stuff up
-        dkey = get_random_string(5)
-        akey = get_random_string(5)
-        data = get_random_string(size)
+        dkey = get_random_bytes(5)
+        akey = get_random_bytes(5)
+        data = get_random_bytes(size)
 
         # write it then read it back
         oid = container.write_an_obj(data, size, dkey, akey, oid, 5)
         data2 = container.read_an_obj(size, dkey, akey, oid)
 
         # verify it came back correctly
-        if data != data2.value.decode("utf-8"):
-            raise ValueError("Data mismatch in ContinousIo")
+        if data != data2.value:
+            raise ValueError("Data mismatch in ContinuousIo")
 
         # collapse down the committed epochs
         container.consolidate_epochs()
@@ -243,9 +243,9 @@ def write_until_full(container):
     try:
         while True:
             # make some stuff up and write
-            dkey = get_random_string(5)
-            akey = get_random_string(5)
-            data = get_random_string(size)
+            dkey = get_random_bytes(5)
+            akey = get_random_bytes(5)
+            data = get_random_bytes(size)
 
             _oid = container.write_an_obj(data, size, dkey, akey)
             total_written += size
@@ -283,9 +283,9 @@ def write_quantity(container, size_in_bytes):
         while total_written < size_in_bytes:
 
             # make some stuff up and write
-            dkey = get_random_string(5)
-            akey = get_random_string(5)
-            data = get_random_string(size)
+            dkey = get_random_bytes(5)
+            akey = get_random_bytes(5)
+            data = get_random_bytes(size)
 
             _oid = container.write_an_obj(data, size, dkey, akey)
             total_written += size
@@ -329,13 +329,13 @@ def write_single_objects(
     for index in range(obj_qty):
         object_list.append({"obj": None, "record": []})
         for _ in range(rec_qty):
-            akey = get_random_string(
+            akey = get_random_bytes(
                 akey_size,
                 [record["akey"] for record in object_list[index]["record"]])
-            dkey = get_random_string(
+            dkey = get_random_bytes(
                 dkey_size,
                 [record["dkey"] for record in object_list[index]["record"]])
-            data = get_random_string(data_size)
+            data = get_random_bytes(data_size)
             object_list[index]["record"].append(
                 {"akey": akey, "dkey": dkey, "data": data})
 
@@ -367,13 +367,13 @@ def read_single_objects(container, size, dkey, akey, obj):
     Args:
         container (DaosContainer): the container from which to read objects
         size (int): amount of data to read
-        dkey (str): dkey used to access the data
-        akey (str): akey used to access the data
+        dkey (bytes): dkey used to access the data
+        akey (bytes): akey used to access the data
         obj (object): object to read
         txn (int): transaction number
 
     Returns:
-        str: data read from the container
+        bytes: data read from the container
 
     Raises:
         DaosTestError: if an error is detected reading the objects
@@ -385,7 +385,7 @@ def read_single_objects(container, size, dkey, akey, obj):
         raise DaosTestError(
             "Error reading data (dkey={}, akey={}, size={}) from the "
             "container: {}".format(dkey, akey, size, error))
-    return data.value.decode("utf-8")
+    return data.value
 
 
 def write_array_objects(
@@ -418,13 +418,13 @@ def write_array_objects(
     for index in range(obj_qty):
         object_list.append({"obj": None, "record": []})
         for _ in range(rec_qty):
-            akey = get_random_string(
+            akey = get_random_bytes(
                 akey_size,
                 [record["akey"] for record in object_list[index]["record"]])
-            dkey = get_random_string(
+            dkey = get_random_bytes(
                 dkey_size,
                 [record["dkey"] for record in object_list[index]["record"]])
-            data = [get_random_string(data_size) for _ in range(data_size)]
+            data = [get_random_bytes(data_size) for _ in range(data_size)]
             object_list[index]["record"].append(
                 {"akey": akey, "dkey": dkey, "data": data})
 
@@ -458,8 +458,8 @@ def read_array_objects(container, size, items, dkey, akey, obj):
         container (DaosContainer): the container from which to read objects
         size (int): number of arrays to read
         items (int): number of items in each array to read
-        dkey (str): dkey used to access the data
-        akey (str): akey used to access the data
+        dkey (bytes): dkey used to access the data
+        akey (bytes): akey used to access the data
         obj (object): object to read
         txn (int): transaction number
 

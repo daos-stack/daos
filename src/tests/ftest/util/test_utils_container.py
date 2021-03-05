@@ -13,7 +13,7 @@ from avocado import fail_on
 from command_utils_base import BasicParameter, CommandFailure
 from pydaos.raw import (DaosApiError, DaosContainer, DaosInputParams,
                         c_uuid_to_str, str_to_c_uuid)
-from general_utils import get_random_string, DaosTestError
+from general_utils import get_random_bytes, DaosTestError
 
 
 class TestContainerData():
@@ -67,9 +67,9 @@ class TestContainerData():
 
         Args:
             container (TestContainer): container in which to write the object
-            akey (str): the akey
-            dkey (str): the dkey
-            data (object): the data to write as a string or list
+            akey (bytes): the akey
+            dkey (bytes): the dkey
+            data (object): the data to write as a list bytes
             rank (int, optional): rank. Defaults to None.
             obj_class (int, optional): daos object class. Defaults to None.
 
@@ -118,13 +118,13 @@ class TestContainerData():
 
         """
         for _ in range(record_qty):
-            akey = get_random_string(akey_size, self.get_akeys())
-            dkey = get_random_string(dkey_size, self.get_dkeys())
+            akey = get_random_bytes(akey_size, self.get_akeys())
+            dkey = get_random_bytes(dkey_size, self.get_dkeys())
             if data_array_size == 0:
-                data = get_random_string(data_size)
+                data = get_random_bytes(data_size)
             else:
                 data = [
-                    get_random_string(data_size)
+                    get_random_bytes(data_size)
                     for _ in range(data_array_size)]
             # Write single data to the container
             self.write_record(container, akey, dkey, data, rank, obj_class)
@@ -142,8 +142,8 @@ class TestContainerData():
 
         Args:
             container (TestContainer): container in which to write the object
-            akey (str): the akey
-            dkey (str): the dkey
+            akey (bytes): the akey
+            dkey (bytes): the dkey
             data_size (int): size of the data to read
             data_array_size (int): size of array item
             txn (int, optional): transaction timestamp to read. Defaults to None
@@ -179,7 +179,7 @@ class TestContainerData():
                     "array " if data_array_size > 0 else "", dkey, akey,
                     data_size, container.uuid, error))
         return [data[:-1] for data in read_data] \
-            if data_array_size > 0 else read_data.value.decode("utf-8")
+            if data_array_size > 0 else read_data.value
 
     def read_object(self, container, txn=None):
         """Read an object from the container.
