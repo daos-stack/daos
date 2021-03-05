@@ -65,7 +65,7 @@ func rankStateGroups(members system.Members) (system.RankGroups, error) {
 
 	for _, m := range members {
 		if _, exists := ranksSeen[m.Rank]; exists {
-			return nil, &system.ErrMemberExists{Rank: m.Rank}
+			return nil, &system.ErrMemberExists{Rank: &m.Rank}
 		}
 		ranksSeen[m.Rank] = struct{}{}
 
@@ -234,7 +234,7 @@ func rankActionGroups(results system.MemberResults) (system.RankGroups, error) {
 
 	for _, r := range results {
 		if _, exists := ranksSeen[r.Rank]; exists {
-			return nil, &system.ErrMemberExists{Rank: r.Rank}
+			return nil, &system.ErrMemberExists{Rank: &r.Rank}
 		}
 		ranksSeen[r.Rank] = struct{}{}
 
