@@ -5,9 +5,10 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import random
+import time
 from osa_utils import OSAUtils
 from test_utils_pool import TestPool
-from apricot import skipForTicket
+from write_host_file import write_host_file
 
 
 class OSAOfflineDrain(OSAUtils):
@@ -22,19 +23,29 @@ class OSAOfflineDrain(OSAUtils):
         """Set up for test case."""
         super(OSAOfflineDrain, self).setUp()
         self.dmg_command = self.get_dmg_command()
+        self.ior_test_sequence = self.params.get(
+            "ior_test_sequence", '/run/ior/iorflags/*')
+        # Recreate the client hostfile without slots defined
+        self.hostfile_clients = write_host_file(
+            self.hostlist_clients, self.workdir, None)
 
-    def run_offline_drain_test(self, num_pool, data=False):
+    def run_offline_drain_test(self, num_pool, data=False,
+                               oclass=None, drain_during_aggregation=False):
         """Run the offline drain without data.
             Args:
             num_pool (int) : total pools to create for testing purposes.
             data (bool) : whether pool has no data or to create
                           some data in pool. Defaults to False.
+            oclass (str): DAOS object class (eg: RP_2G1,etc)
+            drain_during_aggregation (bool) : Perform drain and aggregation
+                                              in parallel
         """
         # Create a pool
         pool = {}
-        pool_uuid = []
         target_list = []
-        drain_servers = (len(self.hostlist_servers) * 2) - 1
+
+        if oclass is None:
+            oclass = self.ior_cmd.dfs_oclass.value
 
         # Exclude target : random two targets  (target idx : 0-7)
         n = random.randint(0, 6)
@@ -42,8 +53,8 @@ class OSAOfflineDrain(OSAUtils):
         target_list.append(n+1)
         t_string = "{},{}".format(target_list[0], target_list[1])
 
-        # Drain a rank (or server)
-        rank = random.randint(1, drain_servers)
+        # Drain a rank 1 (or server)
+        rank = 1
 
         for val in range(0, num_pool):
             pool[val] = TestPool(self.context, dmg_command=self.dmg_command)
@@ -54,17 +65,27 @@ class OSAOfflineDrain(OSAUtils):
             pool[val].nvme_size.value = int(pool[val].nvme_size.value /
                                             num_pool)
             pool[val].create()
-            pool_uuid.append(pool[val].uuid)
             self.pool = pool[val]
-            if data:
-                self.write_single_object()
+            if drain_during_aggregation is True:
+                test_seq = self.ior_test_sequence[1]
+                self.pool.set_property("reclaim", "disabled")
+            else:
+                test_seq = self.ior_test_sequence[0]
 
-        # Drain the pool_uuid, rank and targets
+            if data:
+                self.run_ior_thread("Write", oclass, test_seq)
+                self.run_mdtest_thread()
+
+        # Drain rank and targets
         for val in range(0, num_pool):
             self.pool = pool[val]
+            rank = rank + val
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
+            if drain_during_aggregation is True:
+                self.pool.set_property("reclaim", "time")
+                time.sleep(90)
             output = self.dmg_command.pool_drain(self.pool.uuid,
                                                  rank, t_string)
             self.log.info(output)
@@ -82,9 +103,9 @@ class OSAOfflineDrain(OSAUtils):
             pool[val].display_pool_daos_space(display_string)
 
         if data:
-            self.verify_single_object()
+            self.run_ior_thread("Read", oclass, test_seq)
+            self.run_mdtest_thread()
 
-    @skipForTicket("DAOS-6668")
     def test_osa_offline_drain(self):
         """
         JIRA ID: DAOS-4750
@@ -94,5 +115,4 @@ class OSAOfflineDrain(OSAUtils):
         :avocado: tags=all,daily_regression,hw,medium,ib2
         :avocado: tags=osa,osa_drain,offline_drain
         """
-        for pool_num in range(1, 3):
-            self.run_offline_drain_test(pool_num, True)
+        self.run_offline_drain_test(1, True)

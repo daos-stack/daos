@@ -28,7 +28,7 @@ class MdtestBase(DfuseTestBase):
     def setUp(self):
         """Set up each test case."""
         # obtain separate logs
-        self.update_log_file_names()
+        self.update_log_file_names()g
         # Start the servers and agents
         super(MdtestBase, self).setUp()
 
@@ -62,7 +62,7 @@ class MdtestBase(DfuseTestBase):
         self.run_mdtest(self.get_mdtest_job_manager_command(self.manager),
                         self.processes)
         # reset self.container if dfs_destroy is True
-        if self.mdtest_cmd.dfs_destroy:
+        if self.mdtest_cmd.dfs_destroy is True:
             self.container = None
 
         self.stop_dfuse()

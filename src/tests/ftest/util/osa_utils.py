@@ -10,6 +10,7 @@ import threading
 
 from avocado import fail_on
 from ior_test_base import IorTestBase
+from mdtest_test_base import MdtestBase
 from command_utils import CommandFailure
 from ior_utils import IorCommand
 from job_manager_utils import Mpirun
@@ -19,13 +20,13 @@ from pydaos.raw import (DaosContainer, IORequest,
 
 try:
     # python 3.x
-    import queue as queue
+    import queue as test_queue
 except ImportError:
     # python 2.7
-    import Queue as queue
+    import Queue as test_queue
 
 
-class OSAUtils(IorTestBase):
+class OSAUtils(IorTestBase, MdtestBase):
     # pylint: disable=too-many-ancestors
     """
     Test Class Description: This test runs
@@ -49,7 +50,8 @@ class OSAUtils(IorTestBase):
         self.ior_w_flags = self.params.get("write_flags", '/run/ior/iorflags/*',
                                            default="")
         self.ior_r_flags = self.params.get("read_flags", '/run/ior/iorflags/*')
-        self.out_queue = queue.Queue()
+        self.out_queue = test_queue.Queue()
+        self.dmg_command.exit_status_exception = False
 
     @fail_on(CommandFailure)
     def get_pool_leader(self):
@@ -176,14 +178,13 @@ class OSAUtils(IorTestBase):
         self.obj.close()
         self.container.close()
 
-    def run_ior_thread(self, action, oclass, api, test):
+    def run_ior_thread(self, action, oclass, test):
         """Start the IOR thread for either writing or
         reading data to/from a container.
         Args:
             action (str): Start the IOR thread with Read or
                           Write
             oclass (str): IOR object class
-            API (str): IOR API
             test (list): IOR test sequence
             flags (str): IOR flags
         """
@@ -196,7 +197,6 @@ class OSAUtils(IorTestBase):
         process = threading.Thread(target=self.ior_thread,
                                    kwargs={"pool": self.pool,
                                            "oclass": oclass,
-                                           "api": api,
                                            "test": test,
                                            "flags": flags,
                                            "results":
@@ -206,47 +206,44 @@ class OSAUtils(IorTestBase):
         # Wait for the thread to finish
         process.join()
 
-    def ior_thread(self, pool, oclass, api, test, flags, results):
+    def ior_thread(self, pool, oclass, test, flags, results):
         """Start threads and wait until all threads are finished.
 
         Args:
             pool (object): pool handle
             oclass (str): IOR object class
-            api (str): IOR api
             test (list): IOR test sequence
             flags (str): IOR flags
             results (queue): queue for returning thread results
 
         """
-        mpio_util = MpioUtils()
-        if mpio_util.mpich_installed(self.hostlist_clients) is False:
-            self.fail("Exiting Test : Mpich not installed on :"
-                      " {}".format(self.hostfile_clients[0]))
         self.pool = pool
-        # Define the arguments for the ior_runner_thread method
-        ior_cmd = IorCommand()
-        ior_cmd.get_params(self)
-        ior_cmd.set_daos_params(self.server_group, self.pool)
-        ior_cmd.dfs_oclass.update(oclass)
-        ior_cmd.dfs_dir_oclass.update(oclass)
-        ior_cmd.api.update(api)
-        ior_cmd.transfer_size.update(test[2])
-        ior_cmd.block_size.update(test[3])
-        ior_cmd.flags.update(flags)
-
-        # Define the job manager for the IOR command
-        self.job_manager = Mpirun(ior_cmd, mpitype="mpich")
+        self.ior_cmd.get_params(self)
+        self.ior_cmd.set_daos_params(self.server_group, self.pool)
+        self.ior_cmd.dfs_oclass.update(oclass)
+        self.ior_cmd.dfs_dir_oclass.update(oclass)
         # Create container only
         if self.container is None:
             self.add_container(self.pool)
-        self.job_manager.job.dfs_cont.update(self.container.uuid)
-        env = ior_cmd.get_default_env(str(self.job_manager))
-        self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
-        self.job_manager.assign_processes(self.processes)
-        self.job_manager.assign_environment(env, True)
-
-        # run IOR Command
-        try:
-            self.job_manager.run()
-        except CommandFailure as _error:
-            results.put("FAIL")
+        job_manager = self.get_ior_job_manager_command()
+        job_manager.job.dfs_cont.update(self.container.uuid)
+        self.ior_cmd.transfer_size.update(test[2])
+        self.ior_cmd.block_size.update(test[3])
+        self.ior_cmd.flags.update(flags)
+        self.run_ior_with_pool(create_pool=False, create_cont=False)
+    
+    def run_mdtest_thread(self):
+        """Start mdtest thread and wait until thread completes.
+        """
+        # Create container only
+        self.mdtest_cmd.dfs_destroy = False
+        if self.container is None:
+            self.add_container(self.pool)
+        job_manager = self.get_mdtest_job_manager_command(self.manager)
+        job_manager.job.dfs_cont.update(self.container.uuid)
+        # Add a thread for these IOR arguments
+        process = threading.Thread(target=self.execute_mdtest)
+        # Launch the MDtest thread
+        process.start()
+        # Wait for the thread to finish
+        process.join()
