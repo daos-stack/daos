@@ -565,6 +565,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver, uint32_t op,
 			iv.riv_stable_epoch = rgt->rgt_stable_epoch;
 			iv.riv_ver = rgt->rgt_rebuild_ver;
 			iv.riv_leader_term = rgt->rgt_leader_term;
+			iv.riv_sync = 1;
 
 			/* Notify others the global scan is done, then
 			 * each target can reliablly report its pull status
