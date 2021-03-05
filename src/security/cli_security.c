@@ -155,7 +155,7 @@ get_cred_from_response(Drpc__Response *response, d_iov_t *cred)
 
 	/* If present clear out the verifier (the secret part) */
 	verifier = cred_resp->cred->verifier;
-	memzero_explicit(verifier->data.data, verifier->data.len);
+	explicit_bzero(verifier->data.data, verifier->data.len);
 out:
 	auth__get_cred_resp__free_unpacked(cred_resp, &alloc.alloc);
 	return rc;

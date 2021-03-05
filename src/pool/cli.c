@@ -424,7 +424,7 @@ out:
 	crt_req_decref(arg->rpc);
 	map_bulk_destroy(pci->pci_map_bulk, map_buf);
 	/* Ensure credential memory is wiped clean */
-	memzero_explicit(pci->pci_cred.iov_buf, pci->pci_cred.iov_buf_len);
+	explicit_bzero(pci->pci_cred.iov_buf, pci->pci_cred.iov_buf_len);
 	daos_iov_free(&pci->pci_cred);
 	if (put_pool)
 		dc_pool_put(pool);
@@ -563,7 +563,7 @@ out_bulk:
 	map_bulk_destroy(pci->pci_map_bulk, map_buf);
 out_cred:
 	/* Ensure credential memory is wiped clean */
-	memzero_explicit(pci->pci_cred.iov_buf, pci->pci_cred.iov_buf_len);
+	explicit_bzero(pci->pci_cred.iov_buf, pci->pci_cred.iov_buf_len);
 	daos_iov_free(&pci->pci_cred);
 out_req:
 	crt_req_decref(rpc);

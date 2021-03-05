@@ -51,6 +51,11 @@ def scons():
         env.Install(os.path.join('$PREFIX', 'include', 'gurt'),
                     'include/gurt/%s' % header)
 
+    conf = Configure(env)
+    if conf.CheckFunc('explicit_bzero'):
+        env.Append(CCFLAGS=['HAVE_EXPLICIT_BZERO'])
+    conf.Finish()
+
     env.Append(CCFLAGS=['-DCART_VERSION=\\"' + CART_VERSION + '\\"'])
     env.AppendUnique(CPPPATH=[Dir('cart/test/utest').srcnode()])
     Export('env', 'CART_VERSION')
