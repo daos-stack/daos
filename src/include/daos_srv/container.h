@@ -64,6 +64,7 @@ struct ds_cont_child {
 				 sc_dtx_reindex:1,
 				 sc_dtx_reindex_abort:1,
 				 sc_dtx_cos_shutdown:1,
+				 sc_dtx_cleanup_stale:1,
 				 sc_closing:1,
 				 sc_vos_aggregating:1,
 				 sc_abort_vos_aggregating:1,
