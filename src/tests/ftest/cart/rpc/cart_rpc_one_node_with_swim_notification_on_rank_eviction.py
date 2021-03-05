@@ -49,7 +49,7 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(TestWithoutServers):
     def tearDown(self):
         """Tear down."""
         print("tearDown() start")
-        super(CartRpcOneNodeSwimNotificationOnRankEvictionTest, self).tearDown()
+        super().tearDown()
 
     def test_cart_rpc(self):
         """

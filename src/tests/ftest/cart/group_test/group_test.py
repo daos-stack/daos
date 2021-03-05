@@ -33,7 +33,7 @@ class GroupTest(TestWithoutServers):
         """ Tear down """
         self.report_timeout()
         self._teardown_errors.extend(self.utils.cleanup_processes())
-        super(GroupTest, self).tearDown()
+        super().tearDown()
 
     def test_group(self):
         """
