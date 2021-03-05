@@ -80,6 +80,44 @@ struct daos_sgl_idx {
 };
 
 /*
+ * add bytes to the sgl index offset. If the new offset is greater than or
+ * equal to the indexed iov len, move the index to the next iov in the sgl.
+ */
+static inline void
+sgl_move_forward(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx, uint64_t bytes)
+{
+	sgl_idx->iov_offset += bytes;
+
+	/** move to next iov if necessary */
+	if (sgl_idx->iov_offset >= sgl->sg_iovs[sgl_idx->iov_idx].iov_len) {
+		sgl_idx->iov_idx++;
+		sgl_idx->iov_offset = 0;
+	}
+}
+
+static inline void *
+sgl_indexed_byte(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx)
+{
+	if (sgl_idx->iov_idx > sgl->sg_nr_out - 1)
+		return NULL;
+	return sgl->sg_iovs[sgl_idx->iov_idx].iov_buf + sgl_idx->iov_offset;
+}
+
+/*
+ * If the byte count will exceed the current indexed iov, then move to
+ * the next.
+ */
+static inline void
+sgl_test_forward(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx, uint64_t bytes)
+{
+	if (sgl_idx->iov_offset + bytes >
+	    sgl->sg_iovs[sgl_idx->iov_idx].iov_len) {
+		sgl_idx->iov_idx++;
+		sgl_idx->iov_offset = 0;
+	}
+}
+
+/*
  * Each thread has DF_UUID_MAX number of thread-local buffers for UUID strings.
  * Each debug message can have at most this many DP_UUIDs.
  *
@@ -267,7 +305,8 @@ daos_sgl_buf_extend(d_sg_list_t *sgl, int idx, size_t new_size);
 /** get remaining space in an iov, assuming that iov_len is used and
  * iov_buf_len is total in buf
  */
-#define daos_iov_remaining(iov) ((iov).iov_buf_len - (iov).iov_len)
+#define daos_iov_remaining(iov) ((iov).iov_buf_len > (iov).iov_len ? \
+				(iov).iov_buf_len - (iov).iov_len : 0)
 /**
  * Move sgl forward from iov_idx/iov_off, with move_dist distance. It is
  * caller's responsibility to check the boundary.
@@ -367,6 +406,7 @@ int daos_sgl_processor(d_sg_list_t *sgl, bool check_buf,
 
 char *daos_str_trimwhite(char *str);
 int daos_iov_copy(d_iov_t *dst, d_iov_t *src);
+int daos_iov_alloc(d_iov_t *iov, daos_size_t size, bool set_full);
 void daos_iov_free(d_iov_t *iov);
 bool daos_iov_cmp(d_iov_t *iov1, d_iov_t *iov2);
 void daos_iov_append(d_iov_t *iov, void *buf, uint64_t buf_len);

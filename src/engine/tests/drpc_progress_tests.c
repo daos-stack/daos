@@ -12,6 +12,7 @@
 #include <stddef.h>
 #include <setjmp.h>
 #include <cmocka.h>
+#include <daos/tests_lib.h>
 #include <daos/test_mocks.h>
 #include <daos/test_utils.h>
 #include <abt.h>
@@ -134,7 +135,7 @@ cleanup_drpc_progress_context(struct drpc_progress_context *ctx)
 
 void
 init_drpc_progress_context(struct drpc_progress_context *ctx,
-		struct drpc *listener)
+			   struct drpc *listener)
 {
 	ctx->listener_ctx = listener;
 	D_INIT_LIST_HEAD(&ctx->session_ctx_list);
@@ -142,13 +143,13 @@ init_drpc_progress_context(struct drpc_progress_context *ctx,
 
 void
 add_sessions_to_drpc_progress_context(struct drpc_progress_context *ctx,
-		int *session_fds, int num_sessions)
+				      int *session_fds, int num_sessions)
 {
 	int i;
 
 	for (i = 0; i < num_sessions; i++) {
 		add_new_drpc_node_to_list(&ctx->session_ctx_list,
-				new_drpc_with_fd(session_fds[i]));
+					  new_drpc_with_fd(session_fds[i]));
 	}
 }
 
@@ -164,7 +165,8 @@ set_poll_revents_for_sessions(int revents, int num_sessions)
 
 void
 expect_sessions_in_drpc_progress_session_list(struct drpc_progress_context *ctx,
-		int *session_fds, int num_sessions)
+					      int *session_fds,
+					      int num_sessions)
 {
 	struct drpc_list	*current;
 	int			num_found = 0;
@@ -191,7 +193,7 @@ expect_sessions_missing_from_drpc_progress_session_list(
 	d_list_for_each_entry(current, &ctx->session_ctx_list, link) {
 		for (i = 0; i < num_sessions; i++) {
 			assert_int_not_equal(current->ctx->comm->fd,
-					session_fds[i]);
+					     session_fds[i]);
 		}
 	}
 }
@@ -202,7 +204,7 @@ expect_sessions_missing_from_drpc_progress_session_list(
 static void
 test_drpc_progress_fails_if_ctx_null(void **state)
 {
-	assert_int_equal(drpc_progress(NULL, 15), -DER_INVAL);
+	assert_rc_equal(drpc_progress(NULL, 15), -DER_INVAL);
 }
 
 static void
@@ -212,7 +214,7 @@ test_drpc_progress_fails_if_listener_null(void **state)
 
 	init_drpc_progress_context(&ctx, NULL);
 
-	assert_int_equal(drpc_progress(&ctx, 15), -DER_INVAL);
+	assert_rc_equal(drpc_progress(&ctx, 15), -DER_INVAL);
 }
 
 static void
@@ -223,7 +225,7 @@ test_drpc_progress_fails_if_node_ctx_null(void **state)
 	init_drpc_progress_context(&ctx, new_drpc_with_fd(12));
 	add_new_drpc_node_to_list(&ctx.session_ctx_list, NULL);
 
-	assert_int_equal(drpc_progress(&ctx, 10), -DER_INVAL);
+	assert_rc_equal(drpc_progress(&ctx, 10), -DER_INVAL);
 
 	cleanup_drpc_progress_context(&ctx);
 }
@@ -237,7 +239,7 @@ test_drpc_progress_fails_if_later_node_ctx_null(void **state)
 	add_new_drpc_node_to_list(&ctx.session_ctx_list, new_drpc_with_fd(15));
 	add_new_drpc_node_to_list(&ctx.session_ctx_list, NULL);
 
-	assert_int_equal(drpc_progress(&ctx, 10), -DER_INVAL);
+	assert_rc_equal(drpc_progress(&ctx, 10), -DER_INVAL);
 
 	cleanup_drpc_progress_context(&ctx);
 }
@@ -252,7 +254,7 @@ test_drpc_progress_fails_if_node_comm_null(void **state)
 	D_FREE(bad_drpc->comm);
 	add_new_drpc_node_to_list(&ctx.session_ctx_list, bad_drpc);
 
-	assert_int_equal(drpc_progress(&ctx, 10), -DER_INVAL);
+	assert_rc_equal(drpc_progress(&ctx, 10), -DER_INVAL);
 
 	cleanup_drpc_progress_context(&ctx);
 }
@@ -264,7 +266,7 @@ test_drpc_progress_accepts_timeout_0(void **state)
 
 	init_drpc_progress_context(&ctx, new_drpc_with_fd(12));
 
-	assert_int_equal(drpc_progress(&ctx, 0), DER_SUCCESS);
+	assert_rc_equal(drpc_progress(&ctx, 0), DER_SUCCESS);
 
 	/* zero timeout to poll is valid - means don't block */
 	assert_int_equal(poll_timeout, 0);
@@ -279,7 +281,7 @@ test_drpc_progress_accepts_timeout_negative(void **state)
 
 	init_drpc_progress_context(&ctx, new_drpc_with_fd(12));
 
-	assert_int_equal(drpc_progress(&ctx, -1), DER_SUCCESS);
+	assert_rc_equal(drpc_progress(&ctx, -1), DER_SUCCESS);
 
 	/* negative timeout to poll is valid - means wait forever */
 	assert_int_equal(poll_timeout, -1);
@@ -298,7 +300,7 @@ test_drpc_progress_listener_only_success(void **state)
 	init_drpc_progress_context(&ctx, new_drpc_with_fd(expected_fd));
 	poll_revents_return[0] = POLLIN;
 
-	assert_int_equal(drpc_progress(&ctx, expected_timeout_ms), DER_SUCCESS);
+	assert_rc_equal(drpc_progress(&ctx, expected_timeout_ms), DER_SUCCESS);
 
 	/* Check that poll() was called with properly translated inputs */
 	assert_int_equal(poll_timeout, expected_timeout_ms);
@@ -336,7 +338,7 @@ test_drpc_progress_poll_timed_out(void **state)
 	init_drpc_progress_context(&ctx, new_drpc_with_fd(15));
 	poll_return = 0;
 
-	assert_int_equal(drpc_progress(&ctx, 20), -DER_TIMEDOUT);
+	assert_rc_equal(drpc_progress(&ctx, 20), -DER_TIMEDOUT);
 
 	assert_int_equal(accept_call_count, 0); /* shouldn't be called */
 	assert_int_equal(recvmsg_call_count, 0); /* shouldn't be called */
@@ -353,7 +355,7 @@ test_drpc_progress_poll_failed(void **state)
 	poll_return = -1;
 	errno = ENOMEM;
 
-	assert_int_equal(drpc_progress(&ctx, 20), -DER_NOMEM);
+	assert_rc_equal(drpc_progress(&ctx, 20), -DER_NOMEM);
 
 	assert_int_equal(accept_call_count, 0); /* shouldn't be called */
 	assert_int_equal(recvmsg_call_count, 0); /* shouldn't be called */
@@ -371,7 +373,7 @@ test_drpc_progress_listener_accept_failed(void **state)
 	accept_return = -1;
 
 	/* No clear reason why accept would fail if we got data on it */
-	assert_int_equal(drpc_progress(&ctx, 100), -DER_MISC);
+	assert_rc_equal(drpc_progress(&ctx, 100), -DER_MISC);
 
 	cleanup_drpc_progress_context(&ctx);
 }
@@ -401,7 +403,7 @@ test_drpc_progress_single_session_bad_call(void **state)
 	/* sessions end up listed before listener in poll list */
 	poll_revents_return[0] = POLLIN;
 
-	assert_int_equal(drpc_progress(&ctx, 0), DER_SUCCESS);
+	assert_rc_equal(drpc_progress(&ctx, 0), DER_SUCCESS);
 
 	/* Session receives the garbage message */
 	assert_int_equal(recvmsg_call_count, 1);
@@ -439,7 +441,7 @@ test_drpc_progress_single_session_success(void **state)
 	/* sessions end up listed before listener in poll list */
 	poll_revents_return[0] = POLLIN;
 
-	assert_int_equal(drpc_progress(&ctx, expected_timeout_ms), DER_SUCCESS);
+	assert_rc_equal(drpc_progress(&ctx, expected_timeout_ms), DER_SUCCESS);
 
 	/* Check that poll() was called with both session and listener */
 	assert_int_equal(poll_timeout, expected_timeout_ms);
@@ -471,7 +473,7 @@ test_drpc_progress_single_session_success(void **state)
 
 	/* Final ctx should be unchanged */
 	assert_memory_equal(&ctx, &original_ctx,
-			sizeof(struct drpc_progress_context));
+			    sizeof(struct drpc_progress_context));
 
 	cleanup_drpc_progress_context(&ctx);
 }
@@ -494,7 +496,7 @@ test_drpc_progress_session_cleanup_if_recv_fails(void **state)
 	errno = ENOMEM;
 
 	/* the error was handled by closing the sessions */
-	assert_int_equal(drpc_progress(&ctx, 1), DER_SUCCESS);
+	assert_rc_equal(drpc_progress(&ctx, 1), DER_SUCCESS);
 
 	/* Don't give up after failure - try them all */
 	assert_int_equal(recvmsg_call_count, 2);
@@ -507,7 +509,8 @@ test_drpc_progress_session_cleanup_if_recv_fails(void **state)
 
 	/* Failed sessions should be removed */
 	expect_sessions_missing_from_drpc_progress_session_list(&ctx,
-			session_fds, num_sessions);
+								session_fds,
+								num_sessions);
 
 	cleanup_drpc_progress_context(&ctx);
 }
@@ -530,7 +533,7 @@ test_drpc_progress_session_fails_if_no_data(void **state)
 	errno = EAGAIN; /* No data to fetch */
 
 	/* Pass up the error this time - we didn't do anything with it */
-	assert_int_equal(drpc_progress(&ctx, 1), -DER_AGAIN);
+	assert_rc_equal(drpc_progress(&ctx, 1), -DER_AGAIN);
 
 	/* Try all the sessions even if one fails */
 	assert_int_equal(recvmsg_call_count, 2);
@@ -543,7 +546,7 @@ test_drpc_progress_session_fails_if_no_data(void **state)
 
 	/* Make sure our old sessions are still there */
 	expect_sessions_in_drpc_progress_session_list(&ctx, session_fds,
-			num_sessions);
+						      num_sessions);
 
 	cleanup_drpc_progress_context(&ctx);
 }
@@ -566,7 +569,7 @@ test_drpc_progress_session_cleanup_if_pollerr(void **state)
 	poll_revents_return[num_sessions] = POLLIN; /* listener */
 
 	/* the error was handled by closing the bad session */
-	assert_int_equal(drpc_progress(&ctx, 1), DER_SUCCESS);
+	assert_rc_equal(drpc_progress(&ctx, 1), DER_SUCCESS);
 
 	/* Tried all the sessions with data, even if one failed */
 	assert_int_equal(recvmsg_call_count, num_sessions - 1);
@@ -602,7 +605,7 @@ test_drpc_progress_session_cleanup_if_pollhup(void **state)
 	poll_revents_return[num_sessions] = POLLIN; /* listener */
 
 	/* the error was handled by closing the bad session */
-	assert_int_equal(drpc_progress(&ctx, 1), DER_SUCCESS);
+	assert_rc_equal(drpc_progress(&ctx, 1), DER_SUCCESS);
 
 	/* Tried all the sessions with data, even if one failed */
 	assert_int_equal(recvmsg_call_count, num_sessions - 1);
@@ -637,7 +640,7 @@ test_drpc_progress_session_cleanup_if_ult_fails(void **state)
 	dss_ult_create_return = -DER_MISC;
 
 	/* the error was handled by closing the sessions */
-	assert_int_equal(drpc_progress(&ctx, 1), DER_SUCCESS);
+	assert_rc_equal(drpc_progress(&ctx, 1), DER_SUCCESS);
 
 	/* Don't give up after failure - try them all */
 	assert_int_equal(recvmsg_call_count, 2);
@@ -650,7 +653,8 @@ test_drpc_progress_session_cleanup_if_ult_fails(void **state)
 
 	/* Failed sessions should be removed */
 	expect_sessions_missing_from_drpc_progress_session_list(&ctx,
-			session_fds, num_sessions);
+								session_fds,
+								num_sessions);
 
 	cleanup_drpc_progress_context(&ctx);
 }
@@ -670,7 +674,7 @@ test_drpc_progress_listener_fails_if_pollerr(void **state)
 	/* Listener has an error */
 	poll_revents_return[num_sessions] = POLLERR;
 
-	assert_int_equal(drpc_progress(&ctx, 1), -DER_MISC);
+	assert_rc_equal(drpc_progress(&ctx, 1), -DER_MISC);
 
 	/* Tried all the sessions with data */
 	assert_int_equal(recvmsg_call_count, num_sessions);
@@ -683,7 +687,7 @@ test_drpc_progress_listener_fails_if_pollerr(void **state)
 
 	/* Make sure our old sessions are still there */
 	expect_sessions_in_drpc_progress_session_list(&ctx, session_fds,
-			num_sessions);
+						      num_sessions);
 
 	cleanup_drpc_progress_context(&ctx);
 }
@@ -703,7 +707,7 @@ test_drpc_progress_listener_fails_if_pollhup(void **state)
 	/* Unexpected event, in theory listener shouldn't get hangup */
 	poll_revents_return[num_sessions] = POLLIN | POLLHUP;
 
-	assert_int_equal(drpc_progress(&ctx, 1), -DER_MISC);
+	assert_rc_equal(drpc_progress(&ctx, 1), -DER_MISC);
 
 	/* Tried all the sessions with data */
 	assert_int_equal(recvmsg_call_count, num_sessions);
@@ -716,7 +720,7 @@ test_drpc_progress_listener_fails_if_pollhup(void **state)
 
 	/* Make sure our old sessions are still there */
 	expect_sessions_in_drpc_progress_session_list(&ctx, session_fds,
-			num_sessions);
+						      num_sessions);
 
 	cleanup_drpc_progress_context(&ctx);
 }
