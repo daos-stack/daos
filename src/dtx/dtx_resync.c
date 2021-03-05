@@ -335,7 +335,27 @@ dtx_status_handle(struct dtx_resync_args *dra)
 		 * is race that one DTX may become committable when we abort
 		 * some other DTX(s). To avoid complex rollback logic, let's
 		 * abort the DTXs one by one, not batched.
+		 *
+		 * XXX: There is one corner case: the DTX entry may be too
+		 *	old as to be removed on others via DTX aggregation.
+		 *	Under such case, we cannot know whether it has ever
+		 *	been committed (but current server missed or failed
+		 *	to commit) or should be aborted now. If we abort it,
+		 *	then may cause data inconsistency.
+		 *	Currently, we cannot make the accurate judgment, then
+		 *	have to skip it and leave it to be handled via further
+		 *	DAOS fsck.
 		 */
+
+		if (dtx_hlc_age2sec(dre->dre_epoch) >
+		    DTX_AGG_THRESHOLD_AGE_LOWER) {
+			D_WARN("Not sure about whether the old DTX "DF_DTI
+			       " should be aborted or not, skip it\n",
+			       DP_DTI(&dre->dre_xid));
+			dtx_dre_release(drh, dre);
+			continue;
+		}
+
 		dte = &dre->dre_dte;
 		rc = dtx_abort(cont, dre->dre_epoch, &dte, 1);
 
@@ -520,7 +540,7 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 	D_DEBUG(DB_TRACE, "resync DTX scan "DF_UUID"/"DF_UUID" start.\n",
 		DP_UUID(po_uuid), DP_UUID(co_uuid));
 
-	rc = ds_cont_iter(po_hdl, co_uuid, dtx_iter_cb, &dra, VOS_ITER_DTX);
+	rc = ds_cont_iter(po_hdl, co_uuid, dtx_iter_cb, &dra, VOS_ITER_DTX, 0);
 
 	/* Handle the DTXs that have been scanned even if some failure happened
 	 * in above ds_cont_iter() step.
