@@ -248,7 +248,7 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 #define UUID_REGEX "([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}){1}"
 #define DAOS_FORMAT "^daos://"UUID_REGEX"/"UUID_REGEX"[/]?"
 #define DAOS_FORMAT_NO_PREFIX "^/"UUID_REGEX"/"UUID_REGEX"[/]?"
-#define DAOS_FORMAT_NO_CONT "^daos://"UUID_REGEX"[/]?"
+#define DAOS_FORMAT_NO_CONT "^daos://"UUID_REGEX"[/]?$"
 
 static int
 check_direct_format(const char *path, bool no_prefix, bool *pool_only)
@@ -291,7 +291,7 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	ssize_t		s;
 	char		str[DUNS_MAX_XATTR_LEN];
 	struct statfs	fs;
-	bool		pool_only;
+	bool		pool_only = false;
 	int		rc;
 
 	rc = check_direct_format(path, attr->da_no_prefix, &pool_only);
