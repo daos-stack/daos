@@ -74,9 +74,7 @@ class ContainerAttributeTest(TestWithServers):
                     "buf={} and received buf={}".format(key, buff))
 
     def verify_get_attr(self, indata, outdata):
-        """
-        verify the Attributes value after get_attr
-        """
+        """Verify the Attributes value after get_attr."""
         self.log.info("Verifying get_attr output:")
         self.log.info("  get_attr data: %s", indata)
         self.log.info("  set_attr date: %s", outdata)
