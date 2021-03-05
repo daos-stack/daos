@@ -64,6 +64,7 @@ struct ds_cont_child {
 				 sc_dtx_reindex:1,
 				 sc_dtx_reindex_abort:1,
 				 sc_dtx_cos_shutdown:1,
+				 sc_dtx_cleanup_stale:1,
 				 sc_closing:1,
 				 sc_vos_aggregating:1,
 				 sc_abort_vos_aggregating:1,
@@ -164,7 +165,7 @@ int ds_cont_child_open_create(uuid_t pool_uuid, uuid_t cont_uuid,
 
 typedef int (*cont_iter_cb_t)(uuid_t co_uuid, vos_iter_entry_t *ent, void *arg);
 int ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
-		 void *arg, uint32_t type);
+		 void *arg, uint32_t type, uint32_t flags);
 
 /**
  * Query container properties.
