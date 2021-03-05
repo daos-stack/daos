@@ -80,17 +80,80 @@ func IsNotLeader(err error) bool {
 // ErrMemberExists indicates the failure of an operation that
 // expected the given member to not exist.
 type ErrMemberExists struct {
-	Rank Rank
+	Rank *Rank
+	UUID *uuid.UUID
 }
 
 func (err *ErrMemberExists) Error() string {
-	return fmt.Sprintf("member with rank %d already exists", err.Rank)
+	switch {
+	case err.Rank != nil:
+		return fmt.Sprintf("member with rank %d already exists", *err.Rank)
+	case err.UUID != nil:
+		return fmt.Sprintf("member with uuid %s already exists", *err.UUID)
+	default:
+		return "member already exists"
+	}
+}
+
+func errRankExists(r Rank) *ErrMemberExists {
+	return &ErrMemberExists{Rank: &r}
+}
+
+func errUuidExists(u uuid.UUID) *ErrMemberExists {
+	return &ErrMemberExists{UUID: &u}
 }
 
 // IsMemberExists returns a boolean indicating whether or not the
 // supplied error is an instance of ErrMemberExists.
 func IsMemberExists(err error) bool {
 	_, ok := errors.Cause(err).(*ErrMemberExists)
+	return ok
+}
+
+// ErrJoinFailure indicates the failure of a Join request due
+// to some structured error condition.
+type ErrJoinFailure struct {
+	rankChanged bool
+	uuidChanged bool
+	newUUID     *uuid.UUID
+	curUUID     *uuid.UUID
+	newRank     *Rank
+	curRank     *Rank
+}
+
+func (err *ErrJoinFailure) Error() string {
+	switch {
+	case err.rankChanged:
+		return fmt.Sprintf("can't rejoin member with uuid %s: rank changed from %d -> %d", *err.curUUID, *err.curRank, *err.newRank)
+	case err.uuidChanged:
+		return fmt.Sprintf("can't rejoin member with rank %d: uuid changed from %s -> %s", *err.curRank, *err.curUUID, *err.newUUID)
+	default:
+		return "unknown join failure"
+	}
+}
+
+func errRankChanged(new, cur Rank, uuid uuid.UUID) *ErrJoinFailure {
+	return &ErrJoinFailure{
+		rankChanged: true,
+		curUUID:     &uuid,
+		newRank:     &new,
+		curRank:     &cur,
+	}
+}
+
+func errUuidChanged(new, cur uuid.UUID, rank Rank) *ErrJoinFailure {
+	return &ErrJoinFailure{
+		uuidChanged: true,
+		newUUID:     &new,
+		curUUID:     &cur,
+		curRank:     &rank,
+	}
+}
+
+// IsJoinFailure returns a boolean indicating whether or not the
+// supplied error is an instance of ErrJoinFailure.
+func IsJoinFailure(err error) bool {
+	_, ok := errors.Cause(err).(*ErrJoinFailure)
 	return ok
 }
 
