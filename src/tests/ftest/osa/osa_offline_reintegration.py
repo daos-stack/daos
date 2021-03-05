@@ -76,7 +76,7 @@ class OSAOfflineReintegration(OSAUtils):
 
         # Exclude all the ranks
         random_pool = random.randint(0, (num_pool-1))
-        for val, _ in enumerate(rank)::
+        for val, _ in enumerate(rank):
             self.pool = pool[random_pool]
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
