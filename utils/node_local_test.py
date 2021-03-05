@@ -78,6 +78,11 @@ class NLTConf():
         self.args = None
         self.max_log_size = None
 
+        self.dfuse_parent_dir = tempfile.mkdtemp(prefix='dnt_dfuse_')
+
+    def __del__(self):
+        os.rmdir(self.dfuse_parent_dir)
+
     def set_wf(self, wf):
         """Set the WarningsFactory object"""
         self.wf = wf
@@ -316,8 +321,7 @@ class DaosServer():
         if not os.path.exists(socket_dir):
             os.mkdir(socket_dir)
 
-        self._agent_dir = tempfile.TemporaryDirectory(prefix='dnt_agent_')
-        self.agent_dir = self._agent_dir.name
+        self.agent_dir = tempfile.mkdtemp(prefix='dnt_agent_')
 
         self._yaml_file = None
         self._io_server_dir = None
@@ -329,6 +333,7 @@ class DaosServer():
     def __del__(self):
         if self.running:
             self.stop(None)
+        os.rmdir(self.agent_dir)
 
     # pylint: disable=no-self-use
     def _check_timing(self, op, start, max_time):
@@ -675,7 +680,7 @@ class DFuse():
         if path:
             self.dir = path
         else:
-            self.dir = '/tmp/dfs_test'
+            self.dir = os.path.join(conf.dfuse_parent_dir, 'dfuse_mount')
         self.pool = pool
         self.valgrind_file = None
         self.container = container
@@ -821,6 +826,7 @@ class DFuse():
         # Finally, modify the valgrind xml file to remove the
         # prefix to the src dir.
         self.valgrind.convert_xml()
+        os.rmdir(self.dir)
         return fatal_errors
 
     def wait_for_exit(self):
@@ -1607,7 +1613,8 @@ def run_duns_overlay_test(server, conf):
     while len(pools) < 1:
         pools = make_pool(server)
 
-    parent_dir = tempfile.TemporaryDirectory(prefix='dnt_uns_')
+    parent_dir = tempfile.TemporaryDirectory(dir=conf.dfuse_parent_dir,
+                                             prefix='dnt_uns_')
 
     uns_dir = os.path.join(parent_dir.name, 'uns_ep')
 
