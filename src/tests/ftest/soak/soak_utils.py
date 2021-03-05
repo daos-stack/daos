@@ -17,7 +17,7 @@ from dfuse_utils import Dfuse
 from job_manager_utils import Srun
 from command_utils_base import BasicParameter
 from general_utils import get_host_data, get_random_string, \
-    run_command, DaosTestError, pcmd get_random_bytes
+    run_command, DaosTestError, pcmd, get_random_bytes
 import slurm_utils
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
