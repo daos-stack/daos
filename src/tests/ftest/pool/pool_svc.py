@@ -74,7 +74,7 @@ class PoolSvc(TestWithServers):
             if svc_params[1] > 2:
                 self.pool.get_info()
                 leader = self.pool.info.pi_leader
-                all_svc_ranks = self.pool.svc_ranks.copy()
+                all_svc_ranks = list(self.pool.svc_ranks)
                 all_svc_ranks.remove(leader)
                 non_leader = all_svc_ranks[-1]
 

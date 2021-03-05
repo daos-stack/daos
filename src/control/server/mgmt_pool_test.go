@@ -241,6 +241,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 		mgmtSvc       *mgmtSvc
 		setupMockDrpc func(_ *mgmtSvc, _ error)
 		targetCount   int
+		memberCount   int
 		req           *mgmtpb.PoolCreateReq
 		expResp       *mgmtpb.PoolCreateResp
 		expErr        error
@@ -353,15 +354,27 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			},
 			expErr: FaultPoolInvalidRanks([]system.Rank{11, 40}),
 		},
-		"too many svc replicas": {
+		"svc replicas > max": {
 			targetCount: 1,
+			memberCount: MaxPoolServiceReps + 2,
 			req: &mgmt.PoolCreateReq{
 				Uuid:       common.MockUUID(0),
 				Totalbytes: 100 * humanize.GByte,
 				Scmratio:   0.06,
 				Numsvcreps: MaxPoolServiceReps + 2,
 			},
-			expErr: FaultPoolInvalidServiceReps,
+			expErr: FaultPoolInvalidServiceReps(uint32(MaxPoolServiceReps)),
+		},
+		"svc replicas > numRanks": {
+			targetCount: 1,
+			memberCount: MaxPoolServiceReps - 2,
+			req: &mgmt.PoolCreateReq{
+				Uuid:       common.MockUUID(0),
+				Totalbytes: 100 * humanize.GByte,
+				Scmratio:   0.06,
+				Numsvcreps: MaxPoolServiceReps - 1,
+			},
+			expErr: FaultPoolInvalidServiceReps(uint32(MaxPoolServiceReps - 2)),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -394,8 +407,13 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				tc.mgmtSvc = newMgmtSvc(harness, ms, db, nil,
 					events.NewPubSub(context.Background(), log))
 			}
+
+			numMembers := tc.memberCount
+			if numMembers < 1 {
+				numMembers = 2
+			}
 			tc.mgmtSvc.log = log
-			for i := 0; i < 2; i++ {
+			for i := 0; i < numMembers; i++ {
 				if _, err := tc.mgmtSvc.membership.Add(system.MockMember(t, uint32(i), system.MemberStateJoined)); err != nil {
 					t.Fatal(err)
 				}

@@ -27,6 +27,6 @@ svc_params_mux: !mux
     svc_params_4:
         svc_params: [4, 4]
     svc_params_5:
-        svc_params: [5, 3]
+        svc_params: [5, 4]
     svc_params_6:
-        svc_params: [6, 3]
+        svc_params: [6, 4]
