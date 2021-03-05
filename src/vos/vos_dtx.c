@@ -12,6 +12,7 @@
 
 #include <libpmem.h>
 #include <daos_srv/vos.h>
+#include <daos/common.h>
 #include "vos_layout.h"
 #include "vos_internal.h"
 
@@ -32,6 +33,16 @@ enum {
 
 #define DTX_UMOFF_TYPES		(DTX_UMOFF_ILOG | DTX_UMOFF_SVT | DTX_UMOFF_EVT)
 #define DTX_INDEX_INVAL		(int32_t)(-1)
+
+static inline void
+dtx_memcpy_nodrain(struct umem_instance *umm, void *dest, const void *src,
+		   size_t size)
+{
+	if (DAOS_ON_VALGRIND)
+		umem_tx_xadd_ptr(umm, dest, size, POBJ_XADD_NO_SNAPSHOT);
+
+	pmem_memcpy_nodrain(dest, src, size);
+}
 
 static inline void
 dtx_type2umoff_flag(umem_off_t *rec, uint32_t type)
@@ -135,9 +146,6 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 		if (DAE_MBS_FLAGS(dae) & DMF_SRDG_REP && dth->dth_dist == 0)
 			goto out;
 	}
-
-	if (DAOS_FAIL_CHECK(DAOS_DTX_NO_INPROGRESS))
-		return -DER_IO;
 
 	s_try = true;
 
@@ -1642,9 +1650,9 @@ vos_dtx_prepared(struct dtx_handle *dth)
 
 	DAE_INDEX(dae) = dbd->dbd_index;
 	if (DAE_INDEX(dae) > 0) {
-		pmem_memcpy_nodrain(umem_off2ptr(umm, dae->dae_df_off),
-				    &dae->dae_base,
-				    sizeof(struct vos_dtx_act_ent_df));
+		dtx_memcpy_nodrain(umm, umem_off2ptr(umm, dae->dae_df_off),
+				   &dae->dae_base,
+				   sizeof(struct vos_dtx_act_ent_df));
 		/* dbd_index is next to dbd_count */
 		rc = umem_tx_add_ptr(umm, &dbd->dbd_count,
 				     sizeof(dbd->dbd_count) +
@@ -1833,19 +1841,20 @@ again:
 			rc1 = rc;
 
 		if (dce != NULL) {
-			if (slots == 1)
-				pmem_memcpy_nodrain(dce_df, &dce->dce_base,
-						    sizeof(*dce_df));
-			else
+			if (slots == 1) {
+				dtx_memcpy_nodrain(umm, dce_df, &dce->dce_base,
+						   sizeof(*dce_df));
+			} else {
 				memcpy(&dce_df[j], &dce->dce_base,
 				       sizeof(dce_df[j]));
+			}
 			j++;
 		}
 	}
 
 	if (dce_df != &dbd->dbd_committed_data[dbd->dbd_count]) {
 		if (j > 0)
-			pmem_memcpy_nodrain(
+			dtx_memcpy_nodrain(umm,
 				&dbd->dbd_committed_data[dbd->dbd_count],
 				dce_df, sizeof(*dce_df) * j);
 		D_FREE(dce_df);

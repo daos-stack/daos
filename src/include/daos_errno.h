@@ -153,7 +153,11 @@ extern "C" {
 	       Path name exceeds permitted length)			\
 	/** Metric was not found.*/					\
 	ACTION(DER_METRIC_NOT_FOUND,    (DER_ERR_GURT_BASE + 43),	\
-	       Read failed because metric not found)
+	       Read failed because metric not found)			\
+	/** Invalid user/group permissions.*/				\
+	ACTION(DER_SHMEM_PERMS,         (DER_ERR_GURT_BASE + 44),	\
+	       Unable to access shared memory segment due to		\
+	       incompatible user or group permissions)
 	/** TODO: add more error numbers */
 
 #define D_FOREACH_DAOS_ERR(ACTION)					\

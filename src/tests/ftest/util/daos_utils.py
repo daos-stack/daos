@@ -545,7 +545,7 @@ class DaosCommand(DaosCommandBase):
         # Container's snapshots :
         # 1598478249040609297 1598478258840600594 1598478287952543761
         data = {}
-        match = re.findall(r"(\d{19})", self.result.stdout)
+        match = re.findall(r"(\d+)", self.result.stdout)
         if match:
             data["epochs"] = match
         return data
@@ -614,3 +614,23 @@ class DaosCommand(DaosCommandBase):
             self.log.error(vals)
 
         return data
+
+    def filesystem_copy(self, src, dst):
+        """Copy a POSIX container or path to another POSIX container or path.
+
+        Args:
+            src (str): The source, formatted as
+                daos:<pool>/<cont>/<path> or posix:<path>
+            dst (str): The destination, formatted as
+                daos:<pool>/<cont>/<path> or posix:<path>
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos filesystem copy command fails.
+
+        """
+        return self._get_result(
+            ("filesystem", "copy"), src=src, dst=dst)

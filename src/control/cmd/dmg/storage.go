@@ -48,9 +48,6 @@ type storagePrepareCmd struct {
 func (cmd *storagePrepareCmd) Execute(args []string) error {
 	prepNvme, prepScm, err := cmd.Validate()
 	if err != nil {
-		if cmd.jsonOutputEnabled() {
-			return cmd.errorJSON(err)
-		}
 		return err
 	}
 
@@ -67,7 +64,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 
 	if prepScm {
 		if cmd.jsonOutputEnabled() && !cmd.Force {
-			return cmd.errorJSON(errors.New("Cannot use --json without --force"))
+			return errors.New("Cannot use --json without --force")
 		}
 		if err := cmd.Warn(cmd.log); err != nil {
 			return err
@@ -252,9 +249,6 @@ func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 
 	sysReformat, err := cmd.shouldReformatSystem(ctx)
 	if err != nil {
-		if cmd.jsonOutputEnabled() {
-			return cmd.errorJSON(err)
-		}
 		return err
 	}
 	if sysReformat {
@@ -308,7 +302,7 @@ func (cmd *nvmeSetFaultyCmd) Execute(_ []string) error {
 	cmd.log.Info("WARNING: This command will permanently mark the device as unusable!")
 	if !cmd.Force {
 		if cmd.jsonOutputEnabled() {
-			return cmd.errorJSON(errors.New("Cannot use --json without --force"))
+			return errors.New("Cannot use --json without --force")
 		}
 		if !common.GetConsent(cmd.log) {
 			return errors.New("consent not given")

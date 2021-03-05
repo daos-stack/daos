@@ -270,6 +270,24 @@ class TestPool(TestDaosApiBase):
                     "Error: Undefined control_method: %s",
                     self.control_method.value)
 
+    @fail_on(CommandFailure)
+    def evict(self):
+        """Evict all pool connections to a DAOS pool"""
+
+        if self.pool:
+            self.log.info("Evict all pool connections for pool: %s", self.uuid)
+
+            if self.control_method.value == self.USE_DMG and self.dmg:
+                self.dmg.pool_evict(self.uuid, self.name.value)
+
+            elif self.control_method.value == self.USE_DMG:
+                self.log.error("Error: Undefined dmg command")
+
+            else:
+                self.log.error(
+                    "Error: Undefined control_method: %s",
+                    self.control_method.value)
+
     @fail_on(DaosApiError)
     def get_info(self):
         """Query the pool for information.
