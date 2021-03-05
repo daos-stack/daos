@@ -2023,7 +2023,7 @@ hash_perf(int hash_type, unsigned int buckets, unsigned int loop)
 	struct timespec	 now;
 	int		 i;
 
-	D_ALLOC_PTR(counters);
+	D_ALLOC_ARRAY(counters, buckets);
 	D_ASSERT(counters);
 
 	d_gettime(&then);
