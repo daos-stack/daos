@@ -12,8 +12,6 @@ server_config:
   servers:
     bdev_class: nvme
     bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
-    env_vars:
-      - COVFILE=/usr/lib/daos/TESTING/ftest/test.cov
 pool:
     mode: 511
     name: daos_server
