@@ -184,7 +184,7 @@ class OSAUtils(IorTestBase):
             action (str): Start the IOR thread with Read or
                           Write
             oclass (str): IOR object class
-            API (str): IOR API
+            api (str): IOR API
             test (list): IOR test sequence
             flags (str): IOR flags
         """

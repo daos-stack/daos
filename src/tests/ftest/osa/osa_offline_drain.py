@@ -1,4 +1,4 @@
-#!/usr/bin/python
+g#!/usr/bin/python
 """
   (C) Copyright 2020-2021 Intel Corporation.
 
@@ -104,5 +104,5 @@ class OSAOfflineDrain(OSAUtils):
         :avocado: tags=all,daily_regression,hw,medium,ib2
         :avocado: tags=osa,osa_drain,offline_drain
         """
-        for pool_num in range(1, 4):
+        for pool_num in range(1, 3):
             self.run_offline_drain_test(pool_num, True)
