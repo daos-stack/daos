@@ -2023,7 +2023,7 @@ hash_perf(int hash_type, unsigned int buckets, unsigned int loop)
 	struct timespec	 now;
 	int		 i;
 
-	counters = calloc(buckets, sizeof(*counters));
+	D_ALLOC_PTR(counters);
 	D_ASSERT(counters);
 
 	d_gettime(&then);
@@ -2068,6 +2068,8 @@ hash_perf(int hash_type, unsigned int buckets, unsigned int loop)
 		"range: %d, stdiv: %F, rate: %F\n",
 		hash2name(hash_type), buckets, (int)bkt_min, (int)bkt_max,
 		(int)(bkt_max - bkt_min), stdiv, (double)loop / duration);
+
+	D_FREE(counters);
 }
 
 static void
