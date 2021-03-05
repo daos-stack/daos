@@ -194,9 +194,11 @@ typedef struct {
 /** pool target update (add/exclude) args */
 typedef struct {
 	/** UUID of the pool. */
-	uuid_t			uuid;
+	uuid_t			 uuid;
 	/** Process set name of the DAOS servers managing the pool */
 	const char		*grp;
+	/** Pool service replica ranks (used by server only). */
+	d_rank_list_t		*svc;
 	/** Target array */
 	struct d_tgt_list	*tgts;
 } daos_pool_update_t;
@@ -689,6 +691,10 @@ typedef struct {
 	daos_iom_t		*ioms;
 	/** extra arguments, for example obj_ec_fail_info for DIOF_EC_RECOV */
 	void			*extra_arg;
+	/** Pre-allocated buffer to pack checksums into (Optional, intended for
+	 * internal use only
+	 */
+	d_iov_t			*csum_iov;
 } daos_obj_rw_t;
 
 /** fetch args struct */

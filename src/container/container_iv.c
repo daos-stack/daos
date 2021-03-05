@@ -16,8 +16,8 @@
 #include <daos/dtx.h>
 #include <daos_api.h>
 
-/* XXX Temporary limit for IV */
-#define MAX_SNAP_CNT	50
+/* INIT snap count */
+#define INIT_SNAP_CNT	10
 
 static struct cont_iv_key *
 key2priv(struct ds_iv_key *iv_key)
@@ -31,59 +31,10 @@ cont_iv_snap_ent_size(int nr)
 	return offsetof(struct cont_iv_entry, iv_snap.snaps[nr]);
 }
 
-static int
-cont_iv_snap_alloc_internal(d_sg_list_t *sgl)
-{
-	struct cont_iv_entry	*entry;
-	int			entry_size;
-	int			rc;
-
-	rc = d_sgl_init(sgl, 1);
-	if (rc)
-		return rc;
-
-	/* FIXME: allocate entry by the real size */
-	entry_size = cont_iv_snap_ent_size(MAX_SNAP_CNT);
-	D_ALLOC(entry, entry_size);
-	if (entry == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	d_iov_set(&sgl->sg_iovs[0], entry, entry_size);
-out:
-	if (rc)
-		d_sgl_fini(sgl, true);
-
-	return rc;
-}
-
 static uint32_t
 cont_iv_prop_ent_size(int nr)
 {
 	return offsetof(struct cont_iv_entry, iv_prop.cip_acl.dal_ace[nr]);
-}
-
-static int
-cont_iv_prop_alloc_internal(d_sg_list_t *sgl)
-{
-	struct cont_iv_entry	*entry;
-	int			entry_size;
-	int			rc;
-
-	rc = d_sgl_init(sgl, 1);
-	if (rc)
-		return rc;
-
-	entry_size = cont_iv_prop_ent_size(DAOS_ACL_MAX_ACE_LEN);
-	D_ALLOC(entry, entry_size);
-	if (entry == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	d_iov_set(&sgl->sg_iovs[0], entry, entry_size);
-out:
-	if (rc)
-		d_sgl_fini(sgl, true);
-
-	return rc;
 }
 
 static int
@@ -188,35 +139,57 @@ cont_iv_ent_destroy(d_sg_list_t *sgl)
 }
 
 static int
-cont_iv_ent_copy(struct ds_iv_entry *entry, d_sg_list_t *dst_sgl,
-		 struct cont_iv_entry *src)
+cont_iv_ent_copy(struct ds_iv_entry *entry, struct cont_iv_key *key,
+		 d_sg_list_t *dst_sgl, struct cont_iv_entry *src)
 {
-	struct cont_iv_entry *dst = dst_sgl->sg_iovs[0].iov_buf;
+	struct cont_iv_entry	*dst = dst_sgl->sg_iovs[0].iov_buf;
+	daos_size_t		size;
+	uint64_t		snap_cnt;
+	int			rc = 0;
 
 	uuid_copy(dst->cont_uuid, src->cont_uuid);
 	switch (entry->iv_class->iv_class_id) {
 	case IV_CONT_SNAP:
-		D_ASSERT(src->iv_snap.snap_cnt <= MAX_SNAP_CNT);
+		if (src->iv_snap.snap_cnt == (uint64_t)(-1)) {
+			snap_cnt = 1;
+			rc = -DER_IVCB_FORWARD;
+		} else {
+			snap_cnt = src->iv_snap.snap_cnt;
+		}
 
-		dst->iv_snap.snap_cnt = src->iv_snap.snap_cnt;
-		memcpy(dst->iv_snap.snaps, src->iv_snap.snaps,
-		       src->iv_snap.snap_cnt * sizeof(src->iv_snap.snaps[0]));
+		D_DEBUG(DB_MD, "snap_cnt "DF_U64":"DF_U64"\n",
+			snap_cnt, src->iv_snap.snap_cnt);
+		size = cont_iv_snap_ent_size(snap_cnt);
+		if (size > dst_sgl->sg_iovs[0].iov_buf_len) {
+			/* Return -1 so client can reallocate the buffer. */
+			dst->iv_snap.snap_cnt = (uint64_t)-1;
+			dst->iv_snap.snaps[0] = src->iv_snap.snap_cnt;
+			D_DEBUG(DB_MD, "%zd < %zd\n",
+				dst_sgl->sg_iovs[0].iov_buf_len, size);
+			return 0;
+		}
+
+		size = offsetof(struct cont_iv_snapshot, snaps[snap_cnt]);
+		memcpy(&dst->iv_snap, &src->iv_snap, size);
+
 		break;
 	case IV_CONT_CAPA:
 		dst->iv_capa.flags = src->iv_capa.flags;
 		dst->iv_capa.sec_capas = src->iv_capa.sec_capas;
 		break;
 	case IV_CONT_PROP:
-		memcpy(&dst->iv_prop, &src->iv_prop,
-		       offsetof(struct cont_iv_prop,
-				cip_acl.dal_ace[src->iv_prop.cip_acl.dal_len]));
+		D_ASSERT(dst_sgl->sg_iovs[0].iov_buf_len >=
+			 cont_iv_prop_ent_size(src->iv_prop.cip_acl.dal_len));
+		size = offsetof(struct cont_iv_prop,
+				cip_acl.dal_ace[src->iv_prop.cip_acl.dal_len]);
+		memcpy(&dst->iv_prop, &src->iv_prop, size);
 		break;
 	default:
 		D_ERROR("bad iv_class_id %d.\n", entry->iv_class->iv_class_id);
 		return -DER_INVAL;
 	};
 
-	return 0;
+	return rc;
 }
 
 static bool
@@ -238,7 +211,7 @@ cont_iv_snap_ent_create(struct ds_iv_entry *entry, struct ds_iv_key *key)
 	d_iov_t			key_iov;
 	d_iov_t			val_iov;
 	daos_epoch_t		*snaps = NULL;
-	int			snap_cnt = MAX_SNAP_CNT;
+	int			snap_cnt = -1;
 	int			rc;
 
 	rc = ds_cont_get_snapshots(entry->ns->iv_pool_uuid,
@@ -247,6 +220,7 @@ cont_iv_snap_ent_create(struct ds_iv_entry *entry, struct ds_iv_key *key)
 	if (rc)
 		D_GOTO(out, rc);
 
+	D_ASSERT(snap_cnt >= 0);
 	D_ALLOC(iv_entry, cont_iv_snap_ent_size(snap_cnt));
 	if (iv_entry == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
@@ -258,7 +232,7 @@ cont_iv_snap_ent_create(struct ds_iv_entry *entry, struct ds_iv_key *key)
 	memcpy(iv_entry->iv_snap.snaps, snaps, snap_cnt * sizeof(*snaps));
 	d_iov_set(&val_iov, iv_entry,
 		  cont_iv_snap_ent_size(iv_entry->iv_snap.snap_cnt));
-	d_iov_set(&key_iov, civ_key, sizeof(*civ_key));
+	d_iov_set(&key_iov, &civ_key->cont_uuid, sizeof(civ_key->cont_uuid));
 	rc = dbtree_update(root_hdl, &key_iov, &val_iov);
 	if (rc)
 		D_GOTO(out, rc);
@@ -388,7 +362,7 @@ cont_iv_prop_ent_create(struct ds_iv_entry *entry, struct ds_iv_key *key)
 	uuid_copy(iv_entry->cont_uuid, civ_key->cont_uuid);
 	cont_iv_prop_l2g(prop, &iv_entry->iv_prop);
 	d_iov_set(&val_iov, iv_entry, entry_size);
-	d_iov_set(&key_iov, civ_key, sizeof(*civ_key));
+	d_iov_set(&key_iov, &civ_key->cont_uuid, sizeof(civ_key->cont_uuid));
 
 	rc = dbtree_update(root_hdl, &key_iov, &val_iov);
 	if (rc)
@@ -403,7 +377,7 @@ out:
 
 static int
 cont_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
-		  d_sg_list_t *dst, d_sg_list_t *src, void **priv)
+		  d_sg_list_t *dst, void **priv)
 {
 	struct cont_iv_entry	*src_iv;
 	daos_handle_t		root_hdl;
@@ -413,9 +387,10 @@ cont_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	int			rc;
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+
 	memcpy(&root_hdl, entry->iv_value.sg_iovs[0].iov_buf, sizeof(root_hdl));
 
-	d_iov_set(&key_iov, civ_key, sizeof(*civ_key));
+	d_iov_set(&key_iov, &civ_key->cont_uuid, sizeof(civ_key->cont_uuid));
 	d_iov_set(&val_iov, NULL, 0);
 again:
 	rc = dbtree_lookup(root_hdl, &key_iov, &val_iov);
@@ -446,25 +421,8 @@ again:
 	}
 
 	src_iv = val_iov.iov_buf;
-	rc = cont_iv_ent_copy(entry, dst, src_iv);
+	rc = cont_iv_ent_copy(entry, civ_key, dst, src_iv);
 out:
-	return rc;
-}
-
-static int
-cont_iv_capa_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
-			d_sg_list_t *src, void **priv)
-{
-	struct cont_iv_key	*civ_key = key2priv(key);
-	struct cont_iv_entry	*civ_ent;
-	int rc;
-
-	civ_ent = src->sg_iovs[0].iov_buf;
-	/* open the container locally */
-	rc = ds_cont_tgt_open(entry->ns->iv_pool_uuid,
-			      civ_key->cont_uuid, civ_ent->cont_uuid,
-			      civ_ent->iv_capa.flags,
-			      civ_ent->iv_capa.sec_capas);
 	return rc;
 }
 
@@ -515,52 +473,59 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	struct cont_iv_key	*civ_key = key2priv(key);
 	d_iov_t			key_iov;
 	d_iov_t			val_iov;
-	int			rc;
+	int			rc = 0;
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	if (src != NULL) {
-		if (entry->iv_class->iv_class_id == IV_CONT_CAPA) {
-			rc = cont_iv_capa_ent_update(entry, key, src, priv);
-			if (rc)
-				return rc;
-		} else if (entry->iv_class->iv_class_id == IV_CONT_SNAP) {
-			struct cont_iv_entry *civ_ent = src->sg_iovs[0].iov_buf;
+		struct cont_iv_entry *civ_ent;
 
+		civ_ent = src->sg_iovs[0].iov_buf;
+		if (entry->iv_class->iv_class_id == IV_CONT_CAPA) {
+			/* open the container locally */
+			rc = ds_cont_tgt_open(entry->ns->iv_pool_uuid,
+					      civ_key->cont_uuid,
+					      civ_ent->cont_uuid,
+					      civ_ent->iv_capa.flags,
+					      civ_ent->iv_capa.sec_capas);
+			if (rc)
+				D_GOTO(out, rc);
+		} else if (entry->iv_class->iv_class_id == IV_CONT_SNAP &&
+			   civ_ent->iv_snap.snap_cnt != (uint64_t)(-1)) {
 			rc = ds_cont_tgt_snapshots_update(
 						entry->ns->iv_pool_uuid,
 						civ_key->cont_uuid,
 						&civ_ent->iv_snap.snaps[0],
 						civ_ent->iv_snap.snap_cnt);
 			if (rc)
-				return rc;
+				D_GOTO(out, rc);
 		} else if (entry->iv_class->iv_class_id ==
 						IV_CONT_AGG_EPOCH_REPORT) {
 			rc = cont_iv_ent_agg_eph_update(entry, key, src);
 			if (rc)
-				return rc;
+				D_GOTO(out, rc);
 		} else if (entry->iv_class->iv_class_id ==
 						IV_CONT_AGG_EPOCH_BOUNDRY) {
 			rc = cont_iv_ent_agg_eph_refresh(entry, key, src);
 			if (rc)
-				return rc;
+				D_GOTO(out, rc);
 		}
 	}
 
 	memcpy(&root_hdl, entry->iv_value.sg_iovs[0].iov_buf, sizeof(root_hdl));
-	d_iov_set(&key_iov, civ_key, sizeof(*civ_key));
+	d_iov_set(&key_iov, &civ_key->cont_uuid, sizeof(civ_key->cont_uuid));
 	if (src == NULL) {
 		/* If src == NULL, it is invalidate */
 		if (entry->iv_class->iv_class_id == IV_CONT_CAPA &&
 		    !uuid_is_null(civ_key->cont_uuid)) {
 			rc = ds_cont_tgt_close(civ_key->cont_uuid);
 			if (rc)
-				return rc;
+				D_GOTO(out, rc);
 		}
 
 		if (uuid_is_null(civ_key->cont_uuid)) {
 			rc = dbtree_empty(root_hdl);
 			if (rc)
-				return rc;
+				D_GOTO(out, rc);
 		} else {
 			rc = dbtree_delete(root_hdl, BTR_PROBE_EQ, &key_iov,
 					   NULL);
@@ -568,14 +533,24 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 				rc = 0;
 		}
 	} else {
+		struct cont_iv_entry *iv_entry;
+
+		iv_entry = src->sg_iovs[0].iov_buf;
+		/* Do not update master entry for -1 value */
+		if (entry->iv_class->iv_class_id == IV_CONT_SNAP &&
+		    iv_entry->iv_snap.snap_cnt == (uint64_t)(-1) &&
+		    entry->ns->iv_master_rank == dss_self_rank())
+			goto out;
+
 		/* Put it to IV tree */
-		d_iov_set(&val_iov, src->sg_iovs[0].iov_buf,
-			     src->sg_iovs[0].iov_len);
+		d_iov_set(&val_iov, iv_entry, src->sg_iovs[0].iov_len);
 		rc = dbtree_update(root_hdl, &key_iov, &val_iov);
 	}
 
-	if (rc < 0)
-		D_ERROR("failed to insert: rc "DF_RC"\n", DP_RC(rc));
+out:
+	if (rc < 0 && rc != -DER_IVCB_FORWARD)
+		D_CDEBUG(rc == -DER_NONEXIST, DB_ANY, DLOG_ERR,
+			 "failed to insert: rc "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -589,8 +564,10 @@ cont_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 }
 
 static int
-cont_iv_ent_alloc_internal(d_sg_list_t *sgl)
+cont_iv_value_alloc(struct ds_iv_entry *iv_entry, struct ds_iv_key *key,
+		    d_sg_list_t *sgl)
 {
+	struct cont_iv_key	*civ_key = key2priv(key);
 	struct cont_iv_entry	*entry;
 	int			rc;
 
@@ -598,36 +575,16 @@ cont_iv_ent_alloc_internal(d_sg_list_t *sgl)
 	if (rc)
 		return rc;
 
-	D_ALLOC_PTR(entry);
-	if (!entry) {
+	D_ALLOC(entry, civ_key->entry_size);
+	if (entry == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	d_iov_set(&sgl->sg_iovs[0], entry, civ_key->entry_size);
+out:
+	if (rc)
 		d_sgl_fini(sgl, true);
-		return -DER_NOMEM;
-	}
 
-	d_iov_set(&sgl->sg_iovs[0], entry, sizeof(*entry));
-	return 0;
-}
-
-static int
-cont_iv_value_alloc(struct ds_iv_entry *entry, d_sg_list_t *sgl)
-{
-	D_ASSERT(entry->iv_class != NULL);
-
-	switch (entry->iv_class->iv_class_id) {
-	case IV_CONT_SNAP:
-		return cont_iv_snap_alloc_internal(sgl);
-	case IV_CONT_CAPA:
-	case IV_CONT_AGG_EPOCH_REPORT:
-	case IV_CONT_AGG_EPOCH_BOUNDRY:
-		return cont_iv_ent_alloc_internal(sgl);
-	case IV_CONT_PROP:
-		return cont_iv_prop_alloc_internal(sgl);
-	default:
-		D_ERROR("bad iv_class_id %d.\n", entry->iv_class->iv_class_id);
-		return -DER_INVAL;
-	};
-
-	return 0;
+	return rc;
 }
 
 static bool
@@ -644,7 +601,7 @@ cont_iv_ent_valid(struct ds_iv_entry *entry, struct ds_iv_key *key)
 
 	/* Let's check whether the container really exist */
 	memcpy(&root_hdl, entry->iv_value.sg_iovs[0].iov_buf, sizeof(root_hdl));
-	d_iov_set(&key_iov, civ_key, sizeof(*civ_key));
+	d_iov_set(&key_iov, &civ_key->cont_uuid, sizeof(civ_key->cont_uuid));
 	d_iov_set(&val_iov, NULL, 0);
 	rc = dbtree_lookup(root_hdl, &key_iov, &val_iov);
 	if (rc != 0)
@@ -667,10 +624,11 @@ struct ds_iv_class_ops cont_iv_ops = {
 
 static int
 cont_iv_fetch(void *ns, int class_id, uuid_t key_uuid,
-	      struct cont_iv_entry *cont_iv, int cont_iv_len, bool retry)
+	      struct cont_iv_entry *cont_iv, int cont_iv_len, int entry_size,
+	      bool retry)
 {
 	d_sg_list_t		sgl;
-	d_iov_t			iov;
+	d_iov_t			iov = { 0 };
 	struct ds_iv_key	key = { 0 };
 	struct cont_iv_key	*civ_key;
 	int			rc;
@@ -681,14 +639,14 @@ cont_iv_fetch(void *ns, int class_id, uuid_t key_uuid,
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &iov;
-
 	key.class_id = class_id;
 	civ_key = key2priv(&key);
 	uuid_copy(civ_key->cont_uuid, key_uuid);
 	civ_key->class_id = class_id;
+	civ_key->entry_size = entry_size;
 	rc = ds_iv_fetch(ns, &key, cont_iv ? &sgl : NULL, retry);
 	if (rc)
-		D_CDEBUG(rc != -DER_NOTLEADER, DLOG_ERR, DB_MGMT,
+		D_CDEBUG(rc == -DER_NOTLEADER, DB_MGMT, DLOG_ERR,
 			 DF_UUID" iv fetch failed "DF_RC"\n",
 			 DP_UUID(key_uuid), DP_RC(rc));
 
@@ -718,12 +676,14 @@ cont_iv_update(void *ns, int class_id, uuid_t key_uuid,
 	civ_key = key2priv(&key);
 	uuid_copy(civ_key->cont_uuid, key_uuid);
 	civ_key->class_id = class_id;
+	civ_key->entry_size = cont_iv_len;
 	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0, retry);
 	if (rc)
 		D_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_NONEXIST,
 			 DB_ANY, DLOG_ERR,
 			 DF_UUID" iv update failed "DF_RC"\n",
 			 DP_UUID(key_uuid), DP_RC(rc));
+
 	return rc;
 }
 
@@ -752,18 +712,27 @@ cont_iv_snapshots_fetch(void *ns, uuid_t cont_uuid, uint64_t **snapshots,
 	struct cont_iv_entry	*iv_entry;
 	int			iv_entry_size;
 	int			rc;
-
-	iv_entry_size = cont_iv_snap_ent_size(MAX_SNAP_CNT);
+	uint64_t		snap_cnt = INIT_SNAP_CNT;
+retry:
+	iv_entry_size = cont_iv_snap_ent_size(snap_cnt);
 	D_ALLOC(iv_entry, iv_entry_size);
 	if (iv_entry == NULL)
 		return -DER_NOMEM;
 
-	rc = cont_iv_fetch(ns, IV_CONT_SNAP, cont_uuid, iv_entry,
+	rc = cont_iv_fetch(ns, IV_CONT_SNAP, cont_uuid, iv_entry, iv_entry_size,
 			   iv_entry_size, true);
 	if (rc)
 		D_GOTO(free, rc);
 
-	D_ASSERT(iv_entry->iv_snap.snap_cnt <= MAX_SNAP_CNT);
+	if (iv_entry->iv_snap.snap_cnt == (uint64_t)(-1)) {
+		D_ASSERT(iv_entry->iv_snap.snaps[0] > snap_cnt);
+		D_DEBUG(DB_MD, DF_UUID" retry by snap_cnt "DF_U64"\n",
+			DP_UUID(cont_uuid), iv_entry->iv_snap.snaps[0]);
+		snap_cnt = iv_entry->iv_snap.snaps[0];
+		D_FREE(iv_entry);
+		goto retry;
+	}
+
 	if (iv_entry->iv_snap.snap_cnt == 0) {
 		*snap_count = 0;
 		D_GOTO(free, rc = 0);
@@ -777,8 +746,10 @@ cont_iv_snapshots_fetch(void *ns, uuid_t cont_uuid, uint64_t **snapshots,
 	memcpy(*snapshots, iv_entry->iv_snap.snaps,
 	       sizeof(iv_entry->iv_snap.snaps[0]) * iv_entry->iv_snap.snap_cnt);
 	*snap_count = iv_entry->iv_snap.snap_cnt;
+
 free:
-	D_FREE(iv_entry);
+	if (iv_entry)
+		D_FREE(iv_entry);
 	return rc;
 }
 
@@ -787,53 +758,52 @@ cont_iv_snapshots_update(void *ns, uuid_t cont_uuid, uint64_t *snapshots,
 			 int snap_count)
 {
 	struct cont_iv_entry	*iv_entry;
-	uint32_t		 entry_size;
-	int			 rc;
+	int			iv_entry_size;
+	int			rc;
 
 	/* Only happens on xstream 0 */
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 
-	entry_size = cont_iv_snap_ent_size(snap_count);
-	D_ALLOC(iv_entry, entry_size);
+	iv_entry_size = cont_iv_snap_ent_size(snap_count);
+	D_ALLOC(iv_entry, iv_entry_size);
 	if (iv_entry == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+		return -DER_NOMEM;
 
 	uuid_copy(iv_entry->cont_uuid, cont_uuid);
 	iv_entry->iv_snap.snap_cnt = snap_count;
 	memcpy(iv_entry->iv_snap.snaps, snapshots,
 	       sizeof(*snapshots) * snap_count);
 
-	rc = cont_iv_update(ns, IV_CONT_SNAP, cont_uuid, iv_entry, entry_size,
-			    CRT_IV_SHORTCUT_TO_ROOT, CRT_IV_SYNC_EAGER,
-			    false /* retry */);
+	rc = cont_iv_update(ns, IV_CONT_SNAP, cont_uuid, iv_entry,
+			    iv_entry_size, CRT_IV_SHORTCUT_TO_ROOT,
+			    CRT_IV_SYNC_EAGER, false /* retry */);
 	D_FREE(iv_entry);
-out:
 	return rc;
 }
 
 int
 cont_iv_snapshots_refresh(void *ns, uuid_t cont_uuid)
 {
-	struct cont_iv_entry	*iv_entry;
-	uint32_t		 entry_size;
-	int			 rc;
+	struct cont_iv_entry	iv_entry = { 0 };
+	int			entry_size = 0;
+	uint64_t		snap_cnt = INIT_SNAP_CNT;
+	int			rc;
 
 	/* Only happens on xstream 0 */
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+retry:
+	entry_size = cont_iv_snap_ent_size(snap_cnt);
+	rc = cont_iv_fetch(ns, IV_CONT_SNAP, cont_uuid, &iv_entry,
+			   sizeof(iv_entry), entry_size, false /* retry */);
+	if (rc)
+		return rc;
 
-	entry_size = cont_iv_snap_ent_size(MAX_SNAP_CNT);
-	D_ALLOC(iv_entry, entry_size);
-	if (iv_entry == NULL) {
-		rc = -DER_NOMEM;
-		goto out;
+	if (iv_entry.iv_snap.snap_cnt == (uint64_t)(-1)) {
+		snap_cnt = iv_entry.iv_snap.snaps[0];
+		D_DEBUG(DB_MD, "retry with "DF_U64"\n", snap_cnt);
+		goto retry;
 	}
-	rc = cont_iv_fetch(ns, IV_CONT_SNAP, cont_uuid, iv_entry, entry_size,
-			   false /* retry */);
-	if (rc == 0)
-		D_ASSERT(iv_entry->iv_snap.snap_cnt <= MAX_SNAP_CNT);
 
-	D_FREE(iv_entry);
-out:
 	return rc;
 }
 
@@ -852,7 +822,7 @@ static void
 cont_iv_capa_refresh_ult(void *data)
 {
 	struct iv_capa_ult_arg	*arg = data;
-	struct cont_iv_entry	entry = { 0 };
+	struct cont_iv_entry	iv_entry = { 0 };
 	struct ds_pool		*pool;
 	int			rc;
 
@@ -870,13 +840,13 @@ cont_iv_capa_refresh_ult(void *data)
 			D_GOTO(out, rc);
 	}
 
-	rc = cont_iv_fetch(pool->sp_iv_ns, IV_CONT_CAPA,
-			   arg->cont_hdl_uuid, &entry, sizeof(entry),
+	rc = cont_iv_fetch(pool->sp_iv_ns, IV_CONT_CAPA, arg->cont_hdl_uuid,
+			   &iv_entry, sizeof(iv_entry), sizeof(iv_entry),
 			   false /* retry */);
 	if (rc)
 		D_GOTO(out, rc);
 
-	uuid_copy(arg->cont_uuid, entry.cont_uuid);
+	uuid_copy(arg->cont_uuid, iv_entry.cont_uuid);
 out:
 	if (pool != NULL)
 		ds_pool_put(pool);
@@ -899,7 +869,8 @@ cont_iv_hdl_fetch(uuid_t cont_hdl_uuid, uuid_t pool_uuid,
 	} else {
 		*cont_hdl = ds_cont_hdl_lookup(cont_hdl_uuid);
 		if (*cont_hdl != NULL) {
-			D_DEBUG(DB_TRACE, "get hdl %p\n", cont_hdl);
+			D_DEBUG(DB_TRACE, "get hdl "DF_UUID"\n",
+				DP_UUID(cont_hdl_uuid));
 			return 0;
 		}
 	}
@@ -960,9 +931,8 @@ cont_iv_ec_agg_eph_update_internal(void *ns, uuid_t cont_uuid,
 	if (rc)
 		return rc;
 
-	rc = cont_iv_update(ns, op, cont_uuid, &iv_entry,
-			    sizeof(struct cont_iv_entry), shortcut,
-			    sync_mode, false /* retry */);
+	rc = cont_iv_update(ns, op, cont_uuid, &iv_entry, sizeof(iv_entry),
+			    shortcut, sync_mode, false /* retry */);
 	return rc;
 }
 
@@ -997,9 +967,8 @@ cont_iv_capability_update(void *ns, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	uuid_copy(iv_entry.cont_uuid, cont_uuid);
 
 	rc = cont_iv_update(ns, IV_CONT_CAPA, cont_hdl_uuid, &iv_entry,
-			    sizeof(struct cont_iv_entry),
-			    CRT_IV_SHORTCUT_TO_ROOT, CRT_IV_SYNC_EAGER,
-			    false /* retry */);
+			    sizeof(iv_entry), CRT_IV_SHORTCUT_TO_ROOT,
+			    CRT_IV_SYNC_EAGER, false /* retry */);
 	return rc;
 }
 
@@ -1157,26 +1126,24 @@ int
 cont_iv_prop_update(void *ns, uuid_t cont_uuid, daos_prop_t *prop)
 {
 	struct cont_iv_entry	*iv_entry;
-	uint32_t		 entry_size;
-	int			 rc;
+	uint32_t		iv_entry_size;
+	int			rc;
 
 	/* Only happens on xstream 0 */
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 
-	entry_size = cont_iv_prop_ent_size(DAOS_ACL_MAX_ACE_LEN);
-	D_ALLOC(iv_entry, entry_size);
+	iv_entry_size = cont_iv_prop_ent_size(DAOS_ACL_MAX_ACE_LEN);
+	D_ALLOC(iv_entry, iv_entry_size);
 	if (iv_entry == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+		return -DER_NOMEM;
 
 	uuid_copy(iv_entry->cont_uuid, cont_uuid);
 	cont_iv_prop_l2g(prop, &iv_entry->iv_prop);
 
 	rc = cont_iv_update(ns, IV_CONT_PROP, cont_uuid, iv_entry,
-			    entry_size, CRT_IV_SHORTCUT_TO_ROOT,
+			    iv_entry_size, CRT_IV_SHORTCUT_TO_ROOT,
 			    CRT_IV_SYNC_EAGER, false /* retry */);
 	D_FREE(iv_entry);
-
-out:
 	return rc;
 }
 
@@ -1204,17 +1171,18 @@ cont_iv_prop_fetch_ult(void *data)
 	if (iv_entry == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	prop_fetch = daos_prop_alloc(CONT_PROP_NUM);
-	if (prop_fetch == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
 	rc = cont_iv_fetch(arg->iv_ns, IV_CONT_PROP, arg->cont_uuid,
-			   iv_entry, iv_entry_size, false /* retry */);
+			   iv_entry, iv_entry_size, iv_entry_size,
+			   false /* retry */);
 	if (rc) {
 		D_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR,
 			 "cont_iv_fetch failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
+
+	prop_fetch = daos_prop_alloc(CONT_PROP_NUM);
+	if (prop_fetch == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	D_ASSERT(prop != NULL);
 	rc = cont_iv_prop_g2l(&iv_entry->iv_prop, prop_fetch);
@@ -1230,7 +1198,8 @@ cont_iv_prop_fetch_ult(void *data)
 	}
 
 out:
-	D_FREE(iv_entry);
+	if (iv_entry)
+		D_FREE(iv_entry);
 	daos_prop_free(prop_fetch);
 	ABT_eventual_set(arg->eventual, (void *)&rc, sizeof(rc));
 }
@@ -1349,4 +1318,3 @@ out:
 
 	return rc;
 }
-

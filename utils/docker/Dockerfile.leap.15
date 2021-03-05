@@ -9,16 +9,17 @@
 FROM opensuse/leap:15.2
 LABEL maintainer="daos@daos.groups.io"
 
+# Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
+ARG CB0
+
 # Use our own repo cache
 ARG REPO_URL=""
 ARG REPO_GROUP_LEAP15=""
-RUN if [ -n "${REPO_GROUP_LEAP15}" ]; then                             \
-        rm -f /etc/zypp/repos.d/*.repo;                                \
-        zypper --non-interactive ar                                    \
-                ${REPO_URL}${REPO_GROUP_LEAP15} daos-stack-group-repo; \
-        zypper --non-interactive mr --gpgcheck-allow-unsigned-repo     \
-               daos-stack-group-repo;                                  \
-    fi
+RUN if [ -n "${REPO_GROUP_LEAP15}" ]; then				\
+    rm -f /etc/zypp/repos.d/*.repo &&					\
+    zypper --non-interactive ar ${REPO_URL}${REPO_GROUP_LEAP15} daos-stack-group-repo && \
+    zypper --non-interactive mr --gpgcheck-allow-unsigned-repo daos-stack-group-repo; \
+  fi
 
 # Make sure repos are up to date
 RUN zypper --non-interactive --no-gpg-checks --gpg-auto-import-keys refresh
@@ -45,8 +46,9 @@ RUN zypper --non-interactive update &&					\
 	openmpi3-devel man fuse3-devel patchelf scons lua-lmod		\
 	libjson-c-devel liblz4-devel python3-distro curl		\
 	python3-pyxattr							\
-	java-1_8_0-openjdk-devel maven python3-PyYAML &&		\
-    zypper clean all
+	java-1_8_0-openjdk-devel maven python3-PyYAML			\
+	libunwind-devel &&						\
+    zypper clean --all
 
 # Monkey-patch MODULEPATH
 RUN if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then        \
@@ -54,7 +56,7 @@ RUN if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then      
     fi
 
 RUN update-ca-certificates
-RUN zypper --non-interactive install --allow-unsigned-rpm lua-lmod
+RUN zypper --non-interactive --no-gpg-checks install --allow-unsigned-rpm lua-lmod
 
 RUN if [ -z "${REPO_GROUP_LEAP15}" ]; then                                                                                        \
         zypper --non-interactive addrepo                                                                                          \
@@ -77,10 +79,9 @@ RUN useradd --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
 
 # Create directory for DAOS backend storage
-RUN mkdir -p /opt/daos && chown -R daos_server.daos_server /opt/daos
-RUN mkdir /mnt/daos && chown daos_server.daos_server /mnt/daos
-RUN mkdir /var/run/daos_server && chown daos_server.daos_server /var/run/daos_server
-RUN mkdir /var/run/daos_agent && chown daos_agent.daos_agent /var/run/daos_agent
+RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&	\
+    chown daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server &&	\
+    chown daos_agent.daos_agent /var/run/daos_agent
 
 ARG JENKINS_URL=""
 ARG QUICKBUILD=false
@@ -114,22 +115,7 @@ RUN if $QUICKBUILD; then                                                        
         echo "$QUICKBUILD_DEPS" | tr '\n' '\0' | xargs -0 zypper --non-interactive install;                      \
     fi
 
-# force an upgrade to get any newly built RPMs
 RUN zypper addlock fuse fuse-libs fuse-devel libraft0 raft-devel mercury mercury-devel
-ARG CACHEBUST=1
-RUN zypper --non-interactive update && zypper clean all
-
-# Control what to build.  By default Dockerfiles build everything to allow for
-# ease-of-use for users, however in CI everything is turned off and then
-# selectively enabled.  Turning off any step disables all future steps.
-ARG DAOS_DEPS_BUILD=yes
-ARG DAOS_BUILD=$DAOS_DEPS_BUILD
-ARG DAOS_JAVA_BUILD=$DAOS_BUILD
-# Legacy, NOBUILD should be set to any string to disable all three.
-ARG NOBUILD=no
-
-# select compiler to use
-ARG COMPILER=gcc
 
 # The COPY command has a --chown option but it's not well supported so copy as
 # root then run a chown command which is frustrating as the copy can take a few
@@ -142,9 +128,30 @@ RUN chown -R daos_server.daos_server /home/daos
 USER daos_server:daos_server
 RUN ln -s utils/sl site_scons
 
+# Control what to build.  By default Dockerfiles build everything to allow for
+# ease-of-use for users, however in CI everything is turned off and then
+# selectively enabled.  Turning off any step disables all future steps.
+ARG DAOS_DEPS_BUILD=yes
+
+# Now do an update to ensure software is up to date for the deps build.  If the
+# src hasn't changed then this won't do anything, but if it has then we want to
+# ensure that latest dependencies are used.
+USER root:root
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    (scons --build-deps=yes install PREFIX=/opt/daos --deps-only && \
-    /bin/rm -rf build *.gz)
+    { zypper --non-interactive --no-gpg-checks update && zypper clean --all; }
+USER daos_server:daos_server
+
+ARG DEPS_JOBS=1
+
+RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
+    { scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos --deps-only && \
+    /bin/rm -rf build *.gz; }
+
+# force an upgrade to get any newly built RPMs
+USER root:root
+ARG CACHEBUST
+RUN zypper --non-interactive --no-gpg-checks update && zypper clean --all
+USER daos_server:daos_server
 
 WORKDIR /home/daos/daos/
 COPY VERSION LICENSE ftest.sh SConstruct ./
@@ -155,11 +162,16 @@ RUN chown -R daos_server.daos_server /home/daos
 USER daos_server:daos_server
 RUN ln -s utils/sl site_scons
 
+# select compiler to use
+ARG COMPILER=gcc
+ARG JOBS=$DEPS_JOBS
+ARG DAOS_BUILD=$DAOS_DEPS_BUILD
+
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
-    (scons -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER && \
+    { scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER && \
     /bin/rm -rf build && \
-    cp -r utils/config/examples /opt/daos)
+    cp -r utils/config/examples /opt/daos; }
 
 # Set environment variables
 ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:$LD_LIBRARY_PATH
@@ -180,6 +192,8 @@ RUN echo -e "<settings>\n\
                 </mirror>\n\
         </mirrors>\n\
 </settings>" > /home/daos/.m2/settings.xml
+
+ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 
 RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
     mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos

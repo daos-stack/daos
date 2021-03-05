@@ -70,14 +70,14 @@ class DaosCoreBase(TestWithServers):
         scalable_endpoint = self.get_test_param("scalable_endpoint")
         if scalable_endpoint:
             for server_mgr in self.server_managers:
-                for server_params in server_mgr.manager.job.yaml.server_params:
+                for engine_params in server_mgr.manager.job.yaml.engine_params:
                     # Number of CaRT contexts should equal or be greater than
                     # the number of DAOS targets
-                    targets = server_params.get_value("targets")
+                    targets = engine_params.get_value("targets")
 
                     # Convert the list of variable assignments into a dictionary
                     # of variable names and their values
-                    env_vars = server_params.get_value("env_vars")
+                    env_vars = engine_params.get_value("env_vars")
                     env_dict = {
                         item.split("=")[0]: item.split("=")[1]
                         for item in env_vars}
@@ -85,8 +85,8 @@ class DaosCoreBase(TestWithServers):
                     if "CRT_CTX_NUM" not in env_dict or \
                             int(env_dict["CRT_CTX_NUM"]) < int(targets):
                         env_dict["CRT_CTX_NUM"] = str(targets)
-                    server_params.set_value("crt_ctx_share_addr", 1)
-                    server_params.set_value(
+                    engine_params.set_value("crt_ctx_share_addr", 1)
+                    engine_params.set_value(
                         "env_vars",
                         ["=".join(items) for items in env_dict.items()]
                     )
@@ -129,7 +129,8 @@ class DaosCoreBase(TestWithServers):
         )
 
         env = {}
-        env['CMOCKA_XML_FILE'] = os.path.join(self.outputdir, "%g_results.xml")
+        env['CMOCKA_XML_FILE'] = os.path.join(self.outputdir,
+                                              "%g_cmocka_results.xml")
         env['CMOCKA_MESSAGE_OUTPUT'] = "xml"
         env['POOL_SCM_SIZE'] = "{}".format(scm_size)
         if not nvme_size:
