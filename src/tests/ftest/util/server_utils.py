@@ -1099,7 +1099,8 @@ class DaosServerManager(SubprocessManager):
         Args:
             ranks (list): a list of daos server ranks (int) to kill
             daos_log (DaosLog): object for logging messages
-            force (bool): whether to use --force option to dmg system stop
+            force (bool, optional): whether to use --force option to dmg system
+                stop. Defaults to False.
 
         Raises:
             avocado.core.exceptions.TestFail: if there is an issue stopping the
@@ -1112,7 +1113,7 @@ class DaosServerManager(SubprocessManager):
         daos_log.info(msg)
 
         # Stop desired ranks using dmg
-        self.dmg.system_stop(force=force, ranks=convert_list(value=ranks))
+        self.dmg.system_stop(ranks=convert_list(value=ranks), force=force)
 
         # Update the expected status of the stopped/evicted ranks
         self.update_expected_states(ranks, ["stopped", "evicted"])
