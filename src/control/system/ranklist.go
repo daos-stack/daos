@@ -208,7 +208,7 @@ func (rgs RankGroups) FromMembers(members Members) error {
 
 	for _, m := range members {
 		if _, exists := ranksSeen[m.Rank]; exists {
-			return &ErrMemberExists{Rank: m.Rank}
+			return &ErrMemberExists{Rank: &m.Rank}
 		}
 		ranksSeen[m.Rank] = struct{}{}
 
@@ -246,7 +246,7 @@ func (rgs RankGroups) FromMemberResults(results MemberResults, rowFieldSep strin
 
 	for _, r := range results {
 		if _, exists := ranksSeen[r.Rank]; exists {
-			return errors.Wrap(&ErrMemberExists{Rank: r.Rank},
+			return errors.Wrap(&ErrMemberExists{Rank: &r.Rank},
 				"duplicate result for rank")
 		}
 		ranksSeen[r.Rank] = struct{}{}

@@ -132,7 +132,7 @@ func TestSystem_RankGroupsFromMembers(t *testing.T) {
 				MockMember(t, 4, MemberStateEvicted),
 				MockMember(t, 1, MemberStateJoined),
 			},
-			expErr: &ErrMemberExists{Rank: Rank(4)},
+			expErr: &ErrMemberExists{Rank: NewRankPtr(4)},
 		},
 		"multiple groups": {
 			rankGroups: make(RankGroups),
@@ -210,7 +210,7 @@ func TestSystem_RankGroupsFromMemberResults(t *testing.T) {
 				MockMemberResult(4, "ping", nil, MemberStateEvicted),
 				MockMemberResult(4, "ping", nil, MemberStateEvicted),
 			},
-			expErr: &ErrMemberExists{Rank: Rank(4)},
+			expErr: &ErrMemberExists{Rank: NewRankPtr(4)},
 		},
 		"successful results": {
 			rankGroups: make(RankGroups),
