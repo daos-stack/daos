@@ -57,7 +57,7 @@ class DynamicStartStop(TestWithServers):
 
         # Mark which ranks are now stopped
         for manager in self.server_managers:
-            manager.update_expected_states(ranks, ["stopped"])
+            manager.update_expected_states(ranks, ["stopped", "evicted"])
         for rank in ranks:
             self.stopped_ranks.add(rank)
 
