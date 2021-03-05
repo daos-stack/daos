@@ -365,7 +365,7 @@ boolean skip_test_rpms_centos7() {
 
 boolean skip_scan_rpms_centos7() {
     return target_branch == 'weekly-testing' ||
-           skip_stage('scan-centos-rpms') ||
+           skip_stage('scan-centos-rpms', true) ||
            quick_functional()
 }
 
@@ -462,7 +462,8 @@ boolean skip_unit_testing_stage() {
 
 boolean skip_coverity() {
     return skip_stage('coverity-test') ||
-           quick_functional()
+           quick_functional() ||
+           skip_stage('build')
 }
 
 boolean skip_testing_stage() {
