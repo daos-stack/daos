@@ -128,14 +128,13 @@ class PoolSvc(TestWithServers):
                 # Stop a pool non-leader
                 self.log.info("Stopping a pool non-leader: %s", non_leader)
                 try:
-                    self.pool.start_rebuild([non_leader], self.test_log)
+                    self.server_managers[-1].stop_ranks(
+                        [non_leader], self.test_log)
                 except TestFail as error:
                     self.log.info(error)
                     self.fail(
-                        "Error issuing TestPool.start_rebuild([{}])".format(
-                            non_leader))
-                self.server_managers[-1].update_expected_states(
-                    [non_leader], "evicted")
+                        "Error issuing "
+                        "DaosServerManager.stop_ranks([{}])".format(non_leader))
 
                 # Exclude a pool non-leader
                 self.log.info("Excluding a pool non-leader: %s", non_leader)
