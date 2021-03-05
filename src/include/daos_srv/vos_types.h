@@ -358,6 +358,8 @@ typedef struct {
 		struct {
 			/** Non-zero if punched */
 			daos_epoch_t		ie_punch;
+			/** If applicable, non-zero if object is punched */
+			daos_epoch_t		ie_obj_punch;
 			union {
 				/** key value */
 				daos_key_t	ie_key;

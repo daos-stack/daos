@@ -12,12 +12,6 @@
 #include <daos/common.h>
 #include <daos_mgmt.h>
 #include <daos/object.h>
-#ifdef DAOS_HAS_VALGRIND
-#include <valgrind/valgrind.h>
-#define DAOS_ON_VALGRIND RUNNING_ON_VALGRIND
-#else
-#define DAOS_ON_VALGRIND 0
-#endif
 
 #define assert_success(r)						\
 	do {								\
@@ -152,6 +146,9 @@ struct dts_context {
 	int			 tsc_cred_nr;
 	/** value size for \a tsc_credits */
 	int			 tsc_cred_vsize;
+	/** if pool/cont already created then can skip internal creation */
+	bool			 tsc_skip_pool_create;
+	bool			 tsc_skip_cont_create;
 	/** INPUT END */
 
 	/** OUTPUT: initialized within \a dts_ctx_init() */
@@ -170,6 +167,20 @@ struct dts_context {
 	int			 tsc_init;
 	/** OUTPUT END */
 };
+
+
+static inline bool
+tsc_create_pool(struct dts_context *tsc)
+{
+	return !tsc->tsc_skip_pool_create;
+}
+
+static inline bool
+tsc_create_cont(struct dts_context *tsc)
+{
+	/* Can't skip container if pool isn't also skipped */
+	return tsc_create_pool(tsc) || !tsc->tsc_skip_cont_create;
+}
 
 /* match BIO_XS_CNT_MAX, which is the max VOS xstreams mapped to a device */
 #define MAX_TEST_TARGETS_PER_DEVICE 48
