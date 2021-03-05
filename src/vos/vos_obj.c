@@ -385,9 +385,13 @@ reset:
 		D_DEBUG(DB_IO, "Failed to punch object "DF_UOID": rc = %d\n",
 			DP_UOID(oid), rc);
 
-	if ((rc == -DER_NONEXIST || rc == 0) &&
-	    vos_ts_wcheck(ts_set, epr.epr_hi, bound))
-		rc = -DER_TX_RESTART;
+	if (rc == 0 || rc == -DER_NONEXIST) {
+		/** We must prevent underpunch with regular I/O */
+		if (rc == 0 && (flags & VOS_OF_REPLAY_PC) == 0)
+			bound = DAOS_EPOCH_MAX;
+		if (vos_ts_wcheck(ts_set, epr.epr_hi, bound))
+			rc = -DER_TX_RESTART;
+	}
 
 	rc = vos_tx_end(cont, dth, NULL, NULL, true, rc);
 

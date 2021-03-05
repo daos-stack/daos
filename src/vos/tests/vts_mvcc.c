@@ -1459,7 +1459,12 @@ uncertainty_check_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 				expected_arc = -DER_EXIST;
 		}
 	}
-	if (is_punch(w) && we > bound)
+	if (is_punch(a) && expected_arc != -DER_NONEXIST && we > ae &&
+	    a->o_wlevel <= w->o_wlevel) {
+		expected_arc = -DER_TX_RESTART;
+	}
+
+	if (expected_arc != -DER_TX_RESTART && is_punch(w) && we > bound)
 		print_message("  %s(%s, "DF_X64
 			      ") (expect %s or DER_TX_RESTART): ", a->o_name,
 			      ap, ae, d_errstr(expected_arc));
