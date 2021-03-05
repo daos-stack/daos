@@ -93,6 +93,7 @@ type (
 		FloatSum() float64
 		Mean() float64
 		StdDev() float64
+		SampleSize() uint64
 	}
 )
 
@@ -245,6 +246,10 @@ func (sm *statsMetric) Mean() float64 {
 
 func (sm *statsMetric) StdDev() float64 {
 	return float64(sm.stats.std_dev)
+}
+
+func (sm *statsMetric) SampleSize() uint64 {
+	return uint64(sm.stats.sample_size)
 }
 
 func getStatsMinInt(stats *C.struct_d_tm_stats_t) uint64 {

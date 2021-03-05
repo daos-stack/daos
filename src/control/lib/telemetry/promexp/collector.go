@@ -211,6 +211,10 @@ func getMetricStats(baseName, shortDesc string, m telemetry.Metric) (stats []*me
 		return
 	}
 
+	if ms.SampleSize() == 0 {
+		return
+	}
+
 	for name, s := range map[string]struct {
 		fn   func() float64
 		desc string
