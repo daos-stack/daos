@@ -620,8 +620,7 @@ obj_dkey2grpidx(struct dc_object *obj, uint64_t hash, unsigned int map_ver)
 
 	D_ASSERT(obj->cob_shards_nr >= grp_size);
 
-	/* XXX, consistent hash? */
-	grp_idx = hash % (obj->cob_shards_nr / grp_size);
+	grp_idx = d_hash_jump(hash, obj->cob_shards_nr / grp_size);
 	D_RWLOCK_UNLOCK(&obj->cob_lock);
 
 	return grp_idx;
@@ -1610,9 +1609,11 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 		recov_task->ert_th = th;
 
 		rc = dc_obj_fetch_task_create(args->oh, th, 0, args->dkey, 1,
-					DIOF_EC_RECOV, &recov_task->ert_iod,
-					&recov_task->ert_sgl, NULL, fail_info,
-					NULL, sched, &sub_task);
+					      DIOF_EC_RECOV,
+					      &recov_task->ert_iod,
+					      &recov_task->ert_sgl, NULL,
+					      fail_info, NULL,
+					      NULL, sched, &sub_task);
 		if (rc) {
 			D_ERROR("task %p "DF_OID" dc_obj_fetch_task_create "
 				"failed "DF_RC"\n", task,

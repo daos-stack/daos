@@ -12,6 +12,7 @@ pool:
     mode: 146
     name: daos_server
     scm_size: 134217728
+    pool_query_timeout: 30
 createtests:
     createsvc: !mux
         svc0:
