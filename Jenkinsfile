@@ -462,7 +462,8 @@ boolean skip_unit_testing_stage() {
 
 boolean skip_coverity() {
     return skip_stage('coverity-test') ||
-           quick_functional()
+           quick_functional() ||
+           skip_stage('build')
 }
 
 boolean skip_testing_stage() {
