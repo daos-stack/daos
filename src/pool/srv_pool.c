@@ -924,7 +924,8 @@ ds_pool_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 	int			rc = 0;
 
 	/* Only used for evict the rank for the moment */
-	if (src != CRT_EVS_SWIM || type != CRT_EVT_DEAD || pool_disable_evict) {
+	if ((src != CRT_EVS_SWIM && src != CRT_EVS_GRPMOD) ||
+	    type != CRT_EVT_DEAD || pool_disable_evict) {
 		D_DEBUG(DB_MGMT, "ignore src/type/evict %u/%u/%d\n",
 			src, type, pool_disable_evict);
 		return;
@@ -1126,7 +1127,7 @@ pool_svc_check_node_status(struct pool_svc *svc)
 
 		rc = crt_rank_state_get(crt_group_lookup(NULL),
 				   doms[i].do_comp.co_rank, &state);
-		if (rc != 0) {
+		if (rc != 0 && rc != -DER_NONEXIST) {
 			D_ERROR("failed to get swim for rank %u: %d\n",
 				doms[i].do_comp.co_rank, rc);
 			break;
@@ -1137,8 +1138,10 @@ pool_svc_check_node_status(struct pool_svc *svc)
 		 * moment.
 		 */
 		D_DEBUG(DB_REBUILD, "rank/state %d/%d\n",
-			doms[i].do_comp.co_rank, state.sms_status);
-		if (state.sms_status == SWIM_MEMBER_DEAD) {
+			doms[i].do_comp.co_rank,
+			rc == -DER_NONEXIST ? -1 : state.sms_status);
+		if (rc == -DER_NONEXIST ||
+		    state.sms_status == SWIM_MEMBER_DEAD) {
 			rc = pool_evict_rank(svc, doms[i].do_comp.co_rank);
 			if (rc) {
 				D_ERROR("failed to evict rank %u: %d\n",
@@ -2813,6 +2816,7 @@ out:
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",
 		DP_UUID(in->pqi_op.pi_uuid), rpc, DP_RC(rc));
 	crt_reply_send(rpc);
+	daos_prop_free(prop);
 }
 
 /* Convert pool_comp_state_t to daos_target_state_t */

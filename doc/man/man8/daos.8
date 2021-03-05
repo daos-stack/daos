@@ -10,9 +10,10 @@ daos \- command to manage DAOS pool/container/object
 .B daos RESOURCE COMMAND \fR[\fBOPTION\fRs]
 .SH DESCRIPTION
 .B daos
-can be used to manage/query a pool content, create/query/manage/destroy a
-container inside a pool, copy data to/from a POSIX container to a POSIX,
-filesystem, or query/manage an object inside a container.
+can be used to manage/query pool content, create/query/manage/destroy a
+container inside a pool, copy data to/from a POSIX container to a POSIX
+filesystem, clone a DAOS container, or query/manage an object inside a
+container.
 .br
 The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \fBdaos\fR are listed below.
 .SH RESOURCE\fRs/\fBCOMMAND\fRs/\fBOPTION\fRs
@@ -48,7 +49,9 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 .br
 	  \fBget-attr\fR         get pool user-defined attribute
 .br
-	  \fBget-prop\fR         get pool properties
+	  \fBset-attr\fR         set pool user-defined attribute
+.br
+	  \fBdel-attr\fR         del pool user-defined attribute
 .br
 	  \fBautotest\fR         verify setup with smoke tests
 .br
@@ -60,11 +63,15 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 .br
 	  \fB--sys=\fRSTR
 .br
-	  \fB--attr=\fRNAME        pool attribute name to get
+	  \fB--attr=\fRNAME        pool attribute name to get, set, del
+.br
+	  \fB--value=\fRVALUESTR	pool attribute name to set
 .br
 .TP
 .I container \fR(\fIcont\fR) \fBCOMMAND\fRs:
 	  \fBcreate\fR           create a container
+.br
+	  \fBclone\fR            clone a container
 .br
 	  \fBdestroy\fR          destroy a container
 .br
@@ -73,6 +80,20 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 	  \fBlist-obj\fR
 .br
 	  \fBquery\fR            query a container
+.br
+	  \fBget-prop\fR         get all container's properties
+.br
+	  \fBset-prop\fR         set all container's properties
+.br
+	  \fBget-acl\fR         get a container's ACL
+.br
+	  \fBoverwrite-acl\fR         replace a container's ACL
+.br
+	  \fBupdate-acl\fR         add/modify entries in a container's ACL
+.br
+	  \fBdelete-acl\fR         delete an entry from a container's ACL
+.br
+	  \fBset-owner\fR         change the user and/or group that own a container
 .br
 	  \fBstat\fR             get container statistics
 .br
@@ -85,8 +106,6 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 	  \fBget-attr\fR         get container user-defined attribute
 .br
 	  \fBset-attr\fR         set container user-defined attribute
-.br
-	  \fBget-prop\fR         get container properties
 .br
 	  \fBcreate-snap\fR      create container snapshot (optional name)
 .br
@@ -104,6 +123,11 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 	  <\fIpool\fR options>   (\fB--pool\fR, \fB--sys-name\fR)
 .br
 	  \fB--cont=\fRUUID      (optional) container UUID (or generated)
+.TP
+.I container \fBOPTION\fRs (clone a container):
+	  \fB--src=\fRSTR	</pool/cont | path>
+.br
+	  \fB--dst=\fRSTR	</pool/cont | /pool | path>
 .TP
 .I container \fBOPTION\fRs (create and link to namespace path):
 	  <\fIpool\fR/\fIcont\fR opts>   (\fB--pool\fR, \fB--sys-name\fR, \fB--cont\fR [optional])
@@ -169,6 +193,36 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 	  \fB--path=\fRPATHSTR     (mandatory, unless using \fB--cont\fR)
 .br
                         namespace path must provide direct link to DAOS container
+.TP
+.I container \fBOPTION\fRs (set-prop):
+	  \fB--properties=\fRNAME:<value>[,<name>:<value>,...]
+						supported prop names: label
+                           label value can be any string
+.br
+.I container \fBOPTION\fRs (acl related):
+.br
+	  \fB--acl-file=\fRPATH        input file containing ACL (overwrite-acl,update-acl))
+.br
+	  \fB--entry=\fRACE     add or modify a single ACL entry (update-acl)
+.br
+	  \fB--principal=\fRID     principal of entry (delete-acl)
+                           for users: u:name@[domain]
+                           for groups: g:name@[domain]
+                           special principals: OWNER@, GROUP@, EVERYONE@
+.br
+	  \fB--verbose\fR     verbose mode (get-acl)
+.br
+	  \fB--outfile=\fRPATH     write ACL to file (get-acl)
+.br
+.TP
+.I container \fBOPTION\fR (set owner):
+.br
+	  \fB--user=\fRID        user who will own the container.
+                           format: username@[domain]
+.br
+	  \fB--group=\fRID     group who will own the container.
+                           format: groupname@[domain]
+.br
 .TP
 .I container \fBOPTION\fRs (attribute-related):
 	  \fB--attr=\fRNAME        container attribute name to set, get, del
