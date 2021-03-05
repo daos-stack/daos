@@ -6,8 +6,6 @@
 """
 from apricot import TestWithServers
 from command_utils_base import ObjectWithParameters, BasicParameter
-from test_utils_pool import TestPool
-from test_utils_container import TestContainer
 
 
 class RebuildTestParams(ObjectWithParameters):
@@ -50,13 +48,11 @@ class RebuildTestBase(TestWithServers):
 
     def setup_test_pool(self):
         """Define a TestPool object."""
-        self.pool = TestPool(self.context, self.get_dmg_command())
-        self.pool.get_params(self)
+        self.add_pool(create=False)
 
     def setup_test_container(self):
         """Define a TestContainer object."""
-        self.container = TestContainer(self.pool)
-        self.container.get_params(self)
+        self.add_container(self.pool, create=False)
 
     def setup_pool_verify(self):
         """Set up pool verification initial expected values."""
@@ -130,9 +126,11 @@ class RebuildTestBase(TestWithServers):
         """Start the rebuild process."""
         # Exclude the rank from the pool to initiate rebuild
         if isinstance(self.inputs.rank.value, list):
-            self.pool.start_rebuild(self.inputs.rank.value, self.d_log)
+            self.server_managers[0].stop_ranks(
+                self.inputs.rank.value, self.d_log, force=True)
         else:
-            self.pool.start_rebuild([self.inputs.rank.value], self.d_log)
+            self.server_managers[0].stop_ranks(
+                [self.inputs.rank.value], self.d_log, force=True)
 
         # Wait for rebuild to start
         self.pool.wait_for_rebuild(True, 1)

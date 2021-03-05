@@ -48,7 +48,7 @@ class ExecutableCommand(CommandWithParameters):
         self.run_as_subprocess = subprocess
         self.timeout = None
         self.exit_status_exception = True
-        self.output_check = "combined"
+        self.output_check = "both"
         self.verbose = True
         self.env = None
         self.sudo = False
@@ -725,8 +725,8 @@ class YamlCommand(SubProcessCommand):
 
         """
         if isinstance(self.yaml, YamlParameters):
-            self.yaml.create_yaml(self.temporary_file)
-            self.copy_configuration(self.temporary_file_hosts)
+            if self.yaml.create_yaml(self.temporary_file):
+                self.copy_configuration(self.temporary_file_hosts)
 
     def set_config_value(self, name, value):
         """Set the yaml configuration parameter value.
