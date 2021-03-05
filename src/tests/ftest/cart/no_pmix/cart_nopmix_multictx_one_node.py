@@ -29,13 +29,13 @@ class CartNoPmixOneNodeTest(TestWithoutServers):
         """ Test setup """
         print("Running setup\n")
         self.utils = CartUtils()
-        super(CartNoPmixOneNodeTest, self).setUp()
+        super().setUp()
 
     def tearDown(self):
         """ Tear down """
         self.report_timeout()
         self._teardown_errors.extend(self.utils.cleanup_processes())
-        super(CartNoPmixOneNodeTest, self).tearDown()
+        super().tearDown()
 
     def test_cart_no_pmix(self):
         """
