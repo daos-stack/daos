@@ -1,30 +1,13 @@
 #
 # (C) Copyright 2019-2021 Intel Corporation.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#
-# GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-# The Government's rights to use, modify, reproduce, release, perform, display,
-# or disclose this software are subject to the terms of the Apache License as
-# provided in Contract No. B609815.
-# Any reproduction of computer software, computer software documentation, or
-# portions thereof marked with this legend must also reproduce the markings.
+# SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 DAOS_ROOT ?= $(shell git rev-parse --show-toplevel)
 
 C_HEADER_FILES = include/daos/drpc.pb-c.h\
-		 iosrv/srv.pb-c.h\
-		 iosrv/event.pb-c.h\
+		 engine/srv.pb-c.h\
+		 engine/event.pb-c.h\
 		 mgmt/acl.pb-c.h\
 		 mgmt/cont.pb-c.h\
 		 mgmt/pool.pb-c.h\
@@ -33,8 +16,8 @@ C_HEADER_FILES = include/daos/drpc.pb-c.h\
 		 security/auth.pb-c.h\
 		 tests/drpc/drpc_test.pb-c.h
 C_SOURCE_FILES = common/drpc.pb-c.c\
-		 iosrv/srv.pb-c.c\
-		 iosrv/event.pb-c.c\
+		 engine/srv.pb-c.c\
+		 engine/event.pb-c.c\
 		 mgmt/acl.pb-c.c\
 		 mgmt/cont.pb-c.c\
 		 mgmt/pool.pb-c.c\
@@ -139,16 +122,16 @@ $(DAOS_ROOT)/src/%.pb-c.h: $(PROTO_SOURCE_DIR)/%.proto
 $(DAOS_ROOT)/src/%.pb-c.c: $(PROTO_SOURCE_DIR)/%.proto
 	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
 
-$(DAOS_ROOT)/src/iosrv/event.pb-c.h: $(PROTO_SOURCE_DIR)/shared/event.proto
+$(DAOS_ROOT)/src/engine/event.pb-c.h: $(PROTO_SOURCE_DIR)/shared/event.proto
 	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
 
-$(DAOS_ROOT)/src/iosrv/event.pb-c.c: $(PROTO_SOURCE_DIR)/shared/event.proto
+$(DAOS_ROOT)/src/engine/event.pb-c.c: $(PROTO_SOURCE_DIR)/shared/event.proto
 	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
 
-$(DAOS_ROOT)/src/iosrv/%.pb-c.h: $(PROTO_SOURCE_DIR)/srv/%.proto
+$(DAOS_ROOT)/src/engine/%.pb-c.h: $(PROTO_SOURCE_DIR)/srv/%.proto
 	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
 
-$(DAOS_ROOT)/src/iosrv/%.pb-c.c: $(PROTO_SOURCE_DIR)/srv/%.proto
+$(DAOS_ROOT)/src/engine/%.pb-c.c: $(PROTO_SOURCE_DIR)/srv/%.proto
 	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
 
 $(DAOS_ROOT)/src/mgmt/smd.pb-c.h: $(PROTO_SOURCE_DIR)/ctl/smd.proto

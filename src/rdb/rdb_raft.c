@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * \file
@@ -46,7 +29,7 @@
 
 #include <abt.h>
 #include <raft.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/vos.h>
 #include "rdb_internal.h"
 #include "rdb_layout.h"
@@ -122,8 +105,7 @@ rdb_raft_fini_ae(msg_appendentries_t *ae)
 		for (i = 0; i < ae->n_entries; i++) {
 			msg_entry_t *e = &ae->entries[i];
 
-			if (e->data.buf != NULL)
-				D_FREE(e->data.buf);
+			D_FREE(e->data.buf);
 		}
 		D_FREE(ae->entries);
 	}
@@ -286,7 +268,7 @@ rdb_raft_load_replicas(struct rdb *db, uint64_t index)
 		goto err;
 	}
 	d_iov_set(&value, db->d_replicas->rl_ranks,
-		     sizeof(*db->d_replicas->rl_ranks) * nreplicas);
+		  sizeof(*db->d_replicas->rl_ranks) * nreplicas);
 	rc = rdb_lc_lookup(db->d_lc, index, RDB_LC_ATTRS,
 			   &rdb_lc_replicas, &value);
 	if (rc != 0) {
@@ -706,11 +688,11 @@ rdb_raft_exec_unpack_io(struct dss_enum_unpack_io *io, void *arg)
 	for (i = 0; i < io->ui_iods_len; i++) {
 		D_ASSERT(io->ui_iods[i].iod_type == DAOS_IOD_SINGLE);
 		D_ASSERTF(io->ui_iods[i].iod_nr == 1, "%u\n",
-			 io->ui_iods[i].iod_nr);
+			  io->ui_iods[i].iod_nr);
 		D_ASSERTF(io->ui_iods[i].iod_recxs[0].rx_idx == 0, DF_U64"\n",
-			 io->ui_iods[i].iod_recxs[0].rx_idx);
+			  io->ui_iods[i].iod_recxs[0].rx_idx);
 		D_ASSERTF(io->ui_iods[i].iod_recxs[0].rx_nr == 1, DF_U64"\n",
-			 io->ui_iods[i].iod_recxs[0].rx_nr);
+			  io->ui_iods[i].iod_recxs[0].rx_nr);
 
 		D_ASSERT(io->ui_sgls != NULL);
 		D_ASSERTF(io->ui_sgls[i].sg_nr == 1, "%u\n",
@@ -1330,7 +1312,7 @@ static raft_node_id_t
 rdb_raft_cb_log_get_node_id(raft_server_t *raft, void *arg, raft_entry_t *entry,
 			    raft_index_t index)
 {
-	return *((d_rank_t *) entry->data.buf);
+	return *((d_rank_t *)entry->data.buf);
 }
 
 static void
@@ -1497,7 +1479,7 @@ rdb_compactd(void *arg)
 				break;
 			if (stop)
 				break;
-			ABT_cond_wait(db->d_compact_cv, db->d_raft_mutex);
+			sched_cond_wait(db->d_compact_cv, db->d_raft_mutex);
 		}
 		ABT_mutex_unlock(db->d_raft_mutex);
 		if (stop)
@@ -1624,6 +1606,11 @@ rdb_raft_process_event(struct rdb *db, struct rdb_raft_event *event)
 				  "%d "DF_U64" "DF_U64"\n", next.dre_type,
 				  next.dre_term, event->dre_term);
 		}
+		if (rc == -DER_SHUTDOWN) {
+			D_DEBUG(DB_MD, DF_DB": requesting a replica stop\n",
+				DP_DB(db));
+			db->d_cbs->dc_stop(db, rc, db->d_arg);
+		}
 		ABT_mutex_unlock(db->d_raft_mutex);
 		break;
 	case RDB_RAFT_STEP_DOWN:
@@ -1656,7 +1643,7 @@ rdb_callbackd(void *arg)
 			}
 			if (stop)
 				break;
-			ABT_cond_wait(db->d_events_cv, db->d_raft_mutex);
+			sched_cond_wait(db->d_events_cv, db->d_raft_mutex);
 		}
 		ABT_mutex_unlock(db->d_raft_mutex);
 		if (stop)
@@ -1786,6 +1773,7 @@ rdb_raft_check_state(struct rdb *db, const struct rdb_raft_state *state,
 		break;
 	case -DER_SHUTDOWN:
 	case -DER_IO:
+		D_DEBUG(DB_MD, DF_DB": requesting a replica stop\n", DP_DB(db));
 		db->d_cbs->dc_stop(db, rc, db->d_arg);
 		break;
 	}
@@ -1985,8 +1973,20 @@ rdb_timerd(void *arg)
 	double		t;		/* timestamp of beat (s) */
 	double		t_prev;		/* timestamp of previous beat (s) */
 	int		rc;
+	struct sched_req_attr	 attr = { 0 };
+	uuid_t			 anonym_uuid;
+	struct sched_request	*sched_req;
 
 	D_DEBUG(DB_MD, DF_DB": timerd starting\n", DP_DB(db));
+
+	uuid_clear(anonym_uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
+	sched_req = sched_req_get(&attr, ABT_THREAD_NULL);
+	if (sched_req == NULL) {
+		D_ERROR(DF_DB": failed to get sched req.\n", DP_DB(db));
+		return;
+	}
+
 	t = ABT_get_wtime();
 	t_prev = t;
 	do {
@@ -2005,13 +2005,22 @@ rdb_timerd(void *arg)
 		if (rc != 0)
 			D_ERROR(DF_DB": raft_periodic() failed: %d\n",
 				DP_DB(db), rc);
+		if (db->d_stop)
+			break;
 
 		t_prev = t;
 		/* Wait for d in [d_min, d_max] before the next beat. */
 		d = d_min + (d_max - d_min) * rdb_raft_rand();
-		while ((t = ABT_get_wtime()) < t_prev + d && !db->d_stop)
-			ABT_thread_yield();
+		t = ABT_get_wtime();
+		if (t < t_prev + d) {
+			d_prev = t_prev + d - t;
+			sched_req_sleep(sched_req, (uint32_t)(d_prev * 1000));
+			t = ABT_get_wtime();
+		}
 	} while (!db->d_stop);
+
+	sched_req_put(sched_req);
+
 	D_DEBUG(DB_MD, DF_DB": timerd stopping\n", DP_DB(db));
 }
 
@@ -2497,7 +2506,6 @@ rdb_raft_stop(struct rdb *db)
 {
 	int rc;
 
-
 	/* Stop sending any new RPCs. */
 	db->d_stop = true;
 
@@ -2556,10 +2564,6 @@ rdb_raft_resign(struct rdb *db, uint64_t term)
 	struct rdb_raft_state	state;
 	int			rc;
 
-	if (db == NULL) {
-		D_ERROR("db cannot be NULL\n");
-		return;
-	}
 	ABT_mutex_lock(db->d_raft_mutex);
 	if (term != raft_get_current_term(db->d_raft) ||
 	    !raft_is_leader(db->d_raft)) {
@@ -2573,7 +2577,7 @@ rdb_raft_resign(struct rdb *db, uint64_t term)
 	raft_become_follower(db->d_raft);
 	rc = rdb_raft_check_state(db, &state, 0 /* raft_rc */);
 	ABT_mutex_unlock(db->d_raft_mutex);
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
+	D_ASSERTF(rc == 0, DF_RC"\n", DP_RC(rc));
 }
 
 /* Call new election (campaign to be leader) by a follower */

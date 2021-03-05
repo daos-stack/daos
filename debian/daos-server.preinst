@@ -3,3 +3,5 @@ set -e
 
 addgroup --system daos_server
 adduser --system --ingroup daos_server daos_server
+addgroup --system daos_metrics
+usermod -G -a daos_metrics daos_server

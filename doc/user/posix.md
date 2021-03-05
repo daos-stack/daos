@@ -87,7 +87,6 @@ There are two mandatory command-line options, these are:
 
 | **Command-line Option**  | **Description**     |
 | ------------------------ | ------------------- |
-| --svc=<ranks\>           | service replicas    |
 | --mountpoint=<path\>     | path to mount dfuse |
 
 The mount point specified should be an empty directory on the local node that
@@ -143,7 +142,7 @@ To create a new container and link it into the namespace of an existing one,
 use the following command.
 
 ```bash
-$ daos container create --svc <svc> --type POSIX --pool <pool uuid> --path <path to entry point>
+$ daos container create --type POSIX --pool <pool uuid> --path <path to entry point>
 ```
 
 The pool uuid should already exist, and the path should specify a location
@@ -155,7 +154,7 @@ not supplied, it will be created.
 To destroy a container again, the following command should be used.
 
 ```bash
-$ daos container destroy --svc --path <path to entry point>
+$ daos container destroy --path <path to entry point>
 ```
 
 This will both remove the link between the containers and remove the container
@@ -168,7 +167,7 @@ Information about a container, for example, the presence of an entry point betwe
 containers, or the pool and container uuids of the container linked to can be
 read with the following command.
 ```bash
-$ daos container info --svc --path <path to entry point>
+$ daos container info --path <path to entry point>
 ```
 
 ### Enabling Caching

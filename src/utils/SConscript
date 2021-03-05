@@ -4,7 +4,7 @@ Import('env')
 
 def scons():
     """Execute build"""
-    libs = ['daos', 'daos_common', 'uuid', 'dfs', 'duns', 'gurt', 'cart']
+    libs = ['daos', 'daos_common_pmem', 'uuid', 'dfs', 'duns', 'gurt', 'cart']
 
     denv = env.Clone()
 
@@ -17,6 +17,9 @@ def scons():
 
     # Build cart_ctl
     SConscript('ctl/SConscript')
+
+    # Build daos_metrics
+    SConscript('daos_metrics/SConscript')
 
     # Can remove this when pmdk is not needed on client
     denv.AppendUnique(LIBPATH=["../client/dfs"])

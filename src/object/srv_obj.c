@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * object server operations
@@ -38,20 +21,13 @@
 #include <daos_srv/container.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/bio.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/security.h>
 #include <daos/checksum.h>
-#include <gurt/mem.h>
 #include "daos_srv/srv_csum.h"
 #include "obj_rpc.h"
 #include "obj_internal.h"
-
-static inline bool
-obj_dtx_need_refresh(struct dtx_handle *dth, int rc)
-{
-	return rc == -DER_INPROGRESS && dth->dth_share_tbd_count > 0;
-}
 
 static int
 obj_verify_bio_csum(daos_obj_id_t oid, daos_iod_t *iods,
@@ -125,7 +101,9 @@ obj_rw_complete(crt_rpc_t *rpc, unsigned int map_version,
 		}
 
 		if (rc != 0) {
-			D_CDEBUG(rc == -DER_REC2BIG, DLOG_DBG, DLOG_ERR,
+			D_CDEBUG(rc == -DER_REC2BIG || rc == -DER_INPROGRESS ||
+				 rc == -DER_TX_RESTART,
+				 DLOG_DBG, DLOG_ERR,
 				 DF_UOID " %s end failed: %d\n",
 				 DP_UOID(orwi->orw_oid),
 				 update ? "Update" : "Fetch", rc);
@@ -157,7 +135,7 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint64_t epoch,
 
 	D_DEBUG(DB_IO, "rpc %p opc %d send reply, pmv %d, epoch "DF_U64
 		", status %d\n", rpc, opc_get(rpc->cr_opc),
-		ioc->ioc_map_ver, epoch, status);
+		ioc->ioc_map_ver, orwo->orw_epoch, status);
 
 	if (!ioc->ioc_lost_reply) {
 		rc = crt_reply_send(rpc);
@@ -402,7 +380,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 			}
 
 			rc = crt_bulk_get_len(remote_bulks[i],
-						&remote_bulk_size);
+					      &remote_bulk_size);
 			if (rc)
 				break;
 
@@ -517,6 +495,9 @@ obj_set_reply_sizes(crt_rpc_t *rpc, daos_iod_t *iods, int iod_nr)
 	/* Re-entry case.*/
 	if (orwo->orw_iod_sizes.ca_count != 0) {
 		D_ASSERT(orwo->orw_iod_sizes.ca_count == iod_nr);
+		D_ASSERT(orwo->orw_iod_sizes.ca_arrays != NULL);
+
+		sizes = orwo->orw_iod_sizes.ca_arrays;
 	} else {
 		D_ALLOC_ARRAY(sizes, iod_nr);
 		if (sizes == NULL)
@@ -1082,8 +1063,8 @@ obj_dedup_verify(daos_handle_t ioh, struct bio_sglist *bsgls_dup, int sgl_nr)
 			D_ASSERT(biov_dup->bi_addr.ba_dedup);
 
 			D_ASSERT(bio_iov2len(biov) == bio_iov2len(biov_dup));
-			rc = d_memcmp(bio_iov2buf(biov), bio_iov2buf(biov_dup),
-				      bio_iov2len(biov));
+			rc = memcmp(bio_iov2buf(biov), bio_iov2buf(biov_dup),
+				    bio_iov2len(biov));
 
 			if (rc == 0) {	/* verify succeeded */
 				D_DEBUG(DB_IO, "Verify dedup succeeded\n");
@@ -1262,7 +1243,6 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 	struct dcs_iod_csums		*iod_csums;
 	uint32_t			tag = dss_get_module_info()->dmi_tgt_id;
 	daos_handle_t			ioh = DAOS_HDL_INVAL;
-	uint64_t			time_start = 0;
 	struct bio_desc			*biod;
 	daos_key_t			*dkey;
 	crt_bulk_op_t			bulk_op;
@@ -1276,8 +1256,6 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 	struct bio_sglist		*bsgls_dup = NULL; /* dedup verify */
 	daos_iod_t			*iods_dup = NULL; /* for EC deg fetch */
 	int				err, rc = 0;
-
-	D_TIME_START(time_start, OBJ_PF_UPDATE_LOCAL);
 
 	create_map = orw->orw_flags & ORF_CREATE_MAP;
 
@@ -1328,7 +1306,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		    ioc->ioc_coc->sc_props.dcp_dedup_verify) {
 			/**
 			 * If deduped data need to be compared, then perform
-			 * the I/O are a regular one, we will check for dedup
+			 * the I/O as a regular one, we will check for dedup
 			 * data after RDMA
 			 */
 			D_ALLOC_ARRAY(bsgls_dup, orw->orw_nr);
@@ -1406,8 +1384,8 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				     dth);
 		daos_recx_ep_list_free(shadows, orw->orw_nr);
 		if (rc) {
-			D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_NONEXIST,
-				 DB_IO, DLOG_ERR,
+			D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_NONEXIST ||
+				 rc == -DER_TX_RESTART, DB_IO, DLOG_ERR,
 				 "Fetch begin for "DF_UOID" failed: "DF_RC"\n",
 				 DP_UOID(orw->orw_oid), DP_RC(rc));
 			goto out;
@@ -1534,9 +1512,11 @@ out:
 	if (bsgls_dup != NULL) {
 		int	i;
 
-		for (i = 0; i < orw->orw_nr; i++) {
-			vos_dedup_free_bsgl(ioh, &bsgls_dup[i]);
-			bio_sgl_fini(&bsgls_dup[i]);
+		if (daos_handle_is_valid(ioh)) {
+			for (i = 0; i < orw->orw_nr; i++) {
+				vos_dedup_free_bsgl(ioh, &bsgls_dup[i]);
+				bio_sgl_fini(&bsgls_dup[i]);
+			}
 		}
 		D_FREE(bsgls_dup);
 	}
@@ -1544,7 +1524,6 @@ out:
 	rc = obj_rw_complete(rpc, ioc->ioc_map_ver, ioh, rc, dth);
 	if (iods_dup != NULL)
 		daos_iod_recx_free(iods_dup, orw->orw_nr);
-	D_TIME_END(time_start, OBJ_PF_UPDATE_LOCAL);
 	return rc;
 }
 
@@ -1601,6 +1580,8 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 	int		      rc;
 
 	memset(ioc, 0, sizeof(*ioc));
+	ioc->ioc_opc = opc;
+
 	rc = ds_cont_find_hdl(pool_uuid, coh_uuid, &coh);
 	if (rc) {
 		if (rc == -DER_NONEXIST)
@@ -1618,23 +1599,20 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 		D_ERROR("Stale container handle "DF_UUID" != "DF_UUID"\n",
 			DP_UUID(cont_uuid), DP_UUID(coh->sch_uuid));
 		D_GOTO(failed, rc = -DER_NONEXIST);
+	} else {
+		/**
+		 * The server handle is a dummy and never attached by
+		 * a real container
+		 */
+		D_DEBUG(DB_TRACE, DF_UUID"/%p is server cont hdl\n",
+			DP_UUID(coh_uuid), coh);
 	}
 
-	if (!is_container_from_srv(pool_uuid, coh_uuid)) {
-		D_ERROR("Empty container "DF_UUID" (ref=%d) handle?\n",
-			DP_UUID(cont_uuid), coh->sch_ref);
-		D_GOTO(failed, rc = -DER_NO_HDL);
-	}
-
-	/* rebuild handle is a dummy and never attached by a real container */
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_NO_HDL))
 		D_GOTO(failed, rc = -DER_NO_HDL);
 
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_STALE_POOL))
 		D_GOTO(failed, rc = -DER_STALE);
-
-	D_DEBUG(DB_TRACE, DF_UUID"/%p is rebuild cont hdl\n",
-		DP_UUID(coh_uuid), coh);
 
 	/* load VOS container on demand for rebuild */
 	rc = ds_cont_child_lookup(pool_uuid, cont_uuid, &coc);
@@ -1677,13 +1655,8 @@ do_obj_ioc_begin(uint32_t rpc_map_ver, uuid_t pool_uuid,
 		 struct obj_io_context *ioc)
 {
 	struct ds_pool_child *poc;
-	int		      rank, rc;
-	ABT_xstream xs;
+	int		      rc;
 
-	rc = ABT_xstream_self(&xs);
-	D_ASSERT(rc == ABT_SUCCESS);
-	rc = ABT_xstream_get_rank(xs, &rank);
-	D_ASSERT(rc == ABT_SUCCESS);
 	rc = obj_ioc_init(pool_uuid, coh_uuid, cont_uuid, opc, ioc);
 	if (rc)
 		return rc;
@@ -1748,8 +1721,21 @@ static void
 obj_ioc_end(struct obj_io_context *ioc, int err)
 {
 	if (ioc->ioc_began) {
+		struct obj_tls	*tls = obj_tls_get();
+		uint32_t	opc = ioc->ioc_opc;
+
 		dss_rpc_cntr_exit(DSS_RC_OBJ, !!err);
 		ioc->ioc_began = 0;
+
+		/** Update sensors */
+		if (err == 0)
+			/** measure latency of successful I/O only */
+			d_tm_set_gauge(&tls->ot_op_lat[opc],
+				       (daos_get_ntime() -
+					ioc->ioc_start_time) / 1000,
+				       NULL);
+		d_tm_decrement_gauge(&tls->ot_op_active[opc], 1, NULL);
+		d_tm_increment_counter(&tls->ot_op_total[opc], 1, NULL);
 	}
 	obj_ioc_fini(ioc);
 }
@@ -1760,12 +1746,18 @@ obj_ioc_begin(uint32_t rpc_map_ver, uuid_t pool_uuid,
 	      uuid_t coh_uuid, uuid_t cont_uuid, uint32_t opc,
 	      struct obj_io_context *ioc)
 {
-	int	rc;
+	struct obj_tls	*tls;
+	int		rc;
 
 	rc = do_obj_ioc_begin(rpc_map_ver, pool_uuid, coh_uuid, cont_uuid,
 			      opc, ioc);
 	if (rc != 0)
 		return rc;
+
+	/** increment active request counter and start the chrono */
+	tls = obj_tls_get();
+	d_tm_increment_gauge(&tls->ot_op_active[opc], 1, NULL);
+	ioc->ioc_start_time = daos_get_ntime();
 
 	rc = obj_capa_check(ioc->ioc_coh, obj_is_modification_opc(opc));
 	if (rc != 0)
@@ -2159,7 +2151,6 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	struct dtx_leader_handle	dlh;
 	struct ds_obj_exec_arg		exec_arg = { 0 };
 	struct obj_io_context		ioc;
-	uint64_t			time_start = 0;
 	uint32_t			flags = 0;
 	uint32_t			dtx_flags = 0;
 	uint32_t			opc = opc_get(rpc->cr_opc);
@@ -2215,6 +2206,8 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 		if (orw->orw_flags & ORF_FOR_MIGRATION)
 			dtx_flags = DTX_FOR_MIGRATION;
+		if (orw->orw_flags & ORF_DTX_REFRESH)
+			dtx_flags |= DTX_FORCE_REFRESH;
 
 re_fetch:
 		rc = dtx_begin(ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 0,
@@ -2231,7 +2224,7 @@ re_fetch:
 				D_GOTO(out, rc = -DER_TX_BUSY);
 
 			/* XXX: Currently, we commit the distributed transaction
-			 *	sychronously. Normally, it will be very quickly.
+			 *	synchronously. Normally it will be very quickly.
 			 *	So let's yield then retry. If related
 			 *	distributed transaction is still not committed
 			 *	after several cycles, replies '-DER_TX_BUSY' to
@@ -2268,6 +2261,9 @@ again:
 	/* Handle resend. */
 	if (orw->orw_flags & ORF_RESEND) {
 		daos_epoch_t	e = 0;
+		struct obj_tls  *tls = obj_tls_get();
+
+		d_tm_increment_counter(&tls->ot_update_resent, 1, NULL);
 
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti,
 				       &e, &version);
@@ -2301,8 +2297,6 @@ again:
 			D_GOTO(out, rc);
 		}
 	}
-
-	D_TIME_START(time_start, OBJ_PF_UPDATE);
 
 	/* For leader case, we need to find out the potential conflict
 	 * (or share the same non-committed object/dkey) DTX(s) in the
@@ -2357,7 +2351,7 @@ again:
 	if (DAOS_FAIL_CHECK(DAOS_DTX_LEADER_ERROR))
 		rc = -DER_IO;
 
-	/* Stop the distribute transaction */
+	/* Stop the distributed transaction */
 	rc = dtx_leader_end(&dlh, ioc.ioc_coc, rc);
 	switch (rc) {
 	case -DER_TX_RESTART:
@@ -2367,6 +2361,8 @@ again:
 		 * the restart to the RPC client.
 		 */
 		if (opc == DAOS_OBJ_RPC_UPDATE) {
+			struct obj_tls	*tls = obj_tls_get();
+
 			/*
 			 * Only standalone updates use this RPC. Retry with
 			 * newer epoch.
@@ -2374,6 +2370,8 @@ again:
 			orw->orw_epoch = crt_hlc_get();
 			orw->orw_flags &= ~ORF_RESEND;
 			flags = 0;
+			d_tm_increment_counter(&tls->ot_update_restart, 1,
+					       NULL);
 			goto again;
 		}
 
@@ -2393,8 +2391,6 @@ again:
 		ioc.ioc_lost_reply = 1;
 out:
 	obj_rw_reply(rpc, rc, epoch.oe_value, &ioc);
-	D_TIME_END(time_start, OBJ_PF_UPDATE);
-
 	obj_ec_split_req_fini(split_req);
 	D_FREE(mbs);
 	D_FREE(dti_cos);
@@ -2598,6 +2594,8 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 
 	if (oei->oei_flags & ORF_FOR_MIGRATION)
 		flags = DTX_FOR_MIGRATION;
+	if (oei->oei_flags & ORF_DTX_REFRESH)
+		flags |= DTX_FORCE_REFRESH;
 
 again:
 	rc = dtx_begin(ioc->ioc_vos_coh, &oei->oei_dti, &epoch, 0,
@@ -2629,7 +2627,7 @@ re_pack:
 			D_GOTO(out, rc = -DER_TX_BUSY);
 
 		/* XXX: Currently, we commit the distributed transaction
-		 *	sychronously. Normally, it will be very quickly.
+		 *	synchronously. Normally it will be very quickly.
 		 *	So let's yield then retry. If related distributed
 		 *	transaction is still not committed after several
 		 *	cycles, replies '-DER_TX_BUSY' to the client.
@@ -2887,7 +2885,7 @@ again:
 		D_GOTO(out, rc = -DER_NOSYS);
 	}
 
-	if (obj_dtx_need_refresh(dth, rc)) {
+	if (dth != NULL && obj_dtx_need_refresh(dth, rc)) {
 		rc = dtx_refresh(dth, ioc->ioc_coc);
 		if (rc == -DER_AGAIN)
 			goto again;
@@ -2971,7 +2969,8 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	/* local RPC handler */
 	rc = obj_local_punch(opi, opc_get(rpc->cr_opc), &ioc, &dth);
 	if (rc != 0) {
-		D_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR,
+		D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART,
+			 DB_IO, DLOG_ERR,
 			 DF_UOID": error="DF_RC".\n", DP_UOID(opi->opi_oid),
 			 DP_RC(rc));
 		D_GOTO(out, rc);
@@ -3320,7 +3319,7 @@ out:
 			D_GOTO(failed, rc = -DER_TX_BUSY);
 
 		/* XXX: Currently, we commit the distributed transaction
-		 *	sychronously. Normally, it will be very quickly.
+		 *	synchronously. Normally it will be very quickly.
 		 *	So let's yield then retry. If related distributed
 		 *	transaction is still not committed after several
 		 *	cycles, then replies '-DER_TX_BUSY' to the client.
@@ -3957,7 +3956,8 @@ again:
 	rc = dtx_end(&dth, ioc->ioc_coc, rc);
 
 out:
-	D_CDEBUG(rc != 0, DLOG_ERR, DB_IO,
+	D_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART,
+		 DLOG_ERR, DB_IO,
 		 "Handled DTX "DF_DTI" on non-leader: "DF_RC"\n",
 		 DP_DTI(&dcsh->dcsh_xid), DP_RC(rc));
 
@@ -4019,8 +4019,8 @@ again:
 static int
 ds_obj_dtx_leader_prep_handle(struct daos_cpd_sub_head *dcsh,
 			      struct daos_cpd_sub_req *dcsrs,
-			      struct daos_shard_tgt *tgts, uint32_t tgt_cnt,
-			      uint32_t req_cnt, uint32_t *flags)
+			      struct daos_shard_tgt *tgts,
+			      int tgt_cnt, int req_cnt, uint32_t *flags)
 {
 	int	rc = 0;
 	int	i;
@@ -4059,20 +4059,20 @@ ds_obj_dtx_leader_prep_handle(struct daos_cpd_sub_head *dcsh,
 static void
 ds_obj_dtx_leader_ult(void *arg)
 {
-	struct daos_cpd_args		 *dca = arg;
-	struct dtx_leader_handle	  dlh;
-	struct ds_obj_exec_arg		  exec_arg;
-	struct obj_cpd_in		 *oci = crt_req_get(dca->dca_rpc);
-	struct obj_cpd_out		 *oco = crt_reply_get(dca->dca_rpc);
-	struct daos_cpd_sub_head	 *dcsh;
-	struct daos_cpd_disp_ent	 *dcde;
-	struct daos_cpd_sub_req		 *dcsrs = NULL;
-	struct daos_shard_tgt		 *tgts;
-	uint32_t			  flags = 0;
-	uint32_t			  dtx_flags = DTX_DIST;
-	uint32_t			  tgt_cnt = 0;
-	uint32_t			  req_cnt = 0;
-	int				  rc = 0;
+	struct daos_cpd_args		*dca = arg;
+	struct dtx_leader_handle	 dlh;
+	struct ds_obj_exec_arg		 exec_arg;
+	struct obj_cpd_in		*oci = crt_req_get(dca->dca_rpc);
+	struct obj_cpd_out		*oco = crt_reply_get(dca->dca_rpc);
+	struct daos_cpd_sub_head	*dcsh;
+	struct daos_cpd_disp_ent	*dcde;
+	struct daos_cpd_sub_req		*dcsrs = NULL;
+	struct daos_shard_tgt		*tgts;
+	uint32_t			 flags = 0;
+	uint32_t			 dtx_flags = DTX_DIST;
+	int				 tgt_cnt = 0;
+	int				 req_cnt = 0;
+	int				 rc = 0;
 
 	/* TODO: For the daos targets in the first redundancy (modification)
 	 *	 group, they are the DTX leader candidates when DTX recovery.
@@ -4159,6 +4159,10 @@ ds_obj_dtx_leader_ult(void *arg)
 	req_cnt = ds_obj_cpd_get_dcsr_cnt(dca->dca_rpc, dca->dca_idx);
 	tgt_cnt = ds_obj_cpd_get_tgt_cnt(dca->dca_rpc, dca->dca_idx);
 
+	if (dcde == NULL || dcsrs == NULL || tgts == NULL ||
+	    req_cnt < 0 || tgt_cnt < 0)
+		D_GOTO(out, rc = -DER_INVAL);
+
 	/* Refuse any modification with old epoch. */
 	if (dcde->dcde_write_cnt != 0 &&
 	    dcsh->dcsh_epoch.oe_value < dss_get_start_epoch())
@@ -4200,7 +4204,8 @@ ds_obj_dtx_leader_ult(void *arg)
 	rc = dtx_leader_end(&dlh, dca->dca_ioc->ioc_coc, rc);
 
 out:
-	D_CDEBUG(rc != 0, DLOG_ERR, DB_IO,
+	D_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART,
+		 DLOG_ERR, DB_IO,
 		 "Handled DTX "DF_DTI" on leader, idx %u: "DF_RC"\n",
 		 DP_DTI(&dcsh->dcsh_xid), dca->dca_idx, DP_RC(rc));
 

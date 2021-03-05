@@ -1,37 +1,36 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #ifndef __TELEMETRY_COMMON_H__
 #define __TELEMETRY_COMMON_H__
+
+#include <gurt/common.h>
 
 #define D_TM_VERSION			1
 #define D_TM_MAX_NAME_LEN		256
 #define D_TM_MAX_SHORT_LEN		64
 #define D_TM_MAX_LONG_LEN		1024
 #define D_TM_TIME_BUFF_LEN		26
-#define D_TM_SUCCESS			0
 
 #define D_TM_SHARED_MEMORY_KEY		0x10242048
 #define D_TM_SHARED_MEMORY_SIZE		(1024 * 1024)
+
+#define D_TM_MIN(stats, name) \
+	stats->dtm_min.min_##name
+
+#define D_TM_MAX(stats, name) \
+	stats->dtm_max.max_##name
+
+#define D_TM_PRINT_STATS(s, stats, name, fmt) \
+	do {								       \
+		fprintf(s, " min: %"#fmt " max: %"#fmt " mean: %lf size: %"    \
+			PRIu64, D_TM_MIN(stats, name), D_TM_MAX(stats, name),  \
+			stats->mean, stats->sample_size);		       \
+		if (stats->sample_size > 2)				       \
+			fprintf(s, " std dev: %lf", stats->std_dev);	       \
+	} while (0)
 
 enum {
 	D_TM_DIRECTORY			= 0x001,
@@ -45,11 +44,43 @@ enum {
 	D_TM_CLOCK_THREAD_CPUTIME	= 0x100,
 };
 
+enum {
+	D_TM_SERVER_PROCESS		= 0x000,
+	D_TM_SERIALIZATION		= 0x001,
+	D_TM_RETAIN_SHMEM		= 0x002,
+};
+
+/**
+ * @brief Statistics for gauge and duration metrics
+ *
+ * Stores the computed min, max, sum, standard deviation, mean, sum of squares
+ * and sample size.
+ */
+struct d_tm_stats_t {
+	union minval {
+		uint64_t min_int;
+		double min_float;
+	} dtm_min;
+	union maxval {
+		uint64_t max_int;
+		double max_float;
+	} dtm_max;
+	union sum_ {
+		uint64_t sum_int;
+		double sum_float;
+	} dtm_sum;
+	double std_dev;
+	double mean;
+	double sum_of_squares;
+	uint64_t sample_size;
+};
+
 struct d_tm_metric_t {
 	union data {
 		uint64_t value;
 		struct timespec tms[2];
 	} dtm_data;
+	struct d_tm_stats_t *dtm_stats;
 	char *dtm_sh_desc;
 	char *dtm_lng_desc;
 };
@@ -61,6 +92,7 @@ struct d_tm_node_t {
 	int dtn_type;
 	pthread_mutex_t dtn_lock;
 	struct d_tm_metric_t *dtn_metric;
+	bool dtn_protect;
 };
 
 struct d_tm_nodeList_t {
@@ -69,18 +101,20 @@ struct d_tm_nodeList_t {
 };
 
 void *d_tm_shmalloc(int length);
-uint64_t *d_tm_allocate_shared_memory(int rank, size_t mem_size);
+uint64_t *d_tm_allocate_shared_memory(int srv_idx, size_t mem_size);
 int d_tm_clock_id(int clk_id);
 bool d_tm_validate_shmem_ptr(uint64_t *shmem_root, void *ptr);
-struct d_tm_nodeList_t *d_tm_add_node(struct d_tm_node_t *src,
-				      struct d_tm_nodeList_t *nodelist);
+int d_tm_add_node(struct d_tm_node_t *src, struct d_tm_nodeList_t **nodelist);
 void d_tm_list_free(struct d_tm_nodeList_t *nodeList);
 void d_tm_free_node(uint64_t *shmem_root, struct d_tm_node_t *node);
 struct d_tm_node_t *d_tm_find_child(uint64_t *shmem_root,
 				    struct d_tm_node_t *parent, char *name);
-int d_tm_build_path(char **path, char *item, va_list args);
 int d_tm_alloc_node(struct d_tm_node_t **newnode, char *name);
 int d_tm_add_child(struct d_tm_node_t **newnode, struct d_tm_node_t *parent,
 		   char *name);
 int d_tm_get_version(void);
+void d_tm_compute_duration_stats(struct d_tm_node_t *node);
+void d_tm_compute_gauge_stats(struct d_tm_node_t *node);
+double d_tm_compute_standard_dev(double sum_of_squares, uint64_t sample_size,
+				 double mean);
 #endif /* __TELEMETRY_COMMON_H__ */

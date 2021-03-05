@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -133,6 +116,10 @@ out:
 		if (!rc) {
 			MPI_Bcast(outpool->pool_uuid, 16,
 				  MPI_CHAR, 0, MPI_COMM_WORLD);
+
+			/* TODO: Should we even be broadcasting this now? */
+			if (outpool->svc == NULL)
+				return rc;
 			MPI_Bcast(&outpool->svc->rl_nr,
 				  sizeof(outpool->svc->rl_nr),
 				  MPI_CHAR, 0, MPI_COMM_WORLD);
@@ -167,7 +154,6 @@ test_setup_pool_connect(void **state, struct test_pool *pool)
 
 		print_message("setup: connecting to pool\n");
 		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-				       NULL /* arg->pool.svc */,
 				       arg->pool.pool_connect_flags,
 				       &arg->pool.poh, &arg->pool.pool_info,
 				       NULL /* ev */);
@@ -396,7 +382,7 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 
 	if (daos_handle_is_inval(poh)) {
 		rc = daos_pool_connect(pool->pool_uuid, arg->group,
-				       NULL /* svc */, DAOS_PC_RW,
+				       DAOS_PC_RW,
 				       &poh, &pool->pool_info,
 				       NULL /* ev */);
 		if (rc != 0) { /* destroy straight away */
@@ -426,7 +412,9 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 		break;
 	}
 
-	daos_pool_disconnect(poh, NULL);
+	rc = daos_pool_disconnect(poh, NULL);
+	if (rc)
+		print_message("pool disconnect failed: %d\n", rc);
 
 	rc = dmg_pool_destroy(dmg_config_file,
 			      pool->pool_uuid, arg->group, 1);
@@ -637,7 +625,7 @@ test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo)
 
 	if (daos_handle_is_inval(arg->pool.poh)) {
 		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-				       NULL /* svc */, DAOS_PC_RW,
+				       DAOS_PC_RW,
 				       &arg->pool.poh, pinfo,
 				       NULL /* ev */);
 		if (rc) {
@@ -756,40 +744,8 @@ int
 run_daos_sub_tests_only(char *test_name, const struct CMUnitTest *tests,
 			int tests_size, int *sub_tests, int sub_tests_size)
 {
-	int i;
-	int rc = 0;
-
-	if (sub_tests != NULL) {
-		struct CMUnitTest *subtests;
-		int subtestsnb = 0;
-
-		D_ALLOC_ARRAY(subtests, sub_tests_size);
-		if (subtests == NULL) {
-			print_message("failed allocating subtests array\n");
-			return -DER_NOMEM;
-		}
-
-		for (i = 0; i < sub_tests_size; i++) {
-			if (sub_tests[i] >= tests_size || sub_tests[i] < 0) {
-				print_message("No subtest %d\n", sub_tests[i]);
-				continue;
-			}
-			subtests[i] = tests[sub_tests[i]];
-			subtestsnb++;
-		}
-
-		/* run the sub-tests */
-		if (subtestsnb > 0)
-			rc = _cmocka_run_group_tests(test_name, subtests,
-						     subtestsnb, NULL, NULL);
-		D_FREE(subtests);
-	} else {
-		/* run the full suite */
-		rc = _cmocka_run_group_tests(test_name, tests, tests_size,
-					     NULL, NULL);
-	}
-
-	return rc;
+	return run_daos_sub_tests(test_name, tests, tests_size, sub_tests,
+				  sub_tests_size, NULL, NULL);
 }
 
 int
@@ -811,11 +767,11 @@ run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
 		}
 
 		for (i = 0; i < sub_tests_size; i++) {
-			if (sub_tests[i] > tests_size || sub_tests[i] < 1) {
+			if (sub_tests[i] > tests_size || sub_tests[i] < 0) {
 				print_message("No subtest %d\n", sub_tests[i]);
 				continue;
 			}
-			subtests[i] = tests[sub_tests[i] - 1];
+			subtests[i] = tests[sub_tests[i]];
 			subtestsnb++;
 		}
 
@@ -837,7 +793,7 @@ run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
 static void
 daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
 		     const char *grp, const char *dmg_config,
-		     const d_rank_list_t *svc, d_rank_t rank, int tgt_idx)
+		     d_rank_t rank, int tgt_idx)
 {
 	char		dmg_cmd[DTS_CFG_MAX];
 	int		rc;
@@ -858,46 +814,42 @@ daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
 
 void
 daos_exclude_target(const uuid_t pool_uuid, const char *grp,
-		    const char *dmg_config, const d_rank_list_t *svc,
+		    const char *dmg_config,
 		    d_rank_t rank, int tgt_idx)
 {
-	daos_dmg_pool_target("exclude", pool_uuid, grp, dmg_config, svc,
+	daos_dmg_pool_target("exclude", pool_uuid, grp, dmg_config,
 			     rank, tgt_idx);
 }
 
 void
 daos_reint_target(const uuid_t pool_uuid, const char *grp,
-		  const char *dmg_config, const d_rank_list_t *svc,
-		  d_rank_t rank, int tgt_idx)
+		  const char *dmg_config, d_rank_t rank, int tgt_idx)
 {
-	daos_dmg_pool_target("reintegrate", pool_uuid, grp, dmg_config, svc,
+	daos_dmg_pool_target("reintegrate", pool_uuid, grp, dmg_config,
 			     rank, tgt_idx);
 }
 
 void
 daos_drain_target(const uuid_t pool_uuid, const char *grp,
-		  const char *dmg_config, const d_rank_list_t *svc,
-		  d_rank_t rank, int tgt_idx)
+		  const char *dmg_config, d_rank_t rank, int tgt_idx)
 {
 
-	daos_dmg_pool_target("drain", pool_uuid, grp, dmg_config, svc,
+	daos_dmg_pool_target("drain", pool_uuid, grp, dmg_config,
 			     rank, tgt_idx);
 }
 
 void
 daos_exclude_server(const uuid_t pool_uuid, const char *grp,
-		    const char *dmg_config, const d_rank_list_t *svc,
-		    d_rank_t rank)
+		    const char *dmg_config, d_rank_t rank)
 {
-	daos_exclude_target(pool_uuid, grp, dmg_config, svc, rank, -1);
+	daos_exclude_target(pool_uuid, grp, dmg_config, rank, -1);
 }
 
 void
 daos_reint_server(const uuid_t pool_uuid, const char *grp,
-		  const char *dmg_config, const d_rank_list_t *svc,
-		  d_rank_t rank)
+		  const char *dmg_config, d_rank_t rank)
 {
-	daos_reint_target(pool_uuid, grp, dmg_config, svc, rank, -1);
+	daos_reint_target(pool_uuid, grp, dmg_config, rank, -1);
 }
 
 void
@@ -1014,7 +966,7 @@ get_daos_prop_with_user_acl_perms(uint64_t perms)
 	struct daos_ace	*ace;
 	char		*user = NULL;
 
-	assert_int_equal(daos_acl_uid_to_principal(geteuid(), &user), 0);
+	assert_rc_equal(daos_acl_uid_to_principal(geteuid(), &user), 0);
 
 	acl = get_daos_acl_with_owner_perms(0);
 
@@ -1024,7 +976,7 @@ get_daos_prop_with_user_acl_perms(uint64_t perms)
 	ace->dae_allow_perms = perms;
 	assert_true(daos_ace_is_valid(ace));
 
-	assert_int_equal(daos_acl_add_ace(&acl, ace), 0);
+	assert_rc_equal(daos_acl_add_ace(&acl, ace), 0);
 
 	/* Set effective user up as non-owner */
 	prop = get_daos_prop_with_owner_and_acl("nobody@", DAOS_PROP_CO_OWNER,
@@ -1072,45 +1024,58 @@ get_server_config(char *host, char *server_config_file)
 	char    *dpid;
 	int	rc;
 	char    daos_proc[16] = "daos_server";
+	bool	conf = true;
 
 	D_ALLOC(dpid, 16);
 	rc = get_pid_of_process(host, dpid, daos_proc);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	snprintf(command, sizeof(command),
 		 "ssh %s ps ux -A | grep %s", host, dpid);
 	FILE *fp = popen(command, "r");
 
 	print_message("Command %s", command);
-	if (fp == NULL)
+	if (fp == NULL) {
+		D_FREE(dpid);
 		return -DER_INVAL;
+	}
 
 	while ((read = getline(&line, &len, fp)) != -1) {
 		print_message("line %s", line);
 		if (strstr(line, "--config") != NULL ||
-		    strstr(line, "-o") != NULL)
+		    strstr(line, "-o") != NULL) {
+			conf = false;
 			break;
+		}
 	}
 
-	pch = strtok(line, " ");
-	while (pch != NULL) {
-		if (strstr(pch, "--config") != NULL) {
-			if (strchr(pch, '=') != NULL)
-				strcpy(server_config_file,
-				       strchr(pch, '=') + 1);
-			else {
-				pch = strtok(NULL, " ");
-				strcpy(server_config_file, pch);
+	if (conf)
+		strncpy(server_config_file, DAOS_SERVER_CONF,
+			DAOS_SERVER_CONF_LENGTH);
+	else {
+		pch = strtok(line, " ");
+		while (pch != NULL) {
+			if (strstr(pch, "--config") != NULL) {
+				if (strchr(pch, '=') != NULL)
+					strncpy(server_config_file,
+						strchr(pch, '=') + 1,
+						DAOS_SERVER_CONF_LENGTH);
+				else {
+					pch = strtok(NULL, " ");
+					strncpy(server_config_file, pch,
+						DAOS_SERVER_CONF_LENGTH);
+				}
+				break;
 			}
-			break;
-		}
 
-		if (strstr(pch, "-o") != NULL) {
+			if (strstr(pch, "-o") != NULL) {
+				pch = strtok(NULL, " ");
+				strncpy(server_config_file, pch,
+					DAOS_SERVER_CONF_LENGTH);
+				break;
+			}
 			pch = strtok(NULL, " ");
-			strcpy(server_config_file, pch);
-			break;
 		}
-		pch = strtok(NULL, " ");
 	}
 
 	pclose(fp);
@@ -1208,7 +1173,9 @@ int verify_state_in_log(char *host, char *log_file, char *state)
 			}
 		}
 		pch = strtok(NULL, " ");
-		pclose(fp);
+
+		if (fp != NULL)
+			pclose(fp);
 		free(line);
 	}
 
@@ -1256,32 +1223,44 @@ int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
 	int			retry_cnt;
 	int			rc;
 
+	if (expected_state == NULL) {
+		print_message("Expected target state is NULL!\n");
+		return -DER_INVAL;
+	}
+
 	retry_cnt = 0;
 	while (retry_cnt <= MAX_POOL_TGT_STATE_RETRY) {
 		char *expected_state_dup = strdup(expected_state);
 		char *state = strtok(expected_state_dup, "|");
 
 		rc = daos_pool_query_target(poh, tgtidx, rank, &tgt_info, NULL);
-			if (rc)
-				return rc;
+		if (rc) {
+			D_FREE(expected_state_dup);
+			return rc;
+		}
 
 		/* multiple states not present in expected_state str */
 		if (state == NULL) {
 			if (strcmp(daos_target_state_enum_to_str(tgt_info.ta_state),
-				   expected_state) == 0)
+				   expected_state) == 0) {
+				D_FREE(expected_state_dup);
 				return 0;
+			}
 		/* multiple states separated by a '|' in expected_state str */
 		} else {
 			while (state != NULL) {
 				if (strcmp(daos_target_state_enum_to_str(tgt_info.ta_state),
-					   state) == 0)
+					   state) == 0) {
+					D_FREE(expected_state_dup);
 					return 0;
+				}
 				state = strtok(NULL, "|");
 			};
 		}
 
 		sleep(MAX_POOL_TGT_STATE_WAIT);
 		retry_cnt++;
+		D_FREE(expected_state_dup);
 	};
 
 	return -DER_TIMEDOUT;

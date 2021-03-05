@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * daos(8): DAOS Container and Object Management Utility
@@ -36,7 +19,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-
 #include <daos.h>
 #include <daos/common.h>
 #include <daos/checksum.h>
@@ -45,7 +27,6 @@
 #include <daos/rpc.h>
 #include <daos/debug.h>
 #include <daos/object.h>
-
 #include "daos_types.h"
 #include "daos_api.h"
 #include "daos_uns.h"
@@ -70,6 +51,8 @@ cont_op_parse(const char *str)
 		return CONT_CREATE;
 	else if (strcmp(str, "destroy") == 0)
 		return CONT_DESTROY;
+	else if (strcmp(str, "clone") == 0)
+		return CONT_CLONE;
 	else if (strcmp(str, "list-objects") == 0)
 		return CONT_LIST_OBJS;
 	else if (strcmp(str, "list-obj") == 0)
@@ -168,10 +151,6 @@ cmd_args_print(struct cmd_args_s *ap)
 	D_INFO("\tDAOS system name: %s\n", ap->sysname);
 	D_INFO("\tpool UUID: "DF_UUIDF"\n", DP_UUID(ap->p_uuid));
 	D_INFO("\tcont UUID: "DF_UUIDF"\n", DP_UUID(ap->c_uuid));
-
-	D_INFO("\tpool svc: parsed %u ranks from input %s\n",
-		ap->mdsrv ? ap->mdsrv->rl_nr : 0,
-		ap->mdsrv_str ? ap->mdsrv_str : "NULL");
 
 	D_INFO("\tattr: name=%s, value=%s\n",
 		ap->attrname_str ? ap->attrname_str : "NULL",
@@ -456,6 +435,17 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 			return -DER_INVAL;
 		}
 		entry->dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	} else if (!strcmp(name, "status")) {
+		if (!strcmp(value, "healthy")) {
+			entry->dpe_val =
+				DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_HEALTHY,
+							0);
+		} else {
+			fprintf(stderr, "status prop value can only be "
+				"'healthy' to clear UNCLEAN status\n");
+			return -DER_INVAL;
+		}
+		entry->dpe_type = DAOS_PROP_CO_STATUS;
 	} else {
 		fprintf(stderr, "supported prop names are label/cksum/cksum_size/srv_cksum/dedup/dedup_th/rf\n");
 		return -DER_INVAL;
@@ -547,7 +537,6 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	struct option		options[] = {
 		{"sys-name",	required_argument,	NULL,	'G'},
 		{"pool",	required_argument,	NULL,	'p'},
-		{"svc",		required_argument,	NULL,	'm'},
 		{"cont",	required_argument,	NULL,	'c'},
 		{"attr",	required_argument,	NULL,	'a'},
 		{"value",	required_argument,	NULL,	'v'},
@@ -657,13 +646,6 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			}
 			break;
-		case 'm':
-			D_STRNDUP(ap->mdsrv_str, optarg, strlen(optarg));
-			if (ap->mdsrv_str == NULL)
-				D_GOTO(out_free, rc = RC_NO_HELP);
-			ap->mdsrv = daos_rank_list_parse(ap->mdsrv_str, ",");
-			break;
-
 		case 'a':
 			if (ap->attrname_str != NULL) {
 				fprintf(stderr,
@@ -845,20 +827,12 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		D_GOTO(out_free, rc = RC_NO_HELP);
 	}
 
-	/* Verify pool svc argument. If not provided pass NULL list to libdaos,
-	 * and client will query management service for rank list.
-	 */
-	ARGS_VERIFY_MDSRV(ap, out_free, rc = RC_PRINT_HELP);
-
 	D_FREE(cmdname);
 	return 0;
 
 out_free:
-	d_rank_list_free(ap->mdsrv);
 	if (ap->sysname != NULL)
 		D_FREE(ap->sysname);
-	if (ap->mdsrv_str != NULL)
-		D_FREE(ap->mdsrv_str);
 	if (ap->attrname_str != NULL)
 		D_FREE(ap->attrname_str);
 	if (ap->value_str != NULL)
@@ -985,7 +959,6 @@ fs_op_hdlr(struct cmd_args_s *ap)
 				"must be provided\n");
 		} else {
 			rc = fs_copy_hdlr(ap);
-			assert(rc == 0);
 		}
 		break;
 	default:
@@ -998,38 +971,54 @@ static int
 cont_op_hdlr(struct cmd_args_s *ap)
 {
 	daos_cont_info_t	cont_info;
-	int			rc;
-	int			rc2;
+	int			rc = 0;
+	int			rc2 = 0;
 	enum cont_op		op;
 	const int		RC_PRINT_HELP = 2;
 
 	assert(ap != NULL);
 	op = ap->c_op;
 
-	/* All container operations require a pool handle, connect here.
-	 * Take specified pool UUID or look up through unified namespace.
+	/* cont_clone uses its own src and dst variables, and does
+	 * not use the regular pool and cont ones stored in the
+	 * ap struct. This is because for a clone it is necessary
+	 * to explicitly specify whether a container is a src or
+	 * dst
+	 */
+	if (op == CONT_CLONE) {
+		if (ap->src != NULL && ap->dst != NULL) {
+			rc = cont_clone_hdlr(ap);
+		} else {
+			rc = RC_PRINT_HELP;
+		}
+		return rc;
+	}
+
+	/* All container operations require a pool handle, connect
+	 * here. Take specified pool UUID or look up through unified
+	 * namespace.
 	 */
 	if ((op != CONT_CREATE) && (ap->path != NULL)) {
 		struct duns_attr_t dattr = {0};
 		struct dfuse_il_reply il_reply = {0};
 
-		ARGS_VERIFY_PATH_NON_CREATE(ap, out, rc = RC_PRINT_HELP);
+		ARGS_VERIFY_PATH_NON_CREATE(ap, out,
+					    rc = RC_PRINT_HELP);
 
 		/* Resolve pool, container UUIDs from path if needed
-		 *
-		 * Firtly check for a unified namespace entry point, then if
-		 * that isn't detected then check for dfuse backing the
-		 * path, and print pool/container/oid for the path.
+		 * Firtly check for a unified namespace entry point,
+		 * then if that isn't detected then check for dfuse
+		 * backing the path, and print pool/container/oid
+		 * for the path.
 		 */
 		rc = duns_resolve_path(ap->path, &dattr);
 		if (rc) {
-
 			rc = call_dfuse_ioctl(ap->path, &il_reply);
 			if (rc != 0) {
-				fprintf(stderr, "could not resolve pool, "
-					"container by path: %d %s %s\n",
+				fprintf(stderr, "could not resolve "
+					"pool, container by "
+					"path: %d %s %s\n",
 					rc, strerror(rc), ap->path);
-
 				D_GOTO(out, rc);
 			}
 
@@ -1046,26 +1035,31 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
 	}
 
-	rc = daos_pool_connect(ap->p_uuid, ap->sysname, ap->mdsrv,
-			       DAOS_PC_RW, &ap->pool,
-			       NULL /* info */, NULL /* ev */);
+	rc = daos_pool_connect(ap->p_uuid, ap->sysname, DAOS_PC_RW,
+			       &ap->pool, NULL /* info */,
+			       NULL /* ev */);
 	if (rc != 0) {
-		fprintf(stderr, "failed to connect to pool "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
+		fprintf(stderr, "failed to connect to "
+			"pool "DF_UUIDF ": %s (%d)\n",
+			DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
 		D_GOTO(out, rc);
 	}
 
-	/* container UUID: user-provided, generated here or by uns library */
+	/* container UUID: user-provided, generated here or by uns
+	 * library
+	 */
 
-	/* for container lookup ops: if no path specified, require --cont */
+	/* for container lookup ops: if no path specified,
+	 * require --cont
+	 */
 	if ((op != CONT_CREATE) && (ap->path == NULL))
 		ARGS_VERIFY_CUUID(ap, out, rc = RC_PRINT_HELP);
 
 	/* container create scenarios (generate UUID if necessary):
 	 * 1) both --cont, --path : uns library will use specified c_uuid.
-	 * 2) --cont only         : use specified c_uuid.
-	 * 3) --path only         : uns library will create & return c_uuid
-	 *                          (currently c_uuid null / clear).
+	 * 2) --cont only	  : use specified c_uuid.
+	 * 3) --path only	  : uns library will create & return c_uuid
+	 *			    (currently c_uuid null / clear).
 	 * 4) neither specified   : create a UUID in c_uuid.
 	 */
 	if ((op == CONT_CREATE) && (ap->path == NULL) &&
@@ -1073,10 +1067,12 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		uuid_generate(ap->c_uuid);
 
 	if (op != CONT_CREATE && op != CONT_DESTROY) {
-		rc = daos_cont_open(ap->pool, ap->c_uuid, DAOS_COO_RW,
+		rc = daos_cont_open(ap->pool, ap->c_uuid,
+				    DAOS_COO_RW | DAOS_COO_FORCE,
 				    &ap->cont, &cont_info, NULL);
 		if (rc != 0) {
-			fprintf(stderr, "failed to open container "DF_UUIDF
+			fprintf(stderr, "failed to open "
+				"container "DF_UUIDF
 				": %s (%d)\n", DP_UUID(ap->c_uuid),
 				d_errdesc(rc), rc);
 			D_GOTO(out_disconnect, rc);
@@ -1164,7 +1160,6 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		if (rc == 0)
 			rc = rc2;
 	}
-
 out_disconnect:
 	/* Pool disconnect in normal and error flows: preserve rc */
 	rc2 = daos_pool_disconnect(ap->pool, NULL);
@@ -1201,7 +1196,7 @@ obj_op_hdlr(struct cmd_args_s *ap)
 
 	/* TODO: support container lookup by path? */
 
-	rc = daos_pool_connect(ap->p_uuid, ap->sysname, ap->mdsrv,
+	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
 			       DAOS_PC_RW, &ap->pool,
 			       NULL /* info */, NULL /* ev */);
 	if (rc != 0) {
@@ -1321,6 +1316,7 @@ do { \
 	fprintf(stream, "\n" \
 	"container (cont) commands:\n" \
 	"	  create           create a container\n" \
+	"	  clone            clone a container\n" \
 	"	  destroy          destroy a container\n" \
 	"	  list-objects     list all objects in container\n" \
 	"	  list-obj\n" \
@@ -1352,8 +1348,8 @@ do { \
 do { \
 	fprintf(stream, \
 	"container options (query, and all commands except create):\n" \
-	"	  <pool options>   with --cont use: (--pool, --sys-name, --svc)\n" \
-	"	  <pool options>   with --path use: (--sys-name, --svc)\n" \
+	"	  <pool options>   with --cont use: (--pool, --sys-name)\n" \
+	"	  <pool options>   with --path use: (--sys-name)\n" \
 	"	--cont=UUID        (mandatory, or use --path)\n" \
 	"	--path=PATHSTR     (mandatory, or use --cont)\n"); \
 } while (0)
@@ -1367,7 +1363,10 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 
 	stream = (ap->ostream != NULL) ? ap->ostream : stdout;
 
-	fprintf(stream, "daos command (v%s)\n", DAOS_VERSION);
+	fprintf(stream, "daos command (v%s), libdaos %d.%d.%d\n",
+		DAOS_VERSION, DAOS_API_VERSION_MAJOR,
+		DAOS_API_VERSION_MINOR, DAOS_API_VERSION_FIX);
+
 
 	if (argc <= 2) {
 		FIRST_LEVEL_HELP();
@@ -1395,11 +1394,9 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		"	--pool=UUID        pool UUID\n"
 		"	--sys-name=STR     DAOS system name context for servers (\"%s\")\n"
 		"	--sys=STR\n"
-		"	--svc=RANKS        pool service replicas like 1,2,3\n"
 		"	--attr=NAME        pool attribute name to get, set, del\n"
 		"	--value=VALUESTR   pool attribute name to set\n",
 			default_sysname);
-
 	} else if (strcmp(argv[2], "container") == 0 ||
 		   strcmp(argv[2], "cont") == 0) {
 		if (argc == 3) {
@@ -1407,10 +1404,10 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		} else if (strcmp(argv[3], "create") == 0) {
 			fprintf(stream,
 			"container options (create by UUID):\n"
-			"	  <pool options>   (--pool, --sys-name, --svc)\n"
+			"	  <pool options>   (--pool, --sys-name)\n"
 			"	--cont=UUID        (optional) container UUID (or generated)\n"
 			"container options (create and link to namespace path):\n"
-			"	  <pool/cont opts> (--pool, --sys-name, --svc, --cont [optional])\n"
+			"	  <pool/cont opts> (--pool, --sys-name, --cont [optional])\n"
 			"	--path=PATHSTR     container namespace path\n"
 			"container create common optional options:\n"
 			"	--type=CTYPESTR    container type (HDF5, POSIX)\n"
@@ -1423,7 +1420,7 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			"			   K (KB), M (MB), G (GB), T (TB), P (PB), E (EB)\n"
 			"	--properties=<name>:<value>[,<name>:<value>,...]\n"
 			"			   supported prop names are label, cksum,\n"
-			"				cksum_size, srv_cksum, dedup\n"
+			"				cksum_size, srv_cksum, dedup, status\n"
 			"				dedup_th, compression, encryption\n"
 			"			   label value can be any string\n"
 			"			   cksum supported values are off, crc[16,32,64],\n"
@@ -1449,6 +1446,11 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			"container options (destroy):\n"
 			"	--force            destroy container regardless of state\n");
 			ALL_BUT_CONT_CREATE_OPTS_HELP();
+		} else if (strcmp(argv[3], "clone") == 0) {
+			fprintf(stream,
+				"container options (clone):\n"
+			"	--src=</pool/cont | path>\n"
+			"	--=</pool/cont | /pool | path>\n");
 		} else if (strcmp(argv[3], "get-attr") == 0 ||
 			   strcmp(argv[3], "set-attr") == 0 ||
 			   strcmp(argv[3], "del-attr") == 0) {
@@ -1519,7 +1521,7 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 
 		fprintf(stream,
 		"object (obj) options:\n"
-		"	  <pool options>   (--pool, --sys-name, --svc)\n"
+		"	  <pool options>   (--pool, --sys-name)\n"
 		"	  <cont options>   (--cont)\n"
 		"	--oid=HI.LO        object ID\n");
 
@@ -1541,7 +1543,9 @@ main(int argc, char *argv[])
 	 * argv[2] if provided is a resource-specific command
 	 */
 	if (argc == 2 && strcmp(argv[1], "version") == 0) {
-		fprintf(stdout, "daos version %s\n", DAOS_VERSION);
+		fprintf(stdout, "daos version %s, libdaos %d.%d.%d\n",
+			DAOS_VERSION, DAOS_API_VERSION_MAJOR,
+			DAOS_API_VERSION_MINOR, DAOS_API_VERSION_FIX);
 		return 0;
 	} else if (argc < 2 || strcmp(argv[1], "help") == 0) {
 		dargs.ostream = stdout;
@@ -1560,8 +1564,9 @@ main(int argc, char *argv[])
 	} else if (strcmp(argv[1], "pool") == 0) {
 		hdlr = pool_op_hdlr;
 	} else if ((strcmp(argv[1], "object") == 0) ||
-		 (strcmp(argv[1], "obj") == 0))
+		 (strcmp(argv[1], "obj") == 0)) {
 		hdlr = obj_op_hdlr;
+	}
 
 	if (hdlr == NULL) {
 		dargs.ostream = stderr;
@@ -1591,10 +1596,6 @@ main(int argc, char *argv[])
 	/* Call resource-specific handler function */
 	rc = hdlr(&dargs);
 
-	/* Clean up dargs.mdsrv allocated in common_op_parse_hdlr() */
-	d_rank_list_free(dargs.mdsrv);
-
-	D_FREE(dargs.mdsrv_str);
 	D_FREE(dargs.sysname);
 	D_FREE(dargs.path);
 

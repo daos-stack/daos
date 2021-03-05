@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2015-2020 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #ifndef __DAOS_TESTS_LIB_H__
@@ -29,19 +12,28 @@
 #include <daos/common.h>
 #include <daos_mgmt.h>
 #include <daos/object.h>
-#include <daos_srv/bio.h>
-#ifdef DAOS_HAS_VALGRIND
-#include <valgrind/valgrind.h>
-#define DAOS_ON_VALGRIND RUNNING_ON_VALGRIND
-#else
-#define DAOS_ON_VALGRIND 0
-#endif
 
-#define assert_success(r) do {\
-	int __rc = (r); \
-	if (__rc != 0) \
-		fail_msg("Not successful!! Error code: " DF_RC, DP_RC(__rc)); \
+#define assert_success(r)						\
+	do {								\
+		int __rc = (r);						\
+		if (__rc != 0)						\
+			fail_msg("Not successful!! Error code: "	\
+				 DF_RC, DP_RC(__rc));			\
 	} while (0)
+
+#define assert_rc_equal(rc, expected_rc)				\
+	do {								\
+		if ((rc) == (expected_rc))				\
+			break;						\
+		print_message("Failure assert_rc_equal %s:%d "		\
+			      "%s(%d) != %s(%d)\n", __FILE__, __LINE__, \
+			      d_errstr(rc), rc,				\
+			      d_errstr(expected_rc), expected_rc);	\
+		assert_string_equal(d_errstr(rc), d_errstr(expected_rc)); \
+		assert_int_equal(rc, expected_rc);			\
+	} while (0)
+
+#define DTS_OCLASS_DEF OC_RP_XSF
 
 /** Read a command line from stdin. */
 char *dts_readline(const char *prompt);
@@ -59,10 +51,10 @@ void dts_buf_render_uppercase(char *buf, unsigned int buf_len);
 void dts_key_gen(char *key, unsigned int key_len, const char *prefix);
 
 /** generate a random and unique object ID */
-daos_obj_id_t dts_oid_gen(uint16_t oclass, uint8_t ofeats, unsigned seed);
+daos_obj_id_t dts_oid_gen(unsigned seed);
 
 /** generate a random and unique baseline object ID */
-daos_unit_oid_t dts_unit_oid_gen(uint16_t oclass, uint8_t ofeats,
+daos_unit_oid_t dts_unit_oid_gen(daos_oclass_id_t oclass, uint8_t ofeats,
 				 uint32_t shard);
 
 /** Set rank into the oid */
@@ -154,6 +146,9 @@ struct dts_context {
 	int			 tsc_cred_nr;
 	/** value size for \a tsc_credits */
 	int			 tsc_cred_vsize;
+	/** if pool/cont already created then can skip internal creation */
+	bool			 tsc_skip_pool_create;
+	bool			 tsc_skip_cont_create;
 	/** INPUT END */
 
 	/** OUTPUT: initialized within \a dts_ctx_init() */
@@ -173,14 +168,29 @@ struct dts_context {
 	/** OUTPUT END */
 };
 
+
+static inline bool
+tsc_create_pool(struct dts_context *tsc)
+{
+	return !tsc->tsc_skip_pool_create;
+}
+
+static inline bool
+tsc_create_cont(struct dts_context *tsc)
+{
+	/* Can't skip container if pool isn't also skipped */
+	return tsc_create_pool(tsc) || !tsc->tsc_skip_cont_create;
+}
+
 /* match BIO_XS_CNT_MAX, which is the max VOS xstreams mapped to a device */
 #define MAX_TEST_TARGETS_PER_DEVICE 48
+#define DSS_HOSTNAME_MAX_LEN	255
 
 typedef struct {
 	uuid_t		device_id;
 	char		state[10];
 	int		rank;
-	char		host[50];
+	char		host[DSS_HOSTNAME_MAX_LEN];
 	int		tgtidx[MAX_TEST_TARGETS_PER_DEVICE];
 	int		n_tgtidx;
 }  device_list;
@@ -212,7 +222,7 @@ dts_sgl_init_with_strings(d_sg_list_t *sgl, uint32_t count, char *d, ...);
  */
 void
 dts_sgl_init_with_strings_repeat(d_sg_list_t *sgl, uint32_t repeat,
-	uint32_t count, char *d, ...);
+				 uint32_t count, char *d, ...);
 
 #define DTS_CFG_MAX 256
 __attribute__ ((__format__(__printf__, 2, 3)))
@@ -378,6 +388,6 @@ int dmg_storage_query_device_health(const char *dmg_config_file, char *host,
  */
 int verify_blobstore_state(int state, const char *state_str);
 
-const char * daos_target_state_enum_to_str(int state);
+const char *daos_target_state_enum_to_str(int state);
 
 #endif /* __DAOS_TESTS_LIB_H__ */

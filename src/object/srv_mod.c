@@ -1,31 +1,14 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /*
  * object server: module definitions
  */
 #define D_LOGFAC	DD_FAC(object)
 
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/pool.h>
 #include <daos/rpc.h>
@@ -46,14 +29,20 @@ obj_mod_init(void)
 
 	rc = obj_class_init();
 	if (rc)
-		goto out;
+		goto out_utils;
 
 	rc = obj_ec_codec_init();
-	if (rc != 0) {
+	if (rc) {
 		D_ERROR("failed to obj_ec_codec_init\n");
-		goto out;
+		goto out_class;
 	}
+
 	return 0;
+
+out_class:
+	obj_class_fini();
+out_utils:
+	obj_utils_fini();
 out:
 	D_ERROR("Object module init error: %s\n", d_errstr(rc));
 	return rc;
@@ -71,36 +60,90 @@ obj_mod_fini(void)
 /* Define for cont_rpcs[] array population below.
  * See OBJ_PROTO_*_RPC_LIST macro definition
  */
-#define X(a, b, c, d, e)	\
+#define X(a, b, c, d, e, f)	\
 {				\
 	.dr_opc       = a,	\
 	.dr_hdlr      = d,	\
 	.dr_corpc_ops = e,	\
-}
+},
 
 static struct daos_rpc_handler obj_handlers[] = {
-	OBJ_PROTO_CLI_RPC_LIST,
+	OBJ_PROTO_CLI_RPC_LIST
 };
 
 #undef X
 
 static void *
-obj_tls_init(const struct dss_thread_local_storage *dtls,
-	     struct dss_module_key *key)
+obj_tls_init(int xs_id, int tgt_id)
 {
-	struct obj_tls *tls;
+	struct obj_tls	*tls;
+	uint32_t	opc;
+	int		rc;
 
 	D_ALLOC_PTR(tls);
 	if (tls == NULL)
 		return NULL;
 
 	D_INIT_LIST_HEAD(&tls->ot_pool_list);
+
+	if (tgt_id < 0)
+		/** skip sensor setup on system xstreams */
+		return tls;
+
+	/** register different per-opcode sensors */
+	for (opc = 0; opc < OBJ_PROTO_CLI_COUNT; opc++) {
+		/** Start with latency, of type gauge */
+		rc = d_tm_add_metric(&tls->ot_op_lat[opc], D_TM_GAUGE,
+				     "object RPC processing time", "",
+				     "io/%u/ops/%s/latency_us", tgt_id,
+				     obj_opc_to_str(opc));
+		if (rc)
+			D_WARN("Failed to create latency sensor: "DF_RC"\n",
+			       DP_RC(rc));
+
+		/** Continue with number of active requests, of type gauge */
+		rc = d_tm_add_metric(&tls->ot_op_active[opc], D_TM_GAUGE,
+				     "number of active object RPCs", "",
+				     "io/%u/ops/%s/active_cnt", tgt_id,
+				     obj_opc_to_str(opc));
+		if (rc)
+			D_WARN("Failed to create active cnt sensor: "DF_RC"\n",
+			       DP_RC(rc));
+
+		/** And finally the total number of requests, of type counter */
+		rc = d_tm_add_metric(&tls->ot_op_total[opc], D_TM_COUNTER,
+				     "total number of processed object RPCs",
+				     "",
+				     "io/%u/ops/%s/total_cnt", tgt_id,
+				     obj_opc_to_str(opc));
+		if (rc)
+			D_WARN("Failed to create total cnt sensor: "DF_RC"\n",
+			       DP_RC(rc));
+	}
+
+	/** Total number of silently restarted updates, of type counter */
+	rc = d_tm_add_metric(&tls->ot_update_restart, D_TM_COUNTER,
+			     "total number of restarted update ops", "",
+			     "io/%u/ops/%s/restarted_cnt", tgt_id,
+			     obj_opc_to_str(DAOS_OBJ_RPC_UPDATE));
+	if (rc)
+		D_WARN("Failed to create restarted cnt sensor: "DF_RC"\n",
+		       DP_RC(rc));
+
+	/** Total number of resent updates, of type counter */
+	rc = d_tm_add_metric(&tls->ot_update_resent, D_TM_COUNTER,
+			     "total number of resent update RPCs", "",
+			     "io/%u/ops/%s/resent_cnt", tgt_id,
+			     obj_opc_to_str(DAOS_OBJ_RPC_UPDATE));
+	if (rc)
+		D_WARN("Failed to create resent cnt sensor: "DF_RC"\n",
+		       DP_RC(rc));
+
 	return tls;
 }
 
 static void
-obj_tls_fini(const struct dss_thread_local_storage *dtls,
-	     struct dss_module_key *key, void *data)
+obj_tls_fini(void *data)
 {
 	struct obj_tls *tls = data;
 	struct migrate_pool_tls *pool_tls;

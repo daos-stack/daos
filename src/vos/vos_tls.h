@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * Thread local storage for vos
@@ -35,21 +18,9 @@
 #include <daos/btree.h>
 #include <daos/common.h>
 #include <daos/lru.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
 #include <daos_srv/dtx_srv.h>
-
-struct vos_imem_strts {
-	/**
-	 * In-memory object cache for the PMEM
-	 * object table
-	 */
-	struct daos_lru_cache	*vis_ocache;
-	/** Hash table to refcount VOS handles */
-	/** (container/pool, etc.,) */
-	struct d_hash_table	*vis_pool_hhash;
-	struct d_hash_table	*vis_cont_hhash;
-};
 
 /* Forward declarations */
 struct vos_ts_table;
@@ -57,11 +28,6 @@ struct dtx_handle;
 
 /** VOS thread local storage structure */
 struct vos_tls {
-	/* in-memory structures TLS instance */
-	/* TODO: move those members to vos_tls, nosense to have another
-	 * data structure for it.
-	 */
-	struct vos_imem_strts		 vtl_imems_inst;
 	/** pools registered for GC */
 	d_list_t			 vtl_gc_pools;
 	/* PMDK transaction stage callback data */
@@ -83,6 +49,12 @@ struct vos_tls {
 	struct vos_ts_table		*vtl_ts_table;
 	/** profile for standalone vos test */
 	struct daos_profile		*vtl_dp;
+	/** In-memory object cache for the PMEM object table */
+	struct daos_lru_cache		*vtl_ocache;
+	/** pool open handle hash table */
+	struct d_hash_table		*vtl_pool_hhash;
+	/** container open handle hash table */
+	struct d_hash_table		*vtl_cont_hhash;
 	/** saved hash value */
 	struct {
 		uint64_t		 vtl_hash;
@@ -90,19 +62,25 @@ struct vos_tls {
 	};
 };
 
-struct vos_tls *
-vos_tls_get();
+struct bio_xs_context *vos_xsctxt_get(void);
+struct vos_tls *vos_tls_get();
 
 static inline struct d_hash_table *
 vos_pool_hhash_get(void)
 {
-	return vos_tls_get()->vtl_imems_inst.vis_pool_hhash;
+	return vos_tls_get()->vtl_pool_hhash;
 }
 
 static inline struct d_hash_table *
 vos_cont_hhash_get(void)
 {
-	return vos_tls_get()->vtl_imems_inst.vis_cont_hhash;
+	return vos_tls_get()->vtl_cont_hhash;
+}
+
+static inline struct daos_lru_cache *
+vos_obj_cache_get(void)
+{
+	return vos_tls_get()->vtl_ocache;
 }
 
 static inline struct umem_tx_stage_data *

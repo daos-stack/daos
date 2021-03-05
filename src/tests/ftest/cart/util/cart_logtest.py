@@ -164,49 +164,9 @@ class RegionCounter():
 # error lines.
 shown_logs = set()
 
-# List of known areas where there may be a mismatch between the facility used
-# for alloc vs free.  Typically this is where memory is allocated in one file
-# but freed in another, however allocations in header file also feature.
-
-# First is a lookup dict of commonly shared facilities, key is allocation
-# facility, value is set of free facilities.
-
-# Second part is a unordered dict of functions which are whitelisted
-# specifically, key is function name, value is list of variables.
-# Both the alloc and free function need to be whitelisted.
-
-mismatch_table = {'container': ('common'),
-                  'common': ('container', 'pool'),
-                  'daos': ('common'),
-                  'mgmt': ('common', 'daos', 'pool'),
-                  'misc': ('common', 'mgmt'),
-                  'pool': ('common'),
-                  'server': ('daos')}
-
-mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
-                     'crt_rpc_handler_common': ('rpc_priv'),
-                     'bio_sgl_init': ('sgl->bs_iovs'),
-                     'pool_svc_name_cb': ('s'),
-                     'daos_iov_copy': ('dst->iov_buf'),
-                     'ds_pool_tgt_map_update': ('arg'),
-                     'enum_cont_cb': ('ptr'),
-                     'path_gen': ('*fpath'),
-                     'd_sgl_init': ('sgl->sg_iovs'),
-                     'iod_fetch': ('biovs')}
-
-mismatch_free_ok = {'crt_rpc_priv_free': ('rpc_priv'),
-                    'bio_sgl_fini': ('sgl->bs_iovs'),
-                    'fini_free': ('svc->s_name',
-                                  'svc->s_db_path'),
-                    'd_sgl_fini': ('sgl->sg_iovs[i].iov_buf',
-                                   'sgl->sg_iovs'),
-                    'dtx_resync_ult': ('arg'),
-                    'ds_pool_list_cont_handler': ('cont_buf'),
-                    'notify_ready': ('req.uri')}
-
 wf = None
 
-def show_line(line, sev, msg):
+def show_line(line, sev, msg, custom=None):
     """Output a log line in gcc error format"""
 
     # Only report each individual line once.
@@ -219,7 +179,9 @@ def show_line(line, sev, msg):
     if log in shown_logs:
         return
     print(log)
-    if wf:
+    if custom:
+        custom.add(line, sev, msg)
+    elif wf:
         wf.add(line, sev, msg)
     shown_logs.add(log)
 
@@ -238,11 +200,11 @@ class hwm_counter():
         return self.__hwm != 0
 
     def __str__(self):
-        return "Total:{:,} HWM:{:,} {} allocations, {} frees".\
-            format(self.__val,
-                   self.__hwm,
-                   self.__acount,
-                   self.__fcount)
+        return 'Total:{:,} HWM:{:,} {} allocations, '.format(self.__val,
+                                                             self.__hwm,
+                                                             self.__acount) + \
+            '{} frees {} possible leaks'.format(self.__fcount,
+                                                self.__acount - self.__fcount)
 
     def add(self, val):
         """Add a value"""
@@ -265,7 +227,8 @@ class hwm_counter():
 class LogTest():
     """Log testing"""
 
-    def __init__(self, log_iter):
+    def __init__(self, log_iter, quiet=False):
+        self.quiet = quiet
         self._li = log_iter
         self.hide_fi_calls = False
         self.fi_triggered = False
@@ -278,10 +241,13 @@ class LogTest():
         self.log_count = 0
 
     def __del__(self):
-        self.show_common_logs()
+        if not self.quiet:
+            self.show_common_logs()
 
     def save_log_line(self, line):
         """Record a single line of logging"""
+        if self.quiet:
+            return
         self.log_count += 1
         function = getattr(line, 'filename', None)
         if function:
@@ -320,16 +286,22 @@ class LogTest():
                                             count,
                                             100*count/self.log_count))
 
-    def check_log_file(self, abort_on_warning, show_memleaks=True):
+    def check_log_file(self,
+                       abort_on_warning,
+                       show_memleaks=True,
+                       leak_wf=None):
         """Check a single log file for consistency"""
 
         for pid in self._li.get_pids():
             if wf:
                 wf.reset_pending()
-            self.rpc_reporting(pid)
-            if wf:
-                wf.reset_pending()
-            self._check_pid_from_log_file(pid, abort_on_warning,
+            if not self.quiet:
+                self.rpc_reporting(pid)
+                if wf:
+                    wf.reset_pending()
+            self._check_pid_from_log_file(pid,
+                                          abort_on_warning,
+                                          leak_wf,
                                           show_memleaks=show_memleaks)
 
     def check_dfuse_io(self):
@@ -357,11 +329,14 @@ class LogTest():
                 else:
                     client_pids[pid].add(start, end, line.ts)
 
-            for pid in client_pids:
-                print('{}:{}'.format(pid, client_pids[pid]))
+            for cpid in client_pids:
+                print('{}:{}'.format(cpid, client_pids[pid]))
 
 #pylint: disable=too-many-branches,too-many-nested-blocks
-    def _check_pid_from_log_file(self, pid, abort_on_warning,
+    def _check_pid_from_log_file(self,
+                                 pid,
+                                 abort_on_warning,
+                                 leak_wf,
                                  show_memleaks=True):
         """Check a pid from a single log file for consistency"""
 
@@ -416,7 +391,7 @@ class LogTest():
                             if line.filename == self.fi_location.filename:
                                 src_offset = line.lineno
                                 src_offset -= self.fi_location.lineno
-                                if src_offset > 0 and src_offset < 5:
+                                if 0 < src_offset < 5:
                                     show_line(line, 'NORMAL',
                                               'Logging allocation failure')
 
@@ -428,6 +403,11 @@ class LogTest():
                             # errors for lines that print -DER_NOMEM, as
                             # this highlights other errors and lines which
                             # report an error, but not a fault code.
+                            show = False
+                        elif line.get_msg().endswith(' 12'):
+                            # dfs and dfuse use system error numbers, rather
+                            # than daos, so allow ENOMEM as well as
+                            # -DER_NOMEM
                             show = False
                     elif line.rpc:
                         # Ignore the SWIM RPC opcode, as this often sends RPCs
@@ -512,35 +492,6 @@ class LogTest():
                     if pointer in active_desc:
                         del active_desc[pointer]
                     if pointer in regions:
-                        if line.fac != regions[pointer].fac:
-                            fvar = line.get_field(3).strip("'")
-                            afunc = regions[pointer].function
-                            avar = regions[pointer].get_field(3).strip("':")
-                            if line.function in mismatch_free_ok and \
-                               fvar in mismatch_free_ok[line.function] and \
-                               afunc in mismatch_alloc_ok and \
-                               avar in mismatch_alloc_ok[afunc]:
-                                pass
-                            elif regions[pointer].fac in mismatch_table \
-                                 and line.fac in  \
-                                 mismatch_table[regions[pointer].fac]:
-                                pass
-                            else:
-                                show_line(regions[pointer], 'LOW',
-                                          'facility mismatch in alloc/free ' +
-                                          '{} != {}'.format(
-                                              regions[pointer].fac, line.fac))
-                                show_line(line, 'LOW',
-                                          'facility mismatch in alloc/free ' +
-                                          '{} != {}'.format(
-                                              regions[pointer].fac, line.fac))
-                                err_count += 1
-                        if line.level != regions[pointer].level:
-                            show_line(regions[pointer], 'LOW',
-                                      'level mismatch in alloc/free')
-                            show_line(line, 'LOW',
-                                      'level mismatch in alloc/free')
-                            err_count += 1
                         memsize.subtract(regions[pointer].calloc_size())
                         old_regions[pointer] = [regions[pointer], line]
                         del regions[pointer]
@@ -579,10 +530,9 @@ class LogTest():
         total_lines = trace_lines + non_trace_lines
         p_trace = trace_lines * 1.0 / total_lines * 100
 
-        print("Pid {}, {} lines total, {} trace ({:.2f}%)".format(pid,
-                                                                  total_lines,
-                                                                  trace_lines,
-                                                                  p_trace))
+        if not self.quiet:
+            print("Pid {}, {} lines total, {} trace ({:.2f}%)".format(
+                pid, total_lines, trace_lines, p_trace))
 
         if memsize.has_data():
             print("Memsize: {}".format(memsize))
@@ -599,7 +549,8 @@ class LogTest():
                     show_line(line, 'NORMAL', 'descriptor not freed')
                     del active_desc[pointer]
                 else:
-                    show_line(line, 'NORMAL', 'memory not freed')
+                    show_line(line, 'NORMAL', 'memory not freed',
+                              custom=leak_wf)
                 lost_memory = True
 
         if active_desc:

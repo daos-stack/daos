@@ -1,24 +1,7 @@
 //
 // (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package main
@@ -228,11 +211,6 @@ func (cmd *PoolDestroyCmd) Execute(args []string) error {
 
 	ctx := context.Background()
 	err := control.PoolDestroy(ctx, cmd.ctlInvoker, req)
-
-	if cmd.jsonOutputEnabled() {
-		return cmd.errorJSON(err)
-	}
-
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -261,11 +239,6 @@ func (cmd *PoolEvictCmd) Execute(args []string) error {
 
 	ctx := context.Background()
 	err := control.PoolEvict(ctx, cmd.ctlInvoker, req)
-
-	if cmd.jsonOutputEnabled() {
-		return cmd.errorJSON(err)
-	}
-
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -299,11 +272,6 @@ func (cmd *PoolExcludeCmd) Execute(args []string) error {
 
 	ctx := context.Background()
 	err := control.PoolExclude(ctx, cmd.ctlInvoker, req)
-
-	if cmd.jsonOutputEnabled() {
-		return cmd.errorJSON(err)
-	}
-
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -331,9 +299,6 @@ func (cmd *PoolDrainCmd) Execute(args []string) error {
 	var idxlist []uint32
 	if err := common.ParseNumberList(cmd.Targetidx, &idxlist); err != nil {
 		err = errors.WithMessage(err, "parsing rank list")
-		if cmd.jsonOutputEnabled() {
-			return cmd.errorJSON(err)
-		}
 		return err
 	}
 
@@ -341,11 +306,6 @@ func (cmd *PoolDrainCmd) Execute(args []string) error {
 
 	ctx := context.Background()
 	err := control.PoolDrain(ctx, cmd.ctlInvoker, req)
-
-	if cmd.jsonOutputEnabled() {
-		return cmd.errorJSON(err)
-	}
-
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -376,9 +336,6 @@ func (cmd *PoolExtendCmd) Execute(args []string) error {
 	ranks, err := system.ParseRanks(cmd.RankList)
 	if err != nil {
 		err = errors.Wrap(err, "parsing rank list")
-		if cmd.jsonOutputEnabled() {
-			return cmd.errorJSON(err)
-		}
 		return err
 	}
 
@@ -405,11 +362,6 @@ func (cmd *PoolExtendCmd) Execute(args []string) error {
 
 	ctx := context.Background()
 	err = control.PoolExtend(ctx, cmd.ctlInvoker, req)
-
-	if cmd.jsonOutputEnabled() {
-		return cmd.errorJSON(err)
-	}
-
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -437,9 +389,6 @@ func (cmd *PoolReintegrateCmd) Execute(args []string) error {
 	var idxlist []uint32
 	if err := common.ParseNumberList(cmd.Targetidx, &idxlist); err != nil {
 		err = errors.WithMessage(err, "parsing rank list")
-		if cmd.jsonOutputEnabled() {
-			return cmd.errorJSON(err)
-		}
 		return err
 	}
 
@@ -447,11 +396,6 @@ func (cmd *PoolReintegrateCmd) Execute(args []string) error {
 
 	ctx := context.Background()
 	err := control.PoolReintegrate(ctx, cmd.ctlInvoker, req)
-
-	if cmd.jsonOutputEnabled() {
-		return cmd.errorJSON(err)
-	}
-
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -622,9 +566,6 @@ func (cmd *PoolOverwriteACLCmd) Execute(args []string) error {
 
 	acl, err := control.ReadACLFile(cmd.ACLFile)
 	if err != nil {
-		if cmd.jsonOutputEnabled() {
-			return cmd.errorJSON(err)
-		}
 		return err
 	}
 
@@ -673,9 +614,6 @@ func (cmd *PoolUpdateACLCmd) Execute(args []string) error {
 	if cmd.ACLFile != "" {
 		aclFileResult, err := control.ReadACLFile(cmd.ACLFile)
 		if err != nil {
-			if cmd.jsonOutputEnabled() {
-				return cmd.errorJSON(err)
-			}
 			return err
 		}
 		acl = aclFileResult

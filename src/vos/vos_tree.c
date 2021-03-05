@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -1057,6 +1040,8 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 		/** Key hash may already be calculated but isn't for some key
 		 * types so pass it in here.
 		 */
+		if (ilog != NULL && (flags & SUBTR_CREATE))
+			vos_ilog_ts_ignore(vos_obj2umm(obj), &krec->kr_ilog);
 		tmprc = vos_ilog_ts_add(ts_set, ilog, key->iov_buf,
 					(int)key->iov_len);
 		if (tmprc != 0) {
@@ -1080,6 +1065,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 			goto out;
 		}
 		krec = rbund.rb_krec;
+		vos_ilog_ts_ignore(vos_obj2umm(obj), &krec->kr_ilog);
 		vos_ilog_ts_mark(ts_set, &krec->kr_ilog);
 		created = true;
 	}
@@ -1142,6 +1128,8 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 			ilog = &krec->kr_ilog;
 		}
 
+		if (ilog)
+			vos_ilog_ts_ignore(vos_obj2umm(obj), ilog);
 		lrc = vos_ilog_ts_add(ts_set, ilog, key_iov->iov_buf,
 				      (int)key_iov->iov_len);
 		if (lrc != 0) {
@@ -1176,8 +1164,10 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	krec = rbund->rb_krec;
 	ilog = &krec->kr_ilog;
 
-	if (mark)
+	if (mark) {
+		vos_ilog_ts_ignore(vos_obj2umm(obj), ilog);
 		vos_ilog_ts_mark(ts_set, ilog);
+	}
 
 	rc = vos_ilog_punch(obj->obj_cont, ilog, &epr, bound, parent,
 			    info, ts_set, true,
@@ -1187,6 +1177,13 @@ done:
 	VOS_TX_LOG_FAIL(rc, "Failed to punch key: "DF_RC"\n", DP_RC(rc));
 
 	return rc;
+}
+
+int
+key_tree_delete(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov)
+{
+	/* Delete a dkey or akey from tree @toh */
+	return dbtree_delete(toh, BTR_PROBE_EQ, key_iov, NULL);
 }
 
 /** initialize tree for an object */

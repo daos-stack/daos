@@ -14,7 +14,6 @@ pool:
   mode: 146
   name: daos_server
   scm_size: 1000000000
-  svcn: 1
   control_method: dmg
   pool_count: 1
 container:
@@ -22,8 +21,10 @@ container:
   control_method: daos
   cont_count: 5
 find_cmd:
-  samples: 3
   height: 3
   subdirs_per_node: 6
   files_per_node: 10
   needles: 100
+perf:
+  samples: 3
+  challenger_path: /mnt/lustre

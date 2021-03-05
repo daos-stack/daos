@@ -9,25 +9,30 @@ def scons():
 
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
 
-    ring_test_tgt = denv.SharedObject('ring_map_place_obj.c')
-    jump_test_tgt = denv.SharedObject('jump_map_place_obj.c')
-    pl_bench_tgt = denv.SharedObject('pl_bench.c')
+    ring_test_tgt = denv.SharedObject(['ring_map_place_obj.c',
+                                       'place_obj_common.c'])
+    jump_test_tgt = denv.SharedObject(['jump_map_place_obj.c',
+                                       'place_obj_common.c',
+                                       'placement_test.c'])
+    pl_bench_tgt = denv.SharedObject(['pl_bench.c', 'place_obj_common.c'])
 
     ring_pl_test = daos_build.program(denv, 'ring_pl_map',
                                       ring_test_tgt + common_tgts,
                                       LIBS=['daos', 'daos_common', 'gurt',
                                             'cart', 'placement', 'uuid',
-                                            'pthread', 'isal'])
+                                            'pthread', 'isal', 'cmocka'])
 
     jump_pl_test = daos_build.program(denv, 'jump_pl_map',
-                                      jump_test_tgt + common_tgts,
+                                      jump_test_tgt + common_tgts +
+                                      ['../../pool/srv_pool_map.c'],
                                       LIBS=['daos', 'daos_common', 'gurt',
                                             'cart', 'placement', 'uuid',
-                                            'pthread', 'isal'])
+                                            'pthread', 'isal', 'cmocka'])
 
     pl_bench = daos_build.program(denv, 'pl_bench', pl_bench_tgt + common_tgts,
                                   LIBS=['daos', 'daos_common', 'gurt', 'cart',
-                                        'placement', 'uuid', 'pthread', 'isal'])
+                                        'placement', 'uuid', 'pthread', 'isal',
+                                        'cmocka'])
 
     denv.Install('$PREFIX/bin/', ring_pl_test)
     denv.Install('$PREFIX/bin/', jump_pl_test)

@@ -178,7 +178,7 @@ def define_mercury(reqs):
                           '-DMERCURY_USE_SELF_FORWARD=ON '
                           '-DMERCURY_ENABLE_VERBOSE_ERROR=ON '
                           + MERCURY_DEBUG +
-                          '-DBUILD_TESTING=ON '
+                          '-DBUILD_TESTING=OFF '
                           '-DNA_USE_OFI=ON '
                           '-DBUILD_DOCUMENTATION=OFF '
                           '-DBUILD_SHARED_LIBS=ON ../mercury '
@@ -287,7 +287,8 @@ def define_components(reqs):
                 commands=['git clean -dxf',
                           './autogen.sh',
                           './configure --prefix=$ARGOBOTS_PREFIX CC=gcc'
-                          ' --enable-valgrind',
+                          ' --enable-valgrind'
+                          ' --enable-stack-unwind',
                           'make $JOBS_OPT',
                           'make $JOBS_OPT install'],
                 requires=['valgrind_devel'],
@@ -300,11 +301,14 @@ def define_components(reqs):
     retriever = GitRepoRetriever("https://github.com/spdk/spdk.git", True)
     reqs.define('spdk',
                 retriever=retriever,
-                commands=['./configure --prefix="$SPDK_PREFIX"' \
-                          ' --disable-tests --without-vhost --without-crypto' \
-                          ' --without-pmdk --without-vpp --without-rbd' \
-                          ' --with-rdma --with-shared' \
-                          ' --without-iscsi-initiator --without-isal' \
+                commands=['cd dpdk; '                            \
+                          'git fetch; '                          \
+                          'git checkout origin/spdk-19.11.6',    \
+                          './configure --prefix="$SPDK_PREFIX"'                \
+                          ' --disable-tests --without-vhost --without-crypto'  \
+                          ' --without-pmdk --without-vpp --without-rbd'        \
+                          ' --with-rdma --with-shared'                         \
+                          ' --without-iscsi-initiator --without-isal'          \
                           ' --without-vtune', 'make $JOBS_OPT', 'make install',
                           'cp dpdk/build/lib/* "$SPDK_PREFIX/lib"',
                           'mkdir -p "$SPDK_PREFIX/share/spdk"',

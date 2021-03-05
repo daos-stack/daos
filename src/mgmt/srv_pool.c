@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * \file
@@ -84,23 +67,17 @@ fini_ranks:
 }
 
 /**
- * Destroy the pool on every DOWN rank
+ * Destroy the pool on specified storage ranks
  */
 static int
-ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid)
+ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid, d_rank_list_t *ranks)
 {
-	d_rank_list_t			excluded = { 0 };
-	int				rc;
+	int				 rc;
 
-	rc = ds_pool_get_ranks(pool_uuid, MAP_RANKS_DOWN, &excluded);
-	if (rc)
-		return rc;
+	D_DEBUG(DB_MD, DF_UUID ": send tgt destroy to %u UP ranks:\n",
+		DP_UUID(pool_uuid), ranks->rl_nr);
+	rc = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, ranks, true);
 
-	rc = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, &excluded, false);
-	if (rc)
-		D_GOTO(fini_ranks, rc);
-fini_ranks:
-	map_ranks_fini(&excluded);
 	return rc;
 }
 
@@ -310,7 +287,9 @@ int
 ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		     const char *group, uint32_t force)
 {
-	int		rc;
+	int		 rc;
+	d_rank_list_t	*ranks = NULL;
+	d_rank_list_t	*filtered_svc = NULL;
 
 	D_DEBUG(DB_MGMT, "Destroying pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
@@ -323,27 +302,53 @@ ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	rc = ds_pool_svc_check_evict(pool_uuid, svc_ranks, NULL, 0, true,
 				     force);
 	if (rc != 0) {
-		D_ERROR("Failed to check/evict pool handles "DF_UUID" rc: %d\n",
-			DP_UUID(pool_uuid), rc);
+		D_ERROR("Failed to check/evict pool handles " DF_UUID ", "
+			DF_RC "\n",  DP_UUID(pool_uuid), DP_RC(rc));
 		goto out;
 	}
 
-	rc = ds_pool_svc_destroy(pool_uuid);
+	/* Ask PS for list of storage ranks (tgt corpc destinations) */
+	rc = ds_pool_svc_ranks_get(pool_uuid, svc_ranks, &ranks);
+	if (rc) {
+		D_ERROR(DF_UUID ": failed to get pool storage ranks, "
+			DF_RC "\n", DP_UUID(pool_uuid), DP_RC(rc));
+		goto out;
+	}
+
+	/* Destroy pool service. Send corpc only to svc_ranks found in ranks.
+	 * Control plane may not have been updated yet if any of svc_ranks
+	 * were recently excluded from the pool.
+	 */
+	rc = d_rank_list_dup(&filtered_svc, svc_ranks);
+	if (rc)
+		D_GOTO(free_ranks, rc = -DER_NOMEM);
+	d_rank_list_filter(ranks, filtered_svc, false /* exclude */);
+	if (!d_rank_list_identical(filtered_svc, svc_ranks)) {
+		D_DEBUG(DB_MGMT, DF_UUID": %u svc_ranks, but only %u found "
+			"in pool map\n", DP_UUID(pool_uuid),
+			svc_ranks->rl_nr, filtered_svc->rl_nr);
+	}
+
+	rc = ds_pool_svc_destroy(pool_uuid, filtered_svc);
 	if (rc != 0) {
-		D_ERROR("Failed to destroy pool service "DF_UUID": "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
-		goto out;
+		D_ERROR("Failed to destroy pool service " DF_UUID ", "
+			DF_RC "\n", DP_UUID(pool_uuid), DP_RC(rc));
+		goto free_filtered;
 	}
 
-	rc = ds_mgmt_tgt_pool_destroy(pool_uuid);
+	rc = ds_mgmt_tgt_pool_destroy(pool_uuid, ranks);
 	if (rc != 0) {
-		D_ERROR("Destroying pool "DF_UUID" failed, rc: "DF_RC".\n",
+		D_ERROR("Destroying pool "DF_UUID" failed, " DF_RC ".\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
-		goto out;
+		goto free_filtered;
 	}
 
-	D_DEBUG(DB_MGMT, "Destroying pool "DF_UUID" succeed.\n",
+	D_DEBUG(DB_MGMT, "Destroying pool " DF_UUID " succeeded.\n",
 		DP_UUID(pool_uuid));
+free_filtered:
+	d_rank_list_free(filtered_svc);
+free_ranks:
+	d_rank_list_free(ranks);
 out:
 	return rc;
 }
@@ -509,6 +514,9 @@ get_access_props(uuid_t pool_uuid, d_rank_list_t *ranks, daos_prop_t **prop)
 	daos_prop_t		*new_prop;
 
 	new_prop = daos_prop_alloc(ACCESS_PROPS_LEN);
+	if (new_prop == NULL)
+		return -DER_NOMEM;
+
 	for (i = 0; i < ACCESS_PROPS_LEN; i++)
 		new_prop->dpp_entries[i].dpe_type = ACCESS_PROPS[i];
 
@@ -636,6 +644,9 @@ ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		goto out;
 
 	res_prop = daos_prop_alloc(prop->dpp_nr);
+	if (res_prop == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
 	for (i = 0; i < prop->dpp_nr; i++)
 		res_prop->dpp_entries[i].dpe_type =
 			prop->dpp_entries[i].dpe_type;

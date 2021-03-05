@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import json
 from apricot import TestWithServers
@@ -50,21 +33,20 @@ class DynamicStartStop(TestWithServers):
         """
         output = self.dmg_cmd.system_query().stdout
         data = json.loads(output)
-        members = data["response"]["Members"]
+        members = data["response"]["members"]
         for member in members:
-            if member["Rank"] in self.stopped_ranks:
+            if member["rank"] in self.stopped_ranks:
                 self.assertEqual(
-                    member["State"],
-                    self.dmg_cmd.SYSTEM_QUERY_STATES["STOPPED"],
-                    "State isn't Stopped! Actual: {}".format(member["State"]))
+                    member["state"], "stopped",
+                    "State isn't stopped! Actual: {}".format(member["state"]))
                 self.assertEqual(
-                    member["Info"], "system stop",
+                    member["info"], "system stop",
                     "Info (Reason) isn't system stop! Actual: {}".format(
-                        member["Info"]))
+                        member["info"]))
             else:
                 self.assertEqual(
-                    member["State"], self.dmg_cmd.SYSTEM_QUERY_STATES["JOINED"],
-                    "State isn't Joined! Actual: {}".format(member["State"]))
+                    member["state"], "joined",
+                    "State isn't joined! Actual: {}".format(member["state"]))
 
     def test_dynamic_server_addition(self):
         """JIRA ID: DAOS-3598

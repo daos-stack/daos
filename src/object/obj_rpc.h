@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * dsr: RPC Protocol Definitions
@@ -57,80 +40,91 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See daos_rpc.h.
  */
-#define DAOS_OBJ_VERSION 1
+#define DAOS_OBJ_VERSION 2
 /* LIST of internal RPCS in form of:
- * OPCODE, flags, FMT, handler, corpc_hdlr,
+ * OPCODE, flags, FMT, handler, corpc_hdlr and name
  */
 #define OBJ_PROTO_CLI_RPC_LIST						\
 	X(DAOS_OBJ_RPC_UPDATE,						\
 		0, &CQF_obj_rw,						\
-		ds_obj_rw_handler, NULL),				\
+		ds_obj_rw_handler, NULL, "update")			\
 	X(DAOS_OBJ_RPC_FETCH,						\
 		0, &CQF_obj_rw,						\
-		ds_obj_rw_handler, NULL),				\
+		ds_obj_rw_handler, NULL, "fetch")			\
 	X(DAOS_OBJ_DKEY_RPC_ENUMERATE,					\
 		0, &CQF_obj_key_enum,					\
-		ds_obj_enum_handler, NULL),				\
+		ds_obj_enum_handler, NULL, "dkey_enum")			\
 	X(DAOS_OBJ_AKEY_RPC_ENUMERATE,					\
 		0, &CQF_obj_key_enum,					\
-		ds_obj_enum_handler, NULL),				\
+		ds_obj_enum_handler, NULL, "akey_enum")			\
 	X(DAOS_OBJ_RECX_RPC_ENUMERATE,					\
 		0, &CQF_obj_key_enum,					\
-		ds_obj_enum_handler, NULL),				\
+		ds_obj_enum_handler, NULL, "recx_enum")			\
 	X(DAOS_OBJ_RPC_ENUMERATE,					\
 		0, &CQF_obj_key_enum,					\
-		ds_obj_enum_handler, NULL),				\
+		ds_obj_enum_handler, NULL, "obj_enum")			\
 	X(DAOS_OBJ_RPC_PUNCH,						\
 		0, &CQF_obj_punch,					\
-		ds_obj_punch_handler, NULL),				\
+		ds_obj_punch_handler, NULL, "obj_punch")		\
 	X(DAOS_OBJ_RPC_PUNCH_DKEYS,					\
 		0, &CQF_obj_punch,					\
-		ds_obj_punch_handler, NULL),				\
+		ds_obj_punch_handler, NULL, "dkey_punch")		\
 	X(DAOS_OBJ_RPC_PUNCH_AKEYS,					\
 		0, &CQF_obj_punch,					\
-		ds_obj_punch_handler, NULL),				\
+		ds_obj_punch_handler, NULL, "akey_punch")		\
 	X(DAOS_OBJ_RPC_QUERY_KEY,					\
 		0, &CQF_obj_query_key,					\
-		ds_obj_query_key_handler, NULL),			\
+		ds_obj_query_key_handler, NULL, "key_query")		\
 	X(DAOS_OBJ_RPC_SYNC,						\
 		0, &CQF_obj_sync,					\
-		ds_obj_sync_handler, NULL),				\
+		ds_obj_sync_handler, NULL, "obj_sync")			\
 	X(DAOS_OBJ_RPC_TGT_UPDATE,					\
 		0, &CQF_obj_rw,						\
-		ds_obj_tgt_update_handler, NULL),			\
+		ds_obj_tgt_update_handler, NULL, "tgt_update")		\
 	X(DAOS_OBJ_RPC_TGT_PUNCH,					\
 		0, &CQF_obj_punch,					\
-		ds_obj_tgt_punch_handler, NULL),			\
+		ds_obj_tgt_punch_handler, NULL, "tgt_punch")		\
 	X(DAOS_OBJ_RPC_TGT_PUNCH_DKEYS,					\
 		0, &CQF_obj_punch,					\
-		ds_obj_tgt_punch_handler, NULL),			\
+		ds_obj_tgt_punch_handler, NULL, "tgt_dkey_punch")	\
 	X(DAOS_OBJ_RPC_TGT_PUNCH_AKEYS,					\
 		0, &CQF_obj_punch,					\
-		ds_obj_tgt_punch_handler, NULL),			\
+		ds_obj_tgt_punch_handler, NULL, "tgt_akey_punch")	\
 	X(DAOS_OBJ_RPC_MIGRATE,						\
 		0, &CQF_obj_migrate,					\
-		ds_obj_migrate_handler, NULL),				\
+		ds_obj_migrate_handler, NULL, "migrate")		\
 	X(DAOS_OBJ_RPC_EC_AGGREGATE,					\
 		0, &CQF_obj_ec_agg,					\
-		ds_obj_ec_agg_handler, NULL),				\
+		ds_obj_ec_agg_handler, NULL, "ec_agg")			\
 	X(DAOS_OBJ_RPC_EC_REPLICATE,					\
 		0, &CQF_obj_ec_agg,					\
-		ds_obj_ec_rep_handler, NULL),				\
+		ds_obj_ec_rep_handler, NULL, "ec_rep")			\
 	X(DAOS_OBJ_RPC_CPD,						\
 		0, &CQF_obj_cpd,					\
-		ds_obj_cpd_handler, NULL)
-/* Define for RPC enum population below */
-#define X(a, b, c, d, e) a
+		ds_obj_cpd_handler, NULL, "compound")
 
+/* Define for RPC enum population below */
+#define X(a, b, c, d, e, f) a,
 enum obj_rpc_opc {
-	OBJ_PROTO_CLI_RPC_LIST,
+	OBJ_PROTO_CLI_RPC_LIST
 	OBJ_PROTO_CLI_COUNT,
 	OBJ_PROTO_CLI_LAST = OBJ_PROTO_CLI_COUNT - 1,
 };
-
 #undef X
 
 extern struct crt_proto_format obj_proto_fmt;
+
+/* Helper function to convert opc to name */
+static inline char *
+obj_opc_to_str(crt_opcode_t opc)
+{
+	switch (opc) {
+#define X(a, b, c, d, e, f) case a: return f;
+		OBJ_PROTO_CLI_RPC_LIST
+#undef X
+	}
+	return "unknown";
+}
 
 enum obj_rpc_flags {
 	ORF_BULK_BIND		= (1 << 0),
@@ -168,6 +162,8 @@ enum obj_rpc_flags {
 	ORF_CREATE_MAP_DETAIL	= (1 << 13),
 	/* For data migration. */
 	ORF_FOR_MIGRATION	= (1 << 14),
+	/* Force DTX refresh if hit non-committed DTX on non-leader. */
+	ORF_DTX_REFRESH		= (1 << 15),
 };
 
 /* common for update/fetch */
@@ -324,7 +320,7 @@ CRT_RPC_DECLARE(obj_sync, DAOS_ISEQ_OBJ_SYNC, DAOS_OSEQ_OBJ_SYNC)
 	((uint64_t)		(om_max_eph)		CRT_VAR)	\
 	((uint32_t)		(om_version)		CRT_VAR)	\
 	((uint32_t)		(om_tgt_idx)		CRT_VAR)	\
-	((int32_t)		(om_clear_conts)	CRT_VAR)	\
+	((int32_t)		(om_del_local_obj)	CRT_VAR)	\
 	((daos_unit_oid_t)	(om_oids)		CRT_ARRAY)	\
 	((uint64_t)		(om_ephs)		CRT_ARRAY)	\
 	((uint32_t)		(om_shards)		CRT_ARRAY)
