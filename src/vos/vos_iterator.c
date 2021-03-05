@@ -745,12 +745,12 @@ probe:
 
 			if (acts & VOS_ITER_CB_ABORT)
 				break;
-		}
 
-		if (need_reprobe(type, anchors)) {
-			D_ASSERT(!daos_anchor_is_zero(anchor) &&
-				 !daos_anchor_is_eof(anchor));
-			goto probe;
+			if (need_reprobe(type, anchors)) {
+				D_ASSERT(!daos_anchor_is_zero(anchor) &&
+					 !daos_anchor_is_eof(anchor));
+				goto probe;
+			}
 		}
 
 		rc = vos_iter_next(ih);
