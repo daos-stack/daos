@@ -48,7 +48,7 @@ class ExecutableCommand(CommandWithParameters):
         self.run_as_subprocess = subprocess
         self.timeout = None
         self.exit_status_exception = True
-        self.output_check = "combined"
+        self.output_check = "both"
         self.verbose = True
         self.env = None
         self.sudo = False
