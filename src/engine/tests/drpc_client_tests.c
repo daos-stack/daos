@@ -484,7 +484,6 @@ int
 main(void)
 {
 	const struct CMUnitTest tests[] = {
-		UTEST(test_drpc_init_fini),
 		UTEST(test_drpc_call_connect_fails),
 		UTEST(test_drpc_call_sendmsg_fails),
 		UTEST(test_drpc_verify_notify_ready),
