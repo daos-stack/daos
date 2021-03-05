@@ -91,6 +91,7 @@ struct counts {
 	int num_punched_objs;
 	int num_dkeys;
 	int num_punched_dkeys;
+	int num_punched_objs_dkey;
 	int num_akeys;
 	int num_punched_akeys;
 	int num_recx;
@@ -110,6 +111,8 @@ count_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 		counts->num_dkeys++;
 		if (entry->ie_punch)
 			counts->num_punched_dkeys++;
+		if (entry->ie_obj_punch)
+			counts->num_punched_objs_dkey++;
 		break;
 	case VOS_ITER_AKEY:
 		counts->num_akeys++;
@@ -150,12 +153,15 @@ vos_check(void **state, vos_iter_param_t *param, vos_iter_type_t type,
 	assert_int_equal(expected->num_punched_dkeys, counts.num_punched_dkeys);
 	assert_int_equal(expected->num_punched_akeys, counts.num_punched_akeys);
 	assert_int_equal(expected->num_punched_recx, counts.num_punched_recx);
+	assert_int_equal(expected->num_punched_objs_dkey,
+			 counts.num_punched_objs_dkey);
 }
 
 static void
 vos_check_obj(void **state, daos_epoch_t epoch, int flags, int objs,
-	      int punched_objs, int dkeys, int punched_dkeys, int akeys,
-	      int punched_akeys, int recxs, int punched_recx)
+	      int punched_objs, int punched_objs_dkey, int dkeys,
+	      int punched_dkeys, int akeys, int punched_akeys, int recxs,
+	      int punched_recx)
 {
 	struct io_test_args	*arg = *state;
 	vos_iter_param_t	 param = {0};
@@ -171,6 +177,7 @@ vos_check_obj(void **state, daos_epoch_t epoch, int flags, int objs,
 	counts.num_akeys = akeys;
 	counts.num_recx = recxs;
 	counts.num_punched_objs = punched_objs;
+	counts.num_punched_objs_dkey = punched_objs_dkey;
 	counts.num_punched_dkeys = punched_dkeys;
 	counts.num_punched_akeys = punched_akeys;
 	counts.num_punched_recx = punched_recx;
@@ -180,8 +187,8 @@ vos_check_obj(void **state, daos_epoch_t epoch, int flags, int objs,
 
 static void
 vos_check_dkey(void **state, daos_epoch_t epoch, int flags, daos_unit_oid_t oid,
-	       int dkeys, int punched_dkeys, int akeys, int punched_akeys,
-	       int recxs, int punched_recx)
+	       int punched_objs, int dkeys, int punched_dkeys, int akeys,
+	       int punched_akeys, int recxs, int punched_recx)
 {
 	struct io_test_args	*arg = *state;
 	vos_iter_param_t	 param = {0};
@@ -199,6 +206,7 @@ vos_check_dkey(void **state, daos_epoch_t epoch, int flags, daos_unit_oid_t oid,
 	counts.num_punched_dkeys = punched_dkeys;
 	counts.num_punched_akeys = punched_akeys;
 	counts.num_punched_recx = punched_recx;
+	counts.num_punched_objs_dkey = punched_objs;
 
 	vos_check(state, &param, VOS_ITER_DKEY, &counts);
 }
@@ -280,9 +288,9 @@ array_set_get_size(void **state)
 	assert_int_equal(size, 0);
 
 	flags = VOS_IT_EPC_RR | VOS_IT_RECX_VISIBLE;
-	vos_check_obj(state, 9, flags, 1, 0, 1, 0, 1, 0, 0, 0);
-	vos_check_obj(state, 3, flags, 1, 1, 2, 1, 2, 0, 1, 0);
-	vos_check_obj(state, 5, flags, 1, 1, 2, 0, 2, 0, 2, 1);
+	vos_check_obj(state, 9, flags, 1, 0, 0, 1, 0, 1, 0, 0, 0);
+	vos_check_obj(state, 3, flags, 1, 1, 2, 2, 1, 2, 0, 1, 0);
+	vos_check_obj(state, 5, flags, 1, 1, 2, 2, 0, 2, 0, 2, 1);
 }
 
 static void
@@ -701,19 +709,19 @@ punch_model_test(void **state)
 	(void)vos_check_akey; /* For now, unused. Reference to avoid warning */
 
 	/* Now recurse at an epoch prior to punches */
-	vos_check_dkey(state, 1, 0, oid, 1, 1, 1, 1, 1, 0);
+	vos_check_dkey(state, 1, 0, oid, 1, 1, 1, 1, 1, 1, 0);
 
 	/* Now recurse including punched entries */
-	vos_check_dkey(state, 8, VOS_IT_PUNCHED, oid, 1, 0, 1, 0, 4, 0);
+	vos_check_dkey(state, 8, VOS_IT_PUNCHED, oid, 1, 1, 0, 1, 0, 4, 0);
 
 	/* Now recurse after punch, not including punched entries */
-	vos_check_obj(state, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+	vos_check_obj(state, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
 	/* Now recurse including punched entries after object punch */
-	vos_check_obj(state, 10, VOS_IT_PUNCHED, 1, 0, 1, 0, 1, 0, 5, 0);
+	vos_check_obj(state, 10, VOS_IT_PUNCHED, 1, 0, 0, 1, 0, 1, 0, 5, 0);
 
 	/* Now recurse visible entries at 11 */
-	vos_check_obj(state, 11, 0, 1, 0, 1, 0, 1, 0, 1, 0);
+	vos_check_obj(state, 11, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0);
 
 	/** Read the value at 11 */
 	memset(buf, 0, sizeof(buf));

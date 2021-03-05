@@ -626,15 +626,18 @@ func (db *Database) AddMember(newMember *Member) error {
 	db.Lock()
 	defer db.Unlock()
 
-	mu := &memberUpdate{Member: newMember}
-	if cur, err := db.FindMemberByUUID(newMember.UUID); err == nil {
-		return &ErrMemberExists{Rank: cur.Rank}
+	if _, err := db.FindMemberByUUID(newMember.UUID); err == nil {
+		return errUuidExists(newMember.UUID)
+	}
+	if _, err := db.FindMemberByRank(newMember.Rank); err == nil {
+		return errRankExists(newMember.Rank)
 	}
 
 	if err := db.manageVoter(newMember, raftOpAddMember); err != nil {
 		return err
 	}
 
+	mu := &memberUpdate{Member: newMember}
 	if newMember.Rank.Equals(NilRank) {
 		newMember.Rank = db.data.NextRank
 		mu.NextRank = true
