@@ -798,6 +798,15 @@ ds_iv_ns_start(struct ds_iv_ns *ns)
 }
 
 void
+ds_iv_ns_leader_stop(struct ds_iv_ns *ns)
+{
+	/* Set iv_stop on the leader, so all arriving IV requests will return
+	 * failure after this.
+	 */
+	ns->iv_stop = 1;
+}
+
+void
 ds_iv_ns_stop(struct ds_iv_ns *ns)
 {
 	ns->iv_stop = 1;
