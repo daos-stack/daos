@@ -32,6 +32,7 @@ struct migrate_one {
 	uuid_t			 mo_pool_uuid;
 	uuid_t			 mo_cont_uuid;
 	daos_unit_oid_t		 mo_oid;
+	daos_epoch_t		 mo_obj_punch_eph;
 	daos_epoch_t		 mo_dkey_punch_eph;
 	daos_epoch_t		 mo_epoch;
 	daos_epoch_t		 mo_update_epoch;
@@ -1148,6 +1149,19 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone)
 		D_GOTO(obj_close, rc);
 	}
 
+	/* punch the object here */
+	if (mrone->mo_obj_punch_eph) {
+		rc = vos_obj_punch(cont->sc_hdl, mrone->mo_oid,
+				   mrone->mo_obj_punch_eph,
+				   tls->mpt_version, VOS_OF_REPLAY_PC,
+				   NULL, 0, NULL, NULL);
+		if (rc) {
+			D_ERROR(DF_UOID" punch obj failed: rc %d\n",
+				DP_UOID(mrone->mo_oid), rc);
+			return rc;
+		}
+	}
+
 	rc = migrate_punch(tls, mrone, cont);
 	if (rc)
 		D_GOTO(obj_close, rc);
@@ -1527,6 +1541,7 @@ migrate_one_insert(struct enum_unpack_arg *arg,
 	daos_unit_oid_t		oid = io->ui_oid;
 	daos_key_t		*dkey = &io->ui_dkey;
 	daos_epoch_t		dkey_punch_eph = io->ui_dkey_punch_eph;
+	daos_epoch_t		obj_punch_eph = io->ui_obj_punch_eph;
 	daos_iod_t		*iods = io->ui_iods;
 	struct dcs_iod_csums	*iods_csums = io->ui_iods_csums;
 	daos_epoch_t		*akey_ephs = io->ui_akey_punch_ephs;
@@ -1568,6 +1583,7 @@ migrate_one_insert(struct enum_unpack_arg *arg,
 
 	mrone->mo_epoch = arg->epr.epr_hi;
 	mrone->mo_update_epoch = epoch;
+	mrone->mo_obj_punch_eph = obj_punch_eph;
 	mrone->mo_dkey_punch_eph = dkey_punch_eph;
 	D_ALLOC_ARRAY(mrone->mo_akey_punch_ephs, iod_eph_total);
 	if (mrone->mo_akey_punch_ephs == NULL)
