@@ -1327,7 +1327,7 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone)
 		D_GOTO(obj_close, rc);
 	}
 
-	/* punch the object here */
+	/* punch the object */
 	if (mrone->mo_obj_punch_eph) {
 		rc = vos_obj_punch(cont->sc_hdl, mrone->mo_oid,
 				   mrone->mo_obj_punch_eph,
