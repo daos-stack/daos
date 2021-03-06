@@ -228,7 +228,7 @@ class ContainerCreate(TestWithServers):
                 pool.display_pool_daos_space("after container creation")
 
             # Exclude the first rank from the first pool to initiate rebuild
-            self.pool[0].start_rebuild([rank], self.d_log)
+            self.server_managers[0].stop_ranks([rank], self.d_log)
 
             # Wait for rebuild to start
             self.pool[0].wait_for_rebuild(True, 1)
