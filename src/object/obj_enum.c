@@ -274,7 +274,7 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 		arg->kds_len++;
 
 		D_ASSERT(iov->iov_len + pi_size < iov->iov_buf_len);
-		memcpy(iov->iov_buf + iov->iov_len, &key_ent->ie_punch,
+		memcpy(iov->iov_buf + iov->iov_len, &key_ent->ie_obj_punch,
 		       pi_size);
 
 		iov->iov_len += pi_size;
