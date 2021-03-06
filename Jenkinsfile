@@ -17,14 +17,14 @@
 // Should try to figure this out automatically
 String base_branch = "master"
 // For master, this is just some wildly high number
-String next_version = "1000"
+next_version = "1000"
 
 boolean doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
         return true
     }
 
-    /* automatic Doc-only discover not really valid for the weekly-testing
+    /* Automatic Doc-only discover not really valid for the weekly-testing
      * branch, and ends up requiring ci/doc_only_change.sh which is not available
      * when needed since the change to master is not done yet when this is
      * evaluated.  Additionally, maintaining ci/doc_only_change.sh on this branch
@@ -95,7 +95,8 @@ String pr_repos(String distro) {
 }
 
 String daos_repo() {
-    if (target_branch == "weekly-testing" || rpm_test_version() == '') {
+    if (target_branch.startsWith("weekly-testing") ||
+        rpm_test_version() == '') {
         return ""
     }
     return "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
@@ -164,13 +165,13 @@ String daos_packages_version(String distro) {
                                                         --repoid daos -q --qf %{version}-%{release} --show-duplicates daos | {
                                                     ov=0
                                                     while read v; do
-                                                        if ! rpmdev-vercmp $v ''' + ${next_version} + ''' > /dev/null; then
+                                                        if ! rpmdev-vercmp "$v" "''' + next_version + '''" > /dev/null; then
                                                             if [ ${PIPESTATUS[0]} -ne 12 ]; then
                                                                 echo "$ov"
                                                                 break
                                                             fi
                                                         fi
-                                                        ov=$v
+                                                        ov="$v"
                                                     done
                                                     echo "$ov"
                                                 }''',
@@ -292,7 +293,25 @@ boolean skip_ftest(String distro) {
     return distro == 'ubuntu20' ||
            skip_stage('func-test') ||
            skip_stage('func-test-vm') ||
+           ! tests_in_stage('vm') ||
            skip_stage('func-test-' + distro)
+}
+
+boolean tests_in_stage(String size) {
+    if (env.BRANCH_NAME.startsWith('weekly-testing')) {
+        /* This doesn't actually work on weekly-ltestin branches due to a lack
+         * src/test/ftest/launch.py (and friends).  We could probably just
+         * check that out from the branch we are testing against (i.e. master,
+         * release/*, etc.) but let's save that for another day
+         */
+        return true
+    }
+
+    Map stage_info = parseStageInfo()
+    return sh(label: "Get test list for ${size}",
+              script: """cd src/tests/ftest
+                         ./launch.py --list """ + stage_info['test_tag'],
+              returnStatus: true) == 0
 }
 
 boolean skip_ftest_hw(String size) {
@@ -300,6 +319,7 @@ boolean skip_ftest_hw(String size) {
            skip_stage('func-test') ||
            skip_stage('func-hw-test') ||
            skip_stage('func-hw-test-' + size) ||
+           ! tests_in_stage(size) ||
            (env.BRANCH_NAME == 'master' && ! startedByTimer())
 }
 
@@ -310,7 +330,8 @@ boolean skip_testing_stage() {
             doc_only_change() ||
             skip_stage('test') ||
             (env.BRANCH_NAME.startsWith('weekly-testing') &&
-             ! startedByTimer())
+             ! startedByTimer() &&
+             ! startedByUser())
 }
 
 pipeline {
@@ -339,6 +360,9 @@ pipeline {
         string(name: 'BuildPriority',
                defaultValue: get_priority(),
                description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
+        string(name: 'TestTag',
+               defaultValue: "full_regression",
+               description: 'Test-tag to use for this run')
     }
 
     stages {
