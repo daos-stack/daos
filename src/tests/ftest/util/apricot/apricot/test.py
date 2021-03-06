@@ -205,16 +205,16 @@ class Test(avocadoTest):
                     if commits and vals[1] in commits:
                         # fix is in this code base
                         self.log.info("This test variant is included in the "
-                                     "skip list for ticket {}, but is fixed "
-                                     "in {}.  Test will not be "
-                                     "skipped".format(ticket, vals[1]))
+                                     "skip list for ticket %s, but is fixed "
+                                     "in %s.  Test will not be "
+                                     "skipped" % (ticket, vals[1]))
                     else:
                         # fix is not in this code base
                         self.log.info("Skipping due to being on the "
-                                      "skip list for ticket {}, and "
-                                      "the fix in {} is not in the "
-                                      "current code".format(ticket,
-                                                            vals[1]))
+                                      "skip list for ticket %s, and "
+                                      "the fix in %s is not in the "
+                                      "current code" % (ticket,
+                                                        vals[1]))
                         cancelForTicket(ticket, skip_list)
                 else:
                     try:
@@ -224,16 +224,16 @@ class Test(avocadoTest):
                                     ticket + " "):
                                 # fix is in this PR
                                self.log.info("This test variant is included in "
-                                             "the skip list for ticket {}, but "
+                                             "the skip list for ticket %s, but "
                                              "it is being fixed in this PR.  "
                                              "Test will not be "
-                                             "skipped".format(ticket))
+                                             "skipped" % ticket)
                             else:
                                 # there is no commit that fixes it
                                 self.log.info("This test variant is included "
-                                              "in the skip list for ticket {} "
+                                              "in the skip list for ticket %s "
                                               "with no fix yet "
-                                              "available.".format(ticket))
+                                              "available." % ticket)
                                 cancelForTicket(ticket, skip_list)
                     except exceptions.TestCancel():
                         raise
