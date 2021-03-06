@@ -246,6 +246,7 @@ client_cb_common(const struct crt_cb_info *cb_info)
 
 	struct test_swim_status_in	*swim_status_rpc_req_input;
 	struct test_swim_status_out	*swim_status_rpc_req_output;
+	int aborted_rank = -1;
 
 	rpc_req = cb_info->cci_rpc;
 
