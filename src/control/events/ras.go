@@ -108,10 +108,10 @@ func (sev RASSeverityID) Uint32() uint32 {
 // SyslogPriority maps RAS severity to syslog package priority.
 func (sev RASSeverityID) SyslogPriority() syslog.Priority {
 	slSev := map[RASSeverityID]syslog.Priority{
-		RASSeverityFatal:   syslog.LOG_CRIT,
-		RASSeverityError:   syslog.LOG_ERR,
-		RASSeverityWarn:    syslog.LOG_WARNING,
-		RASSeverityInfo:    syslog.LOG_INFO,
+		RASSeverityFatal: syslog.LOG_CRIT,
+		RASSeverityError: syslog.LOG_ERR,
+		RASSeverityWarn:  syslog.LOG_WARNING,
+		RASSeverityInfo:  syslog.LOG_INFO,
 	}[sev]
 
 	return slSev | syslog.LOG_DAEMON
