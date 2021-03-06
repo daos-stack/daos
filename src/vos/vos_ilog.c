@@ -266,6 +266,7 @@ init:
 	if (punched != NULL)
 		punch = *punched;
 	if (parent != NULL) {
+		info->ii_prior_any_punch = parent->ii_prior_any_punch;
 		punch = parent->ii_prior_punch;
 		info->ii_uncommitted = parent->ii_uncommitted;
 	}

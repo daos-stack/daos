@@ -1826,12 +1826,14 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool discard)
 			 * at present prevent underpunch
 			 */
 			D_ERROR("Removing orphaned single value tree\n");
+			D_ASSERT(0);
 		} else if (krec->kr_bmap & KREC_BF_EVT &&
 			   !evt_is_empty(&krec->kr_evt)) {
 			/* This should be an assert eventually but we can't
 			 * at present prevent underpunch
 			 */
 			D_ERROR("Removing orphaned array value tree\n");
+			D_ASSERT(0);
 		}
 		rc = dbtree_iter_delete(oiter->it_hdl, NULL);
 		D_ASSERT(rc != -DER_NONEXIST);
