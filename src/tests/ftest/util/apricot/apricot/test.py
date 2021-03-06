@@ -174,7 +174,7 @@ class Test(avocadoTest):
             self.log.info(message)
             self.log.info("Trudging on without skipping known failing tests")
 
-        def cancelForTicket(ticket, skip_list):
+        def cancel_for_ticket(ticket, skip_list):
             # put a copy of the skip-list into the logdir
             self.add_test_data("skip-list", skip_list)
             self.cancelForTicket(ticket)
@@ -207,15 +207,14 @@ class Test(avocadoTest):
                         self.log.info("This test variant is included in the "
                                      "skip list for ticket %s, but is fixed "
                                      "in %s.  Test will not be "
-                                     "skipped" % (ticket, vals[1]))
+                                     "skipped", ticket, vals[1])
                     else:
                         # fix is not in this code base
                         self.log.info("Skipping due to being on the "
                                       "skip list for ticket %s, and "
                                       "the fix in %s is not in the "
-                                      "current code" % (ticket,
-                                                        vals[1]))
-                        cancelForTicket(ticket, skip_list)
+                                      "current code", ticket, vals[1])
+                        cancel_for_ticket(ticket, skip_list)
                 else:
                     try:
                         with open(os.path.join(os.sep, 'tmp',
@@ -223,19 +222,19 @@ class Test(avocadoTest):
                             if commit_handle.read().strip().startswith(
                                     ticket + " "):
                                 # fix is in this PR
-                               self.log.info("This test variant is included in "
-                                             "the skip list for ticket %s, but "
-                                             "it is being fixed in this PR.  "
-                                             "Test will not be "
-                                             "skipped" % ticket)
+                                self.log.info("This test variant is included "
+                                              "in the skip list for ticket %s, "
+                                              "but it is being fixed in this "
+                                              "PR.  Test will not be "
+                                              "skipped", ticket)
                             else:
                                 # there is no commit that fixes it
                                 self.log.info("This test variant is included "
                                               "in the skip list for ticket %s "
                                               "with no fix yet "
-                                              "available." % ticket)
-                                cancelForTicket(ticket, skip_list)
-                    except exceptions.TestCancel():
+                                              "available.", ticket)
+                                cancel_for_ticket(ticket, skip_list)
+                    except exceptions.TestCancel(): # pylint: disable=try-except-raise
                         raise
                     except Exception as excpt: # pylint: disable=broad-except
                         skip_process_error("Unable to read commit title: "
