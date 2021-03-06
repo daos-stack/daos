@@ -968,6 +968,11 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 			D_GOTO(out, rc = rc1);
 		}
 	} else {
+		if (DAOS_FAIL_CHECK(DAOS_DTX_RESEND_DELAY1) &&
+		    daos_resend_new_epoch(daos_fail_value_get()))
+			tx->tx_epoch.oe_value =
+			crt_sec2hlc(crt_hlc2sec(tx->tx_epoch.oe_value) + 1);
+
 		rc1 = dc_task_resched(task);
 		if (rc1 != 0) {
 			D_ERROR("Failed to re-init task (%p): "
@@ -1615,7 +1620,9 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		 */
 	}
 
-	if (DAOS_FAIL_CHECK(DAOS_DTX_SPEC_LEADER)) {
+	if (DAOS_FAIL_CHECK(DAOS_DTX_SPEC_LEADER) ||
+	    DAOS_FAIL_CHECK(DAOS_DTX_RESEND_DELAY2) ||
+	    DAOS_FAIL_CHECK(DAOS_DTX_RESEND_DELAY4)) {
 		i = dc_tx_leftmost_req(tx, true);
 		dcsr = &tx->tx_req_cache[i];
 		obj = dcsr->dcsr_obj;
@@ -1812,6 +1819,12 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 
 	tx->tx_status = TX_COMMITTING;
 	D_MUTEX_UNLOCK(&tx->tx_lock);
+
+	if (!tx->tx_retry &&
+	    (DAOS_FAIL_CHECK(DAOS_DTX_RESEND_DELAY1) ||
+	     DAOS_FAIL_CHECK(DAOS_DTX_RESEND_DELAY2)))
+		/* RPC (to leader) timeout is 3 seconds. */
+		rc = crt_req_set_timeout(req, 3);
 
 	rc = daos_rpc_send(req, task);
 	if (rc != 0)

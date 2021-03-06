@@ -188,8 +188,8 @@ static void
 dtx_4(void **state)
 {
 	FAULT_INJECTION_REQUIRED();
-	print_message("failed to update/punch on non-leader\n");
-	dtx_io_test_fail(state, DAOS_DTX_NONLEADER_ERROR | DAOS_FAIL_ALWAYS);
+	print_message("failed to update/punch on follower\n");
+	dtx_io_test_fail(state, DAOS_DTX_FOLLOWER_ERROR | DAOS_FAIL_ALWAYS);
 }
 
 static int
@@ -292,7 +292,7 @@ dtx_fetch_committable(void **state, bool punch)
 	assert_true(rc >= 1);
 
 	/* Reset fail_loc, repeat fetch from any replica. If without specifying
-	 * the replica, and if fetch from non-leader hits non-committed DTX, it
+	 * the replica, and if fetch from follower hits non-committed DTX, it
 	 * will retry with leader, finially, the expected data will be returned
 	 * from the leader replica.
 	 */
@@ -652,6 +652,426 @@ dtx_17(void **state)
 	ioreq_fini(&req);
 }
 
+static void
+dtx_18(void **state)
+{
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX18: resend with same epoch, "
+		      "both leader and follower not prepared\n");
+
+	dtx_resend_check(*state, false, false, false, false);
+}
+
+static void
+dtx_19(void **state)
+{
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX19: resend with same epoch, "
+		      "leader prepared, follower not prepared\n");
+
+	dtx_resend_check(*state, true, false, false, false);
+}
+
+static void
+dtx_20(void **state)
+{
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX20: resend with same epoch, "
+		      "leader not prepared, follower prepared\n");
+
+	dtx_resend_check(*state, false, true, false, false);
+}
+
+static void
+dtx_21(void **state)
+{
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX21: resend with same epoch, "
+		      "both leader and follower prepared\n");
+
+	dtx_resend_check(*state, true, true, false, false);
+}
+
+static void
+dtx_22(void **state)
+{
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX22: resend with new epoch, "
+		      "leader not prepared, follower prepared\n");
+
+	dtx_resend_check(*state, false, true, true, false);
+}
+
+static void
+dtx_leader_switch_with_resend(test_arg_t *arg, uint64_t fail_loc,
+			      bool skip_new_leader)
+{
+	daos_obj_id_t	 oid;
+	struct ioreq	 req;
+	char		*write_buf = NULL;
+	char		*fetch_buf = NULL;
+	size_t		 size = 1 << 21;
+	d_rank_t	 kill_rank = CRT_NO_RANK;
+
+	if (arg->rank_size < 2)
+		skip();
+
+	if (!test_runable(arg, 5))
+		skip();
+
+	if (arg->myrank == 0)
+		oid = daos_test_oid_gen(arg->coh, OC_EC_2P2G1, 0, 0, 0);
+	dtx_share_oid(&oid);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	daos_fail_loc_set(fail_loc | DAOS_FAIL_ALWAYS);
+	if (arg->myrank == 0) {
+		d_rank_t	skip_rank;
+
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      fail_loc | DAOS_FAIL_ALWAYS, 0, NULL);
+		/* shard_2 will be the new leader. */
+		skip_rank = get_rank_by_oid_shard(arg, oid,
+						  skip_new_leader ? 2 : 1);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
+				      skip_rank, 0, NULL);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (arg->myrank == 1) {
+		ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+		D_ALLOC(write_buf, size);
+		assert_non_null(write_buf);
+		dts_buf_render(write_buf, size);
+
+		insert_single(dts_dtx_dkey, dts_dtx_akey, 0, write_buf,
+			      size, DAOS_TX_NONE, &req);
+	} else if (arg->myrank == 0) {
+		/* Sleep 1 second to guarantee that rank1 has send out
+		 * UPDAETE RPC before evict the old leader.
+		 */
+		sleep(1);
+
+		/* Exclude shard_3 - the last parity, old leader,
+		 * then shard_2 - another parity will be the new leader.
+		 */
+		kill_rank = get_rank_by_oid_shard(arg, oid, 3);
+		print_message("Exclude rank %d to trigger rebuild\n",
+			      kill_rank);
+		rebuild_single_pool_rank(arg, kill_rank, false);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      0, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
+				      0, 0, NULL);
+	}
+	daos_fail_loc_set(0);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (arg->myrank == 1) {
+		print_message("Verify update after rebuild...\n");
+
+		D_ALLOC(fetch_buf, size);
+		assert_non_null(fetch_buf);
+
+		lookup_single(dts_dtx_dkey, dts_dtx_akey, 0, fetch_buf,
+			      size, DAOS_TX_NONE, &req);
+		assert_memory_equal(write_buf, fetch_buf, size);
+
+		D_FREE(write_buf);
+		D_FREE(fetch_buf);
+		ioreq_fini(&req);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	/* Add the excluded rank back. */
+	reintegrate_single_pool_rank(arg, kill_rank);
+}
+
+static void
+dtx_23(void **state)
+{
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX23: "
+		      "resend during DTX resync - new leader not prepared\n");
+
+	dtx_leader_switch_with_resend(*state, DAOS_DTX_RESEND_DELAY2, false);
+}
+
+static void
+dtx_24(void **state)
+{
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX24: "
+		      "resync abort the DTX when new leader handling resend\n");
+
+	/* Test logic is as following:
+	 *
+	 * 1.  rank_0 setup environment.
+	 * 2.  rank_0 sleep 1 second to guarantee that rank_1 has sent out
+	 *     update RPC.
+	 * 3.  rank_1 send update RPC (during or before rank_0 sleep) with
+	 *     timeout 3 seconds.
+	 * 4.  IO handler on old leader sleep 4 seconds, then the rank_1's
+	 *     update RPC will timeout.
+	 * 5.  During IO handler sleep, rank_0 exclude the old leader that
+	 *     will trigger DTX resync.
+	 * 6.  DTX resync ULT on the new leader sleep 5 second to guarantee
+	 *     that rank_1 has resent update RPC to the new leader.
+	 * 7.  rank_1 update RPC timeout, refresh the pool map and resend
+	 *     update RPC to the new leader.
+	 * 8.  IO handler on the new leader find the original DTX entry on
+	 *     the new leader, then does not re-execute update. But before
+	 *     dispatching to followers, sleep 7 seconds to guarantee that
+	 *     DTX resync to be done.
+	 * 9.  DTX ULT wakeup, and resync old DTX entry. Because of failure
+	 *     injection, such DTX will be aborted by DTX resync.
+	 * 10. The IO handler on new leader wakeup, dispatch update RPC to
+	 *     followers. On follower, the old DTX has been aborted by DTX
+	 *     resync ULT, so the update will be re-executed on followers.
+	 * 11. The new leader get succeed replies from all replicas, then
+	 *     can mark the DTX as 'committable'. But before doing that it
+	 *     find the local DTX entry is removed by some others, then it
+	 *     will abort the DTX globally, and re-do update from scratch.
+	 **/
+	dtx_leader_switch_with_resend(*state, DAOS_DTX_RESEND_DELAY3, true);
+}
+
+static void
+dtx_25(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	struct ioreq	 req;
+	char		*write_buf = NULL;
+	char		*fetch_buf = NULL;
+	size_t		 size = 1 << 21;
+	d_rank_t	 kill_rank = CRT_NO_RANK;
+
+	print_message("DTX25: resend during new leader restart - reindex\n");
+
+	if (arg->rank_size < 2)
+		skip();
+
+	if (!test_runable(arg, 5))
+		skip();
+
+	if (arg->myrank == 0)
+		oid = daos_test_oid_gen(arg->coh, OC_EC_2P2G1, 0, 0, 0);
+	dtx_share_oid(&oid);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	daos_fail_loc_set(DAOS_DTX_LOST_RPC_REQUEST | DAOS_FAIL_ALWAYS);
+	if (arg->myrank == 0)
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_DTX_LOST_RPC_REQUEST |
+				      DAOS_FAIL_ALWAYS, 0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (arg->myrank == 1) {
+		ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+		D_ALLOC(write_buf, size);
+		assert_non_null(write_buf);
+		dts_buf_render(write_buf, size);
+
+		insert_single(dts_dtx_dkey, dts_dtx_akey, 0, write_buf,
+			      size, DAOS_TX_NONE, &req);
+	} else if (arg->myrank == 0) {
+		d_rank_t	restart_rank;
+
+		/* Sleep 1 second to guarantee that rank1 has send out
+		 * UPDAETE RPC before evict the old leader.
+		 */
+		sleep(1);
+
+		/* Exclude shard_3 - the last parity, old leader,
+		 * then shard_2 - another parity will be the new leader.
+		 */
+
+		restart_rank = get_rank_by_oid_shard(arg, oid, 2);
+		print_message("Restart rank %d when rebuild\n", restart_rank);
+
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_DTX_SRV_RESTART | DAOS_FAIL_ONCE,
+				      0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
+				      restart_rank, 0, NULL);
+
+		kill_rank = get_rank_by_oid_shard(arg, oid, 3);
+		print_message("Exclude rank %d to trigger rebuild\n",
+			      kill_rank);
+		rebuild_single_pool_rank(arg, kill_rank, false);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      0, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
+				      0, 0, NULL);
+	}
+	daos_fail_loc_set(0);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (arg->myrank == 1) {
+		print_message("Verify update after rebuild...\n");
+
+		D_ALLOC(fetch_buf, size);
+		assert_non_null(fetch_buf);
+
+		lookup_single(dts_dtx_dkey, dts_dtx_akey, 0, fetch_buf,
+			      size, DAOS_TX_NONE, &req);
+		assert_memory_equal(write_buf, fetch_buf, size);
+
+		D_FREE(write_buf);
+		D_FREE(fetch_buf);
+		ioreq_fini(&req);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	/* Add the excluded rank back. */
+	reintegrate_single_pool_rank(arg, kill_rank);
+}
+
+static void
+dtx_26(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	struct ioreq	 req;
+	char		*write_buf = NULL;
+	char		*fetch_buf_old = NULL;
+	char		*fetch_buf_new = NULL;
+	size_t		 size = 1 << 21;
+	d_rank_t	 kill_rank = CRT_NO_RANK;
+
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX26: both client and leader crashed, "
+		      "new leader miss modification\n");
+
+	if (arg->rank_size < 2)
+		skip();
+
+	if (!test_runable(arg, 5))
+		skip();
+
+	if (arg->myrank == 0) {
+		oid = daos_test_oid_gen(arg->coh, OC_EC_2P2G1, 0, 0, 0);
+		ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+		D_ALLOC(write_buf, size);
+		assert_non_null(write_buf);
+		dts_buf_render(write_buf, size);
+
+		daos_fail_loc_set(DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS);
+		insert_single(dts_dtx_dkey, dts_dtx_akey, 0, write_buf,
+			      size, DAOS_TX_NONE, &req);
+		daos_fail_loc_set(0);
+	}
+
+	dtx_share_oid(&oid);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	daos_fail_loc_set(DAOS_DTX_NO_RETRY | DAOS_FAIL_ALWAYS);
+	if (arg->myrank == 0) {
+		d_rank_t	skip_rank;
+
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_DTX_SKIP_PREPARE | DAOS_FAIL_ALWAYS,
+				      0, NULL);
+		/* NOT dispatch to objs[0]'s shard_2 that will be new leader. */
+		skip_rank = get_rank_by_oid_shard(arg, oid, 2);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
+				      skip_rank, 0, NULL);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (arg->myrank == 1) {
+		ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+		D_ALLOC(fetch_buf_old, size);
+		assert_non_null(fetch_buf_old);
+
+		insert_single(dts_dtx_dkey, dts_dtx_akey, 0, fetch_buf_old,
+			      size, DAOS_TX_NONE, &req);
+
+		D_ALLOC(write_buf, size);
+		assert_non_null(write_buf);
+		dts_buf_render(write_buf, size);
+
+		/* The udpdate will fail because of failure injection. */
+		insert_single(dts_dtx_dkey, dts_dtx_akey, 0, write_buf,
+			      size, DAOS_TX_NONE, &req);
+	} else if (arg->myrank == 0) {
+		/* Sleep 1 second to guarantee that rank1 has send out
+		 * update RPC before evict the old leader.
+		 */
+		sleep(1);
+
+		/* Exclude shard_3 - the old leader,
+		 * then shard_2 - another parity will be the new leader.
+		 */
+		kill_rank = get_rank_by_oid_shard(arg, oid, 3);
+		print_message("Exclude rank %d to trigger rebuild\n",
+			      kill_rank);
+		rebuild_single_pool_rank(arg, kill_rank, false);
+
+		D_FREE(write_buf);
+		ioreq_fini(&req);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      0, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
+				      0, 0, NULL);
+	}
+	daos_fail_loc_set(0);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (arg->myrank == 1) {
+		print_message("Verify update after rebuild...\n");
+
+		D_ALLOC(fetch_buf_new, size);
+		assert_non_null(fetch_buf_new);
+
+		lookup_single(dts_dtx_dkey, dts_dtx_akey, 0, fetch_buf_new,
+			      size, DAOS_TX_NONE, &req);
+		/* Since the 2nd update failed because new leader missed
+		 * the modification and client does not retried (simulate
+		 * the case of client corruption), then the 2nd fetch is
+		 * expected to get the old value.
+		 */
+		assert_memory_equal(fetch_buf_new, fetch_buf_old, size);
+
+		D_FREE(write_buf);
+		D_FREE(fetch_buf_old);
+		D_FREE(fetch_buf_new);
+		ioreq_fini(&req);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	/* Add the excluded rank back. */
+	reintegrate_single_pool_rank(arg, kill_rank);
+}
+
 static const struct CMUnitTest dtx_tests[] = {
 	{"DTX1: update/punch single value with DTX successfully",
 	 dtx_1, NULL, test_case_teardown},
@@ -659,7 +1079,7 @@ static const struct CMUnitTest dtx_tests[] = {
 	 dtx_2, NULL, test_case_teardown},
 	{"DTX3: update/punch with DTX failed on leader",
 	 dtx_3, NULL, test_case_teardown},
-	{"DTX4: update/punch with DTX failed on non-leader",
+	{"DTX4: update/punch with DTX failed on follower",
 	 dtx_4, NULL, test_case_teardown},
 	{"DTX5: fetch with non-committed update DTX",
 	 dtx_5, NULL, test_case_teardown},
@@ -687,6 +1107,31 @@ static const struct CMUnitTest dtx_tests[] = {
 	 dtx_16, NULL, test_case_teardown},
 	{"DTX17: DTX resync during open-close",
 	 dtx_17, NULL, test_case_teardown},
+
+	{"DTX18: resend with same epoch, "
+		"both leader and follower not prepared",
+	 dtx_18, NULL, test_case_teardown},
+	{"DTX19: resend with same epoch, "
+		"leader prepared, follower not prepared",
+	 dtx_19, NULL, test_case_teardown},
+	{"DTX20: resend with same epoch, "
+		"leader not prepared, follower prepared",
+	 dtx_20, NULL, test_case_teardown},
+	{"DTX21: resend with same epoch, "
+		"both leader and follower prepared",
+	 dtx_21, NULL, test_case_teardown},
+	{"DTX22: resend with new epoch, "
+		"leader not prepared, follower prepared",
+	 dtx_22, NULL, test_case_teardown},
+
+	{"DTX23: resend during DTX resync - new leader not prepared",
+	 dtx_23, dtx_sub_setup, dtx_sub_teardown},
+	{"DTX24: resync abort the DTX when new leader handling resend",
+	 dtx_24, dtx_sub_setup, dtx_sub_teardown},
+	{"DTX25: resend during new leader restart - reindex",
+	 dtx_25, dtx_sub_setup, dtx_sub_teardown},
+	{"DTX26: both client and leader crashed, new leader miss modification",
+	 dtx_26, dtx_sub_setup, dtx_sub_teardown},
 };
 
 static int

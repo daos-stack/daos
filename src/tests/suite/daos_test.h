@@ -477,6 +477,11 @@ void write_ec_full_partial(struct ioreq *req, int test_idx, daos_off_t off);
 void write_ec_partial_full(struct ioreq *req, int test_idx, daos_off_t off);
 void verify_ec_full_partial(struct ioreq *req, int test_idx, daos_off_t off);
 void make_buffer(char *buffer, char start, int total);
+void dtx_share_oid(daos_obj_id_t *oid);
+void dtx_resend_check(test_arg_t *arg, bool leader_prepared,
+		      bool follower_prepared, bool new_epoch, bool distributed);
+int dtx_sub_setup(void **state);
+int dtx_sub_teardown(void **state);
 
 static inline void
 daos_test_print(int rank, char *message)

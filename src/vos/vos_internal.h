@@ -210,7 +210,7 @@ struct vos_container {
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_in_discard:1,
-				vc_reindex_cmt_dtx:1;
+				vc_cmt_reindexed:1;
 	unsigned int		vc_open_count;
 };
 
@@ -1228,6 +1228,12 @@ vos_has_uncertainty(struct vos_ts_set *ts_set,
 		return true;
 
 	return vos_ts_wcheck(ts_set, epoch, bound);
+}
+
+static inline bool
+umoff_is_null(umem_off_t umoff)
+{
+	return umoff == UMOFF_NULL;
 }
 
 /** For dealing with common routines between punch and update where akeys are

@@ -142,6 +142,15 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 	orw->orw_dti_cos.ca_count	= dth->dth_dti_cos_count;
 	orw->orw_dti_cos.ca_arrays	= dth->dth_dti_cos;
 
+	if (orw->orw_flags & ORF_RESEND) {
+		if (DAOS_FAIL_CHECK(DAOS_DTX_RESEND_DELAY3))
+			/* Sleep 7 seconds to guarantee DTX resync done. */
+			rc = dss_sleep(7 * 1000);
+	} else if (DAOS_FAIL_CHECK(DAOS_DTX_RESEND_DELAY1)) {
+		/* RPC (to follower) timeout is 6 seconds. */
+		rc = crt_req_set_timeout(req, 6);
+	}
+
 	D_DEBUG(DB_TRACE, DF_UOID" forwarding to rank:%d tag:%d.\n",
 		DP_UOID(orw->orw_oid), tgt_ep.ep_rank, tgt_ep.ep_tag);
 	rc = crt_req_send(req, shard_update_req_cb, remote_arg);
@@ -348,7 +357,7 @@ ds_obj_cpd_clone_reqs(struct dtx_leader_handle *dlh, struct daos_shard_tgt *tgt,
 			dcu_parent = &dcsr_parent[idx].dcsr_update;
 			dcu = &dcsr[i].dcsr_update;
 
-			/* For non-leader, does not need split EC sub-req. */
+			/* For follower, does not need split EC sub-req. */
 			dcu->dcu_ec_tgts = NULL;
 			dcu->dcu_ec_split_req = NULL;
 			dcsr[i].dcsr_ec_tgt_nr = 0;
@@ -509,6 +518,11 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 	dcde_dcs->dcs_buf = dcde;
 	oci->oci_disp_ents.ca_arrays = dcde_dcs;
 	oci->oci_disp_ents.ca_count = 1;
+
+	if (!(oci->oci_flags & ORF_RESEND) &&
+	    DAOS_FAIL_CHECK(DAOS_DTX_RESEND_DELAY1))
+		/* RPC (to follower) timeout is 6 seconds. */
+		rc = crt_req_set_timeout(req, 6);
 
 	D_DEBUG(DB_TRACE, "Forwarding CPD RPC to rank:%d tag:%d idx %u for DXT "
 		DF_DTI"\n",

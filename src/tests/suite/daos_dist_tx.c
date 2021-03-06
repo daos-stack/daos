@@ -1162,7 +1162,7 @@ dtx_21(void **state)
 	ioreq_fini(&req);
 }
 
-static void
+void
 dtx_share_oid(daos_obj_id_t *oid)
 {
 	int	rc;
@@ -1464,7 +1464,7 @@ dtx_25(void **state)
 
 	for (i = 0; i < DTX_NC_CNT; i++) {
 		/* Async batched commit is disabled, so if fetch hit
-		 * 'prepared' DTX on non-leader, it needs to resolve
+		 * 'prepared' DTX on follower, it needs to resolve
 		 * the uncertainty via dtx_refresh with leader.
 		 */
 		lookup_single(dkey1, akey, 0, &val, sizeof(val), DAOS_TX_NONE,
@@ -2615,11 +2615,13 @@ dtx_37(void **state)
 
 	/* Different MPI ranks will generate different object layout.
 	 * It is not easy to control multiple MPI ranks for specified
-	 * leader and some non-leader. So only check on the MPI rank_0.
+	 * leader and some follower. So only check on the MPI rank_0.
 	 */
 	MPI_Barrier(MPI_COMM_WORLD);
 	daos_fail_loc_set(0);
 	if (arg->myrank == 0) {
+		d_rank_t	skip_rank;
+
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				      DAOS_DTX_NO_BATCHED_CMT |
 				      DAOS_FAIL_ALWAYS, 0, NULL);
@@ -2641,8 +2643,10 @@ dtx_37(void **state)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				      DAOS_DTX_SKIP_PREPARE | DAOS_FAIL_ALWAYS,
 				      0, NULL);
+		/* Skip shard_4 */
+		skip_rank = get_rank_by_oid_shard(arg, oid, 4);
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
-				      4, 0, NULL); /* Skip shard 4 */
+				      skip_rank, 0, NULL);
 		daos_fail_loc_set(DAOS_DTX_SPEC_LEADER | DAOS_FAIL_ALWAYS);
 
 		print_message("Generating some TXs to be aborted...\n");
@@ -2879,9 +2883,403 @@ dtx_38(void **state)
 	dtx_fini_req_akey(reqs, akeys, 2, DTX_NC_CNT);
 }
 
+void
+dtx_resend_check(test_arg_t *arg, bool leader_prepared,
+		 bool follower_prepared, bool new_epoch, bool distributed)
+{
+	daos_obj_id_t	 oid;
+	struct ioreq	 req;
+	daos_handle_t	 th = { 0 };
+	char		 write_buf[DTX_IO_SMALL];
+	char		 fetch_buf[DTX_IO_SMALL];
+	uint64_t	 value;
+
+	if (!test_runable(arg, 2))
+		skip();
+
+	value = daos_resend_gen_fail_value(leader_prepared, follower_prepared,
+					   new_epoch);
+	arg->async = 0;
+	oid = daos_test_oid_gen(arg->coh, OC_RP_2G1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	dts_buf_render(write_buf, DTX_IO_SMALL);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	daos_fail_loc_set(DAOS_DTX_RESEND_DELAY1 | DAOS_FAIL_ALWAYS);
+	daos_fail_value_set(value);
+	if (arg->myrank == 0) {
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_DTX_RESEND_DELAY1 | DAOS_FAIL_ALWAYS,
+				      0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, value,
+				      0, NULL);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (distributed)
+		MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+	else
+		th = DAOS_TX_NONE;
+	insert_single(dts_dtx_dkey, dts_dtx_akey, 0, write_buf, DTX_IO_SMALL,
+		      th, &req);
+	if (distributed) {
+		MUST(daos_tx_commit(th, NULL));
+		MUST(daos_tx_close(th, NULL));
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
+				      0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 0,
+				      0, NULL);
+	}
+	daos_fail_loc_set(0);
+	daos_fail_value_set(0);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	lookup_single(dts_dtx_dkey, dts_dtx_akey, 0, fetch_buf, DTX_IO_SMALL,
+		      DAOS_TX_NONE, &req);
+	assert_memory_equal(write_buf, fetch_buf, DTX_IO_SMALL);
+	ioreq_fini(&req);
+}
+
+static void
+dtx_39(void **state)
+{
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX39: resend with same epoch, "
+		      "both leader and follower not prepared\n");
+
+	dtx_resend_check(*state, false, false, false, true);
+}
+
+static void
+dtx_40(void **state)
+{
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX40: resend with same epoch, "
+		      "leader prepared, follower not prepared\n");
+
+	dtx_resend_check(*state, true, false, false, true);
+}
+
+static void
+dtx_41(void **state)
+{
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX41: resend with same epoch, "
+		      "leader not prepared, follower prepared\n");
+
+	dtx_resend_check(*state, false, true, false, true);
+}
+
+static void
+dtx_42(void **state)
+{
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX42: resend with same epoch, "
+		      "both leader and follower prepared\n");
+
+	dtx_resend_check(*state, true, true, false, true);
+}
+
+static void
+dtx_43(void **state)
+{
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX43: resend with new epoch, "
+		      "both leader and follower not prepared\n");
+
+	dtx_resend_check(*state, false, false, true, true);
+}
+
+static void
+dtx_44(void **state)
+{
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX44: resend with new epoch, "
+		      "leader prepared, follower not prepared\n");
+
+	dtx_resend_check(*state, true, false, true, true);
+}
+
+static void
+dtx_45(void **state)
+{
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX45: resend with new epoch, "
+		      "leader not prepared, follower prepared\n");
+
+	dtx_resend_check(*state, false, true, true, true);
+}
+
+static void
+dtx_46(void **state)
+{
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX46: resend with new epoch, "
+		      "both leader and follower prepared\n");
+
+	dtx_resend_check(*state, true, true, true, true);
+}
+
+static void
+dtx_47(void **state)
+{
+	test_arg_t	*arg = *state;
+	char		*dkey1 = "a_dkey_1";
+	char		*dkey2 = "b_dkey_2";
+	daos_obj_id_t	 oids[2];
+	struct ioreq	 reqs[2];
+	daos_iod_type_t	 types[2] = { DAOS_IOD_SINGLE, DAOS_IOD_SINGLE };
+	uint16_t	 ocs[2] = { OC_S1, OC_RP_2G1 };
+	daos_handle_t	 th = { 0 };
+	uint64_t	 w_vals[2] = { 12, 34 };
+	uint64_t	 r_val;
+	int		 i;
+
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX47: DTX refresh before leader prepared\n");
+
+	if (arg->rank_size < 2)
+		skip();
+
+	if (!test_runable(arg, 3))
+		skip();
+
+	if (arg->myrank == 0) {
+		d_rank_t	rank_a;
+		d_rank_t	rank_b;
+
+again:
+		for (i = 0; i < 2; i++)
+			oids[i] = daos_test_oid_gen(arg->coh, ocs[i], 0, 0, 0);
+
+		rank_a = get_rank_by_oid_shard(arg, oids[0], 0);
+		for (i = 0; i < 2; i++) {
+			rank_b = get_rank_by_oid_shard(arg, oids[1], i);
+			/* To guarantee obj_0 and obj_1 do not share server. */
+			if (rank_a == rank_b)
+				goto again;
+		}
+
+		ioreq_init(&reqs[0], arg->coh, oids[0], types[0], arg);
+		ioreq_init(&reqs[1], arg->coh, oids[1], types[1], arg);
+
+		daos_fail_loc_set(DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS);
+
+		MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+		insert_single(dkey1, dts_dtx_akey, 0, &w_vals[0],
+			      sizeof(w_vals[0]), th, &reqs[0]);
+		insert_single(dkey2, dts_dtx_akey, 0, &w_vals[1],
+			      sizeof(w_vals[1]), th, &reqs[1]);
+		MUST(daos_tx_commit(th, NULL));
+		MUST(daos_tx_close(th, NULL));
+
+		daos_fail_loc_set(0);
+	}
+
+	for (i = 0; i < 2; i++)
+		dtx_share_oid(&oids[i]);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	daos_fail_loc_set(DAOS_DTX_RESEND_DELAY4 | DAOS_FAIL_ALWAYS);
+	if (arg->myrank == 0)
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_DTX_RESEND_DELAY4 | DAOS_FAIL_ALWAYS,
+				      0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (arg->myrank == 0) {
+		MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+		/* exchange values between obj_0 and obj_1.
+		 * Because DAOS_DTX_RESEND_DELAY4, the leader will delay
+		 * prepare for about 3 seconds. During such interval, the
+		 * fetch request from rank1 will arrive that will trigger
+		 * DTX refresh.
+		 */
+		insert_single(dkey1, dts_dtx_akey, 0, &w_vals[1],
+			      sizeof(w_vals[1]), th, &reqs[0]);
+		insert_single(dkey2, dts_dtx_akey, 0, &w_vals[0],
+			      sizeof(w_vals[0]), th, &reqs[1]);
+		MUST(daos_tx_commit(th, NULL));
+		MUST(daos_tx_close(th, NULL));
+
+		for (i = 0; i < 2; i++)
+			ioreq_fini(&reqs[1]);
+	} else if (arg->myrank == 1) {
+		ioreq_init(&reqs[1], arg->coh, oids[1], types[1], arg);
+
+		/* Sleep 1 second to guarantee that rank_0 has started
+		 * the transactional update to exchange values between
+		 * obj_0 and obj_1.
+		 */
+		sleep(1);
+
+		/* Standalone read will NOT wait rank_0's TX to complete. */
+		print_message("Verify standalone fetch, expect old vals\n");
+
+		lookup_single(dkey2, dts_dtx_akey, 0, &r_val,
+			      sizeof(r_val), DAOS_TX_NONE, &reqs[1]);
+		assert_memory_equal(w_vals[1], r_val, sizeof(r_val));
+
+		/* Transactional read will wait rank_0's TX to complete. */
+		print_message("Verify transactional fetch, expect new vals\n");
+
+		MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+		lookup_single(dkey2, dts_dtx_akey, 0, &r_val,
+			      sizeof(r_val), th, &reqs[1]);
+		assert_memory_equal(w_vals[0], r_val, sizeof(r_val));
+		/* Direct close the read TX without commit. */
+		MUST(daos_tx_close(th, NULL));
+
+		ioreq_fini(&reqs[1]);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0)
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      0, 0, NULL);
+	daos_fail_loc_set(0);
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
+static void
+dtx_48(void **state)
+{
+	test_arg_t	*arg = *state;
+	char		*dkey1 = "a_dkey_1";
+	char		*dkey2 = "b_dkey_2";
+	daos_obj_id_t	 oids[2];
+	struct ioreq	 reqs[2];
+	daos_iod_type_t	 types[2] = { DAOS_IOD_ARRAY, DAOS_IOD_SINGLE };
+	uint16_t	 ocs[2] = { OC_RP_2G1, OC_RP_3G1 };
+	daos_handle_t	 th = { 0 };
+	char		 write_bufs[2][DTX_IO_SMALL];
+	char		 fetch_buf[DTX_IO_SMALL];
+	d_rank_t	 kill_rank = CRT_NO_RANK;
+	int		 i;
+
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX48: "
+		      "resend during DTX resync - new leader not prepared\n");
+
+	if (arg->rank_size < 2)
+		skip();
+
+	if (!test_runable(arg, 4))
+		skip();
+
+	for (i = 0; i < 2; i++) {
+		if (arg->myrank == 0)
+			oids[i] = daos_test_oid_gen(arg->coh, ocs[i], 0, 0, 0);
+		dtx_share_oid(&oids[i]);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	daos_fail_loc_set(DAOS_DTX_RESEND_DELAY2 | DAOS_FAIL_ALWAYS);
+	if (arg->myrank == 0) {
+		d_rank_t	skip_rank;
+
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_DTX_RESEND_DELAY2 | DAOS_FAIL_ALWAYS,
+				      0, NULL);
+		/* NOT dispatch to objs[0]'s shard_1 that will be new leader. */
+		skip_rank = get_rank_by_oid_shard(arg, oids[0], 1);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
+				      skip_rank, 0, NULL);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (arg->myrank == 1) {
+		int	restarted = 0;
+		int	rc;
+
+		ioreq_init(&reqs[0], arg->coh, oids[0], types[0], arg);
+		ioreq_init(&reqs[1], arg->coh, oids[1], types[1], arg);
+
+		dts_buf_render(write_bufs[0], DTX_IO_SMALL);
+		dts_buf_render(write_bufs[1], DTX_IO_SMALL);
+
+		MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+
+restart:
+		insert_single(dkey1, dts_dtx_akey, 0, write_bufs[0],
+			      DTX_IO_SMALL, th, &reqs[0]);
+		insert_single(dkey2, dts_dtx_akey, 0, write_bufs[1],
+			      DTX_IO_SMALL, th, &reqs[1]);
+		rc = daos_tx_commit(th, NULL);
+		if (rc != 0) {
+			/* Because of leader eviction, TX will be restarted. */
+			assert_rc_equal(rc, -DER_TX_RESTART);
+			assert_rc_equal(restarted, 0);
+			restarted++;
+			print_message("Handle TX restart\n");
+			MUST(daos_tx_restart(th, NULL));
+
+			goto restart;
+		}
+
+		MUST(daos_tx_close(th, NULL));
+	} else if (arg->myrank == 0) {
+		/* Sleep 1 second to guarantee that rank1 has send out
+		 * CPD RPC before evict the old leader.
+		 */
+		sleep(1);
+
+		/* Exclude shard_0 - the old leader,
+		 * then shard_1 will be the new leader.
+		 */
+		kill_rank = get_rank_by_oid_shard(arg, oids[0], 0);
+		print_message("Exclude rank %d to trigger rebuild\n",
+			      kill_rank);
+		rebuild_single_pool_rank(arg, kill_rank, false);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      0, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
+				      0, 0, NULL);
+	}
+	daos_fail_loc_set(0);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (arg->myrank == 1) {
+		print_message("Verify update after rebuild...\n");
+
+		lookup_single(dkey1, dts_dtx_akey, 0, fetch_buf, DTX_IO_SMALL,
+			      DAOS_TX_NONE, &reqs[0]);
+		assert_memory_equal(write_bufs[0], fetch_buf, DTX_IO_SMALL);
+		ioreq_fini(&reqs[0]);
+
+		lookup_single(dkey2, dts_dtx_akey, 0, fetch_buf, DTX_IO_SMALL,
+			      DAOS_TX_NONE, &reqs[1]);
+		assert_memory_equal(write_bufs[1], fetch_buf, DTX_IO_SMALL);
+		ioreq_fini(&reqs[1]);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	/* Add the excluded rank back. */
+	reintegrate_single_pool_rank(arg, kill_rank);
+}
+
 static test_arg_t *saved_dtx_arg;
 
-static int
+int
 dtx_sub_setup(void **state)
 {
 	int	rc;
@@ -2893,7 +3291,7 @@ dtx_sub_setup(void **state)
 	return rc;
 }
 
-static int
+int
 dtx_sub_teardown(void **state)
 {
 	int	rc;
@@ -2986,6 +3384,38 @@ static const struct CMUnitTest dtx_tests[] = {
 	 dtx_37, dtx_sub_setup, dtx_sub_teardown},
 	{"DTX38: resync - lost whole redundancy groups",
 	 dtx_38, dtx_sub_setup, dtx_sub_teardown},
+
+	{"DTX39: resend with same epoch, "
+		"both leader and follower not prepared",
+	 dtx_39, NULL, test_case_teardown},
+	{"DTX40: resend with same epoch, "
+		"leader prepared, follower not prepared",
+	 dtx_40, NULL, test_case_teardown},
+	{"DTX41: resend with same epoch, "
+		"leader not prepared, follower prepared",
+	 dtx_41, NULL, test_case_teardown},
+	{"DTX42: resend with same epoch, "
+		"both leader and follower prepared",
+	 dtx_42, NULL, test_case_teardown},
+
+	{"DTX43: resend with new epoch, "
+		"both leader and follower not prepared",
+	 dtx_43, NULL, test_case_teardown},
+	{"DTX44: resend with new epoch, "
+		"leader prepared, follower not prepared",
+	 dtx_44, NULL, test_case_teardown},
+	{"DTX45: resend with new epoch, "
+		"leader not prepared, follower prepared",
+	 dtx_45, NULL, test_case_teardown},
+	{"DTX46: resend with new epoch, "
+		"both leader and follower prepared",
+	 dtx_46, NULL, test_case_teardown},
+
+	{"DTX47: DTX refresh before leader prepared",
+	 dtx_47, NULL, test_case_teardown},
+
+	{"DTX48: resend during DTX resync - new leader not prepared",
+	 dtx_48, dtx_sub_setup, dtx_sub_teardown},
 };
 
 static int

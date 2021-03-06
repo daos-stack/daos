@@ -496,16 +496,30 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 		goto out;
 	}
 
+	cont->sc_dtx_resyncing = 1;
+	cont->sc_dtx_resync_ver = ver;
+	ABT_mutex_unlock(cont->sc_mutex);
+
 	crt_group_rank(NULL, &myrank);
 	if (myrank == daos_fail_value_get() &&
 	    DAOS_FAIL_CHECK(DAOS_DTX_SRV_RESTART)) {
 		dss_set_start_epoch();
 		vos_dtx_cache_reset(cont->sc_hdl);
-	}
 
-	cont->sc_dtx_resyncing = 1;
-	cont->sc_dtx_resync_ver = ver;
-	ABT_mutex_unlock(cont->sc_mutex);
+		/* Inject 3 seconds delay to simulate reindex large table.
+		 * There may be resend RPC and DTX resync check during that.
+		 */
+		rc = dss_sleep(3 * 1000);
+
+		/* It is not necessary to call reindex_stop() after rebuild.
+		 * The reindex ULT will auto exit after done. reindex_stop()
+		 * will be called when close the container.
+		 */
+		rc = cont_start_dtx_reindex_ult(cont);
+		if (rc != 0)
+			D_WARN("Fail to reindex CMT entries for "DF_UUID": "
+			       DF_RC"\n", DP_UUID(co_uuid), DP_RC(rc));
+	}
 
 	dra.cont = cont;
 	dra.version = ver;
@@ -516,6 +530,10 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 		dra.resync_all = 0;
 	D_INIT_LIST_HEAD(&dra.tables.drh_list);
 	dra.tables.drh_count = 0;
+
+	if (DAOS_FAIL_CHECK(DAOS_DTX_RESEND_DELAY3))
+		/* Sleep 5 seconds to guarantee that client has resent RPC. */
+		rc = dss_sleep(5 * 1000);
 
 	D_DEBUG(DB_TRACE, "resync DTX scan "DF_UUID"/"DF_UUID" start.\n",
 		DP_UUID(po_uuid), DP_UUID(co_uuid));

@@ -369,6 +369,9 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	cont->vc_dtx_committed_count = 0;
 	cont->vc_dtx_committed_tmp_count = 0;
 
+	if (umoff_is_null(cont->vc_cont_df->cd_dtx_committed_head))
+		cont->vc_cmt_reindexed = 1;
+
 	/* Cache this btr object ID in container handle */
 	rc = dbtree_open_inplace_ex(&cont->vc_cont_df->cd_obj_root,
 				    &pool->vp_uma, vos_cont2hdl(cont),

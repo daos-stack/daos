@@ -2055,6 +2055,18 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 			DP_UOID(orw->orw_oid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
+
+	if (!(orw->orw_flags & ORF_RESEND) &&
+	    !daos_resend_follower_prepared(daos_fail_value_get()) &&
+	    DAOS_FAIL_CHECK(DAOS_DTX_RESEND_DELAY1))
+		/* Timeout for the RPC to leader is 3 seconds.
+		 * Timeout for the RPC to non-leader is 6 seconds.
+		 * Here, make the non-leader to sleep 5 seconds, that will
+		 * cause client side IO RPC timeout, but server side dispatch
+		 * RPC is not timeout yet.
+		 */
+		rc = dss_sleep(5 * 1000);
+
 	rc = obj_local_rw(rpc, &ioc, NULL, NULL, NULL, &dth);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": error="DF_RC".\n", DP_UOID(orw->orw_oid),
@@ -2064,7 +2076,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 
 out:
 	if (opc == DAOS_OBJ_RPC_TGT_UPDATE &&
-	    DAOS_FAIL_CHECK(DAOS_DTX_NONLEADER_ERROR))
+	    DAOS_FAIL_CHECK(DAOS_DTX_FOLLOWER_ERROR))
 		rc = -DER_IO;
 
 	rc = dtx_end(&dth, ioc.ioc_coc, rc);
@@ -2089,6 +2101,17 @@ obj_tgt_update(struct dtx_leader_handle *dlh, void *arg, int idx,
 
 		/* No need re-exec local update */
 		if (!(exec_arg->flags & ORF_RESEND)) {
+			if ((!daos_resend_leader_prepared(
+						daos_fail_value_get()) ||
+			     daos_resend_follower_prepared(
+						daos_fail_value_get())) &&
+			    DAOS_FAIL_CHECK(DAOS_DTX_RESEND_DELAY1))
+				/* Timeout for the RPC to leader is 3 seconds.
+				 * Here, make the leader to sleep 4 seconds,
+				 * that will cause client side IO RPC timeout.
+				 */
+				rc = dss_sleep(4 * 1000);
+
 			split_iods = split_req != NULL ? split_req->osr_iods :
 							 NULL;
 			split_offs = split_req != NULL ? split_req->osr_offs :
@@ -2976,7 +2999,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 out:
-	if (DAOS_FAIL_CHECK(DAOS_DTX_NONLEADER_ERROR))
+	if (DAOS_FAIL_CHECK(DAOS_DTX_FOLLOWER_ERROR))
 		rc = -DER_IO;
 
 	/* Stop the local transaction */
@@ -3945,6 +3968,17 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 	if (rc != 0)
 		goto out;
 
+	if (!(oci->oci_flags & ORF_RESEND) &&
+	    !daos_resend_follower_prepared(daos_fail_value_get()) &&
+	    DAOS_FAIL_CHECK(DAOS_DTX_RESEND_DELAY1))
+		/* Timeout for the RPC to leader is 3 seconds.
+		 * Timeout for the RPC to non-leader is 6 seconds.
+		 * Here, make the non-leader to sleep 5 seconds, that will
+		 * cause client side IO RPC timeout, but server side dispatch
+		 * RPC is not timeout yet.
+		 */
+		rc = dss_sleep(5 * 1000);
+
 again:
 	rc = ds_obj_dtx_handle_one(rpc, dcsh, dcde, dcsr, ioc, &dth);
 	if (obj_dtx_need_refresh(&dth, rc)) {
@@ -3991,6 +4025,20 @@ obj_obj_dtx_leader(struct dtx_leader_handle *dlh, void *arg, int idx,
 					return rc;
 				}
 			}
+
+			if (DAOS_FAIL_CHECK(DAOS_DTX_RESEND_DELAY4))
+				/* Sleep 3 seconds before prepare on leader. */
+				rc = dss_sleep(3 * 1000);
+			else if ((!daos_resend_leader_prepared(
+						daos_fail_value_get()) ||
+				  daos_resend_follower_prepared(
+						daos_fail_value_get())) &&
+				 DAOS_FAIL_CHECK(DAOS_DTX_RESEND_DELAY1))
+				/* Timeout for the RPC to leader is 3 seconds.
+				 * Here, make the leader to sleep 4 seconds,
+				 * that will cause client side IO RPC timeout.
+				 */
+				rc = dss_sleep(4 * 1000);
 
 again:
 			rc = ds_obj_dtx_handle_one(dca->dca_rpc,

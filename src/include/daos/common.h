@@ -617,6 +617,36 @@ enum {
 	DAOS_FAIL_MAX_GROUP
 };
 
+#define DAOS_RESEND_LEADER_SHIFT	1
+#define DAOS_RESEND_FOLLOWER_SHIFT	2
+#define DAOS_RESEND_EPOCH_SHIFT		3
+
+static inline uint64_t
+daos_resend_gen_fail_value(bool leader, bool follower, bool epoch)
+{
+	return ((leader ? 1 : 0) << DAOS_RESEND_LEADER_SHIFT) |
+	       ((follower ? 1 : 0) << DAOS_RESEND_FOLLOWER_SHIFT) |
+	       ((epoch ? 1 : 0) << DAOS_RESEND_EPOCH_SHIFT);
+}
+
+static inline bool
+daos_resend_leader_prepared(uint64_t value)
+{
+	return ((value >> DAOS_RESEND_LEADER_SHIFT) & 1) ? true : false;
+}
+
+static inline bool
+daos_resend_follower_prepared(uint64_t value)
+{
+	return ((value >> DAOS_RESEND_FOLLOWER_SHIFT) & 1) ? true : false;
+}
+
+static inline bool
+daos_resend_new_epoch(uint64_t value)
+{
+	return ((value >> DAOS_RESEND_EPOCH_SHIFT) & 1) ? true : false;
+}
+
 #define DAOS_FAIL_ID_GET(fail_loc)	(fail_loc & DAOS_FAIL_ID_MASK)
 
 #define DAOS_FAIL_UNIT_TEST_GROUP_LOC	\
@@ -681,7 +711,7 @@ enum {
 
 #define DAOS_DTX_COMMIT_SYNC		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x30)
 #define DAOS_DTX_LEADER_ERROR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x31)
-#define DAOS_DTX_NONLEADER_ERROR	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x32)
+#define DAOS_DTX_FOLLOWER_ERROR	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x32)
 #define DAOS_DTX_LOST_RPC_REQUEST	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x33)
 #define DAOS_DTX_LOST_RPC_REPLY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x34)
 #define DAOS_DTX_LONG_TIME_RESEND	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x35)
@@ -704,6 +734,10 @@ enum {
 #define DAOS_DTX_SPEC_LEADER		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x45)
 #define DAOS_DTX_SRV_RESTART		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x46)
 #define DAOS_DTX_NO_RETRY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x47)
+#define DAOS_DTX_RESEND_DELAY1		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x48)
+#define DAOS_DTX_RESEND_DELAY2		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x49)
+#define DAOS_DTX_RESEND_DELAY3		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x4a)
+#define DAOS_DTX_RESEND_DELAY4		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x4b)
 
 #define DAOS_NVME_FAULTY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x50)
 #define DAOS_NVME_WRITE_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x51)

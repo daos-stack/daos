@@ -711,7 +711,7 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc,
 	if (with_oid) {
 		rc = crt_proc_daos_unit_oid_t(proc, &dcsr->dcsr_oid);
 	} else if (ENCODING(proc_op)) {
-		daos_unit_oid_t		 oid;
+		daos_unit_oid_t		 oid = { 0 };
 
 		daos_dc_obj2id(dcsr->dcsr_obj, &oid.id_pub);
 		/* It is not important what the id_shard is, that
@@ -1209,8 +1209,10 @@ obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version)
 		break;
 	case DAOS_OBJ_RPC_EC_AGGREGATE:
 		((struct obj_ec_agg_out *)reply)->ea_map_ver = map_version;
+		break;
 	case DAOS_OBJ_RPC_CPD:
 		((struct obj_cpd_out *)reply)->oco_map_version = map_version;
+		break;
 	case DAOS_OBJ_RPC_EC_REPLICATE:
 		((struct obj_ec_rep_out *)reply)->er_map_ver = map_version;
 		break;

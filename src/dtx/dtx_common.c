@@ -729,6 +729,14 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 			       "old epoch "DF_U64" by resync\n",
 			       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid),
 			       dth->dth_epoch);
+
+			/* It only can happen under standalone case.
+			 * For distributed transaction, the resend logic
+			 * will ask client to wait until DTX resync done.
+			 */
+			D_ASSERT(!dth->dth_dist);
+
+			/* The IO handler will handle -DER_TX_RESTART locally */
 			D_GOTO(abort, result = -DER_TX_RESTART);
 		}
 
@@ -1060,7 +1068,6 @@ dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
 		 */
 		return -DER_NONEXIST;
 
-again:
 	rc = vos_dtx_check(coh, dti, epoch, pm_ver, NULL, true);
 	switch (rc) {
 	case DTX_ST_PREPARED:
@@ -1082,10 +1089,13 @@ again:
 		return rc;
 	case -DER_AGAIN:
 		/* Re-index committed DTX table is not completed yet,
-		 * let's wait and retry.
+		 * ask client to retry. Here, if the re-index process
+		 * take some long time and if we make server to retry
+		 * locally, then client may re-send many times during
+		 * such interval and causes server to start many ULTs
+		 * to handle related resend RPCs in parallel.
 		 */
-		ABT_thread_yield();
-		goto again;
+		return -DER_INPROGRESS;
 	default:
 		return rc >= 0 ? -DER_INVAL : rc;
 	}
@@ -1153,8 +1163,9 @@ dtx_leader_exec_ops_ult(void *arg)
 		sub->dss_result = 0;
 
 		if (sub->dss_tgt.st_rank == DAOS_TGT_IGNORE ||
-		    (i == daos_fail_value_get() &&
-		     DAOS_FAIL_CHECK(DAOS_DTX_SKIP_PREPARE))) {
+		    (sub->dss_tgt.st_rank == daos_fail_value_get() &&
+		     (DAOS_FAIL_CHECK(DAOS_DTX_SKIP_PREPARE) ||
+		      DAOS_FAIL_CHECK(DAOS_DTX_RESEND_DELAY2)))) {
 			int ret;
 
 			ret = ABT_future_set(future, dlh);

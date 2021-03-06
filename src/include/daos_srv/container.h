@@ -117,6 +117,8 @@ struct ds_cont_child {
 	uint32_t		 sc_dtx_resync_ver;
 };
 
+int cont_start_dtx_reindex_ult(struct ds_cont_child *cont);
+
 /*
  * Per-thread container handle (memory) object
  *

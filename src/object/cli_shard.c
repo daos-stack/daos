@@ -1129,6 +1129,14 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	if (daos_io_bypass & IOBP_CLI_RPC) {
 		rc = daos_rpc_complete(req, task);
 	} else {
+		if (!(orw->orw_flags & ORF_RESEND) &&
+		    (DAOS_FAIL_CHECK(DAOS_DTX_RESEND_DELAY1) ||
+		     DAOS_FAIL_CHECK(DAOS_DTX_RESEND_DELAY2) ||
+		     DAOS_FAIL_CHECK(DAOS_DTX_RESEND_DELAY3) ||
+		     DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REQUEST)))
+			/* RPC (to leader) timeout is 3 seconds. */
+			rc = crt_req_set_timeout(req, 3);
+
 		rc = daos_rpc_send(req, task);
 		if (rc != 0) {
 			D_ERROR("update/fetch rpc failed rc "DF_RC"\n",
