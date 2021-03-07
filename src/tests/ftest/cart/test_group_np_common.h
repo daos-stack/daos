@@ -126,8 +126,8 @@ test_checkin_handler(crt_rpc_t *rpc_req)
 	rc = crt_reply_send(rpc_req);
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
 
-	DBG_PRINT("tier1 test_server sent checkin reply, ret: %d, \
-			 room_no: %d.\n", e_reply->ret, e_reply->room_no);
+	DBG_PRINT("tier1 test_server sent checkin reply, ret: %d, "
+		  " room_no: %d.\n", e_reply->ret, e_reply->room_no);
 }
 
 /* Track number of dead-alive swim status changes */
@@ -432,7 +432,9 @@ check_in(crt_group_t *remote_group, int rank, int tag)
 		rpc_req_input->bool_val);
 
 	test_g.global_client_cb_arg = rank;
-	rc = crt_req_send(rpc_req, client_cb_common, &test_g.global_client_cb_arg);
+	rc = crt_req_send(rpc_req,
+			  client_cb_common,
+			  &test_g.global_client_cb_arg);
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 
 	/* If we're testing crt_ep_abort(), abort the previous RPC */
