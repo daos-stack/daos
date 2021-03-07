@@ -40,7 +40,7 @@ drain_dkeys(void **state)
 	if (!test_runable(arg, 4))
 		return;
 
-	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0,
+	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
 				arg->myrank);
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
 	oid = dts_oid_set_tgt(oid, tgt);
@@ -56,10 +56,23 @@ drain_dkeys(void **state)
 		insert_single(key, "a_key", 0, "data", strlen("data") + 1,
 			      DAOS_TX_NONE, &req);
 	}
-	ioreq_fini(&req);
 
 	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
+	for (i = 0; i < KEY_NR; i++) {
+		char key[16];
+		char buf[16];
+
+		sprintf(key, "dkey_0_%d", i);
+		/** Lookup */
+		memset(buf, 0, 10);
+		lookup_single(key, "a_key", 0, buf, 10, DAOS_TX_NONE, &req);
+		assert_int_equal(req.iod[0].iod_size, strlen("data") + 1);
+
+		/** Verify data consistency */
+		assert_string_equal(buf, "data");
+	}
+	ioreq_fini(&req);
 }
 
 static void
@@ -74,7 +87,7 @@ drain_akeys(void **state)
 	if (!test_runable(arg, 4))
 		return;
 
-	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0,
+	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
 				arg->myrank);
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
 	oid = dts_oid_set_tgt(oid, tgt);
@@ -90,11 +103,23 @@ drain_akeys(void **state)
 		insert_single("dkey_1_0", akey, 0, "data", strlen("data") + 1,
 			      DAOS_TX_NONE, &req);
 	}
-	ioreq_fini(&req);
 
 	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	for (i = 0; i < KEY_NR; i++) {
+		char akey[16];
+		char buf[16];
 
-	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+		sprintf(akey, "%d", i);
+		/** Lookup */
+		memset(buf, 0, 10);
+		lookup_single("dkey_1_0", akey, 0, buf, 10, DAOS_TX_NONE, &req);
+		assert_int_equal(req.iod[0].iod_size, strlen("data") + 1);
+
+		/** Verify data consistency */
+		assert_string_equal(buf, "data");
+	}
+
+	ioreq_fini(&req);
 }
 
 static void
@@ -110,7 +135,7 @@ drain_indexes(void **state)
 	if (!test_runable(arg, 4))
 		return;
 
-	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0,
+	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
 				arg->myrank);
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
 	oid = dts_oid_set_tgt(oid, tgt);
@@ -127,120 +152,25 @@ drain_indexes(void **state)
 			insert_single(key, "a_key", j, "data",
 				      strlen("data") + 1, DAOS_TX_NONE, &req);
 	}
-	ioreq_fini(&req);
 
 	/* Drain rank 1 */
 	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	for (i = 0; i < KEY_NR; i++) {
+		char	key[16];
+		char	buf[16];
 
-	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
-}
-
-static void
-drain_snap_update_recs(void **state)
-{
-	test_arg_t	*arg = *state;
-	daos_obj_id_t	oid;
-	struct ioreq	req;
-	daos_recx_t	recx;
-	int		tgt = DEFAULT_FAIL_TGT;
-	char		string[100] = { 0 };
-	daos_epoch_t	snap_epoch[5];
-	int		i;
-	int		rc;
-
-	if (!test_runable(arg, 4))
-		return;
-
-	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0,
-				arg->myrank);
-	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
-	oid = dts_oid_set_tgt(oid, tgt);
-	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-	for (i = 0; i < 5; i++)
-		sprintf(string + strlen(string), "old-snap%d", i);
-
-	recx.rx_idx = 0;
-	recx.rx_nr = strlen(string);
-	insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1, string,
-		     strlen(string) + 1, &req);
-
-	for (i = 0; i < 5; i++) {
-		char data[20] = { 0 };
-
-		/* Update string for each snapshot */
-		daos_cont_create_snap(arg->coh, &snap_epoch[i], NULL, NULL);
-		sprintf(data, "new-snap%d", i);
-		recx.rx_idx = i * strlen(data);
-		recx.rx_nr = strlen(data);
-		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1, data,
-			      strlen(data) + 1, &req);
+		sprintf(key, "dkey_2_%d", i);
+		for (j = 0; j < 20; j++) {
+			memset(buf, 0, 10);
+			lookup_single(key, "a_key", j, buf, 10, DAOS_TX_NONE,
+				      &req);
+			assert_int_equal(req.iod[0].iod_size,
+					 strlen("data") + 1);
+			assert_string_equal(buf, "data");
+		}
 	}
-
-	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
-
-	for (i = 0; i < 5; i++) {
-		rc = daos_obj_verify(arg->coh, oid, snap_epoch[i]);
-		assert_rc_equal(rc, 0);
-	}
-
-	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
-	assert_rc_equal(rc, 0);
 
 	ioreq_fini(&req);
-
-	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
-}
-
-static void
-drain_snap_punch_recs(void **state)
-{
-	test_arg_t	*arg = *state;
-	daos_obj_id_t	oid;
-	struct ioreq	req;
-	daos_recx_t	recx;
-	int		tgt = DEFAULT_FAIL_TGT;
-	char		string[100];
-	daos_epoch_t	snap_epoch[5];
-	int		i;
-	int		rc;
-
-	if (!test_runable(arg, 4))
-		return;
-
-	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0,
-				arg->myrank);
-	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
-	oid = dts_oid_set_tgt(oid, tgt);
-	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-	for (i = 0; i < 5; i++)
-		sprintf(string + strlen(string), "old-snap%d", i);
-
-	recx.rx_idx = 0;
-	recx.rx_nr = strlen(string);
-	insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1, string,
-		     strlen(string) + 1, &req);
-
-	for (i = 0; i < 5; i++) {
-		/* punch string */
-		daos_cont_create_snap(arg->coh, &snap_epoch[i], NULL, NULL);
-		recx.rx_idx = i * 9; /* strlen("old-snap%d") */
-		recx.rx_nr = 9;
-		punch_recxs("d_key", "a_key", &recx, 1, DAOS_TX_NONE, &req);
-	}
-
-	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
-
-	for (i = 0; i < 5; i++) {
-		rc = daos_obj_verify(arg->coh, oid, snap_epoch[i]);
-		assert_rc_equal(rc, 0);
-	}
-
-	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
-	assert_rc_equal(rc, 0);
-
-	ioreq_fini(&req);
-
-	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
 
 static void
@@ -252,11 +182,17 @@ drain_snap_update_keys(void **state)
 	int		tgt = DEFAULT_FAIL_TGT;
 	daos_epoch_t	snap_epoch[5];
 	int		i;
+	uint32_t	number;
+	daos_key_desc_t kds[10];
+	daos_anchor_t	anchor = { 0 };
+	char		buf[256];
+	int		buf_len = 256;
+
 
 	if (!test_runable(arg, 4))
 		return;
 
-	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0,
+	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
 				arg->myrank);
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
 	oid = dts_oid_set_tgt(oid, tgt);
@@ -276,51 +212,37 @@ drain_snap_update_keys(void **state)
 
 	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
-	daos_fail_loc_set(DAOS_OBJ_SPECIAL_SHARD);
-	for (i = 0; i < OBJ_REPLICAS; i++) {
-		uint32_t	number;
-		daos_key_desc_t kds[10];
-		daos_anchor_t	anchor = { 0 };
-		char		buf[256];
-		int		buf_len = 256;
-		int		j;
+	for (i = 0; i < 5; i++) {
+		daos_handle_t	th_open;
 
-		daos_fail_value_set(i);
-		for (j = 0; j < 5; j++) {
-			daos_handle_t	th_open;
-
-			memset(&anchor, 0, sizeof(anchor));
-			daos_tx_open_snap(arg->coh, snap_epoch[j], &th_open,
-					  NULL);
-			number = 10;
-			enumerate_dkey(th_open, &number, kds, &anchor, buf,
-				       buf_len, &req);
-
-			assert_int_equal(number, j > 0 ? j+1 : 0);
-
-			number = 10;
-			memset(&anchor, 0, sizeof(anchor));
-			enumerate_akey(th_open, "dkey", &number, kds, &anchor,
-				       buf, buf_len, &req);
-
-			assert_int_equal(number, j);
-			daos_tx_close(th_open, NULL);
-		}
-		number = 10;
 		memset(&anchor, 0, sizeof(anchor));
-		enumerate_dkey(DAOS_TX_NONE, &number, kds, &anchor, buf,
+		daos_tx_open_snap(arg->coh, snap_epoch[i], &th_open, NULL);
+		number = 10;
+		enumerate_dkey(th_open, &number, kds, &anchor, buf,
 			       buf_len, &req);
-		assert_int_equal(number, 6);
+
+		assert_int_equal(number, i > 0 ? i + 1 : 0);
 
 		number = 10;
 		memset(&anchor, 0, sizeof(anchor));
-		enumerate_akey(DAOS_TX_NONE, "dkey", &number, kds, &anchor,
+		enumerate_akey(th_open, "dkey", &number, kds, &anchor,
 			       buf, buf_len, &req);
-		assert_int_equal(number, 5);
+
+		assert_int_equal(number, i);
+		daos_tx_close(th_open, NULL);
 	}
+	number = 10;
+	memset(&anchor, 0, sizeof(anchor));
+	enumerate_dkey(DAOS_TX_NONE, &number, kds, &anchor, buf, buf_len, &req);
+	assert_int_equal(number, 6);
+
+	number = 10;
+	memset(&anchor, 0, sizeof(anchor));
+	enumerate_akey(DAOS_TX_NONE, "dkey", &number, kds, &anchor,
+		       buf, buf_len, &req);
+	assert_int_equal(number, 5);
 
 	ioreq_fini(&req);
-	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
 
 static void
@@ -332,6 +254,11 @@ drain_snap_punch_keys(void **state)
 	int		tgt = DEFAULT_FAIL_TGT;
 	daos_epoch_t	snap_epoch[5];
 	int		i;
+	daos_key_desc_t  kds[10];
+	daos_anchor_t	 anchor;
+	char		 buf[256];
+	int		 buf_len = 256;
+	uint32_t	 number;
 
 	if (!test_runable(arg, 4))
 		return;
@@ -371,51 +298,38 @@ drain_snap_punch_keys(void **state)
 
 	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
-	daos_fail_loc_set(DAOS_OBJ_SPECIAL_SHARD);
-	for (i = 0; i < OBJ_REPLICAS; i++) {
-		daos_key_desc_t  kds[10];
-		daos_anchor_t	 anchor;
-		char		 buf[256];
-		int		 buf_len = 256;
-		uint32_t	 number;
-		int		 j;
+	for (i = 0; i < 5; i++) {
+		daos_handle_t th_open;
 
-		daos_fail_value_set(i);
-		for (j = 0; j < 5; j++) {
-			daos_handle_t th_open;
-
-			daos_tx_open_snap(arg->coh, snap_epoch[j], &th_open,
-					  NULL);
-			number = 10;
-			memset(&anchor, 0, sizeof(anchor));
-			enumerate_dkey(th_open, &number, kds, &anchor, buf,
-				       buf_len, &req);
-			assert_int_equal(number, 6 - j);
-
-			number = 10;
-			memset(&anchor, 0, sizeof(anchor));
-			enumerate_akey(th_open, "dkey", &number, kds,
-				       &anchor, buf, buf_len, &req);
-			assert_int_equal(number, 10 - j);
-
-			daos_tx_close(th_open, NULL);
-		}
-
+		daos_tx_open_snap(arg->coh, snap_epoch[i], &th_open, NULL);
 		number = 10;
 		memset(&anchor, 0, sizeof(anchor));
-		enumerate_dkey(DAOS_TX_NONE, &number, kds, &anchor, buf,
+		enumerate_dkey(th_open, &number, kds, &anchor, buf,
 			       buf_len, &req);
-		assert_int_equal(number, 1);
+		assert_int_equal(number, 6 - i);
 
 		number = 10;
 		memset(&anchor, 0, sizeof(anchor));
-		enumerate_akey(DAOS_TX_NONE, "dkey", &number, kds, &anchor,
-			       buf, buf_len, &req);
-		assert_int_equal(number, 5);
+		enumerate_akey(th_open, "dkey", &number, kds,
+			       &anchor, buf, buf_len, &req);
+		assert_int_equal(number, 10 - i);
+
+		daos_tx_close(th_open, NULL);
 	}
 
+	number = 10;
+	memset(&anchor, 0, sizeof(anchor));
+	enumerate_dkey(DAOS_TX_NONE, &number, kds, &anchor, buf,
+		       buf_len, &req);
+	assert_int_equal(number, 1);
+
+	number = 10;
+	memset(&anchor, 0, sizeof(anchor));
+	enumerate_akey(DAOS_TX_NONE, "dkey", &number, kds, &anchor,
+		       buf, buf_len, &req);
+	assert_int_equal(number, 5);
+
 	ioreq_fini(&req);
-	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
 
 static void
@@ -432,7 +346,7 @@ drain_multiple(void **state)
 	if (!test_runable(arg, 4))
 		return;
 
-	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0,
+	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
 				arg->myrank);
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
 	oid = dts_oid_set_tgt(oid, tgt);
@@ -455,9 +369,30 @@ drain_multiple(void **state)
 					      DAOS_TX_NONE, &req);
 		}
 	}
-	ioreq_fini(&req);
 
 	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	for (i = 0; i < 10; i++) {
+		char	dkey[16];
+
+		sprintf(dkey, "dkey_3_%d", i);
+		for (j = 0; j < 10; j++) {
+			char	akey[16];
+			char	buf[10];
+
+			memset(buf, 0, 10);
+			sprintf(akey, "akey_%d", j);
+			for (k = 0; k < 10; k++) {
+				lookup_single(dkey, akey, k, buf,
+					      strlen("data") + 1,
+					      DAOS_TX_NONE, &req);
+				assert_int_equal(req.iod[0].iod_size,
+						 strlen("data") + 1);
+				assert_string_equal(buf, "data");
+			}
+		}
+	}
+
+	ioreq_fini(&req);
 }
 
 static void
@@ -469,11 +404,12 @@ drain_large_rec(void **state)
 	int			tgt = DEFAULT_FAIL_TGT;
 	int			i;
 	char			buffer[5000];
+	char			v_buffer[5000];
 
 	if (!test_runable(arg, 4))
 		return;
 
-	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0,
+	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
 				arg->myrank);
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
 	oid = dts_oid_set_tgt(oid, tgt);
@@ -490,9 +426,20 @@ drain_large_rec(void **state)
 		insert_single(key, "a_key", 0, buffer, 5000, DAOS_TX_NONE,
 			      &req);
 	}
-	ioreq_fini(&req);
 
 	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	memset(v_buffer, 'a', 5000);
+	for (i = 0; i < KEY_NR; i++) {
+		char	key[16];
+
+		sprintf(key, "dkey_4_%d", i);
+		memset(buffer, 0, 5000);
+		lookup_single(key, "a_key", 0, buffer, 5000, DAOS_TX_NONE,
+			      &req);
+		assert_memory_equal(v_buffer, buffer, 5000);
+	}
+
+	ioreq_fini(&req);
 }
 
 static void
@@ -507,17 +454,16 @@ drain_objects(void **state)
 		return;
 
 	for (i = 0; i < OBJ_NR; i++) {
-		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0,
 					    0, arg->myrank);
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 		oids[i] = dts_oid_set_tgt(oids[i], DEFAULT_FAIL_TGT);
 	}
 
 	rebuild_io(arg, oids, OBJ_NR);
-
 	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
-	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+	rebuild_io_validate(arg, oids, OBJ_NR);
 }
 
 /** create a new pool/container for each test */
@@ -532,15 +478,11 @@ static const struct CMUnitTest drain_tests[] = {
 	 drain_multiple, rebuild_small_sub_setup, test_teardown},
 	{"DRAIN5: drain large rec single index",
 	 drain_large_rec, rebuild_small_sub_setup, test_teardown},
-	{"DRAIN6: drain records with multiple snapshots",
-	 drain_snap_update_recs, rebuild_small_sub_setup, test_teardown},
-	{"DRAIN7: drain punch/records with multiple snapshots",
-	 drain_snap_punch_recs, rebuild_small_sub_setup, test_teardown},
-	{"DRAIN8: drain keys with multiple snapshots",
+	{"DRAIN7: drain keys with multiple snapshots",
 	 drain_snap_update_keys, rebuild_small_sub_setup, test_teardown},
-	{"DRAIN9: drain keys/punch with multiple snapshots",
+	{"DRAIN8: drain keys/punch with multiple snapshots",
 	 drain_snap_punch_keys, rebuild_small_sub_setup, test_teardown},
-	{"DRAIN10: drain multiple objects",
+	{"DRAIN9: drain multiple objects",
 	 drain_objects, rebuild_sub_setup, test_teardown},
 };
 

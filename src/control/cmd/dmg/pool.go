@@ -211,11 +211,6 @@ func (cmd *PoolDestroyCmd) Execute(args []string) error {
 
 	ctx := context.Background()
 	err := control.PoolDestroy(ctx, cmd.ctlInvoker, req)
-
-	if cmd.jsonOutputEnabled() {
-		return cmd.errorJSON(err)
-	}
-
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -244,11 +239,6 @@ func (cmd *PoolEvictCmd) Execute(args []string) error {
 
 	ctx := context.Background()
 	err := control.PoolEvict(ctx, cmd.ctlInvoker, req)
-
-	if cmd.jsonOutputEnabled() {
-		return cmd.errorJSON(err)
-	}
-
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -282,11 +272,6 @@ func (cmd *PoolExcludeCmd) Execute(args []string) error {
 
 	ctx := context.Background()
 	err := control.PoolExclude(ctx, cmd.ctlInvoker, req)
-
-	if cmd.jsonOutputEnabled() {
-		return cmd.errorJSON(err)
-	}
-
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -314,9 +299,6 @@ func (cmd *PoolDrainCmd) Execute(args []string) error {
 	var idxlist []uint32
 	if err := common.ParseNumberList(cmd.Targetidx, &idxlist); err != nil {
 		err = errors.WithMessage(err, "parsing rank list")
-		if cmd.jsonOutputEnabled() {
-			return cmd.errorJSON(err)
-		}
 		return err
 	}
 
@@ -324,11 +306,6 @@ func (cmd *PoolDrainCmd) Execute(args []string) error {
 
 	ctx := context.Background()
 	err := control.PoolDrain(ctx, cmd.ctlInvoker, req)
-
-	if cmd.jsonOutputEnabled() {
-		return cmd.errorJSON(err)
-	}
-
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -359,9 +336,6 @@ func (cmd *PoolExtendCmd) Execute(args []string) error {
 	ranks, err := system.ParseRanks(cmd.RankList)
 	if err != nil {
 		err = errors.Wrap(err, "parsing rank list")
-		if cmd.jsonOutputEnabled() {
-			return cmd.errorJSON(err)
-		}
 		return err
 	}
 
@@ -388,11 +362,6 @@ func (cmd *PoolExtendCmd) Execute(args []string) error {
 
 	ctx := context.Background()
 	err = control.PoolExtend(ctx, cmd.ctlInvoker, req)
-
-	if cmd.jsonOutputEnabled() {
-		return cmd.errorJSON(err)
-	}
-
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -420,9 +389,6 @@ func (cmd *PoolReintegrateCmd) Execute(args []string) error {
 	var idxlist []uint32
 	if err := common.ParseNumberList(cmd.Targetidx, &idxlist); err != nil {
 		err = errors.WithMessage(err, "parsing rank list")
-		if cmd.jsonOutputEnabled() {
-			return cmd.errorJSON(err)
-		}
 		return err
 	}
 
@@ -430,11 +396,6 @@ func (cmd *PoolReintegrateCmd) Execute(args []string) error {
 
 	ctx := context.Background()
 	err := control.PoolReintegrate(ctx, cmd.ctlInvoker, req)
-
-	if cmd.jsonOutputEnabled() {
-		return cmd.errorJSON(err)
-	}
-
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -605,9 +566,6 @@ func (cmd *PoolOverwriteACLCmd) Execute(args []string) error {
 
 	acl, err := control.ReadACLFile(cmd.ACLFile)
 	if err != nil {
-		if cmd.jsonOutputEnabled() {
-			return cmd.errorJSON(err)
-		}
 		return err
 	}
 
@@ -656,9 +614,6 @@ func (cmd *PoolUpdateACLCmd) Execute(args []string) error {
 	if cmd.ACLFile != "" {
 		aclFileResult, err := control.ReadACLFile(cmd.ACLFile)
 		if err != nil {
-			if cmd.jsonOutputEnabled() {
-				return cmd.errorJSON(err)
-			}
 			return err
 		}
 		acl = aclFileResult
