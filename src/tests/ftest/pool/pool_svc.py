@@ -42,7 +42,7 @@ class PoolSvc(TestWithServers):
         except TestFail as error:
             pool_create_error = error
 
-        # Verify the result - If the svc_params[1] == 0 the dmp pool create is
+        # Verify the result - If the svc_params[1] == 0 the dmg pool create is
         # expected to fail
         if svc_params[1] == 0 and pool_create_error:
             self.log.info(
@@ -108,7 +108,7 @@ class PoolSvc(TestWithServers):
                         "the leader")
 
                 # Connect to the pool
-                self.log.info("Connecting from the pool")
+                self.log.info("Connecting to the pool")
                 try:
                     self.pool.connect()
                 except TestFail as error:
