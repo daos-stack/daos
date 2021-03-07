@@ -17,14 +17,14 @@
 // Should try to figure this out automatically
 String base_branch = "release/1.2"
 // For master, this is just some wildly high number
-String next_version = "1.3.0"
+next_version = "1.3.0"
 
 boolean doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
         return true
     }
 
-    /* automatic Doc-only discover not really valid for the weekly-testing
+    /* Automatic Doc-only discover not really valid for the weekly-testing
      * branch, and ends up requiring ci/doc_only_change.sh which is not available
      * when needed since the change to master is not done yet when this is
      * evaluated.  Additionally, maintaining ci/doc_only_change.sh on this branch
@@ -95,7 +95,8 @@ String pr_repos(String distro) {
 }
 
 String daos_repo() {
-    if (target_branch == "weekly-testing" || rpm_test_version() == '') {
+    if (target_branch.startsWith("weekly-testing") ||
+        rpm_test_version() == '') {
         return ""
     }
     return "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
@@ -164,13 +165,13 @@ String daos_packages_version(String distro) {
                                                         --repoid daos -q --qf %{version}-%{release} --show-duplicates daos | {
                                                     ov=0
                                                     while read v; do
-                                                        if ! rpmdev-vercmp $v ''' + ${next_version} + ''' > /dev/null; then
+                                                        if ! rpmdev-vercmp "$v" "''' + next_version + '''" > /dev/null; then
                                                             if [ ${PIPESTATUS[0]} -ne 12 ]; then
                                                                 echo "$ov"
                                                                 break
                                                             fi
                                                         fi
-                                                        ov=$v
+                                                        ov="$v"
                                                     done
                                                     echo "$ov"
                                                 }''',
@@ -310,7 +311,8 @@ boolean skip_testing_stage() {
             doc_only_change() ||
             skip_stage('test') ||
             (env.BRANCH_NAME.startsWith('weekly-testing') &&
-             ! startedByTimer())
+             ! startedByTimer() &&
+             ! params.ForceRun)
 }
 
 pipeline {
@@ -339,6 +341,9 @@ pipeline {
         string(name: 'BuildPriority',
                defaultValue: get_priority(),
                description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
+        booleanParam(name: 'ForceRun',
+                     defaultValue: false,
+                     description: 'Force a run of this job')
     }
 
     stages {
