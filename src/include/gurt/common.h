@@ -281,6 +281,7 @@ uint32_t d_hash_string_u32(const char *string, unsigned int len);
 /** murmur hash (64 bits) */
 uint64_t d_hash_murmur64(const unsigned char *key, unsigned int key_len,
 			    unsigned int seed);
+uint32_t d_hash_jump(uint64_t key, uint32_t num_buckets);
 
 #define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
 
@@ -599,6 +600,8 @@ d_iov_set_safe(d_iov_t *iov, void *buf, size_t size)
 	iov->iov_buf = buf;
 	iov->iov_len = iov->iov_buf_len = size;
 }
+
+double d_stand_div(double *array, int nr);
 
 #if defined(__cplusplus)
 }
