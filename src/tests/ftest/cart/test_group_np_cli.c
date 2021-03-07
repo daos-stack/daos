@@ -142,9 +142,6 @@ test_run(void)
 		}
 
 		for (i = 0; i < rank_list->rl_nr; i++) {
-			/* Don't wait on RPCs which got aborted. */
-			if (test_g.t_issue_crt_ep_abort == rank)
-				continue;
 			for (tag = 0; tag < test_g.t_srv_ctx_num; tag++) {
 				tc_sem_timedwait(&test_g.t_token_to_proceed, 61,
 						 __LINE__);
