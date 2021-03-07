@@ -198,9 +198,7 @@ class OSAUtils(MdtestBase, IorTestBase):
                                    kwargs={"pool": self.pool,
                                            "oclass": oclass,
                                            "test": test,
-                                           "flags": flags,
-                                           "results":
-                                           self.out_queue})
+                                           "flags": flags)
         # Launch the IOR thread
         process.start()
         # Wait for the thread to finish
@@ -214,7 +212,6 @@ class OSAUtils(MdtestBase, IorTestBase):
             oclass (str): IOR object class
             test (list): IOR test sequence
             flags (str): IOR flags
-            results (queue): queue for returning thread results
 
         """
         self.pool = pool
