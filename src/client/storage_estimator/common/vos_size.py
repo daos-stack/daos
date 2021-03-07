@@ -326,6 +326,7 @@ class MetaOverhead(object):
 
         for pool in range(0, self.num_pools):
             stats.add_meta("pool", int(self.meta.get("root")))
+            stats.add_meta("container", int(self.meta.get("container")))
             self.calc_tree(stats, self.pools[pool])
 
         stats.pretty_print()
