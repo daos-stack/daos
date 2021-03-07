@@ -63,10 +63,10 @@ rebuild_drop_scan(void **state)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
 static void
@@ -96,10 +96,10 @@ rebuild_retry_rebuild(void **state)
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
 static void
@@ -132,10 +132,10 @@ rebuild_retry_for_stale_pool(void **state)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_rank(arg, ranks_to_kill[0], false);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 
 	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
 static void
@@ -163,10 +163,10 @@ rebuild_drop_obj(void **state)
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_rank(arg, ranks_to_kill[0], false);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 
 	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
 static void
@@ -228,12 +228,12 @@ rebuild_multiple_pools(void **state)
 
 	rebuild_pools_ranks(args, 2, ranks_to_kill, 1, false);
 
-	rebuild_io_validate(args[0], oids, OBJ_NR, true);
-	rebuild_io_validate(args[1], oids, OBJ_NR, true);
+	rebuild_io_verify(args[0], oids, OBJ_NR);
+	rebuild_io_verify(args[1], oids, OBJ_NR);
 
 	reintegrate_pools_ranks(args, 2, ranks_to_kill, 1);
-	rebuild_io_validate(args[0], oids, OBJ_NR, true);
-	rebuild_io_validate(args[1], oids, OBJ_NR, true);
+	rebuild_io_verify(args[0], oids, OBJ_NR);
+	rebuild_io_verify(args[1], oids, OBJ_NR);
 
 	rebuild_pool_destroy(args[1]);
 }
@@ -470,10 +470,10 @@ rebuild_iv_tgt_fail(void **state)
 				     DAOS_FAIL_ONCE, 0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_rank(arg, ranks_to_kill[0], false);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 
 	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
 static void
@@ -679,7 +679,7 @@ rebuild_offline_pool_connect_internal(void **state, unsigned int fail_loc)
 	arg->rebuild_pre_cb = NULL;
 	arg->rebuild_cb = NULL;
 
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
 static void
@@ -721,7 +721,7 @@ rebuild_offline(void **state)
 	arg->rebuild_pre_cb = NULL;
 	arg->rebuild_post_cb = NULL;
 
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
 static void
@@ -794,7 +794,7 @@ rebuild_master_change_during_scan(void **state)
 	rebuild_single_pool_rank(arg, ranks_to_kill[0], false);
 
 	/* Verify the data */
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
 static void
@@ -825,7 +825,7 @@ rebuild_master_change_during_rebuild(void **state)
 	rebuild_single_pool_rank(arg, ranks_to_kill[0], false);
 
 	/* Verify the data */
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
 static int
@@ -881,10 +881,10 @@ rebuild_nospace(void **state)
 	rebuild_single_pool_rank(arg, ranks_to_kill[0], false);
 
 	arg->rebuild_cb = NULL;
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 
 	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
 static void
@@ -943,7 +943,7 @@ rebuild_multiple_tgts(void **state)
 		test_rebuild_wait(&arg, 1);
 
 	/* Verify the data */
-	rebuild_io_validate(arg, &oid, 1, true);
+	rebuild_io_verify(arg, &oid, 1);
 
 	daos_obj_layout_free(layout);
 
@@ -977,7 +977,7 @@ rebuild_io_post_cb(void *arg)
 	daos_obj_id_t	*oids = test_arg->rebuild_post_cb_arg;
 
 	if (daos_handle_is_valid(test_arg->coh))
-		rebuild_io_validate(test_arg, oids, OBJ_NR, true);
+		rebuild_io_verify(test_arg, oids, OBJ_NR);
 
 	return 0;
 }
@@ -1012,7 +1012,7 @@ rebuild_master_failure(void **state)
 	rebuild_single_pool_rank(arg, ranks_to_kill[0], true);
 
 	/* Verify the data */
-	rebuild_io_validate(arg, oids, 10 * OBJ_NR, true);
+	rebuild_io_verify(arg, oids, 10 * OBJ_NR);
 
 	/* Verify the POOL_QUERY get same rebuild status after leader change */
 	pinfo.pi_bits = DPI_REBUILD_STATUS;
@@ -1247,7 +1247,7 @@ multi_pools_rebuild_concurrently(void **state)
 			false);
 
 	for (i = POOL_NUM * CONT_PER_POOL - 1; i >= 0; i--)
-		rebuild_io_validate(args[i], oids, OBJ_PER_CONT, true);
+		rebuild_io_verify(args[i], oids, OBJ_PER_CONT);
 
 out:
 	for (i = POOL_NUM * CONT_PER_POOL - 1; i >= 0; i--)
