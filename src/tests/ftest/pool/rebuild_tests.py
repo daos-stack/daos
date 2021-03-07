@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 
 
 class RebuildTests(TestWithServers):
@@ -129,7 +129,6 @@ class RebuildTests(TestWithServers):
                     "Data verification error after rebuild")
         self.log.info("Test Passed")
 
-    @skipForTicket("DAOS-6865")
     def test_simple_rebuild(self):
         """JIRA ID: DAOS-XXXX Rebuild-001.
 
@@ -143,7 +142,6 @@ class RebuildTests(TestWithServers):
         """
         self.run_rebuild_test(1)
 
-    @skipForTicket("DAOS-6865")
     def test_multipool_rebuild(self):
         """JIRA ID: DAOS-XXXX (Rebuild-002).
 
