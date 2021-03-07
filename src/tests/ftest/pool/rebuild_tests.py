@@ -53,10 +53,30 @@ class RebuildTests(TestWithServers):
             self.container[index].create()
             self.container[index].write_objects(rank, obj_class)
 
+        # Debug
+        self.log.info("%s DEBUG START %s", "<" * 40, ">" * 40)
+        self.log.info("Object IDs:")
+        for index in range(pool_quantity):
+            self.log.info(
+                "Pool: %s - Container: %s",
+                self.pool[index].uuid, self.container[index].uuid)
+            for data in self.container[index].written_data:
+                self.log.info("  c_oid: %s", data.obj.c_oid)
+        self.log.info("%s DEBUG END %s", "<" * 40, ">" * 40)
+
         # Determine how many objects will need to be rebuilt
         for index in range(pool_quantity):
             target_rank_lists = self.container[index].get_target_rank_lists(
                 " prior to rebuild")
+
+            # Debug
+            self.log.info("%s DEBUG START %s", "<" * 40, ">" * 40)
+            self.log.info(
+                "TestContainer.get_target_rank_lists() output - "
+                "[DaosContainer.get_layout]:")
+            self.log.info(target_rank_lists)
+            self.log.info("%s DEBUG END %s", "<" * 40, ">" * 40)
+
             rebuild_qty = self.container[index].get_target_rank_count(
                 rank, target_rank_lists)
             rs_obj_nr.append(rebuild_qty)
