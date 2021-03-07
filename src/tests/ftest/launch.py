@@ -1093,7 +1093,9 @@ def archive_cov_usrlib_logs(avocado_logs_dir, test_files, args):
     destination = os.path.join(avocado_logs_dir, "latest", "daos_covs_usrlib")
 
     # Copy any DAOS logs created on any host under test
-    hosts = get_hosts_from_yaml(test_files["yaml"], args)
+    #hosts = get_hosts_from_yaml(test_files["yaml"], args)
+    hosts = list(args.test_servers)
+    hosts.append(socket.gethostname().split(".")[0])
     print("Archiving host logs from {} in {}".format(hosts, destination))
 
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
