@@ -197,7 +197,10 @@ if [ -d "/mnt/daos" ]; then
     if [ -f "/tmp/test.cov" ]; then
         rm /tmp/test.cov
     fi
-    cp "${DAOS_BASE}"/test.cov /tmp/
+
+    if [ -f "${DAOS_BASE}/test.cov" ]; then
+        cp "${DAOS_BASE}"/test.cov /tmp/
+    fi
 
     # Reporting
     if [ $failed -eq 0 ]; then
