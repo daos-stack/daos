@@ -1097,7 +1097,7 @@ class SubprocessManager(object):
                 rank. Can be a str or a list of str.
         """
         if ranks is None:
-            ranks = [key for key in self._expected_states.keys()]
+            ranks = list(self._expected_states.keys())
         elif not isinstance(ranks, (list, tuple)):
             ranks = [ranks]
 

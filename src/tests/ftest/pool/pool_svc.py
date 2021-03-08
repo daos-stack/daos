@@ -7,7 +7,6 @@
 from avocado.core.exceptions import TestFail
 
 from apricot import TestWithServers
-from pydaos.raw import DaosApiError
 
 
 class PoolSvc(TestWithServers):
@@ -78,25 +77,6 @@ class PoolSvc(TestWithServers):
                 all_svc_ranks.remove(leader)
                 non_leader = all_svc_ranks[-1]
 
-                # Stop the pool leader
-                self.log.info("Stopping the pool leader: %s", leader)
-                try:
-                    self.pool.pool.pool_svc_stop()
-                except DaosApiError as error:
-                    self.log.info(error)
-                    self.fail("Error issuing DaosPool.pool_svc_stop()")
-
-                # Exclude the pool leader
-                self.log.info("Excluding the pool leader: %s", leader)
-                try:
-                    self.pool.exclude([leader], self.d_log)
-                except TestFail as error:
-                    self.log.info(error)
-                    self.fail(
-                        "Error issuing TestPool.exclude([{}])".format(leader))
-                self.server_managers[-1].update_expected_states(
-                    [leader], "evicted")
-
                 # Disconnect from the pool
                 self.log.info("Disconnecting from the pool")
                 try:
@@ -106,6 +86,16 @@ class PoolSvc(TestWithServers):
                     self.fail(
                         "Error issuing TestPool.disconnect() after excluding "
                         "the leader")
+
+                # Stop the pool leader
+                self.log.info("Stopping the pool leader: %s", leader)
+                try:
+                    self.server_managers[-1].stop_ranks([leader], self.test_log)
+                except TestFail as error:
+                    self.log.info(error)
+                    self.fail(
+                        "Error stopping pool leader - "
+                        "DaosServerManager.stop_ranks([{}])".format(non_leader))
 
                 # Connect to the pool
                 self.log.info("Connecting to the pool")
@@ -133,7 +123,7 @@ class PoolSvc(TestWithServers):
                 except TestFail as error:
                     self.log.info(error)
                     self.fail(
-                        "Error issuing "
+                        "Error stopping a pool non-leader - "
                         "DaosServerManager.stop_ranks([{}])".format(non_leader))
 
                 # Exclude a pool non-leader
