@@ -1579,6 +1579,7 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 	struct ds_cont_child *coc;
 	int		      rc;
 
+	D_ASSERT(ioc != NULL);
 	memset(ioc, 0, sizeof(*ioc));
 	ioc->ioc_opc = opc;
 
