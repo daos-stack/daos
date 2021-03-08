@@ -13,18 +13,18 @@
 
 #include "crt_internal.h"
 
-#define DBG_PRINT(x...)						 \
-	do {							    \
+#define DBG_PRINT(x...)							\
+	do {								\
 		D_INFO(x);						\
-		if (opts.is_server)				     \
+		if (opts.is_server)					\
 			fprintf(stderr, "SRV [rank=%d pid=%d]\t",       \
-			opts.self_rank,				 \
-			opts.mypid);				    \
-		else						    \
+			opts.self_rank,					\
+			opts.mypid);					\
+		else							\
 			fprintf(stderr, "CLI [rank=%d pid=%d]\t",       \
-			opts.self_rank,				 \
-			opts.mypid);				    \
-		fprintf(stderr, x);				     \
+			opts.self_rank,					\
+			opts.mypid);					\
+		fprintf(stderr, x);					\
 	} while (0)
 
 struct test_options {
@@ -504,8 +504,7 @@ tc_log_msg_cb(const struct crt_cb_info *info)
 	struct tc_log_msg_cb_resp	*resp;
 
 	if (info->cci_rc != 0) {
-		D_WARN(" Add Log message CB failure\n");
-		return;
+		D_WARN("Add Log message CB failed\n");
 	}
 	resp = (struct tc_log_msg_cb_resp *)info->cci_arg;
 	resp->rc = info->cci_rc;
@@ -515,13 +514,13 @@ tc_log_msg_cb(const struct crt_cb_info *info)
 int
 tc_log_msg(crt_context_t ctx, crt_group_t *grp, d_rank_t rank,
 	   char *msg) {
-	int32_t			     rc = 0;
-	struct crt_ctl_log_add_msg_in   *send_args;
-	struct crt_ctl_log_add_msg_out  *recv_args;
-	crt_rpc_t		       *rpc_req = NULL;
-	crt_endpoint_t			ep;
-	crt_opcode_t			opcode = CRT_OPC_CTL_LOG_ADD_MSG;
-	struct tc_log_msg_cb_resp       resp;
+	int32_t				 rc = 0;
+	struct crt_ctl_log_add_msg_in	*send_args;
+	struct crt_ctl_log_add_msg_out	*recv_args;
+	crt_rpc_t			*rpc_req = NULL;
+	crt_endpoint_t			 ep;
+	crt_opcode_t			 opcode = CRT_OPC_CTL_LOG_ADD_MSG;
+	struct tc_log_msg_cb_resp	 resp;
 
 	/* Initialize response structure */
 	rc = sem_init(&resp.sem, 0, 0);
@@ -536,7 +535,7 @@ tc_log_msg(crt_context_t ctx, crt_group_t *grp, d_rank_t rank,
 	rc = crt_req_create(ctx, &ep, opcode, &rpc_req);
 	if (rc != 0) {
 		D_ERROR("crt_req_create() failed. rc %d.\n", rc);
-		D_GOTO(endcode, rc);
+		D_GOTO(exit, rc);
 	}
 
 	crt_req_addref(rpc_req);
@@ -545,6 +544,10 @@ tc_log_msg(crt_context_t ctx, crt_group_t *grp, d_rank_t rank,
 
 	/* send the request */
 	rc = crt_req_send(rpc_req, tc_log_msg_cb, &resp);
+	if (rc < 0) {
+		D_WARN("rpc failed, message: \"%s \"not sent\n", msg);
+		goto cleanup;
+	}
 
 	/* Wait for response */
 	rc = tc_sem_timedwait(&resp.sem, 30, __LINE__);
@@ -565,7 +568,7 @@ tc_log_msg(crt_context_t ctx, crt_group_t *grp, d_rank_t rank,
 	rc = recv_args->rc;
 cleanup:
 	crt_req_decref(rpc_req);
-endcode:
+exit:
 	return rc;
 }
 
