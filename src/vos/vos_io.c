@@ -1323,8 +1323,6 @@ fetch_dkey:
 	if (dkey == NULL || dkey->iov_len == 0) {
 		if (ioc->ic_read_ts_only)
 			goto set_ioc;
-		printf("here\n");
-		fflush(stdout);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
