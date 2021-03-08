@@ -381,7 +381,7 @@ do {									\
 static inline uint32_t
 btr_hkey_size_const(btr_ops_t *ops, uint64_t feats)
 {
-	int size;
+	uint32_t size;
 
 	if (BTR_IS_DIRECT_KEY(feats))
 		return sizeof(umem_off_t);
