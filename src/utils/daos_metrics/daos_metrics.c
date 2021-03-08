@@ -13,27 +13,6 @@
 #include "gurt/telemetry_common.h"
 #include "gurt/telemetry_consumer.h"
 
-void
-print_my_children(uint64_t *shmem_root, struct d_tm_node_t *node, int filter,
-		  int level, FILE *stream)
-{
-	if ((node == NULL) || (stream == NULL))
-		return;
-
-	if (node->dtn_type & filter)
-		d_tm_print_node(shmem_root, node, level, stream);
-
-	node = node->dtn_child;
-	node = d_tm_conv_ptr(shmem_root, node);
-
-	while (node != NULL) {
-		print_my_children(shmem_root, node, filter, level + 1, stream);
-		node = node->dtn_sibling;
-		node = d_tm_conv_ptr(shmem_root, node);
-	}
-}
-
-
 static void
 print_usage(const char *prog_name)
 {
@@ -51,6 +30,10 @@ print_usage(const char *prog_name)
 	       "--delay, -D\n"
 	       "\tDelay in seconds between each iteration\n"
 	       "\tDefault is 1 second\n"
+	       "--csv, -C\n"
+	       "\tDisplay data in CSV format\n"
+	       "--meta, -M\n"
+	       "\tDisplay associated metric metadata\n"
 	       "--help, -h\n"
 	       "\tThis help text\n\n"
 	       "Customize the displayed data by specifying one or more "
@@ -81,6 +64,8 @@ main(int argc, char **argv)
 	int			num_iter = 0;
 	int			filter = 0;
 	int			delay = 1;
+	int			format = D_TM_VERBOSE;
+	int			show_meta = 0;
 	int			opt;
 
 	sprintf(dirname, "/");
@@ -90,6 +75,7 @@ main(int argc, char **argv)
 		static struct option long_options[] = {
 			{"srv_idx", required_argument, NULL, 'S'},
 			{"counter", no_argument, NULL, 'c'},
+			{"csv", no_argument, NULL, 'C'},
 			{"duration", no_argument, NULL, 'd'},
 			{"timestamp", no_argument, NULL, 't'},
 			{"snapshot", no_argument, NULL, 's'},
@@ -97,11 +83,12 @@ main(int argc, char **argv)
 			{"iterations", required_argument, NULL, 'i'},
 			{"path", required_argument, NULL, 'p'},
 			{"delay", required_argument, NULL, 'D'},
+			{"meta", no_argument, NULL, 'M'},
 			{"help", no_argument, NULL, 'h'},
 			{NULL, 0, NULL, 0}
 		};
 
-		opt = getopt_long_only(argc, argv, "S:cdtsgi:p:D:h",
+		opt = getopt_long_only(argc, argv, "S:cCdtsgi:p:D:Mh",
 				       long_options, NULL);
 		if (opt == -1)
 			break;
@@ -112,6 +99,9 @@ main(int argc, char **argv)
 			break;
 		case 'c':
 			filter |= D_TM_COUNTER;
+			break;
+		case 'C':
+			format = D_TM_CSV;
 			break;
 		case 'd':
 			filter |= D_TM_DURATION;
@@ -130,6 +120,9 @@ main(int argc, char **argv)
 			break;
 		case 'p':
 			snprintf(dirname, sizeof(dirname), "%s", optarg);
+			break;
+		case 'M':
+			show_meta = 1;
 			break;
 		case 'D':
 			delay = atoi(optarg);
@@ -165,9 +158,18 @@ main(int argc, char **argv)
 		}
 	}
 
+	if (format == D_TM_CSV)
+		filter &= ~D_TM_DIRECTORY;
+	else
+		filter |= D_TM_DIRECTORY;
+
 	while ((num_iter == 0) || (iteration < num_iter)) {
-		print_my_children(shmem_root, root, filter | D_TM_DIRECTORY, 0,
-				  stdout);
+		d_tm_print_my_children(shmem_root, root, 0,
+				       filter, dirname,
+				       show_meta, format, stdout);
+		if (format == D_TM_CSV)
+			break;
+
 		iteration++;
 		sleep(delay);
 		printf("\n\n");

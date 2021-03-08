@@ -386,15 +386,24 @@ d_tm_free_node(uint64_t *shmem_root, struct d_tm_node_t *node)
  *
  * \param[in]	val	Counter value
  * \param[in]	name	Counter name
+ * \param[in]	format	Output format.
+ *			Choose D_TM_VERBOSE for standard output.
+ *			Choose D_TM_CSV for comma separated values.
  * \param[in]	stream	Output stream (stdout, stderr)
  */
 void
-d_tm_print_counter(uint64_t val, char *name, FILE *stream)
+d_tm_print_counter(uint64_t val, char *name, int format, FILE *stream)
 {
 	if ((name == NULL) || (stream == NULL))
 		return;
 
-	fprintf(stream, "Counter: %s = %" PRIu64 "\n", name, val);
+	switch (format) {
+	case D_TM_CSV:
+		fprintf(stream, "counter,%lu", val);
+		break;
+	default:
+		fprintf(stream, "counter: %s = %" PRIu64, name, val);
+	}
 }
 
 /**
@@ -402,10 +411,13 @@ d_tm_print_counter(uint64_t val, char *name, FILE *stream)
  *
  * \param[in]	clk	Timestamp value
  * \param[in]	name	Timestamp name
+ * \param[in]	format	Output format.
+ *			Choose D_TM_VERBOSE for standard output.
+ *			Choose D_TM_CSV for comma separated values.
  * \param[in]	stream	Output stream (stdout, stderr)
  */
 void
-d_tm_print_timestamp(time_t *clk, char *name, FILE *stream)
+d_tm_print_timestamp(time_t *clk, char *name, int format, FILE *stream)
 {
 	char	time_buff[D_TM_TIME_BUFF_LEN];
 	char	*temp;
@@ -425,7 +437,14 @@ d_tm_print_timestamp(time_t *clk, char *name, FILE *stream)
 	 * Remove the trailing newline character
 	 */
 	temp[D_TM_TIME_BUFF_LEN - 2] = 0;
-	fprintf(stream, "Timestamp: %s: %s\n", name, temp);
+
+	switch (format) {
+	case D_TM_CSV:
+		fprintf(stream, "timestamp,%s", temp);
+		break;
+	default:
+		fprintf(stream, "timestamp: %s: %s", name, temp);
+	}
 }
 
 /**
@@ -434,30 +453,46 @@ d_tm_print_timestamp(time_t *clk, char *name, FILE *stream)
  * \param[in]	tms	Timer value
  * \param[in]	name	Timer name
  * \param[in]	tm_type	Timer type
+ * \param[in]	format	Output format.
+ *			Choose D_TM_VERBOSE for standard output.
+ *			Choose D_TM_CSV for comma separated values.
  * \param[in]	stream	Output stream (stdout, stderr)
  */
 void
 d_tm_print_timer_snapshot(struct timespec *tms, char *name, int tm_type,
-			  FILE *stream)
+			  int format, FILE *stream)
 {
+	uint64_t	us;
+
 	if ((tms == NULL) || (name == NULL) || (stream == NULL))
 		return;
 
+	us = tms->tv_sec * 1000000 + tms->tv_nsec / 1000;
+
 	switch (tm_type) {
 	case D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_REALTIME:
-		fprintf(stream, "Timer snapshot (realtime): %s = %ld s, "
-			"%ldns\n", name, tms->tv_sec, tms->tv_nsec);
+		if (format == D_TM_CSV)
+			fprintf(stream, "snapshot realtime,%lu", us);
+		else
+			fprintf(stream, "snapshot realtime: %s = %lu us",
+				name, us);
 		break;
 	case D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_PROCESS_CPUTIME:
-		fprintf(stream, "Timer snapshot (process): %s = %ld s, "
-			"%ldns\n", name, tms->tv_sec, tms->tv_nsec);
+		if (format == D_TM_CSV)
+			fprintf(stream, "snapshot process,%lu", us);
+		else
+			fprintf(stream, "snapshot process: %s = %lu us",
+				name, us);
 		break;
 	case D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_THREAD_CPUTIME:
-		fprintf(stream, "Timer snapshot (thread): %s = %ld s, "
-			"%ldns\n", name, tms->tv_sec, tms->tv_nsec);
+		if (format == D_TM_CSV)
+			fprintf(stream, "snapshot thread,%lu", us);
+		else
+			fprintf(stream, "snapshot thread: %s = %lu us",
+				name, us);
 		break;
 	default:
-		fprintf(stream, "Invalid timer snapshot type: 0x%x\n",
+		fprintf(stream, "Invalid timer snapshot type: 0x%x",
 			tm_type & ~D_TM_TIMER_SNAPSHOT);
 		break;
 	}
@@ -471,11 +506,14 @@ d_tm_print_timer_snapshot(struct timespec *tms, char *name, int tm_type,
  * \param[in]	stats	Optional stats
  * \param[in]	name	Duration timer name
  * \param[in]	tm_type	Duration timer type
+ * \param[in]	format	Output format.
+ *			Choose D_TM_VERBOSE for standard output.
+ *			Choose D_TM_CSV for comma separated values.
  * \param[in]	stream	Output stream (stdout, stderr)
  */
 void
 d_tm_print_duration(struct timespec *tms, struct d_tm_stats_t *stats,
-		    char *name, int tm_type, FILE *stream)
+		    char *name, int tm_type, int format, FILE *stream)
 {
 	uint64_t	us;
 	bool		printStats;
@@ -486,15 +524,27 @@ d_tm_print_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 	printStats = (stats != NULL) && (stats->sample_size > 0);
 	us = (tms->tv_sec * 1000000) + (tms->tv_nsec / 1000);
 
-	switch (tm_type & ~D_TM_DURATION) {
-	case D_TM_CLOCK_REALTIME:
-		fprintf(stream, "Duration (realtime): %s = %lu us", name, us);
+	switch (tm_type) {
+	case D_TM_DURATION | D_TM_CLOCK_REALTIME:
+		if (format == D_TM_CSV)
+			fprintf(stream, "duration realtime,%lu", us);
+		else
+			fprintf(stream, "duration realtime: %s = %lu us",
+				name, us);
 		break;
-	case D_TM_CLOCK_PROCESS_CPUTIME:
-		fprintf(stream, "Duration (process): %s = %lu us", name, us);
+	case D_TM_DURATION | D_TM_CLOCK_PROCESS_CPUTIME:
+		if (format == D_TM_CSV)
+			fprintf(stream, "duration process,%lu", us);
+		else
+			fprintf(stream, "duration process: %s = %lu us",
+				name, us);
 		break;
-	case D_TM_CLOCK_THREAD_CPUTIME:
-		fprintf(stream, "Duration (thread): %s = %lu us", name, us);
+	case D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME:
+		if (format == D_TM_CSV)
+			fprintf(stream, "duration thread,%lu", us);
+		else
+			fprintf(stream, "duration thread: %s = %lu us",
+				name, us);
 		break;
 	default:
 		fprintf(stream, "Invalid timer duration type: 0x%x",
@@ -504,9 +554,7 @@ d_tm_print_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 	}
 
 	if (printStats)
-		d_tm_print_stats(stream, stats);
-
-	fprintf(stream, "\n");
+		d_tm_print_stats(stream, stats, format);
 }
 
 /**
@@ -515,21 +563,73 @@ d_tm_print_duration(struct timespec *tms, struct d_tm_stats_t *stats,
  * \param[in]	tms	Timer value
  * \param[in]	stats	Optional statistics
  * \param[in]	name	Timer name
+ * \param[in]	format	Output format.
+ *			Choose D_TM_VERBOSE for standard output.
+ *			Choose D_TM_CSV for comma separated values.
  * \param[in]	stream	Output stream (stdout, stderr)
  */
 void
 d_tm_print_gauge(uint64_t val, struct d_tm_stats_t *stats, char *name,
-		 FILE *stream)
+		 int format, FILE *stream)
 {
 	if ((name == NULL) || (stream == NULL))
 		return;
 
-	fprintf(stream, "Gauge: %s = %" PRIu64, name, val);
+	if (format == D_TM_CSV)
+		fprintf(stream, "gauge,%lu", val);
+	else
+		fprintf(stream, "gauge: %s = %lu", name, val);
 
 	if ((stats != NULL) && (stats->sample_size > 0))
-		d_tm_print_stats(stream, stats);
+		d_tm_print_stats(stream, stats, format);
+}
 
-	fprintf(stream, "\n");
+/**
+ * Client function to print the metadata strings \a short_desc and \a long_desc
+ * to the \a stream provided
+ *
+ * \param[in]	short_desc	Memory is allocated and the short
+ *				description is copied here
+ * \param[in]	long_desc	Memory is allocated and the long
+ *				description is copied here
+ * \param[in]	pad		When using the CSV format only, if true,
+ *				pads the output with commas for the missing
+ *				statistics.
+ * \param[in]	format		Output format.
+ *				Choose D_TM_VERBOSE for standard output.
+ *				Choose D_TM_CSV for comma separated values.
+ * \param[in]	stream		Output stream (stdout, stderr)
+ */
+void
+d_tm_print_metadata(char *shortDesc, char *longDesc, bool pad,
+		    int format, FILE *stream)
+{
+	int	lenShort = 0;
+	int	lenLong = 0;
+
+	if (shortDesc != NULL)
+		lenShort = strnlen(shortDesc, D_TM_MAX_SHORT_LEN);
+	if (longDesc != NULL)
+		lenLong = strnlen(longDesc, D_TM_MAX_LONG_LEN);
+
+	if (format == D_TM_CSV) {
+		if (pad && ((lenShort > 0) || (lenLong > 0)))
+			fprintf(stream, ",,,,,");
+
+		if (lenShort > 0)
+			fprintf(stream, ",%s", shortDesc);
+		else if (lenLong > 0)
+			fprintf(stream, ",");
+
+		if (lenLong > 0)
+			fprintf(stream, ",%s", longDesc);
+	} else {
+		if (lenShort > 0)
+			fprintf(stream, ", meta short: %s", shortDesc);
+
+		if (lenLong > 0)
+			fprintf(stream, ", meta long: %s", longDesc);
+	}
 }
 
 /**
@@ -541,16 +641,27 @@ d_tm_print_gauge(uint64_t val, struct d_tm_stats_t *stats, char *name,
  * \param[in]	level		Indicates level of indentation when printing
  *				this \a node
  * \param[in]	stream		Direct output to this stream (stdout, stderr)
+ * \param[in]	path		The full path of the node.
+ *				This path is not stored with the node itself.
+ *				This string is passed in so that it may be
+ *				printed for this and children nodes.
+ * \param[in]	show_meta	Set to true to print the meta-data.
+ * \param[in]	format		Output format.
+ *				Choose D_TM_VERBOSE for standard output.
+ *				Choose D_TM_CSV for comma separated values.
  */
 void
 d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
-		FILE *stream)
+		FILE *stream, char *path, bool show_meta, int format)
 {
 	struct d_tm_stats_t	stats = {0};
 	struct timespec		tms;
 	uint64_t		val;
 	time_t			clk;
 	char			*name = NULL;
+	char			*shortDesc = NULL;
+	char			*longDesc = NULL;
+	bool			stats_printed = false;
 	int			i = 0;
 	int			rc;
 
@@ -558,12 +669,17 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 	if (name == NULL)
 		return;
 
-	for (i = 0; i < level; i++)
-		fprintf(stream, "%20s", " ");
+	if (format == D_TM_CSV) {
+		fprintf(stream, "%s/%s,", path, name);
+	} else {
+		for (i = 0; i < level; i++)
+			fprintf(stream, "%20s", " ");
+	}
 
 	switch (node->dtn_type) {
 	case D_TM_DIRECTORY:
-		fprintf(stream, "%-20s\n", name);
+		if (format != D_TM_CSV)
+			fprintf(stream, "%-20s\n", name);
 		break;
 	case D_TM_COUNTER:
 		rc = d_tm_get_counter(&val, shmem_root, node, NULL);
@@ -571,7 +687,7 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 			fprintf(stream, "Error on counter read: %d\n", rc);
 			break;
 		}
-		d_tm_print_counter(val, name, stream);
+		d_tm_print_counter(val, name, format, stream);
 		break;
 	case D_TM_TIMESTAMP:
 		rc = d_tm_get_timestamp(&clk, shmem_root, node, NULL);
@@ -579,7 +695,7 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 			fprintf(stream, "Error on timestamp read: %d\n", rc);
 			break;
 		}
-		d_tm_print_timestamp(&clk, name, stream);
+		d_tm_print_timestamp(&clk, name, format, stream);
 		break;
 	case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_REALTIME):
 	case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_PROCESS_CPUTIME):
@@ -590,7 +706,8 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 				rc);
 			break;
 		}
-		d_tm_print_timer_snapshot(&tms, name, node->dtn_type, stream);
+		d_tm_print_timer_snapshot(&tms, name, node->dtn_type, format,
+					  stream);
 		break;
 	case (D_TM_DURATION | D_TM_CLOCK_REALTIME):
 	case (D_TM_DURATION | D_TM_CLOCK_PROCESS_CPUTIME):
@@ -600,8 +717,9 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 			fprintf(stream, "Error on duration read: %d\n", rc);
 			break;
 		}
-		d_tm_print_duration(&tms, &stats, name, node->dtn_type,
+		d_tm_print_duration(&tms, &stats, name, node->dtn_type, format,
 				    stream);
+		stats_printed = true;
 		break;
 	case D_TM_GAUGE:
 		rc = d_tm_get_gauge(&val, &stats, shmem_root, node, NULL);
@@ -609,13 +727,29 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 			fprintf(stream, "Error on gauge read: %d\n", rc);
 			break;
 		}
-		d_tm_print_gauge(val, &stats, name, stream);
+		d_tm_print_gauge(val, &stats, name, format, stream);
+		stats_printed = true;
 		break;
 	default:
 		fprintf(stream, "Item: %s has unknown type: 0x%x\n", name,
 			node->dtn_type);
 		break;
 	}
+
+	if (node->dtn_type == D_TM_DIRECTORY)
+		show_meta = false;
+
+	if (show_meta) {
+		d_tm_get_metadata(&shortDesc, &longDesc, shmem_root, node,
+				  NULL);
+		d_tm_print_metadata(shortDesc, longDesc, !stats_printed, format,
+				    stream);
+		D_FREE_PTR(shortDesc);
+		D_FREE_PTR(longDesc);
+	}
+
+	if (node->dtn_type != D_TM_DIRECTORY)
+		fprintf(stream, "\n");
 }
 
 /**
@@ -623,11 +757,23 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
  *
  * \param[in]	stream	Identifies the output stream
  * \param[in]	stats	Pointer to the node statistics
+ * \param[in]	format	Output format.
+ *			Choose D_TM_VERBOSE for standard output.
+ *			Choose D_TM_CSV for comma separated values.
  */
 void
-d_tm_print_stats(FILE *stream, struct d_tm_stats_t *stats)
+d_tm_print_stats(FILE *stream, struct d_tm_stats_t *stats, int format)
 {
-	fprintf(stream, ", min: %lu, max: %lu, mean: %lf, size: %" PRIu64,
+	if (format == D_TM_CSV) {
+		fprintf(stream, ",%lu,%lu,%lf,%lu",
+				stats->dtm_min, stats->dtm_max, stats->mean,
+				stats->sample_size);
+		if (stats->sample_size > 2)
+			fprintf(stream, ",%lf", stats->std_dev);
+		return;
+	}
+
+	fprintf(stream, ", min: %lu, max: %lu, mean: %lf, sample size: %lu",
 		stats->dtm_min, stats->dtm_max, stats->mean,
 		stats->sample_size);
 	if (stats->sample_size > 2)
@@ -646,23 +792,44 @@ d_tm_print_stats(FILE *stream, struct d_tm_stats_t *stats)
  */
 void
 d_tm_print_my_children(uint64_t *shmem_root, struct d_tm_node_t *node,
-		       int level, FILE *stream)
+		       int level, int filter, char *name, bool show_meta,
+		       int format, FILE *stream)
 {
+	char	*path = NULL;
+	char	*node_name = NULL;
+
 	if ((node == NULL) || (stream == NULL))
 		return;
 
-	d_tm_print_node(shmem_root, node, level, stream);
+	if ((format == D_TM_CSV) && (level == 0))
+		fprintf(stream,
+			"name,type,value,min,max,mean,sample_size,std_dev,"
+			"metadata_short,metadata_long\n");
+
+	if (node->dtn_type & filter)
+		d_tm_print_node(shmem_root, node, level, stream, name,
+				show_meta, format);
 
 	node = node->dtn_child;
 	node = d_tm_conv_ptr(shmem_root, node);
 	if (node == NULL)
 		return;
 
-	d_tm_print_my_children(shmem_root, node, level + 1, stream);
-	node = node->dtn_sibling;
-	node = d_tm_conv_ptr(shmem_root, node);
 	while (node != NULL) {
-		d_tm_print_my_children(shmem_root, node, level + 1, stream);
+		node_name = d_tm_conv_ptr(shmem_root, node->dtn_name);
+		if (node_name == NULL)
+			break;
+
+		if (name == NULL)
+			D_ASPRINTF(path, "/%s", node_name);
+		else if (strncmp(name, "/", D_TM_MAX_NAME_LEN) == 0)
+			D_ASPRINTF(path, "%s", node_name);
+		else
+			D_ASPRINTF(path, "%s/%s", name, node_name);
+
+		d_tm_print_my_children(shmem_root, node, level + 1, filter,
+				       path, show_meta, format, stream);
+		D_FREE_PTR(path);
 		node = node->dtn_sibling;
 		node = d_tm_conv_ptr(shmem_root, node);
 	}
@@ -865,7 +1032,7 @@ d_tm_increment_counter(struct d_tm_node_t **metric, uint64_t value,
 	}
 
 	if (node == NULL) {
-		rc = d_tm_add_metric(&node, D_TM_COUNTER, "N/A", "N/A", path);
+		rc = d_tm_add_metric(&node, D_TM_COUNTER, NULL, NULL, path);
 		if (rc != DER_SUCCESS) {
 			D_ERROR("Failed to add and incremement counter [%s]: "
 				DF_RC "\n", path, DP_RC(rc));
@@ -958,7 +1125,7 @@ d_tm_record_timestamp(struct d_tm_node_t **metric, const char *fmt, ...)
 	}
 
 	if (node == NULL) {
-		rc = d_tm_add_metric(&node, D_TM_TIMESTAMP, "N/A", "N/A", path);
+		rc = d_tm_add_metric(&node, D_TM_TIMESTAMP, NULL, NULL, path);
 		if (rc != DER_SUCCESS) {
 			D_ERROR("Failed to add and record timestamp [%s]: "
 				DF_RC "\n", path, DP_RC(rc));
@@ -1064,7 +1231,7 @@ d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
 			goto out;
 		}
 		rc = d_tm_add_metric(&node, D_TM_TIMER_SNAPSHOT | clk_id,
-				     "N/A", "N/A", path);
+				     NULL, NULL, path);
 		if (rc != DER_SUCCESS) {
 			D_ERROR("Failed to add and record high resolution timer"
 				" [%s]: " DF_RC "\n", path, DP_RC(rc));
@@ -1171,7 +1338,7 @@ d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
 			goto out;
 		}
 		rc = d_tm_add_metric(&node, D_TM_DURATION | clk_id,
-				     "N/A", "N/A", path);
+				     NULL, NULL, path);
 		if (rc != DER_SUCCESS) {
 			D_ERROR("Failed to add and mark duration start [%s]: "
 				DF_RC "\n", path, DP_RC(rc));
@@ -1243,7 +1410,7 @@ d_tm_mark_duration_end(struct d_tm_node_t **metric, int err,
 	struct timespec		end;
 	struct timespec		*tms;
 	char			path[D_TM_MAX_NAME_LEN] = {};
-	uint64_t		microseconds;
+	uint64_t		us;
 	int			rc = DER_SUCCESS;
 
 	if (d_tm_shmem_root == NULL)
@@ -1299,10 +1466,10 @@ d_tm_mark_duration_end(struct d_tm_node_t **metric, int err,
 	node->dtn_metric->dtm_data.tms[0] = d_timediff(
 					node->dtn_metric->dtm_data.tms[1], end);
 	tms = node->dtn_metric->dtm_data.tms;
-	microseconds = (tms->tv_sec * 1000000) + (tms->tv_nsec / 1000);
-	d_tm_compute_stats(node, microseconds);
+	us = (tms->tv_sec * 1000000) + (tms->tv_nsec / 1000);
+	d_tm_compute_stats(node, us);
 	if (node->dtn_metric->dtm_histogram != NULL)
-		rc = d_tm_compute_histogram(node, microseconds);
+		rc = d_tm_compute_histogram(node, us);
 	if (node->dtn_protect)
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 
@@ -1377,7 +1544,7 @@ d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value,
 	}
 
 	if (node == NULL) {
-		rc = d_tm_add_metric(&node, D_TM_GAUGE, "N/A", "N/A", path);
+		rc = d_tm_add_metric(&node, D_TM_GAUGE, NULL, NULL, path);
 		if (rc != DER_SUCCESS) {
 			D_ERROR("Failed to add and set gauge [%s]: "
 				DF_RC "\n", path, DP_RC(rc));
@@ -1475,7 +1642,7 @@ d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
 	}
 
 	if (node == NULL) {
-		rc = d_tm_add_metric(&node, D_TM_GAUGE, "N/A", "N/A", path);
+		rc = d_tm_add_metric(&node, D_TM_GAUGE, NULL, NULL, path);
 		if (rc != DER_SUCCESS) {
 			D_ERROR("Failed to add and incremement gauge [%s]: "
 				DF_RC "\n", path, DP_RC(rc));
@@ -1573,7 +1740,7 @@ d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
 	}
 
 	if (node == NULL) {
-		rc = d_tm_add_metric(&node, D_TM_GAUGE, "N/A", "N/A", path);
+		rc = d_tm_add_metric(&node, D_TM_GAUGE, NULL, NULL, path);
 		if (rc != DER_SUCCESS) {
 			D_ERROR("Failed to add and decrement gauge [%s]: "
 				DF_RC "\n", path, DP_RC(rc));
@@ -1776,31 +1943,45 @@ int d_tm_add_metric(struct d_tm_node_t **node, int metric_type, char *sh_desc,
 		temp->dtn_metric->dtm_stats->dtm_min = UINT64_MAX;
 	}
 
-	buff_len = strnlen(sh_desc, D_TM_MAX_SHORT_LEN);
+	buff_len = 0;
+	if (sh_desc != NULL)
+		buff_len = strnlen(sh_desc, D_TM_MAX_SHORT_LEN);
 	if (buff_len == D_TM_MAX_SHORT_LEN) {
 		rc = -DER_EXCEEDS_PATH_LEN;
 		goto failure;
 	}
-	buff_len += 1; /** make room for the trailing null */
-	temp->dtn_metric->dtm_sh_desc = d_tm_shmalloc(buff_len);
-	if (temp->dtn_metric->dtm_sh_desc == NULL) {
-		rc = -DER_NO_SHMEM;
-		goto failure;
-	}
-	strncpy(temp->dtn_metric->dtm_sh_desc, sh_desc, buff_len);
 
-	buff_len = strnlen(lng_desc, D_TM_MAX_LONG_LEN);
+	if (buff_len > 0) {
+		buff_len += 1; /** make room for the trailing null */
+		temp->dtn_metric->dtm_sh_desc = d_tm_shmalloc(buff_len);
+		if (temp->dtn_metric->dtm_sh_desc == NULL) {
+			rc = -DER_NO_SHMEM;
+			goto failure;
+		}
+		strncpy(temp->dtn_metric->dtm_sh_desc, sh_desc, buff_len);
+	} else {
+		temp->dtn_metric->dtm_sh_desc = NULL;
+	}
+
+	buff_len = 0;
+	if (lng_desc != NULL)
+		buff_len = strnlen(lng_desc, D_TM_MAX_LONG_LEN);
 	if (buff_len == D_TM_MAX_LONG_LEN) {
 		rc = -DER_EXCEEDS_PATH_LEN;
 		goto failure;
 	}
-	buff_len += 1; /** make room for the trailing null */
-	temp->dtn_metric->dtm_lng_desc = d_tm_shmalloc(buff_len);
-	if (temp->dtn_metric->dtm_lng_desc == NULL) {
-		rc = -DER_NO_SHMEM;
-		goto failure;
+
+	if (buff_len > 0) {
+		buff_len += 1; /** make room for the trailing null */
+		temp->dtn_metric->dtm_lng_desc = d_tm_shmalloc(buff_len);
+		if (temp->dtn_metric->dtm_lng_desc == NULL) {
+			rc = -DER_NO_SHMEM;
+			goto failure;
+		}
+		strncpy(temp->dtn_metric->dtm_lng_desc, lng_desc, buff_len);
+	} else {
+		temp->dtn_metric->dtm_lng_desc = NULL;
 	}
-	strncpy(temp->dtn_metric->dtm_lng_desc, lng_desc, buff_len);
 
 	temp->dtn_protect = false;
 	if (d_tm_serialization && (temp->dtn_type != D_TM_DIRECTORY)) {
@@ -1958,7 +2139,7 @@ d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets,
 		dth_buckets[i].dtb_max = max;
 
 		rc = d_tm_add_metric(&dth_buckets[i].dtb_bucket, D_TM_COUNTER,
-				     meta_data, "", fullpath);
+				     meta_data, NULL, fullpath);
 		D_FREE(fullpath);
 		D_FREE(meta_data);
 		if (rc)
@@ -2452,13 +2633,11 @@ int d_tm_get_metadata(char **sh_desc, char **lng_desc, uint64_t *shmem_root,
 		sh_desc_str = d_tm_conv_ptr(shmem_root,
 					    metric_data->dtm_sh_desc);
 		if ((sh_desc != NULL) && (sh_desc_str != NULL))
-			D_STRNDUP(*sh_desc, sh_desc_str ? sh_desc_str :
-				  "N/A", D_TM_MAX_SHORT_LEN);
+			D_STRNDUP(*sh_desc, sh_desc_str, D_TM_MAX_SHORT_LEN);
 		lng_desc_str = d_tm_conv_ptr(shmem_root,
 					     metric_data->dtm_lng_desc);
 		if ((lng_desc != NULL) && (lng_desc_str != NULL))
-			D_STRNDUP(*lng_desc, lng_desc_str ? lng_desc_str :
-				  "N/A", D_TM_MAX_LONG_LEN);
+			D_STRNDUP(*lng_desc, lng_desc_str, D_TM_MAX_LONG_LEN);
 		if (node->dtn_protect)
 			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {

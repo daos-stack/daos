@@ -36,15 +36,18 @@ uint64_t d_tm_count_metrics(uint64_t *shmem_root, struct d_tm_node_t *node,
 int d_tm_list(struct d_tm_nodeList_t **head, uint64_t *shmem_root,
 	      struct d_tm_node_t *node, int d_tm_type);
 void d_tm_print_my_children(uint64_t *shmem_root, struct d_tm_node_t *node,
-			    int level, FILE *stream);
+			    int level, int filter, char *name, bool show_meta,
+			    int format, FILE *stream);
 void d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
-		     FILE *stream);
-void d_tm_print_counter(uint64_t val, char *name, FILE *stream);
-void d_tm_print_timestamp(time_t *clk, char *name, FILE *stream);
+		     FILE *stream, char *name, bool show_meta, int format);
+void d_tm_print_counter(uint64_t val, char *name, int format, FILE *stream);
+void d_tm_print_timestamp(time_t *clk, char *name, int format, FILE *stream);
 void d_tm_print_timer_snapshot(struct timespec *tms, char *name, int tm_type,
-			       FILE *stream);
+			       int format, FILE *stream);
 void d_tm_print_duration(struct timespec *tms, struct d_tm_stats_t *stats,
-			 char *name, int tm_type, FILE *stream);
+			 char *name, int tm_type, int format, FILE *stream);
 void d_tm_print_gauge(uint64_t val, struct d_tm_stats_t *stats, char *name,
-		      FILE *stream);
+		      int format, FILE *stream);
+void d_tm_print_metadata(char *shortDesc, char *longDesc, bool pad,
+			 int format, FILE *stream);
 #endif /* __TELEMETRY_CONSUMER_H__ */

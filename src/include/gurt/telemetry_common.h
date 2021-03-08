@@ -35,6 +35,11 @@ enum {
 	D_TM_RETAIN_SHMEM		= 0x002,
 };
 
+enum {
+	D_TM_VERBOSE			= 0x000,
+	D_TM_CSV			= 0x001,
+};
+
 /**
  * @brief Statistics for gauge and duration metrics
  *
@@ -107,5 +112,5 @@ void d_tm_compute_stats(struct d_tm_node_t *node, uint64_t value);
 double d_tm_compute_standard_dev(double sum_of_squares, uint64_t sample_size,
 				 double mean);
 int d_tm_compute_histogram(struct d_tm_node_t *node, uint64_t value);
-void d_tm_print_stats(FILE *stream, struct d_tm_stats_t *stats);
+void d_tm_print_stats(FILE *stream, struct d_tm_stats_t *stats, int format);
 #endif /* __TELEMETRY_COMMON_H__ */
