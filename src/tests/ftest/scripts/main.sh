@@ -103,9 +103,11 @@ for loc in /usr/lib/python2*/site-packages/ \
     fi
 done
 PATCH_DIR="$PREFIX"/lib/daos/TESTING/ftest
-# https://github.com/avocado-framework/avocado/pull/4345
-if ! grep "self.job.result_proxy.notify_progress(False)" \
-          "$pydir"/avocado/core/test.py; then
+# https://github.com/avocado-framework/avocado/pull/4345 fixed somewhere
+# before 69.2
+if grep "self.job.result_proxy.notify_progress(False)" \
+    "$pydir"/avocado/core/runner.py; then
+    echo "Applying patch avocado-job-result_proxy-reference-fix.patch"
     if ! cat < "$PATCH_DIR"/avocado-job-result_proxy-reference-fix.patch | \
       sudo patch -p1 -d "$pydir"; then
         echo "Failed to apply avocado PR-4345 patch"
@@ -115,6 +117,7 @@ fi
 # https://github.com/avocado-framework/avocado/pull/2908 fixed in
 # https://github.com/avocado-framework/avocado/pull/3076/
 if ! grep TIMEOUT_TEARDOWN "$pydir"/avocado/core/runner.py; then
+    echo "Applying patch avocado-teardown-timeout.patch"
     if ! cat < "$PATCH_DIR"/avocado-teardown-timeout.patch | \
       sudo patch -p1 -d "$pydir"; then
         echo "Failed to apply avocado PR-3076 patch"
@@ -124,12 +127,28 @@ fi
 # https://github.com/avocado-framework/avocado/pull/3154
 if ! grep "def phase(self)" \
     "$pydir"/avocado/core/test.py; then
-    if ! filterdiff -p1 -x selftests/* <                \
-        "$PATCH_DIR"/avocado-report-test-phases.patch | \
-      sed -e '/selftests\/.*/d' |                       \
+    echo "Applying patch avocado-report-test-phases-common.patch"
+    if ! filterdiff -p1 -x selftests/* <                       \
+        "$PATCH_DIR"/avocado-report-test-phases-common.patch | \
+      sed -e '/selftests\/.*/d' |                              \
       sudo patch -p1 -d "$pydir"; then
-        echo "Failed to apply avocado PR-3154 patch"
+        echo "Failed to apply avocado PR-3154 patch - common portion"
         exit 1
+    fi
+    if grep "^TEST_STATE_ATTRIBUTES = " "$pydir"/avocado/core/test.py; then
+        echo "Applying patch avocado-report-test-phases-py3.patch"
+        if ! cat < "$PATCH_DIR"/avocado-report-test-phases-py3.patch | \
+          sudo patch -p1 -d "$pydir"; then
+            echo "Failed to apply avocado PR-3154 patch - py3 portion"
+            exit 1
+        fi
+    else
+        echo "Applying patch avocado-report-test-phases-py2.patch"
+        if ! cat < "$PATCH_DIR"/avocado-report-test-phases-py2.patch | \
+          sudo patch -p1 -d "$pydir"; then
+            echo "Failed to apply avocado PR-3154 patch - py2 portion"
+            exit 1
+        fi
     fi
 fi
 # apply fix for https://github.com/avocado-framework/avocado/issues/2908
@@ -198,7 +217,7 @@ fi
 # Post-processing the xml files here to put them in proper categories
 # for publishing in Jenkins
 dt_xml_path="${logs_prefix}/ftest/avocado/job-results/daos_test"
-FILES=(${dt_xml_path}/*/test-results/*/data/*.xml)
+FILES=("${dt_xml_path}"/*/test-results/*/data/*.xml)
 COMP="FTEST_daos_test"
 
 ./scripts/post_process_xml.sh "${COMP}" "${FILES[@]}"

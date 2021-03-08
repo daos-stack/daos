@@ -116,6 +116,10 @@ out:
 		if (!rc) {
 			MPI_Bcast(outpool->pool_uuid, 16,
 				  MPI_CHAR, 0, MPI_COMM_WORLD);
+
+			/* TODO: Should we even be broadcasting this now? */
+			if (outpool->svc == NULL)
+				return rc;
 			MPI_Bcast(&outpool->svc->rl_nr,
 				  sizeof(outpool->svc->rl_nr),
 				  MPI_CHAR, 0, MPI_COMM_WORLD);
@@ -740,40 +744,8 @@ int
 run_daos_sub_tests_only(char *test_name, const struct CMUnitTest *tests,
 			int tests_size, int *sub_tests, int sub_tests_size)
 {
-	int i;
-	int rc = 0;
-
-	if (sub_tests != NULL) {
-		struct CMUnitTest *subtests;
-		int subtestsnb = 0;
-
-		D_ALLOC_ARRAY(subtests, sub_tests_size);
-		if (subtests == NULL) {
-			print_message("failed allocating subtests array\n");
-			return -DER_NOMEM;
-		}
-
-		for (i = 0; i < sub_tests_size; i++) {
-			if (sub_tests[i] >= tests_size || sub_tests[i] < 0) {
-				print_message("No subtest %d\n", sub_tests[i]);
-				continue;
-			}
-			subtests[i] = tests[sub_tests[i]];
-			subtestsnb++;
-		}
-
-		/* run the sub-tests */
-		if (subtestsnb > 0)
-			rc = _cmocka_run_group_tests(test_name, subtests,
-						     subtestsnb, NULL, NULL);
-		D_FREE(subtests);
-	} else {
-		/* run the full suite */
-		rc = _cmocka_run_group_tests(test_name, tests, tests_size,
-					     NULL, NULL);
-	}
-
-	return rc;
+	return run_daos_sub_tests(test_name, tests, tests_size, sub_tests,
+				  sub_tests_size, NULL, NULL);
 }
 
 int
@@ -795,11 +767,11 @@ run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
 		}
 
 		for (i = 0; i < sub_tests_size; i++) {
-			if (sub_tests[i] > tests_size || sub_tests[i] < 1) {
+			if (sub_tests[i] > tests_size || sub_tests[i] < 0) {
 				print_message("No subtest %d\n", sub_tests[i]);
 				continue;
 			}
-			subtests[i] = tests[sub_tests[i] - 1];
+			subtests[i] = tests[sub_tests[i]];
 			subtestsnb++;
 		}
 
@@ -821,14 +793,20 @@ run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
 static void
 daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
 		     const char *grp, const char *dmg_config,
-		     d_rank_t rank, int tgt_idx)
+		     d_rank_t rank, int tgt_idx, daos_size_t scm_size)
 {
 	char		dmg_cmd[DTS_CFG_MAX];
 	int		rc;
 
 	/* build and invoke dmg cmd */
-	dts_create_config(dmg_cmd, "dmg pool %s --pool=" DF_UUIDF " --rank=%d",
-			  sub_cmd, DP_UUID(pool_uuid), rank);
+	if (strncmp(sub_cmd, "extend", strlen("extend")) == 0)
+		dts_create_config(dmg_cmd, "dmg pool %s --pool=" DF_UUIDF
+				  " --ranks=%d --scm-size="DF_U64, sub_cmd,
+				  DP_UUID(pool_uuid), rank, scm_size);
+	else
+		dts_create_config(dmg_cmd, "dmg pool %s --pool=" DF_UUIDF
+				  " --rank=%d", sub_cmd, DP_UUID(pool_uuid),
+				  rank);
 
 	if (tgt_idx != -1)
 		dts_append_config(dmg_cmd, " --target-idx=%d", tgt_idx);
@@ -846,7 +824,7 @@ daos_exclude_target(const uuid_t pool_uuid, const char *grp,
 		    d_rank_t rank, int tgt_idx)
 {
 	daos_dmg_pool_target("exclude", pool_uuid, grp, dmg_config,
-			     rank, tgt_idx);
+			     rank, tgt_idx, 0);
 }
 
 void
@@ -854,7 +832,16 @@ daos_reint_target(const uuid_t pool_uuid, const char *grp,
 		  const char *dmg_config, d_rank_t rank, int tgt_idx)
 {
 	daos_dmg_pool_target("reintegrate", pool_uuid, grp, dmg_config,
-			     rank, tgt_idx);
+			     rank, tgt_idx, 0);
+}
+
+void
+daos_extend_target(const uuid_t pool_uuid, const char *grp,
+		   const char *dmg_config, d_rank_t rank, int tgt_idx,
+		   daos_size_t nvme_size)
+{
+	daos_dmg_pool_target("extend", pool_uuid, grp, dmg_config,
+			     rank, tgt_idx, nvme_size);
 }
 
 void
@@ -863,7 +850,7 @@ daos_drain_target(const uuid_t pool_uuid, const char *grp,
 {
 
 	daos_dmg_pool_target("drain", pool_uuid, grp, dmg_config,
-			     rank, tgt_idx);
+			     rank, tgt_idx, 0);
 }
 
 void
