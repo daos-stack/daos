@@ -63,7 +63,7 @@ class RebuildTests(TestWithServers):
             for data in self.container[index].written_data:
                 self.log.info(
                     "  c_oid: hi: %s, lo: %s",
-                    data.obj.c_oid.hi.value, data.obj.c_oid.lo.value)
+                    data.obj.c_oid.hi, data.obj.c_oid.lo)
         self.log.info("%s DEBUG END %s", "<" * 40, ">" * 40)
 
         # Determine how many objects will need to be rebuilt
