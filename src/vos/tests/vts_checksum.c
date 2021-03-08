@@ -60,8 +60,11 @@ struct test_case_args {
 	uint32_t		holes_nr;
 };
 
-#define	CSUM_FOR_ARRAYS_TEST_CASE(state, ...) \
-	csum_for_arrays_test_case(state, &(struct test_case_args)__VA_ARGS__)
+#define	CSUM_FOR_ARRAYS_TEST_CASE(state, args...) do { \
+        struct test_case_args __args = args; \
+        csum_for_arrays_test_case(state, &__args); \
+        } while(0)
+
 /** index to a specific csum within a csum info array */
 struct cia_idx {
 	uint32_t ci_idx;
