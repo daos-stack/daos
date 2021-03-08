@@ -715,7 +715,7 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc,
 
 		daos_dc_obj2id(dcsr->dcsr_obj, &oid.id_pub);
 		/* It is not important what the id_shard is, that
-		 * is packed via daos_cpd_req_idx::dcri_shard_idx.
+		 * is packed via daos_cpd_req_idx::dcri_shard_id.
 		 */
 		rc = crt_proc_daos_unit_oid_t(proc, &oid);
 	}

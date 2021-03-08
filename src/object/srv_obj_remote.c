@@ -359,7 +359,7 @@ ds_obj_cpd_clone_reqs(struct dtx_leader_handle *dlh, struct daos_shard_tgt *tgt,
 
 				oiod = obj_ec_tgt_oiod_get(split->osr_tgt_oiods,
 						dcsr_parent[idx].dcsr_ec_tgt_nr,
-						dcri_parent->dcri_shard_idx -
+						dcri_parent->dcri_shard_off -
 						dcu_parent->dcu_start_shard);
 				D_ASSERT(oiod != NULL);
 
@@ -370,8 +370,10 @@ ds_obj_cpd_clone_reqs(struct dtx_leader_handle *dlh, struct daos_shard_tgt *tgt,
 			}
 		}
 
-		dcde->dcde_reqs[i].dcri_shard_idx = dcri_parent->dcri_shard_idx;
+		dcde->dcde_reqs[i].dcri_shard_off = dcri_parent->dcri_shard_off;
+		dcde->dcde_reqs[i].dcri_shard_id = dcri_parent->dcri_shard_id;
 		dcde->dcde_reqs[i].dcri_req_idx = i;
+		dcde->dcde_reqs[i].dcri_padding = dcri_parent->dcri_padding;
 	}
 
 out:
