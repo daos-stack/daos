@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 	"time"
 
@@ -264,7 +265,8 @@ func NewEventForwarder(rpcClient UnaryInvoker, accessPts []string) *EventForward
 // EventLogger implements the events.Handler interface and logs RAS event to
 // INFO.
 type EventLogger struct {
-	log logging.Logger
+	log        logging.Logger
+	sysloggers map[events.RASSeverityID]*log.Logger
 }
 
 // OnEvent implements the events.Handler interface.
@@ -276,13 +278,30 @@ func (el *EventLogger) OnEvent(_ context.Context, evt *events.RASEvent) {
 	case evt.IsForwarded():
 		return // event has already been logged at source
 	}
-	// TODO: DAOS-6327 write directly to syslog
-	el.log.Info(evt.PrintRAS())
+
+	out := evt.PrintRAS()
+	el.log.Info(out)
+	el.sysloggers[evt.Severity].Print(out)
 }
 
 // NewEventLogger returns an initialized EventLogger.
-func NewEventLogger(log logging.Logger) *EventLogger {
-	return &EventLogger{log: log}
+func NewEventLogger(logBasic logging.Logger) *EventLogger {
+	getSyslogger := func(sev events.RASSeverityID) *log.Logger {
+		return logging.MustCreateSyslogger(sev.SyslogPriority(), log.LstdFlags)
+	}
+
+	el := &EventLogger{
+		log:        logBasic,
+		sysloggers: make(map[events.RASSeverityID]*log.Logger),
+	}
+
+	el.sysloggers[events.RASSeverityUnknown] = getSyslogger(events.RASSeverityUnknown)
+	el.sysloggers[events.RASSeverityFatal] = getSyslogger(events.RASSeverityFatal)
+	el.sysloggers[events.RASSeverityError] = getSyslogger(events.RASSeverityError)
+	el.sysloggers[events.RASSeverityWarn] = getSyslogger(events.RASSeverityWarn)
+	el.sysloggers[events.RASSeverityInfo] = getSyslogger(events.RASSeverityInfo)
+
+	return el
 }
 
 // SystemQueryReq contains the inputs for the system query request.

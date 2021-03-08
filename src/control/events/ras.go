@@ -14,6 +14,7 @@ import "C"
 import (
 	"encoding/json"
 	"fmt"
+	"log/syslog"
 	"os"
 	"strings"
 	"time"
@@ -102,6 +103,18 @@ func (sev RASSeverityID) String() string {
 // Uint32 returns uint32 representation of event severity.
 func (sev RASSeverityID) Uint32() uint32 {
 	return uint32(sev)
+}
+
+// SyslogPriority maps RAS severity to syslog package priority.
+func (sev RASSeverityID) SyslogPriority() syslog.Priority {
+	slSev := map[RASSeverityID]syslog.Priority{
+		RASSeverityFatal: syslog.LOG_CRIT,
+		RASSeverityError: syslog.LOG_ERR,
+		RASSeverityWarn:  syslog.LOG_WARNING,
+		RASSeverityInfo:  syslog.LOG_INFO,
+	}[sev]
+
+	return slSev | syslog.LOG_DAEMON
 }
 
 // RASEvent describes details of a specific RAS event.
