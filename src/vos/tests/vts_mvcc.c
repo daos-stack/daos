@@ -1458,10 +1458,13 @@ uncertainty_check_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 			else if (a->o_rtype == R_E && !empty)
 				expected_arc = -DER_EXIST;
 		}
-	}
-	if (is_punch(a) && expected_arc != -DER_NONEXIST && we > ae &&
-	    a->o_wlevel <= w->o_wlevel) {
-		expected_arc = -DER_TX_RESTART;
+		/** If is_punch(a), a is equal to or a parent of w and the
+		 *  punch will execute, then a will be rejected due to VOS's
+		 *  prevention of "under punches".
+		 */
+		if (is_punch(a) && a->o_wlevel <= w->o_wlevel &&
+		    expected_arc == 0)
+			expected_arc = -DER_TX_RESTART;
 	}
 
 	if (expected_arc != -DER_TX_RESTART && is_punch(w) && we > bound)
