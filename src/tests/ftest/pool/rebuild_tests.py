@@ -61,7 +61,9 @@ class RebuildTests(TestWithServers):
                 "Pool: %s - Container: %s",
                 self.pool[index].uuid, self.container[index].uuid)
             for data in self.container[index].written_data:
-                self.log.info("  c_oid: %s", data.obj.c_oid)
+                self.log.info(
+                    "  c_oid: hi: %s, lo: %s",
+                    data.obj.c_oid.hi.value, data.obj.c_oid.lo.value)
         self.log.info("%s DEBUG END %s", "<" * 40, ">" * 40)
 
         # Determine how many objects will need to be rebuilt
@@ -73,8 +75,9 @@ class RebuildTests(TestWithServers):
             self.log.info("%s DEBUG START %s", "<" * 40, ">" * 40)
             self.log.info(
                 "TestContainer.get_target_rank_lists() output - "
-                "[DaosContainer.get_layout]:")
-            self.log.info(target_rank_lists)
+                "[DaosContainer.get_layout] - qty: %s:", len(target_rank_lists))
+            for target_rank_list in target_rank_lists:
+                self.log.info("  {}", target_rank_list)
             self.log.info("%s DEBUG END %s", "<" * 40, ">" * 40)
 
             rebuild_qty = self.container[index].get_target_rank_count(
@@ -138,7 +141,10 @@ class RebuildTests(TestWithServers):
         Use Cases:
             single pool rebuild, single client, various record/object counts
 
-        :avocado: tags=all,daily_regression,large,pool,rebuild,rebuildsimple
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm,large
+        :avocado: tags=rebuild
+        :avocado: tags=pool,rebuild_tests,test_simple_rebuild
         """
         self.run_rebuild_test(1)
 
@@ -151,6 +157,9 @@ class RebuildTests(TestWithServers):
         Use Cases:
             multipool rebuild, single client, various object and record counts
 
-        :avocado: tags=all,daily_regression,large,pool,rebuild,rebuildmulti
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm,large
+        :avocado: tags=rebuild
+        :avocado: tags=pool,rebuild_tests,test_multipool_rebuild
         """
         self.run_rebuild_test(self.params.get("quantity", "/run/testparams/*"))
