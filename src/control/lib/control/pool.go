@@ -389,14 +389,15 @@ func (prs *PoolRebuildState) UnmarshalJSON(data []byte) error {
 	if !ok {
 		// Try converting the string to an int32, to handle the
 		// conversion from protobuf message using convert.Types().
-		if si, err := strconv.ParseInt(stateStr, 0, 32); err == nil {
-			if _, ok = mgmtpb.PoolRebuildStatus_State_name[int32(si)]; !ok {
-				return errors.Errorf("invalid rebuild state %q", stateStr)
-			}
-			state = int32(si)
-		} else {
+		si, err := strconv.ParseInt(stateStr, 0, 32)
+		if err != nil {
 			return errors.Errorf("invalid rebuild state %q", stateStr)
 		}
+
+		if _, ok = mgmtpb.PoolRebuildStatus_State_name[int32(si)]; !ok {
+			return errors.Errorf("invalid rebuild state %q", stateStr)
+		}
+		state = int32(si)
 	}
 	*prs = PoolRebuildState(state)
 
