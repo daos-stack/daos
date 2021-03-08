@@ -51,19 +51,17 @@ class OSAOfflineReintegration(OSAUtils):
         """
         # Create a pool
         pool = {}
-        pool_uuid = []
+        random_pool = 0
         if oclass is None:
             oclass = self.ior_cmd.dfs_oclass.value
 
         # Exclude ranks [0, 3, 4]
         rank = [0, 3, 4]
-
         for val in range(0, num_pool):
             pool[val] = TestPool(self.context,
                                  dmg_command=self.get_dmg_command())
             pool[val].get_params(self)
             pool[val].create()
-            pool_uuid.append(pool[val].uuid)
             self.pool = pool[val]
             if reint_during_aggregation is True:
                 test_seq = self.ior_test_sequence[1]
