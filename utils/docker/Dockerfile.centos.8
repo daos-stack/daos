@@ -37,7 +37,7 @@ RUN dnf clean all && dnf -y install epel-release dnf-plugins-core && \
     dnf config-manager --set-enabled powertools && \
     dnf -y upgrade && \
     dnf -y install \
-        boost-python36-devel \
+        boost-python3-devel \
         clang-analyzer \
         cmake \
         CUnit-devel \
@@ -81,18 +81,18 @@ RUN dnf clean all && dnf -y install epel-release dnf-plugins-core && \
         patchelf \
         pciutils \
         python3-pip \
-        python36-Cython \
-        python36-devel \
-        python36-distro \
-        python36-jira \
-        python36-numpy \
-        python36-paramiko \
-        python36-pylint \
-        python36-requests \
-        python36-requests \
-        python36-tabulate \
-        python36-pyxattr \
-        python36-scons \
+        python3-Cython \
+        python3-devel \
+        python3-distro \
+        python3-dnf \
+        python3-jira \
+        python3-numpy \
+        python3-paramiko \
+        python3-pylint \
+        python3-requests \
+        python3-tabulate \
+        python3-pyxattr \
+        python3-scons \
         readline-devel \
         sg3_utils \
         valgrind-devel \
