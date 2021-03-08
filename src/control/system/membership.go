@@ -444,7 +444,7 @@ func (m *Membership) MarkRankDead(rank Rank) error {
 	}
 
 	if member.State().isTransitionIllegal(MemberStateEvicted) {
-		return errors.New("llegal member state update for rank %d: %s->%s",
+		return errors.Errorf("llegal member state update for rank %d: %s->%s",
 			member.Rank, member.state, MemberStateEvicted)
 	}
 
