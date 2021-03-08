@@ -1820,20 +1820,16 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool discard)
 		reprobe = true;
 		D_DEBUG(DB_IO, "Removing %s from tree\n",
 			iter->it_type == VOS_ITER_DKEY ? "dkey" : "akey");
-		if (krec->kr_bmap & KREC_BF_BTR &&
-		    !dbtree_is_empty_inplace(&krec->kr_btr)) {
-			/* This should be an assert eventually but we can't
-			 * at present prevent underpunch
-			 */
-			D_ERROR("Removing orphaned single value tree\n");
-			D_ASSERT(0);
-		} else if (krec->kr_bmap & KREC_BF_EVT &&
-			   !evt_is_empty(&krec->kr_evt)) {
-			/* This should be an assert eventually but we can't
-			 * at present prevent underpunch
-			 */
-			D_ERROR("Removing orphaned array value tree\n");
-			D_ASSERT(0);
+		/** Orphaned values indicate an incarnation log bug.  It happens
+		 *  when the key containing the subtree doesn't have a creation
+		 *  timestamp for updates in the subtree.
+		 */
+		if (krec->kr_bmap & KREC_BF_BTR) {
+			D_ASSERTF(dbtree_is_empty_inplace(&krec->kr_btr),
+				  "Orphaned akey or single value detected\n");
+		} else if (krec->kr_bmap & KREC_BF_EVT) {
+			D_ASSERTF(evt_is_empty(&krec->kr_evt),
+				  "Orphaned array value detected\n");
 		}
 		rc = dbtree_iter_delete(oiter->it_hdl, NULL);
 		D_ASSERT(rc != -DER_NONEXIST);
