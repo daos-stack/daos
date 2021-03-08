@@ -71,14 +71,15 @@ def umount(path, bg=False):
 
 class NLTConf():
     """Helper class for configuration"""
-    def __init__(self, bc):
+    def __init__(self, bc, args):
         self.bc = bc
         self.agent_dir = None
         self.wf = None
         self.args = None
         self.max_log_size = None
 
-        self.dfuse_parent_dir = tempfile.mkdtemp(prefix='dnt_dfuse_')
+        self.dfuse_parent_dir = tempfile.mkdtemp(dir=args.dfuse_dir,
+                                                 prefix='dnt_dfuse_')
 
     def __del__(self):
         os.rmdir(self.dfuse_parent_dir)
@@ -266,7 +267,7 @@ class WarningsFactory():
         print('Closed JSON file {} with {} errors'.format(self.filename,
                                                           len(self.issues)))
 
-def load_conf():
+def load_conf(args):
     """Load the build config file"""
     file_self = os.path.dirname(os.path.abspath(__file__))
     json_file = None
@@ -281,7 +282,7 @@ def load_conf():
     ofh = open(json_file, 'r')
     conf = json.load(ofh)
     ofh.close()
-    return NLTConf(conf)
+    return NLTConf(conf, args)
 
 def get_base_env():
     """Return the base set of env vars needed for DAOS"""
@@ -2412,6 +2413,8 @@ def main():
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
     parser.add_argument('--max-log-size', default=None)
+    parser.add_argument('--dfuse-dir', default='/tmp',
+                        help='parent directory for all dfuse mounts')
     parser.add_argument('--perf-check', action='store_true')
     parser.add_argument('--dtx', action='store_true')
     parser.add_argument('--test', help="Use '--test list' for list")
@@ -2430,7 +2433,7 @@ def main():
         print('Tests are: {}'.format(','.join(sorted(tests))))
         return
 
-    conf = load_conf()
+    conf = load_conf(args)
 
     wf = WarningsFactory('nlt-errors.json')
 
