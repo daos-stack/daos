@@ -544,13 +544,11 @@ io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch, uint64_t flags,
 		   struct dtx_handle *dth, bool verbose)
 {
 	struct bio_sglist	*bsgl;
-	struct bio_iov		*biov;
 	struct dcs_iod_csums	*iod_csums = NULL;
 	struct daos_csummer	*csummer = NULL;
 	d_iov_t			*srv_iov;
 	daos_handle_t		ioh;
-	unsigned int		off;
-	int			i, rc = 0;
+	int			rc = 0;
 
 	if ((arg->ta_flags & TF_USE_CSUMS) && iod->iod_size > 0) {
 		rc = io_test_add_csums(iod, sgl, &csummer, &iod_csums);
@@ -585,13 +583,18 @@ io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch, uint64_t flags,
 	bsgl = vos_iod_sgl_at(ioh, 0);
 	assert_true(bsgl != NULL);
 
+	rc = bio_iod_copy(vos_ioh2desc(ioh), sgl, 1);
+	assert_rc_equal(rc, 0);
+	/*
 	for (i = off = 0; i < bsgl->bs_nr_out; i++) {
 		biov = &bsgl->bs_iovs[i];
-		memcpy(bio_iov2req_buf(biov), srv_iov->iov_buf + off,
-		       bio_iov2req_len(biov));
+		pmemobj_memcpy_persist(bio_iov2req_buf(biov),
+				       srv_iov->iov_buf + off,
+				       bio_iov2req_len(biov));
 		off += bio_iov2req_len(biov);
 	}
-	assert_true(srv_iov->iov_len == off);
+	*/
+	assert_true(srv_iov->iov_len == sgl->sg_iovs[0].iov_len);
 
 	rc = bio_iod_post(vos_ioh2desc(ioh));
 end:
@@ -802,10 +805,16 @@ io_oi_test(void **state)
 	cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
 	assert_ptr_not_equal(cont, NULL);
 
+	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
+	assert_rc_equal(rc, 0);
+
 	rc = vos_oi_find_alloc(cont, oid, 1, true, &obj[0], NULL);
 	assert_rc_equal(rc, 0);
 
 	rc = vos_oi_find_alloc(cont, oid, 2, true, &obj[1], NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = umem_tx_end(vos_cont2umm(cont), 0);
 	assert_rc_equal(rc, 0);
 }
 
@@ -816,6 +825,8 @@ io_obj_cache_test(void **state)
 	struct vos_test_ctx	*ctx = &arg->ctx;
 	struct daos_lru_cache	*occ = NULL;
 	struct vos_object	*objs[20];
+	struct umem_instance	*ummg;
+	struct umem_instance	*umml;
 	daos_epoch_range_t	 epr = {0, 1};
 	daos_unit_oid_t		 oids[2];
 	char			*po_name;
@@ -845,17 +856,32 @@ io_obj_cache_test(void **state)
 	oids[0] = gen_oid(arg->ofeat);
 	oids[1] = gen_oid(arg->ofeat);
 
+	ummg = vos_cont2umm(vos_hdl2cont(ctx->tc_co_hdl));
+	umml = vos_cont2umm(vos_hdl2cont(l_coh));
+	rc = umem_tx_begin(ummg, NULL);
+	assert_rc_equal(rc, 0);
+
 	rc = vos_obj_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0], &epr, 0,
 			  VOS_OBJ_CREATE | VOS_OBJ_VISIBLE, DAOS_INTENT_DEFAULT,
 			  &objs[0], 0);
 	assert_rc_equal(rc, 0);
+
+	rc = umem_tx_end(ummg, 0);
+	assert_rc_equal(rc, 0);
+
 	vos_obj_release(occ, objs[0], false);
+
+	rc = umem_tx_begin(umml, NULL);
+	assert_rc_equal(rc, 0);
 
 	rc = vos_obj_hold(occ, vos_hdl2cont(l_coh), oids[1], &epr, 0,
 			  VOS_OBJ_CREATE | VOS_OBJ_VISIBLE, DAOS_INTENT_DEFAULT,
 			  &objs[0], 0);
 	assert_rc_equal(rc, 0);
 	vos_obj_release(occ, objs[0], false);
+
+	rc = umem_tx_end(umml, 0);
+	assert_rc_equal(rc, 0);
 
 	rc = hold_objects(objs, occ, &ctx->tc_co_hdl, &oids[0], 0, 10, true, 0);
 	assert_int_equal(rc, 0);
@@ -1950,12 +1976,18 @@ oid_iter_test_setup(void **state)
 	cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
 	assert_ptr_not_equal(cont, NULL);
 
+	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
+	assert_rc_equal(rc, 0);
 	for (i = 0; i < VTS_IO_OIDS; i++) {
 		oids[i] = gen_oid(arg->ofeat);
 
 		rc = vos_oi_find_alloc(cont, oids[i], 1, true, &obj_df, NULL);
 		assert_rc_equal(rc, 0);
 	}
+
+	rc = umem_tx_end(vos_cont2umm(cont), 0);
+	assert_rc_equal(rc, 0);
+
 	return 0;
 }
 

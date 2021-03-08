@@ -166,6 +166,54 @@ dc_rw_cb_iod_sgl_copy(daos_iod_t *iod, d_sg_list_t *sgl, daos_iod_t *cp_iod,
 	return 0;
 }
 
+static d_iov_t *
+rw_args2csum_iov(const struct rw_cb_args *rw_args)
+{
+	D_ASSERT(rw_args != NULL);
+	D_ASSERT(rw_args->shard_args != NULL);
+	D_ASSERT(rw_args->shard_args != NULL);
+	D_ASSERT(rw_args->shard_args->api_args != NULL);
+
+	return rw_args->shard_args->api_args->csum_iov;
+}
+
+static bool
+rw_args_has_csum_iov(const struct rw_cb_args *rw_args)
+{
+	return rw_args2csum_iov(rw_args) != NULL;
+}
+
+/**
+ * If csums exist and the rw_args has a checksum iov to put checksums into,
+ * then serialize the data checksums to the checksum iov. If the iov buffer
+ * isn't large enough, then the checksums will be truncated. The iov len will
+ * be the length needed. The caller can decide if it wants to grow the iov
+ * buffer and call again.
+ */
+static void
+rw_args_store_csum(const struct rw_cb_args *rw_args,
+		   const struct dcs_iod_csums *iod_csum)
+{
+	int	c, rc;
+	int	csum_iov_too_small = false;
+	d_iov_t *csum_iov;
+
+	if (!rw_args_has_csum_iov(rw_args) || iod_csum == NULL)
+		return;
+
+	csum_iov = rw_args2csum_iov(rw_args);
+	for (c = 0; c < iod_csum->ic_nr; c++) {
+		if (!csum_iov_too_small) {
+			rc = ci_serialize(&iod_csum->ic_data[c],
+					  csum_iov);
+			csum_iov_too_small = rc == -DER_REC2BIG;
+		}
+
+		if (csum_iov_too_small)
+			csum_iov->iov_len += ci_size(iod_csum->ic_data[c]);
+	}
+}
+
 static int
 dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 {
@@ -289,6 +337,8 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 			}
 			break;
 		}
+
+		rw_args_store_csum(rw_args, iod_csum);
 	}
 	daos_csummer_destroy(&csummer_copy);
 
@@ -1232,14 +1282,13 @@ struct obj_enum_args {
  * use iod/iod_csum as vehicle to verify data
  */
 static int
-csum_enum_verify_recx(struct daos_csummer *csummer,
-		      struct obj_enum_rec *rec,
-		      struct dcs_csum_info *csum_info,
-		      d_iov_t *enum_type_val)
+csum_enum_verify_recx(struct daos_csummer *csummer, struct obj_enum_rec *rec,
+		      d_iov_t *enum_type_val, struct dcs_csum_info *csum_info)
 {
 	daos_iod_t		 tmp_iod = {0};
 	d_sg_list_t		 tmp_sgl = {0};
 	struct dcs_iod_csums	 tmp_iod_csum = {0};
+	int			 rc;
 
 	tmp_iod.iod_size = rec->rec_size;
 	tmp_iod.iod_type = DAOS_IOD_ARRAY;
@@ -1252,50 +1301,128 @@ csum_enum_verify_recx(struct daos_csummer *csummer,
 	tmp_iod_csum.ic_nr = 1;
 	tmp_iod_csum.ic_data = csum_info;
 
-	return daos_csummer_verify_iod(csummer, &tmp_iod, &tmp_sgl,
-				       &tmp_iod_csum, NULL, 0, NULL);
+	rc = daos_csummer_verify_iod(csummer, &tmp_iod, &tmp_sgl,
+				     &tmp_iod_csum, NULL, 0, NULL);
+
+	return rc;
 }
 
 /**
  * use iod/iod_csum as vehicle to verify data
  */
 static int
-csum_enum_verify_sv(struct daos_csummer *csummer,
-		 d_iov_t *enum_type_val, d_iov_t *csum_iov)
+csum_enum_verify_sv(struct daos_csummer *csummer, struct obj_enum_rec *rec,
+		    d_iov_t *enum_type_val, struct dcs_csum_info *csum_info)
 {
 	daos_iod_t		 tmp_iod = {0};
 	d_sg_list_t		 tmp_sgl = {0};
 	struct dcs_iod_csums	 tmp_iod_csum = {0};
-	struct dcs_csum_info	*tmp_csum_info = {0};
+	int			 rc;
 
-	tmp_iod.iod_size = enum_type_val->iov_len;
+	tmp_iod.iod_size = rec->rec_size;
 	tmp_iod.iod_type = DAOS_IOD_SINGLE;
 	tmp_iod.iod_nr = 1;
 
 	tmp_sgl.sg_nr = tmp_sgl.sg_nr_out = 1;
 	tmp_sgl.sg_iovs = enum_type_val;
 
-	ci_cast(&tmp_csum_info, csum_iov);
-	ci_move_next_iov(tmp_csum_info, csum_iov);
-
 	tmp_iod_csum.ic_nr = 1;
-	tmp_iod_csum.ic_data = tmp_csum_info;
+	tmp_iod_csum.ic_data = csum_info;
+	rc = daos_csummer_verify_iod(csummer, &tmp_iod, &tmp_sgl,
+				     &tmp_iod_csum, NULL, 0, NULL);
 
-	return daos_csummer_verify_iod(csummer, &tmp_iod, &tmp_sgl,
-				       &tmp_iod_csum, NULL, 0, NULL);
+	return rc;
 }
 
+struct csum_enum_args {
+	d_iov_t			*csum_iov;
+	struct daos_csummer	*csummer;
+};
+
+static int
+verify_csum_cb(daos_key_desc_t *kd, void *buf, unsigned int size, void *arg)
+{
+	struct dcs_csum_info	 *ci_to_compare = NULL;
+	struct csum_enum_args	*args = arg;
+	d_iov_t			 enum_type_val;
+	int rc;
+
+	switch (kd->kd_val_type) {
+	case OBJ_ITER_SINGLE:
+	case OBJ_ITER_RECX: {
+		struct obj_enum_rec	*rec;
+		uint64_t		 rec_data_len;
+
+		rec = buf;
+		buf += sizeof(*rec);
+
+		/**
+		 * Only inlined data has csums serialized
+		 * to csum_iov
+		 */
+		if (!(rec->rec_flags & RECX_INLINE))
+			return 0;
+
+		ci_cast(&ci_to_compare, args->csum_iov);
+		ci_move_next_iov(ci_to_compare, args->csum_iov);
+		rec_data_len = rec->rec_size *
+			       rec->rec_recx.rx_nr;
+
+		d_iov_set(&enum_type_val, buf, rec_data_len);
+
+		if (kd->kd_val_type == OBJ_ITER_RECX)
+			rc = csum_enum_verify_recx(args->csummer, rec,
+						   &enum_type_val,
+						   ci_to_compare);
+		else
+			rc = csum_enum_verify_sv(args->csummer, rec,
+						 &enum_type_val,
+						 ci_to_compare);
+		if (rc != 0)
+			return rc;
+		break;
+	}
+	case OBJ_ITER_AKEY:
+	case OBJ_ITER_DKEY:
+		d_iov_set(&enum_type_val, buf, kd->kd_key_len);
+		/**
+		  * fault injection - corrupt keys before verifying -
+		  * simulates corruption over network
+		  */
+		if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_FETCH_AKEY) ||
+		    DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_FETCH_DKEY))
+			((uint8_t *)buf)[0] += 2;
+
+		ci_cast(&ci_to_compare, args->csum_iov);
+		ci_move_next_iov(ci_to_compare, args->csum_iov);
+
+		rc = daos_csummer_verify_key(args->csummer,
+					     &enum_type_val, ci_to_compare);
+
+		if (rc != 0) {
+			D_ERROR("daos_csummer_verify_key error for %s: %d",
+				kd->kd_val_type == OBJ_ITER_AKEY ?
+				"AKEY" : "DKEY", rc);
+			return rc;
+		}
+		break;
+	default:
+
+		break;
+	}
+
+	return 0;
+}
+
+/* See obj_enum.c:fill_rec() for how the recx and csum_iov is serialized */
 static int
 csum_enum_verify(const struct obj_enum_args *enum_args,
 		 const struct obj_key_enum_out *oeo)
 {
 	struct daos_csummer	*csummer;
-	uint64_t		 i;
 	int			 rc = 0;
-	struct daos_sgl_idx	 sgl_idx = {0};
 	d_sg_list_t		 sgl = oeo->oeo_sgl;
 	d_iov_t			 csum_iov = oeo->oeo_csum_iov;
-	struct dcs_csum_info	 *tmp = NULL;
 
 	if (enum_args->eaa_nr == NULL ||
 	    *enum_args->eaa_nr == 0 ||
@@ -1306,89 +1433,18 @@ csum_enum_verify(const struct obj_enum_args *enum_args,
 	if (!daos_csummer_initialized(csummer) || csummer->dcs_skip_key_verify)
 		return 0; /** csums not enabled */
 
-	if (csum_iov.iov_len == 0) {
-		D_ERROR("CSUM is enabled but no  checksum provided.");
-		return -DER_CSUM;
-	}
+	struct csum_enum_args csum_args = {0};
 
-	for (i = 0; i < *enum_args->eaa_nr; i++) {
-		daos_key_desc_t		*kd = &enum_args->eaa_kds[i];
-		void			*buf;
-		d_iov_t			 enum_type_val;
-		d_iov_t			 iov;
+	csum_args.csummer = daos_csummer_copy(csummer);
+	if (csum_args.csummer == NULL)
+		return -DER_NOMEM;
+	csum_args.csum_iov = &csum_iov;
 
-		if (sgl_idx.iov_offset + kd->kd_key_len >
-		    sgl.sg_iovs[sgl_idx.iov_idx].iov_len) {
-			sgl_idx.iov_idx++;
-			sgl_idx.iov_offset = 0;
-		}
-		iov = sgl.sg_iovs[sgl_idx.iov_idx];
-		buf = iov.iov_buf + sgl_idx.iov_offset;
-		switch (kd->kd_val_type) {
-		case OBJ_ITER_RECX: {
-			struct obj_enum_rec *rec = buf;
+	rc = obj_enum_iterate(enum_args->eaa_kds, &sgl, *enum_args->eaa_nr,
+			      -1, verify_csum_cb, &csum_args);
 
-			/**
-			 * Even if don't use csum info at this point because
-			 * the data isn't inline, still need to move to next
-			 */
-			ci_cast(&tmp, &csum_iov);
-			ci_move_next_iov(tmp, &csum_iov);
+	daos_csummer_destroy(&csum_args.csummer);
 
-			if (rec->rec_flags & RECX_INLINE) {
-				buf += sizeof(*rec);
-				d_iov_set(&enum_type_val, buf,
-					  rec->rec_size * rec->rec_recx.rx_nr);
-				rc = csum_enum_verify_recx(csummer, rec, tmp,
-							   &enum_type_val);
-				if (rc != 0)
-					return rc;
-			}
-			break;
-		}
-		case OBJ_ITER_SINGLE: {
-			d_iov_set(&enum_type_val, buf, kd->kd_key_len);
-
-			ci_cast(&tmp, &csum_iov);
-			ci_move_next_iov(tmp, &csum_iov);
-
-			rc = csum_enum_verify_sv(csummer,
-						 &enum_type_val, &csum_iov);
-
-			if (rc != 0)
-				return rc;
-			break;
-		}
-		case OBJ_ITER_AKEY:
-		case OBJ_ITER_DKEY:
-			d_iov_set(&enum_type_val, buf, kd->kd_key_len);
-			/**
-			  * fault injection - corrupt keys before verifying -
-			  * simulates corruption over network
-			  */
-			if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_FETCH_AKEY) ||
-			    DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_FETCH_DKEY))
-				((uint8_t *)buf)[0] += 2;
-
-			ci_cast(&tmp, &csum_iov);
-			ci_move_next_iov(tmp, &csum_iov);
-
-			rc = daos_csummer_verify_key(csummer,
-						     &enum_type_val, tmp);
-
-			if (rc != 0)
-				return rc;
-			break;
-		}
-
-		sgl_idx.iov_offset += kd->kd_key_len;
-
-		/** move to next iov if necessary */
-		if (sgl_idx.iov_offset >= iov.iov_len) {
-			sgl_idx.iov_idx++;
-			sgl_idx.iov_offset = 0;
-		}
-	}
 	return rc;
 }
 
@@ -1406,8 +1462,10 @@ dc_enumerate_copy_csum(d_iov_t *dst, const d_iov_t *src)
 		       min(dst->iov_buf_len,
 			   src->iov_len));
 		dst->iov_len = src->iov_len;
-		if (dst->iov_len > dst->iov_buf_len)
+		if (dst->iov_len > dst->iov_buf_len) {
+			D_DEBUG(DB_CSUM, "Checksum buffer truncated");
 			return -DER_TRUNC;
+		}
 	}
 	return 0;
 }

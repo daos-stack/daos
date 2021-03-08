@@ -23,6 +23,7 @@ static test_arg_t *save_arg;
 enum REBUILD_TEST_OP_TYPE {
 	RB_OP_TYPE_FAIL,
 	RB_OP_TYPE_DRAIN,
+	RB_OP_TYPE_REINT,
 	RB_OP_TYPE_ADD,
 	RB_OP_TYPE_RECLAIM,
 };
@@ -52,7 +53,7 @@ rebuild_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 }
 
 static void
-rebuild_add_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
+rebuild_reint_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 		int tgt_idx)
 {
 	int i;
@@ -63,6 +64,22 @@ rebuild_add_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 					  args[i]->group,
 					  args[i]->dmg_config,
 					  rank, tgt_idx);
+		sleep(2);
+	}
+}
+
+static void
+rebuild_extend_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
+		   int tgt_idx, daos_size_t nvme_size)
+{
+	int i;
+
+	for (i = 0; i < args_cnt; i++) {
+		if (!args[i]->pool.destroyed)
+			daos_extend_target(args[i]->pool.pool_uuid,
+					   args[i]->group,
+					   args[i]->dmg_config,
+					   rank, tgt_idx, nvme_size);
 		sleep(2);
 	}
 }
@@ -104,9 +121,14 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 						ranks[i], tgts ? tgts[i] : -1,
 						kill);
 				break;
-			case RB_OP_TYPE_ADD:
-				rebuild_add_tgt(args, args_cnt, ranks[i],
+			case RB_OP_TYPE_REINT:
+				rebuild_reint_tgt(args, args_cnt, ranks[i],
 						tgts ? tgts[i] : -1);
+				break;
+			case RB_OP_TYPE_ADD:
+				rebuild_extend_tgt(args, args_cnt, ranks[i],
+						   tgts ? tgts[i] : -1,
+						   args[i]->pool.pool_size);
 				break;
 			case RB_OP_TYPE_DRAIN:
 				rebuild_drain_tgt(args, args_cnt, ranks[i],
@@ -174,6 +196,12 @@ void
 drain_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool kill)
 {
 	rebuild_targets(&arg, 1, &failed_rank, NULL, 1, kill, RB_OP_TYPE_DRAIN);
+}
+
+void
+extend_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank)
+{
+	rebuild_targets(&arg, 1, &failed_rank, NULL, 1, false, RB_OP_TYPE_ADD);
 }
 
 void
@@ -295,7 +323,7 @@ reintegrate_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
 	 */
 	rebuild_pool_disconnect_internal(arg);
 	rebuild_targets(&arg, 1, &failed_rank, &failed_tgt, 1, false,
-			RB_OP_TYPE_ADD);
+			RB_OP_TYPE_REINT);
 	rebuild_pool_connect_internal(arg);
 }
 
@@ -312,7 +340,8 @@ reintegrate_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank)
 	 * removed
 	 */
 	rebuild_pool_disconnect_internal(arg);
-	rebuild_targets(&arg, 1, &failed_rank, NULL, 1, false, RB_OP_TYPE_ADD);
+	rebuild_targets(&arg, 1, &failed_rank, NULL, 1, false,
+			RB_OP_TYPE_REINT);
 	rebuild_pool_connect_internal(arg);
 }
 
@@ -333,7 +362,7 @@ reintegrate_pools_ranks(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
 	for (i = 0; i < args_cnt; i++)
 		rebuild_pool_disconnect_internal(args[i]);
 	rebuild_targets(args, args_cnt, failed_ranks, NULL, ranks_nr,
-			false, RB_OP_TYPE_ADD);
+			false, RB_OP_TYPE_REINT);
 	for (i = 0; i < args_cnt; i++)
 		rebuild_pool_connect_internal(args[i]);
 }
@@ -358,8 +387,7 @@ rebuild_add_back_tgts(test_arg_t *arg, d_rank_t failed_rank, int *failed_tgts,
 }
 
 static int
-rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
-			daos_epoch_t validate_eph, int index)
+rebuild_io_obj_internal(struct ioreq *req, bool validate, int index)
 {
 #define BULK_SIZE	5000
 #define REC_SIZE	64
@@ -375,6 +403,7 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
 	int	akey_punch_idx = 1;
 	int	dkey_punch_idx = 1;
 	int	rec_punch_idx = 2;
+	int	large_key_idx = 7;
 	int	j;
 	int	k;
 	int	l;
@@ -383,13 +412,12 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
 	if (large_key == NULL)
 		return -DER_NOMEM;
 	memset(large_key, 'L', LARGE_KEY_SIZE - 1);
-
+	sprintf(data, "data");
+	sprintf(data_verify, "data");
 	for (j = 0; j < DKEY_LOOP; j++) {
 		req->iod_type = DAOS_IOD_ARRAY;
 		/* small records */
 		sprintf(dkey, "dkey_%d_%d", index, j);
-		sprintf(data, "%s_"DF_U64, "data", eph);
-		sprintf(data_verify, "%s_"DF_U64, "data", validate_eph);
 		for (k = 0; k < AKEY_LOOP; k++) {
 			sprintf(akey, "akey_%d_%d", index, k);
 			for (l = 0; l < REC_LOOP; l++) {
@@ -400,7 +428,7 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
 					    l == rec_punch_idx)
 						continue;
 					memset(data, 0, REC_SIZE);
-					if (l == 7)
+					if (l == large_key_idx)
 						lookup_single(large_key, akey,
 							      l, data, REC_SIZE,
 							      DAOS_TX_NONE,
@@ -413,7 +441,7 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
 					assert_memory_equal(data, data_verify,
 						    strlen(data_verify));
 				} else {
-					if (l == 7)
+					if (l == large_key_idx)
 						insert_single(large_key, akey,
 							l, data,
 							strlen(data) + 1,
@@ -471,9 +499,6 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
 			punch_dkey(dkey, DAOS_TX_NONE, req);
 
 		/* single record */
-		sprintf(data, "%s_"DF_U64, "single_data", eph);
-		sprintf(data_verify, "%s_"DF_U64, "single_data",
-			validate_eph);
 		req->iod_type = DAOS_IOD_SINGLE;
 		sprintf(dkey, "dkey_single_%d_%d", index, j);
 		if (validate) {
@@ -496,32 +521,45 @@ void
 rebuild_io(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
 {
 	struct ioreq	req;
-	daos_epoch_t	eph = arg->hce + arg->index * 2 + 1;
 	int		i;
 	int		punch_idx = 1;
 
-	print_message("update obj %d eph "DF_U64" before rebuild\n", oids_nr,
-		      eph);
-
+	print_message("rebuild io obj %d\n", oids_nr);
 	for (i = 0; i < oids_nr; i++) {
 		ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
 		if (i == punch_idx) {
 			punch_obj(DAOS_TX_NONE, &req);
 		} else {
-			rebuild_io_obj_internal((&req), false, eph, -1,
-						 arg->index);
+			rebuild_io_obj_internal((&req), false, arg->index);
 		}
 		ioreq_fini(&req);
 	}
 }
 
 void
-rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
-		    bool discard)
+rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
+{
+	struct ioreq	req;
+	int		i;
+
+	print_message("rebuild io validate obj %d\n", oids_nr);
+	for (i = 0; i < oids_nr; i++) {
+		/* XXX: skip punch object. */
+		if (i == 1)
+			continue;
+		ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
+		rebuild_io_obj_internal((&req), true, arg->index);
+		ioreq_fini(&req);
+	}
+}
+
+void
+rebuild_io_verify(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
 {
 	int	rc;
 	int	i;
 
+	print_message("rebuild io verify obj %d\n", oids_nr);
 	for (i = 0; i < oids_nr; i++) {
 		/* XXX: skip punch object. */
 		if (i == 1)

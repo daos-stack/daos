@@ -21,7 +21,6 @@ server_config:
 pool:
  mode: 511
  name: daos_server
- svcn: 1
  prop_name: reclaim
  prop_value: disabled
  control_method: dmg
