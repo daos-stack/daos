@@ -22,10 +22,21 @@ jobs:
       uses: actions/checkout@v2
       with:
         submodules: true
-    - name: Build ${{ matrix.distro }} Docker image with ${{ matrix.compiler }}
+    - name: Prepare base image in Docker
+      run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
+                          --build-arg DAOS_DEPS_BUILD=no
+    - name: Build dependencies in Docker
+      run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
+                          --build-arg DEPS_JOBS=8 --build-arg DAOS_BUILD=no
+    - name: Build DAOS in Docker image with ${{ matrix.compiler }}
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg COMPILER=${{ matrix.compiler }}
+                          --build-arg DEPS_JOBS=8 --build-arg DAOS_JAVA_BUILD=no
                           -t build-image
+    - name: Build DAOS Java client in Docker image with ${{ matrix.compiler }}
+      run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
+                          --build-arg COMPILER=${{ matrix.compiler }}
+                          --build-arg DEPS_JOBS=8
     - name: check server
       run: docker run build-image ldd /opt/daos/bin/daos_engine
     - name: Run Unit Tests

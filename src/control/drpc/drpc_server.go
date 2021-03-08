@@ -25,7 +25,7 @@ import (
 // buffer to put all of the information in. Corresponding C definition is
 // found in include/daos/drpc.h
 //
-const MaxMsgSize = 16384
+const MaxMsgSize = 1 << 17
 
 // DomainSocketServer is the object that listens for incoming dRPC connections,
 // maintains the connections for sessions, and manages the message processing.
@@ -102,7 +102,7 @@ func (d *DomainSocketServer) Start() error {
 	d.listener = lis
 
 	// TODO: Should we set more granular permissions? The only writer should
-	// be the IO server and we should know which user is running it.
+	// be the I/O Engine and we should know which user is running it.
 	if err := os.Chmod(d.sockFile, 0777); err != nil {
 		return errors.Wrapf(err, "Unable to set permissions on %s", d.sockFile)
 	}
