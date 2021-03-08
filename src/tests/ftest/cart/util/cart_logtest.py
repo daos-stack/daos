@@ -422,8 +422,6 @@ class LogTest():
                         show = False
                     if show and server_shutdown and line.get_msg().endswith(
                             "DER_SHUTDOWN(-2017): 'Service should shut down'"):
-                        show_line(line, 'LOW',
-                                  'silenced because of server shutdwon')
                         show = False
                     if show:
                         # Allow WARNING or ERROR messages, but anything higher
