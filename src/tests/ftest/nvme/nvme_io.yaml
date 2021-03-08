@@ -28,6 +28,7 @@ pool:
 ior:
  flags: "-w -r -k -vv"
  repetitions: 1
+ test_file: /testFile
  object_type:
   - "SX"
   - "S1"
