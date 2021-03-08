@@ -3033,36 +3033,36 @@ static const ProtobufCFieldDescriptor mgmt__pool_query_resp__field_descriptors[1
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "totaltargets",
+    "total_targets",
     3,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolQueryResp, totaltargets),
+    offsetof(Mgmt__PoolQueryResp, total_targets),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "activetargets",
+    "active_targets",
     4,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolQueryResp, activetargets),
+    offsetof(Mgmt__PoolQueryResp, active_targets),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "disabledtargets",
+    "disabled_targets",
     5,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolQueryResp, disabledtargets),
+    offsetof(Mgmt__PoolQueryResp, disabled_targets),
     NULL,
     NULL,
     0,             /* flags */
@@ -3105,12 +3105,12 @@ static const ProtobufCFieldDescriptor mgmt__pool_query_resp__field_descriptors[1
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "totalnodes",
+    "total_nodes",
     9,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolQueryResp, totalnodes),
+    offsetof(Mgmt__PoolQueryResp, total_nodes),
     NULL,
     NULL,
     0,             /* flags */
@@ -3142,15 +3142,15 @@ static const ProtobufCFieldDescriptor mgmt__pool_query_resp__field_descriptors[1
   },
 };
 static const unsigned mgmt__pool_query_resp__field_indices_by_name[] = {
-  3,   /* field[3] = activetargets */
-  4,   /* field[4] = disabledtargets */
+  3,   /* field[3] = active_targets */
+  4,   /* field[4] = disabled_targets */
   10,   /* field[10] = leader */
   7,   /* field[7] = nvme */
   5,   /* field[5] = rebuild */
   6,   /* field[6] = scm */
   0,   /* field[0] = status */
-  8,   /* field[8] = totalnodes */
-  2,   /* field[2] = totaltargets */
+  8,   /* field[8] = total_nodes */
+  2,   /* field[2] = total_targets */
   1,   /* field[1] = uuid */
   9,   /* field[9] = version */
 };
