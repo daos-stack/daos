@@ -24,8 +24,6 @@
 #include <daos/placement.h>
 #include "srv_internal.h"
 #include "drpc_internal.h"
-#include <gurt/telemetry_common.h>
-#include <gurt/telemetry_producer.h>
 
 #include <daos.h> /* for daos_init() */
 
@@ -460,9 +458,7 @@ static void
 dss_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		 enum crt_event_type type, void *arg)
 {
-	static struct d_tm_node_t	*dead_rank_cnt;
-	static struct d_tm_node_t	*last_ts;
-	int				 rc = 0;
+	int	 rc = 0;
 
 	/* We only care about dead ranks for now */
 	if (src != CRT_EVS_SWIM || type != CRT_EVT_DEAD) {
@@ -470,10 +466,6 @@ dss_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 			src, type);
 		return;
 	}
-
-	(void)d_tm_increment_counter(&dead_rank_cnt, "events/dead_rank_cnt",
-				     NULL);
-	(void)d_tm_record_timestamp(&last_ts, "events/last_event_ts", NULL);
 
 	rc = ds_notify_swim_rank_dead(rank);
 	if (rc)
@@ -495,18 +487,10 @@ server_init(int argc, char *argv[])
 	if (rc != 0)
 		return rc;
 
-	rc = d_tm_init(dss_instance_idx, D_TM_SHARED_MEMORY_SIZE,
-		       D_TM_SERVER_PROCESS);
-	if (rc != 0)
-		goto exit_debug_init;
-
-	/** Report timestamp when engine was started */
-	(void)d_tm_record_timestamp(NULL, "started_at", NULL);
-
 	rc = drpc_init();
 	if (rc != 0) {
 		D_ERROR("Failed to initialize dRPC: "DF_RC"\n", DP_RC(rc));
-		goto exit_telemetry_init;
+		goto exit_debug_init;
 	}
 
 	rc = register_dbtree_classes();
@@ -646,12 +630,6 @@ server_init(int argc, char *argv[])
 	dss_xstreams_open_barrier();
 	D_INFO("Service fully up\n");
 
-	/** Report timestamp when engine was open for business */
-	(void)d_tm_record_timestamp(NULL, "servicing_at", NULL);
-
-	/** Report rank */
-	(void)d_tm_set_gauge(NULL, dss_self_rank(), "rank", NULL);
-
 	D_PRINT("DAOS I/O Engine (v%s) process %u started on rank %u "
 		"with %u target, %d helper XS, firstcore %d, host %s.\n",
 		DAOS_VERSION, getpid(), dss_self_rank(), dss_tgt_nr,
@@ -683,8 +661,6 @@ exit_abt_init:
 	abt_fini();
 exit_drpc_fini:
 	drpc_fini();
-exit_telemetry_init:
-	d_tm_fini();
 exit_debug_init:
 	daos_debug_fini();
 	return rc;
@@ -725,8 +701,6 @@ server_fini(bool force)
 	D_INFO("abt_fini() done\n");
 	drpc_fini();
 	D_INFO("drpc_fini() done\n");
-	d_tm_fini();
-	D_INFO("d_tm_fini() done\n");
 	daos_debug_fini();
 	D_INFO("daos_debug_fini() done\n");
 }
