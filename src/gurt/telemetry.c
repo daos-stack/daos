@@ -766,8 +766,8 @@ d_tm_print_stats(FILE *stream, struct d_tm_stats_t *stats, int format)
 {
 	if (format == D_TM_CSV) {
 		fprintf(stream, ",%lu,%lu,%lf,%lu",
-				stats->dtm_min, stats->dtm_max, stats->mean,
-				stats->sample_size);
+			stats->dtm_min, stats->dtm_max, stats->mean,
+			stats->sample_size);
 		if (stats->sample_size > 2)
 			fprintf(stream, ",%lf", stats->std_dev);
 		return;
