@@ -358,6 +358,7 @@ int run_daos_nvme_recov_test(int rank, int size, int *sub_tests,
 			     int sub_tests_size);
 int run_daos_rebuild_simple_test(int rank, int size, int *tests, int test_size);
 int run_daos_drain_simple_test(int rank, int size, int *tests, int test_size);
+int run_daos_extend_simple_test(int rank, int size, int *tests, int test_size);
 int run_daos_rebuild_simple_ec_test(int rank, int size, int *tests,
 				    int test_size);
 int run_daos_degrade_simple_ec_test(int rank, int size, int *sub_tests,
@@ -388,6 +389,9 @@ void daos_reint_target(const uuid_t pool_uuid, const char *grp,
 void daos_drain_target(const uuid_t pool_uuid, const char *grp,
 		       const char *dmg_config,
 		       d_rank_t rank, int tgt);
+void daos_extend_target(const uuid_t pool_uuid, const char *grp,
+			const char *dmg_config,
+			d_rank_t rank, int tgt, daos_size_t nvme_size);
 void daos_exclude_server(const uuid_t pool_uuid, const char *grp,
 			 const char *dmg_config,
 			 d_rank_t rank);
@@ -431,6 +435,7 @@ void drain_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
 void drain_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool kill);
 void drain_pools_ranks(test_arg_t **args, int args_cnt,
 		d_rank_t *failed_ranks, int ranks_nr, bool kill);
+void extend_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank);
 
 int rebuild_pool_create(test_arg_t **new_arg, test_arg_t *old_arg, int flag,
 		struct test_pool *pool);
