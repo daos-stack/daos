@@ -384,14 +384,48 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 	uint32_t	map_version;
 	int		ntargets;
 	int		rc, i;
-	d_rank_list_t		rank_list;
-	int32_t domains[] = {1, 1, 1, 1, 1};
-	uuid_t target_uuids[] = {"12345678", "23456789",
-				 "34567890", "4567890a" };
+	d_rank_list_t	rank_list;
+	uint32_t	domains[] = {255, 0, 5, /* root */
+				     1, 101, 1,
+				     1, 102, 1,
+				     1, 103, 1,
+				     1, 104, 1,
+				     1, 105, 1};
+	const size_t	tuple_size = 3;
+	const size_t	max_domains = 5;
+	uint32_t	domain_tree_len;
+	uint32_t	domains_only_len;
+	uint32_t	ranks_per_domain;
+	uint32_t	*domain_tree;
+	uuid_t		target_uuids[] = {"12345678", "23456789",
+					  "34567890", "4567890a" };
 
-	if (domain_count > ARRAY_SIZE(domains))
-		fail_msg("Only %lu domains can be added",
-			 ARRAY_SIZE(domains));
+	if (domain_count > max_domains)
+		fail_msg("Only %lu domains can be added", max_domains);
+
+	/* Build the fault domain tree */
+	ranks_per_domain = node_count / domain_count;
+	/* Update domains array to be consistent with input params */
+	domains[tuple_size - 1] = domain_count; /* root */
+	for (i = 0; i < domain_count; i++) {
+		uint32_t start_idx = (i + 1) * tuple_size;
+
+		domains[start_idx + tuple_size - 1] = ranks_per_domain;
+	}
+
+	domains_only_len = (domain_count + 1) * tuple_size;
+	domain_tree_len = domains_only_len + node_count;
+	D_ALLOC_ARRAY(domain_tree, domain_tree_len);
+	assert_non_null(domain_tree);
+
+	memcpy(domain_tree, domains,
+	       sizeof(uint32_t) * domains_only_len);
+
+	for (i = 0; i < node_count; i++) {
+		uint32_t idx = domains_only_len + i;
+
+		domain_tree[idx] = i;
+	}
 
 	rank_list.rl_nr = node_count;
 	D_ALLOC_ARRAY(rank_list.rl_ranks, node_count);
@@ -406,9 +440,11 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 
 	map_version = pool_map_get_version(ctx->po_map) + 1;
 
-	rc = gen_pool_buf(ctx->po_map, &map_buf, map_version, domain_count,
-			  node_count, ntargets, domains, target_uuids,
+	rc = gen_pool_buf(ctx->po_map, &map_buf, map_version,
+			  domain_tree_len,
+			  node_count, ntargets, domain_tree, target_uuids,
 			  &rank_list, NULL, target_count);
+	D_FREE(domain_tree);
 	assert_success(rc);
 
 	/* Extend the current pool map */

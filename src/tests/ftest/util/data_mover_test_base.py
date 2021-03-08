@@ -722,6 +722,23 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                         self.mdtest_processes,
                         display_space=(True if pool else False), pool=pool)
 
+    def run_diff(self, src, dst, deref=False):
+        """Run linux diff command.
+
+        Args:
+            src (str): the source path
+            dst (str): the destination path
+            deref (bool, optional): Whether to dereference symlinks.
+                Defaults to False.
+        """
+        deref_str = ""
+        if not deref:
+            deref_str = "--no-dereference"
+
+        cmd = "diff -r {} '{}' '{}'".format(
+            deref_str, src, dst)
+        self.execute_cmd(cmd)
+
     # pylint: disable=too-many-arguments
     def run_datamover(self, test_desc=None,
                       src_type=None, src_path=None,
