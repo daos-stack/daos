@@ -55,7 +55,7 @@ run_test()
 
     ((log_num += 1))
 
-    FILES=(${DAOS_BASE}/test_results/*.xml)
+    FILES=("${DAOS_BASE}"/test_results/*.xml)
 
     "${SL_PREFIX}"/lib/daos/TESTING/ftest/scripts/post_process_xml.sh \
                                                                   "${COMP}" \
@@ -147,6 +147,7 @@ if [ -d "/mnt/daos" ]; then
     run_test "${SL_BUILD_DIR}/src/common/tests/acl_principal_tests"
     run_test "${SL_BUILD_DIR}/src/common/tests/acl_real_tests"
     run_test "${SL_BUILD_DIR}/src/common/tests/prop_tests"
+    run_test "${SL_BUILD_DIR}/src/common/tests/fault_domain_tests"
 
     COMP="UTEST_client"
     run_test "${SL_BUILD_DIR}/src/client/api/tests/eq_tests"
@@ -195,7 +196,7 @@ if [ -d "/mnt/daos" ]; then
     rm -rf "${DAOS_BASE}"/test_results/xml
 
     # Reporting
-    if [ $failed -eq 0 ]; then
+    if [ "$failed" -eq 0 ]; then
         # spit out the magic string that the post build script looks for
         echo "SUCCESS! NO TEST FAILURES"
     else

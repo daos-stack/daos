@@ -21,6 +21,7 @@ pool:
   scm_size: 1073741824
   svcn: 2
   control_method: dmg
+  pool_query_timeout: 30
 container:
   object_qty: 10
   record_qty: 10
@@ -28,5 +29,5 @@ container:
   dkey_size: 5
   data_size: 5
 rebuild:
-  object_class: OC_RP_3GX
+  object_class: OC_RP_3G1
   rank: 3
