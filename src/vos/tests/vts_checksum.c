@@ -61,9 +61,9 @@ struct test_case_args {
 };
 
 #define	CSUM_FOR_ARRAYS_TEST_CASE(state, args...) do { \
-        struct test_case_args __args = args; \
-        csum_for_arrays_test_case(state, &__args); \
-        } while(0)
+	struct test_case_args __args = args; \
+	csum_for_arrays_test_case(state, &__args); \
+	} while (0)
 
 /** index to a specific csum within a csum info array */
 struct cia_idx {
@@ -90,7 +90,7 @@ cia_idx_get_csum(struct cia_idx *idx, struct dcs_csum_info *infos)
 }
 
 static void
-csum_for_arrays_test_case(void *const *state, struct test_case_args *test)
+csum_for_arrays_test_case(void *const *state, const struct test_case_args *test)
 {
 	struct dcs_csum_info	*csum_infos;
 	struct dcs_iod_csums	 iod_csums = {0};
@@ -187,7 +187,7 @@ csum_for_arrays_test_case(void *const *state, struct test_case_args *test)
 
 	for (i = 0; i < bsgl->bs_nr_out; i++) {
 		struct bio_iov *biov = &bsgl->bs_iovs[i];
-		struct expected_biov *expected_biov = &test->biovs[i];
+		const struct expected_biov *expected_biov = &test->biovs[i];
 
 		assert_int_equal(expected_biov->prefix, biov->bi_prefix_len);
 		assert_int_equal(expected_biov->suffix, biov->bi_suffix_len);
