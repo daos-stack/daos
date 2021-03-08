@@ -157,9 +157,9 @@ get_vos_structure_sizes_yaml(int alloc_overhead, struct d_string_buffer_t *buf)
 	d_write_string_buffer(buf, "---\n# VOS tree overheads\n");
 	d_write_string_buffer(buf, "root: %d\n", vos_pool_get_msize());
 	d_write_string_buffer(buf, "container: %d\n",
-		vos_container_get_msize());
+			      vos_container_get_msize());
 	d_write_string_buffer(buf, "scm_cutoff: %d\n",
-		vos_pool_get_scm_cutoff());
+			      vos_pool_get_scm_cutoff());
 
 	FOREACH_TYPE(PRINT_DYNAMIC)
 	d_write_string_buffer(buf, "trees:\n");
