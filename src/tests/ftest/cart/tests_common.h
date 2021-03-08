@@ -495,7 +495,6 @@ tc_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 
 struct tc_log_msg_cb_resp {
 	sem_t	sem;
-	int	rc;
 };
 
 static void
@@ -505,9 +504,10 @@ tc_log_msg_cb(const struct crt_cb_info *info)
 
 	if (info->cci_rc != 0) {
 		D_WARN("Add Log message CB failed\n");
+		D_ASSERTF(info->cci_rc == 0,
+			  "Send Log RPC did not respond\n");
 	}
 	resp = (struct tc_log_msg_cb_resp *)info->cci_arg;
-	resp->rc = info->cci_rc;
 	sem_post(&resp->sem);
 }
 
@@ -516,7 +516,6 @@ tc_log_msg(crt_context_t ctx, crt_group_t *grp, d_rank_t rank,
 	   char *msg) {
 	int32_t				 rc = 0;
 	struct crt_ctl_log_add_msg_in	*send_args;
-	struct crt_ctl_log_add_msg_out	*recv_args;
 	crt_rpc_t			*rpc_req = NULL;
 	crt_endpoint_t			 ep;
 	crt_opcode_t			 opcode = CRT_OPC_CTL_LOG_ADD_MSG;
@@ -525,7 +524,6 @@ tc_log_msg(crt_context_t ctx, crt_group_t *grp, d_rank_t rank,
 	/* Initialize response structure */
 	rc = sem_init(&resp.sem, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed\n");
-	resp.rc = 0;
 
 	/* Fill in the endpoint info */
 	ep.ep_grp = grp;
@@ -553,19 +551,13 @@ tc_log_msg(crt_context_t ctx, crt_group_t *grp, d_rank_t rank,
 	rc = tc_sem_timedwait(&resp.sem, 30, __LINE__);
 	if (rc < 0) {
 		D_WARN("Messaage logged timed out: %s\n", msg);
+		crt_req_abort(rpc_req);
 		goto cleanup;
+	} else {
+		D_INFO("Message logged to rank %d:  %s\n", rank, msg);
 	}
 
-	/* Check of valid output */
-	recv_args =  crt_reply_get(rpc_req);
-
-	if (recv_args->rc == 0)
-		D_INFO("Message logged to rank %d:  %s\n", rank, msg);
-	else
-		D_WARN("Message Failed logged to rank %d:  %s\n", rank, msg);
-
-	/* get response and decrement reference */
-	rc = recv_args->rc;
+	/* Decrement reference */
 cleanup:
 	crt_req_decref(rpc_req);
 exit:
