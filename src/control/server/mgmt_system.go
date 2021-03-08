@@ -135,8 +135,9 @@ func getPeerListenAddr(ctx context.Context, listenAddrStr string) (*net.TCPAddr,
 }
 
 const (
-	batchJoinInterval = 250 * time.Millisecond
-	joinRespTimeout   = 10 * time.Millisecond
+	groupUpdateInterval = 500 * time.Millisecond
+	batchJoinInterval   = 250 * time.Millisecond
+	joinRespTimeout     = 10 * time.Millisecond
 )
 
 type (
@@ -161,15 +162,32 @@ func (svc *mgmtSvc) startJoinLoop(ctx context.Context) {
 
 func (svc *mgmtSvc) joinLoop(parent context.Context) {
 	var joinReqs []*batchJoinRequest
+	var groupUpdateNeeded bool
+
+	joinTimer := time.NewTicker(batchJoinInterval)
+	defer joinTimer.Stop()
+	groupUpdateTimer := time.NewTicker(groupUpdateInterval)
+	defer groupUpdateTimer.Stop()
 
 	for {
 		select {
 		case <-parent.Done():
 			svc.log.Debug("stopped joinLoop")
 			return
+		case <-svc.groupUpdateReqs:
+			groupUpdateNeeded = true
+		case <-groupUpdateTimer.C:
+			if !groupUpdateNeeded {
+				continue
+			}
+			if err := svc.doGroupUpdate(parent); err != nil {
+				svc.log.Errorf("GroupUpdate failed: %s", err)
+				continue
+			}
+			groupUpdateNeeded = false
 		case jr := <-svc.joinReqs:
 			joinReqs = append(joinReqs, jr)
-		case <-time.After(batchJoinInterval):
+		case <-joinTimer.C:
 			if len(joinReqs) == 0 {
 				continue
 			}
@@ -180,18 +198,16 @@ func (svc *mgmtSvc) joinLoop(parent context.Context) {
 				joinResps[i] = svc.join(parent, req)
 			}
 
-			for i := 0; i < len(svc.harness.Instances()); i++ {
-				if err := svc.doGroupUpdate(parent); err != nil {
-					if err == errInstanceNotReady {
-						svc.log.Debug("group update not ready (retrying)")
-						continue
-					}
+			for {
+				err := svc.doGroupUpdate(parent)
+				if err == nil || errors.Cause(err) == errInstanceNotReady {
+					break
+				}
 
-					err = errors.Wrap(err, "failed to perform CaRT group update")
-					for i, jr := range joinResps {
-						if jr.joinErr == nil {
-							joinResps[i] = &batchJoinResponse{joinErr: err}
-						}
+				err = errors.Wrap(err, "failed to perform CaRT group update")
+				for i, jr := range joinResps {
+					if jr.joinErr == nil {
+						joinResps[i] = &batchJoinResponse{joinErr: err}
 					}
 				}
 				break
@@ -289,6 +305,17 @@ func (svc *mgmtSvc) join(ctx context.Context, req *batchJoinRequest) *batchJoinR
 	return resp
 }
 
+// reqGroupUpdate requests an asynchronous group update.
+func (svc *mgmtSvc) reqGroupUpdate(ctx context.Context) {
+	select {
+	case <-ctx.Done():
+	case svc.groupUpdateReqs <- struct{}{}:
+	}
+}
+
+// doGroupUpdate performs a synchronous group update.
+// NB: This method must not be called concurrently, as out-of-order
+// group updates may trigger engine assertions.
 func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
 	gm, err := svc.sysdb.GroupMap()
 	if err != nil {
