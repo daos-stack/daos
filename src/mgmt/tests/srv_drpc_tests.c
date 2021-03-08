@@ -13,6 +13,7 @@
 #include <setjmp.h>
 #include <cmocka.h>
 
+#include <daos/tests_lib.h>
 #include <daos/drpc.h>
 #include <daos_pool.h>
 #include <daos_security.h>
@@ -158,7 +159,7 @@ get_valid_acl(void)
 {
 	struct daos_acl	*acl = NULL;
 
-	assert_int_equal(daos_acl_from_strs(TEST_ACES, TEST_ACES_NR, &acl), 0);
+	assert_rc_equal(daos_acl_from_strs(TEST_ACES, TEST_ACES_NR, &acl), 0);
 
 	return acl;
 }

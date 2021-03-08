@@ -410,6 +410,8 @@ gc_cont_run(struct gc_test_args *args)
 		}
 	}
 	rc = gc_wait_check(args, true);
+
+	D_FREE(cont_ids);
 	return rc;
 }
 

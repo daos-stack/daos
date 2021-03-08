@@ -253,7 +253,7 @@ nvme_test_verify_device_stats(void **state)
 	 * different state of NVMe drives. Skip the test if log_mask is not
 	 * set to DEBUG.
 	 */
-	D_ALLOC(server_config_file, 512);
+	D_ALLOC(server_config_file, DAOS_SERVER_CONF_LENGTH);
 	D_ALLOC(log_file, 1024);
 	rc = get_server_config(devices[rank_pos].host,
 			       server_config_file);
@@ -533,7 +533,7 @@ nvme_test_simulate_IO_error(void **state)
 	 * Get DAOS server file
 	 */
 	D_ALLOC(control_log_file, 1024);
-	D_ALLOC(server_config_file, 512);
+	D_ALLOC(server_config_file, DAOS_SERVER_CONF_LENGTH);
 	rc = get_server_config(devices[rank_pos].host, server_config_file);
 	assert_rc_equal(rc, 0);
 	print_message("server_config_file = %s\n", server_config_file);

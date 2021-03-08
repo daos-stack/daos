@@ -565,6 +565,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver, uint32_t op,
 			iv.riv_stable_epoch = rgt->rgt_stable_epoch;
 			iv.riv_ver = rgt->rgt_rebuild_ver;
 			iv.riv_leader_term = rgt->rgt_leader_term;
+			iv.riv_sync = 1;
 
 			/* Notify others the global scan is done, then
 			 * each target can reliablly report its pull status
@@ -1116,6 +1117,7 @@ re_dist:
 		if (rc == -DER_GRPVER) {
 			D_DEBUG(DB_REBUILD, DF_UUID" redistribute pool map\n",
 				DP_UUID(pool->sp_uuid));
+			dss_sleep(1000);
 			goto re_dist;
 		} else {
 			D_ERROR("pool map broadcast failed: rc "DF_RC"\n",
@@ -1295,6 +1297,7 @@ try_reschedule:
 		 * rebuild sequence, which has to be done by failure
 		 * sequence order.
 		 */
+		dss_sleep(1000);
 		ret = ds_rebuild_schedule(pool, task->dst_map_ver,
 					  &task->dst_tgts,
 					  task->dst_rebuild_op);
