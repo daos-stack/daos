@@ -21,6 +21,10 @@ int d_tm_get_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 		      char *metric);
 int d_tm_get_metadata(char **sh_desc, char **lng_desc, uint64_t *shmem_root,
 		      struct d_tm_node_t *node, char *metric);
+int d_tm_get_num_buckets(struct d_tm_histogram_t *histogram,
+			 uint64_t *shmem_root, struct d_tm_node_t *node);
+int d_tm_get_bucket_range(struct d_tm_bucket_t *bucket, int bucket_id,
+			  uint64_t *shmem_root, struct d_tm_node_t *node);
 
 /* Developer facing client API to discover topology and manage results */
 uint64_t *d_tm_get_shared_memory(int srv_idx);
