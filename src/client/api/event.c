@@ -1218,7 +1218,7 @@ daos_event_priv_get(daos_event_t **ev)
 	if (evx->evx_status != DAOS_EVS_READY) {
 		D_CRIT("private event is inuse, status=%d\n",
 		       evx->evx_status);
-		D_ASSERT(0);
+		return -DER_BUSY;
 	}
 	*ev = &ev_thpriv;
 	return 0;
