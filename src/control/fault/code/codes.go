@@ -130,6 +130,7 @@ const (
 	ServerConfigFaultCallbackFailed
 	ServerConfigBothFaultPathAndCb
 	ServerConfigFaultCallbackEmpty
+	ServerConfigFaultDomainTooManyLayers
 
 	// SPDK library bindings codes
 	SpdkUnknown Code = iota + 800
