@@ -34,6 +34,14 @@ class PoolAttributeTest(TestWithServers):
     :avocado: recursive
     """
 
+    CANCEL_FOR_TICKET = [
+        [
+            "DAOS-6971",
+            "test_method_name", "test_pool_attributes",
+            "test_method_name", "test_pool_attribute_asyn"
+        ],
+    ]
+
     @staticmethod
     def create_data_set():
         """Create the large attribute dictionary.
