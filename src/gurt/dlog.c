@@ -775,7 +775,6 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	int		pri;
 
 	memset(&mst, 0, sizeof(mst));
-
 	mst.flush_pri = DLOG_WARN;
 
 	env = getenv(D_LOG_FLUSH_ENV);
