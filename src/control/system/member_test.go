@@ -147,7 +147,7 @@ func TestSystem_MemberResult_Convert(t *testing.T) {
 	mrsOut := MemberResults{}
 
 	CmpErr(t, errors.New("failed ranks 1-2"), mrsIn.Errors())
-	AssertEqual(t, mrsOut.Errors(), nil, "expected no error")
+	CmpErr(t, nil, mrsOut.Errors())
 
 	if err := convert.Types(mrsIn, &mrsOut); err != nil {
 		t.Fatal(err)
