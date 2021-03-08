@@ -500,7 +500,7 @@ main(int argc, char **argv)
 	handle_share(&coh, HANDLE_CO, rank, poh, 1);
 
 	/** generate objid */
-	daos_obj_generate_id(&oid, 0, cid, 0);
+	daos_obj_generate_oid(coh, &oid, 0, cid, 0, 0);
 
 	if (rank == 0) {
 		struct daos_oclass_attr	cattr = {

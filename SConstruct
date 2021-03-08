@@ -58,7 +58,7 @@ def get_version():
         return version_file.read().rstrip()
 
 API_VERSION_MAJOR = "1"
-API_VERSION_MINOR = "1"
+API_VERSION_MINOR = "2"
 API_VERSION_FIX = "0"
 API_VERSION = "{}.{}.{}".format(API_VERSION_MAJOR, API_VERSION_MINOR,
                                 API_VERSION_FIX)
@@ -425,7 +425,7 @@ def scons(): # pylint: disable=too-many-locals
     daos_build.install(env, "lib/daos/", ['.build_vars.sh', '.build_vars.json'])
     env.Install("$PREFIX/lib64/daos", "VERSION")
 
-    env.Install('$PREFIX/etc/bash_completion.d', ['utils/completion/daos.bash'])
+    env.Install(conf_dir + '/bash_completion.d', ['utils/completion/daos.bash'])
     env.Install('$PREFIX/lib/daos/TESTING/ftest/util',
                 ['utils/sl/env_modules.py'])
     env.Install('$PREFIX/lib/daos/TESTING/ftest/',

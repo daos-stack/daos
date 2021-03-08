@@ -288,6 +288,17 @@ vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
 
 #endif
 
+static inline void
+vos_ilog_ts_ignore(struct umem_instance *umm, struct ilog_df *ilog)
+{
+	if (!DAOS_ON_VALGRIND)
+		return;
+
+	umem_tx_xadd_ptr(umm, ilog_ts_idx_get(ilog), sizeof(int),
+			 POBJ_XADD_NO_SNAPSHOT);
+}
+
+
 /** Check if the timestamps associated with the ilog are in cache.  If so,
  *  add them to the set.
  *

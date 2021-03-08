@@ -24,6 +24,8 @@
 #include <daos/object.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/dtx_srv.h>
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 #include "obj_rpc.h"
 #include "obj_ec.h"
@@ -199,11 +201,6 @@ struct migrate_pool_tls {
 	daos_handle_t		mpt_migrated_root_hdl;
 	struct btr_root		mpt_migrated_root;
 
-	/* Hash table to store the container uuids which have already been
-	 * deleted (used by reintegration)
-	 */
-	struct d_hash_table	mpt_cont_dest_tab;
-
 	/* Service rank list for migrate fetch RPC */
 	d_rank_list_t		mpt_svc_list;
 
@@ -233,10 +230,14 @@ struct migrate_pool_tls {
 	uint64_t		mpt_refcount;
 	/* migrate leader ULT */
 	unsigned int		mpt_ult_running:1,
-	/* Indicates whether containers should be cleared of all contents
-	 * before any data is migrated to them (via destroy & recreate)
+	/* Indicates whether objects on the migration destination should be
+	 * removed prior to migrating new data here. This is primarily useful
+	 * for reintegration to ensure that any data that has adequate replica
+	 * data to reconstruct will prefer the remote data over possibly stale
+	 * existing data. Objects that don't have remote replica data will not
+	 * be removed.
 	 */
-				mpt_clear_conts:1,
+				mpt_del_local_objs:1,
 				mpt_fini:1;
 };
 
@@ -246,6 +247,17 @@ migrate_pool_tls_destroy(struct migrate_pool_tls *tls);
 struct obj_tls {
 	d_sg_list_t		ot_echo_sgl;
 	d_list_t		ot_pool_list;
+
+	/** Measure per-operation latency (type = gauge) */
+	struct d_tm_node_t	*ot_op_lat[OBJ_PROTO_CLI_COUNT];
+	/** Count number of per-opcode active requests (type = gauge) */
+	struct d_tm_node_t	*ot_op_active[OBJ_PROTO_CLI_COUNT];
+	/** Count number of total per-opcode requests (type = counter) */
+	struct d_tm_node_t	*ot_op_total[OBJ_PROTO_CLI_COUNT];
+	/** Total number of silently restarted update operations */
+	struct d_tm_node_t	*ot_update_restart;
+	/** Total number of resent update operations */
+	struct d_tm_node_t	*ot_update_resent;
 };
 
 struct obj_ec_parity {
@@ -557,6 +569,8 @@ struct obj_io_context {
 	struct ds_cont_child	*ioc_coc;
 	daos_handle_t		 ioc_vos_coh;
 	uint32_t		 ioc_map_ver;
+	uint32_t		 ioc_opc;
+	uint64_t		 ioc_start_time;
 	uint32_t		 ioc_began:1,
 				 ioc_free_sgls:1,
 				 ioc_lost_reply:1;

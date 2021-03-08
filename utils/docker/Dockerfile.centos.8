@@ -3,20 +3,40 @@
 #
 # 'recipe' for Docker to build an image of centOS 8
 # environment for building the DAOS project.
+#
 
 # Pull base image
-FROM centos:8.3.2011
+FROM centos:8
 LABEL maintainer="daos@daos.groups.io"
 
-# Build arguments can be set via --build-arg
-# use same UID as host and default value of 1000 if not specified
-ARG UID=1000
+# Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
+ARG CB0
+
+ARG REPO_URL
+# Need to clean this up later
+# This is largely the same as the centos.7 code, however this sets priority for
+# the new repo, and leaves the default ones enabled as there is some metadata
+# that is not available locally.
+RUN if [ -n "$REPO_URL" ]; then						\
+      cversion=$(cut -d ' ' -f4 /etc/centos-release);			\
+      version=${cversion%.*} ;						\
+      MY_REPO="${REPO_URL}repository/centos-${version}-x86_64-group/";	\
+      MY_NAME="${MY_REPO#*//}";						\
+      MY_NAME="${MY_NAME//\//_}";					\
+      echo -e "[${MY_NAME}]\n\
+name=created from ${MY_REPO}\n\
+baseurl=${MY_REPO}\n\
+enabled=1\n\
+priority=1\n\
+gpgcheck=False\n" >> /etc/yum.repos.d/local-centos-group.repo;		\
+    fi
 
 # Install basic tools to build DAOS
-RUN yum clean all && yum -y install epel-release dnf-plugins-core &&	\
+
+RUN dnf clean all && dnf -y install epel-release dnf-plugins-core &&	\
     dnf config-manager --set-enabled powertools &&			\
-    yum -y upgrade &&							\
-    yum -y install							\
+    dnf -y upgrade &&							\
+    dnf -y install							\
 	boost-devel clang-analyzer cmake CUnit-devel doxygen file flex	\
 	gcc gcc-c++ git golang graphviz libaio-devel			\
 	libcmocka-devel libevent-devel libiscsi-devel libtool		\
@@ -25,9 +45,7 @@ RUN yum clean all && yum -y install epel-release dnf-plugins-core &&	\
 	readline-devel python3-scons sg3_utils yasm diffutils		\
 	pciutils valgrind-devel man fuse3-devel hwloc-devel patchelf	\
 	json-c-devel lz4-devel libipmctl-devel ndctl ipmctl		\
-	e2fsprogs &&							\
-    dnf config-manager --set-enabled epel-modular && 			\
-    yum -y install 							\
+	e2fsprogs							\
 	python2 python2-devel python36-devel python3-magic		\
 	python3-pygit2 python3-pygithub					\
 	python2-requests python3-requests				\
@@ -35,8 +53,8 @@ RUN yum clean all && yum -y install epel-release dnf-plugins-core &&	\
 	python3-clustershell python3-paramiko				\
 	python3-numpy python3-jira Lmod					\
 	python3-tabulate python2-distro python3-distro			\
-	java-1.8.0-openjdk maven openmpi-devel &&			\
-    yum clean all
+	java-1.8.0-openjdk maven openmpi-devel libunwind-devel &&	\
+    dnf clean all
 
 ARG UID=1000
 
@@ -47,22 +65,9 @@ RUN useradd --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
 
 # Create directory for DAOS backend storage
-RUN mkdir -p /opt/daos && chown -R daos_server.daos_server /opt/daos
-RUN mkdir /mnt/daos && chown daos_server.daos_server /mnt/daos
-RUN mkdir /var/run/daos_server && chown daos_server.daos_server /var/run/daos_server
-RUN mkdir /var/run/daos_agent && chown daos_agent.daos_agent /var/run/daos_agent
-
-# Control what to build.  By default Dockerfiles build everything to allow for
-# ease-of-use for users, however in CI everything is turned off and then
-# selectively enabled.  Turning off any step disables all future steps.
-ARG DAOS_DEPS_BUILD=yes
-ARG DAOS_BUILD=$DAOS_DEPS_BUILD
-ARG DAOS_JAVA_BUILD=$DAOS_BUILD
-# Legacy, NOBUILD should be set to any string to disable all three.
-ARG NOBUILD=no
-
-# select compiler to use
-ARG COMPILER=gcc
+RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&	\
+    chown daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server &&	\
+    chown daos_agent.daos_agent /var/run/daos_agent
 
 # The COPY command has a --chown option but it's not well supported so copy as
 # root then run a chown command which is frustrating as the copy can take a few
@@ -75,9 +80,32 @@ RUN chown -R daos_server.daos_server /home/daos
 USER daos_server:daos_server
 RUN ln -s utils/sl site_scons
 
+# Control what to build.  By default Dockerfiles build everything to allow for
+# ease-of-use for users, however in CI everything is turned off and then
+# selectively enabled.  Turning off any step disables all future steps.
+ARG DAOS_DEPS_BUILD=yes
+
+# Now do an update to ensure software is up to date for the deps build.  If the
+# src hasn't changed then this won't do anything, but if it has then we want to
+# ensure that latest dependencies are used.
+USER root:root
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    (scons-3 --build-deps=yes install PREFIX=/opt/daos --deps-only && \
-    /bin/rm -rf build *.gz)
+    { dnf -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
+    dnf clean all; }
+USER daos_server:daos_server
+
+ARG DEPS_JOBS=1
+
+RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
+    { scons-3 --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos --deps-only && \
+    /bin/rm -rf build *.gz; }
+
+# force an upgrade to get any newly built RPMs
+USER root:root
+ARG CACHEBUST
+RUN dnf -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
+    dnf clean all
+USER daos_server:daos_server
 
 WORKDIR /home/daos/daos/
 COPY VERSION LICENSE ftest.sh SConstruct ./
@@ -88,11 +116,16 @@ RUN chown -R daos_server.daos_server /home/daos
 USER daos_server:daos_server
 RUN ln -s utils/sl site_scons
 
+# select compiler to use
+ARG COMPILER=gcc
+ARG JOBS=$DEPS_JOBS
+ARG DAOS_BUILD=$DAOS_DEPS_BUILD
+
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
-    (scons-3 -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER && \
+    { scons-3 --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER && \
     /bin/rm -rf build && \
-    cp -r utils/config/examples /opt/daos)
+    cp -r utils/config/examples /opt/daos; }
 
 # Set environment variables
 ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:$LD_LIBRARY_PATH
@@ -113,6 +146,8 @@ RUN echo -e "<settings>\n\
                 </mirror>\n\
         </mirrors>\n\
 </settings>" > /home/daos/.m2/settings.xml
+
+ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 
 RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
     mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
