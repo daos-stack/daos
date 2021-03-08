@@ -1466,7 +1466,6 @@ uncertainty_check_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 		    expected_arc == 0)
 			expected_arc = -DER_TX_RESTART;
 	}
-
 	if (expected_arc != -DER_TX_RESTART && is_punch(w) && we > bound)
 		print_message("  %s(%s, "DF_X64
 			      ") (expect %s or DER_TX_RESTART): ", a->o_name,
