@@ -104,7 +104,7 @@ class NvmeEnospace(ServerFillUp):
 
         # Define the job manager for the IOR command
         self.job_manager = Mpirun(ior_bg_cmd, mpitype="mpich")
-        self.create_cont(self.ior_cmd.dfs_oclass.value)
+        self.create_cont()
         self.job_manager.job.dfs_cont.update(self.container.uuid)
         env = ior_bg_cmd.get_default_env(str(self.job_manager))
         self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
