@@ -42,6 +42,13 @@ disable_gpg_check() {
     fi
 }
 
+dump_repos() {
+        for file in "$REPOS_DIR"/*.repo; do
+            echo "---- $file ----"
+            cat "$file"
+        done
+}
+
 env > /root/last_run-env.txt
 if ! grep ":$MY_UID:" /etc/group; then
   groupadd -g "$MY_UID" jenkins
