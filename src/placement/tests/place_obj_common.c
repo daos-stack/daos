@@ -356,8 +356,6 @@ plt_next_level(pool_comp_type_t current)
 		return PO_COMP_TP_TARGET;
 
 	/* these are not used by the test layout */
-	case PO_COMP_TP_BLADE:
-	case PO_COMP_TP_BOARD:
 	case PO_COMP_TP_TARGET:
 	case PO_COMP_TP_UNKNOWN:
 	default:
@@ -801,9 +799,10 @@ get_object_classes(daos_oclass_id_t **oclass_id_pp)
 int
 extend_test_pool_map(struct pool_map *map,
 		     uint32_t nnodes, uuid_t target_uuids[],
-		d_rank_list_t *rank_list, uint32_t ndomains,
-		int32_t *domains, bool *updated_p, uint32_t *map_version_p,
-		uint32_t dss_tgt_nr)
+		     d_rank_list_t *rank_list, uint32_t ndomains,
+		     uint32_t *domains, bool *updated_p,
+		     uint32_t *map_version_p,
+		     uint32_t dss_tgt_nr)
 {
 	struct pool_buf	*map_buf;
 	uint32_t	map_version;

@@ -24,6 +24,10 @@ class OSAOfflineReintegration(OSAUtils):
         """Set up for test case."""
         super(OSAOfflineReintegration, self).setUp()
         self.dmg_command = self.get_dmg_command()
+<<<<<<< HEAD
+=======
+        self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
+>>>>>>> master
         self.ior_test_sequence = self.params.get(
             "ior_test_sequence", '/run/ior/iorflags/*')
         self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
@@ -32,7 +36,10 @@ class OSAOfflineReintegration(OSAUtils):
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
+<<<<<<< HEAD
         self.dmg_command.exit_status_exception = False
+=======
+>>>>>>> master
 
     def run_offline_reintegration_test(self, num_pool, data=False,
                                        server_boot=False, oclass=None,
