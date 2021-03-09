@@ -1336,7 +1336,7 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone)
 		if (rc) {
 			D_ERROR(DF_UOID" punch obj failed: rc %d\n",
 				DP_UOID(mrone->mo_oid), rc);
-			return rc;
+			D_GOTO(obj_close, rc);
 		}
 	}
 
