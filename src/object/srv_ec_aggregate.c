@@ -1421,7 +1421,7 @@ agg_process_holes_ult(void *arg)
 	unsigned int		 ext_cnt = 0;
 	unsigned int		 ext_tot_len = 0;
 	unsigned int		 failed_tgts_cnt = 0;
-	int			 i, rc = 0;
+	int			 rc = 0;
 
 	/* Process extent list to find what to re-replicate -- build recx array
 	 */
@@ -1488,7 +1488,7 @@ agg_process_holes_ult(void *arg)
 	}
 
 	if (targets != NULL) {
-		//int i;
+		int i;
 
 		for (i = 0; i < failed_tgts_cnt; i++) {
 			if (targets[i].ta_comp.co_rank ==

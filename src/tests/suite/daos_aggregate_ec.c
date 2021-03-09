@@ -210,22 +210,18 @@ ec_setup_single_recx_data(struct ec_agg_test_ctx *ctx, unsigned int mode,
 		iov_alloc_str(&ctx->update_iod.iod_name, "akey");
 
 	d_sgl_init(&ctx->update_sgl, 1);
-	//if (update) {
-		iov_alloc(&ctx->update_sgl.sg_iovs[0], data_bytes);
-		if (overwrite) {
-			iov_update_fill(ctx->update_sgl.sg_iovs, 1, len, true);
-		} else if (partial_write) {
-			iov_update_pfill(ctx->update_sgl.sg_iovs, cell,
-					 data_bytes, false);
-		} else {
-			iov_update_fill(ctx->update_sgl.sg_iovs, k, len, false);
-		}
-	//}
+	iov_alloc(&ctx->update_sgl.sg_iovs[0], data_bytes);
+	if (overwrite) {
+		iov_update_fill(ctx->update_sgl.sg_iovs, 1, len, true);
+	} else if (partial_write) {
+		iov_update_pfill(ctx->update_sgl.sg_iovs, cell,
+				 data_bytes, false);
+	} else {
+		iov_update_fill(ctx->update_sgl.sg_iovs, k, len, false);
+	}
 
 	d_sgl_init(&ctx->fetch_sgl, 1);
 	iov_alloc(&ctx->fetch_sgl.sg_iovs[0], data_bytes);
-	//D_PRINT("fetch buf length: %lu\n",
-		//ctx->fetch_sgl.sg_iovs[0].iov_buf_len);
 
 	ctx->recx[0].rx_idx = offset;
 	ctx->recx[0].rx_nr = daos_sgl_buf_size(&ctx->update_sgl);
@@ -794,8 +790,6 @@ test_all_ec_agg(void **statep)
 	verify_1p(&ctx, DAOS_OC_EC_K2P1_L32K, 2);
 	verify_2p(&ctx, DAOS_OC_EC_K2P2_L32K);
 	verify_1p(&ctx, DAOS_OC_EC_K4P1_L32K, 4);
-	//verify_rp1p(&ctx, DAOS_OC_EC_K2P1_L32K, 2);
-	//verify_rp2p(&ctx, DAOS_OC_EC_K2P2_L32K);
 	verify_rp1p(&ctx, DAOS_OC_EC_K4P1_L32K, 4);
 	cleanup_ec_agg_tests(&ctx);
 }
