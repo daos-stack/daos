@@ -191,8 +191,8 @@ class DaosServerCommand(YamlCommand):
         result = stop_processes(self._hosts, regex, send_sigusr2=True)
         if 0 in result and len(result) == 1:
             print(
-                "No remote {} server processes killed (none found),
-                    done.".format(regex))
+                "No remote {} server processes killed (none found), "
+                "done.".format(regex))
         else:
             print(
                 "***At least one remote {} server process needed to be killed! "
