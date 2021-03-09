@@ -152,7 +152,6 @@ main(int argc, char **argv)
 	char			dirname[D_TM_MAX_NAME_LEN] = {0};
 	bool			show_meta = false;
 	int			simulated_srv_idx = 0;
-	int			iteration = 0;
 	int			filter;
 
 	if (argc < 2) {
@@ -171,27 +170,14 @@ main(int argc, char **argv)
 
 	root = d_tm_get_root(shmem_root);
 
-	while (1) {
-		printf("\niteration: %d\n", iteration);
-		printf("Full directory tree from root node:\n");
-		d_tm_print_my_children(shmem_root, root, 0, stdout);
+	printf("Full directory tree from root node:\n");
+	d_tm_print_my_children(shmem_root, root, 0, stdout);
 
-		sprintf(dirname, "src/gurt/examples/telem_producer_example.c"
-			"/main");
-		filter = (D_TM_COUNTER | D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT |
-			  D_TM_DURATION | D_TM_GAUGE);
-		show_meta = false;
-		read_metrics(shmem_root, root, dirname, filter, show_meta);
-
-		filter = D_TM_COUNTER;
-		show_meta = true;
-		sprintf(dirname, "src/gurt/examples/telem_producer_example.c"
-			"/manually added");
-		read_metrics(shmem_root, root, dirname, filter, show_meta);
-		iteration++;
-		sleep(1);
-		printf("\n\n");
-	}
+	sprintf(dirname, "manually added");
+	filter = (D_TM_COUNTER | D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT |
+			D_TM_DURATION | D_TM_GAUGE);
+	show_meta = false;
+	read_metrics(shmem_root, root, dirname, filter, show_meta);
 
 	return 0;
 
