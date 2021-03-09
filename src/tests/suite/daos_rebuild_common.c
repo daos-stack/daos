@@ -23,6 +23,7 @@ static test_arg_t *save_arg;
 enum REBUILD_TEST_OP_TYPE {
 	RB_OP_TYPE_FAIL,
 	RB_OP_TYPE_DRAIN,
+	RB_OP_TYPE_REINT,
 	RB_OP_TYPE_ADD,
 	RB_OP_TYPE_RECLAIM,
 };
@@ -52,7 +53,7 @@ rebuild_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 }
 
 static void
-rebuild_add_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
+rebuild_reint_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 		int tgt_idx)
 {
 	int i;
@@ -63,6 +64,22 @@ rebuild_add_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 					  args[i]->group,
 					  args[i]->dmg_config,
 					  rank, tgt_idx);
+		sleep(2);
+	}
+}
+
+static void
+rebuild_extend_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
+		   int tgt_idx, daos_size_t nvme_size)
+{
+	int i;
+
+	for (i = 0; i < args_cnt; i++) {
+		if (!args[i]->pool.destroyed)
+			daos_extend_target(args[i]->pool.pool_uuid,
+					   args[i]->group,
+					   args[i]->dmg_config,
+					   rank, tgt_idx, nvme_size);
 		sleep(2);
 	}
 }
@@ -104,9 +121,14 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 						ranks[i], tgts ? tgts[i] : -1,
 						kill);
 				break;
-			case RB_OP_TYPE_ADD:
-				rebuild_add_tgt(args, args_cnt, ranks[i],
+			case RB_OP_TYPE_REINT:
+				rebuild_reint_tgt(args, args_cnt, ranks[i],
 						tgts ? tgts[i] : -1);
+				break;
+			case RB_OP_TYPE_ADD:
+				rebuild_extend_tgt(args, args_cnt, ranks[i],
+						   tgts ? tgts[i] : -1,
+						   args[i]->pool.pool_size);
 				break;
 			case RB_OP_TYPE_DRAIN:
 				rebuild_drain_tgt(args, args_cnt, ranks[i],
@@ -174,6 +196,12 @@ void
 drain_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool kill)
 {
 	rebuild_targets(&arg, 1, &failed_rank, NULL, 1, kill, RB_OP_TYPE_DRAIN);
+}
+
+void
+extend_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank)
+{
+	rebuild_targets(&arg, 1, &failed_rank, NULL, 1, false, RB_OP_TYPE_ADD);
 }
 
 void
@@ -295,7 +323,7 @@ reintegrate_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
 	 */
 	rebuild_pool_disconnect_internal(arg);
 	rebuild_targets(&arg, 1, &failed_rank, &failed_tgt, 1, false,
-			RB_OP_TYPE_ADD);
+			RB_OP_TYPE_REINT);
 	rebuild_pool_connect_internal(arg);
 }
 
@@ -312,7 +340,8 @@ reintegrate_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank)
 	 * removed
 	 */
 	rebuild_pool_disconnect_internal(arg);
-	rebuild_targets(&arg, 1, &failed_rank, NULL, 1, false, RB_OP_TYPE_ADD);
+	rebuild_targets(&arg, 1, &failed_rank, NULL, 1, false,
+			RB_OP_TYPE_REINT);
 	rebuild_pool_connect_internal(arg);
 }
 
@@ -333,7 +362,7 @@ reintegrate_pools_ranks(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
 	for (i = 0; i < args_cnt; i++)
 		rebuild_pool_disconnect_internal(args[i]);
 	rebuild_targets(args, args_cnt, failed_ranks, NULL, ranks_nr,
-			false, RB_OP_TYPE_ADD);
+			false, RB_OP_TYPE_REINT);
 	for (i = 0; i < args_cnt; i++)
 		rebuild_pool_connect_internal(args[i]);
 }
