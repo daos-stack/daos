@@ -11,12 +11,6 @@ from test_utils_pool import TestPool
 from write_host_file import write_host_file
 from apricot import skipForTicket
 
-try:
-    # python 3.x
-    import queue as queue
-except ImportError:
-    # python 2.7
-    import Queue as queue
 
 class OSAOfflineReintegration(OSAUtils):
     # pylint: disable=too-many-ancestors
@@ -30,8 +24,6 @@ class OSAOfflineReintegration(OSAUtils):
         """Set up for test case."""
         super(OSAOfflineReintegration, self).setUp()
         self.dmg_command = self.get_dmg_command()
-        self.ior_w_flags = self.params.get("write_flags", '/run/ior/iorflags/*')
-        self.ior_r_flags = self.params.get("read_flags", '/run/ior/iorflags/*')
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
         self.ior_test_sequence = self.params.get(
             "ior_test_sequence", '/run/ior/iorflags/*')
@@ -40,38 +32,6 @@ class OSAOfflineReintegration(OSAUtils):
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
-        self.out_queue = queue.Queue()
-
-    def run_ior_thread(self, action, oclass, api, test):
-        """Start the IOR thread for either writing or
-        reading data to/from a container.
-        Args:
-            action (str): Start the IOR thread with Read or
-                          Write
-            oclass (str): IOR object class
-            API (str): IOR API
-            test (list): IOR test sequence
-            flags (str): IOR flags
-        """
-        if action == "Write":
-            flags = self.ior_w_flags
-        else:
-            flags = self.ior_r_flags
-
-        # Add a thread for these IOR arguments
-        process = threading.Thread(target=self.ior_thread,
-                                   kwargs={"pool": self.pool,
-                                           "oclass": oclass,
-                                           "api": api,
-                                           "test": test,
-                                           "flags": flags,
-                                           "results":
-                                           self.out_queue})
-        # Launch the IOR thread
-        process.start()
-        # Wait for the thread to finish
-        process.join()
-
 
     def run_offline_reintegration_test(self, num_pool, data=False,
                                        server_boot=False):
