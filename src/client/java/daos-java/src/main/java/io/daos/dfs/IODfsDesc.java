@@ -38,6 +38,7 @@ public class IODfsDesc implements DaosEventQueue.Attachment {
   private final long natveHandle;
   private final int retOffset;
   private final int descBufLen;
+  private final DaosEventQueue eq;
   private DaosEventQueue.Event event;
 
   private int retCode = Integer.MAX_VALUE;
@@ -50,6 +51,7 @@ public class IODfsDesc implements DaosEventQueue.Attachment {
 
   protected IODfsDesc(ByteBuf dataBuffer, DaosEventQueue eq) {
     this.dataBuffer = dataBuffer;
+    this.eq = eq;
     // nativeHandle + dataMemoryAddr + eventGrpHandle + offset + length + event ID +
     // rc + actual len (for read)
     retOffset = 8 + 8 + 8 + 8 + 8 + 2;
@@ -103,6 +105,10 @@ public class IODfsDesc implements DaosEventQueue.Attachment {
   public void release() {
     if (released) {
       return;
+    }
+    if ((!resultParsed) && event != null) {
+      eq.abortEvent(event);
+      event.putBack();
     }
     if (descBuffer != null) {
       descBuffer.release();

@@ -268,6 +268,15 @@ public class DaosEventQueue {
   }
 
   /**
+   * abort event.
+   *
+   * @param event
+   */
+  public void abortEvent(Event event) {
+    DaosClient.abortEvent(eqWrapperHdl, event.getId());
+  }
+
+  /**
    * poll completed events. The completed events are put back immediately.
    *
    * @param completedList
@@ -367,6 +376,8 @@ public class DaosEventQueue {
     EQ_MAP.clear();
   }
 
+
+
   /**
    * Java represent of DAOS event associated to a event queue identified by
    * <code>eqHandle</code>.
@@ -403,7 +414,7 @@ public class DaosEventQueue {
       return pa;
     }
 
-    protected void putBack() {
+    public void putBack() {
       available = true;
       if (attachment != null && !attachment.alwaysBoundToEvt()) {
         attachment = null;

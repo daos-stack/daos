@@ -269,6 +269,16 @@ Java_io_daos_DaosClient_pollCompleted(JNIEnv *env, jclass clientClass,
 }
 
 JNIEXPORT void JNICALL
+Java_io_daos_DaosClient_abortEvent(JNIEnv *env, jclass clientClass,
+                jlong eqWrapperHdl, jshort eid)
+{
+        event_queue_wrapper_t *eq = *(event_queue_wrapper_t **)&eqWrapperHdl;
+        daos_event_t *event = eq->events[eid];
+
+        daos_event_abort(event);
+}
+
+JNIEXPORT void JNICALL
 Java_io_daos_DaosClient_destroyEventQueue(JNIEnv *env, jclass clientClass,
 		jlong eqWrapperHdl)
 {

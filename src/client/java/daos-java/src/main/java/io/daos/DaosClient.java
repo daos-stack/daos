@@ -176,6 +176,14 @@ public class DaosClient implements ForceCloseable {
                                           int nbrOfEvents, long timeoutMs) throws IOException;
 
   /**
+   * abort event in given EQ.
+   *
+   * @param eqWrapperHdl handle of EQ wrapper
+   * @param id event id
+   */
+  public static native void abortEvent(long eqWrapperHdl, short id);
+
+  /**
    * destroy event queue identified by <code>queueHdl</code>.
    *
    * @param queueHdl queue handler
