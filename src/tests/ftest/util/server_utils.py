@@ -5,6 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
+from datetime import datetime
 from getpass import getuser
 import os
 import socket
@@ -976,6 +977,8 @@ class DaosServerManager(SubprocessManager):
         """
         status = {"expected": True, "restart": False}
         running_states = ["started", "joined"]
+        errored_states = ["errored"]
+        errored_hosts = []
 
         # Get the current state of the servers
         current_states = self.system_query()
@@ -1001,6 +1004,7 @@ class DaosServerManager(SubprocessManager):
             # Verify that each expected rank appears in the current states
             for rank in sorted(self._expected_states):
                 domain = self._expected_states[rank]["domain"].split(".")
+                current_host = domain[0].replace("/", "")
                 expected = self._expected_states[rank]["state"]
                 if isinstance(expected, (list, tuple)):
                     expected = [item.lower() for item in expected]
@@ -1021,8 +1025,13 @@ class DaosServerManager(SubprocessManager):
                     status["restart"] = True
                     result = "RESTART"
 
+                # Keep track of any hosts with a server in the errored state
+                if current in errored_states:
+                    if current_host not in errored_hosts:
+                        errored_hosts.append(current_host)
+
                 self.log.info(
-                    log_format, rank, domain[0].replace("/", ""),
+                    log_format, rank, current_host,
                     self._expected_states[rank]["uuid"], "|".join(expected),
                     current, result)
 
@@ -1068,6 +1077,19 @@ class DaosServerManager(SubprocessManager):
         if not status["expected"]:
             status["restart"] = True
 
+        # Set the verified timestamp
+        if set_expected and hasattr(self.manager, "timestamps"):
+            self.manager.timestamps["verified"] = datetime.now().strftime(
+                "%Y-%m-%d %H:%M:%S")
+
+        # Dump the server logs for any server found in the errored state
+        if errored_hosts:
+            self.log.info(
+                "<SERVER> logs for ranks in the errored state since start "
+                "detection")
+            if hasattr(self.manager, "dump_logs"):
+                self.manager.dump_logs(errored_hosts)
+
         return status
 
     @fail_on(CommandFailure)
@@ -1077,7 +1099,8 @@ class DaosServerManager(SubprocessManager):
         Args:
             ranks (list): a list of daos server ranks (int) to kill
             daos_log (DaosLog): object for logging messages
-            force (bool): whether to use --force option to dmg system stop
+            force (bool, optional): whether to use --force option to dmg system
+                stop. Defaults to False.
 
         Raises:
             avocado.core.exceptions.TestFail: if there is an issue stopping the
@@ -1090,7 +1113,7 @@ class DaosServerManager(SubprocessManager):
         daos_log.info(msg)
 
         # Stop desired ranks using dmg
-        self.dmg.system_stop(force=force, ranks=convert_list(value=ranks))
+        self.dmg.system_stop(ranks=convert_list(value=ranks), force=force)
 
         # Update the expected status of the stopped/evicted ranks
         self.update_expected_states(ranks, ["stopped", "evicted"])

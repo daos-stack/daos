@@ -319,7 +319,8 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	/* Ranks to allocate targets (in) & svc for pool replicas (out). */
 	rc = ds_mgmt_create_pool(pool_uuid, req->sys, "pmem", targets,
 				 req->scmbytes, req->nvmebytes,
-				 prop, req->numsvcreps, &svc);
+				 prop, req->numsvcreps, &svc,
+				 req->n_faultdomains, req->faultdomains);
 	if (targets != NULL)
 		d_rank_list_free(targets);
 	if (rc != 0) {
@@ -354,7 +355,6 @@ out:
 
 	daos_prop_free(prop);
 
-	/** check for '\0' which is a static allocation from protobuf */
 	D_FREE(resp.svc_reps);
 }
 
@@ -539,8 +539,8 @@ pool_change_target_state(char *id, d_rank_list_t *svc_ranks,
 	rc = ds_mgmt_pool_target_update_state(uuid, svc_ranks, rank,
 					      &target_id_list, state);
 	if (rc != 0) {
-		D_ERROR("Failed to set pool target up %s: "DF_RC"\n", uuid,
-			DP_RC(rc));
+		D_ERROR("Failed to set pool target up "DF_UUID": "DF_RC"\n",
+			DP_UUID(uuid), DP_RC(rc));
 	}
 
 	pool_target_id_list_free(&target_id_list);
@@ -687,7 +687,8 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out_list, rc = -DER_NOMEM);
 
 	rc = ds_mgmt_pool_extend(uuid, svc_ranks, rank_list, "pmem",
-				 req->scmbytes, req->nvmebytes);
+				 req->scmbytes, req->nvmebytes,
+				 req->n_faultdomains, req->faultdomains);
 
 	if (rc != 0)
 		D_ERROR("Failed to extend pool %s: "DF_RC"\n", req->uuid,

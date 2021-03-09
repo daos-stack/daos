@@ -67,11 +67,10 @@ struct dss_thread_local_storage {
 };
 
 enum dss_module_tag {
-	/* Server tag */
 	DAOS_SERVER_TAG	= 1 << 0,
 };
 
-/* The module key descriptor for each server thread */
+/* The module key descriptor for each xstream */
 struct dss_module_key {
 	/* Indicate where the keys should be instantiated */
 	enum dss_module_tag dmk_tags;
@@ -79,12 +78,10 @@ struct dss_module_key {
 	/* The position inside the dss_module_keys */
 	int dmk_index;
 	/* init keys for context */
-	void  *(*dmk_init)(const struct dss_thread_local_storage *dtls,
-			   struct dss_module_key *key);
+	void  *(*dmk_init)(int xs_id, int tgt_id);
 
 	/* fini keys for context */
-	void  (*dmk_fini)(const struct dss_thread_local_storage *dtls,
-			  struct dss_module_key *key, void *data);
+	void  (*dmk_fini)(void *data);
 };
 
 extern pthread_key_t dss_tls_key;
@@ -654,7 +651,7 @@ int dsc_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch,
 int dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		  unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
 		  daos_iom_t *maps, unsigned int extra_flag,
-		  unsigned int *extra_arg);
+		  unsigned int *extra_arg, d_iov_t *csum_iov);
 
 int dsc_obj_update(daos_handle_t oh, uint64_t flags, daos_key_t *dkey,
 		   unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls);
@@ -746,7 +743,7 @@ struct dss_enum_unpack_io {
 	daos_unit_oid_t		 ui_oid;	/**< type <= OBJ */
 	daos_key_t		 ui_dkey;	/**< type <= DKEY */
 	daos_iod_t		*ui_iods;
-	struct dcs_iod_csums	*ui_iods_csums;
+	d_iov_t			 ui_csum_iov;
 	/* punched epochs per akey */
 	daos_epoch_t		*ui_akey_punch_ephs;
 	daos_epoch_t		*ui_rec_punch_ephs;

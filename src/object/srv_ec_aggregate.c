@@ -544,7 +544,7 @@ agg_fetch_odata_cells(struct ec_agg_entry *entry, uint8_t *bit_map,
 	epoch = is_recalc ? stripe->as_hi_epoch :
 		entry->ae_par_extent.ape_epoch;
 	rc = dsc_obj_fetch(entry->ae_obj_hdl, epoch, &entry->ae_dkey, 1, &iod,
-			   &entry->ae_sgl, NULL, 0, NULL);
+			   &entry->ae_sgl, NULL, 0, NULL, NULL);
 	if (rc)
 		D_ERROR("dsc_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
 
@@ -964,7 +964,7 @@ agg_fetch_remote_parity(struct ec_agg_entry *entry)
 		rc = dsc_obj_fetch(entry->ae_obj_hdl,
 				   entry->ae_par_extent.ape_epoch,
 				   &entry->ae_dkey, 1, &iod, &sgl, NULL,
-				   DIOF_TO_SPEC_SHARD, &pshard);
+				   DIOF_TO_SPEC_SHARD, &pshard, NULL);
 		if (rc)
 			goto out;
 		pshard--;
@@ -1303,6 +1303,9 @@ agg_peer_update_ult(void *arg)
 					ext->ae_epoch;
 			}
 		}
+		D_ASSERT(ec_agg_in->ea_remove_nr == i);
+		ec_agg_in->ea_remove_recxs.ca_count = i;
+		ec_agg_in->ea_remove_eps.ca_count = i;
 	}
 
 	rc = dss_rpc_send(rpc);
@@ -1467,7 +1470,7 @@ agg_process_holes_ult(void *arg)
 	/* Pull data via dsc_obj_fetch */
 	rc = dsc_obj_fetch(entry->ae_obj_hdl, entry->ae_cur_stripe.as_hi_epoch,
 			   &entry->ae_dkey, 1, &iod, &entry->ae_sgl, NULL, 0,
-			   NULL);
+			   NULL, NULL);
 	if (rc) {
 		D_ERROR("dsc_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
 		goto out;

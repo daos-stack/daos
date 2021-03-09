@@ -52,10 +52,10 @@ errors are documented in the table below.
 |DER_TX_BUSY|2028|TX is not committed
 |DER_AGENT_INCOMPAT|2029|Agent is incompatible with libdaos
 
-When an operation fails, DAOS returns a negative DER error. For a full
-list of errors, please check
-<https://github.com/daos-stack/cart/blob/master/src/include/daos_errno.h>
-(DER_ERR_GURT_BASE is equal to 1000 and DER_ERR_DAOS_BASE is equal
+When an operation fails, DAOS returns a negative DER error.
+For a full list of errors, please check
+<https://github.com/daos-stack/daos/blob/master/src/include/daos_errno.h>
+(`DER_ERR_GURT_BASE` is equal to 1000, and `DER_ERR_DAOS_BASE` is equal
 to 2000).
 
 The function d_errstr() is provided in the API to convert an error
@@ -68,8 +68,8 @@ server operations:
 
 |Component|Config Parameter|Example Config Value|
 |-|-|-|
-|Control Plane|control_log_file|/tmp/daos_control.log|
-|Data Plane|log_file|/tmp/daos_server.log|
+|Control Plane|control_log_file|/tmp/daos_server.log|
+|Data Plane|log_file|/tmp/daos_engine.*.log|
 |[Privileged Helper](https://daos-stack.github.io/admin/deployment/#elevated-privileges)|helper_log_file|/tmp/daos_admin.log|
 |agent|log_file|/tmp/daos_agent.log|
 
@@ -103,12 +103,12 @@ DEBUG-level logging will be sent to the specified file.
 If the `log_file` config parameter is set in the agent config, then
 DEBUG-level logging will be sent to the specified file.
 
-
 ## Debugging System
 
 DAOS uses the debug system defined in
-[CaRT](https://github.com/daos-stack/cart) but more specifically the
-GURT library. Both server and client default log is stdout, unless
+[CaRT](https://github.com/daos-stack/daos/tree/master/src/cart),
+specifically the GURT library.
+Both server and client default log is `stdout`, unless
 otherwise set by `D_LOG_FILE` environment variable (client) or
 `log_file` config parameter (server).
 
@@ -233,7 +233,7 @@ Refer to the DAOS Environment Variables document for
 more information about the debug system environment.
 
 ## Common DAOS Problems
-
+### Incompatible Agent ####
 When DER_AGENT_INCOMPAT is received, it means that the client library libdaos.so
 is likely mismatched with the DAOS Agent.  The libdaos.so, DAOS Agent and DAOS
 Server must be built from compatible sources so that the GetAttachInfo protocol
@@ -241,11 +241,53 @@ is the same between each component.  Depending on your situation, you will need
 to either update the DAOS Agent or the libdaos.so to the newer version in order
 to maintain compatibility with each other.
 
+### HLC Sync ###
 When DER_HLC_SYNC is received, it means that sender and receiver HLC timestamps
 are off by more than maximum allowed system clock offset (1 second by default).
 
 In order to correct this situation synchronize all server clocks to the same
 reference time, using services like NTP.
+
+### Shared Memory Errors ###
+When DER_SHMEM_PERMS is received it means that this I/O Engine lacked the
+permissions to access the shared memory megment left behind by a previous run of
+the I/O Engine on the same machine.  This happens when the I/O Engine fails to
+remove the shared memory segment upon shutdown, and, there is a mismatch between
+the user/group used to launch the I/O Engine between these successive runs.  To
+remedy the problem, manually identify the shared memory segment and remove it.
+
+Issue ```ipcs``` to view the Shared Memory Segments.  The output will show a
+list of segments organized by ```key```.
+
+```
+$ipcs
+
+------ Message Queues --------
+key        msqid      owner      perms      used-bytes   messages
+
+------ Shared Memory Segments --------
+key        shmid      owner      perms      bytes      nattch     status
+0xffffffff 49938432   root       666        40         0
+0x10242048 98598913   jbrosenz   660        1048576    0
+0x10242049 98631682   jbrosenz   660        1048576    0
+
+------ Semaphore Arrays --------
+key        semid      owner      perms      nsems
+```
+
+Shared Memory Segments with keys [0x10242048 .. (0x10242048 + number of I/O
+Engines running)] are the segments that must be removed.  Use ```ipcrm``` to
+remove the segment.
+
+For example, to remove the shared memory segment left behind by I/O Engine
+instance 0, issue:
+```
+sudo ipcrm -M 0x10242048
+```
+To remove the shared memory segment left behind by I/O Engine instance 1, issue:
+```
+sudo ipcrm -M 0x10242049
+```
 
 ## Bug Report
 

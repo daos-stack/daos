@@ -21,17 +21,19 @@
 
 CRT_RPC_DEFINE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
 
-#define X_RPC(a, b, c, d, e)	\
+#define X(a, b, c, d, e, f)	\
 {				\
 	.prf_flags   = b,	\
 	.prf_req_fmt = c,	\
 	.prf_hdlr    = NULL,	\
 	.prf_co_ops  = NULL,	\
-}
+},
 
 static struct crt_proto_rpc_format dtx_proto_rpc_fmt[] = {
-	DTX_PROTO_SRV_RPC_LIST(X_RPC)
+	DTX_PROTO_SRV_RPC_LIST
 };
+
+#undef X
 
 struct crt_proto_format dtx_proto_fmt = {
 	.cpf_name  = "dtx-proto",
@@ -806,6 +808,9 @@ dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont)
 	int			 len = 0;
 	int			 rc = 0;
 
+	if (DAOS_FAIL_CHECK(DAOS_DTX_NO_RETRY))
+		return -DER_IO;
+
 	D_INIT_LIST_HEAD(&head);
 
 	d_list_for_each_entry(dsp, &dth->dth_share_tbd_list, dsp_link) {
@@ -813,7 +818,7 @@ dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont)
 
 again:
 			rc = ds_pool_elect_dtx_leader(pool, &dsp->dsp_oid,
-						      dsp->dsp_ver);
+						      dth->dth_ver);
 			if (rc < 0) {
 				D_ERROR("Failed to find DTX leader for "DF_DTI
 					": "DF_RC"\n",
