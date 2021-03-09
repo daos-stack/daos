@@ -21,7 +21,6 @@ struct dtx_share_peer {
 	struct dtx_id		dsp_xid;
 	daos_unit_oid_t		dsp_oid;
 	uint32_t		dsp_leader;
-	uint32_t		dsp_ver;
 };
 
 /**

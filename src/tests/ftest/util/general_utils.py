@@ -217,7 +217,7 @@ def bytes_to_human(size, digits=2, binary=True):
 
 
 def run_command(command, timeout=60, verbose=True, raise_exception=True,
-                output_check="combined", env=None):
+                output_check="both", env=None):
     """Run the command on the local host.
 
     This method uses the avocado.utils.process.run() method to run the specified
@@ -242,7 +242,7 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
                 "both"      - both standard output and error in separate files
                 "combined"  - standard output and error in a single file
                 "none"      - disable all recording
-            Defaults to "combined".
+            Defaults to "both".
         env (dict, optional): dictionary of environment variable names and
             values to set when running the command. Defaults to None.
 

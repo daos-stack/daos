@@ -41,7 +41,7 @@ dtx_1(void **state)
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 
 	arg->async = 0;
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
 
 	/* Repeatedly insert different SV for the same obj, overwrite. */
@@ -80,7 +80,7 @@ dtx_2(void **state)
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 
 	arg->async = 0;
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	/* Repeatedly insert different SV for the same obj, some overlap. */
@@ -125,7 +125,8 @@ dtx_update_multiple_objs(test_arg_t *arg, daos_iod_type_t i_type,
 	arg->async = 0;
 
 	for (i = 0; i < DTX_TEST_SUB_REQS; i++) {
-		oids[i] = dts_oid_gen(oclass, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, oclass, 0, 0,
+					    arg->myrank);
 		ioreq_init(&reqs[i], arg->coh, oids[i], i_type, arg);
 
 		D_ALLOC(write_bufs[i], size);
@@ -210,7 +211,7 @@ dtx_7(void **state)
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 
 	arg->async = 0;
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
 
 	dts_buf_render(write_buf, DTX_IO_SMALL);
@@ -244,7 +245,7 @@ dtx_8(void **state)
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 
 	arg->async = 0;
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	dts_buf_render(write_bufs[0], DTX_IO_SMALL);
@@ -284,7 +285,7 @@ dtx_9(void **state)
 	print_message("DTX9: conditional insert/update\n");
 
 	arg->async = 0;
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -343,7 +344,7 @@ dtx_10(void **state)
 	print_message("DTX10: conditional punch\n");
 
 	arg->async = 0;
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
 
 	dts_buf_render(write_buf, DTX_IO_SMALL);
@@ -399,7 +400,7 @@ dtx_11(void **state)
 	print_message("DTX11: read only transaction\n");
 
 	arg->async = 0;
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
 
 	dts_buf_render(write_buf, DTX_IO_SMALL);
@@ -450,7 +451,7 @@ dtx_12(void **state)
 	MUST(daos_tx_open(arg->coh, &th, DAOS_TF_ZERO_COPY, NULL));
 
 	arg->async = 0;
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	dts_buf_render(write_buf, DTX_IO_SMALL);
@@ -500,7 +501,7 @@ dtx_13(void **state)
 	print_message("DTX13: DTX status machnie\n");
 
 	arg->async = 0;
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	dts_buf_render(write_buf, DTX_IO_SMALL);
 
@@ -590,7 +591,7 @@ dtx_14(void **state)
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 
 	arg->async = 0;
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	dts_buf_render(write_buf, DTX_IO_SMALL);
@@ -659,7 +660,7 @@ dtx_15(void **state)
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 
 	arg->async = 0;
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -712,7 +713,7 @@ dtx_handle_resent(test_arg_t *arg, uint64_t fail_loc)
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 
 	arg->async = 0;
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	dts_buf_render(write_buf, DTX_IO_SMALL);
@@ -788,7 +789,7 @@ dtx_18(void **state)
 		skip();
 
 	arg->async = 0;
-	oid = dts_oid_gen(OC_RP_3G1, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_3G1, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
 
 	dts_buf_render(write_buf, DTX_IO_SMALL);
@@ -903,7 +904,8 @@ dtx_19(void **state)
 		if (max_size < size[i] * nr[i])
 			max_size = size[i] * nr[i];
 
-		oids[i] = dts_oid_gen(oclass, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, oclass, 0, 0,
+					    arg->myrank);
 		ioreq_init(&reqs[i], arg->coh, oids[i], i_type, arg);
 
 		D_ALLOC(write_bufs[i], size[i] * nr[i]);
@@ -943,7 +945,8 @@ dtx_init_oid_req_akey(test_arg_t *arg, daos_obj_id_t *oids, struct ioreq *reqs,
 	int	i;
 
 	for (i = 0; i < oid_req_cnt; i++) {
-		oids[i] = dts_oid_gen(ocs[i], ofeats, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, ocs[i], ofeats, 0,
+					    arg->myrank);
 		ioreq_init(&reqs[i], arg->coh, oids[i], types[i], arg);
 	}
 
@@ -1364,7 +1367,8 @@ dtx_24(void **state)
 	print_message("Transactional update something\n");
 
 	for (i = 0, val = 0; i < 10; i++, val++) {
-		oids[i] = dts_oid_gen(OC_RP_2G2, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, OC_RP_2G2, 0, 0,
+					    arg->myrank);
 		ioreq_init(&reqs[i], arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
 
 		MUST(daos_tx_open(arg->coh, &th, 0, NULL));
@@ -1385,9 +1389,10 @@ dtx_24(void **state)
 	sleep(DTX_COMMIT_THRESHOLD_AGE + 3);
 
 	MPI_Barrier(MPI_COMM_WORLD);
+	daos_fail_loc_set(DAOS_DTX_NO_RETRY | DAOS_FAIL_ALWAYS);
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-				      DAOS_DTX_NO_INPROGRESS | DAOS_FAIL_ALWAYS,
+				      DAOS_DTX_NO_RETRY | DAOS_FAIL_ALWAYS,
 				      0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -1404,6 +1409,7 @@ dtx_24(void **state)
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
+	daos_fail_loc_set(0);
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				      0, 0, NULL);
@@ -1440,7 +1446,8 @@ dtx_25(void **state)
 	print_message("Transactional update without batched commit\n");
 
 	for (i = 0, val = 1; i < DTX_NC_CNT; i++, val++) {
-		oids[i] = dts_oid_gen(OC_RP_2G2, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, OC_RP_2G2, 0, 0,
+					    arg->myrank);
 		ioreq_init(&reqs[i], arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
 
 		MUST(daos_tx_open(arg->coh, &th, 0, NULL));
@@ -1503,7 +1510,8 @@ dtx_26(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	for (i = 0, val = 1; i < DTX_NC_CNT; i++, val++) {
-		oids[i] = dts_oid_gen(OC_RP_2G2, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, OC_RP_2G2, 0, 0,
+					    arg->myrank);
 		ioreq_init(&reqs[i], arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
 
 		/* Base value: i + 1 */
@@ -1581,7 +1589,8 @@ dtx_uncertainty_miss_request(test_arg_t *arg, uint64_t loc, bool abort)
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	for (i = 0, val = 1; i < DTX_NC_CNT; i++, val++) {
-		oids[i] = dts_oid_gen(OC_RP_2G2, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, OC_RP_2G2, 0, 0,
+					    arg->myrank);
 		ioreq_init(&reqs[i], arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
 
 		/* Base value: i + 1 */
@@ -2391,9 +2400,10 @@ dtx_35(void **state)
 	MUST(daos_obj_open(arg->coh, oids[0], 0, &reqs[0].oh, NULL));
 	MUST(daos_obj_open(arg->coh, oids[1], 0, &reqs[1].oh, NULL));
 
+	daos_fail_loc_set(DAOS_DTX_NO_RETRY | DAOS_FAIL_ALWAYS);
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-				      DAOS_DTX_NO_INPROGRESS | DAOS_FAIL_ALWAYS,
+				      DAOS_DTX_NO_RETRY | DAOS_FAIL_ALWAYS,
 				      0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -2413,6 +2423,7 @@ dtx_35(void **state)
 	dtx_fini_req_akey(reqs, akeys, 2, DTX_NC_CNT);
 
 	MPI_Barrier(MPI_COMM_WORLD);
+	daos_fail_loc_set(0);
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				      0, 0, NULL);
@@ -2579,9 +2590,6 @@ dtx_37(void **state)
 	d_rank_t	 kill_rank = CRT_NO_RANK;
 	int		 i;
 
-	/* Skip it because of DAOS-6771 */
-	skip();
-
 	FAULT_INJECTION_REQUIRED();
 
 	print_message("DTX37: resync - leader failed during prepare\n");
@@ -2722,10 +2730,12 @@ dtx_38(void **state)
 		skip();
 
 	if (arg->myrank == 0) {
-		oids[0] = dts_oid_gen(ocs[0], 0, arg->myrank);
+		oids[0] = daos_test_oid_gen(arg->coh, ocs[0], 0, 0,
+					    arg->myrank);
 		kill_ranks[0] = get_rank_by_oid_shard(arg, oids[0], 0);
 		do {
-			oids[1] = dts_oid_gen(ocs[1], 0, arg->myrank);
+			oids[1] = daos_test_oid_gen(arg->coh, ocs[1], 0, 0,
+						    arg->myrank);
 			kill_ranks[1] = get_rank_by_oid_shard(arg, oids[1], 0);
 		} while (kill_ranks[0] != kill_ranks[1]);
 

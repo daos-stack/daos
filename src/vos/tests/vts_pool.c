@@ -63,12 +63,17 @@ static int
 pool_file_destroy(void **state)
 {
 	struct vp_test_args	*arg = *state;
+	int			ret = 0;
 
 	if (arg->fname[0]) {
-		remove(arg->fname[0]);
+		ret = remove(arg->fname[0]);
+		if (ret != 0)
+			D_ERROR("Removing %s failed\n",
+				arg->fname[0]);
 		D_FREE(arg->fname[0]);
 	}
 	D_FREE(arg->fname);
+	D_FREE(arg->poh);
 	return 0;
 }
 
@@ -256,7 +261,7 @@ pool_unit_teardown(void **state)
 
 	for (i = 0; i < arg->nfiles; i++) {
 		if (vts_file_exists(arg->fname[i]))
-			remove(arg->fname[i]);
+			assert_int_equal(remove(arg->fname[i]), 0);
 		if (arg->fname[i])
 			D_FREE(arg->fname[i]);
 		if (arg->ops_seq[i])

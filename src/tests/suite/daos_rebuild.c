@@ -47,7 +47,8 @@ rebuild_drop_scan(void **state)
 		return;
 
 	for (i = 0; i < OBJ_NR; i++) {
-		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
+					    0, arg->myrank);
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 		oids[i] = dts_oid_set_tgt(oids[i], tgt);
 	}
@@ -62,10 +63,10 @@ rebuild_drop_scan(void **state)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
 static void
@@ -80,7 +81,8 @@ rebuild_retry_rebuild(void **state)
 		return;
 
 	for (i = 0; i < OBJ_NR; i++) {
-		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
+					    0, arg->myrank);
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 		oids[i] = dts_oid_set_tgt(oids[i], tgt);
 	}
@@ -94,10 +96,10 @@ rebuild_retry_rebuild(void **state)
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
 static void
@@ -111,7 +113,8 @@ rebuild_retry_for_stale_pool(void **state)
 		return;
 
 	for (i = 0; i < OBJ_NR; i++) {
-		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
+					    0, arg->myrank);
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 	}
 
@@ -129,10 +132,10 @@ rebuild_retry_for_stale_pool(void **state)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_rank(arg, ranks_to_kill[0], false);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 
 	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
 static void
@@ -146,7 +149,8 @@ rebuild_drop_obj(void **state)
 		return;
 
 	for (i = 0; i < OBJ_NR; i++) {
-		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
+					    0, arg->myrank);
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 	}
 
@@ -159,10 +163,10 @@ rebuild_drop_obj(void **state)
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_rank(arg, ranks_to_kill[0], false);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 
 	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
 static void
@@ -177,7 +181,8 @@ rebuild_update_failed(void **state)
 		return;
 
 	for (i = 0; i < OBJ_NR; i++) {
-		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
+					    0, arg->myrank);
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 		oids[i] = dts_oid_set_tgt(oids[i], tgt);
 	}
@@ -213,7 +218,8 @@ rebuild_multiple_pools(void **state)
 		return;
 
 	for (i = 0; i < OBJ_NR; i++) {
-		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
+					    0, arg->myrank);
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 	}
 
@@ -222,12 +228,12 @@ rebuild_multiple_pools(void **state)
 
 	rebuild_pools_ranks(args, 2, ranks_to_kill, 1, false);
 
-	rebuild_io_validate(args[0], oids, OBJ_NR, true);
-	rebuild_io_validate(args[1], oids, OBJ_NR, true);
+	rebuild_io_verify(args[0], oids, OBJ_NR);
+	rebuild_io_verify(args[1], oids, OBJ_NR);
 
 	reintegrate_pools_ranks(args, 2, ranks_to_kill, 1);
-	rebuild_io_validate(args[0], oids, OBJ_NR, true);
-	rebuild_io_validate(args[1], oids, OBJ_NR, true);
+	rebuild_io_verify(args[0], oids, OBJ_NR);
+	rebuild_io_verify(args[1], oids, OBJ_NR);
 
 	rebuild_pool_destroy(args[1]);
 }
@@ -312,7 +318,8 @@ rebuild_destroy_container(void **state)
 		return;
 
 	for (i = 0; i < OBJ_NR; i++) {
-		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
+					    0, arg->myrank);
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 	}
 
@@ -343,7 +350,8 @@ rebuild_close_container(void **state)
 		return;
 
 	for (i = 0; i < OBJ_NR; i++) {
-		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
+					    0, arg->myrank);
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 	}
 
@@ -404,7 +412,8 @@ rebuild_destroy_pool_internal(void **state, uint64_t fail_loc)
 		return;
 
 	for (i = 0; i < OBJ_NR; i++) {
-		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
+					    0, arg->myrank);
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 	}
 
@@ -447,7 +456,8 @@ rebuild_iv_tgt_fail(void **state)
 		return;
 
 	for (i = 0; i < OBJ_NR; i++) {
-		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
+					    0, arg->myrank);
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 	}
 
@@ -460,10 +470,10 @@ rebuild_iv_tgt_fail(void **state)
 				     DAOS_FAIL_ONCE, 0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_rank(arg, ranks_to_kill[0], false);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 
 	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
 static void
@@ -478,7 +488,8 @@ rebuild_tgt_start_fail(void **state)
 		return;
 
 	for (i = 0; i < OBJ_NR; i++) {
-		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
+					    0, arg->myrank);
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 	}
 
@@ -507,7 +518,8 @@ rebuild_send_objects_fail(void **state)
 		return;
 
 	for (i = 0; i < OBJ_NR; i++) {
-		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
+					    0, arg->myrank);
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 	}
 
@@ -576,7 +588,8 @@ rebuild_tgt_pool_disconnect_internal(void **state, unsigned int fail_loc)
 		return;
 
 	for (i = 0; i < OBJ_NR; i++) {
-		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
+					    0, arg->myrank);
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 	}
 
@@ -645,7 +658,8 @@ rebuild_offline_pool_connect_internal(void **state, unsigned int fail_loc)
 		return;
 
 	for (i = 0; i < OBJ_NR; i++) {
-		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
+					    0, arg->myrank);
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 	}
 
@@ -665,7 +679,7 @@ rebuild_offline_pool_connect_internal(void **state, unsigned int fail_loc)
 	arg->rebuild_pre_cb = NULL;
 	arg->rebuild_cb = NULL;
 
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
 static void
@@ -693,7 +707,8 @@ rebuild_offline(void **state)
 		return;
 
 	for (i = 0; i < OBJ_NR; i++) {
-		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
+					    0, arg->myrank);
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 	}
 	rebuild_io(arg, oids, OBJ_NR);
@@ -706,7 +721,7 @@ rebuild_offline(void **state)
 	arg->rebuild_pre_cb = NULL;
 	arg->rebuild_post_cb = NULL;
 
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
 static void
@@ -762,7 +777,8 @@ rebuild_master_change_during_scan(void **state)
 		return;
 
 	for (i = 0; i < OBJ_NR; i++) {
-		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
+					    0, arg->myrank);
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 	}
 
@@ -778,7 +794,7 @@ rebuild_master_change_during_scan(void **state)
 	rebuild_single_pool_rank(arg, ranks_to_kill[0], false);
 
 	/* Verify the data */
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
 static void
@@ -792,7 +808,8 @@ rebuild_master_change_during_rebuild(void **state)
 		return;
 
 	for (i = 0; i < OBJ_NR; i++) {
-		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
+					    0, arg->myrank);
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 	}
 
@@ -808,7 +825,7 @@ rebuild_master_change_during_rebuild(void **state)
 	rebuild_single_pool_rank(arg, ranks_to_kill[0], false);
 
 	/* Verify the data */
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
 static int
@@ -847,7 +864,8 @@ rebuild_nospace(void **state)
 		return;
 
 	for (i = 0; i < OBJ_NR; i++) {
-		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
+					    0, arg->myrank);
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 	}
 
@@ -863,10 +881,10 @@ rebuild_nospace(void **state)
 	rebuild_single_pool_rank(arg, ranks_to_kill[0], false);
 
 	arg->rebuild_cb = NULL;
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 
 	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
 static void
@@ -882,7 +900,8 @@ rebuild_multiple_tgts(void **state)
 	if (!test_runable(arg, 6))
 		return;
 
-	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0,
+				arg->myrank);
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
 
 	rebuild_io(arg, &oid, 1);
@@ -924,7 +943,7 @@ rebuild_multiple_tgts(void **state)
 		test_rebuild_wait(&arg, 1);
 
 	/* Verify the data */
-	rebuild_io_validate(arg, &oid, 1, true);
+	rebuild_io_verify(arg, &oid, 1);
 
 	daos_obj_layout_free(layout);
 
@@ -958,7 +977,7 @@ rebuild_io_post_cb(void *arg)
 	daos_obj_id_t	*oids = test_arg->rebuild_post_cb_arg;
 
 	if (daos_handle_is_valid(test_arg->coh))
-		rebuild_io_validate(test_arg, oids, OBJ_NR, true);
+		rebuild_io_verify(test_arg, oids, OBJ_NR);
 
 	return 0;
 }
@@ -982,7 +1001,8 @@ rebuild_master_failure(void **state)
 
 	test_get_leader(arg, &ranks_to_kill[0]);
 	for (i = 0; i < 10 * OBJ_NR; i++) {
-		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
+					    0, arg->myrank);
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 	}
 
@@ -992,7 +1012,7 @@ rebuild_master_failure(void **state)
 	rebuild_single_pool_rank(arg, ranks_to_kill[0], true);
 
 	/* Verify the data */
-	rebuild_io_validate(arg, oids, 10 * OBJ_NR, true);
+	rebuild_io_verify(arg, oids, 10 * OBJ_NR);
 
 	/* Verify the POOL_QUERY get same rebuild status after leader change */
 	pinfo.pi_bits = DPI_REBUILD_STATUS;
@@ -1052,9 +1072,11 @@ rebuild_multiple_failures(void **state)
 		return;
 
 	for (i = 0; i < OBJ_NR; i++) {
-		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
+					    0, arg->myrank);
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
-		cb_arg_oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
+		cb_arg_oids[i] = daos_test_oid_gen(arg->coh, OBJ_CLS, 0, 0,
+						   arg->myrank);
 	}
 
 	/* prepare the data */
@@ -1088,7 +1110,8 @@ rebuild_fail_all_replicas_before_rebuild(void **state)
 	if (!test_runable(arg, 6) || arg->pool.alive_svc->rl_nr < 3)
 		return;
 
-	oid = dts_oid_gen(DAOS_OC_R2S_SPEC_RANK, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R2S_SPEC_RANK, 0, 0,
+				arg->myrank);
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
 
 	rebuild_io(arg, &oid, 1);
@@ -1148,7 +1171,8 @@ rebuild_fail_all_replicas(void **state)
 		return;
 	}
 
-	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0,
+				arg->myrank);
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
 
 	rebuild_io(arg, &oid, 1);
@@ -1211,7 +1235,8 @@ multi_pools_rebuild_concurrently(void **state)
 	}
 
 	for (i = 0; i < OBJ_PER_CONT; i++) {
-		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
+					    0, arg->myrank);
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 	}
 
@@ -1222,7 +1247,7 @@ multi_pools_rebuild_concurrently(void **state)
 			false);
 
 	for (i = POOL_NUM * CONT_PER_POOL - 1; i >= 0; i--)
-		rebuild_io_validate(args[i], oids, OBJ_PER_CONT, true);
+		rebuild_io_verify(args[i], oids, OBJ_PER_CONT);
 
 out:
 	for (i = POOL_NUM * CONT_PER_POOL - 1; i >= 0; i--)
@@ -1246,7 +1271,8 @@ rebuild_kill_rank_during_rebuild(void **state)
 		return;
 
 	for (i = 0; i < OBJ_NR; i++) {
-		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
+					    0, arg->myrank);
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 	}
 

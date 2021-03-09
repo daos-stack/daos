@@ -82,6 +82,8 @@ extern const char *test_io_conf;
 
 extern int daos_event_priv_reset(void);
 #define TEST_RANKS_MAX_NUM	(13)
+#define DAOS_SERVER_CONF	"/etc/daos/daos_server.yml"
+#define DAOS_SERVER_CONF_LENGTH		512
 
 /* the pool used for daos test suite */
 struct test_pool {
@@ -255,6 +257,25 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 int
 pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool);
 
+static inline daos_obj_id_t
+daos_test_oid_gen(daos_handle_t coh, daos_oclass_id_t oclass, uint8_t ofeats,
+		  daos_oclass_hints_t hints, unsigned seed)
+{
+	daos_obj_id_t	oid;
+
+	if (oclass == 0)
+		oclass = DTS_OCLASS_DEF;
+
+	oid = dts_oid_gen(seed);
+	if (daos_handle_is_valid(coh))
+		daos_obj_generate_oid(coh, &oid, ofeats, oclass, hints, 0);
+	else
+		daos_obj_set_oid(&oid, ofeats, oclass, 0);
+
+	return oid;
+}
+
+
 static inline int
 async_enable(void **state)
 {
@@ -337,6 +358,7 @@ int run_daos_nvme_recov_test(int rank, int size, int *sub_tests,
 			     int sub_tests_size);
 int run_daos_rebuild_simple_test(int rank, int size, int *tests, int test_size);
 int run_daos_drain_simple_test(int rank, int size, int *tests, int test_size);
+int run_daos_extend_simple_test(int rank, int size, int *tests, int test_size);
 int run_daos_rebuild_simple_ec_test(int rank, int size, int *tests,
 				    int test_size);
 int run_daos_degrade_simple_ec_test(int rank, int size, int *sub_tests,
@@ -367,6 +389,9 @@ void daos_reint_target(const uuid_t pool_uuid, const char *grp,
 void daos_drain_target(const uuid_t pool_uuid, const char *grp,
 		       const char *dmg_config,
 		       d_rank_t rank, int tgt);
+void daos_extend_target(const uuid_t pool_uuid, const char *grp,
+			const char *dmg_config,
+			d_rank_t rank, int tgt, daos_size_t nvme_size);
 void daos_exclude_server(const uuid_t pool_uuid, const char *grp,
 			 const char *dmg_config,
 			 d_rank_t rank);
@@ -389,8 +414,8 @@ run_daos_sub_tests_only(char *test_name, const struct CMUnitTest *tests,
 			int tests_size, int *sub_tests, int sub_tests_size);
 
 void rebuild_io(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr);
-void rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
-			 bool discard);
+void rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr);
+void rebuild_io_verify(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr);
 void dfs_ec_rebuild_io(void **state, int *shards, int shards_nr);
 
 void rebuild_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
@@ -410,6 +435,7 @@ void drain_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
 void drain_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool kill);
 void drain_pools_ranks(test_arg_t **args, int args_cnt,
 		d_rank_t *failed_ranks, int ranks_nr, bool kill);
+void extend_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank);
 
 int rebuild_pool_create(test_arg_t **new_arg, test_arg_t *old_arg, int flag,
 		struct test_pool *pool);

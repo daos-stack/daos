@@ -76,7 +76,8 @@ main(int argc, char **argv)
 	D_INIT_LIST_HEAD(&eio_arg->op_list);
 	eio_arg->op_lvl = TEST_LVL_DAOS;
 	eio_arg->op_iod_size = 1;
-	eio_arg->op_oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	eio_arg->op_oid = dts_oid_gen(arg->myrank);
+	daos_obj_set_oid(&eio_arg->op_oid, 0, dts_obj_class, 0);
 	arg->eio_args.op_no_verify = 1;	/* No verification for now */
 
 	MPI_Barrier(MPI_COMM_WORLD);
