@@ -590,24 +590,11 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		rc = pool_map_find_target(map->pl_poolmap, tgts[i], &target);
 		D_ASSERT(rc == 1);
 
-		/* During rebuild test, it will manually exclude some target to
-		 * trigger the rebuild, then later add it back, so some objects
-		 * might exist on some illegal target, so they might use its
-		 * "own" target as the spare target, let's skip these object
-		 * now. When we have better support from CART exclude/addback,
-		 * myrank should always not equal to tgt_rebuild. XXX
-		 */
-		if (myrank != target->ta_comp.co_rank) {
-			rc = rebuild_object_insert(rpt, tgts[i], shards[i],
-						   arg->co_uuid,
-						   oid, ent->ie_epoch);
-			if (rc)
-				D_GOTO(out, rc);
-		} else {
-			D_DEBUG(DB_REBUILD, "rebuild skip "DF_UOID".\n",
-				DP_UOID(oid));
-			rc = 0;
-		}
+		rc = rebuild_object_insert(rpt, tgts[i], shards[i],
+					   arg->co_uuid,
+					   oid, ent->ie_epoch);
+		if (rc)
+			D_GOTO(out, rc);
 	}
 
 out:
