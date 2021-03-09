@@ -316,6 +316,7 @@ public class DaosEventQueue {
         event = events[completed.readShort()];
         if (event.status == EventStatus.ABORTED) {
           aborted++;
+          event.putBack();
           continue;
         }
         Attachment attachment = event.complete();
@@ -444,7 +445,7 @@ public class DaosEventQueue {
     }
 
     public void abort() throws DaosIOException {
-      putBack();
+      status = EventStatus.ABORTED;
       abortEvent(this);
     }
   }
