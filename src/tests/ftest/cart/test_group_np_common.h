@@ -486,7 +486,7 @@ parse_verify_swim_status_arg(char *source)
 
 				if (exp_status_len >
 				    strlen(cC + groupArray[g].rm_so)) {
-					strncpy(exp_status, cC +
+					memcpy(exp_status, cC +
 						groupArray[g].rm_so,
 						strlen(cC +
 						       groupArray[g].rm_so));
