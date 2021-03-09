@@ -34,7 +34,8 @@ from test_utils_pool import TestPool
 #  ~48MB for background aggregation use
 # 52% of remaining free space set aside for staging log container
 # (installsnapshot RPC handling in raft)
-NO_OF_MAX_CONTAINER = 4150
+#NO_OF_MAX_CONTAINER = 4150
+NO_OF_MAX_CONTAINER = 3465
 
 def ior_runner_thread(manager, uuids, results):
     """IOR run thread method.
@@ -214,9 +215,16 @@ class ObjectMetadata(TestWithServers):
             self.log.info("Container Create Iteration %d / 9", k)
             for cont in range(NO_OF_MAX_CONTAINER):
                 container = DaosContainer(self.context)
-                container.create(self.pool.pool.handle)
+                try:
+                    container.create(self.pool.pool.handle)
+                except DaosApiError as exc:
+                    self.log.info("Container create %d/%d failed: %s",
+                                  cont, NO_OF_MAX_CONTAINER, exc)
+                    self.fail("Container create failed")
+
                 container_array.append(container)
 
+            self.log.info("Created %d containers", (cont+1))
             self.log.info("Container Remove Iteration %d / 9", k)
             for cont in container_array:
                 cont.destroy()

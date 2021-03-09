@@ -468,7 +468,7 @@ struct daos_cpd_sub_req {
 struct daos_cpd_req_idx {
 	/* Shard index of the object for the sub request on this DAOS target. */
 	uint32_t			 dcri_shard_off;
-	/* Shard identifier of the object for the sub request on this DAOS target. */
+	/* Shard identifier of the object for the sub request. */
 	uint32_t			 dcri_shard_id;
 	/* The index (relative to the first sub request for its transaction)
 	 * of sub-request in the 'oci_sub_reqs' array. For parsing convenience,
