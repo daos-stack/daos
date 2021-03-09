@@ -5,7 +5,7 @@ hosts:
     - server-C
   test_clients:
     - client-D
-timeout: 1000
+timeout: 3600
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -101,3 +101,5 @@ test_obj_class:
     - RP_2G8
     - RP_3G6
     - RP_4G1
+loop_test:
+  iterations: 10
