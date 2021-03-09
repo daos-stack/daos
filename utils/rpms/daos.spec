@@ -56,6 +56,7 @@ BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
 BuildRequires: libcmocka-devel
+BuildRequires: maven
 BuildRequires: readline-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
@@ -246,7 +247,8 @@ install -m 644 utils/systemd/%{server_svc_name} %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
 mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
 mv %{?buildroot}/%{_sysconfdir}/daos/bash_completion.d %{?buildroot}/%{_sysconfdir}
-#cp -r src/client/java %{?buildroot}/%{_prefix}/lib/daos/TESTING/
+mvn clean install -DskipITs -Ddaos.install.path=src/ --file src/client/java/daos-java/pom.xml  -Dgpg.skip -Din-tree=true -X
+cp -r src/client/java %{?buildroot}/%{_prefix}/lib/daos/TESTING/
 
 %pre server
 getent group daos_metrics >/dev/null || groupadd -r daos_metrics
