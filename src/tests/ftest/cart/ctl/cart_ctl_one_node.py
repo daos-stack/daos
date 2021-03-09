@@ -33,7 +33,7 @@ class CartCtlOneNodeTest(TestWithoutServers):
         """ Tear down """
         self.report_timeout()
         self._teardown_errors.extend(self.utils.cleanup_processes())
-        super().tearDown()
+        super(CartCtlOneNodeTest, self).tearDown()
 
     def test_cart_ctl(self):
         """
