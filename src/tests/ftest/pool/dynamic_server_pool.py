@@ -42,7 +42,12 @@ class DynamicServerPool(TestWithServers):
         """Call dmg pool list to get the list of UUIDs and verify against the
         expected UUIDs.
         """
-        actual_uuids = sorted(self.get_dmg_command().pool_list())
+        output = self.get_dmg_command().pool_list()
+        pools = output["response"]["pools"]
+        actual_uuids = []
+        for pool in pools:
+            actual_uuids.append(pool["uuid"])
+        actual_uuids = sorted(actual_uuids)
         self.expected_uuids.sort()
         self.assertEqual(self.expected_uuids, actual_uuids)
 

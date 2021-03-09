@@ -682,24 +682,10 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg pool pool list command fails.
 
         Returns:
-            dict: a dictionary of pool UUID keys and svc replica values
+            dict: dictionary of output in JSON format
 
         """
-        self._get_result(("pool", "list"))
-
-        # Populate a dictionary with svc replicas for each pool UUID key listed
-        # Sample dmg pool list output:
-        #    Pool UUID                            Svc Replicas
-        #    ---------                            ------------
-        #    43bf2fe8-cb92-46ec-b9e9-9b056725092a 0
-        #    98736dfe-cb92-12cd-de45-9b09875092cd 1
-        data = {}
-        match = re.findall(
-            r"(?:([0-9a-fA-F][0-9a-fA-F-]+)\W+([0-9][0-9,-]*))",
-            self.result.stdout)
-        for info in match:
-            data[info[0]] = get_numeric_list(info[1])
-        return data
+        return self._get_json_result(("pool", "list"))
 
     def pool_set_prop(self, pool, name, value):
         """Set property for a given Pool.

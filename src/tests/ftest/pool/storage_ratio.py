@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
-from test_utils_pool import TestPool
 from command_utils import CommandFailure
 
 
@@ -35,7 +34,8 @@ class StorageRatio(TestWithServers):
         :avocado: tags=all,hw,medium,nvme,ib2,full_regression
         :avocado: tags=storage_ratio
         """
-        variants = self.params.get("storage_ratio", '/run/pool/*')
+        variants = self.params.get("storage_ratio", '/run/*')
+        dmg_command = self.get_dmg_command()
         errors = []
 
         # Sample output with warning.
@@ -56,29 +56,20 @@ class StorageRatio(TestWithServers):
         # NVMe          : 400 GB (200 GB / rank)
 
         for variant in variants:
-            pool = TestPool(self.context, self.get_dmg_command())
-            pool.get_params(self)
             scm_size = variant[0]
             nvme_size = variant[1]
-            pool.scm_size.update(scm_size)
-            pool.nvme_size.update(nvme_size)
             expected_result = variant[2]
-            kwargs = {
-                "uid": pool.uid,
-                "gid": pool.gid,
-                "scm_size": pool.scm_size.value,
-                "nvme_size": pool.nvme_size.value,
-                "group": pool.name.value}
             try:
                 # Create a pool
-                pool.dmg.pool_create_stdout(**kwargs)
+                dmg_command.pool_create_stdout(
+                    scm_size=scm_size, nvme_size=nvme_size)
                 if expected_result == 'FAIL':
                     errors.append(
                         "Pool create succeeded when it's expected to fail! " +
                         "storage_ratio used: {}".format(variant))
                 elif ('WARNING' in expected_result and
                       'SCM:NVMe ratio is less than' not in
-                      pool.dmg.result.stdout):
+                      dmg_command.result.stdout):
                     errors.append(
                         "No expected SCM:NVMe ratio warning message! " +
                         "storage_ratio used: {}".format(variant))
@@ -88,7 +79,10 @@ class StorageRatio(TestWithServers):
                         "Pool create failed when it's expected to succeed! " +
                         "storage_ratio used: {}".format(variant))
 
-            pool.destroy()
+            if expected_result != "FAIL":
+                output = dmg_command.pool_list()
+                pool_uuid = output["response"]["pools"][0]["uuid"]
+                dmg_command.pool_destroy(pool=pool_uuid)
 
         if errors:
-            self.fail("Test failures!\n{}".format("\n".join(errors)))
+            self.fail("--- Test failures! ---\n{}".format("\n".join(errors)))
