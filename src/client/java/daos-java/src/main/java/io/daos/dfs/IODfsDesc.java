@@ -26,7 +26,10 @@ package io.daos.dfs;
 import io.daos.BufferAllocator;
 import io.daos.Constants;
 import io.daos.DaosEventQueue;
+import io.daos.DaosIOException;
 import io.netty.buffer.ByteBuf;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * description of dfs IO
@@ -38,7 +41,6 @@ public class IODfsDesc implements DaosEventQueue.Attachment {
   private final long natveHandle;
   private final int retOffset;
   private final int descBufLen;
-  private final DaosEventQueue eq;
   private DaosEventQueue.Event event;
 
   private int retCode = Integer.MAX_VALUE;
@@ -49,9 +51,10 @@ public class IODfsDesc implements DaosEventQueue.Attachment {
 
   private boolean released;
 
+  private static final Logger log = LoggerFactory.getLogger(IODfsDesc.class);
+
   protected IODfsDesc(ByteBuf dataBuffer, DaosEventQueue eq) {
     this.dataBuffer = dataBuffer;
-    this.eq = eq;
     // nativeHandle + dataMemoryAddr + eventGrpHandle + offset + length + event ID +
     // rc + actual len (for read)
     retOffset = 8 + 8 + 8 + 8 + 8 + 2;
@@ -107,8 +110,11 @@ public class IODfsDesc implements DaosEventQueue.Attachment {
       return;
     }
     if ((!resultParsed) && event != null) {
-      eq.abortEvent(event);
-      event.putBack();
+      try {
+        event.abort();
+      } catch (DaosIOException e) {
+        log.error("failed to abort event bound to " + this, e);
+      }
     }
     if (descBuffer != null) {
       descBuffer.release();

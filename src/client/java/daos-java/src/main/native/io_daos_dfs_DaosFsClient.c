@@ -909,6 +909,7 @@ update_actual_size(void *udata, daos_event_t *ev, int ret)
 	memcpy(desc_buffer, &ret, 4);
 	desc_buffer += 4;
 	memcpy(desc_buffer, &value, 4);
+	ev->ev_error = 0;
 }
 
 JNIEXPORT void JNICALL
@@ -933,6 +934,7 @@ Java_io_daos_dfs_DaosFsClient_dfsReadAsync(JNIEnv *env, jobject client,
         throw_exception_const_msg_object(env, msg, rc);
         return;
     }
+    event->ev_error = EVENT_IN_USE;
     rc = dfs_read(dfs, file, &desc->sgl, offset, &desc->size, event);
     if (rc) {
         char *msg;
@@ -996,6 +998,7 @@ update_ret_code(void *udata, daos_event_t *ev, int ret)
 	char *desc_buffer = desc->ret_buf_address;
 
 	memcpy(desc_buffer, &ret, 4);
+	ev->ev_error = 0;
 }
 
 JNIEXPORT void JNICALL
@@ -1020,6 +1023,7 @@ Java_io_daos_dfs_DaosFsClient_dfsWriteAsync(JNIEnv *env, jobject client,
         throw_exception_const_msg_object(env, msg, rc);
         return;
     }
+    event->ev_error = EVENT_IN_USE;
     rc = dfs_write(dfs, file, &desc->sgl, offset, event);
     if (rc) {
         char *msg;

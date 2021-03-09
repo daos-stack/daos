@@ -274,8 +274,20 @@ Java_io_daos_DaosClient_abortEvent(JNIEnv *env, jclass clientClass,
 {
         event_queue_wrapper_t *eq = *(event_queue_wrapper_t **)&eqWrapperHdl;
         daos_event_t *event = eq->events[eid];
+        int rc;
 
-        daos_event_abort(event);
+        if (event->ev_error != EVENT_IN_USE) {
+                return;
+        }
+        rc = daos_event_abort(event);
+        event->ev_error = 0;
+        if (rc) {
+                char *msg = NULL;
+
+                asprintf(&msg, "Failed to abort event (%d)",
+                         event->ev_debug);
+                throw_base(env, msg, rc, 1, 0);
+        }
 }
 
 JNIEXPORT void JNICALL

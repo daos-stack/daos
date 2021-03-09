@@ -145,7 +145,7 @@ public class DaosEventQueue {
     if (nbrOfAcquired == nbrOfEvents) {
       return null;
     }
-    while (!events[idx].available) {
+    while (events[idx].status != EventStatus.FREE) {
       idx++;
       if (idx == nbrOfEvents) {
         idx = 0;
@@ -159,7 +159,7 @@ public class DaosEventQueue {
       nextEventIdx = 0;
     }
     Event ret = events[idx];
-    ret.available = false;
+    ret.status = EventStatus.USING;
     nbrOfAcquired++;
     return ret;
   }
@@ -303,24 +303,37 @@ public class DaosEventQueue {
    * @throws IOException
    */
   public int pollCompleted(List<Attachment> completedList, int expNbrOfRet, long timeOutMs) throws IOException {
-    DaosClient.pollCompleted(eqWrapperHdl, completed.memoryAddress(),
-        expNbrOfRet, timeOutMs < 0 ? DEFAULT_POLL_TIMEOUT_MS : timeOutMs);
-    completed.readerIndex(0);
-    int nbr = completed.readShort();
-    Event event;
-    for (int i = 0; i < nbr; i++) {
-      event = events[completed.readShort()];
-      Attachment attachment = event.complete();
-      if (completedList != null) {
-        completedList.add(attachment);
+    int aborted;
+    int nbr;
+    while (true) {
+      aborted = 0;
+      DaosClient.pollCompleted(eqWrapperHdl, completed.memoryAddress(),
+          expNbrOfRet, timeOutMs < 0 ? DEFAULT_POLL_TIMEOUT_MS : timeOutMs);
+      completed.readerIndex(0);
+      nbr = completed.readShort();
+      Event event;
+      for (int i = 0; i < nbr; i++) {
+        event = events[completed.readShort()];
+        if (event.status == EventStatus.ABORTED) {
+          aborted++;
+          continue;
+        }
+        Attachment attachment = event.complete();
+        if (completedList != null) {
+          completedList.add(attachment);
+        }
+      }
+      nbrOfAcquired -= nbr;
+      nbr -= aborted;
+      if (nbr > 0) {
+        lastProgressed = System.currentTimeMillis();
+        nbrOfTimedOut = 0;
+        return nbr;
+      }
+      if (aborted == 0) {
+        return nbr;
       }
     }
-    nbrOfAcquired -= nbr;
-    if (nbr > 0) {
-      lastProgressed = System.currentTimeMillis();
-      nbrOfTimedOut = 0;
-    }
-    return nbr;
   }
 
   public int getNbrOfAcquired() {
@@ -387,13 +400,13 @@ public class DaosEventQueue {
     private final short id;
     private final long eqHandle;
 
-    protected boolean available;
     protected Attachment attachment;
+    protected EventStatus status;
 
     protected Event(short id) {
       this.eqHandle = eqWrapperHdl;
       this.id = id;
-      this.available = true;
+      this.status = EventStatus.FREE;
     }
 
     public short getId() {
@@ -414,8 +427,8 @@ public class DaosEventQueue {
       return pa;
     }
 
-    public void putBack() {
-      available = true;
+    protected void putBack() {
+      status = EventStatus.FREE;
       if (attachment != null && !attachment.alwaysBoundToEvt()) {
         attachment = null;
       }
@@ -429,6 +442,15 @@ public class DaosEventQueue {
       putBack();
       return ret;
     }
+
+    public void abort() throws DaosIOException {
+      putBack();
+      abortEvent(this);
+    }
+  }
+
+  public enum EventStatus {
+    FREE, USING, ABORTED
   }
 
   public interface Attachment {

@@ -120,6 +120,8 @@ static uint8_t KEY_LIST_CODE_ANCHOR_END = (uint8_t)2;
 static uint8_t KEY_LIST_CODE_KEY2BIG = (uint8_t)3;
 static uint8_t KEY_LIST_CODE_REACH_LIMIT = (uint8_t)4;
 
+static int EVENT_IN_USE = -32768;
+
 /**
  * utility function to throw Java exception.
  *
