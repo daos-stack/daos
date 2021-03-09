@@ -124,16 +124,12 @@ func fixPath(in string) (labels labelMap, name string) {
 func (es *EngineSource) Collect(log logging.Logger, ch chan<- *rankMetric) {
 	metrics := make(chan telemetry.Metric)
 	go func() {
-		//log.Debugf("starting collection for idx %d", es.Index)
-		//startedAt := time.Now()
 		if err := telemetry.CollectMetrics(es.ctx, "", metrics); err != nil {
 			log.Errorf("failed to collect metrics for engine rank %d: %s", es.Rank, err)
 			return
 		}
-		//log.Debugf("finished collection for rank %d in %s", es.Rank, time.Now().Sub(startedAt))
 	}()
 
-	//log.Debugf("reading metrics for rank %d\n", rank)
 	for metric := range metrics {
 		ch <- &rankMetric{
 			r: es.Rank,
@@ -232,7 +228,7 @@ func getMetricStats(baseName, shortDesc string, m telemetry.Metric) (stats []*me
 			desc: " (mean)",
 		},
 		"stddev": {
-			fn:   ms.Mean,
+			fn:   ms.StdDev,
 			desc: " (std dev)",
 		},
 	} {
@@ -258,10 +254,7 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 	gauges := make(gvMap)
 	counters := make(cvMap)
 
-	//startedAt := time.Now()
 	for rm := range rankMetrics {
-		//c.log.Debugf("%d: %s: %.02f\n", rm.r, rm.m.Name(), rm.m.FloatValue())
-
 		labels, path := fixPath(rm.m.Path())
 		labels["rank"] = fmt.Sprintf("%d", rm.r)
 
@@ -295,7 +288,6 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 	for _, cv := range counters {
 		cv.Collect(ch)
 	}
-	//c.log.Debugf("collected all metrics in %s", time.Now().Sub(startedAt))
 }
 
 func (c *Collector) Describe(ch chan<- *prometheus.Desc) {

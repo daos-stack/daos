@@ -38,7 +38,8 @@ type telemConfigCmd struct {
 	logCmd
 	cfgCmd
 	jsonOutputCmd
-	For string `long:"for" short:"f" default:"prometheus" description:"Telemetry system to configure"`
+	InstallDir string `long:"install-dir" short:"i" description:"Install directory for telemetry binary"`
+	System     string `long:"system" short:"s" default:"prometheus" description:"Telemetry system to configure"`
 }
 
 func (cmd *telemConfigCmd) fetchAsset(repo, platform string) (*os.File, error) {
@@ -117,6 +118,10 @@ func (cmd *telemConfigCmd) fetchAsset(repo, platform string) (*os.File, error) {
 }
 
 func (cmd *telemConfigCmd) findInstallPath() (string, error) {
+	if cmd.InstallDir != "" {
+		return cmd.InstallDir, nil
+	}
+
 	path := os.Getenv("PATH")
 	for _, dir := range filepath.SplitList(path) {
 		if err := unix.Access(dir, unix.W_OK); err == nil {
@@ -290,14 +295,14 @@ func (cmd *telemConfigCmd) configurePrometheus() (*installInfo, error) {
 }
 
 func (cmd *telemConfigCmd) Execute(_ []string) error {
-	switch strings.ToLower(cmd.For) {
+	switch strings.ToLower(cmd.System) {
 	case "prometheus":
 		if _, err := cmd.configurePrometheus(); err != nil {
 			return err
 		}
 		return nil
 	default:
-		return errors.Errorf("unsupported telemetry system: %q", cmd.For)
+		return errors.Errorf("unsupported telemetry system: %q", cmd.System)
 	}
 }
 
@@ -310,7 +315,7 @@ func (cmd *telemRunCmd) runTelemetry(bin string, args ...string) error {
 }
 
 func (cmd *telemRunCmd) Execute(_ []string) error {
-	switch strings.ToLower(cmd.For) {
+	switch strings.ToLower(cmd.System) {
 	case "prometheus":
 		promInfo, err := cmd.configurePrometheus()
 		if err != nil {
@@ -324,6 +329,6 @@ func (cmd *telemRunCmd) Execute(_ []string) error {
 			"--storage.tsdb.path", dataPath,
 		)
 	default:
-		return errors.Errorf("unsupported telemetry system: %q", cmd.For)
+		return errors.Errorf("unsupported telemetry system: %q", cmd.System)
 	}
 }

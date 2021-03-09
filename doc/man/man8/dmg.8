@@ -1,4 +1,4 @@
-.TH dmg 1 "25 February 2021"
+.TH dmg 1 "9 March 2021"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -601,7 +601,10 @@ Configure telemetry
 \fBUsage\fP: telemetry config [config-OPTIONS]
 .TP
 .TP
-\fB\fB\-f\fR, \fB\-\-for\fR <default: \fI"prometheus"\fR>\fP
+\fB\fB\-i\fR, \fB\-\-install-dir\fR\fP
+Install directory for telemetry binary
+.TP
+\fB\fB\-s\fR, \fB\-\-system\fR <default: \fI"prometheus"\fR>\fP
 Telemetry system to configure
 .SS telemetry run
 Launch telemetry system
@@ -609,7 +612,10 @@ Launch telemetry system
 \fBUsage\fP: telemetry run [run-OPTIONS]
 .TP
 .TP
-\fB\fB\-f\fR, \fB\-\-for\fR <default: \fI"prometheus"\fR>\fP
+\fB\fB\-i\fR, \fB\-\-install-dir\fR\fP
+Install directory for telemetry binary
+.TP
+\fB\fB\-s\fR, \fB\-\-system\fR <default: \fI"prometheus"\fR>\fP
 Telemetry system to configure
 .SS version
 Print dmg version

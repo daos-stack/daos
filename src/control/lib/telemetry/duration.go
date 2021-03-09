@@ -26,18 +26,18 @@ type Duration struct {
 }
 
 func (d *Duration) Value() time.Duration {
-	if d.handle == nil {
-		return 0
+	if d.handle == nil || d.node == nil {
+		return BadDuration
 	}
 
 	var tms C.struct_timespec
 
-	res := C.d_tm_get_duration(&tms, &d.stats, d.handle.shmem, d.node, C.CString(d.Name()))
+	res := C.d_tm_get_duration(&tms, &d.stats, d.handle.shmem, d.node, nil)
 	if res == C.DER_SUCCESS {
 		return time.Duration(tms.tv_sec)*time.Second + time.Duration(tms.tv_nsec)
 	}
 
-	return 0
+	return BadDuration
 }
 
 func newDuration(hdl *handle, path string, name *string, node *C.struct_d_tm_node_t) *Duration {

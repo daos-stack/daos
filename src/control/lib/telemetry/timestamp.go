@@ -27,11 +27,11 @@ type Timestamp struct {
 
 func (t *Timestamp) Value() time.Time {
 	zero := time.Time{}
-	if t.handle == nil {
+	if t.handle == nil || t.node == nil {
 		return zero
 	}
 	var clk C.time_t
-	res := C.d_tm_get_timestamp(&clk, t.handle.shmem, t.node, C.CString(t.Name()))
+	res := C.d_tm_get_timestamp(&clk, t.handle.shmem, t.node, nil)
 	if res == C.DER_SUCCESS {
 		return time.Unix(int64(clk), 0)
 	}

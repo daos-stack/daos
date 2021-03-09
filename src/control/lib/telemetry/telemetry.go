@@ -13,42 +13,6 @@ package telemetry
 
 #include "gurt/telemetry_common.h"
 #include "gurt/telemetry_consumer.h"
-
-static uint64_t
-get_min_int(struct d_tm_stats_t *stats)
-{
-	return stats->dtm_min.min_int;
-}
-
-static double
-get_min_float(struct d_tm_stats_t *stats)
-{
-	return stats->dtm_min.min_float;
-}
-
-static uint64_t
-get_max_int(struct d_tm_stats_t *stats)
-{
-	return stats->dtm_max.max_int;
-}
-
-static double
-get_max_float(struct d_tm_stats_t *stats)
-{
-	return stats->dtm_max.max_float;
-}
-
-static uint64_t
-get_sum_int(struct d_tm_stats_t *stats)
-{
-	return stats->dtm_sum.sum_int;
-}
-
-static double
-get_sum_float(struct d_tm_stats_t *stats)
-{
-	return stats->dtm_sum.sum_float;
-}
 */
 import "C"
 
@@ -59,6 +23,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/pkg/errors"
@@ -73,6 +38,11 @@ const (
 	MetricTypeGauge     MetricType = C.D_TM_GAUGE
 	MetricTypeSnapshot  MetricType = C.D_TM_TIMER_SNAPSHOT
 	MetricTypeTimestamp MetricType = C.D_TM_TIMESTAMP
+
+	BadUintVal  = ^uint64(0)
+	BadFloatVal = float64(BadUintVal)
+	BadIntVal   = int64(BadUintVal >> 1)
+	BadDuration = time.Duration(BadIntVal)
 )
 
 type (
@@ -240,6 +210,18 @@ func (mb *metricBase) String() string {
 	return strings.TrimSpace(string(buf[:bytes.Index(buf, []byte{0})]))
 }
 
+func (sm *statsMetric) FloatMin() float64 {
+	return float64(sm.stats.dtm_min)
+}
+
+func (sm *statsMetric) FloatMax() float64 {
+	return float64(sm.stats.dtm_max)
+}
+
+func (sm *statsMetric) FloatSum() float64 {
+	return float64(sm.stats.dtm_sum)
+}
+
 func (sm *statsMetric) Mean() float64 {
 	return float64(sm.stats.mean)
 }
@@ -250,30 +232,6 @@ func (sm *statsMetric) StdDev() float64 {
 
 func (sm *statsMetric) SampleSize() uint64 {
 	return uint64(sm.stats.sample_size)
-}
-
-func getStatsMinInt(stats *C.struct_d_tm_stats_t) uint64 {
-	return uint64(C.get_min_int(stats))
-}
-
-func getStatsMaxInt(stats *C.struct_d_tm_stats_t) uint64 {
-	return uint64(C.get_max_int(stats))
-}
-
-func getStatsMinFloat(stats *C.struct_d_tm_stats_t) float64 {
-	return float64(C.get_min_float(stats))
-}
-
-func getStatsMaxFloat(stats *C.struct_d_tm_stats_t) float64 {
-	return float64(C.get_max_float(stats))
-}
-
-func getStatsSumInt(stats *C.struct_d_tm_stats_t) uint64 {
-	return uint64(C.get_sum_int(stats))
-}
-
-func getStatsSumFloat(stats *C.struct_d_tm_stats_t) float64 {
-	return float64(C.get_sum_float(stats))
 }
 
 func Init(parent context.Context, idx uint32) (context.Context, error) {
@@ -304,13 +262,9 @@ func visit(hdl *handle, node *C.struct_d_tm_node_t, pathComps []string, out chan
 	}
 	path := strings.Join(pathComps, "/")
 	name := C.GoString((*C.char)(C.d_tm_conv_ptr(hdl.shmem, unsafe.Pointer(node.dtn_name))))
-	//fmt.Printf("visiting: %q/%q (%p)\n", path, name, node)
 
 	switch node.dtn_type {
 	case C.D_TM_DIRECTORY:
-		/*if name != "" {
-			pathComps = append(pathComps, name)
-		}*/
 		next = (*C.struct_d_tm_node_t)(C.d_tm_conv_ptr(hdl.shmem, unsafe.Pointer(node.dtn_child)))
 		if next != nil {
 			visit(hdl, next, append(pathComps, name), out)
@@ -320,7 +274,6 @@ func visit(hdl *handle, node *C.struct_d_tm_node_t, pathComps []string, out chan
 	case C.D_TM_COUNTER:
 		out <- newCounter(hdl, path, &name, node)
 	default:
-		//fmt.Printf("%s: metric type 0x%x not supported yet\n", name, node.dtn_type)
 	}
 
 	next = (*C.struct_d_tm_node_t)(C.d_tm_conv_ptr(hdl.shmem, unsafe.Pointer(node.dtn_sibling)))
@@ -337,12 +290,15 @@ func CollectMetrics(ctx context.Context, dirname string, out chan<- Metric) erro
 
 	node := hdl.root
 
-	/*if dirname != "/" && dirname != "" {
-		node = FindMetric(shmemRoot, dirname)
-	}*/
+	if dirname != "/" && dirname != "" {
+		node, err = findNode(hdl, dirname)
+		if err != nil {
+			return errors.Wrapf(err, "unable to find %s", dirname)
+		}
+	}
 
 	if node == nil {
-		return errors.Errorf("Directory or metric:[%s] was not found", dirname)
+		return errors.Errorf("directory or metric:[%s] was not found", dirname)
 	}
 
 	var nl *C.struct_d_tm_nodeList_t
@@ -351,11 +307,8 @@ func CollectMetrics(ctx context.Context, dirname string, out chan<- Metric) erro
 	rc := C.d_tm_list(&nl, hdl.shmem, node, C.int(filter))
 
 	if rc != C.DER_SUCCESS {
-		return errors.Errorf("Unable to find entry for %s.  rc = %d\n", dirname, rc)
+		return errors.Errorf("unable to find entry for %s.  rc = %d\n", dirname, rc)
 	}
-
-	//num := C.d_tm_count_metrics(hdl.shmem, node, C.int(filter))
-	//fmt.Printf("found %d metrics under %q\n", num, dirname)
 
 	var pathComps []string
 	if dirname != "" {

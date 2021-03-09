@@ -33,18 +33,18 @@ func (c *Counter) FloatValue() float64 {
 }
 
 func (c *Counter) Value() uint64 {
-	if c.handle == nil && c.node == nil {
-		return 0
+	if c.handle == nil || c.node == nil {
+		return BadUintVal
 	}
 
 	var val C.uint64_t
 
-	res := C.d_tm_get_counter(&val, c.handle.shmem, c.node, C.CString(c.Name()))
+	res := C.d_tm_get_counter(&val, c.handle.shmem, c.node, nil)
 	if res == C.DER_SUCCESS {
 		return uint64(val)
 	}
 
-	return 0
+	return BadUintVal
 }
 
 func newCounter(hdl *handle, path string, name *string, node *C.struct_d_tm_node_t) *Counter {
