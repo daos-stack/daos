@@ -553,8 +553,6 @@ tc_log_msg(crt_context_t ctx, crt_group_t *grp, d_rank_t rank,
 		D_WARN("Messaage logged timed out: %s\n", msg);
 		crt_req_abort(rpc_req);
 		goto cleanup;
-	} else {
-		D_INFO("Message logged to rank %d:  %s\n", rank, msg);
 	}
 
 	/* Decrement reference */
