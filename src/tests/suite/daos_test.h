@@ -408,8 +408,8 @@ run_daos_sub_tests_only(char *test_name, const struct CMUnitTest *tests,
 			int tests_size, int *sub_tests, int sub_tests_size);
 
 void rebuild_io(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr);
-void rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
-			 bool discard);
+void rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr);
+void rebuild_io_verify(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr);
 void dfs_ec_rebuild_io(void **state, int *shards, int shards_nr);
 
 void rebuild_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
