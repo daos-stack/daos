@@ -1458,10 +1458,6 @@ agg_process_holes_ult(void *arg)
 	iod.iod_size = entry->ae_rsize;
 	iod.iod_nr = ext_cnt;
 	iod.iod_recxs = stripe_ud->asu_recxs;
-	D_PRINT("Extent cnt: %u\n", ext_cnt);
-	for (i = 0; i < ext_cnt; i++)
-		D_PRINT("idx: %lu, nr: %lu\n", iod.iod_recxs[i].rx_idx,
-			iod.iod_recxs[i].rx_nr);
 	entry->ae_sgl.sg_nr = 1;
 	entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_len = ext_cnt * ext_tot_len *
 								entry->ae_rsize;
@@ -1471,7 +1467,7 @@ agg_process_holes_ult(void *arg)
 		rc = dsc_obj_fetch(entry->ae_obj_hdl,
 				   entry->ae_cur_stripe.as_hi_epoch,
 				   &entry->ae_dkey, 1, &iod, &entry->ae_sgl,
-				   NULL, 0, NULL);
+				   NULL, 0, NULL, NULL);
 		if (rc) {
 			D_ERROR("dsc_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
 			goto out;
@@ -1601,7 +1597,7 @@ agg_process_holes(struct ec_agg_entry *entry)
 		rc = *status;
 		goto ev_out;
 	}
-	/* Update local vos with replicate */
+	/* Update local vos with replicated extents */
 	iod.iod_name = entry->ae_akey;
 	iod.iod_type = DAOS_IOD_ARRAY;
 	iod.iod_size = entry->ae_rsize;
@@ -1618,8 +1614,6 @@ agg_process_holes(struct ec_agg_entry *entry)
 				    &entry->ae_sgl);
 		if (rc) {
 			D_ERROR("vos_update_begin failed: "DF_RC"\n",
-				DP_RC(rc));
-			D_PRINT("vos_update_begin failed: "DF_RC"\n",
 				DP_RC(rc));
 			goto ev_out;
 		}

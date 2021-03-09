@@ -684,73 +684,64 @@ verify_rp1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 						  i * len * k + len,
 						  len,
 						  j, true, false, 0);
-			//ec_setup_single_recx_data(ctx, EC_SPECIFIED,
-						  //i * k * len,
-						  //len,
-						  //j, false, false, 0);
 			memset(&ctx->fetch_iom, 0, sizeof(daos_iom_t));
 			ctx->fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
-			ctx->fetch_iod.iod_recxs[0].rx_idx = i * len + len;
+			ctx->fetch_iod.iod_recxs[0].rx_idx = i * k * len + len;
 			ctx->fetch_iod.iod_recxs[0].rx_nr = len;
 			ctx->iom_recx.rx_nr = len;
-			ctx->iom_recx.rx_idx = i * len + len;
+			ctx->iom_recx.rx_idx = i * k *len + len;
 			rc = dc_obj_fetch_task_create(ctx->oh, DAOS_TX_NONE, 0,
 						      &ctx->dkey, 1,
 						      DIOF_TO_SPEC_SHARD,
 						      &ctx->fetch_iod,
 						      &ctx->fetch_sgl,
 						      &ctx->fetch_iom, &shard,
-						      NULL, NULL, &task);
+						      NULL, NULL, NULL, &task);
 			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
 			assert_rc_equal(rc, 0);
 			/* verify replicas on parity tgt */
-			//assert_int_equal(ctx->fetch_iom.iom_nr_out, 2);
-			D_PRINT("cell 2 - i: %d, j: %d, ctx->fetch_iom.iom_nr_out: %u\n",
-				i,j,ctx->fetch_iom.iom_nr_out);
+			assert_int_equal(ctx->fetch_iom.iom_nr_out, 1);
 			task = NULL;
 			memset(&ctx->fetch_iom, 0, sizeof(daos_iom_t));
 			ctx->fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
-			ctx->fetch_iod.iod_recxs[0].rx_idx = i * len + 2* len;
+			ctx->fetch_iod.iod_recxs[0].rx_idx = i * k * len +
+				2* len;
 			ctx->fetch_iod.iod_recxs[0].rx_nr = len;
 			ctx->iom_recx.rx_nr = len;
-			ctx->iom_recx.rx_idx = i * len + 2 * len;
+			ctx->iom_recx.rx_idx = i * k * len + 2 * len;
 			rc = dc_obj_fetch_task_create(ctx->oh, DAOS_TX_NONE, 0,
 						      &ctx->dkey, 1,
 						      DIOF_TO_SPEC_SHARD,
 						      &ctx->fetch_iod,
 						      &ctx->fetch_sgl,
 						      &ctx->fetch_iom, &shard,
-						      NULL, NULL, &task);
+						      NULL, NULL, NULL, &task);
 			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
 			assert_rc_equal(rc, 0);
 			/* verify replicas on parity tgt */
-			//assert_int_equal(ctx->fetch_iom.iom_nr_out, 2);
-			D_PRINT("cell 3 - i: %d, j: %d, ctx->fetch_iom.iom_nr_out: %u\n",
-				i,j,ctx->fetch_iom.iom_nr_out);
+			assert_int_equal(ctx->fetch_iom.iom_nr_out, 1);
 			task = NULL;
 			memset(&ctx->fetch_iom, 0, sizeof(daos_iom_t));
 			ctx->fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
-			ctx->fetch_iod.iod_recxs[0].rx_idx = i * len + 3* len;
+			ctx->fetch_iod.iod_recxs[0].rx_idx = i * k * len +
+				3* len;
 			ctx->fetch_iod.iod_recxs[0].rx_nr = len;
 			ctx->iom_recx.rx_nr = len;
-			ctx->iom_recx.rx_idx = i * len + 3 * len;
+			ctx->iom_recx.rx_idx = i * k * len + 3 * len;
 			rc = dc_obj_fetch_task_create(ctx->oh, DAOS_TX_NONE, 0,
 						      &ctx->dkey, 1,
 						      DIOF_TO_SPEC_SHARD,
 						      &ctx->fetch_iod,
 						      &ctx->fetch_sgl,
 						      &ctx->fetch_iom, &shard,
-						      NULL, NULL, &task);
+						      NULL, NULL, NULL, &task);
 			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
 			assert_rc_equal(rc, 0);
 			/* verify replicas on parity tgt */
-			//assert_int_equal(ctx->fetch_iom.iom_nr_out, 2);
-			D_PRINT("cell 4 - i: %d, j: %d, ctx->fetch_iom.iom_nr_out: %u\n\n",
-				i,j,ctx->fetch_iom.iom_nr_out);
-
+			assert_int_equal(ctx->fetch_iom.iom_nr_out, 1);
 			task = NULL;
 			memset(&ctx->fetch_iom, 0, sizeof(daos_iom_t));
 			ctx->fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
@@ -764,7 +755,7 @@ verify_rp1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 						      &ctx->fetch_iod,
 						      &ctx->fetch_sgl,
 						      &ctx->fetch_iom, &shard,
-						      NULL, NULL, &task);
+						      NULL, NULL, NULL, &task);
 			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
 			assert_rc_equal(rc, 0);
