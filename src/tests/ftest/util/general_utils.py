@@ -405,7 +405,8 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
         for item in results
         if expect_rc is not None and item["exit_status"] != expect_rc]
     if verbose or bad_exit_status:
-        log.info("Command: %s\nResults:", command)
+        log.info("Command: %s", command)
+        log.info("Results:")
         for result in results:
             log.info(
                 "  %s: exit_status=%s, interrupted=%s:",
