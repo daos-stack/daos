@@ -241,7 +241,7 @@ install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
 %endif
 mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
 mv %{?buildroot}/%{_sysconfdir}/daos/bash_completion.d %{?buildroot}/%{_sysconfdir}
-mvn clean install -DskipITs -Ddaos.install.path=src/ --file src/client/java/daos-java/pom.xml  -Dgpg.skip -Din-tree=true -X >> /var/tmp/maven_output.log ; cat /var/tmp/maven_output.log
+mvn clean install -DskipITs -Ddaos.install.path=src/ --file src/client/java/daos-java/pom.xml  -Dgpg.skip -Din-tree=true -X
 cp -r src/client/java %{?buildroot}/%{_prefix}/lib/daos/TESTING/
 
 %pre server

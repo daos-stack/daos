@@ -34,6 +34,8 @@ if [ -d /var/cache/pbuilder/ ]; then
     exit 0
 fi
 
+cat /var/tmp/maven_output.log
+
 mockroot="/var/lib/mock/${CHROOT_NAME}"
 cat "$mockroot"/result/{root,build}.log 2>/dev/null || true
 
