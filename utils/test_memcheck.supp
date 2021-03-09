@@ -3,7 +3,7 @@
    Memcheck:Leak
    ...
    fun:calloc
-   fun:d_calloc
+   ...
    fun:vea_reserve
    fun:ut_*
    obj:/usr/lib64/libcmocka.so.*
@@ -69,7 +69,7 @@
    Memcheck:Leak
    ...
    fun:calloc
-   fun:d_calloc
+   ...
    fun:drpc_call
    fun:request_credentials_via_drpc
    fun:dc_sec_request_creds
