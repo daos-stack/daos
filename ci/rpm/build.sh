@@ -25,9 +25,14 @@ SCONS_ARGS="${SCONS_FAULTS_ARGS}"
 : "${CHROOT_NAME:='epel-7-x86_64'}"
 : "${TARGET:='centos7'}"
 
+if [ -n "$BULLSEYE" ]; then
+  COV_REPO="https://repo.dc.hpdd.intel.com/repository/bullseye-el-7-x86_64/"
+  JOB_REPOS="JOB_REPOS=\"${COV_REPO}\""
+fi
+
 rm -rf "artifacts/${TARGET}/"
 mkdir -p "artifacts/${TARGET}/"
 DEBEMAIL="$DAOS_EMAIL" DEBFULLNAME="$DAOS_FULLNAME" \
-TOPDIR=$PWD make CHROOT_NAME="${CHROOT_NAME}" \
+TOPDIR=$PWD make CHROOT_NAME="${CHROOT_NAME}" ${JOB_REPOS} \
     EXTERNAL_RPM_BUILD_OPTIONS="${EXTERNAL_RPM_BUILD_OPTIONS}" \
     SCONS_ARGS="${SCONS_ARGS}" -C utils/rpms chrootbuild

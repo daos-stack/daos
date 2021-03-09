@@ -215,12 +215,16 @@ scons %{?_smp_mflags}                 \
       %{?buildroot}%{_prefix}         \
       %{?buildroot}%{conf_dir}        \
       USE_INSTALLED=all               \
+      COMPILER=covc                   \
       CONF_DIR=%{conf_dir}            \
       PREFIX=%{_prefix}               \
       %{?scons_args}
 
 BUILDROOT="%{?buildroot}"
 PREFIX="%{?_prefix}"
+
+cp test.cov %{?buildroot}/usr/lib/daos/TESTING/ftest/
+
 mkdir -p %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{?buildroot}/%{_unitdir}
