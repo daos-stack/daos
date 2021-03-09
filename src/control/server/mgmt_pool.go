@@ -225,6 +225,15 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return nil, errors.New("pool request contains zero target ranks")
 	}
 
+	// Clamp the maximum allowed svc replicas to the smaller of requested
+	// storage ranks or MaxPoolServiceReps.
+	maxSvcReps := func(allRanks int) uint32 {
+		if allRanks > MaxPoolServiceReps {
+			return uint32(MaxPoolServiceReps)
+		}
+		return uint32(allRanks)
+	}(len(req.GetRanks()))
+
 	// Set the number of service replicas to a reasonable default
 	// if the request didn't specify. Note that the number chosen
 	// should not be even in order to work best with the raft protocol's
@@ -234,12 +243,15 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		if len(req.GetRanks()) < DefaultPoolServiceReps {
 			req.Numsvcreps = 1
 		}
-	} else if req.GetNumsvcreps() > MaxPoolServiceReps {
-		return nil, FaultPoolInvalidServiceReps
+	} else if req.GetNumsvcreps() > maxSvcReps {
+		return nil, FaultPoolInvalidServiceReps(maxSvcReps)
 	}
 
-	// I/O Engine needs the fault domain tree for placement purposes
-	req.FaultDomains = svc.sysdb.FaultDomainTree().ToProto()
+	// IO engine needs the fault domain tree for placement purposes
+	req.FaultDomains, err = svc.membership.CompressedFaultDomainTree(req.Ranks...)
+	if err != nil {
+		return nil, err
+	}
 
 	if err := svc.calculateCreateStorage(req); err != nil {
 		return nil, err
@@ -493,8 +505,12 @@ func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (
 
 	svc.log.Debugf("MgmtSvc.PoolExtend dispatch, req:%+v\n", req)
 
-	// the I/O Engine needs the domain tree for placement purposes
-	req.FaultDomains = svc.sysdb.FaultDomainTree().ToProto()
+	// the IO engine needs the domain tree for placement purposes
+	fdTree, err := svc.membership.CompressedFaultDomainTree(req.Ranks...)
+	if err != nil {
+		return nil, err
+	}
+	req.FaultDomains = fdTree
 
 	svc.log.Debugf("MgmtSvc.PoolExtend forwarding modified req:%+v\n", req)
 

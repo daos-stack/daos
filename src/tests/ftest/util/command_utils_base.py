@@ -32,10 +32,13 @@ class BasicParameter(object):
                 value to assign from the test yaml file. Default is None which
                 will use the object's variable name as the yaml key.
         """
-        self.value = value if value is not None else default
+        self._value = value if value is not None else default
         self._default = default
         self._yaml_key = yaml_key
         self.log = getLogger(__name__)
+
+        # Flag used to indicate if a parameter value has or has not been updated
+        self.updated = True
 
     def __str__(self):
         """Convert this BasicParameter into a string.
@@ -45,6 +48,27 @@ class BasicParameter(object):
 
         """
         return str(self.value) if self.value is not None else ""
+
+    @property
+    def value(self):
+        """Get the value of this setting.
+
+        Returns:
+            object: value currently assigned to the setting
+
+        """
+        return self._value
+
+    @value.setter
+    def value(self, item):
+        """Set the value of this setting.
+
+        Args:
+            item (object): value to assign for the setting
+        """
+        if item != self._value:
+            self._value = item
+            self.updated = True
 
     def get_yaml_value(self, name, test, path):
         """Get the value for the parameter from the test case's yaml file.
@@ -80,9 +104,11 @@ class BasicParameter(object):
             else:
                 # Add the new value to the existing list
                 self.value.append(value)
+            self.updated = True
         elif append and isinstance(self.value, dict):
             # Update the dictionary with the new key/value pairs
             self.value.update(value)
+            self.updated = True
         else:
             # Override the current value with the new value
             self.value = value
@@ -393,8 +419,35 @@ class YamlParameters(ObjectWithParameters):
 
         return yaml_data if self.title is None else {self.title: yaml_data}
 
+    def is_yaml_data_updated(self):
+        """Determine if any of the yaml file parameters have been updated.
+
+        Returns:
+            bool: whether or not a yaml file parameter has been updated
+
+        """
+        yaml_data_updated = False
+        if isinstance(self.other_params, YamlParameters):
+            yaml_data_updated = self.other_params.is_yaml_data_updated()
+        if not yaml_data_updated:
+            for name in self.get_param_names():
+                if getattr(self, name).updated:
+                    yaml_data_updated = True
+                    break
+        return yaml_data_updated
+
+    def reset_yaml_data_updated(self):
+        """Reset each yaml file parameter updated state to False."""
+        if isinstance(self.other_params, YamlParameters):
+            self.other_params.reset_yaml_data_updated()
+        for name in self.get_param_names():
+            getattr(self, name).updated = False
+
     def create_yaml(self, filename=None):
         """Create a yaml file from the parameter values.
+
+        A yaml file will only be created if at least one of its parameter values
+        have be updated (BasicParameter.updated = True).
 
         Args:
             filename (str, optional): the yaml file to generate with the
@@ -403,17 +456,26 @@ class YamlParameters(ObjectWithParameters):
         Raises:
             CommandFailure: if there is an error creating the yaml file
 
+        Returns:
+            bool: whether or not an updated yaml file was created
+
         """
-        if filename is None:
-            filename = self.filename
-        yaml_data = self.get_yaml_data()
-        self.log.info("Writing yaml configuration file %s", filename)
-        try:
-            with open(filename, 'w') as write_file:
-                yaml.dump(yaml_data, write_file, default_flow_style=False)
-        except Exception as error:
-            raise CommandFailure(
-                "Error writing the yaml file {}: {}".format(filename, error))
+        create_yaml = self.is_yaml_data_updated()
+        if create_yaml:
+            # Write a new yaml file if any of the parameters have been updated
+            if filename is None:
+                filename = self.filename
+            yaml_data = self.get_yaml_data()
+            self.log.info("Writing yaml configuration file %s", filename)
+            try:
+                with open(filename, 'w') as write_file:
+                    yaml.dump(yaml_data, write_file, default_flow_style=False)
+            except Exception as error:
+                raise CommandFailure(
+                    "Error writing the yaml file {}: {}".format(
+                        filename, error))
+            self.reset_yaml_data_updated()
+        return create_yaml
 
     def set_value(self, name, value):
         """Set the value for a specified attribute name.

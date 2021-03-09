@@ -108,6 +108,9 @@ rebuild_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	if (rank != src_iv->riv_master_rank)
 		return -DER_IVCB_FORWARD;
 
+	if (src_iv->riv_sync)
+		return 0;
+
 	dst_iv->riv_master_rank = src_iv->riv_master_rank;
 	uuid_copy(dst_iv->riv_pool_uuid, src_iv->riv_pool_uuid);
 
