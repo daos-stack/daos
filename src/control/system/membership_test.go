@@ -74,6 +74,11 @@ func TestSystem_Membership_Get(t *testing.T) {
 }
 
 func TestSystem_Membership_AddRemove(t *testing.T) {
+	dupeRankMember := MockMember(t, 1, MemberStateUnknown)
+	dupeRankMember.UUID = uuid.MustParse(common.MockUUID(2))
+	dupeUUIDMember := MockMember(t, 1, MemberStateUnknown)
+	dupeUUIDMember.Rank = 2
+
 	for name, tc := range map[string]struct {
 		membersToAdd  Members
 		ranksToRemove []Rank
@@ -89,14 +94,23 @@ func TestSystem_Membership_AddRemove(t *testing.T) {
 			Members{},
 			[]error{nil, nil},
 		},
-		"add failure duplicate": {
+		"add failure duplicate rank": {
 			Members{
 				MockMember(t, 1, MemberStateUnknown),
-				MockMember(t, 1, MemberStateUnknown),
+				dupeRankMember,
 			},
 			nil,
 			nil,
-			[]error{nil, &ErrMemberExists{Rank(1)}},
+			[]error{nil, errRankExists(1)},
+		},
+		"add failure duplicate UUID": {
+			Members{
+				MockMember(t, 1, MemberStateUnknown),
+				dupeUUIDMember,
+			},
+			nil,
+			nil,
+			[]error{nil, errUuidExists(dupeUUIDMember.UUID)},
 		},
 		"remove non-existent": {
 			Members{
@@ -141,7 +155,7 @@ func TestSystem_Membership_AddRemove(t *testing.T) {
 	}
 }
 
-func TestSystem_Membership_AddOrReplace(t *testing.T) {
+func TestSystem_Membership_Add(t *testing.T) {
 	m0a := *MockMember(t, 0, MemberStateStopped)
 	m1a := *MockMember(t, 1, MemberStateStopped)
 	m2a := *MockMember(t, 2, MemberStateStopped)
@@ -178,10 +192,6 @@ func TestSystem_Membership_AddOrReplace(t *testing.T) {
 				MockMember(t, 1, MemberStateUnknown),
 				MockMember(t, 2, MemberStateUnknown),
 			},
-		},
-		"rank uuid and address changed after reformat": {
-			Members{&m0a, &m1a, &m2a, &m0b, &m2b, &m1b},
-			Members{&m0b, &m2b, &m1b},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -653,6 +663,7 @@ func TestSystem_Membership_Join(t *testing.T) {
 	fd2 := MustCreateFaultDomainFromString("/dc1/rack9/pdu0/host2")
 
 	curMember := MockMember(t, 0, MemberStateJoined).WithFaultDomain(fd1)
+	newUUID := uuid.New()
 	newMember := MockMember(t, 1, MemberStateJoined).WithFaultDomain(fd2)
 
 	for name, tc := range map[string]struct {
@@ -694,7 +705,7 @@ func TestSystem_Membership_Join(t *testing.T) {
 				MapVersion: 2,
 			},
 		},
-		"rejoin with different rank": {
+		"rejoin with existing UUID and unknown rank": {
 			req: &JoinRequest{
 				Rank:        Rank(42),
 				UUID:        curMember.UUID,
@@ -702,7 +713,27 @@ func TestSystem_Membership_Join(t *testing.T) {
 				FabricURI:   curMember.Addr.String(),
 				FaultDomain: curMember.FaultDomain,
 			},
-			expErr: errors.New("different rank"),
+			expErr: errUuidExists(curMember.UUID),
+		},
+		"rejoin with existing UUID and nil rank": {
+			req: &JoinRequest{
+				Rank:        NilRank,
+				UUID:        curMember.UUID,
+				ControlAddr: curMember.Addr,
+				FabricURI:   curMember.Addr.String(),
+				FaultDomain: curMember.FaultDomain,
+			},
+			expErr: errRankChanged(NilRank, curMember.Rank, curMember.UUID),
+		},
+		"rejoin with different UUID and dupe rank": {
+			req: &JoinRequest{
+				Rank:        curMember.Rank,
+				UUID:        newUUID,
+				ControlAddr: curMember.Addr,
+				FabricURI:   curMember.Addr.String(),
+				FaultDomain: curMember.FaultDomain,
+			},
+			expErr: errUuidChanged(newUUID, curMember.UUID, curMember.Rank),
 		},
 		"successful join": {
 			req: &JoinRequest{
