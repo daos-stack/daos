@@ -685,7 +685,7 @@ verify_rp1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 			ctx->fetch_iod.iod_recxs[0].rx_idx = i * k * len + len;
 			ctx->fetch_iod.iod_recxs[0].rx_nr = len;
 			ctx->iom_recx.rx_nr = len;
-			ctx->iom_recx.rx_idx = i * k *len + len;
+			ctx->iom_recx.rx_idx = i * k * len + len;
 			rc = dc_obj_fetch_task_create(ctx->oh, DAOS_TX_NONE, 0,
 						      &ctx->dkey, 1,
 						      DIOF_TO_SPEC_SHARD,
@@ -702,7 +702,7 @@ verify_rp1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 			memset(&ctx->fetch_iom, 0, sizeof(daos_iom_t));
 			ctx->fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
 			ctx->fetch_iod.iod_recxs[0].rx_idx = i * k * len +
-				2* len;
+				2 * len;
 			ctx->fetch_iod.iod_recxs[0].rx_nr = len;
 			ctx->iom_recx.rx_nr = len;
 			ctx->iom_recx.rx_idx = i * k * len + 2 * len;
@@ -722,7 +722,7 @@ verify_rp1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 			memset(&ctx->fetch_iom, 0, sizeof(daos_iom_t));
 			ctx->fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
 			ctx->fetch_iod.iod_recxs[0].rx_idx = i * k * len +
-				3* len;
+				3 * len;
 			ctx->fetch_iod.iod_recxs[0].rx_nr = len;
 			ctx->iom_recx.rx_nr = len;
 			ctx->iom_recx.rx_idx = i * k * len + 3 * len;
