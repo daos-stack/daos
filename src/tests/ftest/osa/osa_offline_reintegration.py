@@ -9,7 +9,7 @@ import time
 from osa_utils import OSAUtils
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
-# from apricot import skipForTicket
+from apricot import skipForTicket
 
 
 class OSAOfflineReintegration(OSAUtils):
