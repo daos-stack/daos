@@ -847,6 +847,47 @@ rebuild_large_snap(void **state)
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
 
+static void
+rebuild_full_shards(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	int		i;
+
+	skip(); /** DAOS-5758 */
+
+	if (!test_runable(arg, 4))
+		return;
+
+	/* require 4 nodes and 8 targets per node */
+	if (arg->myrank == 0 &&
+	    arg->srv_ntgts / arg->srv_nnodes != 8)
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, OC_RP_2G8, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	/* Insert dkey/akey by different snapshot */
+	for (i = 0; i < 100; i++) {
+		char dkey[20] = { 0 };
+		char akey[20] = { 0 };
+
+		/* Update string for each snapshot */
+		sprintf(dkey, "dkey_%d", i);
+		sprintf(akey, "akey_%d", i);
+		insert_single(dkey, "a_key", 0, "data", 1, DAOS_TX_NONE, &req);
+		insert_single("dkey", akey, 0, "data", 1, DAOS_TX_NONE, &req);
+	}
+
+	ioreq_fini(&req);
+
+	/* rebuild and reintegration to use full shards */
+	rebuild_single_pool_target(arg, 0, -1, false);
+	rebuild_single_pool_target(arg, 3, -1, false);
+	reintegrate_single_pool_target(arg, 0, -1);
+	reintegrate_single_pool_target(arg, 3, -1);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD1: rebuild small rec multiple dkeys",
@@ -879,6 +920,8 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_large_object, rebuild_small_pool_n4_setup, test_teardown},
 	{"REBUILD15: rebuild with 100 snapshot",
 	 rebuild_large_snap, rebuild_small_sub_setup, test_teardown},
+	{"REBUILD16: rebuild with full stripe",
+	 rebuild_full_shards, rebuild_small_pool_n4_setup, test_teardown},
 };
 
 int
