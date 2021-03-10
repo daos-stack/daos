@@ -717,7 +717,8 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 		}
 		d_tm_print_duration(&tms, &stats, name, node->dtn_type, format,
 				    stream);
-		stats_printed = true;
+		if (stats.sample_size > 0)
+			stats_printed = true;
 		break;
 	case D_TM_GAUGE:
 		rc = d_tm_get_gauge(&val, &stats, shmem_root, node, NULL);
@@ -726,7 +727,8 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 			break;
 		}
 		d_tm_print_gauge(val, &stats, name, format, stream);
-		stats_printed = true;
+		if (stats.sample_size > 0)
+			stats_printed = true;
 		break;
 	default:
 		fprintf(stream, "Item: %s has unknown type: 0x%x\n", name,
@@ -772,6 +774,8 @@ d_tm_print_stats(FILE *stream, struct d_tm_stats_t *stats, int format)
 			stats->sample_size);
 		if (stats->sample_size > 2)
 			fprintf(stream, ",%lf", stats->std_dev);
+		else
+			fprintf(stream, ",");
 		return;
 	}
 
@@ -843,8 +847,8 @@ d_tm_print_my_children(uint64_t *shmem_root, struct d_tm_node_t *node,
 /**
  * Prints the header for CSV output
  *
- * \param[in]	extra_fields	A bitmask.  Add D_TM_INCLUDE_TIMESTAMP to print
- *				a header for timestamp data.  Add
+ * \param[in]	extra_fields	A bitmask.  Use D_TM_INCLUDE_TIMESTAMP to print
+ *				a header for timestamp data.  Use
  *				D_TM_INCLUDE_METADATA to print a header for
  *				the metadata.
  * \param[in]	stream		Direct output to this stream (stdout, stderr)

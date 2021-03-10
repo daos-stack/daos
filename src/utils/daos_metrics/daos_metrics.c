@@ -33,7 +33,7 @@ print_usage(const char *prog_name)
 	       "--csv, -C\n"
 	       "\tDisplay data in CSV format\n"
 	       "--tstamp, -T\n"
-	       "\tPrint timestamp when metric was read"
+	       "\tPrint timestamp when metric was read\n"
 	       "\tDefault is no timestamp\n"
 	       "--meta, -M\n"
 	       "\tDisplay associated metric metadata\n"
