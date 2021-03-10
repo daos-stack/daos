@@ -73,7 +73,6 @@ fi
 # creating the /var/run/daos_{agent,server} directories when needed.
 sudo bash -c "set -ex
 
-echo SCHAN15
 chmod 777 /usr/lib/daos/TESTING/ftest/test.cov
 ls -al /usr/lib/daos/TESTING/ftest/
 

@@ -216,7 +216,6 @@ def set_test_environment(args):
     # Update PATH
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
 
-    # SCHAN15
     os.environ["COVFILE"] = "/usr/lib/daos/TESTING/ftest/test.cov"
 
     # Python paths required for functional testing
@@ -829,7 +828,7 @@ def generate_certs():
          daos_test_log_dir])
 
 
-def run_tests(test_files, tag_filter, args):
+def run_tests(test_files, tag_filter, avocado_logs_dir, args):
     """Run or display the test commands.
 
     Args:
@@ -842,12 +841,6 @@ def run_tests(test_files, tag_filter, args):
 
     """
     return_code = 0
-
-    # Determine the location of the avocado logs for archiving or renaming
-    data = get_output(["avocado", "config"]).strip()
-    avocado_logs_dir = re.findall(r"datadir\.paths\.logs_dir\s+(.*)", data)
-    avocado_logs_dir = os.path.expanduser(avocado_logs_dir[0])
-    print("Avocado logs stored in {}".format(avocado_logs_dir))
 
     # Create the base avocado run command
     command_list = [
@@ -913,8 +906,6 @@ def run_tests(test_files, tag_filter, args):
                 return_code |= archive_daos_logs(
                     avocado_logs_dir, test_file, args)
                 return_code |= archive_cart_logs(
-                    avocado_logs_dir, test_file, args)
-                return_code |= archive_cov_usrlib_logs(
                     avocado_logs_dir, test_file, args)
 
                 # Compress any log file that haven't been remotely compressed.
@@ -1065,7 +1056,7 @@ def archive_daos_logs(avocado_logs_dir, test_files, args):
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     task = archive_files(
-        destination, hosts, "{}/*.log*".format(logs_dir), True, True, args)
+        destination, hosts, "{}/*.log*".format(logs_dir), True, args)
 
     # Determine if the command completed successfully across all the hosts
     status = 0
@@ -1077,12 +1068,11 @@ def archive_daos_logs(avocado_logs_dir, test_files, args):
             status |= 32
     return status
 
-def archive_cov_usrlib_logs(avocado_logs_dir, test_files, args):
+def archive_cov_usrlib_logs(avocado_logs_dir, args):
     """Archive daos cov files to the avocado results directory.
 
     Args:
         avocado_logs_dir (str): path to the avocado log files
-        test_files (dict): a list of dictionaries of each test script/yaml file
         args (argparse.Namespace): command line arguments for this program
 
     Returns:
@@ -1090,18 +1080,17 @@ def archive_cov_usrlib_logs(avocado_logs_dir, test_files, args):
 
     """
     # Create a subdirectory in the avocado logs directory for this test
-    destination = os.path.join(avocado_logs_dir, "latest", "daos_covs_usrlib")
+    destination = os.path.join(avocado_logs_dir, "daos_covs_usrlib")
 
-    # Copy any DAOS logs created on any host under test
-    #hosts = get_hosts_from_yaml(test_files["yaml"], args)
+    # Copy any DAOS covs created on all hosts
     hosts = list(args.test_servers)
     hosts.append(socket.gethostname().split(".")[0])
-    print("Archiving host logs from {} in {}".format(hosts, destination))
+    print("Archiving host covs from {} in {}".format(hosts, destination))
 
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     task = archive_files(
-        destination, hosts, "/usr/lib/daos/TESTING/ftest/test.cov", False, False, args)
+        destination, hosts, "/usr/lib/daos/TESTING/ftest/test.cov*", False, args)
 
     # Determine if the command completed successfully across all the hosts
     status = 0
@@ -1131,7 +1120,7 @@ def archive_cart_logs(avocado_logs_dir, test_files, args):
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     task = archive_files(
-        destination, hosts, "{}/*/*log*".format(logs_dir), True, True, args)
+        destination, hosts, "{}/*/*log*".format(logs_dir), True, args)
 
     # Determine if the command completed successfully across all the hosts
     status = 0
@@ -1169,7 +1158,7 @@ def archive_config_files(avocado_logs_dir, args):
     configs_dir = get_temporary_directory(args, base_dir)
     task = archive_files(
         destination, host_list, "{}/*_*_*.yaml".format(configs_dir), False,
-        True, args)
+        args)
 
     status = 0
     if not check_remote_output(task, "archive_config_files"):
@@ -1177,7 +1166,7 @@ def archive_config_files(avocado_logs_dir, args):
     return status
 
 
-def archive_files(destination, hosts, source_files, cart, compress, args):
+def archive_files(destination, hosts, source_files, cart, args):
     """Archive all of the remote files to the destination directory.
 
     Args:
@@ -1205,13 +1194,12 @@ def archive_files(destination, hosts, source_files, cart, compress, args):
 
     command = [
         get_remote_file_command(),
+        "-z",
         "-a \"{}:{}\"".format(this_host, destination),
         "-f \"{}\"".format(source_files),
     ]
     if cart:
         command.append("-c")
-    if compress:
-        command.append("-z")
     if args.logs_threshold:
         command.append("-t \"{}\"".format(args.logs_threshold))
     if args.verbose:
@@ -1922,8 +1910,18 @@ def main():
     # Generate certificate files
     generate_certs()
 
+    # Determine the location of the avocado logs for archiving or renaming
+    data = get_output(["avocado", "config"]).strip()
+    avocado_logs_dir = re.findall(r"datadir\.paths\.logs_dir\s+(.*)", data)
+    avocado_logs_dir = os.path.expanduser(avocado_logs_dir[0])
+    print("Avocado logs stored in {}".format(avocado_logs_dir))
+
     # Run all the tests
-    status = run_tests(test_files, tag_filter, args)
+    status = run_tests(test_files, tag_filter, avocado_logs_dir, args)
+
+    if args.jenkinslog:
+        status |= archive_cov_usrlib_logs(
+            avocado_logs_dir, args)
 
     # Process the avocado run return codes and only treat job and command
     # failures as errors.
