@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from command_utils_base import FormattedParameter, CommandWithParameters
 from command_utils import CommandWithSubCommand
@@ -45,6 +28,8 @@ class DaosCommandBase(CommandWithSubCommand):
             self.sub_command_class = self.ContainerSubCommand()
         elif self.sub_command.value == "object":
             self.sub_command_class = self.ObjectSubCommand()
+        elif self.sub_command.value == "filesystem":
+            self.sub_command_class = self.FilesystemSubCommand()
         else:
             self.sub_command_class = None
 
@@ -524,3 +509,49 @@ class DaosCommandBase(CommandWithSubCommand):
                 super(
                     DaosCommandBase.ObjectSubCommand.DumpSubCommand,
                     self).__init__("dump")
+
+    class FilesystemSubCommand(CommandWithSubCommand):
+        """Defines an object for the daos filesystem sub command."""
+
+        def __init__(self):
+            """Create a daos filesystem subcommand object."""
+            super(DaosCommandBase.FilesystemSubCommand, self).__init__(
+                "/run/daos/filesystem/*", "filesystem")
+
+        def get_sub_command_class(self):
+            # pylint: disable=redefined-variable-type
+            """Get the daos filesystem sub command object."""
+            if self.sub_command.value == "copy":
+                self.sub_command_class = self.CopySubCommand()
+            else:
+                self.sub_command_class = None
+
+        class CommonFilesystemSubCommand(CommandWithParameters):
+            """Defines an object for the common daos filesystem sub-command."""
+
+            def __init__(self, sub_command):
+                """Create a common daos filesystem sub-command object.
+
+                Args:
+                    sub_command (str): sub-command name
+                """
+                super(
+                    DaosCommandBase.FilesystemSubCommand.
+                    CommonFilesystemSubCommand, self).__init__(
+                        "/run/daos/filesystem/{}/*".format(sub_command),
+                        sub_command)
+
+        class CopySubCommand(CommonFilesystemSubCommand):
+            """Defines an object for the daos filesystem copy command."""
+
+            def __init__(self):
+                """Create a daos filesystem copy command object."""
+                super(
+                    DaosCommandBase.FilesystemSubCommand.CopySubCommand,
+                    self).__init__("copy")
+                #   --src=<type>:<pool/cont | path>
+                #   supported types are daos, posix
+                self.src = FormattedParameter("--src={}")
+                #   --src=<type>:<pool/cont | path>
+                #   supported types are daos, posix
+                self.dst = FormattedParameter("--dst={}")

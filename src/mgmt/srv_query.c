@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /*
  * ds_mgmt: Storage Query Methods
@@ -100,7 +83,7 @@ int ds_mgmt_get_bs_state(uuid_t bs_uuid, int *bs_state)
 	ABT_thread_free(&thread);
 
 out:
-	smd_free_dev_info(dev_info);
+	smd_dev_free_info(dev_info);
 	return rc;
 }
 
@@ -218,7 +201,7 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 	ABT_thread_free(&thread);
 
 out:
-	smd_free_dev_info(dev_info);
+	smd_dev_free_info(dev_info);
 	return rc;
 }
 
@@ -455,7 +438,7 @@ ds_mgmt_smd_list_pools(Ctl__SmdPoolResp *resp)
 
 		d_list_del(&pool_info->spi_link);
 		/* Frees spi_tgts, spi_blobs, and pool_info */
-		smd_free_pool_info(pool_info);
+		smd_pool_free_info(pool_info);
 		pool_info = NULL;
 
 		i++;
@@ -466,7 +449,7 @@ ds_mgmt_smd_list_pools(Ctl__SmdPoolResp *resp)
 		d_list_for_each_entry_safe(pool_info, tmp, &pool_list,
 					   spi_link) {
 			d_list_del(&pool_info->spi_link);
-			smd_free_pool_info(pool_info);
+			smd_pool_free_info(pool_info);
 		}
 		for (; i >= 0; i--) {
 			if (resp->pools[i] != NULL) {
@@ -519,7 +502,7 @@ ds_mgmt_dev_state_query(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 		goto out;
 	}
 	strncpy(resp->dev_state,
-		smd_state_enum_to_str(dev_info->sdi_state), buflen);
+		smd_dev_stat2str(dev_info->sdi_state), buflen);
 
 	D_ALLOC(resp->dev_uuid, DAOS_UUID_STR_SIZE);
 	if (resp->dev_uuid == NULL) {
@@ -531,7 +514,7 @@ ds_mgmt_dev_state_query(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 	uuid_unparse_lower(dev_uuid, resp->dev_uuid);
 
 out:
-	smd_free_dev_info(dev_info);
+	smd_dev_free_info(dev_info);
 
 	if (rc != 0) {
 		if (resp->dev_state != NULL)
@@ -672,11 +655,11 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 			DP_UUID(dev_uuid));
 	}
 
-out:
 	dev_info->sdi_state = SMD_DEV_FAULTY;
-	strncpy(resp->dev_state,
-		smd_state_enum_to_str(dev_info->sdi_state), buflen);
-	smd_free_dev_info(dev_info);
+	strncpy(resp->dev_state, smd_dev_stat2str(dev_info->sdi_state), buflen);
+
+out:
+	smd_dev_free_info(dev_info);
 
 	if (rc != 0) {
 		if (resp->dev_state != NULL)
@@ -761,7 +744,7 @@ ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid,
 	}
 
 	/* BIO device state after reintegration should be NORMAL */
-	strncpy(resp->dev_state, smd_state_enum_to_str(SMD_DEV_NORMAL),
+	strncpy(resp->dev_state, smd_dev_stat2str(SMD_DEV_NORMAL),
 		buflen);
 out:
 

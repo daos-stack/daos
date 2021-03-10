@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /*
@@ -205,7 +188,7 @@ example_daos_key_array()
 	 * object (replication, Erasure coding, no protection). In this case, we
 	 * choose max striping with no data prorection - OC_SX.
 	 */
-	daos_obj_generate_id(&oid, 0, OC_SX, 0);
+	daos_obj_generate_oid(coh, &oid, 0, OC_SX, 0, 0);
 
 	/** open DAOS object */
 	rc = daos_obj_open(coh, oid, DAOS_OO_RW, &oh, NULL);
@@ -361,7 +344,7 @@ example_daos_key_sv()
 
 	oid.hi = 0;
 	oid.lo = 2;
-	daos_obj_generate_id(&oid, 0, OC_SX, 0);
+	daos_obj_generate_oid(coh, &oid, 0, OC_SX, 0, 0);
 
 	rc = daos_obj_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	ASSERT(rc == 0, "object open failed with %d", rc);
@@ -500,7 +483,7 @@ example_daos_array()
 	/*
 	 * generate an array objid to encode feature flags and object class to
 	 * the OID. This is a convenience function over the
-	 * daos_obj_generate_id() that adds the required feature flags for an
+	 * daos_obj_generate_oid() that adds the required feature flags for an
 	 * array: DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT | DAOS_OF_ARRAY
 	 */
 	daos_array_generate_id(&oid, OC_SX, true, 0);
@@ -629,7 +612,7 @@ example_daos_kv()
 	oid.hi = 0;
 	oid.lo = 4;
 	/** the KV API requires the flat feature flag be set in the oid */
-	daos_obj_generate_id(&oid, DAOS_OF_KV_FLAT, OC_SX, 0);
+	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, OC_SX, 0, 0);
 
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	ASSERT(rc == 0, "KV open failed with %d", rc);

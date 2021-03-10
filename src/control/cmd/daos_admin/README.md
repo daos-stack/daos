@@ -11,7 +11,7 @@ administration of a DAOS system. For tasks that require elevated privileges
 (e.g. formatting/mounting SCM, preparing NVMe storage, etc.), the `daos_admin`
 helper has been created to consolidate privilege into a single binary that is
 easy to control and audit. This isolation allows the DAOS Control Plane and
-I/O Server processes to run as unprivileged users.
+I/O Engine processes to run as unprivileged users.
 
 In addition to the security isolation provided by `daos_admin`, its process
 isolation simplifies interactions with SPDK and DPDK. Normally, when a process

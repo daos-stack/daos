@@ -1,28 +1,11 @@
 /*
  * (C) Copyright 2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /*
- * This utility shows metrics from the specified IO Server
+ * This utility shows metrics from the specified I/O Engine
  */
 
 #include <getopt.h>
@@ -57,7 +40,7 @@ print_usage(const char *prog_name)
 	printf("Usage: %s [optional arguments]\n"
 	       "\n"
 	       "--srv_idx, -S\n"
-	       "\tShow telemetry data from this IO Server local index "
+	       "\tShow telemetry data from this I/O Engine local index "
 	       "(default 0)\n"
 	       "--path, -p\n"
 	       "\tDisplay metrics at or below the specified path\n"
@@ -194,8 +177,10 @@ main(int argc, char **argv)
 
 failure:
 	printf("Unable to attach to the shared memory for the server index: %d"
-	       "\nMake sure to run the IO server with the same index to "
-	       "initialize the shared memory and populate it with metrics.\n",
+	       "\nMake sure to run the I/O Engine with the same index to "
+	       "initialize the shared memory and populate it with metrics.\n"
+	       "Verify user/group settings match those that started the I/O "
+	       "Engine.\n",
 	       srv_idx);
 	return -1;
 }

@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC       DD_FAC(tests)
 
@@ -565,6 +548,8 @@ akey_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 		fprintf(stderr, "%s failed. rc=%d, epoch=%"PRIu64"\n",
 			op_type == TS_DO_FETCH ? "Fetch" : "Update",
 			rc, *epoch);
+		if (param->pa_rw.verify)
+			dts_credit_return(&ts_ctx, cred);
 		return rc;
 	}
 
@@ -617,8 +602,10 @@ objects_open(void)
 
 	for (i = 0; i < ts_obj_p_cont; i++) {
 		if (!ts_oid_init) {
-			ts_oids[i] = dts_oid_gen(ts_class, 0,
-						 ts_ctx.tsc_mpi_rank);
+			ts_oids[i] = daos_test_oid_gen(
+				ts_mode == TS_MODE_VOS ? DAOS_HDL_INVAL :
+				ts_ctx.tsc_coh, ts_class, 0, 0,
+				ts_ctx.tsc_mpi_rank);
 			if (ts_class == DAOS_OC_R2S_SPEC_RANK)
 				ts_oids[i] = dts_oid_set_rank(ts_oids[i],
 							      RANK_ZERO);

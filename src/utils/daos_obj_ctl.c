@@ -222,8 +222,8 @@ ctl_cmd_run(char opc, char *args)
 		case 'O':
 			ctl_abits |= CTL_ARG_OID;
 			ctl_oid.id_pub.lo = strtoul(&str[2], NULL, 0);
-			daos_obj_generate_id(&ctl_oid.id_pub, 0,
-					     OC_S1, 0);
+			daos_obj_generate_oid(ctl_ctx.tsc_coh, &ctl_oid.id_pub,
+					      0, OC_S1, 0, 0);
 			break;
 		case 'd':
 		case 'D':

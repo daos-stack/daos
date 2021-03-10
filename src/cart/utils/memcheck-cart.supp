@@ -11,60 +11,11 @@
     fun:_dl_open
 }
 {
-   FI leak 1
-   Memcheck:Leak
-   fun:malloc
-   fun:ibv_fork_init
-   fun:fi_ibv_init_info
-   ...
-   fun:crt_hg_ctx_init
-}
-{
-   FI leak 3
-   Memcheck:Leak
-   match-leak-kinds: definite
-   fun:calloc
-   fun:sock_rx_new_buffered_entry
-   fun:sock_pe_progress_rx_pe_entry
-   fun:sock_pe_progress_rx_ctx
-   fun:sock_pe_progress_thread
-   fun:start_thread
-   fun:clone
-}
-{
-   FI leak 4
-   Memcheck:Leak
-   match-leak-kinds: indirect
-   fun:calloc
-   fun:sock_rx_new_buffered_entry
-   fun:sock_pe_progress_rx_pe_entry
-   fun:sock_pe_progress_rx_ctx
-   fun:sock_pe_progress_thread
-   fun:start_thread
-   fun:clone
-}
-{
-   FI leak 5
-   Memcheck:Leak
-   match-leak-kinds: possible
-   fun:malloc
-   fun:strdup
-   fun:fi_param_define@@FABRIC_1.0
-   fun:ofi_hook_init
-   fun:fi_ini
-   fun:fi_getinfo@@FABRIC_1.2
-   fun:na_ofi_getinfo
-   fun:na_ofi_check_protocol
-   ...
-   fun:crt_hg_ctx_init
-   ...
-}
-{
    FI leak 6
    Memcheck:Leak
    match-leak-kinds: possible
    ...
-   obj:/usr/lib64/librdmacm.so.1.1.22.1
+   fun:rdma_bind_addr
    ...
 }
 {
@@ -76,17 +27,6 @@
    ...
 }
 {
-   FI leak 8
-   Memcheck:Leak
-   fun:calloc
-   ...
-   fun:verbs_open_device
-   ...
-   fun:rdma_bind_addr
-   ...
-   fun:fi_verbs_ini
-}
-{
    access-0
    Memcheck:Param
    socketcall.sendto(msg)
@@ -94,101 +34,4 @@
    fun:send
    ...
    fun:sock_pe_progress_thread
-}
-# We couldn't find a rte_log_fini() function or similar on SPDK codebase to
-# suppress the leak warning message. The rte_log_init() function is called
-# from a constructor while loading the SPDK libraries.
-{
-   spdk leak 0
-   Memcheck:Leak
-   match-leak-kinds: reachable
-   fun:calloc
-   fun:rte_log_init
-   ...
-}
-{
-   spdk leak 1
-   Memcheck:Leak
-   match-leak-kinds: reachable
-   fun:calloc
-   fun:spdk_nvme_transport_register
-   ...
-}
-{
-   spdk leak 2
-   Memcheck:Leak
-   match-leak-kinds: reachable
-   fun:calloc
-   fun:spdk_rpc_register_method
-   ...
-}
-{
-   spdk leak 3
-   Memcheck:Leak
-   match-leak-kinds: reachable
-   fun:calloc
-   fun:spdk_rpc_register_alias_deprecated
-   ...
-}
-{
-    CRYPTO leaks malloc
-    Memcheck:Leak
-    match-leak-kinds: reachable
-    fun:malloc
-    ...
-    obj:*/libcrypto.so.1.*
-    ...
-}
-{
-    CRYPTO leaks calloc
-    Memcheck:Leak
-    match-leak-kinds: reachable
-    fun:calloc
-    ...
-    obj:*/libcrypto.so.1.*
-    ...
-}
-{
-   mercury bug/leak 1
-   Memcheck:Addr4
-   fun:OPA_load_int
-   fun:hg_atomic_get32
-   fun:na_ofi_cq_process_event
-   fun:na_ofi_progress
-   fun:NA_Progress
-}
-{
-   mercury bug/leak 2
-   Memcheck:Addr8
-   fun:na_ofi_complete
-   fun:na_ofi_cq_process_event
-   fun:na_ofi_progress
-   fun:NA_Progress
-}
-{
-   orterun --mca pml ob1 leak
-   Memcheck:Param
-   socketcall.sendto(msg)
-   fun:send
-   fun:mca_btl_tcp_send_blocking
-   obj:/usr/lib64/openmpi3/lib/openmpi/mca_btl_tcp.so
-   fun:opal_libevent2022_event_base_loop
-   fun:opal_progress
-   ...
-}
-{
-   libfabric leak
-   Memcheck:Leak
-   match-leak-kinds: definite
-   fun:malloc
-   fun:ofi_rbmap_insert
-   fun:ofi_mr_map_insert
-   fun:sock_regattr
-   fun:sock_reg
-   fun:fi_mr_reg
-   fun:na_ofi_domain_open
-   fun:na_ofi_initialize
-   ...
-   fun:crt_hg_ctx_init
-   ...
 }

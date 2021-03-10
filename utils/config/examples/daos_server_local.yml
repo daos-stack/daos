@@ -5,18 +5,18 @@ access_points: ['localhost']
 # port: 10001
 provider: ofi+sockets
 nr_hugepages: 4096
-control_log_file: /tmp/daos_control.log
+control_log_file: /tmp/daos_server.log
 transport_config:
    allow_insecure: true
 
-servers:
+engines:
 -
   targets: 1
   first_core: 0
   nr_xs_helpers: 0
   fabric_iface: eth0
   fabric_iface_port: 31416
-  log_file: /tmp/daos_server.log
+  log_file: /tmp/daos_engine.0.log
 
   env_vars:
   - DAOS_MD_CAP=1024

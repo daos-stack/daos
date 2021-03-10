@@ -1,30 +1,14 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package system
 
 import (
 	"encoding/json"
+	"fmt"
 	"net"
 
 	"github.com/google/uuid"
@@ -49,6 +33,8 @@ type (
 		FaultDomains *FaultDomainTree
 	}
 )
+
+const rankFaultDomainPrefix = "rank"
 
 // MarshalJSON creates a serialized representation of the MemberRankMap.
 // The member's UUID is used to represent the member in order to
@@ -151,6 +137,14 @@ func (mdb *MemberDatabase) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// memberFaultDomain generates a standardized fault domain for a Member,
+// based on its parent fault domain and rank.
+func memberFaultDomain(m *Member) *FaultDomain {
+	rankDomain := fmt.Sprintf("%s%d", rankFaultDomainPrefix, uint32(m.Rank))
+	// we know the string we're adding is valid, so can't fail
+	return m.FaultDomain.MustCreateChild(rankDomain)
+}
+
 // addMember is responsible for adding a new Member and updating all
 // of the relevant maps.
 func (mdb *MemberDatabase) addMember(m *Member) {
@@ -158,7 +152,11 @@ func (mdb *MemberDatabase) addMember(m *Member) {
 	mdb.Uuids[m.UUID] = m
 	mdb.Addrs.addMember(m.Addr, m)
 
-	if err := mdb.FaultDomains.AddDomain(m.RankFaultDomain()); err != nil {
+	mdb.addToFaultDomainTree(m)
+}
+
+func (mdb *MemberDatabase) addToFaultDomainTree(m *Member) {
+	if err := mdb.FaultDomains.AddDomain(memberFaultDomain(m)); err != nil {
 		panic(err)
 	}
 }
@@ -171,13 +169,9 @@ func (mdb *MemberDatabase) updateMember(m *Member) {
 	cur.state = m.state
 	cur.Info = m.Info
 
-	if err := mdb.FaultDomains.RemoveDomain(cur.RankFaultDomain()); err != nil {
-		panic(err)
-	}
+	mdb.removeFromFaultDomainTree(cur)
 	cur.FaultDomain = m.FaultDomain
-	if err := mdb.FaultDomains.AddDomain(cur.RankFaultDomain()); err != nil {
-		panic(err)
-	}
+	mdb.addToFaultDomainTree(cur)
 }
 
 // removeMember is responsible for removing new Member and updating all
@@ -186,7 +180,11 @@ func (mdb *MemberDatabase) removeMember(m *Member) {
 	delete(mdb.Ranks, m.Rank)
 	delete(mdb.Uuids, m.UUID)
 	mdb.Addrs.removeMember(m)
-	if err := mdb.FaultDomains.RemoveDomain(m.RankFaultDomain()); err != nil {
+	mdb.removeFromFaultDomainTree(m)
+}
+
+func (mdb *MemberDatabase) removeFromFaultDomainTree(m *Member) {
+	if err := mdb.FaultDomains.RemoveDomain(memberFaultDomain(m)); err != nil {
 		panic(err)
 	}
 }

@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of cart, it implements the hash table functions.
@@ -200,6 +183,35 @@ d_hash_murmur64(const unsigned char *key, unsigned int key_len,
 	mur ^= mur >> MUR_ROTATE;
 
 	return mur;
+}
+
+/**
+ * Jump Consistent Hash Algorithm that provides a bucket location
+ * for the given key. This algorithm hashes a minimal (1/n) number
+ * of keys to a new bucket when extending the number of buckets.
+ *
+ * \param[in]   key             A unique key representing the object that
+ *                              will be placed in the bucket.
+ * \param[in]   num_buckets     The total number of buckets the hashing
+ *                              algorithm can choose from.
+ *
+ * \return                      Returns an index ranging from 0 to
+ *                              num_buckets representing the bucket
+ *                              the given key hashes to.
+ */
+uint32_t
+d_hash_jump(uint64_t key, uint32_t num_buckets)
+{
+	int64_t z = -1;
+	int64_t y = 0;
+
+	while (y < num_buckets) {
+		z = y;
+		key = key * 2862933555777941757ULL + 1;
+		y = (z + 1) * ((double)(1LL << 31) /
+			       ((double)((key >> 33) + 1)));
+	}
+	return z;
 }
 
 /******************************************************************************

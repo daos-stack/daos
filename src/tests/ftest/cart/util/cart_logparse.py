@@ -55,14 +55,16 @@ class InvalidLogFile(Exception):
     """Exception to be raised when log file cannot be parsed"""
     pass
 
-LOG_LEVELS = {'FATAL' :1,
-              'EMRG'  :2,
-              'CRIT'  :3,
-              'ERR'   :4,
-              'WARN'  :5,
-              'NOTE'  :6,
-              'INFO'  :7,
-              'DBUG'  :8}
+LOG_LEVELS = {
+    'EMIT'  :1,
+    'FATAL' :2,
+    'EMRG'  :3,
+    'CRIT'  :4,
+    'ERR'   :5,
+    'WARN'  :6,
+    'NOTE'  :7,
+    'INFO'  :8,
+    'DBUG'  :9}
 
 # Make a reverse lookup from log level to name.
 LOG_NAMES = {}
@@ -621,7 +623,7 @@ class LogIter():
             if not line:
                 raise StopIteration
             fields = line.split(' ', 8)
-            if len(fields) < 6 or len(fields[0]) != 17:
+            if len(fields) < 6 or len(fields[0]) != 17 or fields[0][2] != '/':
                 return LogRaw(line)
             return LogLine(line)
 

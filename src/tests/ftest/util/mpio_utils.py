@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2020 Intel Corporation.
+  (C) Copyright 2019-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Governments rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from __future__ import print_function
 
@@ -92,6 +75,10 @@ class MpioUtils():
         Raises:
             MpioFailed: for an invalid test name or test execution failure
 
+        Return:
+            CmdResult: an avocado.utils.process CmdResult object containing the
+                result of the command execution.
+
         """
         print("self.mpichinstall: {}".format(self.mpichinstall))
 
@@ -126,7 +113,6 @@ class MpioUtils():
         # Setup the commands to run for this test name
         commands = []
         if test_name == "romio":
-            env = None
             commands.append(
                 "{} -fname=daos:test1 -subset".format(
                     executables[test_name][0]))
@@ -151,8 +137,11 @@ class MpioUtils():
         for command in commands:
             print("run command: {}".format(command))
             try:
-                run_command(command, timeout=None, verbose=True, env=env)
+                result = run_command(
+                    command, timeout=None, verbose=True, env=env)
 
             except DaosTestError as excep:
                 raise MpioFailed(
                     "<Test FAILED> \nException occurred: {}".format(str(excep)))
+
+        return result

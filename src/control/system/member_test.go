@@ -1,34 +1,15 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// c6xuplcrnless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package system
 
 import (
-	"net"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -113,39 +94,6 @@ func TestSystem_Member_MarshalUnmarshalJSON(t *testing.T) {
 	}
 }
 
-func TestSystem_Member_RankFaultDomain(t *testing.T) {
-	for name, tc := range map[string]struct {
-		rank        Rank
-		faultDomain *FaultDomain
-		expResult   *FaultDomain
-	}{
-		"nil fault domain": {
-			expResult: MustCreateFaultDomain("rank0"),
-		},
-		"empty fault domain": {
-			rank:        Rank(2),
-			faultDomain: MustCreateFaultDomain(),
-			expResult:   MustCreateFaultDomain("rank2"),
-		},
-		"existing fault domain": {
-			rank:        Rank(1),
-			faultDomain: MustCreateFaultDomain("one", "two"),
-			expResult:   MustCreateFaultDomain("one", "two", "rank1"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			m := NewMember(tc.rank, uuid.New().String(), "dontcare", &net.TCPAddr{}, MemberStateJoined).
-				WithFaultDomain(tc.faultDomain)
-
-			result := m.RankFaultDomain()
-
-			if diff := cmp.Diff(tc.expResult, result); diff != "" {
-				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
-			}
-		})
-	}
-}
-
 func TestSystem_Member_Convert(t *testing.T) {
 	membersIn := Members{MockMember(t, 1, MemberStateJoined)}
 	membersOut := Members{}
@@ -163,8 +111,8 @@ func TestSystem_MemberResult_Convert(t *testing.T) {
 	}
 	mrsOut := MemberResults{}
 
-	AssertTrue(t, mrsIn.HasErrors(), "")
-	AssertFalse(t, mrsOut.HasErrors(), "")
+	CmpErr(t, errors.New("failed ranks 1-2"), mrsIn.Errors())
+	CmpErr(t, nil, mrsOut.Errors())
 
 	if err := convert.Types(mrsIn, &mrsOut); err != nil {
 		t.Fatal(err)

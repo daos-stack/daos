@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=pylint-too-many-lines
 from __future__ import print_function
@@ -654,8 +637,12 @@ class DaosObj(object):
         else:
             obj_cls_int = get_object_class(objcls).value
 
-        func.restype = daos_cref.DaosObjId
-        self.c_oid = func(obj_cls_int, 0, 0)
+        self.c_oid = daos_cref.DaosObjId()
+        ret = func(self.container.coh, ctypes.byref(self.c_oid), 0, obj_cls_int,
+                   0, 0)
+        if ret != 0:
+            raise DaosApiError("Object generate oid returned non-zero. RC: {0} "
+                               .format(ret))
 
         if rank is not None:
             self.c_oid.hi |= rank << 24
@@ -724,7 +711,7 @@ class DaosObj(object):
             del self.tgt_rank_list[:]
             for i in range(0, shards):
                 self.tgt_rank_list.append(
-                    obj_layout_ptr[0].ol_shards[0][0].os_shard_data[i].sd_rank)
+                    obj_layout_ptr[0].ol_shards[0][0].os_shard_loc[i].sd_rank)
         else:
             raise DaosApiError("get_layout returned. RC: {0}".format(ret))
 
@@ -2194,7 +2181,7 @@ class DaosContext(object):
             'disconnect-pool': self.libdaos.daos_pool_disconnect,
             'exclude-target':  self.libdaos.daos_pool_tgt_exclude,
             'fetch-obj':       self.libdaos.daos_obj_fetch,
-            'generate-oid':    self.libtest.dts_oid_gen,
+            'generate-oid':    self.libdaos.daos_obj_generate_oid,
             'get-cont-attr':   self.libdaos.daos_cont_get_attr,
             'get-pool-attr':   self.libdaos.daos_pool_get_attr,
             'get-layout':      self.libdaos.daos_obj_layout_get,

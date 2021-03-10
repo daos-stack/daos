@@ -1,24 +1,7 @@
 //
 // (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package system
@@ -461,8 +444,11 @@ func (db *Database) GroupMap() (*GroupMap, error) {
 
 	gm := newGroupMap(db.data.MapVersion)
 	for _, srv := range db.data.Members.Ranks {
+		if srv.state&AvailableMemberFilter == 0 {
+			continue
+		}
 		gm.RankURIs[srv.Rank] = srv.FabricURI
-		if srv.state&AvailableMemberFilter > 0 && db.isReplica(srv.Addr) {
+		if db.isReplica(srv.Addr) {
 			gm.MSRanks = append(gm.MSRanks, srv.Rank)
 		}
 	}
@@ -640,15 +626,18 @@ func (db *Database) AddMember(newMember *Member) error {
 	db.Lock()
 	defer db.Unlock()
 
-	mu := &memberUpdate{Member: newMember}
-	if cur, err := db.FindMemberByUUID(newMember.UUID); err == nil {
-		return &ErrMemberExists{Rank: cur.Rank}
+	if _, err := db.FindMemberByUUID(newMember.UUID); err == nil {
+		return errUuidExists(newMember.UUID)
+	}
+	if _, err := db.FindMemberByRank(newMember.Rank); err == nil {
+		return errRankExists(newMember.Rank)
 	}
 
 	if err := db.manageVoter(newMember, raftOpAddMember); err != nil {
 		return err
 	}
 
+	mu := &memberUpdate{Member: newMember}
 	if newMember.Rank.Equals(NilRank) {
 		newMember.Rank = db.data.NextRank
 		mu.NextRank = true

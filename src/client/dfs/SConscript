@@ -33,9 +33,7 @@ def scons():
 
     configure_lustre(denv)
 
-    denv.AppendUnique(CPPDEFINES=['-DFUSE_USE_VERSION=35'])
-
-    libraries = ['$LIBS', 'daos_common', 'daos', 'uuid', 'gurt']
+    libraries = ['fuse3', 'daos_common', 'daos', 'uuid', 'gurt']
 
     dfs_src = ['dfs.c']
     dfs = daos_build.library(denv, 'dfs', dfs_src, LIBS=libraries)

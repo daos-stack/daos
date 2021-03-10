@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * \file
@@ -181,8 +164,8 @@ set_oid(int i, char *path, daos_unit_oid_t *oid)
 	oid->id_pub.hi = 0;
 	D_ASSERT(L_O < strlen(path));
 	oid->id_pub.lo = (i << 8) + path[L_O];
-	daos_obj_generate_id(&oid->id_pub,
-			     DAOS_OF_AKEY_UINT64 | DAOS_OF_DKEY_UINT64, 0, 0);
+	daos_obj_set_oid(&oid->id_pub,
+			 DAOS_OF_AKEY_UINT64 | DAOS_OF_DKEY_UINT64, 0, 0);
 	oid->id_shard = 0;
 	oid->id_pad_32 = 0;
 }
@@ -1475,8 +1458,15 @@ uncertainty_check_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 			else if (a->o_rtype == R_E && !empty)
 				expected_arc = -DER_EXIST;
 		}
+		/** If is_punch(a), a is equal to or a parent of w and the
+		 *  punch will execute, then a will be rejected due to VOS's
+		 *  prevention of "under punches".
+		 */
+		if (is_punch(a) && a->o_wlevel <= w->o_wlevel &&
+		    expected_arc == 0)
+			expected_arc = -DER_TX_RESTART;
 	}
-	if (is_punch(w) && we > bound)
+	if (expected_arc != -DER_TX_RESTART && is_punch(w) && we > bound)
 		print_message("  %s(%s, "DF_X64
 			      ") (expect %s or DER_TX_RESTART): ", a->o_name,
 			      ap, ae, d_errstr(expected_arc));
@@ -1499,20 +1489,22 @@ out:
 
 	if (!daos_is_zero_dti(&wtx->th_saved_xid)) {
 		if (wtx->th_skip_commit)
-			vos_dtx_commit(arg->ctx.tc_co_hdl, &wtx->th_saved_xid,
-				       1, NULL);
+			rc = vos_dtx_commit(arg->ctx.tc_co_hdl,
+					    &wtx->th_saved_xid, 1, NULL);
 		else
-			vos_dtx_abort(arg->ctx.tc_co_hdl, DAOS_EPOCH_MAX,
-				      &wtx->th_saved_xid, 1);
+			rc = vos_dtx_abort(arg->ctx.tc_co_hdl, DAOS_EPOCH_MAX,
+					   &wtx->th_saved_xid, 1);
+		assert(rc >= 0 || rc == -DER_NONEXIST);
 	}
 
 	if (!daos_is_zero_dti(&atx->th_saved_xid)) {
 		if (atx->th_skip_commit)
-			vos_dtx_commit(arg->ctx.tc_co_hdl, &atx->th_saved_xid,
-				       1, NULL);
+			rc = vos_dtx_commit(arg->ctx.tc_co_hdl,
+					    &atx->th_saved_xid, 1, NULL);
 		else
-			vos_dtx_abort(arg->ctx.tc_co_hdl, DAOS_EPOCH_MAX,
-				      &atx->th_saved_xid, 1);
+			rc = vos_dtx_abort(arg->ctx.tc_co_hdl, DAOS_EPOCH_MAX,
+					   &atx->th_saved_xid, 1);
+		assert(rc >= 0 || rc == -DER_NONEXIST);
 	}
 
 #undef DP_CASE

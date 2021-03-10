@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -141,7 +124,7 @@ vos_propagate_check(struct vos_object *obj, daos_handle_t toh,
 		return 1;
 	}
 
-	VOS_TX_LOG_FAIL(rc, "Could not check emptiness on punch: " DF_RC"\n",
+	VOS_TX_LOG_FAIL(rc, "Could not check emptiness on punch: "DF_RC"\n",
 			DP_RC(rc));
 
 	return rc;
@@ -305,6 +288,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      unsigned int akey_nr, daos_key_t *akeys, struct dtx_handle *dth)
 {
 	struct vos_dtx_act_ent	**daes = NULL;
+	struct vos_dtx_cmt_ent	**dces = NULL;
 	struct vos_ts_set	*ts_set;
 	struct vos_container	*cont;
 	struct vos_object	*obj = NULL;
@@ -368,9 +352,13 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		if (daes == NULL)
 			D_GOTO(reset, rc = -DER_NOMEM);
 
+		D_ALLOC_ARRAY(dces, dth->dth_dti_cos_count);
+		if (dces == NULL)
+			D_GOTO(reset, rc = -DER_NOMEM);
+
 		rc = vos_dtx_commit_internal(cont, dth->dth_dti_cos,
 					     dth->dth_dti_cos_count,
-					     0, NULL, daes);
+					     0, NULL, daes, dces);
 		if (rc <= 0)
 			D_FREE(daes);
 	}
@@ -402,19 +390,27 @@ reset:
 		D_DEBUG(DB_IO, "Failed to punch object "DF_UOID": rc = %d\n",
 			DP_UOID(oid), rc);
 
-	if ((rc == -DER_NONEXIST || rc == 0) &&
-	    vos_ts_wcheck(ts_set, epr.epr_hi, bound))
-		rc = -DER_TX_RESTART;
+	if (rc == 0 || rc == -DER_NONEXIST) {
+		/** We must prevent underpunch with regular I/O */
+		if (rc == 0 && (flags & VOS_OF_REPLAY_PC) == 0)
+			bound = DAOS_EPOCH_MAX;
+		if (vos_ts_wcheck(ts_set, epr.epr_hi, bound))
+			rc = -DER_TX_RESTART;
+	}
 
 	rc = vos_tx_end(cont, dth, NULL, NULL, true, rc);
 
 	if (rc == 0) {
 		vos_ts_set_upgrade(ts_set);
 		if (daes != NULL) {
-			vos_dtx_post_handle(cont, daes, dth->dth_dti_cos_count,
-					    false);
+			vos_dtx_post_handle(cont, daes, NULL,
+					    dth->dth_dti_cos_count, false);
 			dth->dth_cos_done = 1;
 		}
+	} else if (daes != NULL) {
+		vos_dtx_post_handle(cont, daes, dces, dth->dth_dti_cos_count,
+				    false);
+		dth->dth_cos_done = 1;
 	}
 
 	if (rc == -DER_NONEXIST || rc == 0) {
@@ -425,6 +421,7 @@ reset:
 	}
 
 	D_FREE(daes);
+	D_FREE(dces);
 	vos_ts_set_free(ts_set);
 	vos_dth_set(NULL);
 
@@ -466,6 +463,75 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 	/* NB: noop for full-stack mode */
 	gc_wait();
 out:
+	vos_obj_release(occ, obj, true);
+	return rc;
+}
+
+/* Delete a key in its parent tree.
+ * NB: there is no "delete" in DAOS data model, this is really for the
+ * system DB, or space reclaim after data movement.
+ */
+int
+vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
+		daos_key_t *akey)
+{
+	struct daos_lru_cache	*occ  = vos_obj_cache_current();
+	struct vos_container	*cont = vos_hdl2cont(coh);
+	struct umem_instance	*umm  = vos_cont2umm(cont);
+	struct vos_object	*obj;
+	daos_key_t		*key;
+	daos_epoch_range_t	 epr = {0, DAOS_EPOCH_MAX};
+	daos_handle_t		 toh;
+	int			 rc;
+
+	rc = vos_obj_hold(occ, cont, oid, &epr, 0, VOS_OBJ_VISIBLE,
+			  DAOS_INTENT_KILL, &obj, NULL);
+	if (rc == -DER_NONEXIST)
+		return 0;
+
+	if (rc) {
+		D_ERROR("object hold error: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	rc = umem_tx_begin(umm, NULL);
+	if (rc) {
+		D_ERROR("memory TX start error: "DF_RC"\n", DP_RC(rc));
+		goto out;
+	}
+
+	rc = obj_tree_init(obj);
+	if (rc) {
+		D_ERROR("init dkey tree error: "DF_RC"\n", DP_RC(rc));
+		goto out_tx;
+	}
+
+	if (akey) { /* delete akey */
+		key = akey;
+		rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY,
+				      dkey, 0, DAOS_INTENT_PUNCH, NULL,
+				      &toh, NULL);
+		if (rc) {
+			D_ERROR("open akey tree error: "DF_RC"\n", DP_RC(rc));
+			goto out_tx;
+		}
+	} else { /* delete dkey */
+		key = dkey;
+		toh = obj->obj_toh;
+	}
+
+	key_tree_delete(obj, toh, key);
+	if (rc) {
+		D_ERROR("delete key error: "DF_RC"\n", DP_RC(rc));
+		goto out_tx;
+	}
+out_tx:
+	rc = umem_tx_end(umm, rc);
+	gc_wait(); /* NB: noop for full-stack mode */
+out:
+	if (akey)
+		key_tree_release(toh, false);
+
 	vos_obj_release(occ, obj, true);
 	return rc;
 }
@@ -605,6 +671,7 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 
 	ent->ie_epoch = epr.epr_hi;
 	ent->ie_punch = oiter->it_ilog_info.ii_next_punch;
+	ent->ie_obj_punch = oiter->it_obj->obj_ilog_info.ii_next_punch;
 	ent->ie_vis_flags = VOS_VIS_FLAG_VISIBLE;
 	if (oiter->it_ilog_info.ii_create == 0) {
 		/* The key has no visible subtrees so mark it covered */

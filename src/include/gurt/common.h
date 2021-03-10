@@ -1,24 +1,7 @@
 /*
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /**
@@ -298,6 +281,7 @@ uint32_t d_hash_string_u32(const char *string, unsigned int len);
 /** murmur hash (64 bits) */
 uint64_t d_hash_murmur64(const unsigned char *key, unsigned int key_len,
 			    unsigned int seed);
+uint32_t d_hash_jump(uint64_t key, uint32_t num_buckets);
 
 #define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
 
@@ -616,6 +600,8 @@ d_iov_set_safe(d_iov_t *iov, void *buf, size_t size)
 	iov->iov_buf = buf;
 	iov->iov_len = iov->iov_buf_len = size;
 }
+
+double d_stand_div(double *array, int nr);
 
 #if defined(__cplusplus)
 }

@@ -1,24 +1,7 @@
 //
 // (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
@@ -26,6 +9,8 @@ package server
 import (
 	"context"
 	"net"
+	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -40,9 +25,147 @@ import (
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/system"
 )
+
+func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
+	msReplica := system.MockMember(t, 0, system.MemberStateJoined)
+	nonReplica := system.MockMember(t, 1, system.MemberStateJoined)
+
+	for name, tc := range map[string]struct {
+		mgmtSvc          *mgmtSvc
+		clientNetworkCfg *config.ClientNetworkCfg
+		req              *mgmtpb.GetAttachInfoReq
+		expResp          *mgmtpb.GetAttachInfoResp
+	}{
+		"Server uses verbs + Infiniband": {
+			clientNetworkCfg: &config.ClientNetworkCfg{
+				Provider:        "ofi+verbs",
+				CrtCtxShareAddr: 1,
+				CrtTimeout:      10, NetDevClass: netdetect.Infiniband,
+			},
+			req: &mgmtpb.GetAttachInfoReq{
+				Sys:      build.DefaultSystemName,
+				AllRanks: true,
+			},
+			expResp: &mgmtpb.GetAttachInfoResp{
+				Provider:        "ofi+verbs",
+				CrtCtxShareAddr: 1,
+				CrtTimeout:      10,
+				NetDevClass:     netdetect.Infiniband,
+				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
+					{
+						Rank: msReplica.Rank.Uint32(),
+						Uri:  msReplica.FabricURI,
+					},
+					{
+						Rank: nonReplica.Rank.Uint32(),
+						Uri:  nonReplica.FabricURI,
+					},
+				},
+				MsRanks: []uint32{0},
+			},
+		},
+		"Server uses sockets + Ethernet": {
+			clientNetworkCfg: &config.ClientNetworkCfg{
+				Provider:        "ofi+sockets",
+				CrtCtxShareAddr: 0,
+				CrtTimeout:      5,
+				NetDevClass:     netdetect.Ether,
+			},
+			req: &mgmtpb.GetAttachInfoReq{
+				Sys:      build.DefaultSystemName,
+				AllRanks: true,
+			},
+			expResp: &mgmtpb.GetAttachInfoResp{
+				Provider:        "ofi+sockets",
+				CrtCtxShareAddr: 0,
+				CrtTimeout:      5,
+				NetDevClass:     netdetect.Ether,
+				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
+					{
+						Rank: msReplica.Rank.Uint32(),
+						Uri:  msReplica.FabricURI,
+					},
+					{
+						Rank: nonReplica.Rank.Uint32(),
+						Uri:  nonReplica.FabricURI,
+					},
+				},
+				MsRanks: []uint32{0},
+			},
+		},
+		"older client (AllRanks: false)": {
+			clientNetworkCfg: &config.ClientNetworkCfg{
+				Provider:        "ofi+sockets",
+				CrtCtxShareAddr: 0,
+				CrtTimeout:      5,
+				NetDevClass:     netdetect.Ether,
+			},
+			req: &mgmtpb.GetAttachInfoReq{
+				Sys:      build.DefaultSystemName,
+				AllRanks: false,
+			},
+			expResp: &mgmtpb.GetAttachInfoResp{
+				Provider:        "ofi+sockets",
+				CrtCtxShareAddr: 0,
+				CrtTimeout:      5,
+				NetDevClass:     netdetect.Ether,
+				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
+					{
+						Rank: msReplica.Rank.Uint32(),
+						Uri:  msReplica.FabricURI,
+					},
+				},
+				MsRanks: []uint32{0},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+			harness := NewEngineHarness(log)
+			srv := newTestEngine(log, true)
+
+			if err := harness.AddInstance(srv); err != nil {
+				t.Fatal(err)
+			}
+			srv.setDrpcClient(newMockDrpcClient(nil))
+			harness.started.SetTrue()
+
+			db := system.MockDatabaseWithAddr(t, log, msReplica.Addr)
+			m := system.NewMembership(log, db)
+			tc.mgmtSvc = newMgmtSvc(harness, m, db, nil, nil)
+			if _, err := tc.mgmtSvc.membership.Add(msReplica); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := tc.mgmtSvc.membership.Add(nonReplica); err != nil {
+				t.Fatal(err)
+			}
+			tc.mgmtSvc.clientNetworkCfg = tc.clientNetworkCfg
+			gotResp, gotErr := tc.mgmtSvc.GetAttachInfo(context.TODO(), tc.req)
+			if gotErr != nil {
+				t.Fatalf("unexpected error: %+v\n", gotErr)
+			}
+
+			// Sort the "want" and "got" RankUris slices by rank before comparing them.
+			for _, r := range [][]*mgmtpb.GetAttachInfoResp_RankUri{tc.expResp.RankUris, gotResp.RankUris} {
+				sort.Slice(r, func(i, j int) bool { return r[i].Rank < r[j].Rank })
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func stateString(s system.MemberState) string {
+	return strings.ToLower(s.String())
+}
 
 func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 	localhost := common.LocalhostCtrlAddr()
@@ -134,7 +257,9 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			expResp: &sharedpb.ClusterEventResp{
 				Sequence: 1,
 			},
-			expDispatched: []*events.RASEvent{eventRankDown},
+			expDispatched: []*events.RASEvent{
+				eventRankDown.WithForwarded(true),
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -182,6 +307,7 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			}
 
 			common.AssertEqual(t, tc.expDispatched, dispatched.rx,
+
 				"unexpected events dispatched")
 		})
 	}
@@ -262,6 +388,21 @@ func mockMember(t *testing.T, r, a int32, s string) *system.Member {
 	return system.NewMember(system.Rank(r), common.MockUUID(r), "", common.MockHostAddr(a), state)
 }
 
+func checkMembers(t *testing.T, exp system.Members, ms *system.Membership) {
+	t.Helper()
+
+	common.AssertEqual(t, len(exp), len(ms.Members(nil)),
+		"unexpected number of members")
+	for _, em := range exp {
+		am, err := ms.Get(em.Rank)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("want %#v, got %#v", em, am)
+		common.AssertEqual(t, em, am, "unexpected member")
+	}
+}
+
 func mgmtSystemTestSetup(t *testing.T, l logging.Logger, mbs system.Members, r []*control.HostResponse) *mgmtSvc {
 	t.Helper()
 
@@ -276,7 +417,7 @@ func mgmtSystemTestSetup(t *testing.T, l logging.Logger, mbs system.Members, r [
 			}[addr]
 	}
 
-	mgmtSvc := newTestMgmtSvcMulti(t, l, maxIOServers, false)
+	mgmtSvc := newTestMgmtSvcMulti(t, l, maxEngines, false)
 	mgmtSvc.harness.started.SetTrue()
 	mgmtSvc.harness.instances[0]._superblock.Rank = system.NewRankPtr(0)
 	mgmtSvc.membership, _ = system.MockMembership(t, l, mockResolver)
@@ -349,9 +490,9 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Errored: true, Msg: "fatality",
-								State: uint32(system.MemberStateErrored),
+								State: stateString(system.MemberStateErrored),
 							},
-							{Rank: 3, State: uint32(system.MemberStateJoined)},
+							{Rank: 3, State: stateString(system.MemberStateJoined)},
 						},
 					},
 				},
@@ -361,11 +502,11 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank:  1,
-								State: uint32(system.MemberStateJoined),
+								State: stateString(system.MemberStateJoined),
 							},
 							{
 								Rank:  2,
-								State: uint32(system.MemberStateJoined),
+								State: stateString(system.MemberStateJoined),
 							},
 						},
 					},
@@ -451,11 +592,11 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Errored: true, Msg: "fatality",
-								State: uint32(system.MemberStateErrored),
+								State: stateString(system.MemberStateErrored),
 							},
 							{
 								Rank:  3,
-								State: uint32(system.MemberStateJoined),
+								State: stateString(system.MemberStateJoined),
 							},
 						},
 					},
@@ -464,8 +605,8 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 					Addr: common.MockHostAddr(2).String(),
 					Message: &mgmtpb.SystemStartResp{
 						Results: []*sharedpb.RankResult{
-							{Rank: 1, State: uint32(system.MemberStateJoined)},
-							{Rank: 2, State: uint32(system.MemberStateJoined)},
+							{Rank: 1, State: stateString(system.MemberStateJoined)},
+							{Rank: 2, State: stateString(system.MemberStateJoined)},
 						},
 					},
 				},
@@ -538,11 +679,11 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Errored: true, Msg: "fatality",
-								State: uint32(system.MemberStateErrored),
+								State: stateString(system.MemberStateErrored),
 							},
 							{
 								Rank:  3,
-								State: uint32(system.MemberStateJoined),
+								State: stateString(system.MemberStateJoined),
 							},
 						},
 					},
@@ -551,8 +692,8 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 					Addr: common.MockHostAddr(2).String(),
 					Message: &mgmtpb.SystemStartResp{
 						Results: []*sharedpb.RankResult{
-							{Rank: 1, State: uint32(system.MemberStateJoined)},
-							{Rank: 2, State: uint32(system.MemberStateJoined)},
+							{Rank: 1, State: stateString(system.MemberStateJoined)},
+							{Rank: 2, State: stateString(system.MemberStateJoined)},
 						},
 					},
 				},
@@ -628,12 +769,7 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
 			}
 			common.AssertEqual(t, tc.expResults, gotResp.Results, name)
-
-			if diff := cmp.Diff(tc.expMembers, cs.membership.Members(nil), cmpOpts...); diff != "" {
-				t.Logf("unexpected members (-want, +got)\n%s\n", diff) // prints on err
-			}
-			common.AssertEqual(t, tc.expMembers, cs.membership.Members(nil), name)
-
+			checkMembers(t, tc.expMembers, cs.membership)
 			if diff := cmp.Diff(tc.expRanks, gotRankSet.String(), common.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected ranks (-want, +got)\n%s\n", diff) // prints on err
 			}
@@ -672,38 +808,38 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 				{
 					Rank: 0, Addr: common.MockHostAddr(1).String(),
 					Uuid:  common.MockUUID(0),
-					State: uint32(system.MemberStateErrored), Info: "couldn't ping",
+					State: stateString(system.MemberStateErrored), Info: "couldn't ping",
 					FaultDomain: "/",
 				},
 				{
 					Rank: 1, Addr: common.MockHostAddr(1).String(),
 					Uuid: common.MockUUID(1),
 					// transition to "ready" illegal
-					State:       uint32(system.MemberStateStopping),
+					State:       stateString(system.MemberStateStopping),
 					FaultDomain: "/",
 				},
 				{
 					Rank: 2, Addr: common.MockHostAddr(2).String(),
 					Uuid:        common.MockUUID(2),
-					State:       uint32(system.MemberStateUnresponsive),
+					State:       stateString(system.MemberStateUnresponsive),
 					FaultDomain: "/",
 				},
 				{
 					Rank: 3, Addr: common.MockHostAddr(2).String(),
 					Uuid:        common.MockUUID(3),
-					State:       uint32(system.MemberStateJoined),
+					State:       stateString(system.MemberStateJoined),
 					FaultDomain: "/",
 				},
 				{
 					Rank: 4, Addr: common.MockHostAddr(3).String(),
 					Uuid:        common.MockUUID(4),
-					State:       uint32(system.MemberStateStarting),
+					State:       stateString(system.MemberStateStarting),
 					FaultDomain: "/",
 				},
 				{
 					Rank: 5, Addr: common.MockHostAddr(3).String(),
 					Uuid:        common.MockUUID(5),
-					State:       uint32(system.MemberStateStopped),
+					State:       stateString(system.MemberStateStopped),
 					FaultDomain: "/",
 				},
 			},
@@ -715,19 +851,19 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 				{
 					Rank: 0, Addr: common.MockHostAddr(1).String(),
 					Uuid:  common.MockUUID(0),
-					State: uint32(system.MemberStateErrored), Info: "couldn't ping",
+					State: stateString(system.MemberStateErrored), Info: "couldn't ping",
 					FaultDomain: "/",
 				},
 				{
 					Rank: 2, Addr: common.MockHostAddr(2).String(),
 					Uuid:        common.MockUUID(2),
-					State:       uint32(system.MemberStateUnresponsive),
+					State:       stateString(system.MemberStateUnresponsive),
 					FaultDomain: "/",
 				},
 				{
 					Rank: 3, Addr: common.MockHostAddr(2).String(),
 					Uuid:        common.MockUUID(3),
-					State:       uint32(system.MemberStateJoined),
+					State:       stateString(system.MemberStateJoined),
 					FaultDomain: "/",
 				},
 			},
@@ -740,25 +876,25 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 				{
 					Rank: 2, Addr: common.MockHostAddr(2).String(),
 					Uuid:        common.MockUUID(2),
-					State:       uint32(system.MemberStateUnresponsive),
+					State:       stateString(system.MemberStateUnresponsive),
 					FaultDomain: "/",
 				},
 				{
 					Rank: 3, Addr: common.MockHostAddr(2).String(),
 					Uuid:        common.MockUUID(3),
-					State:       uint32(system.MemberStateJoined),
+					State:       stateString(system.MemberStateJoined),
 					FaultDomain: "/",
 				},
 				{
 					Rank: 4, Addr: common.MockHostAddr(3).String(),
 					Uuid:        common.MockUUID(4),
-					State:       uint32(system.MemberStateStarting),
+					State:       stateString(system.MemberStateStarting),
 					FaultDomain: "/",
 				},
 				{
 					Rank: 5, Addr: common.MockHostAddr(3).String(),
 					Uuid:        common.MockUUID(5),
-					State:       uint32(system.MemberStateStopped),
+					State:       stateString(system.MemberStateStopped),
 					FaultDomain: "/",
 				},
 			},
@@ -858,11 +994,11 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 					Message: &mgmtpb.SystemStartResp{
 						Results: []*sharedpb.RankResult{
 							{
-								Rank: 0, Errored: true, Msg: "couldn't start",
-								State: uint32(system.MemberStateStopped),
+								Rank: 0, Errored: true, Msg: "",
+								State: stateString(system.MemberStateErrored),
 							},
 							{
-								Rank: 1, State: uint32(system.MemberStateReady),
+								Rank: 1, State: stateString(system.MemberStateReady),
 							},
 						},
 					},
@@ -872,10 +1008,10 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 					Message: &mgmtpb.SystemStartResp{
 						Results: []*sharedpb.RankResult{
 							{
-								Rank: 2, State: uint32(system.MemberStateReady),
+								Rank: 2, State: stateString(system.MemberStateReady),
 							},
 							{
-								Rank: 3, State: uint32(system.MemberStateReady),
+								Rank: 3, State: stateString(system.MemberStateReady),
 							},
 						},
 					},
@@ -884,24 +1020,24 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 			expResults: []*sharedpb.RankResult{
 				{
 					Rank: 0, Action: "start", Errored: true,
-					Msg: "couldn't start", Addr: common.MockHostAddr(1).String(),
-					State: uint32(system.MemberStateStopped),
+					Msg: "", Addr: common.MockHostAddr(1).String(),
+					State: stateString(system.MemberStateErrored),
 				},
 				{
 					Rank: 1, Action: "start", Addr: common.MockHostAddr(1).String(),
-					State: uint32(system.MemberStateReady),
+					State: stateString(system.MemberStateReady),
 				},
 				{
 					Rank: 2, Action: "start", Addr: common.MockHostAddr(2).String(),
-					State: uint32(system.MemberStateReady),
+					State: stateString(system.MemberStateReady),
 				},
 				{
 					Rank: 3, Action: "start", Addr: common.MockHostAddr(2).String(),
-					State: uint32(system.MemberStateReady),
+					State: stateString(system.MemberStateReady),
 				},
 			},
 			expMembers: system.Members{
-				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 0, 1, "errored"),
 				mockMember(t, 1, 1, "ready"),
 				mockMember(t, 2, 2, "ready"),
 				mockMember(t, 3, 2, "ready"),
@@ -921,11 +1057,11 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 					Message: &mgmtpb.SystemStartResp{
 						Results: []*sharedpb.RankResult{
 							{
-								Rank: 0, Errored: true, Msg: "couldn't start",
-								State: uint32(system.MemberStateStopped),
+								Rank: 0, Errored: true, Msg: "",
+								State: stateString(system.MemberStateErrored),
 							},
 							{
-								Rank: 1, State: uint32(system.MemberStateReady),
+								Rank: 1, State: stateString(system.MemberStateReady),
 							},
 						},
 					},
@@ -934,16 +1070,16 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 			expResults: []*sharedpb.RankResult{
 				{
 					Rank: 0, Action: "start", Errored: true,
-					Msg: "couldn't start", Addr: common.MockHostAddr(1).String(),
-					State: uint32(system.MemberStateStopped),
+					Msg: "", Addr: common.MockHostAddr(1).String(),
+					State: stateString(system.MemberStateErrored),
 				},
 				{
 					Rank: 1, Action: "start", Addr: common.MockHostAddr(1).String(),
-					State: uint32(system.MemberStateReady),
+					State: stateString(system.MemberStateReady),
 				},
 			},
 			expMembers: system.Members{
-				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 0, 1, "errored"),
 				mockMember(t, 1, 1, "joined"),
 				mockMember(t, 2, 2, "stopped"),
 				mockMember(t, 3, 2, "stopped"),
@@ -964,11 +1100,11 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 					Message: &mgmtpb.SystemStartResp{
 						Results: []*sharedpb.RankResult{
 							{
-								Rank: 2, Errored: true, Msg: "couldn't start",
-								State: uint32(system.MemberStateStopped),
+								Rank: 2, Errored: true, Msg: "",
+								State: stateString(system.MemberStateErrored),
 							},
 							{
-								Rank: 3, State: uint32(system.MemberStateReady),
+								Rank: 3, State: stateString(system.MemberStateReady),
 							},
 						},
 					},
@@ -977,18 +1113,18 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 			expResults: []*sharedpb.RankResult{
 				{
 					Rank: 2, Action: "start", Errored: true,
-					Msg: "couldn't start", Addr: common.MockHostAddr(2).String(),
-					State: uint32(system.MemberStateStopped),
+					Msg: "", Addr: common.MockHostAddr(2).String(),
+					State: stateString(system.MemberStateErrored),
 				},
 				{
 					Rank: 3, Action: "start", Addr: common.MockHostAddr(2).String(),
-					State: uint32(system.MemberStateReady),
+					State: stateString(system.MemberStateReady),
 				},
 			},
 			expMembers: system.Members{
 				mockMember(t, 0, 1, "stopped"),
 				mockMember(t, 1, 1, "joined"),
-				mockMember(t, 2, 2, "stopped"),
+				mockMember(t, 2, 2, "errored"),
 				mockMember(t, 3, 2, "ready"),
 			},
 			expAbsentHosts: "10.0.0.[3-5]",
@@ -1007,10 +1143,10 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 					Message: &mgmtpb.SystemStartResp{
 						Results: []*sharedpb.RankResult{
 							{
-								Rank: 0, State: uint32(system.MemberStateReady),
+								Rank: 0, State: stateString(system.MemberStateReady),
 							},
 							{
-								Rank: 1, State: uint32(system.MemberStateReady),
+								Rank: 1, State: stateString(system.MemberStateReady),
 							},
 						},
 					},
@@ -1020,10 +1156,10 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 					Message: &mgmtpb.SystemStartResp{
 						Results: []*sharedpb.RankResult{
 							{
-								Rank: 2, State: uint32(system.MemberStateReady),
+								Rank: 2, State: stateString(system.MemberStateReady),
 							},
 							{
-								Rank: 3, State: uint32(system.MemberStateReady),
+								Rank: 3, State: stateString(system.MemberStateReady),
 							},
 						},
 					},
@@ -1032,19 +1168,19 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 			expResults: []*sharedpb.RankResult{
 				{
 					Rank: 0, Action: "start", Addr: common.MockHostAddr(1).String(),
-					State: uint32(system.MemberStateReady),
+					State: stateString(system.MemberStateReady),
 				},
 				{
 					Rank: 1, Action: "start", Addr: common.MockHostAddr(1).String(),
-					State: uint32(system.MemberStateReady),
+					State: stateString(system.MemberStateReady),
 				},
 				{
 					Rank: 2, Action: "start", Addr: common.MockHostAddr(2).String(),
-					State: uint32(system.MemberStateReady),
+					State: stateString(system.MemberStateReady),
 				},
 				{
 					Rank: 3, Action: "start", Addr: common.MockHostAddr(2).String(),
-					State: uint32(system.MemberStateReady),
+					State: stateString(system.MemberStateReady),
 				},
 			},
 			expMembers: system.Members{
@@ -1079,7 +1215,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
 			}
 			common.AssertEqual(t, tc.expResults, gotResp.Results, name)
-			common.AssertEqual(t, tc.expMembers, cs.membership.Members(nil), name)
+			checkMembers(t, tc.expMembers, cs.membership)
 			common.AssertEqual(t, tc.expAbsentHosts, gotResp.Absenthosts, "absent hosts")
 			common.AssertEqual(t, tc.expAbsentRanks, gotResp.Absentranks, "absent ranks")
 		})
@@ -1103,7 +1239,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 		},
 		"invalid req": {
 			req:       new(mgmtpb.SystemStopReq),
-			expErrMsg: "response results not populated",
+			expErrMsg: "invalid request, no action specified",
 		},
 		"unfiltered prep fail": {
 			req: &mgmtpb.SystemStopReq{Prep: true, Kill: true},
@@ -1118,10 +1254,10 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Errored: true, Msg: "prep shutdown failed",
-								State: uint32(system.MemberStateJoined),
+								State: stateString(system.MemberStateJoined),
 							},
 							{
-								Rank: 1, State: uint32(system.MemberStateStopping),
+								Rank: 1, State: stateString(system.MemberStateStopping),
 							},
 						},
 					},
@@ -1132,11 +1268,11 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 				{
 					Rank: 0, Action: "prep shutdown", Errored: true,
 					Msg: "prep shutdown failed", Addr: common.MockHostAddr(1).String(),
-					State: uint32(system.MemberStateJoined),
+					State: stateString(system.MemberStateJoined),
 				},
 				{
 					Rank: 1, Action: "prep shutdown", Addr: common.MockHostAddr(1).String(),
-					State: uint32(system.MemberStateStopping),
+					State: stateString(system.MemberStateStopping),
 				},
 			},
 			expMembers: system.Members{
@@ -1158,10 +1294,10 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Errored: true, Msg: "prep shutdown failed",
-								State: uint32(system.MemberStateJoined),
+								State: stateString(system.MemberStateJoined),
 							},
 							{
-								Rank: 1, State: uint32(system.MemberStateStopping),
+								Rank: 1, State: stateString(system.MemberStateStopping),
 							},
 						},
 					},
@@ -1172,11 +1308,11 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 				{
 					Rank: 0, Action: "prep shutdown", Errored: true,
 					Msg: "prep shutdown failed", Addr: common.MockHostAddr(1).String(),
-					State: uint32(system.MemberStateJoined),
+					State: stateString(system.MemberStateJoined),
 				},
 				{
 					Rank: 1, Action: "prep shutdown", Addr: common.MockHostAddr(1).String(),
-					State: uint32(system.MemberStateStopping),
+					State: stateString(system.MemberStateStopping),
 				},
 			},
 			expMembers: system.Members{
@@ -1200,10 +1336,10 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Errored: true, Msg: "prep shutdown failed",
-								State: uint32(system.MemberStateJoined),
+								State: stateString(system.MemberStateJoined),
 							},
 							{
-								Rank: 1, State: uint32(system.MemberStateStopping),
+								Rank: 1, State: stateString(system.MemberStateStopping),
 							},
 						},
 					},
@@ -1214,11 +1350,11 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 				{
 					Rank: 0, Action: "prep shutdown", Errored: true,
 					Msg: "prep shutdown failed", Addr: common.MockHostAddr(1).String(),
-					State: uint32(system.MemberStateJoined),
+					State: stateString(system.MemberStateJoined),
 				},
 				{
 					Rank: 1, Action: "prep shutdown", Addr: common.MockHostAddr(1).String(),
-					State: uint32(system.MemberStateStopping),
+					State: stateString(system.MemberStateStopping),
 				},
 			},
 			expMembers: system.Members{
@@ -1242,11 +1378,11 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 					Message: &mgmtpb.SystemStopResp{
 						Results: []*sharedpb.RankResult{
 							{
-								Rank: 0, Errored: true, Msg: "couldn't stop",
-								State: uint32(system.MemberStateJoined),
+								Rank: 0, Errored: true, Msg: "",
+								State: stateString(system.MemberStateErrored),
 							},
 							{
-								Rank: 1, State: uint32(system.MemberStateStopped),
+								Rank: 1, State: stateString(system.MemberStateStopped),
 							},
 						},
 					},
@@ -1256,10 +1392,10 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 					Message: &mgmtpb.SystemStopResp{
 						Results: []*sharedpb.RankResult{
 							{
-								Rank: 2, State: uint32(system.MemberStateStopped),
+								Rank: 2, State: stateString(system.MemberStateStopped),
 							},
 							{
-								Rank: 3, State: uint32(system.MemberStateStopped),
+								Rank: 3, State: stateString(system.MemberStateStopped),
 							},
 						},
 					},
@@ -1268,24 +1404,24 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			expResults: []*sharedpb.RankResult{
 				{
 					Rank: 0, Action: "stop", Errored: true,
-					Msg: "couldn't stop", Addr: common.MockHostAddr(1).String(),
-					State: uint32(system.MemberStateJoined),
+					Msg: "", Addr: common.MockHostAddr(1).String(),
+					State: stateString(system.MemberStateErrored),
 				},
 				{
 					Rank: 1, Action: "stop", Addr: common.MockHostAddr(1).String(),
-					State: uint32(system.MemberStateStopped),
+					State: stateString(system.MemberStateStopped),
 				},
 				{
 					Rank: 2, Action: "stop", Addr: common.MockHostAddr(2).String(),
-					State: uint32(system.MemberStateStopped),
+					State: stateString(system.MemberStateStopped),
 				},
 				{
 					Rank: 3, Action: "stop", Addr: common.MockHostAddr(2).String(),
-					State: uint32(system.MemberStateStopped),
+					State: stateString(system.MemberStateStopped),
 				},
 			},
 			expMembers: system.Members{
-				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 0, 1, "errored"),
 				mockMember(t, 1, 1, "stopped"),
 				mockMember(t, 2, 2, "stopped"),
 				mockMember(t, 3, 2, "stopped"),
@@ -1305,8 +1441,8 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 					Message: &mgmtpb.SystemStopResp{
 						Results: []*sharedpb.RankResult{
 							{
-								Rank: 0, Errored: true, Msg: "couldn't stop",
-								State: uint32(system.MemberStateJoined),
+								Rank: 0, Errored: true, Msg: "",
+								State: stateString(system.MemberStateErrored),
 							},
 						},
 					},
@@ -1316,10 +1452,10 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 					Message: &mgmtpb.SystemStopResp{
 						Results: []*sharedpb.RankResult{
 							{
-								Rank: 2, State: uint32(system.MemberStateStopped),
+								Rank: 2, State: stateString(system.MemberStateStopped),
 							},
 							{
-								Rank: 3, State: uint32(system.MemberStateStopped),
+								Rank: 3, State: stateString(system.MemberStateStopped),
 							},
 						},
 					},
@@ -1328,20 +1464,20 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			expResults: []*sharedpb.RankResult{
 				{
 					Rank: 0, Action: "stop", Errored: true,
-					Msg: "couldn't stop", Addr: common.MockHostAddr(1).String(),
-					State: uint32(system.MemberStateJoined),
+					Msg: "", Addr: common.MockHostAddr(1).String(),
+					State: stateString(system.MemberStateErrored),
 				},
 				{
 					Rank: 2, Action: "stop", Addr: common.MockHostAddr(2).String(),
-					State: uint32(system.MemberStateStopped),
+					State: stateString(system.MemberStateStopped),
 				},
 				{
 					Rank: 3, Action: "stop", Addr: common.MockHostAddr(2).String(),
-					State: uint32(system.MemberStateStopped),
+					State: stateString(system.MemberStateStopped),
 				},
 			},
 			expMembers: system.Members{
-				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 0, 1, "errored"),
 				mockMember(t, 1, 1, "joined"),
 				mockMember(t, 2, 2, "stopped"),
 				mockMember(t, 3, 2, "stopped"),
@@ -1362,10 +1498,10 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 					Message: &mgmtpb.SystemStopResp{
 						Results: []*sharedpb.RankResult{
 							{
-								Rank: 2, State: uint32(system.MemberStateStopped),
+								Rank: 2, State: stateString(system.MemberStateStopped),
 							},
 							{
-								Rank: 3, State: uint32(system.MemberStateStopped),
+								Rank: 3, State: stateString(system.MemberStateStopped),
 							},
 						},
 					},
@@ -1374,11 +1510,11 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			expResults: []*sharedpb.RankResult{
 				{
 					Rank: 2, Action: "stop", Addr: common.MockHostAddr(2).String(),
-					State: uint32(system.MemberStateStopped),
+					State: stateString(system.MemberStateStopped),
 				},
 				{
 					Rank: 3, Action: "stop", Addr: common.MockHostAddr(2).String(),
-					State: uint32(system.MemberStateStopped),
+					State: stateString(system.MemberStateStopped),
 				},
 			},
 			expMembers: system.Members{
@@ -1403,10 +1539,10 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 					Message: &mgmtpb.SystemStopResp{
 						Results: []*sharedpb.RankResult{
 							{
-								Rank: 0, State: uint32(system.MemberStateStopped),
+								Rank: 0, State: stateString(system.MemberStateStopped),
 							},
 							{
-								Rank: 1, State: uint32(system.MemberStateStopped),
+								Rank: 1, State: stateString(system.MemberStateStopped),
 							},
 						},
 					},
@@ -1416,10 +1552,10 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 					Message: &mgmtpb.SystemStopResp{
 						Results: []*sharedpb.RankResult{
 							{
-								Rank: 2, State: uint32(system.MemberStateStopped),
+								Rank: 2, State: stateString(system.MemberStateStopped),
 							},
 							{
-								Rank: 3, State: uint32(system.MemberStateStopped),
+								Rank: 3, State: stateString(system.MemberStateStopped),
 							},
 						},
 					},
@@ -1428,19 +1564,19 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			expResults: []*sharedpb.RankResult{
 				{
 					Rank: 0, Action: "stop", Addr: common.MockHostAddr(1).String(),
-					State: uint32(system.MemberStateStopped),
+					State: stateString(system.MemberStateStopped),
 				},
 				{
 					Rank: 1, Action: "stop", Addr: common.MockHostAddr(1).String(),
-					State: uint32(system.MemberStateStopped),
+					State: stateString(system.MemberStateStopped),
 				},
 				{
 					Rank: 2, Action: "stop", Addr: common.MockHostAddr(2).String(),
-					State: uint32(system.MemberStateStopped),
+					State: stateString(system.MemberStateStopped),
 				},
 				{
 					Rank: 3, Action: "stop", Addr: common.MockHostAddr(2).String(),
-					State: uint32(system.MemberStateStopped),
+					State: stateString(system.MemberStateStopped),
 				},
 			},
 			expMembers: system.Members{
@@ -1470,18 +1606,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
 			}
 			common.AssertEqual(t, tc.expResults, gotResp.Results, name)
-
-			for _, m := range tc.expMembers {
-				member, err := cs.membership.Get(m.Rank)
-				if err != nil {
-					t.Fatal(err)
-				}
-				t.Logf("got %#v, want %#v", member, m)
-				common.AssertEqual(t, m.State().String(), member.State().String(),
-					name+": compare state rank"+m.Rank.String())
-			}
-
-			common.AssertEqual(t, tc.expMembers, cs.membership.Members(nil), name)
+			checkMembers(t, tc.expMembers, cs.membership)
 			common.AssertEqual(t, tc.expAbsentHosts, gotResp.Absenthosts, "absent hosts")
 			common.AssertEqual(t, tc.expAbsentRanks, gotResp.Absentranks, "absent ranks")
 		})
@@ -1519,10 +1644,10 @@ func TestServer_MgmtSvc_SystemResetFormat(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Errored: true, Msg: "something bad",
-								State: uint32(system.MemberStateStopped),
+								State: stateString(system.MemberStateStopped),
 							},
 							{
-								Rank: 1, State: uint32(system.MemberStateAwaitFormat),
+								Rank: 1, State: stateString(system.MemberStateAwaitFormat),
 							},
 						},
 					},
@@ -1532,10 +1657,10 @@ func TestServer_MgmtSvc_SystemResetFormat(t *testing.T) {
 					Message: &mgmtpb.SystemResetFormatResp{
 						Results: []*sharedpb.RankResult{
 							{
-								Rank: 2, State: uint32(system.MemberStateAwaitFormat),
+								Rank: 2, State: stateString(system.MemberStateAwaitFormat),
 							},
 							{
-								Rank: 3, State: uint32(system.MemberStateAwaitFormat),
+								Rank: 3, State: stateString(system.MemberStateAwaitFormat),
 							},
 						},
 					},
@@ -1545,19 +1670,19 @@ func TestServer_MgmtSvc_SystemResetFormat(t *testing.T) {
 				{
 					Rank: 0, Action: "reset format", Errored: true,
 					Msg: "something bad", Addr: common.MockHostAddr(1).String(),
-					State: uint32(system.MemberStateStopped),
+					State: stateString(system.MemberStateStopped),
 				},
 				{
 					Rank: 1, Action: "reset format", Addr: common.MockHostAddr(1).String(),
-					State: uint32(system.MemberStateAwaitFormat),
+					State: stateString(system.MemberStateAwaitFormat),
 				},
 				{
 					Rank: 2, Action: "reset format", Addr: common.MockHostAddr(2).String(),
-					State: uint32(system.MemberStateAwaitFormat),
+					State: stateString(system.MemberStateAwaitFormat),
 				},
 				{
 					Rank: 3, Action: "reset format", Addr: common.MockHostAddr(2).String(),
-					State: uint32(system.MemberStateAwaitFormat),
+					State: stateString(system.MemberStateAwaitFormat),
 				},
 			},
 
@@ -1583,10 +1708,10 @@ func TestServer_MgmtSvc_SystemResetFormat(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Errored: true, Msg: "couldn't reset",
-								State: uint32(system.MemberStateStopped),
+								State: stateString(system.MemberStateStopped),
 							},
 							{
-								Rank: 1, State: uint32(system.MemberStateAwaitFormat),
+								Rank: 1, State: stateString(system.MemberStateAwaitFormat),
 							},
 						},
 					},
@@ -1596,11 +1721,11 @@ func TestServer_MgmtSvc_SystemResetFormat(t *testing.T) {
 				{
 					Rank: 0, Action: "reset format", Errored: true,
 					Msg: "couldn't reset", Addr: common.MockHostAddr(1).String(),
-					State: uint32(system.MemberStateStopped),
+					State: stateString(system.MemberStateStopped),
 				},
 				{
 					Rank: 1, Action: "reset format", Addr: common.MockHostAddr(1).String(),
-					State: uint32(system.MemberStateAwaitFormat),
+					State: stateString(system.MemberStateAwaitFormat),
 				},
 			},
 			expMembers: system.Members{
@@ -1626,10 +1751,10 @@ func TestServer_MgmtSvc_SystemResetFormat(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 2, Errored: true, Msg: "couldn't reset",
-								State: uint32(system.MemberStateStopped),
+								State: stateString(system.MemberStateStopped),
 							},
 							{
-								Rank: 3, State: uint32(system.MemberStateAwaitFormat),
+								Rank: 3, State: stateString(system.MemberStateAwaitFormat),
 							},
 						},
 					},
@@ -1639,11 +1764,11 @@ func TestServer_MgmtSvc_SystemResetFormat(t *testing.T) {
 				{
 					Rank: 2, Action: "reset format", Errored: true,
 					Msg: "couldn't reset", Addr: common.MockHostAddr(2).String(),
-					State: uint32(system.MemberStateStopped),
+					State: stateString(system.MemberStateStopped),
 				},
 				{
 					Rank: 3, Action: "reset format", Addr: common.MockHostAddr(2).String(),
-					State: uint32(system.MemberStateAwaitFormat),
+					State: stateString(system.MemberStateAwaitFormat),
 				},
 			},
 			expMembers: system.Members{
@@ -1679,8 +1804,7 @@ func TestServer_MgmtSvc_SystemResetFormat(t *testing.T) {
 				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
 			}
 			common.AssertEqual(t, tc.expResults, gotResp.Results, name)
-
-			common.AssertEqual(t, tc.expMembers, cs.membership.Members(nil), name)
+			checkMembers(t, tc.expMembers, cs.membership)
 			common.AssertEqual(t, tc.expAbsentHosts, gotResp.Absenthosts, "absent hosts")
 			common.AssertEqual(t, tc.expAbsentRanks, gotResp.Absentranks, "absent ranks")
 		})

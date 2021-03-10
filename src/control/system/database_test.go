@@ -1,24 +1,7 @@
 //
 // (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package system
@@ -452,7 +435,7 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 			expMembers: []*Member{
 				testMembers[0],
 			},
-			expFDTree: NewFaultDomainTree(testMembers[0].RankFaultDomain()),
+			expFDTree: NewFaultDomainTree(memberFaultDomain(testMembers[0])),
 		},
 		"update state success": {
 			startingMembers: testMembers,
@@ -476,9 +459,10 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 				testMembers[2],
 			},
 			expFDTree: NewFaultDomainTree(
-				testMembers[0].RankFaultDomain(),
-				testMembers[1].RankFaultDomain(),
-				testMembers[2].RankFaultDomain()),
+				memberFaultDomain(testMembers[0]),
+				memberFaultDomain(testMembers[1]),
+				memberFaultDomain(testMembers[2]),
+			),
 		},
 		"update fault domain success": {
 			startingMembers: testMembers,
@@ -490,9 +474,10 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 				testMembers[2],
 			},
 			expFDTree: NewFaultDomainTree(
-				testMembers[0].RankFaultDomain(),
-				changedFaultDomainMember.RankFaultDomain(),
-				testMembers[2].RankFaultDomain()),
+				memberFaultDomain(testMembers[0]),
+				memberFaultDomain(changedFaultDomainMember),
+				memberFaultDomain(testMembers[2]),
+			),
 		},
 		"remove success": {
 			startingMembers: testMembers,
@@ -503,8 +488,9 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 				testMembers[1],
 			},
 			expFDTree: NewFaultDomainTree(
-				testMembers[0].RankFaultDomain(),
-				testMembers[1].RankFaultDomain()),
+				memberFaultDomain(testMembers[0]),
+				memberFaultDomain(testMembers[1]),
+			),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -564,6 +550,43 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 
 			if diff := cmp.Diff(tc.expFDTree, db.data.Members.FaultDomains, ignoreFaultDomainIDOption()); diff != "" {
 				t.Fatalf("wrong FaultDomainTree in DB (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func testMemberWithFaultDomain(rank Rank, fd *FaultDomain) *Member {
+	return NewMember(rank, uuid.New().String(), "dontcare", &net.TCPAddr{},
+		MemberStateJoined).WithFaultDomain(fd)
+}
+
+func TestSystem_Database_memberFaultDomain(t *testing.T) {
+	for name, tc := range map[string]struct {
+		rank        Rank
+		faultDomain *FaultDomain
+		expResult   *FaultDomain
+	}{
+		"nil fault domain": {
+			expResult: MustCreateFaultDomain("rank0"),
+		},
+		"empty fault domain": {
+			rank:        Rank(2),
+			faultDomain: MustCreateFaultDomain(),
+			expResult:   MustCreateFaultDomain("rank2"),
+		},
+		"existing fault domain": {
+			rank:        Rank(1),
+			faultDomain: MustCreateFaultDomain("one", "two"),
+			expResult:   MustCreateFaultDomain("one", "two", "rank1"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := testMemberWithFaultDomain(tc.rank, tc.faultDomain)
+
+			result := memberFaultDomain(m)
+
+			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

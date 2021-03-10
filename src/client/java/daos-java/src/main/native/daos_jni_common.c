@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include "daos_jni_common.h"
@@ -87,7 +70,7 @@ JNI_OnLoad(JavaVM *vm, void *reserved)
 
 	if (rc) {
 		printf("daos_init() failed with rc = %d\n", rc);
-		printf("error msg: %s\n", d_errstr(rc));
+		printf("error msg: %.256s\n", d_errstr(rc));
 		return rc;
 	}
 	rc = daos_eq_lib_init();
@@ -99,11 +82,11 @@ JNI_OnLoad(JavaVM *vm, void *reserved)
 }
 
 int
-throw_exception_base(JNIEnv *env, char *msg, int error_code,
-		     int release_msg, int posix_error)
+throw_base(JNIEnv *env, char *msg, int error_code,
+	   int release_msg, int posix_error)
 {
 	char *daos_msg;
-	jstring jmsg = (*env)->NewStringUTF(env, strdup(msg));
+	jstring jmsg = (*env)->NewStringUTF(env, msg);
 
 	if (error_code > CUSTOM_ERROR_CODE_BASE) {
 		const char *temp = posix_error ?
@@ -125,27 +108,27 @@ throw_exception_base(JNIEnv *env, char *msg, int error_code,
 }
 
 int
-throw_exception(JNIEnv *env, char *msg, int error_code)
+throw_exc(JNIEnv *env, char *msg, int error_code)
 {
-	return throw_exception_base(env, msg, error_code, 1, 1);
+	return throw_base(env, msg, error_code, 1, 1);
 }
 
 int
-throw_exception_object(JNIEnv *env, char *msg, int error_code)
+throw_obj(JNIEnv *env, char *msg, int error_code)
 {
-	return throw_exception_base(env, msg, error_code, 1, 0);
+	return throw_base(env, msg, error_code, 1, 0);
 }
 
 int
-throw_exception_const_msg(JNIEnv *env, char *msg, int error_code)
+throw_const(JNIEnv *env, char *msg, int error_code)
 {
-	return throw_exception_base(env, msg, error_code, 0, 1);
+	return throw_base(env, msg, error_code, 0, 1);
 }
 
 int
-throw_exception_const_msg_object(JNIEnv *env, char *msg, int error_code)
+throw_const_obj(JNIEnv *env, char *msg, int error_code)
 {
-	return throw_exception_base(env, msg, error_code, 0, 0);
+	return throw_base(env, msg, error_code, 0, 0);
 }
 
 /**

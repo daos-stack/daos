@@ -1,24 +1,7 @@
 //
 // (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package control
@@ -26,8 +9,9 @@ package control
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"log"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/dustin/go-humanize/english"
@@ -63,8 +47,8 @@ type sysRequest struct {
 }
 
 type sysResponse struct {
-	AbsentRanks system.RankSet
-	AbsentHosts hostlist.HostSet
+	AbsentRanks system.RankSet   `json:"-"`
+	AbsentHosts hostlist.HostSet `json:"-"`
 }
 
 func (resp *sysResponse) getAbsentHostsRanks(inHosts, inRanks string) error {
@@ -82,23 +66,24 @@ func (resp *sysResponse) getAbsentHostsRanks(inHosts, inRanks string) error {
 	return nil
 }
 
-func (resp *sysResponse) DisplayAbsentHostsRanks() string {
-	switch {
-	case resp.AbsentHosts.Count() > 0:
-		return fmt.Sprintf("\nUnknown %s: %s",
-			english.Plural(resp.AbsentHosts.Count(), "host", "hosts"),
-			resp.AbsentHosts.String())
-	case resp.AbsentRanks.Count() > 0:
-		return fmt.Sprintf("\nUnknown %s: %s",
-			english.Plural(resp.AbsentRanks.Count(), "rank", "ranks"),
-			resp.AbsentRanks.String())
-	default:
-		return ""
+func (resp *sysResponse) getAbsentHostsRanksErrors() error {
+	var errMsgs []string
+
+	if resp.AbsentHosts.Count() > 0 {
+		errMsgs = append(errMsgs, "non-existent hosts "+resp.AbsentHosts.String())
 	}
+	if resp.AbsentRanks.Count() > 0 {
+		errMsgs = append(errMsgs, "non-existent ranks "+resp.AbsentRanks.String())
+	}
+
+	if len(errMsgs) > 0 {
+		return errors.New(strings.Join(errMsgs, ", "))
+	}
+
+	return nil
 }
 
 // SystemJoinReq contains the inputs for the system join request.
-// TODO: Unify this with system.JoinRequest
 type SystemJoinReq struct {
 	unaryRequest
 	msRequest
@@ -236,26 +221,29 @@ type EventForwarder struct {
 }
 
 // OnEvent implements the events.Handler interface.
-func (fwdr *EventForwarder) OnEvent(ctx context.Context, evt *events.RASEvent) {
+func (ef *EventForwarder) OnEvent(ctx context.Context, evt *events.RASEvent) {
 	switch {
 	case evt == nil:
-		fwdr.client.Debug("skip event forwarding, nil event")
+		ef.client.Debug("skip event forwarding, nil event")
 		return
-	case len(fwdr.accessPts) == 0:
-		fwdr.client.Debug("skip event forwarding, missing access points")
+	case len(ef.accessPts) == 0:
+		ef.client.Debug("skip event forwarding, missing access points")
+		return
+	case !evt.ShouldForward():
+		ef.client.Debugf("forwarding disabled for %s event", evt.ID)
 		return
 	}
 
 	req := &SystemNotifyReq{
-		Sequence: <-fwdr.seq,
+		Sequence: <-ef.seq,
 		Event:    evt,
 	}
-	req.SetHostList(fwdr.accessPts)
-	fwdr.client.Debugf("forwarding %s event to MS access points %v (seq: %d)",
-		evt.ID, fwdr.accessPts, req.Sequence)
+	req.SetHostList(ef.accessPts)
+	ef.client.Debugf("forwarding %s event to MS access points %v (seq: %d)",
+		evt.ID, ef.accessPts, req.Sequence)
 
-	if _, err := SystemNotify(ctx, fwdr.client, req); err != nil {
-		fwdr.client.Debugf("failed to forward event to MS: %s", err)
+	if _, err := SystemNotify(ctx, ef.client, req); err != nil {
+		ef.client.Debugf("failed to forward event to MS: %s", err)
 	}
 }
 
@@ -278,17 +266,43 @@ func NewEventForwarder(rpcClient UnaryInvoker, accessPts []string) *EventForward
 // EventLogger implements the events.Handler interface and logs RAS event to
 // INFO.
 type EventLogger struct {
-	log logging.Logger
+	log        logging.Logger
+	sysloggers map[events.RASSeverityID]*log.Logger
 }
 
 // OnEvent implements the events.Handler interface.
 func (el *EventLogger) OnEvent(_ context.Context, evt *events.RASEvent) {
-	el.log.Infof("RAS event received: %+v", evt)
+	switch {
+	case evt == nil:
+		el.log.Debug("skip event forwarding, nil event")
+		return
+	case evt.IsForwarded():
+		return // event has already been logged at source
+	}
+
+	out := evt.PrintRAS()
+	el.log.Info(out)
+	el.sysloggers[evt.Severity].Print(out)
 }
 
 // NewEventLogger returns an initialized EventLogger.
-func NewEventLogger(log logging.Logger) *EventLogger {
-	return &EventLogger{log: log}
+func NewEventLogger(logBasic logging.Logger) *EventLogger {
+	getSyslogger := func(sev events.RASSeverityID) *log.Logger {
+		return logging.MustCreateSyslogger(sev.SyslogPriority(), log.LstdFlags)
+	}
+
+	el := &EventLogger{
+		log:        logBasic,
+		sysloggers: make(map[events.RASSeverityID]*log.Logger),
+	}
+
+	el.sysloggers[events.RASSeverityUnknown] = getSyslogger(events.RASSeverityUnknown)
+	el.sysloggers[events.RASSeverityFatal] = getSyslogger(events.RASSeverityFatal)
+	el.sysloggers[events.RASSeverityError] = getSyslogger(events.RASSeverityError)
+	el.sysloggers[events.RASSeverityWarn] = getSyslogger(events.RASSeverityWarn)
+	el.sysloggers[events.RASSeverityInfo] = getSyslogger(events.RASSeverityInfo)
+
+	return el
 }
 
 // SystemQueryReq contains the inputs for the system query request.
@@ -301,7 +315,7 @@ type SystemQueryReq struct {
 // SystemQueryResp contains the request response.
 type SystemQueryResp struct {
 	sysResponse
-	Members system.Members
+	Members system.Members `json:"members"`
 }
 
 // UnmarshalJSON unpacks JSON message into SystemQueryResp struct.
@@ -322,6 +336,12 @@ func (resp *SystemQueryResp) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+// Errors returns a single error combining all error messages associated with a
+// system query response.
+func (resp *SystemQueryResp) Errors() error {
+	return resp.getAbsentHostsRanksErrors()
 }
 
 // SystemQuery requests DAOS system status.
@@ -352,6 +372,23 @@ func SystemQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemQueryRe
 
 	resp := new(SystemQueryResp)
 	return resp, convertMSResponse(ur, resp)
+}
+
+func concatSysErrs(errSys, errRes error) error {
+	var errMsgs []string
+
+	if errSys != nil {
+		errMsgs = append(errMsgs, errSys.Error())
+	}
+	if errRes != nil {
+		errMsgs = append(errMsgs, "check results for "+errRes.Error())
+	}
+
+	if len(errMsgs) > 0 {
+		return errors.New(strings.Join(errMsgs, ", "))
+	}
+
+	return nil
 }
 
 // SystemStartReq contains the inputs for the system start request.
@@ -385,6 +422,12 @@ func (resp *SystemStartResp) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+// Errors returns a single error combining all error messages associated with a
+// system start response.
+func (resp *SystemStartResp) Errors() error {
+	return concatSysErrs(resp.getAbsentHostsRanksErrors(), resp.Results.Errors())
 }
 
 // SystemStart will perform a start after a controlled shutdown of DAOS system.
@@ -451,6 +494,12 @@ func (resp *SystemStopResp) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+// Errors returns a single error combining all error messages associated with a
+// system stop response.
+func (resp *SystemStopResp) Errors() error {
+	return concatSysErrs(resp.getAbsentHostsRanksErrors(), resp.Results.Errors())
 }
 
 // SystemStop will perform a two-phase controlled shutdown of DAOS system and a
@@ -530,11 +579,11 @@ type SystemResetFormatResp struct {
 //
 // First phase trigger format reset on each rank in membership registry, if
 // successful, putting selected harness managed instances in "awaiting format"
-// state (but not proceeding to starting the io_server process runner).
+// state (but not proceeding to starting the engine process runner).
 //
 // Second phase is to perform storage format on each host which, if successful,
 // will reformat storage, un-block "awaiting format" state and start the
-// io_server process. SystemReformat() will only return when relevant io_server
+// engine process. SystemReformat() will only return when relevant io_server
 // processes are running and ready.
 //
 // This method handles request sent from management client app e.g. 'dmg'.
@@ -607,7 +656,6 @@ func SystemReformat(ctx context.Context, rpcClient UnaryInvoker, resetReq *Syste
 type LeaderQueryReq struct {
 	unaryRequest
 	msRequest
-	System string
 }
 
 // LeaderQueryResp contains the status of the request and, if successful, the
@@ -622,7 +670,7 @@ type LeaderQueryResp struct {
 func LeaderQuery(ctx context.Context, rpcClient UnaryInvoker, req *LeaderQueryReq) (*LeaderQueryResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).LeaderQuery(ctx, &mgmtpb.LeaderQueryReq{
-			Sys: req.System,
+			Sys: req.getSystem(),
 		})
 	})
 	rpcClient.Debugf("DAOS system leader-query request: %s", req)
