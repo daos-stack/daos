@@ -80,3 +80,20 @@ class DaosCoreTestNvme(DaosCoreBase):
         :avocado: tags=daos_test,daos_core_test_nvme,test_daos_nvme_recovery_4
         """
         self.run_subtest()
+
+    @skipForTicket("DAOS-5134")
+    def test_daos_nvme_recovery_5(self):
+        """Jira ID: DAOS-3760.
+
+        Test Description:
+            Run daos_test -N subtest 5
+
+        Use cases:
+            daos_test NVMe recovery test
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=unittest,nvme
+        :avocado: tags=daos_test,daos_core_test_nvme,test_daos_nvme_recovery_5
+        """
+        self.run_subtest()
