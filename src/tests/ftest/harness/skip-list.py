@@ -9,10 +9,16 @@ Skip-list harness testing
 '''
 
 import os
+import errno
 from apricot import Test
 
 class TestHarnessSkipsBase(Test):
     """ Base class for test classes below """
+
+    def __init__(self, *args, **kwargs):
+        """Initialize a Test object."""
+        super(TestHarnessSkipsBase, self).__init__(*args, **kwargs)
+        self.commit_title_file = os.path.join(os.sep, 'tmp', 'commit_title')
 
     def setUp(self):
         # Use our own CI-skip-list-master to test to run these tests
@@ -26,7 +32,42 @@ class TestHarnessSkipsBase(Test):
 [['DAOS-9999', 'test_method_name', 'test_case_5']]|b4a912f
 [['DAOS-9999', 'test_method_name', 'test_case_6']]|abcd123''')
         self.cancel_file = self.cancel_file
+
+        # create a temporary commit_title file
+        try:
+            os.rename(self.commit_title_file, self.commit_title_file + '.orig')
+        except OSError as excpt:
+            if excpt.errno == errno.ENOENT:
+                pass
+            else:
+                self.fail("Could not rename {0}"
+                          "{{,.orig}}".format(self.commit_title_file, excpt))
+        try:
+            with open(self.commit_title_file, 'w') as cf_handle:
+                cf_handle.write("DAOS-9999 test: Fixing DAOS-9999")
+        except Exception as excpt: # pylint: disable=broad-except
+            self.fail("Could not create {0}: "
+                      "{1}".format(self.commit_title_file, excpt))
+
         super(TestHarnessSkipsBase, self).setUp()
+
+    def tearDown(self):
+        # put back the original commit_title file
+        try:
+            os.unlink(self.commit_title_file)
+        except Exception as excpt: # pylint: disable=broad-except
+            self.fail("Could not remove {0}: "
+                      "{1}".format(self.commit_title_file, excpt))
+        try:
+            os.rename(self.commit_title_file + '.orig', self.commit_title_file)
+        except Exception as excpt: # pylint: disable=broad-except
+            if excpt.errno == errno.ENOENT:
+                pass
+            else:
+                self.fail("Could not rename {0}{{.orig,}}: "
+                          "{1}".format(self.commit_title_file, excpt))
+
+        super(TestHarnessSkipsBase, self).tearDown()
 
 class TestHarnessSkipsSkipped(TestHarnessSkipsBase):
     """
@@ -46,7 +87,7 @@ class TestHarnessSkipsSkipped(TestHarnessSkipsBase):
         '''
         w/o a fix in this commit w/o a committed fix
         :avocado: tags=all
-        :avocado: tags=harness, test_skips
+        :avocado: tags=harness,test_skips
         :avocado: tags=test_case_1
         '''
         if not self.cancelled:
@@ -56,7 +97,7 @@ class TestHarnessSkipsSkipped(TestHarnessSkipsBase):
         '''
         w/o a fix in this commit w/ a committed fix not in this code base
         :avocado: tags=all
-        :avocado: tags=harness, test_skips
+        :avocado: tags=harness,test_skips
         :avocado: tags=test_case_3
         '''
         if not self.cancelled:
@@ -75,7 +116,7 @@ class TestHarnessSkipsRun(TestHarnessSkipsBase):
         '''
         w/o a fix in this commit w/ a committed fix in this code base
         :avocado: tags=all
-        :avocado: tags=harness, test_skips
+        :avocado: tags=harness,test_skips
         :avocado: tags=test_case_2
         '''
 
@@ -83,7 +124,7 @@ class TestHarnessSkipsRun(TestHarnessSkipsBase):
         '''
         w/ a fix in this commit w/o a committed fix
         :avocado: tags=all
-        :avocado: tags=harness, test_skips
+        :avocado: tags=harness,test_skips
         :avocado: tags=test_case_4
         '''
 
@@ -91,7 +132,7 @@ class TestHarnessSkipsRun(TestHarnessSkipsBase):
         '''
         w/ a fix in this commit w/ a committed fix in this code base
         :avocado: tags=all
-        :avocado: tags=harness, test_skips
+        :avocado: tags=harness,test_skips
         :avocado: tags=test_case_5
         '''
 
@@ -99,6 +140,6 @@ class TestHarnessSkipsRun(TestHarnessSkipsBase):
         '''
         w/ a fix in this commit w/ a committed fix not in this code base
         :avocado: tags=all
-        :avocado: tags=harness, test_skips
+        :avocado: tags=harness,test_skips
         :avocado: tags=test_case_6
         '''
