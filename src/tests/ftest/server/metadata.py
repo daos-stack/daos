@@ -10,7 +10,7 @@ import traceback
 import uuid
 import threading
 import avocado
-import queue as queue
+import queue
 from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError
 from ior_utils import IorCommand

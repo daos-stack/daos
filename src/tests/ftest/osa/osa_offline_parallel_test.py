@@ -12,7 +12,7 @@ from osa_utils import OSAUtils
 from test_utils_pool import TestPool
 from command_utils import CommandFailure
 from apricot import skipForTicket
-import queue as queue
+import queue
 
 
 class OSAOfflineParallelTest(OSAUtils):

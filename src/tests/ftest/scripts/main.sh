@@ -204,12 +204,12 @@ if [[ "${TEST_TAG_ARG}" =~ soak ]]; then
     fi
 fi
 
-# can only process cores on EL7 currently
-if [ "$(lsb_release -s -i)" = "CentOS" ]; then
-    process_cores="p"
-else
-    process_cores=""
-fi
+
+launch_args="-jcrispa"
+# # can only process cores on EL7 currently
+# if [ "$(lsb_release -s -i)" = "CentOS" ]; then
+#     launch_args="-jcrispa"
+# fi
 
 # Clean stale job results
 if [ -d "${logs_prefix}/ftest/avocado/job-results" ]; then
@@ -218,7 +218,7 @@ fi
 
 # now run it!
 # shellcheck disable=SC2086
-if ! ./launch.py -jcris"${process_cores}"a -th "${LOGS_THRESHOLD}" \
+if ! ./launch.py "${launch_args}" -th "${LOGS_THRESHOLD}" \
                  -ts "${TEST_NODES}" ${NVME_ARG} ${TEST_TAG_ARR[*]}; then
     rc=${PIPESTATUS[0]}
 else

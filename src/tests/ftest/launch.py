@@ -1394,19 +1394,72 @@ def resolve_debuginfo(pkg):
         dict: dictionary of debug package information
 
     """
-    import yum      # pylint: disable=import-error,import-outside-toplevel
+    # pylint: disable=import-error,import-outside-toplevel
+    try:
+        import dnf
+        return resolve_debuginfo_dnf(pkg)
+    except ImportError:
+        try:
+            import yum
+            return resolve_debuginfo_yum(pkg)
 
+        except ImportError:
+            return resolve_debuginfo_rpm(pkg)
+
+
+def resolve_debuginfo_rpm(pkg):
+    """Return the debuginfo package for a given package name.
+
+    Args:
+        pkg (str): a package name
+
+    Returns:
+        dict: dictionary of debug package information
+
+    """
+    package_info = None
+    rpm_query = get_output(["rpm", "-qa"])
+    regex = r"({})-([0-9a-z~\.]+)-([0-9a-z~\.]+)\.x".format(pkg)
+    matches = re.findall(regex, rpm_query)
+    if matches:
+        debuginfo_map = {"glibc": "glibc-debuginfo-common"}
+        try:
+            debug_pkg = debuginfo_map[matches[0][0]]
+        except KeyError:
+            debug_pkg = matches[0][0] + "-debuginfo"
+        package_info = {
+            "name": debug_pkg,
+            "version": matches[0][1],
+            "release": matches[0][2],
+        }
+    else:
+        print("Package {} not installed, skipping debuginfo".format(pkg))
+
+    return package_info
+
+
+def resolve_debuginfo_yum(pkg):
+    """Return the debuginfo package for a given package name.
+
+    Args:
+        pkg (str): a package name
+
+    Returns:
+        dict: dictionary of debug package information
+
+    """
+    import yum      # pylint: disable=import-error,import-outside-toplevel
     yum_base = yum.YumBase()
     yum_base.conf.assumeyes = True
     yum_base.setCacheDir(force=True, reuse=True)
     yum_base.repos.enableRepo('*debug*')
 
     debuginfo_map = {'glibc':   'glibc-debuginfo-common'}
-
     try:
         debug_pkg = debuginfo_map[pkg]
     except KeyError:
         debug_pkg = pkg + "-debuginfo"
+
     try:
         pkg_data = yum_base.rpmdb.returnNewestByName(name=pkg)[0]
     except yum.Errors.PackageSackError as expn:
@@ -1420,6 +1473,47 @@ def resolve_debuginfo(pkg):
             'version': pkg_data['version'],
             'release': pkg_data['release'],
             'epoch': pkg_data['epoch']}
+
+
+def resolve_debuginfo_dnf(pkg):
+    """Return the debuginfo package for a given package name.
+
+    Args:
+        pkg (str): a package name
+
+    Returns:
+        dict: dictionary of debug package information
+
+    """
+    import dnf      # pylint: disable=import-error,import-outside-toplevel
+    dnf_base = dnf.Base()
+    dnf_base.conf.assumeyes = True
+    dnf_base.read_all_repos()
+    dnf_base.fill_sack()
+
+    query = dnf_base.sack.query()
+    latest = query.latest()
+    latest_info = latest.filter(name=pkg)
+
+    debuginfo = None
+    package = list(latest_info)[0]
+    if package:
+        debuginfo_map = {"glibc": "glibc-debuginfo-common"}
+        try:
+            debug_pkg = debuginfo_map[pkg]
+        except KeyError:
+            debug_pkg = "{}-debuginfo".format(package.name)
+
+        debuginfo = {
+            "name": debug_pkg,
+            "version": package.version,
+            "release": package.release,
+            "epoch": package.epoch
+        }
+    else:
+        print("Package {} not installed, skipping debuginfo".format(pkg))
+
+    return debuginfo
 
 
 def install_debuginfos():

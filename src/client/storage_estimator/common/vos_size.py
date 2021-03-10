@@ -4,9 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-
-
-import yaml
 import random
 import math
 
@@ -135,9 +132,10 @@ class MetaOverhead():
         self.next_cont = 1
         self.next_object = 1
         self._scm_cutoff = meta_yaml.get("scm_cutoff", 4096)
-        csummers = meta_yaml.get("csummers", {})
+        self.csum_size = 0
 
     def set_scm_cutoff(self, scm_cutoff):
+        """Set SCM threshold"""
         self._scm_cutoff = scm_cutoff
 
     def init_container(self, cont_spec):
@@ -303,7 +301,7 @@ class MetaOverhead():
             overhead = leafs * leaf_size + ints * int_size + rec_overhead
         else:
             overhead = tree_nodes * leaf_size + rec_overhead
-        if key == "akey" or key == "single_value" or key == "array":
+        if key in ("akey", "single_value", "array"):
             # key refers to child tree
             if tree["overhead"] == "user":
                 tree_stats.add_user_meta(num_values * tree["size"])
@@ -311,7 +309,7 @@ class MetaOverhead():
                 tree_stats.add_meta(key, num_values * tree["size"])
             overhead += self.csum_size * num_values
         tree_stats.add_meta(key, overhead)
-        if key == "array" or key == "single_value":
+        if key in ("array", "single_value"):
             tree_stats.add_user_value(tree)
             tree_stats.add_meta(key, tree["meta_size"])
             stats.merge(tree_stats)
@@ -326,6 +324,7 @@ class MetaOverhead():
 
         for pool in range(0, self.num_pools):
             stats.add_meta("pool", int(self.meta.get("root")))
+            stats.add_meta("container", int(self.meta.get("container")))
             self.calc_tree(stats, self.pools[pool])
 
         stats.pretty_print()

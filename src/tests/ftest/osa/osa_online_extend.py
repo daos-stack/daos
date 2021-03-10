@@ -13,7 +13,7 @@ from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
 from apricot import skipForTicket
-import queue as queue
+import queue
 
 
 class OSAOnlineExtend(OSAUtils):

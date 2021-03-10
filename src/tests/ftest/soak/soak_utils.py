@@ -501,7 +501,7 @@ def get_srun_cmd(cmd, nodesperjob=1, ppn=1, srun_params=None, env=None):
     if srun_params:
         for key, value in list(srun_params.items()):
             key_obj = getattr(srun_cmd, key)
-            if isinstance(key_obj, BasicParameter):
+            if key_obj is not None and hasattr(key_obj, "update"):
                 key_obj.update(value, key)
             else:
                 raise SoakTestError(

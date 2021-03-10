@@ -388,7 +388,7 @@ boolean tests_in_stage(String size) {
     tags = newtags.join(" ")
     return sh(label: "Get test list for ${size}",
               script: """cd src/tests/ftest
-                         ./list_tests.py ${tags}""",
+                         ./launch.py --list ${tags}""",
               returnStatus: true) == 0
 }
 

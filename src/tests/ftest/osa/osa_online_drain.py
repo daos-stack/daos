@@ -13,7 +13,7 @@ from test_utils_pool import TestPool
 from write_host_file import write_host_file
 from osa_utils import OSAUtils
 from apricot import skipForTicket
-import queue as queue
+import queue
 
 
 class OSAOnlineDrain(OSAUtils):
