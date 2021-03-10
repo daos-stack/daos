@@ -8,6 +8,7 @@ package system
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"sort"
 	"strconv"
@@ -109,11 +110,19 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 	defer m.Unlock()
 
 	resp = new(JoinResponse)
-	curMember, err := m.db.FindMemberByUUID(req.UUID)
+	var curMember *Member
+	if !req.Rank.Equals(NilRank) {
+		curMember, err = m.db.FindMemberByRank(req.Rank)
+	} else {
+		curMember, err = m.db.FindMemberByUUID(req.UUID)
+	}
 	if err == nil {
 		if !curMember.Rank.Equals(req.Rank) {
-			return nil, errors.Errorf("re-joining server %s has different rank (%d != %d)",
-				req.UUID, req.Rank, curMember.Rank)
+			return nil, errRankChanged(req.Rank, curMember.Rank, curMember.UUID)
+
+		}
+		if curMember.UUID != req.UUID {
+			return nil, errUuidChanged(req.UUID, curMember.UUID, curMember.Rank)
 		}
 
 		if !curMember.FaultDomain.Equals(req.FaultDomain) {
@@ -157,7 +166,7 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		state:          MemberStateJoined,
 	}
 	if err := m.db.AddMember(newMember); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to add new member")
 	}
 	resp.Created = true
 	resp.Member = newMember
@@ -476,4 +485,101 @@ func (m *Membership) OnEvent(_ context.Context, evt *events.RASEvent) {
 	case events.RASRankDown:
 		m.handleRankDown(evt)
 	}
+}
+
+// CompressedFaultDomainTree returns the tree of fault domains of joined
+// members in a compressed format.
+// Each domain is represented as a tuple: (level, ID, number of children)
+// Except for the rank, which is represented as: (rank)
+// The order of items is a breadth-first traversal of the tree.
+func (m *Membership) CompressedFaultDomainTree(ranks ...uint32) ([]uint32, error) {
+	tree := m.db.FaultDomainTree()
+	if tree == nil {
+		return nil, errors.New("uninitialized fault domain tree")
+	}
+
+	subtree, err := getFaultDomainSubtree(tree, ranks...)
+	if err != nil {
+		return nil, err
+	}
+
+	return compressTree(subtree), nil
+}
+
+func getFaultDomainSubtree(tree *FaultDomainTree, ranks ...uint32) (*FaultDomainTree, error) {
+	if len(ranks) == 0 {
+		return tree, nil
+	}
+
+	domains := tree.Domains()
+
+	// Traverse the list of domains only once
+	treeDomains := make(map[uint32]*FaultDomain, len(ranks))
+	for _, d := range domains {
+		if r, isRank := getFaultDomainRank(d); isRank {
+			treeDomains[r] = d
+		}
+	}
+
+	rankDomains := make([]*FaultDomain, 0)
+	for _, r := range ranks {
+		d, ok := treeDomains[r]
+		if !ok {
+			return nil, fmt.Errorf("rank %d not found in fault domain tree", r)
+		}
+		rankDomains = append(rankDomains, d)
+	}
+
+	return tree.Subtree(rankDomains...)
+}
+
+func getFaultDomainRank(fd *FaultDomain) (uint32, bool) {
+	fmtStr := rankFaultDomainPrefix + "%d"
+	var rank uint32
+	n, err := fmt.Sscanf(fd.BottomLevel(), fmtStr, &rank)
+	if err != nil || n != 1 {
+		return 0, false
+	}
+	return rank, true
+}
+
+func compressTree(tree *FaultDomainTree) []uint32 {
+	result := []uint32{}
+	queue := make([]*FaultDomainTree, 0)
+	queue = append(queue, tree)
+
+	numLevel := 1
+	numNextLevel := 0
+	seenThisLevel := 0
+	level := tree.Depth()
+
+	for len(queue) > 0 {
+		if seenThisLevel == numLevel {
+			numLevel = numNextLevel
+			seenThisLevel = 0
+			numNextLevel = 0
+			level--
+			if level < 0 {
+				panic("dev error: decremented levels below 0")
+			}
+		}
+		cur := queue[0]
+		queue = queue[1:]
+		seenThisLevel++
+
+		if rank, ok := getFaultDomainRank(cur.Domain); ok && cur.IsLeaf() {
+			result = append(result, rank)
+			continue
+		}
+
+		result = append(result,
+			uint32(level),
+			cur.ID,
+			uint32(len(cur.Children)))
+		for _, child := range cur.Children {
+			queue = append(queue, child)
+			numNextLevel++
+		}
+	}
+	return result
 }
