@@ -1329,12 +1329,12 @@ func TestControl_EventForwarder_OnEvent(t *testing.T) {
 	}
 }
 
+// In real syslog implementation we would see entries logged to logger specific
+// to a given priority, here we just check the correct prefix (maps to severity)
+// is printed which verifies the event was written to the correct logger.
 func TestControl_EventLogger_OnEvent(t *testing.T) {
 	var mockSyslogBuf *strings.Builder
 	getMockSyslogger := func(sev events.RASSeverityID) *log.Logger {
-		// in real syslog implementation we would see entries logged to
-		// logger specific to a given priority, here we just check the
-		// correct prefix (maps to severity)has been set on the entry.
 		return log.New(mockSyslogBuf, sev.String(), log.LstdFlags)
 	}
 
