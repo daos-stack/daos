@@ -11,8 +11,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <pthread.h>
-#include "wrap_cmocka.h"
 #include "tests_lib.h"
+#include "wrap_cmocka.h"
 #include "gurt/telemetry_common.h"
 #include "gurt/telemetry_producer.h"
 
@@ -292,6 +292,7 @@ static void
 test_duration_stats(void **state)
 {
 	static struct d_tm_node_t	*timer;
+	uint64_t			microseconds;
 	int				rc;
 
 	/*
@@ -313,23 +314,166 @@ test_duration_stats(void **state)
 
 	timer->dtn_metric->dtm_data.tms[0].tv_sec = 1;
 	timer->dtn_metric->dtm_data.tms[0].tv_nsec = 125000000;
-	d_tm_compute_duration_stats(timer);
+	microseconds = timer->dtn_metric->dtm_data.tms[0].tv_sec * 1000000 +
+		       timer->dtn_metric->dtm_data.tms[0].tv_nsec / 1000;
+	d_tm_compute_stats(timer, microseconds);
 
 	timer->dtn_metric->dtm_data.tms[0].tv_sec = 2;
 	timer->dtn_metric->dtm_data.tms[0].tv_nsec = 150000000;
-	d_tm_compute_duration_stats(timer);
+	microseconds = timer->dtn_metric->dtm_data.tms[0].tv_sec * 1000000 +
+		       timer->dtn_metric->dtm_data.tms[0].tv_nsec / 1000;
+	d_tm_compute_stats(timer, microseconds);
+
 
 	timer->dtn_metric->dtm_data.tms[0].tv_sec = 3;
 	timer->dtn_metric->dtm_data.tms[0].tv_nsec = 175000000;
-	d_tm_compute_duration_stats(timer);
+	microseconds = timer->dtn_metric->dtm_data.tms[0].tv_sec * 1000000 +
+		       timer->dtn_metric->dtm_data.tms[0].tv_nsec / 1000;
+	d_tm_compute_stats(timer, microseconds);
+
 
 	timer->dtn_metric->dtm_data.tms[0].tv_sec = 4;
 	timer->dtn_metric->dtm_data.tms[0].tv_nsec = 200000000;
-	d_tm_compute_duration_stats(timer);
+	microseconds = timer->dtn_metric->dtm_data.tms[0].tv_sec * 1000000 +
+		       timer->dtn_metric->dtm_data.tms[0].tv_nsec / 1000;
+	d_tm_compute_stats(timer, microseconds);
+
 
 	timer->dtn_metric->dtm_data.tms[0].tv_sec = 5;
 	timer->dtn_metric->dtm_data.tms[0].tv_nsec = 600000000;
-	d_tm_compute_duration_stats(timer);
+	microseconds = timer->dtn_metric->dtm_data.tms[0].tv_sec * 1000000 +
+		       timer->dtn_metric->dtm_data.tms[0].tv_nsec / 1000;
+	d_tm_compute_stats(timer, microseconds);
+}
+
+static void
+test_gauge_with_histogram_multiplier_1(void **state)
+{
+	static struct d_tm_node_t	*gauge;
+	int				num_buckets;
+	int				initial_width;
+	int				multiplier;
+	int				rc;
+	char				path[D_TM_MAX_NAME_LEN];
+
+	snprintf(path, sizeof(path), "%s", "gurt/tests/telem/test_gauge_m1");
+
+	rc = d_tm_add_metric(&gauge, D_TM_GAUGE,
+			     "A gauge with a histogram", "", path);
+	assert_rc_equal(rc, DER_SUCCESS);
+
+	num_buckets = 10;
+	initial_width = 5;
+	multiplier = 1;
+
+	rc = d_tm_init_histogram(gauge, path, num_buckets,
+				 initial_width, multiplier);
+	assert_rc_equal(rc, DER_SUCCESS);
+
+	/* bucket 0 - gets 3 values */
+	rc = d_tm_set_gauge(&gauge, 2, NULL);
+	assert_rc_equal(rc, DER_SUCCESS);
+	rc = d_tm_set_gauge(&gauge, 0, NULL);
+	assert_rc_equal(rc, DER_SUCCESS);
+	rc = d_tm_set_gauge(&gauge, 4, NULL);
+	assert_rc_equal(rc, DER_SUCCESS);
+
+	/* bucket 1 - gets 5 values  */
+	rc = d_tm_set_gauge(&gauge, 5, NULL);
+	assert_rc_equal(rc, DER_SUCCESS);
+	rc = d_tm_set_gauge(&gauge, 6, NULL);
+	assert_rc_equal(rc, DER_SUCCESS);
+	rc = d_tm_set_gauge(&gauge, 7, NULL);
+	assert_rc_equal(rc, DER_SUCCESS);
+	rc = d_tm_set_gauge(&gauge, 7, NULL);
+	assert_rc_equal(rc, DER_SUCCESS);
+	rc = d_tm_set_gauge(&gauge, 5, NULL);
+
+	/* bucket 2 - gets 2 values  */
+	rc = d_tm_set_gauge(&gauge, 10, NULL);
+	assert_rc_equal(rc, DER_SUCCESS);
+	rc = d_tm_set_gauge(&gauge, 12, NULL);
+	assert_rc_equal(rc, DER_SUCCESS);
+
+	/* bucket 4 - gets 4 values  */
+	rc = d_tm_set_gauge(&gauge, 20, NULL);
+	assert_rc_equal(rc, DER_SUCCESS);
+	rc = d_tm_set_gauge(&gauge, 21, NULL);
+	assert_rc_equal(rc, DER_SUCCESS);
+	rc = d_tm_set_gauge(&gauge, 24, NULL);
+	assert_rc_equal(rc, DER_SUCCESS);
+	rc = d_tm_set_gauge(&gauge, 24, NULL);
+	assert_rc_equal(rc, DER_SUCCESS);
+
+	/* bucket 9 - gets 1 value */
+	rc = d_tm_set_gauge(&gauge, 1900, NULL);
+	assert_rc_equal(rc, DER_SUCCESS);
+}
+
+static void
+test_gauge_with_histogram_multiplier_2(void **state)
+{
+	static struct d_tm_node_t	*gauge;
+	int				num_buckets;
+	int				initial_width;
+	int				multiplier;
+	int				rc;
+	char				path[D_TM_MAX_NAME_LEN];
+
+	snprintf(path, sizeof(path), "%s", "gurt/tests/telem/test_gauge_m2");
+
+	rc = d_tm_add_metric(&gauge, D_TM_GAUGE,
+			     "A gauge with a histogram", "", path);
+	assert_rc_equal(rc, DER_SUCCESS);
+
+	num_buckets = 5;
+	initial_width = 2048;
+	multiplier = 2;
+
+	rc = d_tm_init_histogram(gauge, path, num_buckets,
+				 initial_width, multiplier);
+	assert_rc_equal(rc, DER_SUCCESS);
+
+	/* bucket 0 - gets 3 values */
+	rc = d_tm_set_gauge(&gauge, 0, NULL);
+	assert_rc_equal(rc, DER_SUCCESS);
+	rc = d_tm_set_gauge(&gauge, 512, NULL);
+	assert_rc_equal(rc, DER_SUCCESS);
+	rc = d_tm_set_gauge(&gauge, 2047, NULL);
+	assert_rc_equal(rc, DER_SUCCESS);
+
+	/* bucket 1 - gets 4 values  */
+	rc = d_tm_set_gauge(&gauge, 2048, NULL);
+	assert_rc_equal(rc, DER_SUCCESS);
+	rc = d_tm_set_gauge(&gauge, 2049, NULL);
+	assert_rc_equal(rc, DER_SUCCESS);
+	rc = d_tm_set_gauge(&gauge, 3000, NULL);
+	assert_rc_equal(rc, DER_SUCCESS);
+	rc = d_tm_set_gauge(&gauge, 6143, NULL);
+
+	/* bucket 2 - gets 2 values  */
+	rc = d_tm_set_gauge(&gauge, 6144, NULL);
+	assert_rc_equal(rc, DER_SUCCESS);
+	rc = d_tm_set_gauge(&gauge, 14335, NULL);
+	assert_rc_equal(rc, DER_SUCCESS);
+
+	/* bucket 3 - gets 3 values  */
+	rc = d_tm_set_gauge(&gauge, 14336, NULL);
+	assert_rc_equal(rc, DER_SUCCESS);
+	rc = d_tm_set_gauge(&gauge, 16383, NULL);
+	assert_rc_equal(rc, DER_SUCCESS);
+	rc = d_tm_set_gauge(&gauge, 30719, NULL);
+	assert_rc_equal(rc, DER_SUCCESS);
+
+	/* bucket 4 - gets 4 values  */
+	rc = d_tm_set_gauge(&gauge, 30720, NULL);
+	assert_rc_equal(rc, DER_SUCCESS);
+	rc = d_tm_set_gauge(&gauge, 35000, NULL);
+	assert_rc_equal(rc, DER_SUCCESS);
+	rc = d_tm_set_gauge(&gauge, 40000, NULL);
+	assert_rc_equal(rc, DER_SUCCESS);
+	rc = d_tm_set_gauge(&gauge, 65000, NULL);
+	assert_rc_equal(rc, DER_SUCCESS);
 }
 
 static int
@@ -355,6 +499,12 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_input_validation),
 		cmocka_unit_test(test_gauge_stats),
 		cmocka_unit_test(test_duration_stats),
+		cmocka_unit_test(test_gauge_with_histogram_multiplier_1),
+		cmocka_unit_test(test_gauge_with_histogram_multiplier_2),
+		/**
+		 * Run this test last, because anything written after this test
+		 * is erased.
+		 */
 		cmocka_unit_test(test_shared_memory_cleanup),
 	};
 

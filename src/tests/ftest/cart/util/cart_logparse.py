@@ -623,7 +623,7 @@ class LogIter():
             if not line:
                 raise StopIteration
             fields = line.split(' ', 8)
-            if len(fields) < 6 or len(fields[0]) != 17:
+            if len(fields) < 6 or len(fields[0]) != 17 or fields[0][2] != '/':
                 return LogRaw(line)
             return LogLine(line)
 

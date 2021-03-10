@@ -29,7 +29,7 @@ type PoolCmd struct {
 	Create       PoolCreateCmd       `command:"create" alias:"c" description:"Create a DAOS pool"`
 	Destroy      PoolDestroyCmd      `command:"destroy" alias:"d" description:"Destroy a DAOS pool"`
 	Evict        PoolEvictCmd        `command:"evict" alias:"ev" description:"Evict all pool connections to a DAOS pool"`
-	List         systemListPoolsCmd  `command:"list" alias:"l" description:"List DAOS pools"`
+	List         PoolListCmd         `command:"list" alias:"l" description:"List DAOS pools"`
 	Extend       PoolExtendCmd       `command:"extend" alias:"ext" description:"Extend a DAOS pool to include new ranks."`
 	Exclude      PoolExcludeCmd      `command:"exclude" alias:"e" description:"Exclude targets from a rank"`
 	Drain        PoolDrainCmd        `command:"drain" alias:"d" description:"Drain targets from a rank"`
@@ -156,6 +156,46 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		return err
 	}
 	cmd.log.Info(bld.String())
+
+	return nil
+}
+
+// PoolListCmd represents the command to fetch a list of all DAOS pools in the system.
+type PoolListCmd struct {
+	logCmd
+	cfgCmd
+	ctlInvokerCmd
+	jsonOutputCmd
+}
+
+// Execute is run when PoolListCmd activates
+func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
+	defer func() {
+		errOut = errors.Wrap(errOut, "list pools failed")
+	}()
+
+	if cmd.config == nil {
+		return errors.New("no configuration loaded")
+	}
+
+	ctx := context.Background()
+	req := new(control.ListPoolsReq)
+	req.SetSystem(cmd.config.SystemName)
+
+	resp, err := control.ListPools(ctx, cmd.ctlInvoker, req)
+	if err != nil {
+		return err // control api returned an error, disregard response
+	}
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(resp, nil)
+	}
+
+	var out strings.Builder
+	if err := pretty.PrintListPoolsResponse(&out, resp); err != nil {
+		return err
+	}
+	cmd.log.Info(out.String())
 
 	return nil
 }

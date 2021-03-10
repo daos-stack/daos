@@ -236,12 +236,6 @@ yaml_file.add_argument(
     help='SCM threshold in bytes, optional suffixes KiB, MiB, ..., YiB',
     default='')
 yaml_file.add_argument(
-    '-n',
-    '--num_shards',
-    type=int,
-    help='Number of VOS Pools',
-    default=1000)
-yaml_file.add_argument(
     '-m',
     '--meta',
     metavar='META',
