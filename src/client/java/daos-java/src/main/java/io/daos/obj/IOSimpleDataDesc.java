@@ -9,7 +9,10 @@ package io.daos.obj;
 import io.daos.BufferAllocator;
 import io.daos.Constants;
 import io.daos.DaosEventQueue;
+import io.daos.DaosIOException;
 import io.netty.buffer.ByteBuf;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -54,6 +57,8 @@ public class IOSimpleDataDesc extends IODataDescBase implements DaosEventQueue.A
   private int retCode = Integer.MAX_VALUE;
 
   public static final int RET_CODE_SUCCEEDED = Constants.RET_CODE_SUCCEEDED;
+
+  private static final Logger log = LoggerFactory.getLogger(IOSimpleDataDesc.class);
 
   /**
    * Create simple description for synchronous or asynchronous update/fetch depending on
@@ -365,6 +370,13 @@ public class IOSimpleDataDesc extends IODataDescBase implements DaosEventQueue.A
         }
       } // otherwise, native desc will be released in SimpleDataDescGrp
       this.descBuffer.release();
+      if ((!resultParsed) && event != null) {
+        try {
+          event.abort();
+        } catch (DaosIOException e) {
+          log.error("failed to abort event bound to " + this, e);
+        }
+      }
       this.released = true;
     }
     if (updateOrFetch || releaseFetchBuffer) {

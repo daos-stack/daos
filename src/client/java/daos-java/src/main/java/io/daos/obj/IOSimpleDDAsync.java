@@ -26,8 +26,11 @@ package io.daos.obj;
 import io.daos.BufferAllocator;
 import io.daos.Constants;
 import io.daos.DaosEventQueue;
+import io.daos.DaosIOException;
 import io.netty.buffer.ByteBuf;
 import org.apache.commons.lang.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -62,6 +65,8 @@ public class IOSimpleDDAsync extends IODataDescBase implements DaosEventQueue.At
   private int retCode = Integer.MAX_VALUE;
 
   public static final int RET_CODE_SUCCEEDED = Constants.RET_CODE_SUCCEEDED;
+
+  private static final Logger log = LoggerFactory.getLogger(IOSimpleDDAsync.class);
 
   /**
    * constructor for non-reusable description.
@@ -289,6 +294,13 @@ public class IOSimpleDDAsync extends IODataDescBase implements DaosEventQueue.At
     if (descBuffer != null) {
       this.descBuffer.release();
       descBuffer = null;
+    }
+    if ((!resultParsed) && event != null) {
+      try {
+        event.abort();
+      } catch (DaosIOException e) {
+        log.error("failed to abort event bound to " + this, e);
+      }
     }
     if (releaseFetchBuffer && !updateOrFetch) {
       akeyEntries.forEach(e -> e.releaseDataBuffer());
