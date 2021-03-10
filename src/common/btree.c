@@ -378,10 +378,10 @@ do {									\
 		(trace)->tr_at,	## __VA_ARGS__);			\
 } while (0)
 
-static inline int
+static inline uint32_t
 btr_hkey_size_const(btr_ops_t *ops, uint64_t feats)
 {
-	int size;
+	uint32_t size;
 
 	if (BTR_IS_DIRECT_KEY(feats))
 		return sizeof(umem_off_t);
@@ -398,7 +398,7 @@ btr_hkey_size_const(btr_ops_t *ops, uint64_t feats)
 /**
  * Wrapper for customized tree functions
  */
-static int
+static uint32_t
 btr_hkey_size(struct btr_context *tcx)
 {
 	return btr_hkey_size_const(btr_ops(tcx), tcx->tc_feats);
@@ -541,7 +541,7 @@ btr_rec_string(struct btr_context *tcx, struct btr_record *rec,
 					   buf_len);
 }
 
-static inline int
+static inline uint32_t
 btr_rec_size(struct btr_context *tcx)
 {
 	return btr_hkey_size(tcx) + sizeof(struct btr_record);
@@ -577,7 +577,7 @@ btr_rec_copy_hkey(struct btr_context *tcx, struct btr_record *dst_rec,
 	btr_hkey_copy(tcx, &dst_rec->rec_hkey[0], &src_rec->rec_hkey[0]);
 }
 
-static inline int
+static inline uint32_t
 btr_node_size(struct btr_context *tcx)
 {
 	return sizeof(struct btr_node) +
