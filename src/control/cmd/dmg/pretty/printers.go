@@ -19,6 +19,10 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
 
+const (
+	rowFieldSep = "/"
+)
+
 var (
 	defaultPrintConfig = &PrintConfig{
 		Verbose:       false,
