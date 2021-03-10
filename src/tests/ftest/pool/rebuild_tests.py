@@ -56,7 +56,7 @@ class RebuildTests(TestWithServers):
         rs_rec_nr = []
         for index in range(pool_quantity):
             self.container[index].create()
-            self.container[index].write_objects(rank, obj_class)
+            self.container[index].write_objects(rank_index, obj_class)
 
         # Get written_objects target rank from rank_index
         if self.container[0].object_qty.value == 0:
