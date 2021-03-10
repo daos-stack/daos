@@ -1398,7 +1398,6 @@ def resolve_debuginfo(pkg):
     try:
         import dnf
         return resolve_debuginfo_dnf(pkg)
-
     except ImportError:
         try:
             import yum
@@ -1449,6 +1448,7 @@ def resolve_debuginfo_yum(pkg):
         dict: dictionary of debug package information
 
     """
+    import yum      # pylint: disable=import-error,import-outside-toplevel
     yum_base = yum.YumBase()
     yum_base.conf.assumeyes = True
     yum_base.setCacheDir(force=True, reuse=True)
@@ -1485,6 +1485,7 @@ def resolve_debuginfo_dnf(pkg):
         dict: dictionary of debug package information
 
     """
+    import dnf      # pylint: disable=import-error,import-outside-toplevel
     dnf_base = dnf.Base()
     dnf_base.conf.assumeyes = True
     dnf_base.read_all_repos()

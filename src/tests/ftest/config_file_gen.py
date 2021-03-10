@@ -7,7 +7,7 @@
 import logging
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 
-from util.command_utils_base import CommonConfig, CommandFailure, YamlParameters
+from util.command_utils_base import CommonConfig, CommandFailure
 from util.agent_utils_params import \
     DaosAgentYamlParameters, DaosAgentTransportCredentials
 from util.server_utils_params import \
