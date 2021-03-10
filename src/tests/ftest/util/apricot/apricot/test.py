@@ -374,7 +374,7 @@ class TestWithoutServers(Test):
                         found_path = True
                     else:
                         print("ERROR: Directory does not exist: " + added_path)
-                elif re.match(r"^\s*\/+\s*$", path_dirname) != None:
+                elif re.match(r"^\s*\/+\s*$", path_dirname) is not None:
                     if not found_path:
                         print("ERROR: Couldn't find a directory " +
                               "named 'TESTING' or 'install' to add " +
