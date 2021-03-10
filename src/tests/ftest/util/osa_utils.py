@@ -5,6 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import ctypes
+import queue
 import time
 import threading
 
@@ -17,14 +18,6 @@ from mpio_utils import MpioUtils
 from pydaos.raw import (DaosContainer, IORequest,
                         DaosObj, DaosApiError)
 from general_utils import create_string_buffer
-
-
-try:
-    # python 3.x
-    import queue as test_queue
-except ImportError:
-    # python 2.7
-    import Queue as test_queue
 
 
 class OSAUtils(IorTestBase):
@@ -51,7 +44,7 @@ class OSAUtils(IorTestBase):
         self.ior_w_flags = self.params.get("write_flags", '/run/ior/iorflags/*',
                                            default="")
         self.ior_r_flags = self.params.get("read_flags", '/run/ior/iorflags/*')
-        self.out_queue = test_queue.Queue()
+        self.out_queue = queue.Queue()
         self.dmg_command.exit_status_exception = False
 
     @fail_on(CommandFailure)

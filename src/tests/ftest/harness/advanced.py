@@ -48,7 +48,7 @@ class HarnessAdvancedTest(TestWithServers):
         self.log.info("Found pid %s", pid)
 
         # Send a signal 6 to its daos_engine process
-        self.log.info("Sending a signal 6 to {}".format(pid))
+        self.log.info("Sending a signal 6 to %s", pid)
         result = run_pcmd([host], "sudo kill -6 {}".format(pid))
         if len(result) > 1 or result[0]["exit_status"] != 0:
             self.fail("Error sending a signal 6 to {} on {}".format(pid, host))

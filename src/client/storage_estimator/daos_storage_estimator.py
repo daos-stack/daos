@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
+'''
+  (C) Copyright 2019-2021 Intel Corporation.
 
-
+  SPDX-License-Identifier: BSD-2-Clause-Patent
+'''
 import argparse
 import sys
 
@@ -235,12 +238,6 @@ yaml_file.add_argument(
     type=str,
     help='SCM threshold in bytes, optional suffixes KiB, MiB, ..., YiB',
     default='')
-yaml_file.add_argument(
-    '-n',
-    '--num_shards',
-    type=int,
-    help='Number of VOS Pools',
-    default=1000)
 yaml_file.add_argument(
     '-m',
     '--meta',

@@ -185,9 +185,8 @@ class SameKeyDifferentValue(TestWithServers):
                 for j in range(3):
                     if (array_value_data[j][0:length-1] !=
                             read_back_data[j][0:length-1]):
-                        self.log.info(
-                            "Written Data: {}".format(array_value_data[j]))
-                        self.log.info("Read Data: {}".format(read_back_data[j]))
+                        self.log.info("Written Data: %s", array_value_data[j])
+                        self.log.info("Read Data:    %s", read_back_data[j])
                         self.fail("Data mismatch\n")
                 # test case 1
                 if i == 0:

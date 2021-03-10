@@ -18,7 +18,7 @@ from ior_utils import IorCommand
 from job_manager_utils import Mpirun
 from command_utils_base import CommandFailure
 from mpio_utils import MpioUtils
-import queue as queue
+import queue
 
 
 class NvmePoolCapacity(TestWithServers):
