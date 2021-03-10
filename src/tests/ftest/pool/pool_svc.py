@@ -71,21 +71,10 @@ class PoolSvc(TestWithServers):
                              "Duplicate values in returned rank list")
 
             if svc_params[1] > 2:
-                self.pool.get_info()
-                leader = self.pool.info.pi_leader
-                all_svc_ranks = list(self.pool.svc_ranks)
-                all_svc_ranks.remove(leader)
-                non_leader = all_svc_ranks[-1]
-
-                # Disconnect from the pool
-                self.log.info("Disconnecting from the pool")
-                try:
-                    self.pool.disconnect()
-                except TestFail as error:
-                    self.log.info(error)
-                    self.fail(
-                        "Error issuing TestPool.disconnect() after excluding "
-                        "the leader")
+                # Query the pool to get the leader
+                self.pool.set_query_data()
+                leader = self.pool.query_data["leader"]
+                self.log.info("Current pool leader: %s", leader)
 
                 # Stop the pool leader
                 self.log.info("Stopping the pool leader: %s", leader)
@@ -97,25 +86,20 @@ class PoolSvc(TestWithServers):
                         "Error stopping pool leader - "
                         "DaosServerManager.stop_ranks([{}])".format(non_leader))
 
-                # Connect to the pool
-                self.log.info("Connecting to the pool")
-                try:
-                    self.pool.connect()
-                except TestFail as error:
-                    self.log.info(error)
-                    self.fail("Error issuing TestPool.connect()")
-
-                # Disconnect from the pool
-                self.log.info("Disconnecting from the pool")
-                try:
-                    self.pool.disconnect()
-                except TestFail as error:
-                    self.log.info(error)
-                    self.fail(
-                        "Error issuing TestPool.disconnect() after connecting "
-                        "to the pool")
+                # Verify the pool leader has changed
+                self.pool.set_query_data()
+                new_leader = self.pool.query_data["leader"]
+                self.log.info("Current pool leader: %s", new_leader)
+                self.log.info(
+                    "Verifying %s is no longer the pool leader", leader)
+                self.assertNotEqual(
+                    leader, new_leader, "Pool leader has not changed!")
 
                 # Stop a pool non-leader
+                all_svc_ranks = list(self.pool.svc_ranks)
+                all_svc_ranks.remove(leader)
+                all_svc_ranks.remove(new_leader)
+                non_leader = all_svc_ranks[-1]
                 self.log.info("Stopping a pool non-leader: %s", non_leader)
                 try:
                     self.server_managers[-1].stop_ranks(
@@ -126,24 +110,13 @@ class PoolSvc(TestWithServers):
                         "Error stopping a pool non-leader - "
                         "DaosServerManager.stop_ranks([{}])".format(non_leader))
 
-                # Exclude a pool non-leader
-                self.log.info("Excluding a pool non-leader: %s", non_leader)
-                try:
-                    self.pool.exclude([non_leader], self.d_log)
-                except TestFail as error:
-                    self.log.info(error)
-                    self.fail(
-                        "Error issuing TestPool.exclude([{}])".format(
-                            non_leader))
-                self.server_managers[-1].update_expected_states(
-                    [non_leader], "evicted")
-
-                # Connect to the pool
-                self.log.info("Connecting from the pool")
-                try:
-                    self.pool.connect()
-                except TestFail as error:
-                    self.log.info(error)
-                    self.fail("Error issuing TestPool.connect()")
+                # Verify the pool leader has not changed
+                self.pool.set_query_data()
+                current_leader = self.pool.query_data["leader"]
+                self.log.info("Current pool leader: %s", current_leader)
+                self.log.info(
+                    "Verifying %s is still the pool leader", new_leader)
+                self.assertEqual(
+                    new_leader, current_leader, "Pool leader has changed!")
 
         self.log.info("Test passed!")
