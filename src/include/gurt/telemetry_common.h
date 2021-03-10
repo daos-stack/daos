@@ -36,8 +36,13 @@ enum {
 };
 
 enum {
-	D_TM_VERBOSE			= 0x000,
-	D_TM_CSV			= 0x001,
+	D_TM_STANDARD			= 0x001,
+	D_TM_CSV			= 0x002,
+};
+
+enum {
+	D_TM_INCLUDE_TIMESTAMP		= 0x001,
+	D_TM_INCLUDE_METADATA		= 0x002,
 };
 
 /**

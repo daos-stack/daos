@@ -26,12 +26,15 @@ print_usage(const char *prog_name)
 	       "\tDefault is root directory\n"
 	       "--iterations, -i\n"
 	       "\tSpecifies the number of iterations to show "
-	       "(default continuous)\n"
+	       "(default is 1 iteration.  Set to 0 for continuous output)\n"
 	       "--delay, -D\n"
 	       "\tDelay in seconds between each iteration\n"
 	       "\tDefault is 1 second\n"
 	       "--csv, -C\n"
 	       "\tDisplay data in CSV format\n"
+	       "--tstamp, -T\n"
+	       "\tPrint timestamp when metric was read"
+	       "\tDefault is no timestamp\n"
 	       "--meta, -M\n"
 	       "\tDisplay associated metric metadata\n"
 	       "--help, -h\n"
@@ -59,14 +62,16 @@ main(int argc, char **argv)
 	struct d_tm_node_t	*node = NULL;
 	uint64_t		*shmem_root = NULL;
 	char			dirname[D_TM_MAX_NAME_LEN] = {0};
+	bool			show_timestamp = false;
+	bool			show_meta = false;
 	int			srv_idx = 0;
 	int			iteration = 0;
-	int			num_iter = 0;
+	int			num_iter = 1;
 	int			filter = 0;
 	int			delay = 1;
-	int			format = D_TM_VERBOSE;
-	int			show_meta = 0;
+	int			format = D_TM_STANDARD;
 	int			opt;
+	int			extra_descriptors = 0;
 
 	sprintf(dirname, "/");
 
@@ -76,6 +81,7 @@ main(int argc, char **argv)
 			{"srv_idx", required_argument, NULL, 'S'},
 			{"counter", no_argument, NULL, 'c'},
 			{"csv", no_argument, NULL, 'C'},
+			{"tstamp", no_argument, NULL, 'T'},
 			{"duration", no_argument, NULL, 'd'},
 			{"timestamp", no_argument, NULL, 't'},
 			{"snapshot", no_argument, NULL, 's'},
@@ -88,7 +94,7 @@ main(int argc, char **argv)
 			{NULL, 0, NULL, 0}
 		};
 
-		opt = getopt_long_only(argc, argv, "S:cCdtsgi:p:D:Mh",
+		opt = getopt_long_only(argc, argv, "S:cCTdtsgi:p:D:Mh",
 				       long_options, NULL);
 		if (opt == -1)
 			break;
@@ -122,7 +128,10 @@ main(int argc, char **argv)
 			snprintf(dirname, sizeof(dirname), "%s", optarg);
 			break;
 		case 'M':
-			show_meta = 1;
+			show_meta = true;
+			break;
+		case 'T':
+			show_timestamp = true;
 			break;
 		case 'D':
 			delay = atoi(optarg);
@@ -152,27 +161,32 @@ main(int argc, char **argv)
 		if (node != NULL) {
 			root = node;
 		} else {
-			printf("No metrics found at: '%s'\n",
-			       dirname);
+			printf("No metrics found at: '%s'\n", dirname);
 			exit(0);
 		}
 	}
 
-	if (format == D_TM_CSV)
+	if (format & D_TM_CSV)
 		filter &= ~D_TM_DIRECTORY;
 	else
 		filter |= D_TM_DIRECTORY;
 
-	while ((num_iter == 0) || (iteration < num_iter)) {
-		d_tm_print_my_children(shmem_root, root, 0,
-				       filter, dirname,
-				       show_meta, format, stdout);
-		if (format == D_TM_CSV)
-			break;
+	if (show_timestamp)
+		extra_descriptors |= D_TM_INCLUDE_TIMESTAMP;
+	if (show_meta)
+		extra_descriptors |= D_TM_INCLUDE_METADATA;
 
+	while ((num_iter == 0) || (iteration < num_iter)) {
+		if ((format == D_TM_CSV) && (iteration == 0))
+			d_tm_print_field_descriptors(extra_descriptors,
+						     stdout);
+		d_tm_print_my_children(shmem_root, root, 0, filter, dirname,
+				       show_meta, format, show_timestamp,
+				       stdout);
 		iteration++;
 		sleep(delay);
-		printf("\n\n");
+		if (format == D_TM_STANDARD)
+			printf("\n\n");
 	}
 
 	return 0;

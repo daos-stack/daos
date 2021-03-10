@@ -62,7 +62,7 @@ test_print_metrics(void **state)
 		  D_TM_DURATION | D_TM_GAUGE | D_TM_DIRECTORY);
 
 	d_tm_print_my_children(shmem_root, node, 0, filter, NULL, true,
-			       D_TM_VERBOSE, stdout);
+			       D_TM_STANDARD, false, stdout);
 }
 
 static void

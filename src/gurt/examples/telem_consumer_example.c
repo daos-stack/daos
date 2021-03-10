@@ -73,7 +73,7 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 				       DP_RC(rc));
 				break;
 			}
-			d_tm_print_counter(val, name, D_TM_VERBOSE, stdout);
+			d_tm_print_counter(val, name, D_TM_STANDARD, stdout);
 			break;
 		case D_TM_TIMESTAMP:
 			rc = d_tm_get_timestamp(&clk, shmem_root,
@@ -83,7 +83,7 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 				       DP_RC(rc));
 				break;
 			}
-			d_tm_print_timestamp(&clk, name, D_TM_VERBOSE, stdout);
+			d_tm_print_timestamp(&clk, name, D_TM_STANDARD, stdout);
 			break;
 		case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_REALTIME):
 		case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_PROCESS_CPUTIME):
@@ -97,7 +97,7 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 			}
 			d_tm_print_timer_snapshot(&tms, name,
 						  nodelist->dtnl_node->dtn_type,
-						  D_TM_VERBOSE, stdout);
+						  D_TM_STANDARD, stdout);
 			break;
 		case D_TM_DURATION | D_TM_CLOCK_REALTIME:
 		case D_TM_DURATION | D_TM_CLOCK_PROCESS_CPUTIME:
@@ -111,7 +111,7 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 			}
 			d_tm_print_duration(&tms, &stats, name,
 					    nodelist->dtnl_node->dtn_type,
-					    D_TM_VERBOSE, stdout);
+					    D_TM_STANDARD, stdout);
 			break;
 		case D_TM_GAUGE:
 			rc = d_tm_get_gauge(&val, &stats, shmem_root,
@@ -121,7 +121,7 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 				       DP_RC(rc));
 				break;
 			}
-			d_tm_print_gauge(val, &stats, name, D_TM_VERBOSE,
+			d_tm_print_gauge(val, &stats, name, D_TM_STANDARD,
 					 stdout);
 			break;
 		default:
@@ -131,12 +131,10 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 		}
 
 		if (show_meta) {
-			shortDesc = NULL;
-			longDesc = NULL;
 			d_tm_get_metadata(&shortDesc, &longDesc, shmem_root,
 					  nodelist->dtnl_node, NULL);
-			d_tm_print_metadata(shortDesc, longDesc, false,
-					    D_TM_VERBOSE, stdout);
+			d_tm_print_metadata(shortDesc, longDesc, D_TM_STANDARD,
+					    stdout);
 			D_FREE_PTR(shortDesc);
 			D_FREE_PTR(longDesc);
 		}
@@ -180,7 +178,7 @@ main(int argc, char **argv)
 		  D_TM_DURATION | D_TM_GAUGE | D_TM_DIRECTORY);
 	show_meta = true;
 	d_tm_print_my_children(shmem_root, root, 0, filter, NULL,
-			       show_meta, D_TM_VERBOSE, stdout);
+			       show_meta, D_TM_STANDARD, false, stdout);
 
 	sprintf(dirname, "manually added");
 	filter = (D_TM_COUNTER | D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT |

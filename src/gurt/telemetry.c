@@ -387,23 +387,20 @@ d_tm_free_node(uint64_t *shmem_root, struct d_tm_node_t *node)
  * \param[in]	val	Counter value
  * \param[in]	name	Counter name
  * \param[in]	format	Output format.
- *			Choose D_TM_VERBOSE for standard output.
+ *			Choose D_TM_STANDARD for standard output.
  *			Choose D_TM_CSV for comma separated values.
  * \param[in]	stream	Output stream (stdout, stderr)
  */
 void
 d_tm_print_counter(uint64_t val, char *name, int format, FILE *stream)
 {
-	if ((name == NULL) || (stream == NULL))
+	if ((stream == NULL) || (name == NULL))
 		return;
 
-	switch (format) {
-	case D_TM_CSV:
-		fprintf(stream, "counter,%lu", val);
-		break;
-	default:
+	if (format == D_TM_CSV)
+		fprintf(stream, "/%s,counter,%lu", name, val);
+	else
 		fprintf(stream, "counter: %s = %" PRIu64, name, val);
-	}
 }
 
 /**
@@ -412,7 +409,7 @@ d_tm_print_counter(uint64_t val, char *name, int format, FILE *stream)
  * \param[in]	clk	Timestamp value
  * \param[in]	name	Timestamp name
  * \param[in]	format	Output format.
- *			Choose D_TM_VERBOSE for standard output.
+ *			Choose D_TM_STANDARD for standard output.
  *			Choose D_TM_CSV for comma separated values.
  * \param[in]	stream	Output stream (stdout, stderr)
  */
@@ -438,13 +435,10 @@ d_tm_print_timestamp(time_t *clk, char *name, int format, FILE *stream)
 	 */
 	temp[D_TM_TIME_BUFF_LEN - 2] = 0;
 
-	switch (format) {
-	case D_TM_CSV:
-		fprintf(stream, "timestamp,%s", temp);
-		break;
-	default:
+	if (format == D_TM_CSV)
+		fprintf(stream, "/%s,timestamp,%s", name, temp);
+	else
 		fprintf(stream, "timestamp: %s: %s", name, temp);
-	}
 }
 
 /**
@@ -454,7 +448,7 @@ d_tm_print_timestamp(time_t *clk, char *name, int format, FILE *stream)
  * \param[in]	name	Timer name
  * \param[in]	tm_type	Timer type
  * \param[in]	format	Output format.
- *			Choose D_TM_VERBOSE for standard output.
+ *			Choose D_TM_STANDARD for standard output.
  *			Choose D_TM_CSV for comma separated values.
  * \param[in]	stream	Output stream (stdout, stderr)
  */
@@ -472,21 +466,21 @@ d_tm_print_timer_snapshot(struct timespec *tms, char *name, int tm_type,
 	switch (tm_type) {
 	case D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_REALTIME:
 		if (format == D_TM_CSV)
-			fprintf(stream, "snapshot realtime,%lu", us);
+			fprintf(stream, "/%s,snapshot realtime,%lu", name, us);
 		else
 			fprintf(stream, "snapshot realtime: %s = %lu us",
 				name, us);
 		break;
 	case D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_PROCESS_CPUTIME:
 		if (format == D_TM_CSV)
-			fprintf(stream, "snapshot process,%lu", us);
+			fprintf(stream, "/%s,snapshot process,%lu", name, us);
 		else
 			fprintf(stream, "snapshot process: %s = %lu us",
 				name, us);
 		break;
 	case D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_THREAD_CPUTIME:
 		if (format == D_TM_CSV)
-			fprintf(stream, "snapshot thread,%lu", us);
+			fprintf(stream, "/%s,snapshot thread,%lu", name, us);
 		else
 			fprintf(stream, "snapshot thread: %s = %lu us",
 				name, us);
@@ -507,7 +501,7 @@ d_tm_print_timer_snapshot(struct timespec *tms, char *name, int tm_type,
  * \param[in]	name	Duration timer name
  * \param[in]	tm_type	Duration timer type
  * \param[in]	format	Output format.
- *			Choose D_TM_VERBOSE for standard output.
+ *			Choose D_TM_STANDARD for standard output.
  *			Choose D_TM_CSV for comma separated values.
  * \param[in]	stream	Output stream (stdout, stderr)
  */
@@ -527,21 +521,21 @@ d_tm_print_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 	switch (tm_type) {
 	case D_TM_DURATION | D_TM_CLOCK_REALTIME:
 		if (format == D_TM_CSV)
-			fprintf(stream, "duration realtime,%lu", us);
+			fprintf(stream, "/%s,duration realtime,%lu", name, us);
 		else
 			fprintf(stream, "duration realtime: %s = %lu us",
 				name, us);
 		break;
 	case D_TM_DURATION | D_TM_CLOCK_PROCESS_CPUTIME:
 		if (format == D_TM_CSV)
-			fprintf(stream, "duration process,%lu", us);
+			fprintf(stream, "/%s,duration process,%lu", name, us);
 		else
 			fprintf(stream, "duration process: %s = %lu us",
 				name, us);
 		break;
 	case D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME:
 		if (format == D_TM_CSV)
-			fprintf(stream, "duration thread,%lu", us);
+			fprintf(stream, "/%s,duration thread,%lu", name, us);
 		else
 			fprintf(stream, "duration thread: %s = %lu us",
 				name, us);
@@ -564,7 +558,7 @@ d_tm_print_duration(struct timespec *tms, struct d_tm_stats_t *stats,
  * \param[in]	stats	Optional statistics
  * \param[in]	name	Timer name
  * \param[in]	format	Output format.
- *			Choose D_TM_VERBOSE for standard output.
+ *			Choose D_TM_STANDARD for standard output.
  *			Choose D_TM_CSV for comma separated values.
  * \param[in]	stream	Output stream (stdout, stderr)
  */
@@ -576,7 +570,7 @@ d_tm_print_gauge(uint64_t val, struct d_tm_stats_t *stats, char *name,
 		return;
 
 	if (format == D_TM_CSV)
-		fprintf(stream, "gauge,%lu", val);
+		fprintf(stream, "/%s,gauge,%lu", name, val);
 	else
 		fprintf(stream, "gauge: %s = %lu", name, val);
 
@@ -588,47 +582,30 @@ d_tm_print_gauge(uint64_t val, struct d_tm_stats_t *stats, char *name,
  * Client function to print the metadata strings \a short_desc and \a long_desc
  * to the \a stream provided
  *
- * \param[in]	short_desc	Memory is allocated and the short
- *				description is copied here
- * \param[in]	long_desc	Memory is allocated and the long
- *				description is copied here
- * \param[in]	pad		When using the CSV format only, if true,
- *				pads the output with commas for the missing
- *				statistics.
+ * \param[in]	short_desc	Pointer to the short description metadata
+ * \param[in]	long_desc	Pointer to the long description metadata
  * \param[in]	format		Output format.
- *				Choose D_TM_VERBOSE for standard output.
+ *				Choose D_TM_STANDARD for standard output.
  *				Choose D_TM_CSV for comma separated values.
  * \param[in]	stream		Output stream (stdout, stderr)
  */
 void
-d_tm_print_metadata(char *shortDesc, char *longDesc, bool pad,
-		    int format, FILE *stream)
+d_tm_print_metadata(char *short_desc, char *long_desc, int format, FILE *stream)
 {
-	int	lenShort = 0;
-	int	lenLong = 0;
-
-	if (shortDesc != NULL)
-		lenShort = strnlen(shortDesc, D_TM_MAX_SHORT_LEN);
-	if (longDesc != NULL)
-		lenLong = strnlen(longDesc, D_TM_MAX_LONG_LEN);
-
 	if (format == D_TM_CSV) {
-		if (pad && ((lenShort > 0) || (lenLong > 0)))
-			fprintf(stream, ",,,,,");
-
-		if (lenShort > 0)
-			fprintf(stream, ",%s", shortDesc);
-		else if (lenLong > 0)
+		if (short_desc != NULL)
+			fprintf(stream, ",%s", short_desc);
+		else if (long_desc != NULL)
 			fprintf(stream, ",");
 
-		if (lenLong > 0)
-			fprintf(stream, ",%s", longDesc);
+		if (long_desc != NULL)
+			fprintf(stream, ",%s", long_desc);
 	} else {
-		if (lenShort > 0)
-			fprintf(stream, ", meta short: %s", shortDesc);
+		if (short_desc != NULL)
+			fprintf(stream, ", meta short: %s", short_desc);
 
-		if (lenLong > 0)
-			fprintf(stream, ", meta long: %s", longDesc);
+		if (long_desc != NULL)
+			fprintf(stream, ", meta long: %s", long_desc);
 	}
 }
 
@@ -647,20 +624,23 @@ d_tm_print_metadata(char *shortDesc, char *longDesc, bool pad,
  *				printed for this and children nodes.
  * \param[in]	show_meta	Set to true to print the meta-data.
  * \param[in]	format		Output format.
- *				Choose D_TM_VERBOSE for standard output.
+ *				Choose D_TM_STANDARD for standard output.
  *				Choose D_TM_CSV for comma separated values.
  */
 void
 d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
-		FILE *stream, char *path, bool show_meta, int format)
+		FILE *stream, char *path, bool show_meta, int format,
+		bool show_timestamp)
 {
 	struct d_tm_stats_t	stats = {0};
 	struct timespec		tms;
 	uint64_t		val;
 	time_t			clk;
+	char			time_buff[D_TM_TIME_BUFF_LEN];
+	char			*timestamp;
 	char			*name = NULL;
-	char			*shortDesc = NULL;
-	char			*longDesc = NULL;
+	char			*short_desc = NULL;
+	char			*long_desc = NULL;
 	bool			stats_printed = false;
 	int			i = 0;
 	int			rc;
@@ -669,16 +649,32 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 	if (name == NULL)
 		return;
 
+	if (show_timestamp) {
+		clk = time(NULL);
+		timestamp = ctime_r(&clk, time_buff);
+		timestamp[D_TM_TIME_BUFF_LEN - 2] = 0;
+	}
+
 	if (format == D_TM_CSV) {
-		fprintf(stream, "%s/%s,", path, name);
+		if (show_timestamp)
+			fprintf(stream, "%s,%s", timestamp, path);
+		else
+			fprintf(stream, "%s", path);
 	} else {
 		for (i = 0; i < level; i++)
 			fprintf(stream, "%20s", " ");
+		if ((show_timestamp) && (node->dtn_type != D_TM_DIRECTORY))
+			fprintf(stream, "%s, ", timestamp);
 	}
 
 	switch (node->dtn_type) {
 	case D_TM_DIRECTORY:
-		if (format != D_TM_CSV)
+		/**
+		 * A tree is printed for standard output where the directory
+		 * names are printed in a hierarchy.  In CSV format, the full
+		 * path names are printed in each line of output.
+		 */
+		if (format == D_TM_STANDARD)
 			fprintf(stream, "%-20s\n", name);
 		break;
 	case D_TM_COUNTER:
@@ -740,12 +736,16 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 		show_meta = false;
 
 	if (show_meta) {
-		d_tm_get_metadata(&shortDesc, &longDesc, shmem_root, node,
+		d_tm_get_metadata(&short_desc, &long_desc, shmem_root, node,
 				  NULL);
-		d_tm_print_metadata(shortDesc, longDesc, !stats_printed, format,
-				    stream);
-		D_FREE_PTR(shortDesc);
-		D_FREE_PTR(longDesc);
+		if (format == D_TM_CSV) {
+			if (!stats_printed &&
+			    ((short_desc != NULL) || (long_desc != NULL)))
+				fprintf(stream, ",,,,,");
+		}
+		d_tm_print_metadata(short_desc, long_desc, format, stream);
+		D_FREE_PTR(short_desc);
+		D_FREE_PTR(long_desc);
 	}
 
 	if (node->dtn_type != D_TM_DIRECTORY)
@@ -758,7 +758,7 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
  * \param[in]	stream	Identifies the output stream
  * \param[in]	stats	Pointer to the node statistics
  * \param[in]	format	Output format.
- *			Choose D_TM_VERBOSE for standard output.
+ *			Choose D_TM_STANDARD for standard output.
  *			Choose D_TM_CSV for comma separated values.
  */
 void
@@ -793,7 +793,7 @@ d_tm_print_stats(FILE *stream, struct d_tm_stats_t *stats, int format)
 void
 d_tm_print_my_children(uint64_t *shmem_root, struct d_tm_node_t *node,
 		       int level, int filter, char *name, bool show_meta,
-		       int format, FILE *stream)
+		       int format, bool show_timestamp, FILE *stream)
 {
 	char	*path = NULL;
 	char	*node_name = NULL;
@@ -801,15 +801,9 @@ d_tm_print_my_children(uint64_t *shmem_root, struct d_tm_node_t *node,
 	if ((node == NULL) || (stream == NULL))
 		return;
 
-	if ((format == D_TM_CSV) && (level == 0))
-		fprintf(stream,
-			"name,type,value,min,max,mean,sample_size,std_dev,"
-			"metadata_short,metadata_long\n");
-
 	if (node->dtn_type & filter)
 		d_tm_print_node(shmem_root, node, level, stream, name,
-				show_meta, format);
-
+				show_meta, format, show_timestamp);
 	node = node->dtn_child;
 	node = d_tm_conv_ptr(shmem_root, node);
 	if (node == NULL)
@@ -820,19 +814,42 @@ d_tm_print_my_children(uint64_t *shmem_root, struct d_tm_node_t *node,
 		if (node_name == NULL)
 			break;
 
-		if (name == NULL)
+		if ((name == NULL) ||
+		    (strncmp(name, "/", D_TM_MAX_NAME_LEN) == 0))
 			D_ASPRINTF(path, "/%s", node_name);
-		else if (strncmp(name, "/", D_TM_MAX_NAME_LEN) == 0)
-			D_ASPRINTF(path, "%s", node_name);
 		else
 			D_ASPRINTF(path, "%s/%s", name, node_name);
 
 		d_tm_print_my_children(shmem_root, node, level + 1, filter,
-				       path, show_meta, format, stream);
+				       path, show_meta, format, show_timestamp,
+				       stream);
 		D_FREE_PTR(path);
 		node = node->dtn_sibling;
 		node = d_tm_conv_ptr(shmem_root, node);
 	}
+}
+
+/**
+ * Prints the header for CSV output
+ *
+ * \param[in]	extra_fields	A bitmask.  Add D_TM_INCLUDE_TIMESTAMP to print
+ *				a header for timestamp data.  Add
+ *				D_TM_INCLUDE_METADATA to print a header for
+ *				the metadata.
+ * \param[in]	stream		Direct output to this stream (stdout, stderr)
+ */
+void
+d_tm_print_field_descriptors(int extra_fields, FILE *stream)
+{
+	if (extra_fields & D_TM_INCLUDE_TIMESTAMP)
+		fprintf(stream, "timestamp,");
+
+	fprintf(stream, "name,type,value,min,max,mean,sample_size,std_dev");
+
+	if (extra_fields & D_TM_INCLUDE_METADATA)
+		fprintf(stream, ",metadata_short,metadata_long");
+
+	fprintf(stream, "\n");
 }
 
 /**
@@ -2613,6 +2630,12 @@ int d_tm_get_metadata(char **sh_desc, char **lng_desc, uint64_t *shmem_root,
 
 	if ((sh_desc == NULL) && (lng_desc == NULL))
 		return -DER_INVAL;
+
+	if (sh_desc != NULL)
+		*sh_desc = NULL;
+
+	if (lng_desc != NULL)
+		*lng_desc = NULL;
 
 	if (node == NULL) {
 		node = d_tm_find_metric(shmem_root, metric);
