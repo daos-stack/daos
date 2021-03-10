@@ -1013,6 +1013,12 @@ vos_tree_get_overhead(int alloc_overhead, enum VOS_TREE_CLASS tclass,
 int
 vos_pool_get_msize(void);
 
+/** Return the size of the container metadata in persistent memory on-disk
+ *  format
+ */
+int
+vos_container_get_msize(void);
+
 /** Return the cutoff size for SCM allocation.  Larger blocks are allocated to
  *  NVME.
  */
