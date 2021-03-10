@@ -4,7 +4,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
+import re
 
 
 class RebuildTests(TestWithServers):
@@ -15,6 +16,8 @@ class RebuildTests(TestWithServers):
 
     :avocado: recursive
     """
+
+    CANCEL_FOR_TICKET = [["DAOS-6983", "object_qty", 20]]
 
     def run_rebuild_test(self, pool_quantity):
         """Run the rebuild test for the specified number of pools.
@@ -29,8 +32,10 @@ class RebuildTests(TestWithServers):
             self.pool.append(self.get_pool(create=False))
             self.container.append(
                 self.get_container(self.pool[-1], create=False))
-        rank = self.params.get("rank", "/run/testparams/*")
+        rank_index = self.params.get("rank_ind", "/run/testparams/*")
         obj_class = self.params.get("object_class", "/run/testparams/*")
+        num_of_rep = int(re.findall(r"OC_RP_(\d)", obj_class)[0])
+        self.log.info("-->Number of data replica, num_of_rep= %s", num_of_rep)
 
         # Create the pools and confirm their status
         server_count = len(self.hostlist_servers)
@@ -52,6 +57,14 @@ class RebuildTests(TestWithServers):
         for index in range(pool_quantity):
             self.container[index].create()
             self.container[index].write_objects(rank, obj_class)
+
+        # Get written_objects target rank from rank_index
+        if self.container[0].object_qty.value == 0:
+            rank = rank_index
+        else:
+            rank = self.container[0].get_target_rank_lists(
+                " prior to rebuild")[0][rank_index  % num_of_rep]
+        self.log.info("-->Target rank to rebuild: %s", rank)
 
         # Determine how many objects will need to be rebuilt
         for index in range(pool_quantity):
@@ -81,8 +94,9 @@ class RebuildTests(TestWithServers):
                 self.pool[index].exclude([rank], self.d_log)
 
         # Wait for recovery to start
-        for index in range(pool_quantity):
-            self.pool[index].wait_for_rebuild(True)
+        if pool_quantity < 2:
+            for index in range(pool_quantity):
+                self.pool[index ].wait_for_rebuild(True)
 
         # Wait for recovery to complete
         for index in range(pool_quantity):
@@ -109,7 +123,6 @@ class RebuildTests(TestWithServers):
                     "Data verification error after rebuild")
         self.log.info("Test Passed")
 
-    @skipForTicket("DAOS-6865")
     def test_simple_rebuild(self):
         """JIRA ID: DAOS-XXXX Rebuild-001.
 
@@ -123,7 +136,6 @@ class RebuildTests(TestWithServers):
         """
         self.run_rebuild_test(1)
 
-    @skipForTicket("DAOS-6865")
     def test_multipool_rebuild(self):
         """JIRA ID: DAOS-XXXX (Rebuild-002).
 

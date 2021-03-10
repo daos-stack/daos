@@ -42,11 +42,11 @@ container:
 testparams:
   ranks: !mux
     rank1:
-      rank: 1
-    rank4:
-      rank: 4
+      rank_ind: 1
+    rank2:
+      rank_ind: 2
     rank3:
-      rank: 3
+      rank_ind: 3
   quantity: 2
   object_class: OC_RP_3G1
 
