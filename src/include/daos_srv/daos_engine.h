@@ -651,7 +651,7 @@ int dsc_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch,
 int dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		  unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
 		  daos_iom_t *maps, unsigned int extra_flag,
-		  unsigned int *extra_arg);
+		  unsigned int *extra_arg, d_iov_t *csum_iov);
 
 int dsc_obj_update(daos_handle_t oh, uint64_t flags, daos_key_t *dkey,
 		   unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls);
@@ -743,7 +743,7 @@ struct dss_enum_unpack_io {
 	daos_unit_oid_t		 ui_oid;	/**< type <= OBJ */
 	daos_key_t		 ui_dkey;	/**< type <= DKEY */
 	daos_iod_t		*ui_iods;
-	struct dcs_iod_csums	*ui_iods_csums;
+	d_iov_t			 ui_csum_iov;
 	/* punched epochs per akey */
 	daos_epoch_t		*ui_akey_punch_ephs;
 	daos_epoch_t		*ui_rec_punch_ephs;
@@ -862,5 +862,21 @@ struct sys_db {
 	void	(*sd_lock)(struct sys_db *db);
 	void	(*sd_unlock)(struct sys_db *db);
 };
+
+/** Flags for dss_drpc_call */
+enum dss_drpc_call_flag {
+	/** Do not wait for a response. Implies DSS_DRPC_NO_SCHED. */
+	DSS_DRPC_NO_RESP	= 1,
+	/**
+	 * Do not Argobots-schedule. If the dRPC requires a response, this will
+	 * block the thread until a response is received. That is usually
+	 * faster than waiting for the response by Argobots-scheduling if the
+	 * dRPC can be quickly handled by the local daos_server alone.
+	 */
+	DSS_DRPC_NO_SCHED	= 2
+};
+
+int dss_drpc_call(int32_t module, int32_t method, void *req, size_t req_size,
+		  unsigned int flags, Drpc__Response **resp);
 
 #endif /* __DSS_API_H__ */

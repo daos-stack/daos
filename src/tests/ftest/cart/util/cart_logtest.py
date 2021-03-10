@@ -164,47 +164,6 @@ class RegionCounter():
 # error lines.
 shown_logs = set()
 
-# List of known areas where there may be a mismatch between the facility used
-# for alloc vs free.  Typically this is where memory is allocated in one file
-# but freed in another, however allocations in header file also feature.
-
-# First is a lookup dict of commonly shared facilities, key is allocation
-# facility, value is set of free facilities.
-
-# Second part is a unordered dict of functions which are whitelisted
-# specifically, key is function name, value is list of variables.
-# Both the alloc and free function need to be whitelisted.
-
-mismatch_table = {'client': ('array'),
-                  'daos': ('common', 'container', 'pool'),
-                  'common': ('container', 'pool'),
-                  'container': ('common'),
-                  'mgmt': ('common', 'daos', 'pool', 'rsvc'),
-                  'misc': ('common', 'mgmt'),
-                  'pool': ('common'),
-                  'server': ('daos')}
-
-mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
-                     'crt_rpc_handler_common': ('rpc_priv'),
-                     'bio_sgl_init': ('sgl->bs_iovs'),
-                     'pool_svc_name_cb': ('s'),
-                     'daos_iov_copy': ('dst->iov_buf'),
-                     'ds_pool_tgt_map_update': ('arg'),
-                     'enum_cont_cb': ('ptr'),
-                     'path_gen': ('*fpath'),
-                     'd_sgl_init': ('sgl->sg_iovs'),
-                     'iod_fetch': ('biovs')}
-
-mismatch_free_ok = {'crt_rpc_priv_free': ('rpc_priv'),
-                    'bio_sgl_fini': ('sgl->bs_iovs'),
-                    'fini_free': ('svc->s_name',
-                                  'svc->s_db_path'),
-                    'd_sgl_fini': ('sgl->sg_iovs[i].iov_buf',
-                                   'sgl->sg_iovs'),
-                    'dtx_resync_ult': ('arg'),
-                    'ds_pool_list_cont_handler': ('cont_buf'),
-                    'notify_ready': ('req.uri')}
-
 wf = None
 
 def show_line(line, sev, msg, custom=None):
@@ -370,8 +329,8 @@ class LogTest():
                 else:
                     client_pids[pid].add(start, end, line.ts)
 
-            for pid in client_pids:
-                print('{}:{}'.format(pid, client_pids[pid]))
+            for cpid in client_pids:
+                print('{}:{}'.format(cpid, client_pids[pid]))
 
 #pylint: disable=too-many-branches,too-many-nested-blocks
     def _check_pid_from_log_file(self,
@@ -391,6 +350,7 @@ class LogTest():
         err_count = 0
         warnings_strict = False
         warnings_mode = False
+        server_shutdown = False
 
         regions = OrderedDict()
         memsize = hwm_counter()
@@ -417,6 +377,9 @@ class LogTest():
             except AttributeError:
                 pass
             if abort_on_warning:
+                if not server_shutdown and \
+                   line.fac != 'external' and line.function == 'server_fini':
+                    server_shutdown = True
                 if line.level <= cart_logparse.LOG_LEVELS['WARN']:
                     show = True
                     if self.hide_fi_calls:
@@ -432,7 +395,7 @@ class LogTest():
                             if line.filename == self.fi_location.filename:
                                 src_offset = line.lineno
                                 src_offset -= self.fi_location.lineno
-                                if src_offset > 0 and src_offset < 5:
+                                if 0 < src_offset < 5:
                                     show_line(line, 'NORMAL',
                                               'Logging allocation failure')
 
@@ -456,6 +419,9 @@ class LogTest():
                         if line.rpc_opcode == '0xfe000000':
                             show = False
                     if line.fac == 'external':
+                        show = False
+                    if show and server_shutdown and line.get_msg().endswith(
+                            "DER_SHUTDOWN(-2017): 'Service should shut down'"):
                         show = False
                     if show:
                         # Allow WARNING or ERROR messages, but anything higher
@@ -533,35 +499,6 @@ class LogTest():
                     if pointer in active_desc:
                         del active_desc[pointer]
                     if pointer in regions:
-                        if line.fac != regions[pointer].fac:
-                            fvar = line.get_field(3).strip("'")
-                            afunc = regions[pointer].function
-                            avar = regions[pointer].get_field(3).strip("':")
-                            if line.function in mismatch_free_ok and \
-                               fvar in mismatch_free_ok[line.function] and \
-                               afunc in mismatch_alloc_ok and \
-                               avar in mismatch_alloc_ok[afunc]:
-                                pass
-                            elif regions[pointer].fac in mismatch_table \
-                                 and line.fac in  \
-                                 mismatch_table[regions[pointer].fac]:
-                                pass
-                            else:
-                                show_line(regions[pointer], 'LOW',
-                                          'facility mismatch in alloc/free ' +
-                                          '{} != {}'.format(
-                                              regions[pointer].fac, line.fac))
-                                show_line(line, 'LOW',
-                                          'facility mismatch in alloc/free ' +
-                                          '{} != {}'.format(
-                                              regions[pointer].fac, line.fac))
-                                err_count += 1
-                        if line.level != regions[pointer].level:
-                            show_line(regions[pointer], 'LOW',
-                                      'level mismatch in alloc/free')
-                            show_line(line, 'LOW',
-                                      'level mismatch in alloc/free')
-                            err_count += 1
                         memsize.subtract(regions[pointer].calloc_size())
                         old_regions[pointer] = [regions[pointer], line]
                         del regions[pointer]
@@ -760,6 +697,7 @@ def run():
     parser.add_argument('--dfuse',
                         help='Summarise dfuse I/O',
                         action='store_true')
+    parser.add_argument('--warnings', action='store_true')
     parser.add_argument('file', help='input file')
     args = parser.parse_args()
     try:
@@ -779,7 +717,7 @@ def run():
         test_iter.check_dfuse_io()
     else:
         try:
-            test_iter.check_log_file(False)
+            test_iter.check_log_file(args.warnings)
         except LogError:
             print('Errors in log file, ignoring')
         except NotAllFreed:

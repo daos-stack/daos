@@ -523,7 +523,8 @@ pool_iv_map_ent_fetch(d_sg_list_t *dst_sgl, struct pool_iv_entry *src_iv)
 	dst_iv = dst_sgl->sg_iovs[0].iov_buf;
 	if (src_iv->piv_map.piv_pool_buf.pb_target_nr == (uint32_t)(-1)) {
 		memcpy(&dst_iv->piv_map.piv_pool_buf,
-		       &src_iv->piv_map.piv_pool_buf, sizeof(*src_iv));
+		       &src_iv->piv_map.piv_pool_buf,
+		       sizeof(src_iv->piv_map.piv_pool_buf));
 		return -DER_IVCB_FORWARD;
 	}
 
@@ -564,7 +565,8 @@ pool_iv_map_ent_update(d_sg_list_t *dst_sgl, struct pool_iv_entry *src_iv)
 		 * be called to store these -1 entry.
 		 **/
 		memcpy(&dst_iv->piv_map.piv_pool_buf,
-		       &src_iv->piv_map.piv_pool_buf, sizeof(*src_iv));
+		       &src_iv->piv_map.piv_pool_buf,
+		       sizeof(src_iv->piv_map.piv_pool_buf));
 		return 0;
 	}
 
@@ -573,7 +575,7 @@ pool_iv_map_ent_update(d_sg_list_t *dst_sgl, struct pool_iv_entry *src_iv)
 	src_pbuf_size = pool_buf_size(pb_nr);
 	dst_pbuf_size = dst_sgl->sg_iovs[0].iov_buf_len -
 			sizeof(struct pool_iv_map) + sizeof(struct pool_buf);
-	if (src_pbuf_size < dst_pbuf_size) {
+	if (src_pbuf_size > dst_pbuf_size) {
 		void *new_buf;
 		uint32_t new_size;
 
@@ -1264,7 +1266,8 @@ ds_pool_iv_srv_hdl_fetch(struct ds_pool *pool, uuid_t *pool_hdl_uuid,
 	pool_key->pik_entry_size = sizeof(struct pool_iv_entry);
 	rc = ds_iv_fetch(pool->sp_iv_ns, &key, &sgl, false /* retry */);
 	if (rc) {
-		D_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR,
+		D_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_SHUTDOWN,
+			 DB_ANY, DLOG_ERR,
 			 "iv fetch failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
