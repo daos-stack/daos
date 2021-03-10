@@ -617,20 +617,22 @@ d_tm_print_metadata(char *short_desc, char *long_desc, int format, FILE *stream)
  * \param[in]	node		Pointer to a parent or child node
  * \param[in]	level		Indicates level of indentation when printing
  *				this \a node
- * \param[in]	stream		Direct output to this stream (stdout, stderr)
  * \param[in]	path		The full path of the node.
  *				This path is not stored with the node itself.
  *				This string is passed in so that it may be
  *				printed for this and children nodes.
- * \param[in]	show_meta	Set to true to print the meta-data.
  * \param[in]	format		Output format.
  *				Choose D_TM_STANDARD for standard output.
  *				Choose D_TM_CSV for comma separated values.
+ * \param[in]	show_meta	Set to true to print the meta-data.
+ * \param[in]	show_timestamp	Set to true to print the timestamp the metric
+ *				was read by the consumer.
+ * \param[in]	stream		Direct output to this stream (stdout, stderr)
  */
 void
 d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
-		FILE *stream, char *path, bool show_meta, int format,
-		bool show_timestamp)
+		char *path, int format, bool show_meta, bool show_timestamp,
+		FILE *stream)
 {
 	struct d_tm_stats_t	stats = {0};
 	struct timespec		tms;
@@ -788,22 +790,31 @@ d_tm_print_stats(FILE *stream, struct d_tm_stats_t *stats, int format)
  * \param[in]	node		Pointer to a parent or child node
  * \param[in]	level		Indicates level of indentation when printing
  *				this \a node
+ * \param[in]	filter		A bitmask of d_tm_metric_types that filters the
+ *				results.
+ * \param[in]	path		Path to this metric (for printing)
+ * \param[in]	format		Output format.
+ *				Choose D_TM_STANDARD for standard output.
+ *				Choose D_TM_CSV for comma separated values.
+ * \param[in]	show_meta	Set to true to print the metadata.
+ * \param[in]	show_timestamp	Set to true to print the timestamp the metric
+ *				was read by the consumer.
  * \param[in]	stream		Direct output to this stream (stdout, stderr)
  */
 void
 d_tm_print_my_children(uint64_t *shmem_root, struct d_tm_node_t *node,
-		       int level, int filter, char *name, bool show_meta,
-		       int format, bool show_timestamp, FILE *stream)
+		       int level, int filter, char *path, int format,
+		       bool show_meta, bool show_timestamp, FILE *stream)
 {
-	char	*path = NULL;
+	char	*fullpath = NULL;
 	char	*node_name = NULL;
 
 	if ((node == NULL) || (stream == NULL))
 		return;
 
 	if (node->dtn_type & filter)
-		d_tm_print_node(shmem_root, node, level, stream, name,
-				show_meta, format, show_timestamp);
+		d_tm_print_node(shmem_root, node, level, path, format,
+				show_meta, show_timestamp, stream);
 	node = node->dtn_child;
 	node = d_tm_conv_ptr(shmem_root, node);
 	if (node == NULL)
@@ -814,16 +825,16 @@ d_tm_print_my_children(uint64_t *shmem_root, struct d_tm_node_t *node,
 		if (node_name == NULL)
 			break;
 
-		if ((name == NULL) ||
-		    (strncmp(name, "/", D_TM_MAX_NAME_LEN) == 0))
-			D_ASPRINTF(path, "/%s", node_name);
+		if ((path == NULL) ||
+		    (strncmp(path, "/", D_TM_MAX_NAME_LEN) == 0))
+			D_ASPRINTF(fullpath, "/%s", node_name);
 		else
-			D_ASPRINTF(path, "%s/%s", name, node_name);
+			D_ASPRINTF(fullpath, "%s/%s", path, node_name);
 
 		d_tm_print_my_children(shmem_root, node, level + 1, filter,
-				       path, show_meta, format, show_timestamp,
-				       stream);
-		D_FREE_PTR(path);
+				       fullpath, format, show_meta,
+				       show_timestamp, stream);
+		D_FREE_PTR(fullpath);
 		node = node->dtn_sibling;
 		node = d_tm_conv_ptr(shmem_root, node);
 	}

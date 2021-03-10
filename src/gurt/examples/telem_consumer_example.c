@@ -178,7 +178,7 @@ main(int argc, char **argv)
 		  D_TM_DURATION | D_TM_GAUGE | D_TM_DIRECTORY);
 	show_meta = true;
 	d_tm_print_my_children(shmem_root, root, 0, filter, NULL,
-			       show_meta, D_TM_STANDARD, false, stdout);
+			       D_TM_STANDARD, show_meta, false, stdout);
 
 	sprintf(dirname, "manually added");
 	filter = (D_TM_COUNTER | D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT |

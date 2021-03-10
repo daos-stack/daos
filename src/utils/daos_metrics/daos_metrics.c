@@ -181,7 +181,7 @@ main(int argc, char **argv)
 
 	while ((num_iter == 0) || (iteration < num_iter)) {
 		d_tm_print_my_children(shmem_root, root, 0, filter, dirname,
-				       show_meta, format, show_timestamp,
+				       format, show_meta, show_timestamp,
 				       stdout);
 		iteration++;
 		sleep(delay);

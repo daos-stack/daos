@@ -61,8 +61,8 @@ test_print_metrics(void **state)
 	filter = (D_TM_COUNTER | D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT |
 		  D_TM_DURATION | D_TM_GAUGE | D_TM_DIRECTORY);
 
-	d_tm_print_my_children(shmem_root, node, 0, filter, NULL, true,
-			       D_TM_STANDARD, false, stdout);
+	d_tm_print_my_children(shmem_root, node, 0, filter, NULL, D_TM_STANDARD,
+			       true, true, stdout);
 }
 
 static void

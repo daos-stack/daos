@@ -36,11 +36,11 @@ uint64_t d_tm_count_metrics(uint64_t *shmem_root, struct d_tm_node_t *node,
 int d_tm_list(struct d_tm_nodeList_t **head, uint64_t *shmem_root,
 	      struct d_tm_node_t *node, int d_tm_type);
 void d_tm_print_my_children(uint64_t *shmem_root, struct d_tm_node_t *node,
-			    int level, int filter, char *name, bool show_meta,
-			    int format, bool show_timestamp, FILE *stream);
+			    int level, int filter, char *path, int format,
+			    bool show_meta, bool show_timestamp, FILE *stream);
 void d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
-		     FILE *stream, char *name, bool show_meta, int format,
-		     bool show_timestamp);
+		     char *name, int format, bool show_meta,
+		     bool show_timestamp, FILE *stream);
 void d_tm_print_field_descriptors(int extra_fields, FILE *stream);
 void d_tm_print_counter(uint64_t val, char *name, int format, FILE *stream);
 void d_tm_print_timestamp(time_t *clk, char *name, int format, FILE *stream);

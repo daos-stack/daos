@@ -17,6 +17,7 @@
 #define D_TM_SHARED_MEMORY_KEY		0x10242048
 #define D_TM_SHARED_MEMORY_SIZE		(1024 * 1024)
 
+/** d_tm_metric_types */
 enum {
 	D_TM_DIRECTORY			= 0x001,
 	D_TM_COUNTER			= 0x002,
@@ -35,11 +36,13 @@ enum {
 	D_TM_RETAIN_SHMEM		= 0x002,
 };
 
+/** Output formats */
 enum {
 	D_TM_STANDARD			= 0x001,
 	D_TM_CSV			= 0x002,
 };
 
+/** Optional CSV field descriptors */
 enum {
 	D_TM_INCLUDE_TIMESTAMP		= 0x001,
 	D_TM_INCLUDE_METADATA		= 0x002,
