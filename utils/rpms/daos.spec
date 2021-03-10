@@ -3,11 +3,11 @@
 %define agent_svc_name daos_agent.service
 
 %global mercury_version 2.0.1~rc1-1%{?dist}
-%global libfabric_version 1.12.0~rc1-1
+%global libfabric_version 1.12.0
 
 Name:          daos
 Version:       1.3.0
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -406,6 +406,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Wed Mar 10 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.3.0-3
+- Update libfabric to v1.12.0
+
 * Thu Feb 25 2021 Li Wei <wei.g.li@intel.com> 1.3.0-2
 - Require raft-devel 0.7.3 that fixes an unstable leadership problem caused by
   removed replicas as well as some Coverity issues
