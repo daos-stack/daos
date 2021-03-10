@@ -358,8 +358,9 @@ class TestWithoutServers(Test):
             return
 
         for kv_pair in default_env:
-            if 0 in kv_pair:
-                key, value = kv_pair[0]
+            key = next(iter(kv_pair))
+            if key is not None:
+                value = kv_pair[key]
                 print("Adding {}={} to environment.\n".format(key, value))
                 os.environ[key] = value
 
