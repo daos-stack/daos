@@ -1,36 +1,57 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import getpass
+# pylint: disable=too-many-lines
+from datetime import datetime
+from getpass import getuser
 import os
 import socket
 import time
 
+from avocado import fail_on
+from ClusterShell.NodeSet import NodeSet
+
 from command_utils_base import \
-    CommandFailure, FormattedParameter, YamlParameters, CommandWithParameters
+    CommandFailure, FormattedParameter, YamlParameters, CommandWithParameters, \
+    CommonConfig
 from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
-from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human
-from dmg_utils import DmgCommand
+from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
+    convert_list
+from dmg_utils import get_dmg_command
+from server_utils_params import \
+    DaosServerTransportCredentials, DaosServerYamlParameters
+
+
+def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
+    """Get the daos_server command object to manage.
+
+    Args:
+        group (str): daos_server group name
+        cert_dir (str): directory in which to copy certificates
+        bin_dir (str): location of the daos_server executable
+        config_file (str): configuration file name and path
+        config_temp (str, optional): file name and path to use to generate the
+            configuration file locally and then copy it to all the hosts using
+            the config_file specification. Defaults to None, which creates and
+            utilizes the file specified by config_file.
+
+    Returns:
+        DaosServerCommand: the daos_server command object
+
+    """
+    transport_config = DaosServerTransportCredentials(cert_dir)
+    common_config = CommonConfig(group, transport_config)
+    config = DaosServerYamlParameters(config_file, common_config)
+    command = DaosServerCommand(bin_dir, config)
+    if config_temp:
+        # Setup the DaosServerCommand to write the config file data to the
+        # temporary file and then copy the file to all the hosts using the
+        # assigned filename
+        command.temporary_file = config_temp
+    return command
 
 
 class ServerFailed(Exception):
@@ -40,9 +61,11 @@ class ServerFailed(Exception):
 class DaosServerCommand(YamlCommand):
     """Defines an object representing the daos_server command."""
 
-    NORMAL_PATTERN = "DAOS I/O server.*started"
+    NORMAL_PATTERN = "DAOS I/O Engine.*started"
     FORMAT_PATTERN = "(SCM format required)(?!;)"
     REFORMAT_PATTERN = "Metadata format required"
+
+    DEFAULT_CONFIG_FILE = os.path.join(os.sep, "etc", "daos", "daos_server.yml")
 
     def __init__(self, path="", yaml_cfg=None, timeout=30):
         """Create a daos_server command object.
@@ -78,9 +101,9 @@ class DaosServerCommand(YamlCommand):
         # Used to override the sub_command.value parameter value
         self.sub_command_override = None
 
-        # Include the daos_io_server command launched by the daos_server
+        # Include the daos_engine command launched by the daos_server
         # command.
-        self._exe_names.append("daos_io_server")
+        self._exe_names.append("daos_engine")
 
     def get_sub_command_class(self):
         # pylint: disable=redefined-variable-type
@@ -133,7 +156,7 @@ class DaosServerCommand(YamlCommand):
             self.pattern = self.REFORMAT_PATTERN
         else:
             self.pattern = self.NORMAL_PATTERN
-        self.pattern_count = host_qty * len(self.yaml.server_params)
+        self.pattern_count = host_qty * len(self.yaml.engine_params)
 
     @property
     def using_nvme(self):
@@ -218,7 +241,7 @@ class DaosServerCommand(YamlCommand):
             #                           (default: 0)
             #   --group=                Server group name
             #   --socket_dir=           Location for all daos_server and
-            #                           daos_io_server sockets
+            #                           daos_engine sockets
             #   --insecure              allow for insecure connections
             #   --recreate-superblocks  recreate missing superblocks rather than
             #                           failing
@@ -288,6 +311,7 @@ class DaosServerCommand(YamlCommand):
 
 
 class DaosServerManager(SubprocessManager):
+    # pylint: disable=too-many-public-methods
     """Manages the daos_server execution on one or more hosts."""
 
     # Mapping of environment variable names to daos_server config param names
@@ -297,23 +321,57 @@ class DaosServerManager(SubprocessManager):
         "OFI_PORT": "fabric_iface_port",
     }
 
-    def __init__(self, server_command, manager="Orterun", dmg_cfg=None):
+    # Defined in telemetry_common.h
+    D_TM_SHARED_MEMORY_KEY = 0x10242048
+
+    def __init__(self, group, bin_dir,
+                 svr_cert_dir, svr_config_file, dmg_cert_dir, dmg_config_file,
+                 svr_config_temp=None, dmg_config_temp=None, manager="Orterun"):
         """Initialize a DaosServerManager object.
 
         Args:
-            server_command (ServerCommand): server command object
+            group (str): daos_server group name
+            binary_dir (str): directory from which to run daos_server/dmg
+            svr_cert_dir (str): directory in which to copy server certificates
+            svr_config_file (str): daos_server configuration file name and path
+            dmg_cert_dir (str): directory in which to copy dmg certificates
+            dmg_config_file (str): dmg configuration file name and path
+            svr_config_temp (str, optional): file name and path used to generate
+                the daos_server configuration file locally and copy it to all
+                the hosts using the config_file specification. Defaults to None.
+            dmg_config_temp (str, optional): file name and path used to generate
+                the dmg command configuration file locally and copy it to all
+                the hosts using the config_file specification. Defaults to None.
             manager (str, optional): the name of the JobManager class used to
                 manage the YamlCommand defined through the "job" attribute.
-                Defaults to "OpenMpi".
-            dmg_cfg (DmgYamlParameters, optional): The dmg configuration
-                file parameters used to connect to this group of servers.
+                Defaults to "Orterun".
         """
+        server_command = get_server_command(
+            group, svr_cert_dir, bin_dir, svr_config_file, svr_config_temp)
         super(DaosServerManager, self).__init__(server_command, manager)
         self.manager.job.sub_command_override = "start"
 
         # Dmg command to access this group of servers which will be configured
         # to access the daos_servers when they are started
-        self.dmg = DmgCommand(self.manager.job.command_path, dmg_cfg)
+        self.dmg = get_dmg_command(
+            group, dmg_cert_dir, bin_dir, dmg_config_file, dmg_config_temp)
+
+        # Set the correct certificate file ownership
+        if manager == "Systemctl":
+            self.manager.job.certificate_owner = "daos_server"
+            self.dmg.certificate_owner = getuser()
+
+        # An internal dictionary used to define the expected states of each
+        # server rank when checking their states. It will be populated with
+        # the dictionary output of DmgCommand.system_query() when any of the
+        # following methods are called:
+        #   - start()
+        #   - verify_expected_states(set_expected=True)
+        # Individual rank states may also be updated by calling the
+        # update_expected_states() method. This is required to mark any rank
+        # stopped by a test with the correct state to avoid errors being raised
+        # during tearDown().
+        self._expected_states = {}
 
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
@@ -328,11 +386,44 @@ class DaosServerManager(SubprocessManager):
         # Get the values for the dmg parameters
         self.dmg.get_params(test)
 
+    def prepare_dmg(self, hosts=None):
+        """Prepare the dmg command prior to its execution.
+
+        This is only required to be called once and is included as part of
+        calling prepare() and start().
+
+        It should be called idependently when a test variant is using servers
+        started by a previous test variant.
+
+        Args:
+            hosts (list, optional): dmg hostlist value. Defaults to None which
+                results in using the 'access_points' host list.
+        """
+        self._prepare_dmg_certificates()
+        self._prepare_dmg_hostlist(hosts)
+
+    def _prepare_dmg_certificates(self):
+        """Set up dmg certificates."""
+        local_host = socket.gethostname().split('.', 1)[0]
+        self.dmg.copy_certificates(
+            get_log_file("daosCA/certs"), local_host.split())
+
+    def _prepare_dmg_hostlist(self, hosts=None):
+        """Set up the dmg command host list to use the specified hosts.
+
+        Args:
+            hosts (list, optional): dmg hostlist value. Defaults to None which
+                results in using the 'access_points' host list.
+        """
+        if hosts is None:
+            hosts = self.get_config_value("access_points")
+        self.dmg.hostlist = hosts
+
     def prepare(self, storage=True):
         """Prepare to start daos_server.
 
         Args:
-            storage (bool, optional): whether or not to prepare dspm/nvme
+            storage (bool, optional): whether or not to prepare dcpm/nvme
                 storage. Defaults to True.
         """
         self.log.info(
@@ -340,17 +431,16 @@ class DaosServerManager(SubprocessManager):
             self._hosts, self.manager.command)
 
         # Create the daos_server yaml file
+        self.manager.job.temporary_file_hosts = self._hosts
         self.manager.job.create_yaml_file()
 
         # Copy certificates
         self.manager.job.copy_certificates(
             get_log_file("daosCA/certs"), self._hosts)
-        local_host = socket.gethostname().split('.', 1)[0]
-        self.dmg.copy_certificates(
-            get_log_file("daosCA/certs"), local_host.split())
+        self._prepare_dmg_certificates()
 
         # Prepare dmg for running storage format on all server hosts
-        self.dmg.hostlist = self._hosts
+        self._prepare_dmg_hostlist(self._hosts)
         if not self.dmg.yaml:
             # If using a dmg config file, transport security was
             # already configured.
@@ -363,17 +453,6 @@ class DaosServerManager(SubprocessManager):
         # Clean up any files that exist on the hosts
         self.clean_files()
 
-        # Make sure log file has been created for ownership change
-        if self.manager.job.using_nvme:
-            cmd_list = []
-            for server_params in self.manager.job.yaml.server_params:
-                log_file = server_params.log_file.value
-                if log_file is not None:
-                    self.log.info("Creating log file: %s", log_file)
-                    cmd_list.append("touch {}".format(log_file))
-            if cmd_list:
-                pcmd(self._hosts, "; ".join(cmd_list), False)
-
         if storage:
             # Prepare server storage
             if self.manager.job.using_nvme or self.manager.job.using_dcpm:
@@ -383,29 +462,37 @@ class DaosServerManager(SubprocessManager):
                     self.manager.mca.update(
                         {"plm_rsh_args": "-l root"}, "orterun.mca", True)
 
+        # Verify the socket directory exists when using a non-systemctl manager
+        self.verify_socket_directory(getuser())
+
     def clean_files(self, verbose=True):
         """Clean up the daos server files.
 
         Args:
             verbose (bool, optional): display clean commands. Defaults to True.
         """
-        clean_cmds = []
-        for server_params in self.manager.job.yaml.server_params:
-            scm_mount = server_params.get_value("scm_mount")
+        clean_commands = []
+        for index, engine_params in \
+                enumerate(self.manager.job.yaml.engine_params):
+            scm_mount = engine_params.get_value("scm_mount")
             self.log.info("Cleaning up the %s directory.", str(scm_mount))
 
             # Remove the superblocks
             cmd = "sudo rm -fr {}/*".format(scm_mount)
-            if cmd not in clean_cmds:
-                clean_cmds.append(cmd)
+            if cmd not in clean_commands:
+                clean_commands.append(cmd)
+
+            # Remove the shared memory segment associated with this io server
+            cmd = "sudo ipcrm -M {}".format(self.D_TM_SHARED_MEMORY_KEY + index)
+            clean_commands.append(cmd)
 
             # Dismount the scm mount point
             cmd = "while sudo umount {}; do continue; done".format(scm_mount)
-            if cmd not in clean_cmds:
-                clean_cmds.append(cmd)
+            if cmd not in clean_commands:
+                clean_commands.append(cmd)
 
             if self.manager.job.using_dcpm:
-                scm_list = server_params.get_value("scm_list")
+                scm_list = engine_params.get_value("scm_list")
                 if isinstance(scm_list, list):
                     self.log.info(
                         "Cleaning up the following device(s): %s.",
@@ -423,10 +510,10 @@ class DaosServerManager(SubprocessManager):
                         "done"
                     ]
                     cmd = "; ".join(cmd_list)
-                    if cmd not in clean_cmds:
-                        clean_cmds.append(cmd)
+                    if cmd not in clean_commands:
+                        clean_commands.append(cmd)
 
-        pcmd(self._hosts, "; ".join(clean_cmds), verbose)
+        pcmd(self._hosts, "; ".join(clean_commands), verbose)
 
     def prepare_storage(self, user, using_dcpm=None, using_nvme=None):
         """Prepare the server storage.
@@ -478,9 +565,18 @@ class DaosServerManager(SubprocessManager):
             raise ServerFailed("Error preparing {} storage".format(dev_type))
 
     def detect_format_ready(self, reformat=False):
-        """Detect when all the daos_servers are ready for storage format."""
+        """Detect when all the daos_servers are ready for storage format.
+
+        Args:
+            reformat (bool, optional): whether or detect reformat (True) or
+                format (False) messages. Defaults to False.
+
+        Raises:
+            ServerFailed: if there was an error starting the servers.
+
+        """
         f_type = "format" if not reformat else "reformat"
-        self.log.info("<SERVER> Waiting for servers to be ready for format")
+        self.log.info("<SERVER> Waiting for servers to be ready for %s", f_type)
         self.manager.job.update_pattern(f_type, len(self._hosts))
         try:
             self.manager.run()
@@ -489,8 +585,8 @@ class DaosServerManager(SubprocessManager):
             raise ServerFailed(
                 "Failed to start servers before format: {}".format(error))
 
-    def detect_io_server_start(self, host_qty=None):
-        """Detect when all the daos_io_servers have started.
+    def detect_engine_start(self, host_qty=None):
+        """Detect when all the engines have started.
 
         Args:
             host_qty (int): number of servers expected to have been started.
@@ -502,14 +598,17 @@ class DaosServerManager(SubprocessManager):
         """
         if host_qty is None:
             hosts_qty = len(self._hosts)
-        self.log.info("<SERVER> Waiting for the daos_io_servers to start")
+        self.log.info("<SERVER> Waiting for the daos_engine to start")
         self.manager.job.update_pattern("normal", hosts_qty)
-        if not self.manager.job.check_subprocess_status(self.manager.process):
+        if not self.manager.check_subprocess_status(self.manager.process):
             self.kill()
             raise ServerFailed("Failed to start servers after format")
 
         # Update the dmg command host list to work with pool create/destroy
-        self.dmg.hostlist = self.get_config_value("access_points")
+        self._prepare_dmg_hostlist()
+
+        # Define the expected states for each rank
+        self._expected_states = self.system_query()
 
     def reset_storage(self):
         """Reset the server storage.
@@ -540,11 +639,11 @@ class DaosServerManager(SubprocessManager):
             verbose (bool, optional): display commands. Defaults to False.
 
         """
-        user = getpass.getuser() if user is None else user
+        user = getuser() if user is None else user
 
         cmd_list = set()
-        for server_params in self.manager.job.yaml.server_params:
-            scm_mount = server_params.scm_mount.value
+        for engine_params in self.manager.job.yaml.engine_params:
+            scm_mount = engine_params.scm_mount.value
 
             # Support single or multiple scm_mount points
             if not isinstance(scm_mount, list):
@@ -572,8 +671,8 @@ class DaosServerManager(SubprocessManager):
         # be further investigated.
         self.dmg.storage_format(timeout=40)
 
-        # Wait for all the daos_io_servers to start
-        self.detect_io_server_start()
+        # Wait for all the engines to start
+        self.detect_engine_start()
 
         return True
 
@@ -647,7 +746,7 @@ class DaosServerManager(SubprocessManager):
             str: the current DAOS system state
 
         """
-        data = self.dmg.system_query()
+        data = self.system_query()
         if not data:
             # The regex failed to get the rank and state
             raise ServerFailed(
@@ -705,13 +804,13 @@ class DaosServerManager(SubprocessManager):
         return daos_state
 
     def system_start(self):
-        """Start the DAOS IO servers.
+        """Start the DAOS I/O Engines.
 
         Raises:
             ServerFailed: if there was an error starting the servers
 
         """
-        self.log.info("Starting DAOS IO servers")
+        self.log.info("Starting DAOS I/O Engines")
         self.check_system_state(("stopped"))
         self.dmg.system_start()
         if self.dmg.result.exit_status != 0:
@@ -719,7 +818,7 @@ class DaosServerManager(SubprocessManager):
                 "Error starting DAOS:\n{}".format(self.dmg.result))
 
     def system_stop(self, extra_states=None):
-        """Stop the DAOS IO servers.
+        """Stop the DAOS I/O Engines.
 
         Args:
             extra_states (list, optional): a list of DAOS system states in
@@ -733,7 +832,7 @@ class DaosServerManager(SubprocessManager):
         valid_states = ["started", "joined"]
         if extra_states:
             valid_states.extend(extra_states)
-        self.log.info("Stopping DAOS IO servers")
+        self.log.info("Stopping DAOS I/O Engines")
         self.check_system_state(valid_states)
         self.dmg.system_stop(force=True)
         if self.dmg.result.exit_status != 0:
@@ -779,18 +878,18 @@ class DaosServerManager(SubprocessManager):
         using_nvme = self.manager.job.using_nvme
 
         if using_dcpm or using_nvme:
-            # Stop the DAOS IO servers in order to be able to scan the storage
+            # Stop the DAOS I/O Engines in order to be able to scan the storage
             self.system_stop()
 
             # Scan all of the hosts for their SCM and NVMe storage
-            self.dmg.hostlist = self._hosts
+            self._prepare_dmg_hostlist(self._hosts)
             data = self.dmg.storage_scan(verbose=True)
-            self.dmg.hostlist = self.get_config_value("access_points")
+            self._prepare_dmg_hostlist()
             if self.dmg.result.exit_status != 0:
                 raise ServerFailed(
                     "Error obtaining DAOS storage:\n{}".format(self.dmg.result))
 
-            # Restart the DAOS IO servers
+            # Restart the DAOS I/O Engines
             self.system_start()
 
         if using_dcpm:
@@ -822,3 +921,199 @@ class DaosServerManager(SubprocessManager):
             str(storage[0]), bytes_to_human(storage[0], binary=False),
             str(storage[1]), bytes_to_human(storage[1], binary=False))
         return storage
+
+    def system_query(self):
+        """Query the state of the daos_server ranks.
+
+        Returns:
+            dict: dictionary of server rank keys, each referencing a dictionary
+                of information.  This will be empty if there was error obtaining
+                the dmg system query output.
+
+        """
+        try:
+            data = self.dmg.system_query()
+        except CommandFailure:
+            data = {}
+        return data
+
+    def update_expected_states(self, ranks, state):
+        """Update the expected state of the specified server rank.
+
+        Args:
+            ranks (object): server ranks to update. Can be a single rank (int),
+                multiple ranks (list), or all the ranks (None).
+            state (object): new state to assign as the expected state of this
+                rank. Can be a str or a list.
+        """
+        if ranks is None:
+            ranks = [key for key in self._expected_states]
+        elif not isinstance(ranks, (list, tuple)):
+            ranks = [ranks]
+
+        for rank in ranks:
+            if rank in self._expected_states:
+                self.log.info(
+                    "Updating the expected state for rank %s on %s: %s -> %s",
+                    rank, self._expected_states[rank]["domain"],
+                    self._expected_states[rank]["state"], state)
+                self._expected_states[rank]["state"] = state
+
+    def verify_expected_states(self, set_expected=False):
+        """Verify that the expected server rank states match the current states.
+
+        Args:
+            set_expected (bool, optional): option to update the expected server
+                rank states to the current states prior to checking the states.
+                Defaults to False.
+
+        Returns:
+            dict: a dictionary of whether or not any of the server states were
+                not 'expected' (which should warrant an error) and whether or
+                the servers require a 'restart' (either due to any unexpected
+                states or because at least one servers was found to no longer
+                be running)
+
+        """
+        status = {"expected": True, "restart": False}
+        running_states = ["started", "joined"]
+        errored_states = ["errored"]
+        errored_hosts = []
+
+        # Get the current state of the servers
+        current_states = self.system_query()
+        if set_expected:
+            # Assign the expected states to the current server rank states
+            self.log.info("<SERVER> Assigning expected server states.")
+            self._expected_states = current_states.copy()
+
+        # Verify the expected states match the current states
+        self.log.info(
+            "<SERVER> Verifying server states: group=%s, hosts=%s",
+            self.get_config_value("name"), NodeSet.fromlist(self._hosts))
+        if current_states:
+            log_format = "  %-4s  %-15s  %-36s  %-22s  %-14s  %s"
+            self.log.info(
+                log_format,
+                "Rank", "Host", "UUID", "Expected State", "Current State",
+                "Result")
+            self.log.info(
+                log_format,
+                "-" * 4, "-" * 15, "-" * 36, "-" * 22, "-" * 14, "-" * 6)
+
+            # Verify that each expected rank appears in the current states
+            for rank in sorted(self._expected_states):
+                domain = self._expected_states[rank]["domain"].split(".")
+                current_host = domain[0].replace("/", "")
+                expected = self._expected_states[rank]["state"]
+                if isinstance(expected, (list, tuple)):
+                    expected = [item.lower() for item in expected]
+                else:
+                    expected = [expected.lower()]
+                try:
+                    current_rank = current_states.pop(rank)
+                    current = current_rank["state"].lower()
+                except KeyError:
+                    current = "not detected"
+
+                # Check if the rank's expected state matches the current state
+                result = "PASS" if current in expected else "RESTART"
+                status["expected"] &= current in expected
+
+                # Restart all ranks if the expected rank is not running
+                if current not in running_states:
+                    status["restart"] = True
+                    result = "RESTART"
+
+                # Keep track of any hosts with a server in the errored state
+                if current in errored_states:
+                    if current_host not in errored_hosts:
+                        errored_hosts.append(current_host)
+
+                self.log.info(
+                    log_format, rank, current_host,
+                    self._expected_states[rank]["uuid"], "|".join(expected),
+                    current, result)
+
+            # Report any current states that were not expected as an error
+            for rank in sorted(current_states):
+                status["expected"] = False
+                domain = current_states[rank]["domain"].split(".")
+                self.log.info(
+                    log_format, rank, domain[0].replace("/", ""),
+                    current_states[rank]["uuid"], "not detected",
+                    current_states[rank]["state"].lower(), "RESTART")
+
+        elif not self._expected_states:
+            # Expected states are populated as part of detect_io_server_start(),
+            # so if it is empty there was an error starting the servers.
+            self.log.info(
+                "  Unable to obtain current server state.  Undefined expected "
+                "server states due to a failure starting the servers.")
+            status["restart"] = True
+
+        else:
+            # Any failure to obtain the current rank information is an error
+            self.log.info(
+                "  Unable to obtain current server state.  If the servers are "
+                "not running this is expected.")
+
+            # Do not report an error if all servers are expected to be stopped
+            all_stopped = bool(self._expected_states)
+            for rank in sorted(self._expected_states):
+                states = self._expected_states[rank]["state"]
+                if not isinstance(states, (list, tuple)):
+                    states = [states]
+                if "stopped" not in [item.lower() for item in states]:
+                    all_stopped = False
+                    break
+            if all_stopped:
+                self.log.info("  All servers are expected to be stopped.")
+                status["restart"] = True
+            else:
+                status["expected"] = False
+
+        # Any unexpected state detected warrants a restart of all servers
+        if not status["expected"]:
+            status["restart"] = True
+
+        # Set the verified timestamp
+        if set_expected and hasattr(self.manager, "timestamps"):
+            self.manager.timestamps["verified"] = datetime.now().strftime(
+                "%Y-%m-%d %H:%M:%S")
+
+        # Dump the server logs for any server found in the errored state
+        if errored_hosts:
+            self.log.info(
+                "<SERVER> logs for ranks in the errored state since start "
+                "detection")
+            if hasattr(self.manager, "dump_logs"):
+                self.manager.dump_logs(errored_hosts)
+
+        return status
+
+    @fail_on(CommandFailure)
+    def stop_ranks(self, ranks, daos_log, force=False):
+        """Kill/Stop the specific server ranks using this pool.
+
+        Args:
+            ranks (list): a list of daos server ranks (int) to kill
+            daos_log (DaosLog): object for logging messages
+            force (bool, optional): whether to use --force option to dmg system
+                stop. Defaults to False.
+
+        Raises:
+            avocado.core.exceptions.TestFail: if there is an issue stopping the
+                server ranks.
+
+        """
+        msg = "Stopping DAOS ranks {} from server group {}".format(
+            ranks, self.get_config_value("name"))
+        self.log.info(msg)
+        daos_log.info(msg)
+
+        # Stop desired ranks using dmg
+        self.dmg.system_stop(ranks=convert_list(value=ranks), force=force)
+
+        # Update the expected status of the stopped/evicted ranks
+        self.update_expected_states(ranks, ["stopped", "evicted"])

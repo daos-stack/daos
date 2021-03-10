@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
@@ -89,7 +72,7 @@ func TestServer_getFaultDomain(t *testing.T) {
 	tmpDir, cleanup := common.CreateTestDir(t)
 	defer cleanup()
 
-	validFaultDomain := "/rack0/pdu1/node1"
+	validFaultDomain := "/host0"
 	cbScriptPath := filepath.Join(tmpDir, "cb.sh")
 	createFaultCBScriptFile(t, cbScriptPath, 0755, validFaultDomain)
 
@@ -112,6 +95,18 @@ func TestServer_getFaultDomain(t *testing.T) {
 				FaultPath: "junk",
 			},
 			expErr: config.FaultConfigFaultDomainInvalid,
+		},
+		"root-only path is not valid": {
+			cfg: &config.Server{
+				FaultPath: "/",
+			},
+			expErr: config.FaultConfigFaultDomainInvalid,
+		},
+		"too many layers": { // TODO DAOS-6353: change when multiple layers supported
+			cfg: &config.Server{
+				FaultPath: "/rack1/host0",
+			},
+			expErr: config.FaultConfigTooManyLayersInFaultDomain,
 		},
 		"cfg fault callback": {
 			cfg: &config.Server{
@@ -184,7 +179,7 @@ func TestServer_getFaultDomainFromCallback(t *testing.T) {
 	tmpDir, cleanup := common.CreateTestDir(t)
 	defer cleanup()
 
-	validFaultDomain := "/my/fault/domain"
+	validFaultDomain := "/myfaultdomain"
 
 	goodScriptPath := filepath.Join(tmpDir, "good.sh")
 	createFaultCBScriptFile(t, goodScriptPath, 0755, validFaultDomain)
@@ -203,6 +198,12 @@ func TestServer_getFaultDomainFromCallback(t *testing.T) {
 
 	invalidScriptPath := filepath.Join(tmpDir, "invalid.sh")
 	createFaultCBScriptFile(t, invalidScriptPath, 0755, "some junk")
+
+	multiLayerScriptPath := filepath.Join(tmpDir, "multilayer.sh")
+	createFaultCBScriptFile(t, multiLayerScriptPath, 0755, "/one/two")
+
+	rootScriptPath := filepath.Join(tmpDir, "rootdomain.sh")
+	createFaultCBScriptFile(t, rootScriptPath, 0755, "/")
 
 	for name, tc := range map[string]struct {
 		input     string
@@ -239,6 +240,14 @@ func TestServer_getFaultDomainFromCallback(t *testing.T) {
 		"script returned invalid fault domain": {
 			input:  invalidScriptPath,
 			expErr: config.FaultConfigFaultDomainInvalid,
+		},
+		"script returned root fault domain": {
+			input:  rootScriptPath,
+			expErr: config.FaultConfigFaultDomainInvalid,
+		},
+		"script returned fault domain with too many layers": { // TODO DAOS-6353: change when multiple layers supported
+			input:  multiLayerScriptPath,
+			expErr: config.FaultConfigTooManyLayersInFaultDomain,
 		},
 		"no arbitrary shell commands allowed": {
 			input:  "echo \"my dog has fleas\"",

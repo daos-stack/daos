@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package main
@@ -37,7 +20,9 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
+	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
@@ -126,7 +111,37 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with missing arguments",
 			"pool create",
 			"",
-			errMissingFlag,
+			errors.New("must be supplied"),
+		},
+		{
+			"Create pool with incompatible arguments (auto nvme-size)",
+			fmt.Sprintf("pool create --size %s --nvme-size %s", testScmSizeStr, testScmSizeStr),
+			"",
+			errors.New("may not be mixed"),
+		},
+		{
+			"Create pool with incompatible arguments (auto scm-size)",
+			fmt.Sprintf("pool create --size %s --scm-size %s", testScmSizeStr, testScmSizeStr),
+			"",
+			errors.New("may not be mixed"),
+		},
+		{
+			"Create pool with incompatible rank arguments (auto)",
+			fmt.Sprintf("pool create --size %s --nranks 16 --ranks 1,2,3", testScmSizeStr),
+			"",
+			errors.New("may not be mixed"),
+		},
+		{
+			"Create pool with invalid scm-ratio (auto)",
+			fmt.Sprintf("pool create --size %s --scm-ratio 200", testScmSizeStr),
+			"",
+			errors.New("1-100"),
+		},
+		{
+			"Create pool with incompatible arguments (manual)",
+			fmt.Sprintf("pool create --scm-size %s --nranks 42", testScmSizeStr),
+			"",
+			errors.New("may not be mixed"),
 		},
 		{
 			"Create pool with minimal arguments",
@@ -135,6 +150,21 @@ func TestPoolCommands(t *testing.T) {
 				printRequest(t, createWithSystem(&control.PoolCreateReq{
 					ScmBytes:   uint64(testScmSize),
 					NumSvcReps: 3,
+					User:       eUsr.Username + "@",
+					UserGroup:  eGrp.Name + "@",
+					Ranks:      []system.Rank{},
+				}, build.DefaultSystemName)),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with auto storage parameters",
+			fmt.Sprintf("pool create --size %s --scm-ratio 2 --nranks 8", testScmSizeStr),
+			strings.Join([]string{
+				printRequest(t, createWithSystem(&control.PoolCreateReq{
+					TotalBytes: uint64(testScmSize),
+					ScmRatio:   0.02,
+					NumRanks:   8,
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
 					Ranks:      []system.Rank{},
@@ -663,5 +693,47 @@ func TestPoolGetACLToFile_Success(t *testing.T) {
 
 	if diff := cmp.Diff(expResult, result); diff != "" {
 		t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
+	}
+}
+
+func TestDmg_PoolListCmd_Errors(t *testing.T) {
+	for name, tc := range map[string]struct {
+		ctlCfg *control.Config
+		resp   *mgmtpb.ListPoolsResp
+		msErr  error
+		expErr error
+	}{
+		"list pools no config": {
+			resp:   &mgmtpb.ListPoolsResp{},
+			expErr: errors.New("list pools failed: no configuration loaded"),
+		},
+		"list pools success": {
+			ctlCfg: &control.Config{},
+			resp:   &mgmtpb.ListPoolsResp{},
+		},
+		"list pools ms failures": {
+			ctlCfg: &control.Config{},
+			resp:   &mgmtpb.ListPoolsResp{},
+			msErr:  errors.New("remote failed"),
+			expErr: errors.New("remote failed"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
+					tc.msErr, tc.resp),
+			})
+
+			PoolListCmd := new(PoolListCmd)
+			PoolListCmd.setInvoker(mi)
+			PoolListCmd.setLog(log)
+			PoolListCmd.setConfig(tc.ctlCfg)
+
+			gotErr := PoolListCmd.Execute(nil)
+			common.CmpErr(t, tc.expErr, gotErr)
+		})
 	}
 }

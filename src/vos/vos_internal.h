@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * Layout definition for VOS root object
@@ -35,7 +18,7 @@
 #include <daos/btree.h>
 #include <daos/common.h>
 #include <daos/lru.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
 #include "vos_tls.h"
 #include "vos_layout.h"
@@ -239,17 +222,38 @@ struct vos_dtx_act_ent {
 	umem_off_t			*dae_records;
 	/* The capacity of dae_records, NOT including the inlined buffer. */
 	int				 dae_rec_cap;
+
+	/* The count of objects that are modified by this DTX. */
+	int				 dae_oid_cnt;
+
+	/* The single object OID if it is different from 'dae_base::dae_oid'. */
+	daos_unit_oid_t			 dae_oid_inline;
+
+	/* If single object is modified and if it is the same as the
+	 * 'dae_base::dae_oid', then 'dae_oids' points to 'dae_base::dae_oid'.
+	 *
+	 * If the single object is differet from 'dae_base::dae_oid',
+	 * then 'dae_oids' points to the 'dae_oid_inline'.
+	 *
+	 * Otherwise, 'dae_oids' points to new buffer to hold more.
+	 *
+	 * These information is used for EC aggregation optimization.
+	 * If server restarts, then we will lose the optimization but
+	 * it is not fatal.
+	 */
+	daos_unit_oid_t			*dae_oids;
+
 	unsigned int			 dae_committable:1,
 					 dae_committed:1,
 					 dae_aborted:1,
-					 dae_maybe_shared:1;
+					 dae_maybe_shared:1,
+					 dae_prepared:1;
 };
 
-extern struct vos_tls	*standalone_tls;
 #ifdef VOS_STANDALONE
 #define VOS_TIME_START(start, op)		\
 do {						\
-	if (standalone_tls->vtl_dp == NULL)	\
+	if (vos_tls_get()->vtl_dp == NULL)	\
 		break;				\
 	start = daos_get_ntime();		\
 } while (0)
@@ -259,7 +263,7 @@ do {						\
 	struct daos_profile *dp;		\
 	int time_msec;				\
 						\
-	dp = standalone_tls->vtl_dp;		\
+	dp = vos_tls_get()->vtl_dp;		\
 	if ((dp) == NULL || start == 0)		\
 		break;				\
 	time_msec = (daos_get_ntime() - start)/1000; \
@@ -287,41 +291,37 @@ do {						\
 #define DAE_TGT_CNT(dae)	((dae)->dae_base.dae_tgt_cnt)
 #define DAE_GRP_CNT(dae)	((dae)->dae_base.dae_grp_cnt)
 #define DAE_MBS_DSIZE(dae)	((dae)->dae_base.dae_mbs_dsize)
-#define DAE_OID_CNT(dae)	((dae)->dae_base.dae_oid_cnt)
 #define DAE_INDEX(dae)		((dae)->dae_base.dae_index)
 #define DAE_MBS_INLINE(dae)	((dae)->dae_base.dae_mbs_inline)
 #define DAE_MBS_OFF(dae)	((dae)->dae_base.dae_mbs_off)
-#define DAE_OID_INLINE(dae)	((dae)->dae_base.dae_oid_inline)
-#define DAE_OID_OFF(dae)	((dae)->dae_base.dae_oid_off)
 
 struct vos_dtx_cmt_ent {
 	/* Link into vos_conter::vc_dtx_committed_list */
 	d_list_t			 dce_committed_link;
 	struct vos_dtx_cmt_ent_df	 dce_base;
+
+	/* The single object OID if it is different from 'dce_base::dce_oid'. */
+	daos_unit_oid_t			 dce_oid_inline;
+
+	/* Similar as dae_oids, it points to 'dce_base::dce_oid',
+	 * or 'dce_oid_inline' or new buffer to hold more OIDs.
+	 */
+	daos_unit_oid_t			*dce_oids;
+
+	/* The count objects modified by current DTX. */
+	int				 dce_oid_cnt;
+
 	uint32_t			 dce_reindex:1,
-					 dce_exist:1;
+					 dce_exist:1,
+					 dce_invalid:1;
 };
 
 #define DCE_XID(dce)		((dce)->dce_base.dce_xid)
 #define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
 #define DCE_OID(dce)		((dce)->dce_base.dce_oid)
 #define DCE_DKEY_HASH(dce)	((dce)->dce_base.dce_dkey_hash)
-#define DCE_OID_OFF(dce)	((dce)->dce_base.dce_oid_off)
-#define DCE_OID_CNT(dce)	DCE_DKEY_HASH(dce)
 
-/* in-memory structures standalone instance */
-extern struct bio_xs_context		*vsa_xsctxt_inst;
 extern int vos_evt_feats;
-
-static inline struct bio_xs_context *
-vos_xsctxt_get(void)
-{
-#ifdef VOS_STANDALONE
-	return vsa_xsctxt_inst;
-#else
-	return dss_get_module_info()->dmi_nvme_ctxt;
-#endif
-}
 
 #define VOS_KEY_CMP_LEXICAL	(1ULL << 63)
 
@@ -359,7 +359,11 @@ vos_pool_hash_del(struct vos_pool *pool)
  * Getting object cache
  * Wrapper for TLS and standalone mode
  */
-struct daos_lru_cache *vos_get_obj_cache(void);
+static inline struct daos_lru_cache *
+vos_get_obj_cache(void)
+{
+	return vos_tls_get()->vtl_ocache;
+}
 
 /**
  * Register btree class for container table, it is called within vos_init()
@@ -428,6 +432,27 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 			   daos_epoch_t epoch, uint32_t intent, uint32_t type);
 
 /**
+ * Get local entry DTX state. Only used by VOS aggregation.
+ *
+ * \param entry		[IN]	DTX local id
+ *
+ * \return		DTX_ST_COMMITTED, DTX_ST_PREPARED or
+ *			DTX_ST_ABORTED.
+ */
+static inline unsigned int
+vos_dtx_ent_state(uint32_t entry)
+{
+	switch (entry) {
+	case DTX_LID_COMMITTED:
+		return DTX_ST_COMMITTED;
+	case DTX_LID_ABORTED:
+		return DTX_ST_ABORTED;
+	default:
+		return DTX_ST_PREPARED;
+	}
+}
+
+/**
  * Register the record (to be modified) to the DTX entry.
  *
  * \param umm		[IN]	Instance of an unified memory class.
@@ -476,10 +501,11 @@ int
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
 			int counti, daos_epoch_t epoch,
 			struct dtx_cos_key *dcks,
-			struct vos_dtx_act_ent **daes);
+			struct vos_dtx_act_ent **daes,
+			struct vos_dtx_cmt_ent **dces);
 void
 vos_dtx_post_handle(struct vos_container *cont, struct vos_dtx_act_ent **daes,
-		    int count, bool abort);
+		    struct vos_dtx_cmt_ent **dces, int count, bool abort);
 
 /**
  * Establish indexed active DTX table in DRAM.
@@ -557,6 +583,8 @@ struct vos_rec_bundle {
 	uint32_t		 rb_ver;
 	/** tree class */
 	enum vos_tree_class	 rb_tclass;
+	/** DTX state */
+	unsigned int		 rb_dtx_state;
 };
 
 #define VOS_SIZE_ROUND		8
@@ -770,6 +798,7 @@ struct vos_iter_ops;
 
 /** the common part of vos iterators */
 struct vos_iterator {
+	struct dtx_handle	*it_dth;
 	struct vos_iter_ops	*it_ops;
 	struct vos_iterator	*it_parent; /* parent iterator */
 	struct vos_ts_set	*it_ts_set;
@@ -837,7 +866,7 @@ struct vos_iter_ops {
 	int	(*iop_nested_prepare)(vos_iter_type_t type,
 				      struct vos_iter_info *info,
 				      struct vos_iterator **iter_pp);
-	/** finalise a iterator */
+	/** finalize a iterator */
 	int	(*iop_finish)(struct vos_iterator *iter);
 	/** Set the iterating cursor to the provided @anchor */
 	int	(*iop_probe)(struct vos_iterator *iter,
@@ -975,6 +1004,8 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	       daos_epoch_t bound, d_iov_t *key_iov, d_iov_t *val_iov,
 	       uint64_t flags, struct vos_ts_set *ts_set,
 	       struct vos_ilog_info *parent, struct vos_ilog_info *info);
+int
+key_tree_delete(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov);
 
 /* vos_io.c */
 daos_size_t
@@ -1187,8 +1218,7 @@ vos_dtx_continue_detect(int rc)
 	/* Continue to detect other potential in-prepared DTX. */
 	return rc == -DER_INPROGRESS && dth != NULL &&
 		dth->dth_share_tbd_count > 0 &&
-		dth->dth_share_tbd_count < DTX_REFRESH_MAX &&
-		dth->dth_share_tbd_scanned < DTX_DETECT_SCAN_MAX;
+		dth->dth_share_tbd_count < DTX_REFRESH_MAX;
 }
 
 static inline bool

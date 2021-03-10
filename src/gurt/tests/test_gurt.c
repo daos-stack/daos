@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /*
  * This file tests macros in GURT
@@ -2007,6 +1990,103 @@ test_gurt_string_buffer(void **state)
 	assert_null(str_buf.str);
 }
 
+enum {
+	HASH_MURMUR,
+	HASH_STRING,
+	HASH_JCH,
+};
+
+static char *
+hash2name(int hash_type)
+{
+	switch (hash_type) {
+	default:
+		return "Unknown";
+	case HASH_JCH:
+		return "JCH";
+	case HASH_MURMUR:
+		return "MURMUR";
+	case HASH_STRING:
+		return "STRING";
+	}
+}
+
+static void
+hash_perf(int hash_type, unsigned int buckets, unsigned int loop)
+{
+	double		*counters;
+	double		 bkt_min;
+	double		 bkt_max;
+	double		 duration;
+	double		 stdiv;
+	struct timespec	 then;
+	struct timespec	 now;
+	int		 i;
+
+	D_ALLOC_ARRAY(counters, buckets);
+	D_ASSERT(counters);
+
+	d_gettime(&then);
+	for (i = 0; i < loop; i++) {
+		uint64_t	key;
+		unsigned int	h;
+
+		/* pollute the high bits */
+		key = i | (0x1031ULL << 32);
+		switch (hash_type) {
+		default:
+			D_ASSERTF(0, "Unknown hash type");
+		case HASH_MURMUR:
+			h = d_hash_murmur64((unsigned char *)&key,
+					     sizeof(key), 2077) % buckets;
+			break;
+		case HASH_STRING:
+			h = d_hash_string_u32((char *)&key, sizeof(key)) %
+					       buckets;
+			break;
+		case HASH_JCH:
+			h = d_hash_jump(key, buckets);
+			break;
+		}
+		counters[h % buckets]++;
+	}
+	d_gettime(&now);
+
+	bkt_max = 0;
+	bkt_min = loop;
+	for (i = 0; i < buckets; i++) {
+		if (counters[i] > bkt_max)
+			bkt_max = counters[i];
+		if (counters[i] < bkt_min)
+			bkt_min = counters[i];
+	}
+	stdiv = d_stand_div(counters, buckets);
+	duration = (double)d_timediff_ns(&then, &now) / NSEC_PER_SEC;
+
+	fprintf(stdout,
+		"Hash: %s, bkts: %d, min/max: %d/%d, "
+		"range: %d, stdiv: %F, rate: %F\n",
+		hash2name(hash_type), buckets, (int)bkt_min, (int)bkt_max,
+		(int)(bkt_max - bkt_min), stdiv, (double)loop / duration);
+
+	D_FREE(counters);
+}
+
+static void
+test_hash_perf(void **state)
+{
+	unsigned el = (16 << 10); /* elements per buckert */
+	unsigned i;
+
+	/* hash buckets: 2, 4, 8... 8192 */
+	for (i = 1; i <= 13; i++)
+		hash_perf(HASH_MURMUR, 1 << i, el << i);
+	for (i = 1; i <= 13; i++)
+		hash_perf(HASH_STRING, 1 << i, el << i);
+	for (i = 1; i <= 13; i++)
+		hash_perf(HASH_JCH, 1 << i, el << i);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -2028,6 +2108,7 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_gurt_hash_parallel_refcounting),
 		cmocka_unit_test(test_gurt_atomic),
 		cmocka_unit_test(test_gurt_string_buffer),
+		cmocka_unit_test(test_hash_perf),
 	};
 
 	d_register_alt_assert(mock_assert);

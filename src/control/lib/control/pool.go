@@ -1,24 +1,7 @@
 //
 // (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package control
@@ -45,8 +28,6 @@ const (
 	// PoolCreateTimeout defines the amount of time a pool create
 	// request can take before being timed out.
 	PoolCreateTimeout = 10 * time.Minute // be generous for large pools
-
-	defaultPoolSvcReps = 1
 )
 
 type (
@@ -117,8 +98,11 @@ func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err err
 		return nil, err
 	}
 
-	if in.NumSvcReps == 0 {
-		in.NumSvcReps = defaultPoolSvcReps
+	if in.TotalBytes > 0 && (in.ScmBytes > 0 || in.NvmeBytes > 0) {
+		return nil, errors.New("can't mix TotalBytes and ScmBytes/NvmeBytes")
+	}
+	if in.TotalBytes == 0 && in.ScmBytes == 0 {
+		return nil, errors.New("can't create pool with 0 SCM")
 	}
 
 	out = new(mgmtpb.PoolCreateReq)
@@ -138,20 +122,28 @@ type (
 		msRequest
 		unaryRequest
 		retryableRequest
-		ScmBytes   uint64
-		NvmeBytes  uint64
-		Ranks      []system.Rank
-		NumSvcReps uint32
+		Name       string
 		User       string
 		UserGroup  string
 		ACL        *AccessControlList
+		NumSvcReps uint32
+		// auto-config params
+		TotalBytes uint64
+		ScmRatio   float64
+		NumRanks   uint32
+		// manual params
+		Ranks     []system.Rank
+		ScmBytes  uint64
+		NvmeBytes uint64
 	}
 
 	// PoolCreateResp contains the response from a pool create request.
 	PoolCreateResp struct {
-		UUID     string
-		SvcReps  []uint32 `json:"Svcreps"`
-		NumRanks uint32   `json:"Numranks"`
+		UUID      string   `json:"uuid"`
+		SvcReps   []uint32 `json:"svc_reps"`
+		TgtRanks  []uint32 `json:"tgt_ranks"`
+		ScmBytes  uint64   `json:"scm_bytes"`
+		NvmeBytes uint64   `json:"nvme_bytes"`
 	}
 )
 
@@ -202,11 +194,9 @@ func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq)
 		return nil, errors.New("unable to extract PoolCreateResp from MS response")
 	}
 
-	return &PoolCreateResp{
-		UUID:     pbReq.Uuid,
-		SvcReps:  pbPcr.GetSvcreps(),
-		NumRanks: pbPcr.GetNumranks(),
-	}, nil
+	pcr := new(PoolCreateResp)
+	pcr.UUID = pbReq.Uuid
+	return pcr, convert.Types(pbPcr, pcr)
 }
 
 type (
@@ -333,41 +323,41 @@ type (
 
 	// StorageUsageStats represents DAOS storage usage statistics.
 	StorageUsageStats struct {
-		Total uint64
-		Free  uint64
-		Min   uint64
-		Max   uint64
-		Mean  uint64
+		Total uint64 `json:"total"`
+		Free  uint64 `json:"free"`
+		Min   uint64 `json:"min"`
+		Max   uint64 `json:"max"`
+		Mean  uint64 `json:"mean"`
 	}
 
 	// PoolRebuildState indicates the current state of the pool rebuild process.
-	PoolRebuildState uint
+	PoolRebuildState int32
 
 	// PoolRebuildStatus contains detailed information about the pool rebuild process.
 	PoolRebuildStatus struct {
-		Status  int32
-		State   PoolRebuildState
-		Objects uint64
-		Records uint64
+		Status  int32            `json:"status"`
+		State   PoolRebuildState `json:"state"`
+		Objects uint64           `json:"objects"`
+		Records uint64           `json:"records"`
 	}
 
 	// PoolInfo contains information about the pool.
 	PoolInfo struct {
-		TotalTargets    uint32
-		ActiveTargets   uint32
-		TotalNodes      uint32
-		DisabledTargets uint32
-		Version         uint32
-		Leader          uint32
-		Rebuild         *PoolRebuildStatus
-		Scm             *StorageUsageStats
-		Nvme            *StorageUsageStats
+		TotalTargets    uint32             `json:"total_targets"`
+		ActiveTargets   uint32             `json:"active_targets"`
+		TotalNodes      uint32             `json:"total_nodes"`
+		DisabledTargets uint32             `json:"disabled_targets"`
+		Version         uint32             `json:"version"`
+		Leader          uint32             `json:"leader"`
+		Rebuild         *PoolRebuildStatus `json:"rebuild"`
+		Scm             *StorageUsageStats `json:"scm"`
+		Nvme            *StorageUsageStats `json:"nvme"`
 	}
 
 	// PoolQueryResp contains the pool query response.
 	PoolQueryResp struct {
-		Status int32
-		UUID   string
+		Status int32  `json:"status"`
+		UUID   string `json:"uuid"`
 		PoolInfo
 	}
 )
@@ -382,7 +372,36 @@ const (
 )
 
 func (prs PoolRebuildState) String() string {
-	return [...]string{"idle", "done", "busy"}[prs]
+	return strings.ToLower(mgmtpb.PoolRebuildStatus_State_name[int32(prs)])
+}
+
+func (prs PoolRebuildState) MarshalJSON() ([]byte, error) {
+	stateStr, ok := mgmtpb.PoolRebuildStatus_State_name[int32(prs)]
+	if !ok {
+		return nil, errors.Errorf("invalid rebuild state %d", prs)
+	}
+	return []byte(`"` + strings.ToLower(stateStr) + `"`), nil
+}
+
+func (prs *PoolRebuildState) UnmarshalJSON(data []byte) error {
+	stateStr := strings.ToUpper(string(data))
+	state, ok := mgmtpb.PoolRebuildStatus_State_value[stateStr]
+	if !ok {
+		// Try converting the string to an int32, to handle the
+		// conversion from protobuf message using convert.Types().
+		si, err := strconv.ParseInt(stateStr, 0, 32)
+		if err != nil {
+			return errors.Errorf("invalid rebuild state %q", stateStr)
+		}
+
+		if _, ok = mgmtpb.PoolRebuildStatus_State_name[int32(si)]; !ok {
+			return errors.Errorf("invalid rebuild state %q", stateStr)
+		}
+		state = int32(si)
+	}
+	*prs = PoolRebuildState(state)
+
+	return nil
 }
 
 // PoolQuery performs a pool query operation for the specified pool UUID on a

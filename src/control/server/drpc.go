@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
@@ -33,6 +16,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/system"
@@ -125,27 +109,32 @@ func checkSocketDir(sockDir string) error {
 	return nil
 }
 
+type drpcServerSetupReq struct {
+	log     logging.Logger
+	sockDir string
+	engines []*EngineInstance
+	tc      *security.TransportConfig
+	sysdb   *system.Database
+	events  *events.PubSub
+}
+
 // drpcServerSetup specifies socket path and starts drpc server.
-func drpcServerSetup(ctx context.Context, log logging.Logger, sockDir string, iosrvs []*IOServerInstance, tc *security.TransportConfig, db *system.Database) error {
+func drpcServerSetup(ctx context.Context, req *drpcServerSetupReq) error {
 	// Clean up any previous execution's sockets before we create any new sockets
-	if err := drpcCleanup(sockDir); err != nil {
+	if err := drpcCleanup(req.sockDir); err != nil {
 		return err
 	}
 
-	sockPath := getDrpcServerSocketPath(sockDir)
-	drpcServer, err := drpc.NewDomainSocketServer(ctx, log, sockPath)
+	sockPath := getDrpcServerSocketPath(req.sockDir)
+	drpcServer, err := drpc.NewDomainSocketServer(ctx, req.log, sockPath)
 	if err != nil {
 		return errors.Wrap(err, "unable to create socket server")
 	}
 
 	// Create and add our modules
-	drpcServer.RegisterRPCModule(NewSecurityModule(log, tc))
-	drpcServer.RegisterRPCModule(&mgmtModule{})
-	drpcServer.RegisterRPCModule(&srvModule{
-		log:    log,
-		sysdb:  db,
-		iosrvs: iosrvs,
-	})
+	drpcServer.RegisterRPCModule(NewSecurityModule(req.log, req.tc))
+	drpcServer.RegisterRPCModule(newMgmtModule())
+	drpcServer.RegisterRPCModule(newSrvModule(req.log, req.sysdb, req.engines, req.events))
 
 	if err := drpcServer.Start(); err != nil {
 		return errors.Wrapf(err, "unable to start socket server on %s", sockPath)
@@ -163,13 +152,13 @@ func drpcCleanup(sockDir string) error {
 	srvSock := getDrpcServerSocketPath(sockDir)
 	os.Remove(srvSock)
 
-	pattern := filepath.Join(sockDir, "daos_io_server*.sock")
-	iosrvSocks, err := filepath.Glob(pattern)
+	pattern := filepath.Join(sockDir, "daos_engine*.sock")
+	engineSocks, err := filepath.Glob(pattern)
 	if err != nil {
-		return errors.WithMessage(err, "couldn't get list of iosrv sockets")
+		return errors.WithMessage(err, "couldn't get list of engine sockets")
 	}
 
-	for _, s := range iosrvSocks {
+	for _, s := range engineSocks {
 		os.Remove(s)
 	}
 
@@ -222,7 +211,7 @@ func makeDrpcCall(ctx context.Context, log logging.Logger, client drpc.DomainSoc
 			return nil, errors.Wrap(err, "build drpc call")
 		}
 
-		// Forward the request to the I/O server via dRPC
+		// Forward the request to the I/O Engine via dRPC
 		if err = client.Connect(); err != nil {
 			if te, ok := errors.Cause(err).(interface{ Temporary() bool }); ok {
 				if !te.Temporary() {
@@ -234,7 +223,7 @@ func makeDrpcCall(ctx context.Context, log logging.Logger, client drpc.DomainSoc
 		defer client.Close()
 
 		if drpcResp, err = client.SendMsg(drpcCall); err != nil {
-			return nil, errors.Wrap(err, "send message")
+			return nil, errors.Wrapf(err, "failed to send %dB message", proto.Size(msg))
 		}
 
 		if err = checkDrpcResponse(drpcResp); err != nil {

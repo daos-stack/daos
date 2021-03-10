@@ -1,4 +1,4 @@
-.TH dmg 1 "4 December 2020"
+.TH dmg 1 "15 February 2021"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -50,11 +50,11 @@ Generate DAOS server configuration file based on discoverable hardware devices
 \fB\fB\-a\fR, \fB\-\-access-points\fR\fP
 Comma separated list of access point addresses <ipv4addr/hostname>
 .TP
-\fB\fB\-p\fR, \fB\-\-num-pmem\fR\fP
-Minimum number of SCM (pmem) devices required per storage host in DAOS system
+\fB\fB\-e\fR, \fB\-\-num-engines\fR\fP
+Set the number of DAOS Engine sections to be populated in the config file output. If unset then the value will be set to the number of NUMA nodes on storage hosts in the DAOS system.
 .TP
-\fB\fB\-n\fR, \fB\-\-num-nvme\fR <default: \fI"1"\fR>\fP
-Minimum number of NVMe devices required per storage host in DAOS system, set to 0 to generate pmem-only config
+\fB\fB\-s\fR, \fB\-\-min-ssds\fR <default: \fI"1"\fR>\fP
+Minimum number of NVMe SSDs required per DAOS Engine (SSDs must reside on the host that is managing the engine). Set to 0 to generate a config with no NVMe.
 .TP
 \fB\fB\-c\fR, \fB\-\-net-class\fR <default: \fI"best-available"\fR>\fP
 Network class preferred
@@ -113,20 +113,32 @@ DAOS pool to be owned by given group, format name@domain
 \fB\fB\-u\fR, \fB\-\-user\fR\fP
 DAOS pool to be owned by given user, format name@domain
 .TP
+\fB\fB\-p\fR, \fB\-\-name\fR\fP
+Unique name for pool (set as label)
+.TP
 \fB\fB\-a\fR, \fB\-\-acl-file\fR\fP
 Access Control List file path for DAOS pool
 .TP
-\fB\fB\-s\fR, \fB\-\-scm-size\fR (\fIrequired\fR)\fP
-Size of SCM component of DAOS pool
+\fB\fB\-z\fR, \fB\-\-size\fR\fP
+Total size of DAOS pool (auto)
+.TP
+\fB\fB\-t\fR, \fB\-\-scm-ratio\fR <default: \fI"6"\fR>\fP
+Percentage of SCM:NVMe for pool storage (auto)
+.TP
+\fB\fB\-k\fR, \fB\-\-nranks\fR\fP
+Number of ranks to use (auto)
+.TP
+\fB\fB\-v\fR, \fB\-\-nsvc\fR\fP
+Number of pool service replicas
+.TP
+\fB\fB\-s\fR, \fB\-\-scm-size\fR\fP
+Per-server SCM allocation for DAOS pool (manual)
 .TP
 \fB\fB\-n\fR, \fB\-\-nvme-size\fR\fP
-Size of NVMe component of DAOS pool
+Per-server NVMe allocation for DAOS pool (manual)
 .TP
 \fB\fB\-r\fR, \fB\-\-ranks\fR\fP
 Storage server unique identifiers (ranks) for DAOS pool
-.TP
-\fB\fB\-v\fR, \fB\-\-nsvc\fR <default: \fI"1"\fR>\fP
-Number of pool service replicas
 .TP
 \fB\fB\-S\fR, \fB\-\-sys\fR <default: \fI"daos_server"\fR>\fP
 DAOS system that pool is to be a part of

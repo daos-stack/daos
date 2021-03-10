@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(tests)
 
@@ -138,7 +121,7 @@ static struct evt_desc_cbs	ts_evt_desc_nofree_cbs  = {
 };
 
 static void
-ts_open_create(void **state)
+ts_open_create(void)
 {
 	bool    create;
 	char    *arg;
@@ -183,7 +166,7 @@ ts_open_create(void **state)
 }
 
 static void
-ts_close_destroy(void **state)
+ts_close_destroy(void)
 {
 	bool destroy;
 	int rc;
@@ -338,7 +321,7 @@ bio_strdup(struct utest_context *utx, bio_addr_t *addr, const char *str)
 }
 
 static void
-ts_add_rect(void **state)
+ts_add_rect(void)
 {
 	char			*val;
 	bio_addr_t		 bio_addr = {0}; /* Fake bio addr */
@@ -392,7 +375,7 @@ ts_add_rect(void **state)
 }
 
 static void
-ts_delete_rect(void **state)
+ts_delete_rect()
 {
 	char			*val;
 	struct evt_entry	 ent;
@@ -438,7 +421,7 @@ ts_delete_rect(void **state)
 }
 
 static void
-ts_remove_rect(void **state)
+ts_remove_rect(void)
 {
 	char			*arg;
 	struct evt_rect		 rect;
@@ -475,7 +458,7 @@ ts_remove_rect(void **state)
 
 
 static void
-ts_find_rect(void **state)
+ts_find_rect(void)
 {
 	struct evt_entry	*ent;
 	char			*val;
@@ -523,7 +506,7 @@ ts_find_rect(void **state)
 }
 
 static void
-ts_list_rect(void **state)
+ts_list_rect(void)
 {
 	char			*val;
 	daos_anchor_t		 anchor;
@@ -668,7 +651,7 @@ skip_probe:
 #define TS_VAL_CYCLE	4
 
 static void
-ts_many_add(void **state)
+ts_many_add(void)
 {
 	char			*buf;
 	char			*tmp;
@@ -774,7 +757,7 @@ ts_many_add(void **state)
 }
 
 static void
-ts_tree_debug(void **state)
+ts_tree_debug(void)
 {
 	int	level;
 	char   *arg;
@@ -785,12 +768,12 @@ ts_tree_debug(void **state)
 }
 
 static void
-ts_drain(void **state)
+ts_drain(void)
 {
 	static int const drain_creds = 256;
 	int	rc;
 
-	ts_many_add(state);
+	ts_many_add();
 	while (1) {
 		bool destroyed = false;
 		int creds = drain_creds;
@@ -2296,50 +2279,49 @@ static int
 ts_cmd_run(char opc, char *args)
 {
 	int	 rc = 0;
-	void	 **st = NULL;
 
 	tst_fn_val.optval = args;
 	tst_fn_val.input = true;
 
 	switch (opc) {
 	case 'C':
-		ts_open_create(st);
+		ts_open_create();
 		break;
 	case 'D':
-		ts_close_destroy(st);
+		ts_close_destroy();
 		break;
 	case 'o':
 		tst_fn_val.input = false;
 		tst_fn_val.optval = NULL;
-		ts_open_create(st);
+		ts_open_create();
 		break;
 	case 'c':
 		tst_fn_val.input = false;
-		ts_close_destroy(st);
+		ts_close_destroy();
 		break;
 	case 'a':
-		ts_add_rect(st);
+		ts_add_rect();
 		break;
 	case 'm':
-		ts_many_add(st);
+		ts_many_add();
 		break;
 	case 'e':
-		ts_drain(st);
+		ts_drain();
 		break;
 	case 'f':
-		ts_find_rect(st);
+		ts_find_rect();
 		break;
 	case 'l':
-		ts_list_rect(st);
+		ts_list_rect();
 		break;
 	case 'd':
-		ts_delete_rect(st);
+		ts_delete_rect();
 		break;
 	case 'r':
-		ts_remove_rect(st);
+		ts_remove_rect();
 		break;
 	case 'b':
-		ts_tree_debug(st);
+		ts_tree_debug();
 		break;
 	case 't':
 		break;
@@ -2354,8 +2336,6 @@ ts_cmd_run(char opc, char *args)
 		rc = 0;
 		break;
 	}
-	if (st != NULL)
-		rc = -1;
 
 	return rc;
 }

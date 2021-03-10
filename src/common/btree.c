@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -395,10 +378,10 @@ do {									\
 		(trace)->tr_at,	## __VA_ARGS__);			\
 } while (0)
 
-static inline int
+static inline uint32_t
 btr_hkey_size_const(btr_ops_t *ops, uint64_t feats)
 {
-	int size;
+	uint32_t size;
 
 	if (BTR_IS_DIRECT_KEY(feats))
 		return sizeof(umem_off_t);
@@ -415,7 +398,7 @@ btr_hkey_size_const(btr_ops_t *ops, uint64_t feats)
 /**
  * Wrapper for customized tree functions
  */
-static int
+static uint32_t
 btr_hkey_size(struct btr_context *tcx)
 {
 	return btr_hkey_size_const(btr_ops(tcx), tcx->tc_feats);
@@ -558,7 +541,7 @@ btr_rec_string(struct btr_context *tcx, struct btr_record *rec,
 					   buf_len);
 }
 
-static inline int
+static inline uint32_t
 btr_rec_size(struct btr_context *tcx)
 {
 	return btr_hkey_size(tcx) + sizeof(struct btr_record);
@@ -594,7 +577,7 @@ btr_rec_copy_hkey(struct btr_context *tcx, struct btr_record *dst_rec,
 	btr_hkey_copy(tcx, &dst_rec->rec_hkey[0], &src_rec->rec_hkey[0]);
 }
 
-static inline int
+static inline uint32_t
 btr_node_size(struct btr_context *tcx)
 {
 	return sizeof(struct btr_node) +
@@ -3438,7 +3421,7 @@ dbtree_iter_prepare(daos_handle_t toh, unsigned int options, daos_handle_t *ih)
 }
 
 /**
- * Finalise iterator.
+ * Finalize iterator.
  */
 int
 dbtree_iter_finish(daos_handle_t ih)
@@ -3593,61 +3576,6 @@ int
 dbtree_iter_prev(daos_handle_t ih)
 {
 	return btr_iter_move(ih, false);
-}
-
-static int
-btr_iter_move_with_intent(daos_handle_t ih, uint32_t intent, bool forward)
-{
-	struct btr_context	*tcx;
-	struct btr_trace	*trace;
-	struct btr_iterator	*itr;
-	struct btr_check_alb	 alb;
-	int			 rc;
-
-	tcx = btr_hdl2tcx(ih);
-	if (tcx == NULL)
-		return -DER_NO_HDL;
-
-	itr = &tcx->tc_itr;
-	alb.intent = intent;
-
-again:
-	rc = btr_iter_move(ih, forward);
-	if (rc != 0)
-		return rc;
-
-	trace = &tcx->tc_trace[tcx->tc_depth - 1];
-	alb.nd_off = trace->tr_node;
-	alb.at = trace->tr_at;
-	rc = btr_check_availability(tcx, &alb);
-	switch (rc) {
-	case PROBE_RC_UNAVAILABLE:
-		goto again;
-	case PROBE_RC_INPROGRESS:
-		itr->it_state = BTR_ITR_FINI;
-		return -DER_INPROGRESS;
-	case PROBE_RC_DATA_LOSS:
-		itr->it_state = BTR_ITR_FINI;
-		return -DER_DATA_LOSS;
-	case PROBE_RC_OK:
-		return 0;
-	case PROBE_RC_ERR:
-	default:
-		itr->it_state = BTR_ITR_FINI;
-		return -DER_INVAL;
-	}
-}
-
-int
-dbtree_iter_next_with_intent(daos_handle_t ih, uint32_t intent)
-{
-	return btr_iter_move_with_intent(ih, intent, true);
-}
-
-int
-dbtree_iter_prev_with_intent(daos_handle_t ih, uint32_t intent)
-{
-	return btr_iter_move_with_intent(ih, intent, false);
 }
 
 /**

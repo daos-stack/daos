@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * rebuild: Scanning the objects
@@ -37,7 +20,7 @@
 #include <daos/placement.h>
 #include <daos_srv/container.h>
 #include <daos_srv/daos_mgmt_srv.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/rebuild.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/dtx_srv.h>
@@ -138,7 +121,7 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 				       arg->tgt_id, rpt->rt_rebuild_ver,
 				       rpt->rt_stable_epoch, arg->oids,
 				       arg->ephs, arg->shards, arg->count,
-				       /* Clear containers for reint */
+				       /* Delete local objects for reint */
 				       rpt->rt_rebuild_op == RB_OP_REINT);
 		/* If it does not need retry */
 		if (rc == 0 || (rc != -DER_TIMEDOUT && rc != -DER_GRPVER &&
@@ -527,11 +510,71 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 				DP_UOID(oid), DP_RC(rc));
 			D_GOTO(out, rc);
 		}
+	} else if (rpt->rt_rebuild_op == RB_OP_RECLAIM) {
+		struct pl_obj_layout *layout = NULL;
+		bool still_needed;
+		uint32_t mytarget = dss_get_module_info()->dmi_tgt_id;
+
+		/*
+		 * Compute placement for the object, then check if the layout
+		 * still includes the current rank. If not, the object can be
+		 * deleted/reclaimed because it is no longer reachable
+		 */
+		rc = pl_obj_place(map, &md, NULL, &layout);
+		if (rc != 0)
+			D_GOTO(out, rc);
+
+		still_needed = pl_obj_layout_contains(rpt->rt_pool->sp_map,
+						      layout, myrank, mytarget);
+		if (!still_needed) {
+			struct rebuild_pool_tls *tls;
+
+			tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
+						      rpt->rt_rebuild_ver);
+			D_ASSERT(tls != NULL);
+			tls->rebuild_pool_reclaim_obj_count++;
+			D_DEBUG(DB_REBUILD, "deleting object "DF_UOID
+				" which is not reachable on rank %u tgt %u",
+				DP_UOID(oid), myrank, mytarget);
+
+			/*
+			 * It's possible this object might still be being
+			 * accessed elsewhere - retry until until it is possible
+			 * to delete
+			 */
+			do {
+				/* Inform the iterator and delete the object */
+				*acts |= VOS_ITER_CB_DELETE;
+				rc = vos_obj_delete(param->ip_hdl, oid);
+				if (rc == -DER_BUSY || rc == -DER_INPROGRESS) {
+					D_DEBUG(DB_REBUILD,
+						"got "DF_RC
+						" error while deleting object "
+						DF_UOID
+						" during reclaim; retrying\n",
+						DP_RC(rc), DP_UOID(oid));
+					/* Busy - inform iterator and yield */
+					*acts |= VOS_ITER_CB_YIELD;
+					ABT_thread_yield();
+				}
+			} while (rc == -DER_BUSY || rc == -DER_INPROGRESS);
+
+			if (rc != 0) {
+				D_ERROR("Failed to delete object "DF_UOID
+					" during reclaim: "DF_RC,
+					DP_UOID(oid), DP_RC(rc));
+				D_GOTO(out, rc);
+			}
+		}
+
+		/* Reclaim does not require sending any objects */
+		rebuild_nr = 0;
 	} else {
 		D_ASSERT(rpt->rt_rebuild_op == RB_OP_FAIL ||
 			 rpt->rt_rebuild_op == RB_OP_DRAIN ||
 			 rpt->rt_rebuild_op == RB_OP_REINT ||
-			 rpt->rt_rebuild_op == RB_OP_EXTEND);
+			 rpt->rt_rebuild_op == RB_OP_EXTEND ||
+			 rpt->rt_rebuild_op == RB_OP_RECLAIM);
 	}
 	if (rebuild_nr <= 0) /* No need rebuild */
 		D_GOTO(out, rc = rebuild_nr);
@@ -547,24 +590,11 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		rc = pool_map_find_target(map->pl_poolmap, tgts[i], &target);
 		D_ASSERT(rc == 1);
 
-		/* During rebuild test, it will manually exclude some target to
-		 * trigger the rebuild, then later add it back, so some objects
-		 * might exist on some illegal target, so they might use its
-		 * "own" target as the spare target, let's skip these object
-		 * now. When we have better support from CART exclude/addback,
-		 * myrank should always not equal to tgt_rebuild. XXX
-		 */
-		if (myrank != target->ta_comp.co_rank) {
-			rc = rebuild_object_insert(rpt, tgts[i], shards[i],
-						   arg->co_uuid,
-						   oid, ent->ie_epoch);
-			if (rc)
-				D_GOTO(out, rc);
-		} else {
-			D_DEBUG(DB_REBUILD, "rebuild skip "DF_UOID".\n",
-				DP_UOID(oid));
-			rc = 0;
-		}
+		rc = rebuild_object_insert(rpt, tgts[i], shards[i],
+					   arg->co_uuid,
+					   oid, ent->ie_epoch);
+		if (rc)
+			D_GOTO(out, rc);
 	}
 
 out:
@@ -776,6 +806,14 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	/* check if the rebuild is already started */
 	rpt = rpt_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver);
 	if (rpt != NULL) {
+		if (rpt->rt_global_done) {
+			D_WARN("the previous rebuild "DF_UUID"/%d"
+			       " is not cleanup yet\n",
+			       DP_UUID(rsi->rsi_pool_uuid),
+		               rsi->rsi_rebuild_ver);
+			D_GOTO(out, rc = -DER_BUSY);
+		}
+
 		/* Rebuild should never skip the version */
 		D_ASSERTF(rsi->rsi_rebuild_ver == rpt->rt_rebuild_ver,
 			  "rsi_rebuild_ver %d != rt_rebuild_ver %d\n",

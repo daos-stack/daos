@@ -1,24 +1,7 @@
 //
 // (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
@@ -28,10 +11,9 @@ import (
 	"testing"
 
 	"github.com/daos-stack/daos/src/control/events"
-	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 	"github.com/daos-stack/daos/src/control/system"
@@ -43,8 +25,8 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 	t.Helper()
 
 	if cfg == nil {
-		cfg = config.DefaultServer().WithServers(
-			ioserver.NewConfig().WithTargetCount(1),
+		cfg = config.DefaultServer().WithEngines(
+			engine.NewConfig().WithTargetCount(1),
 		)
 	}
 
@@ -52,25 +34,25 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 		StorageControlService: *NewStorageControlService(log,
 			bdev.NewMockProvider(log, bmbc),
 			scm.NewMockProvider(log, smbc, smsc),
-			cfg.Servers,
+			cfg.Engines,
 		),
-		harness: &IOServerHarness{
+		harness: &EngineHarness{
 			log: log,
 		},
 		events: events.NewPubSub(context.TODO(), log),
 	}
 
-	for _, srvCfg := range cfg.Servers {
-		bp, err := bdev.NewClassProvider(log, "", &srvCfg.Storage.Bdev)
+	for _, engineCfg := range cfg.Engines {
+		bp, err := bdev.NewClassProvider(log, "", &engineCfg.Storage.Bdev)
 		if err != nil {
 			t.Fatal(err)
 		}
-		runner := ioserver.NewTestRunner(&ioserver.TestRunnerConfig{
-			Running: atm.NewBool(true),
-		}, srvCfg)
-		instance := NewIOServerInstance(log, bp, cs.scm, nil, runner)
+		rCfg := new(engine.TestRunnerConfig)
+		rCfg.Running.SetTrue()
+		runner := engine.NewTestRunner(rCfg, engineCfg)
+		instance := NewEngineInstance(log, bp, cs.scm, nil, runner)
 		instance.setSuperblock(&Superblock{
-			Rank: system.NewRankPtr(srvCfg.Rank.Uint32()),
+			Rank: system.NewRankPtr(engineCfg.Rank.Uint32()),
 		})
 		if err := cs.harness.AddInstance(instance); err != nil {
 			t.Fatal(err)
@@ -86,7 +68,7 @@ func mockControlServiceNoSB(t *testing.T, log logging.Logger, cfg *config.Server
 	// don't set a superblock and init with a stopped test runner
 	for i, srv := range cs.harness.instances {
 		srv.setSuperblock(nil)
-		srv.runner = ioserver.NewTestRunner(nil, cfg.Servers[i])
+		srv.runner = engine.NewTestRunner(nil, cfg.Engines[i])
 	}
 
 	return cs

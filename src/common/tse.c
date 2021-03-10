@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /*
  * This file is part of common DAOS library.
@@ -483,6 +466,7 @@ static bool
 tse_task_complete_callback(tse_task_t *task)
 {
 	struct tse_task_private	*dtp = tse_task2priv(task);
+	uint32_t		 dep_cnt = dtp->dtp_dep_cnt;
 	struct tse_task_cb	*dtc;
 	struct tse_task_cb	*tmp;
 
@@ -499,6 +483,13 @@ tse_task_complete_callback(tse_task_t *task)
 		/** Task was re-initialized; break */
 		if (!dtp->dtp_completing) {
 			D_DEBUG(DB_TRACE, "re-init task %p\n", task);
+			return false;
+		}
+
+		/** New dependent task added in completion call-back */
+		if (dtp->dtp_dep_cnt > dep_cnt) {
+			D_DEBUG(DB_TRACE, "new dep-task added to task %p\n",
+				task);
 			return false;
 		}
 	}

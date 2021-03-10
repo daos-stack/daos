@@ -1,30 +1,14 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package system
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"sort"
 	"strconv"
@@ -71,12 +55,6 @@ func (m *Membership) addMember(member *Member) error {
 	m.log.Debugf("adding system member: %s", member)
 
 	return m.db.AddMember(member)
-}
-
-func (m *Membership) updateMember(member *Member) error {
-	m.log.Debugf("updating system member: %s", member)
-
-	return m.db.UpdateMember(member)
 }
 
 // Add adds member to membership, returns member count.
@@ -126,11 +104,19 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 	defer m.Unlock()
 
 	resp = new(JoinResponse)
-	curMember, err := m.db.FindMemberByUUID(req.UUID)
+	var curMember *Member
+	if !req.Rank.Equals(NilRank) {
+		curMember, err = m.db.FindMemberByRank(req.Rank)
+	} else {
+		curMember, err = m.db.FindMemberByUUID(req.UUID)
+	}
 	if err == nil {
 		if !curMember.Rank.Equals(req.Rank) {
-			return nil, errors.Errorf("re-joining server %s has different rank (%d != %d)",
-				req.UUID, req.Rank, curMember.Rank)
+			return nil, errRankChanged(req.Rank, curMember.Rank, curMember.UUID)
+
+		}
+		if curMember.UUID != req.UUID {
+			return nil, errUuidChanged(req.UUID, curMember.UUID, curMember.Rank)
 		}
 
 		if !curMember.FaultDomain.Equals(req.FaultDomain) {
@@ -174,7 +160,7 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		state:          MemberStateJoined,
 	}
 	if err := m.db.AddMember(newMember); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to add new member")
 	}
 	resp.Created = true
 	resp.Member = newMember
@@ -198,7 +184,7 @@ func (m *Membership) AddOrReplace(newMember *Member) error {
 		return nil
 	}
 
-	return m.updateMember(newMember)
+	return m.db.UpdateMember(newMember)
 }
 
 // Remove removes member from membership, idempotent.
@@ -352,7 +338,10 @@ func (m *Membership) UpdateMemberStates(results MemberResults, updateOnFail bool
 					result.Rank, result.State)
 			}
 		}
+
 		if member.State().isTransitionIllegal(result.State) {
+			m.log.Debugf("skipping illegal member state update for rank %d: %s->%s",
+				member.Rank, member.state, result.State)
 			continue
 		}
 		member.state = result.State
@@ -447,39 +436,155 @@ func (m *Membership) CheckHosts(hosts string, ctlPort int) (*RankSet, *hostlist.
 	return rs, missHS, nil
 }
 
+// MarkRankDead is a helper method to mark a rank as dead in response to a
+// swim_rank_dead event.
+func (m *Membership) MarkRankDead(rank Rank) error {
+	member, err := m.db.FindMemberByRank(rank)
+	if err != nil {
+		return err
+	}
+
+	if member.State().isTransitionIllegal(MemberStateEvicted) {
+		return errors.Errorf("llegal member state update for rank %d: %s->%s",
+			member.Rank, member.state, MemberStateEvicted)
+	}
+
+	member.state = MemberStateEvicted
+	return m.db.UpdateMember(member)
+}
+
+func (m *Membership) handleRankDown(evt *events.RASEvent) {
+	ei := evt.GetRankStateInfo()
+	if ei == nil {
+		m.log.Error("no extended info in RankDown event received")
+		return
+	}
+
+	// TODO: sanity check that the correct member is being updated by
+	// performing lookup on provided hostname and matching returned
+	// addresses with the member address with matching rank.
+
+	member, err := m.db.FindMemberByRank(Rank(evt.Rank))
+	if err != nil {
+		m.log.Errorf("member with rank %d not found", evt.Rank)
+		return
+	}
+
+	if member.State().isTransitionIllegal(MemberStateErrored) {
+		m.log.Debugf("skipping illegal member state update for rank %d: %s->%s",
+			member.Rank, member.state, MemberStateErrored)
+		return
+	}
+
+	member.state = MemberStateErrored
+	member.Info = errors.Wrap(ei.ExitErr, evt.Msg).Error()
+
+	if err := m.db.UpdateMember(member); err != nil {
+		m.log.Errorf("updating member with rank %d: %s", member.Rank, err)
+	}
+}
+
 // OnEvent handles events on channel and updates member states accordingly.
-func (m *Membership) OnEvent(_ context.Context, evt events.Event) {
-	if common.InterfaceIsNil(evt) {
-		m.log.Error("nil event")
-		return
+func (m *Membership) OnEvent(_ context.Context, evt *events.RASEvent) {
+	switch evt.ID {
+	case events.RASRankDown:
+		m.handleRankDown(evt)
+	}
+}
+
+// CompressedFaultDomainTree returns the tree of fault domains of joined
+// members in a compressed format.
+// Each domain is represented as a tuple: (level, ID, number of children)
+// Except for the rank, which is represented as: (rank)
+// The order of items is a breadth-first traversal of the tree.
+func (m *Membership) CompressedFaultDomainTree(ranks ...uint32) ([]uint32, error) {
+	tree := m.db.FaultDomainTree()
+	if tree == nil {
+		return nil, errors.New("uninitialized fault domain tree")
 	}
 
-	switch rankEvt := evt.(type) {
-	case *events.RankExit:
-		if rankEvt == nil {
-			m.log.Errorf("nil RankExit event received")
-			return
-		}
-		m.log.Debugf("processing RAS event %q from rank %d on host %q",
-			rankEvt.RAS.Msg, rankEvt.RAS.Rank, rankEvt.RAS.Hostname)
-
-		// TODO: sanity check that the correct member is being updated by
-		// performing lookup on provided hostname and matching returned
-		// addresses with the member address with matching rank.
-
-		if err := m.UpdateMemberStates(MemberResults{
-			NewMemberResult(Rank(rankEvt.RAS.Rank),
-				errors.Wrap(rankEvt.ExitErr, rankEvt.RAS.Msg),
-				MemberStateErrored),
-		}, true); err != nil {
-			m.log.Errorf("updating member states: %s", err)
-			return
-		}
-
-		member, _ := m.Get(Rank(rankEvt.RAS.Rank))
-		m.log.Debugf("updated rank %d to %+v (%s)", rankEvt.RAS.Rank, member, member.Info)
-	default:
-		m.log.Errorf("%v event unsupported", evt)
-		return
+	subtree, err := getFaultDomainSubtree(tree, ranks...)
+	if err != nil {
+		return nil, err
 	}
+
+	return compressTree(subtree), nil
+}
+
+func getFaultDomainSubtree(tree *FaultDomainTree, ranks ...uint32) (*FaultDomainTree, error) {
+	if len(ranks) == 0 {
+		return tree, nil
+	}
+
+	domains := tree.Domains()
+
+	// Traverse the list of domains only once
+	treeDomains := make(map[uint32]*FaultDomain, len(ranks))
+	for _, d := range domains {
+		if r, isRank := getFaultDomainRank(d); isRank {
+			treeDomains[r] = d
+		}
+	}
+
+	rankDomains := make([]*FaultDomain, 0)
+	for _, r := range ranks {
+		d, ok := treeDomains[r]
+		if !ok {
+			return nil, fmt.Errorf("rank %d not found in fault domain tree", r)
+		}
+		rankDomains = append(rankDomains, d)
+	}
+
+	return tree.Subtree(rankDomains...)
+}
+
+func getFaultDomainRank(fd *FaultDomain) (uint32, bool) {
+	fmtStr := rankFaultDomainPrefix + "%d"
+	var rank uint32
+	n, err := fmt.Sscanf(fd.BottomLevel(), fmtStr, &rank)
+	if err != nil || n != 1 {
+		return 0, false
+	}
+	return rank, true
+}
+
+func compressTree(tree *FaultDomainTree) []uint32 {
+	result := []uint32{}
+	queue := make([]*FaultDomainTree, 0)
+	queue = append(queue, tree)
+
+	numLevel := 1
+	numNextLevel := 0
+	seenThisLevel := 0
+	level := tree.Depth()
+
+	for len(queue) > 0 {
+		if seenThisLevel == numLevel {
+			numLevel = numNextLevel
+			seenThisLevel = 0
+			numNextLevel = 0
+			level--
+			if level < 0 {
+				panic("dev error: decremented levels below 0")
+			}
+		}
+		cur := queue[0]
+		queue = queue[1:]
+		seenThisLevel++
+
+		if rank, ok := getFaultDomainRank(cur.Domain); ok && cur.IsLeaf() {
+			result = append(result, rank)
+			continue
+		}
+
+		result = append(result,
+			uint32(level),
+			cur.ID,
+			uint32(len(cur.Children)))
+		for _, child := range cur.Children {
+			queue = append(queue, child)
+			numNextLevel++
+		}
+	}
+	return result
 }

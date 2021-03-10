@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * \file
@@ -75,8 +58,8 @@ typedef struct {
 } dfs_iod_t;
 
 /**
- * Create a DFS container with the the POSIX property layout set.
- * Optionally set attributes for hints on the container.
+ * Create a DFS container with the POSIX property layout set.  Optionally set
+ * attributes for hints on the container.
  *
  * \param[in]	poh	Pool open handle.
  * \param[in]	co_uuid	Container UUID.
@@ -167,7 +150,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 
 /**
  * Optionally set a prefix on the dfs mount where all paths passed to dfs_lookup
- * are trimmed of that prefix. This is helpful when using DFS API with a dfuse
+ * are trimmed off that prefix. This is helpful when using DFS API with a dfuse
  * mount and the user would like to reference files in the dfuse mount instead
  * of the absolute path from the root of the DFS container.
  *
@@ -440,12 +423,12 @@ dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
  * User callback defined for dfs_readdir_size.
  */
 typedef int (*dfs_filler_cb_t)(dfs_t *dfs, dfs_obj_t *obj, const char name[],
-			       void *_udata);
+			       void *arg);
 
 /**
  * Same as dfs_readdir, but this also adds a buffer size limitation when
  * enumerating. On every entry, it issues a user defined callback. If size
- * limitation is reached, function returns -DER_KEY2BIG.
+ * limitation is reached, function returns E2BIG
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Opened directory object.
@@ -458,13 +441,13 @@ typedef int (*dfs_filler_cb_t)(dfs_t *dfs, dfs_obj_t *obj, const char name[],
  *			[out]: Actual number of entries enumerated.
  * \param[in]	size	Max buffer size to be used internally before breaking.
  * \param[in]	op	Optional callback to be issued on every entry.
- * \param[in]	udata	Pointer to user data to be passed to \a op.
+ * \param[in]	arg	Pointer to user data to be passed to \a op.
  *
  * \return		0 on success, errno code on failure.
  */
 int
 dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
-	    uint32_t *nr, size_t size, dfs_filler_cb_t op, void *udata);
+	    uint32_t *nr, size_t size, dfs_filler_cb_t op, void *arg);
 
 /**
  * Provide a function for large directories to split an anchor to be able to
@@ -478,7 +461,7 @@ dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
  * feature is not supported yet.
  *
  * \param[in]	obj	Dir object to split anchor for.
- * \param[in/out]
+ * \param[in,out]
  *		nr	[in]: Number of anchors requested and allocated in
  *			\a anchors. Pass 0 for DAOS to recommend split num.
  *			[out]: Number of anchors recommended if 0 is passed in.

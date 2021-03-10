@@ -1,30 +1,14 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2019-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from rebuild_test_base import RebuildTestBase
 
 
 class RebuildDeleteObjects(RebuildTestBase):
+    # pylint: disable=too-many-ancestors
     """Test class for deleting objects during pool rebuild.
 
     Test Class Description:
@@ -33,6 +17,18 @@ class RebuildDeleteObjects(RebuildTestBase):
 
     :avocado: recursive
     """
+
+    CANCEL_FOR_TICKET = [
+        [
+            "DAOS-6751",
+            "test_method_name", "test_rebuild_delete_records",
+            "record_qty", 1
+        ],
+        [
+            "DAOS-6865",
+            "rank", 4
+        ],
+    ]
 
     def __init__(self, *args, **kwargs):
         """Initialize a RebuildDeleteObjects object."""
@@ -94,7 +90,7 @@ class RebuildDeleteObjects(RebuildTestBase):
         Use Cases:
             foo
 
-        :avocado: tags=all,medium,full_regression,rebuild,rebuilddeleteobject
+        :avocado: tags=all,large,full_regression,rebuild,rebuilddeleteobject
         """
         self.punch_type = "object"
         self.execute_rebuild_test()
@@ -111,7 +107,7 @@ class RebuildDeleteObjects(RebuildTestBase):
         Use Cases:
             foo
 
-        :avocado: tags=all,medium,full_regression,rebuild,rebuilddeleterecord
+        :avocado: tags=all,large,full_regression,rebuild,rebuilddeleterecord
         """
         self.punch_type = "record"
         self.execute_rebuild_test()

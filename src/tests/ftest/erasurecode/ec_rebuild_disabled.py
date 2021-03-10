@@ -1,25 +1,8 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import time
 from ec_utils import ErasureCodeIor
@@ -40,7 +23,7 @@ class EcDisabledRebuild(ErasureCodeIor):
         """Set up for test case."""
         super(EcDisabledRebuild, self).setUp()
 
-    @skipForTicket("DAOS-5377")
+    @skipForTicket("DAOS-6660")
     def test_ec_degrade(self):
         """Jira ID: DAOS-5893.
 
@@ -61,7 +44,7 @@ class EcDisabledRebuild(ErasureCodeIor):
 
         # Kill the last server rank and wait for 20 seconds, Rebuild is disabled
         # so data should not be rebuild
-        self.pool.start_rebuild([self.server_count - 1], self.d_log)
+        self.server_managers[0].stop_ranks([self.server_count - 1], self.d_log)
         time.sleep(20)
 
         #Read IOR data and verify for different EC object and different sizes
@@ -70,7 +53,7 @@ class EcDisabledRebuild(ErasureCodeIor):
 
         # Kill the another server rank and wait for 20 seconds,Rebuild will
         # not happens because i's disabled.Read/verify data with Parity 2.
-        self.pool.start_rebuild([self.server_count - 2], self.d_log)
+        self.server_managers[0].stop_ranks([self.server_count - 2], self.d_log)
         time.sleep(20)
 
         #Read IOR data and verify for different EC object and different sizes

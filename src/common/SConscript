@@ -1,6 +1,30 @@
 """Build common libraries"""
 import daos_build
 
+COMMON_FILES = ['debug.c', 'mem.c', 'fail_loc.c', 'lru.c',
+                'misc.c', 'pool_map.c', 'sort.c', 'btree.c', 'prop.c',
+                'btree_class.c', 'tse.c', 'rsvc.c', 'checksum.c',
+                'drpc.c', 'drpc.pb-c.c', 'proc.c',
+                'acl_api.c', 'acl_util.c', 'acl_principal.c', 'cont_props.c',
+                'dedup.c', 'profile.c', 'compression.c', 'compression_isal.c',
+                'compression_qat.c', 'multihash.c', 'multihash_isal.c',
+                'cipher.c', 'cipher_isal.c', 'qat.c', 'fault_domain.c']
+
+
+def build_daos_common(env, client, prereqs):
+    """ Building non-pmem version for client's common lib"""
+    denv = env.Clone()
+
+    if client:
+        libname = 'libdaos_common'
+    else:
+        denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
+        denv.Append(OBJPREFIX="v_")
+        libname = 'libdaos_common_pmem'
+        prereqs.require(denv, 'pmdk')
+
+    common = daos_build.library(denv, libname, COMMON_FILES)
+    denv.Install('$PREFIX/lib64/', common)
 
 def build_dts_library(env):
     """Build libdts library"""
@@ -32,7 +56,7 @@ def build_dts_library(env):
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs', 'platform_arm')
+    Import('env', 'prereqs')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
@@ -41,44 +65,35 @@ def scons():
     # is correct, but set _libs to [] so that the library isn't
     # linked in.
 
-    prereqs.require(env, 'pmdk')
+    # Arm can build ISA-L
+    prereqs.require(env, 'isal')
+    prereqs.require(env, 'isal_crypto')
 
-    if not platform_arm:
-        prereqs.require(env, 'isal')
-        prereqs.require(env, 'isal_crypto')
-
-    denv = env.Clone()
-
-    prereqs.require(denv, 'protobufc')
+    denv = env.Clone(LIBS=[])
+    prereqs.require(denv, 'isal', 'isal_crypto', 'protobufc')
     denv.AppendUnique(LIBS=['cart', 'gurt', 'lz4'])
+    build_daos_common(denv, True, prereqs)
+    build_daos_common(denv, False, prereqs)
 
+
+    prereqs.require(env, 'pmdk')
     control_tgts = [File('control.c')]
     Export('control_tgts')
 
-    common_src = ['debug.c', 'mem.c', 'fail_loc.c', 'lru.c',
-                  'misc.c', 'pool_map.c', 'sort.c', 'btree.c', 'prop.c',
-                  'btree_class.c', 'tse.c', 'rsvc.c', 'checksum.c',
-                  'drpc.c', 'drpc.pb-c.c', 'proc.c',
-                  'acl_api.c', 'acl_util.c', 'acl_principal.c', 'cont_props.c',
-                  'dedup.c', 'profile.c', 'compression.c', 'compression_isal.c',
-                  'compression_qat.c', 'multihash.c', 'multihash_isal.c',
-                  'cipher.c', 'cipher_isal.c', 'qat.c']
+    tlib_env = denv.Clone()
+    tlib_env.AppendUnique(LIBS=['json-c'])
 
-    common = daos_build.library(denv, 'libdaos_common', common_src)
-    denv.Install('$PREFIX/lib64/', common)
-
-    tenv = denv.Clone()
-    tenv.AppendUnique(LIBS=['json-c'])
-
-    prereqs.require(tenv, 'argobots')
+    prereqs.require(tlib_env, 'argobots')
 
     tests_lib_src = ['tests_lib.c', 'tests_dmg_helpers.c']
-    tests_lib = daos_build.library(tenv, 'libdaos_tests', tests_lib_src)
-    tenv.Install('$PREFIX/lib64/', tests_lib)
+    tests_lib = daos_build.library(tlib_env, 'libdaos_tests', tests_lib_src)
+    tlib_env.Install('$PREFIX/lib64/', tests_lib)
 
+    tenv = tlib_env.Clone()
+    prereqs.require(tenv, 'pmdk')
     SConscript('tests/SConscript', exports='tenv')
 
-    build_dts_library(env)
+    build_dts_library(denv)
 
 if __name__ == "SCons.Script":
     scons()

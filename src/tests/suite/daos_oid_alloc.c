@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos_m
@@ -35,17 +18,17 @@ reconnect(test_arg_t *arg) {
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	rc = daos_cont_close(arg->coh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	MPI_Barrier(MPI_COMM_WORLD);
 	rc = daos_pool_disconnect(arg->pool.poh, NULL /* ev */);
 	arg->pool.poh = DAOS_HDL_INVAL;
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	flags = (DAOS_COO_RW | DAOS_COO_FORCE);
 	if (arg->myrank == 0) {
 		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-				       NULL /* svc */, DAOS_PC_RW,
+				       DAOS_PC_RW,
 				       &arg->pool.poh, &arg->pool.pool_info,
 				       NULL /* ev */);
 		if (rc)
@@ -57,7 +40,7 @@ bcast:
 	/** broadcast container open result */
 	if (arg->rank_size > 1)
 		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	/** l2g and g2l the container handle */
 	if (arg->rank_size > 1) {
 		handle_share(&arg->pool.poh, HANDLE_POOL, arg->myrank,
@@ -85,7 +68,7 @@ simple_oid_allocator(void **state)
 		rc = daos_cont_alloc_oids(arg->coh, num_oids, &oid, NULL);
 		if (rc)
 			print_message("OID alloc failed (%d)\n", rc);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 
 		print_message("%d: OID range %" PRId64 " - %" PRId64 "\n",
 			      arg->myrank, oid, oid+num_oids);
@@ -223,11 +206,8 @@ oid_allocator_checker(void **state)
 	test_arg_t	*arg = *state;
 	uint64_t	oids[NUM_RGS];
 	int		num_oids[NUM_RGS];
-	int		i;
+	int		i = 0;
 	int		rc, rc_reduce;
-
-	/* skipped until bug DAOS-5999 is fixed */
-	skip();
 
 	srand(time(NULL));
 	reconnect(arg);
@@ -235,11 +215,16 @@ oid_allocator_checker(void **state)
 	if (arg->myrank == 0)
 		print_message("Allocating %d OID ranges per rank\n", NUM_RGS);
 
-	for (i = 0; i < NUM_RGS; i++) {
+	while (i < NUM_RGS) {
 		num_oids[i] = rand() % 256 + 1;
 		rc = daos_cont_alloc_oids(arg->coh, num_oids[i], &oids[i],
 					  NULL);
 		if (rc) {
+			if (rc == -DER_UNREACH) {
+				rc = 0;
+				continue;
+			}
+
 			fprintf(stderr, "%d: %d oids alloc failed (%d)\n",
 				i, num_oids[i], rc);
 			goto check;
@@ -255,7 +240,7 @@ oid_allocator_checker(void **state)
 			MPI_Barrier(MPI_COMM_WORLD);
 			rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL,
 					     NULL);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			if (info.pi_ntargets - info.pi_ndisabled >= 2) {
 				if (arg->myrank == 0)
 					daos_kill_server(arg,
@@ -265,6 +250,7 @@ oid_allocator_checker(void **state)
 			}
 			MPI_Barrier(MPI_COMM_WORLD);
 		}
+		i++;
 	}
 
 check:
@@ -281,12 +267,71 @@ check:
 	assert_int_equal(rc, 0);
 }
 
+static void
+cont_oid_prop(void **state)
+{
+	test_arg_t		*arg = *state;
+	daos_prop_t		*prop;
+	uint64_t		oid, alloced_oid;
+	uuid_t			co_uuid;
+	daos_handle_t		coh;
+	daos_cont_info_t	co_info;
+	int			rc = 0;
+
+	if (arg->myrank != 0)
+		return;
+
+	uuid_clear(co_uuid);
+	uuid_generate(co_uuid);
+
+	/** set max oid to 2 x 1024 x 1024 */
+	alloced_oid = 2 * 1024 * 1024;
+	prop = daos_prop_alloc(1);
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_ALLOCED_OID;
+	prop->dpp_entries[0].dpe_val = alloced_oid;
+
+	print_message("Create a container with alloced_oid "DF_U64"\n",
+		      alloced_oid);
+	rc = daos_cont_create(arg->pool.poh, co_uuid, prop, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_cont_open(arg->pool.poh, co_uuid, DAOS_COO_RW, &coh,
+			    &co_info, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("Allocate 1 OID, should be >= "DF_U64"\n", alloced_oid);
+	rc = daos_cont_alloc_oids(coh, 1, &oid, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("OID allocated = "DF_U64"\n", oid);
+	assert_true(oid >= alloced_oid);
+
+	print_message("GET max OID from container property\n");
+	prop->dpp_entries[0].dpe_val = 0;
+	rc = daos_cont_query(coh, NULL, prop, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("MAX OID = "DF_U64"\n", prop->dpp_entries[0].dpe_val);
+	assert_true(prop->dpp_entries[0].dpe_val > alloced_oid);
+
+	print_message("Change alloc'ed oid with daos_cont_set_prop "
+		      "(should fail)\n");
+	rc = daos_cont_set_prop(coh, prop, NULL);
+	assert_rc_equal(rc, -DER_NO_PERM);
+
+	daos_prop_free(prop);
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
+	assert_rc_equal(rc, 0);
+}
+
 static const struct CMUnitTest oid_alloc_tests[] = {
 	{"OID_ALLOC1: Simple OID ALLOCATION (blocking)",
 	 simple_oid_allocator, async_disable, NULL},
 	{"OID_ALLOC2: Multiple Cont OID ALLOCATION (blocking)",
 	 multi_cont_oid_allocator, async_disable, NULL},
-	{"OID_ALLOC3: OID Allocator check (blocking)",
+	{"OID_ALLOC3: Fetch / Set MAX OID",
+	 cont_oid_prop, async_disable, NULL},
+	{"OID_ALLOC4: OID Allocator check (blocking)",
 	 oid_allocator_checker, async_disable, NULL},
 };
 
@@ -303,7 +348,7 @@ run_daos_oid_alloc_test(int rank, int size)
 	int rc = 0;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	rc = cmocka_run_group_tests_name("OID Allocator tests", oid_alloc_tests,
+	rc = cmocka_run_group_tests_name("DAOS_OID_Allocator", oid_alloc_tests,
 					 oid_alloc_setup, test_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;

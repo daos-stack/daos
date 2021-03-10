@@ -1,30 +1,12 @@
 /*
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /*
  * This file shows an example of using the telemetry API to produce metrics
  */
 
-#include "gurt/common.h"
 #include "gurt/telemetry_common.h"
 #include "gurt/telemetry_producer.h"
 
@@ -47,10 +29,10 @@ void test_function1(int count)
 	 * if desired.  See the final d_tm_increment_counter() below.
 	 */
 	for (i = 0; i < count - 1; i++) {
-		rc = d_tm_increment_counter(&loop, __FILE__, __func__,
-					    "loop counter", NULL);
-		if (rc != D_TM_SUCCESS) {
-			printf("d_tm_increment_counter failed, rc = %d\n", rc);
+		rc = d_tm_increment_counter(&loop, 1, "loop counter");
+		if (rc != DER_SUCCESS) {
+			printf("d_tm_increment_counter failed: " DF_RC "\n",
+			       DP_RC(rc));
 			return;
 		}
 	}
@@ -61,10 +43,9 @@ void test_function1(int count)
 	 * provided, and only uses the name if the pointer doesn't reference
 	 * anything.
 	 */
-	rc = d_tm_increment_counter(&loop, NULL);
-	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_increment_counter failed, rc = %d\n", rc);
-	}
+	rc = d_tm_increment_counter(&loop, 1, NULL);
+	if (rc != DER_SUCCESS)
+		printf("d_tm_increment_counter failed: " DF_RC "\n", DP_RC(rc));
 
 }
 
@@ -77,11 +58,9 @@ void test_function2(void)
 	static struct d_tm_node_t	*ts;
 	int				rc;
 
-	rc = d_tm_record_timestamp(&ts, __FILE__, __func__, "last executed",
-				   NULL);
-	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_record_timestamp failed, rc = %d\n", rc);
-	}
+	rc = d_tm_record_timestamp(&ts, "last executed");
+	if (rc != DER_SUCCESS)
+		printf("d_tm_record_timestamp failed: " DF_RC "\n", DP_RC(rc));
 }
 
 /**
@@ -102,11 +81,9 @@ void test_open_handle(void)
 	 * incremented by an arbitrary value.  We will incrememt by one for this
 	 * example.
 	 */
-	rc = d_tm_increment_gauge(&num_open_handles, 1, __FILE__,
-				  "open handles", NULL);
-	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_increment_gauge failed, rc = %d\n", rc);
-	}
+	rc = d_tm_increment_gauge(&num_open_handles, 1, "handles/open handles");
+	if (rc != DER_SUCCESS)
+		printf("d_tm_increment_gauge failed: " DF_RC "\n", DP_RC(rc));
 }
 
 /**
@@ -125,11 +102,9 @@ void test_close_handle(void)
 	 * that increments in test_open_handle() are changing the same metric
 	 * as the one used here.
 	 */
-	rc = d_tm_decrement_gauge(&num_open_handles, 1, __FILE__,
-				  "open handles", NULL);
-	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_decrement_gauge failed, rc = %d\n", rc);
-	}
+	rc = d_tm_decrement_gauge(&num_open_handles, 1, "handles/open handles");
+	if (rc != DER_SUCCESS)
+		printf("d_tm_decrement_gauge failed: " DF_RC "\n", DP_RC(rc));
 }
 
 /**
@@ -152,43 +127,44 @@ void timer_snapshot(void)
 	static struct d_tm_node_t	*t6;
 	struct timespec			ts;
 	int				rc;
+	int				snap = 0;
 
-	rc = d_tm_take_timer_snapshot(&t1, D_TM_CLOCK_REALTIME, __FILE__,
-				      __func__, "snapshot 1", NULL);
-	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_take_timer_snapshot failed, rc = %d\n", rc);
-	}
+	rc = d_tm_take_timer_snapshot(&t1, D_TM_CLOCK_REALTIME,
+				      "snapshot %d", ++snap);
+	if (rc != DER_SUCCESS)
+		printf("d_tm_take_timer_snapshot failed: " DF_RC "\n",
+		       DP_RC(rc));
 
 	/** Do some stuff */
 	sleep(1);
 
-	rc = d_tm_take_timer_snapshot(&t2, D_TM_CLOCK_REALTIME, __FILE__,
-				      __func__, "snapshot 2", NULL);
-	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_take_timer_snapshot failed, rc = %d\n", rc);
-	}
+	rc = d_tm_take_timer_snapshot(&t2, D_TM_CLOCK_REALTIME,
+				      "snapshot %d", ++snap);
+	if (rc != DER_SUCCESS)
+		printf("d_tm_take_timer_snapshot failed: " DF_RC "\n",
+		       DP_RC(rc));
 
 	/** Do some stuff */
 	ts.tv_sec = 0;
 	ts.tv_nsec = 50000000;
 	nanosleep(&ts, NULL);
 
-	rc = d_tm_take_timer_snapshot(&t3, D_TM_CLOCK_REALTIME, __FILE__,
-				      __func__, "snapshot 3", NULL);
-	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_take_timer_snapshot failed, rc = %d\n", rc);
-	}
+	rc = d_tm_take_timer_snapshot(&t3, D_TM_CLOCK_REALTIME,
+				      "snapshot %d", ++snap);
+	if (rc != DER_SUCCESS)
+		printf("d_tm_take_timer_snapshot failed: " DF_RC "\n",
+		       DP_RC(rc));
 
 	/** Do some stuff (10x longer) */
 	ts.tv_sec = 0;
 	ts.tv_nsec = 500000000;
 	nanosleep(&ts, NULL);
 
-	rc = d_tm_take_timer_snapshot(&t4, D_TM_CLOCK_REALTIME, __FILE__,
-				      __func__, "snapshot 4", NULL);
-	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_take_timer_snapshot failed, rc = %d\n", rc);
-	}
+	rc = d_tm_take_timer_snapshot(&t4, D_TM_CLOCK_REALTIME,
+				      "snapshot %d", ++snap);
+	if (rc != DER_SUCCESS)
+		printf("d_tm_take_timer_snapshot failed: " DF_RC "\n",
+		       DP_RC(rc));
 
 	/**
 	 * How long did the sleep(1) take?  That's t2 - t1
@@ -202,17 +178,18 @@ void timer_snapshot(void)
 
 	/** This is how to specify a high resolution process CPU timer */
 	rc = d_tm_take_timer_snapshot(&t5, D_TM_CLOCK_PROCESS_CPUTIME,
-				      __FILE__, __func__, "snapshot 5", NULL);
-	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_take_timer_snapshot failed, rc = %d\n", rc);
-	}
+				      "snapshot %d", ++snap);
+
+	if (rc != DER_SUCCESS)
+		printf("d_tm_take_timer_snapshot failed: " DF_RC "\n",
+		       DP_RC(rc));
 
 	/** This is how to specify a high resolution thread CPU timer */
 	rc = d_tm_take_timer_snapshot(&t6, D_TM_CLOCK_THREAD_CPUTIME,
-				      __FILE__, __func__, "snapshot 6", NULL);
-	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_take_timer_snapshot failed, rc = %d\n", rc);
-	}
+				      "snapshot %d", ++snap);
+	if (rc != DER_SUCCESS)
+		printf("d_tm_take_timer_snapshot failed: " DF_RC "\n",
+		       DP_RC(rc));
 }
 
 /**
@@ -229,48 +206,49 @@ void timer_snapshot(void)
 struct d_tm_nodeList_t *add_metrics_manually(void)
 {
 	struct d_tm_nodeList_t	*node_list = NULL;
-	struct d_tm_nodeList_t	*head = NULL;
 	struct d_tm_node_t	*counter1 = NULL;
 	struct d_tm_node_t	*counter2 = NULL;
-	char			path[D_TM_MAX_NAME_LEN];
 	int			rc;
 
 	/**
 	 * Create some metrics manually, and keep track of the pointers by
 	 * adding them to a d_tm_nodeList_t for later usage.
 	 */
-
-	snprintf(path, sizeof(path), "%s/manually added/counter 1", __FILE__);
-	rc = d_tm_add_metric(&counter1, path, D_TM_COUNTER,
+	rc = d_tm_add_metric(&counter1, D_TM_COUNTER,
 			     "A manually added counter",
 			     "If I had a lot to say about it, I'd write that "
 			     "here.  I have D_TM_MAX_LONG_LEN characters "
-			     "to use.");
-	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_add_metric failed, rc = %d\n", rc);
-	}
-	head = node_list = d_tm_add_node(counter1, NULL);
-
-	if (node_list == NULL) {
-		printf("d_tm_add_node failed\n");
+			     "to use.",
+			     "manually added/counter 1");
+	if (rc != DER_SUCCESS) {
+		printf("d_tm_add_metric failed: " DF_RC "\n", DP_RC(rc));
 		return NULL;
 	}
 
-	snprintf(path, sizeof(path), "%s/manually added/counter 2", __FILE__);
-	rc = d_tm_add_metric(&counter2, path, D_TM_COUNTER,
+	rc = d_tm_add_node(counter1, &node_list);
+	if (rc != DER_SUCCESS) {
+		printf("d_tm_add_metric failed: " DF_RC "\n", DP_RC(rc));
+		return NULL;
+	}
+
+	rc = d_tm_add_metric(&counter2, D_TM_COUNTER,
 			     "Another manually added counter",
-			     "Much less metadata to report this time.");
-	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_add_metric failed, rc = %d\n", rc);
-	}
-	node_list = d_tm_add_node(counter2, node_list);
-
-	if (node_list == NULL) {
-		printf("d_tm_add_node failed\n");
+			     "Much less metadata to report this time.",
+			     "manually added/counter 2");
+	if (rc != DER_SUCCESS) {
+		d_tm_list_free(node_list);
+		printf("d_tm_add_metric failed: " DF_RC "\n", DP_RC(rc));
 		return NULL;
 	}
 
-	return head;
+	rc = d_tm_add_node(counter2, &node_list);
+	if (rc != DER_SUCCESS) {
+		d_tm_list_free(node_list);
+		printf("d_tm_add_metric failed: " DF_RC "\n", DP_RC(rc));
+		return NULL;
+	}
+
+	return node_list;
 }
 
 /**
@@ -293,11 +271,11 @@ void use_manually_added_metrics(struct d_tm_nodeList_t *node_list)
 			 * Supplying an initialized pointer to the metric
 			 * so it is only used and not created implicitly here.
 			 */
-			rc = d_tm_increment_counter(&node_list->dtnl_node,
+			rc = d_tm_increment_counter(&node_list->dtnl_node, 1,
 						    NULL);
-			if (rc != D_TM_SUCCESS) {
-				printf("d_tm_increment_counter failed, "
-				       "rc = %d\n", rc);
+			if (rc != DER_SUCCESS) {
+				printf("d_tm_increment_counter failed: "
+				       DF_RC "\n", DP_RC(rc));
 			}
 			break;
 		default:
@@ -318,28 +296,29 @@ main(int argc, char **argv)
 	static struct d_tm_node_t	*timer1;
 	static struct d_tm_node_t	*timer2;
 	struct d_tm_nodeList_t		*node_list;
-	struct d_tm_nodeList_t		*head;
 	int				rc;
-	int				simulated_rank = 0;
+	int				simulated_srv_idx = 0;
 	int				i;
 
 	if (argc < 2) {
 		printf("Specify an integer that identifies this producer's "
-		       "rank.  Specify the same value to the consumer.\n");
+		       "sever instance.  "
+		       "Specify the same value to the consumer.\n");
 		exit(0);
 	}
 
-	simulated_rank = atoi(argv[1]);
-	printf("This simulated rank has ID: %d\n", simulated_rank);
+	simulated_srv_idx = atoi(argv[1]);
+	printf("This simulated server instance has ID: %d\n",
+	       simulated_srv_idx);
 
 	/**
 	 * Call d_tm_init() only once per process,
-	 * i.e. in iosrv/init.c/server_init()
+	 * i.e. in engine/init.c::server_init()
 	 */
-	rc = d_tm_init(simulated_rank, D_TM_SHARED_MEMORY_SIZE);
-	if (rc != 0) {
+	rc = d_tm_init(simulated_srv_idx, D_TM_SHARED_MEMORY_SIZE,
+		       D_TM_RETAIN_SHMEM);
+	if (rc != 0)
 		goto failure;
-	}
 
 	/**
 	 * The API is ready to use.  Add a counter that will be identified in
@@ -352,10 +331,9 @@ main(int argc, char **argv)
 	 * it.  The counter is created, and incremented by one.  It now has the
 	 * value 1.
 	 */
-	rc = d_tm_increment_counter(&entry, __FILE__, __func__,
-				    "sample counter", NULL);
-	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_increment_counter failed, rc = %d\n", rc);
+	rc = d_tm_increment_counter(&entry, 1, "sample_counter");
+	if (rc != DER_SUCCESS) {
+		printf("d_tm_increment_counter failed: " DF_RC "\n", DP_RC(rc));
 		goto failure;
 	}
 
@@ -366,10 +344,10 @@ main(int argc, char **argv)
 	 * for faster lookup.
 	 */
 	for (i = 0; i < 1000; i++) {
-		rc = d_tm_increment_counter(&loop, __FILE__, __func__,
-					    "loop counter", NULL);
-		if (rc != D_TM_SUCCESS) {
-			printf("d_tm_increment_counter failed, rc = %d\n", rc);
+		rc = d_tm_increment_counter(&loop, 1, "loop counter");
+		if (rc != DER_SUCCESS) {
+			printf("d_tm_increment_counter failed: " DF_RC "\n",
+			       DP_RC(rc));
 			goto failure;
 		}
 	}
@@ -383,36 +361,34 @@ main(int argc, char **argv)
 	 */
 
 	/** For the first timer, let's use the realtime clock */
-	rc = d_tm_mark_duration_start(&timer1, D_TM_CLOCK_REALTIME, __FILE__,
-				      __func__,
-				      "10000 iterations with rt clock",
-				      NULL);
-	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_mark_duration_start failed, rc = %d\n", rc);
+	rc = d_tm_mark_duration_start(&timer1, D_TM_CLOCK_REALTIME,
+				      "10000 iterations with rt clock");
+	if (rc != DER_SUCCESS) {
+		printf("d_tm_mark_duration_start failed: " DF_RC "\n",
+		       DP_RC(rc));
 		goto failure;
 	}
 
 	test_function1(10000);
-	rc = d_tm_mark_duration_end(&timer1, NULL);
-	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_mark_duration_end failed, rc = %d\n", rc);
+	rc = d_tm_mark_duration_end(&timer1, rc, NULL);
+	if (rc != DER_SUCCESS) {
+		printf("d_tm_mark_duration_end failed: " DF_RC "\n", DP_RC(rc));
 		goto failure;
 	}
 
 	/** For the second timer, let's use the process clock */
 	rc = d_tm_mark_duration_start(&timer2, D_TM_CLOCK_PROCESS_CPUTIME,
-				      __FILE__, __func__,
-				      "10000 iterations with process clock",
-				      NULL);
-	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_mark_duration_start failed, rc = %d\n", rc);
+				      "10000 iterations with process clock");
+	if (rc != DER_SUCCESS) {
+		printf("d_tm_mark_duration_start failed: " DF_RC "\n",
+		       DP_RC(rc));
 		goto failure;
 	}
 
 	test_function1(10000);
-	rc = d_tm_mark_duration_end(&timer2, NULL);
-	if (rc != D_TM_SUCCESS) {
-		printf("d_tm_mark_duration_end failed, rc = %d\n", rc);
+	rc = d_tm_mark_duration_end(&timer2, rc, NULL);
+	if (rc != DER_SUCCESS) {
+		printf("d_tm_mark_duration_end failed: " DF_RC "\n", DP_RC(rc));
 		goto failure;
 	}
 
@@ -429,14 +405,12 @@ main(int argc, char **argv)
 	 */
 	test_function2();
 
-
 	/**
 	 * Open a handle 1000 times.  The sample function increments a gauge
 	 * that monitors how many open handles.
 	 */
 	for (i = 0; i < 1000; i++)
 		test_open_handle();
-
 
 	/**
 	 * Close the same handle 750 times.  The sample function decrements the
@@ -462,18 +436,20 @@ main(int argc, char **argv)
 	 * be accessed by a pointer and avoid the cost of the lookup, just like
 	 * when the metrics are created implicitly with the other functions.
 	 */
-	head = node_list = add_metrics_manually();
+	node_list = add_metrics_manually();
+	if (node_list == NULL)
+		goto failure;
 
 	/**
 	 * After calling add_metrics_manually, the counters have value = 0
 	 * Each call to use_manually_added_metrics() increments the counters
 	 * by 1.  After the three calls, they should have value = 3.
-	 * This simply demonsrates how to use the node pointers that were
+	 * This simply demonstrates how to use the node pointers that were
 	 * initialized when adding the metrics manually.
 	 */
 	for (i = 0; i < 3; i++)
 		use_manually_added_metrics(node_list);
-	d_tm_list_free(head);
+	d_tm_list_free(node_list);
 
 	d_tm_fini();
 

@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * VOS Object/Key incarnation log
@@ -1489,6 +1472,7 @@ enum {
 	AGG_RC_NEXT,
 	AGG_RC_REMOVE,
 	AGG_RC_REMOVE_PREV,
+	AGG_RC_ABORT,
 };
 
 static int
@@ -1502,6 +1486,10 @@ check_agg_entry(const struct ilog_entry *entry, struct agg_arg *agg_arg)
 		agg_arg->aa_prev ? agg_arg->aa_prev->ie_id.id_epoch : 0,
 		agg_arg->aa_prior_punch ?
 		agg_arg->aa_prior_punch->ie_id.id_epoch : 0);
+
+	/* Abort ilog aggregation on hitting any uncommitted entry */
+	if (entry->ie_status == ILOG_UNCOMMITTED)
+		D_GOTO(done, rc = AGG_RC_ABORT);
 
 	if (entry->ie_id.id_epoch > agg_arg->aa_epr->epr_hi)
 		D_GOTO(done, rc = AGG_RC_DONE);
@@ -1642,6 +1630,9 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 			if (rc == 0)
 				removed++;
 			break;
+		case AGG_RC_ABORT:
+			rc = -DER_TX_BUSY;
+			goto done;
 		case AGG_RC_REMOVE_PREV:
 			/* Fall through: Should not get this here */
 		default:
@@ -1679,6 +1670,9 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 			if (rc != 0)
 				goto done;
 			break;
+		case AGG_RC_ABORT:
+			rc = -DER_TX_BUSY;
+			goto done;
 		default:
 			/* Unknown return code */
 			D_ASSERT(0);

@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * \file
@@ -132,7 +115,7 @@ void ds_pool_child_put(struct ds_pool_child *child);
 
 int ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 			 enum daos_module_id module, crt_opcode_t opcode,
-			 crt_rpc_t **rpc, crt_bulk_t bulk_hdl,
+			 uint32_t version, crt_rpc_t **rpc, crt_bulk_t bulk_hdl,
 			 d_rank_list_t *excluded_list);
 
 int ds_pool_map_buf_get(uuid_t uuid, d_iov_t *iov, uint32_t *map_ver);
@@ -156,7 +139,7 @@ int ds_pool_start(uuid_t uuid);
 void ds_pool_stop(uuid_t uuid);
 int ds_pool_extend(uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
 		   const d_rank_list_t *rank_list, int ndomains,
-		   const int *domains, d_rank_list_t *svc_ranks);
+		   const uint32_t *domains, d_rank_list_t *svc_ranks);
 int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
 				uint32_t rank,
 				struct pool_target_id_list *target_list,
@@ -165,9 +148,9 @@ int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
 int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets,
 		       uuid_t target_uuids[], const char *group,
 		       const d_rank_list_t *target_addrs, int ndomains,
-		       const int *domains, daos_prop_t *prop,
+		       const uint32_t *domains, daos_prop_t *prop,
 		       d_rank_list_t *svc_addrs);
-int ds_pool_svc_destroy(const uuid_t pool_uuid);
+int ds_pool_svc_destroy(const uuid_t pool_uuid, d_rank_list_t *svc_ranks);
 
 int ds_pool_svc_get_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
 			 daos_prop_t *prop);
@@ -255,10 +238,41 @@ ds_pool_disable_evict(void);
 void
 ds_pool_enable_evict(void);
 
+int ds_pool_svc_ranks_get(uuid_t uuid, d_rank_list_t *svc_ranks,
+			  d_rank_list_t **ranks);
+
 int dsc_pool_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		       unsigned int flags, const char *grp,
 		       struct pool_map *map, d_rank_list_t *svc_list,
 		       daos_handle_t *ph);
 int dsc_pool_close(daos_handle_t ph);
+
+/**
+ * Verify if pool status satisfy Redundancy Factor requirement, by checking
+ * pool map device status.
+ */
+static inline int
+ds_pool_rf_verify(struct ds_pool *pool, uint32_t last_ver, uint32_t rf)
+{
+	int	rc;
+
+	ABT_rwlock_rdlock(pool->sp_lock);
+	rc = pool_map_rf_verify(pool->sp_map, last_ver, rf);
+	ABT_rwlock_unlock(pool->sp_lock);
+
+	return rc;
+}
+
+static inline uint32_t
+ds_pool_get_version(struct ds_pool *pool)
+{
+	uint32_t	ver;
+
+	ABT_rwlock_rdlock(pool->sp_lock);
+	ver = pool_map_get_version(pool->sp_map);
+	ABT_rwlock_unlock(pool->sp_lock);
+
+	return ver;
+}
 
 #endif /* __DAOS_SRV_POOL_H__ */
