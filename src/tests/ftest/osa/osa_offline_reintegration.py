@@ -147,6 +147,7 @@ class OSAOfflineReintegration(OSAUtils):
             self.run_ior_thread("Read", oclass, test_seq)
             self.run_mdtest_thread()
 
+    @skipForTicket("DAOS-6505")
     def test_osa_offline_reintegration(self):
         """Test ID: DAOS-4749
         Test Description: Validate Offline Reintegration
@@ -166,6 +167,7 @@ class OSAOfflineReintegration(OSAUtils):
         """
         self.run_offline_reintegration_test(1, data=True, server_boot=True)
 
+    @skipForTicket("DAOS-6505")
     def test_osa_offline_reintegrate_during_rebuild(self):
         """Test ID: DAOS-6923
         Test Description: Reintegrate rank while rebuild
@@ -178,6 +180,7 @@ class OSAOfflineReintegration(OSAUtils):
         self.run_offline_reintegration_test(1, data=True,
                                             reint_during_rebuild=True)
 
+    @skipForTicket("DAOS-6505")
     def test_osa_offline_reintegration_oclass(self):
         """Test ID: DAOS-6923
         Test Description: Validate Offline Reintegration
@@ -192,6 +195,7 @@ class OSAOfflineReintegration(OSAUtils):
                                                 server_boot=False,
                                                 oclass=oclass)
 
+    @skipForTicket("DAOS-6505")
     def test_osa_offline_reintegrate_during_aggregation(self):
         """Test ID: DAOS-6923
         Test Description: Reintegrate rank while aggregation
