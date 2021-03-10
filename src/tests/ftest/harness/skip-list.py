@@ -41,7 +41,8 @@ class TestHarnessSkipsBase(Test):
                 pass
             else:
                 self.fail("Could not rename {0}"
-                          "{{,.orig}}".format(self.commit_title_file, excpt))
+                          "{{,.orig}}: {1}".format(self.commit_title_file,
+                                                   excpt))
         try:
             with open(self.commit_title_file, 'w') as cf_handle:
                 cf_handle.write("DAOS-9999 test: Fixing DAOS-9999")
@@ -60,12 +61,12 @@ class TestHarnessSkipsBase(Test):
                       "{1}".format(self.commit_title_file, excpt))
         try:
             os.rename(self.commit_title_file + '.orig', self.commit_title_file)
-        except Exception as excpt: # pylint: disable=broad-except
+        except OSError as excpt:
             if excpt.errno == errno.ENOENT:
                 pass
-            else:
-                self.fail("Could not rename {0}{{.orig,}}: "
-                          "{1}".format(self.commit_title_file, excpt))
+        except Exception as excpt: # pylint: disable=broad-except
+            self.fail("Could not rename {0}{{.orig,}}: "
+                      "{1}".format(self.commit_title_file, excpt))
 
         super(TestHarnessSkipsBase, self).tearDown()
 
@@ -78,9 +79,9 @@ class TestHarnessSkipsSkipped(TestHarnessSkipsBase):
         super(TestHarnessSkipsSkipped, self).__init__(*args, **kwargs)
         self.cancelled = False
 
-    def cancel(self, msg):
+    def cancel(self, message=None):
         """ Override Avocado Test.cancel() """
-        self.log.info("Test correctly called cancel(%s)" % msg)
+        self.log.info("Test correctly called cancel(%s)", message)
         self.cancelled = True
 
     def test_case_1(self):
@@ -108,7 +109,7 @@ class TestHarnessSkipsRun(TestHarnessSkipsBase):
     :avocado: recursive
     """
 
-    def cancel(self, _msg):
+    def cancel(self, _message=None):
         """ override Test.cancel() """
         self.fail('This test should not be skipped')
 
