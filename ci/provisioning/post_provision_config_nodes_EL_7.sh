@@ -37,7 +37,7 @@ group_repo_post() {
 }
 
 distro_custom() {
-    dnf -y "$dnf_repo_args" install python3
+    dnf -y $dnf_repo_args install python3
 
     if [ ! -e /usr/bin/pip3 ] &&
        [ -e /usr/bin/pip3.6 ]; then
