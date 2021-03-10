@@ -720,6 +720,19 @@ probe:
 				D_GOTO(out, rc);
 
 			reset_anchors(iter_ent.ie_child_type, anchors);
+
+			/** The child iterator may yield during iteration.
+			 *  It isn't necessary to reprobe the parent in order
+			 *  to continue iterating on the child because it
+			 *  would remain in the same location in memory.
+			 *  However, it is necessary to reprobe this iterator
+			 *  before continuing.
+			 */
+			if (need_reprobe(type, anchors)) {
+				D_ASSERT(!daos_anchor_is_zero(anchor) &&
+					 !daos_anchor_is_eof(anchor));
+				goto probe;
+			}
 		}
 
 		if (post_cb) {
@@ -732,12 +745,12 @@ probe:
 
 			if (acts & VOS_ITER_CB_ABORT)
 				break;
-		}
 
-		if (need_reprobe(type, anchors)) {
-			D_ASSERT(!daos_anchor_is_zero(anchor) &&
-				 !daos_anchor_is_eof(anchor));
-			goto probe;
+			if (need_reprobe(type, anchors)) {
+				D_ASSERT(!daos_anchor_is_zero(anchor) &&
+					 !daos_anchor_is_eof(anchor));
+				goto probe;
+			}
 		}
 
 		rc = vos_iter_next(ih);

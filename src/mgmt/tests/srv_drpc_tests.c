@@ -1113,9 +1113,9 @@ expect_query_resp_with_info(daos_pool_info_t *exp_info,
 	assert_non_null(pq_resp);
 	assert_int_equal(pq_resp->status, 0);
 	assert_string_equal(pq_resp->uuid, TEST_UUID);
-	assert_int_equal(pq_resp->totaltargets, exp_info->pi_ntargets);
-	assert_int_equal(pq_resp->disabledtargets, exp_info->pi_ndisabled);
-	assert_int_equal(pq_resp->activetargets,
+	assert_int_equal(pq_resp->total_targets, exp_info->pi_ntargets);
+	assert_int_equal(pq_resp->disabled_targets, exp_info->pi_ndisabled);
+	assert_int_equal(pq_resp->active_targets,
 			 exp_info->pi_space.ps_ntargets);
 
 	assert_non_null(pq_resp->scm);

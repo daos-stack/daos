@@ -35,7 +35,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	if (!is_new && ie->ie_dfs->dfs_multi_user) {
 		rc = dfuse_get_uid(ie);
 		if (rc)
-			D_GOTO(out_decref, rc);
+			D_GOTO(out_err, rc);
 	}
 
 	entry.attr = ie->ie_stat;
@@ -120,8 +120,6 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	else
 		DFUSE_REPLY_ENTRY(ie, req, entry);
 	return;
-out_decref:
-	d_hash_rec_decref(&fs_handle->dpi_iet, &ie->ie_htl);
 out_err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	dfs_release(ie->ie_obj);
