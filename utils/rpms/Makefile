@@ -1,4 +1,4 @@
-NAME    := $(shell if $(USE_BULLSEYE); then echo daos; else echo daoscov; fi)
+NAME    := daos
 SRC_EXT := gz
 SOURCE   = $(NAME)-$(VERSION).tar.$(SRC_EXT)
 
