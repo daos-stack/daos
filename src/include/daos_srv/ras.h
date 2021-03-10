@@ -153,7 +153,8 @@ ds_notify_ras_eventf(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hwid,
 		     const char *fmt, ...);
 
 /**
- * Notify control-plane of an update to a pool's service replicas.
+ * Notify control-plane of an update to a pool's service replicas and wait for
+ * a response.
  *
  * \param[in] pool	UUID of DAOS pool with updated service replicas.
  * \param[in] svcl	New list of pool service replica ranks.

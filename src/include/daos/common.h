@@ -878,4 +878,13 @@ daos_anchor_is_zero(daos_anchor_t *anchor)
 /* default debug log file */
 #define DAOS_LOG_DEFAULT	"/tmp/daos.log"
 
+#ifdef NEED_EXPLICIT_BZERO
+/* Secure memory scrub */
+static inline void
+explicit_bzero(void *s, size_t count) {
+	memset(s, 0, count);
+	asm volatile("" :  : "r"(s) : "memory");
+}
+#endif /* NEED_EXPLICIT_BZERO */
+
 #endif /* __DAOS_COMMON_H__ */
