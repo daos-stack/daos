@@ -427,7 +427,7 @@ public class IODataDescSync extends IODataDescBase {
    * @return data description entry
    * @throws IOException
    */
-  public Entry addEntryForFetch(String key, long offset,
+  public SyncEntry addEntryForFetch(String key, long offset,
                                               int dataSize) throws IOException {
     if (updateOrFetch) {
       throw new IllegalArgumentException("It's desc for update");
@@ -452,7 +452,7 @@ public class IODataDescSync extends IODataDescBase {
    * @return data description entry
    * @throws IOException
    */
-  public Entry addEntryForUpdate(String key, long offset, ByteBuf dataBuffer) throws IOException {
+  public SyncEntry addEntryForUpdate(String key, long offset, ByteBuf dataBuffer) throws IOException {
     if (!updateOrFetch) {
       throw new IllegalArgumentException("It's desc for fetch");
     }
@@ -461,7 +461,7 @@ public class IODataDescSync extends IODataDescBase {
     return e;
   }
 
-  private Entry addReusableEntry(int bufferLen) {
+  private SyncEntry addReusableEntry(int bufferLen) {
     SyncEntry e = new SyncEntry(bufferLen);
     akeyEntries.add(e);
     return e;

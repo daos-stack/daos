@@ -607,7 +607,7 @@ public class DaosObject {
    * @return {@link IODataDescSync}
    * @throws IOException
    */
-  public static IODataDescSync createDataDescForFetch(String dkey, IODataDescSync.IodType iodType, int recordSize)
+  public IODataDescSync createDataDescForFetch(String dkey, IODataDescSync.IodType iodType, int recordSize)
       throws IOException {
     IODataDescSync desc = new IODataDescSync(dkey, iodType, recordSize, false);
     return desc;
@@ -623,7 +623,7 @@ public class DaosObject {
    * @return {@link IOSimpleDDAsync}
    * @throws IOException
    */
-  public static IOSimpleDDAsync createAsyncDataDescForUpdate(String dkey, long eqHandle) throws IOException {
+  public IOSimpleDDAsync createAsyncDataDescForUpdate(String dkey, long eqHandle) throws IOException {
     return new IOSimpleDDAsync(dkey, true, eqHandle);
   }
 
@@ -637,7 +637,7 @@ public class DaosObject {
    * @return {@link IOSimpleDDAsync}
    * @throws IOException
    */
-  public static IOSimpleDDAsync createAsyncDataDescForFetch(String dkey, long eqHandle) throws IOException {
+  public IOSimpleDDAsync createAsyncDataDescForFetch(String dkey, long eqHandle) throws IOException {
     return new IOSimpleDDAsync(dkey, false, eqHandle);
   }
 

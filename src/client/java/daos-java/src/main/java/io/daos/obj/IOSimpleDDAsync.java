@@ -210,7 +210,7 @@ public class IOSimpleDDAsync extends IODataDescBase implements DaosEventQueue.At
    * @return data description entry
    * @throws IOException
    */
-  public Entry addEntryForFetch(String key, long offset,
+  public AsyncEntry addEntryForFetch(String key, long offset,
                                               int dataSize) throws IOException {
     if (updateOrFetch) {
       throw new IllegalArgumentException("It's desc for update");
@@ -235,7 +235,7 @@ public class IOSimpleDDAsync extends IODataDescBase implements DaosEventQueue.At
    * @return data description entry
    * @throws IOException
    */
-  public Entry addEntryForUpdate(String key, long offset, ByteBuf dataBuffer) throws IOException {
+  public AsyncEntry addEntryForUpdate(String key, long offset, ByteBuf dataBuffer) throws IOException {
     if (!updateOrFetch) {
       throw new IllegalArgumentException("It's desc for fetch");
     }
