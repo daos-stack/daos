@@ -176,10 +176,10 @@ main(int argc, char **argv)
 	if (show_meta)
 		extra_descriptors |= D_TM_INCLUDE_METADATA;
 
+	if (format == D_TM_CSV)
+		d_tm_print_field_descriptors(extra_descriptors, stdout);
+
 	while ((num_iter == 0) || (iteration < num_iter)) {
-		if ((format == D_TM_CSV) && (iteration == 0))
-			d_tm_print_field_descriptors(extra_descriptors,
-						     stdout);
 		d_tm_print_my_children(shmem_root, root, 0, filter, dirname,
 				       show_meta, format, show_timestamp,
 				       stdout);
