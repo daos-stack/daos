@@ -115,6 +115,7 @@ public class IODfsDesc implements DaosEventQueue.Attachment {
       } catch (DaosIOException e) {
         log.error("failed to abort event bound to " + this, e);
       }
+      event = null;
     }
     if (descBuffer != null) {
       descBuffer.release();

@@ -268,7 +268,7 @@ Java_io_daos_DaosClient_pollCompleted(JNIEnv *env, jclass clientClass,
 	}
 }
 
-JNIEXPORT void JNICALL
+JNIEXPORT jboolean JNICALL
 Java_io_daos_DaosClient_abortEvent(JNIEnv *env, jclass clientClass,
                 jlong eqWrapperHdl, jshort eid)
 {
@@ -277,7 +277,7 @@ Java_io_daos_DaosClient_abortEvent(JNIEnv *env, jclass clientClass,
         int rc;
 
         if (event->ev_error != EVENT_IN_USE) {
-                return;
+                return 0;
         }
         rc = daos_event_abort(event);
         event->ev_error = 0;
@@ -288,6 +288,7 @@ Java_io_daos_DaosClient_abortEvent(JNIEnv *env, jclass clientClass,
                          event->ev_debug);
                 throw_base(env, msg, rc, 1, 0);
         }
+        return 1;
 }
 
 JNIEXPORT void JNICALL

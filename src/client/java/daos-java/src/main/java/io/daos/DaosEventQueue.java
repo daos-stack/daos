@@ -271,9 +271,10 @@ public class DaosEventQueue {
    * abort event.
    *
    * @param event
+   * @return true if event being aborted. false if event is not in use.
    */
-  public void abortEvent(Event event) {
-    DaosClient.abortEvent(eqWrapperHdl, event.getId());
+  public boolean abortEvent(Event event) {
+    return DaosClient.abortEvent(eqWrapperHdl, event.getId());
   }
 
   /**
@@ -428,7 +429,7 @@ public class DaosEventQueue {
       return pa;
     }
 
-    protected void putBack() {
+    public void putBack() {
       status = EventStatus.FREE;
       if (attachment != null && !attachment.alwaysBoundToEvt()) {
         attachment = null;
@@ -445,8 +446,13 @@ public class DaosEventQueue {
     }
 
     public void abort() throws DaosIOException {
+      if (status != EventStatus.USING) {
+        return;
+      }
       status = EventStatus.ABORTED;
-      abortEvent(this);
+      if (!abortEvent(this)) { // event is not actually using
+        status = EventStatus.FREE;
+      }
     }
   }
 

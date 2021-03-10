@@ -180,8 +180,9 @@ public class DaosClient implements ForceCloseable {
    *
    * @param eqWrapperHdl handle of EQ wrapper
    * @param id event id
+   * @return true if event being aborted. false if event is not in use.
    */
-  public static native void abortEvent(long eqWrapperHdl, short id);
+  public static native boolean abortEvent(long eqWrapperHdl, short id);
 
   /**
    * destroy event queue identified by <code>queueHdl</code>.

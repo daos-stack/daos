@@ -301,6 +301,7 @@ public class IOSimpleDDAsync extends IODataDescBase implements DaosEventQueue.At
       } catch (DaosIOException e) {
         log.error("failed to abort event bound to " + this, e);
       }
+      event = null;
     }
     if (releaseFetchBuffer && !updateOrFetch) {
       akeyEntries.forEach(e -> e.releaseDataBuffer());

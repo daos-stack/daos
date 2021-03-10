@@ -376,6 +376,7 @@ public class IOSimpleDataDesc extends IODataDescBase implements DaosEventQueue.A
         } catch (DaosIOException e) {
           log.error("failed to abort event bound to " + this, e);
         }
+        event = null;
       }
       this.released = true;
     }
