@@ -7,7 +7,7 @@
 import logging
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 
-from util.command_utils_base import CommonConfig, CommandFailure
+from util.command_utils_base import CommonConfig, CommandFailure, YamlParameters
 from util.agent_utils_params import \
     DaosAgentYamlParameters, DaosAgentTransportCredentials
 from util.server_utils_params import \
@@ -96,14 +96,14 @@ def create_config(args, config):
 def main():
     """Launch DAOS functional tests."""
     # Setup logging
-    log = logging.getLogger(__name__)
-    log.setLevel(logging.DEBUG)
+    log_format = "%(asctime)s - %(levelname)-5s - %(funcName)-15s: %(message)s"
     console = logging.StreamHandler()
-    console.setLevel(logging.INFO)
-    formatter = logging.Formatter(
-        "%(asctime)s - %(levelname)-5s - %(funcName)-15s: %(message)s")
-    console.setFormatter(formatter)
-    log.addHandler(console)
+    console.setLevel(logging.DEBUG)
+    console.setFormatter(logging.Formatter(log_format))
+    logging.basicConfig(
+        format=log_format, datefmt=r"%Y/%m/%d %I:%M:%S", level=logging.DEBUG,
+        handlers=[console])
+    log = logging.getLogger()
 
     # Parse the command line arguments
     description = [

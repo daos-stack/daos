@@ -441,7 +441,8 @@ class CommandWithSubCommand(ExecutableCommand):
         """
         super().get_params(test)
         self.get_sub_command_class()
-        if isinstance(self.sub_command_class, ObjectWithParameters):
+        if (self.sub_command_class is not None and
+                hasattr(self.sub_command_class, "get_params")):
             self.sub_command_class.get_params(test)
 
     def get_sub_command_class(self):
@@ -707,7 +708,7 @@ class YamlCommand(SubProcessCommand):
             test (Test): avocado Test object
         """
         super().get_params(test)
-        if isinstance(self.yaml, YamlParameters):
+        if self.yaml is not None and hasattr(self.yaml, "get_params"):
             self.yaml.get_params(test)
 
     def create_yaml_file(self):
@@ -724,7 +725,7 @@ class YamlCommand(SubProcessCommand):
                 self.temporary_file_hosts attributes are defined.
 
         """
-        if isinstance(self.yaml, YamlParameters):
+        if self.yaml is not None and hasattr(self.yaml, "create_yaml"):
             if self.yaml.create_yaml(self.temporary_file):
                 self.copy_configuration(self.temporary_file_hosts)
 
@@ -740,7 +741,7 @@ class YamlCommand(SubProcessCommand):
 
         """
         status = False
-        if isinstance(self.yaml, YamlParameters):
+        if self.yaml is not None and hasattr(self.yaml, "set_value"):
             status = self.yaml.set_value(name, value)
         return status
 
@@ -756,7 +757,7 @@ class YamlCommand(SubProcessCommand):
 
         """
         value = None
-        if isinstance(self.yaml, YamlParameters):
+        if self.yaml is not None and hasattr(self.yaml, "get_value"):
             value = self.yaml.get_value(name)
 
         return value
@@ -790,7 +791,7 @@ class YamlCommand(SubProcessCommand):
         """
         names = set()
         yaml = self.yaml
-        while isinstance(yaml, YamlParameters):
+        while yaml is not None and hasattr(yaml, "other_params"):
             if hasattr(yaml, "get_certificate_data"):
                 self.log.debug("Copying certificates for %s:", self._command)
                 data = yaml.get_certificate_data(
@@ -834,7 +835,7 @@ class YamlCommand(SubProcessCommand):
             CommandFailure: if there is an error copying the configuration file
 
         """
-        if isinstance(self.yaml, YamlParameters):
+        if self.yaml is not None and hasattr(self.yaml, "filename"):
             if self.temporary_file and hosts:
                 self.log.info(
                     "Copying %s yaml configuration file to %s on %s",
@@ -860,7 +861,7 @@ class YamlCommand(SubProcessCommand):
                 owned by the user and could not be created
 
         """
-        if isinstance(self.yaml, YamlParameters):
+        if self.yaml is not None:
             directory = self.get_user_file()
             self.log.info(
                 "Verifying %s socket directory: %s", self.command, directory)

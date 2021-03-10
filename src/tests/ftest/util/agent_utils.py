@@ -84,7 +84,7 @@ class DaosAgentCommand(YamlCommand):
 
         # If specified use the configuration file from the YamlParameters object
         default_yaml_file = None
-        if isinstance(self.yaml, YamlParameters):
+        if self.yaml is not None and hasattr(self.yaml, "filename"):
             default_yaml_file = self.yaml.filename
 
         # Command line parameters:

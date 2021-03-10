@@ -408,7 +408,8 @@ class YamlParameters(ObjectWithParameters):
             dict: a dictionary of parameter name keys and values
 
         """
-        if isinstance(self.other_params, YamlParameters):
+        if (self.other_params is not None and
+                hasattr(self.other_params, "get_yaml_data")):
             yaml_data = self.other_params.get_yaml_data()
         else:
             yaml_data = {}
@@ -427,7 +428,8 @@ class YamlParameters(ObjectWithParameters):
 
         """
         yaml_data_updated = False
-        if isinstance(self.other_params, YamlParameters):
+        if (self.other_params is not None and
+                hasattr(self.other_params, "is_yaml_data_updated")):
             yaml_data_updated = self.other_params.is_yaml_data_updated()
         if not yaml_data_updated:
             for name in self.get_param_names():
@@ -438,7 +440,8 @@ class YamlParameters(ObjectWithParameters):
 
     def reset_yaml_data_updated(self):
         """Reset each yaml file parameter updated state to False."""
-        if isinstance(self.other_params, YamlParameters):
+        if (self.other_params is not None and
+                hasattr(self.other_params, "reset_yaml_data_updated")):
             self.other_params.reset_yaml_data_updated()
         for name in self.get_param_names():
             getattr(self, name).updated = False
@@ -490,7 +493,7 @@ class YamlParameters(ObjectWithParameters):
         """
         status = False
         setting = getattr(self, name, None)
-        if isinstance(setting, BasicParameter):
+        if setting is not None and hasattr(setting, "update"):
             setting.update(value, name)
             status = True
         elif setting is not None:
@@ -512,7 +515,7 @@ class YamlParameters(ObjectWithParameters):
 
         """
         setting = getattr(self, name, None)
-        if isinstance(setting, BasicParameter):
+        if setting is not None and hasattr(setting, "value"):
             value = setting.value
         elif setting is not None:
             value = setting
