@@ -38,43 +38,6 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-type contextKey string
-
-func (c contextKey) String() string {
-	return "server context key " + string(c)
-}
-
-func (c contextKey) errMissing() error {
-	return errors.New("context missing key " + string(c))
-}
-
-var (
-	contextKeyCtlAddr     = contextKey("ctl-addr")
-	contextKeyNetListener = contextKey("net-listener")
-	contextKeyNetDevClass = contextKey("net-dev-class")
-	contextKeyFaultDomain = contextKey("fault-domain")
-)
-
-func ctlAddrFromContext(ctx context.Context) (*net.TCPAddr, bool) {
-	addr, ok := ctx.Value(contextKeyCtlAddr).(*net.TCPAddr)
-	return addr, ok
-}
-
-func netListenerFromContext(ctx context.Context) (net.Listener, bool) {
-	lis, ok := ctx.Value(contextKeyCtlAddr).(net.Listener)
-	return lis, ok
-}
-
-func netDevClassFromContext(ctx context.Context) (uint32, bool) {
-	ndc, ok := ctx.Value(contextKeyNetDevClass).(uint32)
-	return ndc, ok
-}
-
-func faultDomainFromContext(ctx context.Context) (*system.FaultDomain, bool) {
-	fd, ok := ctx.Value(contextKeyFaultDomain).(*system.FaultDomain)
-	return fd, ok
-}
-
 const (
 	iommuPath        = "/sys/class/iommu"
 	minHugePageCount = 128
@@ -116,10 +79,10 @@ func hostname() string {
 	return hn
 }
 
-func checkConfig(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server) (context.Context, error) {
+func checkConfig(log *logging.LeveledLogger, cfg *config.Server) (*system.FaultDomain, error) {
 	err := cfg.Validate(log)
 	if err != nil {
-		return ctx, errors.Wrapf(err, "%s: validation failed", cfg.Path)
+		return nil, errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 
 	// Temporary notification while the feature is still being polished.
@@ -132,114 +95,34 @@ func checkConfig(ctx context.Context, log *logging.LeveledLogger, cfg *config.Se
 
 	if cfg.HelperLogFile != "" {
 		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cfg.HelperLogFile); err != nil {
-			return ctx, errors.Wrap(err, "unable to configure privileged helper logging")
+			return nil, errors.Wrap(err, "unable to configure privileged helper logging")
 		}
 	}
 
 	if cfg.FWHelperLogFile != "" {
 		if err := os.Setenv(pbin.DaosFWLogFileEnvVar, cfg.FWHelperLogFile); err != nil {
-			return ctx, errors.Wrap(err, "unable to configure privileged firmware helper logging")
+			return nil, errors.Wrap(err, "unable to configure privileged firmware helper logging")
 		}
 	}
 
 	fd, err := getFaultDomain(cfg)
 	if err != nil {
-		return ctx, err
-	}
-	log.Debugf("fault domain: %s", fd.String())
-	ctx = context.WithValue(ctx, contextKeyFaultDomain, fd)
-
-	return ctx, nil
-}
-
-func checkNetwork(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server) (context.Context, error) {
-	controlAddr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("0.0.0.0:%d", cfg.ControlPort))
-	if err != nil {
-		return nil, errors.Wrap(err, "unable to resolve daos_server control address")
-	}
-	ctx = context.WithValue(ctx, contextKeyCtlAddr, controlAddr)
-
-	// Create and start listener on management network.
-	lis, err := net.Listen("tcp4", controlAddr.String())
-	if err != nil {
-		return nil, errors.Wrap(err, "unable to listen on management interface")
-	}
-	ctx = context.WithValue(ctx, contextKeyNetListener, lis)
-
-	ctx, err = netdetect.Init(ctx)
-	if err != nil {
 		return nil, err
 	}
+	log.Debugf("fault domain: %s", fd.String())
 
-	// On a NUMA-aware system, emit a message when the configuration may be
-	// sub-optimal.
-	numaCount := netdetect.NumNumaNodes(ctx)
-	if numaCount > 0 && len(cfg.Engines) > numaCount {
-		log.Infof("NOTICE: Detected %d NUMA node(s); %d-server config may not perform as expected",
-			numaCount, len(cfg.Engines))
-	}
-
-	return ctx, nil
+	return fd, nil
 }
 
-func checkBlockStorage(log *logging.LeveledLogger, cfg *config.Server, bp *bdev.Provider) error {
-	runningUser, err := user.Current()
-	if err != nil {
-		return errors.Wrap(err, "unable to lookup current user")
-	}
+// server struct contains state and components of DAOS Server.
+type server struct {
+	log         *logging.LeveledLogger
+	cfg         *config.Server
+	faultDomain *system.FaultDomain
+	ctlAddr     *net.TCPAddr
+	netDevClass uint32
+	listener    net.Listener
 
-	iommuDisabled := !iommuDetected()
-	// Perform an automatic prepare based on the values in the config file.
-	prepReq := bdev.PrepareRequest{
-		// Default to minimum necessary for scan to work correctly.
-		HugePageCount: minHugePageCount,
-		TargetUser:    runningUser.Username,
-		PCIWhitelist:  strings.Join(cfg.BdevInclude, " "),
-		PCIBlacklist:  strings.Join(cfg.BdevExclude, " "),
-		DisableVFIO:   cfg.DisableVFIO,
-		DisableVMD:    cfg.DisableVMD || cfg.DisableVFIO || iommuDisabled,
-		// TODO: pass vmd include/white list
-	}
-
-	if cfgHasBdev(cfg) {
-		// The config value is intended to be per-engine, so we need to adjust
-		// based on the number of engines.
-		prepReq.HugePageCount = cfg.NrHugepages * len(cfg.Engines)
-
-		// Perform these checks to avoid even trying a prepare if the system
-		// isn't configured properly.
-		if runningUser.Uid != "0" {
-			if cfg.DisableVFIO {
-				return FaultVfioDisabled
-			}
-
-			if iommuDisabled {
-				return FaultIommuDisabled
-			}
-		}
-	}
-
-	log.Debugf("automatic NVMe prepare req: %+v", prepReq)
-	if _, err := bp.Prepare(prepReq); err != nil {
-		log.Errorf("automatic NVMe prepare failed (check configuration?)\n%s", err)
-	}
-
-	hugePages, err := getHugePageInfo()
-	if err != nil {
-		return errors.Wrap(err, "unable to read system hugepage info")
-	}
-
-	if cfgHasBdev(cfg) {
-		// Double-check that we got the requested number of huge pages after prepare.
-		if hugePages.Free < prepReq.HugePageCount {
-			return FaultInsufficientFreeHugePages(hugePages.Free, prepReq.HugePageCount)
-		}
-	}
-
-	return nil
-}
-
-type serverComponents struct {
 	harness      *EngineHarness
 	membership   *system.Membership
 	sysdb        *system.Database
@@ -253,7 +136,7 @@ type serverComponents struct {
 	grpcServer   *grpc.Server
 }
 
-func createComponents(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server) (*serverComponents, error) {
+func newServer(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server, fd *system.FaultDomain) (*server, error) {
 	var dbReplicas []*net.TCPAddr
 	for _, ap := range cfg.AccessPoints {
 		apAddr, err := net.ResolveTCPAddr("tcp", ap)
@@ -274,10 +157,6 @@ func createComponents(ctx context.Context, log *logging.LeveledLogger, cfg *conf
 		return nil, errors.Wrap(err, "failed to create system database")
 	}
 	membership := system.NewMembership(log, sysdb)
-	fd, ok := faultDomainFromContext(ctx)
-	if !ok {
-		return nil, contextKeyFaultDomain.errMissing()
-	}
 	harness := NewEngineHarness(log).WithFaultDomain(fd)
 
 	// Create rpcClient for inter-server communication.
@@ -294,7 +173,10 @@ func createComponents(ctx context.Context, log *logging.LeveledLogger, cfg *conf
 	scmProvider := scm.DefaultProvider(log)
 	bdevProvider := bdev.DefaultProvider(log)
 
-	return &serverComponents{
+	return &server{
+		log:          log,
+		cfg:          cfg,
+		faultDomain:  fd,
 		harness:      harness,
 		membership:   membership,
 		sysdb:        sysdb,
@@ -308,61 +190,154 @@ func createComponents(ctx context.Context, log *logging.LeveledLogger, cfg *conf
 	}, nil
 }
 
-func addEngines(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server, components *serverComponents) (context.Context, error) {
-	ctlAddr, ok := ctlAddrFromContext(ctx)
-	if !ok {
-		return ctx, contextKeyCtlAddr.errMissing()
+func (srv *server) shutdown() {
+	srv.pubSub.Close()
+}
+
+// initNetwork resolves local address and starts TCP listener, initializes net
+// detect library and warns if configured number of engines is less than NUMA
+// node count.
+func (srv *server) initNetwork(ctx context.Context) (context.Context, func(), error) {
+	ctlAddr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("0.0.0.0:%d", srv.cfg.ControlPort))
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "unable to resolve daos_server control address")
+	}
+	srv.ctlAddr = ctlAddr
+
+	// Create and start listener on management network.
+	listener, err := net.Listen("tcp4", ctlAddr.String())
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "unable to listen on management interface")
+	}
+	srv.listener = listener
+
+	ctx, err = netdetect.Init(ctx)
+	if err != nil {
+		return nil, nil, err
 	}
 
+	// On a NUMA-aware system, emit a message when the configuration may be
+	// sub-optimal.
+	numaCount := netdetect.NumNumaNodes(ctx)
+	if numaCount > 0 && len(srv.cfg.Engines) > numaCount {
+		srv.log.Infof("NOTICE: Detected %d NUMA node(s); %d-server config may not perform as expected",
+			numaCount, len(srv.cfg.Engines))
+	}
+
+	return ctx, func() {
+		netdetect.CleanUp(ctx)
+	}, nil
+}
+
+func (srv *server) initStorage() error {
+	runningUser, err := user.Current()
+	if err != nil {
+		return errors.Wrap(err, "unable to lookup current user")
+	}
+
+	iommuDisabled := !iommuDetected()
+	// Perform an automatic prepare based on the values in the config file.
+	prepReq := bdev.PrepareRequest{
+		// Default to minimum necessary for scan to work correctly.
+		HugePageCount: minHugePageCount,
+		TargetUser:    runningUser.Username,
+		PCIWhitelist:  strings.Join(srv.cfg.BdevInclude, " "),
+		PCIBlacklist:  strings.Join(srv.cfg.BdevExclude, " "),
+		DisableVFIO:   srv.cfg.DisableVFIO,
+		DisableVMD:    srv.cfg.DisableVMD || srv.cfg.DisableVFIO || iommuDisabled,
+		// TODO: pass vmd include/white list
+	}
+
+	if cfgHasBdev(srv.cfg) {
+		// The config value is intended to be per-engine, so we need to adjust
+		// based on the number of engines.
+		prepReq.HugePageCount = srv.cfg.NrHugepages * len(srv.cfg.Engines)
+
+		// Perform these checks to avoid even trying a prepare if the system
+		// isn't configured properly.
+		if runningUser.Uid != "0" {
+			if srv.cfg.DisableVFIO {
+				return FaultVfioDisabled
+			}
+
+			if iommuDisabled {
+				return FaultIommuDisabled
+			}
+		}
+	}
+
+	// TODO: should be passing root context into prepare request to
+	//       facilitate cancellation.
+	srv.log.Debugf("automatic NVMe prepare req: %+v", prepReq)
+	if _, err := srv.bdevProvider.Prepare(prepReq); err != nil {
+		srv.log.Errorf("automatic NVMe prepare failed (check configuration?)\n%s", err)
+	}
+
+	hugePages, err := getHugePageInfo()
+	if err != nil {
+		return errors.Wrap(err, "unable to read system hugepage info")
+	}
+
+	if cfgHasBdev(srv.cfg) {
+		// Double-check that we got the requested number of huge pages after prepare.
+		if hugePages.Free < prepReq.HugePageCount {
+			return FaultInsufficientFreeHugePages(hugePages.Free, prepReq.HugePageCount)
+		}
+	}
+
+	return nil
+}
+
+func (srv *server) addEngines(ctxNet context.Context) error {
 	// Create a closure to be used for joining engine instances.
 	joinInstance := func(ctxIn context.Context, req *control.SystemJoinReq) (*control.SystemJoinResp, error) {
-		req.SetHostList(cfg.AccessPoints)
-		req.SetSystem(cfg.SystemName)
-		req.ControlAddr = ctlAddr
+		req.SetHostList(srv.cfg.AccessPoints)
+		req.SetSystem(srv.cfg.SystemName)
+		req.ControlAddr = srv.ctlAddr
 
-		return control.SystemJoin(ctxIn, components.mgmtSvc.rpcClient, req)
+		return control.SystemJoin(ctxIn, srv.mgmtSvc.rpcClient, req)
 	}
 
-	for idx, engineCfg := range cfg.Engines {
+	for idx, engineCfg := range srv.cfg.Engines {
 		// Provide special handling for the ofi+verbs provider.
 		// Mercury uses the interface name such as ib0, while OFI uses the
 		// device name such as hfi1_0 CaRT and Mercury will now support the
 		// new OFI_DOMAIN environment variable so that we can specify the
 		// correct device for each.
 		if strings.HasPrefix(engineCfg.Fabric.Provider, "ofi+verbs") && !engineCfg.HasEnvVar("OFI_DOMAIN") {
-			deviceAlias, err := netdetect.GetDeviceAlias(ctx, engineCfg.Fabric.Interface)
+			deviceAlias, err := netdetect.GetDeviceAlias(ctxNet, engineCfg.Fabric.Interface)
 			if err != nil {
-				return ctx, errors.Wrapf(err, "failed to resolve alias for %s", engineCfg.Fabric.Interface)
+				return errors.Wrapf(err, "failed to resolve alias for %s", engineCfg.Fabric.Interface)
 			}
 			envVar := "OFI_DOMAIN=" + deviceAlias
 			engineCfg.WithEnvVars(envVar)
 		}
 
 		// Indicate whether VMD devices have been detected and can be used.
-		engineCfg.Storage.Bdev.VmdDisabled = components.bdevProvider.IsVMDDisabled()
+		engineCfg.Storage.Bdev.VmdDisabled = srv.bdevProvider.IsVMDDisabled()
 
 		// TODO: ClassProvider should be encapsulated within bdevProvider
-		bcp, err := bdev.NewClassProvider(log, engineCfg.Storage.SCM.MountPoint, &engineCfg.Storage.Bdev)
+		bcp, err := bdev.NewClassProvider(srv.log, engineCfg.Storage.SCM.MountPoint, &engineCfg.Storage.Bdev)
 		if err != nil {
-			return ctx, err
+			return err
 		}
 
-		engine := NewEngineInstance(log, bcp, components.scmProvider, joinInstance, engine.NewRunner(log, engineCfg)).
-			WithHostFaultDomain(components.harness.faultDomain)
-		if err := components.harness.AddInstance(engine); err != nil {
-			return ctx, err
+		engine := NewEngineInstance(srv.log, bcp, srv.scmProvider, joinInstance, engine.NewRunner(srv.log, engineCfg)).
+			WithHostFaultDomain(srv.harness.faultDomain)
+		if err := srv.harness.AddInstance(engine); err != nil {
+			return err
 		}
 		// Register callback to publish I/O Engine process exit events.
-		engine.OnInstanceExit(publishInstanceExitFn(components.pubSub.Publish, hostname(), engine.Index()))
+		engine.OnInstanceExit(publishInstanceExitFn(srv.pubSub.Publish, hostname(), engine.Index()))
 
 		if idx == 0 {
-			netDevClass, err := cfg.GetDeviceClassFn(engineCfg.Fabric.Interface)
+			netDevClass, err := srv.cfg.GetDeviceClassFn(engineCfg.Fabric.Interface)
 			if err != nil {
-				return ctx, err
+				return err
 			}
-			ctx = context.WithValue(ctx, contextKeyNetDevClass, netDevClass)
+			srv.netDevClass = netDevClass
 
-			if !components.sysdb.IsReplica() {
+			if !srv.sysdb.IsReplica() {
 				continue
 			}
 
@@ -371,14 +346,14 @@ func addEngines(ctx context.Context, log *logging.LeveledLogger, cfg *config.Ser
 			var once sync.Once
 			engine.OnStorageReady(func(ctxIn context.Context) (err error) {
 				once.Do(func() {
-					err = errors.Wrap(components.sysdb.Start(ctxIn),
+					err = errors.Wrap(srv.sysdb.Start(ctxIn),
 						"failed to start system db",
 					)
 				})
 				return
 			})
 
-			if !components.sysdb.IsBootstrap() {
+			if !srv.sysdb.IsBootstrap() {
 				continue
 			}
 
@@ -397,10 +372,15 @@ func addEngines(ctx context.Context, log *logging.LeveledLogger, cfg *config.Ser
 		}
 	}
 
-	return ctx, nil
+	return nil
 }
 
-func setupGrpcServer(ctx context.Context, cfg *config.Server, components *serverComponents) error {
+// discoverStorage scans local storage hardware.
+func (srv *server) discoverStorage() error {
+	return srv.ctlSvc.Setup()
+}
+
+func (srv *server) setupGrpc() error {
 	// Create new grpc server, register services and start serving.
 	unaryInterceptors := []grpc.UnaryServerInterceptor{
 		unaryErrorInterceptor,
@@ -409,20 +389,20 @@ func setupGrpcServer(ctx context.Context, cfg *config.Server, components *server
 	streamInterceptors := []grpc.StreamServerInterceptor{
 		streamErrorInterceptor,
 	}
-	tcOpt, err := security.ServerOptionForTransportConfig(cfg.TransportConfig)
+	tcOpt, err := security.ServerOptionForTransportConfig(srv.cfg.TransportConfig)
 	if err != nil {
 		return err
 	}
 	srvOpts := []grpc.ServerOption{tcOpt}
 
-	uintOpt, err := unaryInterceptorForTransportConfig(cfg.TransportConfig)
+	uintOpt, err := unaryInterceptorForTransportConfig(srv.cfg.TransportConfig)
 	if err != nil {
 		return err
 	}
 	if uintOpt != nil {
 		unaryInterceptors = append(unaryInterceptors, uintOpt)
 	}
-	sintOpt, err := streamInterceptorForTransportConfig(cfg.TransportConfig)
+	sintOpt, err := streamInterceptorForTransportConfig(srv.cfg.TransportConfig)
 	if err != nil {
 		return err
 	}
@@ -434,97 +414,86 @@ func setupGrpcServer(ctx context.Context, cfg *config.Server, components *server
 		grpc.ChainStreamInterceptor(streamInterceptors...),
 	}...)
 
-	components.grpcServer = grpc.NewServer(srvOpts...)
-	ctlpb.RegisterCtlSvcServer(components.grpcServer, components.ctlSvc)
+	srv.grpcServer = grpc.NewServer(srvOpts...)
+	ctlpb.RegisterCtlSvcServer(srv.grpcServer, srv.ctlSvc)
 
-	netDevClass, ok := netDevClassFromContext(ctx)
-	if !ok {
-		return contextKeyNetDevClass.errMissing()
+	srv.mgmtSvc.clientNetworkCfg = &config.ClientNetworkCfg{
+		Provider:        srv.cfg.Fabric.Provider,
+		CrtCtxShareAddr: srv.cfg.Fabric.CrtCtxShareAddr,
+		CrtTimeout:      srv.cfg.Fabric.CrtTimeout,
+		NetDevClass:     srv.netDevClass,
 	}
-	components.mgmtSvc.clientNetworkCfg = &config.ClientNetworkCfg{
-		Provider:        cfg.Fabric.Provider,
-		CrtCtxShareAddr: cfg.Fabric.CrtCtxShareAddr,
-		CrtTimeout:      cfg.Fabric.CrtTimeout,
-		NetDevClass:     netDevClass,
-	}
-	mgmtpb.RegisterMgmtSvcServer(components.grpcServer, components.mgmtSvc)
+	mgmtpb.RegisterMgmtSvcServer(srv.grpcServer, srv.mgmtSvc)
 
-	tSec, err := security.DialOptionForTransportConfig(cfg.TransportConfig)
+	tSec, err := security.DialOptionForTransportConfig(srv.cfg.TransportConfig)
 	if err != nil {
 		return err
 	}
-	components.sysdb.ConfigureTransport(components.grpcServer, tSec)
+	srv.sysdb.ConfigureTransport(srv.grpcServer, tSec)
 
 	return nil
 }
 
-func registerEvents(log *logging.LeveledLogger, components *serverComponents) {
+func (srv *server) registerEvents() {
 	// Forward published actionable events (type RASTypeStateChange) to the
 	// management service leader, behavior is updated on leadership change.
-	components.pubSub.Subscribe(events.RASTypeStateChange, components.evtForwarder)
+	srv.pubSub.Subscribe(events.RASTypeStateChange, srv.evtForwarder)
 
 	// Log events on the host that they were raised (and first published) on.
-	components.pubSub.Subscribe(events.RASTypeAny, components.evtLogger)
+	srv.pubSub.Subscribe(events.RASTypeAny, srv.evtLogger)
 
-	components.sysdb.OnLeadershipGained(func(ctx context.Context) error {
-		log.Infof("MS leader running on %s", hostname())
-		components.mgmtSvc.startJoinLoop(ctx)
+	srv.sysdb.OnLeadershipGained(func(ctx context.Context) error {
+		srv.log.Infof("MS leader running on %s", hostname())
+		srv.mgmtSvc.startJoinLoop(ctx)
 
 		// Stop forwarding events to MS and instead start handling
 		// received forwarded (and local) events.
-		components.pubSub.Reset()
-		components.pubSub.Subscribe(events.RASTypeAny, components.evtLogger)
-		components.pubSub.Subscribe(events.RASTypeStateChange, components.membership)
-		components.pubSub.Subscribe(events.RASTypeStateChange, components.sysdb)
-		components.pubSub.Subscribe(events.RASTypeStateChange, events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
-			switch evt.ID {
-			case events.RASSwimRankDead:
-				// Mark the rank as unavailable for membership in
-				// new pools, etc.
-				if err := components.membership.MarkRankDead(system.Rank(evt.Rank)); err != nil {
-					log.Errorf("failed to mark rank %d as dead: %s", evt.Rank, err)
-					return
+		srv.pubSub.Reset()
+		srv.pubSub.Subscribe(events.RASTypeAny, srv.evtLogger)
+		srv.pubSub.Subscribe(events.RASTypeStateChange, srv.membership)
+		srv.pubSub.Subscribe(events.RASTypeStateChange, srv.sysdb)
+		srv.pubSub.Subscribe(events.RASTypeStateChange,
+			events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
+				switch evt.ID {
+				case events.RASSwimRankDead:
+					// Mark the rank as unavailable for membership in
+					// new pools, etc.
+					if err := srv.membership.MarkRankDead(system.Rank(evt.Rank)); err != nil {
+						srv.log.Errorf("failed to mark rank %d as dead: %s", evt.Rank, err)
+						return
+					}
+					// FIXME CART-944: We should be able to update the
+					// primary group in order to remove the dead rank,
+					// but for the moment this will cause problems.
+					if err := srv.mgmtSvc.doGroupUpdate(ctx); err != nil {
+						srv.log.Errorf("GroupUpdate failed: %s", err)
+					}
 				}
-				// FIXME CART-944: We should be able to update the
-				// primary group in order to remove the dead rank,
-				// but for the moment this will cause problems.
-				if err := components.mgmtSvc.doGroupUpdate(ctx); err != nil {
-					log.Errorf("GroupUpdate failed: %s", err)
-				}
-			}
-		}))
+			}))
 
 		return nil
 	})
-	components.sysdb.OnLeadershipLost(func() error {
-		log.Infof("MS leader no longer running on %s", hostname())
+	srv.sysdb.OnLeadershipLost(func() error {
+		srv.log.Infof("MS leader no longer running on %s", hostname())
 
 		// Stop handling received forwarded (in addition to local)
 		// events and start forwarding events to the new MS leader.
-		components.pubSub.Reset()
-		components.pubSub.Subscribe(events.RASTypeAny, components.evtLogger)
-		components.pubSub.Subscribe(events.RASTypeStateChange, components.evtForwarder)
+		srv.pubSub.Reset()
+		srv.pubSub.Subscribe(events.RASTypeAny, srv.evtLogger)
+		srv.pubSub.Subscribe(events.RASTypeStateChange, srv.evtForwarder)
 
 		return nil
 	})
 }
 
-func serverStart(ctx context.Context, shutdown context.CancelFunc, log *logging.LeveledLogger, cfg *config.Server, components *serverComponents) error {
-	listener, ok := netListenerFromContext(ctx)
-	if !ok {
-		return contextKeyNetDevClass.errMissing()
-	}
-
+func (srv *server) start(ctx context.Context, shutdown context.CancelFunc) error {
 	go func() {
-		_ = components.grpcServer.Serve(listener)
+		_ = srv.grpcServer.Serve(srv.listener)
 	}()
-	defer components.grpcServer.Stop()
+	defer srv.grpcServer.Stop()
 
-	ctlAddr, ok := ctlAddrFromContext(ctx)
-	if !ok {
-		return contextKeyCtlAddr.errMissing()
-	}
-	log.Infof("%s v%s (pid %d) listening on %s", build.ControlPlaneName, build.DaosVersion, os.Getpid(), ctlAddr)
+	srv.log.Infof("%s v%s (pid %d) listening on %s", build.ControlPlaneName,
+		build.DaosVersion, os.Getpid(), srv.ctlAddr)
 
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
@@ -532,58 +501,56 @@ func serverStart(ctx context.Context, shutdown context.CancelFunc, log *logging.
 		// SIGKILL I/O Engine immediately on exit.
 		// TODO: Re-enable attempted graceful shutdown of I/O Engines.
 		sig := <-sigChan
-		log.Debugf("Caught signal: %s", sig)
+		srv.log.Debugf("Caught signal: %s", sig)
 
 		shutdown()
 	}()
 
-	return errors.Wrapf(components.harness.Start(ctx, components.sysdb, components.pubSub, cfg),
+	return errors.Wrapf(srv.harness.Start(ctx, srv.sysdb, srv.pubSub, srv.cfg),
 		"%s exited with error", build.DataPlaneName)
 }
 
 // Start is the entry point for a daos_server instance.
-func Start(log *logging.LeveledLogger, cfg *config.Server) (err error) {
+func Start(log *logging.LeveledLogger, cfg *config.Server) error {
+	fd, err := checkConfig(log, cfg)
+	if err != nil {
+		return err
+	}
+
 	// Create the root context here. All contexts should inherit from this one so
 	// that they can be shut down from one place.
 	ctx, shutdown := context.WithCancel(context.Background())
 	defer shutdown()
 
-	ctx, err = checkConfig(ctx, log, cfg)
+	srv, err := newServer(ctx, log, cfg, fd)
 	if err != nil {
 		return err
 	}
+	defer srv.shutdown()
 
-	ctx, err = checkNetwork(ctx, log, cfg)
+	ctxNet, shutdownNet, err := srv.initNetwork(ctx)
 	if err != nil {
 		return err
 	}
-	defer netdetect.CleanUp(ctx)
+	defer shutdownNet()
 
-	components, err := createComponents(ctx, log, cfg)
-	if err != nil {
-		return err
-	}
-	defer components.pubSub.Close()
-
-	if err := checkBlockStorage(log, cfg, components.bdevProvider); err != nil {
+	if err := srv.initStorage(); err != nil {
 		return err
 	}
 
-	ctx, err = addEngines(ctx, log, cfg, components)
-	if err != nil {
+	if err := srv.addEngines(ctxNet); err != nil {
 		return err
 	}
 
-	// Setup the control service by scanning local storage hardware.
-	if err := components.ctlSvc.Setup(); err != nil {
+	if err := srv.discoverStorage(); err != nil {
 		return err
 	}
 
-	if err := setupGrpcServer(ctx, cfg, components); err != nil {
+	if err := srv.setupGrpc(); err != nil {
 		return err
 	}
 
-	registerEvents(log, components)
+	srv.registerEvents()
 
-	return serverStart(ctx, shutdown, log, cfg, components)
+	return srv.start(ctx, shutdown)
 }
