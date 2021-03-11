@@ -793,14 +793,20 @@ run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
 static void
 daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
 		     const char *grp, const char *dmg_config,
-		     d_rank_t rank, int tgt_idx)
+		     d_rank_t rank, int tgt_idx, daos_size_t scm_size)
 {
 	char		dmg_cmd[DTS_CFG_MAX];
 	int		rc;
 
 	/* build and invoke dmg cmd */
-	dts_create_config(dmg_cmd, "dmg pool %s --pool=" DF_UUIDF " --rank=%d",
-			  sub_cmd, DP_UUID(pool_uuid), rank);
+	if (strncmp(sub_cmd, "extend", strlen("extend")) == 0)
+		dts_create_config(dmg_cmd, "dmg pool %s --pool=" DF_UUIDF
+				  " --ranks=%d --scm-size="DF_U64, sub_cmd,
+				  DP_UUID(pool_uuid), rank, scm_size);
+	else
+		dts_create_config(dmg_cmd, "dmg pool %s --pool=" DF_UUIDF
+				  " --rank=%d", sub_cmd, DP_UUID(pool_uuid),
+				  rank);
 
 	if (tgt_idx != -1)
 		dts_append_config(dmg_cmd, " --target-idx=%d", tgt_idx);
@@ -818,7 +824,7 @@ daos_exclude_target(const uuid_t pool_uuid, const char *grp,
 		    d_rank_t rank, int tgt_idx)
 {
 	daos_dmg_pool_target("exclude", pool_uuid, grp, dmg_config,
-			     rank, tgt_idx);
+			     rank, tgt_idx, 0);
 }
 
 void
@@ -826,7 +832,16 @@ daos_reint_target(const uuid_t pool_uuid, const char *grp,
 		  const char *dmg_config, d_rank_t rank, int tgt_idx)
 {
 	daos_dmg_pool_target("reintegrate", pool_uuid, grp, dmg_config,
-			     rank, tgt_idx);
+			     rank, tgt_idx, 0);
+}
+
+void
+daos_extend_target(const uuid_t pool_uuid, const char *grp,
+		   const char *dmg_config, d_rank_t rank, int tgt_idx,
+		   daos_size_t nvme_size)
+{
+	daos_dmg_pool_target("extend", pool_uuid, grp, dmg_config,
+			     rank, tgt_idx, nvme_size);
 }
 
 void
@@ -835,7 +850,7 @@ daos_drain_target(const uuid_t pool_uuid, const char *grp,
 {
 
 	daos_dmg_pool_target("drain", pool_uuid, grp, dmg_config,
-			     rank, tgt_idx);
+			     rank, tgt_idx, 0);
 }
 
 void
