@@ -1218,6 +1218,7 @@ daos_event_priv_get(daos_event_t **ev)
 	if (evx->evx_status != DAOS_EVS_READY) {
 		D_CRIT("private event is inuse, status=%d\n",
 		       evx->evx_status);
+		return -DER_BUSY;
 	}
 	*ev = &ev_thpriv;
 	return 0;
@@ -1243,12 +1244,29 @@ daos_event_priv_wait()
 
 	/* Wait on the event to complete */
 	while (evx->evx_status != DAOS_EVS_READY) {
-		rc = crt_progress_cond(evx->evx_ctx, 0, ev_progress_cb, &epa);
-		if (rc == 0)
-			rc = ev_thpriv.ev_error;
+		int rc2;
 
-		if (rc && rc != -DER_TIMEDOUT)
-			break;
+		rc = crt_progress_cond(evx->evx_ctx, 0, ev_progress_cb, &epa);
+
+		/** progress succeeded, loop can exit if event completed */
+		if (rc == 0) {
+			rc = ev_thpriv.ev_error;
+			continue;
+		}
+
+		/** progress timeout, try calling progress again */
+		if (rc == -DER_TIMEDOUT)
+			continue;
+
+		/*
+		 * other progress failure; op should fail with that err. reset
+		 * the private event first so it can be resused.
+		 */
+		rc2 = daos_event_priv_reset();
+		if (rc2)
+			return rc2;
+		ev_thpriv_is_init = true;
+		break;
 	}
 	return rc;
 }
