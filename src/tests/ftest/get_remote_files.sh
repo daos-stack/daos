@@ -153,7 +153,7 @@ scp_files() {
         archive_name="${file_name%%.*}.$(hostname -s).${file_name#*.}"
         if scp -r "${file}" "${2}"/"${archive_name}"; then
             copied+=("${file}")
-            if [ "${file}" != "/usr/lib/daos/TESTING/ftest/test.cov" ]; then
+            if [ "${file}" ~= "test.cov" ]; then
                 if ! rm -fr "${file}"; then
                     echo "  Error removing ${file}"
                     echo "    $(ls -al ${file})"

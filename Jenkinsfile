@@ -528,6 +528,7 @@ pipeline {
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
         COV_DISABLED = cachedCommitPragma(pragma: 'Skip-bullseye', def_val: 'true')
+        COVFILE = "/usr/lib/daos/TESTING/ftest/test.cov"
         SCONS_FAULTS_ARGS = scons_faults_args()
     }
 

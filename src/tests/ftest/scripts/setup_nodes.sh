@@ -73,8 +73,7 @@ fi
 # creating the /var/run/daos_{agent,server} directories when needed.
 sudo bash -c "set -ex
 
-chmod 777 /usr/lib/daos/TESTING/ftest/test.cov
-ls -al /usr/lib/daos/TESTING/ftest/
+chmod 777 $COVFILE
 
 if [ -d  /var/run/daos_agent ]; then
     rm -rf /var/run/daos_agent

@@ -82,7 +82,11 @@ class DaosCoreBase(TestWithServers):
                         item.split("=")[0]: item.split("=")[1]
                         for item in env_vars}
                     env_dict["CRT_CTX_SHARE_ADDR"] = "1"
-                    env_dict["COVFILE"] = "/usr/lib/daos/TESTING/ftest/test.cov"
+
+                    defaultcov = "/usr/lib/daos/TESTING/ftest/test.cov"
+                    env_dict["COVFILE"] = "{}".format(os.getenv("COVFILE",
+                                                                defaultcov))
+
                     if "CRT_CTX_NUM" not in env_dict or \
                             int(env_dict["CRT_CTX_NUM"]) < int(targets):
                         env_dict["CRT_CTX_NUM"] = str(targets)

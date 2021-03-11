@@ -167,7 +167,8 @@ class CartUtils():
 
         env += " -x CRT_ATTACH_INFO_PATH={!s}".format(daos_test_shared_dir)
 
-        env += " -x COVFILE=/usr/lib/daos/TESTING/ftest/test.cov"
+        defaultcov = "/usr/lib/daos/TESTING/ftest/test.cov"
+        env += " -x COVFILE={!s}".format(os.getenv("COVFILE", defaultcov))
 
         cartobj.log_path = log_path
 
