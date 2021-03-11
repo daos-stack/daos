@@ -1710,12 +1710,13 @@ parse_filename_dfs(const char *path, char **_obj_name, char **_cont_name)
 	char	*f2 = NULL;
 	char	*fname = NULL;
 	char	*cont_name = NULL;
-	int	path_len = strlen(path) + 1;
-	int	rc = 0;
+	int     path_len = 0;
+	int     rc = 0;
 
 	if (path == NULL || _obj_name == NULL || _cont_name == NULL)
 		return -EINVAL;
 
+	path_len = strlen(path) + 1;
 	if (strcmp(path, "/") == 0) {
 		D_STRNDUP(*_cont_name, "/", 2);
 		if (*_cont_name == NULL)
