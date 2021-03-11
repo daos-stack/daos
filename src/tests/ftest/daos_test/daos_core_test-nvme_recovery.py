@@ -31,7 +31,7 @@ class DaosCoreTestNvme(DaosCoreBase):
         """
         self.run_subtest()
 
-    @skipForTicket("DAOS-6767")
+    @skipForTicket("DAOS-5134")
     def test_daos_nvme_recovery_2(self):
         """Jira ID: DAOS-3846.
 
@@ -48,7 +48,7 @@ class DaosCoreTestNvme(DaosCoreBase):
         """
         self.run_subtest()
 
-    @skipForTicket("DAOS-6767")
+    @skipForTicket("DAOS-5134")
     def test_daos_nvme_recovery_3(self):
         """Jira ID: DAOS-3846.
 
@@ -65,7 +65,7 @@ class DaosCoreTestNvme(DaosCoreBase):
         """
         self.run_subtest()
 
-    @skipForTicket("DAOS-6767")
+    @skipForTicket("DAOS-5134")
     def test_daos_nvme_recovery_4(self):
         """Jira ID: DAOS-3846.
 
