@@ -71,12 +71,18 @@ def umount(path, bg=False):
 
 class NLTConf():
     """Helper class for configuration"""
-    def __init__(self, bc):
+    def __init__(self, bc, args):
         self.bc = bc
         self.agent_dir = None
         self.wf = None
         self.args = None
         self.max_log_size = None
+
+        self.dfuse_parent_dir = tempfile.mkdtemp(dir=args.dfuse_dir,
+                                                 prefix='dnt_dfuse_')
+
+    def __del__(self):
+        os.rmdir(self.dfuse_parent_dir)
 
     def set_wf(self, wf):
         """Set the WarningsFactory object"""
@@ -261,7 +267,7 @@ class WarningsFactory():
         print('Closed JSON file {} with {} errors'.format(self.filename,
                                                           len(self.issues)))
 
-def load_conf():
+def load_conf(args):
     """Load the build config file"""
     file_self = os.path.dirname(os.path.abspath(__file__))
     json_file = None
@@ -276,7 +282,7 @@ def load_conf():
     ofh = open(json_file, 'r')
     conf = json.load(ofh)
     ofh.close()
-    return NLTConf(conf)
+    return NLTConf(conf, args)
 
 def get_base_env():
     """Return the base set of env vars needed for DAOS"""
@@ -316,8 +322,7 @@ class DaosServer():
         if not os.path.exists(socket_dir):
             os.mkdir(socket_dir)
 
-        self._agent_dir = tempfile.TemporaryDirectory(prefix='dnt_agent_')
-        self.agent_dir = self._agent_dir.name
+        self.agent_dir = tempfile.mkdtemp(prefix='dnt_agent_')
 
         self._yaml_file = None
         self._io_server_dir = None
@@ -329,6 +334,7 @@ class DaosServer():
     def __del__(self):
         if self.running:
             self.stop(None)
+        os.rmdir(self.agent_dir)
 
     # pylint: disable=no-self-use
     def _check_timing(self, op, start, max_time):
@@ -675,7 +681,7 @@ class DFuse():
         if path:
             self.dir = path
         else:
-            self.dir = '/tmp/dfs_test'
+            self.dir = os.path.join(conf.dfuse_parent_dir, 'dfuse_mount')
         self.pool = pool
         self.valgrind_file = None
         self.container = container
@@ -821,6 +827,7 @@ class DFuse():
         # Finally, modify the valgrind xml file to remove the
         # prefix to the src dir.
         self.valgrind.convert_xml()
+        os.rmdir(self.dir)
         return fatal_errors
 
     def wait_for_exit(self):
@@ -1654,7 +1661,8 @@ def run_duns_overlay_test(server, conf):
     while len(pools) < 1:
         pools = make_pool(server)
 
-    parent_dir = tempfile.TemporaryDirectory(prefix='dnt_uns_')
+    parent_dir = tempfile.TemporaryDirectory(dir=conf.dfuse_parent_dir,
+                                             prefix='dnt_uns_')
 
     uns_dir = os.path.join(parent_dir.name, 'uns_ep')
 
@@ -2452,6 +2460,8 @@ def main():
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
     parser.add_argument('--max-log-size', default=None)
+    parser.add_argument('--dfuse-dir', default='/tmp',
+                        help='parent directory for all dfuse mounts')
     parser.add_argument('--perf-check', action='store_true')
     parser.add_argument('--dtx', action='store_true')
     parser.add_argument('--test', help="Use '--test list' for list")
@@ -2470,7 +2480,7 @@ def main():
         print('Tests are: {}'.format(','.join(sorted(tests))))
         return
 
-    conf = load_conf()
+    conf = load_conf(args)
 
     wf = WarningsFactory('nlt-errors.json')
 
