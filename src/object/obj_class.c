@@ -981,48 +981,31 @@ dc_set_oclass(daos_handle_t coh, int domain_nr, int target_nr,
 	      daos_ofeat_t ofeats, daos_oclass_hints_t hints,
 	      daos_oclass_id_t *oc_id_p)
 {
-	daos_prop_t		*prop = NULL;
 	uint64_t		rf_factor;
 	daos_oclass_id_t	cid = 0;
 	struct daos_obj_class	*oc;
 	struct daos_oclass_attr	ca;
 	uint16_t		shd, rdd;
 	int			grp_size;
-	int			rc;
 
-	/** get the Redundancy Factor from container */
-	prop = daos_prop_alloc(1);
-	if (prop == NULL)
-		return -DER_NOMEM;
-
-	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
-	rc = daos_cont_query(coh, NULL, prop, NULL);
-	if (rc) {
-		daos_prop_free(prop);
-		D_ERROR("daos_cont_query() failed (%d)\n", rc);
-		return rc;
-	}
-
-	rf_factor = prop->dpp_entries[0].dpe_val;
-	daos_prop_free(prop);
-
-	rdd = hints & DAOS_OC_RDD_MASK;
-	shd = hints & DAOS_OC_SHD_MASK;
+	rf_factor = dc_cont_hdl2redunfac(coh);
+	rdd = hints & DAOS_OCH_RDD_MASK;
+	shd = hints & DAOS_OCH_SHD_MASK;
 
 	/** first set a reasonable default based on RF & RDD hint (if set) */
 	switch (rf_factor) {
 	case DAOS_PROP_CO_REDUN_RF0:
-		if (rdd == DAOS_OC_RDD_RP)
+		if (rdd == DAOS_OCH_RDD_RP)
 			cid = OC_RP_2GX;
-		else if (rdd == DAOS_OC_RDD_EC)
+		else if (rdd == DAOS_OCH_RDD_EC)
 			cid = OC_EC_2P1G1;
 		else
 			cid = OC_SX;
 		break;
 	case DAOS_PROP_CO_REDUN_RF1:
-		if (rdd == DAOS_OC_RDD_RP)
+		if (rdd == DAOS_OCH_RDD_RP)
 			cid = OC_RP_2GX;
-		else if (rdd == DAOS_OC_RDD_EC || ofeats & DAOS_OF_ARRAY ||
+		else if (rdd == DAOS_OCH_RDD_EC || ofeats & DAOS_OF_ARRAY ||
 			 ofeats & DAOS_OF_ARRAY_BYTE)
 			/** TODO - this should be GX when supported */
 			cid = OC_EC_2P1G1;
@@ -1030,9 +1013,9 @@ dc_set_oclass(daos_handle_t coh, int domain_nr, int target_nr,
 			cid = OC_RP_2GX;
 		break;
 	case DAOS_PROP_CO_REDUN_RF2:
-		if (rdd == DAOS_OC_RDD_RP)
+		if (rdd == DAOS_OCH_RDD_RP)
 			cid = OC_RP_3GX;
-		else if (rdd == DAOS_OC_RDD_EC || ofeats & DAOS_OF_ARRAY ||
+		else if (rdd == DAOS_OCH_RDD_EC || ofeats & DAOS_OF_ARRAY ||
 			 ofeats & DAOS_OF_ARRAY_BYTE)
 			/** TODO - this should be GX when supported */
 			cid = OC_EC_2P2G1;
@@ -1066,20 +1049,20 @@ dc_set_oclass(daos_handle_t coh, int domain_nr, int target_nr,
 
 	/** adjust the group size based on the sharding hint */
 	switch (shd) {
-	case DAOS_OC_SHD_DEF:
-	case DAOS_OC_SHD_MAX:
+	case DAOS_OCH_SHD_DEF:
+	case DAOS_OCH_SHD_MAX:
 		ca.ca_grp_nr = DAOS_OBJ_GRP_MAX;
 		break;
-	case DAOS_OC_SHD_TINY:
+	case DAOS_OCH_SHD_TINY:
 		ca.ca_grp_nr = 4;
 		break;
-	case DAOS_OC_SHD_REG:
+	case DAOS_OCH_SHD_REG:
 		ca.ca_grp_nr = max(128, target_nr * 25 / 100);
 		break;
-	case DAOS_OC_SHD_HI:
+	case DAOS_OCH_SHD_HI:
 		ca.ca_grp_nr = max(256, target_nr * 50 / 100);
 		break;
-	case DAOS_OC_SHD_EXT:
+	case DAOS_OCH_SHD_EXT:
 		ca.ca_grp_nr = max(1024, target_nr * 80 / 100);
 		break;
 	default:

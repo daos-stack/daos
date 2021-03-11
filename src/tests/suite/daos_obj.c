@@ -4230,19 +4230,19 @@ oclass_auto_setting(void **state)
 	assert_rc_equal(rc, 0);
 
 	/** RP hint should use RP_2GX fit to current DAOS system */
-	print_message("oid with DAOS_OC_RDD_RP hint:\t");
-	rc = check_oclass(coh, DAOS_OC_RDD_RP, 0, DAOS_RES_REPL, 2, OC_RP_2GX);
+	print_message("oid with DAOS_OCH_RDD_RP hint:\t");
+	rc = check_oclass(coh, DAOS_OCH_RDD_RP, 0, DAOS_RES_REPL, 2, OC_RP_2GX);
 	assert_rc_equal(rc, 0);
 
 	/** EC hint should use OC_EC_2P1G1 */
-	print_message("KC oid with DAOS_OC_RDD_EC hint:\t");
-	rc = check_oclass(coh, DAOS_OC_RDD_EC, feat_kv, DAOS_RES_EC, 2,
+	print_message("KC oid with DAOS_OCH_RDD_EC hint:\t");
+	rc = check_oclass(coh, DAOS_OCH_RDD_EC, feat_kv, DAOS_RES_EC, 2,
 			  OC_EC_2P1G1);
 	assert_rc_equal(rc, 0);
 
 	/** RP hint with Tiny sharding should use RP_2G4 */
-	print_message("oid with DAOS_OC_RDD_RP | DAOS_OC_SHD_TINY hint:\t");
-	rc = check_oclass(coh, DAOS_OC_RDD_RP | DAOS_OC_SHD_TINY,
+	print_message("oid with DAOS_OCH_RDD_RP | DAOS_OCH_SHD_TINY hint:\t");
+	rc = check_oclass(coh, DAOS_OCH_RDD_RP | DAOS_OCH_SHD_TINY,
 			  feat_byte_array, DAOS_RES_REPL, 2, OC_RP_2G4);
 	assert_rc_equal(rc, 0);
 
