@@ -121,7 +121,6 @@ if ! clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
     -w "$(IFS=','; echo "${nodes[*]}")"                                 \
     "FIRST_NODE=${nodes[0]}
      TEST_RPMS=$TEST_RPMS
-     COVFILE=$COVFILE
      DAOS_BASE=$DAOS_BASE
      SL_PREFIX=$SL_PREFIX
      TEST_TAG_DIR=$TEST_TAG_DIR
@@ -141,7 +140,6 @@ args+=" $*"
 if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" \
     "FIRST_NODE=\"${nodes[0]}\"
      TEST_RPMS=\"$TEST_RPMS\"
-     COVFILE=\"$COVFILE\"
      DAOS_TEST_SHARED_DIR=\"${DAOS_TEST_SHARED_DIR:-$PWD/install/tmp}\"
      DAOS_BASE=\"$DAOS_BASE\"
      TEST_TAG_DIR=\"$TEST_TAG_DIR\"

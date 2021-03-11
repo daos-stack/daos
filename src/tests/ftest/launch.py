@@ -1157,10 +1157,9 @@ def archive_cov_usrlib_logs(avocado_logs_dir, args):
     print("Archiving host covs from {} in {}".format(hosts, destination))
 
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
-    defaultcov = "/usr/lib/daos/TESTING/ftest/test.cov"
-    covfile = "{}*".format(os.environ.get("COVFILE", defaultcov))
+    logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     task = archive_files(
-        destination, hosts, covfile, False, args)
+        destination, hosts, "/usr/lib/daos/TESTING/ftest/test.cov*", False, args)
 
     # Determine if the command completed successfully across all the hosts
     status = 0
