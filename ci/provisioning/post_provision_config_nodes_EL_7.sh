@@ -28,7 +28,8 @@ timeout_yum() {
 }
 
 bootstrap_dnf() {
-    timeout_yum 5m install dnf 'dnf-command(config-manager)'
+    timeout_yum 5m install dnf 'dnf-command(config-manager)' \
+                           'dnf-command(debuginfo-install)'
 }
 
 group_repo_post() {
@@ -58,7 +59,9 @@ enabled=0
 EOF
 
     # force install of avocado 82.0
-    dnf -y erase avocado{,-common} python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}} python36-PyYAML
+    dnf -y erase avocado{,-common}                                        \
+           python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}} \
+           python36-PyYAML
     pip3 install --upgrade pip
     pip3 install "avocado-framework<83.0"
     pip3 install "avocado-framework-plugin-result-html<83.0"

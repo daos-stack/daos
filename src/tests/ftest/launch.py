@@ -1544,8 +1544,9 @@ def install_debuginfos():
         else:
             yum_args.extend(["libpmemobj", "python36"])
         cmds.append(["sudo", "dnf", "-y", "install"] + yum_args)
-        cmds.append(["sudo", "debuginfo-install", "--enablerepo=*-debuginfo",
-                     "-y"] + yum_args + ["daos-server", "gcc"])
+        cmds.append(
+            ["sudo", "dnf", "debuginfo-install", "--enablerepo=*-debuginfo",
+             "-y"] + yum_args + ["daos-server", "gcc"])
     else:
         # We're not using the yum API to install packages
         # See the comments below.
