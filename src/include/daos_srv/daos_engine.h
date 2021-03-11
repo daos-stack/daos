@@ -678,6 +678,7 @@ struct dss_enum_arg {
 	bool			fill_recxs;	/* type == S||R */
 	bool			chk_key2big;
 	bool			need_punch;	/* need to pack punch epoch */
+	bool			obj_punched;    /* object punch is packed   */
 	daos_epoch_range_t     *eprs;
 	struct daos_csummer    *csummer;
 	int			eprs_cap;
@@ -751,6 +752,8 @@ struct dss_enum_unpack_io {
 	int			 ui_iods_cap;
 	int			 ui_iods_top;
 	int			*ui_recxs_caps;
+	/* punched epoch for object */
+	daos_epoch_t		ui_obj_punch_eph;
 	/* punched epochs for dkey */
 	daos_epoch_t		ui_dkey_punch_eph;
 	d_sg_list_t		*ui_sgls;	/**< optional */
@@ -862,5 +865,21 @@ struct sys_db {
 	void	(*sd_lock)(struct sys_db *db);
 	void	(*sd_unlock)(struct sys_db *db);
 };
+
+/** Flags for dss_drpc_call */
+enum dss_drpc_call_flag {
+	/** Do not wait for a response. Implies DSS_DRPC_NO_SCHED. */
+	DSS_DRPC_NO_RESP	= 1,
+	/**
+	 * Do not Argobots-schedule. If the dRPC requires a response, this will
+	 * block the thread until a response is received. That is usually
+	 * faster than waiting for the response by Argobots-scheduling if the
+	 * dRPC can be quickly handled by the local daos_server alone.
+	 */
+	DSS_DRPC_NO_SCHED	= 2
+};
+
+int dss_drpc_call(int32_t module, int32_t method, void *req, size_t req_size,
+		  unsigned int flags, Drpc__Response **resp);
 
 #endif /* __DSS_API_H__ */

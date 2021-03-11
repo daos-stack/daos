@@ -1010,10 +1010,9 @@ down_to_target(void **state)
 	assert_success(jtc_create_layout(&ctx));
 	jtc_scan(&ctx);
 
-	jtc_fini(&ctx);
-	skip_msg("DAOS-6515: Plenty of targets, but not being rebuilt.");
 	assert_int_equal(ctx.rebuild.out_nr, 1);
 	assert_int_equal(0, jtc_get_layout_bad_count(&ctx));
+	jtc_fini(&ctx);
 }
 
 static void
