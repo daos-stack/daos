@@ -38,6 +38,7 @@
 #include <daos/tests_lib.h>
 #include <daos_srv/vos.h>
 #include <daos/dts.h>
+#include <daos_api.h>
 
 /**
  * An example for integer key evtree .
