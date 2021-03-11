@@ -495,21 +495,19 @@ reset_anchors(vos_iter_type_t type, struct vos_iter_anchors *anchors)
 	switch (type) {
 	case VOS_ITER_DKEY:
 		daos_anchor_set_zero(&anchors->ia_dkey);
-		daos_anchor_set_zero(&anchors->ia_akey);
-		daos_anchor_set_zero(&anchors->ia_ev);
-		daos_anchor_set_zero(&anchors->ia_sv);
-		break;
+		anchors->ia_reprobe_dkey = 0;
+		/* fall through */
 	case VOS_ITER_AKEY:
 		daos_anchor_set_zero(&anchors->ia_akey);
-		daos_anchor_set_zero(&anchors->ia_ev);
-		daos_anchor_set_zero(&anchors->ia_sv);
-		break;
+		anchors->ia_reprobe_akey = 0;
+		/* fall through */
 	case VOS_ITER_RECX:
 		daos_anchor_set_zero(&anchors->ia_ev);
-		daos_anchor_set_zero(&anchors->ia_sv);
-		break;
+		anchors->ia_reprobe_ev = 0;
+		/* fall through */
 	case VOS_ITER_SINGLE:
 		daos_anchor_set_zero(&anchors->ia_sv);
+		anchors->ia_reprobe_sv = 0;
 		break;
 	default:
 		D_ASSERTF(false, "invalid iter type %d\n", type);

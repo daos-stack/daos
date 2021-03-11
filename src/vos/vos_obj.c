@@ -1790,7 +1790,8 @@ obj_iter_delete(struct vos_obj_iter *oiter, void *args)
 	rc = umem_tx_end(umm, rc);
 exit:
 	if (rc != 0)
-		D_ERROR("Failed to delete iter entry: "DF_RC"\n", DP_RC(rc));
+		D_CDEBUG(rc == -DER_TX_BUSY, DB_TRACE, DLOG_ERR,
+			 "Failed to delete iter entry: "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
 
@@ -1840,7 +1841,9 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool discard)
 		 */
 		if (krec->kr_bmap & KREC_BF_BTR) {
 			D_ASSERTF(dbtree_is_empty_inplace(&krec->kr_btr),
-				  "Orphaned akey or single value detected\n");
+				  "Orphaned %s detected\n",
+				  iter->it_type == VOS_ITER_DKEY ?
+				  "akey" : "single value");
 		} else if (krec->kr_bmap & KREC_BF_EVT) {
 			D_ASSERTF(evt_is_empty(&krec->kr_evt),
 				  "Orphaned array value detected\n");
