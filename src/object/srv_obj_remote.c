@@ -133,7 +133,7 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 		orw->orw_iod_array.oia_oiod_nr = orw->orw_iod_array.oia_iod_nr;
 		orw->orw_iod_array.oia_offs = tgt_oiod->oto_offs;
 	}
-	orw->orw_oid.id_shard = shard_tgt->st_shard;
+	orw->orw_oid.id_shard = shard_tgt->st_shard_id;
 	uuid_copy(orw->orw_co_hdl, orw_parent->orw_co_hdl);
 	uuid_copy(orw->orw_co_uuid, orw_parent->orw_co_uuid);
 	orw->orw_shard_tgts.ca_count	= orw_parent->orw_shard_tgts.ca_count;
