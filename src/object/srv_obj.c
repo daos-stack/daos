@@ -1804,6 +1804,7 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 		D_ERROR("ioc_begin failed: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
+	D_ASSERT(ioc.ioc_coc != NULL);
 	dkey = (daos_key_t *)&oer->er_dkey;
 	iod = (daos_iod_t *)&oer->er_iod;
 	rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oer->er_oid,
@@ -1877,6 +1878,7 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 		D_ERROR("ioc_begin failed: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
+	D_ASSERT(ioc.ioc_coc != NULL);
 	dkey = (daos_key_t *)&oea->ea_dkey;
 	iod.iod_name = oea->ea_akey;
 	iod.iod_type = DAOS_IOD_ARRAY;
