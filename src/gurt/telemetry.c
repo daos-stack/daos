@@ -21,9 +21,6 @@
  * These globals are used for all data producers sharing the same process space
  */
 
-/** stores the shmid returned by shmget */
-int			d_tm_shmid;
-
 /** Points to the root directory node */
 struct d_tm_node_t	*d_tm_root;
 
@@ -289,7 +286,7 @@ d_tm_init(int id, uint64_t mem_size, int flags)
 	}
 	*base_addr = (uint64_t)d_tm_shmem_root;
 
-	snprintf(tmp, sizeof(tmp), "ID_%d", id);
+	snprintf(tmp, sizeof(tmp), "ID: %d", id);
 	rc = d_tm_alloc_node(&d_tm_root, tmp);
 	if (rc != DER_SUCCESS)
 		goto failure;
@@ -661,10 +658,13 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 	}
 
 	if (format == D_TM_CSV) {
-		if (show_timestamp)
+		if (path == NULL)
+			return;
+		if (show_timestamp) {
 			fprintf(stream, "%s,%s", timestamp, path);
-		else
+		} else {
 			fprintf(stream, "%s", path);
+		}
 	} else {
 		for (i = 0; i < level; i++)
 			fprintf(stream, "%20s", " ");
@@ -746,6 +746,7 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 		d_tm_get_metadata(&short_desc, &long_desc, shmem_root, node,
 				  NULL);
 		if (format == D_TM_CSV) {
+			/** print placeholders for the missing stats */
 			if (!stats_printed &&
 			    ((short_desc != NULL) || (long_desc != NULL)))
 				fprintf(stream, ",,,,,");
@@ -998,6 +999,7 @@ d_tm_compute_histogram(struct d_tm_node_t *node, uint64_t value)
 	}
 	return rc;
 }
+
 
 /**
  * Increment the given counter by the specified \a value
@@ -2908,7 +2910,7 @@ d_tm_get_shared_memory(int srv_idx)
 }
 
 /**
- * Allocates memory from within the shared memory pool with 64-bit alignment
+ * Allocates memory from within the shared memory pool with 16-bit alignment
  * Clears the allocated buffer.
  *
  * param[in]	length	Size in bytes of the region within the shared memory
@@ -2920,9 +2922,9 @@ d_tm_get_shared_memory(int srv_idx)
 void *
 d_tm_shmalloc(int length)
 {
-	if (length % sizeof(uint64_t) != 0) {
-		length += sizeof(uint64_t);
-		length &= ~(sizeof(uint64_t) - 1);
+	if (length % sizeof(uint16_t) != 0) {
+		length += sizeof(uint16_t);
+		length &= ~(sizeof(uint16_t) - 1);
 	}
 
 	if (d_tm_shmem_idx) {
