@@ -37,6 +37,7 @@ class OSAUtils(MdtestBase, IorTestBase):
     def setUp(self):
         """Set up for test case."""
         super(OSAUtils, self).setUp()
+        self.pool_cont_dict = {}
         self.container = None
         self.obj = None
         self.ioreq = None
@@ -76,25 +77,16 @@ class OSAUtils(MdtestBase, IorTestBase):
         return data["rebuild"]["status"]
 
     @fail_on(CommandFailure)
-    def is_rebuild_done(self, time_interval):
+    def is_rebuild_done(self, time_interval,
+                        wait_for_rebuild_not_to_complete=False):
         """Rebuild is completed/done.
         Args:
             time_interval: Wait interval between checks
-        Returns:
-            False: If rebuild_status not "done" or "completed".
-            True: If rebuild status is "done" or "completed".
+            wait_for_rebuild_not_to_complete: Rebuild completed
+                                              (Default: False)
         """
-        status = False
-        fail_count = 0
-        completion_flag = ["done", "completed"]
-        while fail_count <= 20:
-            rebuild_status = self.get_rebuild_status()
-            time.sleep(time_interval)
-            fail_count += 1
-            if rebuild_status in completion_flag:
-                status = True
-                break
-        return status
+        self.pool.wait_for_rebuild(wait_for_rebuild_not_to_complete,
+                                   interval=time_interval)
 
     @fail_on(CommandFailure)
     def assert_on_rebuild_failure(self):
@@ -219,9 +211,17 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.ior_cmd.set_daos_params(self.server_group, self.pool)
         self.ior_cmd.dfs_oclass.update(oclass)
         self.ior_cmd.dfs_dir_oclass.update(oclass)
-        # Create container only
-        if self.container is None:
+        # If pool is not in the dictionary, 
+        # initialize its container as None.
+        if self.pool not in self.pool_cont_dict:
+            self.pool_cont_dict[self.pool] = None
+        # Create container if the pool doesn't have one.
+        # Otherwise, use the existing container in the pool.
+        if self.pool_cont_dict[self.pool] is None:
             self.add_container(self.pool)
+            self.pool_cont_dict[self.pool] = self.container
+        else:
+            self.container = self.pool_cont_dict[self.pool]
         job_manager = self.get_ior_job_manager_command()
         job_manager.job.dfs_cont.update(self.container.uuid)
         self.ior_cmd.transfer_size.update(test[2])

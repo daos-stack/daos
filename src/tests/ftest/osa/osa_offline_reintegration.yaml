@@ -5,7 +5,7 @@ hosts:
     - server-C
   test_clients:
     - client-D
-timeout: 3600
+timeout: 800
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -77,12 +77,12 @@ ior:
   #    The values are set to be in the multiples of 10.
   #    Values are appx GB.
     - [6000000000, 54000000000, 500000, 500000000]
-    - [6000000000, 54000000000, 1000, 500000000]
+    - [6000000000, 54000000000, 1000, 5000000]
 mdtest:
   api: DFS
   client_processes:
     np: 2
-  num_of_files_dirs: 100         # creating total of 120K files
+  num_of_files_dirs: 100
   test_dir: "/"
   iteration: 1
   dfs_destroy: False
@@ -101,5 +101,6 @@ test_obj_class:
     - RP_2G8
     - RP_3G6
     - RP_4G1
+    - S1
 loop_test:
-  iterations: 10
+  iterations: 3

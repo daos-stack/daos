@@ -27,12 +27,11 @@ class OSAOfflineReintegration(OSAUtils):
         self.ior_test_sequence = self.params.get("ior_test_sequence",
                                                  '/run/ior/iorflags/*')
         self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
-        self.loop_test_cnt = self.params.get("iterations",
-                                             '/run/loop_test/*')
+        self.loop_test_cnt = 1
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
-        self.dmg_command.exit_status_exception = False
+        self.dmg_command.exit_status_exception = True
 
     def run_offline_reintegration_test(self, num_pool, data=False,
                                        server_boot=False, oclass=None,
@@ -98,8 +97,9 @@ class OSAOfflineReintegration(OSAUtils):
                                                            rank[val])
                 else:
                     output = self.dmg_command.system_stop(ranks=rank[val])
-                    self.pool.wait_for_rebuild(True)
                     self.log.info(output)
+                    self.is_rebuild_done(3)
+                    self.assert_on_rebuild_failure()
                     output = self.dmg_command.system_start(ranks=rank[val])
                 # Just try to reintegrate rank 5
                 if (reint_during_rebuild is True and val == 2):
@@ -115,9 +115,9 @@ class OSAOfflineReintegration(OSAUtils):
                 self.log.info("Pool Version after exclude %s", pver_exclude)
                 # Check pool version incremented after pool exclude
                 # pver_exclude should be greater than
-                # pver_begin + 8 targets.
-                self.assertTrue(pver_exclude > (pver_begin + 8),
-                                "Pool Version Error:  After exclude")
+                # pver_begin + 3 (2 targets + exclude)
+                self.assertTrue(pver_exclude > (pver_begin + 3),
+                                "Pool Version Error: After exclude")
 
             # Reintegrate the ranks which was excluded
             for val, _ in enumerate(rank):
@@ -143,20 +143,22 @@ class OSAOfflineReintegration(OSAUtils):
             self.pool = pool[random_pool]
             self.pool.display_pool_daos_space(display_string)
 
-        if data:
-            self.run_ior_thread("Read", oclass, test_seq)
-            self.run_mdtest_thread()
+        for val in range(0, num_pool):
+            self.pool = pool[val]
+            if data:
+                self.run_ior_thread("Read", oclass, test_seq)
+                self.run_mdtest_thread()
 
-    @skipForTicket("DAOS-6505")
-    def test_osa_offline_reintegration(self):
-        """Test ID: DAOS-4749
+    def test_osa_offline_reintegration_multiple_pools(self):
+        """Test ID: DAOS-6923
         Test Description: Validate Offline Reintegration
+        with multiple pools
 
         :avocado: tags=all,daily_regression,hw,medium,ib2
         :avocado: tags=osa,offline_reintegration
-        :avocado: tags=offline_reintegration_exclude
+        :avocado: tags=offline_reintegration_multiple_pools
         """
-        self.run_offline_reintegration_test(1, data=True)
+        self.run_offline_reintegration_test(5, data=True)
 
     def test_osa_offline_reintegration_server_stop(self):
         """Test ID: DAOS-6748.
@@ -167,20 +169,20 @@ class OSAOfflineReintegration(OSAUtils):
         """
         self.run_offline_reintegration_test(1, data=True, server_boot=True)
 
-    @skipForTicket("DAOS-6505")
     def test_osa_offline_reintegrate_during_rebuild(self):
         """Test ID: DAOS-6923
         Test Description: Reintegrate rank while rebuild
         is happening in parallel
 
-        :avocado: tags=all,daily_regression,hw,medium,ib2
+        :avocado: tags=all,full_regression,hw,medium,ib2
         :avocado: tags=osa,offline_reintegration
         :avocado: tags=offline_reintegrate_during_rebuild
         """
+        self.loop_test_cnt = self.params.get("iterations",
+                                             '/run/loop_test/*')
         self.run_offline_reintegration_test(1, data=True,
                                             reint_during_rebuild=True)
 
-    @skipForTicket("DAOS-6505")
     def test_osa_offline_reintegration_oclass(self):
         """Test ID: DAOS-6923
         Test Description: Validate Offline Reintegration
@@ -195,7 +197,6 @@ class OSAOfflineReintegration(OSAUtils):
                                                 server_boot=False,
                                                 oclass=oclass)
 
-    @skipForTicket("DAOS-6505")
     def test_osa_offline_reintegrate_during_aggregation(self):
         """Test ID: DAOS-6923
         Test Description: Reintegrate rank while aggregation
@@ -207,24 +208,3 @@ class OSAOfflineReintegration(OSAUtils):
         """
         self.run_offline_reintegration_test(1, data=True,
                                             reint_during_aggregation=True)
-
-    @skipForTicket("DAOS-6505")
-    def test_osa_offline_reintegration_multiple_pools(self):
-        """Test ID: DAOS-6923
-        Test Description: Validate Offline Reintegration
-        with multiple pools
-
-        :avocado: tags=all,hw,medium,ib2,osa,offline_reintegration
-        :avocado: tags=offline_reintegration_multiple_pools
-        """
-        self.run_offline_reintegration_test(200, data=True)
-
-    def test_osa_offline_reintegration_loop_test(self):
-        """Test ID: DAOS-6923
-        Test Description: Validate Offline Reintegration
-        with multiple pools
-
-        :avocado: tags=all,hw,medium,ib2,osa,offline_reintegration
-        :avocado: tags=offline_reintegration_loop_test
-        """
-        self.run_offline_reintegration_test(1, data=True)
