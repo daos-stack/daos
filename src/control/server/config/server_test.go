@@ -19,6 +19,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -662,6 +663,52 @@ func TestServerConfig_NetworkDeviceClass(t *testing.T) {
 
 			gotErr := conf.Validate(log)
 			CmpErr(t, tc.expErr, gotErr)
+		})
+	}
+}
+
+//// SaveActiveConfig saves read-only active config, tries config dir then /tmp/.
+//func (cfg *Server) SaveActiveConfig(log logging.Logger) {
+//	activeConfig := filepath.Join(filepath.Dir(cfg.Path), configOut)
+//
+//	if err := cfg.SaveToFile(activeConfig); err != nil {
+//		msg := "active config could not be saved"
+//		log.Debug(errors.Wrap(err, msg).Error())
+//
+//		activeConfig = filepath.Join("/tmp", configOut)
+//		if err := cfg.SaveToFile(activeConfig); err != nil {
+//			log.Debug(errors.Wrap(err, msg).Error())
+//			return
+//		}
+//	}
+//	log.Debugf("active config saved to %s (read-only)", activeConfig)
+//}
+func TestServerConfig_SaveActiveConfig(t *testing.T) {
+	testDir, cleanup := CreateTestDir(t)
+	defer cleanup()
+
+	t.Logf("test dir: %s", testDir)
+
+	for name, tc := range map[string]struct {
+		cfgPath   string
+		expLogOut string
+	}{
+		"successful write": {
+			cfgPath: testDir,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			cfg := DefaultServer()
+			cfg.Path = tc.cfgPath
+
+			cfg.SaveActiveConfig(log)
+
+			common.AssertEqual(t, tc.expLogOut, buf.String(),
+				"unexpected log output")
+			// compare files
 		})
 	}
 }

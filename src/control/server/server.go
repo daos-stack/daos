@@ -27,7 +27,6 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -42,19 +41,10 @@ func processConfig(log *logging.LeveledLogger, cfg *config.Server) (*system.Faul
 		return nil, errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 
-	// Backup active config.
 	cfg.SaveActiveConfig(log)
 
-	if cfg.HelperLogFile != "" {
-		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cfg.HelperLogFile); err != nil {
-			return nil, errors.Wrap(err, "unable to configure privileged helper logging")
-		}
-	}
-
-	if cfg.FWHelperLogFile != "" {
-		if err := os.Setenv(pbin.DaosFWLogFileEnvVar, cfg.FWHelperLogFile); err != nil {
-			return nil, errors.Wrap(err, "unable to configure privileged firmware helper logging")
-		}
+	if err := setDaosHelperEnvs(cfg, os.Setenv); err != nil {
+		return nil, err
 	}
 
 	fd, err := getFaultDomain(cfg)

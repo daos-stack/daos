@@ -12,6 +12,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/server/config"
 )
 
@@ -54,4 +57,20 @@ func hostname() string {
 		return fmt.Sprintf("Hostname() failed: %s", err.Error())
 	}
 	return hn
+}
+
+func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error {
+	if cfg.HelperLogFile != "" {
+		if err := setenv(pbin.DaosAdminLogFileEnvVar, cfg.HelperLogFile); err != nil {
+			return errors.Wrap(err, "unable to configure privileged helper logging")
+		}
+	}
+
+	if cfg.FWHelperLogFile != "" {
+		if err := setenv(pbin.DaosFWLogFileEnvVar, cfg.FWHelperLogFile); err != nil {
+			return errors.Wrap(err, "unable to configure privileged firmware helper logging")
+		}
+	}
+
+	return nil
 }
