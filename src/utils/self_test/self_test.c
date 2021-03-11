@@ -3895,6 +3895,14 @@ cleanup:
 		/* Avoid checkpatch warning */
 		free(g_config_append);
 	}
+	if (g_ms_endpts != NULL) {
+		free(g_ms_endpts);
+		g_ms_endpts = NULL;
+	}
+	if (g_endpts != NULL) {
+		free(g_endpts);
+		g_endpts = NULL;
+	}
 
 	if (all_params != NULL)
 		D_FREE(all_params);
