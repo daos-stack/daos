@@ -9,12 +9,10 @@ package server
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/signal"
 	"os/user"
-	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -38,48 +36,7 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-const (
-	iommuPath        = "/sys/class/iommu"
-	minHugePageCount = 128
-)
-
-func cfgHasBdev(cfg *config.Server) bool {
-	for _, engineCfg := range cfg.Engines {
-		if len(engineCfg.Storage.Bdev.DeviceList) > 0 {
-			return true
-		}
-	}
-
-	return false
-}
-
-func iommuDetected() bool {
-	// Simple test for now -- if the path exists and contains
-	// DMAR entries, we assume that's good enough.
-	dmars, err := ioutil.ReadDir(iommuPath)
-	if err != nil {
-		return false
-	}
-
-	return len(dmars) > 0
-}
-
-func raftDir(cfg *config.Server) string {
-	if len(cfg.Engines) == 0 {
-		return "" // can't save to SCM
-	}
-	return filepath.Join(cfg.Engines[0].Storage.SCM.MountPoint, "control_raft")
-}
-
-func hostname() string {
-	hn, err := os.Hostname()
-	if err != nil {
-		return fmt.Sprintf("Hostname() failed: %s", err.Error())
-	}
-	return hn
-}
-
-func checkConfig(log *logging.LeveledLogger, cfg *config.Server) (*system.FaultDomain, error) {
+func processConfig(log *logging.LeveledLogger, cfg *config.Server) (*system.FaultDomain, error) {
 	err := cfg.Validate(log)
 	if err != nil {
 		return nil, errors.Wrapf(err, "%s: validation failed", cfg.Path)
@@ -91,7 +48,7 @@ func checkConfig(log *logging.LeveledLogger, cfg *config.Server) (*system.FaultD
 	}
 
 	// Backup active config.
-	config.SaveActiveConfig(log, cfg)
+	cfg.SaveActiveConfig(log)
 
 	if cfg.HelperLogFile != "" {
 		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cfg.HelperLogFile); err != nil {
@@ -248,7 +205,7 @@ func (srv *server) initStorage() error {
 		// TODO: pass vmd include/white list
 	}
 
-	if cfgHasBdev(srv.cfg) {
+	if cfgHasBdevs(srv.cfg) {
 		// The config value is intended to be per-engine, so we need to adjust
 		// based on the number of engines.
 		prepReq.HugePageCount = srv.cfg.NrHugepages * len(srv.cfg.Engines)
@@ -278,7 +235,7 @@ func (srv *server) initStorage() error {
 		return errors.Wrap(err, "unable to read system hugepage info")
 	}
 
-	if cfgHasBdev(srv.cfg) {
+	if cfgHasBdevs(srv.cfg) {
 		// Double-check that we got the requested number of huge pages after prepare.
 		if hugePages.Free < prepReq.HugePageCount {
 			return FaultInsufficientFreeHugePages(hugePages.Free, prepReq.HugePageCount)
@@ -512,7 +469,7 @@ func (srv *server) start(ctx context.Context, shutdown context.CancelFunc) error
 
 // Start is the entry point for a daos_server instance.
 func Start(log *logging.LeveledLogger, cfg *config.Server) error {
-	fd, err := checkConfig(log, cfg)
+	fd, err := processConfig(log, cfg)
 	if err != nil {
 		return err
 	}
