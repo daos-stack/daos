@@ -647,13 +647,21 @@ nominated(d_rank_list_t *replicas, uuid_t db_uuid)
 {
 	int i;
 
+	/* No initial membership. */
+	if (replicas == NULL || replicas->rl_nr < 1)
+		return false;
+
+	/* Only one replica. */
+	if (replicas->rl_nr == 1)
+		return true;
+
 	/*
 	 * Nominate by hashing the DB UUID. The only requirement is that every
 	 * replica shall end up with the same nomination.
 	 */
 	i = d_hash_murmur64(db_uuid, sizeof(uuid_t), 0x2db) % replicas->rl_nr;
 
-	return (replicas != NULL && replicas->rl_ranks[i] == dss_self_rank());
+	return (replicas->rl_ranks[i] == dss_self_rank());
 }
 
 static bool
