@@ -78,14 +78,14 @@ class OSAUtils(MdtestBase, IorTestBase):
 
     @fail_on(CommandFailure)
     def is_rebuild_done(self, time_interval,
-                        wait_for_rebuild_not_to_complete=False):
+                        wait_for_rebuild_to_complete=False):
         """Rebuild is completed/done.
         Args:
             time_interval: Wait interval between checks
-            wait_for_rebuild_not_to_complete: Rebuild completed
-                                              (Default: False)
+            wait_for_rebuild_to_complete: Rebuild completed
+                                          (Default: False)
         """
-        self.pool.wait_for_rebuild(wait_for_rebuild_not_to_complete,
+        self.pool.wait_for_rebuild(wait_for_rebuild_to_complete,
                                    interval=time_interval)
 
     @fail_on(CommandFailure)
