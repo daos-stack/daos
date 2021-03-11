@@ -69,6 +69,7 @@ type Server struct {
 	FWHelperLogFile     string           `yaml:"firmware_helper_log_file"`
 	RecreateSuperblocks bool             `yaml:"recreate_superblocks"`
 	FaultPath           string           `yaml:"fault_path"`
+	TelemetryPort       int              `yaml:"telemetry_port"`
 
 	// duplicated in engine.Config
 	SystemName string              `yaml:"name"`
@@ -311,6 +312,12 @@ func (c *Server) WithHelperLogFile(filePath string) *Server {
 // WithFirmwareHelperLogFile sets the path to the daos_firmware logfile.
 func (c *Server) WithFirmwareHelperLogFile(filePath string) *Server {
 	c.FWHelperLogFile = filePath
+	return c
+}
+
+// WithTelemetryPort sets the port for the telemetry exporter.
+func (c *Server) WithTelemetryPort(port int) *Server {
+	c.TelemetryPort = port
 	return c
 }
 

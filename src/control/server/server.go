@@ -245,6 +245,8 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		return control.SystemJoin(ctx, rpcClient, req)
 	}
 
+	var allStarted sync.WaitGroup
+
 	for idx, engineCfg := range cfg.Engines {
 		// Provide special handling for the ofi+verbs provider.
 		// Mercury uses the interface name such as ib0, while OFI uses the
@@ -287,6 +289,12 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		// Register callback to publish I/O Engine process exit events.
 		engine.OnInstanceExit(publishInstanceExitFn(eventPubSub.Publish, hostname(), engine.Index()))
 
+		allStarted.Add(1)
+		engine.OnReady(func(_ context.Context) error {
+			allStarted.Done()
+			return nil
+		})
+
 		if idx == 0 {
 			netDevClass, err = cfg.GetDeviceClassFn(engineCfg.Fabric.Interface)
 			if err != nil {
@@ -327,6 +335,19 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 			}
 		}
 	}
+
+	go func() {
+		allStarted.Wait()
+
+		if cfg.TelemetryPort == 0 {
+			return
+		}
+
+		log.Debug("starting Prometheus exporter")
+		if err := startPrometheusExporter(ctx, log, cfg.TelemetryPort, harness.Instances()); err != nil {
+			log.Errorf("failed to start prometheus exporter: %s", err)
+		}
+	}()
 
 	// Create and setup control service.
 	controlService := NewControlService(log, harness, bdevProvider, scmProvider, cfg, eventPubSub)
