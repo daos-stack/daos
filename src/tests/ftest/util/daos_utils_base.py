@@ -148,6 +148,8 @@ class DaosCommandBase(CommandWithSubCommand):
                 self.sub_command_class = self.CreateSubCommand()
             elif self.sub_command.value == "destroy":
                 self.sub_command_class = self.DestroySubCommand()
+            elif self.sub_command.value == "check":
+                self.sub_command_class = self.CheckSubCommand()
             elif self.sub_command.value == "list-objects":
                 self.sub_command_class = self.ListObjectsSubCommand()
             elif self.sub_command.value == "query":
@@ -272,6 +274,15 @@ class DaosCommandBase(CommandWithSubCommand):
                 super(
                     DaosCommandBase.ContainerSubCommand.QuerySubCommand,
                     self).__init__("query")
+
+        class CheckSubCommand(CommonContainerSubCommand):
+            """Defines an object for the daos container check command."""
+
+            def __init__(self):
+                """Create a daos container check command object."""
+                super(
+                    DaosCommandBase.ContainerSubCommand.CheckSubCommand,
+                    self).__init__("check")
 
         class GetAclSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container get-acl command."""

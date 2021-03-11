@@ -7,6 +7,7 @@
 import random
 import time
 from osa_utils import OSAUtils
+from daos_utils import DaosCommand
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
 from apricot import skipForTicket
@@ -24,6 +25,7 @@ class OSAOfflineReintegration(OSAUtils):
         """Set up for test case."""
         super(OSAOfflineReintegration, self).setUp()
         self.dmg_command = self.get_dmg_command()
+        self.daos_command = DaosCommand(self.bin)
         self.ior_test_sequence = self.params.get("ior_test_sequence",
                                                  '/run/ior/iorflags/*')
         self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
@@ -143,11 +145,18 @@ class OSAOfflineReintegration(OSAUtils):
             self.pool = pool[random_pool]
             self.pool.display_pool_daos_space(display_string)
 
+        # Finally check whether the written data can be accessed.
+        # Also, run the daos cont check (for object integrity)
         for val in range(0, num_pool):
             self.pool = pool[val]
             if data:
                 self.run_ior_thread("Read", oclass, test_seq)
                 self.run_mdtest_thread()
+                self.container = self.pool_cont_dict[self.pool]
+                #kwargs = {"pool": self.pool.uuid,
+                #          "cont": self.container.uuid}
+                #output = self.daos_command.container_check(**kwargs)
+                #self.log.info(output)
 
     def test_osa_offline_reintegration_multiple_pools(self):
         """Test ID: DAOS-6923

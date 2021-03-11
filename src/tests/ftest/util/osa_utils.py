@@ -211,7 +211,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.ior_cmd.set_daos_params(self.server_group, self.pool)
         self.ior_cmd.dfs_oclass.update(oclass)
         self.ior_cmd.dfs_dir_oclass.update(oclass)
-        # If pool is not in the dictionary, 
+        # If pool is not in the dictionary,
         # initialize its container as None.
         if self.pool not in self.pool_cont_dict:
             self.pool_cont_dict[self.pool] = None
