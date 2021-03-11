@@ -4805,6 +4805,7 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 			D_GOTO(out_free, rc);
 
 		ds_pool_iv_srv_hdl_invalidate(svc->ps_pool);
+		ds_iv_ns_leader_stop(svc->ps_pool->sp_iv_ns);
 		D_DEBUG(DF_DSMS, DF_UUID": pool destroy/evict: mark pool for "
 			"no new connections\n", DP_UUID(in->pvi_op.pi_uuid));
 	}
