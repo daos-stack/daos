@@ -93,10 +93,9 @@ class RebuildTests(TestWithServers):
             else:
                 self.pool[index].exclude([rank], self.d_log)
 
-        # Wait for recovery to start
+        # Wait for recovery to start on single pool
         if pool_quantity < 2:
-            for index in range(pool_quantity):
-                self.pool[index ].wait_for_rebuild(True)
+            self.pool[0].wait_for_rebuild(True)
 
         # Wait for recovery to complete
         for index in range(pool_quantity):
