@@ -42,11 +42,6 @@ func processConfig(log *logging.LeveledLogger, cfg *config.Server) (*system.Faul
 		return nil, errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 
-	// Temporary notification while the feature is still being polished.
-	if len(cfg.AccessPoints) > 1 {
-		log.Info("\n*******\nNOTICE: Support for multiple access points is an alpha feature and is not well-tested!\n*******\n\n")
-	}
-
 	// Backup active config.
 	cfg.SaveActiveConfig(log)
 

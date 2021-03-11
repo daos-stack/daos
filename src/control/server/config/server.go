@@ -404,7 +404,11 @@ func (cfg *Server) SaveActiveConfig(log logging.Logger) {
 
 // Validate asserts that config meets minimum requirements.
 func (cfg *Server) Validate(log logging.Logger) (err error) {
-	log.Debugf("validating config file read from %q", cfg.Path)
+	msg := "validating config file"
+	if cfg.Path != "" {
+		msg += fmt.Sprintf(" read from %q", cfg.Path)
+	}
+	log.Debug(msg)
 
 	// append the user-friendly message to any error
 	defer func() {
@@ -448,6 +452,9 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		return FaultConfigBadAccessPoints
 	case len(cfg.AccessPoints)%2 == 0:
 		return FaultConfigEvenAccessPoints
+	case len(cfg.AccessPoints) > 1:
+		// temporary notification while the feature is still being polished.
+		log.Info("\n*******\nNOTICE: Support for multiple access points is an alpha feature and is not well-tested!\n*******\n\n")
 	}
 
 	for _, ap := range cfg.AccessPoints {
