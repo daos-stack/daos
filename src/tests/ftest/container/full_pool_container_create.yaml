@@ -5,8 +5,8 @@ hosts:
     - server-A
 server_config:
    name: daos_server
-timeout: 300
+timeout: 150
 pool:
   control_method: dmg
   mode: 511
-  scm_size: 16777216 # 16 mb pool, minimum size currently possible
+  scm_size: 134217728 # 16 mb pool, minimum size currently possible
