@@ -50,7 +50,7 @@ exp_vals:
     total: 32000000000
   rebuild:
     rebuild_status: 0
-    state: 0
+    state: "idle"
     objects: 0
     records: 0
 

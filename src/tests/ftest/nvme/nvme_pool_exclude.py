@@ -64,7 +64,7 @@ class NvmePoolExclude(TestWithServers):
 
         """
         data = self.dmg_command.pool_query(self.pool.uuid)
-        return data["response"]["Rebuild"]["Status"]
+        return data["response"]["rebuild"]["status"]
 
     @fail_on(CommandFailure)
     def get_pool_version(self):
@@ -75,7 +75,7 @@ class NvmePoolExclude(TestWithServers):
 
         """
         data = self.dmg_command.pool_query(self.pool.uuid)
-        return int(data["response"]["Version"])
+        return int(data["response"]["version"])
 
     def ior_thread(self, pool, oclass, api, test, flags, results):
         """This method calls job manager for IOR command

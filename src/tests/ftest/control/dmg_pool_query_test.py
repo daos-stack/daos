@@ -55,18 +55,18 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         """
         self.log.info("==>   Verify dmg output against expected output:")
         dmg_info = self.get_pool_query_info(self.uuid)
-        # We won't be testing Free, Min, Max, and Mean because the values
+        # We won't be testing free, min, max, and mean because the values
         # fluctuate across test runs. In addition, they're related to object
         # placement and testing them wouldn't be straightforward, so we'll need
         # some separate test cases.
-        del dmg_info["response"]["Scm"]["Free"]
-        del dmg_info["response"]["Scm"]["Min"]
-        del dmg_info["response"]["Scm"]["Max"]
-        del dmg_info["response"]["Scm"]["Mean"]
-        del dmg_info["response"]["Nvme"]["Free"]
-        del dmg_info["response"]["Nvme"]["Min"]
-        del dmg_info["response"]["Nvme"]["Max"]
-        del dmg_info["response"]["Nvme"]["Mean"]
+        del dmg_info["response"]["scm"]["free"]
+        del dmg_info["response"]["scm"]["min"]
+        del dmg_info["response"]["scm"]["max"]
+        del dmg_info["response"]["scm"]["mean"]
+        del dmg_info["response"]["nvme"]["free"]
+        del dmg_info["response"]["nvme"]["min"]
+        del dmg_info["response"]["nvme"]["max"]
+        del dmg_info["response"]["nvme"]["mean"]
 
         # Get the expected pool query values from the test yaml.  This should be
         # as simple as:
@@ -74,32 +74,32 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         # but this yields an empty dictionary (the default), so it needs to be
         # defined manually:
         exp_info = {
-            "Status": self.params.get("pool_status", path="/run/exp_vals/*"),
-            "UUID": self.uuid.upper(),
-            "TotalTargets": self.params.get(
+            "status": self.params.get("pool_status", path="/run/exp_vals/*"),
+            "uuid": self.uuid.upper(),
+            "total_targets": self.params.get(
                 "total_targets", path="/run/exp_vals/*"),
-            "ActiveTargets": self.params.get(
+            "active_targets": self.params.get(
                 "active_targets", path="/run/exp_vals/*"),
-            "TotalNodes": self.params.get(
+            "total_nodes": self.params.get(
                 "total_nodes", path="/run/exp_vals/*"),
-            "DisabledTargets": self.params.get(
+            "disabled_targets": self.params.get(
                 "disabled_targets", path="/run/exp_vals/*"),
-            "Version": self.params.get("version", path="/run/exp_vals/*"),
-            "Leader": self.params.get("leader", path="/run/exp_vals/*"),
-            "Scm": {
-                "Total": self.params.get("total", path="/run/exp_vals/scm/*")
+            "version": self.params.get("version", path="/run/exp_vals/*"),
+            "leader": self.params.get("leader", path="/run/exp_vals/*"),
+            "scm": {
+                "total": self.params.get("total", path="/run/exp_vals/scm/*")
             },
-            "Nvme": {
-                "Total": self.params.get("total", path="/run/exp_vals/nvme/*")
+            "nvme": {
+                "total": self.params.get("total", path="/run/exp_vals/nvme/*")
             },
-            "Rebuild": {
-                "Status": self.params.get(
+            "rebuild": {
+                "status": self.params.get(
                     "rebuild_status", path="/run/exp_vals/rebuild/*"),
-                "State": self.params.get(
+                "state": self.params.get(
                     "state", path="/run/exp_vals/rebuild/*"),
-                "Objects": self.params.get(
+                "objects": self.params.get(
                     "objects", path="/run/exp_vals/rebuild/*"),
-                "Records": self.params.get(
+                "records": self.params.get(
                     "records", path="/run/exp_vals/rebuild/*")
             }
         }
@@ -178,9 +178,9 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         self.log.info("==>   Pool info after write: \n%s", out_a)
 
         # The file should have been written into nvme, compare info
-        bytes_orig_val = int(out_b["response"]["Nvme"]["Free"])
-        bytes_curr_val = int(out_a["response"]["Nvme"]["Free"])
+        bytes_orig_val = int(out_b["response"]["nvme"]["free"])
+        bytes_curr_val = int(out_a["response"]["nvme"]["free"])
         if bytes_orig_val <= bytes_curr_val:
             self.fail(
                 "Current NVMe free space should be smaller than {}".format(
-                    out_b["response"]["Nvme"]["Free"]))
+                    out_b["response"]["nvme"]["free"]))
