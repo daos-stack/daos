@@ -15,12 +15,14 @@ import re
 import socket
 import subprocess
 import site
+import sys
 import time
 import yaml
 import errno
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 
+from avocado.utils.distro import detect
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
@@ -196,7 +198,7 @@ def set_test_environment(args):
                 print(
                     "Error obtaining a default interface from: {}".format(
                         os.listdir(net_path)))
-                exit(1)
+                sys.exit(1)
         print("Using {} as the default interface".format(interface))
 
         # Update env definitions
@@ -306,7 +308,7 @@ def get_output(cmd, check=True):
     except RuntimeError as error:
         if check:
             print(error)
-            exit(1)
+            sys.exit(1)
         stdout = str(error)
     return stdout
 
@@ -615,7 +617,7 @@ def get_nvme_replacement(args):
     # A list of server host is required to able to auto-detect NVMe devices
     if not args.test_servers:
         print("ERROR: Missing a test_servers list to auto-detect NVMe devices")
-        exit(1)
+        sys.exit(1)
 
     # Get a list of NVMe devices from each specified server host
     host_list = list(args.test_servers)
@@ -629,13 +631,13 @@ def get_nvme_replacement(args):
     # Verify the command was successful on each server host
     if not check_remote_output(task, command):
         print("ERROR: Issuing commands to detect NVMe PCI addresses.")
-        exit(1)
+        sys.exit(1)
 
     # Verify each server host has the same NVMe PCI addresses
     output_data = list(task.iter_buffers())
     if len(output_data) > 1:
         print("ERROR: Non-homogeneous NVMe PCI addresses.")
-        exit(1)
+        sys.exit(1)
 
     # Get the list of NVMe PCI addresses found in the output
     output_str = "\n".join([line.decode("utf-8") for line in output_data[0][0]])
@@ -972,7 +974,7 @@ def get_yaml_data(yaml_file):
                 yaml_data = yaml.safe_load(file_data.replace("!mux", ""))
             except yaml.YAMLError as error:
                 print("Error reading {}: {}".format(yaml_file, error))
-                exit(1)
+                sys.exit(1)
     return yaml_data
 
 
@@ -1535,8 +1537,12 @@ def install_debuginfos():
         cmds.append(["sudo", "rm", "-f", path])
 
     if USE_DEBUGINFO_INSTALL:
-        yum_args = [
-            "--exclude", "ompi-debuginfo", "libpmemobj", "python", "openmpi3"]
+        distro_info = detect()
+        yum_args = ["--exclude", "ompi-debuginfo", "openmpi3"]
+        if "suse" in distro_info.name.lower():
+            yum_args.extend(["libpmemobj1", "python3"])
+        else:
+            yum_args.extend(["libpmemobj", "python36"])
         cmds.append(["sudo", "dnf", "-y", "install"] + yum_args)
         cmds.append(["sudo", "debuginfo-install", "--enablerepo=*-debuginfo",
                      "-y"] + yum_args + ["daos-server", "gcc"])
@@ -1982,12 +1988,12 @@ def main():
     # Verify at least one test was requested
     if not test_list:
         print("ERROR: No tests or tags found via {}".format(args.tags))
-        exit(1)
+        sys.exit(1)
 
     # Display a list of the tests matching the tags
     print("Detected tests:  \n{}".format("  \n".join(test_list)))
     if args.list:
-        exit(0)
+        sys.exit(0)
 
     # Create a temporary directory
     tmp_dir = TemporaryDirectory()
@@ -1995,7 +2001,7 @@ def main():
     # Create a dictionary of test and their yaml files
     test_files = get_test_files(test_list, args, tmp_dir)
     if args.modify:
-        exit(0)
+        sys.exit(0)
 
     # Setup (clean/create/list) the common test directory
     setup_test_directory(args)
@@ -2045,7 +2051,7 @@ def main():
             print("ERROR: Detected one or more failures in renaming logs and "
                   "results for Jenkins!")
             ret_code = 1
-    exit(ret_code)
+    sys.exit(ret_code)
 
 
 if __name__ == "__main__":
