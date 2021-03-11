@@ -12,7 +12,7 @@ MAINTAINER daos-stack <daos@daos.groups.io>
 ARG CB0
 
 # Install Python Bandit scanner.
-RUN dnf -y upgrade && dny -y install bandit && dnf clean all
+RUN dnf -y upgrade && dnf -y install bandit && dnf clean all
 
 ARG CACHEBUST
 RUN dnf -y upgrade && dnf clean all
