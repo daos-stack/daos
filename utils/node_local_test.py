@@ -1142,13 +1142,13 @@ class posix_tests():
             xattr.set(fd, 'user.dfuse.ids', b'other_value')
             assert False # nosec
         except OSError as e:
-            assert e.errno == errno.EPERM
+            assert e.errno == errno.EPERM # nosec
 
         try:
             xattr.set(fd, 'user.dfuse', b'other_value')
             assert False # nosec
         except OSError as e:
-            assert e.errno == errno.EPERM
+            assert e.errno == errno.EPERM # nosec
 
         xattr.set(fd, 'user.Xfuse.ids', b'other_value')
         for (key, value) in xattr.get_all(fd):
