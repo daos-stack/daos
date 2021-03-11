@@ -7,12 +7,16 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 from command_utils_base import CommandFailure
 from daos_utils import DaosCommand
 from test_utils_container import TestContainer
-from pydaos.raw import str_to_c_uuid, DaosContainer
+from pydaos.raw import str_to_c_uuid, DaosContainer, DaosObj, IORequest
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
 from data_mover_utils import Dcp, Dsync, FsCopy, ContClone
+from data_mover_utils import Dserialize, Ddeserialize
 from os.path import join
 import uuid
+import re
+import ctypes
+from general_utils import create_string_buffer
 
 
 class DataMoverTestBase(IorTestBase, MdtestBase):
@@ -23,6 +27,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # Create test file
         run_ior_with_params("DAOS", "/testFile, pool1, cont1,
                             flags="-w -K")
+
+        # Set dcp as the tool to use
+        self.set_tool("DCP")
 
         # Copy from DAOS to POSIX
         run_datamover(
@@ -40,7 +47,13 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
     PARAM_TYPES = ("POSIX", "DAOS_UUID", "DAOS_UNS")
 
     # The valid datamover tools that can be used
-    TOOLS = ("DCP", "DSYNC", "FS_COPY", "CONT_CLONE")
+    TOOLS = (
+        "DCP",       # mpifileutils dcp
+        "DSYNC",     # mpifileutils dsync
+        "DSERIAL",   # mpifileutils daos-serialize + daos-deserialize
+        "FS_COPY",   # daos filesystem copy
+        "CONT_CLONE" # daos container clone
+    )
 
     def __init__(self, *args, **kwargs):
         """Initialize a DataMoverTestBase object."""
@@ -49,12 +62,16 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.daos_cmd = None
         self.dcp_cmd = None
         self.dsync_cmd = None
+        self.dserialize_cmd = None
+        self.ddeserialize_cmd = None
         self.fs_copy_cmd = None
         self.cont_clone_cmd = None
         self.ior_processes = None
         self.mdtest_processes = None
         self.dcp_processes = None
         self.dsync_processes = None
+        self.dserialize_processes = None
+        self.ddeserialize_processes = None
         self.pool = []
         self.container = []
         self.uuids = []
@@ -93,6 +110,10 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             "np", "/run/dcp/client_processes/*", 1)
         self.dsync_processes = self.params.get(
             "np", "/run/dsync/client_processes/*", 1)
+        self.dserialize_processes = self.params.get(
+            "np", "/run/dserialize/client_processes/*", 1)
+        self.ddeserialize_processes = self.params.get(
+            "np", "/run/ddeserialize/client_processes/*", 1)
 
         tool = self.params.get("tool", "/run/datamover/*")
         if tool:
@@ -229,6 +250,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         if _type in self.PARAM_TYPES:
             return _type
         self.fail("Invalid param_type: {}".format(_type))
+        return None
 
     @staticmethod
     def _uuid_from_obj(obj):
@@ -373,6 +395,175 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             new_uuid = str(uuid.uuid4())
         return new_uuid
 
+    def parse_create_cont_uuid(self, output):
+        """Parse a uuid from some output.
+
+        Format:
+            Successfully created container (.*-.*-.*-.*-.*)
+
+        Args:
+            output (str): The string to parse for the uuid.
+
+        Returns:
+            str: The parsed uuid.
+
+        """
+        uuid_search = re.search(
+            r"Successfully created container (.*-.*-.*-.*-.*)",
+            output)
+        if not uuid_search:
+            self.fail("Failed to parse container uuid")
+        return uuid_search.group(1)
+
+    def dataset_gen(self, cont, num_objs, num_dkeys, num_akeys_single,
+                    num_akeys_array, akey_sizes, akey_extents):
+        """Generate a dataset with some number of objects, dkeys, and akeys,
+           where the akeys have varying sizes.
+           Expects the container to be created with the API control method.
+
+        Args:
+            cont (TestContainer): the container.
+            num_objs (int): number of objects to create in the container.
+            num_dkeys (int): number of dkeys to create per object.
+            num_akeys_single (int): number of DAOS_IOD_SINGLE akeys per dkey.
+            num_akeys_array (int): number of DAOS_IOD_ARRAY akeys per dkey.
+            akey_sizes (list): varying akey sizes to iterate.
+            akey_extents (list): varying number of akey extents to iterate.
+
+        """
+        self.log.info("Creating dataset in %s/%s",
+                      str(cont.pool.uuid), str(cont.uuid))
+
+        cont.open()
+
+        for obj_idx in range(num_objs):
+            # Open the obj
+            obj = DaosObj(cont.pool.context, cont.container)
+            obj.create(rank=obj_idx, objcls=2)
+            obj.open()
+
+            ioreq = IORequest(cont.pool.context, cont.container, obj)
+            for dkey_idx in range(num_dkeys):
+                dkey = "dkey {}".format(dkey_idx)
+                c_dkey = create_string_buffer(dkey)
+
+                for akey_idx in range(num_akeys_single):
+                    # Round-robin to get the size of data and
+                    # arbitrarily use a number 0-9 to fill data
+                    akey_size_idx = akey_idx % len(akey_sizes)
+                    data_size = akey_sizes[akey_size_idx]
+                    data_val = str(akey_idx % 10)
+                    data = data_size * data_val
+                    akey = "akey single {}".format(akey_idx)
+                    c_akey = create_string_buffer(akey)
+                    c_data = create_string_buffer(data)
+                    c_size = ctypes.c_size_t(ctypes.sizeof(c_data))
+                    ioreq.single_insert(c_dkey, c_akey, c_data, c_size)
+
+                for akey_idx in range(num_akeys_array):
+                    # Round-robin to get the size of data and
+                    # the number of extents, and
+                    # arbitrarily use a number 0-9 to fill data
+                    akey_size_idx = akey_idx % len(akey_sizes)
+                    data_size = akey_sizes[akey_size_idx]
+                    akey_extent_idx = akey_idx % len(akey_extents)
+                    num_extents = akey_extents[akey_extent_idx]
+                    akey = "akey array {}".format(akey_idx)
+                    c_akey = create_string_buffer(akey)
+                    c_data = []
+                    for data_idx in range(num_extents):
+                        data_val = str(data_idx % 10)
+                        data = data_size * data_val
+                        c_data.append([
+                            create_string_buffer(data), data_size])
+                    ioreq.insert_array(c_dkey, c_akey, c_data)
+
+            obj.close()
+        cont.close()
+
+    def dataset_verify(self, cont, num_objs, num_dkeys, num_akeys_single,
+                        num_akeys_array, akey_sizes, akey_extents):
+        """Verify a dataset generated with dataset_gen.
+
+        Args:
+            cont (TestContainer): the container.
+            num_objs (int): number of objects created in the container.
+            num_dkeys (int): number of dkeys created per object.
+            num_akeys_single (int): number of DAOS_IOD_SINGLE akeys per dkey.
+            num_akeys_array (int): number of DAOS_IOD_ARRAY akeys per dkey.
+            akey_sizes (list): varying akey sizes to iterate.
+            akey_extents (list): varying number of akey extents to iterate.
+
+        """
+        self.log.info("Verifying dataset in %s/%s",
+                      str(cont.pool.uuid), str(cont.uuid))
+
+        cont.open()
+
+        for obj_idx in range(num_objs):
+            # Open the obj
+            obj = DaosObj(cont.pool.context, cont.container)
+            obj.create(rank=obj_idx, objcls=2)
+            obj.open()
+
+            ioreq = IORequest(cont.pool.context, cont.container, obj)
+            for dkey_idx in range(num_dkeys):
+                dkey = "dkey {}".format(dkey_idx)
+                c_dkey = create_string_buffer(dkey)
+
+                for akey_idx in range(num_akeys_single):
+                    # Round-robin to get the size of data and
+                    # arbitrarily use a number 0-9 to fill data
+                    akey_size_idx = akey_idx % len(akey_sizes)
+                    data_size = akey_sizes[akey_size_idx]
+                    data_val = str(akey_idx % 10)
+                    data = data_size * data_val
+                    akey = "akey single {}".format(akey_idx)
+                    c_akey = create_string_buffer(akey)
+                    c_data = ioreq.single_fetch(c_dkey, c_akey,
+                                                data_size + 1)
+                    actual_data = str(c_data.value.decode())
+                    if actual_data != data:
+                        self.log.info("Expected:\n%s\nBut got:\n%s",
+                            data[:100] + "...",
+                            actual_data[:100] + "...")
+                        self.log.info(
+                            "For:\nobj: %s.%s\ndkey: %s\nakey: %s",
+                            str(obj.c_oid.hi), str(obj.c_oid.lo),
+                            dkey, akey)
+                        self.fail("Single value verification failed.")
+
+                for akey_idx in range(num_akeys_array):
+                    # Round-robin to get the size of data and
+                    # the number of extents, and
+                    # arbitrarily use a number 0-9 to fill data
+                    akey_size_idx = akey_idx % len(akey_sizes)
+                    data_size = akey_sizes[akey_size_idx]
+                    akey_extent_idx = akey_idx % len(akey_extents)
+                    num_extents = akey_extents[akey_extent_idx]
+                    akey = "akey array {}".format(akey_idx)
+                    c_akey = create_string_buffer(akey)
+                    c_num_extents = ctypes.c_uint(num_extents)
+                    c_data_size = ctypes.c_size_t(data_size)
+                    actual_data = ioreq.fetch_array(c_dkey, c_akey,
+                        c_num_extents, c_data_size)
+                    for data_idx in range(num_extents):
+                        data_val = str(data_idx % 10)
+                        data = data_size * data_val
+                        actual_idx = str(actual_data[data_idx].decode())
+                        if data != actual_idx:
+                            self.log.info("Expected:\n%s\nBut got:\n%s",
+                                data[:100] + "...",
+                                actual_idx + "...")
+                            self.log.info(
+                                "For:\nobj: %s.%s\ndkey: %s\nakey: %s",
+                                    str(obj.c_oid.hi), str(obj.c_oid.lo),
+                                    dkey, akey)
+                            self.fail("Array verification failed.")
+
+            obj.close()
+        cont.close()
+
     def set_datamover_params(self,
                              src_type=None, src_path=None,
                              src_pool=None, src_cont=None,
@@ -401,29 +592,36 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         """
         if self.tool == "DCP":
-            self.set_dcp_params(src_type, src_path, src_pool, src_cont,
-                                dst_type, dst_path, dst_pool, dst_cont)
+            self._set_dcp_params(src_type, src_path, src_pool, src_cont,
+                                 dst_type, dst_path, dst_pool, dst_cont)
         elif self.tool == "DSYNC":
-            self.set_dsync_params(src_type, src_path, src_pool, src_cont,
-                                  dst_type, dst_path, dst_pool, dst_cont)
+            self._set_dsync_params(src_type, src_path, src_pool, src_cont,
+                                   dst_type, dst_path, dst_pool, dst_cont)
+        elif self.tool == "DSERIAL":
+            assert src_type in (None, "DAOS", "DAOS_UUID")
+            assert src_path is None
+            assert dst_type in (None, "DAOS", "DAOS_UUID")
+            assert dst_path is None
+            assert dst_cont is None
+            self._set_dserial_params(src_pool, src_cont, dst_pool)
         elif self.tool == "FS_COPY":
-            self.set_fs_copy_params(src_type, src_path, src_pool, src_cont,
-                                    dst_type, dst_path, dst_pool, dst_cont)
+            self._set_fs_copy_params(src_type, src_path, src_pool, src_cont,
+                                     dst_type, dst_path, dst_pool, dst_cont)
         elif self.tool == "CONT_CLONE":
             assert src_type in (None, "DAOS", "DAOS_UUID")
             assert src_path is None
             assert dst_type in (None, "DAOS", "DAOS_UUID")
             assert dst_path is None
-            self.set_cont_clone_params(src_pool, src_cont,
-                                       dst_pool, dst_cont)
+            self._set_cont_clone_params(src_pool, src_cont,
+                                        dst_pool, dst_cont)
         else:
             self.fail("Invalid tool: {}".format(str(self.tool)))
 
-    def set_dcp_params(self,
-                       src_type=None, src_path=None,
-                       src_pool=None, src_cont=None,
-                       dst_type=None, dst_path=None,
-                       dst_pool=None, dst_cont=None):
+    def _set_dcp_params(self,
+                        src_type=None, src_path=None,
+                        src_pool=None, src_cont=None,
+                        dst_type=None, dst_path=None,
+                        dst_pool=None, dst_cont=None):
         """Set the params for dcp.
         This is a wrapper for DcpCommand.set_dcp_params.
 
@@ -505,11 +703,11 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                         prefix=dst_cont.path.value,
                         dst_path=dst_cont.path.value + dst_path)
 
-    def set_dsync_params(self,
-                         src_type=None, src_path=None,
-                         src_pool=None, src_cont=None,
-                         dst_type=None, dst_path=None,
-                         dst_pool=None, dst_cont=None):
+    def _set_dsync_params(self,
+                          src_type=None, src_path=None,
+                          src_pool=None, src_cont=None,
+                          dst_type=None, dst_path=None,
+                          dst_pool=None, dst_cont=None):
         """Set the params for dsync.
         This is a wrapper for DsyncCommand.set_dsync_params.
 
@@ -575,11 +773,11 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                         prefix=dst_cont.path.value,
                         dst=dst_cont.path.value + dst_path)
 
-    def set_fs_copy_params(self,
-                           src_type=None, src_path=None,
-                           src_pool=None, src_cont=None,
-                           dst_type=None, dst_path=None,
-                           dst_pool=None, dst_cont=None):
+    def _set_fs_copy_params(self,
+                            src_type=None, src_path=None,
+                            src_pool=None, src_cont=None,
+                            dst_type=None, dst_path=None,
+                            dst_pool=None, dst_cont=None):
         """Set the params for fs copy.
 
         daos fs copy does not support a "prefix" on UNS paths,
@@ -653,9 +851,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             self.fs_copy_cmd.set_fs_copy_params(
                 dst=path)
 
-    def set_cont_clone_params(self,
-                              src_pool=None, src_cont=None,
-                              dst_pool=None, dst_cont=None):
+    def _set_cont_clone_params(self,
+                               src_pool=None, src_cont=None,
+                               dst_pool=None, dst_cont=None):
         """Set the params for daos cont clone.
 
         This only supports DAOS -> DAOS copies.
@@ -685,6 +883,44 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             param = self._format_daos_path(dst_pool, dst_cont, None)
             self.cont_clone_cmd.set_cont_clone_params(
                 dst = param)
+
+    def _set_dserial_params(self,
+                            src_pool=None, src_cont=None,
+                            dst_pool=None):
+        """Set the params for daos-serialize and daos-deserialize.
+
+        This uses a temporary POSIX path as the intermediate step
+        between serializing and deserializing.
+
+        Args:
+            Args:
+            src_pool (TestPool, optional): the source pool.
+                Alternatively, this can be the pool uuid.
+            src_cont (TestContainer, optional): the source container.
+                Alternatively, this can be the container uuid.
+            dst_pool (TestPool, optional): the destination pool.
+                Alternatively, this can be the pool uuid.
+
+        """
+        # First initialize new commands
+        self.dserialize_cmd = Dserialize(self.hostlist_clients)
+        self.ddeserialize_cmd = Ddeserialize(self.hostlist_clients)
+
+        # Get an intermediate path for HDF5 file(s)
+        tmp_path = self.new_posix_test_path(create=False)
+
+        # Set the source params for dserialize
+        if src_pool or src_cont:
+            param = self._format_daos_path(src_pool, src_cont, None)
+            self.dserialize_cmd.set_dserialize_params(
+                src_path=param, out_path=tmp_path)
+
+        # Set the destination params for ddeserialize
+        if dst_pool:
+            param = self._uuid_from_obj(dst_pool)
+            self.ddeserialize_cmd.set_ddeserialize_params(
+                src_path=tmp_path, pool=param)
+
 
     def set_ior_params(self, param_type, path, pool=None, cont=None,
                        path_suffix=None, flags=None, display=True):
@@ -906,6 +1142,12 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 # If we expect an rc other than 0, don't fail
                 self.dcp_cmd.exit_status_exception = (expected_rc == 0)
                 result = self.dsync_cmd.run(self.workdir, processes)
+            elif self.tool== "DSERIAL":
+                if not processes:
+                    processes1 = self.dserialize_processes
+                    processes2 = self.ddeserialize_processes
+                result = self.dserialize_cmd.run(self.workdir, processes1)
+                result = self.ddeserialize_cmd.run(self.workdir, processes2)
             elif self.tool == "FS_COPY":
                 result = self.fs_copy_cmd.run()
             elif self.tool == "CONT_CLONE":
