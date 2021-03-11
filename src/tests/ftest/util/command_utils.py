@@ -48,6 +48,7 @@ class ExecutableCommand(CommandWithParameters):
         self.run_as_subprocess = subprocess
         self.timeout = None
         self.exit_status_exception = True
+        self.output_check = "both"
         self.verbose = True
         self.env = None
         self.sudo = False
@@ -117,7 +118,7 @@ class ExecutableCommand(CommandWithParameters):
             # Block until the command is complete or times out
             return run_command(
                 command, self.timeout, self.verbose, self.exit_status_exception,
-                "combined", env=self.env)
+                self.output_check, env=self.env)
 
         except DaosTestError as error:
             # Command failed or possibly timed out
@@ -178,9 +179,12 @@ class ExecutableCommand(CommandWithParameters):
 
         """
         if self._process is not None:
-            # Send a SIGTERM to the stop the subprocess and if it is still
-            # running after 5 seconds send a SIGKILL and report an error
-            signal_list = [signal.SIGTERM, signal.SIGKILL]
+            # Send a SIGTERM to stop the subprocess and if it is still
+            # running after 5 seconds give it another try. If that doesn't
+            # stop the process send a SIGKILL and report an error.
+            # Sending 2 SIGTERM signals is a known issue based on
+            # DAOS-6850.
+            signal_list = [signal.SIGTERM, signal.SIGTERM, signal.SIGKILL]
 
             # Turn off verbosity to keep the logs clean as the server stops
             self._process.verbose = False
@@ -724,8 +728,8 @@ class YamlCommand(SubProcessCommand):
 
         """
         if isinstance(self.yaml, YamlParameters):
-            self.yaml.create_yaml(self.temporary_file)
-            self.copy_configuration(self.temporary_file_hosts)
+            if self.yaml.create_yaml(self.temporary_file):
+                self.copy_configuration(self.temporary_file_hosts)
 
     def set_config_value(self, name, value):
         """Set the yaml configuration parameter value.

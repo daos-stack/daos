@@ -1,22 +1,6 @@
 {
    <insert_a_suppression_name_here>
    Memcheck:Leak
-   match-leak-kinds:possible
-   fun:calloc
-   fun:lrua_array_alloc_one
-   fun:lrua_array_alloc
-   fun:vos_ts_table_alloc
-   fun:alloc_ts_cache
-   fun:ts_test_init
-   obj:/usr/lib64/libcmocka.so.*
-   fun:_cmocka_run_group_tests
-   fun:run_ts_tests
-   ...
-   fun:main
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
    ...
    fun:vea_reserve
    ...
@@ -155,20 +139,6 @@
 {
    <insert_a_suppression_name_here>
    Memcheck:Leak
-   match-leak-kinds:possible
-   fun:calloc
-   fun:vos_ts_table_alloc
-   fun:alloc_ts_cache
-   fun:ts_test_init
-   obj:/usr/lib64/libcmocka.so.*
-   fun:_cmocka_run_group_tests
-   fun:run_ts_tests
-   ...
-   fun:main
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
    match-leak-kinds:reachable
    fun:malloc
    fun:xmalloc
@@ -192,19 +162,6 @@
    fun:malloc
    fun:xmalloc
    fun:set_default_locale
-   fun:main
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   match-leak-kinds:definite
-   fun:calloc
-   fun:gc_cont_run
-   fun:gc_cont_test
-   obj:/usr/lib64/libcmocka.so.*
-   fun:_cmocka_run_group_tests
-   fun:run_gc_tests
-   ...
    fun:main
 }
 {
@@ -333,18 +290,6 @@
    Memcheck:Leak
    match-leak-kinds:definite
    fun:calloc
-   fun:pool_file_setup
-   obj:/usr/lib64/libcmocka.so.*
-   fun:_cmocka_run_group_tests
-   fun:run_pool_test
-   ...
-   fun:main
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   match-leak-kinds:definite
-   fun:calloc
    fun:generate_view
    fun:aggregate_basic
    fun:aggregate_21
@@ -382,21 +327,6 @@
    ...
    obj:/usr/lib64/libmlx4.so.*
    ...
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   match-leak-kinds:possible
-   fun:calloc
-   fun:lrua_array_alloc
-   fun:vos_ts_table_alloc
-   fun:alloc_ts_cache
-   fun:ts_test_init
-   obj:/usr/lib64/libcmocka.so.*
-   fun:_cmocka_run_group_tests
-   fun:run_ts_tests
-   ...
-   fun:main
 }
 {
    <insert_a_suppression_name_here>

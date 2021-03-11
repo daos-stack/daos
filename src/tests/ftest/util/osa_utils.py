@@ -6,6 +6,7 @@
 """
 import ctypes
 import time
+import threading
 
 from avocado import fail_on
 from ior_test_base import IorTestBase
@@ -15,6 +16,14 @@ from job_manager_utils import Mpirun
 from mpio_utils import MpioUtils
 from pydaos.raw import (DaosContainer, IORequest,
                         DaosObj, DaosApiError)
+
+try:
+    # python 3.x
+    import queue as test_queue
+except ImportError:
+    # python 2.7
+    import Queue as test_queue
+
 
 class OSAUtils(IorTestBase):
     # pylint: disable=too-many-ancestors
@@ -37,6 +46,11 @@ class OSAUtils(IorTestBase):
                                            default=[0])[0]
         self.record_length = self.params.get("length", '/run/record/*',
                                              default=[0])[0]
+        self.ior_w_flags = self.params.get("write_flags", '/run/ior/iorflags/*',
+                                           default="")
+        self.ior_r_flags = self.params.get("read_flags", '/run/ior/iorflags/*')
+        self.out_queue = test_queue.Queue()
+        self.dmg_command.exit_status_exception = False
 
     @fail_on(CommandFailure)
     def get_pool_leader(self):
@@ -162,6 +176,36 @@ class OSAUtils(IorTestBase):
                                       "akey {0}".format(akey)))
         self.obj.close()
         self.container.close()
+
+    def run_ior_thread(self, action, oclass, api, test):
+        """Start the IOR thread for either writing or
+        reading data to/from a container.
+        Args:
+            action (str): Start the IOR thread with Read or
+                          Write
+            oclass (str): IOR object class
+            api (str): IOR API
+            test (list): IOR test sequence
+            flags (str): IOR flags
+        """
+        if action == "Write":
+            flags = self.ior_w_flags
+        else:
+            flags = self.ior_r_flags
+
+        # Add a thread for these IOR arguments
+        process = threading.Thread(target=self.ior_thread,
+                                   kwargs={"pool": self.pool,
+                                           "oclass": oclass,
+                                           "api": api,
+                                           "test": test,
+                                           "flags": flags,
+                                           "results":
+                                           self.out_queue})
+        # Launch the IOR thread
+        process.start()
+        # Wait for the thread to finish
+        process.join()
 
     def ior_thread(self, pool, oclass, api, test, flags, results):
         """Start threads and wait until all threads are finished.
