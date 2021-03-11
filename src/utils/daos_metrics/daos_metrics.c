@@ -32,9 +32,6 @@ print_usage(const char *prog_name)
 	       "\tDefault is 1 second\n"
 	       "--csv, -C\n"
 	       "\tDisplay data in CSV format\n"
-	       "--tstamp, -T\n"
-	       "\tPrint timestamp when metric was read\n"
-	       "\tDefault is no timestamp\n"
 	       "--meta, -M\n"
 	       "\tDisplay associated metric metadata\n"
 	       "--help, -h\n"
@@ -62,7 +59,7 @@ main(int argc, char **argv)
 	struct d_tm_node_t	*node = NULL;
 	uint64_t		*shmem_root = NULL;
 	char			dirname[D_TM_MAX_NAME_LEN] = {0};
-	bool			show_timestamp = false;
+	bool			show_timestamp = true;
 	bool			show_meta = false;
 	int			srv_idx = 0;
 	int			iteration = 0;
@@ -81,7 +78,6 @@ main(int argc, char **argv)
 			{"srv_idx", required_argument, NULL, 'S'},
 			{"counter", no_argument, NULL, 'c'},
 			{"csv", no_argument, NULL, 'C'},
-			{"tstamp", no_argument, NULL, 'T'},
 			{"duration", no_argument, NULL, 'd'},
 			{"timestamp", no_argument, NULL, 't'},
 			{"snapshot", no_argument, NULL, 's'},
@@ -130,9 +126,6 @@ main(int argc, char **argv)
 		case 'M':
 			show_meta = true;
 			break;
-		case 'T':
-			show_timestamp = true;
-			break;
 		case 'D':
 			delay = atoi(optarg);
 			break;
@@ -166,7 +159,7 @@ main(int argc, char **argv)
 		}
 	}
 
-	if (format & D_TM_CSV)
+	if (format == D_TM_CSV)
 		filter &= ~D_TM_DIRECTORY;
 	else
 		filter |= D_TM_DIRECTORY;

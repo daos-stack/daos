@@ -398,7 +398,7 @@ d_tm_print_counter(uint64_t val, char *name, int format, FILE *stream)
 		return;
 
 	if (format == D_TM_CSV)
-		fprintf(stream, "/%s,counter,%lu", name, val);
+		fprintf(stream, "%s,counter,%lu", name, val);
 	else
 		fprintf(stream, "counter: %s = %" PRIu64, name, val);
 }
@@ -436,7 +436,7 @@ d_tm_print_timestamp(time_t *clk, char *name, int format, FILE *stream)
 	temp[D_TM_TIME_BUFF_LEN - 2] = 0;
 
 	if (format == D_TM_CSV)
-		fprintf(stream, "/%s,timestamp,%s", name, temp);
+		fprintf(stream, "%s,timestamp,%s", name, temp);
 	else
 		fprintf(stream, "timestamp: %s: %s", name, temp);
 }
@@ -466,21 +466,21 @@ d_tm_print_timer_snapshot(struct timespec *tms, char *name, int tm_type,
 	switch (tm_type) {
 	case D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_REALTIME:
 		if (format == D_TM_CSV)
-			fprintf(stream, "/%s,snapshot realtime,%lu", name, us);
+			fprintf(stream, "%s,snapshot realtime,%lu", name, us);
 		else
 			fprintf(stream, "snapshot realtime: %s = %lu us",
 				name, us);
 		break;
 	case D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_PROCESS_CPUTIME:
 		if (format == D_TM_CSV)
-			fprintf(stream, "/%s,snapshot process,%lu", name, us);
+			fprintf(stream, "%s,snapshot process,%lu", name, us);
 		else
 			fprintf(stream, "snapshot process: %s = %lu us",
 				name, us);
 		break;
 	case D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_THREAD_CPUTIME:
 		if (format == D_TM_CSV)
-			fprintf(stream, "/%s,snapshot thread,%lu", name, us);
+			fprintf(stream, "%s,snapshot thread,%lu", name, us);
 		else
 			fprintf(stream, "snapshot thread: %s = %lu us",
 				name, us);
@@ -521,21 +521,21 @@ d_tm_print_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 	switch (tm_type) {
 	case D_TM_DURATION | D_TM_CLOCK_REALTIME:
 		if (format == D_TM_CSV)
-			fprintf(stream, "/%s,duration realtime,%lu", name, us);
+			fprintf(stream, "%s,duration realtime,%lu", name, us);
 		else
 			fprintf(stream, "duration realtime: %s = %lu us",
 				name, us);
 		break;
 	case D_TM_DURATION | D_TM_CLOCK_PROCESS_CPUTIME:
 		if (format == D_TM_CSV)
-			fprintf(stream, "/%s,duration process,%lu", name, us);
+			fprintf(stream, "%s,duration process,%lu", name, us);
 		else
 			fprintf(stream, "duration process: %s = %lu us",
 				name, us);
 		break;
 	case D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME:
 		if (format == D_TM_CSV)
-			fprintf(stream, "/%s,duration thread,%lu", name, us);
+			fprintf(stream, "%s,duration thread,%lu", name, us);
 		else
 			fprintf(stream, "duration thread: %s = %lu us",
 				name, us);
@@ -570,7 +570,7 @@ d_tm_print_gauge(uint64_t val, struct d_tm_stats_t *stats, char *name,
 		return;
 
 	if (format == D_TM_CSV)
-		fprintf(stream, "/%s,gauge,%lu", name, val);
+		fprintf(stream, "%s,gauge,%lu", name, val);
 	else
 		fprintf(stream, "gauge: %s = %lu", name, val);
 
@@ -658,13 +658,10 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 	}
 
 	if (format == D_TM_CSV) {
-		if (path == NULL)
-			return;
-		if (show_timestamp) {
-			fprintf(stream, "%s,%s", timestamp, path);
-		} else {
-			fprintf(stream, "%s", path);
-		}
+		if (show_timestamp)
+			fprintf(stream, "%s,", timestamp);
+		if (path != NULL)
+			fprintf(stream, "%s/", path);
 	} else {
 		for (i = 0; i < level; i++)
 			fprintf(stream, "%20s", " ");
@@ -834,10 +831,15 @@ d_tm_print_my_children(uint64_t *shmem_root, struct d_tm_node_t *node,
 			break;
 
 		if ((path == NULL) ||
-		    (strncmp(path, "/", D_TM_MAX_NAME_LEN) == 0))
-			D_ASPRINTF(fullpath, "/%s", node_name);
-		else
-			D_ASPRINTF(fullpath, "%s/%s", path, node_name);
+		    (strncmp(path, "/", D_TM_MAX_NAME_LEN) == 0)) {
+			if (node->dtn_type & D_TM_DIRECTORY)
+				D_ASPRINTF(fullpath, "%s", node_name);
+		} else {
+			if (node->dtn_type & D_TM_DIRECTORY)
+				D_ASPRINTF(fullpath, "%s/%s", path, node_name);
+			else
+				D_ASPRINTF(fullpath, "%s", path);
+		}
 
 		d_tm_print_my_children(shmem_root, node, level + 1, filter,
 				       fullpath, format, show_meta,
