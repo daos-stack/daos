@@ -1394,7 +1394,7 @@ def resolve_debuginfo(pkg):
         dict: dictionary of debug package information
 
     """
-    # pylint: disable=import-error,import-outside-toplevel
+    # pylint: disable=import-error,import-outside-toplevel,unused-import
     try:
         import dnf
         return resolve_debuginfo_dnf(pkg)
@@ -1537,7 +1537,7 @@ def install_debuginfos():
     if USE_DEBUGINFO_INSTALL:
         yum_args = [
             "--exclude", "ompi-debuginfo", "libpmemobj", "python", "openmpi3"]
-        cmds.append(["sudo", "yum", "-y", "install"] + yum_args)
+        cmds.append(["sudo", "dnf", "-y", "install"] + yum_args)
         cmds.append(["sudo", "debuginfo-install", "--enablerepo=*-debuginfo",
                      "-y"] + yum_args + ["daos-server", "gcc"])
     else:
@@ -1560,7 +1560,7 @@ def install_debuginfos():
     # yum_base.processTransaction(rpmDisplay=yum.rpmtrans.NoOutputCallBack())
 
     # Now install a few pkgs that debuginfo-install wouldn't
-    cmd = ["sudo", "yum", "-y", "--enablerepo=*debug*", "install"]
+    cmd = ["sudo", "dnf", "-y", "--enablerepo=*debug*", "install"]
     for pkg in install_pkgs:
         try:
             cmd.append(
@@ -1582,7 +1582,7 @@ def install_debuginfos():
             break
     if retry:
         print("Going to refresh caches and try again")
-        cmd_prefix = ["sudo", "yum", "--enablerepo=*debug*"]
+        cmd_prefix = ["sudo", "dnf", "--enablerepo=*debug*"]
         cmds.insert(0, cmd_prefix + ["clean", "all"])
         cmds.insert(1, cmd_prefix + ["makecache"])
         for cmd in cmds:

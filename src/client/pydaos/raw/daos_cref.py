@@ -182,6 +182,7 @@ class Anchor(ctypes.Structure):
                 ('da_buff', ctypes.c_uint8*128)]
 
 class CallbackEvent():
+    """ Class to represent a call back event. """
     def __init__(self, obj, event):
         self.obj = obj
         self.event = event

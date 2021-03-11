@@ -7,7 +7,7 @@
 import traceback
 import threading
 import random
-from apricot import TestWithServers
+from apricot import TestWithServers, skipForTicket
 
 from general_utils import get_random_bytes
 from pydaos.raw import DaosApiError
@@ -33,14 +33,6 @@ class PoolAttributeTest(TestWithServers):
 
     :avocado: recursive
     """
-
-    CANCEL_FOR_TICKET = [
-        [
-            "DAOS-6971",
-            "test_method_name", "test_pool_attributes",
-            "test_method_name", "test_pool_attribute_asyn"
-        ],
-    ]
 
     @staticmethod
     def create_data_set():
@@ -107,6 +99,7 @@ class PoolAttributeTest(TestWithServers):
                     "FAIL: Value does not match after get attr, Expected "
                     "val={} and received val={}".format(value, outdata[attr]))
 
+    @skipForTicket("DAOS-6971")
     def test_pool_large_attributes(self):
         """Test pool attributes with large data set.
 
@@ -133,6 +126,7 @@ class PoolAttributeTest(TestWithServers):
             print(traceback.format_exc())
             self.fail("Test was expected to pass but it failed.\n")
 
+    @skipForTicket("DAOS-6971")
     def test_pool_attributes(self):
         """Test pool attributes.
 

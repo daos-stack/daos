@@ -26,7 +26,7 @@ class HarnessTimeoutTest(Test):
         sleep(59)
 
     def test_timeout(self):
-        """Test to verify time alloted for tearDown after test timeout.
+        """Test to verify time allotted for tearDown after test timeout.
 
         This test will send a signal 6 to a random daos_engine process so
         that it will create a core file, allowing the core file collection code
@@ -49,7 +49,7 @@ class HarnessTimeoutTest(Test):
         self.fail("Test did not timeout!")
 
     def test_timeout_hw(self):
-        """Test to verify time alloted for tearDown after test timeout.
+        """Test to verify time allotted for tearDown after test timeout.
 
         This test will send a signal 6 to a random daos_engine process so
         that it will create a core file, allowing the core file collection code
