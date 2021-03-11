@@ -66,7 +66,7 @@ void
 test_run(void)
 {
 	crt_group_t		*grp = NULL;
-	d_rank_list_t		*rank_list = NULL;
+	d_rank_list_t		*rank_list;
 	d_rank_t		 rank;
 	int			 tag;
 	crt_endpoint_t		 server_ep = {0};
