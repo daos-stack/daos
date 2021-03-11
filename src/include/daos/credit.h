@@ -66,6 +66,9 @@ struct dts_context {
 	int			 tsc_cred_nr;
 	/** value size for \a tsc_credits */
 	int			 tsc_cred_vsize;
+	/** if pool/cont already created then can skip internal creation */
+	bool			 tsc_skip_pool_create;
+	bool			 tsc_skip_cont_create;
 	/** INPUT END */
 
 	/** OUTPUT: initialized within \a dts_ctx_init() */

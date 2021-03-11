@@ -7,7 +7,7 @@
 #ifndef __DAOS_OBJ_CTL_H__
 #define __DAOS_OBJ_CTL_H__
 
-#include "daos_hdlr.h"
+#include <daos/daos_hdlr.h>
 
 /**
  * Interactive function testing shell for DAOS

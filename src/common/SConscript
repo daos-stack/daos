@@ -87,6 +87,11 @@ def scons():
     dc_credit = denv.SharedObject(['credit.c'])
     Export('dc_credit')
 
+    cmd_parser = denv.SharedObject(['cmd_parser.c'])
+    Export('cmd_parser')
+    obj_ctl = denv.SharedObject(['credit.c', 'daos_obj_ctl.c', 'cmd_parser.c'])
+    Export('obj_ctl')
+
     prereqs.require(tlib_env, 'argobots')
 
     tests_lib_src = ['tests_lib.c', 'tests_dmg_helpers.c']

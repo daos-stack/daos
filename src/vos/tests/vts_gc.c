@@ -152,7 +152,7 @@ gc_obj_prepare(struct gc_test_args *args, daos_handle_t coh,
 	int			 k;
 	int			 rc = 0;
 
-	cred = dts_credit_take(&args->gc_ctx);
+	cred = vts_dts_credit_take(&args->gc_ctx);
 	D_ASSERT(cred);
 	iod = &cred->tc_iod;
 
@@ -182,7 +182,7 @@ gc_obj_prepare(struct gc_test_args *args, daos_handle_t coh,
 		}
 	}
 out:
-	dts_credit_return(&args->gc_ctx, cred);
+	vts_dts_credit_return(&args->gc_ctx, cred);
 	return 0;
 }
 
@@ -251,7 +251,7 @@ gc_key_run(struct gc_test_args *args)
 	for (i = 0; i < CREDS_MAX; i++) {
 		daos_iod_t *iod;
 
-		cred = creds[i] = dts_credit_take(&args->gc_ctx);
+		cred = creds[i] = vts_dts_credit_take(&args->gc_ctx);
 		D_ASSERT(cred);
 
 		iod = &cred->tc_iod;
@@ -286,7 +286,7 @@ gc_key_run(struct gc_test_args *args)
 out:
 	for (i = 0; i < CREDS_MAX; i++) {
 		if (creds[i])
-			dts_credit_return(&args->gc_ctx, creds[i]);
+			vts_dts_credit_return(&args->gc_ctx, creds[i]);
 	}
 	return rc;
 }

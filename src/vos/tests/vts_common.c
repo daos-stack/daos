@@ -187,7 +187,7 @@ enum {
 
 /** try to obtain a free credit */
 struct dts_io_credit *
-dts_credit_take(struct dts_context *tsc)
+vts_dts_credit_take(struct dts_context *tsc)
 {
 	int	i;
 
@@ -204,7 +204,7 @@ dts_credit_take(struct dts_context *tsc)
 }
 
 void
-dts_credit_return(struct dts_context *tsc, struct dts_io_credit *cred)
+vts_dts_credit_return(struct dts_context *tsc, struct dts_io_credit *cred)
 {
 	int	i;
 
@@ -221,7 +221,7 @@ dts_credit_return(struct dts_context *tsc, struct dts_io_credit *cred)
 }
 
 static int
-credits_init(struct dts_context *tsc)
+vts_credits_init(struct dts_context *tsc)
 {
 	int	i;
 
@@ -243,7 +243,7 @@ credits_init(struct dts_context *tsc)
 }
 
 static void
-credits_fini(struct dts_context *tsc)
+vts_credits_fini(struct dts_context *tsc)
 {
 	int	i;
 
@@ -358,7 +358,7 @@ dts_ctx_init(struct dts_context *tsc)
 	tsc->tsc_init = DTS_INIT_CONT;
 
 	/* initialize I/O credits, which include EQ, event, I/O buffers... */
-	rc = credits_init(tsc);
+	rc = vts_credits_init(tsc);
 	if (rc)
 		goto out;
 	tsc->tsc_init = DTS_INIT_CREDITS;
@@ -377,7 +377,7 @@ dts_ctx_fini(struct dts_context *tsc)
 {
 	switch (tsc->tsc_init) {
 	case DTS_INIT_CREDITS:	/* finalize credits */
-		credits_fini(tsc);
+		vts_credits_fini(tsc);
 		/* fall through */
 	case DTS_INIT_CONT:	/* close and destroy container */
 		cont_fini(tsc);
