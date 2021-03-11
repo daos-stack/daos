@@ -408,6 +408,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %changelog
 * Wed Mar 10 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.3.0-3
 - Update libfabric to v1.12.0
+- Disable grdcopy/gdrapi linkage in libfabric
 
 * Thu Feb 25 2021 Li Wei <wei.g.li@intel.com> 1.3.0-2
 - Require raft-devel 0.7.3 that fixes an unstable leadership problem caused by
