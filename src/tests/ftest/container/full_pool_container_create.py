@@ -40,8 +40,8 @@ class FullPoolContainerCreate(TestWithServers):
             self.log.info("created container 1")
         except DaosApiError as excep:
             self.log.error("caught exception creating container: "
-                           "{0}".format(excep))
-            self.fail("caught exception creating container: {0}".format(excep))
+                           "%s", excep)
+            self.fail("caught exception creating container: %s", excep)
 
         self.log.info("opening container 1")
         cont.open()
@@ -51,7 +51,7 @@ class FullPoolContainerCreate(TestWithServers):
         for obj_sz in [1048576, 10240, 10, 1]:
             write_count = 0
             while True:
-                self.d_log.debug("writing obj {0}, sz {1} to "
+                self.d_log.debug("writing obj {0} sz {1} to "
                                  "container".format(write_count, obj_sz))
                 my_str = "a" * obj_sz
                 my_str_sz = obj_sz
@@ -66,13 +66,13 @@ class FullPoolContainerCreate(TestWithServers):
                 except DaosApiError as excep:
                     if not (err in repr(excep) or err2 in repr(excep)):
                         self.log.error("caught exception while writing "
-                                       "object: {0}".format(repr(excep)))
+                                       "object: %s", repr(excep))
                         cont.close()
-                        self.fail("caught exception while writing object: {0}"
-                                  .format(repr(excep)))
+                        self.fail("caught exception while writing object: %s",
+                                  repr(excep))
                     else:
-                        self.log.info("pool is too full for {0} byte "
-                                      "objects".format(obj_sz))
+                        self.log.info("pool is too full for %s byte "
+                                      "objects", obj_sz)
                         break
 
         self.log.info("closing container")
@@ -104,11 +104,11 @@ class FullPoolContainerCreate(TestWithServers):
         except DaosApiError as excep:
             if not (err in repr(excep) or err2 in repr(excep)):
                 self.log.error("caught unexpected exception while "
-                               "writing object: {0}".format(repr(excep)))
+                               "writing object: %s", repr(excep))
                 self.log.info("closing container")
                 cont2.close()
                 self.fail("caught unexpected exception while writing "
-                          "object: {0}".format(repr(excep)))
+                          "object: %s", repr(excep))
             else:
                 self.log.info("correctly caught -1007 while attempting "
                               "to write object in full pool")
