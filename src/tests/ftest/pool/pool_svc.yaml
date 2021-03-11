@@ -7,12 +7,13 @@ hosts:
     - server-E
 server_config:
     name: daos_server
-timeout: 120
+timeout: 150
 pool:
     control_method: dmg
     mode: 146
     name: daos_server
     scm_size: 134217728
+    pool_query_timeout: 30
 svc_params_mux: !mux
     svc_params_none:
         svc_params: [None, 3]
