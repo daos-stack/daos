@@ -51,13 +51,13 @@ class CartNoPmixOneNodeTest(TestWithoutServers):
 
         # env dict keys and values must all be of string type
         if not isinstance(crt_phy_addr, ("".__class__, u"".__class__)):
-          crt_phy_addr = ""
+            crt_phy_addr = ""
         if not isinstance(ofi_interface, ("".__class__, u"".__class__)):
-          ofi_interface = ""
+            ofi_interface = ""
         if not isinstance(ofi_ctx_num, ("".__class__, u"".__class__)):
-          ofi_ctx_num = ""
+            ofi_ctx_num = ""
         if not isinstance(ofi_share_addr, ("".__class__, u"".__class__)):
-          ofi_share_addr = ""
+            ofi_share_addr = ""
 
         pass_env = {"CRT_PHY_ADDR_STR": crt_phy_addr,
                     "OFI_INTERFACE": ofi_interface,
