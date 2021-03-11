@@ -502,18 +502,24 @@ server_init(int argc, char *argv[])
 	/** Report timestamp when engine was started */
 	d_tm_record_timestamp(NULL, "started_at");
 
+	rc = drpc_init();
+	if (rc != 0) {
+		D_ERROR("Failed to initialize dRPC: "DF_RC"\n", DP_RC(rc));
+		goto exit_telemetry_init;
+	}
+
 	rc = register_dbtree_classes();
 	if (rc != 0)
-		D_GOTO(exit_telemetry_init, rc);
+		D_GOTO(exit_drpc_fini, rc);
 
 	/** initialize server topology data */
 	rc = dss_topo_init();
 	if (rc != 0)
-		D_GOTO(exit_telemetry_init, rc);
+		D_GOTO(exit_drpc_fini, rc);
 
 	rc = abt_init(argc, argv);
 	if (rc != 0)
-		goto exit_telemetry_init;
+		goto exit_drpc_fini;
 
 	/* initialize the modular interface */
 	rc = dss_module_init();
@@ -595,9 +601,9 @@ server_init(int argc, char *argv[])
 		goto exit_srv_init;
 	}
 
-	rc = drpc_init();
+	rc = drpc_notify_ready();
 	if (rc != 0) {
-		D_ERROR("Failed to initialize dRPC: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Failed to notify daos_server: "DF_RC"\n", DP_RC(rc));
 		goto exit_init_state;
 	}
 
@@ -629,12 +635,12 @@ server_init(int argc, char *argv[])
 
 	rc = dss_module_setup_all();
 	if (rc != 0)
-		goto exit_drpc_fini;
+		goto exit_init_state;
 	D_INFO("Modules successfully set up\n");
 
 	rc = crt_register_event_cb(dss_crt_event_cb, NULL);
 	if (rc)
-		D_GOTO(exit_drpc_fini, rc);
+		D_GOTO(exit_init_state, rc);
 
 	dss_xstreams_open_barrier();
 	D_INFO("Service fully up\n");
@@ -655,8 +661,6 @@ server_init(int argc, char *argv[])
 
 	return 0;
 
-exit_drpc_fini:
-	drpc_fini();
 exit_init_state:
 	server_init_state_fini();
 exit_srv_init:
@@ -676,6 +680,8 @@ exit_mod_init:
 	dss_module_fini(true);
 exit_abt_init:
 	abt_fini();
+exit_drpc_fini:
+	drpc_fini();
 exit_telemetry_init:
 	d_tm_fini();
 exit_debug_init:
@@ -691,8 +697,6 @@ server_fini(bool force)
 	D_INFO("unregister event callbacks done\n");
 	dss_module_cleanup_all();
 	D_INFO("dss_module_cleanup_all() done\n");
-	drpc_fini();
-	D_INFO("drpc_fini() done\n");
 	server_init_state_fini();
 	D_INFO("server_init_state_fini() done\n");
 	dss_srv_fini(force);
@@ -718,6 +722,8 @@ server_fini(bool force)
 	D_INFO("dss_module_fini() done\n");
 	abt_fini();
 	D_INFO("abt_fini() done\n");
+	drpc_fini();
+	D_INFO("drpc_fini() done\n");
 	d_tm_fini();
 	D_INFO("d_tm_fini() done\n");
 	daos_debug_fini();
