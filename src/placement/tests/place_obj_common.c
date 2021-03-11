@@ -818,19 +818,14 @@ extend_test_pool_map(struct pool_map *map,
 	rc = gen_pool_buf(map, &map_buf, map_version, ndomains, nnodes,
 			  ntargets, domains, target_uuids, rank_list, NULL,
 			dss_tgt_nr);
-	if (rc != 0)
-		D_GOTO(out_map, rc);
+	assert_success(rc);
 
 	/* Extend the current pool map */
 	rc = pool_map_extend(map, map_version, map_buf);
-	if (rc != 0)
-		D_GOTO(out_map, rc);
-
-	return rc;
-
-out_map:
-	if (map_buf != NULL)
-		pool_buf_free(map_buf);
+	if (rc != 0) {
+		if (map_buf != NULL)
+			pool_buf_free(map_buf);
+	}
 
 	assert_success(rc);
 

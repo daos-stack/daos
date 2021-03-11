@@ -2773,7 +2773,6 @@ pool_map_get_failed_cnt(struct pool_map *map, pool_comp_type_t type)
 static bool
 pool_map_empty(struct pool_map *map)
 {
-	D_ASSERT(map != NULL);
 	return map->po_tree == NULL;
 }
 
