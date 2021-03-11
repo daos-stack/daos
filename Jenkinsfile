@@ -403,13 +403,13 @@ boolean skip_ftest_hw(String size) {
 
 boolean skip_bandit_check() {
     return cachedCommitPragma(pragma: 'Skip-python-bandit',
-                              def_val: 'true') == 'true' ||
+                              def_val: 'false') == 'true' ||
            quick_functional()
 }
 
 boolean skip_build_on_centos7_bullseye() {
     return  env.NO_CI_TESTING == 'true' ||
-            skip_stage('bullseye', true) ||
+            skip_stage('bullseye', false) ||
             quick_functional()
 }
 
