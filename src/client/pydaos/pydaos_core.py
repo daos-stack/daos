@@ -39,6 +39,7 @@ class KvNotFound(Exception):
         return "Failed to create '{}'".format(self.name)
 
 class ObjID():
+    # pylint: disable=too-few-public-methods
     """
     Class representing of DAOS 128-bit object identifier
 

@@ -94,18 +94,20 @@ class ConfigurationData():
                 hosts with the same data value
 
         """
+        data = None
         if requirement in self._data:
             # Return the previously stored requested data
-            return self._data[requirement]
+            data = self._data[requirement]
         elif requirement in self._data_key_map:
             # Obtain, store (for future requests), and return the data
             self._data[requirement] = self._data_key_map[requirement]()
-            return self._data[requirement]
+            data = self._data[requirement]
         else:
             # No known method for obtaining this data
             raise AttributeError(
                 "Unknown data requirement for ConfigurationData object: "
                 "{}".format(requirement))
+        return data
 
 
 class ConfigurationParameters(ObjectWithParameters):

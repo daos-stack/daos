@@ -1312,6 +1312,7 @@ class DaosInputParams():
         return self.co_prop
 
 class DaosContainer():
+    # pylint: disable=too-many-public-methods
     """A python object representing a DAOS container."""
 
     def __init__(self, context):

@@ -57,9 +57,8 @@ class CartTest(TestWithoutServers):
             return_code = proc.returncode
             if return_code is not None:
                 break
-            else:
-                time.sleep(1)
-                i = i - 1
+            time.sleep(1)
+            i = i - 1
         return return_code
 
     def cleanup_processes(self):
@@ -96,9 +95,8 @@ class CartTest(TestWithoutServers):
             return_code = proc.returncode
             if return_code is not None:
                 break
-            else:
-                time.sleep(1)
-                i = i - 1
+            time.sleep(1)
+            i = i - 1
 
         if return_code is None:
             return_code = -1

@@ -4,16 +4,15 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-
+from logging import getLogger
+import os
+import random
+import shutil
+import tempfile
+import time
 
 from general_utils import get_random_bytes, DaosTestError
 from pydaos.raw import DaosApiError
-
-import time
-import tempfile
-import shutil
-import os
-import random
 
 
 class DirTree():
@@ -169,7 +168,7 @@ class DirTree():
             os.close(fd)
 
     def _create_needle(self, current_path, current_height):
-        """If we reach the bottom of the tree, create a *.needle file"""
+        """If we reach the bottom of the tree, create a *.needle file."""
         if current_height != 1:
             return
 
@@ -254,7 +253,8 @@ def write_until_full(container):
             container.slip_epoch()
 
     except ValueError as exp:
-        self.log.info(exp)
+        log = getLogger()
+        log.info(exp)
 
     return total_written
 
@@ -294,7 +294,8 @@ def write_quantity(container, size_in_bytes):
             container.slip_epoch()
 
     except ValueError as exp:
-        self.log.info(exp)
+        log = getLogger()
+        log.info(exp)
 
     return total_written
 
