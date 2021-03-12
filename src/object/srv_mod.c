@@ -195,7 +195,7 @@ obj_tls_init(int xs_id, int tgt_id)
 			     "total number of bytes updated/written", "",
 			     "io/%u/update_bytes", tgt_id);
 	if (rc)
-		D_WARN("Failed to create bytes udpate sensor: "DF_RC"\n",
+		D_WARN("Failed to create bytes update sensor: "DF_RC"\n",
 		       DP_RC(rc));
 
 	return tls;
