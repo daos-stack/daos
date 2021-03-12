@@ -28,8 +28,7 @@ timeout_yum() {
 }
 
 bootstrap_dnf() {
-    timeout_yum 5m install dnf 'dnf-command(config-manager)' \
-                           'dnf-command(debuginfo-install)'
+    timeout_yum 5m install dnf 'dnf-command(config-manager)'
 }
 
 group_repo_post() {
