@@ -388,6 +388,9 @@ boolean tests_in_stage(String size) {
     tags = newtags.join(" ")
     return sh(label: "Get test list for ${size}",
               script: """cd src/tests/ftest
+                         rpm -qa|grep 'avocado\|clustershell\|python'
+                         pip3 list
+                         ls -l /usr/lib64/python*/site-packages
                          ./launch.py --list ${tags}""",
               returnStatus: true) == 0
 }
