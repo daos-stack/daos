@@ -293,7 +293,25 @@ boolean skip_ftest(String distro) {
     return distro == 'ubuntu20' ||
            skip_stage('func-test') ||
            skip_stage('func-test-vm') ||
+           ! tests_in_stage('vm') ||
            skip_stage('func-test-' + distro)
+}
+
+boolean tests_in_stage(String size) {
+    if (env.BRANCH_NAME.startsWith('weekly-testing')) {
+        /* This doesn't actually work on weekly-ltestin branches due to a lack
+         * src/test/ftest/launch.py (and friends).  We could probably just
+         * check that out from the branch we are testing against (i.e. master,
+         * release/*, etc.) but let's save that for another day
+         */
+        return true
+    }
+
+    Map stage_info = parseStageInfo()
+    return sh(label: "Get test list for ${size}",
+              script: """cd src/tests/ftest
+                         ./launch.py --list """ + stage_info['test_tag'],
+              returnStatus: true) == 0
 }
 
 boolean skip_ftest_hw(String size) {
@@ -301,6 +319,7 @@ boolean skip_ftest_hw(String size) {
            skip_stage('func-test') ||
            skip_stage('func-hw-test') ||
            skip_stage('func-hw-test-' + size) ||
+           ! tests_in_stage(size) ||
            (env.BRANCH_NAME == 'master' && ! startedByTimer())
 }
 
@@ -312,7 +331,7 @@ boolean skip_testing_stage() {
             skip_stage('test') ||
             (env.BRANCH_NAME.startsWith('weekly-testing') &&
              ! startedByTimer() &&
-             ! params.ForceRun)
+             ! startedByUser())
 }
 
 pipeline {
@@ -341,9 +360,9 @@ pipeline {
         string(name: 'BuildPriority',
                defaultValue: get_priority(),
                description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
-        booleanParam(name: 'ForceRun',
-                     defaultValue: false,
-                     description: 'Force a run of this job')
+        string(name: 'TestTag',
+               defaultValue: "full_regression",
+               description: 'Test-tag to use for this run')
     }
 
     stages {
