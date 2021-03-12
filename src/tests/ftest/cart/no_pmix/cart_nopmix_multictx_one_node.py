@@ -22,16 +22,6 @@ class CartNoPmixOneNodeTest(CartTest):
 
         :avocado: tags=all,cart,pr,daily_regression,no_pmix,one_node
         """
-        pass_env = {
-            "CRT_PHY_ADDR_STR": self.params.get(
-                "CRT_PHY_ADDR_STR", '/run/defaultENV/'),
-            "OFI_INTERFACE": self.params.get(
-                "OFI_INTERFACE", '/run/defaultENV/'),
-            "CRT_CTX_SHARE_ADDR": self.params.get(
-                "CRT_CTX_SHARE_ADDR", '/run/defaultENV/'),
-            "CRT_CTX_NUM": self.params.get(
-                "CRT_CTX_NUM", '/run/defaultENV/')}
-
         crt_phy_addr = os.environ.get("CRT_PHY_ADDR_STR")
         ofi_interface = os.environ.get("OFI_INTERFACE")
         ofi_ctx_num = os.environ.get("CRT_CTX_NUM")
@@ -56,7 +46,7 @@ class CartNoPmixOneNodeTest(CartTest):
 
         self.print("\nTest cmd : {}\n".format(cmd))
 
-        test_env = pass_env
+        test_env = self.pass_env
         p = subprocess.Popen([cmd], env=test_env, stdout=subprocess.PIPE)
 
         rc = self.wait_process(p, 30)
