@@ -5,6 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import subprocess
+import os
 
 from cart_utils import CartTest
 
@@ -30,6 +31,26 @@ class CartNoPmixOneNodeTest(CartTest):
                 "CRT_CTX_SHARE_ADDR", '/run/defaultENV/'),
             "CRT_CTX_NUM": self.params.get(
                 "CRT_CTX_NUM", '/run/defaultENV/')}
+
+        crt_phy_addr = os.environ.get("CRT_PHY_ADDR_STR")
+        ofi_interface = os.environ.get("OFI_INTERFACE")
+        ofi_ctx_num = os.environ.get("CRT_CTX_NUM")
+        ofi_share_addr = os.environ.get("CRT_CTX_SHARE_ADDR")
+
+        # env dict keys and values must all be of string type
+        if not isinstance(crt_phy_addr, ("".__class__, u"".__class__)):
+            crt_phy_addr = ""
+        if not isinstance(ofi_interface, ("".__class__, u"".__class__)):
+            ofi_interface = ""
+        if not isinstance(ofi_ctx_num, ("".__class__, u"".__class__)):
+            ofi_ctx_num = ""
+        if not isinstance(ofi_share_addr, ("".__class__, u"".__class__)):
+            ofi_share_addr = ""
+
+        pass_env = {"CRT_PHY_ADDR_STR": crt_phy_addr,
+                    "OFI_INTERFACE": ofi_interface,
+                    "CRT_CTX_SHARE_ADDR": ofi_share_addr,
+                    "CRT_CTX_NUM": ofi_ctx_num}
 
         cmd = self.params.get("tst_bin", '/run/tests/*/')
 

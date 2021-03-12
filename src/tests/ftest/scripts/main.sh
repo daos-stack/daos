@@ -205,11 +205,11 @@ if [[ "${TEST_TAG_ARG}" =~ soak ]]; then
 fi
 
 
-launch_args="-jcrispa"
-# # can only process cores on EL7 currently
-# if [ "$(lsb_release -s -i)" = "CentOS" ]; then
-#     launch_args="-jcrispa"
-# fi
+launch_args="-jcrisa"
+# can only process cores on EL7 currently
+if [ "$(lsb_release -s -i)" = "CentOS" ]; then
+    launch_args="-jcrispa"
+fi
 
 # Clean stale job results
 if [ -d "${logs_prefix}/ftest/avocado/job-results" ]; then

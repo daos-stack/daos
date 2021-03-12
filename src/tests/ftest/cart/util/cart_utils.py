@@ -33,6 +33,7 @@ class CartTest(TestWithoutServers):
     def setUp(self):
         """Set up the test case."""
         super().setUp()
+        self.set_other_env_vars()
         self.env = self.get_env()
 
     def tearDown(self):
@@ -129,12 +130,27 @@ class CartTest(TestWithoutServers):
         log_file = os.path.join(log_path, log_dir,
                                 test_name + "_" + env_CCSA + "_cart.log")
 
-        log_mask = self.params.get("D_LOG_MASK", "/run/defaultENV/")
-        self.provider = self.params.get("CRT_PHY_ADDR_STR", "/run/defaultENV/")
-        ofi_interface = self.params.get("OFI_INTERFACE", "/run/defaultENV/")
-        ofi_domain = self.params.get("OFI_DOMAIN", "/run/defaultENV/")
-        ofi_share_addr = self.params.get(
-            "CRT_CTX_SHARE_ADDR", "/run/env_CRT_CTX_SHARE_ADDR/*/")
+        # Default env vars for orterun to None
+        log_mask = None
+        self.provider = None
+        ofi_interface = None
+        ofi_domain = None
+        ofi_share_addr = None
+
+        if "D_LOG_MASK" in os.environ:
+            log_mask = os.environ.get("D_LOG_MASK")
+
+        if "CRT_PHY_ADDR_STR" in os.environ:
+            self.provider = os.environ.get("CRT_PHY_ADDR_STR")
+
+        if "OFI_INTERFACE" in os.environ:
+            ofi_interface = os.environ.get("OFI_INTERFACE")
+
+        if "OFI_DOMAIN" in os.environ:
+            ofi_domain = os.environ.get("OFI_DOMAIN")
+
+        if "CRT_CTX_SHARE_ADDR" in os.environ:
+            ofi_share_addr = os.environ.get("CRT_CTX_SHARE_ADDR")
 
         # Do not use the standard .log file extension, otherwise it'll get
         # removed (cleaned up for disk space savings) before we can archive it.
@@ -223,8 +239,9 @@ class CartTest(TestWithoutServers):
         _tst_arg = self.params.get("{}_arg".format(host), "/run/tests/*/")
         _tst_env = self.params.get("{}_env".format(host), "/run/tests/*/")
         _tst_slt = self.params.get("{}_slt".format(host), "/run/tests/*/")
-        _tst_ctx = self.params.get(
-            "{}_CRT_CTX_NUM".format(host), "/run/defaultENV/")
+        _tst_ctx = "16"
+        if "{}_CRT_CTX_NUM".format(host) in os.environ:
+            _tst_ctx = os.environ["{}_CRT_CTX_NUM".format(host)]
 
         # If the yaml parameter is a list, return the n-th element
         tst_bin = self.get_yaml_list_elem(_tst_bin, index)
@@ -356,3 +373,30 @@ class CartTest(TestWithoutServers):
             cl = cart_logparse.LogIter(log_file)
             c_log_test = cart_logtest.LogTest(cl)
             c_log_test.check_log_file(strict_test)
+
+    def set_other_env_vars(self):
+        """Set env vars from yaml file."""
+        default_env = self.params.get("default", "/run/ENV/")
+        if default_env:
+            for kv_pair in default_env:
+                key = next(iter(kv_pair))
+                if key is not None:
+                    value = kv_pair[key]
+                    self.log.info("Adding %s=%s to environment.", key, value)
+                    os.environ[key] = value
+
+            # For compatibility with cart tests, which set env vars in oretrun
+            # command via -x options
+            self.env = os.environ
+
+    def unset_other_env_vars(self):
+        """Unset env vars from yaml file."""
+        default_env = self.params.get("default", "/run/ENV/")
+        if default_env:
+            for kv_pair in default_env:
+                try:
+                    key = kv_pair[0][0]
+                    self.log.info("Removing key %s from environment.", key)
+                    del os.environ[key]
+                except IndexError:
+                    pass

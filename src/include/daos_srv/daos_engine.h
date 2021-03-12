@@ -678,6 +678,7 @@ struct dss_enum_arg {
 	bool			fill_recxs;	/* type == S||R */
 	bool			chk_key2big;
 	bool			need_punch;	/* need to pack punch epoch */
+	bool			obj_punched;    /* object punch is packed   */
 	daos_epoch_range_t     *eprs;
 	struct daos_csummer    *csummer;
 	int			eprs_cap;
@@ -751,6 +752,8 @@ struct dss_enum_unpack_io {
 	int			 ui_iods_cap;
 	int			 ui_iods_top;
 	int			*ui_recxs_caps;
+	/* punched epoch for object */
+	daos_epoch_t		ui_obj_punch_eph;
 	/* punched epochs for dkey */
 	daos_epoch_t		ui_dkey_punch_eph;
 	d_sg_list_t		*ui_sgls;	/**< optional */
