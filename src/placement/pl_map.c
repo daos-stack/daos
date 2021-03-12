@@ -617,10 +617,13 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 	}
 
 	replicas = oc_attr->u.rp.r_num;
-	if (replicas == DAOS_OBJ_REPL_MAX)
-		replicas = grp_size;
+	if (replicas == DAOS_OBJ_REPL_MAX) {
+		D_ASSERT(grp_idx == 0);
 
-	if (replicas < 1)
+		replicas = grp_size;
+	}
+
+	if (replicas < 1 || replicas > grp_size)
 		return -DER_INVAL;
 
 	if (replicas == 1) {
@@ -651,7 +654,7 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 	 *      to avoid leader switch.
 	 */
 	start = grp_idx * grp_size;
-	replica_idx = (oid.lo + grp_idx) % grp_size;
+	replica_idx = (oid.lo + grp_idx) % replicas;
 	for (i = 0, pos = -1; i < replicas;
 	     i++, replica_idx = (replica_idx + 1) % replicas) {
 		int off = start + replica_idx;
