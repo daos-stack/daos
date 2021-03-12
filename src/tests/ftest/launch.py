@@ -1543,10 +1543,10 @@ def install_debuginfos():
             yum_args.extend(["libpmemobj1", "python3"])
         else:
             yum_args.extend(["libpmemobj", "python36"])
-        cmds.append(["sudo", "dnf", "-y", "install"] + yum_args)
+        cmds.append(["sudo", "yum", "-y", "install"] + yum_args)
         cmds.append(
-            ["sudo", "dnf", "debuginfo-install", "--enablerepo=*-debuginfo",
-             "-y"] + yum_args + ["daos-server", "gcc"])
+            ["sudo", "debuginfo-install", "--enablerepo=*-debuginfo", "-y"] +
+            yum_args + ["daos-server", "gcc"])
     else:
         # We're not using the yum API to install packages
         # See the comments below.
@@ -1567,7 +1567,7 @@ def install_debuginfos():
     # yum_base.processTransaction(rpmDisplay=yum.rpmtrans.NoOutputCallBack())
 
     # Now install a few pkgs that debuginfo-install wouldn't
-    cmd = ["sudo", "dnf", "-y", "--enablerepo=*debug*", "install"]
+    cmd = ["sudo", "yum", "-y", "--enablerepo=*debug*", "install"]
     for pkg in install_pkgs:
         try:
             cmd.append(
@@ -1589,7 +1589,7 @@ def install_debuginfos():
             break
     if retry:
         print("Going to refresh caches and try again")
-        cmd_prefix = ["sudo", "dnf", "--enablerepo=*debug*"]
+        cmd_prefix = ["sudo", "yum", "--enablerepo=*debug*"]
         cmds.insert(0, cmd_prefix + ["clean", "all"])
         cmds.insert(1, cmd_prefix + ["makecache"])
         for cmd in cmds:
