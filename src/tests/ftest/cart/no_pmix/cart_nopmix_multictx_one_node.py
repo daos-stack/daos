@@ -37,7 +37,7 @@ class CartNoPmixOneNodeTest(CartTest):
         if not isinstance(ofi_share_addr, ("".__class__, u"".__class__)):
             ofi_share_addr = ""
 
-        pass_env = {"CRT_PHY_ADDR_STR": crt_phy_addr,
+        test_env = {"CRT_PHY_ADDR_STR": crt_phy_addr,
                     "OFI_INTERFACE": ofi_interface,
                     "CRT_CTX_SHARE_ADDR": ofi_share_addr,
                     "CRT_CTX_NUM": ofi_ctx_num}
@@ -46,7 +46,6 @@ class CartNoPmixOneNodeTest(CartTest):
 
         self.print("\nTest cmd : {}\n".format(cmd))
 
-        test_env = self.pass_env
         p = subprocess.Popen([cmd], env=test_env, stdout=subprocess.PIPE)
 
         rc = self.wait_process(p, 30)
