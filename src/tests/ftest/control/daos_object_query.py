@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
 from daos_utils import DaosCommand
@@ -35,29 +18,35 @@ class DaosObjectQuery(TestWithServers):
     query, and verify the output.
 
     Test with the following object classes.
-    202: OC_S4, 214: OC_SX, 220: OC_RP_2G1, 221: OC_PR_2G2
-    These classes are selected because they're used in other test and generate
-    consistent query output. It would be better if we can understand more about
-    object classes/layout, the command, and their relationship so that we can
-    test with more classes and do better validation. However, due to the time
-    constraint, we'll stick with these four classes and the test steps for now.
+    200: OC_S1, 240: OC_RP_2G1, 241: OC_RP_2G2, 280: OC_PR_3G1
 
     From the command output, verify oid, grp_nr, and the list of grp-replica(s)
     groups.
+
+    Sample daos object query output.
+    oid: 1152922453794619396.1 ver 0 grp_nr: 2
+    grp: 0
+    replica 0 1
+    replica 1 0
+    grp: 1
+    replica 0 0
+    replica 1 1
 
     :avocado: recursive
     """
 
     def test_object_query(self):
-        """
-        JIRA ID: DAOS-4694
+        """JIRA ID: DAOS-4694
         Test Description: Test daos object query.
-        :avocado: tags=all,container,hw,small,full_regression,daos_object_query
+        :avocado: tags=all,full_regression
+        :avocado: tags=control
+        :avocado: tags=daos_object_query
         """
         daos_cmd = DaosCommand(self.bin)
         errors = []
 
-        # Create a pool and a container.
+        # Create a pool and a container. Specify --oclass, which will be used
+        # when writing object.
         self.add_pool()
         self.add_container(self.pool)
         self.pool.connect()
@@ -72,89 +61,100 @@ class DaosObjectQuery(TestWithServers):
         # These determine the size of the keys. Use the frequently used values.
         self.container.akey_size.update(4)
         self.container.dkey_size.update(4)
+
         # Object class defines the number of replicas, groups, etc.
-        # 202: OC_S4, 214: OC_SX, 220: OC_RP_2G1, 221: OC_PR_2G2
         # Other classes and more details are in src/include/daos_obj_class.h
-        obj_classes = [202, 214, 220, 221]
-        expected_replica_ones = {
-            200: (0, 1), 202: (0, 2), 214: (0, 8), 220: (1, 1), 221: (2, 2)}
+        # This mapping could change, so check daos_obj_class.h when this test
+        # fails.
+        class_name_to_code = {
+            "S1": 200,
+            "RP_2G1": 240,
+            "RP_2G2": 241,
+            "RP_3G1": 280
+        }
+        class_name_to_group_num = {
+            "S1": 1,
+            "RP_2G1": 1,
+            "RP_2G2": 2,
+            "RP_3G1": 1
+        }
+        class_name_to_replica_rows = {
+            "S1": 1,
+            "RP_2G1": 2,
+            "RP_2G2": 4,
+            "RP_3G1": 3
+        }
 
-        for obj_class in obj_classes:
-            # Write object.
-            self.container.write_objects(obj_class=obj_class)
+        # Write object. Use the same object class as the one used during the
+        # container create. We need the corresponding integer value for
+        # write_objects.
+        class_name = self.container.oclass.value
+        obj_class = class_name_to_code[class_name]
+        self.container.write_objects(obj_class=obj_class)
 
-            # Verify oid values.
-            # written_data is a list of TestContainerData, which has DaosObj as
-            # member. This is what we need to obtain oid values.
-            obj = self.container.written_data[-1].obj
-            obj.close()
-            expected_oid_hi = obj.c_oid.hi
-            expected_oid_lo = obj.c_oid.lo
-            self.log.info("oid.hi = %s", expected_oid_hi)
-            self.log.info("oid.lo = %s", expected_oid_lo)
-            oid_concat = "{}.{}".format(expected_oid_hi, expected_oid_lo)
-            kwargs = {
-                "pool": self.pool.uuid,
-                "cont": self.container.uuid,
-                "oid": oid_concat
-            }
-            # Call dmg object query.
-            query_output = daos_cmd.object_query(**kwargs)
-            actual_oid_hi = query_output["oid"][0]
-            actual_oid_lo = query_output["oid"][1]
-            if str(expected_oid_hi) != actual_oid_hi:
-                errors.append(
-                    "Unexpected oid.hi! OC = {}; Expected = {}; "\
-                    "Actual = {}".format(
-                        obj_class, expected_oid_hi, actual_oid_hi))
-            if str(expected_oid_lo) != actual_oid_lo:
-                errors.append(
-                    "Unexpected oid.lo! OC = {}; Expected = {}; "\
-                    "Actual = {}".format(
-                        obj_class, expected_oid_lo, actual_oid_lo))
+        # Verify oid values. First, get the expected oid hi and lo.
+        # written_data is a list of TestContainerData, which has DaosObj as
+        # member. This is what we need to obtain oid values.
+        obj = self.container.written_data[-1].obj
+        obj.close()
+        expected_oid_hi = obj.c_oid.hi
+        expected_oid_lo = obj.c_oid.lo
+        self.log.info("oid.hi = %s", expected_oid_hi)
+        self.log.info("oid.lo = %s", expected_oid_lo)
+        oid_concat = "{}.{}".format(expected_oid_hi, expected_oid_lo)
+        kwargs = {
+            "pool": self.pool.uuid,
+            "cont": self.container.uuid,
+            "oid": oid_concat
+        }
 
-            # Verify replica nums and grp_nr.
-            # For grp_nr, check to see if grp 0 -> grp_nr - 1 exists. e.g., if
-            # grp_nr is 4, we expect to see grp: 0, grp: 1, grp: 2, grp: 3.
-            expected_grps = set(
-                [nr for nr in range(int(query_output["grp_nr"]))])
+        # Call daos object query and verify oid values.
+        query_output = daos_cmd.object_query(**kwargs)
+        actual_oid_hi = query_output["oid"][0]
+        actual_oid_lo = query_output["oid"][1]
+        if str(expected_oid_hi) != actual_oid_hi:
+            errors.append(
+                "Unexpected oid.hi! OC = {}; Expected = {}; "\
+                "Actual = {}".format(
+                    obj_class, expected_oid_hi, actual_oid_hi))
+        if str(expected_oid_lo) != actual_oid_lo:
+            errors.append(
+                "Unexpected oid.lo! OC = {}; Expected = {}; "\
+                "Actual = {}".format(
+                    obj_class, expected_oid_lo, actual_oid_lo))
 
-            # For replica nums, check the total number of 1s on the left and
-            # right because the sequence seems to be arbitrary.
-            left = 0
-            right = 0
-            obj_groups = query_output["layout"]
-            for obj_group in obj_groups:
+        # Verify grp_nr. Expected group number is the number that comes after G.
+        expected_group_num = class_name_to_group_num[class_name]
+        actual_group_num = query_output["grp_nr"]
+        if str(expected_group_num) != actual_group_num:
+            errors.append(
+                "Unexpected grp_nr! Class = {}; Expected = {}; "\
+                "Actual = {}".format(
+                    class_name, expected_group_num, actual_group_num))
 
-                # Test grp_nr.
-                if int(obj_group["grp"]) not in expected_grps:
-                    errors.append(
-                        "Unexpected grp sequence! OC = {}; {} is not in "\
-                        "{}".format(obj_class, obj_group["grp"], expected_grps))
-                else:
-                    expected_grps.remove(int(obj_group["grp"]))
+        # Verify number of replica rows, which should be the multiplication of
+        # replication (num before G) and group number (num after G). For S1,
+        # there's 1 group and no replication, so the row count should be 1.
+        expected_replica_rows = class_name_to_replica_rows[class_name]
+        obj_layout = query_output["layout"]
+        actual_replica_rows = 0
+        actual_group_rows = 0
+        for layout in obj_layout:
+            actual_replica_rows += len(layout["replica"])
+            actual_group_rows += 1
+        if expected_replica_rows != actual_replica_rows:
+            errors.append(
+                "Unexpected replica row count! Class = {}; Expected = {}; "\
+                "Actual = {}".format(
+                    class_name, expected_replica_rows, actual_replica_rows))
+        # Also verify the number of group rows; rows that start with "grp".
+        if expected_group_num != actual_group_rows:
+            errors.append(
+                "Unexpected group row count! Class = {}; Expected = {}; "\
+                "Actual = {}".format(
+                    class_name, expected_group_num, actual_group_rows))
 
-                # Accumulate replica 1s.
-                replica_tuples = obj_group["replica"]
-                for replica_tuple in replica_tuples:
-                    left += int(replica_tuple[0])
-                    right += int(replica_tuple[1])
-
-            # Test replica's left and right 1 counts are expected.
-            actual_replica_ones = (left, right)
-            if expected_replica_ones[obj_class] != actual_replica_ones:
-                errors.append(
-                    "Unexpected replica values! OC = {}; Expected = {}; "\
-                    "Actual = {}".format(
-                        obj_class, expected_replica_ones[obj_class],
-                        actual_replica_ones))
-
-            # Check that we have seen all values in 0 -> grp_nr - 1.
-            if expected_grps:
-                errors.append(
-                    "There is grp_nr we haven't seen! OC = {}; {}".format(
-                        obj_class, expected_grps))
-
+        # Print accumulated errors.
         if errors:
             self.log.info("--- Error List ---")
             for error in errors:

@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from __future__ import print_function
 
@@ -55,7 +38,7 @@ class DmgStorageQuery(ControlTestBase):
         """
         err = []
         for dev in devs_info.values()[0]:
-            if dev[3] != state:
+            if dev[4] != state:
                 err.append(dev)
         if err:
             self.fail("Found device(s) in bad state: {}".format(err))
@@ -66,7 +49,8 @@ class DmgStorageQuery(ControlTestBase):
 
         Test Description: Test 'dmg storage query list-devices' command.
 
-        :avocado: tags=all,pr,hw,small,storage_query_devs,basic,dmg
+        :avocado: tags=all,daily_regression,hw,small,storage_query_devs,basic
+        :avocado: tags=dmg
         """
         # Get the storage device information, parse and check devices info
         devs_info = self.get_device_info()
@@ -78,7 +62,7 @@ class DmgStorageQuery(ControlTestBase):
         # Check that number of targets match the config
         targets = 0
         for devs in devs_info.values()[0]:
-            targets += len(devs[1].split(" "))
+            targets += len(devs[2].split(" "))
         if self.targets != targets:
             self.fail("Wrong number of targets found: {}".format(targets))
 
@@ -89,7 +73,8 @@ class DmgStorageQuery(ControlTestBase):
 
         Test Description: Test 'dmg storage query list-pools' command.
 
-        :avocado: tags=all,pr,hw,small,storage_query_pools,basic,dmg
+        :avocado: tags=all,daily_regression,hw,small,storage_query_pools,basic
+        :avocado: tags=dmg
         """
         # Create pool and get the storage smd information, then verfify info
         self.prepare_pool()
@@ -125,7 +110,7 @@ class DmgStorageQuery(ControlTestBase):
 
         Test Description: Test 'dmg storage query list-devices --health' cmd.
 
-        :avocado: tags=all,pr,hw,small,storage_query_health,basic
+        :avocado: tags=all,daily_regression,hw,small,storage_query_health,basic
         """
         dmg_info = self.get_device_info(health=True)
 
@@ -133,7 +118,7 @@ class DmgStorageQuery(ControlTestBase):
         if dmg_info:
             for idx, info in enumerate(dmg_info):
                 dmg_info[idx] = [i for i in info if i]
-        parsed = [dmg_info[i:(i + 17)] for i in range(0, len(dmg_info), 17)]
+        parsed = [dmg_info[i:(i + 19)] for i in range(0, len(dmg_info), 19)]
         _ = parsed[0].pop(0)
 
         # Convert from list of lists to list of strings
@@ -147,7 +132,7 @@ class DmgStorageQuery(ControlTestBase):
         # Verify temperature, convert from Kelvins to Celsius
         temp_err = []
         for info in health_info:
-            cels_temp = int("".join(re.findall(r"\d+", info[0]))) - 273.15
+            cels_temp = int("".join(re.findall(r"\d+", info[2]))) - 273.15
             if not 0.00 <= cels_temp <= 71.00:
                 temp_err.append("{}".format(cels_temp))
         if temp_err:
@@ -162,7 +147,7 @@ class DmgStorageQuery(ControlTestBase):
         In addition this test also does a basic test of nvme-faulty cmd:
         'dmg storage set nvme-faulty'
 
-        :avocado: tags=all,pr,hw,small,storage_query_faulty,basic
+        :avocado: tags=all,daily_regression,hw,small,storage_query_faulty,basic
         """
         # Get device info and check state is NORMAL
         devs_info = self.get_device_info()

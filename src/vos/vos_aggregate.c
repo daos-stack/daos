@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
   * Implementation for aggregation and discard
@@ -145,7 +128,8 @@ struct vos_agg_param {
 	daos_unit_oid_t		ap_oid;		/* current object ID */
 	daos_key_t		ap_dkey;	/* current dkey */
 	daos_key_t		ap_akey;	/* current akey */
-	unsigned int		ap_discard:1;
+	unsigned int		ap_discard:1,
+				ap_csum_err:1;
 	struct umem_instance	*ap_umm;
 	bool			(*ap_yield_func)(void *arg);
 	void			*ap_yield_arg;
@@ -388,7 +372,34 @@ vos_agg_sv(daos_handle_t ih, vos_iter_entry_t *entry,
 	 */
 	if (agg_param->ap_max_epoch == 0 ||
 	    agg_param->ap_max_epoch == entry->ie_epoch) {
-		agg_param->ap_max_epoch = entry->ie_epoch;
+
+		switch (entry->ie_dtx_state) {
+		case DTX_ST_COMMITTED:
+			/* Highest epoch is committed, keep it. */
+			agg_param->ap_max_epoch = entry->ie_epoch;
+			break;
+		case DTX_ST_PREPARED:
+			/*
+			 * Highest epoch is uncommitted, skip it and continue
+			 * checking on next lower epoch.
+			 */
+			D_DEBUG(DB_EPC, "Skip uncommitted at epoch:"DF_X64"\n",
+				entry->ie_epoch);
+			break;
+		case DTX_ST_ABORTED:
+			/*
+			 * Highest epoch is aborted, delete it and continue
+			 * checking on next lower epoch.
+			 */
+			D_DEBUG(DB_EPC, "Delete aborted at epoch:"DF_X64"\n",
+				entry->ie_epoch);
+			goto delete;
+		default:
+			D_ASSERTF(0, "Unexpected DTX state: %d\n",
+				  entry->ie_dtx_state);
+			break;
+		}
+
 		return 0;
 	}
 
@@ -537,11 +548,13 @@ prepare_segments(struct agg_merge_window *mw)
 
 		lgc_seg->ls_idx_end = i;
 		ent_in->ei_rect.rc_ex.ex_hi = ext.ex_hi;
-		/* Merge to highest epoch */
-		if (ent_in->ei_rect.rc_epc < phy_ent->pe_rect.rc_epc)
+		/* Merge to lowest epoch */
+		if (ent_in->ei_rect.rc_epc == 0 ||
+		    ent_in->ei_rect.rc_epc > phy_ent->pe_rect.rc_epc)
 			ent_in->ei_rect.rc_epc = phy_ent->pe_rect.rc_epc;
-		/* Merge to highest pool map version */
-		if (ent_in->ei_ver < phy_ent->pe_ver)
+		/* Merge to lowest pool map version */
+		if (ent_in->ei_ver == 0 ||
+		    ent_in->ei_ver > phy_ent->pe_ver)
 			ent_in->ei_ver = phy_ent->pe_ver;
 		ent_in->ei_rect.rc_minor_epc = VOS_MINOR_EPC_MAX;
 	}
@@ -978,9 +991,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 		rc = csum_recalc(io, &bsgl, &sgl, ent_in, io->ic_csum_recalcs,
 				 seg_count, seg_size);
 		if (rc) {
-			if (rc == -DER_CSUM)
-				D_ERROR("CSUM verify error: "DF_RC"\n",
-					DP_RC(rc));
+			D_ERROR("CSUM verify error: "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
 	}
@@ -1525,6 +1536,25 @@ lookup_phy_ent(struct agg_merge_window *mw, const struct evt_extent *phy_ext,
 	return NULL;
 }
 
+static inline int
+delete_evt_entry(struct vos_obj_iter *oiter, vos_iter_entry_t *entry,
+		 unsigned int *acts, const char *desc)
+{
+	struct evt_rect	rect;
+	int		rc;
+
+	recx2ext(&entry->ie_orig_recx, &rect.rc_ex);
+	rect.rc_epc = entry->ie_epoch;
+	rect.rc_minor_epc = entry->ie_minor_epc;
+	mark_yield(&entry->ie_biov.bi_addr, acts);
+
+	rc = evt_delete(oiter->it_hdl, &rect, NULL);
+	if (rc)
+		D_ERROR("Delete %s EV entry "DF_RECT" error: "DF_RC"\n",
+			desc, DP_RECT(&rect), DP_RC(rc));
+	return rc;
+}
+
 static int
 join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 		  vos_iter_entry_t *entry, unsigned int *acts)
@@ -1539,32 +1569,52 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 	recx2ext(&entry->ie_orig_recx, &phy_ext);
 	D_ASSERT(ext1_covers_ext2(&phy_ext, &lgc_ext));
 
+	switch (entry->ie_dtx_state) {
+	case DTX_ST_COMMITTED:
+		break;
+	case DTX_ST_ABORTED:
+		/*
+		 * Delete the aborted entry, and inform iterator to abort
+		 * current evtree aggregation.
+		 *
+		 * NB. We can't continue current evtree aggregation since
+		 * other entry's visibility could be invalid after deleting.
+		 */
+		D_DEBUG(DB_EPC, "Delete aborted EV entry "DF_EXT"@"DF_X64"\n",
+			DP_EXT(&phy_ext), entry->ie_epoch);
+
+		rc = delete_evt_entry(oiter, entry, acts, "aborted");
+		if (rc)
+			return rc;
+		return -DER_TX_BUSY;
+	case DTX_ST_PREPARED:
+		/*
+		 * Keep uncommitted entry, and inform iterator to abort
+		 * current evtree aggregation.
+		 */
+		D_DEBUG(DB_EPC, "Hit uncommitted EV entry "DF_EXT"@"DF_X64"\n",
+			DP_EXT(&phy_ext), entry->ie_epoch);
+		return -DER_TX_BUSY;
+	default:
+		D_ASSERTF(0, "Unexpected DTX state: %d\n", entry->ie_dtx_state);
+		break;
+	}
+
 	visible = (entry->ie_vis_flags & VOS_VIS_FLAG_VISIBLE);
 	partial = (entry->ie_vis_flags & VOS_VIS_FLAG_PARTIAL);
 	last = (entry->ie_vis_flags & VOS_VIS_FLAG_LAST);
 
 	/* Just delete the fully covered intact physical entry */
 	if (!visible && !partial) {
-		struct evt_rect rect;
-
 		D_ASSERTF(lgc_ext.ex_lo == phy_ext.ex_lo &&
 			  lgc_ext.ex_hi == phy_ext.ex_hi,
 			  ""DF_EXT" != "DF_EXT"\n",
 			  DP_EXT(&lgc_ext), DP_EXT(&phy_ext));
 		D_ASSERT(entry->ie_vis_flags & VOS_VIS_FLAG_COVERED);
 
-		rect.rc_ex = phy_ext;
-		rect.rc_epc = entry->ie_epoch;
-		rect.rc_minor_epc = entry->ie_minor_epc;
-		mark_yield(&entry->ie_biov.bi_addr, acts);
-
-		rc = evt_delete(oiter->it_hdl, &rect, NULL);
-		if (rc) {
-			D_ERROR("Delete EV entry "DF_RECT" error: "DF_RC"\n",
-				DP_RECT(&rect), DP_RC(rc));
+		rc = delete_evt_entry(oiter, entry, acts, "covered");
+		if (rc)
 			return rc;
-		}
-
 		goto out;
 	}
 
@@ -1680,23 +1730,13 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 	/* Discard */
 	if (agg_param->ap_discard) {
 		struct vos_obj_iter	*oiter = vos_hdl2oiter(ih);
-		struct evt_rect		 rect;
 
 		/*
 		 * Delete the physical entry when iterating to the first
 		 * logical entry
 		 */
-		if (phy_ext.ex_lo == lgc_ext.ex_lo) {
-			rect.rc_ex = phy_ext;
-			rect.rc_epc = entry->ie_epoch;
-			rect.rc_minor_epc = entry->ie_minor_epc;
-			mark_yield(&entry->ie_biov.bi_addr, acts);
-
-			rc = evt_delete(oiter->it_hdl, &rect, NULL);
-			if (rc)
-				D_ERROR("Delete EV entry "DF_RECT" error: "
-					""DF_RC"\n", DP_RECT(&rect), DP_RC(rc));
-		}
+		if (phy_ext.ex_lo == lgc_ext.ex_lo)
+			rc = delete_evt_entry(oiter, entry, acts, "discarded");
 
 		/*
 		 * Sorted iteration doesn't support tree empty check, so we
@@ -1707,6 +1747,12 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 			*acts |= VOS_ITER_CB_YIELD;
 		}
 		return rc;
+	}
+
+	/* Aggregation Yield for testing purpose */
+	while (DAOS_FAIL_CHECK(DAOS_VOS_AGG_BLOCKED)) {
+		ABT_thread_yield();
+		*acts |= VOS_ITER_CB_YIELD;
 	}
 
 	/* Aggregation */
@@ -1770,6 +1816,16 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		break;
 	case VOS_ITER_RECX:
 		rc = vos_agg_ev(ih, entry, agg_param, acts);
+		if (rc == -DER_CSUM || rc == -DER_TX_BUSY) {
+			/* Abort current evtree aggregation only */
+			D_DEBUG(DB_EPC, "Abort evtree aggregation "DF_RC"\n",
+				DP_RC(rc));
+
+			*acts |= VOS_ITER_CB_ABORT;
+			if (rc == -DER_CSUM)
+				agg_param->ap_csum_err = true;
+			rc = 0;
+		}
 		break;
 	default:
 		D_ASSERTF(false, "Invalid iter type\n");
@@ -1839,10 +1895,18 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		/* Reprobe flag is set */
 		*acts |= VOS_ITER_CB_YIELD;
 		rc = 0;
-	}
-
-	if (rc != 0)
+	} else if (rc != 0) {
 		D_ERROR("VOS aggregation failed: %d\n", rc);
+
+		/*
+		 * -DER_TX_BUSY error indicates current ilog aggregation
+		 * aborted on hitting uncommitted entry, this should be a very
+		 * rare case, we'd suppress the error here to keep aggregation
+		 * moving forward.
+		 */
+		if (rc == -DER_TX_BUSY)
+			rc = 0;
+	}
 
 	return rc;
 }
@@ -1973,6 +2037,10 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	if (rc != 0) {
 		close_merge_window(&agg_param.ap_window, rc);
 		goto exit;
+	} else if (agg_param.ap_csum_err) {
+		rc = -DER_CSUM;	/* Inform caller the csum error */
+		close_merge_window(&agg_param.ap_window, rc);
+		/* HAE needs be updated for csum error case */
 	}
 
 	/*

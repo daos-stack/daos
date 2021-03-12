@@ -84,19 +84,11 @@
     </description>
   </property>
   <property>
-    <name>fs.daos.preload.size</name>
+    <name>fs.daos.read.min.size</name>
     <value>4194304</value>
-    <description>
-      size for pre-loading more than requested data from DAOS into internal buffer when read.
-      Value range is 1m - 2g.
-    </description>
   </property>
   <property>
-    <name>c2.fs.daos.preload.size</name>
+    <name>c2.fs.daos.read.min.size</name>
     <value>-1</value>
-    <description>
-      size for pre-loading more than requested data from DAOS into internal buffer when read.
-      Value range is 1m - 2g.
-    </description>
   </property>
 </configuration>

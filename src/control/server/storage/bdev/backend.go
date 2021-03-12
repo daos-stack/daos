@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package bdev
@@ -90,7 +73,7 @@ func (w *spdkWrapper) suppressOutput() (restore func(), err error) {
 	return
 }
 
-func (w *spdkWrapper) init(log logging.Logger, spdkOpts spdk.EnvOptions) (func(), error) {
+func (w *spdkWrapper) init(log logging.Logger, spdkOpts *spdk.EnvOptions) (func(), error) {
 	restore, err := w.suppressOutput()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to suppress spdk output")
@@ -128,9 +111,9 @@ func (b *spdkBackend) IsVMDDisabled() bool {
 
 // Scan discovers NVMe controllers accessible by SPDK.
 func (b *spdkBackend) Scan(req ScanRequest) (*ScanResponse, error) {
-	restoreOutput, err := b.binding.init(b.log, spdk.EnvOptions{
-		PciWhiteList: req.DeviceList,
-		DisableVMD:   b.IsVMDDisabled(),
+	restoreOutput, err := b.binding.init(b.log, &spdk.EnvOptions{
+		PciIncludeList: req.DeviceList,
+		DisableVMD:     b.IsVMDDisabled(),
 	})
 	if err != nil {
 		return nil, err
@@ -205,10 +188,10 @@ func (b *spdkBackend) formatRespFromResults(results []*spdk.FormatResult) (*Form
 }
 
 func (b *spdkBackend) formatNvme(req FormatRequest) (*FormatResponse, error) {
-	spdkOpts := spdk.EnvOptions{
-		MemSize:      req.MemSize,
-		PciWhiteList: req.DeviceList,
-		DisableVMD:   b.IsVMDDisabled(),
+	spdkOpts := &spdk.EnvOptions{
+		MemSize:        req.MemSize,
+		PciIncludeList: req.DeviceList,
+		DisableVMD:     b.IsVMDDisabled(),
 	}
 
 	restoreOutput, err := b.binding.init(b.log, spdkOpts)
@@ -273,6 +256,7 @@ func detectVMD() ([]string, error) {
 	lspciCmd := exec.Command("lspci")
 	vmdCmd := exec.Command("grep", "-i", "-E", "201d|Volume Management Device")
 	var cmdOut bytes.Buffer
+	var prefixIncluded bool
 
 	vmdCmd.Stdin, _ = lspciCmd.StdoutPipe()
 	vmdCmd.Stdout = &cmdOut
@@ -285,6 +269,16 @@ func detectVMD() ([]string, error) {
 	}
 
 	vmdCount := bytes.Count(cmdOut.Bytes(), []byte("0000:"))
+	if vmdCount == 0 {
+		// sometimes the output may not include "0000:" prefix
+		// usually when muliple devices are in the PCI_WHITELIST
+		vmdCount = bytes.Count(cmdOut.Bytes(), []byte("Volume"))
+		if vmdCount == 0 {
+			vmdCount = bytes.Count(cmdOut.Bytes(), []byte("201d"))
+		}
+	} else {
+		prefixIncluded = true
+	}
 	vmdAddrs := make([]string, 0, vmdCount)
 
 	i := 0
@@ -294,6 +288,9 @@ func detectVMD() ([]string, error) {
 			break
 		}
 		s := strings.Split(scanner.Text(), " ")
+		if !prefixIncluded {
+			s[0] = "0000:" + s[0]
+		}
 		vmdAddrs = append(vmdAddrs, strings.TrimSpace(s[0]))
 		i++
 	}
@@ -354,7 +351,7 @@ func (b *spdkBackend) UpdateFirmware(pciAddr string, path string, slot int32) er
 		return FaultBadPCIAddr("")
 	}
 
-	restoreOutput, err := b.binding.init(b.log, spdk.EnvOptions{
+	restoreOutput, err := b.binding.init(b.log, &spdk.EnvOptions{
 		DisableVMD: b.IsVMDDisabled(),
 	})
 	if err != nil {

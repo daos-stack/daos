@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #ifndef __OBJ_EC_H__
@@ -63,10 +46,10 @@ struct obj_shard_iod {
 	uint32_t		 siod_tgt_idx;
 	/** start index in extend array in daos_iod_t */
 	uint32_t		 siod_idx;
-	/** number of extends in extend array in daos_iod_t */
-	uint32_t		 siod_nr;
 	/** the byte offset of this shard's data to the sgl/bulk */
 	uint64_t		 siod_off;
+	/** number of extends in extend array in daos_iod_t */
+	uint32_t		 siod_nr;
 };
 
 struct obj_iod_array {
@@ -331,12 +314,12 @@ struct obj_ec_singv_local {
 
 /** Query if the single value record is stored in one data target */
 static inline bool
-obj_ec_singv_one_tgt(daos_iod_t *iod, d_sg_list_t *sgl,
+obj_ec_singv_one_tgt(daos_size_t iod_size, d_sg_list_t *sgl,
 		     struct daos_oclass_attr *oca)
 {
 	uint64_t size = OBJ_EC_SINGV_EVENDIST_SZ(obj_ec_data_tgt_nr(oca));
 
-	if ((iod->iod_size != DAOS_REC_ANY && iod->iod_size <= size) ||
+	if ((iod_size != DAOS_REC_ANY && iod_size <= size) ||
 	    (sgl != NULL && daos_sgl_buf_size(sgl) <= size))
 		return true;
 
@@ -433,11 +416,13 @@ obj_io_desc_init(struct obj_io_desc *oiod, uint32_t tgt_nr, uint32_t flags)
 static inline void
 obj_io_desc_fini(struct obj_io_desc *oiod)
 {
-	if (oiod != NULL) {
-		if (oiod->oiod_siods != NULL)
-			D_FREE(oiod->oiod_siods);
-		memset(oiod, 0, sizeof(*oiod));
-	}
+	if (oiod == NULL)
+		return;
+
+	oiod->oiod_nr = 0;
+	oiod->oiod_tgt_idx = 0;
+	oiod->oiod_flags = 0;
+	D_FREE(oiod->oiod_siods);
 }
 
 /* translate the queried VOS shadow list to daos extents */
@@ -634,6 +619,12 @@ int obj_ec_codec_init(void);
 void obj_ec_codec_fini(void);
 struct obj_ec_codec *obj_ec_codec_get(daos_oclass_id_t oc_id);
 
+static inline struct obj_ec_codec *
+obj_id2ec_codec(daos_obj_id_t id)
+{
+	return obj_ec_codec_get(daos_obj_id2class(id));
+}
+
 /* cli_ec.c */
 int obj_ec_req_reasb(daos_iod_t *iods, d_sg_list_t *sgls, daos_obj_id_t oid,
 		     struct daos_oclass_attr *oca,
@@ -666,7 +657,7 @@ int obj_ec_get_degrade(struct obj_reasb_req *reasb_req, uint16_t fail_tgt_idx,
 struct obj_rw_in;
 int obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 			uint32_t iod_nr, uint32_t start_shard,
-			void *tgt_map, uint32_t map_size,
+			uint32_t max_shard, void *tgt_map, uint32_t map_size,
 			uint32_t tgt_nr, struct daos_shard_tgt *tgts,
 			struct obj_ec_split_req **split_req);
 void obj_ec_split_req_fini(struct obj_ec_split_req *req);

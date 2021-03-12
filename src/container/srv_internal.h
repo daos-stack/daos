@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * ds_cont: Client Server Internal Declarations
@@ -29,7 +12,7 @@
 
 #include <daos/lru.h>
 #include <daos_security.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/rdb.h>
 #include <daos_srv/rsvc.h>
 #include <daos_srv/container.h>
@@ -67,6 +50,21 @@ dsm_tls_get()
  *
  * Identified by a number unique within the pool.
  */
+
+struct ec_eph {
+	d_rank_t	rank;
+	daos_epoch_t	eph;
+};
+
+/* container EC aggregation epoch control descriptor, which is only on leader */
+struct cont_ec_agg {
+	uuid_t			ea_cont_uuid;
+	daos_epoch_t		ea_current_eph;
+	int			ea_servers_num;
+	struct ec_eph		*ea_server_ephs;
+	d_list_t		ea_list;
+};
+
 struct cont_svc {
 	uuid_t			cs_pool_uuid;
 	uint64_t		cs_id;
@@ -76,6 +74,10 @@ struct cont_svc {
 	rdb_path_t		cs_conts;	/* container KVS */
 	rdb_path_t		cs_hdls;	/* container handle KVS */
 	struct ds_pool	       *cs_pool;
+
+	/* Manage the EC aggregation epoch */
+	struct sched_request	*cs_ec_leader_ephs_req;
+	d_list_t		cs_ec_agg_list; /* link cont_ec_agg */
 };
 
 /* Container descriptor */
@@ -96,7 +98,7 @@ struct oid_iv_range {
 
 /* Container IV structure */
 struct cont_iv_snapshot {
-	int snap_cnt;
+	uint64_t snap_cnt;
 	uint64_t snaps[0];
 };
 
@@ -117,13 +119,21 @@ struct cont_iv_prop {
 	uint64_t	cip_csum_server_verify;
 	uint64_t	cip_dedup;
 	uint64_t	cip_dedup_size;
+	uint64_t	cip_alloced_oid;
 	uint64_t	cip_redun_fac;
 	uint64_t	cip_redun_lvl;
 	uint64_t	cip_snap_max;
 	uint64_t	cip_compress;
 	uint64_t	cip_encrypt;
+	struct daos_prop_co_roots	cip_roots;
+	struct daos_co_status		cip_co_status;
+	/* MUST be the last member */
+	struct daos_acl			cip_acl;
+};
 
-	struct daos_acl	cip_acl;
+struct cont_iv_agg_eph {
+	daos_epoch_t	eph;
+	d_rank_t	rank;
 };
 
 struct cont_iv_entry {
@@ -132,6 +142,7 @@ struct cont_iv_entry {
 		struct cont_iv_snapshot iv_snap;
 		struct cont_iv_capa	iv_capa;
 		struct cont_iv_prop	iv_prop;
+		struct cont_iv_agg_eph	iv_agg_eph;
 	};
 };
 
@@ -142,6 +153,7 @@ struct cont_iv_key {
 	uuid_t		cont_uuid;
 	/* IV class id, to differentiate SNAP/CAPA/PROP IV */
 	uint32_t	class_id;
+	uint32_t	entry_size;
 };
 
 /*
@@ -171,6 +183,8 @@ int ds_cont_acl_delete(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 int ds_cont_get_prop(uuid_t pool_uuid, uuid_t cont_uuid,
 		     daos_prop_t **prop_out);
 
+int ds_cont_leader_update_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
+				  d_rank_t rank, daos_epoch_t eph);
 /*
  * srv_epoch.c
  */
@@ -230,6 +244,8 @@ int ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
 				 uint64_t *snapshots, int snap_count);
 int ds_cont_tgt_snapshots_refresh(uuid_t pool_uuid, uuid_t cont_uuid);
 int ds_cont_tgt_close(uuid_t cont_hdl_uuid);
+int ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
+				daos_epoch_t eph);
 /**
  * oid_iv.c
  */
@@ -251,4 +267,10 @@ int cont_iv_prop_update(void *ns, uuid_t cont_uuid, daos_prop_t *prop);
 int cont_iv_snapshots_refresh(void *ns, uuid_t cont_uuid);
 int cont_iv_snapshots_update(void *ns, uuid_t cont_uuid,
 			     uint64_t *snapshots, int snap_count);
+
+int cont_child_gather_oids(struct ds_cont_child *cont, uuid_t coh_uuid,
+			   daos_epoch_t epoch);
+
+int cont_iv_ec_agg_eph_update(void *ns, uuid_t cont_uuid, daos_epoch_t eph);
+int cont_iv_ec_agg_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t eph);
 #endif /* __CONTAINER_SRV_INTERNAL_H__ */

@@ -1,0 +1,278 @@
+---
+# Sample conflig file DFS files and directories
+#
+# Chunk size  = 1MiB
+# I/O size    = 128KiB
+# DIR OClass  = S1
+# File OClass = RP_3GX
+#
+# total_objects total_size     dir_count dir_size data_count data_size      link_count link_size 4k_count 4k_size  256k_count 256k_size  8m_count 8m_size     500g_count 500g_size      10t_count 10t_size
+# 25358         24378612779767 4931      315584   19532      24378612428383 895        35800     5027     18930432 7719       1740194517 6682     47644771512 99         11884632720512 5         12444575811410
+
+num_shards: 1000
+
+# A-Key
+dfs_magic: &dfs_magic
+  count: 1
+  type: hashed
+  size: 9
+  overhead: meta
+  value_type: single_value
+  values: [{"count": 1, "size": 8, "aligned": "Yes"}]
+
+# A-Key
+dfs_sb_version: &dfs_sb_version
+  count: 1
+  type: hashed
+  size: 14
+  overhead: meta
+  value_type: single_value
+  values: [{"count": 1, "size": 2, "aligned": "Yes"}]
+
+# A-Key
+dfs_layout_version: &dfs_layout_version
+  count: 1
+  type: hashed
+  size: 18
+  overhead: meta
+  value_type: single_value
+  values: [{"count": 1, "size": 2, "aligned": "Yes"}]
+
+# A-Key
+dfs_chunk_size: &dfs_chunk_size
+  count: 1
+  type: hashed
+  size: 14
+  overhead: meta
+  value_type: single_value
+  values: [{"count": 1, "size": 8, "aligned": "Yes"}]
+
+# A-Key
+dfs_obj_class: &dfs_obj_class
+  count: 1
+  type: hashed
+  size: 13
+  overhead: meta
+  value_type: single_value
+  values: [{"count": 1, "size": 2, "aligned": "Yes"}]
+
+# D-Key
+dfs_sb_metadata: &dfs_sb_metadata
+  count: 1
+  type: hashed
+  size: 15
+  overhead: meta
+  akeys: [ *dfs_magic, *dfs_sb_version, *dfs_layout_version, *dfs_chunk_size, *dfs_obj_class ]
+
+# Dir A-Key
+dfs_inode: &dfs_inode
+  count: 1
+  type: hashed
+  size: 9           # DFS_INODE
+  overhead: meta
+  value_type: array
+  values: [{"count": 1, "size": 64, "aligned": "Yes"}]
+
+# Root Directory D-Key
+rootdir_dkey: &rootdir_dkey
+  count: 1
+  type: hashed
+  size: 1
+  overhead: user
+  akeys: [*dfs_inode]
+
+# SB Object
+superblock: &superblock_obj
+  count: 1
+  dkeys: [*dfs_sb_metadata, *rootdir_dkey]
+
+# symlinks A-Key
+symlinks_akey: &symlinks_akey
+  count: 1
+  type: hashed
+  size: 9
+  overhead: meta
+  value_type: array
+  values: [{"count": 1, "size": 64, "aligned": "Yes"},{"count": 1, "size": 40, "aligned": "Yes"}]
+
+# symlinks D-Key
+symlinks_dkey: &symlinks_dkey
+  count: 1 # ceiling(symlinks per dir)
+  type: hashed
+  size: 32
+  overhead: user
+  akeys: [*symlinks_akey]
+
+# sub dir D-Key
+sub_dir_dkey: &sub_dir_dkey
+  count: 1
+  type: hashed
+  size: 64
+  overhead: user
+  akeys: [*dfs_inode]
+
+# files D-Key
+files_dkey: &files_dkey
+  count: 4 # ceiling(files per dir)
+  type: hashed
+  size: 32
+  overhead: user
+  akeys: [*dfs_inode]
+
+# dir Object
+dir_obj: &dir_obj
+  count: 4931
+  dkeys: [*symlinks_dkey, *sub_dir_dkey, *files_dkey]
+
+# file A-Key 0
+file_akey0: &file_akey0
+  count: 1
+  type: integer
+  overhead: meta
+  value_type: single_value
+  values: [{"count": 3, "size": 64, "aligned": "Yes"}]
+
+# file D-Key 0
+file_dkey0: &file_dkey0
+  count: 3
+  type: integer
+  overhead: meta
+  akeys: [*file_akey0]
+
+# 1MiB file A-Key
+file_akey: &file_akey
+  count: 1
+  type: integer
+  overhead: user
+  value_type: array
+  values: [{"count": 8, "size": 131072, "aligned": "Yes"}]
+
+# 4k remainder A-Key
+4k_remainder_akey: &4k_remainder_akey
+  count: 1
+  type: integer
+  overhead: user
+  value_type: array
+  values: [{"count": 1, "size": 3765, "aligned": "Yes"}]
+
+# 4k remainder D-Key
+4k_remainder_dkey: &4k_remainder_dkey
+  count: 3
+  type: integer
+  overhead: user
+  akeys: [*4k_remainder_akey]
+
+# 4k file Object
+4k_obj: &4k_obj
+  count: 5027
+  dkeys: [*file_dkey0, *4k_remainder_dkey]
+
+# 256k remainder A-Key
+256k_remainder_akey: &256k_remainder_akey
+  count: 1
+  type: integer
+  overhead: user
+  value_type: array
+  values: [{"count": 1, "size": 131072, "aligned": "Yes"},{"count": 1, "size": 94371, "aligned": "Yes"}]
+
+# 256k remainder D-Key
+256k_remainder_dkey: &256k_remainder_dkey
+  count: 3
+  type: integer
+  overhead: user
+  akeys: [*256k_remainder_akey]
+
+# 256k file Object
+256k_obj: &256k_obj
+  count: 7719
+  dkeys: [*file_dkey0, *256k_remainder_dkey]
+
+# 8m file D-Key
+8m_dkey: &8m_dkey
+  count: 18
+  type: integer
+  overhead: user
+  akeys: [*file_akey]
+
+# 8m remainder A-Key
+8m_remainder_akey: &8m_remainder_akey
+  count: 1
+  type: integer
+  overhead: user
+  value_type: array
+  values: [{"count": 6, "size": 131072, "aligned": "Yes"},{"count": 1, "size": 52428, "aligned": "Yes"}]
+
+# 8m remainder D-Key
+8m_remainder_dkey: &8m_remainder_dkey
+  count: 3
+  type: integer
+  overhead: user
+  akeys: [*8m_remainder_akey]
+
+# 8m file Object
+8m_obj: &8m_obj
+  count: 6682
+  dkeys: [*file_dkey0, *8m_dkey, *8m_remainder_dkey]
+
+# 500g file D-Key
+500g_dkey: &500g_dkey
+  count: 343455
+  type: integer
+  overhead: user
+  akeys: [*file_akey]
+
+# 500g remainder A-Key
+500g_remainder_akey: &500g_remainder_akey
+  count: 1
+  type: integer
+  overhead: user
+  value_type: array
+  values: [{"count": 4, "size": 131072, "aligned": "Yes"},{"count": 1, "size": 47508, "aligned": "Yes"}]
+
+# 500g remainder D-Key
+500g_remainder_dkey: &500g_remainder_dkey
+  count: 3
+  type: integer
+  overhead: user
+  akeys: [*500g_remainder_akey]
+
+# 500g file Object
+500g_obj: &500g_obj
+  count: 99
+  dkeys: [*file_dkey0, *500g_dkey, *500g_remainder_dkey]
+
+# 10t file D-Key
+10t_dkey: &10t_dkey
+  count: 7120842
+  type: integer
+  overhead: user
+  akeys: [*file_akey]
+
+# 10t remainder A-Key
+10t_remainder_akey: &10t_remainder_akey
+  count: 1
+  type: integer
+  overhead: user
+  value_type: array
+  values: [{"count": 3, "size": 131072, "aligned": "Yes"},{"count": 1, "size": 95402, "aligned": "Yes"}]
+
+# 10t remainder D-Key
+10t_remainder_dkey: &10t_remainder_dkey
+  count: 3
+  type: integer
+  overhead: user
+  akeys: [*10t_remainder_akey]
+
+# 10t file Object
+10t_obj: &10t_obj
+  count: 5
+  dkeys: [*file_dkey0, *10t_dkey, *10t_remainder_dkey]
+
+# Containers
+posix_key: &posix
+  count: 1
+  csum_size: 0
+  csum_gran: 16384
+  objects: [*superblock_obj, *dir_obj, *4k_obj, *256k_obj, *8m_obj, *500g_obj, *10t_obj]
+
+containers: [*posix]

@@ -3,10 +3,17 @@
 DAOS uses a flexible security model that separates authentication from
 authorization. It is designed to have a minimal impact on the I/O path.
 
-There are two areas of DAOS that require access control. At the user level,
-clients must be able to read and modify only _pools_ and _containers_ to which 
-they have been granted access. At the system and administrative levels, only
-authorized components must be able to access the DAOS management network.
+DAOS does not provide any transport security for the fabric network used for I/O
+transfers. When deploying DAOS, the administrator is responsible for secure
+configuration of their specific fabric network. For RDMA over Ethernet, enabling
+IPsec is recommended. See the
+[RDMA protocol spec (RFC 5040)](https://tools.ietf.org/html/rfc5040#section-8.2)
+for more information.
+
+There are two areas where DAOS implements its own layer of security. At the user
+level, clients must be able to read and modify only _pools_ and _containers_ to
+which they have been granted access. At the system and administrative levels,
+only authorized components must be able to access the DAOS management network.
 
 ## Authentication
 

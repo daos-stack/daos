@@ -1,36 +1,69 @@
 #!/bin/bash
 
-post_provision_config_nodes() {
-    local yum_repo_args="--disablerepo=*"
-    yum_repo_args+=" --enablerepo=repo.dc.hpdd.intel.com_repository_*"
-    yum_repo_args+=",build.hpdd.intel.com_job_daos-stack*"
+REPOS_DIR=/etc/yum.repos.d
+DISTRO_NAME=centos7
+LSB_RELEASE=redhat-lsb-core
 
-    # Reserve port ranges for DAOS and CART servers
+timeout_yum() {
+    local timeout="$1"
+    shift
+
+    # now make sure everything is fully up-to-date
+    local tries=3
+    while [ $tries -gt 0 ]; do
+        if time timeout "$timeout" yum -y "$@"; then
+            # succeeded, return with success
+            return 0
+        fi
+        if [ "${PIPESTATUS[0]}" = "124" ]; then
+            # timed out, try again
+            (( tries-- ))
+            continue
+        fi
+        # yum failed for something other than timeout
+        return 1
+    done
+
+    return 1
+}
+
+bootstrap_dnf() {
+    timeout_yum 5m install dnf 'dnf-command(config-manager)'
+}
+
+group_repo_post() {
+    # nothing for EL7
+    :
+}
+
+post_provision_config_nodes() {
+    bootstrap_dnf
+
+    # Reserve port ranges 31416-31516 for DAOS and CART servers
     echo 31416-31516 > /proc/sys/net/ipv4/ip_local_reserved_ports
 
     if $CONFIG_POWER_ONLY; then
-        rm -f /etc/yum.repos.d/*.hpdd.intel.com_job_daos-stack_job_*_job_*.repo
-        yum -y erase fio fuse ior-hpc mpich-autoload               \
+        rm -f $REPOS_DIR/*.hpdd.intel.com_job_daos-stack_job_*_job_*.repo
+        dnf -y erase fio fuse ior-hpc mpich-autoload               \
                      ompi argobots cart daos daos-client dpdk      \
                      fuse-libs libisa-l libpmemobj mercury mpich   \
                      openpa pmix protobuf-c spdk libfabric libpmem \
                      libpmemblk munge-libs munge slurm             \
                      slurm-example-configs slurmctld slurm-slurmmd
     fi
-    if [ -n "$DAOS_STACK_GROUP_REPO" ]; then
-         rm -f /etc/yum.repos.d/*"$DAOS_STACK_GROUP_REPO"
-         yum-config-manager \
-             --add-repo="$REPOSITORY_URL"/"$DAOS_STACK_GROUP_REPO"
-    fi
 
-    if [ -n "$DAOS_STACK_LOCAL_REPO" ]; then
-        rm -f /etc/yum.repos.d/*"$DAOS_STACK_LOCAL_REPO"
-        yum-config-manager --add-repo="$REPOSITORY_URL"/"$DAOS_STACK_LOCAL_REPO"
-        echo "gpgcheck = False" >> \
-            /etc/yum.repos.d/*"${DAOS_STACK_LOCAL_REPO//\//_}".repo
-    fi
+    local dnf_repo_args="--disablerepo=*"
+
+    add_repo "$DAOS_STACK_GROUP_REPO"
+    group_repo_post
+
+    add_repo "${DAOS_STACK_LOCAL_REPO}" false
+
+    # TODO: this should be per repo for the above two repos
+    dnf_repo_args+=" --enablerepo=repo.dc.hpdd.intel.com_repository_*"
 
     if [ -n "$INST_REPOS" ]; then
+        local repo
         for repo in $INST_REPOS; do
             branch="master"
             build_number="lastSuccessfulBuild"
@@ -42,34 +75,27 @@ post_provision_config_nodes() {
                     branch="${branch%:*}"
                 fi
             fi
-            yum-config-manager --add-repo="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/centos7/
-            pname=$(ls /etc/yum.repos.d/*.hpdd.intel.com_job_daos-stack_job_"${repo}"_job_"${branch//\//%252F}"_"${build_number}"_artifact_artifacts_centos7_.repo)
-            if [ "$pname" != "${pname//%252F/_}" ]; then
-                mv "$pname" "${pname//%252F/_}"
+            local repo_url="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/$DISTRO_NAME/
+            dnf config-manager --add-repo="${repo_url}"
+            disable_gpg_check "$repo_url"
+            # TODO: this should be per repo in the above loop
+            if [ -n "$INST_REPOS" ]; then
+                dnf_repo_args+=",build.hpdd.intel.com_job_daos-stack*"
             fi
-            pname="${pname//%252F/_}"
-            sed -i -e '/^\[/s/%252F/_/g' -e '$s/^$/gpgcheck = False/' "$pname"
-            cat "$pname"
         done
     fi
     if [ -n "$INST_RPMS" ]; then
         # shellcheck disable=SC2086
-        yum -y erase $INST_RPMS
+        dnf -y erase $INST_RPMS
     fi
-    for gpg_url in $GPG_KEY_URLS; do
-      rpm --import "$gpg_url"
-    done
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
-    yum -y install redhat-lsb-core
+    dnf -y install $LSB_RELEASE
     # shellcheck disable=SC2086
     if [ -n "$INST_RPMS" ] &&
-       ! yum -y $yum_repo_args install $INST_RPMS; then
+       ! dnf -y $dnf_repo_args install $INST_RPMS; then
         rc=${PIPESTATUS[0]}
-        for file in /etc/yum.repos.d/*.repo; do
-            echo "---- $file ----"
-            cat "$file"
-        done
+        dump_repos
         exit "$rc"
     fi
     if [ ! -e /usr/bin/pip3 ] &&
@@ -81,7 +107,7 @@ post_provision_config_nodes() {
         ln -s python3.6 /usr/bin/python3
     fi
     # install the debuginfo repo in case we get segfaults
-    cat <<"EOF" > /etc/yum.repos.d/CentOS-Debuginfo.repo
+    cat <<"EOF" > $REPOS_DIR/CentOS-Debuginfo.repo
 [core-0-debuginfo]
 name=CentOS-7 - Debuginfo
 baseurl=http://debuginfo.centos.org/7/$basearch/
@@ -91,5 +117,11 @@ enabled=0
 EOF
 
     # now make sure everything is fully up-to-date
-    time yum -y upgrade --exclude fuse,mercury,daos,daos-\*
+    if ! time dnf -y upgrade \
+                  --exclude fuse,mercury,daos,daos-\*; then
+        dump_repos
+        exit 1
+    fi
+
+    exit 0
 }

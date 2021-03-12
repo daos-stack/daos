@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B620873.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(bio)
 
@@ -446,6 +429,12 @@ bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state)
 			bbs->bb_owner_xs->bxc_tgt_id,
 			bio_state_enum_to_str(bbs->bb_state),
 			bio_state_enum_to_str(new_state));
+		/* Print a console message */
+		D_PRINT("Blobstore state transitioned. tgt: %d, %s -> %s\n",
+			bbs->bb_owner_xs->bxc_tgt_id,
+			bio_state_enum_to_str(bbs->bb_state),
+			bio_state_enum_to_str(new_state));
+
 		bbs->bb_state = new_state;
 
 		if (new_state == BIO_BS_STATE_FAULTY) {
@@ -529,8 +518,11 @@ bio_bs_state_transit(struct bio_blobstore *bbs)
 		break;
 	case BIO_BS_STATE_SETUP:
 		rc = on_setup(bbs);
-		if (rc == 0)
+		if (rc == 0) {
 			rc = bio_bs_state_set(bbs, BIO_BS_STATE_NORMAL);
+			if (rc == 0)
+				on_normal(bbs);
+		}
 		break;
 	default:
 		rc = -DER_INVAL;

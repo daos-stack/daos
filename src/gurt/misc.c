@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It implements some miscellaneous functions which
@@ -27,7 +10,26 @@
 #define D_LOGFAC	DD_FAC(misc)
 
 #include <stdarg.h>
+#include <math.h>
 #include <gurt/common.h>
+
+void
+d_free(void *ptr)
+{
+	free(ptr);
+}
+
+void *
+d_calloc(size_t count, size_t eltsize)
+{
+	return calloc(count, eltsize);
+}
+
+void *
+d_realloc(void *ptr, size_t size)
+{
+	return realloc(ptr, size);
+}
 
 int
 d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src)
@@ -77,7 +79,7 @@ d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src)
 
 	rc = d_rank_list_dup(dst, src);
 	if (rc != 0) {
-		D_ERROR("d_rank_list_dup() failed, " DF_RC "\n", DP_RC(rc));
+		D_ERROR("d_rank_list_dup() failed, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, 0);
 	}
 
@@ -206,7 +208,6 @@ d_rank_list_realloc(d_rank_list_t *ptr, uint32_t size)
 		ptr->rl_ranks = new_rl_ranks;
 		ptr->rl_nr = size;
 	} else {
-		D_ERROR("d_rank_list_realloc() failed.\n");
 		ptr = NULL;
 	}
 
@@ -490,39 +491,6 @@ rank_list_to_uint32_array(d_rank_list_t *rl, uint32_t **ints, size_t *len)
 	return 0;
 }
 
-/**
- * Initialize a scatter/gather list, create an array to store @nr iovecs.
- */
-int
-d_sgl_init(d_sg_list_t *sgl, unsigned int nr)
-{
-	memset(sgl, 0, sizeof(*sgl));
-
-	sgl->sg_nr = sgl->sg_nr_out = nr;
-	D_ALLOC_ARRAY(sgl->sg_iovs, nr);
-
-	return sgl->sg_iovs == NULL ? -DER_NOMEM : 0;
-}
-
-/**
- * Finalise a scatter/gather list, it can also free iovecs if @free_iovs
- * is true.
- */
-void
-d_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
-{
-	int	i;
-
-	if (sgl->sg_iovs == NULL)
-		return;
-
-	for (i = 0; free_iovs && i < sgl->sg_nr; i++)
-		D_FREE(sgl->sg_iovs[i].iov_buf);
-
-	D_FREE(sgl->sg_iovs);
-	memset(sgl, 0, sizeof(*sgl));
-}
-
 static inline bool
 dis_integer_str(char *str)
 {
@@ -684,4 +652,117 @@ d_free_string(struct d_string_buffer_t *buf)
 		buf->str_size = 0;
 		buf->buf_size = 0;
 	}
+}
+
+/**
+ * Initialize \a seq. The backoff sequence will be generated using an
+ * exponential backoff algorithm. The first \a nzeros backoffs will be zero;
+ * each of the rest will be a random number in [0, x], where x is initially \a
+ * next and multiplied with \a factor for each subsequent backoff. (See
+ * d_backoff_seq_next.) For example, with
+ *
+ *   nzeros = 1,
+ *   factor = 4,
+ *   next = 16, and
+ *   max = 1 << 20,
+ *
+ * the caller shall get:
+ *
+ *   Backoff	Range
+ *         1	[0,       0]
+ *         2	[0,      16]
+ *         3	[0,      64]
+ *         4	[0,     128]
+ *       ...	...
+ *        10	[0, 1048576]
+ *        11	[0, 1048576]
+ *       ...	...
+ *
+ * \param[in]	seq	backoff sequence
+ * \param[in]	nzeros	number of initial zero backoffs
+ * \param[in]	factor	backoff factor
+ * \param[in]	next	next backoff after all initial zero backoffs
+ * \param[in]	max	maximum backoff
+ */
+int
+d_backoff_seq_init(struct d_backoff_seq *seq, uint8_t nzeros, uint16_t factor,
+		   uint32_t next, uint32_t max)
+{
+	if (seq == NULL || factor == 0 || next == 0 || max == 0 || next > max)
+		return -DER_INVAL;
+
+	seq->bos_flags = 0;
+	seq->bos_nzeros = nzeros;
+	seq->bos_factor = factor;
+	seq->bos_next = next;
+	seq->bos_max = max;
+	return 0;
+}
+
+/**
+ * Finalize \a seq. This offers a clear way to reset a d_backoff_seq object
+ * (with potentially different parameters):
+ *
+ *   d_backoff_seq_fini(&seq);
+ *   rc = d_backoff_seq_init(&seq, ...);
+ *
+ * \param[in]	seq	backoff sequence
+ */
+void
+d_backoff_seq_fini(struct d_backoff_seq *seq)
+{
+	/* Don't need to do anything at the moment. */
+}
+
+/**
+ * Compute and return next backoff in \a seq.
+ *
+ * \param[in]	seq	backoff sequence
+ */
+uint32_t
+d_backoff_seq_next(struct d_backoff_seq *seq)
+{
+	uint32_t next;
+
+	/* Have we not outputted all the initial zeros yet? */
+	if (seq->bos_nzeros != 0) {
+		seq->bos_nzeros--;
+		return 0;
+	}
+
+	/* Save seq->bos_next in next. */
+	next = seq->bos_next;
+
+	/* Update seq->bos_next. */
+	if (seq->bos_next < seq->bos_max) {
+		seq->bos_next *= seq->bos_factor;
+		/*
+		 * If the new value overflows or is greater than the maximum,
+		 * set it to the maximum.
+		 */
+		if (seq->bos_next / seq->bos_factor != next ||
+		    seq->bos_next > seq->bos_max)
+			seq->bos_next = seq->bos_max;
+	}
+
+	/* Return a random backoff in [0, next]. */
+	return (next * ((double)rand() / RAND_MAX));
+}
+
+double
+d_stand_div(double *array, int nr)
+{
+	double		avg = 0;
+	double		std = 0;
+	int		i;
+
+	for (i = 0; i < nr; i++)
+		avg += array[i];
+
+	avg /= nr;
+	for (i = 0; i < nr; i++)
+		std += pow(array[i] - avg, 2);
+
+	std /= nr;
+	return sqrt(std);
 }

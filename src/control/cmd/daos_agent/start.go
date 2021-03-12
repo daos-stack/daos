@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package main
@@ -47,7 +30,7 @@ type startCmd struct {
 }
 
 func (cmd *startCmd) Execute(_ []string) error {
-	cmd.log.Infof("Starting %s:", versionString())
+	cmd.log.Debugf("Starting %s (pid %d)", versionString(), os.Getpid())
 	startedAt := time.Now()
 
 	ctx, shutdown := context.WithCancel(context.Background())
@@ -79,7 +62,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 		cmd.log.Debugf("This system is not NUMA aware.  Any devices found are reported as NUMA node 0.")
 	}
 
-	procmon := NewProcMon(cmd.log)
+	procmon := NewProcMon(cmd.log, cmd.ctlInvoker, cmd.cfg.SystemName)
 	procmon.startMonitoring(ctx)
 
 	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.log, cmd.cfg.TransportConfig))
@@ -100,7 +83,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 	}
 
 	cmd.log.Debugf("startup complete in %s", time.Since(startedAt))
-	cmd.log.Infof("Listening on %s", sockPath)
+	cmd.log.Infof("%s (pid %d) listening on %s", versionString(), os.Getpid(), sockPath)
 
 	// Setup signal handlers so we can block till we get SIGINT or SIGTERM
 	signals := make(chan os.Signal)
@@ -113,12 +96,14 @@ func (cmd *startCmd) Execute(_ []string) error {
 	// SIGPIPE is caught and logged to avoid killing the agent.
 	// The syntax looks odd but <- Channel means wait on any input on the
 	// channel.
+	var shutdownRcvd time.Time
 	go func() {
 		sig := <-signals
 		switch sig {
 		case syscall.SIGPIPE:
 			cmd.log.Infof("Signal received.  Caught non-fatal %s; continuing", sig)
 		default:
+			shutdownRcvd = time.Now()
 			cmd.log.Infof("Signal received.  Caught %s; shutting down", sig)
 			close(finish)
 		}
@@ -126,5 +111,6 @@ func (cmd *startCmd) Execute(_ []string) error {
 	<-finish
 	drpcServer.Shutdown()
 
+	cmd.log.Debugf("shutdown complete in %s", time.Since(shutdownRcvd))
 	return nil
 }

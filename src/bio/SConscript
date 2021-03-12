@@ -10,6 +10,7 @@ def scons():
 
     denv = env.Clone()
     denv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])
+    denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     prereqs.require(denv, 'pmdk', 'spdk', 'argobots', 'protobufc', 'hwloc')
 
     SConscript('smd/SConscript')
@@ -24,7 +25,8 @@ def scons():
     libs += ['spdk_conf', 'spdk_blob', 'spdk_nvme', 'spdk_util']
     libs += ['spdk_json', 'spdk_jsonrpc', 'spdk_rpc', 'spdk_trace']
     libs += ['spdk_sock', 'spdk_log', 'spdk_notify', 'spdk_blob_bdev']
-    libs += ['spdk_vmd']
+    libs += ['spdk_vmd', 'spdk_event', 'spdk_event_bdev', 'spdk_event_copy']
+    libs += ['spdk_event_vmd']
 
     # Other libs
     libs += ['numa', 'dl', 'smd']

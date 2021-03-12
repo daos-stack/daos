@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2020 Intel Corporation.
+  (C) Copyright 2019-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from __future__ import print_function
 
@@ -51,7 +34,8 @@ from test_utils_pool import TestPool
 #  ~48MB for background aggregation use
 # 52% of remaining free space set aside for staging log container
 # (installsnapshot RPC handling in raft)
-NO_OF_MAX_CONTAINER = 4150
+#NO_OF_MAX_CONTAINER = 4150
+NO_OF_MAX_CONTAINER = 3465
 
 def ior_runner_thread(manager, uuids, results):
     """IOR run thread method.
@@ -125,41 +109,6 @@ class ObjectMetadata(TestWithServers):
                 return "FAIL"
         self.d_log.debug("IOR {0} Threads Finished -----".format(operation))
         return "PASS"
-
-    def test_metadata_find_svc(self):
-        """JIRA ID: DAOS-3321.
-
-        Test Description:
-            Test to ask MS for list of PS replia ranks.
-
-        Use Cases:
-            ?
-
-        :avocado: tags=all,metadata,pr,large,metadatafindsvc,hw
-        """
-        # Connect to pool with svc argument being a valid rank,
-        # but one that is not a pool service replica. Rank 0 is convenient.
-        # libdaos should process a DER_NOTREPLICA reply, and then contact MS
-        # for the list of PS ranks
-
-        try:
-            # temporarily manipulate the pool's svc ranks
-            save_rank = self.pool.pool.svc.rl_ranks[0]
-            save_nranks = self.pool.pool.svc.rl_nr
-            self.pool.pool.svc.rl_ranks[0] = 0
-            self.pool.pool.svc.rl_nr = 1
-            self.pool.pool.connect(2)
-            self.pool.pool.disconnect()
-            self.log.info("connected to pool specifying incorrect svc rank 0")
-
-        except DaosApiError as exe:
-            print(exe, traceback.format_exc())
-            self.fail("pool connect failed when specifying svc rank 0")
-
-        finally:
-            # restore
-            self.pool.pool.svc.rl_ranks[0] = save_rank
-            self.pool.pool.svc.rl_nr = save_nranks
 
     def test_metadata_fillup(self):
         """JIRA ID: DAOS-1512.
@@ -266,9 +215,16 @@ class ObjectMetadata(TestWithServers):
             self.log.info("Container Create Iteration %d / 9", k)
             for cont in range(NO_OF_MAX_CONTAINER):
                 container = DaosContainer(self.context)
-                container.create(self.pool.pool.handle)
+                try:
+                    container.create(self.pool.pool.handle)
+                except DaosApiError as exc:
+                    self.log.info("Container create %d/%d failed: %s",
+                                  cont, NO_OF_MAX_CONTAINER, exc)
+                    self.fail("Container create failed")
+
                 container_array.append(container)
 
+            self.log.info("Created %d containers", (cont+1))
             self.log.info("Container Remove Iteration %d / 9", k)
             for cont in container_array:
                 cont.destroy()

@@ -1,23 +1,7 @@
-# (C) Copyright  2019 Intel Corporation.
+# (C) Copyright 2019-2021 Intel Corporation.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
+# SPDX-License-Identifier: BSD-2-Clause-Patent
 #
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#
-# GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-# The Government's rights to use, modify, reproduce, release, perform, display,
-# or disclose this software are subject to the terms of the Apache License as
-# provided in Contract No. B609815.
-# Any reproduction of computer software, computer software documentation, or
-# portions thereof marked with this legend must also reproduce the markings.
 """
 PyDAOS Module allowing global access to the DAOS containers and objects.
 """
@@ -131,10 +115,12 @@ class Cont(object):
             raise PyDError("failed to access container", ret)
         self.poh = poh
         self.coh = coh
+        self._root_kv = None
 
     def __del__(self):
         if not self.coh:
             return
+        self._root_kv = None
         ret = pydaos_shim.cont_close(DAOS_MAGIC, self.poh, self.coh)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to close container", ret)
@@ -158,11 +144,15 @@ class Cont(object):
 
     def rootkv(self, cid=ObjClassID.OC_SX):
         """Open the container root key-value store."""
-        (ret, hi, lo) = pydaos_shim.obj_idroot(DAOS_MAGIC, cid.value)
+
+        if self._root_kv:
+            return self._root_kv
+        (ret, hi, lo) = pydaos_shim.obj_idroot(DAOS_MAGIC, self.coh, cid.value)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to generate root object identifier", ret)
         oid = ObjID(hi, lo)
-        return KVObj(self.coh, oid, self)
+        self._root_kv = KVObj(self.coh, oid, self)
+        return self._root_kv
 
     def get_kv_by_name(self, name, root=None, create=False):
         """Return KV by name.
@@ -197,7 +187,7 @@ class _Obj(object):
     def __init__(self, coh, oid, cont):
         self._dc = DaosClient()
         self.oid = oid
-        # Set self.oh to Null here so it's defined in __dell__ if there's
+        # Set self.oh to None here so it's defined in __del__ if there's
         # a problem with the kv_open() call.
         self.oh = None
         # keep container around until all objects are gone

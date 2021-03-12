@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// c6xuplcrnless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package system
@@ -65,8 +48,15 @@ func MockMemberResult(rank Rank, action string, err error, state MemberState) *M
 	return result
 }
 
-func MockMembership(t *testing.T, log logging.Logger) *Membership {
-	return NewMembership(log, MockDatabase(t, log))
+func MockMembership(t *testing.T, log logging.Logger, resolver resolveTCPFn) (*Membership, *Database) {
+	db := MockDatabase(t, log)
+	m := NewMembership(log, db)
+
+	if resolver != nil {
+		return m.WithTCPResolver(resolver), db
+	}
+
+	return m, db
 }
 
 type (
@@ -97,6 +87,10 @@ func (mrs *mockRaftService) Apply(cmd []byte, timeout time.Duration) raft.ApplyF
 }
 
 func (mr *mockRaftService) AddVoter(_ raft.ServerID, _ raft.ServerAddress, _ uint64, _ time.Duration) raft.IndexFuture {
+	return &mockRaftFuture{}
+}
+
+func (mr *mockRaftService) RemoveServer(_ raft.ServerID, _ uint64, _ time.Duration) raft.IndexFuture {
 	return &mockRaftFuture{}
 }
 

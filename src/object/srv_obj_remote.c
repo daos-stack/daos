@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * object server operations
@@ -36,7 +19,7 @@
 #include <daos_srv/container.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/bio.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/dtx_srv.h>
 #include "obj_rpc.h"
 #include "obj_internal.h"
@@ -481,7 +464,7 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 	uuid_copy(oci->oci_co_uuid, oci_parent->oci_co_uuid);
 	oci->oci_map_ver = oci_parent->oci_map_ver;
 	oci->oci_flags = (oci_parent->oci_flags | exec_arg->flags) &
-			~(DRF_HAS_EC_SPLIT | DRF_CPD_LEADER);
+			~(ORF_HAS_EC_SPLIT | ORF_CPD_LEADER);
 
 	oci->oci_disp_tgts.ca_arrays = NULL;
 	oci->oci_disp_tgts.ca_count = 0;
@@ -502,7 +485,7 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 		D_GOTO(out, rc = -DER_INVAL);
 
 	count = dcde_parent->dcde_read_cnt + dcde_parent->dcde_write_cnt;
-	if (count < total || exec_arg->flags & DRF_HAS_EC_SPLIT) {
+	if (count < total || exec_arg->flags & ORF_HAS_EC_SPLIT) {
 		rc = ds_obj_cpd_clone_reqs(dlh, shard_tgt, dcde_parent,
 					   dcsr_parent, total, &dcde, &dcsr);
 		if (rc != 0)

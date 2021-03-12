@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file includes functions to call client daos API on the server side.
@@ -34,7 +17,7 @@
 #include <daos_errno.h>
 #include <daos_event.h>
 #include <daos_task.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 
 static int
 dsc_obj_retry_cb(tse_task_t *task, void *arg)
@@ -144,7 +127,8 @@ dsc_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 int
 dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	      unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
-	      daos_iom_t *maps, uint32_t extra_flag, uint32_t *extra_arg)
+	      daos_iom_t *maps, uint32_t extra_flag, uint32_t *extra_arg,
+	      d_iov_t *csum_iov)
 {
 	tse_task_t	*task;
 	daos_handle_t	coh, th;
@@ -156,8 +140,8 @@ dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		return rc;
 
 	rc = dc_obj_fetch_task_create(oh, th, 0, dkey, nr, extra_flag,
-				      iods, sgls, maps, extra_arg, NULL,
-				      dsc_scheduler(), &task);
+				      iods, sgls, maps, extra_arg, csum_iov,
+				      NULL, dsc_scheduler(), &task);
 	if (rc)
 		return rc;
 
@@ -167,6 +151,21 @@ dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		tse_task_complete(task, rc);
 		return rc;
 	}
+
+	return dsc_task_run(task, dsc_obj_retry_cb, &oh, sizeof(oh), true);
+}
+
+int
+dsc_obj_update(daos_handle_t oh, uint64_t flags, daos_key_t *dkey,
+	       unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls)
+{
+	tse_task_t	*task;
+	int		rc;
+
+	rc = dc_obj_update_task_create(oh, DAOS_TX_NONE, flags, dkey, nr, iods,
+				       sgls, NULL, dsc_scheduler(), &task);
+	if (rc)
+		return rc;
 
 	return dsc_task_run(task, dsc_obj_retry_cb, &oh, sizeof(oh), true);
 }

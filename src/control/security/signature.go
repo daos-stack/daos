@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package security
@@ -78,7 +61,7 @@ func (s *TokenSigner) Sign(key crypto.PrivateKey, data []byte) ([]byte, error) {
 	switch signingKey := key.(type) {
 	// TODO: Support key types other than RSA
 	case *rsa.PrivateKey:
-		return rsa.SignPKCS1v15(s.randPool, signingKey, crypto.SHA512, digest)
+		return rsa.SignPSS(s.randPool, signingKey, crypto.SHA512, digest, nil)
 	default:
 		return nil, &UnsupportedKeyError{}
 	}
@@ -95,7 +78,7 @@ func (s *TokenSigner) Verify(key crypto.PublicKey, data []byte, sig []byte) erro
 	switch signingKey := key.(type) {
 	// TODO: Support key types other than RSA
 	case *rsa.PublicKey:
-		return rsa.VerifyPKCS1v15(signingKey, crypto.SHA512, digest, sig)
+		return rsa.VerifyPSS(signingKey, crypto.SHA512, digest, sig, nil)
 	default:
 		return &UnsupportedKeyError{}
 	}

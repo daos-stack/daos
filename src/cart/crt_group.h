@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It gives out the internal data structure of group.
@@ -29,7 +12,6 @@
 
 #include <gurt/atomic.h>
 #include "crt_swim.h"
-
 
 /* (1 << CRT_LOOKUP_CACHE_BITS) is the number of buckets of lookup hash table */
 #define CRT_LOOKUP_CACHE_BITS	(4)
@@ -92,9 +74,6 @@ struct crt_grp_priv {
 	 */
 	struct crt_swim_membs	 gp_membs_swim;
 
-	/* CaRT context only for sending sub-grp create/destroy RPCs */
-	crt_context_t		 gp_ctx;
-
 	/* size (number of membs) of group */
 	uint32_t		 gp_size;
 	/*
@@ -105,6 +84,8 @@ struct crt_grp_priv {
 	 * up to date.
 	 */
 	d_rank_t		 gp_self;
+	/* List of PSR ranks */
+	d_rank_list_t		 *gp_psr_ranks;
 	/* PSR rank in attached group */
 	d_rank_t		 gp_psr_rank;
 	/* PSR phy addr address in attached group */
@@ -123,14 +104,15 @@ struct crt_grp_priv {
 
 	/* set of variables only valid in primary service groups */
 	uint32_t		 gp_primary:1, /* flag of primary group */
-				 gp_view:1; /* flag to indicate it is a view */
+				 gp_view:1, /* flag to indicate it is a view */
+				/* Auto remove rank from secondary group */
+				 gp_auto_remove:1;
 
 	/* group reference count */
 	uint32_t		 gp_refcount;
 
 	pthread_rwlock_t	 gp_rwlock; /* protect all fields above */
 };
-
 
 static inline d_rank_list_t*
 grp_priv_get_membs(struct crt_grp_priv *priv)
@@ -158,7 +140,6 @@ grp_priv_set_membs(struct crt_grp_priv *priv, d_rank_list_t *list)
 	D_ASSERT(list == NULL);
 
 	return 0;
-
 }
 
 static inline int
@@ -187,10 +168,6 @@ grp_priv_fini_membs(struct crt_grp_priv *priv)
 
 	if (priv->gp_membs.cgm_linear_list != NULL)
 		d_rank_list_free(priv->gp_membs.cgm_linear_list);
-
-	/* Secondary groups have no free indices list */
-	if (!priv->gp_primary)
-		return;
 
 	/* With PMIX disabled free index list needs to be freed */
 	while ((index = d_list_pop_entry(&priv->gp_membs.cgm_free_indices,
@@ -247,7 +224,6 @@ struct crt_lookup_item {
 	pthread_mutex_t		 li_mutex;
 };
 
-
 /* structure of global group data */
 struct crt_grp_gdata {
 	struct crt_grp_priv	*gg_primary_grp;
@@ -261,7 +237,7 @@ int crt_grp_detach(crt_group_t *attached_grp);
 void crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 		      d_rank_t rank, uint32_t tag, crt_phy_addr_t *base_addr,
 		      hg_addr_t *hg_addr);
-int crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
+int crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv,
 			  d_rank_t rank, uint32_t tag, const char *uri);
 int crt_grp_lc_addr_insert(struct crt_grp_priv *grp_priv,
 			   struct crt_context *ctx_idx,
@@ -271,11 +247,10 @@ struct crt_grp_priv *crt_grp_lookup_int_grpid(uint64_t int_grpid);
 struct crt_grp_priv *crt_grp_lookup_grpid(crt_group_id_t grp_id);
 int crt_validate_grpid(const crt_group_id_t grpid);
 int crt_grp_init(crt_group_id_t grpid);
-int crt_grp_fini(void);
+void crt_grp_fini(void);
 void crt_grp_priv_destroy(struct crt_grp_priv *grp_priv);
 
 int crt_grp_config_load(struct crt_grp_priv *grp_priv);
-
 
 /* some simple helpers */
 static inline bool
@@ -323,35 +298,25 @@ crt_grp_priv_addref(struct crt_grp_priv *grp_priv)
  * Decrease the attach refcount and return the result.
  * Returns negative value for error case.
  */
-static inline int
+static inline void
 crt_grp_priv_decref(struct crt_grp_priv *grp_priv)
 {
 	bool	destroy = false;
-	int	rc = 0;
 
 	D_ASSERT(grp_priv != NULL);
 
 	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
-	if (grp_priv->gp_refcount == 0) {
-		D_DEBUG(DB_TRACE, "group (%s), refcount already dropped "
-			"to 0.\n", grp_priv->gp_pub.cg_grpid);
-		D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
-		D_GOTO(out, rc = -DER_ALREADY);
-	} else {
-		grp_priv->gp_refcount--;
-		D_DEBUG(DB_TRACE, "group (%s), refcount decreased to "
-			"%d.\n", grp_priv->gp_pub.cg_grpid,
-			grp_priv->gp_refcount);
-		if (grp_priv->gp_refcount == 0) {
-			destroy = true;
-		}
-	}
+	D_ASSERT(grp_priv->gp_refcount >= 1);
+	grp_priv->gp_refcount--;
+	D_DEBUG(DB_TRACE, "group (%s), decref to %d.\n",
+		grp_priv->gp_pub.cg_grpid, grp_priv->gp_refcount);
+	if (grp_priv->gp_refcount == 0)
+		destroy = true;
+
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
 	if (destroy)
 		crt_grp_priv_destroy(grp_priv);
-out:
-	return rc;
 }
 
 static inline int
@@ -402,12 +367,12 @@ crt_rank_present(crt_group_t *grp, d_rank_t rank)
 #define CRT_RANK_PRESENT(grp, rank) \
 	crt_rank_present(grp, rank)
 
-
 bool
 crt_grp_id_identical(crt_group_id_t grp_id_1, crt_group_id_t grp_id_2);
-int crt_grp_lc_uri_insert_all(crt_group_t *grp, d_rank_t rank, int tag,
-			const char *uri);
 int crt_grp_config_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank);
 int crt_grp_psr_reload(struct crt_grp_priv *grp_priv);
+
+int
+grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank);
 
 #endif /* __CRT_GROUP_H__ */

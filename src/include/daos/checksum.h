@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #ifndef __DAOS_CHECKSUM_H
@@ -98,6 +81,7 @@ struct daos_csummer {
 	bool		 dcs_skip_key_calc;
 	bool		 dcs_skip_key_verify;
 	bool		 dcs_skip_data_verify;
+	pthread_mutex_t	 dcs_lock;
 };
 
 /**
@@ -105,6 +89,7 @@ struct daos_csummer {
  * daos_csummer Functions
  * -----------------------------------------------------------------------------
  */
+
 /**
  * Initialize the daos_csummer
  *
@@ -151,6 +136,17 @@ daos_csummer_init_with_type(struct daos_csummer **obj, enum DAOS_HASH_TYPE type,
  */
 int
 daos_csummer_init_with_props(struct daos_csummer **obj, daos_prop_t *props);
+
+/**
+ * Initialize the daos_csummer using information that's packed into the iov
+ * @param obj		daos_csummer to be initialized. Memory will be allocated
+ *			for it.
+ * @param csums_iov	iov that has csum_info structures in it.
+ * @return
+ */
+int
+daos_csummer_csum_init_with_packed(struct daos_csummer **csummer,
+				   const d_iov_t *csums_iov);
 
 /**
  * Initialize a daos_csummer as a copy of an existing daos_csummer
@@ -361,7 +357,7 @@ daos_csummer_allocation_size(struct daos_csummer *obj, daos_iod_t *iods,
  *				distributed to multiple targets. When it is NULL
  *				it means replica object, or EC object located
  *				in single target.
- * @param[out]	p_iods_csums	pointer that will reference the
+ * @param[out]	p_cds		pointer that will reference the
  *				the memory allocated
  * @return			number of iod_csums allocated, or
  *				negative if error
@@ -370,7 +366,25 @@ int
 daos_csummer_alloc_iods_csums(struct daos_csummer *obj, daos_iod_t *iods,
 			      uint32_t nr, bool akey_only,
 			      struct dcs_layout *singv_los,
-			      struct dcs_iod_csums **p_iods_csums);
+			      struct dcs_iod_csums **p_cds);
+
+/**
+ * Using the information from the iods and csums packed into the csum_iov
+ * allocate the memory for iod_csums structures and populate it appropriately
+ *
+ * @param iods_csums[out]		structure that will be allocated and
+ *					populated
+ * @param iods[in]			list of iod structures
+ * @param iod_cnt[in]			Number of iods
+ * @param csum_iov[in]			packed csum infos
+ * @param csummer			csummer
+ * @return
+ */
+int
+daos_csummer_alloc_iods_csums_with_packed(struct daos_csummer *csummer,
+					  daos_iod_t *iods, int iod_cnt,
+					  d_iov_t *csum_iov,
+					  struct dcs_iod_csums **iods_csums);
 
 /** Destroy the iods csums */
 void
@@ -406,6 +420,13 @@ void
 ci_set(struct dcs_csum_info *csum_buf, void *buf, uint32_t csum_buf_size,
 	uint16_t csum_size, uint32_t csum_count, uint32_t chunksize,
 	uint16_t type);
+
+/**
+ * Setup the daos_csum_info with an existing daos_csum_info. This is not a copy,
+ * meaning that the same csum buf from the source is used in the destination.
+ */
+void
+ci_set_from_ci(struct dcs_csum_info *csum_buf, struct dcs_csum_info *csum2copy);
 
 /** Set the csum buf to a NULL value */
 void

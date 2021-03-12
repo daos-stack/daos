@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package system
@@ -32,6 +15,12 @@ import (
 	"github.com/hashicorp/go-hclog"
 
 	"github.com/daos-stack/daos/src/control/logging"
+)
+
+var (
+	suppressedMessages = map[string]struct{}{
+		"failed to contact": {},
+	}
 )
 
 // hcLogger implements the hclog.Logger interface to
@@ -62,6 +51,9 @@ func (hlc *hcLogger) argString(args ...interface{}) string {
 func (hlc *hcLogger) Trace(msg string, args ...interface{}) {}
 
 func (hlc *hcLogger) Debug(msg string, args ...interface{}) {
+	if _, found := suppressedMessages[msg]; found {
+		return
+	}
 	hlc.log.Debugf(msg+": %s", hlc.argString(args...))
 }
 
@@ -71,9 +63,8 @@ func (hlc *hcLogger) Info(msg string, args ...interface{}) {
 }
 
 func (hlc *hcLogger) Warn(msg string, args ...interface{}) {
-	// As we don't have a warn level with our logger, just
-	// escalate these messages to ERROR.
-	hlc.log.Errorf(msg+": %s", hlc.argString(args...))
+	// Only errors should be printed at ERROR.
+	hlc.log.Debugf(msg+": %s", hlc.argString(args...))
 }
 
 func (hlc *hcLogger) Error(msg string, args ...interface{}) {

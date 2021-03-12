@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package pretty
@@ -219,10 +202,21 @@ func PrintStorageFormatMap(hsm control.HostStorageMap, out io.Writer, opts ...Pr
 	return nil
 }
 
-func printSmdDevice(dev *storage.SmdDevice, out io.Writer, opts ...PrintConfigOption) error {
-	_, err := fmt.Fprintf(out, "UUID:%s Targets:%+v Rank:%d State:%s\n",
-		dev.UUID, dev.TargetIDs, dev.Rank, dev.State)
-	return err
+func printSmdDevice(dev *storage.SmdDevice, iw io.Writer, opts ...PrintConfigOption) error {
+	if _, err := fmt.Fprintf(iw, "UUID:%s [TrAddr:%s]\n",
+		dev.UUID, dev.TrAddr); err != nil {
+
+		return err
+	}
+
+	iw1 := txtfmt.NewIndentWriter(iw)
+	if _, err := fmt.Fprintf(iw1, "Targets:%+v Rank:%d State:%s\n",
+		dev.TargetIDs, dev.Rank, dev.State); err != nil {
+
+		return err
+	}
+
+	return nil
 }
 
 func printSmdPool(pool *control.SmdPool, out io.Writer, opts ...PrintConfigOption) error {

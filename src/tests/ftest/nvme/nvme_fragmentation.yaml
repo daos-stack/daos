@@ -7,14 +7,14 @@ hosts:
     - client-D
 timeout: 5000
 server_config:
-  servers_per_host: 2
+  engines_per_host: 2
   name: daos_server
   servers:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
       fabric_iface: ib0
-      fabric_iface_port: 31416
+      fabric_iface_port: 31317
       log_file: daos_server0.log
       bdev_class: nvme
       bdev_list: ["0000:81:00.0"]
@@ -37,7 +37,6 @@ pool:
     name: daos_server
     scm_size: 500000000000
     nvme_size: 700000000000
-    svcn: 1
     control_method: dmg
 container:
     type: POSIX

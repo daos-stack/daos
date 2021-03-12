@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2018-2020 Intel Corporation.
+// (C) Copyright 2018-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package bdev
@@ -31,6 +14,7 @@ import (
 	"syscall"
 	"text/template"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -68,7 +52,7 @@ const (
 	msgBdevBadSize = "backfile_size should be greater than 0"
 )
 
-// bdev describes parameters and behaviours for a particular bdev class.
+// bdev describes parameters and behaviors for a particular bdev class.
 type bdev struct {
 	templ   string
 	vosEnv  string
@@ -124,6 +108,8 @@ func createEmptyFile(log logging.Logger, path string, size int64) error {
 		return err
 	}
 
+	log.Debugf("allocating new file %s of size %s", path,
+		humanize.Bytes(uint64(size)))
 	file, err := common.TruncFile(path)
 	if err != nil {
 		return err
@@ -133,8 +119,7 @@ func createEmptyFile(log logging.Logger, path string, size int64) error {
 	if err := syscall.Fallocate(int(file.Fd()), 0, 0, size); err != nil {
 		e, ok := err.(syscall.Errno)
 		if ok && (e == syscall.ENOSYS || e == syscall.EOPNOTSUPP) {
-			log.Debugf(
-				"Warning: Fallocate not supported, attempting Truncate: ", e)
+			log.Debugf("warning: Fallocate not supported, attempting Truncate: ", e)
 
 			if err := file.Truncate(size); err != nil {
 				return err
@@ -216,11 +201,12 @@ func NewClassProvider(log logging.Logger, cfgDir string, cfg *storage.BdevConfig
 	if msg := p.bdev.isValid(p.cfg); msg != "" {
 		log.Debugf("spdk %s: %s", cfg.Class, msg)
 		// Bad config; don't generate a config file
-		return nil, errors.Errorf("invalid NVMe config: %s", msg)
+		return nil, errors.Errorf("invalid nvme config: %s", msg)
 	}
 
 	// Config file required; set this so it gets generated later
 	p.cfgPath = filepath.Join(cfgDir, confOut)
+	log.Debugf("output bdev conf file set to %s", p.cfgPath)
 
 	// FIXME: Not really happy with having side-effects here, but trying
 	// not to change too much at once.
@@ -234,6 +220,8 @@ func NewClassProvider(log logging.Logger, cfgDir string, cfg *storage.BdevConfig
 // by spdk.
 func (p *ClassProvider) GenConfigFile() error {
 	if p.cfgPath == "" {
+		p.log.Debug("skip bdev conf file generation as no path set")
+
 		return nil
 	}
 
@@ -247,8 +235,10 @@ func (p *ClassProvider) GenConfigFile() error {
 	}
 
 	if confBytes.Len() == 0 {
-		return errors.New("spdk: generated NVMe config is unexpectedly empty")
+		return errors.New("spdk: generated nvme config is unexpectedly empty")
 	}
+
+	p.log.Debugf("create %s with %v bdevs", p.cfgPath, p.cfg.DeviceList)
 
 	f, err := os.Create(p.cfgPath)
 	defer func() {

@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include <stddef.h>
@@ -357,6 +340,8 @@ strarg2ft(char *str)
 		return daos_mhash_type2algo(HASH_TYPE_CRC16);
 	if (csum_str_match(str, "crc32"))
 		return daos_mhash_type2algo(HASH_TYPE_CRC32);
+	if (csum_str_match(str, "adler32"))
+		return daos_mhash_type2algo(HASH_TYPE_ADLER32);
 	if (csum_str_match(str, "crc64"))
 		return daos_mhash_type2algo(HASH_TYPE_CRC64);
 	if (csum_str_match(str, "sha1"))
@@ -445,7 +430,7 @@ main(int argc, char *argv[])
 	}
 	rc = run_timings(csum_fts, type_count, sizes, sizes_count, 1000);
 	if (rc != 0)
-		printf("Error: " DF_RC "\n", DP_RC(rc));
+		printf("Error: "DF_RC"\n", DP_RC(rc));
 
 	return -rc;
 }

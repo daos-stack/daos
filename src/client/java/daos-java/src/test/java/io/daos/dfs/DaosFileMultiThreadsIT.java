@@ -1,5 +1,9 @@
 package io.daos.dfs;
 
+import io.daos.Constants;
+import io.daos.DaosIOException;
+import io.daos.DaosObjectType;
+import io.daos.DaosTestBase;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -18,8 +22,8 @@ public class DaosFileMultiThreadsIT {
 
   @BeforeClass
   public static void setup() throws Exception {
-    poolId = System.getProperty("pool_id", DaosFsClientTestBase.DEFAULT_POOL_ID);
-    contId = System.getProperty("cont_id", DaosFsClientTestBase.DEFAULT_CONT_ID);
+    poolId = DaosTestBase.getPoolId();
+    contId = DaosTestBase.getContId();
 
     client = DaosFsClientTestBase.prepareFs(poolId, contId);
   }
@@ -96,7 +100,7 @@ public class DaosFileMultiThreadsIT {
   @AfterClass
   public static void teardown() throws Exception {
     if (client != null) {
-      client.disconnect();
+      client.close();
     }
   }
 

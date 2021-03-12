@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos. It implements some miscellaneous functions which
@@ -30,43 +13,18 @@
 #include <daos/checksum.h>
 #include <daos/dtx.h>
 
-/**
- * Initialize a scatter/gather list, create an array to store @nr iovecs.
- */
 int
 daos_sgl_init(d_sg_list_t *sgl, unsigned int nr)
 {
-	memset(sgl, 0, sizeof(*sgl));
-
-	sgl->sg_nr = nr;
-	if (nr == 0)
-		return 0;
-
-	D_ALLOC_ARRAY(sgl->sg_iovs, nr);
-
-	return sgl->sg_iovs == NULL ? -DER_NOMEM : 0;
+	D_ASSERTF(0, "This function is deprecated.  Use d_sgl_init\n");
+	return 0;
 }
 
-/**
- * Finalise a scatter/gather list, it can also free iovecs if @free_iovs
- * is true.
- */
-void
+int
 daos_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
 {
-	int	i;
-
-	if (sgl == NULL || sgl->sg_iovs == NULL)
-		return;
-
-	for (i = 0; free_iovs && i < sgl->sg_nr; i++) {
-		if (sgl->sg_iovs[i].iov_buf != NULL) {
-			D_FREE(sgl->sg_iovs[i].iov_buf);
-		}
-	}
-
-	D_FREE(sgl->sg_iovs);
-	memset(sgl, 0, sizeof(*sgl));
+	D_ASSERTF(0, "This function is deprecated.  Use d_sgl_fini\n");
+	return 0;
 }
 
 static int
@@ -97,7 +55,7 @@ daos_sgls_copy_internal(d_sg_list_t *dst_sgl, uint32_t dst_nr,
 		if (alloc) {
 			int rc;
 
-			rc = daos_sgl_init(&dst_sgl[i], src_sgl[i].sg_nr);
+			rc = d_sgl_init(&dst_sgl[i], src_sgl[i].sg_nr);
 			if (rc)
 				return rc;
 		}
@@ -182,6 +140,44 @@ int
 daos_sgl_alloc_copy_data(d_sg_list_t *dst, d_sg_list_t *src)
 {
 	return daos_sgls_copy_internal(dst, 1, src, 1, true, false, true);
+}
+
+int
+daos_sgl_merge(d_sg_list_t *dst, d_sg_list_t *src)
+{
+	d_iov_t *new_iovs = NULL;
+	int total;
+	int i;
+	int rc = 0;
+
+	D_ASSERT(dst != NULL);
+	D_ASSERT(src != NULL);
+
+	if (src->sg_nr == 0)
+		return 0;
+
+	total = dst->sg_nr + src->sg_nr;
+	D_REALLOC_ARRAY(new_iovs, dst->sg_iovs, total);
+	if (new_iovs == NULL)
+		return -DER_NOMEM;
+
+	for (i = dst->sg_nr; i < total; i++) {
+		int idx = i - dst->sg_nr;
+
+		D_ALLOC(new_iovs[i].iov_buf, src->sg_iovs[idx].iov_buf_len);
+		if (new_iovs[i].iov_buf == NULL)
+			D_GOTO(free, rc = -DER_NOMEM);
+
+		memcpy(new_iovs[i].iov_buf, src->sg_iovs[idx].iov_buf,
+		       src->sg_iovs[idx].iov_len);
+		new_iovs[i].iov_len = src->sg_iovs[idx].iov_len;
+		new_iovs[i].iov_buf_len = src->sg_iovs[idx].iov_buf_len;
+	}
+
+free:
+	dst->sg_iovs = new_iovs;
+	dst->sg_nr = i;
+	return rc;
 }
 
 daos_size_t
@@ -378,6 +374,7 @@ daos_iov_copy(d_iov_t *dst, d_iov_t *src)
 	if (src == NULL || src->iov_buf == NULL)
 		return 0;
 	D_ASSERT(src->iov_buf_len > 0);
+	D_ASSERT(dst != NULL);
 
 	D_ALLOC(dst->iov_buf, src->iov_buf_len);
 	if (dst->iov_buf == NULL)
@@ -389,6 +386,24 @@ daos_iov_copy(d_iov_t *dst, d_iov_t *src)
 	return 0;
 }
 
+int
+daos_iov_alloc(d_iov_t *iov, daos_size_t size, bool set_full)
+{
+	D_ASSERT(iov != NULL);
+	D_ASSERT(size > 0);
+
+	memset(iov, 0, sizeof(*iov));
+	D_ALLOC(iov->iov_buf, size);
+	if (iov->iov_buf == NULL)
+		return -DER_NOMEM;
+
+	iov->iov_buf_len = size;
+	if (set_full)
+		iov->iov_len = size;
+
+	return 0;
+}
+
 void
 daos_iov_free(d_iov_t *iov)
 {
@@ -397,7 +412,6 @@ daos_iov_free(d_iov_t *iov)
 	D_ASSERT(iov->iov_buf_len > 0);
 
 	D_FREE(iov->iov_buf);
-	iov->iov_buf = NULL;
 	iov->iov_buf_len = 0;
 	iov->iov_len = 0;
 }
@@ -419,7 +433,9 @@ daos_iov_cmp(d_iov_t *iov1, d_iov_t *iov2)
 void
 daos_iov_append(d_iov_t *iov, void *buf, uint64_t buf_len)
 {
-	D_ASSERT(iov->iov_len + buf_len <= iov->iov_buf_len);
+	D_ASSERTF(iov->iov_len + buf_len <= iov->iov_buf_len,
+		  "iov->iov_len(%lu) + buf_len(%lu) <= iov->iov_buf_len(%lu)",
+		  iov->iov_len, buf_len, iov->iov_buf_len);
 	memcpy(iov->iov_buf + iov->iov_len, buf, buf_len);
 	iov->iov_len += buf_len;
 }

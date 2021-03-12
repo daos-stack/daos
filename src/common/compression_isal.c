@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #define D_LOGFAC	DD_FAC(csum)
@@ -154,18 +137,14 @@ deflate_compress(void *daos_dc_ctx, uint8_t *src, size_t src_len,
 	int ret = 0;
 	struct deflate_ctx *ctx = daos_dc_ctx;
 
-	ctx->stream.total_in = 0;
-	ctx->stream.total_out = 0;
-	ctx->stream.avail_in = src_len;
+	isal_deflate_reset(&ctx->stream);
+
 	ctx->stream.next_in = src;
-	ctx->stream.avail_out = dst_len;
+	ctx->stream.avail_in = src_len;
 	ctx->stream.next_out = dst;
+	ctx->stream.avail_out = dst_len;
 
 	ret = isal_deflate_stateless(&ctx->stream);
-
-	/* Check if input buffer are all consumed */
-	if (ctx->stream.avail_in)
-		return DC_STATUS_ERR;
 
 	if (ret == COMP_OK) {
 		*produced = ctx->stream.total_out;
@@ -185,18 +164,14 @@ deflate_decompress(void *daos_dc_ctx, uint8_t *src, size_t src_len,
 	int ret = 0;
 	struct deflate_ctx *ctx = daos_dc_ctx;
 
-	ctx->stream.total_in = 0;
-	ctx->stream.total_out = 0;
+	isal_inflate_reset(&ctx->state);
+
 	ctx->state.next_in = src;
 	ctx->state.avail_in = src_len;
 	ctx->state.next_out = dst;
 	ctx->state.avail_out = dst_len;
 
 	ret = isal_inflate(&ctx->state);
-
-	/* Check if input buffer are all consumed */
-	if (ctx->state.avail_in)
-		return DC_STATUS_ERR;
 
 	if (ret == ISAL_DECOMP_OK) {
 		*produced = ctx->state.total_out;

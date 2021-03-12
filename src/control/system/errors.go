@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package system
@@ -42,7 +25,19 @@ var (
 // IsUnavailable returns a boolean indicating whether or not the
 // supplied error corresponds to some unavailability state.
 func IsUnavailable(err error) bool {
+	if err == nil {
+		return false
+	}
 	return strings.Contains(errors.Cause(err).Error(), ErrRaftUnavail.Error())
+}
+
+// IsEmptyGroupMap returns a boolean indicating whether or not the
+// supplied error corresponds to an empty system group map.
+func IsEmptyGroupMap(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(errors.Cause(err).Error(), ErrEmptyGroupMap.Error())
 }
 
 // ErrNotReplica indicates that a request was made to a control plane
@@ -85,17 +80,80 @@ func IsNotLeader(err error) bool {
 // ErrMemberExists indicates the failure of an operation that
 // expected the given member to not exist.
 type ErrMemberExists struct {
-	Rank Rank
+	Rank *Rank
+	UUID *uuid.UUID
 }
 
 func (err *ErrMemberExists) Error() string {
-	return fmt.Sprintf("member with rank %d already exists", err.Rank)
+	switch {
+	case err.Rank != nil:
+		return fmt.Sprintf("member with rank %d already exists", *err.Rank)
+	case err.UUID != nil:
+		return fmt.Sprintf("member with uuid %s already exists", *err.UUID)
+	default:
+		return "member already exists"
+	}
+}
+
+func errRankExists(r Rank) *ErrMemberExists {
+	return &ErrMemberExists{Rank: &r}
+}
+
+func errUuidExists(u uuid.UUID) *ErrMemberExists {
+	return &ErrMemberExists{UUID: &u}
 }
 
 // IsMemberExists returns a boolean indicating whether or not the
 // supplied error is an instance of ErrMemberExists.
 func IsMemberExists(err error) bool {
 	_, ok := errors.Cause(err).(*ErrMemberExists)
+	return ok
+}
+
+// ErrJoinFailure indicates the failure of a Join request due
+// to some structured error condition.
+type ErrJoinFailure struct {
+	rankChanged bool
+	uuidChanged bool
+	newUUID     *uuid.UUID
+	curUUID     *uuid.UUID
+	newRank     *Rank
+	curRank     *Rank
+}
+
+func (err *ErrJoinFailure) Error() string {
+	switch {
+	case err.rankChanged:
+		return fmt.Sprintf("can't rejoin member with uuid %s: rank changed from %d -> %d", *err.curUUID, *err.curRank, *err.newRank)
+	case err.uuidChanged:
+		return fmt.Sprintf("can't rejoin member with rank %d: uuid changed from %s -> %s", *err.curRank, *err.curUUID, *err.newUUID)
+	default:
+		return "unknown join failure"
+	}
+}
+
+func errRankChanged(new, cur Rank, uuid uuid.UUID) *ErrJoinFailure {
+	return &ErrJoinFailure{
+		rankChanged: true,
+		curUUID:     &uuid,
+		newRank:     &new,
+		curRank:     &cur,
+	}
+}
+
+func errUuidChanged(new, cur uuid.UUID, rank Rank) *ErrJoinFailure {
+	return &ErrJoinFailure{
+		uuidChanged: true,
+		newUUID:     &new,
+		curUUID:     &cur,
+		curRank:     &rank,
+	}
+}
+
+// IsJoinFailure returns a boolean indicating whether or not the
+// supplied error is an instance of ErrJoinFailure.
+func IsJoinFailure(err error) bool {
+	_, ok := errors.Cause(err).(*ErrJoinFailure)
 	return ok
 }
 
@@ -130,8 +188,9 @@ func IsMemberNotFound(err error) bool {
 // ErrPoolNotFound indicates a failure to find a pool service with the
 // given search criterion.
 type ErrPoolNotFound struct {
-	byRank *Rank
-	byUUID *uuid.UUID
+	byRank  *Rank
+	byUUID  *uuid.UUID
+	byLabel *string
 }
 
 func (err *ErrPoolNotFound) Error() string {
@@ -140,6 +199,8 @@ func (err *ErrPoolNotFound) Error() string {
 		return fmt.Sprintf("unable to find pool service with rank %d", *err.byRank)
 	case err.byUUID != nil:
 		return fmt.Sprintf("unable to find pool service with uuid %s", *err.byUUID)
+	case err.byLabel != nil:
+		return fmt.Sprintf("unable to find pool service with label %q", *err.byLabel)
 	default:
 		return "unable to find pool service"
 	}

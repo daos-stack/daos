@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * \file
@@ -62,6 +45,8 @@ typedef struct {
 	uuid_t			ci_uuid;
 	/** Epoch of latest persistent snapshot */
 	daos_epoch_t		ci_lsnapshot;
+	/** Redundancy factor */
+	uint32_t		ci_redun_fac;
 	/** Number of snapshots */
 	uint32_t		ci_nsnapshots;
 	/** Epochs of returns snapshots */
@@ -175,6 +160,7 @@ daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop,
  *			-DER_UNREACH	Network is unreachable
  *			-DER_NO_PERM	Permission denied
  *			-DER_NONEXIST	Container is nonexistent
+ *			-DER_RF		#failures exceed RF, data possibly lost
  */
 int
 daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
@@ -560,6 +546,32 @@ daos_cont_subscribe(daos_handle_t coh, daos_epoch_t *epoch, daos_event_t *ev);
 int
 daos_cont_create_snap(daos_handle_t coh, daos_epoch_t *epoch, char *name,
 		      daos_event_t *ev);
+
+enum daos_snapshot_opts {
+	/** create snapshot */
+	DAOS_SNAP_OPT_CR	= (1 << 0),
+	/** create OI table for a snapshot */
+	DAOS_SNAP_OPT_OIT	= (1 << 1),
+};
+
+/**
+ * Advanced snapshot function, it can do different things based bits set
+ * in \a opts:
+ * - DAOS_SNAP_OPT_CR
+ *   create a snapshot at the current epoch and return it.
+ * - DAOS_SNAP_OPT_OIT
+ *   create object ID table (OIT) for the snapshot
+ *
+ * \param[in]	coh	Container handle
+ * \param[out]	epoch	returned epoch of persistent snapshot taken.
+ * \param[in]	name	Optional null terminated name for snapshot.
+ * \param[in]	opts	Bit flags, see daos_snapshot_opts
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ */
+int
+daos_cont_create_snap_opt(daos_handle_t coh, daos_epoch_t *epoch, char *name,
+			  enum daos_snapshot_opts opts, daos_event_t *ev);
 
 /**
  * List all the snapshots of a container and optionally retrieve the snapshot

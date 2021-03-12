@@ -6,14 +6,14 @@ hosts:
     - server-D
 timeout: 900
 server_config:
-  servers_per_host: 2
+  engines_per_host: 2
   name: daos_server
   servers:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
       fabric_iface: ib0
-      fabric_iface_port: 31416
+      fabric_iface_port: 31317
       log_file: daos_server0.log
       bdev_class: nvme
       bdev_list: ["0000:81:00.0"]
@@ -34,7 +34,6 @@ server_config:
 pool:
     mode: 146
     name: daos_server
-    svcn: 1
     control_method: dmg
     storage_ratio:
 #   - [scm_size, nvme_size, Expected Result]

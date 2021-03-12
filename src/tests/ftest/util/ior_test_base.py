@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-(C) Copyright 2018-2020 Intel Corporation.
+(C) Copyright 2018-2021 Intel Corporation.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
-GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-The Government's rights to use, modify, reproduce, release, perform, display,
-or disclose this software are subject to the terms of the Apache License as
-provided in Contract No. B609815.
-Any reproduction of computer software, computer software documentation, or
-portions thereof marked with this legend must also reproduce the markings.
+SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 import threading
@@ -82,20 +65,14 @@ class IorTestBase(DfuseTestBase):
         # Create a pool
         self.pool.create()
 
-    def create_cont(self, oclass):
+    def create_cont(self):
         """Create a TestContainer object to be used to create container.
-        Args:
-            oclass: Explicitly supply object class for container create
+
         """
         # Get container params
         self.container = TestContainer(
             self.pool, daos_command=DaosCommand(self.bin))
         self.container.get_params(self)
-
-        # update object class for container create, if supplied
-        # explicitly.
-        if oclass:
-            self.container.oclass.update(oclass)
 
         # create container
         self.container.create()
@@ -120,7 +97,8 @@ class IorTestBase(DfuseTestBase):
     def run_ior_with_pool(self, intercept=None, test_file_suffix="",
                           test_file="daos:testFile", create_pool=True,
                           create_cont=True, stop_dfuse=True, plugin_path=None,
-                          timeout=None, fail_on_warning=False):
+                          timeout=None, fail_on_warning=False,
+                          mount_dir=None):
         """Execute ior with optional overrides for ior flags and object_class.
 
         If specified the ior flags and ior daos object class parameters will
@@ -144,6 +122,7 @@ class IorTestBase(DfuseTestBase):
             timeout (int, optional): command timeout. Defaults to None.
             fail_on_warning (bool, optional): Controls whether the test
                 should fail if a 'WARNING' is found. Default is False.
+            mount_dir (str, optional): Create specific mount point
 
         Returns:
             CmdResult: result of the ior command execution
@@ -157,7 +136,7 @@ class IorTestBase(DfuseTestBase):
             # Connect to the pool, create container and then start dfuse
             if not self.dfuse:
                 self.start_dfuse(
-                    self.hostlist_clients, self.pool, self.container)
+                    self.hostlist_clients, self.pool, self.container, mount_dir)
 
         # setup test file for POSIX or HDF5 with vol connector
         if self.ior_cmd.api.value == "POSIX" or plugin_path:
@@ -168,21 +147,21 @@ class IorTestBase(DfuseTestBase):
         self.ior_cmd.test_file.update("".join([test_file, test_file_suffix]))
         job_manager = self.get_ior_job_manager_command()
         job_manager.timeout = timeout
-        out = self.run_ior(job_manager, self.processes,
-                           intercept, plugin_path=plugin_path,
-                           fail_on_warning=fail_on_warning)
-
-        if stop_dfuse:
-            self.stop_dfuse()
+        try:
+            out = self.run_ior(job_manager, self.processes,
+                               intercept, plugin_path=plugin_path,
+                               fail_on_warning=fail_on_warning)
+        finally:
+            if stop_dfuse:
+                self.stop_dfuse()
 
         return out
 
-    def update_ior_cmd_with_pool(self, create_cont=True, oclass=None):
+    def update_ior_cmd_with_pool(self, create_cont=True):
         """Update ior_cmd with pool.
 
         Args:
           create_cont (bool, optional): create a container. Defaults to True.
-          oclass (string, optional): Specify object class
         """
         # Create a pool if one does not already exist
         if self.pool is None:
@@ -192,7 +171,7 @@ class IorTestBase(DfuseTestBase):
         # It will not enable checksum feature
         if create_cont:
             self.pool.connect()
-            self.create_cont(oclass)
+            self.create_cont()
         # Update IOR params with the pool and container params
         self.ior_cmd.set_daos_params(self.server_group, self.pool,
                                      self.container.uuid)
@@ -426,14 +405,15 @@ class IorTestBase(DfuseTestBase):
                 "Pool Free Size did not match: actual={}, expected={}".format(
                     actual_pool_size, expected_pool_size))
 
-    def execute_cmd(self, cmd, fail_on_err=True, display_output=True):
+    def execute_cmd(self, command, fail_on_err=True, display_output=True):
         """Execute cmd using general_utils.pcmd.
 
         Args:
-            cmd (str): String command to be executed
-            fail_on_err (bool): Boolean for whether to fail the test if command
-                execution returns non zero return code.
-            display_output (bool): Boolean for whether to display output.
+            command (str): the command to execute on the client hosts
+            fail_on_err (bool, optional): whether or not to fail the test if
+                command returns a non zero return code. Defaults to True.
+            display_output (bool, optional): whether or not to display output.
+                Defaults to True.
 
         Returns:
             dict: a dictionary of return codes keys and accompanying NodeSet
@@ -441,24 +421,42 @@ class IorTestBase(DfuseTestBase):
 
         """
         try:
-            # execute bash cmds
-            ret = pcmd(
-                self.hostlist_clients,
-                cmd,
-                verbose=display_output,
-                timeout=300)
-            if 0 not in ret:
-                error_hosts = NodeSet(
-                    ",".join(
-                        [str(node_set) for code, node_set in
-                         ret.items() if code != 0]))
-                if fail_on_err:
-                    raise CommandFailure(
-                        "Error running '{}' on the following "
-                        "hosts: {}".format(cmd, error_hosts))
+            # Execute the bash command on each client host
+            result = self._execute_command(command, fail_on_err, display_output)
 
-        # report error if any command fails
         except CommandFailure as error:
+            # Report an error if any command fails
             self.log.error("DfuseSparseFile Test Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
-        return ret
+
+        return result
+
+    def _execute_command(self, command, fail_on_err=True, display_output=True):
+        """Execute the command on all client hosts.
+
+        Optionally verify if the command returns a non zero return code.
+
+        Args:
+            command (str): the command to execute on the client hosts
+            fail_on_err (bool, optional): whether or not to fail the test if
+                command returns a non zero return code. Defaults to True.
+            display_output (bool, optional): whether or not to display output.
+                Defaults to True.
+
+        Raises:
+            CommandFailure: if 'fail_on_err' is set and the command fails on at
+                least one of the client hosts
+
+        Returns:
+            dict: a dictionary of return codes keys and accompanying NodeSet
+                values indicating which hosts yielded the return code.
+
+        """
+        result = pcmd(
+            self.hostlist_clients, command, verbose=display_output, timeout=300)
+        if 0 not in result and fail_on_err:
+            hosts = [str(nodes) for code, nodes in result.items() if code != 0]
+            raise CommandFailure(
+                "Error running '{}' on the following hosts: {}".format(
+                    command, NodeSet(",".join(hosts))))
+        return result

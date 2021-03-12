@@ -1,35 +1,15 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 
 from __future__ import print_function
 
 import sys
 
-from apricot import skipForTicket
-
-from avocado       import Test
-from avocado       import main
+from apricot       import TestWithoutServers
 
 sys.path.append('./util')
 
@@ -37,11 +17,11 @@ sys.path.append('./util')
 # pylint: disable=wrong-import-position
 from cart_utils import CartUtils
 
-class CartNoPmixLauncherOneNodeTest(Test):
+class CartNoPmixLauncherOneNodeTest(TestWithoutServers):
     """
     Runs basic CaRT no_pmix_launcher tests
 
-    :avocado: tags=all,cart,pr,no_pmix_launcher,one_node
+    :avocado: recursive
     """
     def setUp(self):
         """ Test setup """
@@ -50,14 +30,16 @@ class CartNoPmixLauncherOneNodeTest(Test):
         self.env = self.utils.get_env(self)
 
     def tearDown(self):
-        """ Test tear down """
-        print("Run TearDown\n")
+        """ Tear down """
+        self.report_timeout()
+        self._teardown_errors.extend(self.utils.cleanup_processes())
+        super(CartNoPmixLauncherOneNodeTest, self).tearDown()
 
     def test_cart_no_pmix_launcher(self):
         """
         Test CaRT NoPmix Launcher
 
-        :avocado: tags=all,cart,pr,no_pmix_launcher,one_node
+        :avocado: tags=all,cart,pr,daily_regression,no_pmix_launcher,one_node
         """
 
         cli_bin = self.params.get("test_clients_bin", '/run/tests/*/')

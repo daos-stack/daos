@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This is a cart test_group common file, running with no pmix.
@@ -28,17 +11,38 @@
 
 #define TEST_CTX_MAX_NUM	 (72)
 
-#define TEST_GROUP_BASE          0x010000000
-#define TEST_GROUP_VER           0
+#define TEST_GROUP_BASE					0x010000000
+#define TEST_GROUP_VER					 0
 
+#define MAX_NUM_RANKS		1024
+#define MAX_SWIM_STATUSES	1024
+#define CRT_CTL_MAX_ARG_STR_LEN (1 << 16)
+
+#include <regex.h>
+#include <ctype.h>
+
+struct t_swim_status {
+	int rank;
+	int swim_status;
+};
 
 struct test_t {
 	char			*t_local_group_name;
 	char			*t_remote_group_name;
 	int			 t_hold;
 	int			 t_shut_only;
+	int			 t_init_only;
+	int			 t_skip_init;
+	int			 t_skip_shutdown;
+	int			 t_skip_check_in;
 	bool			 t_save_cfg;
 	bool			 t_use_cfg;
+	bool			 t_register_swim_callback;
+	int			 t_get_swim_status;
+	int			 t_shutdown_delay;
+	d_rank_t		 cg_ranks[MAX_NUM_RANKS];
+	int			 cg_num_ranks;
+	struct			 t_swim_status t_verify_swim_status;
 	char			*t_cfg_path;
 	uint32_t		 t_hold_time;
 	unsigned int		 t_srv_ctx_num;
@@ -54,13 +58,15 @@ struct test_t test_g = { .t_hold_time = 0,
 			 .t_srv_ctx_num = 1,
 			 .t_roomno = 1082 };
 
-#define CRT_ISEQ_TEST_PING_CHECK /* input fields */		 \
+/* input fields */
+#define CRT_ISEQ_TEST_PING_CHECK				 \
 	((uint32_t)		(age)			CRT_VAR) \
 	((uint32_t)		(days)			CRT_VAR) \
 	((d_string_t)		(name)			CRT_VAR) \
 	((bool)			(bool_val)		CRT_VAR)
 
-#define CRT_OSEQ_TEST_PING_CHECK /* output fields */		 \
+/* output fields */
+#define CRT_OSEQ_TEST_PING_CHECK				 \
 	((int32_t)		(ret)			CRT_VAR) \
 	((uint32_t)		(room_no)		CRT_VAR) \
 	((uint32_t)		(bool_val)		CRT_VAR)
@@ -68,7 +74,21 @@ struct test_t test_g = { .t_hold_time = 0,
 CRT_RPC_DECLARE(test_ping_check,
 		CRT_ISEQ_TEST_PING_CHECK, CRT_OSEQ_TEST_PING_CHECK)
 CRT_RPC_DEFINE(test_ping_check,
-		CRT_ISEQ_TEST_PING_CHECK, CRT_OSEQ_TEST_PING_CHECK)
+	       CRT_ISEQ_TEST_PING_CHECK, CRT_OSEQ_TEST_PING_CHECK)
+
+/* input fields */
+#define CRT_ISEQ_TEST_SWIM_STATUS				 \
+	((uint32_t)		(rank)			CRT_VAR) \
+	((uint32_t)		(exp_status)		CRT_VAR)
+
+/* output fields */
+#define CRT_OSEQ_TEST_SWIM_STATUS				 \
+	((uint32_t)		(bool_val)		CRT_VAR)
+
+CRT_RPC_DECLARE(test_swim_status,
+		CRT_ISEQ_TEST_SWIM_STATUS, CRT_OSEQ_TEST_SWIM_STATUS)
+CRT_RPC_DEFINE(test_swim_status,
+	       CRT_ISEQ_TEST_SWIM_STATUS, CRT_OSEQ_TEST_SWIM_STATUS)
 
 static void
 test_checkin_handler(crt_rpc_t *rpc_req)
@@ -82,10 +102,10 @@ test_checkin_handler(crt_rpc_t *rpc_req)
 	D_ASSERTF(e_req != NULL, "crt_req_get() failed. e_req: %p\n", e_req);
 
 	DBG_PRINT("tier1 test_server recv'd checkin, opc: %#x.\n",
-		   rpc_req->cr_opc);
+		  rpc_req->cr_opc);
 	DBG_PRINT("tier1 checkin input - age: %d, name: %s, days: %d, "
-		  "bool_val %d.\n", e_req->age, e_req->name, e_req->days,
-		   e_req->bool_val);
+			"bool_val %d.\n", e_req->age, e_req->name, e_req->days,
+			 e_req->bool_val);
 
 	e_reply = crt_reply_get(rpc_req);
 	D_ASSERTF(e_reply != NULL, "crt_reply_get() failed. e_reply: %p\n",
@@ -104,7 +124,82 @@ test_checkin_handler(crt_rpc_t *rpc_req)
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
 
 	DBG_PRINT("tier1 test_srver sent checkin reply, ret: %d, \
-		   room_no: %d.\n", e_reply->ret, e_reply->room_no);
+			 room_no: %d.\n", e_reply->ret, e_reply->room_no);
+}
+
+/* Track number of dead-alive swim status changes */
+struct rank_status {
+  int num_alive;
+  int num_dead;
+};
+
+/* Keep a table of whether each rank is alive (0) or dead (1) */
+static char *swim_status_by_rank[MAX_NUM_RANKS];
+
+static void
+test_swim_status_handler(crt_rpc_t *rpc_req)
+{
+	struct test_swim_status_in	*e_req;
+	struct test_swim_status_out	*e_reply;
+	int				 rc = 0;
+	regex_t				 regex_alive;
+	regex_t				 regex_dead;
+	static const char		*dead_regex = ".?0*1";
+	static const char		*alive_regex = ".?0*";
+	char				*swim_seq = malloc(MAX_SWIM_STATUSES);
+
+	/* CaRT internally already allocated the input/output buffer */
+	e_req = crt_req_get(rpc_req);
+
+	if (swim_status_by_rank[e_req->rank] != NULL)
+		strcpy(swim_seq, swim_status_by_rank[e_req->rank]);
+	else
+		memset(swim_seq, 0x0, MAX_SWIM_STATUSES);
+
+	/* compile and run regex's */
+	regcomp(&regex_dead, dead_regex, REG_EXTENDED);
+	int rc_dead = regexec(&regex_dead,
+			      swim_seq,
+			      0, NULL, 0);
+	regcomp(&regex_alive, alive_regex, REG_EXTENDED);
+	int rc_alive = regexec(&regex_alive,
+			       swim_seq,
+			       0, NULL, 0);
+
+	D_ASSERTF(e_req != NULL, "crt_req_get() failed. e_req: %p\n", e_req);
+
+	DBG_PRINT("tier1 test_server recv'd swim_status, opc: %#x.\n",
+		  rpc_req->cr_opc);
+	DBG_PRINT("tier1 swim_status input - rank: %d, exp_status: %d.\n",
+		  e_req->rank, e_req->exp_status);
+
+	if (e_req->exp_status == CRT_EVT_ALIVE)
+		D_ASSERTF(rc_alive == 0,
+			  "Swim status sequence (%s) does not match '%s'.\n",
+			  swim_seq, alive_regex);
+	else if (e_req->exp_status == CRT_EVT_DEAD)
+		D_ASSERTF(rc_dead == 0,
+			  "Swim status sequence (%s) does not match '%s'.\n",
+			  swim_seq, dead_regex);
+
+	DBG_PRINT("Rank [%d] SWIM state sequence (%s) for "
+		  "status [%d] is as expected.\n",
+		  e_req->rank, swim_seq,
+		  e_req->exp_status);
+
+	e_reply = crt_reply_get(rpc_req);
+
+	/* If we got past the previous assert, then we've succeeded */
+	e_reply->bool_val = true;
+	D_ASSERTF(e_reply != NULL, "crt_reply_get() failed. e_reply: %p\n",
+		  e_reply);
+
+	rc = crt_reply_send(rpc_req);
+	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
+
+	DBG_PRINT("tier1 test_srver sent swim_status reply,"
+		  "e_reply->bool_val: %d.\n",
+		  e_reply->bool_val);
 }
 
 static void
@@ -121,8 +216,8 @@ test_ping_delay_handler(crt_rpc_t *rpc_req)
 	DBG_PRINT("tier1 test_server recv'd checkin, opc: %#x.\n",
 		  rpc_req->cr_opc);
 	DBG_PRINT("tier1 checkin input - age: %d, name: %s, days: %d, "
-		  "delay: %u.\n", p_req->age, p_req->name, p_req->days,
-		   p_req->delay);
+			"delay: %u.\n", p_req->age, p_req->name, p_req->days,
+			 p_req->delay);
 
 	p_reply = crt_reply_get(rpc_req);
 	D_ASSERTF(p_reply != NULL, "crt_reply_get() failed. p_reply: %p\n",
@@ -135,49 +230,75 @@ test_ping_delay_handler(crt_rpc_t *rpc_req)
 	rc = crt_reply_send(rpc_req);
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
 
-	DBG_PRINT("tier1 test_srver sent checkin reply, ret: %d, \
-		   room_no: %d.\n", p_reply->ret, p_reply->room_no);
+	DBG_PRINT("tier1 test_srver sent checkin reply, ret: %d, "
+		   "room_no: %d.\n", p_reply->ret, p_reply->room_no);
 }
 
 static void
 client_cb_common(const struct crt_cb_info *cb_info)
 {
 	crt_rpc_t			*rpc_req;
-	struct test_ping_check_in	*rpc_req_input;
-	struct test_ping_check_out	*rpc_req_output;
+	struct test_ping_check_in	*test_ping_rpc_req_input;
+	struct test_ping_check_out	*test_ping_rpc_req_output;
+
+	struct test_swim_status_in	*swim_status_rpc_req_input;
+	struct test_swim_status_out	*swim_status_rpc_req_output;
 
 	rpc_req = cb_info->cci_rpc;
 
-	if (cb_info->cci_arg != NULL)
+	if (cb_info->cci_arg != NULL) {
 		*(int *) cb_info->cci_arg = 1;
+	}
 
 	switch (cb_info->cci_rpc->cr_opc) {
 	case TEST_OPC_CHECKIN:
-		rpc_req_input = crt_req_get(rpc_req);
-		if (rpc_req_input == NULL)
-			return;
-		rpc_req_output = crt_reply_get(rpc_req);
-		if (rpc_req_output == NULL)
-			return;
+
+		test_ping_rpc_req_input = crt_req_get(rpc_req);
+		D_ASSERT(test_ping_rpc_req_input != NULL);
+		test_ping_rpc_req_output = crt_reply_get(rpc_req);
+		D_ASSERT(test_ping_rpc_req_output != NULL);
+
 		if (cb_info->cci_rc != 0) {
 			D_ERROR("rpc (opc: %#x) failed, rc: %d.\n",
 				rpc_req->cr_opc, cb_info->cci_rc);
-			D_FREE(rpc_req_input->name);
 			break;
 		}
 		DBG_PRINT("%s checkin result - ret: %d, room_no: %d, "
-		       "bool_val %d.\n",
-		       rpc_req_input->name, rpc_req_output->ret,
-		       rpc_req_output->room_no, rpc_req_output->bool_val);
-		D_FREE(rpc_req_input->name);
+			  "bool_val %d.\n",
+			  test_ping_rpc_req_input->name,
+			  test_ping_rpc_req_output->ret,
+			  test_ping_rpc_req_output->room_no,
+			  test_ping_rpc_req_output->bool_val);
 		sem_post(&test_g.t_token_to_proceed);
-		D_ASSERT(rpc_req_output->bool_val == true);
+		D_ASSERT(test_ping_rpc_req_output->bool_val == true);
+		break;
+	case TEST_OPC_SWIM_STATUS:
+
+		swim_status_rpc_req_input = crt_req_get(rpc_req);
+		D_ASSERT(swim_status_rpc_req_input != NULL);
+		swim_status_rpc_req_output = crt_reply_get(rpc_req);
+		D_ASSERT(swim_status_rpc_req_output != NULL);
+
+		if (cb_info->cci_rc != 0) {
+			D_ERROR("rpc (opc: %#x) failed, rc: %d.\n",
+				rpc_req->cr_opc, cb_info->cci_rc);
+			break;
+		}
+		DBG_PRINT("swim_status result - rank: %d, exp_status: %d, "
+			  "result: %d.\n",
+			  swim_status_rpc_req_input->rank,
+			  swim_status_rpc_req_input->exp_status,
+			  swim_status_rpc_req_output->bool_val);
+		sem_post(&test_g.t_token_to_proceed);
+		D_ASSERT(swim_status_rpc_req_output->bool_val == true);
 		break;
 	case TEST_OPC_SHUTDOWN:
-		g_shutdown = 1;
+		DBG_PRINT("Received TEST_OPC_SHUTDOWN.\n");
+		tc_progress_stop();
 		sem_post(&test_g.t_token_to_proceed);
 		break;
 	default:
+		DBG_PRINT("Received unregistered opcode.\n");
 		break;
 	}
 }
@@ -186,12 +307,12 @@ static void
 test_shutdown_handler(crt_rpc_t *rpc_req)
 {
 	DBG_PRINT("tier1 test_srver received shutdown request, opc: %#x.\n",
-		   rpc_req->cr_opc);
+		  rpc_req->cr_opc);
 
 	D_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");
 	D_ASSERTF(rpc_req->cr_output == NULL, "RPC request output is NULL\n");
 
-	g_shutdown = 1;
+	tc_progress_stop();
 	DBG_PRINT("tier1 test_srver set shutdown flag.\n");
 }
 
@@ -205,6 +326,11 @@ static struct crt_proto_rpc_format my_proto_rpc_fmt_test_group1[] = {
 		.prf_flags	= CRT_RPC_FEAT_NO_REPLY,
 		.prf_req_fmt	= NULL,
 		.prf_hdlr	= test_shutdown_handler,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_test_swim_status,
+		.prf_hdlr	= test_swim_status_handler,
 		.prf_co_ops	= NULL,
 	}, {
 		.prf_flags	= CRT_RPC_FEAT_NO_TIMEOUT,
@@ -233,6 +359,11 @@ static struct crt_proto_rpc_format my_proto_rpc_fmt_test_group2[] = {
 		.prf_req_fmt	= NULL,
 		.prf_hdlr	= test_shutdown_handler,
 		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_test_swim_status,
+		.prf_hdlr	= test_swim_status_handler,
+		.prf_co_ops	= NULL,
 	}
 };
 
@@ -256,6 +387,7 @@ check_in(crt_group_t *remote_group, int rank, int tag)
 	server_ep.ep_grp = remote_group;
 	server_ep.ep_rank = rank;
 	server_ep.ep_tag = tag;
+
 	rc = crt_req_create(test_g.t_crt_ctx[0], &server_ep,
 			    TEST_OPC_CHECKIN, &rpc_req);
 	D_ASSERTF(rc == 0 && rpc_req != NULL, "crt_req_create() failed,"
@@ -273,7 +405,7 @@ check_in(crt_group_t *remote_group, int rank, int tag)
 	}
 
 	D_ASSERTF(buffer != NULL, "Cannot allocate memory.\n");
-	snprintf(buffer,  256, "Guest %d", rank);
+	snprintf(buffer, 256, "Guest %d", rank);
 	rpc_req_input->name = buffer;
 	rpc_req_input->age = 21;
 	rpc_req_input->days = 7;
@@ -288,11 +420,173 @@ check_in(crt_group_t *remote_group, int rank, int tag)
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 }
 
+static struct t_swim_status
+parse_verify_swim_status_arg(char *source)
+{
+	char *regexString = "([0-9]+)[ ]*=[ ]*(a|d|alive|dead)";
+
+	struct t_swim_status ss = {-1, '\0'};
+
+	size_t maxMatches = 2;
+	size_t maxGroups  = 3;
+
+	unsigned int	 m;
+	regex_t		 regexCompiled;
+	regmatch_t	 groupArray[maxGroups];
+	char		*cursor;
+
+	if (regcomp(&regexCompiled, regexString, REG_EXTENDED | REG_ICASE)) {
+		printf("Could not compile regular expression.\n");
+		return ss;
+	};
+
+	m = 0;
+	cursor = source;
+
+	for (m = 0; m < maxMatches; m++) {
+
+		if (regexec(&regexCompiled, cursor, maxGroups, groupArray, 0)) {
+			break;	/* No more matches */
+		}
+
+		unsigned int g = 0;
+		unsigned int offset = 0;
+
+		for (g = 0; g < maxGroups; g++) {
+
+			if (groupArray[g].rm_so == (size_t)-1) {
+				break;	/* No more groups */
+			}
+
+			if (g == 0) {
+				offset = groupArray[g].rm_eo;
+			}
+
+			char cC[strlen(cursor) + 1];
+
+			strcpy(cC, cursor);
+			cC[groupArray[g].rm_eo] = 0;
+			D_DEBUG(DB_TEST,
+				"parse_verify_swim_status_arg, match %u, "
+					 "group %u: [%2u-%2u]: %s\n",
+					 m,
+					 g,
+					 groupArray[g].rm_so,
+					 groupArray[g].rm_eo,
+					 cC + groupArray[g].rm_so);
+
+			if (g == 1) {
+				ss.rank = atoi(cC +
+					       groupArray[g].rm_so);
+			}
+			if (g == 2) {
+
+				int exp_status_len = 8;
+				char exp_status[exp_status_len];
+
+				if (exp_status_len >
+				    strlen(cC + groupArray[g].rm_so)) {
+					memcpy(exp_status, cC +
+						groupArray[g].rm_so,
+						strlen(cC +
+						       groupArray[g].rm_so));
+				} else {
+					D_ERROR("Use 'dead' or 'alive' for "
+						"swim status label.\n");
+				}
+
+				/* "d(ead)?"=1, a(live)?=0 as
+				 * specified in crt_event_type:
+				 *
+				 * src/include/cart/api.h
+				 * enum crt_event_type {
+				 *		CRT_EVT_ALIVE,
+				 *		CRT_EVT_DEAD,
+				 * };
+				 */
+				ss.swim_status = 0;
+				if (tolower(exp_status[0]) == 'd') {
+					ss.swim_status = 1;
+				}
+
+			}
+		}
+		cursor += offset;
+	}
+
+	regfree(&regexCompiled);
+
+	return ss;
+}
+
+/* Source: src/utils/ctl/cart_ctl.c */
+static void
+parse_rank_string(char *arg_str, d_rank_t *ranks, int *num_ranks)
+{
+	char		*token;
+	char		*saveptr;
+	char		*ptr;
+	uint32_t	 num_ranks_l = 0;
+	uint32_t	 index = 0;
+	int		 rstart;
+	int		 rend;
+	int		 i;
+
+	D_ASSERT(ranks != NULL);
+	D_ASSERT(num_ranks != NULL);
+	D_ASSERT(arg_str != NULL);
+	if (strnlen(arg_str, CRT_CTL_MAX_ARG_STR_LEN) >=
+				CRT_CTL_MAX_ARG_STR_LEN) {
+		D_ERROR("arg string too long.\n");
+		return;
+	}
+
+	if (strcmp(arg_str, "all") == 0) {
+		*num_ranks = -1;
+		return;
+	}
+
+	D_DEBUG(DB_TRACE, "arg_str %s\n", arg_str);
+	token = strtok_r(arg_str, ",", &saveptr);
+	while (token != NULL) {
+		ptr = strchr(token, '-');
+		if (ptr == NULL) {
+			num_ranks_l++;
+			if (num_ranks_l > MAX_NUM_RANKS) {
+				D_ERROR("Too many target ranks.\n");
+				return;
+			}
+			ranks[index] = atoi(token);
+			index++;
+			token = strtok_r(NULL, ",", &saveptr);
+			continue;
+		}
+		if (ptr == token || ptr == token + strlen(token)) {
+			D_ERROR("Invalid rank range.\n");
+			return;
+		}
+		rstart = atoi(token);
+		rend = atoi(ptr + 1);
+		num_ranks_l += (rend - rstart + 1);
+		if (num_ranks_l > MAX_NUM_RANKS) {
+			D_ERROR("Too many target ranks.\n");
+			return;
+		}
+		for (i = rstart; i < rend + 1; i++) {
+			ranks[index] = i;
+			index++;
+		}
+		token = strtok_r(NULL, ",", &saveptr);
+	}
+	*num_ranks = num_ranks_l;
+}
+
 int
 test_parse_args(int argc, char **argv)
 {
 	int				option_index = 0;
 	int				rc = 0;
+	int				ss;
 	struct option			long_options[] = {
 		{"name", required_argument, 0, 'n'},
 		{"attach_to", required_argument, 0, 'a'},
@@ -300,15 +594,35 @@ test_parse_args(int argc, char **argv)
 		{"hold", no_argument, &test_g.t_hold, 1},
 		{"srv_ctx_num", required_argument, 0, 'c'},
 		{"shut_only", no_argument, &test_g.t_shut_only, 1},
+		{"init_only", no_argument, &test_g.t_init_only, 1},
+		{"skip_init", no_argument, &test_g.t_skip_init, 1},
+		{"skip_shutdown", no_argument, &test_g.t_skip_shutdown, 1},
+		{"skip_check_in", no_argument, &test_g.t_skip_check_in, 1},
+		{"rank", required_argument, 0, 'r'},
 		{"cfg_path", required_argument, 0, 's'},
 		{"use_cfg", required_argument, 0, 'u'},
+		{"register_swim_callback", required_argument, 0, 'w'},
+		{"verify_swim_status", required_argument, 0, 'v'},
+		{"get_swim_status", no_argument, 0, 'g'},
+		{"shutdown_delay", required_argument, 0, 'd'},
 		{0, 0, 0, 0}
 	};
 
+	test_g.cg_num_ranks = 0;
 	test_g.t_use_cfg = true;
+	test_g.t_shutdown_delay = 0;
+
+	/* SWIM testing options */
+	test_g.t_get_swim_status = false;
+	test_g.t_register_swim_callback = false;
+
+	/* Default value: non-existent rank with status "alive" */
+	test_g.t_verify_swim_status = (struct t_swim_status){ -1, 0 };
+
+	struct t_swim_status vss;
 
 	while (1) {
-		rc = getopt_long(argc, argv, "n:a:c:h:u:", long_options,
+		rc = getopt_long(argc, argv, "n:a:c:h:u:r:", long_options,
 				 &option_index);
 
 		if (rc == -1)
@@ -343,6 +657,9 @@ test_parse_args(int argc, char **argv)
 			test_g.t_hold = 1;
 			test_g.t_hold_time = atoi(optarg);
 			break;
+		case 'w':
+			test_g.t_register_swim_callback = atoi(optarg);
+			break;
 		case 's':
 			test_g.t_save_cfg = true;
 			test_g.t_cfg_path = optarg;
@@ -350,12 +667,32 @@ test_parse_args(int argc, char **argv)
 		case 'u':
 			test_g.t_use_cfg = atoi(optarg);
 			break;
+		case 'v':
+			vss = parse_verify_swim_status_arg(optarg);
+			test_g.t_verify_swim_status.rank	= vss.rank;
+
+			/* use short name to stay under 80-char width */
+			ss = vss.swim_status;
+			test_g.t_verify_swim_status.swim_status = ss;
+			break;
+		case 'g':
+			test_g.t_get_swim_status = true;
+			break;
+		case 'd':
+			test_g.t_shutdown_delay = atoi(optarg);
+			break;
+		case 'r':
+			parse_rank_string(optarg, test_g.cg_ranks,
+					  &test_g.cg_num_ranks);
+			break;
 		case '?':
 			return 1;
+
 		default:
 			return 1;
 		}
 	}
+
 	if (optind < argc) {
 		fprintf(stderr, "non-option argv elements encountered");
 		return 1;
@@ -363,4 +700,5 @@ test_parse_args(int argc, char **argv)
 
 	return 0;
 }
+
 #endif

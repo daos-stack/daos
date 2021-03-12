@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #ifndef __DFUSE_H__
@@ -36,6 +19,8 @@
 #include "daos.h"
 #include "daos_fs.h"
 
+#include "dfs_internal.h"
+
 #include "dfuse_common.h"
 
 struct dfuse_info {
@@ -45,7 +30,6 @@ struct dfuse_info {
 	char				*di_cont;
 	char				*di_group;
 	char				*di_mountpoint;
-	d_rank_list_t			*di_svcl;
 	uint32_t			di_thread_count;
 	bool				di_threaded;
 	bool				di_foreground;
@@ -69,8 +53,6 @@ struct dfuse_projection_info {
 	uint32_t			dpi_max_write;
 	/** Hash table of open inodes, this matches kernel ref counts */
 	struct d_hash_table		dpi_iet;
-	/** Hash table of all known/seen inodes */
-	struct d_hash_table		dpi_irt;
 	/** Next available inode number */
 	ATOMIC uint64_t			dpi_ino_next;
 	/* Event queue for async events */
@@ -81,46 +63,45 @@ struct dfuse_projection_info {
 	bool				dpi_shutdown;
 };
 
-/*
- * Max number of 4k (fuse buffer size for readdir) blocks that need offset
- * tracking in the readdir implementation. Since in readdir implementation we
- * specify a larger buffer size (16k) to fetch the dir entries, the buffer we
- * track those entries on the OH needs to know where fuse_add_direntry() exceeds
- * the 4k size of a block that we return to readdir. In the next call to
- * readdir, we need to resume from that last offset before we exceeded that 4k
- * size. We define this max number of blocks to 8 (not 4 - 16k/4k) to account
- * for the possibility that we need to re-alloc that buffer on OH since
- * fuse_add_direntry() adds more metadata (the fuse direntry attributes) in
- * addition to the entry name, which could exceed 16K in some cases. We just
- * double the buffer size inthis case to 32k, and so we need a max of 8 offsets
- * to track in this case.
- */
-#define READDIR_BLOCKS 8
-
 struct dfuse_inode_entry;
 
-/** what is returned as the handle for fuse fuse_file_info on create/open */
+struct dfuse_readdir_entry {
+	/* Name of this directory entry */
+	char	dre_name[NAME_MAX + 1];
+
+	/* Offset of this directory entry */
+	off_t	dre_offset;
+
+	/* Offset of the next directory entry
+	 * A value of DFUSE_READDIR_EOD means end
+	 * of directory.
+	 */
+	off_t	dre_next_offset;
+};
+
+/** what is returned as the handle for fuse fuse_file_info on
+ * create/open/opendir
+ */
 struct dfuse_obj_hdl {
 	/** pointer to dfs_t */
-	dfs_t		*doh_dfs;
+	dfs_t				*doh_dfs;
 	/** the DFS object handle */
-	dfs_obj_t	*doh_obj;
+	dfs_obj_t			*doh_obj;
 	/** the inode entry for the file */
-	struct dfuse_inode_entry *doh_ie;
+	struct dfuse_inode_entry	*doh_ie;
+
+	/* Below here is only used for directories */
 	/** an anchor to track listing in readdir */
-	daos_anchor_t	doh_anchor;
-	/** current offset in dir stream (what is returned to fuse) */
-	off_t		doh_fuse_off;
-	/** current offset in dir stream (includes cached entries) */
-	off_t		doh_dir_off[READDIR_BLOCKS];
-	/** Buffer with all entries listed from DFS with the fuse dirents */
-	void		*doh_buf;
-	/** offset to start from of doh_buffer */
-	off_t		doh_start_off[READDIR_BLOCKS];
-	/** ending offset in doh_buf */
-	off_t		doh_cur_off;
-	/** current idx to process in doh_start_off */
-	uint32_t	doh_idx;
+	daos_anchor_t			doh_anchor;
+
+	/** Array of entries returned by dfs but not reported to kernel */
+	struct dfuse_readdir_entry	*doh_dre;
+	/** Current index into doh_dre array */
+	uint32_t			doh_dre_index;
+	/** Last index containing valid data */
+	uint32_t			doh_dre_last_index;
+	/** Next value from anchor */
+	uint32_t			doh_anchor_index;
 };
 
 struct dfuse_inode_ops {
@@ -132,14 +113,12 @@ struct dfuse_inode_ops {
 			struct stat *attr, int to_set);
 	void (*lookup)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		       const char *name);
-	void (*mkdir)(fuse_req_t req, struct dfuse_inode_entry *parent,
+	void (*mknod)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		      const char *name, mode_t mode);
 	void (*opendir)(fuse_req_t req, struct dfuse_inode_entry *inode,
 			struct fuse_file_info *fi);
 	void (*releasedir)(fuse_req_t req, struct dfuse_inode_entry *inode,
 			   struct fuse_file_info *fi);
-	void (*readdir)(fuse_req_t req, struct dfuse_inode_entry *inode,
-			size_t size, off_t offset, struct fuse_file_info *fi);
 	void (*rename)(fuse_req_t req, struct dfuse_inode_entry *parent_inode,
 		       const char *name,
 		       struct dfuse_inode_entry *newparent_inode,
@@ -189,13 +168,21 @@ struct dfuse_dfs {
 	dfs_t			*dfs_ns;
 	uuid_t			dfs_cont;
 	daos_handle_t		dfs_coh;
-	daos_cont_info_t	dfs_co_info;
-	ino_t			dfs_root;
+
+	/** Inode number of the root of this container */
+	ino_t			dfs_ino;
 	double			dfs_attr_timeout;
 	/* List of dfuse_dfs entries in the dfuse_pool */
 	d_list_t		dfs_list;
 	pthread_mutex_t		dfs_read_mutex;
 };
+
+/* Xattr namespace used by dfuse.
+ *
+ * Extended attributes with this prefix can only be set by dfuse itself
+ * or directly though dfs/daos but not through dfuse.
+ */
+#define DFUSE_XATTR_PREFIX "user.dfuse"
 
 /*
  * struct dfuse_info contains list of dfuse_pool
@@ -285,6 +272,8 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 #define LOG_MODES(HANDLE, INPUT) do {					\
 		int _flag = (INPUT) & S_IFMT;				\
 		LOG_MODE((HANDLE), _flag, S_IFREG);			\
+		LOG_MODE((HANDLE), _flag, S_IFDIR);			\
+		LOG_MODE((HANDLE), _flag, S_IFIFO);			\
 		LOG_MODE((HANDLE), _flag, S_ISUID);			\
 		LOG_MODE((HANDLE), _flag, S_ISGID);			\
 		LOG_MODE((HANDLE), _flag, S_ISVTX);			\
@@ -307,7 +296,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					"Invalid call to fuse_reply_err: 0"); \
 			__err = EIO;					\
 		}							\
-		if (__err == ENOTSUP || __err == EIO || __err == EINVAL) \
+		if (__err == EIO || __err == EINVAL) \
 			DFUSE_TRA_WARNING(desc, "Returning %d '%s'",	\
 					  __err, strerror(__err));	\
 		else							\
@@ -334,9 +323,10 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 #define DFUSE_REPLY_ATTR(ie, req, attr)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(ie, "Returning attr mode %#o dir:%d",	\
-				(attr)->st_mode,			\
-				S_ISDIR(((attr)->st_mode)));		\
+		DFUSE_TRA_DEBUG(ie,					\
+				"Returning attr inode %#lx mode %#o",	\
+				(attr)->st_ino,				\
+				(attr)->st_mode);			\
 		__rc = fuse_reply_attr(req, attr,			\
 				(ie)->ie_dfs->dfs_attr_timeout);	\
 		if (__rc != 0)						\
@@ -429,10 +419,9 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 	do {								\
 		int __rc;						\
 		DFUSE_TRA_DEBUG(desc,					\
-				"Returning entry inode %li mode %#o dir:%d", \
+				"Returning entry inode %#lx mode %#o",	\
 				(entry).attr.st_ino,			\
-				(entry).attr.st_mode,			\
-				S_ISDIR((entry).attr.st_mode));		\
+				(entry).attr.st_mode);			\
 		__rc = fuse_reply_entry(req, &entry);			\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(desc,				\
@@ -481,6 +470,11 @@ struct dfuse_inode_entry {
 
 	dfs_obj_t		*ie_obj;
 
+	/** DAOS object ID of the dfs object.  Used for uniquely identifying
+	 * files
+	 */
+	daos_obj_id_t		ie_oid;
+
 	/** The name of the entry, relative to the parent.
 	 * This would have been valid when the inode was first observed
 	 * however may be incorrect at any point after that.  It may not
@@ -521,36 +515,38 @@ struct dfuse_inode_entry {
 	bool			ie_root;
 };
 
-/**
- * Inode record.
+/* Generate the inode to use for this dfs object.  This is generating a single
+ * 64 bit number from three 64 bit numbers so will not be perfect but does
+ * avoid most conflicts.
  *
- * Describes all inodes observed by the system since start, including all inodes
- * known by the kernel, and all inodes that have been in the past.
- *
- * This is needed to be able to generate 64 bit inode numbers from 128 bit DAOS
- * objects, to support multiple containers/pools within a filesystem and to
- * provide consistent inode numbering for the same file over time, even if the
- * kernel cache is dropped, for example because of memory pressure.
+ * Take the sequence parts of both the hi and lo object id and put them in
+ * different parts of the inode, then or in the inode number of the root
+ * of this dfs object, to avoid conflicts across containers.
  */
-struct dfuse_inode_record_id {
-	struct dfuse_dfs	*irid_dfs;
-	daos_obj_id_t		irid_oid;
+static inline void
+dfuse_compute_inode(struct dfuse_dfs *dfs,
+		    daos_obj_id_t *oid,
+		    ino_t *_ino)
+{
+	uint64_t hi;
+
+	hi = (oid->hi & (-1ULL >> 32)) | (dfs->dfs_ino << 48);
+
+	*_ino = hi ^ (oid->lo << 32);
 };
 
-struct dfuse_inode_record {
-	struct dfuse_inode_record_id	ir_id;
-	d_list_t			ir_htl;
-	ino_t				ir_ino;
-};
+extern char *duns_xattr_name;
+
+int
+check_for_uns_ep(struct dfuse_projection_info *fs_handle,
+		 struct dfuse_inode_entry *ie, char *attr, daos_size_t len);
 
 /* dfuse_inode.c */
 
-int
-dfuse_lookup_inode(struct dfuse_projection_info *fs_handle,
-		   struct dfuse_dfs *dfs,
-		   daos_obj_id_t *oid,
-		   ino_t *_ino);
-
+/* This should probably be replaced with a entry pointer in the dfs which
+ * would improve lookup speed when accessing containers/pools, however needs
+ * thorough testing with respect to ref counting
+ */
 int
 dfuse_check_for_inode(struct dfuse_projection_info *fs_handle,
 		      struct dfuse_dfs *dfs,
@@ -577,7 +573,7 @@ void
 dfuse_cb_readlink(fuse_req_t, fuse_ino_t);
 
 void
-dfuse_cb_mkdir(fuse_req_t, struct dfuse_inode_entry *,
+dfuse_cb_mknod(fuse_req_t, struct dfuse_inode_entry *,
 	       const char *, mode_t);
 
 void
@@ -607,8 +603,7 @@ dfuse_cb_unlink(fuse_req_t, struct dfuse_inode_entry *,
 		const char *);
 
 void
-dfuse_cb_readdir(fuse_req_t, struct dfuse_inode_entry *, size_t, off_t,
-		 struct fuse_file_info *);
+dfuse_cb_readdir(fuse_req_t, struct dfuse_obj_hdl *, size_t, off_t, bool);
 
 void
 dfuse_cb_rename(fuse_req_t, struct dfuse_inode_entry *, const char *,
@@ -642,9 +637,15 @@ dfuse_cb_setattr(fuse_req_t, struct dfuse_inode_entry *, struct stat *, int);
 void
 dfuse_cb_statfs(fuse_req_t, struct dfuse_inode_entry *);
 
+#ifdef FUSE_IOCTL_USE_INT
+void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
+		    struct fuse_file_info *fi, unsigned int flags,
+		    const void *in_buf, size_t in_bufsz, size_t out_bufsz);
+#else
 void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 		    struct fuse_file_info *fi, unsigned int flags,
 		    const void *in_buf, size_t in_bufsz, size_t out_bufsz);
+#endif
 
 /* Return inode information to fuse
  *
@@ -654,6 +655,7 @@ void
 dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  struct dfuse_inode_entry *inode,
 		  struct fuse_file_info *fi_out,
+		  bool is_new,
 		  fuse_req_t req);
 
 /* dfuse_cont.c */
@@ -662,7 +664,7 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		  const char *name);
 
 void
-dfuse_cont_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
+dfuse_cont_mknod(fuse_req_t req, struct dfuse_inode_entry *parent,
 		 const char *name, mode_t mode);
 
 /* dfuse_pool.c */

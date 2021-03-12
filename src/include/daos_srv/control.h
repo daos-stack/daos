@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B620873.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /*
@@ -42,10 +25,14 @@ enum {
 };
 
 enum bio_dev_state {
-	BIO_DEV_NORMAL  = 0, /* fully functional and in-use */
-	BIO_DEV_FAULTY,      /* evicted device */
-	BIO_DEV_OUT,         /* unplugged device */
-	BIO_DEV_NEW,         /* new device not currently in-use */
+	/* fully functional and in-use */
+	BIO_DEV_NORMAL	= 0,
+	/* evicted device */
+	BIO_DEV_FAULTY,
+	/* unplugged device */
+	BIO_DEV_OUT,
+	/* new device not currently in-use */
+	BIO_DEV_NEW,
 };
 
 /*
@@ -68,8 +55,6 @@ bio_dev_state_enum_to_str(enum bio_dev_state state)
 	return "Undefined state";
 }
 
-#define HEALTH_STAT_STR_LEN 128
-
 /*
  * Current device health state (health statistics). Periodically updated in
  * bio_bs_monitor(). Used to determine faulty device status.
@@ -77,9 +62,6 @@ bio_dev_state_enum_to_str(enum bio_dev_state state)
  */
 struct nvme_stats {
 	uint64_t	 timestamp;
-	/* Device identifiers */
-	char		 model[HEALTH_STAT_STR_LEN];
-	char		 serial[HEALTH_STAT_STR_LEN];
 	/* Device space utilization */
 	uint64_t	 total_bytes;
 	uint64_t	 avail_bytes;

@@ -1,25 +1,8 @@
 #!/usr/bin/python2 -u
 """
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
 from __future__ import print_function
@@ -96,7 +79,7 @@ def display_disk_space(path):
     print(get_output(["df", "-h", path]))
 
 
-def get_build_environment():
+def get_build_environment(args):
     """Obtain DAOS build environment variables from the .build_vars.json file.
 
     Returns:
@@ -106,11 +89,21 @@ def get_build_environment():
     build_vars_file = os.path.join(
         os.path.dirname(os.path.realpath(__file__)),
         "../../.build_vars.json")
-    with open(build_vars_file) as vars_file:
-        return json.load(vars_file)
+    try:
+        with open(build_vars_file) as vars_file:
+            return json.load(vars_file)
+    except ValueError:
+        if not args.list:
+            raise
+        return json.loads('{{"PREFIX": "{}"}}'.format(os.getcwd()))
+    except IOError as error:
+        if error.errno == errno.ENOENT:
+            if not args.list:
+                raise
+            return json.loads('{{"PREFIX": "{}"}}'.format(os.getcwd()))
 
 
-def get_temporary_directory(base_dir=None):
+def get_temporary_directory(args, base_dir=None):
     """Get the temporary directory used by functional tests.
 
     Args:
@@ -121,7 +114,7 @@ def get_temporary_directory(base_dir=None):
 
     """
     if base_dir is None:
-        base_dir = get_build_environment()["PREFIX"]
+        base_dir = get_build_environment(args)["PREFIX"]
     if base_dir == "/usr":
         tmp_dir = os.getenv(
             "DAOS_TEST_SHARED_DIR", os.path.expanduser("~/daos_test"))
@@ -145,7 +138,7 @@ def set_test_environment(args):
         None
 
     """
-    base_dir = get_build_environment()["PREFIX"]
+    base_dir = get_build_environment(args)["PREFIX"]
     bin_dir = os.path.join(base_dir, "bin")
     sbin_dir = os.path.join(base_dir, "sbin")
     # /usr/sbin is not setup on non-root user for CI nodes.
@@ -154,70 +147,74 @@ def set_test_environment(args):
     usr_sbin = os.path.sep + os.path.join("usr", "sbin")
     path = os.environ.get("PATH")
 
-    # Get the default interface to use if OFI_INTERFACE is not set
-    interface = os.environ.get("OFI_INTERFACE")
-    if interface is None:
-        # Find all the /sys/class/net interfaces on the launch node
-        # (excluding lo)
-        print("Detecting network devices - OFI_INTERFACE not set")
-        available_interfaces = {}
-        net_path = os.path.join(os.path.sep, "sys", "class", "net")
-        net_list = [dev for dev in os.listdir(net_path) if dev != "lo"]
-        for device in sorted(net_list):
-            # Get the interface state - only include active (up) interfaces
-            with open(os.path.join(net_path, device, "operstate"), "r") as \
-                 fileh:
-                state = fileh.read().strip()
-            # Only include interfaces that are up
-            if state.lower() == "up":
-                # Get the interface speed - used to select the fastest available
-                with open(os.path.join(net_path, device, "speed"), "r") as \
+    if not args.list:
+        # Get the default interface to use if OFI_INTERFACE is not set
+        interface = os.environ.get("OFI_INTERFACE")
+        if interface is None:
+            # Find all the /sys/class/net interfaces on the launch node
+            # (excluding lo)
+            print("Detecting network devices - OFI_INTERFACE not set")
+            available_interfaces = {}
+            net_path = os.path.join(os.path.sep, "sys", "class", "net")
+            net_list = [dev for dev in os.listdir(net_path) if dev != "lo"]
+            for device in sorted(net_list):
+                if device == "bonding_masters":
+                    continue
+                # Get the interface state - only include active (up) interfaces
+                with open(os.path.join(net_path, device, "operstate"), "r") as \
                      fileh:
-                    try:
-                        speed = int(fileh.read().strip())
-                        # KVM/Qemu/libvirt returns an EINVAL
-                    except IOError as ioerror:
-                        if ioerror.errno == errno.EINVAL:
-                            speed = 1000
-                        else:
-                            raise
+                    state = fileh.read().strip()
+                # Only include interfaces that are up
+                if state.lower() == "up":
+                    # Get the interface speed - used to select the fastest
+                    # available
+                    with open(os.path.join(net_path, device, "speed"), "r") as \
+                         fileh:
+                        try:
+                            speed = int(fileh.read().strip())
+                            # KVM/Qemu/libvirt returns an EINVAL
+                        except IOError as ioerror:
+                            if ioerror.errno == errno.EINVAL:
+                                speed = 1000
+                            else:
+                                raise
+                    print(
+                        "  - {0:<5} (speed: {1:>6} state: {2})".format(
+                            device, speed, state))
+                    # Only include the first active interface for each speed -
+                    # first is determined by an alphabetic sort: ib0 will be
+                    # checked before ib1
+                    if speed not in available_interfaces:
+                        available_interfaces[speed] = device
+            print("Available interfaces: {}".format(available_interfaces))
+            try:
+                # Select the fastest active interface available by sorting
+                # the speed
+                interface = \
+                    available_interfaces[sorted(available_interfaces)[-1]]
+            except IndexError:
                 print(
-                    "  - {0:<5} (speed: {1:>6} state: {2})".format(
-                        device, speed, state))
-                # Only include the first active interface for each speed - first
-                # is determined by an alphabetic sort: ib0 will be checked
-                # before ib1
-                if speed not in available_interfaces:
-                    available_interfaces[speed] = device
-        print("Available interfaces: {}".format(available_interfaces))
-        try:
-            # Select the fastest active interface available by sorting the speed
-            interface = available_interfaces[sorted(available_interfaces)[-1]]
-        except IndexError:
-            print(
-                "Error obtaining a default interface from: {}".format(
-                    os.listdir(net_path)))
-            exit(1)
-    print("Using {} as the default interface".format(interface))
+                    "Error obtaining a default interface from: {}".format(
+                        os.listdir(net_path)))
+                exit(1)
+        print("Using {} as the default interface".format(interface))
 
-    # Update env definitions
+        # Update env definitions
+        os.environ["CRT_CTX_SHARE_ADDR"] = "0"
+        os.environ["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", interface)
+
+        # Set the default location for daos log files written during testing
+        # if not already defined.
+        if "DAOS_TEST_LOG_DIR" not in os.environ:
+            os.environ["DAOS_TEST_LOG_DIR"] = DEFAULT_DAOS_TEST_LOG_DIR
+        os.environ["D_LOG_FILE"] = os.path.join(
+            os.environ["DAOS_TEST_LOG_DIR"], "daos.log")
+
+        # Assign the default value for transport configuration insecure mode
+        os.environ["DAOS_INSECURE_MODE"] = str(args.insecure_mode)
+
+    # Update PATH
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
-    os.environ["CRT_CTX_SHARE_ADDR"] = "0"
-    os.environ["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", interface)
-
-    # Set the default location for daos log files written during testing if not
-    # already defined.
-    if "DAOS_TEST_LOG_DIR" not in os.environ:
-        os.environ["DAOS_TEST_LOG_DIR"] = DEFAULT_DAOS_TEST_LOG_DIR
-    os.environ["D_LOG_FILE"] = os.path.join(
-        os.environ["DAOS_TEST_LOG_DIR"], "daos.log")
-
-    # Ensure the daos log files directory exists on each possible test node
-    test_hosts = NodeSet(socket.gethostname().split(".")[0])
-    test_hosts.update(args.test_clients)
-    test_hosts.update(args.test_servers)
-    spawn_commands(
-        test_hosts, "mkdir -p {}".format(os.environ["DAOS_TEST_LOG_DIR"]))
 
     # Python paths required for functional testing
     python_version = "python{}{}".format(
@@ -229,9 +226,6 @@ def set_test_environment(args):
         os.path.abspath("cart/util"),
         os.path.join(base_dir, "lib64", python_version, "site-packages"),
     ]
-
-    # Assign the default value for transport configuration insecure mode
-    os.environ["DAOS_INSECURE_MODE"] = str(args.insecure_mode)
 
     # Check the PYTHONPATH env definition
     python_path = os.environ.get("PYTHONPATH")
@@ -278,6 +272,7 @@ def run_command(cmd):
                 " ".join(cmd), stdout))
     return stdout
 
+
 def get_output(cmd, check=True):
     """Get the output of given command executed on this host.
 
@@ -289,6 +284,7 @@ def get_output(cmd, check=True):
 
     Returns:
         str: command output
+
     """
     try:
         stdout = run_command(cmd)
@@ -375,16 +371,19 @@ def check_remote_output(task, command):
         for output, o_hosts in output_data:
             n_set = NodeSet.fromlist(o_hosts)
             lines = str(output).splitlines()
-            print("There are {} lines of output".format(len(lines)))
             if len(lines) > 1:
                 print("    {}: rc={}, output:".format(n_set, code))
-                for line in lines:
+                for number, line in enumerate(lines):
                     try:
                         print("      {}".format(line))
                     except IOError:
                         # DAOS-5781 Jenkins doesn't like receiving large
                         # amounts of data in a short space of time so catch
                         # this and retry.
+                        print(
+                            "*** DAOS-5781: Handling IOError detected while "
+                            "processing line {}/{} with retry ***".format(
+                                number + 1, len(lines)))
                         time.sleep(5)
                         print("      {}".format(line))
             else:
@@ -495,19 +494,36 @@ def get_test_list(tags):
     """
     test_tags = []
     test_list = []
+    # Check if fault injection is enabled ( 0 return status)
+    faults_disabled = False
+    try:
+        faults_disabled = time_command(["fault_status"])
+    except OSError as error:
+        if error.errno == errno.ENOENT:
+            # Not built yet.  Must be trying to figure out which tests are
+            # run for the given tag(s).  Assume this is not a release run
+            # then and faults are enabled
+            pass
     for tag in tags:
         if ".py" in tag:
             # Assume '.py' indicates a test and just add it to the list
             test_list.append(tag)
+            fault_filter = "--filter-by-tags=-faults"
+            if faults_disabled and fault_filter not in test_tags:
+                test_tags.append(fault_filter)
         else:
             # Otherwise it is assumed that this is a tag
-            test_tags.extend(["--filter-by-tags", str(tag)])
+            if faults_disabled:
+                tag = ",".join((tag, "-faults"))
+            test_tags.append("--filter-by-tags={}".format(tag))
 
     # Update the list of tests with any test that match the specified tags.
     # Exclude any specified tests that do not match the specified tags.  If no
     # tags and no specific tests have been specified then all of the functional
     # tests will be added.
     if test_tags or not test_list:
+        if not test_list:
+            test_list = ["./"]
         command = ["avocado", "list", "--paginator=off"]
         for test_tag in test_tags:
             command.append(str(test_tag))
@@ -578,7 +594,7 @@ def get_nvme_replacement(args):
         exit(1)
 
     # Get a list of NVMe devices from each specified server host
-    host_list = args.test_servers.split(",")
+    host_list = list(args.test_servers)
     command_list = [
         "/sbin/lspci -D", "grep 'Non-Volatile memory controller:'"]
     if ":" in args.nvme:
@@ -661,10 +677,16 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
         yaml_keys = list(YAML_KEYS.keys())
         yaml_find = find_values(yaml_data, yaml_keys)
 
-        # Generate a list
-        new_values = {
-            key: getattr(args, value).split(",") if getattr(args, value) else []
-            for key, value in YAML_KEYS.items()}
+        # Generate a list of values that can be used as replacements
+        new_values = {}
+        for key, value in YAML_KEYS.items():
+            args_value = getattr(args, value)
+            if isinstance(args_value, NodeSet):
+                new_values[key] = list(args_value)
+            elif args_value:
+                new_values[key] = args_value.split(",")
+            else:
+                new_values[key] = []
 
         # Assign replacement values for the test yaml entries to be replaced
         display(args, "Detecting replacements for {} in {}".format(
@@ -763,6 +785,37 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
     return yaml_file
 
 
+def setup_test_directory(args, mode="all"):
+    """Set up the common test directory on all hosts.
+
+    Ensure the common test directory exists on each possible test node.
+
+    Args:
+        args (argparse.Namespace): command line arguments for this program
+        mode (str, optional): setup mode. Defaults to "all".
+            "rm"    = remove the directory
+            "mkdir" = create the directory
+            "chmod" = change the permissions of the directory (a+rw)
+            "list"  = list the contents of the directory
+            "all"  = execute all of the mode options
+    """
+    host_list = NodeSet(socket.gethostname().split(".")[0])
+    host_list.update(args.test_clients)
+    host_list.update(args.test_servers)
+    test_dir = os.environ["DAOS_TEST_LOG_DIR"]
+    print(
+        "Setting up '{}' on {}:".format(
+            test_dir, str(NodeSet.fromlist(host_list))))
+    if mode in ["all", "rm"]:
+        spawn_commands(host_list, "sudo rm -fr {}".format(test_dir))
+    if mode in ["all", "mkdir"]:
+        spawn_commands(host_list, "mkdir -p {}".format(test_dir))
+    if mode in ["all", "chmod"]:
+        spawn_commands(host_list, "chmod a+wr {}".format(test_dir))
+    if mode in ["all", "list"]:
+        spawn_commands(host_list, "ls -al {}".format(test_dir))
+
+
 def generate_certs():
     """Generate the certificates for the test."""
     daos_test_log_dir = os.environ["DAOS_TEST_LOG_DIR"]
@@ -788,12 +841,10 @@ def run_tests(test_files, tag_filter, args):
     return_code = 0
 
     # Determine the location of the avocado logs for archiving or renaming
-    avocado_logs_dir = None
-    if args.archive or args.rename:
-        data = get_output(["avocado", "config"]).strip()
-        avocado_logs_dir = re.findall(r"datadir\.paths\.logs_dir\s+(.*)", data)
-        avocado_logs_dir = os.path.expanduser(avocado_logs_dir[0])
-        print("Avocado logs stored in {}".format(avocado_logs_dir))
+    data = get_output(["avocado", "config"]).strip()
+    avocado_logs_dir = re.findall(r"datadir\.paths\.logs_dir\s+(.*)", data)
+    avocado_logs_dir = os.path.expanduser(avocado_logs_dir[0])
+    print("Avocado logs stored in {}".format(avocado_logs_dir))
 
     # Create the base avocado run command
     command_list = [
@@ -816,7 +867,7 @@ def run_tests(test_files, tag_filter, args):
             # this is typically an indication of a communication issue with one
             # of the hosts, do not attempt to run subsequent tests.
             if not report_skipped_test(
-                    test_file["py"], avocado_logs_dir, skip_reason):
+                    test_file["py"], avocado_logs_dir, skip_reason, args):
                 return_code |= 64
 
         elif not isinstance(test_file["yaml"], str):
@@ -824,7 +875,7 @@ def run_tests(test_files, tag_filter, args):
             # in the yaml file.  Treat this like a failed avocado command.
             reason = "error replacing yaml file placeholders"
             if not report_skipped_test(
-                    test_file["py"], avocado_logs_dir, reason):
+                    test_file["py"], avocado_logs_dir, reason, args):
                 return_code |= 64
             return_code |= 4
 
@@ -839,7 +890,8 @@ def run_tests(test_files, tag_filter, args):
                         "leftover logs from a previous test run prior to "
                         "running this test")
                     if not report_skipped_test(
-                            test_file["py"], avocado_logs_dir, skip_reason):
+                            test_file["py"], avocado_logs_dir, skip_reason,
+                            args):
                         return_code |= 64
                     return_code |= 128
                     continue
@@ -849,6 +901,7 @@ def run_tests(test_files, tag_filter, args):
             test_command_list.extend([
                 "--mux-yaml", test_file["yaml"], "--", test_file["py"]])
             return_code |= time_command(test_command_list)
+            return_code |= stop_daos_server_service(test_file["py"], args)
 
             # Optionally store all of the server and client config files
             # and archive remote logs and report big log files, if any.
@@ -864,7 +917,8 @@ def run_tests(test_files, tag_filter, args):
 
             # Optionally rename the test results directory for this test
             if args.rename:
-                rename_logs(avocado_logs_dir, test_file["py"])
+                return_code |= rename_logs(avocado_logs_dir, test_file["py"],
+                                           args)
 
             # Optionally process core files
             if args.process_cores:
@@ -1075,8 +1129,8 @@ def archive_config_files(avocado_logs_dir, args):
     print("Archiving config files from {} in {}".format(host_list, destination))
 
     # Copy any config files
-    base_dir = get_build_environment()["PREFIX"]
-    configs_dir = get_temporary_directory(base_dir)
+    base_dir = get_build_environment(args)["PREFIX"]
+    configs_dir = get_temporary_directory(args, base_dir)
     task = archive_files(
         destination, host_list, "{}/*_*_*.yaml".format(configs_dir), False,
         args)
@@ -1128,17 +1182,28 @@ def archive_files(destination, hosts, source_files, cart, args):
     return get_remote_output(hosts, " ".join(command), 900)
 
 
-def rename_logs(avocado_logs_dir, test_file):
+def rename_logs(avocado_logs_dir, test_file, args):
     """Append the test name to its avocado job-results directory name.
 
     Args:
         avocado_logs_dir (str): avocado job-results directory
         test_file (str): the test python file
     """
+    status = 0
     test_name = get_test_category(test_file)
     test_logs_lnk = os.path.join(avocado_logs_dir, "latest")
     test_logs_dir = os.path.realpath(test_logs_lnk)
-    new_test_logs_dir = "{}-{}".format(test_logs_dir, test_name)
+
+    if args.jenkinslog:
+        new_test_logs_dir = os.path.join(avocado_logs_dir, test_file)
+        try:
+            os.makedirs(new_test_logs_dir)
+        except OSError as error:
+            print("Error mkdir {}: {}".format(new_test_logs_dir, error))
+            status |= 1024
+    else:
+        new_test_logs_dir = "{}-{}".format(test_logs_dir, test_name)
+
     try:
         os.rename(test_logs_dir, new_test_logs_dir)
         os.remove(test_logs_lnk)
@@ -1149,6 +1214,29 @@ def rename_logs(avocado_logs_dir, test_file):
             "Error renaming {} to {}: {}".format(
                 test_logs_dir, new_test_logs_dir, error))
 
+    if args.jenkinslog:
+        xml_file = os.path.join(new_test_logs_dir, "results.xml")
+        try:
+            with open(xml_file) as xml_buffer:
+                xml_data = xml_buffer.read()
+        except OSError as error:
+            print("Error reading {} : {}".format(xml_file, str(error)))
+            status |= 1024
+            return status
+
+        test_dir = os.path.split(os.path.dirname(test_file))[-1]
+        org_class = "classname=\""
+        new_class = "{}FTEST_{}.".format(org_class, test_dir)
+        xml_data = re.sub(org_class, new_class, xml_data)
+
+        try:
+            with open(xml_file, "w") as xml_buffer:
+                xml_buffer.write(xml_data)
+        except OSError as error:
+            print("Error writing {}: {}".format(xml_file, str(error)))
+            status |= 1024
+
+    return status
 
 def check_big_files(avocado_logs_dir, task, test_name, args):
     """Check the contents of the task object, tag big files, create junit xml.
@@ -1188,7 +1276,7 @@ def check_big_files(avocado_logs_dir, task, test_name, args):
     return status
 
 
-def report_skipped_test(test_file, avocado_logs_dir, reason):
+def report_skipped_test(test_file, avocado_logs_dir, reason, args):
     """Report an error for the skipped test.
 
     Args:
@@ -1215,6 +1303,7 @@ def report_skipped_test(test_file, avocado_logs_dir, reason):
         print(
             "Warning: Continuing after failing to create {}: {}".format(
                 destination, error))
+
     return create_results_xml(
         message, test_name, "See launch.py command output for more details",
         destination)
@@ -1247,7 +1336,8 @@ def create_results_xml(message, testname, output, destination):
     testsuite = ET.Element("testsuite", testsuite_attributes)
 
     # Define the test case error
-    testcase_attributes = {"name": "framework_results", "time": "0.0"}
+    testcase_attributes = {"classname": testname, "name": "framework_results",
+                           "time": "0.0"}
     testcase = ET.SubElement(testsuite, "testcase", testcase_attributes)
     ET.SubElement(testcase, "error", {"message": message})
     system_out = ET.SubElement(testcase, "system-out")
@@ -1277,7 +1367,7 @@ def resolve_debuginfo(pkg):
         pkg (str): a package name
 
     Returns:
-        str: the debuginfo package name
+        dict: dictionary of debug package information
 
     """
     import yum      # pylint: disable=import-error,import-outside-toplevel
@@ -1300,8 +1390,7 @@ def resolve_debuginfo(pkg):
             print("Package {} not installed, "
                   "skipping debuginfo".format(pkg))
             return None
-        else:
-            raise
+        raise
 
     return {'name': debug_pkg,
             'version': pkg_data['version'],
@@ -1311,13 +1400,12 @@ def resolve_debuginfo(pkg):
 
 def install_debuginfos():
     """Install debuginfo packages."""
-    install_pkgs = [{'name': 'gdb'},
-                    {'name': 'python-magic'}]
+    install_pkgs = [{'name': 'gdb'}]
 
     cmds = []
 
     # -debuginfo packages that don't get installed with debuginfo-install
-    for pkg in ['python', 'daos', 'systemd', 'ndctl', 'mercury']:
+    for pkg in ['python', 'daos', 'systemd', 'ndctl', 'mercury', 'hdf5']:
         debug_pkg = resolve_debuginfo(pkg)
         if debug_pkg and debug_pkg not in install_pkgs:
             install_pkgs.append(debug_pkg)
@@ -1387,16 +1475,18 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
     """Copy all of the host test log files to the avocado results directory.
 
     Args:
-        avocado_logs_dir ([type]): [description]
+        avocado_logs_dir (str): location of the avocado job logs
         test_yaml (str): yaml file containing host names
         args (argparse.Namespace): command line arguments for this program
 
     Returns:
         bool: True if everything was done as expected, False if there were
               any issues processing core files
+
     """
     import fnmatch  # pylint: disable=import-outside-toplevel
 
+    return_status = True
     this_host = socket.gethostname().split(".")[0]
     host_list = get_hosts_from_yaml(test_yaml, args)
     daos_cores_dir = os.path.join(avocado_logs_dir, "latest", "stacktraces")
@@ -1415,7 +1505,10 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
         "copied=()",
         "for file in /var/tmp/core.*",
         "do if [ -e $file ]",
-        "then if sudo chmod 644 $file && "
+        "then if [ ! -s $file ]",
+        "then ((rc++))",
+        "ls -al $file",
+        "else if sudo chmod 644 $file && "
         "scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
             this_host, daos_cores_dir),
         "then copied+=($file)",
@@ -1427,11 +1520,15 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
         "ls -al $file",
         "fi",
         "fi",
+        "fi",
         "done",
         "echo Copied ${copied[@]:-no files}",
         "exit $rc",
     ]
-    spawn_commands(host_list, "; ".join(commands), timeout=1800)
+    if not spawn_commands(host_list, "; ".join(commands), timeout=1800):
+        # we might have still gotten some core files, so don't return here
+        # but save a False return status for later
+        return_status = False
 
     cores = os.listdir(daos_cores_dir)
 
@@ -1444,63 +1541,60 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
         print(error)
         print("Removing core files to avoid archiving them")
         for corefile in cores:
-            os.remove(corefile)
+            os.remove(os.path.join(daos_cores_dir, corefile))
         return False
 
-    def run_gdb(pattern):
-        """Run a gdb command on all corefiles matching a pattern.
+    for corefile in cores:
+        if not fnmatch.fnmatch(corefile, 'core.*[0-9]'):
+            continue
+        corefile_fqpn = os.path.join(daos_cores_dir, corefile)
+        # can't use the file python magic binding here due to:
+        # https://bugs.astron.com/view.php?id=225, fixed in:
+        # https://github.com/file/file/commit/6faf2eba2b8c65fbac7acd36602500d757614d2f
+        # but not available to us until that is in a released version
+        # revert the commit this comment is in to see use python magic instead
+        try:
+            gdb_output = run_command(["gdb", "-c", corefile_fqpn, "-ex",
+                                      "info proc exe", "-ex",
+                                      "quit"])
 
-        Args:
-            pattern (str): the fnmatch/glob pattern of core files to
-                           run gdb on
-        """
-        import magic    # pylint: disable=import-error
+            last_line = gdb_output.splitlines()[-1]
+            cmd = last_line[7:-1]
+            # assume there are no arguments on cmd
+            find_char = "'"
+            if cmd.find(" ") > -1:
+                # there are arguments on cmd
+                find_char = " "
+            exe_name = cmd[0:cmd.find(find_char)]
+        except RuntimeError:
+            exe_name = None
 
-        for corefile in cores:
-            if not fnmatch.fnmatch(corefile, pattern):
-                continue
-            corefile_fqpn = os.path.join(daos_cores_dir, corefile)
-            exe_magic = magic.open(magic.NONE)
-            exe_magic.load()
-            exe_type = exe_magic.file(corefile_fqpn)
-            exe_name_end = 0
-            if exe_type:
-                exe_name_start = exe_type.find("execfn: '") + 9
-                if exe_name_start > 8:
-                    exe_name_end = exe_type.find("', platform:")
-                else:
-                    exe_name_start = exe_type.find("from '") + 6
-                    if exe_name_start > 5:
-                        exe_name_end = exe_type[exe_name_start:].find(" ") + \
-                                    exe_name_start
-            if exe_name_end:
-                exe_name = exe_type[exe_name_start:exe_name_end]
-                cmd = [
-                    "gdb", "-cd={}".format(daos_cores_dir),
-                    "-ex", "set pagination off",
-                    "-ex", "thread apply all bt full",
-                    "-ex", "detach",
-                    "-ex", "quit",
-                    exe_name, corefile
-                ]
-                stack_trace_file = os.path.join(
-                    daos_cores_dir, "{}.stacktrace".format(corefile))
-                try:
-                    with open(stack_trace_file, "w") as stack_trace:
-                        stack_trace.writelines(get_output(cmd))
-                except IOError as error:
-                    print(
-                        "Error writing {}: {}".format(stack_trace_file, error))
-            else:
-                print(
-                    "Unable to determine executable name from: '{}'\nNot "
-                    "creating stacktrace".format(exe_type))
-            print("Removing {}".format(corefile_fqpn))
-            os.unlink(corefile_fqpn)
+        if exe_name:
+            cmd = [
+                "gdb", "-cd={}".format(daos_cores_dir),
+                "-ex", "set pagination off",
+                "-ex", "thread apply all bt full",
+                "-ex", "detach",
+                "-ex", "quit",
+                exe_name, corefile
+            ]
+            stack_trace_file = os.path.join(
+                daos_cores_dir, "{}.stacktrace".format(corefile))
+            try:
+                with open(stack_trace_file, "w") as stack_trace:
+                    stack_trace.writelines(get_output(cmd))
+            except IOError as error:
+                print("Error writing {}: {}".format(stack_trace_file, error))
+                return_status = False
+        else:
+            print(
+                "Unable to determine executable name from gdb output: '{}'\n"
+                "Not creating stacktrace".format(gdb_output))
+            return_status = False
+        print("Removing {}".format(corefile_fqpn))
+        os.unlink(corefile_fqpn)
 
-    run_gdb('core.*[0-9]')
-
-    return True
+    return return_status
 
 
 def get_test_category(test_file):
@@ -1516,6 +1610,104 @@ def get_test_category(test_file):
     file_parts = os.path.split(test_file)
     return "-".join(
         [os.path.splitext(os.path.basename(part))[0] for part in file_parts])
+
+
+def stop_daos_server_service(test_file, args):
+    """Stop any daos_server.service running on the hosts running servers.
+
+    Args:
+        test_file (str): the test python file
+        args (argparse.Namespace): command line arguments for this program
+
+    Returns:
+        int: status code: 0 = success, 512 = failure
+
+    """
+    hosts = list(args.test_servers)
+    print("Verifying daos_server.service after running '{}'".format(test_file))
+    status, stop_hosts, disable_hosts = get_daos_server_service_status(hosts)
+    if stop_hosts:
+        print("Stopping daos_server.service on {}".format(stop_hosts))
+        command = "sudo systemctl stop daos_server.service"
+        get_remote_output(str(stop_hosts), command)
+    if disable_hosts:
+        print("Disabling daos_server.service on {}".format(stop_hosts))
+        command = "sudo systemctl disable daos_server.service"
+        get_remote_output(str(disable_hosts), command)
+    if stop_hosts or disable_hosts:
+        check_hosts = NodeSet()
+        check_hosts.add(stop_hosts)
+        check_hosts.add(disable_hosts)
+        result = get_daos_server_service_status(hosts)
+        if result[1]:
+            print(
+                "Error daos_server.service still active on {}".format(
+                    result[1]))
+            status = 512
+        if result[2]:
+            print(
+                "Error daos_server.service still enabled on {}".format(
+                    result[2]))
+            status = 512
+        if result[0] != 0:
+            status = 512
+    return status
+
+
+def get_daos_server_service_status(host_list):
+    """Get the status of the daos_server.service.
+
+    Args:
+        host_list (list): list of hosts on which to determine the state of the
+            daos_server.service.
+
+    Returns:
+        tuple: a tuple containing:
+            - (int): status code: 0 = success, 512 = failure
+            - (NodeSet): hosts with an active daos_server.service
+            - (NodeSet): hosts with a loaded daos_server.service
+
+    """
+    status = 0
+    hosts = {"stop": NodeSet(), "disable": NodeSet()}
+    # Possible states:
+    #   active, inactive, activating, deactivating, failed, unknown
+    states_requiring_stop = ["active", "activating", "deactivating"]
+    states_requiring_disable = states_requiring_stop + ["failed"]
+    command = "systemctl is-active daos_server.service"
+    task = get_remote_output(host_list, command)
+    for output, nodelist in task.iter_buffers():
+        output = str(output)
+        nodeset = NodeSet.fromlist(nodelist)
+        if output in states_requiring_stop:
+            hosts["stop"].add(nodeset)
+        if output in states_requiring_disable:
+            hosts["disable"].add(nodeset)
+        print("  {}: {}".format(nodeset, output))
+    if task.num_timeout() > 0:
+        status = 512
+        hosts["stop"].add(nodeset)
+        hosts["disable"].add(nodeset)
+        nodeset = NodeSet.fromlist(task.iter_keys_timeout())
+        print("  {}: TIMEOUT".format(nodeset))
+    return status, hosts["stop"], hosts["disable"]
+
+
+def indent_text(indent, text):
+    """Prepend the specified number of spaces to the specified text.
+
+    Args:
+        indent (int): the number of spaces to use as an indentation
+        text (object): text to indent. lists will be converted into a
+            newline-separated str with spaces prepended to each line
+
+    Returns:
+        str: indented text
+
+    """
+    if isinstance(text, (list, tuple)):
+        return "\n".join(["{}{}".format(" " * indent, line) for line in text])
+    return " " * indent + str(text)
 
 
 def main():
@@ -1648,8 +1840,16 @@ def main():
         "-v", "--verbose",
         action="store_true",
         help="verbose output")
+    parser.add_argument(
+        "-j", "--jenkinslog",
+        action="store_true",
+        help="rename the avocado test logs directory for publishing in Jenkins")
     args = parser.parse_args()
     print("Arguments: {}".format(args))
+
+    # Convert host specifications into NodeSets
+    args.test_servers = NodeSet(args.test_servers)
+    args.test_clients = NodeSet(args.test_clients)
 
     # Setup the user environment
     set_test_environment(args)
@@ -1678,6 +1878,9 @@ def main():
     test_files = get_test_files(test_list, args, tmp_dir)
     if args.modify:
         exit(0)
+
+    # Setup (clean/create/list) the common test directory
+    setup_test_directory(args)
 
     # Generate certificate files
     generate_certs()
@@ -1715,6 +1918,14 @@ def main():
         if status & 256 == 256:
             print("ERROR: Detected one or more tests with failure to create "
                   "stack traces from core files!")
+            ret_code = 1
+        if status & 512 == 512:
+            print("ERROR: Detected stopping daos_server.service after one or "
+                  "more tests!")
+            ret_code = 1
+        if status & 1024 == 1024:
+            print("ERROR: Detected one or more failures in renaming logs and "
+                  "results for Jenkins!")
             ret_code = 1
     exit(ret_code)
 

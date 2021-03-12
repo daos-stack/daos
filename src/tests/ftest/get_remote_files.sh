@@ -130,7 +130,7 @@ list_tag_files() {
 #######################################
 compress_files() {
     # shellcheck disable=SC2086
-    find ${1} -maxdepth 0 -type f -size +1M -print0 | xargs -r0 lbzip2 -v
+    find ${1} -maxdepth 0 -type f -size +1M -print0 | sudo xargs -r0 lbzip2 -v
     return $?
 }
 
@@ -269,6 +269,11 @@ if ! ret=$(check_files_input "${FILES_TO_PROCESS}"); then
         exit 1
     elif [[ ${ret} -eq 2 ]]; then
         echo "No files matched ${FILES_TO_PROCESS}. Nothing to do."
+        if ! "${VERBOSE}" && [ -n "${ARCHIVE_DEST}" ]; then
+            if ! scp_files "${log_file}" "${ARCHIVE_DEST}"; then
+                exit 1
+            fi
+        fi
         exit 0
     fi
 fi
@@ -301,6 +306,7 @@ if "${COMPRESS:-false}"; then
         if ! grep -q "${check_str}" <<< "${output}" || "${EXCLUDE_ZIP:-false}";
         then
             if ! compress_files "${FILES_TO_PROCESS}"; then
+                echo "  Error detected compressing files"
                 rc=1
             fi
         elif ! "${EXCLUDE_ZIP:-false}"; then

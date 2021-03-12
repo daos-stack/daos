@@ -1,0 +1,53 @@
+From d9e5210cd6112b59f7caff98883a9748495c07dd Mon Sep 17 00:00:00 2001
+From: Cleber Rosa <crosa@redhat.com>
+Date: Wed, 20 Mar 2019 12:46:57 -0400
+Subject: [PATCH] [RFC] Runner: add extra timeout for tests in teardown
+
+The current time given to tests performing teardown is pretty limited.
+Let's add a 60 seconds fixed timeout just for validating the idea, and
+once settled, we can turn that into a configuration setting.
+
+Signed-off-by: Cleber Rosa <crosa@redhat.com>
+---
+ avocado/core/runner.py             | 11 +++++++++--
+ examples/tests/longteardown.py     | 29 +++++++++++++++++++++++++++++
+ selftests/functional/test_basic.py | 18 ++++++++++++++++++
+ 3 files changed, 56 insertions(+), 2 deletions(-)
+ create mode 100644 examples/tests/longteardown.py
+
+diff --git /usr/lib/python2.7/site-packages/avocado/core/runner.py.old /usr/lib/python2.7/site-packages/avocado/core/runner.py
+index 1fc84844b..17e6215d0 100644
+--- avocado/core/runner.py.old
++++ avocado/core/runner.py
+@@ -45,6 +45,8 @@
+ TIMEOUT_PROCESS_DIED = 10
+ #: when test reported status but the process did not finish
+ TIMEOUT_PROCESS_ALIVE = 60
++#: extra timeout to give to a test in TEARDOWN phase
++TIMEOUT_TEARDOWN = 60
+ 
+ 
+ def add_runner_failure(test_state, new_status, message):
+@@ -219,7 +221,7 @@ def finish(self, proc, started, step, deadline, result_dispatcher):
+         wait.wait_for(lambda: not proc.is_alive() or self.status, 1, 0, step)
+         if self.status:     # status exists, wait for process to finish
+             deadline = min(deadline, time.time() + TIMEOUT_PROCESS_ALIVE)
+-            while time.time() < deadline:
++            while time.time() < deadline + TIMEOUT_TEARDOWN:
+                 result_dispatcher.map_method('test_progress', False)
+                 if wait.wait_for(lambda: not proc.is_alive(), 1, 0, step):
+                     return self._add_status_failures(self.status)
+@@ -422,7 +424,12 @@ def sigtstp_handler(signum, frame):     # pylint: disable=W0613
+ 
+         while True:
+             try:
+-                if time.time() >= deadline:
++                now = time.time()
++                if test_status.status.get('phase') == 'TEARDOWN':
++                    reached = now >= deadline + TIMEOUT_TEARDOWN
++                else:
++                    reached = now >= deadline
++                if reached:
+                     abort_reason = \"Timeout reached\"
+                     try:
+                         os.kill(proc.pid, signal.SIGTERM)

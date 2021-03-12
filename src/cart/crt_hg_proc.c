@@ -1,32 +1,13 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It implements the main input/output
  * parameter serialization/de-serialization routines (proc functions).
  */
 #define D_LOGFAC	DD_FAC(hg)
-
-#include <gurt/mem.h>
 
 #include "crt_internal.h"
 
@@ -108,10 +89,10 @@ crt_proc_memcpy(crt_proc_t proc, void *data, size_t data_size)
 	buf = hg_proc_save_ptr(proc, data_size);
 	switch (proc_op) {
 	case CRT_PROC_ENCODE:
-		d_memcpy(buf, data, data_size);
+		memcpy(buf, data, data_size);
 		break;
 	case CRT_PROC_DECODE:
-		d_memcpy(data, buf, data_size);
+		memcpy(data, buf, data_size);
 		break;
 	default:
 		break;
@@ -208,14 +189,9 @@ crt_proc_d_rank_list_t(crt_proc_t proc, d_rank_list_t **data)
 			D_GOTO(out, rc = 0);
 		}
 
-		D_ALLOC_PTR(rank_list);
+		rank_list = d_rank_list_alloc(nr);
 		if (rank_list == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
-		D_ALLOC_ARRAY(rank_list->rl_ranks, nr);
-		if (rank_list->rl_ranks == NULL) {
-			D_FREE(rank_list);
-			D_GOTO(out, rc = -DER_NOMEM);
-		}
 		buf = hg_proc_save_ptr(proc, nr * sizeof(*buf));
 		memcpy(rank_list->rl_ranks, buf, nr * sizeof(*buf));
 		rank_list->rl_nr = nr;
@@ -400,6 +376,7 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 	hg_class_t		*hg_class;
 	struct crt_context	*ctx;
 	struct crt_hg_context	*hg_ctx;
+	uint64_t		clock_offset;
 	hg_proc_t		hg_proc = HG_PROC_NULL;
 
 	/* Get extra input buffer; if it's null, get regular input buffer */
@@ -438,16 +415,18 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 
 	/* Sync the HLC. Clients never decode requests. */
 	D_ASSERT(crt_is_service());
-	rc = crt_hlc_get_msg(rpc_priv->crp_req_hdr.cch_hlc, NULL /* hlc_out */);
+	rc = crt_hlc_get_msg(rpc_priv->crp_req_hdr.cch_hlc, NULL /* hlc_out */,
+			     &clock_offset);
 	if (rc != 0) {
 		REPORT_HLC_SYNC_ERR("failed to sync HLC for request: opc=%x ts="
-				    DF_U64" from=%u\n",
+				    DF_U64" offset="DF_U64" from=%u\n",
 				    rpc_priv->crp_req_hdr.cch_opc,
 				    rpc_priv->crp_req_hdr.cch_hlc,
+				    clock_offset,
 				    rpc_priv->crp_req_hdr.cch_src_rank);
 		/* Fail all but SWIM requests. */
 		if (!crt_opc_is_swim(rpc_priv->crp_req_hdr.cch_opc))
-			D_GOTO(out, rc);
+			rpc_priv->crp_fail_hlc = 1;
 		rc = 0;
 	}
 
@@ -641,6 +620,7 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 	struct crt_rpc_priv	*rpc_priv;
 	crt_proc_op_t		 proc_op;
 	int			 rc = 0;
+	int			 rc2;
 
 	if (proc == CRT_PROC_NULL)
 		D_GOTO(out, rc = -DER_INVAL);
@@ -671,29 +651,44 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 			struct crt_common_hdr *hdr = &rpc_priv->crp_reply_hdr;
 
 			if (crt_is_service()) {
+				uint64_t clock_offset;
+
 				rc = crt_hlc_get_msg(hdr->cch_hlc,
-						     NULL /* hlc_out */);
+						     NULL /* hlc_out */,
+						     &clock_offset);
 				if (rc != 0) {
 					REPORT_HLC_SYNC_ERR("failed to sync "
 							    "HLC for reply: "
 							    "opc=%x ts="DF_U64
+							    " offset="DF_U64
 							    " from=%u\n",
 							    hdr->cch_opc,
 							    hdr->cch_hlc,
+							    clock_offset,
 							    hdr->cch_dst_rank);
 					/* Fail all but SWIM replies. */
 					if (!crt_opc_is_swim(hdr->cch_opc))
-						D_GOTO(out, rc);
+						rpc_priv->crp_fail_hlc = 1;
+
 					rc = 0;
 				}
 			} else {
 				crt_hlct_sync(hdr->cch_hlc);
 			}
 		}
-		if (rpc_priv->crp_reply_hdr.cch_rc != 0) {
-			RPC_ERROR(rpc_priv,
-				  "RPC failed to execute on target. error code: %d\n",
-				  rpc_priv->crp_reply_hdr.cch_rc);
+
+		rc2 = rpc_priv->crp_reply_hdr.cch_rc;
+		if (rc2 != 0) {
+
+			if (rpc_priv->crp_reply_hdr.cch_rc != -DER_GRPVER)
+				RPC_ERROR(rpc_priv,
+					  "RPC failed to execute on target. "
+					  "error code: "DF_RC"\n", DP_RC(rc2));
+			else
+				RPC_TRACE(DB_NET, rpc_priv,
+					  "RPC failed to execute on target. "
+					  "error code: "DF_RC"\n", DP_RC(rc2));
+
 			D_GOTO(out, rc);
 		}
 	}

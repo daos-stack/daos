@@ -6,9 +6,7 @@
 utils/rpms/_topdir/
 /build/
 tags
-daos_m.conf
 daos.conf
-/_build.external/
 config.log
 /install/
 utils/daos_build.pyc
@@ -54,3 +52,9 @@ src/cart/src/cart/_structures_from_macros_.h
 dnt.*.memcheck
 utils/.daos_server.active.yml
 nlt-errors.json
+src/tests/ftest/sysinfo-*
+src/client/java/daos-java/target/
+src/client/java/daos-java/src/main/native/include/io_daos_DaosClient.h
+src/client/java/daos-java/src/main/native/include/io_daos_dfs_DaosFsClient.h
+src/client/java/hadoop-daos/target/
+src/client/java/daos-java/build/

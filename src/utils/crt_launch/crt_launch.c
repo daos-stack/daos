@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
  /**
  * MPI-based and cart-based crt_launch application that facilitates launching
@@ -92,6 +75,7 @@ struct options_t {
 	char	*app_to_exec;
 	int	app_args_indx;
 	int	start_port;
+	int	num_ctx;
 };
 
 struct options_t g_opt;
@@ -104,6 +88,7 @@ show_usage(const char *msg)
 	printf("Usage: crt_launch [-cph] <-e app_to_exec app_args>\n");
 	printf("Options:\n");
 	printf("-c	: Indicate app is a client\n");
+	printf("-n	: Optional arg to set num of contexts (default 32)\n");
 	printf("-p	: Optional argument to set first port to use\n");
 	printf("-h	: Print this help and exit\n");
 	printf("----------------------------------------------\n");
@@ -118,18 +103,23 @@ parse_args(int argc, char **argv)
 		{"client",	no_argument,		0, 'c'},
 		{"port",	required_argument,	0, 'p'},
 		{"help",	no_argument,		0, 'h'},
+		{"num_ctx",	required_argument,	0, 'n'},
 		{"exec",	required_argument,	0, 'e'},
 		{0, 0, 0, 0}
 	};
 
 	g_opt.start_port = START_PORT;
+	g_opt.num_ctx = 32;
 
 	while (1) {
-		rc = getopt_long(argc, argv, "e:p:ch", long_options,
+		rc = getopt_long(argc, argv, "e:p:n:ch", long_options,
 				 &option_index);
 		if (rc == -1)
 			break;
 		switch (rc) {
+		case 'n':
+			g_opt.num_ctx = atoi(optarg);
+			break;
 		case 'c':
 			g_opt.is_client = true;
 			break;
@@ -164,7 +154,7 @@ get_self_uri(struct host *h, int rank)
 	char		*str_port = NULL;
 
 	/* Assign ports sequentually to each rank */
-	D_ASPRINTF(str_port, "%d", g_opt.start_port + rank);
+	D_ASPRINTF(str_port, "%d", g_opt.start_port + rank * g_opt.num_ctx);
 	if (str_port == NULL)
 		return -DER_NOMEM;
 

@@ -1,0 +1,24 @@
+# (C) Copyright 2020-2021 Intel Corporation.
+#
+# SPDX-License-Identifier: BSD-2-Clause-Patent
+#
+"""Example code"""
+
+import daos_build
+
+def scons():
+    """Execute build"""
+    Import('env')
+
+    unit_env = env.Clone()
+
+    daos_build.test(unit_env, 'telemetry_producer_example',
+                    ['telem_producer_example.c'],
+                    LIBS=['gurt'])
+
+    daos_build.test(unit_env, 'telemetry_consumer_example',
+                    ['telem_consumer_example.c'],
+                    LIBS=['gurt'])
+
+if __name__ == "SCons.Script":
+    scons()

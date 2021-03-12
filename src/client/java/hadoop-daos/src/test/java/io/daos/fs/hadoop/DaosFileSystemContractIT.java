@@ -1,19 +1,5 @@
 /**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 package io.daos.fs.hadoop;
@@ -25,24 +11,22 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystemContractBaseTest;
 import org.apache.hadoop.fs.Path;
 import org.junit.Test;
+import org.junit.Before;
 
 import java.io.IOException;
 
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assume.assumeTrue;
 
 public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
 
   private static final Log LOG = LogFactory.getLog(DaosFileSystemContractIT.class);
 
-  @Override
-  protected void setUp() throws Exception {
+  public DaosFileSystemContractIT() throws IOException {
     fs = DaosFSFactory.getFS();
     fs.mkdirs(new Path("/test"));
-  }
-
-  @Override
-  protected void tearDown() throws Exception {
-    super.tearDown();
   }
 
   @Override
@@ -88,8 +72,7 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
     assertTrue("Parent should exist", this.fs.exists(parentDir));
   }
 
-  @Test
-  protected boolean renameSupported() {
+  public boolean renameSupported() {
     return true;
   }
 
@@ -115,6 +98,13 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
     assertFalse(fs.exists(src));
   }
 
+  @Test
+  public void testRenameFailed() throws Exception {
+    Path parentdir = path("testRenameChildDirForbidden");
+    fs.mkdirs(parentdir);
+    Path childdir = new Path(parentdir, "childdir");
+    fs.rename(parentdir, childdir);
+  }
 
   @Test
   public void testGetFileStatusFileAndDirectory() throws Exception {
@@ -144,6 +134,7 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
     }
   }
 
+  @Test
   public void testRenameDirectoryMoveToExistingDirectory() throws Exception {
     if (!renameSupported()) return;
 
@@ -248,6 +239,7 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
     assertEquals(0, paths.length);
   }
 
+  @Test
   public void testRenameDirMoveToDescentdantDir() throws Exception {
     if (!renameSupported()) return;
 
@@ -261,6 +253,7 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
         fs.exists(path("/test/hadoop/dir/subdir/dir")));
   }
 
+  @Test
   public void testRenameDirMoveToItSelf() throws Exception {
     if (!renameSupported()) return;
 
@@ -273,6 +266,7 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
         fs.exists(path("/test/hadoop/dir")));
   }
 
+  @Test
   public void testRenameFileToItSelf() throws Exception {
     if (!renameSupported()) return;
 

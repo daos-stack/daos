@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -152,11 +135,17 @@ open_handle_cb(tse_task_t *task, void *data)
 
 err_obj:
 	if (daos_handle_is_valid(*args->oh)) {
-		daos_obj_close_t *close_args;
-		tse_task_t *close_task;
+		daos_obj_close_t	*close_args;
+		tse_task_t		*close_task;
+		int			rc2;
 
-		daos_task_create(DAOS_OPC_OBJ_CLOSE, tse_task2sched(task),
-				 0, NULL, &close_task);
+		rc2 = daos_task_create(DAOS_OPC_OBJ_CLOSE, tse_task2sched(task),
+				       0, NULL, &close_task);
+		if (rc2) {
+			D_ERROR("Failed to create task to cleanup obj hdl\n");
+			return rc;
+		}
+
 		close_args = daos_task_get_args(close_task);
 		close_args->oh = *args->oh;
 		tse_task_schedule(close_task, true);
@@ -361,7 +350,7 @@ int
 dc_kv_put(tse_task_t *task)
 {
 	daos_kv_put_t		*args = daos_task_get_args(task);
-	struct dc_kv		*kv;
+	struct dc_kv		*kv = NULL;
 	daos_obj_update_t	*update_args;
 	tse_task_t		*update_task = NULL;
 	struct io_params	*params = NULL;
@@ -422,7 +411,7 @@ dc_kv_put(tse_task_t *task)
 		D_GOTO(err_task, rc);
 
 	tse_sched_progress(tse_task2sched(task));
-
+	kv_decref(kv);
 	return 0;
 
 err_task:
@@ -431,6 +420,8 @@ err_task:
 	if (update_task)
 		tse_task_complete(update_task, rc);
 	tse_task_complete(task, rc);
+	if (kv)
+		kv_decref(kv);
 	return rc;
 }
 
@@ -438,7 +429,7 @@ int
 dc_kv_get(tse_task_t *task)
 {
 	daos_kv_get_t		*args = daos_task_get_args(task);
-	struct dc_kv		*kv;
+	struct dc_kv		*kv = NULL;
 	daos_obj_fetch_t	*fetch_args;
 	tse_task_t		*fetch_task = NULL;
 	struct io_params	*params = NULL;
@@ -516,6 +507,7 @@ dc_kv_get(tse_task_t *task)
 		D_GOTO(err_task, rc);
 
 	tse_sched_progress(tse_task2sched(task));
+	kv_decref(kv);
 
 	return 0;
 
@@ -525,6 +517,8 @@ err_task:
 	if (fetch_task)
 		tse_task_complete(fetch_task, rc);
 	tse_task_complete(task, rc);
+	if (kv)
+		kv_decref(kv);
 	return rc;
 }
 
@@ -532,7 +526,7 @@ int
 dc_kv_remove(tse_task_t *task)
 {
 	daos_kv_remove_t	*args = daos_task_get_args(task);
-	struct dc_kv		*kv;
+	struct dc_kv		*kv = NULL;
 	daos_obj_punch_t	*punch_args;
 	tse_task_t		*punch_task = NULL;
 	struct io_params	*params = NULL;
@@ -579,6 +573,7 @@ dc_kv_remove(tse_task_t *task)
 		D_GOTO(err_task, rc);
 
 	tse_sched_progress(tse_task2sched(task));
+	kv_decref(kv);
 
 	return 0;
 
@@ -588,6 +583,8 @@ err_task:
 	if (punch_task)
 		tse_task_complete(punch_task, rc);
 	tse_task_complete(task, rc);
+	if (kv)
+		kv_decref(kv);
 	return rc;
 }
 
@@ -595,7 +592,7 @@ int
 dc_kv_list(tse_task_t *task)
 {
 	daos_kv_list_t		*args = daos_task_get_args(task);
-	struct dc_kv		*kv;
+	struct dc_kv		*kv = NULL;
 	daos_obj_list_dkey_t	*list_args;
 	tse_task_t		*list_task = NULL;
 	int			rc;
@@ -626,6 +623,7 @@ dc_kv_list(tse_task_t *task)
 		D_GOTO(err_task, rc);
 
 	tse_sched_progress(tse_task2sched(task));
+	kv_decref(kv);
 
 	return 0;
 
@@ -633,5 +631,7 @@ err_task:
 	if (list_task)
 		tse_task_complete(list_task, rc);
 	tse_task_complete(task, rc);
+	if (kv)
+		kv_decref(kv);
 	return rc;
 }

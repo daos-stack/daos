@@ -27,12 +27,15 @@
 # pylint: disable=bare-except
 # pylint: disable=exec-used
 # pylint: disable=too-many-statements
+# pylint: disable=too-many-lines
 from __future__ import absolute_import, division, print_function
 import os
 import traceback
 import hashlib
 import time
 import sys
+import errno
+import shutil
 from build_info import BuildInfo
 from SCons.Variables import PathVariable
 from SCons.Variables import EnumVariable
@@ -57,6 +60,7 @@ except ImportError:
     DEVNULL = open(os.devnull, "wb")
 import tarfile
 import copy
+from distutils.spawn import find_executable
 if sys.version_info < (3, 0):
 # pylint: disable=import-error
     import ConfigParser
@@ -284,7 +288,7 @@ class Runner():
                 retval = True
             else:
                 print('RUN: %s' % command)
-                if subprocess.call(command, shell=True,
+                if subprocess.call(command, shell=True,   # nosec
                                    env=self.env['ENV']) != 0:
                     retval = False
                     break
@@ -299,15 +303,19 @@ def default_libpath():
     """On debian systems, the default library path can be queried"""
     if not os.path.isfile('/etc/debian_version'):
         return []
+    dpkgarchitecture = find_executable('dpkg-architecture')
+    if not dpkgarchitecture:
+        print('No dpkg-architecture found in path.')
+        return []
     try:
-        pipe = subprocess.Popen(['dpkg-architecture', '-qDEB_HOST_MULTIARCH'],
+        pipe = subprocess.Popen([dpkgarchitecture, '-qDEB_HOST_MULTIARCH'],
                                 stdout=subprocess.PIPE, stderr=DEVNULL)
         (stdo, _) = pipe.communicate()
         if pipe.returncode == 0:
             archpath = stdo.decode().strip()
             return ['lib/' + archpath]
     except Exception:
-        pass
+        print('default_libpath, Exception: subprocess.Popen dpkg-architecture')
     return []
 
 class GitRepoRetriever():
@@ -440,7 +448,7 @@ class WebRetriever():
 
         return False
 
-    def get(self, subdir, **kw):
+    def get(self, subdir, **kw): #pylint: disable=unused-argument
         """Downloads and extracts sources from a url into subdir"""
 
         basename = os.path.basename(self.url)
@@ -550,6 +558,21 @@ class ProgramBinary():
                 return True
         return False
 
+def ensure_dir_exists(dirname, dry_run):
+    """Ensure a directory exists"""
+    if not os.path.exists(dirname):
+        if dry_run:
+            print("Would create %s" % dry_run)
+            return
+        try:
+            os.makedirs(dirname)
+        except Exception as e:
+            if not os.path.isdir(dirname):
+                raise e
+
+    if not os.path.isdir(dirname):
+        raise IOError(errno.ENOTDIR, 'Not a directory', dirname)
+
 # pylint: disable=too-many-public-methods
 class PreReqComponent():
     """A class for defining and managing external components required
@@ -622,8 +645,7 @@ class PreReqComponent():
         bdir = self._setup_build_type()
         self.build_type = self.__env.get("BUILD_TYPE")
         self.__env["BUILD_DIR"] = bdir
-        if not os.path.exists(bdir):
-            os.makedirs(bdir)
+        ensure_dir_exists(bdir, self.__dry_run)
         self.setup_path_var('BUILD_DIR')
         self.__build_info = BuildInfo()
         self.__build_info.update("BUILD_DIR", self.__env.subst("$BUILD_DIR"))
@@ -641,7 +663,8 @@ class PreReqComponent():
                         CONFIGURELOG='#/config-%s.log' % arch)
 
         # Build pre-reqs in sub-dir based on selected build type
-        build_dir_name = os.path.join(build_dir_name, self.build_type)
+        build_dir_name = os.path.join(build_dir_name,
+                                      self.__env.subst("$TTYPE_REAL"))
 
         self.add_opts(PathVariable('ENV_SCRIPT',
                                    "Location of environment script",
@@ -656,14 +679,8 @@ class PreReqComponent():
 
         self.__build_dir = os.path.realpath(os.path.join(self.__top_dir,
                                                          build_dir_name))
-        try:
-            if self.__dry_run:
-                print('Would mkdir -p %s' % self.__build_dir)
-            else:
-                os.makedirs(self.__build_dir)
+        ensure_dir_exists(self.__build_dir, self.__dry_run)
 
-        except Exception:
-            pass
         self.__prebuilt_path = {}
         self.__src_path = {}
 
@@ -686,14 +703,6 @@ class PreReqComponent():
         self.setup_path_var('GOPATH')
         self.__build_info.update("PREFIX", self.__env.subst("$PREFIX"))
         self.prereq_prefix = self.__env.subst("$PREFIX/prereq/$TTYPE_REAL")
-        try:
-            if self.__dry_run:
-                print('Would mkdir -p %s' % self.prereq_prefix)
-            else:
-                os.makedirs(self.prereq_prefix)
-        except:
-            pass
-
         self.setup_parallel_build()
 
         self.config_file = config_file
@@ -731,7 +740,7 @@ class PreReqComponent():
     def _setup_build_type(self):
         """set build type"""
         self.add_opts(EnumVariable('BUILD_TYPE', "Set the build type",
-                                   'dev', ['dev', 'debug', 'release'],
+                                   'release', ['dev', 'debug', 'release'],
                                    ignorecase=1))
         self.add_opts(EnumVariable('TARGET_TYPE', "Set the prerequisite type",
                                    'default',
@@ -925,7 +934,7 @@ class PreReqComponent():
             self.__opts.Update(self.__env)
         except UserError:
             if self.__dry_run:
-                pass
+                print('except on add_opts, self.__opts.Update')
             else:
                 raise
 
@@ -982,7 +991,7 @@ class PreReqComponent():
             env = self.__env.Clone()
             self.require(env, comp)
 
-    def modify_prefix(self, comp_def, env):
+    def modify_prefix(self, comp_def, env): #pylint: disable=unused-argument
         """Overwrite the prefix in cases where we may be using the default"""
         if comp_def.package:
             return
@@ -1357,7 +1366,7 @@ class _Component():
                     return True
         except AttributeError:
             # This feature is new in scons 2.4
-            pass
+            print('except AttributeError: new in scons 2.4')
 
         config.Finish()
         if self.__check_only:
@@ -1477,13 +1486,8 @@ class _Component():
             self.build_path = \
                 os.path.join(self.prereqs.get_build_dir(), '%s.build'
                              % self.name)
-            try:
-                if self.__dry_run:
-                    print('Would mkdir -p %s' % self.build_path)
-                else:
-                    os.makedirs(self.build_path)
-            except:
-                pass
+
+            ensure_dir_exists(self.build_path, self.__dry_run)
 
     def set_environment(self, env, needed_libs):
         """Modify the specified construction environment to build with
@@ -1562,7 +1566,7 @@ class _Component():
         if self.__dry_run:
             print('Would empty %s' % path)
         else:
-            os.system("rm -rf %s" % path)
+            shutil.rmtree(path)
             os.mkdir(path)
 
     def _has_changes(self):
@@ -1675,6 +1679,7 @@ class _Component():
             if self.has_missing_system_deps(self.prereqs.system_env):
                 raise MissingSystemLibs(self.name)
 
+            ensure_dir_exists(self.prereqs.prereq_prefix, self.__dry_run)
             changes = True
             if self.out_of_src_build:
                 self._rm_old_dir(self.build_path)

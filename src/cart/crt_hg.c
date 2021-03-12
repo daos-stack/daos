@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It implements the main interfaces to mercury.
@@ -382,6 +365,15 @@ crt_provider_is_block_mode(int provider)
 	return true;
 }
 
+bool
+crt_provider_is_contig_ep(int provider)
+{
+	if (provider == CRT_NA_OFI_PSM2)
+		return false;
+
+	return crt_na_dict[provider].nad_port_bind;
+}
+
 static bool
 crt_provider_is_sep(int provider)
 {
@@ -393,31 +385,32 @@ crt_get_info_string(char **string, int ctx_idx)
 {
 	int	 provider;
 	char	*provider_str;
-	int	 port;
+	int	 start_port;
 	char	*domain_str;
 	char	*ip_str;
 
 	provider = crt_gdata.cg_na_plugin;
 
 	provider_str = crt_provider_name_get(provider);
-	port = crt_provider_ctx0_port_get(provider);
+	start_port = crt_provider_ctx0_port_get(provider);
 	domain_str = crt_provider_domain_get(provider);
 	ip_str = crt_provider_ip_str_get(provider);
 
-	if (!crt_na_dict[provider].nad_port_bind) {
+	if (provider == CRT_NA_SM) {
 		D_ASPRINTF(*string, "%s://", provider_str);
-	} else {
-		/* If OFI_PORT is set, context0 gets it */
-		if (ctx_idx == 0 && port != -1) {
-			D_ASPRINTF(*string, "%s://%s/%s:%d",
-				   provider_str, domain_str, ip_str, port);
-		} else {
-			/* All other contexts get random port */
-			D_ASPRINTF(*string, "%s://%s/%s",
-				   provider_str, domain_str, ip_str);
-		}
+		D_GOTO(out, 0);
 	}
 
+	if (crt_provider_is_contig_ep(provider) && start_port != -1) {
+		D_ASPRINTF(*string, "%s://%s/%s:%d",
+			   provider_str, domain_str, ip_str,
+			   start_port + ctx_idx);
+	} else {
+		D_ASPRINTF(*string, "%s://%s/%s",
+			   provider_str, domain_str, ip_str);
+	}
+
+out:
 	if (*string == NULL)
 		return -DER_NOMEM;
 
@@ -446,6 +439,7 @@ int
 crt_hg_init(void)
 {
 	int	rc = 0;
+	char	*env;
 
 	if (crt_initialized()) {
 		D_ERROR("CaRT already initialized.\n");
@@ -453,6 +447,11 @@ crt_hg_init(void)
 	}
 
 	#define EXT_FAC DD_FAC(external)
+
+	/* If mercury log level is not set, set it to warning by default */
+	env = getenv("HG_LOG_LEVEL");
+	if (!env)
+		HG_Set_log_level("warning");
 
 	/* import HG log */
 	hg_log_set_func(crt_hg_log);
@@ -520,6 +519,7 @@ crt_hg_class_init(int provider, int idx, hg_class_t **ret_hg_class)
 	else
 		init_info.na_init_info.max_contexts = 1;
 
+	init_info.request_post_incr = 0;
 	hg_class = HG_Init_opt(info_string, crt_is_service(), &init_info);
 	if (hg_class == NULL) {
 		D_ERROR("Could not initialize HG class.\n");
@@ -557,14 +557,13 @@ out:
 }
 
 int
-crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
+crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int provider, int idx)
 {
 	struct crt_context	*crt_ctx;
 	hg_class_t		*hg_class = NULL;
 	hg_context_t		*hg_context = NULL;
 	hg_return_t		 hg_ret;
 	bool			 sep_mode;
-	int			 provider;
 	int			 rc = 0;
 
 	D_ASSERT(hg_ctx != NULL);
@@ -573,7 +572,6 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 	D_DEBUG(DB_NET, "crt_gdata.cg_sep_mode %d, crt_is_service() %d\n",
 		crt_gdata.cg_sep_mode, crt_is_service());
 
-	provider = crt_gdata.cg_na_plugin;
 	sep_mode = crt_provider_is_sep(provider);
 
 	/* In SEP mode all contexts share same hg_class*/
@@ -775,6 +773,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	}
 
 	rpc_priv->crp_opc_info = opc_info;
+	rpc_priv->crp_fail_hlc = rpc_tmp.crp_fail_hlc;
 	rpc_pub->cr_opc = rpc_tmp.crp_pub.cr_opc;
 	rpc_pub->cr_ep.ep_rank = rpc_priv->crp_req_hdr.cch_dst_rank;
 	rpc_pub->cr_ep.ep_tag = rpc_priv->crp_req_hdr.cch_dst_tag;
@@ -816,6 +815,11 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	if (opc_info->coi_rpc_cb == NULL) {
 		D_ERROR("NULL crp_hg_hdl, opc: %#x.\n", opc);
 		crt_hg_reply_error_send(rpc_priv, -DER_UNREG);
+		D_GOTO(decref, hg_ret = HG_SUCCESS);
+	}
+
+	if (rpc_priv->crp_fail_hlc) {
+		crt_hg_reply_error_send(rpc_priv, -DER_HLC_SYNC);
 		D_GOTO(decref, hg_ret = HG_SUCCESS);
 	}
 
@@ -870,7 +874,7 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 			RPC_ERROR(rpc_priv,
 				  "HG_Create failed, hg_ret: %d\n",
 				  hg_ret);
-			rc = -DER_HG;
+			D_GOTO(out, rc = -DER_HG);
 		}
 	} else {
 		rpc_priv->crp_hg_hdl = rpc_priv->crp_hdl_reuse->chh_hdl;
@@ -881,7 +885,7 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 			RPC_ERROR(rpc_priv,
 				  "HG_Reset failed, hg_ret: %d\n",
 				  hg_ret);
-			rc = -DER_HG;
+			D_GOTO(out, rc = -DER_HG);
 		}
 	}
 
@@ -894,10 +898,10 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 			RPC_ERROR(rpc_priv,
 				  "HG_Set_target_id failed, hg_ret: %d\n",
 				  hg_ret);
-			rc = -DER_HG;
+			D_GOTO(out, rc = -DER_HG);
 		}
 	}
-
+out:
 	return rc;
 }
 
@@ -1031,6 +1035,10 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 				}
 			}
 		}
+
+		/* HLC is checked during unpacking of the response */
+		if (rpc_priv->crp_fail_hlc)
+			rc = -DER_HLC_SYNC;
 	}
 
 	crt_cbinfo.cci_rpc = rpc_pub;
@@ -1060,11 +1068,6 @@ out:
 	return hg_ret;
 }
 
-static bool crt_hg_network_error(hg_return_t hg_ret)
-{
-	return (hg_ret == HG_NA_ERROR || hg_ret == HG_PROTOCOL_ERROR);
-}
-
 int
 crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 {
@@ -1092,18 +1095,8 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 			  rpc_priv->crp_tgt_uri);
 	}
 
-	/* HG_Forward can return 2 types of errors - network errors and generic
-	 * ones, such as out of memory, bad parameters passed, invalid handle
-	 * etc...
-	 *
-	 * For network errors, we do not want to return error back to the caller
-	 * of crt_req_send(), but instead we want to invoke completion callback
-	 * manually with 'node unreachable' (DER_UNREACH) error.
-	 *
-	 * HG_NA_ERROR and HG_PROTOCOL_ERROR are both network-level errors
-	 * that can be raised by mercury.
-	 */
-	if (crt_hg_network_error(hg_ret)) {
+	/* For any error to be reported via completion callback */
+	if (hg_ret != HG_SUCCESS) {
 		if (!crt_req_timedout(rpc_priv)) {
 			/* error will be reported to the completion callback in
 			 * crt_req_timeout_hdlr()
@@ -1111,8 +1104,6 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 			crt_req_force_timeout(rpc_priv);
 		}
 		rpc_priv->crp_state = RPC_STATE_FWD_UNREACH;
-	} else if (hg_ret != HG_SUCCESS) {
-		rc = -DER_HG;
 	} else {
 		rpc_priv->crp_on_wire = 1;
 	}

@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * dc_cont: Container Client
@@ -230,6 +213,7 @@ dc_cont_create(tse_task_t *task)
 {
 	daos_cont_create_t     *args;
 	struct cont_create_in  *in;
+	struct daos_prop_entry *entry;
 	struct dc_pool	       *pool;
 	crt_endpoint_t		ep;
 	crt_rpc_t	       *rpc;
@@ -240,6 +224,14 @@ dc_cont_create(tse_task_t *task)
 	args = dc_task_get_args(task);
 	if (uuid_is_null(args->uuid))
 		D_GOTO(err_task, rc = -DER_INVAL);
+
+	entry = daos_prop_entry_get(args->prop, DAOS_PROP_CO_STATUS);
+	if (entry != NULL) {
+		rc = -DER_INVAL;
+		D_ERROR("cannot set DAOS_PROP_CO_STATUS prop for cont_create "
+			DF_RC"\n", DP_RC(rc));
+		goto err_task;
+	}
 
 	pool = dc_hdl2pool(args->poh);
 	if (pool == NULL)
@@ -495,6 +487,123 @@ struct cont_open_args {
 	daos_handle_t		*hdlp;
 };
 
+struct pmap_refresh_cb_arg {
+	struct dc_pool		*pra_pool;
+	uint32_t		 pra_pm_ver;
+	uint32_t		 pra_retry_nr;
+};
+
+static int
+pmap_refresh_cb(tse_task_t *task, void *data)
+{
+	struct pmap_refresh_cb_arg	*cb_arg;
+	struct dc_pool			*pool;
+	uint32_t			 pm_ver;
+	uint64_t			 delay;
+	int				 rc = task->dt_result;
+
+	cb_arg = (struct pmap_refresh_cb_arg *)data;
+	pool = cb_arg->pra_pool;
+	if (rc)
+		goto out;
+
+	pm_ver = dc_pool_get_version(pool);
+	if (pm_ver < cb_arg->pra_pm_ver) {
+		if (cb_arg->pra_retry_nr > 10) {
+			/* basically this is impossible, or there is system
+			 * issue. Return EAGAIN just for code integrality.
+			 */
+			rc = -DER_AGAIN;
+			D_ERROR(DF_UUID": pmap_refresh cannot get required "
+				"version (%d:%d), try again later "DF_RC"\n",
+				DP_UUID(pool->dp_pool), pm_ver,
+				cb_arg->pra_pm_ver, DP_RC(rc));
+			goto out;
+		}
+		if (cb_arg->pra_retry_nr > 3)
+			delay = cb_arg->pra_retry_nr * 10;
+		else
+			delay = 0;
+
+		rc = tse_task_reinit_with_delay(task, delay);
+		if (rc) {
+			D_ERROR(DF_UUID": pmap_refresh version (%d:%d), resched"
+				" failed, "DF_RC"\n", DP_UUID(pool->dp_pool),
+				pm_ver, cb_arg->pra_pm_ver, DP_RC(rc));
+			goto out;
+		}
+
+		rc = dc_task_reg_comp_cb(task, pmap_refresh_cb, cb_arg,
+					 sizeof(*cb_arg));
+		if (rc) {
+			D_ERROR(DF_UUID": pmap_refresh version (%d:%d), failed "
+				"to reg_comp_cb, "DF_RC"\n",
+				DP_UUID(pool->dp_pool), pm_ver,
+				cb_arg->pra_pm_ver, DP_RC(rc));
+			goto out;
+		}
+
+		cb_arg->pra_retry_nr++;
+		D_DEBUG(DB_TRACE, DF_UUID": pmap_refresh version (%d:%d), "
+			"in %d retry\n", DP_UUID(pool->dp_pool), pm_ver,
+			cb_arg->pra_pm_ver, cb_arg->pra_retry_nr);
+		return rc;
+	}
+out:
+	if (rc)
+		D_ERROR(DF_UUID": pmap_refresh(task %p) failed, "DF_RC"\n",
+			DP_UUID(pool->dp_pool), task, DP_RC(rc));
+	dc_pool_put(pool);
+	return rc;
+}
+
+static int
+pmap_refresh(tse_task_t *task, daos_handle_t poh, uint32_t pm_ver)
+{
+	struct dc_pool			*pool;
+	struct pmap_refresh_cb_arg	 cb_arg;
+	tse_sched_t			*sched;
+	daos_pool_query_t		*pargs;
+	tse_task_t			*ptask = NULL;
+	int				 rc;
+
+	pool = dc_hdl2pool(poh);
+	if (pool == NULL)
+		return -DER_NO_HDL;
+
+	sched = (task != NULL) ? tse_task2sched(task) : NULL;
+	rc = dc_task_create(dc_pool_query, sched, NULL, &ptask);
+	if (rc != 0)
+		goto out;
+
+	pargs = dc_task_get_args(ptask);
+	pargs->poh = poh;
+	cb_arg.pra_pool = pool;
+	cb_arg.pra_pm_ver = pm_ver;
+	cb_arg.pra_retry_nr = 0;
+	rc = dc_task_reg_comp_cb(ptask, pmap_refresh_cb, &cb_arg,
+				 sizeof(cb_arg));
+	if (rc != 0)
+		goto out;
+
+	if (task) {
+		rc = dc_task_depend(task, 1, &ptask);
+		if (rc != 0)
+			goto out;
+	}
+
+	rc = dc_task_schedule(ptask, true);
+	return rc;
+
+out:
+	if (rc) {
+		dc_pool_put(pool);
+		if (ptask)
+			dc_task_decref(ptask);
+	}
+	return rc;
+}
+
 static int
 cont_open_complete(tse_task_t *task, void *data)
 {
@@ -502,6 +611,7 @@ cont_open_complete(tse_task_t *task, void *data)
 	struct cont_open_out	*out = crt_reply_get(arg->rpc);
 	struct dc_pool		*pool = arg->coa_pool;
 	struct dc_cont		*cont = daos_task_get_priv(task);
+	uint32_t		 cli_pm_ver;
 	bool			 put_cont = true;
 	int			 rc = task->dt_result;
 
@@ -522,9 +632,21 @@ cont_open_complete(tse_task_t *task, void *data)
 
 	rc = out->coo_op.co_rc;
 	if (rc != 0) {
-		D_DEBUG(DF_DSMC, DF_CONT": failed to open container: %d\n",
-			DP_CONT(pool->dp_pool, cont->dc_uuid), rc);
+		D_DEBUG(DF_DSMC, DF_CONT": failed to open container: "DF_RC"\n",
+			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
 		D_GOTO(out, rc);
+	}
+
+	cont->dc_min_ver = out->coo_op.co_map_version;
+	cli_pm_ver = dc_pool_get_version(pool);
+	if (cli_pm_ver < cont->dc_min_ver) {
+		rc = pmap_refresh(task, arg->hdl, cont->dc_min_ver);
+		if (rc) {
+			D_ERROR(DF_CONT": pmap_refresh fail "DF_RC"\n",
+				DP_CONT(pool->dp_pool, cont->dc_uuid),
+				DP_RC(rc));
+			goto out;
+		}
 	}
 
 	D_RWLOCK_WRLOCK(&pool->dp_co_list_lock);
@@ -544,8 +666,11 @@ cont_open_complete(tse_task_t *task, void *data)
 
 	daos_props_2cont_props(out->coo_prop, &cont->dc_props);
 	rc = dc_cont_props_init(cont);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("container props failed to initialize");
+		D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 		D_GOTO(out, rc);
+	}
 
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
@@ -560,6 +685,7 @@ cont_open_complete(tse_task_t *task, void *data)
 		D_GOTO(out, rc = 0);
 
 	uuid_copy(arg->coa_info->ci_uuid, cont->dc_uuid);
+	arg->coa_info->ci_redun_fac = cont->dc_props.dcp_redun_fac;
 
 	/* TODO */
 	arg->coa_info->ci_nsnapshots = 0;
@@ -634,7 +760,8 @@ dc_cont_open(tse_task_t *task)
 	in->coi_prop_bits	= DAOS_CO_QUERY_PROP_CSUM |
 				  DAOS_CO_QUERY_PROP_CSUM_CHUNK |
 				  DAOS_CO_QUERY_PROP_DEDUP |
-				  DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD;
+				  DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD |
+				  DAOS_CO_QUERY_PROP_REDUN_FAC;
 	arg.coa_pool		= pool;
 	arg.coa_info		= args->info;
 	arg.rpc			= rpc;
@@ -888,6 +1015,8 @@ cont_query_complete(tse_task_t *task, void *data)
 	uuid_copy(arg->cqa_info->ci_uuid, cont->dc_uuid);
 
 	arg->cqa_info->ci_hae = out->cqo_hae;
+	arg->cqa_info->ci_redun_fac = cont->dc_props.dcp_redun_fac;
+
 	/* TODO */
 	arg->cqa_info->ci_nsnapshots = 0;
 	arg->cqa_info->ci_snapshots = NULL;
@@ -939,6 +1068,10 @@ cont_query_bits(daos_prop_t *prop)
 			break;
 		case DAOS_PROP_CO_DEDUP_THRESHOLD:
 			bits |= DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD;
+			break;
+		case DAOS_PROP_CO_ALLOCED_OID:
+			bits |= DAOS_CO_QUERY_PROP_ALLOCED_OID;
+			break;
 		case DAOS_PROP_CO_REDUN_FAC:
 			bits |= DAOS_CO_QUERY_PROP_REDUN_FAC;
 			break;
@@ -962,6 +1095,12 @@ cont_query_bits(daos_prop_t *prop)
 			break;
 		case DAOS_PROP_CO_OWNER_GROUP:
 			bits |= DAOS_CO_QUERY_PROP_OWNER_GROUP;
+			break;
+		case DAOS_PROP_CO_ROOTS:
+			bits |= DAOS_CO_QUERY_PROP_ROOTS;
+			break;
+		case DAOS_PROP_CO_STATUS:
+			bits |= DAOS_CO_QUERY_PROP_CO_STATUS;
 			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
@@ -1100,6 +1239,8 @@ int
 dc_cont_set_prop(tse_task_t *task)
 {
 	daos_cont_set_prop_t		*args;
+	struct daos_prop_entry		*entry;
+	struct daos_co_status		 co_stat;
 	struct cont_prop_set_in		*in;
 	struct dc_pool			*pool;
 	struct dc_cont			*cont;
@@ -1110,6 +1251,23 @@ dc_cont_set_prop(tse_task_t *task)
 
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	if (daos_prop_entry_get(args->prop, DAOS_PROP_CO_ALLOCED_OID)) {
+		D_ERROR("Can't set OID property if container is created.\n");
+		D_GOTO(err, rc = -DER_NO_PERM);
+	}
+
+	entry = daos_prop_entry_get(args->prop, DAOS_PROP_CO_STATUS);
+	if (entry != NULL) {
+		daos_prop_val_2_co_status(entry->dpe_val, &co_stat);
+		if (co_stat.dcs_status != DAOS_PROP_CO_HEALTHY) {
+			rc = -DER_INVAL;
+			D_ERROR("To set DAOS_PROP_CO_STATUS property can-only "
+				"set dcs_status as DAOS_PROP_CO_HEALTHY to "
+				"clear UNCLEAN status, "DF_RC"\n", DP_RC(rc));
+			goto err;
+		}
+	}
 
 	cont = dc_hdl2cont(args->coh);
 	if (cont == NULL)
@@ -1624,6 +1782,11 @@ struct dc_cont_glob {
 	uint32_t	dcg_compress_type;
 	uint32_t	dcg_csum_chunksize;
 	uint32_t        dcg_dedup_th;
+	uint32_t	dcg_redun_fac;
+	/** minimal required pool map version, as a fence to make sure after
+	 * cont_open/g2l client-side pm_ver >= pm_ver@cont_create.
+	 */
+	uint32_t	dcg_min_ver;
 	uint32_t	dcg_csum_srv_verify:1,
 			dcg_dedup_enabled:1,
 			dcg_dedup_verify:1;
@@ -1698,6 +1861,8 @@ dc_cont_l2g(daos_handle_t coh, d_iov_t *glob)
 	cont_glob->dcg_dedup_th		= cont->dc_props.dcp_dedup_size;
 	cont_glob->dcg_compress_type	= cont->dc_props.dcp_compress_type;
 	cont_glob->dcg_encrypt_type	= cont->dc_props.dcp_encrypt_type;
+	cont_glob->dcg_redun_fac	= cont->dc_props.dcp_redun_fac;
+	cont_glob->dcg_min_ver		= cont->dc_min_ver;
 
 	dc_pool_put(pool);
 out_cont:
@@ -1737,6 +1902,7 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 {
 	struct dc_pool *pool;
 	struct dc_cont *cont;
+	uint32_t	pm_ver;
 	int		rc = 0;
 
 	D_ASSERT(cont_glob != NULL);
@@ -1767,8 +1933,6 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 		D_ERROR("pool connection being invalidated\n");
 		D_GOTO(out_cont, rc = -DER_NO_HDL);
 	}
-
-	d_list_add(&cont->dc_po_list, &pool->dp_co_list);
 	cont->dc_pool_hdl = poh;
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
@@ -1781,9 +1945,26 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	cont->dc_props.dcp_dedup_verify  = cont_glob->dcg_dedup_verify;
 	cont->dc_props.dcp_compress_type = cont_glob->dcg_compress_type;
 	cont->dc_props.dcp_encrypt_type	 = cont_glob->dcg_encrypt_type;
+	cont->dc_props.dcp_redun_fac	 = cont_glob->dcg_redun_fac;
+	cont->dc_min_ver		 = cont_glob->dcg_min_ver;
 	rc = dc_cont_props_init(cont);
 	if (rc != 0)
 		D_GOTO(out_cont, rc);
+
+	pm_ver = dc_pool_get_version(pool);
+	if (pm_ver < cont->dc_min_ver) {
+		rc = pmap_refresh(NULL, poh, cont->dc_min_ver);
+		if (rc) {
+			D_ERROR("pool: "DF_UUID" pamp_refresh failed, "
+				DF_RC"\n", DP_UUID(pool->dp_pool_hdl),
+				DP_RC(rc));
+			goto out_cont;
+		}
+	}
+
+	D_RWLOCK_WRLOCK(&pool->dp_co_list_lock);
+	d_list_add(&cont->dc_po_list, &pool->dp_co_list);
+	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
 	dc_cont_hdl_link(cont);
 	dc_cont2hdl(cont, coh);
@@ -2340,16 +2521,18 @@ cont_epoch_op_req_complete(tse_task_t *task, void *data)
 
 int
 dc_epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
-	    tse_task_t *task)
+	    unsigned int opts, tse_task_t *task)
 {
 	struct cont_epoch_op_in	*in;
 	struct epoch_op_arg	 arg;
 	int			 rc;
 
-	/* Check incoming arguments. */
+	/* Check incoming arguments. For CONT_SNAP_CREATE, epoch is out only. */
 	D_ASSERT(epoch != NULL);
-	if (*epoch >= DAOS_EPOCH_MAX)
-		D_GOTO(out, rc = -DER_OVERFLOW);
+	if (opc != CONT_SNAP_CREATE) {
+		if (*epoch >= DAOS_EPOCH_MAX)
+			D_GOTO(out, rc = -DER_OVERFLOW);
+	}
 
 	rc = cont_req_prepare(coh, opc, daos_task2ctx(task), &arg.eoa_req);
 	if (rc != 0)
@@ -2361,7 +2544,9 @@ dc_epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 		DP_UUID(arg.eoa_req.cra_cont->dc_cont_hdl), *epoch);
 
 	in = crt_req_get(arg.eoa_req.cra_rpc);
-	in->cei_epoch = *epoch;
+	if (opc != CONT_SNAP_CREATE)
+		in->cei_epoch = *epoch;
+	in->cei_opts  = opts;
 
 	arg.eoa_epoch = epoch;
 
@@ -2399,7 +2584,8 @@ dc_cont_aggregate(tse_task_t *task)
 		return -DER_INVAL;
 	}
 
-	return dc_epoch_op(args->coh, CONT_EPOCH_AGGREGATE, &args->epoch, task);
+	return dc_epoch_op(args->coh, CONT_EPOCH_AGGREGATE, &args->epoch,
+			   0, task);
 }
 
 int
@@ -2426,6 +2612,11 @@ dc_cont_create_snap(tse_task_t *task)
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
+	if (!(args->opts & DAOS_SNAP_OPT_CR)) {
+		D_ERROR("Specified snapshot is not supported\n");
+		return -DER_NOSYS;
+	}
+
 	if (args->name != NULL) {
 		D_ERROR("Named Snapshots not yet supported\n");
 		tse_task_complete(task, -DER_NOSYS);
@@ -2437,8 +2628,8 @@ dc_cont_create_snap(tse_task_t *task)
 		return -DER_INVAL;
 	}
 
-	*args->epoch = crt_hlc_get();
-	return dc_epoch_op(args->coh, CONT_SNAP_CREATE, args->epoch, task);
+	return dc_epoch_op(args->coh, CONT_SNAP_CREATE, args->epoch,
+			   args->opts, task);
 }
 
 int
@@ -2462,7 +2653,7 @@ dc_cont_destroy_snap(tse_task_t *task)
 	}
 
 	return dc_epoch_op(args->coh, CONT_SNAP_DESTROY, &args->epr.epr_lo,
-			   task);
+			   0, task);
 
 err:
 	tse_task_complete(task, -DER_INVAL);
@@ -2658,6 +2849,23 @@ dc_cont_hdl2pool_hdl(daos_handle_t coh)
 	dc_cont_put(dc);
 	return ph;
 }
+
+int
+dc_cont_hdl2redunfac(daos_handle_t coh)
+{
+	struct dc_cont	*dc;
+	int		 rc;
+
+	dc = dc_hdl2cont(coh);
+	if (dc == NULL)
+		return -DER_NO_HDL;
+
+	rc = dc->dc_props.dcp_redun_fac;
+	dc_cont_put(dc);
+
+	return rc;
+}
+
 struct daos_csummer *
 dc_cont_hdl2csummer(daos_handle_t coh)
 {

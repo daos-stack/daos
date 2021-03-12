@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package security
@@ -28,16 +11,25 @@ import (
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
-	"crypto/rand"
+	crand "crypto/rand"
 	"encoding/hex"
 	"flag"
 	"io/ioutil"
+	mrand "math/rand"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
 var update = flag.Bool("update", false, "update .golden files")
+
+func SeededSigner() *TokenSigner {
+	//This should ensure we get the same signature every time for testing purposes.
+	r := mrand.New(mrand.NewSource(1))
+	return &TokenSigner{
+		randPool: r,
+	}
+}
 
 func SignTestSetup(t *testing.T) (rsaKey, ecdsaKey crypto.PrivateKey, source []byte) {
 	keyPath := "testdata/certs/daosCA.key"
@@ -48,7 +40,7 @@ func SignTestSetup(t *testing.T) (rsaKey, ecdsaKey crypto.PrivateKey, source []b
 	if err != nil {
 		t.Fatalf("Unable to load private key for %s: %s", keyPath, err.Error())
 	}
-	ecdsaKey, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	ecdsaKey, err = ecdsa.GenerateKey(elliptic.P256(), crand.Reader)
 	if err != nil {
 		t.Fatal("Failed to generate ecdsa key for testing")
 	}
@@ -62,7 +54,7 @@ func SignTestSetup(t *testing.T) (rsaKey, ecdsaKey crypto.PrivateKey, source []b
 func TestSign(t *testing.T) {
 
 	rsaKey, ecdsaKey, source := SignTestSetup(t)
-	tokenSigner := DefaultTokenSigner()
+	tokenSigner := SeededSigner()
 
 	testCases := []struct {
 		name string
@@ -108,7 +100,7 @@ func VerifyTestSetup(t *testing.T) (rsaKey, ecdsaKey crypto.PublicKey, source []
 		t.Fatalf("Unable to load certificate for %s: %s", certPath, err.Error())
 	}
 	rsaKey = cert.PublicKey
-	gen, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	gen, err := ecdsa.GenerateKey(elliptic.P256(), crand.Reader)
 	if err != nil {
 		t.Fatal("Failed to generate ecdsa key for testing")
 	}

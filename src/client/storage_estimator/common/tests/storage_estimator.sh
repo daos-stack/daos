@@ -48,7 +48,10 @@ print_header "Storage Estimator: Unit Testing"
 if ! [ -x "$(command -v pytest)" ]; then
   echo "pytest not found, skipping unit testing"
 else
-  python -m pytest -v "${CURRENT_DIR}"
+  python -m pytest -m ut -vv "${CURRENT_DIR}"
+  python -m pytest -m sx -vv "${CURRENT_DIR}"
+  python -m pytest -m rp3gx -vv "${CURRENT_DIR}"
+  python -m pytest -m ec16p2 -vv "${CURRENT_DIR}"
 fi
 
 
@@ -68,12 +71,21 @@ daos_storage_estimator.py create_example -v -m "${VOS_SIZE}" -f "${DFS_SAMPLE}"
 
 print_header "Storage Estimator: read_csv"
 
-CLIENT_CSV="${CURRENT_DIR}/test_data.csv"
+CLIENT_CSV="${CURRENT_DIR}/test_files/test_data.csv"
 CLIENT_YAML="${TEST_DIR}/test_data.yaml"
 
 daos_storage_estimator.py read_csv -h
 daos_storage_estimator.py read_csv -v "${CLIENT_CSV}" -o "${CLIENT_YAML}"
 daos_storage_estimator.py read_yaml -v "${CLIENT_YAML}"
+daos_storage_estimator.py read_csv -v "${CLIENT_CSV}" --file_oclass SX
+daos_storage_estimator.py read_csv -v "${CLIENT_CSV}" --file_oclass RP_3GX
+daos_storage_estimator.py read_csv -v "${CLIENT_CSV}" --file_oclass EC_16P2GX
+daos_storage_estimator.py read_csv -v "${CLIENT_CSV}" --file_oclass SX \
+--checksum crc32
+daos_storage_estimator.py read_csv -v "${CLIENT_CSV}" --file_oclass RP_3GX \
+--checksum crc32
+daos_storage_estimator.py read_csv -v "${CLIENT_CSV}" --file_oclass EC_16P2GX \
+--checksum crc32
 
 print_header "Storage Estimator: read_yaml"
 
@@ -81,7 +93,6 @@ daos_storage_estimator.py read_yaml -h
 daos_storage_estimator.py create_example -m "${VOS_SIZE}" -f "${DFS_SAMPLE}"
 daos_storage_estimator.py read_yaml -v "${DFS_SAMPLE}"
 daos_storage_estimator.py read_yaml -v -m "${VOS_SIZE}" "${DFS_SAMPLE}"
-
 
 print_header "Storage Estimator: explore_fs"
 
@@ -96,6 +107,14 @@ daos_storage_estimator.py explore_fs -v -x "${TEST_DIR}"
 daos_storage_estimator.py explore_fs -v -x -m "${VOS_SIZE}" "${TEST_DIR}"
 daos_storage_estimator.py explore_fs -v -x "${TEST_DIR}" -o "${FS_YAML}"
 daos_storage_estimator.py read_yaml "${FS_YAML}"
-
+daos_storage_estimator.py explore_fs -v "${TEST_DIR}" --file_oclass SX
+daos_storage_estimator.py explore_fs -v "${TEST_DIR}" --file_oclass RP_3GX
+daos_storage_estimator.py explore_fs -v "${TEST_DIR}" --file_oclass EC_16P2GX
+daos_storage_estimator.py explore_fs -v "${TEST_DIR}" --file_oclass SX \
+--checksum crc32
+daos_storage_estimator.py explore_fs -v "${TEST_DIR}" --file_oclass RP_3GX \
+--checksum crc32
+daos_storage_estimator.py explore_fs -v "${TEST_DIR}" --file_oclass EC_16P2GX \
+--checksum crc32
 
 print_header "Storage Estimator: Successful"

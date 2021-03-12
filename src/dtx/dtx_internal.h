@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * dtx: dtx internal.h
@@ -42,16 +25,18 @@
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
-#define DTX_PROTO_SRV_RPC_LIST(X)				\
-	X(DTX_COMMIT, 0, &CQF_dtx, dtx_handler, NULL),		\
-	X(DTX_ABORT, 0, &CQF_dtx, dtx_handler, NULL),		\
-	X(DTX_CHECK, 0, &CQF_dtx, dtx_handler, NULL)
+#define DTX_PROTO_SRV_RPC_LIST						\
+	X(DTX_COMMIT, 0, &CQF_dtx, dtx_handler, NULL, "dtx_commit")	\
+	X(DTX_ABORT, 0, &CQF_dtx, dtx_handler, NULL, "dtx_abort")	\
+	X(DTX_CHECK, 0, &CQF_dtx, dtx_handler, NULL, "dtx_check")	\
+	X(DTX_REFRESH, 0, &CQF_dtx, dtx_handler, NULL, "dtx_refresh")
 
-#define X_OPC(a, b, c, d, e) a
-
+#define X(a, b, c, d, e, f) a,
 enum dtx_operation {
-	DTX_PROTO_SRV_RPC_LIST(X_OPC)
+	DTX_PROTO_SRV_RPC_LIST
+	DTX_PROTO_SRV_RPC_COUNT,
 };
+#undef X
 
 /* DTX RPC input fields */
 #define DAOS_ISEQ_DTX							\
@@ -62,7 +47,8 @@ enum dtx_operation {
 
 /* DTX RPC output fields */
 #define DAOS_OSEQ_DTX							\
-	((int32_t)		(do_status)		CRT_VAR)
+	((int32_t)		(do_status)		CRT_VAR)	\
+	((int32_t)		(do_sub_rets)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
 
@@ -94,15 +80,13 @@ extern btr_ops_t dbtree_dtx_cf_ops;
 extern btr_ops_t dtx_btr_cos_ops;
 
 /* dtx_common.c */
-void dtx_aggregate(void *arg);
+int dtx_handle_reinit(struct dtx_handle *dth);
 void dtx_batched_commit(void *arg);
 
 /* dtx_cos.c */
 int dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
 			  daos_unit_oid_t *oid, daos_epoch_t epoch,
 			  struct dtx_entry ***dtes);
-int dtx_lookup_cos(struct ds_cont_child *cont, struct dtx_id *xid,
-		   daos_unit_oid_t *oid, uint64_t dkey_hash);
 int dtx_add_cos(struct ds_cont_child *cont, struct dtx_entry *dte,
 		daos_unit_oid_t *oid, uint64_t dkey_hash,
 		daos_epoch_t epoch, uint32_t flags);

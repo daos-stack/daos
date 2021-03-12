@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * rebuild: rebuild initator
@@ -35,7 +18,7 @@
 #include <daos/container.h>
 #include <daos/pool.h>
 #include <daos_srv/container.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/iv.h>
 #include <cart/iv.h>
 #include "rpc.h"
@@ -48,7 +31,7 @@ rebuild_iv_alloc_internal(d_sg_list_t *sgl)
 {
 	int	rc;
 
-	rc = daos_sgl_init(sgl, 1);
+	rc = d_sgl_init(sgl, 1);
 	if (rc)
 		return rc;
 
@@ -58,7 +41,7 @@ rebuild_iv_alloc_internal(d_sg_list_t *sgl)
 	sgl->sg_iovs[0].iov_buf_len = sizeof(struct rebuild_iv);
 free:
 	if (rc)
-		daos_sgl_fini(sgl, true);
+		d_sgl_fini(sgl, true);
 	return rc;
 }
 
@@ -92,13 +75,13 @@ rebuild_iv_ent_put(struct ds_iv_entry *entry, void **priv)
 static int
 rebuild_iv_ent_destroy(d_sg_list_t *sgl)
 {
-	daos_sgl_fini(sgl, true);
+	d_sgl_fini(sgl, true);
 	return 0;
 }
 
 static int
 rebuild_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
-		     d_sg_list_t *dst, d_sg_list_t *src, void **priv)
+		     d_sg_list_t *dst, void **priv)
 {
 	D_ASSERT(0);
 	return 0;
@@ -115,15 +98,21 @@ rebuild_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	d_rank_t	  rank;
 	int		  rc;
 
+	D_DEBUG(DB_REBUILD, "rank %d master rank %d\n", src_iv->riv_rank,
+		src_iv->riv_master_rank);
+
+	if (src_iv->riv_master_rank == -1)
+		return -DER_NOTLEADER;
+
 	rc = crt_group_rank(NULL, &rank);
 	if (rc)
 		return rc;
 
-	D_DEBUG(DB_TRACE, "rank %d master rank %d\n", src_iv->riv_rank,
-		src_iv->riv_master_rank);
-
 	if (rank != src_iv->riv_master_rank)
 		return -DER_IVCB_FORWARD;
+
+	if (src_iv->riv_sync)
+		return 0;
 
 	dst_iv->riv_master_rank = src_iv->riv_master_rank;
 	uuid_copy(dst_iv->riv_pool_uuid, src_iv->riv_pool_uuid);
@@ -131,7 +120,10 @@ rebuild_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	/* Gathering the rebuild status here */
 	rgt = rebuild_global_pool_tracker_lookup(src_iv->riv_pool_uuid,
 						 src_iv->riv_ver);
-	if (rgt && rgt->rgt_leader_term == src_iv->riv_leader_term) {
+	if (rgt == NULL)
+		D_GOTO(out, rc);
+
+	if (rgt->rgt_leader_term == src_iv->riv_leader_term) {
 		/* update the rebuild global status */
 		if (!src_iv->riv_global_done) {
 			rgt->rgt_status.rs_toberb_obj_nr +=
@@ -156,9 +148,10 @@ rebuild_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			rgt->rgt_status.rs_done, rgt->rgt_status.rs_errno,
 			src_iv->riv_rank);
 	}
-
+	rgt_put(rgt);
+out:
 	D_DEBUG(DB_TRACE, "pool "DF_UUID" master_rank %d\n",
-		 DP_UUID(dst_iv->riv_pool_uuid), dst_iv->riv_master_rank);
+		DP_UUID(dst_iv->riv_pool_uuid), dst_iv->riv_master_rank);
 
 	return 0;
 }
@@ -260,7 +253,8 @@ out:
 }
 
 static int
-rebuild_iv_alloc(struct ds_iv_entry *entry, d_sg_list_t *sgl)
+rebuild_iv_alloc(struct ds_iv_entry *entry, struct ds_iv_key *key,
+		 d_sg_list_t *sgl)
 {
 	return rebuild_iv_alloc_internal(sgl);
 }
@@ -280,16 +274,15 @@ int
 rebuild_iv_fetch(void *ns, struct rebuild_iv *rebuild_iv)
 {
 	d_sg_list_t		sgl;
-	d_iov_t		iov;
+	d_iov_t			iov;
 	struct ds_iv_key	key;
 	int			rc;
 
-	memset(&sgl, 0, sizeof(sgl));
-	memset(&iov, 0, sizeof(iov));
 	iov.iov_buf = rebuild_iv;
 	iov.iov_len = sizeof(*rebuild_iv);
 	iov.iov_buf_len = sizeof(*rebuild_iv);
 	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &iov;
 
 	memset(&key, 0, sizeof(key));
@@ -306,7 +299,7 @@ rebuild_iv_update(void *ns, struct rebuild_iv *iv, unsigned int shortcut,
 		  unsigned int sync_mode, bool retry)
 {
 	d_sg_list_t		sgl;
-	d_iov_t		iov;
+	d_iov_t			iov;
 	struct ds_iv_key	key;
 	int			rc;
 

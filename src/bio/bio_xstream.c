@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B620873.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(bio)
 
@@ -35,7 +18,6 @@
 #include <spdk/io_channel.h>
 #include <spdk/blob_bdev.h>
 #include <spdk/blob.h>
-#include <spdk/copy_engine.h>
 #include <spdk/conf.h>
 #include "bio_internal.h"
 #include <daos_srv/smd.h>
@@ -228,8 +210,11 @@ populate_whitelist(struct spdk_env_opts *opts)
 	 * Optionally VMD devices will be used, and will require a different
 	 * transport id to pass to whitelist for DPDK.
 	 */
-	if (spdk_conf_find_section(NULL, "Vmd") != NULL)
-		vmd_enabled = true;
+	sp = spdk_conf_find_section(NULL, "Vmd");
+	if (sp != NULL) {
+		if (spdk_conf_section_get_boolval(sp, "Enable", false))
+			vmd_enabled = true;
+	}
 
 	sp = spdk_conf_find_section(NULL, "Nvme");
 	if (sp == NULL) {
@@ -242,8 +227,6 @@ populate_whitelist(struct spdk_env_opts *opts)
 		return -DER_NOMEM;
 
 	for (i = 0; i < DAOS_NVME_MAX_CTRLRS; i++) {
-		memset(trid, 0, sizeof(struct spdk_nvme_transport_id));
-
 		val = spdk_conf_section_get_nmval(sp, "TransportID", i, 0);
 		if (val == NULL) {
 			break;
@@ -287,6 +270,9 @@ populate_whitelist(struct spdk_env_opts *opts)
 			rc = -DER_INVAL;
 			break;
 		}
+
+		/* Clear it for the next loop */
+		memset(trid, 0, sizeof(*trid));
 	}
 
 	D_FREE(trid);
@@ -336,26 +322,6 @@ bio_spdk_env_init(void)
 		return rc;
 	}
 
-	if (spdk_conf_find_section(NULL, "Vmd") != NULL) {
-		/**
-		 * Enumerate VMD devices and hook them into the SPDK PCI
-		 * subsystem.
-		 */
-		rc = spdk_vmd_init();
-		if (rc != 0) {
-			rc = -DER_INVAL; /* spdk_vmd_init() returns -1 */
-			D_ERROR("Failed to initialize VMD env, "DF_RC"\n",
-				DP_RC(rc));
-			return rc;
-		}
-
-		/**
-		 * TODO spdk_vmd_hotplug_monitor() will need to be called
-		 * periodically on 'init' xstream to monitor VMD hotremove/
-		 * hotplug events.
-		 */
-	}
-
 	spdk_unaffinitize_thread();
 
 	rc = spdk_thread_lib_init(NULL, 0);
@@ -370,18 +336,12 @@ bio_spdk_env_init(void)
 }
 
 int
-bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
-	      int mem_size)
+bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
+	      struct sys_db *db)
 {
 	char		*env;
 	int		rc, fd;
 	uint64_t	size_mb = DAOS_DMA_CHUNK_MB;
-
-	rc = smd_init(storage_path);
-	if (rc != 0) {
-		D_ERROR("Initialize SMD store failed. "DF_RC"\n", DP_RC(rc));
-		return rc;
-	}
 
 	nvme_glb.bd_xstream_cnt = 0;
 	nvme_glb.bd_init_thread = NULL;
@@ -399,14 +359,26 @@ bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
 		goto free_mutex;
 	}
 
+	if (nvme_conf == NULL || strlen(nvme_conf) == 0) {
+		D_INFO("NVMe config isn't specified, skip NVMe setup.\n");
+		nvme_glb.bd_nvme_conf = NULL;
+		return 0;
+	}
+
 	fd = open(nvme_conf, O_RDONLY, 0600);
 	if (fd < 0) {
-		D_WARN("Open %s failed("DF_RC"), skip DAOS NVMe setup.\n",
+		D_WARN("Open %s failed, skip DAOS NVMe setup "DF_RC"\n",
 		       nvme_conf, DP_RC(daos_errno2der(errno)));
 		nvme_glb.bd_nvme_conf = NULL;
 		return 0;
 	}
 	close(fd);
+
+	rc = smd_init(db);
+	if (rc != 0) {
+		D_ERROR("Initialize SMD store failed. "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
 
 	nvme_glb.bd_nvme_conf = spdk_conf_allocate();
 	if (nvme_glb.bd_nvme_conf == NULL) {
@@ -542,8 +514,9 @@ struct common_cp_arg {
 static void
 common_prep_arg(struct common_cp_arg *arg)
 {
-	memset(arg, 0, sizeof(*arg));
 	arg->cca_inflights = 1;
+	arg->cca_rc = 0;
+	arg->cca_bs = NULL;
 }
 
 static void
@@ -555,6 +528,12 @@ common_init_cb(void *arg, int rc)
 	D_ASSERT(cp_arg->cca_rc == 0);
 	cp_arg->cca_inflights--;
 	cp_arg->cca_rc = daos_errno2der(-rc);
+}
+
+static void
+subsys_init_cb(int rc, void *arg)
+{
+	common_init_cb(arg, rc);
 }
 
 static void
@@ -856,8 +835,12 @@ replace_bio_bdev(struct bio_bdev *old_dev, struct bio_bdev *new_dev)
 	new_dev->bb_tgt_cnt = old_dev->bb_tgt_cnt;
 	old_dev->bb_tgt_cnt = 0;
 
-	d_list_del_init(&old_dev->bb_link);
-	destroy_bio_bdev(old_dev);
+	if (old_dev->bb_removed) {
+		d_list_del_init(&old_dev->bb_link);
+		destroy_bio_bdev(old_dev);
+	} else {
+		old_dev->bb_faulty = true;
+	}
 }
 
 /*
@@ -992,7 +975,7 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 	if (rc == 0) {
 		D_ASSERT(dev_info->sdi_tgt_cnt != 0);
 		d_bdev->bb_tgt_cnt = dev_info->sdi_tgt_cnt;
-		smd_free_dev_info(dev_info);
+		smd_dev_free_info(dev_info);
 		/*
 		 * Something went wrong in hotplug case: device ID is in SMD
 		 * but bio_bdev wasn't created on server start.
@@ -1197,7 +1180,7 @@ assign_device(int tgt_id)
 	}
 
 	/* Update mapping for this target in NVMe device table */
-	rc = smd_dev_assign(chosen_bdev->bb_uuid, tgt_id);
+	rc = smd_dev_add_tgt(chosen_bdev->bb_uuid, tgt_id);
 	if (rc) {
 		D_ERROR("Failed to map dev "DF_UUID" to tgt %d. "DF_RC"\n",
 			DP_UUID(chosen_bdev->bb_uuid), tgt_id, DP_RC(rc));
@@ -1358,7 +1341,7 @@ retry:
 
 out:
 	D_ASSERT(dev_info != NULL);
-	smd_free_dev_info(dev_info);
+	smd_dev_free_info(dev_info);
 	return rc;
 }
 
@@ -1413,11 +1396,7 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 			fini_bio_bdevs(ctxt);
 
 			common_prep_arg(&cp_arg);
-			spdk_copy_engine_finish(common_fini_cb, &cp_arg);
-			xs_poll_completion(ctxt, &cp_arg.cca_inflights);
-
-			common_prep_arg(&cp_arg);
-			spdk_bdev_finish(common_fini_cb, &cp_arg);
+			spdk_subsystem_fini(common_fini_cb, &cp_arg);
 			xs_poll_completion(ctxt, &cp_arg.cca_inflights);
 
 			nvme_glb.bd_init_thread = NULL;
@@ -1481,7 +1460,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 	/*
 	 * Register SPDK thread beforehand, it could be used for poll device
 	 * admin commands completions and hotplugged events in following
-	 * spdk_bdev_initialize() call, it also could be used for blobstore
+	 * spdk_subsystem_init() call, it also could be used for blobstore
 	 * metadata io channel in following init_bio_bdevs() call.
 	 */
 	snprintf(th_name, sizeof(th_name), "daos_spdk_%d", tgt_id);
@@ -1503,24 +1482,14 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 		D_ASSERTF(nvme_glb.bd_xstream_cnt == 1, "%d",
 			  nvme_glb.bd_xstream_cnt);
 
-		/* The SPDK 'Malloc' device relies on copy engine. */
-		rc = spdk_copy_engine_initialize();
-		if (rc != 0) {
-			D_ERROR("failed to init SPDK copy engine, rc:%d\n", rc);
-			goto out;
-		}
-
-		/* Initialize all types of devices */
+		/* Initialize all registered subsystems: bdev, vmd, copy. */
 		common_prep_arg(&cp_arg);
-		spdk_bdev_initialize(common_init_cb, &cp_arg);
+		spdk_subsystem_init(subsys_init_cb, &cp_arg);
 		xs_poll_completion(ctxt, &cp_arg.cca_inflights);
 
 		if (cp_arg.cca_rc != 0) {
 			rc = cp_arg.cca_rc;
 			D_ERROR("failed to init bdevs, rc:%d\n", rc);
-			common_prep_arg(&cp_arg);
-			spdk_copy_engine_finish(common_fini_cb, &cp_arg);
-			xs_poll_completion(ctxt, &cp_arg.cca_inflights);
 			goto out;
 		}
 
@@ -1611,7 +1580,7 @@ setup_bio_bdev(void *arg)
 	rc = bio_bs_state_set(bbs, BIO_BS_STATE_SETUP);
 	D_ASSERT(rc == 0);
 out:
-	smd_free_dev_info(dev_info);
+	smd_dev_free_info(dev_info);
 }
 
 /*
@@ -1710,6 +1679,29 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 	nvme_glb.bd_scan_age = now;
 }
 
+void
+bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
+{
+	struct bio_bdev         *d_bdev;
+	static uint64_t          led_event_period = NVME_MONITOR_PERIOD;
+
+	/* Scan all devices present in bio_bdev list */
+	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
+		if (d_bdev->bb_led_start_time != 0) {
+			/*
+			 * TODO: Make NVME_LED_EVENT_PERIOD configurable from
+			 * command line
+			 */
+			if (d_bdev->bb_led_start_time + led_event_period >= now)
+				continue;
+
+			if (bio_set_led_state(ctxt, d_bdev->bb_uuid, NULL,
+					      true/*reset*/) != 0)
+				D_ERROR("Failed resetting LED state\n");
+		}
+	}
+}
+
 /*
  * Execute the messages on msg ring, call all registered pollers.
  *
@@ -1722,7 +1714,6 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 int
 bio_nvme_poll(struct bio_xs_context *ctxt)
 {
-
 	uint64_t now = d_timeus_secdiff(0);
 	int rc;
 
@@ -1751,8 +1742,10 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 	    is_bbs_owner(ctxt, ctxt->bxc_blobstore))
 		bio_bs_monitor(ctxt, now);
 
-	if (is_init_xstream(ctxt))
+	if (is_init_xstream(ctxt)) {
 		scan_bio_bdevs(ctxt, now);
+		bio_led_event_monitor(ctxt, now);
+	}
 
 	return rc;
 }

@@ -1,36 +1,18 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
-from time import sleep
+from time import sleep, time
 import ctypes
 
 from test_utils_base import TestDaosApiBase
 
 from avocado import fail_on
 from command_utils import BasicParameter, CommandFailure
-from pydaos.raw import (DaosApiError, DaosServer, DaosPool, c_uuid_to_str,
-                        daos_cref)
+from pydaos.raw import (DaosApiError, DaosPool, c_uuid_to_str, daos_cref)
 from general_utils import check_pool_files, DaosTestError, run_command
 from env_modules import load_mpi
 
@@ -66,6 +48,8 @@ class TestPool(TestDaosApiBase):
         self.nvme_size = BasicParameter(None)
         self.prop_name = BasicParameter(None)       # name of property to be set
         self.prop_value = BasicParameter(None)      # value of property
+        self.rebuild_timeout = BasicParameter(None)
+        self.pool_query_timeout = BasicParameter(None)
 
         self.pool = None
         self.uuid = None
@@ -121,7 +105,7 @@ class TestPool(TestDaosApiBase):
                 "Error: control method {} not supported for create()".format(
                     self.control_method.value))
 
-        elif self.control_method.value == self.USE_DMG and self.dmg:
+        if self.control_method.value == self.USE_DMG and self.dmg:
             # Create a pool with the dmg command and store its CmdResult
             self._log_method("dmg.pool_create", kwargs)
             data = self.dmg.pool_create(**kwargs)
@@ -276,6 +260,24 @@ class TestPool(TestDaosApiBase):
                 if prop_value is None:
                     prop_value = self.prop_value.value
                 self.dmg.pool_set_prop(self.uuid, prop_name, prop_value)
+
+            elif self.control_method.value == self.USE_DMG:
+                self.log.error("Error: Undefined dmg command")
+
+            else:
+                self.log.error(
+                    "Error: Undefined control_method: %s",
+                    self.control_method.value)
+
+    @fail_on(CommandFailure)
+    def evict(self):
+        """Evict all pool connections to a DAOS pool"""
+
+        if self.pool:
+            self.log.info("Evict all pool connections for pool: %s", self.uuid)
+
+            if self.control_method.value == self.USE_DMG and self.dmg:
+                self.dmg.pool_evict(self.uuid, self.name.value)
 
             elif self.control_method.value == self.USE_DMG:
                 self.log.error("Error: Undefined dmg command")
@@ -467,8 +469,22 @@ class TestPool(TestDaosApiBase):
             bool: True if pool rebuild is complete; False otherwise
 
         """
-        self.display_pool_rebuild_status()
-        return self.info.pi_rebuild_st.rs_done == 1
+        status = False
+        if self.control_method.value == self.USE_API:
+            self.display_pool_rebuild_status()
+            status = self.info.pi_rebuild_st.rs_done == 1
+        elif self.control_method.value == self.USE_DMG and self.dmg:
+            self.set_query_data()
+            self.log.info(
+                "Pool %s query data: %s\n", self.uuid, self.query_data)
+            status = self.query_data["rebuild"]["status"] == "done"
+        elif self.control_method.value == self.USE_DMG:
+            self.log.error("Error: Undefined dmg command")
+        else:
+            self.log.error(
+                "Error: Undefined control_method: %s",
+                self.control_method.value)
+        return status
 
     def wait_for_rebuild(self, to_start, interval=1):
         """Wait for the rebuild to start or end.
@@ -478,60 +494,62 @@ class TestPool(TestDaosApiBase):
             interval (int): number of seconds to wait in between rebuild
                 completion checks
         """
+        start = time()
         self.log.info(
-            "Waiting for rebuild to %s ...",
-            "start" if to_start else "complete")
+            "Waiting for rebuild to %s%s ...",
+            "start" if to_start else "complete",
+            " with a {} second timeout".format(self.rebuild_timeout.value)
+            if self.rebuild_timeout.value is not None else "")
+
+        start = time()
         while self.rebuild_complete() == to_start:
             self.log.info(
                 "  Rebuild %s ...",
                 "has not yet started" if to_start else "in progress")
+            if self.rebuild_timeout.value is not None:
+                if time() - start > self.rebuild_timeout.value:
+                    raise DaosTestError(
+                        "TIMEOUT detected after {} seconds while for waiting "
+                        "for rebuild to {}.  This timeout can be adjusted via "
+                        "the 'pool/rebuild_timeout' test yaml "
+                        "parameter.".format(
+                            self.rebuild_timeout.value,
+                            "start" if to_start else "complete"))
             sleep(interval)
+
         self.log.info(
             "Rebuild %s detected", "start" if to_start else "completion")
 
     @fail_on(DaosApiError)
-    def start_rebuild(self, ranks, daos_log):
-        """Kill the specific server ranks using this pool.
-
-        Args:
-            ranks (list): a list of daos server ranks (int) to kill
-            daos_log (DaosLog): object for logging messages
-
-        Returns:
-            bool: True if the server ranks have been killed and the ranks have
-            been excluded from the pool; False if the pool is undefined
-
-        """
-        msg = "Killing DAOS ranks {} from server group {}".format(
-            ranks, self.name.value)
-        self.log.info(msg)
-        daos_log.info(msg)
-        for rank in ranks:
-            server = DaosServer(self.context, self.name.value, rank)
-            self._call_method(server.kill, {"force": 1})
-        return self.exclude(ranks, daos_log)
-
-    @fail_on(DaosApiError)
-    def exclude(self, ranks, daos_log):
+    @fail_on(CommandFailure)
+    def exclude(self, ranks, daos_log=None, tgt_idx=None):
         """Manually exclude a rank from this pool.
 
         Args:
             ranks (list): a list daos server ranks (int) to exclude
             daos_log (DaosLog): object for logging messages
+            tgt_idx (string): str of targets to exclude on ranks ex: "1,2"
 
         Returns:
             bool: True if the ranks were excluded from the pool; False if the
                 pool is undefined
 
         """
-        if self.pool:
+        status = False
+        if self.control_method.value == self.USE_API:
             msg = "Excluding server ranks {} from pool {}".format(
                 ranks, self.uuid)
             self.log.info(msg)
-            daos_log.info(msg)
+            if daos_log is not None:
+                daos_log.info(msg)
             self._call_method(self.pool.exclude, {"rank_list": ranks})
-            return True
-        return False
+            status = True
+
+        elif self.control_method.value == self.USE_DMG and self.dmg:
+            self.dmg.pool_exclude(self.uuid, ranks, tgt_idx)
+            status = True
+
+        return status
 
     def check_files(self, hosts):
         """Check if pool files exist on the specified list of hosts.
@@ -562,11 +580,6 @@ class TestPool(TestDaosApiBase):
 
         """
         self.log.info("Writing %s bytes to pool %s", size, self.uuid)
-        #env = {
-        #    "DAOS_POOL": self.uuid,
-        #    "DAOS_SVCL": "1",
-        #    "PYTHONPATH": os.getenv("PYTHONPATH", "")
-        #}
         env = {
             "DAOS_POOL": self.uuid,
             "PYTHONPATH": os.getenv("PYTHONPATH", "")
@@ -691,9 +704,10 @@ class TestPool(TestDaosApiBase):
 
         # Verify that all of the container data was read successfully
         if read_incomplete:
-            self.log.error(
-                "Rebuild completed before all the written data could be read")
-            status = False
+            self.log.info(
+                "Rebuild completed before all the written data could be read - "
+                "Currently not reporting this as an error.")
+            # status = False
         elif not status:
             self.log.error("Errors detected reading data during rebuild")
         return status
@@ -704,9 +718,75 @@ class TestPool(TestDaosApiBase):
 
         Only supported with the dmg control method.
         """
-        self.query_data = []
+        self.query_data = {}
         if self.pool:
             if self.dmg:
-                self.query_data = self.dmg.pool_query(self.pool.get_uuid_str())
+                uuid = self.pool.get_uuid_str()
+                end_time = None
+                if self.pool_query_timeout.value is not None:
+                    self.log.info(
+                        "Waiting for pool %s query to be responsive with a %s "
+                        "second timeout", uuid, self.pool_query_timeout.value)
+                    end_time = time() + self.pool_query_timeout.value
+                while True:
+                    try:
+                        self.query_data = self.dmg.pool_query(uuid)
+                        break
+                    except CommandFailure as error:
+                        if end_time is not None:
+                            self.log.info(
+                                "Pool %s query still non-responsive: %s",
+                                uuid, str(error))
+                            if time() > end_time:
+                                raise CommandFailure(
+                                    "TIMEOUT detected after {} seconds while "
+                                    "waiting for pool {} query response. This "
+                                    "timeout can be adjusted via the "
+                                    "'pool/pool_query_timeout' test yaml "
+                                    "parameter.".format(
+                                        uuid, self.pool_query_timeout.value))
+                        else:
+                            raise CommandFailure(error)
             else:
                 self.log.error("Error: Undefined dmg command")
+
+    @fail_on(CommandFailure)
+    def reintegrate(self, rank, tgt_idx=None):
+        """Use dmg to reintegrate the rank and targets into this pool.
+
+        Only supported with the dmg control method.
+        Args:
+            rank (str): daos server rank to reintegrate
+            tgt_idx (string): str of targets to reintegrate on ranks ex: "1,2"
+
+        Returns:
+            bool: True if the rank was reintegrated into the pool; False if the
+            reintegrate failed
+
+        """
+        status = False
+        self.dmg.pool_reintegrate(self.uuid, rank, tgt_idx)
+        status = True
+
+        return status
+
+    @fail_on(CommandFailure)
+    def drain(self, rank, tgt_idx=None):
+        """Use dmg to drain the rank and targets from this pool.
+
+        Only supported with the dmg control method.
+        Args:
+            rank (str): daos server rank to drain
+            tgt_idx (string): str of targets to drain on ranks ex: "1,2"
+
+        Returns:
+            bool: True if the rank was drained from the pool; False if the
+            reintegrate failed
+
+        """
+        status = False
+
+        self.dmg.pool_drain(self.uuid, rank, tgt_idx)
+        status = True
+
+        return status
