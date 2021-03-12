@@ -264,7 +264,8 @@ func NewEventForwarder(rpcClient UnaryInvoker, accessPts []string) *EventForward
 }
 
 // EventLogger implements the events.Handler interface and logs RAS event to
-// INFO.
+// INFO using supplied logging.Logger. In addition syslog is written to at the
+// priority level derived from the event severity.
 type EventLogger struct {
 	log        logging.Logger
 	sysloggers map[events.RASSeverityID]*log.Logger
@@ -285,12 +286,13 @@ func (el *EventLogger) OnEvent(_ context.Context, evt *events.RASEvent) {
 	el.sysloggers[evt.Severity].Print(out)
 }
 
-// NewEventLogger returns an initialized EventLogger.
-func NewEventLogger(logBasic logging.Logger) *EventLogger {
-	getSyslogger := func(sev events.RASSeverityID) *log.Logger {
-		return logging.MustCreateSyslogger(sev.SyslogPriority(), log.LstdFlags)
-	}
+func getSyslogger(sev events.RASSeverityID) *log.Logger {
+	return logging.MustCreateSyslogger(sev.SyslogPriority(), log.LstdFlags)
+}
 
+// newEventLogger returns an initialized EventLogger using the provided function
+// to populate syslog endpoints which map to event severity identifiers.
+func newEventLogger(logBasic logging.Logger, getSyslogger func(events.RASSeverityID) *log.Logger) *EventLogger {
 	el := &EventLogger{
 		log:        logBasic,
 		sysloggers: make(map[events.RASSeverityID]*log.Logger),
@@ -303,6 +305,12 @@ func NewEventLogger(logBasic logging.Logger) *EventLogger {
 	el.sysloggers[events.RASSeverityInfo] = getSyslogger(events.RASSeverityInfo)
 
 	return el
+}
+
+// NewEventLogger returns an initialized EventLogger capable of writing to the
+// supplied logger in addition to syslog.
+func NewEventLogger(log logging.Logger) *EventLogger {
+	return newEventLogger(log, getSyslogger)
 }
 
 // SystemQueryReq contains the inputs for the system query request.

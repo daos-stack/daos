@@ -497,8 +497,6 @@ rebuild_snap_punch_empty(void **state)
 	int		i;
 	int		rc;
 
-	skip(); /** DAOS-4698 */
-
 	if (!test_runable(arg, 4))
 		return;
 
