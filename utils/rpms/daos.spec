@@ -243,8 +243,8 @@ mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
 mv %{?buildroot}/%{_sysconfdir}/daos/bash_completion.d %{?buildroot}/%{_sysconfdir}
 mvn clean install -DskipITs -Ddaos.install.path=%{?buildroot}/%{_prefix} --file src/client/java/daos-java/pom.xml  -Dgpg.skip -X
 cp -r src/client/java %{?buildroot}/%{_prefix}/lib/daos/TESTING/
-chmod 755 -R %{?buildroot}/%{_prefix}/lib/daos/TESTING/java/
 sed -i -e "s/${BUILDROOT//\//\\/}//g" %{buildroot}/usr/lib/daos/TESTING/java/daos-java/target/{{antrun/build-main,surefire-reports/TEST-io.daos.{dfs.Daos{FilePath,Uns}Test,obj.{DaosObject{,Id},IO{Data,Key}Desc}Test,Daos{Utils,IOException}Test}}.xml,surefire/surefire_*tmp}
+chmod 755 %{?buildroot}/%{_prefix}/lib/daos/TESTING/java/daos-java/target/antrun/build-compile-proto.xml
 
 %pre server
 getent group daos_metrics >/dev/null || groupadd -r daos_metrics
