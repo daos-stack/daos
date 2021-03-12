@@ -53,8 +53,8 @@ class PoolAttributeTest(TestWithServers):
         data_set = {}
         for index in range(1024):
             size = random.randint(1, 100)
-            key = str(index).encode("utf-8")
-            data_set[key] = get_random_bytes(size)
+            random_string = get_random_bytes(size)
+            data_set[random_string] = random_string
         return data_set
 
     def verify_list_attr(self, indata, size, buff):
@@ -100,7 +100,7 @@ class PoolAttributeTest(TestWithServers):
         """
         self.log.info("Verifying get_attr output:")
         self.log.info("  get_attr data: %s", indata)
-        self.log.info("  set_attr date: %s", outdata)
+        self.log.info("  set_attr data: %s", outdata)
         for attr, value in indata.items():
             if value != outdata[attr]:
                 self.fail(
@@ -118,7 +118,6 @@ class PoolAttributeTest(TestWithServers):
         """
         self.add_pool()
         attr_dict = self.create_data_set()
-
         try:
             self.pool.pool.set_attr(data=attr_dict)
             size, buf = self.pool.pool.list_attr()
@@ -146,9 +145,8 @@ class PoolAttributeTest(TestWithServers):
         expected_for_param = []
         name = self.params.get("name", '/run/attrtests/name_handles/*/')
         expected_for_param.append(name[1])
-        value = self.params.get("value", '/run/attrtests/value_handles/*/')
+        value = self.params.get("value", '/run/attrtests/name_handles/*/')
         expected_for_param.append(value[1])
-
         expected_result = 'PASS'
         for result in expected_for_param:
             if result == 'FAIL':
@@ -165,9 +163,7 @@ class PoolAttributeTest(TestWithServers):
         try:
             self.pool.pool.set_attr(data=attr_dict)
             size, buf = self.pool.pool.list_attr()
-
             self.verify_list_attr(attr_dict, size.value, buf)
-
             if name[0] is not None:
                 # Request something that doesn't exist
                 if b"Negative" in name[0]:
@@ -204,7 +200,7 @@ class PoolAttributeTest(TestWithServers):
             pass
         else:
             expected_for_param.append(name[1])
-        value = self.params.get("value", '/run/attrtests/value_handles/*/')
+        value = self.params.get("value", '/run/attrtests/name_handles/*/')
         expected_for_param.append(value[1])
 
         expected_result = 'PASS'
