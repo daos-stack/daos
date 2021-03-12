@@ -8,7 +8,7 @@ import socket
 from getpass import getuser
 
 from command_utils_base import \
-    CommandFailure, FormattedParameter, YamlParameters, EnvironmentVariables, \
+    CommandFailure, FormattedParameter, EnvironmentVariables, \
     CommonConfig
 from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
 from general_utils import get_log_file

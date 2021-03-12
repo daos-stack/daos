@@ -5,8 +5,9 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import logging
-from argparse import ArgumentParser, RawDescriptionHelpFormatter
+import sys
 
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from util.command_utils_base import CommonConfig, CommandFailure
 from util.agent_utils_params import \
     DaosAgentYamlParameters, DaosAgentTransportCredentials
@@ -187,7 +188,7 @@ def main():
         if not generate_dmg_config(args):
             status += 1
 
-    exit(status)
+    sys.exit(status)
 
 
 if __name__ == "__main__":

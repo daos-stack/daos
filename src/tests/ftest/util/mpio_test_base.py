@@ -1,13 +1,10 @@
 #!/usr/bin/python
-'''
+"""
     (C) Copyright 2020-2021 Intel Corporation.
 
     SPDX-License-Identifier: BSD-2-Clause-Patent
 
-'''
-
-
-import os
+"""
 import re
 
 from apricot import TestWithServers
@@ -18,8 +15,8 @@ from env_modules import load_mpi
 
 
 class MpiioTests(TestWithServers):
-    """
-    Runs ROMIO, LLNL, MPI4PY and HDF5 test suites.
+    """Run ROMIO, LLNL, MPI4PY and HDF5 test suites.
+
     :avocado: recursive
     """
 
@@ -67,8 +64,8 @@ class MpiioTests(TestWithServers):
         self.cont_uuid = cont_uuid[0]
 
     def run_test(self, test_repo, test_name):
-        """
-        Executable function to be used by test functions below
+        """Execute function to be used by test functions below.
+
         test_repo       --location of test repository
         test_name       --name of the test to be run
         """

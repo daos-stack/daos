@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
-from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 
 

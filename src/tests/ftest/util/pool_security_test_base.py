@@ -18,6 +18,7 @@ import security_test_base as secTestBase
 PERMISSIONS = ["", "r", "w", "rw"]
 DENY_ACCESS = "-1001"
 
+
 class PoolSecurityTestBase(TestWithServers):
     # pylint: disable=no-member
 
@@ -304,21 +305,21 @@ class PoolSecurityTestBase(TestWithServers):
 
         """
         permission = "none"
-        if perm_type is "attribute":
+        if perm_type == "attribute":
             permission = perm_action
-        elif perm_type is "property":
+        elif perm_type == "property":
             permission = perm_action.replace("r", "t")
             permission = permission.replace("w", "T")
-        elif perm_type is "acl":
+        elif perm_type == "acl":
             permission = perm_action.replace("r", "a")
             permission = permission.replace("w", "A")
-        elif perm_type is "ownership":
+        elif perm_type == "ownership":
             permission = perm_action.replace("w", "to")
             permission = permission.replace("r", "rwdTAa")
         else:
             self.fail(
                 "##In setup_container_acl_and_permission, unsupported "
-                "perm_type %s", perm_type)
+                "perm_type {}".format(perm_type))
         self.log.info(
             "At setup_container_acl_and_permission, setup %s, %s, %s, with %s",
             user_type, user_name, perm_type, permission)

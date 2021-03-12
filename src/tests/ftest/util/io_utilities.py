@@ -66,17 +66,17 @@ class DirTree():
         Populate the directory-tree. This method must be called before using
         the other methods.
         """
-        if self._tree_path:
-            return
+        if not self._tree_path:
 
-        try:
-            self._tree_path = tempfile.mkdtemp(dir=self._root)
-            self._log("Directory-tree root: {0}".format(self._tree_path))
-            self._create_dir_tree(self._tree_path, self._height)
-            self._created_remaining_needles()
-        except Exception as err:
-            raise RuntimeError(
-                "Failed to populate tree directory with error: {0}".format(err))
+            try:
+                self._tree_path = tempfile.mkdtemp(dir=self._root)
+                self._log("Directory-tree root: {0}".format(self._tree_path))
+                self._create_dir_tree(self._tree_path, self._height)
+                self._created_remaining_needles()
+            except Exception as err:
+                raise RuntimeError(
+                    "Failed to populate tree directory with error: {0}".format(
+                        err)) from err
 
         return self._tree_path
 
@@ -349,7 +349,8 @@ def write_single_objects(
             except DaosApiError as error:
                 raise DaosTestError(
                     "Error writing data (dkey={}, akey={}, data={}) to "
-                    "the container: {}".format(dkey, akey, data, error))
+                    "the container: {}".format(
+                        dkey, akey, data, error)) from error
 
             # Verify the single data was written to the container
             data_read = read_single_objects(
@@ -385,7 +386,7 @@ def read_single_objects(container, size, dkey, akey, obj):
     except DaosApiError as error:
         raise DaosTestError(
             "Error reading data (dkey={}, akey={}, size={}) from the "
-            "container: {}".format(dkey, akey, size, error))
+            "container: {}".format(dkey, akey, size, error)) from error
     return data.value
 
 
@@ -438,7 +439,8 @@ def write_array_objects(
             except DaosApiError as error:
                 raise DaosTestError(
                     "Error writing data (dkey={}, akey={}, data={}) to "
-                    "the container: {}".format(dkey, akey, data, error))
+                    "the container: {}".format(
+                        dkey, akey, data, error)) from error
 
             # Verify the data was written to the container
             data_read = read_array_objects(
@@ -477,7 +479,7 @@ def read_array_objects(container, size, items, dkey, akey, obj):
         raise DaosTestError(
             "Error reading data (dkey={}, akey={}, size={}, items={}) "
             "from the container: {}".format(
-                dkey, akey, size, items, error))
+                dkey, akey, size, items, error)) from error
     return [item[:-1] for item in data]
 
 
@@ -503,4 +505,5 @@ def get_target_rank_list(daos_object):
         return daos_object.tgt_rank_list
     except DaosApiError as error:
         raise DaosTestError(
-            "Error obtaining target list for the object: {}".format(error))
+            "Error obtaining target list for the object: {}".format(
+                error)) from error

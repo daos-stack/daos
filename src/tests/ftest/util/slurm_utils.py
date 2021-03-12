@@ -187,7 +187,7 @@ def run_slurm_script(script, logfile=None):
     try:
         result = run_command(cmd, timeout=10)
     except DaosTestError as error:
-        raise SlurmFailed("job failed : {}".format(error))
+        raise SlurmFailed("job failed : {}".format(error)) from error
     if result:
         output = result.stdout_text
         match = re.search(r"Submitted\s+batch\s+job\s+(\d+)", str(output))
@@ -251,9 +251,8 @@ def watch_job(handle, maxwait, test_obj):
                 print("Job {} has timedout after {} secs".format(handle,
                                                                  maxwait))
                 break
-            else:
-                wait_time += 5
-                time.sleep(5)
+            wait_time += 5
+            time.sleep(5)
         else:
             break
 
@@ -306,5 +305,5 @@ def srun(hosts, cmd, srun_params=None):
         result = run_command(cmd, timeout=30)
     except DaosTestError as error:
         result = None
-        raise SlurmFailed("srun failed : {}".format(error))
+        raise SlurmFailed("srun failed : {}".format(error)) from error
     return result

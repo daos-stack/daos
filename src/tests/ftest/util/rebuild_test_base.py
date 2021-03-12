@@ -137,7 +137,6 @@ class RebuildTestBase(TestWithServers):
 
     def execute_during_rebuild(self):
         """Execute test steps during rebuild."""
-        pass
 
     def verify_container_data(self, txn=None):
         """Verify the container data.

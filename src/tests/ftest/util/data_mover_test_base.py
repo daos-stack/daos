@@ -56,7 +56,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.container = []
         self.uuids = []
         self.dfuse_hosts = None
-        self.num_run_datamover = 0 # Number of times run_datamover was called
+        self.num_run_datamover = 0  # Number of times run_datamover was called
 
         # List of test paths to create and remove
         self.posix_test_paths = []
@@ -658,7 +658,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.set_ior_params(param_type, path, pool, cont,
                             path_suffix, flags, display)
         self.run_ior(self.get_ior_job_manager_command(), self.ior_processes,
-                     display_space=(True if pool else False), pool=pool)
+                     display_space=(bool(pool)), pool=pool)
 
     def set_mdtest_params(self, param_type, path, pool=None, cont=None,
                           flags=None, display=True):
@@ -720,7 +720,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.set_mdtest_params(param_type, path, pool, cont, flags, display)
         self.run_mdtest(self.get_mdtest_job_manager_command(self.manager),
                         self.mdtest_processes,
-                        display_space=(True if pool else False), pool=pool)
+                        display_space=(bool(pool)), pool=pool)
 
     def run_diff(self, src, dst, deref=False):
         """Run linux diff command.

@@ -142,6 +142,7 @@ class MpioUtils():
 
             except DaosTestError as excep:
                 raise MpioFailed(
-                    "<Test FAILED> \nException occurred: {}".format(str(excep)))
+                    "<Test FAILED> \nException occurred: {}".format(
+                        str(excep))) from excep
 
         return result

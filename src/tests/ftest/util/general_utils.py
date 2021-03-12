@@ -164,9 +164,9 @@ def human_to_bytes(size):
                     "Invalid unit detected, not in {}: {}".format(
                         conversion[1000] + conversion[1024][1:], unit))
         value = float(match[0][0]) * multiplier
-    except IndexError:
+    except IndexError as error:
         raise DaosTestError(
-            "Invalid human readable size format: {}".format(size))
+            "Invalid human readable size format: {}".format(size)) from error
     return int(value) if value.is_integer() else value
 
 
@@ -808,11 +808,11 @@ def get_numeric_list(numeric_range):
                 numeric_list.extend([int(val) for val in range(*range_args)])
             else:
                 numeric_list.append(int(item))
-    except (AttributeError, ValueError, TypeError):
+    except (AttributeError, ValueError, TypeError) as error:
         raise AttributeError(
             "Invalid 'numeric_range' argument - must be a string containing "
             "only numbers, dashes (-), and/or commas (,): {}".format(
-                numeric_range))
+                numeric_range)) from error
 
     return numeric_list
 
@@ -884,7 +884,8 @@ def get_module_class(name, module):
         name_class = getattr(name_module, name)
     except (ImportError, AttributeError) as error:
         raise DaosTestError(
-            "Invalid '{}' class name for {}: {}".format(name, module, error))
+            "Invalid '{}' class name for {}: {}".format(
+                name, module, error)) as error
     return name_class
 
 

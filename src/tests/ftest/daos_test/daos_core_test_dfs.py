@@ -8,7 +8,9 @@
 import os
 from daos_core_base import DaosCoreBase
 
+
 class DaosCoreTestDfs(DaosCoreBase):
+    # pylint: disable=too-many-ancestors
     """Runs DAOS file system (DFS) tests.
 
     :avocado: recursive
@@ -20,7 +22,7 @@ class DaosCoreTestDfs(DaosCoreBase):
         self.hostfile_clients_slots = None
 
     def test_daos_dfs_unit(self):
-        """Jira ID: DAOS-5409
+        """Jira ID: DAOS-5409.
 
         Test Description:
             Run daos_test -u
@@ -36,7 +38,7 @@ class DaosCoreTestDfs(DaosCoreBase):
         self.run_subtest()
 
     def test_daos_dfs_parallel(self):
-        """Jira ID: DAOS-5409
+        """Jira ID: DAOS-5409.
 
         Test Description:
             Run daos_test -p

@@ -15,8 +15,8 @@ import os
 from avocado.utils import process
 
 from command_utils_base import \
-    CommandFailure, BasicParameter, ObjectWithParameters, \
-    CommandWithParameters, YamlParameters, EnvironmentVariables, LogParameter
+    CommandFailure, BasicParameter, CommandWithParameters, \
+    EnvironmentVariables, LogParameter
 from general_utils import check_file_exists, stop_processes, get_log_file, \
     run_command, DaosTestError, get_job_manager_class, create_directory, \
     distribute_files, change_file_owner, get_file_listing, get_subprocess_stdout
@@ -122,7 +122,7 @@ class ExecutableCommand(CommandWithParameters):
 
         except DaosTestError as error:
             # Command failed or possibly timed out
-            raise CommandFailure(error)
+            raise CommandFailure from error
 
     def _run_subprocess(self):
         """Run the command as a sub process.
@@ -503,7 +503,8 @@ class CommandWithSubCommand(ExecutableCommand):
             self.result = super().run()
         except CommandFailure as error:
             raise CommandFailure(
-                "<{}> command failed: {}".format(self.command, error))
+                "<{}> command failed: {}".format(
+                    self.command, error)) from error
         return self.result
 
     def _get_result(self, sub_command_list=None, **kwargs):
@@ -850,7 +851,7 @@ class YamlCommand(SubProcessCommand):
                 except DaosTestError as error:
                     raise CommandFailure(
                         "ERROR: Copying yaml configuration file to {}: "
-                        "{}".format(hosts, error))
+                        "{}".format(hosts, error)) from error
 
     def verify_socket_directory(self, user, hosts):
         """Verify the domain socket directory is present and owned by this user.
@@ -877,10 +878,11 @@ class YamlCommand(SubProcessCommand):
                     create_directory(nodes, directory, sudo=True)
                     change_file_owner(nodes, directory, user, user, sudo=True)
                 except DaosTestError as error:
-                    raise CommandFailure(
+                    raise CommandFailure((
                         "{}: error setting up missing socket directory {} for "
                         "user {} on {}:\n{}".format(
                             self.command, directory, user, nodes, error))
+                            from error)
 
     def get_user_file(self):
         """Get the file defined in the yaml file that must be owned by the user.
@@ -987,7 +989,7 @@ class SubprocessManager():
             # Kill the subprocess, anything that might have started
             self.kill()
             raise CommandFailure(
-                "Failed to start {}.".format(str(self.manager.job)))
+                "Failed to start {}.".format(str(self.manager.job))) from error
 
     def stop(self):
         """Stop the daos command."""

@@ -7,7 +7,6 @@
 
 import traceback
 import random
-import string
 from apricot import TestWithServers
 from pydaos.raw import (DaosContainer, DaosSnapshot, DaosApiError,
                         c_uuid_to_str)
@@ -293,8 +292,6 @@ class Snapshot(TestWithServers):
                           len(test_data[ind]["tst_data"]) + 1)
             self.log.info("  ==original tst_data =%s",
                           test_data[ind]["tst_data"])
-        return
-
 
     def test_snapshots(self):
         # pylint: disable=no-member,too-many-locals
@@ -450,8 +447,8 @@ class Snapshot(TestWithServers):
                           .format(str(error)))
             self.log.info("  ==snapshot tst_data =%s", thedata5.value)
             if thedata5.value != tst_data:
-                raise Exception("##(5.2)Snapshot #%s, test data Mis-matches"
-                                "the original data written.", ss_number)
+                raise Exception("##(5.2)Snapshot #{}, test data Mis-matches"
+                                "the original data written.".format(ss_number))
             self.log.info("  snapshot test number %s, test data matches"
                           " the original data written.", ss_number)
 

@@ -7,7 +7,7 @@
 import threading
 import re
 import time
-
+import queue
 from command_utils_base import CommandFailure
 from avocado.core.exceptions import TestFail
 from ior_test_base import IorTestBase
@@ -37,7 +37,8 @@ def get_device_ids(dmg, servers):
             result = dmg.run()
         except CommandFailure as _error:
             raise CommandFailure(
-                "dmg list-devices failed with error {}".format(_error))
+                "dmg list-devices failed with error {}".format(
+                    _error)) from _error
         drive_list = []
         for line in result.stdout_text.split('\n'):
             if 'UUID' in line:
@@ -233,7 +234,7 @@ class ServerFillUp(IorTestBase):
         if nvme or scm:
             sizes = self.get_max_storage_sizes()
 
-        #If NVMe is True get the max NVMe size from servers
+        # If NVMe is True get the max NVMe size from servers
         if nvme:
             self.pool.nvme_size.update('{}'.format(sizes[1]))
 

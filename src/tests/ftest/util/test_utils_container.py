@@ -99,7 +99,7 @@ class TestContainerData():
                 "Error writing {}data (dkey={}, akey={}, data={}) to "
                 "container {}: {}".format(
                     "array " if isinstance(data, list) else "", dkey, akey,
-                    data, container.uuid, error))
+                    data, container.uuid, error)) from error
 
     def write_object(self, container, record_qty, akey_size, dkey_size,
                      data_size, rank=None, obj_class=None, data_array_size=0):
@@ -177,7 +177,7 @@ class TestContainerData():
                 "Error reading {}data (dkey={}, akey={}, size={}) from "
                 "container {}: {}".format(
                     "array " if data_array_size > 0 else "", dkey, akey,
-                    data_size, container.uuid, error))
+                    data_size, container.uuid, error)) from error
         return [data[:-1] for data in read_data] \
             if data_array_size > 0 else read_data.value
 
@@ -704,7 +704,8 @@ class TestContainer(TestDaosApiBase):
             except DaosApiError as error:
                 raise DaosTestError(
                     "Error obtaining target rank list for object {} in "
-                    "container {}: {}".format(data.obj, self.uuid, error))
+                    "container {}: {}".format(
+                        data.obj, self.uuid, error)) from error
         if message is not None:
             self.log.info("Target rank lists%s:", message)
             for ranks in target_rank_lists:
@@ -753,9 +754,10 @@ class TestContainer(TestDaosApiBase):
                 txn = 0
                 try:
                     obj = self.written_data[index].obj
-                except IndexError:
+                except IndexError as error:
                     raise DaosTestError(
-                        "Invalid index {} for written data".format(index))
+                        "Invalid index {} for written data".format(
+                            index)) from error
 
                 # Close the object
                 self.log.info(
@@ -820,10 +822,10 @@ class TestContainer(TestDaosApiBase):
             for index in indices:
                 try:
                     rec = data.records[index]
-                except IndexError:
+                except IndexError as error:
                     raise DaosTestError(
                         "Invalid record index {} for object {}".format(
-                            index, data.obj))
+                            index, data.obj)) from error
 
                 # Punch the record
                 self.log.info(

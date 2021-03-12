@@ -103,10 +103,10 @@ class ContSecurityTestBase(TestWithServers):
             self.container.get_params(self)
             self.container.create(acl_file=file_name)
             container_uuid = self.container.uuid
-        except TestFail:
+        except TestFail as error:
             if acl_type != "invalid":
                 raise DaosTestError(
-                    "Could not create a container when expecting one")
+                    "Could not create expected container ") from error
             container_uuid = None
 
         return container_uuid

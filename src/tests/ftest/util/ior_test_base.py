@@ -99,6 +99,7 @@ class IorTestBase(DfuseTestBase):
                           create_cont=True, stop_dfuse=True, plugin_path=None,
                           timeout=None, fail_on_warning=False,
                           mount_dir=None):
+        # pylint: disable=too-many-arguments
         """Execute ior with optional overrides for ior flags and object_class.
 
         If specified the ior flags and ior daos object class parameters will

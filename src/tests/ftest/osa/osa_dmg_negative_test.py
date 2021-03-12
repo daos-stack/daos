@@ -21,7 +21,7 @@ class OSADmgNegativeTest(OSAUtils):
     """
     def setUp(self):
         """Set up for test case."""
-        super(OSADmgNegativeTest, self).setUp()
+        super().setUp()
         self.dmg_command = self.get_dmg_command()
         # Start an additional server.
         self.extra_servers = self.params.get("test_servers",
@@ -99,7 +99,7 @@ class OSADmgNegativeTest(OSAUtils):
                                                           nvme_size)
                     self.log.info(output)
                     self.validate_results(expected_result, output.stdout_text)
-                if (extend is False and (rank == "4" or rank == "5")):
+                if (extend is False and rank in ["4","5"]):
                     continue
                 # Exclude a rank, target
                 output = self.dmg_command.pool_exclude(self.pool.uuid,

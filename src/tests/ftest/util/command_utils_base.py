@@ -476,7 +476,7 @@ class YamlParameters(ObjectWithParameters):
             except Exception as error:
                 raise CommandFailure(
                     "Error writing the yaml file {}: {}".format(
-                        filename, error))
+                        filename, error)) from error
             self.reset_yaml_data_updated()
         return create_yaml
 

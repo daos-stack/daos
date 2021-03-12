@@ -744,9 +744,10 @@ class TestPool(TestDaosApiBase):
                                     "timeout can be adjusted via the "
                                     "'pool/pool_query_timeout' test yaml "
                                     "parameter.".format(
-                                        uuid, self.pool_query_timeout.value))
+                                        uuid, self.pool_query_timeout.value)) \
+                                            from error
                         else:
-                            raise CommandFailure(error)
+                            raise CommandFailure(error) from error
             else:
                 self.log.error("Error: Undefined dmg command")
 

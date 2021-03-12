@@ -15,8 +15,7 @@ from avocado import fail_on
 from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import \
-    CommandFailure, FormattedParameter, YamlParameters, CommandWithParameters, \
-    CommonConfig
+    CommandFailure, FormattedParameter, CommandWithParameters, CommonConfig
 from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
 from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
     convert_list
@@ -576,7 +575,8 @@ class DaosServerManager(SubprocessManager):
         except CommandFailure as error:
             self.kill()
             raise ServerFailed(
-                "Failed to start servers before format: {}".format(error))
+                "Failed to start servers before format: {}".format(
+                    error)) from error
 
     def detect_engine_start(self, host_qty=None):
         """Detect when all the engines have started.
@@ -722,10 +722,10 @@ class DaosServerManager(SubprocessManager):
         try:
             setting = self.ENVIRONMENT_VARIABLE_MAPPING[name]
 
-        except IndexError:
+        except IndexError as error:
             raise ServerFailed(
                 "Unknown server config setting mapping for the {} environment "
-                "variable!".format(name))
+                "variable!".format(name)) from error
 
         return self.get_config_value(setting)
 
@@ -746,10 +746,10 @@ class DaosServerManager(SubprocessManager):
                 "Error obtaining {} output: {}".format(self.dmg, data))
         try:
             states = list(set([data[rank]["state"] for rank in data]))
-        except KeyError:
+        except KeyError as error:
             raise ServerFailed(
                 "Unexpected result from {} - missing 'state' key: {}".format(
-                    self.dmg, data))
+                    self.dmg, data)) from error
         if len(states) > 1:
             # Multiple states for different ranks detected
             raise ServerFailed(

@@ -78,7 +78,6 @@ class JobManager(ExecutableCommand):
             slots (int, optional): number of slots per host to specify in the
                 optional hostfile. Defaults to None.
         """
-        pass
 
     def assign_processes(self, processes):
         """Assign the number of processes per node.
@@ -88,7 +87,6 @@ class JobManager(ExecutableCommand):
         Args:
             processes (int): number of processes per node
         """
-        pass
 
     def assign_environment(self, env_vars, append=False):
         """Assign or add environment variables to the command.
@@ -99,7 +97,6 @@ class JobManager(ExecutableCommand):
             append (bool): whether to assign (False) or append (True) the
                 specified environment variables
         """
-        pass
 
     def assign_environment_default(self, env_vars):
         """Assign the default environment variables for the command.
@@ -108,7 +105,6 @@ class JobManager(ExecutableCommand):
             env_vars (EnvironmentVariables): the environment variables to
                 assign as the default
         """
-        pass
 
     def get_subprocess_state(self, message=None):
         """Display the state of the subprocess.
@@ -587,7 +583,6 @@ class Systemctl(JobManager):
             append (bool): whether to assign (False) or append (True) the
                 specified environment variables
         """
-        pass
 
     def assign_environment_default(self, env_vars):
         """Assign the default environment variables for the command.
@@ -596,7 +591,6 @@ class Systemctl(JobManager):
             env_vars (EnvironmentVariables): the environment variables to
                 assign as the default
         """
-        pass
 
     def get_subprocess_state(self, message=None):
         """Display the state of the subprocess.
@@ -668,7 +662,7 @@ class Systemctl(JobManager):
             self.log.info(error)
             self.display_log_data(
                 self.get_log_data(self._hosts, self.timestamps[command]))
-            raise CommandFailure(error)
+            raise CommandFailure(error) from error
 
     def service_enable(self):
         """Enable the job's service via the systemctl command.

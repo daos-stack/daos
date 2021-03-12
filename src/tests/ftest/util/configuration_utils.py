@@ -151,10 +151,10 @@ class ConfigurationParameters(ObjectWithParameters):
             value = getattr(self, requirement).value
             try:
                 value = int(value)
-            except ValueError:
+            except ValueError as error:
                 raise AttributeError(
                     "Invalid '{}' attribute - must be an int: {}".format(
-                        requirement, value))
+                        requirement, value)) from error
 
             # Only verify requirements with a minimum
             if value != 0:
@@ -248,7 +248,7 @@ class Configuration():
         else:
             # Default to no active configuration
             self._active_name = None
-            self._inactive_names = [name for name in self._all_names]
+            self._inactive_names = list(self._all_names)
 
             # Report errors for invalid configutaion names
             if value is not None:
@@ -310,10 +310,9 @@ class Configuration():
             # Always include configuration definition paths in order to be able
             # to find the requirements for each configuration
             return True
-        else:
             # Otherwise only include paths that are not configuration-specific
             # or are specific to the active configuration
-            return path.split("/")[-1] not in self._inactive_names
+        return path.split("/")[-1] not in self._inactive_names
 
     def _set_available_names(self, test):
         """Set the list of available configuration names.

@@ -114,6 +114,7 @@ class DcpCommand(ExecutableCommand):
             self.daos_prefix.update(prefix,
                                     "daos_prefix" if display else None)
 
+
 class Dcp(DcpCommand):
     """Class defining an object of type DcpCommand."""
 
@@ -221,12 +222,13 @@ class Dcp(DcpCommand):
 
         return out
 
+
 class DsyncCommand(ExecutableCommand):
     """Defines an object representing a dsync command."""
 
     def __init__(self, namespace, command):
         """Create a dsync Command object."""
-        super(DsyncCommand, self).__init__(namespace, command)
+        super().__init__(namespace, command)
 
         # dsync options
 
@@ -272,7 +274,7 @@ class DsyncCommand(ExecutableCommand):
     def get_param_names(self):
         """Overriding the original get_param_names."""
 
-        param_names = super(DsyncCommand, self).get_param_names()
+        param_names = super().get_param_names()
 
         # move key=dst_path to the end
         param_names.sort(key='dst_path'.__eq__)
@@ -301,13 +303,13 @@ class DsyncCommand(ExecutableCommand):
             self.daos_prefix.update(prefix,
                                     "daos_prefix" if display else None)
 
+
 class Dsync(DsyncCommand):
     """Class defining an object of type DsyncCommand."""
 
     def __init__(self, hosts, timeout=30):
         """Create a dsync object."""
-        super(Dsync, self).__init__(
-            "/run/dsync/*", "dsync")
+        super().__init__("/run/dsync/*", "dsync")
 
         # set params
         self.timeout = timeout
@@ -341,6 +343,7 @@ class Dsync(DsyncCommand):
         out = mpirun.run()
 
         return out
+
 
 class FsCopy():
     """Class defining an object of type FsCopy.

@@ -88,7 +88,7 @@ class Dfuse(DfuseCommand):
 
     def __del__(self):
         """Destruct the object."""
-        if len(self.running_hosts):
+        if self.running_hosts:
             self.log.error('Dfuse object deleted without shutting down')
 
     def check_mount_state(self, nodes=None):
@@ -271,7 +271,7 @@ class Dfuse(DfuseCommand):
             self.running_hosts.add(ret_code[0])
             del ret_code[0]
 
-        if len(ret_code):
+        if ret_code:
             error_hosts = NodeSet(
                 ",".join(
                     [str(node_set) for code, node_set in list(ret_code.items())

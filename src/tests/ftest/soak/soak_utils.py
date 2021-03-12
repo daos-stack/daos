@@ -15,7 +15,6 @@ from fio_utils import FioCommand
 from daos_racer_utils import DaosRacerCommand
 from dfuse_utils import Dfuse
 from job_manager_utils import Srun
-from command_utils_base import BasicParameter
 from general_utils import get_host_data, get_random_string, \
     run_command, DaosTestError, pcmd, get_random_bytes
 import slurm_utils
@@ -108,8 +107,7 @@ def get_remote_logs(self):
                 result = run_command(command, timeout=30)
             except DaosTestError as error:
                 raise SoakTestError(
-                    "<<FAILED: job logs failed to copy {}>>".format(
-                        error))
+                    "<<FAILED: job logs failed to copy>>") from error
         # remove the remote soak logs for this pass
         command = "/usr/bin/rm -rf {0}".format(self.test_log_dir)
         slurm_utils.srun(
@@ -122,8 +120,7 @@ def get_remote_logs(self):
                 result = run_command(command)
             except DaosTestError as error:
                 raise SoakTestError(
-                    "<<FAILED: job logs failed to delete {}>>".format(
-                        error))
+                    "<<FAILED: job logs failed to delete>>") from error
     else:
         raise SoakTestError(
             "<<FAILED: Soak remote logfiles not copied "
@@ -595,7 +592,7 @@ def cleanup_dfuse(self):
                     ";".join(cmd)), self.srun_params)
     except slurm_utils.SlurmFailed as error:
         raise SoakTestError(
-            "<<FAILED: Dfuse directories not deleted {} >>".format(error))
+            "<<FAILED: Dfuse directories not deleted>>") from error
 
 
 def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):

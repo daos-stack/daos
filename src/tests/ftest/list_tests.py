@@ -6,7 +6,7 @@
 from __future__ import print_function
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
-import os
+import sys
 from launch import get_test_list, set_python_environment
 
 
@@ -59,11 +59,11 @@ def main():
     # Verify at least one test was requested
     if not test_list:
         print("ERROR: No tests or tags found via {}".format(args.tags))
-        exit(1)
+        sys.exit(1)
 
     # Display a list of the tests matching the tags
     print("Detected tests:  \n{}".format("  \n".join(test_list)))
-    exit(0)
+    sys.exit(0)
 
 
 if __name__ == "__main__":

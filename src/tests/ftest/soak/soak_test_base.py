@@ -26,6 +26,7 @@ from soak_utils import DDHHMMSS_format, add_pools, get_remote_logs, \
 
 class SoakTestBase(TestWithServers):
     # pylint: disable=too-many-public-methods
+    # pylint: disable=too-many-instance-attributes
     """Execute DAOS Soak test cases.
 
     :avocado: recursive
@@ -280,10 +281,10 @@ class SoakTestBase(TestWithServers):
             job_cmdlist.extend(scripts)
         elif "daos_racer" in job:
             self.add_cancel_ticket("DAOS-6938", "daos_racer pool connect")
-            return job_cmdlist
-            commands = create_racer_cmdline(self, job, pool)
-            # scripts are single cmdline
-            scripts = build_job_script(self, commands, job, 1)
+            # Uncomment the follwing when DAOS-6938 is fixed
+            # commands = create_racer_cmdline(self, job, pool)
+            # # scripts are single cmdline
+            # scripts = build_job_script(self, commands, job, 1)
             job_cmdlist.extend(scripts)
         else:
             raise SoakTestError(
@@ -501,7 +502,7 @@ class SoakTestBase(TestWithServers):
             self.harassers = harasserlist[:]
             run_harasser = True
             self.log.info("<< Initial harrasser list = %s>>", " ".join(
-                [harasser for harasser in self.harassers]))
+                self.harassers))
         # Create the reserved pool with data
         # self.pool is a list of all the pools used in soak
         # self.pool[0] will always be the reserved pool
@@ -536,8 +537,8 @@ class SoakTestBase(TestWithServers):
                 result = run_command(cmd, timeout=30)
             except DaosTestError as error:
                 raise SoakTestError(
-                    "<<FAILED: Soak directory {} was not removed {}>>".format(
-                        log_dir, error))
+                    "<<FAILED: Soak directory {} was not removed>>".format(
+                        log_dir)) from error
 
         # Initialize time
         start_time = time.time()

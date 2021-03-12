@@ -8,7 +8,7 @@
 from socket import gethostname
 
 from command_utils_base import \
-    FormattedParameter, CommandWithParameters, YamlParameters
+    FormattedParameter, CommandWithParameters
 from command_utils import CommandWithSubCommand, YamlCommand
 
 
