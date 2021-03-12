@@ -885,7 +885,7 @@ def get_module_class(name, module):
     except (ImportError, AttributeError) as error:
         raise DaosTestError(
             "Invalid '{}' class name for {}: {}".format(
-                name, module, error)) as error
+                name, module, error)) from error
     return name_class
 
 
