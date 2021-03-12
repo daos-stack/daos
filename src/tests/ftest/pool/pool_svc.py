@@ -16,6 +16,35 @@ class PoolSvc(TestWithServers):
     :avocado: recursive
     """
 
+    def check_leader(self, previous_leader=None, expect_change=True):
+        """Check if the pool leader rank has changed.
+
+        Args:
+            previous_leader (int, optional): previous pool leader rank. Defaults
+                to None.
+            expect_change (bool, optional): is the pool leader expected to
+                change. Defaults to True.
+
+        Return:
+            int: current pool leader rank
+
+        """
+        self.pool.set_query_data()
+        current_leader = int(self.pool.query_data["leader"])
+        if previous_leader is not None:
+            self.log.info(
+                "Pool leader: previous=%s, current=%s",
+                previous_leader, current_leader)
+            leader_change = previous_leader != current_leader
+            message = "The pool leader {} changed".format(
+                "has" if leader_change else "has not")
+            self.log.info("  %s", message)
+            if leader_change != expect_change:
+                self.fail(message)
+        else:
+            self.log.info("Pool leader: current=%s", current_leader)
+        return current_leader
+
     def test_pool_svc(self):
         """Test svc arg during pool create.
 
@@ -61,46 +90,45 @@ class PoolSvc(TestWithServers):
             #   - does not contain an invalid rank
             #   - contains the expected number of members
             #   - does not contain any duplicate ranks
-            self.assertTrue(999999 not in self.pool.svc_ranks,
-                            "999999 is in the pool's service ranks.")
-            self.assertEqual(len(self.pool.svc_ranks), svc_params[1],
-                             "Length of pool scv rank list is not equal to " +
-                             "the expected number of pool service members.")
-            self.assertEqual(len(self.pool.svc_ranks),
-                             len(set(self.pool.svc_ranks)),
-                             "Duplicate values in returned rank list")
+            self.assertTrue(
+                999999 not in self.pool.svc_ranks,
+                "999999 is in the pool's service ranks.")
+            self.assertEqual(
+                len(self.pool.svc_ranks), svc_params[1],
+                "Length of pool scv rank list is not equal to the expected "
+                "number of pool service members.")
+            self.assertEqual(
+                len(self.pool.svc_ranks),
+                len(set(self.pool.svc_ranks)),
+                "Duplicate values in returned rank list")
 
             if svc_params[1] > 2:
                 # Query the pool to get the leader
-                self.pool.set_query_data()
-                leader = int(self.pool.query_data["leader"])
-                self.log.info("Current pool leader: %s", leader)
+                pool_leader = self.check_leader()
+                non_leader_ranks = list(self.pool.svc_ranks)
+                non_leader_ranks.remove(pool_leader)
 
                 # Stop the pool leader
-                self.log.info("Stopping the pool leader: %s", leader)
+                self.log.info("Stopping the pool leader: %s", pool_leader)
                 try:
-                    self.server_managers[-1].stop_ranks([leader], self.test_log)
+                    self.server_managers[-1].stop_ranks(
+                        [pool_leader], self.test_log)
                 except TestFail as error:
                     self.log.info(error)
                     self.fail(
                         "Error stopping pool leader - "
-                        "DaosServerManager.stop_ranks([{}])".format(non_leader))
+                        "DaosServerManager.stop_ranks([{}])".format(
+                            pool_leader))
 
                 # Verify the pool leader has changed
-                self.pool.set_query_data()
-                new_leader = int(self.pool.query_data["leader"])
-                self.log.info("Current pool leader: %s", new_leader)
-                self.log.info(
-                    "Verifying %s is no longer the pool leader", leader)
-                self.assertNotEqual(
-                    leader, new_leader, "Pool leader has not changed!")
+                pool_leader = self.check_leader(pool_leader, True)
+                non_leader_ranks.remove(pool_leader)
 
                 # Stop a pool non-leader
-                all_svc_ranks = list(self.pool.svc_ranks)
-                all_svc_ranks.remove(leader)
-                all_svc_ranks.remove(new_leader)
-                non_leader = all_svc_ranks[-1]
-                self.log.info("Stopping a pool non-leader: %s", non_leader)
+                non_leader = non_leader_ranks[-1]
+                self.log.info(
+                    "Stopping a pool non-leader (%s): %s",
+                    non_leader_ranks, non_leader)
                 try:
                     self.server_managers[-1].stop_ranks(
                         [non_leader], self.test_log)
@@ -111,12 +139,6 @@ class PoolSvc(TestWithServers):
                         "DaosServerManager.stop_ranks([{}])".format(non_leader))
 
                 # Verify the pool leader has not changed
-                self.pool.set_query_data()
-                current_leader = self.pool.query_data["leader"]
-                self.log.info("Current pool leader: %s", current_leader)
-                self.log.info(
-                    "Verifying %s is still the pool leader", new_leader)
-                self.assertEqual(
-                    new_leader, current_leader, "Pool leader has changed!")
+                self.check_leader(pool_leader, False)
 
         self.log.info("Test passed!")
