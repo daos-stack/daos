@@ -359,7 +359,7 @@ int
 daos_csummer_alloc_iods_csums(struct daos_csummer *obj, daos_iod_t *iods,
 			      uint32_t nr, bool akey_only,
 			      struct dcs_layout *singv_los,
-			      struct dcs_iod_csums **p_iods_csums)
+			      struct dcs_iod_csums **p_cds)
 {
 	int			 i, j, rc = 0;
 	uint16_t		 csum_size;
@@ -372,6 +372,8 @@ daos_csummer_alloc_iods_csums(struct daos_csummer *obj, daos_iod_t *iods,
 	if (!(daos_csummer_initialized(obj)) || iods == NULL || nr == 0)
 		goto done;
 
+	D_ASSERT(p_cds != NULL);
+
 	rc = nr;
 
 	csum_size = daos_csummer_get_csum_len(obj);
@@ -383,9 +385,11 @@ daos_csummer_alloc_iods_csums(struct daos_csummer *obj, daos_iod_t *iods,
 	 */
 	buf_len = daos_csummer_allocation_size(obj, iods, nr, akey_only,
 					       singv_los);
-	D_ALLOC(buf, buf_len);
-	if (buf == NULL)
+	D_ALLOC(*p_cds, buf_len);
+	if (*p_cds == NULL)
 		return -DER_NOMEM;
+
+	buf = (uint8_t *)*p_cds;
 
 	setptr(iods_csums, buf, sizeof(*iods_csums) * nr, used, buf_len);
 
@@ -448,8 +452,6 @@ daos_csummer_alloc_iods_csums(struct daos_csummer *obj, daos_iod_t *iods,
 	}
 
 done:
-	if (p_iods_csums != NULL)
-		*p_iods_csums = iods_csums;
 
 	return rc;
 }
@@ -480,7 +482,8 @@ calc_csum_recx_with_no_map(struct daos_csummer *obj, size_t csum_nr,
 		rc = daos_sgl_processor(sgl, false, idx, bytes_for_csum,
 					checksum_sgl_cb, obj);
 		if (rc != 0) {
-			D_ERROR("daos_sgl_processor error: %d\n", rc);
+			D_ERROR("daos_sgl_processor error: "DF_RC"\n",
+				DP_RC(rc));
 			return rc;
 		}
 		daos_csummer_finish(obj);
@@ -583,7 +586,8 @@ calc_csum_recx_with_map(struct daos_csummer *obj, size_t csum_nr,
 						checksum_sgl_cb, obj);
 			consumed_bytes += bytes_for_csum;
 			if (rc != 0) {
-				D_ERROR("daos_sgl_processor error: %d\n", rc);
+				D_ERROR("daos_sgl_processor error: "DF_RC"\n",
+					DP_RC(rc));
 				return rc;
 			}
 			prev_idx = mapped_chunk.dcr_hi + 1;
@@ -738,20 +742,20 @@ calc_for_iov(struct daos_csummer *csummer, daos_key_t *iov,
 	D_MUTEX_LOCK(&csummer->dcs_lock);
 	rc = daos_csummer_reset(csummer);
 	if (rc != 0) {
-		D_ERROR("daos_csummer_reset error: %d\n", rc);
+		D_ERROR("daos_csummer_reset error: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(done, rc);
 	}
 
 	rc = daos_csummer_update(csummer, iov->iov_buf, iov->iov_len);
 	if (rc != 0) {
-		D_ERROR("daos_csummer_update error: %d\n", rc);
+		D_ERROR("daos_csummer_update error: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(done, rc);
 
 	}
 
 	rc = daos_csummer_finish(csummer);
 	if (rc != 0) {
-		D_ERROR("daos_csummer_finish error: %d\n", rc);
+		D_ERROR("daos_csummer_finish error: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(done, rc);
 	}
 
@@ -797,7 +801,8 @@ daos_csummer_calc_iods(struct daos_csummer *obj, d_sg_list_t *sgls,
 	rc = daos_csummer_alloc_iods_csums(obj, iods, nr, akey_only,
 					   los, &iods_csums);
 	if (rc < 0) {
-		D_ERROR("daos_csummer_alloc_iods_csums error: %d\n", rc);
+		D_ERROR("daos_csummer_alloc_iods_csums error: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 
@@ -812,7 +817,8 @@ daos_csummer_calc_iods(struct daos_csummer *obj, d_sg_list_t *sgls,
 			rc = calc_for_iov(obj, &iod->iod_name,
 					  csums->ic_akey.cs_csum, csum_len);
 			if (rc != 0) {
-				D_ERROR("calc_for_iov error: %d\n", rc);
+				D_ERROR("calc_for_iov error: "DF_RC"\n",
+					DP_RC(rc));
 				goto error;
 			}
 		}
@@ -833,7 +839,7 @@ daos_csummer_calc_iods(struct daos_csummer *obj, d_sg_list_t *sgls,
 		csums->ic_nr = iod->iod_nr;
 
 		if (rc != 0) {
-			D_ERROR("calc_csum error: %d\n", rc);
+			D_ERROR("calc_csum error: "DF_RC"\n", DP_RC(rc));
 			goto error;
 		}
 	}
@@ -875,7 +881,7 @@ daos_csummer_calc_key(struct daos_csummer *csummer, daos_key_t *key,
 		C_TRACE("Checksum created for key: "DF_KEY"->"DF_CI"\n",
 			DP_KEY(key), DP_CI(*csum_info));
 	} else {
-		D_ERROR("calc_for_iov error: %d\n", rc);
+		D_ERROR("calc_for_iov error: "DF_RC"\n", DP_RC(rc));
 		*p_csum = NULL;
 		D_FREE(csum_info);
 	}
@@ -923,7 +929,7 @@ daos_csummer_verify_iod(struct daos_csummer *obj, daos_iod_t *iod,
 	rc = daos_csummer_calc_iods(obj, sgl, iod, map, 1, 0, singv_lo,
 				    singv_idx, &new_iod_csums);
 	if (rc != 0) {
-		D_ERROR("daos_csummer_calc_iods error: %d\n", rc);
+		D_ERROR("daos_csummer_calc_iods error: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -967,7 +973,7 @@ daos_csummer_verify_key(struct daos_csummer *obj, daos_key_t *key,
 
 	rc = daos_csummer_calc_key(obj, key, &csum_info_verify);
 	if (rc != 0) {
-		D_ERROR("daos_csummer_calc error: %d\n", rc);
+		D_ERROR("daos_csummer_calc error: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 

@@ -7,6 +7,7 @@
 
 from __future__ import print_function
 
+import os
 import sys
 
 from apricot       import TestWithoutServers
@@ -26,6 +27,7 @@ class CartNoPmixLauncherOneNodeTest(TestWithoutServers):
     def setUp(self):
         """ Test setup """
         print("Running setup\n")
+        super(CartNoPmixLauncherOneNodeTest, self).setUp()
         self.utils = CartUtils()
         self.env = self.utils.get_env(self)
 
@@ -45,10 +47,10 @@ class CartNoPmixLauncherOneNodeTest(TestWithoutServers):
         cli_bin = self.params.get("test_clients_bin", '/run/tests/*/')
         cli_arg = self.params.get("test_clients_arg", '/run/tests/*/')
         cli_ppn = self.params.get("test_clients_ppn", '/run/tests/*/')
-        log_mask = self.params.get("D_LOG_MASK", "/run/defaultENV/")
-        crt_phy_addr = self.params.get("CRT_PHY_ADDR_STR",
-                                       "/run/defaultENV/")
-        ofi_interface = self.params.get("OFI_INTERFACE", "/run/defaultENV/")
+
+        log_mask = os.environ.get("D_LOG_MASK")
+        crt_phy_addr = os.environ.get("CRT_PHY_ADDR_STR")
+        ofi_interface = os.environ.get("OFI_INTERFACE")
 
         srv_cmd = self.utils.build_cmd(self, self.env, "test_servers")
 
