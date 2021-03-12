@@ -878,10 +878,11 @@ class YamlCommand(SubProcessCommand):
                     create_directory(nodes, directory, sudo=True)
                     change_file_owner(nodes, directory, user, user, sudo=True)
                 except DaosTestError as error:
-                    msg = "{}: error setting up missing socket directory {} "
-                    "for user {} on {}:\n{}".format(
-                        self.command, directory, user, nodes, error)
-                    raise CommandFailure(msg) from error
+                    raise CommandFailure(
+                        "{}: error setting up missing socket directory {} for "
+                        "user {} on {}:\n{}".format(
+                            self.command, directory, user, nodes,
+                            error)) from error
 
     def get_user_file(self):
         """Get the file defined in the yaml file that must be owned by the user.

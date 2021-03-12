@@ -64,12 +64,12 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
             permission = ""
         if permission not in PERMISSIONS:
             self.fail(
-                "##permission %s is invalid, valid permissions are:"
-                "'none', 'r', w', 'rw'", permission)
+                "##permission {} is invalid, valid permissions are:"
+                "'none', 'r', w', 'rw'".format(permission))
         if user_type not in user_types:
             self.fail(
-                "##user_type %s is invalid, valid user_types are: "
-                "%s", user_type, user_types)
+                "##user_type {} is invalid, valid user_types are: "
+                "{}".format(user_type, user_types))
         user_type_ind = user_types.index(user_type)
         self.log.info("===>Start DAOS pool acl enforcement order Testcase: "
                       " user_type: %s, permission: %s, expect_read: %s,"

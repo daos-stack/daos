@@ -37,6 +37,7 @@ group_repo_post() {
 }
 
 distro_custom() {
+    # shellcheck disable=SC2086
     dnf -y $dnf_repo_args install python3
 
     if [ ! -e /usr/bin/pip3 ] &&
