@@ -740,8 +740,7 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 
 	if (crt_gdata.cg_use_sensors)
-		(void)d_tm_increment_counter(&crt_ctx->cc_timedout, count,
-					     NULL);
+		(void)d_tm_increment_counter(&crt_ctx->cc_timedout, 1, NULL);
 
 	switch (rpc_priv->crp_state) {
 	case RPC_STATE_URI_LOOKUP:
