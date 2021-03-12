@@ -216,6 +216,7 @@ class NvmeEnospace(ServerFillUp):
         #Run IOR to fill the pool.
         self.run_enospace_with_bg_job()
 
+    @skipForTicket("DAOS-7018")
     def test_enospace_lazy_with_fg(self):
         """Jira ID: DAOS-4756.
 
@@ -275,6 +276,7 @@ class NvmeEnospace(ServerFillUp):
         #Run IOR to fill the pool.
         self.run_enospace_with_bg_job()
 
+    @skipForTicket("DAOS-7018")
     def test_enospace_time_with_fg(self):
         """Jira ID: DAOS-4756.
 
@@ -352,6 +354,7 @@ class NvmeEnospace(ServerFillUp):
                       ' Baseline Read MiB = {} and latest IOR Read MiB = {}'
                       .format(max_mib_baseline, max_mib_latest))
 
+    @skipForTicket("DAOS-7018")
     def test_enospace_no_aggregation(self):
         """Jira ID: DAOS-4756.
 
