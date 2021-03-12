@@ -97,8 +97,8 @@ class PoolSvc(TestWithServers):
 
                 # Stop a pool non-leader
                 all_svc_ranks = list(self.pool.svc_ranks)
-                all_svc_ranks.remove(leader)
-                all_svc_ranks.remove(new_leader)
+                all_svc_ranks.remove(int(leader))
+                all_svc_ranks.remove(int(new_leader))
                 non_leader = all_svc_ranks[-1]
                 self.log.info("Stopping a pool non-leader: %s", non_leader)
                 try:
