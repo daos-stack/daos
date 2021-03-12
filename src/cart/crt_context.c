@@ -245,8 +245,8 @@ crt_context_create(crt_context_t *crt_ctx)
 				      "requests", "",
 				      "net/%u/uri_lookup_timeout", ctx->cc_idx);
 		if (ret)
-			D_WARN("Failed to create timed out uri req counter: "DF_RC
-			       "\n", DP_RC(ret));
+			D_WARN("Failed to create timed out uri req counter: "
+			       DF_RC"\n", DP_RC(ret));
 
 		ret = d_tm_add_metric(&ctx->cc_timedout_uri, D_TM_COUNTER,
 				      "Total number of failed address "

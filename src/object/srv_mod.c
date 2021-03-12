@@ -99,7 +99,7 @@ obj_tls_init(int xs_id, int tgt_id)
 				     obj_opc_to_str(opc));
 		if (rc)
 			D_WARN("Failed to create active cnt sensor: "DF_RC"\n",
-					DP_RC(rc));
+			       DP_RC(rc));
 
 		/** Then the total number of requests, of type counter */
 		rc = d_tm_add_metric(&tls->ot_op_total[opc], D_TM_COUNTER,
@@ -108,7 +108,7 @@ obj_tls_init(int xs_id, int tgt_id)
 				     obj_opc_to_str(opc));
 		if (rc)
 			D_WARN("Failed to create total cnt sensor: "DF_RC"\n",
-					DP_RC(rc));
+			       DP_RC(rc));
 
 		if (opc == DAOS_OBJ_RPC_UPDATE ||
 		    opc == DAOS_OBJ_RPC_TGT_UPDATE ||

@@ -1763,19 +1763,19 @@ obj_update_sensors(struct obj_io_context *ioc, int err)
 	time >>= 10;
 
 	switch (opc) {
-		case DAOS_OBJ_RPC_UPDATE:
-		case DAOS_OBJ_RPC_TGT_UPDATE:
-			(void)d_tm_increment_counter(&tls->ot_update_bytes,
-						     ioc->ioc_io_size, NULL);
-			lat = &tls->ot_update_lat[lat_bucket(ioc->ioc_io_size)];
-			break;
-		case DAOS_OBJ_RPC_FETCH:
-			(void)d_tm_increment_counter(&tls->ot_fetch_bytes,
-						     ioc->ioc_io_size, NULL);
-			lat = &tls->ot_fetch_lat[lat_bucket(ioc->ioc_io_size)];
-			break;
-		default:
-			lat = &tls->ot_op_lat[opc];
+	case DAOS_OBJ_RPC_UPDATE:
+	case DAOS_OBJ_RPC_TGT_UPDATE:
+		(void)d_tm_increment_counter(&tls->ot_update_bytes,
+					     ioc->ioc_io_size, NULL);
+		lat = &tls->ot_update_lat[lat_bucket(ioc->ioc_io_size)];
+		break;
+	case DAOS_OBJ_RPC_FETCH:
+		(void)d_tm_increment_counter(&tls->ot_fetch_bytes,
+					     ioc->ioc_io_size, NULL);
+		lat = &tls->ot_fetch_lat[lat_bucket(ioc->ioc_io_size)];
+		break;
+	default:
+		lat = &tls->ot_op_lat[opc];
 	}
 	(void)d_tm_set_gauge(lat, time, NULL);
 }
