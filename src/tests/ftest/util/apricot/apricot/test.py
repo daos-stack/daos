@@ -352,6 +352,22 @@ class TestWithoutServers(Test):
         self.d_log = DaosLog(self.context)
         self.test_log.daos_log = self.d_log
 
+        # import and set env vars from yaml file
+        default_env = self.params.get("default", "/run/ENV/")
+        if default_env is None:
+            return
+
+        for kv_pair in default_env:
+            key = next(iter(kv_pair))
+            if key is not None:
+                value = kv_pair[key]
+                print("Adding {}={} to environment.\n".format(key, value))
+                os.environ[key] = value
+
+        # For compatibility with cart tests, which set env vars in oretrun
+        # command via -x options
+        self.env = os.environ
+
     def tearDown(self):
         """Tear down after each test case."""
         self.report_timeout()
@@ -377,7 +393,6 @@ class TestWithoutServers(Test):
                 "Stopping any of the following commands left running on %s: %s",
                 hosts, ",".join(processes))
             stop_processes(hosts, "'({})'".format("|".join(processes)))
-
 
 class TestWithServers(TestWithoutServers):
     # pylint: disable=too-many-public-methods,too-many-instance-attributes
