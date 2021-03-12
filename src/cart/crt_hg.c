@@ -453,6 +453,10 @@ crt_hg_init(void)
 	if (!env)
 		HG_Set_log_level("warning");
 
+	env = getenv("HG_NA_LOG_LEVEL");
+	if (!env)
+		NA_Set_log_level("warning");
+
 	/* import HG log */
 	hg_log_set_func(crt_hg_log);
 	hg_log_set_stream_debug((FILE *)(intptr_t)(EXT_FAC | DLOG_DBG));
