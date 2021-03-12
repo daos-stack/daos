@@ -211,15 +211,6 @@ static int data_init(int server, crt_init_options_t *opt)
 		if (ret)
 			D_WARN("Failed to create uri other sensor: "DF_RC"\n",
 			       DP_RC(ret));
-
-		ret = d_tm_add_metric(&crt_gdata.cg_uri_fwd, D_TM_COUNTER,
-				      "total number of URI requests forwarded "
-				      "to rank 0", "",
-				      "net/uri/lookup_forward");
-		if (ret)
-			D_WARN("Failed to create uri forward sensor: "DF_RC"\n",
-			       DP_RC(ret));
-
 	}
 
 	gdata_init_flag = 1;

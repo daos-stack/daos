@@ -89,10 +89,6 @@ struct crt_gdata {
 	 * others, of type counter
 	 */
 	struct d_tm_node_t	*cg_uri_other;
-	/**
-	 * Total number of forwarded URI lookup requests, of type counter
-	 */
-	struct d_tm_node_t	*cg_uri_fwd;
 };
 
 extern struct crt_gdata		crt_gdata;

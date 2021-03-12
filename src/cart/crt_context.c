@@ -235,7 +235,8 @@ crt_context_create(crt_context_t *crt_ctx)
 
 		ret = d_tm_add_metric(&ctx->cc_timedout, D_TM_COUNTER,
 				      "Total number of timed out RPC requests",
-				      "", "net/%u/req_timeout", ctx->cc_idx);
+				      "", "net/%d/%u/req_timeout",
+				      ctx->cc_provider, ctx->cc_idx);
 		if (ret)
 			D_WARN("Failed to create timed out req counter: "DF_RC
 			       "\n", DP_RC(ret));
@@ -243,15 +244,17 @@ crt_context_create(crt_context_t *crt_ctx)
 		ret = d_tm_add_metric(&ctx->cc_timedout_uri, D_TM_COUNTER,
 				      "Total number of timed out URI lookup "
 				      "requests", "",
-				      "net/%u/uri_lookup_timeout", ctx->cc_idx);
+				      "net/%d/%u/uri_lookup_timeout",
+				      ctx->cc_provider, ctx->cc_idx);
 		if (ret)
 			D_WARN("Failed to create timed out uri req counter: "
 			       DF_RC"\n", DP_RC(ret));
 
-		ret = d_tm_add_metric(&ctx->cc_timedout_uri, D_TM_COUNTER,
+		ret = d_tm_add_metric(&ctx->cc_failed_addr, D_TM_COUNTER,
 				      "Total number of failed address "
 				      "resolution attempts", "",
-				      "net/%u/failed_addr", ctx->cc_idx);
+				      "net/%d/%u/failed_addr",
+				      ctx->cc_provider, ctx->cc_idx);
 		if (ret)
 			D_WARN("Failed to create failed addr counter: "DF_RC
 			       "\n", DP_RC(ret));
@@ -736,6 +739,10 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 	grp_priv = crt_grp_pub2priv(tgt_ep->ep_grp);
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 
+	if (crt_gdata.cg_use_sensors)
+		(void)d_tm_increment_counter(&crt_ctx->cc_timedout, count,
+					     NULL);
+
 	switch (rpc_priv->crp_state) {
 	case RPC_STATE_URI_LOOKUP:
 		ul_req = rpc_priv->crp_ul_req;
@@ -844,10 +851,6 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 			  rpc_priv->crp_timeout_sec,
 			  rpc_priv->crp_pub.cr_ep.ep_rank,
 			  rpc_priv->crp_pub.cr_ep.ep_tag);
-
-		if (crt_gdata.cg_use_sensors)
-			(void)d_tm_increment_counter(&crt_ctx->cc_timedout,
-						     count, NULL);
 
 		/* check for and execute RPC timeout callbacks here */
 		crt_exec_timeout_cb(rpc_priv);

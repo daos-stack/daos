@@ -1563,9 +1563,6 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 	ul_out->ul_uri = cached_uri;
 	if (ul_out->ul_uri == NULL)
 		D_GOTO(out, rc = -DER_OOG);
-	if (crt_gdata.cg_use_sensors)
-		(void)d_tm_increment_counter(&crt_gdata.cg_uri_fwd, 1,
-					     NULL);
 
 out:
 	if (should_decref)
