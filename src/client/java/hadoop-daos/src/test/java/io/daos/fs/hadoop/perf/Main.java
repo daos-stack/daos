@@ -42,11 +42,11 @@ public class Main {
     if (uid != null) {
       conf.set(Constants.DAOS_CONTAINER_UUID, uid);
     }
-    String svc = System.getProperty("svc");
-    if (svc != null) {
-      conf.set(Constants.DAOS_POOL_SVC, svc);
+    String async = System.getProperty("async");
+    if (async != null) {
+      conf.set(Constants.DAOS_IO_ASYNC, async);
     }
-    String defaultURI = System.getProperty("uri", "daos://default:1");
+    String defaultURI = System.getProperty("uri", "daos:///");
     if (defaultURI != null) {
       conf.set("fs.defaultFS", defaultURI);
     }
