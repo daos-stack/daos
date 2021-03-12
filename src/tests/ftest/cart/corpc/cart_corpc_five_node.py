@@ -26,7 +26,6 @@ class CartCoRpcFiveNodeTest(TestWithoutServers):
     def setUp(self):
         """ Test setup """
         print("Running setup\n")
-        super(CartCoRpcFiveNodeTest, self).setUp()
         self.utils = CartUtils()
         self.env = self.utils.get_env(self)
 
