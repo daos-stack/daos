@@ -244,6 +244,9 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 		kds_cap = arg->kds_cap - 1; /* one extra kds for punch eph */
 	else
 		kds_cap = arg->kds_cap;
+	if (type == OBJ_ITER_DKEY && arg->need_punch &&
+	    key_ent->ie_obj_punch != 0 && !arg->obj_punched)
+		kds_cap--;                  /* extra kds for obj punch eph */
 
 	if (is_sgl_full(arg, total_size) || arg->kds_len >= kds_cap) {
 		/* NB: if it is rebuild object iteration, let's
@@ -261,6 +264,22 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	}
 
 	iov = &arg->sgl->sg_iovs[arg->sgl_idx];
+
+	if (type == OBJ_ITER_DKEY && key_ent->ie_obj_punch && arg->need_punch &&
+	    !arg->obj_punched) {
+		int pi_size = sizeof(key_ent->ie_obj_punch);
+
+		arg->kds[arg->kds_len].kd_key_len = pi_size;
+		arg->kds[arg->kds_len].kd_val_type = OBJ_ITER_OBJ_PUNCH_EPOCH;
+		arg->kds_len++;
+
+		D_ASSERT(iov->iov_len + pi_size < iov->iov_buf_len);
+		memcpy(iov->iov_buf + iov->iov_len, &key_ent->ie_obj_punch,
+		       pi_size);
+
+		iov->iov_len += pi_size;
+		arg->obj_punched = true;
+	}
 
 	D_ASSERT(arg->kds_len < arg->kds_cap);
 	arg->kds[arg->kds_len].kd_key_len = key_ent->ie_key.iov_len;
@@ -1151,6 +1170,11 @@ enum_unpack_punched_ephs(daos_key_desc_t *kds, char *data,
 	if (kds->kd_key_len != sizeof(daos_epoch_t))
 		return -DER_INVAL;
 
+	if (kds->kd_val_type == OBJ_ITER_OBJ_PUNCH_EPOCH) {
+		memcpy(&io->ui_obj_punch_eph, data, kds->kd_key_len);
+		return 0;
+	}
+
 	if (kds->kd_val_type == OBJ_ITER_DKEY_EPOCH) {
 		memcpy(&io->ui_dkey_punch_eph, data, kds->kd_key_len);
 		return 0;
@@ -1299,6 +1323,7 @@ enum_obj_io_unpack_cb(daos_key_desc_t *kds, void *ptr, unsigned int size,
 		rc = enum_unpack_recxs(kds, ptr, io, unpack_arg->csum_iov,
 				       unpack_arg->cb, unpack_arg->cb_arg);
 		break;
+	case OBJ_ITER_OBJ_PUNCH_EPOCH:
 	case OBJ_ITER_DKEY_EPOCH:
 	case OBJ_ITER_AKEY_EPOCH:
 		rc = enum_unpack_punched_ephs(kds, ptr, io);

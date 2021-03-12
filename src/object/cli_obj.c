@@ -3921,7 +3921,7 @@ obj_csum_update(struct dc_object *obj, daos_obj_update_t *args,
 	if (rc != 0) {
 		daos_csummer_free_ci(csummer_copy, &dkey_csum);
 		daos_csummer_destroy(&csummer_copy);
-		D_ERROR("daos_csummer_calc_iods error: %d", rc);
+		D_ERROR("daos_csummer_calc_iods error: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 	daos_csummer_destroy(&csummer_copy);
@@ -3984,7 +3984,7 @@ obj_csum_fetch(const struct dc_object *obj, daos_obj_fetch_t *args,
 				    true, obj_auxi->reasb_req.orr_singv_los,
 				    -1, &iod_csums);
 	if (rc != 0) {
-		D_ERROR("daos_csummer_calc_iods error: %d", rc);
+		D_ERROR("daos_csummer_calc_iods error: "DF_RC"\n", DP_RC(rc));
 		daos_csummer_free_ci(csummer_copy, &dkey_csum);
 		daos_csummer_destroy(&csummer_copy);
 		return rc;
@@ -4133,7 +4133,7 @@ dc_obj_fetch_task(tse_task_t *task)
 
 	rc = obj_csum_fetch(obj, args, obj_auxi);
 	if (rc != 0) {
-		D_ERROR("obj_csum_fetch error: %d", rc);
+		D_ERROR("obj_csum_fetch error: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_task, rc);
 	}
 
@@ -4206,7 +4206,7 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 	if (!obj_auxi->io_retry) {
 		rc = obj_csum_update(obj, args, obj_auxi);
 		if (rc) {
-			D_ERROR("obj_csum_update error: %d", rc);
+			D_ERROR("obj_csum_update error: "DF_RC"\n", DP_RC(rc));
 			goto out_task;
 		}
 	}
