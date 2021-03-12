@@ -609,7 +609,11 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
     """
     result = {}
     log = getLogger()
-    log.info("Killing any processes on %s that match: %s", hosts, pattern)
+    if send_sigusr2 is True:
+        log.info("First dumping ULT stacks, then Killing any processes on %s "
+                 "that match: %s", hosts, pattern)
+    else:
+        log.info("Killing any processes on %s that match: %s", hosts, pattern)
 
     if added_filter:
         ps_cmd = "ps x | grep -E {} | grep -vE {}".format(pattern, added_filter)

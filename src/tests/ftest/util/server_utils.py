@@ -184,20 +184,6 @@ class DaosServerCommand(YamlCommand):
             value = self.yaml.using_dcpm
         return value
 
-    def kill(self):
-        """Forcibly terminate any server process running on hosts."""
-        regex = self.manager.job.command_regex
-	"""Try to dump all server's ULTs stacks before kill."""
-        result = stop_processes(self._hosts, regex, send_sigusr2=True)
-        if 0 in result and len(result) == 1:
-            print(
-                "No remote {} server processes killed (none found), "
-                "done.".format(regex))
-        else:
-            print(
-                "***At least one remote {} server process needed to be killed! "
-                "Please investigate/report.***".format(regex))
-
     class NetworkSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server network sub command."""
 
@@ -1131,3 +1117,17 @@ class DaosServerManager(SubprocessManager):
 
         # Update the expected status of the stopped/evicted ranks
         self.update_expected_states(ranks, ["stopped", "evicted"])
+
+    def kill(self):
+        """Forcibly terminate any server process running on hosts."""
+        regex = self.manager.job.command_regex
+        """Try to dump all server's ULTs stacks before kill."""
+        result = stop_processes(self._hosts, regex, send_sigusr2=True)
+        if 0 in result and len(result) == 1:
+            print(
+                "No remote {} server processes killed (none found), "
+                "done.".format(regex))
+        else:
+            print(
+                "***At least one remote {} server process needed to be killed! "
+                "Please investigate/report.***".format(regex))
