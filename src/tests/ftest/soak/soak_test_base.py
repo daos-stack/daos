@@ -281,7 +281,7 @@ class SoakTestBase(TestWithServers):
             job_cmdlist.extend(scripts)
         elif "daos_racer" in job:
             self.add_cancel_ticket("DAOS-6938", "daos_racer pool connect")
-            # Uncomment the follwing when DAOS-6938 is fixed
+            # Uncomment the following when DAOS-6938 is fixed
             # commands = create_racer_cmdline(self, job, pool)
             # # scripts are single cmdline
             # scripts = build_job_script(self, commands, job, 1)

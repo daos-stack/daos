@@ -238,7 +238,7 @@ if __name__ == "__main__":
 
         # Client operations
         client_prefix = "{} --ompi-server file:{} {} --np 1 rdbt ".format(
-            orterun urifile, debug_cmds)
+            orterun, urifile, debug_cmds)
         client_suffix = " --group=daos_server"
         # orterun is called for the client four times: init, update, test,
         # and fini

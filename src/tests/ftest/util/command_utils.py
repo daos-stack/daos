@@ -984,7 +984,7 @@ class SubprocessManager():
         # Start the daos command
         try:
             self.manager.run()
-        except CommandFailure:
+        except CommandFailure as error:
             # Kill the subprocess, anything that might have started
             self.kill()
             raise CommandFailure(
