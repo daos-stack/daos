@@ -89,6 +89,7 @@ class EvictTests(TestWithServers):
             self.pool.uuid, self.pool.pool.handle.value, self.pool.name)
 
         server_name = None
+
         if test_param == "BAD_SERVER_NAME":
             # Attempt to evict pool with invalid server group name
             # set the server group name directly
