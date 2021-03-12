@@ -73,7 +73,7 @@ class PoolSvc(TestWithServers):
             if svc_params[1] > 2:
                 # Query the pool to get the leader
                 self.pool.set_query_data()
-                leader = self.pool.query_data["leader"]
+                leader = int(self.pool.query_data["leader"])
                 self.log.info("Current pool leader: %s", leader)
 
                 # Stop the pool leader
@@ -88,7 +88,7 @@ class PoolSvc(TestWithServers):
 
                 # Verify the pool leader has changed
                 self.pool.set_query_data()
-                new_leader = self.pool.query_data["leader"]
+                new_leader = int(self.pool.query_data["leader"])
                 self.log.info("Current pool leader: %s", new_leader)
                 self.log.info(
                     "Verifying %s is no longer the pool leader", leader)
@@ -97,8 +97,8 @@ class PoolSvc(TestWithServers):
 
                 # Stop a pool non-leader
                 all_svc_ranks = list(self.pool.svc_ranks)
-                all_svc_ranks.remove(int(leader))
-                all_svc_ranks.remove(int(new_leader))
+                all_svc_ranks.remove(leader)
+                all_svc_ranks.remove(new_leader)
                 non_leader = all_svc_ranks[-1]
                 self.log.info("Stopping a pool non-leader: %s", non_leader)
                 try:
