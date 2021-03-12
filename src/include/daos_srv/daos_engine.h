@@ -863,4 +863,20 @@ struct sys_db {
 	void	(*sd_unlock)(struct sys_db *db);
 };
 
+/** Flags for dss_drpc_call */
+enum dss_drpc_call_flag {
+	/** Do not wait for a response. Implies DSS_DRPC_NO_SCHED. */
+	DSS_DRPC_NO_RESP	= 1,
+	/**
+	 * Do not Argobots-schedule. If the dRPC requires a response, this will
+	 * block the thread until a response is received. That is usually
+	 * faster than waiting for the response by Argobots-scheduling if the
+	 * dRPC can be quickly handled by the local daos_server alone.
+	 */
+	DSS_DRPC_NO_SCHED	= 2
+};
+
+int dss_drpc_call(int32_t module, int32_t method, void *req, size_t req_size,
+		  unsigned int flags, Drpc__Response **resp);
+
 #endif /* __DSS_API_H__ */
