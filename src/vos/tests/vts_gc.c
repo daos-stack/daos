@@ -399,14 +399,14 @@ gc_obj_run_destroy(struct gc_test_args *args)
 	if (rc) {
 		print_error("failed to close container: %s\n",
 			    d_errstr(rc));
-		return rc;
+		goto out;
 	}
 
 	rc = vos_cont_destroy(poh, cont_id);
 	if (rc) {
 		print_error("failed to destroy container: %s\n",
 			    d_errstr(rc));
-		return rc;
+		goto out;
 	}
 
 	rc = gc_wait_check(args, true);
