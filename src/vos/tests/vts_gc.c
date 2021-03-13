@@ -575,6 +575,7 @@ gc_teardown(void **state)
 {
 	struct gc_test_args *args = *state;
 
+	daos_fail_loc_set(0);
 	assert_ptr_equal(args, &gc_args);
 
 	dts_ctx_fini(&args->gc_ctx);
