@@ -573,10 +573,17 @@ failed:
 	return rc;
 }
 
-static int
-gc_add_item_ex(struct vos_pool *pool, struct vos_container *cont,
-	       enum vos_gc_type type, umem_off_t item_off, uint64_t args)
+/**
+ * Add an item for garbage collection, this item and all its sub-items will
+ * be freed by vos_gc_run/pool().
+ *
+ * NB: this function must be called within pmdk transaction.
+ */
+int
+gc_add_item(struct vos_pool *pool, daos_handle_t coh,
+	    enum vos_gc_type type, umem_off_t item_off, uint64_t args)
 {
+	struct vos_container *cont = vos_hdl2cont(coh);
 	struct vos_gc_bin_df *bin = gc_type2bin(pool, cont, type);
 	struct vos_gc_item    item;
 
@@ -597,6 +604,11 @@ gc_add_item_ex(struct vos_pool *pool, struct vos_container *cont,
 		if (rc == 0) {
 			if (!gc_have_pool(pool))
 				gc_add_pool(pool);
+			if (cont != NULL && d_list_empty(&cont->vc_gc_link)) {
+				/** New item to remove from the container */
+				d_list_add_tail(&cont->vc_gc_link,
+						&pool->vp_gc_cont);
+			}
 			return 0;
 		}
 
@@ -630,47 +642,6 @@ gc_add_item_ex(struct vos_pool *pool, struct vos_container *cont,
 			return -DER_NOSPACE;
 		}
 	}
-}
-
-/**
- * Add an item for garbage collection, this item and all its sub-items will
- * be freed by vos_gc_run/pool().
- *
- * NB: this function must be called within pmdk transaction.
- */
-int
-gc_add_item(struct vos_pool *pool, enum vos_gc_type type, umem_off_t item_off,
-	    uint64_t args)
-{
-	return gc_add_item_ex(pool, NULL, type, item_off, args);
-}
-
-/**
- * Similar to gc_add_item except specific to objects.  If the container
- * is not NULL, the object is added to container heaps for garbage collection.
- * Otherwise, it is added to the pool heap.  This enables us to remove objects
- * from active containers that may be referenced elsewhere (e.g. DTX entries).
- *
- * NB: this function must be called within pmdk transaction.
- */
-int
-gc_add_obj(struct vos_pool *pool, struct vos_container *cont,
-	   umem_off_t item_off, uint64_t args)
-{
-	int	rc;
-
-	if (cont == NULL)
-		return gc_add_item(pool, GC_OBJ, item_off, args);
-
-	rc = gc_add_item_ex(pool, cont, GC_OBJ, item_off, args);
-
-	if (rc != 0)
-		return rc;
-
-	if (d_list_empty(&cont->vc_gc_link))
-		d_list_add_tail(&cont->vc_gc_link, &pool->vp_gc_cont);
-
-	return 0;
 }
 
 struct vos_container *
@@ -772,7 +743,7 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 	if (rc == 0)
 		*credits = creds;
 
-	if (cont != NULL) {
+	if (cont != NULL && d_list_empty(&cont->vc_gc_link)) {
 		/** The container may not be empty so add it back to end of
 		 *  the list.
 		 */

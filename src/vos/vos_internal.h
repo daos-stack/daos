@@ -1086,11 +1086,8 @@ gc_init_pool(struct umem_instance *umm, struct vos_pool_df *pd);
 int
 gc_init_cont(struct umem_instance *umm, struct vos_cont_df *cd);
 int
-gc_add_item(struct vos_pool *pool, enum vos_gc_type type, umem_off_t item_off,
-	    uint64_t args);
-int
-gc_add_obj(struct vos_pool *pool, struct vos_container *cont,
-	   umem_off_t item_off, uint64_t args);
+gc_add_item(struct vos_pool *pool, daos_handle_t coh,
+	    enum vos_gc_type type, umem_off_t item_off, uint64_t args);
 int
 vos_gc_pool(daos_handle_t poh, int *credits);
 void
