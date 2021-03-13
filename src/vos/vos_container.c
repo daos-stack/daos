@@ -373,7 +373,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	D_INIT_LIST_HEAD(&cont->vc_dtx_committed_tmp_list);
 	cont->vc_dtx_committed_count = 0;
 	cont->vc_dtx_committed_tmp_count = 0;
-	D_INIT_LIST_HEAD(&cont->vc_gc_link);
+	gc_check_cont(cont);
 
 	/* Cache this btr object ID in container handle */
 	rc = dbtree_open_inplace_ex(&cont->vc_cont_df->cd_obj_root,

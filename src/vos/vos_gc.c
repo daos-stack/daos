@@ -806,6 +806,27 @@ gc_init_cont(struct umem_instance *umm, struct vos_cont_df *cd)
 }
 
 /**
+ * Check if newly opened container needs to be added to garbage collection list
+ */
+void
+gc_check_cont(struct vos_container *cont)
+{
+	int	i;
+	struct vos_gc_bin_df	*bin;
+
+	D_INIT_LIST_HEAD(&cont->vc_gc_link);
+
+	for (i = 0; i < GC_CONT; i++) {
+		bin = gc_type2bin(cont->vc_pool, cont, i);
+		if (bin->bin_bag_first != UMOFF_NULL) {
+			d_list_add_tail(&cont->vc_gc_link,
+					&cont->vc_pool->vp_gc_cont);
+			return;
+		}
+	}
+}
+
+/**
  * Attach a pool for GC, this function also pins the pool in open hash table.
  * GC will remove this pool from open hash if it has nothing left for GC and
  * user has already closed it.

@@ -302,7 +302,7 @@ gc_key_test(void **state)
 }
 
 static int
-gc_obj_run(struct gc_test_args *args)
+gc_obj_run(struct gc_test_args *args, bool reopen)
 {
 	daos_unit_oid_t	*oids;
 	int		 i;
@@ -329,6 +329,25 @@ gc_obj_run(struct gc_test_args *args)
 		}
 	}
 
+	if (reopen) {
+		rc = vos_cont_close(args->gc_ctx.tsc_coh);
+		if (rc) {
+			print_error("failed to close container: %s\n",
+				    d_errstr(rc));
+			goto out;
+		}
+
+		/* close and reopen the container */
+		rc = vos_cont_open(args->gc_ctx.tsc_poh,
+				   args->gc_ctx.tsc_cont_uuid,
+				   &args->gc_ctx.tsc_coh);
+		if (rc) {
+			print_error("failed to open container: %s\n",
+				    d_errstr(rc));
+			goto out;
+		}
+	}
+
 	rc = gc_wait_check(args, false);
 out:
 	D_FREE(oids);
@@ -341,7 +360,17 @@ gc_obj_test(void **state)
 	struct gc_test_args *args = *state;
 	int		     rc;
 
-	rc = gc_obj_run(args);
+	rc = gc_obj_run(args, false);
+	assert_rc_equal(rc, 0);
+}
+
+static void
+gc_obj_test_reopened(void **state)
+{
+	struct gc_test_args *args = *state;
+	int		     rc;
+
+	rc = gc_obj_run(args, true);
 	assert_rc_equal(rc, 0);
 }
 
@@ -432,7 +461,7 @@ gc_obj_bio_test(void **state)
 	int		     rc;
 
 	args->gc_array = true;
-	rc = gc_obj_run(args);
+	rc = gc_obj_run(args, false);
 	assert_rc_equal(rc, 0);
 }
 
@@ -566,6 +595,8 @@ static const struct CMUnitTest gc_tests[] = {
 	  gc_cont_test, gc_prepare, NULL},
 	{ "GC05: container garbage collecting with outstanding objects",
 	  gc_obj_test_destroy, gc_prepare, NULL},
+	{ "GC06: container garbage reopened container",
+	  gc_obj_test_reopened, gc_prepare, NULL},
 };
 
 int
