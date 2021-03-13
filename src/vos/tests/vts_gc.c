@@ -424,6 +424,13 @@ gc_obj_run_destroy(struct gc_test_args *args)
 		}
 	}
 
+	/** Create some more objects */
+	rc = gc_obj_prepare(args, coh, oids);
+	if (rc)
+		goto out;
+
+	gc_print_stat();
+
 	rc = vos_cont_close(coh);
 	if (rc) {
 		print_error("failed to close container: %s\n",

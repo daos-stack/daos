@@ -222,7 +222,7 @@ gc_bags_move(struct vos_pool *pool, struct vos_gc_bin_df *dest_bin,
 		if (!gc_have_pool(pool))
 			gc_add_pool(pool);
 
-		return 0;
+		goto reset_src;
 	}
 
 	/** Last entry in pool list */
@@ -236,6 +236,15 @@ gc_bags_move(struct vos_pool *pool, struct vos_gc_bin_df *dest_bin,
 	dest_bin->bin_bag_last = src_bin->bin_bag_last;
 	if (!gc_have_pool(pool))
 		gc_add_pool(pool);
+
+reset_src:
+	rc = umem_tx_add_ptr(umm, src_bin, sizeof(*src_bin));
+	if (rc != 0)
+		return rc;
+
+	src_bin->bin_bag_first = 0;
+	src_bin->bin_bag_last = 0;
+	src_bin->bin_bag_nr = 0;
 
 	return 0;
 }
@@ -265,6 +274,9 @@ gc_drain_cont(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 				  src_bin);
 		if (rc != 0)
 			return rc;
+
+		/** Indicate to caller that we've taken over container bags */
+		return 1;
 	}
 
 	D_ASSERT(daos_handle_is_inval(coh));
@@ -511,7 +523,7 @@ gc_drain_item(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 
 	D_ASSERT(item->it_addr != 0);
 	rc = gc->gc_drain(gc, pool, coh, item, &creds, empty);
-	if (rc)
+	if (rc < 0)
 		return rc;
 
 	if (gc->gc_type == GC_AKEY) {
@@ -522,7 +534,7 @@ gc_drain_item(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 		D_ASSERT(*credits >= creds);
 		*credits = creds;
 	}
-	return 0;
+	return rc;
 }
 
 static int
@@ -726,7 +738,7 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 
 		rc = gc_drain_item(gc, pool, vos_cont2hdl(cont), item, &creds,
 				   &empty);
-		if (rc) {
+		if (rc < 0) {
 			D_ERROR("GC=%s error=%s\n", gc->gc_name, d_errstr(rc));
 			break;
 		}
@@ -739,6 +751,14 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 
 		D_DEBUG(DB_TRACE, "GC=%s credits=%d empty=%d\n",
 			gc->gc_name, creds, empty);
+
+		if (rc == 1) {
+			/** We moved some container entries to the pool,
+			 *  so reset to akey level and start over.
+			 */
+			gc = &gc_table[0];
+			continue;
+		}
 
 		/* always try to free akeys and values because they are the
 		 * items consuming most storage space.
