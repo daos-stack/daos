@@ -208,10 +208,20 @@ gc_bags_move(struct vos_pool *pool, struct vos_gc_bin_df *dest_bin,
 	if (rc != 0)
 		return rc;
 
-	if (UMOFF_IS_NULL(dest_bin->bin_bag_last)) {
+	bag = umem_off2ptr(umm, dest_bin->bin_bag_last);
+	if (bag == NULL || bag->bag_item_nr == 0) {
+		if (bag) {
+			/* Old bag is empty */
+			rc = umem_free(umm, dest_bin->bin_bag_last);
+			if (rc != 0)
+				return rc;
+		}
 		dest_bin->bin_bag_first = src_bin->bin_bag_first;
 		dest_bin->bin_bag_last = src_bin->bin_bag_last;
 		dest_bin->bin_bag_nr = src_bin->bin_bag_nr;
+		if (!gc_have_pool(pool))
+			gc_add_pool(pool);
+
 		return 0;
 	}
 
@@ -224,6 +234,8 @@ gc_bags_move(struct vos_pool *pool, struct vos_gc_bin_df *dest_bin,
 
 	bag->bag_next = src_bin->bin_bag_first;
 	dest_bin->bin_bag_last = src_bin->bin_bag_last;
+	if (!gc_have_pool(pool))
+		gc_add_pool(pool);
 
 	return 0;
 }
@@ -465,8 +477,10 @@ gc_get_item(struct vos_gc *gc, struct vos_pool *pool,
 	if (bag == NULL) /* empty bin */
 		return NULL;
 
-	if (bag->bag_item_nr == 0) /* empty bag */
+	if (bag->bag_item_nr == 0) { /* empty bag */
+		D_ASSERT(bag->bag_next == UMOFF_NULL);
 		return NULL;
+	}
 
 	return &bag->bag_items[bag->bag_item_first];
 }
