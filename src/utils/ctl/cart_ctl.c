@@ -136,6 +136,7 @@ parse_rank_string(char *arg_str, d_rank_t *ranks, int *num_ranks)
 	}
 
 	D_DEBUG(DB_TRACE, "arg_str %s\n", arg_str);
+
 	token = strtok_r(arg_str, ",", &saveptr);
 	while (token != NULL) {
 		ptr = strchr(token, '-');
@@ -249,7 +250,7 @@ print_usage_msg(const char *msg)
 	printf("\tset fault injection attributes for a fault ID. This command\n"
 	       "\tmust be accompanied by the option\n"
 	       "\t--attr fault_id,max_faults,probability,err_code"
-	       "[,argument]\n");s
+	       "[,argument]\n");
 	printf("\noptions:\n");
 	printf("--group-name name\n");
 	printf("\tspecify the name of the remote group\n");
