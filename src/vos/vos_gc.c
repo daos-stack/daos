@@ -65,7 +65,7 @@ struct vos_gc {
 	 */
 	int			(*gc_free)(struct vos_gc *gc,
 					   struct vos_pool *pool,
-					   struct vos_gc_item *item);
+					   umem_off_t addr);
 };
 
 static int gc_reclaim_pool(struct vos_pool *pool, int *credits,
@@ -261,14 +261,14 @@ gc_drain_cont(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 }
 
 static int
-gc_free_cont(struct vos_gc *gc, struct vos_pool *pool, struct vos_gc_item *item)
+gc_free_cont(struct vos_gc *gc, struct vos_pool *pool, umem_off_t addr)
 {
 	int	rc;
 
 	rc = vos_dtx_table_destroy(&pool->vp_umm,
-				   umem_off2ptr(&pool->vp_umm, item->it_addr));
+				   umem_off2ptr(&pool->vp_umm, addr));
 	if (rc == 0)
-		rc = umem_free(&pool->vp_umm, item->it_addr);
+		rc = umem_free(&pool->vp_umm, addr);
 
 	return rc;
 }
@@ -518,11 +518,13 @@ gc_free_item(struct vos_gc *gc, struct vos_pool *pool,
 	struct vos_gc_bin_df *bin = gc_type2bin(pool, cont, gc->gc_type);
 	struct vos_gc_bag_df *bag;
 	int		      first;
+	umem_off_t	      addr;
 	int		      rc = 0;
 
 	bag = umem_off2ptr(&pool->vp_umm, bin->bin_bag_first);
 	D_ASSERT(bag && bag->bag_item_nr > 0);
 	D_ASSERT(item == &bag->bag_items[bag->bag_item_first]);
+	addr = item->it_addr;
 
 	first = bag->bag_item_first + 1;
 	if (first == bin->bin_bag_size)
@@ -545,9 +547,9 @@ gc_free_item(struct vos_gc *gc, struct vos_pool *pool,
 	D_DEBUG(DB_TRACE, "GC released a %s\n", gc->gc_name);
 	/* this is the real container|object|dkey|akey free */
 	if (gc->gc_free)
-		rc = gc->gc_free(gc, pool, item);
+		rc = gc->gc_free(gc, pool, addr);
 	else
-		rc = umem_free(&pool->vp_umm, item->it_addr);
+		rc = umem_free(&pool->vp_umm, addr);
 
 	if (rc != 0)
 		goto failed;
