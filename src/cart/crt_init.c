@@ -191,7 +191,8 @@ static int data_init(int server, crt_init_options_t *opt)
 		D_WARN("CRT_CTX_NUM has no effect because CRT_CTX_SHARE_ADDR "
 		       "is not set or set to 0\n");
 
-	if (opt && opt->cio_use_sensors) {
+	/** Enable statistics only for the server side and if requested */
+	if (opt && opt->cio_use_sensors && server) {
 		int	ret;
 
 		/** enable sensors */
