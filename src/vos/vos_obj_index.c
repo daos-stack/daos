@@ -117,6 +117,7 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	struct umem_instance	*umm = &tins->ti_umm;
 	struct vos_obj_df	*obj;
 	struct ilog_desc_cbs	 cbs;
+	struct vos_container	*cont = vos_hdl2cont(tins->ti_coh);
 	int			 rc;
 
 	obj = umem_off2ptr(umm, rec->rec_off);
@@ -132,8 +133,9 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	vos_ilog_ts_evict(&obj->vo_ilog, VOS_TS_TYPE_OBJ);
 
 	D_ASSERT(tins->ti_priv);
-	return gc_add_item((struct vos_pool *)tins->ti_priv, GC_OBJ,
-			   rec->rec_off, 0);
+
+	/** If container is still active, we'll add it to the container heap */
+	return gc_add_obj(tins->ti_priv, cont, rec->rec_off, 0);
 }
 
 static int

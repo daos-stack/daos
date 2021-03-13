@@ -345,6 +345,86 @@ gc_obj_test(void **state)
 	assert_rc_equal(rc, 0);
 }
 
+static int
+gc_obj_run_destroy(struct gc_test_args *args)
+{
+	daos_unit_oid_t	*oids;
+	daos_handle_t	 coh;
+	daos_handle_t	 poh;
+	int		 i;
+	int		 rc;
+	uuid_t		 cont_id;
+
+	poh = args->gc_ctx.tsc_poh;
+
+	uuid_generate(cont_id);
+
+	rc = vos_cont_create(poh, cont_id);
+	if (rc) {
+		print_error("failed to create container: %s\n",
+			    d_errstr(rc));
+		return rc;
+	}
+
+	gc_add_stat(STAT_CONT);
+	rc = vos_cont_open(poh, cont_id, &coh);
+	if (rc) {
+		print_error("failed to open container: %s\n",
+			    d_errstr(rc));
+		return rc;
+	}
+
+	D_ALLOC_ARRAY(oids, obj_per_cont);
+	if (!oids) {
+		print_error("failed to allocate oids\n");
+		return -DER_NOMEM;
+	}
+
+	rc = gc_obj_prepare(args, coh, oids);
+	if (rc)
+		goto out;
+
+	gc_print_stat();
+
+	for (i = 0; i < obj_per_cont; i++) {
+		rc = vos_obj_delete(coh, oids[i]);
+		if (rc) {
+			print_error("failed to delete objects: %s\n",
+				    d_errstr(rc));
+			goto out;
+		}
+	}
+
+	rc = vos_cont_close(coh);
+	if (rc) {
+		print_error("failed to close container: %s\n",
+			    d_errstr(rc));
+		return rc;
+	}
+
+	rc = vos_cont_destroy(poh, cont_id);
+	if (rc) {
+		print_error("failed to destroy container: %s\n",
+			    d_errstr(rc));
+		return rc;
+	}
+
+	rc = gc_wait_check(args, true);
+out:
+	D_FREE(oids);
+	return rc;
+}
+
+static void
+gc_obj_test_destroy(void **state)
+{
+	struct gc_test_args *args = *state;
+	int		     rc;
+
+	rc = gc_obj_run_destroy(args);
+	assert_rc_equal(rc, 0);
+}
+
 static void
 gc_obj_bio_test(void **state)
 {
@@ -484,6 +564,8 @@ static const struct CMUnitTest gc_tests[] = {
 	  gc_obj_bio_test, gc_prepare, NULL},
 	{ "GC04: container garbage collecting",
 	  gc_cont_test, gc_prepare, NULL},
+	{ "GC05: container garbage collecting with outstanding objects",
+	  gc_obj_test_destroy, gc_prepare, NULL},
 };
 
 int

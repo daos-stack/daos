@@ -100,6 +100,7 @@ cont_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	}
 	dbtree_close(hdl);
 
+	gc_init_cont(&tins->ti_umm, cont_df);
 	args->ca_cont_df = cont_df;
 	rec->rec_off = offset;
 	return 0;
@@ -187,6 +188,9 @@ cont_free_internal(struct vos_container *cont)
 	D_ASSERT(d_list_empty(&cont->vc_dtx_committed_tmp_list));
 
 	dbtree_close(cont->vc_btr_hdl);
+
+	if (!d_list_empty(&cont->vc_gc_link))
+		d_list_del(&cont->vc_gc_link);
 
 	for (i = 0; i < VOS_IOS_CNT; i++) {
 		if (cont->vc_hint_ctxt[i])
@@ -368,6 +372,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	D_INIT_LIST_HEAD(&cont->vc_dtx_committed_tmp_list);
 	cont->vc_dtx_committed_count = 0;
 	cont->vc_dtx_committed_tmp_count = 0;
+	D_INIT_LIST_HEAD(&cont->vc_gc_link);
 
 	/* Cache this btr object ID in container handle */
 	rc = dbtree_open_inplace_ex(&cont->vc_cont_df->cd_obj_root,
