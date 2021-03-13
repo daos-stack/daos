@@ -99,7 +99,7 @@ gc_drain_btr(struct vos_gc *gc, struct vos_pool *pool,
 
 	D_ASSERT(*credits >= 0);
 	D_ASSERT(*empty || *credits == 0);
-	D_DEBUG(DB_TRACE, "empty=%d, remainded creds=%d\n", *empty, *credits);
+	D_DEBUG(DB_TRACE, "empty=%d, remained creds=%d\n", *empty, *credits);
 	return 0;
  failed:
 	D_ERROR("Failed to drain %s btree: %s\n", gc->gc_name, d_errstr(rc));
@@ -135,7 +135,7 @@ gc_drain_evt(struct vos_gc *gc, struct vos_pool *pool,
 
 	D_ASSERT(*credits >= 0);
 	D_ASSERT(*empty || *credits == 0);
-	D_DEBUG(DB_TRACE, "empty=%d, remainded creds=%d\n", *empty, *credits);
+	D_DEBUG(DB_TRACE, "empty=%d, remained creds=%d\n", *empty, *credits);
 	return 0;
  failed:
 	D_ERROR("Failed to drain evtree %s: %s\n", gc->gc_name, d_errstr(rc));
@@ -437,7 +437,7 @@ gc_drain_item(struct vos_gc *gc, struct vos_pool *pool,
 		return rc;
 
 	if (gc->gc_type == GC_AKEY) {
-		/* single value/recx tree wouldn't be flatterned (might be
+		/* single value/recx tree wouldn't be flattened (might be
 		 * changed in the future), instead they are freed within
 		 * dbtree/evtree_drain(), so user credits should be consumed.
 		 */
@@ -563,8 +563,8 @@ gc_add_item(struct vos_pool *pool, enum vos_gc_type type, umem_off_t item_off,
 			return rc;
 		}
 
-		if (creds == GC_CREDS_PRIV) { /* recliamed nothing? */
-			D_CRIT("Failed to recliam space for pool="DF_UUID"\n",
+		if (creds == GC_CREDS_PRIV) { /* reclaimed nothing? */
+			D_CRIT("Failed to reclaim space for pool="DF_UUID"\n",
 			       DP_UUID(pool->vp_id));
 			return -DER_NOSPACE;
 		}
@@ -589,7 +589,7 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 
 	rc = umem_tx_begin(&pool->vp_umm, NULL);
 	if (rc) {
-		D_ERROR("Failed to start transacton for "DF_UUID": %s\n",
+		D_ERROR("Failed to start transaction for "DF_UUID": %s\n",
 			DP_UUID(pool->vp_id), d_errstr(rc));
 		return rc;
 	}
@@ -744,7 +744,7 @@ gc_log_pool(struct vos_pool *pool)
 /**
  * Resource reclaim for all opened VOS pool.
  * This function returns when there is nothing to reclaim or consumed all
- * credits. It returns the remainded credits.
+ * credits. It returns the remained credits.
  */
 #if VOS_STANDALONE
 static int
@@ -918,7 +918,7 @@ vos_gc_pool_run(daos_handle_t poh, int credits,
 			D_ERROR("GC pool failed: %s\n", d_errstr(rc));
 			break;
 		}
-		total -= creds; /* subtract the remainded credits */
+		total -= creds; /* subtract the remained credits */
 		if (creds != 0)
 			break; /* reclaimed everything */
 

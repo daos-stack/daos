@@ -457,7 +457,7 @@ int main(int argc, char **argv)
 	verify_corpc(crt_ctx[1], grp, -DER_GRPVER);
 
 	/* Send shutdown RPC to all nodes except for self */
-	DBG_PRINT("Senidng shutdown to all nodes\n");
+	DBG_PRINT("Sending shutdown to all nodes\n");
 
 	/* Note rank at i=0 corresponds to 'self' */
 	for (i = 0; i < s_list->rl_nr; i++) {
@@ -492,7 +492,7 @@ int main(int argc, char **argv)
 	tc_progress_stop();
 	sem_destroy(&sem);
 
-	DBG_PRINT("All tesst succeeded\n");
+	DBG_PRINT("All tests succeeded\n");
 join:
 
 	/* Wait until shutdown is issued and progress threads exit */

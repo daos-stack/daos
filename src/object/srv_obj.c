@@ -1679,7 +1679,7 @@ do_obj_ioc_begin(uint32_t rpc_map_ver, uuid_t pool_uuid,
 		 *	2. The current replica was NOT the old leader if
 		 *	   with the old pool map version. But it becomes
 		 *	   the new leader with the new pool map version.
-		 *	   In the subsequent modificaiton, it may hit
+		 *	   In the subsequent modification, it may hit
 		 *	   some 'prepared' DTX when make availability
 		 *	   check, it will return -DER_INPROGRESS that
 		 *	   will cause client to retry. It is possible
@@ -2300,7 +2300,7 @@ again:
 
 	/* For leader case, we need to find out the potential conflict
 	 * (or share the same non-committed object/dkey) DTX(s) in the
-	 * CoS (committable) cache, piggyback them via the dispdatched
+	 * CoS (committable) cache, piggyback them via the dispatched
 	 * RPC to non-leaders. Then the non-leader replicas can commit
 	 * them before real modifications to avoid availability issues.
 	 */
@@ -3154,7 +3154,7 @@ again:
 
 	/* For leader case, we need to find out the potential conflict
 	 * (or share the same non-committed object/dkey) DTX(s) in the
-	 * CoS (committable) cache, piggyback them via the dispdatched
+	 * CoS (committable) cache, piggyback them via the dispatched
 	 * RPC to non-leaders. Then the non-leader replicas can commit
 	 * them before real modifications to avoid availability issues.
 	 */
@@ -3683,7 +3683,7 @@ ds_obj_dtx_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 		}
 	}
 
-	/* P3: bulk data transafer. */
+	/* P3: bulk data transfer. */
 	for (i = 0; i < dcde->dcde_write_cnt && rma_idx < rma; i++) {
 		int	*status;
 

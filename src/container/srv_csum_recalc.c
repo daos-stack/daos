@@ -17,7 +17,7 @@
  * Checksum recalculation code. Called from vos_aggregate.c.
  *
  * Recalculation is driven by an array of csum_recalc structs,
- * one per input segment. These segments are coalecsed into a single
+ * one per input segment. These segments are coalesced into a single
  * output segment by the overall aggregation process.
  *
  * The input data is held in a buffer that is specified by a bio sg_list.
@@ -96,7 +96,7 @@ csum_agg_set_sgl(d_sg_list_t *sgl, struct bio_sglist *bsgl,
 	return add_offset;
 }
 
-/* Determine checksum parameters for verification of an input segemnt. */
+/* Determine checksum parameters for verification of an input segment. */
 static unsigned int
 calc_csum_params(struct dcs_csum_info *csum_info, struct csum_recalc *recalc,
 		 unsigned int prefix_len, unsigned int suffix_len,

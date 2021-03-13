@@ -462,7 +462,7 @@ vea_tx_publish(struct vea_space_info *vsi, struct vea_hint_context *hint,
 	D_ASSERT(resrvd_list != NULL);
 	/*
 	 * We choose to don't rollback the in-memory hint updates even if the
-	 * transaction manipulcated by caller is aborted, that'll result in
+	 * transaction manipulated by caller is aborted, that'll result in
 	 * some 'holes' in the allocation stream, but it can keep the API as
 	 * simplified as possible, otherwise, caller has to explicitly call
 	 * a hint cancel API on transaction abort.

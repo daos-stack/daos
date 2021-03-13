@@ -186,7 +186,7 @@ example_daos_key_array()
 	 * generate objid to encode feature flags and object class to the
 	 * OID. The object class controls the sharding and redundancy of the
 	 * object (replication, Erasure coding, no protection). In this case, we
-	 * choose max striping with no data prorection - OC_SX.
+	 * choose max striping with no data protection - OC_SX.
 	 */
 	daos_obj_generate_oid(coh, &oid, 0, OC_SX, 0, 0);
 

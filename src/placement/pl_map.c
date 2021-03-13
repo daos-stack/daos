@@ -323,7 +323,7 @@ pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
 {
 	switch (type) {
 	default:
-		D_ASSERTF(0, "Unknown placemet map type: %d.\n", type);
+		D_ASSERTF(0, "Unknown placement map type: %d.\n", type);
 		break;
 
 	case PL_TYPE_RING:

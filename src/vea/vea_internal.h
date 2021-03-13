@@ -109,7 +109,7 @@ struct vea_space_info {
 	daos_handle_t			 vsi_vec_btr;
 	/* Index for searching free extent by size & age */
 	struct vea_free_class		 vsi_class;
-	/* LRU to aggergate just recent freed extents */
+	/* LRU to aggregate just recent freed extents */
 	d_list_t			 vsi_agg_lru;
 	/*
 	 * Free extent tree sorted by offset, for coalescing the just recent

@@ -87,7 +87,7 @@ umem_off2offset(umem_off_t umoff)
  *  The flags parameter must be < UMOFF_MAX_FLAG.
  *
  *  \param	offset[IN,OUT]	The value is marked NULL with additional flags
- *  \param	flags[IN]	Auxilliarly information about the null entry
+ *  \param	flags[IN]	Auxiliary information about the null entry
  */
 static inline void
 umem_off_set_flags(umem_off_t *offset, uint64_t flags)
@@ -101,7 +101,7 @@ umem_off_set_flags(umem_off_t *offset, uint64_t flags)
  *  The flags parameter must be < UMOFF_MAX_FLAG.
  *
  *  \param	offset[IN,OUT]	The value is marked NULL with additional flags
- *  \param	flags[IN]	Auxilliarly information about the null entry
+ *  \param	flags[IN]	Auxiliary information about the null entry
  */
 static inline void
 umem_off_set_null_flags(umem_off_t *offset, uint64_t flags)

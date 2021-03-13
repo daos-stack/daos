@@ -896,7 +896,7 @@ jtc_snapshot_layout_targets(struct jm_test_ctx *ctx)
 
 /*
  * test that the layout has correct number of targets in rebuilding,
- * correct number of items from scan for find_reubild, find_reint, find_addition
+ * correct number of items from scan for find_rebuild, find_reint, find_addition
  */
 #define jtc_assert_rebuild_reint_new(ctx, l_rebuilding, s_rebuild, s_reint, \
 				     s_new) \

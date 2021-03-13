@@ -439,7 +439,7 @@ ult_execute_cb(void *data)
 }
 
 /**
- * Execute a function in a separate ULT synchornously or asynchronously.
+ * Execute a function in a separate ULT synchronously or asynchronously.
  *
  * Sync: wait until it has been executed.
  * Async: return and call user callback from ULT.

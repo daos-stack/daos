@@ -123,7 +123,7 @@ void fake_update_saw(char *file, int line, char *buf, size_t len)
  *
  * These tests verify that the server logic for creating new checksums
  * or copying stored checksums works properly. Each test should have a layout
- * diagram of sorts in the comment header (if it fits easily). Gennerally a '_'
+ * diagram of sorts in the comment header (if it fits easily). Generally a '_'
  * represents a hole that will exist in the request.
  *
  * There is a setup section that defines the request, chunk size,

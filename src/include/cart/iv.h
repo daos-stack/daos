@@ -142,12 +142,12 @@ typedef int (*crt_iv_on_update_cb_t)(crt_iv_namespace_t ivns,
  * \param[in] ivns		the local handle of the IV namespace
  * \param[in] iv_key		key of the IV
  * \param[in] cb		a callback which must be called or scheduled by
- *				the user in order to compelete the handling of
+ *				the user in order to complete the handling of
  *				the crt_iv_fetch() request.
  * \param[in] cb_arg		arguments for \a cb.
  *
  * \note Here pre_fetch() merely means it will be executed before
- * ivo_on_fetch(). It's not related to the notion of prefeching data. Same for
+ * ivo_on_fetch(). It's not related to the notion of prefetching data. Same for
  * pre_update() and pre_refresh().
  */
 typedef void (*crt_iv_pre_fetch_cb_t)(crt_iv_namespace_t ivns,
@@ -165,7 +165,7 @@ typedef void (*crt_iv_pre_fetch_cb_t)(crt_iv_namespace_t ivns,
  * \param[in] ivns		the local handle of the IV namespace
  * \param[in] iv_key		key of the IV
  * \param[in] cb		a callback which must be called or scheduled by
- *				the user in order to compelete the handling of
+ *				the user in order to complete the handling of
  *				the crt_iv_update() request.
  * \param[in] cb_arg		arguments for \a cb.
  */
@@ -184,7 +184,7 @@ typedef void (*crt_iv_pre_update_cb_t)(crt_iv_namespace_t ivns,
  * \param[in] ivns		the local handle of the IV namespace
  * \param[in] iv_key		key of the IV
  * \param[in] cb		a callback which must be called or scheduled by
- *				the user in order to compelete the handling of
+ *				the user in order to complete the handling of
  *				the crt_iv_sync() request.
  * \param[in] cb_arg		arguments for \a cb.
  */

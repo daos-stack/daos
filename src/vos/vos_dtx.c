@@ -274,7 +274,7 @@ dtx_act_ent_free(struct btr_instance *tins, struct btr_record *rec,
 	rec->rec_off = UMOFF_NULL;
 
 	if (args != NULL) {
-		/* Return the record addreass (offset in DRAM).
+		/* Return the record address (offset in DRAM).
 		* The caller will release it after using.
 		*/
 		D_ASSERT(dae != NULL);

@@ -62,7 +62,7 @@ free_class_add(struct vea_free_class *vfc, struct vea_entry *entry)
 		}
 
 		entry->ve_in_heap = 1;
-	} else { /* Otherwise add to one of size categarized LRU */
+	} else { /* Otherwise add to one of size categorized LRU */
 		struct vea_entry *cur;
 		d_list_t *lru_head, *tmp;
 

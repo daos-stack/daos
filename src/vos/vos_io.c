@@ -1783,7 +1783,7 @@ vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
 
 	/*
 	 * TODO:
-	 * To eliminate internal fragmentaion, misaligned record (record size
+	 * To eliminate internal fragmentation, misaligned record (record size
 	 * isn't aligned with 4K) on NVMe could be split into two parts, large
 	 * aligned part will be stored on NVMe and being referenced by
 	 * vos_irec_df->ir_ex_addr, small unaligned part will be stored on SCM
@@ -1867,7 +1867,7 @@ vos_reserve_recx(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 
 	/*
 	 * TODO:
-	 * To eliminate internal fragmentaion, misaligned recx (total recx size
+	 * To eliminate internal fragmentation, misaligned recx (total recx size
 	 * isn't aligned with 4K) on NVMe could be split into two evtree rects,
 	 * larger rect will be stored on NVMe and small reminder on SCM.
 	 */

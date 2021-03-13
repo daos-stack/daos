@@ -526,7 +526,7 @@ struct daos_cpd_sg {
 	 * as the same order as 'oci_disp_ents' do. Each transaction has each
 	 * own different daos_shard_tgt set. If some DAOS target contains the
 	 * requests belonging to multiple transactions, its daos_shard_tgt is
-	 * repeatedly packed in every related dipatch set.
+	 * repeatedly packed in every related dispatch set.
 	 */
 
 #define DAOS_OSEQ_OBJ_CPD /* output fields */				    \
@@ -535,7 +535,7 @@ struct daos_cpd_sg {
 	((uint64_t)			(oco_sub_epochs)	CRT_ARRAY)  \
 	((int32_t)			(oco_sub_rets)		CRT_ARRAY)
 
-	/* Compouned replies. Eac sub reply responding to one independent
+	/* Compounded replies. Eac sub reply responding to one independent
 	 * transaction.
 	 *
 	 * Resent:
