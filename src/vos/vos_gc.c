@@ -92,7 +92,7 @@ gc_drain_btr(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 
 	D_DEBUG(DB_TRACE, "drain btree for %s, creds=%d\n",
 		gc->gc_name, *credits);
-	rc = dbtree_drain(toh, credits, NULL, empty);
+	rc = dbtree_drain(toh, credits, vos_hdl2cont(coh), empty);
 	dbtree_close(toh);
 	if (rc)
 		goto failed;
@@ -675,12 +675,17 @@ gc_add_item(struct vos_pool *pool, daos_handle_t coh,
 struct vos_container *
 gc_get_container(struct vos_pool *pool)
 {
+	struct vos_container	*cont;
 	/** In order to be fair to other containers, we remove this from the
 	 * list.  If we run out of credits, we will put it at the back of
 	 * the list and give another container a turn next time.
 	 */
-	return d_list_pop_entry(&pool->vp_gc_cont, struct vos_container,
+	cont = d_list_pop_entry(&pool->vp_gc_cont, struct vos_container,
 				vc_gc_link);
+	if (DAOS_FAIL_CHECK(DAOS_VOS_GC_CONT_NULL))
+		D_ASSERT(cont == NULL);
+
+	return cont;
 }
 
 /**
@@ -716,6 +721,7 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 			cont, creds, *credits);
 
 		item = gc_get_item(gc, pool, cont);
+
 		if (item == NULL) {
 			if (cont != NULL) {
 				if (gc->gc_type == GC_OBJ) { /* top level GC */
@@ -735,6 +741,9 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 			gc++; /* try upper level tree */
 			continue;
 		}
+
+		if (DAOS_FAIL_CHECK(DAOS_VOS_GC_CONT))
+			D_ASSERT(cont != NULL);
 
 		rc = gc_drain_item(gc, pool, vos_cont2hdl(cont), item, &creds,
 				   &empty);

@@ -282,6 +282,7 @@ gc_key_run(struct gc_test_args *args)
 			goto out;
 		}
 	}
+	daos_fail_loc_set(DAOS_VOS_GC_CONT | DAOS_FAIL_ALWAYS);
 	rc = gc_wait_check(args, false);
 out:
 	for (i = 0; i < CREDS_MAX; i++) {
@@ -348,6 +349,7 @@ gc_obj_run(struct gc_test_args *args, bool reopen)
 		}
 	}
 
+	daos_fail_loc_set(DAOS_VOS_GC_CONT | DAOS_FAIL_ALWAYS);
 	rc = gc_wait_check(args, false);
 out:
 	D_FREE(oids);
@@ -525,7 +527,9 @@ gc_cont_run(struct gc_test_args *args)
 			return rc;
 		}
 	}
+	daos_fail_loc_set(DAOS_VOS_GC_CONT_NULL | DAOS_FAIL_ALWAYS);
 	rc = gc_wait_check(args, true);
+
 
 	D_FREE(cont_ids);
 	return rc;
@@ -586,6 +590,7 @@ gc_prepare(void **state)
 {
 	struct gc_test_args *args = *state;
 
+	daos_fail_loc_set(0);
 	vos_pool_ctl(args->gc_ctx.tsc_poh, VOS_PO_CTL_RESET_GC);
 	memset(&gc_stat, 0, sizeof(gc_stat));
 	return 0;

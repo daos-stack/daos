@@ -117,6 +117,7 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	struct umem_instance	*umm = &tins->ti_umm;
 	struct vos_obj_df	*obj;
 	struct ilog_desc_cbs	 cbs;
+	daos_handle_t		 coh;
 	int			 rc;
 
 	obj = umem_off2ptr(umm, rec->rec_off);
@@ -133,9 +134,8 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 	D_ASSERT(tins->ti_priv);
 
-	/** If container is still active, we'll add it to the container heap */
-	return gc_add_item(tins->ti_priv, tins->ti_coh, GC_OBJ, rec->rec_off,
-			   0);
+	coh = vos_cont2hdl(args);
+	return gc_add_item(tins->ti_priv, coh, GC_OBJ, rec->rec_off, 0);
 }
 
 static int
@@ -323,8 +323,7 @@ vos_oi_delete(struct vos_container *cont, daos_unit_oid_t oid)
 
 	d_iov_set(&key_iov, &oid, sizeof(oid));
 
-	rc = dbtree_delete(cont->vc_btr_hdl, BTR_PROBE_EQ, &key_iov,
-			   cont->vc_pool);
+	rc = dbtree_delete(cont->vc_btr_hdl, BTR_PROBE_EQ, &key_iov, cont);
 	if (rc == -DER_NONEXIST)
 		return 0;
 
