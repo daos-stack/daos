@@ -199,7 +199,6 @@ if [ -d "/mnt/daos" ]; then
         rm /tmp/test.cov
     fi
 
-    # Archive the unit test cov file
     if [ -f "${DAOS_BASE}/test.cov" ]; then
         cp "${DAOS_BASE}"/test.cov /tmp/
     fi
