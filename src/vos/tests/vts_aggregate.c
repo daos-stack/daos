@@ -22,7 +22,8 @@
 
 static bool slow_test;
 
-static void cleanup(void)
+static void
+cleanup(void)
 {
 	daos_fail_loc_set(DAOS_VOS_GC_CONT_NULL | DAOS_FAIL_ALWAYS);
 	gc_wait();
