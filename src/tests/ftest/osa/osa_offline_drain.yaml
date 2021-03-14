@@ -81,7 +81,6 @@ ior:
     #    The values are set to be in the multiples of 10.
     #    Values are appx GB.
       - [6000000000, 54000000000, 500000, 500000000]
-      - [6000000000, 54000000000, 1000, 500000000]
 mdtest:
   api: DFS
   client_processes:

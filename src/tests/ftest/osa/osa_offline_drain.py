@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import random
-import time
 from osa_utils import OSAUtils
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
