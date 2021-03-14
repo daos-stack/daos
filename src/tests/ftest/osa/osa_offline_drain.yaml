@@ -105,3 +105,6 @@ test_obj_class:
     - RP_2G8
     - RP_3G6
     - RP_4G1
+aggregation:
+  test_with_aggregation: True
+

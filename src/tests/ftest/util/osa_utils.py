@@ -53,6 +53,8 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.ior_r_flags = self.params.get("read_flags", '/run/ior/iorflags/*')
         self.out_queue = test_queue.Queue()
         self.dmg_command.exit_status_exception = False
+        self.test_during_aggregation = False
+        self.test_during_rebuild = False
 
     @fail_on(CommandFailure)
     def get_pool_leader(self):
@@ -100,6 +102,15 @@ class OSAUtils(MdtestBase, IorTestBase):
                         "Rebuild failed")
 
     @fail_on(CommandFailure)
+    def print_and_assert_on_rebuild_failure(self, out, timeout=3):
+        """Print the out value (daos, dmg, etc) and check for rebuild
+        completion. If not, raise assert.
+        """
+        self.log.info(out)
+        self.is_rebuild_done(timeout)
+        self.assert_on_rebuild_failure()
+
+    @fail_on(CommandFailure)
     def get_pool_version(self):
         """Get the pool version.
 
@@ -109,6 +120,21 @@ class OSAUtils(MdtestBase, IorTestBase):
         """
         data = self.dmg_command.pool_query(self.pool.uuid)
         return int(data["version"])
+
+    def simple_exclude_reintegrate_loop(self, rank, loop_time=100):
+        """This method performs exclude and reintegration on a rank,
+        for a certain amount of time.
+        """
+        start_time = 0
+        finish_time = 0
+        while (int(finish_time - start_time) > loop_time):
+            start_time = time.time()
+            output = self.dmg_command.pool_exclude(self.pool.uuid,
+                                                   rank)
+            self.print_and_assert_on_rebuild_failure(output)
+            output = self.dmg_command.pool_reintegrate(self.pool.uuid,
+                                                       rank)
+            self.print_and_assert_on_rebuild_failure(output)
 
     @fail_on(DaosApiError)
     def write_single_object(self):
@@ -170,6 +196,16 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.obj.close()
         self.container.close()
 
+    def delete_extra_container(self, pool):
+        """Delete the extra container in the pool.
+        Args:
+            pool (object): pool handle
+        """
+        self.pool.set_property("reclaim", "time")
+        extra_container = self.pool_cont_dict[pool][2]
+        extra_container.destroy()
+        self.pool_cont_dict[pool][3] = None
+
     def run_ior_thread(self, action, oclass, test):
         """Start the IOR thread for either writing or
         reading data to/from a container.
@@ -211,17 +247,33 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.ior_cmd.set_daos_params(self.server_group, self.pool)
         self.ior_cmd.dfs_oclass.update(oclass)
         self.ior_cmd.dfs_dir_oclass.update(oclass)
+        self.log.info(self.pool_cont_dict)
         # If pool is not in the dictionary,
-        # initialize its container as None.
+        # initialize its container list to None
+        # {poolA : [None, None], [None, None]}
         if self.pool not in self.pool_cont_dict:
-            self.pool_cont_dict[self.pool] = None
+            self.pool_cont_dict[self.pool] = [None] * 4
         # Create container if the pool doesn't have one.
         # Otherwise, use the existing container in the pool.
-        if self.pool_cont_dict[self.pool] is None:
+        # pool_cont_dict {pool A: [containerA, Updated,
+        #                          containerB, Updated],
+        #                 pool B : containerA, Updated,
+        #                          containerB, None]}
+        if self.pool_cont_dict[self.pool][0] is None:
             self.add_container(self.pool)
-            self.pool_cont_dict[self.pool] = self.container
+            self.pool_cont_dict[self.pool][0] = self.container
+            self.pool_cont_dict[self.pool][1] = "Updated"
         else:
-            self.container = self.pool_cont_dict[self.pool]
+            if ((self.test_during_aggregation is True) and
+               (self.pool_cont_dict[self.pool][1] == "Updated") and
+               (self.pool_cont_dict[self.pool][3] is None) and
+               ("-w" in flags)):
+                # Write to the second container
+                self.add_container(self.pool)
+                self.pool_cont_dict[self.pool][2] = self.container
+                self.pool_cont_dict[self.pool][3] = "Updated"
+            else:
+                self.container = self.pool_cont_dict[self.pool][0]
         job_manager = self.get_ior_job_manager_command()
         job_manager.job.dfs_cont.update(self.container.uuid)
         self.ior_cmd.transfer_size.update(test[2])

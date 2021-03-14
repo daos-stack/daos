@@ -30,15 +30,13 @@ class OSAOfflineDrain(OSAUtils):
             self.hostlist_clients, self.workdir, None)
 
     def run_offline_drain_test(self, num_pool, data=False,
-                               oclass=None, drain_during_aggregation=False):
+                               oclass=None):
         """Run the offline drain without data.
             Args:
             num_pool (int) : total pools to create for testing purposes.
             data (bool) : whether pool has no data or to create
                           some data in pool. Defaults to False.
             oclass (str): DAOS object class (eg: RP_2G1,etc)
-            drain_during_aggregation (bool) : Perform drain and aggregation
-                                              in parallel
         """
         # Create a pool
         pool = {}
@@ -66,11 +64,8 @@ class OSAOfflineDrain(OSAUtils):
                                             num_pool)
             pool[val].create()
             self.pool = pool[val]
-            if drain_during_aggregation is True:
-                test_seq = self.ior_test_sequence[1]
-                self.pool.set_property("reclaim", "disabled")
-            else:
-                test_seq = self.ior_test_sequence[0]
+            self.pool.set_property("reclaim", "disabled")
+            test_seq = self.ior_test_sequence[0]
 
             if data:
                 self.run_ior_thread("Write", oclass, test_seq)
@@ -83,14 +78,13 @@ class OSAOfflineDrain(OSAUtils):
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
-            if drain_during_aggregation is True:
+            if self.test_during_aggregation is True:
                 self.pool.set_property("reclaim", "time")
-                time.sleep(90)
+                self.delete_extra_container(self.pool)
+                self.simple_exclude_reintegrate_loop(rank)
             output = self.dmg_command.pool_drain(self.pool.uuid,
                                                  rank, t_string)
-            self.log.info(output)
-            self.is_rebuild_done(3)
-            self.assert_on_rebuild_failure()
+            self.print_and_assert_on_rebuild_failure(output)
 
             pver_drain = self.get_pool_version()
             self.log.info("Pool Version after drain %d", pver_drain)

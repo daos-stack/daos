@@ -77,7 +77,6 @@ ior:
   #    The values are set to be in the multiples of 10.
   #    Values are appx GB.
     - [6000000000, 54000000000, 500000, 500000000]
-    - [6000000000, 54000000000, 1000, 5000000]
 mdtest:
   api: DFS
   client_processes:
@@ -104,3 +103,7 @@ test_obj_class:
     - S1
 loop_test:
   iterations: 3
+aggregation:
+  test_with_aggregation: True
+rebuild:
+  test_with_rebuild: True
