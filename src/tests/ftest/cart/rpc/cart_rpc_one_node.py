@@ -26,7 +26,6 @@ class CartRpcOneNodeTest(TestWithoutServers):
     def setUp(self):
         """ Test setup """
         print("Running setup\n")
-        super(CartRpcOneNodeTest, self).setUp()
         self.utils = CartUtils()
         self.env = self.utils.get_env(self)
 
