@@ -1163,8 +1163,7 @@ dtx_leader_exec_ops_ult(void *arg)
 			continue;
 		}
 
-		rc = ult_arg->func(dlh, ult_arg->func_arg, i,
-				   dtx_sub_comp_cb);
+		rc = ult_arg->func(dlh, ult_arg->func_arg, i, dtx_sub_comp_cb);
 		if (rc) {
 			sub->dss_result = rc;
 			break;
@@ -1181,7 +1180,7 @@ dtx_leader_exec_ops_ult(void *arg)
 		}
 	}
 
-	D_FREE_PTR(ult_arg);
+	D_FREE(ult_arg);
 }
 
 /**
@@ -1226,7 +1225,7 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 			    DSS_DEEP_STACK_SZ, NULL);
 	if (rc != 0) {
 		D_ERROR("ult create failed "DF_RC"\n", DP_RC(rc));
-		D_FREE_PTR(ult_arg);
+		D_FREE(ult_arg);
 		ABT_future_free(&dlh->dlh_future);
 		D_GOTO(out, rc);
 	}

@@ -93,10 +93,10 @@ obj_rw_complete(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		if (update) {
 			rc = dtx_sub_init(dth, &orwi->orw_oid,
 					  orwi->orw_dkey_hash);
-			if (rc == 0)
-				rc = vos_update_end(ioh, ioc->ioc_map_ver,
-						    &orwi->orw_dkey, status,
-						    &ioc->ioc_io_size, dth);
+			rc = vos_update_end(ioh, ioc->ioc_map_ver,
+					    &orwi->orw_dkey,
+					    (rc == 0) ? status : rc,
+					    &ioc->ioc_io_size, dth);
 		} else {
 			rc = vos_fetch_end(ioh, &ioc->ioc_io_size, status);
 		}
@@ -183,7 +183,6 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint64_t epoch,
 					if (sgls[i].sg_iovs[j].iov_buf == NULL)
 						continue;
 					D_FREE(sgls[i].sg_iovs[j].iov_buf);
-					sgls[i].sg_iovs[j].iov_buf = NULL;
 				}
 			}
 		}
@@ -550,12 +549,12 @@ obj_set_reply_nrs(crt_rpc_t *rpc, daos_handle_t ioh, d_sg_list_t *sgls)
 	}
 
 	/* return sg_nr_out and data size for sgl */
-	orwo->orw_nrs.ca_count = nrs_count;
 	D_ALLOC(orwo->orw_nrs.ca_arrays,
 		nrs_count * (sizeof(uint32_t) + sizeof(daos_size_t)));
-
 	if (orwo->orw_nrs.ca_arrays == NULL)
 		return -DER_NOMEM;
+
+	orwo->orw_nrs.ca_count = nrs_count;
 	orwo->orw_data_sizes.ca_count = nrs_count;
 	orwo->orw_data_sizes.ca_arrays =
 		(void *)((char *)orwo->orw_nrs.ca_arrays +
@@ -977,6 +976,8 @@ obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod, daos_iod_t *iods)
 		/** will be freed in obj_rw_reply */
 		D_ALLOC_ARRAY(map->iom_recxs, map->iom_nr);
 		if (map->iom_recxs == NULL) {
+			for (r = 0; r < i; r++)
+				D_FREE(maps[r].iom_recxs);
 			D_FREE(maps);
 			return -DER_NOMEM;
 		}
@@ -1178,10 +1179,8 @@ obj_prep_fetch_sgls(crt_rpc_t *rpc, struct obj_io_context *ioc)
 out:
 	if (rc) {
 		for (i = 0; i < nr; i++) {
-			for (i = 0; j < sgls[i].sg_nr; j++) {
+			for (i = 0; j < sgls[i].sg_nr; j++)
 				D_FREE(sgls[i].sg_iovs[j].iov_buf);
-				sgls[i].sg_iovs[j].iov_buf = NULL;
-			}
 		}
 	}
 
@@ -3524,15 +3523,11 @@ obj_cpd_reply(crt_rpc_t *rpc, int status, uint32_t map_version)
 		D_ERROR("Send CPD reply failed: "DF_RC"\n", DP_RC(rc));
 
 cleanup:
-	if (oco->oco_sub_rets.ca_count != 0) {
-		D_FREE(oco->oco_sub_rets.ca_arrays);
-		oco->oco_sub_rets.ca_count = 0;
-	}
+	D_FREE(oco->oco_sub_rets.ca_arrays);
+	oco->oco_sub_rets.ca_count = 0;
 
-	if (oco->oco_sub_epochs.ca_count != 0) {
-		D_FREE(oco->oco_sub_epochs.ca_arrays);
-		oco->oco_sub_epochs.ca_count = 0;
-	}
+	D_FREE(oco->oco_sub_epochs.ca_arrays);
+	oco->oco_sub_epochs.ca_count = 0;
 }
 
 /* Locally process the operations belong to one DTX.
