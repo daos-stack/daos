@@ -1689,6 +1689,12 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 					crt_ctx->cc_rpc_cb_arg);
 	} else {
 		rpc_priv->crp_opc_info->coi_rpc_cb(&rpc_priv->crp_pub);
+		/*
+		 * Correspond to crt_rpc_handler_common -> crt_rpc_priv_init's
+		 * set refcount as 1.
+		 */
+		if (rpc_priv->crp_srv)
+			RPC_DECREF(rpc_priv);
 	}
 
 out:
