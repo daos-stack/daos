@@ -62,8 +62,9 @@ class DaosServerTest(TestWithServers):
         output = self.get_dmg_command().pool_list()
         pools = output["response"]["pools"]
         pool_list = {}
-        for pool in pools:
-            pool_list[pool["uuid"]] = pool["svc_reps"]
+        if pools:
+            for pool in pools:
+                pool_list[pool["uuid"]] = pool["svc_reps"]
         pool_list = sorted(pool_list)
         self.log.info("get_pool-list: %s", pool_list)
         return pool_list
