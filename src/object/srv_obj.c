@@ -91,11 +91,11 @@ obj_rw_complete(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		bool update = obj_rpc_is_update(rpc);
 
 		if (update) {
-			rc = dtx_sub_init(dth, &orwi->orw_oid,
-					  orwi->orw_dkey_hash);
+			if (status == 0)
+				status = dtx_sub_init(dth, &orwi->orw_oid,
+						      orwi->orw_dkey_hash);
 			rc = vos_update_end(ioh, ioc->ioc_map_ver,
-					    &orwi->orw_dkey,
-					    (rc == 0) ? status : rc,
+					    &orwi->orw_dkey, status,
 					    &ioc->ioc_io_size, dth);
 		} else {
 			rc = vos_fetch_end(ioh, &ioc->ioc_io_size, status);
@@ -178,13 +178,9 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint64_t epoch,
 			d_sg_list_t *sgls = orwo->orw_sgls.ca_arrays;
 			int j;
 
-			for (i = 0; i < orw->orw_nr; i++) {
-				for (j = 0; j < sgls[i].sg_nr; j++) {
-					if (sgls[i].sg_iovs[j].iov_buf == NULL)
-						continue;
+			for (i = 0; i < orw->orw_nr; i++)
+				for (j = 0; j < sgls[i].sg_nr; j++)
 					D_FREE(sgls[i].sg_iovs[j].iov_buf);
-				}
-			}
 		}
 	}
 }

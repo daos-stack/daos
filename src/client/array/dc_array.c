@@ -1380,9 +1380,7 @@ next:
 		/** memset all holes to 0 */
 		params->array_size = UINT64_MAX;
 		rc = process_iomap(params, args);
-		if (rc)
-			D_GOTO(err_params, rc);
-		D_GOTO(err_params, rc = 0);
+		D_GOTO(err_params, rc);
 	}
 
 	/** Schedule the get size to properly check for short reads */
