@@ -2684,6 +2684,8 @@ handle_response_internal(void *arg)
 {
 	const struct crt_cb_info *cb_info = arg;
 	crt_rpc_t		 *rpc = cb_info->cci_rpc;
+	void			 *cb_arg = cb_info->cci_arg;
+
 
 	switch (rpc->cr_opc) {
 	case CRT_OPC_IV_FETCH:
@@ -2700,6 +2702,7 @@ handle_response_internal(void *arg)
 	default:
 		D_ERROR("wrong opc: cb_info %p: rpc %p: opc %#x\n",
 			cb_info, rpc, rpc->cr_opc);
+		D_FREE(cb_arg);
 	}
 }
 
