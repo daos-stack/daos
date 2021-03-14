@@ -53,7 +53,10 @@ func (r *Runner) run(ctx context.Context, args, env []string) error {
 		logFn:  r.log.Error,
 		prefix: fmt.Sprintf("%s:%d", engineBin, r.Config.Index),
 	}
-	cmd.Env = env
+	// FIXME(DAOS-3105): This shouldn't be the default. The command environment
+	// should be constructed from values in the configuration. This probably
+	// can't go away until PMIx support is removed, though.
+	cmd.Env = mergeEnvVars(os.Environ(), env)
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		// I/O Engine should get a SIGKILL if this process dies.
@@ -67,7 +70,7 @@ func (r *Runner) run(ctx context.Context, args, env []string) error {
 	}
 
 	r.log.Debugf("%s:%d args: %s", engineBin, r.Config.Index, args)
-	r.log.Debugf("%s:%d env: %s", engineBin, r.Config.Index, cmd.Env)
+	r.log.Debugf("%s:%d env: %s", engineBin, r.Config.Index, env)
 	r.log.Infof("Starting I/O Engine instance %d: %s", r.Config.Index, binPath)
 
 	if err := cmd.Start(); err != nil {
@@ -93,7 +96,6 @@ func (r *Runner) Start(ctx context.Context, errOut chan<- error) error {
 	if err != nil {
 		return err
 	}
-	env = mergeEnvVars(env, cleanEnvVars(os.Environ(), r.Config.EnvPassThrough))
 
 	go func() {
 		errOut <- r.run(ctx, args, env)
