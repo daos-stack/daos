@@ -36,6 +36,7 @@ DaosContPropEnum = enum.Enum(
     {key: value for key, value in pydaos_shim.__dict__.items()
      if key.startswith("DAOS_PROP_")})
 
+
 class DaosPool(object):
     """A python object representing a DAOS pool."""
 
@@ -552,6 +553,23 @@ ConvertObjClass = {
 # pylint: enable=no-member
 
 
+def get_object_id(seed=None):
+    """Get a new unique object ID.
+
+    Args:
+        seed (ctypes.c_uint, optional): seed for the dts_oid_gen function.
+            Defaults to None which will use seconds since epoch as the seed.
+
+    Returns:
+        DaosObjId: new object ID
+
+    """
+    func = self.context.get_function('oid_gen')
+    if seed is None:
+        seed = ctypes.c_uint(int(time.time()))
+    return func(seed)
+
+
 def get_object_class(item):
     """Get the DAOS object class that represents the specified item.
 
@@ -615,6 +633,14 @@ class DaosObj(object):
                 raise DaosApiError("Object close returned non-zero. RC: {0} "
                                    "handle: {1}".format(ret, self.obj_handle))
             self.obj_handle = None
+
+    def __str__(self):
+        """Get the string representaion of this class."""
+        if self.c_oid:
+            # Return the object ID if  defined
+            return "{}.{}".format(self.c_oid.hi, self.c_oid.lo)
+        else:
+            return self.__repr__()
 
     def create(self, rank=None, objcls=None):
         """Create a DAOS object by generating an oid.
@@ -1286,6 +1312,7 @@ class DaosContProperties(ctypes.Structure):
         self.chksum_type = ctypes.c_uint64(100)
         self.chunk_size = ctypes.c_uint64(0)
 
+
 class DaosInputParams(object):
     # pylint: disable=too-few-public-methods
     """ This is a helper python method
@@ -1310,6 +1337,7 @@ class DaosInputParams(object):
         create container method.
         """
         return self.co_prop
+
 
 class DaosContainer(object):
     """A python object representing a DAOS container."""
@@ -2138,6 +2166,7 @@ class DaosSnapshot(object):
             raise Exception("Failed to destroy the snapshot. RC: {0}"
                             .format(retcode))
 
+
 class DaosContext(object):
     # pylint: disable=too-few-public-methods
     """Provides environment and other info for a DAOS client."""
@@ -2209,7 +2238,8 @@ class DaosContext(object):
             'set-pool-attr':   self.libdaos.daos_pool_set_attr,
             'stop-service':    self.libdaos.daos_pool_stop_svc,
             'test-event':      self.libdaos.daos_event_test,
-            'update-obj':      self.libdaos.daos_obj_update}
+            'update-obj':      self.libdaos.daos_obj_update,
+            'oid_gen':         self.libtest.dts_oid_gen}
 
     def get_function(self, function):
         """Call a function through the API."""

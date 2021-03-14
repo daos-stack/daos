@@ -12,7 +12,7 @@ from test_utils_base import TestDaosApiBase
 from avocado import fail_on
 from command_utils_base import BasicParameter, CommandFailure
 from pydaos.raw import (DaosApiError, DaosContainer, DaosInputParams,
-                        c_uuid_to_str, str_to_c_uuid)
+                        c_uuid_to_str, str_to_c_uuid, get_object_id)
 from general_utils import get_random_string, DaosTestError
 
 
@@ -26,7 +26,7 @@ class TestContainerData(object):
             debug (bool, optional): if set log the write/read_record calls.
                 Defaults to False.
         """
-        self.obj = None
+        self.obj = get_object_id()
         self.records = []
         self.log = getLogger(__name__)
         self.debug = debug
