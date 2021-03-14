@@ -61,8 +61,8 @@ class StorageRatio(TestWithServers):
             expected_result = variant[2]
             try:
                 # Create a pool
-                dmg_command.pool_create_stdout(
-                    scm_size=scm_size, nvme_size=nvme_size)
+                dmg_command.pool_create(
+                    scm_size=scm_size, nvme_size=nvme_size, use_json=False)
                 if expected_result == 'FAIL':
                     errors.append(
                         "Pool create succeeded when it's expected to fail! " +

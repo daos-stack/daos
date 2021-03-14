@@ -354,7 +354,8 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(("storage", "scan"), nvme_health=True)
 
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
-                    target_list=None, svcn=None, group=None, acl_file=None):
+                    target_list=None, svcn=None, group=None, acl_file=None,
+                    use_json=True):
         """Create a pool with the dmg command.
 
         The uid and gid method arguments can be specified as either an integer
@@ -398,74 +399,38 @@ class DmgCommand(DmgCommandBase):
 
         # Extract the new pool UUID and SVC list from the command output
         data = {}
-        # Sample json output.
-        # "response": {
-        #   "uuid": "ebac9285-61ec-4d2e-aa2d-4d0f7dd6b7d6",
-        #   "svc_reps": [
-        #     0
-        #   ],
-        #   "tgt_ranks": [
-        #     0,
-        #     1
-        #   ],
-        #   "scm_bytes": 256000000,
-        #   "nvme_bytes": 0
-        # },
-        # "error": null,
-        # "status": 0
-        output = self._get_json_result(("pool", "create"), **kwargs)
-        if output["response"] is None:
+
+        if use_json:
+            # Sample json output.
+            # "response": {
+            #   "uuid": "ebac9285-61ec-4d2e-aa2d-4d0f7dd6b7d6",
+            #   "svc_reps": [
+            #     0
+            #   ],
+            #   "tgt_ranks": [
+            #     0,
+            #     1
+            #   ],
+            #   "scm_bytes": 256000000,
+            #   "nvme_bytes": 0
+            # },
+            # "error": null,
+            # "status": 0
+            output = self._get_json_result(("pool", "create"), **kwargs)
+            if output["response"] is None:
+                return data
+
+            data["uuid"] = output["response"]["uuid"]
+            data["svc"] = ",".join(
+                [str(svc) for svc in output["response"]["svc_reps"]])
+            data["ranks"] = ",".join(
+                [str(r) for r in output["response"]["tgt_ranks"]])
+            data["scm_per_rank"] = output["response"]["scm_bytes"]
+            data["nvme_per_rank"] = output["response"]["nvme_bytes"]
+
             return data
 
-        data["uuid"] = output["response"]["uuid"]
-        data["svc"] = ",".join(
-            [str(svc) for svc in output["response"]["svc_reps"]])
-        data["ranks"] = ",".join(
-            [str(r) for r in output["response"]["tgt_ranks"]])
-        data["scm_per_rank"] = output["response"]["scm_bytes"]
-        data["nvme_per_rank"] = output["response"]["nvme_bytes"]
-
-        return data
-
-    def pool_create_stdout(self, scm_size, uid=None, gid=None, nvme_size=None,
-                           target_list=None, svcn=None, group=None,
-                           acl_file=None):
-        """Create a pool with the dmg command without --json.
-
-        Mainly to test error and warning messages that don't appear in JSON.
-        For all other purposes, use pool_create().
-
-        Args:
-            scm_size (int): SCM pool size to create.
-            uid (object, optional): User ID with privileges. Defaults to None.
-            gid (object, optional): Group ID with privileges. Defaults to None.
-            nvme_size (str, optional): NVMe size. Defaults to None.
-            target_list (list, optional): a list of storage server unique
-                identifiers (ranks) for the DAOS pool
-            svcn (str, optional): Number of pool service replicas. Defaults to
-                None, in which case the default value is set by the server.
-            group (str, optional): DAOS system group name in which to create the
-                pool. Defaults to None, in which case "daos_server" is used by
-                default.
-            acl_file (str, optional): ACL file. Defaults to None.
-
-        Raises:
-            CommandFailure: if the 'dmg pool create' command fails and
-                self.exit_status_exception is set to True.
-
-        """
-        kwargs = {
-            "user": getpwuid(uid).pw_name if isinstance(uid, int) else uid,
-            "group": getgrgid(gid).gr_name if isinstance(gid, int) else gid,
-            "scm_size": scm_size,
-            "nvme_size": nvme_size,
-            "nsvc": svcn,
-            "sys": group,
-            "acl_file": acl_file
-        }
-        if target_list is not None:
-            kwargs["ranks"] = ",".join([str(target) for target in target_list])
-        self._get_result(("pool", "create"), **kwargs)
+        return self._get_result(("pool", "create"), **kwargs)
 
     def pool_query(self, pool):
         """Query a pool with the dmg command.
