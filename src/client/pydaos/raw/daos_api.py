@@ -13,6 +13,7 @@ import uuid
 import os
 import inspect
 import sys
+import time
 import enum
 
 from . import daos_cref
@@ -551,23 +552,6 @@ ConvertObjClass = {
     DaosObjClassOld.DAOS_OC_REPL_MAX_RW: DaosObjClass.OC_RP_XSF
 }
 # pylint: enable=no-member
-
-
-def get_object_id(seed=None):
-    """Get a new unique object ID.
-
-    Args:
-        seed (ctypes.c_uint, optional): seed for the dts_oid_gen function.
-            Defaults to None which will use seconds since epoch as the seed.
-
-    Returns:
-        DaosObjId: new object ID
-
-    """
-    func = self.context.get_function('oid_gen')
-    if seed is None:
-        seed = ctypes.c_uint(int(time.time()))
-    return func(seed)
 
 
 def get_object_class(item):
@@ -2066,6 +2050,22 @@ class DaosContainer(object):
                                             cb_func,
                                             self))
             thread.start()
+
+    def get_object_id(self, seed=None):
+        """Get a new unique object ID.
+
+        Args:
+            seed (ctypes.c_uint, optional): seed for the dts_oid_gen function.
+                Defaults to None which will use seconds since epoch as the seed.
+
+        Returns:
+            DaosObjId: new object ID
+
+        """
+        func = self.context.get_function('oid_gen')
+        if seed is None:
+            seed = ctypes.c_uint(int(time.time()))
+        return func(seed)
 
 
 class DaosSnapshot(object):

@@ -12,21 +12,23 @@ from test_utils_base import TestDaosApiBase
 from avocado import fail_on
 from command_utils_base import BasicParameter, CommandFailure
 from pydaos.raw import (DaosApiError, DaosContainer, DaosInputParams,
-                        c_uuid_to_str, str_to_c_uuid, get_object_id)
+                        c_uuid_to_str, str_to_c_uuid)
 from general_utils import get_random_string, DaosTestError
 
 
 class TestContainerData(object):
     """A class for storing data written to DaosContainer objects."""
 
-    def __init__(self, debug=False):
+    def __init__(self, object_id, debug=False):
         """Create a TestContainerData object.
 
         Args:
+            object_id (daos_cref.DaosObjId): object ID to use when writing
+                objects
             debug (bool, optional): if set log the write/read_record calls.
                 Defaults to False.
         """
-        self.obj = get_object_id()
+        self.obj = object_id
         self.records = []
         self.log = getLogger(__name__)
         self.debug = debug
@@ -237,7 +239,7 @@ class TestContainer(TestDaosApiBase):
     """A class for functional testing of DaosContainer objects."""
 
     def __init__(self, pool, cb_handler=None, daos_command=None):
-        """Create a TeestContainer object.
+        """Create a TestContainer object.
 
         Args:
             pool (TestPool): the test pool in which to create the container
@@ -359,7 +361,7 @@ class TestContainer(TestDaosApiBase):
             self._log_method("daos.container_create", kwargs)
             uuid = self.daos.get_output("container_create", **kwargs)[0]
 
-            # Populte the empty DaosContainer object with the properties of the
+            # Populate the empty DaosContainer object with the properties of the
             # container created with daos container create.
             self.container.uuid = str_to_c_uuid(uuid)
             self.container.attached = 1
@@ -618,7 +620,9 @@ class TestContainer(TestDaosApiBase):
             " with object class {}".format(obj_class)
             if obj_class is not None else "")
         for _ in range(self.object_qty.value):
-            self.written_data.append(TestContainerData(self.debug.value))
+            self.written_data.append(
+                TestContainerData(
+                    self.container.get_object_id(), self.debug.value))
             self.written_data[-1].write_object(
                 self, self.record_qty.value, self.akey_size.value,
                 self.dkey_size.value, self.data_size.value, rank, obj_class,
@@ -671,7 +675,9 @@ class TestContainer(TestDaosApiBase):
         total_bytes_written = 0
         finish_time = time() + duration
         while time() < finish_time:
-            self.written_data.append(TestContainerData(self.debug.value))
+            self.written_data.append(
+                TestContainerData(
+                    self.container.get_object_id(), self.debug.value))
             self.written_data[-1].write_object(
                 self, 1, self.akey_size.value, self.dkey_size.value,
                 self.data_size.value, rank, obj_class)
@@ -699,7 +705,7 @@ class TestContainer(TestDaosApiBase):
         for data in self.written_data:
             try:
                 data.obj.get_layout()
-                # Convert the list of longs into a list of ints
+                # Convert the list of longs into a list of integers
                 target_rank_lists.append(
                     [int(rank) for rank in data.obj.tgt_rank_list])
             except DaosApiError as error:
@@ -781,7 +787,7 @@ class TestContainer(TestDaosApiBase):
                 for record in self.written_data[index].records:
                     record["punched"] = True
 
-        # Retutrn the number of punched objects
+        # Return the number of punched objects
         return count
 
     def punch_records(self, indices, punch_dkey=True):
