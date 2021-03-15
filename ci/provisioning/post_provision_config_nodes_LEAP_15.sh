@@ -82,16 +82,14 @@ post_provision_config_nodes() {
         done
     fi
     if [ -n "$INST_RPMS" ]; then
-        # shellcheck disable=SC2086
-        dnf -y erase $INST_RPMS
+        dnf -y erase "${INST_RPMS[@]}"
     fi
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
     dnf -y install lsb-release
 
-    # shellcheck disable=SC2086
     if [ -n "$INST_RPMS" ] &&
-       ! dnf -y $dnf_repo_args install $INST_RPMS; then
+       ! dnf -y "${dnf_repo_args[@]}" install "${INST_RPMS[@]}"; then
         rc=${PIPESTATUS[0]}
         dump_repos
         exit "$rc"
