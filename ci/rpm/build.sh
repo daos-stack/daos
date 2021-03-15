@@ -25,7 +25,7 @@ SCONS_ARGS="${SCONS_FAULTS_ARGS}"
 : "${CHROOT_NAME:='epel-7-x86_64'}"
 : "${TARGET:='centos7'}"
 
-if $COV_DISABLED; then
+if $COVFN_DISABLED; then
   JOB_REPOS=""
   COVERAGE=""
 else

@@ -12,7 +12,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-@Library(value="pipeline-lib@bmurrell/only-use-params-test-tag-if-it-is-set") _
+//@Library(value="pipeline-lib@your_branch") _
 
 boolean doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
@@ -527,7 +527,7 @@ pipeline {
         SSH_KEY_ARGS = "-ici_key"
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
-        COV_DISABLED = cachedCommitPragma(pragma: 'Skip-bullseye', def_val: 'true')
+        COVFN_DISABLED = cachedCommitPragma(pragma: 'Skip-fnbullseye', def_val: 'true')
         SCONS_FAULTS_ARGS = scons_faults_args()
     }
 
