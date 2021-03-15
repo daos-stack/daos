@@ -109,6 +109,12 @@ degrade_full_partial_fail_2data(void **state)
 {
 	int shards[2];
 
+	/*
+	 * Skipping test because of DAOS-6755, which seems to be related to EC
+	 * aggregation
+	 */
+	skip();
+
 	shards[0] = 0;
 	shards[1] = 3;
 	degrade_ec_internal(state, shards, 2, FULL_PARTIAL_UPDATE);
