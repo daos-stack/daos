@@ -1901,7 +1901,6 @@ cleanup:
 		free(endpts);
 		endpts = NULL;
 	}
-
 	if (all_params != NULL)
 		D_FREE(all_params);
 	d_log_fini();
