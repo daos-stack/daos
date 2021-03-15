@@ -3,7 +3,6 @@
 REPOS_DIR=/etc/yum.repos.d
 DISTRO_NAME=centos7
 LSB_RELEASE=redhat-lsb-core
-read -r -a inst_rpms <<< "${INST_RPMS:-}"
 
 timeout_yum() {
     local timeout="$1"
@@ -117,15 +116,17 @@ post_provision_config_nodes() {
             fi
         done
     fi
-    if [ ${#inst_rpms[@]} -gt 0 ]; then
-        dnf -y erase "${inst_rpms[@]}"
+    if [ -n "$INST_RPMS" ]; then
+        # shellcheck disable=SC2086
+        dnf -y erase $INST_RPMS
     fi
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
     dnf -y install $LSB_RELEASE
 
-    if [ ${#inst_rpms[@]} -gt 0 ] &&
-       ! dnf -y "${dnf_repo_args[@]}" install "${inst_rpms[@]}"; then
+    # shellcheck disable=SC2086
+    if [ -n "$INST_RPMS" ] &&
+       ! dnf -y $dnf_repo_args install $INST_RPMS; then
         rc=${PIPESTATUS[0]}
         dump_repos
         exit "$rc"

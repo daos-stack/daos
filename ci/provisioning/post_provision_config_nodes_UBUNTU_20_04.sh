@@ -1,7 +1,5 @@
 #!/bin/bash
 
-read -r -a inst_rpms <<< "${INST_RPMS:-}"
-
 post_provision_config_nodes() {
     # should we port this to Ubuntu or just consider $CONFIG_POWER_ONLY dead?
     #if $CONFIG_POWER_ONLY; then
@@ -39,8 +37,9 @@ post_provision_config_nodes() {
         done
     fi
     apt-get update
-    if [ ${#inst_rpms[@]} -gt 0 ]; then
-        if ! apt-get -y remove "${inst_rpms[@]}"; then
+    if [ -n "$INST_RPMS" ]; then
+        # shellcheck disable=SC2086
+        if ! apt-get -y remove $INST_RPMS; then
             rc=${PIPESTATUS[0]}
             if [ $rc -ne 100 ]; then
                 echo "Error $rc removing $INST_RPMS"
@@ -53,8 +52,9 @@ post_provision_config_nodes() {
                        python3-avocado-plugins-varianter-yaml-to-mux \
                        lsb-core
 
-    if [ ${#inst_rpms[@]} -gt 0 ] &&
-       ! apt-get -y install "${inst_rpms[@]}"; then
+    # shellcheck disable=2086
+    if [ -n "$INST_RPMS"] &&
+       ! apt-get -y install $INST_RPMS; then
         rc=${PIPESTATUS[0]}
         for file in /etc/apt/sources.list{,.d/*.list}; do
             echo "---- $file ----"
