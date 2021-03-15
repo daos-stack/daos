@@ -121,8 +121,6 @@ struct btr_context {
 	 * or delete because the probe path could have been changed.
 	 */
 	int				 tc_probe_rc;
-	/** Mark the current entry as aborted */
-	bool				 tc_aborted;
 	/** refcount, used by iterator */
 	int				 tc_ref;
 	/** cached tree class, avoid loading from slow memory */
@@ -920,8 +918,6 @@ btr_check_availability(struct btr_context *tcx, struct btr_check_alb *alb)
 	struct btr_record	*rec;
 	int			 rc;
 
-	tcx->tc_aborted = false;
-
 	if (btr_ops(tcx)->to_check_availability == NULL)
 		return PROBE_RC_OK;
 
@@ -961,10 +957,9 @@ btr_check_availability(struct btr_context *tcx, struct btr_check_alb *alb)
 		 *	for the case in the new aggregation logic.
 		 *	But before that, just make it fall through.
 		 */
-	case ALB_AVAILABLE_CLEAN:
-		return PROBE_RC_OK;
 	case ALB_AVAILABLE_ABORTED:
-		tcx->tc_aborted = true;
+		/** NB: Entry is aborted flag set and we can purge it */
+	case ALB_AVAILABLE_CLEAN:
 		return PROBE_RC_OK;
 	case ALB_UNAVAILABLE:
 	default:
@@ -3664,10 +3659,6 @@ dbtree_iter_delete(daos_handle_t ih, void *args)
 	rc = btr_iter_is_ready(itr);
 	if (rc != 0)
 		return rc;
-
-	/** The probed entry is not committed so return -DER_TX_BUSY */
-	if (tcx->tc_aborted)
-		return -DER_TX_BUSY;
 
 	rc = btr_tx_delete(tcx, args);
 

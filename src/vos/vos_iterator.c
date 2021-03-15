@@ -610,7 +610,7 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 	vos_iter_entry_t	iter_ent = {0};
 	daos_epoch_t		read_time = 0;
 	daos_handle_t		ih;
-	unsigned int		acts = 0;
+	unsigned int		acts;
 	bool			skipped;
 	int			rc;
 
@@ -622,6 +622,8 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 	if (type == VOS_ITER_COUUID && recursive)
 		return -DER_NOSYS;
 
+restart:
+	acts = 0;
 	anchor = type2anchor(type, anchors);
 	rc = vos_iter_prepare(type, param, &ih, dth);
 	if (rc != 0) {
@@ -772,6 +774,10 @@ out:
 			DP_RC(rc));
 
 	vos_iter_finish(ih);
+
+	if (acts & VOS_ITER_CB_RESTART)
+		goto restart;
+
 	return rc;
 }
 
