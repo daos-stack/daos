@@ -1852,29 +1852,28 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 	}
 	dkey = (daos_key_t *)&oer->er_dkey;
 	iod = (daos_iod_t *)&oer->er_iod;
-	if (iod->iod_nr) {
-		rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oer->er_oid,
-				      oer->er_epoch, 0, dkey, 1, iod, NULL,
-				      NULL, 0, &ioh, NULL);
-		if (rc) {
-			D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
-				DP_UOID(oer->er_oid), DP_RC(rc));
-			goto out;
-		}
-		biod = vos_ioh2desc(ioh);
-		rc = bio_iod_prep(biod);
-		if (rc) {
-			D_ERROR(DF_UOID" bio_iod_prep failed: "DF_RC".\n",
-				DP_UOID(oer->er_oid), DP_RC(rc));
-			goto out;
-		}
-		rc = obj_bulk_transfer(rpc, CRT_BULK_PUT, false, &oer->er_bulk,
-				       NULL, ioh, NULL, NULL, 1, NULL);
-		if (rc) {
-			D_ERROR(DF_UOID" bulk transfer failed: "DF_RC".\n",
-				DP_UOID(oer->er_oid), DP_RC(rc));
-			goto out;
-		}
+	rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oer->er_oid,
+			      oer->er_epoch, 0, dkey, 1, iod, NULL,
+			      NULL, 0, &ioh, NULL);
+	if (rc) {
+		D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
+			DP_UOID(oer->er_oid), DP_RC(rc));
+		goto out;
+	}
+	biod = vos_ioh2desc(ioh);
+	rc = bio_iod_prep(biod);
+	if (rc) {
+		D_ERROR(DF_UOID" bio_iod_prep failed: "DF_RC".\n",
+			DP_UOID(oer->er_oid), DP_RC(rc));
+		goto out;
+	}
+	rc = obj_bulk_transfer(rpc, CRT_BULK_PUT, false, &oer->er_bulk, NULL,
+			       ioh, NULL, NULL, 1, NULL);
+	if (rc) {
+		D_ERROR(DF_UOID" bulk transfer failed: "DF_RC".\n",
+			DP_UOID(oer->er_oid), DP_RC(rc));
+		goto out;
+	}
 
 	rc = bio_iod_post(biod);
 	if (rc) {
