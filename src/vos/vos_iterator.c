@@ -622,8 +622,6 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 	if (type == VOS_ITER_COUUID && recursive)
 		return -DER_NOSYS;
 
-restart:
-	acts = 0;
 	anchor = type2anchor(type, anchors);
 	rc = vos_iter_prepare(type, param, &ih, dth);
 	if (rc != 0) {
@@ -680,14 +678,21 @@ probe:
 			set_reprobe(type, acts, anchors, param->ip_flags);
 			skipped = (acts & VOS_ITER_CB_SKIP);
 
-			if (acts & (VOS_ITER_CB_ABORT | VOS_ITER_CB_RESTART))
+			if (acts & VOS_ITER_CB_ABORT)
 				break;
+
+			if (acts & VOS_ITER_CB_RESTART) {
+				daos_anchor_set_zero(anchor);
+				probe_anchor = NULL;
+				goto probe;
+			}
 
 			if (need_reprobe(type, anchors)) {
 				D_ASSERT(!daos_anchor_is_zero(anchor) &&
 					 !daos_anchor_is_eof(anchor));
 				goto probe;
 			}
+
 		}
 
 		if (recursive && !is_last_level(type) && !skipped &&
@@ -743,8 +748,14 @@ probe:
 
 			set_reprobe(type, acts, anchors, param->ip_flags);
 
-			if (acts & (VOS_ITER_CB_ABORT | VOS_ITER_CB_RESTART))
+			if (acts & VOS_ITER_CB_ABORT)
 				break;
+
+			if (acts & VOS_ITER_CB_RESTART) {
+				daos_anchor_set_zero(anchor);
+				probe_anchor = NULL;
+				goto probe;
+			}
 
 			if (need_reprobe(type, anchors)) {
 				D_ASSERT(!daos_anchor_is_zero(anchor) &&
@@ -774,9 +785,6 @@ out:
 			DP_RC(rc));
 
 	vos_iter_finish(ih);
-
-	if (rc == 0 && (acts & VOS_ITER_CB_RESTART))
-		goto restart;
 
 	return rc;
 }
