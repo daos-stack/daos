@@ -191,6 +191,29 @@ static int data_init(int server, crt_init_options_t *opt)
 		D_WARN("CRT_CTX_NUM has no effect because CRT_CTX_SHARE_ADDR "
 		       "is not set or set to 0\n");
 
+	/** Enable statistics only for the server side and if requested */
+	if (opt && opt->cio_use_sensors && server) {
+		int	ret;
+
+		/** enable sensors */
+		crt_gdata.cg_use_sensors = true;
+
+		/** set up the global sensors */
+		ret = d_tm_add_metric(&crt_gdata.cg_uri_self, D_TM_COUNTER,
+				      "total number of URI requests for self",
+				      "", "net/uri/lookup_self");
+		if (ret)
+			D_WARN("Failed to create uri self sensor: "DF_RC"\n",
+			       DP_RC(ret));
+
+		ret = d_tm_add_metric(&crt_gdata.cg_uri_other, D_TM_COUNTER,
+				      "total number of URI requests for other "
+				      "ranks", "", "net/uri/lookup_other");
+		if (ret)
+			D_WARN("Failed to create uri other sensor: "DF_RC"\n",
+			       DP_RC(ret));
+	}
+
 	gdata_init_flag = 1;
 exit:
 	return rc;

@@ -708,13 +708,13 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	struct crt_rpc_priv	 rpc_tmp = {0};
 
 	hg_info = HG_Get_info(hg_hdl);
-	if (hg_info == NULL) {
+	if (unlikely(hg_info == NULL)) {
 		D_ERROR("HG_Get_info failed.\n");
 		D_GOTO(out, hg_ret = HG_PROTOCOL_ERROR);
 	}
 
 	crt_ctx = HG_Context_get_data(hg_info->context);
-	if (crt_ctx == NULL) {
+	if (unlikely(crt_ctx == NULL)) {
 		D_ERROR("HG_Context_get_data failed.\n");
 		D_GOTO(out, hg_ret = HG_PROTOCOL_ERROR);
 	}
@@ -727,7 +727,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	rpc_tmp.crp_pub.cr_ctx = crt_ctx;
 
 	rc = crt_hg_unpack_header(hg_hdl, &rpc_tmp, &proc);
-	if (rc != 0) {
+	if (unlikely(rc != 0)) {
 		D_ERROR("crt_hg_unpack_header failed, rc: %d.\n", rc);
 		crt_hg_reply_error_send(&rpc_tmp, -DER_MISC);
 		/** safe to return here because relevant portion of rpc_tmp is
@@ -745,7 +745,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	rpc_tmp.crp_pub.cr_opc = opc;
 
 	opc_info = crt_opc_lookup(crt_gdata.cg_opc_map, opc, CRT_UNLOCK);
-	if (opc_info == NULL) {
+	if (unlikely(opc_info == NULL)) {
 		D_ERROR("opc: %#x, lookup failed.\n", opc);
 		/*
 		 * The RPC is not registered on the server, we don't know how to
@@ -760,7 +760,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	D_ASSERT(opc_info->coi_opc == opc);
 
 	D_ALLOC(rpc_priv, opc_info->coi_rpc_size);
-	if (rpc_priv == NULL) {
+	if (unlikely(rpc_priv == NULL)) {
 		crt_hg_reply_error_send(&rpc_tmp, -DER_DOS);
 		crt_hg_unpack_cleanup(proc);
 		HG_Destroy(rpc_tmp.crp_hg_hdl);
@@ -786,7 +786,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		  &rpc_priv->crp_pub);
 
 	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, true /* srv_flag */);
-	if (rc != 0) {
+	if (unlikely(rc != 0)) {
 		D_ERROR("crt_rpc_priv_init rc=%d, opc=%#x\n", rc, opc);
 		crt_hg_reply_error_send(&rpc_tmp, -DER_MISC);
 		crt_hg_unpack_cleanup(proc);
@@ -816,13 +816,13 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		crt_hg_unpack_cleanup(proc);
 	}
 
-	if (opc_info->coi_rpc_cb == NULL) {
+	if (unlikely(opc_info->coi_rpc_cb == NULL)) {
 		D_ERROR("NULL crp_hg_hdl, opc: %#x.\n", opc);
 		crt_hg_reply_error_send(rpc_priv, -DER_UNREG);
 		D_GOTO(decref, hg_ret = HG_SUCCESS);
 	}
 
-	if (rpc_priv->crp_fail_hlc) {
+	if (unlikely(rpc_priv->crp_fail_hlc)) {
 		crt_hg_reply_error_send(rpc_priv, -DER_HLC_SYNC);
 		D_GOTO(decref, hg_ret = HG_SUCCESS);
 	}
@@ -831,7 +831,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		rc = crt_rpc_common_hdlr(rpc_priv);
 	else
 		rc = crt_corpc_common_hdlr(rpc_priv);
-	if (rc != 0) {
+	if (unlikely(rc != 0)) {
 		RPC_ERROR(rpc_priv,
 			  "failed to invoke RPC handler, rc: %d, opc: %#x\n",
 			  rc, opc);

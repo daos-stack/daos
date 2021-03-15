@@ -383,9 +383,10 @@ _vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 		rc = bio_iod_post(vos_ioh2desc(ioh));
 end:
 		if (op_type == TS_DO_UPDATE)
-			rc = vos_update_end(ioh, 0, &cred->tc_dkey, rc, NULL);
+			rc = vos_update_end(ioh, 0, &cred->tc_dkey, rc, NULL,
+					    NULL);
 		else
-			rc = vos_fetch_end(ioh, rc);
+			rc = vos_fetch_end(ioh, NULL, rc);
 	}
 
 	TS_TIME_END(duration, start);
