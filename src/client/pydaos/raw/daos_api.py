@@ -894,9 +894,11 @@ class IORequest(object):
             # create a new object
             self.obj = DaosObj(context, container)
             self.obj.create(rank, objtype)
-            self.obj.open()
         else:
             self.obj = obj
+
+        if self.obj.obj_handle is None:
+            self.obj.open()
 
         self.io_type = ctypes.c_int(iotype)
 
