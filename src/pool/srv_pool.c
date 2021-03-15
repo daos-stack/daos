@@ -437,7 +437,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 		   uint32_t ndomains, const uint32_t *domains)
 {
 	uint32_t		version = DS_POOL_MD_VERSION;
-	struct pool_buf	       *map_buf;
+	struct pool_buf	       *map_buf = NULL;
 	uint32_t		map_version = 1;
 	uint32_t		connectable;
 	uint32_t		nhandles = 0;
@@ -500,7 +500,8 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 out_uuids:
 	D_FREE(uuids);
 out_map_buf:
-	pool_buf_free(map_buf);
+	if (map_buf)
+		pool_buf_free(map_buf);
 out:
 	return rc;
 }
