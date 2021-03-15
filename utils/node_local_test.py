@@ -544,7 +544,8 @@ class DaosServer():
         self.running = False
 
         rc = self.run_dmg(['system', 'stop'])
-        assert rc.returncode == 0 # nosec
+        if not self.valgrind:
+            assert rc.returncode == 0 # nosec
 
         start = time.time()
         while True:
