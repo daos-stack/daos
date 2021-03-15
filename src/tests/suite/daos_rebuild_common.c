@@ -403,6 +403,7 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, int index)
 	int	akey_punch_idx = 1;
 	int	dkey_punch_idx = 1;
 	int	rec_punch_idx = 2;
+	int	large_key_idx = 7;
 	int	j;
 	int	k;
 	int	l;
@@ -427,7 +428,7 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, int index)
 					    l == rec_punch_idx)
 						continue;
 					memset(data, 0, REC_SIZE);
-					if (l == 7)
+					if (l == large_key_idx)
 						lookup_single(large_key, akey,
 							      l, data, REC_SIZE,
 							      DAOS_TX_NONE,
@@ -440,7 +441,7 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, int index)
 					assert_memory_equal(data, data_verify,
 						    strlen(data_verify));
 				} else {
-					if (l == 7)
+					if (l == large_key_idx)
 						insert_single(large_key, akey,
 							l, data,
 							strlen(data) + 1,

@@ -744,40 +744,8 @@ int
 run_daos_sub_tests_only(char *test_name, const struct CMUnitTest *tests,
 			int tests_size, int *sub_tests, int sub_tests_size)
 {
-	int i;
-	int rc = 0;
-
-	if (sub_tests != NULL) {
-		struct CMUnitTest *subtests;
-		int subtestsnb = 0;
-
-		D_ALLOC_ARRAY(subtests, sub_tests_size);
-		if (subtests == NULL) {
-			print_message("failed allocating subtests array\n");
-			return -DER_NOMEM;
-		}
-
-		for (i = 0; i < sub_tests_size; i++) {
-			if (sub_tests[i] >= tests_size || sub_tests[i] < 0) {
-				print_message("No subtest %d\n", sub_tests[i]);
-				continue;
-			}
-			subtests[i] = tests[sub_tests[i]];
-			subtestsnb++;
-		}
-
-		/* run the sub-tests */
-		if (subtestsnb > 0)
-			rc = _cmocka_run_group_tests(test_name, subtests,
-						     subtestsnb, NULL, NULL);
-		D_FREE(subtests);
-	} else {
-		/* run the full suite */
-		rc = _cmocka_run_group_tests(test_name, tests, tests_size,
-					     NULL, NULL);
-	}
-
-	return rc;
+	return run_daos_sub_tests(test_name, tests, tests_size, sub_tests,
+				  sub_tests_size, NULL, NULL);
 }
 
 int
@@ -799,11 +767,11 @@ run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
 		}
 
 		for (i = 0; i < sub_tests_size; i++) {
-			if (sub_tests[i] > tests_size || sub_tests[i] < 1) {
+			if (sub_tests[i] > tests_size || sub_tests[i] < 0) {
 				print_message("No subtest %d\n", sub_tests[i]);
 				continue;
 			}
-			subtests[i] = tests[sub_tests[i] - 1];
+			subtests[i] = tests[sub_tests[i]];
 			subtestsnb++;
 		}
 
