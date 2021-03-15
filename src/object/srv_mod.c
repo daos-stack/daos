@@ -92,16 +92,7 @@ obj_tls_init(int xs_id, int tgt_id)
 
 	/** register different per-opcode sensors */
 	for (opc = 0; opc < OBJ_PROTO_CLI_COUNT; opc++) {
-		/** Start with latency, of type gauge */
-		rc = d_tm_add_metric(&tls->ot_op_lat[opc], D_TM_GAUGE,
-				     "object RPC processing time", "",
-				     "io/%u/ops/%s/latency", tgt_id,
-				     obj_opc_to_str(opc));
-		if (rc)
-			D_WARN("Failed to create latency sensor: "DF_RC"\n",
-			       DP_RC(rc));
-
-		/** Continue with number of active requests, of type gauge */
+		/** Start with number of active requests, of type gauge */
 		rc = d_tm_add_metric(&tls->ot_op_active[opc], D_TM_GAUGE,
 				     "number of active object RPCs", "",
 				     "io/%u/ops/%s/active", tgt_id,
@@ -110,15 +101,67 @@ obj_tls_init(int xs_id, int tgt_id)
 			D_WARN("Failed to create active cnt sensor: "DF_RC"\n",
 			       DP_RC(rc));
 
-		/** And finally the total number of requests, of type counter */
+		/** Then the total number of requests, of type counter */
 		rc = d_tm_add_metric(&tls->ot_op_total[opc], D_TM_COUNTER,
 				     "total number of processed object RPCs",
-				     "",
-				     "io/%u/ops/%s/total", tgt_id,
+				     "", "io/%u/ops/%s/total", tgt_id,
 				     obj_opc_to_str(opc));
 		if (rc)
 			D_WARN("Failed to create total cnt sensor: "DF_RC"\n",
 			       DP_RC(rc));
+
+		if (opc == DAOS_OBJ_RPC_UPDATE ||
+		    opc == DAOS_OBJ_RPC_TGT_UPDATE ||
+		    opc == DAOS_OBJ_RPC_FETCH)
+			/** See below, latency reported per size for those */
+			continue;
+
+		/** And finally the per-opcode latency, of type gauge */
+		rc = d_tm_add_metric(&tls->ot_op_lat[opc], D_TM_GAUGE,
+				     "object RPC processing time (in us)", "",
+				     "io/%u/ops/%s/latency", tgt_id,
+				     obj_opc_to_str(opc));
+		if (rc)
+			D_WARN("Failed to create latency sensor: "DF_RC"\n",
+			       DP_RC(rc));
+	}
+
+	/**
+	 * Maintain per-I/O size latency for update & fetch RPCs
+	 * of type gauge
+	 */
+	for (opc = 0; opc < 2; opc++) {
+		int			i;
+		unsigned int		bucket_max = 256;
+		struct d_tm_node_t	**tm[2] = { tls->ot_update_lat,
+						    tls->ot_fetch_lat };
+		for (i = 0; i < NR_LATENCY_BUCKETS; i++) {
+			char *path;
+
+			if (bucket_max < 1024) /** B */
+				D_ASPRINTF(path, "io/%u/%s_latency_%uB",
+					   tgt_id, opc ? "fetch" : "update",
+					   bucket_max);
+			else if (bucket_max < 1024 * 1024) /** KB */
+				D_ASPRINTF(path, "io/%u/%s_latency_%uKB",
+					   tgt_id, opc ? "fetch" : "update",
+					   bucket_max / 1024);
+			else if (bucket_max <= 1024 * 1024 * 4) /** MB */
+				D_ASPRINTF(path, "io/%u/%s_latency_%uMB",
+					   tgt_id, opc ? "fetch" : "update",
+					   bucket_max / (1024 * 1024));
+			else /** >4MB */
+				D_ASPRINTF(path, "io/%u/%s_latency_>4MB",
+					   tgt_id, opc ? "fetch" : "update");
+			rc = d_tm_add_metric(&tm[opc][i], D_TM_GAUGE,
+					     "Per-I/O size RPC processing time "
+					     "(in us)", "", path);
+			D_FREE(path);
+			if (rc)
+				D_WARN("Failed to create per-I/O size latency "
+				       "sensor: "DF_RC"\n", DP_RC(rc));
+			bucket_max <<= 1;
+		}
 	}
 
 	/** Total number of silently restarted updates, of type counter */
@@ -137,6 +180,22 @@ obj_tls_init(int xs_id, int tgt_id)
 			     obj_opc_to_str(DAOS_OBJ_RPC_UPDATE));
 	if (rc)
 		D_WARN("Failed to create resent cnt sensor: "DF_RC"\n",
+		       DP_RC(rc));
+
+	/** Total bytes read */
+	rc = d_tm_add_metric(&tls->ot_fetch_bytes, D_TM_COUNTER,
+			     "total number of bytes fetched/read", "",
+			     "io/%u/fetch_bytes", tgt_id);
+	if (rc)
+		D_WARN("Failed to create bytes fetch sensor: "DF_RC"\n",
+		       DP_RC(rc));
+
+	/** Total bytes written */
+	rc = d_tm_add_metric(&tls->ot_update_bytes, D_TM_COUNTER,
+			     "total number of bytes updated/written", "",
+			     "io/%u/update_bytes", tgt_id);
+	if (rc)
+		D_WARN("Failed to create bytes update sensor: "DF_RC"\n",
 		       DP_RC(rc));
 
 	return tls;
