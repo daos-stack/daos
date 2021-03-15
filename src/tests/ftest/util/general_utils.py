@@ -627,6 +627,8 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
                 "if " + ps_cmd,
                 "then rc=1",
                 "sudo pkill --signal USR2 {}".format(pattern),
+                # leave time for ABT info/stacks dump vs xstream/pool/ULT number
+		"sleep 20",
                 "fi",
                 "exit $rc",
             ]
