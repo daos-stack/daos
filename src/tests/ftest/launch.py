@@ -547,10 +547,10 @@ def get_test_list(tags):
         if not test_list:
             test_list = ["./"]
         version = get_output(["avocado", "-v"])
-        if version.split()[-1].startswith("52"):
-            command = ["avocado", "list", "--paginator=off"]
-        else:
+        if version.split()[-1].startswith("82"):
             command = ["avocado", "--paginator=off", "list"]
+        else:
+            command = ["avocado", "list", "--paginator=off"]
         for test_tag in test_tags:
             command.append(str(test_tag))
         command.extend(test_list if test_list else ["./"])
