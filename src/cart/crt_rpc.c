@@ -259,6 +259,7 @@ crt_internal_rpc_register(bool server)
 		D_ERROR("crt_proto_register() failed, "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
+
 	if (!server)
 		return -DER_SUCCESS;
 
