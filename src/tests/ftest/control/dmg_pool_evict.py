@@ -62,7 +62,7 @@ class DmgPoolEvictTest(TestWithServers):
                 "daos pool list-cont with second pool succeeded as expected")
         except CommandFailure:
             self.fail(
-                "daos pool list-cont with first pool failed after pool evict!")
+                "daos pool list-cont with second pool failed after pool evict!")
 
         self.container.pop()
 
