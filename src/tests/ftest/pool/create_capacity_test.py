@@ -8,7 +8,7 @@ import time
 
 from pool_test_base import PoolTestBase
 from server_utils import ServerFailed
-
+from apricot import skipForTicket
 
 class PoolCreateTests(PoolTestBase):
     # pylint: disable=too-many-ancestors,too-few-public-methods
@@ -20,6 +20,7 @@ class PoolCreateTests(PoolTestBase):
     :avocado: recursive
     """
 
+    @skipForTicket("DAOS-7016")
     def test_create_pool_quantity(self):
         """JIRA ID: DAOS-5114 / SRS-2 / SRS-4.
 

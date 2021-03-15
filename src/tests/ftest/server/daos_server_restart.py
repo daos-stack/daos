@@ -7,7 +7,7 @@
 from __future__ import print_function
 
 from avocado import fail_on
-from apricot import TestWithServers
+from apricot import TestWithServers, skipForTicket
 from daos_utils import DaosCommand
 from command_utils import CommandFailure
 from server_utils import ServerFailed
@@ -119,6 +119,7 @@ class DaosServerTest(TestWithServers):
         self.log.info("(5)Verify after server restarted.")
         self.verify_pool_list()
 
+    @skipForTicket("DAOS-7016")
     def test_engine_restart(self):
         """
         JIRA ID: DAOS-3593.

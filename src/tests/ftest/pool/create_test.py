@@ -5,7 +5,7 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from pool_test_base import PoolTestBase
-
+from apricot import skipForTicket
 
 class PoolCreateTests(PoolTestBase):
     # pylint: disable=too-many-ancestors
@@ -17,6 +17,7 @@ class PoolCreateTests(PoolTestBase):
     :avocado: recursive
     """
 
+    @skipForTicket("DAOS-7016")
     def test_create_max_pool_scm_only(self):
         """JIRA ID: DAOS-5114 / SRS-1.
 
@@ -34,6 +35,7 @@ class PoolCreateTests(PoolTestBase):
         self.pool = self.get_pool_list(1, 0.9, None, 1)
         self.check_pool_creation(60)
 
+    @skipForTicket("DAOS-7016")
     def test_create_max_pool(self):
         """JIRA ID: DAOS-5114 / SRS-3.
 
@@ -51,6 +53,7 @@ class PoolCreateTests(PoolTestBase):
         self.pool = self.get_pool_list(1, 0.9, 0.9, 1)
         self.check_pool_creation(120)
 
+    @skipForTicket("DAOS-7016")
     def test_create_no_space(self):
         """JIRA ID: DAOS-3728.
 
@@ -102,6 +105,7 @@ class PoolCreateTests(PoolTestBase):
             "should succeed."
         )
 
+    @skipForTicket("DAOS-7016")
     def test_create_no_space_loop(self):
         """JIRA ID: DAOS-3728.
 
