@@ -4,6 +4,7 @@ REPOS_DIR=/etc/dnf.repos.d
 DISTRO_NAME=leap15
 LSB_RELEASE=lsb-release
 EXCLUDE_UPGRADE=fuse,fuse-libs,fuse-devel,mercury,daos,daos-\*
+read -r -a inst_rpms <<< "$INST_RPMS"
 
 bootstrap_dnf() {
     time zypper --non-interactive install dnf
@@ -23,13 +24,13 @@ distro_custom() {
                /etc/profile.d/lmod.sh;                                        \
     fi
 
-    # force install of avocado 82.0
+    # force install of avocado 69.0
     dnf -y erase avocado{,-common} \
                  python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}}
     pip3 install --upgrade pip
-    pip3 install "avocado-framework<83.0"
-    pip3 install "avocado-framework-plugin-result-html<83.0"
-    pip3 install "avocado-framework-plugin-varianter-yaml-to-mux<83.0"
+    pip3 install "avocado-framework<70.0"
+    pip3 install "avocado-framework-plugin-result-html<70.0"
+    pip3 install "avocado-framework-plugin-varianter-yaml-to-mux<70.0"
 
 }
 
@@ -81,15 +82,15 @@ post_provision_config_nodes() {
             fi
         done
     fi
-    if [ -n "$INST_RPMS" ]; then
-        dnf -y erase "${INST_RPMS[@]}"
+    if [ ${#inst_rpms[@]} -gt 0 ]; then
+        dnf -y erase "${inst_rpms[@]}"
     fi
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
-    dnf -y install lsb-release
+    dnf -y install $LSB_RELEASE
 
-    if [ -n "$INST_RPMS" ] &&
-       ! dnf -y "${dnf_repo_args[@]}" install "${INST_RPMS[@]}"; then
+    if [ ${#inst_rpms[@]} -gt 0 ] &&
+       ! dnf -y "${dnf_repo_args[@]}" install "${inst_rpms[@]}"; then
         rc=${PIPESTATUS[0]}
         dump_repos
         exit "$rc"

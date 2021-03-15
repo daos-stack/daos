@@ -20,58 +20,75 @@
 #include <gurt/hash.h>
 #include <gurt/heap.h>
 #include <gurt/atomic.h>
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 struct crt_hg_gdata;
 struct crt_grp_gdata;
 
 /* CaRT global data */
 struct crt_gdata {
-	/*
+	/**
 	 * TODO: Temporary storage for context0 URI, used during group
 	 * attach info file population for self address. Per-provider
 	 * context0 URIs need to be stored for multi-provider support
 	 */
 	char			cg_addr[CRT_ADDR_STR_MAX_LEN];
 
-	/* Flag indicating whether it is a client or server */
-	bool			cg_server;
-	/* Flag indicating whether scalable endpoint mode is enabled */
-	bool			cg_sep_mode;
-	/* Flag indicating to use contiguous port ranges for contexts */
-	bool			cg_contig_ports;
-	int			cg_na_plugin; /* NA plugin type */
+	/** NA pluging type */
+	int			cg_na_plugin;
 
-	/* global timeout value (second) for all RPCs */
+	/** global timeout value (second) for all RPCs */
 	uint32_t		cg_timeout;
-	/* credits limitation for #inflight RPCs per target EP CTX */
+	/** credits limitation for #inflight RPCs per target EP CTX */
 	uint32_t		cg_credit_ep_ctx;
 
-	/* CaRT contexts list */
+	/** CaRT contexts list */
 	d_list_t		cg_ctx_list;
-	/* actual number of items in CaRT contexts list */
+	/** actual number of items in CaRT contexts list */
 	int			cg_ctx_num;
-	/* maximum number of contexts user wants to create */
+	/** maximum number of contexts user wants to create */
 	uint32_t		cg_ctx_max_num;
-	/* the global opcode map */
+	/** the global opcode map */
 	struct crt_opc_map	*cg_opc_map;
-	/* HG level global data */
+	/** HG level global data */
 	struct crt_hg_gdata	*cg_hg;
 
 	struct crt_grp_gdata	*cg_grp;
 
-	/* refcount to protect crt_init/crt_finalize */
+	/** refcount to protect crt_init/crt_finalize */
 	volatile unsigned int	cg_refcount;
 
-	/* flags to keep track of states */
-	volatile unsigned int	cg_inited		: 1,
+	/** flags to keep track of states */
+	unsigned int		cg_inited		: 1,
 				cg_grp_inited		: 1,
 				cg_swim_inited		: 1,
-				cg_auto_swim_disable	: 1;
+				cg_auto_swim_disable	: 1,
+				/** whether it is a client or server */
+				cg_server		: 1,
+				/** whether scalable endpoint is enabled */
+				cg_sep_mode		: 1,
+				/** whether to use contiguous port ranges */
+				cg_contig_ports		: 1,
+				/** whether sensors are enabled */
+				cg_use_sensors		: 1;
 
 	ATOMIC uint64_t		cg_rpcid; /* rpc id */
 
 	/* protects crt_gdata */
 	pthread_rwlock_t	cg_rwlock;
+
+	/** Global statistics (when cg_use_sensors = true) */
+	/**
+	 * Total number of successfully served URI lookup for self,
+	 * of type counter
+	 */
+	struct d_tm_node_t	*cg_uri_self;
+	/**
+	 * Total number of successfully served (from cache) URI lookup for
+	 * others, of type counter
+	 */
+	struct d_tm_node_t	*cg_uri_other;
 };
 
 extern struct crt_gdata		crt_gdata;
@@ -128,24 +145,38 @@ extern struct crt_plugin_gdata		crt_plugin_gdata;
 
 /* crt_context */
 struct crt_context {
-	d_list_t		 cc_link; /* link to gdata.cg_ctx_list */
-	int			 cc_idx; /* context index */
-	struct crt_hg_context	 cc_hg_ctx; /* HG context */
+	d_list_t		 cc_link;	/** link to gdata.cg_ctx_list */
+	int			 cc_idx;	/** context index */
+	struct crt_hg_context	 cc_hg_ctx;	/** HG context */
+
+	/* callbacks */
 	void			*cc_rpc_cb_arg;
-	crt_rpc_task_t		 cc_rpc_cb; /* rpc callback */
+	crt_rpc_task_t		 cc_rpc_cb;	/** rpc callback */
 	crt_rpc_task_t		 cc_iv_resp_cb;
-	/* in-flight endpoint tracking hash table */
+
+	/** RPC tracking */
+	/** in-flight endpoint tracking hash table */
 	struct d_hash_table	 cc_epi_table;
-	/* binheap for inflight RPC timeout tracking */
+	/** binheap for inflight RPC timeout tracking */
 	struct d_binheap	 cc_bh_timeout;
-	/* mutex to protect cc_epi_table and timeout binheap */
+	/** mutex to protect cc_epi_table and timeout binheap */
 	pthread_mutex_t		 cc_mutex;
-	/* timeout per-context */
+
+	/** timeout per-context */
 	uint32_t		 cc_timeout_sec;
-	/* Stores self uri for the current context */
+	/** provider on which context is allocated */
+	int			 cc_provider;
+
+	/** Per-context statistics (server-side only) */
+	/** Total number of timed out requests, of type counter */
+	struct d_tm_node_t	*cc_timedout;
+	/** Total number of timed out URI lookup requests, of type counter */
+	struct d_tm_node_t	*cc_timedout_uri;
+	/** Total number of failed address resolution, of type counter */
+	struct d_tm_node_t	*cc_failed_addr;
+
+	/** Stores self uri for the current context */
 	char			 cc_self_uri[CRT_ADDR_STR_MAX_LEN];
-	/* provider on which context is allocated */
-	int			provider;
 };
 
 /* in-flight RPC req list, be tracked per endpoint for every crt_context */

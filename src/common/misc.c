@@ -616,11 +616,14 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 	crt_phy_addr_t	addr_env;
 	bool		sep = false;
 
+	/** enable statistics on the server side */
+	daos_crt_init_opt.cio_use_sensors = server;
+
+	/** Scalable EndPoint-related settings */
 	d_getenv_bool("CRT_CTX_SHARE_ADDR", &sep);
 	if (!sep)
-		return NULL;
+		goto out;
 
-	daos_crt_init_opt.cio_crt_timeout = 0;
 	daos_crt_init_opt.cio_sep_override = 1;
 
 	/* for socket provider, force it to use regular EP rather than SEP for:
@@ -632,7 +635,7 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 	    strncmp(addr_env, CRT_SOCKET_PROV, strlen(CRT_SOCKET_PROV)) == 0) {
 		D_INFO("for sockets provider force it to use regular EP.\n");
 		daos_crt_init_opt.cio_use_sep = 0;
-		return &daos_crt_init_opt;
+		goto out;
 	}
 
 	/* for psm2 provider, set a reasonable cio_ctx_max_num for cart */
@@ -647,6 +650,7 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 		daos_crt_init_opt.cio_ctx_max_num = ctx_nr;
 	}
 
+out:
 	return &daos_crt_init_opt;
 }
 

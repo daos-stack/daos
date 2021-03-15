@@ -925,6 +925,7 @@ def run_tests(test_files, tag_filter, args):
             test_command_list.extend([
                 "--mux-yaml", test_file["yaml"], "--", test_file["py"]])
             return_code |= time_command(test_command_list)
+            return_code |= stop_daos_agent_services(test_file["py"], args)
             return_code |= stop_daos_server_service(test_file["py"], args)
 
             # Optionally store all of the server and client config files
@@ -1737,6 +1738,29 @@ def get_test_category(test_file):
         [os.path.splitext(os.path.basename(part))[0] for part in file_parts])
 
 
+def stop_daos_agent_services(test_file, args):
+    """Stop any daos_agent.service running on the hosts running servers.
+
+    Args:
+        test_file (str): the test python file
+        args (argparse.Namespace): command line arguments for this program
+
+    Returns:
+        int: status code: 0 = success, 512 = failure
+
+    """
+    service = "daos_agent.service"
+    print("Verifying {} after running '{}'".format(service, test_file))
+    if args.test_clients:
+        hosts = list(args.test_servers)
+    else:
+        hosts = list(args.test_servers)
+    local_host = socket.gethostname().split(".")[0]
+    if local_host not in hosts:
+        hosts.append(local_host)
+    return stop_service(hosts, service)
+
+
 def stop_daos_server_service(test_file, args):
     """Stop any daos_server.service running on the hosts running servers.
 
@@ -1748,43 +1772,53 @@ def stop_daos_server_service(test_file, args):
         int: status code: 0 = success, 512 = failure
 
     """
-    hosts = list(args.test_servers)
-    print("Verifying daos_server.service after running '{}'".format(test_file))
-    status, stop_hosts, disable_hosts = get_daos_server_service_status(hosts)
+    service = "daos_server.service"
+    print("Verifying {} after running '{}'".format(service, test_file))
+    return stop_service(list(args.test_servers), service)
+
+
+def stop_service(hosts, service):
+    """Stop any daos_server.service running on the hosts running servers.
+
+    Args:
+        host_list (list): list of hosts on which to stop the service.
+        service (str): name of the service
+
+    Returns:
+        int: status code: 0 = success, 512 = failure
+
+    """
+    status, stop_hosts, disable_hosts = get_service_status(hosts, service)
     if stop_hosts:
-        print("Stopping daos_server.service on {}".format(stop_hosts))
-        command = "sudo systemctl stop daos_server.service"
+        print("Stopping {} on {}".format(service, stop_hosts))
+        command = "sudo systemctl stop {}".format(service)
         get_remote_output(str(stop_hosts), command)
     if disable_hosts:
-        print("Disabling daos_server.service on {}".format(stop_hosts))
-        command = "sudo systemctl disable daos_server.service"
+        print("Disabling {} on {}".format(service, stop_hosts))
+        command = "sudo systemctl disable {}".format(service)
         get_remote_output(str(disable_hosts), command)
     if stop_hosts or disable_hosts:
         check_hosts = NodeSet()
         check_hosts.add(stop_hosts)
         check_hosts.add(disable_hosts)
-        result = get_daos_server_service_status(hosts)
+        result = get_service_status(check_hosts, service)
         if result[1]:
-            print(
-                "Error daos_server.service still active on {}".format(
-                    result[1]))
+            print("Error {} still active on {}".format(service, result[1]))
             status = 512
         if result[2]:
-            print(
-                "Error daos_server.service still enabled on {}".format(
-                    result[2]))
+            print("Error {} still enabled on {}".format(service, result[2]))
             status = 512
         if result[0] != 0:
             status = 512
     return status
 
 
-def get_daos_server_service_status(host_list):
+def get_service_status(host_list, service):
     """Get the status of the daos_server.service.
 
     Args:
-        host_list (list): list of hosts on which to determine the state of the
-            daos_server.service.
+        host_list (list): list of hosts on which to get the service state
+        service (str): name of the service
 
     Returns:
         tuple: a tuple containing:
@@ -1799,7 +1833,7 @@ def get_daos_server_service_status(host_list):
     #   active, inactive, activating, deactivating, failed, unknown
     states_requiring_stop = ["active", "activating", "deactivating"]
     states_requiring_disable = states_requiring_stop + ["failed"]
-    command = "systemctl is-active daos_server.service"
+    command = "systemctl is-active {}".format(service)
     task = get_remote_output(host_list, command)
     for output, nodelist in task.iter_buffers():
         output_str = "\n".join([line.decode("utf-8") for line in output])

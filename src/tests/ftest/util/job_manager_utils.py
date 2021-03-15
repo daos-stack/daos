@@ -4,6 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+# pylint: disable=too-many-lines
 from datetime import datetime
 from distutils.spawn import find_executable
 import os
@@ -16,7 +17,7 @@ from command_utils import ExecutableCommand, SystemctlCommand
 from command_utils_base import FormattedParameter, EnvironmentVariables
 from command_utils_base import CommandFailure
 from env_modules import load_mpi
-from general_utils import pcmd, run_pcmd
+from general_utils import pcmd, stop_processes, run_pcmd
 from write_host_file import write_host_file
 
 
@@ -160,6 +161,18 @@ class JobManager(ExecutableCommand):
         # hosts.  If this value is not returned, indicate there are remote
         # processes running by returning a "R" state.
         return "R" if 1 not in results or len(results) > 1 else None
+
+    def kill(self):
+        """Forcibly terminate any job processes running on hosts."""
+        regex = self.job.command_regex
+        result = stop_processes(self._hosts, regex)
+        if 0 in result and len(result) == 1:
+            self.log.info(
+                "No remote %s processes killed (none found), done.", regex)
+        else:
+            self.log.info(
+                "***At least one remote %s process needed to be killed! Please "
+                "investigate/report.***", regex)
 
 
 class Orterun(JobManager):
@@ -457,6 +470,7 @@ class Srun(JobManager):
 
 
 class Systemctl(JobManager):
+    # pylint: disable=too-many-public-methods,too-many-public-methods
     """A class for the systemctl job manager command."""
 
     def __init__(self, job):
@@ -466,7 +480,7 @@ class Systemctl(JobManager):
             job (SubProcessCommand): command object to manage.
         """
         # path = os.path.dirname(find_executable("systemctl"))
-        super().__init__("/run/systemctl/*", "", job)
+        super().__init__("/run/systemctl/*", "systemd", job)
         self.job = job
         self._systemctl = SystemctlCommand()
         self._systemctl.service.value = self.job.service_name
@@ -545,6 +559,15 @@ class Systemctl(JobManager):
     def wait(self):
         """Wait for the sub process to complete."""
         raise NotImplementedError()
+
+    def kill(self):
+        """Forcibly terminate any job processes running on hosts."""
+        try:
+            self.stop()
+        except CommandFailure as error:
+            self.log.info(
+                "Error stopping/disabling %s: %s", self.job.service_name, error)
+        super(Systemctl, self).kill()
 
     def check_subprocess_status(self, sub_process):
         """Verify command status when called in a subprocess.
