@@ -39,7 +39,7 @@ EL_7_PR_REPOS            ?= $(shell git show -s --format=%B | sed -ne 's/^PR-rep
 UBUNTU_20_04_PR_REPOS    ?= $(shell git show -s --format=%B | sed -ne 's/^PR-repos-ubuntu20: *\(.*\)/\1/p')
 
 COMMON_RPM_ARGS  := --define "_topdir $$PWD/_topdir" $(BUILD_DEFINES)
-SPEC             := $(shell if [ -f $(NAME)-$(DISTRO_BASE).spec ]; then echo $(NAME)-$(DISTRO_BASE).spec; else echo $(NAME).spec; fi)
+SPEC             := $(shell if [ -f $(NAME)-$(DISTRO_BASE).spec ]; then echo $(NAME)-$(DISTRO_BASE).spec; else echo $(NAME)$(COVERAGE).spec; fi)
 VERSION           = $(eval VERSION := $(shell rpm $(COMMON_RPM_ARGS) --specfile --qf '%{version}\n' $(SPEC) | sed -n '1p'))$(VERSION)
 DEB_RVERS        := $(subst $(DOT),\$(DOT),$(VERSION))
 DEB_BVERS        := $(basename $(subst ~rc,$(DOT)rc,$(VERSION)))
