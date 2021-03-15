@@ -874,9 +874,13 @@ def run_tests(test_files, tag_filter, args):
     print("Avocado logs stored in {}".format(avocado_logs_dir))
 
     # Create the base avocado run command
+    version = get_output(["avocado", "-v"])
     command_list = ["avocado"]
     if not args.sparse:
-        command_list.append("--show=test")
+        if version.split()[-1].startswith("82"):
+            command_list.append("--show=test")
+        else:
+            command_list.append("--show-job-log")
     command_list.append("run")
     command_list.append("--ignore-missing-references")
     command_list.extend(["--html-job-result", "on"])

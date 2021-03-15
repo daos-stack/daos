@@ -43,7 +43,7 @@ post_provision_config_nodes() {
         if ! apt-get -y remove "${inst_rpms[@]}"; then
             rc=${PIPESTATUS[0]}
             if [ $rc -ne 100 ]; then
-                echo "Error $rc removing $INST_RPMS
+                echo "Error $rc removing $INST_RPMS"
                 exit $rc
             fi
         fi
