@@ -4,7 +4,7 @@ REPOS_DIR=/etc/dnf.repos.d
 DISTRO_NAME=leap15
 LSB_RELEASE=lsb-release
 EXCLUDE_UPGRADE=fuse,fuse-libs,fuse-devel,mercury,daos,daos-\*
-read -r -a inst_rpms <<< "$INST_RPMS"
+read -r -a inst_rpms <<< "${INST_RPMS:-}"
 
 bootstrap_dnf() {
     time zypper --non-interactive install dnf

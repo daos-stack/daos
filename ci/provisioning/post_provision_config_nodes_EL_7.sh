@@ -3,7 +3,7 @@
 REPOS_DIR=/etc/yum.repos.d
 DISTRO_NAME=centos7
 LSB_RELEASE=redhat-lsb-core
-read -r -a inst_rpms <<< "$INST_RPMS"
+read -r -a inst_rpms <<< "${INST_RPMS:-}"
 
 timeout_yum() {
     local timeout="$1"

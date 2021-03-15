@@ -1,6 +1,6 @@
 #!/bin/bash
 
-read -r -a inst_rpms <<< "$INST_RPMS"
+read -r -a inst_rpms <<< "${INST_RPMS:-}"
 
 post_provision_config_nodes() {
     # should we port this to Ubuntu or just consider $CONFIG_POWER_ONLY dead?
@@ -43,7 +43,7 @@ post_provision_config_nodes() {
         if ! apt-get -y remove "${inst_rpms[@]}"; then
             rc=${PIPESTATUS[0]}
             if [ $rc -ne 100 ]; then
-                echo "Error $rc removing $inst_rpms"
+                echo "Error $rc removing $INST_RPMS
                 exit $rc
             fi
         fi

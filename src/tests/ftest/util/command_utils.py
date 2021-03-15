@@ -1087,7 +1087,6 @@ class SubprocessManager():
                 self.manager.job.service_name)
         else:
             command = "prep {}".format(self.manager.job.command)
-        
         results = run_pcmd(self._hosts, command, 30)
         for result in results:
             for node in result["hosts"]:
