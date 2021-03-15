@@ -312,7 +312,8 @@ struct vos_dtx_cmt_ent {
 	int				 dce_oid_cnt;
 
 	uint32_t			 dce_reindex:1,
-					 dce_exist:1;
+					 dce_exist:1,
+					 dce_invalid:1;
 };
 
 #define DCE_XID(dce)		((dce)->dce_base.dce_xid)
@@ -500,10 +501,11 @@ int
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
 			int counti, daos_epoch_t epoch,
 			struct dtx_cos_key *dcks,
-			struct vos_dtx_act_ent **daes);
+			struct vos_dtx_act_ent **daes,
+			struct vos_dtx_cmt_ent **dces);
 void
 vos_dtx_post_handle(struct vos_container *cont, struct vos_dtx_act_ent **daes,
-		    int count, bool abort);
+		    struct vos_dtx_cmt_ent **dces, int count, bool abort);
 
 /**
  * Establish indexed active DTX table in DRAM.

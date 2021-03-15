@@ -246,11 +246,12 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 #endif
 
 #define UUID_REGEX "([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}){1}"
-#define DAOS_FORMAT "daos://"UUID_REGEX"/"UUID_REGEX"[/]?"
-#define DAOS_FORMAT_NO_PREFIX "/"UUID_REGEX"/"UUID_REGEX"[/]?"
+#define DAOS_FORMAT "^daos://"UUID_REGEX"/"UUID_REGEX"[/]?"
+#define DAOS_FORMAT_NO_PREFIX "^/"UUID_REGEX"/"UUID_REGEX"[/]?"
+#define DAOS_FORMAT_NO_CONT "^daos://"UUID_REGEX"[/]?$"
 
 static int
-check_direct_format(const char *path, bool no_prefix)
+check_direct_format(const char *path, bool no_prefix, bool *pool_only)
 {
 	regex_t regx;
 	int	rc;
@@ -261,11 +262,26 @@ check_direct_format(const char *path, bool no_prefix)
 	else
 		rc = regcomp(&regx, DAOS_FORMAT, REG_EXTENDED | REG_ICASE);
 	if (rc)
-		return -DER_INVAL;
+		return EINVAL;
 
 	rc = regexec(&regx, path, 0, NULL, 0);
 	regfree(&regx);
+	if (rc == 0) {
+		*pool_only = false;
+		return rc;
+	} else if (rc != REG_NOMATCH) {
+		return rc;
+	}
 
+	rc = regcomp(&regx, DAOS_FORMAT_NO_CONT, REG_EXTENDED | REG_ICASE);
+	if (rc)
+		return EINVAL;
+
+	rc = regexec(&regx, path, 0, NULL, 0);
+	if (rc == 0)
+		*pool_only = true;
+
+	regfree(&regx);
 	return rc;
 }
 
@@ -275,9 +291,10 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	ssize_t		s;
 	char		str[DUNS_MAX_XATTR_LEN];
 	struct statfs	fs;
+	bool		pool_only = false;
 	int		rc;
 
-	rc = check_direct_format(path, attr->da_no_prefix);
+	rc = check_direct_format(path, attr->da_no_prefix, &pool_only);
 	if (rc == 0) {
 		char	*dir;
 		char	*saveptr, *t;
@@ -312,6 +329,11 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 			D_ERROR("Invalid format: pool UUID cannot be parsed\n");
 			D_FREE(dir);
 			return EINVAL;
+		}
+
+		if (pool_only) {
+			D_FREE(dir);
+			return 0;
 		}
 
 		t = strtok_r(NULL, "/", &saveptr);
@@ -561,6 +583,53 @@ err:
 }
 #endif
 
+static int
+create_cont(daos_handle_t poh, struct duns_attr_t *attrp)
+{
+	int rc;
+
+	if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
+		dfs_attr_t dfs_attr = {};
+
+		/** TODO: set Lustre FID here. */
+		dfs_attr.da_id = 0;
+		dfs_attr.da_oclass_id = attrp->da_oclass_id;
+		dfs_attr.da_chunk_size = attrp->da_chunk_size;
+		dfs_attr.da_props = attrp->da_props;
+		rc = dfs_cont_create(poh, attrp->da_cuuid, &dfs_attr,
+				     NULL, NULL);
+	} else {
+		daos_prop_t	*prop;
+		int		 nr = 1;
+
+		if (attrp->da_props != NULL)
+			nr = attrp->da_props->dpp_nr + 1;
+
+		prop = daos_prop_alloc(nr);
+		if (prop == NULL) {
+			D_ERROR("Failed to allocate container prop.");
+			return ENOMEM;
+		}
+		if (attrp->da_props != NULL) {
+			rc = daos_prop_copy(prop, attrp->da_props);
+			if (rc) {
+				daos_prop_free(prop);
+				D_ERROR("failed to copy properties (%d)\n", rc);
+				return daos_der2errno(rc);
+			}
+		}
+		prop->dpp_entries[prop->dpp_nr - 1].dpe_type =
+			DAOS_PROP_CO_LAYOUT_TYPE;
+		prop->dpp_entries[prop->dpp_nr - 1].dpe_val = attrp->da_type;
+		rc = daos_cont_create(poh, attrp->da_cuuid, prop, NULL);
+		if (rc)
+			rc = daos_der2errno(rc);
+		daos_prop_free(prop);
+	}
+
+	return rc;
+}
+
 int
 duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 {
@@ -571,6 +640,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 	bool		try_multiple = true;
 	int		rc;
 	bool		backend_dfuse = false;
+	bool		pool_only;
 	size_t		path_len;
 
 	if (path == NULL) {
@@ -579,6 +649,19 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 	}
 
 	path_len = strlen(path);
+
+	rc = check_direct_format(path, attrp->da_no_prefix, &pool_only);
+	if (rc == 0) {
+		if (pool_only) {
+			D_ERROR("Invalid DUNS format: %s\n", path);
+			return EINVAL;
+		}
+
+		rc = create_cont(poh, attrp);
+		if (rc)
+			D_ERROR("Failed to create container (%d)\n", rc);
+		return rc;
+	}
 
 	if (attrp->da_type == DAOS_PROP_CO_LAYOUT_HDF5) {
 		/** create a new file if HDF5 container */
@@ -697,44 +780,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			goto err_link;
 		}
 
-		if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
-			dfs_attr_t dfs_attr = {};
-
-			/** TODO: set Lustre FID here. */
-			dfs_attr.da_id = 0;
-			dfs_attr.da_oclass_id = attrp->da_oclass_id;
-			dfs_attr.da_chunk_size = attrp->da_chunk_size;
-			dfs_attr.da_props = attrp->da_props;
-			rc = dfs_cont_create(poh, attrp->da_cuuid, &dfs_attr,
-					     NULL, NULL);
-		} else {
-			daos_prop_t	*prop;
-			int		 nr = 1;
-
-			if (attrp->da_props != NULL)
-				nr = attrp->da_props->dpp_nr + 1;
-
-			prop = daos_prop_alloc(nr);
-			if (prop == NULL) {
-				D_ERROR("Failed to allocate container prop.");
-				D_GOTO(err_link, rc = ENOMEM);
-			}
-			if (attrp->da_props != NULL) {
-				rc = daos_prop_copy(prop, attrp->da_props);
-				if (rc) {
-					daos_prop_free(prop);
-					D_ERROR("failed to copy properties (%d)\n", rc);
-					return daos_der2errno(rc);
-				}
-			}
-			prop->dpp_entries[prop->dpp_nr - 1].dpe_type =
-				DAOS_PROP_CO_LAYOUT_TYPE;
-			prop->dpp_entries[prop->dpp_nr - 1].dpe_val =
-				attrp->da_type;
-			rc = daos_cont_create(poh, attrp->da_cuuid, prop, NULL);
-			daos_prop_free(prop);
-		}
-
+		rc = create_cont(poh, attrp);
 		if (rc == -DER_SUCCESS && backend_dfuse) {
 			/* This next setxattr will cause dfuse to lookup the
 			 * entry point and perform a container connect,

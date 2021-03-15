@@ -2019,6 +2019,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	       struct dtx_handle *dth)
 {
 	struct vos_dtx_act_ent	**daes = NULL;
+	struct vos_dtx_cmt_ent	**dces = NULL;
 	struct vos_io_context	*ioc = vos_ioh2ioc(ioh);
 	struct umem_instance	*umem;
 	uint64_t		 time = 0;
@@ -2050,9 +2051,13 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 		if (daes == NULL)
 			D_GOTO(abort, err = -DER_NOMEM);
 
+		D_ALLOC_ARRAY(dces, dth->dth_dti_cos_count);
+		if (dces == NULL)
+			D_GOTO(abort, err = -DER_NOMEM);
+
 		err = vos_dtx_commit_internal(ioc->ic_cont, dth->dth_dti_cos,
 					      dth->dth_dti_cos_count,
-					      0, NULL, daes);
+					      0, NULL, daes, dces);
 		if (err <= 0)
 			D_FREE(daes);
 	}
@@ -2095,12 +2100,16 @@ abort:
 	if (err == 0) {
 		vos_ts_set_upgrade(ioc->ic_ts_set);
 		if (daes != NULL) {
-			vos_dtx_post_handle(ioc->ic_cont, daes,
+			vos_dtx_post_handle(ioc->ic_cont, daes, NULL,
 					    dth->dth_dti_cos_count, false);
 			dth->dth_cos_done = 1;
 		}
 		vos_dedup_process(vos_cont2pool(ioc->ic_cont),
 				  &ioc->ic_dedup_entries, false);
+	} else if (daes != NULL) {
+		vos_dtx_post_handle(ioc->ic_cont, daes, dces,
+				    dth->dth_dti_cos_count, false);
+		dth->dth_cos_done = 0;
 	}
 
 	if (err == -DER_NONEXIST || err == -DER_EXIST || err == 0) {
@@ -2116,6 +2125,7 @@ abort:
 	vos_space_unhold(vos_cont2pool(ioc->ic_cont), &ioc->ic_space_held[0]);
 
 	D_FREE(daes);
+	D_FREE(dces);
 	vos_ioc_destroy(ioc, err != 0);
 	vos_dth_set(NULL);
 
