@@ -154,13 +154,14 @@ crt_context_init(crt_context_t crt_ctx)
 	}
 
 	/* create epi table, use external lock */
-	rc =  d_hash_table_create_inplace(D_HASH_FT_NOLOCK, CRT_EPI_TABLE_BITS,
-					  NULL, &epi_table_ops,
-					  &ctx->cc_epi_table);
+	rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK, CRT_EPI_TABLE_BITS,
+					 NULL, &epi_table_ops,
+					 &ctx->cc_epi_table);
 	if (rc != 0) {
 		D_ERROR("d_hash_table_create() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out_binheap_destroy, rc);
 	}
+
 	D_GOTO(out, rc);
 
 out_binheap_destroy:
@@ -203,8 +204,8 @@ crt_context_create(crt_context_t *crt_ctx)
 
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
 
-	ctx->provider = crt_gdata.cg_na_plugin;
-	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, ctx->provider,
+	ctx->cc_provider = crt_gdata.cg_na_plugin;
+	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, ctx->cc_provider,
 			     crt_gdata.cg_ctx_num);
 	if (rc != 0) {
 		D_ERROR("crt_hg_ctx_init() failed, " DF_RC "\n", DP_RC(rc));
@@ -227,6 +228,37 @@ crt_context_create(crt_context_t *crt_ctx)
 	crt_gdata.cg_ctx_num++;
 
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
+
+	/** initialize sensors */
+	if (crt_gdata.cg_use_sensors) {
+		int	ret;
+
+		ret = d_tm_add_metric(&ctx->cc_timedout, D_TM_COUNTER,
+				      "Total number of timed out RPC requests",
+				      "", "net/%d/%u/req_timeout",
+				      ctx->cc_provider, ctx->cc_idx);
+		if (ret)
+			D_WARN("Failed to create timed out req counter: "DF_RC
+			       "\n", DP_RC(ret));
+
+		ret = d_tm_add_metric(&ctx->cc_timedout_uri, D_TM_COUNTER,
+				      "Total number of timed out URI lookup "
+				      "requests", "",
+				      "net/%d/%u/uri_lookup_timeout",
+				      ctx->cc_provider, ctx->cc_idx);
+		if (ret)
+			D_WARN("Failed to create timed out uri req counter: "
+			       DF_RC"\n", DP_RC(ret));
+
+		ret = d_tm_add_metric(&ctx->cc_failed_addr, D_TM_COUNTER,
+				      "Total number of failed address "
+				      "resolution attempts", "",
+				      "net/%d/%u/failed_addr",
+				      ctx->cc_provider, ctx->cc_idx);
+		if (ret)
+			D_WARN("Failed to create failed addr counter: "DF_RC
+			       "\n", DP_RC(ret));
+	}
 
 	if (crt_is_service() &&
 	    crt_gdata.cg_auto_swim_disable == 0 &&
@@ -690,6 +722,7 @@ crt_req_timeout_reset(struct crt_rpc_priv *rpc_priv)
 static inline void
 crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 {
+	struct crt_context		*crt_ctx;
 	struct crt_grp_priv		*grp_priv;
 	crt_endpoint_t			*tgt_ep;
 	crt_rpc_t			*ul_req;
@@ -704,6 +737,10 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 
 	tgt_ep = &rpc_priv->crp_pub.cr_ep;
 	grp_priv = crt_grp_pub2priv(tgt_ep->ep_grp);
+	crt_ctx = rpc_priv->crp_pub.cr_ctx;
+
+	if (crt_gdata.cg_use_sensors)
+		(void)d_tm_increment_counter(&crt_ctx->cc_timedout, 1, NULL);
 
 	switch (rpc_priv->crp_state) {
 	case RPC_STATE_URI_LOOKUP:
@@ -717,6 +754,10 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 			  ul_in->ul_grp_id,
 			  ul_in->ul_rank,
 			  ul_req->cr_ep.ep_rank);
+
+		if (crt_gdata.cg_use_sensors)
+			(void)d_tm_increment_counter(&crt_ctx->cc_timedout_uri,
+						     1, NULL);
 		crt_req_abort(ul_req);
 		/*
 		 * don't crt_rpc_complete rpc_priv here, because crt_req_abort
@@ -732,6 +773,9 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 			  grp_priv->gp_pub.cg_grpid,
 			  tgt_ep->ep_rank,
 			  rpc_priv->crp_tgt_uri);
+		if (crt_gdata.cg_use_sensors)
+			(void)d_tm_increment_counter(&crt_ctx->cc_failed_addr,
+						     1, NULL);
 		crt_context_req_untrack(rpc_priv);
 		crt_rpc_complete(rpc_priv, -DER_UNREACH);
 		break;
@@ -768,6 +812,7 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	struct d_binheap_node		*bh_node;
 	d_list_t			 timeout_list;
 	uint64_t			 ts_now;
+	int				 count = 0;
 
 	D_ASSERT(crt_ctx != NULL);
 
@@ -786,6 +831,7 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 
 		/* +1 to prevent it from being released in timeout_untrack */
 		RPC_ADDREF(rpc_priv);
+		count++;
 		crt_req_timeout_untrack(rpc_priv);
 
 		d_list_add_tail(&rpc_priv->crp_tmp_link, &timeout_list);

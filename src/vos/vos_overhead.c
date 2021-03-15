@@ -12,6 +12,12 @@ vos_pool_get_msize(void)
 }
 
 int
+vos_container_get_msize(void)
+{
+	return sizeof(struct vos_cont_df);
+}
+
+int
 vos_pool_get_scm_cutoff(void)
 {
 	return VOS_BLK_SZ;
