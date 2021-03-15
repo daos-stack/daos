@@ -1542,8 +1542,12 @@ def install_debuginfos():
         yum_args = ["--exclude", "ompi-debuginfo", "openmpi3"]
         if "suse" in distro_info.name.lower():
             yum_args.extend(["libpmemobj1", "python3"])
-        else:
+        elif "centos" in distro_info.name.lower():
             yum_args.extend(["libpmemobj", "python36"])
+        else:
+            raise RuntimeError(
+                "install_debuginfos(): Unsupported distro: {}".format(
+                    distro_info))
         cmds.append(["sudo", "yum", "-y", "install"] + yum_args)
         cmds.append(
             ["sudo", "debuginfo-install", "--enablerepo=*-debuginfo", "-y"] +
