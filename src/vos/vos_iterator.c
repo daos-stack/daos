@@ -680,7 +680,7 @@ probe:
 			set_reprobe(type, acts, anchors, param->ip_flags);
 			skipped = (acts & VOS_ITER_CB_SKIP);
 
-			if (acts & VOS_ITER_CB_ABORT)
+			if (acts & (VOS_ITER_CB_ABORT | VOS_ITER_CB_RESTART))
 				break;
 
 			if (need_reprobe(type, anchors)) {
@@ -743,7 +743,7 @@ probe:
 
 			set_reprobe(type, acts, anchors, param->ip_flags);
 
-			if (acts & VOS_ITER_CB_ABORT)
+			if (acts & (VOS_ITER_CB_ABORT | VOS_ITER_CB_RESTART))
 				break;
 
 			if (need_reprobe(type, anchors)) {
@@ -775,7 +775,7 @@ out:
 
 	vos_iter_finish(ih);
 
-	if (acts & VOS_ITER_CB_RESTART)
+	if (rc == 0 && (acts & VOS_ITER_CB_RESTART))
 		goto restart;
 
 	return rc;
