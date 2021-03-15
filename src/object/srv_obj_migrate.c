@@ -1205,7 +1205,8 @@ post:
 		}
 	}
 end:
-	rc1 = vos_update_end(ioh, mrone->mo_version, &mrone->mo_dkey, rc, NULL);
+	rc1 = vos_update_end(ioh, mrone->mo_version, &mrone->mo_dkey, rc, NULL,
+			     NULL);
 	daos_csummer_free_ic(csummer, &iod_csums);
 	daos_csummer_destroy(&csummer);
 	daos_iov_free(&csum_iov_fetch);
