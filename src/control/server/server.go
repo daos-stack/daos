@@ -240,6 +240,7 @@ func (srv *server) addEngines(ctxNet context.Context) error {
 		return control.SystemJoin(ctxIn, srv.mgmtSvc.rpcClient, req)
 	}
 
+	var allStarted sync.WaitGroup
 	for idx, engineCfg := range srv.cfg.Engines {
 		// Provide special handling for the ofi+verbs provider.
 		// Mercury uses the interface name such as ib0, while OFI uses the
@@ -269,8 +270,21 @@ func (srv *server) addEngines(ctxNet context.Context) error {
 		if err := srv.harness.AddInstance(engine); err != nil {
 			return err
 		}
+
 		// Register callback to publish I/O Engine process exit events.
 		engine.OnInstanceExit(publishInstanceExitFn(srv.pubSub.Publish, hostname(), engine.Index()))
+
+		allStarted.Add(1)
+		var onceReady sync.Once
+		engine.OnReady(func(_ context.Context) error {
+			// Indicate that engine has been started, only do this
+			// the first time that the engine starts as shared
+			// memory persists between engine restarts.
+			onceReady.Do(func() {
+				allStarted.Done()
+			})
+			return nil
+		})
 
 		if idx == 0 {
 			netDevClass, err := srv.cfg.GetDeviceClassFn(engineCfg.Fabric.Interface)
@@ -285,9 +299,9 @@ func (srv *server) addEngines(ctxNet context.Context) error {
 
 			// Start the system db after instance 0's SCM is
 			// ready.
-			var once sync.Once
+			var onceStorageReady sync.Once
 			engine.OnStorageReady(func(ctxIn context.Context) (err error) {
-				once.Do(func() {
+				onceStorageReady.Do(func() {
 					err = errors.Wrap(srv.sysdb.Start(ctxIn),
 						"failed to start system db",
 					)
@@ -313,6 +327,19 @@ func (srv *server) addEngines(ctxNet context.Context) error {
 			}
 		}
 	}
+
+	go func() {
+		allStarted.Wait()
+
+		if cfg.TelemetryPort == 0 {
+			return
+		}
+
+		log.Debug("starting Prometheus exporter")
+		if err := startPrometheusExporter(ctx, log, cfg.TelemetryPort, harness.Instances()); err != nil {
+			log.Errorf("failed to start prometheus exporter: %s", err)
+		}
+	}()
 
 	return nil
 }
@@ -404,12 +431,7 @@ func (srv *server) registerEvents() {
 						srv.log.Errorf("failed to mark rank %d as dead: %s", evt.Rank, err)
 						return
 					}
-					// FIXME CART-944: We should be able to update the
-					// primary group in order to remove the dead rank,
-					// but for the moment this will cause problems.
-					if err := srv.mgmtSvc.doGroupUpdate(ctx); err != nil {
-						srv.log.Errorf("GroupUpdate failed: %s", err)
-					}
+					mgmtSvc.reqGroupUpdate(ctx)
 				}
 			}))
 
