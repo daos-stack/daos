@@ -406,7 +406,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
-* Thu Mar 02 2021 Li Wei <wei.g.li@intel.com> 1.1.3-4
+* Tue Mar 02 2021 Li Wei <wei.g.li@intel.com> 1.1.3-4
 - Require raft-devel 0.7.3 that fixes an unstable leadership problem caused by
   removed replicas as well as some Coverity issues
 
