@@ -4,7 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-# pylint: disable=too-many-lines
 from __future__ import print_function
 
 from getpass import getuser
@@ -84,7 +83,7 @@ class DmgCommand(DmgCommandBase):
     }
 
     def _get_json_result(self, sub_command_list=None, **kwargs):
-        """Wraps the base _get_result method to force JSON output."""
+        """Wrap the base _get_result method to force JSON output."""
         prev_json_val = self.json.value
         self.json.update(True)
         prev_output_check = self.output_check
@@ -795,72 +794,37 @@ class DmgCommand(DmgCommandBase):
             dict: a dictionary of host ranks and their unique states.
 
         """
-        self._get_result(("system", "query"), ranks=ranks, verbose=verbose)
-
-        data = {}
-        if re.findall(r"Rank \d+", self.result.stdout):
-            # Process the unique single rank system query output, e.g.
-            #   Rank 1
-            #   ------
-            #   address      : 10.8.1.68:10001
-            #   uuid         : bcc5b010-1ffa-4525-96a9-11f1904374d6
-            #   fault domain : /wolf-68.wolf.hpdd.intel.com
-            #   status       : Joined
-            #   reason       :
-            match = re.findall(
-                r"(?:Rank|address\s+:|uuid\s+:|domain\s+:|status\s+:|"
-                r"reason\s+:)\s+(.*)",
-                self.result.stdout)
-            if match:
-                print("--- match: {}".format(match))
-                data[int(match[0])] = {
-                    "address": match[1].strip(),
-                    "uuid": match[2].strip(),
-                    "domain": match[3].strip(),
-                    "state": match[4].strip(),
-                    "reason": match[5].strip(),
-                }
-        elif verbose:
-            # Process the verbose multiple rank system query output, e.g.
-            #   Rank UUID                                 Control Address State
-            #   ---- ----                                 --------------- -----
-            #   0    385af2f9-1863-406c-ae94-bffdcd02f379 10.8.1.10:10001 Joined
-            #   1    d7a69a41-59a2-4dec-a620-a52217851285 10.8.1.11:10001 Joined
-            #   Rank UUID   Control Address  Fault Domain  State  Reason
-            #   ---- ----   ---------------  ------------  -----  ------
-            #   0    <uuid> <address>        <domain>      Joined system stop
-            #   1    <uuid> <address>        <domain>      Joined system stop
-            #
-            #       Where the above placeholders have values similar to:
-            #           <uuid>    = 0c21d700-0e2b-46fb-be49-1fca490ce5b0
-            #           <address> = 10.8.1.142:10001
-            #           <domain>  = /wolf-142.wolf.hpdd.intel.com
-            #
-            match = re.findall(
-                r"(\d+)\s+([0-9a-f-]+)\s+([0-9.:]+)\s+([/A-Za-z0-9-_.]+)"
-                r"\s+([A-Za-z]+)(.*)",
-                self.result.stdout)
-            for info in match:
-                data[int(info[0])] = {
-                    "uuid": info[1],
-                    "address": info[2],
-                    "domain": info[3],
-                    "state": info[4],
-                    "reason": info[5].strip(),
-                }
-        else:
-            # Process the non-verbose multiple rank system query output, e.g.
-            #   Rank  State
-            #   ----  -----
-            #   [0-1] Joined
-            match = re.findall(
-                r"(?:\[*([0-9-,]+)\]*)\s+([A-Za-z]+)", self.result.stdout)
-            for info in match:
-                for rank in get_numeric_list(info[0]):
-                    data[rank] = {"state": info[1]}
-
-        self.log.info("system_query data: %s", str(data))
-        return data
+        # Sample output:
+        # {
+        # "response": {
+        #     "members": [
+        #     {
+        #         "addr": "10.8.1.11:10001",
+        #         "state": "joined",
+        #         "fault_domain": "/wolf-11.wolf.hpdd.intel.com",
+        #         "rank": 0,
+        #         "uuid": "e7f2cb06-a111-4d55-a6a5-b494b70d62ab",
+        #         "fabric_uri": "ofi+sockets://192.168.100.11:31416",
+        #         "fabric_contexts": 17,
+        #         "info": ""
+        #     },
+        #     {
+        #         "addr": "10.8.1.74:10001",
+        #         "state": "evicted",
+        #         "fault_domain": "/wolf-74.wolf.hpdd.intel.com",
+        #         "rank": 1,
+        #         "uuid": "db36ab28-fdb0-4822-97e6-89547393ed03",
+        #         "fabric_uri": "ofi+sockets://192.168.100.74:31416",
+        #         "fabric_contexts": 17,
+        #         "info": ""
+        #     }
+        #     ]
+        # },
+        # "error": null,
+        # "status": 0
+        # }
+        return self._get_json_result(
+            ("system", "query"), ranks=ranks, verbose=verbose)
 
     def system_leader_query(self):
         """Query system to obtain the MS leader and replica information.
@@ -972,25 +936,25 @@ def check_system_query_status(data):
         bool: True if no server crashed, False otherwise.
 
     """
-    failed_states = ("Unknown", "Evicted", "Errored", "Unresponsive")
-    failed_rank_list = []
+    failed_states = ("unknown", "evicted", "errored", "unresponsive")
+    failed_rank_list = {}
 
     # Check the state of each rank.
-    for rank in data:
-        rank_info = [
-            "{}: {}".format(key, data[rank][key])
-            for key in sorted(data[rank].keys())
-        ]
-        print("Rank {} info:\n  {}".format(rank, "\n  ".join(rank_info)))
-        if "state" in data[rank] and data[rank]["state"] in failed_states:
-            failed_rank_list.append(rank)
+    if "response" in data and "members" in data["response"]:
+        for member in data["response"]["members"]:
+            rank_info = [
+                "{}: {}".format(key, member[key]) for key in sorted(member)]
+            print(
+                "Rank {} info:\n  {}".format(
+                    member["rank"], "\n  ".join(rank_info)))
+            if "state" in member and member["state"].lower() in failed_states:
+                failed_rank_list[member["rank"]] = member["state"]
 
     # Display the details of any failed ranks
-    if failed_rank_list:
-        for rank in failed_rank_list:
-            print(
-                "Rank {} failed with state '{}'".format(
-                    rank, data[rank]["state"]))
+    for rank in sorted(failed_rank_list):
+        print(
+            "Rank {} failed with state '{}'".format(
+                rank, failed_rank_list[rank]))
 
     # Return True if no ranks failed
     return not bool(failed_rank_list)
