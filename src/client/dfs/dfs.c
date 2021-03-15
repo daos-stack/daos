@@ -2397,16 +2397,16 @@ dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
 
 		/** for every entry, issue the filler cb */
 		for (i = 0; i < num; i++) {
-			char name[DFS_MAX_PATH + 1];
-			int len;
-
-			len = snprintf(name, kds[i].kd_key_len + 1, "%s", ptr);
-			D_ASSERT(len >= kds[i].kd_key_len);
-
 			if (op) {
-				rc = op(dfs, obj, name, udata);
+				char term_char;
+
+				term_char = ptr[kds[i].kd_key_len];
+				ptr[kds[i].kd_key_len] = '\0';
+				rc = op(dfs, obj, ptr, udata);
 				if (rc)
 					D_GOTO(out, rc);
+
+				ptr[kds[i].kd_key_len] = term_char;
 			}
 
 			/** advance pointer to next entry */
@@ -3016,6 +3016,9 @@ dfs_read_int(dfs_t *dfs, dfs_obj_t *obj, daos_off_t off, dfs_iod_t *iod,
 	struct dfs_read_params	*params;
 	int			rc;
 
+	D_ASSERT(ev);
+	daos_event_errno_rc(ev);
+
 	rc = dc_task_create(dc_array_read, NULL, ev, &task);
 	if (rc != 0)
 		return daos_der2errno(rc);
@@ -3046,7 +3049,7 @@ dfs_read_int(dfs_t *dfs, dfs_obj_t *obj, daos_off_t off, dfs_iod_t *iod,
 	daos_task_set_priv(task, params);
 	rc = tse_task_register_cbs(task, NULL, 0, 0, read_cb, NULL, 0);
 	if (rc)
-		D_GOTO(err_params, rc);
+		D_GOTO(err_params, daos_der2errno(rc));
 
 	return dc_task_schedule(task, true);
 
@@ -3142,8 +3145,10 @@ dfs_readx(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
 		arr_iod.arr_rgs = iod->iod_rgs;
 
 		rc = daos_array_read(obj->oh, DAOS_TX_NONE, &arr_iod, sgl, ev);
-		if (rc)
+		if (rc) {
 			D_ERROR("daos_array_read() failed (%d)\n", rc);
+			return daos_der2errno(rc);
+		}
 
 		*read_size = arr_iod.arr_nr_read;
 		return 0;
@@ -3172,8 +3177,9 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 		return EPERM;
 
 	buf_size = 0;
-	for (i = 0; i < sgl->sg_nr; i++)
-		buf_size += sgl->sg_iovs[i].iov_len;
+	if (sgl)
+		for (i = 0; i < sgl->sg_nr; i++)
+			buf_size += sgl->sg_iovs[i].iov_len;
 	if (buf_size == 0) {
 		if (ev) {
 			daos_event_launch(ev);
@@ -3189,6 +3195,9 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 	iod.arr_rgs = &rg;
 
 	D_DEBUG(DB_TRACE, "DFS Write: Off %"PRIu64", Len %zu\n", off, buf_size);
+
+	if (ev)
+		daos_event_errno_rc(ev);
 
 	rc = daos_array_write(obj->oh, DAOS_TX_NONE, &iod, sgl, ev);
 	if (rc)
@@ -3212,6 +3221,8 @@ dfs_writex(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
 		return EINVAL;
 	if ((obj->flags & O_ACCMODE) == O_RDONLY)
 		return EPERM;
+	if (iod == NULL)
+		return EINVAL;
 
 	if (iod->iod_nr == 0) {
 		if (ev) {
@@ -3224,6 +3235,9 @@ dfs_writex(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
 	/** set array location */
 	arr_iod.arr_nr = iod->iod_nr;
 	arr_iod.arr_rgs = iod->iod_rgs;
+
+	if (ev)
+		daos_event_errno_rc(ev);
 
 	rc = daos_array_write(obj->oh, DAOS_TX_NONE, &arr_iod, sgl, ev);
 	if (rc)

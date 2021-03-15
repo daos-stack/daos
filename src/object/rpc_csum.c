@@ -157,11 +157,7 @@ crt_proc_struct_dcs_iod_csums_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 				  uint32_t idx, uint32_t nr)
 {
 	struct dcs_csum_info	*singv_ci;
-	int			 rc, i;
-
-	rc = proc_struct_dcs_csum_info(proc, &iod_csum->ic_akey);
-	if (unlikely(rc))
-		return rc;
+	int			 rc = 0, i;
 
 	if (ENCODING(proc_op)) {
 		if (iod_csum->ic_nr != 0) {
@@ -196,6 +192,8 @@ crt_proc_struct_dcs_iod_csums_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 	if (DECODING(proc_op)) {
 		PROC(uint32_t, &iod_csum->ic_nr);
 		D_ALLOC_ARRAY(iod_csum->ic_data, iod_csum->ic_nr);
+		if (iod_csum->ic_data == NULL)
+			return -DER_NOMEM;
 		for (i = 0; i < iod_csum->ic_nr; i++) {
 			rc = proc_struct_dcs_csum_info(proc,
 				&iod_csum->ic_data[i]);
@@ -213,7 +211,15 @@ crt_proc_struct_dcs_iod_csums_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 			if (unlikely(rc))
 				break;
 		}
+		if (rc != 0)
+			return rc;
 		D_FREE(iod_csum->ic_data);
+	}
+
+	rc = proc_struct_dcs_csum_info(proc, &iod_csum->ic_akey);
+	if (unlikely(rc)) {
+		D_FREE(iod_csum->ic_data);
+		return rc;
 	}
 
 	return rc;

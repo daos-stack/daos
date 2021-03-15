@@ -666,8 +666,11 @@ cont_open_complete(tse_task_t *task, void *data)
 
 	daos_props_2cont_props(out->coo_prop, &cont->dc_props);
 	rc = dc_cont_props_init(cont);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("container props failed to initialize");
+		D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 		D_GOTO(out, rc);
+	}
 
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
