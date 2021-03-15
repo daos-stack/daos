@@ -26,7 +26,6 @@ class CartCtlFiveNodeTest(TestWithoutServers):
     def setUp(self):
         """ Test setup """
         print("Running setup\n")
-        super(CartCtlFiveNodeTest, self).setUp()
         self.utils = CartUtils()
         self.env = self.utils.get_env(self)
 
