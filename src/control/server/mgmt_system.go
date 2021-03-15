@@ -449,10 +449,14 @@ func (svc *mgmtSvc) resolveRanks(hosts, ranks string) (hitRS, missRS *system.Ran
 		if hitRS, missHS, err = svc.membership.CheckHosts(hosts, build.DefaultControlPort); err != nil {
 			return
 		}
+		svc.log.Debugf("resolveRanks(): req hosts %s, hit ranks %s, miss hosts %s",
+			hosts, hitRS, missHS)
 	case hasRanks:
 		if hitRS, missRS, err = svc.membership.CheckRanks(ranks); err != nil {
 			return
 		}
+		svc.log.Debugf("resolveRanks(): req ranks %s, hit ranks %s, miss ranks %s",
+			ranks, hitRS, missRS)
 	default:
 		// empty rank/host sets implies include all ranks so pass empty
 		// string to CheckRanks()
@@ -607,10 +611,6 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, pbReq *mgmtpb.SystemStopReq)
 	}
 	svc.log.Debug("Received SystemStop RPC")
 
-	if !pbReq.GetPrep() && !pbReq.GetKill() {
-		return nil, errors.New("invalid request, no action specified")
-	}
-
 	// Raise event on systemwide shutdown
 	if pbReq.GetHosts() == "" && pbReq.GetRanks() == "" && pbReq.GetKill() {
 		svc.events.Publish(events.New(&events.RASEvent{
@@ -621,6 +621,7 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, pbReq *mgmtpb.SystemStopReq)
 		}))
 	}
 
+	// TODO: consider locking to prevent join attempts when shutting down
 	pbResp := new(mgmtpb.SystemStopResp)
 
 	fanReq := fanoutRequest{
@@ -630,6 +631,8 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, pbReq *mgmtpb.SystemStopReq)
 	}
 
 	if pbReq.GetPrep() {
+		svc.log.Debug("prepping ranks for shutdown")
+
 		fanReq.Method = control.PrepShutdownRanks
 		fanResp, _, err := svc.rpcFanout(ctx, fanReq, false)
 		if err != nil {
@@ -638,19 +641,25 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, pbReq *mgmtpb.SystemStopReq)
 		if err := populateStopResp(fanResp, pbResp, "prep shutdown"); err != nil {
 			return nil, err
 		}
-		if !fanReq.Force && fanResp.Results.Errors() != nil {
+		if !fanReq.Force && fanResp.Results.HasErrors() {
 			return pbResp, errors.New("PrepShutdown HasErrors")
 		}
 	}
 	if pbReq.GetKill() {
+		svc.log.Debug("shutting down ranks")
+
 		fanReq.Method = control.StopRanks
-		fanResp, _, err := svc.rpcFanout(ctx, fanReq, true)
+		fanResp, _, err := svc.rpcFanout(ctx, fanReq, false)
 		if err != nil {
 			return nil, err
 		}
 		if err := populateStopResp(fanResp, pbResp, "stop"); err != nil {
 			return nil, err
 		}
+	}
+
+	if pbResp.GetResults() == nil {
+		return nil, errors.New("response results not populated")
 	}
 
 	svc.log.Debugf("Responding to SystemStop RPC: %+v", pbResp)
@@ -686,7 +695,7 @@ func (svc *mgmtSvc) SystemStart(ctx context.Context, pbReq *mgmtpb.SystemStartRe
 		Method: control.StartRanks,
 		Hosts:  pbReq.GetHosts(),
 		Ranks:  pbReq.GetRanks(),
-	}, true)
+	}, false)
 	if err != nil {
 		return nil, err
 	}

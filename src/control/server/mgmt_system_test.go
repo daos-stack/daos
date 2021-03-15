@@ -388,21 +388,6 @@ func mockMember(t *testing.T, r, a int32, s string) *system.Member {
 	return system.NewMember(system.Rank(r), common.MockUUID(r), "", common.MockHostAddr(a), state)
 }
 
-func checkMembers(t *testing.T, exp system.Members, ms *system.Membership) {
-	t.Helper()
-
-	common.AssertEqual(t, len(exp), len(ms.Members(nil)),
-		"unexpected number of members")
-	for _, em := range exp {
-		am, err := ms.Get(em.Rank)
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Logf("want %#v, got %#v", em, am)
-		common.AssertEqual(t, em, am, "unexpected member")
-	}
-}
-
 func mgmtSystemTestSetup(t *testing.T, l logging.Logger, mbs system.Members, r []*control.HostResponse) *mgmtSvc {
 	t.Helper()
 
@@ -769,7 +754,12 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
 			}
 			common.AssertEqual(t, tc.expResults, gotResp.Results, name)
-			checkMembers(t, tc.expMembers, cs.membership)
+
+			if diff := cmp.Diff(tc.expMembers, cs.membership.Members(nil), cmpOpts...); diff != "" {
+				t.Logf("unexpected members (-want, +got)\n%s\n", diff) // prints on err
+			}
+			common.AssertEqual(t, tc.expMembers, cs.membership.Members(nil), name)
+
 			if diff := cmp.Diff(tc.expRanks, gotRankSet.String(), common.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected ranks (-want, +got)\n%s\n", diff) // prints on err
 			}
@@ -994,8 +984,8 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 					Message: &mgmtpb.SystemStartResp{
 						Results: []*sharedpb.RankResult{
 							{
-								Rank: 0, Errored: true, Msg: "",
-								State: stateString(system.MemberStateErrored),
+								Rank: 0, Errored: true, Msg: "couldn't start",
+								State: stateString(system.MemberStateStopped),
 							},
 							{
 								Rank: 1, State: stateString(system.MemberStateReady),
@@ -1020,8 +1010,8 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 			expResults: []*sharedpb.RankResult{
 				{
 					Rank: 0, Action: "start", Errored: true,
-					Msg: "", Addr: common.MockHostAddr(1).String(),
-					State: stateString(system.MemberStateErrored),
+					Msg: "couldn't start", Addr: common.MockHostAddr(1).String(),
+					State: stateString(system.MemberStateStopped),
 				},
 				{
 					Rank: 1, Action: "start", Addr: common.MockHostAddr(1).String(),
@@ -1037,7 +1027,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 				},
 			},
 			expMembers: system.Members{
-				mockMember(t, 0, 1, "errored"),
+				mockMember(t, 0, 1, "stopped"),
 				mockMember(t, 1, 1, "ready"),
 				mockMember(t, 2, 2, "ready"),
 				mockMember(t, 3, 2, "ready"),
@@ -1057,8 +1047,8 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 					Message: &mgmtpb.SystemStartResp{
 						Results: []*sharedpb.RankResult{
 							{
-								Rank: 0, Errored: true, Msg: "",
-								State: stateString(system.MemberStateErrored),
+								Rank: 0, Errored: true, Msg: "couldn't start",
+								State: stateString(system.MemberStateStopped),
 							},
 							{
 								Rank: 1, State: stateString(system.MemberStateReady),
@@ -1070,8 +1060,8 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 			expResults: []*sharedpb.RankResult{
 				{
 					Rank: 0, Action: "start", Errored: true,
-					Msg: "", Addr: common.MockHostAddr(1).String(),
-					State: stateString(system.MemberStateErrored),
+					Msg: "couldn't start", Addr: common.MockHostAddr(1).String(),
+					State: stateString(system.MemberStateStopped),
 				},
 				{
 					Rank: 1, Action: "start", Addr: common.MockHostAddr(1).String(),
@@ -1079,7 +1069,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 				},
 			},
 			expMembers: system.Members{
-				mockMember(t, 0, 1, "errored"),
+				mockMember(t, 0, 1, "stopped"),
 				mockMember(t, 1, 1, "joined"),
 				mockMember(t, 2, 2, "stopped"),
 				mockMember(t, 3, 2, "stopped"),
@@ -1100,8 +1090,8 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 					Message: &mgmtpb.SystemStartResp{
 						Results: []*sharedpb.RankResult{
 							{
-								Rank: 2, Errored: true, Msg: "",
-								State: stateString(system.MemberStateErrored),
+								Rank: 2, Errored: true, Msg: "couldn't start",
+								State: stateString(system.MemberStateStopped),
 							},
 							{
 								Rank: 3, State: stateString(system.MemberStateReady),
@@ -1113,8 +1103,8 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 			expResults: []*sharedpb.RankResult{
 				{
 					Rank: 2, Action: "start", Errored: true,
-					Msg: "", Addr: common.MockHostAddr(2).String(),
-					State: stateString(system.MemberStateErrored),
+					Msg: "couldn't start", Addr: common.MockHostAddr(2).String(),
+					State: stateString(system.MemberStateStopped),
 				},
 				{
 					Rank: 3, Action: "start", Addr: common.MockHostAddr(2).String(),
@@ -1124,7 +1114,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 			expMembers: system.Members{
 				mockMember(t, 0, 1, "stopped"),
 				mockMember(t, 1, 1, "joined"),
-				mockMember(t, 2, 2, "errored"),
+				mockMember(t, 2, 2, "stopped"),
 				mockMember(t, 3, 2, "ready"),
 			},
 			expAbsentHosts: "10.0.0.[3-5]",
@@ -1215,7 +1205,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
 			}
 			common.AssertEqual(t, tc.expResults, gotResp.Results, name)
-			checkMembers(t, tc.expMembers, cs.membership)
+			common.AssertEqual(t, tc.expMembers, cs.membership.Members(nil), name)
 			common.AssertEqual(t, tc.expAbsentHosts, gotResp.Absenthosts, "absent hosts")
 			common.AssertEqual(t, tc.expAbsentRanks, gotResp.Absentranks, "absent ranks")
 		})
@@ -1239,7 +1229,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 		},
 		"invalid req": {
 			req:       new(mgmtpb.SystemStopReq),
-			expErrMsg: "invalid request, no action specified",
+			expErrMsg: "response results not populated",
 		},
 		"unfiltered prep fail": {
 			req: &mgmtpb.SystemStopReq{Prep: true, Kill: true},
@@ -1378,8 +1368,8 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 					Message: &mgmtpb.SystemStopResp{
 						Results: []*sharedpb.RankResult{
 							{
-								Rank: 0, Errored: true, Msg: "",
-								State: stateString(system.MemberStateErrored),
+								Rank: 0, Errored: true, Msg: "couldn't stop",
+								State: stateString(system.MemberStateJoined),
 							},
 							{
 								Rank: 1, State: stateString(system.MemberStateStopped),
@@ -1404,8 +1394,8 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			expResults: []*sharedpb.RankResult{
 				{
 					Rank: 0, Action: "stop", Errored: true,
-					Msg: "", Addr: common.MockHostAddr(1).String(),
-					State: stateString(system.MemberStateErrored),
+					Msg: "couldn't stop", Addr: common.MockHostAddr(1).String(),
+					State: stateString(system.MemberStateJoined),
 				},
 				{
 					Rank: 1, Action: "stop", Addr: common.MockHostAddr(1).String(),
@@ -1421,7 +1411,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 				},
 			},
 			expMembers: system.Members{
-				mockMember(t, 0, 1, "errored"),
+				mockMember(t, 0, 1, "joined"),
 				mockMember(t, 1, 1, "stopped"),
 				mockMember(t, 2, 2, "stopped"),
 				mockMember(t, 3, 2, "stopped"),
@@ -1441,8 +1431,8 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 					Message: &mgmtpb.SystemStopResp{
 						Results: []*sharedpb.RankResult{
 							{
-								Rank: 0, Errored: true, Msg: "",
-								State: stateString(system.MemberStateErrored),
+								Rank: 0, Errored: true, Msg: "couldn't stop",
+								State: stateString(system.MemberStateJoined),
 							},
 						},
 					},
@@ -1464,8 +1454,8 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			expResults: []*sharedpb.RankResult{
 				{
 					Rank: 0, Action: "stop", Errored: true,
-					Msg: "", Addr: common.MockHostAddr(1).String(),
-					State: stateString(system.MemberStateErrored),
+					Msg: "couldn't stop", Addr: common.MockHostAddr(1).String(),
+					State: stateString(system.MemberStateJoined),
 				},
 				{
 					Rank: 2, Action: "stop", Addr: common.MockHostAddr(2).String(),
@@ -1477,7 +1467,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 				},
 			},
 			expMembers: system.Members{
-				mockMember(t, 0, 1, "errored"),
+				mockMember(t, 0, 1, "joined"),
 				mockMember(t, 1, 1, "joined"),
 				mockMember(t, 2, 2, "stopped"),
 				mockMember(t, 3, 2, "stopped"),
@@ -1606,7 +1596,18 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
 			}
 			common.AssertEqual(t, tc.expResults, gotResp.Results, name)
-			checkMembers(t, tc.expMembers, cs.membership)
+
+			for _, m := range tc.expMembers {
+				member, err := cs.membership.Get(m.Rank)
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Logf("got %#v, want %#v", member, m)
+				common.AssertEqual(t, m.State().String(), member.State().String(),
+					name+": compare state rank"+m.Rank.String())
+			}
+
+			common.AssertEqual(t, tc.expMembers, cs.membership.Members(nil), name)
 			common.AssertEqual(t, tc.expAbsentHosts, gotResp.Absenthosts, "absent hosts")
 			common.AssertEqual(t, tc.expAbsentRanks, gotResp.Absentranks, "absent ranks")
 		})
@@ -1804,7 +1805,8 @@ func TestServer_MgmtSvc_SystemResetFormat(t *testing.T) {
 				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
 			}
 			common.AssertEqual(t, tc.expResults, gotResp.Results, name)
-			checkMembers(t, tc.expMembers, cs.membership)
+
+			common.AssertEqual(t, tc.expMembers, cs.membership.Members(nil), name)
 			common.AssertEqual(t, tc.expAbsentHosts, gotResp.Absenthosts, "absent hosts")
 			common.AssertEqual(t, tc.expAbsentRanks, gotResp.Absentranks, "absent ranks")
 		})

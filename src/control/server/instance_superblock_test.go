@@ -40,9 +40,9 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 			IsMountedBool: true,
 		}
 		mp := scm.NewMockProvider(log, nil, msc)
-		ei := NewEngineInstance(log, nil, mp, nil, r)
-		ei.fsRoot = testDir
-		if err := h.AddInstance(ei); err != nil {
+		srv := NewEngineInstance(log, nil, mp, nil, r)
+		srv.fsRoot = testDir
+		if err := h.AddInstance(srv); err != nil {
 			t.Fatal(err)
 		}
 	}

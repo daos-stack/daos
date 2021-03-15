@@ -20,6 +20,10 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+const (
+	rowFieldSep = "/"
+)
+
 // storageCmd is the struct representing the top-level storage subcommand.
 type storageCmd struct {
 	Prepare  storagePrepareCmd  `command:"prepare" alias:"p" description:"Prepare SCM and NVMe storage attached to remote servers."`

@@ -86,57 +86,57 @@ func NewEngineInstance(log logging.Logger,
 
 // WithHostFaultDomain adds a fault domain for the host this instance is running
 // on.
-func (ei *EngineInstance) WithHostFaultDomain(fd *system.FaultDomain) *EngineInstance {
-	ei.hostFaultDomain = fd
-	return ei
+func (srv *EngineInstance) WithHostFaultDomain(fd *system.FaultDomain) *EngineInstance {
+	srv.hostFaultDomain = fd
+	return srv
 }
 
 // isAwaitingFormat indicates whether EngineInstance is waiting
 // for an administrator action to trigger a format.
-func (ei *EngineInstance) isAwaitingFormat() bool {
-	return ei.waitFormat.Load()
+func (srv *EngineInstance) isAwaitingFormat() bool {
+	return srv.waitFormat.Load()
 }
 
 // isStarted indicates whether EngineInstance is in a running state.
-func (ei *EngineInstance) isStarted() bool {
-	return ei.runner.IsRunning()
+func (srv *EngineInstance) isStarted() bool {
+	return srv.runner.IsRunning()
 }
 
 // isReady indicates whether the EngineInstance is in a ready state.
 //
 // If true indicates that the instance is fully setup, distinct from
 // drpc and storage ready states, and currently active.
-func (ei *EngineInstance) isReady() bool {
-	return ei.ready.Load() && ei.isStarted()
+func (srv *EngineInstance) isReady() bool {
+	return srv.ready.Load() && srv.isStarted()
 }
 
 // OnStorageReady adds a list of callbacks to invoke when the instance
 // storage becomes ready.
-func (ei *EngineInstance) OnStorageReady(fns ...onStorageReadyFn) {
-	ei.onStorageReady = append(ei.onStorageReady, fns...)
+func (srv *EngineInstance) OnStorageReady(fns ...onStorageReadyFn) {
+	srv.onStorageReady = append(srv.onStorageReady, fns...)
 }
 
 // OnReady adds a list of callbacks to invoke when the instance
 // becomes ready.
-func (ei *EngineInstance) OnReady(fns ...onReadyFn) {
-	ei.onReady = append(ei.onReady, fns...)
+func (srv *EngineInstance) OnReady(fns ...onReadyFn) {
+	srv.onReady = append(srv.onReady, fns...)
 }
 
 // OnInstanceExit adds a list of callbacks to invoke when the instance
 // runner (process) terminates.
-func (ei *EngineInstance) OnInstanceExit(fns ...onInstanceExitFn) {
-	ei.onInstanceExit = append(ei.onInstanceExit, fns...)
+func (srv *EngineInstance) OnInstanceExit(fns ...onInstanceExitFn) {
+	srv.onInstanceExit = append(srv.onInstanceExit, fns...)
 }
 
 // LocalState returns local perspective of the current instance state
 // (doesn't consider state info held by the global system membership).
-func (ei *EngineInstance) LocalState() system.MemberState {
+func (srv *EngineInstance) LocalState() system.MemberState {
 	switch {
-	case ei.isReady():
+	case srv.isReady():
 		return system.MemberStateReady
-	case ei.isStarted():
+	case srv.isStarted():
 		return system.MemberStateStarting
-	case ei.isAwaitingFormat():
+	case srv.isAwaitingFormat():
 		return system.MemberStateAwaitFormat
 	default:
 		return system.MemberStateStopped
@@ -144,38 +144,38 @@ func (ei *EngineInstance) LocalState() system.MemberState {
 }
 
 // setIndex sets the server index assigned by the harness.
-func (ei *EngineInstance) setIndex(idx uint32) {
-	ei.runner.GetConfig().Index = idx
+func (srv *EngineInstance) setIndex(idx uint32) {
+	srv.runner.GetConfig().Index = idx
 }
 
 // Index returns the server index assigned by the harness.
-func (ei *EngineInstance) Index() uint32 {
-	return ei.runner.GetConfig().Index
+func (srv *EngineInstance) Index() uint32 {
+	return srv.runner.GetConfig().Index
 }
 
 // removeSocket removes the socket file used for dRPC communication with
 // harness and updates relevant ready states.
-func (ei *EngineInstance) removeSocket() error {
-	fMsg := fmt.Sprintf("removing instance %d socket file", ei.Index())
+func (srv *EngineInstance) removeSocket() error {
+	fMsg := fmt.Sprintf("removing instance %d socket file", srv.Index())
 
-	dc, err := ei.getDrpcClient()
+	dc, err := srv.getDrpcClient()
 	if err != nil {
 		return errors.Wrap(err, fMsg)
 	}
-	engineSock := dc.GetSocketPath()
+	srvSock := dc.GetSocketPath()
 
-	if err := checkDrpcClientSocketPath(engineSock); err != nil {
+	if err := checkDrpcClientSocketPath(srvSock); err != nil {
 		return errors.Wrap(err, fMsg)
 	}
-	os.Remove(engineSock)
+	os.Remove(srvSock)
 
-	ei.ready.SetFalse()
+	srv.ready.SetFalse()
 
 	return nil
 }
 
-func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.NotifyReadyReq) (system.Rank, bool, error) {
-	superblock := ei.getSuperblock()
+func (srv *EngineInstance) determineRank(ctx context.Context, ready *srvpb.NotifyReadyReq) (system.Rank, bool, error) {
+	superblock := srv.getSuperblock()
 	if superblock == nil {
 		return system.NilRank, false, errors.New("nil superblock while determining rank")
 	}
@@ -185,13 +185,13 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 		r = *superblock.Rank
 	}
 
-	resp, err := ei.joinSystem(ctx, &control.SystemJoinReq{
+	resp, err := srv.joinSystem(ctx, &control.SystemJoinReq{
 		UUID:        superblock.UUID,
 		Rank:        r,
 		URI:         ready.GetUri(),
 		NumContexts: ready.GetNctxs(),
-		FaultDomain: ei.hostFaultDomain,
-		InstanceIdx: ei.Index(),
+		FaultDomain: srv.hostFaultDomain,
+		InstanceIdx: srv.Index(),
 	})
 	if err != nil {
 		return system.NilRank, false, err
@@ -208,8 +208,8 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 		*superblock.Rank = r
 		superblock.ValidRank = true
 		superblock.URI = ready.GetUri()
-		ei.setSuperblock(superblock)
-		if err := ei.WriteSuperblock(); err != nil {
+		srv.setSuperblock(superblock)
+		if err := srv.WriteSuperblock(); err != nil {
 			return system.NilRank, resp.LocalJoin, err
 		}
 	}
@@ -219,8 +219,8 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 
 // handleReady determines the instance rank and sends a SetRank dRPC request
 // to the Engine.
-func (ei *EngineInstance) handleReady(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
-	r, localJoin, err := ei.determineRank(ctx, ready)
+func (srv *EngineInstance) handleReady(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
+	r, localJoin, err := srv.determineRank(ctx, ready)
 	if err != nil {
 		return err
 	}
@@ -231,19 +231,19 @@ func (ei *EngineInstance) handleReady(ctx context.Context, ready *srvpb.NotifyRe
 		return nil
 	}
 
-	if err := ei.callSetRank(ctx, r); err != nil {
+	if err := srv.callSetRank(ctx, r); err != nil {
 		return err
 	}
 
-	if err := ei.callSetUp(ctx); err != nil {
+	if err := srv.callSetUp(ctx); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (ei *EngineInstance) callSetRank(ctx context.Context, rank system.Rank) error {
-	dresp, err := ei.CallDrpc(ctx, drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32()})
+func (srv *EngineInstance) callSetRank(ctx context.Context, rank system.Rank) error {
+	dresp, err := srv.CallDrpc(ctx, drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32()})
 	if err != nil {
 		return err
 	}
@@ -260,9 +260,9 @@ func (ei *EngineInstance) callSetRank(ctx context.Context, rank system.Rank) err
 }
 
 // GetRank returns a valid instance rank or error.
-func (ei *EngineInstance) GetRank() (system.Rank, error) {
+func (srv *EngineInstance) GetRank() (system.Rank, error) {
 	var err error
-	sb := ei.getSuperblock()
+	sb := srv.getSuperblock()
 
 	switch {
 	case sb == nil:
@@ -279,23 +279,23 @@ func (ei *EngineInstance) GetRank() (system.Rank, error) {
 }
 
 // setTargetCount updates target count in engine config.
-func (ei *EngineInstance) setTargetCount(numTargets int) {
-	ei.Lock()
-	defer ei.Unlock()
+func (srv *EngineInstance) setTargetCount(numTargets int) {
+	srv.Lock()
+	defer srv.Unlock()
 
-	ei.runner.GetConfig().TargetCount = numTargets
+	srv.runner.GetConfig().TargetCount = numTargets
 }
 
 // GetTargetCount returns the target count set for this instance.
-func (ei *EngineInstance) GetTargetCount() int {
-	ei.RLock()
-	defer ei.RUnlock()
+func (srv *EngineInstance) GetTargetCount() int {
+	srv.RLock()
+	defer srv.RUnlock()
 
-	return ei.runner.GetConfig().TargetCount
+	return srv.runner.GetConfig().TargetCount
 }
 
-func (ei *EngineInstance) callSetUp(ctx context.Context) error {
-	dresp, err := ei.CallDrpc(ctx, drpc.MethodSetUp, nil)
+func (srv *EngineInstance) callSetUp(ctx context.Context) error {
+	dresp, err := srv.CallDrpc(ctx, drpc.MethodSetUp, nil)
 	if err != nil {
 		return err
 	}
@@ -312,8 +312,8 @@ func (ei *EngineInstance) callSetUp(ctx context.Context) error {
 }
 
 // BioErrorNotify logs a blob I/O error.
-func (ei *EngineInstance) BioErrorNotify(bio *srvpb.BioErrorReq) {
+func (srv *EngineInstance) BioErrorNotify(bio *srvpb.BioErrorReq) {
 
-	ei.log.Errorf("I/O Engine instance %d (target %d) has detected blob I/O error! %v",
-		ei.Index(), bio.TgtId, bio)
+	srv.log.Errorf("I/O Engine instance %d (target %d) has detected blob I/O error! %v",
+		srv.Index(), bio.TgtId, bio)
 }
