@@ -53,7 +53,7 @@ post_provision_config_nodes() {
                        lsb-core
 
     # shellcheck disable=2086
-    if [ -n "$INST_RPMS"] &&
+    if [ -n "$INST_RPMS" ] &&
        ! apt-get -y install $INST_RPMS; then
         rc=${PIPESTATUS[0]}
         for file in /etc/apt/sources.list{,.d/*.list}; do
