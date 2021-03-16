@@ -12,7 +12,7 @@ pool:
   scm_size: 1073741824
   name: daos_server
 attrtests:
-  name_handles: !mux
+  test_handles: !mux
     validlongname:
       name:
         - "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890\

@@ -472,8 +472,9 @@ class DaosPool():
 
         no_of_att = ctypes.c_int(attr_count)
         buffers = ctypes.c_char_p * attr_count
-        buff = buffers(*[ctypes.c_char_p(ctypes.create_string_buffer(buffer_size).raw)
-                         for i in range(attr_count)])
+        buff = buffers(*[ctypes.c_char_p(
+            ctypes.create_string_buffer(buffer_size).raw)
+            for i in range(attr_count)])
 
         size_of_att_val = [buffer_size] * attr_count
         sizes = (ctypes.c_size_t * attr_count)(*size_of_att_val)

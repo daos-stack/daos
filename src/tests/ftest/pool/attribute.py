@@ -51,7 +51,7 @@ class PoolAttributeTest(TestWithServers):
 
         """
         data_set = {}
-        for index in range(1024):
+        for _ in range(1024):
             size = random.randint(1, 100)
             random_string = get_random_bytes(size)
             data_set[random_string] = random_string
@@ -143,9 +143,9 @@ class PoolAttributeTest(TestWithServers):
         """
         self.add_pool()
         expected_for_param = []
-        name = self.params.get("name", '/run/attrtests/name_handles/*/')
+        name = self.params.get("name", '/run/attrtests/test_handles/*/')
         expected_for_param.append(name[1])
-        value = self.params.get("value", '/run/attrtests/name_handles/*/')
+        value = self.params.get("value", '/run/attrtests/test_handles/*/')
         expected_for_param.append(value[1])
         expected_result = 'PASS'
         for result in expected_for_param:
@@ -194,13 +194,13 @@ class PoolAttributeTest(TestWithServers):
 
         self.add_pool()
         expected_for_param = []
-        name = self.params.get("name", '/run/attrtests/name_handles/*/')
+        name = self.params.get("name", '/run/attrtests/test_handles/*/')
         # workaround until async functions are fixed
         if name[0] is not None and "Negative" in name[0]:
             pass
         else:
             expected_for_param.append(name[1])
-        value = self.params.get("value", '/run/attrtests/name_handles/*/')
+        value = self.params.get("value", '/run/attrtests/test_handles/*/')
         expected_for_param.append(value[1])
 
         expected_result = 'PASS'
