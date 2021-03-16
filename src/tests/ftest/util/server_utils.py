@@ -402,10 +402,10 @@ class DaosServerManager(SubprocessManager):
 
         Args:
             hosts (list, optional): dmg hostlist value. Defaults to None which
-                results in using the 'access_points' host list.
+                results in using the entire host list.
         """
         if hosts is None:
-            hosts = self.get_config_value("access_points")
+            hosts = self._hosts
         self.dmg.hostlist = hosts
 
     def prepare(self, storage=True):
