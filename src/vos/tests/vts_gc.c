@@ -402,18 +402,18 @@ gc_obj_run_destroy(struct gc_test_args *args)
 	if (rc) {
 		print_error("failed to open container: %s\n",
 			    d_errstr(rc));
-		return rc;
+		goto fail_destroy;
 	}
 
 	D_ALLOC_ARRAY(oids, obj_per_cont);
 	if (!oids) {
 		print_error("failed to allocate oids\n");
-		return -DER_NOMEM;
+		D_GOTO(fail_destroy, rc = -DER_NOMEM);
 	}
 
 	rc = gc_obj_prepare(args, coh, oids);
 	if (rc)
-		goto out;
+		goto fail_free;
 
 	gc_print_stat();
 
@@ -422,14 +422,14 @@ gc_obj_run_destroy(struct gc_test_args *args)
 		if (rc) {
 			print_error("failed to delete objects: %s\n",
 				    d_errstr(rc));
-			goto out;
+			goto fail_free;
 		}
 	}
 
 	/** Create some more objects */
 	rc = gc_obj_prepare(args, coh, oids);
 	if (rc)
-		goto out;
+		goto fail_free;
 
 	gc_print_stat();
 
@@ -437,7 +437,7 @@ gc_obj_run_destroy(struct gc_test_args *args)
 	if (rc) {
 		print_error("failed to close container: %s\n",
 			    d_errstr(rc));
-		goto out;
+		goto fail_free;
 	}
 
 	rc = vos_cont_destroy(poh, cont_id);
@@ -450,6 +450,13 @@ gc_obj_run_destroy(struct gc_test_args *args)
 	rc = gc_wait_check(args, true);
 out:
 	D_FREE(oids);
+	return rc;
+
+fail_free:
+	D_FREE(oids);
+fail_destroy:
+	vos_cont_destroy(poh, cont_id);
+
 	return rc;
 }
 
