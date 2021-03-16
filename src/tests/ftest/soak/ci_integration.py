@@ -149,7 +149,8 @@ class JavaCIIntegration(TestWithServers):
 #        cmd += "java-{}-openjdk-{}-0.el7_8.x86_64/".format(version[:-8],
 #                                                           version)
 #        cmd += "jre/lib/amd64/libjsig.so;"
-        cmd += " mvn -X integration-test -Ddaos.install.path={}".\
+        cmd += " ls -l daos-java/target/antrun/build-compile-proto.xml;"
+        cmd += " sudo mvn -X integration-test -Ddaos.install.path={}".\
                 format(self.prefix)
         cmd += " -Dpool_id={}  -Dcont_id={} ".format(pool_uuid, cont_uuid)
         cmd += " >> {}".format(output_file)
