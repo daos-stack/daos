@@ -98,12 +98,15 @@ rebuild_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	d_rank_t	  rank;
 	int		  rc;
 
+	D_DEBUG(DB_REBUILD, "rank %d master rank %d\n", src_iv->riv_rank,
+		src_iv->riv_master_rank);
+
+	if (src_iv->riv_master_rank == -1)
+		return -DER_NOTLEADER;
+
 	rc = crt_group_rank(NULL, &rank);
 	if (rc)
 		return rc;
-
-	D_DEBUG(DB_TRACE, "rank %d master rank %d\n", src_iv->riv_rank,
-		src_iv->riv_master_rank);
 
 	if (rank != src_iv->riv_master_rank)
 		return -DER_IVCB_FORWARD;
