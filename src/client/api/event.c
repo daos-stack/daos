@@ -310,6 +310,14 @@ daos_event_complete_cb(struct daos_event_private *evx, int rc)
 	return ret;
 }
 
+void
+daos_event_errno_rc(struct daos_event *ev)
+{
+	struct daos_event_private *evx = daos_ev2evx(ev);
+
+	evx->is_errno = 1;
+}
+
 static int
 daos_event_complete_locked(struct daos_eq_private *eqx,
 			   struct daos_event_private *evx, int rc)
@@ -323,7 +331,10 @@ daos_event_complete_locked(struct daos_eq_private *eqx,
 
 	evx->evx_status = DAOS_EVS_COMPLETED;
 	rc = daos_event_complete_cb(evx, rc);
-	ev->ev_error = rc;
+	if (evx->is_errno)
+		ev->ev_error = daos_der2errno(rc);
+	else
+		ev->ev_error = rc;
 
 	if (parent_evx != NULL) {
 		daos_event_t *parent_ev = daos_evx2ev(parent_evx);
