@@ -323,6 +323,14 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 	return rc;
 }
 
+static void
+print_usage(const char *msg)
+{
+	printf("Error: %s\n", msg);
+	printf("Usage: ./dual_iface_server [-i 'iface0,iface1' ");
+	printf("-d 'domain0,domain1' -p 'provider'\n");
+}
+
 int main(int argc, char **argv)
 {
 	int	pid;
@@ -335,7 +343,7 @@ int main(int argc, char **argv)
 	char	*arg_domain = NULL;
 	char	*arg_provider = NULL;
 	char	*iface0, *iface1;
-	char	*save_ptr;
+	char	*save_ptr = NULL;
 	char	*domain0, *domain1;
 	char	default_iface0[] = "ib0";
 	char	default_iface1[] = "ib1";
@@ -365,12 +373,30 @@ int main(int argc, char **argv)
 
 	if (arg_interface) {
 		iface0 = strtok_r(arg_interface, ",", &save_ptr);
+		if (iface0 == NULL) {
+			print_usage("Failed to parse iface0");
+			return -1;
+		}
+
 		iface1 = strtok_r(NULL, ",", &save_ptr);
+		if (iface1 == NULL) {
+			print_usage("Failed to parse iface1");
+			return -1;
+		}
 	}
 
 	if (arg_domain) {
 		domain0 = strtok_r(arg_domain, ",", &save_ptr);
+		if (domain0 == NULL) {
+			print_usage("Failed to parse domain0");
+			return -1;
+		}
+
 		domain1 = strtok_r(NULL, ",", &save_ptr);
+		if (domain1 == NULL) {
+			print_usage("Failed to parse domain1");
+			return -1;
+		}
 	}
 
 	if (arg_provider)
