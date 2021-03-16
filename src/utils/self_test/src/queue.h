@@ -225,8 +225,9 @@ struct {								\
 	    SLIST_NEXT(SLIST_NEXT(elm, field), field);		\
 }
 
-#define SLIST_REMOVE_HEAD(head, field)  {			     \
-	SLIST_FIRST((head)) = SLIST_NEXT(SLIST_FIRST((head)), field);\
+#define SLIST_REMOVE_HEAD(head, field)  {			\
+	SLIST_FIRST((head)) =					\
+	     SLIST_NEXT(SLIST_FIRST((head)), field);		\
 }
 
 #define SLIST_SWAP(head1, head2, type) do {			\
@@ -430,6 +431,7 @@ struct {							\
 	    (var) = (tvar))
 
 #define LIST_INIT(head) {					\
+	/* avoid check patch warning */				\
 	LIST_FIRST((head)) = NULL;				\
 }
 
