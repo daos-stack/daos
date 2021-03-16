@@ -303,6 +303,13 @@ public class DaosFileSystem extends FileSystem {
                 conf.setInt(kv[0], Integer.valueOf(kv[1]));
               }
               break;
+            case Constants.DAOS_IO_ASYNC:
+              if (!("true".equalsIgnoreCase(kv[1]) || "false".equalsIgnoreCase(kv[1]))) {
+                throw new IllegalArgumentException("value need to be true or false for " +
+                        Constants.DAOS_IO_ASYNC);
+              }
+              conf.set(Constants.DAOS_IO_ASYNC, kv[1]);
+              break;
             default:
               throw new IllegalArgumentException("unknown daos config, " + kv[0]);
           }

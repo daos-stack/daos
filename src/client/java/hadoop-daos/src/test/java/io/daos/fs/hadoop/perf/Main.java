@@ -182,7 +182,6 @@ public class Main {
   }
 
   static class JvmsWriteRunner extends WriteRunner {
-
     private String async;
 
     protected JvmsWriteRunner(String async) {
