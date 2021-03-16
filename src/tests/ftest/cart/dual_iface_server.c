@@ -247,7 +247,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 	rc = read(fd_read, other_server_uri, MAX_URI);
 	if (rc < 0) {
 		perror("Failed to read ");
-		D_ERROR("Failed ot read uri from a file\n");
+		D_ERROR("Failed to read uri from a file\n");
 		assert(0);
 	}
 
