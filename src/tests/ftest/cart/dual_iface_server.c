@@ -87,7 +87,6 @@ int handler_ping(crt_rpc_t *rpc)
 	input = crt_req_get(rpc);
 	output = crt_reply_get(rpc);
 
-//	DBG_PRINT("Ping handler invoked\n");
 	rc = crt_req_src_rank_get(rpc, &hdr_src_rank);
 	D_ASSERTF(rc == 0, "crt_req_src_rank_get() failed; rc=%d\n", rc);
 
@@ -107,7 +106,6 @@ int handler_ping(crt_rpc_t *rpc)
 	if (hdr_src_rank != input->src_rank) {
 		D_ERROR("Expected %lu got %d\n", input->src_rank, hdr_src_rank);
 		rc = -DER_INVAL;
-//		assert(0);
 	}
 
 	output->rc = rc;
