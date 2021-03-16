@@ -46,8 +46,8 @@ enum {
 #define CRT_OSEQ_RPC_SHUTDOWN	/* output fields */		 \
 	((uint64_t)		(field)			CRT_VAR)
 
-int handler_ping(crt_rpc_t *rpc);
-int handler_shutdown(crt_rpc_t *rpc);
+static int handler_ping(crt_rpc_t *rpc);
+static int handler_shutdown(crt_rpc_t *rpc);
 
 RPC_DECLARE(RPC_PING);
 RPC_DECLARE(RPC_SHUTDOWN);
@@ -74,7 +74,8 @@ struct crt_proto_format my_proto_fmt = {
 	.cpf_base = MY_BASE,
 };
 
-int handler_ping(crt_rpc_t *rpc)
+static int
+handler_ping(crt_rpc_t *rpc)
 {
 	struct RPC_PING_in	*input;
 	struct RPC_PING_out	*output;
@@ -114,20 +115,20 @@ int handler_ping(crt_rpc_t *rpc)
 	return 0;
 }
 
-
 static void
 rpc_handle_reply(const struct crt_cb_info *info)
 {
 	sem_t	*sem;
 
 	D_ASSERTF(info->cci_rc == 0, "rpc response failed. rc: %d\n",
-		info->cci_rc);
+		  info->cci_rc);
 
 	sem = (sem_t *)info->cci_arg;
 	sem_post(sem);
 }
 
-int handler_shutdown(crt_rpc_t *rpc)
+static int
+handler_shutdown(crt_rpc_t *rpc)
 {
 	crt_reply_send(rpc);
 	tc_progress_stop();
@@ -153,6 +154,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 	crt_rpc_t		*rpc = NULL;
 	char			other_server_uri[MAX_URI];
 	int			tag = 0;
+	d_rank_t		other_rank;
 
 	setenv("OFI_PORT", str_port, 1);
 	setenv("OFI_INTERFACE", str_interface, 1);
@@ -246,16 +248,15 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 		assert(0);
 	}
 
-	DBG_PRINT("Other servers uri is '%s'\n", other_server_uri); 	
+	DBG_PRINT("Other servers uri is '%s'\n", other_server_uri); 
 
-	d_rank_t other_rank;
 	if (my_rank == 0)
 		other_rank = 1;
 	else
 		other_rank = 0;
 
 	rc = crt_group_primary_rank_add(crt_ctx[0], grp, other_rank,
-			other_server_uri);
+					other_server_uri);
 	if (rc != 0) {
 		D_ERROR("Failed to add rank=%d uri='%s'\n",
 			other_rank, other_server_uri);
@@ -402,7 +403,6 @@ int main(int argc, char **argv)
 	if (arg_provider)
 		provider = arg_provider;
 
-	
 	printf("----------------------------------------\n");
 	printf("Provider: '%s'\n", provider);
 	printf("Interface0: '%s' Domain0: '%s'\n", iface0, domain0);
@@ -413,16 +413,13 @@ int main(int argc, char **argv)
 	fd1 = mkstemp(tmp_file1);
 
 	pid = fork();
-	if (pid == 0) {
+	if (pid == 0)
 		server_main(0, "31337", iface0, domain0, provider, fd0, fd1);
-	} else {
+	else
 		server_main(1, "32337", iface1, domain1,  provider, fd1, fd0);
-	}
 
-	if (pid) {
-		close(fd0);
-		close(fd1);
-	}
+	close(fd0);
+	close(fd1);
 
 	return 0;
 }
