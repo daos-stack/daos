@@ -626,8 +626,8 @@ static struct daos_obj_class daos_obj_classes[] = {
 		.oc_private	= true,
 	},
 	{
-		.oc_name	= "OBJ_ID_TABLE",
-		.oc_id		= DAOS_OC_OIT,
+		.oc_name	= "OBJ_ID_TABLE_RF0",
+		.oc_id		= DAOS_OC_OIT_RF0,
 		{
 			.ca_schema		= DAOS_OS_SINGLE,
 			.ca_resil		= DAOS_RES_REPL,
@@ -636,6 +636,50 @@ static struct daos_obj_class daos_obj_classes[] = {
 			 */
 			.ca_grp_nr		= 1,
 			.ca_rp_nr		= 1,
+		},
+		.oc_private	= true,
+	},
+	{
+		.oc_name	= "OBJ_ID_TABLE_RF1",
+		.oc_id		= DAOS_OC_OIT_RF1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 1,
+			.ca_rp_nr		= 2,
+		},
+		.oc_private	= true,
+	},
+	{
+		.oc_name	= "OBJ_ID_TABLE_RF2",
+		.oc_id		= DAOS_OC_OIT_RF2,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 1,
+			.ca_rp_nr		= 3,
+		},
+		.oc_private	= true,
+	},
+	{
+		.oc_name	= "OBJ_ID_TABLE_RF3",
+		.oc_id		= DAOS_OC_OIT_RF3,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 1,
+			.ca_rp_nr		= 4,
+		},
+		.oc_private	= true,
+	},
+	{
+		.oc_name	= "OBJ_ID_TABLE_RF4",
+		.oc_id		= DAOS_OC_OIT_RF4,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 1,
+			.ca_rp_nr		= 5,
 		},
 		.oc_private	= true,
 	},
