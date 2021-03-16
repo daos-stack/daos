@@ -54,17 +54,15 @@ class DmgPoolEvictTest(TestWithServers):
             self.fail(
                 "daos pool list-cont with first pool failed after pool evict!")
 
-        # Call daos pool list-cont on the evicted pool. It should fail with
-        # -1012.
+        # Call daos pool list-cont on the evicted pool. It should succeed.
         try:
             daos_cmd.pool_list_cont(
                 pool=self.pool[1].uuid)
-            self.fail(
-                "daos pool list-cont with second pool succeeded after pool " +
-                "evict!")
-        except CommandFailure:
             self.log.info(
-                "daos pool list-cont with second pool failed as expected")
+                "daos pool list-cont with second pool succeeded as expected")
+        except CommandFailure:
+            self.fail(
+                "daos pool list-cont with second pool failed after pool evict!")
 
         self.container.pop()
 
