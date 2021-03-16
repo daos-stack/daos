@@ -206,7 +206,7 @@ csum_for_arrays_test_case(void *const *state, const struct test_case_args *test)
 		cia_idx_next(&f_csums_idx, f_csums, f_csums_nr));
 
 	/** Clean up */
-	vos_fetch_end(ioh, rc);
+	vos_fetch_end(ioh, NULL, rc);
 	d_sgl_fini(&sgl, true);
 
 	for (i = 0; i < update_recx_nr; i++)

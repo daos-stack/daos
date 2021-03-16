@@ -663,12 +663,13 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * Finish the fetch operation and release the responding resources.
  *
  * \param ioh	[IN]	The I/O handle created by \a vos_fetch_begin
+ * \param size	[OUT]	The total IO size for the fetch.
  * \param err	[IN]	Errno of the current fetch, zero if there is no error.
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_fetch_end(daos_handle_t ioh, int err);
+vos_fetch_end(daos_handle_t ioh, daos_size_t *size, int err);
 
 /**
  * Prepare IO sink buffers for the specified arrays of the given
@@ -712,13 +713,14 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \param err	[IN]	Errno of the current update, zero if there is no error.
  *			All updates will be dropped if this function is called
  *			for \a vos_update_begin with a non-zero error code.
+ * \param size	[OUT]	The total IO size for the update.
  * \param dth	[IN]	Pointer to the DTX handle.
  *
  * \return		Zero on success, negative value if error
  */
 int
 vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
-	       struct dtx_handle *dth);
+	       daos_size_t *size, struct dtx_handle *dth);
 
 /**
  * Get the recx/epoch list.
