@@ -501,7 +501,7 @@ class DaosPool():
         results = {}
         i = 0
         for attr in attr_names:
-            results[attr] = buff[i][:sizes[i]]
+            results[str(i).encode("utf-8")] = buff[i][:sizes[i]]
             i += 1
         return results
 

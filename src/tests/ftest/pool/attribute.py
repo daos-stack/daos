@@ -51,10 +51,11 @@ class PoolAttributeTest(TestWithServers):
 
         """
         data_set = {}
-        for _ in range(1024):
+        for index in range(1024):
+            key = str(index).encode("utf-8")
             size = random.randint(1, 100)
             random_string = get_random_bytes(size)
-            data_set[random_string] = random_string
+            data_set[key] = random_string
         return data_set
 
     def verify_list_attr(self, indata, size, buff):
@@ -67,11 +68,13 @@ class PoolAttributeTest(TestWithServers):
 
         """
         # length of all the attribute names
-        aggregate_len = sum(
-            len(attr_name) if attr_name is not None else 0
-            for attr_name in list(indata.keys())) + 1
+        aggregate_len = 0
+        for attr_name in indata.values():
+            if attr_name:
+                aggregate_len += len(attr_name)
+
         # there is a space between each name, so account for that
-        aggregate_len += len(list(indata.keys()))-1
+        aggregate_len += len(list(indata.values()))
 
         self.log.info("Verifying list_attr output:")
         self.log.info("  set_attr names:  %s", list(indata.keys()))
@@ -84,7 +87,7 @@ class PoolAttributeTest(TestWithServers):
                 "FAIL: Size is not matching for Names in list attr, Expected "
                 "len={0} and received len={1}".format(aggregate_len, size))
         # verify the Attributes names in list_attr retrieve
-        for key in list(indata.keys()):
+        for key in list(indata.values()):
             if key not in buff:
                 self.fail(
                     "FAIL: Name does not match after list attr, Expected "
@@ -125,12 +128,15 @@ class PoolAttributeTest(TestWithServers):
             self.verify_list_attr(attr_dict, size.value, buf)
 
             results = {}
-            results = self.pool.pool.get_attr(list(attr_dict.keys()))
+            results = self.pool.pool.get_attr(list(attr_dict.values()))
             self.verify_get_attr(attr_dict, results)
         except DaosApiError as excep:
             print(excep)
             print(traceback.format_exc())
+
             self.fail("Test was expected to pass but it failed.\n")
+
+
 
     def test_pool_attributes(self):
         """Test pool attributes.
@@ -169,7 +175,7 @@ class PoolAttributeTest(TestWithServers):
                 if b"Negative" in name[0]:
                     name[0] = b"rubbish"
                 results = {}
-                results = self.pool.pool.get_attr([name[0]])
+                results = self.pool.pool.get_attr([value[0]])
                 self.verify_get_attr(attr_dict, results)
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
