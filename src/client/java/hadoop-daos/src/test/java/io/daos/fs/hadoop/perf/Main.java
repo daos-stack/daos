@@ -86,13 +86,14 @@ public class Main {
 
     if (jvms != null) {
       System.out.println("in jvms mode");
+      String async = System.getProperty("async", "true");
       if ("write".equalsIgnoreCase(args[0]) || "both".equalsIgnoreCase(args[0])) {
-        Runner runner = new JvmsWriteRunner();
+        Runner runner = new JvmsWriteRunner(async);
         runner.run();
       }
 
       if ("read".equalsIgnoreCase(args[0]) || "both".equalsIgnoreCase(args[0])) {
-        Runner runner = new JvmsReadRunner();
+        Runner runner = new JvmsReadRunner(async);
         runner.run();
       }
     }
@@ -181,9 +182,11 @@ public class Main {
   }
 
   static class JvmsWriteRunner extends WriteRunner {
+    private String async;
 
-    protected JvmsWriteRunner() {
+    protected JvmsWriteRunner(String async) {
       super(null);
+      this.async = async;
     }
 
     @Override
@@ -386,6 +389,9 @@ public class Main {
         list.add("-Dseq=" + i);
         list.add("-Drandom=" + (random ? "true" : "false"));
         list.add("-Dapi=" + api);
+        if (fs != null) {
+          list.add("-D" + Constants.DAOS_IO_ASYNC + "=" + fs.getConf().get(Constants.DAOS_IO_ASYNC));
+        }
         executors.add(new ShellExecutor(i, list, out, err, READ_PERF_PREFIX, FINAL_READ_PERF_PREFIX));
       }
       for (ShellExecutor executor : executors) {
