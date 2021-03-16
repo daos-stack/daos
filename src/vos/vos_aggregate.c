@@ -383,8 +383,10 @@ vos_agg_sv(daos_handle_t ih, vos_iter_entry_t *entry,
 			break;
 		case DTX_ST_PREPARED:
 			/*
-			 * Highest epoch is uncommitted, skip it and continue
-			 * checking on next lower epoch.
+			 * Highest epoch is uncommitted.  Since it may be
+			 * punched by a key or object and that entity may not
+			 * know about the update, we need to abort processing
+			 * of the current single value for now.
 			 */
 			D_DEBUG(DB_EPC, "Hit uncommitted single value at epoch:"
 				DF_X64"\n", entry->ie_epoch);
