@@ -1392,7 +1392,8 @@ add_domains_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 	/* discard the root - it's being added to the pool buf elsewhere */
 	rc = d_fd_tree_next(&tree, &node);
 	while (rc == 0) {
-		struct pool_component map_comp;
+		struct pool_component	map_comp;
+		int			already_in_map;
 
 		rc = d_fd_tree_next(&tree, &node);
 		if (rc != 0) {
@@ -1415,6 +1416,15 @@ add_domains_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 		map_comp.co_ver = map_version;
 		map_comp.co_fseq = 1;
 		map_comp.co_nr = node.fdn_val.dom->fd_children_nr;
+
+		if (map != NULL) {
+			already_in_map = pool_map_find_domain(map,
+							      PO_COMP_TP_RACK,
+							      map_comp.co_id,
+							      NULL);
+			if (already_in_map > 0)
+				map_comp.co_status = PO_COMP_ST_UPIN;
+		}
 
 		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
 		i++;

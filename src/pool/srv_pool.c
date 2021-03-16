@@ -4501,7 +4501,7 @@ pool_extend_internal(uuid_t pool_uuid, struct rsvc_hint *hint,
 	 * Extend the pool map directly - this is more complicated than other
 	 * operations which are handled within ds_pool_update()
 	 */
-	rc = pool_extend_map(&tx, svc, ndomains, target_uuids,
+	rc = pool_extend_map(&tx, svc, nnodes, target_uuids,
 			     rank_list, ndomains, domains,
 			     &updated, map_version_p, hint);
 
@@ -4554,7 +4554,8 @@ ds_pool_extend_handler(crt_rpc_t *rpc)
 	ndomains = in->pei_ndomains;
 	domains = in->pei_domains.ca_arrays;
 
-	rc = pool_extend_internal(pool_uuid, &out->peo_op.po_hint, ndomains,
+	rc = pool_extend_internal(pool_uuid, &out->peo_op.po_hint,
+				  rank_list.rl_nr,
 				  target_uuids, &rank_list, ndomains, domains,
 				  &out->peo_op.po_map_version);
 
