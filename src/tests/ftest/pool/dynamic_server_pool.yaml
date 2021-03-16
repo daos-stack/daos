@@ -9,6 +9,7 @@ server_config:
 # actual server name passed into --test_servers. If above test_servers is hosts,
 # it'll be used as one of the servers at test startup time, so use something
 # other than hosts.
+# Pust to PR for verification aftr discussed with Phil
 extra_servers:
   test_servers:
     - server-C
