@@ -17,7 +17,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 func TestFlattenAddrs(t *testing.T) {
@@ -97,64 +96,6 @@ func TestFormatHostGroups(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			buf := &bytes.Buffer{}
 			if diff := cmp.Diff(tt.out, formatHostGroups(buf, tt.g)); diff != "" {
-				t.Fatalf("unexpected output (-want, +got):\n%s\n", diff)
-			}
-		})
-	}
-}
-
-func mockRankGroups(t *testing.T) system.RankGroups {
-	groups := make(system.RankGroups)
-
-	rs1, err := system.CreateRankSet("0-9,11-19")
-	if err != nil {
-		t.Fatal(err)
-	}
-	groups["foo/OK"] = rs1
-
-	rs2, err := system.CreateRankSet("10,20-299")
-	if err != nil {
-		t.Fatal(err)
-	}
-	groups["bar/BAD"] = rs2
-
-	return groups
-}
-
-func TestTabulateRankGroups(t *testing.T) {
-	mockColumnTitles := []string{"Ranks", "Action", "Result"}
-
-	for name, tt := range map[string]struct {
-		g         system.RankGroups
-		cTitles   []string
-		out       string
-		expErrMsg string
-	}{
-		"formatted results": {
-			g:       mockRankGroups(t),
-			cTitles: mockColumnTitles,
-			out: `
-Ranks       Action Result 
------       ------ ------ 
-[10,20-299] bar    BAD    
-[0-9,11-19] foo    OK     
-`,
-		},
-		"column number mismatch": {
-			g:         mockRankGroups(t),
-			cTitles:   []string{"Ranks", "SCM", "NVME", "???"},
-			expErrMsg: "unexpected summary format",
-		},
-		"too few columns": {
-			g:         mockRankGroups(t),
-			cTitles:   []string{"Ranks"},
-			expErrMsg: "insufficient number of column titles",
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			table, err := tabulateRankGroups(tt.g, tt.cTitles...)
-			ExpectError(t, err, tt.expErrMsg, name)
-			if diff := cmp.Diff(strings.TrimLeft(tt.out, "\n"), table); diff != "" {
 				t.Fatalf("unexpected output (-want, +got):\n%s\n", diff)
 			}
 		})

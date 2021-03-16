@@ -132,7 +132,7 @@ gc_obj_update(struct gc_test_args *args, daos_handle_t coh, daos_unit_oid_t oid,
 			return rc;
 		}
 
-		rc = vos_update_end(ioh, 0, &cred->tc_dkey, rc, NULL);
+		rc = vos_update_end(ioh, 0, &cred->tc_dkey, rc, NULL, NULL);
 		if (rc != 0) {
 			print_error("Failed to submit ZC update\n");
 			return rc;
@@ -410,6 +410,8 @@ gc_cont_run(struct gc_test_args *args)
 		}
 	}
 	rc = gc_wait_check(args, true);
+
+	D_FREE(cont_ids);
 	return rc;
 }
 

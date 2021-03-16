@@ -35,6 +35,8 @@
 #include "srv_internal.h"
 #include "srv_layout.h"
 #include "srv_pool_map.h"
+#include "gurt/telemetry_common.h"
+#include "gurt/telemetry_producer.h"
 
 /* Pool service */
 struct pool_svc {
@@ -432,10 +434,10 @@ static int
 init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 		   uint32_t nnodes, uuid_t target_uuids[], const char *group,
 		   const d_rank_list_t *target_addrs, daos_prop_t *prop,
-		   uint32_t ndomains, const int32_t *domains)
+		   uint32_t ndomains, const uint32_t *domains)
 {
 	uint32_t		version = DS_POOL_MD_VERSION;
-	struct pool_buf	       *map_buf;
+	struct pool_buf	       *map_buf = NULL;
 	uint32_t		map_version = 1;
 	uint32_t		connectable;
 	uint32_t		nhandles = 0;
@@ -498,7 +500,8 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 out_uuids:
 	D_FREE(uuids);
 out_map_buf:
-	pool_buf_free(map_buf);
+	if (map_buf)
+		pool_buf_free(map_buf);
 out:
 	return rc;
 }
@@ -511,11 +514,12 @@ out:
  */
 static int
 select_svc_ranks(int nreplicas, const d_rank_list_t *target_addrs,
-		 int ndomains, const int *domains, d_rank_list_t **ranksp)
+		 int ndomains, const uint32_t *domains,
+		 d_rank_list_t **ranksp)
 {
 	int			i_rank_zero = -1;
 	int			selectable;
-	d_rank_list_t       *ranks;
+	d_rank_list_t		*ranks;
 	int			i;
 	int			j;
 
@@ -578,12 +582,12 @@ select_svc_ranks(int nreplicas, const d_rank_list_t *target_addrs,
 int
 ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
 		   const char *group, const d_rank_list_t *target_addrs,
-		   int ndomains, const int *domains, daos_prop_t *prop,
-		   d_rank_list_t *svc_addrs)
+		   int ndomains, const uint32_t *domains,
+		   daos_prop_t *prop, d_rank_list_t *svc_addrs)
 {
 	d_rank_list_t	       *ranks;
 	uuid_t			rdb_uuid;
-	d_iov_t		psid;
+	d_iov_t			psid;
 	struct rsvc_client	client;
 	struct dss_module_info *info = dss_get_module_info();
 	crt_endpoint_t		ep;
@@ -637,7 +641,7 @@ rechoose:
 	in->pri_prop = prop;
 	in->pri_ndomains = ndomains;
 	in->pri_domains.ca_count = ndomains;
-	in->pri_domains.ca_arrays = (int *)domains;
+	in->pri_domains.ca_arrays = (uint32_t *)domains;
 
 	/* Send the POOL_CREATE request. */
 	rc = dss_rpc_send(rpc);
@@ -1949,6 +1953,7 @@ out:
 void
 ds_pool_connect_handler(crt_rpc_t *rpc)
 {
+	struct d_tm_node_t	       *open_hdl_gauge = NULL;
 	struct pool_connect_in	       *in = crt_req_get(rpc);
 	struct pool_connect_out	       *out = crt_reply_get(rpc);
 	struct pool_svc		       *svc;
@@ -2073,6 +2078,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 		D_GOTO(out_map_version, rc = -DER_NO_PERM);
 	}
 
+	d_tm_increment_gauge(&open_hdl_gauge, 1,
+			     "pool/ops/open/active");
 	/*
 	 * Transfer the pool map to the client before adding the pool handle,
 	 * so that we don't need to worry about rolling back the transaction
@@ -2217,10 +2224,11 @@ static int
 pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 		     int n_hdl_uuids, crt_context_t ctx)
 {
-	d_iov_t	value;
-	uint32_t	nhandles;
-	int		i;
-	int		rc;
+	struct d_tm_node_t	*open_hdl_gauge = NULL;
+	d_iov_t			 value;
+	uint32_t		 nhandles;
+	int			 i;
+	int			 rc;
 
 	D_ASSERTF(n_hdl_uuids > 0, "%d\n", n_hdl_uuids);
 
@@ -2240,6 +2248,9 @@ pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 	rc = pool_disconnect_bcast(ctx, svc, hdl_uuids, n_hdl_uuids);
 	if (rc != 0)
 		D_GOTO(out, rc);
+
+	d_tm_decrement_gauge(&open_hdl_gauge, n_hdl_uuids,
+			     "pool/ops/open/active");
 
 	d_iov_set(&value, &nhandles, sizeof(nhandles));
 	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_nhandles, &value);
@@ -2816,6 +2827,7 @@ out:
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",
 		DP_UUID(in->pqi_op.pi_uuid), rpc, DP_RC(rc));
 	crt_reply_send(rpc);
+	daos_prop_free(prop);
 }
 
 /* Convert pool_comp_state_t to daos_target_state_t */
@@ -3162,7 +3174,7 @@ out:
 int
 ds_pool_extend(uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
 	       const d_rank_list_t *rank_list, int ndomains,
-	       const int *domains, d_rank_list_t *svc_ranks)
+	       const uint32_t *domains, d_rank_list_t *svc_ranks)
 {
 	int				rc;
 	struct rsvc_client		client;
@@ -3196,7 +3208,7 @@ rechoose:
 	in->pei_tgt_uuids.ca_arrays = target_uuids;
 	in->pei_tgt_ranks = (d_rank_list_t *)rank_list;
 	in->pei_domains.ca_count = ndomains;
-	in->pei_domains.ca_arrays = (int *)domains;
+	in->pei_domains.ca_arrays = (uint32_t *)domains;
 
 	rc = dss_rpc_send(rpc);
 	out = crt_reply_get(rpc);
@@ -4382,8 +4394,8 @@ static int
 pool_extend_map(struct rdb_tx *tx, struct pool_svc *svc,
 		uint32_t nnodes, uuid_t target_uuids[],
 		d_rank_list_t *rank_list, uint32_t ndomains,
-		int32_t *domains, bool *updated_p, uint32_t *map_version_p,
-		struct rsvc_hint *hint)
+		uint32_t *domains, bool *updated_p,
+		uint32_t *map_version_p, struct rsvc_hint *hint)
 {
 	struct pool_buf		*map_buf = NULL;
 	struct pool_map		*map = NULL;
@@ -4467,7 +4479,7 @@ static int
 pool_extend_internal(uuid_t pool_uuid, struct rsvc_hint *hint,
 		     uint32_t nnodes,
 		     uuid_t target_uuids[], d_rank_list_t *rank_list,
-		     uint32_t ndomains, int32_t *domains,
+		     uint32_t ndomains, uint32_t *domains,
 		     uint32_t *map_version_p)
 {
 	struct pool_svc		*svc;
@@ -4532,8 +4544,8 @@ ds_pool_extend_handler(crt_rpc_t *rpc)
 	uuid_t			*target_uuids;
 	d_rank_list_t		rank_list;
 	uint32_t		ndomains;
-	int32_t			*domains;
-	int rc;
+	uint32_t		*domains;
+	int			rc;
 
 	uuid_copy(pool_uuid, in->pei_op.pi_uuid);
 	target_uuids = in->pei_tgt_uuids.ca_arrays;
@@ -4808,6 +4820,7 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 			D_GOTO(out_free, rc);
 
 		ds_pool_iv_srv_hdl_invalidate(svc->ps_pool);
+		ds_iv_ns_leader_stop(svc->ps_pool->sp_iv_ns);
 		D_DEBUG(DF_DSMS, DF_UUID": pool destroy/evict: mark pool for "
 			"no new connections\n", DP_UUID(in->pvi_op.pi_uuid));
 	}

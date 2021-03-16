@@ -312,7 +312,7 @@ verify_1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 						      &ctx->fetch_iod,
 						      &ctx->fetch_sgl,
 						      &ctx->fetch_iom, &shard,
-						      NULL, NULL, &task);
+						      NULL, NULL, NULL, &task);
 			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
 			assert_rc_equal(rc, 0);
@@ -331,7 +331,7 @@ verify_1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 						      &ctx->fetch_iod,
 						      &ctx->fetch_sgl,
 						      &ctx->fetch_iom, &shard,
-						      NULL, NULL, &task);
+						      NULL, NULL, NULL, &task);
 			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
 			assert_rc_equal(rc, 0);
@@ -441,7 +441,7 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 						      &ctx->fetch_iod,
 						      &ctx->fetch_sgl,
 						      &ctx->fetch_iom, &shard,
-						      NULL, NULL, &task);
+						      NULL, NULL, NULL, &task);
 			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
 			assert_rc_equal(rc, 0);
@@ -457,7 +457,7 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 						      &ctx->fetch_iod,
 						      &ctx->fetch_sgl,
 						      &ctx->fetch_iom, &shard,
-						      NULL, NULL, &task);
+						      NULL, NULL, NULL, &task);
 			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
 			assert_rc_equal(rc, 0);
@@ -477,7 +477,7 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 						      &ctx->fetch_iod,
 						      &ctx->fetch_sgl,
 						      &ctx->fetch_iom, &shard,
-						      NULL, NULL, &task);
+						      NULL, NULL, NULL, &task);
 			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
 			assert_rc_equal(rc, 0);
@@ -497,7 +497,7 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 						      &ctx->fetch_iod,
 						      &ctx->fetch_sgl,
 						      &ctx->fetch_iom, &shard,
-						      NULL, NULL, &task);
+						      NULL, NULL, NULL, &task);
 			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
 			assert_rc_equal(rc, 0);

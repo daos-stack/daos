@@ -356,7 +356,7 @@ rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 	rc = bio_iod_post(vos_ioh2desc(io));
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 out:
-	rc = vos_fetch_end(io, 0 /* err */);
+	rc = vos_fetch_end(io, NULL, 0 /* err */);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 
 	return rdb_vos_fetch_check(value, &value_orig);
