@@ -245,7 +245,7 @@ class DaosAgentManager(SubprocessManager):
                     self.manager.command, error))
 
         # Kill any leftover processes that may not have been stopped correctly
-        self.kill()
+        self.manager.kill()
 
         # Report any errors after all stop actions have been attempted
         if messages:

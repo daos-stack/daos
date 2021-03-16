@@ -426,6 +426,7 @@ class TestWithServers(TestWithoutServers):
         #       start_servers_once attribute will most likely also want to be
         #       set to False to ensure the servers are not running at the start
         #       of each test variant.
+        self.start_agents_once = True
         self.start_servers_once = True
         self.server_manager_class = "Systemctl"
         self.agent_manager_class = "Systemctl"
@@ -458,7 +459,9 @@ class TestWithServers(TestWithoutServers):
         """Set up each test case."""
         super(TestWithServers, self).setUp()
 
-        # Support starting the servers once per test for all test variants
+        # Support starting agents/servers once per test for all test variants
+        self.start_agents_once = self.params.get(
+            "start_agents_once", "/run/setup/*", self.start_agents_once)
         self.start_servers_once = self.params.get(
             "start_servers_once", "/run/setup/*", self.start_servers_once)
 
@@ -834,8 +837,16 @@ class TestWithServers(TestWithoutServers):
     def start_agent_managers(self):
         """Start the daos_agent processes on each specified list of hosts."""
         self.log.info("-" * 100)
-        self.log.info("--- STARTING AGENTS ---")
-        self._start_manager_list("agent", self.agent_managers)
+        start_agents = True
+        if self.start_agents_once:
+            # Starting agents for each test variant is enabled.  The agents
+            # will still need be started if any agent is down.
+            status = self.check_running(
+                "agents", self.agent_managers, False, True)
+            start_agents = status["restart"]
+        if start_agents:
+            self.log.info("--- STARTING AGENTS ---")
+            self._start_manager_list("agent", self.agent_managers)
         self.log.info("-" * 100)
 
     @fail_on(CommandFailure)
@@ -859,7 +870,7 @@ class TestWithServers(TestWithoutServers):
 
     def check_running(self, name, manager_list, prepare_dmg=False,
                       set_expected=False):
-        """Verify that servers are running on all the expected hosts.
+        """Verify that agents/servers are running on all the expected hosts.
 
         Args:
             name (str): manager name
@@ -868,26 +879,28 @@ class TestWithServers(TestWithoutServers):
                 each server manager prior to querying the server states. This
                 should be set to True when verifying server states for servers
                 started by other test variants. Defaults to False.
-            set_expected (bool, optional): option to update the expected server
-                rank states to the current states prior to checking the states.
-                Defaults to False.
+            set_expected (bool, optional): option to update the expected rank
+                states to the current states prior to check. Defaults to False.
 
         Returns:
-            dict: a dictionary of whether or not any of the server states were
-                not 'expected' (which should warrant an error) and whether or
-                the servers require a 'restart' (either due to any unexpected
-                states or because at least one servers was found to no longer
-                be running)
+            dict: a dictionary of whether or not any of the states were not
+                'expected' (which should warrant an error) and whether or the
+                agents/servers require a 'restart' (either due to any unexpected
+                states or because at least one agent/server was found not to be
+                running)
 
         """
         status = {"expected": True, "restart": False}
-        self.log.info("--- VERIFYING %s RUNNING ---", name.upper())
+        self.log.info(
+            "--- VERIFYING STATES OF %s %s GROUP%s ---",
+            len(manager_list), name.upper(),
+            "S" if len(manager_list) > 1 else "")
         for manager in manager_list:
             # Setup the dmg command
-            if prepare_dmg:
+            if prepare_dmg and hasattr(manager, "prepare_dmg"):
                 manager.prepare_dmg()
 
-            # Verify the current server states match the expected states
+            # Verify the current states match the expected states
             manager_status = manager.verify_expected_states(set_expected)
             status["expected"] &= manager_status["expected"]
             if manager_status["restart"]:
@@ -1038,9 +1051,21 @@ class TestWithServers(TestWithoutServers):
             list: a list of exceptions raised stopping the agents
 
         """
-        self.test_log.info(
-            "Stopping %s group(s) of agents", len(self.agent_managers))
-        return self._stop_managers(self.agent_managers, "agents")
+        errors = []
+        status = self.check_running("agents", self.agent_managers)
+        if self.start_agents_once and not status["restart"]:
+            self.log.info(
+                "Agents are configured to run across multiple test variants, "
+                "not stopping")
+        else:
+            if not status["expected"]:
+                errors.append(
+                    "ERROR: At least one multi-variant agent was not found in "
+                    "its expected state; stopping all agents")
+            self.test_log.info(
+                "Stopping %s group(s) of agents", len(self.agent_managers))
+            errors.extend(self._stop_managers(self.agent_managers, "agents"))
+        return errors
 
     def stop_servers(self):
         """Stop the daos server and I/O Engines.
@@ -1063,6 +1088,12 @@ class TestWithServers(TestWithoutServers):
             self.test_log.info(
                 "Stopping %s group(s) of servers", len(self.server_managers))
             errors.extend(self._stop_managers(self.server_managers, "servers"))
+
+            # Stopping agents whenever servers are stopped for DAOS-6873
+            self.log.info(
+                "Workaround for DAOS-6873: Stopping %s group(s) of agents",
+                len(self.agent_managers))
+            errors.extend(self._stop_managers(self.agent_managers, "agents"))
         return errors
 
     def _stop_managers(self, managers, name):
@@ -1254,8 +1285,8 @@ class TestWithServers(TestWithoutServers):
                 daos_server.
             index (int): Determines which server_managers to use when creating
                 the new server.
-            access_points (list, optional) : Access point node list.
-                                            Defaults to None.
+            access_points (list, optional): list of access point hosts. Defaults
+                to None which uses self.access_points.
         """
         self.add_server_manager(
             self.server_managers[index].manager.job.get_config_value("name"),
