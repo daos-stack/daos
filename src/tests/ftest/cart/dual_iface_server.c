@@ -228,6 +228,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 
 	DBG_PRINT("my_rank=%d uri=%s\n", my_rank, my_uri);
 
+	/* Write self uri into a file */
 	rc = write(fd_write, my_uri, strlen(my_uri) + 1);
 	if (rc <= 0) {
 		D_ERROR("Failed to write uri to a file\n");
@@ -237,9 +238,11 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 
 	syncfs(fd_write);
 
+	/* Give time for both servers to write to local tmp file */
 	sleep(1);
-	memset(other_server_uri, 0x0, MAX_URI);
 
+	/* Read each others URIs from the file */
+	memset(other_server_uri, 0x0, MAX_URI);
 	lseek(fd_read, 0, SEEK_SET);
 	rc = read(fd_read, other_server_uri, MAX_URI);
 	if (rc < 0) {
@@ -248,7 +251,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 		assert(0);
 	}
 
-	DBG_PRINT("Other servers uri is '%s'\n", other_server_uri); 
+	DBG_PRINT("Other servers uri is '%s'\n", other_server_uri);
 
 	if (my_rank == 0)
 		other_rank = 1;
@@ -352,7 +355,7 @@ int main(int argc, char **argv)
 	char	default_domain1[] = "mlx5_1";
 	char	default_provider[] = "ofi+verbs;ofi_rxm\0";
 
-	while ((c = getopt(argc, argv, "i:p:d:")) != -1) {
+	while ((c = getopt(argc, argv, "i:p:d")) != -1) {
 		switch (c) {
 		case 'i':
 			arg_interface = optarg;
@@ -363,6 +366,9 @@ int main(int argc, char **argv)
 		case 'p':
 			arg_provider = optarg;
 			break;
+		default:
+			print_usage("");
+			return -1;
 		}
 	}
 
@@ -409,6 +415,7 @@ int main(int argc, char **argv)
 	printf("Interface1: '%s' Domain1: '%s'\n", iface1, domain1);
 	printf("----------------------------------------\n\n");
 
+	/* Spawn 2 servers, each one reads and writes URIs into diff file */
 	fd0 = mkstemp(tmp_file0);
 	fd1 = mkstemp(tmp_file1);
 
@@ -416,8 +423,9 @@ int main(int argc, char **argv)
 	if (pid == 0)
 		server_main(0, "31337", iface0, domain0, provider, fd0, fd1);
 	else
-		server_main(1, "32337", iface1, domain1,  provider, fd1, fd0);
+		server_main(1, "32337", iface1, domain1, provider, fd1, fd0);
 
+	/* Close fds for both child and parent */
 	close(fd0);
 	close(fd1);
 
