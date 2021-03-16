@@ -9,7 +9,6 @@ from osa_utils import OSAUtils
 from daos_utils import DaosCommand
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
-from apricot import skipForTicket
 
 
 class OSAOfflineReintegration(OSAUtils):
@@ -87,7 +86,8 @@ class OSAOfflineReintegration(OSAUtils):
                     output = self.dmg_command.pool_exclude(self.pool.uuid,
                                                            rank[val])
                 else:
-                    output = self.dmg_command.system_stop(ranks=rank[val])
+                    output = self.dmg_command.system_stop(ranks=rank[val],
+                                                          force=True)
                     self.print_and_assert_on_rebuild_failure(output)
                     output = self.dmg_command.system_start(ranks=rank[val])
                 # Just try to reintegrate rank 5
@@ -160,7 +160,6 @@ class OSAOfflineReintegration(OSAUtils):
         """
         self.run_offline_reintegration_test(1, data=True, server_boot=True)
 
-    @skipForTicket("DAOS-7013")
     def test_osa_offline_reintegrate_during_rebuild(self):
         """Test ID: DAOS-6923
         Test Description: Reintegrate rank while rebuild
