@@ -105,6 +105,10 @@ static struct pool_comp_state_dict comp_state_dict[] = {
 		.sd_name	= "NEW",
 	},
 	{
+		.sd_state	= PO_COMP_ST_DRAIN,
+		.sd_name	= "DRAIN",
+	},
+	{
 		.sd_state	= PO_COMP_ST_UNKNOWN,
 		.sd_name	= "UNKNOWN",
 	},
