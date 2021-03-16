@@ -1913,7 +1913,7 @@ d_tm_find_metric(uint64_t *shmem_root, char *path)
  * \param[in]	desc		A description of the metric containing
  *				D_TM_MAX_DESC_LEN - 1 characters maximum
  * \param[in]	units		A string defining the units of the metric
- * 				containing D_TM_UNIT_LEN - 1 characters maximum
+ *				containing D_TM_UNIT_LEN - 1 characters maximum
  * \param[in]	fmt		Format specifier for the name and full path of
  *				the new metric followed by optional args to
  *				populate the string, printf style.
@@ -1954,7 +1954,7 @@ int d_tm_add_metric(struct d_tm_node_t **node, int metric_type, char *desc,
 		return -DER_INVAL;
 
 	if (units != NULL) {
-		switch(metric_type & D_TM_ALL_NODES) {
+		switch (metric_type & D_TM_ALL_NODES) {
 		case D_TM_TIMESTAMP:
 			return -DER_INVAL;
 		case D_TM_TIMER_SNAPSHOT:
