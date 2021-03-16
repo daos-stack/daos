@@ -333,6 +333,7 @@ func (m *Membership) UpdateMemberStates(results MemberResults, updateOnFail bool
 				continue
 			}
 			if result.State != MemberStateErrored {
+				// this indicates a programming error
 				return errors.Errorf(
 					"errored result for rank %d has conflicting state '%s'",
 					result.Rank, result.State)
@@ -445,8 +446,7 @@ func (m *Membership) MarkRankDead(rank Rank) error {
 	}
 
 	if member.State().isTransitionIllegal(MemberStateEvicted) {
-		return errors.Errorf("llegal member state update for rank %d: %s->%s",
-			member.Rank, member.state, MemberStateEvicted)
+		return errMemberIllegalStateChange(member, MemberStateEvicted)
 	}
 
 	member.state = MemberStateEvicted
