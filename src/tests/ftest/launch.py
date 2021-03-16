@@ -880,7 +880,10 @@ def run_tests(test_files, tag_filter, args):
     if not args.sparse and version >= 82.0:
         command_list.append("--show=test")
     command_list.append("run")
-    command_list.append("--ignore-missing-references")
+    if version >= 82.0:
+        command_list.append("--ignore-missing-references")
+    else:
+        command_list.extend(["--ignore-missing-references", "on"])
     command_list.extend(["--html-job-result", "on"])
     command_list.extend(["--tap-job-result", "off"])
     if not args.sparse and version < 82.0:
