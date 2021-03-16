@@ -86,10 +86,9 @@ pool_ref_count_test(void **state)
 	int			num = 10;
 
 	uuid_generate(uuid);
-	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0);
+	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0, 0, NULL);
 	for (i = 0; i < num; i++) {
-		ret = vos_pool_open(arg->fname[0], uuid, false /*small */,
-				    &arg->poh[i]);
+		ret = vos_pool_open(arg->fname[0], uuid, 0, &arg->poh[i]);
 		assert_rc_equal(ret, 0);
 	}
 	for (i = 0; i < num - 1; i++) {
@@ -117,11 +116,8 @@ pool_interop(void **state)
 	uuid_generate(uuid);
 
 	daos_fail_loc_set(FLC_POOL_DF_VER | DAOS_FAIL_ONCE);
-	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0);
+	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0, 0, &poh);
 	assert_rc_equal(ret, 0);
-
-	ret = vos_pool_open(arg->fname[0], uuid, false, &poh);
-	assert_rc_equal(ret, -DER_DF_INCOMPT);
 
 	ret = vos_pool_destroy(arg->fname[0], uuid);
 	assert_rc_equal(ret, 0);
@@ -146,21 +142,20 @@ pool_ops_run(void **state)
 					assert_int_equal(ret, 0);
 					ret = vos_pool_create(arg->fname[j],
 							      arg->uuid[j],
-							      0, 0);
+							      0, 0, 0, NULL);
 				} else {
 					ret =
 					vts_alloc_gen_fname(&arg->fname[j]);
 					assert_int_equal(ret, 0);
 					ret = vos_pool_create(arg->fname[j],
 							      arg->uuid[j],
-							      VPOOL_16M, 0);
+							      VPOOL_16M, 0, 0,
+							      NULL);
 				}
 				break;
 			case OPEN:
-				ret = vos_pool_open(arg->fname[j],
-						    arg->uuid[j],
-						    false /* small */,
-						    &arg->poh[j]);
+				ret = vos_pool_open(arg->fname[j], arg->uuid[j],
+						    0, &arg->poh[j]);
 				break;
 			case CLOSE:
 				ret = vos_pool_close(arg->poh[j]);

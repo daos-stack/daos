@@ -683,16 +683,14 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
 		goto err;
 	svc->s_ref++;
 
-	if (create) {
-		rc = rdb_create(svc->s_db_path, svc->s_db_uuid, size, replicas);
-		if (rc != 0)
-			goto err_svc;
-	}
-
-	rc = rdb_start(svc->s_db_path, svc->s_db_uuid, &rsvc_rdb_cbs, svc,
-		       &svc->s_db);
+	if (create)
+		rc = rdb_create(svc->s_db_path, svc->s_db_uuid, size, replicas,
+				&rsvc_rdb_cbs, svc, &svc->s_db);
+	else
+		rc = rdb_start(svc->s_db_path, svc->s_db_uuid, &rsvc_rdb_cbs,
+			       svc, &svc->s_db);
 	if (rc != 0)
-		goto err_creation;
+		goto err_svc;
 
 	/*
 	 * If creating a replica with an initial membership, we are
@@ -720,9 +718,6 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
 
 err_db:
 	rdb_stop(svc->s_db);
-err_creation:
-	if (create)
-		rdb_destroy(svc->s_db_path, svc->s_db_uuid);
 err_svc:
 	svc->s_ref--;
 	fini_free(svc);
