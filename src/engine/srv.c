@@ -900,6 +900,13 @@ dss_xstreams_init(void)
 	D_INFO("CPU relax mode is set to [%s]\n",
 	       sched_relax_mode2str(sched_relax_mode));
 
+	d_getenv_int("DAOS_SCHED_UNIT_RUNTIME_MAX", &sched_unit_runtime_max);
+	if (sched_unit_runtime_max != 0 && strcmp(ABT_VERSION, "1.1b1")) {
+		D_ERROR("incompatible ABT version: %s, watchdog disabled.\n",
+			ABT_VERSION);
+		sched_unit_runtime_max = 0;
+	}
+
 	/* start the execution streams */
 	D_DEBUG(DB_TRACE,
 		"%d cores total detected starting %d main xstreams\n",
