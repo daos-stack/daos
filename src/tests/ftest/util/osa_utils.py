@@ -13,9 +13,6 @@ from avocado import fail_on
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
 from command_utils import CommandFailure
-from ior_utils import IorCommand
-from job_manager_utils import Mpirun
-from mpio_utils import MpioUtils
 from pydaos.raw import (DaosContainer, IORequest,
                         DaosObj, DaosApiError)
 
@@ -207,19 +204,17 @@ class OSAUtils(MdtestBase, IorTestBase):
         extra_container.destroy()
         self.pool_cont_dict[pool][3] = None
 
-    def set_cont_class_properties(self, cont, oclass="S1"):
+    def set_cont_class_properties(self, oclass="S1"):
         """Update the container class to match the IOR object
         class. Also, remove the redundancy factor for S type
         object class.
         Args:
-            cont (object): TestContainer object
             oclass (str, optional): Container object class to be set.
                                     Defaults to "S1".
         """
         self.container.oclass.value = oclass
         # Set the container properties properly for S!, S2 class.
         # rf should not be set to 1 for S type object class.
-
         x = re.search("^S\\d$", oclass)
         if x is not None:
             prop = self.container.properties.value
@@ -267,7 +262,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.ior_cmd.set_daos_params(self.server_group, self.pool)
         self.ior_cmd.dfs_oclass.update(oclass)
         self.ior_cmd.dfs_dir_oclass.update(oclass)
-        
+
         self.log.info(self.pool_cont_dict)
         # If pool is not in the dictionary,
         # initialize its container list to None
@@ -282,7 +277,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         #                          containerB, None]}
         if self.pool_cont_dict[self.pool][0] is None:
             self.add_container(self.pool, create=False)
-            self.set_cont_class_properties(self.container, oclass)
+            self.set_cont_class_properties(oclass)
             self.container.create()
             self.pool_cont_dict[self.pool][0] = self.container
             self.pool_cont_dict[self.pool][1] = "Updated"
@@ -293,7 +288,7 @@ class OSAUtils(MdtestBase, IorTestBase):
                ("-w" in flags)):
                 # Write to the second container
                 self.add_container(self.pool, create=False)
-                self.set_cont_class_properties(self.container, oclass)
+                self.set_cont_class_properties(oclass)
                 self.container.create()
                 self.pool_cont_dict[self.pool][2] = self.container
                 self.pool_cont_dict[self.pool][3] = "Updated"
@@ -313,8 +308,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.mdtest_cmd.dfs_destroy = False
         if self.container is None:
             self.add_container(self.pool, create=False)
-            self.set_cont_class_properties(self.container,
-                                           self.mdtest_cmd.dfs_oclass)
+            self.set_cont_class_properties(self.mdtest_cmd.dfs_oclass)
             self.container.create()
         job_manager = self.get_mdtest_job_manager_command(self.manager)
         job_manager.job.dfs_cont.update(self.container.uuid)
