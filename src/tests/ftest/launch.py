@@ -15,7 +15,6 @@ import re
 import socket
 import subprocess
 import site
-from sys import version_info
 import sys
 import time
 import yaml

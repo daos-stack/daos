@@ -1090,8 +1090,10 @@ class SubprocessManager():
         results = run_pcmd(self._hosts, command, 30)
         for result in results:
             for node in result["hosts"]:
+                # expecting single line output from run_pcmd
                 data[ranks[node]] = {
-                    "host": node, "uuid": "-", "state": result["stdout"]}
+                    "host": node, "uuid": "-",
+                    "state": result["stdout"][-1]}
         return data
 
     def update_expected_states(self, ranks, state):

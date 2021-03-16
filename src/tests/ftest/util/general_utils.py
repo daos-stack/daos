@@ -343,7 +343,7 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
                         "hosts": NodeSet(wolf-[5-6]),
                         "exit_status": 255,
                         "interrupted": True,
-                        "stdout": ""
+                        "stdout": [""]
                     },
                 ]
 
