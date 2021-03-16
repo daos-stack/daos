@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2021 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -112,13 +112,9 @@ Unknown 3 ranks: 7-9
 				},
 			},
 			expPrintStr: `
-Rank 0
-------
-  address      : 127.0.0.0:10001                     
-  uuid         : 00000000-0000-0000-0000-000000000000
-  fault domain : /                                   
-  status       : Joined                              
-  reason       :                                     
+Rank State  
+---- -----  
+0    Joined 
 
 `,
 		},
@@ -131,13 +127,41 @@ Rank 0
 			absentHosts: "foo[7,8,9]",
 			absentRanks: "7-9",
 			expPrintStr: `
-Rank 0
-------
-  address      : 127.0.0.0:10001                     
-  uuid         : 00000000-0000-0000-0000-000000000000
-  fault domain : /                                   
-  status       : Joined                              
-  reason       :                                     
+Rank  State        
+----  -----        
+[7-9] Unknown Rank 
+0     Joined       
+
+Unknown 3 hosts: foo[7-9]
+`,
+		},
+		"single response verbose": {
+			resp: &control.SystemQueryResp{
+				Members: Members{
+					MockMember(t, 0, MemberStateJoined),
+				},
+			},
+			verbose: true,
+			expPrintStr: `
+Rank UUID                                 Control Address Fault Domain State  Reason 
+---- ----                                 --------------- ------------ -----  ------ 
+0    00000000-0000-0000-0000-000000000000 127.0.0.0:10001 /            Joined        
+
+`,
+		},
+		"single response verbose with missing hosts and ranks": {
+			resp: &control.SystemQueryResp{
+				Members: Members{
+					MockMember(t, 0, MemberStateJoined),
+				},
+			},
+			absentHosts: "foo[7,8,9]",
+			absentRanks: "7-9",
+			verbose:     true,
+			expPrintStr: `
+Rank UUID                                 Control Address Fault Domain State  Reason 
+---- ----                                 --------------- ------------ -----  ------ 
+0    00000000-0000-0000-0000-000000000000 127.0.0.0:10001 /            Joined        
 
 Unknown 3 hosts: foo[7-9]
 Unknown 3 ranks: 7-9

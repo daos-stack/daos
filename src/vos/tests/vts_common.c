@@ -298,8 +298,11 @@ pool_fini(struct dts_context *tsc)
 	int	rc;
 
 	vos_pool_close(tsc->tsc_poh);
-	rc = vos_pool_destroy(tsc->tsc_pmem_file, tsc->tsc_pool_uuid);
-	D_ASSERTF(rc == 0 || rc == -DER_NONEXIST, "rc="DF_RC"\n", DP_RC(rc));
+	if (tsc_create_pool(tsc)) {
+		rc = vos_pool_destroy(tsc->tsc_pmem_file, tsc->tsc_pool_uuid);
+		D_ASSERTF(rc == 0 || rc == -DER_NONEXIST, "rc="DF_RC"\n",
+			  DP_RC(rc));
+	}
 }
 
 static int
