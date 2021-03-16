@@ -517,6 +517,7 @@ class PoolSecurityTestBase(TestWithServers):
         scm_size = self.params.get("scm_size", "/run/pool_acl/*")
         get_acl_file = self.params.get(
             "acl_file", "/run/pool_acl/*", "acl_test.txt")
+
         acl_file = os.path.join(self.tmp, get_acl_file)
         num_user = self.params.get("num_user", "/run/pool_acl/*")
         num_group = self.params.get("num_group", "/run/pool_acl/*")
@@ -528,10 +529,13 @@ class PoolSecurityTestBase(TestWithServers):
                                                num_group,
                                                current_user_acl,
                                                acl_file)
+        self.log.info("===>acl_file= %s", acl_file)
+        self.log.info("===>permission_list= %s", permission_list)
 
         # (3)Create a pool with acl
         self.dmg.exit_status_exception = False
         data = self.dmg.pool_create(scm_size, acl_file=acl_file)
+        self.log.info("===>self.dmg.pool_create return: %s", data)
         self.dmg.exit_status_exception = True
         self.log.info("  (2)dmg= %s", self.dmg)
         self.log.info("  (3)Create a pool with acl")
