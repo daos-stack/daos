@@ -24,6 +24,8 @@
 #include "rpc.h"
 #include "srv_internal.h"
 #include "srv_layout.h"
+#include "gurt/telemetry_common.h"
+#include "gurt/telemetry_producer.h"
 
 static int
 cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
@@ -2989,20 +2991,34 @@ static int
 cont_op_with_cont(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		  struct cont *cont, crt_rpc_t *rpc)
 {
-	struct cont_op_in      *in = crt_req_get(rpc);
-	d_iov_t			key;
-	d_iov_t			value;
-	struct container_hdl	hdl;
-	int			rc;
+	struct d_tm_node_t	*op_open_ctr = NULL;
+	struct d_tm_node_t	*op_close_ctr = NULL;
+	struct d_tm_node_t	*op_destroy_ctr = NULL;
+	struct d_tm_node_t	*open_cont_gauge = NULL;
+	struct cont_op_in	*in = crt_req_get(rpc);
+	d_iov_t			 key;
+	d_iov_t			 value;
+	struct container_hdl	 hdl;
+	int			 rc;
 
 	switch (opc_get(rpc->cr_opc)) {
 	case CONT_OPEN:
+		d_tm_increment_counter(&op_open_ctr, 1,
+				       "container/ops/open/total");
+		d_tm_increment_gauge(&open_cont_gauge, 1,
+				     "container/ops/open/active");
 		rc = cont_open(tx, pool_hdl, cont, rpc);
 		break;
 	case CONT_CLOSE:
+		d_tm_increment_counter(&op_close_ctr, 1,
+				       "container/ops/close/total");
+		d_tm_decrement_gauge(&open_cont_gauge, 1,
+				     "container/ops/open/active");
 		rc = cont_close(tx, pool_hdl, cont, rpc);
 		break;
 	case CONT_DESTROY:
+		d_tm_increment_counter(&op_destroy_ctr, 1,
+				       "container/ops/destroy/total");
 		rc = cont_destroy(tx, pool_hdl, cont, rpc);
 		break;
 	default:

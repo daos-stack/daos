@@ -235,7 +235,7 @@ func TestServer_Harness_Start(t *testing.T) {
 					}, nil
 				}
 
-				srv := NewEngineInstance(log, bdevProvider, scmProvider, joinFn, runner)
+				ei := NewEngineInstance(log, bdevProvider, scmProvider, joinFn, runner)
 				var isAP bool
 				if tc.isAP && i == 0 { // first instance will be AP & bootstrap MS
 					isAP = true
@@ -252,11 +252,11 @@ func TestServer_Harness_Start(t *testing.T) {
 				} else if isAP { // bootstrap will assume rank 0
 					rank = new(system.Rank)
 				}
-				srv.setSuperblock(&Superblock{
+				ei.setSuperblock(&Superblock{
 					UUID: uuid, Rank: rank, ValidRank: isValid,
 				})
 
-				if err := harness.AddInstance(srv); err != nil {
+				if err := harness.AddInstance(ei); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -264,8 +264,8 @@ func TestServer_Harness_Start(t *testing.T) {
 			instances := harness.Instances()
 
 			// set mock dRPC client to record call details
-			for _, srv := range instances {
-				srv.setDrpcClient(newMockDrpcClient(&mockDrpcClientConfig{
+			for _, ei := range instances {
+				ei.setDrpcClient(newMockDrpcClient(&mockDrpcClientConfig{
 					SendMsgResponse: &drpc.Response{},
 				}))
 			}
@@ -290,8 +290,8 @@ func TestServer_Harness_Start(t *testing.T) {
 			go func(ctxIn context.Context) {
 				for {
 					ready := true
-					for _, srv := range instances {
-						if srv.waitDrpc.IsFalse() {
+					for _, ei := range instances {
+						if ei.waitDrpc.IsFalse() {
 							ready = false
 						}
 					}
@@ -327,7 +327,7 @@ func TestServer_Harness_Start(t *testing.T) {
 
 			// simulate receiving notify ready whilst instances
 			// running in harness (unless dontNotifyReady flag is set)
-			for _, srv := range instances {
+			for _, ei := range instances {
 				if tc.dontNotifyReady {
 					continue
 				}
@@ -337,8 +337,8 @@ func TestServer_Harness_Start(t *testing.T) {
 					case i.drpcReady <- req:
 					case <-ctxIn.Done():
 					}
-				}(ctx, srv)
-				t.Logf("sent drpc ready to instance %d", srv.Index())
+				}(ctx, ei)
+				t.Logf("sent drpc ready to instance %d", ei.Index())
 			}
 
 			waitReady := make(chan struct{})
@@ -383,25 +383,25 @@ func TestServer_Harness_Start(t *testing.T) {
 			defer joinMu.Unlock()
 			// verify expected RPCs were made, ranks allocated and
 			// members added to membership
-			for _, srv := range instances {
-				dc, err := srv.getDrpcClient()
+			for _, ei := range instances {
+				dc, err := ei.getDrpcClient()
 				if err != nil {
 					t.Fatal(err)
 				}
 				gotDrpcCalls := dc.(*mockDrpcClient).CalledMethods()
-				AssertEqual(t, tc.expDrpcCalls[srv.Index()], gotDrpcCalls,
-					fmt.Sprintf("%s: unexpected dRPCs for instance %d", name, srv.Index()))
+				AssertEqual(t, tc.expDrpcCalls[ei.Index()], gotDrpcCalls,
+					fmt.Sprintf("%s: unexpected dRPCs for instance %d", name, ei.Index()))
 
-				if diff := cmp.Diff(tc.expGrpcCalls[srv.Index()], joinRequests[srv.Index()]); diff != "" {
+				if diff := cmp.Diff(tc.expGrpcCalls[ei.Index()], joinRequests[ei.Index()]); diff != "" {
 					t.Fatalf("unexpected gRPCs for instance %d (-want, +got):\n%s\n",
-						srv.Index(), diff)
+						ei.Index(), diff)
 				}
-				rank, _ := srv.GetRank()
-				if diff := cmp.Diff(tc.expRanks[srv.Index()], rank); diff != "" {
+				rank, _ := ei.GetRank()
+				if diff := cmp.Diff(tc.expRanks[ei.Index()], rank); diff != "" {
 					t.Fatalf("unexpected rank for instance %d (-want, +got):\n%s\n",
-						srv.Index(), diff)
+						ei.Index(), diff)
 				}
-				CmpErr(t, tc.expIoErrs[srv.Index()], srv._lastErr)
+				CmpErr(t, tc.expIoErrs[ei.Index()], ei._lastErr)
 			}
 			members := membership.Members(nil)
 			AssertEqual(t, len(tc.expMembers), len(members), "unexpected number in membership")

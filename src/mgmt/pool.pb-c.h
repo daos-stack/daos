@@ -692,15 +692,15 @@ struct  _Mgmt__PoolQueryResp
   /*
    * total targets in pool
    */
-  uint32_t totaltargets;
+  uint32_t total_targets;
   /*
    * active targets in pool
    */
-  uint32_t activetargets;
+  uint32_t active_targets;
   /*
    * number of disabled targets in pool
    */
-  uint32_t disabledtargets;
+  uint32_t disabled_targets;
   /*
    * pool rebuild status
    */
@@ -716,7 +716,7 @@ struct  _Mgmt__PoolQueryResp
   /*
    * total nodes in pool
    */
-  uint32_t totalnodes;
+  uint32_t total_nodes;
   /*
    * latest pool map version
    */

@@ -111,8 +111,8 @@ func TestSystem_MemberResult_Convert(t *testing.T) {
 	}
 	mrsOut := MemberResults{}
 
-	AssertTrue(t, mrsIn.HasErrors(), "")
-	AssertFalse(t, mrsOut.HasErrors(), "")
+	CmpErr(t, errors.New("failed ranks 1-2"), mrsIn.Errors())
+	CmpErr(t, nil, mrsOut.Errors())
 
 	if err := convert.Types(mrsIn, &mrsOut); err != nil {
 		t.Fatal(err)
