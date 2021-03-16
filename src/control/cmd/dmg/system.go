@@ -134,21 +134,6 @@ func displaySystemQueryVerbose(log logging.Logger, members system.Members) {
 	log.Info(formatter.Format(table))
 }
 
-func displaySystemQuerySingle(log logging.Logger, members system.Members) {
-	m := members[0]
-
-	table := []txtfmt.TableRow{
-		{"address": m.Addr.String()},
-		{"uuid": m.UUID.String()},
-		{"fault domain": m.FaultDomain.String()},
-		{"status": m.State().String()},
-		{"reason": m.Info},
-	}
-
-	title := fmt.Sprintf("Rank %d", m.Rank)
-	log.Info(txtfmt.FormatEntity(title, table))
-}
-
 // rankListCmd enables rank or host list to be supplied with command to filter
 // which ranks are operated upon.
 type rankListCmd struct {
@@ -218,8 +203,6 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 	switch {
 	case len(resp.Members) == 0:
 		cmd.log.Info("Query matches no members in system.")
-	case len(resp.Members) == 1:
-		displaySystemQuerySingle(cmd.log, resp.Members)
 	case cmd.Verbose:
 		displaySystemQueryVerbose(cmd.log, resp.Members)
 	default:
