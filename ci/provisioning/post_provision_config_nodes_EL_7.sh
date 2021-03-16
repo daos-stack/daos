@@ -3,6 +3,7 @@
 REPOS_DIR=/etc/yum.repos.d
 DISTRO_NAME=centos7
 LSB_RELEASE=redhat-lsb-core
+PYTHON_MACROS_RPM=("python3-rpm-macros")
 
 timeout_yum() {
     local timeout="$1"
@@ -141,6 +142,14 @@ post_provision_config_nodes() {
         dump_repos
         exit 1
     fi
+
+    if ! time dnf -y install "${PYTHON_MACROS_RPM[@]}" ; then
+        dump_repos
+        exit 1
+    fi
+
+    cat /etc/do-release
+    cat /etc/os-release
 
     exit 0
 }
