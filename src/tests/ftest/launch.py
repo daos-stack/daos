@@ -900,8 +900,9 @@ def run_tests(test_files, tag_filter, args):
             if not report_skipped_test(
                     test_file["py"], avocado_logs_dir, skip_reason):
                 return_code |= 64
+            continue
 
-        elif not isinstance(test_file["yaml"], str):
+        if not isinstance(test_file["yaml"], str):
             # The test was not run due to an error replacing host placeholders
             # in the yaml file.  Treat this like a failed avocado command.
             reason = "error replacing yaml file placeholders"
@@ -909,53 +910,64 @@ def run_tests(test_files, tag_filter, args):
                     test_file["py"], avocado_logs_dir, reason):
                 return_code |= 64
             return_code |= 4
+            continue
 
-        else:
-            # Optionally clean the log files before running this test on the
-            # servers and clients specified for this test
-            if args.clean:
-                if not clean_logs(test_file["yaml"], args):
-                    # Report errors for this skipped test
-                    skip_reason = (
-                        "host communication error attempting to clean out "
-                        "leftover logs from a previous test run prior to "
-                        "running this test")
-                    if not report_skipped_test(
-                            test_file["py"], avocado_logs_dir, skip_reason):
-                        return_code |= 64
-                    return_code |= 128
-                    continue
+        # Optionally clean the log files before running this test on the
+        # servers and clients specified for this test
+        if args.clean:
+            if not clean_logs(test_file["yaml"], args):
+                # Report errors for this skipped test
+                skip_reason = (
+                    "host communication error attempting to clean out "
+                    "leftover logs from a previous test run prior to "
+                    "running this test")
+                if not report_skipped_test(
+                        test_file["py"], avocado_logs_dir, skip_reason):
+                    return_code |= 64
+                return_code |= 128
+                continue
 
-            # Execute this test
-            test_command_list = list(command_list)
-            test_command_list.extend([
-                "--mux-yaml", test_file["yaml"], "--", test_file["py"]])
-            return_code |= time_command(test_command_list)
-            return_code |= stop_daos_agent_services(test_file["py"], args)
-            return_code |= stop_daos_server_service(test_file["py"], args)
+        # Execute this test
+        test_command_list = list(command_list)
+        test_command_list.extend([
+            "--mux-yaml", test_file["yaml"], "--", test_file["py"]])
+        # return_code |= time_command(test_command_list)
+        run_return_code = time_command(test_command_list)
+        if run_return_code != 0:
+            # Move any avocado crash files into job-results/latest/crashes
+            data_dir = avocado_logs_dir.replace("job-results", "data")
+            crash_dir = os.path.join(data_dir, "crashes")
+            if os.path.isdir(crash_dir):
+                latest_dir = os.path.join(avocado_logs_dir, "latest")
+                latest_crash_dir = os.path.join(latest_dir, "crashes")
+                run_command(["mkdir", latest_crash_dir])
+                for crash_file in os.listdir(crash_dir):
+                    if os.path.isfile(crash_file):
+                        run_command(["mv", crash_file, latest_crash_dir])
+        return_code |= run_return_code
+        return_code |= stop_daos_agent_services(test_file["py"], args)
+        return_code |= stop_daos_server_service(test_file["py"], args)
 
-            # Optionally store all of the server and client config files
-            # and archive remote logs and report big log files, if any.
-            if args.archive:
-                return_code |= archive_config_files(avocado_logs_dir, args)
-                return_code |= archive_daos_logs(
-                    avocado_logs_dir, test_file, args)
-                return_code |= archive_cart_logs(
-                    avocado_logs_dir, test_file, args)
+        # Optionally store all of the server and client config files
+        # and archive remote logs and report big log files, if any.
+        if args.archive:
+            return_code |= archive_config_files(avocado_logs_dir, args)
+            return_code |= archive_daos_logs(
+                avocado_logs_dir, test_file, args)
+            return_code |= archive_cart_logs(
+                avocado_logs_dir, test_file, args)
 
-                # Compress any log file that haven't been remotely compressed.
-                compress_log_files(avocado_logs_dir, args)
+            # Compress any log file that haven't been remotely compressed.
+            compress_log_files(avocado_logs_dir, args)
 
-            # Optionally rename the test results directory for this test
-            if args.rename:
-                return_code |= rename_logs(avocado_logs_dir, test_file["py"],
-                                           args)
+        # Optionally rename the test results directory for this test
+        if args.rename:
+            return_code |= rename_logs(avocado_logs_dir, test_file["py"], args)
 
-            # Optionally process core files
-            if args.process_cores:
-                if not process_the_cores(avocado_logs_dir, test_file["yaml"],
-                                         args):
-                    return_code |= 256
+        # Optionally process core files
+        if args.process_cores:
+            if not process_the_cores(avocado_logs_dir, test_file["yaml"], args):
+                return_code |= 256
 
     return return_code
 

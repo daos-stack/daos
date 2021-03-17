@@ -71,6 +71,7 @@ mkdir -p ~/.config/avocado/
 cat <<EOF > ~/.config/avocado/avocado.conf
 [datadir.paths]
 logs_dir = $logs_prefix/ftest/avocado/job-results
+data_dir = $logs_prefix/ftest/avocado/data
 
 [runner.timeout]
 process_died = 60
