@@ -59,14 +59,14 @@ gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-Debug-7
 enabled=0
 EOF
 
-    # force install of avocado 69.0
+    # force install of avocado 82.x
     dnf -y erase avocado{,-common}                                        \
            python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}} \
            python36-PyYAML
     pip3 install --upgrade pip
-    pip3 install "avocado-framework<70.0"
-    pip3 install "avocado-framework-plugin-result-html<70.0"
-    pip3 install "avocado-framework-plugin-varianter-yaml-to-mux<70.0"
+    pip3 install "avocado-framework<83.0"
+    pip3 install "avocado-framework-plugin-result-html<83.0"
+    pip3 install "avocado-framework-plugin-varianter-yaml-to-mux<83.0"
     pip3 install clustershell
 }
 
