@@ -459,9 +459,6 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 	rc = umem_tx_end(umm, rc);
 	if (rc)
 		goto out;
-
-	/* NB: noop for full-stack mode */
-	gc_wait();
 out:
 	vos_obj_release(occ, obj, true);
 	return rc;
@@ -527,7 +524,6 @@ vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
 	}
 out_tx:
 	rc = umem_tx_end(umm, rc);
-	gc_wait(); /* NB: noop for full-stack mode */
 out:
 	if (akey)
 		key_tree_release(toh, false);
