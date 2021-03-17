@@ -1808,7 +1808,7 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 {
 	struct vos_agg_param	*agg_param = cb_arg;
 	struct vos_container	*cont;
-	int			 rc;
+	int			 rc = 0;
 
 	cont = vos_hdl2cont(param->ip_hdl);
 	D_DEBUG(DB_EPC, DF_CONT": Aggregate pre, type:%d, is_discard:%d\n",
