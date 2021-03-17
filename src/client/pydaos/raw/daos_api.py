@@ -36,7 +36,6 @@ DaosContPropEnum = enum.Enum(
     {key: value for key, value in list(pydaos_shim.__dict__.items())
      if key.startswith("DAOS_PROP_")})
 
-
 class DaosPool():
     """A python object representing a DAOS pool."""
 
@@ -374,6 +373,7 @@ class DaosPool():
             raise DaosApiError("Pool List-attr returned non-zero. RC:{0}"
                                .format(ret))
         buf = t_size[0]
+
         buff = ctypes.create_string_buffer(buf + 1).raw
         total_size = ctypes.pointer(ctypes.c_size_t(buf + 1))
 
@@ -393,7 +393,6 @@ class DaosPool():
                                             cb_func,
                                             self))
             thread.start()
-        buff = buff.rstrip(b"\x00")
         return total_size.contents, buff
 
     def set_attr(self, data, poh=None, cb_func=None):
@@ -462,21 +461,15 @@ class DaosPool():
         if poh is not None:
             self.handle = poh
 
-        buffer_size = 100
-        # Adjust the buffer size based on attributes to retrieve
-        for attr in attr_names:
-            if buffer_size <= len(attr):
-                buffer_size = len(attr)
         attr_count = len(attr_names)
         attr_names_c = (ctypes.c_char_p * attr_count)(*attr_names)
 
         no_of_att = ctypes.c_int(attr_count)
         buffers = ctypes.c_char_p * attr_count
-        buff = buffers(*[ctypes.c_char_p(
-            ctypes.create_string_buffer(buffer_size).raw)
-            for i in range(attr_count)])
+        buff = buffers(*[ctypes.c_char_p(ctypes.create_string_buffer(100).raw)
+                         for i in range(attr_count)])
 
-        size_of_att_val = [buffer_size] * attr_count
+        size_of_att_val = [100] * attr_count
         sizes = (ctypes.c_size_t * attr_count)(*size_of_att_val)
 
         func = self.context.get_function('get-pool-attr')
@@ -501,8 +494,9 @@ class DaosPool():
         results = {}
         i = 0
         for attr in attr_names:
-            results[str(i).encode("utf-8")] = buff[i][:sizes[i]]
+            results[attr] = buff[i][:sizes[i]]
             i += 1
+
         return results
 
     @staticmethod
@@ -541,22 +535,20 @@ class DaosObjClassOld(enum.IntEnum):
 
 # pylint: disable=no-member
 ConvertObjClass = {
-    DaosObjClassOld.DAOS_OC_TINY_RW: DaosObjClass.OC_S1,
-    DaosObjClassOld.DAOS_OC_SMALL_RW: DaosObjClass.OC_S4,
-    DaosObjClassOld.DAOS_OC_LARGE_RW: DaosObjClass.OC_SX,
-    DaosObjClassOld.DAOS_OC_R2S_RW: DaosObjClass.OC_RP_2G1,
-    DaosObjClassOld.DAOS_OC_R2_RW: DaosObjClass.OC_RP_2G2,
-    DaosObjClassOld.DAOS_OC_R2_MAX_RW: DaosObjClass.OC_RP_2GX,
-    DaosObjClassOld.DAOS_OC_R3S_RW: DaosObjClass.OC_RP_3G1,
-    DaosObjClassOld.DAOS_OC_R3_RW: DaosObjClass.OC_RP_3G2,
-    DaosObjClassOld.DAOS_OC_R3_MAX_RW: DaosObjClass.OC_RP_3GX,
-    DaosObjClassOld.DAOS_OC_R4S_RW: DaosObjClass.OC_RP_4G1,
-    DaosObjClassOld.DAOS_OC_R4_RW: DaosObjClass.OC_RP_4G2,
-    DaosObjClassOld.DAOS_OC_R4_MAX_RW: DaosObjClass.OC_RP_4GX,
+    DaosObjClassOld.DAOS_OC_TINY_RW:     DaosObjClass.OC_S1,
+    DaosObjClassOld.DAOS_OC_SMALL_RW:    DaosObjClass.OC_S4,
+    DaosObjClassOld.DAOS_OC_LARGE_RW:    DaosObjClass.OC_SX,
+    DaosObjClassOld.DAOS_OC_R2S_RW:      DaosObjClass.OC_RP_2G1,
+    DaosObjClassOld.DAOS_OC_R2_RW:       DaosObjClass.OC_RP_2G2,
+    DaosObjClassOld.DAOS_OC_R2_MAX_RW:   DaosObjClass.OC_RP_2GX,
+    DaosObjClassOld.DAOS_OC_R3S_RW:      DaosObjClass.OC_RP_3G1,
+    DaosObjClassOld.DAOS_OC_R3_RW:       DaosObjClass.OC_RP_3G2,
+    DaosObjClassOld.DAOS_OC_R3_MAX_RW:   DaosObjClass.OC_RP_3GX,
+    DaosObjClassOld.DAOS_OC_R4S_RW:      DaosObjClass.OC_RP_4G1,
+    DaosObjClassOld.DAOS_OC_R4_RW:       DaosObjClass.OC_RP_4G2,
+    DaosObjClassOld.DAOS_OC_R4_MAX_RW:   DaosObjClass.OC_RP_4GX,
     DaosObjClassOld.DAOS_OC_REPL_MAX_RW: DaosObjClass.OC_RP_XSF
 }
-
-
 # pylint: enable=no-member
 
 
@@ -1160,9 +1152,10 @@ class IORequest():
         sgl_list = (daos_cref.SGL * count)()
         i = 0
         for tup in data:
+
             sgl_iov = daos_cref.IOV()
-            sgl_iov.iov_len = ctypes.c_size_t(len(tup[1]) + 1)
-            sgl_iov.iov_buf_len = ctypes.c_size_t(len(tup[1]) + 1)
+            sgl_iov.iov_len = ctypes.c_size_t(len(tup[1])+1)
+            sgl_iov.iov_buf_len = ctypes.c_size_t(len(tup[1])+1)
             sgl_iov.iov_buf = ctypes.cast(tup[1], ctypes.c_void_p)
 
             sgl_list[i].sg_nr_out = 1
@@ -1173,7 +1166,7 @@ class IORequest():
             iods[i].iod_name.iov_buf_len = ctypes.sizeof(tup[0])
             iods[i].iod_name.iov_len = ctypes.sizeof(tup[0])
             iods[i].iod_type = 1
-            iods[i].iod_size = len(tup[1]) + 1
+            iods[i].iod_size = len(tup[1])+1
             iods[i].iod_flags = 0
             iods[i].iod_nr = 1
             i += 1
@@ -1219,9 +1212,9 @@ class IORequest():
         iods = (daos_cref.DaosIODescriptor * count)()
         for key in keys:
             sgl_iov = daos_cref.IOV()
-            sgl_iov.iov_len = ctypes.c_ulong(key[1].value + 1)
-            sgl_iov.iov_buf_len = ctypes.c_ulong(key[1].value + 1)
-            buf = ctypes.create_string_buffer(key[1].value + 1)
+            sgl_iov.iov_len = ctypes.c_ulong(key[1].value+1)
+            sgl_iov.iov_buf_len = ctypes.c_ulong(key[1].value+1)
+            buf = ctypes.create_string_buffer(key[1].value+1)
             sgl_iov.iov_buf = ctypes.cast(buf, ctypes.c_void_p)
 
             sgl_list[i].sg_nr_out = 1
@@ -1232,7 +1225,7 @@ class IORequest():
             iods[i].iod_name.iov_buf_len = ctypes.sizeof(key[0])
             iods[i].iod_name.iov_len = ctypes.sizeof(key[0])
             iods[i].iod_type = 1
-            iods[i].iod_size = ctypes.c_ulong(key[1].value + 1)
+            iods[i].iod_size = ctypes.c_ulong(key[1].value+1)
             iods[i].iod_flags = 0
 
             iods[i].iod_nr = 1
@@ -1272,7 +1265,7 @@ class DaosContProperties(ctypes.Structure):
     future for setting other container properties
     (if needed)
     """
-    _fields_ = [("type", ctypes.c_char * 10),
+    _fields_ = [("type", ctypes.c_char*10),
                 ("enable_chksum", ctypes.c_bool),
                 ("srv_verify", ctypes.c_bool),
                 ("chksum_type", ctypes.c_uint64),
@@ -1293,7 +1286,6 @@ class DaosContProperties(ctypes.Structure):
         self.chksum_type = ctypes.c_uint64(100)
         self.chunk_size = ctypes.c_uint64(0)
 
-
 class DaosInputParams():
     # pylint: disable=too-few-public-methods
     """ This is a helper python method
@@ -1301,7 +1293,6 @@ class DaosInputParams():
     parameters for create methods
     (eg: container or pool (future)).
     """
-
     def __init__(self):
         super().__init__()
         # Get the input params for setting
@@ -1320,8 +1311,8 @@ class DaosInputParams():
         """
         return self.co_prop
 
-
 class DaosContainer():
+    # pylint: disable=too-many-public-methods
     """A python object representing a DAOS container."""
 
     def __init__(self, context):
@@ -2064,7 +2055,7 @@ class DaosSnapshot():
         libdaos we know to always convert it to a ctype.
         """
         self.context = context
-        self.name = name  # currently unused
+        self.name = name            # currently unused
         self.epoch = 0
 
     def create(self, coh):
@@ -2148,7 +2139,6 @@ class DaosSnapshot():
             raise Exception("Failed to destroy the snapshot. RC: {0}"
                             .format(retcode))
 
-
 class DaosContext():
     # pylint: disable=too-few-public-methods
     """Provides environment and other info for a DAOS client."""
@@ -2171,56 +2161,56 @@ class DaosContext():
                                    mode=ctypes.DEFAULT_MODE)
         # Note: action-subject format
         self.ftable = {
-            'reint-target': self.libdaos.daos_pool_reint_tgt,
-            'close-cont': self.libdaos.daos_cont_close,
-            'close-obj': self.libdaos.daos_obj_close,
-            'close-tx': self.libdaos.daos_tx_close,
-            'commit-tx': self.libdaos.daos_tx_commit,
-            'connect-pool': self.libdaos.daos_pool_connect,
+            'reint-target':    self.libdaos.daos_pool_reint_tgt,
+            'close-cont':      self.libdaos.daos_cont_close,
+            'close-obj':       self.libdaos.daos_obj_close,
+            'close-tx':        self.libdaos.daos_tx_close,
+            'commit-tx':       self.libdaos.daos_tx_commit,
+            'connect-pool':    self.libdaos.daos_pool_connect,
             'convert-cglobal': self.libdaos.daos_cont_global2local,
-            'convert-clocal': self.libdaos.daos_cont_local2global,
+            'convert-clocal':  self.libdaos.daos_cont_local2global,
             'convert-pglobal': self.libdaos.daos_pool_global2local,
-            'convert-plocal': self.libdaos.daos_pool_local2global,
-            'create-cont': self.libdaos.daos_cont_create,
-            'create-eq': self.libdaos.daos_eq_create,
-            'create-snap': self.libdaos.daos_cont_create_snap,
-            'd_log': self.libtest.dts_log,
-            'destroy-cont': self.libdaos.daos_cont_destroy,
-            'destroy-eq': self.libdaos.daos_eq_destroy,
-            'destroy-snap': self.libdaos.daos_cont_destroy_snap,
-            'destroy-tx': self.libdaos.daos_tx_abort,
+            'convert-plocal':  self.libdaos.daos_pool_local2global,
+            'create-cont':     self.libdaos.daos_cont_create,
+            'create-eq':       self.libdaos.daos_eq_create,
+            'create-snap':     self.libdaos.daos_cont_create_snap,
+            'd_log':           self.libtest.dts_log,
+            'destroy-cont':    self.libdaos.daos_cont_destroy,
+            'destroy-eq':      self.libdaos.daos_eq_destroy,
+            'destroy-snap':    self.libdaos.daos_cont_destroy_snap,
+            'destroy-tx':      self.libdaos.daos_tx_abort,
             'disconnect-pool': self.libdaos.daos_pool_disconnect,
-            'exclude-target': self.libdaos.daos_pool_tgt_exclude,
-            'fetch-obj': self.libdaos.daos_obj_fetch,
-            'generate-oid': self.libdaos.daos_obj_generate_oid,
-            'get-cont-attr': self.libdaos.daos_cont_get_attr,
-            'get-pool-attr': self.libdaos.daos_pool_get_attr,
-            'get-layout': self.libdaos.daos_obj_layout_get,
-            'init-event': self.libdaos.daos_event_init,
-            'kill-target': self.libdaos.daos_pool_tgt_exclude_out,
-            'list-attr': self.libdaos.daos_cont_list_attr,
-            'list-cont-attr': self.libdaos.daos_cont_list_attr,
-            'list-pool-attr': self.libdaos.daos_pool_list_attr,
-            'cont-aggregate': self.libdaos.daos_cont_aggregate,
-            'list-snap': self.libdaos.daos_cont_list_snap,
-            'open-cont': self.libdaos.daos_cont_open,
-            'open-obj': self.libdaos.daos_obj_open,
-            'open-snap': self.libdaos.daos_tx_open_snap,
-            'open-tx': self.libdaos.daos_tx_open,
-            'poll-eq': self.libdaos.daos_eq_poll,
-            'punch-akeys': self.libdaos.daos_obj_punch_akeys,
-            'punch-dkeys': self.libdaos.daos_obj_punch_dkeys,
-            'punch-obj': self.libdaos.daos_obj_punch,
-            'query-cont': self.libdaos.daos_cont_query,
-            'query-obj': self.libdaos.daos_obj_query,
-            'query-pool': self.libdaos.daos_pool_query,
-            'query-target': self.libdaos.daos_pool_query_target,
-            'restart-tx': self.libdaos.daos_tx_restart,
-            'set-cont-attr': self.libdaos.daos_cont_set_attr,
-            'set-pool-attr': self.libdaos.daos_pool_set_attr,
-            'stop-service': self.libdaos.daos_pool_stop_svc,
-            'test-event': self.libdaos.daos_event_test,
-            'update-obj': self.libdaos.daos_obj_update}
+            'exclude-target':  self.libdaos.daos_pool_tgt_exclude,
+            'fetch-obj':       self.libdaos.daos_obj_fetch,
+            'generate-oid':    self.libdaos.daos_obj_generate_oid,
+            'get-cont-attr':   self.libdaos.daos_cont_get_attr,
+            'get-pool-attr':   self.libdaos.daos_pool_get_attr,
+            'get-layout':      self.libdaos.daos_obj_layout_get,
+            'init-event':      self.libdaos.daos_event_init,
+            'kill-target':     self.libdaos.daos_pool_tgt_exclude_out,
+            'list-attr':       self.libdaos.daos_cont_list_attr,
+            'list-cont-attr':  self.libdaos.daos_cont_list_attr,
+            'list-pool-attr':  self.libdaos.daos_pool_list_attr,
+            'cont-aggregate':  self.libdaos.daos_cont_aggregate,
+            'list-snap':       self.libdaos.daos_cont_list_snap,
+            'open-cont':       self.libdaos.daos_cont_open,
+            'open-obj':        self.libdaos.daos_obj_open,
+            'open-snap':       self.libdaos.daos_tx_open_snap,
+            'open-tx':         self.libdaos.daos_tx_open,
+            'poll-eq':         self.libdaos.daos_eq_poll,
+            'punch-akeys':     self.libdaos.daos_obj_punch_akeys,
+            'punch-dkeys':     self.libdaos.daos_obj_punch_dkeys,
+            'punch-obj':       self.libdaos.daos_obj_punch,
+            'query-cont':      self.libdaos.daos_cont_query,
+            'query-obj':       self.libdaos.daos_obj_query,
+            'query-pool':      self.libdaos.daos_pool_query,
+            'query-target':    self.libdaos.daos_pool_query_target,
+            'restart-tx':      self.libdaos.daos_tx_restart,
+            'set-cont-attr':   self.libdaos.daos_cont_set_attr,
+            'set-pool-attr':   self.libdaos.daos_pool_set_attr,
+            'stop-service':    self.libdaos.daos_pool_stop_svc,
+            'test-event':      self.libdaos.daos_event_test,
+            'update-obj':      self.libdaos.daos_obj_update}
 
     def get_function(self, function):
         """Call a function through the API."""

@@ -34,14 +34,6 @@ class PoolAttributeTest(TestWithServers):
     :avocado: recursive
     """
 
-    CANCEL_FOR_TICKET = [
-        [
-            "DAOS-6971",
-            "test_method_name", "test_pool_attributes",
-            "test_method_name", "test_pool_attribute_asyn"
-        ],
-    ]
-
     @staticmethod
     def create_data_set():
         """Create the large attribute dictionary.
@@ -52,10 +44,9 @@ class PoolAttributeTest(TestWithServers):
         """
         data_set = {}
         for index in range(1024):
-            key = str(index).encode("utf-8")
             size = random.randint(1, 100)
-            random_string = get_random_bytes(size)
-            data_set[key] = random_string
+            key = str(index).encode("utf-8")
+            data_set[key] = get_random_bytes(size)
         return data_set
 
     def verify_list_attr(self, indata, size, buff):
@@ -68,13 +59,11 @@ class PoolAttributeTest(TestWithServers):
 
         """
         # length of all the attribute names
-        aggregate_len = 0
-        for attr_name in indata.values():
-            if attr_name:
-                aggregate_len += len(attr_name)
-
+        aggregate_len = sum(
+            len(attr_name) if attr_name is not None else 0
+            for attr_name in list(indata.keys())) + 1
         # there is a space between each name, so account for that
-        aggregate_len += len(list(indata.values()))
+        aggregate_len += len(list(indata.keys())) - 1
 
         self.log.info("Verifying list_attr output:")
         self.log.info("  set_attr names:  %s", list(indata.keys()))
@@ -87,7 +76,7 @@ class PoolAttributeTest(TestWithServers):
                 "FAIL: Size is not matching for Names in list attr, Expected "
                 "len={0} and received len={1}".format(aggregate_len, size))
         # verify the Attributes names in list_attr retrieve
-        for key in list(indata.values()):
+        for key in list(indata.keys()):
             if key not in buff:
                 self.fail(
                     "FAIL: Name does not match after list attr, Expected "
@@ -102,8 +91,8 @@ class PoolAttributeTest(TestWithServers):
 
         """
         self.log.info("Verifying get_attr output:")
-        self.log.info("  get_attr data: %s", indata)
-        self.log.info("  set_attr data: %s", outdata)
+        self.log.info("  set_attr data: %s", indata)
+        self.log.info("  get_attr data: %s", outdata)
         for attr, value in indata.items():
             if value != outdata[attr]:
                 self.fail(
@@ -121,6 +110,7 @@ class PoolAttributeTest(TestWithServers):
         """
         self.add_pool()
         attr_dict = self.create_data_set()
+
         try:
             self.pool.pool.set_attr(data=attr_dict)
             size, buf = self.pool.pool.list_attr()
@@ -128,15 +118,12 @@ class PoolAttributeTest(TestWithServers):
             self.verify_list_attr(attr_dict, size.value, buf)
 
             results = {}
-            results = self.pool.pool.get_attr(list(attr_dict.values()))
+            results = self.pool.pool.get_attr(list(attr_dict.keys()))
             self.verify_get_attr(attr_dict, results)
         except DaosApiError as excep:
             print(excep)
             print(traceback.format_exc())
-
             self.fail("Test was expected to pass but it failed.\n")
-
-
 
     def test_pool_attributes(self):
         """Test pool attributes.
@@ -149,10 +136,11 @@ class PoolAttributeTest(TestWithServers):
         """
         self.add_pool()
         expected_for_param = []
-        name = self.params.get("name", '/run/attrtests/test_handles/*/')
+        name = self.params.get("name", '/run/attrtests/name_handles/*/')
         expected_for_param.append(name[1])
-        value = self.params.get("value", '/run/attrtests/test_handles/*/')
+        value = self.params.get("value", '/run/attrtests/value_handles/*/')
         expected_for_param.append(value[1])
+
         expected_result = 'PASS'
         for result in expected_for_param:
             if result == 'FAIL':
@@ -169,13 +157,15 @@ class PoolAttributeTest(TestWithServers):
         try:
             self.pool.pool.set_attr(data=attr_dict)
             size, buf = self.pool.pool.list_attr()
+
             self.verify_list_attr(attr_dict, size.value, buf)
+
             if name[0] is not None:
                 # Request something that doesn't exist
                 if b"Negative" in name[0]:
                     name[0] = b"rubbish"
                 results = {}
-                results = self.pool.pool.get_attr([value[0]])
+                results = self.pool.pool.get_attr([name[0]])
                 self.verify_get_attr(attr_dict, results)
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
@@ -200,13 +190,13 @@ class PoolAttributeTest(TestWithServers):
 
         self.add_pool()
         expected_for_param = []
-        name = self.params.get("name", '/run/attrtests/test_handles/*/')
+        name = self.params.get("name", '/run/attrtests/name_handles/*/')
         # workaround until async functions are fixed
         if name[0] is not None and "Negative" in name[0]:
             pass
         else:
             expected_for_param.append(name[1])
-        value = self.params.get("value", '/run/attrtests/test_handles/*/')
+        value = self.params.get("value", '/run/attrtests/value_handles/*/')
         expected_for_param.append(value[1])
 
         expected_result = 'PASS'
