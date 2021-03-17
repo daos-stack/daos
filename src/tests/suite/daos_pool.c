@@ -245,9 +245,6 @@ pool_attribute(void **state)
 	};
 	int			 n = (int) ARRAY_SIZE(names);
 	char			 out_buf[10 * BUFSIZE] = { 0 };
-	/* use 2 consecutives pieces of big buffer to avoid the need to
-	 * unpack and merge bulk segments
-	 */
 	void			*out_values[] = {
 						  &out_buf[0 * BUFSIZE],
 						  &out_buf[1 * BUFSIZE]
@@ -307,12 +304,12 @@ pool_attribute(void **state)
 
 	print_message("Verifying Name-Value (A)..\n");
 	assert_int_equal(out_sizes[0], in_sizes[0]);
-	assert_memory_equal(out_buf, in_values[0], in_sizes[0]);
+	assert_memory_equal(out_values[0], in_values[0], in_sizes[0]);
 
 	print_message("Verifying Name-Value (B)..\n");
 	assert_true(in_sizes[1] > BUFSIZE);
-	assert_int_equal(out_sizes[1], BUFSIZE);
-	assert_memory_equal(out_buf + out_sizes[0], in_values[1], out_sizes[1]);
+	assert_int_equal(out_sizes[1], in_sizes[1]);
+	assert_memory_equal(out_values[1], in_values[1], BUFSIZE);
 
 	rc = daos_pool_get_attr(arg->pool.poh, n, names, NULL, out_sizes,
 				arg->async ? &ev : NULL);
