@@ -18,9 +18,8 @@ import (
 )
 
 var (
-	ErrEmptyGroupMap      = errors.New("empty GroupMap")
-	ErrRaftUnavail        = errors.New("raft service unavailable (not started yet?)")
-	ErrRankAlreadyEvicted = errors.New("rank already evicted")
+	ErrEmptyGroupMap = errors.New("empty GroupMap")
+	ErrRaftUnavail   = errors.New("raft service unavailable (not started yet?)")
 )
 
 // IsUnavailable returns a boolean indicating whether or not the
@@ -109,13 +108,6 @@ func errUuidExists(u uuid.UUID) *ErrMemberExists {
 func IsMemberExists(err error) bool {
 	_, ok := errors.Cause(err).(*ErrMemberExists)
 	return ok
-}
-
-func errMemberIllegalStateChange(m *Member, ts MemberState) error {
-	if m.State() == MemberStateEvicted {
-		return ErrRankAlreadyEvicted
-	}
-	return errors.Errorf("illegal member state update for rank %d: %s->%s", m.Rank, m.state, ts)
 }
 
 // ErrJoinFailure indicates the failure of a Join request due

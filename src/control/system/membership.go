@@ -306,6 +306,10 @@ func (m *Membership) Members(rankSet *RankSet) (members Members) {
 	return
 }
 
+func msgBadStateTransition(m *Member, ts MemberState) string {
+	return fmt.Sprintf("illegal member state update for rank %d: %s->%s", m.Rank, m.state, ts)
+}
+
 // UpdateMemberStates updates member's state according to result state.
 //
 // If updateOnFail is false, only update member state and info if result is a
@@ -341,8 +345,7 @@ func (m *Membership) UpdateMemberStates(results MemberResults, updateOnFail bool
 		}
 
 		if member.State().isTransitionIllegal(result.State) {
-			m.log.Debugf("skipping illegal member state update for rank %d: %s->%s",
-				member.Rank, member.state, result.State)
+			m.log.Debugf("skipping %s", msgBadStateTransition(member, result.State))
 			continue
 		}
 		member.state = result.State
@@ -445,11 +448,19 @@ func (m *Membership) MarkRankDead(rank Rank) error {
 		return err
 	}
 
-	if member.State().isTransitionIllegal(MemberStateEvicted) {
-		return errMemberIllegalStateChange(member, MemberStateEvicted)
+	ts := MemberStateEvicted
+	if member.State().isTransitionIllegal(ts) {
+		msg := msgBadStateTransition(member, ts)
+		// evicted->evicted transitions expected for multiple swim
+		// notifications, if so return error to skip group update
+		if member.State() != ts {
+			m.log.Error(msg)
+		}
+
+		return errors.New(msg)
 	}
 
-	member.state = MemberStateEvicted
+	member.state = ts
 	return m.db.UpdateMember(member)
 }
 
@@ -470,13 +481,13 @@ func (m *Membership) handleRankDown(evt *events.RASEvent) {
 		return
 	}
 
-	if member.State().isTransitionIllegal(MemberStateErrored) {
-		m.log.Debugf("skipping illegal member state update for rank %d: %s->%s",
-			member.Rank, member.state, MemberStateErrored)
+	ts := MemberStateErrored
+	if member.State().isTransitionIllegal(ts) {
+		m.log.Debugf("skipping %s", msgBadStateTransition(member, ts))
 		return
 	}
 
-	member.state = MemberStateErrored
+	member.state = ts
 	member.Info = errors.Wrap(ei.ExitErr, evt.Msg).Error()
 
 	if err := m.db.UpdateMember(member); err != nil {
