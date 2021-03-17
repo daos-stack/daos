@@ -169,8 +169,8 @@ nvme_fault_reaction(void **state, bool mode)
 		 */
 		print_message("Connect the pool to get the pool query\n");
 		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-			DAOS_PC_RW, &arg->pool.poh, &arg->pool.pool_info,
-			NULL /* ev */);
+				       DAOS_PC_RW, &arg->pool.poh,
+				       &arg->pool.pool_info, NULL /* ev */);
 		assert_rc_equal(rc, 0);
 		/* Set container handle as invalid so it does not close again*/
 		arg->coh = DAOS_HDL_INVAL;
