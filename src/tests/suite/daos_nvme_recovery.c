@@ -66,6 +66,7 @@ nvme_fault_reaction(void **state, bool mode)
 	int			 n_tgtidx = 0;
 	int			 per_node_tgt_cnt = 0;
 	int			 i, j, k, rc;
+	int		 faulty_disk_idx = 0;
 
 	if (!is_nvme_enabled(arg)) {
 		print_message("NVMe isn't enabled.\n");
@@ -87,6 +88,9 @@ nvme_fault_reaction(void **state, bool mode)
 	for (i = 0; i < ndisks; i++) {
 		if (devices[i].rank != rank)
 			continue;
+		else
+			faulty_disk_idx = i;
+
 		print_message("Rank=%d UUID=" DF_UUIDF " state=%s host=%s tgts=",
 			      devices[i].rank, DP_UUID(devices[i].device_id),
 			      devices[i].state, devices[i].host);
@@ -136,8 +140,10 @@ nvme_fault_reaction(void **state, bool mode)
 
 	if (mode == 0) {
 		print_message("Disconnect the pool for offline failure\n");
+		rc = daos_cont_close(arg->coh, NULL);
+		assert_rc_equal(rc, 0);
 		rc = daos_pool_disconnect(arg->pool.poh, NULL);
-		assert_rc_equal(-DER_BUSY, rc);
+		assert_rc_equal(rc, 0);
 	}
 
 	/** Inject error on random target index */
@@ -147,6 +153,28 @@ nvme_fault_reaction(void **state, bool mode)
 		      " faulty.\n", fail_loc_tgt);
 	set_fail_loc(arg, rank, fail_loc_tgt,
 		     DAOS_NVME_FAULTY | DAOS_FAIL_ALWAYS);
+
+	if (mode == 0) {
+		/**
+		*  Continue to check blobstore state until "OUT" state is returned
+		*  or max test retry count is hit (5 min).
+		*/
+		rc = wait_and_verify_blobstore_state(
+			devices[faulty_disk_idx].device_id, /*expected state*/"out",
+			arg->group);
+		assert_rc_equal(rc, 0);
+		
+		/** 
+		 * Connect the pool for query check.
+		 */
+		print_message("Connect the pool to get the pool query\n");
+		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+			DAOS_PC_RW, &arg->pool.poh, &arg->pool.pool_info,
+			NULL /* ev */);
+		assert_rc_equal(rc, 0);
+		/* Set container handle as invalid so it does not close again*/
+		arg->coh = DAOS_HDL_INVAL;
+	}
 
 	/* Verify that the DAOS_NVME_FAULTY reaction got triggered. Target should
 	 * be in the DOWN state to trigger rebuild (or DOWNOUT if rebuild already
