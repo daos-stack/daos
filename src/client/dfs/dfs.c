@@ -2968,16 +2968,14 @@ dfs_release(dfs_obj_t *obj)
 		break;
 	default:
 		D_ERROR("Invalid entry type (not a dir, file, symlink).\n");
-		rc = EINVAL;
+		rc = -DER_IO_INVAL;
 	}
 
-	if (rc) {
+	if (rc)
 		D_ERROR("daos_obj_close() failed, "DF_RC"\n", DP_RC(rc));
-		return daos_der2errno(rc);
-	}
 
 	D_FREE(obj);
-	return 0;
+	return daos_der2errno(rc);
 }
 
 struct dfs_read_params {
@@ -3016,6 +3014,9 @@ dfs_read_int(dfs_t *dfs, dfs_obj_t *obj, daos_off_t off, dfs_iod_t *iod,
 	struct dfs_read_params	*params;
 	int			rc;
 
+	D_ASSERT(ev);
+	daos_event_errno_rc(ev);
+
 	rc = dc_task_create(dc_array_read, NULL, ev, &task);
 	if (rc != 0)
 		return daos_der2errno(rc);
@@ -3046,7 +3047,7 @@ dfs_read_int(dfs_t *dfs, dfs_obj_t *obj, daos_off_t off, dfs_iod_t *iod,
 	daos_task_set_priv(task, params);
 	rc = tse_task_register_cbs(task, NULL, 0, 0, read_cb, NULL, 0);
 	if (rc)
-		D_GOTO(err_params, rc);
+		D_GOTO(err_params, rc = daos_der2errno(rc));
 
 	return dc_task_schedule(task, true);
 
@@ -3142,8 +3143,10 @@ dfs_readx(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
 		arr_iod.arr_rgs = iod->iod_rgs;
 
 		rc = daos_array_read(obj->oh, DAOS_TX_NONE, &arr_iod, sgl, ev);
-		if (rc)
+		if (rc) {
 			D_ERROR("daos_array_read() failed (%d)\n", rc);
+			return daos_der2errno(rc);
+		}
 
 		*read_size = arr_iod.arr_nr_read;
 		return 0;
@@ -3172,8 +3175,9 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 		return EPERM;
 
 	buf_size = 0;
-	for (i = 0; i < sgl->sg_nr; i++)
-		buf_size += sgl->sg_iovs[i].iov_len;
+	if (sgl)
+		for (i = 0; i < sgl->sg_nr; i++)
+			buf_size += sgl->sg_iovs[i].iov_len;
 	if (buf_size == 0) {
 		if (ev) {
 			daos_event_launch(ev);
@@ -3189,6 +3193,9 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 	iod.arr_rgs = &rg;
 
 	D_DEBUG(DB_TRACE, "DFS Write: Off %"PRIu64", Len %zu\n", off, buf_size);
+
+	if (ev)
+		daos_event_errno_rc(ev);
 
 	rc = daos_array_write(obj->oh, DAOS_TX_NONE, &iod, sgl, ev);
 	if (rc)
@@ -3212,6 +3219,8 @@ dfs_writex(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
 		return EINVAL;
 	if ((obj->flags & O_ACCMODE) == O_RDONLY)
 		return EPERM;
+	if (iod == NULL)
+		return EINVAL;
 
 	if (iod->iod_nr == 0) {
 		if (ev) {
@@ -3224,6 +3233,9 @@ dfs_writex(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
 	/** set array location */
 	arr_iod.arr_nr = iod->iod_nr;
 	arr_iod.arr_rgs = iod->iod_rgs;
+
+	if (ev)
+		daos_event_errno_rc(ev);
 
 	rc = daos_array_write(obj->oh, DAOS_TX_NONE, &arr_iod, sgl, ev);
 	if (rc)
