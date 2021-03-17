@@ -718,7 +718,7 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc,
 		 * be used as part of the vos object cache index.
 		 *
 		 * It is not important what the id_shard is, that
-		 * is packed via daos_cpd_req_idx::dcri_shard_idx.
+		 * is packed via daos_cpd_req_idx::dcri_shard_id.
 		 */
 		rc = crt_proc_daos_unit_oid_t(proc, &oid);
 	}

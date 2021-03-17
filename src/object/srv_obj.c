@@ -3526,7 +3526,7 @@ ds_obj_dtx_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 			D_GOTO(out, rc = -DER_PROTO);
 		}
 
-		dcsr->dcsr_oid.id_shard = dcri[i].dcri_shard_idx;
+		dcsr->dcsr_oid.id_shard = dcri[i].dcri_shard_id;
 		rc = vos_fetch_begin(ioc->ioc_vos_coh, dcsr->dcsr_oid,
 				     dcsh->dcsh_epoch.oe_value,
 				     &dcsr->dcsr_dkey, dcsr->dcsr_nr,
@@ -3550,7 +3550,7 @@ ds_obj_dtx_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 	/* P2: vos_update_begin. */
 	for (i = 0; i < dcde->dcde_write_cnt; i++) {
 		dcsr = &dcsrs[dcri[i].dcri_req_idx];
-		dcsr->dcsr_oid.id_shard = dcri[i].dcri_shard_idx;
+		dcsr->dcsr_oid.id_shard = dcri[i].dcri_shard_id;
 
 		if (dcsr->dcsr_opc != DCSO_UPDATE)
 			continue;
