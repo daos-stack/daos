@@ -644,10 +644,13 @@ dtx_leader_wait(struct dtx_leader_handle *dlh)
 {
 	int	rc;
 
-	rc = ABT_future_wait(dlh->dlh_future);
-	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_wait failed %d.\n", rc);
+	if (dlh->dlh_future != ABT_FUTURE_NULL) {
+		rc = ABT_future_wait(dlh->dlh_future);
+		D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_wait failed %d.\n", rc);
 
-	ABT_future_free(&dlh->dlh_future);
+		ABT_future_free(&dlh->dlh_future);
+	}
+
 	D_DEBUG(DB_IO, "dth "DF_DTI" rc "DF_RC"\n",
 		DP_DTI(&dlh->dlh_handle.dth_xid), DP_RC(dlh->dlh_result));
 
