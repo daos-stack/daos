@@ -194,8 +194,56 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.obj.close()
         self.container.close()
 
+    def prepare_cont_ior_write_read(self, oclass, flags):
+        """This method prepares the containers for
+        IOR write and read invocations.
+            To enable aggregation:
+            - Create two containers and read always from
+              first container
+            Normal usage (use only a single container):
+            - Create a single container and use the same.
+        Args:
+            oclass (str): IOR object class
+            flags (str): IOR flags
+        """
+        self.log.info(self.pool_cont_dict)
+        # If pool is not in the dictionary,
+        # initialize its container list to None
+        # {poolA : [None, None], [None, None]}
+        if self.pool not in self.pool_cont_dict:
+            self.pool_cont_dict[self.pool] = [None] * 4
+        # Create container if the pool doesn't have one.
+        # Otherwise, use the existing container in the pool.
+        # pool_cont_dict {pool A: [containerA, Updated,
+        #                          containerB, Updated],
+        #                 pool B : containerA, Updated,
+        #                          containerB, None]}
+        if self.pool_cont_dict[self.pool][0] is None:
+            self.add_container(self.pool, create=False)
+            self.set_cont_class_properties(oclass)
+            self.container.create()
+            self.pool_cont_dict[self.pool][0] = self.container
+            self.pool_cont_dict[self.pool][1] = "Updated"
+        else:
+            if ((self.test_during_aggregation is True) and
+               (self.pool_cont_dict[self.pool][1] == "Updated") and
+               (self.pool_cont_dict[self.pool][3] is None) and
+               ("-w" in flags)):
+                # Write to the second container
+                self.add_container(self.pool, create=False)
+                self.set_cont_class_properties(oclass)
+                self.container.create()
+                self.pool_cont_dict[self.pool][2] = self.container
+                self.pool_cont_dict[self.pool][3] = "Updated"
+            else:
+                self.container = self.pool_cont_dict[self.pool][0]
+
+
     def delete_extra_container(self, pool):
         """Delete the extra container in the pool.
+        Refer prepare_cont_ior_write_read. This method
+        should be called when OSA tests intend to
+        enable aggregation.
         Args:
             pool (object): pool handle
         """
@@ -247,7 +295,8 @@ class OSAUtils(MdtestBase, IorTestBase):
         # Wait for the thread to finish
         process.join()
 
-    def ior_thread(self, pool, oclass, test, flags):
+    def ior_thread(self, pool, oclass, test, flags,
+                   single_cont_read=True):
         """Start threads and wait until all threads are finished.
 
         Args:
@@ -262,38 +311,15 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.ior_cmd.set_daos_params(self.server_group, self.pool)
         self.ior_cmd.dfs_oclass.update(oclass)
         self.ior_cmd.dfs_dir_oclass.update(oclass)
-
-        self.log.info(self.pool_cont_dict)
-        # If pool is not in the dictionary,
-        # initialize its container list to None
-        # {poolA : [None, None], [None, None]}
-        if self.pool not in self.pool_cont_dict:
-            self.pool_cont_dict[self.pool] = [None] * 4
-        # Create container if the pool doesn't have one.
-        # Otherwise, use the existing container in the pool.
-        # pool_cont_dict {pool A: [containerA, Updated,
-        #                          containerB, Updated],
-        #                 pool B : containerA, Updated,
-        #                          containerB, None]}
-        if self.pool_cont_dict[self.pool][0] is None:
-            self.add_container(self.pool, create=False)
-            self.set_cont_class_properties(oclass)
-            self.container.create()
-            self.pool_cont_dict[self.pool][0] = self.container
-            self.pool_cont_dict[self.pool][1] = "Updated"
+        if single_cont_read is True and self.container is None:
+            # Prepare the containers created and use in a specific
+            # way defined in prepare_cont_ior_write.
+            self.prepare_cont_ior_write_read(oclass, flags)
+        elif single_cont_read is False and self.container is not None:
+            # Here self.container is having actual value. Just use it.
+            self.log.info(self.container)
         else:
-            if ((self.test_during_aggregation is True) and
-               (self.pool_cont_dict[self.pool][1] == "Updated") and
-               (self.pool_cont_dict[self.pool][3] is None) and
-               ("-w" in flags)):
-                # Write to the second container
-                self.add_container(self.pool, create=False)
-                self.set_cont_class_properties(oclass)
-                self.container.create()
-                self.pool_cont_dict[self.pool][2] = self.container
-                self.pool_cont_dict[self.pool][3] = "Updated"
-            else:
-                self.container = self.pool_cont_dict[self.pool][0]
+            self.fail("Not supported option on ior_thread")
         job_manager = self.get_ior_job_manager_command()
         job_manager.job.dfs_cont.update(self.container.uuid)
         self.ior_cmd.transfer_size.update(test[2])
