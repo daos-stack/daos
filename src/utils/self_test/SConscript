@@ -8,7 +8,6 @@
 import os
 import re
 import daos_build
-Import('env', 'prereqs', 'cart_lib', 'gurt_lib')
 
 SELF_TEST = 'self_test.c'
 LIB_CONFIG_INI = 'src/configini.c'
@@ -18,14 +17,15 @@ LIB_CONFIG_ECNF = 'etc/selftest_expected.cnf'
 # Function to filter out gcc flags from this compilation env
 def remove_certain_gcc_flags(_str):
     """function to remove gcc flag for self_test compilation """
-    r = re.compile(r"-Wframe-larger-than=")
-    if r.match(_str):
+    r_f = re.compile(r"-Wframe-larger-than=")
+    if r_f.match(_str):
         return False
     else:
         return True
 
 def scons():
     """scons function"""
+    Import('env', 'prereqs', 'cart_lib', 'gurt_lib')
 
     tenv = env.Clone()
     prereqs.require(tenv, 'pmdk')

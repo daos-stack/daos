@@ -1541,11 +1541,14 @@ increment_code:
 				/* loop control:*/
 				j++;
 				if (j == number_keys) {
+					char	*sn = section_name;
+					int	 tnk = total_number_keys;
+
 					j = 0;
 					number_keys = ConfigGetKeys(cfg_output,
-							    section_name,
-							    key_names, max,
-							    total_number_keys);
+								    sn,
+								    key_names,
+								    max, tnk);
 					total_number_keys += number_keys;
 				}
 			}
