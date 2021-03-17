@@ -941,7 +941,7 @@ def run_tests(test_files, tag_filter, args):
                 latest_dir = os.path.join(avocado_logs_dir, "latest")
                 latest_crash_dir = os.path.join(latest_dir, "crashes")
                 run_command(["mkdir", latest_crash_dir])
-                run_command(["ls -la", latest_crash_dir])
+                run_command(["ls", "-la", latest_crash_dir])
                 for crash_file in os.listdir(crash_dir):
                     run_command(["cat", crash_file])
                     if os.path.isfile(crash_file):
