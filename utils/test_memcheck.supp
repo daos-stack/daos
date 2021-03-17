@@ -602,13 +602,3 @@
    fun:__run_exit_handlers
    ...
 }
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   ...
-   fun:malloc
-   ...
-   fun:daos_debug_init
-   fun:dts_ctx_init
-   fun:main
-}
