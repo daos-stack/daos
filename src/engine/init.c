@@ -460,7 +460,7 @@ static void
 dss_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		 enum crt_event_type type, void *arg)
 {
-	static struct d_tm_node_t	*dead_rank_cnt;
+	static struct d_tm_node_t	*dead_ranks;
 	static struct d_tm_node_t	*last_ts;
 	int				 rc = 0;
 
@@ -471,8 +471,8 @@ dss_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		return;
 	}
 
-	d_tm_increment_counter(&dead_rank_cnt, 1, "events/dead_rank_cnt");
-	d_tm_record_timestamp(&last_ts, "events/last_event_ts");
+	(void)d_tm_increment_counter(&dead_ranks, 1, "events/dead_ranks");
+	(void)d_tm_record_timestamp(&last_ts, "events/last_event_ts");
 
 	rc = ds_notify_swim_rank_dead(rank);
 	if (rc)
@@ -500,7 +500,7 @@ server_init(int argc, char *argv[])
 		goto exit_debug_init;
 
 	/** Report timestamp when engine was started */
-	d_tm_record_timestamp(NULL, "started_at");
+	(void)d_tm_record_timestamp(NULL, "started_at");
 
 	rc = drpc_init();
 	if (rc != 0) {
@@ -646,10 +646,10 @@ server_init(int argc, char *argv[])
 	D_INFO("Service fully up\n");
 
 	/** Report timestamp when engine was open for business */
-	d_tm_record_timestamp(NULL, "servicing_at");
+	(void)d_tm_record_timestamp(NULL, "servicing_at");
 
 	/** Report rank */
-	d_tm_increment_counter(NULL, dss_self_rank(), "rank");
+	(void)d_tm_increment_counter(NULL, dss_self_rank(), "rank");
 
 	D_PRINT("DAOS I/O Engine (v%s) process %u started on rank %u "
 		"with %u target, %d helper XS, firstcore %d, host %s.\n",
