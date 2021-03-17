@@ -120,16 +120,16 @@ if grep "self.job.result_proxy.notify_progress(False)" \
         exit 1
     fi
 fi
-# # https://github.com/avocado-framework/avocado/pull/2908 fixed in
-# # https://github.com/avocado-framework/avocado/pull/3076/
-# if ! grep TIMEOUT_TEARDOWN "$pydir"/avocado/core/runner.py; then
-#     echo "Applying patch avocado-teardown-timeout.patch"
-#     if ! cat < "$PATCH_DIR"/avocado-teardown-timeout.patch | \
-#       sudo patch -p1 -d "$pydir"; then
-#         echo "Failed to apply avocado PR-3076 patch"
-#         exit 1
-#     fi
-# fi
+# https://github.com/avocado-framework/avocado/pull/2908 fixed in
+# https://github.com/avocado-framework/avocado/pull/3076/
+if ! grep TIMEOUT_TEARDOWN "$pydir"/avocado/core/runner.py; then
+    echo "Applying patch avocado-teardown-timeout.patch"
+    if ! cat < "$PATCH_DIR"/avocado-teardown-timeout.patch | \
+      sudo patch -p1 -d "$pydir"; then
+        echo "Failed to apply avocado PR-3076 patch"
+        exit 1
+    fi
+fi
 # https://github.com/avocado-framework/avocado/pull/3154 - fixed somewhere
 # before 69.2
 if ! grep "def phase(self)" \
