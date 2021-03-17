@@ -226,8 +226,6 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 		din->di_dtx_array.ca_arrays = drr->drr_dti;
 
 		rc = crt_req_send(req, dtx_req_cb, drr);
-		if (rc != 0)
-			crt_req_decref(req);
 	}
 
 	D_DEBUG(DB_TRACE, "DTX req for opc %x to %d/%d (req %p future %p) sent "
