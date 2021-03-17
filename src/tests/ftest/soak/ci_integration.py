@@ -118,8 +118,14 @@ class JavaCIIntegration(TestWithServers):
 
         :avocado: tags=all,pr,hw,small,javaciintegration
         """
+        # copy java folder to /var/tmp
+        test_jdir = str("{}/../java".format(os.getcwd()))
+        cp_cmd = "cp -r {} /var/tmp/".format(test_jdir)
+        self.execute_cmd(cp_cmd, 300)
+
         # get current working dir
-        self.jdir = str("{}/../java".format(os.getcwd()))
+        self.jdir = str("/var/tmp/java")
+#        self.jdir = str("{}/../java".format(os.getcwd()))
 
         # create pool and container
         self.pool = self._create_pool()
@@ -150,7 +156,7 @@ class JavaCIIntegration(TestWithServers):
 #                                                           version)
 #        cmd += "jre/lib/amd64/libjsig.so;"
         cmd += " ls -l daos-java/target/antrun/build-compile-proto.xml;"
-        cmd += " sudo mvn -X integration-test -Ddaos.install.path={}".\
+        cmd += " mvn -X integration-test -Ddaos.install.path={}".\
                 format(self.prefix)
         cmd += " -Dpool_id={}  -Dcont_id={} ".format(pool_uuid, cont_uuid)
         cmd += " >> {}".format(output_file)
