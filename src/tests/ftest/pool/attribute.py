@@ -7,7 +7,7 @@
 import traceback
 import threading
 import random
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 
 from general_utils import get_random_bytes
 from pydaos.raw import DaosApiError
@@ -63,7 +63,7 @@ class PoolAttributeTest(TestWithServers):
             len(attr_name) if attr_name is not None else 0
             for attr_name in list(indata.keys())) + 1
         # there is a space between each name, so account for that
-        aggregate_len += len(list(indata.keys()))-1
+        aggregate_len += len(list(indata.keys())) - 1
 
         self.log.info("Verifying list_attr output:")
         self.log.info("  set_attr names:  %s", list(indata.keys()))
@@ -91,15 +91,14 @@ class PoolAttributeTest(TestWithServers):
 
         """
         self.log.info("Verifying get_attr output:")
-        self.log.info("  get_attr data: %s", indata)
-        self.log.info("  set_attr date: %s", outdata)
+        self.log.info("  set_attr data: %s", indata)
+        self.log.info("  get_attr date: %s", outdata)
         for attr, value in indata.items():
             if value != outdata[attr]:
                 self.fail(
                     "FAIL: Value does not match after get attr, Expected "
                     "val={} and received val={}".format(value, outdata[attr]))
 
-    @skipForTicket("DAOS-6971")
     def test_pool_large_attributes(self):
         """Test pool attributes with large data set.
 
@@ -126,7 +125,6 @@ class PoolAttributeTest(TestWithServers):
             print(traceback.format_exc())
             self.fail("Test was expected to pass but it failed.\n")
 
-    @skipForTicket("DAOS-6971")
     def test_pool_attributes(self):
         """Test pool attributes.
 

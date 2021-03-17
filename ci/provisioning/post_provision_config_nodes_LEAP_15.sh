@@ -28,10 +28,10 @@ distro_custom() {
     # force install of avocado 82.x
     dnf -y erase avocado{,-common} \
                  python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}}
-    pip3 install --upgrade pip
-    pip3 install "avocado-framework<83.0"
-    pip3 install "avocado-framework-plugin-result-html<83.0"
-    pip3 install "avocado-framework-plugin-varianter-yaml-to-mux<83.0"
+    python3 -m pip install --upgrade pip
+    python3 -m pip install "avocado-framework<83.0"
+    python3 -m pip install "avocado-framework-plugin-result-html<83.0"
+    python3 -m pip install "avocado-framework-plugin-varianter-yaml-to-mux<83.0"
 
 }
 

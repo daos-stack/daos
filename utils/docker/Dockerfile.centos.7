@@ -94,9 +94,9 @@ RUN echo "daos_agent:daos_agent" | chpasswd
 # Removing PyYAML 3.10 to allow pip install to upgrade
 RUN yum -y remove python36-PyYAML
 
-RUN pip3 install --upgrade pip
+RUN python3 -m pip install --upgrade pip
 
-RUN pip3 --no-cache-dir install \
+RUN python3 -m pip --no-cache-dir install \
     "avocado-framework<83.0" \
     "avocado-framework-plugin-result-html<83.0" \
     "avocado-framework-plugin-varianter-yaml-to-mux<83.0" \
