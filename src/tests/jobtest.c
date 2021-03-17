@@ -53,6 +53,7 @@ void cleanup_handles(uuid_t *pool_uuids, int num_pools,
 				uuid_unparse_lower(pool->dp_pool, hdl_str);
 				printf("disconnect handle %s from pool %s "
 					"failed\n", hdl_str, pool_str);
+				dc_pool_put(pool);
 			}
 		}
 		free(pool_handles[i]);
