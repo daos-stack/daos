@@ -2255,7 +2255,7 @@ out:
 	daos_prop_free(agg_param.ap_prop);
 	ABT_eventual_free(&agg_param.ap_pool_info.api_eventual);
 	d_sgl_fini(&agg_param.ap_agg_entry.ae_sgl, true);
-	if (!daos_handle_is_inval(ph))
+	if (daos_handle_is_valid(ph))
 		dsc_pool_close(ph);
 	return rc;
 }
