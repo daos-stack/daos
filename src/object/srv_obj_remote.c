@@ -64,7 +64,7 @@ shard_update_req_cb(const struct crt_cb_info *cb_info)
 		arg->comp_cb(dlh, arg->idx, rc);
 
 	crt_req_decref(parent_req);
-	D_FREE_PTR(arg);
+	D_FREE(arg);
 }
 
 /* Execute update on the remote target */
@@ -145,11 +145,8 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 	D_DEBUG(DB_TRACE, DF_UOID" forwarding to rank:%d tag:%d.\n",
 		DP_UOID(orw->orw_oid), tgt_ep.ep_rank, tgt_ep.ep_tag);
 	rc = crt_req_send(req, shard_update_req_cb, remote_arg);
-	if (rc != 0) {
+	if (rc != 0)
 		D_ERROR("crt_req_send failed, rc "DF_RC"\n", DP_RC(rc));
-		crt_req_decref(req);
-	}
-
 	return rc;
 
 out:
@@ -158,9 +155,8 @@ out:
 		if (comp_cb)
 			comp_cb(dlh, idx, rc);
 		if (remote_arg) {
-			if (remote_arg->parent_req)
-				crt_req_decref(remote_arg->parent_req);
-			D_FREE_PTR(remote_arg);
+			crt_req_decref(parent_req);
+			D_FREE(remote_arg);
 		}
 	}
 	return rc;
@@ -194,7 +190,7 @@ shard_punch_req_cb(const struct crt_cb_info *cb_info)
 		arg->comp_cb(dlh, arg->idx, rc);
 
 	crt_req_decref(parent_req);
-	D_FREE_PTR(arg);
+	D_FREE(arg);
 }
 
 /* Execute punch on the remote target */
@@ -261,11 +257,8 @@ ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
 		DP_UOID(opi->opi_oid), tgt_ep.ep_rank, tgt_ep.ep_tag);
 
 	rc = crt_req_send(req, shard_punch_req_cb, remote_arg);
-	if (rc != 0) {
+	if (rc != 0)
 		D_ERROR("crt_req_send failed, rc "DF_RC"\n", DP_RC(rc));
-		crt_req_decref(req);
-	}
-
 	return rc;
 
 out:
@@ -274,9 +267,8 @@ out:
 		if (comp_cb != NULL)
 			comp_cb(dlh, idx, rc);
 		if (remote_arg) {
-			if (remote_arg->parent_req)
-				crt_req_decref(remote_arg->parent_req);
-			D_FREE_PTR(remote_arg);
+			crt_req_decref(parent_req);
+			D_FREE(remote_arg);
 		}
 	}
 	return rc;
@@ -300,7 +292,7 @@ shard_cpd_req_cb(const struct crt_cb_info *cb_info)
 	D_FREE(arg->cpd_head);
 	D_FREE(arg->cpd_dcsr);
 	D_FREE(arg->cpd_dcde);
-	D_FREE_PTR(arg);
+	D_FREE(arg);
 }
 
 static int
@@ -485,11 +477,11 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 		D_GOTO(out, rc = -DER_INVAL);
 
 	count = dcde_parent->dcde_read_cnt + dcde_parent->dcde_write_cnt;
-	if (count < total || exec_arg->flags & ORF_HAS_EC_SPLIT) {
+	if (count < total || (exec_arg->flags & ORF_HAS_EC_SPLIT)) {
 		rc = ds_obj_cpd_clone_reqs(dlh, shard_tgt, dcde_parent,
 					   dcsr_parent, total, &dcde, &dcsr);
 		if (rc != 0)
-			goto out;
+			D_GOTO(out, rc);
 
 		remote_arg->cpd_reqs = dcsr;
 		remote_arg->cpd_desc = dcde;
@@ -515,6 +507,8 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 		tgt_ep.ep_rank, tgt_ep.ep_tag, idx, DP_DTI(&dcsh->dcsh_xid));
 
 	rc = crt_req_send(req, shard_cpd_req_cb, remote_arg);
+	if (rc != 0)
+		D_ERROR("crt_req_send failed, rc "DF_RC"\n", DP_RC(rc));
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE,
 		 "Forwarded CPD RPC to rank:%d tag:%d idx %u for DXT "
@@ -522,19 +516,15 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 		 DP_DTI(&dcsh->dcsh_xid), DP_RC(rc));
 
 	return rc;
-
 out:
-	D_ASSERT(rc != 0);
-
 	if (req != NULL)
 		crt_req_decref(req);
 
 	comp_cb(dlh, idx, rc);
 
 	if (remote_arg != NULL) {
-		if (remote_arg->parent_req != NULL)
-			crt_req_decref(remote_arg->parent_req);
-		D_FREE_PTR(remote_arg);
+		crt_req_decref(parent_req);
+		D_FREE(remote_arg);
 	}
 
 	if (dcsr != dcsr_parent)
