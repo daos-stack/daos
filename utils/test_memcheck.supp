@@ -67,18 +67,6 @@
 {
    <insert_a_suppression_name_here>
    Memcheck:Leak
-   ...
-   fun:calloc
-   ...
-   fun:drpc_call
-   fun:request_credentials_via_drpc
-   fun:dc_sec_request_creds
-   fun:test_request_credentials_*
-   ...
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
    match-leak-kinds:reachable
    fun:malloc
    fun:xmalloc
