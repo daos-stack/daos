@@ -201,7 +201,7 @@ type metricStat struct {
 	value float64
 }
 
-func getMetricStats(baseName, shortDesc string, m telemetry.Metric) (stats []*metricStat) {
+func getMetricStats(baseName, desc string, m telemetry.Metric) (stats []*metricStat) {
 	ms, ok := m.(telemetry.StatsMetric)
 	if !ok {
 		return
@@ -234,7 +234,7 @@ func getMetricStats(baseName, shortDesc string, m telemetry.Metric) (stats []*me
 	} {
 		stats = append(stats, &metricStat{
 			name:  baseName + "_" + name,
-			desc:  shortDesc + s.desc,
+			desc:  desc + s.desc,
 			value: s.fn(),
 		})
 	}
@@ -259,7 +259,7 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 		labels["rank"] = fmt.Sprintf("%d", rm.r)
 
 		baseName := prometheus.BuildFQName("engine", path, rm.m.Name())
-		shortDesc := rm.m.ShortDesc()
+		desc := rm.m.Desc()
 
 		switch rm.m.Type() {
 		case telemetry.MetricTypeGauge:
@@ -267,8 +267,8 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 				continue
 			}
 
-			gauges.add(baseName, shortDesc, rm.m.FloatValue(), labels)
-			for _, ms := range getMetricStats(baseName, shortDesc, rm.m) {
+			gauges.add(baseName, desc, rm.m.FloatValue(), labels)
+			for _, ms := range getMetricStats(baseName, desc, rm.m) {
 				gauges.add(ms.name, ms.desc, ms.value, labels)
 			}
 		case telemetry.MetricTypeCounter:
@@ -276,7 +276,7 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 				break
 			}
 
-			counters.add(baseName, shortDesc, rm.m.FloatValue(), labels)
+			counters.add(baseName, desc, rm.m.FloatValue(), labels)
 		default:
 			c.log.Errorf("metric type %d not supported", rm.m.Type())
 		}
