@@ -310,16 +310,20 @@ class IorTestBase(DfuseTestBase):
                                 results, intercept)
         job2 = self.get_new_job([self.hostlist_clients[-1]], 2,
                                 results, None)
-
+        self.log.debug("## Ready to start job1")
         job1.start()
+        self.log.debug("## job1 started")
         # Since same ior_cmd is used to trigger the MPIRUN
         # with different parameters, pausing for 2 seconds to
         # avoid data collisions.
         # DAOS-6937
-        time.sleep(10)
+        #time.sleep(10)
         job2.start()
+        self.log.debug("## job2 started")
         job1.join()
+        self.log.debug("## job1.join end")
         job2.join()
+        self.log.debug("## job2.join end")
         self.stop_dfuse()
 
     def get_new_job(self, clients, job_num, results, intercept=None):
