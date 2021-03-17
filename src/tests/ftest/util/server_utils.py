@@ -4,15 +4,12 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-# pylint: disable=too-many-lines
-from datetime import datetime
 from getpass import getuser
 import os
 import socket
 import time
 
 from avocado import fail_on
-from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import \
     CommandFailure, FormattedParameter, YamlParameters, CommandWithParameters, \
@@ -361,17 +358,17 @@ class DaosServerManager(SubprocessManager):
             self.manager.job.certificate_owner = "daos_server"
             self.dmg.certificate_owner = getuser()
 
-        # An internal dictionary used to define the expected states of each
-        # server rank when checking their states. It will be populated with
-        # the dictionary output of DmgCommand.system_query() when any of the
-        # following methods are called:
-        #   - start()
-        #   - verify_expected_states(set_expected=True)
-        # Individual rank states may also be updated by calling the
-        # update_expected_states() method. This is required to mark any rank
-        # stopped by a test with the correct state to avoid errors being raised
-        # during tearDown().
-        self._expected_states = {}
+        # Server states
+        self._states = {
+            "all": [
+                "awaitformat", "starting", "ready", "joined", "stopping",
+                "stopped", "evicted", "errored", "unresponsive", "unknown"],
+            "running": ["ready", "joined"],
+            "stopped": [
+                "stopping", "stopped", "evicted", "errored", "unresponsive",
+                "unknown"],
+            "errored": ["errored"],
+        }
 
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
@@ -413,10 +410,10 @@ class DaosServerManager(SubprocessManager):
 
         Args:
             hosts (list, optional): dmg hostlist value. Defaults to None which
-                results in using the 'access_points' host list.
+                results in using the entire host list.
         """
         if hosts is None:
-            hosts = self.get_config_value("access_points")
+            hosts = self._hosts
         self.dmg.hostlist = hosts
 
     def prepare(self, storage=True):
@@ -448,7 +445,7 @@ class DaosServerManager(SubprocessManager):
                 self.get_config_value("allow_insecure"), "dmg.insecure")
 
         # Kill any daos servers running on the hosts
-        self.kill()
+        self.manager.kill()
 
         # Clean up any files that exist on the hosts
         self.clean_files()
@@ -581,7 +578,7 @@ class DaosServerManager(SubprocessManager):
         try:
             self.manager.run()
         except CommandFailure as error:
-            self.kill()
+            self.manager.kill()
             raise ServerFailed(
                 "Failed to start servers before format: {}".format(error))
 
@@ -601,14 +598,14 @@ class DaosServerManager(SubprocessManager):
         self.log.info("<SERVER> Waiting for the daos_engine to start")
         self.manager.job.update_pattern("normal", hosts_qty)
         if not self.manager.check_subprocess_status(self.manager.process):
-            self.kill()
+            self.manager.kill()
             raise ServerFailed("Failed to start servers after format")
 
         # Update the dmg command host list to work with pool create/destroy
         self._prepare_dmg_hostlist()
 
         # Define the expected states for each rank
-        self._expected_states = self.system_query()
+        self._expected_states = self.get_current_state()
 
     def reset_storage(self):
         """Reset the server storage.
@@ -693,7 +690,7 @@ class DaosServerManager(SubprocessManager):
                     self.manager.command, error))
 
         # Kill any leftover processes that may not have been stopped correctly
-        self.kill()
+        self.manager.kill()
 
         if self.manager.job.using_nvme:
             # Reset the storage
@@ -746,7 +743,7 @@ class DaosServerManager(SubprocessManager):
             str: the current DAOS system state
 
         """
-        data = self.system_query()
+        data = self.get_current_state()
         if not data:
             # The regex failed to get the rank and state
             raise ServerFailed(
@@ -922,175 +919,33 @@ class DaosServerManager(SubprocessManager):
             str(storage[1]), bytes_to_human(storage[1], binary=False))
         return storage
 
-    def system_query(self):
-        """Query the state of the daos_server ranks.
+    def get_current_state(self):
+        """Get the current state of the daos_server ranks.
 
         Returns:
             dict: dictionary of server rank keys, each referencing a dictionary
-                of information.  This will be empty if there was error obtaining
-                the dmg system query output.
+                of information containing at least the following information:
+                    {"host": <>, "uuid": <>, "state": <>}
+                This will be empty if there was error obtaining the dmg system
+                query output.
 
         """
+        data = {}
         try:
-            data = self.dmg.system_query()
+            query_data = self.dmg.system_query()
         except CommandFailure:
-            data = {}
+            query_data = {"status": 1}
+        if query_data["status"] == 0:
+            if "response" in query_data and "members" in query_data["response"]:
+                for member in query_data["response"]["members"]:
+                    host = member["fault_domain"].split(".")[0].replace("/", "")
+                    if host in self._hosts:
+                        data[member["rank"]] = {
+                            "uuid": member["uuid"],
+                            "host": host,
+                            "state": member["state"],
+                        }
         return data
-
-    def update_expected_states(self, ranks, state):
-        """Update the expected state of the specified server rank.
-
-        Args:
-            ranks (object): server ranks to update. Can be a single rank (int),
-                multiple ranks (list), or all the ranks (None).
-            state (object): new state to assign as the expected state of this
-                rank. Can be a str or a list.
-        """
-        if ranks is None:
-            ranks = [key for key in self._expected_states]
-        elif not isinstance(ranks, (list, tuple)):
-            ranks = [ranks]
-
-        for rank in ranks:
-            if rank in self._expected_states:
-                self.log.info(
-                    "Updating the expected state for rank %s on %s: %s -> %s",
-                    rank, self._expected_states[rank]["domain"],
-                    self._expected_states[rank]["state"], state)
-                self._expected_states[rank]["state"] = state
-
-    def verify_expected_states(self, set_expected=False):
-        """Verify that the expected server rank states match the current states.
-
-        Args:
-            set_expected (bool, optional): option to update the expected server
-                rank states to the current states prior to checking the states.
-                Defaults to False.
-
-        Returns:
-            dict: a dictionary of whether or not any of the server states were
-                not 'expected' (which should warrant an error) and whether or
-                the servers require a 'restart' (either due to any unexpected
-                states or because at least one servers was found to no longer
-                be running)
-
-        """
-        status = {"expected": True, "restart": False}
-        running_states = ["started", "joined"]
-        errored_states = ["errored"]
-        errored_hosts = []
-
-        # Get the current state of the servers
-        current_states = self.system_query()
-        if set_expected:
-            # Assign the expected states to the current server rank states
-            self.log.info("<SERVER> Assigning expected server states.")
-            self._expected_states = current_states.copy()
-
-        # Verify the expected states match the current states
-        self.log.info(
-            "<SERVER> Verifying server states: group=%s, hosts=%s",
-            self.get_config_value("name"), NodeSet.fromlist(self._hosts))
-        if current_states:
-            log_format = "  %-4s  %-15s  %-36s  %-22s  %-14s  %s"
-            self.log.info(
-                log_format,
-                "Rank", "Host", "UUID", "Expected State", "Current State",
-                "Result")
-            self.log.info(
-                log_format,
-                "-" * 4, "-" * 15, "-" * 36, "-" * 22, "-" * 14, "-" * 6)
-
-            # Verify that each expected rank appears in the current states
-            for rank in sorted(self._expected_states):
-                domain = self._expected_states[rank]["domain"].split(".")
-                current_host = domain[0].replace("/", "")
-                expected = self._expected_states[rank]["state"]
-                if isinstance(expected, (list, tuple)):
-                    expected = [item.lower() for item in expected]
-                else:
-                    expected = [expected.lower()]
-                try:
-                    current_rank = current_states.pop(rank)
-                    current = current_rank["state"].lower()
-                except KeyError:
-                    current = "not detected"
-
-                # Check if the rank's expected state matches the current state
-                result = "PASS" if current in expected else "RESTART"
-                status["expected"] &= current in expected
-
-                # Restart all ranks if the expected rank is not running
-                if current not in running_states:
-                    status["restart"] = True
-                    result = "RESTART"
-
-                # Keep track of any hosts with a server in the errored state
-                if current in errored_states:
-                    if current_host not in errored_hosts:
-                        errored_hosts.append(current_host)
-
-                self.log.info(
-                    log_format, rank, current_host,
-                    self._expected_states[rank]["uuid"], "|".join(expected),
-                    current, result)
-
-            # Report any current states that were not expected as an error
-            for rank in sorted(current_states):
-                status["expected"] = False
-                domain = current_states[rank]["domain"].split(".")
-                self.log.info(
-                    log_format, rank, domain[0].replace("/", ""),
-                    current_states[rank]["uuid"], "not detected",
-                    current_states[rank]["state"].lower(), "RESTART")
-
-        elif not self._expected_states:
-            # Expected states are populated as part of detect_io_server_start(),
-            # so if it is empty there was an error starting the servers.
-            self.log.info(
-                "  Unable to obtain current server state.  Undefined expected "
-                "server states due to a failure starting the servers.")
-            status["restart"] = True
-
-        else:
-            # Any failure to obtain the current rank information is an error
-            self.log.info(
-                "  Unable to obtain current server state.  If the servers are "
-                "not running this is expected.")
-
-            # Do not report an error if all servers are expected to be stopped
-            all_stopped = bool(self._expected_states)
-            for rank in sorted(self._expected_states):
-                states = self._expected_states[rank]["state"]
-                if not isinstance(states, (list, tuple)):
-                    states = [states]
-                if "stopped" not in [item.lower() for item in states]:
-                    all_stopped = False
-                    break
-            if all_stopped:
-                self.log.info("  All servers are expected to be stopped.")
-                status["restart"] = True
-            else:
-                status["expected"] = False
-
-        # Any unexpected state detected warrants a restart of all servers
-        if not status["expected"]:
-            status["restart"] = True
-
-        # Set the verified timestamp
-        if set_expected and hasattr(self.manager, "timestamps"):
-            self.manager.timestamps["verified"] = datetime.now().strftime(
-                "%Y-%m-%d %H:%M:%S")
-
-        # Dump the server logs for any server found in the errored state
-        if errored_hosts:
-            self.log.info(
-                "<SERVER> logs for ranks in the errored state since start "
-                "detection")
-            if hasattr(self.manager, "dump_logs"):
-                self.manager.dump_logs(errored_hosts)
-
-        return status
 
     @fail_on(CommandFailure)
     def stop_ranks(self, ranks, daos_log, force=False):
