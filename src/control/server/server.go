@@ -286,12 +286,19 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		if err := harness.AddInstance(engine); err != nil {
 			return err
 		}
+
 		// Register callback to publish I/O Engine process exit events.
 		engine.OnInstanceExit(publishInstanceExitFn(eventPubSub.Publish, hostname(), engine.Index()))
 
+		var onceReady sync.Once
 		allStarted.Add(1)
 		engine.OnReady(func(_ context.Context) error {
-			allStarted.Done()
+			// Indicate that engine has been started, only do this
+			// the first time that the engine starts as shared
+			// memory persists between engine restarts.
+			onceReady.Do(func() {
+				allStarted.Done()
+			})
 			return nil
 		})
 
@@ -307,9 +314,9 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 
 			// Start the system db after instance 0's SCM is
 			// ready.
-			var once sync.Once
+			var onceStorageReady sync.Once
 			engine.OnStorageReady(func(ctx context.Context) (err error) {
-				once.Do(func() {
+				onceStorageReady.Do(func() {
 					err = errors.Wrap(sysdb.Start(ctx),
 						"failed to start system db",
 					)
