@@ -217,7 +217,7 @@ def bytes_to_human(size, digits=2, binary=True):
 
 
 def run_command(command, timeout=60, verbose=True, raise_exception=True,
-                output_check="combined", env=None):
+                output_check="both", env=None):
     """Run the command on the local host.
 
     This method uses the avocado.utils.process.run() method to run the specified
@@ -242,7 +242,7 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
                 "both"      - both standard output and error in separate files
                 "combined"  - standard output and error in a single file
                 "none"      - disable all recording
-            Defaults to "combined".
+            Defaults to "both".
         env (dict, optional): dictionary of environment variable names and
             values to set when running the command. Defaults to None.
 
@@ -607,22 +607,23 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None):
     log.info("Killing any processes on %s that match: %s", hosts, pattern)
 
     if added_filter:
-        ps_cmd = "ps x | grep -E {} | grep -vE {}".format(pattern, added_filter)
+        ps_cmd = "/usr/bin/ps x | grep -E {} | grep -vE {}".format(
+            pattern, added_filter)
     else:
-        ps_cmd = "pgrep --list-full {}".format(pattern)
+        ps_cmd = "/usr/bin/pgrep --list-full {}".format(pattern)
 
     if hosts is not None:
         commands = [
             "rc=0",
             "if " + ps_cmd,
             "then rc=1",
-            "sudo pkill {}".format(pattern),
+            "sudo /usr/bin/pkill {}".format(pattern),
             "sleep 5",
             "if " + ps_cmd,
-            "then pkill --signal ABRT {}".format(pattern),
+            "then /usr/bin/pkill --signal ABRT {}".format(pattern),
             "sleep 1",
             "if " + ps_cmd,
-            "then pkill --signal KILL {}".format(pattern),
+            "then /usr/bin/pkill --signal KILL {}".format(pattern),
             "fi",
             "fi",
             "fi",
