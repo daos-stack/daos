@@ -108,21 +108,6 @@ func printSystemQueryVerbose(out io.Writer, members system.Members) {
 	fmt.Fprintln(out, formatter.Format(table))
 }
 
-func printSystemQuerySingle(out io.Writer, members system.Members) {
-	m := members[0]
-
-	table := []txtfmt.TableRow{
-		{"address": m.Addr.String()},
-		{"uuid": m.UUID.String()},
-		{"fault domain": m.FaultDomain.String()},
-		{"status": m.State().String()},
-		{"reason": m.Info},
-	}
-
-	title := fmt.Sprintf("Rank %d", m.Rank)
-	fmt.Fprintln(out, txtfmt.FormatEntity(title, table))
-}
-
 // PrintSystemQueryResponse generates a human-readable representation of the supplied
 // SystemQueryResp struct and writes it to the supplied io.Writer.
 func PrintSystemQueryResponse(out, outErr io.Writer, resp *control.SystemQueryResp, opts ...PrintConfigOption) error {
@@ -133,8 +118,6 @@ func PrintSystemQueryResponse(out, outErr io.Writer, resp *control.SystemQueryRe
 	switch {
 	case len(resp.Members) == 0:
 		fmt.Fprintln(out, "Query matches no ranks in system")
-	case len(resp.Members) == 1:
-		printSystemQuerySingle(out, resp.Members)
 	case getPrintConfig(opts...).Verbose:
 		printSystemQueryVerbose(out, resp.Members)
 	default:
