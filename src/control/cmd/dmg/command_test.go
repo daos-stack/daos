@@ -20,6 +20,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 type dmgTestErr string
@@ -100,7 +101,7 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 	// that interact with the MS will need a valid-ish MS response
 	// in order to avoid failing response validation.
 	resp := &control.UnaryResponse{}
-	switch uReq.(type) {
+	switch req := uReq.(type) {
 	case *control.PoolCreateReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolCreateResp{
 			TgtRanks: []uint32{0},
@@ -116,11 +117,15 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 		})
 	case *control.SystemStopReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.SystemStopResp{})
-	case *control.SystemResetFormatReq:
-		resp = control.MockMSResponse("", nil, &mgmtpb.SystemResetFormatResp{})
+	case *control.SystemEraseReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.SystemEraseResp{})
 	case *control.SystemStartReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.SystemStartResp{})
 	case *control.SystemQueryReq:
+		if req.FailOnUnavailable {
+			resp = control.MockMSResponse("", system.ErrRaftUnavail, nil)
+			break
+		}
 		resp = control.MockMSResponse("", nil, &mgmtpb.SystemQueryResp{})
 	case *control.LeaderQueryReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.LeaderQueryResp{})

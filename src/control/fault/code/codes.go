@@ -91,6 +91,7 @@ const (
 	ClientConnectionNoRoute
 	ClientConnectionRefused
 	ClientConnectionClosed
+	ClientFormatRunningSystem
 
 	// server fault codes
 	ServerUnknown Code = iota + 600
