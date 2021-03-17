@@ -410,7 +410,7 @@ class DaosPool():
 
         func = self.context.get_function('set-pool-attr')
 
-        att_names = (ctypes.c_char_p * len(data))(*list(data.values()))
+        att_names = (ctypes.c_char_p * len(data))(*list(data.keys()))
         names = ctypes.cast(att_names, ctypes.POINTER(ctypes.c_char_p))
 
         no_of_att = ctypes.c_int(len(data))
