@@ -8,7 +8,7 @@ from __future__ import print_function
 
 from apricot import TestWithServers
 from server_utils import ServerFailed
-from general_utils import pcmd
+from general_utils import pcmd, stop_processes
 
 
 class DaosServerDumpTest(TestWithServers):
@@ -48,16 +48,25 @@ class DaosServerDumpTest(TestWithServers):
             exception = err
 
         # Verify
-        fail_message = ""
         if exception is not None:
             self.log.error("Server was expected to start")
             self.fail(
                 "Server start failed when it was expected to complete")
 
-        self.kill()
+        return_codes = stop_processes(self.hostlist_servers, r"daos_engine",
+                           added_filter=r"'\<(grep|defunct)\>'",
+                           send_sigusr2=True)
+        if 1 in return_codes:
+            print(
+                "Stopped daos_engine processes on {}".format(
+                    str(return_codes[1])))
+        if 0 in return_codes:
+            print(
+                "No daos_engine processes found on {}".format(
+                    str(return_codes[1])))
 
         # XXX may need to check for one file per engine...
-        ret_codes = pcmd(self.hostlist_servers, "ls /tmp/daos_dump\*.txt")
+        ret_codes = pcmd(self.hostlist_servers, r"ls /tmp/daos_dump\*.txt")
         # Report any failures
         if len(ret_codes) > 1 or 0 not in ret_codes:
             failed = [
