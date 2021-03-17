@@ -156,16 +156,16 @@ nvme_fault_reaction(void **state, bool mode)
 
 	if (mode == 0) {
 		/**
-		*  Continue to check blobstore state until "OUT" state is returned
+		*  Continue to check blobstore until state is "OUT"
 		*  or max test retry count is hit (5 min).
 		*/
 		rc = wait_and_verify_blobstore_state(
-			devices[faulty_disk_idx].device_id, /*expected state*/"out",
-			arg->group);
+			devices[faulty_disk_idx].device_id,
+			/*expected state*/"out", arg->group);
 		assert_rc_equal(rc, 0);
-		
-		/** 
-		 * Connect the pool for query check.
+
+		/**
+		* Connect the pool for query check.
 		 */
 		print_message("Connect the pool to get the pool query\n");
 		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
