@@ -244,19 +244,39 @@ struct migrate_pool_tls {
 void
 migrate_pool_tls_destroy(struct migrate_pool_tls *tls);
 
+/*
+ * Report latency on a per-I/O size.
+ * Buckets starts at [0; 256B[ and are increased by power of 2
+ * (i.e. [256B; 512B[, [512B; 1KB[) up to [4MB; infinity[
+ * Since 4MB = 2^22 and 256B = 2^8, this means
+ * (22 - 8 + 1) = 15 buckets plus the 4MB+ bucket, so
+ * 16 buckets in total.
+ */
+#define NR_LATENCY_BUCKETS 16
+
 struct obj_tls {
 	d_sg_list_t		ot_echo_sgl;
 	d_list_t		ot_pool_list;
 
-	/** Measure per-operation latency (type = gauge) */
+	/** Measure per-operation latency in us (type = gauge) */
 	struct d_tm_node_t	*ot_op_lat[OBJ_PROTO_CLI_COUNT];
 	/** Count number of per-opcode active requests (type = gauge) */
 	struct d_tm_node_t	*ot_op_active[OBJ_PROTO_CLI_COUNT];
 	/** Count number of total per-opcode requests (type = counter) */
 	struct d_tm_node_t	*ot_op_total[OBJ_PROTO_CLI_COUNT];
-	/** Total number of silently restarted update operations */
+
+	/** Measure update/fetch latency based on I/O size (type = gauge) */
+	struct d_tm_node_t	*ot_update_lat[NR_LATENCY_BUCKETS];
+	struct d_tm_node_t	*ot_fetch_lat[NR_LATENCY_BUCKETS];
+
+	/** Total number of bytes fetched (type = counter) */
+	struct d_tm_node_t	*ot_fetch_bytes;
+	/** Total number of bytes updated (type = counter) */
+	struct d_tm_node_t	*ot_update_bytes;
+
+	/** Total number of silently restarted updates (type = counter) */
 	struct d_tm_node_t	*ot_update_restart;
-	/** Total number of resent update operations */
+	/** Total number of resent update operations (type = counter) */
 	struct d_tm_node_t	*ot_update_resent;
 };
 
@@ -571,6 +591,7 @@ struct obj_io_context {
 	uint32_t		 ioc_map_ver;
 	uint32_t		 ioc_opc;
 	uint64_t		 ioc_start_time;
+	uint64_t		 ioc_io_size;
 	uint32_t		 ioc_began:1,
 				 ioc_free_sgls:1,
 				 ioc_lost_reply:1;

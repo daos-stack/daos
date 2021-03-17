@@ -4,12 +4,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
 from daos_core_base import DaosCoreBase
 
 
 class DaosCoreTest(DaosCoreBase):
-    # pylint: disable=too-many-ancestors
+    # pylint: disable=too-many-ancestors,too-many-public-methods
     """Runs just the non-rebuild daos_test tests.
 
     :avocado: recursive

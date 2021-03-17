@@ -599,7 +599,7 @@ io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch, uint64_t flags,
 	rc = bio_iod_post(vos_ioh2desc(ioh));
 end:
 	if (rc == 0 && (arg->ta_flags & TF_ZERO_COPY))
-		rc = vos_update_end(ioh, 0, dkey, rc, dth);
+		rc = vos_update_end(ioh, 0, dkey, rc, NULL, dth);
 	if (rc != 0 && verbose && rc != -DER_INPROGRESS &&
 		(arg->ta_flags & TF_ZERO_COPY))
 		print_error("Failed to submit ZC update: "DF_RC"\n", DP_RC(rc));
@@ -662,7 +662,7 @@ io_test_obj_fetch(struct io_test_args *arg, daos_epoch_t epoch, uint64_t flags,
 
 	rc = bio_iod_post(vos_ioh2desc(ioh));
 end:
-	rc = vos_fetch_end(ioh, rc);
+	rc = vos_fetch_end(ioh, NULL, rc);
 	if (((flags & VOS_COND_FETCH_MASK) && rc == -DER_NONEXIST) ||
 	    rc == -DER_INPROGRESS)
 		goto skip;
