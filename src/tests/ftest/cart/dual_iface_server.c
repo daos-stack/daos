@@ -38,7 +38,7 @@ enum {
 	((uint64_t)		(dst_tag)		CRT_VAR)
 
 #define CRT_OSEQ_RPC_PING	/* output fields */		 \
-	((uint64_t)		(rc)			CRT_VAR)
+	((int64_t)		(rc)			CRT_VAR)
 
 #define CRT_ISEQ_RPC_SHUTDOWN	/* input fields */		 \
 	((uint64_t)		(field)			CRT_VAR)
@@ -385,7 +385,7 @@ int main(int argc, char **argv)
 			return -1;
 		}
 
-		iface1 = strtok_r(NULL, ",", &save_ptr);
+		iface1 = save_ptr;
 		if (iface1 == NULL) {
 			print_usage("Failed to parse iface1");
 			return -1;
@@ -399,7 +399,7 @@ int main(int argc, char **argv)
 			return -1;
 		}
 
-		domain1 = strtok_r(NULL, ",", &save_ptr);
+		domain1 = save_ptr;
 		if (domain1 == NULL) {
 			print_usage("Failed to parse domain1");
 			return -1;
@@ -419,6 +419,12 @@ int main(int argc, char **argv)
 	fd0 = mkstemp(tmp_file0);
 	fd1 = mkstemp(tmp_file1);
 
+	if (fd0 <= 0  || fd1 <= 0) {
+		D_ERROR("Failed to create tmp files %s %s\n",
+			tmp_file0, tmp_file1);
+		assert(0);
+	}
+
 	pid = fork();
 	if (pid == 0)
 		server_main(0, "31337", iface0, domain0, provider, fd0, fd1);
@@ -428,6 +434,11 @@ int main(int argc, char **argv)
 	/* Close fds for both child and parent */
 	close(fd0);
 	close(fd1);
+
+	if (pid == 0) {
+		unlink(tmp_file0);
+		unlink(tmp_file1);
+	}
 
 	return 0;
 }
