@@ -63,11 +63,11 @@ EOF
     dnf -y erase avocado{,-common}                                        \
            python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}} \
            python36-PyYAML
-    pip3 install --upgrade pip
-    pip3 install "avocado-framework<83.0"
-    pip3 install "avocado-framework-plugin-result-html<83.0"
-    pip3 install "avocado-framework-plugin-varianter-yaml-to-mux<83.0"
-    pip3 install clustershell
+    python3 -m pip install --upgrade pip
+    python3 -m pip install "avocado-framework<70.0"
+    python3 -m pip install "avocado-framework-plugin-result-html<70.0"
+    python3 -m pip install "avocado-framework-plugin-varianter-yaml-to-mux<70.0"
+    python3 -m pip install clustershell
 }
 
 post_provision_config_nodes() {

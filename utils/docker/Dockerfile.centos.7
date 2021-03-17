@@ -97,9 +97,9 @@ RUN yum -y remove python36-PyYAML
 RUN python3 -m pip install --upgrade pip
 
 RUN python3 -m pip --no-cache-dir install \
-    "avocado-framework<83.0" \
-    "avocado-framework-plugin-result-html<83.0" \
-    "avocado-framework-plugin-varianter-yaml-to-mux<83.0" \
+    "avocado-framework<70.0" \
+    "avocado-framework-plugin-result-html<70.0" \
+    "avocado-framework-plugin-varianter-yaml-to-mux<70.0" \
     clustershell \
     pep8 \
     pygit2 \
