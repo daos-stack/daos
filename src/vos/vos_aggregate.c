@@ -1826,30 +1826,32 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		rc = vos_agg_akey(ih, entry, agg_param, acts);
 		break;
 	case VOS_ITER_RECX:
+		rc = vos_agg_ev(ih, entry, agg_param, acts);
+		if (rc == -DER_TX_RESTART) {
+			D_DEBUG(DB_EPC, "Restarting evtree aggregation\n");
+			*acts |= VOS_ITER_CB_RESTART;
+			rc = 0;
+			break;
+		}
+		/* fall through to check for abort */
 	case VOS_ITER_SINGLE:
 		if (type == VOS_ITER_SINGLE)
 			rc = vos_agg_sv(ih, entry, agg_param, acts);
-		else
-			rc = vos_agg_ev(ih, entry, agg_param, acts);
 		if (rc == -DER_CSUM || rc == -DER_TX_BUSY) {
 			D_DEBUG(DB_EPC, "Abort value aggregation "DF_RC"\n",
 				DP_RC(rc));
 
-			if (rc == -DER_TX_RESTART)
-				*acts |= VOS_ITER_CB_RESTART;
-			else {
-				*acts |= VOS_ITER_CB_ABORT;
-				if (rc == -DER_CSUM) {
-					agg_param->ap_csum_err = true;
-				} else if (rc == -DER_TX_BUSY) {
-					/** Must not aggregate anything above
-					 *  this entry to avoid orphaned tree
-					 *  assertion
-					 */
-					agg_param->ap_skip_akey = true;
-					agg_param->ap_skip_dkey = true;
-					agg_param->ap_skip_obj = true;
-				}
+			*acts |= VOS_ITER_CB_ABORT;
+			if (rc == -DER_CSUM) {
+				agg_param->ap_csum_err = true;
+			} else if (rc == -DER_TX_BUSY) {
+				/** Must not aggregate anything above
+				 *  this entry to avoid orphaned tree
+				 *  assertion
+				 */
+				agg_param->ap_skip_akey = true;
+				agg_param->ap_skip_dkey = true;
+				agg_param->ap_skip_obj = true;
 			}
 			rc = 0;
 		}
