@@ -17,6 +17,7 @@
 #define D_TM_SHARED_MEMORY_KEY		0x10242048
 #define D_TM_SHARED_MEMORY_SIZE		(1024 * 1024)
 
+/** d_tm_metric_types */
 enum {
 	D_TM_DIRECTORY			= 0x001,
 	D_TM_COUNTER			= 0x002,
@@ -39,6 +40,18 @@ enum {
 	D_TM_SERVER_PROCESS		= 0x000,
 	D_TM_SERIALIZATION		= 0x001,
 	D_TM_RETAIN_SHMEM		= 0x002,
+};
+
+/** Output formats */
+enum {
+	D_TM_STANDARD			= 0x001,
+	D_TM_CSV			= 0x002,
+};
+
+/** Optional CSV field descriptors */
+enum {
+	D_TM_INCLUDE_TIMESTAMP		= 0x001,
+	D_TM_INCLUDE_METADATA		= 0x002,
 };
 
 /**
@@ -113,5 +126,5 @@ void d_tm_compute_stats(struct d_tm_node_t *node, uint64_t value);
 double d_tm_compute_standard_dev(double sum_of_squares, uint64_t sample_size,
 				 double mean);
 int d_tm_compute_histogram(struct d_tm_node_t *node, uint64_t value);
-void d_tm_print_stats(FILE *stream, struct d_tm_stats_t *stats);
+void d_tm_print_stats(FILE *stream, struct d_tm_stats_t *stats, int format);
 #endif /* __TELEMETRY_COMMON_H__ */

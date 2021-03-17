@@ -309,7 +309,7 @@ test_duration_stats(void **state)
 	 */
 
 	rc = d_tm_add_metric(&timer, D_TM_DURATION | D_TM_CLOCK_REALTIME,
-			     "N/A", "N/A", "gurt/tests/telem/duration-stats");
+			     NULL, NULL, "gurt/tests/telem/duration-stats");
 	assert_rc_equal(rc, DER_SUCCESS);
 
 	timer->dtn_metric->dtm_data.tms[0].tv_sec = 1;
@@ -359,7 +359,9 @@ test_gauge_with_histogram_multiplier_1(void **state)
 	snprintf(path, sizeof(path), "%s", "gurt/tests/telem/test_gauge_m1");
 
 	rc = d_tm_add_metric(&gauge, D_TM_GAUGE,
-			     "A gauge with a histogram", "", path);
+			     "A gauge with a histogram",
+			     "This histogram uses buckets with a multiplier "
+			     "of 1", path);
 	assert_rc_equal(rc, DER_SUCCESS);
 
 	num_buckets = 10;
@@ -423,7 +425,10 @@ test_gauge_with_histogram_multiplier_2(void **state)
 	snprintf(path, sizeof(path), "%s", "gurt/tests/telem/test_gauge_m2");
 
 	rc = d_tm_add_metric(&gauge, D_TM_GAUGE,
-			     "A gauge with a histogram", "", path);
+			     NULL,
+			     "A gauge with a histogram.  This gauge has no "
+			     "short description metadata.  This histogram uses "
+			     "buckets with a multiplier of 2", path);
 	assert_rc_equal(rc, DER_SUCCESS);
 
 	num_buckets = 5;
