@@ -1262,6 +1262,8 @@ daos_event_priv_wait()
 		/** progress succeeded, loop can exit if event completed */
 		if (rc == 0) {
 			rc = ev_thpriv.ev_error;
+			if (rc)
+				break;
 			continue;
 		}
 
@@ -1274,8 +1276,7 @@ daos_event_priv_wait()
 		 * the private event first so it can be resused.
 		 */
 		rc2 = daos_event_priv_reset();
-		if (rc2)
-			return rc2;
+		D_ASSERT(rc2 == 0);
 		ev_thpriv_is_init = true;
 		break;
 	}
