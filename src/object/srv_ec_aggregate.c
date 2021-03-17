@@ -1218,7 +1218,7 @@ agg_peer_update_ult(void *arg)
 	struct obj_ec_agg_in	*ec_agg_in = NULL;
 	struct obj_ec_agg_out	*ec_agg_out = NULL;
 	struct ec_agg_param	*agg_param;
-	crt_rpc_t		*rpc;
+	crt_rpc_t		*rpc = NULL;
 	int			 rc = 0;
 
 	tgt_ep.ep_rank = entry->ae_peer_pshards[0].sd_rank;
@@ -1227,8 +1227,9 @@ agg_peer_update_ult(void *arg)
 			    DAOS_OBJ_RPC_EC_AGGREGATE, &rpc);
 	if (rc) {
 		D_ERROR("obj_req_create failed: "DF_RC"\n", DP_RC(rc));
-		return;
+		goto out_rpc;
 	}
+	D_ASSERT(rpc != NULL);
 	ec_agg_in = crt_req_get(rpc);
 	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
 	uuid_copy(ec_agg_in->ea_pool_uuid,
@@ -1327,10 +1328,9 @@ out:
 		D_FREE(ec_agg_in->ea_remove_recxs.ca_arrays);
 		D_FREE(ec_agg_in->ea_remove_eps.ca_arrays);
 	}
-
+out_rpc:
 	if (rpc)
 		crt_req_decref(rpc);
-
 	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
 }
 
