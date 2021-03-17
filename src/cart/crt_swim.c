@@ -297,7 +297,7 @@ static int crt_swim_send_message(struct swim_context *ctx, swim_id_t to,
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 	struct crt_rpc_swim_in	*rpc_swim_input;
 	crt_context_t		 crt_ctx;
-	crt_rpc_t		*rpc_req;
+	crt_rpc_t		*rpc_req = NULL;
 	crt_endpoint_t		 ep;
 	crt_opcode_t		 opc;
 	swim_id_t		 self_id = swim_self_get(ctx);
@@ -342,7 +342,6 @@ static int crt_swim_send_message(struct swim_context *ctx, swim_id_t to,
 			D_TRACE_ERROR(rpc_req,
 				      "crt_req_set_timeout() failed "
 				      DF_RC"\n", DP_RC(rc));
-			crt_req_decref(rpc_req);
 			D_GOTO(out, rc);
 		}
 	}
@@ -356,13 +355,11 @@ static int crt_swim_send_message(struct swim_context *ctx, swim_id_t to,
 		      "sending opc %#x with %zu updates %lu => %lu\n",
 		      opc, nupds, self_id, to);
 
-	rc = crt_req_send(rpc_req, crt_swim_cli_cb, ctx);
-	if (rc) {
-		D_TRACE_ERROR(rpc_req, "crt_req_send() failed "DF_RC"\n",
-			      DP_RC(rc));
-		D_GOTO(out, rc);
-	}
+	return crt_req_send(rpc_req, crt_swim_cli_cb, ctx);
+
 out:
+	if (rc && rpc_req != NULL)
+		crt_req_decref(rpc_req);
 	return rc;
 }
 

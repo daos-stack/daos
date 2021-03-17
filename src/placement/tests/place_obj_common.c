@@ -48,6 +48,7 @@ plt_obj_place(daos_obj_id_t oid, struct pl_obj_layout **layout,
 
 	memset(&md, 0, sizeof(md));
 	md.omd_id  = oid;
+	D_ASSERT(pl_map != NULL);
 	md.omd_ver = pool_map_get_version(pl_map->pl_poolmap);
 
 	rc = pl_obj_place(pl_map, &md, NULL, layout);
@@ -804,7 +805,7 @@ extend_test_pool_map(struct pool_map *map,
 		     uint32_t *map_version_p,
 		     uint32_t dss_tgt_nr)
 {
-	struct pool_buf	*map_buf;
+	struct pool_buf	*map_buf = NULL;
 	uint32_t	map_version;
 	int		ntargets;
 	int		rc;
@@ -820,6 +821,11 @@ extend_test_pool_map(struct pool_map *map,
 
 	/* Extend the current pool map */
 	rc = pool_map_extend(map, map_version, map_buf);
+	if (rc != 0) {
+		if (map_buf != NULL)
+			pool_buf_free(map_buf);
+	}
+
 	assert_success(rc);
 
 	return rc;

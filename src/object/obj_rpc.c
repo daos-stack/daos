@@ -138,19 +138,19 @@ crt_proc_daos_iod_and_csum(crt_proc_t proc, crt_proc_op_t proc_op,
 
 	rc = crt_proc_d_iov_t(proc, &iod->iod_name);
 	if (unlikely(rc))
-		return rc;
+		D_GOTO(out, rc);
 
 	rc = crt_proc_memcpy(proc, &iod->iod_type, sizeof(iod->iod_type));
 	if (unlikely(rc))
-		return rc;
+		D_GOTO(out, rc);
 
 	rc = crt_proc_uint64_t(proc, &iod->iod_size);
 	if (unlikely(rc))
-		return rc;
+		D_GOTO(out, rc);
 
 	rc = crt_proc_uint64_t(proc, &iod->iod_flags);
 	if (unlikely(rc))
-		return rc;
+		D_GOTO(out, rc);
 
 	if (ENCODING(proc_op) && oiod != NULL &&
 	    (oiod->oiod_flags & OBJ_SIOD_PROC_ONE) != 0) {
@@ -178,12 +178,12 @@ crt_proc_daos_iod_and_csum(crt_proc_t proc, crt_proc_op_t proc_op,
 		nr = iod->iod_nr;
 	}
 	if (unlikely(rc))
-		return rc;
+		D_GOTO(out, rc);
 
 #if 0
 	if (iod->iod_nr == 0 && iod->iod_type != DAOS_IOD_ARRAY) {
 		D_ERROR("invalid I/O descriptor, iod_nr = 0\n");
-		return -DER_HG;
+		D_GOTO(out, rc = -DER_HG);
 	}
 #else
 	/* Zero nr is possible for EC (even for singv), as different IODs
@@ -193,7 +193,7 @@ crt_proc_daos_iod_and_csum(crt_proc_t proc, crt_proc_op_t proc_op,
 	 * The RW handler can just ignore those invalid IODs.
 	 */
 	if (nr == 0)
-		return 0;
+		D_GOTO(out, rc = 0);
 #endif
 
 	if (ENCODING(proc_op) || FREEING(proc_op)) {
@@ -203,13 +203,13 @@ crt_proc_daos_iod_and_csum(crt_proc_t proc, crt_proc_op_t proc_op,
 
 	rc = crt_proc_uint32_t(proc, &existing_flags);
 	if (unlikely(rc))
-		return rc;
+		D_GOTO(out, rc);
 
 	if (DECODING(proc_op)) {
 		if (existing_flags & IOD_REC_EXIST) {
 			D_ALLOC_ARRAY(iod->iod_recxs, nr);
 			if (iod->iod_recxs == NULL)
-				D_GOTO(out_free, rc = -DER_NOMEM);
+				D_GOTO(out, rc = -DER_NOMEM);
 		}
 	}
 
@@ -221,7 +221,7 @@ crt_proc_daos_iod_and_csum(crt_proc_t proc, crt_proc_op_t proc_op,
 			if (unlikely(rc)) {
 				if (DECODING(proc_op))
 					D_GOTO(out_free, rc);
-				return rc;
+				D_GOTO(out, rc);
 			}
 		}
 	}
@@ -232,7 +232,7 @@ crt_proc_daos_iod_and_csum(crt_proc_t proc, crt_proc_op_t proc_op,
 		if (unlikely(rc)) {
 			if (DECODING(proc_op))
 				D_GOTO(out_free, rc);
-			return rc;
+			D_GOTO(out, rc);
 		}
 	}
 
@@ -241,7 +241,7 @@ crt_proc_daos_iod_and_csum(crt_proc_t proc, crt_proc_op_t proc_op,
 		if (unlikely(rc)) {
 			if (DECODING(proc_op))
 				D_GOTO(out_free, rc);
-			return rc;
+			D_GOTO(out, rc);
 		}
 	}
 
@@ -250,7 +250,7 @@ out_free:
 		if (existing_flags & IOD_REC_EXIST)
 			D_FREE(iod->iod_recxs);
 	}
-
+out:
 	return rc;
 }
 
@@ -295,25 +295,19 @@ static int crt_proc_daos_iom_t(crt_proc_t proc, daos_iom_t *map)
 	if (iom_nr == 0)
 		return 0;
 
-	switch (proc_op) {
-	case CRT_PROC_DECODE:
+	if (DECODING(proc_op)) {
 		map->iom_nr = iom_nr;
 		map->iom_nr_out = iom_nr;
 		D_ALLOC_ARRAY(map->iom_recxs, iom_nr);
 		if (map->iom_recxs == NULL)
 			return -DER_NOMEM;
-		/* fall through to fill iom_recxs */
-	case CRT_PROC_ENCODE:
-		rc = crt_proc_memcpy(proc, map->iom_recxs,
-				     iom_nr * sizeof(*map->iom_recxs));
-		if (unlikely(rc)) {
-			if (DECODING(proc_op))
-				D_FREE(map->iom_recxs);
-			return rc;
-		}
-		break;
-	default:
-		return -DER_INVAL;
+	}
+	rc = crt_proc_memcpy(proc, map->iom_recxs,
+			     iom_nr * sizeof(*map->iom_recxs));
+	if (unlikely(rc)) {
+		if (DECODING(proc_op))
+			D_FREE(map->iom_recxs);
+		return rc;
 	}
 
 	return 0;
@@ -347,29 +341,25 @@ crt_proc_struct_daos_recx_ep_list(crt_proc_t proc,
 	if (list->re_nr == 0)
 		return 0;
 
-	switch (proc_op) {
-	case CRT_PROC_DECODE:
+	if (DECODING(proc_op)) {
 		D_ALLOC_ARRAY(list->re_items, list->re_nr);
 		if (list->re_items == NULL)
 			return -DER_NOMEM;
 		list->re_total = list->re_nr;
-		/* fall through to fill re_items */
-	case CRT_PROC_ENCODE:
-		rc = crt_proc_memcpy(proc, list->re_items,
-				     list->re_nr * sizeof(*list->re_items));
-		if (unlikely(rc && DECODING(proc_op))) {
-			daos_recx_ep_free(list);
-			return rc;
-		}
-
-		if (!list->re_ep_valid && DECODING(proc_op)) {
-			for (i = 0; i < list->re_nr; i++)
-				list->re_items[i].re_ep = 0;
-		}
-		break;
-	default:
-		return -DER_INVAL;
 	}
+	rc = crt_proc_memcpy(proc, list->re_items,
+			     list->re_nr * sizeof(*list->re_items));
+	if (unlikely(rc)) {
+		if (DECODING(proc_op))
+			daos_recx_ep_free(list);
+		return rc;
+	}
+
+	if (!list->re_ep_valid && DECODING(proc_op)) {
+		for (i = 0; i < list->re_nr; i++)
+			list->re_items[i].re_ep = 0;
+	}
+
 	return rc;
 }
 
@@ -497,7 +487,8 @@ crt_proc_struct_obj_iod_array(crt_proc_t proc, struct obj_iod_array *iod_array)
 						iod_csum,
 						oiod);
 		if (unlikely(rc)) {
-			D_FREE(iod_array->oia_iods);
+			if (DECODING(proc_op))
+				D_FREE(iod_array->oia_iods);
 			return rc;
 		}
 	}
@@ -633,15 +624,15 @@ crt_proc_daos_iod_t(crt_proc_t proc, daos_iod_t *iod)
 	if (unlikely(rc))
 		return rc;
 
+	rc = crt_proc_daos_key_t(proc, &iod->iod_name);
+	if (unlikely(rc))
+		return rc;
+
 	if (FREEING(proc_op)) {
 		/* NB: don't need free in crt_proc_d_iov_t() */
 		D_FREE(iod->iod_recxs);
 		return 0;
 	}
-
-	rc = crt_proc_daos_key_t(proc, &iod->iod_name);
-	if (unlikely(rc))
-		return rc;
 
 	rc = crt_proc_memcpy(proc, &iod->iod_type, sizeof(iod->iod_type));
 	if (unlikely(rc))
@@ -662,23 +653,19 @@ crt_proc_daos_iod_t(crt_proc_t proc, daos_iod_t *iod)
 	if (iod->iod_nr == 0)
 		return 0;
 
-	switch (proc_op) {
-	case CRT_PROC_DECODE:
+	if (DECODING(proc_op)) {
 		D_ALLOC_ARRAY(iod->iod_recxs, iod->iod_nr);
 		if (iod->iod_recxs == NULL)
 			return -DER_NOMEM;
-		/* fall through to fill iod_recxs */
-	case CRT_PROC_ENCODE:
-		rc = crt_proc_memcpy(proc, iod->iod_recxs,
-				     iod->iod_nr * sizeof(*iod->iod_recxs));
-		if (unlikely(rc)) {
-			if (DECODING(proc_op))
-				D_FREE(iod->iod_recxs);
-			return rc;
+	}
+	rc = crt_proc_memcpy(proc, iod->iod_recxs,
+			     iod->iod_nr * sizeof(*iod->iod_recxs));
+	if (unlikely(rc)) {
+		if (DECODING(proc_op)) {
+			D_FREE(iod->iod_name.iov_buf);
+			D_FREE(iod->iod_recxs);
 		}
-		break;
-	default:
-		return -DER_INVAL;
+		return rc;
 	}
 
 	return 0;
@@ -820,7 +807,7 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc,
 		if (DECODING(proc_op)) {
 			D_ALLOC_ARRAY(dcp->dcp_akeys, dcsr->dcsr_nr);
 			if (dcp->dcp_akeys == NULL)
-				return -DER_NOMEM;
+				D_GOTO(out, rc = -DER_NOMEM);
 		}
 
 		for (i = 0; i < dcsr->dcsr_nr; i++) {
@@ -852,7 +839,7 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc,
 		break;
 	}
 	default:
-		return -DER_INVAL;
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 out:
@@ -906,23 +893,17 @@ crt_proc_struct_daos_cpd_disp_ent(crt_proc_t proc,
 	if (count == 0)
 		return 0;
 
-	switch (proc_op) {
-	case CRT_PROC_DECODE:
+	if (DECODING(proc_op)) {
 		D_ALLOC_ARRAY(dcde->dcde_reqs, count);
 		if (dcde->dcde_reqs == NULL)
 			return -DER_NOMEM;
-		/* fall through to fill dcde_reqs */
-	case CRT_PROC_ENCODE:
-		rc = crt_proc_memcpy(proc, dcde->dcde_reqs,
-				     count * sizeof(*dcde->dcde_reqs));
-		if (unlikely(rc)) {
-			if (DECODING(proc_op))
-				D_FREE(dcde->dcde_reqs);
-			return rc;
-		}
-		break;
-	default:
-		return -DER_INVAL;
+	}
+	rc = crt_proc_memcpy(proc, dcde->dcde_reqs,
+			     count * sizeof(*dcde->dcde_reqs));
+	if (unlikely(rc)) {
+		if (DECODING(proc_op))
+			D_FREE(dcde->dcde_reqs);
+		return rc;
 	}
 
 	return 0;
@@ -1212,8 +1193,10 @@ obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version)
 		break;
 	case DAOS_OBJ_RPC_EC_AGGREGATE:
 		((struct obj_ec_agg_out *)reply)->ea_map_ver = map_version;
+		break;
 	case DAOS_OBJ_RPC_CPD:
 		((struct obj_cpd_out *)reply)->oco_map_version = map_version;
+		break;
 	case DAOS_OBJ_RPC_EC_REPLICATE:
 		((struct obj_ec_rep_out *)reply)->er_map_ver = map_version;
 		break;
