@@ -2684,6 +2684,7 @@ handle_response_internal(void *arg)
 {
 	const struct crt_cb_info *cb_info = arg;
 	crt_rpc_t		 *rpc = cb_info->cci_rpc;
+	void			 *cb_arg = cb_info->cci_arg;
 
 	switch (rpc->cr_opc) {
 	case CRT_OPC_IV_FETCH:
@@ -2700,6 +2701,7 @@ handle_response_internal(void *arg)
 	default:
 		D_ERROR("wrong opc: cb_info %p: rpc %p: opc %#x\n",
 			cb_info, rpc, rpc->cr_opc);
+		D_FREE(cb_arg);
 	}
 }
 
@@ -2864,16 +2866,15 @@ bulk_update_transfer_done_aux(const struct crt_bulk_cb_info *info)
 			D_GOTO(exit, rc);
 		}
 
-		rc = iv_ops->ivo_on_put(ivns_internal,
-					&cb_info->buc_iv_value,
-					cb_info->buc_user_priv);
-		output->rc = rc;
-		crt_reply_send(info->bci_bulk_desc->bd_rpc);
+		output->rc = iv_ops->ivo_on_put(ivns_internal,
+						&cb_info->buc_iv_value,
+						cb_info->buc_user_priv);
 
+		crt_reply_send(info->bci_bulk_desc->bd_rpc);
 		RPC_PUB_DECREF(info->bci_bulk_desc->bd_rpc);
+
 		IVNS_DECREF(update_cb_info->uci_ivns_internal);
 		D_FREE(update_cb_info);
-
 	} else {
 		D_GOTO(send_error, rc = update_rc);
 	}
@@ -2887,16 +2888,16 @@ send_error:
 			   cb_info->buc_user_priv);
 
 	rc = crt_bulk_free(cb_info->buc_bulk_hdl);
+	output->rc = rc;
+
+	crt_reply_send(info->bci_bulk_desc->bd_rpc);
+	RPC_PUB_DECREF(info->bci_bulk_desc->bd_rpc);
 
 	if (update_cb_info) {
 		IVNS_DECREF(update_cb_info->uci_ivns_internal);
 		D_FREE(update_cb_info);
 	}
 
-	output->rc = rc;
-
-	crt_reply_send(info->bci_bulk_desc->bd_rpc);
-	RPC_PUB_DECREF(info->bci_bulk_desc->bd_rpc);
 	return rc;
 }
 
@@ -3291,6 +3292,7 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 		if (sync_type.ivs_flags & CRT_IV_SYNC_BIDIRECTIONAL) {
 			rc = update_comp_cb(ivns_internal, class_id, iv_key,
 					    NULL, iv_value, rc, cb_arg);
+			D_ASSERT(sync_type.ivs_comp_cb == NULL);
 		} else {
 			/* issue sync. will call completion callback */
 			rc = crt_ivsync_rpc_issue(ivns_internal, class_id,

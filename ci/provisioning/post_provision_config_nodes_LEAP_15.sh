@@ -4,6 +4,7 @@ REPOS_DIR=/etc/dnf.repos.d
 DISTRO_NAME=leap15
 LSB_RELEASE=lsb-release
 EXCLUDE_UPGRADE=fuse,fuse-libs,fuse-devel,mercury,daos,daos-\*
+PYTHON_MACROS_RPM=("python-rpm-macros")
 
 bootstrap_dnf() {
     time zypper --non-interactive install dnf
@@ -102,6 +103,14 @@ post_provision_config_nodes() {
         dump_repos
         exit 1
     fi
+
+    if ! time dnf -y install "${PYTHON_MACROS_RPM[@]}" ; then
+        dump_repos
+        exit 1
+    fi
+
+    cat /etc/do-release
+    cat /etc/os-release
 
     exit 0
 }

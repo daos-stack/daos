@@ -727,7 +727,7 @@ ds_mgmt_tgt_create_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 		return -DER_NOMEM;
 	}
 
-	for (i = 0; i < ret_uuids_nr + tc_uuids_nr; i++) {
+	for (i = 0; i < new_uuids_nr; i++) {
 		if (i < ret_uuids_nr) {
 			uuid_copy(new_uuids[i], ret_uuids[i]);
 			new_ranks[i] = ret_ranks[i];

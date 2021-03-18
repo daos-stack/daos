@@ -123,24 +123,24 @@ d_tm_alloc_node(struct d_tm_node_t **newnode, char *name)
 
 	if ((newnode == NULL) || (name == NULL)) {
 		rc = -DER_INVAL;
-		goto failure;
+		goto out;
 	}
 
 	node = d_tm_shmalloc(sizeof(struct d_tm_node_t));
 	if (node == NULL) {
 		rc = -DER_NO_SHMEM;
-		goto failure;
+		goto out;
 	}
 	buff_len = strnlen(name, D_TM_MAX_NAME_LEN);
 	if (buff_len == D_TM_MAX_NAME_LEN) {
 		rc = DER_EXCEEDS_PATH_LEN;
-		goto failure;
+		goto out;
 	}
 	buff_len += 1; /* make room for the trailing null */
 	node->dtn_name = d_tm_shmalloc(buff_len);
 	if (node->dtn_name == NULL) {
 		rc = -DER_NO_SHMEM;
-		goto failure;
+		goto out;
 	}
 	strncpy(node->dtn_name, name, buff_len);
 	node->dtn_child = NULL;
@@ -148,9 +148,8 @@ d_tm_alloc_node(struct d_tm_node_t **newnode, char *name)
 	node->dtn_metric = NULL;
 	node->dtn_type = D_TM_DIRECTORY;
 	*newnode = node;
-	return rc;
 
-failure:
+out:
 	return rc;
 }
 
@@ -387,15 +386,21 @@ d_tm_free_node(uint64_t *shmem_root, struct d_tm_node_t *node)
  *
  * \param[in]	val	Counter value
  * \param[in]	name	Counter name
+ * \param[in]	format	Output format.
+ *			Choose D_TM_STANDARD for standard output.
+ *			Choose D_TM_CSV for comma separated values.
  * \param[in]	stream	Output stream (stdout, stderr)
  */
 void
-d_tm_print_counter(uint64_t val, char *name, FILE *stream)
+d_tm_print_counter(uint64_t val, char *name, int format, FILE *stream)
 {
-	if ((name == NULL) || (stream == NULL))
+	if ((stream == NULL) || (name == NULL))
 		return;
 
-	fprintf(stream, "Counter: %s = %" PRIu64 "\n", name, val);
+	if (format == D_TM_CSV)
+		fprintf(stream, "%s,counter,%lu", name, val);
+	else
+		fprintf(stream, "counter: %s = %" PRIu64, name, val);
 }
 
 /**
@@ -403,10 +408,13 @@ d_tm_print_counter(uint64_t val, char *name, FILE *stream)
  *
  * \param[in]	clk	Timestamp value
  * \param[in]	name	Timestamp name
+ * \param[in]	format	Output format.
+ *			Choose D_TM_STANDARD for standard output.
+ *			Choose D_TM_CSV for comma separated values.
  * \param[in]	stream	Output stream (stdout, stderr)
  */
 void
-d_tm_print_timestamp(time_t *clk, char *name, FILE *stream)
+d_tm_print_timestamp(time_t *clk, char *name, int format, FILE *stream)
 {
 	char	time_buff[D_TM_TIME_BUFF_LEN];
 	char	*temp;
@@ -426,7 +434,11 @@ d_tm_print_timestamp(time_t *clk, char *name, FILE *stream)
 	 * Remove the trailing newline character
 	 */
 	temp[D_TM_TIME_BUFF_LEN - 2] = 0;
-	fprintf(stream, "Timestamp: %s: %s\n", name, temp);
+
+	if (format == D_TM_CSV)
+		fprintf(stream, "%s,timestamp,%s", name, temp);
+	else
+		fprintf(stream, "timestamp: %s: %s", name, temp);
 }
 
 /**
@@ -435,30 +447,46 @@ d_tm_print_timestamp(time_t *clk, char *name, FILE *stream)
  * \param[in]	tms	Timer value
  * \param[in]	name	Timer name
  * \param[in]	tm_type	Timer type
+ * \param[in]	format	Output format.
+ *			Choose D_TM_STANDARD for standard output.
+ *			Choose D_TM_CSV for comma separated values.
  * \param[in]	stream	Output stream (stdout, stderr)
  */
 void
 d_tm_print_timer_snapshot(struct timespec *tms, char *name, int tm_type,
-			  FILE *stream)
+			  int format, FILE *stream)
 {
+	uint64_t	us;
+
 	if ((tms == NULL) || (name == NULL) || (stream == NULL))
 		return;
 
+	us = tms->tv_sec * 1000000 + tms->tv_nsec / 1000;
+
 	switch (tm_type) {
 	case D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_REALTIME:
-		fprintf(stream, "Timer snapshot (realtime): %s = %lds, "
-			"%ldns\n", name, tms->tv_sec, tms->tv_nsec);
+		if (format == D_TM_CSV)
+			fprintf(stream, "%s,snapshot realtime,%lu", name, us);
+		else
+			fprintf(stream, "snapshot realtime: %s = %lu us",
+				name, us);
 		break;
 	case D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_PROCESS_CPUTIME:
-		fprintf(stream, "Timer snapshot (process): %s = %lds, "
-			"%ldns\n", name, tms->tv_sec, tms->tv_nsec);
+		if (format == D_TM_CSV)
+			fprintf(stream, "%s,snapshot process,%lu", name, us);
+		else
+			fprintf(stream, "snapshot process: %s = %lu us",
+				name, us);
 		break;
 	case D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_THREAD_CPUTIME:
-		fprintf(stream, "Timer snapshot (thread): %s = %lds, "
-			"%ldns\n", name, tms->tv_sec, tms->tv_nsec);
+		if (format == D_TM_CSV)
+			fprintf(stream, "%s,snapshot thread,%lu", name, us);
+		else
+			fprintf(stream, "snapshot thread: %s = %lu us",
+				name, us);
 		break;
 	default:
-		fprintf(stream, "Invalid timer snapshot type: 0x%x\n",
+		fprintf(stream, "Invalid timer snapshot type: 0x%x",
 			tm_type & ~D_TM_TIMER_SNAPSHOT);
 		break;
 	}
@@ -472,31 +500,45 @@ d_tm_print_timer_snapshot(struct timespec *tms, char *name, int tm_type,
  * \param[in]	stats	Optional stats
  * \param[in]	name	Duration timer name
  * \param[in]	tm_type	Duration timer type
+ * \param[in]	format	Output format.
+ *			Choose D_TM_STANDARD for standard output.
+ *			Choose D_TM_CSV for comma separated values.
  * \param[in]	stream	Output stream (stdout, stderr)
  */
 void
 d_tm_print_duration(struct timespec *tms, struct d_tm_stats_t *stats,
-		    char *name, int tm_type, FILE *stream)
+		    char *name, int tm_type, int format, FILE *stream)
 {
-	bool printStats;
+	uint64_t	us;
+	bool		printStats;
 
 	if ((tms == NULL) || (name == NULL) || (stream == NULL))
 		return;
 
 	printStats = (stats != NULL) && (stats->sample_size > 0);
+	us = (tms->tv_sec * 1000000) + (tms->tv_nsec / 1000);
 
 	switch (tm_type) {
 	case D_TM_DURATION | D_TM_CLOCK_REALTIME:
-		fprintf(stream, "Duration (realtime): %s = %.9fs",
-			name, tms->tv_sec + tms->tv_nsec / 1e9);
+		if (format == D_TM_CSV)
+			fprintf(stream, "%s,duration realtime,%lu", name, us);
+		else
+			fprintf(stream, "duration realtime: %s = %lu us",
+				name, us);
 		break;
 	case D_TM_DURATION | D_TM_CLOCK_PROCESS_CPUTIME:
-		fprintf(stream, "Duration (process): %s = %.9fs",
-			name, tms->tv_sec + tms->tv_nsec / 1e9);
+		if (format == D_TM_CSV)
+			fprintf(stream, "%s,duration process,%lu", name, us);
+		else
+			fprintf(stream, "duration process: %s = %lu us",
+				name, us);
 		break;
 	case D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME:
-		fprintf(stream, "Duration (thread): %s = %.9fs",
-			name, tms->tv_sec + tms->tv_nsec / 1e9);
+		if (format == D_TM_CSV)
+			fprintf(stream, "%s,duration thread,%lu", name, us);
+		else
+			fprintf(stream, "duration thread: %s = %lu us",
+				name, us);
 		break;
 	default:
 		fprintf(stream, "Invalid timer duration type: 0x%x",
@@ -506,9 +548,7 @@ d_tm_print_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 	}
 
 	if (printStats)
-		D_TM_PRINT_STATS(stream, stats, float, lf);
-
-	fprintf(stream, "\n");
+		d_tm_print_stats(stream, stats, format);
 }
 
 /**
@@ -517,21 +557,56 @@ d_tm_print_duration(struct timespec *tms, struct d_tm_stats_t *stats,
  * \param[in]	tms	Timer value
  * \param[in]	stats	Optional statistics
  * \param[in]	name	Timer name
+ * \param[in]	format	Output format.
+ *			Choose D_TM_STANDARD for standard output.
+ *			Choose D_TM_CSV for comma separated values.
  * \param[in]	stream	Output stream (stdout, stderr)
  */
 void
 d_tm_print_gauge(uint64_t val, struct d_tm_stats_t *stats, char *name,
-		 FILE *stream)
+		 int format, FILE *stream)
 {
 	if ((name == NULL) || (stream == NULL))
 		return;
 
-	fprintf(stream, "Gauge: %s = %" PRIu64, name, val);
+	if (format == D_TM_CSV)
+		fprintf(stream, "%s,gauge,%lu", name, val);
+	else
+		fprintf(stream, "gauge: %s = %lu", name, val);
 
 	if ((stats != NULL) && (stats->sample_size > 0))
-		D_TM_PRINT_STATS(stream, stats, int, lu);
+		d_tm_print_stats(stream, stats, format);
+}
 
-	fprintf(stream, "\n");
+/**
+ * Client function to print the metadata strings \a short_desc and \a long_desc
+ * to the \a stream provided
+ *
+ * \param[in]	short_desc	Pointer to the short description metadata
+ * \param[in]	long_desc	Pointer to the long description metadata
+ * \param[in]	format		Output format.
+ *				Choose D_TM_STANDARD for standard output.
+ *				Choose D_TM_CSV for comma separated values.
+ * \param[in]	stream		Output stream (stdout, stderr)
+ */
+void
+d_tm_print_metadata(char *short_desc, char *long_desc, int format, FILE *stream)
+{
+	if (format == D_TM_CSV) {
+		if (short_desc != NULL)
+			fprintf(stream, ",%s", short_desc);
+		else if (long_desc != NULL)
+			fprintf(stream, ",");
+
+		if (long_desc != NULL)
+			fprintf(stream, ",%s", long_desc);
+	} else {
+		if (short_desc != NULL)
+			fprintf(stream, ", meta short: %s", short_desc);
+
+		if (long_desc != NULL)
+			fprintf(stream, ", meta long: %s", long_desc);
+	}
 }
 
 /**
@@ -542,17 +617,33 @@ d_tm_print_gauge(uint64_t val, struct d_tm_stats_t *stats, char *name,
  * \param[in]	node		Pointer to a parent or child node
  * \param[in]	level		Indicates level of indentation when printing
  *				this \a node
+ * \param[in]	path		The full path of the node.
+ *				This path is not stored with the node itself.
+ *				This string is passed in so that it may be
+ *				printed for this and children nodes.
+ * \param[in]	format		Output format.
+ *				Choose D_TM_STANDARD for standard output.
+ *				Choose D_TM_CSV for comma separated values.
+ * \param[in]	show_meta	Set to true to print the meta-data.
+ * \param[in]	show_timestamp	Set to true to print the timestamp the metric
+ *				was read by the consumer.
  * \param[in]	stream		Direct output to this stream (stdout, stderr)
  */
 void
 d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
+		char *path, int format, bool show_meta, bool show_timestamp,
 		FILE *stream)
 {
 	struct d_tm_stats_t	stats = {0};
 	struct timespec		tms;
 	uint64_t		val;
 	time_t			clk;
+	char			time_buff[D_TM_TIME_BUFF_LEN];
+	char			*timestamp;
 	char			*name = NULL;
+	char			*short_desc = NULL;
+	char			*long_desc = NULL;
+	bool			stats_printed = false;
 	int			i = 0;
 	int			rc;
 
@@ -560,12 +651,33 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 	if (name == NULL)
 		return;
 
-	for (i = 0; i < level; i++)
-		fprintf(stream, "%20s", " ");
+	if (show_timestamp) {
+		clk = time(NULL);
+		timestamp = ctime_r(&clk, time_buff);
+		timestamp[D_TM_TIME_BUFF_LEN - 2] = 0;
+	}
+
+	if (format == D_TM_CSV) {
+		if (show_timestamp)
+			fprintf(stream, "%s,", timestamp);
+		if (path != NULL)
+			fprintf(stream, "%s/", path);
+	} else {
+		for (i = 0; i < level; i++)
+			fprintf(stream, "%20s", " ");
+		if ((show_timestamp) && (node->dtn_type != D_TM_DIRECTORY))
+			fprintf(stream, "%s, ", timestamp);
+	}
 
 	switch (node->dtn_type) {
 	case D_TM_DIRECTORY:
-		fprintf(stream, "%-20s\n", name);
+		/**
+		 * A tree is printed for standard output where the directory
+		 * names are printed in a hierarchy.  In CSV format, the full
+		 * path names are printed in each line of output.
+		 */
+		if (format == D_TM_STANDARD)
+			fprintf(stream, "%-20s\n", name);
 		break;
 	case D_TM_COUNTER:
 		rc = d_tm_get_counter(&val, shmem_root, node, NULL);
@@ -573,7 +685,7 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 			fprintf(stream, "Error on counter read: %d\n", rc);
 			break;
 		}
-		d_tm_print_counter(val, name, stream);
+		d_tm_print_counter(val, name, format, stream);
 		break;
 	case D_TM_TIMESTAMP:
 		rc = d_tm_get_timestamp(&clk, shmem_root, node, NULL);
@@ -581,7 +693,7 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 			fprintf(stream, "Error on timestamp read: %d\n", rc);
 			break;
 		}
-		d_tm_print_timestamp(&clk, name, stream);
+		d_tm_print_timestamp(&clk, name, format, stream);
 		break;
 	case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_REALTIME):
 	case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_PROCESS_CPUTIME):
@@ -592,7 +704,8 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 				rc);
 			break;
 		}
-		d_tm_print_timer_snapshot(&tms, name, node->dtn_type, stream);
+		d_tm_print_timer_snapshot(&tms, name, node->dtn_type, format,
+					  stream);
 		break;
 	case (D_TM_DURATION | D_TM_CLOCK_REALTIME):
 	case (D_TM_DURATION | D_TM_CLOCK_PROCESS_CPUTIME):
@@ -602,8 +715,10 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 			fprintf(stream, "Error on duration read: %d\n", rc);
 			break;
 		}
-		d_tm_print_duration(&tms, &stats, name, node->dtn_type,
+		d_tm_print_duration(&tms, &stats, name, node->dtn_type, format,
 				    stream);
+		if (stats.sample_size > 0)
+			stats_printed = true;
 		break;
 	case D_TM_GAUGE:
 		rc = d_tm_get_gauge(&val, &stats, shmem_root, node, NULL);
@@ -611,13 +726,65 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 			fprintf(stream, "Error on gauge read: %d\n", rc);
 			break;
 		}
-		d_tm_print_gauge(val, &stats, name, stream);
+		d_tm_print_gauge(val, &stats, name, format, stream);
+		if (stats.sample_size > 0)
+			stats_printed = true;
 		break;
 	default:
 		fprintf(stream, "Item: %s has unknown type: 0x%x\n", name,
 			node->dtn_type);
 		break;
 	}
+
+	if (node->dtn_type == D_TM_DIRECTORY)
+		show_meta = false;
+
+	if (show_meta) {
+		d_tm_get_metadata(&short_desc, &long_desc, shmem_root, node,
+				  NULL);
+		if (format == D_TM_CSV) {
+			/** print placeholders for the missing stats */
+			if (!stats_printed &&
+			    ((short_desc != NULL) || (long_desc != NULL)))
+				fprintf(stream, ",,,,,");
+		}
+		d_tm_print_metadata(short_desc, long_desc, format, stream);
+		D_FREE_PTR(short_desc);
+		D_FREE_PTR(long_desc);
+	}
+
+	if (node->dtn_type != D_TM_DIRECTORY)
+		fprintf(stream, "\n");
+}
+
+/**
+ * Prints the \a stats to the \a stream
+ *
+ * \param[in]	stream	Identifies the output stream
+ * \param[in]	stats	Pointer to the node statistics
+ * \param[in]	format	Output format.
+ *			Choose D_TM_STANDARD for standard output.
+ *			Choose D_TM_CSV for comma separated values.
+ */
+void
+d_tm_print_stats(FILE *stream, struct d_tm_stats_t *stats, int format)
+{
+	if (format == D_TM_CSV) {
+		fprintf(stream, ",%lu,%lu,%lf,%lu",
+			stats->dtm_min, stats->dtm_max, stats->mean,
+			stats->sample_size);
+		if (stats->sample_size > 2)
+			fprintf(stream, ",%lf", stats->std_dev);
+		else
+			fprintf(stream, ",");
+		return;
+	}
+
+	fprintf(stream, ", min: %lu, max: %lu, mean: %lf, sample size: %lu",
+		stats->dtm_min, stats->dtm_max, stats->mean,
+		stats->sample_size);
+	if (stats->sample_size > 2)
+		fprintf(stream, ", std dev: %lf", stats->std_dev);
 }
 
 /**
@@ -628,30 +795,82 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
  * \param[in]	node		Pointer to a parent or child node
  * \param[in]	level		Indicates level of indentation when printing
  *				this \a node
+ * \param[in]	filter		A bitmask of d_tm_metric_types that filters the
+ *				results.
+ * \param[in]	path		Path to this metric (for printing)
+ * \param[in]	format		Output format.
+ *				Choose D_TM_STANDARD for standard output.
+ *				Choose D_TM_CSV for comma separated values.
+ * \param[in]	show_meta	Set to true to print the metadata.
+ * \param[in]	show_timestamp	Set to true to print the timestamp the metric
+ *				was read by the consumer.
  * \param[in]	stream		Direct output to this stream (stdout, stderr)
  */
 void
 d_tm_print_my_children(uint64_t *shmem_root, struct d_tm_node_t *node,
-		       int level, FILE *stream)
+		       int level, int filter, char *path, int format,
+		       bool show_meta, bool show_timestamp, FILE *stream)
 {
+	char	*fullpath = NULL;
+	char	*node_name = NULL;
+
 	if ((node == NULL) || (stream == NULL))
 		return;
 
-	d_tm_print_node(shmem_root, node, level, stream);
-
+	if (node->dtn_type & filter)
+		d_tm_print_node(shmem_root, node, level, path, format,
+				show_meta, show_timestamp, stream);
 	node = node->dtn_child;
 	node = d_tm_conv_ptr(shmem_root, node);
 	if (node == NULL)
 		return;
 
-	d_tm_print_my_children(shmem_root, node, level + 1, stream);
-	node = node->dtn_sibling;
-	node = d_tm_conv_ptr(shmem_root, node);
 	while (node != NULL) {
-		d_tm_print_my_children(shmem_root, node, level + 1, stream);
+		node_name = d_tm_conv_ptr(shmem_root, node->dtn_name);
+		if (node_name == NULL)
+			break;
+
+		if ((path == NULL) ||
+		    (strncmp(path, "/", D_TM_MAX_NAME_LEN) == 0)) {
+			if (node->dtn_type & D_TM_DIRECTORY)
+				D_ASPRINTF(fullpath, "%s", node_name);
+		} else {
+			if (node->dtn_type & D_TM_DIRECTORY)
+				D_ASPRINTF(fullpath, "%s/%s", path, node_name);
+			else
+				D_ASPRINTF(fullpath, "%s", path);
+		}
+
+		d_tm_print_my_children(shmem_root, node, level + 1, filter,
+				       fullpath, format, show_meta,
+				       show_timestamp, stream);
+		D_FREE_PTR(fullpath);
 		node = node->dtn_sibling;
 		node = d_tm_conv_ptr(shmem_root, node);
 	}
+}
+
+/**
+ * Prints the header for CSV output
+ *
+ * \param[in]	extra_fields	A bitmask.  Use D_TM_INCLUDE_TIMESTAMP to print
+ *				a header for timestamp data.  Use
+ *				D_TM_INCLUDE_METADATA to print a header for
+ *				the metadata.
+ * \param[in]	stream		Direct output to this stream (stdout, stderr)
+ */
+void
+d_tm_print_field_descriptors(int extra_fields, FILE *stream)
+{
+	if (extra_fields & D_TM_INCLUDE_TIMESTAMP)
+		fprintf(stream, "timestamp,");
+
+	fprintf(stream, "name,type,value,min,max,mean,sample_size,std_dev");
+
+	if (extra_fields & D_TM_INCLUDE_METADATA)
+		fprintf(stream, ",metadata_short,metadata_long");
+
+	fprintf(stream, "\n");
 }
 
 /**
@@ -713,63 +932,74 @@ d_tm_compute_standard_dev(double sum_of_squares, uint64_t sample_size,
 }
 
 /**
- * Compute gauge statistics: sample size, min, max, sum and sum of squares.
+ * Compute statistics: sample size, min, max, sum and sum of squares.
  * Standard deviation calculation is deferred until the metric is read.
  *
- * \param[in]	node		Pointer to a gauge node
+ * \param[in]	node		Pointer to a node with stats
+ * \param[in]	value		The new sample value
  */
 void
-d_tm_compute_gauge_stats(struct d_tm_node_t *node)
+d_tm_compute_stats(struct d_tm_node_t *node, uint64_t value)
 {
 	struct d_tm_stats_t	*dtm_stats;
-	uint64_t		value = 0;
 
 	dtm_stats = node->dtn_metric->dtm_stats;
 
 	if (dtm_stats == NULL)
 		return;
 
-	value = node->dtn_metric->dtm_data.value;
 	dtm_stats->sample_size++;
-	dtm_stats->dtm_sum.sum_int += value;
+	dtm_stats->dtm_sum += value;
 	dtm_stats->sum_of_squares += value * value;
 
-	if (value > dtm_stats->dtm_max.max_int)
-		dtm_stats->dtm_max.max_int = value;
+	if (value > dtm_stats->dtm_max)
+		dtm_stats->dtm_max = value;
 
-	if (value < dtm_stats->dtm_min.min_int)
-		dtm_stats->dtm_min.min_int = value;
+	if (value < dtm_stats->dtm_min)
+		dtm_stats->dtm_min = value;
 }
 
 /**
- * Compute duration statistics: sample size, min, max, sum and sum of squares.
- * Standard deviation calculation is deferred until the metric is read.
+ * Computes the histogram for this metric by finding the bucket that corresponds
+ * to the \a value given, and increments the counter for that bucket.
  *
- * \param[in]	node		Pointer to a duration node
+ * \param[in]	node		Pointer to a duration or gauge node
+ * \param[in]	value		The value that is sorted into a bucket
+ *
+ * \return			DER_SUCCESS		Success
+ *				-DER_INVAL		\a node was NULL,
+ *							\a node has no metric
+ *							data
+ *							\a metric has no
+ *							histogram
  */
-void
-d_tm_compute_duration_stats(struct d_tm_node_t *node)
+int
+d_tm_compute_histogram(struct d_tm_node_t *node, uint64_t value)
 {
-	struct d_tm_stats_t	*dtm_stats;
-	double			value = 0;
+	struct d_tm_histogram_t	*dtm_histogram;
+	struct d_tm_node_t	*bucket;
+	int			rc = -DER_INVAL;
+	int			i;
 
-	dtm_stats = node->dtn_metric->dtm_stats;
+	if (!node)
+		return rc;
 
-	if (dtm_stats == NULL)
-		return;
+	if (!node->dtn_metric)
+		return rc;
 
-	value = node->dtn_metric->dtm_data.tms[0].tv_sec +
-		(node->dtn_metric->dtm_data.tms[0].tv_nsec / 1E9);
+	if (!node->dtn_metric->dtm_histogram)
+		return rc;
 
-	dtm_stats->sample_size++;
-	dtm_stats->dtm_sum.sum_float += value;
-	dtm_stats->sum_of_squares += value * value;
+	dtm_histogram = node->dtn_metric->dtm_histogram;
 
-	if (value > dtm_stats->dtm_max.max_float)
-		dtm_stats->dtm_max.max_float = value;
-
-	if (value < dtm_stats->dtm_min.min_float)
-		dtm_stats->dtm_min.min_float = value;
+	for (i = 0; i < dtm_histogram->dth_num_buckets; i++) {
+		if (value <= dtm_histogram->dth_buckets[i].dtb_max) {
+			bucket = dtm_histogram->dth_buckets[i].dtb_bucket;
+			rc = d_tm_increment_counter(&bucket, 1, NULL);
+			break;
+		}
+	}
+	return rc;
 }
 
 
@@ -822,7 +1052,7 @@ d_tm_increment_counter(struct d_tm_node_t **metric, uint64_t value,
 
 		if (fmt == NULL) {
 			rc = -DER_INVAL;
-			goto failure;
+			goto out;
 		}
 
 		va_start(args, fmt);
@@ -831,7 +1061,7 @@ d_tm_increment_counter(struct d_tm_node_t **metric, uint64_t value,
 
 		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
 			rc = -DER_EXCEEDS_PATH_LEN;
-			goto failure;
+			goto out;
 		}
 
 		node = d_tm_find_metric(d_tm_shmem_root, path);
@@ -840,11 +1070,11 @@ d_tm_increment_counter(struct d_tm_node_t **metric, uint64_t value,
 	}
 
 	if (node == NULL) {
-		rc = d_tm_add_metric(&node, D_TM_COUNTER, "N/A", "N/A", path);
+		rc = d_tm_add_metric(&node, D_TM_COUNTER, NULL, NULL, path);
 		if (rc != DER_SUCCESS) {
 			D_ERROR("Failed to add and incremement counter [%s]: "
 				DF_RC "\n", path, DP_RC(rc));
-			goto failure;
+			goto out;
 		}
 		if (metric != NULL)
 			*metric = node;
@@ -855,7 +1085,7 @@ d_tm_increment_counter(struct d_tm_node_t **metric, uint64_t value,
 		D_ERROR("Failed to increment counter [%s] on item not a "
 			"counter.  Operation mismatch: " DF_RC "\n",
 			node->dtn_name, DP_RC(rc));
-		goto failure;
+		goto out;
 	}
 
 	if (node->dtn_protect)
@@ -864,9 +1094,7 @@ d_tm_increment_counter(struct d_tm_node_t **metric, uint64_t value,
 	if (node->dtn_protect)
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 
-	return rc;
-
-failure:
+out:
 	return rc;
 }
 
@@ -917,7 +1145,7 @@ d_tm_record_timestamp(struct d_tm_node_t **metric, const char *fmt, ...)
 
 		if (fmt == NULL) {
 			rc = -DER_INVAL;
-			goto failure;
+			goto out;
 		}
 
 		va_start(args, fmt);
@@ -926,7 +1154,7 @@ d_tm_record_timestamp(struct d_tm_node_t **metric, const char *fmt, ...)
 
 		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
 			rc = -DER_EXCEEDS_PATH_LEN;
-			goto failure;
+			goto out;
 		}
 
 		node = d_tm_find_metric(d_tm_shmem_root, path);
@@ -935,11 +1163,11 @@ d_tm_record_timestamp(struct d_tm_node_t **metric, const char *fmt, ...)
 	}
 
 	if (node == NULL) {
-		rc = d_tm_add_metric(&node, D_TM_TIMESTAMP, "N/A", "N/A", path);
+		rc = d_tm_add_metric(&node, D_TM_TIMESTAMP, NULL, NULL, path);
 		if (rc != DER_SUCCESS) {
 			D_ERROR("Failed to add and record timestamp [%s]: "
 				DF_RC "\n", path, DP_RC(rc));
-			goto failure;
+			goto out;
 		}
 		if (metric != NULL)
 			*metric = node;
@@ -958,9 +1186,7 @@ d_tm_record_timestamp(struct d_tm_node_t **metric, const char *fmt, ...)
 	if (node->dtn_protect)
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 
-	return rc;
-
-failure:
+out:
 	return rc;
 }
 
@@ -1015,7 +1241,7 @@ d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
 
 		if (fmt == NULL) {
 			rc = -DER_INVAL;
-			goto failure;
+			goto out;
 		}
 
 		va_start(args, fmt);
@@ -1024,7 +1250,7 @@ d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
 
 		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
 			rc = -DER_EXCEEDS_PATH_LEN;
-			goto failure;
+			goto out;
 		}
 
 		node = d_tm_find_metric(d_tm_shmem_root, path);
@@ -1040,14 +1266,14 @@ d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
 			D_ERROR("Invalid clk_id for [%s] "
 				"Failed to add metric: " DF_RC "\n", path,
 				DP_RC(rc));
-			goto failure;
+			goto out;
 		}
 		rc = d_tm_add_metric(&node, D_TM_TIMER_SNAPSHOT | clk_id,
-				     "N/A", "N/A", path);
+				     NULL, NULL, path);
 		if (rc != DER_SUCCESS) {
 			D_ERROR("Failed to add and record high resolution timer"
 				" [%s]: " DF_RC "\n", path, DP_RC(rc));
-			goto failure;
+			goto out;
 		}
 		if (metric != NULL)
 			*metric = node;
@@ -1058,7 +1284,7 @@ d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
 		D_ERROR("Failed to record high resolution timer [%s] on item "
 			"not a high resolution timer.  Operation mismatch: "
 			DF_RC "\n", path, DP_RC(rc));
-		goto failure;
+		goto out;
 	}
 
 	if (node->dtn_protect)
@@ -1068,9 +1294,7 @@ d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
 	if (node->dtn_protect)
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 
-	return rc;
-
-failure:
+out:
 	return rc;
 }
 
@@ -1124,7 +1348,7 @@ d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
 
 		if (fmt == NULL) {
 			rc = -DER_INVAL;
-			goto failure;
+			goto out;
 		}
 
 		va_start(args, fmt);
@@ -1133,7 +1357,7 @@ d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
 
 		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
 			rc = -DER_EXCEEDS_PATH_LEN;
-			goto failure;
+			goto out;
 		}
 
 		node = d_tm_find_metric(d_tm_shmem_root, path);
@@ -1149,14 +1373,14 @@ d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
 			D_ERROR("Invalid clk_id for [%s] "
 				"Failed to add metric: " DF_RC "\n", path,
 				DP_RC(rc));
-			goto failure;
+			goto out;
 		}
 		rc = d_tm_add_metric(&node, D_TM_DURATION | clk_id,
-				     "N/A", "N/A", path);
+				     NULL, NULL, path);
 		if (rc != DER_SUCCESS) {
 			D_ERROR("Failed to add and mark duration start [%s]: "
 				DF_RC "\n", path, DP_RC(rc));
-			goto failure;
+			goto out;
 		}
 		if (metric != NULL)
 			*metric = node;
@@ -1167,7 +1391,7 @@ d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
 		D_ERROR("Failed to mark duration start [%s] on item "
 			"not a duration.  Operation mismatch: " DF_RC "\n",
 			path, DP_RC(rc));
-		goto failure;
+		goto out;
 	}
 
 	if (node->dtn_protect)
@@ -1177,9 +1401,7 @@ d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
 	if (node->dtn_protect)
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 
-	return rc;
-
-failure:
+out:
 	return rc;
 }
 
@@ -1224,7 +1446,9 @@ d_tm_mark_duration_end(struct d_tm_node_t **metric, int err,
 {
 	struct d_tm_node_t	*node = NULL;
 	struct timespec		end;
+	struct timespec		*tms;
 	char			path[D_TM_MAX_NAME_LEN] = {};
+	uint64_t		us;
 	int			rc = DER_SUCCESS;
 
 	if (d_tm_shmem_root == NULL)
@@ -1241,7 +1465,7 @@ d_tm_mark_duration_end(struct d_tm_node_t **metric, int err,
 
 		if (fmt == NULL) {
 			rc = -DER_INVAL;
-			goto failure;
+			goto out;
 		}
 
 		va_start(args, fmt);
@@ -1250,7 +1474,7 @@ d_tm_mark_duration_end(struct d_tm_node_t **metric, int err,
 
 		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
 			rc = -DER_EXCEEDS_PATH_LEN;
-			goto failure;
+			goto out;
 		}
 
 		node = d_tm_find_metric(d_tm_shmem_root, path);
@@ -1263,7 +1487,7 @@ d_tm_mark_duration_end(struct d_tm_node_t **metric, int err,
 		D_ERROR("Failed to mark duration end [%s].  "
 			"No existing metric found: " DF_RC "\n", path,
 			DP_RC(rc));
-		goto failure;
+		goto out;
 	}
 
 	if (!(node->dtn_type & D_TM_DURATION)) {
@@ -1271,7 +1495,7 @@ d_tm_mark_duration_end(struct d_tm_node_t **metric, int err,
 		D_ERROR("Failed to mark duration end [%s] on item "
 			"not a duration.  Operation mismatch: " DF_RC "\n",
 			path, DP_RC(rc));
-		goto failure;
+		goto out;
 	}
 
 	if (node->dtn_protect)
@@ -1279,13 +1503,15 @@ d_tm_mark_duration_end(struct d_tm_node_t **metric, int err,
 	clock_gettime(d_tm_clock_id(node->dtn_type & ~D_TM_DURATION), &end);
 	node->dtn_metric->dtm_data.tms[0] = d_timediff(
 					node->dtn_metric->dtm_data.tms[1], end);
-	d_tm_compute_duration_stats(node);
+	tms = node->dtn_metric->dtm_data.tms;
+	us = (tms->tv_sec * 1000000) + (tms->tv_nsec / 1000);
+	d_tm_compute_stats(node, us);
+	if (node->dtn_metric->dtm_histogram != NULL)
+		rc = d_tm_compute_histogram(node, us);
 	if (node->dtn_protect)
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 
-	return rc;
-
-failure:
+out:
 	return rc;
 }
 
@@ -1338,7 +1564,7 @@ d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value,
 
 		if (fmt == NULL) {
 			rc = -DER_INVAL;
-			goto failure;
+			goto out;
 		}
 
 		va_start(args, fmt);
@@ -1347,7 +1573,7 @@ d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value,
 
 		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
 			rc = -DER_EXCEEDS_PATH_LEN;
-			goto failure;
+			goto out;
 		}
 
 		node = d_tm_find_metric(d_tm_shmem_root, path);
@@ -1356,11 +1582,11 @@ d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value,
 	}
 
 	if (node == NULL) {
-		rc = d_tm_add_metric(&node, D_TM_GAUGE, "N/A", "N/A", path);
+		rc = d_tm_add_metric(&node, D_TM_GAUGE, NULL, NULL, path);
 		if (rc != DER_SUCCESS) {
 			D_ERROR("Failed to add and set gauge [%s]: "
 				DF_RC "\n", path, DP_RC(rc));
-			goto failure;
+			goto out;
 		}
 		if (metric != NULL)
 			*metric = node;
@@ -1371,19 +1597,19 @@ d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value,
 		D_ERROR("Failed to set gauge [%s] on item "
 			"not a gauge.  Operation mismatch: " DF_RC "\n",
 			path, DP_RC(rc));
-		goto failure;
+		goto out;
 	}
 
 	if (node->dtn_protect)
 		D_MUTEX_LOCK(&node->dtn_lock);
 	node->dtn_metric->dtm_data.value = value;
-	d_tm_compute_gauge_stats(node);
+	d_tm_compute_stats(node, node->dtn_metric->dtm_data.value);
+	if (node->dtn_metric->dtm_histogram != NULL)
+		rc = d_tm_compute_histogram(node, value);
 	if (node->dtn_protect)
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 
-	return rc;
-
-failure:
+out:
 	return rc;
 }
 
@@ -1436,7 +1662,7 @@ d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
 
 		if (fmt == NULL) {
 			rc = -DER_INVAL;
-			goto failure;
+			goto out;
 		}
 
 		va_start(args, fmt);
@@ -1445,7 +1671,7 @@ d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
 
 		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
 			rc = -DER_EXCEEDS_PATH_LEN;
-			goto failure;
+			goto out;
 		}
 
 		node = d_tm_find_metric(d_tm_shmem_root, path);
@@ -1454,11 +1680,11 @@ d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
 	}
 
 	if (node == NULL) {
-		rc = d_tm_add_metric(&node, D_TM_GAUGE, "N/A", "N/A", path);
+		rc = d_tm_add_metric(&node, D_TM_GAUGE, NULL, NULL, path);
 		if (rc != DER_SUCCESS) {
 			D_ERROR("Failed to add and incremement gauge [%s]: "
 				DF_RC "\n", path, DP_RC(rc));
-			goto failure;
+			goto out;
 		}
 		if (metric != NULL)
 			*metric = node;
@@ -1469,19 +1695,19 @@ d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
 		D_ERROR("Failed to increment gauge [%s] on item "
 			"not a gauge.  Operation mismatch: " DF_RC "\n",
 			path, DP_RC(rc));
-		goto failure;
+		goto out;
 	}
 
 	if (node->dtn_protect)
 		D_MUTEX_LOCK(&node->dtn_lock);
 	node->dtn_metric->dtm_data.value += value;
-	d_tm_compute_gauge_stats(node);
+	d_tm_compute_stats(node, node->dtn_metric->dtm_data.value);
+	if (node->dtn_metric->dtm_histogram != NULL)
+		rc = d_tm_compute_histogram(node, value);
 	if (node->dtn_protect)
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 
-	return rc;
-
-failure:
+out:
 	return rc;
 }
 
@@ -1534,7 +1760,7 @@ d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
 
 		if (fmt == NULL) {
 			rc = -DER_INVAL;
-			goto failure;
+			goto out;
 		}
 
 		va_start(args, fmt);
@@ -1543,7 +1769,7 @@ d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
 
 		if (ret <= 0 || ret >= D_TM_MAX_NAME_LEN) {
 			rc = -DER_EXCEEDS_PATH_LEN;
-			goto failure;
+			goto out;
 		}
 
 		node = d_tm_find_metric(d_tm_shmem_root, path);
@@ -1552,11 +1778,11 @@ d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
 	}
 
 	if (node == NULL) {
-		rc = d_tm_add_metric(&node, D_TM_GAUGE, "N/A", "N/A", path);
+		rc = d_tm_add_metric(&node, D_TM_GAUGE, NULL, NULL, path);
 		if (rc != DER_SUCCESS) {
 			D_ERROR("Failed to add and decrement gauge [%s]: "
 				DF_RC "\n", path, DP_RC(rc));
-			goto failure;
+			goto out;
 		}
 		if (metric != NULL)
 			*metric = node;
@@ -1567,19 +1793,19 @@ d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
 		D_ERROR("Failed to decrement gauge [%s] on item "
 			"not a gauge.  Operation mismatch: " DF_RC "\n",
 			path, DP_RC(rc));
-		goto failure;
+		goto out;
 	}
 
 	if (node->dtn_protect)
 		D_MUTEX_LOCK(&node->dtn_lock);
 	node->dtn_metric->dtm_data.value -= value;
-	d_tm_compute_gauge_stats(node);
+	d_tm_compute_stats(node, node->dtn_metric->dtm_data.value);
+	if (node->dtn_metric->dtm_histogram != NULL)
+		rc = d_tm_compute_histogram(node, value);
 	if (node->dtn_protect)
 		D_MUTEX_UNLOCK(&node->dtn_lock);
 
-	return rc;
-
-failure:
+out:
 	return rc;
 }
 
@@ -1745,51 +1971,55 @@ int d_tm_add_metric(struct d_tm_node_t **node, int metric_type, char *sh_desc,
 	}
 
 	temp->dtn_metric->dtm_stats = NULL;
-	if (metric_type == D_TM_GAUGE) {
+	if ((metric_type == D_TM_GAUGE) || (metric_type & D_TM_DURATION)) {
 		temp->dtn_metric->dtm_stats =
 				     d_tm_shmalloc(sizeof(struct d_tm_stats_t));
 		if (temp->dtn_metric->dtm_stats == NULL) {
 			rc = -DER_NO_SHMEM;
 			goto failure;
 		}
-		temp->dtn_metric->dtm_stats->dtm_min.min_int = UINT64_MAX;
+		temp->dtn_metric->dtm_stats->dtm_min = UINT64_MAX;
 	}
 
-	if (metric_type & D_TM_DURATION) {
-		temp->dtn_metric->dtm_stats =
-				     d_tm_shmalloc(sizeof(struct d_tm_stats_t));
-		if (temp->dtn_metric->dtm_stats == NULL) {
-			rc = -DER_NO_SHMEM;
-			goto failure;
-		}
-		temp->dtn_metric->dtm_stats->dtm_min.min_float = DBL_MAX;
-	}
-
-	buff_len = strnlen(sh_desc, D_TM_MAX_SHORT_LEN);
+	buff_len = 0;
+	if (sh_desc != NULL)
+		buff_len = strnlen(sh_desc, D_TM_MAX_SHORT_LEN);
 	if (buff_len == D_TM_MAX_SHORT_LEN) {
 		rc = -DER_EXCEEDS_PATH_LEN;
 		goto failure;
 	}
-	buff_len += 1; /** make room for the trailing null */
-	temp->dtn_metric->dtm_sh_desc = d_tm_shmalloc(buff_len);
-	if (temp->dtn_metric->dtm_sh_desc == NULL) {
-		rc = -DER_NO_SHMEM;
-		goto failure;
-	}
-	strncpy(temp->dtn_metric->dtm_sh_desc, sh_desc, buff_len);
 
-	buff_len = strnlen(lng_desc, D_TM_MAX_LONG_LEN);
+	if (buff_len > 0) {
+		buff_len += 1; /** make room for the trailing null */
+		temp->dtn_metric->dtm_sh_desc = d_tm_shmalloc(buff_len);
+		if (temp->dtn_metric->dtm_sh_desc == NULL) {
+			rc = -DER_NO_SHMEM;
+			goto failure;
+		}
+		strncpy(temp->dtn_metric->dtm_sh_desc, sh_desc, buff_len);
+	} else {
+		temp->dtn_metric->dtm_sh_desc = NULL;
+	}
+
+	buff_len = 0;
+	if (lng_desc != NULL)
+		buff_len = strnlen(lng_desc, D_TM_MAX_LONG_LEN);
 	if (buff_len == D_TM_MAX_LONG_LEN) {
 		rc = -DER_EXCEEDS_PATH_LEN;
 		goto failure;
 	}
-	buff_len += 1; /** make room for the trailing null */
-	temp->dtn_metric->dtm_lng_desc = d_tm_shmalloc(buff_len);
-	if (temp->dtn_metric->dtm_lng_desc == NULL) {
-		rc = -DER_NO_SHMEM;
-		goto failure;
+
+	if (buff_len > 0) {
+		buff_len += 1; /** make room for the trailing null */
+		temp->dtn_metric->dtm_lng_desc = d_tm_shmalloc(buff_len);
+		if (temp->dtn_metric->dtm_lng_desc == NULL) {
+			rc = -DER_NO_SHMEM;
+			goto failure;
+		}
+		strncpy(temp->dtn_metric->dtm_lng_desc, lng_desc, buff_len);
+	} else {
+		temp->dtn_metric->dtm_lng_desc = NULL;
 	}
-	strncpy(temp->dtn_metric->dtm_lng_desc, lng_desc, buff_len);
 
 	temp->dtn_protect = false;
 	if (d_tm_serialization && (temp->dtn_type != D_TM_DIRECTORY)) {
@@ -1828,6 +2058,273 @@ failure:
 	D_ERROR("Failed to add metric [%s]: " DF_RC "\n", path, DP_RC(rc));
 	return rc;
 }
+
+/**
+ * Creates histogram counters for the given node.  It calculates the
+ * extents of each bucket and creates counters at the path specified that
+ * correspond to each bucket required.  The name of each counter created is
+ * given by the bucket number.  The bucket number and range of each bucket
+ * is stored as metadata for each counter.
+ *
+ * \param[in]	node		Pointer to a node with a metric of type duration
+ *				or gauge.
+ * \param[in]	path		Path name of the metric specified.
+ *				by \a node.  Can be an arbitrary location.
+ *				However, specifying the full path allows this
+ *				function to create counters underneath the given
+ *				node.
+ * \param[in]	num_buckets	Specifies the number of buckets the histogram
+ *				should have.  Must be > 1.
+ * \param[in]	initial_width	The number of elements in the first bucket
+ *				Must be > 0.
+ * \param[in]	multiplier	Increases the width of bucket N (for N > 0)
+ *				by this factor over the width of bucket (N-1).
+ *				A multiplier of 1 creates equal size buckets.
+ *				A multiplier of 2 creates buckets that are
+ *				twice the size of the previous bucket.
+ *				Must be > 0.
+ *
+ * \return			DER_SUCCESS		Success
+ *				-DER_INVAL		node, path, num_buckets,
+ *							initial_width or
+ *							multiplier is invalid.
+ *				-DER_OP_NOT_PERMITTED	Node was not a gauge
+ *							or duration.
+ *				-DER_NO_SHMEM		Out of shared memory
+ *				-DER_NOMEM		Out of heap
+ */
+int
+d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets,
+		    int initial_width, int multiplier)
+{
+	struct d_tm_metric_t	*metric;
+	struct d_tm_bucket_t	*dth_buckets;
+	uint64_t		min = 0;
+	uint64_t		max = 0;
+	uint64_t		prev_width = 0;
+	int			rc = DER_SUCCESS;
+	int			i;
+	char			*meta_data;
+	char			*fullpath;
+
+	if (node == NULL)
+		return -DER_INVAL;
+
+	if (path == NULL)
+		return -DER_INVAL;
+
+	if (num_buckets < 2)
+		return -DER_INVAL;
+
+	if (initial_width < 1)
+		return -DER_INVAL;
+
+	if (multiplier < 1)
+		return -DER_INVAL;
+
+	if (!((node->dtn_type == D_TM_GAUGE) ||
+	      (node->dtn_type & D_TM_DURATION)))
+		return -DER_OP_NOT_PERMITTED;
+
+	rc = D_MUTEX_LOCK(&d_tm_add_lock);
+	if (rc != 0) {
+		D_ERROR("Failed to get mutex: " DF_RC "\n", DP_RC(rc));
+		goto failure;
+	}
+
+	metric = node->dtn_metric;
+
+	metric->dtm_histogram = d_tm_shmalloc(sizeof(struct d_tm_histogram_t));
+	if (metric->dtm_histogram == NULL) {
+		D_MUTEX_UNLOCK(&d_tm_add_lock);
+		rc = -DER_NO_SHMEM;
+		goto failure;
+	}
+
+	metric->dtm_histogram->dth_buckets = d_tm_shmalloc(num_buckets *
+						  sizeof(struct d_tm_bucket_t));
+	if (metric->dtm_histogram->dth_buckets == NULL) {
+		D_MUTEX_UNLOCK(&d_tm_add_lock);
+		rc = -DER_NO_SHMEM;
+		goto failure;
+	}
+	metric->dtm_histogram->dth_num_buckets = num_buckets;
+	metric->dtm_histogram->dth_initial_width = initial_width;
+	metric->dtm_histogram->dth_value_multiplier = multiplier;
+
+	D_MUTEX_UNLOCK(&d_tm_add_lock);
+
+	dth_buckets = metric->dtm_histogram->dth_buckets;
+
+	min = 0;
+	max = initial_width - 1;
+	prev_width = initial_width;
+	for (i = 0; i < num_buckets; i++) {
+		D_ASPRINTF(meta_data, "histogram bucket %d [%lu .. %lu]",
+			   i, min, max);
+		if (meta_data == NULL) {
+			rc = -DER_NOMEM;
+			goto failure;
+		}
+
+		D_ASPRINTF(fullpath, "%s/bucket %d", path, i);
+		if (fullpath == NULL) {
+			rc = -DER_NOMEM;
+			goto failure;
+		}
+
+		dth_buckets[i].dtb_min = min;
+		dth_buckets[i].dtb_max = max;
+
+		rc = d_tm_add_metric(&dth_buckets[i].dtb_bucket, D_TM_COUNTER,
+				     meta_data, NULL, fullpath);
+		D_FREE(fullpath);
+		D_FREE(meta_data);
+		if (rc)
+			goto failure;
+
+		min = max + 1;
+
+		if (i == (num_buckets - 2)) {
+			max = UINT64_MAX;
+		} else if (multiplier == 1) {
+			max += initial_width;
+		} else {
+			max = min + (prev_width * multiplier) - 1;
+		}
+		prev_width = (max - min) + 1;
+	}
+
+	D_DEBUG(DB_TRACE, "Successfully added histogram for: [%s]\n", path);
+	return DER_SUCCESS;
+
+failure:
+
+	D_ERROR("Failed to histogram for [%s]: " DF_RC "\n", path, DP_RC(rc));
+	return rc;
+}
+
+/**
+ * Retrieves the histogram creation data for the given node, which includes
+ * the number of buckets, initial width and multiplier used to create the
+ * given histogram.
+ *
+ * \param[in,out]	histogram	Pointer to a d_tm_histogram_t used to
+ *					store the results.
+ * \param[in]		shmem_root	Pointer to the shared memory segment.
+ * \param[in]		node		Pointer to the metric node with a
+ *					histogram.
+ *
+ * \return			DER_SUCCESS		Success
+ *				-DER_INVAL		node or histogram is
+ *							invalid.
+ *				-DER_METRIC_NOT_FOUND	The metric node, the
+ *							metric data or histogram
+ *							was not found.
+ *				-DER_OP_NOT_PERMITTED	Node was not a gauge
+ *							or duration with
+ *							an associated histogram.
+ */
+int
+d_tm_get_num_buckets(struct d_tm_histogram_t *histogram,
+		     uint64_t *shmem_root, struct d_tm_node_t *node)
+{
+	struct d_tm_histogram_t	*dtm_histogram = NULL;
+	struct d_tm_metric_t	*metric_data = NULL;
+
+	if (node == NULL)
+		return -DER_INVAL;
+
+	if (histogram == NULL)
+		return -DER_INVAL;
+
+	if (!d_tm_validate_shmem_ptr(shmem_root, (void *)node))
+		return -DER_METRIC_NOT_FOUND;
+
+	if (!((node->dtn_type == D_TM_GAUGE) ||
+	      (node->dtn_type & D_TM_DURATION)))
+		return -DER_OP_NOT_PERMITTED;
+
+	metric_data = d_tm_conv_ptr(shmem_root, node->dtn_metric);
+	if (metric_data == NULL)
+		return -DER_METRIC_NOT_FOUND;
+
+	dtm_histogram = d_tm_conv_ptr(shmem_root, metric_data->dtm_histogram);
+	if (dtm_histogram == NULL)
+		return -DER_METRIC_NOT_FOUND;
+
+	histogram->dth_num_buckets = dtm_histogram->dth_num_buckets;
+	histogram->dth_initial_width = dtm_histogram->dth_initial_width;
+	histogram->dth_value_multiplier = dtm_histogram->dth_value_multiplier;
+
+	return DER_SUCCESS;
+}
+
+/**
+ * Retrieves the range of the given bucket for the node with a histogram.
+ *
+ * \param[in,out]	bucket		Pointer to a d_tm_bucket_t used to
+ *					store the results.
+ * \param[in]		bucket_id	Identifies which bucket (0 .. n-1)
+ * \param[in]		shmem_root	Pointer to the shared memory segment.
+ * \param[in]		node		Pointer to the metric node with a
+ *					histogram.
+ *
+ * \return			DER_SUCCESS		Success
+ *				-DER_INVAL		node, bucket, or bucket
+ *							ID is invalid.
+ *				-DER_METRIC_NOT_FOUND	The metric node, the
+ *							metric data, histogram
+ *							or bucket data was
+ *							not found.
+ *				-DER_OP_NOT_PERMITTED	Node was not a gauge
+ *							or duration with
+ *							an associated histogram.
+ */
+int
+d_tm_get_bucket_range(struct d_tm_bucket_t *bucket, int bucket_id,
+		      uint64_t *shmem_root, struct d_tm_node_t *node)
+{
+	struct d_tm_histogram_t	*dtm_histogram = NULL;
+	struct d_tm_bucket_t	*dth_bucket = NULL;
+	struct d_tm_metric_t	*metric_data = NULL;
+
+	if (node == NULL)
+		return -DER_INVAL;
+
+	if (bucket == NULL)
+		return -DER_INVAL;
+
+	if (bucket_id < 0)
+		return -DER_INVAL;
+
+	if (!d_tm_validate_shmem_ptr(shmem_root, (void *)node))
+		return -DER_METRIC_NOT_FOUND;
+
+	if (!((node->dtn_type == D_TM_GAUGE) ||
+	      (node->dtn_type & D_TM_DURATION)))
+		return -DER_OP_NOT_PERMITTED;
+
+	metric_data = d_tm_conv_ptr(shmem_root, node->dtn_metric);
+	if (metric_data == NULL)
+		return -DER_METRIC_NOT_FOUND;
+
+	dtm_histogram = d_tm_conv_ptr(shmem_root, metric_data->dtm_histogram);
+	if (dtm_histogram == NULL)
+		return -DER_METRIC_NOT_FOUND;
+
+	if (bucket_id >= dtm_histogram->dth_num_buckets)
+		return -DER_INVAL;
+
+	dth_bucket = d_tm_conv_ptr(shmem_root, dtm_histogram->dth_buckets);
+	if (dth_bucket == NULL)
+		return -DER_METRIC_NOT_FOUND;
+
+	bucket->dtb_min = dth_bucket[bucket_id].dtb_min;
+	bucket->dtb_max = dth_bucket[bucket_id].dtb_max;
+	return DER_SUCCESS;
+}
+
 
 /**
  * Client function to read the specified counter.  If the node is provided,
@@ -2005,6 +2502,7 @@ d_tm_get_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 {
 	struct d_tm_metric_t	*metric_data = NULL;
 	struct d_tm_stats_t	*dtm_stats = NULL;
+	double			sum = 0;
 
 	if (tms == NULL)
 		return -DER_INVAL;
@@ -2029,12 +2527,13 @@ d_tm_get_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 		tms->tv_sec = metric_data->dtm_data.tms[0].tv_sec;
 		tms->tv_nsec = metric_data->dtm_data.tms[0].tv_nsec;
 		if ((stats != NULL) && (dtm_stats != NULL)) {
-			stats->dtm_min.min_float = dtm_stats->dtm_min.min_float;
-			stats->dtm_max.max_float = dtm_stats->dtm_max.max_float;
-			stats->dtm_sum.sum_float = dtm_stats->dtm_sum.sum_float;
-			if (dtm_stats->sample_size > 0)
-				stats->mean = dtm_stats->dtm_sum.sum_float /
-					      dtm_stats->sample_size;
+			stats->dtm_min = dtm_stats->dtm_min;
+			stats->dtm_max = dtm_stats->dtm_max;
+			stats->dtm_sum = dtm_stats->dtm_sum;
+			if (dtm_stats->sample_size > 0) {
+				sum = (double)dtm_stats->dtm_sum;
+				stats->mean = sum / dtm_stats->sample_size;
+			}
 			stats->std_dev = d_tm_compute_standard_dev(
 						      dtm_stats->sum_of_squares,
 						      dtm_stats->sample_size,
@@ -2101,11 +2600,11 @@ d_tm_get_gauge(uint64_t *val, struct d_tm_stats_t *stats, uint64_t *shmem_root,
 			D_MUTEX_LOCK(&node->dtn_lock);
 		*val = metric_data->dtm_data.value;
 		if ((stats != NULL) && (dtm_stats != NULL)) {
-			stats->dtm_min.min_int = dtm_stats->dtm_min.min_int;
-			stats->dtm_max.max_int = dtm_stats->dtm_max.max_int;
-			stats->dtm_sum.sum_int = dtm_stats->dtm_sum.sum_int;
+			stats->dtm_min = dtm_stats->dtm_min;
+			stats->dtm_max = dtm_stats->dtm_max;
+			stats->dtm_sum = dtm_stats->dtm_sum;
 			if (dtm_stats->sample_size > 0) {
-				sum = (double)dtm_stats->dtm_sum.sum_int;
+				sum = (double)dtm_stats->dtm_sum;
 				stats->mean = sum / dtm_stats->sample_size;
 			}
 			stats->std_dev = d_tm_compute_standard_dev(
@@ -2153,6 +2652,12 @@ int d_tm_get_metadata(char **sh_desc, char **lng_desc, uint64_t *shmem_root,
 	if ((sh_desc == NULL) && (lng_desc == NULL))
 		return -DER_INVAL;
 
+	if (sh_desc != NULL)
+		*sh_desc = NULL;
+
+	if (lng_desc != NULL)
+		*lng_desc = NULL;
+
 	if (node == NULL) {
 		node = d_tm_find_metric(shmem_root, metric);
 		if (node == NULL)
@@ -2172,13 +2677,11 @@ int d_tm_get_metadata(char **sh_desc, char **lng_desc, uint64_t *shmem_root,
 		sh_desc_str = d_tm_conv_ptr(shmem_root,
 					    metric_data->dtm_sh_desc);
 		if ((sh_desc != NULL) && (sh_desc_str != NULL))
-			D_STRNDUP(*sh_desc, sh_desc_str ? sh_desc_str :
-				  "N/A", D_TM_MAX_SHORT_LEN);
+			D_STRNDUP(*sh_desc, sh_desc_str, D_TM_MAX_SHORT_LEN);
 		lng_desc_str = d_tm_conv_ptr(shmem_root,
 					     metric_data->dtm_lng_desc);
 		if ((lng_desc != NULL) && (lng_desc_str != NULL))
-			D_STRNDUP(*lng_desc, lng_desc_str ? lng_desc_str :
-				  "N/A", D_TM_MAX_LONG_LEN);
+			D_STRNDUP(*lng_desc, lng_desc_str, D_TM_MAX_LONG_LEN);
 		if (node->dtn_protect)
 			D_MUTEX_UNLOCK(&node->dtn_lock);
 	} else {
@@ -2231,28 +2734,28 @@ d_tm_list(struct d_tm_nodeList_t **head, uint64_t *shmem_root,
 
 	if ((head == NULL) || (node == NULL)) {
 		rc = -DER_INVAL;
-		goto failure;
+		goto out;
 	}
 
 	if (d_tm_type & node->dtn_type) {
 		rc = d_tm_add_node(node, head);
 		if (rc != DER_SUCCESS)
-			goto failure;
+			goto out;
 	}
 
 	node = node->dtn_child;
 	if (node == NULL)
-		goto success;
+		goto out;
 
 	node = d_tm_conv_ptr(shmem_root, node);
 	if (node == NULL) {
 		rc = -DER_INVAL;
-		goto failure;
+		goto out;
 	}
 
 	rc = d_tm_list(head, shmem_root, node, d_tm_type);
 	if (rc != DER_SUCCESS)
-		goto failure;
+		goto out;
 
 	node = node->dtn_sibling;
 	if (node == NULL)
@@ -2262,14 +2765,12 @@ d_tm_list(struct d_tm_nodeList_t **head, uint64_t *shmem_root,
 	while (node != NULL) {
 		rc = d_tm_list(head, shmem_root, node, d_tm_type);
 		if (rc != DER_SUCCESS)
-			goto failure;
+			goto out;
 		node = node->dtn_sibling;
 		node = d_tm_conv_ptr(shmem_root, node);
 	}
-success:
-	return rc;
 
-failure:
+out:
 	return rc;
 }
 

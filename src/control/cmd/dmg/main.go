@@ -164,6 +164,7 @@ type cliOptions struct {
 	Pool           PoolCmd    `command:"pool" alias:"p" description:"Perform tasks related to DAOS pools"`
 	Cont           ContCmd    `command:"cont" alias:"c" description:"Perform tasks related to DAOS containers"`
 	Version        versionCmd `command:"version" description:"Print dmg version"`
+	Telemetry      telemCmd   `command:"telemetry" description:"Perform telemetry operations"`
 	firmwareOption            // build with tag "firmware" to enable
 }
 
@@ -224,7 +225,7 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			jsonCmd.enableJsonOutput(opts.JSON, os.Stdout, &wroteJSON)
 			if opts.JSON {
 				// disable output on stdout other than JSON
-				log.SetLevel(logging.LogLevelError)
+				log.ClearLevel(logging.LogLevelInfo)
 			}
 		}
 

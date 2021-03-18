@@ -7,6 +7,7 @@ timeout: 60
 setup:
   start_agents: False
   start_servers: False
+  start_agents_once: False
   start_servers_once: False
   agent_manager_class: Orterun
   server_manager_class: Orterun
