@@ -148,7 +148,7 @@ String unit_packages() {
                            'fuse3-libs fuse3 ' +
                            'boost-devel ' +
                            'libisa-l-devel libpmem ' +
-                           'libpmemobj protobuf-c ' +
+                           'libpmemobj protobuf-c protobuf-c-devel ' +
                            'spdk-devel libfabric-devel ' +
                            'pmix numactl-devel ' +
                            'libipmctl-devel python36-pyxattr ' +
