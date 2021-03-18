@@ -39,7 +39,7 @@ class DmgCommandBase(YamlCommand):
         self.hostfile = FormattedParameter("-f {}")
         self.configpath = FormattedParameter("-o {}", default_yaml_file)
         self.insecure = FormattedParameter("-i", False)
-        self.debug = FormattedParameter("-d", False)
+        self.debug = FormattedParameter("-d", True)
         self.json = FormattedParameter("-j", False)
 
     @property
