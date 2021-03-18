@@ -23,7 +23,7 @@ BuildRequires: libpsm2-devel
 BuildRequires: gcc-c++
 BuildRequires: openmpi3-devel
 BuildRequires: hwloc-devel
-%if ("%{?scons_args}" == "BUILD_TYPE=dev COMPILER=covc")
+%if ("%{?compiler_args}" == "COMPILER=covc")
 BuildRequires: bullseye
 %endif
 %if (0%{?rhel} >= 7)
@@ -207,7 +207,7 @@ scons %{?_smp_mflags}      \
       USE_INSTALLED=all    \
       CONF_DIR=%{conf_dir} \
       PREFIX=%{?buildroot} \
-     %{?scons_args}
+      %{?scons_args}
 
 %install
 scons %{?_smp_mflags}                 \
@@ -219,11 +219,14 @@ scons %{?_smp_mflags}                 \
       USE_INSTALLED=all               \
       CONF_DIR=%{conf_dir}            \
       PREFIX=%{_prefix}               \
-      %{?scons_args}
+      %{?scons_args}                  \
+      %{?compiler_args}
 
 BUILDROOT="%{?buildroot}"
 PREFIX="%{?_prefix}"
+%if ("%{?compiler_args}" == "COMPILER=covc")
 cp test.cov %{?buildroot}/usr/lib/daos/TESTING/ftest/
+%endif
 mkdir -p %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{?buildroot}/%{_unitdir}

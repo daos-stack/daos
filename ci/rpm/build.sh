@@ -26,13 +26,16 @@ SCONS_ARGS="${SCONS_FAULTS_ARGS}"
 
 if $COVFN_DISABLED; then
   JOB_REPOS=""
+  EXTERNAL_COMPILER_OPT=""
 else
   COV_REPO="https://repo.dc.hpdd.intel.com/repository/bullseye-el-7-x86_64/"
   JOB_REPOS="JOB_REPOS=${COV_REPO}"
-  SCONS_ARGS="${SCONS_ARGS} COMPILER=covc"
+  COMPILER_ARGS="COMPILER=covc"
+  EXTERNAL_COMPILER_OPT=" --define \"compiler_args ${COMPILER_ARGS}\""
 fi
 
-EXTERNAL_RPM_BUILD_OPTIONS=" --define \"scons_args ${SCONS_ARGS}\""
+EXTERNAL_SCONS_OPT=" --define \"scons_args ${SCONS_ARGS}\""
+EXTERNAL_RPM_BUILD_OPTIONS="${EXTERNAL_SCONS_OPT}${EXTERNAL_COMPILER_OPT}"
 
 rm -rf "artifacts/${TARGET}/"
 mkdir -p "artifacts/${TARGET}/"
