@@ -1278,7 +1278,7 @@ dfs_sys_closedir(DIR *dirp)
 int
 dfs_sys_readdir(dfs_sys_t *dfs_sys, DIR *dirp, struct dirent **_dirent)
 {
-	int			rc;
+	int			rc = 0;
 	struct dfs_sys_dir	*sys_dir;
 
 	if (dfs_sys == NULL)
