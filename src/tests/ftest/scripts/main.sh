@@ -74,7 +74,7 @@ logs_dir = $logs_prefix/ftest/avocado/job-results
 data_dir = $logs_prefix/ftest/avocado/data
 
 [job.output]
-loglevel = "DEBUG"
+loglevel = DEBUG
 
 [runner.timeout]
 process_died = 60
