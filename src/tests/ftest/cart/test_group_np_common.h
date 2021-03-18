@@ -418,6 +418,9 @@ check_in(crt_group_t *remote_group, int rank, int tag)
 
 	rc = crt_req_send(rpc_req, client_cb_common, NULL);
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
+
+	if (buffer != NULL)
+		D_FREE(buffer);
 }
 
 static struct t_swim_status
