@@ -346,10 +346,8 @@ type metricsCmd struct {
 // metricsListCmd provides a list of metrics available from the requested DAOS servers.
 type metricsListCmd struct {
 	logCmd
-	cfgCmd
-	ctlInvokerCmd
-	hostListCmd
 	jsonOutputCmd
+	Host string `short:"s" long:"host" default:"localhost" description:"DAOS server host to query"`
 	Port uint32 `short:"p" long:"port" required:"true" description:"Telemetry port on the host"`
 }
 
@@ -357,7 +355,7 @@ type metricsListCmd struct {
 func (cmd *metricsListCmd) Execute(args []string) error {
 	req := new(control.MetricsListReq)
 	req.Port = cmd.Port
-	req.SetHostList(cmd.hostlist)
+	req.Host = cmd.Host
 
 	resp, err := control.MetricsList(context.Background(), req)
 
@@ -381,10 +379,8 @@ func (cmd *metricsListCmd) Execute(args []string) error {
 // metricsQueryCmd collects the requested metrics from the requested DAOS servers.
 type metricsQueryCmd struct {
 	logCmd
-	cfgCmd
-	ctlInvokerCmd
-	hostListCmd
 	jsonOutputCmd
+	Host    string `short:"s" long:"host" default:"localhost" description:"DAOS server host to query"`
 	Port    uint32 `short:"p" long:"port" required:"true" description:"Telemetry port on the host"`
 	Metrics string `short:"m" long:"metrics" default:"" description:"Comma-separated list of metric names"`
 }
@@ -393,7 +389,7 @@ type metricsQueryCmd struct {
 func (cmd *metricsQueryCmd) Execute(args []string) error {
 	req := new(control.MetricsQueryReq)
 	req.Port = cmd.Port
-	req.SetHostList(cmd.hostlist)
+	req.Host = cmd.Host
 	req.MetricNames = common.TokenizeCommaSeparatedString(cmd.Metrics)
 
 	resp, err := control.MetricsQuery(context.Background(), req)

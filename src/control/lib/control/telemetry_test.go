@@ -214,32 +214,19 @@ func TestControl_MetricsList(t *testing.T) {
 		"nil request": {
 			expErr: errors.New("nil"),
 		},
-		"no hosts in req": {
+		"no host": {
 			req:    &MetricsListReq{Port: 2525},
-			expErr: errors.New("exactly one host"),
-		},
-		"too many hosts in req": {
-			req: &MetricsListReq{
-				request: request{
-					HostList: []string{"host1", "host2"},
-				},
-				Port: 4111,
-			},
-			expErr: errors.New("exactly one host"),
+			expErr: errors.New("host must be specified"),
 		},
 		"no port": {
 			req: &MetricsListReq{
-				request: request{
-					HostList: []string{"host1"},
-				},
+				Host: "host1",
 			},
 			expErr: errors.New("port must be specified"),
 		},
 		"scrape failed": {
 			req: &MetricsListReq{
-				request: request{
-					HostList: []string{"host1"},
-				},
+				Host: "host1",
 				Port: 1066,
 			},
 			scrapeFn: func(context.Context, *url.URL, httpGetFn) ([]byte, error) {
@@ -249,9 +236,7 @@ func TestControl_MetricsList(t *testing.T) {
 		},
 		"no metrics": {
 			req: &MetricsListReq{
-				request: request{
-					HostList: []string{"host1"},
-				},
+				Host: "host1",
 				Port: 8888,
 			},
 			scrapeFn: func(context.Context, *url.URL, httpGetFn) ([]byte, error) {
@@ -263,9 +248,7 @@ func TestControl_MetricsList(t *testing.T) {
 		},
 		"success": {
 			req: &MetricsListReq{
-				request: request{
-					HostList: []string{"host1"},
-				},
+				Host: "host1",
 				Port: 7777,
 			},
 			scrapeFn: mockScrapeFnSuccess(t, testMetricFam...),
@@ -435,32 +418,19 @@ func TestControl_MetricsQuery(t *testing.T) {
 		"nil request": {
 			expErr: errors.New("nil"),
 		},
-		"no hosts in req": {
+		"no host": {
 			req:    &MetricsQueryReq{Port: 2525},
-			expErr: errors.New("exactly one host"),
-		},
-		"too many hosts in req": {
-			req: &MetricsQueryReq{
-				request: request{
-					HostList: []string{"host1", "host2"},
-				},
-				Port: 4111,
-			},
-			expErr: errors.New("exactly one host"),
+			expErr: errors.New("host must be specified"),
 		},
 		"no port": {
 			req: &MetricsQueryReq{
-				request: request{
-					HostList: []string{"host1"},
-				},
+				Host: "host1",
 			},
 			expErr: errors.New("port must be specified"),
 		},
 		"scrape failed": {
 			req: &MetricsQueryReq{
-				request: request{
-					HostList: []string{"host1"},
-				},
+				Host: "host1",
 				Port: 1066,
 			},
 			scrapeFn: func(context.Context, *url.URL, httpGetFn) ([]byte, error) {
@@ -470,9 +440,7 @@ func TestControl_MetricsQuery(t *testing.T) {
 		},
 		"no metrics": {
 			req: &MetricsQueryReq{
-				request: request{
-					HostList: []string{"host1"},
-				},
+				Host: "host1",
 				Port: 8888,
 			},
 			scrapeFn: func(context.Context, *url.URL, httpGetFn) ([]byte, error) {
@@ -484,9 +452,7 @@ func TestControl_MetricsQuery(t *testing.T) {
 		},
 		"all metrics": {
 			req: &MetricsQueryReq{
-				request: request{
-					HostList: []string{"host1"},
-				},
+				Host: "host1",
 				Port: 7777,
 			},
 			scrapeFn: mockScrapeFnSuccess(t, testMetricFam...),
@@ -547,9 +513,7 @@ func TestControl_MetricsQuery(t *testing.T) {
 		},
 		"selected metrics": {
 			req: &MetricsQueryReq{
-				request: request{
-					HostList: []string{"host1"},
-				},
+				Host:        "host1",
 				Port:        7777,
 				MetricNames: []string{"my_generic", "my_counter"},
 			},
@@ -577,9 +541,7 @@ func TestControl_MetricsQuery(t *testing.T) {
 		},
 		"invalid metric name": {
 			req: &MetricsQueryReq{
-				request: request{
-					HostList: []string{"host1"},
-				},
+				Host:        "host1",
 				Port:        7777,
 				MetricNames: []string{"my_generic", "fake"},
 			},

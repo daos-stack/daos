@@ -186,7 +186,7 @@ func (m QuantileMap) Keys() []float64 {
 type (
 	// MetricsListReq is used to request the list of metrics.
 	MetricsListReq struct {
-		request
+		Host string // Host to query for telemetry data
 		Port uint32 // Port to use for collecting telemetry data
 	}
 
@@ -202,15 +202,15 @@ func MetricsList(ctx context.Context, req *MetricsListReq) (*MetricsListResp, er
 		return nil, errors.New("nil request")
 	}
 
-	if err := checkHostList(req); err != nil {
-		return nil, err
+	if req.Host == "" {
+		return nil, errors.New("host must be specified")
 	}
 
 	if req.Port == 0 {
 		return nil, errors.New("port must be specified")
 	}
 
-	scraped, err := scrapeMetrics(ctx, req.HostList[0], req.Port)
+	scraped, err := scrapeMetrics(ctx, req.Host, req.Port)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to list metrics")
 	}
@@ -232,17 +232,10 @@ func MetricsList(ctx context.Context, req *MetricsListReq) (*MetricsListResp, er
 	return resp, nil
 }
 
-func checkHostList(req hostListGetter) error {
-	if len(req.getHostList()) != 1 {
-		return errors.New("exactly one host must be specified")
-	}
-	return nil
-}
-
 type (
 	// MetricsQueryReq is used to query telemetry values.
 	MetricsQueryReq struct {
-		request
+		Host        string   // host to query for telemetry data
 		Port        uint32   // port to use for collecting telemetry data
 		MetricNames []string // if empty, collects all metrics
 	}
@@ -259,15 +252,15 @@ func MetricsQuery(ctx context.Context, req *MetricsQueryReq) (*MetricsQueryResp,
 		return nil, errors.New("nil request")
 	}
 
-	if err := checkHostList(req); err != nil {
-		return nil, err
+	if req.Host == "" {
+		return nil, errors.New("host must be specified")
 	}
 
 	if req.Port == 0 {
 		return nil, errors.New("port must be specified")
 	}
 
-	scraped, err := scrapeMetrics(ctx, req.HostList[0], req.Port)
+	scraped, err := scrapeMetrics(ctx, req.Host, req.Port)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to query metrics")
 	}

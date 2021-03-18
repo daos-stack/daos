@@ -1,4 +1,4 @@
-.TH dmg 1 "17 March 2021"
+.TH dmg 1 "18 March 2021"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -614,6 +614,9 @@ List available metrics on a DAOS storage node
 \fBUsage\fP: metrics list [list-OPTIONS]
 .TP
 .TP
+\fB\fB\-s\fR, \fB\-\-host\fR <default: \fI"localhost"\fR>\fP
+DAOS server host to query
+.TP
 \fB\fB\-p\fR, \fB\-\-port\fR (\fIrequired\fR)\fP
 Telemetry port on the host
 .SS telemetry metrics query
@@ -621,6 +624,9 @@ Query metrics on a DAOS storage node
 
 \fBUsage\fP: metrics query [query-OPTIONS]
 .TP
+.TP
+\fB\fB\-\-host\fR <default: \fI"localhost"\fR>\fP
+DAOS server host to query
 .TP
 \fB\fB\-p\fR, \fB\-\-port\fR (\fIrequired\fR)\fP
 Telemetry port on the host
