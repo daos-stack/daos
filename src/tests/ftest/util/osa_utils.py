@@ -118,7 +118,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         """
         data = self.dmg_command.pool_query(self.pool.uuid)
         return int(data["response"]["version"])
- 
+
     def set_container(self, container):
         """Set the OSA utils container object.
         Args:
@@ -287,7 +287,7 @@ class OSAUtils(MdtestBase, IorTestBase):
             oclass (str): IOR object class
             test (list): IOR test sequence
             flags (str): IOR flags
-            single_cont_read (bool) : Always read from the 
+            single_cont_read (bool) : Always read from the
                                       1st container.
                                       Defaults to True.
             fail_on_warning (bool)  : Test terminates
@@ -324,7 +324,7 @@ class OSAUtils(MdtestBase, IorTestBase):
             oclass (str): IOR object class, container class.
             test (list): IOR test sequence
             flags (str): IOR flags
-            single_cont_read (bool) : Always read from the 
+            single_cont_read (bool) : Always read from the
                                       1st container.
                                       Defaults to True.
             fail_on_warning (bool)  : Test terminates
