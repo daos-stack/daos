@@ -39,6 +39,7 @@ container:
       record_qty: 1
     ten_records:
       record_qty: 10
+  debug: True
 testparams:
   ranks: !mux
     rank1:

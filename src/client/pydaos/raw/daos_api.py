@@ -626,7 +626,7 @@ class DaosObj(object):
         else:
             return self.__repr__()
 
-    def create(self, rank=None, objcls=None):
+    def create(self, rank=None, objcls=None, seed=None):
         """Create a DAOS object by generating an oid.
 
         Args:
@@ -634,20 +634,26 @@ class DaosObj(object):
             objcls (object, optional): the DAOS class for this object specified
                 as either one of the DAOS object class enumerations or an
                 enumeration name or value. Defaults to DaosObjClass.OC_RP_XSF.
+            seed (ctypes.c_uint, optional): seed for the dts_oid_gen function.
+                Defaults to None which will use seconds since epoch as the seed.
 
         Raises:
             DaosApiError: if the object class is invalid
 
         """
-        func = self.context.get_function('generate-oid')
-
         # Convert the object class into an valid object class enumeration value
         if objcls is None:
             obj_cls_int = DaosObjClass.OC_RP_XSF.value
         else:
             obj_cls_int = get_object_class(objcls).value
 
+        func = self.context.get_function('oid_gen')
+        if seed is None:
+            seed = ctypes.c_uint(int(time.time()))
         self.c_oid = daos_cref.DaosObjId()
+        self.c_oid.hi = func(seed)
+
+        func = self.context.get_function('generate-oid')
         ret = func(self.container.coh, ctypes.byref(self.c_oid), 0, obj_cls_int,
                    0, 0)
         if ret != 0:
@@ -894,11 +900,9 @@ class IORequest(object):
             # create a new object
             self.obj = DaosObj(context, container)
             self.obj.create(rank, objtype)
+            self.obj.open()
         else:
             self.obj = obj
-
-        if self.obj.obj_handle is None:
-            self.obj.open()
 
         self.io_type = ctypes.c_int(iotype)
 
@@ -2052,22 +2056,6 @@ class DaosContainer(object):
                                             cb_func,
                                             self))
             thread.start()
-
-    def get_object_id(self, seed=None):
-        """Get a new unique object ID.
-
-        Args:
-            seed (ctypes.c_uint, optional): seed for the dts_oid_gen function.
-                Defaults to None which will use seconds since epoch as the seed.
-
-        Returns:
-            DaosObjId: new object ID
-
-        """
-        func = self.context.get_function('oid_gen')
-        if seed is None:
-            seed = ctypes.c_uint(int(time.time()))
-        return func(seed)
 
 
 class DaosSnapshot(object):

@@ -32,14 +32,23 @@ class RebuildTests(TestWithServers):
         rank = self.params.get("rank", "/run/testparams/*")
         obj_class = self.params.get("object_class", "/run/testparams/*")
 
-        # Create the pools and confirm their status
+        # Collect server configuration information
         server_count = len(self.hostlist_servers)
+        engine_count = self.server_managers[0].get_config_value(
+            "engines_per_host")
+        engine_count = 1 if engine_count is None else int(engine_count)
+        target_count = int(self.server_managers[0].get_config_value("targets"))
+        self.log.info(
+            "Running with %s servers, %s engines per server, and %s targets "
+            "per engine", server_count, engine_count, target_count)
+
+        # Create the pools and confirm their status
         status = True
         for index in range(pool_quantity):
             self.pool[index].create()
             status &= self.pool[index].check_pool_info(
                 pi_nnodes=server_count,
-                pi_ntargets=server_count,               # DAOS-2799
+                pi_ntargets=server_count * engine_count * target_count,
                 pi_ndisabled=0
             )
             status &= self.pool[index].check_rebuild_status(
@@ -53,33 +62,10 @@ class RebuildTests(TestWithServers):
             self.container[index].create()
             self.container[index].write_objects(rank, obj_class)
 
-        # Debug
-        self.log.info("%s DEBUG START %s", "<" * 40, ">" * 40)
-        self.log.info("Object IDs:")
-        for index in range(pool_quantity):
-            self.log.info(
-                "Pool: %s - Container: %s",
-                self.pool[index].uuid, self.container[index].uuid)
-            for data in self.container[index].written_data:
-                self.log.info(
-                    "  c_oid: hi: %s, lo: %s",
-                    data.obj.c_oid.hi, data.obj.c_oid.lo)
-        self.log.info("%s DEBUG END %s", "<" * 40, ">" * 40)
-
         # Determine how many objects will need to be rebuilt
         for index in range(pool_quantity):
             target_rank_lists = self.container[index].get_target_rank_lists(
                 " prior to rebuild")
-
-            # Debug
-            self.log.info("%s DEBUG START %s", "<" * 40, ">" * 40)
-            self.log.info(
-                "TestContainer.get_target_rank_lists() output - "
-                "[DaosContainer.get_layout] - qty: %s:", len(target_rank_lists))
-            for target_rank_list in target_rank_lists:
-                self.log.info("  {}", target_rank_list)
-            self.log.info("%s DEBUG END %s", "<" * 40, ">" * 40)
-
             rebuild_qty = self.container[index].get_target_rank_count(
                 rank, target_rank_lists)
             rs_obj_nr.append(rebuild_qty)
@@ -116,8 +102,8 @@ class RebuildTests(TestWithServers):
         for index in range(pool_quantity):
             status &= self.pool[index].check_pool_info(
                 pi_nnodes=server_count,
-                pi_ntargets=server_count,              # DAOS-2799
-                pi_ndisabled=1
+                pi_ntargets=server_count * engine_count * target_count,
+                pi_ndisabled=target_count
             )
             status &= self.pool[index].check_rebuild_status(
                 rs_done=1, rs_obj_nr=rs_obj_nr[index],

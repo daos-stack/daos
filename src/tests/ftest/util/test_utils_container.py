@@ -19,16 +19,14 @@ from general_utils import get_random_string, DaosTestError
 class TestContainerData(object):
     """A class for storing data written to DaosContainer objects."""
 
-    def __init__(self, object_id, debug=False):
+    def __init__(self, debug=False):
         """Create a TestContainerData object.
 
         Args:
-            object_id (daos_cref.DaosObjId): object ID to use when writing
-                objects
             debug (bool, optional): if set log the write/read_record calls.
                 Defaults to False.
         """
-        self.obj = object_id
+        self.obj = None
         self.records = []
         self.log = getLogger(__name__)
         self.debug = debug
@@ -620,9 +618,7 @@ class TestContainer(TestDaosApiBase):
             " with object class {}".format(obj_class)
             if obj_class is not None else "")
         for _ in range(self.object_qty.value):
-            self.written_data.append(
-                TestContainerData(
-                    self.container.get_object_id(), self.debug.value))
+            self.written_data.append(TestContainerData(self.debug.value))
             self.written_data[-1].write_object(
                 self, self.record_qty.value, self.akey_size.value,
                 self.dkey_size.value, self.data_size.value, rank, obj_class,
@@ -675,9 +671,7 @@ class TestContainer(TestDaosApiBase):
         total_bytes_written = 0
         finish_time = time() + duration
         while time() < finish_time:
-            self.written_data.append(
-                TestContainerData(
-                    self.container.get_object_id(), self.debug.value))
+            self.written_data.append(TestContainerData(self.debug.value))
             self.written_data[-1].write_object(
                 self, 1, self.akey_size.value, self.dkey_size.value,
                 self.data_size.value, rank, obj_class)
