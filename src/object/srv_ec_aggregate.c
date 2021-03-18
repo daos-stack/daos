@@ -1227,7 +1227,7 @@ agg_peer_update_ult(void *arg)
 			    DAOS_OBJ_RPC_EC_AGGREGATE, &rpc);
 	if (rc) {
 		D_ERROR("obj_req_create failed: "DF_RC"\n", DP_RC(rc));
-		goto out_rpc;
+		goto out;
 	}
 	D_ASSERT(rpc != NULL);
 	ec_agg_in = crt_req_get(rpc);
@@ -1329,10 +1329,9 @@ out_rpc:
 		D_FREE(ec_agg_in->ea_remove_recxs.ca_arrays);
 		D_FREE(ec_agg_in->ea_remove_eps.ca_arrays);
 	}
-out_rpc:
+out:
 	if (rpc)
 		crt_req_decref(rpc);
-out:
 	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
 }
 
