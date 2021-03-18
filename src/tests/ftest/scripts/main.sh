@@ -174,6 +174,15 @@ if grep "TIMEOUT_TEST_INTERRUPTED" \
 wq
 EOF
 fi
+# apply fix for https://jira.hpdd.intel.com/browse/DAOS-6756 for avocado 69.x -
+# fixed somewhere before 82.0
+if grep "TIMEOUT_PROCESS_DIED" \
+    "$pydir"/avocado/core/runner.py; then
+        sudo ed <<EOF "$pydir"/avocado/core/runner.py
+/TIMEOUT_PROCESS_DIED/s/[0-9]*$/60/
+wq
+EOF
+fi
 # apply fix for https://github.com/avocado-framework/avocado/pull/2922 - fixed
 # somewhere before 69.2
 if grep "testsuite.setAttribute('name', 'avocado')" \

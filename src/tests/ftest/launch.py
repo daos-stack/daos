@@ -937,19 +937,21 @@ def run_tests(test_files, tag_filter, args):
             # Move any avocado crash files into job-results/latest/crashes
             data_dir = avocado_logs_dir.replace("job-results", "data")
             crash_dir = os.path.join(data_dir, "crashes")
-            crash_files = [
-                os.path.join(crash_dir, crash_file)
-                for crash_file in os.listdir(crash_dir)
-                if os.path.isfile(os.path.join(crash_dir, crash_file))]
-            if crash_files:
-                latest_dir = os.path.join(avocado_logs_dir, "latest")
-                latest_crash_dir = os.path.join(latest_dir, "crashes")
-                run_command(["mkdir", latest_crash_dir])
-                for crash_file in crash_files:
-                    run_command(["mv", crash_file, latest_crash_dir])
-            else:
-                print("No avocado crash files found in {}".format(crash_dir))
-                run_command(["ls", "-al", crash_dir])
+            if os.path.isdir(crash_dir):
+                crash_files = [
+                    os.path.join(crash_dir, crash_file)
+                    for crash_file in os.listdir(crash_dir)
+                    if os.path.isfile(os.path.join(crash_dir, crash_file))]
+                if crash_files:
+                    latest_dir = os.path.join(avocado_logs_dir, "latest")
+                    latest_crash_dir = os.path.join(latest_dir, "crashes")
+                    run_command(["mkdir", latest_crash_dir])
+                    for crash_file in crash_files:
+                        run_command(["mv", crash_file, latest_crash_dir])
+                else:
+                    print(
+                        "No avocado crash files found in {}".format(crash_dir))
+                    run_command(["ls", "-al", crash_dir])
         return_code |= run_return_code
         return_code |= stop_daos_agent_services(test_file["py"], args)
         return_code |= stop_daos_server_service(test_file["py"], args)

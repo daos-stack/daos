@@ -78,7 +78,7 @@ class PoolDestroyWithIO(IorTestBase):
         # self.pool.wait_for_rebuild(False, interval=1)
 
         self.pool.set_query_data()
-        rebuild_status = self.pool.query_data["rebuild"]["status"]
+        rebuild_status = self.pool.query_data["response"]["rebuild"]["state"]
         self.log.info("Pool %s rebuild status:%s", self.pool.uuid,
                       rebuild_status)
 

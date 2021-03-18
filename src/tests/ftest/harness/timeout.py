@@ -59,6 +59,6 @@ class HarnessTimeoutTest(Test):
 
         :avocado: tags=all
         :avocado: tags=hw,small,medium,ib2,large
-        :avocado: tags=harness,harness_timeout_test,test_timeout
+        :avocado: tags=harness,harness_timeout_test,test_timeout_hw
         """
         self.test_timeout()

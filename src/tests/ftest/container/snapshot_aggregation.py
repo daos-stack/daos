@@ -30,7 +30,7 @@ class SnapshotAggregation(IorTestBase):
         """Append the free space list with the current pool capacities."""
         for index, name in enumerate(("scm", "nvme")):
             self.free_space[name].append({
-                "dmg": self.pool.query_data[name]["free"],
+                "dmg": self.pool.query_data["response"][name]["free"],
                 "api": int(self.pool.info.pi_space.ps_space.s_free[index])
             })
 
