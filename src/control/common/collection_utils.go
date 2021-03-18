@@ -171,7 +171,7 @@ func PercentageString(part, total uint64) string {
 		int((float64(part)/float64(total))*float64(100)))
 }
 
-// TokenizeCommandSeparatedString splits the input string on comma boundaries,
+// TokenizeCommaSeparatedString splits the input string on comma boundaries,
 // and discards any empty strings in the result.
 func TokenizeCommaSeparatedString(str string) []string {
 	tokens := strings.Split(str, ",")

@@ -101,7 +101,6 @@ func sanitizeMetricName(in string) string {
 		case r >= 'a' && r <= 'z': // lowercase letters
 		case r >= 'A' && r <= 'Z': // uppercase letters
 		case unicode.IsDigit(r): // digits
-		case r == ':':
 		default: // sanitize any other character
 			return '_'
 		}
@@ -114,10 +113,13 @@ func fixPath(in string) (labels labelMap, name string) {
 	name = sanitizeMetricName(in)
 
 	labels = make(labelMap)
-	ID_re := regexp.MustCompile(`ID\:?_+(\d+)_?`)
-	io_re := regexp.MustCompile(`io_+(\d+)_?`)
 
+	// Clean up metric names and parse out useful labels
+
+	ID_re := regexp.MustCompile(`ID_+(\d+)_?`)
 	name = ID_re.ReplaceAllString(name, "")
+
+	io_re := regexp.MustCompile(`io_+(\d+)_?`)
 	io_matches := io_re.FindStringSubmatch(name)
 	if len(io_matches) > 0 {
 		labels["target"] = io_matches[1]
@@ -126,6 +128,19 @@ func fixPath(in string) (labels labelMap, name string) {
 			replacement += "_"
 		}
 		name = io_re.ReplaceAllString(name, replacement)
+	}
+
+	net_re := regexp.MustCompile(`net_+(\d+)_+(\d+)_?`)
+	net_matches := net_re.FindStringSubmatch(name)
+	if len(net_matches) > 0 {
+		labels["rank"] = net_matches[1]
+		labels["context"] = net_matches[2]
+
+		replacement := "net"
+		if strings.HasSuffix(net_matches[0], "_") {
+			replacement += "_"
+		}
+		name = net_re.ReplaceAllString(name, replacement)
 	}
 
 	return

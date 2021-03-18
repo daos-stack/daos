@@ -348,7 +348,7 @@ type metricsListCmd struct {
 	logCmd
 	jsonOutputCmd
 	Host string `short:"s" long:"host" default:"localhost" description:"DAOS server host to query"`
-	Port uint32 `short:"p" long:"port" required:"true" description:"Telemetry port on the host"`
+	Port uint32 `short:"p" long:"port" default:"9191" description:"Telemetry port on the host"`
 }
 
 // Execute runs the command to list metrics from the DAOS storage nodes.
@@ -357,6 +357,9 @@ func (cmd *metricsListCmd) Execute(args []string) error {
 	req.Port = cmd.Port
 	req.Host = cmd.Host
 
+	if !cmd.shouldEmitJSON {
+		cmd.log.Info(getConnectingMsg(req.Host, req.Port))
+	}
 	resp, err := control.MetricsList(context.Background(), req)
 
 	if cmd.shouldEmitJSON {
@@ -376,12 +379,16 @@ func (cmd *metricsListCmd) Execute(args []string) error {
 	return nil
 }
 
+func getConnectingMsg(host string, port uint32) string {
+	return fmt.Sprintf("connecting to %s:%d...", host, port)
+}
+
 // metricsQueryCmd collects the requested metrics from the requested DAOS servers.
 type metricsQueryCmd struct {
 	logCmd
 	jsonOutputCmd
 	Host    string `short:"s" long:"host" default:"localhost" description:"DAOS server host to query"`
-	Port    uint32 `short:"p" long:"port" required:"true" description:"Telemetry port on the host"`
+	Port    uint32 `short:"p" long:"port" default:"9191" description:"Telemetry port on the host"`
 	Metrics string `short:"m" long:"metrics" default:"" description:"Comma-separated list of metric names"`
 }
 
@@ -392,6 +399,9 @@ func (cmd *metricsQueryCmd) Execute(args []string) error {
 	req.Host = cmd.Host
 	req.MetricNames = common.TokenizeCommaSeparatedString(cmd.Metrics)
 
+	if !cmd.shouldEmitJSON {
+		cmd.log.Info(getConnectingMsg(req.Host, req.Port))
+	}
 	resp, err := control.MetricsQuery(context.Background(), req)
 
 	if cmd.shouldEmitJSON {
