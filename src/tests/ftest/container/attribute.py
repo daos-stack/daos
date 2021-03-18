@@ -93,7 +93,8 @@ class ContainerAttributeTest(TestWithServers):
 
         Test description: Test large randomly created container attribute.
 
-        :avocado: tags=container,container_attr,attribute,large_conattribute
+        :avocado: tags=all,full_regression,container,container_attr
+        :avocado: tags=attribute,large_contattribute
         """
         self.add_pool()
         self.add_container(self.pool)
@@ -117,7 +118,7 @@ class ContainerAttributeTest(TestWithServers):
     def test_container_attribute(self):
         """
         Test basic container attribute tests.
-        :avocado: tags=all,tiny,full_regression,container,sync_conattribute
+        :avocado: tags=all,tiny,daily_regression,container,sync_contattribute
         """
         self.add_pool()
         self.add_container(self.pool)
@@ -170,7 +171,7 @@ class ContainerAttributeTest(TestWithServers):
         """
         Test basic container attribute tests.
 
-        :avocado: tags=all,small,full_regression,container,async_conattribute
+        :avocado: tags=all,small,daily_regression,container,async_contattribute
         """
         global GLOB_SIGNAL
         global GLOB_RC

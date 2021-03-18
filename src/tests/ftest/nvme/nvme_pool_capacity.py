@@ -112,6 +112,8 @@ class NvmePoolCapacity(TestWithServers):
                 nvme_size (int): NVME size used in the testing
             Returns:
                 None
+        :avocado: tags=all,hw,medium,nvme,full_regression
+        :avocado: tags=nvme_pool_capacity,create_delete
         """
         pool = {}
         cont = {}
@@ -154,6 +156,8 @@ class NvmePoolCapacity(TestWithServers):
                num_pool (int): Total pools for running a test.
             Returns:
                None
+        :avocado: tags=all,hw,medium,nvme,full_regression
+        :avocado: tags=nvme_pool_capacity,nvme_pool_capacity_run
         """
         num_jobs = self.params.get("no_parallel_job", '/run/ior/*')
         # Create a pool

@@ -29,7 +29,7 @@ class MdtestLarge(MdtestBase):
             write bytes: 0 | 1K | 32K
             read bytes: 0 | 1K | 32K
             depth of hierarchical directory structure: 0 | 100
-        :avocado: tags=all,hw,perf,nvme,mdtest,mdtestlarge
+        :avocado: tags=all,full_regression,hw,perf,nvme,mdtest,mdtestlarge
         """
         mdtest_flags = self.params.get("flags", "/run/mdtest/*")
         self.mdtest_cmd.flags.update(mdtest_flags)

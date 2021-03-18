@@ -30,6 +30,6 @@ class DaosPerf(DaosPerfBase):
             daos_perf using single value type for 'LARGE' and 'R2s' object
             class. Run this config with multiple server/client configuration.
 
-        :avocado: tags=daosperf,daosperfsmall
+        :avocado: tags=all,full_regression,daosperf,daosperfsmall
         """
         self.run_daos_perf()

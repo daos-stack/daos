@@ -88,7 +88,7 @@ class LargeFileCount(MdtestBase, IorTestBase):
         Use Cases:
             Run IOR for 5 mints with DFS and POSIX
             Run MDTEST to create 25K files with DFS and POSIX
-        :avocado: tags=all,daosio,hw,large,rc,largefilecount_rc
+        :avocado: tags=all,full_regression,daosio,hw,large,rc,largefilecount_rc
         """
         apis = self.params.get("api", "/run/largefilecount/*")
         num_of_files_dirs_rc = self.params.get("num_of_files_dirs_rc",

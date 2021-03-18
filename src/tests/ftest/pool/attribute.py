@@ -106,7 +106,8 @@ class PoolAttributeTest(TestWithServers):
 
         Test description: Test large randomly created pool attribute.
 
-        :avocado: tags=regression,pool,pool_attr,attribute,large_poolattribute
+        :avocado: tags=all,full_regression,pool,pool_attr
+        :avocado: tags=attribute,large_poolattribute
         """
         self.add_pool()
         attr_dict = self.create_data_set()
@@ -132,7 +133,7 @@ class PoolAttributeTest(TestWithServers):
 
         Test description: Test basic pool attribute tests (sync).
 
-        :avocado: tags=all,pool,daily_regression,tiny,sync_poolattribute
+        :avocado: tags=all,pool,full_regression,tiny,sync_poolattribute
         """
         self.add_pool()
         expected_for_param = []

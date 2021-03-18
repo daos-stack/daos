@@ -27,6 +27,6 @@ class DaosPerfLarge(DaosPerfBase):
           Run the combination of above test cases with large number of clients
             on four servers.
 
-        :avocado: tags=daosperf,daosperflarge
+        :avocado: tags=all,full_regression,daosperf,daosperflarge
         """
         self.run_daos_perf()

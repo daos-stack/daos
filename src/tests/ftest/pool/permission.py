@@ -37,7 +37,7 @@ class Permission(TestWithServers):
         Test Description:
             Test pool connections with specific permissions.
 
-        :avocado: tags=pool,permission,connectpermission
+        :avocado: tags=all,daily_regression,pool,permission,connectpermission
         """
         # parameter used in pool create
         createmode = self.params.get("mode", '/run/createtests/createmode/*/')
@@ -88,7 +88,7 @@ class Permission(TestWithServers):
             Test whether file modification happens as expected under different
             permission levels.
 
-        :avocado: tags=pool,permission,filemodification
+        :avocado: tags=all,daily_regression,pool,permission,filemodification
         """
         # parameters used in pool create
         createmode = self.params.get("mode", '/run/createtests/createmode/*/')

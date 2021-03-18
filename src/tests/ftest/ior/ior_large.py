@@ -24,7 +24,7 @@ class IorLarge(IorTestBase):
             Different combinations of 1/64/128 Clients and
             1K/4K/32K/128K/512K/1M transfersize.
 
-        :avocado: tags=all,daosio,iorlarge_sequential,iorlarge
+        :avocado: tags=all,full_regression,daosio,iorlarge_sequential,iorlarge
         """
         ior_flags = self.params.get("F", "/run/ior/iorflags/sequential/")
         self.ior_cmd.flags.update(ior_flags)
@@ -40,7 +40,7 @@ class IorLarge(IorTestBase):
             Different combinations of 1/64/128 Clients and
             1K/4K/32K/128K/512K/1M transfersize.
 
-        :avocado: tags=all,daosio,iorlarge_random,iorlarge
+        :avocado: tags=all,full_regression,daosio,iorlarge_random,iorlarge
         """
         ior_flags = self.params.get("F", "/run/ior/iorflags/random/")
         self.ior_cmd.flags.update(ior_flags)
@@ -56,7 +56,7 @@ class IorLarge(IorTestBase):
             Different combinations of 1/64/128 Clients and
             1K/4K/32K/128K/512K/1M transfersize.
 
-        :avocado: tags=all,daosio,iorlarge_fpp,iorlarge
+        :avocado: tags=all,full_regression,daosio,iorlarge_fpp,iorlarge
         """
         ior_flags = self.params.get("F", "/run/ior/iorflags/fpp/")
         self.ior_cmd.flags.update(ior_flags)
