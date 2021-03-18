@@ -94,7 +94,7 @@ funny_hats    Counter Hilarious headwear
 				WriteErr: tc.writeErr,
 			}
 
-			err := PrintMetricsListResp(tc.resp, writer)
+			err := PrintMetricsListResp(writer, tc.resp)
 
 			common.CmpErr(t, tc.expErr, err)
 			common.AssertEqual(t, strings.TrimLeft(tc.expOutput, "\n"), writer.GetWritten(), "")
@@ -133,6 +133,7 @@ func TestPretty_PrintMetricsQueryResp(t *testing.T) {
 - Metric Set: test_metric_1 (Type: Unknown)
   Test Metric
     No metrics found
+
 `,
 		},
 		"untyped": {
@@ -172,6 +173,7 @@ func TestPretty_PrintMetricsQueryResp(t *testing.T) {
     Generic (foo=bar)                2.25  
     Generic (bearer=frodo, ring=one) 5     
     Generic N/A                      125   
+
 `,
 		},
 		"counter type": {
@@ -211,6 +213,7 @@ func TestPretty_PrintMetricsQueryResp(t *testing.T) {
     Counter (foo=bar)                2.25  
     Counter (bearer=frodo, ring=one) 5     
     Counter N/A                      125   
+
 `,
 		},
 		"gauge type": {
@@ -250,6 +253,7 @@ func TestPretty_PrintMetricsQueryResp(t *testing.T) {
     Gauge  (foo=bar)                2.25  
     Gauge  (bearer=frodo, ring=one) 5     
     Gauge  N/A                      125   
+
 `,
 		},
 		"summary type": {
@@ -295,6 +299,7 @@ func TestPretty_PrintMetricsQueryResp(t *testing.T) {
     Sample Count   N/A       102     
     Sample Sum     N/A       19.84   
     Quantile(0.25) N/A       4       
+
 `,
 		},
 		"histogram type": {
@@ -344,6 +349,7 @@ func TestPretty_PrintMetricsQueryResp(t *testing.T) {
     Bucket(1) Cumulative Count (foo=bar) 1       
     Sample Count               N/A       22      
     Sample Sum                 N/A       102     
+
 `,
 		},
 		"multiple sets": {
@@ -407,6 +413,7 @@ func TestPretty_PrintMetricsQueryResp(t *testing.T) {
     Sample Sum     N/A    6094.27 
     Quantile(0.25) N/A    2034    
     Quantile(0.5)  N/A    33.333  
+
 `,
 		},
 		"write failure": {
@@ -426,7 +433,7 @@ func TestPretty_PrintMetricsQueryResp(t *testing.T) {
 				WriteErr: tc.writeErr,
 			}
 
-			err := PrintMetricsQueryResp(tc.resp, writer)
+			err := PrintMetricsQueryResp(writer, tc.resp)
 
 			common.CmpErr(t, tc.expErr, err)
 			common.AssertEqual(t, strings.TrimLeft(tc.expOutput, "\n"), writer.GetWritten(), "")

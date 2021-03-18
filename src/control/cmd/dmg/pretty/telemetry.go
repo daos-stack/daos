@@ -16,9 +16,9 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
 
-// PrintMetricsListResp formats the MetricsListResp for human-readable output,
-// and writes it to the io.Writer.
-func PrintMetricsListResp(resp *control.MetricsListResp, out io.Writer) error {
+// PrintMetricsListResp formats the MetricsListResp as a table of available
+// metric sets with the name, type, and description for each.
+func PrintMetricsListResp(out io.Writer, resp *control.MetricsListResp) error {
 	if resp == nil {
 		return errors.New("nil response")
 	}
@@ -50,9 +50,10 @@ func PrintMetricsListResp(resp *control.MetricsListResp, out io.Writer) error {
 	return nil
 }
 
-// PrintMetricsQueryResp formats a MetricsQueryResp for human-readable output,
-// and writes it to the io.Writer.
-func PrintMetricsQueryResp(resp *control.MetricsQueryResp, out io.Writer) error {
+// PrintMetricsQueryResp formats a MetricsQueryResp as a list of metric sets.
+// For each metric set, it includes a table of metrics in the set, detailing the
+// identifying information and value for each.
+func PrintMetricsQueryResp(out io.Writer, resp *control.MetricsQueryResp) error {
 	if resp == nil {
 		return errors.New("nil response")
 	}
@@ -61,10 +62,7 @@ func PrintMetricsQueryResp(resp *control.MetricsQueryResp, out io.Writer) error 
 		return nil
 	}
 
-	for i, set := range resp.MetricSets {
-		if i > 0 { // a little space between metric sets
-			fmt.Fprintf(out, "\n")
-		}
+	for _, set := range resp.MetricSets {
 		fmt.Fprintf(out, "- Metric Set: %s (Type: %s)\n", set.Name, set.Type.String())
 
 		dw := txtfmt.NewIndentWriter(out)
@@ -73,6 +71,7 @@ func PrintMetricsQueryResp(resp *control.MetricsQueryResp, out io.Writer) error 
 		iw := txtfmt.NewIndentWriter(dw)
 		printMetrics(iw, set.Metrics, set.Type)
 
+		fmt.Fprintf(out, "\n")
 	}
 	return nil
 }
@@ -92,52 +91,47 @@ func printMetrics(out io.Writer, metrics []control.Metric, metricType control.Me
 	table := []txtfmt.TableRow{}
 
 	for _, m := range metrics {
-		switch m.(type) {
+		switch realM := m.(type) {
 		case *control.SimpleMetric:
-			sm, _ := m.(*control.SimpleMetric)
-			labels := metricLabelsToStr(sm.Labels)
+			labels := metricLabelsToStr(realM.Labels)
 			name := metricType.String()
 			table = append(table, txtfmt.TableRow{
 				nameTitle:  name,
 				labelTitle: labels,
-				valTitle:   fmt.Sprintf("%g", sm.Value),
+				valTitle:   fmt.Sprintf("%g", realM.Value),
 			})
 		case *control.SummaryMetric:
-			sm, _ := m.(*control.SummaryMetric)
-
-			labels := metricLabelsToStr(sm.Labels)
+			labels := metricLabelsToStr(realM.Labels)
 			table = append(table, txtfmt.TableRow{
 				nameTitle:  "Sample Count",
 				labelTitle: labels,
-				valTitle:   fmt.Sprintf("%d", sm.SampleCount),
+				valTitle:   fmt.Sprintf("%d", realM.SampleCount),
 			})
 			table = append(table, txtfmt.TableRow{
 				nameTitle:  "Sample Sum",
 				labelTitle: labels,
-				valTitle:   fmt.Sprintf("%g", sm.SampleSum),
+				valTitle:   fmt.Sprintf("%g", realM.SampleSum),
 			})
-			for _, quant := range sm.Quantiles.Keys() {
+			for _, quant := range realM.Quantiles.Keys() {
 				table = append(table, txtfmt.TableRow{
 					nameTitle:  fmt.Sprintf("Quantile(%g)", quant),
 					labelTitle: labels,
-					valTitle:   fmt.Sprintf("%g", sm.Quantiles[quant]),
+					valTitle:   fmt.Sprintf("%g", realM.Quantiles[quant]),
 				})
 			}
 		case *control.HistogramMetric:
-			hm, _ := m.(*control.HistogramMetric)
-
-			labels := metricLabelsToStr(hm.Labels)
+			labels := metricLabelsToStr(realM.Labels)
 			table = append(table, txtfmt.TableRow{
 				nameTitle:  "Sample Count",
 				labelTitle: labels,
-				valTitle:   fmt.Sprintf("%d", hm.SampleCount),
+				valTitle:   fmt.Sprintf("%d", realM.SampleCount),
 			})
 			table = append(table, txtfmt.TableRow{
 				nameTitle:  "Sample Sum",
 				labelTitle: labels,
-				valTitle:   fmt.Sprintf("%g", hm.SampleSum),
+				valTitle:   fmt.Sprintf("%g", realM.SampleSum),
 			})
-			for i, bucket := range hm.Buckets {
+			for i, bucket := range realM.Buckets {
 				name := fmt.Sprintf("Bucket(%d)", i)
 				table = append(table, txtfmt.TableRow{
 					nameTitle:  fmt.Sprintf("%s Upper Bound", name),
@@ -150,7 +144,6 @@ func printMetrics(out io.Writer, metrics []control.Metric, metricType control.Me
 					valTitle:   fmt.Sprintf("%d", bucket.CumulativeCount),
 				})
 			}
-		default:
 		}
 	}
 

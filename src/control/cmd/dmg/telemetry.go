@@ -370,7 +370,7 @@ func (cmd *metricsListCmd) Execute(args []string) error {
 	}
 
 	var b strings.Builder
-	err = pretty.PrintMetricsListResp(resp, &b)
+	err = pretty.PrintMetricsListResp(&b, resp)
 	if err != nil {
 		return err
 	}
@@ -407,7 +407,7 @@ func (cmd *metricsQueryCmd) Execute(args []string) error {
 	}
 
 	var b strings.Builder
-	err = pretty.PrintMetricsQueryResp(resp, &b)
+	err = pretty.PrintMetricsQueryResp(&b, resp)
 	if err != nil {
 		return err
 	}
