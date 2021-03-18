@@ -875,6 +875,7 @@ def run_tests(test_files, tag_filter, args):
 
     # Create the base avocado run command
     version = float(get_output(["avocado", "-v"]).split()[-1])
+    print("Running with Avocado version {}".format(version))
     command_list = ["avocado"]
     if not args.sparse and version >= 82.0:
         command_list.append("--show=test")
@@ -931,21 +932,24 @@ def run_tests(test_files, tag_filter, args):
         test_command_list = list(command_list)
         test_command_list.extend([
             "--mux-yaml", test_file["yaml"], "--", test_file["py"]])
-        # return_code |= time_command(test_command_list)
         run_return_code = time_command(test_command_list)
         if run_return_code != 0:
             # Move any avocado crash files into job-results/latest/crashes
             data_dir = avocado_logs_dir.replace("job-results", "data")
             crash_dir = os.path.join(data_dir, "crashes")
-            if os.path.isdir(crash_dir):
+            crash_files = [
+                os.path.join(crash_dir, crash_file)
+                for crash_file in os.listdir(crash_dir)
+                if os.path.isfile(os.path.join(crash_dir, crash_file))]
+            if crash_files:
                 latest_dir = os.path.join(avocado_logs_dir, "latest")
                 latest_crash_dir = os.path.join(latest_dir, "crashes")
                 run_command(["mkdir", latest_crash_dir])
-                run_command(["ls", "-la", latest_crash_dir])
-                for crash_file in os.listdir(crash_dir):
-                    full_crash_file = os.path.join(crash_dir, crash_file)
-                    if os.path.isfile(full_crash_file):
-                        run_command(["mv", full_crash_file, latest_crash_dir])
+                for crash_file in crash_files:
+                    run_command(["mv", crash_file, latest_crash_dir])
+            else:
+                print("No avocado crash files found in {}".format(crash_dir))
+                run_command(["ls", "-al", crash_dir])
         return_code |= run_return_code
         return_code |= stop_daos_agent_services(test_file["py"], args)
         return_code |= stop_daos_server_service(test_file["py"], args)
