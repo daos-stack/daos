@@ -943,9 +943,9 @@ def run_tests(test_files, tag_filter, args):
                 run_command(["mkdir", latest_crash_dir])
                 run_command(["ls", "-la", latest_crash_dir])
                 for crash_file in os.listdir(crash_dir):
-                    run_command(["cat", crash_file])
-                    if os.path.isfile(crash_file):
-                        run_command(["mv", crash_file, latest_crash_dir])
+                    full_crash_file = os.path.join(crash_dir, crash_file)
+                    if os.path.isfile(full_crash_file):
+                        run_command(["mv", full_crash_file, latest_crash_dir])
         return_code |= run_return_code
         return_code |= stop_daos_agent_services(test_file["py"], args)
         return_code |= stop_daos_server_service(test_file["py"], args)
