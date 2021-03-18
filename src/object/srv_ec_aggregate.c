@@ -1329,9 +1329,8 @@ out_rpc:
 		D_FREE(ec_agg_in->ea_remove_recxs.ca_arrays);
 		D_FREE(ec_agg_in->ea_remove_eps.ca_arrays);
 	}
+	crt_req_decref(rpc);
 out:
-	if (rpc)
-		crt_req_decref(rpc);
 	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
 }
 
