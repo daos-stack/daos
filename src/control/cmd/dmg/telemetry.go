@@ -394,7 +394,7 @@ func (cmd *metricsQueryCmd) Execute(args []string) error {
 	req := new(control.MetricsQueryReq)
 	req.Port = cmd.Port
 	req.SetHostList(cmd.hostlist)
-	req.MetricNames = strings.Split(cmd.Metrics, ",")
+	req.MetricNames = common.TokenizeCommaSeparatedString(cmd.Metrics)
 
 	resp, err := control.MetricsQuery(context.Background(), req)
 
