@@ -2912,7 +2912,7 @@ d_tm_get_shared_memory(int srv_idx)
 }
 
 /**
- * Allocates memory from within the shared memory pool with 16-bit alignment
+ * Allocates memory from within the shared memory pool with 64-bit alignment
  * Clears the allocated buffer.
  *
  * param[in]	length	Size in bytes of the region within the shared memory
@@ -2924,9 +2924,9 @@ d_tm_get_shared_memory(int srv_idx)
 void *
 d_tm_shmalloc(int length)
 {
-	if (length % sizeof(uint16_t) != 0) {
-		length += sizeof(uint16_t);
-		length &= ~(sizeof(uint16_t) - 1);
+	if (length % sizeof(uint64_t) != 0) {
+		length += sizeof(uint64_t);
+		length &= ~(sizeof(uint64_t) - 1);
 	}
 
 	if (d_tm_shmem_idx) {
