@@ -958,7 +958,7 @@ dfs_sys_open(dfs_sys_t *dfs_sys, const char *path, mode_t mode, int flags,
 
 	/* If this is root, just dup the handle */
 	if (sys_path.name == NULL) {
-		if (flags & (O_CREAT || O_EXCL))
+		if (flags & (O_CREAT | O_EXCL))
 			D_GOTO(out_free_path, rc = EEXIST);
 		if (!S_ISDIR(mode))
 			D_GOTO(out_free_path, rc = ENOTDIR);
