@@ -137,6 +137,9 @@ struct vos_agg_param {
 	daos_epoch_t		 ap_max_epoch;
 	/* EV tree: Merge window for evtree aggregation */
 	struct agg_merge_window	 ap_window;
+	bool			 ap_skip_akey;
+	bool			 ap_skip_dkey;
+	bool			 ap_skip_obj;
 };
 
 static inline void
@@ -380,12 +383,14 @@ vos_agg_sv(daos_handle_t ih, vos_iter_entry_t *entry,
 			break;
 		case DTX_ST_PREPARED:
 			/*
-			 * Highest epoch is uncommitted, skip it and continue
-			 * checking on next lower epoch.
+			 * Highest epoch is uncommitted.  Since it may be
+			 * punched by a key or object and that entity may not
+			 * know about the update, we need to abort processing
+			 * of the current single value for now.
 			 */
-			D_DEBUG(DB_EPC, "Skip uncommitted at epoch:"DF_X64"\n",
-				entry->ie_epoch);
-			break;
+			D_DEBUG(DB_EPC, "Hit uncommitted single value at epoch:"
+				DF_X64"\n", entry->ie_epoch);
+			return -DER_TX_BUSY;
 		case DTX_ST_ABORTED:
 			/*
 			 * Highest epoch is aborted, delete it and continue
@@ -1586,7 +1591,14 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 		rc = delete_evt_entry(oiter, entry, acts, "aborted");
 		if (rc)
 			return rc;
-		return -DER_TX_BUSY;
+		/** We just need an alternative error code.  Use -DER_TX_RESTART
+		 *  here to indicate that we hit an aborted entry and need to
+		 *  restart the aggregation of the evtree.  Using -DER_TX_BUSY
+		 *  would mean aborting the current level and everything above
+		 *  it.   We only want to do that if we hit an in-progress
+		 *  entry.
+		 */
+		return -DER_TX_RESTART;
 	case DTX_ST_PREPARED:
 		/*
 		 * Keep uncommitted entry, and inform iterator to abort
@@ -1768,8 +1780,10 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	rc = join_merge_window(ih, mw, entry, acts);
 	if (rc)
-		D_ERROR("Join window "DF_EXT"/"DF_EXT" error: "DF_RC"\n",
-			DP_EXT(&mw->mw_ext), DP_EXT(&phy_ext), DP_RC(rc));
+		D_CDEBUG(rc == -DER_TX_RESTART || rc == -DER_TX_BUSY, DB_TRACE,
+			 DLOG_ERR, "Join window "DF_EXT"/"DF_EXT" error: "
+			 DF_RC"\n", DP_EXT(&mw->mw_ext), DP_EXT(&phy_ext),
+			 DP_RC(rc));
 out:
 	if (rc)
 		close_merge_window(mw, rc);
@@ -1794,7 +1808,7 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 {
 	struct vos_agg_param	*agg_param = cb_arg;
 	struct vos_container	*cont;
-	int			 rc;
+	int			 rc = 0;
 
 	cont = vos_hdl2cont(param->ip_hdl);
 	D_DEBUG(DB_EPC, DF_CONT": Aggregate pre, type:%d, is_discard:%d\n",
@@ -1811,19 +1825,34 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	case VOS_ITER_AKEY:
 		rc = vos_agg_akey(ih, entry, agg_param, acts);
 		break;
-	case VOS_ITER_SINGLE:
-		rc = vos_agg_sv(ih, entry, agg_param, acts);
-		break;
 	case VOS_ITER_RECX:
 		rc = vos_agg_ev(ih, entry, agg_param, acts);
+		if (rc == -DER_TX_RESTART) {
+			D_DEBUG(DB_EPC, "Restarting evtree aggregation\n");
+			*acts |= VOS_ITER_CB_RESTART;
+			rc = 0;
+			break;
+		}
+		/* fall through to check for abort */
+	case VOS_ITER_SINGLE:
+		if (type == VOS_ITER_SINGLE)
+			rc = vos_agg_sv(ih, entry, agg_param, acts);
 		if (rc == -DER_CSUM || rc == -DER_TX_BUSY) {
-			/* Abort current evtree aggregation only */
-			D_DEBUG(DB_EPC, "Abort evtree aggregation "DF_RC"\n",
+			D_DEBUG(DB_EPC, "Abort value aggregation "DF_RC"\n",
 				DP_RC(rc));
 
 			*acts |= VOS_ITER_CB_ABORT;
-			if (rc == -DER_CSUM)
+			if (rc == -DER_CSUM) {
 				agg_param->ap_csum_err = true;
+			} else if (rc == -DER_TX_BUSY) {
+				/** Must not aggregate anything above
+				 *  this entry to avoid orphaned tree
+				 *  assertion
+				 */
+				agg_param->ap_skip_akey = true;
+				agg_param->ap_skip_dkey = true;
+				agg_param->ap_skip_obj = true;
+			}
 			rc = 0;
 		}
 		break;
@@ -1876,10 +1905,22 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	switch (type) {
 	case VOS_ITER_OBJ:
+		if (agg_param->ap_skip_obj) {
+			agg_param->ap_skip_obj = false;
+			break;
+		}
 		rc = oi_iter_aggregate(ih, agg_param->ap_discard);
 		break;
 	case VOS_ITER_DKEY:
+		if (agg_param->ap_skip_dkey) {
+			agg_param->ap_skip_dkey = false;
+			break;
+		}
 	case VOS_ITER_AKEY:
+		if (agg_param->ap_skip_akey) {
+			agg_param->ap_skip_akey = false;
+			break;
+		}
 		rc = vos_obj_iter_aggregate(ih, agg_param->ap_discard);
 		break;
 	case VOS_ITER_SINGLE:
@@ -1902,10 +1943,25 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		 * -DER_TX_BUSY error indicates current ilog aggregation
 		 * aborted on hitting uncommitted entry, this should be a very
 		 * rare case, we'd suppress the error here to keep aggregation
-		 * moving forward.
+		 * moving forward.   We do, however, need to ensure we do not
+		 * aggregate anything in the parent path.  Otherwise, we could
+		 * orphan the current entry due to incarnation log semantics.
 		 */
-		if (rc == -DER_TX_BUSY)
+		if (rc == -DER_TX_BUSY) {
 			rc = 0;
+			switch (type) {
+			default:
+				D_ASSERTF(type == VOS_ITER_OBJ,
+					  "Invalid iter type\n");
+				break;
+			case VOS_ITER_AKEY:
+				agg_param->ap_skip_dkey = true;
+				/* fall through */
+			case VOS_ITER_DKEY:
+				agg_param->ap_skip_obj = true;
+				/* fall through */
+			}
+		}
 	}
 
 	return rc;
