@@ -951,7 +951,6 @@ def run_tests(test_files, tag_filter, args):
                 else:
                     print(
                         "No avocado crash files found in {}".format(crash_dir))
-                    run_command(["ls", "-al", crash_dir])
         return_code |= run_return_code
         return_code |= stop_daos_agent_services(test_file["py"], args)
         return_code |= stop_daos_server_service(test_file["py"], args)
@@ -1782,7 +1781,7 @@ def stop_daos_agent_services(test_file, args):
     service = "daos_agent.service"
     print("Verifying {} after running '{}'".format(service, test_file))
     if args.test_clients:
-        hosts = list(args.test_servers)
+        hosts = list(args.test_clients)
     else:
         hosts = list(args.test_servers)
     local_host = socket.gethostname().split(".")[0]

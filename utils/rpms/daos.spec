@@ -218,35 +218,33 @@ This is the package needed to build software with the DAOS library.
       --no-rpath             \
       USE_INSTALLED=all      \
       CONF_DIR=%{conf_dir}   \
-      PREFIX=%{?buildroot}   \
+      PREFIX=%{buildroot}    \
      %{?scons_args}
 
 %install
 %{scons_exe} %{?_smp_mflags}          \
       --config=force                  \
       --no-rpath                      \
-      --install-sandbox=%{?buildroot} \
-      %{?buildroot}%{_prefix}         \
-      %{?buildroot}%{conf_dir}        \
+      --install-sandbox=%{buildroot} \
+      %{buildroot}%{_prefix}         \
+      %{buildroot}%{conf_dir}        \
       USE_INSTALLED=all               \
       CONF_DIR=%{conf_dir}            \
       PREFIX=%{_prefix}               \
       %{?scons_args}
 
-BUILDROOT="%{?buildroot}"
-PREFIX="%{?_prefix}"
-mkdir -p %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/
-echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
-mkdir -p %{?buildroot}/%{_unitdir}
+mkdir -p %{buildroot}/%{_sysconfdir}/ld.so.conf.d/
+echo "%{_libdir}/daos_srv" > %{buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
+mkdir -p %{buildroot}/%{_unitdir}
 %if (0%{?rhel} == 7)
-install -m 644 utils/systemd/%{server_svc_name}.pre230 %{?buildroot}/%{_unitdir}/%{server_svc_name}
-install -m 644 utils/systemd/%{agent_svc_name}.pre230 %{?buildroot}/%{_unitdir}/%{agent_svc_name}
+install -m 644 utils/systemd/%{server_svc_name}.pre230 %{buildroot}/%{_unitdir}/%{server_svc_name}
+install -m 644 utils/systemd/%{agent_svc_name}.pre230 %{buildroot}/%{_unitdir}/%{agent_svc_name}
 %else
-install -m 644 utils/systemd/%{server_svc_name} %{?buildroot}/%{_unitdir}
-install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
+install -m 644 utils/systemd/%{server_svc_name} %{buildroot}/%{_unitdir}
+install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 %endif
-mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
-mv %{?buildroot}/%{_sysconfdir}/daos/bash_completion.d %{?buildroot}/%{_sysconfdir}
+mkdir -p %{buildroot}/%{conf_dir}/certs/clients
+mv %{buildroot}/%{_sysconfdir}/daos/bash_completion.d %{buildroot}/%{_sysconfdir}
 
 %pre server
 getent group daos_metrics >/dev/null || groupadd -r daos_metrics
@@ -403,7 +401,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
-* Tue Mar 2 2021 Maureen Jean <maureen.jean@intel.com> 1.3.0-3
+* Thu Mar 18 2021 Maureen Jean <maureen.jean@intel.com> 1.3.0-3
 - Update to python3
 
 * Thu Feb 25 2021 Li Wei <wei.g.li@intel.com> 1.3.0-2
