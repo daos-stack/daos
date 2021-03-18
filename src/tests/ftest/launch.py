@@ -215,6 +215,7 @@ def set_test_environment(args):
 
     # Update PATH
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
+    os.environ["COVFILE"] = "/tmp/test.cov"
 
     # Python paths required for functional testing
     python_version = "python{}{}".format(
@@ -1158,7 +1159,7 @@ def archive_cov_usrlib_logs(avocado_logs_dir, args):
 
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
     task = archive_files(destination, hosts,
-                         "/usr/lib/daos/TESTING/ftest/test.cov*",False, args)
+                         "/tmp/test.cov*",False, args)
 
     # Determine if the command completed successfully across all the hosts
     status = 0
