@@ -66,7 +66,7 @@ void
 test_run(void)
 {
 	crt_group_t		*grp = NULL;
-	d_rank_list_t		*rank_list;
+	d_rank_list_t		*rank_list = NULL;
 	d_rank_t		 rank;
 	int			 tag;
 	crt_endpoint_t		 server_ep = {0};
@@ -127,7 +127,8 @@ test_run(void)
 	test_g.t_fault_attr_1000 = d_fault_attr_lookup(1000);
 	test_g.t_fault_attr_5000 = d_fault_attr_lookup(5000);
 
-	if (!test_g.t_shut_only && !test_g.t_skip_check_in) {
+	if (!test_g.t_shut_only && !test_g.t_skip_check_in &&
+	    (rank_list != NULL)) {
 		for (i = 0; i < rank_list->rl_nr; i++) {
 			rank = rank_list->rl_ranks[i];
 
@@ -148,7 +149,8 @@ test_run(void)
 	server_ep.ep_grp = grp;
 
 	/* Shutdown one particular rank */
-	if (test_g.t_verify_swim_status.rank >= 0) {
+	if ((test_g.t_verify_swim_status.rank >= 0) &&
+	    (rank_list != NULL)) {
 
 		/* Check swim status on all (remaining) ranks */
 		for (i = 0; i < rank_list->rl_nr; i++) {
@@ -157,7 +159,7 @@ test_run(void)
 		}
 	}
 
-	if (test_g.t_skip_shutdown) {
+	if ((test_g.t_skip_shutdown) || (rank_list == NULL)) {
 		DBG_PRINT("Skipping shutdown stage.\n");
 	} else {
 
@@ -167,7 +169,8 @@ test_run(void)
 			send_rpc_shutdown(server_ep, rpc_req);
 		}
 	}
-	d_rank_list_free(rank_list);
+	if (rank_list != NULL)
+		d_rank_list_free(rank_list);
 	rank_list = NULL;
 
 	if (test_g.t_save_cfg) {
