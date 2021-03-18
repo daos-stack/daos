@@ -83,14 +83,14 @@ func setupTestMetrics(t *testing.T) (context.Context, testMetricsMap) {
 			sum:    107,
 			mean:   35.666666666666664,
 			stddev: 31.973947728319903,
-			str:    "Gauge: test_gauge = 42, min: 1, max: 64, mean: 35.666667, size: 3, std dev: 31.973948",
+			str:    "gauge: test_gauge = 42, min: 1, max: 64, mean: 35.666667, sample size: 3, std dev: 31.973948",
 		},
 		MetricTypeCounter: {
 			name:  "test_counter",
 			short: "short counter",
 			long:  "long counter",
 			cur:   1,
-			str:   "Counter: test_counter = 1",
+			str:   "counter: test_counter = 1",
 		},
 	}
 

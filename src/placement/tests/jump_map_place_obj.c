@@ -489,6 +489,9 @@ jtc_create_layout(struct jm_test_ctx *ctx)
 {
 	int rc;
 
+	D_ASSERT(ctx != NULL);
+	D_ASSERT(ctx->pl_map != NULL);
+
 	/* place object will allocate the layout so need to free first
 	 * if already allocated
 	 */
@@ -620,6 +623,8 @@ jtc_layout_has_duplicate(struct jm_test_ctx *ctx)
 	bool *target_set;
 	bool result = false;
 
+	D_ASSERT(ctx != NULL);
+	D_ASSERT(ctx->po_map != NULL);
 	const uint32_t total_targets = pool_map_target_nr(ctx->po_map);
 
 	D_ALLOC_ARRAY(target_set, total_targets);

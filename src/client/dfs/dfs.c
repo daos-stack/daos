@@ -2968,16 +2968,14 @@ dfs_release(dfs_obj_t *obj)
 		break;
 	default:
 		D_ERROR("Invalid entry type (not a dir, file, symlink).\n");
-		rc = EINVAL;
+		rc = -DER_IO_INVAL;
 	}
 
-	if (rc) {
+	if (rc)
 		D_ERROR("daos_obj_close() failed, "DF_RC"\n", DP_RC(rc));
-		return daos_der2errno(rc);
-	}
 
 	D_FREE(obj);
-	return 0;
+	return daos_der2errno(rc);
 }
 
 struct dfs_read_params {
@@ -3049,7 +3047,7 @@ dfs_read_int(dfs_t *dfs, dfs_obj_t *obj, daos_off_t off, dfs_iod_t *iod,
 	daos_task_set_priv(task, params);
 	rc = tse_task_register_cbs(task, NULL, 0, 0, read_cb, NULL, 0);
 	if (rc)
-		D_GOTO(err_params, daos_der2errno(rc));
+		D_GOTO(err_params, rc = daos_der2errno(rc));
 
 	return dc_task_schedule(task, true);
 

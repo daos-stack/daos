@@ -267,6 +267,8 @@ struct vos_cont_df {
 	umem_off_t			cd_dtx_committed_tail;
 	/** Allocation hints for block allocator. */
 	struct vea_hint_df		cd_hint_df[VOS_IOS_CNT];
+	/** GC bins for object/dkey...Don't need GC_CONT entry */
+	struct vos_gc_bin_df		cd_gc_bins[GC_CONT];
 };
 
 /* Assume cd_dtx_active_tail is just after cd_dtx_active_head. */
