@@ -796,6 +796,16 @@ rebuild_sx_object_internal(void **state, uint16_t oclass)
 
 	/* wait until reintegration is done */
 	test_rebuild_wait(&arg, 1);
+
+	print_message("lookup 100 dkeys\n");
+	for (i = 0; i < 100; i++) {
+		char buffer[32];
+
+		memset(buffer, 0, 32);
+		sprintf(dkey, "dkey_%d\n", i);
+		lookup_single(dkey, akey, 0, buffer, 32, DAOS_TX_NONE, &req);
+		assert_string_equal(buffer, rec);
+	}
 	ioreq_fini(&req);
 }
 
