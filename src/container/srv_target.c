@@ -583,8 +583,12 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 	if (rc != 0)
 		goto out_pool;
 
+	/* sc_uuid, sc_pool_uuid contiguous in memory within the structure */
+	D_CASSERT(offsetof(struct ds_cont_child, sc_uuid) + sizeof(uuid_t) ==
+	          offsetof(struct ds_cont_child, sc_pool_uuid));
 	uuid_copy(cont->sc_uuid, co_uuid);
 	uuid_copy(cont->sc_pool_uuid, po_uuid);
+
 	cont->sc_aggregation_full_scan_hlc = 0;
 	/* prevent aggregation till snapshot iv refreshed */
 	cont->sc_aggregation_max = 0;
