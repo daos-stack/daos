@@ -827,7 +827,7 @@ def generate_certs():
          daos_test_log_dir])
 
 
-def run_tests(test_files, tag_filter, avocado_logs_dir, args):
+def run_tests(test_files, tag_filter, args):
     """Run or display the test commands.
 
     Args:
@@ -926,6 +926,9 @@ def run_tests(test_files, tag_filter, avocado_logs_dir, args):
                 if not process_the_cores(avocado_logs_dir, test_file["yaml"],
                                          args):
                     return_code |= 256
+
+    if args.jenkinslog:
+        return_code |= archive_cov_usrlib_logs(avocado_logs_dir, args)
 
     return return_code
 
@@ -1911,18 +1914,8 @@ def main():
     # Generate certificate files
     generate_certs()
 
-    # Determine the location of the avocado logs for archiving or renaming
-    data = get_output(["avocado", "config"]).strip()
-    avocado_logs_dir = re.findall(r"datadir\.paths\.logs_dir\s+(.*)", data)
-    avocado_logs_dir = os.path.expanduser(avocado_logs_dir[0])
-    print("Avocado logs stored in {}".format(avocado_logs_dir))
-
     # Run all the tests
-    status = run_tests(test_files, tag_filter, avocado_logs_dir, args)
-
-    if args.jenkinslog:
-        status |= archive_cov_usrlib_logs(
-            avocado_logs_dir, args)
+    status = run_tests(test_files, tag_filter, args)
 
     # Process the avocado run return codes and only treat job and command
     # failures as errors.

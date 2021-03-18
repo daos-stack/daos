@@ -207,7 +207,8 @@ scons %{?_smp_mflags}      \
       USE_INSTALLED=all    \
       CONF_DIR=%{conf_dir} \
       PREFIX=%{?buildroot} \
-      %{?scons_args}
+      %{?scons_args}       \
+      %{?compiler_args}
 
 %install
 scons %{?_smp_mflags}                 \
@@ -219,8 +220,7 @@ scons %{?_smp_mflags}                 \
       USE_INSTALLED=all               \
       CONF_DIR=%{conf_dir}            \
       PREFIX=%{_prefix}               \
-      %{?scons_args}                  \
-      %{?compiler_args}
+      %{?scons_args}
 
 BUILDROOT="%{?buildroot}"
 PREFIX="%{?_prefix}"
