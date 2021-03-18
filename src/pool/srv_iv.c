@@ -1372,8 +1372,6 @@ ds_pool_iv_prop_update(struct ds_pool *pool, daos_prop_t *prop)
 
 	D_FREE(iv_entry);
 out:
-	if (iv_entry)
-		D_FREE(iv_entry);
 	return rc;
 }
 

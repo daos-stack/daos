@@ -15,6 +15,7 @@ import re
 import socket
 import subprocess
 from sys import version_info
+import sys
 import time
 import yaml
 import errno
@@ -196,7 +197,7 @@ def set_test_environment(args):
                 print(
                     "Error obtaining a default interface from: {}".format(
                         os.listdir(net_path)))
-                exit(1)
+                sys.exit(1)
         print("Using {} as the default interface".format(interface))
 
         # Update env definitions
@@ -215,6 +216,7 @@ def set_test_environment(args):
 
     # Update PATH
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
+    os.environ["COVFILE"] = "/tmp/test.cov"
 
     # Python paths required for functional testing
     python_version = "python{}{}".format(
@@ -291,7 +293,7 @@ def get_output(cmd, check=True):
     except RuntimeError as error:
         if check:
             print(error)
-            exit(1)
+            sys.exit(1)
         stdout = str(error)
     return stdout
 
@@ -482,7 +484,7 @@ def find_values(obj, keys, key=None, val_type=list):
     return matches
 
 
-def get_test_list(tags):
+def get_test_list(tags, python_version):
     """Generate a list of tests and avocado tag filter from a list of tags.
 
     Args:
@@ -524,7 +526,7 @@ def get_test_list(tags):
     if test_tags or not test_list:
         if not test_list:
             test_list = ["./"]
-        command = ["avocado", "list", "--paginator=off"]
+        command = ["avocado-" + python_version, "list", "--paginator=off"]
         for test_tag in test_tags:
             command.append(str(test_tag))
         command.extend(test_list if test_list else ["./"])
@@ -591,7 +593,7 @@ def get_nvme_replacement(args):
     # A list of server host is required to able to auto-detect NVMe devices
     if not args.test_servers:
         print("ERROR: Missing a test_servers list to auto-detect NVMe devices")
-        exit(1)
+        sys.exit(1)
 
     # Get a list of NVMe devices from each specified server host
     host_list = list(args.test_servers)
@@ -605,13 +607,13 @@ def get_nvme_replacement(args):
     # Verify the command was successful on each server host
     if not check_remote_output(task, command):
         print("ERROR: Issuing commands to detect NVMe PCI addresses.")
-        exit(1)
+        sys.exit(1)
 
     # Verify each server host has the same NVMe PCI addresses
     output_data = list(task.iter_buffers())
     if len(output_data) > 1:
         print("ERROR: Non-homogeneous NVMe PCI addresses.")
-        exit(1)
+        sys.exit(1)
 
     # Get the list of NVMe PCI addresses found in the output
     devices = find_pci_address(output_data[0][0])
@@ -826,7 +828,7 @@ def generate_certs():
          daos_test_log_dir])
 
 
-def run_tests(test_files, tag_filter, avocado_logs_dir, args):
+def run_tests(test_files, tag_filter, args, python_version):
     """Run or display the test commands.
 
     Args:
@@ -841,14 +843,14 @@ def run_tests(test_files, tag_filter, avocado_logs_dir, args):
     return_code = 0
 
     # Determine the location of the avocado logs for archiving or renaming
-    data = get_output(["avocado", "config"]).strip()
+    data = get_output(["avocado-" + python_version, "config"]).strip()
     avocado_logs_dir = re.findall(r"datadir\.paths\.logs_dir\s+(.*)", data)
     avocado_logs_dir = os.path.expanduser(avocado_logs_dir[0])
     print("Avocado logs stored in {}".format(avocado_logs_dir))
 
     # Create the base avocado run command
     command_list = [
-        "avocado",
+        "avocado-" + python_version,
         "run",
         "--ignore-missing-references", "on",
         "--html-job-result", "on",
@@ -926,6 +928,9 @@ def run_tests(test_files, tag_filter, avocado_logs_dir, args):
                                          args):
                     return_code |= 256
 
+    if args.jenkinslog:
+        return_code |= archive_cov_usrlib_logs(avocado_logs_dir, args)
+
     return return_code
 
 
@@ -950,7 +955,7 @@ def get_yaml_data(yaml_file):
                 yaml_data = yaml.safe_load(file_data.replace("!mux", ""))
             except yaml.YAMLError as error:
                 print("Error reading {}: {}".format(yaml_file, error))
-                exit(1)
+                sys.exit(1)
     return yaml_data
 
 
@@ -1158,7 +1163,7 @@ def archive_cov_usrlib_logs(avocado_logs_dir, args):
 
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
     task = archive_files(destination, hosts,
-                         "/usr/lib/daos/TESTING/ftest/test.cov*",False, args)
+                         "/tmp/test.cov*",False, args)
 
     # Determine if the command completed successfully across all the hosts
     status = 0
@@ -1917,18 +1922,26 @@ def main():
     if args.nvme and args.nvme.startswith("auto"):
         args.nvme = get_nvme_replacement(args)
 
+    # Figure out which python version we are running with
+    python_version = get_output(['rpm', '--eval', '%python{}_version'.format(
+        version_info.major)]).strip()
+    if python_version.startswith("%python"):
+        print("Failure getting python version.  Is python{{2,3}}-rpm-macros "
+              "installed on {}?".format(socket.gethostname()))
+        sys.exit(1)
+
     # Process the tags argument to determine which tests to run
-    tag_filter, test_list = get_test_list(args.tags)
+    tag_filter, test_list = get_test_list(args.tags, python_version)
 
     # Verify at least one test was requested
     if not test_list:
         print("ERROR: No tests or tags found via {}".format(args.tags))
-        exit(1)
+        sys.exit(1)
 
     # Display a list of the tests matching the tags
     print("Detected tests:  \n{}".format("  \n".join(test_list)))
     if args.list:
-        exit(0)
+        sys.exit(0)
 
     # Create a temporary directory
     tmp_dir = TemporaryDirectory()
@@ -1936,7 +1949,7 @@ def main():
     # Create a dictionary of test and their yaml files
     test_files = get_test_files(test_list, args, tmp_dir)
     if args.modify:
-        exit(0)
+        sys.exit(0)
 
     # Setup (clean/create/list) the common test directory
     setup_test_directory(args)
@@ -1944,18 +1957,7 @@ def main():
     # Generate certificate files
     generate_certs()
 
-    # Determine the location of the avocado logs for archiving or renaming
-    data = get_output(["avocado", "config"]).strip()
-    avocado_logs_dir = re.findall(r"datadir\.paths\.logs_dir\s+(.*)", data)
-    avocado_logs_dir = os.path.expanduser(avocado_logs_dir[0])
-    print("Avocado logs stored in {}".format(avocado_logs_dir))
-
-    # Run all the tests
-    status = run_tests(test_files, tag_filter, avocado_logs_dir, args)
-
-    if args.jenkinslog:
-        status |= archive_cov_usrlib_logs(
-            avocado_logs_dir, args)
+    status = run_tests(test_files, tag_filter, args, python_version)
 
     # Process the avocado run return codes and only treat job and command
     # failures as errors.
@@ -1996,7 +1998,7 @@ def main():
             print("ERROR: Detected one or more failures in renaming logs and "
                   "results for Jenkins!")
             ret_code = 1
-    exit(ret_code)
+    sys.exit(ret_code)
 
 
 if __name__ == "__main__":

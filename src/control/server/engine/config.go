@@ -88,6 +88,32 @@ func (fc *FabricConfig) Validate() error {
 	return nil
 }
 
+// cleanEnvVars scrubs the supplied slice of environment
+// variables by removing all variables not included in the
+// allow list.
+func cleanEnvVars(in, allowed []string) (out []string) {
+	allowedMap := make(map[string]struct{})
+	for _, key := range allowed {
+		allowedMap[key] = struct{}{}
+	}
+
+	for _, pair := range in {
+		kv := strings.SplitN(pair, "=", 2)
+		if len(kv) != 2 || kv[0] == "" || kv[1] == "" {
+			continue
+		}
+		if _, found := allowedMap[kv[0]]; !found {
+			continue
+		}
+		out = append(out, pair)
+	}
+
+	return
+}
+
+// mergeEnvVars merges and deduplicates two slices of environment
+// variables. Conflicts are resolved by taking the value from the
+// second list.
 func mergeEnvVars(curVars []string, newVars []string) (merged []string) {
 	mergeMap := make(map[string]string)
 	for _, pair := range curVars {
@@ -139,6 +165,7 @@ type Config struct {
 	Storage           StorageConfig `yaml:",inline"`
 	Fabric            FabricConfig  `yaml:",inline"`
 	EnvVars           []string      `yaml:"env_vars,omitempty"`
+	EnvPassThrough    []string      `yaml:"env_pass_through,omitempty"`
 	Index             uint32        `yaml:"-" cmdLongFlag:"--instance_idx" cmdShortFlag:"-I"`
 }
 
@@ -196,6 +223,14 @@ func (c *Config) HasEnvVar(name string) bool {
 func (c *Config) WithEnvVars(newVars ...string) *Config {
 	c.EnvVars = mergeEnvVars(c.EnvVars, newVars)
 
+	return c
+}
+
+// WithEnvPassThrough sets a list of environment variable
+// names that will be allowed to pass through into the
+// engine subprocess environment.
+func (c *Config) WithEnvPassThrough(allowList ...string) *Config {
+	c.EnvPassThrough = allowList
 	return c
 }
 

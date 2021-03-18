@@ -23,6 +23,9 @@ BuildRequires: libpsm2-devel
 BuildRequires: gcc-c++
 BuildRequires: openmpi3-devel
 BuildRequires: hwloc-devel
+%if ("%{?compiler_args}" == "COMPILER=covc")
+BuildRequires: bullseye
+%endif
 %if (0%{?rhel} >= 7)
 BuildRequires: argobots-devel >= 1.0rc1
 BuildRequires: json-c-devel
@@ -203,35 +206,37 @@ scons %{?_smp_mflags}      \
       --no-rpath           \
       USE_INSTALLED=all    \
       CONF_DIR=%{conf_dir} \
-      PREFIX=%{?buildroot} \
-     %{?scons_args}
+      PREFIX=%{buildroot} \
+      %{?scons_args}
 
 %install
 scons %{?_smp_mflags}                 \
       --config=force                  \
       --no-rpath                      \
-      --install-sandbox=%{?buildroot} \
-      %{?buildroot}%{_prefix}         \
-      %{?buildroot}%{conf_dir}        \
+      --install-sandbox=%{buildroot} \
+      %{buildroot}%{_prefix}         \
+      %{buildroot}%{conf_dir}        \
       USE_INSTALLED=all               \
       CONF_DIR=%{conf_dir}            \
       PREFIX=%{_prefix}               \
-      %{?scons_args}
+      %{?scons_args}                  \
+      %{?compiler_args}
 
-BUILDROOT="%{?buildroot}"
-PREFIX="%{?_prefix}"
-mkdir -p %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/
-echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
-mkdir -p %{?buildroot}/%{_unitdir}
-%if (0%{?rhel} == 7)
-install -m 644 utils/systemd/%{server_svc_name}.pre230 %{?buildroot}/%{_unitdir}/%{server_svc_name}
-install -m 644 utils/systemd/%{agent_svc_name}.pre230 %{?buildroot}/%{_unitdir}/%{agent_svc_name}
-%else
-install -m 644 utils/systemd/%{server_svc_name} %{?buildroot}/%{_unitdir}
-install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
+%if ("%{?compiler_args}" == "COMPILER=covc")
+cp test.cov %{buildroot}/usr/lib/daos/TESTING/ftest/
 %endif
-mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
-mv %{?buildroot}/%{_sysconfdir}/daos/bash_completion.d %{?buildroot}/%{_sysconfdir}
+mkdir -p %{buildroot}/%{_sysconfdir}/ld.so.conf.d/
+echo "%{_libdir}/daos_srv" > %{buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
+mkdir -p %{buildroot}/%{_unitdir}
+%if (0%{?rhel} == 7)
+install -m 644 utils/systemd/%{server_svc_name}.pre230 %{buildroot}/%{_unitdir}/%{server_svc_name}
+install -m 644 utils/systemd/%{agent_svc_name}.pre230 %{buildroot}/%{_unitdir}/%{agent_svc_name}
+%else
+install -m 644 utils/systemd/%{server_svc_name} %{buildroot}/%{_unitdir}
+install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
+%endif
+mkdir -p %{buildroot}/%{conf_dir}/certs/clients
+mv %{buildroot}/%{_sysconfdir}/daos/bash_completion.d %{buildroot}/%{_sysconfdir}
 
 %pre server
 getent group daos_metrics >/dev/null || groupadd -r daos_metrics

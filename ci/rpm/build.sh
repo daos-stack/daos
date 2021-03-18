@@ -19,7 +19,6 @@ if [ -e "${ci_envs}" ]; then
   source "${ci_envs}"
 fi
 
-EXTERNAL_RPM_BUILD_OPTIONS=" --define \"scons_args ${SCONS_FAULTS_ARGS}\""
 SCONS_ARGS="${SCONS_FAULTS_ARGS}"
 
 : "${CHROOT_NAME:='epel-7-x86_64'}"
@@ -27,16 +26,20 @@ SCONS_ARGS="${SCONS_FAULTS_ARGS}"
 
 if $COVFN_DISABLED; then
   JOB_REPOS=""
-  COVERAGE=""
+  EXTERNAL_COMPILER_OPT=""
 else
   COV_REPO="https://repo.dc.hpdd.intel.com/repository/bullseye-el-7-x86_64/"
   JOB_REPOS="JOB_REPOS=${COV_REPO}"
-  COVERAGE="COVERAGE=cov"
+  COMPILER_ARGS="COMPILER=covc"
+  EXTERNAL_COMPILER_OPT=" --define \"compiler_args ${COMPILER_ARGS}\""
 fi
+
+EXTERNAL_SCONS_OPT=" --define \"scons_args ${SCONS_ARGS}\""
+EXTERNAL_RPM_BUILD_OPTIONS="${EXTERNAL_SCONS_OPT}${EXTERNAL_COMPILER_OPT}"
 
 rm -rf "artifacts/${TARGET}/"
 mkdir -p "artifacts/${TARGET}/"
 DEBEMAIL="$DAOS_EMAIL" DEBFULLNAME="$DAOS_FULLNAME" \
-TOPDIR=$PWD make CHROOT_NAME="${CHROOT_NAME}" ${JOB_REPOS} ${COVERAGE} \
+TOPDIR=$PWD make CHROOT_NAME="${CHROOT_NAME}" ${JOB_REPOS} \
     EXTERNAL_RPM_BUILD_OPTIONS="${EXTERNAL_RPM_BUILD_OPTIONS}" \
     SCONS_ARGS="${SCONS_ARGS}" -C utils/rpms chrootbuild
