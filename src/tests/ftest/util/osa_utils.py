@@ -118,6 +118,14 @@ class OSAUtils(MdtestBase, IorTestBase):
         """
         data = self.dmg_command.pool_query(self.pool.uuid)
         return int(data["version"])
+ 
+    def set_container(self, container):
+        """Set the OSA utils container object.
+        Args:
+            container (obj) : Container object to be used
+                              within OSA utils.
+        """
+        self.container = container
 
     def simple_exclude_reintegrate_loop(self, rank, loop_time=100):
         """This method performs exclude and reintegration on a rank,
@@ -238,7 +246,6 @@ class OSAUtils(MdtestBase, IorTestBase):
             else:
                 self.container = self.pool_cont_dict[self.pool][0]
 
-
     def delete_extra_container(self, pool):
         """Delete the extra container in the pool.
         Refer prepare_cont_ior_write_read. This method
@@ -269,7 +276,9 @@ class OSAUtils(MdtestBase, IorTestBase):
             prop = prop.replace("rf:1", "rf:0")
             self.container.properties.value = prop
 
-    def run_ior_thread(self, action, oclass, test):
+    def run_ior_thread(self, action, oclass, test,
+                       single_cont_read=True,
+                       fail_on_warning=True):
         """Start the IOR thread for either writing or
         reading data to/from a container.
         Args:
@@ -278,6 +287,12 @@ class OSAUtils(MdtestBase, IorTestBase):
             oclass (str): IOR object class
             test (list): IOR test sequence
             flags (str): IOR flags
+            single_cont_read (bool) : Always read from the 
+                                      1st container.
+                                      Defaults to True.
+            fail_on_warning (bool)  : Test terminates
+                                      for IOR warnings.
+                                      Defaults to True.
         """
         if action == "Write":
             flags = self.ior_w_flags
@@ -289,14 +304,19 @@ class OSAUtils(MdtestBase, IorTestBase):
                                    kwargs={"pool": self.pool,
                                            "oclass": oclass,
                                            "test": test,
-                                           "flags": flags})
+                                           "flags": flags,
+                                           "single_cont_read":
+                                           single_cont_read,
+                                           "fail_on_warning":
+                                           fail_on_warning})
         # Launch the IOR thread
         process.start()
         # Wait for the thread to finish
         process.join()
 
     def ior_thread(self, pool, oclass, test, flags,
-                   single_cont_read=True):
+                   single_cont_read=True,
+                   fail_on_warning=True):
         """Start threads and wait until all threads are finished.
 
         Args:
@@ -304,7 +324,12 @@ class OSAUtils(MdtestBase, IorTestBase):
             oclass (str): IOR object class, container class.
             test (list): IOR test sequence
             flags (str): IOR flags
-
+            single_cont_read (bool) : Always read from the 
+                                      1st container.
+                                      Defaults to True.
+            fail_on_warning (bool)  : Test terminates
+                                      for IOR warnings.
+                                      Defaults to True.
         """
         self.pool = pool
         self.ior_cmd.get_params(self)
@@ -325,7 +350,8 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.ior_cmd.transfer_size.update(test[2])
         self.ior_cmd.block_size.update(test[3])
         self.ior_cmd.flags.update(flags)
-        self.run_ior_with_pool(create_pool=False, create_cont=False)
+        self.run_ior_with_pool(create_pool=False, create_cont=False,
+                               fail_on_warning=fail_on_warning)
 
     def run_mdtest_thread(self):
         """Start mdtest thread and wait until thread completes.
