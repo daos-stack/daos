@@ -286,7 +286,7 @@ d_tm_init(int id, uint64_t mem_size, int flags)
 	}
 	*base_addr = (uint64_t)d_tm_shmem_root;
 
-	snprintf(tmp, sizeof(tmp), "ID: %d", id);
+	snprintf(tmp, sizeof(tmp), "I/O Engine %d", id);
 	rc = d_tm_alloc_node(&d_tm_root, tmp);
 	if (rc != DER_SUCCESS)
 		goto failure;
@@ -823,6 +823,7 @@ d_tm_print_my_children(uint64_t *shmem_root, struct d_tm_node_t *node,
 {
 	char	*fullpath = NULL;
 	char	*node_name = NULL;
+	char	*parent_name = NULL;
 
 	if ((node == NULL) || (stream == NULL))
 		return;
@@ -830,6 +831,7 @@ d_tm_print_my_children(uint64_t *shmem_root, struct d_tm_node_t *node,
 	if (node->dtn_type & filter)
 		d_tm_print_node(shmem_root, node, level, path, format,
 				show_meta, show_timestamp, stream);
+	parent_name = d_tm_conv_ptr(shmem_root, node->dtn_name);
 	node = node->dtn_child;
 	node = d_tm_conv_ptr(shmem_root, node);
 	if (node == NULL)
@@ -841,15 +843,10 @@ d_tm_print_my_children(uint64_t *shmem_root, struct d_tm_node_t *node,
 			break;
 
 		if ((path == NULL) ||
-		    (strncmp(path, "/", D_TM_MAX_NAME_LEN) == 0)) {
-			if (node->dtn_type & D_TM_DIRECTORY)
-				D_ASPRINTF(fullpath, "%s", node_name);
-		} else {
-			if (node->dtn_type & D_TM_DIRECTORY)
-				D_ASPRINTF(fullpath, "%s/%s", path, node_name);
-			else
-				D_ASPRINTF(fullpath, "%s", path);
-		}
+		    (strncmp(path, "/", D_TM_MAX_NAME_LEN) == 0))
+			D_ASPRINTF(fullpath, "%s", parent_name);
+		else
+			D_ASPRINTF(fullpath, "%s/%s", path, parent_name);
 
 		d_tm_print_my_children(shmem_root, node, level + 1, filter,
 				       fullpath, format, show_meta,
