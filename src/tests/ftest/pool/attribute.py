@@ -4,20 +4,15 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from __future__ import print_function
-
 import traceback
 import threading
-import string
 import random
 from apricot import TestWithServers
 
-from general_utils import DaosTestError
+from general_utils import get_random_bytes
 from pydaos.raw import DaosApiError
-from test_utils_pool import TestPool
 
 # pylint: disable=global-variable-not-assigned, global-statement
-
 GLOB_SIGNAL = None
 GLOB_RC = -99000000
 
@@ -30,97 +25,116 @@ def cb_func(event):
     GLOB_SIGNAL.set()
 
 
-def verify_list_attr(indata, size, buff):
-    """
-    verify the length of the Attribute names
-    """
-    # length of all the attribute names
-    aggregate_len = sum(len(attr_name) for attr_name in indata.keys()) + 1
-    # there is a space between each name, so account for that
-    aggregate_len += len(indata.keys())-1
-
-    if aggregate_len != size:
-        raise DaosTestError("FAIL: Size is not matching for Names in list"
-                            "attr, Expected len={0} and received len = {1}"
-                            .format(aggregate_len, size))
-    # verify the Attributes names in list_attr retrieve
-    for key in indata.keys():
-        if key not in buff:
-            raise DaosTestError("FAIL: Name does not match after list attr,"
-                                " Expected buf={0} and received buf = {1}"
-                                .format(key, buff))
-
-
-def verify_get_attr(indata, outdata):
-    """
-    verify the Attributes value after get_attr
-    """
-    for attr, value in indata.iteritems():
-        if value != outdata[attr]:
-            raise DaosTestError("FAIL: Value does not match after get attr,"
-                                " Expected val={0} and received val = {1}"
-                                .format(value, outdata[attr]))
-
-
 class PoolAttributeTest(TestWithServers):
-    """
-    Test class Description: Tests DAOS pool attribute get/set/list.
+    """Pool Attribute test Class.
+
+    Test class Description:
+        Tests DAOS pool attribute get/set/list.
+
     :avocado: recursive
     """
 
-    def setUp(self):
-        super(PoolAttributeTest, self).setUp()
+    @staticmethod
+    def create_data_set():
+        """Create the large attribute dictionary.
 
-        self.large_data_set = {}
+        Returns:
+            dict: a large attribute dictionary
 
-        self.pool = TestPool(self.context, self.get_dmg_command())
-        self.pool.get_params(self)
-        self.pool.create()
-        self.pool.connect()
-
-    def create_data_set(self):
         """
-        To create the large attribute dictionary
+        data_set = {}
+        for index in range(1024):
+            size = random.randint(1, 100)
+            key = str(index).encode("utf-8")
+            data_set[key] = get_random_bytes(size)
+        return data_set
+
+    def verify_list_attr(self, indata, size, buff):
+        """Verify the length of the Attribute names.
+
+        Args:
+            indata (dict): dictionary of data sent to set_attr
+            size (int): size of attribute names from list_attr
+            buff (bytearray): attribute names from list_attr
+
         """
-        allchar = string.ascii_letters + string.digits
-        for i in range(1024):
-            self.large_data_set[str(i)] = (
-                "".join(random.choice(allchar)
-                        for x in range(random.randint(1, 100))))
+        # length of all the attribute names
+        aggregate_len = sum(
+            len(attr_name) if attr_name is not None else 0
+            for attr_name in list(indata.keys())) + 1
+        # there is a space between each name, so account for that
+        aggregate_len += len(list(indata.keys())) - 1
+
+        self.log.info("Verifying list_attr output:")
+        self.log.info("  set_attr names:  %s", list(indata.keys()))
+        self.log.info("  set_attr size:   %s", aggregate_len)
+        self.log.info("  list_attr names: %s", buff)
+        self.log.info("  list_attr size:  %s", size)
+
+        if aggregate_len != size:
+            self.fail(
+                "FAIL: Size is not matching for Names in list attr, Expected "
+                "len={0} and received len={1}".format(aggregate_len, size))
+        # verify the Attributes names in list_attr retrieve
+        for key in list(indata.keys()):
+            if key not in buff:
+                self.fail(
+                    "FAIL: Name does not match after list attr, Expected "
+                    "buf={} and received buf={}".format(key, buff))
+
+    def verify_get_attr(self, indata, outdata):
+        """Verify the Attributes value after get_attr.
+
+        Args:
+            indata (dict): dictionary of data sent to set_attr
+            outdata (dict): dictionary of data from get_attr
+
+        """
+        self.log.info("Verifying get_attr output:")
+        self.log.info("  set_attr data: %s", indata)
+        self.log.info("  get_attr date: %s", outdata)
+        for attr, value in indata.items():
+            if value != outdata[attr]:
+                self.fail(
+                    "FAIL: Value does not match after get attr, Expected "
+                    "val={} and received val={}".format(value, outdata[attr]))
 
     def test_pool_large_attributes(self):
-        """
+        """Test pool attributes with large data set.
+
         Test ID: DAOS-1359
 
         Test description: Test large randomly created pool attribute.
 
         :avocado: tags=regression,pool,pool_attr,attribute,large_poolattribute
         """
-        self.create_data_set()
-        attr_dict = self.large_data_set
+        self.add_pool()
+        attr_dict = self.create_data_set()
 
         try:
             self.pool.pool.set_attr(data=attr_dict)
             size, buf = self.pool.pool.list_attr()
 
-            verify_list_attr(attr_dict, size.value, buf)
+            self.verify_list_attr(attr_dict, size.value, buf)
 
             results = {}
-            results = self.pool.pool.get_attr(attr_dict.keys())
-            verify_get_attr(attr_dict, results)
+            results = self.pool.pool.get_attr(list(attr_dict.keys()))
+            self.verify_get_attr(attr_dict, results)
         except DaosApiError as excep:
             print(excep)
             print(traceback.format_exc())
             self.fail("Test was expected to pass but it failed.\n")
 
     def test_pool_attributes(self):
-        """
+        """Test pool attributes.
+
         Test ID: DAOS-1359
 
         Test description: Test basic pool attribute tests (sync).
 
         :avocado: tags=all,pool,daily_regression,tiny,sync_poolattribute
         """
+        self.add_pool()
         expected_for_param = []
         name = self.params.get("name", '/run/attrtests/name_handles/*/')
         expected_for_param.append(name[1])
@@ -133,20 +147,26 @@ class PoolAttributeTest(TestWithServers):
                 expected_result = 'FAIL'
                 break
 
+        # Convert any test yaml string to bytes
+        if isinstance(name[0], str):
+            name[0] = name[0].encode("utf-8")
+        if isinstance(value[0], str):
+            value[0] = value[0].encode("utf-8")
+
         attr_dict = {name[0]: value[0]}
         try:
             self.pool.pool.set_attr(data=attr_dict)
             size, buf = self.pool.pool.list_attr()
 
-            verify_list_attr(attr_dict, size.value, buf)
+            self.verify_list_attr(attr_dict, size.value, buf)
 
             if name[0] is not None:
                 # Request something that doesn't exist
-                if "Negative" in name[0]:
-                    name[0] = "rubbish"
+                if b"Negative" in name[0]:
+                    name[0] = b"rubbish"
                 results = {}
                 results = self.pool.pool.get_attr([name[0]])
-                verify_get_attr(attr_dict, results)
+                self.verify_get_attr(attr_dict, results)
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
 
@@ -157,7 +177,8 @@ class PoolAttributeTest(TestWithServers):
                 self.fail("Test was expected to pass but it failed.\n")
 
     def test_pool_attribute_asyn(self):
-        """
+        """Test pool attribute with callback.
+
         Test ID: DAOS-1359
 
         Test description: Test basic pool attribute tests (async).
@@ -167,6 +188,7 @@ class PoolAttributeTest(TestWithServers):
         global GLOB_SIGNAL
         global GLOB_RC
 
+        self.add_pool()
         expected_for_param = []
         name = self.params.get("name", '/run/attrtests/name_handles/*/')
         # workaround until async functions are fixed
@@ -182,6 +204,12 @@ class PoolAttributeTest(TestWithServers):
             if result == 'FAIL':
                 expected_result = 'FAIL'
                 break
+
+        # Convert any test yaml string to bytes
+        if isinstance(name[0], str):
+            name[0] = name[0].encode("utf-8")
+        if isinstance(value[0], str):
+            value[0] = value[0].encode("utf-8")
 
         attr_dict = {name[0]: value[0]}
         try:

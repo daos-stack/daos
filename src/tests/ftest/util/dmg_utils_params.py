@@ -14,7 +14,7 @@ class DmgTransportCredentials(TransportCredentials):
 
     def __init__(self, log_dir="/tmp"):
         """Initialize a TransportConfig object."""
-        super(DmgTransportCredentials, self).__init__(
+        super().__init__(
             "/run/dmg/transport_config/*", "transport_config", log_dir)
         self.cert = LogParameter(log_dir, None, "admin.crt")
         self.key = LogParameter(log_dir, None, "admin.key")
@@ -32,8 +32,7 @@ class DmgYamlParameters(YamlParameters):
             transport (DmgTransportCredentials): dmg security
                 configuration settings.
         """
-        super(DmgYamlParameters, self).__init__(
-            "/run/dmg/*", filename, None, transport)
+        super().__init__("/run/dmg/*", filename, None, transport)
 
         # dmg parameters:
         #   - name: <str>, e.g. "daos_server"

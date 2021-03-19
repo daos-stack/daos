@@ -4,13 +4,13 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 import traceback
 import random
-import string
 from apricot import TestWithServers
 from pydaos.raw import (DaosContainer, DaosSnapshot, DaosApiError,
                         c_uuid_to_str)
+from general_utils import get_random_bytes
 
 
 # pylint: disable=broad-except
@@ -36,7 +36,7 @@ class Snapshot(TestWithServers):
         """
         set up method
         """
-        super(Snapshot, self).setUp()
+        super().setUp()
         self.log.info("==In setUp, self.context= %s", self.context)
 
         # initialize a python pool object then create the underlying
@@ -148,8 +148,8 @@ class Snapshot(TestWithServers):
         :avocado: tags=snapshotcreate_negative
         """
 
-        #DAOS-1322 Create a new container, verify snapshot state as expected
-        #          for a brand new container.
+        # DAOS-1322 Create a new container, verify snapshot state as expected
+        #           for a brand new container.
         try:
             self.log.info(
                 "==(0)Take a snapshot of the newly created container.")
@@ -160,16 +160,16 @@ class Snapshot(TestWithServers):
             self.fail("##(0)Error on a snapshot on a new container"
                       " {}".format(str(error)))
 
-        #(1)Create an object, write some data into it, and take a snapshot
+        # (1)Create an object, write some data into it, and take a snapshot
         obj_cls = self.params.get("obj_class", '/run/object_class/*')
         akey = self.params.get("akey", '/run/snapshot/*', default="akey")
         dkey = self.params.get("dkey", '/run/snapshot/*', default="dkey")
+        akey = akey.encode("utf-8")
+        dkey = dkey.encode("utf-8")
         data_size = self.params.get("test_datasize",
                                     '/run/snapshot/*', default=150)
-        rand_str = lambda n: ''.join([random.choice(string.lowercase)
-                                      for i in range(n)])
-        thedata = "--->>>Happy Daos Snapshot-Create Negative Testing " + \
-                  "<<<---" + rand_str(random.randint(1, data_size))
+        thedata = b"--->>>Happy Daos Snapshot-Create Negative Testing " + \
+                  b"<<<---" + get_random_bytes(random.randint(1, data_size))
         try:
             obj = self.container.write_an_obj(thedata,
                                               len(thedata)+1,
@@ -181,11 +181,11 @@ class Snapshot(TestWithServers):
                 "##(1)Test failed during the initial object write:"
                 " {}".format(str(error)))
         obj.close()
-        ##Take a snapshot of the container
+        # Take a snapshot of the container
         snapshot = self.take_snapshot(self.container)
         self.log.info("==(1)snapshot.epoch= %s", snapshot.epoch)
 
-        #(2)Verify the snapshot is working properly.
+        # (2)Verify the snapshot is working properly.
         try:
             obj.open()
             snap_handle = snapshot.open(
@@ -201,12 +201,12 @@ class Snapshot(TestWithServers):
         self.log.info("==written thedata=%s", thedata)
         self.log.info("==thedata2.value= %s", thedata2.value)
         if thedata2.value != thedata:
-            raise Exception("##(2)The data in the snapshot is not the "
-                            "same as the original data")
+            self.fail("##(2)The data in the snapshot is not the same as the "
+                      "original data")
         self.log.info("==Snapshot data matches the data originally "
                       "written.")
 
-        #(3)Test snapshot with an invalid container handle
+        # (3)Test snapshot with an invalid container handle
         self.log.info("==(3)Snapshot with an invalid container handle.")
         if self.invalid_snapshot_test(self.container):
             self.log.info("==>Negative test 1, expecting failed on taking "
@@ -218,7 +218,7 @@ class Snapshot(TestWithServers):
                 " taking snapshot with an invalid container.coh: "
                 " {}".format(self.container))
 
-        #(4)Test snapshot with a NULL container handle
+        # (4)Test snapshot with a NULL container handle
         self.log.info("==(4)Snapshot with a NULL container handle.")
         if self.invalid_snapshot_test(None):
             self.log.info("==>Negative test 2, expecting failed on taking "
@@ -227,7 +227,7 @@ class Snapshot(TestWithServers):
             self.fail("##(4)Negative test 2 passing, expecting failed on "
                       "taking snapshot with a NULL container.coh.")
 
-        #(5)DAOS-1392 destroy snapshot with an invalid handle
+        # (5)DAOS-1392 destroy snapshot with an invalid handle
         self.log.info(
             "==(6)DAOS-1392 destroy snapshot with an invalid handle.")
         try:
@@ -244,7 +244,7 @@ class Snapshot(TestWithServers):
                 self.fail(
                     "##(6.1)Expecting error RC: -1002  did not show.")
 
-        #(6)DAOS-1388 Verify snap_list bad parameter behavior
+        # (6)DAOS-1388 Verify snap_list bad parameter behavior
         self.log.info(
             "==(7)DAOS-1388 Verify snap_list bad parameter behavior.")
         try:
@@ -292,8 +292,6 @@ class Snapshot(TestWithServers):
                           len(test_data[ind]["tst_data"]) + 1)
             self.log.info("  ==original tst_data =%s",
                           test_data[ind]["tst_data"])
-        return
-
 
     def test_snapshots(self):
         # pylint: disable=no-member,too-many-locals
@@ -329,21 +327,21 @@ class Snapshot(TestWithServers):
         obj_cls = self.params.get("obj_class", '/run/object_class/*')
         akey = self.params.get("akey", '/run/snapshot/*', default="akey")
         dkey = self.params.get("dkey", '/run/snapshot/*', default="dkey")
+        akey = akey.encode("utf-8")
+        dkey = dkey.encode("utf-8")
         data_size = self.params.get("test_datasize",
                                     '/run/snapshot/*', default=150)
         snapshot_loop = self.params.get("num_of_snapshot",
                                         '/run/snapshot/*', default=3)
-        rand_str = lambda n: ''.join([random.choice(string.lowercase)
-                                      for i in range(n)])
         #
-        #Test loop for creat, modify and snapshot object in the DAOS container.
+        # Test loop for creat, modify and snapshot object in the DAOS container.
         #
         while ss_number < snapshot_loop:
-            #(1)Create an object, write some data into it, and take a snapshot
+            # (1)Create an object, write some data into it, and take a snapshot
             ss_number += 1
-            thedata = "--->>>Happy Daos Snapshot Testing " + \
-                str(ss_number) + \
-                "<<<---" + rand_str(random.randint(1, data_size))
+            thedata = b"--->>>Happy Daos Snapshot Testing " + \
+                str(ss_number).encode("utf-8") + \
+                b"<<<---" + get_random_bytes(random.randint(1, data_size))
             datasize = len(thedata) + 1
             try:
                 obj = self.container.write_an_obj(thedata,
@@ -355,33 +353,33 @@ class Snapshot(TestWithServers):
             except DaosApiError as error:
                 self.fail("##(1)Test failed during the initial object "
                           "write: {}".format(str(error)))
-            #Take a snapshot of the container
+            # Take a snapshot of the container
             snapshot = DaosSnapshot(self.context)
             snapshot.create(self.container.coh)
             self.log.info("==Wrote an object and created a snapshot")
 
-            #Display snapshot
+            # Display snapshot
             self.log.info("=(1.%s)snapshot test loop: %s"
                           , ss_number, ss_number)
             self.log.info("  ==snapshot.epoch= %s"
                           , snapshot.epoch)
             self.display_snapshot(snapshot)
 
-            #Save snapshot test data
+            # Save snapshot test data
             test_data.append(
                 {"coh": self.container.coh,
                  "tst_obj": obj,
                  "snapshot": snapshot,
                  "tst_data": thedata})
 
-            #(2)Make changes to the data object. The write_an_obj function does
-            #   a commit when the update is complete
+            # (2)Make changes to the data object. The write_an_obj function does
+            #    a commit when the update is complete
             num_transactions = more_transactions = 200
             self.log.info("=(2.%s)Committing %d additional transactions to "
                           "the same KV.", ss_number, more_transactions)
             while more_transactions:
                 size = random.randint(1, 250) + 1
-                new_data = rand_str(size)
+                new_data = get_random_bytes(size)
                 try:
                     new_obj = self.container.write_an_obj(
                         new_data, size, dkey, akey, obj_cls=obj_cls)
@@ -391,9 +389,9 @@ class Snapshot(TestWithServers):
                               "multi-objects: {}".format(str(error)))
                 more_transactions -= 1
 
-            #(3)Verify the data in the snapshot is the original data.
-            #   Get a handle for the snapshot and read the object at dkey, akey
-            #   Compare it to the originally written data.
+            # (3)Verify the data in the snapshot is the original data.
+            #    Get a handle for the snapshot and read the object at dkey, akey
+            #    Compare it to the originally written data.
             self.log.info("=(3.%s)snapshot test loop: %s"
                           , ss_number, ss_number)
             try:
@@ -414,7 +412,7 @@ class Snapshot(TestWithServers):
             self.log.info("  ==The snapshot data matches the data originally"
                           " written.")
 
-            #(4)List the snapshot and make sure it reflects the original epoch
+            # (4)List the snapshot and make sure it reflects the original epoch
             try:
                 ss_list = snapshot.list(self.container.coh, snapshot.epoch)
                 self.log.info("=(4.%s)snapshot.list(self.container.coh)= %s",
@@ -427,7 +425,7 @@ class Snapshot(TestWithServers):
             self.log.info("  ==After %s additional commits the snapshot is "
                           "still available", num_transactions)
 
-        #(5)Verify the snapshots data
+        # (5)Verify the snapshots data
         for ind, _ in enumerate(test_data):
             ss_number = ind + 1
             self.log.info("=(5.%s)Verify the snapshot number %s:"
@@ -449,12 +447,12 @@ class Snapshot(TestWithServers):
                           .format(str(error)))
             self.log.info("  ==snapshot tst_data =%s", thedata5.value)
             if thedata5.value != tst_data:
-                raise Exception("##(5.2)Snapshot #%s, test data Mis-matches"
-                                "the original data written.", ss_number)
+                raise Exception("##(5.2)Snapshot #{}, test data Mis-matches"
+                                "the original data written.".format(ss_number))
             self.log.info("  snapshot test number %s, test data matches"
                           " the original data written.", ss_number)
 
-        #(6)Destroy the individual snapshot
+        # (6)Destroy the individual snapshot
             self.log.info("=(6.%s)Destroy the snapshot epoch: %s",
                           ss_number, snapshot.epoch)
             try:
@@ -466,8 +464,8 @@ class Snapshot(TestWithServers):
                 self.fail("##(6)Error on snapshot.destroy: {}"
                           .format(str(error)))
 
-        #(7)Check if still able to Open the destroyed snapshot and
-        #   Verify the snapshot removed from the snapshot list
+        # (7)Check if still able to Open the destroyed snapshot and
+        #    Verify the snapshot removed from the snapshot list
         try:
             obj.open()
             snap_handle7 = snapshot.open(coh, snapshot.epoch)
@@ -481,7 +479,7 @@ class Snapshot(TestWithServers):
                       thedata7.value)
         self.log.info("  ==>snapshot.epoch=     %s", snapshot.epoch)
 
-        #Still able to open the snapshot and read data after destroyed.
+        # Still able to open the snapshot and read data after destroyed.
         try:
             ss_list = snapshot.list(coh, snapshot.epoch)
             self.log.info(
@@ -490,7 +488,7 @@ class Snapshot(TestWithServers):
             self.fail("##(7)Error when calling the snapshot list: {}"
                       .format(str(error)))
 
-        #(8)Destroy the snapshot on the container
+        # (8)Destroy the snapshot on the container
         try:
             snapshot.destroy(coh)
             self.log.info("=(8)Container snapshot destroyed successfully.")
