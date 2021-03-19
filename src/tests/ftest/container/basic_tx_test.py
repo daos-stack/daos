@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from __future__ import print_function
+
 
 import time
 import traceback
@@ -53,37 +53,35 @@ class BasicTxTest(TestWithServers):
                 self.fail("Container UUID did not match the one in info\n")
 
             # create an object and write some data into it
-            thedata = "a string that I want to stuff into an object"
+            thedata = b"a string that I want to stuff into an object"
             thedatasize = 45
-            dkey = "this is the dkey"
-            akey = "this is the akey"
+            dkey = b"this is the dkey"
+            akey = b"this is the akey"
 
             oid = container.write_an_obj(thedata, thedatasize,
                                          dkey, akey, None, None, 2)
 
             # read the data back and make sure its correct
-            thedata2 = container.read_an_obj(thedatasize, dkey, akey,
-                                             oid)
+            thedata2 = container.read_an_obj(thedatasize, dkey, akey, oid)
             if thedata != thedata2.value:
-                print("thedata>" + thedata)
-                print("thedata2>" + thedata2.value)
+                self.log.info("thedata:  %s", thedata)
+                self.log.info("thedata2: %s", thedata2.value)
                 self.fail("Write data 1, read it back, didn't match\n")
 
             # repeat above, but know that the write_an_obj call is advancing
             # the epoch so the original copy remains and the new copy is in
             # a new epoch.
-            thedata3 = "a different string"
+            thedata3 = b"a different string"
             thedatasize2 = 19
             # note using the same keys so writing to the same spot
-            dkey = "this is the dkey"
-            akey = "this is the akey"
+            dkey = b"this is the dkey"
+            akey = b"this is the akey"
 
             oid = container.write_an_obj(thedata3, thedatasize2,
                                          dkey, akey, oid, None, 2)
 
             # read the data back and make sure its correct
-            thedata4 = container.read_an_obj(thedatasize2, dkey, akey,
-                                             oid)
+            thedata4 = container.read_an_obj(thedatasize2, dkey, akey, oid)
             if thedata3 != thedata4.value:
                 self.fail("Write data 2, read it back, didn't match\n")
 

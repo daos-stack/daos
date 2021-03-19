@@ -28,11 +28,5 @@ def scons():
 
     install_storage_estimator_module(env, '$PREFIX/lib64/', "3")
 
-    # Python 2.7 is optional. If python 2.7 is not found. We skip the targets
-    # that rely on python 2.7
-    if prereqs.check_component('python27_devel'):
-        install_storage_estimator_module(env, '$PREFIX/lib64/', "2.7")
-
-
 if __name__ == "SCons.Script":
     scons()
