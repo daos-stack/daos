@@ -40,7 +40,7 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See daos_rpc.h.
  */
-#define DAOS_OBJ_VERSION 2
+#define DAOS_OBJ_VERSION 3
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr and name
  */
@@ -467,13 +467,17 @@ struct daos_cpd_sub_req {
  */
 struct daos_cpd_req_idx {
 	/* Shard index of the object for the sub request on this DAOS target. */
-	uint32_t			 dcri_shard_idx;
+	uint32_t			 dcri_shard_off;
+	/* Shard identifier of the object for the sub request. */
+	uint32_t			 dcri_shard_id;
 	/* The index (relative to the first sub request for its transaction)
 	 * of sub-request in the 'oci_sub_reqs' array. For parsing convenience,
 	 * DCSO_READ requests firstly, then modification ones. The update and
 	 * punch are sorted as their original executed order.
 	 */
 	uint32_t			 dcri_req_idx;
+	/* 64-bits alignment. */
+	uint32_t			 dcri_padding;
 };
 
 /**

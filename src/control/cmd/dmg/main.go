@@ -225,7 +225,7 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			jsonCmd.enableJsonOutput(opts.JSON, os.Stdout, &wroteJSON)
 			if opts.JSON {
 				// disable output on stdout other than JSON
-				log.SetLevel(logging.LogLevelError)
+				log.ClearLevel(logging.LogLevelInfo)
 			}
 		}
 

@@ -17,12 +17,12 @@
 	{							\
 		crt_proc_op_t	 proc_op;			\
 		type		*buf;				\
-		int		 rc = 0;			\
+		int		 rc;				\
 		rc = crt_proc_get_op(proc, &proc_op);		\
 		if (unlikely(rc))				\
-			return -DER_HG;				\
-		if (proc_op == CRT_PROC_FREE)			\
 			return rc;				\
+		if (proc_op == CRT_PROC_FREE)			\
+			return 0;				\
 		buf = hg_proc_save_ptr(proc, sizeof(*buf));	\
 		switch (proc_op) {				\
 		case CRT_PROC_ENCODE:				\
@@ -47,6 +47,7 @@ crt_proc_get_op(crt_proc_t proc, crt_proc_op_t *proc_op)
 		D_ERROR("Proc is not initilalized.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
+
 	if (unlikely(proc_op == NULL)) {
 		D_ERROR("invalid parameter - NULL proc_op.\n");
 		D_GOTO(out, rc = -DER_INVAL);
@@ -77,14 +78,14 @@ crt_proc_memcpy(crt_proc_t proc, void *data, size_t data_size)
 {
 	crt_proc_op_t	 proc_op;
 	void		*buf;
-	int		 rc = 0;
+	int		 rc;
 
 	rc = crt_proc_get_op(proc, &proc_op);
 	if (unlikely(rc))
-		return -DER_HG;
+		D_GOTO(out, rc);
 
 	if (proc_op == CRT_PROC_FREE)
-		return rc;
+		D_GOTO(out, rc = 0);
 
 	buf = hg_proc_save_ptr(proc, data_size);
 	switch (proc_op) {
@@ -98,6 +99,7 @@ crt_proc_memcpy(crt_proc_t proc, void *data, size_t data_size)
 		break;
 	}
 
+out:
 	return rc;
 }
 
@@ -154,7 +156,7 @@ crt_proc_d_rank_list_t(crt_proc_t proc, d_rank_list_t **data)
 	crt_proc_op_t	 proc_op;
 	uint32_t	*buf;
 	uint32_t	 nr;
-	int		 rc = 0;
+	int		 rc;
 
 	if (unlikely(data == NULL)) {
 		D_ERROR("Invalid parameter data: %p.\n", data);
@@ -163,7 +165,7 @@ crt_proc_d_rank_list_t(crt_proc_t proc, d_rank_list_t **data)
 
 	rc = crt_proc_get_op(proc, &proc_op);
 	if (unlikely(rc))
-		D_GOTO(out, rc = -DER_HG);
+		D_GOTO(out, rc);
 
 	switch (proc_op) {
 	case CRT_PROC_ENCODE:
@@ -211,16 +213,14 @@ int
 crt_proc_d_iov_t(crt_proc_t proc, d_iov_t *div)
 {
 	crt_proc_op_t	proc_op;
-	int		rc = 0;
+	int		rc;
 
-	if (unlikely(div == NULL)) {
-		D_ERROR("invalid parameter, NULL div.\n");
+	if (unlikely(div == NULL))
 		D_GOTO(out, rc = -DER_INVAL);
-	}
 
 	rc = crt_proc_get_op(proc, &proc_op);
 	if (unlikely(rc))
-		D_GOTO(out, rc = -DER_HG);
+		D_GOTO(out, rc);
 
 	if (proc_op == CRT_PROC_FREE) {
 		div->iov_buf = NULL;
@@ -273,7 +273,7 @@ crt_proc_corpc_hdr(crt_proc_t proc, struct crt_corpc_hdr *hdr)
 
 	rc = crt_proc_get_op(proc, &proc_op);
 	if (unlikely(rc))
-		D_GOTO(out, rc = -DER_HG);
+		D_GOTO(out, rc);
 
 	rc = crt_proc_crt_group_id_t(proc, &hdr->coh_grpid);
 	if (unlikely(rc))

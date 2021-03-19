@@ -495,21 +495,19 @@ reset_anchors(vos_iter_type_t type, struct vos_iter_anchors *anchors)
 	switch (type) {
 	case VOS_ITER_DKEY:
 		daos_anchor_set_zero(&anchors->ia_dkey);
-		daos_anchor_set_zero(&anchors->ia_akey);
-		daos_anchor_set_zero(&anchors->ia_ev);
-		daos_anchor_set_zero(&anchors->ia_sv);
-		break;
+		anchors->ia_reprobe_dkey = 0;
+		/* fall through */
 	case VOS_ITER_AKEY:
 		daos_anchor_set_zero(&anchors->ia_akey);
-		daos_anchor_set_zero(&anchors->ia_ev);
-		daos_anchor_set_zero(&anchors->ia_sv);
-		break;
+		anchors->ia_reprobe_akey = 0;
+		/* fall through */
 	case VOS_ITER_RECX:
 		daos_anchor_set_zero(&anchors->ia_ev);
-		daos_anchor_set_zero(&anchors->ia_sv);
-		break;
+		anchors->ia_reprobe_ev = 0;
+		/* fall through */
 	case VOS_ITER_SINGLE:
 		daos_anchor_set_zero(&anchors->ia_sv);
+		anchors->ia_reprobe_sv = 0;
 		break;
 	default:
 		D_ASSERTF(false, "invalid iter type %d\n", type);
@@ -612,7 +610,7 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 	vos_iter_entry_t	iter_ent = {0};
 	daos_epoch_t		read_time = 0;
 	daos_handle_t		ih;
-	unsigned int		acts = 0;
+	unsigned int		acts;
 	bool			skipped;
 	int			rc;
 
@@ -683,11 +681,18 @@ probe:
 			if (acts & VOS_ITER_CB_ABORT)
 				break;
 
+			if (acts & VOS_ITER_CB_RESTART) {
+				daos_anchor_set_zero(anchor);
+				probe_anchor = NULL;
+				goto probe;
+			}
+
 			if (need_reprobe(type, anchors)) {
 				D_ASSERT(!daos_anchor_is_zero(anchor) &&
 					 !daos_anchor_is_eof(anchor));
 				goto probe;
 			}
+
 		}
 
 		if (recursive && !is_last_level(type) && !skipped &&
@@ -746,6 +751,12 @@ probe:
 			if (acts & VOS_ITER_CB_ABORT)
 				break;
 
+			if (acts & VOS_ITER_CB_RESTART) {
+				daos_anchor_set_zero(anchor);
+				probe_anchor = NULL;
+				goto probe;
+			}
+
 			if (need_reprobe(type, anchors)) {
 				D_ASSERT(!daos_anchor_is_zero(anchor) &&
 					 !daos_anchor_is_eof(anchor));
@@ -774,6 +785,7 @@ out:
 			DP_RC(rc));
 
 	vos_iter_finish(ih);
+
 	return rc;
 }
 

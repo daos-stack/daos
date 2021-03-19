@@ -604,7 +604,7 @@ test_partial_stripe(struct ec_agg_test_ctx *ctx)
 	rc = daos_obj_close(ctx->oh, NULL);
 	assert_rc_equal(rc, 0);
 }
-
+#define NUMB_STRIPES 4
 static void
 test_range_punch(struct ec_agg_test_ctx *ctx)
 {
@@ -618,7 +618,7 @@ test_range_punch(struct ec_agg_test_ctx *ctx)
 	len = oca->u.ec.e_len;
 	k = oca->u.ec.e_k;
 	for (j = 0; j < NUM_KEYS; j++)
-		for (i = 0; i < NUM_STRIPES; i++) {
+		for (i = 0; i < NUMB_STRIPES; i++) {
 			ec_setup_single_recx_data(ctx, EC_SPECIFIED,
 						  i * (len * 4), len * 4, j,
 						  false, false, 0);
@@ -632,7 +632,7 @@ test_range_punch(struct ec_agg_test_ctx *ctx)
 	sleep(1);
 
 	for (j = 0; j < NUM_KEYS; j++)
-		for (i = 0; i < NUM_STRIPES; i++) {
+		for (i = 0; i < NUMB_STRIPES; i++) {
 			ec_setup_punch_recx_data(ctx, EC_SPECIFIED,
 						 i * len * k, len, j, 0);
 			rc = daos_obj_update(ctx->oh, DAOS_TX_NONE, 0,
@@ -643,7 +643,7 @@ test_range_punch(struct ec_agg_test_ctx *ctx)
 		}
 
 	for (j = 0; j < NUM_KEYS; j++)
-		for (i = 0; i < NUM_STRIPES; i++) {
+		for (i = 0; i < NUMB_STRIPES; i++) {
 			ec_setup_single_recx_data(ctx, EC_SPECIFIED,
 						  i * len * k + 2 * len, len,
 						  j, false, true, 0);
@@ -674,7 +674,7 @@ verify_rp1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 	k = oca->u.ec.e_k;
 
 	for (j = 0; j < NUM_KEYS; j++)
-		for (i = 0; i < NUM_STRIPES; i++) {
+		for (i = 0; i < NUMB_STRIPES; i++) {
 			ec_setup_single_recx_data(ctx, EC_SPECIFIED,
 						  i * len * k + len,
 						  len,
