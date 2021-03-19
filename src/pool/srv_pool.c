@@ -594,6 +594,7 @@ ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
 	crt_rpc_t	       *rpc;
 	struct pool_create_in  *in;
 	struct pool_create_out *out;
+	struct d_backoff_seq	backoff_seq;
 	int			rc;
 
 	D_ASSERTF(ntargets == target_addrs->rl_nr, "ntargets=%u num=%u\n",
@@ -616,6 +617,10 @@ ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
 	if (rc != 0)
 		D_GOTO(out_creation, rc);
 
+	rc = d_backoff_seq_init(&backoff_seq, 0 /* nzeros */, 16 /* factor */,
+				8 /* next (ms) */, 1 << 10 /* max (ms) */);
+	D_ASSERTF(rc == 0, "d_backoff_seq_init: "DF_RC"\n", DP_RC(rc));
+
 rechoose:
 	/* Create a POOL_CREATE request. */
 	ep.ep_grp = NULL;
@@ -623,13 +628,13 @@ rechoose:
 	if (rc != 0) {
 		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
-		goto out_client;
+		goto out_backoff_seq;
 	}
 	rc = pool_req_create(info->dmi_ctx, &ep, POOL_CREATE, &rpc);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create POOL_CREATE RPC: "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
-		D_GOTO(out_client, rc);
+		goto out_backoff_seq;
 	}
 	in = crt_req_get(rpc);
 	uuid_copy(in->pri_op.pi_uuid, pool_uuid);
@@ -652,7 +657,7 @@ rechoose:
 				      rc == 0 ? &out->pro_op.po_hint : NULL);
 	if (rc == RSVC_CLIENT_RECHOOSE) {
 		crt_req_decref(rpc);
-		dss_sleep(1000 /* ms */);
+		dss_sleep(d_backoff_seq_next(&backoff_seq));
 		D_GOTO(rechoose, rc);
 	}
 	rc = out->pro_op.po_rc;
@@ -666,7 +671,8 @@ rechoose:
 	D_ASSERTF(rc == 0, "daos_rank_list_copy: "DF_RC"\n", DP_RC(rc));
 out_rpc:
 	crt_req_decref(rpc);
-out_client:
+out_backoff_seq:
+	d_backoff_seq_fini(&backoff_seq);
 	rsvc_client_fini(&client);
 out_creation:
 	if (rc != 0)
