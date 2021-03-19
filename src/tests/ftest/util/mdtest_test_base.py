@@ -20,7 +20,7 @@ class MdtestBase(DfuseTestBase):
 
     def __init__(self, *args, **kwargs):
         """Initialize a MdtestBase object."""
-        super(MdtestBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.mdtest_cmd = None
         self.processes = None
         self.hostfile_clients_slots = None
@@ -30,7 +30,7 @@ class MdtestBase(DfuseTestBase):
         # obtain separate logs
         self.update_log_file_names()
         # Start the servers and agents
-        super(MdtestBase, self).setUp()
+        super().setUp()
 
         # Get the parameters for Mdtest
         self.mdtest_cmd = MdtestCommand()

@@ -9,6 +9,8 @@ from nvme_utils import ServerFillUp, get_device_ids
 from test_utils_pool import TestPool
 from dmg_utils import DmgCommand
 from command_utils_base import CommandFailure
+from apricot import skipForTicket
+
 
 class NvmeHealth(ServerFillUp):
     # pylint: disable=too-many-ancestors
@@ -16,6 +18,8 @@ class NvmeHealth(ServerFillUp):
     Test Class Description: To validate NVMe health test cases
     :avocado: recursive
     """
+
+    @skipForTicket("DAOS-7011")
     def test_monitor_for_large_pools(self):
         """Jira ID: DAOS-4722.
 
@@ -37,7 +41,7 @@ class NvmeHealth(ServerFillUp):
         single_pool_scm_size = int((storage[0] * 0.90)/no_of_pools)
 
         self.pool = []
-        #Create the Large number of pools
+        # Create the Large number of pools
         for _pool in range(no_of_pools):
             pool = TestPool(self.context, self.get_dmg_command())
             pool.get_params(self)
@@ -46,18 +50,18 @@ class NvmeHealth(ServerFillUp):
             pool.create()
             self.pool.append(pool)
 
-        #initialize the dmg command
+        # initialize the dmg command
         self.dmg = DmgCommand(os.path.join(self.prefix, "bin"))
         self.dmg.get_params(self)
         self.dmg.insecure.update(
             self.server_managers[0].get_config_value("allow_insecure"),
             "dmg.insecure")
 
-        #List all pools
+        # List all pools
         self.dmg.set_sub_command("storage")
         self.dmg.sub_command_class.set_sub_command("query")
-        self.dmg.sub_command_class.sub_command_class.\
-        set_sub_command("list-pools")
+        self.dmg.sub_command_class.sub_command_class.set_sub_command(
+            "list-pools")
         for host in self.hostlist_servers:
             self.dmg.hostlist = host
             try:
@@ -66,7 +70,7 @@ class NvmeHealth(ServerFillUp):
                 self.fail("dmg command failed: {}".format(error))
             #Verify all pools UUID listed as part of query
             for pool in self.pool:
-                if pool.uuid.lower() not in result.stdout:
+                if pool.uuid.lower() not in result.stdout_text:
                     self.fail('Pool uuid {} not found in smd query'
                               .format(pool.uuid.lower()))
 
@@ -81,7 +85,7 @@ class NvmeHealth(ServerFillUp):
                     result = self.dmg.storage_query_device_health(_dev)
                 except CommandFailure as error:
                     self.fail("dmg get device states failed {}".format(error))
-                if 'State:NORMAL' not in result.stdout:
+                if 'State:NORMAL' not in result.stdout_text:
                     self.fail("device {} on host {} is not NORMAL"
                               .format(_dev, host))
 

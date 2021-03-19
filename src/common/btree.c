@@ -957,6 +957,8 @@ btr_check_availability(struct btr_context *tcx, struct btr_check_alb *alb)
 		 *	for the case in the new aggregation logic.
 		 *	But before that, just make it fall through.
 		 */
+	case ALB_AVAILABLE_ABORTED:
+		/** NB: Entry is aborted flag set and we can purge it */
 	case ALB_AVAILABLE_CLEAN:
 		return PROBE_RC_OK;
 	case ALB_UNAVAILABLE:

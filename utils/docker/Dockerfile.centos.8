@@ -33,27 +33,68 @@ gpgcheck=False\n" >> /etc/yum.repos.d/local-centos-group.repo;		\
 
 # Install basic tools to build DAOS
 
-RUN dnf clean all && dnf -y install epel-release dnf-plugins-core &&	\
-    dnf config-manager --set-enabled powertools &&			\
-    dnf -y upgrade &&							\
-    dnf -y install							\
-	boost-devel clang-analyzer cmake CUnit-devel doxygen file flex	\
-	gcc gcc-c++ git golang graphviz libaio-devel			\
-	libcmocka-devel libevent-devel libiscsi-devel libtool		\
-	libtool-ltdl-devel libuuid-devel libyaml-devel make nasm	\
-	numactl-devel openssl-devel pandoc patch glibc-langpack-en	\
-	readline-devel python3-scons sg3_utils yasm diffutils		\
-	pciutils valgrind-devel man fuse3-devel hwloc-devel patchelf	\
-	json-c-devel lz4-devel libipmctl-devel ndctl ipmctl		\
-	e2fsprogs							\
-	python2 python2-devel python36-devel python3-magic		\
-	python3-pygit2 python3-pygithub					\
-	python2-requests python3-requests				\
-	python2-Cython python3-pylint python3-pyxattr			\
-	python3-clustershell python3-paramiko				\
-	python3-numpy python3-jira Lmod					\
-	python3-tabulate python2-distro python3-distro			\
-	java-1.8.0-openjdk maven openmpi-devel libunwind-devel &&	\
+RUN dnf clean all && dnf -y install epel-release dnf-plugins-core && \
+    dnf config-manager --set-enabled powertools && \
+    dnf -y upgrade && \
+    dnf -y install \
+        boost-python3-devel \
+        clang-analyzer \
+        cmake \
+        CUnit-devel \
+        doxygen \
+        e2fsprogs \
+        file \
+        flex \
+        fuse3-devel \
+        gcc \
+        gcc-c++ \
+        git \
+        golang \
+        graphviz \
+        hwloc-devel \
+        ipmctl \
+        java-1.8.0-openjdk \
+        json-c-devel \
+        libaio-devel \
+        libcmocka-devel \
+        libevent-devel \
+        libipmctl-devel \
+        libiscsi-devel \
+        libtool \
+        libtool-ltdl-devel \
+        libunwind-devel \
+        libuuid-devel \
+        libyaml-devel \
+        Lmod \
+        lz4-devel \
+        make \
+        man \
+        maven \
+        nasm \
+        ndctl \
+        numactl-devel \
+        openmpi-devel \
+        openssl-devel \
+        pandoc \
+        patch \
+        patchelf \
+        pciutils \
+        python3-pip \
+        python3-Cython \
+        python3-devel \
+        python3-distro \
+        python3-jira \
+        python3-numpy \
+        python3-paramiko \
+        python3-pylint \
+        python3-requests \
+        python3-tabulate \
+        python3-pyxattr \
+        python3-scons \
+        readline-devel \
+        sg3_utils \
+        valgrind-devel \
+        yasm && \
     dnf clean all
 
 ARG UID=1000

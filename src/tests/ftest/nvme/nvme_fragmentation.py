@@ -19,13 +19,7 @@ from daos_utils import DaosCommand
 from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun
 from mpio_utils import MpioUtils
-
-try:
-    # python 3.x
-    import queue
-except ImportError:
-    # python 2.7
-    import Queue as queue
+import queue
 
 
 class NvmeFragmentation(TestWithServers):
@@ -41,7 +35,7 @@ class NvmeFragmentation(TestWithServers):
 
     def setUp(self):
         """Set up for test case."""
-        super(NvmeFragmentation, self).setUp()
+        super().setUp()
 
         self.ior_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
