@@ -30,7 +30,7 @@ from daos_utils import DaosCommand
 from ClusterShell.NodeSet import NodeSet
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
-from general_utils import run_task, error_count
+from general_utils import run_task, error_count, run_pcmd
 
 class JavaCIIntegration(TestWithServers):
     """Test class Description:
@@ -84,17 +84,25 @@ class JavaCIIntegration(TestWithServers):
         # look for java home
         commands = [u"source {}/daos-java/find_java_home.sh".format(self.jdir)]
         for cmd in commands:
-            task = run_task(hosts=self.hostlist_clients, command=cmd)
-            for _rc_code, _node in task.iter_retcodes():
-                if _rc_code == 1:
-                    for output, _ in task.iter_buffers():
-                        result = str(output)
-                        self.log.info(result)
-                    self.fail("Failed to run cmd {} on {}".format(cmd, _node))
-            for output, _ in task.iter_buffers():
-                result = str(output)
-                self.log.info(result)
-        return str(result)
+            task = run_pcmd(hosts=self.hostlist_clients, command=cmd)
+            for result in task:
+#                for _rc_code in result["exit_status"]:
+                if result["exit_status"] != 0:
+                    self.log.info(result["stdout"])
+                    self.fail("Failed to run cmd {} on {}".format(cmd, result["hosts"]))
+                self.log.info(str(result["stdout"][0]))
+        return str(result["stdout"][0])
+
+#            for _rc_code, _node in task.iter_retcodes():
+#                if _rc_code == 1:
+#                    for output, _ in task.iter_buffers():
+#                        result = str(output)
+#                        self.log.info(result)
+#                    self.fail("Failed to run cmd {} on {}".format(cmd, _node))
+#            for output, _ in task.iter_buffers():
+#                result = str(output)
+#                self.log.info(result)
+#        return str(result)
 
         # checking java install
 #        task = run_task(hosts=self.hostlist_clients, command="java -version")

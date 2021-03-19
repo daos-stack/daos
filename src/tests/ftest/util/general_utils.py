@@ -854,7 +854,7 @@ def error_count(error, hostlist, log_file, pattern="ERR"):
     # Get the Client side Error from client_log file.
     requested_error_count = 0
     other_error_count = 0
-    cmd = "cat {} | grep '{}'".format(get_log_file(log_file), pattern)
+    command = "cat {} | grep '{}'".format(get_log_file(log_file), pattern)
     results = run_pcmd(hostlist, command, False, None, None)
     for result in results:
         for line in result["stdout"]:
