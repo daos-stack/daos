@@ -4,85 +4,141 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from __future__ import print_function
-import traceback
-
-from apricot import TestWithServers
-from test_utils_pool import TestPool
 from avocado.core.exceptions import TestFail
 
-RESULT_PASS = "PASS"
-RESULT_FAIL = "FAIL"
+from apricot import TestWithServers
 
 
 class PoolSvc(TestWithServers):
-    """
-    Tests svc argument while pool create.
+    # pylint: disable=too-few-public-methods
+    """Tests svc argument while pool create.
+
     :avocado: recursive
     """
 
-    def test_poolsvc(self):
-        """
-        Test svc arg during pool create.
+    def check_leader(self, previous_leader=None, expect_change=True):
+        """Check if the pool leader rank has changed.
 
-        :avocado: tags=all,pool,daily_regression,medium,svc,DAOS_5610
+        Args:
+            previous_leader (int, optional): previous pool leader rank. Defaults
+                to None.
+            expect_change (bool, optional): is the pool leader expected to
+                change. Defaults to True.
+
+        Return:
+            int: current pool leader rank
+
+        """
+        self.pool.set_query_data()
+        current_leader = int(self.pool.query_data["leader"])
+        if previous_leader is not None:
+            self.log.info(
+                "Pool leader: previous=%s, current=%s",
+                previous_leader, current_leader)
+            leader_change = previous_leader != current_leader
+            message = "The pool leader {} changed".format(
+                "has" if leader_change else "has not")
+            self.log.info("  %s", message)
+            if leader_change != expect_change:
+                self.fail(message)
+        else:
+            self.log.info("Pool leader: current=%s", current_leader)
+        return current_leader
+
+    def test_pool_svc(self):
+        """Test svc arg during pool create.
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=medium
+        :avocado: tags=pool,pool_svc,test_pool_svc,svc
+        :avocado: tags=DAOS_5610
         """
         # parameter used in pool create
-        createsvc = self.params.get("svc", '/run/createtests/createsvc/*/')
+        svc_params = self.params.get("svc_params")
 
-        expected_result = createsvc[1]
+        # Setup the TestPool object
+        self.add_pool(create=False)
 
-        # initialize a python pool object then create the underlying
-        # daos storage
-        self.pool = TestPool(self.context, self.get_dmg_command())
-        self.pool.get_params(self)
-        self.pool.svcn.update(createsvc[0])
+        # Assign the expected svcn value
+        if svc_params[0] != "None":
+            self.pool.svcn.update(svc_params[0], "svcn")
+
+        # Create the pool
+        pool_create_error = None
         try:
             self.pool.create()
-            if expected_result == RESULT_FAIL:
-                self.fail("Test was expected to fail, but it passed.\n")
-        except TestFail as excep:
-            print("## TestFail exception is caught at pool create!")
-            print(excep)
-            print(traceback.format_exc())
-            if expected_result == RESULT_PASS:
-                self.fail("Test was expected to pass but it failed.\n")
+        except TestFail as error:
+            pool_create_error = error
 
-        # FAIL case should fail at above pool create, so do below only for
-        # PASS case
-        if expected_result == RESULT_PASS:
-            self.log.debug("self.pool.svc_ranks = %s", self.pool.svc_ranks)
-            self.assertTrue(999999 not in self.pool.svc_ranks,
-                            "999999 is in the pool's service ranks.")
-            self.assertEqual(len(self.pool.svc_ranks), self.pool.svcn.value,
-                             "Length of Returned Rank list is not equal to " +
-                             "the number of Pool Service members.")
+        # Verify the result - If the svc_params[1] == 0 the dmg pool create is
+        # expected to fail
+        if svc_params[1] == 0 and pool_create_error:
+            self.log.info(
+                "Pool creation with svcn=%s failed as expected", svc_params[0])
+        elif pool_create_error:
+            self.fail(
+                "Pool creation with svcn={} failed when it was expected to "
+                "pass: {}".format(svc_params[0], pool_create_error))
+        else:
+            self.log.info("Pool creation passed as expected")
+            self.log.info(
+                "Verifying that the pool has %s pool service members",
+                svc_params[1])
+            self.log.info("  self.pool.svc_ranks = %s", self.pool.svc_ranks)
 
-            # Verify there are no duplicate ranks in the rank list
-            self.assertEqual(len(self.pool.svc_ranks),
-                             len(set(self.pool.svc_ranks)),
-                             "Duplicate values in returned rank list")
+            # Verify the pool service member list:
+            #   - does not contain an invalid rank
+            #   - contains the expected number of members
+            #   - does not contain any duplicate ranks
+            self.assertTrue(
+                999999 not in self.pool.svc_ranks,
+                "999999 is in the pool's service ranks.")
+            self.assertEqual(
+                len(self.pool.svc_ranks), svc_params[1],
+                "Length of pool scv rank list is not equal to the expected "
+                "number of pool service members.")
+            self.assertEqual(
+                len(self.pool.svc_ranks),
+                len(set(self.pool.svc_ranks)),
+                "Duplicate values in returned rank list")
 
-            try:
-                self.pool.get_info()
-                leader = self.pool.info.pi_leader
-                if createsvc[0] == 3:
-                    # kill pool leader and exclude it
-                    self.pool.pool.pool_svc_stop()
-                    self.pool.exclude([leader], self.d_log)
-                    # perform pool disconnect, try connect again and disconnect
-                    self.pool.disconnect()
-                    self.pool.connect()
-                    self.pool.disconnect()
-                    # kill another server which is not a leader and exclude it
-                    self.server_managers[0].stop_ranks([3], self.test_log)
-                    self.pool.exclude([3], self.d_log)
-                    # perform pool connect
-                    self.pool.connect()
-            # Use TestFail instead of DaosApiError because create method has
-            # @fail_on
-            except TestFail as excep:
-                print("## TestFail exception caught")
-                print(excep)
-                print(traceback.format_exc())
-                self.fail("Test was expected to pass but it failed.\n")
+            if svc_params[1] > 2:
+                # Query the pool to get the leader
+                pool_leader = self.check_leader()
+                non_leader_ranks = list(self.pool.svc_ranks)
+                non_leader_ranks.remove(pool_leader)
+
+                # Stop the pool leader
+                self.log.info("Stopping the pool leader: %s", pool_leader)
+                try:
+                    self.server_managers[-1].stop_ranks(
+                        [pool_leader], self.test_log)
+                except TestFail as error:
+                    self.log.info(error)
+                    self.fail(
+                        "Error stopping pool leader - "
+                        "DaosServerManager.stop_ranks([{}])".format(
+                            pool_leader))
+
+                # Verify the pool leader has changed
+                pool_leader = self.check_leader(pool_leader, True)
+                non_leader_ranks.remove(pool_leader)
+
+                # Stop a pool non-leader
+                non_leader = non_leader_ranks[-1]
+                self.log.info(
+                    "Stopping a pool non-leader (%s): %s",
+                    non_leader_ranks, non_leader)
+                try:
+                    self.server_managers[-1].stop_ranks(
+                        [non_leader], self.test_log)
+                except TestFail as error:
+                    self.log.info(error)
+                    self.fail(
+                        "Error stopping a pool non-leader - "
+                        "DaosServerManager.stop_ranks([{}])".format(non_leader))
+
+                # Verify the pool leader has not changed
+                self.check_leader(pool_leader, False)
+
+        self.log.info("Test passed!")

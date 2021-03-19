@@ -23,6 +23,13 @@
 static bool slow_test;
 
 static void
+cleanup(void)
+{
+	daos_fail_loc_set(DAOS_VOS_GC_CONT_NULL | DAOS_FAIL_ALWAYS);
+	gc_wait();
+}
+
+static void
 update_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 	     uint64_t flags, char *dkey, char *akey, daos_iod_type_t type,
 	     daos_size_t iod_size, daos_recx_t *recx, char *buf)
@@ -611,6 +618,8 @@ discard_1(void **state)
 			    ds.td_agg_epr.epr_lo, ds.td_iod_size);
 		aggregate_basic(arg, &ds, 0, NULL);
 	}
+
+	cleanup();
 }
 /*
  * Discard on single akey-SV with epr [A, B].
@@ -640,6 +649,8 @@ discard_2(void **state)
 			    ds.td_agg_epr.epr_hi, ds.td_iod_size);
 		aggregate_basic(arg, &ds, 0, NULL);
 	}
+
+	cleanup();
 }
 
 /*
@@ -673,6 +684,8 @@ discard_3(void **state)
 	/* Object should have been deleted by discard */
 	rc = lookup_object(arg, arg->oid);
 	assert_rc_equal(rc, -DER_NONEXIST);
+
+	cleanup();
 }
 
 /*
@@ -707,6 +720,8 @@ discard_4(void **state)
 			    ds.td_iod_size);
 		aggregate_basic(arg, &ds, punch_nr, punch_epoch);
 	}
+
+	cleanup();
 }
 
 /*
@@ -738,7 +753,8 @@ discard_5(void **state)
 			    "iod_size:"DF_U64"\n", ds.td_iod_size);
 		aggregate_basic(arg, &ds, -1, NULL);
 	}
-	daos_fail_loc_set(0);
+
+	cleanup();
 }
 
 /*
@@ -761,6 +777,8 @@ discard_6(void **state)
 	ds.td_discard = true;
 
 	aggregate_multi(arg, &ds);
+
+	cleanup();
 }
 
 /*
@@ -792,6 +810,8 @@ discard_7(void **state)
 
 	VERBOSE_MSG("Discard epoch "DF_U64"\n", ds.td_agg_epr.epr_lo);
 	aggregate_basic(arg, &ds, 0, NULL);
+
+	cleanup();
 }
 
 /*
@@ -825,6 +845,8 @@ discard_8(void **state)
 	VERBOSE_MSG("Discard epr ["DF_U64", "DF_U64"]\n",
 		    ds.td_agg_epr.epr_lo, ds.td_agg_epr.epr_hi);
 	aggregate_basic(arg, &ds, 0, NULL);
+
+	cleanup();
 }
 
 /*
@@ -861,6 +883,8 @@ discard_9(void **state)
 	/* Object should have been deleted by discard */
 	rc = lookup_object(arg, arg->oid);
 	assert_rc_equal(rc, -DER_NONEXIST);
+
+	cleanup();
 }
 
 /*
@@ -899,6 +923,8 @@ discard_10(void **state)
 
 	VERBOSE_MSG("Discard punch records\n");
 	aggregate_basic(arg, &ds, punch_nr, punch_epoch);
+
+	cleanup();
 }
 
 /*
@@ -934,7 +960,8 @@ discard_11(void **state)
 
 	daos_fail_loc_set(DAOS_VOS_AGG_RANDOM_YIELD | DAOS_FAIL_ALWAYS);
 	aggregate_basic(arg, &ds, -1, NULL);
-	daos_fail_loc_set(0);
+
+	cleanup();
 }
 
 /*
@@ -962,6 +989,8 @@ discard_12(void **state)
 	ds.td_discard = true;
 
 	aggregate_multi(arg, &ds);
+
+	cleanup();
 }
 
 /*
@@ -1000,6 +1029,8 @@ discard_13(void **state)
 	ds.td_discard = true;
 
 	aggregate_basic(arg, &ds, -1, NULL);
+
+	cleanup();
 }
 
 enum {
@@ -1191,18 +1222,19 @@ agg_punches_test(void **state, int record_type, bool discard)
 			}
 		}
 	}
-	daos_fail_loc_set(0);
 }
 static void
 discard_14(void **state)
 {
 	agg_punches_test(state, DAOS_IOD_SINGLE, true);
+	cleanup();
 }
 
 static void
 discard_15(void **state)
 {
 	agg_punches_test(state, DAOS_IOD_ARRAY, true);
+	cleanup();
 }
 
 /*
@@ -1234,6 +1266,7 @@ aggregate_1(void **state)
 		aggregate_basic(arg, &ds, 0, NULL);
 	}
 
+	cleanup();
 }
 
 /*
@@ -1268,6 +1301,7 @@ aggregate_2(void **state)
 			    ds.td_iod_size);
 		aggregate_basic(arg, &ds, punch_nr, punch_epoch);
 	}
+	cleanup();
 }
 
 /*
@@ -1298,7 +1332,7 @@ aggregate_3(void **state)
 			    "iod_size:"DF_U64"\n", ds.td_iod_size);
 		aggregate_basic(arg, &ds, -1, NULL);
 	}
-	daos_fail_loc_set(0);
+	cleanup();
 }
 
 /*
@@ -1321,6 +1355,7 @@ aggregate_4(void **state)
 	ds.td_discard = false;
 
 	aggregate_multi(arg, &ds);
+	cleanup();
 }
 
 /*
@@ -1359,6 +1394,7 @@ aggregate_5(void **state)
 		aggregate_basic(arg, &ds, punch_nr,
 				punch_nr ? punch_epoch : NULL);
 	}
+	cleanup();
 }
 
 /*
@@ -1395,6 +1431,7 @@ aggregate_6(void **state)
 
 	VERBOSE_MSG("Aggregate disjoint records\n");
 	aggregate_basic(arg, &ds, punch_nr, punch_epoch);
+	cleanup();
 }
 
 /*
@@ -1436,6 +1473,7 @@ aggregate_7(void **state)
 
 	VERBOSE_MSG("Aggregate adjacent records\n");
 	aggregate_basic(arg, &ds, punch_nr, punch_epoch);
+	cleanup();
 }
 
 /*
@@ -1477,6 +1515,7 @@ aggregate_8(void **state)
 
 	VERBOSE_MSG("Aggregate overlapped records\n");
 	aggregate_basic(arg, &ds, punch_nr, punch_epoch);
+	cleanup();
 }
 
 /*
@@ -1514,6 +1553,7 @@ aggregate_9(void **state)
 
 	VERBOSE_MSG("Aggregate fully covered records\n");
 	aggregate_basic(arg, &ds, punch_nr, punch_epoch);
+	cleanup();
 }
 
 /*
@@ -1573,6 +1613,7 @@ aggregate_10(void **state)
 
 	VERBOSE_MSG("Aggregate records spanning window end.\n");
 	aggregate_basic(arg, &ds, punch_nr, punch_epoch);
+	cleanup();
 }
 
 /*
@@ -1607,7 +1648,7 @@ aggregate_11(void **state)
 
 	daos_fail_loc_set(DAOS_VOS_AGG_RANDOM_YIELD | DAOS_FAIL_ALWAYS);
 	aggregate_basic(arg, &ds, -1, NULL);
-	daos_fail_loc_set(0);
+	cleanup();
 }
 
 /*
@@ -1643,7 +1684,7 @@ aggregate_12(void **state)
 	daos_fail_loc_set(DAOS_VOS_AGG_MW_THRESH | DAOS_FAIL_ALWAYS);
 	daos_fail_value_set(50);
 	aggregate_basic(arg, &ds, -1, NULL);
-	daos_fail_loc_set(0);
+	cleanup();
 }
 
 /*
@@ -1671,6 +1712,7 @@ aggregate_13(void **state)
 	ds.td_discard = false;
 
 	aggregate_multi(arg, &ds);
+	cleanup();
 }
 
 static void
@@ -1821,18 +1863,21 @@ aggregate_14(void **state)
 	print_space_info(&pool_info, "FINAL");
 
 	assert_int_equal(i, repeat_cnt);
+	cleanup();
 }
 
 static void
 aggregate_15(void **state)
 {
 	agg_punches_test(state, DAOS_IOD_SINGLE, false);
+	cleanup();
 }
 
 static void
 aggregate_16(void **state)
 {
 	agg_punches_test(state, DAOS_IOD_ARRAY, false);
+	cleanup();
 }
 
 /*
@@ -1846,6 +1891,7 @@ aggregate_17(void **state)
 	arg->ta_flags |= TF_USE_CSUMS;
 	aggregate_6(state);
 	arg->ta_flags &= ~TF_USE_CSUMS;
+	cleanup();
 }
 
 /*
@@ -1859,6 +1905,7 @@ aggregate_18(void **state)
 	arg->ta_flags |= TF_USE_CSUMS;
 	aggregate_9(state);
 	arg->ta_flags &= ~TF_USE_CSUMS;
+	cleanup();
 }
 
 /*
@@ -1872,6 +1919,7 @@ aggregate_19(void **state)
 	arg->ta_flags |= TF_USE_CSUMS;
 	aggregate_10(state);
 	arg->ta_flags &= ~TF_USE_CSUMS;
+	cleanup();
 }
 
 /*
@@ -1885,6 +1933,7 @@ aggregate_20(void **state)
 	arg->ta_flags |= TF_USE_CSUMS;
 	aggregate_11(state);
 	arg->ta_flags &= ~TF_USE_CSUMS;
+	cleanup();
 }
 /*
  * Aggregate on single akey->EV, random punch, small flush threshold.
@@ -1921,7 +1970,7 @@ aggregate_21(void **state)
 	arg->ta_flags |= TF_USE_CSUMS;
 	aggregate_basic(arg, &ds, -1, NULL);
 	arg->ta_flags &= ~TF_USE_CSUMS;
-	daos_fail_loc_set(0);
+	cleanup();
 }
 
 static void
@@ -2018,12 +2067,14 @@ aggregate_22(void **state)
 	update_value(arg, oid, epoch++,
 		     VOS_OF_COND_DKEY_UPDATE, dkey,
 		     akey4, DAOS_IOD_SINGLE, sizeof(buf_u), &recx, buf_u);
+	cleanup();
 }
 
 
 static int
 agg_tst_teardown(void **state)
 {
+	daos_fail_loc_set(0);
 	test_args_reset((struct io_test_args *) *state, VPOOL_SIZE);
 	return 0;
 }
