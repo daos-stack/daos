@@ -32,3 +32,5 @@ $(NAME)-$(VERSION).tar.gz: $(shell git ls-files :/:)
 	            -o $$OLDPWD/$(basename $@) HEAD ./
 	rm -f $@
 	gzip $(basename $@)
+
+tarball: $(NAME)-$(VERSION).tar.gz
