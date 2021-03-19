@@ -24,7 +24,7 @@ class DmObjSmallTest(DataMoverTestBase):
     def setUp(self):
         """Set up each test case."""
         # Start the servers and agents
-        super(DmObjSmallTest, self).setUp()
+        super().setUp()
 
         self.obj_list = []
 
