@@ -19,7 +19,6 @@
 #include "test_group_rpc.h"
 #include "test_group_np_common.h"
 
-
 static void
 send_rpc_shutdown(crt_endpoint_t server_ep, crt_rpc_t *rpc_req)
 {
@@ -80,7 +79,6 @@ test_run(void)
 		DBG_PRINT("Skipping init stage.\n");
 
 	} else {
-
 		if (test_g.t_save_cfg) {
 			rc = crt_group_config_path_set(test_g.t_cfg_path);
 			D_ASSERTF(rc == 0,
@@ -129,8 +127,14 @@ test_run(void)
 
 	if (!test_g.t_shut_only && !test_g.t_skip_check_in &&
 	    (rank_list != NULL)) {
+		char  msg[256];
+
 		for (i = 0; i < rank_list->rl_nr; i++) {
 			rank = rank_list->rl_ranks[i];
+
+			snprintf(msg, sizeof(msg), "Sending message to %d",
+				 rank);
+			tc_log_msg(test_g.t_crt_ctx[0], grp, rank, msg);
 
 			for (tag = 0; tag < test_g.t_srv_ctx_num; tag++) {
 				DBG_PRINT("Sending rpc to %d:%d\n", rank, tag);
@@ -151,7 +155,6 @@ test_run(void)
 	/* Shutdown one particular rank */
 	if ((test_g.t_verify_swim_status.rank >= 0) &&
 	    (rank_list != NULL)) {
-
 		/* Check swim status on all (remaining) ranks */
 		for (i = 0; i < rank_list->rl_nr; i++) {
 			server_ep.ep_rank = rank_list->rl_ranks[i];
@@ -162,7 +165,6 @@ test_run(void)
 	if ((test_g.t_skip_shutdown) || (rank_list == NULL)) {
 		DBG_PRINT("Skipping shutdown stage.\n");
 	} else {
-
 		/* Shutdown all ranks */
 		for (i = 0; i < rank_list->rl_nr; i++) {
 			server_ep.ep_rank = rank_list->rl_ranks[i];
