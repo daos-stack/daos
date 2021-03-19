@@ -22,7 +22,7 @@ class PoolTestBase(TestWithServers):
         # Create test-case-specific DAOS log files
         self.update_log_file_names()
 
-        super(PoolTestBase, self).setUp()
+        super().setUp()
         self.dmg = self.get_dmg_command()
 
     def get_max_pool_sizes(self, scm_ratio=0.9, nvme_ratio=0.9):
