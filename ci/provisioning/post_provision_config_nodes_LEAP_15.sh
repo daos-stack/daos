@@ -5,6 +5,7 @@ DISTRO_NAME=leap15
 LSB_RELEASE=lsb-release
 EXCLUDE_UPGRADE=fuse,fuse-libs,fuse-devel,mercury,daos,daos-\*
 
+
 bootstrap_dnf() {
     time zypper --non-interactive install dnf
     rm -rf "$REPOS_DIR"
@@ -24,6 +25,14 @@ distro_custom() {
         sed -e '/MODULEPATH=/s/$/:\/usr\/share\/modules/'                     \
                /etc/profile.d/lmod.sh;                                        \
     fi
+
+    # force install of avocado 69.x
+    dnf -y erase avocado{,-common}                                              \
+                 python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}}
+    python3 -m pip install --upgrade pip
+    python3 -m pip install "avocado-framework<70.0"
+    python3 -m pip install "avocado-framework-plugin-result-html<70.0"
+    python3 -m pip install "avocado-framework-plugin-varianter-yaml-to-mux<70.0"
 
 }
 
@@ -74,6 +83,7 @@ post_provision_config_nodes() {
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
     time dnf -y install $LSB_RELEASE
+
     # shellcheck disable=SC2086
     if [ -n "$INST_RPMS" ] &&
        ! time dnf -y install $INST_RPMS; then

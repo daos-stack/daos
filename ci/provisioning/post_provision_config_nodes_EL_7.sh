@@ -38,6 +38,9 @@ group_repo_post() {
 }
 
 distro_custom() {
+    # shellcheck disable=SC2086
+    time dnf -y install python3
+
     if [ ! -e /usr/bin/pip3 ] &&
        [ -e /usr/bin/pip3.6 ]; then
         ln -s pip3.6 /usr/bin/pip3
@@ -57,6 +60,15 @@ gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-Debug-7
 enabled=0
 EOF
 
+    # force install of avocado 69.x
+    dnf -y erase avocado{,-common}                                              \
+                 python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}} \
+                 python36-PyYAML
+    pip3 install --upgrade pip
+    pip3 install "avocado-framework<70.0"
+    pip3 install "avocado-framework-plugin-result-html<70.0"
+    pip3 install "avocado-framework-plugin-varianter-yaml-to-mux<70.0"
+    pip3 install clustershell
 }
 
 post_provision_config_nodes() {
@@ -106,6 +118,7 @@ post_provision_config_nodes() {
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
     time dnf -y install $LSB_RELEASE
+
     # shellcheck disable=SC2086
     if [ -n "$INST_RPMS" ] &&
        ! time dnf -y install $INST_RPMS; then

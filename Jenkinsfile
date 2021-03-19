@@ -144,7 +144,7 @@ String unit_packages() {
         String packages =  'gotestsum openmpi3 ' +
                            'hwloc-devel argobots ' +
                            'fuse3-libs fuse3 ' +
-                           'boost-devel ' +
+                           'boost-python36-devel ' +
                            'libisa-l-devel libpmem ' +
                            'libpmemobj protobuf-c ' +
                            'spdk-devel libfabric-devel ' +
@@ -158,7 +158,7 @@ String unit_packages() {
             packages += " spdk-tools mercury-" +
                         readFile(stage_info['target'] +
                                  '-required-mercury-rpm-version').trim() +
-                        " boost-devel libisa-l_crypto libfabric-debuginfo" +
+                        " libisa-l_crypto libfabric-debuginfo" +
                         " argobots-debuginfo protobuf-c-debuginfo"
         }
         return packages
@@ -370,7 +370,7 @@ boolean tests_in_stage(String size) {
     Map stage_info = parseStageInfo()
     return sh(label: "Get test list for ${size}",
               script: """cd src/tests/ftest
-                         ./launch.py --list """ + stage_info['test_tag'],
+                         ./list_tests.py """ + stage_info['test_tag'],
               returnStatus: true) == 0
 }
 
@@ -768,6 +768,7 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallel_build(),
                                    stash_files: 'ci/test_files_to_stash.txt',
+                                   scons_exe: 'scons-3',
                                    scons_args: scons_faults_args()
                     }
                     post {
@@ -806,6 +807,7 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallel_build(),
                                    stash_files: 'ci/test_files_to_stash.txt',
+                                   scons_exe: 'scons-3',
                                    scons_args: scons_faults_args()
                     }
                     post {
@@ -843,6 +845,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
+                                   scons_exe: 'scons-3',
                                    scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
                     }
@@ -881,6 +884,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
+                                   scons_exe: 'scons-3',
                                    scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
                     }
@@ -918,6 +922,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
+                                   scons_exe: 'scons-3',
                                    scons_args: scons_faults_args() + " PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
                     }
@@ -1287,7 +1292,8 @@ pipeline {
                     }
                     steps {
                         sconsBuild coverity: "daos-stack/daos",
-                                   parallel_build: parallel_build()
+                                   parallel_build: parallel_build(),
+                                   scons_exe: 'scons-3'
                     }
                     post {
                         success {
