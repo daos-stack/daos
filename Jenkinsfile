@@ -14,8 +14,6 @@
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
 
-Calendar current_time = Calendar.getInstance()
-
 boolean doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
         return true
@@ -148,7 +146,7 @@ String unit_packages() {
         String packages =  'gotestsum openmpi3 ' +
                            'hwloc-devel argobots ' +
                            'fuse3-libs fuse3 ' +
-                           'boost-devel ' +
+                           'boost-python36-devel ' +
                            'libisa-l-devel libpmem ' +
                            'libpmemobj protobuf-c ' +
                            'spdk-devel libfabric-devel ' +
@@ -162,7 +160,7 @@ String unit_packages() {
             packages += " spdk-tools mercury-" +
                         readFile(stage_info['target'] +
                                  '-required-mercury-rpm-version').trim() +
-                        " boost-devel libisa-l_crypto libfabric-debuginfo" +
+                        " libisa-l_crypto libfabric-debuginfo" +
                         " argobots-debuginfo protobuf-c-debuginfo"
         }
         return packages
@@ -375,7 +373,7 @@ boolean tests_in_stage(String size) {
     Map stage_info = parseStageInfo()
     return sh(label: "Get test list for ${size}",
               script: """cd src/tests/ftest
-                         ./launch.py --list """ + stage_info['test_tag'],
+                         ./list_tests.py """ + stage_info['test_tag'],
               returnStatus: true) == 0
 }
 
@@ -407,6 +405,11 @@ boolean skip_build_on_centos7_gcc_debug() {
 
 boolean skip_build_on_centos7_gcc_release() {
     return skip_stage('build-centos7-gcc-release') ||
+           quickbuild()
+}
+
+boolean skip_build_on_centos8_gcc_dev() {
+    return skip_stage('build-centos8-gcc-dev') ||
            quickbuild()
 }
 
@@ -548,8 +551,7 @@ pipeline {
                             filename 'Dockerfile.checkpatch'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(add_repos:false) +
-                                                " --build-arg CB0=" + current_time.get(Calendar.WEEK_OF_YEAR)
+                            additionalBuildArgs dockerBuildArgs(add_repos:false)
                         }
                     }
                     steps {
@@ -769,6 +771,7 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallel_build(),
                                    stash_files: 'ci/test_files_to_stash.txt',
+                                   scons_exe: 'scons-3',
                                    scons_args: scons_faults_args()
                     }
                     post {
@@ -807,6 +810,7 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallel_build(),
                                    stash_files: 'ci/test_files_to_stash.txt',
+                                   scons_exe: 'scons-3',
                                    scons_args: scons_faults_args()
                     }
                     post {
@@ -844,6 +848,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
+                                   scons_exe: 'scons-3',
                                    scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
                     }
@@ -882,6 +887,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
+                                   scons_exe: 'scons-3',
                                    scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
                     }
@@ -919,6 +925,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
+                                   scons_exe: 'scons-3',
                                    scons_args: scons_faults_args() + " PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
                     }
@@ -934,6 +941,42 @@ pipeline {
                                       mv config.log config.log-centos7-clang
                                   fi"""
                             archiveArtifacts artifacts: 'config.log-centos7-clang',
+                                             allowEmptyArchive: true
+                        }
+                    }
+                }
+                stage('Build on CentOS 8') {
+                    when {
+                        beforeAgent true
+                        expression { ! skip_build_on_centos8_gcc_dev() }
+                     }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.centos.8'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(qb: quickbuild(),
+                                                                deps_build:true) +
+                                                " -t ${sanitized_JOB_NAME}-centos8 "
+                        }
+                    }
+                    steps {
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_args: scons_faults_args() + " PREFIX=/opt/daos TARGET_TYPE=release",
+                                   build_deps: "no",
+                                   scons_exe: 'scons-3'
+                    }
+                    post {
+                        always {
+                            recordIssues enabledForFailure: true,
+                                         aggregatingResults: true,
+                                         tool: gcc4(pattern: 'centos8-gcc-build.log',
+                                                    id: "analysis-centos8-gcc")
+                        }
+                        unsuccessful {
+                            sh """if [ -f config.log ]; then
+                                      mv config.log config.log-centos8-gcc
+                                  fi"""
+                            archiveArtifacts artifacts: 'config.log-centos8-gcc',
                                              allowEmptyArchive: true
                         }
                     }
@@ -1253,7 +1296,8 @@ pipeline {
                     }
                     steps {
                         sconsBuild coverity: "daos-stack/daos",
-                                   parallel_build: parallel_build()
+                                   parallel_build: parallel_build(),
+                                   scons_exe: 'scons-3'
                     }
                     post {
                         success {

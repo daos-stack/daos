@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 import traceback
 
@@ -20,7 +20,7 @@ class ObjOpenBadParam(TestWithServers):
     :avocado: recursive
     """
     def setUp(self):
-        super(ObjOpenBadParam, self).setUp()
+        super().setUp()
         self.prepare_pool()
 
         try:
@@ -32,10 +32,10 @@ class ObjOpenBadParam(TestWithServers):
             self.container.open()
 
             # create an object and write some data into it
-            thedata = "a string that I want to stuff into an object"
+            thedata = b"a string that I want to stuff into an object"
             self.datasize = len(thedata) + 1
-            self.dkey = "this is the dkey"
-            self.akey = "this is the akey"
+            self.dkey = b"this is the dkey"
+            self.akey = b"this is the akey"
             self.obj = self.container.write_an_obj(thedata,
                                                    self.datasize,
                                                    self.dkey,
@@ -45,8 +45,8 @@ class ObjOpenBadParam(TestWithServers):
             thedata2 = self.container.read_an_obj(self.datasize, self.dkey,
                                                   self.akey, self.obj)
             if thedata not in thedata2.value:
-                print(thedata)
-                print(thedata2.value)
+                self.log.info("thedata:  %s", thedata)
+                self.log.info("thedata2: %s", thedata2.value)
                 err_str = "Error reading back data, test failed during the " \
                           "initial setup."
                 self.d_log.error(err_str)

@@ -23,7 +23,7 @@ class DmPosixTypesTest(DataMoverTestBase):
     def setUp(self):
         """Set up each test case."""
         # Start the servers and agents
-        super(DmPosixTypesTest, self).setUp()
+        super().setUp()
 
         # Get the parameters
         self.ior_flags = self.params.get(

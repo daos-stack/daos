@@ -10,13 +10,7 @@ def build_shim_module(env, lib_prefix, version):
     new_env = env.Clone()
     extra_flags = ""
 
-    if version == "2.7":
-        tgt_name = 'pydaos_shim_27'
-
-        if not GetOption('clean'):
-            new_env.ParseConfig("pkg-config --cflags --libs python2")
-
-    elif version == "3":
+    if version == "3":
         tgt_name = 'pydaos_shim_3'
         extra_flags = " -D__USE_PYTHON3__==1"
         new_env.ParseConfig("pkg-config --cflags --libs python3")
@@ -57,12 +51,6 @@ def scons():
     Import('env', 'prereqs')
 
     build_shim_module(env, '$PREFIX/lib64/', "3")
-
-    # Python 2.7 is optional. If python 2.7 is not found. We skip the targets
-    # that rely on python 2.7
-    if prereqs.check_component('python27_devel'):
-        build_shim_module(env, '$PREFIX/lib64/', "2.7")
-
 
 if __name__ == "SCons.Script":
     scons()

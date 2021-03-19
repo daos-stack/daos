@@ -12,8 +12,7 @@ import time
 from avocado import fail_on
 
 from command_utils_base import \
-    CommandFailure, FormattedParameter, YamlParameters, CommandWithParameters, \
-    CommonConfig
+    CommandFailure, FormattedParameter, CommandWithParameters, CommonConfig
 from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
 from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
     convert_list
@@ -74,13 +73,13 @@ class DaosServerCommand(YamlCommand):
             timeout (int, optional): number of seconds to wait for patterns to
                 appear in the subprocess output. Defaults to 30 seconds.
         """
-        super(DaosServerCommand, self).__init__(
+        super().__init__(
             "/run/daos_server/*", "daos_server", path, yaml_cfg, timeout)
         self.pattern = self.NORMAL_PATTERN
 
         # If specified use the configuration file from the YamlParameters object
         default_yaml_file = None
-        if isinstance(self.yaml, YamlParameters):
+        if self.yaml is not None and hasattr(self.yaml, "filename"):
             default_yaml_file = self.yaml.filename
 
         # Command line parameters:
@@ -131,7 +130,7 @@ class DaosServerCommand(YamlCommand):
         Args:
             test (Test): avocado Test object
         """
-        super(DaosServerCommand, self).get_params(test)
+        super().get_params(test)
 
         # Run daos_server with test variant specific log file names if specified
         self.yaml.update_log_files(
@@ -164,7 +163,7 @@ class DaosServerCommand(YamlCommand):
 
         """
         value = False
-        if isinstance(self.yaml, YamlParameters):
+        if self.yaml is not None and hasattr(self.yaml, "using_nvme"):
             value = self.yaml.using_nvme
         return value
 
@@ -177,7 +176,7 @@ class DaosServerCommand(YamlCommand):
 
         """
         value = False
-        if isinstance(self.yaml, YamlParameters):
+        if self.yaml is not None and hasattr(self.yaml, "using_dcpm"):
             value = self.yaml.using_dcpm
         return value
 
@@ -186,7 +185,7 @@ class DaosServerCommand(YamlCommand):
 
         def __init__(self):
             """Create a network subcommand object."""
-            super(DaosServerCommand.NetworkSubCommand, self).__init__(
+            super().__init__(
                 "/run/daos_server/network/*", "network")
 
         def get_sub_command_class(self):
@@ -204,10 +203,7 @@ class DaosServerCommand(YamlCommand):
 
             def __init__(self):
                 """Create a network scan subcommand object."""
-                super(
-                    DaosServerCommand.NetworkSubCommand.ScanSubCommand,
-                    self).__init__(
-                        "/run/daos_server/network/scan/*", "scan")
+                super().__init__("/run/daos_server/network/scan/*", "scan")
 
                 # daos_server network scan command options:
                 #   --provider=     Filter device list to those that support the
@@ -223,8 +219,7 @@ class DaosServerCommand(YamlCommand):
 
         def __init__(self):
             """Create a start subcommand object."""
-            super(DaosServerCommand.StartSubCommand, self).__init__(
-                "/run/daos_server/start/*", "start")
+            super().__init__("/run/daos_server/start/*", "start")
 
             # daos_server start command options:
             #   --port=                 Port for the gRPC management interface
@@ -258,8 +253,7 @@ class DaosServerCommand(YamlCommand):
 
         def __init__(self):
             """Create a storage subcommand object."""
-            super(DaosServerCommand.StorageSubCommand, self).__init__(
-                "/run/daos_server/storage/*", "storage")
+            super().__init__("/run/daos_server/storage/*", "storage")
 
         def get_sub_command_class(self):
             """Get the daos_server storage sub command object."""
@@ -276,10 +270,8 @@ class DaosServerCommand(YamlCommand):
 
             def __init__(self):
                 """Create a storage subcommand object."""
-                super(
-                    DaosServerCommand.StorageSubCommand.PrepareSubCommand,
-                    self).__init__(
-                        "/run/daos_server/storage/prepare/*", "prepare")
+                super().__init__(
+                    "/run/daos_server/storage/prepare/*", "prepare")
 
                 # daos_server storage prepare command options:
                 #   --pci-whitelist=    Whitespace separated list of PCI
@@ -345,7 +337,7 @@ class DaosServerManager(SubprocessManager):
         """
         server_command = get_server_command(
             group, svr_cert_dir, bin_dir, svr_config_file, svr_config_temp)
-        super(DaosServerManager, self).__init__(server_command, manager)
+        super().__init__(server_command, manager)
         self.manager.job.sub_command_override = "start"
 
         # Dmg command to access this group of servers which will be configured
@@ -379,7 +371,7 @@ class DaosServerManager(SubprocessManager):
         Args:
             test (Test): avocado Test object
         """
-        super(DaosServerManager, self).get_params(test)
+        super().get_params(test)
         # Get the values for the dmg parameters
         self.dmg.get_params(test)
 
@@ -580,7 +572,8 @@ class DaosServerManager(SubprocessManager):
         except CommandFailure as error:
             self.manager.kill()
             raise ServerFailed(
-                "Failed to start servers before format: {}".format(error))
+                "Failed to start servers before format: {}".format(
+                    error)) from error
 
     def detect_engine_start(self, host_qty=None):
         """Detect when all the engines have started.
@@ -683,7 +676,7 @@ class DaosServerManager(SubprocessManager):
 
         # Stop the subprocess running the job manager command
         try:
-            super(DaosServerManager, self).stop()
+            super().stop()
         except CommandFailure as error:
             messages.append(
                 "Error stopping the {} subprocess: {}".format(
@@ -726,10 +719,10 @@ class DaosServerManager(SubprocessManager):
         try:
             setting = self.ENVIRONMENT_VARIABLE_MAPPING[name]
 
-        except IndexError:
+        except IndexError as error:
             raise ServerFailed(
                 "Unknown server config setting mapping for the {} environment "
-                "variable!".format(name))
+                "variable!".format(name)) from error
 
         return self.get_config_value(setting)
 
@@ -750,10 +743,10 @@ class DaosServerManager(SubprocessManager):
                 "Error obtaining {} output: {}".format(self.dmg, data))
         try:
             states = list(set([data[rank]["state"] for rank in data]))
-        except KeyError:
+        except KeyError as error:
             raise ServerFailed(
                 "Unexpected result from {} - missing 'state' key: {}".format(
-                    self.dmg, data))
+                    self.dmg, data)) from error
         if len(states) > 1:
             # Multiple states for different ranks detected
             raise ServerFailed(
