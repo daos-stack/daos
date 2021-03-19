@@ -1724,8 +1724,6 @@ def run_dfuse(server, conf):
         #create_and_read_via_il(dfuse, cdir)
     fatal_errors.add_result(dfuse.stop())
 
-    uns_container = container
-
     container2 = str(uuid.uuid4())
     dfuse = DFuse(server, conf, pool=pools[0])
     pre_stat = os.stat(dfuse.dir)
