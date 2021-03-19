@@ -2334,6 +2334,118 @@ start_over:
 	start_epoch = epoch + 1;
 }
 
+static struct dtx_id
+execute_op(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
+	   daos_key_t *dkey, daos_key_t *akey, d_sg_list_t *sgl,
+	   char *buf, int len, bool commit, int op)
+{
+	struct vos_ioreq	req = {0};
+	daos_iod_t		iod = {0};
+	int			rc;
+
+	vts_dtx_begin(&oid, coh, epoch, 0, &req.dth);
+
+	req.oid = oid;
+	req.coh = coh;
+	req.xid = req.dth->dth_xid;
+	req.flags = 0;
+	req.dkey = dkey;
+	req.akey = akey;
+	if (akey)
+		req.akey_nr = 1;
+
+	if (op <= TX_OP_PUNCH_AKEY) {
+		do_punch(&req);
+		goto do_commit;
+	}
+
+	iod.iod_type = DAOS_IOD_SINGLE;
+	iod.iod_recxs = NULL;
+	iod.iod_nr = 1;
+	req.akey = NULL;
+	req.iod = &iod;
+	iod.iod_name = *akey;
+	iod.iod_size = len;
+	d_iov_set(&sgl->sg_iovs[0], (void *)buf, iod.iod_size);
+	sgl->sg_nr = 1;
+	sgl->sg_nr_out = 0;
+	req.sgl = sgl;
+	req.fetch_sgl = sgl;
+	do_io(&req, op);
+do_commit:
+	vts_dtx_end(req.dth);
+	if (commit && req.commit) {
+		rc = vos_dtx_commit(coh, &req.xid, 1, NULL);
+		assert_rc_equal(rc, 1);
+	}
+
+	return req.xid;
+}
+
+
+static void
+uncommitted_parent(void **state)
+{
+	struct io_test_args	*arg = *state;
+	int			rc = 0;
+	daos_key_t		dkey;
+	daos_key_t		akey[2];
+	daos_iod_t		iod;
+	d_sg_list_t		sgl;
+	char			buf[32];
+	daos_epoch_t		epoch = start_epoch;
+	daos_handle_t		coh;
+	char			*first = "Hello";
+	char			dkey_buf[UPDATE_DKEY_SIZE];
+	char			akey_buf[2][UPDATE_AKEY_SIZE];
+	daos_unit_oid_t		oid;
+	struct dtx_id		xid;
+
+	test_args_reset(arg, VPOOL_SIZE);
+	coh = arg->ctx.tc_co_hdl;
+
+	memset(&iod, 0, sizeof(iod));
+
+	rc = d_sgl_init(&sgl, 1);
+	assert_rc_equal(rc, 0);
+
+	/* Set up dkey and akey */
+	oid = gen_oid(arg->ofeat);
+	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
+	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
+	vts_key_gen(&akey_buf[0][0], arg->akey_size, true, arg);
+	set_iov(&akey[0], &akey_buf[0][0], arg->ofeat & DAOS_OF_AKEY_UINT64);
+	vts_key_gen(&akey_buf[1][0], arg->akey_size, true, arg);
+	set_iov(&akey[1], &akey_buf[1][0], arg->ofeat & DAOS_OF_AKEY_UINT64);
+
+	execute_op(coh, oid, epoch, &dkey, &akey[0], &sgl, first, 5, true,
+		   TX_OP_UPDATE1);
+	epoch += 10;
+	xid = execute_op(coh, oid, epoch, NULL, NULL, NULL, NULL, 0, false,
+			 TX_OP_PUNCH_OBJ);
+	epoch += 10;
+	execute_op(coh, oid, epoch, &dkey, &akey[1], &sgl, first, 5, true,
+		   TX_OP_UPDATE1);
+	/** Commit the punch */
+	rc = vos_dtx_commit(coh, &xid, 1, NULL);
+	assert_rc_equal(rc, 1);
+
+	memset(buf, 'x', sizeof(buf));
+	epoch += 10;
+	execute_op(coh, oid, epoch, &dkey, &akey[0], &sgl, buf, 5, true,
+		   TX_OP_FETCH1);
+	assert_memory_equal(buf, "xxxxx", 5);
+
+	memset(buf, 'x', sizeof(buf));
+	epoch += 10;
+	execute_op(coh, oid, epoch, &dkey, &akey[1], &sgl, buf, 5, true,
+		   TX_OP_FETCH1);
+	assert_memory_equal(buf, first, 5);
+
+	d_sgl_fini(&sgl, false);
+	start_epoch = epoch + 1;
+}
+
 static void
 test_multiple_key_conditionals_common(void **state, bool with_dtx)
 {
@@ -2572,6 +2684,7 @@ static const struct CMUnitTest punch_model_tests_pmdk[] = {
 	{ "VOS864: Multikey conditionals with tx",
 		test_multiple_key_conditionals_tx, NULL, NULL },
 	{ "VOS865: Many transactions", many_tx, NULL, NULL },
+	{ "VOS866: Uncommitted parent punch", uncommitted_parent, NULL, NULL },
 };
 
 static const struct CMUnitTest punch_model_tests_all[] = {
