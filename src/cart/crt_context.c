@@ -615,8 +615,15 @@ crt_rank_abort_all(crt_group_t *grp)
 	grp_membs = grp_priv_get_membs(grp_priv);
 	rc2 = 0;
 
+	if (grp_membs == NULL) {
+		D_ERROR("No members in the group\n");
+		D_GOTO(out, rc2 = -DER_INVAL);
+	}
+
 	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
 	for (i = 0; i < grp_membs->rl_nr; i++) {
+		D_DEBUG("Aborting RPCs to rank=%d\n", grp_membs->rl_ranks[i]);
+
 		rc = crt_rank_abort(grp_membs->rl_ranks[i]);
 		if (rc != DER_SUCCESS) {
 			D_WARN("Abort to rank=%d failed with rc=%d\n",
@@ -626,6 +633,7 @@ crt_rank_abort_all(crt_group_t *grp)
 	}
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
+out:
 	return rc2;
 }
 
