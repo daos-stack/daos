@@ -123,7 +123,9 @@ post_provision_config_nodes() {
         exit 1
     fi
 
-    cat /etc/do-release
+    if [ -f /etc/do-release ]; then
+        cat /etc/do-release
+    fi
     cat /etc/os-release
 
     exit 0
