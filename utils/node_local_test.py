@@ -1366,7 +1366,7 @@ def run_tests(dfuse):
     fname = os.path.join(path, 'test_file3')
 
     rc = subprocess.run(['dd', 'if=/dev/zero', 'bs=16k', 'count=64',
-                         'of={}'.format(os.path.join(path, 'dd_file'))])
+                         'of={}'.format(os.path.join(path, 'dd_file'))]) # nosec
     print(rc)
     assert rc.returncode == 0 # nosec
     ofd = open(fname, 'w')
@@ -1710,8 +1710,8 @@ def run_dfuse(server, conf):
     container = str(uuid.uuid4())
     dfuse.start(v_hint='no_pool')
     print(os.statvfs(dfuse.dir))
-    subprocess.run(['df', '-h'])
-    subprocess.run(['df', '-i', dfuse.dir])
+    subprocess.run(['df', '-h'])  # nosec
+    subprocess.run(['df', '-i', dfuse.dir]) # nosec
     print('Running dfuse with nothing')
     stat_and_check(dfuse, pre_stat)
     check_no_file(dfuse)
