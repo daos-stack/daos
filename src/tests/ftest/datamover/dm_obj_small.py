@@ -64,7 +64,7 @@ class DmObjSmallTest(DataMoverTestBase):
             ioreq = IORequest(cont.pool.context, cont.container, obj)
             for dkey_idx in range(self.num_dkeys_per_obj):
                 c_dkey = ctypes.create_string_buffer(
-                    "dkey {}".format(dkey_idx))
+                    "dkey {}".format(dkey_idx).encode())
 
                 for akey_idx in range(self.num_akeys_single_per_dkey):
                     # Round-robin to get the size of data and
@@ -74,8 +74,8 @@ class DmObjSmallTest(DataMoverTestBase):
                     data_val = str(akey_idx % 10)
                     data = data_size * data_val
                     c_akey = ctypes.create_string_buffer(
-                        "akey single {}".format(akey_idx))
-                    c_value = ctypes.create_string_buffer(data)
+                        "akey single {}".format(akey_idx).encode())
+                    c_value = ctypes.create_string_buffer(data.encode())
                     c_size = ctypes.c_size_t(ctypes.sizeof(c_value))
                     ioreq.single_insert(c_dkey, c_akey, c_value, c_size)
 
@@ -89,12 +89,13 @@ class DmObjSmallTest(DataMoverTestBase):
                     num_extents = self.akey_extents[akey_extent_idx]
                     c_data = []
                     akey = "akey array {}".format(akey_idx)
-                    c_akey = ctypes.create_string_buffer(akey)
+                    c_akey = ctypes.create_string_buffer(akey.encode())
                     for data_idx in range(num_extents):
                         data_val = str(data_idx % 10)
                         data = data_size * data_val
-                        c_data.append([ctypes.create_string_buffer(data),
-                                      data_size])
+                        c_data.append([
+                            ctypes.create_string_buffer(data.encode()),
+                            data_size])
                     ioreq.insert_array(c_dkey, c_akey, c_data)
             obj.close()
         cont.close()
@@ -118,7 +119,7 @@ class DmObjSmallTest(DataMoverTestBase):
             ioreq = IORequest(cont.pool.context, cont.container, obj)
             for dkey_idx in range(self.num_dkeys_per_obj):
                 dkey = "dkey {}".format(dkey_idx)
-                c_dkey = ctypes.create_string_buffer(dkey)
+                c_dkey = ctypes.create_string_buffer(dkey.encode())
 
                 for akey_idx in range(self.num_akeys_single_per_dkey):
                     # Round-robin to get the size of data and
@@ -126,15 +127,15 @@ class DmObjSmallTest(DataMoverTestBase):
                     akey_size_idx = akey_idx % len(self.akey_sizes)
                     data_size = self.akey_sizes[akey_size_idx]
                     data_val = str(akey_idx % 10)
-                    data = data_size * data_val
+                    data = str(data_size * data_val)
                     akey = "akey single {}".format(akey_idx)
-                    c_akey = ctypes.create_string_buffer(akey)
+                    c_akey = ctypes.create_string_buffer(akey.encode())
                     buf = ioreq.single_fetch(c_dkey, c_akey, data_size + 1)
-                    actual_data = str(buf.value)
+                    actual_data = str(buf.value.decode())
                     if actual_data != data:
                         self.log.info("Expected:\n%s\nBut got:\n%s",
-                            str(data[:100]) + "...",
-                            str(actual_data[:100]) + "...")
+                            data[:100] + "...",
+                            actual_data[:100] + "...")
                         self.log.info(
                             "For:\nobj: %s.%s\ndkey: %s\nakey: %s",
                                 str(obj.c_oid.hi), str(obj.c_oid.lo),
@@ -152,16 +153,17 @@ class DmObjSmallTest(DataMoverTestBase):
                     num_extents = self.akey_extents[akey_extent_idx]
                     c_num_extents = ctypes.c_uint(num_extents)
                     akey = "akey array {}".format(akey_idx)
-                    c_akey = ctypes.create_string_buffer(akey)
+                    c_akey = ctypes.create_string_buffer(akey.encode())
                     actual_data = ioreq.fetch_array(c_dkey, c_akey,
                                                     c_num_extents, c_data_size)
                     for data_idx in range(num_extents):
                         data_val = str(data_idx % 10)
-                        data = data_size * data_val
-                        if data != actual_data[data_idx]:
+                        data = str(data_size * data_val)
+                        actual_idx = str(actual_data[data_idx].decode())
+                        if data != actual_idx:
                             self.log.info("Expected:\n%s\nBut got:\n%s",
-                                str(data[:100]) + "...",
-                                str(actual_data[data_idx][:100]) + "...")
+                                data[:100] + "...",
+                                actual_idx + "...")
                             self.log.info(
                                 "For:\nobj: %s.%s\ndkey: %s\nakey: %s",
                                     str(obj.c_oid.hi), str(obj.c_oid.lo),
