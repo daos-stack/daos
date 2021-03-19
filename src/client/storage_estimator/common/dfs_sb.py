@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from __future__ import print_function
+
 import json
 import sys
 import os
@@ -223,7 +223,7 @@ class STR_BUFFER(ctypes.Structure):
                 ("cstr", ctypes.c_char_p)]
 
 
-class BASE_CLASS(object):
+class BASE_CLASS():
     def __init__(self, lib_name):
         self._lib = self._load_lib(lib_name)
 
@@ -246,7 +246,7 @@ class BASE_CLASS(object):
 
 class VOS_SIZE(BASE_CLASS):
     def __init__(self):
-        super(VOS_SIZE, self).__init__('libvos_size.so')
+        super().__init__('libvos_size.so')
         self._data = STR_BUFFER()
 
     def __del__(self):
@@ -269,7 +269,7 @@ class VOS_SIZE(BASE_CLASS):
 
 class FREE_DFS_SB(BASE_CLASS):
     def __init__(self):
-        super(FREE_DFS_SB, self).__init__('libdfs_internal.so')
+        super().__init__('libdfs_internal.so')
 
     def dfs_free_sb_layout(self, data_pointer):
         self._lib.dfs_free_sb_layout(data_pointer)
@@ -277,7 +277,7 @@ class FREE_DFS_SB(BASE_CLASS):
 
 class DFS_SB(BASE_CLASS):
     def __init__(self):
-        super(DFS_SB, self).__init__('libdfs.so')
+        super().__init__('libdfs.so')
         self._dkey = daos_cref.IOV()
         self._iods = ctypes.pointer(daos_cref.DaosIODescriptor())
         self._akey_count = ctypes.c_int()
