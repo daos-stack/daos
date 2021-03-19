@@ -924,14 +924,13 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 	/* Make sure config is valid */
 	if (cfg == NULL) {
 		/* avoid checkpatch warning */
-		goto exit_code_ret;
+		D_GOTO(exit_code_ret, value);
 	}
 
 	/* See if there is an exact match, if so,then return value */
 	config_ret = ConfigReadInt(cfg, sec_name, key, &ivalue, -1);
 	if ((config_ret == CONFIG_OK) && (ivalue != -1)) {
-		value = ivalue;
-		goto exit_code_ret;
+		D_GOTO(exit_code_ret, value = ivalue);
 	}
 
 	/* Determine which stats we are looking at */
@@ -943,8 +942,7 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 		}
 	}
 	if (i >= status_size) {
-		ret = -DER_NONEXIST;
-		goto exit_code;
+		D_GOTO(exit_code, ret = -DER_NONEXIST);
 	}
 	key_name = status[i].name;
 
@@ -964,20 +962,20 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 		/* avoid checkpatch warning */
 		temp = sscanf(c_master, "%d", &master);
 		if (temp != 1)
-			goto exit_code_free;
+			D_GOTO(exit_code_free, value);
 	}
 	if ((c_tag != NULL) && isdigit(*c_tag)) {
 		/* avoid checkpatch warning */
 		temp = sscanf(c_tag, "%d", &master_tag);
 		if (temp != 1)
-			goto exit_code_free;
+			D_GOTO(exit_code_free, value);
 	}
 
 	/*
 	 * Parse string to find endpoint and its tag.
 	 * Not necessary top specify endpoint.
 	 * Strip off endpoit EP:T and then the tag.
-	 * Not neccsary to specified endpoint/
+	 * Not neccsary to specified endpoint.
 	 * Tag not necessary specified, or as *
 	 */
 	c_endpoint = strtok_r(c_endpoint, "-", &c_remaining);
@@ -986,13 +984,13 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 		/* avoid check patch warning */
 		temp = sscanf(c_endpoint, "%d", &endpoint);
 		if (temp != 1)
-			goto exit_code_free;
+			D_GOTO(exit_code_free, value);
 	}
 	if ((c_tag != NULL) && isdigit(*c_tag)) {
 		/* avoid check patch warning */
 		temp = sscanf(c_tag, "%d", &endpoint_tag);
 		if (temp != 1)
-			goto exit_code_free;
+			D_GOTO(exit_code_free, value);
 	}
 
 	/*
@@ -1002,7 +1000,7 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 	 * search
 	 */
 	if ((master == -1) || (endpoint == -1))
-		goto code_search_master;
+		D_GOTO(code_search_master, value);
 	number_keys = 0;
 	number_keys = ConfigGetKeys(cfg, sec_name,
 				    key_names, max_keys, number_keys);
@@ -1030,7 +1028,7 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 				/* avoid check patch warning */
 				temp = sscanf(c_master, "%d", &itemp);
 				if (temp != 1)
-					goto exit_code_free;
+					D_GOTO(exit_code_free, value);
 			}
 
 			/* Match with master, check endpoint */
@@ -1046,12 +1044,12 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 					temp = sscanf(c_endpoint, "%d",
 						      &itemp2);
 					if (temp != 1)
-						goto exit_code_free;
+						D_GOTO(exit_code_free, value);
 				}
 				if (itemp2 == endpoint) {
 					/* Have a match */
-					value = ini_value;
-					goto exit_code_free;
+					D_GOTO(exit_code_free,
+					       value = ini_value);
 				} /* End of endpoint match */
 			} /* end of master match */
 		} /* End of for loop */
@@ -1070,7 +1068,7 @@ code_search_master:
 	 * Assumes that the endpoint not specified.
 	 */
 	if (master == -1)
-		goto code_search_endpoint;
+		D_GOTO(code_search_endpoint, value);
 	number_keys = 0;
 	number_keys = ConfigGetKeys(cfg, sec_name,
 				    key_names, max_keys, number_keys);
@@ -1098,7 +1096,7 @@ code_search_master:
 				/* avoid checkpatch warning */
 				temp = sscanf(c_master, "%d", &itemp);
 				if (temp != 1)
-					goto exit_code_free;
+					D_GOTO(exit_code_free, value);
 			}
 			if (itemp == master) {
 				/* endpoint must be a '*' */
@@ -1108,8 +1106,8 @@ code_search_master:
 				if ((c_endpoint != NULL) &&
 				    strcmp(c_endpoint, "*") == 0) {
 					/* Have a match, read value and exit */
-					value = ini_value;
-					goto exit_code_free;
+					D_GOTO(exit_code_free,
+					       value = ini_value);
 				}
 			} /* End of master compare */
 		} /* End of for loop */
@@ -1128,7 +1126,7 @@ code_search_endpoint:
 	 * Assumes that the master specified with '*'.
 	 */
 	if (endpoint == -1)
-		goto exit_code_free;
+		D_GOTO(exit_code_free, value);
 	number_keys = 0;
 	number_keys = ConfigGetKeys(cfg, sec_name,
 				    key_names, max_keys, number_keys);
@@ -1162,13 +1160,13 @@ code_search_endpoint:
 					/* avoid checkpatch warning */
 					temp = sscanf(c_endpoint, "%d", &itemp);
 					if (temp != 1)
-						goto exit_code_free;
+						D_GOTO(exit_code_free, value);
 				}
 
 				/* Have a match, read value and exit */
 				if (endpoint == itemp) {
-					value = ini_value;
-					goto exit_code_free;
+					D_GOTO(exit_code_free,
+					       value = ini_value);
 				}
 			} /* End of master compare */
 		} /* End of for loop */
@@ -1205,8 +1203,7 @@ static int compare_print_results(char *section_name, char *input_section_name,
 		if (config_ret != CONFIG_OK) {
 			D_ERROR("Cannot open expected file: %s\n",
 				g_expected_infile);
-			ret_value = -ENOENT;
-			goto cleanup;
+			D_GOTO(cleanup, ret_value = -ENOENT);
 		}
 	}
 
@@ -1307,8 +1304,7 @@ static int compare_print_results(char *section_name, char *input_section_name,
 		str = (char *)malloc(strlen(g_expected_results));
 		if (str == NULL) {
 			D_ERROR(" Memory Not allocated\n");
-			ret_value = -ENOMEM;
-			goto cleanup;
+			D_GOTO(cleanup, ret_value = -ENOENT);
 		}
 		strcpy(str, g_expected_results);
 		tptr = str;
@@ -1345,8 +1341,7 @@ static int compare_print_results(char *section_name, char *input_section_name,
 			/* make sure we had a valid input */
 			if (j >= status_size) {
 				D_WARN("Illegal Input\n");
-				ret_value = -EINVAL;
-				goto next_arg;
+				D_GOTO(next_arg, ret_value = -EINVAL);
 			}
 
 			status[j].flag |= TST_OUTPUT;
@@ -1425,7 +1420,7 @@ next_arg:
 					      status[i].name);
 				if (tkey == NULL) {
 					/* avoid checkpatch warning */
-					goto increment_code;
+					D_GOTO(increment_code, ret_value);
 				}
 
 				ConfigReadInt(cfg_output, section_name,
@@ -1439,8 +1434,7 @@ next_arg:
 				ret = get_config_value(Ecfg, sec_name, key,
 						       &ivalue, ivalue);
 				if (ret < 0) {
-					ret_value = ret;
-					goto cleanup;
+					D_GOTO(cleanup, ret_value = ret);
 				}
 				scale = (float)ivalue;
 
@@ -1449,8 +1443,7 @@ next_arg:
 				ret = get_config_value(Ecfg, sec_name, key,
 						       &ivalue, ivalue);
 				if (ret < 0) {
-					ret_value = ret;
-					goto cleanup;
+					D_GOTO(cleanup, ret_value = ret);
 				}
 
 				/* Find range for testing */
@@ -1647,14 +1640,14 @@ file_name_create(char **gpath_name, bool *name_allocated, char *env)
 	D_EMIT(" env:       %s\n", env_name);
 
 	if (env_name == NULL) {
-		D_EMIT(" Environment %s not set\n", env);
-		goto cleanup;
+		D_INFO(" Environment %s not set\n", env);
+		D_GOTO(cleanup, ret_value);
 	}
 
 	/* If no name given, then just return */
 	if (path_name == NULL) {
-		D_EMIT(" Path Name not set\n");
-		goto cleanup;
+		D_INFO(" Path Name not set\n");
+		D_GOTO(cleanup, ret_value);
 	}
 
 	/*
@@ -1716,7 +1709,7 @@ static char *config_section_name_create(char *section_name,
 	name_str = (char *)malloc(len + 1);
 	if (name_str == NULL) {
 		/* avoid checkpatch warning */
-		goto exit_code;
+		D_GOTO(exit_code, name_str = NULL);
 	}
 
 	/*
@@ -1734,8 +1727,7 @@ static char *config_section_name_create(char *section_name,
 		/* Verify we have test parameters passed. */
 		if (test_params == (struct crt_st_start_params *)NULL) {
 			free(name_str);
-			name_str = NULL;
-			goto exit_code;
+			D_GOTO(exit_code, name_str = NULL);
 		}
 
 		/* Add alignment parameter */
@@ -2003,8 +1995,7 @@ static int test_msg_size(crt_context_t crt_ctx,
 						  test_params);
 	if (section_name == NULL) {
 		D_ERROR("No memory allocated for sector name");
-		ret_value = -ENOMEM;
-		goto exit_code;
+		D_GOTO(exit_code, ret_value = -ENOMEM);
 	}
 	config_create_section(cfg_output, section_name, false);
 
@@ -3201,8 +3192,7 @@ static int config_file_setup(char *file_name, char *section_name,
 		}
 		if (temp < 0) {
 			/* Avoid checkpatch warning */
-			ret = -1;
-			goto cleanup;
+			D_GOTO(cleanup, ret = -1);
 		}
 	}
 
@@ -3213,8 +3203,7 @@ static int config_file_setup(char *file_name, char *section_name,
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		/* Avoid checkpatch warning */
-		ret = 1;
-		goto cleanup;
+		D_GOTO(cleanup, ret = 1);
 	}
 
 	/********/
@@ -3675,7 +3664,7 @@ int main(int argc, char *argv[])
 		}
 		if (ret < 0) {
 			/* avoid checkpatch warning */
-			goto cleanup;
+			D_GOTO(cleanup, ret);
 		}
 	}
 
@@ -3688,7 +3677,7 @@ int main(int argc, char *argv[])
 	optind = 1;
 	ret = parse_command_options(argc, argv);
 	if (ret != 0)
-		goto cleanup;
+		D_GOTO(cleanup, ret);
 
 	/******* Parse message sizes argument ***************/
 
@@ -3830,7 +3819,7 @@ int main(int argc, char *argv[])
 			       "DAOS_TEST_LOG_DIR");
 	if (ret != 0) {
 		D_WARN("Error creating output name\n");
-		goto cleanup;
+		D_GOTO(cleanup, ret);
 	} else {
 		D_WARN("Selftest Results File: %s\n", g_expected_outfile);
 		printf("Selftest Results File:\n\t %s\n", g_expected_outfile);
@@ -3872,38 +3861,38 @@ int main(int argc, char *argv[])
 cleanup:
 	if (alloc_g_dest_name && (g_dest_name != NULL)) {
 		/* Avoid checkpatch warning */
-		free(g_dest_name);
+		D_FREE(g_dest_name);
 	}
 	if (alloc_g_msg_sizes_str && (g_msg_sizes_str != NULL)) {
 		/* Avoid checkpatch warning */
-		free(g_msg_sizes_str);
+		D_FREE(g_msg_sizes_str);
 	}
 	if (alloc_g_attach_info_path && (g_attach_info_path != NULL)) {
 		/* Avoid checkpatch warning */
-		free(g_attach_info_path);
+		D_FREE(g_attach_info_path);
 	}
 	if (alloc_g_expected_results && (g_expected_results != NULL)) {
 		/* Avoid checkpatch warning */
-		free(g_expected_results);
+		D_FREE(g_expected_results);
 	}
 	if (alloc_g_expected_infile && (g_expected_infile != NULL)) {
 		/* Avoid checkpatch warning */
-		free(g_expected_infile);
+		D_FREE(g_expected_infile);
 	}
 	if (alloc_g_expected_outfile && (g_expected_outfile != NULL)) {
 		/* Avoid checkpatch warning */
-		free(g_expected_outfile);
+		D_FREE(g_expected_outfile);
 	}
 	if (alloc_g_config_append && (g_config_append != NULL)) {
 		/* Avoid checkpatch warning */
-		free(g_config_append);
+		D_FREE(g_config_append);
 	}
 	if (g_ms_endpts != NULL) {
-		free(g_ms_endpts);
+		D_FREE(g_ms_endpts);
 		g_ms_endpts = NULL;
 	}
 	if (g_endpts != NULL) {
-		free(g_endpts);
+		D_FREE(g_endpts);
 		g_endpts = NULL;
 	}
 
