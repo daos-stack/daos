@@ -174,23 +174,6 @@
 {
    <insert_a_suppression_name_here>
    Memcheck:Leak
-   ...
-   fun:calloc
-   ...
-   fun:btr_insert
-   fun:btr_upsert
-   fun:dbtree_update
-   fun:vos_cont_create
-   fun:cont_init
-   fun:dts_ctx_init
-   fun:gc_setup
-   ...
-   ...
-   ...
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
    match-leak-kinds:definite
    fun:calloc
    fun:test_evt_iter_flags
