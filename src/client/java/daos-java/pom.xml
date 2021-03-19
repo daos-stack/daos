@@ -280,6 +280,7 @@
                       executable="gcc">
                   <arg value="-v"/>
                   <arg value="-I/usr/local/"/>
+                  <arg value="-I/usr/include/"/>
                   <arg value="-I${java-home}/include/"/>
                   <arg value="-I${java-home}/include/linux/"/>
                   <arg value="-I${daos.install.path}/include/"/>
@@ -296,6 +297,7 @@
                       executable="gcc">
                   <arg value="-v"/>
                   <arg value="-I/usr/local/"/>
+                  <arg value="-I/usr/include/"/>
                   <arg value="-I${java-home}/include/"/>
                   <arg value="-I${java-home}/include/linux/"/>
                   <arg value="-I${sl-prefix}/include/"/>
@@ -334,6 +336,7 @@
                       executable="gcc">
                   <arg value="-v"/>
                   <arg value="-I/usr/local/"/>
+                  <arg value="-I/usr/include/"/>
                   <arg value="-I${java-home}/include/"/>
                   <arg value="-I${java-home}/include/linux/"/>
                   <arg value="-I${daos-build-dir}/include"/>
@@ -363,6 +366,7 @@
                       executable="gcc">
                   <arg value="-v"/>
                   <arg value="-I/usr/local/"/>
+                  <arg value="-I/usr/include/"/>
                   <arg value="-I${java-home}/include/"/>
                   <arg value="-I${java-home}/include/linux/"/>
                   <arg value="-I${daos-build-dir}/include"/>
