@@ -18,7 +18,7 @@
 #include "daos_errno.h"
 
 /* Section names */
-#define DEFAULT_SCALE_NAME			"scale"
+#define DEFAULT_SCALE_NAME			"threshold"
 #define DEFAULT_VALUE_NAME			"default_values"
 #define RAW_DATA_EXTENSION			"raw"
 #define RESULT_EXTENSION			"results"
@@ -66,8 +66,8 @@ const struct {
 			  CRT_SELF_TEST_MSG_TYPE_BULK_GET} };
 
 #define MSG_TYPE_STR(str, id)					\
-	{	\
-	int _i;	\
+	{							\
+	int _i;							\
 	for (_i = 0; _i < 4; _i++) {				\
 		if (id == transfer_type_map[_i].type) {		\
 			str =  transfer_type_map[_i].long_name;	\
@@ -189,7 +189,8 @@ static char *config_section_name_create(char *section_name,
 					*test_params);
 
 /* ********************************************* */
-static void *progress_fn(void *arg)
+static void *
+progress_fn(void *arg)
 {
 	int		ret;
 	crt_context_t	*crt_ctx = NULL;
@@ -209,7 +210,8 @@ static void *progress_fn(void *arg)
 	pthread_exit(NULL);
 }
 
-static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
+static int
+self_test_init(char *dest_name, crt_context_t *crt_ctx,
 			  crt_group_t **srv_grp, pthread_t *tid,
 			  char *attach_info_path, bool listen)
 {
@@ -312,7 +314,8 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 	return 0;
 }
 
-static int st_compare_endpts(const void *a_in, const void *b_in)
+static int
+st_compare_endpts(const void *a_in, const void *b_in)
 {
 	struct st_endpoint *a = (struct st_endpoint *)a_in;
 	struct st_endpoint *b = (struct st_endpoint *)b_in;
@@ -322,7 +325,8 @@ static int st_compare_endpts(const void *a_in, const void *b_in)
 	return a->tag > b->tag;
 }
 
-static int st_compare_latencies_by_vals(const void *a_in, const void *b_in)
+static int
+st_compare_latencies_by_vals(const void *a_in, const void *b_in)
 {
 	struct st_latency *a = (struct st_latency *)a_in;
 	struct st_latency *b = (struct st_latency *)b_in;
@@ -332,7 +336,8 @@ static int st_compare_latencies_by_vals(const void *a_in, const void *b_in)
 	return a->cci_rc > b->cci_rc;
 }
 
-static int st_compare_latencies_by_ranks(const void *a_in, const void *b_in)
+static int
+st_compare_latencies_by_ranks(const void *a_in, const void *b_in)
 {
 	struct st_latency *a = (struct st_latency *)a_in;
 	struct st_latency *b = (struct st_latency *)b_in;
@@ -407,7 +412,8 @@ status_req_cb(const struct crt_cb_info *cb_info)
  * The input latencies must be sorted by cci_rc to group all same cci_rc values
  * together into contiguous blocks (-1 -1 -1, -2 -2 -2, etc.)
  */
-static void print_fail_counts(struct st_latency *latencies,
+static void
+print_fail_counts(struct st_latency *latencies,
 			      uint32_t num_latencies,
 			      const char *prefix)
 {
@@ -444,10 +450,11 @@ static void print_fail_counts(struct st_latency *latencies,
 }
 
 /*Returns the number of valid points */
-static int calculate_stats(struct st_latency *latencies, int count,
-			   int64_t *av, double *sd, int64_t *min,
-			   int64_t *max, int64_t *med25, int64_t *med50,
-			   int64_t *med75, int64_t *total)
+static int
+calculate_stats(struct st_latency *latencies, int count,
+		int64_t *av, double *sd, int64_t *min,
+		int64_t *max, int64_t *med25, int64_t *med50,
+		int64_t *med75, int64_t *total)
 {
 	uint32_t	i;
 	uint32_t	num_failed = 0;
@@ -499,7 +506,7 @@ static int calculate_stats(struct st_latency *latencies, int count,
 	latency_std_dev =  sqrt(latency_std_dev);
 	*sd = latency_std_dev;
 
-	/* Find medium values.  Works for sorted input only. */
+	/* Find mediam values.  Works for sorted input only. */
 	idx = (count - num_failed - 1) / 4;
 	*med25 = latencies[idx].val;
 	idx = (count - num_failed - 1) / 2;
@@ -511,11 +518,12 @@ static int calculate_stats(struct st_latency *latencies, int count,
 	return num_passed;
 }
 
-static void print_results(struct st_latency *latencies,
-			  struct crt_st_start_params *test_params,
-			  int64_t test_duration_ns, int output_megabits,
-			  Config *cfg, char *section_name,
-			  char *section_name_raw)
+static void
+print_results(struct st_latency *latencies,
+	      struct crt_st_start_params *test_params,
+	      int64_t test_duration_ns, int output_megabits,
+	      Config *cfg, char *section_name,
+	      char *section_name_raw)
 {
 	ConfigRet	 ret;
 	Config		*Ocfg = cfg_output;
@@ -571,12 +579,11 @@ static void print_results(struct st_latency *latencies,
 	snprintf(new_key_name, sizeof(new_key_name), "%s-@:*-tp", master);
 	ConfigAddInt(Ocfg, section_name, new_key_name, throughput);
 
-#undef PRINT_ALL
-#ifdef PRINT_ALL
-	printf(" Grp: %s, rep %d, sendSize %d, replySize %d\n",
-	       test_params->srv_grp, test_params->rep_count,
-	       test_params->send_size, test_params->reply_size);
-#endif
+	D_DEBUG(DB_TEST,
+		" Grp: %s, rep %d, sendSize %d, replySize %d\n",
+		test_params->srv_grp, test_params->rep_count,
+		test_params->send_size, test_params->reply_size);
+
 	/* Figure out how many repetitions were errors */
 	num_failed = 0;
 	for (local_rep = 0; local_rep < test_params->rep_count; local_rep++) {
@@ -703,7 +710,6 @@ static void print_results(struct st_latency *latencies,
 		       local_rep,  latencies[local_rep].rank,
 		       latencies[local_rep].val);
 	}
-	printf("\n");
 #endif
 
 	/* Iterate over each rank / tag pair */
@@ -792,7 +798,8 @@ static void print_results(struct st_latency *latencies,
 	} while (local_rep < test_params->rep_count);
 }
 
-static char *config_section_name_add(char *section_name, char *name_to_add)
+static char *
+config_section_name_add(char *section_name, char *name_to_add)
 {
 	int	 len;
 	char	*section_name_new;
@@ -807,7 +814,8 @@ static char *config_section_name_add(char *section_name, char *name_to_add)
 	return section_name_new;
 }
 
-static int config_create_section(Config *cfg, char *section_name, bool remove)
+static int
+config_create_section(Config *cfg, char *section_name, bool remove)
 {
 	int		ret = 0;
 	ConfigRet	config_ret;
@@ -829,7 +837,8 @@ static int config_create_section(Config *cfg, char *section_name, bool remove)
 	return ret;
 }
 
-static int config_create_output_config(char *section_name, bool remove)
+static int
+config_create_output_config(char *section_name, bool remove)
 {
 	int		 ret_value = 0;
 	ConfigRet	 config_ret;
@@ -890,8 +899,9 @@ cleanup:
  * From section in configuration, find closest value that matches the key.
  * If nothing matches, then return the default value.
  */
-static int get_config_value(Config *cfg, char *sec_name, char *key,
-			    int *ret_value, int default_value)
+static int
+get_config_value(Config *cfg, char *sec_name, char *key,
+		 int *ret_value, int default_value)
 {
 	ConfigRet	 config_ret;
 	int		 value = default_value;
@@ -930,6 +940,7 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 	/* See if there is an exact match, if so,then return value */
 	config_ret = ConfigReadInt(cfg, sec_name, key, &ivalue, -1);
 	if ((config_ret == CONFIG_OK) && (ivalue != -1)) {
+		/* avoid checkpatch warning */
 		D_GOTO(exit_code_ret, value = ivalue);
 	}
 
@@ -942,6 +953,7 @@ static int get_config_value(Config *cfg, char *sec_name, char *key,
 		}
 	}
 	if (i >= status_size) {
+		/* avoid checkpatch warning */
 		D_GOTO(exit_code, ret = -DER_NONEXIST);
 	}
 	key_name = status[i].name;
@@ -1186,8 +1198,9 @@ exit_code:
 	return ret;
 }
 
-static int compare_print_results(char *section_name, char *input_section_name,
-				 char *result_section_name)
+static int
+compare_print_results(char *section_name, char *input_section_name,
+		      char *result_section_name)
 {
 	Config		*cfg_expected = NULL;
 	ConfigRet	 config_ret;
@@ -1434,6 +1447,7 @@ next_arg:
 				ret = get_config_value(Ecfg, sec_name, key,
 						       &ivalue, ivalue);
 				if (ret < 0) {
+					/* avoid checkpatch warning */
 					D_GOTO(cleanup, ret_value = ret);
 				}
 				scale = (float)ivalue;
@@ -1443,6 +1457,7 @@ next_arg:
 				ret = get_config_value(Ecfg, sec_name, key,
 						       &ivalue, ivalue);
 				if (ret < 0) {
+					/* avoid checkpatch warning */
 					D_GOTO(cleanup, ret_value = ret);
 				}
 
@@ -1554,7 +1569,8 @@ cleanup:
 }
 
 /* Place output results into output file, tagging with master key */
-static int combine_results(Config *cfg_results, char *section_name)
+static int
+combine_results(Config *cfg_results, char *section_name)
 {
 	ConfigRet	 ret;
 	int		 ret_value = 0;
@@ -1688,11 +1704,12 @@ cleanup:
 	return ret_value;
 }
 
-static char *config_section_name_create(char *section_name,
-					struct crt_st_start_params
-					*test_params)
+static char *
+config_section_name_create(char *section_name,
+			   struct crt_st_start_params
+			   *test_params)
 {
-	int	len = MAX_SECTION_NAME_SIZE;
+	int	len = SELF_TEST_MAX_SECTION_NAME_SIZE;
 	char	*name_str;
 	int	ids;
 	int	idr;
@@ -1732,41 +1749,45 @@ static char *config_section_name_create(char *section_name,
 
 		/* Add alignment parameter */
 		if (test_params->buf_alignment >= 10) {
-			len = snprintf(name_str, MAX_SECTION_NAME_SIZE,
+			len = snprintf(name_str,
+				       SELF_TEST_MAX_SECTION_NAME_SIZE,
 				       "align_%dK_",
 				       1 << (test_params->buf_alignment
 					     - 10));
 		} else {
-			len = snprintf(name_str, MAX_SECTION_NAME_SIZE,
+			len = snprintf(name_str,
+				       SELF_TEST_MAX_SECTION_NAME_SIZE,
 				       "align_%dB_",
 				       1 << test_params->buf_alignment);
 		}
 
 		/* Add inflight parameter */
-		len += snprintf(&name_str[len], MAX_SECTION_NAME_SIZE - len,
-			 "inFlight_%d_", test_params->max_inflight);
+		len += snprintf(&name_str[len],
+				SELF_TEST_MAX_SECTION_NAME_SIZE - len,
+				"inFlight_%d_", test_params->max_inflight);
 
 		/* Add size parameter */
 		if (test_params->send_size >= 0x00100000) {
 			len += snprintf(&name_str[len],
-					MAX_SECTION_NAME_SIZE - len,
+					SELF_TEST_MAX_SECTION_NAME_SIZE - len,
 					"size_%dM_",
 					test_params->send_size >> 20);
 		} else if (test_params->send_size > 0x00000400) {
 			len += snprintf(&name_str[len],
-					MAX_SECTION_NAME_SIZE - len,
+					SELF_TEST_MAX_SECTION_NAME_SIZE - len,
 					"size_%dK_",
 					test_params->send_size >> 12);
 		} else {
 			len += snprintf(&name_str[len],
-					MAX_SECTION_NAME_SIZE - len,
+					SELF_TEST_MAX_SECTION_NAME_SIZE - len,
 					"size_%dB_",
 					test_params->send_size);
 		}
 		/* Add transfer send/receive type */
 		ids = test_params->send_type;
 		idr = test_params->reply_type;
-		len += snprintf(&name_str[len], MAX_SECTION_NAME_SIZE - len,
+		len += snprintf(&name_str[len],
+				SELF_TEST_MAX_SECTION_NAME_SIZE - len,
 				"%s%s_", transfer_type_map[ids].short_name,
 				 transfer_type_map[idr].short_name);
 	}
@@ -1774,13 +1795,14 @@ exit_code:
 	return name_str;
 }
 
-static int test_msg_size(crt_context_t crt_ctx,
-			 struct st_master_endpt *ms_endpts,
-			 uint32_t num_ms_endpts,
-			 struct crt_st_start_params *test_params,
-			 struct st_latency **latencies,
-			 crt_bulk_t *latencies_bulk_hdl, int output_megabits,
-			 char *input_section_name)
+static int
+test_msg_size(crt_context_t crt_ctx,
+	      struct st_master_endpt *ms_endpts,
+	      uint32_t num_ms_endpts,
+	      struct crt_st_start_params *test_params,
+	      struct st_latency **latencies,
+	      crt_bulk_t *latencies_bulk_hdl, int output_megabits,
+	      char *input_section_name)
 {
 	int				 ret;
 	int				 done;
@@ -2134,13 +2156,14 @@ randomize_endpts(struct st_endpoint *endpts, uint32_t num_endpts)
 	printf("\n");
 }
 
-static int run_self_test(struct st_size_params all_params[],
-			 int num_msg_sizes, int rep_count, int max_inflight,
-			 char *dest_name, struct st_endpoint *ms_endpts_in,
-			 uint32_t num_ms_endpts_in,
-			 struct st_endpoint *endpts, uint32_t num_endpts,
-			 int output_megabits, int16_t buf_alignment,
-			 char *attach_info_path, char *section_name)
+static int
+run_self_test(struct st_size_params all_params[],
+	      int num_msg_sizes, int rep_count, int max_inflight,
+	      char *dest_name, struct st_endpoint *ms_endpts_in,
+	      uint32_t num_ms_endpts_in,
+	      struct st_endpoint *endpts, uint32_t num_endpts,
+	      int output_megabits, int16_t buf_alignment,
+	      char *attach_info_path, char *section_name)
 {
 	crt_context_t		  crt_ctx;
 	crt_group_t		 *srv_grp;
@@ -2405,9 +2428,10 @@ cleanup_nothread:
 	return ret;
 }
 
-static void print_usage(const char *prog_name, const char *msg_sizes_str,
-			int rep_count,
-			int max_inflight)
+static void
+print_usage(const char *prog_name, const char *msg_sizes_str,
+	    int rep_count,
+	    int max_inflight)
 {
 	/* TODO --verbose */
 
@@ -2708,7 +2732,8 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 
 #define ST_ENDPT_RANK_IDX 0
 #define ST_ENDPT_TAG_IDX 1
-static int st_validate_range_str(const char *str)
+static int
+st_validate_range_str(const char *str)
 {
 	const char *start = str;
 
@@ -2727,8 +2752,9 @@ static int st_validate_range_str(const char *str)
 	return 0;
 }
 
-static void st_parse_range_str(char *const str, char *const validated_str,
-			       uint32_t *num_elements)
+static void
+st_parse_range_str(char *const str, char *const validated_str,
+		   uint32_t *num_elements)
 {
 	char *pch;
 	char *pch_sub;
@@ -2809,9 +2835,10 @@ static void st_parse_range_str(char *const str, char *const validated_str,
 		*(validated_cur_ptr - 1) = '\0';
 }
 
-int parse_endpoint_string(char *const opt_arg,
-			  struct st_endpoint **const endpts,
-			  uint32_t *const num_endpts)
+int
+parse_endpoint_string(char *const opt_arg,
+		      struct st_endpoint **const endpts,
+		      uint32_t *const num_endpts)
 {
 	char			*token_ptrs[2] = {NULL, NULL};
 	int			 separator_count = 0;
@@ -3000,8 +3027,9 @@ cleanup:
  *
  * \return	0 on successfully filling *test_params, nonzero otherwise
  */
-int parse_message_sizes_string(const char *pch,
-			       struct st_size_params *test_params)
+int
+parse_message_sizes_string(const char *pch,
+			   struct st_size_params *test_params)
 {
 	/*
 	 * Note whether a type is specified or not. If no type is
@@ -3151,8 +3179,9 @@ int parse_message_sizes_string(const char *pch,
  * Read Config file and interpret;
  */
 #define STRING_MAX_SIZE 256
-static int config_file_setup(char *file_name, char *section_name,
-			     char *display)
+static int
+config_file_setup(char *file_name, char *section_name,
+		  char *display)
 {
 	Config *cfg = NULL;
 	int ret = 0;
@@ -3443,7 +3472,8 @@ cleanup:
 	return ret;
 }
 
-int parse_command_options(int argc, char *argv[])
+int
+parse_command_options(int argc, char *argv[])
 {
 	int	c;
 	int	ret = 0;
@@ -3593,7 +3623,8 @@ cleanup:
 	return ret;
 }
 
-int main(int argc, char *argv[])
+int
+main(int argc, char *argv[])
 {
 	char				*file_name = NULL;
 	char				*section_name = NULL;

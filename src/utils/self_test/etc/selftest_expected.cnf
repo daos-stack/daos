@@ -1,6 +1,6 @@
 
-#Default scaling factor as percentage.
-[scale]
+#Default threshold scaling factor as percentage.
+[threshold]
 all=15
 bw=45
 tp=45
