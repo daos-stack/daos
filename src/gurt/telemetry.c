@@ -286,7 +286,7 @@ d_tm_init(int id, uint64_t mem_size, int flags)
 	}
 	*base_addr = (uint64_t)d_tm_shmem_root;
 
-	snprintf(tmp, sizeof(tmp), "I/O Engine %d", id);
+	snprintf(tmp, sizeof(tmp), "ID: %d", id);
 	rc = d_tm_alloc_node(&d_tm_root, tmp);
 	if (rc != DER_SUCCESS)
 		goto failure;
