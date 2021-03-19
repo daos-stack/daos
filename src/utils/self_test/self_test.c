@@ -1894,11 +1894,11 @@ int main(int argc, char *argv[])
 	/********************* Clean up *********************/
 cleanup:
 	if (ms_endpts != NULL) {
-		free(ms_endpts);
+		D_FREE(ms_endpts);
 		ms_endpts = NULL;
 	}
 	if (endpts != NULL) {
-		free(endpts);
+		D_FREE(endpts);
 		endpts = NULL;
 	}
 	if (all_params != NULL)
