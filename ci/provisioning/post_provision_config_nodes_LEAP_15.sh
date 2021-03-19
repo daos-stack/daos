@@ -6,6 +6,7 @@ LSB_RELEASE=lsb-release
 EXCLUDE_UPGRADE=fuse,fuse-libs,fuse-devel,mercury,daos,daos-\*
 PYTHON_MACROS_RPM=("python-rpm-macros")
 
+
 bootstrap_dnf() {
     time zypper --non-interactive install dnf
 }
@@ -24,10 +25,13 @@ distro_custom() {
                /etc/profile.d/lmod.sh;                                        \
     fi
 
-    # force install of avocado 52.1
+    # force install of avocado 69.x
     dnf -y erase avocado{,-common} \
-           python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}}
-    dnf -y install {avocado-common,python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}}}-52.1
+                 python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}}
+    python3 -m pip install --upgrade pip
+    python3 -m pip install "avocado-framework<70.0"
+    python3 -m pip install "avocado-framework-plugin-result-html<70.0"
+    python3 -m pip install "avocado-framework-plugin-varianter-yaml-to-mux<70.0"
 
 }
 
