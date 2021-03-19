@@ -1,15 +1,17 @@
-#!/usr/bin/python2
+#!/usr/bin/python3
 """
   (C) Copyright 2018-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-import socket
+
 import argparse
-import logging
 import getpass
+import logging
 import re
+import socket
+import sys
 from ClusterShell.NodeSet import NodeSet
 from util.general_utils import pcmd, run_task
 
@@ -57,7 +59,7 @@ def update_config_cmdlist(args):
         sudo = "sudo"
     # Copy the slurm*example.conf files to /etc/slurm/
     if execute_cluster_cmds(all_nodes, COPY_LIST, args.sudo) > 0:
-        exit(1)
+        sys.exit(1)
 
     cmd_list = [
         "sed -i -e 's/ControlMachine=linux0/ControlMachine={}/g' {}".format(
@@ -74,10 +76,11 @@ def update_config_cmdlist(args):
     command = r"lscpu | grep -E '(Socket|Core|Thread)\(s\)'"
     task = run_task(all_nodes, command)
     for output, nodes in task.iter_buffers():
+        output_str = "\n".join([line.decode("utf-8") for line in output])
         info = {
             data[0]: data[1]
             for data in re.findall(
-                r"(Socket|Core|Thread).*:\s+(\d+)", str(output))
+                r"(Socket|Core|Thread).*:\s+(\d+)", str(output_str))
             if len(data) > 1}
 
         if "Socket" not in info or "Core" not in info or "Thread" not in info:
@@ -229,8 +232,7 @@ def main():
     """Set up test env with slurm."""
     logging.basicConfig(
         format="%(asctime)s %(levelname)-5s %(message)s",
-        datefmt=r"%Y/%m/%d %I:%M:%S",
-        name="slurm_setup", level=logging.DEBUG)
+        datefmt=r"%Y/%m/%d %I:%M:%S", level=logging.DEBUG)
 
     parser = argparse.ArgumentParser(prog="slurm_setup.py")
 
@@ -269,7 +271,7 @@ def main():
     # Check params
     if args.nodes is None:
         logging.error("slurm_nodes: Specify at least one slurm node")
-        exit(1)
+        sys.exit(1)
 
     # Convert control node and slurm node list into NodeSets
     args.control = NodeSet(args.control)
@@ -279,31 +281,31 @@ def main():
     if args.remove:
         ret_code = configuring_packages(args, "remove")
         if ret_code > 0:
-            exit(1)
-        exit(0)
+            sys.exit(1)
+        sys.exit(0)
 
     # Install packages if specified with --install and continue with setup
     if args.install:
         ret_code = configuring_packages(args, "install")
         if ret_code > 0:
-            exit(1)
+            sys.exit(1)
 
     # Edit the slurm conf files
     ret_code = update_config_cmdlist(args)
     if ret_code > 0:
-        exit(1)
+        sys.exit(1)
 
     # Munge Setup
     ret_code = start_munge(args)
     if ret_code > 0:
-        exit(1)
+        sys.exit(1)
 
     # Slurm Startup
     ret_code = start_slurm(args)
     if ret_code > 0:
-        exit(1)
+        sys.exit(1)
 
-    exit(0)
+    sys.exit(0)
 
 
 if __name__ == "__main__":

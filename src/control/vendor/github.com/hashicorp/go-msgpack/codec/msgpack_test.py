@@ -62,7 +62,7 @@ def build_test_data(destdir):
         f.close()
 
 def doRpcServer(port, stopTimeSec):
-    class EchoHandler(object):
+    class EchoHandler():
         def Echo123(self, msg1, msg2, msg3):
             return ("1:%s 2:%s 3:%s" % (msg1, msg2, msg3))
         def EchoStruct(self, msg):
@@ -82,15 +82,15 @@ def doRpcServer(port, stopTimeSec):
 def doRpcClientToPythonSvc(port):
     address = msgpackrpc.Address('localhost', port)
     client = msgpackrpc.Client(address, unpack_encoding='utf-8')
-    print client.call("Echo123", "A1", "B2", "C3")
-    print client.call("EchoStruct", {"A" :"Aa", "B":"Bb", "C":"Cc"})
+    print(client.call("Echo123", "A1", "B2", "C3"))
+    print(client.call("EchoStruct", {"A" :"Aa", "B":"Bb", "C":"Cc"}))
    
 def doRpcClientToGoSvc(port):
     # print ">>>> port: ", port, " <<<<<"
     address = msgpackrpc.Address('localhost', port)
     client = msgpackrpc.Client(address, unpack_encoding='utf-8')
-    print client.call("TestRpcInt.Echo123", ["A1", "B2", "C3"])
-    print client.call("TestRpcInt.EchoStruct", {"A" :"Aa", "B":"Bb", "C":"Cc"})
+    print(client.call("TestRpcInt.Echo123", ["A1", "B2", "C3"]))
+    print(client.call("TestRpcInt.EchoStruct", {"A" :"Aa", "B":"Bb", "C":"Cc"}))
 
 def doMain(args):
     if len(args) == 2 and args[0] == "testdata":
@@ -102,7 +102,7 @@ def doMain(args):
     elif len(args) == 2 and args[0] == "rpc-client-go-service":
         doRpcClientToGoSvc(int(args[1]))
     else:
-        print("Usage: msgpack_test.py " + 
+        print("Usage: msgpack_test.py " +
               "[testdata|rpc-server|rpc-client-python-service|rpc-client-go-service] ...")
     
 if __name__ == "__main__":
