@@ -67,8 +67,7 @@ def functional_post_always() {
 }
 
 String get_daos_packages() {
-    Map stage_info = parseStageInfo()
-    return get_daos_packages(stage_info['target'])
+    return get_daos_packages(parseStageInfo()['target'])
 }
 
 String get_daos_packages(String distro) {
@@ -85,15 +84,14 @@ String get_daos_packages(String distro) {
 }
 
 String pr_repos() {
-    Map stage_info = parseStageInfo()
-    return pr_repos(stage_info['target'])
+    return pr_repos(parseStageInfo()['target'])
 }
 
 String pr_repos(String distro) {
     String repos = ""
-    if (distro == 'centos7') {
+    if (distro.startsWith('el7') || distro.startsWith('centos7')) {
         repos = cachedCommitPragma(pragma: 'PR-repos-el7')
-    } else if (distro == 'leap15') {
+    } else if (distro.startsWith('leap15')) {
         repos = cachedCommitPragma(pragma: 'PR-repos-leap15')
     } else if (distro.startsWith('ubuntu20')) {
         repos = cachedCommitPragma(pragma: 'PR-repos-ubuntu20', cache: commit_pragma_cache)
@@ -123,8 +121,7 @@ String hw_distro_target() {
             return hw_distro('large')
         }
     }
-    Map stage_info = parseStageInfo()
-    return stage_info['target']
+    return parseStageInfo()['target']
 }
 
 String daos_repos() {
@@ -142,11 +139,12 @@ String unit_packages() {
     if (env.STAGE_NAME.contains('Bullseye')) {
         need_qb = true
     }
-    if (stage_info['target'] == 'centos7') {
+    if (stage_info['target'].startsWith('el7') ||
+        stage_info['target'].startsWith('centos7')) {
         String packages =  'gotestsum openmpi3 ' +
                            'hwloc-devel argobots ' +
                            'fuse3-libs fuse3 ' +
-                           'boost-devel ' +
+                           'boost-python36-devel ' +
                            'libisa-l-devel libpmem ' +
                            'libpmemobj protobuf-c ' +
                            'spdk-devel libfabric-devel ' +
@@ -160,7 +158,7 @@ String unit_packages() {
             packages += " spdk-tools mercury-" +
                         readFile(stage_info['target'] +
                                  '-required-mercury-rpm-version').trim() +
-                        " boost-devel libisa-l_crypto libfabric-debuginfo" +
+                        " libisa-l_crypto libfabric-debuginfo" +
                         " argobots-debuginfo protobuf-c-debuginfo"
         }
         return packages
@@ -183,8 +181,7 @@ def cachedCommitPragma(Map config) {
 }
 
 String daos_packages_version() {
-    stage_info = parseStageInfo()
-    return daos_packages_version(stage_info['target'])
+    return daos_packages_version(parseStageInfo()['target'])
 }
 
 String daos_packages_version(String distro) {
@@ -195,9 +192,9 @@ String daos_packages_version(String distro) {
         String dist = ""
         if (version.indexOf('-') > -1) {
             // only tack on the %{dist} if the release was specified
-            if (distro == "centos7") {
+            if (distro.startsWith('el7') || distro.startsWith('centos7')) {
                 dist = ".el7"
-            } else if (distro == "leap15") {
+            } else if (distro.startsWith('leap15')) {
                 dist = ".suse.lp152"
             }
         }
@@ -254,15 +251,15 @@ String functional_packages(String distro) {
                   "MACSio-mpich " +
                   "MACSio-openmpi3 " +
                   "mpifileutils-mpich-daos-1 "
-    if (distro == "leap15") {
+    if (distro.startsWith('leap15')) {
         return daos_pkgs + pkgs
-    } else if (distro == "centos7") {
+    } else if (distro.startsWith('el7') || distro.startsWith('centos7')) {
         // need to exclude openmpi until we remove it from the repo
         return  "--exclude openmpi " + daos_pkgs + pkgs
     } else if (distro.startsWith('ubuntu20')) {
         return daos_pkgs + " openmpi-bin ndctl fio"
     } else {
-        error 'functional_packages not implemented for ' + stage_info['target']
+        error 'functional_packages not implemented for ' + distro
     }
 }
 
@@ -370,25 +367,10 @@ boolean skip_scan_rpms_centos7() {
 }
 
 boolean tests_in_stage(String size) {
-    String tags = cachedCommitPragma(pragma: 'Test-tag', def_val: 'pr')
-    def newtags = []
-    if (size == "vm") {
-        for (String tag in tags.split(" ")) {
-            newtags.add(tag + ",-hw")
-        }
-        tags += ",-hw"
-    } else {
-        if (size == "medium") {
-            size += ",ib2"
-        }
-        for (String tag in tags.split(" ")) {
-            newtags.add(tag + ",hw," + size)
-        }
-    }
-    tags = newtags.join(" ")
+    Map stage_info = parseStageInfo()
     return sh(label: "Get test list for ${size}",
               script: """cd src/tests/ftest
-                         ./launch.py --list ${tags}""",
+                         ./list_tests.py """ + stage_info['test_tag'],
               returnStatus: true) == 0
 }
 
@@ -493,11 +475,11 @@ String quick_build_deps(String distro, always=false) {
             return ""
         }
     }
-    if (distro == "leap15") {
+    if (distro.startsWith('leap15')) {
         rpmspec_args = "--define dist\\ .suse.lp152 " +
                        "--undefine rhel " +
                        "--define suse_version\\ 1502"
-    } else if (distro == "centos7") {
+    } else if (distro.startsWith('el7') || distro.startsWith('centos7')) {
         rpmspec_args = "--undefine suse_version " +
                        "--define rhel\\ 7"
     } else {
@@ -786,6 +768,7 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallel_build(),
                                    stash_files: 'ci/test_files_to_stash.txt',
+                                   scons_exe: 'scons-3',
                                    scons_args: scons_faults_args()
                     }
                     post {
@@ -824,6 +807,7 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallel_build(),
                                    stash_files: 'ci/test_files_to_stash.txt',
+                                   scons_exe: 'scons-3',
                                    scons_args: scons_faults_args()
                     }
                     post {
@@ -861,6 +845,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
+                                   scons_exe: 'scons-3',
                                    scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
                     }
@@ -899,6 +884,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
+                                   scons_exe: 'scons-3',
                                    scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
                     }
@@ -936,6 +922,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
+                                   scons_exe: 'scons-3',
                                    scons_args: scons_faults_args() + " PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
                     }
@@ -1305,7 +1292,8 @@ pipeline {
                     }
                     steps {
                         sconsBuild coverity: "daos-stack/daos",
-                                   parallel_build: parallel_build()
+                                   parallel_build: parallel_build(),
+                                   scons_exe: 'scons-3'
                     }
                     post {
                         success {
@@ -1322,7 +1310,7 @@ pipeline {
                         expression { ! skip_ftest('el7') }
                     }
                     agent {
-                        label 'ci_vm9'
+                        label 'stage_vm9'
                     }
                     steps {
                         functionalTest inst_repos: daos_repos(),
@@ -1341,7 +1329,7 @@ pipeline {
                         expression { ! skip_ftest('leap15') }
                     }
                     agent {
-                        label 'ci_vm9'
+                        label 'stage_vm9'
                     }
                     steps {
                         functionalTest inst_repos: daos_repos(),
