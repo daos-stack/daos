@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 import threading
 import avocado
@@ -143,7 +143,7 @@ class NvmeObject(TestWithServers):
 
     def setUp(self):
         """Set Up nodes for each test case."""
-        super(NvmeObject, self).setUp()
+        super().setUp()
 
         # initialize self.pool and self.container as lists
         self.pool = []

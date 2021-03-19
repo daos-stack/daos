@@ -3,7 +3,7 @@
 REPOS_DIR=/etc/yum.repos.d
 DISTRO_NAME=centos7
 LSB_RELEASE=redhat-lsb-core
-PYTHON_MACROS_RPM=("python2-rpm-macros" "python3-rpm-macros")
+PYTHON_MACROS_RPM=("python3-rpm-macros")
 
 timeout_yum() {
     local timeout="$1"
@@ -35,6 +35,39 @@ bootstrap_dnf() {
 group_repo_post() {
     # nothing for EL7
     :
+}
+
+distro_custom() {
+    # shellcheck disable=SC2086
+    dnf -y $dnf_repo_args install python3
+
+    if [ ! -e /usr/bin/pip3 ] &&
+       [ -e /usr/bin/pip3.6 ]; then
+        ln -s pip3.6 /usr/bin/pip3
+    fi
+    if [ ! -e /usr/bin/python3 ] &&
+       [ -e /usr/bin/python3.6 ]; then
+        ln -s python3.6 /usr/bin/python3
+    fi
+    # install the debuginfo repo in case we get segfaults
+    cat <<"EOF" > $REPOS_DIR/CentOS-Debuginfo.repo
+[core-0-debuginfo]
+name=CentOS-7 - Debuginfo
+baseurl=http://debuginfo.centos.org/7/$basearch/
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-Debug-7
+enabled=0
+EOF
+
+    # force install of avocado 69.x
+    dnf -y erase avocado{,-common}                                        \
+           python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}} \
+           python36-PyYAML
+    pip3 install --upgrade pip
+    pip3 install "avocado-framework<70.0"
+    pip3 install "avocado-framework-plugin-result-html<70.0"
+    pip3 install "avocado-framework-plugin-varianter-yaml-to-mux<70.0"
+    pip3 install clustershell
 }
 
 post_provision_config_nodes() {
@@ -92,6 +125,7 @@ post_provision_config_nodes() {
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
     dnf -y install $LSB_RELEASE
+
     # shellcheck disable=SC2086
     if [ -n "$INST_RPMS" ] &&
        ! dnf -y $dnf_repo_args install $INST_RPMS; then
@@ -99,23 +133,8 @@ post_provision_config_nodes() {
         dump_repos
         exit "$rc"
     fi
-    if [ ! -e /usr/bin/pip3 ] &&
-       [ -e /usr/bin/pip3.6 ]; then
-        ln -s pip3.6 /usr/bin/pip3
-    fi
-    if [ ! -e /usr/bin/python3 ] &&
-       [ -e /usr/bin/python3.6 ]; then
-        ln -s python3.6 /usr/bin/python3
-    fi
-    # install the debuginfo repo in case we get segfaults
-    cat <<"EOF" > $REPOS_DIR/CentOS-Debuginfo.repo
-[core-0-debuginfo]
-name=CentOS-7 - Debuginfo
-baseurl=http://debuginfo.centos.org/7/$basearch/
-gpgcheck=1
-gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-Debug-7
-enabled=0
-EOF
+
+    distro_custom
 
     # now make sure everything is fully up-to-date
     if ! time dnf -y upgrade \
