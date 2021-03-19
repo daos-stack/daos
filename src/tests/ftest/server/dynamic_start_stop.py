@@ -19,7 +19,7 @@ class DynamicStartStop(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a DynamicStartStop object."""
-        super(DynamicStartStop, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.dmg_cmd = None
         self.stopped_ranks = set()
 
