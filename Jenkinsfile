@@ -173,7 +173,6 @@ String daos_packages_version(String distro) {
                                                         fi
                                                         ov="$v"
                                                     done
-                                                    echo "$ov"
                                                 }''',
                                    returnStdout: true).trim()[0..-5]
         } else {
