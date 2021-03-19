@@ -336,7 +336,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.ior_cmd.set_daos_params(self.server_group, self.pool)
         self.ior_cmd.dfs_oclass.update(oclass)
         self.ior_cmd.dfs_dir_oclass.update(oclass)
-        if single_cont_read is True and self.container is None:
+        if single_cont_read is True:
             # Prepare the containers created and use in a specific
             # way defined in prepare_cont_ior_write.
             self.prepare_cont_ior_write_read(oclass, flags)
