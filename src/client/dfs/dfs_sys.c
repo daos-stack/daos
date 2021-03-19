@@ -254,7 +254,7 @@ hash_lookup(dfs_sys_t *dfs_sys, struct sys_path *sys_path)
 		/* another thread beat us. Use the existing entry. */
 		sys_path->parent = hash_hdl_obj(rlink)->obj;
 		sys_path->rlink = rlink;
-		return 0;
+		D_GOTO(free_hdl_obj, rc = 0);
 	}
 
 out:
@@ -274,14 +274,16 @@ free_hdl:
 /**
  * Parse path into dirname and basename.
  */
-static int parse_path(const char *path,
-		      char **_dir_name, size_t *_dir_name_len,
-		      char **_name, size_t *_name_len)
+static int
+parse_path(const char *path,
+	   char **_dir_name, size_t *_dir_name_len,
+	   char **_name, size_t *_name_len)
 {
 	char	*f1 = NULL;
 	char	*f2 = NULL;
 	char	*dir_name = NULL;
 	char	*name = NULL;
+	size_t	path_len;
 	size_t	dir_name_len;
 	size_t	name_len;
 	int	rc = 0;
@@ -291,7 +293,11 @@ static int parse_path(const char *path,
 	if (path[0] != '/')
 		return EINVAL;
 
-	if (strncmp(path, "/", 2) == 0) {
+	path_len = strnlen(path, PATH_MAX);
+	if (path_len > PATH_MAX - 1)
+		return ENAMETOOLONG;
+
+	if (strncmp(path, "/", path_len) == 0) {
 		D_STRNDUP(*_dir_name, "/", 2);
 		if (*_dir_name == NULL)
 			return ENOMEM;
@@ -313,16 +319,12 @@ static int parse_path(const char *path,
 	name = basename(f2);
 
 	dir_name_len = strnlen(dir_name, PATH_MAX);
-	name_len = strnlen(name, PATH_MAX);
-	if ((dir_name_len > PATH_MAX - 1) ||
-	    (name_len > PATH_MAX - 1))
-		D_GOTO(out, rc = ENAMETOOLONG);
-
 	D_STRNDUP(*_dir_name, dir_name, dir_name_len + 1);
 	if (*_dir_name == NULL)
 		D_GOTO(out, rc = ENOMEM);
 	*_dir_name_len = dir_name_len;
 
+	name_len = strnlen(name, PATH_MAX);
 	D_STRNDUP(*_name, name, name_len + 1);
 	if (*_name == NULL) {
 		D_FREE(*_dir_name);

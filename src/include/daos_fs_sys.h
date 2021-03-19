@@ -442,11 +442,13 @@ int
 dfs_sys_closedir(DIR *dirp);
 
 /**
- * Read a directory opened with dfs_sys_opendir().
+ * Return the next directory entry in a directory opened by
+ * dfs_sys_readdir(), or NULL if there are no more entries.
  *
  * \param[in]	dfs_sys Pointer to the mounted file system.
- * \param[in]	dirp	Pointer to the open directory.
- * \param[in]	dirent	Pointer to the next directory.
+ * \param[in]	dirp	Pointer to open directory.
+ * \param[out]	dirent	Pointer to the next directory entry.
+ *			This is NULL if there are no more directory entries.
  *
  * \return		0 on success, errno code on failure.
  */
