@@ -284,10 +284,13 @@ def load_conf(args):
     ofh.close()
     return NLTConf(conf, args)
 
-def get_base_env():
+def get_base_env(clean=False):
     """Return the base set of env vars needed for DAOS"""
 
-    env = os.environ.copy()
+    if clean:
+        env = OrderedDict()
+    else:
+        env = os.environ.copy()
     env['DD_MASK'] = 'all'
     env['DD_SUBSYS'] = 'all'
     env['D_LOG_MASK'] = 'DEBUG'
@@ -360,31 +363,7 @@ class DaosServer():
     def start(self):
         """Start a DAOS server"""
 
-        daos_server = os.path.join(self.conf['PREFIX'], 'bin', 'daos_server')
-
-        self_dir = os.path.dirname(os.path.abspath(__file__))
-
-        # Create a server yaml file.  To do this open and copy the
-        # nlt_server.yaml file in the current directory, but overwrite
-        # the server log file with a temporary file so that multiple
-        # server runs do not overwrite each other.
-        scfd = open(os.path.join(self_dir, 'nlt_server.yaml'), 'r')
-
-        scyaml = yaml.safe_load(scfd)
-        scyaml['engines'][0]['log_file'] = self.server_log.name
-        if self.conf.args.server_debug:
-            scyaml['control_log_mask'] = 'ERROR'
-            scyaml['engines'][0]['log_mask'] = self.conf.args.server_debug
-        scyaml['control_log_file'] = self.control_log.name
-
-        self._yaml_file = tempfile.NamedTemporaryFile(
-            prefix='nlt-server-config-',
-            suffix='.yaml')
-
-        self._yaml_file.write(yaml.dump(scyaml, encoding='utf-8'))
-        self._yaml_file.flush()
-
-        server_env = get_base_env()
+        server_env = get_base_env(clean=True)
 
         if self.valgrind:
             valgrind_args = ['--fair-sched=yes',
@@ -412,11 +391,37 @@ class DaosServer():
             server_env['PATH'] = '{}:{}'.format(self._io_server_dir.name,
                                                 server_env['PATH'])
 
+        daos_server = os.path.join(self.conf['PREFIX'], 'bin', 'daos_server')
+
+        self_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # Create a server yaml file.  To do this open and copy the
+        # nlt_server.yaml file in the current directory, but overwrite
+        # the server log file with a temporary file so that multiple
+        # server runs do not overwrite each other.
+        scfd = open(os.path.join(self_dir, 'nlt_server.yaml'), 'r')
+
+        scyaml = yaml.safe_load(scfd)
+        scyaml['engines'][0]['log_file'] = self.server_log.name
+        if self.conf.args.server_debug:
+            scyaml['control_log_mask'] = 'ERROR'
+            scyaml['engines'][0]['log_mask'] = self.conf.args.server_debug
+        scyaml['control_log_file'] = self.control_log.name
+
+        for (key, value) in server_env.items():
+            scyaml['engines'][0]['env_vars'].append('{}={}'.format(key, value))
+
+        self._yaml_file = tempfile.NamedTemporaryFile(
+            prefix='nlt-server-config-',
+            suffix='.yaml')
+
+        self._yaml_file.write(yaml.dump(scyaml, encoding='utf-8'))
+        self._yaml_file.flush()
+
         cmd = [daos_server, '--config={}'.format(self._yaml_file.name),
                'start', '-t' '4', '--insecure', '-d', self.agent_dir]
 
-        server_env['DAOS_DISABLE_REQ_FWD'] = '1'
-        self._sp = subprocess.Popen(cmd, env=server_env)
+        self._sp = subprocess.Popen(cmd)
 
         agent_config = os.path.join(self_dir, 'nlt_agent.yaml')
 
@@ -431,8 +436,7 @@ class DaosServer():
         if not self.conf.args.server_debug:
             agent_cmd.append('--debug')
 
-        self._agent = subprocess.Popen(agent_cmd,
-                                       env=os.environ.copy())
+        self._agent = subprocess.Popen(agent_cmd)
         self.conf.agent_dir = self.agent_dir
         self.running = True
 
