@@ -369,25 +369,10 @@ boolean skip_scan_rpms_centos7() {
 }
 
 boolean tests_in_stage(String size) {
-    String tags = cachedCommitPragma(pragma: 'Test-tag', def_val: 'pr')
-    def newtags = []
-    if (size == "vm") {
-        for (String tag in tags.split(" ")) {
-            newtags.add(tag + ",-hw")
-        }
-        tags += ",-hw"
-    } else {
-        if (size == "medium") {
-            size += ",ib2"
-        }
-        for (String tag in tags.split(" ")) {
-            newtags.add(tag + ",hw," + size)
-        }
-    }
-    tags = newtags.join(" ")
+    Map stage_info = parseStageInfo()
     return sh(label: "Get test list for ${size}",
               script: """cd src/tests/ftest
-                         ./launch.py --list ${tags}""",
+                         ./launch.py --list """ + stage_info['test_tag'],
               returnStatus: true) == 0
 }
 
