@@ -116,8 +116,11 @@ pool_interop(void **state)
 	uuid_generate(uuid);
 
 	daos_fail_loc_set(FLC_POOL_DF_VER | DAOS_FAIL_ONCE);
-	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0, 0, &poh);
+	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0, 0, NULL);
 	assert_rc_equal(ret, 0);
+
+	ret = vos_pool_open(arg->fname[0], uuid, 0, &poh);
+	assert_rc_equal(ret, -DER_DF_INCOMPT);
 
 	ret = vos_pool_destroy(arg->fname[0], uuid);
 	assert_rc_equal(ret, 0);

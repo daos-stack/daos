@@ -18,8 +18,8 @@
 #include "rdb_layout.h"
 
 static int rdb_start_internal(daos_handle_t pool, daos_handle_t mc,
-			      const char *path, const uuid_t uuid,
-			      struct rdb_cbs *cbs, void *arg, struct rdb **dbp);
+			      const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
+			      struct rdb **dbp);
 
 /**
  * Create an RDB replica at \a path with \a uuid, \a size, and \a replicas, and
@@ -87,7 +87,7 @@ rdb_create(const char *path, const uuid_t uuid, size_t size,
 	if (rc != 0)
 		goto out_mc_hdl;
 
-	rc = rdb_start_internal(pool, mc, path, uuid, cbs, arg, dbp);
+	rc = rdb_start_internal(pool, mc, uuid, cbs, arg, dbp);
 
 out_mc_hdl:
 	if (rc != 0)
@@ -222,9 +222,8 @@ rdb_lookup(const uuid_t uuid)
  * the caller therefore shall not close.
  */
 static int
-rdb_start_internal(daos_handle_t pool, daos_handle_t mc, const char *path,
-		   const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
-		   struct rdb **dbp)
+rdb_start_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid,
+		   struct rdb_cbs *cbs, void *arg, struct rdb **dbp)
 {
 	struct rdb	       *db;
 	int			rc;
@@ -430,7 +429,7 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 		goto err_mc;
 	}
 
-	rc = rdb_start_internal(pool, mc, path, uuid, cbs, arg, dbp);
+	rc = rdb_start_internal(pool, mc, uuid, cbs, arg, dbp);
 	if (rc != 0)
 		goto err_mc;
 
