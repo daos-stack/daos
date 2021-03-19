@@ -76,8 +76,8 @@ func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ..
 	title := fmt.Sprintf("Pool created with %0.2f%%%% SCM/NVMe ratio", ratio*100)
 	_, err := fmt.Fprintln(out, txtfmt.FormatEntity(title, []txtfmt.TableRow{
 		{"UUID": pcr.UUID},
-		{"Service Ranks": FormatRanks(pcr.SvcReps)},
-		{"Storage Ranks": FormatRanks(pcr.TgtRanks)},
+		{"Service Ranks": formatRanks(pcr.SvcReps)},
+		{"Storage Ranks": formatRanks(pcr.TgtRanks)},
 		{"Total Size": humanize.Bytes((pcr.ScmBytes + pcr.NvmeBytes) * numRanks)},
 		{"SCM": fmt.Sprintf("%s (%s / rank)", humanize.Bytes(pcr.ScmBytes*numRanks), humanize.Bytes(pcr.ScmBytes))},
 		{"NVMe": fmt.Sprintf("%s (%s / rank)", humanize.Bytes(pcr.NvmeBytes*numRanks), humanize.Bytes(pcr.NvmeBytes))},

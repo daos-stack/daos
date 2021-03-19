@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 from command_utils_base import FormattedParameter
 from command_utils_base import BasicParameter
@@ -17,7 +17,7 @@ class DcpCommand(ExecutableCommand):
 
     def __init__(self, namespace, command):
         """Create a dcp Command object."""
-        super(DcpCommand, self).__init__(namespace, command)
+        super().__init__(namespace, command)
 
         # dcp options
 
@@ -67,7 +67,7 @@ class DcpCommand(ExecutableCommand):
     def get_param_names(self):
         """Overriding the original get_param_names."""
 
-        param_names = super(DcpCommand, self).get_param_names()
+        param_names = super().get_param_names()
 
         # move key=dst_path to the end
         param_names.sort(key='dst_path'.__eq__)
@@ -114,13 +114,13 @@ class DcpCommand(ExecutableCommand):
             self.daos_prefix.update(prefix,
                                     "daos_prefix" if display else None)
 
+
 class Dcp(DcpCommand):
     """Class defining an object of type DcpCommand."""
 
     def __init__(self, hosts, tmp, timeout=30):
         """Create a dcp object."""
-        super(Dcp, self).__init__(
-            "/run/dcp/*", "dcp")
+        super().__init__("/run/dcp/*", "dcp")
 
         # set params
         self.timeout = timeout
@@ -154,10 +154,10 @@ class Dcp(DcpCommand):
         self.exit_status_exception = False
         result = self.run(self.tmp, 1)
         self.exit_status_exception = True
-        self.has_src_pool = ("--daos-src-pool" in result.stdout)
+        self.has_src_pool = ("--daos-src-pool" in result.stdout_text)
         self.log.info("query_compatibility: has_src_pool=%s\n",
                       str(self.has_src_pool))
-        self.has_bufsize = ("--bufsize" in result.stdout)
+        self.has_bufsize = ("--bufsize" in result.stdout_text)
         self.log.info("query_compatibility: has_bufsize=%s\n",
                       str(self.has_bufsize))
 
@@ -222,12 +222,13 @@ class Dcp(DcpCommand):
 
         return out
 
+
 class DsyncCommand(ExecutableCommand):
     """Defines an object representing a dsync command."""
 
     def __init__(self, namespace, command):
         """Create a dsync Command object."""
-        super(DsyncCommand, self).__init__(namespace, command)
+        super().__init__(namespace, command)
 
         # dsync options
 
@@ -273,7 +274,7 @@ class DsyncCommand(ExecutableCommand):
     def get_param_names(self):
         """Overriding the original get_param_names."""
 
-        param_names = super(DsyncCommand, self).get_param_names()
+        param_names = super().get_param_names()
 
         # move key=dst_path to the end
         param_names.sort(key='dst_path'.__eq__)
@@ -302,13 +303,13 @@ class DsyncCommand(ExecutableCommand):
             self.daos_prefix.update(prefix,
                                     "daos_prefix" if display else None)
 
+
 class Dsync(DsyncCommand):
     """Class defining an object of type DsyncCommand."""
 
     def __init__(self, hosts, timeout=30):
         """Create a dsync object."""
-        super(Dsync, self).__init__(
-            "/run/dsync/*", "dsync")
+        super().__init__("/run/dsync/*", "dsync")
 
         # set params
         self.timeout = timeout
@@ -342,6 +343,7 @@ class Dsync(DsyncCommand):
         out = mpirun.run()
 
         return out
+
 
 class FsCopy():
     """Class defining an object of type FsCopy.

@@ -1507,7 +1507,7 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 
 	crt_ctx = rpc_req->cr_ctx;
 
-	if (ul_in->ul_tag >= CRT_SRV_CONTEXT_NUM) {
+	if (unlikely(ul_in->ul_tag >= CRT_SRV_CONTEXT_NUM)) {
 		D_WARN("Looking up invalid tag %d of rank %d "
 		       "in group %s (%d)\n",
 		       ul_in->ul_tag, ul_in->ul_rank,
@@ -1531,6 +1531,9 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 				"rc %d\n", ul_in->ul_tag, rc);
 		ul_out->ul_uri = tmp_uri;
 		ul_out->ul_tag = ul_in->ul_tag;
+		if (crt_gdata.cg_use_sensors)
+			(void)d_tm_increment_counter(&crt_gdata.cg_uri_self,
+						     1, NULL);
 		D_GOTO(out, rc);
 	}
 
@@ -1540,8 +1543,12 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 	ul_out->ul_uri = cached_uri;
 	ul_out->ul_tag = ul_in->ul_tag;
 
-	if (ul_out->ul_uri != NULL)
+	if (ul_out->ul_uri != NULL) {
+		if (crt_gdata.cg_use_sensors)
+			(void)d_tm_increment_counter(&crt_gdata.cg_uri_other,
+						     1, NULL);
 		D_GOTO(out, rc);
+	}
 
 	/* If this server does not know rank:0 then return error */
 	if (ul_in->ul_tag == 0)

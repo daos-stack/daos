@@ -162,6 +162,8 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev,
 		D_DEBUG(DB_TRACE, "fill ranks %d idx %d "DF_UUID"\n",
 			tc_out_ranks[i], idx, DP_UUID(tc_out_uuids[i]));
 	}
+	D_FREE(tc_out->tc_tgt_uuids.ca_arrays);
+	D_FREE(tc_out->tc_ranks.ca_arrays);
 
 	rc = DER_SUCCESS;
 
@@ -368,7 +370,7 @@ ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, tgt_dev, rank_list,
+	rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, tgt_dev, unique_add_ranks,
 					   scm_size, nvme_size, &tgt_uuids);
 	if (rc != 0) {
 		D_ERROR("creating pool on ranks "DF_UUID" failed: rc "DF_RC"\n",
@@ -378,14 +380,12 @@ ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 
 	/* TODO: Need to make pool service aware of new rank UUIDs */
 
-	ntargets = rank_list->rl_nr;
-
-	rc = ds_pool_extend(pool_uuid, ntargets, tgt_uuids, rank_list,
+	ntargets = unique_add_ranks->rl_nr;
+	rc = ds_pool_extend(pool_uuid, ntargets, tgt_uuids, unique_add_ranks,
 			    domains_nr, domains, svc_ranks);
 out:
-	if (unique_add_ranks != NULL)
-		d_rank_list_free(unique_add_ranks);
-
+	d_rank_list_free(unique_add_ranks);
+	D_FREE(tgt_uuids);
 	return rc;
 }
 
