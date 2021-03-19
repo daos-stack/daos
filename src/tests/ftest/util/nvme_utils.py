@@ -7,7 +7,7 @@
 import threading
 import re
 import time
-
+import queue
 from command_utils_base import CommandFailure
 from avocado.core.exceptions import TestFail
 from ior_test_base import IorTestBase
@@ -15,15 +15,9 @@ from test_utils_pool import TestPool
 from ior_utils import IorCommand
 from server_utils import ServerFailed
 
-try:
-    # python 3.x
-    import queue
-except ImportError:
-    # python 2.7
-    import Queue as queue
 
 def get_device_ids(dmg, servers):
-    """Get the NVMe Device ID from servers
+    """Get the NVMe Device ID from servers.
 
     Args:
         dmg: DmgCommand class instance.
@@ -43,27 +37,29 @@ def get_device_ids(dmg, servers):
             result = dmg.run()
         except CommandFailure as _error:
             raise CommandFailure(
-                "dmg list-devices failed with error {}".format(_error))
+                "dmg list-devices failed with error {}".format(
+                    _error)) from _error
         drive_list = []
-        for line in result.stdout.split('\n'):
+        for line in result.stdout_text.split('\n'):
             if 'UUID' in line:
                 drive_list.append(line.split('UUID:')[1].split(' ')[0])
         devices[host] = drive_list
     return devices
 
+
 class ServerFillUp(IorTestBase):
-    """
-    Class to fill up the servers based on pool percentage given.
+    # pylint: disable=too-many-ancestors,too-many-instance-attributes
+    """Class to fill up the servers based on pool percentage given.
+
     It will get the drives listed in yaml file and find the maximum capacity of
     the pool which will be created.
     IOR block size will be calculated as part of function based on percentage
     of pool needs to fill up.
     """
-    # pylint: disable=too-many-ancestors
-    # pylint: disable=too-many-instance-attributes
+
     def __init__(self, *args, **kwargs):
         """Initialize a IorTestBase object."""
-        super(ServerFillUp, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.no_of_pools = 1
         self.capacity = 1
         self.no_of_servers = 1
@@ -83,7 +79,7 @@ class ServerFillUp(IorTestBase):
         # obtain separate logs
         self.update_log_file_names()
         # Start the servers and agents
-        super(ServerFillUp, self).setUp()
+        super().setUp()
         self.hostfile_clients = None
         self.ior_default_flags = self.ior_cmd.flags.value
         self.ior_scm_xfersize = self.ior_cmd.transfer_size.value
@@ -93,7 +89,7 @@ class ServerFillUp(IorTestBase):
         self.ior_nvme_xfersize = self.params.get(
             "nvme_transfer_size", '/run/ior/transfersize_blocksize/*',
             '16777216')
-        #Get the number of daos_engine
+        # Get the number of daos_engine
         self.engines = (self.server_managers[0].manager.job.yaml.engine_params)
         self.out_queue = queue.Queue()
 
@@ -108,12 +104,12 @@ class ServerFillUp(IorTestBase):
         """
         self.ior_cmd.flags.value = self.ior_default_flags
 
-        #For IOR Other operation, calculate the block size based on server %
-        #to fill up. Store the container UUID for future reading operation.
+        # For IOR Other operation, calculate the block size based on server %
+        # to fill up. Store the container UUID for future reading operation.
         if operation == 'Write':
             block_size = self.calculate_ior_block_size()
             self.ior_cmd.block_size.update('{}'.format(block_size))
-        #For IOR Read only operation, retrieve the stored container UUID
+        # For IOR Read only operation, retrieve the stored container UUID
         elif operation == 'Read':
             create_cont = False
             self.ior_cmd.flags.value = self.ior_read_flags
@@ -128,17 +124,17 @@ class ServerFillUp(IorTestBase):
             results.put("FAIL")
 
     def calculate_ior_block_size(self):
-        """
-        Calculate IOR Block size to fill up the Server
+        """Calculate IOR Block size to fill up the Server.
 
         Returns:
             block_size(int): IOR Block size
+
         """
-        #Check the replica for IOR object to calculate the correct block size.
+        # Check the replica for IOR object to calculate the correct block size.
         _replica = re.findall(r'_(.+?)G', self.ior_cmd.dfs_oclass.value)
         if not _replica:
             replica_server = 1
-        #This is for EC Parity
+        # This is for EC Parity
         elif 'P' in _replica[0]:
             replica_server = re.findall(r'\d+', _replica[0])[0]
         else:
@@ -154,35 +150,34 @@ class ServerFillUp(IorTestBase):
         else:
             self.fail('Provide storage type (SCM/NVMe) to be filled')
 
-        #Get the block size based on the capacity to be filled. For example
-        #If nvme_free_space is 100G and to fill 50% of capacity.
-        #Formula : (107374182400 / 100) * 50.This will give 50% of space to be
-        #filled. Divide with total number of process, 16 process means each
-        #process will write 3.12Gb.last, if there is replica set, For RP_2G1
-        #will divide the individual process size by number of replica.
-        #3.12G (Single process size)/2 (No of Replica) = 1.56G
-        #To fill 50 % of 100GB pool with total 16 process and replica 2, IOR
-        #single process size will be 1.56GB.
+        # Get the block size based on the capacity to be filled. For example
+        # If nvme_free_space is 100G and to fill 50% of capacity.
+        # Formula : (107374182400 / 100) * 50.This will give 50% of space to be
+        # filled. Divide with total number of process, 16 process means each
+        # process will write 3.12Gb.last, if there is replica set, For RP_2G1
+        # will divide the individual process size by number of replica.
+        # 3.12G (Single process size)/2 (No of Replica) = 1.56G
+        # To fill 50 % of 100GB pool with total 16 process and replica 2, IOR
+        # single process size will be 1.56GB.
         _tmp_block_size = (((free_space/100)*self.capacity)/self.processes)
         _tmp_block_size = int(_tmp_block_size / int(replica_server))
-        block_size = ((_tmp_block_size/int(self.ior_cmd.transfer_size.value))
-                      *int(self.ior_cmd.transfer_size.value))
+        block_size = (
+            (_tmp_block_size / int(self.ior_cmd.transfer_size.value)) *
+            int(self.ior_cmd.transfer_size.value))
         return block_size
 
     def set_device_faulty(self, server, disk_id):
-        """
-        Set the devices (disk_id) to Faulty and wait for rebuild to complete on
-        given server hostname.
+        """Set the devices to Faulty and wait for rebuild to complete.
 
-        args:
-            server(string): server hostname where it generate the NVMe fault.
-            disk_id(string): NVMe disk ID where it will be changed to faulty.
+        Args:
+            server (string): server hostname where it generate the NVMe fault.
+            disk_id (string): NVMe disk ID where it will be changed to faulty.
         """
         self.dmg.hostlist = server
         self.dmg.storage_set_faulty(disk_id)
         result = self.dmg.storage_query_device_health(disk_id)
-        #Check if device state changed to EVICTED.
-        if 'State:EVICTED' not in result.stdout:
+        # Check if device state changed to EVICTED.
+        if 'State:EVICTED' not in result.stdout_text:
             self.fail("device State {} on host {} suppose to be EVICTED"
                       .format(disk_id, server))
         # Wait for rebuild to start
@@ -191,14 +186,12 @@ class ServerFillUp(IorTestBase):
         self.pool.wait_for_rebuild(False)
 
     def set_device_faulty_loop(self):
-        """
-        Set the devices to Faulty one by one and wait for rebuild to complete.
-        """
-        #Get the device ids from all servers and try to eject the disks
+        """Set devices to Faulty one by one and wait for rebuild to complete."""
+        # Get the device ids from all servers and try to eject the disks
         device_ids = get_device_ids(self.dmg, self.hostlist_servers)
 
-        #no_of_servers and no_of_drives can be set from test yaml.
-        #1 Server, 1 Drive = Remove single drive from single server
+        # no_of_servers and no_of_drives can be set from test yaml.
+        # 1 Server, 1 Drive = Remove single drive from single server
         for num in range(0, self.no_of_servers):
             server = self.hostlist_servers[num]
             for disk_id in range(0, self.no_of_drives):
@@ -224,12 +217,11 @@ class ServerFillUp(IorTestBase):
         return sizes
 
     def create_pool_max_size(self, scm=False, nvme=False):
-        """
-        Method to create the single pool with Maximum NVMe/SCM size available.
+        """Create a single pool with Maximum NVMe/SCM size available.
 
-        arg:
-            scm(bool): To create the pool with max SCM size or not.
-            nvme(bool): To create the pool with max NVMe size or not.
+        Args:
+            scm (bool): To create the pool with max SCM size or not.
+            nvme (bool): To create the pool with max NVMe size or not.
 
         Note: Method to Fill up the server. It will get the maximum Storage
               space and create the pool.
@@ -242,51 +234,49 @@ class ServerFillUp(IorTestBase):
         if nvme or scm:
             sizes = self.get_max_storage_sizes()
 
-        #If NVMe is True get the max NVMe size from servers
+        # If NVMe is True get the max NVMe size from servers
         if nvme:
             self.pool.nvme_size.update('{}'.format(sizes[1]))
 
-        #If SCM is True get the max SCM size from servers
+        # If SCM is True get the max SCM size from servers
         if scm:
             self.pool.scm_size.update('{}'.format(sizes[0]))
 
-        #Create the Pool
+        # Create the Pool
         self.pool.create()
 
     def start_ior_load(self, storage='NVMe', operation="Write", percent=1,
                        create_cont=True):
-        """
-        Method to Fill up the server either SCM or NVMe.
+        """Fill up the server either SCM or NVMe.
+
         Fill up based on percent amount given using IOR.
 
-        arg:
-            storage(string): SCM or NVMe, by default it will fill NVMe.
-            operation(string): Write/Read operation
-            percent(int): % of storage to be filled
-            create_cont(bool): To create the new container for IOR
-        Returns:
-            None
+        Args:
+            storage (string): SCM or NVMe, by default it will fill NVMe.
+            operation (string): Write/Read operation
+            percent (int): % of storage to be filled
+            create_cont (bool): To create the new container for IOR
         """
         self.capacity = percent
         # Fill up NVMe by default
-        self.nvme_fill = True if 'NVMe' in storage else False
-        self.scm_fill = True if 'SCM' in storage else False
+        self.nvme_fill = 'NVMe' in storage
+        self.scm_fill = 'SCM' in storage
 
         # Create the IOR threads
         job = threading.Thread(target=self.start_ior_thread,
-                               kwargs={"results":self.out_queue,
+                               kwargs={"results": self.out_queue,
                                        "create_cont": create_cont,
                                        "operation": operation})
         # Launch the IOR thread
         job.start()
 
-        #Set NVMe device faulty if it's set
+        # Set NVMe device faulty if it's set
         if self.set_faulty_device:
             time.sleep(60)
-            #Set the device faulty
+            # Set the device faulty
             self.set_device_faulty_loop()
 
-        #Kill the server rank while IOR in progress
+        # Kill the server rank while IOR in progress
         if self.set_online_rebuild:
             time.sleep(30)
             # Kill the server rank
