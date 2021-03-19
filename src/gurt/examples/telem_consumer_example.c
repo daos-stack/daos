@@ -73,7 +73,7 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 				       DP_RC(rc));
 				break;
 			}
-			d_tm_print_counter(val, name, stdout);
+			d_tm_print_counter(val, name, D_TM_STANDARD, stdout);
 			break;
 		case D_TM_TIMESTAMP:
 			rc = d_tm_get_timestamp(&clk, shmem_root,
@@ -83,7 +83,7 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 				       DP_RC(rc));
 				break;
 			}
-			d_tm_print_timestamp(&clk, name, stdout);
+			d_tm_print_timestamp(&clk, name, D_TM_STANDARD, stdout);
 			break;
 		case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_REALTIME):
 		case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_PROCESS_CPUTIME):
@@ -97,7 +97,7 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 			}
 			d_tm_print_timer_snapshot(&tms, name,
 						  nodelist->dtnl_node->dtn_type,
-						  stdout);
+						  D_TM_STANDARD, stdout);
 			break;
 		case D_TM_DURATION | D_TM_CLOCK_REALTIME:
 		case D_TM_DURATION | D_TM_CLOCK_PROCESS_CPUTIME:
@@ -111,7 +111,7 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 			}
 			d_tm_print_duration(&tms, &stats, name,
 					    nodelist->dtnl_node->dtn_type,
-					    stdout);
+					    D_TM_STANDARD, stdout);
 			break;
 		case D_TM_GAUGE:
 			rc = d_tm_get_gauge(&val, &stats, shmem_root,
@@ -121,7 +121,8 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 				       DP_RC(rc));
 				break;
 			}
-			d_tm_print_gauge(val, &stats, name, stdout);
+			d_tm_print_gauge(val, &stats, name, D_TM_STANDARD,
+					 stdout);
 			break;
 		default:
 			printf("Item: %s has unknown type: 0x%x\n",
@@ -132,13 +133,15 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 		if (show_meta) {
 			d_tm_get_metadata(&shortDesc, &longDesc, shmem_root,
 					  nodelist->dtnl_node, NULL);
-			printf("\tMetadata short description: %s\n"
-			       "\tMetadata long description: %s\n",
-			       shortDesc ? shortDesc : "N/A",
-			       longDesc ? longDesc : "N/A");
+			d_tm_print_metadata(shortDesc, longDesc, D_TM_STANDARD,
+					    stdout);
 			D_FREE_PTR(shortDesc);
 			D_FREE_PTR(longDesc);
 		}
+
+		if (nodelist->dtnl_node->dtn_type != D_TM_DIRECTORY)
+			printf("\n");
+
 		nodelist = nodelist->dtnl_next;
 	}
 	d_tm_list_free(head);
@@ -171,12 +174,20 @@ main(int argc, char **argv)
 	root = d_tm_get_root(shmem_root);
 
 	printf("Full directory tree from root node:\n");
-	d_tm_print_my_children(shmem_root, root, 0, stdout);
+	filter = (D_TM_COUNTER | D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT |
+		  D_TM_DURATION | D_TM_GAUGE | D_TM_DIRECTORY);
+	show_meta = true;
+	d_tm_print_my_children(shmem_root, root, 0, filter, NULL,
+			       D_TM_STANDARD, show_meta, false, stdout);
 
 	sprintf(dirname, "manually added");
 	filter = (D_TM_COUNTER | D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT |
 			D_TM_DURATION | D_TM_GAUGE);
 	show_meta = false;
+	read_metrics(shmem_root, root, dirname, filter, show_meta);
+
+	filter = D_TM_COUNTER;
+	show_meta = true;
 	read_metrics(shmem_root, root, dirname, filter, show_meta);
 
 	return 0;

@@ -88,7 +88,7 @@ enum vos_gc_type {
 #define POOL_DF_MAGIC				0x5ca1ab1e
 
 /** Lowest supported durable format version */
-#define POOL_DF_VER_1				13
+#define POOL_DF_VER_1				14
 /** Current durable format version */
 #define POOL_DF_VERSION				POOL_DF_VER_1
 
@@ -256,6 +256,8 @@ struct vos_cont_df {
 	umem_off_t			cd_dtx_committed_tail;
 	/** Allocation hints for block allocator. */
 	struct vea_hint_df		cd_hint_df[VOS_IOS_CNT];
+	/** GC bins for object/dkey...Don't need GC_CONT entry */
+	struct vos_gc_bin_df		cd_gc_bins[GC_CONT];
 };
 
 /* Assume cd_dtx_active_tail is just after cd_dtx_active_head. */

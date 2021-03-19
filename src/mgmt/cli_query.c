@@ -71,7 +71,6 @@ dc_mgmt_get_bs_state(tse_task_t *task)
 	struct mgmt_get_bs_state_arg	 cb_args;
 	int				 rc;
 
-
 	args = dc_task_get_args(task);
 
 	rc = dc_mgmt_sys_attach(args->grp, &cb_args.sys);
@@ -112,7 +111,6 @@ dc_mgmt_get_bs_state(tse_task_t *task)
 	D_DEBUG(DB_MGMT, "getting internal blobstore state in DAOS system:%s\n",
 		args->grp);
 
-	/** send the request */
 	return daos_rpc_send(rpc_req, task);
 
 out_put_req:
