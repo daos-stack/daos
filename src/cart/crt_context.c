@@ -622,7 +622,8 @@ crt_rank_abort_all(crt_group_t *grp)
 
 	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
 	for (i = 0; i < grp_membs->rl_nr; i++) {
-		D_DEBUG("Aborting RPCs to rank=%d\n", grp_membs->rl_ranks[i]);
+		D_DEBUG(DB_ALL, "Aborting RPCs to rank=%d\n",
+			grp_membs->rl_ranks[i]);
 
 		rc = crt_rank_abort(grp_membs->rl_ranks[i]);
 		if (rc != DER_SUCCESS) {
