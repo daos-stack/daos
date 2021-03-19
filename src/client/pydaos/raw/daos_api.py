@@ -5,7 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=pylint-too-many-lines
-from __future__ import print_function
+
 
 import ctypes
 import threading
@@ -28,15 +28,15 @@ else:
 
 DaosObjClass = enum.Enum(
     "DaosObjClass",
-    {key: value for key, value in pydaos_shim.__dict__.items()
+    {key: value for key, value in list(pydaos_shim.__dict__.items())
      if key.startswith("OC_")})
 
 DaosContPropEnum = enum.Enum(
     "DaosContPropEnum",
-    {key: value for key, value in pydaos_shim.__dict__.items()
+    {key: value for key, value in list(pydaos_shim.__dict__.items())
      if key.startswith("DAOS_PROP_")})
 
-class DaosPool(object):
+class DaosPool():
     """A python object representing a DAOS pool."""
 
     def __init__(self, context):
@@ -147,7 +147,7 @@ class DaosPool(object):
         c_glob = daos_cref.IOV()
         c_glob.iov_len = iov_len
         c_glob.iov_buf_len = buf_len
-        c_buf = ctypes.create_string_buffer(str(buf))
+        c_buf = ctypes.create_string_buffer(bytes(buf))
         c_glob.iov_buf = ctypes.cast(c_buf, ctypes.c_void_p)
 
         local_handle = ctypes.c_uint64(0)
@@ -419,7 +419,7 @@ class DaosPool(object):
         values = ctypes.cast(att_values, ctypes.POINTER(ctypes.c_char_p))
 
         size_of_att_val = []
-        for key in data.keys():
+        for key in list(data.keys()):
             if data[key] is not None:
                 size_of_att_val.append(len(data[key]))
             else:
@@ -593,7 +593,7 @@ def get_object_class(item):
                 item, type(item)))
 
 
-class DaosObj(object):
+class DaosObj():
     """A class representing an object stored in a DAOS container."""
 
     def __init__(self, context, container, c_oid=None):
@@ -855,7 +855,7 @@ class DaosObj(object):
             thread.start()
 
 
-class IORequest(object):
+class IORequest():
     """Python object that centralizes details about an I/O type.
 
     Type is either 1 (single) or 2 (array)
@@ -1279,14 +1279,14 @@ class DaosContProperties(ctypes.Structure):
         # input variables which is used
         # to set appropriate
         # container properties.
-        super(DaosContProperties, self).__init__()
-        self.type = "Unknown"
+        super().__init__()
+        self.type = bytes("Unknown", "utf-8")
         self.enable_chksum = False
         self.srv_verify = False
         self.chksum_type = ctypes.c_uint64(100)
         self.chunk_size = ctypes.c_uint64(0)
 
-class DaosInputParams(object):
+class DaosInputParams():
     # pylint: disable=too-few-public-methods
     """ This is a helper python method
     which can be used to pack input
@@ -1294,7 +1294,7 @@ class DaosInputParams(object):
     (eg: container or pool (future)).
     """
     def __init__(self):
-        super(DaosInputParams, self).__init__()
+        super().__init__()
         # Get the input params for setting
         # container properties for
         # create method.
@@ -1311,7 +1311,8 @@ class DaosInputParams(object):
         """
         return self.co_prop
 
-class DaosContainer(object):
+class DaosContainer():
+    # pylint: disable=too-many-public-methods
     """A python object representing a DAOS container."""
 
     def __init__(self, context):
@@ -1665,7 +1666,7 @@ class DaosContainer(object):
         # strings as the data)
         c_values = []
         for item in datalist:
-            c_values.append((ctypes.create_string_buffer(item), len(item)+1))
+            c_values.append((ctypes.create_string_buffer(item), len(item) + 1))
         c_dkey = ctypes.create_string_buffer(dkey)
         c_akey = ctypes.create_string_buffer(akey)
 
@@ -1844,7 +1845,7 @@ class DaosContainer(object):
         c_glob = daos_cref.IOV()
         c_glob.iov_len = iov_len
         c_glob.iov_buf_len = buf_len
-        c_buf = ctypes.create_string_buffer(str(buf))
+        c_buf = ctypes.create_string_buffer(bytes(buf))
         c_glob.iov_buf = ctypes.cast(c_buf, ctypes.c_void_p)
 
         local_handle = ctypes.c_uint64(0)
@@ -1926,7 +1927,7 @@ class DaosContainer(object):
         values = ctypes.cast(att_values, ctypes.POINTER(ctypes.c_char_p))
 
         size_of_att_val = []
-        for key in data.keys():
+        for key in list(data.keys()):
             if data[key] is not None:
                 size_of_att_val.append(len(data[key]))
             else:
@@ -2040,7 +2041,7 @@ class DaosContainer(object):
             thread.start()
 
 
-class DaosSnapshot(object):
+class DaosSnapshot():
     """A python object that can represent a DAOS snapshot.
 
     We do not save the coh in the snapshot since it is different each time the
@@ -2138,7 +2139,7 @@ class DaosSnapshot(object):
             raise Exception("Failed to destroy the snapshot. RC: {0}"
                             .format(retcode))
 
-class DaosContext(object):
+class DaosContext():
     # pylint: disable=too-few-public-methods
     """Provides environment and other info for a DAOS client."""
 
@@ -2253,10 +2254,10 @@ class DaosLog:
         caller_func = sys._getframe(1).f_back.f_code.co_name
         filename = os.path.basename(caller.filename)
 
-        c_filename = ctypes.create_string_buffer(filename)
+        c_filename = ctypes.create_string_buffer(filename.encode('utf-8'))
         c_line = ctypes.c_int(caller.lineno)
-        c_msg = ctypes.create_string_buffer(msg)
-        c_caller_func = ctypes.create_string_buffer(caller_func)
+        c_msg = ctypes.create_string_buffer(msg.encode('utf-8'))
+        c_caller_func = ctypes.create_string_buffer(caller_func.encode('utf-8'))
         c_level = ctypes.c_uint64(level)
 
         func(c_msg, c_filename, c_caller_func, c_line, c_level)
