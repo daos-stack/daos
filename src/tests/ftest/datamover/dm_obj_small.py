@@ -181,6 +181,9 @@ class DmObjSmallTest(DataMoverTestBase):
             Clone cont1 to a new cont2 in pool1.
             Create pool2.
             Clone cont1 to a new cont3 in pool2.
+
+        Args:
+            tool (str): the tool to use. Must be in DataMoverTestBase.TOOLS
         """
         # Set the tool to use
         self.set_tool(tool)

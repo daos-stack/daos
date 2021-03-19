@@ -26,6 +26,9 @@ class DmObjLargePosix(DataMoverTestBase):
             Create a large directory in cont1 with mdtest.
             Clone cont1 to a new cont2.
             Verify the directory in cont2 with mdtest.
+
+        Args:
+            tool (str): the tool to use. Must be in DataMoverTestBase.TOOLS
         """
         # Set the tool to use
         self.set_tool(tool)
