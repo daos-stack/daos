@@ -1365,8 +1365,8 @@ def run_tests(dfuse):
 
     fname = os.path.join(path, 'test_file3')
 
-    rc = subprocess.run(['dd', 'if=/dev/zero', 'bs=16k', 'count=64',
-                         'of={}'.format(os.path.join(path, 'dd_file'))]) # nosec
+    rc = subprocess.run(['dd', 'if=/dev/zero', 'bs=16k', 'count=64', # nosec
+                         'of={}'.format(os.path.join(path, 'dd_file'))])
     print(rc)
     assert rc.returncode == 0 # nosec
     ofd = open(fname, 'w')
