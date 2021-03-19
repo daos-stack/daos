@@ -21,7 +21,7 @@ class DfuseSparseFile(IorTestBase):
 
     def __init__(self, *args, **kwargs):
         """Initialize a DfuseSparseFile object."""
-        super(DfuseSparseFile, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.space_before = None
 
     def test_dfusesparsefile(self):
@@ -56,7 +56,7 @@ class DfuseSparseFile(IorTestBase):
         # space.
         sparse_file = str(self.dfuse.mount_dir.value + "/" +
                           "sparsefile.txt")
-        self.execute_cmd(u"touch {}".format(sparse_file))
+        self.execute_cmd("touch {}".format(sparse_file))
         self.log.info("File size (in bytes) before truncate: %s",
                       get_remote_file_size(
                           self.hostlist_clients[0], sparse_file))
@@ -81,7 +81,7 @@ class DfuseSparseFile(IorTestBase):
         self.assertTrue(fsize_after_truncate == self.space_before)
 
         # write to the first byte of the file with char 'A'
-        dd_first_byte = u"echo 'A' | dd conv=notrunc of={} bs=1 count=1".\
+        dd_first_byte = "echo 'A' | dd conv=notrunc of={} bs=1 count=1".\
                         format(sparse_file)
         self.execute_cmd(dd_first_byte)
         fsize_write_1stbyte = get_remote_file_size(self.hostlist_clients[0],
@@ -92,7 +92,7 @@ class DfuseSparseFile(IorTestBase):
         self.assertTrue(fsize_write_1stbyte == self.space_before)
 
         # write to the 1024th byte position of the file
-        dd_1024_byte = u"echo 'A' | dd conv=notrunc of={} obs=1 seek=1023 \
+        dd_1024_byte = "echo 'A' | dd conv=notrunc of={} obs=1 seek=1023 \
                        bs=1 count=1".format(sparse_file)
         self.execute_cmd(dd_1024_byte)
         fsize_write_1024thwrite = get_remote_file_size(self.hostlist_clients[0],
@@ -111,13 +111,13 @@ class DfuseSparseFile(IorTestBase):
 
         # check the middle 1022 bytes if they are filled with zeros
         middle_1022_bytes = \
-            u"cmp --ignore-initial=1 --bytes=1022 {} {}".format(
+            "cmp --ignore-initial=1 --bytes=1022 {} {}".format(
                 sparse_file, "/dev/zero")
         self.execute_cmd(middle_1022_bytes)
 
         # read last 512 bytes which should be zeros till end of file.
         ignore_bytes = self.space_before - 512
-        read_till_eof = u"cmp --ignore-initial={} {} {}".format(
+        read_till_eof = "cmp --ignore-initial={} {} {}".format(
             ignore_bytes, sparse_file, "/dev/zero")
 #        self.execute_cmd(read_till_eof, False)
         # fail the test if the above command is successful.

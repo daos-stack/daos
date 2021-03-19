@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 import os
 import re
@@ -14,7 +14,7 @@ from avocado.utils import process
 from apricot import TestWithServers
 
 
-class NetDev(object):
+class NetDev():
     # pylint: disable=too-few-public-methods
     """A class to represent the information of a network device"""
 
@@ -84,7 +84,7 @@ class NetDev(object):
         # Parse the list and divide the info
         # pylint: disable=no-member
         prov = re.findall(
-            r"(?:provider:|domain:)\s+([A-Za-z0-9;_+]+)", out.stdout, re.M)
+            r"(?:provider:|domain:)\s+([A-Za-z0-9;_+]+)", out.stdout_text, re.M)
         # pylint: enable=no-member
         info = [prov[i:(i + 2)] for i in range(0, len(prov), 2)]
 
@@ -116,14 +116,15 @@ class DmgNetworkScanTest(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a DmgNetworkScanTest object."""
-        super(DmgNetworkScanTest, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
+        self.start_agents_once = False
         self.start_servers_once = False
         self.setup_start_agents = False
         self.setup_start_servers = False
 
     def setUp(self):
         """Set up each test case."""
-        super(DmgNetworkScanTest, self).setUp()
+        super().setUp()
 
         # Run the dmg command locally, unset config to run locally
         self.hostlist_servers = socket.gethostname().split(".")[0].split(",")
