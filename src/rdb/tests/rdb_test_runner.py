@@ -6,12 +6,10 @@
 #
 """
 This script runs the rdb tests. From the command line the tests are run with:
-
 server:
 orterun -N 1 --report-uri /tmp/urifile -x LD_LIBRARY_PATH
 daos_server -o <builddir>/utils/config/examples/daos_server_rdb_tests.yml
 start -d ./ -t 1 -m vos,rdb,rsvc,mgmt,rdbt
-
 client:
 orterun --ompi-server file:/tmp/urifile <debug_cmds> -np 1 rdbt init
 --group=daos_server --uuid <uuid>
@@ -21,10 +19,8 @@ orterun --ompi-server file:/tmp/urifile <debug_cmds> -np 1 rdbt test
 --group=daos_server
 orterun --ompi-server file:/tmp/urifile <debug_cmds> -np 1 rdbt fini
 --group=daos_server
-
 Where debug_cmds = -x D_LOG_MASK=DEBUG,RPC=ERR,MEM=ERR -x DD_SUBSYS=all
 -x DD_MASK=all
-
 This script automates the process.
 """
 
@@ -141,7 +137,6 @@ def find_child(parent_pid, child_name):
     ps -o pid,comm --no-headers --ppid <pid> gives output that looks like this:
      41108 orterun
      41519 ps
-
     """
     child_pid = None
     cmd = ['ps', '-o', 'pid,comm', '--no-headers', '--ppid', str(parent_pid)]
@@ -242,9 +237,8 @@ if __name__ == "__main__":
         print("DAOS server started")
 
         # Client operations
-        client_prefix = "{} --ompi-server " \
-                        "file:{} {} --np 1 rdbt ".format(
-                        orterun urifile, debug_cmds)
+        client_prefix = "{} --ompi-server file:{} {} --np 1 rdbt ".format(
+            orterun, urifile, debug_cmds)
         client_suffix = " --group=daos_server"
         # orterun is called for the client four times: init, update, test,
         # and fini
