@@ -871,7 +871,7 @@ ilog_test_aggregate(void **state)
 	commit_all();
 	epr.epr_lo = 2;
 	epr.epr_hi = 4;
-	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, false, 0,
+	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, false, 0, 0,
 			    &ilents);
 	LOG_FAIL(rc, 0, "Failed to aggregate ilog\n");
 	version_cache_fetch(&version_cache, loh, true);
@@ -895,7 +895,7 @@ ilog_test_aggregate(void **state)
 
 	epr.epr_lo = 0;
 	epr.epr_hi = 6;
-	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, false, 0,
+	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, false, 0, 0,
 			    &ilents);
 	LOG_FAIL(rc, 0, "Failed to aggregate ilog\n");
 	version_cache_fetch(&version_cache, loh, true);
@@ -910,7 +910,7 @@ ilog_test_aggregate(void **state)
 	version_cache_fetch(&version_cache, loh, true);
 	commit_all();
 	epr.epr_hi = 7;
-	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, false, 0,
+	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, false, 0, 0,
 			    &ilents);
 	/* 1 means empty */
 	LOG_FAIL(rc, 1, "Failed to aggregate log entry\n");
@@ -987,7 +987,8 @@ ilog_test_discard(void **state)
 	commit_all();
 	epr.epr_lo = 2;
 	epr.epr_hi = 4;
-	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, true, 0, &ilents);
+	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, true, 0, 0,
+			    &ilents);
 	LOG_FAIL(rc, 0, "Failed to aggregate ilog\n");
 	version_cache_fetch(&version_cache, loh, true);
 
@@ -1009,7 +1010,8 @@ ilog_test_discard(void **state)
 	commit_all();
 	epr.epr_lo = 0;
 	epr.epr_hi = 6;
-	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, true, 0, &ilents);
+	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, true, 0, 0,
+			    &ilents);
 	/* 1 means empty */
 	LOG_FAIL(rc, 1, "Failed to aggregate ilog\n");
 	version_cache_fetch(&version_cache, loh, true);
@@ -1026,7 +1028,8 @@ ilog_test_discard(void **state)
 	commit_all();
 
 	epr.epr_hi = 7;
-	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, true, 0, &ilents);
+	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, true, 0, 0,
+			    &ilents);
 	/* 1 means empty */
 	LOG_FAIL(rc, 1, "Failed to aggregate ilog\n");
 	version_cache_fetch(&version_cache, loh, true);

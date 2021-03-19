@@ -61,7 +61,7 @@ class OSAUtils(IorTestBase):
 
         """
         data = self.dmg_command.pool_query(self.pool.uuid)
-        return int(data["leader"])
+        return int(data["response"]["leader"])
 
     @fail_on(CommandFailure)
     def get_rebuild_status(self):
@@ -72,7 +72,7 @@ class OSAUtils(IorTestBase):
 
         """
         data = self.dmg_command.pool_query(self.pool.uuid)
-        return data["rebuild"]["status"]
+        return data["response"]["rebuild"]["status"]
 
     @fail_on(CommandFailure)
     def is_rebuild_done(self, time_interval):
@@ -115,7 +115,7 @@ class OSAUtils(IorTestBase):
 
         """
         data = self.dmg_command.pool_query(self.pool.uuid)
-        return int(data["version"])
+        return int(data["response"]["version"])
 
     @fail_on(DaosApiError)
     def write_single_object(self):
