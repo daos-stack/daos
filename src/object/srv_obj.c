@@ -1730,12 +1730,12 @@ obj_ioc_end(struct obj_io_context *ioc, int err)
 		/** Update sensors */
 		if (err == 0)
 			/** measure latency of successful I/O only */
-			d_tm_set_gauge(&tls->ot_op_lat[opc],
-				       (daos_get_ntime() -
-					ioc->ioc_start_time) / 1000,
-				       NULL);
-		d_tm_decrement_gauge(&tls->ot_op_active[opc], 1, NULL);
-		d_tm_increment_counter(&tls->ot_op_total[opc], NULL);
+			(void)d_tm_set_gauge(&tls->ot_op_lat[opc],
+					     (daos_get_ntime() -
+					     ioc->ioc_start_time) / 1000,
+					     NULL);
+		(void)d_tm_decrement_gauge(&tls->ot_op_active[opc], 1, NULL);
+		(void)d_tm_increment_counter(&tls->ot_op_total[opc], NULL);
 	}
 	obj_ioc_fini(ioc);
 }
@@ -1756,7 +1756,7 @@ obj_ioc_begin(uint32_t rpc_map_ver, uuid_t pool_uuid,
 
 	/** increment active request counter and start the chrono */
 	tls = obj_tls_get();
-	d_tm_increment_gauge(&tls->ot_op_active[opc], 1, NULL);
+	(void)d_tm_increment_gauge(&tls->ot_op_active[opc], 1, NULL);
 	ioc->ioc_start_time = daos_get_ntime();
 
 	rc = obj_capa_check(ioc->ioc_coh, obj_is_modification_opc(opc));
@@ -2263,7 +2263,7 @@ again:
 		daos_epoch_t	e = 0;
 		struct obj_tls  *tls = obj_tls_get();
 
-		d_tm_increment_counter(&tls->ot_update_resent, NULL);
+		(void)d_tm_increment_counter(&tls->ot_update_resent, NULL);
 
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti,
 				       &e, &version);
@@ -2370,7 +2370,8 @@ again:
 			orw->orw_epoch = crt_hlc_get();
 			orw->orw_flags &= ~ORF_RESEND;
 			flags = 0;
-			d_tm_increment_counter(&tls->ot_update_restart, NULL);
+			(void)d_tm_increment_counter(&tls->ot_update_restart,
+						     NULL);
 			goto again;
 		}
 
