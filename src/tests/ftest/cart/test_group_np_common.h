@@ -123,14 +123,14 @@ test_checkin_handler(crt_rpc_t *rpc_req)
 	rc = crt_reply_send(rpc_req);
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
 
-	DBG_PRINT("tier1 test_srver sent checkin reply, ret: %d, \
-			 room_no: %d.\n", e_reply->ret, e_reply->room_no);
+	DBG_PRINT("tier1 test_srver sent checkin reply, ret: %d,"
+		  "  room_no: %d.\n", e_reply->ret, e_reply->room_no);
 }
 
 /* Track number of dead-alive swim status changes */
 struct rank_status {
-  int num_alive;
-  int num_dead;
+	int num_alive;
+	int num_dead;
 };
 
 /* Keep a table of whether each rank is alive (0) or dead (1) */
@@ -247,6 +247,7 @@ client_cb_common(const struct crt_cb_info *cb_info)
 	rpc_req = cb_info->cci_rpc;
 
 	if (cb_info->cci_arg != NULL) {
+		/* avoid checkpatch warning */
 		*(int *) cb_info->cci_arg = 1;
 	}
 
@@ -447,8 +448,8 @@ parse_verify_swim_status_arg(char *source)
 	cursor = source;
 
 	for (m = 0; m < maxMatches; m++) {
-
 		if (regexec(&regexCompiled, cursor, maxGroups, groupArray, 0)) {
+			/* avoid checkpatch warning */
 			break;	/* No more matches */
 		}
 
@@ -456,12 +457,13 @@ parse_verify_swim_status_arg(char *source)
 		unsigned int offset = 0;
 
 		for (g = 0; g < maxGroups; g++) {
-
 			if (groupArray[g].rm_so == (size_t)-1) {
+				/* avoid checkpatch warning */
 				break;	/* No more groups */
 			}
 
 			if (g == 0) {
+				/* avoid checkpatch warning */
 				offset = groupArray[g].rm_eo;
 			}
 
@@ -479,21 +481,23 @@ parse_verify_swim_status_arg(char *source)
 					 cC + groupArray[g].rm_so);
 
 			if (g == 1) {
+				/* avoid checkpatch warning */
 				ss.rank = atoi(cC +
 					       groupArray[g].rm_so);
 			}
 			if (g == 2) {
-
 				int exp_status_len = 8;
 				char exp_status[exp_status_len];
 
 				if (exp_status_len >
 				    strlen(cC + groupArray[g].rm_so)) {
+					/* avoid checkpatch warning */
 					memcpy(exp_status, cC +
 						groupArray[g].rm_so,
 						strlen(cC +
 						       groupArray[g].rm_so));
 				} else {
+					/* avoid checkpatch warning */
 					D_ERROR("Use 'dead' or 'alive' for "
 						"swim status label.\n");
 				}
@@ -509,6 +513,7 @@ parse_verify_swim_status_arg(char *source)
 				 */
 				ss.swim_status = 0;
 				if (tolower(exp_status[0]) == 'd') {
+					/* avoid checkpatch warning */
 					ss.swim_status = 1;
 				}
 

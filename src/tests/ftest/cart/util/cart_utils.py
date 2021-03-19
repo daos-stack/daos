@@ -22,7 +22,7 @@ import cart_logtest
 import socket
 
 from general_utils import stop_processes
-from distutils.spawn import find_executable
+
 from write_host_file import write_host_file
 
 class CartUtils():
@@ -223,7 +223,7 @@ class CartUtils():
                   r"valgrind.%q\{PMIX_ID\}.memcheck " + \
                   "--fair-sched=try  --partial-loads-ok=yes " + \
                   "--leak-check=yes --gen-suppressions=all " + \
-                  "--suppressions=/etc/daos/memcheck-cart.supp " + \
+                  "--suppressions=../etc/memcheck-cart.supp " + \
                   "--show-reachable=yes "
 
 
@@ -294,8 +294,6 @@ class CartUtils():
             tst_cmd += " -x D_LOG_FILE_APPEND_PID=1"
 
         tst_mod = os.getenv("CART_TEST_MODE", "native")
-        os.environ["CART_TEST_MODE"] = "memcheck"
-
         if tst_mod == "memcheck":
             tst_cmd += tst_vgd
 
