@@ -4,19 +4,18 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from __future__ import print_function
-
-from general_utils import get_random_string, DaosTestError
-from pydaos.raw import DaosApiError
-
-import time
-import tempfile
-import shutil
+from logging import getLogger
 import os
 import random
+import shutil
+import tempfile
+import time
+
+from general_utils import get_random_bytes, DaosTestError
+from pydaos.raw import DaosApiError
 
 
-class DirTree(object):
+class DirTree():
     """
     This class creates a directory-tree. The height, the number of files and
     subdirectories that will be created to populate the directory-tree are
@@ -67,17 +66,17 @@ class DirTree(object):
         Populate the directory-tree. This method must be called before using
         the other methods.
         """
-        if self._tree_path:
-            return
+        if not self._tree_path:
 
-        try:
-            self._tree_path = tempfile.mkdtemp(dir=self._root)
-            self._log("Directory-tree root: {0}".format(self._tree_path))
-            self._create_dir_tree(self._tree_path, self._height)
-            self._created_remaining_needles()
-        except Exception as err:
-            raise RuntimeError(
-                "Failed to populate tree directory with error: {0}".format(err))
+            try:
+                self._tree_path = tempfile.mkdtemp(dir=self._root)
+                self._log("Directory-tree root: {0}".format(self._tree_path))
+                self._create_dir_tree(self._tree_path, self._height)
+                self._created_remaining_needles()
+            except Exception as err:
+                raise RuntimeError(
+                    "Failed to populate tree directory with error: {0}".format(
+                        err)) from err
 
         return self._tree_path
 
@@ -169,7 +168,7 @@ class DirTree(object):
             os.close(fd)
 
     def _create_needle(self, current_path, current_height):
-        """If we reach the bottom of the tree, create a *.needle file"""
+        """If we reach the bottom of the tree, create a *.needle file."""
         if current_height != 1:
             return
 
@@ -206,9 +205,9 @@ def continuous_io(container, seconds):
 
     while time.time() < finish_time:
         # make some stuff up
-        dkey = get_random_string(5)
-        akey = get_random_string(5)
-        data = get_random_string(size)
+        dkey = get_random_bytes(5)
+        akey = get_random_bytes(5)
+        data = get_random_bytes(size)
 
         # write it then read it back
         oid = container.write_an_obj(data, size, dkey, akey, oid, 5)
@@ -216,7 +215,7 @@ def continuous_io(container, seconds):
 
         # verify it came back correctly
         if data != data2.value:
-            raise ValueError("Data mismatch in ContinousIo")
+            raise ValueError("Data mismatch in ContinuousIo")
 
         # collapse down the committed epochs
         container.consolidate_epochs()
@@ -243,9 +242,9 @@ def write_until_full(container):
     try:
         while True:
             # make some stuff up and write
-            dkey = get_random_string(5)
-            akey = get_random_string(5)
-            data = get_random_string(size)
+            dkey = get_random_bytes(5)
+            akey = get_random_bytes(5)
+            data = get_random_bytes(size)
 
             _oid = container.write_an_obj(data, size, dkey, akey)
             total_written += size
@@ -254,7 +253,8 @@ def write_until_full(container):
             container.slip_epoch()
 
     except ValueError as exp:
-        print(exp)
+        log = getLogger()
+        log.info(exp)
 
     return total_written
 
@@ -283,9 +283,9 @@ def write_quantity(container, size_in_bytes):
         while total_written < size_in_bytes:
 
             # make some stuff up and write
-            dkey = get_random_string(5)
-            akey = get_random_string(5)
-            data = get_random_string(size)
+            dkey = get_random_bytes(5)
+            akey = get_random_bytes(5)
+            data = get_random_bytes(size)
 
             _oid = container.write_an_obj(data, size, dkey, akey)
             total_written += size
@@ -294,7 +294,8 @@ def write_quantity(container, size_in_bytes):
             container.slip_epoch()
 
     except ValueError as exp:
-        print(exp)
+        log = getLogger()
+        log.info(exp)
 
     return total_written
 
@@ -329,13 +330,13 @@ def write_single_objects(
     for index in range(obj_qty):
         object_list.append({"obj": None, "record": []})
         for _ in range(rec_qty):
-            akey = get_random_string(
+            akey = get_random_bytes(
                 akey_size,
                 [record["akey"] for record in object_list[index]["record"]])
-            dkey = get_random_string(
+            dkey = get_random_bytes(
                 dkey_size,
                 [record["dkey"] for record in object_list[index]["record"]])
-            data = get_random_string(data_size)
+            data = get_random_bytes(data_size)
             object_list[index]["record"].append(
                 {"akey": akey, "dkey": dkey, "data": data})
 
@@ -348,7 +349,8 @@ def write_single_objects(
             except DaosApiError as error:
                 raise DaosTestError(
                     "Error writing data (dkey={}, akey={}, data={}) to "
-                    "the container: {}".format(dkey, akey, data, error))
+                    "the container: {}".format(
+                        dkey, akey, data, error)) from error
 
             # Verify the single data was written to the container
             data_read = read_single_objects(
@@ -367,13 +369,13 @@ def read_single_objects(container, size, dkey, akey, obj):
     Args:
         container (DaosContainer): the container from which to read objects
         size (int): amount of data to read
-        dkey (str): dkey used to access the data
-        akey (str): akey used to access the data
+        dkey (bytes): dkey used to access the data
+        akey (bytes): akey used to access the data
         obj (object): object to read
         txn (int): transaction number
 
     Returns:
-        str: data read from the container
+        bytes: data read from the container
 
     Raises:
         DaosTestError: if an error is detected reading the objects
@@ -384,7 +386,7 @@ def read_single_objects(container, size, dkey, akey, obj):
     except DaosApiError as error:
         raise DaosTestError(
             "Error reading data (dkey={}, akey={}, size={}) from the "
-            "container: {}".format(dkey, akey, size, error))
+            "container: {}".format(dkey, akey, size, error)) from error
     return data.value
 
 
@@ -418,13 +420,13 @@ def write_array_objects(
     for index in range(obj_qty):
         object_list.append({"obj": None, "record": []})
         for _ in range(rec_qty):
-            akey = get_random_string(
+            akey = get_random_bytes(
                 akey_size,
                 [record["akey"] for record in object_list[index]["record"]])
-            dkey = get_random_string(
+            dkey = get_random_bytes(
                 dkey_size,
                 [record["dkey"] for record in object_list[index]["record"]])
-            data = [get_random_string(data_size) for _ in range(data_size)]
+            data = [get_random_bytes(data_size) for _ in range(data_size)]
             object_list[index]["record"].append(
                 {"akey": akey, "dkey": dkey, "data": data})
 
@@ -437,7 +439,8 @@ def write_array_objects(
             except DaosApiError as error:
                 raise DaosTestError(
                     "Error writing data (dkey={}, akey={}, data={}) to "
-                    "the container: {}".format(dkey, akey, data, error))
+                    "the container: {}".format(
+                        dkey, akey, data, error)) from error
 
             # Verify the data was written to the container
             data_read = read_array_objects(
@@ -458,8 +461,8 @@ def read_array_objects(container, size, items, dkey, akey, obj):
         container (DaosContainer): the container from which to read objects
         size (int): number of arrays to read
         items (int): number of items in each array to read
-        dkey (str): dkey used to access the data
-        akey (str): akey used to access the data
+        dkey (bytes): dkey used to access the data
+        akey (bytes): akey used to access the data
         obj (object): object to read
         txn (int): transaction number
 
@@ -476,7 +479,7 @@ def read_array_objects(container, size, items, dkey, akey, obj):
         raise DaosTestError(
             "Error reading data (dkey={}, akey={}, size={}, items={}) "
             "from the container: {}".format(
-                dkey, akey, size, items, error))
+                dkey, akey, size, items, error)) from error
     return [item[:-1] for item in data]
 
 
@@ -502,4 +505,5 @@ def get_target_rank_list(daos_object):
         return daos_object.tgt_rank_list
     except DaosApiError as error:
         raise DaosTestError(
-            "Error obtaining target list for the object: {}".format(error))
+            "Error obtaining target list for the object: {}".format(
+                error)) from error

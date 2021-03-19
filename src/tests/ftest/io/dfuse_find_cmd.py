@@ -140,10 +140,10 @@ class FindCmd(DfuseTestBase):
             self.pool.destroy()
 
             if challenger_path:
-                self._run_cmd(u"rm -rf {0}".format(challenger_path))
+                self._run_cmd("rm -rf {0}".format(challenger_path))
 
             if temp_dfs_path:
-                self._run_cmd(u"rm -rf {0}".format(temp_dfs_path))
+                self._run_cmd("rm -rf {0}".format(temp_dfs_path))
 
         self.log.info("DAOS Stats")
         daos_stats.print_stats()
@@ -179,12 +179,12 @@ class FindCmd(DfuseTestBase):
         the number of expected files. The test fails.
         """
         profiler = general_utils.SimpleProfiler()
-        profiler.set_logger(self.log.info)
+        profiler.set_logger(self.log)
 
         def _search_needles(file_name, sample_tag, expected_res):
             self.log.info("Searching pattern: %s", file_name)
             self.log.info("Number of expecting results: %d", expected_res)
-            cmd = u"find {0} -name {1} | wc -l | grep {2}".format(test_path,
+            cmd = "find {0} -name {1} | wc -l | grep {2}".format(test_path,
                                                                   file_name,
                                                                   expected_res)
             profiler.run(self._run_cmd,
@@ -251,13 +251,13 @@ class FindCmd(DfuseTestBase):
                 path, height, subdirs, files_per_node, needles, prefix)
             dir_tree_cmd = "PYTHONPATH={} python {} {}".format(
                 remote_pythonpath, os.path.abspath(__file__), remote_args)
-            self._run_cmd(u"{0}".format(dir_tree_cmd))
+            self._run_cmd("{0}".format(dir_tree_cmd))
 
     def _run_cmd(self, cmd):
         ret_code = general_utils.pcmd(self.hostlist_clients, cmd, timeout=180)
         if 0 not in ret_code:
             error_hosts = NodeSet(
-                ",".join([str(v) for k, v in ret_code.items() if k != 0]))
+                ",".join([str(v) for k, v in list(ret_code.items()) if k != 0]))
             raise CommandFailure(
                 "Error running '{}' on the following hosts: {}".format(
                     cmd, error_hosts))
@@ -280,7 +280,7 @@ class FindCmd(DfuseTestBase):
         for directory in range(directories):
             dir_name = "test_dir_{:05d}".format(directory)
             dir_name = os.path.join(test_path, dir_name)
-            self._run_cmd(u"mkdir -p {0}".format(dir_name))
+            self._run_cmd("mkdir -p {0}".format(dir_name))
             challenger_dirs.append(dir_name)
 
         return challenger_dirs

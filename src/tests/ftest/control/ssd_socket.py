@@ -5,7 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
-from general_utils import pcmd, run_task
+from general_utils import pcmd, run_pcmd
 
 
 class SSDSocketTest(TestWithServers):
@@ -24,6 +24,7 @@ class SSDSocketTest(TestWithServers):
 
     :avocado: recursive
     """
+
     def debug_numa_node(self, pci_addr_heads):
         """Debug numa_node file by searching it in /sys and call hwloc-ls.
 
@@ -33,11 +34,10 @@ class SSDSocketTest(TestWithServers):
         for pci_addr_head in pci_addr_heads:
             self.log.debug(
                 "----- Search PCI Addr Head %s in /sys -----", pci_addr_head)
-            task = run_task(
+            run_pcmd(
                 hosts=self.hostlist_servers,
-                command="find /sys -name \"{}\"".format(pci_addr_head))
-            for output, _ in task.iter_buffers():
-                self.log.debug(output)
+                command="find /sys -name \"{}\"".format(pci_addr_head),
+                verbose=True)
 
         # Another way to obtain the Socket ID is to use hwloc-ls --whole-io
         # --verbose. It contains something like:
@@ -67,7 +67,7 @@ class SSDSocketTest(TestWithServers):
         """
         # Call dmg storage scan --verbose and get the PCI addresses.
         data = self.get_dmg_command().storage_scan(verbose=True)
-        pci_addrs = data[self.hostlist_servers[0]]["nvme"].keys()
+        pci_addrs = list(data[self.hostlist_servers[0]]["nvme"].keys())
         self.log.info("Testing PCI addresses: %s", pci_addrs)
 
         pci_addr_heads = []
@@ -77,8 +77,8 @@ class SSDSocketTest(TestWithServers):
         # ID.
         for pci_addr in pci_addrs:
             # Get the PCI Address Head and construct the path to numa_node.
-            cmd_socket_id = data[self.hostlist_servers[0]]["nvme"][pci_addr]\
-                ["socket"]
+            cmd_socket_id = \
+                data[self.hostlist_servers[0]]["nvme"][pci_addr]["socket"]
             pci_addr_values = pci_addr.split(":")
             pci_addr_head = "{}:{}".format(
                 pci_addr_values[0], pci_addr_values[1])
@@ -87,20 +87,19 @@ class SSDSocketTest(TestWithServers):
                 pci_addr_head)
 
             # Call cat on the server host, not necessarily the local test host.
-            task = run_task(
+            results = run_pcmd(
                 hosts=[self.hostlist_servers[0]],
                 command="cat {}".format(numa_node_path))
 
             # Obtain the numa_node content.
             fs_socket_id = ""
-            for output, _ in task.iter_buffers():
-                fs_socket_id = str(output).splitlines()[-1]
-
-            # Test that the content is expected.
-            if fs_socket_id != cmd_socket_id:
-                errors.append(
-                    "Unexpected socket ID! Cmd: {}; FS: {}".format(
-                        cmd_socket_id, fs_socket_id))
+            for result in results:
+                # Test that the content is expected.
+                fs_socket_id = result["stdout"][-1]
+                if fs_socket_id != cmd_socket_id:
+                    errors.append(
+                        "Unexpected socket ID! Cmd: {}; FS: {}".format(
+                            cmd_socket_id, fs_socket_id))
 
         if errors:
             # Since we're dealing with system files and we don't have access to

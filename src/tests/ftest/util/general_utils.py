@@ -5,13 +5,14 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
-from __future__ import print_function
+
 from logging import getLogger
 import os
 import re
 import random
 import string
 import time
+import ctypes
 from getpass import getuser
 from importlib import import_module
 from socket import gethostname
@@ -25,32 +26,31 @@ class DaosTestError(Exception):
     """DAOS API exception class."""
 
 
-class SimpleProfiler(object):
-    """
-    Simple profiler that counts the number of times a function is called
-    and measure its execution time.
+class SimpleProfiler():
+    """Simple profiler class.
+
+    Counts the number of times a function is called and measure its execution
+    time.
     """
 
     def __init__(self):
+        """Initialize a SimpleProfiler object."""
         self._stats = {}
-        self._logger = None
+        self._logger = getLogger()
 
     def clean(self):
-        """
-        Clean the metrics collect so far.
-        """
+        """Clean the metrics collect so far."""
         self._stats = {}
 
     def run(self, fn, tag, *args, **kwargs):
-        """
-        Run a function and update its stats.
+        """Run a function and update its stats.
 
-        Parameters:
+        Args:
             fn (function): Function to be executed
             args  (tuple): Argument list
             kwargs (dict): Keyworded, variable-length argument list
         """
-        self._log("Running function: {0}()".format(fn.__name__))
+        self._logger.info("Running function: %s()", fn.__name__)
 
         start_time = time.time()
 
@@ -58,9 +58,8 @@ class SimpleProfiler(object):
 
         end_time = time.time()
         elapsed_time = end_time - start_time
-        self._log(
-            "Execution time: {0}".format(
-                self._pretty_time(elapsed_time)))
+        self._logger.info(
+            "Execution time: %s", self._pretty_time(elapsed_time))
 
         if tag not in self._stats:
             self._stats[tag] = [0, []]
@@ -71,42 +70,45 @@ class SimpleProfiler(object):
         return ret
 
     def get_stat(self, tag):
-        """
-        Retrieves the stats of a function.
+        """Retrieve the stats of a function.
 
-        Parameters:
+        Args:
             tag (str): Tag to be query
 
-        Return:
-            max, min, avg (tuple): A tuple with the slowest, fastest and
-            average execution times.
+        Returns:
+            tuple: A tuple of the fastest (max), slowest (min), and average
+                execution times.
+
         """
         data = self._stats.get(tag, [0, []])
 
         return self._calculate_metrics(data[1])
 
     def set_logger(self, fn):
-        """
+        """Assign the function to be used for logging.
+
         Set the function that will be used to print the elapsed time on each
         function call. If this value is not set, the profiling will be
         performed silently.
 
         Parameters:
             fn (function): Function to be used for logging.
+
         """
         self._logger = fn
 
     def print_stats(self):
+        """Print all the stats collected so far.
+
+        If the logger has not been set, the stats will be printed by using the
+        built-in print function.
         """
-        Prints all the stats collected so far. If the logger has not been set,
-        the stats will be printed by using the built-in print function.
-        """
-        self._pmsg("{0:20} {1:5} {2:10} {3:10} {4:10}".format(
+        self._logger.info("{0:20} {1:5} {2:10} {3:10} {4:10}".format(
             "Function Tag", "Hits", "Max", "Min", "Average"))
 
-        for fname, data in self._stats.items():
+        for fname, data in list(self._stats.items()):
             max_time, min_time, avg_time = self._calculate_metrics(data[1])
-            self._pmsg(
+            self._logger.info(
                 "{0:20} {1:5} {2:10} {3:10} {4:10}".format(
                     fname,
                     data[0],
@@ -114,38 +116,17 @@ class SimpleProfiler(object):
                     self._pretty_time(min_time),
                     self._pretty_time(avg_time)))
 
-    def _log(self, msg):
-        """If logger function is set, print log messages"""
-        if self._logger:
-            self._logger(msg)
-
-    def _pmsg(self, msg):
-        """
-        Print messages using the logger. If it has not been set, print
-        messages using python print() function.
-        """
-        if self._logger:
-            self._log(msg)
-        else:
-            print(msg)
-
     @classmethod
     def _pretty_time(cls, ftime):
-        """Convert to pretty time string"""
+        """Convert to pretty time string."""
         return time.strftime("%H:%M:%S", time.gmtime(ftime))
 
     @classmethod
     def _calculate_metrics(cls, data):
-        """
-        Calculate the maximum, minimum and average values of a given list.
-        """
+        """Calculate the maximum, minimum and average values of a given list."""
         max_time = max(data)
         min_time = min(data)
-
-        if len(data):
-            avg_time = sum(data) / len(data)
-        else:
-            avg_time = 0
+        avg_time = sum(data) / len(data) if data else 0
 
         return max_time, min_time, avg_time
 
@@ -183,9 +164,9 @@ def human_to_bytes(size):
                     "Invalid unit detected, not in {}: {}".format(
                         conversion[1000] + conversion[1024][1:], unit))
         value = float(match[0][0]) * multiplier
-    except IndexError:
+    except IndexError as error:
         raise DaosTestError(
-            "Invalid human readable size format: {}".format(size))
+            "Invalid human readable size format: {}".format(size)) from error
     return int(value) if value.is_integer() else value
 
 
@@ -256,12 +237,15 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
                 command         - command string
                 exit_status     - exit_status of the command
                 stdout          - the stdout
+                stdout_text     - decoded stdout
                 stderr          - the stderr
+                stderr_text     - decoded stderr
                 duration        - command execution time
                 interrupted     - whether the command completed within timeout
                 pid             - command's pid
 
     """
+    log = getLogger()
     msg = None
     kwargs = {
         "cmd": command,
@@ -273,7 +257,7 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
         "env": env,
     }
     if verbose:
-        print("Command environment vars:\n  {}".format(env))
+        log.info("Command environment vars:\n  %s", env)
     try:
         # Block until the command is complete or times out
         return process.run(**kwargs)
@@ -298,7 +282,7 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
                 command, error.result)
 
     if msg is not None:
-        print(msg)
+        log.info(msg)
         raise DaosTestError(msg)
 
 
@@ -324,6 +308,115 @@ def run_task(hosts, command, timeout=None):
     return task
 
 
+def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
+    """Run a command on each host in parallel and get the results.
+
+    Args:
+        hosts (list): list of hosts
+        command (str): the command to run in parallel
+        verbose (bool, optional): display command output. Defaults to True.
+        timeout (int, optional): command timeout in seconds. Defaults to None.
+        expect_rc (int, optional): display output if the command return code
+            does not match this value. Defaults to 0. A value of None will
+            bypass this feature.
+
+    Returns:
+        list: a list of dictionaries with each entry containing output, exit
+            status, and interrupted status common to each group of hosts, e.g.:
+                [
+                    {
+                        "command": "ls my_dir",
+                        "hosts": NodeSet(wolf-[1-3]),
+                        "exit_status": 0,
+                        "interrupted": False,
+                        "stdout": ["file1.txt", "file2.json"],
+                    },
+                    {
+                        "command": "ls my_dir",
+                        "hosts": NodeSet(wolf-[4]),
+                        "exit_status": 1,
+                        "interrupted": False,
+                        "stdout": ["No such file or directory"],
+                    },
+                    {
+                        "command": "ls my_dir",
+                        "hosts": NodeSet(wolf-[5-6]),
+                        "exit_status": 255,
+                        "interrupted": True,
+                        "stdout": [""]
+                    },
+                ]
+
+    """
+    log = getLogger()
+    results = []
+
+    # Run the command on each host in parallel
+    task = run_task(hosts, command, timeout)
+
+    # Get the exit status of each host
+    host_exit_status = {
+        host: exit_status for exit_status, host_list in task.iter_retcodes()
+        for host in host_list}
+
+    # Get a list of any interrupted hosts
+    host_interrupted = []
+    if timeout and task.num_timeout() > 0:
+        host_interrupted.extend(list(task.iter_keys_timeout()))
+
+    # Iterate through all the groups of common output
+    output_data = list(task.iter_buffers())
+    if not output_data:
+        output_data = [["", hosts]]
+    for output, host_list in output_data:
+        # Deterimine the unique exit status for each host with the same output
+        output_exit_status = {}
+        for host in host_list:
+            if host_exit_status[host] not in output_exit_status:
+                output_exit_status[host_exit_status[host]] = NodeSet()
+            output_exit_status[host_exit_status[host]].add(host)
+
+        # Determine the unique interrupted state for each host with the same
+        # output and exit status
+        for exit_status in output_exit_status:
+            output_interrupted = {}
+            for host in list(output_exit_status[exit_status]):
+                is_interrupted = host in host_interrupted
+                if is_interrupted not in output_interrupted:
+                    output_interrupted[is_interrupted] = NodeSet()
+                output_interrupted[is_interrupted].add(host)
+
+            # Add a result entry for each group of hosts with the same output,
+            # exit status, and interrupted status
+            for interrupted in output_interrupted:
+                results.append({
+                    "command": command,
+                    "hosts": output_interrupted[interrupted],
+                    "exit_status": exit_status,
+                    "interrupted": interrupted,
+                    "stdout": [
+                        line.decode("utf-8").rstrip(os.linesep)
+                        for line in output],
+                })
+
+    # Display results if requested or there is an unexpected exit status
+    bad_exit_status = [
+        item["exit_status"]
+        for item in results
+        if expect_rc is not None and item["exit_status"] != expect_rc]
+    if verbose or bad_exit_status:
+        log.info("Command: %s", command)
+        log.info("Results:")
+        for result in results:
+            log.info(
+                "  %s: exit_status=%s, interrupted=%s:",
+                result["hosts"], result["exit_status"], result["interrupted"])
+            for line in result["stdout"]:
+                log.info("    %s", line)
+
+    return results
+
+
 def get_host_data(hosts, command, text, error, timeout=None):
     """Get the data requested for each host using the specified command.
 
@@ -334,49 +427,36 @@ def get_host_data(hosts, command, text, error, timeout=None):
         error (str): data error string
 
     Returns:
-        dict: a dictionary of data values for each NodeSet key
+        list: a list of dictionaries containing the following key/value pairs:
+            "hosts": NodeSet containing the hosts with this data
+            "data":  data requested for the group of hosts
 
     """
-    # Find the data for each specified servers
-    print("  Obtaining {} data on {}".format(text, hosts))
-    task = run_task(hosts, command, timeout)
-    host_data = {}
+    log = getLogger()
+    host_data = []
     DATA_ERROR = "[ERROR]"
 
-    # Create a list of NodeSets with the same return code
-    data = {code: host_list for code, host_list in task.iter_retcodes()}
-
-    # Multiple return codes or a single non-zero return code
-    # indicate at least one error obtaining the data
-    if len(data) > 1 or 0 not in data:
-        # Report the errors
-        messages = []
-        for code, host_list in data.items():
-            if code != 0:
-                output_data = list(task.iter_buffers(host_list))
-                if not output_data:
-                    messages.append(
-                        "{}: rc={}, command=\"{}\"".format(
-                            NodeSet.fromlist(host_list), code, command))
-                else:
-                    for output, o_hosts in output_data:
-                        lines = str(output).splitlines()
-                        info = "rc={}{}".format(
-                            code,
-                            ", {}".format(output) if len(lines) < 2 else
-                            "\n  {}".format("\n  ".join(lines)))
-                        messages.append(
-                            "{}: {}".format(
-                                NodeSet.fromlist(o_hosts), info))
-        print("    {} on the following hosts:\n      {}".format(
-            error, "\n      ".join(messages)))
-
-        # Return an error data set for all of the hosts
-        host_data = {NodeSet.fromlist(hosts): DATA_ERROR}
-
+    # Find the data for each specified servers
+    log.info("  Obtaining %s data on %s", text, hosts)
+    results = run_pcmd(hosts, command, False, timeout, None)
+    errors = [
+        item["exit_status"]
+        for item in results if item["exit_status"] != 0]
+    if errors:
+        log.info("    %s on the following hosts:", error)
+        for result in results:
+            if result["exit_status"] in errors:
+                log.info(
+                    "      %s: rc=%s, interrupted=%s, command=\"%s\":",
+                    result["hosts"], result["exit_status"],
+                    result["interrupted"], result["command"])
+                for line in result["stdout"]:
+                    log.info("        %s", line)
+        host_data.append({"hosts": NodeSet.fromlist(hosts), "data": DATA_ERROR})
     else:
-        for output, host_list in task.iter_buffers(data[0]):
-            host_data[NodeSet.fromlist(host_list)] = str(output)
+        for result in results:
+            host_data.append(
+                {"hosts": result["hosts"], "data": "\n".join(result["stdout"])})
 
     return host_data
 
@@ -397,53 +477,13 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
 
     """
     # Run the command on each host in parallel
-    task = run_task(hosts, command, timeout)
-
-    # Report any errors
-    retcode_dict = {}
-    errors = False
-    for retcode, rc_nodes in task.iter_retcodes():
-        # Create a NodeSet for this list of nodes
-        nodeset = NodeSet.fromlist(rc_nodes)
-
-        # Include this NodeSet for this return code
-        if retcode not in retcode_dict:
-            retcode_dict[retcode] = NodeSet()
-        retcode_dict[retcode].add(nodeset)
-
-        # Keep track of any errors
-        if expect_rc is not None and expect_rc != retcode:
-            errors = True
-
-    # Report command output if requested or errors are detected
-    if verbose or errors:
-        print("Command:\n  {}".format(command))
-        print("Command return codes:")
-        for retcode in sorted(retcode_dict):
-            print("  {}: rc={}".format(retcode_dict[retcode], retcode))
-
-        print("Command output:")
-        for output, bf_nodes in task.iter_buffers():
-            # Create a NodeSet for this list of nodes
-            nodeset = NodeSet.fromlist(bf_nodes)
-
-            # Display the output per node set
-            print("  {}:\n    {}".format(
-                nodeset, "\n    ".join(str(output).splitlines())))
-
-    # Report any timeouts
-    if timeout and task.num_timeout() > 0:
-        nodes = task.iter_keys_timeout()
-        print(
-            "{}: timeout detected running '{}' on {}/{} hosts after {}s".format(
-                NodeSet.fromlist(nodes),
-                command, task.num_timeout(), len(hosts), timeout))
-        retcode = 255
-        if retcode not in retcode_dict:
-            retcode_dict[retcode] = NodeSet()
-        retcode_dict[retcode].add(NodeSet.fromlist(nodes))
-
-    return retcode_dict
+    results = run_pcmd(hosts, command, verbose, timeout, expect_rc)
+    exit_status = {}
+    for result in results:
+        if result["exit_status"] not in exit_status:
+            exit_status[result["exit_status"]] = NodeSet()
+        exit_status[result["exit_status"]].add(result["hosts"])
+    return exit_status
 
 
 def check_file_exists(hosts, filename, user=None, directory=False):
@@ -539,6 +579,25 @@ def get_random_string(length, exclude=None):
     return random_string
 
 
+def get_random_bytes(length, exclude=None, encoding="utf-8"):
+    """Create a specified length string of random ascii letters and numbers.
+
+    Optionally exclude specific random strings from being returned.
+
+    Args:
+        length (int): length of the string to return
+        exclude (list, optional): list of strings to not return. Defaults to
+            None.
+        encoding (str, optional): bytes encoding. Defaults to "utf-8"
+
+    Returns:
+        bytes : a string of random ascii letters and numbers converted to
+                bytes object
+
+    """
+    return get_random_string(length, exclude).encode(encoding)
+
+
 def check_pool_files(log, hosts, uuid):
     """Check if pool files exist on the specified list of hosts.
 
@@ -607,22 +666,23 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None):
     log.info("Killing any processes on %s that match: %s", hosts, pattern)
 
     if added_filter:
-        ps_cmd = "ps x | grep -E {} | grep -vE {}".format(pattern, added_filter)
+        ps_cmd = "/usr/bin/ps x | grep -E {} | grep -vE {}".format(
+            pattern, added_filter)
     else:
-        ps_cmd = "pgrep --list-full {}".format(pattern)
+        ps_cmd = "/usr/bin/pgrep --list-full {}".format(pattern)
 
     if hosts is not None:
         commands = [
             "rc=0",
             "if " + ps_cmd,
             "then rc=1",
-            "sudo pkill {}".format(pattern),
+            "sudo /usr/bin/pkill {}".format(pattern),
             "sleep 5",
             "if " + ps_cmd,
-            "then pkill --signal ABRT {}".format(pattern),
+            "then /usr/bin/pkill --signal ABRT {}".format(pattern),
             "sleep 1",
             "if " + ps_cmd,
-            "then pkill --signal KILL {}".format(pattern),
+            "then /usr/bin/pkill --signal KILL {}".format(pattern),
             "fi",
             "fi",
             "fi",
@@ -657,7 +717,7 @@ def get_partition_hosts(partition, reservation=None):
 
         if result:
             # Get the list of hosts from the partition information
-            output = result.stdout
+            output = result.stdout_text
             try:
                 hosts = list(NodeSet(re.findall(r"\s+Nodes=(.*)", output)[0]))
             except (NodeSetParseError, IndexError):
@@ -678,7 +738,7 @@ def get_partition_hosts(partition, reservation=None):
                     hosts = []
                 if result:
                     # Get the list of hosts from the reservation information
-                    output = result.stdout
+                    output = result.stdout_text
                     try:
                         reservation_hosts = list(
                             NodeSet(re.findall(r"\sNodes=(\S+)", output)[0]))
@@ -749,11 +809,11 @@ def get_numeric_list(numeric_range):
                 numeric_list.extend([int(val) for val in range(*range_args)])
             else:
                 numeric_list.append(int(item))
-    except (AttributeError, ValueError, TypeError):
+    except (AttributeError, ValueError, TypeError) as error:
         raise AttributeError(
             "Invalid 'numeric_range' argument - must be a string containing "
             "only numbers, dashes (-), and/or commas (,): {}".format(
-                numeric_range))
+                numeric_range)) from error
 
     return numeric_list
 
@@ -772,7 +832,7 @@ def get_remote_file_size(host, file_name):
         getuser(), host, file_name)
     result = run_command(cmd)
 
-    return int(result.stdout)
+    return int(result.stdout_text)
 
 
 def error_count(error, hostlist, log_file):
@@ -791,20 +851,17 @@ def error_count(error, hostlist, log_file):
 
     """
     # Get the Client side Error from client_log file.
-    output = []
     requested_error_count = 0
     other_error_count = 0
-    cmd = 'cat {} | grep ERR'.format(get_log_file(log_file))
-    task = run_task(hostlist, cmd)
-    for buf, _nodes in task.iter_buffers():
-        output = str(buf).split('\n')
-
-    for line in output:
-        if 'ERR' in line:
-            if error in line:
-                requested_error_count += 1
-            else:
-                other_error_count += 1
+    command = 'cat {} | grep ERR'.format(get_log_file(log_file))
+    results = run_pcmd(hostlist, command, False, None, None)
+    for result in results:
+        for line in result["stdout"]:
+            if 'ERR' in line:
+                if error in line:
+                    requested_error_count += 1
+                else:
+                    other_error_count += 1
 
     return requested_error_count, other_error_count
 
@@ -828,7 +885,8 @@ def get_module_class(name, module):
         name_class = getattr(name_module, name)
     except (ImportError, AttributeError) as error:
         raise DaosTestError(
-            "Invalid '{}' class name for {}: {}".format(name, module, error))
+            "Invalid '{}' class name for {}: {}".format(
+                name, module, error)) from error
     return name_class
 
 
@@ -1107,3 +1165,38 @@ def get_file_listing(hosts, files):
             convert_string(files, " ")),
         verbose=False, raise_exception=False)
     return result
+
+
+def get_subprocess_stdout(subprocess):
+    """Get the stdout from the specified subprocess.
+
+    Args:
+        subprocess (process.SubProcess): subprocess from which to get stdout
+
+    Returns:
+        str: the std out of the subprocess
+
+    """
+    output = subprocess.get_stdout()
+    if isinstance(output, bytes):
+        output = output.decode("utf-8")
+    return output
+
+
+def create_string_buffer(value, size=None):
+    """Create a ctypes string buffer.
+
+    Converts any string to a bytes object before calling
+    ctypes.create_string_buffer().
+
+    Args:
+    value (object): value to pass to ctypes.create_string_buffer()
+    size (int, optional): sze to pass to ctypes.create_string_buffer()
+
+    Returns:
+    array: return value from ctypes.create_string_buffer()
+
+    """
+    if isinstance(value, str):
+        value = value.encode("utf-8")
+    return ctypes.create_string_buffer(value, size)
