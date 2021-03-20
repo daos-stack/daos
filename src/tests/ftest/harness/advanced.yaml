@@ -1,0 +1,5 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+timeout: 120

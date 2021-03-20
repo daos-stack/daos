@@ -2,11 +2,13 @@
    <insert_a_suppression_name_here>
    Memcheck:Leak
    ...
-   fun:vea_reserve
+   fun:calloc
    ...
+   fun:vea_reserve
+   fun:ut_*
    obj:/usr/lib64/libcmocka.so.*
    fun:_cmocka_run_group_tests
-   fun:(below main)
+   ...
 }
 {
    <insert_a_suppression_name_here>
@@ -69,7 +71,9 @@
    fun:calloc
    fun:drpc_call
    fun:request_credentials_via_drpc
-   ...
+   fun:dc_sec_request_creds
+   fun:test_request_credentials_*
+   obj:/usr/lib64/libcmocka.so*
    fun:_cmocka_run_group_tests
    fun:main
 }
@@ -122,10 +126,11 @@
    Memcheck:Leak
    match-leak-kinds:definite
    fun:calloc
+   ...
    fun:register_cb
    fun:tse_task_register_cbs
    fun:sched_test_2
-   fun:main
+   ...
 }
 {
    <insert_a_suppression_name_here>
@@ -169,23 +174,6 @@
    Memcheck:User
    fun:pmemobj_tx_add_snapshot
    fun:pmemobj_tx_add_common.constprop.*
-   ...
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   ...
-   fun:calloc
-   ...
-   fun:btr_insert
-   fun:btr_upsert
-   fun:dbtree_update
-   fun:vos_cont_create
-   fun:cont_init
-   fun:dts_ctx_init
-   fun:gc_setup
-   ...
-   ...
    ...
 }
 {
@@ -293,11 +281,9 @@
    fun:generate_view
    fun:aggregate_basic
    fun:aggregate_21
-   obj:/usr/lib64/libcmocka.so.*
-   fun:_cmocka_run_group_tests
+   ...
    fun:run_aggregate_tests
    ...
-   fun:main
 }
 {
    <insert_a_suppression_name_here>
@@ -313,10 +299,9 @@
    Memcheck:Leak
    match-leak-kinds:definite
    fun:calloc
+   ...
    fun:vea_hint_load
    fun:ut_interleaved_ops
-   obj:/usr/lib64/libcmocka.so*
-   fun:_cmocka_run_group_tests
    ...
 }
 {
@@ -341,13 +326,12 @@
    Memcheck:Leak
    match-leak-kinds:reachable
    fun:calloc
+   ...
    fun:pack_validate_resp_in_drpc_call_resp_body
    fun:init_valid_cred
    fun:init_default_cred
    fun:test_cont_can_delete
-   obj:/usr/lib64/libcmocka.so.*
-   fun:_cmocka_run_group_tests
-   fun:main
+   ...
 }
 {
    <insert_a_suppression_name_here>
@@ -401,21 +385,11 @@
 {
    <insert_a_suppression_name_here>
    Memcheck:Leak
-   ...
-   fun:calloc
-   fun:vea_reserve
-   fun:ut_*
-   obj:/usr/lib64/libcmocka.so*
-   fun:_cmocka_run_group_tests
-   fun:main
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
    match-leak-kinds:definite
    fun:calloc
+   ...
    fun:eq_test_8
-   fun:main
+   ...
 }
 {
    <insert_a_suppression_name_here>
@@ -568,5 +542,46 @@
    fun:?alloc
    ...
    fun:_dl_init
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Free
+   fun:free
+   ...
+   fun:dl_open_worker
+   fun:_dl_catch_error
+   fun:_dl_open
+   fun:dlopen_doit
+   fun:_dl_catch_error
+   fun:_dlerror_run
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Free
+   fun:free
+   ...
+   fun:ofi_get_core_info
+   fun:ofix_getinfo
+   fun:rxm_getinfo
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Free
+   fun:free
+   ...
+   fun:mca_base_component_repository_release
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Free
+   fun:free
+   ...
+   fun:__libc_freeres
+   fun:_vgnU_freeres
+   fun:__run_exit_handlers
    ...
 }

@@ -209,13 +209,12 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc_req)
 					rpc_swim_input->upds.ca_arrays,
 					rpc_swim_input->upds.ca_count);
 	}
-	if (rc == -ESHUTDOWN) {
+	if (rc == -DER_SHUTDOWN) {
 		if (grp_priv->gp_size > 1)
 			D_ERROR("SWIM shutdown\n");
 		swim_self_set(ctx, SWIM_ID_INVALID);
 	} else if (rc) {
-		D_ERROR("swim_parse_message() failed: %s (%d)\n",
-			strerror(rc), rc);
+		D_ERROR("swim_parse_message(): "DF_RC"\n", DP_RC(rc));
 	}
 
 out:
@@ -223,15 +222,15 @@ out:
 		return;
 
 	D_TRACE_DEBUG(DB_TRACE, rpc_req,
-		      "reply to opc %#x with %zu updates %lu <= %lu rc=%d\n",
+		      "reply to opc %#x with %zu updates %lu <= %lu "DF_RC"\n",
 		      rpc_req->cr_opc, rpc_swim_input->upds.ca_count,
-		      self_id, from_id, rc);
+		      self_id, from_id, DP_RC(rc));
 
 	rpc_swim_output->rc = rc;
 	rc = crt_reply_send(rpc_req);
 	if (rc)
-		D_ERROR("send reply %d failed "DF_RC"\n",
-			rpc_swim_output->rc, DP_RC(rc));
+		D_ERROR("send reply: "DF_RC" failed: "DF_RC"\n",
+			DP_RC(rpc_swim_output->rc), DP_RC(rc));
 }
 
 static int crt_swim_get_member_state(struct swim_context *ctx, swim_id_t id,
@@ -297,7 +296,7 @@ static int crt_swim_send_message(struct swim_context *ctx, swim_id_t to,
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 	struct crt_rpc_swim_in	*rpc_swim_input;
 	crt_context_t		 crt_ctx;
-	crt_rpc_t		*rpc_req;
+	crt_rpc_t		*rpc_req = NULL;
 	crt_endpoint_t		 ep;
 	crt_opcode_t		 opc;
 	swim_id_t		 self_id = swim_self_get(ctx);
@@ -322,7 +321,7 @@ static int crt_swim_send_message(struct swim_context *ctx, swim_id_t to,
 
 	crt_ctx = crt_context_lookup(ctx_idx);
 	if (crt_ctx == CRT_CONTEXT_NULL) {
-		D_ERROR("crt_context_lookup failed\n");
+		D_ERROR("crt_context_lookup(%d) failed\n", ctx_idx);
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
 
@@ -332,7 +331,7 @@ static int crt_swim_send_message(struct swim_context *ctx, swim_id_t to,
 
 	rc = crt_req_create(crt_ctx, &ep, opc, &rpc_req);
 	if (rc) {
-		D_ERROR("crt_req_create() failed "DF_RC"\n", DP_RC(rc));
+		D_ERROR("crt_req_create(): "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -340,9 +339,8 @@ static int crt_swim_send_message(struct swim_context *ctx, swim_id_t to,
 		rc = crt_req_set_timeout(rpc_req, crt_swim_rpc_timeout);
 		if (rc) {
 			D_TRACE_ERROR(rpc_req,
-				      "crt_req_set_timeout() failed "
-				      DF_RC"\n", DP_RC(rc));
-			crt_req_decref(rpc_req);
+				      "crt_req_set_timeout(): "DF_RC"\n",
+				      DP_RC(rc));
 			D_GOTO(out, rc);
 		}
 	}
@@ -356,13 +354,11 @@ static int crt_swim_send_message(struct swim_context *ctx, swim_id_t to,
 		      "sending opc %#x with %zu updates %lu => %lu\n",
 		      opc, nupds, self_id, to);
 
-	rc = crt_req_send(rpc_req, crt_swim_cli_cb, ctx);
-	if (rc) {
-		D_TRACE_ERROR(rpc_req, "crt_req_send() failed "DF_RC"\n",
-			      DP_RC(rc));
-		D_GOTO(out, rc);
-	}
+	return crt_req_send(rpc_req, crt_swim_cli_cb, ctx);
+
 out:
+	if (rc && rpc_req != NULL)
+		crt_req_decref(rpc_req);
 	return rc;
 }
 
@@ -538,13 +534,12 @@ static void crt_swim_progress_cb(crt_context_t crt_ctx, void *arg)
 	}
 
 	rc = swim_progress(ctx, CRT_SWIM_PROGRESS_TIMEOUT);
-	if (rc == -ESHUTDOWN) {
+	if (rc == -DER_SHUTDOWN) {
 		if (grp_priv->gp_size > 1)
 			D_ERROR("SWIM shutdown\n");
 		swim_self_set(ctx, SWIM_ID_INVALID);
-	} else if (rc && rc != -ETIMEDOUT) {
-		D_ERROR("swim_progress() failed: %s (%d)\n",
-			strerror(rc), rc);
+	} else if (rc && rc != -DER_TIMEDOUT) {
+		D_ERROR("swim_progress(): "DF_RC"\n", DP_RC(rc));
 	}
 }
 
@@ -587,7 +582,7 @@ int crt_swim_init(int crt_ctx_idx)
 	int			 i, rc;
 
 	if (crt_gdata.cg_swim_inited) {
-		D_ERROR("Swim already initialized\n");
+		D_ERROR("SWIM already initialized\n");
 		D_GOTO(out, rc = -DER_ALREADY);
 	}
 
@@ -611,8 +606,8 @@ int crt_swim_init(int crt_ctx_idx)
 			rc = crt_swim_rank_add(grp_priv,
 					       grp_membs->rl_ranks[i]);
 			if (rc && rc != -DER_ALREADY) {
-				D_ERROR("crt_swim_rank_add() failed "
-					DF_RC"\n", DP_RC(rc));
+				D_ERROR("crt_swim_rank_add(): "DF_RC"\n",
+					DP_RC(rc));
 				D_GOTO(cleanup, rc);
 			}
 		}
@@ -622,19 +617,18 @@ int crt_swim_init(int crt_ctx_idx)
 
 	rc = crt_proto_register(&crt_swim_proto_fmt);
 	if (rc) {
-		D_ERROR("crt_proto_register() failed "DF_RC"\n", DP_RC(rc));
+		D_ERROR("crt_proto_register(): "DF_RC"\n", DP_RC(rc));
 		D_GOTO(cleanup, rc);
 	}
 
 	rc = crt_register_progress_cb(crt_swim_progress_cb, crt_ctx_idx, NULL);
 	if (rc) {
-		D_ERROR("crt_register_progress_cb() failed "DF_RC"\n",
-			DP_RC(rc));
+		D_ERROR("crt_register_progress_cb(): "DF_RC"\n", DP_RC(rc));
 		D_GOTO(cleanup, rc);
 	}
 
 	if (!d_fault_inject_is_enabled())
-		D_GOTO(out, rc);
+		D_GOTO(out, rc = 0);
 
 	crt_swim_should_fail = false; /* disabled by default */
 	crt_swim_fail_hlc = 0;
@@ -656,7 +650,7 @@ int crt_swim_init(int crt_ctx_idx)
 		if (d_fa_swim_drop_rpc->fa_argument != NULL)
 			crt_swim_fault_init(d_fa_swim_drop_rpc->fa_argument);
 	}
-	D_GOTO(out, rc);
+	D_GOTO(out, rc = 0);
 
 cleanup:
 	if (self != CRT_NO_RANK && grp_membs != NULL) {
@@ -667,7 +661,7 @@ cleanup:
 	csm->csm_ctx = NULL;
 	csm->csm_crt_ctx_idx = -1;
 out:
-	if (rc == DER_SUCCESS)
+	if (rc == 0)
 		crt_gdata.cg_swim_inited = 1;
 	return rc;
 }
@@ -709,15 +703,15 @@ int crt_swim_enable(struct crt_grp_priv *grp_priv, int crt_ctx_idx)
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 		if (rc)
-			D_ERROR("crt_unregister_progress_cb() failed "
-				DF_RC"\n", DP_RC(rc));
+			D_ERROR("crt_unregister_progress_cb(): "DF_RC"\n",
+				DP_RC(rc));
 	}
 	if (old_ctx_idx != crt_ctx_idx) {
 		rc = crt_register_progress_cb(crt_swim_progress_cb,
 					      crt_ctx_idx, NULL);
 		if (rc)
-			D_ERROR("crt_register_progress_cb() failed "
-				DF_RC"\n", DP_RC(rc));
+			D_ERROR("crt_register_progress_cb(): "DF_RC"\n",
+				DP_RC(rc));
 	}
 
 out:
@@ -753,8 +747,8 @@ int crt_swim_disable(struct crt_grp_priv *grp_priv, int crt_ctx_idx)
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 		if (rc)
-			D_ERROR("crt_unregister_progress_cb() failed "
-				DF_RC"\n", DP_RC(rc));
+			D_ERROR("crt_unregister_progress_cb(): "DF_RC"\n",
+				DP_RC(rc));
 	}
 
 out:

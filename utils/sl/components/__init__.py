@@ -209,9 +209,6 @@ def define_common(reqs):
     reqs.define('python34_devel', headers=['python3.4m/Python.h'],
                 package='python34-devel')
 
-    reqs.define('python27_devel', headers=['python2.7/Python.h'],
-                package='python-devel')
-
     reqs.define('libelf', headers=['libelf.h'], package='elfutils-libelf-devel')
 
     reqs.define('tbbmalloc', libs=['tbbmalloc_proxy'], package='tbb-devel')
@@ -219,7 +216,7 @@ def define_common(reqs):
     reqs.define('jemalloc', libs=['jemalloc'], package='jemalloc-devel')
 
     reqs.define('boost', headers=['boost/preprocessor.hpp'],
-                package='boost-devel')
+                package='boost-python36-devel')
 
     reqs.define('yaml', headers=['yaml.h'], package='libyaml-devel')
 

@@ -135,10 +135,10 @@ class Permission(TestWithServers):
             self.container.open()
             self.test_log.debug("Container open successful")
 
-            thedata = "a string that I want to stuff into an object"
+            thedata = b"a string that I want to stuff into an object"
             size = 45
-            dkey = "this is the dkey"
-            akey = "this is the akey"
+            dkey = b"this is the dkey"
+            akey = b"this is the akey"
 
             self.container.write_an_obj(thedata, size, dkey, akey)
             self.test_log.debug("Container write successful")

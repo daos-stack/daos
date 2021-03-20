@@ -53,10 +53,16 @@ static void
 test_print_metrics(void **state)
 {
 	struct d_tm_node_t	*node;
+	int			filter;
 
 	node = d_tm_find_metric(shmem_root, "gurt");
 	assert_non_null(node);
-	d_tm_print_my_children(shmem_root, node, 0, stdout);
+
+	filter = (D_TM_COUNTER | D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT |
+		  D_TM_DURATION | D_TM_GAUGE | D_TM_DIRECTORY);
+
+	d_tm_print_my_children(shmem_root, node, 0, filter, NULL, D_TM_STANDARD,
+			       true, true, stdout);
 }
 
 static void

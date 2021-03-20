@@ -76,6 +76,20 @@ func (ll *LeveledLogger) Level() LogLevel {
 	return ll.level.Get()
 }
 
+// ClearLevel clears all loggers for the specified level.
+func (ll *LeveledLogger) ClearLevel(level LogLevel) {
+	switch level {
+	case LogLevelDebug:
+		ll.debugLoggers = nil
+	case LogLevelInfo:
+		ll.infoLoggers = nil
+	case LogLevelError:
+		ll.errorLoggers = nil
+	default:
+		ll.Errorf("unable to clear level %s", level)
+	}
+}
+
 // WithLogLevel allows the logger's LogLevel to be set
 // as part of a chained method call.
 func (ll *LeveledLogger) WithLogLevel(level LogLevel) *LeveledLogger {
