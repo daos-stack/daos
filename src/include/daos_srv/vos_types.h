@@ -434,6 +434,8 @@ enum {
 	VOS_ITER_CB_SKIP	= (1UL << 2),
 	/** Abort current level iteration */
 	VOS_ITER_CB_ABORT	= (1UL << 3),
+	/** Abort the current level iterator and restart */
+	VOS_ITER_CB_RESTART	= (1UL << 4),
 };
 
 /**
