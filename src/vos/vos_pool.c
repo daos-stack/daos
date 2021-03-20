@@ -146,6 +146,7 @@ pool_alloc(uuid_t uuid, struct vos_pool **pool_p)
 
 	d_uhash_ulink_init(&pool->vp_hlink, &pool_uuid_hops);
 	D_INIT_LIST_HEAD(&pool->vp_gc_link);
+	D_INIT_LIST_HEAD(&pool->vp_gc_cont);
 	uuid_copy(pool->vp_id, uuid);
 
 	memset(&uma, 0, sizeof(uma));

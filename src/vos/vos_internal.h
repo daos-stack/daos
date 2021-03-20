@@ -150,6 +150,8 @@ struct vos_pool {
 	struct vos_gc_stat	vp_gc_stat;
 	/** link chain on vos_tls::vtl_gc_pools */
 	d_list_t		vp_gc_link;
+	/** List of open containers with objects in gc pool */
+	d_list_t		vp_gc_cont;
 	/** address of durable-format pool in SCM */
 	struct vos_pool_df	*vp_pool_df;
 	/** I/O context */
@@ -198,6 +200,8 @@ struct vos_container {
 	uint32_t		*vc_ts_idx;
 	/** Direct pointer to the VOS container */
 	struct vos_cont_df	*vc_cont_df;
+	/** Set if container has objects to garbage collect */
+	d_list_t		vc_gc_link;
 	/**
 	 * Corresponding in-memory block allocator hints for the
 	 * durable hints in vos_cont_df
@@ -1080,8 +1084,12 @@ gc_have_pool(struct vos_pool *pool);
 int
 gc_init_pool(struct umem_instance *umm, struct vos_pool_df *pd);
 int
-gc_add_item(struct vos_pool *pool, enum vos_gc_type type, umem_off_t item_off,
-	    uint64_t args);
+gc_init_cont(struct umem_instance *umm, struct vos_cont_df *cd);
+void
+gc_check_cont(struct vos_container *cont);
+int
+gc_add_item(struct vos_pool *pool, daos_handle_t coh,
+	    enum vos_gc_type type, umem_off_t item_off, uint64_t args);
 int
 vos_gc_pool(daos_handle_t poh, int *credits);
 void
