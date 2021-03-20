@@ -4,15 +4,15 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
 
-import ctypes
+
 import uuid
 from apricot import TestWithServers, skipForTicket
 from pydaos.raw import DaosApiError, c_uuid_to_str
 from command_utils_base import CommandFailure
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
+from general_utils import create_string_buffer
 
 
 class EvictTests(TestWithServers):
@@ -30,8 +30,9 @@ class EvictTests(TestWithServers):
         Args:
             hostlist (list): list of daos server nodes
             targets (list): List of targets for pool create
+
         Returns:
-            TestPool (object)
+            TestPool: a TestPool objectfor the created pool
 
         """
         pool = TestPool(self.context, self.get_dmg_command())
@@ -42,9 +43,9 @@ class EvictTests(TestWithServers):
         pool.create()
         # Commented out due to DAOS-3836. Remove the pylint disable at the top
         # of this method when the following lines are uncommented.
-        ## Check that the pool was created
-        #status = pool.check_files(hostlist)
-        #if not status:
+        # Check that the pool was created
+        # status = pool.check_files(hostlist)
+        # if not status:
         #    self.fail("Invalid pool - pool data not detected on servers")
         # Connect to the pool
         status = pool.connect()
@@ -54,14 +55,14 @@ class EvictTests(TestWithServers):
         return pool
 
     def pool_handle_exist(self, test_param):
-        """
-        Check if pool handle still exists
+        """Check if pool handle still exists.
 
         Args:
             test_param (str): either invalid UUID or bad server name
 
         Returns:
             True or False, depending if the handle exists or not
+
         """
         status = True
         if int(self.pool.pool.handle.value) == 0:
@@ -91,7 +92,7 @@ class EvictTests(TestWithServers):
         if test_param == "BAD_SERVER_NAME":
             # Attempt to evict pool with invalid server group name
             # set the server group name directly
-            self.pool.pool.group = ctypes.create_string_buffer(test_param)
+            self.pool.pool.group = create_string_buffer(test_param)
             self.log.info(
                 "Evicting pool with invalid Server Group Name: %s", test_param)
         elif test_param == "invalid_uuid":
@@ -121,8 +122,7 @@ class EvictTests(TestWithServers):
         finally:
             # Restore the valid server group name or uuid
             if "BAD_SERVER_NAME" in test_param:
-                self.pool.pool.group = ctypes.create_string_buffer(
-                    self.server_group)
+                self.pool.pool.group = create_string_buffer(self.server_group)
             else:
                 self.pool.pool.set_uuid_str(self.pool.uuid)
 
@@ -137,7 +137,7 @@ class EvictTests(TestWithServers):
         self.pool_handle_exist(test_param)
 
         # Commented out due to DAOS-3836.
-        #if self.pool.check_files(self.hostlist_servers):
+        # if self.pool.check_files(self.hostlist_servers):
         #    self.log.error("Valid pool files were not detected on server after"
         #                   " a pool evict with %s failed to raise an "
         #                   "exception", test_param)
@@ -163,19 +163,19 @@ class EvictTests(TestWithServers):
         """
         pool = []
         container = []
-        #non_pool_servers = []
+        # non_pool_servers = []
         # Target list is configured so that the pools are across all servers
         # except the pool under test is created on half of the servers
-        pool_tgt = [num for num in range(len(self.hostlist_servers))]
-        pool_tgt_ut = [num for num in range(int(len(self.hostlist_servers)/2))]
+        pool_tgt = list(range(len(self.hostlist_servers)))
+        pool_tgt_ut = list(range(int(len(self.hostlist_servers)/2)))
         tlist = [pool_tgt, pool_tgt, pool_tgt_ut]
         pool_servers = [self.hostlist_servers[:len(tgt)] for tgt in tlist]
-        #non_pool_servers = [self.hostlist_servers[len(tgt):] for tgt in tlist]
+        # non_pool_servers = [self.hostlist_servers[len(tgt):] for tgt in tlist]
         # Create Connected TestPool
         for count, target_list in enumerate(tlist):
             pool.append(self.connected_pool(pool_servers[count], target_list))
             # Commented out due to DAOS-3836.
-            #if len(non_pool_servers[count]) > 0:
+            # if len(non_pool_servers[count]) > 0:
             #    self.assertFalse(
             #        pool[count].check_files(non_pool_servers[count]),
             #        "Pool # {} data detected on non pool servers {} ".format(
@@ -202,12 +202,12 @@ class EvictTests(TestWithServers):
 
         for count in range(len(tlist)):
             # Commented out due to DAOS-3836.
-            ## Check that all pool files still exist
-            #if pool[count].check_files(pool_servers[count]):
+            # # Check that all pool files still exist
+            # if pool[count].check_files(pool_servers[count]):
             #    self.log.info(
             #        "Pool # %s with UUID %s still exists",
             #        count+1, pool[count].uuid)
-            #else:
+            # else:
             #    self.fail(
             #        "Pool # {} with UUID {} does not exists".format(
             #            count+1, pool[count].uuid))

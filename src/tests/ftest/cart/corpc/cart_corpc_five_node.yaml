@@ -1,13 +1,14 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
 
-defaultENV:
-  #!filter-only : /run/envs_CRT_CTX_SHARE_ADDR/no_sep
-  #!filter-only : /run/tests/corpc_prefwd
-  D_LOG_MASK: "WARN,CORPC=DEBUG"
-  CRT_PHY_ADDR_STR: "ofi+sockets"
-  OFI_INTERFACE: "eth0"
-  test_servers_CRT_CTX_NUM: "0"
+ENV:
+  default:
+    #!filter-only : /run/envs_CRT_CTX_SHARE_ADDR/no_sep
+    #!filter-only : /run/tests/corpc_prefwd
+    - D_LOG_MASK: "WARN,CORPC=DEBUG"
+    - CRT_PHY_ADDR_STR: "ofi+sockets"
+    - OFI_INTERFACE: "eth0"
+    - test_servers_CRT_CTX_NUM: "0"
 env_CRT_CTX_SHARE_ADDR: !mux
   no_sep:
     env: no_sep

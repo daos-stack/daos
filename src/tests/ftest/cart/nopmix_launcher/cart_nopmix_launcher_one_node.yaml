@@ -1,11 +1,12 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
 
-defaultENV:
-  #!filter-only : /run/tests/no_pmix_launcher
-  D_LOG_MASK: "WARN"
-  CRT_PHY_ADDR_STR: "ofi+sockets"
-  OFI_INTERFACE: "eth0"
+ENV:
+  default:
+    #!filter-only : /run/tests/no_pmix_launcher
+    - D_LOG_MASK: "WARN"
+    - CRT_PHY_ADDR_STR: "ofi+sockets"
+    - OFI_INTERFACE: "eth0"
 hosts: !mux
   hosts_1:
     config: one_node

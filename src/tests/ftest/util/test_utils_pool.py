@@ -13,7 +13,8 @@ from test_utils_base import TestDaosApiBase
 from avocado import fail_on
 from command_utils import BasicParameter, CommandFailure
 from pydaos.raw import (DaosApiError, DaosPool, c_uuid_to_str, daos_cref)
-from general_utils import check_pool_files, DaosTestError, run_command
+from general_utils import (check_pool_files, DaosTestError, run_command,
+                           create_string_buffer)
 from env_modules import load_mpi
 
 
@@ -35,7 +36,7 @@ class TestPool(TestDaosApiBase):
             cb_handler (CallbackHandler, optional): callback object to use with
                 the API methods. Defaults to None.
         """
-        super(TestPool, self).__init__("/run/pool/*", cb_handler)
+        super().__init__("/run/pool/*", cb_handler)
         self.context = context
         self.uid = os.geteuid()
         self.gid = os.getegid()
@@ -113,8 +114,7 @@ class TestPool(TestDaosApiBase):
                 # Populate the empty DaosPool object with the properties of the
                 # pool created with dmg pool create.
                 if self.name.value:
-                    self.pool.group = ctypes.create_string_buffer(
-                        self.name.value)
+                    self.pool.group = create_string_buffer(self.name.value)
 
                 # Convert the string of service replicas from the dmg command
                 # output into an ctype array for the DaosPool object using the
@@ -334,7 +334,7 @@ class TestPool(TestDaosApiBase):
              c_uuid_to_str(getattr(self.info, key))
              if key == "pi_uuid" else getattr(self.info, key),
              val)
-            for key, val in locals().items()
+            for key, val in list(locals().items())
             if key != "self" and val is not None]
         return self._check_info(checks)
 
@@ -412,7 +412,7 @@ class TestPool(TestDaosApiBase):
             ("{}_{}".format(key, index),
              getattr(self.info.pi_space.ps_space, key)[index],
              item)
-            for key, val in locals().items()
+            for key, val in list(locals().items())
             if key != "self" and val is not None
             for index, item in enumerate(val)]
         return self._check_info(checks)
@@ -458,7 +458,7 @@ class TestPool(TestDaosApiBase):
         self.get_info()
         checks = [
             (key, getattr(self.info.pi_rebuild_st, key), val)
-            for key, val in locals().items()
+            for key, val in list(locals().items())
             if key != "self" and val is not None]
         return self._check_info(checks)
 
@@ -477,7 +477,7 @@ class TestPool(TestDaosApiBase):
             self.set_query_data()
             self.log.info(
                 "Pool %s query data: %s\n", self.uuid, self.query_data)
-            status = self.query_data["rebuild"]["status"] == "done"
+            status = self.query_data["response"]["rebuild"]["state"] == "done"
         elif self.control_method.value == self.USE_DMG:
             self.log.error("Error: Undefined dmg command")
         else:
@@ -744,9 +744,10 @@ class TestPool(TestDaosApiBase):
                                     "timeout can be adjusted via the "
                                     "'pool/pool_query_timeout' test yaml "
                                     "parameter.".format(
-                                        uuid, self.pool_query_timeout.value))
+                                        uuid, self.pool_query_timeout.value)) \
+                                            from error
                         else:
-                            raise CommandFailure(error)
+                            raise CommandFailure(error) from error
             else:
                 self.log.error("Error: Undefined dmg command")
 
