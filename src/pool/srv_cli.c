@@ -29,6 +29,9 @@ dsc_pool_close(daos_handle_t ph)
 		return 0;
 
 	pl_map_disconnect(pool->dp_pool);
+	dc_pool_hdl_unlink(pool); /* -1 ref from dc_pool_hdl_link(pool); */
+	dc_pool_put(pool);	  /* -1 ref from dc_pool2hdl(pool, ph); */
+
 	dc_pool_put(pool);
 	return 0;
 }
@@ -75,8 +78,9 @@ dsc_pool_open(uuid_t pool_uuid, uuid_t poh_uuid, unsigned int flags,
 	D_DEBUG(DF_DSMC, DF_UUID": create: hdl="DF_UUIDF" flags=%x\n",
 		DP_UUID(pool_uuid), DP_UUID(pool->dp_pool_hdl), flags);
 
-	dc_pool_hdl_link(pool);
-	dc_pool2hdl(pool, ph);
+	dc_pool_hdl_link(pool); /* +1 ref */
+	dc_pool2hdl(pool, ph);  /* +1 ref */
+
 out:
 	if (pool != NULL)
 		dc_pool_put(pool);
