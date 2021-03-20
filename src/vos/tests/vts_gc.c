@@ -132,7 +132,7 @@ gc_obj_update(struct gc_test_args *args, daos_handle_t coh, daos_unit_oid_t oid,
 			return rc;
 		}
 
-		rc = vos_update_end(ioh, 0, &cred->tc_dkey, rc, NULL);
+		rc = vos_update_end(ioh, 0, &cred->tc_dkey, rc, NULL, NULL);
 		if (rc != 0) {
 			print_error("Failed to submit ZC update\n");
 			return rc;
@@ -282,6 +282,7 @@ gc_key_run(struct gc_test_args *args)
 			goto out;
 		}
 	}
+	daos_fail_loc_set(DAOS_VOS_GC_CONT | DAOS_FAIL_ALWAYS);
 	rc = gc_wait_check(args, false);
 out:
 	for (i = 0; i < CREDS_MAX; i++) {
@@ -302,7 +303,7 @@ gc_key_test(void **state)
 }
 
 static int
-gc_obj_run(struct gc_test_args *args)
+gc_obj_run(struct gc_test_args *args, bool reopen)
 {
 	daos_unit_oid_t	*oids;
 	int		 i;
@@ -329,6 +330,26 @@ gc_obj_run(struct gc_test_args *args)
 		}
 	}
 
+	if (reopen) {
+		rc = vos_cont_close(args->gc_ctx.tsc_coh);
+		if (rc) {
+			print_error("failed to close container: %s\n",
+				    d_errstr(rc));
+			goto out;
+		}
+
+		/* close and reopen the container */
+		rc = vos_cont_open(args->gc_ctx.tsc_poh,
+				   args->gc_ctx.tsc_cont_uuid,
+				   &args->gc_ctx.tsc_coh);
+		if (rc) {
+			print_error("failed to open container: %s\n",
+				    d_errstr(rc));
+			goto out;
+		}
+	}
+
+	daos_fail_loc_set(DAOS_VOS_GC_CONT | DAOS_FAIL_ALWAYS);
 	rc = gc_wait_check(args, false);
 out:
 	D_FREE(oids);
@@ -341,7 +362,111 @@ gc_obj_test(void **state)
 	struct gc_test_args *args = *state;
 	int		     rc;
 
-	rc = gc_obj_run(args);
+	rc = gc_obj_run(args, false);
+	assert_rc_equal(rc, 0);
+}
+
+static void
+gc_obj_test_reopened(void **state)
+{
+	struct gc_test_args *args = *state;
+	int		     rc;
+
+	rc = gc_obj_run(args, true);
+	assert_rc_equal(rc, 0);
+}
+
+static int
+gc_obj_run_destroy(struct gc_test_args *args)
+{
+	daos_unit_oid_t	*oids;
+	daos_handle_t	 coh;
+	daos_handle_t	 poh;
+	int		 i;
+	int		 rc;
+	uuid_t		 cont_id;
+
+	poh = args->gc_ctx.tsc_poh;
+
+	uuid_generate(cont_id);
+
+	rc = vos_cont_create(poh, cont_id);
+	if (rc) {
+		print_error("failed to create container: %s\n",
+			    d_errstr(rc));
+		return rc;
+	}
+
+	gc_add_stat(STAT_CONT);
+	rc = vos_cont_open(poh, cont_id, &coh);
+	if (rc) {
+		print_error("failed to open container: %s\n",
+			    d_errstr(rc));
+		goto fail_destroy;
+	}
+
+	D_ALLOC_ARRAY(oids, obj_per_cont);
+	if (!oids) {
+		print_error("failed to allocate oids\n");
+		D_GOTO(fail_destroy, rc = -DER_NOMEM);
+	}
+
+	rc = gc_obj_prepare(args, coh, oids);
+	if (rc)
+		goto fail_free;
+
+	gc_print_stat();
+
+	for (i = 0; i < obj_per_cont; i++) {
+		rc = vos_obj_delete(coh, oids[i]);
+		if (rc) {
+			print_error("failed to delete objects: %s\n",
+				    d_errstr(rc));
+			goto fail_free;
+		}
+	}
+
+	/** Create some more objects */
+	rc = gc_obj_prepare(args, coh, oids);
+	if (rc)
+		goto fail_free;
+
+	gc_print_stat();
+
+	rc = vos_cont_close(coh);
+	if (rc) {
+		print_error("failed to close container: %s\n",
+			    d_errstr(rc));
+		goto fail_free;
+	}
+
+	rc = vos_cont_destroy(poh, cont_id);
+	if (rc) {
+		print_error("failed to destroy container: %s\n",
+			    d_errstr(rc));
+		goto out;
+	}
+
+	rc = gc_wait_check(args, true);
+out:
+	D_FREE(oids);
+	return rc;
+
+fail_free:
+	D_FREE(oids);
+fail_destroy:
+	vos_cont_destroy(poh, cont_id);
+
+	return rc;
+}
+
+static void
+gc_obj_test_destroy(void **state)
+{
+	struct gc_test_args *args = *state;
+	int		     rc;
+
+	rc = gc_obj_run_destroy(args);
 	assert_rc_equal(rc, 0);
 }
 
@@ -352,7 +477,7 @@ gc_obj_bio_test(void **state)
 	int		     rc;
 
 	args->gc_array = true;
-	rc = gc_obj_run(args);
+	rc = gc_obj_run(args, false);
 	assert_rc_equal(rc, 0);
 }
 
@@ -409,7 +534,9 @@ gc_cont_run(struct gc_test_args *args)
 			return rc;
 		}
 	}
+	daos_fail_loc_set(DAOS_VOS_GC_CONT_NULL | DAOS_FAIL_ALWAYS);
 	rc = gc_wait_check(args, true);
+
 
 	D_FREE(cont_ids);
 	return rc;
@@ -455,6 +582,7 @@ gc_teardown(void **state)
 {
 	struct gc_test_args *args = *state;
 
+	daos_fail_loc_set(0);
 	assert_ptr_equal(args, &gc_args);
 
 	dts_ctx_fini(&args->gc_ctx);
@@ -470,6 +598,7 @@ gc_prepare(void **state)
 {
 	struct gc_test_args *args = *state;
 
+	daos_fail_loc_set(0);
 	vos_pool_ctl(args->gc_ctx.tsc_poh, VOS_PO_CTL_RESET_GC);
 	memset(&gc_stat, 0, sizeof(gc_stat));
 	return 0;
@@ -484,6 +613,10 @@ static const struct CMUnitTest gc_tests[] = {
 	  gc_obj_bio_test, gc_prepare, NULL},
 	{ "GC04: container garbage collecting",
 	  gc_cont_test, gc_prepare, NULL},
+	{ "GC05: container garbage collecting with outstanding objects",
+	  gc_obj_test_destroy, gc_prepare, NULL},
+	{ "GC06: container garbage reopened container",
+	  gc_obj_test_reopened, gc_prepare, NULL},
 };
 
 int

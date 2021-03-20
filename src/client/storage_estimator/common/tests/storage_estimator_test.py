@@ -15,7 +15,7 @@ from storage_estimator.parse_csv import ProcessCSV
 from .util import FileGenerator
 
 
-class MockArgs(object):
+class MockArgs():
     def __init__(self, file_oclass="SX", csv_file=""):
         self.dir_oclass = "S1"
         self.file_oclass = file_oclass
