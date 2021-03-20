@@ -1479,6 +1479,11 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	d_iov_set(&value, &chdl, sizeof(chdl));
 	rc = rdb_tx_lookup(tx, &cont->c_svc->cs_hdls, &key, &value);
 	if (rc != -DER_NONEXIST) {
+		D_DEBUG(DF_DSMS, DF_CONT"/"DF_UUID": "
+				 "Container handle already open.\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid,
+				in->coi_op.ci_uuid),
+			DP_UUID(in->coi_op.ci_hdl));
 		if (rc == 0 && chdl.ch_flags != in->coi_flags) {
 			D_ERROR(DF_CONT": found conflicting container handle\n",
 				DP_CONT(cont->c_svc->cs_pool_uuid,
@@ -1601,15 +1606,18 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	if (rc != 0)
 		goto out;
 
-	/**
-	 * Put requested properties in output.
-	 * the allocated prop will be freed after rpc replied in
-	 * ds_cont_op_handler.
-	 */
-	rc = cont_prop_read(tx, cont, in->coi_prop_bits, &prop);
-	out->coo_prop = prop;
 
 out:
+	if (rc == 0) {
+		/**
+		 * Put requested properties in output.
+		 * the allocated prop will be freed after rpc replied in
+		 * ds_cont_op_handler.
+		 */
+		rc = cont_prop_read(tx, cont, in->coi_prop_bits, &prop);
+		out->coo_prop = prop;
+
+	}
 	if (rc != 0 && cont_hdl_opened)
 		cont_iv_capability_invalidate(pool_hdl->sph_pool->sp_iv_ns,
 					      in->coi_op.ci_hdl,
