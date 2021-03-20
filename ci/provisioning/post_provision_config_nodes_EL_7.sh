@@ -118,7 +118,6 @@ post_provision_config_nodes() {
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
     time dnf -y install $LSB_RELEASE
-
     # shellcheck disable=SC2086
     if [ -n "$INST_RPMS" ] &&
        ! time dnf -y install $INST_RPMS; then
