@@ -18,6 +18,9 @@
 #include <getopt.h>
 #include <errno.h>
 #include <execinfo.h>
+#ifdef ULT_MMAP_STACK
+#include <daos/stack_mmap.h>
+#endif
 
 #include <daos/btree_class.h>
 #include <daos/common.h>
@@ -447,12 +450,24 @@ abt_init(int argc, char *argv[])
 		return dss_abterr2der(rc);
 	}
 
+#ifdef ULT_MMAP_STACK
+	rc = ABT_key_create(free_stack, &stack_key);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("ABT key for stack create failed: %d\n", rc);
+		ABT_finalize();
+		return dss_abterr2der(rc);
+	}
+#endif
+	
 	return 0;
 }
 
 static void
 abt_fini(void)
 {
+#ifdef ULT_MMAP_STACK
+	ABT_key_free(&stack_key);
+#endif
 	ABT_finalize();
 }
 

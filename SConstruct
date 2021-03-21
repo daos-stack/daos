@@ -128,6 +128,11 @@ def set_defaults(env, daos_version):
               action='store_true',
               default=False,
               help='Preprocess selected files for profiling')
+    AddOption('--stack_mmap',
+              dest='stack_mmap',
+              action='store_true',
+              default=False,
+              help='Build with mmap()ed ULT stack support')
     AddOption('--no-rpath',
               dest='no_rpath',
               action='store_true',
@@ -158,6 +163,9 @@ def set_defaults(env, daos_version):
     if GetOption("preprocess"):
         #could refine this but for now, just assume these warnings are ok
         env.AppendIfSupported(CCFLAGS=PP_ONLY_FLAGS)
+
+    if GetOption("stack_mmap"):
+        env.Append(CCFLAGS=['-DULT_MMAP_STACK'])
 
     if env.get('BUILD_TYPE') != 'release':
         env.Append(CCFLAGS=['-DFAULT_INJECTION=1'])

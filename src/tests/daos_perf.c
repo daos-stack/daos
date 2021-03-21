@@ -24,6 +24,9 @@
 #include <daos_srv/vos.h>
 #include <daos_test.h>
 #include <daos/dts.h>
+#ifdef ULT_MMAP_STACK
+#include <daos/stack_mmap.h>
+#endif
 
 /* unused object class to identify VOS (storage only) test mode */
 #define DAOS_OC_RAW	(0xBEE)
@@ -432,9 +435,17 @@ vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 	ult_arg.epoch = epoch;
 	ult_arg.duration = duration;
 	ult_arg.obj_idx = obj_idx;
+
+#ifdef ULT_MMAP_STACK
+	rc = mmap_stack_thread_create_on_xstream(abt_xstream,
+						 vos_update_or_fetch_ult,
+						 &ult_arg, ABT_THREAD_ATTR_NULL,
+						 &thread);
+#else
 	rc = ABT_thread_create_on_xstream(abt_xstream, vos_update_or_fetch_ult,
 					  &ult_arg, ABT_THREAD_ATTR_NULL,
 					  &thread);
+#endif
 	if (rc != ABT_SUCCESS)
 		return rc;
 

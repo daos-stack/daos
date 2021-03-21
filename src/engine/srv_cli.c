@@ -13,6 +13,9 @@
 #include <daos/object.h>
 #include <daos/event.h>
 #include <daos/task.h>
+#ifdef ULT_MMAP_STACK
+#include <daos/stack_mmap.h>
+#endif
 
 #include <daos_types.h>
 #include <daos_errno.h>
@@ -48,8 +51,14 @@ dsc_progress_start(void)
 	if (dx->dx_dsc_started)
 		return 0;
 
+#ifdef ULT_MMAP_STACK
+	rc = mmap_stack_thread_create(dx->dx_pools[DSS_POOL_GENERIC],
+				      dsc_progress, dx, ABT_THREAD_ATTR_NULL,
+				      NULL);
+#else
 	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_GENERIC], dsc_progress,
 			       dx, ABT_THREAD_ATTR_NULL, NULL);
+#endif
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
 

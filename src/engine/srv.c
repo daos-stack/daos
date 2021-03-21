@@ -26,6 +26,9 @@
 #include <gurt/list.h>
 #include "drpc_internal.h"
 #include "srv_internal.h"
+#ifdef ULT_MMAP_STACK
+#include <daos/stack_mmap.h>
+#endif
 
 /**
  * DAOS server threading model:
@@ -436,9 +439,15 @@ dss_srv_handler(void *arg)
 			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
 		}
 
+#ifdef ULT_MMAP_STACK
+		rc = mmap_stack_thread_create(dx->dx_pools[DSS_POOL_NVME_POLL],
+					      dss_nvme_poll_ult, attr,
+					      ABT_THREAD_ATTR_NULL, NULL);
+#else
 		rc = ABT_thread_create(dx->dx_pools[DSS_POOL_NVME_POLL],
 				       dss_nvme_poll_ult, attr,
 				       ABT_THREAD_ATTR_NULL, NULL);
+#endif
 		ABT_thread_attr_free(&attr);
 		if (rc != ABT_SUCCESS) {
 			D_ERROR("create NVMe poll ULT failed: %d\n", rc);
@@ -669,9 +678,15 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	}
 
 	/** start progress ULT */
+#ifdef ULT_MMAP_STACK
+	rc = mmap_stack_thread_create(dx->dx_pools[DSS_POOL_NET_POLL],
+				      dss_srv_handler, dx, attr,
+				      &dx->dx_progress);
+#else
 	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_NET_POLL],
 			       dss_srv_handler, dx, attr,
 			       &dx->dx_progress);
+#endif
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("create progress ULT failed: %d\n", rc);
 		D_GOTO(out_xstream, rc = dss_abterr2der(rc));

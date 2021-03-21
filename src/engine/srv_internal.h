@@ -7,6 +7,9 @@
 #define __DAOS_SRV_INTERNAL__
 
 #include <daos_srv/daos_engine.h>
+#ifdef ULT_MMAP_STACK
+#include <daos/stack_mmap.h>
+#endif
 
 /**
  * Argobots ULT pools for different tasks, NET_POLL & NVME_POLL
@@ -228,7 +231,11 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 		/* Atomic integer assignment from different xstream */
 		info->si_stats.ss_busy_ts = info->si_cur_ts;
 
+#ifdef ULT_MMAP_STACK
+	rc = mmap_stack_thread_create(abt_pool, func, arg, t_attr, thread);
+#else
 	rc = ABT_thread_create(abt_pool, func, arg, t_attr, thread);
+#endif
 	return dss_abterr2der(rc);
 }
 
