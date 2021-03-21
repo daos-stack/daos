@@ -45,7 +45,7 @@
     <dependency>
       <groupId>io.netty</groupId>
       <artifactId>netty-buffer</artifactId>
-      <version>4.1.45.Final</version>
+      <version>4.1.59.Final</version>
     </dependency>
     <dependency>
       <groupId>com.google.code.findbugs</groupId>

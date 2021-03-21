@@ -9,9 +9,10 @@ package control
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
+	"log/syslog"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/dustin/go-humanize/english"
@@ -66,23 +67,24 @@ func (resp *sysResponse) getAbsentHostsRanks(inHosts, inRanks string) error {
 	return nil
 }
 
-func (resp *sysResponse) DisplayAbsentHostsRanks() string {
-	switch {
-	case resp.AbsentHosts.Count() > 0:
-		return fmt.Sprintf("\nUnknown %s: %s",
-			english.Plural(resp.AbsentHosts.Count(), "host", "hosts"),
-			resp.AbsentHosts.String())
-	case resp.AbsentRanks.Count() > 0:
-		return fmt.Sprintf("\nUnknown %s: %s",
-			english.Plural(resp.AbsentRanks.Count(), "rank", "ranks"),
-			resp.AbsentRanks.String())
-	default:
-		return ""
+func (resp *sysResponse) getAbsentHostsRanksErrors() error {
+	var errMsgs []string
+
+	if resp.AbsentHosts.Count() > 0 {
+		errMsgs = append(errMsgs, "non-existent hosts "+resp.AbsentHosts.String())
 	}
+	if resp.AbsentRanks.Count() > 0 {
+		errMsgs = append(errMsgs, "non-existent ranks "+resp.AbsentRanks.String())
+	}
+
+	if len(errMsgs) > 0 {
+		return errors.New(strings.Join(errMsgs, ", "))
+	}
+
+	return nil
 }
 
 // SystemJoinReq contains the inputs for the system join request.
-// TODO: Unify this with system.JoinRequest
 type SystemJoinReq struct {
 	unaryRequest
 	msRequest
@@ -263,7 +265,8 @@ func NewEventForwarder(rpcClient UnaryInvoker, accessPts []string) *EventForward
 }
 
 // EventLogger implements the events.Handler interface and logs RAS event to
-// INFO.
+// INFO using supplied logging.Logger. In addition syslog is written to at the
+// priority level derived from the event severity.
 type EventLogger struct {
 	log        logging.Logger
 	sysloggers map[events.RASSeverityID]*log.Logger
@@ -281,27 +284,44 @@ func (el *EventLogger) OnEvent(_ context.Context, evt *events.RASEvent) {
 
 	out := evt.PrintRAS()
 	el.log.Info(out)
-	el.sysloggers[evt.Severity].Print(out)
+	if sl := el.sysloggers[evt.Severity]; sl != nil {
+		sl.Print(out)
+	}
 }
 
-// NewEventLogger returns an initialized EventLogger.
-func NewEventLogger(logBasic logging.Logger) *EventLogger {
-	getSyslogger := func(sev events.RASSeverityID) *log.Logger {
-		return logging.MustCreateSyslogger(sev.SyslogPriority(), log.LstdFlags)
-	}
+type newSysloggerFn func(syslog.Priority, int) (*log.Logger, error)
 
+// newEventLogger returns an initialized EventLogger using the provided function
+// to populate syslog endpoints which map to event severity identifiers.
+func newEventLogger(logBasic logging.Logger, newSyslogger newSysloggerFn) *EventLogger {
 	el := &EventLogger{
 		log:        logBasic,
 		sysloggers: make(map[events.RASSeverityID]*log.Logger),
 	}
 
-	el.sysloggers[events.RASSeverityUnknown] = getSyslogger(events.RASSeverityUnknown)
-	el.sysloggers[events.RASSeverityFatal] = getSyslogger(events.RASSeverityFatal)
-	el.sysloggers[events.RASSeverityError] = getSyslogger(events.RASSeverityError)
-	el.sysloggers[events.RASSeverityWarn] = getSyslogger(events.RASSeverityWarn)
-	el.sysloggers[events.RASSeverityInfo] = getSyslogger(events.RASSeverityInfo)
+	for _, sev := range []events.RASSeverityID{
+		events.RASSeverityUnknown,
+		events.RASSeverityFatal,
+		events.RASSeverityError,
+		events.RASSeverityWarn,
+		events.RASSeverityInfo,
+	} {
+		sl, err := newSyslogger(sev.SyslogPriority(), log.LstdFlags)
+		if err != nil {
+			logBasic.Errorf("failed to create syslogger with priority %s: %s",
+				sev.SyslogPriority(), err)
+			continue
+		}
+		el.sysloggers[sev] = sl
+	}
 
 	return el
+}
+
+// NewEventLogger returns an initialized EventLogger capable of writing to the
+// supplied logger in addition to syslog.
+func NewEventLogger(log logging.Logger) *EventLogger {
+	return newEventLogger(log, syslog.NewLogger)
 }
 
 // SystemQueryReq contains the inputs for the system query request.
@@ -337,6 +357,12 @@ func (resp *SystemQueryResp) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// Errors returns a single error combining all error messages associated with a
+// system query response.
+func (resp *SystemQueryResp) Errors() error {
+	return resp.getAbsentHostsRanksErrors()
+}
+
 // SystemQuery requests DAOS system status.
 //
 // Handles MS requests sent from management client app e.g. 'dmg' and calls into
@@ -365,6 +391,23 @@ func SystemQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemQueryRe
 
 	resp := new(SystemQueryResp)
 	return resp, convertMSResponse(ur, resp)
+}
+
+func concatSysErrs(errSys, errRes error) error {
+	var errMsgs []string
+
+	if errSys != nil {
+		errMsgs = append(errMsgs, errSys.Error())
+	}
+	if errRes != nil {
+		errMsgs = append(errMsgs, "check results for "+errRes.Error())
+	}
+
+	if len(errMsgs) > 0 {
+		return errors.New(strings.Join(errMsgs, ", "))
+	}
+
+	return nil
 }
 
 // SystemStartReq contains the inputs for the system start request.
@@ -398,6 +441,12 @@ func (resp *SystemStartResp) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+// Errors returns a single error combining all error messages associated with a
+// system start response.
+func (resp *SystemStartResp) Errors() error {
+	return concatSysErrs(resp.getAbsentHostsRanksErrors(), resp.Results.Errors())
 }
 
 // SystemStart will perform a start after a controlled shutdown of DAOS system.
@@ -464,6 +513,12 @@ func (resp *SystemStopResp) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+// Errors returns a single error combining all error messages associated with a
+// system stop response.
+func (resp *SystemStopResp) Errors() error {
+	return concatSysErrs(resp.getAbsentHostsRanksErrors(), resp.Results.Errors())
 }
 
 // SystemStop will perform a two-phase controlled shutdown of DAOS system and a
@@ -620,7 +675,6 @@ func SystemReformat(ctx context.Context, rpcClient UnaryInvoker, resetReq *Syste
 type LeaderQueryReq struct {
 	unaryRequest
 	msRequest
-	System string
 }
 
 // LeaderQueryResp contains the status of the request and, if successful, the
@@ -635,7 +689,7 @@ type LeaderQueryResp struct {
 func LeaderQuery(ctx context.Context, rpcClient UnaryInvoker, req *LeaderQueryReq) (*LeaderQueryResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).LeaderQuery(ctx, &mgmtpb.LeaderQueryReq{
-			Sys: req.System,
+			Sys: req.getSystem(),
 		})
 	})
 	rpcClient.Debugf("DAOS system leader-query request: %s", req)

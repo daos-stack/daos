@@ -51,47 +51,47 @@ func (sb *Superblock) Unmarshal(raw []byte) error {
 	return yaml.Unmarshal(raw, sb)
 }
 
-func (srv *EngineInstance) superblockPath() string {
-	scmConfig := srv.scmConfig()
+func (ei *EngineInstance) superblockPath() string {
+	scmConfig := ei.scmConfig()
 	storagePath := scmConfig.MountPoint
 	if storagePath == "" {
 		storagePath = defaultStoragePath
 	}
-	return filepath.Join(srv.fsRoot, storagePath, "superblock")
+	return filepath.Join(ei.fsRoot, storagePath, "superblock")
 }
 
-func (srv *EngineInstance) setSuperblock(sb *Superblock) {
-	srv.Lock()
-	defer srv.Unlock()
-	srv._superblock = sb
+func (ei *EngineInstance) setSuperblock(sb *Superblock) {
+	ei.Lock()
+	defer ei.Unlock()
+	ei._superblock = sb
 }
 
-func (srv *EngineInstance) getSuperblock() *Superblock {
-	srv.RLock()
-	defer srv.RUnlock()
-	return srv._superblock
+func (ei *EngineInstance) getSuperblock() *Superblock {
+	ei.RLock()
+	defer ei.RUnlock()
+	return ei._superblock
 }
 
-func (srv *EngineInstance) hasSuperblock() bool {
-	return srv.getSuperblock() != nil
+func (ei *EngineInstance) hasSuperblock() bool {
+	return ei.getSuperblock() != nil
 }
 
 // NeedsSuperblock indicates whether or not the instance appears
 // to need a superblock to be created in order to start.
 //
 // Should not be called if SCM format is required.
-func (srv *EngineInstance) NeedsSuperblock() (bool, error) {
-	if srv.hasSuperblock() {
+func (ei *EngineInstance) NeedsSuperblock() (bool, error) {
+	if ei.hasSuperblock() {
 		return false, nil
 	}
 
-	scmCfg := srv.scmConfig()
+	scmCfg := ei.scmConfig()
 
-	srv.log.Debugf("%s: checking superblock", scmCfg.MountPoint)
+	ei.log.Debugf("%s: checking superblock", scmCfg.MountPoint)
 
-	err := srv.ReadSuperblock()
+	err := ei.ReadSuperblock()
 	if os.IsNotExist(errors.Cause(err)) {
-		srv.log.Debugf("%s: needs superblock (doesn't exist)", scmCfg.MountPoint)
+		ei.log.Debugf("%s: needs superblock (doesn't exist)", scmCfg.MountPoint)
 		return true, nil
 	}
 
@@ -103,12 +103,12 @@ func (srv *EngineInstance) NeedsSuperblock() (bool, error) {
 }
 
 // createSuperblock creates instance superblock if needed.
-func (srv *EngineInstance) createSuperblock(recreate bool) error {
-	if srv.isStarted() {
-		return errors.Errorf("can't create superblock: instance %d already started", srv.Index())
+func (ei *EngineInstance) createSuperblock(recreate bool) error {
+	if ei.isStarted() {
+		return errors.Errorf("can't create superblock: instance %d already started", ei.Index())
 	}
 
-	needsSuperblock, err := srv.NeedsSuperblock() // scm format completed by now
+	needsSuperblock, err := ei.NeedsSuperblock() // scm format completed by now
 	if !needsSuperblock {
 		return nil
 	}
@@ -116,9 +116,9 @@ func (srv *EngineInstance) createSuperblock(recreate bool) error {
 		return err
 	}
 
-	srv.log.Debugf("idx %d createSuperblock()", srv.Index())
+	ei.log.Debugf("idx %d createSuperblock()", ei.Index())
 
-	if err := srv.MountScmDevice(); err != nil {
+	if err := ei.MountScmDevice(); err != nil {
 		return err
 	}
 
@@ -127,7 +127,7 @@ func (srv *EngineInstance) createSuperblock(recreate bool) error {
 		return errors.Wrap(err, "Failed to generate instance UUID")
 	}
 
-	cfg := srv.runner.GetConfig()
+	cfg := ei.runner.GetConfig()
 	systemName := cfg.SystemName
 	if systemName == "" {
 		systemName = defaultGroupName
@@ -145,40 +145,40 @@ func (srv *EngineInstance) createSuperblock(recreate bool) error {
 			*superblock.Rank = *cfg.Rank
 		}
 	}
-	srv.setSuperblock(superblock)
-	srv.log.Debugf("creating %s: (rank: %s, uuid: %s)",
-		srv.superblockPath(), superblock.Rank, superblock.UUID)
+	ei.setSuperblock(superblock)
+	ei.log.Debugf("creating %s: (rank: %s, uuid: %s)",
+		ei.superblockPath(), superblock.Rank, superblock.UUID)
 
-	return srv.WriteSuperblock()
+	return ei.WriteSuperblock()
 }
 
 // WriteSuperblock writes the instance's superblock
 // to storage.
-func (srv *EngineInstance) WriteSuperblock() error {
-	return WriteSuperblock(srv.superblockPath(), srv.getSuperblock())
+func (ei *EngineInstance) WriteSuperblock() error {
+	return WriteSuperblock(ei.superblockPath(), ei.getSuperblock())
 }
 
 // ReadSuperblock reads the instance's superblock
 // from storage.
-func (srv *EngineInstance) ReadSuperblock() error {
-	if err := srv.MountScmDevice(); err != nil {
+func (ei *EngineInstance) ReadSuperblock() error {
+	if err := ei.MountScmDevice(); err != nil {
 		return errors.Wrap(err, "failed to mount SCM device")
 	}
 
-	sb, err := ReadSuperblock(srv.superblockPath())
+	sb, err := ReadSuperblock(ei.superblockPath())
 	if err != nil {
 		return errors.Wrap(err, "failed to read instance superblock")
 	}
-	srv.setSuperblock(sb)
+	ei.setSuperblock(sb)
 
 	return nil
 }
 
 // RemoveSuperblock removes a superblock from storage.
-func (srv *EngineInstance) RemoveSuperblock() error {
-	srv.setSuperblock(nil)
+func (ei *EngineInstance) RemoveSuperblock() error {
+	ei.setSuperblock(nil)
 
-	return os.Remove(srv.superblockPath())
+	return os.Remove(ei.superblockPath())
 }
 
 // WriteSuperblock writes a Superblock to storage.

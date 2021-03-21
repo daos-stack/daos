@@ -32,7 +32,7 @@ class RebuildDeleteObjects(RebuildTestBase):
 
     def __init__(self, *args, **kwargs):
         """Initialize a RebuildDeleteObjects object."""
-        super(RebuildDeleteObjects, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.punched_indices = None
         self.punched_qty = 0
         self.punch_type = None
@@ -76,7 +76,7 @@ class RebuildDeleteObjects(RebuildTestBase):
                 self.punch_type, self.punched_qty, expected_qty))
 
         # Read objects from the last transaction
-        super(RebuildDeleteObjects, self).verify_container_data(txn)
+        super().verify_container_data(txn)
 
     def test_rebuild_delete_objects(self):
         """JIRA ID: DAOS-2572.
