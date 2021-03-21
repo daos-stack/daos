@@ -9,7 +9,7 @@
  *
  * The dRPC listener is a thread that sets up a UNIX Domain Socket to listen for
  * local client connections and processes dRPC messages from those clients. It
- * is expected to stay alive for the life of the I/O server.
+ * is expected to stay alive for the life of the I/O Engine.
  */
 
 #ifndef __DAOS_DRPC_INTERNAL_H__
@@ -23,11 +23,6 @@
  * Path to the Unix Domain Socket used by the dRPC listener thread
  */
 extern char *drpc_listener_socket_path;
-
-/**
- * Client context
- */
-extern struct drpc *dss_drpc_ctx;
 
 /**
  * Context for listener's drpc_progress loop. Includes the context for the
@@ -122,10 +117,12 @@ int drpc_listener_fini(void);
  */
 const char *drpc_listener_get_socket_path(void);
 
-/** Initialize the dRPC client (dss_drpc_ctx). */
+/** Initialize the dRPC client. */
 int drpc_init(void);
 
-/** Finalize the dRPC client (dss_drpc_ctx). */
+/** Finalize the dRPC client. */
 void drpc_fini(void);
+
+int drpc_notify_ready(void);
 
 #endif /* __DAOS_DRPC_INTERNAL_H__ */

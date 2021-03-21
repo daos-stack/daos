@@ -294,16 +294,16 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 			req:            &ctlpb.RanksReq{Ranks: "0-3"},
 			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGINT, 1: syscall.SIGINT},
 			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msReady, Errored: true},
-				{Rank: 2, State: msReady, Errored: true},
+				{Rank: 1, State: msErrored, Errored: true},
+				{Rank: 2, State: msErrored, Errored: true},
 			},
 		},
 		"force stop instances started": { // unsuccessful result for kill
 			req:            &ctlpb.RanksReq{Ranks: "0-3", Force: true},
 			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGKILL, 1: syscall.SIGKILL},
 			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msReady, Errored: true},
-				{Rank: 2, State: msReady, Errored: true},
+				{Rank: 1, State: msErrored, Errored: true},
+				{Rank: 2, State: msErrored, Errored: true},
 			},
 		},
 		"instances already stopped": { // successful result for kill
@@ -318,7 +318,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 			req:            &ctlpb.RanksReq{Ranks: "1", Force: true},
 			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGKILL},
 			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msReady, Errored: true},
+				{Rank: 1, State: msErrored, Errored: true},
 			},
 		},
 		"single instance already stopped": {
@@ -722,14 +722,14 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 
 				testDir, cleanup := common.CreateTestDir(t)
 				defer cleanup()
-				ioCfg := engine.NewConfig().WithScmMountPoint(testDir)
+				engineCfg := engine.NewConfig().WithScmMountPoint(testDir)
 
 				trc := &engine.TestRunnerConfig{}
 				if tc.instancesStarted {
 					trc.Running.SetTrue()
 					srv.ready.SetTrue()
 				}
-				srv.runner = engine.NewTestRunner(trc, ioCfg)
+				srv.runner = engine.NewTestRunner(trc, engineCfg)
 				srv.setIndex(uint32(i))
 
 				t.Logf("scm dir: %s", srv.scmConfig().MountPoint)
@@ -838,8 +838,8 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 			instancesStopped: true,
 			startFails:       true,
 			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msStopped, Errored: true},
-				{Rank: 2, State: msStopped, Errored: true},
+				{Rank: 1, State: msErrored, Errored: true},
+				{Rank: 2, State: msErrored, Errored: true},
 			},
 		},
 	} {

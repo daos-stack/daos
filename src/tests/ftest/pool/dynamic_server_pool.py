@@ -30,12 +30,12 @@ class DynamicServerPool(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a DynamicServerPool object."""
-        super(DynamicServerPool, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.expected_uuids = []
         self.uuid_to_ranks = {}
 
     def setUp(self):
-        super(DynamicServerPool, self).setUp()
+        super().setUp()
         self.pool = []
 
     def verify_uuids(self):

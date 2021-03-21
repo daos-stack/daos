@@ -29,6 +29,9 @@ dsc_pool_close(daos_handle_t ph)
 		return 0;
 
 	pl_map_disconnect(pool->dp_pool);
+	dc_pool_hdl_unlink(pool); /* -1 ref from dc_pool_hdl_link(pool); */
+	dc_pool_put(pool);	  /* -1 ref from dc_pool2hdl(pool, ph); */
+
 	dc_pool_put(pool);
 	return 0;
 }
@@ -75,8 +78,9 @@ dsc_pool_open(uuid_t pool_uuid, uuid_t poh_uuid, unsigned int flags,
 	D_DEBUG(DF_DSMC, DF_UUID": create: hdl="DF_UUIDF" flags=%x\n",
 		DP_UUID(pool_uuid), DP_UUID(pool->dp_pool_hdl), flags);
 
-	dc_pool_hdl_link(pool);
-	dc_pool2hdl(pool, ph);
+	dc_pool_hdl_link(pool); /* +1 ref */
+	dc_pool2hdl(pool, ph);  /* +1 ref */
+
 out:
 	if (pool != NULL)
 		dc_pool_put(pool);
@@ -86,7 +90,7 @@ out:
 
 int
 dsc_pool_tgt_exclude(const uuid_t uuid, const char *grp,
-		     struct d_tgt_list *tgts)
+		     const d_rank_list_t *svc, struct d_tgt_list *tgts)
 {
 	daos_pool_update_t	*args;
 	tse_task_t		*task;
@@ -100,6 +104,7 @@ dsc_pool_tgt_exclude(const uuid_t uuid, const char *grp,
 
 	args = dc_task_get_args(task);
 	args->grp	= grp;
+	args->svc	= (d_rank_list_t *)svc;
 	args->tgts	= tgts;
 	uuid_copy((unsigned char *)args->uuid, uuid);
 
@@ -108,7 +113,7 @@ dsc_pool_tgt_exclude(const uuid_t uuid, const char *grp,
 
 int
 dsc_pool_tgt_reint(const uuid_t uuid, const char *grp,
-		   struct d_tgt_list *tgts)
+		   const d_rank_list_t *svc, struct d_tgt_list *tgts)
 {
 	daos_pool_update_t	*args;
 	tse_task_t		*task;
@@ -122,6 +127,7 @@ dsc_pool_tgt_reint(const uuid_t uuid, const char *grp,
 
 	args = dc_task_get_args(task);
 	args->grp	= grp;
+	args->svc	= (d_rank_list_t *)svc;
 	args->tgts	= tgts;
 	uuid_copy((unsigned char *)args->uuid, uuid);
 

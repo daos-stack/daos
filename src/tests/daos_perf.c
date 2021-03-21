@@ -383,9 +383,10 @@ _vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 		rc = bio_iod_post(vos_ioh2desc(ioh));
 end:
 		if (op_type == TS_DO_UPDATE)
-			rc = vos_update_end(ioh, 0, &cred->tc_dkey, rc, NULL);
+			rc = vos_update_end(ioh, 0, &cred->tc_dkey, rc, NULL,
+					    NULL);
 		else
-			rc = vos_fetch_end(ioh, rc);
+			rc = vos_fetch_end(ioh, NULL, rc);
 	}
 
 	TS_TIME_END(duration, start);
@@ -602,8 +603,10 @@ objects_open(void)
 
 	for (i = 0; i < ts_obj_p_cont; i++) {
 		if (!ts_oid_init) {
-			ts_oids[i] = dts_oid_gen(ts_class, 0,
-						 ts_ctx.tsc_mpi_rank);
+			ts_oids[i] = daos_test_oid_gen(
+				ts_mode == TS_MODE_VOS ? DAOS_HDL_INVAL :
+				ts_ctx.tsc_coh, ts_class, 0, 0,
+				ts_ctx.tsc_mpi_rank);
 			if (ts_class == DAOS_OC_R2S_SPEC_RANK)
 				ts_oids[i] = dts_oid_set_rank(ts_oids[i],
 							      RANK_ZERO);

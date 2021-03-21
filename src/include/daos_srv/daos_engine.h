@@ -26,7 +26,7 @@
 #include <cart/iv.h>
 #include <daos/checksum.h>
 
-/** number of target (XS set) per server */
+/** number of target (XS set) per engine */
 extern unsigned int	 dss_tgt_nr;
 
 /** Storage path (hack) */
@@ -44,7 +44,7 @@ extern int		 dss_nvme_shm_id;
 /** NVMe mem_size for SPDK memory allocation when using primary mode */
 extern int		 dss_nvme_mem_size;
 
-/** IO server instance index */
+/** I/O Engine instance index */
 extern unsigned int	 dss_instance_idx;
 
 /**
@@ -67,11 +67,10 @@ struct dss_thread_local_storage {
 };
 
 enum dss_module_tag {
-	/* Server tag */
 	DAOS_SERVER_TAG	= 1 << 0,
 };
 
-/* The module key descriptor for each server thread */
+/* The module key descriptor for each xstream */
 struct dss_module_key {
 	/* Indicate where the keys should be instantiated */
 	enum dss_module_tag dmk_tags;
@@ -79,12 +78,10 @@ struct dss_module_key {
 	/* The position inside the dss_module_keys */
 	int dmk_index;
 	/* init keys for context */
-	void  *(*dmk_init)(const struct dss_thread_local_storage *dtls,
-			   struct dss_module_key *key);
+	void  *(*dmk_init)(int xs_id, int tgt_id);
 
 	/* fini keys for context */
-	void  (*dmk_fini)(const struct dss_thread_local_storage *dtls,
-			  struct dss_module_key *key, void *data);
+	void  (*dmk_fini)(void *data);
 };
 
 extern pthread_key_t dss_tls_key;
@@ -225,7 +222,7 @@ dss_current_xstream(void)
 /**
  * Any dss_module that accepts dRPC communications over the Unix Domain Socket
  * must provide one or more dRPC handler functions. The handler is used by the
- * I/O server to multiplex incoming dRPC messages for processing.
+ * I/O Engine to multiplex incoming dRPC messages for processing.
  *
  * The dRPC messaging module ID is different from the dss_module's ID. A
  * dss_module may handle more than one dRPC module ID.
@@ -654,7 +651,7 @@ int dsc_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch,
 int dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		  unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
 		  daos_iom_t *maps, unsigned int extra_flag,
-		  unsigned int *extra_arg);
+		  unsigned int *extra_arg, d_iov_t *csum_iov);
 
 int dsc_obj_update(daos_handle_t oh, uint64_t flags, daos_key_t *dkey,
 		   unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls);
@@ -666,9 +663,9 @@ int dsc_obj_list_obj(daos_handle_t oh, daos_epoch_range_t *epr,
 		     daos_anchor_t *akey_anchor, d_iov_t *csum);
 
 int dsc_pool_tgt_exclude(const uuid_t uuid, const char *grp,
-			 struct d_tgt_list *tgts);
+			 const d_rank_list_t *svc, struct d_tgt_list *tgts);
 int dsc_pool_tgt_reint(const uuid_t uuid, const char *grp,
-		       struct d_tgt_list *tgts);
+		       const d_rank_list_t *svc, struct d_tgt_list *tgts);
 
 int dsc_task_run(tse_task_t *task, tse_task_cb_t retry_cb, void *arg,
 		 int arg_size, bool sync);
@@ -681,6 +678,7 @@ struct dss_enum_arg {
 	bool			fill_recxs;	/* type == S||R */
 	bool			chk_key2big;
 	bool			need_punch;	/* need to pack punch epoch */
+	bool			obj_punched;    /* object punch is packed   */
 	daos_epoch_range_t     *eprs;
 	struct daos_csummer    *csummer;
 	int			eprs_cap;
@@ -746,7 +744,7 @@ struct dss_enum_unpack_io {
 	daos_unit_oid_t		 ui_oid;	/**< type <= OBJ */
 	daos_key_t		 ui_dkey;	/**< type <= DKEY */
 	daos_iod_t		*ui_iods;
-	struct dcs_iod_csums	*ui_iods_csums;
+	d_iov_t			 ui_csum_iov;
 	/* punched epochs per akey */
 	daos_epoch_t		*ui_akey_punch_ephs;
 	daos_epoch_t		*ui_rec_punch_ephs;
@@ -754,6 +752,8 @@ struct dss_enum_unpack_io {
 	int			 ui_iods_cap;
 	int			 ui_iods_top;
 	int			*ui_recxs_caps;
+	/* punched epoch for object */
+	daos_epoch_t		ui_obj_punch_eph;
 	/* punched epochs for dkey */
 	daos_epoch_t		ui_dkey_punch_eph;
 	d_sg_list_t		*ui_sgls;	/**< optional */
@@ -865,5 +865,21 @@ struct sys_db {
 	void	(*sd_lock)(struct sys_db *db);
 	void	(*sd_unlock)(struct sys_db *db);
 };
+
+/** Flags for dss_drpc_call */
+enum dss_drpc_call_flag {
+	/** Do not wait for a response. Implies DSS_DRPC_NO_SCHED. */
+	DSS_DRPC_NO_RESP	= 1,
+	/**
+	 * Do not Argobots-schedule. If the dRPC requires a response, this will
+	 * block the thread until a response is received. That is usually
+	 * faster than waiting for the response by Argobots-scheduling if the
+	 * dRPC can be quickly handled by the local daos_server alone.
+	 */
+	DSS_DRPC_NO_SCHED	= 2
+};
+
+int dss_drpc_call(int32_t module, int32_t method, void *req, size_t req_size,
+		  unsigned int flags, Drpc__Response **resp);
 
 #endif /* __DSS_API_H__ */

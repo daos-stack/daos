@@ -579,10 +579,20 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 	struct json_object	*targets;
 	int			tgts_len;
 	int			i, j;
+	char		*tmp_var;
 
 	for (i = 0; i < dev_length; i++) {
 		dev = json_object_array_get_idx(smd_dev, i);
-		strcpy(devices[*disks].host, strtok(host, ":") + 1);
+
+		tmp_var =  strtok(host, ":");
+		if (tmp_var == NULL) {
+			D_ERROR("Hostname is empty\n");
+			return -DER_INVAL;
+		}
+
+		snprintf(devices[*disks].host, sizeof(devices[*disks].host),
+			 "%s", tmp_var + 1);
+
 		if (!json_object_object_get_ex(dev, "uuid", &tmp)) {
 			D_ERROR("unable to extract uuid from JSON\n");
 			return -DER_INVAL;
@@ -607,7 +617,9 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 			D_ERROR("unable to extract state from JSON\n");
 			return -DER_INVAL;
 		}
-		strcpy(devices[*disks].state, json_object_to_json_string(tmp));
+
+		snprintf(devices[*disks].state, sizeof(devices[*disks].state),
+			 "%s", json_object_to_json_string(tmp));
 
 		if (!json_object_object_get_ex(dev, "rank", &tmp)) {
 			D_ERROR("unable to extract rank from JSON\n");
@@ -629,7 +641,7 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 	struct json_object	*hosts = NULL;
 	struct json_object	*smd_info = NULL;
 	struct json_object	*smd_dev = NULL;
-	char		host[100];
+	char		*host;
 	int			dev_length = 0;
 	int			rc = 0;
 	int			*disk;
@@ -641,6 +653,7 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 	rc = daos_dmg_json_pipe("storage query list-devices", dmg_config_file,
 				NULL, 0, &dmg_out);
 	if (rc != 0) {
+		D_FREE(disk);
 		D_ERROR("dmg failed");
 		goto out_json;
 	}
@@ -648,7 +661,7 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 	if (!json_object_object_get_ex(dmg_out, "host_storage_map",
 				       &storage_map)) {
 		D_ERROR("unable to extract host_storage_map from JSON\n");
-		return -DER_INVAL;
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	json_object_object_foreach(storage_map, key, val) {
@@ -657,9 +670,10 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 
 		if (!json_object_object_get_ex(val, "hosts", &hosts)) {
 			D_ERROR("unable to extract hosts from JSON\n");
-			return -DER_INVAL;
+			D_GOTO(out, rc = -DER_INVAL);
 		}
 
+		D_ALLOC(host, strlen(json_object_to_json_string(hosts)) + 1);
 		strcpy(host, json_object_to_json_string(hosts));
 
 		json_object_object_foreach(val, key1, val1) {
@@ -671,7 +685,8 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 				if (!json_object_object_get_ex(
 					smd_info, "devices", &smd_dev)) {
 					D_ERROR("unable to extract devices\n");
-					return -DER_INVAL;
+					D_FREE(host);
+					D_GOTO(out, rc = -DER_INVAL);
 				}
 
 				if (smd_dev != NULL)
@@ -685,17 +700,21 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 					rc = parse_device_info(smd_dev, devices,
 							       host, dev_length,
 							       disk);
-					if (rc != 0)
+					if (rc != 0) {
+						D_FREE(host);
 						goto out_json;
+					}
 				}
 			}
 		}
+		D_FREE(host);
 	}
 
 out_json:
 	if (dmg_out != NULL)
 		json_object_put(dmg_out);
 
+out:
 	D_FREE(disk);
 	return rc;
 }
@@ -775,7 +794,7 @@ dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 	if (!json_object_object_get_ex(dmg_out, "host_storage_map",
 				       &storage_map)) {
 		D_ERROR("unable to extract host_storage_map from JSON\n");
-		return -DER_INVAL;
+		D_GOTO(out_json, rc = -DER_INVAL);
 	}
 
 	json_object_object_foreach(storage_map, key, val) {
@@ -783,12 +802,12 @@ dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 			json_object_to_json_string(val));
 		if (!json_object_object_get_ex(val, "storage", &storage_info)) {
 			D_ERROR("unable to extract hosts from JSON\n");
-			return -DER_INVAL;
+			D_GOTO(out_json, rc = -DER_INVAL);
 		}
 		if (!json_object_object_get_ex(storage_info, "smd_info",
 					       &smd_info)) {
 			D_ERROR("unable to extract hosts from JSON\n");
-			return -DER_INVAL;
+			D_GOTO(out_json, rc = -DER_INVAL);
 		}
 		json_object_object_foreach(smd_info, key1, val1) {
 			D_DEBUG(DB_TEST, "key1:\"%s\",val1=%s\n", key1,

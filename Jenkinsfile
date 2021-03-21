@@ -67,8 +67,7 @@ def functional_post_always() {
 }
 
 String get_daos_packages() {
-    Map stage_info = parseStageInfo()
-    return get_daos_packages(stage_info['target'])
+    return get_daos_packages(parseStageInfo()['target'])
 }
 
 String get_daos_packages(String distro) {
@@ -85,15 +84,14 @@ String get_daos_packages(String distro) {
 }
 
 String pr_repos() {
-    Map stage_info = parseStageInfo()
-    return pr_repos(stage_info['target'])
+    return pr_repos(parseStageInfo()['target'])
 }
 
 String pr_repos(String distro) {
     String repos = ""
-    if (distro == 'centos7') {
+    if (distro.startsWith('el7') || distro.startsWith('centos7')) {
         repos = cachedCommitPragma(pragma: 'PR-repos-el7')
-    } else if (distro == 'leap15') {
+    } else if (distro.startsWith('leap15')) {
         repos = cachedCommitPragma(pragma: 'PR-repos-leap15')
     } else if (distro.startsWith('ubuntu20')) {
         repos = cachedCommitPragma(pragma: 'PR-repos-ubuntu20', cache: commit_pragma_cache)
@@ -123,8 +121,7 @@ String hw_distro_target() {
             return hw_distro('large')
         }
     }
-    Map stage_info = parseStageInfo()
-    return stage_info['target']
+    return parseStageInfo()['target']
 }
 
 String daos_repos() {
@@ -142,11 +139,12 @@ String unit_packages() {
     if (env.STAGE_NAME.contains('Bullseye')) {
         need_qb = true
     }
-    if (stage_info['target'] == 'centos7') {
+    if (stage_info['target'].startsWith('el7') ||
+        stage_info['target'].startsWith('centos7')) {
         String packages =  'gotestsum openmpi3 ' +
                            'hwloc-devel argobots ' +
                            'fuse3-libs fuse3 ' +
-                           'boost-devel ' +
+                           'boost-python36-devel ' +
                            'libisa-l-devel libpmem ' +
                            'libpmemobj protobuf-c ' +
                            'spdk-devel libfabric-devel ' +
@@ -156,9 +154,12 @@ String unit_packages() {
                            'libyaml-devel ' +
                            'valgrind-devel patchelf'
         if (need_qb) {
-            // TODO: these should be gotten from the Requires: of RPM
-            packages += " spdk-tools mercury-2.0.0~rc1" +
-                        " boost-devel libisa-l_crypto libfabric-debuginfo"
+            unstash stage_info['target'] + '-required-mercury-rpm-version'
+            packages += " spdk-tools mercury-" +
+                        readFile(stage_info['target'] +
+                                 '-required-mercury-rpm-version').trim() +
+                        " libisa-l_crypto libfabric-debuginfo" +
+                        " argobots-debuginfo protobuf-c-debuginfo"
         }
         return packages
     } else {
@@ -180,8 +181,7 @@ def cachedCommitPragma(Map config) {
 }
 
 String daos_packages_version() {
-    stage_info = parseStageInfo()
-    return daos_packages_version(stage_info['target'])
+    return daos_packages_version(parseStageInfo()['target'])
 }
 
 String daos_packages_version(String distro) {
@@ -192,9 +192,9 @@ String daos_packages_version(String distro) {
         String dist = ""
         if (version.indexOf('-') > -1) {
             // only tack on the %{dist} if the release was specified
-            if (distro == "centos7") {
+            if (distro.startsWith('el7') || distro.startsWith('centos7')) {
                 dist = ".el7"
-            } else if (distro == "leap15") {
+            } else if (distro.startsWith('leap15')) {
                 dist = ".suse.lp152"
             }
         }
@@ -251,15 +251,15 @@ String functional_packages(String distro) {
                   "MACSio-mpich " +
                   "MACSio-openmpi3 " +
                   "mpifileutils-mpich-daos-1 "
-    if (distro == "leap15") {
+    if (distro.startsWith('leap15')) {
         return daos_pkgs + pkgs
-    } else if (distro == "centos7") {
+    } else if (distro.startsWith('el7') || distro.startsWith('centos7')) {
         // need to exclude openmpi until we remove it from the repo
         return  "--exclude openmpi " + daos_pkgs + pkgs
     } else if (distro.startsWith('ubuntu20')) {
         return daos_pkgs + " openmpi-bin ndctl fio"
     } else {
-        error 'functional_packages not implemented for ' + stage_info['target']
+        error 'functional_packages not implemented for ' + distro
     }
 }
 
@@ -297,7 +297,8 @@ def getuid() {
 // in faster time-to-result for PRs.
 
 String get_priority() {
-    if (env.BRANCH_NAME == 'master') {
+    if (env.BRANCH_NAME == 'master' ||
+        env.BRANCH_NAME.startsWith("release/")) {
         string p = '2'
     } else {
         string p = ''
@@ -361,30 +362,15 @@ boolean skip_test_rpms_centos7() {
 
 boolean skip_scan_rpms_centos7() {
     return target_branch == 'weekly-testing' ||
-           skip_stage('scan-centos-rpms') ||
+           skip_stage('scan-centos-rpms', true) ||
            quick_functional()
 }
 
 boolean tests_in_stage(String size) {
-    String tags = cachedCommitPragma(pragma: 'Test-tag', def_val: 'pr')
-    def newtags = []
-    if (size == "vm") {
-        for (String tag in tags.split(" ")) {
-            newtags.add(tag + ",-hw")
-        }
-        tags += ",-hw"
-    } else {
-        if (size == "medium") {
-            size += ",ib2"
-        }
-        for (String tag in tags.split(" ")) {
-            newtags.add(tag + ",hw," + size)
-        }
-    }
-    tags = newtags.join(" ")
+    Map stage_info = parseStageInfo()
     return sh(label: "Get test list for ${size}",
               script: """cd src/tests/ftest
-                         ./launch.py --list ${tags}""",
+                         ./list_tests.py """ + stage_info['test_tag'],
               returnStatus: true) == 0
 }
 
@@ -416,6 +402,11 @@ boolean skip_build_on_centos7_gcc_debug() {
 
 boolean skip_build_on_centos7_gcc_release() {
     return skip_stage('build-centos7-gcc-release') ||
+           quickbuild()
+}
+
+boolean skip_build_on_centos8_gcc_dev() {
+    return skip_stage('build-centos8-gcc-dev') ||
            quickbuild()
 }
 
@@ -453,7 +444,8 @@ boolean skip_unit_testing_stage() {
 
 boolean skip_coverity() {
     return skip_stage('coverity-test') ||
-           quick_functional()
+           quick_functional() ||
+           skip_stage('build')
 }
 
 boolean skip_testing_stage() {
@@ -474,13 +466,20 @@ boolean skip_bullseye_report() {
            skip_stage('bullseye', true)
 }
 
-String quick_build_deps(String distro) {
+// Reply with an empty string if quickbuild disabled to avoid discarding
+// docker caches.
+String quick_build_deps(String distro, always=false) {
     String rpmspec_args = ""
-    if (distro == "leap15") {
+    if (!always) {
+        if (!quickbuild() ) {
+            return ""
+        }
+    }
+    if (distro.startsWith('leap15')) {
         rpmspec_args = "--define dist\\ .suse.lp152 " +
                        "--undefine rhel " +
                        "--define suse_version\\ 1502"
-    } else if (distro == "centos7") {
+    } else if (distro.startsWith('el7') || distro.startsWith('centos7')) {
         rpmspec_args = "--undefine suse_version " +
                        "--define rhel\\ 7"
     } else {
@@ -499,7 +498,8 @@ pipeline {
     agent { label 'lightweight' }
 
     triggers {
-        cron(env.BRANCH_NAME == 'master' ? 'TZ=America/Toronto\n0 0,12 * * *\n' : '' +
+        cron(env.BRANCH_NAME == 'master' ? 'TZ=America/Toronto\n0 0 * * *\n' : '' +
+             env.BRANCH_NAME == 'release/1.2' ? 'TZ=America/Toronto\n0 12 * * *\n' : '' +
              env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
     }
 
@@ -545,11 +545,10 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.centos.7'
+                            filename 'Dockerfile.checkpatch'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs() +
-                                           " -t ${sanitized_JOB_NAME}-centos7 "
+                            additionalBuildArgs dockerBuildArgs(add_repos:false)
                         }
                     }
                     steps {
@@ -659,6 +658,11 @@ pipeline {
                     post {
                         success {
                             buildRpmPost condition: 'success'
+                            script {
+                                Map stage_info = parseStageInfo()
+                                    stash name: stage_info['target'] + '-required-mercury-rpm-version',
+                                          includes: stage_info['target'] + '-required-mercury-rpm-version'
+                            }
                         }
                         unstable {
                             buildRpmPost condition: 'unstable'
@@ -752,8 +756,7 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.centos.7'
-                            dir 'utils/docker'
+                            filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
@@ -765,20 +768,15 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallel_build(),
                                    stash_files: 'ci/test_files_to_stash.txt',
+                                   scons_exe: 'scons-3',
                                    scons_args: scons_faults_args()
                     }
                     post {
                         always {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
-                                         id: "analysis-gcc-centos7",
-                                         tools: [ gcc4(pattern: 'centos7-gcc-build.log'),
-                                                  cppCheck(pattern: 'centos7-gcc-build.log') ],
-                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
-                                                    excludeFile('_build\\.external\\/.*') ]
-                        }
-                        success {
-                            sh "rm -rf _build.external"
+                                         tool: gcc4(pattern: 'centos7-gcc-build.log',
+                                                    id: "analysis-gcc-centos7")
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -796,8 +794,7 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.centos.7'
-                            dir 'utils/docker'
+                            filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
                                 " -t ${sanitized_JOB_NAME}-centos7 " +
@@ -810,20 +807,15 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallel_build(),
                                    stash_files: 'ci/test_files_to_stash.txt',
+                                   scons_exe: 'scons-3',
                                    scons_args: scons_faults_args()
                     }
                     post {
                         always {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
-                                         id: "analysis-covc-centos7",
-                                         tools: [ gcc4(pattern: 'centos7-covc-build.log'),
-                                                  cppCheck(pattern: 'centos7-covc-build.log') ],
-                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
-                                                    excludeFile('_build\\.external\\/.*') ]
-                        }
-                        success {
-                            sh "rm -rf _build.external"
+                                         tool: gcc4(pattern: 'centos7-covc-build.log',
+                                                    id: "analysis-covc-centos7")
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -841,10 +833,10 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.centos.7'
-                            dir 'utils/docker'
+                            filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
+                            additionalBuildArgs dockerBuildArgs(qb: quickbuild(),
+                                                                deps_build:true) +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quick_build_deps('centos7') + '"' +
@@ -852,20 +844,17 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallel_build()
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_exe: 'scons-3',
+                                   scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
+                                   build_deps: "no"
                     }
                     post {
                         always {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
-                                         id: "analysis-gcc-centos7-debug",
-                                         tools: [ gcc4(pattern: 'centos7-gcc-debug-build.log'),
-                                                  cppCheck(pattern: 'centos7-gcc-debug-build.log') ],
-                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
-                                                   excludeFile('_build\\.external\\/.*') ]
-                        }
-                        success {
-                            sh "rm -rf _build.external"
+                                         tool: gcc4(pattern: 'centos7-gcc-debug-build.log',
+                                                    id: "analysis-gcc-centos7-debug")
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -883,10 +872,10 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.centos.7'
-                            dir 'utils/docker'
+                            filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
+                            additionalBuildArgs dockerBuildArgs(qb: quickbuild(),
+                                                                deps_build:true) +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quick_build_deps('centos7') + '"' +
@@ -894,20 +883,17 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallel_build()
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_exe: 'scons-3',
+                                   scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
+                                   build_deps: "no"
                     }
                     post {
                         always {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
-                                         id: "analysis-gcc-centos7-release",
-                                         tools: [ gcc4(pattern: 'centos7-gcc-release-build.log'),
-                                                  cppCheck(pattern: 'centos7-gcc-release-build.log') ],
-                                         filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                   excludeFile('_build\\.external\\/.*')]
-                        }
-                        success {
-                            sh "rm -rf _build.external"
+                                         tool: gcc4(pattern: 'centos7-gcc-release-build.log',
+                                                    id: "analysis-gcc-centos7-release")
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -925,10 +911,10 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.centos.7'
-                            dir 'utils/docker'
+                            filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
+                            additionalBuildArgs dockerBuildArgs(qb: quickbuild(),
+                                                                deps_build:true) +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quick_build_deps('centos7') + '"'
@@ -936,26 +922,58 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   scons_args: scons_faults_args()
+                                   scons_exe: 'scons-3',
+                                   scons_args: scons_faults_args() + " PREFIX=/opt/daos TARGET_TYPE=release",
+                                   build_deps: "no"
                     }
                     post {
                         always {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
-                                         id: "analysis-centos7-clang",
-                                         tools: [ clang(pattern: 'centos7-clang-build.log'),
-                                                  cppCheck(pattern: 'centos7-clang-build.log') ],
-                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
-                                                    excludeFile('_build\\.external\\/.*') ]
-                        }
-                        success {
-                            sh "rm -rf _build.external"
+                                         tool: clang(pattern: 'centos7-clang-build.log',
+                                                     id: "analysis-centos7-clang")
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
                                       mv config.log config.log-centos7-clang
                                   fi"""
                             archiveArtifacts artifacts: 'config.log-centos7-clang',
+                                             allowEmptyArchive: true
+                        }
+                    }
+                }
+                stage('Build on CentOS 8') {
+                    when {
+                        beforeAgent true
+                        expression { ! skip_build_on_centos8_gcc_dev() }
+                     }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.centos.8'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(qb: quickbuild(),
+                                                                deps_build:true) +
+                                                " -t ${sanitized_JOB_NAME}-centos8 "
+                        }
+                    }
+                    steps {
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_args: scons_faults_args() + " PREFIX=/opt/daos TARGET_TYPE=release",
+                                   build_deps: "no",
+                                   scons_exe: 'scons-3'
+                    }
+                    post {
+                        always {
+                            recordIssues enabledForFailure: true,
+                                         aggregatingResults: true,
+                                         tool: gcc4(pattern: 'centos8-gcc-build.log',
+                                                    id: "analysis-centos8-gcc")
+                        }
+                        unsuccessful {
+                            sh """if [ -f config.log ]; then
+                                      mv config.log config.log-centos8-gcc
+                                  fi"""
+                            archiveArtifacts artifacts: 'config.log-centos8-gcc',
                                              allowEmptyArchive: true
                         }
                     }
@@ -967,29 +985,23 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.ubuntu.20.04'
-                            dir 'utils/docker'
+                            filename 'utils/docker/Dockerfile.ubuntu.20.04'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs() +
+                            additionalBuildArgs dockerBuildArgs(deps_build:true) +
                                                 " -t ${sanitized_JOB_NAME}-ubuntu20.04"
                         }
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   scons_args: scons_faults_args()
+                                   scons_args: scons_faults_args() + " PREFIX=/opt/daos TARGET_TYPE=release",
+                                   build_deps: "no"
                     }
                     post {
                         always {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
-                                         id: "analysis-ubuntu20",
-                                         tools: [ gcc4(pattern: 'ubuntu20.04-gcc-build.log'),
-                                                  cppCheck(pattern: 'ubuntu20.04-gcc-build.log') ],
-                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
-                                                    excludeFile('_build\\.external\\/.*') ]
-                        }
-                        success {
-                            sh "rm -rf _build.external"
+                                         tool: gcc4(pattern: 'ubuntu20.04-gcc-build.log',
+                                                    id: "analysis-ubuntu20")
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -1007,29 +1019,23 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.ubuntu.20.04'
-                            dir 'utils/docker'
+                            filename 'utils/docker/Dockerfile.ubuntu.20.04'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs() +
+                            additionalBuildArgs dockerBuildArgs(deps_build:true) +
                                                 " -t ${sanitized_JOB_NAME}-ubuntu20.04"
                         }
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   scons_args: scons_faults_args()
+                                   scons_args: scons_faults_args() + " PREFIX=/opt/daos TARGET_TYPE=release",
+                                   build_deps: "no"
                     }
                     post {
                         always {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
-                                         id: "analysis-ubuntu20-clang",
-                                         tools: [ clang(pattern: 'ubuntu20.04-clang-build.log'),
-                                                  cppCheck(pattern: 'ubuntu20.04-clang-build.log') ],
-                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
-                                                    excludeFile('_build\\.external\\/.*') ]
-                        }
-                        success {
-                            sh "rm -rf _build.external"
+                                         tool: clang(pattern: 'ubuntu20.04-clang-build.log',
+                                                     id: "analysis-ubuntu20-clang")
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -1047,8 +1053,7 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.leap.15'
-                            dir 'utils/docker'
+                            filename 'utils/docker/Dockerfile.leap.15'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
                                                 " -t ${sanitized_JOB_NAME}-leap15 " +
@@ -1066,14 +1071,8 @@ pipeline {
                         always {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
-                                         id: "analysis-gcc-leap15",
-                                         tools: [ gcc4(pattern: 'leap15-gcc-build.log'),
-                                                  cppCheck(pattern: 'leap15-gcc-build.log') ],
-                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
-                                                    excludeFile('_build\\.external\\/.*') ]
-                        }
-                        success {
-                            sh "rm -rf _build.external"
+                                         tool: gcc4(pattern: 'leap15-gcc-build.log',
+                                                    id: "analysis-gcc-leap15")
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -1091,29 +1090,23 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.leap.15'
-                            dir 'utils/docker'
+                            filename 'utils/docker/Dockerfile.leap.15'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs() +
+                            additionalBuildArgs dockerBuildArgs(deps_build:true) +
                                                 " -t ${sanitized_JOB_NAME}-leap15"
                         }
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   scons_args: scons_faults_args()
+                                   scons_args: scons_faults_args() + " PREFIX=/opt/daos TARGET_TYPE=release",
+                                   build_deps: "no"
                     }
                     post {
                         always {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
-                                         id: "analysis-leap15-clang",
-                                         tools: [ clang(pattern: 'leap15-clang-build.log'),
-                                                  cppCheck(pattern: 'leap15-clang-build.log') ],
-                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
-                                                    excludeFile('_build\\.external\\/.*') ]
-                        }
-                        success {
-                            sh "rm -rf _build.external"
+                                         tool: clang(pattern: 'leap15-clang-build.log',
+                                                     id: "analysis-leap15-clang")
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -1131,30 +1124,24 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.leap.15'
-                            dir 'utils/docker'
+                            filename 'utils/docker/Dockerfile.leap.15'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs() +
+                            additionalBuildArgs dockerBuildArgs(deps_build:true) +
                                                 " -t ${sanitized_JOB_NAME}-leap15"
                             args '-v /opt/intel:/opt/intel'
                         }
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   scons_args: scons_faults_args()
+                                   scons_args: scons_faults_args() + " PREFIX=/opt/daos TARGET_TYPE=release",
+                                   build_deps: "no"
                     }
                     post {
                         always {
                             recordIssues enabledForFailure: true,
                                          aggregatingResults: true,
-                                         id: "analysis-leap15-intelc",
-                                         tools: [ intel(pattern: 'leap15-icc-build.log'),
-                                                  cppCheck(pattern: 'leap15-icc-build.log') ],
-                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
-                                                    excludeFile('_build\\.external\\/.*') ]
-                        }
-                        success {
-                            sh "rm -rf _build.external"
+                                         tool: intel(pattern: 'leap15-icc-build.log',
+                                                     id: "analysis-leap15-intelc")
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -1294,19 +1281,19 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.centos.7'
-                            dir 'utils/docker'
+                            filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(qb: true) +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                                quick_build_deps('centos7') + '"' +
+                                                quick_build_deps('centos7', true) + '"' +
                                                 ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
                     steps {
                         sconsBuild coverity: "daos-stack/daos",
-                                   parallel_build: parallel_build()
+                                   parallel_build: parallel_build(),
+                                   scons_exe: 'scons-3'
                     }
                     post {
                         success {
@@ -1323,15 +1310,16 @@ pipeline {
                         expression { ! skip_ftest('el7') }
                     }
                     agent {
-                        label 'ci_vm9'
+                        label 'stage_vm9'
                     }
                     steps {
                         functionalTest inst_repos: daos_repos(),
-                                       inst_rpms: functional_packages()
+                                       inst_rpms: functional_packages(),
+                                       test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
-                            functionalTestPost()
+                            functionalTestPostV2()
                         }
                     }
                 } // stage('Functional on CentOS 7')
@@ -1341,15 +1329,16 @@ pipeline {
                         expression { ! skip_ftest('leap15') }
                     }
                     agent {
-                        label 'ci_vm9'
+                        label 'stage_vm9'
                     }
                     steps {
                         functionalTest inst_repos: daos_repos(),
-                                       inst_rpms: functional_packages()
+                                       inst_rpms: functional_packages(),
+                                       test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
-                            functionalTestPost()
+                            functionalTestPostV2()
                         }
                     } // post
                 } // stage('Functional on Leap 15')
@@ -1363,11 +1352,12 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daos_repos(),
-                                       inst_rpms: functional_packages()
+                                       inst_rpms: functional_packages(),
+                                       test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
-                            functionalTestPost()
+                            functionalTestPostV2()
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
@@ -1383,11 +1373,12 @@ pipeline {
                     steps {
                         functionalTest target: hw_distro_target(),
                                        inst_repos: daos_repos(),
-                                       inst_rpms: functional_packages()
+                                       inst_rpms: functional_packages(),
+                                       test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
-                            functionalTestPost()
+                            functionalTestPostV2()
                         }
                     }
                 } // stage('Functional_Hardware_Small')
@@ -1403,11 +1394,12 @@ pipeline {
                     steps {
                         functionalTest target: hw_distro_target(),
                                        inst_repos: daos_repos(),
-                                       inst_rpms: functional_packages()
+                                       inst_rpms: functional_packages(),
+                                       test_function: 'runTestFunctionalV2'
                    }
                     post {
                         always {
-                            functionalTestPost()
+                            functionalTestPostV2()
                         }
                     }
                 } // stage('Functional_Hardware_Medium')
@@ -1423,11 +1415,12 @@ pipeline {
                     steps {
                         functionalTest target: hw_distro_target(),
                                        inst_repos: daos_repos(),
-                                       inst_rpms: functional_packages()
+                                       inst_rpms: functional_packages(),
+                                       test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
-                            functionalTestPost()
+                            functionalTestPostV2()
                         }
                     }
                 } // stage('Functional_Hardware_Large')
@@ -1476,8 +1469,7 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.centos.7'
-                            dir 'utils/docker'
+                            filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
                                 " -t ${sanitized_JOB_NAME}-centos7 " +

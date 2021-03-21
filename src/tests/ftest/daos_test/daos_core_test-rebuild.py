@@ -25,8 +25,8 @@ class DaosCoreTestRebuild(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test_rebuild,unittest
-        :avocado: tags=daos_rebuild_0to10
+        :avocado: tags=unittest
+        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_0to10
         """
         self.run_subtest()
 
@@ -41,8 +41,8 @@ class DaosCoreTestRebuild(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test_rebuild,unittest
-        :avocado: tags=daos_rebuild_12to15
+        :avocado: tags=unittest
+        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_12to15
         """
         self.run_subtest()
 
@@ -57,8 +57,8 @@ class DaosCoreTestRebuild(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test_rebuild,unittest
-        :avocado: tags=daos_rebuild_16
+        :avocado: tags=unittest
+        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_16
         """
         self.run_subtest()
 
@@ -73,8 +73,8 @@ class DaosCoreTestRebuild(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test_rebuild,unittest
-        :avocado: tags=daos_rebuild_17
+        :avocado: tags=unittest
+        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_17
         """
         self.run_subtest()
 
@@ -89,8 +89,8 @@ class DaosCoreTestRebuild(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test_rebuild,unittest
-        :avocado: tags=daos_rebuild_18
+        :avocado: tags=unittest
+        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_18
         """
         self.run_subtest()
 
@@ -105,8 +105,8 @@ class DaosCoreTestRebuild(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test_rebuild,unittest
-        :avocado: tags=daos_rebuild_19
+        :avocado: tags=unittest
+        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_19
         """
         self.run_subtest()
 
@@ -121,8 +121,8 @@ class DaosCoreTestRebuild(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test_rebuild,unittest
-        :avocado: tags=daos_rebuild_20
+        :avocado: tags=unittest
+        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_20
         """
         self.run_subtest()
 
@@ -137,8 +137,8 @@ class DaosCoreTestRebuild(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test_rebuild,unittest
-        :avocado: tags=daos_rebuild_21
+        :avocado: tags=unittest
+        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_21
         """
         self.run_subtest()
 
@@ -153,8 +153,8 @@ class DaosCoreTestRebuild(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test_rebuild,unittest
-        :avocado: tags=daos_rebuild_22
+        :avocado: tags=unittest
+        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_22
         """
         self.run_subtest()
 
@@ -169,8 +169,8 @@ class DaosCoreTestRebuild(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test_rebuild,unittest
-        :avocado: tags=daos_rebuild_23
+        :avocado: tags=unittest
+        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_23
         """
         self.run_subtest()
 
@@ -185,8 +185,8 @@ class DaosCoreTestRebuild(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test_rebuild,unittest
-        :avocado: tags=daos_rebuild_24
+        :avocado: tags=unittest
+        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_24
         """
         self.run_subtest()
 
@@ -201,8 +201,8 @@ class DaosCoreTestRebuild(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test_rebuild,unittest
-        :avocado: tags=daos_rebuild_25
+        :avocado: tags=unittest
+        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_25
         """
         self.run_subtest()
 
@@ -217,8 +217,8 @@ class DaosCoreTestRebuild(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test_rebuild,unittest
-        :avocado: tags=daos_rebuild_26
+        :avocado: tags=unittest
+        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_26
         """
         self.run_subtest()
 
@@ -233,8 +233,8 @@ class DaosCoreTestRebuild(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test_rebuild,unittest
-        :avocado: tags=daos_rebuild_27
+        :avocado: tags=unittest
+        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_27
         """
         self.run_subtest()
 
@@ -249,7 +249,7 @@ class DaosCoreTestRebuild(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test_rebuild,unittest
-        :avocado: tags=daos_rebuild_28
+        :avocado: tags=unittest
+        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_28
         """
         self.run_subtest()

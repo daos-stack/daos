@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <setjmp.h>
 #include <cmocka.h>
+#include <daos/tests_lib.h>
 #include <daos_types.h>
 #include <daos_errno.h>
 #include <daos/common.h>
@@ -39,17 +40,20 @@ char *getenv(const char *name)
 }
 
 /* unpacked content of response body */
-static Auth__Credential *drpc_call_resp_return_auth_credential;
+static Auth__Credential *drpc_call_resp_return_auth_cred;
 char *dc_agent_sockpath;
 
 static void
 init_default_drpc_resp_auth_credential(void)
 {
-	D_ALLOC_PTR(drpc_call_resp_return_auth_credential);
-	auth__credential__init(drpc_call_resp_return_auth_credential);
+	D_ALLOC_PTR(drpc_call_resp_return_auth_cred);
+	auth__credential__init(drpc_call_resp_return_auth_cred);
 
-	D_ALLOC_PTR(drpc_call_resp_return_auth_credential->token);
-	auth__token__init(drpc_call_resp_return_auth_credential->token);
+	D_ALLOC_PTR(drpc_call_resp_return_auth_cred->token);
+	auth__token__init(drpc_call_resp_return_auth_cred->token);
+
+	D_ALLOC_PTR(drpc_call_resp_return_auth_cred->verifier);
+	auth__token__init(drpc_call_resp_return_auth_cred->verifier);
 }
 
 static void
@@ -65,13 +69,13 @@ static void
 init_drpc_resp_with_default_cred(void)
 {
 	init_default_drpc_resp_auth_credential();
-	init_drpc_resp_with_cred(drpc_call_resp_return_auth_credential);
+	init_drpc_resp_with_cred(drpc_call_resp_return_auth_cred);
 }
 
 void
 free_drpc_call_resp_auth_credential()
 {
-	auth__credential__free_unpacked(drpc_call_resp_return_auth_credential,
+	auth__credential__free_unpacked(drpc_call_resp_return_auth_cred,
 					NULL);
 }
 
@@ -115,7 +119,7 @@ teardown_security_mocks(void **state)
 static void
 test_request_credentials_fails_with_null_creds(void **state)
 {
-	assert_int_equal(dc_sec_request_creds(NULL), -DER_INVAL);
+	assert_rc_equal(dc_sec_request_creds(NULL), -DER_INVAL);
 }
 
 static void
@@ -125,7 +129,7 @@ test_request_credentials_succeeds_with_good_values(void **state)
 
 	memset(&creds, 0, sizeof(d_iov_t));
 
-	assert_int_equal(dc_sec_request_creds(&creds), DER_SUCCESS);
+	assert_rc_equal(dc_sec_request_creds(&creds), DER_SUCCESS);
 
 	daos_iov_free(&creds);
 }
@@ -138,7 +142,7 @@ test_request_credentials_fails_if_drpc_connect_fails(void **state)
 	memset(&creds, 0, sizeof(d_iov_t));
 	free_drpc_connect_return(); /* drpc_connect returns NULL on failure */
 
-	assert_int_equal(dc_sec_request_creds(&creds), -DER_BADPATH);
+	assert_rc_equal(dc_sec_request_creds(&creds), -DER_BADPATH);
 
 	daos_iov_free(&creds);
 }
@@ -166,7 +170,7 @@ test_request_credentials_fails_if_drpc_call_fails(void **state)
 	memset(&creds, 0, sizeof(d_iov_t));
 	drpc_call_return = -DER_BUSY;
 
-	assert_int_equal(dc_sec_request_creds(&creds),
+	assert_rc_equal(dc_sec_request_creds(&creds),
 			drpc_call_return);
 
 	daos_iov_free(&creds);
@@ -240,7 +244,7 @@ test_request_credentials_fails_if_reply_null(void **state)
 	memset(&creds, 0, sizeof(d_iov_t));
 	drpc_call_resp_return_ptr = NULL;
 
-	assert_int_equal(dc_sec_request_creds(&creds), -DER_NOREPLY);
+	assert_rc_equal(dc_sec_request_creds(&creds), -DER_NOREPLY);
 
 	daos_iov_free(&creds);
 }
@@ -253,7 +257,7 @@ test_request_credentials_fails_if_reply_status_failure(void **state)
 	memset(&creds, 0, sizeof(d_iov_t));
 	drpc_call_resp_return_content.status = DRPC__STATUS__FAILURE;
 
-	assert_int_equal(dc_sec_request_creds(&creds), -DER_MISC);
+	assert_rc_equal(dc_sec_request_creds(&creds), -DER_MISC);
 
 	daos_iov_free(&creds);
 }
@@ -268,7 +272,7 @@ test_request_credentials_fails_if_reply_body_malformed(void **state)
 	D_ALLOC(drpc_call_resp_return_content.body.data, 1);
 	drpc_call_resp_return_content.body.len = 1;
 
-	assert_int_equal(dc_sec_request_creds(&creds), -DER_PROTO);
+	assert_rc_equal(dc_sec_request_creds(&creds), -DER_PROTO);
 
 	daos_iov_free(&creds);
 }
@@ -281,7 +285,7 @@ test_request_credentials_fails_if_reply_cred_missing(void **state)
 	memset(&creds, 0, sizeof(d_iov_t));
 	init_drpc_resp_with_cred(NULL);
 
-	assert_int_equal(dc_sec_request_creds(&creds), -DER_PROTO);
+	assert_rc_equal(dc_sec_request_creds(&creds), -DER_PROTO);
 
 	daos_iov_free(&creds);
 }
@@ -292,16 +296,31 @@ test_request_credentials_fails_if_reply_token_missing(void **state)
 	d_iov_t creds;
 
 	memset(&creds, 0, sizeof(d_iov_t));
-	auth__token__free_unpacked(drpc_call_resp_return_auth_credential->token,
+	auth__token__free_unpacked(drpc_call_resp_return_auth_cred->token,
 				   NULL);
-	drpc_call_resp_return_auth_credential->token = NULL;
-	init_drpc_resp_with_cred(drpc_call_resp_return_auth_credential);
+	drpc_call_resp_return_auth_cred->token = NULL;
+	init_drpc_resp_with_cred(drpc_call_resp_return_auth_cred);
+
+	assert_rc_equal(dc_sec_request_creds(&creds), -DER_PROTO);
+
+	daos_iov_free(&creds);
+}
+
+static void
+test_request_cred_fails_if_reply_verifier_missing(void **state)
+{
+	d_iov_t creds;
+
+	memset(&creds, 0, sizeof(d_iov_t));
+	auth__token__free_unpacked(drpc_call_resp_return_auth_cred->verifier,
+				   NULL);
+	drpc_call_resp_return_auth_cred->verifier = NULL;
+	init_drpc_resp_with_cred(drpc_call_resp_return_auth_cred);
 
 	assert_int_equal(dc_sec_request_creds(&creds), -DER_PROTO);
 
 	daos_iov_free(&creds);
 }
-
 static void
 test_request_credentials_fails_if_reply_cred_status(void **state)
 {
@@ -312,7 +331,7 @@ test_request_credentials_fails_if_reply_cred_status(void **state)
 	pack_get_cred_resp_in_drpc_call_resp_body(&resp);
 	memset(&creds, 0, sizeof(d_iov_t));
 
-	assert_int_equal(dc_sec_request_creds(&creds), -DER_UNKNOWN);
+	assert_rc_equal(dc_sec_request_creds(&creds), -DER_UNKNOWN);
 }
 
 static void
@@ -328,12 +347,12 @@ test_request_credentials_returns_raw_bytes(void **state)
 	 * Credential bytes == raw bytes of the packed Auth__Credential
 	 */
 	expected_len = auth__credential__get_packed_size(
-			drpc_call_resp_return_auth_credential);
+			drpc_call_resp_return_auth_cred);
 	D_ALLOC(expected_data, expected_len);
-	auth__credential__pack(drpc_call_resp_return_auth_credential,
+	auth__credential__pack(drpc_call_resp_return_auth_cred,
 			expected_data);
 
-	assert_int_equal(dc_sec_request_creds(&creds), DER_SUCCESS);
+	assert_rc_equal(dc_sec_request_creds(&creds), DER_SUCCESS);
 
 	assert_int_equal(creds.iov_buf_len, expected_len);
 	assert_int_equal(creds.iov_len, expected_len);
@@ -378,6 +397,8 @@ main(void)
 			test_request_credentials_fails_if_reply_token_missing),
 		SECURITY_UTEST(
 			test_request_credentials_fails_if_reply_cred_missing),
+		SECURITY_UTEST(
+			test_request_cred_fails_if_reply_verifier_missing),
 		SECURITY_UTEST(
 			test_request_credentials_fails_if_reply_cred_status),
 		SECURITY_UTEST(

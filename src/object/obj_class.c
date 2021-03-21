@@ -626,8 +626,8 @@ static struct daos_obj_class daos_obj_classes[] = {
 		.oc_private	= true,
 	},
 	{
-		.oc_name	= "OBJ_ID_TABLE",
-		.oc_id		= DAOS_OC_OIT,
+		.oc_name	= "OBJ_ID_TABLE_RF0",
+		.oc_id		= DAOS_OC_OIT_RF0,
 		{
 			.ca_schema		= DAOS_OS_SINGLE,
 			.ca_resil		= DAOS_RES_REPL,
@@ -636,6 +636,50 @@ static struct daos_obj_class daos_obj_classes[] = {
 			 */
 			.ca_grp_nr		= 1,
 			.ca_rp_nr		= 1,
+		},
+		.oc_private	= true,
+	},
+	{
+		.oc_name	= "OBJ_ID_TABLE_RF1",
+		.oc_id		= DAOS_OC_OIT_RF1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 1,
+			.ca_rp_nr		= 2,
+		},
+		.oc_private	= true,
+	},
+	{
+		.oc_name	= "OBJ_ID_TABLE_RF2",
+		.oc_id		= DAOS_OC_OIT_RF2,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 1,
+			.ca_rp_nr		= 3,
+		},
+		.oc_private	= true,
+	},
+	{
+		.oc_name	= "OBJ_ID_TABLE_RF3",
+		.oc_id		= DAOS_OC_OIT_RF3,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 1,
+			.ca_rp_nr		= 4,
+		},
+		.oc_private	= true,
+	},
+	{
+		.oc_name	= "OBJ_ID_TABLE_RF4",
+		.oc_id		= DAOS_OC_OIT_RF4,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 1,
+			.ca_rp_nr		= 5,
 		},
 		.oc_private	= true,
 	},
@@ -803,7 +847,7 @@ static int oc_ident_array_sz;
 static int oc_scale_array_sz;
 static int oc_resil_array_sz;
 
-static struct daos_obj_class  *oclass_ident2cl(int oc_id);
+static struct daos_obj_class  *oclass_ident2cl(daos_oclass_id_t oc_id);
 static struct daos_obj_class  *oclass_scale2cl(struct daos_oclass_attr *ca);
 static struct daos_obj_class  *oclass_resil2cl(struct daos_oclass_attr *ca);
 
@@ -924,7 +968,7 @@ daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr, struct daos_obj_md *md)
 }
 
 static struct daos_obj_class *
-oclass_fit_max(int oc_id, int domain_nr, int target_nr)
+oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr)
 {
 	struct daos_obj_class	*oc;
 	struct daos_oclass_attr	 ca;
@@ -961,7 +1005,8 @@ out:
 }
 
 int
-daos_oclass_fit_max(int oc_id, int domain_nr, int target_nr, int *oc_id_p)
+daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
+		    daos_oclass_id_t *oc_id_p)
 {
 	struct daos_obj_class	*oc;
 
@@ -1341,7 +1386,7 @@ static daos_sort_ops_t	oc_scale_sort_ops = {
 
 /* find object class by ID */
 static struct daos_obj_class *
-oclass_ident2cl(int oc_id)
+oclass_ident2cl(daos_oclass_id_t oc_id)
 {
 	int	idx;
 

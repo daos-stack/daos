@@ -24,6 +24,8 @@
 #include <daos/object.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/dtx_srv.h>
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 #include "obj_rpc.h"
 #include "obj_ec.h"
@@ -199,11 +201,6 @@ struct migrate_pool_tls {
 	daos_handle_t		mpt_migrated_root_hdl;
 	struct btr_root		mpt_migrated_root;
 
-	/* Hash table to store the container uuids which have already been
-	 * deleted (used by reintegration)
-	 */
-	struct d_hash_table	mpt_cont_dest_tab;
-
 	/* Service rank list for migrate fetch RPC */
 	d_rank_list_t		mpt_svc_list;
 
@@ -233,19 +230,54 @@ struct migrate_pool_tls {
 	uint64_t		mpt_refcount;
 	/* migrate leader ULT */
 	unsigned int		mpt_ult_running:1,
-	/* Indicates whether containers should be cleared of all contents
-	 * before any data is migrated to them (via destroy & recreate)
+	/* Indicates whether objects on the migration destination should be
+	 * removed prior to migrating new data here. This is primarily useful
+	 * for reintegration to ensure that any data that has adequate replica
+	 * data to reconstruct will prefer the remote data over possibly stale
+	 * existing data. Objects that don't have remote replica data will not
+	 * be removed.
 	 */
-				mpt_clear_conts:1,
+				mpt_del_local_objs:1,
 				mpt_fini:1;
 };
 
 void
 migrate_pool_tls_destroy(struct migrate_pool_tls *tls);
 
+/*
+ * Report latency on a per-I/O size.
+ * Buckets starts at [0; 256B[ and are increased by power of 2
+ * (i.e. [256B; 512B[, [512B; 1KB[) up to [4MB; infinity[
+ * Since 4MB = 2^22 and 256B = 2^8, this means
+ * (22 - 8 + 1) = 15 buckets plus the 4MB+ bucket, so
+ * 16 buckets in total.
+ */
+#define NR_LATENCY_BUCKETS 16
+
 struct obj_tls {
 	d_sg_list_t		ot_echo_sgl;
 	d_list_t		ot_pool_list;
+
+	/** Measure per-operation latency in us (type = gauge) */
+	struct d_tm_node_t	*ot_op_lat[OBJ_PROTO_CLI_COUNT];
+	/** Count number of per-opcode active requests (type = gauge) */
+	struct d_tm_node_t	*ot_op_active[OBJ_PROTO_CLI_COUNT];
+	/** Count number of total per-opcode requests (type = counter) */
+	struct d_tm_node_t	*ot_op_total[OBJ_PROTO_CLI_COUNT];
+
+	/** Measure update/fetch latency based on I/O size (type = gauge) */
+	struct d_tm_node_t	*ot_update_lat[NR_LATENCY_BUCKETS];
+	struct d_tm_node_t	*ot_fetch_lat[NR_LATENCY_BUCKETS];
+
+	/** Total number of bytes fetched (type = counter) */
+	struct d_tm_node_t	*ot_fetch_bytes;
+	/** Total number of bytes updated (type = counter) */
+	struct d_tm_node_t	*ot_update_bytes;
+
+	/** Total number of silently restarted updates (type = counter) */
+	struct d_tm_node_t	*ot_update_restart;
+	/** Total number of resent update operations (type = counter) */
+	struct d_tm_node_t	*ot_update_resent;
 };
 
 struct obj_ec_parity {
@@ -557,6 +589,9 @@ struct obj_io_context {
 	struct ds_cont_child	*ioc_coc;
 	daos_handle_t		 ioc_vos_coh;
 	uint32_t		 ioc_map_ver;
+	uint32_t		 ioc_opc;
+	uint64_t		 ioc_start_time;
+	uint64_t		 ioc_io_size;
 	uint32_t		 ioc_began:1,
 				 ioc_free_sgls:1,
 				 ioc_lost_reply:1;

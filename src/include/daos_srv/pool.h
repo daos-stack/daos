@@ -139,7 +139,7 @@ int ds_pool_start(uuid_t uuid);
 void ds_pool_stop(uuid_t uuid);
 int ds_pool_extend(uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
 		   const d_rank_list_t *rank_list, int ndomains,
-		   const int *domains, d_rank_list_t *svc_ranks);
+		   const uint32_t *domains, d_rank_list_t *svc_ranks);
 int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
 				uint32_t rank,
 				struct pool_target_id_list *target_list,
@@ -148,7 +148,7 @@ int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
 int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets,
 		       uuid_t target_uuids[], const char *group,
 		       const d_rank_list_t *target_addrs, int ndomains,
-		       const int *domains, daos_prop_t *prop,
+		       const uint32_t *domains, daos_prop_t *prop,
 		       d_rank_list_t *svc_addrs);
 int ds_pool_svc_destroy(const uuid_t pool_uuid, d_rank_list_t *svc_ranks);
 
@@ -246,5 +246,33 @@ int dsc_pool_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		       struct pool_map *map, d_rank_list_t *svc_list,
 		       daos_handle_t *ph);
 int dsc_pool_close(daos_handle_t ph);
+
+/**
+ * Verify if pool status satisfy Redundancy Factor requirement, by checking
+ * pool map device status.
+ */
+static inline int
+ds_pool_rf_verify(struct ds_pool *pool, uint32_t last_ver, uint32_t rf)
+{
+	int	rc;
+
+	ABT_rwlock_rdlock(pool->sp_lock);
+	rc = pool_map_rf_verify(pool->sp_map, last_ver, rf);
+	ABT_rwlock_unlock(pool->sp_lock);
+
+	return rc;
+}
+
+static inline uint32_t
+ds_pool_get_version(struct ds_pool *pool)
+{
+	uint32_t	ver;
+
+	ABT_rwlock_rdlock(pool->sp_lock);
+	ver = pool_map_get_version(pool->sp_map);
+	ABT_rwlock_unlock(pool->sp_lock);
+
+	return ver;
+}
 
 #endif /* __DAOS_SRV_POOL_H__ */

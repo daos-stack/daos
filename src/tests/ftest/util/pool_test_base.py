@@ -22,7 +22,7 @@ class PoolTestBase(TestWithServers):
         # Create test-case-specific DAOS log files
         self.update_log_file_names()
 
-        super(PoolTestBase, self).setUp()
+        super().setUp()
         self.dmg = self.get_dmg_command()
 
     def get_max_pool_sizes(self, scm_ratio=0.9, nvme_ratio=0.9):
@@ -90,7 +90,7 @@ class PoolTestBase(TestWithServers):
                         "Unable to assign a max pool NVMe size; NVMe not "
                         "configured!")
 
-                # The I/O server allocates NVMe storage on targets in multiples
+                # The I/O Engine allocates NVMe storage on targets in multiples
                 # of 1GiB per target.  A server with 8 targets will have a
                 # minimum NVMe size of 8 GiB.  Specify the largest NVMe size in
                 # GiB that can be used with the configured number of targets and

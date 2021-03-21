@@ -63,10 +63,11 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	rc = ds_obj_ec_aggregate(cont, epr, dss_ult_yield,
 				 (void *)cont->sc_agg_req, is_current);
 	if (rc) {
+		D_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_SHUTDOWN,
+			 DB_ANY, DLOG_ERR,
+			 "EC aggregation returned: "DF_RC"\n", DP_RC(rc));
 		if (rc == -DER_NOTLEADER)
 			return -DER_SHUTDOWN;
-		D_ERROR("EC aggregation returned: "DF_RC"\n",
-			DP_RC(rc));
 	}
 
 	if (dss_ult_exiting(cont->sc_agg_req))
@@ -1553,59 +1554,6 @@ cont_close_hdl(uuid_t cont_hdl_uuid)
 	return 0;
 }
 
-static int
-cont_close_all_cb(d_list_t *rlink, void *arg)
-{
-	uuid_t *cont_uuid = arg;
-	struct ds_cont_hdl *hdl = cont_hdl_obj(rlink);
-	int rc;
-
-	if (hdl->sch_cont == NULL)
-		return DER_SUCCESS;
-
-	if (uuid_compare(*cont_uuid, hdl->sch_cont->sc_uuid) == 0) {
-		rc = cont_close_hdl(hdl->sch_uuid);
-		if (rc != 0) {
-			D_ERROR("cont_close_hdl failed: rc="DF_RC, DP_RC(rc));
-			return rc;
-		}
-	}
-
-	return DER_SUCCESS;
-}
-
-/* Called via dss_collective() to close all container handles for this thread */
-static int
-cont_close_all(void *vin)
-{
-	struct dsm_tls *tls = dsm_tls_get();
-	uuid_t *cont_uuid = vin;
-	int rc;
-
-	rc = d_hash_table_traverse(&tls->dt_cont_hdl_hash, cont_close_all_cb,
-				   cont_uuid);
-	if (rc != 0) {
-		D_ERROR("d_hash_table_traverse failed: rc="DF_RC, DP_RC(rc));
-		return rc;
-	}
-
-	return DER_SUCCESS;
-}
-
-int
-ds_cont_tgt_force_close(uuid_t cont_uuid)
-{
-	int rc;
-
-	D_DEBUG(DF_DSMS, "Force closing all handles for container "
-		DF_UUID"\n", DP_UUID(cont_uuid));
-
-	rc = dss_thread_collective(cont_close_all, &cont_uuid, 0);
-	if (rc != 0)
-		D_ERROR("dss_thread_collective failed: rc="DF_RC, DP_RC(rc));
-	return rc;
-}
-
 struct coll_close_arg {
 	uuid_t	uuid;
 };
@@ -1832,7 +1780,7 @@ ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
 	uuid_copy(args.cont_uuid, cont_uuid);
 	args.snap_count = snap_count;
 	args.snapshots = snapshots;
-	D_DEBUG(DB_TRACE, DF_UUID": refreshing snapshots %d\n",
+	D_DEBUG(DB_EPC, DF_UUID": refreshing snapshots %d\n",
 		DP_UUID(cont_uuid), snap_count);
 	return dss_thread_collective(cont_snap_update_one, &args, 0);
 }
