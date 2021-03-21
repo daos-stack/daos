@@ -5,6 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import ctypes
+import queue
 import time
 import threading
 import re
@@ -15,13 +16,7 @@ from mdtest_test_base import MdtestBase
 from command_utils import CommandFailure
 from pydaos.raw import (DaosContainer, IORequest,
                         DaosObj, DaosApiError)
-
-try:
-    # python 3.x
-    import queue as test_queue
-except ImportError:
-    # python 2.7
-    import Queue as test_queue
+from general_utils import create_string_buffer
 
 
 class OSAUtils(MdtestBase, IorTestBase):
@@ -34,7 +29,7 @@ class OSAUtils(MdtestBase, IorTestBase):
     """
     def setUp(self):
         """Set up for test case."""
-        super(OSAUtils, self).setUp()
+        super().setUp()
         self.pool_cont_dict = {}
         self.container = None
         self.obj = None
@@ -49,7 +44,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.ior_w_flags = self.params.get("write_flags", '/run/ior/iorflags/*',
                                            default="")
         self.ior_r_flags = self.params.get("read_flags", '/run/ior/iorflags/*')
-        self.out_queue = test_queue.Queue()
+        self.out_queue = queue.Queue()
         self.dmg_command.exit_status_exception = False
         self.test_during_aggregation = False
         self.test_during_rebuild = False
@@ -165,10 +160,10 @@ class OSAUtils(MdtestBase, IorTestBase):
                 indata = ("{0}".format(str(akey)[0])
                           * self.record_length)
                 d_key_value = "dkey {0}".format(dkey)
-                c_dkey = ctypes.create_string_buffer(d_key_value)
+                c_dkey = create_string_buffer(d_key_value)
                 a_key_value = "akey {0}".format(akey)
-                c_akey = ctypes.create_string_buffer(a_key_value)
-                c_value = ctypes.create_string_buffer(indata)
+                c_akey = create_string_buffer(a_key_value)
+                c_value = create_string_buffer(indata)
                 c_size = ctypes.c_size_t(ctypes.sizeof(c_value))
                 self.ioreq.single_insert(c_dkey, c_akey, c_value, c_size)
         self.obj.close()
@@ -185,8 +180,8 @@ class OSAUtils(MdtestBase, IorTestBase):
             for akey in range(self.no_of_akeys):
                 indata = ("{0}".format(str(akey)[0]) *
                           self.record_length)
-                c_dkey = ctypes.create_string_buffer("dkey {0}".format(dkey))
-                c_akey = ctypes.create_string_buffer("akey {0}".format(akey))
+                c_dkey = create_string_buffer("dkey {0}".format(dkey))
+                c_akey = create_string_buffer("akey {0}".format(akey))
                 val = self.ioreq.single_fetch(c_dkey,
                                               c_akey,
                                               len(indata)+1)

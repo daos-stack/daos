@@ -4,8 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
-
 from getpass import getuser
 from grp import getgrgid
 from pwd import getpwuid
@@ -155,7 +153,7 @@ class DmgCommand(DmgCommandBase):
                 r"(?:([0-9a-fA-F:.]+)\s+([a-zA-Z0-9 ]+)\s+"
                 r"([a-zA-Z0-9]+)\s+(\d+)\s+([0-9\.]+\s+[A-Z]+))|"
                 r"(?:([a-zA-Z0-9]+)\s+(\d+)\s+([0-9\.]+\s+[A-Z]+)))",
-                self.result.stdout)
+                self.result.stdout_text)
             host = ""
             for item in match:
                 if item[0]:
@@ -184,7 +182,7 @@ class DmgCommand(DmgCommandBase):
             values = re.findall(
                 r"([a-z0-9-\[\]]+)\s+([\d.]+)\s+([A-Z]+)\s+"
                 r"\(([\w\s]+)\)\s+([\d.]+)\s+([A-Z]+)\s+\(([\w\s]+)",
-                self.result.stdout)
+                self.result.stdout_text)
             self.log.info("--- Non-verbose output parse result ---")
             self.log.info(values)
 
@@ -591,7 +589,7 @@ class DmgCommand(DmgCommandBase):
         data = {}
         match = re.findall(
             r"(?:([0-9a-fA-F][0-9a-fA-F-]+)\W+([0-9][0-9,-]*))",
-            self.result.stdout)
+            self.result.stdout_text)
         for info in match:
             data[info[0]] = get_numeric_list(info[1])
         return data
@@ -805,7 +803,7 @@ class DmgCommand(DmgCommandBase):
         data = {}
         match = re.findall(
             r"(?:\[*([0-9-,]+)\]*)\s+([A-Za-z]+)\s+(.*)",
-            self.result.stdout)
+            self.result.stdout_text)
         for info in match:
             for rank in get_numeric_list(info[0]):
                 data[rank] = info[1].strip()
@@ -836,7 +834,7 @@ class DmgCommand(DmgCommandBase):
         data = {}
         match = re.findall(
             r"(?:\[*([0-9-,]+)\]*)\s+([A-Za-z]+)\s+(.*)",
-            self.result.stdout)
+            self.result.stdout_text)
         for info in match:
             for rank in get_numeric_list(info[0]):
                 data[rank] = info[1].strip()

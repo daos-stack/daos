@@ -965,7 +965,8 @@ daos_csummer_verify_key(struct daos_csummer *obj, daos_key_t *key,
 		return 0;
 
 	if (!ci_is_valid(csum)) {
-		D_ERROR("checksums is enabled, but dcs_csum_info is invalid\n");
+		D_ERROR("checksums is enabled, but dcs_csum_info is invalid, "
+			"key: "DF_KEY", csum = %p\n", DP_KEY(key), csum);
 		return -DER_CSUM;
 	}
 

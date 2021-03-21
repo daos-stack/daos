@@ -13,15 +13,17 @@ from write_host_file import write_host_file
 
 class OSAOfflineReintegration(OSAUtils):
     # pylint: disable=too-many-ancestors
-    """
-    Test Class Description: This test runs
-    daos_server offline reintegration test cases.
+    """OSA offline Reintegration test cases.
+
+    Test Class Description:
+        This test runs daos_server offline reintegration test cases.
 
     :avocado: recursive
     """
+
     def setUp(self):
         """Set up for test case."""
-        super(OSAOfflineReintegration, self).setUp()
+        super().setUp()
         self.dmg_command = self.get_dmg_command()
         self.daos_command = DaosCommand(self.bin)
         self.ior_test_sequence = self.params.get("ior_test_sequence",
@@ -36,10 +38,11 @@ class OSAOfflineReintegration(OSAUtils):
     def run_offline_reintegration_test(self, num_pool, data=False,
                                        server_boot=False, oclass=None):
         """Run the offline reintegration without data.
-            Args:
+
+        Args:
             num_pool (int) : total pools to create for testing purposes.
             data (bool) : whether pool has no data or to create
-                          some data in pool. Defaults to False.
+                some data in pool. Defaults to False.
             server_boot (bool) : Perform system stop/start on a rank.
                                  Defults to False.
             oclass (str) : daos object class string (eg: "RP_2G8")
@@ -153,6 +156,7 @@ class OSAOfflineReintegration(OSAUtils):
 
     def test_osa_offline_reintegration_server_stop(self):
         """Test ID: DAOS-6748.
+
         Test Description: Validate Offline Reintegration with server stop
         :avocado: tags=all,pr,daily_regression,hw,medium,ib2
         :avocado: tags=osa,offline_reintegration
