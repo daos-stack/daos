@@ -1836,8 +1836,14 @@ pool_connect_iv_dist(struct pool_svc *svc, uuid_t pool_hdl,
 
 	rc = ds_pool_iv_conn_hdl_update(svc->ps_pool, pool_hdl, flags,
 					sec_capas, cred);
-	if (rc)
+	if (rc) {
+		if (rc == -DER_SHUTDOWN) {
+			D_DEBUG(DF_DSMS, DF_UUID":"DF_UUID" some ranks stop.\n",
+				DP_UUID(svc->ps_uuid), DP_UUID(pool_hdl));
+			rc = 0;
+		}
 		D_GOTO(out, rc);
+	}
 out:
 	D_DEBUG(DF_DSMS, DF_UUID": bcasted: "DF_RC"\n", DP_UUID(svc->ps_uuid),
 		DP_RC(rc));
