@@ -9,7 +9,7 @@ from os.path import join
 from apricot import skipForTicket
 
 
-class CopyNegativeTest(DataMoverTestBase):
+class DmNegativeTest(DataMoverTestBase):
     # pylint: disable=too-many-ancestors
     """Test class for POSIX DataMover negative testing.
 
@@ -21,11 +21,7 @@ class CopyNegativeTest(DataMoverTestBase):
     """
 
     # DCP error codes
-    MFU_ERR = "MFU_ERR(-1000)"
-    MFU_ERR_INVAL_ARG = "MFU_ERR(-1001)"
-    MFU_ERR_DCP = "MFU_ERR(-1100)"
     MFU_ERR_DCP_COPY = "MFU_ERR(-1101)"
-    MFU_ERR_DAOS = "MFU_ERR(-4000)"
     MFU_ERR_DAOS_INVAL_ARG = "MFU_ERR(-4001)"
 
     def setUp(self):
@@ -42,9 +38,9 @@ class CopyNegativeTest(DataMoverTestBase):
         self.daos_test_path = "/"
         self.daos_test_file = join(self.daos_test_path, self.test_file)
 
-    @skipForTicket("DAOS-6355")
-    def test_copy_bad_params_dcp(self):
-        """Jira ID: DAOS-5515
+    def test_dm_bad_params_dcp(self):
+        """Jira ID: DAOS-5515 - Initial test case.
+           Jira ID: DAOS-6355 - Test case reworked.
         Test Description:
             Test POSIX copy with invalid parameters.
             This uses the dcp tool.
@@ -53,8 +49,8 @@ class CopyNegativeTest(DataMoverTestBase):
             (3) Bad parameter: daos-prefix is invalid.
             (4) Bad parameter: UUID, UNS, or POSIX path is invalid.
         :avocado: tags=all,full_regression
-        :avocado: tags=datamover
-        :avocado: tags=copy_negative,copy_bad_params_dcp
+        :avocado: tags=datamover,dcp
+        :avocado: tags=dm_negative,dm_bad_params_dcp
         """
         self.set_tool("DCP")
 
@@ -76,69 +72,64 @@ class CopyNegativeTest(DataMoverTestBase):
                                  pool1, cont1)
 
         # Bad parameter: required arguments.
-        # These tests use missing arguments
         self.run_datamover(
-            "copy_bad_params (source cont but no source pool)",
-            "DAOS_UUID", "/", None, cont1,
+            self.test_id + " (missing source pool)",
+            "DAOS_UUID", "/", None, None,
             "POSIX", self.posix_test_paths[0],
             expected_rc=1,
             expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
 
         self.run_datamover(
-            "copy_bad_params (source pool but no source cont)",
+            self.test_id + " (missing source cont)",
             "DAOS_UUID", "/", pool1, None,
             "POSIX", self.posix_test_paths[0],
             expected_rc=1,
             expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
 
-        # Bad parameter: required arguments.
-        # This test uses invalid destination parameters.
         self.run_datamover(
-            "copy_bad_params (dest cont but no dest pool)",
+            self.test_id + " (missing dest pool)",
             "POSIX", self.posix_test_paths[0], None, None,
-            "DAOS_UUID", "/", None, cont1,
+            "DAOS_UUID", "/", None, None,
             expected_rc=1,
             expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
 
         # (2) Bad parameter: source is destination.
-        # These tests use the same source and destination.
         self.run_datamover(
-            "copy_bad_params (UUID source is UUID dest)",
+            self.test_id + " (UUID source is UUID dest)",
             "DAOS_UUID", "/", pool1, cont1,
             "DAOS_UUID", "/", pool1, cont1,
             expected_rc=1,
             expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
 
         self.run_datamover(
-            "copy_bad_params (UNS source is UNS dest)",
+            self.test_id + " (UNS source is UNS dest)",
             "DAOS_UNS", "/", pool1, cont1,
             "DAOS_UNS", "/", pool1, cont1,
             expected_rc=1,
             expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
 
         self.run_datamover(
-            "copy_bad_params (UUID source is UNS dest)",
+            self.test_id + " (UUID source is UNS dest)",
             "DAOS_UUID", "/", pool1, cont1,
             "DAOS_UNS", "/", pool1, cont1,
             expected_rc=1,
             expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
 
         self.run_datamover(
-            "copy_bad_params (UNS source is UUID dest)",
+            self.test_id + " (UNS source is UUID dest)",
             "DAOS_UNS", "/", pool1, cont1,
             "DAOS_UUID", "/", pool1, cont1,
             expected_rc=1,
             expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
 
         # (3) Bad parameter: daos-prefix is invalid.
-        # These tests use invalid prefixes.
         self.set_datamover_params(
             "DAOS_UNS", "/", pool1, cont1,
             "POSIX", self.posix_test_paths[0])
         self.dcp_cmd.daos_prefix.update("/fake/prefix")
         self.dcp_cmd.src_path.update("/fake/prefix/dir")
         self.run_datamover(
-            test_desc="copy_bad_params (source prefix is not UNS path)",
+            self.test_id + " (invalid source prefix - not UNS path)",
             expected_rc=1,
             expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
 
@@ -148,7 +139,7 @@ class CopyNegativeTest(DataMoverTestBase):
         self.dcp_cmd.daos_prefix.update("/fake/prefix")
         self.dcp_cmd.dst_path.update("/fake/prefix/dir")
         self.run_datamover(
-            test_desc="copy_bad_params (dest prefix is not UNS path)",
+            self.test_id + " (invalid dest prefix - not UNS path)",
             expected_rc=1,
             expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
 
@@ -157,7 +148,7 @@ class CopyNegativeTest(DataMoverTestBase):
             "POSIX", self.posix_test_paths[0])
         self.dcp_cmd.src_path.update("/fake/fake/fake")
         self.run_datamover(
-            test_desc="copy_bad_params (UNS prefix doesn't match src or dst)",
+            self.test_id + " (invalid prefix - not match source or dest)",
             expected_rc=1,
             expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
 
@@ -167,7 +158,7 @@ class CopyNegativeTest(DataMoverTestBase):
         src_path = "/fake/fake" + str(self.dcp_cmd.daos_prefix.value)
         self.dcp_cmd.src_path.update(src_path)
         self.run_datamover(
-            test_desc="copy_bad_params (src prefix is substring, not prefix)",
+            self.test_id + " (invalid prefix - source substring, not prefix)",
             expected_rc=1,
             expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
 
@@ -177,7 +168,7 @@ class CopyNegativeTest(DataMoverTestBase):
         dst_path = "/fake/fake" + str(self.dcp_cmd.daos_prefix.value)
         self.dcp_cmd.dst_path.update(dst_path)
         self.run_datamover(
-            test_desc="copy_bad_params (dst prefix is substring, not prefix)",
+            self.test_id + " (invalid prefix - dest substring, not prefix)",
             expected_rc=1,
             expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
 
@@ -186,7 +177,7 @@ class CopyNegativeTest(DataMoverTestBase):
             "DAOS_UUID", "/", pool1, cont1)
         self.dcp_cmd.daos_prefix.update(self.posix_test_paths[0])
         self.run_datamover(
-            test_desc="copy_bad_params (prefix is on POSIX src)",
+            self.test_id + " (invalid prefix - on POSIX source)",
             expected_rc=1,
             expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
 
@@ -195,76 +186,71 @@ class CopyNegativeTest(DataMoverTestBase):
             "POSIX", self.posix_test_paths[0])
         self.dcp_cmd.daos_prefix.update(self.posix_test_paths[0])
         self.run_datamover(
-            test_desc="copy_bad_params (prefix is on POSIX dst)",
+            self.test_id + " (invalid prefix - on POSIX dst)",
             expected_rc=1,
             expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
 
         # (4) Bad parameter: UUID, UNS, or POSIX path does not exist.
-        # These tests use parameters that do not exist."""
-        self.set_datamover_params(
-            "DAOS_UUID", "/", pool1, cont1,
-            "POSIX", self.posix_test_paths[0])
-        self.dcp_cmd.daos_src_pool.update(str(self.gen_uuid()))
+        fake_uuid = str(self.gen_uuid())
         self.run_datamover(
-            test_desc="copy_bad_params (src pool uuid does not exist)",
+            self.test_id + " (invalid source pool)",
+            "DAOS_UUID", "/", fake_uuid, cont1,
+            "POSIX", self.posix_test_paths[0],
             expected_rc=1,
-            expected_output=self.MFU_ERR_DAOS)
+            expected_output="DER_NONEXIST")
 
-        self.set_datamover_params(
-            "DAOS_UUID", "/", pool1, cont1,
-            "POSIX", self.posix_test_paths[0])
-        self.dcp_cmd.daos_src_cont.update(str(self.gen_uuid()))
+        fake_uuid = str(self.gen_uuid())
         self.run_datamover(
-            test_desc="copy_bad_params (src cont uuid does not exist)",
+            self.test_id + " (invalid source cont)",
+            "DAOS_UUID", "/", pool1, fake_uuid,
+            "POSIX", self.posix_test_paths[0],
             expected_rc=1,
-            expected_output=self.MFU_ERR_DAOS)
+            expected_output="DER_NONEXIST")
 
-        self.set_datamover_params(
+        fake_uuid = str(self.gen_uuid())
+        self.run_datamover(
+            self.test_id + " (invalid dest pool)",
             "POSIX", self.posix_test_paths[0], None, None,
-            "DAOS_UUID", "/", pool1, cont1)
-        self.dcp_cmd.daos_dst_pool.update(str(self.gen_uuid()))
-        self.run_datamover(
-            test_desc="copy_bad_params (dst pool uuid does not exist)",
+            "DAOS_UUID", "/", fake_uuid, cont1,
             expected_rc=1,
-            expected_output=self.MFU_ERR_DAOS)
+            expected_output="DER_NONEXIST")
 
         self.run_datamover(
-            "copy_bad_params (src cont path does not exist)",
+            self.test_id + " (invalid source cont path)",
             "DAOS_UUID", "/fake/fake", pool1, cont1,
             "POSIX", self.posix_test_paths[0],
             expected_rc=1,
-            expected_output=self.MFU_ERR_INVAL_ARG)
+            expected_output="No such file or directory")
 
         self.run_datamover(
-            "copy_bad_params (dst cont path does not exist)",
+            self.test_id + " (invalid dest cont path)",
             "POSIX", self.posix_test_paths[0], None, None,
             "DAOS_UUID", "/fake/fake", pool1, cont1,
             expected_rc=1,
-            expected_output=self.MFU_ERR_INVAL_ARG)
+            expected_output="No such file or directory")
 
         self.run_datamover(
-            "copy_bad_params (src posix path does not exist)",
+            self.test_id + " (invalid source posix path)",
             "POSIX", "/fake/fake/fake", None, None,
             "DAOS_UUID", "/", pool1, cont1,
             expected_rc=1,
-            expected_output=self.MFU_ERR_INVAL_ARG)
+            expected_output="No such file or directory")
 
         self.run_datamover(
-            "copy_bad_params (dst posix path does not exist)",
+            self.test_id + " (invalid dest posix path)",
             "DAOS_UUID", "/", pool1, cont1,
             "POSIX", "/fake/fake/fake",
-            expected_rc=1,
-            expected_output=self.MFU_ERR_INVAL_ARG)
+            expected_rc=1)
 
     @skipForTicket("DAOS-6871")
-    def test_copy_space_dcp(self):
+    def test_dm_negative_space_dcp(self):
         """Jira ID: DAOS-5515
         Test Description:
             DAOS-5515: destination pool does not have enough space.
             DAOS-6387: posix filesystem does not have enough space.
         :avocado: tags=all,full_regression
         :avocado: tags=datamover,dcp
-        :avocado: tags=copy_negative,copy_space_dcp
+        :avocado: tags=dm_negative,dm_negative_space_dcp
         """
         self.set_tool("DCP")
 
@@ -301,7 +287,7 @@ class CopyNegativeTest(DataMoverTestBase):
             expected_rc=255,
             expected_err=["errno=28"])
 
-    def test_copy_error_check_dcp(self):
+    def test_dm_negative_error_check_dcp(self):
         """Jira ID: DAOS-5515
         Test Description:
             Tests POSIX copy error checking for dcp.
@@ -309,7 +295,7 @@ class CopyNegativeTest(DataMoverTestBase):
                 destination filename is invalid.
         :avocado: tags=all,full_regression
         :avocado: tags=datamover,dcp
-        :avocado: tags=copy_negative,copy_error_check_dcp
+        :avocado: tags=dm_negative,dm_negative_error_check_dcp
         """
         self.set_tool("DCP")
 
@@ -324,7 +310,7 @@ class CopyNegativeTest(DataMoverTestBase):
         # Use a really long filename
         dst_path = join(self.posix_test_paths[0], "d"*300)
         self.run_datamover(
-            "copy_error_check (filename is too long)",
+            self.test_id + " (filename is too long)",
             "DAOS_UUID", "/", pool1, cont1,
             "POSIX", dst_path,
             expected_rc=1,
