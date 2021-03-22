@@ -132,6 +132,7 @@ func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq)
 	if err := convert.Types(req, pbReq); err != nil {
 		return nil, err
 	}
+	pbReq.Sys = req.getSystem()
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).Join(ctx, pbReq)
 	})

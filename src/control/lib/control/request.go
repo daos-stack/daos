@@ -60,6 +60,12 @@ type (
 		getDeadline() time.Time
 	}
 
+	// sysSetter defines an interface to be implemented by
+	// requests that can set the system name Field.
+	sysSetter interface {
+		SetSystem(string)
+	}
+
 	// UnaryRequest defines an interface to be implemented by
 	// unary request types (1 response to 1 request).
 	UnaryRequest interface {
@@ -67,6 +73,7 @@ type (
 		deadliner
 		retryer
 		unaryRPCGetter
+		sysSetter
 	}
 )
 

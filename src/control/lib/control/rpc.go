@@ -404,5 +404,7 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 // items which represent the success or failure of the RPC invocation for each host
 // in the request.
 func (c *Client) InvokeUnaryRPC(ctx context.Context, req UnaryRequest) (*UnaryResponse, error) {
+	req.SetSystem(c.config.SystemName)
+
 	return invokeUnaryRPC(ctx, c.log, c, req, c.config.HostList)
 }

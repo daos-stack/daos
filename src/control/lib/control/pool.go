@@ -280,7 +280,6 @@ type PoolEvictReq struct {
 	msRequest
 	unaryRequest
 	UUID    string
-	Sys     string
 	Handles []string
 }
 
@@ -292,8 +291,8 @@ func PoolEvict(ctx context.Context, rpcClient UnaryInvoker, req *PoolEvictReq) e
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolEvict(ctx, &mgmtpb.PoolEvictReq{
-			Uuid:    req.UUID,
 			Sys:     req.getSystem(),
+			Uuid:    req.UUID,
 			Handles: req.Handles,
 		})
 	})
