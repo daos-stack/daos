@@ -35,7 +35,6 @@ class OSAOfflineReintegration(OSAUtils):
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
         self.dmg_command.exit_status_exception = True
-        self.pool_cont_dict = {}
 
     def run_offline_reintegration_test(self, num_pool, data=False,
                                        server_boot=False, oclass=None):
