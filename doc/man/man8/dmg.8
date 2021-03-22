@@ -1,4 +1,4 @@
-.TH dmg 1 "9 March 2021"
+.TH dmg 1 "18 March 2021"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -606,6 +606,33 @@ Install directory for telemetry binary
 .TP
 \fB\fB\-s\fR, \fB\-\-system\fR <default: \fI"prometheus"\fR>\fP
 Telemetry system to configure
+.SS telemetry metrics
+Interact with metrics
+.SS telemetry metrics list
+List available metrics on a DAOS storage node
+
+\fBUsage\fP: metrics list [list-OPTIONS]
+.TP
+.TP
+\fB\fB\-s\fR, \fB\-\-host\fR <default: \fI"localhost"\fR>\fP
+DAOS server host to query
+.TP
+\fB\fB\-p\fR, \fB\-\-port\fR <default: \fI"9191"\fR>\fP
+Telemetry port on the host
+.SS telemetry metrics query
+Query metrics on a DAOS storage node
+
+\fBUsage\fP: metrics query [query-OPTIONS]
+.TP
+.TP
+\fB\fB\-s\fR, \fB\-\-host\fR <default: \fI"localhost"\fR>\fP
+DAOS server host to query
+.TP
+\fB\fB\-p\fR, \fB\-\-port\fR <default: \fI"9191"\fR>\fP
+Telemetry port on the host
+.TP
+\fB\fB\-m\fR, \fB\-\-metrics\fR <default: \fI""\fR>\fP
+Comma-separated list of metric names
 .SS telemetry run
 Launch telemetry system
 

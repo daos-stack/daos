@@ -7,7 +7,7 @@
 
 
 import uuid
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from pydaos.raw import DaosApiError, c_uuid_to_str
 from command_utils_base import CommandFailure
 from test_utils_pool import TestPool
@@ -89,9 +89,12 @@ class EvictTests(TestWithServers):
             "Pool UUID: %s\n Pool handle: %s\n Server group: %s\n",
             self.pool.uuid, self.pool.pool.handle.value, self.pool.name)
 
+        server_name = None
+
         if test_param == "BAD_SERVER_NAME":
             # Attempt to evict pool with invalid server group name
             # set the server group name directly
+            server_name = test_param
             self.pool.pool.group = create_string_buffer(test_param)
             self.log.info(
                 "Evicting pool with invalid Server Group Name: %s", test_param)
@@ -110,7 +113,8 @@ class EvictTests(TestWithServers):
             self.fail("Invalid yaml parameters - check \"params\" values")
         try:
             # call dmg pool_evict directly
-            self.pool.dmg.pool_evict(pool=self.pool.pool.get_uuid_str())
+            self.pool.dmg.pool_evict(pool=self.pool.pool.get_uuid_str(),
+	    	                               sys=server_name)
         # exception is expected
         except CommandFailure as result:
             self.log.info("Expected exception - invalid param %s\n %s\n",
@@ -244,7 +248,6 @@ class EvictTests(TestWithServers):
                             count+1, pool[count].uuid, c_uuid_to_str(
                                 pool_info.pi_uuid)))
 
-    @skipForTicket("DAOS-5545")
     def test_evict_bad_server_name(self):
         """
         Test evicting a pool using an invalid server group name.
