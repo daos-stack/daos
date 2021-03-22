@@ -18,13 +18,7 @@ from job_manager_utils import Mpirun
 from write_host_file import write_host_file
 from command_utils import CommandFailure
 from mpio_utils import MpioUtils
-
-try:
-    # python 3.x
-    import queue as queue
-except ImportError:
-    # python 2.7
-    import Queue as queue
+import queue
 
 
 class NvmePoolExclude(TestWithServers):
@@ -37,7 +31,7 @@ class NvmePoolExclude(TestWithServers):
     """
     def setUp(self):
         """Set up for test case."""
-        super(NvmePoolExclude, self).setUp()
+        super().setUp()
         self.dmg_command = self.get_dmg_command()
         self.ior_w_flags = self.params.get("write_flags", '/run/ior/iorflags/*')
         self.ior_r_flags = self.params.get("read_flags", '/run/ior/iorflags/*')
@@ -64,7 +58,7 @@ class NvmePoolExclude(TestWithServers):
 
         """
         data = self.dmg_command.pool_query(self.pool.uuid)
-        return data["rebuild"]["status"]
+        return data["response"]["rebuild"]["status"]
 
     @fail_on(CommandFailure)
     def get_pool_version(self):
@@ -75,7 +69,7 @@ class NvmePoolExclude(TestWithServers):
 
         """
         data = self.dmg_command.pool_query(self.pool.uuid)
-        return int(data["version"])
+        return int(data["response"]["version"])
 
     def ior_thread(self, pool, oclass, api, test, flags, results):
         """This method calls job manager for IOR command

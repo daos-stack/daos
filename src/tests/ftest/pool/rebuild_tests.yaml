@@ -8,7 +8,7 @@ hosts:
     - server-D
     - server-E
     - server-F
-timeout: 1200
+timeout: 600
 server_config:
   name: daos_server
   servers:
@@ -18,6 +18,7 @@ pool:
   name: daos_server
   scm_size: 1073741824
   control_method: dmg
+  pool_query_timeout: 30
 container:
   akey_size: 5
   dkey_size: 5
@@ -47,5 +48,5 @@ testparams:
     rank3:
       rank: 3
   quantity: 2
-  object_class: DAOS_OC_R3_RW
+  object_class: OC_RP_3G1
 

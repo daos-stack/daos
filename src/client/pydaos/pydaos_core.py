@@ -25,7 +25,7 @@ from . import DaosClient
 # Import Object class as an enumeration
 ObjClassID = enum.Enum(
     "Enumeration of the DAOS object classes (OC).",
-    {key: value for key, value in pydaos_shim.__dict__.items()
+    {key: value for key, value in list(pydaos_shim.__dict__.items())
      if key.startswith("OC_")})
 
 class KvNotFound(Exception):
@@ -38,7 +38,8 @@ class KvNotFound(Exception):
     def __str__(self):
         return "Failed to create '{}'".format(self.name)
 
-class ObjID(object):
+class ObjID():
+    # pylint: disable=too-few-public-methods
     """
     Class representing of DAOS 128-bit object identifier
 
@@ -61,7 +62,7 @@ class ObjID(object):
     def __str__(self):
         return "[" + hex(self.hi) + ":" + hex(self.lo) + "]"
 
-class Cont(object):
+class Cont():
     """
     Class representing of DAOS Container
     Can be identified via a path or a combination of pool UUID and container
@@ -181,7 +182,7 @@ class Cont(object):
     def __str__(self):
         return '{}@{}'.format(self.cuuid, self.puuid)
 
-class _Obj(object):
+class _Obj():
     oh = None
 
     def __init__(self, coh, oid, cont):
@@ -193,8 +194,8 @@ class _Obj(object):
         # keep container around until all objects are gone
         self.cont = cont
         # Open to the object
-        (ret, oh) = pydaos_shim.kv_open(DAOS_MAGIC, coh, self.oid.hi,
-                                         self.oid.lo, 0)
+        (ret, oh) = pydaos_shim.kv_open(
+            DAOS_MAGIC, coh, self.oid.hi, self.oid.lo, 0)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to open object", ret)
         self.oh = oh
@@ -351,7 +352,7 @@ class KVObj(_Obj):
             raise PyDError("failed to store KV value", ret)
 
     def dump(self):
-        """Fetch all the key-value pairs and return them in a python dictionary."""
+        """Fetch all the key-value pairs, return them in a python dictionary."""
         # leverage python iterator, see __iter__/__next__ below
         # could be optimized over the C library in the future
         d = {}

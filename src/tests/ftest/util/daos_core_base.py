@@ -25,7 +25,7 @@ class DaosCoreBase(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize the DaosCoreBase object."""
-        super(DaosCoreBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.subtest_name = None
 
     def setUp(self):
@@ -36,7 +36,7 @@ class DaosCoreBase(TestWithServers):
         # obtain separate logs
         self.update_log_file_names(self.subtest_name)
 
-        super(DaosCoreBase, self).setUp()
+        super().setUp()
 
         # if no client specified update self.hostlist_clients to local host
         # and create a new self.hostfile_clients.
@@ -88,11 +88,11 @@ class DaosCoreBase(TestWithServers):
                     engine_params.set_value("crt_ctx_share_addr", 1)
                     engine_params.set_value(
                         "env_vars",
-                        ["=".join(items) for items in env_dict.items()]
+                        ["=".join(items) for items in list(env_dict.items())]
                     )
 
         # Start the servers
-        super(DaosCoreBase, self).start_server_managers()
+        super().start_server_managers()
 
     def run_subtest(self):
         """Run daos_test with a subtest argument."""
@@ -185,6 +185,7 @@ class DaosCoreBase(TestWithServers):
 <![CDATA[{2}]]>
     </system-err>
   </testcase>
-</testsuite>'''.format(testname, result.result.stdout, result.result.stderr))
+</testsuite>'''.format(
+    testname, result.result.stdout_text, result.result.stderr_text))
         except IOError as error:
             self.log.error("Error creating %s: %s", filename, error)
