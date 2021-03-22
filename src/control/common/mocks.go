@@ -9,6 +9,7 @@ package common
 import (
 	"fmt"
 	"net"
+	"strings"
 )
 
 var hostAddrs = make(map[int32]*net.TCPAddr)
@@ -63,4 +64,23 @@ func MockPCIAddrs(num int) (addrs []string) {
 	}
 
 	return
+}
+
+// MockWriter is a mock io.Writer that can be used to inject errors and check
+// values written.
+type MockWriter struct {
+	builder  strings.Builder
+	WriteErr error
+}
+
+func (w *MockWriter) Write(p []byte) (int, error) {
+	if w.WriteErr != nil {
+		return 0, w.WriteErr
+	}
+	return w.builder.Write(p)
+}
+
+// GetWritten gets the string value written using Write.
+func (w *MockWriter) GetWritten() string {
+	return w.builder.String()
 }
