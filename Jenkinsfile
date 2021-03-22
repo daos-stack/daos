@@ -1361,6 +1361,48 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
+                stage('Test CentOS 7 RPMs') {
+                    when {
+                        beforeAgent true
+                        expression { ! skip_test_rpms_centos7() }
+                    }
+                    agent {
+                        label 'ci_vm1'
+                    }
+                    steps {
+                        testRpm inst_repos: daos_repos(),
+                                daos_pkg_version: daos_packages_version()
+                   }
+                } // stage('Test CentOS 7 RPMs')
+                stage('Scan CentOS 7 RPMs') {
+                    when {
+                        beforeAgent true
+                        expression { ! skip_scan_rpms_centos7() }
+                    }
+                    agent {
+                        label 'ci_vm1'
+                    }
+                    steps {
+                        scanRpms inst_repos: daos_repos(),
+                                 daos_pkg_version: daos_packages_version(),
+                                 inst_rpms: 'clamav clamav-devel',
+                                 test_script: 'ci/rpm/scan_daos.sh',
+                                 junit_files: 'maldetect.xml'
+                    }
+                    post {
+                        always {
+                            junit 'maldetect.xml'
+                        }
+                    }
+                } // stage('Scan CentOS 7 RPMs')
+            } // parallel
+        } // stage('Test')
+        stage('Test Hardware') {
+            when {
+                beforeAgent true
+                expression { ! skip_testing_stage() }
+            }
+            parallel {
                 stage('Functional_Hardware_Small') {
                     when {
                         beforeAgent true
@@ -1424,42 +1466,8 @@ pipeline {
                         }
                     }
                 } // stage('Functional_Hardware_Large')
-                stage('Test CentOS 7 RPMs') {
-                    when {
-                        beforeAgent true
-                        expression { ! skip_test_rpms_centos7() }
-                    }
-                    agent {
-                        label 'ci_vm1'
-                    }
-                    steps {
-                        testRpm inst_repos: daos_repos(),
-                                daos_pkg_version: daos_packages_version()
-                   }
-                } // stage('Test CentOS 7 RPMs')
-                stage('Scan CentOS 7 RPMs') {
-                    when {
-                        beforeAgent true
-                        expression { ! skip_scan_rpms_centos7() }
-                    }
-                    agent {
-                        label 'ci_vm1'
-                    }
-                    steps {
-                        scanRpms inst_repos: daos_repos(),
-                                 daos_pkg_version: daos_packages_version(),
-                                 inst_rpms: 'clamav clamav-devel',
-                                 test_script: 'ci/rpm/scan_daos.sh',
-                                 junit_files: 'maldetect.xml'
-                    }
-                    post {
-                        always {
-                            junit 'maldetect.xml'
-                        }
-                    }
-                } // stage('Scan CentOS 7 RPMs')
             } // parallel
-        } // stage('Test')
+        } // stage('Test Hardware')
         stage ('Test Report') {
             parallel {
                 stage('Bullseye Report') {
