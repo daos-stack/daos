@@ -1275,8 +1275,7 @@ d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
 			goto out;
 		}
 		rc = d_tm_add_metric(&node, D_TM_TIMER_SNAPSHOT | clk_id,
-				     d_tm_clock_string(clk_id),
-				     D_TM_MICROSECOND, path);
+				     d_tm_clock_string(clk_id), NULL, path);
 		if (rc != DER_SUCCESS) {
 			D_ERROR("Failed to add and record high resolution timer"
 				" [%s]: " DF_RC "\n", path, DP_RC(rc));
@@ -1383,8 +1382,7 @@ d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
 			goto out;
 		}
 		rc = d_tm_add_metric(&node, D_TM_DURATION | clk_id,
-				     d_tm_clock_string(clk_id),
-				     D_TM_MICROSECOND, path);
+				     d_tm_clock_string(clk_id), NULL, path);
 		if (rc != DER_SUCCESS) {
 			D_ERROR("Failed to add and mark duration start [%s]: "
 				DF_RC "\n", path, DP_RC(rc));
@@ -1936,6 +1934,7 @@ int d_tm_add_metric(struct d_tm_node_t **node, int metric_type, char *desc,
 	char			path[D_TM_MAX_NAME_LEN] = {};
 	char			*token;
 	char			*rest;
+	char			*unit_string;
 	int			buff_len;
 	int			rc;
 	int			ret;
@@ -1949,23 +1948,6 @@ int d_tm_add_metric(struct d_tm_node_t **node, int metric_type, char *desc,
 
 	if (fmt == NULL)
 		return -DER_INVAL;
-
-	if (units != NULL) {
-		switch (metric_type & D_TM_ALL_NODES) {
-		case D_TM_TIMESTAMP:
-			return -DER_INVAL;
-		case D_TM_TIMER_SNAPSHOT:
-			if ((strncmp(units, D_TM_MICROSECOND,
-				     D_TM_MAX_UNIT_LEN)) != 0)
-				return -DER_INVAL;
-		case D_TM_DURATION:
-			if ((strncmp(units, D_TM_MICROSECOND,
-				     D_TM_MAX_UNIT_LEN)) != 0)
-				return -DER_INVAL;
-		default:
-			break;
-		}
-	}
 
 	rc = D_MUTEX_LOCK(&d_tm_add_lock);
 	if (rc != 0) {
@@ -2052,9 +2034,29 @@ int d_tm_add_metric(struct d_tm_node_t **node, int metric_type, char *desc,
 		temp->dtn_metric->dtm_desc = NULL;
 	}
 
+	unit_string = units;
+
+	switch (metric_type & D_TM_ALL_NODES) {
+	case D_TM_TIMESTAMP:
+		/** Prohibit units for timestamp */
+		unit_string = NULL;
+		break;
+	case D_TM_TIMER_SNAPSHOT:
+		/** Always use D_TM_MICROSECOND for timer snapshot */
+		unit_string = D_TM_MICROSECOND;
+		break;
+	case D_TM_DURATION:
+		/** Always use D_TM_MICROSECOND for duration */
+		unit_string = D_TM_MICROSECOND;
+		break;
+	default:
+		break;
+	}
+
 	buff_len = 0;
-	if (units != NULL)
-		buff_len = strnlen(units, D_TM_MAX_UNIT_LEN);
+	if (unit_string != NULL)
+		buff_len = strnlen(unit_string, D_TM_MAX_UNIT_LEN);
+
 	if (buff_len == D_TM_MAX_UNIT_LEN) {
 		rc = -DER_EXCEEDS_PATH_LEN;
 		goto failure;
@@ -2067,7 +2069,7 @@ int d_tm_add_metric(struct d_tm_node_t **node, int metric_type, char *desc,
 			rc = -DER_NO_SHMEM;
 			goto failure;
 		}
-		strncpy(temp->dtn_metric->dtm_units, units, buff_len);
+		strncpy(temp->dtn_metric->dtm_units, unit_string, buff_len);
 	} else {
 		temp->dtn_metric->dtm_units = NULL;
 	}

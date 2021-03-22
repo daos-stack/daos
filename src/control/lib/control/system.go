@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"log/syslog"
 	"net"
 	"strings"
 	"time"
@@ -283,26 +284,36 @@ func (el *EventLogger) OnEvent(_ context.Context, evt *events.RASEvent) {
 
 	out := evt.PrintRAS()
 	el.log.Info(out)
-	el.sysloggers[evt.Severity].Print(out)
+	if sl := el.sysloggers[evt.Severity]; sl != nil {
+		sl.Print(out)
+	}
 }
 
-func getSyslogger(sev events.RASSeverityID) *log.Logger {
-	return logging.MustCreateSyslogger(sev.SyslogPriority(), log.LstdFlags)
-}
+type newSysloggerFn func(syslog.Priority, int) (*log.Logger, error)
 
 // newEventLogger returns an initialized EventLogger using the provided function
 // to populate syslog endpoints which map to event severity identifiers.
-func newEventLogger(logBasic logging.Logger, getSyslogger func(events.RASSeverityID) *log.Logger) *EventLogger {
+func newEventLogger(logBasic logging.Logger, newSyslogger newSysloggerFn) *EventLogger {
 	el := &EventLogger{
 		log:        logBasic,
 		sysloggers: make(map[events.RASSeverityID]*log.Logger),
 	}
 
-	el.sysloggers[events.RASSeverityUnknown] = getSyslogger(events.RASSeverityUnknown)
-	el.sysloggers[events.RASSeverityFatal] = getSyslogger(events.RASSeverityFatal)
-	el.sysloggers[events.RASSeverityError] = getSyslogger(events.RASSeverityError)
-	el.sysloggers[events.RASSeverityWarn] = getSyslogger(events.RASSeverityWarn)
-	el.sysloggers[events.RASSeverityInfo] = getSyslogger(events.RASSeverityInfo)
+	for _, sev := range []events.RASSeverityID{
+		events.RASSeverityUnknown,
+		events.RASSeverityFatal,
+		events.RASSeverityError,
+		events.RASSeverityWarn,
+		events.RASSeverityInfo,
+	} {
+		sl, err := newSyslogger(sev.SyslogPriority(), log.LstdFlags)
+		if err != nil {
+			logBasic.Errorf("failed to create syslogger with priority %s: %s",
+				sev.SyslogPriority(), err)
+			continue
+		}
+		el.sysloggers[sev] = sl
+	}
 
 	return el
 }
@@ -310,7 +321,7 @@ func newEventLogger(logBasic logging.Logger, getSyslogger func(events.RASSeverit
 // NewEventLogger returns an initialized EventLogger capable of writing to the
 // supplied logger in addition to syslog.
 func NewEventLogger(log logging.Logger) *EventLogger {
-	return newEventLogger(log, getSyslogger)
+	return newEventLogger(log, syslog.NewLogger)
 }
 
 // SystemQueryReq contains the inputs for the system query request.

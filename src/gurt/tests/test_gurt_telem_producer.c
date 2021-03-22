@@ -482,31 +482,9 @@ test_gauge_with_histogram_multiplier_2(void **state)
 static void
 test_units(void **state)
 {
-	static struct d_tm_node_t	*duration;
-	static struct d_tm_node_t	*snapshot;
-	static struct d_tm_node_t	*timestamp;
 	static struct d_tm_node_t	*counter;
 	static struct d_tm_node_t	*gauge;
-
 	int				rc;
-
-	rc = d_tm_add_metric(&duration, D_TM_DURATION | D_TM_CLOCK_REALTIME,
-			     D_TM_CLOCK_REALTIME_STR, D_TM_KIBIBYTE,
-			     "gurt/tests/telem/invalid units");
-	assert_rc_equal(rc, -DER_INVAL);
-
-	rc = d_tm_add_metric(&snapshot, D_TM_TIMER_SNAPSHOT |
-			     D_TM_CLOCK_THREAD_CPUTIME,
-			     D_TM_CLOCK_THREAD_CPUTIME_STR,
-			     D_TM_TERABIT_PER_SECOND,
-			     "gurt/tests/telem/invalid units");
-	assert_rc_equal(rc, -DER_INVAL);
-
-
-	rc = d_tm_add_metric(&timestamp, D_TM_TIMESTAMP, NULL,
-			     D_TM_TERABIT_PER_SECOND,
-			     "gurt/tests/telem/invalid units");
-	assert_rc_equal(rc, -DER_INVAL);
 
 	rc = d_tm_add_metric(&counter, D_TM_COUNTER, NULL, D_TM_KIBIBYTE,
 			     "gurt/tests/telem/kibibyte-counter");
@@ -515,7 +493,6 @@ test_units(void **state)
 	rc = d_tm_add_metric(&gauge, D_TM_GAUGE, NULL, D_TM_GIGIBYTE_PER_SECOND,
 			     "gurt/tests/telem/gigibyte-per-second-gauge");
 	assert_rc_equal(rc, DER_SUCCESS);
-
 }
 
 
