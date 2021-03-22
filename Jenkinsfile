@@ -146,7 +146,7 @@ String unit_packages() {
                            'fuse3-libs fuse3 ' +
                            'boost-python36-devel ' +
                            'libisa-l-devel libpmem ' +
-                           'libpmemobj protobuf-c protobuf-c-devel ' +
+                           'libpmemobj protobuf-c ' +
                            'spdk-devel libfabric-devel ' +
                            'pmix numactl-devel ' +
                            'libipmctl-devel python36-pyxattr ' +
@@ -250,7 +250,8 @@ String functional_packages(String distro) {
                   "hdf5-vol-daos-openmpi3-tests " +
                   "MACSio-mpich " +
                   "MACSio-openmpi3 " +
-                  "mpifileutils-mpich-daos-1 "
+                  "mpifileutils-mpich-daos-1 " +
+                  "protobuf-c protobuf-c-devel "
     if (distro.startsWith('leap15')) {
         return daos_pkgs + pkgs
     } else if (distro.startsWith('el7') || distro.startsWith('centos7')) {
