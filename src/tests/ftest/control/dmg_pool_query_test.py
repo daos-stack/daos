@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 from apricot import skipForTicket
 from ior_test_base import IorTestBase
@@ -14,14 +14,18 @@ from general_utils import human_to_bytes
 
 
 class DmgPoolQueryTest(ControlTestBase, IorTestBase):
-    """Test Class Description:
-    Simple test to verify the pool query command of dmg tool.
+    # pylint: disable=too-many-ancestors
+    """Test dmg query command.
+
+    Test Class Description:
+        Simple test to verify the pool query command of dmg tool.
+
     :avocado: recursive
     """
-    # pylint: disable=too-many-ancestors
+
     def setUp(self):
         """Set up for dmg pool query."""
-        super(DmgPoolQueryTest, self).setUp()
+        super().setUp()
 
         # Init the pool
         self.pool = TestPool(self.context, self.dmg)
