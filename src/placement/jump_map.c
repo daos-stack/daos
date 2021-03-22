@@ -61,35 +61,6 @@ struct pl_jump_map {
 };
 
 /**
- * Jump Consistent Hash Algorithm that provides a bucket location
- * for the given key. This algorithm hashes a minimal (1/n) number
- * of keys to a new bucket when extending the number of buckets.
- *
- * \param[in]   key             A unique key representing the object that
- *                              will be placed in the bucket.
- * \param[in]   num_buckets     The total number of buckets the hashing
- *                              algorithm can choose from.
- *
- * \return                      Returns an index ranging from 0 to
- *                              num_buckets representing the bucket
- *                              the given key hashes to.
- */
-static inline uint32_t
-jump_consistent_hash(uint64_t key, uint32_t num_buckets)
-{
-	int64_t z = -1;
-	int64_t y = 0;
-
-	while (y < num_buckets) {
-		z = y;
-		key = key * 2862933555777941757ULL + 1;
-		y = (z + 1) * ((double)(1LL << 31) /
-			       ((double)((key >> 33) + 1)));
-	}
-	return z;
-}
-
-/**
  * This functions determines whether the object layout should be extended or
  * not based on the operation performed and the target status.
  *
@@ -219,35 +190,6 @@ jm_obj_placement_get(struct pl_jump_map *jmap, struct daos_obj_md *md,
 		DP_OID(oid), jmop->jmop_grp_size, jmop->jmop_grp_nr);
 
 	return 0;
-}
-
-/**
- * Given a @jmop and target determine if there exists a spare target
- * that satisfies the layout requirements. This will return false if
- * there are no available domains of type jmp_domain_nr left.
- *
- * \param[in] jmap      The currently used placement map.
- * \param[in] jmop      Struct containing layout group size and number.
- *
- * \return              True if there exists a spare, false otherwise.
- */
-static bool
-jump_map_has_next_spare(struct pl_jump_map *jmap, struct jm_obj_placement *jmop,
-		uint32_t spares_left, enum PL_OP_TYPE op,
-		enum pool_comp_state state)
-{
-	D_ASSERTF(jmop->jmop_grp_size <= jmap->jmp_domain_nr,
-		  "grp_size: %u > domain_nr: %u\n",
-		  jmop->jmop_grp_size, jmap->jmp_domain_nr);
-
-	if ((jmop->jmop_grp_size == jmap->jmp_domain_nr &&
-	    jmop->jmop_grp_size > 1))
-		return false;
-
-	if (spares_left == 0)
-		return false;
-
-	return true;
 }
 
 /**
@@ -381,10 +323,8 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 			 * not work
 			 */
 			obj_key = crc(obj_key, fail_num++);
-
 			/* Get target for shard */
-			selected_dom = jump_consistent_hash(obj_key, num_doms);
-
+			selected_dom = d_hash_jump(obj_key, num_doms);
 			do {
 				selected_dom = selected_dom % num_doms;
 				/* Retrieve actual target using index */
@@ -454,8 +394,7 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 			 * not been used is found
 			 */
 			do {
-				selected_dom = jump_consistent_hash(key,
-								    num_doms);
+				selected_dom = d_hash_jump(key, num_doms);
 				key = crc(key, fail_num++);
 			} while (isset(dom_used, start_dom + selected_dom));
 
@@ -552,8 +491,16 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 		l_shard = &layout->ol_shards[f_shard->fs_shard_idx];
 		D_DEBUG(DB_PL, "Attempting to remap failed shard: "
 			DF_FAILEDSHARD"\n", DP_FAILEDSHARD(*f_shard));
-		spare_avail = jump_map_has_next_spare(jmap, jmop, spares_left,
-				op_type, f_shard->fs_status);
+
+		/*
+		 * If there are any targets left, there are potentially valid
+		 * spares. Don't be picky here about refusing to accept a
+		 * potential spare because of doubling up in the same fault
+		 * domain - if this is the case, fault tolerance is already at
+		 * risk because of failures up to this point. Rebuilding data
+		 * on a non-redundant other fault domain won't make this worse.
+		 */
+		spare_avail = spares_left > 0;
 		if (spare_avail) {
 			rebuild_key = crc(key, f_shard->fs_shard_idx);
 			get_target(root, &spare_tgt, crc(key, rebuild_key),

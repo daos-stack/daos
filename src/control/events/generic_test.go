@@ -14,14 +14,8 @@ import (
 )
 
 func mockGenericEvent() *RASEvent {
-	return New(&RASEvent{
-		ID:           math.MaxInt32 - 1,
-		Type:         RASTypeInfoOnly,
-		Severity:     RASSeverityError,
-		Msg:          "DAOS generic test event",
-		Rank:         1,
-		ExtendedInfo: NewStrInfo(`{"people":["bill","steve","bob"]}`),
-	})
+	return NewGenericEvent(RASID(math.MaxInt32-1), RASSeverityError,
+		"DAOS generic test event", `{"people":["bill","steve","bob"]}`)
 }
 
 func TestEvents_ConvertGeneric(t *testing.T) {

@@ -319,7 +319,8 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	/* Ranks to allocate targets (in) & svc for pool replicas (out). */
 	rc = ds_mgmt_create_pool(pool_uuid, req->sys, "pmem", targets,
 				 req->scmbytes, req->nvmebytes,
-				 prop, req->numsvcreps, &svc);
+				 prop, req->numsvcreps, &svc,
+				 req->n_faultdomains, req->faultdomains);
 	if (targets != NULL)
 		d_rank_list_free(targets);
 	if (rc != 0) {
@@ -354,7 +355,6 @@ out:
 
 	daos_prop_free(prop);
 
-	/** check for '\0' which is a static allocation from protobuf */
 	D_FREE(resp.svc_reps);
 }
 
@@ -687,7 +687,8 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out_list, rc = -DER_NOMEM);
 
 	rc = ds_mgmt_pool_extend(uuid, svc_ranks, rank_list, "pmem",
-				 req->scmbytes, req->nvmebytes);
+				 req->scmbytes, req->nvmebytes,
+				 req->n_faultdomains, req->faultdomains);
 
 	if (rc != 0)
 		D_ERROR("Failed to extend pool %s: "DF_RC"\n", req->uuid,
@@ -1387,10 +1388,10 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	/* Populate the response */
 	resp.uuid = req->uuid;
-	resp.totaltargets = pool_info.pi_ntargets;
-	resp.disabledtargets = pool_info.pi_ndisabled;
-	resp.activetargets = pool_info.pi_space.ps_ntargets;
-	resp.totalnodes = pool_info.pi_nnodes;
+	resp.total_targets = pool_info.pi_ntargets;
+	resp.disabled_targets = pool_info.pi_ndisabled;
+	resp.active_targets = pool_info.pi_space.ps_ntargets;
+	resp.total_nodes = pool_info.pi_nnodes;
 	resp.leader = pool_info.pi_leader;
 	resp.version = pool_info.pi_map_ver;
 

@@ -2769,6 +2769,9 @@ dm_connect(bool is_posix_copy,
 		if (rc == -DER_NONEXIST) {
 			if (ca->cont_layout == DAOS_PROP_CO_LAYOUT_POSIX) {
 				attr.da_props = props;
+				attr.da_id = 0;
+				attr.da_oclass_id = OC_UNKNOWN;
+				attr.da_chunk_size = 0;
 				rc = dfs_cont_create(ca->dst_poh,
 						     ca->dst_c_uuid,
 						     &attr, NULL, NULL);
@@ -3095,11 +3098,11 @@ cont_clone_recx_single(daos_key_t *dkey,
 	/* if iod_type is single value just fetch iod size from source
 	 * and update in destination object
 	 */
-	int		buf_len = (int)(*iod).iod_size;
+	daos_size_t	buf_len = (*iod).iod_size;
 	char		buf[buf_len];
 	d_sg_list_t	sgl;
 	d_iov_t		iov;
-	int		    rc;
+	int		rc;
 
 	/* set sgl values */
 	sgl.sg_nr     = 1;
@@ -3110,13 +3113,15 @@ cont_clone_recx_single(daos_key_t *dkey,
 	rc = daos_obj_fetch(*src_oh, DAOS_TX_NONE, 0, dkey, 1, iod, &sgl,
 			    NULL, NULL);
 	if (rc != 0) {
-		fprintf(stderr, "failed to fetch source value: %d\n", rc);
+		fprintf(stderr, "failed to fetch source value: "
+			DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 	rc = daos_obj_update(*dst_oh, DAOS_TX_NONE, 0, dkey, 1, iod,
 			     &sgl, NULL);
 	if (rc != 0) {
-		fprintf(stderr, "failed to update destination value: %d\n", rc);
+		fprintf(stderr, "failed to update destination value: "
+			DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 out:
@@ -3132,15 +3137,17 @@ cont_clone_recx_array(daos_key_t *dkey,
 {
 	int			rc = 0;
 	int			i = 0;
-	int			k = 0;
-	uint64_t		buf_len = 0;
+	daos_size_t		buf_len = 0;
+	daos_size_t		buf_len_alloc = 0;
 	uint32_t		number = 5;
 	daos_anchor_t		recx_anchor = {0};
 	d_sg_list_t		sgl;
+	d_iov_t			iov;
 	daos_epoch_range_t	eprs[5];
 	daos_recx_t		recxs[5];
 	daos_size_t		size;
-	char			**buf = NULL;
+	char			*buf = NULL;
+	char			*prev_buf = NULL;
 
 	while (!daos_anchor_is_eof(&recx_anchor)) {
 		/* list all recx for this dkey/akey */
@@ -3150,20 +3157,14 @@ cont_clone_recx_array(daos_key_t *dkey,
 					eprs, &recx_anchor,
 					true, NULL);
 		if (rc != 0) {
-			fprintf(stderr, "failed to list recx: %d\n", rc);
+			fprintf(stderr, "failed to list recx: "
+				DF_RC"\n", DP_RC(rc));
 			D_GOTO(out, rc);
 		}
 
 		/* if no recx is returned for this dkey/akey move on */
 		if (number == 0)
 			continue;
-
-		D_ALLOC(buf, number);
-		if (buf == NULL) {
-			D_GOTO(out, rc = -DER_NOMEM);
-		}
-
-		d_iov_t	iov[number];
 
 		/* set iod values */
 		(*iod).iod_type  = DAOS_IOD_ARRAY;
@@ -3173,33 +3174,37 @@ cont_clone_recx_array(daos_key_t *dkey,
 
 		/* set sgl values */
 		sgl.sg_nr_out = 0;
-		sgl.sg_iovs   = iov;
-		sgl.sg_nr     = number;
+		sgl.sg_iovs   = &iov;
+		sgl.sg_nr     = 1;
 
+		/* allocate/reallocate a single buffer */
+		buf_len = 0;
+		prev_buf = buf;
 		for (i = 0; i < number; i++) {
-			buf_len = recxs[i].rx_nr * size;
-			D_ALLOC(buf[i], buf_len);
-			if (buf[i] == NULL) {
-				/* free any other buf[i] that
-				 * was previously allocated
-				 * on error
-				 */
-				for (k = 0; k < i; k++) {
-					D_FREE(buf[k]);
-				}
-				D_FREE(buf);
-				D_GOTO(out, rc = -DER_NOMEM);
-			}
-			d_iov_set(&iov[i], buf[i], buf_len);
+			buf_len += recxs[i].rx_nr;
 		}
+		buf_len *= size;
+		if (buf_len > buf_len_alloc) {
+			D_REALLOC(buf, prev_buf, buf_len);
+			if (buf == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			buf_len_alloc = buf_len;
+		}
+		d_iov_set(&iov, buf, buf_len);
 
 		/* fetch recx values from source */
 		rc = daos_obj_fetch(*src_oh, DAOS_TX_NONE, 0, dkey,
 				    1, iod, &sgl, NULL, NULL);
 		if (rc != 0) {
-			fprintf(stderr, "failed to fetch source "
-				"recx: %d\n", rc);
-			D_GOTO(err_out, rc);
+			fprintf(stderr, "failed to fetch source recx: "
+				DF_RC"\n", DP_RC(rc));
+			D_GOTO(out, rc);
+		}
+
+		/* Sanity check that fetch returns as expected */
+		if (sgl.sg_nr_out != 1) {
+			fprintf(stderr, "failed to fetch source recx\n");
+			D_GOTO(out, rc = -DER_INVAL);
 		}
 
 		/* update fetched recx values and place in
@@ -3208,22 +3213,14 @@ cont_clone_recx_array(daos_key_t *dkey,
 		rc = daos_obj_update(*dst_oh, DAOS_TX_NONE, 0, dkey,
 				     1, iod, &sgl, NULL);
 		if (rc != 0) {
-			fprintf(stderr, "failed to update destination "
-				"recx: %d\n", rc);
-			D_GOTO(err_out, rc);
+			fprintf(stderr, "failed to update destination recx: "
+				DF_RC"\n", DP_RC(rc));
+			D_GOTO(out, rc);
 		}
-		for (i = 0; i < number; i++) {
-			D_FREE(buf[i]);
-		}
-		D_FREE(buf);
 	}
-	D_GOTO(out, rc);
-err_out:
-	for (i = 0; i < number; i++) {
-		D_FREE(buf[i]);
-	}
-	D_FREE(buf);
+
 out:
+	D_FREE(buf);
 	return rc;
 }
 
@@ -3309,12 +3306,11 @@ cont_clone_list_akeys(daos_handle_t *src_oh,
 			d_iov_set(&aiov, (void *)akey, akey_kds[j].kd_key_len);
 
 			/* set iod values */
-			iod.iod_nr   = 1;
-			iod.iod_type = DAOS_IOD_SINGLE;
-			iod.iod_size = DAOS_REC_ANY;
+			iod.iod_nr    = 1;
+			iod.iod_type  = DAOS_IOD_SINGLE;
+			iod.iod_size  = DAOS_REC_ANY;
 			iod.iod_recxs = NULL;
-
-			d_iov_set(&iod.iod_name, (void *)akey, strlen(akey));
+			iod.iod_name  = aiov;
 
 			/* do fetch with sgl == NULL to check if iod type
 			 * (ARRAY OR SINGLE VAL)
@@ -3670,6 +3666,8 @@ out:
 			"container "DF_UUIDF "\n\n",
 			DP_UUID(ca.dst_c_uuid));
 	}
+	D_FREE(src_str);
+	D_FREE(dst_str);
 	D_FREE(ca.src);
 	D_FREE(ca.dst);
 	return rc;

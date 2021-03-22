@@ -38,7 +38,7 @@ class DmgStorageScanSCMTest(TestWithServers):
         # pmem1.
         data = self.get_dmg_command().storage_scan(verbose=True)
         host = self.hostlist_servers[0]
-        pmem_names = data[host]["scm"].keys()
+        pmem_names = list(data[host]["scm"].keys())
         # Verifies that all namespaces exist under /dev.
         RC_SUCCESS = 0
         for pmem_name in pmem_names:

@@ -10,16 +10,20 @@ from nvme_utils import ServerFillUp
 from daos_utils import DaosCommand
 from test_utils_container import TestContainer
 
+
 class ErasureCodeIor(ServerFillUp):
     # pylint: disable=too-many-ancestors
     """
+
     Class to used for EC testing.
     It will get the object types from yaml file write the IOR data set with
     IOR.
+
     """
+
     def __init__(self, *args, **kwargs):
         """Initialize a ServerFillUp object."""
-        super(ErasureCodeIor, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.server_count = None
         self.ec_container = None
         self.cont_uuid = []
@@ -27,15 +31,15 @@ class ErasureCodeIor(ServerFillUp):
     def setUp(self):
         """Set up each test case."""
         # Start the servers and agents
-        super(ErasureCodeIor, self).setUp()
+        super().setUp()
 
         self.obj_class = self.params.get("dfs_oclass", '/run/ior/objectclass/*')
         self.ior_chu_trs_blk_size = self.params.get(
             "chunk_block_transfer_sizes", '/run/ior/*')
-        #Fail IOR test in case of Warnings
+        # Fail IOR test in case of Warnings
         self.fail_on_warning = True
         self.server_count = len(self.hostlist_servers) * 2
-        #Create the Pool
+        # Create the Pool
         self.create_pool_max_size()
         self.update_ior_cmd_with_pool()
 
@@ -84,22 +88,21 @@ class ErasureCodeIor(ServerFillUp):
         self.ior_cmd.dfs_chunk.update(sizes[0])
 
     def ior_write_dataset(self):
-        """ Write IOR data set with different EC object and different sizes
-        """
+        """Write IOR data set with different EC object and different sizes."""
         for oclass in self.obj_class:
             for sizes in self.ior_chu_trs_blk_size:
-                #Skip the object type if server count does not meet the minimum
-                #EC object server count
+                # Skip the object type if server count does not meet the minimum
+                # EC object server count
                 if oclass[1] > self.server_count:
                     continue
                 self.ior_param_update(oclass, sizes)
 
-                #Create the new container with correct redundancy factor
-                #for EC object type
+                # Create the new container with correct redundancy factor
+                # for EC object type
                 self.ec_contaier_create(oclass[0])
                 self.update_ior_cmd_with_pool(oclass=oclass[0],
                                               create_cont=False)
-                #Start IOR Write
+                # Start IOR Write
                 self.container.uuid = self.ec_container.uuid
                 self.start_ior_load(operation="WriteRead", percent=1,
                                     create_cont=False)
@@ -114,12 +117,12 @@ class ErasureCodeIor(ServerFillUp):
         con_count = 0
         for oclass in self.obj_class:
             for sizes in self.ior_chu_trs_blk_size:
-                #Skip the object type if server count does not meet the minimum
-                #EC object server count
+                # Skip the object type if server count does not meet the minimum
+                # EC object server count
                 if oclass[1] > self.server_count:
                     continue
                 parity_set = "P{}".format(parity)
-                #Read the requested data+parity data set only
+                # Read the requested data+parity data set only
                 if parity != 1 and parity_set not in oclass[0]:
                     print("Skipping Read as object type is {}"
                           .format(oclass[0]))
@@ -127,7 +130,7 @@ class ErasureCodeIor(ServerFillUp):
                     continue
                 self.ior_param_update(oclass, sizes)
                 self.container.uuid = self.cont_uuid[con_count]
-                #Start IOR Read
+                # Start IOR Read
                 self.start_ior_load(operation='Read', percent=1,
                                     create_cont=False)
                 con_count += 1

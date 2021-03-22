@@ -4,7 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import json
 from apricot import TestWithServers
 
 
@@ -20,7 +19,7 @@ class DynamicStartStop(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a DynamicStartStop object."""
-        super(DynamicStartStop, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.dmg_cmd = None
         self.stopped_ranks = set()
 
@@ -31,13 +30,11 @@ class DynamicStartStop(TestWithServers):
         rank is in self.stopped_ranks, verify that its status is Stopped.
         Otherwise, Joined.
         """
-        output = self.dmg_cmd.system_query().stdout
-        data = json.loads(output)
-        members = data["response"]["members"]
-        for member in members:
+        output = self.dmg_cmd.system_query()
+        for member in output["response"]["members"]:
             if member["rank"] in self.stopped_ranks:
-                self.assertEqual(
-                    member["state"], "stopped",
+                self.assertIn(
+                    member["state"], ["stopped", "evicted"],
                     "State isn't stopped! Actual: {}".format(member["state"]))
                 self.assertEqual(
                     member["info"], "system stop",
@@ -47,6 +44,26 @@ class DynamicStartStop(TestWithServers):
                 self.assertEqual(
                     member["state"], "joined",
                     "State isn't joined! Actual: {}".format(member["state"]))
+
+    def stop_server_ranks(self, ranks):
+        """Stop one or more server ranks.
+
+        Args:
+            ranks (list): [description]
+        """
+        # Stop the requested server ranks
+        ranks_str = ",".join([str(rank) for rank in ranks])
+        self.dmg_cmd.system_stop(ranks=ranks_str)
+
+        # Mark which ranks are now stopped
+        for manager in self.server_managers:
+            manager.update_expected_states(ranks, ["stopped", "evicted"])
+        for rank in ranks:
+            self.stopped_ranks.add(rank)
+
+        # Verify that the State of the stopped servers is Stopped and Reason is
+        # system stop.
+        self.verify_system_query()
 
     def test_dynamic_server_addition(self):
         """JIRA ID: DAOS-3598
@@ -75,29 +92,13 @@ class DynamicStartStop(TestWithServers):
         self.verify_system_query()
 
         # Stop one of the added servers - Single stop.
-        self.dmg_cmd.system_stop(ranks="4")
-
-        # Verify that the State of the stopped server is Stopped and Reason is
-        # system stop.
-        self.stopped_ranks.add(4)
-        self.verify_system_query()
+        self.stop_server_ranks([4])
 
         # Stop two of the added servers - Multiple stop.
-        self.dmg_cmd.system_stop(ranks="2,3")
-
-        # Verify that the State of the stopped servers is Stopped and Reason is
-        # system stop.
-        self.stopped_ranks.add(2)
-        self.stopped_ranks.add(3)
-        self.verify_system_query()
+        self.stop_server_ranks([2, 3])
 
         # Stop one of the original servers.
-        self.dmg_cmd.system_stop(ranks="1")
-
-        # Verify that the State of the stopped servers is Stopped and Reason is
-        # system stop.
-        self.stopped_ranks.add(1)
-        self.verify_system_query()
+        self.stop_server_ranks([1])
 
         # Stopping newly added server and destroy pool causes -1006. DAOS-5606
         self.pool = None
