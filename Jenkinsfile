@@ -12,7 +12,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value="pipeline-lib@your_branch") _
+@Library(value="pipeline-lib@bmurrell/move-functions-from-DAOS-Jenkinsfile") _
 
 boolean doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
@@ -1326,7 +1326,7 @@ pipeline {
                         expression { ! skip_ftest('el7') }
                     }
                     agent {
-                        label 'ci_vm9'
+                        label 'stage_vm9'
                     }
                     steps {
                         functionalTest inst_repos: daos_repos(),
@@ -1345,7 +1345,7 @@ pipeline {
                         expression { ! skip_ftest('leap15') }
                     }
                     agent {
-                        label 'ci_vm9'
+                        label 'stage_vm9'
                     }
                     steps {
                         functionalTest inst_repos: daos_repos(),
