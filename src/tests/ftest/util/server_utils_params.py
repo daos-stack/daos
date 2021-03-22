@@ -16,7 +16,7 @@ class DaosServerTransportCredentials(TransportCredentials):
 
     def __init__(self, log_dir="/tmp"):
         """Initialize a TransportConfig object."""
-        super(DaosServerTransportCredentials, self).__init__(
+        super().__init__(
             "/run/server_config/transport_config/*",
             "transport_config", log_dir)
 
@@ -41,9 +41,7 @@ class DaosServerTransportCredentials(TransportCredentials):
         """
         # Ensure the client cert directory includes the required certificate
         name_list.remove("client_cert_dir")
-        data = super(
-            DaosServerTransportCredentials, self).get_certificate_data(
-                name_list)
+        data = super().get_certificate_data(name_list)
         if not self.allow_insecure.value and self.client_cert_dir.value:
             if self.client_cert_dir.value not in data:
                 data[self.client_cert_dir.value] = ["agent.crt"]
@@ -62,8 +60,7 @@ class DaosServerYamlParameters(YamlParameters):
             filename (str): yaml configuration file name
             common_yaml (YamlParameters): [description]
         """
-        super(DaosServerYamlParameters, self).__init__(
-            "/run/server_config/*", filename, None, common_yaml)
+        super().__init__("/run/server_config/*", filename, None, common_yaml)
 
         # daos_server configuration file parameters
         #
@@ -139,7 +136,7 @@ class DaosServerYamlParameters(YamlParameters):
         Args:
             test (Test): avocado Test object
         """
-        super(DaosServerYamlParameters, self).get_params(test)
+        super().get_params(test)
 
         # Create the requested number of single server parameters
         if isinstance(self.engines_per_host.value, int):
@@ -160,7 +157,7 @@ class DaosServerYamlParameters(YamlParameters):
 
         """
         # Get the common config yaml parameters
-        yaml_data = super(DaosServerYamlParameters, self).get_yaml_data()
+        yaml_data = super().get_yaml_data()
 
         # Remove the "engines_per_host" BasicParameter as it is not an actual
         # daos_server configuration file parameter
@@ -188,7 +185,7 @@ class DaosServerYamlParameters(YamlParameters):
             bool: if the attribute name was found and the value was set
 
         """
-        status = super(DaosServerYamlParameters, self).set_value(name, value)
+        status = super().set_value(name, value)
 
         # Set the value for each per-engine configuration attribute name
         if not status:
@@ -208,7 +205,7 @@ class DaosServerYamlParameters(YamlParameters):
             object: the object's value referenced by the attribute name
 
         """
-        value = super(DaosServerYamlParameters, self).get_value(name)
+        value = super().get_value(name)
 
         # Look for the value in the per-engine configuration parameters.  The
         # first value found will be returned.
@@ -290,9 +287,7 @@ class DaosServerYamlParameters(YamlParameters):
             namespace = "/run/server_config/servers/*"
             if isinstance(index, int):
                 namespace = "/run/server_config/servers/{}/*".format(index)
-            super(
-                DaosServerYamlParameters.PerEngineYamlParameters,
-                self).__init__(namespace)
+            super().__init__(namespace)
 
             # Use environment variables to get default parameters
             default_interface = os.environ.get("OFI_INTERFACE", "eth0")
@@ -402,9 +397,7 @@ class DaosServerYamlParameters(YamlParameters):
             Args:
                 test (Test): avocado Test object
             """
-            super(
-                DaosServerYamlParameters.PerEngineYamlParameters,
-                self).get_params(test)
+            super().get_params(test)
 
             # Override the log file file name with the test log file name
             if hasattr(test, "server_log") and test.server_log is not None:

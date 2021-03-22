@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import random
-import threading
 from osa_utils import OSAUtils
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
@@ -14,15 +13,17 @@ from apricot import skipForTicket
 
 class OSAOfflineReintegration(OSAUtils):
     # pylint: disable=too-many-ancestors
-    """
-    Test Class Description: This test runs
-    daos_server offline reintegration test cases.
+    """OSA offline Reintegration test cases.
+
+    Test Class Description:
+        This test runs daos_server offline reintegration test cases.
 
     :avocado: recursive
     """
+
     def setUp(self):
         """Set up for test case."""
-        super(OSAOfflineReintegration, self).setUp()
+        super().setUp()
         self.dmg_command = self.get_dmg_command()
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
         self.ior_test_sequence = self.params.get(
@@ -36,12 +37,13 @@ class OSAOfflineReintegration(OSAUtils):
     def run_offline_reintegration_test(self, num_pool, data=False,
                                        server_boot=False):
         """Run the offline reintegration without data.
-            Args:
+
+        Args:
             num_pool (int) : total pools to create for testing purposes.
             data (bool) : whether pool has no data or to create
-                          some data in pool. Defaults to False.
+                some data in pool. Defaults to False.
             server_boot (bool) : Perform system stop/start on a rank.
-                                 Defults to False.
+                Defaults to False.
         """
         # Create a pool
         pool = {}
@@ -115,7 +117,8 @@ class OSAOfflineReintegration(OSAUtils):
                                 self.ior_apis[0], self.ior_test_sequence[0])
 
     def test_osa_offline_reintegration(self):
-        """Test ID: DAOS-4749
+        """Test ID: DAOS-4749.
+
         Test Description: Validate Offline Reintegration
 
         :avocado: tags=all,daily_regression,hw,medium,ib2
@@ -127,7 +130,9 @@ class OSAOfflineReintegration(OSAUtils):
     @skipForTicket("DAOS-6766, DAOS-6783")
     def test_osa_offline_reintegration_server_stop(self):
         """Test ID: DAOS-6748.
+
         Test Description: Validate Offline Reintegration with server stop
+
         :avocado: tags=all,pr,daily_regression,hw,medium,ib2,osa
         :avocado: tags=offline_reintegration_srv_stop
         """
