@@ -31,7 +31,7 @@ tests: !mux
     test_clients_ppn: 1
     test_clients_bin: ../tests/test_group_np_cli
     test_clients_env: ""
-    test_clients_arg: "--name client_group --attach_to tg_srv_grp_crt_ep_abort_test --issue_crt_ep_abort 0 --num_checkins_to_send 1"
+    test_clients_arg: "--name client_group --attach_to tg_srv_grp_crt_ep_abort_test --issue_crt_ep_abort 0 --num_checkins_to_send 1 --sleep_time_after_rpc 3"
   test_group_multiple_server_single_rpc:
     name: test_group_multiple_server_single_rpc
     test_servers_bin: crt_launch
@@ -41,7 +41,7 @@ tests: !mux
     test_clients_ppn: 1
     test_clients_bin: ../tests/test_group_np_cli
     test_clients_env: ""
-    test_clients_arg: "--name client_group --attach_to tg_srv_grp_crt_ep_abort_test --issue_crt_ep_abort 0 --num_checkins_to_send 3"
+    test_clients_arg: "--name client_group --attach_to tg_srv_grp_crt_ep_abort_test --issue_crt_ep_abort 0 --num_checkins_to_send 3 --sleep_time_after_rpc 3"
   test_group_multiple_server_multiple_rpc:
     name: test_group_multiple_server_multiple_rpc
     test_servers_bin: crt_launch
@@ -51,4 +51,4 @@ tests: !mux
     test_clients_ppn: 1
     test_clients_bin: ../tests/test_group_np_cli
     test_clients_env: ""
-    test_clients_arg: "--name client_group --attach_to tg_srv_grp_crt_ep_abort_test --issue_crt_ep_abort 2 --num_checkins_to_send 1"
+    test_clients_arg: "--name client_group --attach_to tg_srv_grp_crt_ep_abort_test --issue_crt_ep_abort 2 --num_checkins_to_send 1 --sleep_time_after_rpc 3"

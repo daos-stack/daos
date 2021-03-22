@@ -75,6 +75,7 @@ test_run(void)
 	int			 rc = 0;
 	uint32_t		*_cg_ranks;
 	int			 _cg_num_ranks;
+	int			 icea;
 
 	if (test_g.t_skip_init) {
 		DBG_PRINT("Skipping init stage.\n");
@@ -126,7 +127,6 @@ test_run(void)
 
 	test_g.t_fault_attr_1000 = d_fault_attr_lookup(1000);
 	test_g.t_fault_attr_5000 = d_fault_attr_lookup(5000);
-
 	if (!test_g.t_shut_only && !test_g.t_skip_check_in) {
 		for (i = 0; i < rank_list->rl_nr; i++) {
 			rank = rank_list->rl_ranks[i];
@@ -136,7 +136,13 @@ test_run(void)
 
 				k = test_g.t_num_checkins_to_send;
 				for (j = 0; j < k; j++) {
-					check_in(grp, rank, tag);
+					icea = test_g.t_issue_crt_ep_abort;
+					if (icea == rank)
+						check_in_with_delay(grp,
+								    rank,
+								    tag);
+					else
+						check_in(grp, rank, tag);
 				}
 			}
 		}

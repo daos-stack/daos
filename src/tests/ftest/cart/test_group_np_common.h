@@ -32,6 +32,7 @@ struct test_t {
 	int			 t_hold;
 	int			 t_shut_only;
 	int			 t_issue_crt_ep_abort;
+	int			 t_sleep_time_after_rpc;
 	int			 t_num_checkins_to_send;
 	int			 t_init_only;
 	int			 t_skip_init;
@@ -244,8 +245,12 @@ client_cb_common(const struct crt_cb_info *cb_info)
 	struct test_ping_check_in	*test_ping_rpc_req_input;
 	struct test_ping_check_out	*test_ping_rpc_req_output;
 
+	struct crt_test_ping_delay_in	*rpc_req_input;
+	struct crt_test_ping_delay_out	*rpc_req_output;
+
 	struct test_swim_status_in	*swim_status_rpc_req_input;
 	struct test_swim_status_out	*swim_status_rpc_req_output;
+
 	int aborted_rank = -1;
 
 	rpc_req = cb_info->cci_rpc;
@@ -256,12 +261,13 @@ client_cb_common(const struct crt_cb_info *cb_info)
 	}
 
 	switch (cb_info->cci_rpc->cr_opc) {
-	case TEST_OPC_CHECKIN:
-
-		test_ping_rpc_req_input = crt_req_get(rpc_req);
-		D_ASSERT(test_ping_rpc_req_input != NULL);
-		test_ping_rpc_req_output = crt_reply_get(rpc_req);
-		D_ASSERT(test_ping_rpc_req_output != NULL);
+	case TEST_OPC_PING_DELAY:
+		rpc_req_input = crt_req_get(rpc_req);
+		if (rpc_req_input == NULL)
+			return;
+		rpc_req_output = crt_reply_get(rpc_req);
+		if (rpc_req_output == NULL)
+			return;
 
 		if (test_g.t_issue_crt_ep_abort > -1 &&
 		    test_g.t_issue_crt_ep_abort == aborted_rank) {
@@ -272,6 +278,26 @@ client_cb_common(const struct crt_cb_info *cb_info)
 			sem_post(&test_g.t_token_to_proceed);
 			break;
 		}
+
+		if (cb_info->cci_rc != 0) {
+			D_ERROR("rpc (opc: %#x) failed, rc: %d.\n",
+				rpc_req->cr_opc, cb_info->cci_rc);
+			D_FREE(rpc_req_input->name);
+			break;
+		}
+		printf("%s ping result - ret: %d, room_no: %d.\n",
+		       rpc_req_input->name, rpc_req_output->ret,
+		       rpc_req_output->room_no);
+		D_FREE(rpc_req_input->name);
+		sem_post(&test_g.t_token_to_proceed);
+		break;
+
+	case TEST_OPC_CHECKIN:
+
+		test_ping_rpc_req_input = crt_req_get(rpc_req);
+		D_ASSERT(test_ping_rpc_req_input != NULL);
+		test_ping_rpc_req_output = crt_reply_get(rpc_req);
+		D_ASSERT(test_ping_rpc_req_output != NULL);
 
 		if (cb_info->cci_rc != 0) {
 			D_ERROR("rpc (opc: %#x) failed, rc: %d.\n",
@@ -287,6 +313,7 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		sem_post(&test_g.t_token_to_proceed);
 		D_ASSERT(test_ping_rpc_req_output->bool_val == true);
 		break;
+
 	case TEST_OPC_SWIM_STATUS:
 
 		swim_status_rpc_req_input = crt_req_get(rpc_req);
@@ -379,6 +406,11 @@ static struct crt_proto_rpc_format my_proto_rpc_fmt_test_group2[] = {
 		.prf_req_fmt	= &CQF_test_swim_status,
 		.prf_hdlr	= test_swim_status_handler,
 		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= CRT_RPC_FEAT_NO_TIMEOUT,
+		.prf_req_fmt	= &CQF_crt_test_ping_delay,
+		.prf_hdlr	= test_ping_delay_handler,
+		.prf_co_ops	= NULL,
 	}
 };
 
@@ -403,8 +435,11 @@ check_in(crt_group_t *remote_group, int rank, int tag)
 	server_ep.ep_rank = rank;
 	server_ep.ep_tag = tag;
 
-	rc = crt_req_create(test_g.t_crt_ctx[0], &server_ep,
-			    TEST_OPC_CHECKIN, &rpc_req);
+	rc = crt_req_create(test_g.t_crt_ctx[0],
+			    &server_ep,
+			    TEST_OPC_CHECKIN,
+			    &rpc_req);
+
 	D_ASSERTF(rc == 0 && rpc_req != NULL, "crt_req_create() failed,"
 		  " rc: %d rpc_req: %p\n", rc, rpc_req);
 
@@ -430,6 +465,65 @@ check_in(crt_group_t *remote_group, int rank, int tag)
 		rank, server_ep.ep_tag, rpc_req_input->name,
 		rpc_req_input->age, rpc_req_input->days,
 		rpc_req_input->bool_val);
+
+	test_g.global_client_cb_arg = rank;
+	rc = crt_req_send(rpc_req,
+			  client_cb_common,
+			  &test_g.global_client_cb_arg);
+	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
+}
+
+void
+check_in_with_delay(crt_group_t *remote_group, int rank, int tag)
+{
+	crt_rpc_t			*rpc_req = NULL;
+	struct crt_test_ping_delay_in	*rpc_req_input;
+	crt_endpoint_t			 server_ep = {0};
+	char				*buffer;
+	int				 rc;
+
+	server_ep.ep_grp = remote_group;
+	server_ep.ep_rank = rank;
+	server_ep.ep_tag = tag;
+
+	rc = crt_req_create(test_g.t_crt_ctx[0],
+			    &server_ep,
+			    TEST_OPC_PING_DELAY,
+			    &rpc_req);
+
+	D_ASSERTF(rc == 0 && rpc_req != NULL, "crt_req_create() failed,"
+		  " rc: %d rpc_req: %p\n", rc, rpc_req);
+
+	rpc_req_input = crt_req_get(rpc_req);
+	D_ASSERTF(rpc_req_input != NULL, "crt_req_get() failed."
+		  " rpc_req_input: %p\n", rpc_req_input);
+
+	if (D_SHOULD_FAIL(test_g.t_fault_attr_1000)) {
+		buffer = NULL;
+	} else {
+		D_ALLOC(buffer, 256);
+		D_INFO("not injecting fault.\n");
+	}
+
+	D_ASSERTF(buffer != NULL, "Cannot allocate memory.\n");
+	snprintf(buffer, 256, "Guest %d", rank);
+	rpc_req_input->name = buffer;
+	rpc_req_input->age = 21;
+	rpc_req_input->days = 7;
+	rpc_req_input->delay = 5;
+
+	/* Give the soon-to-be aborted rank some time before actually
+	 * aborting */
+	if (test_g.t_sleep_time_after_rpc != -1)
+		rpc_req_input->delay = test_g.t_sleep_time_after_rpc;
+
+	DBG_PRINT("EAM trace: line 586, rpc_req_input->delay = %d.\n", rpc_req_input->delay);
+
+	D_DEBUG(DB_TEST, "client(rank %d) sending checkin rpc with tag "
+		"%d, name: %s, age: %d, days: %d, bool_val %d.\n",
+		rank, server_ep.ep_tag, rpc_req_input->name,
+		rpc_req_input->age, rpc_req_input->days,
+		rpc_req_input->delay);
 
 	test_g.global_client_cb_arg = rank;
 	rc = crt_req_send(rpc_req,
@@ -618,6 +712,7 @@ test_parse_args(int argc, char **argv)
 		{"cfg_path", required_argument, 0, 's'},
 		{"use_cfg", required_argument, 0, 'u'},
 		{"issue_crt_ep_abort", required_argument, 0, 'i'},
+		{"sleep_time_after_rpc", required_argument, 0, 'p'},
 		{"num_checkins_to_send", required_argument, 0, 'm'},
 		{"register_swim_callback", required_argument, 0, 'w'},
 		{"verify_swim_status", required_argument, 0, 'v'},
@@ -630,6 +725,7 @@ test_parse_args(int argc, char **argv)
 	test_g.t_use_cfg = true;
 	test_g.t_num_checkins_to_send = 1;
 	test_g.t_issue_crt_ep_abort = -1;
+	test_g.t_sleep_time_after_rpc = -1;
 
 	test_g.t_shutdown_delay = 0;
 
@@ -693,6 +789,8 @@ test_parse_args(int argc, char **argv)
 			break;
 		case 'i':
 			test_g.t_issue_crt_ep_abort = atoi(optarg);
+		case 'p':
+			test_g.t_sleep_time_after_rpc = atoi(optarg);
 		case 'v':
 			vss = parse_verify_swim_status_arg(optarg);
 			test_g.t_verify_swim_status.rank	= vss.rank;
