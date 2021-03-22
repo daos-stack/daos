@@ -5,7 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from cart_utils import CartTest
-
+from apricot import skipForTicket
 
 class CartCoRpcOneNodeTest(CartTest):
     # pylint: disable=too-few-public-methods
@@ -14,6 +14,7 @@ class CartCoRpcOneNodeTest(CartTest):
     :avocado: recursive
     """
 
+    @skipForTicket("DAOS-7077")
     def test_cart_ghost_rank_rpc(self):
         """Test ghost rank RPC.
 
