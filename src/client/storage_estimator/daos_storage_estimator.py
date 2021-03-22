@@ -1,6 +1,9 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+'''
+  (C) Copyright 2019-2021 Intel Corporation.
 
-from __future__ import print_function
+  SPDX-License-Identifier: BSD-2-Clause-Patent
+'''
 import argparse
 import sys
 
@@ -16,7 +19,7 @@ This CLI is able to estimate the SCM/NVMe ratios
 
 class CreateExample(Common):
     def __init__(self, args):
-        super(CreateExample, self).__init__(args)
+        super().__init__(args)
 
     def run(self):
         self._info('Vos metadata overhead:')
@@ -38,7 +41,7 @@ def create_dfs_example(args):
 
 class ProcessFS(ProcessBase):
     def __init__(self, args):
-        super(ProcessFS, self).__init__(args)
+        super().__init__(args)
 
     def run(self):
         fse = self._get_estimate_from_fs()
@@ -73,7 +76,7 @@ def process_fs(args):
 
 class ProcessYAML(Common):
     def __init__(self, args):
-        super(ProcessYAML, self).__init__(args)
+        super().__init__(args)
 
     def run(self):
         config_yaml = self._load_yaml_from_file(args.config[0])

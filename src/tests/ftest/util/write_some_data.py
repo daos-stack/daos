@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from __future__ import print_function
+
 
 import sys
 import numpy as np
@@ -18,7 +18,7 @@ def write_some_data():
     """
     Write sys.argv[1] bytes to the file handle specified by sys.argv[2]
     """
-    sizeinbytes = long(sys.argv[1])
+    sizeinbytes = int(sys.argv[1])
     filename = sys.argv[2]
 
     # create some data to write, integers 0,1,2,...
