@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from __future__ import print_function
+
 import sys
 
 from storage_estimator.explorer import AverageFS
@@ -17,7 +17,7 @@ FILE_SIZES = ['4k', '64k', '128k', '256k', '512k', '768k', '1m', '8m', '64m',
 
 class ProcessCSV(ProcessBase):
     def __init__(self, args):
-        super(ProcessCSV, self).__init__(args)
+        super().__init__(args)
 
     def run(self):
         fse = self._ingest_csv()

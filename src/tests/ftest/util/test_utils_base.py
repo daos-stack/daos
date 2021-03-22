@@ -11,7 +11,7 @@ from command_utils_base import ObjectWithParameters, BasicParameter
 from pydaos.raw import DaosApiError
 
 
-class CallbackHandler(object):
+class CallbackHandler():
     """Defines a callback method to use with DaosApi class methods."""
 
     def __init__(self, delay=1):
@@ -74,7 +74,7 @@ class TestDaosApiBase(ObjectWithParameters):
             cb_handler (CallbackHandler, optional): callback object to use with
                 the API methods. Defaults to None.
         """
-        super(TestDaosApiBase, self).__init__(namespace)
+        super().__init__(namespace)
         self.cb_handler = cb_handler
         self.debug = BasicParameter(None, False)
 
@@ -108,7 +108,8 @@ class TestDaosApiBase(ObjectWithParameters):
 
         # Optionally log the method call with its arguments if debug is set
         self._log_method(
-            "{}.{}".format(method.im_class.__name__, method.__name__), kwargs)
+            "{}.{}".format(
+                method.__self__.__class__.__name__, method.__name__), kwargs)
 
         try:
             method(**kwargs)
@@ -118,7 +119,8 @@ class TestDaosApiBase(ObjectWithParameters):
                 "Exception raised by %s.%s(%s)",
                 method.__module__, method.__name__,
                 ", ".join(
-                    ["{}={}".format(key, val) for key, val in kwargs.items()]),
+                    ["{}={}".format(key, val) for key, val in list(
+                        kwargs.items())]),
                 exc_info=error)
             # Raise the exception so it can be handled by the caller
             raise error
@@ -156,7 +158,7 @@ class TestDaosApiBase(ObjectWithParameters):
                     ">=": (
                         lambda x, y: x >= y, "is too small or does not match"),
                 }
-                for key, val in comparisons.items():
+                for key, val in list(comparisons.items()):
                     # If the expected value is preceded by one of the known
                     # comparison keys, use the comparison and remove the key
                     # from the expected value

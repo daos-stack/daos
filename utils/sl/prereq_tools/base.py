@@ -77,7 +77,7 @@ class DownloadFailure(Exception):
     """
 
     def __init__(self, repo, component):
-        super(DownloadFailure, self).__init__()
+        super().__init__()
         self.repo = repo
         self.component = component
 
@@ -95,7 +95,7 @@ class ExtractionError(Exception):
     """
 
     def __init__(self, component):
-        super(ExtractionError, self).__init__()
+        super().__init__()
         self.component = component
 
     def __str__(self):
@@ -112,7 +112,7 @@ class UnsupportedCompression(Exception):
     """
 
     def __init__(self, component):
-        super(UnsupportedCompression, self).__init__()
+        super().__init__()
         self.component = component
 
     def __str__(self):
@@ -129,7 +129,7 @@ class BadScript(Exception):
     """
 
     def __init__(self, script, trace):
-        super(BadScript, self).__init__()
+        super().__init__()
         self.script = script
         self.trace = trace
 
@@ -148,7 +148,7 @@ class MissingDefinition(Exception):
     """
 
     def __init__(self, component):
-        super(MissingDefinition, self).__init__()
+        super().__init__()
         self.component = component
 
     def __str__(self):
@@ -164,7 +164,7 @@ class MissingPath(Exception):
     """
 
     def __init__(self, variable):
-        super(MissingPath, self).__init__()
+        super().__init__()
         self.variable = variable
 
     def __str__(self):
@@ -180,7 +180,7 @@ class BuildFailure(Exception):
     """
 
     def __init__(self, component):
-        super(BuildFailure, self).__init__()
+        super().__init__()
         self.component = component
 
     def __str__(self):
@@ -196,7 +196,7 @@ class MissingTargets(Exception):
     """
 
     def __init__(self, component, package):
-        super(MissingTargets, self).__init__()
+        super().__init__()
         self.component = component
         self.package = package
 
@@ -217,7 +217,7 @@ class MissingSystemLibs(Exception):
     """
 
     def __init__(self, component):
-        super(MissingSystemLibs, self).__init__()
+        super().__init__()
         self.component = component
 
     def __str__(self):
@@ -233,7 +233,7 @@ class DownloadRequired(Exception):
     """
 
     def __init__(self, component):
-        super(DownloadRequired, self).__init__()
+        super().__init__()
         self.component = component
 
     def __str__(self):
@@ -249,7 +249,7 @@ class BuildRequired(Exception):
     """
 
     def __init__(self, component):
-        super(BuildRequired, self).__init__()
+        super().__init__()
         self.component = component
 
     def __str__(self):
