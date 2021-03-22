@@ -725,8 +725,11 @@ crt_ep_abort(crt_endpoint_t *ep);
 		/* process the elements of array */			\
 		for (i = 0; i < count; i++) {				\
 			rc = CRT_GEN_GET_FUNC(seq)(proc, &e_ptr[i]);	\
-			if (rc)						\
+			if (rc) {					\
+				if (proc_op == CRT_PROC_DECODE)		\
+					D_FREE(e_ptr);			\
 				D_GOTO(out, rc);			\
+			}						\
 		}							\
 		if (proc_op == CRT_PROC_FREE)				\
 			D_FREE(e_ptr);					\
