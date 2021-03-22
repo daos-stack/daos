@@ -1804,7 +1804,7 @@ rebuild_tgt_status_check_ult(void *arg)
 	rpt->rt_ult = sched_req_get(&attr, ABT_THREAD_NULL);
 	if (rpt->rt_ult == NULL) {
 		D_ERROR("Can not start rebuild status check\n");
-		return;
+		goto out;
 	}
 
 	while (1) {
@@ -1815,7 +1815,7 @@ rebuild_tgt_status_check_ult(void *arg)
 		memset(&status, 0, sizeof(status));
 		rc = ABT_mutex_create(&status.lock);
 		if (rc != ABT_SUCCESS)
-			return;
+			break;
 		rc = rebuild_tgt_query(rpt, &status);
 		ABT_mutex_free(&status.lock);
 		if (rc || status.status != 0) {
@@ -1937,7 +1937,7 @@ rebuild_tgt_status_check_ult(void *arg)
 
 	sched_req_put(rpt->rt_ult);
 	rpt->rt_ult = NULL;
-
+out:
 	rpt_put(rpt);
 	rebuild_tgt_fini(rpt);
 }
