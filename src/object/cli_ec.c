@@ -1132,6 +1132,8 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 			if (!reasb_req->orr_size_fetched)
 				ec_data_recx_add(recx, riod->iod_recxs, ridx,
 						 tgt_recx_idxs, oca, update);
+			if (punch)
+				continue;
 			if (!reasb_req->orr_size_fetch) {
 				/* After size query, server returns as zero
 				 * iod_size (Empty tree or all holes, DAOS array
@@ -1140,15 +1142,14 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 				 * iod_size as 1 to make sgl be splittable,
 				 * server will not really transfer data back.
 				 */
-				if (iod_size == 0 && !punch) {
+				if (iod_size == 0) {
 					D_ASSERT(reasb_req->orr_size_fetched);
 					iod_size = 1;
 				}
-				if (!punch)
-					ec_data_seg_add(recx, iod_size, sgl,
-							&iov_idx, &iov_off, oca,
-							iovs, iov_nr, sorter,
-							update);
+				ec_data_seg_add(recx, iod_size, sgl,
+						&iov_idx, &iov_off, oca,
+						iovs, iov_nr, sorter,
+						update);
 			}
 			continue;
 		}
@@ -1163,9 +1164,9 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 				  "bad recx\n");
 			ec_data_recx_add(&tmp_recx, riod->iod_recxs, ridx,
 					 tgt_recx_idxs, oca, true);
-				ec_data_seg_add(&tmp_recx, iod_size,
-						sgl, &iov_idx, &iov_off, oca,
-						iovs, iov_nr, sorter, true);
+			ec_data_seg_add(&tmp_recx, iod_size,
+					sgl, &iov_idx, &iov_off, oca,
+					iovs, iov_nr, sorter, true);
 		}
 		ec_data_recx_add(full_recx, riod->iod_recxs, ridx,
 				 tgt_recx_idxs, oca, false);
@@ -1196,11 +1197,11 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 		ec_parity_seg_add(ec_recx_array, iod, oca, sorter);
 	}
 
-	if (!reasb_req->orr_size_fetch)
+	if (!punch && !reasb_req->orr_size_fetch)
 		obj_ec_seg_pack(sorter, rsgl);
 
 	/* generate the oiod/siod */
-	tgt_nr = (update  || reasb_req->orr_recov == 1) ?
+	tgt_nr = (update || reasb_req->orr_recov == 1) ?
 		 obj_ec_tgt_nr(oca) : obj_ec_data_tgt_nr(oca);
 	for (i = 0, idx = 0, last = 0; i < tgt_nr; i++) {
 		/* get each tgt's idx in the compact oiod_siods array */
@@ -1554,8 +1555,6 @@ obj_ec_encode(struct obj_reasb_req *reasb_req)
 	}
 
 	for (i = 0; i < reasb_req->orr_iod_nr; i++) {
-		if (!reasb_req->orr_uiods[i].iod_size)
-			continue;
 		rc = obj_ec_recx_encode(reasb_req->orr_oid,
 					&reasb_req->orr_uiods[i],
 					&reasb_req->orr_usgls[i],

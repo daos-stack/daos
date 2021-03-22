@@ -1429,10 +1429,6 @@ agg_process_holes_ult(void *arg)
 	 */
 	d_list_for_each_entry_safe(agg_extent, ext_tmp,
 				   &entry->ae_cur_stripe.as_dextents, ae_link) {
-		D_PRINT("extent rx_idx: %lu, rx_nr: %lu\n",
-			agg_extent->ae_recx.rx_idx,
-			agg_extent->ae_recx.rx_nr);
-
 		if (agg_extent->ae_epoch < entry->ae_par_extent.ape_epoch)
 			continue;
 		if (agg_extent->ae_recx.rx_idx - ss > last_ext_end) {
@@ -1470,14 +1466,6 @@ agg_process_holes_ult(void *arg)
 	D_ASSERT(entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_len <= k * len);
 	/* Pull data via dsc_obj_fetch */
 	if (ext_cnt) {
-		int i;
-
-		D_PRINT("ext_cnt: %u\n", ext_cnt);
-		for (i = 0; i < ext_cnt; i++)
-			D_PRINT("i: %d, rx_idx: %lu, rx_nr: %lu\n", i,
-				iod.iod_recxs[i].rx_idx,
-				iod.iod_recxs[i].rx_nr);
-
 		rc = dsc_obj_fetch(entry->ae_obj_hdl,
 				   entry->ae_cur_stripe.as_hi_epoch,
 				   &entry->ae_dkey, 1, &iod, &entry->ae_sgl,
@@ -1563,7 +1551,6 @@ agg_process_holes_ult(void *arg)
 out:
 	if (rpc)
 		crt_req_decref(rpc);
-	//D_FREE(stripe_ud->asu_recxs);
 	entry->ae_sgl.sg_nr = AGG_IOV_CNT;
 	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
 }
@@ -1621,7 +1608,6 @@ agg_process_holes(struct ec_agg_entry *entry)
 	iod.iod_nr = stripe_ud.asu_cell_cnt;
 	iod.iod_recxs = stripe_ud.asu_recxs;
 
-	//D_PRINTa("%u\n"
 	entry->ae_sgl.sg_nr = 1;
 	agg_param = container_of(entry, struct ec_agg_param,
 				 ap_agg_entry);
