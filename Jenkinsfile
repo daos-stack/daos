@@ -445,12 +445,27 @@ boolean skip_coverity() {
            skip_stage('build')
 }
 
+boolean skip_if_unstable() {
+    if (cachedCommitPragma(pragma: 'Allow-unstable-test') == 'true' ||
+        env.BRANCH_NAME == 'master' ||
+        env.BRANCH_NAME.startsWith("weekly-testing") ||
+        env.BRANCH_NAME.startsWith("release/")) {
+        return false
+    }
+
+    //Ok, it's a PR and the Allow pragma isn't set.  Skip if the build is
+    //unstable.
+
+    return currentBuild.currentResult == 'UNSTABLE'
+}
+
 boolean skip_testing_stage() {
     return  env.NO_CI_TESTING == 'true' ||
             (skip_stage('build') &&
              rpm_test_version() == '') ||
             doc_only_change() ||
-            skip_stage('test')
+            skip_stage('test') ||
+            skip_if_unstable()
 }
 
 boolean skip_unit_test() {
@@ -1324,6 +1339,48 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
+                stage('Test CentOS 7 RPMs') {
+                    when {
+                        beforeAgent true
+                        expression { ! skip_test_rpms_centos7() }
+                    }
+                    agent {
+                        label 'ci_vm1'
+                    }
+                    steps {
+                        testRpm inst_repos: daos_repos(),
+                                daos_pkg_version: daos_packages_version()
+                   }
+                } // stage('Test CentOS 7 RPMs')
+                stage('Scan CentOS 7 RPMs') {
+                    when {
+                        beforeAgent true
+                        expression { ! skip_scan_rpms_centos7() }
+                    }
+                    agent {
+                        label 'ci_vm1'
+                    }
+                    steps {
+                        scanRpms inst_repos: daos_repos(),
+                                 daos_pkg_version: daos_packages_version(),
+                                 inst_rpms: 'clamav clamav-devel',
+                                 test_script: 'ci/rpm/scan_daos.sh',
+                                 junit_files: 'maldetect.xml'
+                    }
+                    post {
+                        always {
+                            junit 'maldetect.xml'
+                        }
+                    }
+                } // stage('Scan CentOS 7 RPMs')
+            } // parallel
+        } // stage('Test')
+        stage('Test Hardware') {
+            when {
+                beforeAgent true
+                expression { ! skip_testing_stage() }
+            }
+            parallel {
                 stage('Functional_Hardware_Small') {
                     when {
                         beforeAgent true
@@ -1387,42 +1444,8 @@ pipeline {
                         }
                     }
                 } // stage('Functional_Hardware_Large')
-                stage('Test CentOS 7 RPMs') {
-                    when {
-                        beforeAgent true
-                        expression { ! skip_test_rpms_centos7() }
-                    }
-                    agent {
-                        label 'ci_vm1'
-                    }
-                    steps {
-                        testRpm inst_repos: daos_repos(),
-                                daos_pkg_version: daos_packages_version()
-                   }
-                } // stage('Test CentOS 7 RPMs')
-                stage('Scan CentOS 7 RPMs') {
-                    when {
-                        beforeAgent true
-                        expression { ! skip_scan_rpms_centos7() }
-                    }
-                    agent {
-                        label 'ci_vm1'
-                    }
-                    steps {
-                        scanRpms inst_repos: daos_repos(),
-                                 daos_pkg_version: daos_packages_version(),
-                                 inst_rpms: 'clamav clamav-devel',
-                                 test_script: 'ci/rpm/scan_daos.sh',
-                                 junit_files: 'maldetect.xml'
-                    }
-                    post {
-                        always {
-                            junit 'maldetect.xml'
-                        }
-                    }
-                } // stage('Scan CentOS 7 RPMs')
             } // parallel
-        } // stage('Test')
+        } // stage('Test Hardware')
         stage ('Test Report') {
             parallel {
                 stage('Bullseye Report') {
