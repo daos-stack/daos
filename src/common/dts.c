@@ -269,16 +269,18 @@ pool_fini(struct dts_context *tsc)
 
 	if (tsc->tsc_pmem_file) { /* VOS mode */
 		vos_pool_close(tsc->tsc_poh);
-		rc = vos_pool_destroy(tsc->tsc_pmem_file, tsc->tsc_pool_uuid);
-		D_ASSERTF(rc == 0 || rc == -DER_NONEXIST, "rc="DF_RC"\n",
-			DP_RC(rc));
-
+		if (tsc_create_pool(tsc)) {
+			rc = vos_pool_destroy(tsc->tsc_pmem_file,
+					      tsc->tsc_pool_uuid);
+			D_ASSERTF(rc == 0 || rc == -DER_NONEXIST,
+				  "rc: "DF_RC"\n", DP_RC(rc));
+		}
 	} else { /* DAOS mode */
 		rc = daos_pool_disconnect(tsc->tsc_poh, NULL);
 		D_ASSERTF(rc == 0 || rc == -DER_NO_HDL, "rc="DF_RC"\n",
 			  DP_RC(rc));
 		MPI_Barrier(MPI_COMM_WORLD);
-		if (tsc->tsc_mpi_rank == 0) {
+		if (tsc->tsc_mpi_rank == 0 && tsc_create_pool(tsc)) {
 			rc = dmg_pool_destroy(dmg_config_file,
 					      tsc->tsc_pool_uuid, NULL, true);
 			D_ASSERTF(rc == 0 || rc == -DER_NONEXIST ||

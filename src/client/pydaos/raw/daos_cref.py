@@ -97,7 +97,7 @@ class DaosProperty(ctypes.Structure):
                 ("dpp_entries", ctypes.POINTER(DaosPropertyEntry))]
 
     def __init__(self, num_structs):
-        super(DaosProperty, self).__init__()
+        super().__init__()
         total_prop_entries = (DaosPropertyEntry * num_structs)()
         self.dpp_entries = ctypes.cast(total_prop_entries,
                                        ctypes.POINTER(DaosPropertyEntry))
@@ -181,7 +181,8 @@ class Anchor(ctypes.Structure):
                 ('da_padding', ctypes.c_uint32),
                 ('da_buff', ctypes.c_uint8*128)]
 
-class CallbackEvent(object):
+class CallbackEvent():
+    """ Class to represent a call back event. """
     def __init__(self, obj, event):
         self.obj = obj
         self.event = event

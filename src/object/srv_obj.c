@@ -103,7 +103,8 @@ obj_rw_complete(crt_rpc_t *rpc, struct obj_io_context *ioc,
 
 		if (rc != 0) {
 			D_CDEBUG(rc == -DER_REC2BIG || rc == -DER_INPROGRESS ||
-				 rc == -DER_TX_RESTART,
+				 rc == -DER_TX_RESTART || rc == -DER_EXIST ||
+				 rc == -DER_NONEXIST,
 				 DLOG_DBG, DLOG_ERR,
 				 DF_UOID " %s end failed: %d\n",
 				 DP_UOID(orwi->orw_oid),
