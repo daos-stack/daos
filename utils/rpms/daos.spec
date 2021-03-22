@@ -7,8 +7,8 @@
 %global __python %{__python3}
 
 Name:          daos
-Version:       1.1.3
-Release:       5%{?relval}%{?dist}
+Version:       1.1.4
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -401,6 +401,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Mon Mar 22 2021 Johann Lombardi <johann.lombardi@intel.com> 1.1.4-1
+- Version bump up to 1.1.4
+
 * Fri Mar 19 2021 Maureen Jean <maureen.jean@intel.com> 1.1.3-5
 - Update to python3
 
