@@ -20,7 +20,7 @@ class IorInterceptDfuseMix(IorTestBase):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-7068")
+    @skipForTicket("DAOS-5857")
     def test_ior_intercept_dfuse_mix(self):
         """Jira ID: DAOS-3500.
 
