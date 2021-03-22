@@ -32,32 +32,22 @@ sys.path.append('./util')
 
 # Can't call this import before setting sys.path
 # pylint: disable=wrong-import-position
-from cart_utils import CartUtils
+from cart_utils import CartTest
 
-class CartRpcOneNodeCrtEpAbortTest(Test):
+class CartRpcOneNodeCrtEpAbortTest(CartTest):
     """
     Runs basic CaRT RPC tests
 
     :avocado: recursive
     """
-    def setUp(self):
-        """ Test setup """
-        print("Running setup\n")
-        self.utils = CartUtils()
-        self.env = self.utils.get_env(self)
-
-    def tearDown(self):
-        """ Test tear down """
-        print("Run TearDown\n")
-
-    def test_cart_rpc(self):
+    def test_cart_ep_abort(self):
         """
         Test CaRT RPC
 
         :avocado: tags=all,cart,pr,daily_regression,test_crt_ep_abort
         """
-        srvcmd = self.utils.build_cmd(self, self.env, "test_servers")
-        clicmd = self.utils.build_cmd(self, self.env, "test_clients")
+        srvcmd = self.build_cmd(self.env, "test_servers")
+        clicmd = self.build_cmd(self.env, "test_clients")
 
-        self.utils.launch_srv_cli_test(self, srvcmd, clicmd)
-        self.utils.log_check(self)
+        self.launch_srv_cli_test(srvcmd, clicmd)
+        self.log_check()

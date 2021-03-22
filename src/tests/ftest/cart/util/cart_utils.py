@@ -16,7 +16,8 @@ import socket
 from apricot import TestWithoutServers
 from general_utils import stop_processes
 from write_host_file import write_host_file
-
+from env_modules import load_mpi
+from distutils.spawn import find_executable
 
 class CartTest(TestWithoutServers):
     """Define a Cart test case."""
@@ -235,7 +236,7 @@ class CartTest(TestWithoutServers):
                   "--suppressions=../etc/memcheck-cart.supp " + \
                   "--show-reachable=yes "
 
-        self.init_mpi("openmpi")
+        load_mpi("openmpi")
 
         openmpi_path = os.environ["PATH"]
         openmpi_path += ":/usr/lib64/openmpi3/bin"
@@ -249,6 +250,7 @@ class CartTest(TestWithoutServers):
         _tst_arg = self.params.get("{}_arg".format(host), "/run/tests/*/")
         _tst_env = self.params.get("{}_env".format(host), "/run/tests/*/")
         _tst_slt = self.params.get("{}_slt".format(host), "/run/tests/*/")
+        _tst_ppn = self.params.get("{}_ppn".format(host), "/run/tests/*/")
         _tst_ctx = "16"
         if "{}_CRT_CTX_NUM".format(host) in os.environ:
             _tst_ctx = os.environ["{}_CRT_CTX_NUM".format(host)]
