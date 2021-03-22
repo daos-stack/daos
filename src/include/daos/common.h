@@ -230,6 +230,12 @@ daos_getntime_coarse(void)
 }
 
 static inline uint64_t
+daos_getmtime_coarse(void)
+{
+	return daos_getntime_coarse() / NSEC_PER_MSEC;
+}
+
+static inline uint64_t
 daos_getutime(void)
 {
 	struct timespec tv;

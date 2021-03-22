@@ -565,7 +565,7 @@ crt_context_flush(crt_context_t crt_ctx, uint64_t timeout)
 }
 
 int
-crt_ep_abort(crt_endpoint_t *ep)
+crt_rank_abort(d_rank_t rank)
 {
 	struct crt_context	*ctx = NULL;
 	d_list_t		*rlink;
@@ -578,8 +578,7 @@ crt_ep_abort(crt_endpoint_t *ep)
 		rc = 0;
 		D_MUTEX_LOCK(&ctx->cc_mutex);
 		rlink = d_hash_rec_find(&ctx->cc_epi_table,
-					(void *)&ep->ep_rank,
-					sizeof(ep->ep_rank));
+					(void *)&rank, sizeof(rank));
 		if (rlink != NULL) {
 			flags = CRT_EPI_ABORT_FORCE;
 			rc = crt_ctx_epi_abort(rlink, &flags);
@@ -589,7 +588,7 @@ crt_ep_abort(crt_endpoint_t *ep)
 		if (rc != 0) {
 			D_ERROR("context (idx %d), ep_abort (rank %d), "
 				"failed rc: %d.\n",
-				ctx->cc_idx, ep->ep_rank, rc);
+				ctx->cc_idx, rank, rc);
 			break;
 		}
 	}
@@ -597,6 +596,46 @@ crt_ep_abort(crt_endpoint_t *ep)
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
 	return rc;
+}
+
+int
+crt_ep_abort(crt_endpoint_t *ep) {
+	return crt_rank_abort(ep->ep_rank);
+}
+
+int
+crt_rank_abort_all(crt_group_t *grp)
+{
+	struct crt_grp_priv	*grp_priv;
+	d_rank_list_t		*grp_membs;
+	int			i;
+	int			rc, rc2;
+
+	grp_priv = crt_grp_pub2priv(grp);
+	grp_membs = grp_priv_get_membs(grp_priv);
+	rc2 = 0;
+
+	if (grp_membs == NULL) {
+		D_ERROR("No members in the group\n");
+		D_GOTO(out, rc2 = -DER_INVAL);
+	}
+
+	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
+	for (i = 0; i < grp_membs->rl_nr; i++) {
+		D_DEBUG(DB_ALL, "Aborting RPCs to rank=%d\n",
+			grp_membs->rl_ranks[i]);
+
+		rc = crt_rank_abort(grp_membs->rl_ranks[i]);
+		if (rc != DER_SUCCESS) {
+			D_WARN("Abort to rank=%d failed with rc=%d\n",
+			       grp_membs->rl_ranks[i], rc);
+			rc2 = rc;
+		}
+	}
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
+
+out:
+	return rc2;
 }
 
 /* caller should already hold crt_ctx->cc_mutex */
