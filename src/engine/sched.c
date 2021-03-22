@@ -1554,6 +1554,9 @@ sched_start_cycle(struct sched_data *data, ABT_pool *pools)
  * address from ABT_unit.)
  */
 
+/* Update the hack code once Argobots upgraded */
+D_CASSERT(ABT_NUMVERSION == 10100201 /* 1.1rc1 */);
+
 /* Hack start */
 struct ABTI_thread_dup;
 
@@ -1590,7 +1593,7 @@ sched_watchdog_prep(struct dss_xstream *dx, ABT_unit unit,
 	if (!watchdog_enabled(dx))
 		return;
 
-	su->su_start = daos_getntime_coarse() / NSEC_PER_MSEC;
+	su->su_start = daos_getmtime_coarse();
 	su->su_func_addr = td->f_thread;
 }
 
@@ -1605,7 +1608,7 @@ sched_watchdog_post(struct dss_xstream *dx, struct sched_unit *su)
 	if (!watchdog_enabled(dx))
 		return;
 
-	cur = daos_getntime_coarse() / NSEC_PER_MSEC;
+	cur = daos_getmtime_coarse();
 	D_ASSERT(cur >= su->su_start);
 	elapsed = cur - su->su_start;
 
