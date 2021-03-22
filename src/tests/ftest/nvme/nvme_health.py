@@ -9,6 +9,8 @@ from nvme_utils import ServerFillUp, get_device_ids
 from test_utils_pool import TestPool
 from dmg_utils import DmgCommand
 from command_utils_base import CommandFailure
+from apricot import skipForTicket
+
 
 class NvmeHealth(ServerFillUp):
     # pylint: disable=too-many-ancestors
@@ -16,6 +18,8 @@ class NvmeHealth(ServerFillUp):
     Test Class Description: To validate NVMe health test cases
     :avocado: recursive
     """
+
+    @skipForTicket("DAOS-7011")
     def test_monitor_for_large_pools(self):
         """Jira ID: DAOS-4722.
 
@@ -30,37 +34,37 @@ class NvmeHealth(ServerFillUp):
         # pylint: disable=attribute-defined-outside-init
         # pylint: disable=too-many-branches
         no_of_pools = self.params.get("number_of_pools", '/run/pool/*')
-        #Stop the servers to run SPDK too to get the server capacity
+        # Stop the servers to run SPDK too to get the server capacity
         self.stop_servers()
         storage = self.get_nvme_max_capacity()
         self.start_servers()
 
-        #Create the pool from 80% of available of storage space
+        # Create the pool from 80% of available of storage space
         single_pool_nvme_size = int((storage * 0.80)/no_of_pools)
 
         self.pool = []
-        #Create the Large number of pools
+        # Create the Large number of pools
         for _pool in range(no_of_pools):
             pool = TestPool(self.context, self.get_dmg_command())
             pool.get_params(self)
-            #SCM size is 10% of NVMe
+            # SCM size is 10% of NVMe
             pool.scm_size.update('{}'.format(int(single_pool_nvme_size * 0.10)))
             pool.nvme_size.update('{}'.format(single_pool_nvme_size))
             pool.create()
             self.pool.append(pool)
 
-        #initialize the dmg command
+        # initialize the dmg command
         self.dmg = DmgCommand(os.path.join(self.prefix, "bin"))
         self.dmg.get_params(self)
         self.dmg.insecure.update(
             self.server_managers[0].get_config_value("allow_insecure"),
             "dmg.insecure")
 
-        #List all pools
+        # List all pools
         self.dmg.set_sub_command("storage")
         self.dmg.sub_command_class.set_sub_command("query")
-        self.dmg.sub_command_class.sub_command_class.\
-        set_sub_command("list-pools")
+        self.dmg.sub_command_class.sub_command_class.set_sub_command(
+            "list-pools")
         for host in self.hostlist_servers:
             self.dmg.hostlist = host
             try:
@@ -69,7 +73,7 @@ class NvmeHealth(ServerFillUp):
                 self.fail("dmg command failed: {}".format(error))
             #Verify all pools UUID listed as part of query
             for pool in self.pool:
-                if pool.uuid.lower() not in result.stdout:
+                if pool.uuid.lower() not in result.stdout_text:
                     self.fail('Pool uuid {} not found in smd query'
                               .format(pool.uuid.lower()))
 
@@ -84,7 +88,7 @@ class NvmeHealth(ServerFillUp):
                     result = self.dmg.storage_query_device_health(_dev)
                 except CommandFailure as error:
                     self.fail("dmg get device states failed {}".format(error))
-                if 'State:NORMAL' not in result.stdout:
+                if 'State:NORMAL' not in result.stdout_text:
                     self.fail("device {} on host {} is not NORMAL"
                               .format(_dev, host))
 

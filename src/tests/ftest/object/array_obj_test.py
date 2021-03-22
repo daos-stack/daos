@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from __future__ import print_function
+
 
 import time
 import traceback
@@ -21,7 +21,7 @@ class ArrayObjTest(TestWithServers):
     :avocado: recursive
     """
     def setUp(self):
-        super(ArrayObjTest, self).setUp()
+        super().setUp()
         self.plog = logging.getLogger("progress")
 
     def test_array_obj(self):
@@ -54,15 +54,14 @@ class ArrayObjTest(TestWithServers):
 
             # create an object and write some data into it
             thedata = []
-            thedata.append("data string one")
-            thedata.append("data string two")
-            thedata.append("data string tre")
-            dkey = "this is the dkey"
-            akey = "this is the akey"
+            thedata.append(b"data string one")
+            thedata.append(b"data string two")
+            thedata.append(b"data string tre")
+            dkey = b"this is the dkey"
+            akey = b"this is the akey"
 
             self.plog.info("writing array to dkey >%s< akey >%s<.", dkey, akey)
-            oid = container.write_an_array_value(thedata, dkey, akey,
-                                                 obj_cls=3)
+            oid = container.write_an_array_value(thedata, dkey, akey, obj_cls=3)
 
             # read the data back and make sure its correct
             length = len(thedata[0])
