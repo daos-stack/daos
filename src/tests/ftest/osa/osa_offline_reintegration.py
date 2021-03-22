@@ -9,6 +9,7 @@ from osa_utils import OSAUtils
 from daos_utils import DaosCommand
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
+from apricot import skipForTicket
 
 
 class OSAOfflineReintegration(OSAUtils):
@@ -34,6 +35,7 @@ class OSAOfflineReintegration(OSAUtils):
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
         self.dmg_command.exit_status_exception = True
+        self.pool_cont_dict = {}
 
     def run_offline_reintegration_test(self, num_pool, data=False,
                                        server_boot=False, oclass=None):
@@ -88,10 +90,16 @@ class OSAOfflineReintegration(OSAUtils):
                         self.simple_exclude_reintegrate_loop(rank[val])
                     output = self.dmg_command.pool_exclude(self.pool.uuid,
                                                            rank[val])
+                    # Check the IOR data after exclude
+                    if data:
+                        self.run_ior_thread("Read", oclass, test_seq)
                 else:
                     output = self.dmg_command.system_stop(ranks=rank[val],
                                                           force=True)
                     self.print_and_assert_on_rebuild_failure(output)
+                    # Check the IOR data after system stop
+                    if data:
+                        self.run_ior_thread("Read", oclass, test_seq)
                     output = self.dmg_command.system_start(ranks=rank[val])
                 # Just try to reintegrate rank 5
                 if (self.test_during_rebuild is True and val == 2):
@@ -136,12 +144,11 @@ class OSAOfflineReintegration(OSAUtils):
             if data:
                 self.run_ior_thread("Read", oclass, test_seq)
                 self.run_mdtest_thread()
-                if self.test_during_rebuild is True:
-                    self.container = self.pool_cont_dict[self.pool]
-                    kwargs = {"pool": self.pool.uuid,
-                              "cont": self.container.uuid}
-                    output = self.daos_command.container_check(**kwargs)
-                    self.log.info(output)
+                self.container = self.pool_cont_dict[self.pool][0]
+                kwargs = {"pool": self.pool.uuid,
+                          "cont": self.container.uuid}
+                output = self.daos_command.container_check(**kwargs)
+                self.log.info(output)
 
     def test_osa_offline_reintegration_multiple_pools(self):
         """Test ID: DAOS-6923
@@ -179,6 +186,7 @@ class OSAOfflineReintegration(OSAUtils):
                                                    '/run/rebuild/*')
         self.run_offline_reintegration_test(1, data=True)
 
+    @skipForTicket("DAOS-6925")
     def test_osa_offline_reintegration_oclass(self):
         """Test ID: DAOS-6923
         Test Description: Validate Offline Reintegration
