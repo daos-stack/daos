@@ -17,7 +17,7 @@
 #include "configini.h"
 #include "daos_errno.h"
 
-/* Section names */
+/* Configini Section names */
 #define DEFAULT_SCALE_NAME			"threshold"
 #define DEFAULT_VALUE_NAME			"default_values"
 #define RAW_DATA_EXTENSION			"raw"
@@ -28,6 +28,13 @@
 #define MAX_NUMBER_KEYS				200
 #define CRT_SELF_TEST_AUTO_BULK_THRESH		(1 << 20)
 #define CRT_SELF_TEST_GROUP_NAME		("crt_self_test")
+
+/* User input maximum values */
+#define SELF_TEST_MAX_REPETITIONS		(0x40000000)
+#define SELF_TEST_MAX_INFLIGHT			(0x40000000)
+#define SELF_TEST_MAX_LIST_STR_LEN		(1 << 16)
+#define SELF_TEST_MAX_NUM_ENDPOINTS		(UINT32_MAX)
+#define SELF_TEST_MAX_RAW_DATA_OUTPUT		(0x00000400)
 
 struct st_size_params {
 	uint32_t send_size;
@@ -99,48 +106,71 @@ static struct status_feature status[] = {
 	{"max", 0, 0, TST_HIGH | TST_OUTPUT, "Maximum"},
 };
 
-/* User input maximum values */
-#define SELF_TEST_MAX_REPETITIONS	(0x40000000)
-#define SELF_TEST_MAX_INFLIGHT		(0x40000000)
-#define SELF_TEST_MAX_LIST_STR_LEN	(1 << 16)
-#define SELF_TEST_MAX_NUM_ENDPOINTS	(UINT32_MAX)
-#define SELF_TEST_MAX_RAW_DATA_OUTPUT	(0x00000400)
-
 /* Global shutdown flag, used to terminate the progress thread */
-static int		g_shutdown_flag;
-const int		g_default_rep_count = 10000;
-static bool		g_randomize_endpoints;
+struct global_params {
+	int			g_shutdown_flag;
+	const int		g_default_rep_count;
+	bool			g_randomize_endpoints;
+	char			*g_dest_name;
+	struct st_endpoint	*g_endpts;
+	struct st_endpoint	*g_ms_endpts;
+	uint32_t		 g_num_endpts;
+	uint32_t		 g_num_ms_endpts;
+	char			*g_msg_sizes_str;
+	int			 g_rep_count;
+	int			 g_max_inflight;
+	int16_t			 g_buf_alignment;
+	float			 g_scale_factor;
+	int			 g_output_megabits;
+	int			 g_raw_data;
+	char			*g_attach_info_path;
+	char			*g_expected_outfile;
+	char			*g_expected_infile;
+	char			*g_expected_results;
+	char			*g_config_append;
 
-char			*g_dest_name;
-struct st_endpoint	*g_endpts;
-struct st_endpoint	*g_ms_endpts;
-uint32_t		 g_num_endpts;
-uint32_t		 g_num_ms_endpts;
+	const int		 g_default_max_inflight;
+	bool			 alloc_g_dest_name;
+	bool			 alloc_g_msg_sizes_str;
+	bool			 alloc_g_attach_info_path;
+	bool			 alloc_g_expected_outfile;
+	bool			 alloc_g_expected_infile;
+	bool			 alloc_g_expected_results;
+	bool			 alloc_g_config_append;
+	Config			*cfg_output;
+};
 
-char			*g_msg_sizes_str;
-int			 g_rep_count;
-int			 g_max_inflight;
-int16_t			 g_buf_alignment =
-				CRT_ST_BUF_ALIGN_DEFAULT;
-float			 g_scale_factor = INVALID_SCALING;
-int			 g_output_megabits;
-int			 g_raw_data;
-char			*g_attach_info_path;
-char			*g_expected_outfile;
-char			*g_expected_infile;
-char			*g_expected_results;
-char			*g_config_append;
-
-const int		 g_default_max_inflight = 1000;
-bool			 alloc_g_dest_name = true;
-bool			 alloc_g_msg_sizes_str;
-bool			 alloc_g_attach_info_path = true;
-bool			 alloc_g_expected_outfile;
-bool			 alloc_g_expected_infile;
-bool			 alloc_g_expected_results;
-bool			 alloc_g_config_append;
-
-Config			*cfg_output;
+struct global_params gbl = {
+	0,			/*  g_shutdown_flag; */
+	10000,			/*  g_default_rep_count; */
+	false,			/*  g_randomize_endpoints; */
+	NULL,			/* *g_dest_name; */
+	NULL,			/* *g_endpts; */
+	NULL,			/* *g_ms_endpts; */
+	0,			/*  g_num_endpts; */
+	0,			/*  g_num_ms_endpts; */
+	NULL,			/* *g_msg_sizes_str; */
+	0,			/*  g_rep_count; */
+	0,			/*  g_max_inflight; */
+	CRT_ST_BUF_ALIGN_DEFAULT,/*	g_buf_alignment;  */
+	INVALID_SCALING,	/* g_scale_factor; */
+	0,			/* g_output_megabits; */
+	0,			/*  g_raw_data; */
+	NULL,			/* *g_attach_info_path; */
+	NULL,			/* *g_expected_outfile; */
+	NULL,			/* *g_expected_infile; */
+	NULL,			/* *g_expected_results; */
+	NULL,			/* *g_config_append; */
+	1000,			/*  g_default_max_inflight; */
+	true,			/*  alloc_g_dest_name; */
+	false,			/*  alloc_g_msg_sizes_str; */
+	true,			/*  alloc_g_attach_info_path; */
+	false,			/*  alloc_g_expected_outfile; */
+	false,			/*  alloc_g_expected_infile; */
+	false,			/*  alloc_g_expected_results; */
+	false,			/*  alloc_g_config_append; */
+	NULL,			/* *cfg_output; */
+};
 
 static struct option long_options[] = {
 	{"file-name", required_argument, 0, 'f'},
@@ -199,7 +229,7 @@ progress_fn(void *arg)
 	D_ASSERT(crt_ctx != NULL);
 	D_ASSERT(*crt_ctx != NULL);
 
-	while (!g_shutdown_flag) {
+	while (!gbl.g_shutdown_flag) {
 		ret = crt_progress(*crt_ctx, 1);
 		if (ret != 0 && ret != -DER_TIMEDOUT) {
 			D_ERROR("crt_progress failed; ret = %d\n", ret);
@@ -262,7 +292,7 @@ self_test_init(char *dest_name, crt_context_t *crt_ctx,
 
 	DBG_PRINT("Attached %s\n", dest_name);
 
-	g_shutdown_flag = 0;
+	gbl.g_shutdown_flag = 0;
 
 	ret = pthread_create(tid, NULL, progress_fn, crt_ctx);
 	if (ret != 0) {
@@ -526,7 +556,7 @@ print_results(struct st_latency *latencies,
 	      char *section_name_raw)
 {
 	ConfigRet	 ret;
-	Config		*Ocfg = cfg_output;
+	Config		*Ocfg = gbl.cfg_output;
 	uint32_t	 local_rep;
 	uint32_t	 num_failed = 0;
 	uint32_t	 num_passed = 0;
@@ -594,7 +624,7 @@ print_results(struct st_latency *latencies,
 #endif
 		/* Place raw data into output configuration */
 		if ((section_name_raw != NULL)  &&
-		    (local_rep <= g_raw_data) &&
+		    (local_rep <= gbl.g_raw_data) &&
 		    (latencies[local_rep].cci_rc >= 0)) {
 			snprintf(new_key_name, sizeof(new_key_name),
 				 "%s-%d:%d-:%05d", master,
@@ -847,20 +877,21 @@ config_create_output_config(char *section_name, bool remove)
 	/*
 	 * Read result file if specified and exists.
 	 * Not requirement that file exist so don't exit if cannot be read.
-	 * May be called more than once so verify that cfg_output == null
+	 * May be called more than once so verify that gbl.cfg_output == null
 	 * Else, open new configuration to use.
 	 */
-	if ((g_expected_outfile != NULL) && (cfg_output == NULL)) {
-		config_ret = ConfigReadFile(g_expected_outfile, &cfg_output);
+	if ((gbl.g_expected_outfile != NULL) && (gbl.cfg_output == NULL)) {
+		config_ret = ConfigReadFile(gbl.g_expected_outfile,
+					    &gbl.cfg_output);
 		if (config_ret != CONFIG_OK) {
 			D_WARN("Output file does not exist: %s\n",
-			       g_expected_outfile);
+			       gbl.g_expected_outfile);
 		}
 	}
 	/* Output config does not exist or couldn't be open, create one */
-	if (cfg_output == NULL) {
-		cfg_output = ConfigNew();
-		if (cfg_output == NULL) {
+	if (gbl.cfg_output == NULL) {
+		gbl.cfg_output = ConfigNew();
+		if (gbl.cfg_output == NULL) {
 			/* avoid checkpatch warning */
 			D_GOTO(cleanup, ret_value = -ENOMEM);
 		}
@@ -875,16 +906,16 @@ config_create_output_config(char *section_name, bool remove)
 		/* avoid checkpatch warning */
 		D_GOTO(cleanup, ret_value = -ENOMEM);
 	}
-	ret_value = config_create_section(cfg_output, new_section_name,
+	ret_value = config_create_section(gbl.cfg_output, new_section_name,
 					  remove);
 
 	/* Create section for raw data */
-	if (g_raw_data != 0) {
+	if (gbl.g_raw_data != 0) {
 		char	*section_name_raw;
 
 		section_name_raw = config_section_name_add(new_section_name,
 							   RAW_DATA_EXTENSION);
-		config_create_section(cfg_output, section_name_raw,
+		config_create_section(gbl.cfg_output, section_name_raw,
 				      remove);
 		free(section_name_raw);
 	}
@@ -1211,11 +1242,12 @@ compare_print_results(char *section_name, char *input_section_name,
 				       sizeof(struct status_feature);
 
 	/* Read in expected file if specified */
-	if (g_expected_infile != NULL) {
-		config_ret = ConfigReadFile(g_expected_infile, &cfg_expected);
+	if (gbl.g_expected_infile != NULL) {
+		config_ret = ConfigReadFile(gbl.g_expected_infile,
+					    &cfg_expected);
 		if (config_ret != CONFIG_OK) {
 			D_ERROR("Cannot open expected file: %s\n",
-				g_expected_infile);
+				gbl.g_expected_infile);
 			D_GOTO(cleanup, ret_value = -ENOENT);
 		}
 	}
@@ -1242,11 +1274,11 @@ compare_print_results(char *section_name, char *input_section_name,
 	 * -----------------------
 	 */
 	/* Use global scaling factor if specified */
-	if (g_scale_factor != INVALID_SCALING) {
+	if (gbl.g_scale_factor != INVALID_SCALING) {
 		/* avoid checkpatch warning */
 		for (i = 0; i < status_size; i++) {
 			/* avoid checkpatch warning */
-			status[i].scale = g_scale_factor;
+			status[i].scale = gbl.g_scale_factor;
 		}
 	}
 
@@ -1303,7 +1335,7 @@ compare_print_results(char *section_name, char *input_section_name,
 	 * which are constant.  Therefore, allocate a region for string
 	 * manipulation. (strtok modifies string it is working on).
 	 */
-	if (g_expected_results != NULL) {
+	if (gbl.g_expected_results != NULL) {
 		char	*str;
 		char	*save_str;
 		char	*save_str_outer;
@@ -1314,12 +1346,12 @@ compare_print_results(char *section_name, char *input_section_name,
 		int	 j;
 
 		/* alloc temporary string storage and copy to it */
-		str = (char *)malloc(strlen(g_expected_results));
+		str = (char *)malloc(strlen(gbl.g_expected_results));
 		if (str == NULL) {
 			D_ERROR(" Memory Not allocated\n");
 			D_GOTO(cleanup, ret_value = -ENOENT);
 		}
-		strcpy(str, g_expected_results);
+		strcpy(str, gbl.g_expected_results);
 		tptr = str;
 
 		/* first, mark status not to print */
@@ -1414,7 +1446,8 @@ next_arg:
 
 			/* Get number of keys in section */
 			number_keys = 0;
-			number_keys = ConfigGetKeys(cfg_output, section_name,
+			number_keys = ConfigGetKeys(gbl.cfg_output,
+						    section_name,
 						    key_names, max,
 						    number_keys);
 			total_number_keys = number_keys;
@@ -1436,7 +1469,7 @@ next_arg:
 					D_GOTO(increment_code, ret_value);
 				}
 
-				ConfigReadInt(cfg_output, section_name,
+				ConfigReadInt(gbl.cfg_output, section_name,
 					      key_names[j], &ivalue, 0);
 				value = (float)ivalue;
 				key = key_names[j];
@@ -1543,7 +1576,8 @@ next_arg:
 				}
 
 				/* Place results into result section */
-				ConfigAddString(cfg_output, result_section_name,
+				ConfigAddString(gbl.cfg_output,
+						result_section_name,
 						key, compar_result);
 increment_code:
 				/* loop control:*/
@@ -1551,9 +1585,10 @@ increment_code:
 				if (j == number_keys) {
 					char	*sn = section_name;
 					int	 tnk = total_number_keys;
+					Config	*cout = gbl.cfg_output;
 
 					j = 0;
-					number_keys = ConfigGetKeys(cfg_output,
+					number_keys = ConfigGetKeys(cout,
 								    sn,
 								    key_names,
 								    max, tnk);
@@ -1603,13 +1638,13 @@ combine_results(Config *cfg_results, char *section_name)
 		/* Check to see if key occurres in results */
 		if (ret == CONFIG_OK) {
 			/* Check to see if key already exist in output */
-			ret = ConfigReadInt(cfg_output, section_name,
+			ret = ConfigReadInt(gbl.cfg_output, section_name,
 					    key_name, &temp2, dfault);
 			if (ret == CONFIG_OK) {
-				ConfigRemoveKey(cfg_output, section_name,
+				ConfigRemoveKey(gbl.cfg_output, section_name,
 						key_name);
 			}
-			ConfigAddInt(cfg_output, section_name,
+			ConfigAddInt(gbl.cfg_output, section_name,
 				     new_key_name, temp);
 		}
 	}
@@ -1620,16 +1655,17 @@ combine_results(Config *cfg_results, char *section_name)
 	ConfigPrintSection(cfg_results, stdout, section_name);
 
 	printf("\n Output file results\n");
-	ConfigPrintSection(cfg_output, stdout, section_name);
+	ConfigPrintSection(gbl.cfg_output, stdout, section_name);
 #endif
 
 	/* print out results if file specified */
-	if (g_expected_outfile != NULL) {
+	if (gbl.g_expected_outfile != NULL) {
 		/* avoid checkpatch warning */
-		ret = ConfigPrintToFile(cfg_output, g_expected_outfile);
+		ret = ConfigPrintToFile(gbl.cfg_output,
+					gbl.g_expected_outfile);
 		if (ret != CONFIG_OK) {
 			D_ERROR("Fail to write to output file: %s\n",
-				g_expected_outfile);
+				gbl.g_expected_outfile);
 		ret_value = -ENOENT;
 		}
 	}
@@ -1719,9 +1755,9 @@ config_section_name_create(char *section_name,
 		/* avoid checkpatch warning */
 		len = strlen(section_name) + 2;
 	}
-	if (g_config_append != NULL) {
+	if (gbl.g_config_append != NULL) {
 		/* avoid checkpatch warning */
-		len += strlen(g_config_append);
+		len += strlen(gbl.g_config_append);
 	}
 	name_str = (char *)malloc(len + 1);
 	if (name_str == NULL) {
@@ -1734,11 +1770,11 @@ config_section_name_create(char *section_name,
 	 * Otherwise, create a name based on test parameters.
 	 */
 	if (section_name != NULL) {
-		if (g_config_append == NULL) {
+		if (gbl.g_config_append == NULL) {
 			snprintf(name_str, len, "%s", section_name);
 		} else {
 			snprintf(name_str, len, "%s_%s", section_name,
-				 g_config_append);
+				 gbl.g_config_append);
 		}
 	} else {
 		/* Verify we have test parameters passed. */
@@ -2019,14 +2055,14 @@ test_msg_size(crt_context_t crt_ctx,
 		D_ERROR("No memory allocated for sector name");
 		D_GOTO(exit_code, ret_value = -ENOMEM);
 	}
-	config_create_section(cfg_output, section_name, false);
+	config_create_section(gbl.cfg_output, section_name, false);
 
 	/* Create section for raw data */
-	if (g_raw_data != 0) {
+	if (gbl.g_raw_data != 0) {
 		section_name_raw = config_section_name_add(section_name,
 							   RAW_DATA_EXTENSION);
 		if (section_name_raw != NULL) {
-			config_create_section(cfg_output, section_name_raw,
+			config_create_section(gbl.cfg_output, section_name_raw,
 					      false);
 		}
 	}
@@ -2039,7 +2075,8 @@ test_msg_size(crt_context_t crt_ctx,
 						      RESULT_EXTENSION);
 	if (section_name_result != NULL) {
 		/* avoid checkpatch warning */
-		config_create_section(cfg_output, section_name_result, true);
+		config_create_section(gbl.cfg_output, section_name_result,
+				      true);
 	}
 
 	/* Create temporary configuration structure to store results */
@@ -2337,7 +2374,7 @@ run_self_test(struct st_size_params all_params[],
 		D_ASSERT(latencies_bulk_hdl != CRT_BULK_NULL);
 	}
 
-	if (g_randomize_endpoints) {
+	if (gbl.g_randomize_endpoints) {
 		/* Avoid checkpatch warning */
 		randomize_endpts(endpts, num_endpts);
 	}
@@ -2377,7 +2414,7 @@ run_self_test(struct st_size_params all_params[],
 
 cleanup:
 	/* Tell the progress thread to abort and exit */
-	g_shutdown_flag = 1;
+	gbl.g_shutdown_flag = 1;
 
 	cleanup_ret = pthread_join(tid, NULL);
 	if (cleanup_ret)
@@ -3241,12 +3278,12 @@ config_file_setup(char *file_name, char *section_name,
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		len = strlen(string) + 1;
-		g_dest_name = (char *)malloc(len);
-		if (g_dest_name == NULL) {
+		gbl.g_dest_name = (char *)malloc(len);
+		if (gbl.g_dest_name == NULL) {
 			/* Avoid checkpatch warning */
 			D_GOTO(cleanup, ret = -ENOMEM);
 		}
-		memcpy(g_dest_name, string, len);
+		memcpy(gbl.g_dest_name, string, len);
 	}
 
 	/********/
@@ -3255,8 +3292,8 @@ config_file_setup(char *file_name, char *section_name,
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		/* Avoid checkpatch warning */
-		parse_endpoint_string(&string[0], &g_ms_endpts,
-				      &g_num_ms_endpts);
+		parse_endpoint_string(&string[0], &gbl.g_ms_endpts,
+				      &gbl.g_num_ms_endpts);
 	}
 
 	/********/
@@ -3265,7 +3302,8 @@ config_file_setup(char *file_name, char *section_name,
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		/* Avoid checkpatch warning */
-		parse_endpoint_string(&string[0], &g_endpts, &g_num_endpts);
+		parse_endpoint_string(&string[0], &gbl.g_endpts,
+				      &gbl.g_num_endpts);
 	}
 
 	/********/
@@ -3274,13 +3312,13 @@ config_file_setup(char *file_name, char *section_name,
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		len = strlen(string) + 1;
-		g_msg_sizes_str = (char *)malloc(len);
-		if (g_msg_sizes_str == NULL) {
+		gbl.g_msg_sizes_str = (char *)malloc(len);
+		if (gbl.g_msg_sizes_str == NULL) {
 			/* Avoid checkpatch warning */
 			D_GOTO(cleanup, ret = -ENOMEM);
 		}
-		alloc_g_msg_sizes_str = true;
-		memcpy(g_msg_sizes_str, string, len);
+		gbl.alloc_g_msg_sizes_str = true;
+		memcpy(gbl.g_msg_sizes_str, string, len);
 	}
 
 	/********/
@@ -3289,12 +3327,12 @@ config_file_setup(char *file_name, char *section_name,
 				      &string[0], STRING_MAX_SIZE,
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
-		sret = sscanf(&string[0], "%d", &g_rep_count);
+		sret = sscanf(&string[0], "%d", &gbl.g_rep_count);
 		if (sret != 1) {
-			g_rep_count = g_default_rep_count;
+			gbl.g_rep_count = gbl.g_default_rep_count;
 			printf("Warning: Invalid repetitions-per-size\n"
 			       "  Using default value %d instead\n",
-			       g_rep_count);
+			       gbl.g_rep_count);
 		}
 	}
 
@@ -3304,12 +3342,12 @@ config_file_setup(char *file_name, char *section_name,
 				      &string[0], STRING_MAX_SIZE,
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
-		sret = sscanf(&string[0], "%d", &g_max_inflight);
+		sret = sscanf(&string[0], "%d", &gbl.g_max_inflight);
 		if (sret != 1) {
-			g_max_inflight = g_default_max_inflight;
+			gbl.g_max_inflight = gbl.g_default_max_inflight;
 			printf("Warning: Invalid max-inflight-rpcs\n"
 			"  Using default value %d instead\n",
-			g_max_inflight);
+			gbl.g_max_inflight);
 		}
 	}
 
@@ -3318,14 +3356,14 @@ config_file_setup(char *file_name, char *section_name,
 				      &string[0], STRING_MAX_SIZE,
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
-		sret = sscanf(string, "%" SCNd16, &g_buf_alignment);
-		if (sret != 1 || g_buf_alignment < CRT_ST_BUF_ALIGN_MIN ||
-		    g_buf_alignment > CRT_ST_BUF_ALIGN_MAX) {
+		sret = sscanf(string, "%" SCNd16, &gbl.g_buf_alignment);
+		if (sret != 1 || gbl.g_buf_alignment < CRT_ST_BUF_ALIGN_MIN ||
+		    gbl.g_buf_alignment > CRT_ST_BUF_ALIGN_MAX) {
 			printf("Warning: Invalid align value %d;"
 			       " Expected value in range [%d:%d]\n",
-			       g_buf_alignment, CRT_ST_BUF_ALIGN_MIN,
+			       gbl.g_buf_alignment, CRT_ST_BUF_ALIGN_MIN,
 			       CRT_ST_BUF_ALIGN_MAX);
-			g_buf_alignment = CRT_ST_BUF_ALIGN_DEFAULT;
+			gbl.g_buf_alignment = CRT_ST_BUF_ALIGN_DEFAULT;
 		}
 	}
 
@@ -3336,9 +3374,9 @@ config_file_setup(char *file_name, char *section_name,
 	if (config_ret == CONFIG_OK) {
 		sret = sscanf(&string[0], "%d", &temp);
 		if (temp == 0)
-			g_output_megabits = 0;
+			gbl.g_output_megabits = 0;
 		else
-			g_output_megabits = 1;
+			gbl.g_output_megabits = 1;
 	}
 
 #ifdef INCLUDE_OBSOLETE
@@ -3355,9 +3393,9 @@ config_file_setup(char *file_name, char *section_name,
 	if (config_ret == CONFIG_OK) {
 		sret = sscanf(&string[0], "%d", &temp);
 		if (temp == 0)
-			g_randomize_endpoints = false;
+			gbl.g_randomize_endpoints = false;
 		else
-			g_randomize_endpoints = true;
+			gbl.g_randomize_endpoints = true;
 	}
 
 	/********/
@@ -3366,12 +3404,12 @@ config_file_setup(char *file_name, char *section_name,
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		len = strlen(string) + 1;
-		g_attach_info_path = (char *)malloc(len);
-		if (g_attach_info_path == NULL) {
+		gbl.g_attach_info_path = (char *)malloc(len);
+		if (gbl.g_attach_info_path == NULL) {
 			/* Avoid checkpatch warning */
 			D_GOTO(cleanup, ret = -ENOMEM);
 		}
-		memcpy(g_attach_info_path, string, len);
+		memcpy(gbl.g_attach_info_path, string, len);
 	}
 
 	/**********/
@@ -3381,7 +3419,7 @@ config_file_setup(char *file_name, char *section_name,
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		/* Avoid checkpatch warning */
-		sret = sscanf(&string[0], "%f", &g_scale_factor);
+		sret = sscanf(&string[0], "%f", &gbl.g_scale_factor);
 	}
 
 	/**********/
@@ -3390,9 +3428,10 @@ config_file_setup(char *file_name, char *section_name,
 				      &string[0], STRING_MAX_SIZE,
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
-		sret = sscanf(&string[0], "%d", &g_raw_data);
-		g_raw_data = g_raw_data < SELF_TEST_MAX_RAW_DATA_OUTPUT ?
-			g_raw_data : SELF_TEST_MAX_RAW_DATA_OUTPUT;
+		sret = sscanf(&string[0], "%d", &gbl.g_raw_data);
+		gbl.g_raw_data = gbl.g_raw_data <
+				 SELF_TEST_MAX_RAW_DATA_OUTPUT ?
+				 gbl.g_raw_data : SELF_TEST_MAX_RAW_DATA_OUTPUT;
 	}
 
 	/********/
@@ -3402,13 +3441,13 @@ config_file_setup(char *file_name, char *section_name,
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		len = strlen(string) + 1;
-		g_expected_results = (char *)malloc(len);
-		if (g_expected_results == NULL) {
+		gbl.g_expected_results = (char *)malloc(len);
+		if (gbl.g_expected_results == NULL) {
 			/* Avoid checkpatch warning */
 			D_GOTO(cleanup, ret = -ENOMEM);
 		}
-		memcpy(g_expected_results, string, len);
-		alloc_g_expected_results = true;
+		memcpy(gbl.g_expected_results, string, len);
+		gbl.alloc_g_expected_results = true;
 	}
 
 	/********/
@@ -3418,13 +3457,13 @@ config_file_setup(char *file_name, char *section_name,
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		len = strlen(string) + 1;
-		g_expected_outfile = (char *)malloc(len);
-		if (g_expected_outfile == NULL) {
+		gbl.g_expected_outfile = (char *)malloc(len);
+		if (gbl.g_expected_outfile == NULL) {
 			/* Avoid checkpatch warning */
 			D_GOTO(cleanup, ret = -ENOMEM);
 		}
-		memcpy(g_expected_outfile, string, len);
-		alloc_g_expected_outfile = true;
+		memcpy(gbl.g_expected_outfile, string, len);
+		gbl.alloc_g_expected_outfile = true;
 	}
 
 	/********/
@@ -3434,13 +3473,13 @@ config_file_setup(char *file_name, char *section_name,
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		len = strlen(string) + 1;
-		g_config_append = (char *)malloc(len);
-		if (g_config_append == NULL) {
+		gbl.g_config_append = (char *)malloc(len);
+		if (gbl.g_config_append == NULL) {
 			/* Avoid checkpatch warning */
 			D_GOTO(cleanup, ret = -ENOMEM);
 		}
-		memcpy(g_config_append, string, len);
-		alloc_g_config_append = true;
+		memcpy(gbl.g_config_append, string, len);
+		gbl.alloc_g_config_append = true;
 	}
 
 	/********/
@@ -3450,13 +3489,13 @@ config_file_setup(char *file_name, char *section_name,
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		len = strlen(string) + 1;
-		g_expected_infile = (char *)malloc(len);
-		if (g_expected_infile == NULL) {
+		gbl.g_expected_infile = (char *)malloc(len);
+		if (gbl.g_expected_infile == NULL) {
 			/* Avoid checkpatch warning */
 			D_GOTO(cleanup, ret = -ENOMEM);
 		}
-		memcpy(g_expected_infile, string, len);
-		alloc_g_expected_infile = true;
+		memcpy(gbl.g_expected_infile, string, len);
+		gbl.alloc_g_expected_infile = true;
 	}
 
 	/********/
@@ -3494,112 +3533,115 @@ parse_command_options(int argc, char *argv[])
 
 		/* Non file parameters. May be used to override file. */
 		case 'g':
-			if (g_dest_name != NULL) {
+			if (gbl.g_dest_name != NULL) {
 				/* Avoid checkpatch warning */
-				free(g_dest_name);
+				free(gbl.g_dest_name);
 			}
-			alloc_g_dest_name = false;
-			g_dest_name = optarg;
+			gbl.alloc_g_dest_name = false;
+			gbl.g_dest_name = optarg;
 			break;
 		case 'm':
-			parse_endpoint_string(optarg, &g_ms_endpts,
-					      &g_num_ms_endpts);
+			parse_endpoint_string(optarg, &gbl.g_ms_endpts,
+					      &gbl.g_num_ms_endpts);
 			break;
 		case 'e':
-			parse_endpoint_string(optarg, &g_endpts, &g_num_endpts);
+			parse_endpoint_string(optarg, &gbl.g_endpts,
+					      &gbl.g_num_endpts);
 			break;
 		case 's':
-			if (alloc_g_msg_sizes_str) {
+			if (gbl.alloc_g_msg_sizes_str) {
 				/* Avoid checkpatch warning */
-				free(g_msg_sizes_str);
+				free(gbl.g_msg_sizes_str);
 			}
-			alloc_g_msg_sizes_str = false;
-			g_msg_sizes_str = optarg;
+			gbl.alloc_g_msg_sizes_str = false;
+			gbl.g_msg_sizes_str = optarg;
 			break;
 		case 'r':
-			ret = sscanf(optarg, "%d", &g_rep_count);
+			ret = sscanf(optarg, "%d", &gbl.g_rep_count);
 			if (ret != 1) {
-				g_rep_count = g_default_rep_count;
+				gbl.g_rep_count = gbl.g_default_rep_count;
 				printf("Warning: Invalid repetitions-per-size\n"
 				       "  Using default value %d instead\n",
-				       g_rep_count);
+				       gbl.g_rep_count);
 			}
 			break;
 		case 'i':
-			ret = sscanf(optarg, "%d", &g_max_inflight);
+			ret = sscanf(optarg, "%d", &gbl.g_max_inflight);
 			if (ret != 1) {
-				g_max_inflight = g_default_max_inflight;
+				gbl.g_max_inflight = gbl.g_default_max_inflight;
 				printf("Warning: Invalid max-inflight-rpcs\n"
 				       "  Using default value %d instead\n",
-				       g_max_inflight);
+				       gbl.g_max_inflight);
 			}
 			break;
 		case 'a':
-			ret = sscanf(optarg, "%" SCNd16, &g_buf_alignment);
+			ret = sscanf(optarg, "%" SCNd16, &gbl.g_buf_alignment);
 			if (ret != 1 ||
-			    g_buf_alignment < CRT_ST_BUF_ALIGN_MIN ||
-			    g_buf_alignment > CRT_ST_BUF_ALIGN_MAX) {
+			    gbl.g_buf_alignment < CRT_ST_BUF_ALIGN_MIN ||
+			    gbl.g_buf_alignment > CRT_ST_BUF_ALIGN_MAX) {
 				printf("Warning: Invalid align value %d;"
 				       " Expected value in range [%d:%d]\n",
-				       g_buf_alignment, CRT_ST_BUF_ALIGN_MIN,
+				       gbl.g_buf_alignment,
+				       CRT_ST_BUF_ALIGN_MIN,
 				       CRT_ST_BUF_ALIGN_MAX);
-				g_buf_alignment = CRT_ST_BUF_ALIGN_DEFAULT;
+				gbl.g_buf_alignment = CRT_ST_BUF_ALIGN_DEFAULT;
 			}
 			break;
 		case 'b':
-			g_output_megabits = 1;
+			gbl.g_output_megabits = 1;
 			break;
 		case 'p':
-			if (g_attach_info_path != NULL) {
+			if (gbl.g_attach_info_path != NULL) {
 				/* Avoid checkpatch warning */
-				free(g_attach_info_path);
+				free(gbl.g_attach_info_path);
 			}
-			alloc_g_attach_info_path = false;
-			g_attach_info_path = optarg;
+			gbl.alloc_g_attach_info_path = false;
+			gbl.g_attach_info_path = optarg;
 			break;
 		case 'q':
-			g_randomize_endpoints = true;
+			gbl.g_randomize_endpoints = true;
 			break;
 		case 'v':  /* *** */
-			ret = sscanf(optarg, "%d", &g_raw_data);
-			g_raw_data = g_raw_data <
+			ret = sscanf(optarg, "%d", &gbl.g_raw_data);
+			gbl.g_raw_data = gbl.g_raw_data <
 				     SELF_TEST_MAX_RAW_DATA_OUTPUT ?
-				     g_raw_data : SELF_TEST_MAX_RAW_DATA_OUTPUT;
+				     gbl.g_raw_data :
+				     SELF_TEST_MAX_RAW_DATA_OUTPUT;
 			break;
 		case 'w':  /* *** */
-			ret = sscanf(optarg, "%f", &g_scale_factor);
+			ret = sscanf(optarg, "%f", &gbl.g_scale_factor);
 			break;
 		case 'x':
-			if (alloc_g_expected_results) {
+			if (gbl.alloc_g_expected_results) {
 				/* Avoid checkpatch warning */
-				free(g_expected_results);
+				free(gbl.g_expected_results);
 			}
-			alloc_g_expected_results = false;
-			g_expected_results = optarg;
+			gbl.alloc_g_expected_results = false;
+			gbl.g_expected_results = optarg;
 			break;
 		case 'y':
-			if (alloc_g_expected_infile) {
+			if (gbl.alloc_g_expected_infile) {
 				/* Avoid checkpatch warning */
-				free(g_expected_infile);
+				free(gbl.g_expected_infile);
 			}
-			alloc_g_expected_infile = false;
-			g_expected_infile = optarg;
+			gbl.alloc_g_expected_infile = false;
+			gbl.g_expected_infile = optarg;
 			break;
 		case 'z':
-			if (alloc_g_expected_outfile) {
+			if (gbl.alloc_g_expected_outfile) {
 				/* Avoid checkpatch warning */
-				free(g_expected_outfile);
+				free(gbl.g_expected_outfile);
 			}
-			alloc_g_expected_outfile = false;
-			g_expected_outfile = optarg;
+			gbl.alloc_g_expected_outfile = false;
+			gbl.g_expected_outfile = optarg;
 			break;
 		case 'o':
-			if (alloc_g_config_append) {
+			if (gbl.alloc_g_config_append) {
 				/* Avoid checkpatch warning */
-				free(g_config_append);
+				free(gbl.g_config_append);
 			}
-			alloc_g_config_append = false;
-			g_config_append = optarg;
+			gbl.alloc_g_config_append = false;
+			gbl.g_config_append = optarg;
 			break;
 #ifdef INCLUDE_OBSOLETE
 		case 'n':
@@ -3610,8 +3652,8 @@ parse_command_options(int argc, char *argv[])
 		case '?':
 		default:
 			print_usage(argv[0], default_msg_sizes_str,
-				    g_default_rep_count,
-				    g_default_max_inflight);
+				    gbl.g_default_rep_count,
+				    gbl.g_default_max_inflight);
 			if (c == 'h')
 				D_GOTO(cleanup, ret = 1);
 			else
@@ -3643,9 +3685,9 @@ main(int argc, char *argv[])
 	char				*str_put = NULL;
 	char				*save_ptr;
 
-	g_msg_sizes_str = default_msg_sizes_str;
-	g_rep_count = g_default_rep_count;
-	g_max_inflight = g_default_max_inflight;
+	gbl.g_msg_sizes_str = default_msg_sizes_str;
+	gbl.g_rep_count = gbl.g_default_rep_count;
+	gbl.g_max_inflight = gbl.g_default_max_inflight;
 
 	ret = d_log_init();
 	if (ret != 0) {
@@ -3675,8 +3717,8 @@ main(int argc, char *argv[])
 			break;
 		case 'h':
 			print_usage(argv[0], default_msg_sizes_str,
-				    g_default_rep_count,
-				    g_default_max_inflight);
+				    gbl.g_default_rep_count,
+				    gbl.g_default_max_inflight);
 			D_GOTO(cleanup, ret = 0);
 			break;
 		default:
@@ -3689,8 +3731,8 @@ main(int argc, char *argv[])
 		ret = config_file_setup(file_name, section_name, display);
 		if (ret == 1) {
 			print_usage(argv[0], default_msg_sizes_str,
-				    g_default_rep_count,
-				    g_default_max_inflight);
+				    gbl.g_default_rep_count,
+				    gbl.g_default_max_inflight);
 			D_GOTO(cleanup, ret = 0);
 		}
 		if (ret < 0) {
@@ -3711,16 +3753,12 @@ main(int argc, char *argv[])
 		D_GOTO(cleanup, ret);
 
 	/******* Parse message sizes argument ***************/
-
-	/* repeat rep_count for each endpoint */
-	/* g_rep_count = g_rep_count * g_num_endpts; */
-
 	/*
 	 * Count the number of tuple tokens (',') in the user-specified string
 	 * This gives an upper limit on the number of arguments the user passed
 	 */
 	num_tokens = 0;
-	sizes_ptr = g_msg_sizes_str;
+	sizes_ptr = gbl.g_msg_sizes_str;
 	while (1) {
 		const char *token_ptr = tuple_tokens;
 
@@ -3753,7 +3791,7 @@ main(int argc, char *argv[])
 
 	/* Iterate over the user's message sizes and parse / validate them */
 	num_msg_sizes = 0;
-	pch = strtok_r(g_msg_sizes_str, tuple_tokens, &save_ptr);
+	pch = strtok_r(gbl.g_msg_sizes_str, tuple_tokens, &save_ptr);
 	while (pch != NULL) {
 		D_ASSERTF(num_msg_sizes <= num_tokens, "Token counting err\n");
 
@@ -3788,28 +3826,30 @@ main(int argc, char *argv[])
 	}
 
 	/******************** Validate arguments ********************/
-	if (g_dest_name == NULL || crt_validate_grpid(g_dest_name) != 0) {
+	if (gbl.g_dest_name == NULL ||
+	    crt_validate_grpid(gbl.g_dest_name) != 0) {
 		printf("--group-name argument not specified or is invalid\n");
 		D_GOTO(cleanup, ret = -EINVAL);
 	}
-	if (g_ms_endpts == NULL)
+	if (gbl.g_ms_endpts == NULL)
 		printf("Warning: No --master-endpoint specified; using this\n"
 		       " command line application as the master endpoint\n");
-	if (g_endpts == NULL || g_num_endpts == 0) {
+	if (gbl.g_endpts == NULL || gbl.g_num_endpts == 0) {
 		printf("No endpoints specified\n");
 		D_GOTO(cleanup, ret = -EINVAL);
 	}
-	if ((g_rep_count <= 0) || (g_rep_count > SELF_TEST_MAX_REPETITIONS)) {
+	if ((gbl.g_rep_count <= 0) ||
+	    (gbl.g_rep_count > SELF_TEST_MAX_REPETITIONS)) {
 		printf("Invalid --repetitions-per-size argument\n"
 		       "  Expected value in range (0:%d], got %d\n",
-		       SELF_TEST_MAX_REPETITIONS, g_rep_count);
+		       SELF_TEST_MAX_REPETITIONS, gbl.g_rep_count);
 		D_GOTO(cleanup, ret = -EINVAL);
 	}
-	if ((g_max_inflight <= 0) ||
-	    (g_max_inflight > SELF_TEST_MAX_INFLIGHT)) {
+	if ((gbl.g_max_inflight <= 0) ||
+	    (gbl.g_max_inflight > SELF_TEST_MAX_INFLIGHT)) {
 		printf("Invalid --max-inflight-rpcs argument\n"
 		       "  Expected value in range (0:%d], got %d\n",
-		       SELF_TEST_MAX_INFLIGHT, g_max_inflight);
+		       SELF_TEST_MAX_INFLIGHT, gbl.g_max_inflight);
 		D_GOTO(cleanup, ret = -EINVAL);
 	}
 
@@ -3817,14 +3857,14 @@ main(int argc, char *argv[])
 	 * No reason to have max_inflight bigger than the total number of RPCs
 	 * each session
 	 */
-	g_max_inflight = g_max_inflight > g_rep_count ?
-			 g_rep_count : g_max_inflight;
+	gbl.g_max_inflight = gbl.g_max_inflight > gbl.g_rep_count ?
+			 gbl.g_rep_count : gbl.g_max_inflight;
 
 	/********************* Print out parameters *********************/
 	printf("Self Test Parameters:\n"
 	       "  Group name to test against: %s\n"
 	       "  # endpoints:	%u\n"
-	       "  Message sizes: [", g_dest_name, g_num_endpts);
+	       "  Message sizes: [", gbl.g_dest_name, gbl.g_num_endpts);
 	for (j = 0; j < num_msg_sizes; j++) {
 		if (j > 0)
 			printf(", ");
@@ -3837,23 +3877,26 @@ main(int argc, char *argv[])
 		       str_put);
 	}
 	printf("]\n");
-	if (g_buf_alignment == CRT_ST_BUF_ALIGN_DEFAULT)
+	if (gbl.g_buf_alignment == CRT_ST_BUF_ALIGN_DEFAULT)
 		printf("  Buffer addresses end with:  <Default>\n");
 	else
-		printf("  Buffer addresses end with:  %3d\n", g_buf_alignment);
+		printf("  Buffer addresses end with:  %3d\n",
+		       gbl.g_buf_alignment);
 	printf("  Repetitions per size:       %3d\n"
 	       "  Max inflight RPCs:          %3d\n\n",
-	       g_rep_count, g_max_inflight);
+	       gbl.g_rep_count, gbl.g_max_inflight);
 
 	/* Evaluate name of results file */
-	ret = file_name_create(&g_expected_outfile, &alloc_g_expected_outfile,
+	ret = file_name_create(&gbl.g_expected_outfile,
+			       &gbl.alloc_g_expected_outfile,
 			       "DAOS_TEST_LOG_DIR");
 	if (ret != 0) {
 		D_WARN("Error creating output name\n");
 		D_GOTO(cleanup, ret);
 	} else {
-		D_WARN("Selftest Results File: %s\n", g_expected_outfile);
-		printf("Selftest Results File:\n\t %s\n", g_expected_outfile);
+		D_WARN("Selftest Results File: %s\n", gbl.g_expected_outfile);
+		printf("Selftest Results File:\n\t %s\n",
+		       gbl.g_expected_outfile);
 	}
 
 	/****** Open global configuration for output results *****/
@@ -3863,21 +3906,24 @@ main(int argc, char *argv[])
 	ret = config_create_output_config(section_name, true);
 
 	/********************* Run the self test *********************/
-	ret = run_self_test(all_params, num_msg_sizes, g_rep_count,
-			    g_max_inflight, g_dest_name, g_ms_endpts,
-			    g_num_ms_endpts, g_endpts, g_num_endpts,
-			    g_output_megabits, g_buf_alignment,
-			    g_attach_info_path, section_name);
+	ret = run_self_test(all_params, num_msg_sizes, gbl.g_rep_count,
+			    gbl.g_max_inflight, gbl.g_dest_name,
+			    gbl.g_ms_endpts, gbl.g_num_ms_endpts,
+			    gbl.g_endpts, gbl.g_num_endpts,
+			    gbl.g_output_megabits, gbl.g_buf_alignment,
+			    gbl.g_attach_info_path, section_name);
 
 	/* Write output results and free output configuration */
-	if (g_expected_outfile != NULL) {
+	if (gbl.g_expected_outfile != NULL) {
 		ConfigRet config_ret;
 
-		printf(" Selftest Results File:\n\t %s\n", g_expected_outfile);
-		config_ret = ConfigPrintToFile(cfg_output, g_expected_outfile);
+		printf(" Selftest Results File:\n\t %s\n",
+		       gbl.g_expected_outfile);
+		config_ret = ConfigPrintToFile(gbl.cfg_output,
+					       gbl.g_expected_outfile);
 		if (config_ret != CONFIG_OK) {
 			D_ERROR("Fail to write to output file: %s\n",
-				g_expected_outfile);
+				gbl.g_expected_outfile);
 		ret = -ENOENT;
 		}
 	} else {
@@ -3886,45 +3932,45 @@ main(int argc, char *argv[])
 		D_INFO(" Selftest Results File not specified:"
 		       " no results written\n");
 	}
-	ConfigFree(cfg_output);
+	ConfigFree(gbl.cfg_output);
 
 	/********************* Clean up *********************/
 cleanup:
-	if (alloc_g_dest_name && (g_dest_name != NULL)) {
+	if (gbl.alloc_g_dest_name && (gbl.g_dest_name != NULL)) {
 		/* Avoid checkpatch warning */
-		D_FREE(g_dest_name);
+		D_FREE(gbl.g_dest_name);
 	}
-	if (alloc_g_msg_sizes_str && (g_msg_sizes_str != NULL)) {
+	if (gbl.alloc_g_msg_sizes_str && (gbl.g_msg_sizes_str != NULL)) {
 		/* Avoid checkpatch warning */
-		D_FREE(g_msg_sizes_str);
+		D_FREE(gbl.g_msg_sizes_str);
 	}
-	if (alloc_g_attach_info_path && (g_attach_info_path != NULL)) {
+	if (gbl.alloc_g_attach_info_path && (gbl.g_attach_info_path != NULL)) {
 		/* Avoid checkpatch warning */
-		D_FREE(g_attach_info_path);
+		D_FREE(gbl.g_attach_info_path);
 	}
-	if (alloc_g_expected_results && (g_expected_results != NULL)) {
+	if (gbl.alloc_g_expected_results && (gbl.g_expected_results != NULL)) {
 		/* Avoid checkpatch warning */
-		D_FREE(g_expected_results);
+		D_FREE(gbl.g_expected_results);
 	}
-	if (alloc_g_expected_infile && (g_expected_infile != NULL)) {
+	if (gbl.alloc_g_expected_infile && (gbl.g_expected_infile != NULL)) {
 		/* Avoid checkpatch warning */
-		D_FREE(g_expected_infile);
+		D_FREE(gbl.g_expected_infile);
 	}
-	if (alloc_g_expected_outfile && (g_expected_outfile != NULL)) {
+	if (gbl.alloc_g_expected_outfile && (gbl.g_expected_outfile != NULL)) {
 		/* Avoid checkpatch warning */
-		D_FREE(g_expected_outfile);
+		D_FREE(gbl.g_expected_outfile);
 	}
-	if (alloc_g_config_append && (g_config_append != NULL)) {
+	if (gbl.alloc_g_config_append && (gbl.g_config_append != NULL)) {
 		/* Avoid checkpatch warning */
-		D_FREE(g_config_append);
+		D_FREE(gbl.g_config_append);
 	}
-	if (g_ms_endpts != NULL) {
-		D_FREE(g_ms_endpts);
-		g_ms_endpts = NULL;
+	if (gbl.g_ms_endpts != NULL) {
+		D_FREE(gbl.g_ms_endpts);
+		gbl.g_ms_endpts = NULL;
 	}
-	if (g_endpts != NULL) {
-		D_FREE(g_endpts);
-		g_endpts = NULL;
+	if (gbl.g_endpts != NULL) {
+		D_FREE(gbl.g_endpts);
+		gbl.g_endpts = NULL;
 	}
 
 	if (all_params != NULL)
