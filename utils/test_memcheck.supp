@@ -179,17 +179,6 @@
 {
    <insert_a_suppression_name_here>
    Memcheck:Leak
-   match-leak-kinds:definite
-   fun:calloc
-   fun:test_evt_iter_flags
-   obj:/usr/lib64/libcmocka.so.*
-   fun:_cmocka_run_group_tests
-   fun:run_internal_tests
-   fun:main
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
    match-leak-kinds:reachable
    fun:malloc
    fun:xmalloc
@@ -241,19 +230,6 @@
    fun:xmalloc
    fun:set_locale_var
    fun:set_default_lang
-   fun:main
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   ...
-   fun:calloc
-   fun:ent_array_resize
-   fun:ent_array_alloc.isra.*
-   fun:evt_ent_array_fill
-   fun:evt_iter_probe_sorted
-   fun:evt_iter_probe
-   ...
    fun:main
 }
 {
@@ -367,20 +343,6 @@
    fun:xmalloc
    fun:array_create_element
    ...
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   ...
-   fun:calloc
-   fun:ent_array_resize
-   fun:ent_array_alloc*
-   fun:evt_ent_array_fill
-   fun:evt_iter_probe_sorted
-   fun:evt_iter_probe
-   fun:test_evt_overlap_split
-   ...
-   fun:main
 }
 {
    <insert_a_suppression_name_here>
