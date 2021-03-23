@@ -180,12 +180,12 @@ class RebuildTestBase(TestWithServers):
         # Confirm rebuild completes
         self.pool.wait_for_rebuild(False, 1)
 
-        # Verify the excluded rank is no longer used with the objects
-        self.verify_rank_has_no_objects()
-
         # Verify the pool information after rebuild
         self.update_pool_verify()
         self.execute_pool_verify(" after rebuild")
+
+        # Verify the excluded rank is no longer used with the objects
+        self.verify_rank_has_no_objects()
 
         # Verify the container data can still be accessed
         self.verify_container_data()
