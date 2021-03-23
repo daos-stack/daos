@@ -94,28 +94,53 @@ func NewCollector(log logging.Logger, opts *CollectorOpts, sources ...*EngineSou
 	return c, nil
 }
 
-func fixPath(in string) (labels labelMap, name string) {
-	name = strings.Map(func(r rune) rune {
-		if !unicode.IsPrint(r) || unicode.IsSpace(r) {
-			return '_'
-		}
-		switch r {
-		case '/', ':':
+func sanitizeMetricName(in string) string {
+	return strings.Map(func(r rune) rune {
+		switch {
+		// Valid names for Prometheus are limited to:
+		case r >= 'a' && r <= 'z': // lowercase letters
+		case r >= 'A' && r <= 'Z': // uppercase letters
+		case unicode.IsDigit(r): // digits
+		default: // sanitize any other character
 			return '_'
 		}
 
 		return r
 	}, strings.TrimLeft(in, "/"))
+}
+
+func fixPath(in string) (labels labelMap, name string) {
+	name = sanitizeMetricName(in)
 
 	labels = make(labelMap)
-	ID_re := regexp.MustCompile(`ID_(\d+)_`)
-	io_re := regexp.MustCompile(`io_(\d+)_`)
 
+	// Clean up metric names and parse out useful labels
+
+	ID_re := regexp.MustCompile(`ID_+(\d+)_?`)
 	name = ID_re.ReplaceAllString(name, "")
+
+	io_re := regexp.MustCompile(`io_+(\d+)_?`)
 	io_matches := io_re.FindStringSubmatch(name)
 	if len(io_matches) > 0 {
 		labels["target"] = io_matches[1]
-		name = io_re.ReplaceAllString(name, "io_")
+		replacement := "io"
+		if strings.HasSuffix(io_matches[0], "_") {
+			replacement += "_"
+		}
+		name = io_re.ReplaceAllString(name, replacement)
+	}
+
+	net_re := regexp.MustCompile(`net_+(\d+)_+(\d+)_?`)
+	net_matches := net_re.FindStringSubmatch(name)
+	if len(net_matches) > 0 {
+		labels["rank"] = net_matches[1]
+		labels["context"] = net_matches[2]
+
+		replacement := "net"
+		if strings.HasSuffix(net_matches[0], "_") {
+			replacement += "_"
+		}
+		name = net_re.ReplaceAllString(name, replacement)
 	}
 
 	return
@@ -258,7 +283,9 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 		labels, path := fixPath(rm.m.Path())
 		labels["rank"] = fmt.Sprintf("%d", rm.r)
 
-		baseName := prometheus.BuildFQName("engine", path, rm.m.Name())
+		name := sanitizeMetricName(rm.m.Name())
+
+		baseName := prometheus.BuildFQName("engine", path, name)
 		shortDesc := rm.m.ShortDesc()
 
 		switch rm.m.Type() {
