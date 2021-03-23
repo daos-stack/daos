@@ -1001,8 +1001,6 @@ main(int argc, char **argv)
 	if (rc)
 		exit(EXIT_FAILURE);
 
-	D_ERROR("Add an error to make NLT unstable to test this\n");
-
 	/** wait for shutdown signal */
 	sigemptyset(&set);
 	sigaddset(&set, SIGINT);
