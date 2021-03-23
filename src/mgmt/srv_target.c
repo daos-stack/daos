@@ -683,6 +683,18 @@ out:
 }
 
 int
+ds_mgmt_tgt_create_post_reply(crt_rpc_t *rpc, void *priv)
+{
+	struct mgmt_tgt_create_out	*tc_out;
+
+	tc_out = crt_reply_get(rpc);
+	D_FREE(tc_out->tc_tgt_uuids.ca_arrays);
+	D_FREE(tc_out->tc_ranks.ca_arrays);
+
+	return 0;
+}
+
+int
 ds_mgmt_tgt_create_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 			      void *priv)
 {

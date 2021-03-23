@@ -20,7 +20,7 @@ class ApricotTests(Test):
 
     def __init__(self, *args, **kwargs):
         """Initialize a Test object."""
-        super(ApricotTests, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         print("__init__()")
         self.timeout = 9
@@ -29,12 +29,12 @@ class ApricotTests(Test):
     def setUp(self):
         """Set up."""
         print("setUp() start")
-        super(ApricotTests, self).setUp()
+        super().setUp()
 
     def tearDown(self):
         """Tear down."""
         print("tearDown() start")
-        super(ApricotTests, self).tearDown()
+        super().tearDown()
 
         time.sleep(5)
         print("tearDown() ended after 5s sleep")
