@@ -1418,8 +1418,6 @@ down_up_sequences1(void **state)
 
 	jtc_set_status_on_target(&ctx, UP, shard_target_2);
 	jtc_assert_scan_and_layout(&ctx);
-	jtc_fini(&ctx);
-	skip_msg("Investigation into DAOS-6519 is similar/same issue.");
 	is_true(jtc_has_shard_moving_to_target(&ctx, 0, shard_target_2));
 
 	jtc_set_status_on_target(&ctx, UP, shard_target_1);
@@ -1490,8 +1488,6 @@ drain_all_with_enough_targets(void **state)
 	 * rebuilding and one not
 	 */
 	for (i = 0; i < shards_nr; i++) {
-		jtc_fini(&ctx);
-		skip_msg("DAOS-6300 - Not drained to other target?");
 		assert_int_equal(0, jtc_get_layout_bad_count(&ctx));
 		is_true(jtc_has_shard_with_target_rebuilding(&ctx, i, NULL));
 		is_true(jtc_has_shard_with_rebuilding_not_set(&ctx, i));
@@ -1522,8 +1518,6 @@ drain_target_same_shard_repeatedly_for_all_shards(void **state)
 			is_true(jtc_has_shard_with_target_rebuilding(&ctx,
 				shard_id, &new_target));
 
-			jtc_fini(&ctx);
-			skip_msg("DAOS-6300: All are marked as rebuilding");
 			is_true(jtc_has_shard_target_not_rebuilding(&ctx,
 				shard_id, target));
 
