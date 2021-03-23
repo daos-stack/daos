@@ -272,7 +272,7 @@ if (!env.CHANGE_ID &&
     (!env.BRANCH_NAME.startsWith("weekly-testing") &&
      !env.BRANCH_NAME.startsWith("release/") &&
      env.BRANCH_NAME != "master")) {
-   currentBuild.result = 'SUCCESS'
+   currentBuild.currentResult = 'SUCCESS'
    return
 }
 
