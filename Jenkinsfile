@@ -448,12 +448,24 @@ boolean skip_coverity() {
            skip_stage('build')
 }
 
+boolean skip_unstable() {
+    if (cachedCommitPragma(pragma: 'run-unstable') == 'true' ||
+        env.BRANCH_NAME == 'master' ||
+        env.BRANCH_NAME.startsWith("weekly-testing") ||
+        env.BRANCH_NAME.startsWith("release/")) {
+        return false
+    }
+
+    return currentBuild.results == 'UNSTABLE'
+}
+
 boolean skip_testing_stage() {
     return  env.NO_CI_TESTING == 'true' ||
             (skip_stage('build') &&
              rpm_test_version() == '') ||
             doc_only_change() ||
-            skip_stage('test')
+            skip_stage('test') ||
+            skip_unstable()
 }
 
 boolean skip_unit_test() {
@@ -1401,6 +1413,7 @@ pipeline {
             when {
                 beforeAgent true
                 expression { ! skip_testing_stage() }
+                expression { ! skip_unstable() }
             }
             parallel {
                 stage('Functional_Hardware_Small') {
