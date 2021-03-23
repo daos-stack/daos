@@ -344,6 +344,7 @@ self_test_init(char *dest_name, crt_context_t *crt_ctx,
 	return 0;
 }
 
+/* Sort by rank and then by tag */
 static int
 st_compare_endpts(const void *a_in, const void *b_in)
 {
@@ -355,6 +356,7 @@ st_compare_endpts(const void *a_in, const void *b_in)
 	return a->tag > b->tag;
 }
 
+/* Sort by latencies (stored in val element */
 static int
 st_compare_latencies_by_vals(const void *a_in, const void *b_in)
 {
@@ -366,6 +368,7 @@ st_compare_latencies_by_vals(const void *a_in, const void *b_in)
 	return a->cci_rc > b->cci_rc;
 }
 
+/* Sort by rank, then by tag, and then by latencies */
 static int
 st_compare_latencies_by_ranks(const void *a_in, const void *b_in)
 {
@@ -479,7 +482,7 @@ print_fail_counts(struct st_latency *latencies,
 	}
 }
 
-/*Returns the number of valid points */
+/* Calculates all statics. Returns the number of valid points */
 static int
 calculate_stats(struct st_latency *latencies, int count,
 		int64_t *av, double *sd, int64_t *min,
@@ -533,7 +536,7 @@ calculate_stats(struct st_latency *latencies, int count,
 		latency_std_dev += value * value;
 	}
 	latency_std_dev /= num_passed;
-	latency_std_dev =  sqrt(latency_std_dev);
+	latency_std_dev = sqrt(latency_std_dev);
 	*sd = latency_std_dev;
 
 	/* Find mediam values.  Works for sorted input only. */
@@ -1016,7 +1019,6 @@ get_config_value(Config *cfg, char *sec_name, char *key,
 
 	/*
 	 * Parse string to find endpoint and its tag.
-	 * Not necessary top specify endpoint.
 	 * Strip off endpoit EP:T and then the tag.
 	 * Not neccsary to specified endpoint.
 	 * Tag not necessary specified, or as *
@@ -1241,8 +1243,13 @@ compare_print_results(char *section_name, char *input_section_name,
 	int		 status_size = sizeof(status) /
 				       sizeof(struct status_feature);
 
+	D_INFO(" Section name: %s\n", section_name);
+	D_INFO(" Input Section name: %s\n", input_section_name);
+	D_INFO(" Result Section name: %s\n", result_section_name);
+
 	/* Read in expected file if specified */
 	if (gbl.g_expected_infile != NULL) {
+		D_INFO(" Expected File: %s\n", gbl.g_expected_infile);
 		config_ret = ConfigReadFile(gbl.g_expected_infile,
 					    &cfg_expected);
 		if (config_ret != CONFIG_OK) {
@@ -1250,15 +1257,42 @@ compare_print_results(char *section_name, char *input_section_name,
 				gbl.g_expected_infile);
 			D_GOTO(cleanup, ret_value = -ENOENT);
 		}
+	} else {
+		/* avoid checkpatch warning */
+		D_INFO(" No Expected File Specified\n");
 	}
 
-	/* Read in default sector if defined. */
+	/* Read in default stat value in default sector if defined. */
 	sec_name = DEFAULT_VALUE_NAME;
 	if (ConfigHasSection(cfg_expected, DEFAULT_VALUE_NAME)) {
 		int ivalue;
 
+		D_INFO(" File %s has default sector: %s\n",
+		       gbl.g_expected_infile, DEFAULT_VALUE_NAME);
 		for (i = 0; i < status_size; i++) {
 			config_ret = ConfigReadInt(cfg_expected, sec_name,
+						   status[i].name,
+						   &ivalue, 0.0);
+			if (config_ret == CONFIG_OK) {
+				/* avoid checkpatch warning */
+				status[i].value = ivalue;
+			}
+		}
+	} else {
+		/* avoid checkpatch warning */
+		D_INFO(" File %s does Not have default sector: %s\n",
+		       gbl.g_expected_infile, DEFAULT_VALUE_NAME);
+	}
+
+	/*
+	 * Read in specified stat values for requested sector.
+	 * Over rides default settings if specified.
+	 */
+	if (ConfigHasSection(cfg_expected, input_section_name)) {
+		int ivalue;
+		for (i = 0; i < status_size; i++) {
+			config_ret = ConfigReadInt(cfg_expected,
+						   input_section_name,
 						   status[i].name,
 						   &ivalue, 0.0);
 			if (config_ret == CONFIG_OK) {
@@ -1271,6 +1305,11 @@ compare_print_results(char *section_name, char *input_section_name,
 	/*
 	 * -----------------------
 	 * Read in scaling factors
+	 *   Order of precedent: least to higher
+	 *     expected-threshold parameter - applied to all thresholds
+	 *     all    - threshold sector    - apply to all thresholds
+	 *     <stat> - threshold sector    - apply to all <stat> thresholds
+	 *     expected-results parameter   - apply to listed <stat> with =
 	 * -----------------------
 	 */
 	/* Use global scaling factor if specified */
@@ -1282,6 +1321,7 @@ compare_print_results(char *section_name, char *input_section_name,
 		}
 	}
 
+	/* Check if scaling factor defined in default sector */
 	sec_name = DEFAULT_SCALE_NAME;
 	if (ConfigHasSection(cfg_expected, sec_name)) {
 		float scale = 0.0;
@@ -1304,24 +1344,6 @@ compare_print_results(char *section_name, char *input_section_name,
 			if (config_ret == CONFIG_OK) {
 				/* avoid checkpatch warning */
 				status[i].scale = scale;
-			}
-		}
-	}
-
-	/*
-	 * Read in specified values for requested sector.
-	 * Over rides default settings if specified.
-	 */
-	if (ConfigHasSection(cfg_expected, input_section_name)) {
-		int ivalue;
-
-		for (i = 0; i < status_size; i++) {
-			config_ret = ConfigReadInt(cfg_expected, section_name,
-						   status[i].name,
-						   &ivalue, 0.0);
-			if (config_ret == CONFIG_OK) {
-				/* avoid checkpatch warning */
-				status[i].value = ivalue;
 			}
 		}
 	}
