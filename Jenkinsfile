@@ -272,7 +272,7 @@ if (!env.CHANGE_ID &&
     (!env.BRANCH_NAME.startsWith("weekly-testing") &&
      !env.BRANCH_NAME.startsWith("release/") &&
      env.BRANCH_NAME != "master")) {
-   currentBuild.currentResult = 'SUCCESS'
+   currentBuild.result = 'SUCCESS'
    return
 }
 
@@ -456,7 +456,7 @@ boolean skip_unstable() {
         return false
     }
 
-    return currentBuild.results == 'UNSTABLE'
+    return currentBuild.result == 'UNSTABLE'
 }
 
 boolean skip_testing_stage() {
