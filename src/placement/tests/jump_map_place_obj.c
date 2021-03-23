@@ -1576,8 +1576,6 @@ one_server_is_added(void **state)
 	assert_int_equal(0, ctx.rebuild.out_nr);
 	assert_int_equal(0, ctx.reint.out_nr);
 
-	jtc_fini(&ctx);
-	skip_msg("DAOS-6303 - should have targets marked as rebuild");
 	assert_int_equal(ctx.new.out_nr, jtc_get_layout_rebuild_count(&ctx));
 
 	jtc_fini(&ctx);
