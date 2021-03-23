@@ -1578,6 +1578,8 @@ def install_debuginfos():
     install_pkgs = [{'name': 'gdb'}]
 
     cmds = []
+    timeout_cmd = "timeout"
+    timeout_wait = "5m"
 
     # -debuginfo packages that don't get installed with debuginfo-install
     for pkg in ['python', 'daos', 'systemd', 'ndctl', 'mercury', 'hdf5']:
@@ -1602,9 +1604,11 @@ def install_debuginfos():
             raise RuntimeError(
                 "install_debuginfos(): Unsupported distro: {}".format(
                     distro_info))
-        cmds.append(["sudo", "yum", "-y", "install"] + yum_args)
+        cmds.append(["sudo", timeout_cmd, timeout_wait,
+                     "dnf", "-y", "install"] + yum_args)
         cmds.append(
-            ["sudo", "debuginfo-install", "--enablerepo=*-debuginfo", "-y"] +
+            ["sudo", timeout_cmd, timeout_wait,
+             "debuginfo-install", "--enablerepo=*-debuginfo", "-y"] +
             yum_args + ["daos-server", "gcc"])
     else:
         # We're not using the yum API to install packages
@@ -1626,7 +1630,8 @@ def install_debuginfos():
     # yum_base.processTransaction(rpmDisplay=yum.rpmtrans.NoOutputCallBack())
 
     # Now install a few pkgs that debuginfo-install wouldn't
-    cmd = ["sudo", "yum", "-y", "--enablerepo=*debug*", "install"]
+    cmd = ["sudo", timeout_cmd, timeout_wait,
+           "dnf", "-y", "--enablerepo=*debug*", "install"]
     for pkg in install_pkgs:
         try:
             cmd.append(
@@ -1648,7 +1653,7 @@ def install_debuginfos():
             break
     if retry:
         print("Going to refresh caches and try again")
-        cmd_prefix = ["sudo", "yum", "--enablerepo=*debug*"]
+        cmd_prefix = ["sudo", "dnf", "--enablerepo=*debug*"]
         cmds.insert(0, cmd_prefix + ["clean", "all"])
         cmds.insert(1, cmd_prefix + ["makecache"])
         for cmd in cmds:
