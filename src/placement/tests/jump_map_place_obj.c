@@ -1447,8 +1447,6 @@ drain_all_with_extra_domains(void **state)
 	 */
 	assert_int_equal(8, jtc_get_layout_target_count(&ctx));
 
-	jtc_fini(&ctx);
-	skip_msg("DAOS-6300 - too many are marked as rebuild");
 	assert_int_equal(4, jtc_get_layout_rebuild_count(&ctx));
 	for (i = 0; i < shards_nr; i++) {
 		is_true(jtc_has_shard_with_target_rebuilding(&ctx, i, NULL));
