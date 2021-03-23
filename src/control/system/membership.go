@@ -103,6 +103,10 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 	m.Lock()
 	defer m.Unlock()
 
+	if err := m.checkReqFaultDomain(req); err != nil {
+		return nil, err
+	}
+
 	resp = new(JoinResponse)
 	var curMember *Member
 	if !req.Rank.Equals(NilRank) {
@@ -170,6 +174,16 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 	}
 
 	return resp, nil
+}
+
+func (m *Membership) checkReqFaultDomain(req *JoinRequest) error {
+	currentDepth := m.db.FaultDomainTree().Depth()
+	newDepth := req.FaultDomain.NumLevels() + 1 // joining will add domain layer for rank
+	if currentDepth > 0 && newDepth != currentDepth {
+		return errors.Errorf("cannot join with fault domain %q (need %d layers)",
+			req.FaultDomain.String(), currentDepth)
+	}
+	return nil
 }
 
 // AddOrReplace adds member to membership or replaces member if it exists.

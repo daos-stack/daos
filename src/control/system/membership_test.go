@@ -662,10 +662,12 @@ func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 func TestSystem_Membership_Join(t *testing.T) {
 	fd1 := MustCreateFaultDomainFromString("/dc1/rack8/pdu5/host1")
 	fd2 := MustCreateFaultDomainFromString("/dc1/rack9/pdu0/host2")
+	shallowFD := MustCreateFaultDomainFromString("/host3")
 
 	curMember := MockMember(t, 0, MemberStateJoined).WithFaultDomain(fd1)
 	newUUID := uuid.New()
 	newMember := MockMember(t, 1, MemberStateJoined).WithFaultDomain(fd2)
+	newMemberShallowFD := MockMember(t, 2, MemberStateJoined).WithFaultDomain(shallowFD)
 
 	for name, tc := range map[string]struct {
 		notLeader bool
@@ -675,8 +677,10 @@ func TestSystem_Membership_Join(t *testing.T) {
 	}{
 		"not leader": {
 			notLeader: true,
-			req:       &JoinRequest{},
-			expErr:    errors.New("leader"),
+			req: &JoinRequest{
+				FaultDomain: fd1,
+			},
+			expErr: errors.New("leader"),
 		},
 		"successful rejoin": {
 			req: &JoinRequest{
@@ -751,6 +755,28 @@ func TestSystem_Membership_Join(t *testing.T) {
 				PrevState:  MemberStateUnknown,
 				MapVersion: 2,
 			},
+		},
+		"new member with bad fault domain depth": {
+			req: &JoinRequest{
+				Rank:           NilRank,
+				UUID:           newMemberShallowFD.UUID,
+				ControlAddr:    newMemberShallowFD.Addr,
+				FabricURI:      newMemberShallowFD.FabricURI,
+				FabricContexts: newMemberShallowFD.FabricContexts,
+				FaultDomain:    newMemberShallowFD.FaultDomain,
+			},
+			expErr: errors.New("fault domain"),
+		},
+		"update existing member with bad fault domain depth": {
+			req: &JoinRequest{
+				Rank:           NilRank,
+				UUID:           curMember.UUID,
+				ControlAddr:    curMember.Addr,
+				FabricURI:      curMember.FabricURI,
+				FabricContexts: curMember.FabricContexts,
+				FaultDomain:    shallowFD,
+			},
+			expErr: errors.New("fault domain"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
