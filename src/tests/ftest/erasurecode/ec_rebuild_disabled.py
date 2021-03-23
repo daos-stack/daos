@@ -8,6 +8,7 @@ import time
 from ec_utils import ErasureCodeIor
 from apricot import skipForTicket
 
+
 class EcDisabledRebuild(ErasureCodeIor):
     # pylint: disable=too-many-ancestors
     """
@@ -15,13 +16,6 @@ class EcDisabledRebuild(ErasureCodeIor):
                             single server when pool rebuild is off.
     :avocado: recursive
     """
-    def __init__(self, *args, **kwargs):
-        """Initialize a ErasureCodeIor object."""
-        super(EcDisabledRebuild, self).__init__(*args, **kwargs)
-
-    def setUp(self):
-        """Set up for test case."""
-        super(EcDisabledRebuild, self).setUp()
 
     @skipForTicket("DAOS-6660")
     def test_ec_degrade(self):
@@ -35,11 +29,11 @@ class EcDisabledRebuild(ErasureCodeIor):
         :avocado: tags=all,hw,large,ib2,full_regression
         :avocado: tags=ec,ec_disabled_rebuild
         """
-        #Disabled pool Rebuild
+        # Disabled pool Rebuild
         self.pool.set_property("self_heal", "exclude")
-        #self.pool.set_property("reclaim", "disabled")
+        # self.pool.set_property("reclaim", "disabled")
 
-        #Write the IOR data set with given all the EC object type
+        # Write the IOR data set with given all the EC object type
         self.ior_write_dataset()
 
         # Kill the last server rank and wait for 20 seconds, Rebuild is disabled
@@ -47,8 +41,8 @@ class EcDisabledRebuild(ErasureCodeIor):
         self.server_managers[0].stop_ranks([self.server_count - 1], self.d_log)
         time.sleep(20)
 
-        #Read IOR data and verify for different EC object and different sizes
-        #written before killing the single server
+        # Read IOR data and verify for different EC object and different sizes
+        # written before killing the single server
         self.ior_read_dataset()
 
         # Kill the another server rank and wait for 20 seconds,Rebuild will
@@ -56,6 +50,6 @@ class EcDisabledRebuild(ErasureCodeIor):
         self.server_managers[0].stop_ranks([self.server_count - 2], self.d_log)
         time.sleep(20)
 
-        #Read IOR data and verify for different EC object and different sizes
-        #written before killing the single server
+        # Read IOR data and verify for different EC object and different sizes
+        # written before killing the single server
         self.ior_read_dataset(parity=2)

@@ -22,7 +22,7 @@ class CrashIor(IorTestBase):
 
     def setUp(self):
         """Set up test before executing."""
-        super(CrashIor, self).setUp()
+        super().setUp()
         self.dmg = self.get_dmg_command()
 
     @skipForTicket("DAOS-5928")

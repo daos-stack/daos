@@ -1205,7 +1205,6 @@ rebuild_task_ult(void *arg)
 
 		if (rgt) {
 			rgt->rgt_abort = 1;
-			rgt->rgt_status.rs_done = 1;
 			rgt->rgt_status.rs_errno = rc;
 			D_GOTO(done, rc);
 		} else {
@@ -1230,7 +1229,7 @@ done:
 			 */
 			D_DEBUG(DB_REBUILD, DF_UUID" Only stop the leader\n",
 				DP_UUID(task->dst_pool_uuid));
-			D_GOTO(try_reschedule, rc);
+			D_GOTO(out_pool, rc);
 		}
 	} else {
 		if (task->dst_tgts.pti_number <= 0 ||
@@ -1280,12 +1279,6 @@ iv_stop:
 				DP_UUID(task->dst_pool_uuid), rc);
 	}
 
-	/* Update the rebuild status, so query can get the rebuild status. */
-	rc = rebuild_status_completed_update(task->dst_pool_uuid,
-					     &rgt->rgt_status);
-	if (rc != 0)
-		D_ERROR("rebuild_status_completed_update, "DF_UUID" "
-			"failed, rc %d.\n", DP_UUID(task->dst_pool_uuid), rc);
 try_reschedule:
 	if (rgt == NULL || !is_rebuild_global_done(rgt) ||
 	    rgt->rgt_status.rs_errno != 0) {
@@ -1296,6 +1289,7 @@ try_reschedule:
 		 * rebuild sequence, which has to be done by failure
 		 * sequence order.
 		 */
+		rgt->rgt_status.rs_done = 0;
 		ret = ds_rebuild_schedule(pool, task->dst_map_ver,
 					  &task->dst_tgts,
 					  task->dst_rebuild_op);
@@ -1304,6 +1298,16 @@ try_reschedule:
 		else
 			D_DEBUG(DB_REBUILD, DF_UUID" reschedule rebuild\n",
 				DP_UUID(pool->sp_uuid));
+	} else {
+		int ret;
+
+		/* Update the rebuild complete status. */
+		ret = rebuild_status_completed_update(task->dst_pool_uuid,
+						      &rgt->rgt_status);
+		if (ret != 0)
+			D_ERROR("rebuild_status_completed_update, "DF_UUID" "
+				"failed: %d.\n", DP_UUID(task->dst_pool_uuid),
+				ret);
 	}
 output:
 	rc = rebuild_notify_ras_end(&task->dst_pool_uuid, task->dst_map_ver,
@@ -1313,6 +1317,7 @@ output:
 		D_ERROR(DF_UUID": failed to send RAS event\n",
 			DP_UUID(task->dst_pool_uuid));
 
+out_pool:
 	ds_pool_put(pool);
 	if (rgt) {
 		ABT_mutex_lock(rgt->rgt_lock);

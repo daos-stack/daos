@@ -13,13 +13,7 @@ from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
 from apricot import skipForTicket
-
-try:
-    # python 3.x
-    import queue as queue
-except ImportError:
-    # python 2.7
-    import Queue as queue
+import queue
 
 
 class OSAOnlineExtend(OSAUtils):
@@ -32,7 +26,7 @@ class OSAOnlineExtend(OSAUtils):
     """
     def setUp(self):
         """Set up for test case."""
-        super(OSAOnlineExtend, self).setUp()
+        super().setUp()
         self.dmg_command = self.get_dmg_command()
         self.ior_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
