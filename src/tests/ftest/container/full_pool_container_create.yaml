@@ -9,4 +9,4 @@ timeout: 150
 pool:
   control_method: dmg
   mode: 511
-  scm_size: 134217728 # 16 mb pool, minimum size currently possible
+  scm_size: 201326592

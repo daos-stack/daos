@@ -75,7 +75,7 @@ class FullPoolContainerCreate(TestWithServers):
                                       "objects", obj_sz)
                         break
 
-        self.log.info("closing container")
+        self.log.info("closing container 1")
         cont.close()
 
         # query the pool
@@ -97,7 +97,7 @@ class FullPoolContainerCreate(TestWithServers):
             self.log.info("writing one more object, write expected to fail")
             cont2.write_an_obj(my_str, my_str_sz, dkey, akey,
                                obj_cls="OC_SX")
-            self.log.info("closing container")
+            self.log.info("closing container 2")
             cont2.close()
             self.fail("wrote one more object after pool was completely filled,"
                       " this should never print")
@@ -105,12 +105,12 @@ class FullPoolContainerCreate(TestWithServers):
             if not (err in repr(excep) or err2 in repr(excep)):
                 self.log.error("caught unexpected exception while "
                                "writing object: %s", repr(excep))
-                self.log.info("closing container")
+                self.log.info("closing container 2")
                 cont2.close()
                 self.fail("caught unexpected exception while writing "
                           "object: {}".format(repr(excep)))
             else:
                 self.log.info("correctly caught -1007 while attempting "
                               "to write object in full pool")
-                self.log.info("closing container")
+                self.log.info("closing container 2")
                 cont2.close()
