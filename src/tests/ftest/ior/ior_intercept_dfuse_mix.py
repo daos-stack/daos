@@ -54,12 +54,24 @@ class IorInterceptDfuseMix(IorTestBase):
         results = dict()
         intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
         client_count = len(self.hostlist_clients)
-        w_clients = self.hostlist_clients[0:client_count / 2]
-        wo_clients = self.hostlist_clients[client_count / 2:]
+        w_clients = self.hostlist_clients[0:int(client_count / 2)]
+        wo_clients = self.hostlist_clients[int(client_count / 2):]
         self.run_ior_threads_il(
             results=results, intercept=intercept, with_clients=w_clients,
             without_clients=wo_clients)
 
+        self.process_results(results, w_clients, wo_clients)
+
+    def process_results(self, results, w_clients, wo_clients):
+        """Process results.
+
+        (Method created to avoid pylint error.)
+
+        Args:
+            results (dict): Results
+            w_clients (list): List of clients that used IL.
+            wo_clients (list): List of clients that didn't use IL.
+        """
         # Print the raw results from the IOR stdout.
         IorCommand.log_metrics(
             self.log, "{} clients - with interception library".format(
@@ -116,14 +128,14 @@ class IorInterceptDfuseMix(IorTestBase):
         # Print the summary of improvements.
         self.log.info(
             "--- Throughput Improvement with Interception Library ---")
-        self.log.info("Clients with IL: {}".format(w_clients))
-        self.log.info("Clients without IL: {}\n".format(wo_clients))
-        self.log.info("Write Max: x{}".format(write_max_change))
-        self.log.info("Write Min: x{}".format(write_min_change))
-        self.log.info("Write Mean: x{}\n".format(write_mean_change))
-        self.log.info("Read Max: x{}".format(read_max_change))
-        self.log.info("Read Min: x{}".format(read_min_change))
-        self.log.info("Read Mean: x{}".format(read_mean_change))
+        self.log.info("Clients with IL: %s", w_clients)
+        self.log.info("Clients without IL: %s\n", wo_clients)
+        self.log.info("Write Max: x%f", write_max_change)
+        self.log.info("Write Min: x%f", write_min_change)
+        self.log.info("Write Mean: x%f\n", write_mean_change)
+        self.log.info("Read Max: x%f", read_max_change)
+        self.log.info("Read Min: x%f", read_min_change)
+        self.log.info("Read Mean: x%f", read_mean_change)
 
         # Do the threshold testing.
         write_x = self.params.get("write_x", "/run/ior/iorflags/ssf/*", 1)

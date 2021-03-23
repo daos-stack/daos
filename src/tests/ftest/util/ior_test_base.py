@@ -6,7 +6,6 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 import threading
-import time
 
 from ClusterShell.NodeSet import NodeSet
 
@@ -364,7 +363,7 @@ class IorTestBase(DfuseTestBase):
             intercept (str, optional): path to interception library. Defaults to
                 None.
         """
-        self.log.info("--- IOR Thread {}: Start ---".format(job_num))
+        self.log.info("--- IOR Thread %d: Start ---", job_num)
         tsize = ior_command.transfer_size.value
         testfile = os.path.join(
             self.dfuse.mount_dir.value, "testfile{}{}".format(tsize, job_num))
@@ -385,7 +384,7 @@ class IorTestBase(DfuseTestBase):
         manager.assign_environment(env)
         self.display_pool_space()
 
-        self.log.info("--- IOR Thread {}: Starting IOR ---".format(job_num))
+        self.log.info("--- IOR Thread %d: Starting IOR ---", job_num)
         try:
             ior_output = manager.run()
             results[job_num] = IorCommand.get_ior_metrics(ior_output)
@@ -395,7 +394,7 @@ class IorTestBase(DfuseTestBase):
         finally:
             self.display_pool_space()
 
-        self.log.info("--- IOR Thread {}: End ---".format(job_num))
+        self.log.info("--- IOR Thread %d: End ---", job_num)
 
     def verify_pool_size(self, original_pool_info, processes):
         """Validate the pool size.
