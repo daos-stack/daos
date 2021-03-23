@@ -647,8 +647,8 @@ cont_check_hdlr(struct cmd_args_s *ap)
 	daos_obj_id_t		oids[OID_ARR_SIZE];
 	daos_handle_t		oit;
 	daos_anchor_t		anchor = { 0 };
-	uint64_t		begin = 0;
-	uint64_t		end = 0;
+	time_t			begin;
+	time_t			end;
 	unsigned long		duration;
 	unsigned long		checked = 0;
 	unsigned long		skipped = 0;
@@ -671,10 +671,10 @@ cont_check_hdlr(struct cmd_args_s *ap)
 		goto out_snap;
 	}
 
-	D_PRINT("check container "DF_UUIDF" stated at: %s\n",
-		DP_UUID(ap->c_uuid), ctime(NULL));
+	begin = time(NULL);
 
-	daos_gettime_coarse(&begin);
+	D_PRINT("check container "DF_UUIDF" stated at: %s\n",
+		DP_UUID(ap->c_uuid), ctime(&begin));
 
 	while (!daos_anchor_is_eof(&anchor)) {
 		oids_nr = OID_ARR_SIZE;
@@ -712,20 +712,19 @@ cont_check_hdlr(struct cmd_args_s *ap)
 		}
 	}
 
-	daos_gettime_coarse(&end);
-
+	end = time(NULL);
 	duration = end - begin;
 	if (duration == 0)
 		duration = 1;
 
 	if (rc == 0 || rc == -DER_NOSYS || rc == -DER_MISMATCH) {
-		D_PRINT("check container "DF_UUIDF" completed at %s\n"
+		D_PRINT("check container "DF_UUIDF" completed at: %s\n"
 			"checked: %lu\n"
 			"skipped: %lu\n"
 			"inconsistent: %lu\n"
 			"run_time: %lu seconds\n"
 			"scan_speed: %lu objs/sec\n",
-			DP_UUID(ap->c_uuid), ctime(NULL), checked, skipped,
+			DP_UUID(ap->c_uuid), ctime(&end), checked, skipped,
 			inconsistent, duration, (checked + skipped) / duration);
 		rc = 0;
 	}
