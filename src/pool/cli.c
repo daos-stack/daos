@@ -111,7 +111,7 @@ dc_pool_hdl_link(struct dc_pool *pool)
 	daos_hhash_link_insert(&pool->dp_hlink, DAOS_HTYPE_POOL);
 }
 
-static void
+void
 dc_pool_hdl_unlink(struct dc_pool *pool)
 {
 	daos_hhash_link_delete(&pool->dp_hlink);
@@ -413,8 +413,8 @@ pool_connect_cp(tse_task_t *task, void *data)
 	}
 
 	/* add pool to hhash */
-	dc_pool_hdl_link(pool);
-	dc_pool2hdl(pool, arg->hdlp);
+	dc_pool_hdl_link(pool); /* +1 ref */
+	dc_pool2hdl(pool, arg->hdlp); /* +1 ref */
 
 	D_DEBUG(DF_DSMC, DF_UUID": connected: cookie="DF_X64" hdl="DF_UUID
 		" master\n", DP_UUID(pool->dp_pool), arg->hdlp->cookie,
@@ -954,8 +954,8 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 		D_GOTO(out, rc);
 
 	/* add pool to hash */
-	dc_pool_hdl_link(pool);
-	dc_pool2hdl(pool, poh);
+	dc_pool_hdl_link(pool); /* +1 ref */
+	dc_pool2hdl(pool, poh); /* +1 ref */
 
 	D_DEBUG(DF_DSMC, DF_UUID": connected: cookie="DF_X64" hdl="DF_UUID
 		" slave\n", DP_UUID(pool->dp_pool), poh->cookie,
@@ -1636,7 +1636,7 @@ dc_pool_query_target(tse_task_t *task)
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create pool tgt info rpc: %d\n",
 			DP_UUID(pool->dp_pool), rc);
-		D_GOTO(out_pool, rc);
+		 goto out_pool;
 	}
 
 	in = crt_req_get(rpc);
@@ -2104,23 +2104,22 @@ dc_pool_del_attr(tse_task_t *task)
 	in->padi_count = args->n;
 	rc = attr_bulk_create(args->n, (char **)args->names, NULL, NULL,
 			      daos_task2ctx(task), CRT_BULK_RO, &in->padi_bulk);
-	if (rc != 0)
-		D_GOTO(cleanup, rc);
+	if (rc != 0) {
+		pool_req_cleanup(CLEANUP_RPC, &cb_args);
+		D_GOTO(out, rc);
+	}
 
 	cb_args.pra_bulk = in->padi_bulk;
 	rc = tse_task_register_comp_cb(task, pool_req_complete,
 				       &cb_args, sizeof(cb_args));
-	if (rc != 0)
-		D_GOTO(cleanup, rc);
+	if (rc != 0) {
+		pool_req_cleanup(CLEANUP_BULK, &cb_args);
+		D_GOTO(out, rc);
+	}
 
 	crt_req_addref(cb_args.pra_rpc);
-	rc = daos_rpc_send(cb_args.pra_rpc, task);
-	if (rc != 0)
-		D_GOTO(cleanup, rc);
+	return daos_rpc_send(cb_args.pra_rpc, task);
 
-	return rc;
-cleanup:
-	pool_req_cleanup(CLEANUP_BULK, &cb_args);
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "Failed to del pool attributes: "DF_RC"\n", DP_RC(rc));
@@ -2189,11 +2188,12 @@ dc_pool_stop_svc(tse_task_t *task)
 			DP_UUID(pool->dp_pool), DP_RC(rc));
 		goto out_pool;
 	}
+
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_SVC_STOP, &rpc);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create POOL_SVC_STOP RPC: %d\n",
 			DP_UUID(pool->dp_pool), rc);
-		D_GOTO(out_pool, rc);
+		goto out_pool;
 	}
 
 	in = crt_req_get(rpc);

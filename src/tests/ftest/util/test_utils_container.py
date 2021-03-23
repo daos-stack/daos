@@ -13,10 +13,10 @@ from avocado import fail_on
 from command_utils_base import BasicParameter, CommandFailure
 from pydaos.raw import (DaosApiError, DaosContainer, DaosInputParams,
                         c_uuid_to_str, str_to_c_uuid)
-from general_utils import get_random_string, DaosTestError
+from general_utils import get_random_bytes, DaosTestError
 
 
-class TestContainerData(object):
+class TestContainerData():
     """A class for storing data written to DaosContainer objects."""
 
     def __init__(self, debug=False):
@@ -67,9 +67,9 @@ class TestContainerData(object):
 
         Args:
             container (TestContainer): container in which to write the object
-            akey (str): the akey
-            dkey (str): the dkey
-            data (object): the data to write as a string or list
+            akey (bytes): the akey
+            dkey (bytes): the dkey
+            data (object): the data to write as a list bytes
             rank (int, optional): rank. Defaults to None.
             obj_class (int, optional): daos object class. Defaults to None.
 
@@ -99,7 +99,7 @@ class TestContainerData(object):
                 "Error writing {}data (dkey={}, akey={}, data={}) to "
                 "container {}: {}".format(
                     "array " if isinstance(data, list) else "", dkey, akey,
-                    data, container.uuid, error))
+                    data, container.uuid, error)) from error
 
     def write_object(self, container, record_qty, akey_size, dkey_size,
                      data_size, rank=None, obj_class=None, data_array_size=0):
@@ -118,13 +118,13 @@ class TestContainerData(object):
 
         """
         for _ in range(record_qty):
-            akey = get_random_string(akey_size, self.get_akeys())
-            dkey = get_random_string(dkey_size, self.get_dkeys())
+            akey = get_random_bytes(akey_size, self.get_akeys())
+            dkey = get_random_bytes(dkey_size, self.get_dkeys())
             if data_array_size == 0:
-                data = get_random_string(data_size)
+                data = get_random_bytes(data_size)
             else:
                 data = [
-                    get_random_string(data_size)
+                    get_random_bytes(data_size)
                     for _ in range(data_array_size)]
             # Write single data to the container
             self.write_record(container, akey, dkey, data, rank, obj_class)
@@ -142,8 +142,8 @@ class TestContainerData(object):
 
         Args:
             container (TestContainer): container in which to write the object
-            akey (str): the akey
-            dkey (str): the dkey
+            akey (bytes): the akey
+            dkey (bytes): the dkey
             data_size (int): size of the data to read
             data_array_size (int): size of array item
             txn (int, optional): transaction timestamp to read. Defaults to None
@@ -177,7 +177,7 @@ class TestContainerData(object):
                 "Error reading {}data (dkey={}, akey={}, size={}) from "
                 "container {}: {}".format(
                     "array " if data_array_size > 0 else "", dkey, akey,
-                    data_size, container.uuid, error))
+                    data_size, container.uuid, error)) from error
         return [data[:-1] for data in read_data] \
             if data_array_size > 0 else read_data.value
 
@@ -201,7 +201,6 @@ class TestContainerData(object):
                 "container": container,
                 "akey": record_info["akey"],
                 "dkey": record_info["dkey"],
-                "data_size": len(data[0].split()),
                 "txn": txn,
             }
             try:
@@ -244,7 +243,7 @@ class TestContainer(TestDaosApiBase):
             cb_handler (CallbackHandler, optional): callback object to use with
                 the API methods. Defaults to None.
         """
-        super(TestContainer, self).__init__("/run/container/*", cb_handler)
+        super().__init__("/run/container/*", cb_handler)
         self.pool = pool
 
         self.object_qty = BasicParameter(None)
@@ -285,7 +284,7 @@ class TestContainer(TestDaosApiBase):
         """
         if self.container is not None and self.uuid is not None:
             return str(self.uuid)
-        return super(TestContainer, self).__str__()
+        return super().__str__()
 
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
@@ -301,7 +300,7 @@ class TestContainer(TestDaosApiBase):
         Args:
             test (Test): avocado Test object
         """
-        super(TestContainer, self).get_params(test)
+        super().get_params(test)
         if self.daos:
             self.daos.timeout = self.daos_timeout.value
 
@@ -593,7 +592,7 @@ class TestContainer(TestDaosApiBase):
              c_uuid_to_str(getattr(self.info, key))
              if key == "ci_uuid" else getattr(self.info, key),
              val)
-            for key, val in locals().items()
+            for key, val in list(locals().items())
             if key != "self" and val is not None]
         return self._check_info(checks)
 
@@ -705,7 +704,8 @@ class TestContainer(TestDaosApiBase):
             except DaosApiError as error:
                 raise DaosTestError(
                     "Error obtaining target rank list for object {} in "
-                    "container {}: {}".format(data.obj, self.uuid, error))
+                    "container {}: {}".format(
+                        data.obj, self.uuid, error)) from error
         if message is not None:
             self.log.info("Target rank lists%s:", message)
             for ranks in target_rank_lists:
@@ -754,9 +754,10 @@ class TestContainer(TestDaosApiBase):
                 txn = 0
                 try:
                     obj = self.written_data[index].obj
-                except IndexError:
+                except IndexError as error:
                     raise DaosTestError(
-                        "Invalid index {} for written data".format(index))
+                        "Invalid index {} for written data".format(
+                            index)) from error
 
                 # Close the object
                 self.log.info(
@@ -821,10 +822,10 @@ class TestContainer(TestDaosApiBase):
             for index in indices:
                 try:
                     rec = data.records[index]
-                except IndexError:
+                except IndexError as error:
                     raise DaosTestError(
                         "Invalid record index {} for object {}".format(
-                            index, data.obj))
+                            index, data.obj)) from error
 
                 # Punch the record
                 self.log.info(
