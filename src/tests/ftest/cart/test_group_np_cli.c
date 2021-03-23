@@ -117,6 +117,14 @@ test_run(void)
 				       5,
 				       150);
 		D_ASSERTF(rc == 0, "wait_for_ranks() failed; rc=%d\n", rc);
+
+		crt_endpoint_t ep;
+		ep.ep_rank = rank_list->rl_ranks[0];
+		ep.ep_tag = 0;
+		ep.ep_grp = grp;
+		rc = crt_register_proto_ctl(&ep);
+		D_ASSERTF(rc == 0, "crt_register_proto_ctl() failed; rc=%d\n", rc);
+
 	}
 
 	if (test_g.t_init_only) {
