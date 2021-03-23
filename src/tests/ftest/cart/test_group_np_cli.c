@@ -75,6 +75,7 @@ test_run(void)
 	uint32_t		*_cg_ranks;
 	int			 _cg_num_ranks;
 	int			 icea;
+	sem_t			 ttp;
 
 	if (test_g.t_skip_init) {
 		DBG_PRINT("Skipping init stage.\n");
@@ -142,21 +143,22 @@ test_run(void)
 
 				k = test_g.t_num_checkins_to_send;
 				for (j = 0; j < k; j++) {
-					icea = test_g.t_issue_crt_ep_abort;
-					if (icea == rank)
-						check_in_with_delay(grp,
-								    rank,
-								    tag);
-					else
-						check_in(grp, rank, tag);
+					check_in_with_delay(grp,
+							    rank,
+							    tag);
 				}
 			}
 		}
 
+		/* Don't wait on the aborted rank */
+		icea = test_g.t_issue_crt_ep_abort;
 		for (i = 0; i < rank_list->rl_nr; i++) {
-			for (tag = 0; tag < test_g.t_srv_ctx_num; tag++) {
-				tc_sem_timedwait(&test_g.t_token_to_proceed, 61,
-						 __LINE__);
+			rank = rank_list->rl_ranks[i];
+			if (icea != rank) {
+				for (tag = 0; tag < test_g.t_srv_ctx_num; tag++) {
+						ttp = test_g.t_token_to_proceed;
+						tc_sem_timedwait(&ttp, 61, __LINE__);
+				}
 			}
 		}
 	}

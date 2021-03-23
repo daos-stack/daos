@@ -257,7 +257,6 @@ client_cb_common(const struct crt_cb_info *cb_info)
 
 	if (cb_info->cci_arg != NULL) {
 		aborted_rank = *(int *) cb_info->cci_arg;
-		*(int *) cb_info->cci_arg = 1;
 	}
 
 	switch (cb_info->cci_rpc->cr_opc) {
@@ -517,8 +516,6 @@ check_in_with_delay(crt_group_t *remote_group, int rank, int tag)
 	if (test_g.t_sleep_time_after_rpc != -1)
 		rpc_req_input->delay = test_g.t_sleep_time_after_rpc;
 
-	DBG_PRINT("EAM trace: line 586, rpc_req_input->delay = %d.\n", rpc_req_input->delay);
-
 	D_DEBUG(DB_TEST, "client(rank %d) sending checkin rpc with tag "
 		"%d, name: %s, age: %d, days: %d, bool_val %d.\n",
 		rank, server_ep.ep_tag, rpc_req_input->name,
@@ -531,7 +528,7 @@ check_in_with_delay(crt_group_t *remote_group, int rank, int tag)
 			  &test_g.global_client_cb_arg);
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 
-	/* If we're testing crt_ep_abort(), abort the previous RPC */
+	/* If we're testing crt_ep_abort(), abort the specified RPC */
 	if (test_g.t_issue_crt_ep_abort == rank) {
 		rc = crt_ep_abort(&server_ep);
 		D_ASSERTF(rc == 0, "crt_ep_abort() failed. rc: %d\n", rc);
