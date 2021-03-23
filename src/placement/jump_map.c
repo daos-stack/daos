@@ -91,7 +91,28 @@ layout_find_diff(struct pl_jump_map *jmap, struct pl_obj_layout *original,
 		if (reint_tgt != original_target) {
 			pool_map_find_target(jmap->jmp_map.pl_poolmap,
 					     reint_tgt, &temp_tgt);
-			remap_alloc_one(diff, index, temp_tgt, true);
+			if (pool_target_avail(temp_tgt, PO_COMP_ST_UPIN |
+							PO_COMP_ST_UP |
+							PO_COMP_ST_DRAIN |
+							PO_COMP_ST_NEW))
+				remap_alloc_one(diff, index, temp_tgt, true);
+			else
+				/* XXX: This isn't desirable - but it can happen
+				 * when a reintegration is happening when
+				 * something else fails. Placement will do a
+				 * pass to determine what failed (good), and
+				 * then do another pass to figure out where
+				 * things moved to. But that 2nd pass will
+				 * re-find failed things, and this diff function
+				 * will cause the failed targets to be re-added
+				 * to the layout as rebuilding. This should be
+				 * removed when placement is able to handle
+				 * this situation better
+				 */
+				D_DEBUG(DB_PL,
+					"skip remap %d to unavail tgt %u\n",
+					index, reint_tgt);
+
 		}
 	}
 }
@@ -189,6 +210,18 @@ static inline struct pl_jump_map *
 pl_map2jmap(struct pl_map *map)
 {
 	return container_of(map, struct pl_jump_map, jmp_map);
+}
+
+static void debug_print_allow_status(uint32_t allow_status)
+{
+	D_DEBUG(DB_PL, "Allow status: [%s%s%s%s%s%s%s ]\n",
+		allow_status & PO_COMP_ST_UNKNOWN ? " UNKNOWN" : "",
+		allow_status & PO_COMP_ST_NEW ? " NEW" : "",
+		allow_status & PO_COMP_ST_UP ? " UP" : "",
+		allow_status & PO_COMP_ST_UPIN ? " UPIN" : "",
+		allow_status & PO_COMP_ST_DOWN ? " DOWN" : "",
+		allow_status & PO_COMP_ST_DOWNOUT ? " DOWNOUT" : "",
+		allow_status & PO_COMP_ST_DRAIN ? " DRAIN" : "");
 }
 
 static inline uint32_t
@@ -468,6 +501,7 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 		l_shard = &layout->ol_shards[f_shard->fs_shard_idx];
 		D_DEBUG(DB_PL, "Attempting to remap failed shard: "
 			DF_FAILEDSHARD"\n", DP_FAILEDSHARD(*f_shard));
+		debug_print_allow_status(allow_status);
 
 		/*
 		 * If there are any targets left, there are potentially valid
@@ -595,8 +629,8 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 
 	/* Set the pool map version */
 	layout->ol_ver = pl_map_version(&(jmap->jmp_map));
-	D_DEBUG(DB_PL, "Building layout. map version: %d allow %x\n",
-		layout->ol_ver, allow_status);
+	D_DEBUG(DB_PL, "Building layout. map version: %d\n", layout->ol_ver);
+	debug_print_allow_status(allow_status);
 
 	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_ROOT,
 				  PO_COMP_ID_ALL, &root);
@@ -908,6 +942,11 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 			allow_status |= PO_COMP_ST_NEW;
 		else
 			allow_status |= PO_COMP_ST_UP | PO_COMP_ST_DRAIN;
+
+		/* Don't repeat remapping failed shards during this phase -
+		 * they have already been remapped.
+		 */
+		allow_status |= PO_COMP_ST_DOWN;
 		rc = obj_layout_alloc_and_get(jmap, &jmop, md, allow_status,
 					      &extend_layout, NULL, NULL);
 		if (rc)
@@ -973,7 +1012,7 @@ jump_map_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 
 	int idx = 0;
 
-	D_DEBUG(DB_PL, "Finding Rebuild\n");
+	D_DEBUG(DB_PL, "Finding Rebuild at version: %u\n", rebuild_ver);
 
 	/* Caller should guarantee the pl_map is up-to-date */
 	if (pl_map_version(map) < rebuild_ver) {
@@ -1023,7 +1062,7 @@ jump_map_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 
 	int idx = 0;
 
-	D_DEBUG(DB_PL, "Finding Rebuild\n");
+	D_DEBUG(DB_PL, "Finding Reint at version: %u\n", reint_ver);
 
 	/* Caller should guarantee the pl_map is up-to-date */
 	if (pl_map_version(map) < reint_ver) {
@@ -1039,7 +1078,10 @@ jump_map_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 		return rc;
 	}
 
-	allow_status = PO_COMP_ST_UPIN;
+	/* Ignore DOWN and DRAIN objects here - this API is only for finding
+	 * reintegration candidates
+	 */
+	allow_status = PO_COMP_ST_UPIN | PO_COMP_ST_DOWN | PO_COMP_ST_DRAIN;
 	D_INIT_LIST_HEAD(&reint_list);
 	rc = obj_layout_alloc_and_get(jmap, &jop, md, allow_status, &layout,
 				      NULL, NULL);

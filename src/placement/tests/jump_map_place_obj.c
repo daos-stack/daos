@@ -921,6 +921,7 @@ jtc_snapshot_layout_targets(struct jm_test_ctx *ctx)
 	} while (0)
 
 #define UP	POOL_REINT
+#define UPIN	POOL_ADD_IN
 #define DOWN	POOL_EXCLUDE
 #define DOWNOUT	POOL_EXCLUDE_OUT
 #define DRAIN	POOL_DRAIN
@@ -1573,11 +1574,118 @@ one_server_is_added(void **state)
 
 /*
  * ------------------------------------------------
- * Leave in multiple states at same time
+ * Leave in multiple states at same time (no addition)
  * ------------------------------------------------
  */
 static void
 placement_handles_multiple_states(void **state)
+{
+	struct jm_test_ctx ctx;
+	int ver_after_reint;
+	int ver_after_fail;
+	int ver_after_drain;
+	int ver_after_reint_complete;
+	uint32_t reint_tgt_id;
+	uint32_t fail_tgt_id;
+	uint32_t rebuilding;
+
+	jtc_init_with_layout(&ctx, 4, 1, 8, OC_RP_3G1, g_verbose);
+
+	/* first shard goes down, rebuilt, then reintegrated */
+	jtc_set_status_on_shard_target(&ctx, DOWN, 0);
+	jtc_set_status_on_shard_target(&ctx, DOWNOUT, 0);
+	jtc_set_status_on_shard_target(&ctx, UP, 0);
+	reint_tgt_id = jtc_layout_shard_tgt(&ctx, 0);
+	assert_success(jtc_create_layout(&ctx));
+
+	rebuilding = jtc_get_layout_rebuild_count(&ctx);
+	/* One thing reintegrating */
+	assert_int_equal(1, rebuilding);
+
+	/*
+	 * Reintegration is now in progress. Grab the version from here
+	 * for find reint count
+	 */
+	ver_after_reint = ctx.ver;
+
+	/* second shard goes down */
+	jtc_set_status_on_shard_target(&ctx, DOWN, 1);
+	fail_tgt_id = jtc_layout_shard_tgt(&ctx, 1);
+	assert_success(jtc_create_layout(&ctx));
+
+	ver_after_fail = ctx.ver;
+
+	rebuilding = jtc_get_layout_rebuild_count(&ctx);
+	/* One reintegrating plus one failure recovery */
+	assert_int_equal(2, rebuilding);
+
+	/* third shard is queued for drain */
+	jtc_set_status_on_shard_target(&ctx, DRAIN, 2);
+	assert_success(jtc_create_layout(&ctx));
+
+	/*
+	 * Reintegration is still running, but these other operations have
+	 * happened too and are now queued.
+	 */
+	ver_after_drain = ctx.ver;
+
+	is_false(jtc_layout_has_duplicate(&ctx));
+
+	/*
+	 * Compute placement in this state. All three shards should
+	 * be moving around
+	 */
+	jtc_scan(&ctx);
+	rebuilding = jtc_get_layout_rebuild_count(&ctx);
+	assert_int_equal(3, rebuilding);
+
+	/*
+	 * Compute find_reint() using the correct version of rebuild which
+	 * would have launched when reintegration started
+	 *
+	 * find_reint() should only be finding the one thing to move at this
+	 * version
+	 */
+	ctx.ver = ver_after_reint;
+	jtc_scan(&ctx);
+	assert_int_equal(ctx.reint.out_nr, 1);
+
+	/* Complete the reintegration */
+	ctx.ver = ver_after_drain; /* Restore the version first */
+	jtc_set_status_on_target(&ctx, UPIN, reint_tgt_id);
+	ver_after_reint_complete = ctx.ver;
+
+	/* This would start processing the failure - so check that it'd just
+	 * move one thing
+	 */
+	ctx.ver = ver_after_fail;
+	jtc_scan(&ctx);
+	assert_int_equal(ctx.rebuild.out_nr, 1);
+
+	/* Complete the rebuild */
+	ctx.ver = ver_after_reint_complete; /* Restore the version first */
+	jtc_set_status_on_target(&ctx, DOWNOUT, fail_tgt_id);
+
+	/* This would start processing the drain - so check that it'd just
+	 * move one thing
+	 */
+	ctx.ver = ver_after_drain;
+	jtc_scan(&ctx);
+	assert_int_equal(ctx.rebuild.out_nr, 1);
+
+	/* Remainder is simple / out of scope for this test */
+
+	jtc_fini(&ctx);
+}
+
+
+/*
+ * ------------------------------------------------
+ * Leave in multiple states at same time (including addition)
+ * ------------------------------------------------
+ */
+static void
+placement_handles_multiple_states_with_addition(void **state)
 {
 	struct jm_test_ctx	 ctx;
 
@@ -1773,8 +1881,10 @@ static const struct CMUnitTest tests[] = {
 	  "data movement to the new server",
 	  one_server_is_added),
 	/* Multiple */
-	T("Placement can handle multiple states",
+	T("Placement can handle multiple states (excluding addition)",
 	  placement_handles_multiple_states),
+	T("Placement can handle multiple states (including addition)",
+	  placement_handles_multiple_states_with_addition),
 	/* Non-standard system setups*/
 	T("Non-standard system configurations. All healthy",
 	  unbalanced_config),
