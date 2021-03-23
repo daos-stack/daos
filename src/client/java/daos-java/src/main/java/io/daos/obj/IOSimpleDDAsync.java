@@ -184,8 +184,15 @@ public class IOSimpleDDAsync extends IODataDescBase implements DaosEventQueue.At
         return;
       }
       // update actual size
-      int idx = getRequestBufLen();
+      int idx = totalRequestBufLen;
       descBuffer.writerIndex(descBuffer.capacity());
+      descBuffer.readerIndex(idx);
+      retCode = descBuffer.readInt();
+      if (retCode != RET_CODE_SUCCEEDED) {
+        resultParsed = true;
+        return;
+      }
+      idx += 4;
       for (Entry entry : akeyEntries) {
         descBuffer.readerIndex(idx);
         entry.setActualSize(descBuffer.readInt());
