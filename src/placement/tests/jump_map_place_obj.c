@@ -1243,10 +1243,23 @@ down_back_to_up_in_same_order(void **state)
 	jtc_set_status_on_target(&ctx, UP, orig_shard_targets[0]);
 	jtc_assert_scan_and_layout(&ctx);
 
-	jtc_fini(&ctx);
-	skip_msg("DAOS-6519: too many things are in the reint scan");
-	assert_int_equal(1, ctx.reint.out_nr);
-	jtc_assert_rebuild_reint_new(ctx, 1, 0, 1, 0);
+	/* NOTE: This is a really important test case. Even though this test
+	 * seems like it should only move one shard (because only one target is
+	 * being reintegrated), this particular combination happens to trigger
+	 * extra data movement, resulting in two shards moving - one moving back
+	 * to the reintegrated target, and one moving between two otherwise
+	 * healthy targets because of the retry/collision mechanism of the jump
+	 * map algorithm.
+	 *
+	 * XXX This will likely break if the jump consistent hashing algorithm
+	 * is changed. It's just fortunate we happened to trigger this somewhat
+	 * rare case here. If you are reading this later and you find this
+	 * assert triggering because the value is 1 instead of 2, likely the
+	 * placement algorithm was modified so that this test no longer hits
+	 * this corner case.
+	 */
+	assert_int_equal(2, ctx.reint.out_nr);
+	jtc_assert_rebuild_reint_new(ctx, 2, 0, 2, 0);
 
 	/* Take second downed target up */
 	jtc_set_status_on_target(&ctx, UP, orig_shard_targets[1]);
