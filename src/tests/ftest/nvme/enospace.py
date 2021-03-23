@@ -16,13 +16,8 @@ from job_manager_utils import Mpirun
 from ior_utils import IorCommand, IorMetrics
 from command_utils_base import CommandFailure
 from general_utils import error_count
+import queue
 
-try:
-    # python 3.x
-    import queue
-except ImportError:
-    # python 2.7
-    import Queue as queue
 
 class NvmeEnospace(ServerFillUp):
     # pylint: disable=too-many-ancestors
@@ -33,11 +28,11 @@ class NvmeEnospace(ServerFillUp):
 
     def __init__(self, *args, **kwargs):
         """Initialize a NvmeEnospace object."""
-        super(NvmeEnospace, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.daos_cmd = None
 
     def setUp(self):
-        super(NvmeEnospace, self).setUp()
+        super().setUp()
 
         # initialize daos command
         self.daos_cmd = DaosCommand(self.bin)

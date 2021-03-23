@@ -18,7 +18,7 @@ class CascadingFailures(RebuildTestBase):
 
     def __init__(self, *args, **kwargs):
         """Initialize a CascadingFailures object."""
-        super(CascadingFailures, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.mode = None
 
     def create_test_container(self):

@@ -3994,7 +3994,6 @@ cleanup:
 		D_FREE(gbl.g_endpts);
 		gbl.g_endpts = NULL;
 	}
-
 	if (all_params != NULL)
 		D_FREE(all_params);
 	d_log_fini();

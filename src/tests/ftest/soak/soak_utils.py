@@ -15,9 +15,8 @@ from fio_utils import FioCommand
 from daos_racer_utils import DaosRacerCommand
 from dfuse_utils import Dfuse
 from job_manager_utils import Srun
-from command_utils_base import BasicParameter
 from general_utils import get_host_data, get_random_string, \
-    run_command, DaosTestError, pcmd
+    run_command, DaosTestError, pcmd, get_random_bytes
 import slurm_utils
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
@@ -108,8 +107,7 @@ def get_remote_logs(self):
                 result = run_command(command, timeout=30)
             except DaosTestError as error:
                 raise SoakTestError(
-                    "<<FAILED: job logs failed to copy {}>>".format(
-                        error))
+                    "<<FAILED: job logs failed to copy>>") from error
         # remove the remote soak logs for this pass
         command = "/usr/bin/rm -rf {0}".format(self.test_log_dir)
         slurm_utils.srun(
@@ -122,8 +120,7 @@ def get_remote_logs(self):
                 result = run_command(command)
             except DaosTestError as error:
                 raise SoakTestError(
-                    "<<FAILED: job logs failed to delete {}>>".format(
-                        error))
+                    "<<FAILED: job logs failed to delete>>") from error
     else:
         raise SoakTestError(
             "<<FAILED: Soak remote logfiles not copied "
@@ -151,9 +148,8 @@ def run_event_check(self, since, until):
         "daos_server --since=\"{}\" --until=\"{}\"".format(since, until)
         err = "Error gathering system log events"
         for event in events:
-            for output in get_host_data(
-                    hosts, command, "journalctl", err).values():
-                lines = str(output).splitlines()
+            for output in get_host_data(hosts, command, "journalctl", err):
+                lines = output["data"].splitlines()
                 for line in lines:
                     match = re.search(r"{}".format(event), str(line))
                     if match:
@@ -248,10 +244,10 @@ def launch_snapshot(self, pool, name):
         "object_class", '/run/container_reserved/*')
 
     # write data to object
-    data_pattern = get_random_string(500)
+    data_pattern = get_random_bytes(500)
     datasize = len(data_pattern) + 1
-    dkey = "dkey"
-    akey = "akey"
+    dkey = b"dkey"
+    akey = b"akey"
     obj = container.container.write_an_obj(
         data_pattern, datasize, dkey, akey, obj_cls=obj_cls)
     obj.close()
@@ -265,10 +261,10 @@ def launch_snapshot(self, pool, name):
     if status:
         self.log.info("Sanpshot Created")
         # write more data to object
-        data_pattern2 = get_random_string(500)
+        data_pattern2 = get_random_bytes(500)
         datasize2 = len(data_pattern2) + 1
-        dkey = "dkey"
-        akey = "akey"
+        dkey = b"dkey"
+        akey = b"akey"
         obj2 = container.container.write_an_obj(
             data_pattern2, datasize2, dkey, akey, obj_cls=obj_cls)
         obj2.close()
@@ -286,7 +282,7 @@ def launch_snapshot(self, pool, name):
         if status:
             # Compare the snapshot to the original written data.
             if data_pattern3.value != data_pattern:
-                self.log.error("Snapshot data miscompere")
+                self.log.error("Snapshot data miscompare")
                 status &= False
     # Destroy the snapshot
     try:
@@ -500,9 +496,9 @@ def get_srun_cmd(cmd, nodesperjob=1, ppn=1, srun_params=None, env=None):
     srun_cmd.nodes.update(nodesperjob)
     srun_cmd.ntasks_per_node.update(ppn)
     if srun_params:
-        for key, value in srun_params.items():
+        for key, value in list(srun_params.items()):
             key_obj = getattr(srun_cmd, key)
-            if isinstance(key_obj, BasicParameter):
+            if key_obj is not None and hasattr(key_obj, "update"):
                 key_obj.update(value, key)
             else:
                 raise SoakTestError(
@@ -596,7 +592,7 @@ def cleanup_dfuse(self):
                     ";".join(cmd)), self.srun_params)
     except slurm_utils.SlurmFailed as error:
         raise SoakTestError(
-            "<<FAILED: Dfuse directories not deleted {} >>".format(error))
+            "<<FAILED: Dfuse directories not deleted>>") from error
 
 
 def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
@@ -808,14 +804,13 @@ def create_fio_cmdline(self, job_spec, pool):
     return commands
 
 
-def build_job_script(self, commands, job, ppn, nodesperjob):
+def build_job_script(self, commands, job, nodesperjob):
     """Create a slurm batch script that will execute a list of cmdlines.
 
     Args:
         self (obj): soak obj
         commands(list): commandlines and cmd specific log_name
         job(str): the job name that will be defined in the slurm script
-        ppn(int): number of tasks to run on each node
 
     Returns:
         script_list: list of slurm batch scripts
