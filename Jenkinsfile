@@ -456,7 +456,7 @@ boolean skip_unstable() {
         return false
     }
 
-    return currentBuild.result == 'UNSTABLE'
+    return currentBuild.currentResult == 'UNSTABLE'
 }
 
 boolean skip_testing_stage() {
