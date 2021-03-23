@@ -235,7 +235,8 @@ class DaosCommand(DaosCommandBase):
         # 182347e4-08ce-4069-b5e2-0dd04406dffd
         data = {}
         if self.result.exit_status == 0:
-            data["uuids"] = re.findall(r"([0-9a-f-]{36})", self.result.stdout)
+            data["uuids"] = re.findall(r"([0-9a-f-]{36})",
+            self.result.stdout_text)
         return data
 
     def pool_set_attr(self, pool, attr, value):
@@ -423,7 +424,7 @@ class DaosCommand(DaosCommandBase):
         # Container's `&()\;'"!<> attribute value: attr12
         match = re.findall(
             r"Container's\s+([\S ]+)\s+attribute\s+value:\s+(.+)$",
-            self.result.stdout)
+            self.result.stdout_text)
         data = {}
         if match:
             data["attr"] = match[0][0]
@@ -457,7 +458,7 @@ class DaosCommand(DaosCommandBase):
         # ~@#$%^*-=_+[]{}:/?,.
         # aa bb
         # attr48
-        match = re.findall(r"\n([\S ]+)", self.result.stdout)
+        match = re.findall(r"\n([\S ]+)", self.result.stdout_text)
         return {"attrs": match}
 
     def container_create_snap(self, pool, cont, snap_name=None, epoch=None,
@@ -487,7 +488,7 @@ class DaosCommand(DaosCommandBase):
         # snapshot/epoch 1582610056530034697 has been created
         data = {}
         match = re.findall(
-            r"[A-Za-z\/]+\s([0-9]+)\s[a-z\s]+", self.result.stdout)
+            r"[A-Za-z\/]+\s([0-9]+)\s[a-z\s]+", self.result.stdout_text)
         if match:
             data["epoch"] = match[0]
 
@@ -545,7 +546,7 @@ class DaosCommand(DaosCommandBase):
         # Container's snapshots :
         # 1598478249040609297 1598478258840600594 1598478287952543761
         data = {}
-        match = re.findall(r"(\d+)", self.result.stdout)
+        match = re.findall(r"(\d+)", self.result.stdout_text)
         if match:
             data["epochs"] = match
         return data
@@ -586,7 +587,7 @@ class DaosCommand(DaosCommandBase):
         vals = re.findall(
             r"oid:\s+([\d.]+)\s+ver\s+(\d+)\s+grp_nr:\s+(\d+)|"\
             r"grp:\s+(\d+)\s+|"\
-            r"replica\s+(\d+)\s+(\d+)\s*", self.result.stdout)
+            r"replica\s+(\d+)\s+(\d+)\s*", self.result.stdout_text)
 
         try:
             oid_vals = vals[0][0]

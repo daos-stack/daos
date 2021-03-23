@@ -35,11 +35,13 @@
 # ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 """
 LogIter class definition.
 LogLine class definition.
 
 This provides a way of querying CaRT logfiles for processing.
+
 """
 
 from collections import OrderedDict
@@ -47,37 +49,40 @@ import bz2
 import os
 import re
 
+
 class InvalidPid(Exception):
-    """Exception to be raised when invalid pid is requested"""
-    pass
+    """Exception to be raised when invalid pid is requested."""
+
 
 class InvalidLogFile(Exception):
-    """Exception to be raised when log file cannot be parsed"""
-    pass
+    """Exception to be raised when log file cannot be parsed."""
+
 
 LOG_LEVELS = {
-    'EMIT'  :1,
-    'FATAL' :2,
-    'EMRG'  :3,
-    'CRIT'  :4,
-    'ERR'   :5,
-    'WARN'  :6,
-    'NOTE'  :7,
-    'INFO'  :8,
-    'DBUG'  :9}
+    'EMIT': 1,
+    'FATAL': 2,
+    'EMRG': 3,
+    'CRIT': 4,
+    'ERR': 5,
+    'WARN': 6,
+    'NOTE': 7,
+    'INFO': 8,
+    'DBUG': 9}
 
 # Make a reverse lookup from log level to name.
 LOG_NAMES = {}
 for name in LOG_LEVELS:
     LOG_NAMES[LOG_LEVELS[name]] = name
 
+
 # pylint: disable=too-few-public-methods
 class LogRaw():
-    """Class for raw (non cart log lines) in cart log files
+    """Class for raw (non cart log lines) in cart log files.
 
     This is used for lines that cannot be identified as cart log lines,
     for example mercury logs being sent to the same file.
     """
+
     def __init__(self, line):
         self.line = line.rstrip('\n')
         self.trace = False
@@ -87,6 +92,7 @@ class LogRaw():
         LogLine
         """
         return self.line
+
 
 # pylint: disable=too-many-instance-attributes
 class LogLine():
@@ -127,8 +133,8 @@ class LogLine():
         self.fac = fields[3]
         try:
             self.level = LOG_LEVELS[fields[4]]
-        except KeyError:
-            raise InvalidLogFile(fields[4])
+        except KeyError as error:
+            raise InvalidLogFile(fields[4]) from error
 
         self.ts = fields[0]
         self._fields = fields[5:]
@@ -431,6 +437,7 @@ class StateIter():
 
 # pylint: disable=too-few-public-methods
 
+
 class LogIter():
     """Class for parsing CaRT log files
 
@@ -576,8 +583,8 @@ class LogIter():
         if pid is not None:
             try:
                 self._iter_pid = self._pids[pid]
-            except KeyError:
-                raise InvalidPid
+            except KeyError as error:
+                raise InvalidPid from error
 
             if self.__from_file:
                 if self.bz2:
@@ -629,8 +636,8 @@ class LogIter():
 
         try:
             line = self._data[self._offset]
-        except IndexError:
-            raise StopIteration
+        except IndexError as error:
+            raise StopIteration from error
         self._offset += 1
         return line
 
@@ -640,7 +647,7 @@ class LogIter():
             self._iter_index += 1
 
             if self._pid and self._iter_index > self._iter_last_index:
-                assert self._iter_count == self._iter_pid['line_count'] # nosec
+                assert self._iter_count == self._iter_pid['line_count']  # nosec
                 raise StopIteration
 
             line = self.__lnext()
@@ -667,5 +674,5 @@ class LogIter():
 
     def get_pids(self):
         """Return an array of pids appearing in the file"""
-        return self._pids.keys()
+        return list(self._pids.keys())
 # pylint: enable=too-many-instance-attributes

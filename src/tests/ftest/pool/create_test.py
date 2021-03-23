@@ -90,7 +90,7 @@ class PoolCreateTests(PoolTestBase):
         self.pool[1].create()
         self.assertTrue(
             self.pool[1].dmg.result.exit_status == 1 and
-            "-1007" in self.pool[1].dmg.result.stdout,
+            "-1007" in self.pool[1].dmg.result.stdout_text,
             "Creating a large capacity pool across all servers should fail "
             "due to an existing pool on one server consuming the required "
             "space."
@@ -146,7 +146,7 @@ class PoolCreateTests(PoolTestBase):
             self.pool[1].create()
             self.assertTrue(
                 self.pool[1].dmg.result.exit_status == 1 and
-                "-1007" in self.pool[1].dmg.result.stdout,
+                "-1007" in self.pool[1].dmg.result.stdout_text,
                 "Creating a large capacity pool across all servers should fail "
                 "due to an existing pool on one server consuming the required "
                 "space."

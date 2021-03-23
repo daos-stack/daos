@@ -22,7 +22,7 @@ class SnapshotAggregation(IorTestBase):
 
     def __init__(self, *args, **kwargs):
         """Initialize a SnapshotAggregation object."""
-        super(SnapshotAggregation, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.dmg = None
         self.free_space = {"scm": [], "nvme": []}
 

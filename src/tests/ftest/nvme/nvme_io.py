@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 from ior_test_base import IorTestBase
 from test_utils_pool import TestPool

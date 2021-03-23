@@ -206,6 +206,7 @@ struct daos_obj_layout {
 struct daos_shard_tgt {
 	uint32_t		st_rank;	/* rank of the shard */
 	uint32_t		st_shard;	/* shard index */
+	uint32_t		st_shard_id;	/* shard id */
 	uint32_t		st_tgt_id;	/* target id */
 	uint16_t		st_tgt_idx;	/* target xstream index */
 	/* target idx for EC obj, only used for client */
