@@ -392,8 +392,7 @@ check_in(crt_group_t *target_group, int rank)
 	rc = crt_req_send(rpc_req, completion_cb_common, NULL);
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 
-	if (buffer != NULL)
-		D_FREE(buffer);
+	/* Buffer will be freed in completion_cb_common */
 }
 
 void

@@ -260,6 +260,7 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		D_ASSERT(test_ping_rpc_req_output != NULL);
 
 		if (cb_info->cci_rc != 0) {
+			D_FREE(test_ping_rpc_req_input->name);
 			D_ERROR("rpc (opc: %#x) failed, rc: %d.\n",
 				rpc_req->cr_opc, cb_info->cci_rc);
 			break;
@@ -270,6 +271,7 @@ client_cb_common(const struct crt_cb_info *cb_info)
 			  test_ping_rpc_req_output->ret,
 			  test_ping_rpc_req_output->room_no,
 			  test_ping_rpc_req_output->bool_val);
+		D_FREE(test_ping_rpc_req_input->name);
 		sem_post(&test_g.t_token_to_proceed);
 		D_ASSERT(test_ping_rpc_req_output->bool_val == true);
 		break;
@@ -420,8 +422,6 @@ check_in(crt_group_t *remote_group, int rank, int tag)
 	rc = crt_req_send(rpc_req, client_cb_common, NULL);
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 
-	if (buffer != NULL)
-		D_FREE(buffer);
 }
 
 static struct t_swim_status

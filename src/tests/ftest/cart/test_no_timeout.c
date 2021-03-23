@@ -164,8 +164,7 @@ ping_delay_reply(crt_group_t *remote_group, int rank, int tag, uint32_t delay)
 	rc = crt_req_send(rpc_req, client_cb_common, NULL);
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 
-	if (buffer != 0)
-		D_FREE(buffer);
+	/* buffer will be freed in the call back function client_cb_common */
 }
 
 void
