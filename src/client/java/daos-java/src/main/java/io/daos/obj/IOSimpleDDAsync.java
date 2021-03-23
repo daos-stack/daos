@@ -135,6 +135,8 @@ public class IOSimpleDDAsync extends IODataDescBase implements DaosEventQueue.At
     totalDescBufferLen += totalRequestBufLen;
     if (!updateOrFetch) { // for return code and returned actual size
       totalDescBufferLen += 4 + akeyEntries.size() * Constants.ENCODED_LENGTH_EXTENT;
+    } else {
+      totalDescBufferLen += 4;
     }
   }
 
