@@ -11,9 +11,6 @@
 
 #define TEST_CTX_MAX_NUM	 (72)
 
-#define TEST_GROUP_BASE					0x010000000
-#define TEST_GROUP_VER					 0
-
 #define MAX_NUM_RANKS		1024
 #define MAX_SWIM_STATUSES	1024
 #define CRT_CTL_MAX_ARG_STR_LEN (1 << 16)
@@ -212,6 +209,7 @@ test_ping_delay_handler(crt_rpc_t *rpc_req)
 	struct crt_test_ping_delay_in	*p_req;
 	struct crt_test_ping_delay_out	*p_reply;
 	int				 rc = 0;
+	d_rank_t			 my_rank;
 
 	/* CaRT internally already allocated the input/output buffer */
 	p_req = crt_req_get(rpc_req);
@@ -220,8 +218,8 @@ test_ping_delay_handler(crt_rpc_t *rpc_req)
 	DBG_PRINT("tier1 test_server recv'd checkin, opc: %#x.\n",
 		  rpc_req->cr_opc);
 	DBG_PRINT("tier1 checkin input - age: %d, name: %s, days: %d, "
-			"delay: %u.\n", p_req->age, p_req->name, p_req->days,
-			 p_req->delay);
+		  "delay: %u.\n", p_req->age, p_req->name, p_req->days,
+		  p_req->delay);
 
 	p_reply = crt_reply_get(rpc_req);
 	D_ASSERTF(p_reply != NULL, "crt_reply_get() failed. p_reply: %p\n",
@@ -232,7 +230,20 @@ test_ping_delay_handler(crt_rpc_t *rpc_req)
 	sleep(p_req->delay);
 
 	rc = crt_reply_send(rpc_req);
-	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
+
+	/* Expect the reply on an aborted RPC to fail */
+	crt_group_rank(NULL, &my_rank);
+
+	if (test_g.t_issue_crt_ep_abort == my_rank) {
+		D_ASSERTF(rc != 0,
+			  "crt_reply_send() should fail " 
+			  "since it was aborted. rc: %d\n",
+			  rc);
+	} else {
+		D_ASSERTF(rc == 0,
+			  "crt_reply_send() failed. rc: %d\n",
+			  rc);
+	}
 
 	DBG_PRINT("tier1 test_server sent checkin reply, ret: %d, "
 		   "room_no: %d.\n", p_reply->ret, p_reply->room_no);

@@ -75,6 +75,7 @@ test_run(void)
 	uint32_t		*_cg_ranks;
 	int			 _cg_num_ranks;
 	int			 icea;
+	int			 scn;
 	sem_t			 ttp;
 
 	if (test_g.t_skip_init) {
@@ -160,12 +161,15 @@ test_run(void)
 
 		/* Don't wait on the aborted rank */
 		icea = test_g.t_issue_crt_ep_abort;
+		scn = test_g.t_srv_ctx_num;
+		ttp = test_g.t_token_to_proceed;
 		for (i = 0; i < rank_list->rl_nr; i++) {
 			rank = rank_list->rl_ranks[i];
 			if (icea != rank) {
-				for (tag = 0; tag < test_g.t_srv_ctx_num; tag++) {
-						ttp = test_g.t_token_to_proceed;
-						tc_sem_timedwait(&ttp, 61, __LINE__);
+				for (tag = 0; tag < scn; tag++) {
+						tc_sem_timedwait(&ttp,
+								 61,
+								 __LINE__);
 				}
 			}
 		}

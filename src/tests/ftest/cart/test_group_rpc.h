@@ -5,10 +5,21 @@
  */
 
 /* Set array indices into my_proto_fmt_test_group arrays */
-#define TEST_OPC_CHECKIN	CRT_PROTO_OPC(0x010000000, 0, 0)
-#define TEST_OPC_PING_DELAY	CRT_PROTO_OPC(0x010000000, 0, 3)
-#define TEST_OPC_SWIM_STATUS	CRT_PROTO_OPC(0x010000000, 0, 2)
-#define TEST_OPC_SHUTDOWN	CRT_PROTO_OPC(0x010000000, 0, 1)
+
+#define TEST_GROUP_BASE          0x010000000
+#define TEST_GROUP_VER           0
+#define TEST_OPC_CHECKIN	CRT_PROTO_OPC(TEST_GROUP_BASE, \
+					      TEST_GROUP_VER,  \
+					      0)
+#define TEST_OPC_PING_DELAY	CRT_PROTO_OPC(TEST_GROUP_BASE, \
+					      TEST_GROUP_VER,  \
+					      3)
+#define TEST_OPC_SWIM_STATUS	CRT_PROTO_OPC(TEST_GROUP_BASE, \
+					      TEST_GROUP_VER,  \
+					      2)
+#define TEST_OPC_SHUTDOWN	CRT_PROTO_OPC(TEST_GROUP_BASE, \
+					      TEST_GROUP_VER,  \
+					      1)
 
 /* input fields */
 #define CRT_ISEQ_TEST_PING_DELAY				 \
