@@ -312,7 +312,7 @@ public class IOSimpleDDAsync extends IODataDescBase implements DaosEventQueue.At
       }
       event = null;
     }
-    if (releaseFetchBuffer && !updateOrFetch) {
+    if (releaseFetchBuffer || updateOrFetch) { 
       akeyEntries.forEach(e -> e.releaseDataBuffer());
       akeyEntries.clear();
     }
