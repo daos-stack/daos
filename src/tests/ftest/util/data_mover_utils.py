@@ -190,17 +190,27 @@ class Dcp(DcpCommand):
             if src_pool or src_cont:
                 self.log.info(
                     "Converting --daos-src-pool to daos://pool/cont/path")
-                src_path = "daos://{}/{}/{}".format(
-                    src_pool, src_cont, src_path)
-                self.src_path.update(src_path)
+                new_path = "daos://"
+                if src_pool:
+                    new_path += str(src_pool) + "/"
+                if src_cont:
+                    new_path += str(src_cont) + "/"
+                if src_path:
+                    new_path += str(src_path).lstrip("/")
+                self.src_path.update(new_path)
                 self.daos_src_pool.update(None)
                 self.daos_src_cont.update(None)
             if dst_pool or dst_cont:
                 self.log.info(
                     "Converting --daos-dst-pool to daos://pool/cont/path")
-                dst_path = "daos://{}/{}/{}".format(
-                    dst_pool, dst_cont, dst_path)
-                self.dst_path.update(dst_path)
+                new_path = "daos://"
+                if dst_pool:
+                    new_path += str(dst_pool) + "/"
+                if dst_cont:
+                    new_path += str(dst_cont) + "/"
+                if dst_path:
+                    new_path += str(dst_path).lstrip("/")
+                self.dst_path.update(new_path)
                 self.daos_dst_pool.update(None)
                 self.daos_dst_cont.update(None)
         if self.has_bufsize:
@@ -395,3 +405,52 @@ class FsCopy():
         self.log.info("Starting daos filesystem copy")
 
         return self.daos_cmd.filesystem_copy(src=self.src, dst=self.dst)
+
+class ContClone():
+    """Class defining an object of type ContClone.
+       Allows interfacing with daos container copy in a similar
+       manner to DcpCommand.
+    """
+
+    def __init__(self, daos_cmd, log):
+        """Create a ContClone object.
+
+        Args:
+            daos_cmd (DaosCommand): daos command to issue the cont clone
+                command.
+            log (TestLogger): logger to log messages
+
+        """
+        self.src = None
+        self.dst = None
+        self.daos_cmd = daos_cmd
+        self.log = log
+
+    def set_cont_clone_params(self, src=None, dst=None):
+        """Set the daos container clone params.
+
+        Args:
+            src (str, optional): the src, formatted as /<pool>/<cont>
+            dst (str, optional): the dst, formatted as /<pool>/<cont>
+
+        """
+        if src:
+            self.src = src
+        if dst:
+            self.dst = dst
+
+    def run(self):
+        # pylint: disable=arguments-differ
+        """Run the daos container clone command.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: In case daos container clone run command fails.
+
+        """
+        self.log.info("Starting daos container clone")
+
+        return self.daos_cmd.container_clone(src=self.src, dst=self.dst)
