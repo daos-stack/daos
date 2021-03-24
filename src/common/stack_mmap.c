@@ -77,8 +77,8 @@ int mmap_stack_thread_create(ABT_pool pool, void (*thread_func)(void *),
 	}
 
 	stack = mmap(NULL, stack_size, PROT_READ | PROT_WRITE,
-		  MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK | MAP_GROWSDOWN,
-		  -1, 0);
+		     MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK | MAP_GROWSDOWN,
+		     -1, 0);
 	if (stack == MAP_FAILED) {
 		D_ERROR("Failed to mmap() ULT stack : %s\n", strerror(errno));
 		/* return an ABT error */
@@ -153,8 +153,8 @@ int mmap_stack_thread_create_on_xstream(ABT_xstream xstream,
 	}
 
 	stack = mmap(NULL, stack_size, PROT_READ | PROT_WRITE,
-		  MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK | MAP_GROWSDOWN,
-		  -1, 0);
+		     MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK | MAP_GROWSDOWN,
+		     -1, 0);
 	if (stack == MAP_FAILED) {
 		D_ERROR("Failed to mmap() ULT stack : %s\n", strerror(errno));
 		D_GOTO(out_err, rc = ABT_ERR_MEM);

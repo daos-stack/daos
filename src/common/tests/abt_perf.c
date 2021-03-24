@@ -30,7 +30,7 @@ static int		opt_secs;
 static int		opt_stack;
 static int		opt_cr_type;
 #ifdef ULT_MMAP_STACK
-static int		opt_mmap = false;
+static int		opt_mmap;
 #endif
 
 static inline uint64_t
@@ -202,7 +202,8 @@ abt_sched_rate(void)
 		if (opt_mmap)
 			rc = mmap_stack_thread_create(abt_pool, abt_thread_2,
 						      NULL,
-						      ABT_THREAD_ATTR_NULL, NULL);
+						      ABT_THREAD_ATTR_NULL,
+						      NULL);
 		else
 #endif
 		rc = ABT_thread_create(abt_pool, abt_thread_2, NULL,

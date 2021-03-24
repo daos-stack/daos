@@ -458,7 +458,7 @@ abt_init(int argc, char *argv[])
 		return dss_abterr2der(rc);
 	}
 #endif
-	
+
 	return 0;
 }
 
