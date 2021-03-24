@@ -37,6 +37,16 @@ func TestHostSet_Create(t *testing.T) {
 			expOut:    "server[1,3,5,7,9]:10000,server[2,4,6,8,10]:10001",
 			expCount:  10,
 		},
+		"single hyphen": {
+			startList: "dserver-0001,dserver-0002,dserver-0003",
+			expOut:    "dserver-[0001-0003]",
+			expCount:  3,
+		},
+		"multiple hyphens": {
+			startList: "d-server-j-0001,d-server-j-0002,d-server-j-0003",
+			expOut:    "d-server-j-[0001-0003]",
+			expCount:  3,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			hs, gotErr := hostlist.CreateSet(tc.startList)
