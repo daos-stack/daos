@@ -176,6 +176,7 @@ class CartTest(TestWithoutServers):
             env += " -x CRT_CTX_SHARE_ADDR={!s}".format(ofi_share_addr)
 
         env += " -x CRT_ATTACH_INFO_PATH={!s}".format(daos_test_shared_dir)
+        env += " -x COVFILE=/tmp/test.cov"
 
         self.log_path = log_path
 
