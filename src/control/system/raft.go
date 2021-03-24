@@ -13,8 +13,8 @@ import (
 	"time"
 
 	transport "github.com/Jille/raft-grpc-transport"
+	boltdb "github.com/daos-stack/raft-boltdb"
 	"github.com/hashicorp/raft"
-	boltdb "github.com/hashicorp/raft-boltdb"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 

@@ -190,7 +190,8 @@ struct ilog_entries {
  *				that are provably not needed.  If discard is
  *				set, it will remove everything in the epoch
  *				range.
- *  \param	punched[in]	Max punch of parent incarnation log
+ *  \param	punch_major[in]	Max major epoch punch of parent incarnation log
+ *  \param	punch_major[in]	Max minor epoch punch of parent incarnation log
  *  \param	entries[in]	Used for efficiency since aggregation is used
  *				by vos_iterator
  *
@@ -201,7 +202,7 @@ struct ilog_entries {
 int
 ilog_aggregate(struct umem_instance *umm, struct ilog_df *root,
 	       const struct ilog_desc_cbs *cbs, const daos_epoch_range_t *epr,
-	       bool discard, daos_epoch_t punched,
+	       bool discard, daos_epoch_t punch_major, uint16_t punch_minor,
 	       struct ilog_entries *entries);
 
 /** Initialize an ilog_entries struct for fetch

@@ -35,6 +35,8 @@
 #include "srv_internal.h"
 #include "srv_layout.h"
 #include "srv_pool_map.h"
+#include "gurt/telemetry_common.h"
+#include "gurt/telemetry_producer.h"
 
 /* Pool service */
 struct pool_svc {
@@ -435,7 +437,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 		   uint32_t ndomains, const uint32_t *domains)
 {
 	uint32_t		version = DS_POOL_MD_VERSION;
-	struct pool_buf	       *map_buf;
+	struct pool_buf	       *map_buf = NULL;
 	uint32_t		map_version = 1;
 	uint32_t		connectable;
 	uint32_t		nhandles = 0;
@@ -498,7 +500,8 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 out_uuids:
 	D_FREE(uuids);
 out_map_buf:
-	pool_buf_free(map_buf);
+	if (map_buf)
+		pool_buf_free(map_buf);
 out:
 	return rc;
 }
@@ -591,6 +594,7 @@ ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
 	crt_rpc_t	       *rpc;
 	struct pool_create_in  *in;
 	struct pool_create_out *out;
+	struct d_backoff_seq	backoff_seq;
 	int			rc;
 
 	D_ASSERTF(ntargets == target_addrs->rl_nr, "ntargets=%u num=%u\n",
@@ -613,6 +617,10 @@ ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
 	if (rc != 0)
 		D_GOTO(out_creation, rc);
 
+	rc = d_backoff_seq_init(&backoff_seq, 0 /* nzeros */, 16 /* factor */,
+				8 /* next (ms) */, 1 << 10 /* max (ms) */);
+	D_ASSERTF(rc == 0, "d_backoff_seq_init: "DF_RC"\n", DP_RC(rc));
+
 rechoose:
 	/* Create a POOL_CREATE request. */
 	ep.ep_grp = NULL;
@@ -620,13 +628,13 @@ rechoose:
 	if (rc != 0) {
 		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
-		goto out_client;
+		goto out_backoff_seq;
 	}
 	rc = pool_req_create(info->dmi_ctx, &ep, POOL_CREATE, &rpc);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create POOL_CREATE RPC: "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
-		D_GOTO(out_client, rc);
+		goto out_backoff_seq;
 	}
 	in = crt_req_get(rpc);
 	uuid_copy(in->pri_op.pi_uuid, pool_uuid);
@@ -649,7 +657,7 @@ rechoose:
 				      rc == 0 ? &out->pro_op.po_hint : NULL);
 	if (rc == RSVC_CLIENT_RECHOOSE) {
 		crt_req_decref(rpc);
-		dss_sleep(1000 /* ms */);
+		dss_sleep(d_backoff_seq_next(&backoff_seq));
 		D_GOTO(rechoose, rc);
 	}
 	rc = out->pro_op.po_rc;
@@ -663,7 +671,8 @@ rechoose:
 	D_ASSERTF(rc == 0, "daos_rank_list_copy: "DF_RC"\n", DP_RC(rc));
 out_rpc:
 	crt_req_decref(rpc);
-out_client:
+out_backoff_seq:
+	d_backoff_seq_fini(&backoff_seq);
 	rsvc_client_fini(&client);
 out_creation:
 	if (rc != 0)
@@ -1839,8 +1848,14 @@ pool_connect_iv_dist(struct pool_svc *svc, uuid_t pool_hdl,
 
 	rc = ds_pool_iv_conn_hdl_update(svc->ps_pool, pool_hdl, flags,
 					sec_capas, cred);
-	if (rc)
+	if (rc) {
+		if (rc == -DER_SHUTDOWN) {
+			D_DEBUG(DF_DSMS, DF_UUID":"DF_UUID" some ranks stop.\n",
+				DP_UUID(svc->ps_uuid), DP_UUID(pool_hdl));
+			rc = 0;
+		}
 		D_GOTO(out, rc);
+	}
 out:
 	D_DEBUG(DF_DSMS, DF_UUID": bcasted: "DF_RC"\n", DP_UUID(svc->ps_uuid),
 		DP_RC(rc));
@@ -1950,6 +1965,7 @@ out:
 void
 ds_pool_connect_handler(crt_rpc_t *rpc)
 {
+	struct d_tm_node_t	       *open_hdl_gauge = NULL;
 	struct pool_connect_in	       *in = crt_req_get(rpc);
 	struct pool_connect_out	       *out = crt_reply_get(rpc);
 	struct pool_svc		       *svc;
@@ -2074,6 +2090,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 		D_GOTO(out_map_version, rc = -DER_NO_PERM);
 	}
 
+	d_tm_increment_gauge(&open_hdl_gauge, 1,
+			     "pool/ops/open/active");
 	/*
 	 * Transfer the pool map to the client before adding the pool handle,
 	 * so that we don't need to worry about rolling back the transaction
@@ -2218,10 +2236,11 @@ static int
 pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 		     int n_hdl_uuids, crt_context_t ctx)
 {
-	d_iov_t	value;
-	uint32_t	nhandles;
-	int		i;
-	int		rc;
+	struct d_tm_node_t	*open_hdl_gauge = NULL;
+	d_iov_t			 value;
+	uint32_t		 nhandles;
+	int			 i;
+	int			 rc;
 
 	D_ASSERTF(n_hdl_uuids > 0, "%d\n", n_hdl_uuids);
 
@@ -2241,6 +2260,9 @@ pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 	rc = pool_disconnect_bcast(ctx, svc, hdl_uuids, n_hdl_uuids);
 	if (rc != 0)
 		D_GOTO(out, rc);
+
+	d_tm_decrement_gauge(&open_hdl_gauge, n_hdl_uuids,
+			     "pool/ops/open/active");
 
 	d_iov_set(&value, &nhandles, sizeof(nhandles));
 	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_nhandles, &value);

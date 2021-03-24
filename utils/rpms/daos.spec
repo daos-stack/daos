@@ -4,19 +4,22 @@
 
 %global mercury_version 2.0.1~rc1-1%{?dist}
 %global libfabric_version 1.12.0~rc1-1
+%global __python %{__python3}
 
 Name:          daos
 Version:       1.3.0
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
 URL:           https//github.com/daos-stack/daos
 Source0:       %{name}-%{version}.tar.gz
-
+%if (0%{?rhel} >= 7)
+BuildRequires: python36-scons >= 2.4
+%else
 BuildRequires: scons >= 2.4
+%endif
 BuildRequires: libfabric-devel >= %{libfabric_version}
-BuildRequires: boost-devel
 BuildRequires: mercury-devel = %{mercury_version}
 BuildRequires: openpa-devel
 BuildRequires: libpsm2-devel
@@ -26,9 +29,11 @@ BuildRequires: hwloc-devel
 %if (0%{?rhel} >= 7)
 BuildRequires: argobots-devel >= 1.0rc1
 BuildRequires: json-c-devel
+BuildRequires: boost-python36-devel
 %else
 BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libjson-c-devel
+BuildRequires: boost-devel
 %endif
 BuildRequires: libpmem-devel >= 1.8, libpmemobj-devel >= 1.8
 BuildRequires: fuse3-devel >= 3.4.2
@@ -59,8 +64,6 @@ BuildRequires: libcmocka-devel
 BuildRequires: readline-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
-BuildRequires: python-devel
-BuildRequires: python-distro
 %if (0%{?rhel} >= 7)
 BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
@@ -68,6 +71,7 @@ BuildRequires: golang-bin >= 1.12
 # needed to retrieve PMM region info through control-plane
 BuildRequires: libipmctl-devel
 BuildRequires: python36-devel
+BuildRequires: python36-distro
 BuildRequires: Lmod
 %else
 %if (0%{?suse_version} >= 1315)
@@ -165,9 +169,16 @@ This is the package needed to run a DAOS client
 %package tests
 Summary: The DAOS test suite
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
-Requires: python-pathlib
-Requires: python-distro
-Requires: python2-tabulate
+%if (0%{?rhel} >= 7)
+Requires: python36
+Requires: python36-distro
+Requires: python36-tabulate
+%endif
+%if (0%{?suse_version} >= 1500)
+Requires: python3
+Requires: python3-distro
+Requires: python3-tabulate
+%endif
 Requires: fio
 Requires: dbench
 Requires: lbzip2
@@ -197,41 +208,43 @@ This is the package needed to build software with the DAOS library.
 %build
 
 %define conf_dir %{_sysconfdir}/daos
-
-scons %{?_smp_mflags}      \
-      --config=force       \
-      --no-rpath           \
-      USE_INSTALLED=all    \
-      CONF_DIR=%{conf_dir} \
-      PREFIX=%{?buildroot} \
+%if (0%{?rhel} >= 7)
+%define scons_exe scons-3
+%else
+%define scons_exe scons
+%endif
+%{scons_exe} %{?_smp_mflags} \
+      --config=force         \
+      --no-rpath             \
+      USE_INSTALLED=all      \
+      CONF_DIR=%{conf_dir}   \
+      PREFIX=%{buildroot}    \
      %{?scons_args}
 
 %install
-scons %{?_smp_mflags}                 \
+%{scons_exe} %{?_smp_mflags}          \
       --config=force                  \
       --no-rpath                      \
-      --install-sandbox=%{?buildroot} \
-      %{?buildroot}%{_prefix}         \
-      %{?buildroot}%{conf_dir}        \
+      --install-sandbox=%{buildroot} \
+      %{buildroot}%{_prefix}         \
+      %{buildroot}%{conf_dir}        \
       USE_INSTALLED=all               \
       CONF_DIR=%{conf_dir}            \
       PREFIX=%{_prefix}               \
       %{?scons_args}
 
-BUILDROOT="%{?buildroot}"
-PREFIX="%{?_prefix}"
-mkdir -p %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/
-echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
-mkdir -p %{?buildroot}/%{_unitdir}
+mkdir -p %{buildroot}/%{_sysconfdir}/ld.so.conf.d/
+echo "%{_libdir}/daos_srv" > %{buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
+mkdir -p %{buildroot}/%{_unitdir}
 %if (0%{?rhel} == 7)
-install -m 644 utils/systemd/%{server_svc_name}.pre230 %{?buildroot}/%{_unitdir}/%{server_svc_name}
-install -m 644 utils/systemd/%{agent_svc_name}.pre230 %{?buildroot}/%{_unitdir}/%{agent_svc_name}
+install -m 644 utils/systemd/%{server_svc_name}.pre230 %{buildroot}/%{_unitdir}/%{server_svc_name}
+install -m 644 utils/systemd/%{agent_svc_name}.pre230 %{buildroot}/%{_unitdir}/%{agent_svc_name}
 %else
-install -m 644 utils/systemd/%{server_svc_name} %{?buildroot}/%{_unitdir}
-install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
+install -m 644 utils/systemd/%{server_svc_name} %{buildroot}/%{_unitdir}
+install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 %endif
-mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
-mv %{?buildroot}/%{_sysconfdir}/daos/bash_completion.d %{?buildroot}/%{_sysconfdir}
+mkdir -p %{buildroot}/%{conf_dir}/certs/clients
+mv %{buildroot}/%{_sysconfdir}/daos/bash_completion.d %{buildroot}/%{_sysconfdir}
 
 %pre server
 getent group daos_metrics >/dev/null || groupadd -r daos_metrics
@@ -334,41 +347,22 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdfs_internal.so
 %{_libdir}/libvos_size.so
 %{_libdir}/libdts.so
-%dir  %{_libdir}/python2.7/site-packages/pydaos
-%dir  %{_libdir}/python2.7/site-packages/storage_estimator
-%{_libdir}/python2.7/site-packages/pydaos/*.py
-%{_libdir}/python2.7/site-packages/storage_estimator/*.py
-%if (0%{?rhel} >= 7)
-%{_libdir}/python2.7/site-packages/pydaos/*.pyc
-%{_libdir}/python2.7/site-packages/pydaos/*.pyo
-%{_libdir}/python2.7/site-packages/storage_estimator/*.pyc
-%{_libdir}/python2.7/site-packages/storage_estimator/*.pyo
-%endif
-%{_libdir}/python2.7/site-packages/pydaos/pydaos_shim_27.so
-%dir  %{_libdir}/python2.7/site-packages/pydaos/raw
-%{_libdir}/python2.7/site-packages/pydaos/raw/*.py
-%if (0%{?rhel} >= 7)
-%{_libdir}/python2.7/site-packages/pydaos/raw/*.pyc
-%{_libdir}/python2.7/site-packages/pydaos/raw/*.pyo
-%endif
-%dir %{_libdir}/python3
-%dir %{_libdir}/python3/site-packages
 %dir %{_libdir}/python3/site-packages/pydaos
 %dir %{_libdir}/python3/site-packages/storage_estimator
 %{_libdir}/python3/site-packages/pydaos/*.py
 %{_libdir}/python3/site-packages/storage_estimator/*.py
 %if (0%{?rhel} >= 7)
-%{_libdir}/python3/site-packages/pydaos/*.pyc
-%{_libdir}/python3/site-packages/pydaos/*.pyo
-%{_libdir}/python3/site-packages/storage_estimator/*.pyc
-%{_libdir}/python3/site-packages/storage_estimator/*.pyo
+%dir %{_libdir}/python3/site-packages/pydaos/__pycache__
+%dir %{_libdir}/python3/site-packages/storage_estimator/__pycache__
+%{_libdir}/python3/site-packages/pydaos/__pycache__/*.pyc
+%{_libdir}/python3/site-packages/storage_estimator/__pycache__/*.pyc
 %endif
 %{_libdir}/python3/site-packages/pydaos/pydaos_shim_3.so
 %dir %{_libdir}/python3/site-packages/pydaos/raw
 %{_libdir}/python3/site-packages/pydaos/raw/*.py
 %if (0%{?rhel} >= 7)
-%{_libdir}/python3/site-packages/pydaos/raw/*.pyc
-%{_libdir}/python3/site-packages/pydaos/raw/*.pyo
+%dir %{_libdir}/python3/site-packages/pydaos/raw/__pycache__
+%{_libdir}/python3/site-packages/pydaos/raw/__pycache__/*.pyc
 %endif
 %{_datadir}/%{name}/ioil-ld-opts
 %config(noreplace) %{conf_dir}/daos_agent.yml
@@ -380,6 +374,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files tests
 %dir %{_prefix}/lib/daos
 %{_prefix}/lib/daos/TESTING
+%exclude %{_prefix}/lib/daos/TESTING/ftest/list_tests.py
 %{_bindir}/hello_drpc
 %{_bindir}/*_test*
 %{_bindir}/jobtest
@@ -406,6 +401,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Thu Mar 18 2021 Maureen Jean <maureen.jean@intel.com> 1.3.0-3
+- Update to python3
+
 * Thu Feb 25 2021 Li Wei <wei.g.li@intel.com> 1.3.0-2
 - Require raft-devel 0.7.3 that fixes an unstable leadership problem caused by
   removed replicas as well as some Coverity issues

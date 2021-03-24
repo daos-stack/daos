@@ -558,19 +558,41 @@ common_bs_cb(void *arg, struct spdk_blob_store *bs, int rc)
 	cp_arg->cca_bs = bs;
 }
 
-void
-xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights)
+int
+xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights,
+		   uint64_t timeout)
 {
+	uint64_t	start_time, cur_time;
+
 	D_ASSERT(inflights != NULL);
 	D_ASSERT(ctxt != NULL);
-	/* Wait for the completion callback done */
+
+	if (timeout != 0)
+		start_time = daos_getmtime_coarse();
+
+	/* Wait for the completion callback done or timeout */
 	while (*inflights != 0) {
 		spdk_thread_poll(ctxt->bxc_thread, 0, 0);
 
 		/* Called by standalone VOS */
 		if (ctxt->bxc_tgt_id == -1)
 			bio_xs_io_stat(ctxt, d_timeus_secdiff(0));
+
+		/* Completion is executed */
+		if (*inflights == 0)
+			return 0;
+
+		/* Timeout */
+		if (timeout != 0) {
+			cur_time = daos_getmtime_coarse();
+
+			D_ASSERT(cur_time >= start_time);
+			if (cur_time - start_time > timeout)
+				return -DER_TIMEDOUT;
+		}
 	}
+
+	return 0;
 }
 
 struct spdk_blob_store *
@@ -633,7 +655,8 @@ load_blobstore(struct bio_xs_context *ctxt, char *bdev_name, uuid_t *bs_uuid,
 		spdk_bs_init(bs_dev, &bs_opts, common_bs_cb, &cp_arg);
 	else
 		spdk_bs_load(bs_dev, &bs_opts, common_bs_cb, &cp_arg);
-	xs_poll_completion(ctxt, &cp_arg.cca_inflights);
+	rc = xs_poll_completion(ctxt, &cp_arg.cca_inflights, 0);
+	D_ASSERT(rc == 0);
 
 	if (cp_arg.cca_rc != 0) {
 		D_CDEBUG(bs_uuid == NULL, DB_IO, DLOG_ERR,
@@ -649,11 +672,13 @@ load_blobstore(struct bio_xs_context *ctxt, char *bdev_name, uuid_t *bs_uuid,
 int
 unload_blobstore(struct bio_xs_context *ctxt, struct spdk_blob_store *bs)
 {
-	struct common_cp_arg cp_arg;
+	struct common_cp_arg	cp_arg;
+	int			rc;
 
 	common_prep_arg(&cp_arg);
 	spdk_bs_unload(bs, common_init_cb, &cp_arg);
-	xs_poll_completion(ctxt, &cp_arg.cca_inflights);
+	rc = xs_poll_completion(ctxt, &cp_arg.cca_inflights, 0);
+	D_ASSERT(rc == 0);
 
 	if (cp_arg.cca_rc != 0)
 		D_ERROR("failed to unload blobstore %d\n", cp_arg.cca_rc);
@@ -1040,7 +1065,7 @@ put_bio_blobstore(struct bio_blobstore *bb, struct bio_xs_context *ctxt)
 	d_list_for_each_entry_safe(ioc, tmp, &ctxt->bxc_io_ctxts, bic_link) {
 		d_list_del_init(&ioc->bic_link);
 		if (ioc->bic_blob != NULL)
-			D_WARN("Pool isn't closed. xs:%p\n", ctxt);
+			D_WARN("Pool isn't closed. tgt:%d\n", ctxt->bxc_tgt_id);
 	}
 
 	ABT_mutex_lock(bb->bb_mutex);
@@ -1355,6 +1380,8 @@ out:
 void
 bio_xsctxt_free(struct bio_xs_context *ctxt)
 {
+	int	rc = 0;
+
 	/* NVMe context setup was skipped */
 	if (ctxt == NULL)
 		return;
@@ -1389,15 +1416,27 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 			 * The xstream initialized SPDK env will have to
 			 * wait for all other xstreams finalized first.
 			 */
-			if (nvme_glb.bd_xstream_cnt != 0)
+			if (nvme_glb.bd_xstream_cnt != 0) {
+				D_DEBUG(DB_MGMT, "Init xs waits\n");
 				ABT_cond_wait(nvme_glb.bd_barrier,
 					      nvme_glb.bd_mutex);
+			}
 
 			fini_bio_bdevs(ctxt);
 
 			common_prep_arg(&cp_arg);
+			D_DEBUG(DB_MGMT, "Finalizing SPDK subsystems\n");
 			spdk_subsystem_fini(common_fini_cb, &cp_arg);
-			xs_poll_completion(ctxt, &cp_arg.cca_inflights);
+			/*
+			 * spdk_subsystem_fini() won't run to completion if
+			 * any bdev is held by open blobs, set a timeout as
+			 * temporary workaround.
+			 */
+			rc = xs_poll_completion(ctxt, &cp_arg.cca_inflights,
+						3000 /*ms*/);
+			D_CDEBUG(rc == 0, DB_MGMT, DLOG_ERR,
+				 "SPDK subsystems finalized. "DF_RC"\n",
+				 DP_RC(rc));
 
 			nvme_glb.bd_init_thread = NULL;
 
@@ -1412,7 +1451,8 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 		D_DEBUG(DB_MGMT, "Finalizing SPDK thread, tgt_id:%d",
 			ctxt->bxc_tgt_id);
 
-		while (!spdk_thread_is_idle(ctxt->bxc_thread))
+		/* Don't drain events if spdk_subsystem_fini() timeout */
+		while (rc == 0 && !spdk_thread_is_idle(ctxt->bxc_thread))
 			spdk_thread_poll(ctxt->bxc_thread, 0, 0);
 
 		D_DEBUG(DB_MGMT, "SPDK thread finalized, tgt_id:%d",
@@ -1485,7 +1525,8 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 		/* Initialize all registered subsystems: bdev, vmd, copy. */
 		common_prep_arg(&cp_arg);
 		spdk_subsystem_init(subsys_init_cb, &cp_arg);
-		xs_poll_completion(ctxt, &cp_arg.cca_inflights);
+		rc = xs_poll_completion(ctxt, &cp_arg.cca_inflights, 0);
+		D_ASSERT(rc == 0);
 
 		if (cp_arg.cca_rc != 0) {
 			rc = cp_arg.cca_rc;

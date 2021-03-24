@@ -357,7 +357,7 @@ daos_csummer_allocation_size(struct daos_csummer *obj, daos_iod_t *iods,
  *				distributed to multiple targets. When it is NULL
  *				it means replica object, or EC object located
  *				in single target.
- * @param[out]	p_iods_csums	pointer that will reference the
+ * @param[out]	p_cds		pointer that will reference the
  *				the memory allocated
  * @return			number of iod_csums allocated, or
  *				negative if error
@@ -366,7 +366,7 @@ int
 daos_csummer_alloc_iods_csums(struct daos_csummer *obj, daos_iod_t *iods,
 			      uint32_t nr, bool akey_only,
 			      struct dcs_layout *singv_los,
-			      struct dcs_iod_csums **p_iods_csums);
+			      struct dcs_iod_csums **p_cds);
 
 /**
  * Using the information from the iods and csums packed into the csum_iov

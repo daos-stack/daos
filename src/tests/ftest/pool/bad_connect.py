@@ -4,13 +4,15 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from __future__ import print_function
+
 
 import traceback
 import ctypes
 from avocado.core.exceptions import TestFail
 from apricot import TestWithServers
 from test_utils_pool import TestPool
+from general_utils import create_string_buffer
+
 
 class BadConnectTest(TestWithServers):
     """
@@ -51,7 +53,7 @@ class BadConnectTest(TestWithServers):
                 break
 
         puuid = (ctypes.c_ubyte * 16)()
-        pgroup = ctypes.create_string_buffer(0)
+        pgroup = create_string_buffer(0)
         # initialize a python pool object then create the underlying
         # daos storage
         self.pool = TestPool(self.context, self.get_dmg_command())

@@ -489,6 +489,9 @@ jtc_create_layout(struct jm_test_ctx *ctx)
 {
 	int rc;
 
+	D_ASSERT(ctx != NULL);
+	D_ASSERT(ctx->pl_map != NULL);
+
 	/* place object will allocate the layout so need to free first
 	 * if already allocated
 	 */
@@ -620,6 +623,8 @@ jtc_layout_has_duplicate(struct jm_test_ctx *ctx)
 	bool *target_set;
 	bool result = false;
 
+	D_ASSERT(ctx != NULL);
+	D_ASSERT(ctx->po_map != NULL);
 	const uint32_t total_targets = pool_map_target_nr(ctx->po_map);
 
 	D_ALLOC_ARRAY(target_set, total_targets);
@@ -977,17 +982,24 @@ all_healthy(void **state)
 
 	/* Test all object classes */
 	num_test_oc = get_object_classes(&object_classes);
-
-	jtc_init(&ctx, 128, 1, 8, 0, g_verbose);
+	jtc_init(&ctx, (1 << 10), 1, 16, 0, g_verbose);
 	for (i = 0; i < num_test_oc; ++i) {
-		jtc_set_object_meta(&ctx, object_classes[i], 0, 1);
-		JTC_CREATE_AND_ASSERT_HEALTHY_LAYOUT(&ctx);
-	}
-	jtc_fini(&ctx);
+		struct daos_oclass_attr *oa;
+		daos_obj_id_t oid;
+		int	grp_sz;
+		int	grp_nr;
 
-	/* many more domains and targets */
-	jtc_init(&ctx, 1024, 1, 128, 0, g_verbose);
-	for (i = 0; i < num_test_oc; ++i) {
+		gen_oid(&oid, 0, 0, object_classes[i]);
+		oa = daos_oclass_attr_find(oid);
+		grp_sz = daos_oclass_grp_size(oa);
+		grp_nr = daos_oclass_grp_nr(oa, NULL);
+
+		/* skip those gigantic layouts for saving time */
+		if (grp_sz != DAOS_OBJ_REPL_MAX &&
+		    grp_nr != DAOS_OBJ_GRP_MAX &&
+		    grp_sz * grp_nr > (16 << 10))
+			continue;
+
 		jtc_set_object_meta(&ctx, object_classes[i], 0, 1);
 		JTC_CREATE_AND_ASSERT_HEALTHY_LAYOUT(&ctx);
 	}
@@ -1010,10 +1022,9 @@ down_to_target(void **state)
 	assert_success(jtc_create_layout(&ctx));
 	jtc_scan(&ctx);
 
-	jtc_fini(&ctx);
-	skip_msg("DAOS-6515: Plenty of targets, but not being rebuilt.");
 	assert_int_equal(ctx.rebuild.out_nr, 1);
 	assert_int_equal(0, jtc_get_layout_bad_count(&ctx));
+	jtc_fini(&ctx);
 }
 
 static void

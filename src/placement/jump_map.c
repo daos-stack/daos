@@ -176,8 +176,10 @@ jm_obj_placement_get(struct pl_jump_map *jmap, struct daos_obj_md *md,
 			grp_max = 1;
 
 		jmop->jmop_grp_nr = daos_oclass_grp_nr(oc_attr, md);
-		if (jmop->jmop_grp_nr > grp_max)
+		if (jmop->jmop_grp_nr == DAOS_OBJ_GRP_MAX)
 			jmop->jmop_grp_nr = grp_max;
+		else if (jmop->jmop_grp_nr > grp_max)
+			return -DER_INVAL;
 	} else {
 		jmop->jmop_grp_nr = 1;
 	}
@@ -190,35 +192,6 @@ jm_obj_placement_get(struct pl_jump_map *jmap, struct daos_obj_md *md,
 		DP_OID(oid), jmop->jmop_grp_size, jmop->jmop_grp_nr);
 
 	return 0;
-}
-
-/**
- * Given a @jmop and target determine if there exists a spare target
- * that satisfies the layout requirements. This will return false if
- * there are no available domains of type jmp_domain_nr left.
- *
- * \param[in] jmap      The currently used placement map.
- * \param[in] jmop      Struct containing layout group size and number.
- *
- * \return              True if there exists a spare, false otherwise.
- */
-static bool
-jump_map_has_next_spare(struct pl_jump_map *jmap, struct jm_obj_placement *jmop,
-		uint32_t spares_left, enum PL_OP_TYPE op,
-		enum pool_comp_state state)
-{
-	D_ASSERTF(jmop->jmop_grp_size <= jmap->jmp_domain_nr,
-		  "grp_size: %u > domain_nr: %u\n",
-		  jmop->jmop_grp_size, jmap->jmp_domain_nr);
-
-	if ((jmop->jmop_grp_size == jmap->jmp_domain_nr &&
-	    jmop->jmop_grp_size > 1))
-		return false;
-
-	if (spares_left == 0)
-		return false;
-
-	return true;
 }
 
 /**
@@ -520,8 +493,16 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 		l_shard = &layout->ol_shards[f_shard->fs_shard_idx];
 		D_DEBUG(DB_PL, "Attempting to remap failed shard: "
 			DF_FAILEDSHARD"\n", DP_FAILEDSHARD(*f_shard));
-		spare_avail = jump_map_has_next_spare(jmap, jmop, spares_left,
-				op_type, f_shard->fs_status);
+
+		/*
+		 * If there are any targets left, there are potentially valid
+		 * spares. Don't be picky here about refusing to accept a
+		 * potential spare because of doubling up in the same fault
+		 * domain - if this is the case, fault tolerance is already at
+		 * risk because of failures up to this point. Rebuilding data
+		 * on a non-redundant other fault domain won't make this worse.
+		 */
+		spare_avail = spares_left > 0;
 		if (spare_avail) {
 			rebuild_key = crc(key, f_shard->fs_shard_idx);
 			get_target(root, &spare_tgt, crc(key, rebuild_key),
