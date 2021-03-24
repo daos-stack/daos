@@ -19,6 +19,7 @@ import sys
 import time
 import uuid
 import json
+import copy
 import signal
 import stat
 import errno
@@ -308,15 +309,18 @@ class DaosServer():
         self.conf = conf
         self.valgrind = valgrind
         self._agent = None
+        self.engines = conf.args.engine_count
         self.control_log = tempfile.NamedTemporaryFile(prefix='dnt_control_',
                                                        suffix='.log',
                                                        delete=False)
         self.agent_log = tempfile.NamedTemporaryFile(prefix='dnt_agent_',
                                                      suffix='.log',
                                                      delete=False)
-        self.server_log = tempfile.NamedTemporaryFile(prefix='dnt_server_',
-                                                      suffix='.log',
-                                                      delete=False)
+        self.server_logs = []
+        for engine in range(self.engines):
+            self.server_logs.append(tempfile.NamedTemporaryFile(prefix='dnt_server_{}_'.format(engine),
+                                                                suffix='.log',
+                                                                delete=False))
         self.__process_name = 'daos_engine'
         if self.valgrind:
             self.__process_name = 'valgrind'
@@ -329,10 +333,6 @@ class DaosServer():
 
         self._yaml_file = None
         self._io_server_dir = None
-        self._size = os.statvfs('/mnt/daos')
-        capacity = self._size.f_blocks * self._size.f_bsize
-        mb = int(capacity / (1024*1024))
-        self.mb = mb
 
     def __del__(self):
         if self.running:
@@ -402,7 +402,7 @@ class DaosServer():
         scfd = open(os.path.join(self_dir, 'nlt_server.yaml'), 'r')
 
         scyaml = yaml.safe_load(scfd)
-        scyaml['engines'][0]['log_file'] = self.server_log.name
+        scyaml['engines'][0]['log_file'] = self.server_logs[0].name
         if self.conf.args.server_debug:
             scyaml['control_log_mask'] = 'ERROR'
             scyaml['engines'][0]['log_mask'] = self.conf.args.server_debug
@@ -411,6 +411,16 @@ class DaosServer():
         for (key, value) in server_env.items():
             scyaml['engines'][0]['env_vars'].append('{}={}'.format(key, value))
 
+        ref_engine = copy.deepcopy(scyaml['engines'][0])
+        ref_engine['scm_size'] = int(ref_engine['scm_size'] / self.engines)
+        scyaml['engines'] = []
+        for idx in range(self.engines):
+            engine = copy.deepcopy(ref_engine)
+            engine['log_file'] = self.server_logs[idx].name
+            engine['first_core'] += ref_engine['targets'] * idx
+            engine['fabric_iface_port'] += int(server_env['FI_UNIVERSE_SIZE']) * idx
+            engine['scm_mount'] = '{}_{}'.format(ref_engine['scm_mount'], idx)
+            scyaml['engines'].append(engine)
         self._yaml_file = tempfile.NamedTemporaryFile(
             prefix='nlt-server-config-',
             suffix='.yaml')
@@ -451,7 +461,11 @@ class DaosServer():
 
         cmd = ['storage', 'format']
         while True:
-            time.sleep(0.5)
+            try:
+                self._sp.wait(timeout=0.5)
+                raise Exception('Server exited waiting for start')
+            except subprocess.TimeoutExpired:
+                pass
             rc = self.run_dmg(cmd)
             ready = False
             if rc.returncode == 1:
@@ -548,7 +562,8 @@ class DaosServer():
         compress_file(self.agent_log.name)
         compress_file(self.control_log.name)
 
-        log_test(self.conf, self.server_log.name, leak_wf=wf)
+        for log in self.server_logs:
+            log_test(self.conf, log.name, leak_wf=wf)
         self.running = False
         return ret
 
@@ -849,7 +864,7 @@ def get_pool_list():
     """Return a list of valid pool names"""
     pools = []
 
-    for fname in os.listdir('/mnt/daos'):
+    for fname in os.listdir('/mnt/daos_0'):
         if len(fname) != 36:
             continue
         try:
@@ -972,7 +987,7 @@ def destroy_container(conf, pool, container):
 def make_pool(daos):
     """Create a DAOS pool"""
 
-    size = int(daos.mb / 4)
+    size = 1024*2
 
     attempt = 0
     max_tries = 5
@@ -2464,6 +2479,8 @@ def main():
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
     parser.add_argument('--max-log-size', default=None)
+    parser.add_argument('--engine-count', type=int, default=1,
+                        help='Number of daos engines to run')
     parser.add_argument('--dfuse-dir', default='/tmp',
                         help='parent directory for all dfuse mounts')
     parser.add_argument('--perf-check', action='store_true')
