@@ -48,10 +48,11 @@ crt_self_uri_get(int tag, char **uri)
 }
 
 static uint32_t	mock_self_rank = 1;
-d_rank_t
-dss_self_rank(void)
+int
+crt_group_rank(crt_group_t *grp, d_rank_t *rank)
 {
-	return (d_rank_t)mock_self_rank;
+	*rank = (d_rank_t)mock_self_rank;
+	return 0;
 }
 
 struct dss_module_info	*mock_dmi;
@@ -282,7 +283,7 @@ verify_notify_pool_svc_update(uuid_t *pool_uuid, d_rank_list_t *svc_reps)
 	assert_non_null(req);
 
 	assert_string_equal(req->event->hostname, dss_hostname);
-	/* populated by mock dss_self_rank */
+	/* populated by mock crt_group_rank */
 	assert_int_equal(req->event->rank, mock_self_rank);
 	assert_int_equal(uuid_parse(req->event->pool_uuid, pool), 0);
 	assert_int_equal(uuid_compare(pool, *pool_uuid), 0);
