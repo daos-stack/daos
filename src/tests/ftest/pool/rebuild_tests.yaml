@@ -43,8 +43,8 @@ testparams:
   ranks: !mux
     rank1:
       rank: 1
-    rank4:
-      rank: 4
+    rank2:
+      rank: 2
     rank3:
       rank: 3
   quantity: 2
