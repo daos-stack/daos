@@ -1957,6 +1957,7 @@ def main():
     # Generate certificate files
     generate_certs()
 
+    # Run all the tests
     status = run_tests(test_files, tag_filter, args, python_version)
 
     # Process the avocado run return codes and only treat job and command
