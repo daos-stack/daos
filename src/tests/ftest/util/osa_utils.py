@@ -312,7 +312,7 @@ class OSAUtils(MdtestBase, IorTestBase):
     def ior_thread(self, pool, oclass, test, flags,
                    single_cont_read=True,
                    fail_on_warning=True):
-        """Start threads and wait until all threads are finished.
+        """Start an IOR thread.
 
         Args:
             pool (object): pool handle
