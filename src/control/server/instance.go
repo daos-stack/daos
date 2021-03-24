@@ -217,9 +217,47 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 	return r, resp.LocalJoin, nil
 }
 
+func (ei *EngineInstance) isFaultDomainChanging(sb *Superblock) bool {
+	if ei.hostFaultDomain == nil && sb.HostFaultDomain == "" {
+		return false
+	}
+
+	return !(ei.hostFaultDomain.String() == sb.HostFaultDomain)
+}
+
+func (ei *EngineInstance) updateFaultDomainInSuperblock() error {
+	superblock := ei.getSuperblock()
+	if superblock == nil {
+		return errors.New("nil superblock while updating fault domain")
+	}
+
+	if !ei.isFaultDomainChanging(superblock) {
+		return nil
+	}
+
+	ei.log.Infof("instance %d setting host fault domain to %q (previously %q)",
+		ei.Index(), ei.hostFaultDomain, superblock.HostFaultDomain)
+
+	newDomainStr := ""
+	if ei.hostFaultDomain != nil {
+		newDomainStr = ei.hostFaultDomain.String()
+	}
+	superblock.HostFaultDomain = newDomainStr
+
+	ei.setSuperblock(superblock)
+	if err := ei.WriteSuperblock(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // handleReady determines the instance rank and sends a SetRank dRPC request
 // to the Engine.
 func (ei *EngineInstance) handleReady(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
+	if err := ei.updateFaultDomainInSuperblock(); err != nil {
+		ei.log.Error(err.Error()) // nonfatal
+	}
+
 	r, localJoin, err := ei.determineRank(ctx, ready)
 	if err != nil {
 		return err
