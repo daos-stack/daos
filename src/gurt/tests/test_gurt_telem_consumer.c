@@ -63,6 +63,13 @@ test_print_metrics(void **state)
 
 	d_tm_print_my_children(shmem_root, node, 0, filter, NULL, D_TM_STANDARD,
 			       true, true, stdout);
+
+	d_tm_print_field_descriptors(D_TM_INCLUDE_TIMESTAMP |
+				     D_TM_INCLUDE_METADATA, stdout);
+
+	filter &= ~D_TM_DIRECTORY;
+	d_tm_print_my_children(shmem_root, node, 0, filter, NULL, D_TM_CSV,
+			       true, true, stdout);
 }
 
 static void
@@ -75,10 +82,10 @@ test_verify_object_count(void **state)
 	assert_non_null(node);
 
 	num = d_tm_count_metrics(shmem_root, node, D_TM_COUNTER);
-	assert_int_equal(num, 18);
+	assert_int_equal(num, 19);
 
 	num = d_tm_count_metrics(shmem_root, node, D_TM_GAUGE);
-	assert_int_equal(num, 4);
+	assert_int_equal(num, 5);
 
 	num = d_tm_count_metrics(shmem_root, node, D_TM_DURATION);
 	assert_int_equal(num, 2);
@@ -92,7 +99,7 @@ test_verify_object_count(void **state)
 	num = d_tm_count_metrics(shmem_root, node,
 				 D_TM_COUNTER | D_TM_GAUGE | D_TM_DURATION |
 				 D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT);
-	assert_int_equal(num, 27);
+	assert_int_equal(num, 29);
 }
 
 static void
@@ -344,100 +351,133 @@ test_histogram_stats(void **state)
 static void
 test_histogram_metadata(void **state)
 {
-	char	*metadata;
+	char	*desc;
+	char	*units;
 	int	rc;
 
-	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
+	rc = d_tm_get_metadata(&desc, &units, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m1/bucket 0");
 	assert_rc_equal(rc, DER_SUCCESS);
-	assert_string_equal(metadata, "histogram bucket 0 [0 .. 4]");
-	free(metadata);
+	assert_string_equal(desc, "histogram bucket 0 [0 .. 4]");
+	free(desc);
+	assert_string_equal(units, "elements");
+	free(units);
 
-	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
+	rc = d_tm_get_metadata(&desc, &units, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m1/bucket 1");
 	assert_rc_equal(rc, DER_SUCCESS);
-	assert_string_equal(metadata, "histogram bucket 1 [5 .. 9]");
-	free(metadata);
-	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
+	assert_string_equal(desc, "histogram bucket 1 [5 .. 9]");
+	free(desc);
+	assert_string_equal(units, "elements");
+	free(units);
+
+	rc = d_tm_get_metadata(&desc, &units, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m1/bucket 2");
 	assert_rc_equal(rc, DER_SUCCESS);
-	assert_string_equal(metadata, "histogram bucket 2 [10 .. 14]");
-	free(metadata);
+	assert_string_equal(desc, "histogram bucket 2 [10 .. 14]");
+	free(desc);
+	assert_string_equal(units, "elements");
+	free(units);
 
-	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
+	rc = d_tm_get_metadata(&desc, &units, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m1/bucket 3");
 	assert_rc_equal(rc, DER_SUCCESS);
-	assert_string_equal(metadata, "histogram bucket 3 [15 .. 19]");
-	free(metadata);
+	assert_string_equal(desc, "histogram bucket 3 [15 .. 19]");
+	free(desc);
+	assert_string_equal(units, "elements");
+	free(units);
 
-	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
+	rc = d_tm_get_metadata(&desc, &units, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m1/bucket 4");
 	assert_rc_equal(rc, DER_SUCCESS);
-	assert_string_equal(metadata, "histogram bucket 4 [20 .. 24]");
-	free(metadata);
+	assert_string_equal(desc, "histogram bucket 4 [20 .. 24]");
+	free(desc);
+	assert_string_equal(units, "elements");
+	free(units);
 
-	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
+	rc = d_tm_get_metadata(&desc, &units, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m1/bucket 5");
 	assert_rc_equal(rc, DER_SUCCESS);
-	assert_string_equal(metadata, "histogram bucket 5 [25 .. 29]");
-	free(metadata);
+	assert_string_equal(desc, "histogram bucket 5 [25 .. 29]");
+	free(desc);
+	assert_string_equal(units, "elements");
+	free(units);
 
-	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
+	rc = d_tm_get_metadata(&desc, &units, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m1/bucket 6");
 	assert_rc_equal(rc, DER_SUCCESS);
-	assert_string_equal(metadata, "histogram bucket 6 [30 .. 34]");
-	free(metadata);
+	assert_string_equal(desc, "histogram bucket 6 [30 .. 34]");
+	free(desc);
+	assert_string_equal(units, "elements");
+	free(units);
 
-	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
+	rc = d_tm_get_metadata(&desc, &units, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m1/bucket 7");
 	assert_rc_equal(rc, DER_SUCCESS);
-	assert_string_equal(metadata, "histogram bucket 7 [35 .. 39]");
-	free(metadata);
+	assert_string_equal(desc, "histogram bucket 7 [35 .. 39]");
+	free(desc);
+	assert_string_equal(units, "elements");
+	free(units);
 
-	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
+	rc = d_tm_get_metadata(&desc, &units, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m1/bucket 8");
 	assert_rc_equal(rc, DER_SUCCESS);
-	assert_string_equal(metadata, "histogram bucket 8 [40 .. 44]");
-	free(metadata);
+	assert_string_equal(desc, "histogram bucket 8 [40 .. 44]");
+	free(desc);
+	assert_string_equal(units, "elements");
+	free(units);
 
-	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
+	rc = d_tm_get_metadata(&desc, &units, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m1/bucket 9");
 	assert_rc_equal(rc, DER_SUCCESS);
-	assert_string_equal(metadata,
+	assert_string_equal(desc,
 			    "histogram bucket 9 [45 .. 18446744073709551615]");
-	free(metadata);
+	free(desc);
+	assert_string_equal(units, "elements");
+	free(units);
 
-	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
+	rc = d_tm_get_metadata(&desc, &units, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m2/bucket 0");
 	assert_rc_equal(rc, DER_SUCCESS);
-	assert_string_equal(metadata, "histogram bucket 0 [0 .. 2047]");
-	free(metadata);
+	assert_string_equal(desc, "histogram bucket 0 [0 .. 2047]");
+	free(desc);
+	assert_string_equal(units, "elements");
+	free(units);
 
-	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
+	rc = d_tm_get_metadata(&desc, &units, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m2/bucket 1");
 	assert_rc_equal(rc, DER_SUCCESS);
-	assert_string_equal(metadata, "histogram bucket 1 [2048 .. 6143]");
-	free(metadata);
+	assert_string_equal(desc, "histogram bucket 1 [2048 .. 6143]");
+	free(desc);
+	assert_string_equal(units, "elements");
+	free(units);
 
-	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
+	rc = d_tm_get_metadata(&desc, &units, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m2/bucket 2");
 	assert_rc_equal(rc, DER_SUCCESS);
-	assert_string_equal(metadata, "histogram bucket 2 [6144 .. 14335]");
-	free(metadata);
+	assert_string_equal(desc, "histogram bucket 2 [6144 .. 14335]");
+	free(desc);
+	assert_string_equal(units, "elements");
+	free(units);
 
-	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
+	rc = d_tm_get_metadata(&desc, &units, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m2/bucket 3");
 	assert_rc_equal(rc, DER_SUCCESS);
-	assert_string_equal(metadata, "histogram bucket 3 [14336 .. 30719]");
-	free(metadata);
+	assert_string_equal(desc, "histogram bucket 3 [14336 .. 30719]");
+	free(desc);
+	assert_string_equal(units, "elements");
+	free(units);
 
-	rc = d_tm_get_metadata(&metadata, NULL, shmem_root, NULL,
+	rc = d_tm_get_metadata(&desc, &units, shmem_root, NULL,
 			       "gurt/tests/telem/test_gauge_m2/bucket 4");
 	assert_rc_equal(rc, DER_SUCCESS);
-	assert_string_equal(metadata,
+	assert_string_equal(desc,
 			    "histogram bucket 4 [30720 .. "
 			    "18446744073709551615]");
-	free(metadata);
+	free(desc);
+	assert_string_equal(units, "elements");
+	free(units);
+
 }
 
 static void
@@ -452,7 +492,6 @@ test_histogram_bucket_data(void **state)
 	assert_non_null(node);
 
 	rc = d_tm_get_num_buckets(&histogram, shmem_root, node);
-	assert_rc_equal(rc, DER_SUCCESS);
 	assert_rc_equal(rc, DER_SUCCESS);
 
 	assert_int_equal(histogram.dth_num_buckets, 10);

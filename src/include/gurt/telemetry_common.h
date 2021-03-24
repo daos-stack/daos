@@ -10,12 +10,121 @@
 
 #define D_TM_VERSION			1
 #define D_TM_MAX_NAME_LEN		256
-#define D_TM_MAX_SHORT_LEN		64
-#define D_TM_MAX_LONG_LEN		1024
+#define D_TM_MAX_DESC_LEN		64
+#define D_TM_MAX_UNIT_LEN		16
 #define D_TM_TIME_BUFF_LEN		26
 
 #define D_TM_SHARED_MEMORY_KEY		0x10242048
 #define D_TM_SHARED_MEMORY_SIZE		(1024 * 1024)
+
+/**
+ * The following definitions are suggested strings for units that may be used
+ * when explicitly calling d_tm_add_metric() to initialize a metric before use.
+ */
+
+/** Units of measure for time */
+#define D_TM_YEAR			"y"
+#define D_TM_MONTH			"mo"
+#define D_TM_WEEK			"w"
+#define D_TM_DAY			"d"
+#define D_TM_HOUR			"h"
+#define D_TM_MINUTE			"min"
+#define D_TM_SECOND			"s"
+#define D_TM_MILLISECOND		"ms"
+#define D_TM_MICROSECOND		"us"
+#define D_TM_NANOSECOND			"ns"
+
+/** Units of measure for storage */
+#define D_TM_BIT			"b"
+#define D_TM_BYTE			"B"
+
+#define D_TM_KILOBIT			"kbit"
+#define D_TM_KIBIBIT			"Kibit"
+#define D_TM_KILOBYTE			"kB"
+#define D_TM_KIBIBYTE			"KiB"
+
+#define D_TM_MEGABIT			"Mbit"
+#define D_TM_MEBIBIT			"Mibit"
+#define D_TM_MEGABYTE			"MB"
+#define D_TM_MEBIBYTE			"MiB"
+
+#define D_TM_GIGABIT			"Gbit"
+#define D_TM_GIGIBIT			"Gibit"
+#define D_TM_GIGABYTE			"GB"
+#define D_TM_GIGIBYTE			"GiB"
+
+#define D_TM_TERABIT			"Tbit"
+#define D_TM_TEBIBIT			"Tibit"
+#define D_TM_TERABYTE			"TB"
+#define D_TM_TEBIBYTE			"TiB"
+
+#define D_TM_PETABIT			"Pbit"
+#define D_TM_PEBIBIT			"Pibit"
+#define D_TM_PETABYTE			"PB"
+#define D_TM_PEBIBYTE			"PiB"
+
+#define D_TM_EXABIT			"Ebit"
+#define D_TM_EXBIBIT			"Eibit"
+#define D_TM_EXABYTE			"EB"
+#define D_TM_EXBIBYTE			"EiB"
+
+#define D_TM_ZETTABIT			"Zbit"
+#define D_TM_ZEBIBIT			"Zibit"
+#define D_TM_ZETTABYTE			"ZB"
+#define D_TM_ZEBIBYTE			"ZiB"
+
+#define D_TM_YOTTABIT			"Ybit"
+#define D_TM_YOBIBIT			"Yibit"
+#define D_TM_YOTTABYTE			"YB"
+#define D_TM_YOBIBYTE			"YiB"
+
+/** Units of measure for data rates */
+#define D_TM_BIT_PER_SECOND		D_TM_BIT"/s"
+#define D_TM_BYTE_PER_SECOND		D_TM_BYTE"/s"
+
+#define D_TM_KILOBIT_PER_SECOND		D_TM_KILOBIT"/s"
+#define D_TM_KIBIBIT_PER_SECOND		D_TM_KIBIBIT"/s"
+#define D_TM_KILOBYTE_PER_SECOND	D_TM_KILOBYTE"/s"
+#define D_TM_KIBIBYTE_PER_SECOND	D_TM_KIBIBYTE"/s"
+
+#define D_TM_MEGABIT_PER_SECOND		D_TM_MEGABIT"/s"
+#define D_TM_MEBIBIT_PER_SECOND		D_TM_MEBIBIT"/s"
+#define D_TM_MEGABYTE_PER_SECOND	D_TM_MEGABYTE"/s"
+#define D_TM_MEBIBYTE_PER_SECOND	D_TM_MEBIBYTE"/s"
+
+#define D_TM_GIGABIT_PER_SECOND		D_TM_GIGABIT"/s"
+#define D_TM_GIGIBIT_PER_SECOND		D_TM_GIGIBIT"/s"
+#define D_TM_GIGABYTE_PER_SECOND	D_TM_GIGABYTE"/s"
+#define D_TM_GIGIBYTE_PER_SECOND	D_TM_GIGIBYTE"/s"
+
+#define D_TM_TERABIT_PER_SECOND		D_TM_TERABIT"/s"
+#define D_TM_TEBIBIT_PER_SECOND		D_TM_TEBIBIT"/s"
+#define D_TM_TERABYTE_PER_SECOND	D_TM_TERABYTE"/s"
+#define D_TM_TEBIBYTE_PER_SECOND	D_TM_TEBIBYTE"/s"
+
+#define D_TM_PETABIT_PER_SECOND		D_TM_PETABIT"/s"
+#define D_TM_PEBIBIT_PER_SECOND		D_TM_PEBIBIT"/s"
+#define D_TM_PETABYTE_PER_SECOND	D_TM_PETABYTE"/s"
+#define D_TM_PEBIBYTE_PER_SECOND	D_TM_PEBIBYTE"/s"
+
+#define D_TM_EXABIT_PER_SECOND		D_TM_EXABIT"/s"
+#define D_TM_EXBIBIT_PER_SECOND		D_TM_EXBIBIT"s"
+#define D_TM_EXABYTE_PER_SECOND		D_TM_EXABYTE"/s"
+#define D_TM_EXBIBYTE_PER_SECOND	D_TM_EXBIBYTE"/s"
+
+#define D_TM_ZETTABIT_PER_SECOND	D_TM_ZETTABIT"/s"
+#define D_TM_ZEBIBIT_PER_SECOND		D_TM_ZEBIBIT"/s"
+#define D_TM_ZETTABYTE_PER_SECOND	D_TM_ZETTABYTE"/s"
+#define D_TM_ZEBIBYTE_PER_SECOND	D_TM_ZEBIBYTE"/s"
+
+#define D_TM_YOTTABIT_PER_SECOND	D_TM_YOTTABIT"/s"
+#define D_TM_YOBIBIT_PER_SECOND		D_TM_YOBIBIT"/s"
+#define D_TM_YOTTABYTE_PER_SECOND	D_TM_YOTTABYTE"/s"
+#define D_TM_YOBIBYTE_PER_SECOND	D_TM_YOBIBYTE"/s"
+
+#define D_TM_CLOCK_REALTIME_STR		"CLOCK_REALTIME"
+#define D_TM_CLOCK_PROCESS_CPUTIME_STR	"CLOCK_PROCESS_CPUTIME_ID"
+#define D_TM_CLOCK_THREAD_CPUTIME_STR	"CLOCK_THREAD_CPUTIME_ID"
 
 /** d_tm_metric_types */
 enum {
@@ -90,8 +199,8 @@ struct d_tm_metric_t {
 	} dtm_data;
 	struct d_tm_stats_t *dtm_stats;
 	struct d_tm_histogram_t *dtm_histogram;
-	char *dtm_sh_desc;
-	char *dtm_lng_desc;
+	char *dtm_desc;
+	char *dtm_units;
 };
 
 struct d_tm_node_t {
@@ -112,6 +221,7 @@ struct d_tm_nodeList_t {
 void *d_tm_shmalloc(int length);
 uint64_t *d_tm_allocate_shared_memory(int srv_idx, size_t mem_size);
 int d_tm_clock_id(int clk_id);
+char *d_tm_clock_string(int clk_id);
 bool d_tm_validate_shmem_ptr(uint64_t *shmem_root, void *ptr);
 int d_tm_add_node(struct d_tm_node_t *src, struct d_tm_nodeList_t **nodelist);
 void d_tm_list_free(struct d_tm_nodeList_t *nodeList);
