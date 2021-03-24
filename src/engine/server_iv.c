@@ -182,23 +182,26 @@ ds_iv_ns_put(struct ds_iv_ns *ns)
 		ds_iv_ns_destroy(ns);
 }
 
-static struct ds_iv_ns *
-iv_ns_lookup_by_ivns(crt_iv_namespace_t ivns)
+static int
+iv_ns_lookup_by_ivns(crt_iv_namespace_t ivns, struct ds_iv_ns **p_ns)
 {
 	struct ds_iv_ns *ns;
 
+	*p_ns = NULL;
 	d_list_for_each_entry(ns, &ds_iv_ns_list, iv_ns_link) {
-		if (ns->iv_ns == ivns) {
-			if (!ns->iv_stop) {
-				ds_iv_ns_get(ns);
-				return ns;
-			}
+		if (ns->iv_ns != ivns)
+			continue;
+
+		if (ns->iv_stop) {
 			D_DEBUG(DB_MD, DF_UUID" stopping\n",
 				DP_UUID(ns->iv_pool_uuid));
-			return NULL;
+			return -DER_SHUTDOWN;
 		}
+		ds_iv_ns_get(ns);
+		*p_ns = ns;
+		return 0;
 	}
-	return NULL;
+	return -DER_NONEXIST;
 }
 
 static bool
@@ -373,16 +376,17 @@ ivc_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	     d_sg_list_t *iv_value, void *priv)
 {
 	struct iv_priv_entry	*priv_entry = priv;
-	struct ds_iv_ns		*ns;
+	struct ds_iv_ns		*ns = NULL;
 	struct ds_iv_entry	*entry;
 	struct ds_iv_key	key;
 	bool			valid;
 	int			 rc;
 
 	D_ASSERT(iv_value != NULL);
-	ns = iv_ns_lookup_by_ivns(ivns);
-	if (!ns)
-		return -DER_NONEXIST;
+	rc = iv_ns_lookup_by_ivns(ivns, &ns);
+	if (rc != 0)
+		return rc;
+	D_ASSERT(ns != NULL);
 
 	iv_key_unpack(&key, iv_key);
 	if (priv_entry == NULL) {
@@ -442,15 +446,16 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 		      crt_iv_ver_t iv_ver, d_sg_list_t *iv_value,
 		      bool invalidate, bool refresh, int ref_rc, void *priv)
 {
-	struct ds_iv_ns		*ns;
+	struct ds_iv_ns		*ns = NULL;
 	struct ds_iv_entry	*entry;
 	struct ds_iv_key	key;
 	struct iv_priv_entry	*priv_entry = priv;
 	int			rc = 0;
 
-	ns = iv_ns_lookup_by_ivns(ivns);
-	if (!ns)
-		return -DER_NONEXIST;
+	rc = iv_ns_lookup_by_ivns(ivns, &ns);
+	if (rc != 0)
+		return rc;
+	D_ASSERT(ns != NULL);
 
 	iv_key_unpack(&key, iv_key);
 	if (priv_entry == NULL || priv_entry->entry == NULL) {
@@ -541,7 +546,7 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	   crt_iv_ver_t iv_ver, crt_iv_perm_t permission,
 	   d_sg_list_t *iv_value, void **priv)
 {
-	struct ds_iv_ns		*ns;
+	struct ds_iv_ns		*ns = NULL;
 	struct ds_iv_entry	*entry;
 	struct ds_iv_class	*class;
 	struct ds_iv_key	key;
@@ -549,9 +554,10 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	bool			alloc_entry = false;
 	int			rc;
 
-	ns = iv_ns_lookup_by_ivns(ivns);
-	if (!ns)
-		return -DER_NONEXIST;
+	rc = iv_ns_lookup_by_ivns(ivns, &ns);
+	if (rc != 0)
+		return rc;
+	D_ASSERT(ns != NULL);
 
 	iv_key_unpack(&key, iv_key);
 	/* find and prepare entry */
@@ -636,9 +642,10 @@ ivc_pre_sync(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
 	struct ds_iv_class	*class;
 	int			rc = 0;
 
-	ns = iv_ns_lookup_by_ivns(ivns);
-	if (!ns)
-		return -DER_NONEXIST;
+	rc = iv_ns_lookup_by_ivns(ivns, &ns);
+	if (rc != 0)
+		return rc;
+	D_ASSERT(ns != NULL);
 
 	iv_key_unpack(&key, iv_key);
 	if (priv_entry == NULL || priv_entry->entry == NULL) {
