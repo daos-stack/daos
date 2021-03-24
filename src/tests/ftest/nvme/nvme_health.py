@@ -11,8 +11,6 @@ from nvme_utils import ServerFillUp, get_device_ids
 from test_utils_pool import TestPool
 from dmg_utils import DmgCommand
 from command_utils_base import CommandFailure
-from apricot import skipForTicket
-
 
 class NvmeHealth(ServerFillUp):
     # pylint: disable=too-many-ancestors
@@ -45,7 +43,7 @@ class NvmeHealth(ServerFillUp):
         self.pool = []
         # Create the Large number of pools
         for _pool in range(no_of_pools):
-            self.log.info("-- Creating pool number = {}".format(_pool))
+            self.log.info("-- Creating pool number = %s", _pool)
             pool = TestPool(self.context, self.get_dmg_command())
             pool.get_params(self)
             pool.scm_size.update('{}'.format(single_pool_scm_size))
