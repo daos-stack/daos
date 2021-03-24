@@ -228,8 +228,34 @@ enum {
 	OC_RP_3G8K,
 	OC_RP_3GX,
 
+	/** 4-way replicated object classes */
+	OC_RP_4G1	= 320,
+	OC_RP_4G2,
+	OC_RP_4G4,
+	OC_RP_4G6,
+	OC_RP_4G8,
+	OC_RP_4G12,
+	OC_RP_4G16,
+	OC_RP_4G24,
+	OC_RP_4G32,
+	OC_RP_4G48,
+	OC_RP_4G64,
+	OC_RP_4G96,
+	OC_RP_4G128,
+	OC_RP_4G192,
+	OC_RP_4G256,
+	OC_RP_4G384,
+	OC_RP_4G512,
+	OC_RP_4G768,
+	OC_RP_4G1K,
+	OC_RP_4G2K,
+	OC_RP_4G4K,
+	OC_RP_4G6K,
+	OC_RP_4G8K,
+	OC_RP_4GX,
+
 	/** 6-way replicated object classes */
-	OC_RP_6G1	= 320,
+	OC_RP_6G1	= 360,
 	OC_RP_6G2,
 	OC_RP_6G4,
 	OC_RP_6G6,
@@ -255,7 +281,7 @@ enum {
 	OC_RP_6GX,
 
 	/** 8-way replicated object classes */
-	OC_RP_8G1	= 340,
+	OC_RP_8G1	= 400,
 	OC_RP_8G2,
 	OC_RP_8G4,
 	OC_RP_8G6,
@@ -281,12 +307,13 @@ enum {
 	OC_RP_8GX,
 
 	/* OC_XSF will map to one of these */
-	OC_RP_12G1	= 380,
+	OC_RP_12G1	= 440,
 	OC_RP_16G1,
 	OC_RP_24G1,
 	OC_RP_32G1,
 	OC_RP_48G1,
 	OC_RP_64G1,
+	OC_RP_128G1,
 	/**
 	 * Erasure coded object with explicit layout
 	 * - the first number is data cells number within a redundancy group
@@ -300,7 +327,7 @@ enum {
 	 * - 16P2GX: 16+2 EC object spreads across all targets within the pool
 	 */
 	/** EC 2+1 object classes */
-	OC_EC_2P1G1	= 400,
+	OC_EC_2P1G1	= 500,
 	OC_EC_2P1G2,
 	OC_EC_2P1G4,
 	OC_EC_2P1G6,
@@ -326,7 +353,7 @@ enum {
 	OC_EC_2P1GX,
 
 	/** EC 2+2 object classes */
-	OC_EC_2P2G1	= 440,
+	OC_EC_2P2G1	= 540,
 	OC_EC_2P2G2,
 	OC_EC_2P2G4,
 	OC_EC_2P2G6,
@@ -351,14 +378,8 @@ enum {
 	OC_EC_2P2G8K,
 	OC_EC_2P2GX,
 
-	/** EC 3+1 object classes */
-	OC_EC_3P1G1	= 480,
-
-	/** EC 3+2 object classes */
-	OC_EC_3P2G1	= 520,
-
 	/** EC 4+1 object classes */
-	OC_EC_4P1G1	= 560,
+	OC_EC_4P1G1	= 580,
 	OC_EC_4P1G2,
 	OC_EC_4P1G4,
 	OC_EC_4P1G6,
@@ -384,7 +405,7 @@ enum {
 	OC_EC_4P1GX,
 
 	/** EC 4+2 object classes */
-	OC_EC_4P2G1	= 600,
+	OC_EC_4P2G1	= 620,
 	OC_EC_4P2G2,
 	OC_EC_4P2G4,
 	OC_EC_4P2G6,
@@ -410,7 +431,7 @@ enum {
 	OC_EC_4P2GX,
 
 	/** EC 8+1 object classes */
-	OC_EC_8P1G1	= 640,
+	OC_EC_8P1G1	= 660,
 	OC_EC_8P1G2,
 	OC_EC_8P1G4,
 	OC_EC_8P1G6,
@@ -421,7 +442,7 @@ enum {
 	OC_EC_8P1G32,
 	OC_EC_8P1G48,
 	OC_EC_8P1G64,
-	OC_EC_8P1G92,
+	OC_EC_8P1G96,
 	OC_EC_8P1G128,
 	OC_EC_8P1G192,
 	OC_EC_8P1G256,
@@ -436,7 +457,7 @@ enum {
 	OC_EC_8P1GX,
 
 	/** EC 8+2 object classes */
-	OC_EC_8P2G1	= 680,
+	OC_EC_8P2G1	= 700,
 	OC_EC_8P2G2,
 	OC_EC_8P2G4,
 	OC_EC_8P2G6,
@@ -462,7 +483,7 @@ enum {
 	OC_EC_8P2GX,
 
 	/** EC 16+1 object classes */
-	OC_EC_16P1G1	= 720,
+	OC_EC_16P1G1	= 740,
 	OC_EC_16P1G2,
 	OC_EC_16P1G4,
 	OC_EC_16P1G6,
@@ -488,7 +509,7 @@ enum {
 	OC_EC_16P1GX,
 
 	/** EC 16+2 object classes */
-	OC_EC_16P2G1	= 760,
+	OC_EC_16P2G1	= 780,
 	OC_EC_16P2G2,
 	OC_EC_16P2G4,
 	OC_EC_16P2G6,
@@ -515,15 +536,6 @@ enum {
 
 	/** Class ID equal or higher than this is reserved */
 	OC_RESERVED		= (1U << 10),
-};
-
-/** Internal classes for testing & debugging */
-enum {
-	OC_INTERNAL		= OC_RESERVED + 1,
-	OC_RP_4G1,
-	OC_RP_4G2,
-	OC_RP_4G4,
-	OC_RP_4GX,
 };
 
 enum daos_obj_schema {
@@ -609,6 +621,17 @@ daos_oclass_name2id(const char *name);
  */
 size_t
 daos_oclass_names_list(size_t size, char *str);
+
+/**
+ *
+ * Return total number of object classes
+ *
+ * \param[in]	opts	reserved options
+ *
+ * \return		> 0 Number object classes
+ */
+int
+daos_oclass_nr(int opts);
 
 /**
  * Return the object class name given it's ID.

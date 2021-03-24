@@ -176,8 +176,10 @@ jm_obj_placement_get(struct pl_jump_map *jmap, struct daos_obj_md *md,
 			grp_max = 1;
 
 		jmop->jmop_grp_nr = daos_oclass_grp_nr(oc_attr, md);
-		if (jmop->jmop_grp_nr > grp_max)
+		if (jmop->jmop_grp_nr == DAOS_OBJ_GRP_MAX)
 			jmop->jmop_grp_nr = grp_max;
+		else if (jmop->jmop_grp_nr > grp_max)
+			return -DER_INVAL;
 	} else {
 		jmop->jmop_grp_nr = 1;
 	}
