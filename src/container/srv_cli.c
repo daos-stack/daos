@@ -21,6 +21,21 @@
 #include <daos_srv/container.h>
 #include "cli_internal.h"
 
+void dsc_coh_get(daos_handle_t coh)
+{
+	dc_hdl2cont(coh);
+}
+
+void dsc_coh_put(daos_handle_t coh)
+{
+	struct dc_cont *cont;
+
+	cont = dc_hdl2cont(coh);
+
+	dc_cont_put(cont);
+	dc_cont_put(cont);
+}
+
 int
 dsc_cont_close(daos_handle_t poh, daos_handle_t coh)
 {
@@ -45,6 +60,7 @@ dsc_cont_close(daos_handle_t poh, daos_handle_t coh)
 
 	daos_csummer_destroy(&cont->dc_csummer);
 
+	dc_cont_put(cont);
 out:
 	if (cont != NULL)
 		dc_cont_put(cont);

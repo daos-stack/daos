@@ -2316,6 +2316,7 @@ free:
 	tls->mpt_obj_executed_ult++;
 	if (tls->mpt_status == 0 && rc < 0)
 		tls->mpt_status = rc;
+	dsc_coh_put(arg->cont_hdl);
 	D_DEBUG(DB_REBUILD, "stop migrate obj "DF_UOID" for shard %u rc %d\n",
 		DP_UOID(arg->oid), arg->shard, rc);
 	if (arg->snaps)
@@ -2349,6 +2350,7 @@ migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, unsigned int shard,
 	obj_arg->shard = shard;
 	obj_arg->tgt_idx = tgt_idx;
 	obj_arg->cont_hdl = cont_arg->cont_hdl;
+	dsc_coh_get(cont_arg->cont_hdl);
 	uuid_copy(obj_arg->pool_uuid, cont_arg->pool_tls->mpt_pool_uuid);
 	uuid_copy(obj_arg->cont_uuid, cont_arg->cont_uuid);
 	obj_arg->version = cont_arg->pool_tls->mpt_version;
@@ -2356,7 +2358,7 @@ migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, unsigned int shard,
 		D_ALLOC(obj_arg->snaps,
 			sizeof(*cont_arg->snaps) * cont_arg->snap_cnt);
 		if (obj_arg->snaps == NULL)
-			D_GOTO(free, rc = -DER_NOMEM);
+			D_GOTO(out, rc = -DER_NOMEM);
 
 		obj_arg->snap_cnt = cont_arg->snap_cnt;
 		memcpy(obj_arg->snaps, cont_arg->snaps,
@@ -2406,12 +2408,12 @@ migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, unsigned int shard,
 			DP_UUID(cont_arg->cont_uuid), DP_UOID(oid), DP_RC(ret));
 	}
 
-	return rc;
-
-free:
-	if (rc)
-		D_FREE(obj_arg);
-
+out:
+	if (rc) {
+		dsc_coh_put(cont_arg->cont_hdl);
+		if (obj_arg)
+			D_FREE(obj_arg);
+	}
 	return rc;
 }
 

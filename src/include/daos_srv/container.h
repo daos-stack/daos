@@ -237,6 +237,9 @@ ds_csum_recalc(void *args);
 void
 ds_csum_agg_recalc(void *args);
 
+void dsc_coh_get(daos_handle_t coh);
+void dsc_coh_put(daos_handle_t coh);
+
 int dsc_cont_open(daos_handle_t poh, uuid_t cont_uuid, uuid_t cont_hdl_uuid,
 		  unsigned int flags, daos_handle_t *coh);
 int dsc_cont_close(daos_handle_t poh, daos_handle_t coh);
