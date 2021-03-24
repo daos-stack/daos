@@ -543,8 +543,9 @@ class DaosServerManager(SubprocessManager):
             hugepages = self.get_config_value("nr_hugepages")
             cmd.sub_command_class.sub_command_class.hugepages.value = hugepages
 
+        runcmd = "export COVFILE=/tmp/test.cov.srv; " + str(cmd)
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
-        result = pcmd(self._hosts, str(cmd), timeout=40)
+        result = pcmd(self._hosts, runcmd, timeout=40)
         if len(result) > 1 or 0 not in result:
             dev_type = "nvme"
             if using_dcpm and using_nvme:
