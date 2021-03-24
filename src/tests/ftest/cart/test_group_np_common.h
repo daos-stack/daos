@@ -422,6 +422,12 @@ check_in(crt_group_t *remote_group, int rank, int tag)
 	rc = crt_req_send(rpc_req, client_cb_common, NULL);
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 
+	/*
+	 * Note: it is the responsibility of the caller of this
+	 * function to call sem_wait/sem_timewait on test semaphore
+	 * test_g.t_token_to_proceed for each call to this function.
+	 */
+
 }
 
 static struct t_swim_status
