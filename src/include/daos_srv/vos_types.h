@@ -360,6 +360,8 @@ typedef struct {
 			daos_epoch_t		ie_punch;
 			/** If applicable, non-zero if object is punched */
 			daos_epoch_t		ie_obj_punch;
+			/** Last update timestamp */
+			daos_epoch_t		ie_last_update;
 			union {
 				/** key value */
 				daos_key_t	ie_key;
