@@ -64,14 +64,14 @@ index 4ff4ee03..d5abc3e0 100644
 +        Set up
 +        """
 +        self.report_state()
-+        super(Test, self).setUp()
++        super().setUp()
 +
 +    def tearDown(self):
 +        """
 +        Tear down after each test case
 +        """
 +        self.report_state()
-+        super(Test, self).tearDown()
++        super().tearDown()
 +
      @property
      def name(self):

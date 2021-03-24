@@ -8,7 +8,9 @@ package control
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"log/syslog"
 	"math"
 	"strings"
 	"testing"
@@ -1334,8 +1336,11 @@ func TestControl_EventForwarder_OnEvent(t *testing.T) {
 // is printed which verifies the event was written to the correct logger.
 func TestControl_EventLogger_OnEvent(t *testing.T) {
 	var mockSyslogBuf *strings.Builder
-	getMockSyslogger := func(sev events.RASSeverityID) *log.Logger {
-		return log.New(mockSyslogBuf, sev.String(), log.LstdFlags)
+	mockNewSyslogger := func(prio syslog.Priority, _ int) (*log.Logger, error) {
+		return log.New(mockSyslogBuf, fmt.Sprintf("prio%d ", prio), log.LstdFlags), nil
+	}
+	mockNewSysloggerFail := func(prio syslog.Priority, _ int) (*log.Logger, error) {
+		return nil, errors.Errorf("failed to create new syslogger (prio %d)", prio)
 	}
 
 	rasEventRankDown := events.NewRankDownEvent("foo", 0, 0, common.NormalExit)
@@ -1343,8 +1348,10 @@ func TestControl_EventLogger_OnEvent(t *testing.T) {
 		WithForwarded(true)
 
 	for name, tc := range map[string]struct {
-		event        *events.RASEvent
-		expShouldLog bool
+		event           *events.RASEvent
+		newSyslogger    newSysloggerFn
+		expShouldLog    bool
+		expShouldLogSys bool
 	}{
 		"nil event": {
 			event: nil,
@@ -1353,47 +1360,59 @@ func TestControl_EventLogger_OnEvent(t *testing.T) {
 			event: rasEventRankDownFwded,
 		},
 		"not forwarded error event gets logged": {
-			event:        rasEventRankDown,
-			expShouldLog: true,
+			event:           rasEventRankDown,
+			expShouldLog:    true,
+			expShouldLogSys: true,
 		},
 		"not forwarded info event gets logged": {
 			event: events.NewGenericEvent(events.RASID(math.MaxInt32-1),
 				events.RASSeverityInfo, "DAOS generic test event",
 				`{"people":["bill","steve","bob"]}`),
-			expShouldLog: true,
+			expShouldLog:    true,
+			expShouldLogSys: true,
+		},
+		"sysloggers not created": {
+			event:           rasEventRankDown,
+			newSyslogger:    mockNewSysloggerFail,
+			expShouldLog:    true,
+			expShouldLogSys: false,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			logBasic, bufBasic := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, bufBasic)
 
 			mockSyslogBuf = &strings.Builder{}
 
-			el := newEventLogger(log, getMockSyslogger)
+			if tc.newSyslogger == nil {
+				tc.newSyslogger = mockNewSyslogger
+			}
+
+			el := newEventLogger(logBasic, tc.newSyslogger)
 			el.OnEvent(context.TODO(), tc.event)
 
 			// check event logged to control plane
 			common.AssertEqual(t, tc.expShouldLog,
-				strings.Contains(buf.String(), "RAS "),
+				strings.Contains(bufBasic.String(), "RAS "),
 				"unexpected log output")
 
 			slStr := mockSyslogBuf.String()
-			log.Debugf("syslog out: %s", slStr)
-			if !tc.expShouldLog {
+			t.Logf("syslog out: %s", slStr)
+			if !tc.expShouldLogSys {
 				common.AssertTrue(t, slStr == "",
 					"expected syslog to be empty")
 				return
 			}
-			sevStr := tc.event.Severity.String()
-			sevOut := "sev: [" + sevStr + "]"
+			prioStr := fmt.Sprintf("prio%d ", tc.event.Severity.SyslogPriority())
+			sevOut := "sev: [" + tc.event.Severity.String() + "]"
 
 			// check event logged to correct mock syslogger
 			common.AssertEqual(t, 1, strings.Count(slStr, "RAS EVENT"),
 				"unexpected number of events in syslog")
 			common.AssertTrue(t, strings.Contains(slStr, sevOut),
 				"syslog output missing severity")
-			common.AssertTrue(t, strings.HasPrefix(slStr, sevStr),
-				"syslog output missing severity")
+			common.AssertTrue(t, strings.HasPrefix(slStr, prioStr),
+				"syslog output missing syslog priority")
 		})
 	}
 }

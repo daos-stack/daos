@@ -647,8 +647,8 @@ cont_check_hdlr(struct cmd_args_s *ap)
 	daos_obj_id_t		oids[OID_ARR_SIZE];
 	daos_handle_t		oit;
 	daos_anchor_t		anchor = { 0 };
-	uint64_t		begin = 0;
-	uint64_t		end = 0;
+	time_t			begin;
+	time_t			end;
 	unsigned long		duration;
 	unsigned long		checked = 0;
 	unsigned long		skipped = 0;
@@ -671,10 +671,10 @@ cont_check_hdlr(struct cmd_args_s *ap)
 		goto out_snap;
 	}
 
-	D_PRINT("check container "DF_UUIDF" stated at: %s\n",
-		DP_UUID(ap->c_uuid), ctime(NULL));
+	begin = time(NULL);
 
-	daos_gettime_coarse(&begin);
+	D_PRINT("check container "DF_UUIDF" stated at: %s\n",
+		DP_UUID(ap->c_uuid), ctime(&begin));
 
 	while (!daos_anchor_is_eof(&anchor)) {
 		oids_nr = OID_ARR_SIZE;
@@ -712,20 +712,19 @@ cont_check_hdlr(struct cmd_args_s *ap)
 		}
 	}
 
-	daos_gettime_coarse(&end);
-
+	end = time(NULL);
 	duration = end - begin;
 	if (duration == 0)
 		duration = 1;
 
 	if (rc == 0 || rc == -DER_NOSYS || rc == -DER_MISMATCH) {
-		D_PRINT("check container "DF_UUIDF" completed at %s\n"
+		D_PRINT("check container "DF_UUIDF" completed at: %s\n"
 			"checked: %lu\n"
 			"skipped: %lu\n"
 			"inconsistent: %lu\n"
 			"run_time: %lu seconds\n"
 			"scan_speed: %lu objs/sec\n",
-			DP_UUID(ap->c_uuid), ctime(NULL), checked, skipped,
+			DP_UUID(ap->c_uuid), ctime(&end), checked, skipped,
 			inconsistent, duration, (checked + skipped) / duration);
 		rc = 0;
 	}
@@ -2928,12 +2927,11 @@ out:
 */
 static int
 dm_parse_path(struct file_dfs *file, char *path, size_t path_len,
-	      uuid_t *p_uuid, uuid_t *c_uuid, bool daos_no_prefix)
+	      uuid_t *p_uuid, uuid_t *c_uuid)
 {
 	struct duns_attr_t	dattr = {0};
 	int			rc = 0;
 
-	dattr.da_no_prefix = daos_no_prefix;
 	rc = duns_resolve_path(path, &dattr);
 	if (rc == 0) {
 		uuid_copy(*p_uuid, dattr.da_puuid);
@@ -2946,7 +2944,7 @@ dm_parse_path(struct file_dfs *file, char *path, size_t path_len,
 	/* no prefix option is only for DAOS->DAOS (cont clone),
 	 * so this is an error
 	 */
-	} else if (strncmp(path, "daos://", 7) == 0 || daos_no_prefix) {
+	} else if (strncmp(path, "daos://", 7) == 0) {
 		/* Error, since we expect a DAOS path */
 		D_GOTO(out, rc = 1);
 	} else {
@@ -2983,7 +2981,6 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	char			*dst_dir = NULL;
 	mode_t			tmp_mode_dir = S_IRWXU;
 	bool			is_posix_copy = true;
-	bool			daos_no_prefix = false;
 
 	set_dm_args_default(&ca);
 	file_set_defaults_dfs(&src_file_dfs);
@@ -2996,7 +2993,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	rc = dm_parse_path(&src_file_dfs, src_str, src_str_len,
-			   &ca.src_p_uuid, &ca.src_c_uuid, daos_no_prefix);
+			   &ca.src_p_uuid, &ca.src_c_uuid);
 	if (rc != 0) {
 		fprintf(stderr, "failed to parse source path: %d\n", rc);
 		D_GOTO(out, rc = daos_errno2der(rc));
@@ -3010,7 +3007,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	rc = dm_parse_path(&dst_file_dfs, dst_str, dst_str_len,
-			   &ca.dst_p_uuid, &ca.dst_c_uuid, daos_no_prefix);
+			   &ca.dst_p_uuid, &ca.dst_c_uuid);
 	if (rc != 0) {
 		fprintf(stderr, "failed to parse destination path: %d\n", rc);
 		D_GOTO(out, rc);
@@ -3478,7 +3475,6 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 	size_t			src_str_len = 0;
 	size_t			dst_str_len = 0;
 	daos_epoch_range_t	epr;
-	bool			daos_no_prefix = true;
 	int			uuid_len = 128;
 
 	set_dm_args_default(&ca);
@@ -3492,7 +3488,7 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	rc = dm_parse_path(&src_cp_type, src_str, src_str_len,
-			   &ca.src_p_uuid, &ca.src_c_uuid, daos_no_prefix);
+			   &ca.src_p_uuid, &ca.src_c_uuid);
 	if (rc != 0) {
 		fprintf(stderr, "failed to parse source path: %d\n", rc);
 		D_GOTO(out, rc = daos_errno2der(rc));
@@ -3505,7 +3501,7 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	rc = dm_parse_path(&dst_cp_type, dst_str, dst_str_len,
-			   &ca.dst_p_uuid, &ca.dst_c_uuid, daos_no_prefix);
+			   &ca.dst_p_uuid, &ca.dst_c_uuid);
 	/* parse pool uuid if this fails, since it is not in form that
 	 * can be parsed by duns_resolve_path (i.e. dst=/$pool)
 	 */
