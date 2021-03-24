@@ -23,14 +23,20 @@ struct ds_iv_ns {
 	unsigned int	iv_ns_id;
 	/* Link to global ns list (ds_iv_list) */
 	d_list_t	iv_ns_link;
-	/* Protect to the key list */
-	ABT_mutex	iv_lock;
 	/* all of entries under the ns links here */
 	d_list_t	iv_entry_list;
 	/* Cart IV namespace */
 	crt_iv_namespace_t	iv_ns;
 	/* pool uuid */
 	uuid_t		iv_pool_uuid;
+
+	ABT_eventual	iv_done_eventual;
+	int		iv_refcount;
+	/**
+	 * iv_fini: the IV namespace will be stopped, usually happens
+	 * the pool will be destroyed.
+	 */
+	uint32_t	iv_stop:1;
 };
 
 struct ds_iv_class_ops;
@@ -175,15 +181,13 @@ typedef int (*ds_iv_ent_destroy_t)(d_sg_list_t *sgl);
  * \param entry [IN]	class entry.
  * \param key [IN]	key to locate the entry.
  * \param dst [OUT]	destination buffer.
- * \param src [IN]	source buffer.
  * \param priv [OUT]	private buffer from IV callback.
  *
  * \return		0 if succeeds, error code otherwise.
  */
 typedef int (*ds_iv_ent_fetch_t)(struct ds_iv_entry *entry,
 				 struct ds_iv_key *key,
-				 d_sg_list_t *dst, d_sg_list_t *src,
-				 void **priv);
+				 d_sg_list_t *dst, void **priv);
 
 /**
  * Update data to the iv_class entry.
@@ -218,11 +222,13 @@ typedef int (*ds_iv_ent_refresh_t)(struct ds_iv_entry *entry,
  * allocate the value for cart IV.
  *
  * \param ent [IN]	entry to allocate iv_value.
+ * \param key [IN]	key of the IV call.
  * \param src [OUT]	buffer to be allocated.
  *
  * \return		0 if succeeds, error code otherwise.
  */
 typedef int (*ds_iv_value_alloc_t)(struct ds_iv_entry *ent,
+				   struct ds_iv_key *key,
 				   d_sg_list_t *sgl);
 
 /**
@@ -297,7 +303,11 @@ int ds_iv_ns_create(crt_context_t ctx, uuid_t pool_uuid, crt_group_t *grp,
 		    unsigned int *ns_id, struct ds_iv_ns **p_iv_ns);
 
 void ds_iv_ns_update(struct ds_iv_ns *ns, unsigned int master_rank);
-
+void ds_iv_ns_stop(struct ds_iv_ns *ns);
+void ds_iv_ns_leader_stop(struct ds_iv_ns *ns);
+void ds_iv_ns_start(struct ds_iv_ns *ns);
+void ds_iv_ns_put(struct ds_iv_ns *ns);
+void ds_iv_ns_get(struct ds_iv_ns *ns);
 void ds_iv_ns_destroy(void *ns);
 
 unsigned int ds_iv_ns_id_get(void *ns);

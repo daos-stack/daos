@@ -13,7 +13,7 @@ ON_TAG          := $(shell if git diff-index --name-only HEAD^ | grep -q TAG; th
 PACKAGING_CHECK_DIR := ../../../rpm/packaging/
 
 ifeq ($(ON_TAG),false)
-BUILD_DEFINES     := --define "%relval .$(GIT_NUM_COMMITS).g$(GIT_SHORT)"
+BUILD_DEFINES     := --define "relval .$(GIT_NUM_COMMITS).g$(GIT_SHORT)"
 endif
 
 RPM_BUILD_OPTIONS := $(BUILD_DEFINES)
@@ -32,3 +32,5 @@ $(NAME)-$(VERSION).tar.gz: $(shell git ls-files :/:)
 	            -o $$OLDPWD/$(basename $@) HEAD ./
 	rm -f $@
 	gzip $(basename $@)
+
+tarball: $(NAME)-$(VERSION).tar.gz

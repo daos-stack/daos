@@ -314,8 +314,8 @@ static pthread_rwlock_t		pl_rwlock = PTHREAD_RWLOCK_INITIALIZER;
 /** hash table for placement maps */
 static struct d_hash_table	pl_htable;
 
-#define DSR_RING_DOMAIN         PO_COMP_TP_RACK
-#define DSR_JUMP_MAP_DOMAIN      PO_COMP_TP_RACK
+/** XXX should be fetched from property */
+#define PL_DEFAULT_DOMAIN	PO_COMP_TP_NODE
 
 static void
 pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
@@ -328,12 +328,12 @@ pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
 
 	case PL_TYPE_RING:
 		mia->ia_type         = PL_TYPE_RING;
-		mia->ia_ring.domain  = DSR_RING_DOMAIN;
+		mia->ia_ring.domain  = PL_DEFAULT_DOMAIN;
 		mia->ia_ring.ring_nr = 1;
 		break;
 	case PL_TYPE_JUMP_MAP:
 		mia->ia_type            = PL_TYPE_JUMP_MAP;
-		mia->ia_jump_map.domain = DSR_JUMP_MAP_DOMAIN;
+		mia->ia_jump_map.domain = PL_DEFAULT_DOMAIN;
 	}
 }
 
@@ -486,7 +486,14 @@ out:
 void
 pl_map_disconnect(uuid_t uuid)
 {
-	d_list_t        *link;
+	d_list_t *link;
+
+	/*
+	 * FIXME: DAOS-6763 Check if pl_htable is already finalized.
+	 * It can be called from ds_pool_hdl_hash_fini() after pl_fini().
+	 */
+	if (pl_htable.ht_ops == NULL)
+		return;
 
 	D_RWLOCK_WRLOCK(&pl_rwlock);
 	link = d_hash_rec_find(&pl_htable, uuid, sizeof(uuid_t));
@@ -610,10 +617,13 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 	}
 
 	replicas = oc_attr->u.rp.r_num;
-	if (replicas == DAOS_OBJ_REPL_MAX)
-		replicas = grp_size;
+	if (replicas == DAOS_OBJ_REPL_MAX) {
+		D_ASSERT(grp_idx == 0);
 
-	if (replicas < 1)
+		replicas = grp_size;
+	}
+
+	if (replicas < 1 || replicas > grp_size)
 		return -DER_INVAL;
 
 	if (replicas == 1) {
@@ -644,7 +654,7 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 	 *      to avoid leader switch.
 	 */
 	start = grp_idx * grp_size;
-	replica_idx = (oid.lo + grp_idx) % grp_size;
+	replica_idx = (oid.lo + grp_idx) % replicas;
 	for (i = 0, pos = -1; i < replicas;
 	     i++, replica_idx = (replica_idx + 1) % replicas) {
 		int off = start + replica_idx;

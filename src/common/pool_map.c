@@ -11,6 +11,7 @@
 #define D_LOGFAC	DD_FAC(common)
 
 #include <daos/pool_map.h>
+#include "fault_domain.h"
 
 /** counters for component (sub)tree */
 struct pool_comp_cntr {
@@ -122,16 +123,6 @@ static struct pool_comp_type_dict comp_type_dict[] = {
 		.td_type	= PO_COMP_TP_NODE,
 		.td_abbr	= 'n',
 		.td_name	= "node",
-	},
-	{
-		.td_type	= PO_COMP_TP_BOARD,
-		.td_abbr	= 'b',
-		.td_name	= "board",
-	},
-	{
-		.td_type	= PO_COMP_TP_BLADE,
-		.td_abbr	= 'l',
-		.td_name	= "blade",
 	},
 	{
 		.td_type	= PO_COMP_TP_RACK,
@@ -302,7 +293,7 @@ comp_sorter_init(struct pool_comp_sorter *sorter, int nr,
 static void
 comp_sorter_fini(struct pool_comp_sorter *sorter)
 {
-	if (sorter->cs_comps != NULL) {
+	if (sorter != NULL && sorter->cs_comps != NULL) {
 		D_DEBUG(DB_TRACE, "Finalize sorter for %s\n",
 			pool_comp_type2str(sorter->cs_type));
 
@@ -585,8 +576,8 @@ pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 out:
 	if (rc)
 		D_FREE(tree);
-
-	*tree_pp = &tree[0];
+	else
+		*tree_pp = tree;
 	return rc;
 }
 
@@ -904,8 +895,6 @@ pool_map_finalise(struct pool_map *map)
 			comp_sorter_fini(&map->po_domain_sorters[i]);
 
 		D_FREE(map->po_domain_sorters);
-
-		map->po_domain_sorters = NULL;
 		map->po_domain_layers = 0;
 	}
 
@@ -913,6 +902,7 @@ pool_map_finalise(struct pool_map *map)
 		pool_tree_free(map->po_tree);
 		map->po_tree = NULL;
 	}
+
 	D_MUTEX_DESTROY(&map->po_lock);
 }
 
@@ -930,18 +920,20 @@ pool_map_initialise(struct pool_map *map, struct pool_domain *tree)
 	int			 rc = 0;
 
 	D_ASSERT(pool_map_empty(map));
-	rc = D_MUTEX_INIT(&map->po_lock, NULL);
-	if (rc != 0)
-		return rc;
+
+	map->po_tree = tree;	/* should be free in case of error */
 
 	if (tree[0].do_comp.co_type != PO_COMP_TP_ROOT) {
 		D_DEBUG(DB_TRACE, "Invalid tree format: %s/%d\n",
 			pool_domain_name(&tree[0]), tree[0].do_comp.co_type);
 		rc = -DER_INVAL;
-		goto failed;
+		goto out_tree;
 	}
 
-	map->po_tree = tree;
+	rc = D_MUTEX_INIT(&map->po_lock, NULL);
+	if (rc != 0)
+		goto out_tree;
+
 	pool_tree_count(tree, &cntr);
 
 	/* po_map_print(map); */
@@ -949,17 +941,18 @@ pool_map_initialise(struct pool_map *map, struct pool_domain *tree)
 		cntr.cc_layers, cntr.cc_domains, cntr.cc_targets);
 
 	map->po_domain_layers = cntr.cc_layers;
+	D_ASSERT(map->po_domain_layers != 0);
 
 	D_ALLOC_ARRAY(map->po_comp_fail_cnts, map->po_domain_layers);
 	if (map->po_comp_fail_cnts == NULL) {
 		rc = -DER_NOMEM;
-		goto failed;
+		goto out_mutex;
 	}
 
 	D_ALLOC_ARRAY(map->po_domain_sorters, map->po_domain_layers);
 	if (map->po_domain_sorters == NULL) {
 		rc = -DER_NOMEM;
-		goto failed;
+		goto out_comp_fail_cnts;
 	}
 
 	/* pointer arrays for binary search of domains */
@@ -972,7 +965,7 @@ pool_map_initialise(struct pool_map *map, struct pool_domain *tree)
 		rc = comp_sorter_init(sorter, cntr.cc_top_doms,
 				      tree[0].do_comp.co_type);
 		if (rc != 0)
-			goto failed;
+			goto out_domain_sorters;
 
 		D_DEBUG(DB_TRACE, "domain %s, ndomains %d\n",
 			pool_domain_name(&tree[0]), sorter->cs_nr);
@@ -982,7 +975,7 @@ pool_map_initialise(struct pool_map *map, struct pool_domain *tree)
 
 		rc = comp_sorter_sort(sorter);
 		if (rc != 0)
-			goto failed;
+			goto out_domain_sorters;
 
 		tree = &tree[sorter->cs_nr];
 	}
@@ -990,7 +983,7 @@ pool_map_initialise(struct pool_map *map, struct pool_domain *tree)
 	rc = comp_sorter_init(&map->po_target_sorter, cntr.cc_targets,
 			      PO_COMP_TP_TARGET);
 	if (rc != 0)
-		goto failed;
+		goto out_domain_sorters;
 
 	for (i = 0; i < cntr.cc_targets; i++) {
 		struct pool_target *ta;
@@ -1001,13 +994,26 @@ pool_map_initialise(struct pool_map *map, struct pool_domain *tree)
 
 	rc = comp_sorter_sort(&map->po_target_sorter);
 	if (rc != 0)
-		goto failed;
+		goto out_target_sorter;
 
 	return 0;
- failed:
-	D_DEBUG(DB_MGMT, "Failed to setup pool map "DF_RC"\n", DP_RC(rc));
+
+out_target_sorter:
+	comp_sorter_fini(&map->po_target_sorter);
+out_domain_sorters:
+	for (i = 0; i < map->po_domain_layers; i++)
+		comp_sorter_fini(&map->po_domain_sorters[i]);
+	D_FREE(map->po_domain_sorters);
+out_comp_fail_cnts:
+	D_FREE(map->po_comp_fail_cnts);
+out_mutex:
+	map->po_domain_layers = 0;
 	D_MUTEX_DESTROY(&map->po_lock);
-	pool_map_finalise(map);
+out_tree:
+	pool_tree_free(map->po_tree);
+	map->po_tree = NULL;
+
+	D_DEBUG(DB_MGMT, "Failed to setup pool map: "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
 
@@ -1154,13 +1160,18 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 
 	/* create scratch map for merging */
 	D_ALLOC_PTR(src_map);
-	if (src_map == NULL)
+	if (src_map == NULL) {
+		pool_tree_free(tree);
 		return -DER_NOMEM;
+	}
 
 	rc = pool_map_initialise(src_map, tree);
 	if (rc != 0) {
-		D_DEBUG(DB_MGMT, "Failed to create scratch map for buffer\n");
-		goto failed;
+		D_DEBUG(DB_MGMT, "Failed to create scratch map for buffer: "
+			DF_RC"\n", DP_RC(rc));
+		/* pool_tree_free(tree) did in pool_map_initialise */
+		D_FREE(src_map);
+		return rc;
 	}
 
 	/* destination buffer could has larger than the actually needed space,
@@ -1187,8 +1198,10 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 		rc = pool_map_find_domain(map, tree[0].do_comp.co_type,
 					  PO_COMP_ID_ALL, &cur_doms);
 	}
-	if (rc == 0)
+	if (rc == 0) {
+		D_FREE(dst_tree);
 		goto failed;
+	}
 
 	dst_doms = dst_tree;
 	dst_doms += cur_doms - map->po_tree;
@@ -1332,7 +1345,9 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 
 	/* install new buffer for pool map */
 	rc = pool_map_initialise(map, dst_tree);
-	D_ASSERT(rc == 0 || rc == -DER_NOMEM);
+	if (rc != 0)
+		/* pool_tree_free(dst_tree) did in pool_map_initialise */
+		goto failed;
 
 	map->po_version = version;
  failed:
@@ -1349,26 +1364,97 @@ uuid_compare_cb(const void *a, const void *b)
 	return uuid_compare(*ua, *ub);
 }
 
+static int
+add_domains_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
+			int map_version,
+			int ndomains, const uint32_t *domains)
+{
+	int			i = 0;
+	int			rc;
+	uint32_t		num_comps;
+	uint8_t			new_status;
+	struct d_fd_tree	tree = {0};
+	struct d_fd_node	node = {0};
+
+	if (map != NULL) {
+		new_status = PO_COMP_ST_NEW;
+		num_comps = pool_map_find_domain(map, PO_COMP_TP_RACK,
+						 PO_COMP_ID_ALL, NULL);
+	} else {
+		new_status = PO_COMP_ST_UPIN;
+		num_comps = 0;
+	}
+
+	rc = d_fd_tree_init(&tree, domains, ndomains);
+	if (rc != 0)
+		return rc;
+
+	/* discard the root - it's being added to the pool buf elsewhere */
+	rc = d_fd_tree_next(&tree, &node);
+	while (rc == 0) {
+		struct pool_component map_comp;
+
+		rc = d_fd_tree_next(&tree, &node);
+		if (rc != 0) {
+			/* got to the end of the tree with no problems */
+			if (rc == -DER_NONEXIST)
+				rc = 0;
+			break;
+		}
+
+		/* ranks are handled elsewhere for now */
+		if (node.fdn_type != D_FD_NODE_TYPE_DOMAIN)
+			break;
+
+		/* TODO DAOS-6353: Use the layer number as type */
+		map_comp.co_type = PO_COMP_TP_RACK;
+		map_comp.co_status = new_status;
+		map_comp.co_index = i + num_comps;
+		map_comp.co_id = node.fdn_val.dom->fd_id;
+		map_comp.co_rank = 0;
+		map_comp.co_ver = map_version;
+		map_comp.co_fseq = 1;
+		map_comp.co_nr = node.fdn_val.dom->fd_children_nr;
+
+		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
+		i++;
+	}
+
+	return rc;
+}
+
 int
 gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 		int map_version, int ndomains, int nnodes, int ntargets,
-		const int32_t *domains, uuid_t target_uuids[],
+		const uint32_t *domains, uuid_t target_uuids[],
 		const d_rank_list_t *target_addrs, uuid_t **uuids_out,
 		uint32_t dss_tgt_nr)
 {
 	struct pool_component	map_comp;
 	struct pool_buf		*map_buf;
-	struct pool_domain      *found_dom;
-	uuid_t		        *uuids = NULL;
+	struct pool_domain	*found_dom;
+	uuid_t			*uuids = NULL;
 	uint32_t		num_comps;
 	uint8_t			new_status;
 	bool			updated;
-	int i, rc;
+	int			i, rc;
+	uint32_t		num_domain_comps;
 
 	updated = false;
 
+	/*
+	 * Estimate number of domains for allocating the pool buffer
+	 */
+	rc = d_fd_get_exp_num_domains(ndomains, nnodes, &num_domain_comps);
+	if (rc != 0) {
+		D_ERROR("Invalid domain array, len=%u\n", ndomains);
+		return rc;
+	}
+	D_ASSERT(num_domain_comps > 0);
+	num_domain_comps--; /* remove the root domain - allocated separately */
+
 	/* Prepare the pool map attribute buffers. */
-	map_buf = pool_buf_alloc(ndomains + nnodes + ntargets);
+	map_buf = pool_buf_alloc(num_domain_comps + nnodes + ntargets);
 	if (map_buf == NULL)
 		D_GOTO(out_map_buf, rc = -DER_NOMEM);
 
@@ -1379,35 +1465,19 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 	memcpy(uuids, target_uuids, sizeof(uuid_t) * nnodes);
 	qsort(uuids, nnodes, sizeof(uuid_t), uuid_compare_cb);
 
+	rc = add_domains_to_pool_buf(map, map_buf, map_version, ndomains,
+				     domains);
+	if (rc != 0)
+		D_GOTO(out_map_buf, rc);
+
 	if (map != NULL) {
 		new_status = PO_COMP_ST_NEW;
-		num_comps = pool_map_find_domain(map, PO_COMP_TP_RACK,
+		num_comps = pool_map_find_domain(map, PO_COMP_TP_NODE,
 						 PO_COMP_ID_ALL, NULL);
 	} else {
 		new_status = PO_COMP_ST_UPIN;
 		num_comps = 0;
 	}
-	/* fill racks */
-	for (i = 0; i < ndomains; i++) {
-		map_comp.co_type = PO_COMP_TP_RACK;	/* TODO */
-		map_comp.co_status = new_status;
-		map_comp.co_index = i + num_comps;
-		map_comp.co_id = i + num_comps;
-		map_comp.co_rank = 0;
-		map_comp.co_ver = map_version;
-		map_comp.co_fseq = 1;
-		map_comp.co_nr = domains[i];
-
-		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
-		if (rc != 0)
-			D_GOTO(out_map_buf, rc);
-	}
-
-	if (map != NULL)
-		num_comps = pool_map_find_domain(map, PO_COMP_TP_NODE,
-						 PO_COMP_ID_ALL, NULL);
-	else
-		num_comps = 0;
 
 	/* fill nodes */
 	for (i = 0; i < nnodes; i++) {
@@ -1502,8 +1572,7 @@ pool_map_extend(struct pool_map *map, uint32_t version, struct pool_buf *buf)
 
 	D_DEBUG(DB_TRACE, "Merge buffer with already existent pool map\n");
 	rc = pool_map_merge(map, version, tree);
-	if(rc != 0)
-		goto error_tree;
+	/* pool_tree_free(tree) did in pool_map_initialise in case of error */
 
 	return rc;
 
@@ -1523,52 +1592,49 @@ int
 pool_map_create(struct pool_buf *buf, uint32_t version, struct pool_map **mapp)
 {
 	struct pool_domain *tree = NULL;
-	struct pool_map	   *map = NULL;
+	struct pool_map	   *map;
 	int		    rc;
 
 	rc = pool_buf_parse(buf, &tree);
 	if (rc != 0) {
-		D_ERROR("pool_buf_parse failed, rc "DF_RC"\n", DP_RC(rc));
+		D_ERROR("pool_buf_parse failed: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
 	if (!pool_tree_sane(tree, version)) {
-		rc = -DER_INVAL;
-		D_ERROR("pool_tree_sane failed, rc "DF_RC"\n", DP_RC(rc));
-		goto failed;
+		pool_tree_free(tree);
+		return -DER_INVAL;
 	}
 
 	D_ALLOC_PTR(map);
 	if (map == NULL) {
-		rc = -DER_NOMEM;
-		goto failed;
+		pool_tree_free(tree);
+		return -DER_NOMEM;
 	}
 
 	rc = pool_map_initialise(map, tree);
 	if (rc != 0) {
-		D_ERROR("pool_map_initialise failed, rc "DF_RC"\n", DP_RC(rc));
-		/* pool_tree_free() did in pool_map_initialise */
-		tree = NULL;
-		goto failed;
+		D_ERROR("pool_map_initialise failed: "DF_RC"\n", DP_RC(rc));
+		/* pool_tree_free(tree) did in pool_map_initialise() */
+		goto out;
 	}
 
 	/** Record the initial failed domain counts */
 	rc = pool_map_update_failed_cnt(map);
 	if (rc != 0) {
-		D_ERROR("could not update number of failed targets, rc %d.\n",
-				rc);
-		goto failed;
+		D_ERROR("could not update number of failed targets: "DF_RC"\n",
+			DP_RC(rc));
+		pool_map_finalise(map);
+		goto out;
 	}
 
 	map->po_version = version;
 	map->po_ref = 1; /* 1 for caller */
-	*mapp = map;
-	return 0;
- failed:
-	if (tree != NULL)
-		pool_tree_free(tree);
-	if (map != NULL)
+out:
+	if (rc != 0)
 		D_FREE(map);
+	else
+		*mapp = map;
 	return rc;
 }
 

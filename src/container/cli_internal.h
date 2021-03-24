@@ -29,6 +29,8 @@ struct dc_cont {
 	daos_handle_t		dc_pool_hdl;
 	struct daos_csummer    *dc_csummer;
 	struct cont_props	dc_props;
+	/* minimal pmap version */
+	uint32_t		dc_min_ver;
 	uint32_t		dc_closing:1,
 				dc_slave:1; /* generated via g2l */
 };

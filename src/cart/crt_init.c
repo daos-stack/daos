@@ -27,12 +27,12 @@ dump_envariables(void)
 		"OFI_PORT", "OFI_INTERFACE", "OFI_DOMAIN", "CRT_CREDIT_EP_CTX",
 		"CRT_CTX_SHARE_ADDR", "CRT_CTX_NUM", "D_FI_CONFIG",
 		"FI_UNIVERSE_SIZE", "CRT_DISABLE_MEM_PIN",
-		"FI_OFI_RXM_USE_SRX" };
+		"FI_OFI_RXM_USE_SRX", "D_LOG_FLUSH", "CRT_MRC_ENABLE" };
 
-	D_DEBUG(DB_ALL, "-- ENVARS: --\n");
+	D_INFO("-- ENVARS: --\n");
 	for (i = 0; i < ARRAY_SIZE(envars); i++) {
 		val = getenv(envars[i]);
-		D_DEBUG(DB_ALL, "%s = %s\n", envars[i], val);
+		D_INFO("%s = %s\n", envars[i], val);
 	}
 }
 
@@ -70,6 +70,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	uint32_t	ctx_num = 1;
 	uint32_t	fi_univ_size = 0;
 	uint32_t	mem_pin_disable = 0;
+	uint32_t	mrc_enable = 0;
 	uint64_t	start_rpcid;
 	int		rc = 0;
 
@@ -145,6 +146,12 @@ static int data_init(int server, crt_init_options_t *opt)
 		setenv("FI_UNIVERSE_SIZE", "2048", 1);
 	}
 
+	d_getenv_int("CRT_MRC_ENABLE", &mrc_enable);
+	if (mrc_enable == 0) {
+		D_INFO("Disabling MR CACHE (FI_MR_CACHE_MAX_COUNT=0)\n");
+		setenv("FI_MR_CACHE_MAX_COUNT", "0", 1);
+	}
+
 	if (credits == 0) {
 		D_DEBUG(DB_ALL, "CRT_CREDIT_EP_CTX set as 0, flow control "
 			"disabled.\n");
@@ -176,11 +183,36 @@ static int data_init(int server, crt_init_options_t *opt)
 		d_getenv_int("CRT_CTX_NUM", &ctx_num);
 		crt_gdata.cg_ctx_max_num = ctx_num;
 	}
+
 	D_DEBUG(DB_ALL, "set cg_sep_mode %d, cg_ctx_max_num %d.\n",
 		crt_gdata.cg_sep_mode, crt_gdata.cg_ctx_max_num);
+
 	if (crt_gdata.cg_sep_mode == false && crt_gdata.cg_ctx_max_num > 1)
 		D_WARN("CRT_CTX_NUM has no effect because CRT_CTX_SHARE_ADDR "
 		       "is not set or set to 0\n");
+
+	/** Enable statistics only for the server side and if requested */
+	if (opt && opt->cio_use_sensors && server) {
+		int	ret;
+
+		/** enable sensors */
+		crt_gdata.cg_use_sensors = true;
+
+		/** set up the global sensors */
+		ret = d_tm_add_metric(&crt_gdata.cg_uri_self, D_TM_COUNTER,
+				      "total number of URI requests for self",
+				      "", "net/uri/lookup_self");
+		if (ret)
+			D_WARN("Failed to create uri self sensor: "DF_RC"\n",
+			       DP_RC(ret));
+
+		ret = d_tm_add_metric(&crt_gdata.cg_uri_other, D_TM_COUNTER,
+				      "total number of URI requests for other "
+				      "ranks", "", "net/uri/lookup_other");
+		if (ret)
+			D_WARN("Failed to create uri other sensor: "DF_RC"\n",
+			       DP_RC(ret));
+	}
 
 	gdata_init_flag = 1;
 exit:
@@ -316,9 +348,8 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	if (gdata_init_flag == 0) {
 		rc = data_init(server, opt);
 		if (rc != 0) {
-			D_ERROR("data_init failed, rc(%d) - %s.\n",
-				rc, strerror(rc));
-			D_GOTO(out, rc = -rc);
+			D_ERROR("data_init failed "DF_RC"\n", DP_RC(rc));
+			D_GOTO(out, rc);
 		}
 	}
 	D_ASSERT(gdata_init_flag == 1);
@@ -540,13 +571,7 @@ crt_finalize(void)
 		if (crt_is_service() && crt_gdata.cg_swim_inited)
 			crt_swim_fini();
 
-		rc = crt_grp_fini();
-		if (rc != 0) {
-			D_ERROR("crt_grp_fini failed, rc: %d.\n", rc);
-			crt_gdata.cg_refcount++;
-			D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
-			D_GOTO(out, rc);
-		}
+		crt_grp_fini();
 
 		rc = crt_hg_fini();
 		if (rc != 0) {

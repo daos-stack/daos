@@ -106,11 +106,12 @@ pool_hop_free(struct d_ulink *hlink)
 	if (pool->vp_io_ctxt != NULL) {
 		rc = bio_ioctxt_close(pool->vp_io_ctxt);
 		if (rc)
-			D_ERROR("Closing VOS I/O context:%p pool:"DF_UUID"\n",
-				pool->vp_io_ctxt, DP_UUID(pool->vp_id));
+			D_ERROR("Closing VOS I/O context:%p pool:"DF_UUID" : "
+				DF_RC"\n", pool->vp_io_ctxt,
+				DP_UUID(pool->vp_id), DP_RC(rc));
 		else
 			D_DEBUG(DB_MGMT, "Closed VOS I/O context:%p pool:"
-				""DF_UUID"\n",
+				DF_UUID"\n",
 				pool->vp_io_ctxt, DP_UUID(pool->vp_id));
 	}
 
@@ -145,6 +146,7 @@ pool_alloc(uuid_t uuid, struct vos_pool **pool_p)
 
 	d_uhash_ulink_init(&pool->vp_hlink, &pool_uuid_hops);
 	D_INIT_LIST_HEAD(&pool->vp_gc_link);
+	D_INIT_LIST_HEAD(&pool->vp_gc_cont);
 	uuid_copy(pool->vp_id, uuid);
 
 	memset(&uma, 0, sizeof(uma));
@@ -196,19 +198,20 @@ vos_blob_format_cb(void *cb_data, struct umem_instance *umem)
 	/* Create a bio_io_context to get the blob */
 	rc = bio_ioctxt_open(&ioctxt, xs_ctxt, umem, blob_hdr->bbh_pool);
 	if (rc) {
-		D_ERROR("Failed to create an ioctxt for writing blob header\n");
+		D_ERROR("Failed to create an I/O context for writing blob "
+			"header: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
 	/* Write the blob header info to blob offset 0 */
 	rc = bio_write_blob_hdr(ioctxt, blob_hdr);
 	if (rc)
-		D_ERROR("Failed to write header for blob:"DF_U64"\n",
-			blob_hdr->bbh_blob_id);
+		D_ERROR("Failed to write header for blob:"DF_U64" : "DF_RC"\n",
+			blob_hdr->bbh_blob_id, DP_RC(rc));
 
 	rc = bio_ioctxt_close(ioctxt);
 	if (rc)
-		D_ERROR("Failed to free ioctxt\n");
+		D_ERROR("Failed to free I/O context: "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }

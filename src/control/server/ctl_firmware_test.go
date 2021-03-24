@@ -16,10 +16,9 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
@@ -518,27 +517,27 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 	for name, tc := range map[string]struct {
 		bmbc           *bdev.MockBackendConfig
 		smbc           *scm.MockBackendConfig
-		serversRunning bool
-		noRankServers  bool
+		enginesRunning bool
+		noRankEngines  bool
 		req            ctlpb.FirmwareUpdateReq
 		expErr         error
 		expResp        *ctlpb.FirmwareUpdateResp
 	}{
-		"IO servers running": {
+		"IO engines running": {
 			req: ctlpb.FirmwareUpdateReq{
 				Type:         ctlpb.FirmwareUpdateReq_SCM,
 				FirmwarePath: "/some/path",
 			},
-			serversRunning: true,
+			enginesRunning: true,
 			expErr:         FaultInstancesNotStopped("firmware update", 0),
 		},
-		"IO servers running with no rank": {
+		"IO engines running with no rank": {
 			req: ctlpb.FirmwareUpdateReq{
 				Type:         ctlpb.FirmwareUpdateReq_SCM,
 				FirmwarePath: "/some/path",
 			},
-			serversRunning: true,
-			noRankServers:  true,
+			enginesRunning: true,
+			noRankEngines:  true,
 			expErr:         errors.New("unidentified server rank is running"),
 		},
 		"no path": {
@@ -805,11 +804,11 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 			cfg := config.DefaultServer()
 			cs := mockControlService(t, log, cfg, tc.bmbc, tc.smbc, nil)
 			for i := 0; i < 2; i++ {
-				runner := ioserver.NewTestRunner(&ioserver.TestRunnerConfig{
-					Running: atm.NewBool(tc.serversRunning),
-				}, ioserver.NewConfig())
-				instance := NewIOServerInstance(log, nil, nil, nil, runner)
-				if !tc.noRankServers {
+				rCfg := new(engine.TestRunnerConfig)
+				rCfg.Running.Store(tc.enginesRunning)
+				runner := engine.NewTestRunner(rCfg, engine.NewConfig())
+				instance := NewEngineInstance(log, nil, nil, nil, runner)
+				if !tc.noRankEngines {
 					instance._superblock = &Superblock{}
 					instance._superblock.ValidRank = true
 					instance._superblock.Rank = system.NewRankPtr(uint32(i))

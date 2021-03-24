@@ -7,7 +7,7 @@
   <parent>
     <groupId>io.daos</groupId>
     <artifactId>daos-java-root</artifactId>
-    <version>1.1.0-SNAPSHOT</version>
+    <version>1.2.0-SNAPSHOT</version>
   </parent>
 
   <groupId>io.daos</groupId>
@@ -16,7 +16,7 @@
 
   <properties>
     <native.build.path>${project.basedir}/build</native.build.path>
-    <daos.install.path>/usr/local/daos</daos.install.path>
+    <daos.install.path>${project.basedir}/install</daos.install.path>
     <compile.proto>false</compile.proto>
   </properties>
 
@@ -45,7 +45,7 @@
     <dependency>
       <groupId>io.netty</groupId>
       <artifactId>netty-buffer</artifactId>
-      <version>4.1.45.Final</version>
+      <version>4.1.59.Final</version>
     </dependency>
     <dependency>
       <groupId>com.google.code.findbugs</groupId>
@@ -356,6 +356,22 @@
             </configuration>
           </execution>
         </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-gpg-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.sonatype.plugins</groupId>
+        <artifactId>nexus-staging-maven-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-javadoc-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-source-plugin</artifactId>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>

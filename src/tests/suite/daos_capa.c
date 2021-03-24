@@ -310,7 +310,7 @@ io_invalid_poh(void **state)
 
 	if (arg->myrank == 1) {
 		/** open object */
-		oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+		oid = daos_test_oid_gen(coh, OC_RP_XSF, 0, 0, arg->myrank);
 		rc = daos_obj_open(coh, oid, 0, &oh, NULL);
 		assert_rc_equal(rc, 0);
 
@@ -398,7 +398,7 @@ io_invalid_coh(void **state)
 
 	if (arg->myrank == 1) {
 		/** open object */
-		oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+		oid = daos_test_oid_gen(coh, OC_RP_XSF, 0, 0, arg->myrank);
 		rc = daos_obj_open(coh, oid, 0, &oh, NULL);
 		assert_rc_equal(rc, 0);
 
@@ -474,7 +474,7 @@ update_ro(void **state)
 	handle_share(&coh, HANDLE_CO, arg->myrank, arg->pool.poh, false);
 
 	/** open object */
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(coh, OC_RP_XSF, 0, 0, arg->myrank);
 	rc = daos_obj_open(coh, oid, 0, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
@@ -540,7 +540,7 @@ run_daos_capa_test(int rank, int size)
 {
 	int rc = 0;
 
-	rc = cmocka_run_group_tests_name("DAOS capability tests", capa_tests,
+	rc = cmocka_run_group_tests_name("DAOS_Capability", capa_tests,
 					 setup, test_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;

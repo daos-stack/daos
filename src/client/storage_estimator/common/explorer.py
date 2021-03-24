@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from __future__ import print_function
+
 import os
 import copy
 import sys
@@ -13,12 +13,12 @@ from storage_estimator.vos_structures import VosObject, AKey, DKey, Container, C
 from storage_estimator.util import CommonBase, ObjectClass
 
 
-class FileInfo(object):
+class FileInfo():
     def __init__(self, size):
         self.st_size = size
 
 
-class Entry(object):
+class Entry():
     def __init__(self, name, path):
         self.path = path
         self.name = name
@@ -33,7 +33,7 @@ class Entry(object):
 
 class AverageFS(CommonBase):
     def __init__(self, arg):
-        super(AverageFS, self).__init__()
+        super().__init__()
 
         if isinstance(arg, DFS):
             self._dfs = arg
@@ -141,7 +141,7 @@ class AverageFS(CommonBase):
 
 class CellStats(CommonBase):
     def __init__(self, verbose=False):
-        super(CellStats, self).__init__()
+        super().__init__()
         self.parity = 0
         self.payload = 0
         self.set_verbose(verbose)
@@ -161,7 +161,7 @@ class CellStats(CommonBase):
 
 class DFS(CommonBase):
     def __init__(self, oclass):
-        super(DFS, self).__init__()
+        super().__init__()
         self._objects = []
         self._chunk_size = 1048576
         self._io_size = 131072
@@ -412,7 +412,7 @@ class DFS(CommonBase):
 
 class FileSystemExplorer(CommonBase):
     def __init__(self, path, oclass):
-        super(FileSystemExplorer, self).__init__()
+        super().__init__()
         self._path = path
         self._queue = []
         self._count_files = 0

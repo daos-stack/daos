@@ -22,12 +22,14 @@ class DaosRacerCommand(ExecutableCommand):
             dmg (DmgCommand): a DmgCommand object used to obtain the
                 configuration file and certificate
         """
-        super(DaosRacerCommand, self).__init__(
+        super().__init__(
             "/run/daos_racer/*", "daos_racer", path)
         self.host = host
 
         # Number of seconds to run
         self.runtime = FormattedParameter("-t {}", 60)
+        self.pool_uuid = FormattedParameter("-p {}")
+        self.cont_uuid = FormattedParameter("-c {}")
 
         if dmg:
             self.dmg_config = FormattedParameter("-n {}", dmg.yaml.filename)
@@ -72,7 +74,7 @@ class DaosRacerCommand(ExecutableCommand):
                 values to export prior to running daos_racer
 
         """
-        env = super(DaosRacerCommand, self).get_environment(manager, log_file)
+        env = super().get_environment(manager, log_file)
         env["OMPI_MCA_btl_openib_warn_default_gid_prefix"] = "0"
         env["OMPI_MCA_btl"] = "tcp,self"
         env["OMPI_MCA_oob"] = "tcp"

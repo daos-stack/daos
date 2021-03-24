@@ -9,6 +9,8 @@
 
 #include "daos_uns.h"
 
+char *duns_xattr_name = DUNS_XATTR_NAME;
+
 void
 dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  struct dfuse_inode_entry *ie,
@@ -23,19 +25,9 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	D_ASSERT(ie->ie_parent);
 	D_ASSERT(ie->ie_dfs);
 
-	/* Set the caching attributes of this entry, but do not allow
-	 * any caching on fifos.
-	 */
-
-	if (S_ISFIFO(ie->ie_stat.st_mode)) {
-		if (!is_new) {
-			ie->ie_stat.st_mode &= ~S_IFIFO;
-			ie->ie_stat.st_mode |= S_IFDIR;
-		}
-	} else {
-		entry.attr_timeout = ie->ie_dfs->dfs_attr_timeout;
+	/* Do not cache directory attributes as this does not work with uns */
+	if (!S_ISDIR(ie->ie_stat.st_mode))
 		entry.entry_timeout = ie->ie_dfs->dfs_attr_timeout;
-	}
 
 	if (ie->ie_dfs->dfs_multi_user) {
 		rc = dfuse_get_uid(ie);
@@ -43,19 +35,14 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 			D_GOTO(out_decref, rc);
 	}
 
-	if (ie->ie_stat.st_ino == 0) {
-		rc = dfs_obj2id(ie->ie_obj, &ie->ie_oid);
-		if (rc)
-			D_GOTO(out_decref, rc);
-
-		dfuse_compute_inode(ie->ie_dfs, &ie->ie_oid,
-				    &ie->ie_stat.st_ino);
-	}
+	/* Set the caching attributes of this entry */
+	entry.attr_timeout = ie->ie_dfs->dfs_attr_timeout;
 
 	entry.attr = ie->ie_stat;
 	entry.generation = 1;
 	entry.ino = entry.attr.st_ino;
-	DFUSE_TRA_DEBUG(ie, "Inserting inode %#lx", entry.ino);
+	DFUSE_TRA_DEBUG(ie, "Inserting inode %#lx mode 0%o",
+			entry.ino, ie->ie_stat.st_mode);
 
 	rlink = d_hash_rec_find_insert(&fs_handle->dpi_iet,
 				       &ie->ie_stat.st_ino,
@@ -74,7 +61,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 
 		/* Update the existing object with the new name/parent */
 
-		DFUSE_TRA_DEBUG(ie, "inode dfs %p %ld hi %#lx lo %#lx",
+		DFUSE_TRA_DEBUG(inode, "inode dfs %p %ld hi %#lx lo %#lx",
 				inode->ie_dfs,
 				inode->ie_dfs->dfs_ino,
 				inode->ie_oid.hi,
@@ -133,8 +120,6 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	else
 		DFUSE_REPLY_ENTRY(ie, req, entry);
 	return;
-out_decref:
-	d_hash_rec_decref(&fs_handle->dpi_iet, &ie->ie_htl);
 out_err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	dfs_release(ie->ie_obj);
@@ -149,13 +134,11 @@ out_err:
  * On failure it will return error.
  *
  */
-static int
+int
 check_for_uns_ep(struct dfuse_projection_info *fs_handle,
-		 struct dfuse_inode_entry *ie)
+		 struct dfuse_inode_entry *ie, char *attr, daos_size_t len)
 {
 	int			rc;
-	char			str[DUNS_MAX_XATTR_LEN];
-	daos_size_t		str_len = DUNS_MAX_XATTR_LEN;
 	struct duns_attr_t	dattr = {};
 	struct dfuse_dfs	*dfs = NULL;
 	struct dfuse_dfs	*dfsi;
@@ -165,15 +148,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	int			new_cont = false;
 	int ret;
 
-	rc = dfs_getxattr(ie->ie_dfs->dfs_ns, ie->ie_obj, DUNS_XATTR_NAME,
-			  &str, &str_len);
-
-	if (rc == ENODATA)
-		return 0;
-	if (rc)
-		return rc;
-
-	rc = duns_parse_attr(&str[0], str_len, &dattr);
+	rc = duns_parse_attr(attr, len, &dattr);
 	if (rc)
 		return rc;
 
@@ -185,10 +160,9 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	/* Search the currently connect dfp list, if one matches then use that,
 	 * otherwise allocate a new one.
 	 */
+
 	d_list_for_each_entry(dfpi, &fs_handle->dpi_info->di_dfp_list,
 			      dfp_list) {
-		DFUSE_TRA_DEBUG(ie, "Checking dfp %p", dfpi);
-
 		if (uuid_compare(dattr.da_puuid, dfpi->dfp_pool) != 0)
 			continue;
 
@@ -204,6 +178,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 
 		DFUSE_TRA_UP(dfp, ie->ie_dfs->dfs_dfp, "dfp");
 		D_INIT_LIST_HEAD(&dfp->dfp_dfs_list);
+
 		d_list_add(&dfp->dfp_list, &fs_handle->dpi_info->di_dfp_list);
 		new_pool = true;
 
@@ -223,7 +198,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 			else
 				DFUSE_TRA_WARNING(ie,
 						  "daos_pool_connect() failed, "
-						  DF_RC"\n", DP_RC(rc));
+						  DF_RC "\n", DP_RC(rc));
 			D_GOTO(out_err, ret = daos_der2errno(rc));
 		}
 	}
@@ -266,7 +241,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 					strerror(rc));
 			D_GOTO(out_cont, ret = rc);
 		}
-		new_cont = true;
+
 		ie->ie_root = true;
 
 		dfs->dfs_ino = atomic_fetch_add_relaxed(&fs_handle->dpi_ino_next,
@@ -290,6 +265,8 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	}
 
 	ie->ie_stat.st_ino = dfs->dfs_ino;
+
+	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 
 	ie->ie_dfs = dfs;
 
@@ -338,6 +315,9 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*ie = NULL;
 	int				rc;
+	char				out[DUNS_MAX_XATTR_LEN];
+	char				*outp = &out[0];
+	daos_size_t			attr_len = DUNS_MAX_XATTR_LEN;
 
 	DFUSE_TRA_DEBUG(fs_handle,
 			"Parent:%lu '%s'", parent->ie_stat.st_ino, name);
@@ -351,9 +331,9 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
 
-	rc = dfs_lookup_rel(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
-			    O_RDWR | O_NOFOLLOW, &ie->ie_obj,
-			    NULL, &ie->ie_stat);
+	rc = dfs_lookupx(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
+			 O_RDWR | O_NOFOLLOW, &ie->ie_obj, NULL, &ie->ie_stat,
+			 1, &duns_xattr_name, (void **)&outp, &attr_len);
 	if (rc) {
 		DFUSE_TRA_DEBUG(parent, "dfs_lookup() failed: (%s)",
 				strerror(rc));
@@ -370,15 +350,22 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(err, rc);
 	}
 
+	DFUSE_TRA_DEBUG(ie, "Attr len is %zi", attr_len);
+
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
 	atomic_store_relaxed(&ie->ie_ref, 1);
 
-	if (S_ISFIFO(ie->ie_stat.st_mode)) {
-		rc = check_for_uns_ep(fs_handle, ie);
+	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
+
+	dfuse_compute_inode(ie->ie_dfs, &ie->ie_oid,
+			    &ie->ie_stat.st_ino);
+
+	if (S_ISDIR(ie->ie_stat.st_mode) && attr_len) {
+		rc = check_for_uns_ep(fs_handle, ie, out, attr_len);
 		DFUSE_TRA_DEBUG(ie,
 				"check_for_uns_ep() returned %d", rc);
-		if (rc != 0 && rc != EPERM)
+		if (rc != 0)
 			D_GOTO(err, rc);
 	}
 

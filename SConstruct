@@ -58,7 +58,7 @@ def get_version():
         return version_file.read().rstrip()
 
 API_VERSION_MAJOR = "1"
-API_VERSION_MINOR = "0"
+API_VERSION_MINOR = "2"
 API_VERSION_FIX = "0"
 API_VERSION = "{}.{}.{}".format(API_VERSION_MAJOR, API_VERSION_MINOR,
                                 API_VERSION_FIX)
@@ -271,9 +271,7 @@ def scons(): # pylint: disable=too-many-locals
                   "to clean it up manually.")
             exit(1)
 
-        print("Updating the API_VERSION, VERSION and TAG files...")
-        with open("API_VERSION", "w") as version_file:
-            version_file.write(API_VERSION + '\n')
+        print("Updating the VERSION and TAG files...")
         with open("VERSION", "w") as version_file:
             version_file.write(version + '\n')
         with open("TAG", "w") as version_file:
@@ -293,7 +291,6 @@ def scons(): # pylint: disable=too-many-locals
                                                   repo.default_signature.email)
         # pylint: enable=no-member
         index.add("utils/rpms/daos.spec")
-        index.add("API_VERSION")
         index.add("VERSION")
         index.add("TAG")
         index.write()
@@ -370,9 +367,6 @@ def scons(): # pylint: disable=too-many-locals
 
     env = Environment(TOOLS=['extra', 'default', 'textfile'])
 
-    if os.path.exists("daos_m.conf"):
-        os.rename("daos_m.conf", "daos.conf")
-
     opts_file = os.path.join(Dir('#').abspath, 'daos.conf')
     opts = Variables(opts_file)
 
@@ -430,13 +424,16 @@ def scons(): # pylint: disable=too-many-locals
     # also install to $PREFIX/lib to work with existing avocado test code
     daos_build.install(env, "lib/daos/", ['.build_vars.sh', '.build_vars.json'])
     env.Install("$PREFIX/lib64/daos", "VERSION")
-    env.Install("$PREFIX/lib64/daos", "API_VERSION")
 
-    env.Install('$PREFIX/etc/bash_completion.d', ['utils/completion/daos.bash'])
+    env.Install(conf_dir + '/bash_completion.d', ['utils/completion/daos.bash'])
     env.Install('$PREFIX/lib/daos/TESTING/ftest/util',
                 ['utils/sl/env_modules.py'])
     env.Install('$PREFIX/lib/daos/TESTING/ftest/',
                 ['ftest.sh'])
+    api_version = env.Command("%s/API_VERSION" % build_prefix,
+                              "%s/SConstruct" % build_prefix,
+                              "echo %s > $TARGET" % (API_VERSION))
+    env.Install("$PREFIX/lib64/daos", api_version)
 
     # install the configuration files
     SConscript('utils/config/SConscript')

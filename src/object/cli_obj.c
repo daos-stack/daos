@@ -24,7 +24,7 @@
 #define CLI_OBJ_IO_PARMS	8
 #define NIL_BITMAP		(NULL)
 
-#define OBJ_TGT_INLINE_NR	(16)
+#define OBJ_TGT_INLINE_NR	(12)
 struct obj_req_tgts {
 	/* to save memory allocation if #targets <= OBJ_TGT_INLINE_NR */
 	struct daos_shard_tgt	 ort_tgts_inline[OBJ_TGT_INLINE_NR];
@@ -306,7 +306,10 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 	int			rc;
 
 	pool = dc_hdl2pool(dc_cont_hdl2pool_hdl(obj->cob_coh));
-	D_ASSERT(pool != NULL);
+	if (pool == NULL) {
+		D_WARN("Cannot find valid pool\n");
+		D_GOTO(out, rc = -DER_NO_HDL);
+	}
 
 	map = pl_map_find(pool->dp_pool, obj->cob_md.omd_id);
 	dc_pool_put(pool);
@@ -316,7 +319,7 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	obj->cob_md.omd_ver = pool_map_get_version(pool->dp_map);
+	obj->cob_md.omd_ver = dc_pool_get_version(pool);
 	rc = pl_obj_place(map, &obj->cob_md, NULL, &layout);
 	pl_map_decref(map);
 	if (rc != 0) {
@@ -514,8 +517,8 @@ obj_grp_valid_shard_get(struct dc_object *obj, int grp_idx,
 	 */
 	D_ASSERT(grp_size >= obj_get_replicas(obj));
 	grp_start = grp_idx * grp_size;
-	idx = grp_start + random() % obj_get_replicas(obj);
-	for (i = 0; i < obj_get_replicas(obj); i++, idx++) {
+	idx = grp_start + random() % grp_size;
+	for (i = 0; i < grp_size; i++, idx++) {
 		uint32_t tgt_id;
 		int index;
 
@@ -541,7 +544,7 @@ obj_grp_valid_shard_get(struct dc_object *obj, int grp_idx,
 
 	D_RWLOCK_UNLOCK(&obj->cob_lock);
 
-	if (i == obj_get_replicas(obj))
+	if (i == grp_size)
 		return -DER_NONEXIST;
 
 	return idx;
@@ -617,8 +620,7 @@ obj_dkey2grpidx(struct dc_object *obj, uint64_t hash, unsigned int map_ver)
 
 	D_ASSERT(obj->cob_shards_nr >= grp_size);
 
-	/* XXX, consistent hash? */
-	grp_idx = hash % (obj->cob_shards_nr / grp_size);
+	grp_idx = d_hash_jump(hash, obj->cob_shards_nr / grp_size);
 	D_RWLOCK_UNLOCK(&obj->cob_lock);
 
 	return grp_idx;
@@ -765,14 +767,14 @@ obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr)
 	daos_iod_t			*iod;
 	int				 i;
 
+	if (reasb_req->orr_iods == NULL)
+		return;
+
 	for (i = 0; i < iod_nr; i++) {
-		iod = reasb_req->orr_iods + i;
-		if (iod == NULL)
-			return;
-		if (iod->iod_recxs != NULL)
-			D_FREE(iod->iod_recxs);
-		d_sgl_fini(reasb_req->orr_sgls + i, false);
-		obj_io_desc_fini(reasb_req->orr_oiods + i);
+		iod = &reasb_req->orr_iods[i];
+		D_FREE(iod->iod_recxs);
+		d_sgl_fini(&reasb_req->orr_sgls[i], false);
+		obj_io_desc_fini(&reasb_req->orr_oiods[i]);
 		obj_ec_recxs_fini(&reasb_req->orr_recxs[i]);
 		obj_ec_seg_sorter_fini(&reasb_req->orr_sorters[i]);
 		obj_ec_tgt_oiod_fini(reasb_req->tgt_oiods);
@@ -939,11 +941,11 @@ ec_deg_get:
 		D_GOTO(out, rc);
 
 	shard_tgt->st_rank	= obj_shard->do_target_rank;
-	shard_tgt->st_shard	= obj_shard->do_shard,
+	shard_tgt->st_shard	= shard;
+	shard_tgt->st_shard_id	= obj_shard->do_id.id_shard;
 	shard_tgt->st_tgt_idx	= obj_shard->do_target_idx;
 	rc = obj_shard2tgtid(obj, shard, map_ver, &shard_tgt->st_tgt_id);
 	obj_shard_close(obj_shard);
-
 out:
 	return rc;
 }
@@ -1608,9 +1610,11 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 		recov_task->ert_th = th;
 
 		rc = dc_obj_fetch_task_create(args->oh, th, 0, args->dkey, 1,
-					DIOF_EC_RECOV, &recov_task->ert_iod,
-					&recov_task->ert_sgl, NULL, fail_info,
-					NULL, sched, &sub_task);
+					      DIOF_EC_RECOV,
+					      &recov_task->ert_iod,
+					      &recov_task->ert_sgl, NULL,
+					      fail_info, NULL,
+					      NULL, sched, &sub_task);
 		if (rc) {
 			D_ERROR("task %p "DF_OID" dc_obj_fetch_task_create "
 				"failed "DF_RC"\n", task,
@@ -2421,6 +2425,12 @@ obj_embedded_shard_arg(struct obj_auxi_args *obj_auxi)
 		return &obj_auxi->l_args.la_auxi;
 	case DAOS_OBJ_RPC_SYNC:
 		return &obj_auxi->s_args.sa_auxi;
+	case DAOS_OBJ_RPC_QUERY_KEY:
+		/*
+		 * called from obj_comp_cb_internal() and
+		 * checked in obj_shard_comp_cb() correctly
+		 */
+		return NULL;
 	default:
 		D_ERROR("bad opc %d.\n", obj_auxi->opc);
 		return NULL;
@@ -2984,7 +2994,8 @@ obj_shard_list_obj_cb(struct shard_auxi_args *shard_auxi,
 	}
 	iter_arg->merge_nr += shard_arg->la_nr;
 
-	D_DEBUG(DB_TRACE, "merge_nr %d\n", iter_arg->merge_nr);
+	D_DEBUG(DB_TRACE, "merge_nr %d/"DF_U64"\n", iter_arg->merge_nr,
+		obj_arg->sgl->sg_iovs[0].iov_len);
 	return rc;
 }
 
@@ -3854,6 +3865,11 @@ obj_csum_update(struct dc_object *obj, daos_obj_update_t *args,
 	struct dcs_iod_csums	*iod_csums = NULL;
 	int			 rc;
 
+	D_DEBUG(DB_CSUM, "obj: %p, args: %p, obj_auxi: %p, csummer: %p, "
+			 "csum_type: %d, csum_enabled: %s\n",
+		obj, args, obj_auxi, csummer,
+		cont_props.dcp_csum_type,
+		cont_props.dcp_csum_enabled ? "Yes" : "No");
 	if (!daos_csummer_initialized(csummer)) /** Not configured */
 		return 0;
 
@@ -3911,7 +3927,7 @@ obj_csum_update(struct dc_object *obj, daos_obj_update_t *args,
 	if (rc != 0) {
 		daos_csummer_free_ci(csummer_copy, &dkey_csum);
 		daos_csummer_destroy(&csummer_copy);
-		D_ERROR("daos_csummer_calc_iods error: %d", rc);
+		D_ERROR("daos_csummer_calc_iods error: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 	daos_csummer_destroy(&csummer_copy);
@@ -3974,7 +3990,7 @@ obj_csum_fetch(const struct dc_object *obj, daos_obj_fetch_t *args,
 				    true, obj_auxi->reasb_req.orr_singv_los,
 				    -1, &iod_csums);
 	if (rc != 0) {
-		D_ERROR("daos_csummer_calc_iods error: %d", rc);
+		D_ERROR("daos_csummer_calc_iods error: "DF_RC"\n", DP_RC(rc));
 		daos_csummer_free_ci(csummer_copy, &dkey_csum);
 		daos_csummer_destroy(&csummer_copy);
 		return rc;
@@ -4123,7 +4139,7 @@ dc_obj_fetch_task(tse_task_t *task)
 
 	rc = obj_csum_fetch(obj, args, obj_auxi);
 	if (rc != 0) {
-		D_ERROR("obj_csum_fetch error: %d", rc);
+		D_ERROR("obj_csum_fetch error: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_task, rc);
 	}
 
@@ -4196,7 +4212,7 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 	if (!obj_auxi->io_retry) {
 		rc = obj_csum_update(obj, args, obj_auxi);
 		if (rc) {
-			D_ERROR("obj_csum_update error: %d", rc);
+			D_ERROR("obj_csum_update error: "DF_RC"\n", DP_RC(rc));
 			goto out_task;
 		}
 	}
@@ -5381,4 +5397,43 @@ daos_dc_obj2id(void *ptr, daos_obj_id_t *id)
 	struct dc_object *obj = ptr;
 
 	*id = obj->cob_md.omd_id;
+}
+
+int
+daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
+		      daos_ofeat_t ofeats, daos_oclass_id_t cid,
+		      daos_oclass_hints_t hints, uint32_t args)
+{
+	daos_handle_t		poh;
+	struct dc_pool		*pool;
+	struct pl_map_attr	attr;
+	int			rc;
+
+	/** TODO - unsupported for now */
+	if (cid == OC_UNKNOWN)
+		return -DER_INVAL;
+
+	/** select the oclass */
+	poh = dc_cont_hdl2pool_hdl(coh);
+	if (daos_handle_is_inval(poh))
+		return -DER_NO_HDL;
+
+	pool = dc_hdl2pool(poh);
+	D_ASSERT(pool);
+
+	rc = pl_map_query(pool->dp_pool, &attr);
+	D_ASSERT(rc == 0);
+	dc_pool_put(pool);
+
+	D_DEBUG(DB_TRACE, "available domain=%d, targets=%d\n",
+		attr.pa_domain_nr, attr.pa_target_nr);
+
+	rc = daos_oclass_fit_max(cid, attr.pa_domain_nr, attr.pa_target_nr,
+				 &cid);
+	if (rc)
+		return rc;
+
+	daos_obj_set_oid(oid, ofeats, cid, args);
+
+	return rc;
 }

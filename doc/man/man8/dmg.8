@@ -1,4 +1,4 @@
-.TH dmg 1 "15 December 2020"
+.TH dmg 1 "18 March 2021"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -50,11 +50,11 @@ Generate DAOS server configuration file based on discoverable hardware devices
 \fB\fB\-a\fR, \fB\-\-access-points\fR\fP
 Comma separated list of access point addresses <ipv4addr/hostname>
 .TP
-\fB\fB\-p\fR, \fB\-\-num-pmem\fR\fP
-Minimum number of SCM (pmem) devices required per storage host in DAOS system
+\fB\fB\-e\fR, \fB\-\-num-engines\fR\fP
+Set the number of DAOS Engine sections to be populated in the config file output. If unset then the value will be set to the number of NUMA nodes on storage hosts in the DAOS system.
 .TP
-\fB\fB\-n\fR, \fB\-\-num-nvme\fR <default: \fI"1"\fR>\fP
-Minimum number of NVMe devices required per storage host in DAOS system, set to 0 to generate pmem-only config
+\fB\fB\-s\fR, \fB\-\-min-ssds\fR <default: \fI"1"\fR>\fP
+Minimum number of NVMe SSDs required per DAOS Engine (SSDs must reside on the host that is managing the engine). Set to 0 to generate a config with no NVMe.
 .TP
 \fB\fB\-c\fR, \fB\-\-net-class\fR <default: \fI"best-available"\fR>\fP
 Network class preferred
@@ -593,5 +593,56 @@ Hostlist representing hosts whose managed ranks are to be operated on
 .TP
 \fB\fB\-\-force\fR\fP
 Force stop DAOS system members
+.SS telemetry
+Perform telemetry operations
+.SS telemetry config
+Configure telemetry
+
+\fBUsage\fP: telemetry config [config-OPTIONS]
+.TP
+.TP
+\fB\fB\-i\fR, \fB\-\-install-dir\fR\fP
+Install directory for telemetry binary
+.TP
+\fB\fB\-s\fR, \fB\-\-system\fR <default: \fI"prometheus"\fR>\fP
+Telemetry system to configure
+.SS telemetry metrics
+Interact with metrics
+.SS telemetry metrics list
+List available metrics on a DAOS storage node
+
+\fBUsage\fP: metrics list [list-OPTIONS]
+.TP
+.TP
+\fB\fB\-s\fR, \fB\-\-host\fR <default: \fI"localhost"\fR>\fP
+DAOS server host to query
+.TP
+\fB\fB\-p\fR, \fB\-\-port\fR <default: \fI"9191"\fR>\fP
+Telemetry port on the host
+.SS telemetry metrics query
+Query metrics on a DAOS storage node
+
+\fBUsage\fP: metrics query [query-OPTIONS]
+.TP
+.TP
+\fB\fB\-s\fR, \fB\-\-host\fR <default: \fI"localhost"\fR>\fP
+DAOS server host to query
+.TP
+\fB\fB\-p\fR, \fB\-\-port\fR <default: \fI"9191"\fR>\fP
+Telemetry port on the host
+.TP
+\fB\fB\-m\fR, \fB\-\-metrics\fR <default: \fI""\fR>\fP
+Comma-separated list of metric names
+.SS telemetry run
+Launch telemetry system
+
+\fBUsage\fP: telemetry run [run-OPTIONS]
+.TP
+.TP
+\fB\fB\-i\fR, \fB\-\-install-dir\fR\fP
+Install directory for telemetry binary
+.TP
+\fB\fB\-s\fR, \fB\-\-system\fR <default: \fI"prometheus"\fR>\fP
+Telemetry system to configure
 .SS version
 Print dmg version

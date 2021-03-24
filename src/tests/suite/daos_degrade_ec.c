@@ -30,7 +30,7 @@ degrade_ec_internal(void **state, int *shards, int shards_nr, int write_type)
 	if (!test_runable(arg, 6))
 		return;
 
-	oid = dts_oid_gen(OC_EC_4P2G1, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	if (write_type == PARTIAL_UPDATE)
@@ -108,6 +108,12 @@ static void
 degrade_full_partial_fail_2data(void **state)
 {
 	int shards[2];
+
+	/*
+	 * Skipping test because of DAOS-6755, which seems to be related to EC
+	 * aggregation
+	 */
+	skip();
 
 	shards[0] = 0;
 	shards[1] = 3;
@@ -379,7 +385,7 @@ run_daos_degrade_simple_ec_test(int rank, int size, int *sub_tests,
 		sub_tests_size = ARRAY_SIZE(degrade_tests);
 		sub_tests = NULL;
 	}
-	run_daos_sub_tests_only("DAOS degrade ec tests", degrade_tests,
+	run_daos_sub_tests_only("DAOS_Degrade_EC", degrade_tests,
 				ARRAY_SIZE(degrade_tests), sub_tests,
 				sub_tests_size);
 

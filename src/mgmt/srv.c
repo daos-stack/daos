@@ -17,7 +17,7 @@
 #define D_LOGFAC	DD_FAC(mgmt)
 
 #include <signal.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/rsvc.h>
 #include <daos/drpc_modules.h>
 #include <daos_mgmt.h>
@@ -30,6 +30,7 @@ const int max_svc_nreplicas = 13;
 static struct crt_corpc_ops ds_mgmt_hdlr_tgt_create_co_ops = {
 	.co_aggregate	= ds_mgmt_tgt_create_aggregator,
 	.co_pre_forward	= NULL,
+	.co_post_reply = ds_mgmt_tgt_create_post_reply,
 };
 
 static struct crt_corpc_ops ds_mgmt_hdlr_tgt_map_update_co_ops = {
@@ -267,8 +268,8 @@ ds_mgmt_profile_hdlr(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 out:
-	out = crt_reply_get(rpc);
 	D_DEBUG(DB_MGMT, "profile hdlr: rc "DF_RC"\n", DP_RC(rc));
+	out = crt_reply_get(rpc);
 	out->p_rc = rc;
 	crt_reply_send(rpc);
 }
@@ -315,8 +316,8 @@ ds_mgmt_mark_hdlr(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 out:
-	out = crt_reply_get(rpc);
 	D_DEBUG(DB_MGMT, "mark hdlr: rc "DF_RC"\n", DP_RC(rc));
+	out = crt_reply_get(rpc);
 	out->m_rc = rc;
 	crt_reply_send(rpc);
 }

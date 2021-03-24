@@ -23,11 +23,6 @@ dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *ie)
 			D_GOTO(err, rc);
 	}
 
-	if (S_ISFIFO(stat.st_mode)) {
-		stat.st_mode &= ~S_IFIFO;
-		stat.st_mode |= S_IFDIR;
-	}
-
 	/* Copy the inode number from the inode struct, to avoid having to
 	 * recompute it each time.
 	 */
