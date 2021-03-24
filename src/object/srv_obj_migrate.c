@@ -856,7 +856,7 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 	char		*data;
 	daos_size_t	 size;
 	unsigned int	 p = obj_ec_parity_tgt_nr(oca);
-	unsigned char	*p_bufs[p];
+	unsigned char	*p_bufs[OBJ_EC_MAX_P] = { 0 };
 	unsigned char	*ptr;
 	int		 i;
 	int		 rc;
@@ -868,7 +868,6 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 		if (data == NULL)
 			D_GOTO(out, rc =-DER_NOMEM);
 
-		memset(p_bufs, 0, p * sizeof(p_bufs));
 		d_iov_set(&iov[i], data, size);
 		sgls[i].sg_nr = 1;
 		sgls[i].sg_nr_out = 1;
