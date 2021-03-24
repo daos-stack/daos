@@ -12,13 +12,42 @@ LABEL maintainer="daos@daos.groups.io"
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
 ARG CB0
 
+# Need to be able to use a local repository for packages
+ARG REPO_URL=""
+ARG REPO_EL7=""
+
+# If a local repository is supplied, then we should use it
+# and disable using the distro repositories.
+RUN if [ -n "$REPO_URL" ]; then                                 \
+      MY_REPO="${REPO_URL}${REPO_EL7}/";                        \
+      MY_NAME="${MY_REPO#*//}";                                 \
+      MY_NAME="${MY_NAME//\//_}";                               \
+      echo -e "[${MY_NAME}]\n\
+name=created from ${MY_REPO}\n\
+baseurl=${MY_REPO}\n\
+enabled=1\n\
+repo_gpgcheck=0\n\
+exclude=fuse-3* fuse-devel-3* fuse-libs-3* fuse-debuginfo-3* ompi*\n\
+gpgcheck=0\n" >> /etc/yum.repos.d/local-centos-group.repo;   \
+      yum --assumeyes install yum-utils;                        \
+      yum-config-manager --assumeyes --quiet                    \
+                         --disable base epel extra updates;     \
+    fi;                                                         \
+    sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/"   \
+        -i /etc/yum.conf
+
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
 # Clean up any repos afterwards to save space.
+# Switch to dnf as it seems a bit faster.
+# libatomic should be in this list, but can not for now due to CI
+# post provisioning issue.
+# *** Keep these in as much alphbetical order as possible ***
 RUN yum clean all && \
     yum -y install epel-release && \
-    yum -y upgrade && \
-    yum -y install \
+    yum -y install dnf && \
+    dnf clean all && dnf -y upgrade && \
+    dnf -y install \
         boost-python36-devel \
         clang-analyzer \
         cmake \
@@ -65,7 +94,6 @@ RUN yum clean all && \
         python36-Cython \
         python36-devel \
         python36-distro \
-        python36-jira \
         python36-numpy \
         python36-paramiko \
         python36-pylint \
@@ -78,10 +106,10 @@ RUN yum clean all && \
         sg3_utils \
         valgrind-devel \
         yasm && \
-    yum clean all
+    dnf clean all
 
 # Install this individually because of potential conflicts
-RUN yum -y install openmpi3-devel && yum clean all
+RUN dnf clean all && dnf -y install openmpi3-devel && dnf clean all
 
 ARG UID=1000
 
@@ -92,7 +120,7 @@ RUN useradd --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
 
 # Removing PyYAML 3.10 to allow pip install to upgrade
-RUN yum -y remove python36-PyYAML
+RUN dnf -y remove python36-PyYAML
 
 RUN python3 -m pip install --upgrade pip
 
@@ -117,37 +145,13 @@ RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&	\
 # Dependencies
 # Packages for NVML exist in CentOS, but are
 # unfortunately outdated. The DAOS build system will rebuild those packages.
+# Currently this still must use yum as the QUICKBUILD_DEPS may have a
+# trailing newline that causes DNF to fail.
 ARG JENKINS_URL=""
 ARG QUICKBUILD=false
 ARG QUICKBUILD_DEPS=""
 ARG REPOS=""
-ARG REPO_URL=""
-ARG REPO_EL7=""
-# Need to clean this up later
-RUN if [ -n "$REPO_URL" ]; then                                               \
-      cversion=$(cut -d ' ' -f4 /etc/centos-release);                         \
-      version=${cversion%.*} ;                                                \
-      MY_REPO="${REPO_URL}repository/centos-${version}-x86_64-group/";        \
-      MY_NAME="${MY_REPO#*//}";                                               \
-      MY_NAME="${MY_NAME//\//_}";                                             \
-      echo -e "[${MY_NAME}]\n\
-name=created from ${MY_REPO}\n\
-baseurl=${MY_REPO}\n\
-enabled=1\n\
-gpgcheck=False\n" >> /etc/yum.repos.d/local-centos-group.repo;                \
-      yum --assumeyes install yum-utils;                                      \
-      yum-config-manager --assumeyes --quiet                                  \
-                         --disable base epel extra updates;                   \
-    fi
 RUN if $QUICKBUILD; then                                                      \
-        MY_REPO="${REPO_URL}${REPO_EL7}";                                     \
-        MY_NAME="${MY_REPO#*//}";                                             \
-        MY_NAME="${MY_NAME//\//_}";                                           \
-        echo -e "[${MY_NAME}]\n\
-name=created from ${MY_REPO}\n\
-baseurl=${MY_REPO}\n\
-enabled=1\n\
-gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;       \
         for repo in $REPOS; do                                                \
             branch="master";                                                  \
             build_number="lastSuccessfulBuild";                               \
@@ -166,7 +170,9 @@ enabled=1\n\
 gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;       \
         done;                                                                 \
         echo "Installing: $QUICKBUILD_DEPS";                                  \
-        echo "$QUICKBUILD_DEPS" | tr '\n' '\0' | xargs -0 yum -y install;     \
+        yum clean all;                                                        \
+        echo "$QUICKBUILD_DEPS" |                                             \
+        tr '\n' '\0' | xargs -0 yum --nogpgcheck -y install;                  \
     fi
 
 ARG BULLSEYE=""
@@ -203,8 +209,10 @@ ARG DAOS_DEPS_BUILD=yes
 # ensure that latest dependencies are used.
 USER root:root
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    { yum -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
-    yum clean all; }
+    { dnf clean all && \
+      dnf -y --nogpgcheck upgrade \
+          --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
+      dnf clean all; }
 USER daos_server:daos_server
 
 ARG DEPS_JOBS=1
@@ -216,8 +224,10 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
 USER root:root
 # force an upgrade to get any newly built RPMs
 ARG CACHEBUST
-RUN yum -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
-    yum clean all
+RUN dnf clean all && \
+    dnf -y --nogpgcheck upgrade \
+        --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
+    dnf clean all
 USER daos_server:daos_server
 
 WORKDIR /home/daos/daos/

@@ -13,28 +13,34 @@ LABEL maintainer="daos@daos.groups.io"
 ARG CB0
 
 ARG REPO_URL
-# Need to clean this up later
-# This is largely the same as the centos.7 code, however this sets priority for
-# the new repo, and leaves the default ones enabled as there is some metadata
-# that is not available locally.
-RUN if [ -n "$REPO_URL" ]; then						\
-      cversion=$(cut -d ' ' -f4 /etc/centos-release);			\
-      version=${cversion%.*} ;						\
-      MY_REPO="${REPO_URL}repository/centos-${version}-x86_64-group/";	\
-      MY_NAME="${MY_REPO#*//}";						\
-      MY_NAME="${MY_NAME//\//_}";					\
+ARG REPO_EL8=""
+
+# Need to do this before switching to a alternate local repo
+RUN dnf clean all && dnf -y install epel-release dnf-plugins-core && \
+    dnf config-manager --set-enabled powertools
+
+# If a local repository is supplied, then we should use it
+# and disable using the distro repositories.
+RUN if [ -n "$REPO_URL" ]; then                                 \
+      MY_REPO="${REPO_URL}${REPO_EL8}/";                        \
+      MY_NAME="${MY_REPO#*//}";                                 \
+      MY_NAME="${MY_NAME//\//_}";                               \
       echo -e "[${MY_NAME}]\n\
 name=created from ${MY_REPO}\n\
 baseurl=${MY_REPO}\n\
 enabled=1\n\
-priority=1\n\
-gpgcheck=False\n" >> /etc/yum.repos.d/local-centos-group.repo;		\
-    fi
+repo_gpgcheck=0\n\
+gpgcheck=0\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
+      dnf --assumeyes install dnf-utils;                        \
+      dnf config-manager --assumeyes --quiet --disable          \
+          baseos powertools epel epel-modular extras;           \
+    fi;                                                         \
+    sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/"   \
+        -i /etc/dnf/dnf.conf
 
 # Install basic tools to build DAOS
-
-RUN dnf clean all && dnf -y install epel-release dnf-plugins-core && \
-    dnf config-manager --set-enabled powertools && \
+# *** Keep these in as much alphbetical order as possible ***
+RUN dnf clean all && \
     dnf -y upgrade && \
     dnf -y install \
         boost-python3-devel \
@@ -49,6 +55,7 @@ RUN dnf clean all && dnf -y install epel-release dnf-plugins-core && \
         gcc \
         gcc-c++ \
         git \
+        glibc-langpack-en \
         golang \
         graphviz \
         hwloc-devel \
@@ -56,6 +63,7 @@ RUN dnf clean all && dnf -y install epel-release dnf-plugins-core && \
         java-1.8.0-openjdk \
         json-c-devel \
         libaio-devel \
+        libatomic \
         libcmocka-devel \
         libevent-devel \
         libipmctl-devel \
@@ -100,14 +108,15 @@ RUN dnf clean all && dnf -y install epel-release dnf-plugins-core && \
 ARG UID=1000
 
 # Add DAOS users
-RUN useradd --uid $UID --user-group --create-home --shell /bin/bash --home /home/daos daos_server
+RUN useradd --uid $UID --user-group --create-home --shell /bin/bash \
+            --home /home/daos daos_server
 RUN echo "daos_server:daos_server" | chpasswd
 RUN useradd --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
 
 # Create directory for DAOS backend storage
-RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&	\
-    chown daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server &&	\
+RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&  \
+    chown daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server && \
     chown daos_agent.daos_agent /var/run/daos_agent
 
 # The COPY command has a --chown option but it's not well supported so copy as
@@ -131,20 +140,23 @@ ARG DAOS_DEPS_BUILD=yes
 # ensure that latest dependencies are used.
 USER root:root
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    { dnf -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
+    { dnf --nogpgcheck -y upgrade \
+          --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
     dnf clean all; }
 USER daos_server:daos_server
 
 ARG DEPS_JOBS=1
 
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    { scons-3 --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos --deps-only && \
+    { scons-3 --build-deps=yes \
+              --jobs $DEPS_JOBS PREFIX=/opt/daos --deps-only && \
     /bin/rm -rf build *.gz; }
 
 # force an upgrade to get any newly built RPMs
 USER root:root
 ARG CACHEBUST
-RUN dnf -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
+RUN dnf --nogpgcheck -y upgrade \
+        --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
     dnf clean all
 USER daos_server:daos_server
 
