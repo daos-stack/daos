@@ -395,7 +395,8 @@ class DaosServer():
             fd = open(os.path.join(self._io_server_dir.name,
                                    'daos_engine'), 'w')
             fd.write('#!/bin/sh\n')
-            fd.write('export PATH=$REAL_PATH\n')
+            fd.write('export PATH={}:$PATH\n'.format(
+                os.path.join(self.conf['PREFIX'], 'bin')))
             fd.write('exec valgrind {} daos_engine "$@"\n'.format(
                 ' '.join(valgrind_args)))
             fd.close()
@@ -403,10 +404,8 @@ class DaosServer():
             os.chmod(os.path.join(self._io_server_dir.name, 'daos_engine'),
                      stat.S_IXUSR | stat.S_IRUSR)
 
-            server_env['REAL_PATH'] = '{}:{}'.format(
-                os.path.join(self.conf['PREFIX'], 'bin'), server_env['PATH'])
             server_env['PATH'] = '{}:{}'.format(self._io_server_dir.name,
-                                                server_env['PATH'])
+                                                os.environ['PATH'])
             self.max_start_time = 300
             self.max_stop_time = 300
             self.stop_sleep_time = 10
