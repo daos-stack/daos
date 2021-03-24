@@ -17,7 +17,7 @@ class EcDisabledRebuild(ErasureCodeIor):
     :avocado: recursive
     """
 
-    #@skipForTicket("DAOS-6660")
+    @skipForTicket("DAOS-6660")
     def test_ec_degrade(self):
         """Jira ID: DAOS-5893.
 
