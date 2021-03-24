@@ -90,7 +90,8 @@ class RebuildDeleteObjects(RebuildTestBase):
         Use Cases:
             foo
 
-        :avocado: tags=all,large,full_regression,rebuild,rebuilddeleteobject
+        :avocado: tags=all,hw,large,full_regression
+        :avocado: tags=rebuild,rebuilddeleteobject
         """
         self.punch_type = "object"
         self.execute_rebuild_test()
@@ -107,7 +108,8 @@ class RebuildDeleteObjects(RebuildTestBase):
         Use Cases:
             foo
 
-        :avocado: tags=all,large,full_regression,rebuild,rebuilddeleterecord
+        :avocado: tags=all,hw,large,full_regression
+        :avocado: tags=rebuild,rebuilddeleterecord
         """
         self.punch_type = "record"
         self.execute_rebuild_test()
