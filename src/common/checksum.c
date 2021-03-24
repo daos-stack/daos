@@ -604,9 +604,11 @@ calc_csum_recx_with_map(struct daos_csummer *obj, size_t csum_nr,
 		consumed_bytes += bytes_to_skip;
 	}
 
-	D_ASSERTF(consumed_bytes == recx->rx_nr * rec_len,
-		"consumed_bytes(%lu) == recx->rx_nr * rec_len(%lu)",
-		  consumed_bytes, recx->rx_nr * rec_len);
+	if (consumed_bytes != recx->rx_nr * rec_len) {
+		D_ERROR("consumed_bytes(%lu) != recx->rx_nr * rec_len(%lu)",
+			consumed_bytes, recx->rx_nr * rec_len);
+		return -DER_CSUM;
+	}
 	return 0;
 }
 
