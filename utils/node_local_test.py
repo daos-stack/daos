@@ -318,9 +318,11 @@ class DaosServer():
                                                      delete=False)
         self.server_logs = []
         for engine in range(self.engines):
-            self.server_logs.append(tempfile.NamedTemporaryFile(prefix='dnt_server_{}_'.format(engine),
-                                                                suffix='.log',
-                                                                delete=False))
+            prefix = 'dnt_server_{}_'.format(engine)
+            lf = tempfile.NamedTemporaryFile(prefix=prefix,
+                                             suffix='.log',
+                                             delete=False)
+            self.server_logs.append(lf)
         self.__process_name = 'daos_engine'
         if self.valgrind:
             self.__process_name = 'valgrind'
@@ -414,11 +416,12 @@ class DaosServer():
         ref_engine = copy.deepcopy(scyaml['engines'][0])
         ref_engine['scm_size'] = int(ref_engine['scm_size'] / self.engines)
         scyaml['engines'] = []
+        server_port_count = int(server_env['FI_UNIVERSE_SIZE'])
         for idx in range(self.engines):
             engine = copy.deepcopy(ref_engine)
             engine['log_file'] = self.server_logs[idx].name
-            engine['first_core'] += ref_engine['targets'] * idx
-            engine['fabric_iface_port'] += int(server_env['FI_UNIVERSE_SIZE']) * idx
+            engine['first_core'] = ref_engine['targets'] * idx
+            engine['fabric_iface_port'] += server_port_count * idx
             engine['scm_mount'] = '{}_{}'.format(ref_engine['scm_mount'], idx)
             scyaml['engines'].append(engine)
         self._yaml_file = tempfile.NamedTemporaryFile(
@@ -1739,8 +1742,6 @@ def run_dfuse(server, conf):
         os.mkdir(cdir)
         #create_and_read_via_il(dfuse, cdir)
     fatal_errors.add_result(dfuse.stop())
-
-    uns_container = container
 
     container2 = str(uuid.uuid4())
     dfuse = DFuse(server, conf, pool=pools[0])
