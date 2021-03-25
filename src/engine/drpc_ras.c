@@ -32,6 +32,21 @@ free_event(Shared__RASEvent *evt)
 		D_FREE(evt->timestamp);
 }
 
+static d_rank_t
+safe_self_rank(void)
+{
+	d_rank_t	rank;
+	int		rc;
+
+	rc = crt_group_rank(NULL /* grp */, &rank);
+	if (rc != 0) {
+		D_ERROR("failed to get self rank: "DF_RC"\n", DP_RC(rc));
+		rank = CRT_NO_RANK;
+	}
+
+	return rank;
+}
+
 static int
 init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 	   char *hwid, d_rank_t *rank, char *jobid, uuid_t *pool,
@@ -250,7 +265,7 @@ ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 
 	/* populate rank param if empty */
 	if (rank == NULL) {
-		this_rank = dss_self_rank();
+		this_rank = safe_self_rank();
 		rank = &this_rank;
 	}
 
@@ -286,7 +301,7 @@ ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl)
 	Shared__RASEvent			evt = SHARED__RASEVENT__INIT;
 	Shared__RASEvent__PoolSvcEventInfo	info = \
 		SHARED__RASEVENT__POOL_SVC_EVENT_INFO__INIT;
-	d_rank_t				rank = dss_self_rank();
+	d_rank_t				rank = safe_self_rank();
 	int					rc;
 
 	if ((pool == NULL) || uuid_is_null(*pool)) {

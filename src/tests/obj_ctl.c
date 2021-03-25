@@ -23,6 +23,7 @@
 #include <daos_srv/vos.h>
 #include <daos_test.h>
 #include <daos/dts.h>
+#include <daos/cmd_parser.h>
 
 /**
  * An example for integer key evtree .
@@ -32,14 +33,11 @@
 #define CTL_BUF_LEN		4096
 
 static char			 pmem_file[PATH_MAX];
-static bool			 daos_mode = true;
 
 static long			 ctl_epoch;
 static daos_unit_oid_t		 ctl_oid;
-static daos_handle_t		 ctl_oh;	/* object open handle */
 static unsigned int		 ctl_abits;	/* see CTL_ARG_* */
-static d_rank_t			 ctl_svc_rank;	/* pool service leader */
-static struct dts_context	 ctl_ctx;
+static struct credit_context	 ctl_ctx;
 
 /* available input parameters */
 enum {
@@ -53,39 +51,23 @@ enum {
 };
 
 static int
-ctl_update(struct dts_io_credit *cred)
+ctl_update(struct io_credit *cred)
 {
-	int	rc;
-
-	if (daos_mode) {
-		rc = daos_obj_update(ctl_oh, DAOS_TX_NONE, 0, &cred->tc_dkey, 1,
-				     &cred->tc_iod, &cred->tc_sgl, NULL);
-	} else {
-		rc = vos_obj_update(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch, 0xcafe,
-				    0, &cred->tc_dkey, 1, &cred->tc_iod, NULL,
-				    &cred->tc_sgl);
-	}
-	return rc;
+	return vos_obj_update(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch, 0xcafe,
+			      0, &cred->tc_dkey, 1, &cred->tc_iod, NULL,
+			      &cred->tc_sgl);
 }
 
 static int
-ctl_fetch(struct dts_io_credit *cred)
+ctl_fetch(struct io_credit *cred)
 {
-	int	rc;
-
-	if (daos_mode) {
-		rc = daos_obj_fetch(ctl_oh, DAOS_TX_NONE, 0, &cred->tc_dkey, 1,
-				    &cred->tc_iod, &cred->tc_sgl, NULL, NULL);
-	} else {
-		rc = vos_obj_fetch(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch, 0,
-				   &cred->tc_dkey, 1, &cred->tc_iod,
-				   &cred->tc_sgl);
-	}
-	return rc;
+	return vos_obj_fetch(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch, 0,
+			     &cred->tc_dkey, 1, &cred->tc_iod,
+			     &cred->tc_sgl);
 }
 
 static int
-ctl_punch(struct dts_io_credit *cred)
+ctl_punch(struct io_credit *cred)
 {
 	daos_key_t *dkey = NULL;
 	daos_key_t *akey = NULL;
@@ -97,39 +79,27 @@ ctl_punch(struct dts_io_credit *cred)
 			akey = &cred->tc_iod.iod_name;
 	}
 
-	if (daos_mode) {
-		if (!dkey) {
-			rc = daos_obj_punch(ctl_oh, DAOS_TX_NONE, 0, NULL);
+	int	flags;
 
-		} else if (!akey) {
-			rc = daos_obj_punch_dkeys(ctl_oh, DAOS_TX_NONE, 0, 1,
-						  dkey, NULL);
-		} else {
-			rc = daos_obj_punch_akeys(ctl_oh, DAOS_TX_NONE, 0, dkey,
-						  1, akey, NULL);
-		}
+	if (ctl_epoch < 0) {
+		flags = VOS_OF_REPLAY_PC;
+		ctl_epoch *= -1;
 	} else {
-		int	flags;
-
-		if (ctl_epoch < 0) {
-			flags = VOS_OF_REPLAY_PC;
-			ctl_epoch *= -1;
-		} else {
-			flags = 0;
-		}
-
-		rc = vos_obj_punch(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch,
-				   0, flags, dkey, 1, akey, NULL);
-		if (rc == -DER_NO_PERM) {
-			D_PRINT("permission denied\n");
-			rc = 0; /* ignore it */
-		}
+		flags = 0;
 	}
+
+	rc = vos_obj_punch(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch,
+			   0, flags, dkey, 1, akey, NULL);
+	if (rc == -DER_NO_PERM) {
+		D_PRINT("permission denied\n");
+		rc = 0; /* ignore it */
+	}
+
 	return rc;
 }
 
 static int
-ctl_vos_list(struct dts_io_credit *cred)
+ctl_vos_list(struct io_credit *cred)
 {
 	char			*opstr = "";
 	vos_iter_param_t	 param;
@@ -137,8 +107,6 @@ ctl_vos_list(struct dts_io_credit *cred)
 	vos_iter_type_t		 type;
 	int			 n;
 	int			 rc;
-
-	D_ASSERT(!daos_mode);
 
 	memset(&param, 0, sizeof(param));
 	param.ip_hdl	    = ctl_ctx.tsc_coh;
@@ -206,73 +174,10 @@ out:
 	return rc;
 }
 
-#define KDS_NR		128
-
-static int
-ctl_daos_list(struct dts_io_credit *cred)
-{
-	char		*kstr;
-	char		 kbuf[CTL_BUF_LEN];
-	uint32_t	 knr = KDS_NR;
-	daos_key_desc_t	 kds[KDS_NR] = {0};
-	daos_anchor_t	 anchor;
-	int		 i;
-	int		 rc = 0;
-	int		 total = 0;
-
-	memset(&anchor, 0, sizeof(anchor));
-	while (!daos_anchor_is_eof(&anchor)) {
-		memset(kbuf, 0, CTL_BUF_LEN);
-		d_iov_set(&cred->tc_val, kbuf, CTL_BUF_LEN);
-
-		if (!(ctl_abits & CTL_ARG_OID)) {
-			fprintf(stderr, "Cannot list object for now\n");
-			return -DER_INVAL;
-
-		} else if (!(ctl_abits & CTL_ARG_DKEY)) {
-			rc = daos_obj_list_dkey(ctl_oh, DAOS_TX_NONE, &knr,
-						kds, &cred->tc_sgl, &anchor,
-						NULL);
-
-		} else if (!(ctl_abits & CTL_ARG_AKEY)) {
-			rc = daos_obj_list_akey(ctl_oh, DAOS_TX_NONE,
-						&cred->tc_dkey, &knr, kds,
-						&cred->tc_sgl, &anchor, NULL);
-		}
-
-		if (rc) {
-			fprintf(stderr, "Failed to list keys: "DF_RC"\n",
-				DP_RC(rc));
-			return rc;
-		}
-
-		total += knr;
-		for (i = 0, kstr = kbuf; i < knr; i++) {
-			D_PRINT("%s\n", kstr);
-			kstr += kds[i].kd_key_len;
-		}
-	}
-	D_PRINT("total %d keys\n", total);
-	return 0;
-}
-
-static inline void
-ctl_obj_open(bool *opened)
-{
-	int rc;
-
-	if (daos_mode) {
-		rc = daos_obj_open(ctl_ctx.tsc_coh, ctl_oid.id_pub,
-				   DAOS_OO_RW, &ctl_oh, NULL);
-		D_ASSERT(!rc);
-		*opened = true;
-	}
-}
-
 static void
 ctl_print_usage(void)
 {
-	printf("daos_ctl -- interactive function testing shell for DAOS\n");
+	printf("obj_ctl -- interactive function testing shell for VOS\n");
 	printf("Usage:\n");
 	printf("update\to=...,d=...,a=...,v=...,e=...\n");
 	printf("fetch\to=...d=...,a=...,e=...\n");
@@ -285,14 +190,13 @@ ctl_print_usage(void)
 static int
 ctl_cmd_run(char opc, char *args)
 {
-	struct dts_io_credit	*cred;
+	struct io_credit	*cred;
 	char			*dkey = NULL;
 	char			*akey = NULL;
 	char			*val = NULL;
 	char			*str;
 	char			 buf[CTL_BUF_LEN];
 	int			 rc;
-	bool			 opened = false;
 
 	if (args) {
 		strncpy(buf, args, CTL_BUF_LEN);
@@ -302,7 +206,7 @@ ctl_cmd_run(char opc, char *args)
 		str = NULL;
 	}
 
-	cred = dts_credit_take(&ctl_ctx);
+	cred = credit_take(&ctl_ctx);
 	D_ASSERT(cred);
 
 	ctl_abits = 0;
@@ -325,9 +229,6 @@ ctl_cmd_run(char opc, char *args)
 		case 'O':
 			ctl_abits |= CTL_ARG_OID;
 			ctl_oid.id_pub.lo = strtoul(&str[2], NULL, 0);
-			if (!daos_mode)
-				break;
-
 			daos_obj_generate_oid(ctl_ctx.tsc_coh, &ctl_oid.id_pub,
 					      0, OC_S1, 0, 0);
 			break;
@@ -394,8 +295,6 @@ ctl_cmd_run(char opc, char *args)
 		if (ctl_abits != CTL_ARG_ALL) {
 			ctl_print_usage();
 			D_GOTO(out, rc = -1);
-		} else {
-			ctl_obj_open(&opened);
 		}
 
 		rc = ctl_update(cred);
@@ -404,8 +303,6 @@ ctl_cmd_run(char opc, char *args)
 		if (ctl_abits != (CTL_ARG_ALL & ~CTL_ARG_VAL)) {
 			ctl_print_usage();
 			D_GOTO(out, rc = -1);
-		} else {
-			ctl_obj_open(&opened);
 		}
 
 		rc = ctl_fetch(cred);
@@ -419,8 +316,6 @@ ctl_cmd_run(char opc, char *args)
 		    !(ctl_abits & CTL_ARG_OID)) {
 			ctl_print_usage();
 			D_GOTO(out, rc = -1);
-		} else {
-			ctl_obj_open(&opened);
 		}
 
 		rc = ctl_punch(cred);
@@ -432,13 +327,9 @@ ctl_cmd_run(char opc, char *args)
 		} else {
 			if (!(ctl_abits & CTL_ARG_EPOCH))
 				ctl_epoch = DAOS_EPOCH_MAX;
-			ctl_obj_open(&opened);
 		}
 
-		if (daos_mode)
-			rc = ctl_daos_list(cred);
-		else
-			rc = ctl_vos_list(cred);
+		rc = ctl_vos_list(cred);
 		break;
 	case 'h':
 		ctl_print_usage();
@@ -454,9 +345,6 @@ ctl_cmd_run(char opc, char *args)
 	if (rc && rc != -ESHUTDOWN)
 		D_GOTO(out, rc = -2);
 out:
-	if (opened)
-		daos_obj_close(ctl_oh, NULL);
-
 	switch (rc) {
 	case -2: /* real failure */
 		D_PRINT("Operation failed, rc="DF_RC"\n",
@@ -487,7 +375,7 @@ main(int argc, char *argv[])
 {
 	int	rc;
 
-	if (argc < 2)
+	if (argc == 2)
 		goto out_usage;
 
 	uuid_generate(ctl_ctx.tsc_pool_uuid);
@@ -500,23 +388,12 @@ main(int argc, char *argv[])
 	ctl_ctx.tsc_mpi_rank	= 0;
 	ctl_ctx.tsc_mpi_size	= 1;	/* just one rank */
 
-	if (!strcasecmp(argv[1], "vos")) {
-		daos_mode = false;
-		if (argc == 3)
-			strncpy(pmem_file, argv[3], PATH_MAX - 1);
-		else
-			strcpy(pmem_file, "/mnt/daos/vos_ctl.pmem");
+	if (argc == 3)
+		strncpy(pmem_file, argv[2], PATH_MAX - 1);
+	else
+		strcpy(pmem_file, "/mnt/daos/vos_ctl.pmem");
 
-		ctl_ctx.tsc_pmem_file = pmem_file;
-
-	} else if (!strcasecmp(argv[1], "daos")) {
-		ctl_ctx.tsc_svc.rl_ranks = &ctl_svc_rank;
-		ctl_ctx.tsc_svc.rl_nr = 1;
-
-	} else {
-		fprintf(stderr, "Unknown test mode %s\n", argv[1]);
-		goto out_usage;
-	}
+	ctl_ctx.tsc_pmem_file = pmem_file;
 
 	rc = dts_ctx_init(&ctl_ctx);
 	if (rc != 0) {
@@ -525,15 +402,13 @@ main(int argc, char *argv[])
 		return rc;
 	}
 
-	rc = dts_cmd_parser(ctl_ops, "$ > ", ctl_cmd_run);
+	rc = cmd_parser(ctl_ops, "$ > ", ctl_cmd_run);
 	if (rc)
-		D_GOTO(out_ctx, rc);
+		dts_ctx_fini(&ctl_ctx);
 
- out_ctx:
-	dts_ctx_fini(&ctl_ctx);
 	return rc;
 
  out_usage:
-	printf("%s daos|vos [pmem_file]\n", argv[0]);
+	printf("%s [pmem_file]\n", argv[0]);
 	return -1;
 }

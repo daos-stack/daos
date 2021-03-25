@@ -96,6 +96,8 @@ func TestDmg_JsonOutput(t *testing.T) {
 				testArgs = append(testArgs, []string{"--pool", common.MockUUID(), "--rank", "0"}...)
 			case "cont set-owner":
 				testArgs = append(testArgs, []string{"--user", "foo", "--pool", common.MockUUID(), "--cont", common.MockUUID()}...)
+			case "telemetry metrics list", "telemetry metrics query":
+				return // These commands query via http directly
 			}
 
 			// replace os.Stdout so that we can verify the generated output
