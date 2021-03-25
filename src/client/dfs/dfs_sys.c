@@ -544,7 +544,7 @@ dfs_sys_global2local(daos_handle_t poh, daos_handle_t coh, int mflags,
 		D_GOTO(err_mount, rc);
 	}
 
-        /* Initialize the hash */
+	/* Initialize the hash */
 	if (!no_cache) {
 		if (no_lock)
 			hash_feats |= D_HASH_FT_NOLOCK;
