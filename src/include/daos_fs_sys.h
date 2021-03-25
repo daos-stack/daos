@@ -23,24 +23,8 @@
 #define DFS_SYS_NO_CACHE 1
 #define DFS_SYS_NO_LOCK 2
 
-/* TODO - Not necessary, but it would be useful if we keep "dfs"
- * public in this struct in case a user wants to call a dfs function
- * directly. The main use case for this is that the dfs functions
- * operate directly on an object instead of a path, so if the user
- * already has the object handle, it's technically more efficient
- * to call the dfs functions directly.
- * This is mostly a way of future-proofing, in case some new functions are
- * added to dfs.
- * An alternative is that we could just add direct wrappers for each of
- * the dfs functions, but we would get some name conflicts, since dfs_sys
- * already adds wrappers for most of these functions that take a "path".
- * As an example, see dfs_sys_punch and dfs_sys_opunch below.
- */
 /** struct holding attributes for the dfs_sys calls */
-typedef struct dfs_sys {
-	dfs_t			*dfs;		/* mounted filesystem */
-	struct d_hash_table	*dfs_hash;	/* optional lookup hash */
-} dfs_sys_t;
+typedef struct dfs_sys dfs_sys_t;
 
 /**
  * Mount a file system with dfs_mount and optionally
@@ -328,7 +312,7 @@ dfs_sys_symlink(dfs_sys_t *dfs_sys, const char *target, const char *path);
  *			(pass 0 for default 1 MiB chunk size).
  *			Valid on file create only; ignored otherwise.
  * \param[in]	value	Symlink value (NULL if not syml).
- * \param[in]	obj	Pointer to object opened.
+ * \param[out]	obj	Pointer to object opened.
  *
  * \return		0 on success, errno code on failure.
  */

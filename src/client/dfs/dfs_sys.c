@@ -19,35 +19,35 @@
 
 #include "daos_fs_sys.h"
 
+/** Number of entries for readdir */
+#define DFS_SYS_NUM_DIRENTS 24
+
+/** Size of the hash table */
+#define DFS_SYS_HASH_SIZE 16
+
+struct dfs_sys {
+	dfs_t			*dfs;	/* mounted filesystem */
+	struct d_hash_table	*hash;	/* optional lookup hash */
+};
+
 /** struct holding parsed dirname, name, and cached parent obj */
-/* TODO
- * Ashley:
- *   One thing that would work well is if this simply saved two pointers,
- *   and two lengths, but into the same allocation, and used the len to
- *   control the length of the dir_name string rather than a \0 character.
- * Dalton:
- *   I think we would still need the \0 character for each, because some
- *   functions, like dfs_lookup() don't take a length, and instead expect
- *   the string to be null-terminated.
- */
 struct sys_path {
+	const char	*path;		/* full path */
 	char		*dir_name;	/* dirname(path) */
 	char		*name;		/* basename(path) */
+	size_t		path_len;	/* length of path */
 	size_t		dir_name_len;	/* length of dir_name */
 	size_t		name_len;	/* length of name */
 	dfs_obj_t	*parent;	/* dir_name obj */
 	d_list_t	*rlink;		/* hash link */
 };
 
-#define DFS_SYS_NUM_DIRENTS 24
 struct dfs_sys_dir {
 	dfs_obj_t	*obj;
 	struct dirent	ents[DFS_SYS_NUM_DIRENTS];
 	daos_anchor_t	anchor;
 	uint32_t	num_ents;
 };
-
-#define DFS_SYS_HASH_SIZE 16
 
 /**
  * Hash handle for each entry.
@@ -192,7 +192,7 @@ hash_lookup(dfs_sys_t *dfs_sys, struct sys_path *sys_path)
 	int		rc = 0;
 
 	/* If we aren't caching, just call dfs_lookup */
-	if (dfs_sys->dfs_hash == NULL) {
+	if (dfs_sys->hash == NULL) {
 		rc = dfs_lookup(dfs_sys->dfs, sys_path->dir_name, O_RDWR,
 				&sys_path->parent, &mode, NULL);
 		if (rc != 0) {
@@ -210,7 +210,7 @@ hash_lookup(dfs_sys_t *dfs_sys, struct sys_path *sys_path)
 	}
 
 	/* If cached, return it */
-	rlink = d_hash_rec_find(dfs_sys->dfs_hash, sys_path->dir_name,
+	rlink = d_hash_rec_find(dfs_sys->hash, sys_path->dir_name,
 				sys_path->dir_name_len);
 	if (rlink != NULL) {
 		hdl = hash_hdl_obj(rlink);
@@ -236,8 +236,8 @@ hash_lookup(dfs_sys_t *dfs_sys, struct sys_path *sys_path)
 	rc = dfs_lookup(dfs_sys->dfs, sys_path->dir_name, O_RDWR, &hdl->obj,
 			&mode, NULL);
 	if (rc != 0) {
-		D_ERROR("dfs_lookup() %s failed "DF_RC"\n",
-			sys_path->dir_name, DP_RC(rc));
+		D_ERROR("dfs_lookup() %s failed: %s\n",
+			sys_path->dir_name, strerror(rc));
 		D_GOTO(free_hdl_name, rc);
 	}
 
@@ -248,7 +248,7 @@ hash_lookup(dfs_sys_t *dfs_sys, struct sys_path *sys_path)
 	/* call find_insert in case another thread added the same entry
 	 * after calling find.
 	 */
-	rlink = d_hash_rec_find_insert(dfs_sys->dfs_hash, hdl->name,
+	rlink = d_hash_rec_find_insert(dfs_sys->hash, hdl->name,
 				       sys_path->dir_name_len, &hdl->entry);
 	if (rlink != &hdl->entry) {
 		/* another thread beat us. Use the existing entry. */
@@ -273,37 +273,40 @@ free_hdl:
 
 /**
  * Parse path into dirname and basename.
+ *
+ * TODO - This function could be optimized by allocating
+ * a single copy of path and writing custom parsing to
+ * split the dirname and name with a null terminator,
+ * and use pointers to the individual dirname and name.
  */
 static int
-parse_path(const char *path,
-	   char **_dir_name, size_t *_dir_name_len,
-	   char **_name, size_t *_name_len)
+parse_path(const char *path, struct sys_path *sys_path)
 {
 	char	*f1 = NULL;
 	char	*f2 = NULL;
 	char	*dir_name = NULL;
 	char	*name = NULL;
-	size_t	path_len;
 	size_t	dir_name_len;
 	size_t	name_len;
 	int	rc = 0;
 
-	if (path == NULL || _name == NULL || _dir_name == NULL)
+	if (path == NULL)
 		return EINVAL;
 	if (path[0] != '/')
 		return EINVAL;
 
-	path_len = strnlen(path, PATH_MAX);
-	if (path_len > PATH_MAX - 1)
+	sys_path->path = path;
+	sys_path->path_len = strnlen(path, PATH_MAX);
+	if (sys_path->path_len > PATH_MAX - 1)
 		return ENAMETOOLONG;
 
-	if (strncmp(path, "/", path_len) == 0) {
-		D_STRNDUP(*_dir_name, "/", 2);
-		if (*_dir_name == NULL)
+	if (strncmp(path, "/", sys_path->path_len) == 0) {
+		D_STRNDUP(sys_path->dir_name, "/", 2);
+		if (sys_path->dir_name == NULL)
 			return ENOMEM;
-		*_name = NULL;
-		*_dir_name_len = 1;
-		*_name_len = 0;
+		sys_path->dir_name_len = 1;
+		sys_path->name = NULL;
+		sys_path->name_len = 0;
 		return 0;
 	}
 
@@ -319,18 +322,18 @@ parse_path(const char *path,
 	name = basename(f2);
 
 	dir_name_len = strnlen(dir_name, PATH_MAX);
-	D_STRNDUP(*_dir_name, dir_name, dir_name_len + 1);
-	if (*_dir_name == NULL)
+	D_STRNDUP(sys_path->dir_name, dir_name, dir_name_len + 1);
+	if (sys_path->dir_name == NULL)
 		D_GOTO(out, rc = ENOMEM);
-	*_dir_name_len = dir_name_len;
+	sys_path->dir_name_len = dir_name_len;
 
 	name_len = strnlen(name, PATH_MAX);
-	D_STRNDUP(*_name, name, name_len + 1);
-	if (*_name == NULL) {
-		D_FREE(*_dir_name);
+	D_STRNDUP(sys_path->name, name, name_len + 1);
+	if (sys_path->name == NULL) {
+		D_FREE(sys_path->dir_name);
 		D_GOTO(out, rc = ENOMEM);
 	}
-	*_name_len = name_len;
+	sys_path->name_len = name_len;
 
 out:
 	D_FREE(f1);
@@ -346,10 +349,10 @@ sys_path_free(dfs_sys_t *dfs_sys, struct sys_path *sys_path)
 {
 	D_FREE(sys_path->dir_name);
 	D_FREE(sys_path->name);
-	if (dfs_sys->dfs_hash == NULL)
+	if (dfs_sys->hash == NULL)
 		dfs_release(sys_path->parent);
 	else
-		d_hash_rec_decref(dfs_sys->dfs_hash, sys_path->rlink);
+		d_hash_rec_decref(dfs_sys->hash, sys_path->rlink);
 }
 
 /**
@@ -363,8 +366,7 @@ sys_path_parse(dfs_sys_t *dfs_sys, struct sys_path *sys_path,
 {
 	int rc;
 
-	rc = parse_path(path, &sys_path->dir_name, &sys_path->dir_name_len,
-			&sys_path->name, &sys_path->name_len);
+	rc = parse_path(path, sys_path);
 	if (rc != 0)
 		return rc;
 
@@ -428,7 +430,7 @@ dfs_sys_mount(daos_handle_t poh, daos_handle_t coh, int mflags, int sflags,
 
 		rc = d_hash_table_create(hash_feats, DFS_SYS_HASH_SIZE,
 					 NULL, &hash_hdl_ops,
-					 &dfs_sys->dfs_hash);
+					 &dfs_sys->hash);
 		if (rc != 0) {
 			D_DEBUG(DB_TRACE, "d_hash_table_create() failed: "
 				DF_RC"\n", DP_RC(rc));
@@ -458,17 +460,17 @@ dfs_sys_umount(dfs_sys_t *dfs_sys)
 	if (dfs_sys == NULL)
 		return EINVAL;
 
-	if (dfs_sys->dfs_hash != NULL) {
+	if (dfs_sys->hash != NULL) {
 		/* Decrease each reference by one. */
 		while (1) {
-			rlink = d_hash_rec_first(dfs_sys->dfs_hash);
+			rlink = d_hash_rec_first(dfs_sys->hash);
 			if (rlink == NULL)
 				break;
 
-			d_hash_rec_decref(dfs_sys->dfs_hash, rlink);
+			d_hash_rec_decref(dfs_sys->hash, rlink);
 		}
 
-		rc = d_hash_table_destroy(dfs_sys->dfs_hash, false);
+		rc = d_hash_table_destroy(dfs_sys->hash, false);
 		if (rc != 0) {
 			D_DEBUG(DB_TRACE, "d_hash_table_destroy() failed: "
 				DF_RC"\n", DP_RC(rc));
@@ -553,7 +555,7 @@ dfs_sys_global2local(daos_handle_t poh, daos_handle_t coh, int mflags,
 
 		rc = d_hash_table_create(hash_feats, DFS_SYS_HASH_SIZE,
 					 NULL, &hash_hdl_ops,
-					 &dfs_sys->dfs_hash);
+					 &dfs_sys->hash);
 		if (rc != 0) {
 			D_DEBUG(DB_TRACE, "d_hash_table_create() failed: "
 				DF_RC"\n", DP_RC(rc));
@@ -1253,6 +1255,19 @@ remove:
 		D_DEBUG(DB_TRACE, "dfs_remove() %s failed: (%d)\n",
 			sys_path.name, rc);
 		D_GOTO(out_free_path, rc);
+	}
+
+	if ((dfs_sys->hash != NULL) &&
+	    (type_mask == 0 || type_mask == S_IFDIR)) {
+		bool deleted;
+
+		/* TODO - Ideally, we should return something like EBUSY
+		 * if there are still open handles to the directory.
+		 */
+		deleted = d_hash_rec_delete(dfs_sys->hash, sys_path.path,
+					    sys_path.path_len);
+		D_DEBUG(DB_TRACE, "d_hash_rec_delete() %s = %d\n",
+			sys_path.path, deleted);
 	}
 
 out_free_path:
