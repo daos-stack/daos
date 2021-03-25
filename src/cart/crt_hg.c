@@ -257,6 +257,11 @@ crt_hg_addr_free(struct crt_hg_context *hg_ctx, hg_addr_t addr)
 {
 	hg_return_t	ret = HG_SUCCESS;
 
+	/* Destroy underlying connections */
+	ret = HG_Addr_set_remove(hg_ctx->chc_hgcla, addr);
+	if (ret != HG_SUCCESS)
+		D_ERROR("HG_Addr_set_remove() failed; hg_ret %d.\n", ret);
+
 	ret = HG_Addr_free(hg_ctx->chc_hgcla, addr);
 	if (ret != HG_SUCCESS) {
 		D_ERROR("HG_Addr_free() failed, hg_ret %d.\n", ret);
