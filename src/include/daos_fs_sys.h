@@ -10,7 +10,9 @@
  *
  * The DFS Sys API provides a simplified layer directly on top
  * of the DFS API that is more similar to the equivalent
- * POSIX libraries.
+ * POSIX libraries. While the DFS Sys API stands on its own,
+ * the DFS API can be used directly by getting the DFS Object
+ * with dfs_sys_get_dfs_obj().
  */
 
 #include <dirent.h>
@@ -98,6 +100,18 @@ dfs_sys_local2global(dfs_sys_t *dfs_sys, d_iov_t *glob);
 int
 dfs_sys_global2local(daos_handle_t poh, daos_handle_t coh, int mflags,
 		     int sflags, d_iov_t glob, dfs_sys_t **dfs_sys);
+
+/**
+ * Get the underlying dfs_t from the dfs_sys_t.
+ * This should not be closed with dfs_umount().
+ *
+ * \param[in]	dfs_sys	Pointer to the mounted file system.
+ * \param[out]	dfs	Pointer to the underlying dfs_t.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_sys_get_dfs_obj(dfs_sys_t *dfs_sys, dfs_t **dfs);
 
 /**
  * Check access permissions on a path. Similar to Linux access(2).
@@ -355,26 +369,6 @@ dfs_sys_read(dfs_sys_t *dfs_sys, dfs_obj_t *obj, void *buf, daos_off_t off,
 	     daos_size_t *size, daos_event_t *ev);
 
 /**
- * Non-contiguous read interface to a DFS file.
- * Same as dfs_sys_read with the ability to have a segmented file layout
- * to read.
- *
- * \param[in]	dfs_sys	Pointer to the mounted file system.
- * \param[in]	obj	Opened file object.
- * \param[in]	iod	IO descriptor for list-io.
- * \param[in]	sgl	IO descriptor for list-io.
- * \param[out]	read_size
- *			How much data is actually read.
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- *
- * \return		0 on success, errno code on failure.
- */
-int
-dfs_sys_readx(dfs_sys_t *dfs_sys, dfs_obj_t *obj, dfs_iod_t *iod,
-	      d_sg_list_t *sgl, daos_size_t *read_size, daos_event_t *ev);
-
-/**
  * Write data to the file object.
  *
  * \param[in]	dfs_sys Pointer to the mounted file system.
@@ -392,22 +386,6 @@ dfs_sys_readx(dfs_sys_t *dfs_sys, dfs_obj_t *obj, dfs_iod_t *iod,
 int
 dfs_sys_write(dfs_sys_t *dfs_sys, dfs_obj_t *obj, const void *buf,
 	      daos_off_t off, daos_size_t *size, daos_event_t *ev);
-
-/**
- * Non-contiguous write interface to a DFS file.
- *
- * \param[in]	dfs_sys	Pointer to the mounted file system.
- * \param[in]	obj	Opened file object.
- * \param[in]	iod	IO descriptor of file view.
- * \param[in]	sgl	Scatter/Gather list for data buffer.
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- *
- * \return		0 on success, errno code on failure.
- */
-int
-dfs_sys_writex(dfs_sys_t *dfs_sys, dfs_obj_t *obj, dfs_iod_t *iod,
-	       d_sg_list_t *sgl, daos_event_t *ev);
 
 /**
  * Punch a hole in the file starting at offset to len. If len is set to

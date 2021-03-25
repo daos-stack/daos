@@ -572,6 +572,16 @@ err_mount:
 }
 
 int
+dfs_sys_get_dfs_obj(dfs_sys_t *dfs_sys, dfs_t **_dfs)
+{
+	if (dfs_sys == NULL)
+		return EINVAL;
+
+	*_dfs = dfs_sys->dfs;
+	return 0;
+}
+
+int
 dfs_sys_access(dfs_sys_t *dfs_sys, const char *path, int mask, int flags)
 {
 	int		rc;
@@ -1123,24 +1133,6 @@ dfs_sys_read(dfs_sys_t *dfs_sys, dfs_obj_t *obj, void *buf, daos_off_t off,
 }
 
 int
-dfs_sys_readx(dfs_sys_t *dfs_sys, dfs_obj_t *obj, dfs_iod_t *iod,
-	      d_sg_list_t *sgl, daos_size_t *read_size, daos_event_t *ev)
-{
-	int		rc;
-
-	if (dfs_sys == NULL)
-		return EINVAL;
-	if (read_size == NULL)
-		return EINVAL;
-
-	rc = dfs_readx(dfs_sys->dfs, obj, iod, sgl, read_size, ev);
-	if (rc != 0)
-		*read_size = -1;
-
-	return rc;
-}
-
-int
 dfs_sys_write(dfs_sys_t *dfs_sys, dfs_obj_t *obj, const void *buf,
 	      daos_off_t off, daos_size_t *size, daos_event_t *ev)
 {
@@ -1165,15 +1157,6 @@ dfs_sys_write(dfs_sys_t *dfs_sys, dfs_obj_t *obj, const void *buf,
 		*size = -1;
 
 	return rc;
-}
-
-int dfs_sys_writex(dfs_sys_t *dfs_sys, dfs_obj_t *obj, dfs_iod_t *iod,
-		   d_sg_list_t *sgl, daos_event_t *ev)
-{
-	if (dfs_sys == NULL)
-		return EINVAL;
-
-	return dfs_writex(dfs_sys->dfs, obj, iod, sgl, ev);
 }
 
 int
