@@ -869,10 +869,6 @@ def run_tests(test_files, tag_filter, args):
     """
     return_code = 0
 
-    #if args.jenkinslog:
-    #    if os.path.isfile("/usr/lib/daos/TESTING/ftest/test.cov"):
-    #        copyfile("/usr/lib/daos/TESTING/ftest/test.cov", "/tmp/test.cov")
-
     # Determine the location of the avocado logs for archiving or renaming
     data = get_output(["avocado", "config"]).strip()
     avocado_logs_dir = re.findall(r"datadir\.paths\.logs_dir\s+(.*)", data)
