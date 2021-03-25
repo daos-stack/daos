@@ -1044,6 +1044,24 @@ dfs_sys_read(dfs_sys_t *dfs_sys, dfs_obj_t *obj, void *buf, daos_off_t off,
 }
 
 int
+dfs_sys_readx(dfs_sys_t *dfs_sys, dfs_obj_t *obj, dfs_iod_t *iod,
+	      d_sg_list_t *sgl, daos_size_t *read_size, daos_event_t *ev)
+{
+	int		rc;
+
+	if (dfs_sys == NULL)
+		return EINVAL;
+	if (read_size == NULL)
+		return EINVAL;
+
+	rc = dfs_readx(dfs_sys->dfs, obj, iod, sgl, read_size, ev);
+	if (rc != 0)
+		*read_size = -1;
+
+	return rc;
+}
+
+int
 dfs_sys_write(dfs_sys_t *dfs_sys, dfs_obj_t *obj, const void *buf,
 	      daos_off_t off, daos_size_t *size, daos_event_t *ev)
 {
@@ -1070,8 +1088,17 @@ dfs_sys_write(dfs_sys_t *dfs_sys, dfs_obj_t *obj, const void *buf,
 	return rc;
 }
 
+int dfs_sys_writex(dfs_sys_t *dfs_sys, dfs_obj_t *obj, dfs_iod_t *iod,
+		   d_sg_list_t *sgl, daos_event_t *ev)
+{
+	if (dfs_sys == NULL)
+		return EINVAL;
+
+	return dfs_writex(dfs_sys->dfs, obj, iod, sgl, ev);
+}
+
 int
-dfs_sys_punch(dfs_sys_t *dfs_sys, const char *file,
+dfs_sys_punch(dfs_sys_t *dfs_sys, const char *path,
 	      daos_off_t offset, daos_off_t len)
 {
 	int		rc;
@@ -1080,10 +1107,10 @@ dfs_sys_punch(dfs_sys_t *dfs_sys, const char *file,
 
 	if (dfs_sys == NULL)
 		return EINVAL;
-	if (file == NULL)
+	if (path == NULL)
 		return EINVAL;
 
-	rc = sys_path_parse(dfs_sys, &sys_path, file);
+	rc = sys_path_parse(dfs_sys, &sys_path, path);
 	if (rc != 0)
 		return rc;
 

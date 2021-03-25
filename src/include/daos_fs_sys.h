@@ -322,6 +322,26 @@ dfs_sys_read(dfs_sys_t *dfs_sys, dfs_obj_t *obj, void *buf, daos_off_t off,
 	     daos_size_t *size, daos_event_t *ev);
 
 /**
+ * Non-contiguous read interface to a DFS file.
+ * Same as dfs_sys_read with the ability to have a segmented file layout
+ * to read.
+ *
+ * \param[in]	dfs_sys	Pointer to the mounted file system.
+ * \param[in]	obj	Opened file object.
+ * \param[in]	iod	IO descriptor for list-io.
+ * \param[in]	sgl	IO descriptor for list-io.
+ * \param[out]	read_size
+ *			How much data is actually read.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_sys_readx(dfs_sys_t *dfs_sys, dfs_obj_t *obj, dfs_iod_t *iod,
+	      d_sg_list_t *sgl, daos_size_t *read_size, daos_event_t *ev);
+
+/**
  * Write data to the file object.
  *
  * \param[in]	dfs_sys Pointer to the mounted file system.
@@ -341,20 +361,36 @@ dfs_sys_write(dfs_sys_t *dfs_sys, dfs_obj_t *obj, const void *buf,
 	      daos_off_t off, daos_size_t *size, daos_event_t *ev);
 
 /**
+ * Non-contiguous write interface to a DFS file.
+ *
+ * \param[in]	dfs_sys	Pointer to the mounted file system.
+ * \param[in]	obj	Opened file object.
+ * \param[in]	iod	IO descriptor of file view.
+ * \param[in]	sgl	Scatter/Gather list for data buffer.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_sys_writex(dfs_sys_t *dfs_sys, dfs_obj_t *obj, dfs_iod_t *iod,
+	       d_sg_list_t *sgl, daos_event_t *ev);
+
+/**
  * Punch a hole in the file starting at offset to len. If len is set to
  * DFS_MAX_FSIZE, this will be a truncate operation to punch all bytes in the
  * file above offset. If the file size is smaller than offset, the file is
  * extended to offset and len is ignored.
  *
  * \param[in]	dfs_sys Pointer to the mounted file system.
- * \param[in]	file	Link path of file.
+ * \param[in]	path	Link path of file.
  * \param[in]	offset	offset of file to punch at.
  * \param[in]	len	number of bytes to punch.
  *
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_sys_punch(dfs_sys_t *dfs_sys, const char *file,
+dfs_sys_punch(dfs_sys_t *dfs_sys, const char *path,
 	      daos_off_t offset, daos_off_t len);
 
 /**
