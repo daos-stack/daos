@@ -73,8 +73,16 @@ func TestProto_ConvertNvmeControllers(t *testing.T) {
 	if err := convertedNatives.FromNative(natives); err != nil {
 		t.Fatal(err)
 	}
+
+	opts := []cmp.Option{
+		cmpopts.IgnoreUnexported(ctlpb.NvmeController{},
+			ctlpb.NvmeController_Health{},
+			ctlpb.NvmeController_Namespace{},
+			ctlpb.NvmeController_SmdDevice{}),
+	}
+
 	if diff := cmp.Diff(pbs,
-		([]*ctlpb.NvmeController)(convertedNatives)); diff != "" {
+		([]*ctlpb.NvmeController)(convertedNatives), opts...); diff != "" {
 
 		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
 	}
@@ -108,8 +116,12 @@ func TestProto_ConvertScmModules(t *testing.T) {
 	if err := convertedNatives.FromNative(natives); err != nil {
 		t.Fatal(err)
 	}
+
+	opts := []cmp.Option{
+		cmpopts.IgnoreUnexported(ctlpb.ScmModule{}),
+	}
 	if diff := cmp.Diff(pbs,
-		([]*ctlpb.ScmModule)(convertedNatives)); diff != "" {
+		([]*ctlpb.ScmModule)(convertedNatives), opts...); diff != "" {
 
 		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
 	}
@@ -125,7 +137,10 @@ func TestProto_ConvertScmNamespace(t *testing.T) {
 	expNative := storage.MockScmNamespace()
 	expNative.Mount = storage.MockScmMountPoint()
 
-	if diff := cmp.Diff(expNative, native); diff != "" {
+	opts := []cmp.Option{
+		cmpopts.IgnoreUnexported(ctlpb.ScmNamespace{}),
+	}
+	if diff := cmp.Diff(expNative, native, opts...); diff != "" {
 		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
 	}
 }
@@ -145,8 +160,11 @@ func TestProto_ConvertScmNamespaces(t *testing.T) {
 	if err := convertedNatives.FromNative(natives); err != nil {
 		t.Fatal(err)
 	}
+	opts := []cmp.Option{
+		cmpopts.IgnoreUnexported(ctlpb.ScmNamespace{}),
+	}
 	if diff := cmp.Diff(pbs,
-		([]*ctlpb.ScmNamespace)(convertedNatives)); diff != "" {
+		([]*ctlpb.ScmNamespace)(convertedNatives), opts...); diff != "" {
 
 		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
 	}
