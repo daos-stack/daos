@@ -67,6 +67,39 @@ int
 dfs_sys_umount(dfs_sys_t *dfs_sys);
 
 /**
+ * Convert a local dfs_sys mount to global representation data which can be
+ * shared with peer processes.
+ * If glob->iov_buf is set to NULL, the actual size of the global handle is
+ * returned through glob->iov_buf_len.
+ * This function does not involve any communication and does not block.
+ *
+ * \param[in]	dfs_sys	valid dfs_sys mount to be shared.
+ * \param[out]	glob	pointer to iov of the buffer to store mount information.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_sys_local2global(dfs_sys_t *dfs_sys, d_iov_t *glob);
+
+/**
+ * Create a dfs_sys mount from global representation data. This has to be
+ * closed with dfs_sys_umount().
+ *
+ * \param[in]	poh	Pool connection handle.
+ * \param[in]	coh	Container open handle.
+ * \param[in]	mflags	Mount flags (O_RDONLY or O_RDWR). If 0, inherit flags
+ *			of serialized DFS Sys handle.
+ * \param[in]	sflags	Sys flags (DFS_SYS_NO_CACHE or DFS_SYS_NO_LOCK).
+ *			This is not inherited from the DFS Sys handle.
+ * \param[in]	glob	Global (shared) representation of a collective handle
+ *			to be extracted.
+ * \param[out]	dfs_sys	Returned dfs_sys mount.
+ */
+int
+dfs_sys_global2local(daos_handle_t poh, daos_handle_t coh, int mflags,
+		     int sflags, d_iov_t glob, dfs_sys_t **dfs_sys);
+
+/**
  * Check access permissions on a path. Similar to Linux access(2).
  * By default, symlinks are dereferenced.
  *

@@ -493,6 +493,85 @@ err_umount:
 }
 
 int
+dfs_sys_local2global(dfs_sys_t *dfs_sys, d_iov_t *glob)
+{
+	if (dfs_sys == NULL)
+		return EINVAL;
+
+	/* TODO serialize the dfs_sys flags as well */
+	return dfs_local2global(dfs_sys->dfs, glob);
+}
+
+int
+dfs_sys_global2local(daos_handle_t poh, daos_handle_t coh, int mflags,
+		     int sflags, d_iov_t glob, dfs_sys_t **_dfs_sys)
+{
+	int		rc;
+	dfs_sys_t	*dfs_sys;
+	bool		no_cache = false;
+	bool		no_lock = false;
+	uint32_t	hash_feats = D_HASH_FT_EPHEMERAL;
+
+	if (_dfs_sys == NULL)
+		return EINVAL;
+
+	if (sflags & DFS_SYS_NO_CACHE) {
+		D_DEBUG(DB_TRACE, "dfs_sys_global2local(): "
+			"DFS_SYS_NO_CACHE.\n");
+		no_cache = true;
+		sflags &= ~DFS_SYS_NO_CACHE;
+	}
+	if (sflags & DFS_SYS_NO_LOCK) {
+		D_DEBUG(DB_TRACE, "dfs_sys_global2local(): "
+			"DFS_SYS_NO_LOCK.\n");
+		no_lock = true;
+		sflags &= ~DFS_SYS_NO_LOCK;
+	}
+
+	if (sflags != 0) {
+		D_DEBUG(DB_TRACE, "dfs_sys_global2local invalid sflags.\n");
+		return EINVAL;
+	}
+
+	/* Create the DFS Sys handle with no RPCs */
+	D_ALLOC_PTR(dfs_sys);
+	if (dfs_sys == NULL)
+		return ENOMEM;
+
+	rc = dfs_global2local(poh, coh, mflags, glob, &dfs_sys->dfs);
+	if (rc != 0) {
+		D_DEBUG(DB_TRACE, "dfs_global2local() failed (%d)\n", rc);
+		D_GOTO(err_mount, rc);
+	}
+
+        /* Initialize the hash */
+	if (!no_cache) {
+		if (no_lock)
+			hash_feats |= D_HASH_FT_NOLOCK;
+		else
+			hash_feats |= D_HASH_FT_RWLOCK;
+
+		rc = d_hash_table_create(hash_feats, DFS_SYS_HASH_SIZE,
+					 NULL, &hash_hdl_ops,
+					 &dfs_sys->dfs_hash);
+		if (rc != 0) {
+			D_DEBUG(DB_TRACE, "d_hash_table_create() failed: "
+				DF_RC"\n", DP_RC(rc));
+			D_GOTO(err_hash, rc = daos_der2errno(rc));
+		}
+	}
+
+	*_dfs_sys = dfs_sys;
+	return rc;
+
+err_hash:
+	dfs_umount(dfs_sys->dfs);
+err_mount:
+	D_FREE(dfs_sys);
+	return rc;
+}
+
+int
 dfs_sys_access(dfs_sys_t *dfs_sys, const char *path, int mask, int flags)
 {
 	int		rc;
