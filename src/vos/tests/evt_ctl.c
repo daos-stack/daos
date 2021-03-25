@@ -28,6 +28,7 @@
 #include <daos_srv/bio.h>
 #include <daos/tests_lib.h>
 #include <daos_pool.h>
+#include <daos/cmd_parser.h>
 #include <utest_common.h>
 
 /*
@@ -2430,7 +2431,7 @@ main(int argc, char **argv)
 	/* Start interactive session*/
 	if ((argc - optind) == 1) {
 		print_message("Starting interactive session...\n");
-		rc = dts_cmd_parser(ts_ops, "$ > ", ts_cmd_run);
+		rc = cmd_parser(ts_ops, "$ > ", ts_cmd_run);
 		goto out;
 	}
 

@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
+#ifndef __DAOS_HDLR_H__
+#define __DAOS_HDLR_H__
+
 enum fs_op {
 	FS_COPY
 };
@@ -51,6 +54,11 @@ enum obj_op {
 	OBJ_DUMP
 };
 
+enum sh_op {
+	SH_DAOS,
+	SH_VOS
+};
+
 /* cmd_args_s: consolidated result of parsing command-line arguments
  * for pool, cont, obj commands, much of which is common.
  */
@@ -60,6 +68,7 @@ struct cmd_args_s {
 	enum cont_op		c_op;		/* cont sub-command */
 	enum obj_op		o_op;		/* obj sub-command */
 	enum fs_op		fs_op;		/* filesystem sub-command */
+	enum sh_op		sh_op;		/* DAOS shell sub-command */
 	char			*sysname;	/* --sys-name or --sys */
 	uuid_t			p_uuid;		/* --pool */
 	daos_handle_t		pool;
@@ -203,3 +212,5 @@ int cont_list_objs_hdlr(struct cmd_args_s *ap);
  */
 
 int obj_query_hdlr(struct cmd_args_s *ap);
+
+#endif /* __DAOS_HDLR_H__ */

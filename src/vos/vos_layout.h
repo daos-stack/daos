@@ -88,7 +88,7 @@ enum vos_gc_type {
 #define POOL_DF_MAGIC				0x5ca1ab1e
 
 /** Lowest supported durable format version */
-#define POOL_DF_VER_1				14
+#define POOL_DF_VER_1				15
 /** Current durable format version */
 #define POOL_DF_VERSION				POOL_DF_VER_1
 
@@ -104,6 +104,13 @@ struct vos_pool_df {
 	uint64_t				pd_compat_flags;
 	/** reserved: flags for incompatibility features */
 	uint64_t				pd_incompat_flags;
+	/**
+	 * Reserved for durable format update, e.g. convert vos_cont_df to
+	 * a new format, containers with old format can be attached at here.
+	 */
+	uint64_t				pd_reserv_upgrade;
+	/** Reserved for future usage */
+	uint64_t				pd_reserv;
 	/** Unique PoolID for each VOS pool assigned on creation */
 	uuid_t					pd_id;
 	/** Total space in bytes on SCM */
@@ -246,6 +253,10 @@ struct vos_cont_df {
 	daos_size_t			cd_used;
 	daos_epoch_t			cd_hae;
 	struct btr_root			cd_obj_root;
+	/** reserved for placement algorithm upgrade */
+	uint64_t			cd_reserv_upgrade;
+	/** reserved for future usage */
+	uint64_t			cd_reserv;
 	/** The active DTXs blob head. */
 	umem_off_t			cd_dtx_active_head;
 	/** The active DTXs blob tail. */
