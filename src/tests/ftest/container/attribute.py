@@ -103,9 +103,9 @@ class ContainerAttributeTest(TestWithServers):
 
         try:
             self.container.container.set_attr(data=attr_dict)
-            size, buf = self.container.container.list_attr()
-
-            self.verify_list_attr(attr_dict, size, buf)
+            # skip step due to DAOS-6880
+            #size, buf = self.container.container.list_attr()
+            #self.verify_list_attr(attr_dict, size, buf)
 
             results = self.container.container.get_attr(list(attr_dict.keys()))
             self.verify_get_attr(attr_dict, results)
@@ -144,9 +144,9 @@ class ContainerAttributeTest(TestWithServers):
                 break
         try:
             self.container.container.set_attr(data=attr_dict)
-            size, buf = self.container.container.list_attr()
-
-            self.verify_list_attr(attr_dict, size, buf)
+            # skip step due to DAOS-6880
+            #size, buf = self.container.container.list_attr()
+            #self.verify_list_attr(attr_dict, size, buf)
 
             # Request something that doesn't exist
             if name[0] is not None and b"Negative" in name[0]:
@@ -206,14 +206,15 @@ class ContainerAttributeTest(TestWithServers):
                 self.fail("RC not as expected after set_attr First {0}"
                           .format(GLOB_RC))
 
-            GLOB_SIGNAL = threading.Event()
-            size, buf = self.container.container.list_attr(cb_func=cb_func)
-            GLOB_SIGNAL.wait()
-            if GLOB_RC != 0 and expected_result in ['PASS']:
-                self.fail("RC not as expected after list_attr First {0}"
-                          .format(GLOB_RC))
-            if expected_result in ['PASS']:
-                self.verify_list_attr(attr_dict, size, buf, mode="async")
+            # skip-step due to DAOS-6880
+            #GLOB_SIGNAL = threading.Event()
+            #size, buf = self.container.container.list_attr(cb_func=cb_func)
+            #GLOB_SIGNAL.wait()
+            #if GLOB_RC != 0 and expected_result in ['PASS']:
+            #    self.fail("RC not as expected after list_attr First {0}"
+            #              .format(GLOB_RC))
+            #if expected_result in ['PASS']:
+            #    self.verify_list_attr(attr_dict, size, buf, mode="async")
 
             # Request something that doesn't exist
             if name[0] is not None and b"Negative" in name[0]:
