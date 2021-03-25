@@ -28,9 +28,9 @@
 #define DAOS_BS_CLUSTER_SZ	(1ULL << 30)	/* 1GB */
 #define DAOS_BS_MD_PAGES	(1024 * 20)	/* 20k blobs per device */
 /* DMA buffer parameters */
-#define DAOS_DMA_CHUNK_MB	32		/* 32MB DMA chunks */
-#define DAOS_DMA_CHUNK_CNT_INIT	2		/* Per-xstream init chunks */
-#define DAOS_DMA_CHUNK_CNT_MAX	32		/* Per-xstream max chunks */
+#define DAOS_DMA_CHUNK_MB	8		/* 8MB DMA chunks */
+#define DAOS_DMA_CHUNK_CNT_INIT	32		/* Per-xstream init chunks */
+#define DAOS_DMA_CHUNK_CNT_MAX	128		/* Per-xstream max chunks */
 #define DAOS_NVME_MAX_CTRLRS	1024		/* Max read from nvme_conf */
 
 /* Max inflight blob IOs per io channel */
