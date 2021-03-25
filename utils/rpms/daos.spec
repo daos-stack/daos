@@ -219,6 +219,7 @@ This is the package needed to build software with the DAOS library.
 %{scons_exe} %{?_smp_mflags} \
       --config=force         \
       --no-rpath             \
+      USE_INSTALLED=all      \
       CONF_DIR=%{conf_dir}   \
       PREFIX=%{buildroot}    \
      %{?scons_args}          \
@@ -232,16 +233,17 @@ cp -f test.cov /tmp/
 %{scons_exe} %{?_smp_mflags}          \
       --config=force                  \
       --no-rpath                      \
-      --install-sandbox=%{buildroot} \
-      %{buildroot}%{_prefix}         \
-      %{buildroot}%{conf_dir}        \
+      --install-sandbox=%{buildroot}  \
+      %{buildroot}%{_prefix}          \
+      %{buildroot}%{conf_dir}         \
+      USE_INSTALLED=all               \
       CONF_DIR=%{conf_dir}            \
       PREFIX=%{_prefix}               \
       %{?scons_args}                  \
       %{?compiler_args}
 
 %if ("%{?compiler_args}" == "COMPILER=covc")
-cp -f /tmp/test.cov %{?buildroot}/usr/lib/daos/TESTING/ftest/
+cp -f /tmp/test.cov %{buildroot}/usr/lib/daos/TESTING/ftest/
 %endif
 mkdir -p %{buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
