@@ -25,7 +25,7 @@ if $COVFN_DISABLED; then
   JOB_REPOS=""
   EXTERNAL_COMPILER_OPT=""
 else
-  COV_REPO="https://repo.dc.hpdd.intel.com/repository/bullseye-el-7-x86_64/"
+  COV_REPO="${REPOSITORY_URL}repository/bullseye-el-7-x86_64/"
   JOB_REPOS="JOB_REPOS=${COV_REPO}"
   COMPILER_ARGS="COMPILER=covc"
   EXTERNAL_COMPILER_OPT=" --define \"compiler_args ${COMPILER_ARGS}\""
