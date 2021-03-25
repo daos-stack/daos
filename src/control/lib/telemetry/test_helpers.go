@@ -47,8 +47,8 @@ import "C"
 type (
 	testMetric struct {
 		name   string
-		short  string
-		long   string
+		desc   string
+		units  string
 		min    float64
 		max    float64
 		cur    float64
@@ -75,29 +75,29 @@ func setupTestMetrics(t *testing.T) (context.Context, testMetricsMap) {
 	testMetrics := testMetricsMap{
 		MetricTypeGauge: {
 			name:   "test_gauge",
-			short:  "short gauge",
-			long:   "long gauge",
+			desc:   "some gauge",
+			units:  "rpc/s",
 			min:    1,
 			cur:    42,
 			max:    64,
 			sum:    107,
 			mean:   35.666666666666664,
 			stddev: 31.973947728319903,
-			str:    "gauge: test_gauge = 42, min: 1, max: 64, mean: 35.666667, sample size: 3, std dev: 31.973948",
+			str:    "gauge: test_gauge = 42 rpc/s, min: 1, max: 64, mean: 35.666667, sample size: 3, std dev: 31.973948",
 		},
 		MetricTypeCounter: {
 			name:  "test_counter",
-			short: "short counter",
-			long:  "long counter",
+			desc:  "some counter",
+			units: "KB",
 			cur:   1,
-			str:   "counter: test_counter = 1",
+			str:   "counter: test_counter = 1 KB",
 		},
 	}
 
 	for mt, tm := range testMetrics {
 		switch mt {
 		case MetricTypeGauge:
-			rc = C.add_metric(&tm.node, C.D_TM_GAUGE, C.CString(tm.short), C.CString(tm.long), C.CString(tm.name))
+			rc = C.add_metric(&tm.node, C.D_TM_GAUGE, C.CString(tm.desc), C.CString(tm.units), C.CString(tm.name))
 			if rc != 0 {
 				t.Fatalf("failed to add %s: %d", tm.name, rc)
 			}
@@ -108,7 +108,7 @@ func setupTestMetrics(t *testing.T) (context.Context, testMetricsMap) {
 				}
 			}
 		case MetricTypeCounter:
-			rc = C.add_metric(&tm.node, C.D_TM_COUNTER, C.CString(tm.short), C.CString(tm.long), C.CString(tm.name))
+			rc = C.add_metric(&tm.node, C.D_TM_COUNTER, C.CString(tm.desc), C.CString(tm.units), C.CString(tm.name))
 			if rc != 0 {
 				t.Fatalf("failed to add %s: %d", tm.name, rc)
 			}
