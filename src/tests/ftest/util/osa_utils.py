@@ -282,7 +282,7 @@ class OSAUtils(MdtestBase, IorTestBase):
     def update_cont_properties(self, cont_prop):
         """Update the existing container properties.
         Args:
-            cont_prop (str): Replace existing cotainer properties
+            cont_prop (str): Replace existing container properties
                              with new value
         """
         self.container.properties.value = cont_prop
