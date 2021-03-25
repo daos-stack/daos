@@ -14,13 +14,15 @@ hosts:
 server_config:
   name: daos_server
   servers:
-    targets: 8
+    targets: 1
 pool:
   mode: 511
   name: daos_server
-  scm_size: 16428800
+  scm_size: 134217728
   control_method: dmg
-testparams:
-  rank_to_kill: 0
-  # rank_to_kill: 1
-  # rank_to_kill: 3
+  pool_query_timeout: 30
+testparams: !mux
+  rank_to_kill:
+    - 0
+    - 1
+    - 2
