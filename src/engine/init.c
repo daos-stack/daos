@@ -18,9 +18,6 @@
 #include <getopt.h>
 #include <errno.h>
 #include <execinfo.h>
-#ifdef ULT_MMAP_STACK
-#include <daos/stack_mmap.h>
-#endif
 
 #include <daos/btree_class.h>
 #include <daos/common.h>

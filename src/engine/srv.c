@@ -26,9 +26,6 @@
 #include <gurt/list.h>
 #include "drpc_internal.h"
 #include "srv_internal.h"
-#ifdef ULT_MMAP_STACK
-#include <daos/stack_mmap.h>
-#endif
 
 /**
  * DAOS server threading model:

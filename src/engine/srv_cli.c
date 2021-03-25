@@ -13,9 +13,6 @@
 #include <daos/object.h>
 #include <daos/event.h>
 #include <daos/task.h>
-#ifdef ULT_MMAP_STACK
-#include <daos/stack_mmap.h>
-#endif
 
 #include <daos_types.h>
 #include <daos_errno.h>
