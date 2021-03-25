@@ -525,8 +525,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 			D_GOTO(out, rc);
 
 		still_needed = pl_obj_layout_contains(rpt->rt_pool->sp_map,
-						      layout, myrank, mytarget,
-						      oid.id_shard);
+						      layout, myrank, mytarget);
 		if (!still_needed) {
 			struct rebuild_pool_tls *tls;
 

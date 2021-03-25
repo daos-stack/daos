@@ -94,12 +94,10 @@ inline void
 remap_list_free_all(d_list_t *remap_list)
 {
 	struct failed_shard *f_shard;
-	struct failed_shard *tmp;
 
-	d_list_for_each_entry_safe(f_shard, tmp, remap_list, fs_list) {
-		d_list_del(&f_shard->fs_list);
+	while ((f_shard = d_list_pop_entry(remap_list, struct failed_shard,
+			fs_list)))
 		D_FREE(f_shard);
-	}
 }
 
 /** dump remap list, for debug only */
@@ -234,8 +232,8 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 void
 determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		bool spare_avail, d_list_t **current, d_list_t *remap_list,
-		uint32_t allow_status, struct failed_shard *f_shard,
-		struct pl_obj_shard *l_shard, bool *is_extending)
+		bool for_reint, struct failed_shard *f_shard,
+		struct pl_obj_shard *l_shard)
 {
 	struct failed_shard *f_tmp;
 
@@ -243,7 +241,7 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		goto next_fail;
 
 	/* The selected spare target is down as well */
-	if (!pool_target_avail(spare_tgt, allow_status)) {
+	if (pool_target_unavail(spare_tgt, for_reint)) {
 		D_ASSERTF(spare_tgt->ta_comp.co_fseq !=
 			  f_shard->fs_fseq, "same fseq %u!\n",
 			  f_shard->fs_fseq);
@@ -296,10 +294,6 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		D_DEBUG(DB_PL, "failed shard ("DF_FAILEDSHARD") added to "
 			       "remamp_list\n", DP_FAILEDSHARD(*f_shard));
 		remap_add_one(remap_list, f_shard);
-		if (is_extending != NULL &&
-		    (spare_tgt->ta_comp.co_status == PO_COMP_ST_UP ||
-		     spare_tgt->ta_comp.co_status == PO_COMP_ST_DRAIN))
-			*is_extending = true;
 
 		/* Continue with the failed shard has minimal fseq */
 		if ((*current) == remap_list) {
@@ -316,7 +310,6 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 			spare_tgt->ta_comp.co_fseq);
 		return; /* try next spare */
 	}
-
 next_fail:
 	if (spare_avail) {
 		/* The selected spare target is up and ready */
@@ -475,6 +468,7 @@ out:
 		D_FREE(grp_map);
 	if (grp_count != grp_cnt_array && grp_count != NULL)
 		D_FREE(grp_count);
+	remap_list_free_all(extended_list);
 	return rc;
 }
 
@@ -483,8 +477,7 @@ is_pool_adding(struct pool_domain *dom)
 {
 	uint32_t child_nr;
 
-	while (dom->do_children &&
-	       dom->do_comp.co_status != PO_COMP_ST_NEW) {
+	while (dom->do_children && dom->do_comp.co_status != PO_COMP_ST_NEW) {
 		child_nr = dom->do_child_nr;
 		dom = &dom->do_children[child_nr - 1];
 	}
