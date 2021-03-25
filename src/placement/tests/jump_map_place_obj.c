@@ -921,6 +921,7 @@ jtc_snapshot_layout_targets(struct jm_test_ctx *ctx)
 	} while (0)
 
 #define UP	POOL_REINT
+#define UPIN	POOL_ADD_IN
 #define DOWN	POOL_EXCLUDE
 #define DOWNOUT	POOL_EXCLUDE_OUT
 #define DRAIN	POOL_DRAIN
@@ -1249,10 +1250,23 @@ down_back_to_up_in_same_order(void **state)
 	jtc_set_status_on_target(&ctx, UP, orig_shard_targets[0]);
 	jtc_assert_scan_and_layout(&ctx);
 
-	jtc_fini(&ctx);
-	skip_msg("DAOS-6519: too many things are in the reint scan");
-	assert_int_equal(1, ctx.reint.out_nr);
-	jtc_assert_rebuild_reint_new(ctx, 1, 0, 1, 0);
+	/* NOTE: This is a really important test case. Even though this test
+	 * seems like it should only move one shard (because only one target is
+	 * being reintegrated), this particular combination happens to trigger
+	 * extra data movement, resulting in two shards moving - one moving back
+	 * to the reintegrated target, and one moving between two otherwise
+	 * healthy targets because of the retry/collision mechanism of the jump
+	 * map algorithm.
+	 *
+	 * XXX This will likely break if the jump consistent hashing algorithm
+	 * is changed. It's just fortunate we happened to trigger this somewhat
+	 * rare case here. If you are reading this later and you find this
+	 * assert triggering because the value is 1 instead of 2, likely the
+	 * placement algorithm was modified so that this test no longer hits
+	 * this corner case.
+	 */
+	assert_int_equal(2, ctx.reint.out_nr);
+	jtc_assert_rebuild_reint_new(ctx, 2, 0, 2, 0);
 
 	/* Take second downed target up */
 	jtc_set_status_on_target(&ctx, UP, orig_shard_targets[1]);
@@ -1411,8 +1425,6 @@ down_up_sequences1(void **state)
 
 	jtc_set_status_on_target(&ctx, UP, shard_target_2);
 	jtc_assert_scan_and_layout(&ctx);
-	jtc_fini(&ctx);
-	skip_msg("Investigation into DAOS-6519 is similar/same issue.");
 	is_true(jtc_has_shard_moving_to_target(&ctx, 0, shard_target_2));
 
 	jtc_set_status_on_target(&ctx, UP, shard_target_1);
@@ -1453,8 +1465,6 @@ drain_all_with_extra_domains(void **state)
 	 */
 	assert_int_equal(8, jtc_get_layout_target_count(&ctx));
 
-	jtc_fini(&ctx);
-	skip_msg("DAOS-6300 - too many are marked as rebuild");
 	assert_int_equal(4, jtc_get_layout_rebuild_count(&ctx));
 	for (i = 0; i < shards_nr; i++) {
 		is_true(jtc_has_shard_with_target_rebuilding(&ctx, i, NULL));
@@ -1485,8 +1495,6 @@ drain_all_with_enough_targets(void **state)
 	 * rebuilding and one not
 	 */
 	for (i = 0; i < shards_nr; i++) {
-		jtc_fini(&ctx);
-		skip_msg("DAOS-6300 - Not drained to other target?");
 		assert_int_equal(0, jtc_get_layout_bad_count(&ctx));
 		is_true(jtc_has_shard_with_target_rebuilding(&ctx, i, NULL));
 		is_true(jtc_has_shard_with_rebuilding_not_set(&ctx, i));
@@ -1517,8 +1525,6 @@ drain_target_same_shard_repeatedly_for_all_shards(void **state)
 			is_true(jtc_has_shard_with_target_rebuilding(&ctx,
 				shard_id, &new_target));
 
-			jtc_fini(&ctx);
-			skip_msg("DAOS-6300: All are marked as rebuilding");
 			is_true(jtc_has_shard_target_not_rebuilding(&ctx,
 				shard_id, target));
 
@@ -1571,8 +1577,6 @@ one_server_is_added(void **state)
 	assert_int_equal(0, ctx.rebuild.out_nr);
 	assert_int_equal(0, ctx.reint.out_nr);
 
-	jtc_fini(&ctx);
-	skip_msg("DAOS-6303 - should have targets marked as rebuild");
 	assert_int_equal(ctx.new.out_nr, jtc_get_layout_rebuild_count(&ctx));
 
 	jtc_fini(&ctx);
@@ -1580,11 +1584,118 @@ one_server_is_added(void **state)
 
 /*
  * ------------------------------------------------
- * Leave in multiple states at same time
+ * Leave in multiple states at same time (no addition)
  * ------------------------------------------------
  */
 static void
 placement_handles_multiple_states(void **state)
+{
+	struct jm_test_ctx ctx;
+	int ver_after_reint;
+	int ver_after_fail;
+	int ver_after_drain;
+	int ver_after_reint_complete;
+	uint32_t reint_tgt_id;
+	uint32_t fail_tgt_id;
+	uint32_t rebuilding;
+
+	jtc_init_with_layout(&ctx, 4, 1, 8, OC_RP_3G1, g_verbose);
+
+	/* first shard goes down, rebuilt, then reintegrated */
+	jtc_set_status_on_shard_target(&ctx, DOWN, 0);
+	jtc_set_status_on_shard_target(&ctx, DOWNOUT, 0);
+	jtc_set_status_on_shard_target(&ctx, UP, 0);
+	reint_tgt_id = jtc_layout_shard_tgt(&ctx, 0);
+	assert_success(jtc_create_layout(&ctx));
+
+	rebuilding = jtc_get_layout_rebuild_count(&ctx);
+	/* One thing reintegrating */
+	assert_int_equal(1, rebuilding);
+
+	/*
+	 * Reintegration is now in progress. Grab the version from here
+	 * for find reint count
+	 */
+	ver_after_reint = ctx.ver;
+
+	/* second shard goes down */
+	jtc_set_status_on_shard_target(&ctx, DOWN, 1);
+	fail_tgt_id = jtc_layout_shard_tgt(&ctx, 1);
+	assert_success(jtc_create_layout(&ctx));
+
+	ver_after_fail = ctx.ver;
+
+	rebuilding = jtc_get_layout_rebuild_count(&ctx);
+	/* One reintegrating plus one failure recovery */
+	assert_int_equal(2, rebuilding);
+
+	/* third shard is queued for drain */
+	jtc_set_status_on_shard_target(&ctx, DRAIN, 2);
+	assert_success(jtc_create_layout(&ctx));
+
+	/*
+	 * Reintegration is still running, but these other operations have
+	 * happened too and are now queued.
+	 */
+	ver_after_drain = ctx.ver;
+
+	is_false(jtc_layout_has_duplicate(&ctx));
+
+	/*
+	 * Compute placement in this state. All three shards should
+	 * be moving around
+	 */
+	jtc_scan(&ctx);
+	rebuilding = jtc_get_layout_rebuild_count(&ctx);
+	assert_int_equal(3, rebuilding);
+
+	/*
+	 * Compute find_reint() using the correct version of rebuild which
+	 * would have launched when reintegration started
+	 *
+	 * find_reint() should only be finding the one thing to move at this
+	 * version
+	 */
+	ctx.ver = ver_after_reint;
+	jtc_scan(&ctx);
+	assert_int_equal(ctx.reint.out_nr, 1);
+
+	/* Complete the reintegration */
+	ctx.ver = ver_after_drain; /* Restore the version first */
+	jtc_set_status_on_target(&ctx, UPIN, reint_tgt_id);
+	ver_after_reint_complete = ctx.ver;
+
+	/* This would start processing the failure - so check that it'd just
+	 * move one thing
+	 */
+	ctx.ver = ver_after_fail;
+	jtc_scan(&ctx);
+	assert_int_equal(ctx.rebuild.out_nr, 1);
+
+	/* Complete the rebuild */
+	ctx.ver = ver_after_reint_complete; /* Restore the version first */
+	jtc_set_status_on_target(&ctx, DOWNOUT, fail_tgt_id);
+
+	/* This would start processing the drain - so check that it'd just
+	 * move one thing
+	 */
+	ctx.ver = ver_after_drain;
+	jtc_scan(&ctx);
+	assert_int_equal(ctx.rebuild.out_nr, 1);
+
+	/* Remainder is simple / out of scope for this test */
+
+	jtc_fini(&ctx);
+}
+
+
+/*
+ * ------------------------------------------------
+ * Leave in multiple states at same time (including addition)
+ * ------------------------------------------------
+ */
+static void
+placement_handles_multiple_states_with_addition(void **state)
 {
 	struct jm_test_ctx	 ctx;
 
@@ -1780,8 +1891,10 @@ static const struct CMUnitTest tests[] = {
 	  "data movement to the new server",
 	  one_server_is_added),
 	/* Multiple */
-	T("Placement can handle multiple states",
+	T("Placement can handle multiple states (excluding addition)",
 	  placement_handles_multiple_states),
+	T("Placement can handle multiple states (including addition)",
+	  placement_handles_multiple_states_with_addition),
 	/* Non-standard system setups*/
 	T("Non-standard system configurations. All healthy",
 	  unbalanced_config),
