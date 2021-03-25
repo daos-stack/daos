@@ -189,8 +189,9 @@ struct rebuild_task {
 	d_list_t			dst_list;
 	uuid_t				dst_pool_uuid;
 	struct pool_target_id_list	dst_tgts;
-	uint32_t			dst_map_ver;
 	daos_rebuild_opc_t		dst_rebuild_op;
+	uint64_t			dst_schedule_time;
+	uint32_t			dst_map_ver;
 };
 
 /* Per pool structure in TLS to check pool rebuild status
