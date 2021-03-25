@@ -27,6 +27,67 @@
 #define REBUILD_POOL_SIZE	(4ULL << 30)
 
 #define DATA_SIZE	(1048576 * 2 + 512)
+
+static int
+reintegrate_inflight_io(void *data)
+{
+	test_arg_t	*arg = data;
+	daos_obj_id_t	oid = *(daos_obj_id_t *)arg->rebuild_cb_arg;
+	struct ioreq	req;
+	int		i;
+
+	rebuild_pool_connect_internal(arg);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	for (i = 0; i < 5; i++) {
+		char	key[32];
+		daos_recx_t recx;
+		char	buf[DATA_SIZE];
+
+		sprintf(key, "d_inflight_%d", i);
+		insert_single(key, "a_key", 0, "data", strlen("data") + 1,
+			      DAOS_TX_NONE, &req);
+
+		sprintf(key, "d_inflight_1M_%d", i);
+		recx.rx_idx = 0;
+		recx.rx_nr = DATA_SIZE;
+		memset(buf, 'a', DATA_SIZE);
+		insert_recxs(key, "a_key_1M", 1, DAOS_TX_NONE, &recx, 1,
+			     buf, DATA_SIZE, &req);
+	}
+	ioreq_fini(&req);
+	rebuild_pool_disconnect_internal(arg);
+	if (arg->myrank == 0)
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0,
+				      NULL);
+	return 0;
+}
+
+static void
+reintegrate_with_inflight_io(test_arg_t *arg, d_rank_t rank, int tgt)
+{
+	daos_obj_id_t oid;
+	int rc;
+
+	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
+				0, arg->myrank);
+
+	oid = dts_oid_set_rank(oid, rank);
+	arg->rebuild_cb = reintegrate_inflight_io;
+	arg->rebuild_cb_arg = &oid;
+
+	/* To make sure the IO will be done before reintegration is done */
+	if (arg->myrank == 0)
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_REBUILD_TGT_REBUILD_HANG, 0, NULL);
+	reintegrate_single_pool_target(arg, rank, tgt);
+	arg->rebuild_cb = NULL;
+	arg->rebuild_cb_arg = NULL;
+
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	if (rc != 0)
+		assert_rc_equal(rc, -DER_NOSYS);
+}
+
 static void
 rebuild_dkeys(void **state)
 {
@@ -73,7 +134,8 @@ rebuild_dkeys(void **state)
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
 
-	reintegrate_single_pool_target(arg, kill_rank, -1);
+	reintegrate_with_inflight_io(arg, kill_rank, -1);
+
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
@@ -127,8 +189,7 @@ rebuild_akeys(void **state)
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
 
-
-	reintegrate_single_pool_target(arg, kill_rank, tgt);
+	reintegrate_with_inflight_io(arg, kill_rank, tgt);
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
@@ -172,7 +233,7 @@ rebuild_indexes(void **state)
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
 
-	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+	reintegrate_with_inflight_io(arg, ranks_to_kill[0], tgt);
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
@@ -231,7 +292,7 @@ rebuild_snap_update_recs(void **state)
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
 
-	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+	reintegrate_with_inflight_io(arg, ranks_to_kill[0], tgt);
 	for (i = 0; i < SNAP_CNT; i++) {
 		rc = daos_obj_verify(arg->coh, oid, snap_epoch[i]);
 		if (rc != 0)
@@ -290,7 +351,7 @@ rebuild_snap_punch_recs(void **state)
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
 
-	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+	reintegrate_with_inflight_io(arg, ranks_to_kill[0], tgt);
 	for (i = 0; i < SNAP_CNT; i++) {
 		rc = daos_obj_verify(arg->coh, oid, snap_epoch[i]);
 		if (rc != 0)
@@ -377,7 +438,7 @@ rebuild_snap_update_keys(void **state)
 		assert_int_equal(number, SNAP_CNT);
 	}
 
-	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+	reintegrate_with_inflight_io(arg, ranks_to_kill[0], tgt);
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
@@ -479,7 +540,7 @@ rebuild_snap_punch_keys(void **state)
 		assert_int_equal(number, SNAP_CNT);
 	}
 
-	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+	reintegrate_with_inflight_io(arg, ranks_to_kill[0], tgt);
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
@@ -496,8 +557,6 @@ rebuild_snap_punch_empty(void **state)
 	daos_epoch_t	snap_epoch;
 	int		i;
 	int		rc;
-
-	skip(); /** DAOS-4698 */
 
 	if (!test_runable(arg, 4))
 		return;
@@ -655,7 +714,7 @@ rebuild_large_rec(void **state)
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
 
-	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+	reintegrate_with_inflight_io(arg, ranks_to_kill[0], tgt);
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
@@ -690,7 +749,7 @@ rebuild_objects(void **state)
 			assert_rc_equal(rc, -DER_NOSYS);
 	}
 
-	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+	reintegrate_with_inflight_io(arg, ranks_to_kill[0], tgt);
 	for (i = 0; i < OBJ_NR; i++) {
 		rc = daos_obj_verify(arg->coh, oids[i], DAOS_EPOCH_MAX);
 		if (rc != 0)
@@ -847,6 +906,47 @@ rebuild_large_snap(void **state)
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
 
+static void
+rebuild_full_shards(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	int		i;
+
+	skip(); /** DAOS-5758 */
+
+	if (!test_runable(arg, 4))
+		return;
+
+	/* require 4 nodes and 8 targets per node */
+	if (arg->myrank == 0 &&
+	    arg->srv_ntgts / arg->srv_nnodes != 8)
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, OC_RP_2G8, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	/* Insert dkey/akey by different snapshot */
+	for (i = 0; i < 100; i++) {
+		char dkey[20] = { 0 };
+		char akey[20] = { 0 };
+
+		/* Update string for each snapshot */
+		sprintf(dkey, "dkey_%d", i);
+		sprintf(akey, "akey_%d", i);
+		insert_single(dkey, "a_key", 0, "data", 1, DAOS_TX_NONE, &req);
+		insert_single("dkey", akey, 0, "data", 1, DAOS_TX_NONE, &req);
+	}
+
+	ioreq_fini(&req);
+
+	/* rebuild and reintegration to use full shards */
+	rebuild_single_pool_target(arg, 0, -1, false);
+	rebuild_single_pool_target(arg, 3, -1, false);
+	reintegrate_single_pool_target(arg, 0, -1);
+	reintegrate_single_pool_target(arg, 3, -1);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD1: rebuild small rec multiple dkeys",
@@ -879,6 +979,8 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_large_object, rebuild_small_pool_n4_setup, test_teardown},
 	{"REBUILD15: rebuild with 100 snapshot",
 	 rebuild_large_snap, rebuild_small_sub_setup, test_teardown},
+	{"REBUILD16: rebuild with full stripe",
+	 rebuild_full_shards, rebuild_small_pool_n4_setup, test_teardown},
 };
 
 int

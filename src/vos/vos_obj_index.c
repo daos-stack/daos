@@ -117,6 +117,7 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	struct umem_instance	*umm = &tins->ti_umm;
 	struct vos_obj_df	*obj;
 	struct ilog_desc_cbs	 cbs;
+	daos_handle_t		 coh;
 	int			 rc;
 
 	obj = umem_off2ptr(umm, rec->rec_off);
@@ -132,8 +133,9 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	vos_ilog_ts_evict(&obj->vo_ilog, VOS_TS_TYPE_OBJ);
 
 	D_ASSERT(tins->ti_priv);
-	return gc_add_item((struct vos_pool *)tins->ti_priv, GC_OBJ,
-			   rec->rec_off, 0);
+
+	coh = vos_cont2hdl(args);
+	return gc_add_item(tins->ti_priv, coh, GC_OBJ, rec->rec_off, 0);
 }
 
 static int
@@ -251,6 +253,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 	}
 	obj = val_iov.iov_buf;
 
+	vos_ilog_ts_ignore(vos_cont2umm(cont), &obj->vo_ilog);
 	vos_ilog_ts_mark(ts_set, &obj->vo_ilog);
 do_log:
 	if (!log)
@@ -320,8 +323,7 @@ vos_oi_delete(struct vos_container *cont, daos_unit_oid_t oid)
 
 	d_iov_set(&key_iov, &oid, sizeof(oid));
 
-	rc = dbtree_delete(cont->vc_btr_hdl, BTR_PROBE_EQ, &key_iov,
-			   cont->vc_pool);
+	rc = dbtree_delete(cont->vc_btr_hdl, BTR_PROBE_EQ, &key_iov, cont);
 	if (rc == -DER_NONEXIST)
 		return 0;
 
@@ -608,6 +610,7 @@ oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 
 	it_entry->ie_oid = obj->vo_id;
 	it_entry->ie_punch = oiter->oit_ilog_info.ii_next_punch;
+	it_entry->ie_obj_punch = it_entry->ie_punch;
 	it_entry->ie_epoch = epr.epr_hi;
 	it_entry->ie_vis_flags = VOS_VIS_FLAG_VISIBLE;
 	if (oiter->oit_ilog_info.ii_create == 0) {
@@ -668,7 +671,7 @@ oi_iter_aggregate(daos_handle_t ih, bool discard)
 		goto exit;
 
 	rc = vos_ilog_aggregate(vos_cont2hdl(oiter->oit_cont), &obj->vo_ilog,
-				&oiter->oit_epr, discard, 0,
+				&oiter->oit_epr, discard, NULL,
 				&oiter->oit_ilog_info);
 	if (rc == 1) {
 		/* Incarnation log is empty, delete the object */

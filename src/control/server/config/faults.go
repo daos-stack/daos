@@ -80,6 +80,11 @@ var (
 		"fault domain callback executed but did not generate output",
 		"specify a valid fault domain callback script ('fault_cb' parameter) and restart the control server",
 	)
+	FaultConfigTooManyLayersInFaultDomain = serverConfigFault(
+		code.ServerConfigFaultDomainTooManyLayers,
+		"only a single fault domain layer below the root is supported",
+		"update either the fault domain ('fault_path' parameter) or callback script ('fault_cb' parameter) and restart the control server",
+	)
 )
 
 func FaultConfigDuplicateFabric(curIdx, seenIdx int) *fault.Fault {

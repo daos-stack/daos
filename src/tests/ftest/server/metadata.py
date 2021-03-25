@@ -4,20 +4,13 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 import traceback
 import uuid
 import threading
 import avocado
-
-try:
-    # python 3.x
-    import queue
-except ImportError:
-    # python 2.7
-    import Queue as queue
-
+import queue
 from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError
 from ior_utils import IorCommand
@@ -34,7 +27,8 @@ from test_utils_pool import TestPool
 #  ~48MB for background aggregation use
 # 52% of remaining free space set aside for staging log container
 # (installsnapshot RPC handling in raft)
-NO_OF_MAX_CONTAINER = 4150
+#NO_OF_MAX_CONTAINER = 4150
+NO_OF_MAX_CONTAINER = 3465
 
 def ior_runner_thread(manager, uuids, results):
     """IOR run thread method.
@@ -69,13 +63,13 @@ class ObjectMetadata(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a ObjectMetadata object."""
-        super(ObjectMetadata, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.out_queue = None
 
     def setUp(self):
         """Set up each test case."""
         # Start the servers and agents
-        super(ObjectMetadata, self).setUp()
+        super().setUp()
 
         # Create a pool
         self.pool = TestPool(self.context, self.get_dmg_command())
@@ -214,9 +208,16 @@ class ObjectMetadata(TestWithServers):
             self.log.info("Container Create Iteration %d / 9", k)
             for cont in range(NO_OF_MAX_CONTAINER):
                 container = DaosContainer(self.context)
-                container.create(self.pool.pool.handle)
+                try:
+                    container.create(self.pool.pool.handle)
+                except DaosApiError as exc:
+                    self.log.info("Container create %d/%d failed: %s",
+                                  cont, NO_OF_MAX_CONTAINER, exc)
+                    self.fail("Container create failed")
+
                 container_array.append(container)
 
+            self.log.info("Created %d containers", (cont+1))
             self.log.info("Container Remove Iteration %d / 9", k)
             for cont in container_array:
                 cont.destroy()
