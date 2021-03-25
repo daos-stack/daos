@@ -48,6 +48,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.dmg_command.exit_status_exception = False
         self.test_during_aggregation = False
         self.test_during_rebuild = False
+        self.test_with_checksum = True
 
     @fail_on(CommandFailure)
     def get_pool_leader(self):
@@ -224,6 +225,9 @@ class OSAUtils(MdtestBase, IorTestBase):
         if self.pool_cont_dict[self.pool][0] is None:
             self.add_container(self.pool, create=False)
             self.set_cont_class_properties(oclass)
+            if self.test_with_checksum is False:
+                rf_value = "rf:{}".format(self.get_object_replica_value - 1)
+                self.update_cont_properties(rf_value)
             self.container.create()
             self.pool_cont_dict[self.pool][0] = self.container
             self.pool_cont_dict[self.pool][1] = "Updated"
@@ -235,6 +239,10 @@ class OSAUtils(MdtestBase, IorTestBase):
                 # Write to the second container
                 self.add_container(self.pool, create=False)
                 self.set_cont_class_properties(oclass)
+                if self.test_with_checksum is False:
+                    rf_value = "rf:{}".format(
+                        self.get_object_replica_value - 1)
+                    self.update_cont_properties(rf_value)
                 self.container.create()
                 self.pool_cont_dict[self.pool][2] = self.container
                 self.pool_cont_dict[self.pool][3] = "Updated"
@@ -254,9 +262,35 @@ class OSAUtils(MdtestBase, IorTestBase):
         extra_container.destroy()
         self.pool_cont_dict[pool][3] = None
 
+    def get_object_replica_value(self, oclass):
+        """ Get the object replica value for an object class.
+
+        Args:
+            oclass (str): Object Class (eg: RP_2G1,etc)
+
+        Returns:
+            value (int) : Object replica value
+        """
+        value = 0
+        if "_" in oclass:
+            replica_list = oclass.split("_")
+            value = replica_list[1][0]
+        else:
+            self.log.info("Wrong Object Class. Cannot split")
+        return int(value)
+
+    def update_cont_properties(self, cont_prop):
+        """Update the existing container properties.
+        Args:
+            cont_prop (str): Replace existing cotainer properties
+                             with new value
+        """
+        self.container.properties.value = cont_prop
+
     def set_cont_class_properties(self, oclass="S1"):
         """Update the container class to match the IOR object
-        class. Also, remove the redundancy factor for S type
+        class. Fix the rf factor based on object replica value.
+        Also, remove the redundancy factor for S type
         object class.
         Args:
             oclass (str, optional): Container object class to be set.
@@ -266,10 +300,13 @@ class OSAUtils(MdtestBase, IorTestBase):
         # Set the container properties properly for S!, S2 class.
         # rf should not be set to 1 for S type object class.
         x = re.search("^S\\d$", oclass)
+        prop = self.container.properties.value
         if x is not None:
-            prop = self.container.properties.value
             prop = prop.replace("rf:1", "rf:0")
-            self.container.properties.value = prop
+        else:
+            rf_value = "rf:{}".format(self.get_object_replica_value - 1)
+            prop = prop.replace("rf:1", rf_value)
+        self.container.properties.value = prop
 
     def run_ior_thread(self, action, oclass, test,
                        single_cont_read=True,

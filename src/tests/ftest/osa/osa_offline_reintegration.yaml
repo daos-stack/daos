@@ -107,3 +107,5 @@ aggregation:
   test_with_aggregation: True
 rebuild:
   test_with_rebuild: True
+checksum:
+  test_with_checksum: False

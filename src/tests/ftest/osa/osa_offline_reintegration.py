@@ -150,6 +150,19 @@ class OSAOfflineReintegration(OSAUtils):
                     output = self.daos_command.container_check(**kwargs)
                     self.log.info(output)
 
+    def test_osa_offline_reintegration_without_checksum(self):
+        """Test ID: DAOS-6923
+        Test Description: Validate Offline Reintegration
+        without enabling checksum in container properties.
+
+        :avocado: tags=all,pr,daily_regression,hw,medium,ib2
+        :avocado: tags=osa,offline_reintegration
+        :avocado: tags=offline_reintegration_without_csum
+        """
+        self.test_with_checksum = self.params.get("checksum",
+                                                  '/run/test_with_checksum/*')
+        self.run_offline_reintegration_test(1, data=True)
+
     def test_osa_offline_reintegration_multiple_pools(self):
         """Test ID: DAOS-6923
         Test Description: Validate Offline Reintegration
