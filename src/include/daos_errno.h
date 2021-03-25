@@ -153,7 +153,11 @@ extern "C" {
 	       Path name exceeds permitted length)			\
 	/** Metric was not found.*/					\
 	ACTION(DER_METRIC_NOT_FOUND,    (DER_ERR_GURT_BASE + 43),	\
-	       Read failed because metric not found)
+	       Read failed because metric not found)			\
+	/** Invalid user/group permissions.*/				\
+	ACTION(DER_SHMEM_PERMS,         (DER_ERR_GURT_BASE + 44),	\
+	       Unable to access shared memory segment due to		\
+	       incompatible user or group permissions)
 	/** TODO: add more error numbers */
 
 #define D_FOREACH_DAOS_ERR(ACTION)					\
@@ -246,7 +250,10 @@ extern "C" {
 	       Agent is incompatible with libdaos)			\
 	/** Multiple shards locate on the same target */		\
 	ACTION(DER_SHARDS_OVERLAP,	(DER_ERR_DAOS_BASE + 30),	\
-	       Shards overlap)
+	       Shards overlap)						\
+	/** #failures exceed RF(Redundancy Factor), data possibly lost */ \
+	ACTION(DER_RF,			(DER_ERR_DAOS_BASE + 31),	\
+	       Failures exceed RF)
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\

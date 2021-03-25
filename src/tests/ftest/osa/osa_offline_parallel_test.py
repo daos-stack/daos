@@ -9,16 +9,11 @@ import random
 import threading
 import copy
 from osa_utils import OSAUtils
-from apricot import skipForTicket
 from test_utils_pool import TestPool
 from command_utils import CommandFailure
+from apricot import skipForTicket
+import queue
 
-try:
-    # python 3.x
-    import queue as queue
-except ImportError:
-    # python 2.7
-    import Queue as queue
 
 class OSAOfflineParallelTest(OSAUtils):
     # pylint: disable=too-many-ancestors
@@ -31,7 +26,7 @@ class OSAOfflineParallelTest(OSAUtils):
     """
     def setUp(self):
         """Set up for test case."""
-        super(OSAOfflineParallelTest, self).setUp()
+        super().setUp()
         self.dmg_command = self.get_dmg_command()
         self.out_queue = queue.Queue()
 
@@ -141,23 +136,16 @@ class OSAOfflineParallelTest(OSAUtils):
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
             pool[val].display_pool_daos_space(display_string)
-            fail_count = 0
-            while fail_count <= 20:
-                pver_end = self.get_pool_version()
-                time.sleep(10)
-                fail_count += 1
-                if pver_end > 23:
-                    break
-
+            self.is_rebuild_done(3)
             self.assert_on_rebuild_failure()
-
+            pver_end = self.get_pool_version()
             self.log.info("Pool Version at the End %s", pver_end)
             self.assertTrue(pver_end == 25,
                             "Pool Version Error:  at the end")
         if data:
             self.verify_single_object()
 
-    @skipForTicket("DAOS-6107")
+    @skipForTicket("DAOS-6668")
     def test_osa_offline_parallel_test(self):
         """
         JIRA ID: DAOS-4752

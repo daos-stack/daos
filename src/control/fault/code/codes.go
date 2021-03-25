@@ -118,7 +118,7 @@ const (
 	ServerConfigBadAccessPoints
 	ServerConfigEvenAccessPoints
 	ServerConfigBadProvider
-	ServerConfigNoServers
+	ServerConfigNoEngines
 	ServerConfigDuplicateFabric
 	ServerConfigDuplicateLogFile
 	ServerConfigDuplicateScmMount
@@ -130,6 +130,7 @@ const (
 	ServerConfigFaultCallbackFailed
 	ServerConfigBothFaultPathAndCb
 	ServerConfigFaultCallbackEmpty
+	ServerConfigFaultDomainTooManyLayers
 
 	// SPDK library bindings codes
 	SpdkUnknown Code = iota + 800

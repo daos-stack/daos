@@ -26,6 +26,9 @@ public class DaosPool extends Shareable implements Closeable {
   private static final Logger log = LoggerFactory.getLogger(DaosPool.class);
 
   private DaosPool(String poolUuid) {
+    if (poolUuid.length() != Constants.UUID_LENGTH) {
+      throw new IllegalArgumentException("pool UUID length should be " + Constants.UUID_LENGTH);
+    }
     this.uuid = poolUuid;
   }
 
@@ -47,6 +50,10 @@ public class DaosPool extends Shareable implements Closeable {
   private void init(String serverGroup, int flags) throws IOException {
     if (isInited()) {
       return;
+    }
+    if (serverGroup.length() > Constants.SERVER_GROUP_NAME_MAX_LEN) {
+      throw new IllegalArgumentException("server group length should be no more than " +
+          Constants.SERVER_GROUP_NAME_MAX_LEN);
     }
     poolPtr = DaosClient.daosOpenPool(uuid, serverGroup, flags);
     setInited(true);

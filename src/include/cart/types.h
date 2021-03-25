@@ -39,23 +39,26 @@ typedef struct crt_init_options {
 	 */
 	uint32_t	cio_sep_override:1,
 			/**
-			* overrides the value of the environment variable
-			* CRT_CTX_SHARE_ADDR
-			*/
+			 * overrides the value of the environment variable
+			 * CRT_CTX_SHARE_ADDR
+			 */
 			cio_use_sep:1,
 			/** whether or not to inject faults */
 			cio_fault_inject:1,
-			/** whether or not to override credits. When set
-			* overrides CRT_CTX_EP_CREDITS envariable
-			*/
-			cio_use_credits:1;
 			/**
-			* overrides the value of the environment variable
-			* CRT_CTX_NUM
-			*/
+			 * whether or not to override credits. When set
+			 * overrides CRT_CTX_EP_CREDITS envariable
+			 */
+			cio_use_credits:1,
+			/** whether or not to enable per-context sensors */
+			cio_use_sensors:1;
+	/**
+	 * overrides the value of the environment variable
+	 * CRT_CTX_NUM
+	 */
 	int		cio_ctx_max_num;
 
-			/** Used with cio_use_credits to set credit limit */
+	/** Used with cio_use_credits to set credit limit */
 	int		cio_ep_credits;
 } crt_init_options_t;
 
@@ -109,7 +112,6 @@ typedef d_string_t crt_phy_addr_t;
  * expected.
  */
 typedef uint32_t crt_opcode_t;
-#define CRT_OPC_INTERNAL_BASE	0xFF000000UL
 
 /**
  * Check if the opcode is reserved by CRT internally.
@@ -267,7 +269,6 @@ typedef enum {
  */
 #define CRT_RPC_FEAT_QUEUE_FRONT	(1U << 3)
 
-
 typedef void *crt_bulk_opid_t;
 
 /** Bulk transfer permissions */
@@ -395,7 +396,6 @@ typedef enum {
 	/** Total count of supported operations */
 	CRT_GROUP_MOD_OP_COUNT,
 } crt_group_mod_op_t;
-
 
 /** @}
  */

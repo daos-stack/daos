@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (C) Copyright 2020 Intel Corporation
+# Copyright (C) Copyright 2020-2021 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -71,6 +71,13 @@ mkdir -p ~/.config/avocado/
 cat <<EOF > ~/.config/avocado/avocado.conf
 [datadir.paths]
 logs_dir = $logs_prefix/ftest/avocado/job-results
+data_dir = $logs_prefix/ftest/avocado/data
+
+[job.output]
+loglevel = DEBUG
+
+[runner.timeout]
+process_died = 60
 
 [sysinfo.collectibles]
 files = \$HOME/.config/avocado/sysinfo/files
@@ -91,21 +98,26 @@ cat <<EOF > ~/.config/avocado/sysinfo/files
 EOF
 
 # apply patches to Avocado
+pydir=""
 for loc in /usr/lib/python2*/site-packages/ \
-           /usr/lib/python3*/dist-packages/; do
+           /usr/lib/python3*/site-packages/ \
+           /usr/local/lib/python3*/site-packages/; do
     if [ -f "$loc"/avocado/core/runner.py ]; then
         pydir=$loc
         break
     fi
-    if [ -z "$loc" ]; then
-        echo "Could not determine avocado installation location"
-        exit 1
-    fi
 done
+if [ -z "${pydir}" ]; then
+    echo "Could not determine avocado installation location"
+    exit 1
+fi
+
 PATCH_DIR="$PREFIX"/lib/daos/TESTING/ftest
-# https://github.com/avocado-framework/avocado/pull/4345
-if ! grep "self.job.result_proxy.notify_progress(False)" \
-          "$pydir"/avocado/core/test.py; then
+# https://github.com/avocado-framework/avocado/pull/4345 fixed somewhere
+# before 69.2
+if grep "self.job.result_proxy.notify_progress(False)" \
+    "$pydir"/avocado/core/runner.py; then
+    echo "Applying patch avocado-job-result_proxy-reference-fix.patch"
     if ! cat < "$PATCH_DIR"/avocado-job-result_proxy-reference-fix.patch | \
       sudo patch -p1 -d "$pydir"; then
         echo "Failed to apply avocado PR-4345 patch"
@@ -114,30 +126,65 @@ if ! grep "self.job.result_proxy.notify_progress(False)" \
 fi
 # https://github.com/avocado-framework/avocado/pull/2908 fixed in
 # https://github.com/avocado-framework/avocado/pull/3076/
-if ! grep TIMEOUT_TEARDOWN "$pydir"/avocado/core/runner.py; then
-    if ! cat < "$PATCH_DIR"/avocado-teardown-timeout.patch | \
-      sudo patch -p1 -d "$pydir"; then
-        echo "Failed to apply avocado PR-3076 patch"
-        exit 1
+if ! grep "runner.timeout.process_died" "$pydir"/avocado/core/runner.py; then
+    # this version of runner.py is older than 82.0
+    if ! grep TIMEOUT_TEARDOWN "$pydir"/avocado/core/runner.py; then
+        echo "Applying patch avocado-teardown-timeout.patch"
+        if ! cat < "$PATCH_DIR"/avocado-teardown-timeout.patch | \
+        sudo patch -p1 -d "$pydir"; then
+            echo "Failed to apply avocado PR-3076 patch"
+            exit 1
+        fi
     fi
 fi
-# https://github.com/avocado-framework/avocado/pull/3154
+# https://github.com/avocado-framework/avocado/pull/3154 - fixed somewhere
+# before 69.2
 if ! grep "def phase(self)" \
     "$pydir"/avocado/core/test.py; then
-    if ! filterdiff -p1 -x selftests/* <                \
-        "$PATCH_DIR"/avocado-report-test-phases.patch | \
-      sed -e '/selftests\/.*/d' |                       \
+    echo "Applying patch avocado-report-test-phases-common.patch"
+    if ! filterdiff -p1 -x selftests/* <                       \
+        "$PATCH_DIR"/avocado-report-test-phases-common.patch | \
+      sed -e '/selftests\/.*/d' |                              \
       sudo patch -p1 -d "$pydir"; then
-        echo "Failed to apply avocado PR-3154 patch"
+        echo "Failed to apply avocado PR-3154 patch - common portion"
         exit 1
     fi
+    if grep "^TEST_STATE_ATTRIBUTES = " "$pydir"/avocado/core/test.py; then
+        echo "Applying patch avocado-report-test-phases-py3.patch"
+        if ! cat < "$PATCH_DIR"/avocado-report-test-phases-py3.patch | \
+          sudo patch -p1 -d "$pydir"; then
+            echo "Failed to apply avocado PR-3154 patch - py3 portion"
+            exit 1
+        fi
+    else
+        echo "Applying patch avocado-report-test-phases-py2.patch"
+        if ! cat < "$PATCH_DIR"/avocado-report-test-phases-py2.patch | \
+          sudo patch -p1 -d "$pydir"; then
+            echo "Failed to apply avocado PR-3154 patch - py2 portion"
+            exit 1
+        fi
+    fi
 fi
-# apply fix for https://github.com/avocado-framework/avocado/issues/2908
-sudo ed <<EOF "$pydir"/avocado/core/runner.py
+# apply fix for https://github.com/avocado-framework/avocado/issues/2908 - fixed
+# somewhere before 69.2
+if grep "TIMEOUT_TEST_INTERRUPTED" \
+    "$pydir"/avocado/core/runner.py; then
+        sudo ed <<EOF "$pydir"/avocado/core/runner.py
 /TIMEOUT_TEST_INTERRUPTED/s/[0-9]*$/60/
 wq
 EOF
-# apply fix for https://github.com/avocado-framework/avocado/pull/2922
+fi
+# apply fix for https://jira.hpdd.intel.com/browse/DAOS-6756 for avocado 69.x -
+# fixed somewhere before 82.0
+if grep "TIMEOUT_PROCESS_DIED" \
+    "$pydir"/avocado/core/runner.py; then
+        sudo ed <<EOF "$pydir"/avocado/core/runner.py
+/TIMEOUT_PROCESS_DIED/s/[0-9]*$/60/
+wq
+EOF
+fi
+# apply fix for https://github.com/avocado-framework/avocado/pull/2922 - fixed
+# somewhere before 69.2
 if grep "testsuite.setAttribute('name', 'avocado')" \
     "$pydir"/avocado/plugins/xunit.py; then
     sudo ed <<EOF "$pydir"/avocado/plugins/xunit.py
@@ -145,7 +192,7 @@ if grep "testsuite.setAttribute('name', 'avocado')" \
 wq
 EOF
 fi
-# Fix for bug to be filed upstream
+# Fix for bug to be filed upstream - fixed somewhere before 69.2
 if grep "self\.job\.result_proxy\.notify_progress(False)" \
     "$pydir"/avocado/core/runner.py; then
     sudo ed <<EOF "$pydir"/avocado/core/runner.py
@@ -173,19 +220,34 @@ if [[ "${TEST_TAG_ARG}" =~ soak ]]; then
     fi
 fi
 
+
+launch_args="-jcrisa"
 # can only process cores on EL7 currently
 if [ "$(lsb_release -s -i)" = "CentOS" ]; then
-    process_cores="p"
-else
-    process_cores=""
+    launch_args="-jcrispa"
 fi
+
+# Clean stale job results
+if [ -d "${logs_prefix}/ftest/avocado/job-results" ]; then
+    rm -rf "${logs_prefix}/ftest/avocado/job-results"
+fi
+
 # now run it!
 # shellcheck disable=SC2086
-if ! ./launch.py -cris"${process_cores}"a -th "${LOGS_THRESHOLD}" \
+if ! ./launch.py "${launch_args}" -th "${LOGS_THRESHOLD}" \
                  -ts "${TEST_NODES}" ${NVME_ARG} ${TEST_TAG_ARR[*]}; then
     rc=${PIPESTATUS[0]}
 else
     rc=0
 fi
+
+# daos_test uses cmocka framework which generates a set of xml of its own.
+# Post-processing the xml files here to put them in proper categories
+# for publishing in Jenkins
+dt_xml_path="${logs_prefix}/ftest/avocado/job-results/daos_test"
+FILES=("${dt_xml_path}"/*/test-results/*/data/*.xml)
+COMP="FTEST_daos_test"
+
+./scripts/post_process_xml.sh "${COMP}" "${FILES[@]}"
 
 exit $rc

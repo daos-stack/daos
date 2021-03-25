@@ -10,19 +10,13 @@ import threading
 import copy
 
 from itertools import product
-from apricot import skipForTicket
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
 from command_utils import CommandFailure
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
-
-try:
-    # python 3.x
-    import queue as queue
-except ImportError:
-    # python 2.7
-    import Queue as queue
+from apricot import skipForTicket
+import queue
 
 
 class OSAOnlineParallelTest(OSAUtils):
@@ -36,7 +30,7 @@ class OSAOnlineParallelTest(OSAUtils):
     """
     def setUp(self):
         """Set up for test case."""
-        super(OSAOnlineParallelTest, self).setUp()
+        super().setUp()
         self.dmg_command = self.get_dmg_command()
         self.ior_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
@@ -135,8 +129,8 @@ class OSAOnlineParallelTest(OSAUtils):
             pool_uuid.append(pool[val].uuid)
 
         # Exclude and reintegrate the pool_uuid, rank and targets
-        for val in range(0, num_pool):
-            self.pool = pool[val]
+        for value in range(0, num_pool):
+            self.pool = pool[value]
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
@@ -157,7 +151,7 @@ class OSAOnlineParallelTest(OSAUtils):
                 for _ in range(0, num_jobs):
                     # Add a thread for these IOR arguments
                     threads.append(threading.Thread(target=self.ior_thread,
-                                                    kwargs={"pool": pool[val],
+                                                    kwargs={"pool": pool[value],
                                                             "oclass": oclass,
                                                             "api": api,
                                                             "test": test,
@@ -181,7 +175,7 @@ class OSAOnlineParallelTest(OSAUtils):
 
                 # Wait to finish the threads
                 for thrd in threads:
-                    thrd.join(timeout=20)
+                    thrd.join(timeout=100)
 
             # Check data consistency for IOR in future
             # Presently, we are running daos_racer in parallel
@@ -201,9 +195,8 @@ class OSAOnlineParallelTest(OSAUtils):
                 self.log.info("Pool Version at the End %s", pver_end)
                 self.assertTrue(pver_end == 25,
                                 "Pool Version Error:  at the end")
-                pool[val].destroy()
 
-    @skipForTicket("DAOS-6107")
+    @skipForTicket("DAOS-6664")
     def test_osa_online_parallel_test(self):
         """
         JIRA ID: DAOS-4752

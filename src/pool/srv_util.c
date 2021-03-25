@@ -502,7 +502,11 @@ update_targets_ult(void *arg)
 {
 	struct update_targets_arg	*uta = arg;
 	struct d_tgt_list		 tgt_list;
+	d_rank_list_t			 svc;
 	int				 rc;
+
+	svc.rl_ranks = &uta->uta_pl_rank;
+	svc.rl_nr = 1;
 
 	tgt_list.tl_nr = uta->uta_nr;
 	tgt_list.tl_ranks = uta->uta_ranks;
@@ -510,10 +514,10 @@ update_targets_ult(void *arg)
 
 	if (uta->uta_reint)
 		rc = dsc_pool_tgt_reint(uta->uta_pool_id, NULL /* grp */,
-					&tgt_list);
+					&svc, &tgt_list);
 	else
 		rc = dsc_pool_tgt_exclude(uta->uta_pool_id, NULL /* grp */,
-					  &tgt_list);
+					  &svc, &tgt_list);
 	if (rc)
 		D_ERROR(DF_UUID": %s targets failed. "DF_RC"\n",
 			DP_UUID(uta->uta_pool_id),
@@ -606,7 +610,7 @@ nvme_reaction(int *tgt_ids, int tgt_cnt, bool reint)
 		}
 
 		d_list_del(&pool_info->spi_link);
-		smd_free_pool_info(pool_info);
+		smd_pool_free_info(pool_info);
 	}
 
 	D_DEBUG(DB_MGMT, "Faulty reaction done. tgt_cnt:%d, rc:%d\n",

@@ -57,6 +57,16 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 				Uri:  uri,
 			})
 		}
+	} else {
+		// If the request does not indicate that all ranks should be returned,
+		// it may be from an older client, in which case we should just return
+		// the MS ranks.
+		for _, rank := range groupMap.MSRanks {
+			resp.RankUris = append(resp.RankUris, &mgmtpb.GetAttachInfoResp_RankUri{
+				Rank: rank.Uint32(),
+				Uri:  groupMap.RankURIs[rank],
+			})
+		}
 	}
 	resp.Provider = svc.clientNetworkCfg.Provider
 	resp.CrtCtxShareAddr = svc.clientNetworkCfg.CrtCtxShareAddr
@@ -125,8 +135,9 @@ func getPeerListenAddr(ctx context.Context, listenAddrStr string) (*net.TCPAddr,
 }
 
 const (
-	batchJoinInterval = 250 * time.Millisecond
-	joinRespTimeout   = 10 * time.Millisecond
+	groupUpdateInterval = 500 * time.Millisecond
+	batchJoinInterval   = 250 * time.Millisecond
+	joinRespTimeout     = 10 * time.Millisecond
 )
 
 type (
@@ -151,15 +162,32 @@ func (svc *mgmtSvc) startJoinLoop(ctx context.Context) {
 
 func (svc *mgmtSvc) joinLoop(parent context.Context) {
 	var joinReqs []*batchJoinRequest
+	var groupUpdateNeeded bool
+
+	joinTimer := time.NewTicker(batchJoinInterval)
+	defer joinTimer.Stop()
+	groupUpdateTimer := time.NewTicker(groupUpdateInterval)
+	defer groupUpdateTimer.Stop()
 
 	for {
 		select {
 		case <-parent.Done():
 			svc.log.Debug("stopped joinLoop")
 			return
+		case <-svc.groupUpdateReqs:
+			groupUpdateNeeded = true
+		case <-groupUpdateTimer.C:
+			if !groupUpdateNeeded {
+				continue
+			}
+			if err := svc.doGroupUpdate(parent); err != nil {
+				svc.log.Errorf("GroupUpdate failed: %s", err)
+				continue
+			}
+			groupUpdateNeeded = false
 		case jr := <-svc.joinReqs:
 			joinReqs = append(joinReqs, jr)
-		case <-time.After(batchJoinInterval):
+		case <-joinTimer.C:
 			if len(joinReqs) == 0 {
 				continue
 			}
@@ -170,18 +198,16 @@ func (svc *mgmtSvc) joinLoop(parent context.Context) {
 				joinResps[i] = svc.join(parent, req)
 			}
 
-			for i := 0; i < len(svc.harness.Instances()); i++ {
-				if err := svc.doGroupUpdate(parent); err != nil {
-					if err == errInstanceNotReady {
-						svc.log.Debug("group update not ready (retrying)")
-						continue
-					}
+			for {
+				err := svc.doGroupUpdate(parent)
+				if err == nil || errors.Cause(err) == errInstanceNotReady {
+					break
+				}
 
-					err = errors.Wrap(err, "failed to perform CaRT group update")
-					for i, jr := range joinResps {
-						if jr.joinErr == nil {
-							joinResps[i] = &batchJoinResponse{joinErr: err}
-						}
+				err = errors.Wrap(err, "failed to perform CaRT group update")
+				for i, jr := range joinResps {
+					if jr.joinErr == nil {
+						joinResps[i] = &batchJoinResponse{joinErr: err}
 					}
 				}
 				break
@@ -272,13 +298,24 @@ func (svc *mgmtSvc) join(ctx context.Context, req *batchJoinRequest) *batchJoinR
 			}
 		}
 
-		// mark the ioserver as ready to handle dRPC requests
+		// mark the engine as ready to handle dRPC requests
 		srv.ready.SetTrue()
 	}
 
 	return resp
 }
 
+// reqGroupUpdate requests an asynchronous group update.
+func (svc *mgmtSvc) reqGroupUpdate(ctx context.Context) {
+	select {
+	case <-ctx.Done():
+	case svc.groupUpdateReqs <- struct{}{}:
+	}
+}
+
+// doGroupUpdate performs a synchronous group update.
+// NB: This method must not be called concurrently, as out-of-order
+// group updates may trigger engine assertions.
 func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
 	gm, err := svc.sysdb.GroupMap()
 	if err != nil {
@@ -293,7 +330,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
 	}
 	rankSet := &system.RankSet{}
 	for rank, uri := range gm.RankURIs {
-		req.Servers = append(req.Servers, &mgmtpb.GroupUpdateReq_Server{
+		req.Engines = append(req.Engines, &mgmtpb.GroupUpdateReq_Engine{
 			Rank: rank.Uint32(),
 			Uri:  uri,
 		})
@@ -328,7 +365,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
 // On receipt of the join request, add to a queue of requests to be processed
 // periodically in a dedicated goroutine. This architecture provides for thread
 // safety and improved performance while updating the system membership and CaRT
-// primary group in the local ioserver.
+// primary group in the local engine.
 //
 // The state of the newly joined/evicted rank along with the reply address used
 // to contact the new rank in future will be registered in the system membership.
@@ -409,18 +446,13 @@ func (svc *mgmtSvc) resolveRanks(hosts, ranks string) (hitRS, missRS *system.Ran
 	case hasHosts && hasRanks:
 		err = errors.New("ranklist and hostlist cannot both be set in request")
 	case hasHosts:
-		//if hitRS, missHS, err = svc.membership.CheckHosts(hosts, svc.srvCfg.ControlPort); err != nil {
 		if hitRS, missHS, err = svc.membership.CheckHosts(hosts, build.DefaultControlPort); err != nil {
 			return
 		}
-		svc.log.Debugf("resolveRanks(): req hosts %s, hit ranks %s, miss hosts %s",
-			hosts, hitRS, missHS)
 	case hasRanks:
 		if hitRS, missRS, err = svc.membership.CheckRanks(ranks); err != nil {
 			return
 		}
-		svc.log.Debugf("resolveRanks(): req ranks %s, hit ranks %s, miss ranks %s",
-			ranks, hitRS, missRS)
 	default:
 		// empty rank/host sets implies include all ranks so pass empty
 		// string to CheckRanks()
@@ -575,6 +607,10 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, pbReq *mgmtpb.SystemStopReq)
 	}
 	svc.log.Debug("Received SystemStop RPC")
 
+	if !pbReq.GetPrep() && !pbReq.GetKill() {
+		return nil, errors.New("invalid request, no action specified")
+	}
+
 	// Raise event on systemwide shutdown
 	if pbReq.GetHosts() == "" && pbReq.GetRanks() == "" && pbReq.GetKill() {
 		svc.events.Publish(events.New(&events.RASEvent{
@@ -585,7 +621,6 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, pbReq *mgmtpb.SystemStopReq)
 		}))
 	}
 
-	// TODO: consider locking to prevent join attempts when shutting down
 	pbResp := new(mgmtpb.SystemStopResp)
 
 	fanReq := fanoutRequest{
@@ -595,8 +630,6 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, pbReq *mgmtpb.SystemStopReq)
 	}
 
 	if pbReq.GetPrep() {
-		svc.log.Debug("prepping ranks for shutdown")
-
 		fanReq.Method = control.PrepShutdownRanks
 		fanResp, _, err := svc.rpcFanout(ctx, fanReq, false)
 		if err != nil {
@@ -605,25 +638,19 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, pbReq *mgmtpb.SystemStopReq)
 		if err := populateStopResp(fanResp, pbResp, "prep shutdown"); err != nil {
 			return nil, err
 		}
-		if !fanReq.Force && fanResp.Results.HasErrors() {
+		if !fanReq.Force && fanResp.Results.Errors() != nil {
 			return pbResp, errors.New("PrepShutdown HasErrors")
 		}
 	}
 	if pbReq.GetKill() {
-		svc.log.Debug("shutting down ranks")
-
 		fanReq.Method = control.StopRanks
-		fanResp, _, err := svc.rpcFanout(ctx, fanReq, false)
+		fanResp, _, err := svc.rpcFanout(ctx, fanReq, true)
 		if err != nil {
 			return nil, err
 		}
 		if err := populateStopResp(fanResp, pbResp, "stop"); err != nil {
 			return nil, err
 		}
-	}
-
-	if pbResp.GetResults() == nil {
-		return nil, errors.New("response results not populated")
 	}
 
 	svc.log.Debugf("Responding to SystemStop RPC: %+v", pbResp)
@@ -659,7 +686,7 @@ func (svc *mgmtSvc) SystemStart(ctx context.Context, pbReq *mgmtpb.SystemStartRe
 		Method: control.StartRanks,
 		Hosts:  pbReq.GetHosts(),
 		Ranks:  pbReq.GetRanks(),
-	}, false)
+	}, true)
 	if err != nil {
 		return nil, err
 	}

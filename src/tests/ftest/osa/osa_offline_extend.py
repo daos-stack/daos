@@ -7,6 +7,7 @@
 import time
 from osa_utils import OSAUtils
 from test_utils_pool import TestPool
+from apricot import skipForTicket
 
 
 class OSAOfflineExtend(OSAUtils):
@@ -19,7 +20,7 @@ class OSAOfflineExtend(OSAUtils):
     """
     def setUp(self):
         """Set up for test case."""
-        super(OSAOfflineExtend, self).setUp()
+        super().setUp()
         self.dmg_command = self.get_dmg_command()
         # Start an additional server.
         self.extra_servers = self.params.get("test_servers",
@@ -27,7 +28,8 @@ class OSAOfflineExtend(OSAUtils):
 
     def run_offline_extend_test(self, num_pool, data=False):
         """Run the offline extend without data.
-            Args:
+
+        Args:
             num_pool (int) : total pools to create for testing purposes.
             data (bool) : whether pool has no data or to create
                           some data in pool. Defaults to False.
@@ -70,16 +72,7 @@ class OSAOfflineExtend(OSAUtils):
                                                   rank, scm_size,
                                                   nvme_size)
             self.log.info(output)
-
-            pver_extend = self.get_pool_version()
-            fail_count = 0
-            while fail_count <= 20:
-                pver_extend = self.get_pool_version()
-                time.sleep(15)
-                fail_count += 1
-                if pver_extend > pver_begin:
-                    break
-
+            self.is_rebuild_done(3)
             self.assert_on_rebuild_failure()
 
             pver_extend = self.get_pool_version()
@@ -95,6 +88,7 @@ class OSAOfflineExtend(OSAUtils):
         if data:
             self.verify_single_object()
 
+    @skipForTicket("DAOS-6644")
     def test_osa_offline_extend(self):
         """
         JIRA ID: DAOS-4751

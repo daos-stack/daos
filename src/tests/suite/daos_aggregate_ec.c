@@ -117,7 +117,7 @@ ec_setup_cont_obj(struct ec_agg_test_ctx *ctx, daos_oclass_id_t oclass)
 
 	ctx->oid.lo = 1;
 	ctx->oid.hi =  100;
-	daos_obj_generate_id(&ctx->oid, 0, oclass, 0);
+	daos_obj_generate_oid(ctx->coh, &ctx->oid, 0, oclass, 0, 0);
 	rc = daos_obj_open(ctx->coh, ctx->oid, 0, &ctx->oh, NULL);
 	assert_success(rc);
 }
@@ -129,7 +129,7 @@ ec_setup_obj(struct ec_agg_test_ctx *ctx, daos_oclass_id_t oclass, int low)
 
 	ctx->oid.lo = low;
 	ctx->oid.hi =  100;
-	daos_obj_generate_id(&ctx->oid, 0, oclass, 0);
+	daos_obj_generate_oid(ctx->coh, &ctx->oid, 0, oclass, 0, 0);
 	ctx->oh = DAOS_HDL_INVAL;
 	rc = daos_obj_open(ctx->coh, ctx->oid, 0, &ctx->oh, NULL);
 	assert_success(rc);
@@ -287,8 +287,8 @@ verify_1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 		assert_int_equal(!parity[i], 0);
 	}
 
-	ec_setup_single_recx_data(ctx, EC_SPECIFIED, 0, k * len, 0, false,
-				  false, 0);
+	ec_setup_single_recx_data(ctx, EC_SPECIFIED, 0, (daos_size_t)k * len, 0,
+				  false, false, 0);
 	if (shard > 2)
 		iov_update_fill(ctx->update_sgl.sg_iovs, 1, len, true);
 
@@ -312,7 +312,7 @@ verify_1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 						      &ctx->fetch_iod,
 						      &ctx->fetch_sgl,
 						      &ctx->fetch_iom, &shard,
-						      NULL, NULL, &task);
+						      NULL, NULL, NULL, &task);
 			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
 			assert_rc_equal(rc, 0);
@@ -331,7 +331,7 @@ verify_1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 						      &ctx->fetch_iod,
 						      &ctx->fetch_sgl,
 						      &ctx->fetch_iom, &shard,
-						      NULL, NULL, &task);
+						      NULL, NULL, NULL, &task);
 			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
 			assert_rc_equal(rc, 0);
@@ -441,7 +441,7 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 						      &ctx->fetch_iod,
 						      &ctx->fetch_sgl,
 						      &ctx->fetch_iom, &shard,
-						      NULL, NULL, &task);
+						      NULL, NULL, NULL, &task);
 			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
 			assert_rc_equal(rc, 0);
@@ -457,7 +457,7 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 						      &ctx->fetch_iod,
 						      &ctx->fetch_sgl,
 						      &ctx->fetch_iom, &shard,
-						      NULL, NULL, &task);
+						      NULL, NULL, NULL, &task);
 			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
 			assert_rc_equal(rc, 0);
@@ -477,7 +477,7 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 						      &ctx->fetch_iod,
 						      &ctx->fetch_sgl,
 						      &ctx->fetch_iom, &shard,
-						      NULL, NULL, &task);
+						      NULL, NULL, NULL, &task);
 			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
 			assert_rc_equal(rc, 0);
@@ -497,7 +497,7 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 						      &ctx->fetch_iod,
 						      &ctx->fetch_sgl,
 						      &ctx->fetch_iom, &shard,
-						      NULL, NULL, &task);
+						      NULL, NULL, NULL, &task);
 			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
 			assert_rc_equal(rc, 0);
@@ -610,7 +610,7 @@ int run_daos_aggregation_ec_test(int rank, int size, int *sub_tests,
 		MPI_Barrier(MPI_COMM_WORLD);
 		return rc;
 	}
-	rc = cmocka_run_group_tests_name("DAOS EC AGGREGATION TESTS",
+	rc = cmocka_run_group_tests_name("DAOS_EC_Aggregation",
 					 ec_agg_tests, ec_setup, test_teardown);
 
 	MPI_Barrier(MPI_COMM_WORLD);

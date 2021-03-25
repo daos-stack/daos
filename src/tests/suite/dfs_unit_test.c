@@ -6,6 +6,7 @@
 #define D_LOGFAC	DD_FAC(tests)
 
 #include "dfs_test.h"
+#include "dfs_internal.h"
 #include <pthread.h>
 
 /** global DFS mount used for all tests */
@@ -29,21 +30,21 @@ dfs_test_mount(void **state)
 	/** create & open a non-posix container */
 	uuid_generate(cuuid);
 	rc = daos_cont_create(arg->pool.poh, cuuid, NULL, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	print_message("Created non-POSIX Container "DF_UUIDF"\n",
 		      DP_UUID(cuuid));
 	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
 			    &coh, &co_info, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/** try to mount DFS on it, should fail. */
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
 	assert_int_equal(rc, EINVAL);
 
 	rc = daos_cont_close(coh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	print_message("Destroyed non-POSIX Container "DF_UUIDF"\n",
 		      DP_UUID(cuuid));
 
@@ -53,7 +54,7 @@ dfs_test_mount(void **state)
 	print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
 	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
 			    &coh, &co_info, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
 	assert_int_equal(rc, 0);
@@ -61,9 +62,9 @@ dfs_test_mount(void **state)
 	rc = dfs_umount(dfs);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
 }
 
@@ -519,6 +520,177 @@ dfs_test_read_shared_file(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
+static void
+dfs_test_lookupx(void **state)
+{
+	test_arg_t		*arg = *state;
+	dfs_obj_t		*obj;
+	char			*dir1 = "xdir1", *dir2 = "xdir2";
+	mode_t			create_mode = S_IWUSR | S_IRUSR;
+	int			create_flags = O_RDWR | O_CREAT;
+	char			*xnames[] = {"x1", "x2", "x3"};
+	int			vals_in[] = {1, 2, 3};
+	void			*vals_out[3];
+	daos_size_t		*val_sizes;
+	mode_t			mode;
+	struct stat             stbuf;
+	int			i;
+	int			rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	/** Create dir1 */
+	rc = dfs_open(dfs_mt, NULL, dir1, create_mode | S_IFDIR, create_flags,
+		      0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_setxattr(dfs_mt, obj, xnames[0], &vals_in[0], sizeof(int), 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_setxattr(dfs_mt, obj, xnames[1], &vals_in[1], sizeof(int), 0);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	/** Create dir2 */
+	rc = dfs_open(dfs_mt, NULL, dir2, create_mode | S_IFDIR, create_flags,
+		      0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	D_ALLOC_ARRAY(val_sizes, 3);
+	D_ASSERT(val_sizes != NULL);
+
+	/** MSC - this is currently not allowed by the DAOS obj API */
+#if 0
+	/** lookup with xattr first without sink buffer for vals */
+	rc = dfs_lookupx(dfs_mt, NULL, dir1, O_RDWR, &obj, &mode, &stbuf, 3,
+			 xnames, NULL, val_sizes);
+	assert_int_equal(rc, 0);
+	assert_int_equal(val_sizes[0], sizeof(int));
+	assert_int_equal(val_sizes[1], sizeof(int));
+	assert_int_equal(val_sizes[2], 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+#endif
+
+	for (i = 0; i < 3; i++) {
+		D_ALLOC(vals_out[i], sizeof(int));
+		D_ASSERT(vals_out[i] != NULL);
+		*((int *)vals_out[i]) = 5;
+		val_sizes[i] = sizeof(int);
+	}
+
+	rc = dfs_lookupx(dfs_mt, NULL, dir1, O_RDWR, &obj, &mode, &stbuf, 3,
+			 xnames, vals_out, val_sizes);
+	assert_int_equal(rc, 0);
+	assert_int_equal(val_sizes[0], sizeof(int));
+	assert_int_equal(val_sizes[1], sizeof(int));
+	assert_int_equal(val_sizes[2], 0);
+	assert_int_equal(*((int *)vals_out[0]), vals_in[0]);
+	assert_int_equal(*((int *)vals_out[1]), vals_in[1]);
+	assert_int_equal(*((int *)vals_out[2]), 5);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	for (i = 0; i < 3; i++)
+		*((int *)vals_out[i]) = 5;
+
+	val_sizes[2] = sizeof(int);
+	rc = dfs_lookupx(dfs_mt, NULL, dir2, O_RDWR, &obj, &mode, &stbuf, 3,
+			 xnames, vals_out, val_sizes);
+	assert_int_equal(rc, 0);
+	assert_int_equal(val_sizes[0], 0);
+	assert_int_equal(val_sizes[1], 0);
+	assert_int_equal(val_sizes[2], 0);
+	assert_int_equal(*((int *)vals_out[0]), 5);
+	assert_int_equal(*((int *)vals_out[1]), 5);
+	assert_int_equal(*((int *)vals_out[2]), 5);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+}
+
+static void
+dfs_test_io_error_code(void **state)
+{
+	test_arg_t	*arg = *state;
+	dfs_obj_t	*file;
+	daos_event_t	ev, *evp;
+	daos_range_t	iod_rgs;
+	dfs_iod_t	iod;
+	d_sg_list_t	sgl;
+	d_iov_t		iov;
+	char		buf[10];
+	daos_size_t	read_size;
+	int		rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	rc = dfs_open(dfs_mt, NULL, "io_error", S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT, 0, 0, NULL, &file);
+	assert_int_equal(rc, 0);
+
+	/*
+	 * set an IOD that has writes more data than sgl to trigger error in
+	 * array layer.
+	 */
+	iod.iod_nr = 1;
+	iod_rgs.rg_idx = 0;
+	iod_rgs.rg_len = 10;
+	iod.iod_rgs = &iod_rgs;
+	d_iov_set(&iov, buf, 5);
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs = &iov;
+
+	/** Write */
+	if (arg->async) {
+		rc = daos_event_init(&ev, arg->eq, NULL);
+		assert_rc_equal(rc, 0);
+	}
+	rc = dfs_writex(dfs_mt, file, &iod, &sgl, arg->async ? &ev : NULL);
+	if (arg->async) {
+		/** Wait for completion */
+		rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+		assert_rc_equal(rc, 1);
+		assert_ptr_equal(evp, &ev);
+		assert_int_equal(evp->ev_error, EINVAL);
+
+		rc = daos_event_fini(&ev);
+		assert_rc_equal(rc, 0);
+	} else {
+		assert_int_equal(rc, EINVAL);
+	}
+
+	/** Read */
+	if (arg->async) {
+		rc = daos_event_init(&ev, arg->eq, NULL);
+		assert_rc_equal(rc, 0);
+	}
+	rc = dfs_readx(dfs_mt, file, &iod, &sgl, &read_size,
+		       arg->async ? &ev : NULL);
+	if (arg->async) {
+		/** Wait for completion */
+		rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+		assert_rc_equal(rc, 1);
+		assert_ptr_equal(evp, &ev);
+		assert_int_equal(evp->ev_error, EINVAL);
+
+		rc = daos_event_fini(&ev);
+		assert_rc_equal(rc, 0);
+	} else {
+		assert_int_equal(rc, EINVAL);
+	}
+
+	rc = dfs_release(file);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "io_error", 0, NULL);
+	assert_int_equal(rc, 0);
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
 	{ "DFS_UNIT_TEST1: DFS mount / umount",
 	  dfs_test_mount, async_disable, test_case_teardown},
@@ -530,6 +702,12 @@ static const struct CMUnitTest dfs_unit_tests[] = {
 	  dfs_test_syml_follow, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST5: multi-threads read shared file",
 	  dfs_test_read_shared_file, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST6: DFS lookupx",
+	  dfs_test_lookupx, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST7: DFS IO sync error code",
+	  dfs_test_io_error_code, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST8: DFS IO async error code",
+	  dfs_test_io_error_code, async_enable, test_case_teardown},
 };
 
 static int
@@ -567,12 +745,12 @@ dfs_teardown(void **state)
 	rc = dfs_umount(dfs_mt);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(co_hdl, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0) {
 		rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		print_message("Destroyed DFS Container "DF_UUIDF"\n",
 			      DP_UUID(co_uuid));
 	}
@@ -587,7 +765,7 @@ run_dfs_unit_test(int rank, int size)
 	int rc = 0;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	rc = cmocka_run_group_tests_name("DAOS FileSystem (DFS) unit tests",
+	rc = cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Unit",
 					 dfs_unit_tests, dfs_setup,
 					 dfs_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);

@@ -6,12 +6,10 @@
 #
 """
 This script runs the rdb tests. From the command line the tests are run with:
-
 server:
 orterun -N 1 --report-uri /tmp/urifile -x LD_LIBRARY_PATH
 daos_server -o <builddir>/utils/config/examples/daos_server_rdb_tests.yml
 start -d ./ -t 1 -m vos,rdb,rsvc,mgmt,rdbt
-
 client:
 orterun --ompi-server file:/tmp/urifile <debug_cmds> -np 1 rdbt init
 --group=daos_server --uuid <uuid>
@@ -21,10 +19,8 @@ orterun --ompi-server file:/tmp/urifile <debug_cmds> -np 1 rdbt test
 --group=daos_server
 orterun --ompi-server file:/tmp/urifile <debug_cmds> -np 1 rdbt fini
 --group=daos_server
-
 Where debug_cmds = -x D_LOG_MASK=DEBUG,RPC=ERR,MEM=ERR -x DD_SUBSYS=all
 -x DD_MASK=all
-
 This script automates the process.
 """
 
@@ -141,7 +137,6 @@ def find_child(parent_pid, child_name):
     ps -o pid,comm --no-headers --ppid <pid> gives output that looks like this:
      41108 orterun
      41519 ps
-
     """
     child_pid = None
     cmd = ['ps', '-o', 'pid,comm', '--no-headers', '--ppid', str(parent_pid)]
@@ -179,7 +174,7 @@ def daos_server_pid():
     """
     Find the pid for the daos_server. Start drilling down from the parent
     (current) process until we get output where one line contains
-    "daos_io_server" or "daos_server".
+    "daos_engine" or "daos_server".
     """
     parent_pid = os.getpid()
     return find_child(parent_pid, "daos_")
@@ -187,7 +182,7 @@ def daos_server_pid():
 def cleanup(daos_server):
     """ Perform cleanup operations. Shut down the DAOS server by killing the
     child processes that have been created. If the daos_server process is
-    killed, so are the processes for daos_io_server and orterun (theoretically).
+    killed, so are the processes for daos_engine and orterun (theoretically).
     It has been observed on occasion to go zombie until orterun itself is
     killed.
     """
@@ -236,15 +231,14 @@ if __name__ == "__main__":
             time.sleep(1)
             daos_server = daos_server_pid()
 
-        # Give daos_io_server some time to get ready.
+        # Give daos_engine some time to get ready.
         time.sleep(10)
 
         print("DAOS server started")
 
         # Client operations
-        client_prefix = "{} --ompi-server " \
-                        "file:{} {} --np 1 rdbt ".format(
-                        orterun urifile, debug_cmds)
+        client_prefix = "{} --ompi-server file:{} {} --np 1 rdbt ".format(
+            orterun, urifile, debug_cmds)
         client_suffix = " --group=daos_server"
         # orterun is called for the client four times: init, update, test,
         # and fini

@@ -199,7 +199,7 @@ pl_obj_layout_free(struct pl_obj_layout *layout)
 /* Returns whether or not a given layout contains the specified rank */
 bool
 pl_obj_layout_contains(struct pool_map *map, struct pl_obj_layout *layout,
-		       uint32_t rank, uint32_t target_index)
+		       uint32_t rank, uint32_t target_index, uint32_t id_shard)
 {
 	struct pool_target *target;
 	int i;
@@ -211,7 +211,7 @@ pl_obj_layout_contains(struct pool_map *map, struct pl_obj_layout *layout,
 		rc = pool_map_find_target(map, layout->ol_shards[i].po_target,
 					  &target);
 		if (rc != 0 && target->ta_comp.co_rank == rank &&
-		    target->ta_comp.co_index == target_index)
+		    target->ta_comp.co_index == target_index && i == id_shard)
 			return true; /* Found a target and rank matches */
 	}
 
@@ -486,7 +486,14 @@ out:
 void
 pl_map_disconnect(uuid_t uuid)
 {
-	d_list_t        *link;
+	d_list_t *link;
+
+	/*
+	 * FIXME: DAOS-6763 Check if pl_htable is already finalized.
+	 * It can be called from ds_pool_hdl_hash_fini() after pl_fini().
+	 */
+	if (pl_htable.ht_ops == NULL)
+		return;
 
 	D_RWLOCK_WRLOCK(&pl_rwlock);
 	link = d_hash_rec_find(&pl_htable, uuid, sizeof(uuid_t));
@@ -610,10 +617,13 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 	}
 
 	replicas = oc_attr->u.rp.r_num;
-	if (replicas == DAOS_OBJ_REPL_MAX)
-		replicas = grp_size;
+	if (replicas == DAOS_OBJ_REPL_MAX) {
+		D_ASSERT(grp_idx == 0);
 
-	if (replicas < 1)
+		replicas = grp_size;
+	}
+
+	if (replicas < 1 || replicas > grp_size)
 		return -DER_INVAL;
 
 	if (replicas == 1) {
@@ -644,7 +654,7 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 	 *      to avoid leader switch.
 	 */
 	start = grp_idx * grp_size;
-	replica_idx = (oid.lo + grp_idx) % grp_size;
+	replica_idx = (oid.lo + grp_idx) % replicas;
 	for (i = 0, pos = -1; i < replicas;
 	     i++, replica_idx = (replica_idx + 1) % replicas) {
 		int off = start + replica_idx;
