@@ -201,6 +201,7 @@ This is the package needed to build software with the DAOS library.
 scons %{?_smp_mflags}      \
       --config=force       \
       --no-rpath           \
+      --stack_mmap         \
       USE_INSTALLED=all    \
       CONF_DIR=%{conf_dir} \
       PREFIX=%{buildroot} \
@@ -210,6 +211,7 @@ scons %{?_smp_mflags}      \
 scons %{?_smp_mflags}                 \
       --config=force                  \
       --no-rpath                      \
+      --stack_mmap                   \
       --install-sandbox=%{buildroot} \
       %{buildroot}%{_prefix}         \
       %{buildroot}%{conf_dir}        \
@@ -404,6 +406,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Thu Mar 25 2021 Bruno Faccini <bruno.faccini@intel.com> 1.3.0-3
+- Build with --stack_mmap
+
 * Thu Feb 25 2021 Li Wei <wei.g.li@intel.com> 1.3.0-2
 - Require raft-devel 0.7.3 that fixes an unstable leadership problem caused by
   removed replicas as well as some Coverity issues
