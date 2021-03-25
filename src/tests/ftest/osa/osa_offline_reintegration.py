@@ -174,6 +174,7 @@ class OSAOfflineReintegration(OSAUtils):
         """
         self.run_offline_reintegration_test(5, data=True)
 
+    @skipForTicket("DAOS-6807")
     def test_osa_offline_reintegration_server_stop(self):
         """Test ID: DAOS-6748.
 
