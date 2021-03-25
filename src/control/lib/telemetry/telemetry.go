@@ -43,6 +43,8 @@ const (
 	BadFloatVal = float64(BadUintVal)
 	BadIntVal   = int64(BadUintVal >> 1)
 	BadDuration = time.Duration(BadIntVal)
+	ShowMeta    = false
+	ShowTStamp  = false
 )
 
 type (
@@ -50,8 +52,8 @@ type (
 		Path() string
 		Name() string
 		Type() MetricType
-		ShortDesc() string
-		LongDesc() string
+		Desc() string
+		Units() string
 		FloatValue() float64
 		String() string
 	}
@@ -80,10 +82,10 @@ type (
 		handle *handle
 		node   *C.struct_d_tm_node_t
 
-		path      string
-		name      *string
-		shortDesc *string
-		longDesc  *string
+		path  string
+		name  *string
+		desc  *string
+		units *string
 	}
 
 	statsMetric struct {
@@ -148,38 +150,38 @@ func (mb *metricBase) fillMetadata() {
 		return
 	}
 
-	var shortDesc *C.char
-	var longDesc *C.char
-	res := C.d_tm_get_metadata(&shortDesc, &longDesc, mb.handle.shmem, mb.node, C.CString(mb.Name()))
+	var desc *C.char
+	var units *C.char
+	res := C.d_tm_get_metadata(&desc, &units, mb.handle.shmem, mb.node, C.CString(mb.Name()))
 	if res == C.DER_SUCCESS {
-		short := C.GoString(shortDesc)
-		mb.shortDesc = &short
-		long := C.GoString(longDesc)
-		mb.longDesc = &long
+		descStr := C.GoString(desc)
+		mb.desc = &descStr
+		unitsStr := C.GoString(units)
+		mb.units = &unitsStr
 
-		C.free(unsafe.Pointer(shortDesc))
-		C.free(unsafe.Pointer(longDesc))
+		C.free(unsafe.Pointer(desc))
+		C.free(unsafe.Pointer(units))
 	} else {
 		failed := "failed to retrieve metadata"
-		mb.shortDesc = &failed
-		mb.longDesc = &failed
+		mb.desc = &failed
+		mb.units = &failed
 	}
 }
 
-func (mb *metricBase) ShortDesc() string {
-	if mb.shortDesc == nil {
+func (mb *metricBase) Desc() string {
+	if mb.desc == nil {
 		mb.fillMetadata()
 	}
 
-	return *mb.shortDesc
+	return *mb.desc
 }
 
-func (mb *metricBase) LongDesc() string {
-	if mb.longDesc == nil {
+func (mb *metricBase) Units() string {
+	if mb.units == nil {
 		mb.fillMetadata()
 	}
 
-	return *mb.longDesc
+	return *mb.units
 }
 
 func (mb *metricBase) String() string {
@@ -196,7 +198,7 @@ func (mb *metricBase) String() string {
 	}
 
 	go func() {
-		C.d_tm_print_node(mb.handle.shmem, mb.node, C.int(0), f)
+		C.d_tm_print_node(mb.handle.shmem, mb.node, C.int(0), C.CString(""), C.D_TM_STANDARD, ShowMeta, ShowTStamp, f)
 		C.fclose(f)
 	}()
 

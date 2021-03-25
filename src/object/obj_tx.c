@@ -1246,8 +1246,10 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 
 		dcri = &dtrg->dtrg_req_idx[dtrg->dtrg_read_cnt +
 					   dtrg->dtrg_write_cnt];
-		dcri->dcri_shard_idx = shard->do_shard;
+		dcri->dcri_shard_off = idx;
+		dcri->dcri_shard_id = shard->do_shard;
 		dcri->dcri_req_idx = req_idx;
+		dcri->dcri_padding = 0;
 
 		if (read)
 			dtrg->dtrg_read_cnt++;

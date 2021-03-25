@@ -32,7 +32,7 @@ class ContSecurityTestBase(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a ContSecurityTestBase object."""
-        super(ContSecurityTestBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.dmg = None
         self.daos_tool = None
         self.user_uid = None
@@ -44,7 +44,7 @@ class ContSecurityTestBase(TestWithServers):
 
     def setUp(self):
         """Set up each test case."""
-        super(ContSecurityTestBase, self).setUp()
+        super().setUp()
         self.user_uid = os.geteuid()
         self.user_gid = os.getegid()
         self.current_user = pwd.getpwuid(self.user_uid)[0]
@@ -103,10 +103,10 @@ class ContSecurityTestBase(TestWithServers):
             self.container.get_params(self)
             self.container.create(acl_file=file_name)
             container_uuid = self.container.uuid
-        except TestFail:
+        except TestFail as error:
             if acl_type != "invalid":
                 raise DaosTestError(
-                    "Could not create a container when expecting one")
+                    "Could not create expected container ") from error
             container_uuid = None
 
         return container_uuid
@@ -138,7 +138,7 @@ class ContSecurityTestBase(TestWithServers):
                                                   verbose, outfile)
 
         cont_permission_list = []
-        for line in result.stdout.splitlines():
+        for line in result.stdout_text.splitlines():
             if not line.startswith("A:"):
                 continue
             elif line.startswith("A::"):
@@ -398,14 +398,14 @@ class ContSecurityTestBase(TestWithServers):
         test_errs = []
         if results.exit_status == 0:
             test_errs.append("{} passed unexpectedly: {}".format(
-                results.command, results.stdout))
+                results.command, results.stdout_text))
         elif results.exit_status == 1:
             # REMOVE BELOW IF Once DAOS-5635 is resolved
-            if results.stdout and err_msg in results.stdout:
-                self.log.info("Found expected error %s", results.stdout)
+            if results.stdout_text and err_msg in results.stdout_text:
+                self.log.info("Found expected error %s", results.stdout_text)
             # REMOVE ABOVE IF Once DAOS-5635 is resolved
-            elif results.stderr and err_msg in results.stderr:
-                self.log.info("Found expected error %s", results.stderr)
+            elif results.stderr_text and err_msg in results.stderr_text:
+                self.log.info("Found expected error %s", results.stderr_text)
             else:
                 self.fail("{} seems to have failed with \
                     unexpected error: {}".format(results.command, results))

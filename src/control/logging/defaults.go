@@ -17,7 +17,7 @@ const (
 )
 
 // NewCommandLineLogger returns a logger configured
-// to send non-error output to stdout and error
+// to send non-error output to stdout and error/debug
 // output to stderr. The output format is suitable
 // for command line utilities which don't want output
 // to include timestamps and filenames.
@@ -25,7 +25,7 @@ func NewCommandLineLogger() *LeveledLogger {
 	return &LeveledLogger{
 		level: DefaultLogLevel,
 		debugLoggers: []DebugLogger{
-			NewDebugLogger(os.Stdout),
+			NewDebugLogger(os.Stderr),
 		},
 		infoLoggers: []InfoLogger{
 			NewCommandLineInfoLogger(os.Stdout),

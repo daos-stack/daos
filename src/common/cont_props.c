@@ -5,13 +5,16 @@
  */
 
 #include <daos/cont_props.h>
-#include <common.h>
+#include <daos/common.h>
 
 void
 daos_props_2cont_props(daos_prop_t *props, struct cont_props *cont_prop)
 {
-	if (props == NULL || cont_prop == NULL)
+	if (props == NULL || cont_prop == NULL) {
+		D_DEBUG(DB_TRACE, "No props to set, props=%p, cont_prop=%p\n",
+			props, cont_prop);
 		return;
+	}
 
 	/** deduplication */
 	cont_prop->dcp_dedup_enabled	= daos_cont_prop2dedup(props);

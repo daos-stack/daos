@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from __future__ import print_function
+
 
 import time
 import traceback
@@ -20,7 +20,7 @@ class ObjFetchBadParam(TestWithServers):
     :avocado: recursive
     """
     def setUp(self):
-        super(ObjFetchBadParam, self).setUp()
+        super().setUp()
         time.sleep(5)
 
         self.prepare_pool()
@@ -34,10 +34,10 @@ class ObjFetchBadParam(TestWithServers):
             self.container.open()
 
             # create an object and write some data into it
-            thedata = "a string that I want to stuff into an object"
+            thedata = b"a string that I want to stuff into an object"
             self.datasize = len(thedata) + 1
-            self.dkey = "this is the dkey"
-            self.akey = "this is the akey"
+            self.dkey = b"this is the dkey"
+            self.akey = b"this is the akey"
             self.obj = self.container.write_an_obj(thedata,
                                                    self.datasize,
                                                    self.dkey,
@@ -47,10 +47,11 @@ class ObjFetchBadParam(TestWithServers):
             thedata2 = self.container.read_an_obj(self.datasize, self.dkey,
                                                   self.akey, self.obj)
             if thedata not in thedata2.value:
-                print(thedata)
-                print(thedata2.value)
-                self.fail("Error reading back data, test failed during"\
-                         " the initial setup.\n")
+                self.log.info("thedata:  %s", thedata)
+                self.log.info("thedata2: %s", thedata2.value)
+                self.fail(
+                    "Error reading back data, test failed during the initial "
+                    "setup.\n")
 
         except DaosApiError as excep:
             print(excep)
@@ -124,11 +125,11 @@ class ObjFetchBadParam(TestWithServers):
         try:
             # when DAOS-1449 is complete, uncomment and retest
             # now try it with a null iod, expecting this to fail with -1003
-            #test_hints = ['iodnull']
-            #thedata2 = self.container.read_an_obj(self.datasize, dkey, akey,
+            # test_hints = ['iodnull']
+            # thedata2 = self.container.read_an_obj(self.datasize, dkey, akey,
             #                                 self.obj, test_hints)
             pass
-            #self.fail("Test was expected to return a -1003 but it has not.\n")
+            # self.fail("Test was expected to return a -1003 but it has not.\n")
 
         except DaosApiError as excep:
             if '-1003' not in str(excep):

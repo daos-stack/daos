@@ -103,7 +103,8 @@ obj_rw_complete(crt_rpc_t *rpc, struct obj_io_context *ioc,
 
 		if (rc != 0) {
 			D_CDEBUG(rc == -DER_REC2BIG || rc == -DER_INPROGRESS ||
-				 rc == -DER_TX_RESTART,
+				 rc == -DER_TX_RESTART || rc == -DER_EXIST ||
+				 rc == -DER_NONEXIST,
 				 DLOG_DBG, DLOG_ERR,
 				 DF_UOID " %s end failed: %d\n",
 				 DP_UOID(orwi->orw_oid),
@@ -1575,6 +1576,7 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 	struct ds_cont_child *coc;
 	int		      rc;
 
+	D_ASSERT(ioc != NULL);
 	memset(ioc, 0, sizeof(*ioc));
 	ioc->ioc_opc = opc;
 
@@ -1845,6 +1847,7 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 		D_ERROR("ioc_begin failed: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
+	D_ASSERT(ioc.ioc_coc != NULL);
 	dkey = (daos_key_t *)&oer->er_dkey;
 	iod = (daos_iod_t *)&oer->er_iod;
 	rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oer->er_oid,
@@ -1919,6 +1922,7 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 		D_ERROR("ioc_begin failed: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
+	D_ASSERT(ioc.ioc_coc != NULL);
 	dkey = (daos_key_t *)&oea->ea_dkey;
 	iod.iod_name = oea->ea_akey;
 	iod.iod_type = DAOS_IOD_ARRAY;
@@ -3567,7 +3571,7 @@ ds_obj_dtx_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 			D_GOTO(out, rc = -DER_PROTO);
 		}
 
-		dcsr->dcsr_oid.id_shard = dcri[i].dcri_shard_idx;
+		dcsr->dcsr_oid.id_shard = dcri[i].dcri_shard_id;
 		rc = vos_fetch_begin(ioc->ioc_vos_coh, dcsr->dcsr_oid,
 				     dcsh->dcsh_epoch.oe_value,
 				     &dcsr->dcsr_dkey, dcsr->dcsr_nr,
@@ -3591,7 +3595,7 @@ ds_obj_dtx_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 	/* P2: vos_update_begin. */
 	for (i = 0; i < dcde->dcde_write_cnt; i++) {
 		dcsr = &dcsrs[dcri[i].dcri_req_idx];
-		dcsr->dcsr_oid.id_shard = dcri[i].dcri_shard_idx;
+		dcsr->dcsr_oid.id_shard = dcri[i].dcri_shard_id;
 
 		if (dcsr->dcsr_opc != DCSO_UPDATE)
 			continue;

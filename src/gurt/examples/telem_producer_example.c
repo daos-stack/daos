@@ -216,9 +216,7 @@ struct d_tm_nodeList_t *add_metrics_manually(void)
 	 */
 	rc = d_tm_add_metric(&counter1, D_TM_COUNTER,
 			     "A manually added counter",
-			     "If I had a lot to say about it, I'd write that "
-			     "here.  I have D_TM_MAX_LONG_LEN characters "
-			     "to use.",
+			     D_TM_KILOBYTE,
 			     "manually added/counter 1");
 	if (rc != DER_SUCCESS) {
 		printf("d_tm_add_metric failed: " DF_RC "\n", DP_RC(rc));
@@ -233,7 +231,7 @@ struct d_tm_nodeList_t *add_metrics_manually(void)
 
 	rc = d_tm_add_metric(&counter2, D_TM_COUNTER,
 			     "Another manually added counter",
-			     "Much less metadata to report this time.",
+			     D_TM_MEGABYTE,
 			     "manually added/counter 2");
 	if (rc != DER_SUCCESS) {
 		d_tm_list_free(node_list);
