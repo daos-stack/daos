@@ -108,6 +108,24 @@ class DaosCommand(DaosCommandBase):
             cont=cont, path=path, type=cont_type, oclass=oclass,
             chunk_size=chunk_size, properties=properties, acl_file=acl_file)
 
+    def container_clone(self, src, dst):
+        """Clone a container to a new container.
+
+        Args:
+            src (str): the source, formatted as daos://<pool>/<cont>
+            dst (str): the destination, formatted as daos://<pool>/<cont>
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos container clone command fails.
+
+        """
+        return self._get_result(
+            ("container", "clone"), src=src, dst=dst)
+
     def container_destroy(self, pool, cont, force=None, sys_name=None):
         """Destroy a container.
 

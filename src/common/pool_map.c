@@ -1420,6 +1420,18 @@ add_domains_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 		map_comp.co_fseq = 1;
 		map_comp.co_nr = node.fdn_val.dom->fd_children_nr;
 
+		if (map != NULL) {
+			struct pool_domain	*current;
+			int			already_in_map;
+
+			already_in_map = pool_map_find_domain(map,
+							      PO_COMP_TP_RACK,
+							      map_comp.co_id,
+							      &current);
+			if (already_in_map > 0)
+				map_comp.co_status = current->do_comp.co_status;
+		}
+
 		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
 		i++;
 	}
