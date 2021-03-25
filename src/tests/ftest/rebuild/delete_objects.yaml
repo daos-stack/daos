@@ -35,5 +35,5 @@ container:
       record_qty: 1
   debug: True
 rebuild:
-  rank: 3
+  rank: 4
   object_class: OC_RP_3G1
