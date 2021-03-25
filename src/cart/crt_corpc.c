@@ -628,8 +628,7 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 
 	rc = cb_info->cci_rc;
 	if (rc != 0) {
-		D_ERROR("RPC(opc: %#x) error, rc: %d.\n",
-			child_req->cr_opc, rc);
+		RPC_ERROR(child_rpc_priv, "error, rc: "DF_RC"\n", DP_RC(rc));
 		co_info->co_rc = rc;
 	}
 	/* propagate failure rc to parent */

@@ -531,7 +531,7 @@ class DaosServer():
                     procs.append(proc_id)
                     break
 
-        if len(procs) != 1:
+        if len(procs) != self.engines:
             entry = {}
             entry['fileName'] = os.path.basename(self._file)
             entry['directory'] = os.path.dirname(self._file)
@@ -863,18 +863,21 @@ class DFuse():
         # prefix to the src dir.
         self.valgrind.convert_xml()
 
-def get_pool_list():
+def get_pool_list(server):
     """Return a list of valid pool names"""
     pools = []
 
-    for fname in os.listdir('/mnt/daos_0'):
-        if len(fname) != 36:
-            continue
-        try:
-            uuid.UUID(fname)
-        except ValueError:
-            continue
-        pools.append(fname)
+    for idx in range(server.engines):
+        for fname in os.listdir('/mnt/daos_{}'.format(idx)):
+            if len(fname) != 36:
+                continue
+            if fname in pools:
+                continue
+            try:
+                uuid.UUID(fname)
+            except ValueError:
+                continue
+            pools.append(fname)
     return pools
 
 def assert_file_size_fd(fd, size):
@@ -1007,7 +1010,7 @@ def make_pool(daos):
     print(rc)
     assert rc.returncode == 0 # nosec
 
-    return get_pool_list()
+    return get_pool_list(daos)
 
 def needs_dfuse(method):
     """Decorator function for starting dfuse under posix_tests class"""
@@ -1354,7 +1357,7 @@ def run_posix_tests(server, conf, test=None):
         print('rc from {} is {}'.format(fn, rc))
         print('Took {:.1f} seconds'.format(duration))
 
-    pools = get_pool_list()
+    pools = get_pool_list(server)
     while len(pools) < 1:
         pools = make_pool(server)
     pool = pools[0]
@@ -1679,7 +1682,7 @@ def run_duns_overlay_test(server, conf):
     and expose the container.
     """
 
-    pools = get_pool_list()
+    pools = get_pool_list(server)
     while len(pools) < 1:
         pools = make_pool(server)
 
@@ -1716,7 +1719,7 @@ def run_dfuse(server, conf):
 
     fatal_errors = BoolRatchet()
 
-    pools = get_pool_list()
+    pools = get_pool_list(server)
     while len(pools) < 1:
         pools = make_pool(server)
 
@@ -1780,7 +1783,7 @@ def run_dfuse(server, conf):
 def run_il_test(server, conf):
     """Run a basic interception library test"""
 
-    pools = get_pool_list()
+    pools = get_pool_list(server)
 
     # TODO:                       # pylint: disable=W0511
     # This doesn't work with two pools, partly related to
@@ -1855,7 +1858,7 @@ def run_in_fg(server, conf):
     Block until ctrl-c is pressed.
     """
 
-    pools = get_pool_list()
+    pools = get_pool_list(server)
 
     while len(pools) < 1:
         pools = make_pool(server)
@@ -1948,7 +1951,7 @@ def check_readdir_perf(server, conf):
                                 headers=headers,
                                 floatfmt=".2f"))
 
-    pools = get_pool_list()
+    pools = get_pool_list(server)
 
     while len(pools) < 1:
         pools = make_pool(server)
@@ -2071,7 +2074,7 @@ def test_pydaos_kv(server, conf):
     os.environ['D_LOG_FILE'] = pydaos_log_file.name
     daos = import_daos(server, conf)
 
-    pools = get_pool_list()
+    pools = get_pool_list(server)
 
     while len(pools) < 1:
         pools = make_pool(server)
@@ -2414,7 +2417,7 @@ def test_alloc_fail_cat(server, conf, wf):
     itself yet.
     """
 
-    pools = get_pool_list()
+    pools = get_pool_list(server)
 
     while len(pools) < 1:
         pools = make_pool(server)
@@ -2447,7 +2450,7 @@ def test_alloc_fail_cat(server, conf, wf):
 def test_alloc_fail(server, conf):
     """run 'daos' client binary with fault injection"""
 
-    pools = get_pool_list()
+    pools = get_pool_list(server)
 
     while len(pools) < 1:
         pools = make_pool(server)
@@ -2559,7 +2562,7 @@ def main():
     if args.mode == 'server-valgrind':
         server = DaosServer(conf, valgrind=True)
         server.start()
-        pools = get_pool_list()
+        pools = get_pool_list(server)
         for pool in pools:
             cmd = ['pool', 'list-containers', '--pool', pool]
             run_daos_cmd(conf, cmd, valgrind=False)
