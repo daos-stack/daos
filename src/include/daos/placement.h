@@ -121,7 +121,8 @@ void pl_obj_layout_free(struct pl_obj_layout *layout);
 int  pl_obj_layout_alloc(unsigned int grp_size, unsigned int grp_nr,
 			 struct pl_obj_layout **layout_pp);
 bool pl_obj_layout_contains(struct pool_map *map, struct pl_obj_layout *layout,
-			    uint32_t rank, uint32_t target_index);
+			    uint32_t rank, uint32_t target_index,
+			    uint32_t shard);
 
 int pl_obj_place(struct pl_map *map,
 		 struct daos_obj_md *md,
