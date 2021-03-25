@@ -108,9 +108,13 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 		if (grp_priv != NULL) {
 			grp_ref_taken = true;
 		} else {
-			D_ERROR("crt_grp_lookup_grpid: %s failed.\n",
-				co_hdr->coh_grpid);
-			D_GOTO(out, rc = -DER_INVAL);
+			/* the local SG does not match others SG, so let's
+			 * return GRPVER to retry until pool map is updated
+			 * or the pool is stopped.
+			 */
+			D_ERROR("crt_grp_lookup_grpid: %s failed: %d\n",
+				co_hdr->coh_grpid, -DER_GRPVER);
+			D_GOTO(out, rc = -DER_GRPVER);
 		}
 	}
 
