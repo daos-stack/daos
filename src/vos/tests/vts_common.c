@@ -186,8 +186,8 @@ enum {
 };
 
 /** try to obtain a free credit */
-struct dts_io_credit *
-dts_credit_take(struct dts_context *tsc)
+struct io_credit *
+dts_credit_take(struct credit_context *tsc)
 {
 	int	i;
 
@@ -204,7 +204,7 @@ dts_credit_take(struct dts_context *tsc)
 }
 
 void
-dts_credit_return(struct dts_context *tsc, struct dts_io_credit *cred)
+dts_credit_return(struct credit_context *tsc, struct io_credit *cred)
 {
 	int	i;
 
@@ -221,7 +221,7 @@ dts_credit_return(struct dts_context *tsc, struct dts_io_credit *cred)
 }
 
 static int
-credits_init(struct dts_context *tsc)
+vts_credits_init(struct credit_context *tsc)
 {
 	int	i;
 
@@ -229,7 +229,7 @@ credits_init(struct dts_context *tsc)
 	tsc->tsc_cred_avail	= tsc->tsc_cred_nr;
 
 	for (i = 0; i < tsc->tsc_cred_nr; i++) {
-		struct dts_io_credit *cred = &tsc->tsc_cred_buf[i];
+		struct io_credit *cred = &tsc->tsc_cred_buf[i];
 
 		memset(cred, 0, sizeof(*cred));
 		D_ALLOC(cred->tc_vbuf, tsc->tsc_cred_vsize);
@@ -243,7 +243,7 @@ credits_init(struct dts_context *tsc)
 }
 
 static void
-credits_fini(struct dts_context *tsc)
+vts_credits_fini(struct credit_context *tsc)
 {
 	int	i;
 
@@ -254,7 +254,7 @@ credits_fini(struct dts_context *tsc)
 }
 
 static int
-pool_init(struct dts_context *tsc)
+pool_init(struct credit_context *tsc)
 {
 	char		*pmem_file = tsc->tsc_pmem_file;
 	daos_handle_t	 poh = DAOS_HDL_INVAL;
@@ -293,7 +293,7 @@ pool_init(struct dts_context *tsc)
 }
 
 static void
-pool_fini(struct dts_context *tsc)
+pool_fini(struct credit_context *tsc)
 {
 	int	rc;
 
@@ -306,7 +306,7 @@ pool_fini(struct dts_context *tsc)
 }
 
 static int
-cont_init(struct dts_context *tsc)
+cont_init(struct credit_context *tsc)
 {
 	daos_handle_t	coh = DAOS_HDL_INVAL;
 	int		rc;
@@ -327,7 +327,7 @@ cont_init(struct dts_context *tsc)
 }
 
 static void
-cont_fini(struct dts_context *tsc)
+cont_fini(struct credit_context *tsc)
 {
 	if (tsc->tsc_pmem_file) /* VOS mode */
 		vos_cont_close(tsc->tsc_coh);
@@ -335,7 +335,7 @@ cont_fini(struct dts_context *tsc)
 
 /* see comments in dts_common.h */
 int
-dts_ctx_init(struct dts_context *tsc)
+dts_ctx_init(struct credit_context *tsc)
 {
 	int	rc;
 
@@ -361,7 +361,7 @@ dts_ctx_init(struct dts_context *tsc)
 	tsc->tsc_init = DTS_INIT_CONT;
 
 	/* initialize I/O credits, which include EQ, event, I/O buffers... */
-	rc = credits_init(tsc);
+	rc = vts_credits_init(tsc);
 	if (rc)
 		goto out;
 	tsc->tsc_init = DTS_INIT_CREDITS;
@@ -376,11 +376,11 @@ dts_ctx_init(struct dts_context *tsc)
 
 /* see comments in dts_common.h */
 void
-dts_ctx_fini(struct dts_context *tsc)
+dts_ctx_fini(struct credit_context *tsc)
 {
 	switch (tsc->tsc_init) {
 	case DTS_INIT_CREDITS:	/* finalize credits */
-		credits_fini(tsc);
+		vts_credits_fini(tsc);
 		/* fall through */
 	case DTS_INIT_CONT:	/* close and destroy container */
 		cont_fini(tsc);

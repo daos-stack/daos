@@ -332,6 +332,7 @@ func TestControl_getMetricFromPrometheus(t *testing.T) {
 		input     *pclient.Metric
 		inputType pclient.MetricType
 		expResult Metric
+		expErr    error
 	}{
 		"counter": {
 			input:     testCounter,
@@ -386,9 +387,16 @@ func TestControl_getMetricFromPrometheus(t *testing.T) {
 				},
 			},
 		},
+		"unknown": {
+			input:     testUntyped,
+			inputType: pclient.MetricType(-1),
+			expErr:    errors.New("unknown metric type"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			result := getMetricFromPrometheus(tc.input, tc.inputType)
+			result, err := getMetricFromPrometheus(tc.input, tc.inputType)
+
+			common.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
 			}
