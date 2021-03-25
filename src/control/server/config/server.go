@@ -392,17 +392,12 @@ func (cfg *Server) SetPath(inPath string) error {
 
 // SaveActiveConfig saves read-only active config, tries config dir then /tmp/.
 func (cfg *Server) SaveActiveConfig(log logging.Logger) {
-	activeConfig := filepath.Join(filepath.Dir(cfg.Path), configOut)
+	activeConfig := filepath.Join(cfg.SocketDir, configOut)
 
 	if err := cfg.SaveToFile(activeConfig); err != nil {
-		msg := "active config could not be saved"
-		log.Debug(errors.Wrap(err, msg).Error())
+		log.Debugf("active config could not be saved: %s", err.Error())
 
-		activeConfig = filepath.Join("/tmp", configOut)
-		if err := cfg.SaveToFile(activeConfig); err != nil {
-			log.Debug(errors.Wrap(err, msg).Error())
-			return
-		}
+		return
 	}
 	log.Debugf("active config saved to %s (read-only)", activeConfig)
 }

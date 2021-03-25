@@ -667,22 +667,6 @@ func TestServerConfig_NetworkDeviceClass(t *testing.T) {
 	}
 }
 
-//// SaveActiveConfig saves read-only active config, tries config dir then /tmp/.
-//func (cfg *Server) SaveActiveConfig(log logging.Logger) {
-//	activeConfig := filepath.Join(filepath.Dir(cfg.Path), configOut)
-//
-//	if err := cfg.SaveToFile(activeConfig); err != nil {
-//		msg := "active config could not be saved"
-//		log.Debug(errors.Wrap(err, msg).Error())
-//
-//		activeConfig = filepath.Join("/tmp", configOut)
-//		if err := cfg.SaveToFile(activeConfig); err != nil {
-//			log.Debug(errors.Wrap(err, msg).Error())
-//			return
-//		}
-//	}
-//	log.Debugf("active config saved to %s (read-only)", activeConfig)
-//}
 func TestServerConfig_SaveActiveConfig(t *testing.T) {
 	testDir, cleanup := CreateTestDir(t)
 	defer cleanup()
@@ -694,21 +678,23 @@ func TestServerConfig_SaveActiveConfig(t *testing.T) {
 		expLogOut string
 	}{
 		"successful write": {
-			cfgPath: testDir,
+			cfgPath:   testDir,
+			expLogOut: "active config saved to " + testDir + configOut,
+		},
+		"missing directory": {
+			cfgPath: filepath.Join(testDir, "non-existent/"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			cfg := DefaultServer()
-			cfg.Path = tc.cfgPath
+			cfg := DefaultServer().WithSocketDir(tc.cfgPath)
 
 			cfg.SaveActiveConfig(log)
 
-			common.AssertEqual(t, tc.expLogOut, buf.String(),
+			common.AssertTrue(t, strings.Contains(buf.String(), tc.expLogOut),
 				"unexpected log output")
-			// compare files
 		})
 	}
 }
