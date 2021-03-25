@@ -62,6 +62,8 @@ public class IOSimpleDDAsync extends IODataDescBase implements DaosEventQueue.At
 
   private DaosEventQueue.Event event;
 
+  private int sequence;
+
   private int retCode = Integer.MAX_VALUE;
 
   public static final int RET_CODE_SUCCEEDED = Constants.RET_CODE_SUCCEEDED;
@@ -90,6 +92,24 @@ public class IOSimpleDDAsync extends IODataDescBase implements DaosEventQueue.At
   @Override
   public void setDkey(String dkey) {
     throw new UnsupportedOperationException("setDkey is not supported");
+  }
+
+  /**
+   * sequence to identify this object which may return out of order.
+   *
+   * @return sequence
+   */
+  public int getSequence() {
+    return sequence;
+  }
+
+  /**
+   * set sequence.
+   * 
+   * @param sequence
+   */
+  public void setSequence(int sequence) {
+    this.sequence = sequence;
   }
 
   /**

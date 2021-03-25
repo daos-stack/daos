@@ -422,6 +422,109 @@ public class DaosObjectIT {
     }
   }
 
+  private void progress(DaosEventQueue eq, int nbr, List<DaosEventQueue.Attachment> completedList) throws IOException {
+    completedList.clear();
+    IOSimpleDDAsync failed = null;
+    int failedCnt = 0;
+    int count = eq.pollCompleted(completedList, nbr, 5000);
+    if (count == 0) {
+      throw new TimedOutException("failed to poll completed");
+    }
+    for (DaosEventQueue.Attachment attachment : completedList) {
+      IOSimpleDDAsync desc = (IOSimpleDDAsync) attachment;
+      if (desc.isSucceeded()) {
+        continue;
+      }
+      failedCnt++;
+      if (failed == null) {
+        failed = desc;
+      }
+    }
+    if (failedCnt > 0) {
+      throw new IOException("failed to write " + failedCnt + " IOSimpleDDAsync. First failed is " + failed);
+    }
+  }
+
+  @Test
+  public void testObjectUpdateAndFetchAsync() throws IOException {
+    DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
+    id.encode();
+    DaosObject object = client.getObject(id);
+    List<DaosEventQueue.Attachment> completeList = new LinkedList<>();
+    try {
+      object.open();
+      object.punch();
+      Assert.assertTrue(object.isOpen());
+      int dataSize = 30;
+      byte[] bytes = generateDataArray(dataSize);
+      DaosEventQueue eq = DaosEventQueue.getInstance(0);
+      IOSimpleDDAsync desc = object.createAsyncDataDescForUpdate("dkey1", eq.getEqWrapperHdl());
+      ByteBuf buffer1 = BufferAllocator.objBufWithNativeOrder(dataSize);
+      ByteBuf buffer2 = BufferAllocator.objBufWithNativeOrder(dataSize);
+      buffer1.writeBytes(bytes);
+      buffer2.writeBytes(bytes);
+      desc.addEntryForUpdate("akey1", 0, buffer1);
+      desc.addEntryForUpdate("akey2", 0, buffer2);
+      desc.setEvent(eq.acquireEventBlocking(100, null));
+      try {
+        object.updateAsync(desc);
+        progress(eq, 1, completeList);
+      } finally {
+        desc.release();
+      }
+      // fetch akey1
+      IOSimpleDDAsync desc2 = object.createAsyncDataDescForFetch("dkey1", eq.getEqWrapperHdl());
+      IOSimpleDDAsync.AsyncEntry entry = desc2.addEntryForFetch("akey1", 0, 80);
+      byte[] actualBytes;
+      desc2.setEvent(eq.acquireEventBlocking(100, null));
+      try {
+        object.fetchAsync(desc2);
+        progress(eq, 1, completeList);
+        Assert.assertEquals(dataSize, entry.getActualSize());
+        actualBytes = new byte[dataSize];
+        entry.getFetchedData().readBytes(actualBytes);
+        Assert.assertTrue(Arrays.equals(bytes, actualBytes));
+      } finally {
+        desc2.release();
+      }
+      // fetch akey2
+      desc2 = object.createAsyncDataDescForFetch("dkey1", eq.getEqWrapperHdl());
+      desc2.setEvent(eq.acquireEventBlocking(100, null));
+      entry = desc2.addEntryForFetch("akey2", 0, 30);
+      try {
+        object.fetchAsync(desc2);
+        progress(eq, 1, completeList);
+        Assert.assertEquals(dataSize, entry.getActualSize());
+        entry.getFetchedData().readBytes(actualBytes);
+        Assert.assertTrue(Arrays.equals(bytes, actualBytes));
+      } finally {
+        desc2.release();
+      }
+      // fetch both
+      desc2 = object.createAsyncDataDescForFetch("dkey1", eq.getEqWrapperHdl());
+      desc2.setEvent(eq.acquireEventBlocking(100, null));
+      IOSimpleDDAsync.AsyncEntry entry1 = desc2.addEntryForFetch("akey1", 0, 50);
+      IOSimpleDDAsync.AsyncEntry entry2 = desc2.addEntryForFetch("akey2", 0, 50);
+      try {
+        object.fetchAsync(desc2);
+        progress(eq, 1, completeList);
+        Assert.assertEquals(dataSize, entry1.getActualSize());
+        entry1.getFetchedData().readBytes(actualBytes);
+        Assert.assertTrue(Arrays.equals(bytes, actualBytes));
+        Assert.assertEquals(dataSize, entry2.getActualSize());
+        entry2.getFetchedData().readBytes(actualBytes);
+        Assert.assertTrue(Arrays.equals(bytes, actualBytes));
+      } finally {
+        desc2.release();
+      }
+    } finally {
+      if (object.isOpen()) {
+        object.punch();
+      }
+      object.close();
+    }
+  }
+
   @Test
   public void testObjectUpdateAndFetch() throws IOException {
     DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
