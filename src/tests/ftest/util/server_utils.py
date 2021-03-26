@@ -587,9 +587,9 @@ class DaosServerManager(SubprocessManager):
 
         """
         if host_qty is None:
-            hosts_qty = len(self._hosts)
+            host_qty = len(self._hosts)
         self.log.info("<SERVER> Waiting for the daos_engine to start")
-        self.manager.job.update_pattern("normal", hosts_qty)
+        self.manager.job.update_pattern("normal", host_qty)
         if not self.manager.check_subprocess_status(self.manager.process):
             self.manager.kill()
             raise ServerFailed("Failed to start servers after format")

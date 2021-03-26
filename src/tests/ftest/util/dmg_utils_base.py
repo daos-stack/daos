@@ -344,6 +344,7 @@ class DmgCommandBase(YamlCommand):
                 super().__init__("/run/dmg/storage/format/*", "format")
                 self.verbose = FormattedParameter("--verbose", False)
                 self.reformat = FormattedParameter("--reformat", False)
+                self.force = FormattedParameter("--force", False)
 
         class PrepareSubCommand(CommandWithParameters):
             """Defines an object for the dmg storage format command."""

@@ -6,10 +6,10 @@
 """
 
 
-
-from apricot import skipForTicket
+import time
 from avocado.core.exceptions import TestFail
 from pool_test_base import PoolTestBase
+from command_utils_base import CommandFailure
 
 
 class DmgSystemReformatTest(PoolTestBase):
@@ -22,7 +22,6 @@ class DmgSystemReformatTest(PoolTestBase):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-6004")
     def test_dmg_system_reformat(self):
         """
         JIRA ID: DAOS-5415
@@ -32,12 +31,12 @@ class DmgSystemReformatTest(PoolTestBase):
         :avocado: tags=all,small,daily_regression,hw,control,sys_reformat,dmg
         """
         # Create pool using 90% of the available SCM capacity
-        self.pool = self.get_pool_list(1, None, 0.9)
+        self.pool = self.get_pool_list(1, 0.9, None)
         self.pool[-1].create()
 
         self.log.info("Check that new pool will fail with DER_NOSPACE")
         self.get_dmg_command().exit_status_exception = False
-        self.pool.extend(self.get_pool_list(1, None, 0.9))
+        self.pool.extend(self.get_pool_list(1, 0.9, None))
         try:
             self.pool[-1].create()
         except TestFail as error:
@@ -54,21 +53,30 @@ class DmgSystemReformatTest(PoolTestBase):
         # Remove pools
         self.pool = []
 
-        # To verify that we are using the membership information instead of the
-        # dmg config explicit hostlist
-        # Uncomment below after DAOS-5979 is resolved
-        # self.assertTrue(
-        #     self.server_managers[-1].dmg.set_config_value("hostlist", None))
+        self.log.info("Stopping system prior to erase:")
+        self.get_dmg_command().system_stop(force=True)
+        if self.get_dmg_command().result.exit_status != 0:
+            self.fail("Issues performing system stop --force: {}".format(
+                self.get_dmg_command().result.stderr_text))
+
+        self.log.info("Erasing system:")
+        self.get_dmg_command().system_erase()
+        if self.get_dmg_command().result.exit_status != 0:
+            self.fail("Issues performing system erase: {}".format(
+                self.get_dmg_command().result.stderr_text))
 
         self.log.info("Perform dmg storage format on all system ranks:")
-        self.get_dmg_command().storage_format(reformat=True)
-        if self.get_dmg_command().result.exit_status != 0:
-            self.fail("Issues performing storage format --reformat: {}".format(
-                self.get_dmg_command().result.stderr_text))
+        while True:
+            try:
+                self.get_dmg_command().storage_format(force=True)
+                if self.get_dmg_command().result.exit_status == 0:
+                    break
+            except CommandFailure:
+                time.sleep(0.5)
 
         # Check that engine starts up again
         self.log.info("<SERVER> Waiting for the engines to start")
-        self.server_managers[-1].detect_engine_start(host_qty=2)
+        self.server_managers[0].detect_engine_start()
 
         # Check that we have cleared storage by checking pool list
         if self.get_dmg_command().pool_list():
@@ -76,7 +84,7 @@ class DmgSystemReformatTest(PoolTestBase):
                 self.get_dmg_command().result.stdout_text))
 
         # Create last pool now that memory has been wiped.
-        self.pool.extend(self.get_pool_list(1, None, 0.9))
+        self.pool.extend(self.get_pool_list(1, 0.9, None))
         self.pool[-1].create()
 
         # Lastly, verify that last created pool is in the list

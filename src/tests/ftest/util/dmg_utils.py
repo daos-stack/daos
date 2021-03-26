@@ -200,11 +200,11 @@ class DmgCommand(DmgCommandBase):
         self.log.info("storage_scan data: %s", str(data))
         return data
 
-    def storage_format(self, reformat=False, timeout=30, verbose=False):
+    def storage_format(self, force=False, timeout=30, verbose=False):
         """Get the result of the dmg storage format command.
 
         Args:
-            reformat (bool): always reformat storage, could be destructive.
+            force (bool): always reformat storage, could be destructive.
                 This will create control-plane related metadata i.e. superblock
                 file and reformat if the storage media is available and
                 formattable.
@@ -224,7 +224,7 @@ class DmgCommand(DmgCommandBase):
         saved_timeout = self.timeout
         self.timeout = timeout
         self._get_result(
-            ("storage", "format"), reformat=reformat, verbose=verbose)
+            ("storage", "format"), force=force, verbose=verbose)
         self.timeout = saved_timeout
         return self.result
 
@@ -835,6 +835,19 @@ class DmgCommand(DmgCommandBase):
             for rank in get_numeric_list(info[0]):
                 data[rank] = info[1].strip()
         return data
+
+    def system_erase(self):
+        """Erase the system.
+
+        Raises:
+            CommandFailure: if the dmg system erase command fails.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        """
+        return self._get_result(("system", "erase"))
 
     def pool_evict(self, pool, sys=None):
         """Evict a pool.
