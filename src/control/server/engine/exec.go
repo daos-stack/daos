@@ -53,9 +53,6 @@ func (r *Runner) run(ctx context.Context, args, env []string) error {
 		logFn:  r.log.Error,
 		prefix: fmt.Sprintf("%s:%d", engineBin, r.Config.Index),
 	}
-	// FIXME(DAOS-3105): This shouldn't be the default. The command environment
-	// should be constructed from values in the configuration. This probably
-	// can't go away until PMIx support is removed, though.
 	cmd.Env = mergeEnvVars(os.Environ(), env)
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{

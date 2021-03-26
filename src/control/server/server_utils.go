@@ -109,11 +109,38 @@ func connectServer(ctlPort int, resolver resolveTCPFn, listener netListenFn) (*n
 	return ctlAddr, lis, nil
 }
 
-func netInit(ctx context.Context, log *logging.LeveledLogger, engineCount int) (context.Context, func(), error) {
+// Provide special handling for the ofi+verbs provide.
+// Mercury uses the interface name such as ib0, while OFI uses the device name
+// such as hfi1_0 CaRT and Mercury will now support the new OFI_DOMAIN
+// environment variable so that we can specify the correct device for each.
+func updateFabricEnvars(ctx context.Context, ec *engine.Config) error {
+	if strings.HasPrefix(ec.Fabric.Provider, "ofi+verbs") && !ec.HasEnvVar("OFI_DOMAIN") {
+		deviceAlias, err := netdetect.GetDeviceAlias(ctx, ec.Fabric.Interface)
+		if err != nil {
+			return errors.Wrapf(err, "failed to resolve alias for %s", ec.Fabric.Interface)
+		}
+		envVar := "OFI_DOMAIN=" + deviceAlias
+		ec.WithEnvVars(envVar)
+	}
+
+	return nil
+}
+
+// netInit performs all network detection tasks in one place starting with
+// netdetect library init and cleaning up on exit. Warn if configured number
+// of engines is less than NUMA node count and update-in-place engine configs.
+func netInit(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server) (uint32, error) {
+	engineCount := len(cfg.Engines)
+	if engineCount == 0 {
+		log.Debug("no engines configured, skipping network init")
+		return 0, nil
+	}
+
 	ctx, err := netdetect.Init(ctx)
 	if err != nil {
-		return nil, nil, err
+		return 0, err
 	}
+	defer netdetect.CleanUp(ctx)
 
 	// On a NUMA-aware system, emit a message when the configuration may be
 	// sub-optimal.
@@ -123,9 +150,24 @@ func netInit(ctx context.Context, log *logging.LeveledLogger, engineCount int) (
 			numaCount, engineCount)
 	}
 
-	return ctx, func() {
-		netdetect.CleanUp(ctx)
-	}, nil
+	var netDevClass uint32
+	for idx, ec := range cfg.Engines {
+		if err := updateFabricEnvars(ctx, ec); err != nil {
+			return 0, errors.Wrap(err, "update fabric envars")
+		}
+
+		if idx != 0 {
+			continue
+		}
+
+		// set device class based on fabric cfg of first engine
+		netDevClass, err = cfg.GetDeviceClassFn(ec.Fabric.Interface)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	return netDevClass, nil
 }
 
 func prepBdevStorage(srv *server, usr *user.User, iommuEnabled bool, hpiGetter getHugePageInfoFn) error {
@@ -138,7 +180,7 @@ func prepBdevStorage(srv *server, usr *user.User, iommuEnabled bool, hpiGetter g
 		PCIBlacklist:  strings.Join(srv.cfg.BdevExclude, " "),
 		DisableVFIO:   srv.cfg.DisableVFIO,
 		DisableVMD:    srv.cfg.DisableVMD || srv.cfg.DisableVFIO || !iommuEnabled,
-		// TODO: pass vmd include/white list
+		// TODO: pass vmd include list
 	}
 
 	hasBdevs := cfgHasBdevs(srv.cfg)
@@ -198,23 +240,6 @@ func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error
 	return nil
 }
 
-// Provide special handling for the ofi+verbs provide.
-// Mercury uses the interface name such as ib0, while OFI uses the device name
-// such as hfi1_0 CaRT and Mercury will now support the new OFI_DOMAIN
-// environment variable so that we can specify the correct device for each.
-func updateFabricEnvars(ctx context.Context, ec *engine.Config) error {
-	if strings.HasPrefix(ec.Fabric.Provider, "ofi+verbs") && !ec.HasEnvVar("OFI_DOMAIN") {
-		deviceAlias, err := netdetect.GetDeviceAlias(ctx, ec.Fabric.Interface)
-		if err != nil {
-			return errors.Wrapf(err, "failed to resolve alias for %s", ec.Fabric.Interface)
-		}
-		envVar := "OFI_DOMAIN=" + deviceAlias
-		ec.WithEnvVars(envVar)
-	}
-
-	return nil
-}
-
 func registerEngineCallbacks(engine *EngineInstance, pubSub *events.PubSub, allStarted *sync.WaitGroup) {
 	// Register callback to publish I/O Engine process exit events.
 	engine.OnInstanceExit(publishInstanceExitFn(pubSub.Publish, hostname(), engine.Index()))
@@ -231,13 +256,12 @@ func registerEngineCallbacks(engine *EngineInstance, pubSub *events.PubSub, allS
 	})
 }
 
-func initFirstEngine(engine *EngineInstance, sysdb *system.Database, joinFn systemJoinFn) error {
+func configureFirstEngine(engine *EngineInstance, sysdb *system.Database, joinFn systemJoinFn) {
 	if !sysdb.IsReplica() {
-		return nil
+		return
 	}
 
-	// Start the system db after instance 0's SCM is
-	// ready.
+	// Start the system db after instance 0's SCM is ready.
 	var onceStorageReady sync.Once
 	engine.OnStorageReady(func(ctx context.Context) (err error) {
 		onceStorageReady.Do(func() {
@@ -249,7 +273,7 @@ func initFirstEngine(engine *EngineInstance, sysdb *system.Database, joinFn syst
 	})
 
 	if !sysdb.IsBootstrap() {
-		return nil
+		return
 	}
 
 	// For historical reasons, we reserve rank 0 for the first
@@ -264,21 +288,22 @@ func initFirstEngine(engine *EngineInstance, sysdb *system.Database, joinFn syst
 		}
 		return joinFn(ctx, req)
 	}
-
-	return nil
 }
 
-func exportStats(ctx context.Context, allStarted *sync.WaitGroup, log *logging.LeveledLogger, port int, instances []*EngineInstance) {
-	allStarted.Wait()
-
-	if port == 0 {
+// registerTelemetryCallback sets callback which will launch Prometheus
+// telemetry exporter when all engines have been started.
+func registerTelemetryCallback(ctx context.Context, srv *server) {
+	telemPort := srv.cfg.TelemetryPort
+	if telemPort == 0 {
 		return
 	}
 
-	log.Debug("starting Prometheus exporter")
-	if err := startPrometheusExporter(ctx, log, port, instances); err != nil {
-		log.Errorf("failed to start prometheus exporter: %s", err)
-	}
+	srv.onEnginesStarted(func(ctxIn context.Context) {
+		srv.log.Debug("starting Prometheus exporter")
+		if err := startPrometheusExporter(ctxIn, srv.log, telemPort, srv.harness.Instances()); err != nil {
+			srv.log.Errorf("failed to start prometheus exporter: %s", err)
+		}
+	})
 }
 
 // registerInitialSubscriptions sets up forwarding of published actionable
