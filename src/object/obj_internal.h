@@ -228,6 +228,15 @@ struct migrate_pool_tls {
 
 	/* reference count for the structure */
 	uint64_t		mpt_refcount;
+
+	/* The current inflight iod, mainly used for controlling
+	 * rebuild inflight rate to avoid the DMA buffer overflow.
+	 */
+	uint64_t		mpt_inflight_size;
+	uint64_t		mpt_inflight_max_size;
+	ABT_cond		mpt_inflight_cond;
+	ABT_mutex		mpt_inflight_mutex;
+	int			mpt_inflight_max_ult;
 	/* migrate leader ULT */
 	unsigned int		mpt_ult_running:1,
 	/* Indicates whether objects on the migration destination should be
@@ -440,6 +449,11 @@ struct dc_obj_verify_args {
 	char				 inline_buf[DOVA_BUF_LEN];
 	struct dc_obj_verify_cursor	 cursor;
 };
+
+int
+dc_set_oclass(daos_handle_t coh, int domain_nr, int target_nr,
+	      daos_ofeat_t ofeats, daos_oclass_hints_t hints,
+	      daos_oclass_id_t *oc_id_);
 
 int dc_obj_shard_open(struct dc_object *obj, daos_unit_oid_t id,
 		      unsigned int mode, struct dc_obj_shard *shard);
