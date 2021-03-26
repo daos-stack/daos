@@ -159,8 +159,8 @@ class OSAOfflineReintegration(OSAUtils):
         :avocado: tags=osa,offline_reintegration
         :avocado: tags=offline_reintegration_without_csum
         """
-        self.test_with_checksum = self.params.get("checksum",
-                                                  '/run/test_with_checksum/*')
+        self.test_with_checksum = self.params.get("test_with_checksum",
+                                                  '/run/checksum/*')
         self.run_offline_reintegration_test(1, data=True)
 
     def test_osa_offline_reintegration_multiple_pools(self):

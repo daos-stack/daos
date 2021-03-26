@@ -226,7 +226,8 @@ class OSAUtils(MdtestBase, IorTestBase):
             self.add_container(self.pool, create=False)
             self.set_cont_class_properties(oclass)
             if self.test_with_checksum is False:
-                rf_value = "rf:{}".format(self.get_object_replica_value - 1)
+                tmp = self.get_object_replica_value(oclass)
+                rf_value = "rf:{}".format(tmp - 1)
                 self.update_cont_properties(rf_value)
             self.container.create()
             self.pool_cont_dict[self.pool][0] = self.container
@@ -240,8 +241,8 @@ class OSAUtils(MdtestBase, IorTestBase):
                 self.add_container(self.pool, create=False)
                 self.set_cont_class_properties(oclass)
                 if self.test_with_checksum is False:
-                    rf_value = "rf:{}".format(
-                        self.get_object_replica_value - 1)
+                    tmp = self.get_object_replica_value(oclass)
+                    rf_value = "rf:{}".format(tmp - 1)
                     self.update_cont_properties(rf_value)
                 self.container.create()
                 self.pool_cont_dict[self.pool][2] = self.container
@@ -304,7 +305,8 @@ class OSAUtils(MdtestBase, IorTestBase):
         if x is not None:
             prop = prop.replace("rf:1", "rf:0")
         else:
-            rf_value = "rf:{}".format(self.get_object_replica_value - 1)
+            tmp = self.get_object_replica_value(oclass)
+            rf_value = "rf:{}".format(tmp - 1)
             prop = prop.replace("rf:1", rf_value)
         self.container.properties.value = prop
 
@@ -393,6 +395,10 @@ class OSAUtils(MdtestBase, IorTestBase):
         if self.container is None:
             self.add_container(self.pool, create=False)
             self.set_cont_class_properties(self.mdtest_cmd.dfs_oclass)
+            if self.test_with_checksum is False:
+                tmp = self.get_object_replica_value(self.mdtest_cmd.dfs_oclass)
+                rf_value = "rf:{}".format(tmp - 1)
+                self.update_cont_properties(rf_value)
             self.container.create()
         job_manager = self.get_mdtest_job_manager_command(self.manager)
         job_manager.job.dfs_cont.update(self.container.uuid)
