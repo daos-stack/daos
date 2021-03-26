@@ -756,8 +756,11 @@ dma_rw(struct bio_desc *biod, bool prep)
 	}
 
 	if (xs_ctxt->bxc_tgt_id == -1) {
+		int	rc;
+
 		D_DEBUG(DB_IO, "Self poll completion, blob:%p\n", blob);
-		xs_poll_completion(xs_ctxt, &biod->bd_inflights);
+		rc = xs_poll_completion(xs_ctxt, &biod->bd_inflights, 0);
+		D_ASSERT(rc == 0);
 	} else {
 		biod->bd_dma_issued = 1;
 		if (biod->bd_inflights != 0)
