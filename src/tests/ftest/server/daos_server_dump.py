@@ -63,7 +63,7 @@ class DaosServerDumpTest(TestWithServers):
         if 0 in return_codes:
             print(
                 "No daos_engine processes found on {}".format(
-                    str(return_codes[1])))
+                    str(return_codes[0])))
 
         # XXX may need to check for one file per engine...
         ret_codes = pcmd(self.hostlist_servers, r"ls /tmp/daos_dump\*.txt")
