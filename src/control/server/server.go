@@ -44,13 +44,13 @@ func processConfig(log *logging.LeveledLogger, cfg *config.Server) (*system.Faul
 		return nil, err
 	}
 
-	fd, err := getFaultDomain(cfg)
+	faultDomain, err := getFaultDomain(cfg)
 	if err != nil {
 		return nil, err
 	}
-	log.Debugf("fault domain: %s", fd.String())
+	log.Debugf("fault domain: %s", faultDomain.String())
 
-	return fd, nil
+	return faultDomain, nil
 }
 
 // server struct contains state and components of DAOS Server.
@@ -73,36 +73,12 @@ type server struct {
 	scmProvider  *scm.Provider
 	bdevProvider *bdev.Provider
 	grpcServer   *grpc.Server
+
+	enginesStartedCbs []func(context.Context)
 }
 
-func newServer(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server, fd *system.FaultDomain) (*server, error) {
-	dbReplicas, err := cfgGetReplicas(cfg, net.ResolveTCPAddr)
-	if err != nil {
-		return nil, errors.Wrap(err, "retrieve replicas from config")
-	}
-
-	// If this daos_server instance ends up being the MS leader,
-	// this will record the DAOS system membership.
-	sysdb, err := system.NewDatabase(log, &system.DatabaseConfig{
-		Replicas:   dbReplicas,
-		RaftDir:    cfgGetRaftDir(cfg),
-		SystemName: cfg.SystemName,
-	})
-	if err != nil {
-		return nil, errors.Wrap(err, "create system database")
-	}
-	membership := system.NewMembership(log, sysdb)
-	harness := NewEngineHarness(log).WithFaultDomain(fd)
-
-	// Create rpcClient for inter-server communication.
-	cliCfg := control.DefaultConfig()
-	cliCfg.TransportConfig = cfg.TransportConfig
-	rpcClient := control.NewClient(
-		control.WithConfig(cliCfg),
-		control.WithClientLogger(log))
-
-	// Create event distribution primitives.
-	eventPubSub := events.NewPubSub(ctx, log)
+func newServer(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server, faultDomain *system.FaultDomain) (*server, error) {
+	harness := NewEngineHarness(log).WithFaultDomain(faultDomain)
 
 	// Create storage subsystem providers.
 	scmProvider := scm.DefaultProvider(log)
@@ -111,18 +87,55 @@ func newServer(ctx context.Context, log *logging.LeveledLogger, cfg *config.Serv
 	return &server{
 		log:          log,
 		cfg:          cfg,
-		faultDomain:  fd,
+		faultDomain:  faultDomain,
 		harness:      harness,
-		membership:   membership,
-		sysdb:        sysdb,
-		pubSub:       eventPubSub,
-		evtForwarder: control.NewEventForwarder(rpcClient, cfg.AccessPoints),
-		evtLogger:    control.NewEventLogger(log),
-		ctlSvc:       NewControlService(log, harness, bdevProvider, scmProvider, cfg, eventPubSub),
-		mgmtSvc:      newMgmtSvc(harness, membership, sysdb, rpcClient, eventPubSub),
 		scmProvider:  scmProvider,
 		bdevProvider: bdevProvider,
 	}, nil
+}
+
+// createServices adds required infrastructure for rpc and event services.
+func (srv *server) createServices(ctx context.Context) error {
+	dbReplicas, err := cfgGetReplicas(srv.cfg, net.ResolveTCPAddr)
+	if err != nil {
+		return errors.Wrap(err, "retrieve replicas from config")
+	}
+
+	// If this daos_server instance ends up being the MS leader,
+	// this will record the DAOS system membership.
+	sysdb, err := system.NewDatabase(srv.log, &system.DatabaseConfig{
+		Replicas:   dbReplicas,
+		RaftDir:    cfgGetRaftDir(srv.cfg),
+		SystemName: srv.cfg.SystemName,
+	})
+	if err != nil {
+		return errors.Wrap(err, "create system database")
+	}
+	srv.sysdb = sysdb
+	srv.membership = system.NewMembership(srv.log, sysdb)
+
+	// Create rpcClient for inter-server communication.
+	cliCfg := control.DefaultConfig()
+	cliCfg.TransportConfig = srv.cfg.TransportConfig
+	rpcClient := control.NewClient(
+		control.WithConfig(cliCfg),
+		control.WithClientLogger(srv.log))
+
+	// Create event distribution primitives.
+	srv.pubSub = events.NewPubSub(ctx, srv.log)
+	srv.evtForwarder = control.NewEventForwarder(rpcClient, srv.cfg.AccessPoints)
+	srv.evtLogger = control.NewEventLogger(srv.log)
+
+	srv.ctlSvc = NewControlService(srv.log, srv.harness, srv.bdevProvider, srv.scmProvider,
+		srv.cfg, srv.pubSub)
+
+	srv.mgmtSvc = newMgmtSvc(srv.harness, srv.membership, sysdb, rpcClient, srv.pubSub)
+
+	return nil
+}
+
+func (srv *server) onEnginesStarted(fn func(context.Context)) {
+	srv.enginesStartedCbs = append(srv.enginesStartedCbs, fn)
 }
 
 func (srv *server) shutdown() {
@@ -149,7 +162,11 @@ func (srv *server) initStorage() error {
 		return errors.Wrap(err, "unable to lookup current user")
 	}
 
-	return prepBdevStorage(srv, runningUser, iommuDetected(), getHugePageInfo)
+	if err := prepBdevStorage(srv, runningUser, iommuDetected(), getHugePageInfo); err != nil {
+		return err
+	}
+
+	return srv.ctlSvc.Setup()
 }
 
 func (srv *server) createEngine(ctx context.Context, idx int, ec *engine.Config) (*EngineInstance, error) {
@@ -194,8 +211,11 @@ func (srv *server) createEngine(ctx context.Context, idx int, ec *engine.Config)
 	return engine, nil
 }
 
+// addEngines creates and adds engine instances to harness then starts
+// goroutine to execute callbacks when all engines are started.
 func (srv *server) addEngines(ctx context.Context) error {
 	var allStarted sync.WaitGroup
+	registerTelemetryCallback(ctx, srv)
 
 	for idx, ec := range srv.cfg.Engines {
 		engine, err := srv.createEngine(ctx, idx, ec)
@@ -212,14 +232,14 @@ func (srv *server) addEngines(ctx context.Context) error {
 		allStarted.Add(1)
 	}
 
-	go exportStats(ctx, &allStarted, srv.log, srv.cfg.TelemetryPort, srv.harness.Instances())
+	go func(ctxIn context.Context) {
+		allStarted.Wait()
+		for _, cb := range srv.enginesStartedCbs {
+			cb(ctxIn)
+		}
+	}(ctx)
 
 	return nil
-}
-
-// discoverStorage scans local storage hardware.
-func (srv *server) discoverStorage() error {
-	return srv.ctlSvc.Setup()
 }
 
 // setupGrpc creates a new grpc server and registers services.
@@ -291,7 +311,7 @@ func (srv *server) start(ctx context.Context, shutdown context.CancelFunc) error
 
 // Start is the entry point for a daos_server instance.
 func Start(log *logging.LeveledLogger, cfg *config.Server) error {
-	fd, err := processConfig(log, cfg)
+	faultDomain, err := processConfig(log, cfg)
 	if err != nil {
 		return err
 	}
@@ -301,11 +321,15 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	ctx, shutdown := context.WithCancel(context.Background())
 	defer shutdown()
 
-	srv, err := newServer(ctx, log, cfg, fd)
+	srv, err := newServer(ctx, log, cfg, faultDomain)
 	if err != nil {
 		return err
 	}
 	defer srv.shutdown()
+
+	if err := srv.createServices(ctx); err != nil {
+		return err
+	}
 
 	ctxNet, shutdownNet, err := srv.initNetwork(ctx)
 	if err != nil {
@@ -318,10 +342,6 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	}
 
 	if err := srv.addEngines(ctxNet); err != nil {
-		return err
-	}
-
-	if err := srv.discoverStorage(); err != nil {
 		return err
 	}
 

@@ -268,17 +268,20 @@ func initFirstEngine(engine *EngineInstance, sysdb *system.Database, joinFn syst
 	return nil
 }
 
-func exportStats(ctx context.Context, allStarted *sync.WaitGroup, log *logging.LeveledLogger, port int, instances []*EngineInstance) {
-	allStarted.Wait()
-
-	if port == 0 {
+// registerTelemetryCallback sets callback which will launch Prometheus
+// telemetry exporter when all engines have been started.
+func registerTelemetryCallback(ctx context.Context, srv *server) {
+	telemPort := srv.cfg.TelemetryPort
+	if telemPort == 0 {
 		return
 	}
 
-	log.Debug("starting Prometheus exporter")
-	if err := startPrometheusExporter(ctx, log, port, instances); err != nil {
-		log.Errorf("failed to start prometheus exporter: %s", err)
-	}
+	srv.onEnginesStarted(func(ctxIn context.Context) {
+		srv.log.Debug("starting Prometheus exporter")
+		if err := startPrometheusExporter(ctxIn, srv.log, telemPort, srv.harness.Instances()); err != nil {
+			srv.log.Errorf("failed to start prometheus exporter: %s", err)
+		}
+	})
 }
 
 // registerInitialSubscriptions sets up forwarding of published actionable

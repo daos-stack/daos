@@ -8,6 +8,7 @@ package config
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -679,10 +680,11 @@ func TestServerConfig_SaveActiveConfig(t *testing.T) {
 	}{
 		"successful write": {
 			cfgPath:   testDir,
-			expLogOut: "active config saved to " + testDir + configOut,
+			expLogOut: fmt.Sprintf("config saved to %s/%s", testDir, configOut),
 		},
 		"missing directory": {
-			cfgPath: filepath.Join(testDir, "non-existent/"),
+			cfgPath:   filepath.Join(testDir, "non-existent/"),
+			expLogOut: "could not be saved",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -694,7 +696,7 @@ func TestServerConfig_SaveActiveConfig(t *testing.T) {
 			cfg.SaveActiveConfig(log)
 
 			common.AssertTrue(t, strings.Contains(buf.String(), tc.expLogOut),
-				"unexpected log output")
+				fmt.Sprintf("expected %q in %q", tc.expLogOut, buf.String()))
 		})
 	}
 }
