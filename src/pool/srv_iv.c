@@ -34,12 +34,14 @@ pool_iv_prop_ent_size(int nr_aces, int nr_ranks)
 {
 	uint32_t acl_size;
 	uint32_t svc_size;
+	uint32_t pd_size;
 
 	/* Calculate pool_iv_buf size */
 	acl_size = roundup(offsetof(struct daos_acl, dal_ace[nr_aces]), 8);
 	svc_size = roundup(nr_ranks * sizeof(d_rank_t), 8);
+	pd_size = roundup(sizeof(struct policy_desc_t), 8);
 
-	return sizeof(struct pool_iv_entry) + acl_size + svc_size;
+	return sizeof(struct pool_iv_entry) + acl_size + svc_size + pd_size;
 }
 
 static int
@@ -105,6 +107,7 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 	struct daos_prop_entry	*prop_entry;
 	struct daos_acl		*acl;
 	d_rank_list_t		*svc_list;
+	struct policy_desc_t 	*pd;
 	unsigned int		offset = 0;
 	int			i;
 
@@ -168,6 +171,15 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 					svc_list->rl_nr * sizeof(d_rank_t), 8);
 			}
 			break;
+		case DAOS_PROP_PO_POLICY:
+			pd = prop_entry->dpe_val_ptr;
+			if (pd != NULL) {
+				iv_prop->pip_policy_desc = (void *)(iv_prop->pip_iv_buf + roundup(offset, 8));
+				iv_prop->pip_policy_desc_offset = offset;
+				memcpy(iv_prop->pip_policy_desc, pd, sizeof(*pd));
+				offset += roundup(sizeof(*pd), 8);
+			}
+			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
 			break;
@@ -180,10 +192,13 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 {
 	struct daos_prop_entry	*prop_entry;
 	struct daos_acl		*acl;
+	struct policy_desc_t 	*pd;
 	void			*label_alloc = NULL;
 	void			*owner_alloc = NULL;
 	void			*owner_grp_alloc = NULL;
 	void			*acl_alloc = NULL;
+	void			*pd_alloc = NULL;
+
 	d_rank_list_t		*svc_list = NULL;
 	d_rank_list_t		*dst_list;
 	int			i;
@@ -260,6 +275,20 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 				prop_entry->dpe_val_ptr = dst_list;
 			}
 			break;
+		case DAOS_PROP_PO_POLICY:
+			iv_prop->pip_policy_desc = (void *)(iv_prop->pip_iv_buf +
+						   roundup(iv_prop->pip_policy_desc_offset, 8));
+			pd = iv_prop->pip_policy_desc;
+
+			D_ALLOC(pd_alloc, sizeof(*pd));
+			if (pd_alloc != NULL) {
+				memcpy(pd_alloc, pd, sizeof(*pd));
+				prop_entry->dpe_val_ptr = pd_alloc;
+			}
+			else {
+				D_GOTO(out, rc = -DER_NOMEM);
+			}
+			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
 			break;
@@ -275,6 +304,8 @@ out:
 		D_FREE(owner_grp_alloc);
 		if (svc_list)
 			d_rank_list_free(dst_list);
+		if (pd_alloc)
+			D_FREE(pd_alloc);
 	}
 	return rc;
 }

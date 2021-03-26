@@ -22,6 +22,48 @@
 #include <daos_pool.h>
 #include <daos_security.h>
 #include <gurt/telemetry_common.h>
+#include <daos/policy.h>
+
+/** Metrics for each individual active pool */
+struct ds_pool_metrics {
+	uuid_t			pm_pool_uuid;
+	ABT_mutex		pm_lock; /* multiple threads may have access */
+
+	struct d_tm_node_t	*pm_started_timestamp;
+	/* TODO: add more per-pool metrics */
+};
+
+/**
+ * Lock a pool metrics structure for synchronized access.
+ *
+ * \param[in]	metrics		Pool metrics
+ */
+static inline void
+ds_pool_metrics_lock(struct ds_pool_metrics *metrics)
+{
+	if (unlikely(metrics == NULL))
+		return;
+
+	ABT_mutex_lock(metrics->pm_lock);
+}
+
+/**
+ * Unlock a pool metrics structure for synchronized access.
+ *
+ * \param[in]	metrics		Pool metrics
+ */
+static inline void
+ds_pool_metrics_unlock(struct ds_pool_metrics *metrics)
+{
+	if (unlikely(metrics == NULL))
+		return;
+
+	ABT_mutex_unlock(metrics->pm_lock);
+}
+
+struct ds_pool_metrics *ds_pool_metrics_get(const uuid_t pool_uuid);
+int ds_pool_metrics_get_path(const uuid_t pool_uuid, char *path,
+			     size_t path_len);
 
 /*
  * Pool object
@@ -36,6 +78,7 @@ struct ds_pool {
 	uint32_t		sp_map_version;	/* temporary */
 	uint32_t		sp_ec_cell_sz;
 	uint64_t		sp_reclaim;
+	struct policy_desc_t	sp_policy_desc;	/* pool tiering policy descriptor */
 	crt_group_t	       *sp_group;
 	ABT_mutex		sp_mutex;
 	ABT_cond		sp_fetch_hdls_cond;

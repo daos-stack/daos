@@ -20,6 +20,7 @@
 #include <daos/lru.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
+#include <daos/policy.h>
 #include "vos_tls.h"
 #include "vos_layout.h"
 #include "vos_ilog.h"
@@ -165,6 +166,8 @@ struct vos_pool {
 	daos_size_t		vp_space_held[DAOS_MEDIA_MAX];
 	/** Dedup hash */
 	struct d_hash_table	*vp_dedup_hash;
+	/** Tiering policy */
+	struct policy_desc_t	vp_policy_desc;
 };
 
 /**
@@ -1008,19 +1011,6 @@ key_tree_delete(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov);
 /* vos_io.c */
 daos_size_t
 vos_recx2irec_size(daos_size_t rsize, struct dcs_csum_info *csum);
-
-/*
- * A simple media selection policy embedded in VOS, which select media by
- * akey type and record size.
- */
-static inline uint16_t
-vos_media_select(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size)
-{
-	if (pool->vp_vea_info == NULL)
-		return DAOS_MEDIA_SCM;
-
-	return (size >= VOS_BLK_SZ) ? DAOS_MEDIA_NVME : DAOS_MEDIA_SCM;
-}
 
 int
 vos_dedup_init(struct vos_pool *pool);

@@ -18,6 +18,7 @@
 #include <daos.h>
 #include "vos_internal.h"
 #include "evt_priv.h"
+#include "vos_policy.h"
 
 /** I/O context */
 struct vos_io_context {
@@ -2093,8 +2094,11 @@ akey_update_begin(struct vos_io_context *ioc)
 		size = (iod->iod_type == DAOS_IOD_SINGLE) ? iod->iod_size :
 				iod->iod_recxs[i].rx_nr * iod->iod_size;
 
-		media = vos_media_select(vos_cont2pool(ioc->ic_cont),
-					 iod->iod_type, size);
+		/* media = vos_media_select(vos_cont2pool(ioc->ic_cont),
+					 iod->iod_type, size); */
+
+		media = vos_policy_media_select(vos_cont2pool(ioc->ic_cont),
+					 iod->iod_type, size, VOS_IOS_GENERIC);
 
 		recx_csum = (iod_csums != NULL) ? &iod_csums[i] : NULL;
 
